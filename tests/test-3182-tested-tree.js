@@ -276,7 +276,7 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
   yes('  its output is the script\'s', /\n      run: \$\{\{ steps\.look\.outputs\.run \}\}\n/.test(tj) && /id: look\n/.test(tj) &&
       /node scripts\/dev\/Tested-Tree\.js --tree \$tree --commit \$env:GITHUB_SHA --repo \$env:GITHUB_REPOSITORY\n/.test(tj) && /git rev-parse 'HEAD\^\{tree\}'/.test(tj));
   yes('the build waits for the answer and builds only when it found nothing',
-      /\n  launcher:\n    name: Launcher builds\n    needs: \[tested, pick\]\n    if: \$\{\{ !cancelled\(\) && needs\.tested\.outputs\.run == '' && needs\.pick\.outputs\.launcher != 'false' \}\}\n/.test(build) &&
+      /\n  launcher:\n    name: Launcher builds\n    needs: \[tested, pick\]\n    if: \$\{\{ !cancelled\(\) && needs\.tested\.outputs\.run == '' \}\}\n/.test(build) &&
       /\n  checks:\n    name: Tree checks\n    needs: tested\n    if: \$\{\{ !cancelled\(\) && needs\.tested\.outputs\.run == '' \}\}\n/.test(build));
   // The checks are the launcher job's steps and, since #5292, the Tree
   // checks job's, each without the comments that stand before the next one.
@@ -295,7 +295,15 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
   // #3874 wrote it only on GitHub's hosted runner, so a VPS build left main
   // to be built and traced. Every build is on GitHub's runner since #4983.
   yes('  on a pull request and in the merge queue only (#5182)',
-      /\n        if: github\.event_name == 'pull_request' \|\| github\.event_name == 'merge_group'\n/.test(note));
+      /\n        if: env\.REACHES != 'false' && \(github\.event_name == 'pull_request' \|\| github\.event_name == 'merge_group'\)\n/.test(note));
+  // #5292: when the pick says the change reaches nothing the job checks, the
+  // job still runs, on Linux, and its first step says why; every other step
+  // is for a build and runs only then, so that pass writes no note.
+  const why = steps[0] || '';
+  yes('  and a change the launcher build cannot see runs only the first step, which says why there is nothing to build (#5292)',
+      /^      - name: Say why there is nothing to build\n        if: env\.REACHES == 'false'\n/.test(why) && !/\n\s+(shell|uses):/.test(why) &&
+      steps.length > 2 && steps.slice(1).every(st => /\n        if: env\.REACHES != 'false'(\n| && \()/.test(st)) &&
+      /\n    env:\n(\s*#[^\n]*\n)*      REACHES: \$\{\{ needs\.pick\.outputs\.launcher \}\}\n/.test(build.slice(lj)));
   // The gate runs in the job "gate" beside the launcher job, in shares
   // (31 Oct 2026), after the job "pick" says what each runs (#5183). A
   // share of what a change can reach says so in its name, and the script
@@ -359,7 +367,7 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
   yes('  and runs in the merge queue, whose run the script reads first (#5182)', /\non:\n  pull_request:\n  merge_group:\n    types: \[checks_requested\]\n/.test(pr));
 
   // ---- 3. why the tree is enough ---------------------------------------------
-  const checkout = steps[0] || '';
+  const checkout = steps.find(st => /^      - uses: actions\/checkout@/.test(st)) || '';
   const treeCheckout = treeSteps[0] || '';
   yes('the checks check out one commit, with no history on either build, in both jobs', /^      - uses: actions\/checkout@[0-9a-f]{40} # v\d+\n/.test(checkout + '\n') && !/^\s+with:/m.test(checkout) &&
       /^      - uses: actions\/checkout@[0-9a-f]{40} # v\d+\n/.test(treeCheckout + '\n') && !/^\s+with:/m.test(treeCheckout));
@@ -385,7 +393,7 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
     'scripts/dev/Run-Gate.ps1': 'the gate step: the event chooses only how much of the gate runs (#3114), and a build that ran less than all of it keeps no note, held above',
     'tests/test-3114-run-gate.ps1': 'sets those names for Run-Gate.ps1 in scratch processes, to hold what it does on each event',
     'scripts/release/Sign-OnRunner.ps1': 'signs in the release workflows only, never in a check of a build: it reads the ref to refuse signing on any branch but main (#3930)',
-    'scripts/dev/Launcher-Reach.ps1': 'the pick\'s path rule (#5292): the event chooses only whether the launcher job runs, and a pull request build that skipped it keeps no note, so main builds',
+    'scripts/dev/Launcher-Reach.ps1': 'the pick\'s path rule (#5292): the event chooses only whether the launcher job builds, and a pull request build that built nothing keeps no note, so main builds',
     'tests/test-5292-path-rule.ps1': 'sets those names for Launcher-Reach.ps1 in scratch processes, to hold what it says on each event',
     'tests/test-5179-merge-release.ps1': 'sets GITHUB_SHA for merge-release.yml\'s notes step, run in a scratch process over a stand-in; merge-release.yml runs on main after a merge and is no check of a build (#5179)'
   };
