@@ -10,12 +10,20 @@
 # repository is deleted. The job runs only while the repository variable
 # WATCH_OUTSIDE is "here", so exactly one watcher posts.
 #
-# ITS TWO SECRETS are in the "watch" environment, which only main may deploy
+# ITS SECRETS are in the "watch" environment, which only main may deploy
 # from (records/github-settings.json): STAFF_WEBHOOK, the Discord webhook in
-# #staff-updates that the VPS watchdog also posts through, and RUNNER_TOKEN,
-# a fine-grained token whose only permission is Administration: Read-only on
-# Thornswood-Ops, where the box's runners are registered since the flip, so
-# it can read the runners and nothing else. Nothing a fork can start reaches
+# #staff-updates that the VPS watchdog also posts through, and WATCH_APP_KEY,
+# the key of the thornswood-watch App (#5259), whose only permission is
+# Administration: read on Thornswood-Ops, where the box's runners are
+# registered since the flip. Each run mints that App's token for
+# Thornswood-Ops alone with actions/create-github-app-token, so it can read
+# the runners and nothing else. Until 1 Nov 2026 this was RUNNER_TOKEN, a
+# fine-grained token of Patrick's: after the move to ThornswoodRP it named a
+# repository that was no longer there, GitHub answered 401 and the runner
+# check went blind, and every call it made counted against Patrick's own
+# limit. An App's token belongs to the org and is not one person's.
+# If the token cannot be minted the other checks still run, and the runner
+# check says it could not ask and where the key goes. Nothing a fork can start reaches
 # them: this workflow has no pull_request trigger, a dispatch needs write
 # access, the repository sends no secrets to fork pull requests, and no
 # workflow here runs on pull_request_target.
@@ -72,12 +80,27 @@ jobs:
           WATCH_WEBHOOK: ${{ secrets.STAFF_WEBHOOK }}
         run: ./scripts/vps/Watch-Outside.ps1 -TestPost -Minutes 5
 
+      # The runners' token, for Thornswood-Ops alone. A failure here leaves
+      # the token empty, and the runner check says so instead of the whole
+      # watch stopping (Watch-Outside.ps1, Get-Runners).
+      - name: The watcher's token for the runners
+        id: app
+        if: ${{ !inputs.test }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.WATCH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.WATCH_APP_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: Thornswood-Ops
+          permission-administration: read
+
       - name: Watch
         if: ${{ !inputs.test }}
         shell: pwsh
         env:
           WATCH_WEBHOOK: ${{ secrets.STAFF_WEBHOOK }}
-          WATCH_RUNNER_TOKEN: ${{ secrets.RUNNER_TOKEN }}
+          WATCH_RUNNER_TOKEN: ${{ steps.app.outputs.token }}
         run: ./scripts/vps/Watch-Outside.ps1 -Run -Folder state -Minutes 5
 
       - name: Keep what it remembers
