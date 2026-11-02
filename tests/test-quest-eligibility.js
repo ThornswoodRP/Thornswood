@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const {createQuestEligibility} = require('../game/quest-eligibility');
-const gm = fs.readFileSync(path.join(__dirname, '../game/gamemode.js'), 'utf8');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname, '../game/gamemode.js'), 'utf8'));
 const begin = gm.indexOf('// ==== thornswood progression ====');
 const end = gm.indexOf('// ==== end thornswood progression ====');
 assert.ok(begin >= 0 && end > begin);

@@ -1,9 +1,11 @@
 """
 Build-AdminNameTables.py
 
-Writes the ADMIN_NAMES block in game\\gamemode.js: every named item a pack can
-hold and every named actor in the load order, by the name the game shows,
-with the record it is. /give and /spawn read them after their own tables.
+Writes ADMIN_ITEMS and ADMIN_ACTORS, which game\\gamemode.js reads from
+game\\gamemode-tables when it loads (#5191; until then the ADMIN_NAMES block
+this wrote into gamemode.js): every named item a pack can hold and every named
+actor in the load order, by the name the game shows, with the record it is.
+/give and /spawn read them after their own tables.
 
 WHY
 
@@ -34,12 +36,11 @@ list is a different creature every time), and then the lowest form id. Any
 record at all can still be reached by its form id: /spawn 23ab7 or
 /give 12eb7:Skyrim.esm.
 
-Read only except for gamemode.js, which it rewrites between the markers. It
-adds the markers after ITEM_NAMES the first time.
+Read only except for those two files.
 
 Usage:
   python scripts\\dev\\Build-AdminNameTables.py
-  python scripts\\dev\\Build-AdminNameTables.py --data <Data> --plugins <plugins.txt> --gamemode <file>
+  python scripts\\dev\\Build-AdminNameTables.py --data <Data> --plugins <plugins.txt> --tables <folder>
 """
 
 import argparse
@@ -51,6 +52,7 @@ import struct
 import sys
 
 import bsa
+import gamemode_tables
 import own_plugins
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -70,10 +72,6 @@ NON_PLAYABLE = 0x4        # record header flag on ARMO and WEAP
 DELETED = 0x20
 USE_TRAITS = 0x0001
 USE_BASE_DATA = 0x0080
-
-START = '  // ==== ADMIN_NAMES ===='
-END = '  // ==== end ADMIN_NAMES ===='
-AFTER = '  // ==== end ITEM_NAMES ===='
 
 # Update.esm's own Creation Club records (#479): every Special Edition has
 # them, but their art comes with the Creation Club files Thornswood leaves
@@ -173,27 +171,16 @@ def table(recs, rank, pick_items, creation=frozenset()):
     return dict((k, (v[1], v[2])) for k, v in best.items())
 
 
-def block(items, actors, plugins):
-    out = [START,
-           '  /* Built by scripts\\dev\\Build-AdminNameTables.py out of the %d plugins in the load order.' % plugins,
-           '     Do not hand edit. %d item names and %d actor names, for /give and /spawn, which' % (len(items), len(actors)),
-           '     read them after their own tables. Lower-case name -> [name as written, record]. */']
-    for var, tab in (('ADMIN_ITEMS', items), ('ADMIN_ACTORS', actors)):
-        out.append('  var %s = {' % var)
-        keys = sorted(tab)
-        for i, k in enumerate(keys):
-            out.append('    %s: [%s, %s]%s' % (json.dumps(k), json.dumps(tab[k][0]), json.dumps(tab[k][1]),
-                                              ',' if i < len(keys) - 1 else ''))
-        out.append('  };')
-    out.append(END)
-    return '\n'.join(out) + '\n'
+def rows(tab):
+    """One table as JSON text: lower-case name -> [name as written, record], in name order."""
+    return json.dumps(dict((k, list(tab[k])) for k in sorted(tab)), separators=(',', ':'))
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--data', default=r'C:\Thornswood\Game\Data')
     ap.add_argument('--plugins', default=r'C:\Thornswood\Profile\OwnGame\plugins.txt')
-    ap.add_argument('--gamemode', default=os.path.join(HERE, '..', '..', 'game', 'gamemode.js'))
+    ap.add_argument('--tables', default=None, help='the folder of gamemode tables (game/gamemode-tables)')
     a = ap.parse_args()
 
     order = own_plugins.load_order(a.plugins)
@@ -223,18 +210,9 @@ def main():
         tab = items if probe in ('gold', 'iron sword') else actors
         print('  %-12s %s' % (probe, tab.get(probe)))
 
-    raw = io.open(a.gamemode, encoding='utf-8', newline='').read()
-    s = raw.replace('\r\n', '\n')
-    text = block(items, actors, len(order))
-    if START in s:
-        i = s.index(START)
-        j = s.index(END, i) + len(END) + 1
-        s = s[:i] + text + s[j:]
-    else:
-        i = s.index(AFTER) + len(AFTER) + 1
-        s = s[:i] + '\n' + text + s[i:]
-    io.open(a.gamemode, 'w', encoding='utf-8', newline='').write(s)
-    print('wrote the ADMIN_NAMES block into ' + a.gamemode)
+    for name, tab in (('ADMIN_ITEMS', items), ('ADMIN_ACTORS', actors)):
+        changed = gamemode_tables.write(name, rows(tab), a.tables)
+        print('%s %s' % ('wrote' if changed else 'already current:', gamemode_tables.table_file(name, a.tables)))
     return 0
 
 

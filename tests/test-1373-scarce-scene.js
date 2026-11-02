@@ -7,7 +7,7 @@ const vm = require('vm');
 const root = path.join(__dirname, '..');
 const gmPath = path.join(root, 'game', 'gamemode.js');
 const pagePath = path.join(root, 'docs', 'systems', 'quests.md');
-const gm = fs.readFileSync(gmPath, 'utf8').replace(/\r/g, '');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(gmPath, 'utf8')).replace(/\r/g, '');
 const page = fs.readFileSync(pagePath, 'utf8').replace(/\r/g, '');
 const startMark = '// ==== thornswood custom quests ====';
 const endMark = '// ==== end thornswood custom quests ====';

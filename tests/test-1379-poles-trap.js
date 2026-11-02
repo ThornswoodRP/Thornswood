@@ -18,7 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const SRC = process.env.GM || path.join(__dirname, '..', 'game', 'gamemode.js');
 const CR = String.fromCharCode(13);
-const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const src = require('./gamemode-tables.js').joined(fs.readFileSync(SRC, 'utf8')).split(CR).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -96,7 +96,7 @@ yes('TOOLS.fisher.accept lists at least the handout pole',
   // Behavioral lift when the call is present; otherwise stay red with TODO.
   // TODO(Temp-Fishing): once toolGate is wired in fish(), these run for real.
   if (fishFn && toolAt >= 0) {
-    const fishTable = cut('// ==== FISH_BY_BASE, generated ====', '// ==== end FISH_BY_BASE ====');
+    const fishTable = cut('var FISH_BY_BASE = ', ';\n');
     yes('FISH_BY_BASE table cuts for the no-pole lift', !!fishTable);
     if (fishTable) {
       const FISH_BY_BASE = new Function(fishTable + '\nreturn FISH_BY_BASE;')();

@@ -1,0 +1,3488 @@
+{
+"10fc0e:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10ee64:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10ee3f:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10e101:Skyrim.esm":{
+"ore":"5acdc:Skyrim.esm",
+"name":"Ebony Ore",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"10f0e7:Skyrim.esm":{
+"ore":"5acdc:Skyrim.esm",
+"name":"Ebony Ore",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"10dcd2:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcd1:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcd0:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dccf:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcce:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dccd:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dccc:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dccb:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dcca:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dcc9:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dcc8:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dcc7:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dcc6:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dcc5:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dcc4:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dcc3:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dcc2:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dcc1:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcc0:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcbf:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcbe:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcbd:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcbc:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcbb:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcba:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcb9:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcb8:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcb7:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcb6:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcb5:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcb4:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcb3:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcb2:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcb1:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcb0:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcaf:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcae:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcad:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcac:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcab:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dcaa:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dca9:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dca8:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dca7:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dca6:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dca5:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dca4:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dca3:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dca2:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dca1:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dca0:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc9f:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc9e:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc9d:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc9c:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc9b:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc9a:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc99:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc98:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc97:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc96:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc95:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc94:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc93:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc92:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc91:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dc90:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dc8f:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dc8e:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dc8d:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc8c:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc8b:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc8a:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc89:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc88:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc87:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc86:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc85:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc84:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc83:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc82:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc81:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc80:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc7f:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc7e:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc7d:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc7c:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc7b:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc7a:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc79:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc78:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc77:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc76:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc75:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc74:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc73:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc72:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc71:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc70:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc6f:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc6e:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc6d:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dc6c:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dc6b:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dc6a:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dc69:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc68:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc67:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc66:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc65:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc64:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc63:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc62:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc61:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc60:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc5f:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc5e:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc5d:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc5c:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc5b:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc5a:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc59:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc58:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc57:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc56:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc55:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc54:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc53:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc52:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc51:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dc50:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dc4f:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dc4e:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dc4d:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc4c:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc4b:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc4a:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc49:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc48:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc47:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc46:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc45:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc44:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc43:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc42:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc41:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc40:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc3f:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc3e:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc3d:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc3c:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc3b:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc3a:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc39:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc38:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dc37:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dc36:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dc35:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dc34:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc33:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc32:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc31:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dc30:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc2f:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc2e:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc2d:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc2c:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc2b:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dc2a:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db89:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db88:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db87:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db86:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db85:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db84:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db83:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db82:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db81:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db80:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db7f:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db7e:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db7d:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db7c:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db7b:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10db7a:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10db79:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10db78:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db77:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db76:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db75:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db74:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db73:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db71:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db70:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db6f:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db6e:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db6d:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db6c:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db6b:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db6a:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db69:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db68:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db67:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db66:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db65:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db64:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db63:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db62:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db61:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10db60:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10db5f:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10db5e:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db5d:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db5c:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db5b:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db5a:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db59:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db58:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db57:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db55:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db54:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db53:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db52:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db51:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db50:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db4f:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db4e:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db4d:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db4c:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db4b:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db4a:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db49:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db48:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db47:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db46:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db45:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db44:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db43:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db42:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db41:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db40:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db3f:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db3e:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db3d:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db3c:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db3b:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db3a:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db39:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db38:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db37:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db36:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db35:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db34:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db33:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db32:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db31:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db30:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db2f:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db2e:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db2d:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db2c:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db2b:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db2a:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db29:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db28:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db27:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db26:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db25:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db24:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db23:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db22:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db21:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db20:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db1f:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db1e:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db1d:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db1c:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db1b:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db1a:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db19:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db18:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db17:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db16:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db15:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db14:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db13:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db12:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db11:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db10:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db0f:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db0e:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10db0d:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db0c:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db0b:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db0a:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db09:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db08:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db07:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db06:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db05:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db04:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db03:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db02:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db01:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10db00:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10daff:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dafe:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dafd:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dafc:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dafb:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dafa:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10daf9:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10daf8:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10daf7:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10daf6:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10daf5:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10daf4:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10daf3:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10daf2:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10daf1:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10daf0:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10daef:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10daee:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10daed:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10daec:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10daeb:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10daea:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dae9:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dae8:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dae7:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dae6:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dae5:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dae4:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dae3:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dae2:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dae1:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dae0:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dadf:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dade:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10dadd:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dadc:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dadb:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dada:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dad9:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dad8:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dad7:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dad6:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dad5:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dad4:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dad3:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dad2:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dad1:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dad0:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dacf:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dace:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dacd:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dacc:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dacb:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10daca:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dac9:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dac8:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dac7:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dac6:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10dac5:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dac4:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dac3:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dac2:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dac1:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dac0:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dabf:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dabe:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dabd:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dabc:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dabb:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10dab9:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10daa8:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10daa5:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10daa4:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10daa3:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10daa1:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10daa0:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10da9f:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10da9e:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10da9d:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10da9b:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10da97:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10da95:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d7c8:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d7aa:Skyrim.esm":{
+"ore":"5ace1:Skyrim.esm",
+"name":"Malachite Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d7a9:Skyrim.esm":{
+"ore":"5ace1:Skyrim.esm",
+"name":"Malachite Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d798:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d76f:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d749:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d710:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d6ff:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d4de:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d4db:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d4d5:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d4d0:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d4c4:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d130:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d098:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d096:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d095:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d094:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d093:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d092:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d091:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d090:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d08f:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d08e:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d08d:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d08c:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d08b:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d08a:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d089:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d088:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d087:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d086:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d085:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d084:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d083:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d082:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d081:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d080:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d07f:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d07e:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d07d:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d07c:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d07b:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d07a:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d079:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d078:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d077:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d076:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d075:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d074:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d073:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d072:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d071:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d070:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d06f:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d06e:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d06d:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d06c:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d06b:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d06a:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d069:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d068:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d067:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d066:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d065:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d064:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d063:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d062:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d061:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d060:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d05f:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d05e:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d05d:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d05c:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d05b:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d05a:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d059:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d058:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d057:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d056:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d055:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d054:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d053:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d052:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d051:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d050:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d04f:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d04e:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d04d:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d04c:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d04b:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d04a:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d049:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d047:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d046:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d045:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d044:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d043:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d040:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d03f:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d03e:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d03b:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d03a:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d039:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d038:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d037:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d036:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d035:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d034:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d032:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d031:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d030:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d02f:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d02e:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d02d:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d02c:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d027:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d026:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d025:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d024:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"10d023:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d022:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d021:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d020:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"10d01f:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d01e:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10d01d:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"10acc8:Skyrim.esm":{
+"ore":"5ace1:Skyrim.esm",
+"name":"Malachite Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"a2cb1:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"a2c85:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"a2c82:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"a2c81:Skyrim.esm":{
+"ore":"5acdf:Skyrim.esm",
+"name":"Silver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"a2c80:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"a2c7f:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"a2c7e:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"a2c7d:Skyrim.esm":{
+"ore":"5ace2:Skyrim.esm",
+"name":"Quicksilver Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"a2c7c:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"a2c7b:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"a2c79:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"a2c78:Skyrim.esm":{
+"ore":"5acdd:Skyrim.esm",
+"name":"Orichalcum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"a2c77:Skyrim.esm":{
+"ore":"5ace1:Skyrim.esm",
+"name":"Malachite Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"a2c73:Skyrim.esm":{
+"ore":"5ace1:Skyrim.esm",
+"name":"Malachite Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"a2c6b:Skyrim.esm":{
+"ore":"5ace1:Skyrim.esm",
+"name":"Malachite Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"a2c68:Skyrim.esm":{
+"ore":"5ace1:Skyrim.esm",
+"name":"Malachite Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"a2c5b:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"a2c52:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"a2c4f:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"a2c4e:Skyrim.esm":{
+"ore":"5ace0:Skyrim.esm",
+"name":"Moonstone Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"a2c4d:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"a2c4c:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"a2c4b:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"a2c46:Skyrim.esm":{
+"ore":"71cf3:Skyrim.esm",
+"name":"Iron Ore",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"a2c42:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"a2c36:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"a2c33:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"a2bfe:Skyrim.esm":{
+"ore":"5acde:Skyrim.esm",
+"name":"Gold Ore",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,2],[1,2]]
+},
+"a2bfb:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"a2bf8:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"a2bf6:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"a2bed:Skyrim.esm":{
+"ore":"5acdb:Skyrim.esm",
+"name":"Corundum Ore",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"a2bec:Skyrim.esm":{
+"ore":"5acdc:Skyrim.esm",
+"name":"Ebony Ore",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"a2be6:Skyrim.esm":{
+"ore":"5acdc:Skyrim.esm",
+"name":"Ebony Ore",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"a2be5:Skyrim.esm":{
+"ore":"5acdc:Skyrim.esm",
+"name":"Ebony Ore",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"e2bc2:Skyrim.esm":{
+"ore":"5acdc:Skyrim.esm",
+"name":"Ebony Ore",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"195a5:Dawnguard.esm":{
+"ore":"195aa:Dawnguard.esm",
+"name":"Shellbug Chitin",
+"rank":"advanced",
+"yield":[[0,0],[1,2],[1,2],[1,2]]
+},
+"a14:HearthFires.esm":{
+"ore":"3043:HearthFires.esm",
+"name":"Clay",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"9f3:HearthFires.esm":{
+"ore":"3043:HearthFires.esm",
+"name":"Clay",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"9f2:HearthFires.esm":{
+"ore":"3043:HearthFires.esm",
+"name":"Clay",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"a511:HearthFires.esm":{
+"ore":"3043:HearthFires.esm",
+"name":"Clay",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"310b:HearthFires.esm":{
+"ore":"3043:HearthFires.esm",
+"name":"Clay",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"306b:HearthFires.esm":{
+"ore":"306c:HearthFires.esm",
+"name":"Quarried Stone",
+"rank":"novice",
+"yield":[[1,2],[1,2],[1,2],[1,2]]
+},
+"3863e:Dragonborn.esm":{
+"ore":"17749:Dragonborn.esm",
+"name":"Heart Stone",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"3863d:Dragonborn.esm":{
+"ore":"17749:Dragonborn.esm",
+"name":"Heart Stone",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"377ee:Dragonborn.esm":{
+"ore":"2b06b:Dragonborn.esm",
+"name":"Stalhrim",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"32cd6:Dragonborn.esm":{
+"ore":"2b06b:Dragonborn.esm",
+"name":"Stalhrim",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"295cb:Dragonborn.esm":{
+"ore":"17749:Dragonborn.esm",
+"name":"Heart Stone",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"28ea2:Dragonborn.esm":{
+"ore":"63b42:Skyrim.esm",
+"name":"Ruby",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"28ea1:Dragonborn.esm":{
+"ore":"63b42:Skyrim.esm",
+"name":"Ruby",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"28ea0:Dragonborn.esm":{
+"ore":"63b42:Skyrim.esm",
+"name":"Ruby",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"28e9c:Dragonborn.esm":{
+"ore":"63b46:Skyrim.esm",
+"name":"Amethyst",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"28e9b:Dragonborn.esm":{
+"ore":"63b46:Skyrim.esm",
+"name":"Amethyst",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"28e9a:Dragonborn.esm":{
+"ore":"63b46:Skyrim.esm",
+"name":"Amethyst",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"28e96:Dragonborn.esm":{
+"ore":"63b43:Skyrim.esm",
+"name":"Emerald",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"28e95:Dragonborn.esm":{
+"ore":"63b43:Skyrim.esm",
+"name":"Emerald",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"28e94:Dragonborn.esm":{
+"ore":"63b43:Skyrim.esm",
+"name":"Emerald",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"28e92:Dragonborn.esm":{
+"ore":"63b44:Skyrim.esm",
+"name":"Sapphire",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"28e90:Dragonborn.esm":{
+"ore":"63b44:Skyrim.esm",
+"name":"Sapphire",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"28e8e:Dragonborn.esm":{
+"ore":"63b44:Skyrim.esm",
+"name":"Sapphire",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+},
+"1b659:Dragonborn.esm":{
+"ore":"17749:Dragonborn.esm",
+"name":"Heart Stone",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,2]]
+}
+}

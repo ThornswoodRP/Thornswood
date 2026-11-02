@@ -29,6 +29,9 @@ const VERBOSE = process.argv.indexOf('-v') !== -1;
 const SRC = process.env.GM || path.join(HERE, '..', '..', 'game', 'gamemode.js');
 const CR = String.fromCharCode(13);
 const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+// The gamemode's tables (#5191): game/gamemode-tables, or GM_TABLES.
+const TABLES = require('./GamemodeTables.js');
+const TABLE_DIR = process.env.GM_TABLES || TABLES.DIR;
 
 let ok = 0, warn = 0, bad = 0;
 const notes = [];
@@ -118,8 +121,8 @@ if (!VERBS) {
     // Is there a table of things to do it to?
     const table = CLASS_TABLES[verb];
     if (!table) { WARN(verb + ' has no table named in this audit'); return; }
-    const present = src.indexOf(table) !== -1;
-    if (!present) { BAD(cls + ': ' + table + ' is NOT in the gamemode, so the verb has nothing to work on'); }
+    const present = src.indexOf("table('" + table + "')") !== -1 && fs.existsSync(TABLES.file(table, TABLE_DIR));
+    if (!present) { BAD(cls + ': ' + table + ' is NOT read by the gamemode or not in its tables, so the verb has nothing to work on'); }
     else { OK(cls + ': ' + table + ' is installed'); }
   });
 }
@@ -226,11 +229,11 @@ if (!PROFESSIONS) {
     // src is the gamemode, already read at the top of this file.
     const gm = src;
     const benched = {};
-    if (gm) {
-      const access = /const BENCH_ACCESS = (\{[\s\S]*?\});/.exec(gm);
+    {
+      const access = fs.existsSync(TABLES.file('BENCH_ACCESS', TABLE_DIR));
       if (access) {
         try {
-          const table = JSON.parse(access[1]);
+          const table = TABLES.read('BENCH_ACCESS', TABLE_DIR);
           Object.keys(table).forEach(function (k) {
             const halves = (table[k] && table[k].halves) || {};
             Object.keys(halves).forEach(function (hh) {

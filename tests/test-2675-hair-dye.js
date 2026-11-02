@@ -51,7 +51,7 @@ const DATA_FILE = path.join(REPO_DIR, 'game', 'data', 'hair-dyes.json');
 const MODULE_FILE = path.join(REPO_DIR, 'game', 'hair-dye.js');
 const data = JSON.parse(read(DATA_FILE));
 const dye = require(MODULE_FILE);
-const gm = read(path.join(REPO_DIR, 'game', 'gamemode.js'));
+const gm = require('./gamemode-tables.js').joined(read(path.join(REPO_DIR, 'game', 'gamemode.js')));
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
 function between(text, from, to) {
@@ -117,10 +117,15 @@ for (const [what, change, want] of BAD) {
 yes('D refuses a list that is not an object', dye.checkDyes(null).length === 1 && dye.checkDyes([]).length === 1);
 
 // ------------------------------------------------------- T: the item table
-const ITEM_NAMES = between(gm, '  var ITEM_NAMES = {', '  // ==== end ITEM_NAMES ====');
-const ADMIN = between(gm, '  // ==== ADMIN_NAMES ====', '  // ==== end ADMIN_NAMES ====');
-yes('T0 the gamemode\'s item tables are found', ITEM_NAMES.length > 1000 && ADMIN.length > 1000);
-const known = (rec) => ITEM_NAMES.indexOf('", "' + rec + '"]') >= 0 || ADMIN.indexOf('", "' + rec + '"]') >= 0;
+// The gamemode reads ITEM_NAMES, ADMIN_ITEMS and ADMIN_ACTORS from
+// game/gamemode-tables (#5191): lower-case name -> [name, record].
+const GT = require('./gamemode-tables.js');
+const ITEM_T = GT.table('ITEM_NAMES');
+const ADMIN_T = Object.assign({}, GT.table('ADMIN_ACTORS'), GT.table('ADMIN_ITEMS'));
+yes('T0 the gamemode\'s item tables are found', Object.keys(ITEM_T).length > 100 && Object.keys(ADMIN_T).length > 1000);
+const records = {};
+[ITEM_T, ADMIN_T].forEach((t) => Object.keys(t).forEach((k) => { records[t[k][1]] = true; }));
+const known = (rec) => !!records[rec];
 const unknown = allRecords(data).filter((r) => !known(r));
 yes('T1 every record the list names is in the gamemode\'s item tables', unknown.length === 0, unknown.join(', '));
 const accessLine = /const BENCH_ACCESS = (\{[^\n]*\});/.exec(gm);
@@ -151,18 +156,20 @@ yes('T5 every dye takes a bottle of water, the record the needs code fills', !!w
 // ----------------------------------------------------------------- B: the base
 const base = data.item;
 const fid = parseInt(base.split(':')[0], 16);
+// gamemode.js as it is, without its tables: the dye base is in ADMIN_ITEMS's
+// file (the /give lookup), which B3 allows, and in the carried list here.
+const gmText = read(path.join(REPO_DIR, 'game', 'gamemode.js'));
 const gmHits = [];
-gm.split('\n').forEach((l, i) => { if (l.indexOf(base) >= 0) gmHits.push(i + 1); });
-const adminFrom = gm.split('\n').findIndex((l) => l === '  // ==== ADMIN_NAMES ====') + 1;
-const adminTo = gm.split('\n').findIndex((l) => l === '  // ==== end ADMIN_NAMES ====') + 1;
+gmText.split('\n').forEach((l, i) => { if (l.indexOf(base) >= 0) gmHits.push(i + 1); });
 // And in the HAIR_DYES region, the list itself as Build-HairDyeGamemode.js
 // carries it into the hair dye block (slice 2), which test-2675-hair-dye-wiring.js
 // checks is the list byte for byte.
-const dyesFrom = gm.split('\n').findIndex((l) => l === '  // ==== HAIR_DYES ====') + 1;
-const dyesTo = gm.split('\n').findIndex((l) => l === '  // ==== end HAIR_DYES ====') + 1;
+const dyesFrom = gmText.split('\n').findIndex((l) => l === '  // ==== HAIR_DYES ====') + 1;
+const dyesTo = gmText.split('\n').findIndex((l) => l === '  // ==== end HAIR_DYES ====') + 1;
 const inList = (n) => dyesFrom > 0 && n > dyesFrom && n < dyesTo;
-yes('B1 the gamemode names the dye base only in ADMIN_NAMES, the /give lookup, and the carried list',
-    gmHits.length >= 1 && gmHits.every((n) => (n > adminFrom && n < adminTo) || inList(n)), 'lines ' + gmHits.join(', '));
+yes('B1 the gamemode names the dye base only in ADMIN_ITEMS, the /give lookup, and the carried list',
+    gmHits.length >= 1 && gmHits.every(inList) && ADMIN_T[Object.keys(ADMIN_T).find((k) => ADMIN_T[k][1] === base)] !== undefined,
+    'lines ' + gmHits.join(', '));
 yes('B2 ...and not by its bare form id either', !new RegExp('0x0*' + fid.toString(16) + '\\b', 'i').test(gm) &&
     !new RegExp('\\b' + fid + '\\b').test(gm.replace(/[0-9.]*\.[0-9]+/g, '')));
 const others = [];
@@ -171,16 +178,17 @@ function scan(dir, filter) {
   for (const n of fs.readdirSync(dir)) {
     const p = path.join(dir, n);
     if (fs.statSync(p).isDirectory()) { scan(p, filter); continue; }
-    if (!filter.test(n) || p === DATA_FILE || /gamemode\.js$/.test(p)) continue;
+    if (!filter.test(n) || p === DATA_FILE || /gamemode\.js$/.test(p) || p === GT.file('ADMIN_ITEMS')) continue;
     if (read(p).indexOf(base) >= 0) others.push(path.relative(REPO_DIR, p));
   }
 }
 scan(path.join(REPO_DIR, 'game'), /\.(js|json|txt|html|css)$/i);
 yes('B3 nothing else under game\\ names the dye base', others.length === 0, others.join(', '));
-const plain = (/"([^"]+)": \["([^"]+)", "98626:Skyrim\.esm"\]/.exec(ADMIN) || [])[2];
+const plainKey = Object.keys(ADMIN_T).find((k) => ADMIN_T[k][1] === '98626:Skyrim.esm');
+const plain = plainKey ? ADMIN_T[plainKey][0] : undefined;
 yes('B4 the dye names are none of the game\'s own item names', data.dyes.every((d) =>
-  ITEM_NAMES.toLowerCase().indexOf('"' + d.name.toLowerCase() + '": [') < 0 &&
-  ADMIN.toLowerCase().indexOf('"' + d.name.toLowerCase() + '": [') < 0) && data.dyes.every((d) => d.name !== plain));
+  !Object.prototype.hasOwnProperty.call(ITEM_T, d.name.toLowerCase()) &&
+  !Object.prototype.hasOwnProperty.call(ADMIN_T, d.name.toLowerCase())) && data.dyes.every((d) => d.name !== plain));
 
 const DATA_DIR = process.env.THORNSWOOD_DATA || 'C:\\Thornswood\\Game\\Data';
 const PLUGIN = path.join(DATA_DIR, base.split(':')[1]);

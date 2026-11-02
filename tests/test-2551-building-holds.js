@@ -7,13 +7,13 @@
   #2551, Patrick, 16 October, answer C: a Steward evicts and sets rent only
   in their own hold, with a table giving every claimable building the hold
   its door opens onto. scripts/dev/Build-BuildingHolds.py measures it out of
-  the plugins into game/data/building-holds.json and the BUILDING_HOLD block
+  the plugins into game/data/building-holds.json and the BUILDING_HOLD table
   of the gamemode. This holds all of it together:
 
     T  the table: every building the server claims is in it with one of the
        ten holds, or refused with the reason, never both; each answer
        follows the rule it says it followed
-    G  the gamemode's BUILDING_HOLD block is the table, building for building
+    G  the gamemode's BUILDING_HOLD table is the builder's, building for building
     X  DATA.cellToHold agrees with the table on every building it names, or
        the table says which is right and why
     B  the table was built against the collection's own bytes and the
@@ -54,7 +54,7 @@ const DOORS = path.join(ROOT, 'game', 'data', 'doors.json');
 const COLLECTION = path.join(ROOT, 'records', 'collection-plugins.json');
 const LAST = path.join(ROOT, 'game', 'data', 'last-plugin.json');
 const TOOL = path.join(ROOT, 'scripts', 'dev', 'Build-BuildingHolds.py');
-const gm = read(path.join(ROOT, 'game', 'gamemode.js'));
+const gm = require('./gamemode-tables.js').joined(read(path.join(ROOT, 'game', 'gamemode.js')));
 const OURS = ['Thornswood-Content.esp', 'Thornswood-Last.esp'];
 const AFTER = ['Thornswood-Last.esp'];
 const HOLDS = ['whiterun', 'solitude', 'riften', 'markarth', 'windhelm',
@@ -143,12 +143,15 @@ yes('T9 every building refused says why, and names no hold', Object.keys(refused
   typeof refused[b].why === 'string' && refused[b].why.length > 20 && !refused[b].hold));
 
 // ---------------------------------------------------------------- G
-const blockText = slice(gm, '  // ==== BUILDING_HOLD, generated ====', '  // ==== end BUILDING_HOLD ====');
+// The gamemode reads BUILDING_HOLD from game/gamemode-tables (#5191), in
+// the property block.
 const prop = slice(gm, '// ==== thornswood property ====', '// ==== end thornswood property ====');
-yes('G1 the property block carries the BUILDING_HOLD block', !!blockText && !!prop && prop.indexOf(blockText) !== -1);
-const m = blockText ? /\n  var BUILDING_HOLD = (\{[^\n]*\});\n/.exec(blockText) : null;
-const inBlock = m ? JSON.parse(m[1]) : null;
-yes('G2 the block is the table, building for building (' + (inBlock ? Object.keys(inBlock).length : 0) + ')', !!inBlock &&
+const gmText = read(path.join(ROOT, 'game', 'gamemode.js'));
+const propText = slice(gmText, '// ==== thornswood property ====', '// ==== end thornswood property ====');
+yes('G1 the property block reads the BUILDING_HOLD table', !!propText && propText.split("var BUILDING_HOLD = table('BUILDING_HOLD');").length === 2);
+let inBlock = null;
+try { inBlock = require('./gamemode-tables.js').table('BUILDING_HOLD'); } catch (e) { inBlock = null; }
+yes('G2 the table is the builder\'s, building for building (' + (inBlock ? Object.keys(inBlock).length : 0) + ')', !!inBlock &&
     Object.keys(inBlock).length === Object.keys(rows).length &&
     Object.keys(rows).every((b) => inBlock[b] === rows[b].hold));
 

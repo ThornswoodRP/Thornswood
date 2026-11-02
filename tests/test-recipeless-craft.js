@@ -43,7 +43,7 @@ const fs = require('fs');
 const path = require('path');
 const SRC = process.env.GM || path.join(REPO_DIR, 'game', 'gamemode.js');
 const CR = String.fromCharCode(13);
-const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const src = require('./gamemode-tables.js').joined(fs.readFileSync(SRC, 'utf8')).split(CR).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -100,7 +100,7 @@ const tableAt = src.indexOf('  var RECIPES_BY_ID = {');
 const tableEnd = tableAt < 0 ? -1 : src.indexOf('\n  };\n', tableAt);
 let REAL_TABLE = {};
 try {
-  REAL_TABLE = JSON.parse(src.slice(tableAt + '  var RECIPES_BY_ID = '.length, tableEnd + 4));
+  REAL_TABLE = require('./gamemode-tables.js').inGamemode(src, 'RECIPES_BY_ID');
 } catch (e) { REAL_TABLE = {}; }
 yes('the rank ladder, the bench table and the recipe table all read',
     RANK_LADDER.length === 4 && Object.keys(REAL_BENCHES).length > 10 &&

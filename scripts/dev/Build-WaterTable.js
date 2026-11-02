@@ -56,6 +56,7 @@
 const fs = require('fs');
 const path = require('path');
 const { pluginPath, loadedOrder } = require('./OwnPlugins.js');
+const TABLES = require('./GamemodeTables.js');
 const zlib = require('zlib');
 
 const args = process.argv.slice(2);
@@ -252,9 +253,6 @@ if (PRINT) {
 }
 
 function install() {
-  const gm = path.join(__dirname, '..', '..', 'game', 'gamemode.js');
-  let src;
-  try { src = fs.readFileSync(gm, 'utf8'); } catch (e) { fail('no gamemode.js to install into'); return; }
   // Flattened on the way in: the server only ever asks "what class of water is
   // in this cell", so the two hops are collapsed to one here rather than at
   // run time, and the water records themselves never reach the gamemode.
@@ -263,18 +261,8 @@ function install() {
     const w = waters[where[d]];
     if (w && w.c !== 'deep') { thin[d] = w.c; }
   });
-  const line = 'const WATERS = ' + JSON.stringify({ items: thin }) + ';';
-  const re = /^const WATERS = .*;$/m;
-  const next = re.test(src)
-    ? src.replace(re, line)
-    : src.replace(/^(const ITEMS = .*;)$/m, '$1\n' + line);
-  if (next === src) {
-    if (re.test(src)) { console.log('installed water table already matches this load order'); return; }
-    fail('could not find anywhere in gamemode.js to put the table'); return;
-  }
-  fs.writeFileSync(gm, next);
-  console.log('installed ' + Object.keys(thin).length +
-              ' places into game\\gamemode.js (deep is the default and is left out)');
+  const changed = TABLES.write('WATERS', { items: thin });
+  console.log((changed ? 'wrote ' : 'already current: ') + Object.keys(thin).length + ' places (deep is the default and is left out)' + ' in game\\gamemode-tables\\WATERS.json');
 }
 
 /*

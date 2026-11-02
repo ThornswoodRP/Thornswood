@@ -33,7 +33,7 @@ function yes(what, cond) {
 }
 
 // -------------------------------------------------------------- the races
-const line = /const RACES = (\{[\s\S]*?\});\n/.exec(src);
+const line = require('./gamemode-tables.js').lineOf(src, 'RACES');
 const RACES = line ? JSON.parse(line[1]) : { items: {} };
 const races = Object.keys(RACES.items || {});
 const playable = races.filter(function (d) { return RACES.items[d].p; });

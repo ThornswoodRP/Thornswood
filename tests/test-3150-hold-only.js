@@ -164,7 +164,7 @@ yes('D1 the gatherer and miner pages name every one' + (unnamed.length ? ' (not:
     rows.length > 0 && !unnamed.length);
 
 // ---------------------------------------------------------------- G
-const gm = fs.readFileSync(path.join(ROOT, 'game', 'gamemode.js'), 'utf8');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(ROOT, 'game', 'gamemode.js'), 'utf8'));
 const at = /var HELD_BY_SERVER = (\[[^\]]*\]);/.exec(gm);
 const held = new Set(at ? JSON.parse(at[1]) : []);
 yes('G1 the ones the server holds off are in the gamemode\'s HELD_BY_SERVER block',

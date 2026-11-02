@@ -154,7 +154,7 @@ test('small operation sequences obey conservation through recreation', () => {
   assert.ok(paths > 100);
 });
 test('the runtime bundle exposes the reviewed accounting implementation', () => {
-  const source=fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8'),vm=require('node:vm'),context={require,Buffer};
+  const source=require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8')),vm=require('node:vm'),context={require,Buffer};
   vm.createContext(context);
   vm.runInContext(source.slice(source.indexOf('// MERCHANT TRADING BUNDLE BEGIN'),source.indexOf('// MERCHANT TRADING BUNDLE END'))+
     '\nglobalThis.accounting=MERCHANT_TRADING.sceneBudget;',context);

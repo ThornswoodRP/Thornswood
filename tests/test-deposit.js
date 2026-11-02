@@ -213,7 +213,7 @@ if (block !== null) {
       /if \(took === 1\) \{ stopMining\(actorId\); return; \}/.test(code));
   yes('logging out ends it, by the next swing asking who is online',
       /if \(miningGone\(actorId\)\) \{ stopMining\(actorId\); return; \}/.test(code) &&
-      /function miningGone[\s\S]{0,300}mp\.getOnlinePlayers\(\)/.test(code));
+      /function miningGone[\s\S]{0,300}mp\.get\(0, 'onlinePlayers'\)/.test(code));
   yes('and there is a hard stop that no real seam reaches',
       /swungThisSpell >= MINE_MOST/.test(code) && /const MINE_MOST = \d+;/.test(code));
   /*

@@ -550,6 +550,8 @@ Put (Join-Path $repo 'bot\factions.json') '[]'
 Put (Join-Path $repo 'bot\staff-channel.txt') '0'
 Put (Join-Path $repo 'bot\assets\join-card.png') 'not really a picture'
 Put (Join-Path $repo 'game\gamemode.js') '// the committed gamemode'
+# And its tables (#5191), which the gamemode artifact carries with it.
+Put (Join-Path $repo 'game\gamemode-tables\WAY_OUT.json') '{}'
 Site 'docs v0'
 Voice 'voice-v0'
 Bot 'bot v0'

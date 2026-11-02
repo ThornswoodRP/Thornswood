@@ -50,6 +50,7 @@
 const fs = require('fs');
 const path = require('path');
 const { pluginPath, loadedOrder } = require('./OwnPlugins.js');
+const TABLES = require('./GamemodeTables.js');
 const zlib = require('zlib');
 
 const args = process.argv.slice(2);
@@ -214,28 +215,13 @@ if (PRINT) {
 }
 
 function install() {
-  const gm = path.join(__dirname, '..', '..', 'game', 'gamemode.js');
-  let src;
-  try { src = fs.readFileSync(gm, 'utf8'); } catch (e) { fail('no gamemode.js to install into'); return; }
   const thin = {};
   Object.keys(items).sort().forEach(function (d) {
     thin[d] = { w: items[d].w, k: items[d].k };
     if (items[d].s) { thin[d].s = 1; }
   });
-  const line = 'const WEATHER = ' + JSON.stringify({ most: maxWind, mid: midWind, items: thin }) + ';';
-  const re = /^const WEATHER = .*;$/m;
-  const next = re.test(src)
-    ? src.replace(re, line)
-    : src.replace(/^(const ITEMS = .*;)$/m, '$1\n' + line);
-  if (next === src) {
-    // Run on a load order that has not changed, the line is already there and
-    // is the same line. That is the table being current, not a failure to
-    // find a place for it, and it used to say FAIL and exit 1 (#1138).
-    if (re.test(src)) { console.log('game\\gamemode.js already holds this table'); return; }
-    fail('could not find anywhere in gamemode.js to put the table'); return;
-  }
-  fs.writeFileSync(gm, next);
-  console.log('installed ' + Object.keys(thin).length + ' rows into game\\gamemode.js');
+  const changed = TABLES.write('WEATHER', { most: maxWind, mid: midWind, items: thin });
+  console.log((changed ? 'wrote ' : 'already current: ') + Object.keys(thin).length + ' rows' + ' in game\\gamemode-tables\\WEATHER.json');
 }
 
 if (process.exitCode === 1) {

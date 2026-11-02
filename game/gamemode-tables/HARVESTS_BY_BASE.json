@@ -1,0 +1,537 @@
+{
+"1016a1:Skyrim.esm":{
+"produce":"3ad56:Skyrim.esm",
+"name":"Chaurus Eggs",
+"rank":"expert"
+},
+"1016a2:Skyrim.esm":{
+"produce":"3ad56:Skyrim.esm",
+"name":"Chaurus Eggs",
+"rank":"expert"
+},
+"1016a3:Skyrim.esm":{
+"produce":"3ad56:Skyrim.esm",
+"name":"Chaurus Eggs",
+"rank":"expert"
+},
+"108ee2:Skyrim.esm":{
+"produce":"ec870:Skyrim.esm",
+"name":"Mora Tapinella",
+"rank":"advanced"
+},
+"10f37:Dawnguard.esm":{
+"produce":"b097:Dawnguard.esm",
+"name":"Gleamblossom",
+"rank":"advanced"
+},
+"110c8:HearthFires.esm":{
+"produce":"59b86:Skyrim.esm",
+"name":"Nirnroot",
+"rank":"expert"
+},
+"12db9:Dawnguard.esm":{
+"produce":"14dc4:Dawnguard.esm",
+"name":"Soul Husk",
+"rank":"novice"
+},
+"12dba:Dawnguard.esm":{
+"produce":"14dc4:Dawnguard.esm",
+"name":"Soul Husk",
+"rank":"novice"
+},
+"16e24:Dragonborn.esm":{
+"produce":"16e26:Dragonborn.esm",
+"name":"Ashen Grass Pod",
+"rank":"novice"
+},
+"16e25:Dragonborn.esm":{
+"produce":"16e26:Dragonborn.esm",
+"name":"Ashen Grass Pod",
+"rank":"novice"
+},
+"17005:Dragonborn.esm":{
+"produce":"17008:Dragonborn.esm",
+"name":"Trama Root",
+"rank":"novice"
+},
+"17e93:Dragonborn.esm":{
+"produce":"17e97:Dragonborn.esm",
+"name":"Scathecraw",
+"rank":"novice"
+},
+"17e94:Dragonborn.esm":{
+"produce":"17e97:Dragonborn.esm",
+"name":"Scathecraw",
+"rank":"novice"
+},
+"184ef:Dragonborn.esm":{
+"produce":"17008:Dragonborn.esm",
+"name":"Trama Root",
+"rank":"novice"
+},
+"18b19:Dragonborn.esm":{
+"produce":"17008:Dragonborn.esm",
+"name":"Trama Root",
+"rank":"novice"
+},
+"195dc:Dragonborn.esm":{
+"produce":"1cd74:Dragonborn.esm",
+"name":"Ash Creep Cluster",
+"rank":"master"
+},
+"195dd:Dragonborn.esm":{
+"produce":"1cd74:Dragonborn.esm",
+"name":"Ash Creep Cluster",
+"rank":"master"
+},
+"1bb3d:Skyrim.esm":{
+"produce":"45c28:Skyrim.esm",
+"name":"Lavender",
+"rank":"novice"
+},
+"1ff64:Dragonborn.esm":{
+"produce":"1ff75:Dragonborn.esm",
+"name":"Emperor Parasol Moss",
+"rank":"novice"
+},
+"1ff65:Dragonborn.esm":{
+"produce":"1ff75:Dragonborn.esm",
+"name":"Emperor Parasol Moss",
+"rank":"novice"
+},
+"1ff66:Dragonborn.esm":{
+"produce":"1ff75:Dragonborn.esm",
+"name":"Emperor Parasol Moss",
+"rank":"novice"
+},
+"23cff:Skyrim.esm":{
+"produce":"23d6f:Skyrim.esm",
+"name":"Pine Thrush Egg",
+"rank":"advanced"
+},
+"2a76:Dawnguard.esm":{
+"produce":"2a78:Dawnguard.esm",
+"name":"Yellow Mountain Flower",
+"rank":"advanced"
+},
+"2a77:Dawnguard.esm":{
+"produce":"2a78:Dawnguard.esm",
+"name":"Yellow Mountain Flower",
+"rank":"advanced"
+},
+"34d2c:Skyrim.esm":{
+"produce":"34d32:Skyrim.esm",
+"name":"Frost Mirriam",
+"rank":"novice"
+},
+"34d2d:Skyrim.esm":{
+"produce":"34d31:Skyrim.esm",
+"name":"Elves Ear",
+"rank":"expert"
+},
+"34d30:Skyrim.esm":{
+"produce":"34d22:Skyrim.esm",
+"name":"Garlic",
+"rank":"novice"
+},
+"4d9ff:Skyrim.esm":{
+"produce":"4da00:Skyrim.esm",
+"name":"Fly Amanita",
+"rank":"advanced"
+},
+"4da03:Skyrim.esm":{
+"produce":"4da00:Skyrim.esm",
+"name":"Fly Amanita",
+"rank":"advanced"
+},
+"4da04:Skyrim.esm":{
+"produce":"4da20:Skyrim.esm",
+"name":"Bleeding Crown",
+"rank":"expert"
+},
+"4da05:Skyrim.esm":{
+"produce":"4da20:Skyrim.esm",
+"name":"Bleeding Crown",
+"rank":"expert"
+},
+"4da06:Skyrim.esm":{
+"produce":"4da22:Skyrim.esm",
+"name":"White Cap",
+"rank":"novice"
+},
+"4da07:Skyrim.esm":{
+"produce":"4da22:Skyrim.esm",
+"name":"White Cap",
+"rank":"novice"
+},
+"4da08:Skyrim.esm":{
+"produce":"4da23:Skyrim.esm",
+"name":"Imp Stool",
+"rank":"novice"
+},
+"4da09:Skyrim.esm":{
+"produce":"4da23:Skyrim.esm",
+"name":"Imp Stool",
+"rank":"novice"
+},
+"4da0a:Skyrim.esm":{
+"produce":"4da24:Skyrim.esm",
+"name":"Namira's Rot",
+"rank":"novice"
+},
+"4da0b:Skyrim.esm":{
+"produce":"4da24:Skyrim.esm",
+"name":"Namira's Rot",
+"rank":"novice"
+},
+"4da0c:Skyrim.esm":{
+"produce":"4da25:Skyrim.esm",
+"name":"Blisterwort",
+"rank":"expert"
+},
+"4da1f:Skyrim.esm":{
+"produce":"4da25:Skyrim.esm",
+"name":"Blisterwort",
+"rank":"expert"
+},
+"6f94d:Skyrim.esm":{
+"produce":"6f950:Skyrim.esm",
+"name":"Scaly Pholiota",
+"rank":"advanced"
+},
+"70e42:Skyrim.esm":{
+"produce":"6f950:Skyrim.esm",
+"name":"Scaly Pholiota",
+"rank":"advanced"
+},
+"7e8b8:Skyrim.esm":{
+"produce":"7e8b7:Skyrim.esm",
+"name":"Swamp Fungal Pod",
+"rank":"advanced"
+},
+"7e8c2:Skyrim.esm":{
+"produce":"7e8c1:Skyrim.esm",
+"name":"Giant Lichen",
+"rank":"advanced"
+},
+"7e8c9:Skyrim.esm":{
+"produce":"7e8c8:Skyrim.esm",
+"name":"Rock Warbler Egg",
+"rank":"advanced"
+},
+"7edf6:Skyrim.esm":{
+"produce":"7edf5:Skyrim.esm",
+"name":"Nordic Barnacle",
+"rank":"advanced"
+},
+"7ee00:Skyrim.esm":{
+"produce":"7ee01:Skyrim.esm",
+"name":"Glowing Mushroom",
+"rank":"advanced"
+},
+"8b5c4:Skyrim.esm":{
+"produce":"77e1c:Skyrim.esm",
+"name":"Blue Mountain Flower",
+"rank":"advanced"
+},
+"9748b:Skyrim.esm":{
+"produce":"7ee01:Skyrim.esm",
+"name":"Glowing Mushroom",
+"rank":"advanced"
+},
+"a24d:Dawnguard.esm":{
+"produce":"b097:Dawnguard.esm",
+"name":"Gleamblossom",
+"rank":"advanced"
+},
+"b03af:Skyrim.esm":{
+"produce":"b2183:Skyrim.esm",
+"name":"Creep Cluster",
+"rank":"novice"
+},
+"b202c:Skyrim.esm":{
+"produce":"b2183:Skyrim.esm",
+"name":"Creep Cluster",
+"rank":"novice"
+},
+"b4ec:Dawnguard.esm":{
+"produce":"1932b:Dawnguard.esm",
+"name":"Canticle Bark",
+"rank":"novice"
+},
+"b91f0:Skyrim.esm":{
+"produce":"134aa:Skyrim.esm",
+"name":"Thistle Branch",
+"rank":"novice"
+},
+"b91f8:Skyrim.esm":{
+"produce":"77e1e:Skyrim.esm",
+"name":"Purple Mountain Flower",
+"rank":"advanced"
+},
+"bb947:Skyrim.esm":{
+"produce":"3f7f8:Skyrim.esm",
+"name":"Tundra Cotton",
+"rank":"novice"
+},
+"bb948:Skyrim.esm":{
+"produce":"5076e:Skyrim.esm",
+"name":"Juniper Berries",
+"rank":"novice"
+},
+"bb949:Skyrim.esm":{
+"produce":"6ac4a:Skyrim.esm",
+"name":"Jazbay Grapes",
+"rank":"novice"
+},
+"bb94a:Skyrim.esm":{
+"produce":"6abcb:Skyrim.esm",
+"name":"Canis Root",
+"rank":"advanced"
+},
+"bb94b:Skyrim.esm":{
+"produce":"516c8:Skyrim.esm",
+"name":"Deathbell",
+"rank":"advanced"
+},
+"bb94c:Skyrim.esm":{
+"produce":"516c8:Skyrim.esm",
+"name":"Deathbell",
+"rank":"advanced"
+},
+"bb94d:Skyrim.esm":{
+"produce":"889a2:Skyrim.esm",
+"name":"Dragon's Tongue",
+"rank":"advanced"
+},
+"bb94e:Skyrim.esm":{
+"produce":"889a2:Skyrim.esm",
+"name":"Dragon's Tongue",
+"rank":"advanced"
+},
+"bb94f:Skyrim.esm":{
+"produce":"57f91:Skyrim.esm",
+"name":"Hanging Moss",
+"rank":"novice"
+},
+"bb950:Skyrim.esm":{
+"produce":"57f91:Skyrim.esm",
+"name":"Hanging Moss",
+"rank":"novice"
+},
+"bb951:Skyrim.esm":{
+"produce":"57f91:Skyrim.esm",
+"name":"Hanging Moss",
+"rank":"novice"
+},
+"bb953:Skyrim.esm":{
+"produce":"4b0ba:Skyrim.esm",
+"name":"Wheat",
+"rank":"advanced"
+},
+"bcf33:Skyrim.esm":{
+"produce":"1b3bd:Skyrim.esm",
+"name":"Snowberries",
+"rank":"advanced"
+},
+"bcf34:Skyrim.esm":{
+"produce":"1b3bd:Skyrim.esm",
+"name":"Snowberries",
+"rank":"advanced"
+},
+"bcf3a:Skyrim.esm":{
+"produce":"77e1e:Skyrim.esm",
+"name":"Purple Mountain Flower",
+"rank":"advanced"
+},
+"bcf3c:Skyrim.esm":{
+"produce":"77e1d:Skyrim.esm",
+"name":"Red Mountain Flower",
+"rank":"advanced"
+},
+"bcf3d:Skyrim.esm":{
+"produce":"77e1c:Skyrim.esm",
+"name":"Blue Mountain Flower",
+"rank":"advanced"
+},
+"bcf3e:Skyrim.esm":{
+"produce":"77e1d:Skyrim.esm",
+"name":"Red Mountain Flower",
+"rank":"advanced"
+},
+"bcf3f:Skyrim.esm":{
+"produce":"77e1c:Skyrim.esm",
+"name":"Blue Mountain Flower",
+"rank":"advanced"
+},
+"be3e0:Skyrim.esm":{
+"produce":"83e64:Skyrim.esm",
+"name":"Grass Pod",
+"rank":"novice"
+},
+"be3e1:Skyrim.esm":{
+"produce":"83e64:Skyrim.esm",
+"name":"Grass Pod",
+"rank":"novice"
+},
+"c43b0:Skyrim.esm":{
+"produce":"2f44c:Skyrim.esm",
+"name":"Nightshade",
+"rank":"expert"
+},
+"c43b6:Skyrim.esm":{
+"produce":"2f44c:Skyrim.esm",
+"name":"Nightshade",
+"rank":"expert"
+},
+"ce84c:Skyrim.esm":{
+"produce":"4da24:Skyrim.esm",
+"name":"Namira's Rot",
+"rank":"novice"
+},
+"d1:_ResourcePack.esl":{
+"produce":"d0:_ResourcePack.esl",
+"name":"Aloe Vera Leaves",
+"rank":"novice"
+},
+"d2:_ResourcePack.esl":{
+"produce":"d0:_ResourcePack.esl",
+"name":"Aloe Vera Leaves",
+"rank":"novice"
+},
+"db68b:Skyrim.esm":{
+"produce":"4da22:Skyrim.esm",
+"name":"White Cap",
+"rank":"novice"
+},
+"db6bc:Skyrim.esm":{
+"produce":"4da20:Skyrim.esm",
+"name":"Bleeding Crown",
+"rank":"expert"
+},
+"dd676:Skyrim.esm":{
+"produce":"4da20:Skyrim.esm",
+"name":"Bleeding Crown",
+"rank":"expert"
+},
+"dd679:Skyrim.esm":{
+"produce":"4da20:Skyrim.esm",
+"name":"Bleeding Crown",
+"rank":"expert"
+},
+"dd683:Skyrim.esm":{
+"produce":"4da22:Skyrim.esm",
+"name":"White Cap",
+"rank":"novice"
+},
+"df015:Skyrim.esm":{
+"produce":"1b3bd:Skyrim.esm",
+"name":"Snowberries",
+"rank":"advanced"
+},
+"e644b:Skyrim.esm":{
+"produce":"4da00:Skyrim.esm",
+"name":"Fly Amanita",
+"rank":"advanced"
+},
+"ec7e7:Skyrim.esm":{
+"produce":"ec870:Skyrim.esm",
+"name":"Mora Tapinella",
+"rank":"advanced"
+},
+"ec875:Skyrim.esm":{
+"produce":"ec870:Skyrim.esm",
+"name":"Mora Tapinella",
+"rank":"advanced"
+},
+"ec876:Skyrim.esm":{
+"produce":"ec870:Skyrim.esm",
+"name":"Mora Tapinella",
+"rank":"advanced"
+},
+"eca55:Skyrim.esm":{
+"produce":"4da00:Skyrim.esm",
+"name":"Fly Amanita",
+"rank":"advanced"
+},
+"eca56:Skyrim.esm":{
+"produce":"4da00:Skyrim.esm",
+"name":"Fly Amanita",
+"rank":"advanced"
+},
+"eca57:Skyrim.esm":{
+"produce":"4da20:Skyrim.esm",
+"name":"Bleeding Crown",
+"rank":"expert"
+},
+"eca58:Skyrim.esm":{
+"produce":"4da20:Skyrim.esm",
+"name":"Bleeding Crown",
+"rank":"expert"
+},
+"eca59:Skyrim.esm":{
+"produce":"4da22:Skyrim.esm",
+"name":"White Cap",
+"rank":"novice"
+},
+"eca5a:Skyrim.esm":{
+"produce":"4da22:Skyrim.esm",
+"name":"White Cap",
+"rank":"novice"
+},
+"eca5b:Skyrim.esm":{
+"produce":"4da23:Skyrim.esm",
+"name":"Imp Stool",
+"rank":"novice"
+},
+"eca5c:Skyrim.esm":{
+"produce":"4da23:Skyrim.esm",
+"name":"Imp Stool",
+"rank":"novice"
+},
+"eca5d:Skyrim.esm":{
+"produce":"4da24:Skyrim.esm",
+"name":"Namira's Rot",
+"rank":"novice"
+},
+"eca5e:Skyrim.esm":{
+"produce":"4da24:Skyrim.esm",
+"name":"Namira's Rot",
+"rank":"novice"
+},
+"eca5f:Skyrim.esm":{
+"produce":"4da25:Skyrim.esm",
+"name":"Blisterwort",
+"rank":"expert"
+},
+"eca60:Skyrim.esm":{
+"produce":"4da25:Skyrim.esm",
+"name":"Blisterwort",
+"rank":"expert"
+},
+"ece21:Skyrim.esm":{
+"produce":"ec870:Skyrim.esm",
+"name":"Mora Tapinella",
+"rank":"advanced"
+},
+"ece9a:Skyrim.esm":{
+"produce":"ec870:Skyrim.esm",
+"name":"Mora Tapinella",
+"rank":"advanced"
+},
+"f1ce:HearthFires.esm":{
+"produce":"f1cc:HearthFires.esm",
+"name":"Hawk's Egg",
+"rank":"advanced"
+},
+"f3e57:Skyrim.esm":{
+"produce":"4da20:Skyrim.esm",
+"name":"Bleeding Crown",
+"rank":"expert"
+},
+"f675f:Skyrim.esm":{
+"produce":"4da25:Skyrim.esm",
+"name":"Blisterwort",
+"rank":"expert"
+}
+}

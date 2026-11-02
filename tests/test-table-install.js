@@ -1,27 +1,31 @@
 // test-table-install.js
 //
 // A table builder run on a load order that has not changed says the table is
-// current and exits 0; one with nowhere to put its table still fails.
+// current and exits 0, and a table that changed is written whole.
 //
 // WHY THIS EXISTS. Issue #1138. Build-WarmthTable.js, Build-WaterTable.js and
-// Build-WeatherTable.js install their compact table into game/gamemode.js by
+// Build-WeatherTable.js installed their compact table into game/gamemode.js by
 // replacing one line, and decided whether that worked by asking whether the
 // file changed. When the table they built was the one already there, nothing
 // changed, so they printed "FAIL could not find anywhere in gamemode.js to put
 // the table" and exited 1: an up to date table read as a broken run. Seen for
 // all three against a copy of origin/main where all three were current.
 // Build-FoodTable.js and Build-RaceTable.js had been fixed the same way before.
+// Since #5191 each writes game/gamemode-tables/<NAME>.json through
+// scripts/dev/GamemodeTables.js instead, and never reads or writes
+// gamemode.js; the same three states still hold.
 //
-// HOW. Each builder's own install() is lifted out of the file and run over a
-// stand-in gamemode.js, with a table of two rows, in four states:
-//   1. the anchor line it goes after and no table: it is put in after the anchor
-//   2. run again over what 1 wrote: nothing written, it says so, exit not 1
-//   3. a table that differs: the line is replaced, nothing else moves
-//   4. neither the table nor the anchor: FAIL, exit 1, nothing written
+// HOW. Each builder's own install() is lifted out of the file and run with
+// the real GamemodeTables.js copied into a scratch tree, so the table goes to
+// that tree's game/gamemode-tables, with a table of two rows, in three states:
+//   1. no table yet: it is written, laid out one row to a line
+//   2. run again: nothing written, it says so, exit not 1
+//   3. a table that differs: it is replaced whole
 //
-// Read only. Nothing is written anywhere; the stand-in fs keeps the file.
+// Writes only under its own scratch folder in the temp directory.
 const REPO_DIR = require('path').join(__dirname, '..'); // the tests are in tests\, the repository is one folder up
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 let pass = 0, fail = 0;
@@ -29,6 +33,11 @@ function yes(what, cond) {
   if (cond) { pass++; console.log('PASS  ' + what); }
   else { fail++; console.log('FAIL  ' + what); }
 }
+
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-table-install-'));
+fs.mkdirSync(path.join(TMP, 'scripts', 'dev'), { recursive: true });
+fs.copyFileSync(path.join(REPO_DIR, 'scripts', 'dev', 'GamemodeTables.js'), path.join(TMP, 'scripts', 'dev', 'GamemodeTables.js'));
+const TABLES = require(path.join(TMP, 'scripts', 'dev', 'GamemodeTables.js'));
 
 /* function install() { ... } out of a builder, by its braces. */
 function liftInstall(src) {
@@ -44,41 +53,41 @@ function liftInstall(src) {
 }
 
 /*
-  Each builder: the const it installs, the line it goes after when there is
-  none yet, and the table variables its install() reads, two rows of each.
+  Each builder: the table it writes and the table variables its install()
+  reads, two rows of each.
 */
 const BUILDERS = [
-  { file: 'Build-WarmthTable.js', name: 'WARMTH', anchor: 'ITEMS',
+  { file: 'Build-WarmthTable.js', name: 'WARMTH',
     vars: { items: { '1:Skyrim.esm': { m: 'fur', c: 4 }, '2:Skyrim.esm': { m: 'cloth', c: 2 } } } },
-  { file: 'Build-WaterTable.js', name: 'WATERS', anchor: 'ITEMS',
+  { file: 'Build-WaterTable.js', name: 'WATERS',
     vars: { where: { 'a:Skyrim.esm': 'w1', 'b:Skyrim.esm': 'w2' },
             waters: { w1: { c: 'cold' }, w2: { c: 'warm' } } } },
-  { file: 'Build-WeatherTable.js', name: 'WEATHER', anchor: 'ITEMS',
+  { file: 'Build-WeatherTable.js', name: 'WEATHER',
     vars: { items: { '3:Skyrim.esm': { w: 10, k: 'snow' }, '4:Skyrim.esm': { w: 2, k: 'clear' } },
             maxWind: 10, midWind: 5 } },
-  { file: 'Build-FoodTable.js', name: 'FOODS', anchor: 'WARMTH',
+  { file: 'Build-FoodTable.js', name: 'FOODS',
     vars: { items: { '5:Skyrim.esm': 'ale', '6:Skyrim.esm': 'bread' } } },
-  { file: 'Build-RaceTable.js', name: 'RACES', anchor: 'FOODS',
+  { file: 'Build-RaceTable.js', name: 'RACES',
     vars: { rows: { '7:Skyrim.esm': { e: 'NordRace', p: true }, '8:Skyrim.esm': { n: 'Riekling', p: false } } } }
 ];
 
-/* One run of a lifted install() over `gm`, the text of a stand-in gamemode.js. */
-function run(fn, vars, gm) {
-  const out = { wrote: null, said: [], failed: [] };
-  const fakeFs = {
-    readFileSync: function () { return gm; },
-    writeFileSync: function (p, s) { out.wrote = String(s); }
-  };
+/* One run of a lifted install(), with the scratch tree's GamemodeTables. */
+function run(fn, vars) {
+  const out = { said: [], failed: [] };
   const proc = { exitCode: undefined };
   const fakeConsole = {
     log: function (m) { out.said.push(String(m)); },
     error: function (m) { out.failed.push(String(m)); }
   };
   const failFn = function (m) { out.failed.push('FAIL  ' + m); proc.exitCode = 1; };
+  const noGamemode = {
+    readFileSync: function (p) { if (/gamemode\.js$/.test(String(p))) { out.readGamemode = true; } throw new Error('no file here: ' + p); },
+    writeFileSync: function (p) { out.wroteElsewhere = String(p); }
+  };
   const names = Object.keys(vars);
-  const make = Function.apply(null, ['fs', 'path', '__dirname', 'console', 'process', 'fail']
+  const make = Function.apply(null, ['fs', 'path', '__dirname', 'console', 'process', 'fail', 'TABLES']
     .concat(names).concat([fn + '\nreturn install;']));
-  const install = make.apply(null, [fakeFs, path, path.join(REPO_DIR, 'scripts', 'dev'), fakeConsole, proc, failFn]
+  const install = make.apply(null, [noGamemode, path, path.join(TMP, 'scripts', 'dev'), fakeConsole, proc, failFn, TABLES]
     .concat(names.map(function (n) { return vars[n]; })));
   install();
   out.exitCode = proc.exitCode;
@@ -90,37 +99,34 @@ for (const b of BUILDERS) {
   const fn = liftInstall(src);
   yes(b.file + ': install() is there to lift', !!fn);
   if (!fn) { continue; }
+  yes(b.file + ': takes its table writer from GamemodeTables.js', /\nconst TABLES = require\('\.\/GamemodeTables\.js'\);\n/.test(src));
+  const file = TABLES.file(b.name);
 
-  const head = '// the gamemode\nconst ' + b.anchor + ' = {"items":{}};\nconst AFTER = 1;\n';
-
-  // 1. the anchor and no table yet
-  const r1 = run(fn, b.vars, head);
-  const lineRx = new RegExp('^const ' + b.name + ' = .*;$', 'm');
-  yes(b.file + ': with no table yet it puts one in, after const ' + b.anchor,
-      r1.wrote !== null && lineRx.test(r1.wrote) &&
-      r1.wrote.indexOf('const ' + b.anchor + ' = ') < r1.wrote.indexOf('const ' + b.name + ' = ') &&
-      r1.exitCode !== 1);
-  if (r1.wrote === null) { continue; }
+  // 1. no table yet
+  fs.rmSync(file, { force: true });
+  const r1 = run(fn, b.vars);
+  const wrote = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+  yes(b.file + ': with no table yet it writes game/gamemode-tables/' + b.name + '.json, laid out one row to a line',
+      wrote !== null && wrote === TABLES.layout(wrote) && r1.exitCode !== 1 && r1.failed.length === 0);
+  yes(b.file + ': and neither reads nor writes gamemode.js nor any other file', !r1.readGamemode && !r1.wroteElsewhere);
+  if (wrote === null) { continue; }
 
   // 2. the same table again
-  const r2 = run(fn, b.vars, r1.wrote);
-  yes(b.file + ': run again on the same tables, nothing is written and it does not fail',
-      r2.wrote === null && r2.exitCode !== 1 && r2.failed.length === 0);
-  yes(b.file + ': and it says the table is already there (' + (r2.said[0] || '') + ')',
-      r2.said.some(function (s) { return /already/.test(s); }));
+  const before = fs.statSync(file).mtimeMs;
+  const r2 = run(fn, b.vars);
+  yes(b.file + ': run again on the same tables, the file is the same and it does not fail',
+      fs.readFileSync(file, 'utf8') === wrote && r2.exitCode !== 1 && r2.failed.length === 0);
+  yes(b.file + ': and it says the table is already current (' + (r2.said[0] || '') + ')',
+      r2.said.some(function (s) { return /already current/.test(s); }) && fs.statSync(file).mtimeMs === before);
 
   // 3. a table that differs
-  const stale = r1.wrote.replace(lineRx, 'const ' + b.name + ' = {"items":{"old":1}};');
-  const r3 = run(fn, b.vars, stale);
-  yes(b.file + ': a table that differs is replaced, and the lines around it stay',
-      r3.wrote === r1.wrote && r3.exitCode !== 1);
-
-  // 4. nowhere to put it
-  const r4 = run(fn, b.vars, '// a gamemode with neither line\nconst AFTER = 1;\n');
-  yes(b.file + ': with neither its table nor const ' + b.anchor + ' it fails and writes nothing',
-      r4.wrote === null && r4.exitCode === 1 &&
-      r4.failed.some(function (s) { return /could not find anywhere in gamemode\.js to put the table/.test(s); }));
+  fs.writeFileSync(file, '{\n"items":{\n"old":1\n}\n}\n');
+  const r3 = run(fn, b.vars);
+  yes(b.file + ': a table that differs is written whole',
+      fs.readFileSync(file, 'utf8') === wrote && r3.exitCode !== 1 && r3.said.some(function (s) { return /^wrote /.test(s); }));
 }
+
+try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { }
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');

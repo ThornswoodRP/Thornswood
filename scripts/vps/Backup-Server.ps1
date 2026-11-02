@@ -18,7 +18,8 @@
     the bot folder              whole: its config, bot.log and joins.json
     the voice server folder     whole: its config, voice.log and the chat\
                                 day files, every line typed in the game
-    the game server             server-settings.json, gamemode.js, and the
+    the game server             server-settings.json, gamemode.js and the
+                                gamemode-tables it reads (#5191), and the
                                 data, world and private folders next to it.
                                 world is the characters: every person who plays
                                 here is a change form in that folder and nowhere
@@ -191,6 +192,7 @@ foreach (`$root in `$found) {
   'game at   ' + `$root
   Grab (Join-Path `$root 'server-settings.json') (`$tag + '\server-settings.json')
   if (Test-Path (Join-Path `$root 'gamemode.js')) { Grab (Join-Path `$root 'gamemode.js') (`$tag + '\gamemode.js') }
+  if (Test-Path (Join-Path `$root 'gamemode-tables')) { Grab (Join-Path `$root 'gamemode-tables') (`$tag + '\gamemode-tables') }
   if (Test-Path (Join-Path `$root 'data')) { Grab (Join-Path `$root 'data') (`$tag + '\data') }
   # The characters. Every person who plays here is a change form in this
   # folder and nowhere else, and it was not in the backup: the 15 September

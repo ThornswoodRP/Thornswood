@@ -27,18 +27,23 @@
 
       [thornswood] gamemode.js is git blob <sha1>, <size> bytes
 
+  and, from #5191, which tables it read with it (game/gamemode.js, tableFolder):
+
+      [thornswood] gamemode tables are git tree <sha1>, <n> files, in <folder>
+
   So the block below notes where server.log ends, puts the new files in, and
-  reads what the log says after that place: the new blob and then the client
-  scripts line is the new gamemode loaded; "did not load", or a load of any
-  other blob, or nothing within $Wait seconds, is not. Then the old files go
+  reads what the log says after that place: the new blob, the new tree, and
+  then the client scripts line is the new gamemode loaded; "did not load", or
+  a load of any other blob or tree, or nothing within $Wait seconds, is not. Then the old files go
   back the same way and the old blob has to load the same way. Only if that
   fails too is the server restarted, by the put-back swap (Swap.ps1) with
   those old files, which the caller runs.
 
   WHEN IT RELOADS, and otherwise the deploy restarts as before (the block
   says RELOAD NOT HERE, touching nothing, and why):
-    - the run sends gamemode.js and the build stamp and nothing else: a
-      plugin, a load order or a setting is read by the server only at a start
+    - the run sends gamemode.js, the build stamp and the gamemode's tables
+      and nothing else: a plugin, a load order or a setting is read by the
+      server only at a start
     - the staged server-settings.json is the running one byte for byte
     - the gamemode the server loads is $Root\gamemode.js
     - the engine on the box says how a load went (the line above is in its
@@ -48,11 +53,16 @@
   restarts.
 
   WHAT IT LEAVES. The files it replaces are copied into $Root\.prev-<stamp>
-  first, gamemode.js, thornswood-build.json and server-settings.json, the same
-  set a swap moves there, so -PutBack puts a reload back the way it puts back a
-  swap. Each new file goes in with one File.Replace (ReplaceFile), the stamp
-  first, so the gamemode the server loads is never half written and never
-  absent. The newest two .prev and .undone folders are kept, as the swap keeps
+  first, gamemode.js, thornswood-build.json, server-settings.json and the
+  gamemode-tables folder, the same set a swap moves there, so -PutBack puts a
+  reload back the way it puts back a swap. The tables go in first, the folder
+  in two renames (the old one out into the stage, the new one in), because
+  the gamemode reads them only as it loads and nothing loads until
+  gamemode.js goes in. Then each new file goes in with one File.Replace
+  (ReplaceFile), the stamp first, so the gamemode the server loads is never
+  half written and never absent. gamemode.js always goes in, a new file with
+  a new write time, and that is what the engine loads again on: a change of
+  tables alone is loaded the same way as a change of code. The newest two .prev and .undone folders are kept, as the swap keeps
   them.
 
   The people on the server are not warned: nobody is dropped. When the reload
@@ -71,21 +81,9 @@
   scratch folder with a stand-in engine.
 #>
 
-# The git blob id of a gamemode.js, the way the gamemode works it out at load
-# (game/gamemode.js, gamemodeId): every CR LF made LF, then git's blob hash, so
-# it is the id git hash-object prints for the committed file. Latin-1 maps
-# every byte to one char and back, so the replace touches nothing else.
-function Get-ThornswoodGamemodeBlob([string]$Path) {
-  $latin = [Text.Encoding]::GetEncoding(28591)
-  $lf = $latin.GetBytes($latin.GetString([IO.File]::ReadAllBytes($Path)).Replace("`r`n", "`n"))
-  $head = $latin.GetBytes('blob ' + $lf.Length + [char]0)
-  $sha = [Security.Cryptography.SHA1]::Create()
-  try {
-    $null = $sha.TransformBlock($head, 0, $head.Length, $null, 0)
-    $null = $sha.TransformFinalBlock($lf, 0, $lf.Length)
-    return (-join @($sha.Hash | ForEach-Object { $_.ToString('x2') }))
-  } finally { $sha.Dispose() }
-}
+# Get-ThornswoodGamemodeBlob and Get-ThornswoodTablesTree, the ids the
+# gamemode logs as it loads; their text goes up in front of the block below.
+. (Join-Path $PSScriptRoot 'GamemodeId.ps1')
 
 # ==== dev reload block ====
 $reloadBlock = @'
@@ -97,6 +95,11 @@ $gm       = Join-Path $Root 'gamemode.js'
 # The files a reload may put in, in the order it puts them: the stamp first,
 # so the gamemode is never loaded beside a stamp naming the one before it.
 $Files    = @('thornswood-build.json', 'gamemode.js')
+# The gamemode's tables (#5191), each sent as gamemode-tables/NAME.json and
+# put in as the one folder, ahead of both.
+$TablesDir = 'gamemode-tables'
+$tables    = Join-Path $Root $TablesDir
+$tableRels = @(@($Want.Keys) | Where-Object { $_.StartsWith($TablesDir + '/') })
 
 function NotHere([string]$why) {
   'not reloading: ' + $why
@@ -107,7 +110,7 @@ function NotHere([string]$why) {
 # ---- whether this deploy can be a reload --------------------------------
 # Read only. Each refusal leaves the stage as it is, for the swap, which
 # restarts the server with it.
-$others = @(@($Want.Keys) | Where-Object { @($Files + 'server-settings.json') -notcontains $_ })
+$others = @(@($Want.Keys) | Where-Object { @($Files + 'server-settings.json') -notcontains $_ -and -not $_.StartsWith($TablesDir + '/') })
 if ($others.Count) { NotHere ('this run also sends ' + ($others -join ', ') + ', which the server reads only at a start') }
 if (-not $Want.Contains('gamemode.js')) { NotHere 'this run sends no gamemode.js' }
 $runSettings = Join-Path $Root 'server-settings.json'
@@ -191,21 +194,30 @@ function LogLines {
     $l
   }
 }
-# Waits for the gamemode with this blob to load. $loadSaid holds the lines
+# Waits for the gamemode with this blob to load, with the tables of this tree
+# ('' is a folder this deploy does not hold it to). $loadSaid holds the lines
 # that said how it went; the answer is LOADED or the reason it did not.
 $loadSaid = New-Object System.Collections.Generic.List[string]
-function AwaitLoad([string]$blob) {
+function AwaitLoad([string]$blob, [string]$tree) {
   $loadSaid.Clear()
   $until = (Get-Date).AddSeconds($Wait)
   $last = ''
+  $lastTree = ''
   while ($true) {
     foreach ($l in @(LogLines)) {
-      if ($l -match 'gamemode\.js is git blob ([0-9a-f]{40})') { $last = $Matches[1]; $loadSaid.Add($l) }
+      if ($l -match 'gamemode\.js is git blob ([0-9a-f]{40})') { $last = $Matches[1]; $lastTree = ''; $loadSaid.Add($l) }
+      elseif ($l -match 'gamemode tables are git tree ([0-9a-f]{40})') { $lastTree = $Matches[1]; $loadSaid.Add($l) }
       elseif ($l.Contains('[thornswood] gamemode client scripts ')) {
         $loadSaid.Add($l)
-        if ($last -eq $blob) { return 'LOADED' }
-        if ($last) { return ('a different gamemode loaded, git blob ' + $last) }
-        return 'a gamemode loaded without saying which it is'
+        if ($last -ne $blob) {
+          if ($last) { return ('a different gamemode loaded, git blob ' + $last) }
+          return 'a gamemode loaded without saying which it is'
+        }
+        if ($tree -and $lastTree -ne $tree) {
+          if ($lastTree) { return ('the gamemode loaded a different set of tables, git tree ' + $lastTree) }
+          return 'the gamemode loaded without saying which tables it read'
+        }
+        return 'LOADED'
       }
       elseif ($l.Contains('[thornswood] gamemode did not load') -or $l.Contains('Bad syntax, ignoring')) {
         $loadSaid.Add($l)
@@ -235,8 +247,26 @@ function PutIn([string]$from, [string]$to) {
   }
 }
 
+# A folder from one place to another in one rename. $putWhy says why when
+# Windows refuses.
+function MoveDir([string]$from, [string]$to) {
+  $script:putWhy = ''
+  try { [IO.Directory]::Move($from, $to); return $true }
+  catch {
+    $e = $_.Exception
+    while ($e.InnerException) { $e = $e.InnerException }
+    $script:putWhy = $e.Message.Trim()
+    return $false
+  }
+}
+
 $oldBlob = Get-ThornswoodGamemodeBlob $gm
-$changes = ($oldBlob -ne $NewBlob)
+$oldTree = Get-ThornswoodTablesTree $tables
+# The tables the new gamemode has to load with: the ones sent, or the ones
+# there when none are.
+$wantTree = $oldTree
+if ($tableRels.Count) { $wantTree = $NewTree }
+$changes = ($oldBlob -ne $NewBlob) -or ($wantTree -ne $oldTree)
 
 # ---- the reload ------------------------------------------------------------
 # The nightly backup reads this server's folder; one of the two at a time
@@ -258,6 +288,11 @@ try {
     $at = Join-Path $Root $rel
     if (Test-Path -LiteralPath $at) { [IO.File]::Copy($at, (Join-Path $prevDir $rel), $true) }
   }
+  if ($tableRels.Count -and (Test-Path -LiteralPath $tables -PathType Container)) {
+    $keep = Join-Path $prevDir $TablesDir
+    $null = New-Item -ItemType Directory -Path $keep -Force
+    foreach ($f in @(Get-ChildItem -LiteralPath $tables -File -Force)) { [IO.File]::Copy($f.FullName, (Join-Path $keep $f.Name), $true) }
+  }
 } catch {
   'could not keep the running files in ' + $prevDir + ': ' + $_.Exception.Message + ', so nothing was put in'
   Remove-Item -LiteralPath $prevDir -Recurse -Force -EA SilentlyContinue
@@ -265,27 +300,43 @@ try {
   'RELOAD REFUSED'
   exit 1
 }
-'the running gamemode is git blob ' + $oldBlob + '; it and its stamp are kept in ' + $prevDir
+if ($tableRels.Count -and $oldTree) { 'the running gamemode is git blob ' + $oldBlob + ' with tables git tree ' + $oldTree + '; they and its stamp are kept in ' + $prevDir }
+else { 'the running gamemode is git blob ' + $oldBlob + '; it and its stamp are kept in ' + $prevDir }
 
 LogMark
 $placed = @()
 $why = ''
+# The tables first: the old folder into the stage, where the way back finds
+# it, and the new one in. A first deploy with tables has no old folder.
+$tablesWas = Join-Path $stageDir ($TablesDir + '.was')
+$tablesIn = $false
+if ($tableRels.Count) {
+  $hadTables = Test-Path -LiteralPath $tables -PathType Container
+  if ($hadTables -and -not (MoveDir $tables $tablesWas)) { $why = 'could not move the running tables out of the way: ' + $putWhy }
+  elseif (-not (MoveDir (Join-Path $stageDir $TablesDir) $tables)) {
+    $why = 'could not put the new tables in place: ' + $putWhy
+    if ($hadTables -and -not (MoveDir $tablesWas $tables)) { $why += '; AND COULD NOT PUT THE RUNNING TABLES BACK: ' + $putWhy }
+  } else { $tablesIn = $true }
+}
 foreach ($rel in $Files) {
+  if ($why) { break }
   if (-not $Want.Contains($rel)) { continue }
   if (-not (PutIn (Join-Path $stageDir $rel) (Join-Path $Root $rel))) { $why = 'could not put the new ' + $rel + ' in place: ' + $putWhy; break }
   $placed += $rel
 }
+$withTables = ''
+if ($wantTree) { $withTables = ' with tables git tree ' + $wantTree }
 if (-not $why -and -not $changes) {
-  'the server already runs git blob ' + $NewBlob + ', so it has nothing to load; the stamp is the new one'
+  'the server already runs git blob ' + $NewBlob + $withTables + ', so it has nothing to load; the stamp is the new one'
 }
 if (-not $why -and $changes) {
-  'put in git blob ' + $NewBlob + ', waiting up to ' + $Wait + ' seconds for the server to load it'
-  $got = AwaitLoad $NewBlob
+  'put in git blob ' + $NewBlob + $withTables + ', waiting up to ' + $Wait + ' seconds for the server to load it'
+  $got = AwaitLoad $NewBlob $wantTree
   foreach ($l in $loadSaid) { '  ' + $l }
   if ($got -ne 'LOADED') { $why = 'the new gamemode did not take: ' + $got }
 }
 if (-not $why) {
-  if ($changes) { 'PASS: the dev server loaded git blob ' + $NewBlob + ' without a restart' }
+  if ($changes) { 'PASS: the dev server loaded git blob ' + $NewBlob + $withTables + ' without a restart' }
   Remove-Item -LiteralPath $stageDir -Recurse -Force -EA SilentlyContinue
   # The last two sets of replaced files stay, newest first by their stamp,
   # and the last two a -PutBack took out, as after a swap.
@@ -311,6 +362,12 @@ $clean = $true
 $back = @($placed)
 [array]::Reverse($back)
 LogMark
+# The tables first, as they went in: the new folder back out into the stage,
+# and the one that ran back from where it was moved.
+if ($tablesIn) {
+  if (-not (MoveDir $tables (Join-Path $stageDir ($TablesDir + '.new')))) { 'COULD NOT TAKE THE NEW TABLES BACK OUT: ' + $putWhy; $clean = $false }
+  elseif ((Test-Path -LiteralPath $tablesWas -PathType Container) -and -not (MoveDir $tablesWas $tables)) { 'COULD NOT PUT THE OLD TABLES BACK: ' + $putWhy; $clean = $false }
+}
 foreach ($rel in $back) {
   $kept = Join-Path $prevDir $rel
   if (-not (Test-Path -LiteralPath $kept)) { continue }
@@ -321,10 +378,12 @@ foreach ($rel in $back) {
 $loaded = $true
 if ($clean) {
   $now = Get-ThornswoodGamemodeBlob $gm
+  $nowTree = Get-ThornswoodTablesTree $tables
   if ($now -ne $oldBlob) { 'gamemode.js is git blob ' + $now + ' after the put-back, not the old ' + $oldBlob; $clean = $false }
+  elseif ($nowTree -ne $oldTree) { 'the tables are git tree ' + $nowTree + ' after the put-back, not the old ' + $oldTree; $clean = $false }
   elseif ($changes -and $placed -contains 'gamemode.js') {
     'the old gamemode is back on disk, waiting up to ' + $Wait + ' seconds for the server to load it'
-    $got = AwaitLoad $oldBlob
+    $got = AwaitLoad $oldBlob $oldTree
     foreach ($l in $loadSaid) { '  ' + $l }
     if ($got -ne 'LOADED') { 'the old gamemode did not take either: ' + $got; $loaded = $false }
   }
@@ -342,12 +401,17 @@ exit 1
 '@
 # ==== end dev reload block ====
 
-# The block's values: the swap's (SwapVars) and the blob it waits for. The
-# folders' turn (#3247) and the blob function go in front, as text, so the box
-# has them.
-function ReloadVars([string]$farRoot, [string]$taskName, [string]$stageName, [string]$prevName, [int]$waitSeconds, $sums, [string]$newBlob) {
+# The block's values: the swap's (SwapVars), the blob it waits for, and the
+# git tree of the tables it sends ('' for a run that sends none). The
+# folders' turn (#3247) and the blob and tree functions go in front, as text,
+# so the box has them.
+function ReloadVars([string]$farRoot, [string]$taskName, [string]$stageName, [string]$prevName, [int]$waitSeconds, $sums, [string]$newBlob, [string]$newTree = '') {
   if ($newBlob -notmatch '^[0-9a-f]{40}$') { throw ('not a git blob id: ' + $newBlob) }
-  return (SwapVars $farRoot $taskName $stageName $prevName $waitSeconds $sums) + ('$NewBlob = ''' + $newBlob + '''' + "`r`n")
+  $sendsTables = @(@($sums.Keys) | Where-Object { $_.StartsWith('gamemode-tables/') }).Count -gt 0
+  if ($sendsTables -and $newTree -notmatch '^[0-9a-f]{40}$') { throw ('the run sends tables, and this is not a git tree id: ' + $newTree) }
+  if (-not $sendsTables -and $newTree) { throw 'a tables tree was given for a run that sends no tables' }
+  return (SwapVars $farRoot $taskName $stageName $prevName $waitSeconds $sums) + ('$NewBlob = ''' + $newBlob + '''' + "`r`n") + ('$NewTree = ''' + $newTree + '''' + "`r`n")
 }
-$ThornswoodGamemodeBlobText = 'function Get-ThornswoodGamemodeBlob {' + "`n" + (Get-Command Get-ThornswoodGamemodeBlob).Definition + "`n}`r`n"
+$ThornswoodGamemodeBlobText = 'function Get-ThornswoodGamemodeBlob {' + "`n" + (Get-Command Get-ThornswoodGamemodeBlob).Definition + "`n}`r`n" +
+  'function Get-ThornswoodTablesTree {' + "`n" + (Get-Command Get-ThornswoodTablesTree).Definition + "`n}`r`n"
 $reloadBlock = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'ServerFolderTurn.ps1')) + "`r`n" + $ThornswoodGamemodeBlobText + $reloadBlock

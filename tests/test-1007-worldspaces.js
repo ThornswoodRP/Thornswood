@@ -30,7 +30,7 @@ function yes(what, cond) {
   else { fail++; console.log('FAIL  ' + what); }
 }
 
-const m = /^const DATA = (.*);$/m.exec(gm);
+const m = require('./gamemode-tables.js').lineOf(gm, 'DATA');
 let DATA = null;
 try { DATA = m ? JSON.parse(m[1]) : null; } catch (e) { DATA = null; }
 const ws = data.worldspaces || [];

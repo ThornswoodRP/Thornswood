@@ -222,7 +222,16 @@ function client(token, fetchImpl) {
     }
     return out;
   }
-  return { call: call, all: all, count: () => calls };
+  // GraphQL answers 200 with its errors in the body; those are failures too.
+  async function graphql(query, variables) {
+    const r = await call('POST', 'graphql', { query: query, variables: variables });
+    const d = r.data || {};
+    if (Array.isArray(d.errors) && d.errors.length) {
+      throw new Error('GraphQL answered: ' + d.errors.map(e => String(e && e.message || e)).join('; '));
+    }
+    return d.data || {};
+  }
+  return { call: call, all: all, graphql: graphql, count: () => calls };
 }
 
 function optionName(o) { return o && typeof o.name === 'object' && o.name ? String(o.name.raw || '') : String((o && o.name) || ''); }
@@ -239,7 +248,26 @@ async function readBoard(gh, owner, number, kind) {
   if (missing.length) { throw new Error('the board\'s Status has no ' + missing.join(', ') + '; it has ' + Object.keys(so).join(', ') + ' (an option is never added from here: GitHub rewrites every option when one is added, which can clear every card\'s Status)'); }
   const order = pick('Order');
   if (order && String(order.data_type).toLowerCase() !== 'number') { throw new Error('the board\'s Order field is not a number'); }
-  return { status: { id: status.id, options: so }, order: order ? { id: order.id } : null };
+  const project = (await gh.call('GET', (kind || 'orgs') + '/' + owner + '/projectsV2/' + number)).data || {};
+  return { node: String(project.node_id || ''), status: { id: status.id, options: so }, order: order ? { id: order.id } : null };
+}
+
+// The issue's card on the board, its REST id. REST's add answers 422
+// "Content already exists in this project" for an issue already on the board
+// and does not say which card that is (board.yml runs 41350871295,
+// 41350710978 and 41350708585, 1 Nov 2026), and REST has no way to ask an
+// issue for its card. GraphQL's addProjectV2ItemById hands back the card
+// already there, or the new one, in one call, so two runs for the same issue
+// at once both get the one card. Its databaseId is the id the REST item
+// paths take.
+const ADD_CARD = 'mutation($project:ID!,$content:ID!){addProjectV2ItemById(input:{projectId:$project,contentId:$content}){item{databaseId}}}';
+async function cardFor(gh, board, issueNode) {
+  if (!board.node) { throw new Error('the board gave back no node id'); }
+  if (!issueNode) { throw new Error('the issue gave back no node id'); }
+  const d = await gh.graphql(ADD_CARD, { project: board.node, content: issueNode });
+  const item = d.addProjectV2ItemById && d.addProjectV2ItemById.item && d.addProjectV2ItemById.item.databaseId;
+  if (!item) { throw new Error('the board gave back no card'); }
+  return item;
 }
 
 async function setup(gh, owner, number, dry, say) {
@@ -274,9 +302,7 @@ async function syncIssue(gh, o, issue, board, fresh) {
     return parts.join(', ') + '; nothing written (dry run)';
   }
   if (typeSet) { await gh.call('PATCH', 'repos/' + o.repo + '/issues/' + n, { type: typeSet }); }
-  const added = await gh.call('POST', 'orgs/' + o.owner + '/projectsV2/' + o.number + '/items', { type: 'Issue', owner: o.repo.split('/')[0], repo: o.repo.split('/')[1], number: n });
-  const item = added.data && added.data.id;
-  if (!item) { throw new Error('the board gave back no card for #' + n); }
+  const item = await cardFor(gh, board, issue.node_id);
   const itemPath = 'orgs/' + o.owner + '/projectsV2/' + o.number + '/items/' + item;
   const fields = [{ id: board.status.id, value: board.status.options[s.status] }];
   if (board.order && ask.order !== null) {
@@ -300,10 +326,31 @@ async function syncIssue(gh, o, issue, board, fresh) {
   return parts.join(', ');
 }
 
+// Each card of o.repo's issues on a board, by issue number: its REST id and
+// its Order (null when it has none). One read of the whole board, a page of
+// 100 cards a call.
+async function cardsOf(gh, kind, owner, number, orderId, repo) {
+  const name = repo.split('/')[1].toLowerCase();
+  const out = new Map();
+  for (const it of await gh.all(kind + '/' + owner + '/projectsV2/' + number + '/items?fields=' + orderId)) {
+    const c = it.content || {};
+    if (String(it.content_type || '') !== 'Issue' || !c.number || String(c.repository_url || '').split('/').pop().toLowerCase() !== name) { continue; }
+    const f = (it.fields || []).find(x => String(x.id) === String(orderId));
+    out.set(Number(c.number), { item: it.id, node: String(c.node_id || ''), order: numberOf(f && f.value) });
+  }
+  return out;
+}
+
 // Carries each card's Order over from the board this one replaced (a user's
-// board, read with a token that may read it), for the issues of o.repo, and
-// puts the card on this board if it is not there yet. Cards of other
-// repositories, and cards with no Order there, are left alone. Run once.
+// board, read with a token that may read it), for the issues of o.repo. A
+// card already here keeps its id and gets the Order; a card already holding
+// that Order is left as it is, so a second run writes only what the first
+// did not; an issue with no card here gets one. Cards of other repositories,
+// and cards with no Order there, are left alone.
+// The first copy (1 Nov 2026) added every card through REST, which answers
+// 422 "Content already exists in this project" for a card already on the
+// board: 92 Orders copied, 149 refused, stopped by hand. Nothing here adds a
+// card the board already has.
 async function copyOrder(gh, o, from, say) {
   const m = /^([\w.-]+)\/(\d+)$/.exec(from);
   if (!m) { say('--copy-order takes the old board as user/number, such as EvilPatrick06/1'); return 2; }
@@ -314,33 +361,35 @@ async function copyOrder(gh, o, from, say) {
   } catch (e) { say('stopped, nothing written: ' + e.message); return 1; }
   if (!old.order) { say('stopped, nothing written: the board ' + from + ' has no Order field'); return 1; }
   if (!board.order) { say('stopped, nothing written: this board has no Order field yet (--setup makes it)'); return 1; }
-  const name = o.repo.split('/')[1].toLowerCase();
-  const items = await gh.all('users/' + m[1] + '/projectsV2/' + m[2] + '/items?fields=' + old.order.id);
-  const found = [];
-  for (const it of items) {
-    const c = it.content || {};
-    const repoUrl = String(c.repository_url || '');
-    if (String(it.content_type || '') !== 'Issue' || !c.number || repoUrl.split('/').pop().toLowerCase() !== name) { continue; }
-    const f = (it.fields || []).find(x => String(x.id) === String(old.order.id));
-    const v = numberOf(f && f.value);
-    if (v !== null) { found.push({ number: Number(c.number), order: v }); }
-  }
-  say(items.length + ' cards on ' + from + ', ' + found.length + ' issues of ' + o.repo + ' with an Order');
+  const there = await cardsOf(gh, 'users', m[1], m[2], old.order.id, o.repo);
+  const found = Array.from(there.entries()).filter(([, c]) => c.order !== null).map(([n, c]) => ({ number: n, node: c.node, order: c.order }));
+  const here = await cardsOf(gh, 'orgs', o.owner, o.number, board.order.id, o.repo);
+  const same = found.filter(f => here.has(f.number) && here.get(f.number).order === f.order).length;
+  const missing = found.filter(f => !here.has(f.number)).length;
+  say(found.length + ' issues of ' + o.repo + ' with an Order on ' + from + '; ' + same + ' already hold it here, ' +
+      (found.length - same - missing) + ' have a card here to set, ' + missing + ' have no card here yet');
   const failed = [];
+  let wrote = 0;
   for (const f of found.sort((a, b) => a.number - b.number)) {
-    if (o.dry) { say('#' + f.number + ': Order ' + f.order + '; nothing written (dry run)'); continue; }
+    const card = here.get(f.number);
+    if (card && card.order === f.order) { continue; }
+    const was = card ? (card.order === null ? 'it had none' : 'it had ' + card.order) : 'card added';
+    if (o.dry) { say('#' + f.number + ': Order ' + f.order + ' (' + was + '); nothing written (dry run)'); continue; }
     try {
-      const added = await gh.call('POST', 'orgs/' + o.owner + '/projectsV2/' + o.number + '/items', { type: 'Issue', owner: o.repo.split('/')[0], repo: o.repo.split('/')[1], number: f.number });
-      const item = added.data && added.data.id;
-      if (!item) { throw new Error('the board gave back no card'); }
+      let item = card && card.item;
+      if (!item) {
+        const node = f.node || String(((await gh.call('GET', 'repos/' + o.repo + '/issues/' + f.number)).data || {}).node_id || '');
+        item = await cardFor(gh, board, node);
+      }
       await gh.call('PATCH', 'orgs/' + o.owner + '/projectsV2/' + o.number + '/items/' + item, { fields: [{ id: board.order.id, value: f.order }] });
-      say('#' + f.number + ': Order ' + f.order);
+      wrote++;
+      say('#' + f.number + ': Order ' + f.order + ' (' + was + ')');
     } catch (e) {
       failed.push(f.number);
       say('#' + f.number + ': not copied: ' + e.message);
     }
   }
-  say(gh.count() + ' calls to GitHub');
+  say((o.dry ? 'nothing written; ' : wrote + ' Orders written; ') + gh.count() + ' calls to GitHub');
   if (failed.length) { say('not copied: ' + failed.map(x => '#' + x).join(', ')); return 1; }
   return 0;
 }

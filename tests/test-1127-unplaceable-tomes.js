@@ -30,7 +30,7 @@ const vm = require('vm');
 const REPO = path.join(__dirname, '..');
 const SRC = process.env.GM || path.join(REPO, 'game', 'gamemode.js');
 const CR = String.fromCharCode(13);
-const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const src = require('./gamemode-tables.js').joined(fs.readFileSync(SRC, 'utf8')).split(CR).join('');
 const magic = fs.readFileSync(path.join(REPO, 'docs', 'systems', 'magic.md'), 'utf8').split(CR).join('');
 
 let pass = 0, fail = 0;

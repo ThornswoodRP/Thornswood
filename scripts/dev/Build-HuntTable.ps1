@@ -240,7 +240,7 @@ param(
     [string] $StringsData = '',
     # Restrict dressing to the animal bases retained by the population policy.
     [string] $Population = '',
-    # Print the table and leave game\gamemode.js alone.
+    # Print the table and leave game\gamemode-tables\HUNTS_BY_BASE.json alone.
     [switch] $NoInstall
 )
 
@@ -1831,7 +1831,7 @@ $lines.Add('     body''s inventory: they come from a levelled list the client re
 $lines.Add('     server hands them over itself. yield is four pairs, novice first: the least and')
 $lines.Add('     the most of EACH of those things a hunter of that rank takes, and a pair of')
 $lines.Add('     zeroes is a rank that may not work that body at all.')
-$lines.Add('     Paste it between the HUNTS_BY_BASE markers in game\gamemode.js. Do not hand edit. */')
+$lines.Add('     The gamemode reads it from game\gamemode-tables\HUNTS_BY_BASE.json. Do not hand edit. */')
 $lines.Add('  var HUNTS_BY_BASE = {')
 $n = 0
 foreach ($d in $table.Keys) {
@@ -1852,66 +1852,27 @@ $literal = $lines -join [Environment]::NewLine
 
 # ---------------------------------------------------------------- install --
 #
-# The gamemode carries the table, because the server is deployed as one file
-# and cannot read game\data\hunts.json. Nothing hand edits that block: this writes
-# it between its own markers, the way the other generated blocks in this repo
-# are written. -NoInstall prints it and leaves the file alone.
-#
-# A gamemode.js with no HUNTS_BY_BASE markers yet is the expected case the
-# first time this runs, and it is not a failure and not a place to improvise:
-# the block is printed, the two lines it needs are named, and the file is left
-# exactly as it was. Writing the table anywhere this script chose by itself
-# would put the hunter's gate in a spot nobody agreed on.
-#
-# The declaration line is found rather than assumed, so whichever of var or
-# const the block is written with, and whatever indent it sits at, is kept.
+# The gamemode reads the table from game\gamemode-tables\HUNTS_BY_BASE.json
+# when it loads (#5191): until then this wrote it between markers in
+# gamemode.js, and every content change rewrote the same lines there.
+# -NoInstall prints it and leaves the file alone.
 #
 if (-not $NoInstall -and $fail -eq 0) {
-    $gm = Join-Path $PSScriptRoot '..\..\game\gamemode.js'
-    if (-not (Test-Path -LiteralPath $gm)) {
-        Note "no gamemode.js beside this script, so the table was not installed"
-    } else {
-        $text = [System.IO.File]::ReadAllText($gm)
-        $close = '// ==== end HUNTS_BY_BASE ===='
-        $m = [regex]::Match($text, '(?m)^([ \t]*)(var|const|let)[ \t]+HUNTS_BY_BASE[ \t]*=[ \t]*\{')
-        $b = $text.IndexOf($close)
-        # back up to the start of that line, so the end marker keeps the indent
-        # it was written with instead of being shunted to column zero
-        while ($b -gt 0 -and $text[$b - 1] -ne "`n") { $b-- }
-        if (-not $m.Success -or $b -lt 0 -or $b -lt $m.Index) {
-            Note ("{0} has no HUNTS_BY_BASE block yet, so the hunts were NOT written into it." -f $gm)
-            Note "  It needs a declaration line and an end marker, in this order:"
-            Note "      var HUNTS_BY_BASE = {"
-            Note "      };"
-            Note "      // ==== end HUNTS_BY_BASE ===="
-            Note "  Run this again once they are there, or paste the block printed below."
-        } else {
-            $indent = $m.Groups[1].Value
-            $kw     = $m.Groups[2].Value
-            $body = New-Object 'System.Collections.Generic.List[string]'
-            $body.Add($indent + $kw + ' HUNTS_BY_BASE = {')
-            $k = 0
-            foreach ($d in $table.Keys) {
-                $k++
-                $comma = ','
-                if ($k -eq $table.Count) { $comma = '' }
-                $e = $table[$d]
-                $body.Add($indent + '  ' + (JsonStr ([string]$d)) + ': { "name": ' + (JsonStr ([string]$e.Name)) +
-                          ', "rank": ' + (JsonStr ([string]$e.Rank)) + ', "yield": ' + $e.Yield +
-                          ', "gives": ' + (Gives-Json $e.Gives) + ' }' + $comma)
-            }
-            $body.Add($indent + '};')
-            $body.Add('')
-            $eol = $Eol
-            $new = $text.Substring(0, $m.Index) + (($body -join $eol)) + $eol + $text.Substring($b)
-            [System.IO.File]::WriteAllText($gm, $new, (New-Object System.Text.UTF8Encoding($false)))
-            Ok ("wrote {0} animals into the HUNTS_BY_BASE block of {1}" -f $table.Count, $gm)
-        }
+    . (Join-Path $PSScriptRoot 'GamemodeTables.ps1')
+    $rows = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($d in $table.Keys) {
+        $e = $table[$d]
+        $rows.Add((JsonStr ([string]$d)) + ':{"name":' + (JsonStr ([string]$e.Name)) +
+                  ',"rank":' + (JsonStr ([string]$e.Rank)) + ',"yield":' + $e.Yield +
+                  ',"gives":' + (Gives-Json $e.Gives) + '}')
     }
+    $changed = Write-GamemodeTable 'HUNTS_BY_BASE' ('{' + ($rows -join ',') + '}')
+    if ($changed) { Ok ("wrote {0} animals into {1}" -f $table.Count, (Get-GamemodeTableFile 'HUNTS_BY_BASE')) }
+    else { Ok ("{0} already holds these {1} animals" -f (Get-GamemodeTableFile 'HUNTS_BY_BASE'), $table.Count) }
 }
 
 Write-Host ''
-Write-Host 'the same table, ready to paste into the gamemode:' -ForegroundColor Cyan
+Write-Host 'the same table, as JavaScript (the gamemode reads its file in game\gamemode-tables):' -ForegroundColor Cyan
 Write-Host $literal
 if ($JsOut) {
     [System.IO.File]::WriteAllText($JsOut, $literal, (New-Object System.Text.UTF8Encoding($false)))

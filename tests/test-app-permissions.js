@@ -7,7 +7,8 @@
 //   1. the real record holds its own rules, and the record's rules refuse an
 //      App named twice, a permission with no why or at a level GitHub does
 //      not have, a why for a permission not given, no metadata read, no
-//      events list, an App that is also one of Patrick's own agents, and a
+//      events list, an event with no why or a why for an event not sent,
+//      an App that is also one of Patrick's own agents, and a
 //      repository both installed on and never on;
 //   2. the comparison: an extra permission, a higher level, a missing one, a
 //      lower level, an extra or missing event, and another App behind the
@@ -48,6 +49,7 @@ yes('  only Bramble\'s App may change a workflow', real.apps.filter(a => a.permi
 yes('  no App holds administration but the box admin App and the watcher (read)',
   real.apps.filter(a => a.permissions.administration).map(a => a.slug + ' ' + a.permissions.administration).sort().join() === 'thornswood-box-admin write,thornswood-watch read');
 yes('  no App may write a secret, and only the box admin App an environment', real.apps.every(a => a.permissions.secrets !== 'write') && real.apps.filter(a => a.permissions.environments === 'write').map(a => a.slug).join() === 'thornswood-box-admin');
+yes('  only Bramble\'s App is sent events: check_suite and pull_request, to wake it', real.apps.filter(a => a.events.length).map(a => a.slug + ' ' + a.events.join('+')).join() === 'thornswood-bramble check_suite+pull_request');
 yes('  no Bot App is installed on Thornswood-Hermes', real.apps.every(a => (a.installed_on || []).indexOf('ThornswoodRP/Thornswood-Hermes') < 0));
 const bad = (what, change) => { const d = clone(real); change(d); return checkRecord(d).some(l => what.test(l)); };
 yes('an App named twice is refused', bad(/names thornswood-bramble twice/, d => d.apps.push(clone(d.apps[0]))));
@@ -56,6 +58,8 @@ yes('a level GitHub does not have is refused', bad(/issues is "all", not read or
 yes('a why for a permission not given is refused', bad(/a why for packages/, d => { d.apps[0].why.packages = 'x'; }));
 yes('no metadata read is refused', bad(/metadata: read/, d => { delete d.apps[0].permissions.metadata; delete d.apps[0].why.metadata; }));
 yes('no events list is refused', bad(/no events list/, d => { delete d.apps[0].events; }));
+yes('an event with no why is refused', bad(/the check_suite event has no why/, d => { delete d.apps[0].events_why.check_suite; }));
+yes('a why for an event not sent is refused', bad(/an events_why for push/, d => { d.apps[0].events_why.push = 'x'; }));
 yes('an App that is also one of Patrick\'s agents is refused', bad(/is also one of Patrick's own agents/, d => { d.patrick_agents.push({ name: 'x', slug: 'thornswood-workers', why: 'x' }); }));
 yes('no patrick_agents list is refused', bad(/no patrick_agents list/, d => { delete d.patrick_agents; }));
 yes('a repository both installed on and never on is refused', bad(/both installed on and never on ThornswoodRP\/Thornswood/, d => { d.apps[0].never_on.push('ThornswoodRP/Thornswood'); }));

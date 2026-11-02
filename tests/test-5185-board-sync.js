@@ -13,7 +13,8 @@
 //      issues (with the issues it named before an edit, and itself read
 //      fresh), every open issue across pages, a new issue's Order and an
 //      order: label carried out, the Order field made once, the old board's
-//      Orders copied,
+//      Orders copied, an issue already on the board put right through the
+//      add that gives back its card (REST's add answers 422 for one, #5185),
 //      a dry run that writes nothing, a type somebody set left alone, an
 //      issue that fails named and the run red, a board without its Status
 //      options refused, and nothing run without its settings;
@@ -118,14 +119,32 @@ function github(o) {
       return answer(200, [{ id: 201, name: 'Status', data_type: 'single_select', options: ['Todo', 'In Progress', 'Done'].map((n, i) => OPT('o' + i, n)) }].concat(o.oldOrder === false ? [] : [{ id: 202, name: 'Order', data_type: 'number' }]));
     }
     if (/^users\/EvilPatrick06\/projectsV2\/1\/items\?fields=202&per_page=100$/.test(p)) { return answer(200, o.oldItems || []); }
-    if (method === 'POST' && p === 'orgs/ThornswoodRP/projectsV2/7/items') { return answer(201, { id: 9000 + body.number }); }
+    // This board's cards, two a page, the way GitHub pages them.
+    if ((m = /^orgs\/ThornswoodRP\/projectsV2\/7\/items\?fields=102&per_page=100(&page=(\d+))?$/.exec(p))) {
+      const page = Number(m[2] || 1);
+      const all = o.newItems || [];
+      const next = page * 2 < all.length ? '<https://api.github.com/orgs/ThornswoodRP/projectsV2/7/items?fields=102&per_page=100&page=' + (page + 1) + '>; rel="next"' : '';
+      return answer(200, all.slice((page - 1) * 2, page * 2), next);
+    }
+    if (p === 'orgs/ThornswoodRP/projectsV2/7') { return answer(200, { id: 7, number: 7, node_id: 'PVT_7' }); }
+    if (p === 'users/EvilPatrick06/projectsV2/1') { return answer(200, { id: 1, number: 1, node_id: 'PVT_old' }); }
+    // GitHub's REST add refuses an issue already on the board (422) and
+    // names no card; GraphQL's add gives back the card already there.
+    if (method === 'POST' && p === 'orgs/ThornswoodRP/projectsV2/7/items') { return answer(422, { message: 'Content already exists in this project' }); }
+    if (method === 'POST' && p === 'graphql') {
+      if (o.graphqlRefused) { return answer(200, { data: null, errors: [{ message: o.graphqlRefused }] }); }
+      const n = Number(String(body.variables.content).replace('I_', ''));
+      if (!/addProjectV2ItemById/.test(body.query) || body.variables.project !== 'PVT_7' || !n) { return answer(200, { errors: [{ message: 'the stand-in was not asked for that' }] }); }
+      o.added = (o.added || []).concat(o.onBoard && o.onBoard.indexOf(n) >= 0 ? [] : [n]);
+      return answer(200, { data: { addProjectV2ItemById: { item: { databaseId: 9000 + n } } } });
+    }
     if (method === 'PATCH' && (m = /^orgs\/ThornswoodRP\/projectsV2\/7\/items\/(\d+)$/.exec(p))) { return answer(200, { id: Number(m[1]) }); }
     if (method === 'PATCH' && (m = /^repos\/ThornswoodRP\/Thornswood\/issues\/(\d+)$/.exec(p))) { return answer(200, {}); }
     if ((m = /^repos\/ThornswoodRP\/Thornswood\/issues\/(\d+)\/timeline\?per_page=100$/.exec(p))) { return answer(200, (o.timelines || {})[m[1]] || []); }
     if ((m = /^repos\/ThornswoodRP\/Thornswood\/issues\/(\d+)$/.exec(p))) {
       const i = (o.issues || {})[m[1]];
       if (!i || o.broken === Number(m[1])) { return answer(o.broken === Number(m[1]) ? 502 : 404, { message: 'Not Found' }); }
-      return answer(200, i);
+      return answer(200, Object.assign({ node_id: 'I_' + m[1] }, i));
     }
     if ((m = /^repos\/ThornswoodRP\/Thornswood\/pulls\/(\d+)$/.exec(p))) { return answer(200, (o.pulls || {})[m[1]]); }
     if ((m = /^repos\/ThornswoodRP\/Thornswood\/issues\?state=open&per_page=100(&page=(\d+))?$/.exec(p))) {
@@ -140,22 +159,31 @@ function github(o) {
   return f;
 }
 const ENV = { GITHUB_REPOSITORY: HERE, BOARD_OWNER: 'ThornswoodRP', BOARD_NUMBER: '7', BOARD_TOKEN: 't' };
-const issue = (n, extra) => Object.assign({ number: n, state: 'open', labels: [], type: { name: 'Task' } }, extra || {});
+const issue = (n, extra) => Object.assign({ number: n, node_id: 'I_' + n, state: 'open', labels: [], type: { name: 'Task' } }, extra || {});
 const xref = (n, extra) => ({ event: 'cross-referenced', source: { issue: Object.assign({ number: n, state: 'open', title: 'x', body: 'Refs #10', pull_request: {}, repository: { full_name: HERE } }, extra || {}) } });
 async function go(argv, o, env) {
   const lines = [];
   const g = github(o);
   const code = await S.run(argv, Object.assign({}, ENV, env || {}), g, s => lines.push(String(s)));
-  return { code: code, lines: lines, out: lines.join('\n'), writes: g.writes, reads: g.reads };
+  return { code: code, lines: lines, out: lines.join('\n'), writes: g.writes, reads: g.reads, added: o.added || [] };
 }
 const fieldWrite = (w, n) => w.find(x => x.method === 'PATCH' && x.path === 'orgs/ThornswoodRP/projectsV2/7/items/' + (9000 + n));
+const restAdd = w => w.some(x => x.method === 'POST' && /projectsV2\/\d+\/items$/.test(x.path));
+const cardAdd = (w, n) => w.find(x => x.method === 'POST' && x.path === 'graphql' && x.body.variables.content === 'I_' + n && x.body.variables.project === 'PVT_7');
 
 (async () => {
   let r = await go(['--issues', '10'], { issues: { 10: issue(10) }, timelines: { 10: [xref(55)] }, cardOrder: { 10: 52.5 } });
   let w = fieldWrite(r.writes, 10);
   yes('one issue: its card is added and set to In Progress, and the Order it has is kept: ' + r.lines[0], r.code === 0 &&
-      r.writes.some(x => x.method === 'POST' && x.path === 'orgs/ThornswoodRP/projectsV2/7/items' && x.body.type === 'Issue' && x.body.owner === 'ThornswoodRP' && x.body.repo === 'Thornswood' && x.body.number === 10) &&
+      cardAdd(r.writes, 10) && same(r.added, [10]) &&
       w && JSON.stringify(w.body) === JSON.stringify({ fields: [{ id: 101, value: 's1' }] }));
+  yes('  the card is added the way that gives back one already there, never by REST\'s add (422 for a card on the board)', !restAdd(r.writes));
+  r = await go(['--issues', '10'], { issues: { 10: issue(10) }, onBoard: [10], cardOrder: { 10: 52.5 } });
+  yes('an issue already on the board: its card is the one there, put right, nothing added and no failure: ' + r.lines[0], r.code === 0 &&
+      r.added.length === 0 && !restAdd(r.writes) && fieldWrite(r.writes, 10) && JSON.stringify(fieldWrite(r.writes, 10).body.fields) === JSON.stringify([{ id: 101, value: 's0' }]));
+  r = await go(['--issues', '10'], { issues: { 10: issue(10) }, graphqlRefused: 'Resource not accessible by integration' });
+  yes('  GraphQL\'s errors in a 200 answer are a failure, named, and nothing is written to the card: ' + r.lines[0], r.code === 1 &&
+      /#10: not put right: GraphQL answered: Resource not accessible/.test(r.out) && !fieldWrite(r.writes, 10));
   yes('  a type somebody set is left as it is', !r.writes.some(x => x.path === 'repos/ThornswoodRP/Thornswood/issues/10'));
   r = await go(['--issues', '11'], { issues: { 11: issue(11, { type: null, labels: [{ name: 'Suggestion' }] }) } });
   w = fieldWrite(r.writes, 11);
@@ -217,16 +245,33 @@ const fieldWrite = (w, n) => w.find(x => x.method === 'PATCH' && x.path === 'org
   r = await go(['--setup'], {});
   yes('  and only when there is none', r.code === 0 && r.writes.length === 0 && /nothing to make/.test(r.out));
 
-  const oldItem = (n, order, repoUrl, type) => ({ id: 500 + n, content_type: type || 'Issue', content: { number: n, repository_url: repoUrl || 'https://api.github.com/repos/ThornswoodRP/Thornswood' }, fields: [{ id: 202, name: 'Order', value: order }] });
+  const oldItem = (n, order, repoUrl, type) => ({ id: 500 + n, content_type: type || 'Issue', content: { number: n, node_id: 'I_' + n, repository_url: repoUrl || 'https://api.github.com/repos/ThornswoodRP/Thornswood' }, fields: [{ id: 202, name: 'Order', value: order }] });
   const oldItems = [oldItem(10, 52.5), oldItem(11, null), oldItem(12, 7, 'https://api.github.com/repos/ThornswoodRP/Thornswood-Ops'), oldItem(13, 8, null, 'PullRequest'), oldItem(14, 3)];
   r = await go(['--copy-order', 'EvilPatrick06/1'], { oldItems: oldItems });
   yes('copy-order: each issue of this repository with an Order on the old board gets it here: ' + r.lines[0], r.code === 0 &&
-      /5 cards on EvilPatrick06\/1, 2 issues/.test(r.lines[0]) &&
+      /^2 issues of ThornswoodRP\/Thornswood with an Order on EvilPatrick06\/1; 0 already hold it here, 0 have a card here to set, 2 have no card here yet$/.test(r.lines[0]) &&
       JSON.stringify(fieldWrite(r.writes, 10).body.fields) === JSON.stringify([{ id: 102, value: 52.5 }]) &&
       JSON.stringify(fieldWrite(r.writes, 14).body.fields) === JSON.stringify([{ id: 102, value: 3 }]) &&
-      ![11, 12, 13].some(n => fieldWrite(r.writes, n)));
-  r = await go(['--copy-order', 'EvilPatrick06/1', '--dry-run'], { oldItems: oldItems });
-  yes('  a dry run says each and writes nothing', r.code === 0 && r.writes.length === 0 && /#10: Order 52\.5; nothing written/.test(r.out));
+      ![11, 12, 13].some(n => fieldWrite(r.writes, n)) && /^2 Orders written/.test(r.lines[r.lines.length - 1]));
+  yes('  a card it has to add goes through the add that gives back one already there, never REST\'s add', !restAdd(r.writes) && cardAdd(r.writes, 10) && cardAdd(r.writes, 14));
+  // The board as the first copy left it (1 Nov): #10 already right, #14 on
+  // the board with no Order, #15 with another Order, #16 not on it yet, and
+  // an Ops issue with the same number that is not this repository's.
+  const old2 = oldItems.concat([oldItem(15, 9), oldItem(16, 4)]);
+  const newItem = (n, order, repoUrl) => ({ id: 9000 + n, content_type: 'Issue', content: { number: n, node_id: 'I_' + n, repository_url: repoUrl || 'https://api.github.com/repos/ThornswoodRP/Thornswood' }, fields: [{ id: 102, name: 'Order', value: order }] });
+  const partly = [newItem(10, 52.5), newItem(14, null), newItem(15, 10015), newItem(16, 1, 'https://api.github.com/repos/ThornswoodRP/Thornswood-Ops')];
+  r = await go(['--copy-order', 'EvilPatrick06/1'], { oldItems: old2, newItems: partly, onBoard: [10, 14, 15] });
+  yes('a rerun after a partial copy: cards already here keep their id and get the Order, only a missing one is added: ' + r.lines[0], r.code === 0 &&
+      /4 issues .*; 1 already hold it here, 2 have a card here to set, 1 have no card here yet$/.test(r.lines[0]) &&
+      !restAdd(r.writes) && !cardAdd(r.writes, 14) && !cardAdd(r.writes, 15) && cardAdd(r.writes, 16) && same(r.added, [16]) &&
+      fieldWrite(r.writes, 14).body.fields[0].value === 3 && fieldWrite(r.writes, 15).body.fields[0].value === 9 && fieldWrite(r.writes, 16).body.fields[0].value === 4);
+  yes('  an Order already the same is not written again, and each line says what it was', !fieldWrite(r.writes, 10) &&
+      /#14: Order 3 \(it had none\)/.test(r.out) && /#15: Order 9 \(it had 10015\)/.test(r.out) && /#16: Order 4 \(card added\)/.test(r.out) && /^3 Orders written/.test(r.lines[r.lines.length - 1]));
+  r = await go(['--copy-order', 'EvilPatrick06/1'], { oldItems: old2, newItems: [newItem(10, 52.5), newItem(14, 3), newItem(15, 9), newItem(16, 4)] });
+  yes('  run again once all is copied: nothing written, exit 0', r.code === 0 && r.writes.length === 0 && /4 already hold it here/.test(r.lines[0]));
+  r = await go(['--copy-order', 'EvilPatrick06/1', '--dry-run'], { oldItems: old2, newItems: partly });
+  yes('  a dry run says each it would write and writes nothing', r.code === 0 && r.writes.length === 0 &&
+      /#14: Order 3 \(it had none\); nothing written/.test(r.out) && /#16: Order 4 \(card added\); nothing written/.test(r.out) && !/#10:/.test(r.out));
   r = await go(['--copy-order', 'EvilPatrick06/1'], { oldItems: oldItems, order: false });
   yes('  no Order field here yet: stopped, nothing written', r.code === 1 && r.writes.length === 0 && /no Order field yet/.test(r.out));
   r = await go(['--copy-order', 'EvilPatrick06/1'], { oldItems: oldItems, oldOrder: false });

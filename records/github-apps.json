@@ -1,5 +1,5 @@
 {
- "about": "What each GitHub App that works on Thornswood's repositories may do: the six Hermes Bots' two Apps, the box's admin App, the outside watcher's App and the engine pin robot (the redesign's part 20, plan lines 26 and 27, 1 Nov 2026). Each App holds exactly the permissions written here, at the level written, and no webhook events: what its job needs and nothing more. Every night scripts/dev/Check-AppPermissions.js reads each App from GitHub (GET /apps/<slug>) and names any permission or event the App has that this does not give it, and any this gives it that it lacks; the night is red until GitHub and this file agree. An App's permissions are changed only by Patrick, on its settings page, then accepted on each installation; the change is a pull request to this file first, with the reason in the permission's why, and a card on the report page with the clicks. Patrick's own agents are listed apart under patrick_agents: none of them holds a Bot App's key, and no Bot App is one of them. The repositories each App is installed on are written here for people to read; the nightly check cannot see an installation (only the App's own key can), so the box admin App's installation-repos ask and each Bot host's own check read those. A why is this file's own note.",
+ "about": "What each GitHub App that works on Thornswood's repositories may do: the six Hermes Bots' two Apps, the box's admin App, the outside watcher's App and the engine pin robot (the redesign's part 20, plan lines 26 and 27, 1 Nov 2026). Each App holds exactly the permissions written here, at the level written, and only the webhook events written here, each with its reason in events_why: what its job needs and nothing more. Every night scripts/dev/Check-AppPermissions.js reads each App from GitHub (GET /apps/<slug>) and names any permission or event the App has that this does not give it, and any this gives it that it lacks; the night is red until GitHub and this file agree. An App's permissions are changed only by Patrick, on its settings page, then accepted on each installation; the change is a pull request to this file first, with the reason in the permission's why, and a card on the report page with the clicks. Patrick's own agents are listed apart under patrick_agents: none of them holds a Bot App's key, and no Bot App is one of them. The repositories each App is installed on are written here for people to read; the nightly check cannot see an installation (only the App's own key can), so the box admin App's installation-repos ask and each Bot host's own check read those. A why is this file's own note.",
  "apps": [
   {
    "slug": "thornswood-bramble",
@@ -23,7 +23,14 @@
     "pull_requests": "write",
     "workflows": "write"
    },
-   "events": [],
+   "events": [
+    "check_suite",
+    "pull_request"
+   ],
+   "events_why": {
+    "check_suite": "Wakes Bramble when a pull request's checks finish, so it merges a green head or hands a red one back without anyone nudging it (Patrick's answer A on q-hermes-bramble-wake, 1 Nov 2026). The webhook goes through Tailscale Funnel to Hermes's own receiver on the Hermes VM, signed with a secret only root there holds (Thornswood-Hermes policy.yaml, wake).",
+    "pull_request": "Wakes Bramble when a pull request is merged, closed or taken out of the merge queue, so it reports the merge and its Release, or looks at why the queue dropped it. Same route and secret as check_suite."
+   },
    "why": {
     "actions": "Starts the release, deploy, Nexus and signing runs the policy lists (git_service.py start_run, POST actions/workflows/<file>/dispatches) and reads runs.",
     "checks": "Reads the check runs on a pull request's exact head before a merge (the policy's required checks). Never writes one.",

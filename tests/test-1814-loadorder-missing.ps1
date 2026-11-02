@@ -75,6 +75,8 @@ function New-Tree([string]$name, [string]$lo) {
         Put (Join-Path $t 'scripts\mods\LoadOrder.ps1') $lo
     }
     Put (Join-Path $t 'game\gamemode.js') "var thornswood1814 = 1;`n"
+    # And its tables (#5191), which Deploy-Gamemode.ps1 copies in beside it.
+    Put (Join-Path $t 'game\gamemode-tables\WAY_OUT.json') "{}`n"
     Put (Join-Path $t 'dist\server-settings.json') $settingsText
     New-Item -ItemType Directory -Force -Path (Join-Path $t 'Game\Data') | Out-Null
     Put (Join-Path $t 'Game\config.json') '{"CollectionUrl":"https://next.nexusmods.com/skyrimspecialedition/collections/ts1814"}'

@@ -15,7 +15,7 @@ for(const row of data.sources) {
  assert.equal(s.finish(row).ok,false);assert.equal(h.have(500,'f:Skyrim.esm'),row.gold);
 }
 {
- const s=setup(),row=data.sources[0],gm=fs.readFileSync(require('node:path').join(__dirname,'../game/gamemode.js'),'utf8');
+ const s=setup(),row=data.sources[0],gm=require('./gamemode-tables.js').joined(fs.readFileSync(require('node:path').join(__dirname,'../game/gamemode.js'),'utf8'));
  const hook=gm.match(/^mp\.onActivate = guard\('onActivate',[\s\S]*?^\}\);/m)[0];
  s.w.ctx.guard=(name,fn)=>fn;s.w.ctx.notify=()=>{};vm.runInContext(hook,s.w.ctx);
  assert.equal(s.take(row).ok,true);assert.equal(s.w.ctx.mp.onActivate(s.id(row.reference),500),false);

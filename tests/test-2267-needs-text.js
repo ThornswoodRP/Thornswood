@@ -88,10 +88,9 @@ function person(id, cell) {
 function needsRig() {
   const g = { __thornswoodChargen: { inCreation: function (id) { return !!creating[id]; } } };
   const fake = {
-    getOnlinePlayers: function () { return online.slice(); },
     makeProperty: function () { },
     getDescFromId: function () { return ''; },
-    get: function (id, key) {
+    get: function (id, key) { if (id === 0 && key === 'onlinePlayers') { return online.slice(); }
       if (key === 'thornswoodNeeds') { return refs[id] ? refs[id].needs : undefined; }
       if (!refs[id]) { throw new Error('no reference ' + id); }
       const v = refs[id][key];

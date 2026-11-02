@@ -131,10 +131,18 @@ try {
     # handed and answers the line the script looks for.
     function Probe([string]$name, [string]$answer, [string[]]$more) {
         $src = [IO.File]::ReadAllText((Join-Path $Repo ('scripts\deploy\' + $name)))
-        $probe = Join-Path $Repo ('scripts\deploy\_probe-5180-' + [guid]::NewGuid().ToString('N').Substring(0, 6) + '.ps1')
+        # The probe lives in this harness's own temp folder, never in scripts\:
+        # other harnesses read that folder while this one runs, and a file that
+        # comes and goes under them breaks them (test-local-accounts on #5420).
+        # It is told the real scripts\deploy folder, so it loads what the script does.
+        $probe = Join-Path $tmp ('_probe-5180-' + [guid]::NewGuid().ToString('N').Substring(0, 6) + '.ps1')
         $hook = 'function Remote($script) { [IO.File]::WriteAllText($env:PROBE_OUT, $script); return @("' + $answer + '") }'
+        $hereLine = '$Here = ''' + (Join-Path $Repo 'scripts\deploy').Replace("'", "''") + ''''
         $probeSrc = [regex]::Replace($src, '(?m)^function Remote\(\$script\) \{.*$', $hook.Replace('$', '$$'))
         if ($probeSrc -eq $src) { return $null }
+        $placed = [regex]::Replace($probeSrc, '(?m)^\$Here = \$PSScriptRoot\s*$', $hereLine.Replace('$', '$$'))
+        if ($placed -eq $probeSrc) { return $null }
+        $probeSrc = $placed
         [IO.File]::WriteAllText($probe, $probeSrc)
         $sent = Join-Path $tmp ('sent-' + [guid]::NewGuid().ToString('N').Substring(0, 6) + '.ps1')
         try {

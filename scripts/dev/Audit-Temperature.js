@@ -31,13 +31,12 @@ if (a < 0 || b < 0) {
   process.exit(1);
 }
 
-// The three tables the block reads, lifted out of the file the same way
-// test-temp.js lifts them, so this audits what is installed rather than what
-// is in the json beside it.
+// The three tables the block reads, out of game\gamemode-tables where the
+// gamemode reads them when it loads (#5191), so this audits what is installed
+// rather than what is in game\data beside it. GM_TABLES names another folder.
+const TABLES = require('./GamemodeTables.js');
 function table(name, fallback) {
-  const line = new RegExp('const ' + name + ' = (\\{[\\s\\S]*?\\});\\n').exec(src);
-  if (!line) { return fallback; }
-  try { return JSON.parse(line[1]); } catch (e) { return fallback; }
+  try { return TABLES.read(name, process.env.GM_TABLES || TABLES.DIR); } catch (e) { return fallback; }
 }
 const WARMTH = table('WARMTH', { items: {} });
 const WEATHER = table('WEATHER', { most: 0, mid: 0, items: {} });

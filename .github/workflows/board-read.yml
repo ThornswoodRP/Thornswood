@@ -87,10 +87,25 @@ jobs:
           function Has($o, [string]$name) { return ($null -ne $o -and $o.PSObject.Properties[$name] -and $null -ne $o.$name) }
 
           $who = @{ o = $env:BOARD_OWNER; n = [int]$env:BOARD_NUMBER }
-          $d = Board 'query($o:String!,$n:Int!){organization(login:$o){projectV2(number:$n){title url status:field(name:"Status"){... on ProjectV2SingleSelectField{options{name}}} workflows(first:50){nodes{name enabled}}}}}' $who
+          $d = Board 'query($o:String!,$n:Int!){organization(login:$o){projectV2(number:$n){title url status:field(name:"Status"){... on ProjectV2SingleSelectField{options{name}}}}}}' $who
           $project = $d.organization.projectV2
           if (-not $project) { throw "board $env:BOARD_NUMBER of $env:BOARD_OWNER is not there, or the token cannot see it" }
           if (-not (Has $project 'status') -or -not (Has $project.status 'options')) { throw 'the board has no single-select field named Status' }
+
+          # The board's own workflows, asked for apart: GitHub refuses them to
+          # the board App's token ("You do not have permission to access
+          # workflows", run 41350496779, 1 Nov 2026), and nothing else here
+          # needs them. So they are written as not read,
+          # with GitHub's answer, and the cards are still read. Check-Board.ps1
+          # says Auto-close issue was not checked.
+          $workflows = $null; $workflowsUnread = $null
+          try {
+            $wf = Board 'query($o:String!,$n:Int!){organization(login:$o){projectV2(number:$n){workflows(first:50){nodes{name enabled}}}}}' $who
+            $workflows = @(@($wf.organization.projectV2.workflows.nodes) | ForEach-Object { [ordered]@{ name = $_.name; enabled = [bool]$_.enabled } })
+          } catch {
+            $workflowsUnread = $_.Exception.Message
+            Write-Host "the board's workflows were not read: $workflowsUnread"
+          }
 
           $items = New-Object System.Collections.Generic.List[object]
           $after = $null
@@ -117,7 +132,8 @@ jobs:
             read_at   = [DateTime]::UtcNow.ToString('o')
             board     = [ordered]@{ owner = $env:BOARD_OWNER; number = [int]$env:BOARD_NUMBER; title = $project.title; url = $project.url }
             statuses  = @($project.status.options | ForEach-Object { $_.name })
-            workflows = @(@($project.workflows.nodes) | ForEach-Object { [ordered]@{ name = $_.name; enabled = [bool]$_.enabled } })
+            workflows = $workflows
+            workflows_unread = $workflowsUnread
             items     = $items.ToArray()
           }
           $dir = Join-Path $env:RUNNER_TEMP 'board-read'

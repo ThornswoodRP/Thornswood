@@ -6,7 +6,9 @@
 #
 # WHAT A RELEASE CARRIES. Every Release carries every part, so any of them can
 # be put back by its tag:
-#   gamemode  game/gamemode.js and its stamp, thornswood-build.json
+#   gamemode  game/gamemode.js and its stamp, thornswood-build.json, and
+#             gamemode-tables.zip, the tables the gamemode reads (#5191),
+#             zipped by App-Part.ps1 so the same tables give the same bytes
 #   bot       the bot pass a dev Deployment waits on (#5196)
 #   server    the server build the commit records (records/server-build.json),
 #             CI's build of the pin as ServerArtifact.ps1 zips it (#5219)
@@ -42,8 +44,13 @@
 #             and game files, whole, with main's feed files,
 #             setup-files.main.json and Thornswood-Setup.exe. Listed in the
 #             manifest and held, not published (MAIN'S PACKAGE below)
-# The agent applies gamemode, bot, server, site, discord and voice and names
-# the other parts in its log.
+#   after     the steps after a deploy: every step file of deploy/after and
+#             the gate's verbs.json, which says which verbs a step may run
+#             (#5186). The agent runs each step once on each environment,
+#             after a Deployment of this Release succeeds; deploy/after's
+#             README says how a step file is written
+# The agent applies gamemode, bot, server, site, discord, voice and after
+# and names the other parts in its log.
 #
 # WHAT CHANGED. Each part is compared with the same part of the newest build
 # Release before (MergeRelease.ps1 says what is compared). A merge that
@@ -111,6 +118,7 @@ on:
       # launcher, as LauncherVersion.ps1 says.
       - '!launcher/tests/**'
       - 'records/**'
+      - 'deploy/after/*.json'
       - 'scripts/bot/Bot-Pass.js'
       - 'scripts/bot/bot.js'
       - 'scripts/bot/character.js'
@@ -412,13 +420,21 @@ jobs:
           $stamp = Join-Path $out 'thornswood-build.json'
           $s = Save-ThornswoodBuildStamp -Gamemode $gm -Channel dev -RepoDir . -Path $stamp
           Write-Host (Format-ThornswoodBuildStamp $s)
+          $tables = Join-Path $out 'gamemode-tables.zip'
+          ./scripts/release/App-Part.ps1 -Part tables -Out $tables
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Write-Host ('gamemode tables are git tree ' + (git rev-parse "$($env:GITHUB_SHA):game/gamemode-tables"))
           $bot = @(@('Bot-Pass.js', 'bot.js', 'character.js', 'relay.js') | ForEach-Object { Join-Path 'scripts\bot' $_ }) + @(@('voice-server.js', 'headlines.js') | ForEach-Object { Join-Path 'voice' $_ })
           $launcher = @(Get-ChildItem -LiteralPath $env:LAUNCHER_DIR -File | ForEach-Object { 'launcher=' + $_.FullName })
           $adds = $launcher + @("game=$($env:GAME_ZIP)", "game=$($env:GAME_LIST)",
                     "site=$($env:SITE_ZIP)", "discord=$($env:DISCORD_ZIP)", "voice=$($env:VOICE_ZIP)")
+          # The steps after a deploy and the verbs they are held to (#5186).
+          $steps = @(Get-ChildItem -LiteralPath 'deploy\after' -Filter '*.json' -File | Sort-Object Name | ForEach-Object { 'after=' + $_.FullName })
+          $adds += $steps + @('after=' + (Resolve-Path 'scripts\vps\gate\verbs.json').Path)
+          Write-Host ("steps after a deploy: " + $(if ($steps.Count) { ($steps | ForEach-Object { Split-Path -Leaf $_ }) -join ', ' } else { 'none' }))
           Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'parts.txt') -Value $adds
           $probe = Join-Path $env:RUNNER_TEMP 'probe'
-          ./scripts/release/New-SignedManifest.ps1 -Out $probe -Tag $env:TAG -Commit $env:GITHUB_SHA -Part gamemode -Files $gm, $stamp -BotFiles $bot -ServerZip $env:SERVER_ZIP -Add $adds -LauncherVersion $env:LAUNCHER_VERSION -NoCatalog
+          ./scripts/release/New-SignedManifest.ps1 -Out $probe -Tag $env:TAG -Commit $env:GITHUB_SHA -Part gamemode -Files $gm, $stamp, $tables -BotFiles $bot -ServerZip $env:SERVER_ZIP -Add $adds -LauncherVersion $env:LAUNCHER_VERSION -NoCatalog
           if ($LASTEXITCODE -ne 0) { exit 1 }
           $m = Get-Content -LiteralPath (Join-Path $probe 'files\manifest.json') -Raw | ConvertFrom-Json
           $prev = if ($env:PREVIOUS_MANIFEST) { Get-Content -LiteralPath $env:PREVIOUS_MANIFEST -Raw | ConvertFrom-Json } else { $null }
@@ -445,6 +461,7 @@ jobs:
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("apps=" + ($apps -join ','))
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("gamemode=" + $gm)
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("stamp=" + $stamp)
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("tables=" + $tables)
 
       # What the install reads beside the game files on the first start
       # (Build-SetupFiles.ps1), from the record the game files were built
@@ -575,13 +592,14 @@ jobs:
           LAUNCHER_VERSION: ${{ steps.launcher.outputs.version }}
           GAMEMODE: ${{ steps.changed.outputs.gamemode }}
           STAMP: ${{ steps.changed.outputs.stamp }}
+          TABLES: ${{ steps.changed.outputs.tables }}
         run: |
           $rel = Join-Path $env:RUNNER_TEMP 'merge-release'
           $bot = @(@('Bot-Pass.js', 'bot.js', 'character.js', 'relay.js') | ForEach-Object { Join-Path 'scripts\bot' $_ }) + @(@('voice-server.js', 'headlines.js') | ForEach-Object { Join-Path 'voice' $_ })
           $adds = @(Get-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'parts.txt'))
           $vp = Join-Path $env:RUNNER_TEMP 'velopack.txt'
           if (Test-Path -LiteralPath $vp) { $adds += @(Get-Content -LiteralPath $vp) }
-          ./scripts/release/New-SignedManifest.ps1 -Out $rel -Tag $env:TAG -Commit $env:GITHUB_SHA -Version $env:VERSION -Part gamemode -Files $env:GAMEMODE, $env:STAMP -BotFiles $bot -ServerZip $env:SERVER_ZIP -Add $adds -LauncherVersion $env:LAUNCHER_VERSION
+          ./scripts/release/New-SignedManifest.ps1 -Out $rel -Tag $env:TAG -Commit $env:GITHUB_SHA -Version $env:VERSION -Part gamemode -Files $env:GAMEMODE, $env:STAMP, $env:TABLES -BotFiles $bot -ServerZip $env:SERVER_ZIP -Add $adds -LauncherVersion $env:LAUNCHER_VERSION
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("dir=" + $rel)
           # The attestation's file pattern, in forward slashes, which the

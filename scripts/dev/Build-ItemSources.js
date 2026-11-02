@@ -95,6 +95,9 @@ const INPUTS = [
   'game/data/merchant-scarce-harvest.json',
   'game/data/merchant-orchard.json',
   'game/data/merchant-role-tables.json',
+  'game/gamemode-tables/ITEM_NAMES.json',
+  'game/gamemode-tables/ADMIN_ITEMS.json',
+  'game/gamemode-tables/ADMIN_ACTORS.json',
   'game/gamemode.js'
 ];
 const KINDS = ['crafted', 'race', 'company', 'faction', 'quest', 'gathered', 'found', 'start'];
@@ -187,14 +190,18 @@ const types = {};
 // other.
 const lowNames = {};
 const adminNames = {};
-['ITEM_NAMES', 'ADMIN_NAMES'].forEach(function (marker) {
-  const a = GM.indexOf('// ==== ' + marker + ' ====');
-  const b = GM.indexOf('// ==== end ' + marker + ' ====');
-  if (a < 0 || b < 0) { die('game/gamemode.js lost its ' + marker + ' block'); }
-  const re = /^\s*"[^"]*": \["((?:[^"\\]|\\.)*)", "([^"]+)"\],?$/gm;
-  const block = GM.slice(a, b);
-  let m;
-  while ((m = re.exec(block))) { if (!adminNames[m[2]]) { adminNames[m[2]] = JSON.parse('"' + m[1] + '"'); } }
+// The gamemode's tables (game/gamemode-tables, #5191): each row is
+// lower-case name -> [name as written, record]; ADMIN_ACTORS is read too, as
+// it was while it shared the ADMIN_NAMES block with ADMIN_ITEMS.
+const TABLES = require(path.join(ROOT, 'scripts', 'dev', 'GamemodeTables.js'));
+['ITEM_NAMES', 'ADMIN_ITEMS', 'ADMIN_ACTORS'].forEach(function (name) {
+  let rows;
+  try { rows = TABLES.read(name, path.join(ROOT, 'game', 'gamemode-tables')); } catch (e) { die('the ' + name + ' table does not read: ' + e.message); }
+  Object.keys(rows).forEach(function (k) {
+    const r = rows[k];
+    if (!Array.isArray(r) || typeof r[0] !== 'string' || typeof r[1] !== 'string') { die('the ' + name + ' row ' + k + ' is not [name, record]'); }
+    if (!adminNames[r[1]]) { adminNames[r[1]] = r[0]; }
+  });
 });
 const recordTypes = {};
 (function () {
@@ -467,7 +474,7 @@ ids.forEach(function (desc) {
 // What it read, by name and not by hash: the table itself is what --check
 // compares, so a change to game/gamemode.js that moves no source leaves it
 // current rather than stale.
-const readFrom = INPUTS.concat(['scripts/dev/MerchantScarceLongfinSources.js']);
+const readFrom = INPUTS.concat(['scripts/dev/MerchantScarceLongfinSources.js', 'scripts/dev/GamemodeTables.js']);
 
 const head = {
   builtBy: 'scripts/dev/Build-ItemSources.js',

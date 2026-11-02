@@ -40,7 +40,7 @@ const siteFiles = require('./site-files');
 const CR = String.fromCharCode(13);
 const read = function (p) { return fs.readFileSync(p, 'utf8').split(CR).join(''); };
 const site = siteFiles.source();
-const gm = read(path.join(REPO_DIR, 'game', 'gamemode.js'));
+const gm = require('./gamemode-tables.js').joined(read(path.join(REPO_DIR, 'game', 'gamemode.js')));
 const builder = read(path.join(REPO_DIR, 'bot', 'Build-Discord.py'));
 const botSrc = read(path.join(REPO_DIR, 'bot', 'bot.py'));
 

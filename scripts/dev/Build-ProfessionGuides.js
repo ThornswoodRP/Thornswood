@@ -14,14 +14,15 @@
 
     game/data/recipes.json        the rows the recipe book counts (every row
                                   not marked book "cut", the same 643 rows
-                                  RECIPES_BY_ID in game/gamemode.js carries
+                                  the gamemode's RECIPES_BY_ID table carries
                                   with a half), their families and ranks, and
                                   what each one asks for, with the class that
                                   gathers it and the rung that class needs
     game/data/mine-buildings.json which mines hold which ore, by vein count
     game/data/hunts.json          which animals give which part
-    game/gamemode.js              BENCH_ACCESS (who each bench opens for, at
-                                  which rank), MANEUVERS (a warrior's), and
+    game/gamemode-tables          BENCH_ACCESS (who each bench opens for, at
+                                  which rank, #5191)
+    game/gamemode.js              MANEUVERS (a warrior's), and
                                   the numbers of the ladder: workPerRank, the
                                   rest a piece costs, CRAFT_REST, partyBonus,
                                   a mage's study work and TOOL_USES
@@ -46,6 +47,7 @@ const path = require('node:path');
 const ROOT = path.join(__dirname, '..', '..');
 const UI = path.join(ROOT, 'game', 'ui', 'thornswood-skills.js');
 const GAMEMODE = path.join(ROOT, 'game', 'gamemode.js');
+const TABLES = require('./GamemodeTables.js');
 const BEGIN = '  // ==== PROFESSION_GUIDES ====\n';
 const END = '  // ==== end PROFESSION_GUIDES ====\n';
 
@@ -115,8 +117,9 @@ function ladderOf(gm) {
 
 /** Each half's benches, as [ words, the lowest rank it opens at ], lowest rank first. */
 function benchesOf(gm) {
-  const m = one(gm, /const BENCH_ACCESS = (\{.*\});/, 'BENCH_ACCESS line');
-  const access = JSON.parse(m[1]);
+  // The gamemode reads BENCH_ACCESS from its table file (#5191); gm is kept
+  // for the callers that still read the gamemode's own lines.
+  const access = TABLES.read('BENCH_ACCESS');
   const out = {};
   for (const id of Object.keys(access).sort()) {
     const b = access[id];

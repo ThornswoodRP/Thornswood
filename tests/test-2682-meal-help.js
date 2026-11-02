@@ -110,8 +110,9 @@ function rig(groups, hurtHas) {
   const store = {}, calls = [];
   let online = [];
   const mp = {
-    getOnlinePlayers: function () { return online; }, makeProperty: function () { },
-    get: function (id, key) { if (key === 'worldOrCellDesc' || key === 'pos') { return null; } return store[id]; },
+    makeProperty: function () { },
+    get: function (id, key) {
+      if (id === 0 && key === 'onlinePlayers') { return online; } if (key === 'worldOrCellDesc' || key === 'pos') { return null; } return store[id]; },
     set: function (id, key, v) { store[id] = JSON.parse(JSON.stringify(v)); }
   };
   const hurt = { exposed: function () { return false; } };

@@ -23,10 +23,8 @@ let pass = 0, fail = 0;
 function yes(what, ok) {
   if (ok) { pass++; console.log('PASS  ' + what); } else { fail++; console.log('FAIL  ' + what); }
 }
-function table(name) {
-  const m = new RegExp('^const ' + name + ' = (\\{.*\\});$', 'm').exec(gm);
-  return m ? JSON.parse(m[1]) : null;
-}
+// From its file when the gamemode reads it from one (#5191), else its line.
+function table(name) { return require('./gamemode-tables.js').inGamemode(gm, name); }
 const a = gm.indexOf('// ==== thornswood needs: hunger, thirst and exhaustion ====');
 const b = gm.indexOf('// ==== end thornswood needs ====');
 const needsBlock = (a >= 0 && b > a) ? gm.slice(a, b) : null;
@@ -67,8 +65,8 @@ function idOf(d) { return ids[d] || 0; }
 function rig() {
   const store = {}, fouled = [];
   const mp = {
-    getOnlinePlayers: function () { return []; }, makeProperty: function () { },
-    get: function (id, key) { if (key === 'worldOrCellDesc' || key === 'pos') { return null; } return store[id]; },
+    makeProperty: function () { },
+    get: function (id, key) { if (id === 0 && key === 'onlinePlayers') { return []; } if (key === 'worldOrCellDesc' || key === 'pos') { return null; } return store[id]; },
     set: function (id, key, v) { store[id] = JSON.parse(JSON.stringify(v)); }
   };
   const g = { __thornswoodHurt: { exposed: function (id, kind, source) { fouled.push([kind, source]); return false; } } };

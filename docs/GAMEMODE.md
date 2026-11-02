@@ -20,6 +20,16 @@ watches the file and reloads it on change after `mp.clear()`, so every block
 registers its handlers at load and keeps timers and state on `globalThis`
 (`g.__thornswood*`) so a reload does not lose them or double them.
 
+The tables read out of the load order are the one exception (#5191). Each is
+its own file, `game\gamemode-tables\<NAME>.json`, and `const <NAME> =
+table('<NAME>')` reads it when the gamemode loads, from `gamemode-tables` in
+the server's working folder, where `server-settings.json` is read from too
+(`gamemode.js:THE TABLES READ OUT OF THE LOAD ORDER ARE FILES BESIDE THE GAMEMODE`).
+Pasted into this file, every content change rewrote the same lines here and
+no two content pull requests could merge side by side. The load reads the
+whole folder once and logs it as a git tree id beside the git blob of
+`gamemode.js`, so a deploy can tell which tables a load ran.
+
 The plan for writing it as many source files that are joined into this one
 file, with the loader's limits read from the fork and the measurements behind
 it, is [GAMEMODE-SOURCE.md](GAMEMODE-SOURCE.md) (#2181).
@@ -327,11 +337,14 @@ each server, with that game server stopped:
 ## Generated tables
 
 Never hand edit these. Each script writes its json in `game\data` and then
-replaces its own block or line in `game\gamemode.js`. Run the Build-Recipe step
+its table's file in `game\gamemode-tables`, or, for `STATIONS`, `ITEMS`,
+`CHARGEN` and `STAFF_DATA`, its own line in `game\gamemode.js`. The tables
+the content builders write are listed in `scripts\mods\content-tables.json`.
+Run the Build-Recipe step
 after the ore, harvest, hunt and race tables, and Build-Bench after it,
 because each reads the one before.
 
-| In gamemode.js | Script | Json | Where the script installs it |
+| Table | Script | Json | Where the script installs it |
 |---|---|---|---|
 | `WATERS` | `Build-WaterTable.js` | `waters.json` | `Build-WaterTable.js:install` |
 | `WEATHER` | `Build-WeatherTable.js` | `weather.json` | `Build-WeatherTable.js:install` |
@@ -339,14 +352,14 @@ because each reads the one before.
 | `FOODS` | `Build-FoodTable.js` | `food.json` | `Build-FoodTable.js:install` |
 | `RACES` | `Build-RaceTable.js` | `races.json` | `Build-RaceTable.js:install` |
 | `STAFF_DATA` | `Build-StaffData.js` (#2873): the staff files the gamemode reads at run time, carried because the server's copy has no `game\data` beside it | `furniture.json`, `merchant-traders.json` (first steps' Cook, #5137), `property-word.json`, `thalmor-patrols.json` | `Build-StaffData.js:const LINE` |
-| `ORES_BY_BASE` | `Build-OreTable.ps1` | `ores.json` | `Build-OreTable.ps1:// ==== end ORES_BY_BASE ====` |
-| `HARVESTS_BY_BASE`, `FISH_BY_BASE`, `GAME_BY_BASE`, `CROPS_BY_BASE` | `Build-HarvestTable.ps1` | `harvests.json` | `Build-HarvestTable.ps1:All four installs work on the text of gamemode.js` |
-| `HUNTS_BY_BASE` | `Build-HuntTable.ps1` | `hunts.json` | `Build-HuntTable.ps1:// ==== end HUNTS_BY_BASE ====` |
-| `RECIPES_BY_ID` | `Build-RecipeTable.ps1`, which also reads `docs/systems/cut-items.json` for what leaves the open book | `recipes.json` | `Build-RecipeTable.ps1:// ==== end RECIPES_BY_ID ====` |
-| `STAFF_SPELLS` (staff spells block) | `Build-RecipeTable.ps1`, with each spell's school and rank | none | the STAFF_SPELLS markers |
-| `BUILDING_BY_DOOR`, `BUILDING_NAME`, `WAY_OUT` | `Build-DoorTable.py` | `doors.json` | `Build-DoorTable.py:'const BUILDING_BY_DOOR = '` |
-| `BENCH_BY_BASE`, `BENCH_ACCESS` | `Build-BenchTable.py`, from `recipes.json` | none | `Build-BenchTable.py:The blocks are written with LF` |
-| `SPELL_IDS` | `Build-SpellTable.ps1` | `spells.json` | `Build-SpellTable.ps1:// ==== end SPELL_IDS ====` |
+| `ORES_BY_BASE` | `Build-OreTable.ps1` | `ores.json` | `Build-OreTable.ps1:Write-GamemodeTable 'ORES_BY_BASE'` |
+| `HARVESTS_BY_BASE`, `FISH_BY_BASE`, `GAME_BY_BASE`, `CROPS_BY_BASE` | `Build-HarvestTable.ps1` | `harvests.json` | `Build-HarvestTable.ps1:Write-GamemodeTable 'HARVESTS_BY_BASE'`, one file for each of the four |
+| `HUNTS_BY_BASE` | `Build-HuntTable.ps1` | `hunts.json` | `Build-HuntTable.ps1:Write-GamemodeTable 'HUNTS_BY_BASE'` |
+| `RECIPES_BY_ID` | `Build-RecipeTable.ps1`, which also reads `docs/systems/cut-items.json` for what leaves the open book | `recipes.json` | `Build-RecipeTable.ps1:Write-GamemodeTable 'RECIPES_BY_ID'` |
+| `STAFF_SPELLS` (staff spells block) | `Build-RecipeTable.ps1`, with each spell's school and rank | none | `Build-RecipeTable.ps1:Write-GamemodeTable 'STAFF_SPELLS'` |
+| `BUILDING_BY_DOOR`, `BUILDING_NAME`, `WAY_OUT` | `Build-DoorTable.py` | `doors.json` | `Build-DoorTable.py:changed = gamemode_tables.write(name` |
+| `BENCH_BY_BASE`, `BENCH_ACCESS` | `Build-BenchTable.py`, from `recipes.json` | none | `Build-BenchTable.py:gamemode_tables.write('BENCH_BY_BASE'` |
+| `SPELL_IDS` | `Build-SpellTable.ps1` | `spells.json` | `Build-SpellTable.ps1:Write-GamemodeTable 'SPELL_IDS'` |
 | `DATA` | `Install-GamemodeConsts.js` | `data.json` | `Install-GamemodeConsts.js` |
 | `DATA.worldspaces`, inside `DATA` | `Build-WorldspaceTable.js`, from the WRLD records of the load order | `data.json` (`worldspaces`) | `Build-WorldspaceTable.js:install`, the list and nothing else of the line |
 | `DATA.ownWorlds` and `DATA.ownWorldDoors`, inside `DATA` | `Build-WakeTable.js`, from the doors, rooms and locations of the load order | `data.json` (`ownWorlds`, `ownWorldDoors`) | `Build-WakeTable.js:install`, the two tables and nothing else of the line |
@@ -365,7 +378,7 @@ The one part of them that is read out of the plugins is `DATA.worldspaces`,
 the set `WORLDSPACES` reads as a worldspace rather than a room (#1896): every
 WRLD record of the load order, overrides counted as the record they override.
 `scripts\dev\Build-WorldspaceTable.js` writes it into `data.json` and the DATA
-line, and `--check` says whether both hold the load order's list. Run it when
+table, and `--check` says whether both hold the load order's list. Run it when
 a plugin that adds a worldspace comes into the load order. Its two readers,
 `resolveArrival` and `climateOf`, pick the same hold for a worldspace in the
 set or out of it, because `cellToHold` names no worldspace; what the set
@@ -401,8 +414,9 @@ Everything goes to the dev server first.
   before anything leaves the machine, and on a machine without node it refuses,
   as the live deploys do
   (`scripts\deploy\Deploy-DevGamemode.ps1:node is not on this machine, so gamemode.js cannot be checked`). It reads how many are
-  on, warns them, sends `gamemode.js` alone to `C:\Thornswood-Server-Dev` and
-  restarts only the process on the dev port. `-LoadOrder` brings the dev load
+  on, warns them, sends `gamemode.js` and its `gamemode-tables` folder to
+  `C:\Thornswood-Server-Dev`, puts the folder in before the file and waits
+  for the load to log both (`scripts\deploy\Reload.ps1:The tables go in first`). `-LoadOrder` brings the dev load
   order up to the built server's; a change to the CHARGEN records needs
   `Deploy-Gamemode.ps1 -Vortex` first (`scripts\deploy\Deploy-DevGamemode.ps1:changes the CHARGEN records needs Deploy-Gamemode.ps1 -Vortex first`).
 - **Live:** `.\scripts\deploy\Deploy-Gamemode.ps1` copies `gamemode.js` into the local

@@ -13,7 +13,7 @@
                     "transport":  "a helper that carries what its caller hands it; the caller is the row that counts"
                 },
     "scriptCount":  79,
-    "callCount":  317,
+    "callCount":  319,
     "calls":  [
                   {
                       "script":  "scripts/deploy/Artifact.ps1",
@@ -199,19 +199,28 @@
                       "script":  "scripts/deploy/Deploy-DevGamemode.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "Remote",
-                      "anchor":  "$reloadOut = @(Remote ((ReloadVars $Root $Task $stageName $prevName $Wait $hashes $newBlob) + $reloadBlock) |",
-                      "does":  "puts a gamemode-only stage in while the dev server runs and confirms the load from server.log, or puts the old one back (#3196)",
-                      "class":  "swap",
-                      "reason":  "reload block; replaces gamemode.js and the stamp in the server folder, stops nothing"
+                      "anchor":  "`$port = [int]`$s.port",
+                      "does":  "checks the dev port is answering",
+                      "class":  "read-status",
+                      "reason":  "read only"
+                  },
+                  {
+                      "script":  "scripts/deploy/Deploy-DevGamemode.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "scp",
+                      "anchor":  "Invoke-ThornswoodNative { \u0026 scp @ssh @($tableFiles | ForEach-Object { $_.FullName }) \"$User@${Vps}:$stageFar/gamemode-tables/\" }",
+                      "does":  "writes the gamemode's tables into a stage folder (#5191)",
+                      "class":  "stage",
+                      "reason":  "writes or checks a stage folder or file"
                   },
                   {
                       "script":  "scripts/deploy/Deploy-DevGamemode.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "Remote",
-                      "anchor":  "`$port = [int]`$s.port",
-                      "does":  "checks the dev port is answering",
-                      "class":  "read-status",
-                      "reason":  "read only"
+                      "anchor":  "$reloadOut = @(Remote ((ReloadVars $Root $Task $stageName $prevName $Wait $hashes $newBlob $newTree) + $reloadBlock) |",
+                      "does":  "puts a gamemode-only stage in while the dev server runs and confirms the load from server.log, or puts the old one back (#3196)",
+                      "class":  "swap",
+                      "reason":  "reload block; replaces gamemode.js and the stamp in the server folder, stops nothing"
                   },
                   {
                       "script":  "scripts/deploy/Deploy-Docs.ps1",
@@ -545,6 +554,15 @@
                       "does":  "swaps the stage in",
                       "class":  "swap",
                       "reason":  "swap block; StopOurs kills the server pid with Stop-Process"
+                  },
+                  {
+                      "script":  "scripts/deploy/Deploy-Server.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "scp",
+                      "anchor":  "Invoke-ThornswoodNative { \u0026 scp @ssh @($tableSend.Values) \"$User@${Vps}:$stageFar/gamemode-tables/\" }",
+                      "does":  "writes the gamemode's tables into a stage folder (#5191)",
+                      "class":  "stage",
+                      "reason":  "writes or checks a stage folder or file"
                   },
                   {
                       "script":  "scripts/deploy/Install-Backup.ps1",

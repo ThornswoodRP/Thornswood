@@ -63,8 +63,9 @@ fs.writeFileSync(pluginsTxt, [
 ].join("\r\n"));
 const recipes = path.join(tmp, "recipes.json");
 fs.writeFileSync(recipes, JSON.stringify({ recipes: {}, unowned: {} }));
-const gamemode = path.join(tmp, "gamemode.js");
-fs.writeFileSync(gamemode, "// nothing\n");
+// The gamemode's tables (#5191), an empty folder a --check must leave empty.
+const tables = path.join(tmp, "gamemode-tables");
+fs.mkdirSync(tables);
 
 function run(cmd, args) {
   const r = cp.spawnSync(cmd, args, { encoding: "utf8", timeout: 120000 });
@@ -78,14 +79,14 @@ try {
   yes("python is on this machine, so the bench builder can be run", !!py);
   if (py) {
     const b = run(py.c, [path.join(REPO_DIR, "scripts", "dev", "Build-BenchTable.py"),
-      "--data", data, "--plugins", pluginsTxt, "--recipes", recipes, "--gamemode", gamemode, "--check"]);
+      "--data", data, "--plugins", pluginsTxt, "--recipes", recipes, "--tables", tables, "--check"]);
     yes("Build-BenchTable.py runs to the end with a switched off plugin missing from the folder (exit " + b.code + ")", b.code === 0);
     yes("it does not stop on a plugin that is not in the folder", b.out.indexOf("STOP.") < 0);
     yes("it says it left the two switched off lines out",
       b.out.indexOf("2 line(s) in that list are switched off and were left out") >= 0);
     yes("it reads the five masters and the two switched on plugins, and nothing else",
       b.out.indexOf("7 plugin(s): the five masters, then") >= 0 && b.out.indexOf("7 plugin(s) read") >= 0);
-    yes("--check wrote nothing into the gamemode", fs.readFileSync(gamemode, "utf8") === "// nothing\n");
+    yes("--check wrote nothing into the gamemode's tables", fs.readdirSync(tables).length === 0);
     if (b.code !== 0) { console.log(b.out.split("\n").slice(-15).join("\n")); }
   }
 
@@ -115,7 +116,7 @@ try {
     const out = path.join(tmp, "out.json");
     for (const b of ["Build-DoorTable.py", "Build-CastTable.py", "Build-WellTable.py"]) {
       const a = [path.join(REPO_DIR, "scripts", "dev", b), "--data", data, "--plugins", pluginsTxt, "--out", out, "--check"];
-      if (b !== "Build-CastTable.py") { a.push("--gamemode", gamemode); }
+      if (b !== "Build-CastTable.py") { a.push("--tables", tables); }
       const r = run(py.c, a);
       // The well builder stops later, on well bases this folder has none of.
       if (b !== "Build-WellTable.py") {
@@ -126,7 +127,7 @@ try {
         r.out.indexOf("STOP. 1 plugin") < 0 && r.out.indexOf("skipped") < 0 && r.out.indexOf("Off ") < 0);
       if (r.out.indexOf("Off ") >= 0 || r.out.indexOf("STOP. 1 plugin") >= 0) { console.log(r.out.split("\n").slice(0, 10).join("\n")); }
     }
-    yes("--check wrote nothing into the gamemode", fs.readFileSync(gamemode, "utf8") === "// nothing\n");
+    yes("--check wrote nothing into the gamemode's tables", fs.readdirSync(tables).length === 0);
   }
 
   // ---- #2976: the fire, warmth, water and weather builders ---------------

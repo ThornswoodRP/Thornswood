@@ -48,8 +48,8 @@ function done() {
 }
 
 const gm = process.env.GAMEMODE
-  ? fs.readFileSync(process.env.GAMEMODE, 'utf8').split(CR).join('')
-  : read(path.join('game', 'gamemode.js'));
+  ? require('../../tests/gamemode-tables.js').joined(fs.readFileSync(process.env.GAMEMODE, 'utf8')).split(CR).join('')
+  : require('../../tests/gamemode-tables.js').joined(read(path.join('game', 'gamemode.js')));
 const page = process.env.CLASSES_MD
   ? fs.readFileSync(process.env.CLASSES_MD, 'utf8').split(CR).join('')
   : read(path.join('site', 'data', 'site', 'classes.md'));
@@ -127,7 +127,7 @@ if (!P || !P.TABLE) { done(); }
 const T = P.TABLE;
 
 // Recipes and benches, the two generated tables the craft gate reads.
-const recSrc = slice(gm, 'var RECIPES_BY_ID = {', '\n  };');
+const recSrc = slice(gm, 'var RECIPES_BY_ID = {', ';\n');
 let RECIPES = null;
 try { RECIPES = recSrc ? new Function('return ' + recSrc.slice('var RECIPES_BY_ID = '.length).replace(/;$/, ''))() : null; }
 catch (e) { RECIPES = null; }

@@ -30,8 +30,12 @@
   "game/data/merchant-scarce-harvest.json",
   "game/data/merchant-orchard.json",
   "game/data/merchant-role-tables.json",
+  "game/gamemode-tables/ITEM_NAMES.json",
+  "game/gamemode-tables/ADMIN_ITEMS.json",
+  "game/gamemode-tables/ADMIN_ACTORS.json",
   "game/gamemode.js",
-  "scripts/dev/MerchantScarceLongfinSources.js"
+  "scripts/dev/MerchantScarceLongfinSources.js",
+  "scripts/dev/GamemodeTables.js"
  ],
  "count": 1158,
  "counts": {

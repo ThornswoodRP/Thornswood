@@ -70,6 +70,9 @@ function checkRecord(doc) {
     }
     for (const k of Object.keys(why)) if (!(k in perms)) bad.push(at + ': a why for ' + k + ', which it is not given');
     if (!Array.isArray(a.events)) bad.push(at + ': no events list (an empty one says none)');
+    const evWhy = a.events_why || {};
+    for (const e of Array.isArray(a.events) ? a.events : []) if (!String(evWhy[e] || '').trim()) bad.push(at + ': the ' + e + ' event has no why');
+    for (const e of Object.keys(evWhy)) if (!Array.isArray(a.events) || a.events.indexOf(e) < 0) bad.push(at + ': an events_why for ' + e + ', which it is not sent');
     const on = Array.isArray(a.installed_on) ? a.installed_on : null;
     const off = Array.isArray(a.never_on) ? a.never_on : [];
     if (!on || !on.length) bad.push(at + ': does not say which repositories it is installed on');

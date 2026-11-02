@@ -114,7 +114,7 @@ for (const part of PARTS) {
 
 // The server's half was already there, and this must not have moved it.
 const recipes = JSON.parse(fs.readFileSync(RECIPES, 'utf8'));
-const gm = fs.readFileSync(GM, 'utf8');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(GM, 'utf8'));
 for (const part of PARTS) {
   const key = (part.fid & 0xFFFFFF).toString(16) + ':HearthFires.esm';
   const row = recipes.refused && recipes.refused[key];

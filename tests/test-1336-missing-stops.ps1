@@ -23,12 +23,14 @@
   3. Export-ServerPayload.ps1, run on a scratch build. A build with no
      gamemode.js is refused before anything is packed (the server would
      otherwise start with no gamemode: skymp5-server logs the missing file
-     and runs on). A load order naming a plugin this machine does not have
+     and runs on). So is a build with no gamemode tables (#5191), which
+     the gamemode cannot load without. A load order naming a plugin this machine does not have
      is refused, where it used to be left out and the shorter order shipped.
      A build with both packs, with the whole order. A build with no stamp
      packs and says it has none.
-  4. Install-ThornswoodServer.ps1 refuses a stage with no gamemode.js, and a
-     put-back with a settings file missing says so. Read from the source:
+  4. Install-ThornswoodServer.ps1 refuses a stage with no gamemode.js or no
+     gamemode tables (#5191), and a put-back with a settings file missing
+     says so. Read from the source:
      the installer runs only on Windows, under test-install-server.ps1.
 
   Nothing leaves this machine. Scratch files go under the temp folder.
@@ -215,6 +217,12 @@ try {
     Yes '  and no zip is made' (-not $x.Zip)
 
     Put (Join-Path $dist 'gamemode.js') '// the gamemode'
+    # The tables the gamemode reads as it loads (#5191): a build with none
+    # would start a server whose gamemode stops at once.
+    $x = Export
+    Yes ("a build with no gamemode tables is refused (exit {0})" -f $x.Code) ($x.Code -ne 0 -and $x.Out -match 'no gamemode tables' -and $x.Out -match 'Nothing was packed')
+    Yes '  and no zip is made' (-not $x.Zip)
+    Put (Join-Path $dist 'gamemode-tables\WAY_OUT.json') '{}'
     Order @('Skyrim.esm', 'Missing.esp', 'A.esp', 'B.esp')
     $x = Export
     Yes ("a load order naming a plugin this machine does not have is refused (exit {0})" -f $x.Code) (
@@ -226,6 +234,7 @@ try {
     $ents = if ($x.Zip) { Entries } else { @() }
     Yes ("a build with both packs (exit {0})" -f $x.Code) ($x.Code -eq 0 -and $x.Zip); if ($x.Code) { Write-Host $x.Out }
     Yes '  with gamemode.js in it' ($ents -contains 'gamemode.js')
+    Yes '  and its tables' ($ents -contains 'gamemode-tables/WAY_OUT.json')
     Yes '  and the whole order, in order' ((@(if ($x.Zip) { ZipOrder }) | ForEach-Object { ($_ -split '/')[-1] }) -join ',' -eq 'Skyrim.esm,A.esp,B.esp')
     Yes '  and says the build has no stamp' ($x.Out -match 'no thornswood-build\.json')
     Put (Join-Path $dist 'thornswood-build.json') '{"gamemode":"x"}'
@@ -238,6 +247,9 @@ try {
     Yes 'a stage with no gamemode.js is refused with the rest, before anything is stopped' (
         $inst -match "(?s)if \(-not \(Test-Path -LiteralPath \`$gm\)\) \{\s*\`$bad \+= 'the payload has no gamemode\.js[^']*'\s*\} else \{" -and
         $inst.IndexOf("`$bad += 'the payload has no gamemode.js") -lt $inst.IndexOf('if ($bad.Count) { Refuse $bad }'))
+    Yes 'a stage with no gamemode tables is refused with the rest, before anything is stopped (#5191)' (
+        $inst.IndexOf("`$bad += 'the payload has no gamemode-tables") -gt 0 -and
+        $inst.IndexOf("`$bad += 'the payload has no gamemode-tables") -lt $inst.IndexOf('if ($bad.Count) { Refuse $bad }'))
     Yes 'a put-back with a settings file missing says so' ($inst -match "(?s)\`$gone = @\(@\(\`$runPath, \`$backPath\).*?Say \(""there is no "" \+")
 } finally {
     Remove-Item -LiteralPath $T -Recurse -Force -ErrorAction SilentlyContinue

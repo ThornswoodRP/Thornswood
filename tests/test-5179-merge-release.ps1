@@ -134,6 +134,12 @@ try {
     $c = Copy-Parts $same
     $got = @(Get-MergeReleaseChanged -Manifest (M $c '2026.1101.1745') -Previous $prev)
     Yes '  and new launcher sources are a change with the same exe' (($got -join ',') -eq 'launcher')
+    $c = Copy-Parts $same; $c['after'] = @((F 'verbs.json' 'w1'))
+    $got = @(Get-MergeReleaseChanged -Manifest (M $c) -Previous $prev)
+    Yes 'the gate''s verbs.json alone in the steps after a deploy is no change (#5186)' ($got.Count -eq 0)
+    $c['after'] = @((F 'verbs.json' 'w1'), (F '2484-gates.json' 'p1'))
+    $got = @(Get-MergeReleaseChanged -Manifest (M $c) -Previous $prev)
+    Yes '  and a step file is' (($got -join ',') -eq 'after')
     $got = @(Get-MergeReleaseChanged -Manifest $prev)
     Yes 'with no Release before, every part but velopack and main has changed' (($got -join ',') -eq 'gamemode,bot,server,launcher,game')
     # Whether this merge makes a Velopack package and builds the launcher for
@@ -350,6 +356,8 @@ try {
         $wf -match "(?m)^\s+- 'game/\*\*'\s*$" -and $wf -match "(?m)^\s+- 'launcher/\*\*'\s*$" -and $wf -match "(?m)^\s+- 'records/\*\*'\s*$" -and $wf -match "(?m)^\s+- 'scripts/bot/Bot-Pass\.js'\s*$")
     $self = @('Build-GameFiles.ps1', 'Build-SetupFiles.ps1', 'Source-Notice.ps1', 'MergeRelease.ps1', 'New-SignedManifest.ps1', 'Build-Launcher.ps1', 'Go.ps1', 'Build-Front.ps1') | Where-Object { $wf -notmatch ("(?m)^\s+- 'scripts/release/" + [regex]::Escape($_) + "'\s*$") }
     Yes ('  and for the scripts it runs that decide what is built' + $(if ($self) { ': not ' + ($self -join ', ') } else { '' })) (-not $self)
+    Yes '  and for a new step after a deploy, carried as the part after with the gate''s verbs (#5186)' ($wf -match "(?m)^\s+- 'deploy/after/\*\.json'\s*$" -and
+        $wf.Contains("Get-ChildItem -LiteralPath 'deploy\after' -Filter '*.json'") -and $wf.Contains("'after=' + (Resolve-Path 'scripts\vps\gate\verbs.json').Path"))
     Yes '  in the release environment, on main only, one run at a time, a newer merge cancelling the run before (#5398)' ($wf -match '(?m)^\s+environment: release\s*$' -and $wf.Contains("if: `${{ github.ref == 'refs/heads/main' }}") -and $wf -match '(?m)^\s+group: merge-release\s*$' -and $wf -match '(?m)^\s+cancel-in-progress: true\s*$')
     # GitHub refuses the run's token a tag on a commit whose workflow files
     # differ from main's (probe runs 41375894899 and 41376016183, #5398), so
@@ -453,6 +461,23 @@ try {
         $wf.Contains("`$dev = @(`$changed | Where-Object { `$_ -notin 'site', 'discord' })"))
     Yes 'the site and the bot each get a Deployment of their own with the part beside the tag' ($wf.Contains("`$where = @{ site = 'Site'; discord = 'Discord bot' }") -and
         $wf.Contains('payload = [ordered]@{ release = $env:TAG; part = $part }') -and $wf.Contains("if: `${{ steps.newest.outputs.release == 'yes' && steps.changed.outputs.apps != '' }}"))
+    # The tables the gamemode reads (#5191) ride the gamemode part.
+    Yes 'the gamemode part carries gamemode-tables.zip, zipped by App-Part.ps1, in the compare and the signed Release' ($wf.Contains('./scripts/release/App-Part.ps1 -Part tables -Out $tables') -and
+        $wf.Contains('-Part gamemode -Files $gm, $stamp, $tables -BotFiles') -and $wf.Contains('-Part gamemode -Files $env:GAMEMODE, $env:STAMP, $env:TABLES -BotFiles') -and
+        $wf.Contains('TABLES: ${{ steps.changed.outputs.tables }}'))
+    $tz1 = Join-Path $tmp 'tables1/gamemode-tables.zip'; $tz2 = Join-Path $tmp 'tables2/gamemode-tables.zip'
+    & pwsh -NoProfile -File (Join-Path $Repo 'scripts/release/App-Part.ps1') -Part tables -Out $tz1 -RepoDir $Repo *> $null; $e1 = $LASTEXITCODE
+    Start-Sleep -Milliseconds 1100
+    & pwsh -NoProfile -File (Join-Path $Repo 'scripts/release/App-Part.ps1') -Part tables -Out $tz2 -RepoDir $Repo *> $null; $e2 = $LASTEXITCODE
+    $want = @(Get-ChildItem -LiteralPath (Join-Path $Repo 'game/gamemode-tables') -File -Filter '*.json' | Where-Object { $_.Name -cmatch '^[A-Z][A-Z0-9_]*\.json$' } | ForEach-Object { $_.Name } | Sort-Object)
+    $got = @()
+    if ($e1 -eq 0 -and (Test-Path -LiteralPath $tz1)) {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $z = [IO.Compression.ZipFile]::OpenRead($tz1); try { $got = @($z.Entries | ForEach-Object { $_.FullName } | Sort-Object) } finally { $z.Dispose() }
+    }
+    Yes ('  with every table at the top of the zip (' + $want.Count + ' tables)') ($e1 -eq 0 -and $want.Count -gt 0 -and (($got -join '|') -ceq ($want -join '|')))
+    Yes '  and the same tables give the same bytes, so a merge that changed none leaves the gamemode part unchanged' ($e2 -eq 0 -and (Test-Path -LiteralPath $tz2) -and
+        (Get-FileHash -LiteralPath $tz1).Hash -eq (Get-FileHash -LiteralPath $tz2).Hash)
     $wfs = @(Get-ChildItem -LiteralPath (Join-Path $Repo '.github/workflows') -Filter *.yml -File | Where-Object { [IO.File]::ReadAllText($_.FullName) -match 'Record-Deployment|gamemode-release' } | ForEach-Object { $_.Name })
     Yes ('no other workflow records a Deployment or names the old gamemode release' + $(if ($wfs) { ': ' + ($wfs -join ', ') } else { '' })) ($wfs.Count -eq 0 -or ($wfs.Count -eq 2 -and $wfs -contains 'merge-release.yml' -and $wfs -contains 'release-files.yml' -and
         -not ([IO.File]::ReadAllText((Join-Path $Repo '.github/workflows/release-files.yml'))).Contains('deployments: write')))

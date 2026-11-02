@@ -30,13 +30,20 @@ Bramble picks, claims, merges and runs every release step, and Rift, Sprocket,
 Echo, Magpie and Wisp each own a part of the project. A Bot marks what it is
 on with its `claimed: <Bot>` label and the board card in In Progress, the
 way everybody claims. When the issue closes, `.github\workflows\drop-claims.yml`
-takes every `claimed:` label off it (#1863). A change that needs a run (a
-Ship, a Deploy-*, Publish-* or Install-* script, a step on the live or dev
-server, a Vortex step) is run by Bramble, from the note the change's pull
-request leaves in the private ops repo's `ops\claude-queue\` folder
-(`ops\README.md` there has the template), once that pull request is merged;
-a main or live run still waits for Patrick's word. Since 1 Nov the Claude
-Desk neither runs those notes nor merges. Bot branches carry the Bot's name
+takes every `claimed:` label off it (#1863). A change that needs something
+done once it is deployed says so in a step file of its own under
+`deploy\after\` (its README has the shape, #5186): a gate verb for the box
+deploy agent to run after the Deployment succeeds, or a check for a person in
+the game, which becomes an issue labelled `check: in game`. The agent runs
+each step once and says how it went on the Deployment, so nobody keeps or
+runs a note. When no gate verb does what is needed, the same pull request
+adds one to `scripts\vps\gate\verbs.json` and lists it in that verb's
+`afterDeploy`. No new run note goes in the private ops repo's
+`ops\claude-queue\`; Bramble runs the notes already there and takes them
+away as they are (since 1 Nov the Claude Desk neither runs those notes nor
+merges). A step only a person can take outside the game (a click in Vortex's
+own window) is a card on Patrick's report page, never a note, and a main or
+live run still waits for Patrick's word. Bot branches carry the Bot's name
 (`wisp/3150-what-it-is`). On the shipping machine `C:\Thornswood-Repo` is
 shared and sits detached at `origin/main`: branch work goes in a worktree in
 its ignored `worktrees` folder, removed with its branch once the pull request

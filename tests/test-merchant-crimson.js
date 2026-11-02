@@ -7,7 +7,7 @@ vm.runInNewContext(fixture.slice(0,fixture.indexOf('let w = boot();'))+
  ';this.h={boot,form,have,fault,clock,reset(){forms={};}};',realm);
 const h=realm.h,doc=require('../game/data/merchant-scarce-harvest.json'),item=doc.sources[0].item;
 const refs=doc.sources.map(row=>parseInt(row.reference,16));
-const gm=fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8');
+const gm=require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8'));
 const interception=Array.from(gm.matchAll(/\[(0x[0-9a-f, x]+)\]\.includes\(refrId\)/g)).filter(hit=>hit[1].split(',').length===8);
 assert.equal(interception.length,2,'activation and direct harvesting both intercept the eight static sources');
 for(const hit of interception)assert.deepEqual(hit[1].split(',').map(x=>Number(x)),refs);
@@ -36,7 +36,7 @@ function setup() {
   ctx.plantAt=()=>({produce:item,name:'Crimson Nirnroot',rank:''});
   ctx.RANK_LADDER=['novice','advanced','expert','master'];ctx.rankStep=()=>0;ctx.rankWord=v=>v;
  };
- const w=h.boot(into),gm=fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8');
+ const w=h.boot(into),gm=require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8'));
  const at=gm.indexOf('function harvest(actorId'),end=gm.indexOf('\n}',at)+2;
  const helper=gm.indexOf('function harvestCrimson(');
  if(helper>=0)vm.runInContext(gm.slice(helper,gm.indexOf('\n}',helper)+2),w.ctx);
@@ -79,7 +79,7 @@ function setup() {
  s.w.ctx.MERCHANT_TRADING.scarceHarvest=()=>{throw new Error('unavailable source data');};
  s.w.ctx.mp.getDescFromId=()=>{throw new Error('unavailable descriptions');};
  assert.match(s.pick(999999),/You pick/);assert.equal(s.counts().normalGrants,1,'ordinary plants do not consult quest services');
- const hook=fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8').match(/^mp\.onActivate = guard\('onActivate',[\s\S]*?^\}\);/m)[0];
+ const hook=require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8')).match(/^mp\.onActivate = guard\('onActivate',[\s\S]*?^\}\);/m)[0];
  const get=s.w.ctx.mp.get;s.w.ctx.mp.get=(id,key)=>refs.includes(id)&&key==='baseDesc'?'other:Skyrim.esm':get(id,key);
  s.w.ctx.guard=(name,fn)=>fn;s.w.ctx.notify=()=>{};vm.runInContext(hook,s.w.ctx);
  assert.equal(s.w.ctx.mp.onActivate(refs[0],500),false,'selected source stays intercepted with failed service and substituted base');

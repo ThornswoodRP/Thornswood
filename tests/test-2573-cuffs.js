@@ -59,8 +59,8 @@ function rig(src, opts) {
   const strengthAsked = [];
   const mp = {
     makeProperty: function (k, o) { made[k] = o; },
-    getOnlinePlayers: function () { return Object.keys(people).filter(function (id) { return !people[id].npc; }).map(Number); },
     get: function (id, key) {
+      if (id === 0 && key === 'onlinePlayers') { return Object.keys(people).filter(function (id) { return !people[id].npc; }).map(Number); }
       const p = people[id];
       if (!p) { throw new Error('no such form'); }
       if (key === 'profileId') { return p.pid; }
@@ -462,10 +462,10 @@ if (C && typeof C.used === 'function') {
     yes('...and the same day, a pair gone, arriving again issues no other', (q.people[c].inv = {}, Q.cameIn(c) === false && q.count(c, CUFFS) === 0));
     q.clock.now += Q.ISSUE_EVERY_MS + 1000;
     yes('...and a day later, arriving issues the next one', Q.cameIn(c) === true && q.count(c, CUFFS) === 1);
-    const gone = q.mp.getOnlinePlayers;
-    q.mp.getOnlinePlayers = function () { throw new Error('no list'); };
+    const was = q.mp.get;
+    q.mp.get = function (id, key) { if (id === 0 && key === 'onlinePlayers') { throw new Error('no list'); } return was.apply(this, arguments); };
     yes('a pass shown when who is online cannot be read issues nothing, and does not throw', Q.passShown(111) === false);
-    q.mp.getOnlinePlayers = gone;
+    q.mp.get = was;
   }
   // wentOut() and cameIn() start a person's stored-equipment look afresh.
   {

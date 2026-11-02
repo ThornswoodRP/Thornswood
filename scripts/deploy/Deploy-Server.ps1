@@ -57,7 +57,8 @@
   -Dist. A gamemode is not part of that build. It is a versioned artifact
   any machine makes byte for byte from a commit (#459). -GamemodeOnly sends
   that, from any machine, and reads nothing out of -Dist:
-    - gamemode.js from the gamemode artifact, the build stamp made from that
+    - gamemode.js and its gamemode-tables folder (#5191) from the gamemode
+      artifact, the build stamp made from that
       artifact (channel main), and Thornswood-Content.esp into plugins when
       its size is not the box's copy's (the rule the full deploy uses);
     - server-settings.json made on the box: the running server's own file,
@@ -259,6 +260,7 @@ if (-not $PSBoundParameters.ContainsKey('Wait')) {
 . (Join-Path $Here 'ServerBuild.ps1')
 . (Join-Path $Here 'DeployedBuild.ps1')
 . (Join-Path $Here 'ServerContent.ps1')   # which content plugin the box holds, by size and sha256 (#2308)
+. (Join-Path $Here 'GamemodeId.ps1')      # the git ids of gamemode.js and its tables (#5191)
 . (Join-Path $Here 'LastPluginOnBox.ps1')   # Thornswood-Last.esp, made on the box from the recipe (#2791)
 . (Join-Path $Here '..\release\Read-JsonFile.ps1')   # ConvertFrom-ThornswoodJson: a bad JSON file named
 
@@ -622,10 +624,18 @@ if (-not $noBuild -and -not (Test-Path -LiteralPath $Dist)) {
 # sends out of the repository (our plugin, the server build's record), has
 # uncommitted changes (#1121).
 . (Join-Path $Here 'Artifact.ps1')
-$artifact = New-ThornswoodArtifact -Component gamemode -RepoDir (Join-Path $Here '..\..') -Paths 'game/gamemode.js' `
+# The gamemode's tables (#5191) are in the artifact with it, and go up with
+# it on every deploy, full or -GamemodeOnly: the gamemode reads them from the
+# gamemode-tables folder beside it as it loads, and a load without them stops.
+$artifact = New-ThornswoodArtifact -Component gamemode -RepoDir (Join-Path $Here '..\..') -Paths 'game/gamemode.js', 'game/gamemode-tables' `
   -AlsoSends 'game/content/Thornswood-Content.esp', 'game/data/last-plugin.recipe', 'game/data/last-plugin.json', 'records/server-build.json'
 '{0,-22} {1}' -f 'artifact', (Format-ThornswoodArtifact $artifact) | Write-Host
 $src = Join-Path $artifact.Folder 'game\gamemode.js'
+$tablesFrom = Join-Path $artifact.Folder 'game\gamemode-tables'
+$tableFiles = @(Get-ThornswoodTableFiles $tablesFrom)
+$tablesTree = Get-ThornswoodTablesTree $tablesFrom
+if (-not $tableFiles.Count) { throw "the artifact holds no game\gamemode-tables, and the gamemode reads its tables from there (#5191). Nothing was sent." }
+'{0,-22} {1} tables, git tree {2}' -f 'gamemode-tables', $tableFiles.Count, $tablesTree | Write-Host
 # -GamemodeOnly and -FromStore have no build to copy it into, and send the artifact's own.
 $built = $src
 if (-not $noBuild) {
@@ -1174,10 +1184,15 @@ if (-not $GamemodeOnly) { $send['server-build.json'] = $recordPath }
 # server was already down; here it stops the run like any other file, because
 # nothing has been stopped yet and nobody has been warned, so it costs a rerun.
 $send['thornswood-build.json'] = $stampPath
+# The tables (#5191), held to their hashes on the box like every file sent,
+# and sent in one scp rather than one each. The swap moves the folder whole.
+$tableSend = [ordered]@{}
+foreach ($t in $tableFiles) { $tableSend['gamemode-tables/' + $t.Name] = $t.FullName }
 
 $hashes = [ordered]@{}
-foreach ($rel in $send.Keys) {
-  $hashes[$rel] = (Get-FileHash -LiteralPath $send[$rel] -Algorithm SHA256).Hash.ToLowerInvariant()
+foreach ($rel in @($send.Keys) + @($tableSend.Keys)) {
+  $from = if ($tableSend.Contains($rel)) { $tableSend[$rel] } else { $send[$rel] }
+  $hashes[$rel] = (Get-FileHash -LiteralPath $from -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 # -FromStore's server files are not sent from here: the box takes them out of
 # its store, and the stage is held to them by the record's own hashes (#459).
@@ -1200,7 +1215,7 @@ Write-Host "Staging in $rootWin\$stageName..."
 # A stage left by a run that died part way is cleared first. It was never
 # swapped in, so nothing is lost with it.
 # ==== thornswood staged directories ====
-$stageParents = @(Get-StageDirectories "$rootWin\$stageName" @($send.Keys))
+$stageParents = @(Get-StageDirectories "$rootWin\$stageName" (@($send.Keys) + @($tableSend.Keys)))
 $parentLiterals = ($stageParents | ForEach-Object { "'" + $_.Replace("'", "''") + "'" }) -join ','
 Remote @"
 Get-ChildItem -LiteralPath '$rootWin' -Directory -Force -EA SilentlyContinue |
@@ -1217,6 +1232,9 @@ foreach ($rel in $send.Keys) {
   if ($LASTEXITCODE -ne 0) { throw "scp failed for $rel. The server has not been touched." }
   Write-Host "  $rel"
 }
+Invoke-ThornswoodNative { & scp @ssh @($tableSend.Values) "$User@${Vps}:$stageFar/gamemode-tables/" }
+if ($LASTEXITCODE -ne 0) { throw "scp failed for the gamemode tables. The server has not been touched." }
+Write-Host ('  gamemode-tables/ ({0} tables, git tree {1})' -f $tableSend.Count, $tablesTree)
 # Thornswood-Last.esp, made into the stage from the plugins just sent and
 # then the live server's own (#2791); the stage check holds it to the
 # manifest's sha256 like a file that was sent.

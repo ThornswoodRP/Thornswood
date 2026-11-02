@@ -152,16 +152,16 @@ fs.writeFileSync(path.join(TMP, 'Profile', 'Default', 'plugins.txt'),
   ['*LowerCase.esp', '*Gourmet.esp', ''].join(String.fromCharCode(13, 10)));
 fs.copyFileSync(path.join(REPO, 'scripts', 'dev', 'Build-FoodTable.js'), path.join(TMP, 'scripts', 'dev', 'Build-FoodTable.js'));
 fs.copyFileSync(path.join(REPO, 'scripts', 'dev', 'OwnPlugins.js'), path.join(TMP, 'scripts', 'dev', 'OwnPlugins.js'));
-fs.writeFileSync(path.join(TMP, 'game', 'gamemode.js'),
-  ['const WARMTH = {"items":{}};', 'const FOODS = {"items":{}};', ''].join(String.fromCharCode(10)));
+fs.copyFileSync(path.join(REPO, 'scripts', 'dev', 'GamemodeTables.js'), path.join(TMP, 'scripts', 'dev', 'GamemodeTables.js'));
+// The table the gamemode reads is its own file since #5191.
+const TABLE = path.join(TMP, 'game', 'gamemode-tables', 'FOODS.json');
 
 function build() {
   return spawnSync(process.execPath, [path.join(TMP, 'scripts', 'dev', 'Build-FoodTable.js'), '--data', DATA],
                    { encoding: 'utf8' });
 }
 function installed() {
-  const m = /^const FOODS = (.*);$/m.exec(fs.readFileSync(path.join(TMP, 'game', 'gamemode.js'), 'utf8'));
-  try { return m ? JSON.parse(m[1]).items : null; } catch (e) { return null; }
+  try { return JSON.parse(fs.readFileSync(TABLE, 'utf8')).items; } catch (e) { return null; }
 }
 
 const run1 = build();
@@ -214,10 +214,10 @@ yes('A8 twenty one versions of eleven records make eleven lines (' + Object.keys
   which is what it did before 24 September whenever nothing had changed.
 */
 {
-  const before = fs.readFileSync(path.join(TMP, 'game', 'gamemode.js'), 'utf8');
+  const before = fs.readFileSync(TABLE, 'utf8');
   const run2 = build();
-  const after = fs.readFileSync(path.join(TMP, 'game', 'gamemode.js'), 'utf8');
-  yes('A9 run again on the same plugins, it exits 0 and leaves the same line',
+  const after = fs.readFileSync(TABLE, 'utf8');
+  yes('A9 run again on the same plugins, it exits 0 and leaves the same table',
       run2.status === 0 && before === after);
 }
 
@@ -229,8 +229,7 @@ yes('A8 twenty one versions of eleven records make eleven lines (' + Object.keys
   const alt = path.join(TMP, 'elsewhere', 'plugins.txt');
   fs.mkdirSync(path.dirname(alt), { recursive: true });
   fs.writeFileSync(alt, ['*LowerCase.esp', ''].join(String.fromCharCode(13, 10)));
-  fs.writeFileSync(path.join(TMP, 'game', 'gamemode.js'),
-    ['const WARMTH = {"items":{}};', 'const FOODS = {"items":{}};', ''].join(String.fromCharCode(10)));
+  fs.rmSync(TABLE, { force: true });
   const runAlt = spawnSync(process.execPath,
     [path.join(TMP, 'scripts', 'dev', 'Build-FoodTable.js'), '--data', DATA, '--plugins', alt],
     { encoding: 'utf8' });
@@ -250,7 +249,7 @@ try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { }
 // ------------------------------------------------------------------ B --
 
 const FOODS = (function () {
-  const m = /^const FOODS = (.*);$/m.exec(src);
+  const m = require('./gamemode-tables.js').lineOf(src, 'FOODS');
   try { return m ? JSON.parse(m[1]) : null; } catch (e) { return null; }
 })();
 yes('B0 the FOODS line is in the gamemode and parses', !!(FOODS && FOODS.items));
@@ -296,9 +295,8 @@ function rig() {
   const clock = { now: 1000000000000 };
   const g = {};
   const Fake = {
-    getOnlinePlayers: function () { return Object.keys(store).map(Number); },
     makeProperty: function () { },
-    get: function (id, key) {
+    get: function (id, key) { if (id === 0 && key === 'onlinePlayers') { return Object.keys(store).map(Number); }
       if (key === 'worldOrCellDesc') { return 'cell:X.esm'; }
       return store[id] ? store[id].v : undefined;
     },

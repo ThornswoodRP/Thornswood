@@ -33,7 +33,7 @@ function yes(what, cond) {
 }
 function read(rel) { return fs.readFileSync(path.join(REPO_DIR, rel), 'utf8').split('\r\n').join('\n'); }
 
-const gm = read('game/gamemode.js');
+const gm = require('./gamemode-tables.js').joined(read('game/gamemode.js'));
 const front = read('game/plugins/thornswood-front.js');
 const doc = JSON.parse(read('game/data/furniture.json'));
 const acr = read('scripts/mods/Add-ContentRecords.py');
@@ -74,14 +74,16 @@ const acr = read('scripts/mods/Add-ContentRecords.py');
   yes('a row is written only while its type is on', /if not types\.get\(row\.get\('type'\)\):\s*\n\s*continue/.test(acr));
   yes('the recipe is made at the woodworking bench', /cobj\(recipe,[^\n]*\n[^\n]*inputs, item, WOODWORKING_KEYWORD\)/.test(acr));
   let all = true, offs = true;
+  // The gamemode reads RECIPES_BY_ID from game/gamemode-tables (#5191).
+  const BOOK = require('./gamemode-tables.js').table('RECIPES_BY_ID');
   (doc.pieces || []).forEach(function (r) {
-    const key = '"' + r.recipe + ':Thornswood-Content.esp": { "out": "' + r.item + ':Thornswood-Content.esp"';
-    const at = gm.indexOf(key);
+    const row = BOOK[r.recipe + ':Thornswood-Content.esp'];
+    const at = row && row.out === r.item + ':Thornswood-Content.esp' ? row : null;
     if (doc.limits.types[r.type]) {
-      if (at < 0 || gm.slice(at, gm.indexOf('\n', at)).indexOf('"owner": "Woodworker", "half": "Woodwright"') < 0) {
+      if (!at || at.owner !== 'Woodworker' || at.half !== 'Woodwright') {
         all = false; console.log('      no Woodwright recipe row for ' + r.key);
       }
-    } else if (at >= 0) { offs = false; }
+    } else if (at) { offs = false; }
   });
   yes('RECIPES_BY_ID has a Woodwright row for every piece that is on', all);
   yes('RECIPES_BY_ID has no row for a piece that is off', offs);

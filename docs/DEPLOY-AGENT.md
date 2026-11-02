@@ -40,6 +40,7 @@ build** (the engine).
 | Release news | After a Deployment goes in, the agent leaves its Release's notes for the bot, which posts them once (#5187). See "Release news" below. |
 | Launcher and game files | Not the agent's job: they reach people through the launcher's feed and a Ship. Since #5179 every Release carries them as well (the signed launcher, the game files and the Velopack packages of both), attested, for the launcher's move to Velopack; the agent logs them as left alone. |
 | Bot pass before each dev Deployment | Once `Install-DeployAgent` has set up its task, every Deployment waits on a bot pass on a throwaway copy of dev with the new gamemode (#5196, below). A FAIL fails the Deployment and dev keeps what it runs. A deploy by tag (the gate's `Deploy-Release`, a rollback) does not wait on one. |
+| Steps after a deploy | Run by the agent (#5186), once each, after a Deployment of the Release carrying them succeeds: a pull request's file under `deploy/after/` names gate verbs to run and checks for a person in the game, instead of a run note. See "Steps after a deploy" below. merge-release.yml puts them in every Release as the part `after`. |
 | Parity check after a dev Deployment | Run by the agent (#5180): once a dev Deployment is in, it asks the gate for `Check-ProdParity` and opens one issue labelled `parity` for each row to review that has no open issue by the same title. It never puts anything back by itself and never changes how the Deployment went. See "After a dev Deployment" below. |
 
 The old way keeps working beside the agent until the agent has proved itself
@@ -157,6 +158,45 @@ Every Deployment's log is left in the dev server's data folder as
 newest ten. The status's log link points there:
 `http://play.thornswood.net:7788/deploy-<id>.log`. Network addresses in
 server log lines are taken out before they go in.
+
+## Steps after a deploy
+
+A pull request whose change needs something done once it is deployed puts a
+file under [deploy/after/](../deploy/after/README.md), which says its shape.
+The signed Release carries every such file and the gate's own
+`scripts/vps/gate/verbs.json` as its part `after` (merge-release.yml; a new
+or changed step file is a change that gets a Release and a Deployment of its
+own, and verbs.json alone is not). After a Deployment of it
+succeeds (never after a failed one, a deploy by tag or a rollback), the agent:
+
+1. holds each file to the rules (`AfterDeploy.cs`, the same code
+   `thornswood-agent steps` runs in the pull request's Tree checks, so a
+   file that breaks one never merges): a `run` step's verb has
+   to be one `verbs.json` lets run after a deploy to that environment (its
+   `afterDeploy` list). That list comes from the signed Release, never from
+   `agent.json` on the box, so nobody widens what the LocalSystem agent runs
+   by editing a file there. A file that breaks a rule is said in the log, and
+   the rest run.
+2. runs each `run` step it has not run on that environment, in file name
+   order, once the Release is wholly in (on dev, after the load order move
+   below), through the same gate client as the load order and the parity
+   check (`Gate.cs`, the broker's pipe), so the gate holds the line to its
+   own rules again and runs main as it is then. It waits up to 30 minutes
+   for the gate's turn; a step the gate never took is not started and runs
+   with the next Deployment.
+3. writes each step down in `state\after-<environment>.json` as started
+   before it starts and as ended when it ends. A step the agent was stopped
+   in the middle of is never run again: it is said as cut short.
+4. lists each `inGame` step, which `.github/workflows/after-deploy.yml`
+   files as an issue labelled `check: in game` when the Deployment succeeds.
+
+Every step's lines go in the Deployment's log, and what became of each in
+`deploy-<id>.after.json` beside it (`http://play.thornswood.net:7788/`), which
+after-deploy.yml reads: it files the in-game checks and says a failed or cut
+short step on that step's issue, with words from the commit's own step
+files, never from the box's file. A failed step leads the Deployment's
+description ("after-deploy FAILED for #<issue>"); the deploy itself stays in,
+since the step ran after it.
 
 ## A new server build
 

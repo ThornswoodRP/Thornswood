@@ -11,6 +11,7 @@
       pwsh -File scripts/release/App-Part.ps1 -Part site    -Out <folder>\site.zip
       pwsh -File scripts/release/App-Part.ps1 -Part discord -Out <folder>\discord.zip
       pwsh -File scripts/release/App-Part.ps1 -Part voice   -Out <folder>\voice.zip
+      pwsh -File scripts/release/App-Part.ps1 -Part tables  -Out <folder>\gamemode-tables.zip
 
   WHAT EACH CARRIES, by the path it has in the app's folder on the box:
 
@@ -30,6 +31,12 @@
              Install-Voice.ps1 sends; server-log.js is
              scripts\vps\Server-Log.js, which the voice task writes its log
              through.
+    tables   every game\gamemode-tables\<NAME>.json, at the top of the zip
+             (#5191). Not an app: it rides the gamemode part as
+             gamemode-tables.zip, and the agent swaps the folder in beside
+             gamemode.js (tools/DeployAgent/Tables.cs). Built here for the
+             same bytes as the apps, so a merge that changed no table leaves
+             the gamemode part unchanged.
 
   THE ZIP IS THE SAME BYTES FOR THE SAME FILES. Merge release tells whether
   an app changed by comparing this zip's sha256 with the same part of the
@@ -47,7 +54,7 @@
 #>
 [CmdletBinding()]
 param(
-  [Parameter(Mandatory = $true)][ValidateSet('site', 'discord', 'voice')][string]$Part,
+  [Parameter(Mandatory = $true)][ValidateSet('site', 'discord', 'voice', 'tables')][string]$Part,
   [Parameter(Mandatory = $true)][string]$Out,
   [string]$RepoDir = ''
 )
@@ -99,6 +106,15 @@ switch ($Part) {
     Add-One 'voice-server.js' 'voice/voice-server.js'
     Add-One 'headlines.js' 'voice/headlines.js'
     Add-One 'server-log.js' 'scripts/vps/Server-Log.js'
+  }
+  'tables' {
+    # The names the gamemode's table('NAME') reads; anything else in the
+    # folder is not a table.
+    $dir = Join-Path $RepoDir 'game/gamemode-tables'
+    if (-not (Test-Path -LiteralPath $dir -PathType Container)) { Stop-Part 'there is no folder game/gamemode-tables in the repository' }
+    foreach ($f in @(Get-ChildItem -LiteralPath $dir -File -Filter '*.json' | Where-Object { $_.Name -cmatch '^[A-Z][A-Z0-9_]*\.json$' })) {
+      Add-One $f.Name ('game/gamemode-tables/' + $f.Name)
+    }
   }
 }
 

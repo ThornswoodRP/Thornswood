@@ -4,7 +4,7 @@ const root=path.join(__dirname,'..'),read=name=>JSON.parse(fs.readFileSync(path.
 const copy=value=>JSON.parse(JSON.stringify(value));
 const {prepareMerchantRoleStage}=require('../game/merchant-role-stage');
 const roster=read('merchant-roster'),currentCatalog=read('merchant-traders'),roleDoc=read('merchant-role-tables'),tables=roleDoc.tables;
-const source=fs.readFileSync(path.join(root,'game/gamemode.js'),'utf8'),context={};vm.createContext(context);
+const source=require('./gamemode-tables.js').joined(fs.readFileSync(path.join(root,'game/gamemode.js'),'utf8')),context={};vm.createContext(context);
 assert.ok(!source.slice(source.indexOf('// MERCHANT TRADING BUNDLE BEGIN'),source.indexOf('// MERCHANT TRADING BUNDLE END'))
   .includes('"f:Skyrim.esm"'),'unused currency evidence must not enter a role bundle');
 vm.runInContext(source.slice(source.indexOf('// NPC POPULATION DATA BEGIN'),source.indexOf('// NPC POPULATION DATA END'))+'\nglobalThis.data=NPC_POPULATION_DATA;',context);

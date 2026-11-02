@@ -54,11 +54,9 @@ function rig(startAt) {
   const gone = {};
   const named = {};
   const Fake = {
-    getOnlinePlayers: function () {
-      return Object.keys(store).map(Number).filter(function (id) { return !gone[id]; });
-    },
     makeProperty: function () { },
     get: function (id, key) {
+      if (id === 0 && key === 'onlinePlayers') { return Object.keys(store).map(Number).filter(function (id) { return !gone[id]; }); }
       if (key === 'worldOrCellDesc') { return (store[id] && store[id].cell) || 'cell:X.esm'; }
       return store[id] ? store[id].v : undefined;
     },

@@ -143,8 +143,7 @@ const REPO = path.join(TMP, 'repo');
 const GAME = path.join(TMP, 'Game', 'Data');
 for (const d of ['scripts/dev', 'game/data', 'game/content', 'Profile/Default']) { fs.mkdirSync(path.join(REPO, d), { recursive: true }); }
 fs.mkdirSync(GAME, { recursive: true });
-for (const f of ['Build-FoodTable.js', 'OwnPlugins.js']) { fs.copyFileSync(path.join(DEV, f), path.join(REPO, 'scripts', 'dev', f)); }
-fs.writeFileSync(path.join(REPO, 'game', 'gamemode.js'), 'const FOODS = {"items":{}};\n');
+for (const f of ['Build-FoodTable.js', 'OwnPlugins.js', 'GamemodeTables.js']) { fs.copyFileSync(path.join(DEV, f), path.join(REPO, 'scripts', 'dev', f)); }
 fs.writeFileSync(path.join(GAME, 'Skyrim.esm'), plugin([], [alch(0x00064b3d, 'FoodSweetroll', 'Sweet Roll')]));
 for (const m of ['Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm']) { fs.writeFileSync(path.join(GAME, m), plugin(['Skyrim.esm'], [])); }
 // The game folder's copy is an older release; the repository's has the tea.
@@ -224,7 +223,10 @@ const unnamed = [];
 for (const s of steps) {
   const src = read(s.tool);
   for (const f of (s.reads || []).concat(s.readsBack || [], s.uses || [], s.writes || [])) {
-    if (src.indexOf(path.basename(f)) < 0) { unnamed.push(s.tool + ' ' + f); }
+    // A gamemode table (#5191) is named in its builder by its constant's
+    // name, which GamemodeTables turns into the file's.
+    const named = /^game\/gamemode-tables\//.test(f) ? path.basename(f, '.json') : path.basename(f);
+    if (src.indexOf(named) < 0) { unnamed.push(s.tool + ' ' + f); }
   }
 }
 yes('C5 each step\'s own source names every table it is said to read and write' + (unnamed.length ? ' (not: ' + unnamed.slice(0, 4).join('; ') + ')' : ''),

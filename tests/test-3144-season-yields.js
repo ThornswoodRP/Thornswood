@@ -13,7 +13,7 @@ const os = require('os');
 const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
-const src = fs.readFileSync(process.env.GM || path.join(ROOT, 'game', 'gamemode.js'), 'utf8')
+const src = require('./gamemode-tables.js').joined(fs.readFileSync(process.env.GM || path.join(ROOT, 'game', 'gamemode.js'), 'utf8'))
   .split(String.fromCharCode(13)).join('');
 
 let pass = 0, fail = 0;
@@ -43,7 +43,7 @@ function topFn(name) {
   return m[0];
 }
 function table(name) {
-  const m = src.match(new RegExp('^(?:var|const) ' + name + ' = \\{[\\s\\S]*?^\\};', 'm'));
+  const m = src.match(new RegExp('^(?:var|const) ' + name + ' = (?:\\{[^\\n]*\\};$|\\{[\\s\\S]*?^\\};)', 'm'));
   if (!m) { throw new Error('no table ' + name + ' in gamemode.js'); }
   return m[0];
 }

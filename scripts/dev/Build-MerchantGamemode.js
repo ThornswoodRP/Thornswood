@@ -1,12 +1,19 @@
 'use strict';
 // Native hot reload copies only gamemode.js into a temporary directory.
-// Keep the standalone, tested module and its catalogues embedded in that file.
+// Keep the standalone, tested module embedded in that file. Its catalogues are
+// gamemode tables (game/gamemode-tables, #5191), which the bundle reads with
+// table() where the gamemode runs, so a content change rewrites a table file
+// and never the bundle. --tables <folder> writes them somewhere else.
 const fs = require('node:fs');
 const path = require('node:path');
+const TABLES = require(path.join(__dirname, 'GamemodeTables.js'));
+const opts = TABLES.options(process.argv.slice(2), ['--tables'], ['--check']);
+const tablesDir = opts['--tables'] || TABLES.DIR;
 const root = path.join(__dirname, '../..');
 const modePath = path.join(root, 'game/gamemode.js');
 const old = fs.readFileSync(modePath, 'utf8').replace(/\r\n/g, '\n');
-const progression={};
+// The progression block reads SPELL_IDS with the gamemode's table().
+const progression={table:name=>TABLES.read(name,tablesDir)};
 require('node:vm').runInNewContext(old.slice(old.indexOf('// ==== thornswood progression ===='),old.indexOf('// ==== end thornswood progression ====')),progression);
 const gates=require(path.join(root,'game/quest-eligibility.js')).createQuestEligibility({
   table:progression.__thornswoodProgression.TABLE,spellIds:progression.__thornswoodProgression.SPELL_IDS});
@@ -77,8 +84,16 @@ const commissionRows=activation.commissions.map(pin=>{
 const roleItems = new Set(Object.values(roles.tables).flatMap(table => Object.values(table).flat()));
 const stage = {version:1,history:roster.history,merchants:roster.merchants,tables:roles.tables,
   types:Object.fromEntries(Array.from(roleItems,desc=>[desc,roles.records[desc].type]))};
+// Each catalogue is read with table() every time the bundle hands it out, so
+// each caller gets its own copy, as it did when the literal stood in the code.
+const tables = {
+  MERCHANT_GUILD_SITES: sites, MERCHANT_TRADERS: traders, MERCHANT_STAGE: stage,
+  MERCHANT_COMMISSION_ROWS: commissionRows, MERCHANT_ORCHARD: orchardData, MERCHANT_RETRIEVALS: retrievalData,
+  MERCHANT_SCARCE_LONGFIN: scarceLongfin, MERCHANT_SCARCE_GEODES: scarceGeodes, MERCHANT_SCARCE_HARVEST: scarceHarvest,
+  MERCHANT_SCARCE_FISHING: scarceFishing, MERCHANT_KILL_SCENES: expandedRows,
+};
 const block = '// MERCHANT TRADING BUNDLE BEGIN\nconst MERCHANT_TRADING = (function () {\n' +
-  'const module = { exports: {} };\nconst MERCHANT_GUILD_SITES = ' + JSON.stringify(sites) + ';\n' +
+  'const module = { exports: {} };\nconst MERCHANT_GUILD_SITES = table(\'MERCHANT_GUILD_SITES\');\n' +
   'const MERCHANT_COMMISSION_STATE = (function () { const module = {exports:{}};\n' + commissionStateSource.trimEnd() + '\nreturn module.exports;})();\n' +
   'const MERCHANT_SETTLEMENT = (function () { const module = {exports:{}};\n' + settlementSource.trimEnd() + '\nreturn module.exports;})();\n' +
   'const MERCHANT_COMMISSIONS = (function () { const module = {exports:{}};\n' + commissionSource.trimEnd() + '\nreturn module.exports;})();\n' +
@@ -95,11 +110,11 @@ const block = '// MERCHANT TRADING BUNDLE BEGIN\nconst MERCHANT_TRADING = (funct
   'const SCENE_BUDGET = (function () { const module = {exports:{}};\n' + budgetSource.trimEnd() + '\nreturn module.exports;})();\n' +
   moduleSource.trimEnd() + '\nconst install = module.exports.installMerchantTrading;\n' +
   'module.exports.installMerchantTrading = function (env) {\n' +
-  '  return install(Object.assign({ catalog: ' + JSON.stringify(traders) + ' }, env));\n};\n' +
+  '  return install(Object.assign({ catalog: table(\'MERCHANT_TRADERS\') }, env));\n};\n' +
   'module.exports.prepareRoles = function (population, mp) {\n' +
   '  const native=MERCHANT_NATIVE.createLedgerNativeValidators(mp);\n' +
-  '  const prepared=MERCHANT_ROLES.prepareMerchantRoleStage(population, ' + JSON.stringify(traders) + ', ' + JSON.stringify(stage) + ', native);\n' +
-  '  prepared.commissions=MERCHANT_COMMISSIONS.prepareCommissions(' + JSON.stringify(commissionRows) + ',prepared.catalog,native);\n' +
+  '  const prepared=MERCHANT_ROLES.prepareMerchantRoleStage(population, table(\'MERCHANT_TRADERS\'), table(\'MERCHANT_STAGE\'), native);\n' +
+  '  prepared.commissions=MERCHANT_COMMISSIONS.prepareCommissions(table(\'MERCHANT_COMMISSION_ROWS\'),prepared.catalog,native);\n' +
   '  return prepared;\n};\n' +
   'module.exports.createQuestFishingSources = QUEST_FISHING_SOURCES.createQuestFishingSources;\n' +
   'module.exports.createQuestHarvestSources = QUEST_FISHING_SOURCES.createQuestHarvestSources;\n' +
@@ -109,18 +124,18 @@ const block = '// MERCHANT TRADING BUNDLE BEGIN\nconst MERCHANT_TRADING = (funct
   'module.exports.createQuestItemPolicy = QUEST_ITEMS.createQuestItemPolicy;\n' +
   'module.exports.createQuestMammothSources = QUEST_MAMMOTH_SOURCES.createQuestMammothSources;\n' +
   'module.exports.orchardPlots = ORCHARD_PLOTS;\n' +
-  'module.exports.orchardSources = function () { return '+JSON.stringify(orchardData)+'; };\n' +
+  'module.exports.orchardSources = function () { return table(\'MERCHANT_ORCHARD\'); };\n' +
   'module.exports.createQuestOrchardSources = QUEST_FISHING_SOURCES.createQuestOrchardSources;\n' +
   'module.exports.huntBundles = QUEST_HUNT_BUNDLES;\n' +
-  'module.exports.retrievalSources = function () { return '+JSON.stringify(retrievalData)+'; };\n' +
-  'module.exports.scarceLongfin = function () { return '+JSON.stringify(scarceLongfin)+'; };\n' +
-  'module.exports.scarceGeodes = function () { return '+JSON.stringify(scarceGeodes)+'; };\n' +
-  'module.exports.scarceHarvest = function () { return '+JSON.stringify(scarceHarvest)+'; };\n' +
-  'module.exports.scarceFishing = function () { return '+JSON.stringify(scarceFishing)+'; };\n' +
+  'module.exports.retrievalSources = function () { return table(\'MERCHANT_RETRIEVALS\'); };\n' +
+  'module.exports.scarceLongfin = function () { return table(\'MERCHANT_SCARCE_LONGFIN\'); };\n' +
+  'module.exports.scarceGeodes = function () { return table(\'MERCHANT_SCARCE_GEODES\'); };\n' +
+  'module.exports.scarceHarvest = function () { return table(\'MERCHANT_SCARCE_HARVEST\'); };\n' +
+  'module.exports.scarceFishing = function () { return table(\'MERCHANT_SCARCE_FISHING\'); };\n' +
   'module.exports.createKillContracts = KILL_CONTRACTS.createKillContracts;\n' +
   'module.exports.sceneBudget = SCENE_BUDGET;\n' +
-  'module.exports.expandedScenes = function () { return ' + JSON.stringify(expandedRows) + '; };\n' +
-  'module.exports.commissionRows = function () { return '+JSON.stringify(commissionRows)+'; };\n' +
+  'module.exports.expandedScenes = function () { return table(\'MERCHANT_KILL_SCENES\'); };\n' +
+  'module.exports.commissionRows = function () { return table(\'MERCHANT_COMMISSION_ROWS\'); };\n' +
   'module.exports.createQuestEligibility = QUEST_ELIGIBILITY.createQuestEligibility;\n' +
   'return module.exports;\n})();\n// MERCHANT TRADING BUNDLE END';
 const existing = /\/\/ MERCHANT TRADING BUNDLE BEGIN[\s\S]*?\/\/ MERCHANT TRADING BUNDLE END/;
@@ -134,7 +149,12 @@ else {
   if (at < 0) throw new Error('NPC startup marker is missing.');
   next = without.slice(0, at) + block + '\n\n' + without.slice(at);
 }
-if (process.argv.includes('--check')) {
-  if (next !== old) throw new Error('Merchant gamemode bundle is stale. Run scripts/dev/Build-MerchantGamemode.js.');
-  console.log('PASS merchant gamemode bundle matches its source and catalogues');
-} else fs.writeFileSync(modePath, next);
+if (opts['--check']) {
+  const stale = Object.keys(tables).filter(name => !TABLES.isCurrent(name, tables[name], tablesDir));
+  if (next !== old || stale.length) throw new Error('Merchant gamemode bundle' + (stale.length ? ' or its tables ' + stale.join(', ') : '') +
+    ' is stale. Run scripts/dev/Build-MerchantGamemode.js.');
+  console.log('PASS merchant gamemode bundle and its tables match their source and catalogues');
+} else {
+  fs.writeFileSync(modePath, next);
+  for (const name of Object.keys(tables)) TABLES.write(name, tables[name], tablesDir);
+}

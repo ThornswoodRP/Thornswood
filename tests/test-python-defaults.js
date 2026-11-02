@@ -69,12 +69,16 @@ yes('the paths built from a script\'s own folder were found to check (' + joins 
 for (const o of outside) { console.log('      outside the repository: ' + o); }
 yes('every one of them lands inside this repository', outside.length === 0);
 
-// The four builders #1139 named, by their defaults.
+// The four builders #1139 named, by their defaults, and where they write the
+// gamemode's tables.
 const WANT = {
-  'Build-BenchTable.py': ['game/data/recipes.json', 'game/gamemode.js'],
+  'Build-BenchTable.py': ['game/data/recipes.json'],
   'Build-CastTable.py': ['game/data/cast.json'],
-  'Build-DoorTable.py': ['game/data/doors.json', 'game/gamemode.js'],
-  'Measure-MineBuildings.py': ['game/gamemode.js', 'game/data/doors.json']
+  'Build-DoorTable.py': ['game/data/doors.json'],
+  'Measure-MineBuildings.py': ['game/data/doors.json'],
+  // The tables the gamemode reads, one file each since #5191: every builder
+  // takes its folder from here unless --tables names another.
+  'gamemode_tables.py': ['game/gamemode-tables']
 };
 for (const name of Object.keys(WANT)) {
   const file = path.join(REPO_DIR, 'scripts', 'dev', name);

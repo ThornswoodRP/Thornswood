@@ -29,7 +29,7 @@ for(const [id,ref] of [[31,'50533'],[32,'50549'],[33,'5054a'],[41,'86a88']]) {
   npcStates[id]=npcStates[npcIds[ref+':Skyrim.esm']];npcIds[ref+':Skyrim.esm']=id;
 }
 const CR = String.fromCharCode(13);
-const gm = fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8').split(CR).join('');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8')).split(CR).join('');
 const questPage = fs.readFileSync(path.join(REPO_DIR, 'docs', 'systems', 'quests.md'), 'utf8').split(CR).join('');
 const minerPage = fs.readFileSync(path.join(REPO_DIR, 'docs', 'systems', 'classes', 'miner.md'), 'utf8').split(CR).join('');
 
