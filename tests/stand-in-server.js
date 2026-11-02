@@ -51,6 +51,10 @@
               then one leaves the pack whatever the handler answered.
     read      MpActor: onReadBook, with the actor and the base id.
     death     MpActor: onDying, then onDeath, then onRespawn after the delay.
+    animate   ActionListener: an animation the client sends for its own
+              character is kept as lastAnimEvent (OnUpdateAnimation); a
+              movement that is not Standing clears it (OnUpdateMovement), and
+              so does coming into the world (PartOne::SetUserActor).
     login     ts/systems/thornswoodLogin.ts: mp.onThornswoodLogin({ userId,
               profileId, nonce, proof: null }) at the login; > 0 hands that
               profile over, 0 refuses, anything else waits for the proof.
@@ -519,7 +523,13 @@ function world(opts) {
     const hit = e.find(function (x) { return x.baseId === baseId && (x.name || '') === name && !x.made; });
     if (hit) { hit.count += count; } else { e.push(Object.assign({ baseId: baseId, count: count }, extra || {})); }
   };
-  w.moveTo = function (id, cell, pos) { const r = store.get(id >>> 0); r.worldOrCellDesc = cell; r.pos = pos.slice(); };
+  /*
+    Moving: a movement message that is not Standing, which also clears the
+    last animation the client sent (ActionListener::OnUpdateMovement).
+  */
+  w.moveTo = function (id, cell, pos) { const r = store.get(id >>> 0); r.worldOrCellDesc = cell; r.pos = pos.slice(); r.lastAnimEvent = null; };
+  /* An animation the client sent for its own character: the engine keeps its name as lastAnimEvent (ActionListener::OnUpdateAnimation). */
+  w.animate = function (id, eventName) { const r = store.get(id >>> 0); r.lastAnimEvent = String(eventName); saw(id >>> 0, 'animation', '', String(eventName)); };
   w.online = function () { return online.slice(); };
   w.now = function () { return clock; };
 
@@ -1026,6 +1036,7 @@ function world(opts) {
     }
     if (handed !== row.profileId) { fault('login handed over profile ' + handed + ' for ' + row.profileId); }
     users.set(actorId, user);
+    row.lastAnimEvent = null;   // not saved client side, so reset (PartOne::SetUserActor)
     if (online.indexOf(actorId) < 0) { online.push(actorId); }
     sendPass(actorId);
     saw(actorId, 'login', 'handed over', handed);
