@@ -34,8 +34,11 @@
   renumbering by hand, which nothing checked, put them back. Now an anchor
   that names no call, or more than one, fails here, and so does a call that
   no row names or that two rows name. A call put in anywhere fails by name
-  until it has a row, and every other row stays on its own call. Nothing is
-  run and nothing leaves this machine.
+  until it has a row, and every other row stays on its own call. The record
+  keeps no count of its scripts or calls (#5191): that one-to-one check
+  already holds them, and a count was a line every pull request with a new
+  remote call changed, so two of them always conflicted. Nothing is run and
+  nothing leaves this machine.
 #>
 [CmdletBinding()]
 param([string]$Record)
@@ -93,9 +96,12 @@ if (-not (Test-Path -LiteralPath $Record)) {
     $problems = Get-MapProblems $calls $rows
     foreach ($p in $problems) { Ok $false $p }
     Ok ($problems.Count -eq 0) 'every row names exactly one call and every call exactly one row'
-    $scripts = @($calls | ForEach-Object { $_.Script } | Sort-Object -Unique)
-    Ok ([int]$doc.scriptCount -eq $scripts.Count) ('the record says ' + $doc.scriptCount + ' scripts, the scan finds ' + $scripts.Count)
-    Ok ([int]$doc.callCount -eq $calls.Count) ('the record says ' + $doc.callCount + ' calls, the scan finds ' + $calls.Count)
+    # No totals in the record (#5191): the check above already holds every
+    # call to one row and every row to one call, and a count beside them was
+    # the one line every pull request that adds or takes away a remote call
+    # changed, so any two of them conflicted in the merge queue.
+    $totals = @('scriptCount', 'callCount' | Where-Object { $null -ne $doc.PSObject.Properties[$_] })
+    Ok ($totals.Count -eq 0) ('the record carries no totals, which two pull requests would both change' + $(if ($totals) { ': it has ' + ($totals -join ', ') } else { '' }))
 }
 
 # ---- planted: a call put in ahead of others moves no row (#2498) -------------
