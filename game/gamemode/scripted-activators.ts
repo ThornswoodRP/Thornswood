@@ -2214,6 +2214,14 @@ mp.onActivate = guard('onActivate', function (refrId, casterRefrId) {
     engine, so the press goes on down the chain and the cooking menu opens as
     it always has. Boiling is not cooking, so it is asked before the bench gate.
   */
+  /*
+    Whether this press was already answered at the cooking spot, by the hair
+    dye or the water: a steep or a boil set going, or one settled (#5465).
+    The bench gate below still keeps a menu shut that is not theirs, but its
+    line says nothing can be made here, which contradicts what the person was
+    just told about the dye or the water on the same press.
+  */
+  var answeredHere = false;
   try {
     var needsW = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodNeeds;
     if (needsW && needsW.activatedWater) {
@@ -2231,9 +2239,9 @@ mp.onActivate = guard('onActivate', function (refrId, casterRefrId) {
       try { dLine = (dyeW && dyeW.pressed) ? dyeW.pressed(casterRefrId, kwW) : ''; } catch (eDye) {
         log('the hair dye at', refrId.toString(16), 'threw:', eDye);
       }
-      if (dLine) { notify(casterRefrId, dLine); say(casterRefrId, dLine); }
+      if (dLine) { notify(casterRefrId, dLine); say(casterRefrId, dLine); answeredHere = true; }
       var wLine = needsW.activatedWater(casterRefrId, refDescW, baseDesc, kwW);
-      if (wLine) { notify(casterRefrId, wLine); say(casterRefrId, wLine); }
+      if (wLine) { notify(casterRefrId, wLine); say(casterRefrId, wLine); answeredHere = true; }
     }
   } catch (eWater) {
     // Logged and passed on, the way farmActivate does: a fault in the water
@@ -2262,8 +2270,10 @@ mp.onActivate = guard('onActivate', function (refrId, casterRefrId) {
   */
   const shut = benchGate(casterRefrId, baseDesc);
   if (shut) {
-    notify(casterRefrId, shut);
-    say(casterRefrId, shut);
+    if (!answeredHere) {
+      notify(casterRefrId, shut);
+      say(casterRefrId, shut);
+    }
     return false;
   }
 
