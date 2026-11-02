@@ -5,8 +5,8 @@
 
   The site is a small node server holding six markdown documents and whatever
   is in its files folder. Patrick and the testers edit the documents in the
-  browser, Claude edits the same files over ssh, and the installer is published
-  into it by Publish-Installer.ps1.
+  browser, and Claude edits the same files over ssh. The setup program is not
+  in it: since #4824 the site serves it from GitHub Releases.
 
   Run once to install, and again whenever the site itself changes. The
   documents are NOT overwritten by a redeploy: only the app is. Anything typed

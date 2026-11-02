@@ -124,8 +124,21 @@ try {
     fs.writeFileSync(held, allOld);
     const hold = cp.spawn('powershell.exe', ['-NoProfile', '-Command',
       "$f = [IO.File]::Open('" + held.replace(/'/g, "''") + "', 'Open', 'Read', 'Read'); 'held'; Start-Sleep -Seconds 20"], { stdio: ['ignore', 'pipe', 'ignore'] });
-    const waitHeld = new Promise((res) => { hold.stdout.on('data', () => res()); setTimeout(res, 15000); });
-    waitHeld.then(() => {
+    // The sweep runs once Windows PowerShell says it holds the file, never on
+    // a clock: on a busy runner its start alone took over 15 seconds, and a
+    // sweep before the hold deleted the file (gate run 41502686958).
+    let saidHeld = '';
+    const waitHeld = new Promise((res) => {
+      hold.stdout.on('data', (d) => { saidHeld += d; if (/held/.test(saidHeld)) res(true); });
+      hold.on('exit', () => res(false));
+    });
+    waitHeld.then((isHeld) => {
+      if (!isHeld) {
+        yes('a rolled file another program holds is named with the error, and left for the next pass (Windows PowerShell ended without holding it)', false);
+        fs.rmSync(held, { force: true });
+        runPart();
+        return;
+      }
       const s2 = W.sweep(log, now);
       yes('a rolled file another program holds is named with the error, and left for the next pass',
         fs.existsSync(held) && s2.some((l) => l.indexOf(path.basename(held)) >= 0 && /could not/.test(l)));

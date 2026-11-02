@@ -48,7 +48,7 @@ const party = read('game', 'ui', 'thornswood-party.js');
 const journal = read('game', 'ui', 'thornswood-journal.js');
 const skills = read('game', 'ui', 'thornswood-skills.js');
 const template = read('launcher', 'Thornswood.ini');
-const xaml = read('launcher', 'ui.xaml');
+const xaml = read('launcher', 'app', 'MainWindow.axaml');
 const shellCs = read('launcher', 'app', 'Shell.cs');
 const pagesCs = read('launcher', 'app', 'Pages.cs');
 const displayCs = read('launcher', 'app', 'Display.cs');
@@ -510,7 +510,7 @@ attempt('E', function () {
   // The launcher's display settings say it, beside what stayed, and so does
   // the Play page's In game card (E4).
   yes('E2 and the launcher\'s Settings says where the keys are changed',
-      /<TextBlock Style="\{StaticResource Small\}" TextWrapping="Wrap" Margin="0,0,0,14"\s+Text="Every key, the field of view, the chat and the needs bars are set in the game, on Settings at the foot of the help panel and of the K, P and J panels\."\/>/.test(xaml));
+      /<TextBlock Theme="\{StaticResource Small\}" TextWrapping="Wrap" Margin="0,0,0,14"\s+Text="Every key, the field of view, the chat and the needs bars are set in the game, on Settings at the foot of the help panel and of the K, P and J panels\."\/>/.test(xaml));
   yes('E3 resolution, the display mode, the frame limit and VSync stay on the launcher (#3146)',
       /x:Name="BoxResolution"/.test(xaml) && /x:Name="BoxFrameLimit"/.test(xaml) && /x:Name="ChkVSync"/.test(xaml) &&
       /x:Name="DisplayModeRow"/.test(xaml));

@@ -7,9 +7,15 @@
       .\scripts\release\Install-Launcher.ps1 -Root C:\Thornswood-DevBuild -From $env:TEMP\tsl -NoPause
 
   In order: closes a game and a launcher left running (Close-Launcher.ps1),
-  copies Thornswood.exe from -From into <Root>\Launcher, writes
-  the icon file and the shortcuts, tells Explorer to redraw, and clears
-  Explorer's icon cache when the artwork is new.
+  copies the launcher from -From into <Root>\Launcher, writes the icon file
+  and the shortcuts, tells Explorer to redraw, and clears Explorer's icon
+  cache when the artwork is new.
+
+  THE LAUNCHER IS A FOLDER (#4823). Compiled to native code, Thornswood.exe
+  needs the native libraries Avalonia draws with beside it, so every file
+  Build-Launcher.ps1 left in -From goes in, Thornswood.exe last: an exe in
+  place that is the new one means everything before it went in too, which
+  is what Ship reads back. Until #4823 this copied the one exe.
 
   Split out of Build-Launcher.ps1 on 24 September, To Do List entry 243,
   "Build-Launcher.ps1 is an installer wearing a build script's name". Every
@@ -25,7 +31,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Root,
-    # The folder Build-Launcher.ps1 wrote Thornswood.exe into (its -OutDir).
+    # The folder Build-Launcher.ps1 published the launcher into (its -OutDir):
+    # Thornswood.exe, the native libraries, and the two icons it embeds.
     [string]$From,
     # When set, do not Stop-Game / Stop-Launcher. Ship -DryRun uses this so a
     # dry run can still put the built exe in place without closing a running game.
@@ -53,8 +60,32 @@ $built = Join-Path $From 'Thornswood.exe'
 # Checked before anything is closed, so a build that produced nothing never
 # costs anybody their game or their launcher.
 if (-not (Test-Path -LiteralPath $built)) { Die "There is no Thornswood.exe in $From. Run Build-Launcher.ps1 first." }
-$icon = @((Join-Path $Here '..\..\launcher\app.ico'), (Join-Path $Here '..\..\launcher\app\app.ico')) | Where-Object { Test-Path $_ } | Select-Object -First 1
-if (-not $icon) { Die 'app.ico was not found next to this script or in app' }
+
+# THE ICON IS THE ONE THE EXE CARRIES (#887). The name of the icon file has to
+# be the one the launcher itself writes (Icons.IconFile: icon-<the first eight
+# hex digits of the artwork's SHA-256>.ico), or the sweep below deletes the
+# file the Start menu and pinned shortcuts name and Windows draws them blank.
+# Measured 28 Sep: this took the repository's app.ico, while the dev launcher
+# uses app-dev.ico and a main Ship installs the exe CI built from the tag,
+# which can carry older art. Until #4823 the bytes were read out of the exe
+# with Reflection; a native exe is not an assembly, and its resources cannot
+# be read that way. So Build-Launcher.ps1 writes the two icons the project
+# embeds beside the exe it publishes, app.ico and app-dev.ico, byte for byte,
+# and they travel with that exe (release.yml drafts them with it). They are
+# read here, and checked for before anything is closed. The repository's art
+# is never the answer: it is the fault #887 was.
+#
+# Which one: the dev build's shortcuts get app-dev.ico, the main build's
+# app.ico, as Icons.IconBytes picks with Art.Dev.
+$isDevArt = $Root.TrimEnd('\') -match '-DevBuild$'
+$iconName = if ($isDevArt) { 'app-dev.ico' } else { 'app.ico' }
+$iconFrom = Join-Path $From $iconName
+if (-not (Test-Path -LiteralPath $iconFrom)) {
+    Die ("There is no $iconName beside Thornswood.exe in $From. Build-Launcher.ps1 writes the icons the launcher embeds there, " +
+         "and a launcher taken from a release comes with them; without it the shortcuts would name an icon file the launcher does not write (#887). Nothing was closed or installed.")
+}
+$iconBytes = [IO.File]::ReadAllBytes($iconFrom)
+if ($iconBytes.Length -eq 0) { Die "$iconFrom is empty. Nothing was closed or installed." }
 
 $null = New-Item -ItemType Directory -Force -Path $outDir
 $exe = Join-Path $outDir 'Thornswood.exe'
@@ -83,15 +114,19 @@ if ($NoClose) {
     $null = Stop-Launcher -Root $Root
 }
 
-# Copied rather than compiled in place, so csc never has to write over a
-# launcher that is still running. Ship reads back that the exe in place is
-# this one by its sha256 (until #5156 by its write time, which Copy-Item keeps).
+# Copied rather than published in place, so the build never has to write
+# over a launcher that is still running. Every file of the build goes in,
+# Thornswood.exe last (header). Ship reads back that the exe in place is this
+# one by its sha256 (until #5156 by its write time, which Copy-Item keeps).
 $same = (Resolve-Path -LiteralPath $From).ProviderPath.TrimEnd('\') -ieq (Resolve-Path -LiteralPath $outDir).ProviderPath.TrimEnd('\')
 if (-not $same) {
-    try { Copy-Item -LiteralPath $built -Destination $exe -Force }
-    catch { Die ("Could not put the new Thornswood.exe into $outDir, so the old one is still there. " +
-                 "It is probably still open. " + $_.Exception.Message) }
-    Say ('  Thornswood.exe put in place from ' + $From) 'Green'
+    $files = @(Get-ChildItem -LiteralPath $From -File | Where-Object { $_.Name -ne 'Thornswood.exe' } | Sort-Object Name) + @(Get-Item -LiteralPath $built)
+    foreach ($f in $files) {
+        try { Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $outDir $f.Name) -Force }
+        catch { Die ("Could not put the new $($f.Name) into $outDir, so the old Thornswood.exe is still there. " +
+                     "It is probably still open. " + $_.Exception.Message) }
+    }
+    Say ('  the launcher put in place from ' + $From + ' (' + $files.Count + ' files)') 'Green'
 }
 
 # ------------------------------------------------------------ shortcut
@@ -102,34 +137,7 @@ Head 'Shortcut'
 # changes, so a new icon inside the exe can go on being ignored for days, and
 # a reboot does not clear it. Giving the icon its own file, named after its
 # own contents, changes the key the moment the artwork changes and leaves it
-# alone when it has not.
-#
-# The name has to be the one the launcher itself writes (Icons.IconFile), or
-# the sweep below deletes the file the Start menu and pinned shortcuts name and
-# Windows draws them blank (issue #887). Measured 28 Sep: this took the repo's
-# app.ico, while the dev launcher uses app-dev.ico and a main Ship installs the
-# exe CI built from the tag, which can carry older art. So the bytes come out
-# of the exe being installed, the same resource the launcher picks; the repo
-# file is only the fallback.
-$iconBytes = $null
-$isDevArt = $Root.TrimEnd('\') -match '-DevBuild$'
-try {
-    $asm = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($exe))
-    $names = @($asm.GetManifestResourceNames())
-    foreach ($want in @($(if ($isDevArt) { 'app-dev.ico' }), 'app.ico')) {
-        if (-not $want) { continue }
-        $res = $names | Where-Object { $_.EndsWith($want, [StringComparison]::OrdinalIgnoreCase) } | Select-Object -First 1
-        if (-not $res) { continue }
-        $st = $asm.GetManifestResourceStream($res)
-        $ms = New-Object IO.MemoryStream
-        $st.CopyTo($ms); $st.Dispose()
-        if ($ms.Length -gt 0) { $iconBytes = $ms.ToArray(); break }
-    }
-} catch { Say ('  could not read the icon out of the exe, using ' + (Split-Path -Leaf $icon)) 'Yellow' }
-if (-not $iconBytes) {
-    $devIcon = Join-Path $Here '..\..\launcher\app-dev.ico'
-    $iconBytes = [IO.File]::ReadAllBytes($(if ($isDevArt -and (Test-Path $devIcon)) { $devIcon } else { $icon }))
-}
+# alone when it has not. The bytes are the ones read above, out of the build.
 $sha = [Security.Cryptography.SHA256]::Create()
 $iconHash = ([BitConverter]::ToString($sha.ComputeHash($iconBytes), 0, 4)).Replace('-', '').ToLower()
 $iconFile = Join-Path $outDir ("icon-$iconHash.ico")
@@ -194,8 +202,8 @@ $playRoot  = $Root.TrimEnd('\') -ieq $playInstall
 $isScratch = -not ($isDevRoot -or $playRoot)
 
 # A .lnk is made through Windows' own shell (WScript.Shell), which no other
-# machine has. Off Windows (Ship.ps1's Install-FeedLauncher in a cloud Ship, for one) the
-# exe and its icon are put in place as above and no shortcut is made (#2989).
+# machine has. Off Windows (a cloud Ship, for one) the launcher and its icon
+# are put in place as above and no shortcut is made (#2989).
 $canLink = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
 $places = if (-not $canLink) { @() } elseif ($isScratch) { @($Root) } else { @([Environment]::GetFolderPath('Desktop'), $Root) }
 if ($canLink) { $ws = New-Object -ComObject WScript.Shell }

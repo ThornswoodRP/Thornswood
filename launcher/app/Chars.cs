@@ -1109,8 +1109,8 @@ namespace Thornswood
         /// second program, so the first time it runs Windows Firewall stops
         /// the game to ask about a name nobody recognises.
         ///
-        /// NirnLab is not ours. Package-Thornswood lists NirnLabUIPlatform
-        /// among the folders that never go into the installer, and
+        /// NirnLab is not ours. Ship-Rules.ps1 lists NirnLabUIPlatform
+        /// among the folders that never go into a release ($ShipForeignDataDirs), and
         /// Clean-OtherServers names it as another roleplay server's interface
         /// framework. Machines that have it got it from that server's
         /// collection. Every other part of this repo treats it as somebody

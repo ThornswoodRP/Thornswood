@@ -46,15 +46,20 @@
        loses them at its next refresh, once, logged, with the Steam copy
        untouched; one held open is tried again at the next start.
 
-  HOW. It compiles the shipped launcher\app\OwnGame.cs, OwnGameShare.cs,
-  Downgrade.cs, Steam.cs, Paths.cs and Config.cs with the compiler the build
-  runs (tests\Launcher-Csc.ps1), with stand-ins for the few calls that touch
-  the machine (Checks, Keep, Junction). A driver builds a pretend Steam, Steam
-  copy and Vortex in a scratch folder, points Steam.cs at it through
-  Steam.RootForTest, and runs the real code. Steam's console is never driven:
-  the Downgrade's download is laid down as Steam leaves it.
+  HOW. It builds the shipped launcher\app\OwnGame.cs, OwnGameShare.cs,
+  Downgrade.cs, Steam.cs, Paths.cs and Config.cs the way the project builds
+  them, with the .NET 10 SDK (tests\Launcher-Csc.ps1, #4823), with stand-ins
+  for the few calls that touch the machine (Checks, Keep, Junction). The
+  build runs on any machine with the SDK. A driver builds a pretend Steam,
+  Steam copy and Vortex in a scratch folder, points Steam.cs at it through
+  Steam.RootForTest, and runs the real code. That run is Windows' alone: the
+  code under test makes NTFS hard links through kernel32, and the driver
+  reads file ids and change times the same way, so elsewhere it says SKIP and
+  the reading of the source in 5 and 6 still runs. Steam's console is never
+  driven: the Downgrade's download is laid down as Steam leaves it.
 
-  Nothing outside its own scratch folder is read or written.
+  Nothing outside its own scratch folder is read or written, apart from the
+  build under out\harness, which git ignores.
 #>
 [CmdletBinding()]
 param([string]$AppPath, [string]$Scratch)
@@ -80,19 +85,12 @@ function Done {
     exit 0
 }
 
-if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'; Done }
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
-# What the launcher compiles against, from the reference assemblies the
-# build uses (Launcher-Csc.ps1). Downgrade.cs puts a line on the clipboard
-# through WPF, so the WPF ones are here too.
-$refs = @('System.dll', 'System.Core.dll', 'System.Runtime.Serialization.dll', 'System.Xml.dll', 'System.Security.dll',
-          'PresentationCore.dll', 'WindowsBase.dll', 'PresentationFramework.dll', 'System.Xaml.dll') |
-    ForEach-Object { Join-Path $LauncherRefDir $_ }
-foreach ($r in $refs) { Yes "$([IO.Path]::GetFileName($r)) is there to compile against" (Test-Path -LiteralPath $r) }
+Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
 
 # OwnGameKinds and Verify name LastPlugin (#2791), which reads the game's archives through FromGameArchive.cs.
-$real = @('OwnGame.cs', 'OwnGameShare.cs', 'OwnGameKinds.cs', 'Downgrade.cs', 'Steam.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'Swallow.cs', 'Progress.cs', 'LastPlugin.cs', 'FromGameArchive.cs') |
+# Config and OwnGame read their JSON through LooseString since the move to System.Text.Json, and
+# Downgrade opens the clipboard for Ask.Owner, the window its boxes belong to (#4823).
+$real = @('OwnGame.cs', 'OwnGameShare.cs', 'OwnGameKinds.cs', 'Downgrade.cs', 'Steam.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'Swallow.cs', 'Progress.cs', 'LastPlugin.cs', 'FromGameArchive.cs', 'LooseString.cs', 'Ask.cs') |
     ForEach-Object { Join-Path $AppPath $_ }
 foreach ($f in $real) {
     Yes "launcher\app\$([IO.Path]::GetFileName($f)) is there" (Test-Path -LiteralPath $f)
@@ -1002,11 +1000,6 @@ $work = Join-Path $Scratch ('thornswood-own-alone-' + [Guid]::NewGuid().ToString
 $null = New-Item -ItemType Directory -Force -Path $work
 try {
     $utf8 = New-Object System.Text.UTF8Encoding($false)
-    $stubFile = Join-Path $work 'Stubs.cs'
-    $driverFile = Join-Path $work 'Driver.cs'
-    [IO.File]::WriteAllText($stubFile, $stubs, $utf8)
-    [IO.File]::WriteAllText($driverFile, $driver, $utf8)
-    $exe = Join-Path $work 'own-alone-test.exe'
     # The pretend build's list, in records\skyrim-files.json's shape (#1232).
     # Bytes and SHA-1 are what NewScene writes for 1.6.1170 (PIN-EXE at 4096,
     # PIN-MASTER, the two archives, GAME-BINK, GAME-LOOSE), so a file edited
@@ -1021,32 +1014,32 @@ try {
         '    "Data\\Video\\BGS_Logo.bik": { "bytes": 10, "sha1": "b5c2432d19146126a033d65dcb4e3ce01d88cfff", "depot": "1" }'
     )
     [IO.File]::WriteAllText($skyrimList, "{`n  ""build"": ""1.6.1170"",`n  ""files"": {`n" + ($listed -join ",`n") + "`n  }`n}`n", $utf8)
-    $uiGoneList = Join-Path $Here 'records\ui-gone.json'
-    $cscArgs = @('/noconfig', '/nologo', '/target:exe', '/warn:0', "/out:$exe", "/resource:$skyrimList,skyrim-files.json", "/resource:$uiGoneList,ui-gone.json")
-    foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-    foreach ($f in $real) { $cscArgs += (Resolve-Path -LiteralPath $f).Path }
-    $cscArgs += $stubFile
-    $cscArgs += $driverFile
-    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $compiled = & $LauncherCsc @cscArgs 2>&1
-    $ErrorActionPreference = $old
-    $built = ($LASTEXITCODE -eq 0) -and (Test-Path -LiteralPath $exe)
-    Yes 'the real OwnGame.cs, OwnGameShare.cs and Downgrade.cs compile with the driver under the build''s compiler' $built
-    if (-not $built) { foreach ($l in @($compiled)) { Write-Host "      $l" }; Done }
-
-    $scene = Join-Path $work 'machine'
-    $null = New-Item -ItemType Directory -Force -Path $scene
-    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $out = & $exe $scene 2>&1
-    $code = $LASTEXITCODE
-    $ErrorActionPreference = $old
-    foreach ($l in @($out)) {
-        $s = [string]$l
-        if ($s.StartsWith('PASS  ')) { $script:pass++; Write-Host $s }
-        elseif ($s.StartsWith('FAIL  ')) { $script:fail++; Write-Host $s }
-        else { Write-Host $s }
+    $uiGoneList = Join-Path (Join-Path $Here 'records') 'ui-gone.json'
+    $exe = $null
+    if (Test-Path -LiteralPath $LauncherDotnet) {
+        try { $exe = Build-LauncherCode -File $real -Source $stubs, $driver -Exe -Resource @{ 'skyrim-files.json' = $skyrimList; 'ui-gone.json' = $uiGoneList } }
+        catch { Write-Host ('      ' + $_.Exception.Message) }
+        Yes 'the real OwnGame.cs, OwnGameShare.cs and Downgrade.cs build with the driver, the way the project builds them' ($null -ne $exe)
     }
-    Yes 'the driver finished and agrees' ($code -eq 0)
+
+    if ($exe -and -not $OnWindows) {
+        Write-Host 'SKIP  the driver run, 1 to 4 and 6''s files: OwnGame makes NTFS hard links through kernel32, and the driver reads file ids the same way, which only Windows has'
+    }
+    elseif ($exe) {
+        $scene = Join-Path $work 'machine'
+        $null = New-Item -ItemType Directory -Force -Path $scene
+        $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        $out = Invoke-LauncherExe $exe $scene 2>&1
+        $code = $LASTEXITCODE
+        $ErrorActionPreference = $old
+        foreach ($l in @($out)) {
+            $s = [string]$l
+            if ($s.StartsWith('PASS  ')) { $script:pass++; Write-Host $s }
+            elseif ($s.StartsWith('FAIL  ')) { $script:fail++; Write-Host $s }
+            else { Write-Host $s }
+        }
+        Yes 'the driver finished and agrees' ($code -eq 0)
+    }
 }
 finally {
     try { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction Stop } catch { }

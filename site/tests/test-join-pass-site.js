@@ -12,7 +12,9 @@
 // test-play-join.js runs /api/play/join, because server.js opens a port when it
 // is required. The feed is real write-once generations in a temp folder,
 // <channel>\version\<8 digits>.json (#2727), found by the real feedFile and
-// read by the real feedLaunchers.
+// read by the real feedLaunchers. A Velopack launcher's number is checked by
+// the real nativeTag and nativePublished against stand-ins for GitHub's
+// Release answer and the channel's newest setup program (#4825).
 //
 // THE SHARED PASS. One pass is written out below in full. makePass must produce
 // exactly it, and tests\test-join-pass-game.js checks the gamemode accepts
@@ -61,6 +63,10 @@ const HELPERS = [
     src.slice(src.indexOf('const feedNewest = {};'), braceEnd(src.indexOf('function feedFile('))),
   src.slice(src.indexOf('const feedLaunchersSeen'), src.indexOf('\n', src.indexOf('const feedLaunchersSeen'))),
   grab('function feedLaunchers('),
+  // A Velopack launcher's number, against the channel's Releases (#4825).
+  src.slice(src.indexOf('const RELEASE_LOOK_MS'), src.indexOf('\n', src.indexOf('const RELEASE_LOOK_MS'))),
+  src.slice(src.indexOf('const NATIVE_ASK_MS'), src.indexOf('let nativeAskedAt = 0;') + 'let nativeAskedAt = 0;'.length),
+  grab('function nativeTag('), grab('async function nativePublished('),
   grab('async function hasLeft('), grab('async function departed('),
   // What a refusal for want of a role says, alpha or open (#428).
   grab('function notAcceptedYet('),
@@ -158,6 +164,16 @@ async function ask(o) {
     STATE_BROKEN_WHY: '',
     crypto: crypto, fs: fs, path: path, ROOT: FEEDROOT,
     console: { log: function () { }, error: function () { } },
+    releaseGitHub: async function (apiPath) {
+      const asked = (o.asked = o.asked || []);
+      asked.push(apiPath);
+      const tag = decodeURIComponent(String(apiPath).replace(/^\/releases\/tags\//, ''));
+      const r = o.releases && o.releases[tag];
+      if (r === 'down') return { status: 0, why: 'could not reach GitHub' };
+      if (!r) return { status: 404, why: 'GitHub answered 404' };
+      return { status: 200, body: r };
+    },
+    newestSetup: function (ch) { return (o.setups && o.setups[ch]) || null; },
     sendJson: null
   };
   let sent = null;
@@ -166,6 +182,10 @@ async function ask(o) {
   const fn = new AsyncFunction(names.join(','), HELPERS.join('\n') + '\n' + ROUTE + '\nreturn "fell through";');
   const r = await fn.apply(null, names.map(function (n) { return env[n]; }));
   return sent || { code: 0, obj: { fell: r } };
+}
+
+function runTag(ch, said) {
+  return new Function(grab('function nativeTag(') + '\nreturn nativeTag;')()(ch, said);
 }
 
 function readPass(s) {
@@ -306,6 +326,40 @@ async function main() {
   yes('a character ban that has run out lets it back at once', r.code === 200);
   r = await ask(Object.assign({}, P, { bans: { 'p:700': { until: 0, why: 'for good' } } }));
   yes('a character ban for good holds', r.code === 403 && /for good/.test(r.obj.message));
+
+  // ---- Velopack launchers (#4825) ----
+  const DEVREL = { tag_name: 'build-20261102.3', draft: false, assets: [{ name: 'releases.dev.json', state: 'uploaded' }] };
+  const MAINREL = { tag_name: 'main-build-20261102.3', draft: false, assets: [{ name: 'releases.main.json', state: 'uploaded' }] };
+  const SETUP = { dev: { name: 'Thornswood-Dev-Setup.exe' }, main: { name: 'Thornswood-Setup.exe' } };
+  const DEVSTAND = { '111': { dev: true, devBuild: true } };
+  let q = { body: { ticket: '111', profileId: 700, channel: 'dev', version: '2026.1102.3' }, linked: MINE, standing: DEVSTAND,
+            releases: { 'build-20261102.3': DEVREL }, setups: SETUP };
+  r = await ask(q);
+  yes('a Velopack launcher whose build Release is out with releases.dev.json gets a dev pass', r.code === 200 && readPass(r.obj.pass).v === '2026.1102.3');
+  yes('  asked of GitHub by its own tag, build-20261102.3', q.asked && q.asked.length === 1 && q.asked[0] === '/releases/tags/build-20261102.3');
+  q = { body: { ticket: '111', profileId: 700, version: '2026.1102.3' }, linked: MINE, releases: { 'main-build-20261102.3': MAINREL }, setups: SETUP };
+  r = await ask(q);
+  yes('main reads the same number from main-build-20261102.3, with releases.main.json', r.code === 200 && q.asked[0] === '/releases/tags/main-build-20261102.3');
+  r = await ask({ body: { ticket: '111', profileId: 700, version: '2026.1102.3' }, linked: MINE,
+                  releases: { 'main-build-20261102.3': { tag_name: 'main-build-20261102.3', draft: false, assets: [{ name: 'releases.dev.json', state: 'uploaded' }] } }, setups: SETUP });
+  yes('a Release without the channel\'s own Velopack feed does not let that channel\'s launcher in', r.code === 403 && r.obj.why === 'unknown launcher' && !r.obj.pass);
+  r = await ask({ body: { ticket: '111', profileId: 700, channel: 'dev', version: '2026.1102.4' }, linked: MINE, standing: DEVSTAND,
+                  releases: { 'build-20261102.3': DEVREL }, setups: SETUP });
+  yes('a Velopack number with no Release is one Thornswood never published', r.code === 403 && r.obj.why === 'unknown launcher' && /never published/.test(r.obj.message));
+  r = await ask({ body: { ticket: '111', profileId: 700, channel: 'dev', version: '2026.1102.3' }, linked: MINE, standing: DEVSTAND,
+                  releases: { 'build-20261102.3': Object.assign({}, DEVREL, { draft: true }) }, setups: SETUP });
+  yes('  and neither is one on a draft', r.code === 403 && r.obj.why === 'unknown launcher');
+  r = await ask({ body: { ticket: '111', profileId: 700, channel: 'dev', version: '2026.1102.3' }, linked: MINE, standing: DEVSTAND,
+                  releases: { 'build-20261102.3': 'down' }, setups: SETUP });
+  yes('GitHub not answering refuses the pass with a 503, never issues one', r.code === 503 && r.obj.why === 'releases' && !r.obj.pass);
+  r = await ask({ body: { ticket: '111', profileId: 700, version: '1.1.102' }, linked: MINE, setups: SETUP });
+  yes('once a channel has a Velopack setup program, a launcher from before it is told to install the new one', r.code === 403 &&
+      r.obj.why === 'update' && /thornswood\.net\/downloads/.test(r.obj.message) && !r.obj.pass);
+  r = await ask({ body: { ticket: '111', profileId: 700, version: '1.1.102' }, linked: MINE, setups: { dev: SETUP.dev } });
+  yes('  while a channel with none still lets the feed\'s old launcher in', r.code === 200);
+  yes('nativeTag reads only a real day: month 13 and day 0 are not Velopack numbers',
+      runTag('dev', '2026.1302.1') === '' && runTag('dev', '2026.1100.1') === '' && runTag('dev', '1.1.102') === '' &&
+      runTag('dev', '2026.102.7') === 'build-20260102.7' && runTag('main', '2026.1231.12') === 'main-build-20261231.12');
 
   try { fs.rmSync(FEEDROOT, { recursive: true, force: true }); } catch (e) { }
   console.log('');

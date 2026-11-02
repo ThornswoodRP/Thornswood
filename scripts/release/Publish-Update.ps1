@@ -7,10 +7,17 @@
 
   First time:   .\Publish-Update.ps1 -Baseline
   After that:   .\Publish-Update.ps1 -Notes "Swapped the map mod"
-  Launcher:     .\Publish-Update.ps1 -Launcher -Notes "New launcher"
 
   The feed and its baseline are received from the VPS at the start and sent
   back at the end (Feed-Store.ps1, #907). Nothing here uses GitHub.
+
+  NO LAUNCHER GOES ON THE FEED (#4825). The launcher goes out only through
+  Velopack (.github\workflows\merge-release.yml for dev, promote-main.yml for
+  main), and this sends no launcher and writes none of the feed's launcher
+  fields (launcherVersion, launcherUrl, launcherSha256, launcherInputs,
+  minLauncher). A feed keeps the ones it has: they name the last launcher the
+  feed sent, which every older launcher already takes, so none of those is
+  offered a launcher it cannot start.
 #>
 [CmdletBinding()]
 param(
@@ -42,7 +49,6 @@ param(
     [string]$Id,
     [string]$Notes   = '',
     [switch]$Baseline,
-    [switch]$Launcher,
     [switch]$NoUpload,
     [switch]$NoPush,
     [switch]$NoPause
@@ -53,16 +59,8 @@ param(
     # the dev server: its own release branch, its own baseline, its own pack
     # ids, and the dev ports in its version.json. Nothing about main moves.
     ,[ValidateSet('main', 'dev')][string]$Channel = 'main'
-    # The version to record for the launcher being published. Ship always
-    # passes the number its exe carries: git holds 0.0.0 in app\Updater.cs,
-    # and the real number lives only in the exe (#5179).
-    ,[string]$VersionOverride
-    # With -Launcher: the fingerprint of what that exe is compiled from, which
-    # Ship works out (Get-LauncherInputHash). Written to the feed as
-    # launcherInputs, issue #921.
-    ,[string]$LauncherInputs
-    # Where launchers download what this release adds (#897): every pack, the
-    # launcher and the client runtime are sent to /feed[-dev]/assets/<sha256>
+    # Where launchers download what this release adds (#897): every pack and
+    # the client runtime are sent to /feed[-dev]/assets/<sha256>
     # on thornswood.net BEFORE version.json is written, and the feed names
     # them there. The urls already on the feed move to the site too, each one
     # only once the site answers for its bytes. The GitHub release path kept
@@ -97,11 +95,6 @@ $freshRepo = Join-Path $PSScriptRoot '..\..'
 Assert-FreshCheckout -RepoDir $freshRepo -What 'Publish-Update' -AnyBranch:(Test-FreshAnyBranch -RepoDir $freshRepo -Channel $Channel) -AllowStale:$AllowStaleCheckout
 
 
-# The launcher, Thornswood.exe in the launcher folder.
-function Get-LauncherExe([string]$dir) {
-    return (Join-Path $dir 'Thornswood.exe')
-}
-
 Set-StrictMode -Version Latest
 
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
@@ -119,17 +112,14 @@ $Dev = ($Channel -eq 'dev')
 # Thornswood on another drive when the launcher is there. The dev launcher
 # lives beside the main one, the install plus -DevBuild, where the main
 # launcher's Settings page installs it (DevBuild.cs), and Where.ps1 InstallDev
-# answers that. Its config.json carries the dev ports and its Launcher folder
-# holds the exe that gets uploaded. -Root still wins.
+# answers that. Its config.json carries the dev ports. -Root still wins.
 if (-not $PSBoundParameters.ContainsKey('Root')) {
     $Root = [string](& (Join-Path $Here 'Where.ps1') $(if ($Dev) { 'InstallDev' } else { 'Install' }))
 }
 # Only the folder worked out here is asked for a Launcher folder (#2662): no
 # Launcher folder in <install>-DevBuild means the dev build was never
-# installed. A folder named by -Root is not: Ship always passes one, the ship
-# root Update-ShipRoot.ps1 makes has no Launcher folder, and the exe is read
-# from it only with -Launcher, after Ship's launcher step has put it there
-# ("No launcher at" below says so when it has not).
+# installed. A folder named by -Root is not: Ship always passes one, and the
+# ship root Update-ShipRoot.ps1 makes has no Launcher folder.
 if ($Dev -and -not $PSBoundParameters.ContainsKey('Root') -and -not (Test-Path (Join-Path $Root 'Launcher'))) {
     Die "No dev build at $Root. Install it from the main launcher's Settings page first, or name the folder with -Root."
 }
@@ -287,8 +277,9 @@ function Get-SkyrimPath {
 # What never leaves a machine in a pack: runtime folders, one machine's own
 # files, other servers' files, sign in tokens, and the collection's files in a
 # Game folder the launcher made. The rules live in Ship-Rules.ps1, shared with
-# Package-Thornswood.ps1, so the installer follows exactly the same rules as
-# the packs (it did not, and shipped a token file).
+# Build-GameFiles.ps1, so the game files Velopack's package carries follow
+# exactly the same rules as the packs (the old installer, which had its own
+# list until 24 September, did not, and shipped a token file).
 . (Join-Path $Here 'Ship-Rules.ps1')
 # What a file of the repo ships as, from any machine (#2903).
 . (Join-Path $Here 'ShippedBytes.ps1')
@@ -720,24 +711,11 @@ if ($orderSrc -and (Test-Path $orderSrc)) {
     finally { Remove-Item -LiteralPath $orderTmp -Force -ErrorAction SilentlyContinue }
 }
 
-# The launcher's own source. Nothing here ships as a file, it all ends up
-# compiled into one exe, which is why a release that only changed the launcher
-# used to produce an empty file list and a news post that said nothing. Hashed
-# so the news can at least name which parts of it moved.
-# launcher\ since the reorganisation (issue #440, phase 7); it read tools\ until
-# 25 September and found nothing there after the move. The keys are the paths
-# under that folder, app\Shell.cs and ui.xaml, the same as before, so a
-# baseline written before the move still compares.
-$srcDir = Join-Path $RepoDir 'launcher'
-if (Test-Path $srcDir) {
-    $srcListed = (Get-Item -LiteralPath $srcDir).FullName
-    foreach ($f in @(Get-ChildItem -LiteralPath $srcListed -Recurse -File -ErrorAction SilentlyContinue |
-                     Where-Object { $_.Extension -in '.cs', '.xaml' })) {
-        $rel = $f.FullName.Substring($srcListed.Length).Replace([string][IO.Path]::DirectorySeparatorChar, '\').TrimStart('\')
-        # As a Windows checkout holds it, so any machine records the same (#2903).
-        $now[":src:$rel"] = (Get-ThornswoodShippedSha256 $f.FullName).ToUpperInvariant()
-    }
-}
+# The launcher's own source is not recorded here (#4825). It was, as :src:
+# keys, while this published the launcher, so a release that changed only the
+# launcher was not "nothing to do". No launcher goes on the feed now, so its
+# source is no part of a release; a baseline that still has :src: keys reads
+# them as gone, and every key that starts with ':' is never deleted (diff).
 
 # The same bytes as the baseline this release publishes on the site (the
 # release manifest block), so the store copy and the feed's record agree.
@@ -959,14 +937,13 @@ if ($legacySame) { Say ("  {0:n0} file(s) compared by size and time, as the old 
 foreach ($k in $prev.Keys) { if (-not $now.ContainsKey($k)) { $removed += $k } }
 
 $profileChanged = @($changed | Where-Object { $_ -like ':profile:*' })
-$srcChanged     = @($changed | Where-Object { $_ -like ':src:*' })
 # Only a real change to the active plugins and their order, and only when the
 # last release recorded one to compare with: the first Ship after this key
 # arrived has nothing to compare, and saying "start over" then would be the
 # same false alarm this exists to stop. See Get-ActiveOrderKey.
 $orderMoved     = $prev.ContainsKey(':order:shippedPlugins') -and $now.ContainsKey(':order:shippedPlugins') -and ($prev[':order:shippedPlugins'] -ne $now[':order:shippedPlugins'])
 # Every key that starts with ':' is about the release, not a file in the game
-# folder: the plugin list, the launcher's source, and since #1050 what the
+# folder: the plugin list, the launcher's source until #4825, and since #1050 what the
 # record says about itself (:record:), the plugin list as shipped (:golden:)
 # and what is gone (:gone:). None of them is ever packed or deleted.
 $changed        = @($changed | Where-Object { -not $_.StartsWith(':') })
@@ -1111,13 +1088,14 @@ if ($removed.Count -gt $MaxRemovals -and -not $AcceptRemovals) {
 # NOTHING NEW IS NO RELEASE, AND EXIT CODE 2 SAYS SO, whichever way it is run.
 #
 # Running Ship twice in a row used to cut a second release that carried
-# nothing: no mod files, no removals, no launcher source, just a higher
-# version number that everyone still had to download. Exit code 2 tells Ship
-# that happened so it can put the version number back, and so it tells nobody.
+# nothing: no mod files, no removals, just a higher version number that
+# everyone still had to download. Exit code 2 tells Ship that happened, so it
+# tells nobody.
 #
-# Without -Launcher this used to exit 0. Since #921 a Ship whose launcher
-# sources are unchanged runs this without -Launcher, and 0 is what a release
-# that went out returns, so Ship went on to its after-release steps. Measured
+# Without a launcher this used to exit 0. Since #921 a Ship whose launcher
+# sources were unchanged ran this without one (and since #4825 every Ship
+# does), and 0 is what a release that went out returns, so Ship went on to
+# its after-release steps. Measured
 # 6 Oct: a dev Ship from main 2a8ebc9b printed "Nothing to do", then posted
 # the previous night's note to the dev updates channel a second time and told
 # the dev server "update in 5 min" for a release that did not exist.
@@ -1131,14 +1109,9 @@ if ($removed.Count -gt $MaxRemovals -and -not $AcceptRemovals) {
 # THE NOTE IS NOT ADDED. A note goes out with the release it describes: its
 # sourceCommit, its download size and the Discord post all belong to one, and
 # this run has none. Nothing on the dev feed writes a note without a release.
-if (-not $changed.Count -and -not $realRemoved -and -not $profileChanged.Count -and (-not $Launcher -or -not $srcChanged.Count)) {
+if (-not $changed.Count -and -not $realRemoved -and -not $profileChanged.Count) {
     Head 'Nothing to do'
-    if ($Launcher) {
-        Say 'No mod files changed and no launcher source changed since the last release.' 'Gray'
-        Say 'Publishing now would hand everyone a new launcher that does nothing.' 'Gray'
-    } else {
-        Say 'The build matches what is already published.' 'Gray'
-    }
+    Say 'The build matches what is already published.' 'Gray'
     Say 'Nothing was released, so nothing was added to the news.' 'Gray'
     if ($Dev) {
         Head "The dev feed's DEV marks"
@@ -1373,59 +1346,6 @@ if ($changed.Count -or $removed.Count -or $profileChanged.Count) {
     }
 }
 
-# ==== thornswood launcher number ====
-# tests\test-2347-publish-launcher-number.ps1 runs this block on its own.
-#
-# A LAUNCHER UPDATES BY ITS NUMBER ALONE (Updater.cs IsNewer), so a launcher
-# published under the number the feed already offers, built from other
-# sources, reaches nobody who already has that number. Until #2347 this file
-# found that out only after the launcher was built, signed and sent, and said
-# so in a WARNING with advice that no longer applied (-NoBump has done nothing
-# since main Ships stopped bumping). Ship's Assert-DevVersionSelection refuses
-# the dev case before anything is built; a main Ship that signs CI's exe for
-# the number main's feed already offers could still get here. So this refuses,
-# in the same terms, before anything is sent, and again before the feed is
-# written in case a feed received again meanwhile offers it.
-#
-# The same launcher is the same bytes, or the same fingerprint of what it is
-# compiled from (launcherInputs, #921). A feed launcher with neither to compare
-# is not known to be this one, so it is refused, as Ship refuses it.
-# Returns '' or the sentence to stop with.
-function Get-LauncherNumberRefusal($feed, [string]$version, [string]$sha, [string]$inputs, [string]$channel, [string]$nothing) {
-    if ($null -eq $feed -or -not $version) { return '' }
-    function Field($o, [string]$k) { if ($o.PSObject.Properties[$k] -and $null -ne $o.$k) { return ([string]$o.$k).Trim() } return '' }
-    $was = Field $feed 'launcherVersion'
-    if ($was -ne $version) { return '' }
-    $wasSha = Field $feed 'launcherSha256'
-    if ($wasSha -and $sha -and $wasSha -eq $sha.ToLowerInvariant()) { return '' }
-    $wasInputs = Field $feed 'launcherInputs'
-    if ($wasInputs -and $inputs -and $wasInputs -eq $inputs) { return '' }
-    $way = if ($channel -eq 'dev') { 'Ship without -Version so it takes the next dev number.' }
-           else { 'This is main''s number, the time the launcher last changed (LauncherVersion.ps1), so two launchers under it means the history was rewritten: say so on the board rather than ship it.' }
-    return ("$version is already out on the $channel feed as a launcher built from other sources than these, and a launcher " +
-            "updates by its number alone, so nobody on $version would ever be offered this one. $nothing $way")
-}
-# ==== end thornswood launcher number ====
-
-# ------------------------------------------------------------ launcher exe
-$exePath = Get-LauncherExe (Join-Path $Root 'Launcher')
-$launcherVersion = ''
-if ($Launcher) {
-    if (-not (Test-Path $exePath)) { Die "No launcher at $exePath. Run Build-Launcher.ps1 first." }
-    $updaterCs = Join-Path $Here '..\..\launcher\app\Updater.cs'
-    if (Test-Path $updaterCs) {
-        $m = [regex]::Match((Get-Content $updaterCs -Raw), 'Version\s*=\s*"([^"]+)"')
-        if ($m.Success) { $launcherVersion = $m.Groups[1].Value }
-    }
-    if ($VersionOverride) { $launcherVersion = $VersionOverride }
-    if (-not $launcherVersion) { Die 'Could not read the version out of app\Updater.cs, and no -VersionOverride was given.' }
-    if ($launcherVersion -eq '0.0.0') { Die 'Updater.cs holds git''s 0.0.0, which no launcher carries. Pass -VersionOverride with the number the exe was built with (Ship does).' }
-    # Before anything is sent (the launcher number block above, #2347).
-    $numberWhy = Get-LauncherNumberRefusal $feedNow $launcherVersion (Get-FileHash $exePath -Algorithm SHA256).Hash $LauncherInputs $Channel 'Nothing was sent.'
-    if ($numberWhy) { Die $numberWhy }
-    Say "  launcher $launcherVersion" 'Green'
-}
-
 # ==== thornswood packs gone ====
 # tests\test-record-sync.ps1 runs the real publisher through this, and
 # tests\test-feed-rules.ps1 runs the feed append block with what it decides.
@@ -1434,17 +1354,23 @@ if ($Launcher) {
 # Every launcher from the first one with Sync.cs syncs the install to the
 # record file by file and never replays a pack (Release-Baseline.ps1,
 # $FeedFirstSyncLauncher, says which numbers and how they were read). The feed
-# lets in nothing below minLauncher, which this publish sets to the launcher
-# the feed offers (the min launcher block). So when that is at or above the
+# lets in nothing below minLauncher, the last launcher the feed sent (the
+# feed's launcher fields, below: nothing moves it since #4825, read as the site reads it, the
+# feed's launcherVersion when it names none). So when that is at or above the
 # first syncing launcher on this channel, and the last record already had all
 # its files on the site (so its :gone: list, started from the packs, carries
 # what they took out), this release adds no pack and the feed's "packs" goes
 # to []: measured 12 Oct, 47,950 of main's 95,085 bytes and 66,018 of dev's
 # 111,305. An older launcher still updates: with no pack waiting it is offered
-# the launcher, takes it through the signed self-update, and the new one syncs.
-# The pack is still built, because Check-Secrets reads what this release
+# the feed's launcher, takes it through the signed self-update, and that one
+# syncs. The pack is still built, because Check-Secrets reads what this release
 # changed out of it, and it stays in the staging folder; it is not sent.
-$minAfter = if ($Launcher -and $launcherVersion) { $launcherVersion } elseif ($null -ne $feedNow -and $feedNow.PSObject.Properties['launcherVersion']) { [string]$feedNow.launcherVersion } else { '' }
+$minAfter = ''
+if ($null -ne $feedNow) {
+    foreach ($k in 'minLauncher', 'launcherVersion') {
+        if ($feedNow.PSObject.Properties[$k] -and [string]$feedNow.$k) { $minAfter = [string]$feedNow.$k; break }
+    }
+}
 $packsGone = (Test-FeedPacksGone $Channel $minAfter) -and $prev.ContainsKey($RecordFilesKey)
 if ($packsGone) {
     Say ("  no pack goes on the feed: every launcher let in (from {0}) syncs to the record file by file, the first on {1} being {2}" -f
@@ -1474,8 +1400,6 @@ Say "  downloads go to $SiteUrl/$(if ($Dev) { 'feed-dev' } else { 'feed' })/asse
 # thornswood.net feed asset path: nothing is uploaded to GitHub any more, and
 # the feed block below refuses a new pack named anywhere else.
 . (Join-Path $Here 'Feed-Rules.ps1')
-
-$exeUrl = ''
 
 # ---- the client runtime, as an asset with an address ----------------------
 #
@@ -1555,8 +1479,8 @@ try {
 # Entry 236. Ship-Rules decides what goes into a pack, and twice a secret got
 # past it because nobody had listed the file yet: the SkyMP sign in in the
 # installer, and voice-token.txt in nine main packs from 18 to 20 September.
-# Check-Secrets reads what was actually built, every pack, the launcher and the
-# client runtime, and stops the release here, before anything is uploaded, on a
+# Check-Secrets reads what was actually built, every pack and the client
+# runtime, and stops the release here, before anything is uploaded, on a
 # credential by name or by shape or on a file Ship-Rules says never ships.
 # It prints the file, the line and the rule, never the value. Measured on 24
 # September over the 54 packs and 2 client runtimes on Patrick's machine: the
@@ -1564,11 +1488,9 @@ try {
 # five files the rules keep out now fail, and the other 53 pass.
 $scanZips = @($chunks | ForEach-Object { $_.Path })
 if ($clientRel) { $scanZips += $clientRel.path }
-$scanExes = @()
-if ($Launcher -and (Test-Path -LiteralPath $exePath)) { $scanExes += $exePath }
-if ($scanZips.Count -or $scanExes.Count) {
+if ($scanZips.Count) {
     Head 'Checking for secrets'
-    & (Join-Path $Here '..\dev\Check-Secrets.ps1') -Zip $scanZips -Binary $scanExes
+    & (Join-Path $Here '..\dev\Check-Secrets.ps1') -Zip $scanZips
     if ($LASTEXITCODE -ne 0) { Die 'Something that must never ship is in what was just built. The lines above name each file and rule. Nothing was uploaded.' }
 }
 
@@ -1589,11 +1511,6 @@ if (-not $NoUpload) {
     # No pack once the packs are off the feed (the packs gone block): nothing
     # would name it.
     if (-not $packsGone) { foreach ($c in $chunks) { $siteFiles += $c.Path } }
-    $exeSite = ''
-    if ($Launcher -and (Test-Path -LiteralPath $exePath)) {
-        $siteFiles += $exePath
-        $exeSite = (Get-FileHash -LiteralPath $exePath -Algorithm SHA256).Hash.ToLower()
-    }
     if ($clientRel) { $siteFiles += $clientRel.path }
     if ($siteFiles.Count) {
         $sendArgs = @{ Dev = $Dev; Send = $siteFiles }
@@ -1611,13 +1528,8 @@ if (-not $NoUpload) {
     }
     if (-not $packsGone) { foreach ($c in $chunks) { $c.Url = Get-HostFeedAssetUrl $c.Sha -Dev:$Dev } }
     if ($clientRel) { $clientRel.url = Get-HostFeedAssetUrl $clientRel.sha256 -Dev:$Dev }
-    if ($exeSite) { $exeUrl = Get-HostFeedAssetUrl $exeSite -Dev:$Dev }
-    if ($Launcher -and -not $exeUrl) {
-        Die 'The launcher was not found to send, so version.json has not been touched and the feed still points at the last launcher that went up.'
-    }
     if ($chunks.Count -and -not $packsGone) { Say "  $($chunks.Count) pack asset$(if ($chunks.Count -eq 1) { '' } else { 's' }) on the site" 'Green' }
     if ($clientRel) { Say '  client runtime on the site' 'Green' }
-    if ($exeUrl) { Say '  launcher on the site' 'Green' }
     # ==== end thornswood site upload ====
 }
 
@@ -2022,40 +1934,17 @@ if ($releaseBaseline) {
     $doc.PSObject.Properties.Remove('baseline')
     Say '  -NoUpload: the feed no longer names a baseline, so the next release reads the store''s copy' 'Yellow'
 }
-if ($Launcher -and (Test-Path $exePath)) {
-    $nowSha     = (Get-FileHash $exePath -Algorithm SHA256).Hash.ToLower()
-    # The feed as it is now, received again above if somebody changed it while
-    # this ran: the same refusal as before anything was sent, before a byte of
-    # the feed is written (the launcher number block, #2347).
-    $numberWhy = Get-LauncherNumberRefusal $doc $launcherVersion $nowSha $LauncherInputs $Channel `
-        'Nothing was written to the feed; what was sent is on the site, where no feed names it.'
-    if ($numberWhy) { Die $numberWhy }
-
-    Set-Prop $doc 'launcherVersion' $launcherVersion
-    Set-Prop $doc 'launcherUrl' $exeUrl
-    Set-Prop $doc 'launcherSha256' $nowSha
-    # What that exe was compiled from, so the next Ship can keep it rather than
-    # rebuild and re-sign an identical one (issue #921). Cleared when nobody
-    # said, so a launcher published by hand never inherits the last fingerprint.
-    Set-Prop $doc 'launcherInputs' ([string]$LauncherInputs)
-    Say "  launcher $launcherVersion recorded" 'Green'
-}
-
-# ==== thornswood min launcher ====
-# The launcher this feed offers is the oldest one allowed into the game (#937;
-# Patrick, 28 Sep: no older launcher is kept working in game). The site refuses
-# a join pass below minLauncher, so the game server ends that session, and the
-# launcher holds Play below it (FeedNotice.cs). Written on every publish from
-# the feed's own launcherVersion, so a Ship that keeps the launcher it had
-# (#921) keeps the minimum where it was. Updating needs no pass, so every
-# launcher still out there can read this feed and update itself.
-$minWas = Val $doc 'minLauncher'
-$minNow = Val $doc 'launcherVersion'
-if ($minNow) {
-    Set-Prop $doc 'minLauncher' $minNow
-    if ($minWas -ne $minNow) { Say "  minLauncher $minNow, so an older launcher updates before it can play" 'Green' }
-}
-# ==== end thornswood min launcher ====
+# THE FEED'S LAUNCHER FIELDS ARE LEFT AS THEY ARE (#4825). launcherVersion,
+# launcherUrl, launcherSha256 and launcherInputs name the last launcher this
+# feed sent, the last one on .NET Framework, and minLauncher (#937), which a
+# publish set to that same launcher until #4825. Nothing here writes any of
+# them now: the launcher goes out only through Velopack, and a launcher this
+# feed offered would be an exe the launchers on .NET Framework swap in when
+# its number is newer (ShellUpdate.cs, Upkeep.cs on them), which the launcher
+# on .NET 10, an exe and its own DLLs, cannot be. Left as they are, they offer
+# those launchers nothing new, and the site's join pass and the feed's own
+# shape (feedView, Feed-News.ps1) go on reading the floor they were written
+# with.
 
 # Whatever this machine's launcher is pointed at becomes what everyone else is
 # pointed at. It is how the password reaches four other people without anyone
@@ -2277,9 +2166,9 @@ catch { Die ("The notes the feed already has could not be read, so nothing was w
 
 # A note can be a headline on its own, or a headline followed by lines. Any
 # line starting with - or * becomes its own bullet on the News page, which is
-# the only way a launcher change gets described at all: none of it ships as a
-# file, so the diff below cannot see it and only the person who made the
-# change can say what it now does.
+# the only way a change the diff below cannot see (a gamemode rule, a server
+# setting) gets described at all: only the person who made the change can say
+# what it now does.
 #
 #     .\scripts\release\Ship.ps1 "Quieter publish output
 #     - git progress no longer prints as a red error
@@ -2324,8 +2213,6 @@ $details = @()
 # What Patrick wrote comes first, because it is the only part that knows why.
 foreach ($bpt in $bullets) { $details += $bpt }
 
-if ($Launcher -and $launcherVersion) { $details += "Launcher $launcherVersion" }
-
 $newMods  = @(LeafNames $changed '\\.(esp|esm|esl)$')
 $goneMods = @(LeafNames $removed '\\.(esp|esm|esl)$')
 $newDlls  = @(LeafNames $changed '[\\/]SKSE[\\/]Plugins[\\/][^\\/]+\\.dll$')
@@ -2336,17 +2223,17 @@ if ($newDlls.Count)  { $details += 'Under the hood: ' + (Listed $newDlls 8) }
 
 # The list of .cs files that moved used to go in here. It meant something to
 # one person and nothing to anybody else, and this feed is on a public website
-# and in a public Discord now. The version number above already says the
-# launcher changed.
+# and in a public Discord now. The launcher's own changes go out with it,
+# through Velopack (#4825), not in this feed.
 
 if ($changed.Count) {
     $details += ('{0:n0} file{1} to download, {2:n1} MB' -f $changed.Count, $(if ($changed.Count -eq 1) { '' } else { 's' }), ($changedBytes / 1MB))
 }
-elseif (-not $srcChanged.Count) { $details += 'Nothing to download, this one is bookkeeping' }
+else { $details += 'Nothing to download, this one is bookkeeping' }
 if ($orderMoved) { $details += 'The load order moved, so start a new character or expect the old save to complain' }
 
 # One line once. The 1.1.101 note read "Launcher 1.1.101" twice, because the
-# notes carried it and the line above adds it too. First one kept, in order.
+# notes carried it and a line this added said it too. First one kept, in order.
 $seenDetail = @{}
 $details = @($details | Where-Object {
     $k = ([string]$_).Trim().ToLowerInvariant()
@@ -2362,7 +2249,6 @@ $log = @()
 foreach ($c in @($changed | Sort-Object)) { $log += $c }
 foreach ($r in @($removed | Sort-Object)) { $log += '- ' + $r }
 foreach ($p in @($profileChanged | Sort-Object)) { $log += ($p -replace '^:profile:', '') + '  (load order)' }
-foreach ($p in @($srcChanged | Sort-Object)) { $log += 'launcher\' + ($p -replace '^:src:', '') + '  (launcher)' }
 if ($log.Count -gt $Cap) {
     $rest = $log.Count - $Cap
     $log  = @($log[0..($Cap - 1)]) + ('... and {0:n0} more file{1}' -f $rest, $(if ($rest -eq 1) { '' } else { 's' }))
@@ -2435,10 +2321,6 @@ if ($Dev) {
     if ($null -ne $mainDoc) {
         $marks = Set-DevFeedMarks $doc $mainDoc $RepoDir $SiteDir $SiteUrl
         Say ("  {0} note{1} marked dev, the ones main has not had" -f $marks.Marked, $(if ($marks.Marked -eq 1) { '' } else { 's' })) 'DarkGray'
-        # The feed's own number, not $launcherVersion: that is set only when a
-        # launcher is sent, so a packs-only dev Ship (#921) printed "this one is
-        # on" and nothing after it (12 Oct, 20261012-180219-dev).
-        if ($marks.MainVersion) { Say "  main is on $($marks.MainVersion), this one is on $(Val $doc 'launcherVersion')" 'DarkGray' }
     } else {
         Say '  the site has no main feed, so the dev marks were left alone' 'Yellow'
     }
@@ -2457,8 +2339,8 @@ if ($Dev) {
 #
 # ONE NAME FOR THIS RELEASE (#444): its id, which its packs and its baseline
 # record are already named by. Written with everything else it is known by:
-# the launcher the feed offers with it (unchanged by a Ship that keeps its
-# launcher, #921), its packs, its baseline, and the commit it was built from,
+# the launcher the feed offers with it (the last one it sent, which no
+# publish moves since #4825), its packs, its baseline, and the commit it was built from,
 # which Ship tags as release/<channel>/<id> once the feed is out.
 $relSource = Get-ReleaseSource $RepoDir
 $relBaseline = if ($releaseBaseline) { [string]$releaseBaseline.id } else { '' }
@@ -2474,7 +2356,7 @@ Say ("  release {0}{1}" -f $Id, $(if ($relRecord.commit) { ', built from ' + $re
 # while any launcher let in reads only that, and from the first minLauncher
 # that reads the news file (1.2.4) as one asset named as "newsFile", sent to
 # the site before the feed names it, with "news" left []. minLauncher is the
-# one this publish writes (the min launcher block). A dry run (-NoUpload
+# feed's own, which no publish moves since #4825. A dry run (-NoUpload
 # -NoPush) writes the file here and sends nothing, like the rest of it; a run
 # that sends the feed but uploads nothing keeps the notes in "news", so the
 # feed never names a file the site does not hold.
@@ -2784,7 +2666,7 @@ Write-Host ''
 if (-not $NoPause) { [void](Read-Host 'Enter to close') }
 # Said with an exit code, not only in red (#1055). This used to run off the end
 # after NOT SHIPPED, so its exit code was whatever ran last, measured 0, and a
-# Ship that keeps its launcher reads nothing else: it went on to #news, the
+# Ship (which sends no launcher) reads nothing else: it went on to #news, the
 # Discord and the server's countdown for a release no launcher could see.
 # Anything but 0 or 2 makes Ship stop with "NOTHING was published".
 if ($pushFailed) { exit 1 }

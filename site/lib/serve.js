@@ -18,7 +18,7 @@ const { andList, cfg, forMode, notAcceptedYet } = require('./config');
 const { BLURB, BOARDS, DOCS, escAttr, fillCreditsCommits, fillLoreLine,
   fillPage, LEVEL, MD_PAGES, pageHtml, pageMarkdown, PUBLIC_EDGE_SECONDS,
   PUBLIC_PAGES, readLines, roadmapBoard } = require('./pages');
-const { feedFile, feedSettings, feedView, releaseCopy, releaseInstallerCopy } = require('./feed');
+const { feedFile, feedSettings, feedView, nativePublished, nativeTag, newestSetup, releaseCopy } = require('./feed');
 const { creditsFacts, findPageVersion, PAGES, pageSha256, PUBLIC_ORIGIN,
   publicAssetBody, publicAssetVersion, publicDiscovery, publicPageBody,
   singlePageHeading } = require('./public');
@@ -29,7 +29,7 @@ const { NEWS } = require('./news');
 const { galleryPage, loginBackoff, loginBackoffBump, loginKey, loginNote,
   loginWait, publicApiWait, publicJson, reportFrom, reportRefusal,
   reportTaken, requestAddr, trimInbox, turnstileOn, turnstilePasses } = require('./limits');
-const { downloadServed, listFiles, payloadZip } = require('./downloads');
+const { downloadServed, listFiles } = require('./downloads');
 const { deleteUpload, GALLERY, GALLERY_ALLOW, GALLERY_CAP, GALLERY_HOLD_DAYS,
   GPENDING, GREPORTS, KIND, listUploads, pendingCopies, pictureSize,
   receiveUpload, shotSrcset, SMALL_CAP, SMALL_KINDS, SMALL_WIDTHS, smallCopy,
@@ -635,67 +635,6 @@ async function handle(req, res) {
     }), 'application/json; charset=utf-8', { 'Cache-Control': 'no-cache' });
   }
 
-  /*
-    What the setup program fetches. It is a small exe with the mods beside it,
-    so on startup it asks here for the name, the address and the size of the
-    payload, then downloads it with a Range header so a dropped connection
-    carries on rather than starting over.
-
-    This route did not exist. Every request for it fell through to the admin
-    API block below, which answers 401 sign in first to anybody not logged in,
-    and the installer showed "Could not reach https://thornswood.net to get the
-    mods ... (401) Unauthorized" to every new person. It has to stay above that
-    gate and stay public, because an installer cannot sign in.
-
-    The reply is read by Bootstrap.cs with plain string searches for "name":",
-    "url":", "size": and "sha256":", so the shape matters more than the field
-    order.
-  */
-  if (route === '/api/payload' && req.method === 'GET') {
-    /* A downloads folder that is there and cannot be read answered as if no
-       zip was there, so the installer said the site was not offering a
-       download when the site could not look (#2736). Now it is said and
-       answered 500. No folder is still no zip, tested for; a zip deleted by a
-       publish between the listing and the look at it is left out. */
-    let best = null;
-    // Only a zip files.json lists, since that is all /file/ serves (#3798): an
-    // unlisted one is a publish that never finished writing its list, and
-    // naming it would send the setup program to a 404.
-    const meta = jsonFile(path.join(FILES, 'files.json'), {});
-    try {
-      const names = fs.existsSync(FILES) ? fs.readdirSync(FILES) : [];
-      for (const name of names) {
-        if (!payloadZip(name) || !downloadServed(name, meta)) continue;
-        let st;
-        try { st = fs.statSync(path.join(FILES, name)); }
-        catch (e) { if (e.code === 'ENOENT') continue; throw e; }
-        if (!st.isFile()) continue;
-        if (!best || st.mtimeMs > best.at) best = { name, at: st.mtimeMs, size: st.size };
-      }
-    } catch (e) {
-      console.error('[thornswood-docs] could not read the downloads in ' + FILES + ' for /api/payload (' + (e.code || e.message) + ')');
-      return sendJson(res, 500, { error: 'the site could not look at its downloads' });
-    }
-    // No zip means a one file build, where the payload rides inside the exe
-    // and nothing should be fetched. Bootstrap turns an empty url into "The
-    // site is not offering a download right now", which is the truth.
-    if (!best) return sendJson(res, 200, {});
-    // The SHA-256 Publish-Installer measured on the zip it sent, kept in
-    // files.json beside its name. best is built from a stat and has no hash on
-    // it, so it is looked up here. Only a well formed one goes out: anything
-    // else would make every install delete a good download. An empty value is
-    // what an installer from before this sees when the field is missing; an
-    // installer from #1365 on stops on it rather than fetching half a
-    // gigabyte it has no way to measure.
-    const sha = String((meta[best.name] || {}).sha256 || '');
-    return sendJson(res, 200, {
-      name: best.name,
-      url: '/file/' + encodeURIComponent(best.name),
-      size: best.size,
-      sha256: /^[0-9a-f]{64}$/i.test(sha) ? sha.toLowerCase() : ''
-    });
-  }
-
   /* Reporting a problem is public on purpose. Somebody whose install will not
      start cannot sign in to say so, and making them ask in Discord first is
      how a bug turns into nobody bothering. Held to one short message at a
@@ -1161,10 +1100,18 @@ async function handle(req, res) {
   }
 
   // ------------------------------------------------------------- downloads
-  // Streamed, not read into memory. The installer is most of a gigabyte and
-  // reading it up front would hold all of that per person downloading.
+  // Streamed, not read into memory: a download can be hundreds of megabytes
+  // and reading it up front would hold all of that per person downloading.
   const dl = p.match(/^\/file\/([A-Za-z0-9._ -]+)$/);
   if (dl && req.method === 'GET') {
+    // The setup programs, from their GitHub Releases (newestSetup, #4824).
+    for (const ch of Object.keys(SETUP_KINDS)) {
+      if (dl[1] !== SETUP_KINDS[ch].name) continue;
+      const setup = newestSetup(ch);
+      if (!setup) return send(res, 404, 'the installer is not published yet', 'text/plain');
+      res.writeHead(302, { location: setup.url, 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' });
+      return res.end();
+    }
     const file = path.join(FILES, dl[1]);
     // Only what files.json publishes (downloadServed, #3798).
     const meta = jsonFile(path.join(FILES, 'files.json'), {});
@@ -1173,21 +1120,11 @@ async function handle(req, res) {
       return send(res, 404, 'no such file', 'text/plain');
     }
     const st = fs.statSync(file);
-    // The installer from the main release's GitHub Release, once it holds
-    // this very file publicly (release copies, #3686).
-    if (dl[1] === 'Thornswood-Setup.exe') {
-      const copy = releaseInstallerCopy(String((meta[dl[1]] || {}).sha256 || '').toLowerCase(), st.size);
-      if (copy) {
-        res.writeHead(302, { location: copy, 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' });
-        return res.end();
-      }
-    }
-    /* Resumable, because the payload is hundreds of megabytes and the Join
-       page says a dropped connection carries on. Accept-Ranges on the 200 so
-       a client knows before it starts. The ETag and Last-Modified are what a
-       browser needs before it will resume at all, and what If-Range is
-       checked against, so a one file installer taken in the browser resumes
-       too and never onto a different build. */
+    /* Resumable, because a dropped connection should carry on. Accept-Ranges
+       on the 200 so a client knows before it starts. The ETag and
+       Last-Modified are what a browser needs before it will resume at all,
+       and what If-Range is checked against, so a download taken in the
+       browser resumes too and never onto a different file. */
     const kind = {
       'content-type': 'application/octet-stream',
       'content-disposition': 'attachment; filename="' + path.basename(file) + '"',
@@ -2706,11 +2643,13 @@ async function handle(req, res) {
     (the hand written admin list aside, as at /api/play/join). A refusal here
     means that session is ended by the game server, which is the point.
 
-    THE VERSION IS THE LAUNCHER'S OWN WORD, checked against the channel's feed
-    both ways: below minLauncher is an old launcher and is told to update, and
-    above launcherVersion is a number Thornswood never published. So an old
-    launcher cannot get in, and neither can a request that simply claims to be a
-    new one. A person who writes their own request with their own ticket gets a
+    THE VERSION IS THE LAUNCHER'S OWN WORD, checked against what the channel
+    published: a Velopack number only when its Release is out on GitHub with
+    the channel's Velopack feed on it (nativePublished, #4825), and a launcher
+    from before Velopack only while the channel has no Velopack setup program
+    out, inside the update feed's minLauncher to launcherVersion as before.
+    So an old launcher cannot get in, and neither can a request that simply
+    claims to be a new one. A person who writes their own request with their own ticket gets a
     pass only for their own characters, which is all the game server lets it
     prove.
 
@@ -2732,20 +2671,34 @@ async function handle(req, res) {
     if (!cfg.passKey) return sendJson(res, 503, { ok: false, why: 'no key', message:
       'Thornswood cannot let anybody into the game right now. Tell Patrick.' });
 
-    const feed = feedLaunchers(server);
-    if (!feed) return sendJson(res, 503, { ok: false, why: 'feed', message:
-      'Thornswood could not read its own update feed just now. Try again in a minute.' });
     const said = String(o.version == null ? '' : o.version).trim().slice(0, 40);
     const have = versionParts(said);
-    if (!have || versionCompare(have, versionParts(feed.min)) < 0) {
-      return sendJson(res, 403, { ok: false, why: 'update', need: feed.min, message:
-        'This launcher is ' + (said || 'too old to say') + ' and Thornswood needs ' + feed.min +
-        ' or newer. Update the launcher, then press Play again.' });
-    }
-    if (versionCompare(have, versionParts(feed.current)) > 0) {
-      return sendJson(res, 403, { ok: false, why: 'unknown launcher', need: feed.current, message:
+    const setup = newestSetup(server);
+    if (nativeTag(server, said)) {
+      const out = await within(nativePublished(server, said), by - Date.now(), () => 'unknown');
+      if (out === 'unknown') return sendJson(res, 503, { ok: false, why: 'releases', message:
+        'Thornswood could not check this launcher with GitHub just now. Try again in a minute.' });
+      if (out !== 'yes') return sendJson(res, 403, { ok: false, why: 'unknown launcher', message:
         'This launcher says it is ' + said + ', which Thornswood never published. ' +
-        'Install the launcher from thornswood.net, then press Play again.' });
+        'Install the launcher from thornswood.net/downloads, then press Play again.' });
+    } else if (setup) {
+      return sendJson(res, 403, { ok: false, why: 'update', message:
+        'Thornswood has a new launcher, and this one (' + (said || 'too old to say') + ') cannot update itself to it. ' +
+        'Install it once from thornswood.net/downloads, then press Play again.' });
+    } else {
+      const feed = feedLaunchers(server);
+      if (!feed) return sendJson(res, 503, { ok: false, why: 'feed', message:
+        'Thornswood could not read its own update feed just now. Try again in a minute.' });
+      if (!have || versionCompare(have, versionParts(feed.min)) < 0) {
+        return sendJson(res, 403, { ok: false, why: 'update', need: feed.min, message:
+          'This launcher is ' + (said || 'too old to say') + ' and Thornswood needs ' + feed.min +
+          ' or newer. Update the launcher, then press Play again.' });
+      }
+      if (versionCompare(have, versionParts(feed.current)) > 0) {
+        return sendJson(res, 403, { ok: false, why: 'unknown launcher', need: feed.current, message:
+          'This launcher says it is ' + said + ', which Thornswood never published. ' +
+          'Install the launcher from thornswood.net, then press Play again.' });
+      }
     }
 
     const st = await within(standingCached(t.d), by - Date.now(), () => standingLate(t.d));

@@ -204,7 +204,7 @@ if (block) {
 // ------------------------------------------------ the launcher's half
 
 {
-  yes("Verify reads the manifest's served list", /\[DataMember\] public string\[\] served;/.test(verify));
+  yes("Verify reads the manifest's served list", /\[JsonInclude\] public string\[\] served;/.test(verify));
   yes("Manifest marks each plugin served or not from that list, and nothing else sets it",
       /m\.Served = served\.Contains\(m\.filename\);/.test(verify) &&
       (verify.match(/\bm\.Served = /g) || []).length === 1);

@@ -7,11 +7,13 @@
     - every Markdown file in the repository, apart from lore\ (in-world
       writing, not operational text), docs\archive\ (dated snapshots, kept as
       they were) and the engine submodule;
-    - the launcher's window (launcher/ui.xaml; its Help page went with #3146),
-      the bot's channel posts (bot/content.py), the site's public pages
-      (site/public/*.html) and the read me every installer carries
-      (installer/READ ME FIRST.txt). The voice service serves no page since
-      #1822, so it has none to read.
+    - the launcher's window (launcher/app/MainWindow.axaml, compiled since
+      #4823; its Help page went with #3146),
+      the bot's channel posts (bot/content.py) and the site's public pages
+      (site/public/*.html). The voice service serves no page since #1822,
+      so it has none to read. The installer carries no read me since #4824:
+      Velopack's Setup.exe opens the launcher, whose install window says
+      what to do, and the join guide on the site is the long form.
   Not the code files (the gamemode, the overlays, the rest of the launcher): a
   word check there fires on identifiers, engine calls like player.moveto and
   Skyrim's own record names, and those are not text for people.
@@ -81,13 +83,13 @@ $Root = (Resolve-Path -LiteralPath $Root).Path
 # written from the issue board, and the bot checks their words (bot.py
 # post_problems).
 $Named = @(
-    'README.md', 'SECURITY.md', 'Developer-Guide.md', 'launcher/ui.xaml',
-    'bot/content.py', 'site/public/home.html', 'installer/READ ME FIRST.txt', 'site/data/board.json'
+    'README.md', 'SECURITY.md', 'Developer-Guide.md', 'launcher/app/MainWindow.axaml',
+    'bot/content.py', 'site/public/home.html', 'site/data/board.json'
 )
 # README.md and the component READMEs that tests\test-component-readmes.js reads.
 $NameFiles = @(
     'README.md', 'launcher/README.md', 'site/README.md', 'voice/README.md',
-    'game/plugins/README.md', 'game/ui/README.md', 'installer/setup/README.md'
+    'game/plugins/README.md', 'game/ui/README.md', 'installer/README.md'
 )
 $Rules = @(
     @{ Id = 'em-dash'; Case = 'IgnoreCase'; For = 'people'

@@ -5,8 +5,8 @@
 #
 #   security  the secret scan of the tree and of the built launcher
 #   files     every PowerShell, game and bot file parses; the writing rules
-#   code      all ~380 test harnesses in tests/, plus the bot and voice harnesses, the
-#             launcher window check and the launcher build
+#   code      all ~380 test harnesses in tests/, plus the bot and voice harnesses, and
+#             the launcher's native publish
 #   GitHub    pull requests open more than two days and branches other than
 #             main, which CONTRIBUTING.md says are merged or closed; issues
 #             and comments of the last day not written plain (#3692)
@@ -59,6 +59,11 @@ jobs:
         with:
           fetch-depth: 0
           filter: blob:none
+      # The .NET 10 SDK publishes the launcher (#4823), pinned for the reason
+      # build.yml gives.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
 
       - name: Scan the tree for secrets
         if: ${{ !cancelled() }}
@@ -153,21 +158,6 @@ jobs:
           # hits had gone out in those files. Each hit is marked on its line.
           .\scripts\dev\Check-Words.ps1
 
-      - name: Check the launcher window
-        if: ${{ !cancelled() }}
-        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
-        run: |
-          # The launcher builds its window from ui.xaml at startup and finds
-          # every control by name, so a renamed control or a window that does
-          # not parse compiles clean and is found by the person using it. This
-          # fails on either. Windows PowerShell on purpose: it parses with the
-          # .NET Framework WPF the launcher runs on, not the newer one in pwsh.
-          # -ExecutionPolicy Bypass on both, as every harness starts 5.1:
-          # Windows 11 keeps 5.1 at Restricted, so on One's runners the plain
-          # shell: powershell could not run this step's own script (#3861).
-          & powershell -NoProfile -ExecutionPolicy Bypass -File scripts\dev\Check-Controls.ps1 -NoPause
-          if ($LASTEXITCODE -ne 0) { Write-Host '::error file=launcher/ui.xaml::the launcher window does not line up with the C#, see the lines above'; exit 1 }
-
       - name: Parse every game script
         if: ${{ !cancelled() }}
         shell: pwsh
@@ -236,9 +226,12 @@ jobs:
         if: ${{ !cancelled() }}
         shell: pwsh
         run: |
+          # The native publish every build makes (Build-Launcher.ps1, #4823),
+          # which stops on any trim or native code warning.
           $root = Join-Path $env:RUNNER_TEMP 'Thornswood'
           New-Item -ItemType Directory -Force -Path (Join-Path $root 'Launcher') | Out-Null
-          .\scripts\release\Build-Launcher.ps1 -Root $root -NoPause
+          .\scripts\release\Build-Launcher.ps1 -Root $root -NoSign -NoPause
+          if ($LASTEXITCODE -ne 0) { Write-Host '::error file=scripts/release/Build-Launcher.ps1::the launcher did not publish; the lines above say why'; exit 1 }
           if (-not (Test-Path (Join-Path $root 'Launcher\Thornswood.exe'))) { Write-Host '::error::no Thornswood.exe came out of the build'; exit 1 }
 
       - name: Scan the built launcher for secrets
@@ -247,9 +240,9 @@ jobs:
         run: |
           # The secrets that shipped were in built artefacts, not in the source,
           # so what this build made is read too, byte by byte: the launcher with
-          # everything Build-Launcher embeds in it, and the setup stub.
-          $built = @(Join-Path $env:RUNNER_TEMP 'Thornswood\Launcher\Thornswood.exe')
-          if (Test-Path out\setup-stub.exe) { $built += (Resolve-Path out\setup-stub.exe).Path }
+          # everything Build-Launcher embeds in it, and every native library
+          # published beside it.
+          $built = @(Get-ChildItem -LiteralPath (Join-Path $env:RUNNER_TEMP 'Thornswood\Launcher') -File | Where-Object { $_.Extension -in '.exe', '.dll' } | ForEach-Object { $_.FullName })
           .\scripts\dev\Check-Secrets.ps1 -Binary $built
           exit $LASTEXITCODE
 

@@ -371,10 +371,10 @@ function partD() {
                  '        public static HashSet<int> ReadGone(string text, out DateTime at)']
     .map(function (h) { return lift(rosterCs, h); });
   yes('Roster.cs has Gone, Played and ReadGone', parts.every(Boolean));
-  const csc = require('./launcher-csc').csc || path.join(require('os').tmpdir(), 'no-build-tools-roslyn-csc', 'csc.exe');
-  if (parts.every(Boolean) && !require('./launcher-csc').onWindows) {
-    console.log('SKIP  Gone, Played and ReadGone compiled and run: the compiler the launcher builds with is the Roslyn csc of Visual Studio\'s Build Tools, which only Windows has');
-  } else if (parts.every(Boolean) && fs.existsSync(csc)) {
+  // Built the way the project builds, by the .NET 10 SDK, which runs here on
+  // any machine that has it (#4823).
+  const lc = require('./launcher-csc');
+  if (parts.every(Boolean) && lc.dotnet) {
     const prog =
       'using System; using System.Collections.Generic; using System.Text.RegularExpressions;\n' +
       'static class Roster {\n static readonly object gate = new object();\n' +
@@ -395,13 +395,11 @@ function partD() {
       '  Set("{\\"ok\\":true,\\"rows\\":{},\\"gone\\":[],\\"goneAt\\":0}");\n' +
       '  Console.WriteLine("none " + gone.Count);\n' +
       ' }\n}\n';
-    const dir = fs.mkdtempSync(path.join(TMP, 'cs-'));
-    fs.writeFileSync(path.join(dir, 'g.cs'), prog);
     let out = '';
     try {
-      cp.execFileSync(csc, ['/nologo', '/langversion:' + require('./launcher-csc').langVersion, '/out:' + path.join(dir, 'g.exe'), path.join(dir, 'g.cs')], { stdio: 'pipe' });
-      out = cp.execFileSync(path.join(dir, 'g.exe'), { encoding: 'utf8' });
-    } catch (e) { out = 'ERROR ' + ((e.stdout || '') + (e.stderr || '') || e.message); }
+      const r = lc.run(lc.build({ sources: [prog], exe: true }), []);
+      out = r.status === 0 ? r.stdout : 'ERROR exit ' + r.status + '\n' + r.stdout + r.stderr;
+    } catch (e) { out = 'ERROR ' + e.message; }
     const has = function (re) { return re.test(out); };
     yes('the lifted C# compiles with the compiler the launcher builds with, and runs', !/ERROR/.test(out));
     yes('ReadGone reads both ids and the moment the server looked (2026-09-21T14:13:20Z)',
@@ -413,7 +411,7 @@ function partD() {
     yes('an empty answer marks nothing', has(/none 0/));
     if (/ERROR/.test(out)) { console.log(out); }
   } else if (parts.every(Boolean)) {
-    yes('the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)', false);
+    yes('the .NET SDK the launcher builds with is on this machine', false);
   }
 
   yes('Roster.Refresh sends the channel, so the site answers for this build\'s server',

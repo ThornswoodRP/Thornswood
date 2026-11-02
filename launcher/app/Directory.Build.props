@@ -1,0 +1,9 @@
+<Project>
+  <!-- Build scratch under out\, which git ignores, never beside the sources:
+       launcher\app\*.cs is read by this build and by the harnesses. -->
+  <PropertyGroup>
+    <ThornswoodRepo>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\'))</ThornswoodRepo>
+    <BaseIntermediateOutputPath>$(ThornswoodRepo)out\obj\launcher\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(ThornswoodRepo)out\bin\launcher\</BaseOutputPath>
+  </PropertyGroup>
+</Project>

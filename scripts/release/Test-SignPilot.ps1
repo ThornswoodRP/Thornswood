@@ -64,15 +64,22 @@ if ($Sign) {
     New-Item -ItemType Directory -Force -Path $Out | Out-Null
     Remove-Item -LiteralPath $exe, $sums, $prov -Force -EA SilentlyContinue
     $src = 'public static class SignPilot { public static int Main() { System.Console.WriteLine("Thornswood signing pilot, issue 2163. Not a release."); return 0; } }'
-    # PowerShell 7's Add-Type writes no exe, so the build's own compiler
-    # (the Roslyn csc MSBuild runs, Find-MSBuild.ps1) makes it (#5356).
-    $msb = & { . (Join-Path $PSScriptRoot 'Find-MSBuild.ps1') -Load; Find-ThornswoodMSBuild }
-    if (-not $msb.Csc) { Write-Host 'No C# compiler: the Build Tools are not on this machine (docs/guide/set-up-a-machine.md, "Setting up a machine").' -ForegroundColor Red; exit 1 }
-    $srcFile = Join-Path $Out 'pilot.cs'
-    [IO.File]::WriteAllText($srcFile, $src)
-    $said = @(& $msb.Csc /nologo /target:exe ('/out:' + $exe) $srcFile 2>&1 | ForEach-Object { "$_" })
-    Remove-Item -LiteralPath $srcFile -Force
-    if ($LASTEXITCODE -ne 0) { $said | ForEach-Object { Write-Host $_ }; Write-Host 'The compiler refused the test exe; nothing was signed.' -ForegroundColor Red; exit 1 }
+    # PowerShell 7's Add-Type writes no exe, so the .NET SDK the launcher
+    # builds with makes it (#5356, #4823): a one file project, built with its
+    # apphost, the exe that is signed.
+    $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $dotnet) { Write-Host 'No .NET SDK: dotnet is not on this machine (docs/guide/set-up-a-machine.md, "Setting up a machine").' -ForegroundColor Red; exit 1 }
+    $proj = Join-Path $Out 'pilot-src'
+    New-Item -ItemType Directory -Force -Path $proj | Out-Null
+    [IO.File]::WriteAllText((Join-Path $proj 'pilot.cs'), $src)
+    [IO.File]::WriteAllText((Join-Path $proj 'pilot.csproj'), '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><AssemblyName>pilot</AssemblyName><UseAppHost>true</UseAppHost><ImplicitUsings>disable</ImplicitUsings></PropertyGroup></Project>')
+    $built = Join-Path $proj 'bin'
+    $said = @(& $dotnet.Source build (Join-Path $proj 'pilot.csproj') -c Release -o $built --nologo -v minimal --disable-build-servers 2>&1 | ForEach-Object { "$_" })
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $built 'pilot.exe'))) {
+        $said | ForEach-Object { Write-Host $_ }; Write-Host 'The .NET SDK refused the test exe; nothing was signed.' -ForegroundColor Red; exit 1
+    }
+    Copy-Item -LiteralPath (Join-Path $built 'pilot.exe') -Destination $exe -Force
+    Remove-Item -LiteralPath $proj -Recurse -Force
     $unsigned = Sha $exe
     Write-Host ("unsigned sha256  " + $unsigned)
     $signArgs = @{ Path = @($exe); Required = $true }

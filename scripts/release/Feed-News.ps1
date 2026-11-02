@@ -13,7 +13,10 @@
   in version.json. From the first launcher with launcher\app\FeedNews.cs it
   also reads "newsFile": { url, sha256, count }, one asset at
   /feed[-dev]/assets/<sha256> holding the same list, and shows its notes after
-  the ones "news" carries.
+  the ones "news" carries. FeedNews.cs went with #5187: the native launcher
+  reads its News tab from the GitHub Releases (launcher\app\ReleaseNews.cs)
+  and reads neither field, so these are for the launchers already installed
+  before it.
 
   So a channel keeps its notes in "news" until the launcher it lets into the
   game (minLauncher, which a publish sets to the launcher it offers) reads the

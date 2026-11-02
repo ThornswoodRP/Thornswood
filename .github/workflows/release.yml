@@ -6,19 +6,25 @@
 # WHAT IT DOES. On a tag v<version> it checks the tag out clean, runs
 # scripts\release\Build-Launcher.ps1 into a folder under RUNNER_TEMP so it
 # never touches a Desktop shortcut or closes a game on a real machine, signs
-# Thornswood.exe through Azure Artifact Signing (in a run of main's own
-# workflow, below), writes SHA256SUMS beside it, and attaches them to a DRAFT release for
-# that tag. A person promotes the draft; Ship reads a draft's assets fine.
-# Ship then downloads Thornswood.exe and SHA256SUMS and refuses to ship unless
-# the checksum matches. SHA256SUMS is written AFTER signing, so it describes
-# the signed bytes the draft carries.
+# every program of the launcher through Azure Artifact Signing (in a run of
+# main's own workflow, below), writes SHA256SUMS beside them, and attaches
+# them to a DRAFT release for that tag. A person promotes the draft; Ship
+# reads a draft's assets fine. Ship then downloads Thornswood.exe and
+# SHA256SUMS and refuses to ship unless the checksum matches. SHA256SUMS is
+# written AFTER signing, so it describes the signed bytes the draft carries.
 #
-# THE SETUP PROGRAM TOO, issue #932. The same build compiles setup-stub.exe,
-# the program the installer is built around, into out\ of the checkout. It is
-# attached beside the launcher and listed in the same SHA256SUMS. It is NOT
-# signed here, on purpose: Package-Thornswood.ps1 appends the OneFile trailer
-# to it and signs the finished Setup, and a stub signed first cannot be signed
-# again after that append (Build-Launcher.ps1, "Do NOT sign setup-stub.exe").
+# THE LAUNCHER IS A FOLDER (#4823). Compiled to native code, Thornswood.exe
+# needs the native libraries Avalonia draws with beside it, so every .exe and
+# .dll the publish leaves goes on the draft, signed, each with its own line
+# in SHA256SUMS; Thornswood.pdb, the symbols, does not. So do app.ico and
+# app-dev.ico, the icons the exe embeds, which Build-Launcher.ps1 writes
+# beside it: Install-Launcher.ps1 names the shortcuts' icon file after the
+# art the exe carries (#887), and a native exe's resources cannot be read
+# back out of it. They are not programs, so they are not signed; their
+# lines in SHA256SUMS hold them. The setup program
+# this build also made until #4824 (setup-stub.exe) went with the old
+# installer: the download is Velopack's Setup.exe, which merge-release.yml
+# makes.
 #
 # WHERE IT RUNS (#2163, Patrick's decisions of 12 Oct, relayed by Smeagle;
 # #4013, Patrick's A of 27 Oct 2026). GitHub's hosted windows-latest, the
@@ -32,12 +38,13 @@
 # repository, which would have needed a second Azure federated credential
 # and a stored token that writes releases here. If GitHub's runner cannot
 # build a release, a Ship on One signs the unsigned launcher on download
-# (#921). Every launcher since 1.2.4.5 on dev and 1.2.5 on main is built by
-# MSBuild (#498). tests\test-release-workflow.ps1 holds the shape.
+# (#921). tests\test-release-workflow.ps1 holds the shape.
 #
-# HOW IT BUILDS (#498, Patrick's option C, switched 15 Oct). The launcher and
-# setup program are built by MSBuild from launcher\app\Thornswood.csproj and
-# installer\setup\Setup.csproj (Build-Launcher.ps1, which has no other way).
+# HOW IT BUILDS (#4823). The .NET 10 SDK publishes launcher\app\Thornswood.csproj
+# compiled to native code (Build-Launcher.ps1, which has no other way), so
+# the job sets that SDK up first, at the same pinned action as the build
+# check. From #498 (15 Oct) to #4823 MSBuild built it, and before that the
+# .NET Framework's own compiler.
 #
 # HOW IT SIGNS (#2163 section 8). A federated
 # (OIDC) identity, no secret stored anywhere: GitHub mints a short token for
@@ -260,6 +267,12 @@ jobs:
           Write-Host "the launcher's number at this commit is $main; this builds $want"
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('version=' + $want)
 
+      # The .NET 10 SDK the launcher publishes with (#4823), the same pin as
+      # the build check's.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+
       - name: Build the launcher into RUNNER_TEMP
         shell: pwsh
         env:
@@ -268,18 +281,16 @@ jobs:
         run: |
           # RUNNER_TEMP, not a real install root, so Install-Launcher is never
           # run and no Desktop shortcut, icon cache or Stop-Game is touched.
-          # MSBuild and the two project files on either runner (#498).
+          # The .NET 10 SDK's native publish on either runner (#4823).
           # -NoSign: signing is its own step below, -Required, never "skip if
           # no config".
-          Write-Host ("building with MSBuild on a {0} runner" -f $env:RUNNER_KIND)
+          Write-Host ("publishing with the .NET 10 SDK on a {0} runner" -f $env:RUNNER_KIND)
           $root = Join-Path $env:RUNNER_TEMP 'Thornswood'
           New-Item -ItemType Directory -Force -Path (Join-Path $root 'Launcher') | Out-Null
           .\scripts\release\Build-Launcher.ps1 -Root $root -NoSign -NoPause -Version $env:LAUNCHER_VERSION
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::Build-Launcher.ps1 failed"; exit 1 }
           $exe = Join-Path $root 'Launcher\Thornswood.exe'
           if (-not (Test-Path $exe)) { Write-Host '::error::no Thornswood.exe came out of the build'; exit 1 }
-          # The setup program the same build compiled (issue #932).
-          if (-not (Test-Path 'out\setup-stub.exe')) { Write-Host '::error::no setup-stub.exe came out of the build'; exit 1 }
 
       # SIGNING (#2163 section 8): a run of main's own workflow, nothing
       # else (#3930). Microsoft's signing client comes first, at the version and
@@ -314,7 +325,7 @@ jobs:
       # DefaultAzureCredential, whose workload identity credential reads
       # AZURE_FEDERATED_TOKEN_FILE beside AZURE_CLIENT_ID and AZURE_TENANT_ID
       # (header, HOW IT SIGNS).
-      - name: Sign the launcher with ThornswoodRelease (OIDC, no secret)
+      - name: Sign the launcher's programs with ThornswoodRelease (OIDC, no secret)
         if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
         shell: pwsh
         env:
@@ -324,6 +335,9 @@ jobs:
           if (-not $env:AZURE_CLIENT_ID -or -not $env:AZURE_TENANT_ID) { Write-Host '::error::the AZURE_SIGNING_CLIENT_ID and AZURE_SIGNING_TENANT_ID repository variables are not set'; exit 1 }
           if (-not $env:ACTIONS_ID_TOKEN_REQUEST_URL -or -not $env:ACTIONS_ID_TOKEN_REQUEST_TOKEN) { Write-Host '::error::GitHub gave this job no OIDC token to ask for (id-token: write and the release environment)'; exit 1 }
           $exe = Join-Path $env:RUNNER_TEMP 'Thornswood\Launcher\Thornswood.exe'
+          # Every program of the launcher: the exe and each native library
+          # beside it (header, THE LAUNCHER IS A FOLDER).
+          $programs = @(Get-ChildItem -LiteralPath (Split-Path -Parent $exe) -File | Where-Object { $_.Extension -in '.exe', '.dll' } | ForEach-Object { $_.FullName })
           $tokenFile = Join-Path $env:RUNNER_TEMP 'azure-federated-token'
           try {
             $answer = Invoke-RestMethod -Uri ($env:ACTIONS_ID_TOKEN_REQUEST_URL + '&audience=api://AzureADTokenExchange') -Headers @{ Authorization = ('bearer ' + $env:ACTIONS_ID_TOKEN_REQUEST_TOKEN) } -ErrorAction Stop
@@ -331,38 +345,48 @@ jobs:
             Write-Host ('::add-mask::' + $answer.value)
             [IO.File]::WriteAllText($tokenFile, [string]$answer.value)
             $env:AZURE_FEDERATED_TOKEN_FILE = $tokenFile
-            & .\scripts\release\Sign-Artifact.ps1 -Path $exe -Required
+            & .\scripts\release\Sign-Artifact.ps1 -Path $programs -Required
             $rc = $LASTEXITCODE
           } finally {
             Remove-Item -LiteralPath $tokenFile -Force -ErrorAction SilentlyContinue
             Remove-Item Env:\AZURE_FEDERATED_TOKEN_FILE -ErrorAction SilentlyContinue
           }
-          if ($rc -ne 0) { Write-Host '::error::signing failed; no draft gets this exe'; exit 1 }
+          if ($rc -ne 0) { Write-Host '::error::signing failed; no draft gets these programs'; exit 1 }
+          foreach ($f in $programs) {
+            $sig = Get-AuthenticodeSignature -LiteralPath $f
+            $n = Split-Path -Leaf $f
+            if ($sig.Status -ne 'Valid') { Write-Host ('::error::the signed ' + $n + ' reads back ' + $sig.Status); exit 1 }
+            if (-not $sig.TimeStamperCertificate) { Write-Host ('::error::the signed ' + $n + ' has no timestamp'); exit 1 }
+          }
           $sig = Get-AuthenticodeSignature -LiteralPath $exe
-          if ($sig.Status -ne 'Valid') { Write-Host ('::error::the signed exe reads back ' + $sig.Status); exit 1 }
-          if (-not $sig.TimeStamperCertificate) { Write-Host '::error::the signed exe has no timestamp'; exit 1 }
-          Write-Host ('signed by ' + $sig.SignerCertificate.Subject + ' on a ' + $env:RUNNER_ENVIRONMENT + ' runner')
+          Write-Host ('{0} program(s) signed by {1} on a {2} runner' -f $programs.Count, $sig.SignerCertificate.Subject, $env:RUNNER_ENVIRONMENT)
 
-      - name: Collect the exe and the setup program, and write SHA256SUMS
+      - name: Collect the launcher's programs, and write SHA256SUMS
         shell: pwsh
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'Thornswood'
           $out = Join-Path $env:RUNNER_TEMP 'release'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
-          Copy-Item -LiteralPath (Join-Path $root 'Launcher\Thornswood.exe') -Destination (Join-Path $out 'Thornswood.exe') -Force
-          Copy-Item -LiteralPath 'out\setup-stub.exe' -Destination (Join-Path $out 'setup-stub.exe') -Force
+          # Every .exe and .dll the publish left (header, THE LAUNCHER IS A
+          # FOLDER), and the two icons the exe embeds, by name, so the order
+          # is the same on every run.
+          $programs = @(Get-ChildItem -LiteralPath (Join-Path $root 'Launcher') -File | Where-Object { $_.Extension -in '.exe', '.dll' -or $_.Name -in 'app.ico', 'app-dev.ico' } | Sort-Object Name)
+          if (-not ($programs | Where-Object { $_.Name -eq 'Thornswood.exe' })) { Write-Host '::error::the launcher folder has no Thornswood.exe'; exit 1 }
+          $noIcon = @('app.ico', 'app-dev.ico' | Where-Object { $programs.Name -notcontains $_ })
+          if ($noIcon.Count) { Write-Host ("::error::the launcher folder has no " + ($noIcon -join ' or ') + ", which Build-Launcher.ps1 writes beside the exe"); exit 1 }
+          foreach ($f in $programs) { Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $out $f.Name) -Force }
           # The sha256sum shape, "<hash>  <name>" with two spaces, one line
           # each, so both `sha256sum -c` and Ship read the same file. Written
           # after signing, so it names the bytes the draft carries.
           $lines = @()
-          foreach ($n in 'Thornswood.exe', 'setup-stub.exe') {
-            $hash = (Get-FileHash -LiteralPath (Join-Path $out $n) -Algorithm SHA256).Hash.ToLower()
-            $lines += ("$hash  $n")
-            Write-Host ("SHA256  {0}  {1}" -f $hash, $n)
+          foreach ($f in $programs) {
+            $hash = (Get-FileHash -LiteralPath (Join-Path $out $f.Name) -Algorithm SHA256).Hash.ToLower()
+            $lines += ("$hash  " + $f.Name)
+            Write-Host ("SHA256  {0}  {1}" -f $hash, $f.Name)
           }
           Set-Content -LiteralPath (Join-Path $out 'SHA256SUMS') -Value $lines -Encoding ascii
 
-      # THE SAME THREE FILES AS THIS RUN'S ARTIFACT (#2841). GitHub lists a
+      # THE SAME FILES AS THIS RUN'S ARTIFACT (#2841). GitHub lists a
       # draft release only to an account that can push, and the box's Ship
       # token reads Thornswood's contents and nothing more (ship-access.js,
       # Patrick's pick of 30 Oct). So a Ship from the deploy gate never saw
@@ -372,7 +396,7 @@ jobs:
       # from the newest green run of this workflow for the tag, and the draft
       # only when no such run still holds them. Same folder, same bytes as the
       # draft; Ship checks them against SHA256SUMS and the signature as before.
-      - name: Keep the exe, the setup program and SHA256SUMS as the run's files
+      - name: Keep the launcher's programs and SHA256SUMS as the run's files
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-files
@@ -380,7 +404,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Draft a release with the exe, the setup program and their checksums
+      - name: Draft a release with the launcher's programs and their checksums
         id: draft
         shell: pwsh
         env:
@@ -394,13 +418,14 @@ jobs:
           if (-not $tag -or $env:RELEASE_COMMIT -notmatch '^[0-9a-f]{40}$') { Write-Host '::error::the tag check gave no tag and commit'; exit 1 }
           $out = Join-Path $env:RUNNER_TEMP 'release'
           $exe = Join-Path $out 'Thornswood.exe'
-          $stub = Join-Path $out 'setup-stub.exe'
           $sums = Join-Path $out 'SHA256SUMS'
+          # Every file the collect step put here: the programs and SHA256SUMS.
+          $files = @(Get-ChildItem -LiteralPath $out -File | Sort-Object Name | ForEach-Object { $_.FullName })
           $signed = (Get-AuthenticodeSignature -LiteralPath $exe).Status -eq 'Valid'
-          $how = 'built on GitHub''s runner with MSBuild (#498)'
-          if ($signed) { $how += ', the launcher signed by ThornswoodRelease (#2163)' }
+          $how = 'published natively on GitHub''s runner with the .NET 10 SDK (#4823)'
+          if ($signed) { $how += ', every program signed by ThornswoodRelease (#2163)' }
           else { $how += ', UNSIGNED (not a run of main''s workflow, #3930): Ship signs it on download (#921)' }
-          $notes = "Launcher exe and setup program for $tag, $how, and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).`n`nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source"
+          $notes = "The launcher for $tag, Thornswood.exe and the native libraries beside it, $how, and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issue #457).`n`nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source"
           # A draft: a person promotes it, and Ship reads a draft's assets. If a
           # run for this tag already made the draft, upload into it instead.
           # Use the GitHub REST API directly; the dedicated runner does not
@@ -442,7 +467,7 @@ jobs:
             # go with them: since immutable releases (31 Oct 2026), GitHub
             # drops a draft's tag when an edit does not name it, and the
             # v1.2.13 draft read untagged-<hex> after a second run wrote its
-            # notes alone, so Ship and installer.yml could not find it by its
+            # notes alone, so Ship could not find it by its
             # tag (scripts\ops\Set-Ref.ps1 -RetagLauncher puts one back).
             $patch = @{ body = $notes; tag_name = $tag; target_commitish = $env:RELEASE_COMMIT } | ConvertTo-Json
             $release = Invoke-RestMethod -Method Patch -Uri "$api/releases/$($release.id)" -Headers $headers -ContentType 'application/json' -Body $patch -ErrorAction Stop
@@ -458,7 +483,7 @@ jobs:
             } | ConvertTo-Json
             $release = Invoke-RestMethod -Method Post -Uri "$api/releases" -Headers $headers -ContentType 'application/json' -Body $payload
           }
-          foreach ($asset in @($exe, $stub, $sums)) {
+          foreach ($asset in $files) {
             $assetName = [IO.Path]::GetFileName($asset)
             $existing = @($release.assets | Where-Object { $_.name -eq $assetName })
             foreach ($item in $existing) {
@@ -468,7 +493,7 @@ jobs:
             $uploadUri = "https://uploads.github.com/repos/$repo/releases/$($release.id)/assets?name=$encodedName"
             Invoke-RestMethod -Method Post -Uri $uploadUri -Headers $headers -ContentType 'application/octet-stream' -InFile $asset -ErrorAction Stop | Out-Null
           }
-          Write-Host ("draft {0} for {1} holds Thornswood.exe ({2}), setup-stub.exe and SHA256SUMS" -f $release.id, $tag, $(if ($signed) { 'signed' } else { 'unsigned' }))
+          Write-Host ("draft {0} for {1} holds {2} file(s), Thornswood.exe {3}: {4}" -f $release.id, $tag, $files.Count, $(if ($signed) { 'signed' } else { 'unsigned' }), (($files | ForEach-Object { Split-Path -Leaf $_ }) -join ', '))
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("release_id=" + $release.id)
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("signed=" + $(if ($signed) { 'true' } else { 'false' }))
 
@@ -526,12 +551,19 @@ jobs:
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
           # Each file by its asset id, as bytes: the octet-stream answer is a
           # redirect to the file, and PowerShell 7 drops the token on it.
+          # SHA256SUMS first, then every file it names, which is the launcher
+          # whole (header, THE LAUNCHER IS A FOLDER).
           $bin = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/octet-stream'; 'X-GitHub-Api-Version' = '2022-11-28' }
-          foreach ($n in 'Thornswood.exe', 'setup-stub.exe', 'SHA256SUMS') {
+          $ProgressPreference = 'SilentlyContinue'
+          $get = {
+            param([string]$n)
             $a = @($release.assets | Where-Object { $_.name -eq $n })
             if ($a.Count -ne 1) { Write-Host ("::error::draft {0} has {1} files named {2}" -f $env:RELEASE_ID, $a.Count, $n); exit 1 }
-            $ProgressPreference = 'SilentlyContinue'
             Invoke-WebRequest -Uri "$api/releases/assets/$($a[0].id)" -Headers $bin -OutFile (Join-Path $dir $n) -UseBasicParsing -ErrorAction Stop
           }
+          & $get 'SHA256SUMS'
+          $named = @([IO.File]::ReadAllLines((Join-Path $dir 'SHA256SUMS')) | ForEach-Object { [regex]::Match($_, '^\s*[0-9a-fA-F]{64}\s+\*?([A-Za-z0-9][A-Za-z0-9._-]*)\s*$') } | Where-Object { $_.Success } | ForEach-Object { $_.Groups[1].Value })
+          if ($named.Count -eq 0) { Write-Host "::error::draft $($env:RELEASE_ID)'s SHA256SUMS names no file"; exit 1 }
+          foreach ($n in $named) { & $get $n }
           & .\scripts\release\Test-ReleaseFiles.ps1 -Dir $dir -RequireSigned
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::draft $($env:RELEASE_ID) did not pass on a second machine; do not ship it"; exit 1 }

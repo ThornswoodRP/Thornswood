@@ -9,8 +9,9 @@
   fixed but never covered by a test, so a later change could undo any of them
   in silence. This reads the source and checks the shape each fix relies on:
 
-    F1  installer\Setup-Thornswood.ps1: a wrong Skyrim build is not a failed
-        check. Counting it as a miss kept the window shut and never opened the
+    F1  launcher\app\InstallSteps.cs, the install Velopack's Setup.exe runs
+        (installer\Setup-Thornswood.ps1 until #4824): a wrong Skyrim build is
+        not a failed check. Counting it as a miss kept the window shut and never opened the
         launcher whose Downgrade button fixes it. So the build check counts it
         as next, and the notice above tells the person to press Downgrade in
         the launcher, not to pick a build from Steam's Betas list.
@@ -33,7 +34,7 @@
   source and checks the shape rather than running the button.
 
   Read only. It reads launcher\app\Downgrade.cs, launcher\app\OwnGameShare.cs
-  and installer\Setup-Thornswood.ps1.
+  and launcher\app\InstallSteps.cs.
 */
 const REPO_DIR = require('path').join(__dirname, '..', '..'); // this harness is in launcher\tests\, the repository is two folders up
 const fs = require('fs');
@@ -42,7 +43,7 @@ const path = require('path');
 const ROOT = REPO_DIR;
 const APP = path.join(ROOT, 'launcher', 'app');
 const DOWN = fs.readFileSync(path.join(APP, 'Downgrade.cs'), 'utf8');
-const SETUP = fs.readFileSync(path.join(ROOT, 'installer', 'Setup-Thornswood.ps1'), 'utf8');
+const SETUP = fs.readFileSync(path.join(APP, 'InstallSteps.cs'), 'utf8');
 
 let pass = 0, fail = 0;
 const yes = (w, c) => {
@@ -62,16 +63,16 @@ function body(src, signature) {
 
 // ============================================================ F1, the installer
 
-// The build check counts a wrong game build as next, under a collection
-// install, and hands it to the launcher's Downgrade button.
-const gameBranch = /\}\s*elseif \(\$Collection -and \$k -eq 'Game 1\.6\.1170'\) \{([\s\S]*?)\n\s*\} else \{/.exec(SETUP);
-yes('F1: the build check has a branch for a wrong Game 1.6.1170 under a collection install', !!gameBranch);
+// The build check counts a wrong game build as next and hands it to the
+// launcher's Downgrade button.
+const gameBranch = /\n\s*else if \(c\.Key == "Game 1\.6\.1170"\)\s*\{([\s\S]*?)\n\s*\}\s*\n\s*else\s*\{/.exec(SETUP);
+yes('F1: the build check has a branch for a wrong Game 1.6.1170', !!gameBranch);
 const branchText = gameBranch ? gameBranch[1] : '';
-yes('F1: a wrong build is counted as next, not a miss', /\$later\+\+/.test(branchText) && !/\$bad\+\+/.test(branchText));
-yes('F1: it says the launcher\'s Downgrade button fixes it', /\[next\] \$k  the launcher's Downgrade button fixes this/.test(branchText));
-// The MISS branch that increments $bad is the one after it, so the two do not
+yes('F1: a wrong build is counted as next, not a miss', /Later\+\+/.test(branchText) && !/Bad\+\+/.test(branchText));
+yes('F1: it says the launcher\'s Downgrade button fixes this', /"  \[next\] " \+ c\.Key \+ "  the launcher's Downgrade button fixes this"/.test(branchText));
+// The MISS branch that adds to Bad is the one after it, so the two do not
 // collapse into one: a real miss still fails the install.
-yes('F1: a real miss still counts against the install', /\} else \{[\s\S]*?Say "  \[MISS\] \$k"[\s\S]*?\$bad\+\+/.test(SETUP));
+yes('F1: a real miss still counts against the install', /\n\s*else\s*\{\s*Say\("  \[MISS\] " \+ c\.Key\);\s*Bad\+\+;/.test(SETUP));
 
 // The notice above the check points at the launcher's Downgrade button, not at
 // Steam's Betas list, which is where it used to send people.

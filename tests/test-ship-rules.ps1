@@ -1,7 +1,7 @@
 <#
   test-ship-rules.ps1
 
-  Every file that has ever leaked in a pack or an installer stays out, and the
+  Every file that has ever leaked in a pack or the old installer stays out, and the
   rules that decide what leaves this machine still say what they mean.
 
   WHY THIS EXISTS. Ship-Rules.ps1 is the one list of what never leaves a
@@ -29,9 +29,11 @@
   of the shipped Publish-Update.ps1, the same way test-master-flag.ps1 lifts
   its functions out of Deploy-Gamemode.ps1, so it tests the real code.
 
-  THE LOOSE ART REPORT. Get-ShipLooseArt names, a folder at a time, the loose
-  textures and meshes an installer is about to carry that are neither ours nor
-  the collection's. On 22 September that was 547 MB nobody had accounted for.
+  THE LOOSE ART REPORT, Get-ShipLooseArt, named the loose textures and meshes
+  the old installer was about to carry that were neither ours nor the
+  collection's (547 MB on 22 September). It went with that installer and its
+  own scan of Ship-Rules (#4824); packs keep such files out by
+  Test-ShipNotOurs, which test-not-ours.ps1 holds.
 
   Where this machine has a pack baseline and a Profile\OwnGame\files.txt, it
   measures against them too, and says SKIP where it cannot.
@@ -646,46 +648,10 @@ Yes 'the next pack carries no script source and lists none as removed (#1227)' (
     -not $now.ContainsKey('Data\Source\Scripts\Actor.psc') -and $changed -notcontains 'Data\Source\Scripts\Actor.psc' -and $removed -notcontains 'Data\Scripts\Source\IED.psc')
 Yes 'and our overlay is neither changed nor removed' (($changed -notcontains 'Data\Platform\Plugins\thornswood-hud.js') -and ($removed -notcontains 'Data\Platform\Plugins\thornswood-hud.js'))
 
-# ---- the installer asks the same question ----------------------------------------
-$pkg = Get-Content -LiteralPath (Join-Path $Here 'scripts\release\Package-Thornswood.ps1') -Raw
-Yes 'Package-Thornswood.ps1 dot-sources Ship-Rules.ps1' ($pkg -match '\. \(Join-Path \$Here ''Ship-Rules\.ps1''\)')
-Yes 'and its filter loop leaves out what Test-ShipMachine claims' ($pkg -match 'if \(Test-ShipMachine \$rel\) \{')
-Yes 'and it reports the loose art it is about to ship' ($pkg -match '\$loose = Get-ShipLooseArt \$ship')
-
-# ---- the loose art report --------------------------------------------------------
-function Row([string]$rel, [long]$len) { return [pscustomobject]@{ Rel = $rel; Len = $len } }
-$ship = @(
-    (Row 'Data\textures\LoA Reborn Paladin Legendary\body.dds' 5000),
-    (Row 'Data\textures\LoA Reborn Paladin Legendary\sub\hands.dds' 3000),
-    (Row 'Data\Textures\LostArk\a.dds' 1000),
-    (Row 'Data\textures\lostark\b.dds' 500),
-    (Row 'Data\meshes\armor\commonclothes\travel.nif' 4000),
-    (Row 'Data\meshes\leftover.nif' 700),
-    (Row 'Data\meshes\interface\logo\logo.nif' 10562),
-    (Row 'Data\meshes\interface\logo\logo01ae.nif' 10562),
-    (Row 'Data\textures\interface\objects\Mainmenuwallpaper.dds' 8388736),
-    (Row 'Data\Scripts\rp_trapcactusscript.pex' 900),
-    (Row 'Data\Platform\UI\index.html' 2000),
-    (Row 'Data\texturesOld\x.dds' 50),
-    (Row 'Data\Thornswood-Content.esp' 64)
-)
-$loose = Get-ShipLooseArt $ship
-$by = @{}
-foreach ($l in $loose) { $by[$l.Folder] = $l }
-
-Yes 'one row per folder: LoA, LostArk, armor and the loose meshes' ($loose.Count -eq 4)
-Yes 'biggest first' ($loose.Count -ge 1 -and $loose[0].Folder -eq 'Data\textures\LoA Reborn Paladin Legendary')
-Yes 'a folder counts everything under it, subfolders too' ($by.ContainsKey('Data\textures\LoA Reborn Paladin Legendary') -and $by['Data\textures\LoA Reborn Paladin Legendary'].Files -eq 2 -and $by['Data\textures\LoA Reborn Paladin Legendary'].Bytes -eq 8000)
-Yes 'two spellings of one folder are one row' ($by.ContainsKey('Data\Textures\LostArk') -and $by['Data\Textures\LostArk'].Files -eq 2 -and $by['Data\Textures\LostArk'].Bytes -eq 1500)
-Yes 'files straight under Data\meshes are a row of their own' ($by.ContainsKey('Data\meshes') -and $by['Data\meshes'].Files -eq 1)
-Yes 'the menu backdrop is ours and is not reported' (-not $by.ContainsKey('Data\meshes\interface') -and -not $by.ContainsKey('Data\textures\interface'))
-Yes 'scripts, the front and our plugin are not loose art' (-not ($loose | Where-Object { $_.Folder -notlike 'Data\textures*' -and $_.Folder -notlike 'Data\meshes*' }))
-Yes 'a folder that only starts with textures is not textures' (-not ($loose | Where-Object { $_.Folder -like 'Data\texturesOld*' }))
-$none = Get-ShipLooseArt @((Row 'Data\meshes\interface\logo\logo.nif' 1), (Row 'Data\Scripts\a.pex' 1))
-Yes 'nothing to report is an empty list, not nothing' (($null -ne $none) -and $none.Count -eq 0)
-$one = Get-ShipLooseArt @((Row 'Data\meshes\MCE\robe.nif' 29))
-Yes 'one folder is still a list of one' ($one.Count -eq 1 -and $one[0].Folder -eq 'Data\meshes\MCE' -and $one[0].Bytes -eq 29)
+# ---- the menu backdrop ------------------------------------------------------------
 Yes 'the three files Go.ps1 writes are the three called ours' ((@($ShipOwnArt) | Where-Object { (Get-Content -LiteralPath (Join-Path $Here 'scripts\release\Go.ps1') -Raw).Contains("'" + $_ + "'") }).Count -eq 3)
+Yes 'and they are ours outside Data\Platform' (@($ShipOwnArt | Where-Object { -not (Test-ShipOurs $_) }).Count -eq 0)
+Yes 'no Get-ShipLooseArt is left: the old installer that read it went (#4824)' (-not (Get-Command Get-ShipLooseArt -ErrorAction SilentlyContinue))
 
 # ---- our menu files ---------------------------------------------------------------
 # The three paths in $ShipOursFiles that are not the plugins or the client
@@ -745,21 +711,15 @@ if ($baseline) {
 # so whether the folder is here at all is asked first.
 $filesRecord = $(if (Test-Path -LiteralPath $Root) { Join-Path $Root 'Profile\OwnGame\files.txt' } else { '' })
 if ($filesRecord -and (Test-Path -LiteralPath $filesRecord)) {
-    # What the installer carries under textures and meshes out of an own game
-    # folder: everything the record does not mark as the collection's (V).
+    # What the record does not mark as the collection's (V).
     $rows = @()
     foreach ($line in [IO.File]::ReadLines($filesRecord)) {
         $p = $line.Split([char[]]'|', 5)
         if ($p.Count -ne 5 -or $p[1] -eq 'V') { continue }
         $rows += [pscustomobject]@{ Rel = $p[4]; Len = [long]$p[2] }
     }
-    $measured = Get-ShipLooseArt $rows
-    $mf = 0; $mb = [long]0
-    foreach ($l in $measured) { $mf += $l.Files; $mb += $l.Bytes }
-    Write-Host ("      {0} holds {1:n0} loose file(s), {2:n1} MB, in {3} folder(s) that are not ours:" -f $filesRecord, $mf, ($mb / 1MB), $measured.Count)
-    foreach ($l in $measured) { Write-Host ("        {0,8:n1} MB {1,6:n0} file(s)  {2}" -f ($l.Bytes / 1MB), $l.Files, $l.Folder) }
     $oursThere = @($rows | Where-Object { @($ShipOwnArt) -contains $_.Rel })
-    Yes ("the record's {0} file(s) of our menu backdrop are not reported" -f $oursThere.Count) ((Get-ShipLooseArt $oursThere).Count -eq 0)
+    Yes ("the record's {0} file(s) of our menu backdrop are ours" -f $oursThere.Count) (@($oursThere | Where-Object { -not (Test-ShipOurs $_.Rel) }).Count -eq 0)
     $inRecord = @($rows | Where-Object { $_.Rel -ieq $bsa })
     if ($inRecord.Count) {
         Yes 'the record''s MarketplaceTextures.bsa is left out' (Test-ShipMachine $inRecord[0].Rel)

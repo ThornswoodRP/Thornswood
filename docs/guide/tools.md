@@ -152,7 +152,7 @@ Stay in `C:\Dev\Thornswood`. Each big folder has its own `README.md`. Open that 
 | `README.md` | The short map of the repository | `code .\README.md` |
 | `Developer-Guide.md` | This guide's index; its pages are in `docs\guide` | `code .\Developer-Guide.md` |
 | `launcher\app` | The launcher program | `Get-ChildItem launcher\app\*.cs` |
-| `launcher\ui.xaml` | The launcher window layout | `code .\launcher\ui.xaml` |
+| `launcher\app\MainWindow.axaml` | The launcher window layout | `code .\launcher\app\MainWindow.axaml` |
 | `game\gamemode.js` | The server rules | `code .\game\gamemode.js` |
 | `game\plugins` | Scripts that run in Skyrim | `Get-ChildItem game\plugins` |
 | `site\data\site` | The public website pages | `Get-ChildItem site\data\site` |
@@ -420,7 +420,7 @@ Thornswood
 
 | Folder | What it is for | Open this first |
 | --- | --- | --- |
-| `launcher` | The launcher window and the C# that runs it | [launcher/ui.xaml](../../launcher/ui.xaml), then [launcher/app/ARCHITECTURE.md](../../launcher/app/ARCHITECTURE.md) |
+| `launcher` | The launcher window and the C# that runs it | [launcher/app/MainWindow.axaml](../../launcher/app/MainWindow.axaml), then [launcher/app/ARCHITECTURE.md](../../launcher/app/ARCHITECTURE.md) |
 | `game` | What the server and the Skyrim client run for Thornswood | [game/gamemode.js](../../game/gamemode.js) |
 | `site` | The website program and the public pages | [site/server.js](../../site/server.js) and the modules in `site\lib`, then `site\data\site` |
 | `bot` | The Discord bot | [bot/README.md](../../bot/README.md) |
@@ -429,7 +429,7 @@ Thornswood
 | `tests` | One file per check. `node tests\the-name.js` runs it | the `tests` folder |
 | `docs` | How the feed, the gamemode, and the game's systems fit | [docs/README.md](../README.md) |
 | `records` | What a Ship compares the build to, and signing | [records/README.md](../../records/README.md) |
-| `installer` | The small setup program people download first | [installer/setup/README.md](../../installer/setup/README.md) |
+| `installer` | What the install hands over; the install itself is the launcher's first start | [installer/README.md](../../installer/README.md) |
 | `engine` | SkyMP source. Leave it until you are building the server | [engine/README.md](../../engine/README.md) |
 | `lore` | The world. It is writing, not the server rules | the `lore` folder |
 
@@ -447,7 +447,7 @@ Click a name to open the file. The line under it says what the file is for.
 | [README.md](../../README.md) | The short map of the repository |
 | [game/gamemode.js](../../game/gamemode.js) | The server's rules. Most game changes start here or in `game\data` |
 | [game/plugins/README.md](../../game/plugins/README.md) | The scripts that run inside Skyrim. The plugin files sit beside that README |
-| [launcher/ui.xaml](../../launcher/ui.xaml) | The launcher window: buttons, pages, and labels |
+| [launcher/app/MainWindow.axaml](../../launcher/app/MainWindow.axaml) | The launcher window: buttons, pages, and labels |
 | [launcher/app/ARCHITECTURE.md](../../launcher/app/ARCHITECTURE.md) | How the launcher starts, which class owns which job, and the path from Play to the game |
 | [site/server.js](../../site/server.js) | The website program: it starts the site, and `site\lib` holds one module per area |
 | [site/data/site](../../site/data/site) | The public pages, one markdown file each |
@@ -490,7 +490,7 @@ The bot scripts need Python 3.11 or newer (the bot runs on 3.12; Pillow 13 needs
 
 ### The .NET Framework
 
-Launcher code is C# 13, built with MSBuild from `launcher\app\Thornswood.csproj` (#498, switched 15 Oct, by Patrick's decision of 11 Oct); the runtime is .NET Framework 4.8.1, so features that need a newer runtime are out (the list is in [Settled design](settled-design.md)), and C# inside PowerShell scripts stays C# 5. The window is `launcher\ui.xaml`. How the launcher starts is `launcher\app\ARCHITECTURE.md`. The six shared files in `launcher\app` are named in [D. Visual Studio Code](#d-visual-studio-code).
+Launcher code is C# on .NET 10 with Avalonia, published with Native AOT from `launcher\app\Thornswood.csproj` (#4823, Patrick's decision of 26 Oct), so it stays AOT safe (the rules are in [Settled design](settled-design.md)), and C# that Windows PowerShell 5.1 compiles with Add-Type stays C# 5. The window is `launcher\app\MainWindow.axaml`. How the launcher starts is `launcher\app\ARCHITECTURE.md`. The six shared files in `launcher\app` are named in [D. Visual Studio Code](#d-visual-studio-code).
 
 ### SkyMP
 
@@ -507,7 +507,6 @@ Open these in Visual Studio Code. `Ctrl+P`, then the file name.
 | [site/public/home.html](../../site/public/home.html) | The public page at https://thornswood.net |
 | [site/public/index.html](../../site/public/index.html) | The staff hub at https://thornswood.net/hub |
 | [game/ui/index.html](../../game/ui/index.html) | The page Skyrim Platform opens over the game |
-| [launcher/voice-host.html](../../launcher/voice-host.html) | The voice page, which the launcher hosts |
 
 In `home.html`, the `<title>` is the tab name. Two `<link>` tags pull in the stylesheets, `fonts.css` and `home.css`. The page loads nothing from another site. Keep it that way: a test fails if a `src`, a `url()`, or a stylesheet link points anywhere else.
 

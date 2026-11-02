@@ -31,13 +31,13 @@
     4. The words: the uninstall box, the privacy page and LocalKeep.Days say
        the same 30 days and the same list.
 
-  HOW. Part 1 and 3 compile every file in launcher\app with a driver into one
-  program, with the compiler the build runs (tests\Launcher-Csc.ps1), and run
-  it on a scratch install. The handover script is run by cmd, waiting on a
-  process that has already ended; the farewell is run in Windows PowerShell
-  with its message box line swapped for printing the message. Off Windows
-  that compiler, cmd and Windows PowerShell are not there, so those parts say
-  SKIP and the rest is checked.
+  HOW. Part 1 and 3 build the whole launcher with a driver into one program,
+  the way the project builds (the .NET 10 SDK, tests\Launcher-Csc.ps1), and
+  run it on a scratch install. Part 1 runs everywhere. In part 3 the handover
+  script is run by cmd, waiting on a process that has already ended, and the
+  farewell is run in Windows PowerShell with its message box line swapped for
+  printing the message. Off Windows cmd and Windows PowerShell are not there,
+  so part 3 says SKIP and the rest is checked.
 
   Nothing outside its own scratch folder is read or written, beyond reading
   the repository.
@@ -46,7 +46,7 @@
 param([string]$Repo, [string]$Scratch)
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # builds launcher code the way the project does (#498, #4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 if (-not $Repo) { $Repo = Split-Path -Parent (Split-Path -Parent $Here) }
@@ -71,7 +71,7 @@ $keepSrc = Read 'launcher\app\LocalKeep.cs'
 $shellSrc = Read 'launcher\app\Shell.cs'
 $uninstallSrc = Read 'launcher\app\Uninstall.cs'
 $discordSrc = Read 'launcher\app\Discord.cs'
-$xaml = Read 'launcher\ui.xaml'
+$xaml = Read 'launcher\app\MainWindow.axaml'
 $privacy = (Read 'site\data\site\privacy.md') -replace "`r`n", "`n"
 
 # ---- 2: the start, by text ---------------------------------------------------
@@ -93,7 +93,7 @@ $targets = [regex]::Match($uninstallSrc, '(?s)public static string\[\] Targets\(
 Yes 'Uninstall.Targets is the list Begin hands back' ($targets.Success -and $uninstallSrc -match 'return Targets\(keepSaves, deleteMods\);')
 Yes 'and with the saves kept it takes LocalKeep.NotSaves' ($targets.Groups[1].Value -match '(?s)if \(!keepSaves\)\s*\{[^}]*ProfileDir[^}]*\}\s*else\s*\{[^}]*leave\.AddRange\(LocalKeep\.NotSaves\(\)\);')
 Yes 'Discord.Forget deletes the same files the uninstall does (Discord.AccountFiles)' ($discordSrc -match '(?s)public static void Forget\(\)\s*\{\s*foreach \(string f in AccountFiles\(Folder\)\)')
-Yes 'NotSaves takes the Discord files from Discord.AccountFiles, the voice browser''s folder from Voice, and the old music browser''s folder' ($keepSrc -match 'Discord\.AccountFiles\(Paths\.ProfileDir\)' -and $keepSrc -match 'Voice\.BrowserDir' -and $keepSrc -match 'Path\.Combine\(Paths\.ProfileDir, "MusicBrowser"\)')
+Yes 'NotSaves takes the Discord files from Discord.AccountFiles, and the old voice and music browsers'' folders' ($keepSrc -match 'Discord\.AccountFiles\(Paths\.ProfileDir\)' -and $keepSrc -match 'Path\.Combine\(Paths\.ProfileDir, "VoiceBrowser"\)' -and $keepSrc -match 'Path\.Combine\(Paths\.ProfileDir, "MusicBrowser"\)')
 
 # ---- 4: the words -------------------------------------------------------------
 $box = [regex]::Match($xaml, 'x:Name="ChkKeepSaves"[^>]*/>\s*<TextBlock[^>]*Text="([^"]*)"')
@@ -109,26 +109,16 @@ Yes 'the privacy page has a section on what the launcher keeps on the PC' $onPc.
 $sec = $onPc.Groups[1].Value -replace '\s+', ' '
 Yes ('it says the log keeps each line for ' + $days + ' days') ($sec -match ('launcher\.log, the one described above\. Each line is kept for ' + $days + ' days'))
 Yes ('and the support reports are kept for ' + $days + ' days') ($sec -match ('Support reports.*Each is kept for ' + $days + ' days'))
-Yes 'it names the Discord sign-in, name and picture, and the browsers'' data, until uninstall' ($sec -match 'Your Discord sign-in.*name and picture.*until you uninstall' -and $sec -match 'voice browser''s data.*until you uninstall')
+Yes 'it names the Discord sign-in, name and picture, until uninstall' ($sec -match 'Your Discord sign-in.*name and picture.*until you uninstall')
 Yes 'it says the box keeps only the saves and settings and the rest goes either way' ($sec -match 'Keep this build''s saves and settings' -and $sec -match 'go either way')
 # The launcher.log entry among the logs sent when a session ends (#3627).
 $logPara = [regex]::Match($privacy, '(?s)\n- \*\*launcher\.log\*\*(.*?)\n(?:- |\n)').Groups[1].Value -replace '\s+', ' '
 Yes 'the log''s paragraph names the voice address and port, the profile number and the microphone' ($logPara -match 'address and port' -and $logPara -match 'profile number' -and $logPara -match 'microphone')
 Yes ('the keeping times say the copy on the PC keeps ' + $days + ' days') (($privacy -replace '\s+', ' ') -match ('The copy on your PC keeps each line for ' + $days + ' days'))
 
-# ---- 1 and 3: the launcher, compiled and run -----------------------------------
-if (-not $OnWindows) {
-    Write-Host 'SKIP  the launcher''s code, compiled and run on a scratch install: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, and the handover script is cmd''s, which only Windows has'
-    Done
-}
-$winps = Get-WindowsPowerShell
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
-$refs = @(); $missing = @()
-foreach ($n in @($LauncherNeeded)) { $p = Find-LauncherRef $n; if ($p) { $refs += $p } else { $missing += $n } }
-foreach ($n in @($LauncherLib)) { $p = $n; if (Test-Path -LiteralPath $p) { $refs += $p } else { $missing += $n } }
-Yes ('every reference Thornswood.csproj names is on this machine' + $(if ($missing.Count) { ', missing ' + ($missing -join ', ') } else { '' })) ($refs.Count -gt 0 -and $missing.Count -eq 0)
-if ($missing.Count -or $refs.Count -eq 0) { Done }
+# ---- 1 and 3: the launcher, built and run --------------------------------------
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 $T = Join-Path $Scratch ('local-keep-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 $null = New-Item -ItemType Directory -Force -Path $T
@@ -170,7 +160,8 @@ namespace Thornswood
             Log(Path.Combine(t, "log"), now);
             Reports(Path.Combine(t, "reports"), now);
             Tidy(Path.Combine(t, "tidy"), now);
-            Uninstalls(t);
+            // The handover script is cmd's, so the uninstall runs on Windows.
+            if (args.Length > 1 && args[1] == "uninstall") Uninstalls(t);
 
             Console.WriteLine("driver: done, " + fails + " failed");
             return fails == 0 ? 0 : 1;
@@ -254,7 +245,7 @@ namespace Thornswood
             string p = Paths.ProfileDir;
             Put(Paths.LogFile, "2026-10-26 12:00:00  a line\r\n");
             foreach (string f in Discord.AccountFiles(p)) Put(f, "account");
-            Put(Path.Combine(Voice.BrowserDir, "EBWebView\\Default\\Cache\\data_0"), "cache");
+            Put(Path.Combine(p, "VoiceBrowser\\EBWebView\\Default\\Cache\\data_0"), "cache");
             Put(Path.Combine(p, "MusicBrowser\\EBWebView\\Local State"), "state");
             Put(Path.Combine(Diag.ReportDir, "thornswood-20261026-1200.zip"), "zip");
             saves = new string[]
@@ -301,7 +292,7 @@ namespace Thornswood
             Yes("launcher.log is gone", Gone(Paths.LogFile));
             foreach (string f in Discord.AccountFiles(Paths.ProfileDir))
                 Yes("Profile\\" + Path.GetFileName(f) + " is gone", Gone(f));
-            Yes("Profile\\VoiceBrowser is gone", Gone(Voice.BrowserDir));
+            Yes("Profile\\VoiceBrowser, the old voice browser's folder, is gone", Gone(Path.Combine(Paths.ProfileDir, "VoiceBrowser")));
             Yes("Profile\\MusicBrowser, the old music browser's folder, is gone", Gone(Path.Combine(Paths.ProfileDir, "MusicBrowser")));
             Yes("Profile\\Reports is gone", Gone(Diag.ReportDir));
             foreach (string s in saves)
@@ -329,25 +320,13 @@ namespace Thornswood
 }
 '@
 
-$build = Join-Path $T 'build'
-$null = New-Item -ItemType Directory -Force -Path $build
-$driverCs = Join-Path $build 'LocalKeepTest.cs'
-[IO.File]::WriteAllText($driverCs, $driver, (New-Object Text.UTF8Encoding($false)))
-$exe = Join-Path $build 'LocalKeepTest.exe'
-$cs = @(Get-ChildItem (Join-Path $App '*.cs') -File | ForEach-Object { $_.FullName })
-$cscArgs = @('/noconfig', '/nologo', '/target:exe', '/platform:anycpu', "/langversion:$LauncherLangVersion", '/nowarn:0649,1701,0414,0169', "/out:$exe", '/main:Thornswood.LocalKeepTest')
-foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-$cscArgs += $cs
-$cscArgs += $driverCs
-$old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-$said = & $LauncherCsc @cscArgs 2>&1
-$rc = $LASTEXITCODE
-$ErrorActionPreference = $old
-Yes ('the launcher''s {0} source files and the driver compile with the build''s compiler' -f $cs.Count) ($rc -eq 0 -and (Test-Path -LiteralPath $exe))
-if ($rc -ne 0) { $said | Where-Object { "$_" -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" }; Done }
-foreach ($r in $refs) { if ($r -like '*webview2*') { Copy-Item -LiteralPath $r -Destination $build -Force } }
+$dll = $null
+try { $dll = Build-LauncherCode -Launcher -Source $driver -Exe -Main 'Thornswood.LocalKeepTest' }
+catch { ($_.Exception.Message -split "`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
+Yes 'the whole launcher and the driver build the way the project does' ($null -ne $dll)
+if ($null -eq $dll) { Done }
 
-$out = & $exe $T 2>&1 | ForEach-Object { "$_" }
+$out = Invoke-LauncherExe $dll $T $(if ($OnWindows) { 'uninstall' } else { 'tidy-only' }) 2>&1 | ForEach-Object { "$_" }
 $farewell = $null; $stuck = $null; $rootKept = $null
 foreach ($l in $out) {
     if ($l -match '^PASS  ') { $script:pass++; Write-Host $l }
@@ -359,6 +338,12 @@ foreach ($l in $out) {
     else { Write-Host $l }
 }
 Yes 'the driver ran and reported' (@($out | Where-Object { $_ -match '^driver: ' }).Count -eq 1)
+if (-not $OnWindows) {
+    Write-Host 'SKIP  3, the uninstall on a scratch install: its handover script is cmd''s and its farewell is Windows PowerShell''s, which only Windows has'
+    try { Remove-Item -LiteralPath $T -Recurse -Force } catch { Write-Host "      (scratch left at $T)" }
+    Done
+}
+$winps = Get-WindowsPowerShell
 
 # ---- 3: the farewell, run with its message printed instead of shown -----------
 function Farewell([string]$note) {

@@ -37,13 +37,15 @@
          first page of releases), stays (#4177);
        - a draft is one DELETE, DRAFT-DELETED; one gone is DRAFT-GONE; a
          published release is refused;
-       - a launcher draft has its three files fetched and checked by
-         Test-ReleaseFiles.ps1 -RequireSigned, then is published as not the
-         latest, a four part version as a prerelease, PUBLISHED; one already
-         published is ALREADY-PUBLISHED; a failed check, a missing file, two
-         releases on the tag, a draft built from another commit than the
-         tag names, a draft not named for the launcher and a tag that is not
-         v<version> each leave it a draft.
+       - a launcher draft has its SHA256SUMS fetched, then every file it
+         names (Thornswood.exe and the native libraries beside it, #4823),
+         all checked by Test-ReleaseFiles.ps1 -RequireSigned, then is
+         published as not the latest, a four part version as a prerelease,
+         PUBLISHED; one already published is ALREADY-PUBLISHED; a failed
+         check, a missing SHA256SUMS or file it names, a SHA256SUMS that does
+         not name Thornswood.exe, two releases on the tag, a draft built from
+         another commit than the tag names, a draft not named for the
+         launcher and a tag that is not v<version> each leave it a draft.
        - a launcher draft GitHub took off its tag (untagged-<hex>) is one
          PATCH naming tag_name and target_commitish together, then read
          back, RETAGGED; a tag that already has its release is
@@ -164,7 +166,12 @@ function Invoke-WebRequest {
     }
     if ($Method -eq 'GET' -and $p -match '^releases/assets/(\d+)$') {
         if ($s.assetCode -ne 200) { return (A $s.assetCode @{ message = 'no' }) }
-        [IO.File]::WriteAllText($OutFile, "asset $($Matches[1])")
+        # An asset with a body (SHA256SUMS) is those bytes; any other is a
+        # line that names it.
+        $id = $Matches[1]
+        $one = @(@($s.releases) | ForEach-Object { @($_.assets) } | Where-Object { $_ -is [hashtable] -and [string]$_['id'] -eq $id })
+        $text = if ($one.Count -and $one[0].ContainsKey('body')) { [string]$one[0]['body'] } else { "asset $id" }
+        [IO.File]::WriteAllText($OutFile, $text)
         return (A 200 $null)
     }
     if ($Method -eq 'GET' -and $p -match '^releases/(\d+)$') {
@@ -329,9 +336,12 @@ exit [int]$env:TS_TRF_RC
 $global:TSscript = Join-Path $Tree 'scripts/ops/Set-Ref.ps1'
 $env:TS_TRF = Join-Path $Tree 'trf.json'
 $env:TS_TRF_RC = '0'
+# A launcher draft as release.yml makes it since #4823: the exe, a native
+# library beside it, and SHA256SUMS naming both.
+$sumsBoth = ('a' * 64) + "  Thornswood.exe`n" + ('b' * 64) + "  libSkiaSharp.dll`n"
 function Launcher([string]$v, $more = @{}) {
     $r = [ordered]@{ id = 429409837; tag_name = $v; name = "Launcher $v"; draft = $true; target_commitish = $main
-        assets = @(@{ id = 11; name = 'Thornswood.exe' }, @{ id = 12; name = 'setup-stub.exe' }, @{ id = 13; name = 'SHA256SUMS' }) }
+        assets = @(@{ id = 11; name = 'Thornswood.exe' }, @{ id = 12; name = 'libSkiaSharp.dll' }, @{ id = 13; name = 'SHA256SUMS'; body = $sumsBoth }) }
     foreach ($k in $more.Keys) { $r[$k] = $more[$k] }
     return @{ releases = @([pscustomobject]$r); refs = @{ "tags/$v" = @{ type = 'tag'; sha = $tagObj } }; tagObjects = @{ $tagObj = $main } }
 }
@@ -340,8 +350,10 @@ try {
     $w = @(Writes $r)
     $trf = if (Test-Path -LiteralPath $env:TS_TRF) { [IO.File]::ReadAllText($env:TS_TRF) | ConvertFrom-Json } else { $null }
     Yes ("a launcher draft whose files pass: exit 0, PUBLISHED ($($r.Code))") ($r.Code -eq 0 -and $r.Out -match "Set-Ref::PUBLISHED v1\.2\.11 $main")
-    Yes '  its three files fetched by id and checked with -RequireSigned, each under its own name' (
-        $trf -and $trf.Signed -and (@($trf.Files) -join ',') -eq 'setup-stub.exe=asset 12,SHA256SUMS=asset 13,Thornswood.exe=asset 11')
+    $files = @(if ($trf) { @($trf.Files) })
+    Yes '  SHA256SUMS and each file it names fetched by id and checked with -RequireSigned, each under its own name' (
+        $trf -and $trf.Signed -and $files.Count -eq 3 -and $files -contains 'Thornswood.exe=asset 11' -and
+        $files -contains 'libSkiaSharp.dll=asset 12' -and $files -contains ('SHA256SUMS=' + $sumsBoth))
     Yes '  then one PATCH: published, not the latest, not a prerelease' ($w.Count -eq 1 -and $w[0].Method -eq 'PATCH' -and $w[0].Path -eq 'releases/429409837' -and
         $w[0].Body.draft -eq $false -and $w[0].Body.make_latest -eq 'false' -and $w[0].Body.prerelease -eq $false)
     Yes '  and the files it fetched are gone again' (@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Filter 'set-ref-*' -Directory -ErrorAction SilentlyContinue).Count -eq 0)
@@ -357,8 +369,13 @@ try {
     $l = Launcher 'v1.2.11'; $l.assetCode = 404
     $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.11'; REF_COMMIT = '' } $l
     Yes 'a file GitHub does not hand over: it stays a draft' ($r.Code -eq 1 -and @(Writes $r).Count -eq 0)
-    $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.11'; REF_COMMIT = '' } (Launcher 'v1.2.11' @{ assets = @(@{ id = 11; name = 'Thornswood.exe' }, @{ id = 13; name = 'SHA256SUMS' }) })
-    Yes 'a draft without setup-stub.exe: it stays a draft, nothing fetched' ($r.Code -eq 1 -and @($r.Calls | Where-Object { $_.Path -like 'releases/assets/*' }).Count -eq 0 -and @(Writes $r).Count -eq 0)
+    $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.11'; REF_COMMIT = '' } (Launcher 'v1.2.11' @{ assets = @(@{ id = 11; name = 'Thornswood.exe' }, @{ id = 12; name = 'libSkiaSharp.dll' }) })
+    Yes 'a draft without SHA256SUMS: it stays a draft, nothing fetched' ($r.Code -eq 1 -and @($r.Calls | Where-Object { $_.Path -like 'releases/assets/*' }).Count -eq 0 -and @(Writes $r).Count -eq 0)
+    $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.11'; REF_COMMIT = '' } (Launcher 'v1.2.11' @{ assets = @(@{ id = 11; name = 'Thornswood.exe' }, @{ id = 13; name = 'SHA256SUMS'; body = $sumsBoth }) })
+    Yes 'a draft without a library its SHA256SUMS names: it stays a draft' ($r.Code -eq 1 -and $r.Out -match 'exactly one libSkiaSharp\.dll' -and @(Writes $r).Count -eq 0)
+    $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.11'; REF_COMMIT = '' } (Launcher 'v1.2.11' @{ assets = @(@{ id = 12; name = 'libSkiaSharp.dll' }, @{ id = 13; name = 'SHA256SUMS'; body = (('b' * 64) + "  libSkiaSharp.dll`n") }) })
+    Yes 'a SHA256SUMS that does not name Thornswood.exe: it stays a draft, the library not fetched' ($r.Code -eq 1 -and $r.Out -match 'does not name Thornswood\.exe' -and
+        @($r.Calls | Where-Object { $_.Path -like 'releases/assets/*' }).Count -eq 1 -and @(Writes $r).Count -eq 0)
     $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.11'; REF_COMMIT = '' } (Launcher 'v1.2.11' @{ target_commitish = $other })
     Yes 'a draft built from another commit than the tag names: it stays a draft' ($r.Code -eq 1 -and $r.Out -match 'tag moved' -and @(Writes $r).Count -eq 0)
     $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.11'; REF_COMMIT = '' } (Launcher 'v1.2.11' @{ name = 'Thornswood main release' })

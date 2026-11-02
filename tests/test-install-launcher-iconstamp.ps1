@@ -36,6 +36,9 @@ try {
         $dir = Join-Path $root 'Launcher'
         New-Item -ItemType Directory -Force -Path $dir, $from | Out-Null
         [IO.File]::WriteAllText((Join-Path $from 'Thornswood.exe'), "stand-in $case")
+        # The two icons the exe embeds, which Build-Launcher.ps1 writes beside
+        # it and Install-Launcher.ps1 reads (#887, #4823).
+        foreach ($n in 'app.ico', 'app-dev.ico') { Copy-Item -LiteralPath (Join-Path $RepoDir ('launcher\' + $n)) -Destination (Join-Path $from $n) }
         if ($case -eq 'empty') { [IO.File]::WriteAllBytes((Join-Path $dir '.iconstamp'), [byte[]]@()) }
         # Continue, so the child's stderr comes back as lines rather than stopping here.
         $ErrorActionPreference = 'Continue'

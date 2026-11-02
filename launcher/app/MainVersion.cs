@@ -1,5 +1,4 @@
 using System;
-using System.Net;
 
 namespace Thornswood
 {
@@ -14,8 +13,8 @@ namespace Thornswood
     ///
     /// So the tab asks main's own feed when it is shown (ShellNews.cs), and
     /// this is the asking. It is a feed read like every other one: https to a
-    /// host on the list (CheckUrl), the shared Client with its ten second
-    /// timeout, gzip, TLS 1.2, and VersionDoc.Parse. The feed itself carries no
+    /// host on the list (CheckUrl), the feed's request (FeedGet, through
+    /// Http.cs) with its ten second wait and gzip, and VersionDoc.Parse. The feed itself carries no
     /// signature and no checksum to check, the same as the launcher's own feed;
     /// https to thornswood.net is what it is trusted on. It never touches the
     /// update check's cache (Updater.cs, cached), which holds this channel's
@@ -34,7 +33,6 @@ namespace Thornswood
         /// </summary>
         public static string MainLauncherVersion(Config cfg)
         {
-            ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072; // Tls12 added, never replaced (#1360)
             CheckUrl(MainFeed);
             return MainVersionAt(cfg, MainFeed);
         }
@@ -46,15 +44,10 @@ namespace Thornswood
         /// </summary>
         static string MainVersionAt(Config cfg, string url)
         {
-            using (var wc = Client(cfg, false, url))
-            {
-                var q = wc as Quick;
-                if (q != null) q.Gzip = true;
-                VersionDoc doc = VersionDoc.Parse(wc.DownloadData(url));
-                string v = (doc == null || doc.launcherVersion == null) ? "" : doc.launcherVersion.Trim();
-                if (v.Length == 0) throw new Exception("main's feed names no launcher version");
-                return v;
-            }
+            VersionDoc doc = VersionDoc.Parse(FeedGet(cfg, false, url, true));
+            string v = (doc == null || doc.launcherVersion == null) ? "" : doc.launcherVersion.Trim();
+            if (v.Length == 0) throw new Exception("main's feed names no launcher version");
+            return v;
         }
     }
 }

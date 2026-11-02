@@ -9,9 +9,9 @@
 // collection in Vortex is required, told people the password was in Discord
 // when the build carries it, described an F2 party menu that no plugin binds,
 // sent problems to one named person, and broke the repo's own rule against em
-// dashes five times. installer\READ ME FIRST.txt was worse, because it is not a
-// leftover: Package-Thornswood.ps1 copies it into every installer, and it
-// opened with the old mod's name, named its setup program and told a new
+// dashes five times. installer\READ ME FIRST.txt was worse, because it was not
+// a leftover: the old installer's Package-Thornswood.ps1 copied it into every
+// installer, and it opened with the old mod's name, named its setup program and told a new
 // customer to ask in the Discord for a password. config.example.json still
 // pointed at the old box (192.135.119.166, port 25565) and the old product's
 // update repository. SETUP.md walked a reader through making a repository
@@ -97,13 +97,13 @@ if (readme !== null) {
 }
 
 // ------------------------------------------------------ READ ME FIRST.txt
-// Shipped, so it is rewritten and never deleted. Package-Thornswood.ps1 only
-// prints a yellow line when it is missing and carries on, which is an
-// installer with no read me that nobody notices.
+// Kept while it shipped: the old installer's Package-Thornswood.ps1 copied it
+// into every installer until #4824. Velopack's Setup.exe carries no loose
+// page and opens the launcher, whose install window says each step, so it
+// went with the batch files it named, and a copy of the join guide that
+// nothing ships cannot drift from it. installer\README.md says so and points
+// at the join guide, which is what a person reads now.
 const RMF = 'installer/READ ME FIRST.txt';
-const pkg = read('scripts/release/Package-Thornswood.ps1');
-yes('Package-Thornswood.ps1 still copies READ ME FIRST.txt into the installer',
-    pkg !== null && /foreach\s*\(\$f in [^)]*'READ ME FIRST\.txt'/.test(pkg));
 
 let tracked = null;
 try {
@@ -112,22 +112,11 @@ try {
 } catch (e) {
   console.log('SKIP  git ls-files did not answer, so the tracked-file checks are left out: ' + e.message);
 }
-if (tracked) yes(RMF + ' is tracked, so a fresh clone can build the installer', tracked.indexOf(RMF) >= 0);
-
-const rmf = read(RMF);
-yes(RMF + ' is there', rmf !== null);
-if (rmf !== null) {
-  clean(RMF, rmf);
-  yes(RMF + ' names the setup program Package-Thornswood.ps1 builds, Thornswood-Setup.exe',
-      /Thornswood-Setup\.exe/.test(rmf) && /Thornswood-Setup\.exe/.test(pkg || ''));
-  yes(RMF + ' says the collection comes through Vortex, as join.md does',
-      /Vortex/.test(rmf) && /collection/i.test(rmf));
-  yes(RMF + ' names build 1.6.1170 and the launcher\'s Downgrade button',
-      /1\.6\.1170/.test(rmf) && /Downgrade/.test(rmf));
-  yes(RMF + ' points at the join guide on the site', /https:\/\/thornswood\.net\/join/.test(rmf));
-  yes(RMF + ' does not tell anybody to ask for a password' + where(rmf, /ask[^.]*password/i),
-      !/ask[^.]*password/i.test(rmf));
-}
+if (tracked) yes(RMF + ' is not tracked (#4824)', tracked.indexOf(RMF) < 0);
+yes(RMF + ' is gone', read(RMF) === null);
+const instReadme = read('installer/README.md') || '';
+yes('installer/README.md says what a person reads is the join guide on the site',
+    /\bhttps:\/\/thornswood\.net\/join\b/.test(instReadme) && instReadme.indexOf('site\\data\\site\\join.md') >= 0);
 
 // ------------------------------------------------------ config.example.json
 // Either gone or the same as what the launcher defaults to. Config.cs is the

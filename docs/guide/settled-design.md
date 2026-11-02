@@ -89,28 +89,29 @@ Part of the [Developer Guide](../../Developer-Guide.md), the index of every page
   (issue #440), along with the forwarding copies in `tools\`. The files a
   machine kept in `tools\` moved on 29 Sep (signing.json to `records\signing`,
   the setup stub to `out`, the rest to `local`) and the folder is gone.
-- The launcher builds with MSBuild from its project files, at C# 13.
-  Decided by Patrick on 11 Oct: option C on #498, switch the build fully,
-  and in his words "also we can lift the C# 5 rule"; the switch went in on
-  15 Oct, once the VPS build runners had the Build Tools (option A, 12 Oct).
-  `scripts\release\Build-Launcher.ps1` runs MSBuild on
-  `launcher\app\Thornswood.csproj` and `installer\setup\Setup.csproj` and
-  has no other way; the in-box .NET Framework 4 csc it used to call, and
-  the C# 5 limit that came with it (the rule was always about that compiler,
-  never the framework, #499), are gone. `LangVersion` in both project files
-  is 13.0, the newest the Visual Studio 2022 Build Tools compiler offers.
-  The runtime is still .NET Framework 4.8.1, so the C# features that need a
-  newer runtime compile but do not work here: default interface methods,
-  static abstract interface members, Index and Range (`^1`, `a..b`), and
-  `init` or `required` members, whose attribute types Framework lacks. The
-  harnesses compile launcher files with the same compiler at the same
-  version (`tests\Launcher-Csc.ps1`). C# inside PowerShell scripts
-  (`Add-Type`, which Windows PowerShell 5.1 compiles with the Framework
-  compiler, as in `scripts\dev\Check-Secrets.ps1`) stays C# 5. So do the two
-  launcher files a script compiles that way: `launcher\app\Signature.cs`
-  (`Assert-PublishSigned.ps1`) and `launcher\app\VortexProfileState.cs`
-  (`scripts\mods\LoadOrder.ps1`); `tests\test-signer-check.ps1` and
-  `tests\test-vortex-profile-state.ps1` compile them at C# 5.
+- The launcher is Avalonia on .NET 10, Windows only, self-contained and
+  published with Native AOT, and Velopack installs and updates it. Decided
+  by Patrick on 26 Oct 2026 (#3209, docs\studies\launcher-stack\README.md):
+  the stack is Avalonia on .NET 10, the install moves into compiled code and
+  Velopack, and the game files update through Velopack with the feed's
+  checks rebuilt on top of it. It replaced the WPF launcher on the .NET
+  Framework 4.8.1 that MSBuild built (#498) in one change (#4823, #4824,
+  #4825), with nothing kept for the old one.
+  `scripts\release\Build-Launcher.ps1` runs `dotnet publish` on
+  `launcher\app\Thornswood.csproj` (win-x64, Native AOT, which publishes on
+  Windows only) and has no other way. `LangVersion` is latest. Code stays
+  AOT safe: System.Text.Json with a source-generated context, LibraryImport
+  or DllImport, generated COM interfaces, no reflection serializers and no
+  `Assembly.Location`; the project's AOT analyzers say when a change is not.
+  The harnesses build launcher files with the same .NET SDK at the same
+  settings, on any machine (`tests\Launcher-Csc.ps1`,
+  `tests\launcher-csc.js`). C# inside a script that Windows PowerShell 5.1
+  compiles with `Add-Type` (the Framework compiler, as in
+  `scripts\dev\Check-Secrets.ps1`) stays C# 5, and so do the launcher files
+  such a script compiles: `launcher\app\VortexProfileState.cs`
+  (`scripts\mods\LoadOrder.ps1`) and the others `tests\Framework-Csc.ps1`
+  names; `tests\test-vortex-profile-state.ps1`, `test-2791` and `test-2827`
+  hold them to it.
 - Every change goes out as one complete release: launcher, game files and
   server together, never a half.
 

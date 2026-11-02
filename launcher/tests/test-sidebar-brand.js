@@ -26,7 +26,7 @@
 // second line cannot be the one that runs out. Centered Dev is still inside
 // that first-line width.
 //
-// Read only. It reads launcher\ui.xaml and launcher\app\Shell.cs.
+// Read only. It reads launcher\app\MainWindow.axaml and launcher\app\Shell.cs.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -42,7 +42,7 @@ function yes(what, cond) {
   else { fail++; console.log('FAIL  ' + what); }
 }
 
-const XAML = read(path.join('launcher', 'ui.xaml'));
+const XAML = read(path.join('launcher', 'app', 'MainWindow.axaml'));
 const SHELL = read(path.join('launcher', 'app', 'Shell.cs'));
 
 function between(src, from, to) {
@@ -133,7 +133,7 @@ yes('TxtBrandSmall\'s live text is still the one-line word Thornswood',
 yes('and it still uses Constantia at 17 with small capitals and the ink brush',
     attr(brandTag[0], 'FontFamily') === 'Constantia, Georgia' &&
     attr(brandTag[0], 'FontSize') === '17' &&
-    attr(brandTag[0], 'Typography.Capitals') === 'SmallCaps' &&
+    attr(brandTag[0], 'FontFeatures') === '+smcp' &&
     attr(brandTag[0], 'Foreground') === '{DynamicResource Ink}');
 yes('it wraps, so a newline can put Dev under the name, and it has no width that would break Thornswood',
     attr(brandTag[0], 'TextWrapping') === 'Wrap' &&

@@ -6,8 +6,9 @@
   #5179, the plan's part 7: the launcher's number comes from the build. It was
   a line in launcher\app\Updater.cs that a pull request of its own moved
   (Bump-Version.ps1), four times in the last hundred merges on 31 Oct 2026.
-  Now git holds 0.0.0 there and scripts\release\LauncherVersion.ps1 works the
-  number out from when the launcher's sources last changed.
+  Now scripts\release\LauncherVersion.ps1 works the number out from when the
+  launcher's sources last changed, and the build gives it to the exe as
+  -p:Version (#4825): no source file holds it.
 
   This drives the real LauncherVersion.ps1 against a scratch git repository
   whose commits it dates itself, and holds it to the rule its header gives:
@@ -23,8 +24,11 @@
     6. a shallow checkout and a repository with no change stop, and say why;
     7. each part fits in 0 to 65534, the most a Windows file version holds,
        up to the last minute of 2099;
-    8. Updater.cs in this repository holds 0.0.0, and Ship.ps1 fingerprints
-       the same files the number is worked out from.
+    8. no source file in this repository holds the number: Updater.cs reads
+       it from the exe's own version, a bare build of the project is 0.0.0,
+       Build-Launcher.ps1 hands the number to the compile as -p:Version, and
+       Publish-Update.ps1 records the number it is given; Ship.ps1
+       fingerprints the same files the number is worked out from.
 
   Read only apart from its own folder under TEMP, which it removes.
 #>
@@ -56,11 +60,20 @@ if (-not (Test-Path -LiteralPath $lib)) { Done }
 
 # ---- 8. this repository ------------------------------------------------------
 $updater = [IO.File]::ReadAllText((Join-Path $Repo 'launcher\app\Updater.cs'))
-Yes 'Updater.cs in git holds 0.0.0, the placeholder a build writes over' (Test-LauncherVersionPlaceholder $updater)
-Yes '  and a number a build wrote in is not taken for it' (-not (Test-LauncherVersionPlaceholder ($updater -replace '"0\.0\.0"', '"2026.1101.1745"')))
+Yes 'Updater.cs holds no number: its Version is the exe''s own (BuiltVersion)' (
+    $updater.Contains('public static readonly string Version = BuiltVersion();') -and
+    $updater.Contains('typeof(Updater).Assembly.GetName().Version') -and
+    $updater -notmatch 'Version\s*=\s*"\d+\.\d+\.\d+')
+$proj = [IO.File]::ReadAllText((Join-Path $Repo 'launcher\app\Thornswood.csproj'))
+Yes '  a bare build of the project is 0.0.0' ($proj.Contains("<Version Condition=`"'`$(Version)' == ''`">0.0.0</Version>"))
+$bl = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Build-Launcher.ps1'))
+Yes '  Build-Launcher.ps1 gives the compile the number as -p:Version, worked out here unless given' (
+    $bl.Contains('"-p:Version=$Version"') -and $bl.Contains('Get-LauncherVersion -RepoDir'))
+$pub = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Publish-Update.ps1'))
+Yes '  and Publish-Update.ps1 records no launcher number and reads no source file for one (#4825)' (
+    -not $pub.Contains('$VersionOverride') -and -not $pub.Contains("launcher\app\Updater.cs'"))
 $ship = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Ship.ps1'))
-Yes 'Ship.ps1 loads LauncherVersion.ps1' ($ship -match "\. \(Join-Path \`$Here 'LauncherVersion\.ps1'\)")
-Yes '  and fingerprints the files outside launcher\ from its list, so the two cannot drift' ($ship -match '\$script:LauncherInputFiles')
+Yes 'Ship.ps1 works out no launcher number: a Ship sends no launcher (#4825)' ($ship -notmatch 'LauncherVersion\.ps1' -and $ship -notmatch 'Get-LauncherVersion')
 
 # ---- 7. the parts fit a file version ------------------------------------------
 $last = Format-LauncherVersion ([DateTime]::new(2099, 12, 31, 23, 59, 0, [DateTimeKind]::Utc))

@@ -1,6 +1,6 @@
 # test-check-secrets.ps1
 #
-# Drives scripts\dev\Check-Secrets.ps1 over scratch trees, zips, folders and programs
+# Drives scripts\dev\Check-Secrets.ps1 over scratch trees, zips and programs
 # with obviously fake values planted in them, and over this repository as it is.
 #
 # WHY. Entry 236. A secret shipped inside a built artefact twice: the SkyMP
@@ -238,24 +238,36 @@ try {
     $r = Invoke-Scan @{ Zip = @($wide); Allow = $noAllow }
     yes 'a UTF-16 text file is read as text' ($r.Out.Contains('notes.txt:2  github-token'))
 
-    # The installer carries the launcher's config.json on purpose, so a zip is
-    # not failed for that name; it is failed for what is in it.
-    $inst = Join-Path $work 'Thornswood-Setup.zip'
-    New-Zip $inst @{
+    # A download may carry a config.json on purpose (the setup's carries the
+    # channel's server and site), so a zip is not failed for that name; it is
+    # failed for what is in it.
+    $conf = Join-Path $work 'with-config.zip'
+    New-Zip $conf @{
         'config.json' = (Get-Bytes ('{"UpdateToken": ""}' + "`n"))
-        'payload/Data/Platform/Plugins/thornswood-front.js' = (Get-Bytes "var a = 1;`n")
+        'game/Data/Platform/Plugins/thornswood-front.js' = (Get-Bytes "var a = 1;`n")
     }
-    $r = Invoke-Scan @{ Zip = @($inst); Allow = $noAllow }
-    yes 'the installer''s own config.json is not failed by name' ($r.Code -eq 0)
-    $inst2 = Join-Path $work 'Thornswood-Setup-2.zip'
-    New-Zip $inst2 @{
+    $r = Invoke-Scan @{ Zip = @($conf); Allow = $noAllow }
+    yes 'a zip''s own config.json is not failed by name' ($r.Code -eq 0)
+    $conf2 = Join-Path $work 'with-config-2.zip'
+    New-Zip $conf2 @{
         'config.json' = (Get-Bytes ('{"UpdateToken": "' + $fake['github-token'] + '"}' + "`n"))
-        'payload/Data/SKSE/Plugins/Thornswood.ini' = (Get-Bytes "[Keys]`n")
+        'game/Data/SKSE/Plugins/Thornswood.ini' = (Get-Bytes "[Keys]`n")
     }
-    $r = Invoke-Scan @{ Zip = @($inst2); Allow = $noAllow }
-    yes 'a plain update token in the installer''s config.json fails' ($r.Out.Contains('Thornswood-Setup-2.zip!config.json:1  github-token'))
-    yes 'and payload/ is the game, asked of Ship-Rules' ($r.Out.Contains('payload/Data/SKSE/Plugins/Thornswood.ini:0  never-ship-machine'))
+    $r = Invoke-Scan @{ Zip = @($conf2); Allow = $noAllow }
+    yes 'a plain update token in a zip''s config.json fails' ($r.Out.Contains('with-config-2.zip!config.json:1  github-token'))
+    yes 'and game/ is the game, asked of Ship-Rules' ($r.Out.Contains('game/Data/SKSE/Plugins/Thornswood.ini:0  never-ship-machine'))
     yes 'without the value' (-not (Test-Leaks $r.Out))
+    # payload/ was the old installer's game (#4824); nothing reads it as one now.
+    $old = Join-Path $work 'old-payload.zip'
+    New-Zip $old @{ 'payload/Data/SKSE/Plugins/Thornswood.ini' = (Get-Bytes "[Keys]`n") }
+    $r = Invoke-Scan @{ Zip = @($old); Allow = $noAllow }
+    yes 'payload/ is not asked of Ship-Rules any more: the old installer went' ($r.Code -eq 0 -and -not $r.Out.Contains('never-ship-machine'))
+    # A program at the top of a zip is read byte by byte.
+    $top = Join-Path $work 'program-on-top.zip'
+    New-Zip $top @{ 'Thornswood.exe' = [byte[]](@(0x4D, 0x5A, 0x00, 0x00, 0x00) + [Text.Encoding]::Unicode.GetBytes($fake['github-token'])) }
+    $r = Invoke-Scan @{ Zip = @($top); Allow = $noAllow }
+    yes 'a program at the top of a zip is read byte by byte' ($r.Code -eq 1 -and $r.Out -match 'Thornswood\.exe at byte \d+  github-token')
+    yes 'without its value' (-not (Test-Leaks $r.Out))
 
     # Something that will not open is not a pass.
     $notzip = Join-Path $work 'pack-broken.zip'
@@ -268,15 +280,15 @@ try {
     # one must pass with its real entry count, not "0 entries".
     $sfx = Join-Path $work 'Thornswood-Setup.exe'
     New-Sfx $sfx @{
-        'payload/Data/Platform/voice-token.txt' = (Get-Bytes ($fake['voice-join-token']))
-        'payload/Data/Platform/Plugins/thornswood-front.js' = (Get-Bytes "var a = 1;`n")
+        'game/Data/Platform/voice-token.txt' = (Get-Bytes ($fake['voice-join-token']))
+        'game/Data/Platform/Plugins/thornswood-front.js' = (Get-Bytes "var a = 1;`n")
     }
     $r = Invoke-Scan @{ Zip = @($sfx); Allow = $noAllow }
     yes 'a Setup program with an appended zip is read, not passed as empty' ($r.Code -eq 1 -and $r.Out -match 'Thornswood-Setup\.exe: 2 entries' -and $r.Out.Contains('voice-token.txt:1  voice-join-token'))
     yes 'and that token is not in the output' (-not (Test-Leaks $r.Out))
     $sfxClean = Join-Path $work 'Thornswood-Setup-clean.exe'
     New-Sfx $sfxClean @{
-        'payload/Data/Platform/Plugins/thornswood-front.js' = (Get-Bytes "var a = 1;`n")
+        'game/Data/Platform/Plugins/thornswood-front.js' = (Get-Bytes "var a = 1;`n")
     }
     $r = Invoke-Scan @{ Zip = @($sfxClean); Allow = $noAllow }
     yes 'a clean Setup program with an appended zip passes, and not as 0 entries' ($r.Code -eq 0 -and $r.Out -match 'Thornswood-Setup-clean\.exe: 1 entries' -and $r.Out -notmatch '0 entries')
@@ -302,38 +314,14 @@ try {
     $r = Invoke-Scan @{ Binary = @($clean); Allow = $noAllow }
     yes 'a clean program passes' ($r.Code -eq 0)
 
-    # ---------------------------------------------------------------- a stage
-    $stage = Join-Path $work 'stage'
-    Write-Utf8 (Join-Path $stage 'payload\Data\Platform\voice-token.txt') ($fake['voice-join-token'] + "`n")
-    Write-Utf8 (Join-Path $stage 'payload\Data\Platform\Plugins\thornswood-front.js') "var a = 1;`n"
-    Write-Utf8 (Join-Path $stage 'config.json') "{}`n"
-    [IO.File]::WriteAllBytes((Join-Path $stage 'Thornswood.exe'), [byte[]](@(0x4D, 0x5A, 0x00, 0x00, 0x00) + [Text.Encoding]::Unicode.GetBytes($fake['github-token'])))
-    $r = Invoke-Scan @{ Dir = $stage; Allow = $noAllow }
-    yes 'a staged installer with the token fails' ($r.Code -eq 1 -and $r.Out.Contains('voice-token.txt:1  voice-join-token') -and $r.Out.Contains('voice-token.txt:0  never-ship-machine'))
-    yes 'the launcher at the top of the stage is read byte by byte' ($r.Out -match 'Thornswood\.exe at byte \d+  github-token')
-    yes 'the stage''s own config.json is not failed by name' (-not $r.Out.Contains('config.json'))
-    yes 'without any value' (-not (Test-Leaks $r.Out))
-
-    # ------------------------------------------- a stage of an older release (#3099)
-    # The installer of a release whose client is not the checkout's holds the
-    # six files to the record of the launcher it packs.
-    $older = Join-Path $work 'stage-older'
-    $bundle = Join-Path $older 'payload\Data\Platform\Plugins\skymp5-client.js'
-    Write-Utf8 $bundle "// an older client`n"
-    $sha = (Get-FileHash -LiteralPath $bundle -Algorithm SHA256).Hash.ToLowerInvariant()
-    $olderRec = Join-Path $work 'older-client-build.json'
-    Write-Utf8 $olderRec ('{"forkCommit":"0lder000","files":{"Data\\Platform\\Plugins\\skymp5-client.js":{"sha256":"' + $sha + '","bytes":1}}}')
-    $r = Invoke-Scan @{ Dir = $older; Allow = $noAllow }
-    yes 'held to the checkout''s record, an older client fails' ($r.Code -eq 1 -and $r.Out.Contains('skymp5-client.js:0  client-not-recorded-build'))
-    $r = Invoke-Scan @{ Dir = $older; Allow = $noAllow; ClientRecord = $olderRec }
-    yes 'held to the record it was built with, it passes' ($r.Code -eq 0)
-    Write-Utf8 $bundle "// one byte changed`n"
-    $r = Invoke-Scan @{ Dir = $older; Allow = $noAllow; ClientRecord = $olderRec }
-    yes 'and a changed byte still fails against that record' ($r.Code -eq 1 -and $r.Out.Contains('skymp5-client.js:0  client-not-recorded-build'))
-    $badRec = Join-Path $work 'bad-client-build.json'
-    Write-Utf8 $badRec '{"forkCommit":"x"}'
-    $r = Invoke-Scan @{ Dir = $older; Allow = $noAllow; ClientRecord = $badRec }
-    yes 'a record that names no files stops the scan' ($r.Code -eq 2)
+    # -------------------------------------------- the old installer's inputs
+    # -Dir read the old installer's staged folder and -ClientRecord held its
+    # client to the record of the launcher it packed (#3099); both went with
+    # that installer (#4824).
+    $tok = $null; $err = $null
+    $sAst = [System.Management.Automation.Language.Parser]::ParseFile($scan, [ref]$tok, [ref]$err)
+    $sParams = @($sAst.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
+    yes 'Check-Secrets.ps1 has no -Dir and no -ClientRecord' ($sParams -contains 'Zip' -and $sParams -notcontains 'Dir' -and $sParams -notcontains 'ClientRecord')
 
     # ---------------------------------------------------------------- the repo
     $repo = $here
@@ -341,22 +329,18 @@ try {
     yes 'this repository as it stands passes (exit 0)' ($r.Code -eq 0)
     if ($r.Code -ne 0) { Write-Host $r.Out }
 
-    # Wired in before anything leaves: the upload in Publish-Update, the
-    # compression in Package-Thornswood, both steps in the build check.
+    # Wired in before anything leaves: the upload in Publish-Update, and both
+    # steps in the build check. Package-Thornswood scanned the installer's
+    # stage until the old installer pipeline went (#4824).
     $pub = [IO.File]::ReadAllText((Join-Path $here 'scripts\release\Publish-Update.ps1'))
     $a = $pub.IndexOf("Check-Secrets.ps1')")
     $b = $pub.IndexOf('# ==== thornswood site upload ====')
     yes 'Publish-Update runs the scan over what it built' ($a -ge 0 -and $pub.Contains('-Zip $scanZips'))
     yes 'and before the upload' ($a -ge 0 -and $b -gt $a)
-    $pkg = [IO.File]::ReadAllText((Join-Path $here 'scripts\release\Package-Thornswood.ps1'))
-    $a = $pkg.IndexOf("Check-Secrets.ps1')")
-    yes 'Package-Thornswood scans the stage' ($a -ge 0 -and $pkg.Contains('-Dir $stage'))
-    yes 'held to the record of the launcher it packs (#3099)' ($pkg.Contains('-Dir $stage -ClientRecord $clientRecordPath') -and $pkg.IndexOf('Remove-Item -LiteralPath $clientRecordDir') -gt $a)
-    yes 'before -NoArchive hands it over and before it is compressed' ($a -ge 0 -and $a -lt $pkg.IndexOf('if ($NoArchive)') -and $a -lt $pkg.IndexOf("Head 'Compressing'"))
 
-    # And the two hooks themselves, run: the block out of each script, with Die
-    # recording instead of exiting. The rest of those scripts publish and
-    # upload, so they cannot be run here.
+    # And the hook itself, run: the block out of the script, with Die
+    # recording instead of exiting. The rest of that script publishes and
+    # uploads, so it cannot be run here.
     function Invoke-Hook([string]$src, [string]$from, [string]$to) {
         $i = $src.IndexOf($from); $j = $src.IndexOf($to)
         if ($i -lt 0 -or $j -le $i) { return 'no hook' }
@@ -367,8 +351,8 @@ try {
     }
     function Die($m) { $script:died = [string]$m }
     function Head($m) { }
-    # The two hooks run as if from their own folder, scripts\release, where
-    # their Join-Path $Here reaches Check-Secrets.ps1 in scripts\dev.
+    # The hook runs as if from its own folder, scripts\release, where its
+    # Join-Path $Here reaches Check-Secrets.ps1 in scripts\dev.
     $Here = Join-Path $here (Join-Path 'scripts' 'release')
     $pubFrom = '# ---- nothing that must never ship, read off what was built'
     # The upload, which is the site one since #897 and the only one since #907.
@@ -380,42 +364,28 @@ try {
     $chunks = @([pscustomobject]@{ Path = $good })
     $d = Invoke-Hook $pub $pubFrom $pubTo
     yes 'and lets a clean pack through' ($d -eq '')
+    # No launcher is published here since #4825 (it goes out through Velopack,
+    # whose workflow scans what it publishes, below), so a launcher left
+    # beside the release is not read: nothing sends it.
     $Launcher = $true; $exePath = $prog
     $d = Invoke-Hook $pub $pubFrom $pubTo
-    yes 'and stops on a launcher with a webhook in it' ($d -match 'Nothing was uploaded')
+    yes 'and reads no launcher, which a publish no longer sends (#4825)' ($d -eq '')
     $Launcher = $false; $exePath = ''
     $clientRel = [pscustomobject]@{ path = $signin }
     $d = Invoke-Hook $pub $pubFrom $pubTo
     yes 'and reads the client runtime zip too' ($d -match 'Nothing was uploaded')
     $clientRel = $null
 
-    $pkgFrom = '# ---- nothing that must never ship ----'
-    $pkgTo = '# ---- archive ----'
-    # The record the packager saved for the launcher it packs (#3099), which
-    # the hook hands the scan and then removes.
-    $clientRecordDir = Join-Path $work 'package-client'
-    $clientRecordPath = Join-Path $clientRecordDir 'client-build.json'
-    $null = New-Item -ItemType Directory -Force -Path $clientRecordDir
-    Copy-Item -LiteralPath (Join-Path $repo 'records\client-build.json') -Destination $clientRecordPath
-    $d = Invoke-Hook $pkg $pkgFrom $pkgTo
-    yes 'Package-Thornswood stops on a stage carrying a token' ($d -ne 'no hook' -and $d -match 'staged installer')
-    $stageGood = Join-Path $work 'stage-good'
-    Write-Utf8 (Join-Path $stageGood 'payload\Data\Platform\Plugins\thornswood-front.js') "var a = 1;`n"
-    Write-Utf8 (Join-Path $stageGood 'config.json') "{}`n"
-    $stage = $stageGood
-    $null = New-Item -ItemType Directory -Force -Path $clientRecordDir
-    Copy-Item -LiteralPath (Join-Path $repo 'records\client-build.json') -Destination $clientRecordPath
-    $d = Invoke-Hook $pkg $pkgFrom $pkgTo
-    yes 'and lets a clean stage through' ($d -eq '')
     $yml = [IO.File]::ReadAllText((Join-Path $repo '.github\workflows\build.yml'))
     $t = $yml.IndexOf('name: Scan the tree for secrets')
     yes 'the build check scans the tree' ($t -ge 0)
-    # Since #3114 the launcher and setup program are built and scanned once,
-    # inside launcher\tests\test-498-msbuild.ps1, which a step of the build runs.
-    $t498 = [IO.File]::ReadAllText((Join-Path $repo 'launcher\tests\test-498-msbuild.ps1'))
-    $built = $t498.IndexOf('-File $blPath -Root $root -StubOut $stub')
-    $scan = $t498.IndexOf("scripts\dev\Check-Secrets.ps1') -Binary @(`$exe, `$stub)")
-    yes 'and the launcher and setup program it built, after building them' ($yml -match 'tests\\test-498-msbuild\.ps1 -RequireMSBuild' -and $built -gt 0 -and $scan -gt $built)
+    # Since #4823 the step that publishes the native launcher scans every
+    # program it published, after publishing them.
+    $pub = $yml.IndexOf('name: Publish the native launcher')
+    $built = $(if ($pub -ge 0) { $yml.IndexOf('scripts\release\Build-Launcher.ps1', $pub) } else { -1 })
+    $scan = $(if ($built -ge 0) { $yml.IndexOf('scripts\dev\Check-Secrets.ps1 -Binary $programs', $built) } else { -1 })
+    $next = $(if ($pub -ge 0) { $yml.IndexOf('- name:', $pub + 10) } else { -1 })
+    yes 'and the launcher programs it published, after publishing them' ($pub -ge 0 -and $built -gt $pub -and $scan -gt $built -and ($next -lt 0 -or $scan -lt $next))
 
     # ---------------------------------------------------------------- this machine
     # The two dev packs this machine still has that carried a real token. The

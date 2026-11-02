@@ -55,7 +55,7 @@ gh workflow run promote-main.yml --ref main -f tag=build-<yyyyMMdd>.<run>
 
 ## A hotfix
 
-A hotfix is the one live release that does not come off `main`. The branch starts from the tag of the release that is live, carries only the fix, and is pushed. Ship runs from a checkout of that branch. When the installer has to be rebuilt for it, `Package-Thornswood.ps1 -OneFile` runs from the same checkout: it and `Publish-Installer.ps1` accept a clean `hotfix/` branch that matches GitHub by the same rule Ship uses (#2436), with no `-AllowStaleCheckout`. The dev feed stays as it is. The fix also goes to `main` through its own pull request, or the next main release loses it. The long form is in [How a release goes out](#how-a-release-goes-out).
+A hotfix is the one live release that does not come off `main`. The branch starts from the tag of the release that is live, carries only the fix, and is pushed. Ship runs from a checkout of that branch, and accepts a clean `hotfix/` branch that matches GitHub (#2436), with no `-AllowStaleCheckout`. The setup program is the launcher itself since #4824, so there is no separate installer to rebuild. The dev feed stays as it is. The fix also goes to `main` through its own pull request, or the next main release loses it. The long form is in [How a release goes out](#how-a-release-goes-out).
 
 ## How a release goes out
 
@@ -130,7 +130,7 @@ the channel it shipped, and then the release is announced as it always was:
 
 VirusTotal is no longer part of publish (#802). Code signing covers trust
 (#390). `Publish-VirusTotal.ps1` and `Add-VirusTotalComment.ps1` stay as
-optional manual tools; `Publish-Installer.ps1` and Ship do not call them.
+optional manual tools; Ship and the release workflow do not call them.
 
 There is no third step for the launcher. A launcher updates itself from the feed
 it polls, so the remirror is how a launcher update reaches anybody, and the

@@ -152,13 +152,13 @@ try {
     Yes 'j12: and without the flag it is not' (-not (Test-FreshHarnessStandIn '127.0.0.1'))
 } finally { $env:THORNSWOOD_HARNESS = $keepH; $env:THORNSWOOD_VPS = $keepV }
 # Every script that sends to the VPS or ships calls it, near the top, and
-# offers the loud override.
+# offers the loud override. The old installer's Package-Thornswood.ps1 and
+# Publish-Installer.ps1 were on this list until they went in #4824.
 $callers = @(
     @{ f = 'scripts\deploy\Deploy-Docs.ps1' }, @{ f = 'scripts\deploy\Deploy-DevGamemode.ps1' },
     @{ f = 'scripts\deploy\Deploy-Server.ps1' }, @{ f = 'scripts\release\Ship.ps1' },
-    @{ f = 'scripts\release\Package-Thornswood.ps1' }, @{ f = 'scripts\release\Publish-Server.ps1' },
-    @{ f = 'scripts\release\Publish-Update.ps1' }, @{ f = 'scripts\release\Publish-Pack.ps1' },
-    @{ f = 'scripts\release\Publish-Installer.ps1' }
+    @{ f = 'scripts\release\Publish-Server.ps1' },
+    @{ f = 'scripts\release\Publish-Update.ps1' }, @{ f = 'scripts\release\Publish-Pack.ps1' }
 )
 foreach ($c in $callers) {
     $p = Join-Path $Repo $c.f

@@ -13,17 +13,17 @@
 //      and AccentInk on Accent;
 //   2. Muted stays brighter than Faint against every surface, so raising
 //      Faint did not make the two one colour;
-//   3. the placeholders at the top of launcher\ui.xaml are Forge's, so the
-//      window never opens on the old values for a moment;
+//   3. the placeholders at the top of launcher\app\MainWindow.axaml are
+//      Forge's, so the window never opens on the old values for a moment;
 //   4. the launcher measures the same pairs at the same line (Themes.cs
 //      MinContrast, TextNames, SurfaceNames), and the DIY editor and
 //      ApplyCustomTheme both say what it finds;
 //   5. the measure here goes red on the palette #2771 replaced, so it cannot
 //      pass by reading nothing;
-//   6. the setup program's window (installer\setup\Bootstrap.cs, #2851) has
-//      no palette of its own: Setup.csproj compiles Themes.cs into it,
-//      Themes.cs leans on nothing else in launcher\app, the window is drawn
-//      in Forge from there, and every colour it names is one of the sixteen.
+//   6. the install window (launcher\app\InstallWindow.cs since #4824, the
+//      setup program's window before it, #2851) has no palette of its own:
+//      it is drawn in Forge from Themes.cs, and every colour it names is one
+//      of the sixteen.
 //
 // Read only.
 'use strict';
@@ -117,12 +117,12 @@ for (const p of palettes) {
   yes(p.name + ': Muted stands out more than Faint on every surface' + (flat.length ? ' (not on ' + flat.join(', ') + ')' : ''), flat.length === 0);
 }
 
-// ---- 3. ui.xaml's placeholders are Forge's --------------------------------
-const xaml = read('launcher', 'ui.xaml');
+// ---- 3. the window's placeholders are Forge's --------------------------------
+const xaml = read('launcher', 'app', 'MainWindow.axaml');
 const forge = palettes.find((p) => p.name === 'Forge');
 for (const n of TEXT.concat(['AccentInk'])) {
   const m = new RegExp('<SolidColorBrush x:Key="' + n + '"\\s+Color="(#[0-9A-Fa-f]+)"').exec(xaml);
-  yes('ui.xaml: ' + n + ' starts as Forge\'s ' + (forge ? forge.colors[n] : '?') + (m ? ' (it is ' + m[1] + ')' : ' (not found)'),
+  yes('MainWindow.axaml: ' + n + ' starts as Forge\'s ' + (forge ? forge.colors[n] : '?') + (m ? ' (it is ' + m[1] + ')' : ' (not found)'),
     !!m && !!forge && m[1].toUpperCase() === forge.colors[n].toUpperCase());
 }
 
@@ -155,15 +155,12 @@ yes('and passes plain black on white', low(Object.assign({}, old, {
   Ink: '#000000', Muted: '#000000', Faint: '#000000', Ok: '#000000', Warn: '#000000', Bad: '#000000',
   Accent: '#FFFFFF', AccentInk: '#000000' })).length === 0);
 
-// ---- 6. the setup program draws its window in Forge from Themes.cs -------
-// It kept its own copy of the old Forge in its markup and in literal colours,
-// so #2771 left the first window a new tester sees at 2.6 to 1 (#2851).
-const proj = read('installer', 'setup', 'Setup.csproj');
-yes('Setup.csproj compiles the launcher\'s Themes.cs into the setup program',
-  proj.includes('<Compile Include="..\\..\\launcher\\app\\Themes.cs"><Link>Themes.cs</Link></Compile>'));
-
-// Themes.cs is compiled on its own there, so it may name no other class from
-// launcher\app. Comments and strings are taken out before looking.
+// ---- 6. the install window draws in Forge from Themes.cs -----------------
+// The setup program kept its own copy of the old Forge in its markup and in
+// literal colours, so #2771 left the first window a new tester sees at 2.6
+// to 1 (#2851). Since #4824 that window is the launcher's install window
+// (launcher\app\InstallWindow.cs), which takes every colour from Themes.cs by
+// name, and the lines it colours take their names from InstallPlace.cs.
 const code = (t) => t.replace(/\/\/.*$/gm, '').replace(/"(?:[^"\\]|\\.)*"/g, '""');
 const appDir = path.join(REPO_DIR, 'launcher', 'app');
 const others = new Set();
@@ -180,27 +177,25 @@ const leans = Array.from(others).filter((n) => new RegExp('(?<![.\\w])' + n + '\
 yes('Themes.cs uses nothing else from launcher\\app' + (leans.length ? ' (it names ' + leans.join(', ') + ')' : ''),
   others.size > 20 && leans.length === 0);
 
-const boot = read('installer', 'setup', 'Bootstrap.cs');
-yes('Bootstrap.cs draws the window in Forge straight after it is built',
-  /win = \(Window\)XamlReader\.Parse\(Ui\);\s*(?:\/\/.*\s*)*Thornswood\.Themes\.Apply\(win, "Forge"\);/.test(boot));
-const hexes = (boot.match(/#[0-9A-Fa-f]{6,8}\b/g) || []).filter((h) => h.toUpperCase() !== '#16808080');
-yes('Bootstrap.cs holds no colour of its own, only the hatch lines' + (hexes.length ? ' (it has ' + hexes.join(', ') + ')' : ''),
-  hexes.length === 0);
-yes('its markup defines none of the sixteen colours itself',
-  !NAMES.some((n) => new RegExp('x:Key=""' + n + '""').test(boot)));
-const statics = (boot.match(/\{StaticResource (\w+)\}/g) || []).map((m) => m.slice(16, -1)).filter((n) => NAMES.includes(n));
-yes('its markup reads every colour as a DynamicResource' + (statics.length ? ' (StaticResource ' + statics.join(', ') + ')' : ''),
-  statics.length === 0);
+const boot = read('launcher', 'app', 'InstallWindow.cs');
+const place = read('launcher', 'app', 'InstallPlace.cs');
+yes('InstallWindow.cs draws the window in Forge before it builds a control',
+  boot.indexOf('Themes.Apply(this, "Forge");') > 0 && boot.indexOf('Themes.Apply(this, "Forge");') < boot.indexOf('Content = Build();'));
+const hexes = ((boot + place).match(/#[0-9A-Fa-f]{6,8}\b/g) || []);
+yes('the install window holds no colour of its own' + (hexes.length ? ' (it has ' + hexes.join(', ') + ')' : ''),
+  hexes.length === 0 && !/Colors\.|Color\.(?:From|Parse)|new SolidColorBrush/.test(boot));
 const used = new Set();
 let u;
-const dynRe = /\{DynamicResource (\w+)\}/g;
-while ((u = dynRe.exec(boot))) used.add(u[1]);
 const bRe = /\bB\((?:[^;]*?)\)/g;
 while ((u = bRe.exec(boot))) (u[0].match(/"(\w+)"/g) || []).forEach((q) => used.add(q.replace(/"/g, '')));
+const cRe = /colour = "(\w+)"/g;
+while ((u = cRe.exec(place))) used.add(u[1]);
 const unknown = Array.from(used).filter((n) => !NAMES.includes(n));
 yes('every colour it names is one of the sixteen in Themes.cs (' + used.size + ' used)' + (unknown.length ? ' (not: ' + unknown.join(', ') + ')' : ''),
   used.size >= 10 && unknown.length === 0);
-yes('the old tan for a close fit and a missing Skyrim is Warn now', /txtRoom\.Foreground = B\("Warn"\)/.test(boot) && /txtSkyrim\.Foreground = B\("Warn"\)/.test(boot));
+yes('the old tan for a close fit and a missing Skyrim is Warn now',
+  /colour = "Warn";\s*return Gb\(free\) \+ " free, and this needs about "/.test(place) &&
+  /colour = "Warn";\s*return "Steam's copy of Skyrim Special Edition was not found/.test(place));
 // The setup window also writes text in the accent ("Skyrim is here" and the
 // three Read them links), which the launcher's rule leaves to each theme.
 if (forge) {

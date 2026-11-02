@@ -23,9 +23,10 @@
        files would have been copied over the game with the 1.6.1170 ones.
 
   HOW. ClearLeftover, MarkerIs and FolderSize are lifted out of
-  launcher\app\Downgrade.cs by brace match and compiled with the compiler the
-  build runs (tests\Launcher-Csc.ps1), and run against folders
-  made under a temp folder. Run itself drives Steam's window and cannot be run
+  launcher\app\Downgrade.cs by brace match and compiled with the .NET SDK the
+  launcher builds with (tests\Launcher-Csc.ps1), and run against folders
+  made under a temp folder. Case 5 runs on Windows only: a file held open
+  with no sharing keeps its folder only there. Run itself drives Steam's window and cannot be run
   here, so where it calls ClearLeftover is read from its text. Nothing here
   opens Steam or touches Steam's folders.
 #>
@@ -33,7 +34,7 @@
 param([string]$AppPath)
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 # This harness is in launcher\tests\, the repository is two folders up.
@@ -149,23 +150,19 @@ if ($stop) {
 }
 $probe = $probe.Replace('__LIFTED__', $body.ToString())
 
-if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'; Done }
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-downgrade-leftover-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 $null = New-Item -ItemType Directory -Force -Path $work
 $held = $null
 try {
-    $probeCs = Join-Path $work 'Probe.cs'
-    [IO.File]::WriteAllText($probeCs, $probe)
-    $dll = Join-Path $work 'Probe.dll'
-    $out = & $LauncherCsc /nologo /target:library "/out:$dll" $probeCs 2>&1
-    $built = ($LASTEXITCODE -eq 0) -and (Test-Path -LiteralPath $dll)
-    Yes 'the lifted methods compile with the compiler the build runs' $built
-    if (-not $built) { $out | ForEach-Object { Write-Host "      $_" }; Done }
+    $asm = $null
+    try { $asm = Add-LauncherType -Source $probe }
+    catch { $out = $_.Exception.Message }
+    Yes 'the lifted methods compile with the .NET SDK the launcher builds with' ($null -ne $asm)
+    if (-not $asm) { $out -split "`n" | ForEach-Object { Write-Host "      $_" }; Done }
 
-    $asm = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($dll))
     $T = $asm.GetType('Probe.Downgrade', $true)
     $flags = [Reflection.BindingFlags]'Static, Public, NonPublic'
     $script:logged = New-Object System.Collections.Generic.List[string]
@@ -252,15 +249,20 @@ try {
     Yes 'no folder is nothing to do' ((Clear-Leftover $none 1) -and $script:logged.Count -eq 0 -and $script:shown.Count -eq 0)
 
     # 5. A folder that cannot be removed, the way one Steam is still writing
-    #    to is: a file in it held open with no sharing.
-    Clear-Said
-    $d = New-Depot 'depot_busy' ''
-    $held = [IO.File]::Open((Join-Path $d 'SkyrimSE.exe'), 'Open', 'ReadWrite', 'None')
-    $ok = Clear-Leftover $d 2
-    Yes 'a folder that cannot be removed stops the run' (-not $ok)
-    Yes 'and the card says so, and what to do' ($script:shown.Count -eq 1 -and $script:shown[0].Contains('Could not remove') -and $script:shown[0].Contains('press the button again'))
-    Yes 'and the log says the same' ($script:logged.Count -ge 2 -and $script:logged[$script:logged.Count - 1] -eq $script:shown[0])
-    if ($stop) { Yes 'and the card''s bar is hidden, as every other early stop hides it' (([int]$T.GetField('BarHidden', $flags).GetValue($null)) -ge 1) }
+    #    to is: a file in it held open with no sharing. Only Windows keeps a
+    #    file held that way; elsewhere it is deleted under the open handle.
+    if ($OnWindows) {
+        Clear-Said
+        $d = New-Depot 'depot_busy' ''
+        $held = [IO.File]::Open((Join-Path $d 'SkyrimSE.exe'), 'Open', 'ReadWrite', 'None')
+        $ok = Clear-Leftover $d 2
+        Yes 'a folder that cannot be removed stops the run' (-not $ok)
+        Yes 'and the card says so, and what to do' ($script:shown.Count -eq 1 -and $script:shown[0].Contains('Could not remove') -and $script:shown[0].Contains('press the button again'))
+        Yes 'and the log says the same' ($script:logged.Count -ge 2 -and $script:logged[$script:logged.Count - 1] -eq $script:shown[0])
+        if ($stop) { Yes 'and the card''s bar is hidden, as every other early stop hides it' (([int]$T.GetField('BarHidden', $flags).GetValue($null)) -ge 1) }
+    } else {
+        Write-Host 'SKIP  5, a folder that cannot be removed: a file held open with no sharing keeps its folder only on Windows'
+    }
 }
 finally {
     if ($held) { $held.Dispose() }

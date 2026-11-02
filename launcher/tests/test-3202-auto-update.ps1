@@ -56,7 +56,7 @@ $cfg = Src (Join-Path $App 'Config.cs')
 $upd = Src (Join-Path $App 'ShellUpdate.cs')
 $shell = Src (Join-Path $App 'Shell.cs')
 $sf = Src (Join-Path $App 'ShellScanFix.cs')
-$xaml = Src (Join-Path $Repo 'launcher\ui.xaml')
+$xaml = Src (Join-Path $Repo 'launcher\app\MainWindow.axaml')
 $example = Src (Join-Path $Repo 'config.example.json')
 
 function Body([string]$text, [string]$head) {
@@ -64,7 +64,7 @@ function Body([string]$text, [string]$head) {
 }
 
 # ---- 1: the default ---------------------------------------------------------------
-Yes 'AutoUpdate is a nullable that starts on' ($cfg.Contains('[DataMember(Name = "AutoUpdate")] public bool? AutoUpdateSetting = true;'))
+Yes 'AutoUpdate is a nullable that starts on' ($cfg.Contains('[JsonInclude, JsonPropertyName("AutoUpdate")] public bool? AutoUpdateSetting = true;'))
 Yes 'and only an explicit false is off, so a config.json without the key has it on' ($cfg -match 'get \{ return AutoUpdateSetting != false; \}')
 Yes 'config.example.json has it on' ($example -match '"AutoUpdate":\s*true')
 

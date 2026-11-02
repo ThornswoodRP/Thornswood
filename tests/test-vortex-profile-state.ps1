@@ -1,6 +1,6 @@
 param([string]$Scratch)
 $ErrorActionPreference='Stop'
-. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path $PSScriptRoot 'Framework-Csc.ps1')  # C# 5 against the .NET Framework, through the .NET SDK the launcher builds with (#498, #4823)
 $repo=Split-Path -Parent $PSScriptRoot
 if(-not $Scratch){$Scratch=Join-Path ([IO.Path]::GetTempPath()) ('thornswood-vortex-state-'+[guid]::NewGuid().ToString('N'))}
 New-Item -ItemType Directory -Path $Scratch -Force | Out-Null
@@ -44,15 +44,14 @@ try {
     $locked=Join-Path $Scratch 'compressed\Vortex\state.v2\MANIFEST-000002'
     $handle=[IO.File]::Open($locked,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
     try{Check 'compressed' $null 'Thornswood' $true}finally{$handle.Dispose()}
-    # Compile the same helper at C# 5 as well: scripts\mods\LoadOrder.ps1
-    # loads this file with Add-Type, which in Windows PowerShell is the .NET
-    # Framework compiler and stops at C# 5 (docs/guide/settled-design.md).
-    if ($OnWindows) {
-        $dll=Join-Path $Scratch 'VortexProfileState.dll'
-        & $LauncherCsc /noconfig /nologo /target:library "/langversion:5" ("/out:"+$dll) /reference:System.dll /reference:System.Core.dll /reference:System.Xml.dll /reference:System.Runtime.Serialization.dll (Join-Path $repo 'launcher\app\VortexProfileState.cs')
-        if($LASTEXITCODE -or -not(Test-Path -LiteralPath $dll)){throw 'Framework compilation failed'}
-    } else {
-        Write-Host 'SKIP  VortexProfileState.cs compiled at C# 5, the most Windows PowerShell''s Add-Type takes: the build''s compiler (the Build Tools'' csc) is only on Windows'
-    }
-    Write-Host ($count.ToString()+' profile cases'+$(if($OnWindows){' and framework compilation'}else{''})+' passed')
+    # Compile the same helper at C# 5 against the .NET Framework as well:
+    # scripts\mods\LoadOrder.ps1 loads this file with Add-Type, which in
+    # Windows PowerShell is the .NET Framework compiler and stops at C# 5
+    # (docs/guide/settled-design.md). The .NET SDK the launcher builds
+    # with fetches the Framework's reference assemblies on any machine, so
+    # this runs everywhere (#4823). Build-FrameworkCode throws with what the
+    # compiler said when it refuses the file.
+    $null=Build-FrameworkCode -File ([IO.Path]::Combine($repo,'launcher','app','VortexProfileState.cs')) -Reference System.Xml
+    Write-Host 'PASS framework compilation: VortexProfileState.cs at C# 5 against the .NET Framework'
+    Write-Host ($count.ToString()+' profile cases and framework compilation passed')
 } finally {$env:APPDATA=$oldAppData}

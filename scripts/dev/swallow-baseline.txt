@@ -169,7 +169,6 @@
 # fails after the work is done, or where a dev Ship fails open on purpose, is
 # said (releases.txt, the pending note, the icon cache, Explorer, what main
 # and dev have published). 82 are left.
-installer\Setup-Thornswood.ps1 7
 scripts\dev\Check-Outside.ps1 6
 scripts\dev\Close-Launcher.ps1 8
 scripts\dev\Start-Thornswood.ps1 3

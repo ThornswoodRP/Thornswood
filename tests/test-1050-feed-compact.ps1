@@ -21,29 +21,27 @@
       indentation, that reads back to the same feed, and keeps a release note
       with a line break, quotes, a backslash and letters outside ASCII
     - the release record New-ReleaseRecord makes carries no uiAssets
-    - the launcher compiled from launcher\app (or -Src, any launcher source,
-      such as the one at a channel's minLauncher) with the compiler the build
-      runs (tests\Launcher-Csc.ps1), reads that file with VersionDoc.Parse:
-      every field it binds, the record pointer and its note, and the news file
+    - the launcher, built from launcher\app\Thornswood.csproj the way the
+      build builds it (tests\Launcher-Csc.ps1, Add-LauncherAssembly) and
+      loaded into this PowerShell, which runs on .NET 10 as the launcher
+      does, reads that file with VersionDoc.Parse: every field it binds, and
+      the record pointer and its note (the news file is the site's: the
+      launcher reads its News from the Releases, #5187)
 
-  The launcher half runs under Windows PowerShell 5.1, because the launcher
-  runs on the .NET Framework; this script starts itself there for it. Nothing
+  It runs on every machine with the .NET 10 SDK (#4823). Until then the
+  launcher half ran under Windows PowerShell 5.1 on the .NET Framework, and
+  took -Src, the sources of an older launcher; those compile only with the
+  .NET Framework compiler, which the launcher no longer builds with. Nothing
   is sent anywhere; everything it writes is in its own temp folder.
 #>
 [CmdletBinding()]
-param(
-    [string]$Src,
-    # Internal: the Windows PowerShell half, handed the feed file to parse.
-    [string]$ParseFeed
-)
+param()
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
-. (Join-Path $PSScriptRoot 'Windows.ps1')
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's SDK and settings (#4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $Repo = Split-Path -Parent $Here
-if (-not $Src) { $Src = Join-Path $Repo 'launcher\app' }
 
 $script:pass = 0
 $script:fail = 0
@@ -65,75 +63,44 @@ $NoteSha = ('97b1f3f31cc50e80c735c50ab80f7ac91086cfe4aa10e604d8ee41ed50c83362')
 $NewsSha = ('0326733ddbbd921d59a0506d00cdf313cfb422de3263b9958133a37e09984b63')
 
 # ============================================================================
-# The Windows PowerShell half: compile the launcher and parse the feed.
+# The launcher half: build the launcher and parse the feed.
 # ============================================================================
-if ($ParseFeed) {
-    $needed = @($LauncherNeeded)
-    $wv2 = @($LauncherLib)
-
-    Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-    if (-not (Test-Path -LiteralPath $LauncherCsc) -or $needed.Count -eq 0) { Yes 'Thornswood.csproj names the references' $false; Done }
-    $refs = @(); $missing = @()
-    foreach ($n in $needed) { $p = Find-LauncherRef $n; if ($p) { $refs += $p } else { $missing += $n } }
-    foreach ($n in $wv2) {
-        $p = $n
-        if (Test-Path -LiteralPath $p) { $refs += $p } else { $missing += $n }
+function Test-LauncherReads([string]$feedPath) {
+    Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
+    if (-not (Test-Path -LiteralPath $LauncherDotnet)) { return }
+    $asm = $null
+    try { $asm = Add-LauncherAssembly }
+    catch {
+        Yes 'the launcher project builds' $false
+        foreach ($l in @(($_.Exception.Message -split "`r?`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20)) { Write-Host "      $l" }
+        return
     }
-    Yes ('every reference is on this machine' + $(if ($missing.Count) { ', missing ' + ($missing -join ', ') } else { '' })) ($missing.Count -eq 0)
-    if ($missing.Count) { Done }
-
-    $tmp = Join-Path ([IO.Path]::GetTempPath()) ('ts-feed-compact-cs-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
-    New-Item -ItemType Directory -Force -Path $tmp | Out-Null
-    try {
-        $cs = @(if (Test-Path -LiteralPath $Src -PathType Container) { Get-ChildItem (Join-Path $Src '*.cs') -File })
-        Yes ('{0} holds launcher source' -f $Src) ($cs.Count -gt 0)
-        if (-not $cs.Count) { Done }
-        $dll = Join-Path $tmp 'Thornswood.dll'
-        $cscArgs = @('/noconfig', '/nologo', '/target:library', '/platform:anycpu', "/langversion:$LauncherLangVersion", "/out:$dll")
-        foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-        foreach ($f in $cs) { $cscArgs += $f.FullName }
-        $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-        $said = & $LauncherCsc @cscArgs 2>&1
-        $rc = $LASTEXITCODE
-        $ErrorActionPreference = $old
-        $built = ($rc -eq 0) -and (Test-Path -LiteralPath $dll)
-        Yes ('the launcher''s {0} source files in {1} compile with the build''s compiler' -f $cs.Count, $Src) $built
-        if (-not $built) {
-            foreach ($l in @($said | Where-Object { "$_" -match 'error' } | Select-Object -First 20)) { Write-Host "      $l" }
-            Done
-        }
-
-        $asm = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($dll))
-        $V = $asm.GetType('Thornswood.VersionDoc')
-        $mParse = $V.GetMethod('Parse', [Reflection.BindingFlags]'Static, Public')
-        $raw = [IO.File]::ReadAllBytes($ParseFeed)
-        $v = $null
-        try { $v = $mParse.Invoke($null, @(, $raw)) } catch { Write-Host ("      " + $_.Exception.InnerException.Message) }
-        Yes 'VersionDoc.Parse reads the compact feed' ($null -ne $v)
-        if ($null -eq $v) { Done }
-        Yes '  launcherVersion, minLauncher, launcherUrl and launcherSha256' (
-            $v.launcherVersion -eq '1.2.4' -and $v.minLauncher -eq '1.2.4' -and
-            $v.launcherUrl -eq ('https://thornswood.net/feed/assets/' + ('e' * 64)) -and $v.launcherSha256 -eq ('e' * 64))
-        Yes '  serverAddress, serverPort, voicePort, voiceUrl, updateFeedUrl, siteUrl' (
-            $v.serverAddress -eq '203.0.113.7' -and $v.serverPort -eq '7777' -and $v.voicePort -eq '7778' -and
-            $v.voiceUrl -eq 'https://thornswood.net/voice' -and $v.updateFeedUrl -eq 'https://thornswood.net/feed/version.json' -and
-            $v.siteUrl -eq 'https://thornswood.net')
-        Yes '  maxOnline and collectionRevision as numbers, the exe sizes as the feed writes them' (
-            $v.maxOnline -eq 25 -and $v.collectionRevision -eq 2 -and $v.expectedExeBytes -eq '37157144' -and $v.newerExeBytes -eq '37910440')
-        Yes '  clientRuntime, with its sha256 and size' (
-            $null -ne $v.clientRuntime -and $v.clientRuntime.sha256 -eq ('a' * 64) -and $v.clientRuntime.bytes -eq 6598716 -and $v.clientRuntime.forkCommit -eq 'cdd84651')
-        Yes '  the three depots of the Skyrim pin' (@($v.depots).Count -eq 3 -and $v.depots[0].id -eq '489831' -and $v.depots[2].manifest -eq '1914580699073641964')
-        Yes '  no packs and no news in the feed itself' (@($v.packs).Count -eq 0 -and @($v.news).Count -eq 0)
-        Yes '  the record pointer, read apart (RecordRef.FromFeed)' (
-            $null -ne $v.record -and $v.record.id -eq '20261012-115531' -and $v.record.sha256 -eq $NoteSha -and
-            $v.record.url -eq ('https://thornswood.net/feed/assets/' + $NoteSha))
-        Yes '  and its note, line break, quotes, backslash and accents as written' ($null -ne $v.record -and $v.record.notes -ceq $Note)
-        Yes '  the news file, read apart (NewsRef.FromFeed)' (
-            $null -ne $v.newsRef -and $v.newsRef.sha256 -eq $NewsSha -and $v.newsRef.url -eq ('https://thornswood.net/feed/assets/' + $NewsSha))
-    } finally {
-        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
-    }
-    Done
+    Yes 'the launcher project builds' ($null -ne $asm)
+    if ($null -eq $asm) { return }
+    $V = $asm.GetType('Thornswood.VersionDoc')
+    $mParse = $V.GetMethod('Parse', [Reflection.BindingFlags]'Static, Public')
+    $raw = [IO.File]::ReadAllBytes($feedPath)
+    $v = $null
+    try { $v = $mParse.Invoke($null, @(, $raw)) } catch { $e = $_.Exception; while ($e.InnerException) { $e = $e.InnerException }; Write-Host ("      " + $e.Message) }
+    Yes 'VersionDoc.Parse reads the compact feed' ($null -ne $v)
+    if ($null -eq $v) { return }
+    Yes '  launcherVersion, minLauncher, launcherUrl and launcherSha256' (
+        $v.launcherVersion -eq '1.2.4' -and $v.minLauncher -eq '1.2.4' -and
+        $v.launcherUrl -eq ('https://thornswood.net/feed/assets/' + ('e' * 64)) -and $v.launcherSha256 -eq ('e' * 64))
+    Yes '  serverAddress, serverPort, voicePort, voiceUrl, updateFeedUrl, siteUrl' (
+        $v.serverAddress -eq '203.0.113.7' -and $v.serverPort -eq '7777' -and $v.voicePort -eq '7778' -and
+        $v.voiceUrl -eq 'https://thornswood.net/voice' -and $v.updateFeedUrl -eq 'https://thornswood.net/feed/version.json' -and
+        $v.siteUrl -eq 'https://thornswood.net')
+    Yes '  maxOnline and collectionRevision as numbers, the exe sizes as the feed writes them' (
+        $v.maxOnline -eq 25 -and $v.collectionRevision -eq 2 -and $v.expectedExeBytes -eq '37157144' -and $v.newerExeBytes -eq '37910440')
+    Yes '  clientRuntime, with its sha256 and size' (
+        $null -ne $v.clientRuntime -and $v.clientRuntime.sha256 -eq ('a' * 64) -and $v.clientRuntime.bytes -eq 6598716 -and $v.clientRuntime.forkCommit -eq 'cdd84651')
+    Yes '  the three depots of the Skyrim pin' (@($v.depots).Count -eq 3 -and $v.depots[0].id -eq '489831' -and $v.depots[2].manifest -eq '1914580699073641964')
+    Yes '  no packs and no news in the feed itself' (@($v.packs).Count -eq 0 -and @($v.news).Count -eq 0)
+    Yes '  the record pointer, read apart (RecordRef.FromFeed)' (
+        $null -ne $v.record -and $v.record.id -eq '20261012-115531' -and $v.record.sha256 -eq $NoteSha -and
+        $v.record.url -eq ('https://thornswood.net/feed/assets/' + $NoteSha))
+    Yes '  and its note, line break, quotes, backslash and accents as written' ($null -ne $v.record -and $v.record.notes -ceq $Note)
 }
 
 # ============================================================================
@@ -268,23 +235,7 @@ try {
 
     Write-Host ''
     Write-Host 'the launcher reads it'
-    if (-not $OnWindows) {
-        Write-Host 'SKIP  the launcher half: it runs on the .NET Framework the launcher runs on, which only Windows has'
-    } else {
-        $winps = Get-WindowsPowerShell
-        $out = & $winps -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Src $Src -ParseFeed $vf 2>&1
-        $rc = $LASTEXITCODE
-        $childPass = 0; $childFail = 0
-        foreach ($l in @($out)) {
-            $s = [string]$l
-            if ($s -match '^PASS  ') { $script:pass++; $childPass++; Write-Host $s }
-            elseif ($s -match '^FAIL  ') { $script:fail++; $childFail++; Write-Host $s }
-            elseif ($s -match '^\d+ passed, \d+ failed$') { }
-            elseif ($s.Trim()) { Write-Host $s }
-        }
-        # A half that stopped without saying why is a failure of its own.
-        Yes 'the launcher half ran to its end' ($childPass -gt 0 -and ($rc -eq 0) -eq ($childFail -eq 0))
-    }
+    Test-LauncherReads $vf
 } finally {
     Remove-Item -LiteralPath $T -Recurse -Force -ErrorAction SilentlyContinue
 }

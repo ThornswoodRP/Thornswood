@@ -388,7 +388,6 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
   const ALLOWED = {
     'tests/test-release-workflow.ps1': 'reads release.yml\'s text for the names its tag push hands to main\'s run (#3930); runs nothing',
     'tests/test-release-tag.ps1': 'reads release.yml\'s text for those names; sets them for Resolve-ReleaseTag.ps1 in a scratch process',
-    'tests/test-3412-installer-on-github.ps1': 'reads installer.yml\'s text for those names; installer.yml is started by hand on main and is no check of a build (#3412)',
     'tests/test-5181-promote-main.ps1': 'reads promote-main.yml\'s text for the run id its Deployment names; promote-main.yml is started by hand on main and is no check of a build (#5181)',
     'scripts/dev/Run-Gate.ps1': 'the gate step: the event chooses only how much of the gate runs (#3114), and a build that ran less than all of it keeps no note, held above',
     'tests/test-3114-run-gate.ps1': 'sets those names for Run-Gate.ps1 in scratch processes, to hold what it does on each event',

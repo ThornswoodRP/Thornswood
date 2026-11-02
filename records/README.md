@@ -32,8 +32,8 @@ read it (issue #440, phase 8):
   Publish-Update writes it into version.json and launchers take it from
   there. No script writes this one: it is changed by hand, in the same pull
   request as the script extender, the collection revision, the launcher's
-  compiled fallback (Downgrade.cs, Config.cs) and Setup-Thornswood.ps1,
-  because a pin move is one release. `launcher\tests\test-skyrim-pin.ps1` fails while
+  compiled fallback (Downgrade.cs, Config.cs), because a pin move is one
+  release; the install reads the exe size from records\skyrim-files.json. `launcher\tests\test-skyrim-pin.ps1` fails while
   they disagree.
 - `ui-gone.json`: the 37 Daedric Online menu files (name and sha256) and the
   41 unused skymp5-front svgs, bg.png, and the four Futura PT and DIN Pro

@@ -25,7 +25,10 @@
 //
 // Since 27 September (issue #474) it also checks the record itself: the
 // choice WriteBrowserBackend makes reaches launcher.log on every Play,
-// config.json across a restart, and a line on the Settings page.
+// config.json across a restart, and a line on the Settings page. Since the
+// move to .NET 10 and Avalonia (#4823) config.json is written by
+// System.Text.Json, which takes a field marked [JsonInclude], and the Settings
+// line is in launcher\app\MainWindow.axaml, reached as win.TxtInGameBrowser.
 //
 // Read only.
 const REPO_DIR = require('path').join(__dirname, '..', '..'); // this harness is in launcher\tests\, the repository is two folders up
@@ -163,7 +166,7 @@ yes('Chars.BrowserBackend is readable from Shell',
 
 const config = read('launcher/app/Config.cs');
 yes('config.json has a BrowserBackend field, so the answer survives a restart',
-  /\[DataMember\] public string BrowserBackend = "";/.test(config));
+  /\[JsonInclude\] public string BrowserBackend = "";/.test(config));
 
 const shellChars = read('launcher/app/ShellChars.cs');
 const startPlay = body(shellChars, 'static void StartPlay()');
@@ -180,11 +183,11 @@ yes('config.json is saved only when the answer changed',
 yes('the Settings line is redrawn after a Play', /DrawInGameBrowser\(\);/.test(record));
 
 const draw = body(shellChars, 'static void DrawInGameBrowser()');
-yes('DrawInGameBrowser looks up TxtInGameBrowser', /F<[\w.]*TextBlock>\("TxtInGameBrowser"\)/.test(draw));
+yes('DrawInGameBrowser takes TxtInGameBrowser from the window', /win\.TxtInGameBrowser\b/.test(draw));
 yes('the Settings line reads "In-game browser: <name>"', /"In-game browser: " \+ b/.test(draw));
-const ui = read('launcher/ui.xaml');
+const ui = read('launcher/app/MainWindow.axaml');
 const settingsPage = ui.slice(ui.indexOf('x:Name="PageSettings"'));
-yes('ui.xaml has TxtInGameBrowser on the Settings page',
+yes('MainWindow.axaml has TxtInGameBrowser on the Settings page',
   ui.indexOf('x:Name="PageSettings"') >= 0 && /x:Name="TxtInGameBrowser"/.test(settingsPage));
 const shell = read('launcher/app/Shell.cs');
 yes('the Settings line is drawn at startup with the folder rows',

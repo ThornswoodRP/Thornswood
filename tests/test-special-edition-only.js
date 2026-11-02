@@ -164,7 +164,6 @@ function listed(rel, re) {
   return m ? (m[1].match(/'[^']+'|"[^"]+"/g) || []).map(function (s) { return s.slice(1, -1).replace(/^Data\\\\/, ''); }) : null;
 }
 const baseLists = [
-  ['the installer\'s copy of the base game', 'installer/Setup-Thornswood.ps1', /\$want = @\(([^)]*)\)/],
   ['the launcher\'s masters (OwnGame)', 'launcher/app/OwnGame.cs', /static readonly string\[\] Masters = \{([^}]*)\}/],
   ['the launcher\'s load order masters', 'launcher/app/LoadOrder.cs', /public static readonly string\[\] Masters = \{([^}]*)\}/],
   ['the publisher\'s load order masters', 'scripts/mods/LoadOrder.ps1', /\$script:LoadOrderMasters = ([^\n]*)/],

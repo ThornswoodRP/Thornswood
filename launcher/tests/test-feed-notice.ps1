@@ -24,46 +24,37 @@
     - a maintenance value that is not plainly on holds nothing, and a value
       that would have thrown as a bool reads without a word
 
-  The C# is compiled with the compiler the build runs, at the C# version the
-  project names (Add-LauncherType, tests\Launcher-Csc.ps1, #2821), and run
-  under Windows PowerShell on the same serializer the launcher reads the feed
-  with. Measured on 24
-  September: that serializer turns "maintenance": null or "yes" on a bool field
-  into an exception, and an exception there is the whole document unread and
-  Play shut for everybody. Under pwsh this hands itself to powershell.exe for
-  that reason; the harness step on GitHub runs pwsh.
+  The launcher is built the way its project builds it (tests\Launcher-Csc.ps1,
+  Add-LauncherAssembly, #4823), and its own VersionDoc.Parse, FeedNotice.From
+  and Updater.IsNewer are asked, on any machine with the .NET 10 SDK. Until
+  #4823 this compiled Config.cs and FeedNotice.cs alone and ran them under
+  Windows PowerShell on the .NET Framework's serializer, which, measured on 24
+  September, turned "maintenance": null or "yes" on a bool field into an
+  exception, and an exception there is the whole document unread and Play
+  shut for everybody. The field is still a string, and the cases below still
+  ask it every such value.
 
-  It also reads every file of the Shell class and ui.xaml for the wiring: the bar is found by name,
-  the log line is gone, the hold is on the button and in Play(), it can only be
-  set from a document that was read, and the bar has a grid row of its own.
+  It also reads every file of the Shell class and the window,
+  launcher\app\MainWindow.axaml, for the wiring: the bar is the window's
+  NoticeBar, the log line is gone, the hold is on the button and in Play(),
+  it can only be set from a document that was read, and the bar has a grid
+  row of its own.
 
-  Read only. The compiler writes its dll under the temp folder, and it is
-  removed once loaded.
+  Read only. The build goes under out\harness, which git ignores.
 #>
 [CmdletBinding()]
 param(
-    [string]$AppDir,
     [string]$Xaml
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's SDK and settings (#4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 # This harness is in launcher\tests\, the repository is two folders up.
 $Here = Split-Path -Parent (Split-Path -Parent $Here)
-if (-not $AppDir) { $AppDir = Join-Path $Here 'launcher\app' }
-if (-not $Xaml) { $Xaml = Join-Path $Here 'launcher\ui.xaml' }
-
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  this runs the launcher''s code on the .NET Framework the launcher runs on, which only Windows has'; exit 0 }
-# The launcher's serializer is the .NET Framework's, so the answer has to come
-# from there and not from .NET under pwsh.
-if ($PSVersionTable.PSEdition -eq 'Core') {
-    $wp = Get-WindowsPowerShell
-    & $wp -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -AppDir $AppDir -Xaml $Xaml
-    exit $LASTEXITCODE
-}
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#2821)
+$AppDir = Join-Path $Here (Join-Path 'launcher' 'app')
+if (-not $Xaml) { $Xaml = Join-Path $AppDir 'MainWindow.axaml' }
 
 $script:pass = 0
 $script:fail = 0
@@ -78,26 +69,15 @@ function Done {
 }
 function Read-Text([string]$p) { return [IO.File]::ReadAllText($p, [Text.Encoding]::UTF8) }
 
-$configPath = Join-Path $AppDir 'Config.cs'
-$updaterPath = Join-Path $AppDir 'Updater.cs'
 $noticePath = Join-Path $AppDir 'FeedNotice.cs'
 $shellPath = Join-Path $AppDir 'Shell.cs'
 
 Yes 'FeedNotice.cs is in the launcher source' (Test-Path -LiteralPath $noticePath)
 if (-not (Test-Path -LiteralPath $noticePath)) { Done }
 
-$configSrc = Read-Text $configPath
-# Config.Load and Save call Secrets, so it comes along. Nothing here calls it.
-$secretsSrc = Read-Text (Join-Path $AppDir 'Secrets.cs')
-# Config.Save logs what it swallows through Swallow.Note (entry 239), so
-# Swallow.cs comes along too, with a stand-in for the one field of Paths it
-# reads. Left null, a note writes nothing, which keeps this read only.
-$swallowSrc = Read-Text (Join-Path $AppDir 'Swallow.cs')
-$pathsStub = "namespace Thornswood`r`n{`r`n    static class Paths { public static string LogFile; }`r`n}`r`n"
-$updaterSrc = Read-Text $updaterPath
 $noticeSrc = Read-Text $noticePath
 # The Shell class is split across files (#500): ShowNotice, OnVersionDoc and
-# CheckFailed moved to ShellUpdate.cs. Every file of the class is read, so the
+# CheckFailed are in ShellUpdate.cs. Every file of the class is read, so the
 # counts below cover the whole class whichever file the code is in next.
 $shellSrc = Read-Text $shellPath
 foreach ($f in (Get-ChildItem -LiteralPath $AppDir -Filter '*.cs' | Sort-Object Name)) {
@@ -106,10 +86,7 @@ foreach ($f in (Get-ChildItem -LiteralPath $AppDir -Filter '*.cs' | Sort-Object 
     if ($t -match '\bpartial class Shell\b') { $shellSrc += "`r`n" + $t }
 }
 
-# ---- lift Updater.IsNewer and Parts out of the shipped Updater.cs -----------
-# Updater.cs as a whole needs half the launcher to compile. The comparison is
-# two methods that need nothing, so they are cut out by brace matching and
-# compiled into a class of the same name. The answer is the shipped code's.
+# A method's text, cut out of the source by brace matching.
 function Lift([string]$src, [string]$signature) {
     $at = $src.IndexOf($signature)
     if ($at -lt 0) { return $null }
@@ -123,24 +100,26 @@ function Lift([string]$src, [string]$signature) {
     }
     return $null
 }
-$isNewer = Lift $updaterSrc 'public static bool IsNewer('
-$parts = Lift $updaterSrc 'static int[] Parts('
-Yes 'Updater.IsNewer is in Updater.cs' ($null -ne $isNewer)
-Yes 'Updater.Parts is in Updater.cs' ($null -ne $parts)
-if ($null -eq $isNewer -or $null -eq $parts) { Done }
-$updaterStub = "using System;`r`nnamespace Thornswood`r`n{`r`n    static class Updater`r`n    {`r`n" +
-               $isNewer + "`r`n" + $parts + "`r`n    }`r`n}`r`n"
 
-# ---- compile Config.cs, FeedNotice.cs and the comparison --------------------
+# ---- build the launcher, as the project builds it ---------------------------
+Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 $asm = $null
-try { $asm = Add-LauncherType -Source $configSrc, $secretsSrc, $swallowSrc, $pathsStub, $noticeSrc, $updaterStub }
-catch { Write-Host ('      ' + $_.Exception.Message) }
-Yes 'Config.cs and FeedNotice.cs compile with the compiler the build runs' ($null -ne $asm)
+try { $asm = Add-LauncherAssembly }
+catch { foreach ($l in @(($_.Exception.Message -split "`r?`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20)) { Write-Host "      $l" } }
+Yes 'the launcher builds' ($null -ne $asm)
 if ($null -eq $asm) { Done }
 
 $DocT = $asm.GetType('Thornswood.VersionDoc')
 $NoticeT = $asm.GetType('Thornswood.FeedNotice')
 $UpdaterT = $asm.GetType('Thornswood.Updater')
+Yes 'VersionDoc, FeedNotice and Updater are in it' ($null -ne $DocT -and $null -ne $NoticeT -and $null -ne $UpdaterT)
+if ($null -eq $DocT -or $null -eq $NoticeT -or $null -eq $UpdaterT) { Done }
+$mParse = $DocT.GetMethod('Parse', [Reflection.BindingFlags]'Static, Public', $null, [Type[]]@([byte[]]), $null)
+$mFrom = $NoticeT.GetMethod('From', [Reflection.BindingFlags]'Static, Public')
+$mNewer = $UpdaterT.GetMethod('IsNewer', [Reflection.BindingFlags]'Static, Public')
+Yes 'VersionDoc.Parse, FeedNotice.From and Updater.IsNewer are public and static' ($null -ne $mParse -and $null -ne $mFrom -and $null -ne $mNewer)
+if ($null -eq $mParse -or $null -eq $mFrom -or $null -eq $mNewer) { Done }
 
 $Running = '1.1.92'
 
@@ -149,8 +128,8 @@ $Running = '1.1.92'
 function Ask([string]$json, [string]$running = $Running) {
     $r = @{ Threw = $null; Notice = $null }
     try {
-        $doc = $DocT::Parse([Text.Encoding]::UTF8.GetBytes($json))
-        $r.Notice = $NoticeT::From($doc, $running)
+        $doc = $mParse.Invoke($null, @(, [Text.Encoding]::UTF8.GetBytes($json)))
+        $r.Notice = $mFrom.Invoke($null, @($doc, $running))
     }
     catch { $r.Threw = $_.Exception.GetBaseException().Message }
     return $r
@@ -189,7 +168,7 @@ Quiet 'S1 a feed from before the message field' '{"launcherVersion":"1.0.1","pac
 Quiet 'S1 an empty document' '{}'
 Quiet 'S1 a message of spaces' '{"message":"   "}'
 Quiet 'S1 every new field null' '{"message":null,"maintenance":null,"minLauncher":null}'
-$none = $NoticeT::From($null, $Running)
+$none = $mFrom.Invoke($null, @($null, $Running))
 Yes 'S1 a check that got no document shows no bar' ($null -eq $none.Title)
 Yes 'S1 and leaves Play open' ($null -eq $none.Hold)
 
@@ -238,7 +217,7 @@ $n = Holds 'S4 a minimum with a leading v' '{"minLauncher":"v1.1.93"}'
 $n = Holds 'S4 a minimum written as a JSON number' '{"minLauncher":1.2}'
 # #1329: a version on either side that does not read as dotted numbers is not
 # an update. It used to be, which is why the notice reads the minimum itself.
-Yes ('S4 Updater.IsNewer on its own no longer calls "latest" newer than ' + $Running) (-not $UpdaterT::IsNewer('latest', $Running))
+Yes ('S4 Updater.IsNewer on its own no longer calls "latest" newer than ' + $Running) (-not $mNewer.Invoke($null, @('latest', $Running)))
 Quiet 'S4 so a minimum of "latest" is not a version and holds nothing' '{"minLauncher":"latest"}'
 Quiet 'S4 a minimum of "1.1."' '{"minLauncher":"1.1."}'
 Quiet 'S4 a minimum with a part too long for an int' '{"minLauncher":"1.1.9999999999"}'
@@ -265,9 +244,7 @@ Yes 'S6 no text in FeedNotice.cs carries an em dash' (-not $said.Contains([strin
 
 # ---- S7: the wiring in the Shell class ---------------------------------------
 Yes 'S7 the message no longer goes only to the log' (-not $shellSrc.Contains('Log(v.message)'))
-Yes 'S7 the bar is found by name' ($shellSrc.Contains('F<Border>("NoticeBar")'))
-Yes 'S7 its heading is found by name' ($shellSrc.Contains('F<TextBlock>("TxtNoticeTitle")'))
-Yes 'S7 its sentence is found by name' ($shellSrc.Contains('F<TextBlock>("TxtNoticeNote")'))
+Yes 'S7 the bar, its heading and its sentence are the window''s, by name' ($shellSrc.Contains('noticeBar = win.NoticeBar; txtNoticeTitle = win.TxtNoticeTitle; txtNoticeNote = win.TxtNoticeNote;'))
 $gate = [regex]::Match($shellSrc, 'btnPlay\.IsEnabled = all [^;]*;').Value
 Yes 'S7 the Play button is shut while the feed holds it' ($gate.Contains('feedNotice.Hold == null'))
 Yes 'S7 Play() refuses too, for the ways in that are not the button' ($shellSrc.Contains('if (feedNotice.Hold != null) { Log(feedNotice.Hold); return; }'))
@@ -282,14 +259,18 @@ Yes 'S7 and the one call is in OnVersionDoc, which only ever has a document that
 $failed = Lift $shellSrc 'static void CheckFailed(string why)'
 Yes 'S7 a failed check does not touch the notice' ($null -ne $failed -and -not $failed.Contains('feedNotice') -and -not $failed.Contains('ShowNotice'))
 
-# ---- S8: the bar in ui.xaml --------------------------------------------------
+# ---- S8: the bar in the window, MainWindow.axaml -----------------------------
+# Avalonia's markup since #4823: x:Name in the same XAML namespace as WPF's,
+# IsVisible in place of Visibility, and the rows either as elements or as one
+# RowDefinitions="Auto,*" attribute.
 $xns = 'http://schemas.microsoft.com/winfx/2006/xaml'
 [xml]$ui = Read-Text $Xaml
 $page = $null
 foreach ($g in $ui.GetElementsByTagName('Grid')) { if ($g.GetAttribute('Name', $xns) -eq 'PagePlay') { $page = $g; break } }
-Yes 'S8 the Play page is in ui.xaml' ($null -ne $page)
+Yes 'S8 the Play page is in MainWindow.axaml' ($null -ne $page)
 if ($page) {
     $rows = 0
+    if ($page.GetAttribute('RowDefinitions')) { $rows = @($page.GetAttribute('RowDefinitions') -split ',').Count }
     $kids = @()
     foreach ($k in $page.ChildNodes) {
         if ($k.NodeType -ne 'Element') { continue }
@@ -309,7 +290,7 @@ if ($page) {
         $shared = @($kids | Where-Object { $_ -ne $bar -and ([int]$_.GetAttribute('Grid.Row')) -eq $barRow })
         Yes "S8 it has row $barRow to itself, so it cannot cover an update card" ($shared.Count -eq 0)
         Yes 'S8 it sits above the Play button' ($playRow -gt $barRow)
-        Yes 'S8 it is hidden until a feed says something' ($bar.GetAttribute('Visibility') -eq 'Collapsed')
+        Yes 'S8 it is hidden until a feed says something' ($bar.GetAttribute('IsVisible') -eq 'False')
         Yes 'S8 it holds the heading and the sentence' ($bar.OuterXml.Contains('Name="TxtNoticeTitle"') -and $bar.OuterXml.Contains('Name="TxtNoticeNote"'))
     }
     Yes "S8 every row the page uses is defined ($rows rows, highest used $maxRow)" ($maxRow -lt $rows)

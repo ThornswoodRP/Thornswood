@@ -34,7 +34,7 @@ const SHELL = read('Shell.cs');
 const UPDATE = read('ShellUpdate.cs');
 const PAGES = read('Pages.cs');
 const PACKS = read('ShellPacks.cs');
-const XAML = fs.readFileSync(path.join(REPO_DIR, 'launcher', 'ui.xaml'), 'utf8').split(CR).join('');
+const XAML = fs.readFileSync(path.join(REPO_DIR, 'launcher', 'app', 'MainWindow.axaml'), 'utf8').split(CR).join('');
 
 let pass = 0, fail = 0;
 const yes = (w, c) => {
@@ -73,8 +73,8 @@ yes('that add is not into DiagReadings, so the line cannot sit under the Vortex 
 yes('the host is filled before the readings are rebuilt',
     hostClear >= 0 && card > hostClear && readingsClear > card && rows > readingsClear);
 
-const status = PACKS.slice(PACKS.indexOf('static UIElement CollectionStatusCard()'));
-yes('CollectionStatusCard exists', PACKS.indexOf('static UIElement CollectionStatusCard()') > 0);
+const status = PACKS.slice(PACKS.indexOf('static Control CollectionStatusCard()'));
+yes('CollectionStatusCard exists', PACKS.indexOf('static Control CollectionStatusCard()') > 0);
 yes('it reads the installed revision', /Checks\.CollectionRevision\(cfg\)/.test(status.slice(0, 2500)));
 yes('it says when the revision could not be read', status.indexOf('Your mods: not confirmed') > 0);
 yes('it is built on the card that has the button to the collection',

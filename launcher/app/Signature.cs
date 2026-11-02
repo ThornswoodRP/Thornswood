@@ -58,12 +58,8 @@ namespace Thornswood
     /// Identities and Ship that launcher, signed with the OLD profile, before
     /// anything is signed with the new one, or every installed launcher
     /// refuses the update. scripts\release\Assert-PublishSigned.ps1 runs this
-    /// same class on every launcher and setup program before a Ship
+    /// same class on every launcher before a Ship
     /// publishes, so a Ship signed by anything else stops there first.
-    ///
-    /// MicrosoftRefusal, at the end, asks the same question of a program
-    /// Microsoft signed itself: the WebView2 installer Voice downloads and
-    /// runs (issue #1330).
     ///
     /// Kept apart from Updater, with nothing in it but the framework, so that
     /// tests\test-signer-check.ps1 can compile it on its own and point it at
@@ -272,15 +268,20 @@ namespace Thornswood
             public IntPtr pChainContext;
         }
 
+        // DllImport and not LibraryImport: tools\DeployAgent compiles this file
+        // too, without unsafe code, and the generated calls need it for the
+        // two ref arguments. Every argument here is plain memory (the BOOL is
+        // an int), so the native build calls these directly with no
+        // marshalling made at run time.
         [DllImport("wintrust.dll", ExactSpelling = true)]
-        static extern uint WinVerifyTrust(IntPtr hwnd, [In] ref Guid action, ref WINTRUST_DATA data);
+        static extern uint WinVerifyTrust(IntPtr hwnd, ref Guid action, ref WINTRUST_DATA data);
 
         [DllImport("wintrust.dll", ExactSpelling = true)]
         static extern IntPtr WTHelperProvDataFromStateData(IntPtr state);
 
         [DllImport("wintrust.dll", ExactSpelling = true)]
         static extern IntPtr WTHelperGetProvSignerFromChain(IntPtr provData, uint signer,
-            [MarshalAs(UnmanagedType.Bool)] bool counterSigner, uint counterSignerIndex);
+            int counterSigner, uint counterSignerIndex);
 
         [DllImport("wintrust.dll", ExactSpelling = true)]
         static extern IntPtr WTHelperGetProvCertFromChain(IntPtr sgnr, uint cert);
@@ -302,13 +303,13 @@ namespace Thornswood
             try
             {
                 var fi = new WINTRUST_FILE_INFO();
-                fi.cbStruct = (uint)Marshal.SizeOf(typeof(WINTRUST_FILE_INFO));
+                fi.cbStruct = (uint)Marshal.SizeOf<WINTRUST_FILE_INFO>();
                 fi.pcwszFilePath = name;
                 fi.hFile = fs.SafeFileHandle.DangerousGetHandle();
-                info = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(WINTRUST_FILE_INFO)));
+                info = Marshal.AllocHGlobal(Marshal.SizeOf<WINTRUST_FILE_INFO>());
                 Marshal.StructureToPtr(fi, info, false);
 
-                data.cbStruct = (uint)Marshal.SizeOf(typeof(WINTRUST_DATA));
+                data.cbStruct = (uint)Marshal.SizeOf<WINTRUST_DATA>();
                 data.dwUIChoice = WTD_UI_NONE;
                 data.fdwRevocationChecks = revocation ? WTD_REVOKE_WHOLECHAIN : WTD_REVOKE_NONE;
                 data.dwProvFlags = revocation ? WTD_REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT : WTD_REVOCATION_CHECK_NONE;
@@ -321,9 +322,9 @@ namespace Thornswood
                 if (rc != 0) return rc;
 
                 IntPtr prov = WTHelperProvDataFromStateData(data.hWVTStateData);
-                IntPtr sgnr = prov == IntPtr.Zero ? IntPtr.Zero : WTHelperGetProvSignerFromChain(prov, 0, false, 0);
+                IntPtr sgnr = prov == IntPtr.Zero ? IntPtr.Zero : WTHelperGetProvSignerFromChain(prov, 0, 0, 0);
                 if (sgnr == IntPtr.Zero) return TRUST_E_NOSIGNATURE;
-                var s = (CRYPT_PROVIDER_SGNR)Marshal.PtrToStructure(sgnr, typeof(CRYPT_PROVIDER_SGNR));
+                var s = Marshal.PtrToStructure<CRYPT_PROVIDER_SGNR>(sgnr);
                 stamped = s.csCounterSigners > 0;
                 for (uint i = 0; i < s.csCertChain; i++)
                 {
@@ -346,108 +347,10 @@ namespace Thornswood
                 }
                 if (info != IntPtr.Zero)
                 {
-                    Marshal.DestroyStructure(info, typeof(WINTRUST_FILE_INFO));
+                    Marshal.DestroyStructure<WINTRUST_FILE_INFO>(info);
                     Marshal.FreeHGlobal(info);
                 }
                 Marshal.FreeHGlobal(name);
-            }
-        }
-
-        // ---- Microsoft's own programs (issue #1330) -----------------------------
-
-        /// <summary>Thumbprint of Microsoft Root Certificate Authority 2011,
-        /// the root Microsoft signs its own programs under.</summary>
-        public const string MicrosoftRoot = "8F43288AD272F3103B6FB1428485EA3014C0BCFE";
-
-        /// <summary>The name (CN) on the certificate Microsoft signs its own
-        /// programs with.</summary>
-        public const string MicrosoftSigner = "Microsoft Corporation";
-
-        /// <summary>
-        /// Empty when the file at path is a program Microsoft signed itself;
-        /// otherwise the rest of a sentence that starts with the file's name,
-        /// as Refusal returns it. said is the line for the log when it passed.
-        ///
-        /// Voice.Bootstrap asks this before it runs the WebView2 installer it
-        /// has just downloaded. Until #1330 it ran whatever the download
-        /// handed it, so whoever could change that file on the way, or at the
-        /// server it came from, chose what ran on this machine.
-        ///
-        /// A file passes only when all of this holds:
-        ///
-        ///   1. Windows says the signature is good, exactly as in Refusal
-        ///      (WinVerifyTrust, the same revocation rule), so a changed file
-        ///      or a certificate Windows does not trust fails.
-        ///   2. The chain Windows built ends at MicrosoftRoot. Any certificate
-        ///      authority Windows trusts can sign a certificate that says
-        ///      Microsoft Corporation; only Microsoft issues under its own root.
-        ///   3. The certificate is named MicrosoftSigner and is for signing
-        ///      programs.
-        ///
-        /// No hash is pinned: the link always hands out Microsoft's latest
-        /// installer, so its bytes change with every release of it.
-        ///
-        /// MEASURED 5 OCT on what https://go.microsoft.com/fwlink/p/?LinkId=2124703
-        /// handed out (MicrosoftEdgeWebview2Setup.exe, 1,850,576 bytes):
-        /// CN=Microsoft Corporation, O=Microsoft Corporation, issued by
-        /// Microsoft Code Signing PCA 2024, under Microsoft Root Certificate
-        /// Authority 2011 (8F43288A...BCFE, to 2036), with a timestamp. It also
-        /// carries a nested second signature from a self-made EdgeBuild
-        /// certificate; WinVerifyTrust checks the first signature, the one
-        /// pinned here.
-        ///
-        /// IF MICROSOFT MOVES its signing to another root, this refuses the new
-        /// installer and the log names the root it is signed under. Measure
-        /// the new chain and add that root here; never take the check out.
-        /// </summary>
-        public static string MicrosoftRefusal(string path, out string said)
-        {
-            said = "";
-            FileStream fs;
-            try { fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read); }
-            catch (Exception ex) { return "could not be opened to check its signature: " + ex.Message; }
-
-            using (fs)
-            {
-                var chain = new List<X509Certificate2>();
-                bool stamped;
-                bool revocation = true;
-                uint rc = Trust(fs, path, true, chain, out stamped);
-                if (rc == CERT_E_REVOCATION_FAILURE || rc == CRYPT_E_REVOCATION_OFFLINE ||
-                    rc == CRYPT_E_NO_REVOCATION_CHECK)
-                {
-                    revocation = false;
-                    chain.Clear();
-                    rc = Trust(fs, path, false, chain, out stamped);
-                }
-                if (rc != 0) return Said(rc);
-
-                if (chain.Count < 2)
-                    return "has a signature Windows accepts, but not Microsoft's (a chain of " +
-                           chain.Count + " certificate" + (chain.Count == 1 ? "" : "s") + ").";
-                X509Certificate2 leaf = chain[0];
-                X509Certificate2 root = chain[chain.Count - 1];
-                if (!String.Equals(root.Thumbprint, MicrosoftRoot, StringComparison.OrdinalIgnoreCase))
-                    return "is signed under " + root.Subject + ", not under Microsoft's own root.";
-                if (!String.Equals(leaf.GetNameInfo(X509NameType.SimpleName, false), MicrosoftSigner, StringComparison.Ordinal))
-                    return "is signed under Microsoft's own root, but for " + leaf.Subject + ", not for " + MicrosoftSigner + ".";
-
-                bool programs = false;
-                foreach (X509Extension e in leaf.Extensions)
-                {
-                    var eku = e as X509EnhancedKeyUsageExtension;
-                    if (eku == null) continue;
-                    foreach (System.Security.Cryptography.Oid o in eku.EnhancedKeyUsages)
-                        if (o.Value == CodeSigning) programs = true;
-                }
-                if (!programs)
-                    return "is signed with a Microsoft certificate that is not for signing programs.";
-
-                said = "Signed by " + MicrosoftSigner + " (" + leaf.GetNameInfo(X509NameType.SimpleName, true) +
-                       ", under " + root.GetNameInfo(X509NameType.SimpleName, false) + "), " +
-                       (revocation ? "and Windows checked it is not revoked."
-                                   : "but Microsoft could not be reached to check it is not revoked.");
-                return "";
             }
         }
     }

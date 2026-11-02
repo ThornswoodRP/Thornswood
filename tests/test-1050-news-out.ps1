@@ -9,9 +9,10 @@
 
   WHY THIS EXISTS. Measured 12 Oct over https, the news was 31,282 of main's
   95,085 bytes of version.json and 19,980 of dev's 111,305, read by every
-  launcher on every check. Every launcher up to 1.2.3 reads the News tab only
-  out of "news"; from 1.2.4 on it also reads "newsFile" (launcher\app\
-  FeedNews.cs). scripts\release\Feed-News.ps1 is the one place that decides
+  launcher on every check. Launchers 1.2.4 to 2026.1101 read the News tab
+  from "newsFile" as well as "news"; since #5187 the launcher reads it from
+  the build Releases and the site's News page is what reads "newsFile".
+  scripts\release\Feed-News.ps1 is the one place that decides
   which a channel uses and reads either. What this proves, on a stand-in site
   folder (-SiteDir), nothing sent anywhere:
     - Test-FeedNewsOut: from 1.2.4 on, dev numbers included, and never for a
@@ -66,12 +67,13 @@ try {
     Yes 'not below 1.2.4: 1.2.3 and 1.2.3.9 keep them in the feed' (-not (Test-FeedNewsOut '1.2.3') -and -not (Test-FeedNewsOut '1.2.3.9'))
     Yes 'from 1.2.4 on, a dev number too: 1.2.4, 1.2.4.1, 1.2.10, 1.3.0' ((Test-FeedNewsOut '1.2.4') -and (Test-FeedNewsOut '1.2.4.1') -and (Test-FeedNewsOut '1.2.10') -and (Test-FeedNewsOut '1.3.0'))
     Yes 'never for a minimum that is not a version' (-not (Test-FeedNewsOut '') -and -not (Test-FeedNewsOut 'latest') -and -not (Test-FeedNewsOut '1.2.x'))
-    # The number holds only while every launcher from it on reads the file: a
-    # launcher source at or past it without FeedNews.cs would let in a launcher
-    # that shows no news once the publisher empties "news".
-    $ver = [regex]::Match([IO.File]::ReadAllText((Join-Path $Repo 'launcher\app\Updater.cs')), 'Version\s*=\s*"([^"]+)"').Groups[1].Value
-    $reader = Test-Path -LiteralPath (Join-Path $Repo 'launcher\app\FeedNews.cs')
-    Yes ("this launcher source ({0}) is below {1}, or it reads the news file" -f $ver, $FeedNewsFileLauncher) ((-not (Test-FeedNewsOut $ver)) -or $reader)
+    # The launcher reads its News from the build Releases (ReleaseNews.cs,
+    # #5187) and neither "news" nor the file, so where the feed keeps the
+    # notes is the site's News page's concern alone.
+    $reader = @(Get-ChildItem -LiteralPath (Join-Path $Repo 'launcher\app') -Filter '*.cs' -File |
+                Where-Object { (Get-Content -LiteralPath $_.FullName -Raw) -match '\bclass\s+FeedNews\b' }).Count -gt 0
+    $releases = Test-Path -LiteralPath (Join-Path $Repo 'launcher\app\ReleaseNews.cs')
+    Yes 'the launcher reads its News from the Releases, not the feed''s notes, so emptying "news" takes nothing from it' ($releases -and -not $reader)
 
     $three = @((Note '10-12-2026 1:00 AM' 'Third' 'dev'), (Note '10-11-2026 5:51 PM' 'Second'), (Note '10-10-2026 9:00 AM' 'First'))
 
@@ -149,8 +151,8 @@ try {
         $pu.IndexOf('$marks = Set-DevFeedMarks') -lt $pu.IndexOf('Set-FeedNewsList $doc') -and
         $pu.IndexOf('Set-FeedNewsList $doc') -lt $pu.IndexOf('Write-FeedVersionFile $VersionFile'))
     Yes '  with the minLauncher it writes, and nothing sent on a run that uploads nothing' ($pu -match "Val \`$doc 'minLauncher'" -and $pu -match '-NoSend:\$NoUpload')
-    Yes '  and says the launcher number the feed carries next to main''s, which a packs-only dev Ship left blank' (
-        $pu -match "this one is on \`$\(Val \`$doc 'launcherVersion'\)" -and $pu -notmatch 'this one is on \$launcherVersion')
+    Yes '  and names no launcher number in the note, since the feed carries none that moves (#4825)' (
+        $pu -notmatch 'this one is on' -and $pu -notmatch "Launcher \`$")
     $rb = $src['scripts\release\Rollback-Feed.ps1']
     Yes 'Rollback-Feed adds its note to the whole list and puts it back before the feed is written' ($rb -match 'Open-FeedNewsList \$doc' -and $rb.IndexOf('Set-FeedNewsList $doc') -gt 0 -and
         $rb.IndexOf('Set-FeedNewsList $doc') -lt $rb.IndexOf('Write-FeedVersionFile $VersionFile'))

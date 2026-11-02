@@ -16,7 +16,7 @@
 // file and every line they write, and Held() throws for one the lists do not
 // have; WhatTheReportHolds() makes the page's words from the same lists, and
 // the page's TextBlock has no words of its own. This reads launcher\app and
-// launcher\ui.xaml and holds:
+// launcher\app\MainWindow.axaml and holds:
 //   - every file Report() grabs and every key Summary() writes is in a list,
 //     and every part in a list is written, so a field added without words
 //     fails here (and throws at run time if it got past this);
@@ -62,7 +62,7 @@ const diag = read('Diag.cs');
 const pages = read('Pages.cs');
 const shell = read('Shell.cs');
 const play = read('ShellPlay.cs');
-const xaml = fs.readFileSync(path.join(REPO, 'launcher', 'ui.xaml'), 'utf8').split(CR).join('');
+const xaml = fs.readFileSync(path.join(REPO, 'launcher', 'app', 'MainWindow.axaml'), 'utf8').split(CR).join('');
 
 // ---- the two lists ------------------------------------------------------------
 function list(name) {
@@ -144,7 +144,7 @@ yes('the Diagnostics page has the TxtDiagHolds line, with no words of its own', 
 yes('the page is under "One zip for Discord"', /Text="One zip for Discord"\/>\s*(<!--[^>]*-->\s*)?<TextBlock x:Name="TxtDiagHolds"/.test(xaml));
 yes('the old promise is gone from the page', xaml.indexOf('Nothing personal beyond your Windows user name') < 0);
 yes('Pages.cs fills it from WhatTheReportHolds',
-    /txtDiagHolds = F<TextBlock>\("TxtDiagHolds"\);/.test(pages) && /txtDiagHolds\.Text = Diag\.WhatTheReportHolds\(\);/.test(pages));
+    /txtDiagHolds = win\.TxtDiagHolds;/.test(pages) && /txtDiagHolds\.Text = Diag\.WhatTheReportHolds\(\);/.test(pages));
 
 // ---- keeping -------------------------------------------------------------------------------
 const kept = /public const int KeptReports = (\d+);/.exec(diag);

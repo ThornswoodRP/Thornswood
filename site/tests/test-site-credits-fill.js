@@ -68,7 +68,8 @@ yes('a file with only dev: the page names the test server', one.indexOf('The tes
 yes('one server whose commit is not 40 hex: unchanged', fill(CREDITS, { live: { commit: 'abc' } }, {}) === CREDITS);
 one = fill(CREDITS, { live: { commit: 'zz' + A.slice(2) }, dev: { commit: A } }, {});
 yes('a live commit that is not 40 hex beside a good dev one: only dev is said',
-  one.indexOf('The test server runs [`aaaaaaaa`]') >= 0 && one.indexOf('main server runs') < 0 && one.indexOf('zz') < 0);
+  // The bad commit's own text, not any "zz": the page names HarfBuzz since #4823.
+  one.indexOf('The test server runs [`aaaaaaaa`]') >= 0 && one.indexOf('main server runs') < 0 && one.indexOf('zz' + A.slice(2, 8)) < 0);
 yes('garbage shapes do not throw and change nothing',
   fill(CREDITS, 'nope', 7) === CREDITS && fill(CREDITS, { live: 3, dev: [] }, null) === CREDITS);
 

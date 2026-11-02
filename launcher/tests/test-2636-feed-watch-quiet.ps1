@@ -30,34 +30,26 @@
     - WaitForFeedChange waits longer than the site holds the tip, read out of
       site\server.js, so the site's own 204 always arrives first
 
-  HOW. Compiles launcher\app\*.cs with the build's compiler and C# version
-  (Launcher-Csc.ps1), as test-feed-conditional.ps1 does, and calls
-  Updater.Tip by reflection: the request WaitForFeedChange makes after
-  CheckUrl, which only lets https to thornswood.net through. Nothing under
-  C:\Thornswood is read or written and nothing leaves 127.0.0.1.
+  HOW. Builds the launcher project with the .NET 10 SDK and loads it
+  (Add-LauncherAssembly in Launcher-Csc.ps1), as test-feed-conditional.ps1
+  does, and calls Updater.Tip by reflection: the request WaitForFeedChange
+  makes after CheckUrl, which only lets https to thornswood.net through.
+  Nothing under C:\Thornswood is read or written and nothing leaves 127.0.0.1.
 
   On main's code before #2636 there is no Updater.Tip and this fails.
 
-  Runs under Windows PowerShell 5.1 and restarts itself there from pwsh,
-  because the launcher runs on the .NET Framework.
+  Runs in pwsh 7 on any system the .NET 10 SDK is on, because the launcher
+  is a .NET 10 program now (#4823).
 #>
 [CmdletBinding()]
-param([string]$Src)
+param()
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the launcher's own build, by the .NET 10 SDK (#4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $Here = Split-Path -Parent (Split-Path -Parent $Here)
-if (-not $Src) { $Src = Join-Path $Here 'launcher\app' }
-
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  this runs the launcher''s code on the .NET Framework the launcher runs on, which only Windows has'; exit 0 }
-if ($PSVersionTable.PSEdition -eq 'Core') {
-    $winps = Get-WindowsPowerShell
-    & $winps -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Src $Src
-    exit $LASTEXITCODE
-}
+$Src = Join-Path $Here 'launcher\app'
 
 $script:pass = 0
 $script:fail = 0
@@ -183,38 +175,20 @@ public class TsTipServer
 '@
 
 function Run {
-    Yes 'the build''s compiler is here' (Test-Path -LiteralPath $LauncherCsc)
-    if (-not (Test-Path -LiteralPath $LauncherCsc) -or $LauncherNeeded.Count -eq 0) { return }
+    Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
+    if (-not (Test-Path -LiteralPath $LauncherDotnet)) { return }
 
-    $refs = @(); $missing = @()
-    foreach ($n in $LauncherNeeded) {
-        $p = Find-LauncherRef $n
-        if ($p) { $refs += $p } else { $missing += $n }
-    }
-    foreach ($n in $LauncherLib) {
-        $p = $n
-        if (Test-Path -LiteralPath $p) { $refs += $p } else { $missing += $n }
-    }
-    Yes ('every reference is on this machine' + $(if ($missing.Count) { ', missing ' + ($missing -join ', ') } else { '' })) ($missing.Count -eq 0)
-    if ($missing.Count) { return }
-
-    $cs = @(Get-ChildItem (Join-Path $Src '*.cs') -File)
-    $dll = Join-Path $tmp 'Thornswood.dll'
-    $cscArgs = @('/noconfig', '/nologo', '/target:library', '/platform:anycpu', "/langversion:$LauncherLangVersion", "/out:$dll")
-    foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-    foreach ($f in $cs) { $cscArgs += $f.FullName }
-    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $said = & $LauncherCsc @cscArgs 2>&1
-    $rc = $LASTEXITCODE
-    $ErrorActionPreference = $old
-    $built = ($rc -eq 0) -and (Test-Path -LiteralPath $dll)
-    Yes ('the launcher''s {0} source files compile at C# {1}' -f $cs.Count, $LauncherLangVersion) $built
-    if (-not $built) {
-        foreach ($l in @($said | Where-Object { "$_" -match 'error' } | Select-Object -First 20)) { Write-Host "      $l" }
+    # The launcher project itself, built as the build builds it, and loaded
+    # into this PowerShell, which runs on .NET 10 as the launcher does.
+    $asm = $null
+    try { $asm = Add-LauncherAssembly }
+    catch {
+        Yes 'the launcher project builds' $false
+        foreach ($l in @(($_.Exception.Message -split "`r?`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20)) { Write-Host "      $l" }
         return
     }
-
-    $asm = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($dll))
+    Yes 'the launcher project builds' ($null -ne $asm)
+    if ($null -eq $asm) { return }
     $U = $asm.GetType('Thornswood.Updater')
     $C = $asm.GetType('Thornswood.Config')
     $flags = [Reflection.BindingFlags]'Static, Public, NonPublic'
@@ -274,7 +248,7 @@ function Run {
 
         $srv.Status = 202; $srv.HoldMs = 0
         $r = Ask $tag 10000
-        Yes ('a 202, success to WebClient but neither answer, throws: ' + $script:threw) (
+        Yes ('a 202, a success but neither answer, throws: ' + $script:threw) (
             $null -eq $r -and $null -ne $script:threw -and $script:threw -match '202')
 
         $srv.Status = 0; $srv.HoldMs = 0

@@ -58,7 +58,7 @@ EVERY RELEASE HAS TO BE SIGNED NOW. `ExpectedSigner` in
 `launcher\app\Updater.cs` is set, so a launcher from dev 1.1.101.17 on
 refuses an update that is not signed by this certificate. A machine with no
 `records\signing\signing.json`, or one that is disabled, still builds and only prints
-"not signing", but Ship and Publish-Installer refuse to publish from it
+"not signing", but Ship refuses to publish from it
 (`scripts\release\Assert-PublishSigned.ps1`). So only a machine that signs
 Ships, dev included.
 
@@ -83,6 +83,6 @@ pinned. What stays the same, measured on dev 1.1.101.34 on 28 September:
 A new certificate profile or a new identity validation gets a new durable
 identity value. Before signing anything with it, add the new value to
 `Signature.Identities` and Ship that launcher signed with the old profile;
-otherwise every installed launcher refuses the next update. Ship and
-Publish-Installer run the same check before they publish, so a launcher signed
+otherwise every installed launcher refuses the next update. Ship runs the
+same check before it publishes, so a launcher signed
 with a profile the code does not name stops there.

@@ -9,7 +9,7 @@
   no Discord ticket and talks to no launcher. Since every join needs a token
   (#1303) it could never get in, and since #1337 its handshake was refused
   before it opened. Nothing linked to it. The two clients are the launcher's
-  voice page and the game's overlay, both loaded off disk. So the page went,
+  voice and the game's overlay, the overlay loaded off disk. So the page went,
   along with the route that served it and the Origin rule that let a page on
   this host open a socket.
 
@@ -22,14 +22,16 @@
     a socket opened the way the page opened it (Origin this host, through
     Caddy, no token) is refused before any 101, and so is one from a page on
     this host that does hold a good token;
-    the two clients' way in (Origin null or file://, a good token) still
-    joins;
+    the two clients' way in still joins: a page off disk (Origin null or
+    file://) with a good token, and the launcher's voice, which since #4823
+    is C# with no browser and sends no Origin at all, run here by
+    tests\voice-launcher.js;
 
   and, read from the tree: voice\public is gone, Install-Voice.ps1 neither
   packs nor sends nor checks for it, making the dev instance copies no page
   from live, the build parses no file there, no harness reads it, and the
-  only files that open a socket to the service are the launcher's voice
-  page, the game's chat overlay and the load test's bots
+  only things that open a socket to the service are the launcher's voice
+  (VoiceSession.cs), the game's chat overlay and the load test's bots
   (scripts\bot\load-bots.js, #4623), which stand in for the overlay: each
   gets a join token from /token first, as the overlay does.
 
@@ -45,6 +47,7 @@ const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn, execFileSync } = require('child_process');
+const VL = require('./voice-launcher');
 
 const CR = String.fromCharCode(13);
 const VOICE = process.env.VOICE || path.join(REPO_DIR, 'voice', 'voice-server.js');
@@ -279,9 +282,12 @@ function get(port, route) {
     .filter((f) => /new WebSocket\(/.test(read(f)));
   // And the bot pass's relay client (#5196), which joins a copy of the
   // service of its own the way the chat overlay does, from node, with no Origin.
-  const clients = ['game/ui/thornswood-chat.js', 'launcher/voice-host.html', 'scripts/bot/load-bots.js', 'scripts/bot/relay.js'];
-  yes('the only files that open a socket are the launcher\'s voice page, the game\'s chat overlay, the load test\'s bots and the bot pass\'s relay client (' + opens.join(', ') + ')',
+  const clients = ['game/ui/thornswood-chat.js', 'scripts/bot/load-bots.js', 'scripts/bot/relay.js'];
+  yes('the only scripts that open a socket are the game\'s chat overlay, the load test\'s bots and the bot pass\'s relay client (' + opens.join(', ') + ')',
       opens.length === clients.length && clients.every((f) => opens.indexOf(f) >= 0));
+  const csOpens = tracked.filter((f) => /^(launcher|installer)\/.*\.cs$/.test(f)).filter((f) => /new ClientWebSocket\(/.test(read(f)));
+  yes('and the only C# that opens one is the launcher\'s voice (' + csOpens.join(', ') + ')',
+      csOpens.length === 1 && csOpens[0] === 'launcher/app/VoiceSession.cs');
 
   // ------------------------------------------------------- the service
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-1822-'));
@@ -329,6 +335,14 @@ function get(port, route) {
     yes('and so does one that says file:// (' + r.status + ')', r.status === 101 && r.joined, r.late);
     r = await knock(PORT, { Host: HOST, Origin: 'null' }, ++pid, false);
     yes('a page off disk with no token is still refused (' + r.status + ')', r.status !== 101 && !r.joined, r.late);
+
+    // The launcher's voice, which opens its socket with no Origin, as it is.
+    const lv = await VL.start({ clock: 'real', wire: 'ws', name: 'the launcher' });
+    try {
+      await lv.send({ do: 'configure', profileId: ++pid, name: 'Tester', token: await joinToken(PORT, pid), base: 'https://' + HOST });
+      await lv.until(() => lv.host('status').indexOf('connected') >= 0, 15000, 'a connection').catch(() => false);
+      yes('the launcher\'s voice, with no Origin and a good token, joins', lv.host('status').indexOf('connected') >= 0);
+    } finally { await lv.quit(); }
 
     await new Promise((ok) => { srv.once('exit', ok); srv.kill(); });
     stopped = true;

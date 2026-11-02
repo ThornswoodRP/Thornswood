@@ -79,9 +79,10 @@ const sendJson = (res, code, obj) => send(res, code, JSON.stringify(obj));
   true, or returns false when there is no range to honour and the caller sends
   its own 200.
 
-  The static files had this and /file/ did not. /file/ is where the installer
-  gets its payload, and Bootstrap.cs asks for the rest of a half downloaded zip
-  with a Range header and appends whatever a 206 brings. The site answered
+  The static files had this and /file/ did not. /file/ was where the old
+  installer got its payload (until #4824), asking for the rest of a half
+  downloaded zip with a Range header and appending whatever a 206 brought,
+  and a browser resumes a download from it the same way. The site answered
   every such request 200 with the whole file and no Accept-Ranges, so a
   connection that dropped at 300 MB started again from nothing, while the Join
   page promises it carries on. The To Do List has it measured live: a Range

@@ -17,7 +17,8 @@
        then moves. (Matched on tokens, not on exact spacing.)
     2. The real ReplaceName, SwapNameIn, SwapCopyIn and DeleteName, lifted
        out of OwnGame.cs with the MoveFileEx and handles they use, compiled
-       with the launcher's compiler and run on real files:
+       with the .NET SDK the launcher builds with (everywhere) and run on
+       real files (on Windows only: they rename through kernel32):
          - replace, create, nothing left beside;
          - read only, without clearReadOnly: refused, left as it was;
            with it: replaced;
@@ -82,7 +83,7 @@ Yes 'the share step does the same, around the hard link' ($share -match '(?s)\bD
 Yes 'no File.Move is left in OwnGameShare.cs' ($share -notmatch 'File\.Move\(')
 
 # ---- 2 and 3: the real code, compiled -----------------------------------------------
-$region = [regex]::Match($og, '(?s)\n(        (?:internal )?static void WriteRecord\(string path, IEnumerable<string> lines\)\n.*?static extern bool MoveFileEx\([^)]*\);\n)')
+$region = [regex]::Match($og, '(?s)\n(        (?:internal )?static void WriteRecord\(string path, IEnumerable<string> lines\)\n.*?private static partial bool MoveFileEx\([^)]*\);\n)')
 $block = [regex]::Match($og, '(?s)\n(        // ---- #2599: one name of the game folder replaced whole.*?        // ---- end #2599[^\n]*\n)')
 Yes 'ReplaceName and the record writers, with the MoveFileEx they call, are in OwnGame.cs' ($region.Success -and $region.Groups[1].Value -match 'internal static void ReplaceName\(string next, string path, bool clearReadOnly\)')
 Yes 'DeleteName, SwapCopyIn and SwapNameIn are in OwnGame.cs' ($block.Success -and $block.Groups[1].Value -match 'internal static void DeleteName\(' -and $block.Groups[1].Value -match 'internal static void SwapCopyIn\(' -and $block.Groups[1].Value -match 'internal static void SwapNameIn\(')
@@ -90,8 +91,6 @@ Yes 'the records keep their own SwapIn, a different name from ReplaceName' ($og 
 Yes 'ReplaceName renames with write through and never opens next for writing: a link to the Steam copy is not flushed' ($region.Success -and $region.Groups[1].Value -match 'internal static void ReplaceName\(string next, string path, bool clearReadOnly\)\s*\{\s*int err = MoveOver\(next, path\);' -and $region.Groups[1].Value -match 'fs\.Flush\(true\)' -and $region.Groups[1].Value -match 'MoveReplaceExisting \| MoveWriteThrough')
 Yes 'SwapCopyIn flushes the fresh copy it made before it takes the file''s place' ($block.Success -and $block.Groups[1].Value -match '(?s)internal static void SwapCopyIn\(string path, string aside\).*?File\.Copy\(path, aside, false\);.*?FlushToDisk\(aside\);\s*SwapNameIn\(aside, path, false\);')
 if (-not ($region.Success -and $block.Success)) { Done }
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'SKIP  the swaps, run: the launcher''s .NET Framework code renames through kernel32, which only Windows has'; Done }
 
 $work = Join-Path $Scratch ('thornswood-2599-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 $null = New-Item -ItemType Directory -Force -Path $work
@@ -108,7 +107,7 @@ namespace Thornswood
 {
     static class Swallow { public static void Note(string where, Exception ex) { Console.WriteLine("NOTE " + where + ": " + ex.Message); } }
 
-    static class OwnGame
+    static partial class OwnGame
     {
 __REGION__
 __BLOCK__
@@ -178,21 +177,15 @@ __BLOCK__
 }
 '@
     $driver = $driver.Replace('__REGION__', $region.Groups[1].Value.TrimEnd()).Replace('__BLOCK__', $block.Groups[1].Value.TrimEnd())
-    $src = Join-Path $work 'WholeSwapTest.cs'
-    [IO.File]::WriteAllText($src, $driver, (New-Object Text.UTF8Encoding($false)))
-    $exe = Join-Path $work 'whole-swap-test.exe'
-    $fw = Get-WindowsPath 'Microsoft.NET\Framework64\v4.0.30319'
-    $cscArgs = @('/noconfig', '/nologo', '/target:exe', "/langversion:$LauncherLangVersion", "/out:$exe",
-                 "/reference:$(Join-Path $fw 'System.dll')", "/reference:$(Join-Path $fw 'System.Core.dll')", $src)
-    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $compiled = & $LauncherCsc @cscArgs 2>&1
-    $ErrorActionPreference = $old
-    $built = ($LASTEXITCODE -eq 0) -and (Test-Path -LiteralPath $exe)
-    Yes "the real code compiles with the launcher's compiler, C# $LauncherLangVersion" $built
-    if (-not $built) { foreach ($l in @($compiled)) { Write-Host "      $l" }; Done }
+    $dll = $null
+    try { $dll = Build-LauncherCode -Source $driver -Exe }
+    catch { Write-Host ('      ' + $_.Exception.Message) }
+    Yes "the real code compiles with the .NET SDK the launcher builds with, C# $LauncherLangVersion" ($null -ne $dll)
+    if (-not $dll) { Done }
+    if (-not $OnWindows) { Write-Host 'SKIP  the swaps, run: the launcher''s code renames through kernel32, which only Windows has'; Done }
 
     $script:out = ''
-    function Run([string[]]$a) { $script:out = (& $exe @a) -join "`n"; return $LASTEXITCODE }
+    function Run([string[]]$a) { $script:out = (Invoke-LauncherExe $dll @a) -join "`n"; return $LASTEXITCODE }
     function Put([string]$p, [string]$t) { [IO.File]::WriteAllText($p, $t) }
     function Text([string]$p) { if (Test-Path -LiteralPath $p) { return [IO.File]::ReadAllText($p) } else { return $null } }
     function RO([string]$p) { return (([IO.File]::GetAttributes($p) -band [IO.FileAttributes]::ReadOnly) -ne 0) }
@@ -257,7 +250,7 @@ __BLOCK__
     $whole = 0; $bad = @()
     $rand = New-Object Random 2599
     for ($i = 0; $i -lt 50; $i++) {
-        $psi = New-Object Diagnostics.ProcessStartInfo($exe, ('"loop" "{0}"' -f $kp))
+        $psi = New-Object Diagnostics.ProcessStartInfo($LauncherDotnet, ('"{0}" "loop" "{1}"' -f $dll, $kp))
         $psi.UseShellExecute = $false; $psi.RedirectStandardOutput = $true
         $p = [Diagnostics.Process]::Start($psi)
         $null = $p.StandardOutput.ReadLine()
@@ -270,7 +263,7 @@ __BLOCK__
     $op = Join-Path $work 'oldway\settings.ini'
     $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $op)
     Put $op $body
-    $psi = New-Object Diagnostics.ProcessStartInfo($exe, ('"oldway" "{0}"' -f $op))
+    $psi = New-Object Diagnostics.ProcessStartInfo($LauncherDotnet, ('"{0}" "oldway" "{1}"' -f $dll, $op))
     $psi.UseShellExecute = $false; $psi.RedirectStandardOutput = $true
     $p = [Diagnostics.Process]::Start($psi)
     $said = $p.StandardOutput.ReadLine()

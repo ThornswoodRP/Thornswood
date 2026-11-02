@@ -15,8 +15,9 @@
   What this drives:
 
     1. launcher\app\Progress.cs (PlayBar, PlayProgress, ProgressStep) with
-       Swallow.cs, compiled with the compiler and the C# version the build
-       uses (tests\Launcher-Csc.ps1), into a small program that
+       Swallow.cs, built the way the project builds them, by the .NET 10 SDK
+       (tests\Launcher-Csc.ps1, #4823, on any machine that has it), into a
+       small program that
        feeds it the reports each piece of work makes, in the order they make
        them: an update synced to its release record (checking files, then the
        download), several packs, a self-update, the client download, the own
@@ -25,8 +26,8 @@
        fill, that nothing goes backwards, the moving state, that a burst of
        reports is one redraw, and that the button says Play (or the error it
        said before) once the work ends.
-    2. The wiring, read from the real files: the fill in the Primary style's
-       template in ui.xaml, the timer and the fill in ShellProgress.cs,
+    2. The wiring, read from the real files: the fill in the Primary theme's
+       template in MainWindow.axaml, the timer and the fill in ShellProgress.cs,
        DrawStatus putting the words first and keeping the button off, and
        every caller (Updater.Download, Sync, RunUpdate, the client repair,
        OwnGame.Make and Refresh, StartOwnGame, Verify.Bytes) reporting and
@@ -43,7 +44,7 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $Repo = Split-Path -Parent (Split-Path -Parent $Here)
 if (-not $AppDir) { $AppDir = Join-Path $Repo 'launcher\app' }
-if (-not $Xaml) { $Xaml = Join-Path $Repo 'launcher\ui.xaml' }
+if (-not $Xaml) { $Xaml = Join-Path $AppDir 'MainWindow.axaml' }
 
 $script:pass = 0
 $script:fail = 0
@@ -75,13 +76,9 @@ $progressPath = Join-Path $AppDir 'Progress.cs'
 Yes 'Progress.cs is in the launcher source' (Test-Path -LiteralPath $progressPath)
 if (-not (Test-Path -LiteralPath $progressPath)) { Done }
 
-# ---- 1. compile the real model and drive it ------------------------------------
-if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'; Done }
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
-
-$tmp = Join-Path ([IO.Path]::GetTempPath()) ('ts-play-progress-' + [Guid]::NewGuid().ToString('N'))
-New-Item -ItemType Directory -Path $tmp | Out-Null
+# ---- 1. build the real model and drive it --------------------------------------
+Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 $driver = @'
 using System;
@@ -313,21 +310,12 @@ namespace Thornswood
     }
 }
 '@
-$driverPath = Join-Path $tmp 'Drive.cs'
-[IO.File]::WriteAllText($driverPath, $driver, (New-Object Text.UTF8Encoding($false)))
-$exe = Join-Path $tmp 'drive.exe'
-$cscArgs = @('/noconfig', '/nologo', '/target:exe', '/platform:anycpu', "/langversion:$LauncherLangVersion", "/out:$exe",
-             '/reference:System.dll', $progressPath, (Join-Path $AppDir 'Swallow.cs'), $driverPath)
-$old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-$said = & $LauncherCsc @cscArgs 2>&1
-$ErrorActionPreference = $old
-Yes 'Progress.cs compiles with the compiler the build runs' ((Test-Path -LiteralPath $exe) -and $LASTEXITCODE -eq 0)
-if (-not (Test-Path -LiteralPath $exe)) {
-    $said | ForEach-Object { Write-Host "      $_" }
-    Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
-    Done
-}
-$out = & $exe 2>&1
+$exe = $null
+try { $exe = Build-LauncherCode -File $progressPath, (Join-Path $AppDir 'Swallow.cs') -Source $driver -Exe }
+catch { Write-Host ('      ' + $_.Exception.Message) }
+Yes 'Progress.cs builds the way the project builds it' ($null -ne $exe)
+if (-not $exe) { Done }
+$out = Invoke-LauncherExe $exe 2>&1
 $code = $LASTEXITCODE
 foreach ($line in $out) {
     $l = [string]$line
@@ -336,35 +324,35 @@ foreach ($line in $out) {
 }
 Yes 'the driver ran to the end' (($out | Where-Object { ([string]$_).StartsWith('RESULT ') }).Count -eq 1)
 Yes 'the driver exits 0 only when every step passed' (($code -eq 0) -eq (($out | Where-Object { ([string]$_).StartsWith('FAIL  ') }).Count -eq 0))
-Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 
 # ---- 2. the wiring -----------------------------------------------------------------
 $xamlText = Read-Text $Xaml
-$pAt = $xamlText.IndexOf('<Style x:Key="Primary"')
-$primary = if ($pAt -ge 0) { $xamlText.Substring($pAt, $xamlText.IndexOf('</Style>', $pAt) - $pAt) } else { '' }
-Yes 'ui.xaml: the Primary style is there' ($primary.Length -gt 0)
-$fillAt = $primary.IndexOf('x:Name="fill"')
-Yes 'ui.xaml: the Primary template has the fill' ($fillAt -ge 0)
-Yes 'ui.xaml: the fill sits over the face and under the words' ($fillAt -gt $primary.IndexOf('x:Name="b"') -and $fillAt -lt $primary.IndexOf('<ContentPresenter'))
+$pAt = $xamlText.IndexOf('<ControlTheme x:Key="Primary"')
+$primary = if ($pAt -ge 0) { $xamlText.Substring($pAt, $xamlText.IndexOf('</ControlTheme>', $pAt) - $pAt) } else { '' }
+Yes 'MainWindow.axaml: the Primary theme is there' ($primary.Length -gt 0)
+$fillAt = $primary.IndexOf('Name="fill"')
+Yes 'MainWindow.axaml: the Primary template has the fill' ($fillAt -ge 0)
+Yes 'MainWindow.axaml: the fill sits over the face and under the words' ($fillAt -gt $primary.IndexOf('Name="b"') -and $fillAt -lt $primary.IndexOf('<ContentPresenter'))
 $fillTag = if ($fillAt -ge 0) { $primary.Substring($primary.LastIndexOf('<', $fillAt), $primary.IndexOf('>', $fillAt) - $primary.LastIndexOf('<', $fillAt)) } else { '' }
-Yes 'ui.xaml: the fill starts hidden, empty, from the left, and takes no clicks' ($fillTag -match 'Visibility="Collapsed"' -and $fillTag -match 'Width="0"' -and $fillTag -match 'HorizontalAlignment="Left"' -and $fillTag -match 'IsHitTestVisible="False"')
-Yes 'ui.xaml: the fill is the launcher''s accent colour, so every theme keeps its look' (([regex]::Matches($primary, 'Background="\{DynamicResource Accent\}"')).Count -ge 3)
-Yes 'ui.xaml: the button keeps its height' ($primary -match '<Setter Property="Height" Value="56"/>')
+Yes 'MainWindow.axaml: the fill starts hidden, empty, from the left, and takes no clicks' ($fillTag -match 'IsVisible="False"' -and $fillTag -match 'Width="0"' -and $fillTag -match 'HorizontalAlignment="Left"' -and $fillTag -match 'IsHitTestVisible="False"')
+Yes 'MainWindow.axaml: the fill is the launcher''s accent colour, so every theme keeps its look' (([regex]::Matches($primary, 'Background="\{DynamicResource Accent\}"')).Count -ge 3)
+Yes 'MainWindow.axaml: the button keeps its height' ($primary -match '<Setter Property="Height" Value="56"/>')
 try {
     $doc = New-Object Xml.XmlDocument
     $doc.LoadXml($xamlText)
-    Yes 'ui.xaml still reads as XML' $true
-} catch { Yes ('ui.xaml still reads as XML: ' + $_.Exception.Message) $false }
+    Yes 'MainWindow.axaml still reads as XML' $true
+} catch { Yes ('MainWindow.axaml still reads as XML: ' + $_.Exception.Message) $false }
 
 $sp = Read-Text (Join-Path $AppDir 'ShellProgress.cs')
 Yes 'ShellProgress.cs: the sink feeds the PlayBar and Stop on the end' ($sp -match 'PlayProgress\.Sink\s*=' -and $sp -match 'playBar\.Stop\(\)' -and $sp -match 'playBar\.Offer\(s\)')
 Yes 'ShellProgress.cs: redraws on a timer every PlayBar.DrawEveryMs, only when something changed' ($sp -match 'FromMilliseconds\(PlayBar\.DrawEveryMs\)' -and $sp -match 'if \(playBar\.TakeDirty\(\)\) DrawPlayBar\(\)')
 Yes 'ShellProgress.cs: one wake per run, not a BeginInvoke per report' ($sp -match 'Interlocked\.CompareExchange\(ref playBarTicking, 1, 0\)')
-Yes 'ShellProgress.cs: finds the fill in the button''s template' ($sp -match 'Template\.FindName\("fill", btnPlay\)')
-Yes 'ShellProgress.cs: an unknown total slides a band steadily, for ever' ($sp -match 'RepeatBehavior\.Forever' -and $sp -match 'AutoReverse = true')
+Yes 'ShellProgress.cs: finds the fill in the button''s template' ($sp -match 'btnPlay\.GetTemplateDescendants\(\)\.OfType<Control>\(\)\.FirstOrDefault\(c => c\.Name == "fill"\)')
+Yes 'ShellProgress.cs: an unknown total slides a band steadily, for ever' ($sp -match 'IterationCount = IterationCount\.Infinite' -and $sp -match 'PlaybackDirection = PlaybackDirection\.Alternate')
 Yes 'ShellProgress.cs: a known total sets the width from the fill' ($sp -match 'playFill\.Width = Math\.Max\(0, Math\.Min\(1\.0, f\)\) \* w')
 Yes 'ShellProgress.cs: when the work ends the fill goes and DrawStatus puts Play or the reason back' ((Body $sp 'static void DrawPlayBar()') -match 'HidePlayFill\(\);\s*(//[^\n]*\n\s*)*DrawStatus\(\);')
-Yes 'ShellProgress.cs: the words read on the fill and on the face (Ink)' ($sp -match 'SetResourceReference\(Control\.ForegroundProperty, "Ink"\)' -and $sp -match 'ClearValue\(Control\.ForegroundProperty\)')
+Yes 'ShellProgress.cs: the words read on the fill and on the face (Ink, followed as the theme changes)' (
+    $sp -match 'playInk = btnPlay\.Bind\(TemplatedControl\.ForegroundProperty, btnPlay\.GetResourceObservable\("Ink"\)\)' -and $sp -match 'if \(playInk != null\) \{ playInk\.Dispose\(\); playInk = null; \}')
 Yes 'ShellProgress.cs: redrawn when the window is resized' ($sp -match 'btnPlay\.SizeChanged')
 
 $shell = Read-Text (Join-Path $AppDir 'Shell.cs')
@@ -381,14 +369,14 @@ Yes 'the client repair opens the button before it starts and closes it in its fi
 $upd = Read-Text (Join-Path $AppDir 'Updater.cs')
 $dl = Body $upd 'static string Download(Config cfg'
 Yes 'Updater.Download reports each piece it reads' ($dl -match 'PlayProgress\.Part\(had, length\)' -and $dl -match 'PlayProgress\.PartDone\(\)')
-Yes 'Updater.Download reads the size the server gives' ($dl -match 'Content-Length')
+Yes 'Updater.Download reads the size the server gives' ($dl -match 'long length = res\.Content\.Headers\.ContentLength \?\? -1;')
 Yes 'Updater.Download no longer uses DownloadFile, and throws a half file away' ($dl -notmatch '\.DownloadFile\(' -and $dl -match 'File\.Delete\(tmp\)')
 Yes 'Updater.Download still checks the url and the checksum' ($dl -match 'CheckUrl\(url\)' -and $dl -match 'Checksum did not match')
 
 $sync = Read-Text (Join-Path $AppDir 'Sync.cs')
 Yes 'Sync: checking the install counts every file' ($sync -match 'PlayProgress\.Files\("Checking files", \+\+looked, items\.Count\)')
 Yes 'Sync: the downloads report their bytes against the total' ($sync -match 'PlayProgress\.Bytes\("Updating", before \+ Math\.Min\(had, f\.Value\), total\)')
-Yes 'Sync: Transfer reports as it writes' ((Body $sync 'static void Transfer(') -match 'onBytes\(had\)')
+Yes 'Sync: Transfer reports as it writes' ((Body $sync 'static void Transfer(') -match 'Http\.CopyBody\([^;]*n => onBytes\(had \+ n\)\);')
 Yes 'Sync: packs after a record without its files are planned as downloads' ($sync -match 'PlayProgress\.Plan\("Updating", count, "updates"\)')
 
 $su = Read-Text (Join-Path $AppDir 'ShellUpdate.cs')
@@ -397,9 +385,14 @@ $su = Read-Text (Join-Path $AppDir 'ShellUpdate.cs')
 $run = Body $su 'static void RunUpdate(Action<bool> after)'
 Yes 'RunUpdate opens the button with one download per pack' ($run -match 'PlayProgress\.Begin\("Updating", downloads\)')
 $stages = Read-Text (Join-Path $AppDir 'UpdateStages.cs')
-Yes 'the update''s download: the self-update is its own phase' ((Body $stages 'public static Fetched FetchUpdate(') -match 'PlayProgress\.Plan\("Updating the launcher", 1, "updates"\)')
+# Since the launcher updates through Velopack (#4825), its download is
+# VeloUpdate.FetchLauncher, which FetchUpdate calls.
+$velo = Read-Text (Join-Path $AppDir 'VeloUpdate.cs')
+Yes 'the update''s download: the self-update is its own phase' (
+    (Body $stages 'public static Fetched FetchUpdate(') -match 'FetchLauncher\(launcher, log\);' -and
+    (Body $velo 'public static void FetchLauncher(') -match 'PlayProgress\.Plan\("Updating the launcher", 1, "updates"\);\s*PlayProgress\.Part\(0, size\);')
 Yes 'RunUpdate marks its thread second, so a folder being prepared keeps the button (#2210)' ($run -match 'PlayProgress\.Second\(true\);' -and $run -match 'finally \{ PlayProgress\.Second\(false\); \}')
-Yes 'RunUpdate closes it when it finishes and when it fails, before DrawStatus' (([regex]::Matches($run, 'PlayProgress\.End\(\);\s*(updatePending = false;\s*)?DrawStatus\(\)')).Count -eq 2)
+Yes 'RunUpdate closes it when it finishes and when it fails, before DrawStatus' (([regex]::Matches($run, 'PlayProgress\.End\(\);\s*((updatePending|updating) = false;\s*)*DrawStatus\(\)')).Count -eq 2)
 
 $sog = Read-Text (Join-Path $AppDir 'ShellOwnGame.cs')
 # The overload that does the work. Since #1584 StartOwnGame(make, loud) only
@@ -410,7 +403,7 @@ $start = Body $sog 'static bool StartOwnGame(bool make, bool loud, Action then, 
 Yes 'StartOwnGame opens the button' ($start -match 'PlayProgress\.Begin\(OwnGame\.Phase, 0\)')
 $work = Body $sog 'static void FolderWork('
 Yes 'the folder work closes it as soon as the work is over' ($work -match 'ownGameBusy = false;\s*PlayProgress\.End\(\);')
-Yes 'the folder work holds the button while it runs and lets go before it finishes (#2210)' ($work -match 'PlayProgress\.FolderFirst\(true\);' -and $work -match 'PlayProgress\.FolderFirst\(false\);\s*try\s*\{\s*win\.Dispatcher\.BeginInvoke')
+Yes 'the folder work holds the button while it runs and lets go before it finishes (#2210)' ($work -match 'PlayProgress\.FolderFirst\(true\);' -and $work -match 'PlayProgress\.FolderFirst\(false\);\s*try\s*\{\s*Dispatcher\.UIThread\.Post')
 
 $og = Read-Text (Join-Path $AppDir 'OwnGame.cs')
 Yes 'OwnGame: the phase is "Preparing the game folder"' ($og -match 'public const string Phase = "Preparing the game folder";')

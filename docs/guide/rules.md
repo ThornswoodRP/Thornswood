@@ -5,9 +5,9 @@ Part of the [Developer Guide](../../Developer-Guide.md), the index of every page
 ## What this is
 
 Thornswood: a modded co-op Skyrim roleplay server on SkyMP, in alpha and
-open by application. This repo is the launcher (launcher\app, C# 13 and WPF on
-the .NET Framework 4.8.1, built with MSBuild from launcher\app\Thornswood.csproj,
-#498), the game plugins (game\plugins, Skyrim Platform
+open by application. This repo is the launcher (launcher\app, C# and Avalonia
+on .NET 10, published with Native AOT from launcher\app\Thornswood.csproj,
+#4823), the game plugins (game\plugins, Skyrim Platform
 JavaScript), the site (site, node), the Discord bot (bot,
 Python) and every script that ships or runs it. Owner: Patrick (EvilPatrick06).
 
@@ -76,7 +76,7 @@ me. Each hit names the file, the line and the rule, and turns the build red:
 | `old-owner` | the old owner name |
 | `open-alpha` | calling the alpha a playtest that is closed; it is open by application |
 | `placeholder` | a marker left for later, in capitals (to do, to be decided, fix me), or filler Latin |
-| `names-person` | a person's name in README.md or the six component READMEs (launcher, site, voice, game\plugins, game\ui, installer\setup) |
+| `names-person` | a person's name in README.md or the six component READMEs (launcher, site, voice, game\plugins, game\ui, installer) |
 
 A line that has to say it anyway (this section naming the word it bans, a
 document quoting a note as it went out) goes in

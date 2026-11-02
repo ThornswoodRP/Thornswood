@@ -135,7 +135,7 @@ if (block) {
 
 // The launcher reads the same two fields.
 yes("the launcher reads the light list and the whole order from the manifest",
-    /\[DataMember\] public ServerMod\[\] light;/.test(verify) && /\[DataMember\] public string\[\] loadOrder;/.test(verify));
+    /\[JsonInclude\] public ServerMod\[\] light;/.test(verify) && /\[JsonInclude\] public string\[\] loadOrder;/.test(verify));
 yes("and puts a plugin list into the whole order when there is a light list",
     /LoadOrder\.ReorderWhole\(lines, whole, ccc\)/.test(verify));
 

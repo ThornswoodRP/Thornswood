@@ -9,8 +9,9 @@
 
   WHY. The repository is being reorganised in phases (issue #440 on the
   board), and the scripts that build a release find what they ship by joining
-  a path onto their own folder. Build-Launcher, Package-Thornswood and Go.ps1
-  only warn in yellow when one of those files is not there, and carry on, so
+  a path onto their own folder. Build-Launcher, Package-Thornswood (gone with
+  the old installer, #4824) and Go.ps1 only warned in yellow when one of
+  those files was not there, and carried on, so
   a move that missed one path would ship a launcher without its art or a
   pack without its overlays, and nobody would notice until a tester did. This
   turns that into a failed check before anything is built.
@@ -45,7 +46,7 @@ $notInGit = @{
     '.git'                          = 'the repository itself'
     'version.json'                  = 'the releases clone''s feed; the scripts that name it are pointed at that clone'
     'local'                         = 'what one machine keeps and git ignores; Audit-Mods.ps1 writes mod-audit.json there'
-    'out'                           = 'the build output, which git ignores; Build-Launcher leaves the setup stub there'
+    'out'                           = 'the build output, which git ignores; Build-Launcher and Update-ShipRoot build under it'
     'out/dist'                      = 'the release output, under out, which git ignores (CONTRIBUTING, the fork and its build)'
     'records/signing/signing.json'  = 'a machine''s signing settings, ignored by git'
     'records/signing/client'        = 'Microsoft''s signing client, fetched from NuGet by Setup-ShipMachine.ps1 and ignored by git (#458)'
@@ -58,12 +59,8 @@ $notInGit = @{
     'scripts/dev/task.json'            = 'what Trace-Gate.ps1 -Install writes beside the trace task''s copy in C:\Thornswood-Trace\task on the box (#3114), never in this repository'
     'scripts/dev/seen.txt'             = 'the runs the trace task has traced, beside its copy on the box in C:\Thornswood-Trace\task (#3114), never in this repository'
     'scripts/vps/watch-outside.json'   = 'what Watch-Outside.ps1 -Export writes beside its copy in the public repository it runs from (#2755), never in this one'
-    'launcher/app/app.ico'             = 'the second place the icon lookups try; the icon is launcher/app.ico'
     'Thornswood-Ops'                   = 'the private ops repo, checked out beside this one (#3693): Check-RehearsalDue.ps1 reads RESTORING.md there, and the path climbs above this root, so it is named here without the ..'
 }
-# Setup-Thornswood.ps1 runs inside an unpacked installer, where its own folder
-# is the installer's, so its paths are the installer's layout.
-$skipScripts = @('Setup-Thornswood.ps1')
 
 $tracked = @{}
 foreach ($t in (& git -C $repo ls-files)) {
@@ -96,7 +93,6 @@ if (Test-Path -LiteralPath $testsDir) { $scan += @(Get-ChildItem -LiteralPath $t
 . (Join-Path (Join-Path (Join-Path $repo 'scripts') 'dev') 'Harness-Files.ps1')
 foreach ($p in @(Get-ProductTestFolders $repo)) { $scan += @(Get-ChildItem -LiteralPath $p.Path -Filter *.ps1 -File) }
 foreach ($f in $scan) {
-    if ($skipScripts -contains $f.Name) { continue }
     $inTests = ((Split-Path -Leaf (Split-Path -Parent $f.FullName)) -eq 'tests')
     $text = [IO.File]::ReadAllText($f.FullName)
     # Comments build no path. A comment that quotes another script's line
@@ -130,8 +126,8 @@ foreach ($f in $scan) {
             elseif ($seg -and $seg -ne '.') { $parts.Add($seg) }
         }
         $full = $parts -join '/'
-        # Nothing left is the repository root itself (Package-Thornswood's
-        # '..\..', test-gamemode-consts' '..'), which is always there.
+        # Nothing left is the repository root itself (test-gamemode-consts'
+        # '..'), which is always there.
         if (-not $full) { $found++; continue }
         if ($tracked.ContainsKey($full)) { $found++; continue }
         if ($notInGit.ContainsKey($full)) { $allowedSeen[$full] = $true; continue }

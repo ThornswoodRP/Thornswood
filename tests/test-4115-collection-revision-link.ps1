@@ -16,8 +16,8 @@
   What it checks:
     - Checks.CollectionRevisionUrl makes .../collections/<slug>/revisions/<N>
       from the configured address and the feed's revision, and leaves the
-      address as it is with no revision or no collection in it (compiled and
-      run with the build's compiler on Windows; SKIP elsewhere);
+      address as it is with no revision or no collection in it (built the
+      way the project builds, with the .NET 10 SDK, and run, on any system);
     - no button, card or box in the launcher opens cfg.CollectionUrl as it
       stands: each goes through OpenCollection, whose page is CollectionLink;
     - the ahead state has its own Play label and tooltip, saying nothing
@@ -25,7 +25,8 @@
       card, and a press that slips in opens nothing;
     - the stale and not-installed labels and the button name the revision;
     - the update log and Play's own refusal say which case holds updates;
-    - READ ME FIRST says to install the revision the launcher opens;
+    - the join guide says to install the revision the launcher opens (the
+      installer's READ ME FIRST.txt said it until #4824);
     - the site's News page links the feed's revision for the Downloads page
       (#5187: the site writes it from the feed itself), the
       site's public answer carries the number, and the Downloads button,
@@ -91,8 +92,8 @@ $bar = Method $shell 'static void ShowCollectionBar(int revision = -1)'
 Yes 'the ahead card says nothing needs installing' ($bar.Contains('nothing needs installing'))
 # Since #3201 the card's button above Play and Settings' are one handler with
 # one label and one visibility, in ShellUpdate.cs (InstallNowPressed, InstallShown).
-Yes 'the ahead card has no install button' ($bar.Contains('InstallShown(problem == "ahead" ? Visibility.Collapsed : Visibility.Visible);') -and
-    $update -match '(?s)static void InstallShown\(Visibility shown\)\s*\{\s*if \(btnInstallNow != null\) btnInstallNow\.Visibility = shown;\s*if \(btnUpdate != null\) btnUpdate\.Visibility = shown;')
+Yes 'the ahead card has no install button' ($bar.Contains('InstallShown(problem != "ahead");') -and
+    $update -match '(?s)static void InstallShown\(bool shown\)\s*\{\s*if \(btnInstallNow != null\) btnInstallNow\.IsVisible = shown;\s*if \(btnUpdate != null\) btnUpdate\.IsVisible = shown;')
 $click = Method $update 'static void InstallNowPressed()'
 Yes 'a press on the bar''s button while ahead opens nothing' ($click.Contains('if (collectionBarUp && CollectionProblem() == "ahead") return;'))
 $draw = Method $shell 'static bool DrawStatus()'
@@ -102,9 +103,9 @@ Yes 'Play has its own label for ahead, ahead of the install label' ($aheadAt -gt
 Yes 'its tooltip says nothing needs installing' ($draw.Substring([Math]::Max(0, $aheadAt), 700).Contains('Nothing needs installing.'))
 Yes 'a copy behind reads UPDATE THE MODS FIRST' ($draw.Contains('== "stale" ? "UPDATE THE MODS FIRST" : "INSTALL THE MODS FIRST"'))
 Yes 'Play is still enabled by the same test' ($draw.Contains('btnPlay.IsEnabled = all && !playing && !updatePending && !collectionBarUp && !ownGameBusy && !working && feedNotice.Hold == null;'))
-$status = Method $packs 'static UIElement CollectionStatusCard()'
+$status = Method $packs 'static Control CollectionStatusCard()'
 Yes 'the Diagnostics ahead card has no button' ($status.Contains('installing; Play opens once the server is rebuilt on your revision.", false);'))
-Yes 'CollectionCard leaves the button out when asked' ((Method $packs 'static UIElement CollectionCard(string title, string body, bool button = true)').Contains('if (button)'))
+Yes 'CollectionCard leaves the button out when asked' ((Method $packs 'static Control CollectionCard(string title, string body, bool button = true)').Contains('if (button)'))
 
 # ---- why updates wait -------------------------------------------------------
 $wait = Method $shell 'static string[] CollectionWait()'
@@ -113,9 +114,11 @@ Yes 'the update log no longer says not installed for every case' (-not $update.C
 Yes 'all three update log lines ask CollectionWait' (([regex]::Matches($update, '= CollectionWait\(\);')).Count -eq 3)
 Yes 'Play''s own refusal asks it too' ($play.Contains('if (collectionBarUp) { Log(CollectionHeldLine()); return; }') -and (Method $shell 'static string CollectionHeldLine()').Contains('CollectionWait()[0]') -and -not $play.Contains('Log("The collection is not installed yet. Open it'))
 
-# ---- what the installer tells people ---------------------------------------
-$rmf = [IO.File]::ReadAllText((Join-Path $repo 'installer\READ ME FIRST.txt')) -replace '\s+', ' '
-Yes 'READ ME FIRST says to install the revision the launcher opens' ($rmf.Contains('opens the revision the server was built against') -and $rmf.Contains('not a newer one Nexus may show first'))
+# ---- what the guide tells people before they install ------------------------
+# The installer carried READ ME FIRST.txt until #4824; the join guide on the
+# site is what a person reads now (installer\README.md).
+$joinFirst = [IO.File]::ReadAllText((Join-Path $repo 'site\data\site\join.md')) -replace '\s+', ' '
+Yes 'the join guide says to install the revision the launcher opens, not a newer one' ($joinFirst.Contains('opens the revision of the collection the server was built against') -and $joinFirst.Contains('not a newer one Nexus may show first'))
 
 # ---- the site ---------------------------------------------------------------
 # The site writes its News page from the feed (#5187): its publicNews, lifted
@@ -158,9 +161,8 @@ Yes 'help.md says to install the revision the link opens' ($help.Contains('it op
 Yes 'help.md tells a copy ahead of the server nothing needs installing' ($help.Contains('## When your mods are ahead of the server') -and $help.Contains('nothing needs installing'))
 
 # ---- the real method, compiled ----------------------------------------------
-if (-not $OnWindows) {
-    Write-Host 'SKIP  Checks.CollectionRevisionUrl compiled and run: the build''s compiler (the Build Tools'' csc, against .NET Framework 4.8.1) is only on Windows; its source was read above'
-} else {
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (Test-Path -LiteralPath $LauncherDotnet) {
     $slug = Method $checks 'public static string CollectionSlug(Config cfg)'
     $fixture = @'
 using System;

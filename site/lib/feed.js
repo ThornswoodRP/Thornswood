@@ -10,7 +10,7 @@
 // needs this one back finds them (a function is there from the top of its
 // file).
 module.exports = { askReleaseCopies, feedFile, feedReleaseTag, feedSettings,
-  feedView, readJsonQuiet, releaseCopy, releaseInstallerCopy };
+  feedView, nativePublished, nativeTag, newestSetup, readJsonQuiet, releaseCopy };
 
 const https  = require('https');
 const fs     = require('fs');
@@ -154,12 +154,13 @@ function readJsonQuiet(file) {
    not there yet is asked about again RELEASE_LOOK_MS later, never sooner,
    which keeps the site inside GitHub's sixty unsigned calls an hour. The
    lookup never holds a download: the request that starts it is served from
-   here. site/tests/test-release-copies.js drives this block. */
+   here. site/tests/test-release-copies.js drives this block, and the setup
+   programs below it. */
 const RELEASE_REPO = 'ThornswoodRP/Thornswood';
 const RELEASE_DOWNLOAD = 'https://github.com/' + RELEASE_REPO + '/releases/download/';
 const RELEASE_LOOK_MS = 10 * 60 * 1000;
 const RELEASE_TAG_RE = /^release\/(main|dev)\/\d{8}-\d{4,6}(-dev)?$/;
-const releaseCopies = {};   // tag -> { files: { sha: { url, size } }, installer, seen } once found; { at, busy } while not
+const releaseCopies = {};   // tag -> { files: { sha: { url, size } }, seen } once found; { at, busy } while not
 const releaseTagOf = {};    // feed generation file -> the release tag it names, or ''
 function releaseGitHub(apiPath) {
   return new Promise((resolve) => {
@@ -184,8 +185,7 @@ function releaseGitHub(apiPath) {
   });
 }
 // The files of one published Release, from GitHub without a token. Only an
-// asset whose name is the sha256 GitHub itself measured on it counts, and
-// the installer only under its own name with GitHub's sha256 beside it.
+// asset whose name is the sha256 GitHub itself measured on it counts.
 async function lookReleaseCopies(tag) {
   // The newest Releases rather than /releases/tags/<tag>, which a tag with
   // slashes in it does not suit; a feed's current release is always among
@@ -195,7 +195,6 @@ async function lookReleaseCopies(tag) {
   const r = list.body.find((x) => x && x.tag_name === tag && !x.draft && Number.isInteger(x.id));
   if (!r) return { found: false, why: '' };
   const files = {};
-  let installer = null;
   for (let page = 1; page <= 10; page++) {
     const got = await releaseGitHub('/releases/' + r.id + '/assets?per_page=100&page=' + page);
     if (got.status !== 200 || !Array.isArray(got.body)) return { found: false, why: got.why || 'the asset list did not read' };
@@ -206,11 +205,10 @@ async function lookReleaseCopies(tag) {
       const m = /^sha256:([0-9a-f]{64})$/.exec(String(a.digest || ''));
       if (!m || !Number.isInteger(a.size)) continue;
       if (a.name === m[1]) files[m[1]] = { url, size: a.size };
-      else if (a.name === 'Thornswood-Setup.exe') installer = { sha: m[1], url, size: a.size };
     }
     if (got.body.length < 100) break;
   }
-  return { found: true, files, installer };
+  return { found: true, files };
 }
 function askReleaseCopies(tag) {
   const had = releaseCopies[tag];
@@ -218,8 +216,8 @@ function askReleaseCopies(tag) {
   releaseCopies[tag] = { at: Date.now(), busy: true };
   lookReleaseCopies(tag).then((v) => {
     if (v.found) {
-      releaseCopies[tag] = { files: v.files, installer: v.installer, seen: Date.now() };
-      console.log('[thornswood-docs] release copies: ' + tag + ' holds ' + Object.keys(v.files).length + ' file(s)' + (v.installer ? ' and the installer' : ''));
+      releaseCopies[tag] = { files: v.files, seen: Date.now() };
+      console.log('[thornswood-docs] release copies: ' + tag + ' holds ' + Object.keys(v.files).length + ' file(s)');
     } else {
       releaseCopies[tag] = { at: Date.now(), busy: false };
       if (v.why && !/ 404$/.test(v.why)) console.error('[thornswood-docs] release copies: ' + tag + ': ' + v.why);
@@ -250,15 +248,138 @@ function releaseCopy(channel, sha, size) {
   const f = c && c.files && c.files[sha];
   return f && f.size === size ? f.url : '';
 }
-// The same for the installer on the Downloads page: the main release's copy,
-// when it is the very file this site lists (its sha256 in files.json).
-function releaseInstallerCopy(sha, size) {
-  const tag = feedReleaseTag('feed');
-  if (!tag || !/^[0-9a-f]{64}$/.test(sha)) return '';
-  askReleaseCopies(tag);
-  const c = releaseCopies[tag];
-  const i = c && c.installer;
-  return i && i.sha === sha && i.size === size ? i.url : '';
+/* THE SETUP PROGRAMS (#4824). The download is Velopack's setup program, which
+   merge-release.yml makes and signs with the launcher's package inside it.
+   Main's, Thornswood-Setup.exe, goes on a Release main-<tag> of its own once
+   Patrick approves that build (#5181); dev's, Thornswood-Dev-Setup.exe, is on
+   every build Release <tag> that made a package (build-YYYYMMDD.N). Each
+   channel's is the one on the newest published Release of its kind, under
+   that name, with GitHub's own sha256 digest and a whole size beside it, and
+   /file/<name> answers 302 to it. Until GitHub has said so there is no setup
+   program to offer: the Downloads page says the installer is not published
+   yet and /file/<name> answers 404. The site's own downloads folder never
+   serves either name (downloadServed): the old installer Publish-Installer put
+   there went with that pipeline.
+
+   The same list as the release copies, asked the same way: without a token,
+   again RELEASE_LOOK_MS after the last answer and never sooner, without
+   holding the request that started it. A look that fails keeps what the last
+   one found. The list is walked a hundred Releases a page, because a main
+   Release is made only on an approval and can be older than the newest thirty
+   build Releases. */
+const SETUP_KINDS = {
+  main: { tag: /^main-build-\d{8}\.\d+$/, name: 'Thornswood-Setup.exe' },
+  dev: { tag: /^build-\d{8}\.\d+$/, name: 'Thornswood-Dev-Setup.exe' }
+};
+const SETUP_PAGES = 5;
+const setups = { main: null, dev: null, at: 0, busy: false };
+async function lookSetups() {
+  const out = { main: null, dev: null };
+  for (let page = 1; page <= SETUP_PAGES && !(out.main && out.dev); page++) {
+    const list = await releaseGitHub('/releases?per_page=100&page=' + page);
+    if (list.status !== 200 || !Array.isArray(list.body)) return { found: false, why: list.why || 'the Release list did not read' };
+    const rs = list.body.filter((r) => r && !r.draft && typeof r.tag_name === 'string' && Array.isArray(r.assets))
+      .sort((a, b) => (Date.parse(b.published_at || '') || 0) - (Date.parse(a.published_at || '') || 0));
+    for (const ch of Object.keys(SETUP_KINDS)) {
+      const k = SETUP_KINDS[ch];
+      for (const r of rs) {
+        if (out[ch]) break;
+        if (!k.tag.test(r.tag_name)) continue;
+        const a = r.assets.find((x) => x && x.name === k.name && x.state === 'uploaded');
+        if (!a) continue;
+        const url = String(a.browser_download_url || '');
+        const m = /^sha256:([0-9a-f]{64})$/.exec(String(a.digest || ''));
+        if (url !== RELEASE_DOWNLOAD + r.tag_name + '/' + k.name || !m || !Number.isInteger(a.size) || a.size <= 0) continue;
+        out[ch] = { name: k.name, url, size: a.size, sha256: m[1], tag: r.tag_name, at: Date.parse(r.published_at || '') || 0 };
+      }
+    }
+    if (list.body.length < 100) break;
+  }
+  return { found: true, main: out.main, dev: out.dev };
+}
+function askSetups() {
+  if (setups.busy || (setups.at && Date.now() - setups.at < RELEASE_LOOK_MS)) return;
+  setups.busy = true;
+  lookSetups().then((v) => {
+    setups.busy = false;
+    setups.at = Date.now();
+    if (!v.found) {
+      if (v.why && !/ 404$/.test(v.why)) console.error('[thornswood-docs] setup programs: ' + v.why);
+      return;
+    }
+    for (const ch of Object.keys(SETUP_KINDS)) {
+      const was = setups[ch], now = v[ch];
+      if (now && (!was || was.url !== now.url)) console.log('[thornswood-docs] setup programs: ' + ch + ' is ' + now.name + ' on ' + now.tag);
+      setups[ch] = now;
+    }
+  }, (e) => {
+    setups.busy = false;
+    setups.at = Date.now();
+    console.error('[thornswood-docs] setup programs: ' + (e && e.message));
+  });
+}
+// The newest setup program of a channel, 'main' or 'dev', as GitHub last said
+// it, or null: { name, url, size, sha256, tag, at }.
+function newestSetup(channel) {
+  askSetups();
+  return setups[channel] || null;
+}
+/* THE LAUNCHERS A CHANNEL LETS IN, SINCE VELOPACK (#4825). The launcher goes
+   out only through Velopack: merge-release.yml packs it as version
+   <yyyy>.<M*100+d>.<n> on the build Release build-<yyyyMMdd>.<n>
+   (MergeRelease.ps1, New-MergeReleaseNames), and promote-main.yml puts main's
+   package of the same number on main-build-<yyyyMMdd>.<n>. The launcher says
+   that number at Play (Updater.Version), and a channel lets it in when its
+   Release is out on GitHub with that channel's Velopack feed on it,
+   releases.dev.json or releases.main.json, since that is the only way a
+   launcher reaches the number. Velopack moves a launcher forward at its
+   start, so any number the channel published is let in; the update feed's
+   launcherVersion and minLauncher are the old launcher's, which nothing writes
+   any more, and are read only while a channel has no Velopack setup program
+   out (newestSetup). Once it has one, a launcher from before Velopack is told
+   to install the new one from the Downloads page.
+
+   Asked of GitHub without a token, like the setup programs: a number found is
+   kept, since a published Release stays published. A number not found is
+   asked again only RELEASE_LOOK_MS later, and a number nobody has asked about
+   yet is asked at most once every NATIVE_ASK_MS, which keeps the site inside
+   GitHub's sixty unsigned calls an hour even when a linked account sends a
+   new number at every Play. The launcher can only be on a number after its
+   Release is published, so the first Play on a new number finds it. */
+const NATIVE_ASK_MS = 90 * 1000;
+const nativeSeen = {};   // '<channel> <number>' -> { ok: true } once found; { at } while not
+let nativeAskedAt = 0;
+// The Release tag a launcher number is from, for a channel, or '' when the
+// number is not a Velopack one (an old launcher's 1.x, or nonsense).
+function nativeTag(channel, said) {
+  const m = /^(20\d\d)\.(\d{3,4})\.(\d{1,9})$/.exec(String(said || ''));
+  if (!m) return '';
+  const md = Number(m[2]), month = Math.floor(md / 100), day = md % 100;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+  const tag = 'build-' + m[1] + String(month).padStart(2, '0') + String(day).padStart(2, '0') + '.' + Number(m[3]);
+  return channel === 'main' ? 'main-' + tag : tag;
+}
+// Whether a channel published this Velopack launcher number: 'yes', 'no', or
+// 'unknown' when GitHub could not be asked just now.
+async function nativePublished(channel, said) {
+  const tag = nativeTag(channel, said);
+  if (!tag) return 'no';
+  const key = channel + ' ' + said;
+  const had = nativeSeen[key];
+  if (had && had.ok) return 'yes';
+  if (had && Date.now() - had.at < RELEASE_LOOK_MS) return 'no';
+  if (Date.now() - nativeAskedAt < NATIVE_ASK_MS) return 'unknown';
+  nativeAskedAt = Date.now();
+  const got = await releaseGitHub('/releases/tags/' + encodeURIComponent(tag));
+  if (got.status === 404) { nativeSeen[key] = { at: Date.now() }; return 'no'; }
+  if (got.status !== 200 || !got.body) return 'unknown';
+  const r = got.body;
+  const feedName = 'releases.' + channel + '.json';
+  const ok = r.tag_name === tag && !r.draft && Array.isArray(r.assets) &&
+    r.assets.some((a) => a && a.name === feedName && a.state === 'uploaded');
+  nativeSeen[key] = ok ? { ok: true } : { at: Date.now() };
+  if (ok) console.log('[thornswood-docs] launcher ' + said + ' is published on ' + channel + ' (' + tag + ')');
+  return ok ? 'yes' : 'no';
 }
 /* ---- end release copies ---- */
 

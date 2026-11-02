@@ -790,8 +790,8 @@
         responder, and the chat logged "listener threw: TypeError: Cannot read
         properties of null (reading 'createGain')". A WebRTC connection opens
         UDP sockets on every network the machine has, which is what makes
-        Windows Firewall ask about the game's browser. The launcher's voice
-        page does all of this in WebView2, so this page has no reason to.
+        Windows Firewall ask about the game's browser. The launcher's own
+        voice code does all of this, so this page has no reason to.
 
         This guard is all relay mode takes from this listener (#1959). It
         used to take the listener off the socket as well, and then a page

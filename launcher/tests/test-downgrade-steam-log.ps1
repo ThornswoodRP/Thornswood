@@ -28,9 +28,11 @@
 
   HOW. The real text of SteamLog, LogStarted, LogHasCompletion, FailedLine,
   Refused, ByHand and DownloadedExe is lifted out of Downgrade.cs by brace
-  match and compiled with the compiler the build runs (Launcher-Csc.ps1), and
+  match and compiled with the .NET SDK the launcher builds with
+  (Launcher-Csc.ps1), and
   driven against a made-up Steam folder under a temp folder. Nothing opens
-  Steam or touches the real one.
+  Steam or touches the real one. The reads of the made-up log files run on
+  Windows only: SteamLog finds them by Windows paths (logs\console_log.txt).
 
   Read only apart from files under its own temp folder.
 #>
@@ -38,7 +40,7 @@
 param([string]$AppPath)
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 # This harness is in launcher\tests\, the repository is two folders up.
@@ -170,22 +172,18 @@ $body = New-Object System.Text.StringBuilder
 foreach ($k in $lifted.Keys) { [void]$body.AppendLine($lifted[$k]) }
 $probe = $probe.Replace('__LIFTED__', $body.ToString())
 
-if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'; Done }
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-downgrade-log-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 $null = New-Item -ItemType Directory -Force -Path $work
 try {
-    $probeCs = Join-Path $work 'Probe.cs'
-    [IO.File]::WriteAllText($probeCs, $probe)
-    $dll = Join-Path $work 'Probe.dll'
-    $out = & $LauncherCsc /nologo /target:library "/out:$dll" $probeCs 2>&1
-    $built = ($LASTEXITCODE -eq 0) -and (Test-Path -LiteralPath $dll)
-    Yes 'the lifted text compiles with the compiler the build runs' $built
-    if (-not $built) { $out | ForEach-Object { Write-Host "      $_" }; Done }
+    $asm = $null
+    try { $asm = Add-LauncherType -Source $probe }
+    catch { $out = $_.Exception.Message }
+    Yes 'the lifted text compiles with the .NET SDK the launcher builds with' ($null -ne $asm)
+    if (-not $asm) { $out -split "`n" | ForEach-Object { Write-Host "      $_" }; Done }
 
-    $asm = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($dll))
     $T = $asm.GetType('Probe.Downgrade', $true)
     $flags = [Reflection.BindingFlags]'Static, Public, NonPublic'
     # PowerShell wraps paths and returned objects; the compiled side wants what
@@ -245,49 +243,55 @@ try {
     Yes 'and says nothing' ($logs.Count -eq 0 -and $stat.Count -eq 0)
 
     # ---- the logs on disk --------------------------------------------------------
-    $steam = Join-Path $work 'Steam'
-    $logsDir = Join-Path $steam 'logs'
-    $null = New-Item -ItemType Directory -Force -Path $logsDir
-    $console = Join-Path $logsDir 'console_log.txt'
-    $contentLog = Join-Path $logsDir 'content_log.txt'
-    # Before the command: an old finish for 489832 from another attempt, which
-    # must not count, and the appmanifest line that fills Patrick's content log.
-    [IO.File]::WriteAllText($console, "[2026-09-01 10:00:00] GameAction [AppID 489830, ActionID 3] : LaunchApp changed task to CheckShaderDepotManifest`n" + $complete2 + "`n")
-    $spam = '[2026-09-24 17:13:59] Failed to write app state file "C:\Program Files (x86)\Steam\steamapps\appmanifest_489830.acf" (1156 bytes)'
-    [IO.File]::WriteAllText($contentLog, (($spam + "`n") * 40))
+    # SteamLog finds console_log.txt and content_log.txt by Windows paths
+    # (logs\console_log.txt), so the reads of real files run on Windows only.
+    if ($OnWindows) {
+        $steam = Join-Path $work 'Steam'
+        $logsDir = Join-Path $steam 'logs'
+        $null = New-Item -ItemType Directory -Force -Path $logsDir
+        $console = Join-Path $logsDir 'console_log.txt'
+        $contentLog = Join-Path $logsDir 'content_log.txt'
+        # Before the command: an old finish for 489832 from another attempt, which
+        # must not count, and the appmanifest line that fills Patrick's content log.
+        [IO.File]::WriteAllText($console, "[2026-09-01 10:00:00] GameAction [AppID 489830, ActionID 3] : LaunchApp changed task to CheckShaderDepotManifest`n" + $complete2 + "`n")
+        $spam = '[2026-09-24 17:13:59] Failed to write app state file "C:\Program Files (x86)\Steam\steamapps\appmanifest_489830.acf" (1156 bytes)'
+        [IO.File]::WriteAllText($contentLog, (($spam + "`n") * 40))
 
-    $sl = Call 'NewLog' @($steam)
-    Yes 'nothing Steam wrote before the command is read' (-not [bool](Call 'LogHasCompletion' @((Call 'Since' @($sl)), '489832')))
+        $sl = Call 'NewLog' @($steam)
+        Yes 'nothing Steam wrote before the command is read' (-not [bool](Call 'LogHasCompletion' @((Call 'Since' @($sl)), '489832')))
 
-    [IO.File]::AppendAllText($console, $started2 + "`n")
-    [IO.File]::AppendAllText($contentLog, (($spam + "`n") * 5))
-    $said = Call 'Since' @($sl)
-    Yes 'the start written to console_log.txt is heard' ([bool](Call 'LogStarted' @($said, '489832')))
-    Yes 'and is not taken as the finish' (-not [bool](Call 'LogHasCompletion' @($said, '489832')))
+        [IO.File]::AppendAllText($console, $started2 + "`n")
+        [IO.File]::AppendAllText($contentLog, (($spam + "`n") * 5))
+        $said = Call 'Since' @($sl)
+        Yes 'the start written to console_log.txt is heard' ([bool](Call 'LogStarted' @($said, '489832')))
+        Yes 'and is not taken as the finish' (-not [bool](Call 'LogHasCompletion' @($said, '489832')))
 
-    [IO.File]::AppendAllText($console, $complete2 + "`n")
-    Yes 'the finish written to console_log.txt is heard' ([bool](Call 'LogHasCompletion' @((Call 'Since' @($sl)), '489832')))
+        [IO.File]::AppendAllText($console, $complete2 + "`n")
+        Yes 'the finish written to console_log.txt is heard' ([bool](Call 'LogHasCompletion' @((Call 'Since' @($sl)), '489832')))
 
-    $sl2 = Call 'NewLog' @($steam)
-    [IO.File]::AppendAllText($contentLog, $completeOld + "`n")
-    Yes 'a finish written to content_log.txt is still heard' ([bool](Call 'LogHasCompletion' @((Call 'Since' @($sl2)), '489833')))
+        $sl2 = Call 'NewLog' @($steam)
+        [IO.File]::AppendAllText($contentLog, $completeOld + "`n")
+        Yes 'a finish written to content_log.txt is still heard' ([bool](Call 'LogHasCompletion' @((Call 'Since' @($sl2)), '489833')))
 
-    # Steam restarts: console_log.txt becomes .previous and starts again,
-    # shorter than where this was reading from.
-    $sl3 = Call 'NewLog' @($steam)
-    Move-Item -LiteralPath $console -Destination (Join-Path $logsDir 'console_log.previous.txt') -Force
-    [IO.File]::WriteAllText($console, $started2 + "`n" + $complete2 + "`n")
-    Yes 'after Steam restarts, the new console_log.txt is read from the top' ([bool](Call 'LogHasCompletion' @((Call 'Since' @($sl3)), '489832')))
+        # Steam restarts: console_log.txt becomes .previous and starts again,
+        # shorter than where this was reading from.
+        $sl3 = Call 'NewLog' @($steam)
+        Move-Item -LiteralPath $console -Destination (Join-Path $logsDir 'console_log.previous.txt') -Force
+        [IO.File]::WriteAllText($console, $started2 + "`n" + $complete2 + "`n")
+        Yes 'after Steam restarts, the new console_log.txt is read from the top' ([bool](Call 'LogHasCompletion' @((Call 'Since' @($sl3)), '489832')))
 
-    $sl4 = Call 'NewLog' @($steam)
-    [IO.File]::AppendAllText($console, $failed1 + "`n")
-    [IO.File]::AppendAllText($contentLog, (($spam + "`n") * 30))
-    $tail = Call 'Tail' @($sl4, 12)
-    Yes 'the tail for the launcher log keeps console_log.txt''s line under its name' ($tail.Contains('console_log.txt:') -and $tail.Contains('Content unavailable'))
-    Yes 'and the content log''s spam takes no more than its own twelve lines' (([regex]::Matches($tail, 'appmanifest_489830').Count) -le 12)
+        $sl4 = Call 'NewLog' @($steam)
+        [IO.File]::AppendAllText($console, $failed1 + "`n")
+        [IO.File]::AppendAllText($contentLog, (($spam + "`n") * 30))
+        $tail = Call 'Tail' @($sl4, 12)
+        Yes 'the tail for the launcher log keeps console_log.txt''s line under its name' ($tail.Contains('console_log.txt:') -and $tail.Contains('Content unavailable'))
+        Yes 'and the content log''s spam takes no more than its own twelve lines' (([regex]::Matches($tail, 'appmanifest_489830').Count) -le 12)
 
-    $sl5 = Call 'NewLog' @($steam)
-    Yes 'nothing written since, nothing in the tail' ((Call 'Tail' @($sl5, 12)) -eq '')
+        $sl5 = Call 'NewLog' @($steam)
+        Yes 'nothing written since, nothing in the tail' ((Call 'Tail' @($sl5, 12)) -eq '')
+    } else {
+        Write-Host 'SKIP  the logs on disk: SteamLog finds Steam''s logs by Windows paths (logs\console_log.txt), which only Windows has'
+    }
 
     $gone = Join-Path $work 'NoSteamHere'
     $sl6 = Call 'NewLog' @($gone)

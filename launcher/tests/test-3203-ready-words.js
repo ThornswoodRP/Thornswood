@@ -26,16 +26,14 @@
 //      card says ReadyTitle's words, and "Check Diagnostics" is gone.
 //   C. The Steam row says "not running" when it is not.
 //   D. Class Check and the three word functions, lifted out of the shipped
-//      files and compiled with the compiler the launcher builds with
-//      (tests/launcher-csc.js), say the right words for none, one and several
-//      failures. Off Windows that part says SKIP.
+//      files and built the way the launcher project builds (the .NET 10 SDK,
+//      tests/launcher-csc.js), say the right words for none, one and several
+//      failures. That runs on Linux too.
 //
-// Read only. Temp files go under os.tmpdir().
+// Read only. The build goes under out/harness/, which git ignores.
 'use strict';
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
-const cp = require('child_process');
 const CR = String.fromCharCode(13);
 const REPO_DIR = path.join(__dirname, '..', '..');
 function read(rel) { return fs.readFileSync(path.join(REPO_DIR, rel), 'utf8').split(CR).join(''); }
@@ -130,7 +128,7 @@ yes('hovering it lists every problem when there is more than one', !!summary && 
 const shellCode = shellCs.split('\n').filter(function (l) { return !/^\s*\/\//.test(l); }).join('\n');
 yes('"Check Diagnostics" is not said anywhere in the launcher\'s code any more', !shellCode.includes('"Check Diagnostics"'));
 yes('the Diagnostics button beside the card still shows on a failure',
-    !!summary && summary.includes('btnCheckDiagnostics.Visibility = all ? Visibility.Collapsed : Visibility.Visible;'));
+    !!summary && summary.includes('btnCheckDiagnostics.IsVisible = !all;'));
 
 // ============================================== C. the Steam row
 yes('the Steam row says "not running" when Steam is not running',
@@ -143,11 +141,8 @@ const parts = ['static string ReadyTitle(List<Check> blocking)', 'static string 
                'static string ProblemWords(Check c)'].map(function (h) { return lift(shellCs, h); });
 yes('Shell.cs has ReadyTitle, ReadyList and ProblemWords', parts.every(Boolean));
 const lc = require('../../tests/launcher-csc');
-if (!lc.onWindows) {
-  console.log('SKIP  the Ready words compiled and run: the compiler the launcher builds with is the Roslyn csc of Visual Studio\'s Build Tools, which only Windows has');
-} else if (!lc.csc) {
-  yes('the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)', false);
-} else if (checkClass && parts.every(Boolean)) {
+yes('the .NET SDK the launcher builds with is on this machine', !!lc.dotnet);
+if (lc.dotnet && checkClass && parts.every(Boolean)) {
   const prog =
     'using System; using System.Collections.Generic;\n' +
     checkClass + '\n' +
@@ -161,22 +156,19 @@ if (!lc.onWindows) {
     '  Console.WriteLine("list=" + ReadyList(three).Replace("\\n", "|"));\n' +
     '  Console.WriteLine("bare=" + ReadyTitle(new List<Check> { new Check("Later row", false, "found this") }));\n' +
     ' }\n}\n';
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-3203-'));
-  fs.writeFileSync(path.join(dir, 'r.cs'), prog);
   let out = '';
   try {
-    cp.execFileSync(lc.csc, ['/nologo', '/langversion:' + lc.langVersion, '/out:' + path.join(dir, 'r.exe'), path.join(dir, 'r.cs')], { stdio: 'pipe' });
-    out = cp.execFileSync(path.join(dir, 'r.exe'), { encoding: 'utf8' }).split(CR).join('');
-  } catch (e) { out = 'ERROR ' + ((e.stdout || '') + (e.stderr || '') || e.message); }
+    const r = lc.run(lc.build({ sources: [prog], exe: true }));
+    out = r.status === 0 ? r.stdout.split(CR).join('') : 'ERROR exit ' + r.status + '\n' + r.stdout + r.stderr;
+  } catch (e) { out = 'ERROR ' + e.message; }
   const has = function (line) { return out.split('\n').indexOf(line) >= 0; };
-  yes('the lifted C# compiles with the compiler the launcher builds with, and runs', !/ERROR/.test(out));
+  yes('the lifted C# builds the way the launcher does, and runs', !/ERROR/.test(out));
   yes('nothing failing: "Everything checks out"', has('none=Everything checks out'));
   yes('one failing row: its words alone, "Steam not running"', has('one=Steam not running'));
   yes('three failing rows: the first and how many more, "Wrong Skyrim build and 2 more"', has('three=Wrong Skyrim build and 2 more'));
   yes('the hover lists all three, in order', has('list=Wrong Skyrim build|3 mods missing|Steam not running'));
   yes('a row without words still says which row and what it found', has('bare=Later row: found this'));
   if (/ERROR/.test(out)) console.log(out);
-  fs.rmSync(dir, { recursive: true, force: true });
 }
 
 done();

@@ -1,8 +1,0 @@
-# Controls the C# still looks up that ui.xaml no longer has.
-#
-# None since #3146: the server address and local-server controls, whose UI
-# was taken out of the Settings page, went with the C# that looked them up.
-# A name that is not on this list stands out as new.
-#
-# Do not add a name here to silence a real problem. The only reason a name
-# belongs on this list is that the control is genuinely gone on purpose.

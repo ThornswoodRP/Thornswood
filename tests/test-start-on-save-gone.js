@@ -25,7 +25,7 @@
     - that rule leaves both files out when a folder is made, takes them out of
       a folder that already has them, and Rules moved so every folder does
       that once;
-    - no pack and no installer carries either file (Ship-Rules.ps1,
+    - no pack carries either file (Ship-Rules.ps1,
       Test-ShipRetired inside Test-ShipMachine), the two lists agree, and no
       script installs the mod by hand any more;
     - the public pages no longer describe it as part of the build;
@@ -56,11 +56,11 @@ function read(p) { return fs.readFileSync(p, 'utf8'); }
 const NAMES = /po3_StartOnSave|Start ?On ?Save|\bStartIni\b|Thornswood-Nobody|bDisableMissingContentWarning/i;
 
 // ---- the launcher -------------------------------------------------------------
+// The window is compiled markup in launcher\app since #4823 (MainWindow.axaml,
+// App.axaml); launcher\ui.xaml went with WPF.
 const launcherFiles = fs.readdirSync(APP)
-  .filter(function (f) { return /\.(cs|md|xaml)$/i.test(f); })
-  .map(function (f) { return path.join(APP, f); })
-  .concat([path.join(ROOT, 'launcher', 'ui.xaml')])
-  .filter(function (f) { return fs.existsSync(f); });
+  .filter(function (f) { return /\.(cs|md|axaml)$/i.test(f); })
+  .map(function (f) { return path.join(APP, f); });
 
 const naming = [];
 for (const f of launcherFiles) {
@@ -125,7 +125,7 @@ const rulesDoc = /\/\/\/ (\d+): Start On Save is left out/.exec(OG);
 yes('Rules moved for it, so every folder already made refreshes once and drops both files',
     rulesNum !== null && rulesDoc !== null && Number(rulesNum[1]) >= Number(rulesDoc[1]) && Number(rulesDoc[1]) >= 7);
 
-// ---- packs and the installer --------------------------------------------------
+// ---- packs ---------------------------------------------------------------------
 const SHIP_RULES = path.join(ROOT, 'scripts', 'release', 'Ship-Rules.ps1');
 const RULES_SRC = read(SHIP_RULES);
 const shipBlock = /\$ShipRetiredFiles = @\(([\s\S]*?)\)/.exec(RULES_SRC);
@@ -138,16 +138,17 @@ if (shipBlock) {
 yes('Ship-Rules.ps1 lists the same retired files as OwnGame',
     shipOf.length > 0 && shipOf.length === retiredOf.length &&
     shipOf.every(function (s) { return retiredOf.some(function (r) { return r.toLowerCase() === s.toLowerCase(); }); }));
-yes('and Test-ShipMachine asks Test-ShipRetired, so packs and the installer leave them out',
+yes('and Test-ShipMachine asks Test-ShipRetired, so packs leave them out',
     /function Test-ShipMachine\([^)]*\) \{[\s\S]*?if \(Test-ShipRetired \$rel\) \{ return \$true \}/.test(RULES_SRC));
 
 const pu = read(path.join(ROOT, 'scripts', 'release', 'Publish-Update.ps1'));
-const pk = read(path.join(ROOT, 'scripts', 'release', 'Package-Thornswood.ps1'));
 yes('Publish-Update scans through Test-ShipMachine',
     /function Test-Machine\(\[string\]\$rel\) \{ return \(\(?Test-ShipMachine \$rel\)/.test(pu) &&
     /if \(Test-Machine \$rel\) \{ continue \}/.test(pu));
-yes('Package-Thornswood scans through Test-ShipMachine',
-    /if \(Test-ShipMachine \$rel\)/.test(pk));
+// The old installer's Package-Thornswood.ps1 scanned through it too until
+// #4824. Velopack's Setup.exe carries no game files: an install gets the
+// game from the packs Publish-Update makes, or on dev from the merge
+// release's game files built over them.
 
 // What the rules actually answer, from PowerShell itself.
 const probe = WANT.concat(['data' + BS + 'skse' + BS + 'plugins' + BS + 'PO3_STARTONSAVE.DLL',
@@ -172,7 +173,7 @@ if (!run || run.error) {
   });
   yes('Ship-Rules.ps1 dot-sources and answers', run.status === 0 && Object.keys(got).length === probe.length);
   if (run.status !== 0) console.log(run.stderr);
-  yes('no pack or installer carries the DLL or its settings file, in any letter case',
+  yes('no pack carries the DLL or its settings file, in any letter case',
       got[probe[0]] === 'True' && got[probe[1]] === 'True' && got[probe[2]] === 'True');
   yes('and a different name that merely starts the same way is not caught by it',
       got[probe[3]] === 'False');

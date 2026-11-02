@@ -5,17 +5,17 @@
 
   #1869. voice/test-one-way.js drove the negotiation of the service's own
   browser page, which went in #1822, and nothing drove the two clients that
-  are left: the launcher's voice page (launcher\voice-host.html) and the
-  game's voice overlay (game\ui\thornswood-voice.js, riding the chat's socket
-  in game\ui\thornswood-chat.js). Both begin onSdp and onIce with
-  `if (!rec) return;`, so an offer or a candidate from somebody they have not
-  opened is dropped. This measures whether that can happen, and runs both
-  clients' own code, unchanged, against the real service. It cannot happen
-  to a page that reads its own socket (1, 2): the service writes the roster
-  that names somebody first, and the launcher's page opens everybody on a
-  roster before it reads the next message. It did happen to the overlay,
-  which shares the chat's socket and can start listening after the room
-  has already offered to it (3).
+  are left: the launcher's voice (a page, launcher\voice-host.html, until
+  #4823 made it C#, launcher\app\VoiceSession.cs) and the game's voice
+  overlay (game\ui\thornswood-voice.js, riding the chat's socket in
+  game\ui\thornswood-chat.js). Both turn away an offer or a candidate from
+  somebody they have not opened. This measures whether that can happen, and
+  runs both clients' own code, unchanged, against the real service. It
+  cannot happen to a client that reads its own socket (1, 2): the service
+  writes the roster that names somebody first, and the launcher opens
+  everybody on a roster before it reads the next message. It did happen to
+  the overlay, which shares the chat's socket and can start listening after
+  the room has already offered to it (3).
 
   1. The service, over raw sockets. A socket is held backed (a probe in
      the service holds every write to it, as a kernel with no room would,
@@ -25,52 +25,72 @@
      never comes at all. So no socket is sent anything from somebody before
      the roster that names them.
 
-  2. Two launcher pages. They join, negotiate, and then both microphones
-     open in the same moment and each offers before it reads the other's
-     (glare). The lower peer id is impolite and ignores the offer that
-     crossed its own; the higher is polite, rolls back and answers. Both
-     hear each other.
+  2. Two launchers. They join and connect to each other, real ICE and
+     DTLS-SRTP on loopback, before either talks, and nobody is heard. Then
+     both talk in the same moment and each hears the other. Only the lower
+     peer id offers, so talking needs no new negotiation and two offers
+     can never cross: neither connection starts again when they talk.
 
-  3. The order that dropped. The game's chat socket joins the room as soon
-     as it has a token, at the character choice for somebody waiting in
-     line (#481, #1142), and the overlay only gets on it when the voice
-     plugin configures it, so it can get on late. A launcher page already
-     in the room and one that joins after the chat both send that socket
-     their offers before the overlay is listening. On main that roster and
-     those offers went to nobody: the overlay opened nobody until the next
-     join, and then its offer to the launcher that was there first met a
-     peer still waiting on the answer to its own, which the impolite side
-     ignores, so that pair never connected. Now the chat keeps them and
-     hands them over when the overlay gets on, every pair connects, and
-     when every microphone opens at once every pair's offers cross and
-     settle, the overlay polite in one pair and impolite in the others.
+  3. The order that dropped, between overlays. The game's chat socket joins
+     the room as soon as it has a token, at the character choice for
+     somebody waiting in line (#481, #1142), and the overlay only gets on
+     it when the voice plugin configures it, so it can get on late. An
+     overlay already in the room and one that joins after the chat both
+     send that socket their offers before its overlay is listening. On the
+     code before #1869 that roster and those offers went to nobody: the
+     overlay opened nobody until the next join, and then its offer to the
+     one that was there first met a peer still waiting on the answer to its
+     own, which the impolite side ignores, so that pair never connected.
+     Now the chat keeps them and hands them over when the overlay gets on,
+     every pair connects, and when every microphone opens at once every
+     pair's offers cross and settle, the late overlay polite in one pair and
+     impolite in the others.
 
-  4. The overlay on before its socket has joined, then the socket joins
-     again under a new name (setName), which is a new peer id: everybody
-     drops the old one and connects to the new.
+  4. An overlay on before its socket has joined, then the socket joins
+     again under a new name (setName), which is a new peer id: the other
+     overlay drops the old one and connects to the new.
 
-  5. What the chat keeps for voice, on its own: the newest roster first,
+  5. The launcher's side of 3 and 4. A launcher already in the room and one
+     that joins after a game's chat socket both open that socket from the
+     roster and send it their half before anything there listens for
+     voice: the lower peer id its offer and candidates, the higher its
+     candidates and no offer. The two launchers connect and hear each other
+     with it in the room. When the chat socket joins again under a new
+     name, both drop the old peer and open the new one, and offer to it.
+
+  6. What the chat keeps for voice, on its own: the newest roster first,
      then signalling in order, nothing from somebody who left, at most a
      hundred from one peer, nothing once voice is on, nothing across a new
      connection.
 
-  6. The rules in the pages' source the rest relies on.
+  7. The rules in the two clients' source the rest relies on, and that the
+     launcher and the overlay hold the same one, so in a pair of the two
+     exactly one side offers.
 
-  The pages run in node's vm with their own sources. The network is a real
-  WebSocket to the real voice-server.js; the browser is stood in for by a
-  fake RTCPeerConnection (signalling states, implicit rollback, an answer
-  that must answer the current offer, candidates refused before a remote
-  description or for another session, negotiationneeded only when stable),
-  a fake AudioContext that records which streams were played, and a
-  microphone each test opens when it chooses. A pair counts as connected
-  when both connections are stable, each holds the other's current
-  description, and at least one of them has taken the other's candidates,
-  which is all ICE needs. One person hears another when that is so, the
-  other's side of the last negotiation sends audio, and the page fed that
-  stream to its audio.
+  The overlay and the chat run in node's vm with their own sources, the
+  browser stood in for by a fake RTCPeerConnection (signalling states,
+  implicit rollback, an answer that must answer the current offer,
+  candidates refused before a remote description or for another session,
+  negotiationneeded only when stable), a fake AudioContext that records
+  which streams were played, and a microphone each test opens when it
+  chooses. A pair of overlays counts as connected when both connections are
+  stable, each holds the other's current description, and at least one of
+  them has taken the other's candidates, which is all ICE needs. One
+  overlay hears another when that is so, the other's side of the last
+  negotiation sends audio, and the page fed that stream to its audio.
 
-  VOICE_SERVER, VOICE_HOST, VOICE_OVERLAY and VOICE_CHAT point it at other
-  copies, which is how it is shown to fail on the code before #1869.
+  The launchers are the launcher's own voice (tests\voice-launcher.js, the
+  .NET 10 SDK), with real connections between them, each microphone a tone
+  of its own and each mixer read back for what it plays. The stand-in
+  browser speaks descriptions of its own, which a real WebRTC stack, and so
+  the launcher, cannot read, nor it theirs; so no overlay is turned on in a
+  room with a launcher, and whether the launcher and a game's own browser
+  hear each other needs that browser, not this stand-in (the report for
+  #4823 says so). The network is a real WebSocket to the real
+  voice-server.js.
+
+  VOICE_SERVER, VOICE_OVERLAY and VOICE_CHAT point it at other copies,
+  which is how it is shown to fail on the code before #1869.
   Writes only to a temp folder, on loopback ports the system hands out.
 */
 'use strict';
@@ -81,11 +101,11 @@ const path = require('path');
 const vm = require('vm');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const VL = require('./voice-launcher');
 
 const REPO = path.join(__dirname, '..');
 const CR = String.fromCharCode(13);
 const SERVER = process.env.VOICE_SERVER || path.join(REPO, 'voice', 'voice-server.js');
-const HOST_PAGE = process.env.VOICE_HOST || path.join(REPO, 'launcher', 'voice-host.html');
 const OVERLAY = process.env.VOICE_OVERLAY || path.join(REPO, 'game', 'ui', 'thornswood-voice.js');
 const CHAT = process.env.VOICE_CHAT || path.join(REPO, 'game', 'ui', 'thornswood-chat.js');
 const read = (f) => fs.readFileSync(f, 'utf8').split(CR).join('');
@@ -542,43 +562,72 @@ function closePage(page) {
   for (const pc of page.pcs) pc.close();
 }
 
-const HOST_SRC = (function () {
-  const html = read(HOST_PAGE);
-  const a = html.indexOf('<script>');
-  const b = html.lastIndexOf('</script>');
-  return a >= 0 && b > a ? html.slice(a + 8, b) : '';
-})();
 const CHAT_SRC = read(CHAT);
 const OVERLAY_SRC = read(OVERLAY);
+const SESSION_SRC = read(path.join(REPO, 'launcher', 'app', 'VoiceSession.cs'));
 
-/* The launcher's voice page, as WebView2 runs it, with the launcher's config. */
-function launcherPage(name, pid) {
-  const page = newPage(name, pid, 'launcher');
-  const heard = [];
-  const box = Object.assign({
-    document: { getElementById: () => element() },
-    navigator: { mediaDevices: mediaFor(page) },
-    AudioContext: audioFor(page),
-    RTCPeerConnection: rtcFor(page),
-    Audio: FakeAudio,
-    WebSocket: socketFor(page),
-    console: { log: (l) => page.said.push('console: ' + l) },
-  }, timersFor(page));
-  box.window = box;
-  box.chrome = { webview: {
-    addEventListener: (kind, fn) => heard.push(fn),
-    postMessage: (s) => { let m = {}; try { m = JSON.parse(s); } catch (e) { } page.said.push(m.t + ': ' + m.text); },
-  } };
-  vm.createContext(box);
-  vm.runInContext(HOST_SRC, box, { filename: 'voice-host.html' });
-  page.box = box;
-  page.peer = () => Number(box.myPeer) || 0;
-  page.start = () => heard.forEach((fn) => fn({ data: JSON.stringify({
-    t: 'config', host: 'thornswood.test', port: 443, profileId: pid, name: name, token: tokenFor(pid),
-    base: 'https://thornswood.test/voice', socket: 'wss://thornswood.test/voice/' }) }));
-  pages.push(page);
-  return page;
+/*
+  A launcher: its own voice, configured as Voice.cs configures it, with a
+  join token for its profile, and every later ask answered with a fresh
+  one. Its microphone is a tone of its own.
+*/
+const launchers = [];
+async function launcher(name, pid, tone) {
+  const l = await VL.start({ clock: 'real', wire: 'ws', tone: tone, name: name });
+  launchers.push(l);
+  l.tone = tone;
+  l.listeners.push((e) => { if (e.ev === 'host' && e.kind === 'token' && e.text === 'need') l.send({ do: 'token', token: tokenFor(pid) }); });
+  await l.send({ do: 'configure', profileId: pid, name: name, token: tokenFor(pid), base: 'https://127.0.0.1:' + PORT });
+  return l;
 }
+/* In the room: the service took its join, which it says with the roster that
+   names it. "connected" is only the socket open and the join sent, and a
+   socket that opens after it can still join first and take the lower peer
+   id. */
+const joined = (l) => until(() => l.host('peers').length > 0, 15000);
+/* The address the launcher's voice last dialled. */
+function dialled(l) {
+  const said = l.host('log').filter((t) => /^connecting to /.test(t));
+  return said.length ? said[said.length - 1].slice('connecting to '.length) : '';
+}
+/* The launcher's ICE to the person by that name reached connected. */
+function iceUp(l, name) {
+  return l.host('debug').some((t) => /^peer \d+ \(/.test(t) && t.endsWith(' (' + name + ') is connected'));
+}
+/* How many times the launcher's connections began their checks. */
+const checks = (l) => l.host('debug').filter((t) => /^peer \d+ \(.*\) is checking$/.test(t)).length;
+/* The last peer count a launcher reported to the launcher, and the most it
+   reported from its event `from` on. */
+function reported(l) {
+  const said = l.host('peers');
+  return said.length ? Number(said[said.length - 1]) : -1;
+}
+function maxSince(l, from) {
+  return l.events.slice(from).filter((e) => e.ev === 'host' && e.kind === 'peers').reduce((m, e) => Math.max(m, Number(e.text)), 0);
+}
+const HEARD = 0.1;    // a voice at full level in front reads about 0.25
+const SILENT = 0.02;
+/* What each launcher hears of every other's tone, as "who: level". */
+async function levels(list) {
+  const out = [];
+  for (const l of list) {
+    const lv = await l.hear(list.filter((o) => o !== l).map((o) => o.tone));
+    for (const o of list) { if (o !== l) out.push({ who: l.name + ' hears ' + o.name, v: lv[String(o.tone)] || 0 }); }
+  }
+  return out;
+}
+/* Every launcher hears every other's tone in what it plays. */
+async function allHear(list) {
+  const from = Date.now();
+  while (Date.now() - from < 20000) {
+    if ((await levels(list)).every((x) => x.v > HEARD)) return true;
+    await sleep(250);
+  }
+  return false;
+}
+/* What a launcher said that means a negotiation went wrong. */
+const troubleRe = /offer failed|sdp failed|could not offer|listener threw|threw|could not reach/i;
+function launcherTroubles(l) { return l.host('log').filter((t) => troubleRe.test(t)); }
 
 /*
   The game's page: the chat file, which holds the socket and joins as soon
@@ -792,83 +841,81 @@ function checkRoles(list, label) {
 
 // ----------------------------------------------------------------- part 2 --
 async function partTwo() {
-  console.log('\n2. two launcher pages, and both microphones opening at once:');
-  const P = launcherPage('Aela', 201);
-  P.start();
-  await until(() => P.peer() > 0);
-  const Q = launcherPage('Brynjolf', 202);
-  Q.start();
-  yes('both pages ask for the address the launcher gave them, through Caddy',
-      await until(() => Q.urls.length > 0) && P.urls[0] === 'wss://thornswood.test/voice/' && Q.urls[0] === P.urls[0]);
-  yes('they negotiate through the relay before either has a microphone, each taking the other\'s candidates',
-      await until(() => bothTook(P, Q)));
-  yes('and nobody is heard yet, because nobody sends', !hears(P, Q) && !hears(Q, P));
-  const r = roles(P, Q);
-  const rolled = r ? r.polite.rollbacks : 0;
-  const offered = r ? offersBy(r.rudePage, r.polite).length : 0;
+  console.log('\n2. two launchers, and both starting to talk at once:');
+  const P = await launcher('Aela', 201, 440);
+  await joined(P);
+  const Q = await launcher('Brynjolf', 202, 550);
+  const both = [P, Q];
+  await joined(Q);
+  const base = 'wss://127.0.0.1:' + PORT + '/';
+  yes('both join through the voice address the launcher gave them (' + both.map(dialled).join(', ') + ')',
+      both.every((l) => l.host('status').indexOf('connected') >= 0 && dialled(l) === base));
+  yes('they connect to each other before either talks, ICE up on both sides',
+      await until(() => iceUp(P, 'Brynjolf') && iceUp(Q, 'Aela'), 15000));
+  yes('each holds one connection, the one to the other (' + both.map(reported).join(', ') + ')',
+      await until(() => both.every((l) => reported(l) === 1)));
+  await sleep(600);
+  const quiet = await levels(both);
+  yes('and nobody is heard yet, because nobody talks (' + quiet.map((x) => x.who + ' ' + x.v.toFixed(3)).join(', ') + ')',
+      quiet.every((x) => x.v < SILENT));
+  const before = both.map(checks);
 
-  // Both in the same moment, each making its offer before it reads the
-  // other's, so the two offers cross.
-  P.hold(); Q.hold();
-  P.mic();
-  Q.mic();
-  yes('both microphones open and both pages offer at once',
-      await until(() => [P, Q].every((x) => x.pcs.every((pc) => pc.signalingState === 'have-local-offer'))));
-  P.release(); Q.release();
-  yes('once both microphones open, each hears the other', await until(() => hears(P, Q) && hears(Q, P)));
-  const r2 = roles(P, Q);
-  yes('the offers crossed: the polite side (' + (r2 && r2.politePage.name) + ') rolled its own back',
-      !!r2 && r2.polite.rollbacks > rolled);
-  const ignored = r2 ? offersBy(r2.rudePage, r2.polite).slice(offered)
-                         .filter((o) => r2.rude.offersTaken.indexOf(o) < 0) : [];
-  yes('and the impolite side (' + (r2 && r2.rudePage.name) + ') ignored the one that crossed its own', ignored.length >= 1);
-  checkRoles([P, Q], 'launcher and launcher');
-  const pcs = P.pcs.concat(Q.pcs);
-  yes('no candidate was refused, early or for another session', pcs.every((pc) => !pc.iceRefused));
-  yes('and neither page said anything failed', !troubles(P).length && !troubles(Q).length);
-  if (troubles(P).length || troubles(Q).length) console.log('      ' + troubles(P).concat(troubles(Q)).join('\n      '));
-  closePage(P);
-  closePage(Q);
+  // Both in the same moment.
+  await Promise.all(both.map((l) => l.send({ do: 'ptt', on: true })));
+  yes('once both talk at once, each hears the other', await allHear(both));
+  const loud = await levels(both);
+  console.log('      ' + loud.map((x) => x.who + ' ' + x.v.toFixed(3)).join(', '));
+  yes('talking needed no new negotiation: neither connection began its checks again (' + before.join(', ') + ' to ' +
+      both.map(checks).join(', ') + ')', both.every((l, i) => checks(l) === before[i] && before[i] >= 1));
+  yes('neither tried a connection again', both.every((l) => !l.host('debug').some((t) => /failed, trying again/.test(t))));
+  const said = [].concat(launcherTroubles(P), launcherTroubles(Q));
+  yes('and neither said anything failed', !said.length);
+  if (said.length) console.log('      ' + said.join('\n      '));
+  await P.quit();
+  await Q.quit();
   await sleep(200);
 }
 
 // ----------------------------------------------------------------- part 3 --
+/* A game whose overlay is on from the start, the microphone held shut. */
+function overlayOn(name, pid) {
+  const g = gamePage(name, pid, true);
+  g.configure(false);
+  return g;
+}
 async function partThree() {
-  console.log('\n3. the order that dropped: the game\'s overlay gets on a socket that joined first:');
-  const L = launcherPage('Lydia', 301);
-  L.start();
+  console.log('\n3. the order that dropped: a game\'s overlay gets on a socket that joined first:');
+  const L = overlayOn('Lydia', 301);
   await until(() => L.peer() > 0);
   // At the character choice: the chat joins with the token it was handed.
   const G = gamePage('Gerdur', 302, true);
   yes('the game\'s chat socket joins on its own, before voice is configured',
       await until(() => G.peer() > 0 && G.box.thornswoodNet.isUp()));
-  const M = launcherPage('Mjoll', 303);
-  M.start();
+  const M = overlayOn('Mjoll', 303);
   await until(() => M.peer() > 0);
   const offeredTo = (from) => G.wire.some((m) => m.t === 'sdp' && m.from === from.peer() && m.sdp.type === 'offer') &&
                               G.wire.some((m) => m.t === 'ice' && m.from === from.peer());
-  yes('the launcher already in the room, and the one that joined after the chat, both send that socket an offer ' +
-      'and candidates before the overlay is listening', await until(() => offeredTo(L) && offeredTo(M)));
-  yes('the launcher that was there first is the impolite one in that pair, waiting on its answer',
+  yes('the overlay already in the room, and the one that joined after the chat, both send that socket an offer ' +
+      'and candidates before its overlay is listening', await until(() => offeredTo(L) && offeredTo(M)));
+  yes('the overlay that was there first is the impolite one in that pair, waiting on its answer',
       L.peer() < G.peer() && L.pcs.some((pc) => pc.signalingState === 'have-local-offer'));
-  yes('and the overlay has opened nobody yet', G.pcs.length === 0);
+  yes('and the late overlay has opened nobody yet', G.pcs.length === 0);
 
   // In the world: the voice plugin configures the overlay, with the
   // microphone held shut as it does at first.
   G.configure(false);
-  const N = launcherPage('Njada', 304);
-  N.start();
+  const N = overlayOn('Njada', 304);
   const room = [L, G, M, N];
-  yes('once the overlay is on, every pair in the room connects', await until(() => !unlinked(room).length));
+  yes('once the late overlay is on, every pair in the room connects', await until(() => !unlinked(room).length));
   const still = unlinked(room);
   if (still.length) console.log('      not connected: ' + still.join(', '));
-  yes('the overlay and the launcher that was there first connect', !!link(G, L));
-  yes('the overlay and the launcher that joined before it was on connect', !!link(G, M));
-  yes('the overlay and the launcher that joined after it was on connect', !!link(G, N));
-  yes('and the overlay took the candidates both launchers sent before it was on, as they took its own',
+  yes('the late overlay and the one that was there first connect', !!link(G, L));
+  yes('the late overlay and the one that joined before it was on connect', !!link(G, M));
+  yes('the late overlay and the one that joined after it was on connect', !!link(G, N));
+  yes('and the late overlay took the candidates both sent before it was on, as they took its own',
       bothTook(G, L) && bothTook(G, M));
 
-  // Every microphone at once: the plugin's second configure opens the
+  // Every microphone at once: the plugin's second configure opens each
   // overlay's, and every page offers before it reads anybody else's, so in
   // every pair the two offers cross.
   const pairs = [];
@@ -879,23 +926,21 @@ async function partThree() {
     }
   }
   room.forEach((x) => x.hold());
-  L.mic(); M.mic(); N.mic();
-  G.configure(true);
-  G.mic();
+  room.forEach((x) => { x.configure(true); x.mic(); });
   yes('every page offers to everybody at once',
       await until(() => room.every((x) => x.pcs.filter((pc) => !pc.closed).every((pc) => pc.signalingState === 'have-local-offer'))));
   room.forEach((x) => x.release());
   yes('and with every microphone open, everybody hears everybody', await until(() => !deaf(room).length));
   const unheard = deaf(room);
   if (unheard.length) console.log('      ' + unheard.join(', '));
-  yes('the overlay hears the launcher that was there first, and it hears the overlay', hears(G, L) && hears(L, G));
+  yes('the late overlay hears the one that was there first, and it hears the late one', hears(G, L) && hears(L, G));
   const crossed = pairs.filter((x) => x.r.polite.rollbacks > x.rolled &&
                                       offersBy(x.r.rudePage, x.r.polite).slice(x.offered)
                                         .some((o) => x.r.rude.offersTaken.indexOf(o) < 0));
   yes('in all six pairs the offers crossed, the polite side rolled back and the impolite side ignored the other\'s, ' +
-      'the overlay on both sides of it', pairs.length === 6 && crossed.length === 6 &&
+      'the late overlay on both sides of it', pairs.length === 6 && crossed.length === 6 &&
       crossed.some((x) => x.r.politePage === G) && crossed.some((x) => x.r.rudePage === G));
-  checkRoles(room, 'overlay and launchers');
+  checkRoles(room, 'four overlays');
   const pcs = [].concat(L.pcs, G.pcs, M.pcs, N.pcs);
   yes('no candidate was refused, early or for another session', pcs.every((pc) => !pc.iceRefused));
   const said = [].concat(troubles(L), troubles(G), troubles(M), troubles(N));
@@ -907,9 +952,9 @@ async function partThree() {
 
 // ----------------------------------------------------------------- part 4 --
 async function partFour() {
-  console.log('\n4. the overlay on before its socket joins, then that socket joining again as a new peer:');
-  const K = launcherPage('Kodlak', 401);
-  K.start();
+  console.log('\n4. an overlay on before its socket joins, then that socket joining again as a new peer:');
+  const K = gamePage('Kodlak', 401, true);
+  K.configure(true);
   K.mic();
   await until(() => K.peer() > 0);
   // No token yet, so the chat asks the front for one and waits.
@@ -932,8 +977,8 @@ async function partFour() {
   yes('and it joins again as a new peer', await until(() => H.peer() > 0 && H.peer() !== firstId));
   yes('after which both hear each other again', await until(() => hears(H, K) && hears(K, H)));
   yes('the overlay closed every connection it had on the old socket', firstPcs.every((pc) => pc.closed));
-  yes('and the launcher closed its connection to the old peer', await until(() => K.pcs.filter((pc) => !pc.closed).length === 1));
-  checkRoles([K, H], 'overlay and launcher after the rejoin');
+  yes('and the other overlay closed its connection to the old peer', await until(() => K.pcs.filter((pc) => !pc.closed).length === 1));
+  checkRoles([K, H], 'two overlays after the rejoin');
   const said = [].concat(troubles(K), troubles(H));
   yes('no page said anything failed', !said.length);
   if (said.length) console.log('      ' + said.join('\n      '));
@@ -943,13 +988,78 @@ async function partFour() {
 
 // ----------------------------------------------------------------- part 5 --
 /*
+  The launcher's side of parts 3 and 4. The game's socket here never turns
+  its overlay on: the stand-in browser cannot read the launcher's
+  descriptions (the header says why), so what is read is what each
+  launcher sent that socket, which the chat keeps for its overlay.
+*/
+async function partFive() {
+  console.log('\n5. the launcher\'s side of the same orders:');
+  const A = await launcher('Ingun', 501, 440);
+  await joined(A);
+  const G = gamePage('Sigrid', 502, true);
+  yes('a game\'s chat socket joins on its own, before voice is configured',
+      await until(() => G.peer() > 0 && G.box.thornswoodNet.isUp()));
+  const B = await launcher('Brand-Shei', 503, 550);
+  await joined(B);
+  const both = [A, B];
+  const idOf = (pid) => {
+    const r = G.wire.filter((m) => m.t === 'peers').pop();
+    const row = r && r.peers.find((x) => x.profileId === pid);
+    return row ? row.peer : 0;
+  };
+  const from = (pid, after) => {
+    const id = idOf(pid);
+    const got = G.wire.slice(after).filter((m) => m.from === id);
+    return { offer: got.some((m) => m.t === 'sdp' && m.sdp && m.sdp.type === 'offer'), ice: got.some((m) => m.t === 'ice') };
+  };
+  yes('the launcher there first sends that socket an offer and candidates, as the lower peer id',
+      idOf(501) < G.peer() && await until(() => from(501, 0).offer && from(501, 0).ice, 10000));
+  // The launcher's own socket saying it joined comes on another socket than
+  // the roster that names it to the game's, so that roster can still be on
+  // its way: read the late launcher's peer id once the game's socket has it.
+  yes('the launcher that joined after it sends it candidates and no offer, as the side that answers',
+      await until(() => idOf(503) > 0, 10000) && idOf(503) > G.peer() && await until(() => from(503, 0).ice, 10000) && !from(503, 0).offer);
+  yes('each launcher holds a connection to the other and one to the game\'s socket (' + both.map(reported).join(', ') + ')',
+      await until(() => both.every((l) => reported(l) === 2)));
+  yes('the two launchers connect to each other with the game\'s socket in the room',
+      await until(() => iceUp(A, 'Brand-Shei') && iceUp(B, 'Ingun'), 15000));
+  await Promise.all(both.map((l) => l.send({ do: 'ptt', on: true })));
+  yes('and hear each other', await allHear(both));
+
+  // A new name closes the connection and opens another, which is a new peer.
+  const oldId = G.peer();
+  const asked = () => G.said.filter((l) => /^thornswood-front: token\? 502$/.test(l)).length;
+  const n = asked();
+  const mark = G.wire.length;
+  const marks = both.map((l) => l.events.length);
+  G.box.thornswoodNet.setName('Sigrid Brightmane');
+  yes('a new name makes the chat ask for a fresh token', await until(() => asked() > n, 8000));
+  G.box.thornswoodNet.setToken(tokenFor(502));
+  yes('and it joins again as a new peer', await until(() => G.peer() > 0 && G.peer() !== oldId));
+  yes('both launchers open the new peer and, both lower now, send it an offer and candidates',
+      await until(() => [501, 503].every((pid) => from(pid, mark).offer && from(pid, mark).ice), 10000));
+  yes('and drop the old one: two connections each, never three (' + both.map(reported).join(', ') + ', at most ' +
+      both.map((l, i) => maxSince(l, marks[i])).join(', ') + ')',
+      await until(() => both.every((l) => reported(l) === 2)) && both.every((l, i) => maxSince(l, marks[i]) <= 2));
+  const said = [].concat(launcherTroubles(A), launcherTroubles(B));
+  yes('and neither launcher said anything failed', !said.length);
+  if (said.length) console.log('      ' + said.join('\n      '));
+  closePage(G);
+  await A.quit();
+  await B.quit();
+  await sleep(200);
+}
+
+// ----------------------------------------------------------------- part 6 --
+/*
   What the chat keeps for voice, on its own, with a socket that records:
   the newest roster, signalling from the people on it in the order it
   came, nothing from somebody who left, a limit for one peer, and nothing
   at all once voice is on.
 */
-function partFive() {
-  console.log('\n5. what the chat keeps until voice is on:');
+function partSix() {
+  console.log('\n6. what the chat keeps until voice is on:');
   /* The chat file on its own, with a socket that records and a log. */
   function chatAlone() {
     const made = [];
@@ -1029,13 +1139,20 @@ function partFive() {
 }
 
 // -------------------------------------------------------------- the source --
-function partSix() {
-  console.log('\n6. the pages\' own rules:');
-  yes('the launcher\'s page: the lower peer id offers and is impolite',
-      /open\(p\.peer, p, myPeer < p\.peer\)/.test(HOST_SRC) && /polite: !initiator/.test(HOST_SRC));
-  yes('the overlay: the same rule', /open\(id, p, myPeer < id\)/.test(OVERLAY_SRC) && /polite: !initiator/.test(OVERLAY_SRC));
-  yes('both ignore a colliding offer only when impolite',
-      /if \(collision && !rec\.polite\) return;/.test(HOST_SRC) && /if \(collision && !rec\.polite\) \{\s*return;\s*\}/.test(OVERLAY_SRC));
+function partSeven() {
+  console.log('\n7. the two clients\' own rules:');
+  const open = /Open\(peer, [^;\n]*, myPeer < peer\);/.test(SESSION_SRC);
+  const build = /(?:^|\n)\s*if \(!rec\.Initiator\) return;\s*\n\s*try\s*\{\s*string sdp = pc\.Description\(\);\s*SendSdp\(id, "offer", sdp\);/.test(SESSION_SRC);
+  yes('the launcher: the lower peer id offers, and only it', open && build && (SESSION_SRC.match(/SendSdp\([^;]*"offer"/g) || []).length === 1);
+  yes('and it never gives way to an offer that crosses its own, the impolite side',
+      /if \(type == "offer"\)\s*\{[^}]*?if \(rec\.Initiator\) return;/.test(SESSION_SRC));
+  yes('and it turns away signalling only from a peer it does not hold, as the roster comes first',
+      /int from = \(int\)Num\(m, "from"\);\s*if \(!conns\.TryGetValue\(from, out rec\)\) return;/.test(SESSION_SRC) &&
+      /if \(!conns\.TryGetValue\(\(int\)Num\(m, "from"\), out rec\)\) return;/.test(SESSION_SRC));
+  yes('the overlay: the same rule, the lower peer id offers and is impolite',
+      /open\(id, p, myPeer < id\)/.test(OVERLAY_SRC) && /polite: !initiator/.test(OVERLAY_SRC));
+  yes('so between the launcher and an overlay the same side offers on both ends', open && /open\(id, p, myPeer < id\)/.test(OVERLAY_SRC));
+  yes('the overlay ignores a colliding offer only when impolite', /if \(collision && !rec\.polite\) \{\s*return;\s*\}/.test(OVERLAY_SRC));
   yes('the overlay gets on the chat\'s socket with board', /n\.board\(onNet\);/.test(OVERLAY_SRC) && !/n\.on\(onNet\);/.test(OVERLAY_SRC));
 }
 
@@ -1045,7 +1162,7 @@ function partSix() {
   done with, so the feed is now these, standing in one room.
 */
 function seatPages() {
-  const who = [201, 202, 301, 302, 303, 304, 401, 402].map((pid) => ({ profileId: pid, pos: [0, 0, 0], angleZ: 0, cell: 'a room' }));
+  const who = [201, 202, 301, 302, 303, 304, 401, 402, 501, 502, 503].map((pid) => ({ profileId: pid, pos: [0, 0, 0], angleZ: 0, cell: 'a room' }));
   return fetch(BASE + '/positions', { method: 'POST', body: JSON.stringify({ who: who }) });
 }
 
@@ -1056,13 +1173,15 @@ function seatPages() {
   await partTwo();
   await partThree();
   await partFour();
-  partFive();
+  await partFive();
   partSix();
+  partSeven();
 })().catch((e) => {
   fail++;
   console.log('FAIL  the harness itself: ' + (e && e.stack || e));
-}).then(() => {
+}).then(async () => {
   pages.forEach(closePage);
+  for (const l of launchers) { await l.quit(); }
   for (const s of raw) { try { s.destroy(); } catch (e) { } }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   const rm = () => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { } };

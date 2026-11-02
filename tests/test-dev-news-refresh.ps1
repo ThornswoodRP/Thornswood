@@ -502,7 +502,7 @@ try {
         Put (Join-Path $stand $s[0]) ($standIn -f $s[1])
     }
     $prelude = @'
-param([string]$Channel, [int]$Published, [string]$Release, [switch]$ModsOnly, [switch]$DryRun, [string]$Marks)
+param([string]$Channel, [int]$Published, [string]$Release, [switch]$DryRun, [string]$Marks)
 $ErrorActionPreference = 'Stop'
 function Say($m, $c = 'Gray') { Write-Host $m }
 function Head($m) { Write-Host ''; Write-Host $m }
@@ -529,44 +529,46 @@ $published = $LASTEXITCODE
     $shipTail = Join-Path $Scratch 'ship-tail.ps1'
     Put $shipTail ($prelude + $tail)
     $relDir = Join-Path $Scratch 'ship-rel'
-    Put (Join-Path $relDir 'version.json') '{"launcherVersion":"1.2.0"}'
-    function ShipRun([string]$channel, [int]$code, [string]$release, [string]$marks, [string]$failing = '', [switch]$ModsOnly) {
+    function ShipRun([string]$channel, [int]$code, [string]$release, [string]$marks, [string]$failing = '') {
         if (Test-Path -LiteralPath $calls) { Remove-Item -LiteralPath $calls -Force }
+        # What the publisher left: version.json naming the release it sent,
+        # which is what Ship holds a publisher that said 0 to (#4825).
+        Put (Join-Path $relDir 'version.json') ('{"release":{"id":"' + $release + '"}}')
         $env:TS_CALLS = $calls; $env:TS_STAND = $stand; $env:TS_REL = $relDir; $env:TS_FAIL = $failing
-        $cmd = "& " + (Q $shipTail) + " -Channel $channel -Published $code -Release " + (Q $release) + " -Marks " + (Q $marks) + $(if ($ModsOnly) { ' -ModsOnly' } else { '' }) + "; exit `$LASTEXITCODE"
+        $cmd = "& " + (Q $shipTail) + " -Channel $channel -Published $code -Release " + (Q $release) + " -Marks " + (Q $marks) + "; exit `$LASTEXITCODE"
         $c = Child $cmd
         $got = @(if (Test-Path -LiteralPath $calls) { Get-Content -LiteralPath $calls | Where-Object { $_ } })
         return [pscustomobject]@{ Code = $c.Code; Out = $c.Out; Calls = $got }
     }
     try {
-        $s = ShipRun 'dev' 2 '' 'done' -ModsOnly
+        $s = ShipRun 'dev' 2 '' 'done'
         YesR ("dev, nothing new: nothing is posted, no server is told, no tag (called: {0})" -f ($s.Calls -join ', ')) ($s.Calls.Count -eq 0 -and $s.Code -eq 0) $s
         Yes '  it says nothing was released and nobody was told' ($s.Out -match 'Nothing was released' -and $s.Out -match 'was not posted to, and no server was told')
         Yes '  and that the dev marks were refreshed, with what moved' ($s.Out -match "DEV marks were refreshed against main" -and $s.Out -match '1 of 40 notes marked DEV')
 
-        $s = ShipRun 'dev' 2 '' 'failed' -ModsOnly
+        $s = ShipRun 'dev' 2 '' 'failed'
         YesR ("dev, nothing new, marks not refreshed: still nobody told (called: {0})" -f ($s.Calls -join ', ')) ($s.Calls.Count -eq 0) $s
         Yes '  it says the marks were NOT refreshed, why, and what does it on its own' ($s.Out -match 'were NOT refreshed' -and $s.Out -match 'no main feed' -and
             $s.Out -match [regex]::Escape('.\scripts\release\Refresh-DevNews.ps1'))
 
-        $s = ShipRun 'dev' 0 '' '' -ModsOnly
+        $s = ShipRun 'dev' 0 '' ''
         YesR ("a publisher that says 0 but names no release is not announced (exit {0}, called: {1})" -f $s.Code, ($s.Calls -join ', ')) (
             $s.Calls.Count -eq 0 -and $s.Code -eq 1 -and $s.Out -match 'NOTHING WAS PUBLISHED') $s
 
-        $s = ShipRun 'main' 2 '' '' -ModsOnly
+        $s = ShipRun 'main' 2 '' ''
         YesR ("main, nothing new: nobody told, and the dev marks are left as they are (called: {0})" -f ($s.Calls -join ', ')) (
             $s.Calls.Count -eq 0 -and $s.Out -match "DEV marks were not touched") $s
 
-        $s = ShipRun 'main' 0 '20261005-235125' '' -ModsOnly
+        $s = ShipRun 'main' 0 '20261005-235125' ''
         YesR ("main, released: the dev marks follow at once, after the remirror and before anybody is told ({0})" -f ($s.Calls -join ', ')) (
             ($s.Calls -join ',') -eq 'remirror,refresh,discord,server,tag') $s
 
-        $s = ShipRun 'main' 0 '20261005-235125' '' 'refresh' -ModsOnly
+        $s = ShipRun 'main' 0 '20261005-235125' '' 'refresh'
         YesR ("  a refresh that fails does not fail the release (exit {0}, called: {1})" -f $s.Code, ($s.Calls -join ', ')) (
             $s.Code -eq 0 -and ($s.Calls -join ',') -eq 'remirror,refresh,discord,server,tag') $s
         Yes '  and Done names it with the command that does it again' ($s.Out -match "the dev feed's DEV marks" -and $s.Out -match [regex]::Escape('.\scripts\release\Refresh-DevNews.ps1'))
 
-        $s = ShipRun 'dev' 0 '20261006-110000-dev' '' -ModsOnly
+        $s = ShipRun 'dev' 0 '20261006-110000-dev' ''
         YesR ("dev, released: announced as before, and no separate refresh, the publish marked it (called: {0})" -f ($s.Calls -join ', ')) (
             ($s.Calls -join ',') -eq 'remirror,discord,server,tag') $s
     } finally {

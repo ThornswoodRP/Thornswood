@@ -24,9 +24,9 @@
 
   VirusTotal is NOT part of publish any more. Code signing covers trust for the
   installer (#390). `Publish-VirusTotal.ps1` and `Add-VirusTotalComment.ps1`
-  stay in the repo as optional manual tools. Ship no longer calls the upload,
-  and neither does Publish-Installer.ps1. Passing -Only VirusTotal prints that
-  and exits 0 so an old hand-typed line does not fail a release.
+  stay in the repo as optional manual tools, and Ship does not call the
+  upload. Passing -Only VirusTotal prints that and exits 0 so an old
+  hand-typed line does not fail a release.
 
   NOTHING HERE FAILS A RELEASE. The tip is on the feed before any of this runs.
   A script that is not on this machine yet is a line naming it. A remirror that
@@ -71,13 +71,6 @@
   Where releases are staged. Kept for callers that still pass it; unused now
   that VirusTotal is off the publish path.
 
-.PARAMETER Installer
-  Kept for callers that still pass it. Unused on the publish path; for a
-  manual VirusTotal send use Publish-VirusTotal.ps1 -Path <file>.
-
-.PARAMETER AlsoLauncher
-  Kept for callers that still pass it. Unused on the publish path.
-
 .PARAMETER Only
   Remirror runs the host feed remirror (default, and what Ship passes).
   VirusTotal prints that the upload is optional and manual, then exits 0.
@@ -98,8 +91,6 @@ param(
     [ValidateSet('main', 'dev')][string]$Channel = 'main',
     [string]$Root = (& (Join-Path $PSScriptRoot 'Where.ps1') Install),
     [string]$DistRoot = (& (Join-Path $PSScriptRoot 'Where.ps1') Dist),
-    [string]$Installer,
-    [switch]$AlsoLauncher,
     [ValidateSet('Both', 'Remirror', 'VirusTotal')][string]$Only = 'Both',
     [switch]$NoPause
 )

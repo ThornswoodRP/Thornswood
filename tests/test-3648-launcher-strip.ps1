@@ -10,8 +10,8 @@
   (stripMedia in site\server.js).
 
   WHAT IT CHECKS:
-    1. Compiled with the compiler the build runs (Add-LauncherType,
-       tests\Launcher-Csc.ps1, #2821) and asked: for every picture and
+    1. Compiled with the .NET SDK the launcher builds with (Add-LauncherType,
+       tests\Launcher-Csc.ps1, #2821, #4823) and asked: for every picture and
        recording in tests\fixtures\media-3648.js, MediaStrip.Clean gives
        exactly the bytes the site keeps (the same fixture's clean bytes,
        which site\tests\test-3648-media-metadata.js holds the site to), so what the
@@ -25,8 +25,7 @@
     3. The two copies of the rules name each other.
 
   Read only. node writes the fixtures under the temp folder, and they are
-  removed at the end. Off Windows, 1 says SKIP: the build's compiler is only
-  there.
+  removed at the end. It runs on any machine.
 #>
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -46,7 +45,8 @@ function Same([byte[]]$a, [byte[]]$b) {
 $latin = [Text.Encoding]::GetEncoding(28591)
 
 # ------------------------------------------------- 1. compiled and asked
-if ($OnWindows -and (Test-Path -LiteralPath $LauncherCsc)) {
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (Test-Path -LiteralPath $LauncherDotnet) {
     $node = Get-Command node -ErrorAction SilentlyContinue
     Yes 'node is here to write the fixtures' ($null -ne $node)
     $work = Join-Path ([IO.Path]::GetTempPath()) ('ts-3648-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -55,10 +55,9 @@ if ($OnWindows -and (Test-Path -LiteralPath $LauncherCsc)) {
             & $node.Source (Join-Path $PSScriptRoot 'fixtures\media-3648.js') $work
             Yes 'the fixtures are written' ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath (Join-Path $work 'in')))
 
-            $cs = [IO.File]::ReadAllText((Join-Path $app 'MediaStrip.cs'))
-            $cs = $cs -replace 'namespace Thornswood', 'namespace ThornswoodMediaStripTest'
-            $null = Add-LauncherType -Source $cs
-            $T = [ThornswoodMediaStripTest.MediaStrip]
+            # The type from the assembly this build returns, so another copy
+            # loaded in the same session cannot answer for it.
+            $T = (Add-LauncherType -File (Join-Path $app 'MediaStrip.cs')).GetType('Thornswood.MediaStrip', $true)
 
             foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $work 'in') -File | Sort-Object Name)) {
                 $dirty = [IO.File]::ReadAllBytes($f.FullName)
@@ -85,9 +84,6 @@ if ($OnWindows -and (Test-Path -LiteralPath $LauncherCsc)) {
     finally {
         if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
     }
-}
-else {
-    Write-Host 'SKIP  1, MediaStrip.cs compiled and asked: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'
 }
 
 # ------------------------------------------------- 2. Submit uses it

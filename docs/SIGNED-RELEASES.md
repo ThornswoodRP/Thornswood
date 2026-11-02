@@ -10,8 +10,9 @@ runner registered to it, so that job went rather than moving to the private
 ops repository (section 7, "#4013"). A second GitHub runner checks the
 signed draft, and for a release from the feed the engine fork checks the
 launcher again on GitHub's runner before it signs the release (section 7,
-"#3312"). Ship, Publish-Installer, the feed and every checksum
-check stay as they are. Patrick's answers are in
+"#3312"). Ship, the feed and every checksum check stay as they are. Since
+#4824 the launcher is also the setup program, so there is no separate
+installer to sign or publish. Patrick's answers are in
 section 8, "Decisions", and none is pending. Section 9 sets doing nothing
 beside the change (Patrick, 15 Oct, #2168 A).
 
@@ -29,10 +30,10 @@ the same bytes".
 | Layer | What it is | Where |
 | --- | --- | --- |
 | Authenticode signing | Azure Artifact Signing, account ThornswoodSigning, profile ThornswoodRelease, `signtool /fd SHA256 /tr http://timestamp.acs.microsoft.com /td SHA256` | `scripts\release\Sign-Artifact.ps1`, `records\signing\` |
-| What is signed | Launcher `Thornswood.exe`, the installer (`Setup`, signed after the OneFile attach), and setup-stub on the paths that sign it | `Build-Launcher.ps1`, `Package-Thornswood.ps1` |
-| Publish gate | Ship and Publish-Installer refuse an unsigned or wrongly signed file | `scripts\release\Assert-PublishSigned.ps1` |
+| What is signed | Every program of the launcher's folder (`Thornswood.exe`, which is also the setup program since #4824, and the native libraries beside it) | `Build-Launcher.ps1`, `.github/workflows/release.yml` |
+| Publish gate | Ship refuses an unsigned or wrongly signed file | `scripts\release\Assert-PublishSigned.ps1` |
 | Launcher check | WinVerifyTrust, chain to Microsoft Identity Verification Root CA 2020 (`F40042E2...BFA2`), a "Microsoft ID Verified CS" issuer, a timestamp, the ThornswoodRelease durable identity `1.3.6.1.4.1.311.97.203948530.216998690.847558466.123546472`, Subject contains `ExpectedSigner` | `launcher\app\Signature.cs`, `Updater.cs` |
-| Checksums | release.yml writes `SHA256SUMS` for Thornswood.exe and setup-stub.exe onto a DRAFT release; Ship downloads and refuses on mismatch. The feed names every pack, the launcher and the client runtime by sha256 and serves them at `/feed[-dev]/assets/<sha256>`; the launcher refuses an empty or mismatched hash | `.github/workflows/release.yml`, `docs\FEED.md`, `Updater.cs` |
+| Checksums | release.yml writes `SHA256SUMS` for every file of the launcher's folder onto a DRAFT release; Ship downloads and refuses on mismatch. The feed names every pack, the launcher and the client runtime by sha256 and serves them at `/feed[-dev]/assets/<sha256>`; the launcher refuses an empty or mismatched hash | `.github/workflows/release.yml`, `docs\FEED.md`, `Updater.cs` |
 | Build records | `records\client-build.json` and `server-build.json` name every built file by hash and the fork commit; the feed's `release` object names id, channel, commit, branch, tag; `releases.txt` on the VPS keeps the history | `records\README.md`, `docs\FEED.md` |
 
 What is NOT covered today, which is what this issue is about:
@@ -56,7 +57,7 @@ What is NOT covered today, which is what this issue is about:
 | Artifact | Format | Signature | Algorithm | Verified by |
 | --- | --- | --- | --- | --- |
 | Launcher `Thornswood.exe` | PE | Authenticode, embedded (today) | RSA certificate from Artifact Signing, SHA256 file digest, RFC 3161 SHA256 timestamp | Ship gate; installed launcher before swap (`Signature.cs`) |
-| Installer / setup-stub | PE | Authenticode, embedded (today) | same | Ship gate; Windows SmartScreen for the people installing |
+| The launcher's native libraries | PE | Authenticode, embedded (today) | same | Ship gate; Windows SmartScreen for the people installing, since the launcher is the setup program (#4824) |
 | Client runtime, packs, optional packs, the baseline record (which names every file of the release by its sha256) | zip, JSON | Listed by sha256 in the signed release manifest (below), since phase B | SHA256 entries in a signed manifest | Launcher (phase C), Publish-Update's gate |
 | Feed `version.json` | JSON | Not signed itself. It names the manifest (`signedManifest`), and every asset in it is checked against the manifest. Its own bytes are not listed: Set-Server, Set-Collection, Dev-News, Publish-Discord, Rollback-Feed and Repair-Manifest rewrite it after a Ship, so a signature over it would go stale at the next edit. What it says outside the asset hashes (server address, collection, news, minLauncher) is not covered; see "Not covered" below | none | |
 | Build records `client-build.json`, `server-build.json` | JSON | Not yet. The manifest carries the commit and the fork commit; listing the records' hashes is for phase C | | |

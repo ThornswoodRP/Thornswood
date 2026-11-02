@@ -41,9 +41,8 @@
   that matches records\client-build.json for it to copy in (issue #946),
   which is CI's build of the pin, fetched by the Ship itself on a machine
   that takes it (Setup-ShipMachine.ps1 -EngineBuild ci, issue #3047). What
-  only a main release asks for, the setup stub -Package attaches to and the
-  server build the live deploys send (issue #932), prints as WARN on main and
-  leaves the verdict alone.
+  only a main release asks for, the server build the live deploys send
+  (issue #932), prints as WARN on main and leaves the verdict alone.
 
   It is deliberately not part of Ship. Ship's refusals stay where they are:
   they are the gate, and a gate that can be satisfied by a different script is
@@ -67,10 +66,8 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 . (Join-Path $Here '..\deploy\ServerBuild.ps1')
 . (Join-Path $Here '..\deploy\Fresh-Checkout.ps1')
 . (Join-Path $Here '..\mods\LoadOrder.ps1')
-. (Join-Path $Here 'Find-MSBuild.ps1') -Load
 . (Join-Path $Here 'Assert-PublishSigned.ps1')
 . (Join-Path $Here 'Feed-Store.ps1')
-. (Join-Path $Here 'LauncherVersion.ps1')   # main's launcher number from git (#5179)
 # Each check below is a row, not a stop: what fails is said, and the rest are still asked.
 $ErrorActionPreference = 'Continue'
 $script:VpsAddress = Get-ThornswoodVpsAddress
@@ -85,7 +82,7 @@ function Head($m) { Write-Host ''; Write-Host $m -ForegroundColor Cyan; Write-Ho
 # One answer. $fix is the command that closes the gap, or $null when it is
 # somebody's decision rather than a command. $who is who runs it. $level is
 # 'need' for what would stop a Ship, and 'warn' for what does not stop one but
-# gets in the way of something around it (-Package, the live deploys); a warn
+# gets in the way of something around it (the live deploys); a warn
 # never changes the verdict. tests\test-ship-ready.ps1 lifts this and the
 # functions below out of the script and runs them.
 function New-Row([string]$what, [bool]$ok, [string]$detail, [string]$fix, [string]$who = 'either', [string]$level = 'need') {
@@ -185,11 +182,6 @@ function Get-ClientRows([string]$SyncClient, [string]$Record, [string]$Game, [st
 
 # WHAT ONLY A MAIN RELEASE ASKS FOR (issue #932), as a warning: it does not
 # stop Ship.ps1 itself.
-#   The setup stub is not asked here any more: a main Ship with -Package
-#   takes the one CI built for its tag, verified by SHA256SUMS, and stops
-#   before anything is published when there is none (Get-ReleaseStub in
-#   Ship.ps1). What this machine's out\ holds does not go into a main
-#   installer.
 #   The server build. Deploy-Gamemode and Deploy-Server follow a main Ship,
 #   and Deploy-Server refuses any server file (the binary, the JavaScript
 #   half, the rest ServerBuild.ps1 names) that is not the build
@@ -282,55 +274,6 @@ function Get-LauncherRows([string]$Channel, [string]$Root, [bool]$Named = $false
            'Update-ShipRoot.ps1 makes it, and a dev Ship asks it for no Launcher folder'
   }
   return @(New-Row 'it has the Launcher folder a dev Ship asks for' $has $detail $fix)
-}
-
-# WHAT -PACKAGE PUTS IN THE INSTALLER AS THE LAUNCHER (#2603), a warning on
-# main like the other -Package row. Package-Thornswood.ps1 packs
-# <root>\Launcher\Thornswood.exe and stops with "MISSING the launcher" when
-# there is none, after the feed is out (Ship carries on, #2243). A main Ship
-# that builds a launcher puts it there first. One that keeps the feed's
-# launcher (Test-KeepFeedLauncher: nothing it is built from changed since)
-# used to put none there, so -Package packed whatever the folder held, and a
-# ship root's launcher is never started to update itself. Since #2661 it
-# downloads the feed's launcherUrl, checks it against launcherSha256 and its
-# signature, and puts it there before anything is published, so that passes
-# too; a feed that names no whole launcher (no launcherUrl or no 64 digit
-# launcherSha256) is what still warns, because that Ship stops. Which of the two
-# a Ship does: a launcher on main's feed under another number than main's
-# for these sources is never kept, because that number moves whenever one of
-# the files the launcher is built from does (LauncherVersion.ps1), and one
-# under the same number may be.
-# $Current is main's number for these sources, $Feed main's feed as the site serves it
-# ($null when it could not be read) and $Exe <root>\Launcher\Thornswood.exe.
-function Get-PackageLauncherRows([string]$Current, $Feed, [string]$Exe) {
-  $what = 'a launcher for -Package to put in the installer'
-  if ($null -eq $Feed) {
-    return @(New-Row $what $false 'main''s feed could not be read, so whether the Ship builds a launcher is not known' `
-      'Run this again once https://thornswood.net/feed/version.json answers' 'either' 'warn')
-  }
-  $fv = ''; $fsha = ''
-  if ($Feed.PSObject.Properties['launcherVersion']) { $fv = [string]$Feed.launcherVersion }
-  if ($Feed.PSObject.Properties['launcherSha256']) { $fsha = ([string]$Feed.launcherSha256).ToLowerInvariant() }
-  if ($Current -and $fv -ne $Current) {
-    return @(New-Row $what $true ('main''s feed has ' + $(if ($fv) { $fv } else { 'no launcher' }) + ' and this checkout ' + $Current +
-      ', so the Ship builds ' + $Current + ' and puts it in the folder before -Package (not with -ModsOnly)') $null 'either' 'warn')
-  }
-  $has = [bool]($Exe -and (Test-Path -LiteralPath $Exe -PathType Leaf))
-  $sha = ''
-  if ($has) { $sha = (Get-FileHash -LiteralPath $Exe -Algorithm SHA256).Hash.ToLowerInvariant() }
-  if ($has -and $fsha -and $sha -eq $fsha) {
-    return @(New-Row $what $true ($Exe + ' is the ' + $fv + ' main''s feed offers') $null 'either' 'warn')
-  }
-  $now = $(if ($has) { $Exe + ' is not the ' + $fv + ' main''s feed offers' } else { 'there is no ' + $Exe })
-  $fu = ''
-  if ($Feed.PSObject.Properties['launcherUrl']) { $fu = ([string]$Feed.launcherUrl).Trim() }
-  if (-not $fu -or $fsha -notmatch '^[0-9a-f]{64}$') {
-    return @(New-Row $what $false ($now + ', and main''s feed names no whole launcher (launcherUrl and launcherSha256), so a Ship ' +
-      'that keeps the feed''s ' + $fv + ' with -Package stops before anything is published') `
-      'Ship with -RebuildLauncher, which builds the launcher and puts it in the folder first' 'either' 'warn')
-  }
-  return @(New-Row $what $true ($now + '; a Ship that keeps the feed''s ' + $fv + ' (nothing it is built from changed since) ' +
-    'downloads it from the feed, checks its sha256 and signature, and puts it there before -Package (#2661)') $null 'either' 'warn')
 }
 
 # WHAT SHIP ASKS OF THE CHECKOUT, from the same answer Ship gets (#2981).
@@ -499,10 +442,13 @@ if ($hasGame) {
 
 # ------------------------------------------------------------- the compiler --
 Head 'The build'
-# The launcher builds only with MSBuild from its project files (#498).
-$msb = Find-ThornswoodMSBuild
-Ready 'MSBuild and the .NET Framework 4.8.1 reference assemblies are here' ([bool]($msb.MSBuild -and $msb.Csc -and $msb.RefAssemblies)) $msb.MSBuild `
-  'docs/guide/set-up-a-machine.md "Setting up a machine" has the one install line (Visual Studio 2022 Build Tools with the MSBuild workload and the 4.8.1 targeting pack)'
+# The launcher and the ship root tool build with the .NET 10 SDK (#4823).
+$sdk10 = ''
+if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+  $sdk10 = [string](@(& dotnet --list-sdks 2>$null | Where-Object { $_ -match '^10\.' }) | Select-Object -Last 1)
+}
+Ready 'the .NET 10 SDK is here' ([bool]$sdk10) $sdk10 `
+  'winget install --id Microsoft.DotNet.SDK.10 -e   (docs/guide/set-up-a-machine.md "Setting up a machine" has the C++ build tools Native AOT needs)'
 
 $node = $null
 $nodeCmd = Get-Command node -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -616,18 +562,10 @@ if (Test-Path -LiteralPath (Join-Path $fork '.git')) {
 
 # ------------------------------------------------ what only main asks for --
 if (-not $Dev) {
-  Head 'For -Package and the live deploys'
+  Head 'For the live deploys'
   foreach ($r in @(Get-MainOnlyRows $Channel `
                      (Join-Path $RepoDir 'records\server-build.json') `
                      @((& $where ServerDist), (& $where Payload)))) { Show-Row $r }
-  # Main's feed as the site serves it, as Ship reads it (Get-PublishedLauncher),
-  # and main's number for this checkout's launcher, as Ship works it out from
-  # git (LauncherVersion.ps1, #5179); '' when git cannot say.
-  $mainFeed = $null
-  try { $mainFeed = Read-SiteFeed 'main' } catch { $mainFeed = $null }
-  $current = ''
-  try { $current = Get-LauncherVersion -RepoDir $RepoDir } catch { $current = '' }
-  foreach ($r in @(Get-PackageLauncherRows $current $mainFeed $(if ($Root) { Join-Path $Root 'Launcher\Thornswood.exe' } else { '' }))) { Show-Row $r }
 }
 
 # ---------------------------------------------------------------- the VPS ---

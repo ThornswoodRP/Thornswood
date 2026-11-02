@@ -6,10 +6,10 @@
   the installer and the packs (#421, the 19 Oct review: AGPL section 13 asks
   for a prominent offer to everybody who uses the server over a network).
 
-  A. THE LAUNCHER. ui.xaml has the Source code link under the version lines,
-     Shell.cs wires it to ClientRuntime.SourceUrl, and the patterns
-     ClientRuntime.cs reads the embedded record with give the fork at the
-     commit records\client-build.json names.
+  A. THE LAUNCHER. The window (MainWindow.axaml) has the Source code link
+     under the version lines, Shell.cs wires it to ClientRuntime.SourceUrl,
+     and the patterns ClientRuntime.cs reads the embedded record with give
+     the fork at the commit records\client-build.json names.
   B. THE GAME. The help panel's Getting help topic says where the source is.
 
   Read only.
@@ -27,16 +27,16 @@ function yes(what, cond) {
 }
 
 // ---- A. the launcher -----------------------------------------------------------
-const xaml = read('launcher', 'ui.xaml');
+const xaml = read('launcher', 'app', 'MainWindow.axaml');
 const shell = read('launcher', 'app', 'Shell.cs');
 const runtime = read('launcher', 'app', 'ClientRuntime.cs');
 const record = read('records', 'client-build.json');
 
 const at = xaml.indexOf('x:Name="BtnSource"');
-yes('ui.xaml has the Source code link', at >= 0 && /x:Name="BtnSource"[^>]*Content="Source code"/.test(xaml));
+yes('the window has the Source code link', at >= 0 && /x:Name="BtnSource"[^>]*Content="Source code"/.test(xaml));
 yes('  under the version lines in the sidebar', at > xaml.indexOf('x:Name="TxtBuildLine"') && xaml.indexOf('x:Name="TxtBuildLine"') > 0);
 yes('Shell.cs opens ClientRuntime.SourceUrl from it',
-  /F<Button>\("BtnSource"\)/.test(shell) && /ClientRuntime\.SourceUrl/.test(shell) && /btnSource\.Click \+= delegate \{ Open\(source\); \}/.test(shell));
+  /Button btnSource = win\.BtnSource;/.test(shell) && /ClientRuntime\.SourceUrl/.test(shell) && /btnSource\.Click \+= delegate \{ Open\(source\); \}/.test(shell));
 yes('  and the credits page\'s source section when the exe carries no record', /\/credits#source"/.test(shell));
 
 // The two patterns ClientRuntime.cs reads the record with, as C# string

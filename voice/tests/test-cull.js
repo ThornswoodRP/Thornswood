@@ -64,10 +64,11 @@ const reaches = [];
   yes('the overlay range table is where it was (' + got.join(', ') + ' m)', got.length === 3);
   reaches.push(...got);
 
-  const host = read(path.join(__dirname, '..', '..', 'launcher', 'voice-host.html'));
-  const range = /var RANGE = \{([\s\S]*?)\};/.exec(host);
-  const quiet = range ? (range[1].match(/quiet:\s*[\d.]+/g) || []).map(s => Number(s.split(':')[1])) : [];
-  yes('the launcher voice host range table is where it was (' + quiet.join(', ') + ' m)', quiet.length === 3);
+  // The launcher's voice, a page until #4823 and C# since (VoiceSession.cs).
+  const host = read(path.join(__dirname, '..', '..', 'launcher', 'app', 'VoiceSession.cs'));
+  const range = /static readonly Dictionary<string, Range> RANGE = new Dictionary<string, Range>\s*\{([\s\S]*?)\};/.exec(host);
+  const quiet = range ? (range[1].match(/Quiet = [\d.]+/g) || []).map(s => Number(s.split('=')[1])) : [];
+  yes('the launcher\'s voice range table is where it was (' + quiet.join(', ') + ' m)', quiet.length === 3);
   reaches.push(...quiet);
   // The service's own browser page was a third client until it went (#1822).
 }

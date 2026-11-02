@@ -5,21 +5,23 @@
 // publisher warn above the button are gone: Setup is Authenticode-signed,
 // and the site no longer promises a VT report or a Downloads warn block.
 //
-// THREE HALVES, AND THIS RUNS ALL THREE, because the value has to survive the
-// whole trip and a field name spelt differently at any one stop drops it
-// silently:
+// TWO HALVES, AND THIS RUNS BOTH, because the value has to survive the whole
+// trip and a field name spelt differently at any one stop drops it silently.
+// Since #4824 the installer is Velopack's setup program on a GitHub Release,
+// and its SHA-256 is the digest GitHub measured on it there (newestSetup in
+// server.js, which test-release-copies.js drives):
 //
-//   Publish-Installer.ps1 hashes the exe and writes sha256 into files.json.
-//     Its own lines are lifted and run in PowerShell against a temp file.
-//   server.js listFiles() passes it on to /api/public. Lifted and run against
-//     a temp folder with a files.json in it.
+//   server.js listFiles() passes it on to /api/public, beside a file the
+//     downloads folder's files.json lists with a sha256 of its own. Lifted and
+//     run against a temp folder, with newestSetup a stand-in.
 //   home.html builds the download block from /api/public. The whole /downloads
 //     branch of the page script is lifted and run with the fetch stubbed.
 //
-// The publisher takes the same trip (#5275, Patrick's answer A on
-// q-installer-publisher): Publish-Installer writes the signer its sign gate
-// held the exe to, listFiles passes it on, and the page says "Published by"
-// that name, the one Windows shows, and never "Thornswood".
+// The publisher takes the same trip when an entry has one (#5275, Patrick's
+// answer A on q-installer-publisher): listFiles passes it on, and the page
+// says "Published by" that name, the one Windows shows, and never
+// "Thornswood". The Release's installer has none, since nothing on the
+// Release says who signed it, and the page then names nobody.
 //
 // Read only. Writes to a temp folder and nowhere else.
 const REPO_DIR = require('path').join(__dirname, '..', '..'); // this harness is in site\tests\, the repository is two folders up
@@ -27,12 +29,10 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
-const { spawnSync } = require('child_process');
 const siteFiles = require('../../tests/site-files');
 
 const CR = String.fromCharCode(13);
 const read = (p) => fs.readFileSync(path.join(REPO_DIR, p), 'utf8').split(CR).join('');
-const publisher = read('scripts/release/Publish-Installer.ps1');
 const server = siteFiles.source();
 // The page is home.html and the script that builds it, which moved out of
 // home.html into home.js in #1479. The downloads builder and esc are in the
@@ -49,112 +49,41 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-download-hash-'));
 const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 
 async function main() {
-  // -------------------------------------------------- Publish-Installer.ps1
-  const hashLine = (/^\$(\w+) = \(Get-FileHash -LiteralPath \$exeItem\.FullName -Algorithm SHA256\)\.Hash$/m
-    .exec(publisher) || [])[0];
-  yes('Publish-Installer hashes the exe it publishes', !!hashLine);
-
-  const from = publisher.indexOf('if ($single) {\n  $meta = @{');
-  const to = publisher.indexOf('\n$b64 = ', from);
-  const metaBlock = (from >= 0 && to > from) ? publisher.slice(from, to) : '';
-  yes('the files.json entries are built in one block that can be lifted', !!metaBlock);
-
-  const exeBlocks = metaBlock.match(/\$exeOut = @\{[^}]*\}/g) || [];
-  yes('there is an exe entry for the one file build and one for the pair',
-      exeBlocks.length === 2);
-  const hashVar = hashLine ? /^\$(\w+)/.exec(hashLine)[1] : '(none)';
-  yes('both of them carry the sign gate\'s signer as publisher',
-      exeBlocks.length === 2 && exeBlocks.every((b) => /\bpublisher\s*=\s*\$expectWho\b/.test(b)));
-  yes('and both of them carry the hash as sha256',
-      exeBlocks.length === 2 && exeBlocks.every((b) =>
-        new RegExp('\\bsha256\\s*=\\s*\\$' + hashVar + '\\b').test(b)));
-
-  if (hashLine && metaBlock) {
-    /*
-      Run for real rather than read, so the key survives ConvertTo-Json the way
-      the script sends it and the value is the hash of the file and not of its
-      name. Both builds, one file and the pair, in one PowerShell start.
-    */
-    const exe = path.join(tmp, 'Thornswood-Setup.exe');
-    const bytes = Buffer.from('not really an installer, but bytes all the same\n');
-    fs.writeFileSync(exe, bytes);
-    const ps = path.join(tmp, 'run.ps1');
-    fs.writeFileSync(ps, [
-      "$ErrorActionPreference = 'Stop'",
-      "$exeItem = Get-Item -LiteralPath '" + exe.replace(/'/g, "''") + "'",
-      hashLine,
-      "$Version = 'launcher 1.2.3'",
-      "$exeOut = 'Thornswood-Setup.exe'",
-      "$expectWho = 'Someone Signing'",
-      "$zipOut = 'Thornswood-Setup.zip'",
-      'foreach ($single in @($true, $false)) {',
-      metaBlock,
-      '  $meta | ConvertTo-Json -Depth 4 -Compress',
-      '}',
-      ''
-    ].join('\r\n'));
-    // Without PSModulePath, each shell finds its own modules. Started from a
-    // pwsh 7 session, Windows PowerShell inherits pwsh's module folders and
-    // then cannot find Get-FileHash at all, which is a fault in the harness and
-    // not in the script.
-    const env = Object.assign({}, process.env);
-    for (const k of Object.keys(env)) if (k.toLowerCase() === 'psmodulepath') delete env[k];
-    let run = null;
-    for (const shell of ['pwsh', 'powershell']) {
-      run = spawnSync(shell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-        '-File', ps], { encoding: 'utf8', env: env });
-      if (!run.error) break;
-    }
-    if (run.error) {
-      console.log('SKIP  no PowerShell here to run Publish-Installer\'s lines');
-    } else {
-      const lines = String(run.stdout || '').split(/\r?\n/).filter((l) => l.trim().startsWith('{'));
-      yes('the lifted lines ran', run.status === 0 && lines.length === 2);
-      if (run.status !== 0) console.log(run.stderr);
-      const want = sha(bytes);
-      for (let i = 0; i < lines.length; i++) {
-        let meta = {};
-        try { meta = JSON.parse(lines[i]); } catch (e) { }
-        const e = meta['Thornswood-Setup.exe'] || {};
-        const kind = i === 0 ? 'one file build' : 'pair';
-        yes(kind + ': files.json gets the exe\'s SHA-256 under sha256',
-            String(e.sha256 || '').toLowerCase() === want);
-        yes(kind + ': files.json names the signer the sign gate held it to as publisher',
-            e.publisher === 'Someone Signing');
-        yes(kind + ': and the label, version and note are still there',
-            e.label === 'Thornswood installer' && e.version === 'launcher 1.2.3' && !!e.note);
-      }
-    }
-  }
-
   // ---------------------------------------------------- server.js listFiles
   const lf = /\nfunction listFiles\(\) \{\n[\s\S]*?\n\}\n/.exec(server);
   yes('listFiles is in server.js', !!lf);
   if (lf) {
     const files = path.join(tmp, 'files');
     fs.mkdirSync(files);
-    const exeBytes = Buffer.from('the exe');
+    const exeBytes = Buffer.from('the setup program');
     const good = sha(exeBytes);
-    fs.writeFileSync(path.join(files, 'Thornswood-Setup.exe'), exeBytes);
-    fs.writeFileSync(path.join(files, 'Thornswood-Setup.zip'), 'the zip');
+    const guideBytes = Buffer.from('a guide people may take');
+    const guideSha = sha(guideBytes);
+    fs.writeFileSync(path.join(files, 'Guide.pdf'), guideBytes);
+    fs.writeFileSync(path.join(files, 'Extra.zip'), 'an extra');
     fs.writeFileSync(path.join(files, 'notes.txt'), 'no entry in files.json');
+    // The old installer a publish left in the folder, still in files.json.
+    fs.writeFileSync(path.join(files, 'Thornswood-Setup.exe'), 'the old exe');
     const meta = {
       // Get-FileHash writes upper case.
-      'Thornswood-Setup.exe': { label: 'Thornswood installer',
-        version: 'launcher 1.2.3', sha256: good.toUpperCase(), publisher: 'Someone Signing' },
-      'Thornswood-Setup.zip': { label: 'payload', hidden: true,
-        sha256: '"><img src=x onerror=alert(1)>' }
+      'Guide.pdf': { label: 'The guide', version: 'launcher 1.2.3', sha256: guideSha.toUpperCase(),
+        publisher: 'Someone Signing' },
+      'Extra.zip': { label: 'extra', sha256: '"><img src=x onerror=alert(1)>' },
+      'Thornswood-Setup.exe': { label: 'Thornswood installer', sha256: sha(Buffer.from('the old exe')) }
     };
+    // What GitHub said of main's Release (newestSetup, test-release-copies.js).
+    const setup = { name: 'Thornswood-Setup.exe', size: 123456789, sha256: good, tag: 'main-build-20261101.3', at: 5,
+      url: 'https://github.com/ThornswoodRP/Thornswood/releases/download/main-build-20261101.3/Thornswood-Setup.exe' };
     fs.writeFileSync(path.join(files, 'files.json'), JSON.stringify(meta));
     const jsonFile = (p, fb) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { return fb; } };
     // listFiles lists only what /file/ serves (downloadServed, #3798).
-    const rule = ['function payloadZip(', 'function downloadServed('].map((h) => {
+    const rule = ['function oldInstaller(', 'function downloadServed('].map((h) => {
       const m = new RegExp('\\n' + h.replace('(', '\\(') + '[\\s\\S]*?\\n\\}\\n').exec(server);
       return m ? m[0] : '';
     }).join('');
     yes('the rule for what is served is in server.js', /function downloadServed\(/.test(rule));
-    const listFiles = new Function('fs', 'path', 'FILES', 'jsonFile',
-      rule + lf[0] + '\nreturn listFiles;')(fs, path, files, jsonFile);
+    const listFiles = new Function('fs', 'path', 'FILES', 'jsonFile', 'newestSetup',
+      rule + lf[0] + '\nreturn listFiles;')(fs, path, files, jsonFile, (ch) => ch === 'main' ? setup : null);
     const list = () => {
       const by = {};
       for (const f of listFiles()) by[f.name] = f;
@@ -162,19 +91,20 @@ async function main() {
     };
     const by = list();
     const e = by['Thornswood-Setup.exe'] || {};
-    yes('/api/public carries the exe\'s sha256', e.sha256 === good);
-    yes('in lower case', e.sha256 === good.toLowerCase());
-    yes('/api/public carries the exe\'s publisher', e.publisher === 'Someone Signing');
-    yes('an entry with no publisher sends an empty one',
-        (by['Thornswood-Setup.zip'] || {}).publisher === '');
-    yes('a value that is not a SHA-256 does not go out',
-        (by['Thornswood-Setup.zip'] || {}).sha256 === '');
+    const g = by['Guide.pdf'] || {};
+    yes('/api/public carries the installer\'s sha256, GitHub\'s from its Release', e.sha256 === good);
+    yes('  with the Release\'s size and tag, not the old exe left in the folder',
+        e.size === setup.size && e.version === setup.tag && e.hidden === false);
+    yes('  and names no publisher, which the Release does not say', e.publisher === '');
+    yes('a folder file\'s sha256 from files.json goes out, in lower case', g.sha256 === guideSha);
+    yes('  with its publisher', g.publisher === 'Someone Signing');
+    yes('an entry with no publisher sends an empty one', (by['Extra.zip'] || {}).publisher === '');
+    yes('a value that is not a SHA-256 does not go out', (by['Extra.zip'] || {}).sha256 === '');
     yes('a file files.json says nothing about is not listed at all (#3798)',
         !('notes.txt' in by));
     yes('and nothing that was there before is lost',
-        e.label === 'Thornswood installer' && e.version === 'launcher 1.2.3' &&
-        e.size === exeBytes.length && e.hidden === false &&
-        (by['Thornswood-Setup.zip'] || {}).hidden === true);
+        g.label === 'The guide' && g.version === 'launcher 1.2.3' &&
+        g.size === guideBytes.length && g.hidden === false);
 
     // VirusTotal fields no longer go out on /api/public.
     yes('listFiles does not emit vt', !('vt' in e));
@@ -184,9 +114,9 @@ async function main() {
     // Stale vtUrl / vtSkipped in files.json must not leak onto the API.
     const withMeta = (extra) => {
       const m = JSON.parse(JSON.stringify(meta));
-      Object.assign(m['Thornswood-Setup.exe'], extra);
+      Object.assign(m['Guide.pdf'], extra);
       fs.writeFileSync(path.join(files, 'files.json'), JSON.stringify(m));
-      return list()['Thornswood-Setup.exe'] || {};
+      return list()['Guide.pdf'] || {};
     };
     const leaked = withMeta({
       vtUrl: 'https://www.virustotal.com/gui/file/' + good,
@@ -194,7 +124,7 @@ async function main() {
       vtSkipped: true,
       vtSkipReason: 'key out of quota'
     });
-    yes('stale vtUrl in files.json does not appear on the API', !('vt' in leaked) && leaked.sha256 === good);
+    yes('stale vtUrl in files.json does not appear on the API', !('vt' in leaked) && leaked.sha256 === guideSha);
     yes('stale vtSkipped in files.json does not appear on the API', !('vtSkipped' in leaked));
     yes('and a skip-reason string never goes out either',
         !('vtSkipReason' in leaked) && !JSON.stringify(leaked).includes('quota'));
@@ -221,8 +151,8 @@ async function main() {
     const exe = (size, hash, extra) => Object.assign({ name: 'Thornswood-Setup.exe', size: size,
       at: 2, hidden: false, label: 'Thornswood installer', version: '2026-09-24 01:00',
       note: '', sha256: hash, publisher: 'Someone & Signing' }, extra || {});
-    const zip = (hidden) => ({ name: 'Thornswood-Setup.zip', size: 385154603,
-      at: 1, hidden: hidden, label: 'payload', version: '', note: '', sha256: '' });
+    const zip = (hidden) => ({ name: 'Extra.zip', size: 385154603,
+      at: 1, hidden: hidden, label: 'extra', version: '', note: '', sha256: '' });
     const SIZE = /\d (KB|MB|GB)\b/;
     const small = (html) => {
       const m = html.match(/<p class="also faintly">[\s\S]*?<\/p>/g) || [];
@@ -230,10 +160,9 @@ async function main() {
     };
 
     const cases = [
-      ['one file build', [exe(560000000, H)]],
-      ['stub with a hidden payload, which is what the site serves now',
-        [exe(400000, H), zip(true)]],
-      ['stub with the payload beside it', [exe(400000, H), zip(false)]]
+      ['the installer alone', [exe(560000000, H)]],
+      ['with a hidden zip on the site', [exe(400000, H), zip(true)]],
+      ['with a zip people may take', [exe(400000, H), zip(false)]]
     ];
     for (const c of cases) {
       const html = await render({ files: c[1] });
@@ -250,7 +179,13 @@ async function main() {
       yes(c[0] + ': and no SmartScreen / publisher warn above the button',
           !/SmartScreen/i.test(html) && !/Why this happens/.test(html) &&
           !/signed as /.test(html) && !/Unknown publisher/i.test(html));
+      yes(c[0] + ': one button, and no payload to take beside it (#4824)',
+          (html.match(/Download the installer/g) || []).length === 1 && !/its payload/.test(html) &&
+          !/Do not unzip/.test(html));
     }
+    const missing = await render({ files: [zip(false)] });
+    yes('with no installer published yet, the page says so and offers no button',
+        /The installer is not published yet\./.test(missing) && !/Download the installer/.test(missing));
 
     const none = await render({ files: [exe(560000000, '')] });
     yes('no hash on the site: the size and date still show', / MB/.test(small(none)));

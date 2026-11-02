@@ -30,8 +30,8 @@
   HOW. Nothing here opens Steam, focuses a window or sends a key: Downgrade
   drives another program's window, and keys sent to the wrong one land
   somewhere else on the person's desktop. So the real methods are lifted out
-  of Downgrade.cs by brace match and compiled, with the compiler the build
-  runs (tests\Launcher-Csc.ps1), into a class whose EnumWindows,
+  of Downgrade.cs by brace match and compiled, with the .NET SDK the
+  launcher builds with (tests\Launcher-Csc.ps1), into a class whose EnumWindows,
   GetForegroundWindow, Process and clipboard are stand-ins for a made-up
   desktop. What is driven is the shipped text of ForegroundIsSteam,
   MainWindow and the clipboard lines, not a copy of them.
@@ -42,7 +42,7 @@
 param([string]$AppPath)
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 # The tests are in tests\, the repository is one folder up.
@@ -111,6 +111,9 @@ $wanted = [ordered]@{
     'ForegroundIsSteam' = 'static bool ForegroundIsSteam()'
     'SteamInFront'      = 'static bool SteamInFront(IntPtr h)'
     'MainWindow'        = 'static IntPtr MainWindow()'
+    'WindowSearch'      = 'sealed class WindowSearch'
+    # The callback EnumWindows calls, from its attribute on (#4823).
+    'OnWindow'          = '[UnmanagedCallersOnly]'
     'IsSteam'           = 'static bool IsSteam(string processName)'
     'SteamNames'        = 'static readonly string[] SteamNames ='
     'SayWindow'         = 'static void SayWindow(IntPtr h, Action<string> log)'
@@ -139,6 +142,7 @@ Yes 'Downgrade.cs has AppId' $appId.Success
 $probe = @'
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Probe
@@ -204,8 +208,9 @@ namespace Probe
         static Win Find(IntPtr h) { foreach (Win w in Desktop) if (w.Handle == h) return w; return null; }
 
         public struct RECT { public int Left, Top, Right, Bottom; }
-        delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-        static bool EnumWindows(EnumWindowsProc cb, IntPtr l) { foreach (Win w in Desktop.ToArray()) if (!cb(w.Handle, l)) break; return true; }
+        // Calls the lifted OnWindow through the same function pointer the
+        // real EnumWindows is handed, once a window, until it answers 0.
+        static unsafe int EnumWindows(delegate* unmanaged<IntPtr, IntPtr, int> cb, IntPtr l) { foreach (Win w in Desktop.ToArray()) if (cb(w.Handle, l) == 0) break; return 1; }
         static bool IsWindowVisible(IntPtr h) { Win w = Find(h); return w != null && w.Visible; }
         static uint GetWindowThreadProcessId(IntPtr h, out uint pid) { Win w = Find(h); pid = w == null ? 0u : w.Pid; return w == null ? 0u : 1u; }
         static bool GetWindowRect(IntPtr h, out RECT r)
@@ -237,22 +242,18 @@ if ($said.Success) { [void]$body.AppendLine($said.Value) }
 if ($appId.Success) { [void]$body.AppendLine($appId.Value) }
 $probe = $probe.Replace('__LIFTED__', $body.ToString())
 
-if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'; Done }
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-downgrade-window-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 $null = New-Item -ItemType Directory -Force -Path $work
 try {
-    $probeCs = Join-Path $work 'Probe.cs'
-    [IO.File]::WriteAllText($probeCs, $probe)
-    $dll = Join-Path $work 'Probe.dll'
-    $out = & $LauncherCsc /nologo /target:library "/out:$dll" $probeCs 2>&1
-    $built = ($LASTEXITCODE -eq 0) -and (Test-Path -LiteralPath $dll)
-    Yes 'the lifted methods compile with the compiler the build runs against the stand-in desktop' $built
-    if (-not $built) { $out | ForEach-Object { Write-Host "      $_" }; Done }
+    $asm = $null
+    try { $asm = Add-LauncherType -Source $probe }
+    catch { $out = $_.Exception.Message }
+    Yes 'the lifted methods compile with the .NET SDK the launcher builds with against the stand-in desktop' ($null -ne $asm)
+    if (-not $asm) { $out -split "`n" | ForEach-Object { Write-Host "      $_" }; Done }
 
-    $asm = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($dll))
     $T = $asm.GetType('Probe.Downgrade', $true)
     $flags = [Reflection.BindingFlags]'Static, Public, NonPublic'
     function Call([string]$name, [object[]]$argv) {

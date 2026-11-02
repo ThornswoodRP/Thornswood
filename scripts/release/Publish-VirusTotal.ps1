@@ -17,7 +17,7 @@
   one line saying what happened: no key, no file, a key VirusTotal refuses, a
   file too big for it, a network that is not there. A release that is already
   published and on the site is not undone by a report that is missing, and
-  Ship and Publish-Installer carry on either way. The line is the record.
+  whatever runs this carries on either way. The line is the record.
 
   THE KEY IS READ FROM THE ENVIRONMENT AND FROM NOWHERE ELSE. VT_API_KEY, set
   on the machine that ships and nowhere in this repository. There is no
@@ -36,9 +36,9 @@
     1. Hashes the file itself. The hash of the bytes on disk is the only one
        worth having; -Sha256 from a caller that already hashed it is checked
        against this one and said out loud when the two differ.
-    2. Asks VirusTotal whether it already holds that hash. A published
-       installer is most of a gigabyte and a rerun of Publish-Installer is
-       normal, so sending it twice is a long upload for nothing.
+    2. Asks VirusTotal whether it already holds that hash. A build can be
+       large and running this twice on the same file is normal, so sending it
+       twice is a long upload for nothing.
     3. Sends it, to the plain endpoint under 32 MB and to the one-time URL
        VirusTotal hands out for anything larger.
 
@@ -49,9 +49,9 @@
 
   VIRUSTOTAL WILL NOT TAKE EVERYTHING. Its own limits, not ours: 32 MB on the
   plain endpoint, 650 MB through an upload URL, and nothing above that. The
-  one-file installer has been over 650 MB, so that refusal is the expected
-  outcome on some builds rather than a fault, and it is said as plainly as the
-  rest. When it happens there is no report for that hash until the file is
+  old one-file installer was over 650 MB, so that refusal is an expected
+  outcome for a large file rather than a fault, and it is said as plainly as
+  the rest. When it happens there is no report for that hash until the file is
   under the cap or somebody sends it by hand.
 
   WHAT HAS BEEN MEASURED, and what has not. The paths that end in a line and
@@ -62,8 +62,7 @@
   The first real upload is Patrick's, on the machine that ships.
 
 .PARAMETER Path
-  The file to send. The installer exe today, and it takes any file, so Ship
-  can pass a launcher zip later without this changing.
+  The file to send: the Setup program or the launcher, and it takes any file.
 
 .PARAMETER Sha256
   The SHA-256 the caller has already measured, if it has. Optional. This
@@ -83,8 +82,8 @@
 .PARAMETER OutcomePath
   Optional path for a small name=value outcome file the caller can read.
   status is sent, already-has or skipped. skipReason, when status is skipped,
-  is one of no-key, over-650mb or upload-failed (stable tokens for Website).
-  Ship does not pass this; Publish-Installer does.
+  is one of no-key, over-650mb or upload-failed (stable tokens, so a script
+  can read the outcome without parsing the printed line).
 
 .EXAMPLE
   .\Publish-VirusTotal.ps1 -Path .\Thornswood-Setup.exe
@@ -92,7 +91,7 @@
 .EXAMPLE
   .\Publish-VirusTotal.ps1 -Path .\Thornswood-Setup.exe -Sha256 $exeSha
 
-  What Publish-Installer.ps1 runs, with the hash it has already measured.
+  With a hash already measured; a value that does not match is reported.
 #>
 [CmdletBinding()]
 param(
@@ -102,8 +101,8 @@ param(
     [string]$Api = 'https://www.virustotal.com/api/v3',
     [int]$TimeoutMinutes = 30,
     # Where this run writes a small name=value outcome the caller can read.
-    # Optional: Ship and a lone run do not pass it. Publish-Installer does, so
-    # it can mark the tip exe in files.json without parsing the printed line.
+    # Optional, for a caller that reads the outcome without parsing the
+    # printed line.
     [string]$OutcomePath
 )
 
@@ -295,8 +294,8 @@ function Get-Refusal($r) {
 
 # --------------------------------------------------------- already sent once
 #
-# A rerun of Publish-Installer is a normal thing to do when a push failed, and
-# the file it publishes is the same file. Asking costs one small call.
+# Running this again on the same file is a normal thing to do, and the file
+# is the same file. Asking costs one small call.
 try {
     $have = Invoke-Get ($Api.TrimEnd('/') + '/files/' + $sha)
 }

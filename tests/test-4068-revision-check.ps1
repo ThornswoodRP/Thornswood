@@ -228,8 +228,8 @@ $env:TS_4068_NEXUS = $null; $env:TS_4068_FEEDS = $null
 Write-Host ''; Write-Host 'where it is wired'
 $ship = [IO.File]::ReadAllText((Join-Path $rel 'Ship.ps1')).Replace("`r`n", "`n")
 $at = $ship.IndexOf('$newestWhy = Get-ShipNewestRevisionProblem -RepoDir $RepoDir')
-$bump = $ship.IndexOf("`$updaterCs = Join-Path `$Here '..\..\launcher\app\Updater.cs'")
-Yes 'Ship.ps1 asks, and stops on the answer, before the version moves' ($at -gt 0 -and $bump -gt $at -and $ship.Contains('if ($newestWhy) { Die $newestWhy }'))
+$bump = $ship.IndexOf("Head 'Animation and body files'")
+Yes 'Ship.ps1 asks, and stops on the answer, before anything is built' ($at -gt 0 -and $bump -gt $at -and $ship.Contains('if ($newestWhy) { Die $newestWhy }'))
 $pu = [IO.File]::ReadAllText((Join-Path $rel 'Publish-Update.ps1')).Replace("`r`n", "`n")
 $at = $pu.IndexOf('$newestWhy = Get-ShipNewestRevisionProblem -RepoDir $RepoDir')
 $held = $pu.IndexOf('loose files held for the collection until then still ship')

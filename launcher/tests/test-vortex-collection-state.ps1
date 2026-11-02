@@ -1,6 +1,6 @@
 param([string]$Scratch)
 $ErrorActionPreference='Stop'
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
 $repo=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 # A folder this run makes is removed in the finally below (#1992); one the
 # caller passed in is the caller's to keep.
@@ -53,25 +53,22 @@ $count=0
   if($got -ne $ids[$case]){throw ('Mod ids '+$case+': expected ['+$ids[$case]+'], got ['+$got+']')}
   $count++;Write-Host ('PASS mod ids '+$case)
  }
- if ($OnWindows) {
-     $dll=Join-Path $Scratch 'VortexCollectionState.dll'
-     & $LauncherCsc /noconfig /nologo /target:library "/langversion:$LauncherLangVersion" ("/out:"+$dll) /reference:System.dll /reference:System.Core.dll /reference:System.Xml.dll /reference:System.Runtime.Serialization.dll (Join-Path $repo 'launcher\app\VortexProfileState.cs')
-     if($LASTEXITCODE){throw 'Framework compilation failed'}
-     foreach($case in $cases.Keys | Sort-Object){
+ # The same reader built the way the launcher builds it, with the .NET SDK at
+ # the launcher's C# version, on any machine (#4823), and called through the
+ # type that build returns, not the copy LoadOrder.ps1 loaded above.
+ $T=(Add-LauncherType -File ([IO.Path]::Combine($repo,'launcher','app','VortexProfileState.cs'))).GetType('Thornswood.VortexProfileState',$true)
+ foreach($case in $cases.Keys | Sort-Object){
       $state=Join-Path (Join-Path $Scratch ('collection-'+$case)) 'Vortex\state.v2'
       $got=0;$gotNewest=0;$gotIds=''
-      try{$got=[Thornswood.VortexProfileState]::CollectionRevision($state,'7essxf')}catch{if($case -notin @('corrupt','partial')){throw}}
+      try{$got=$T::CollectionRevision($state,'7essxf')}catch{if($case -notin @('corrupt','partial')){throw}}
       if($got -ne $cases[$case]){throw ('Shared C# reader '+$case+' differs')}
-      try{$gotNewest=[Thornswood.VortexProfileState]::CollectionNewest($state,'7essxf')}catch{if($case -notin @('corrupt','partial')){throw}}
+      try{$gotNewest=$T::CollectionNewest($state,'7essxf')}catch{if($case -notin @('corrupt','partial')){throw}}
       if($gotNewest -ne (Newest $case)){throw ('Shared C# reader newest '+$case+' differs')}
-      try{$gotIds=[Thornswood.VortexProfileState]::CollectionModIds($state,'7essxf') -join ','}catch{if($case -notin @('corrupt','partial')){throw}}
+      try{$gotIds=$T::CollectionModIds($state,'7essxf') -join ','}catch{if($case -notin @('corrupt','partial')){throw}}
       if($gotIds -ne $ids[$case]){throw ('Shared C# reader mod ids '+$case+' differs')}
       $count++;Write-Host ('PASS reader '+$case)
-     }
- } else {
-     Write-Host 'SKIP  the shared C# reader compiled at the launcher''s C# version and checked case by case: the build''s compiler (the Build Tools'' csc, against .NET Framework 4.8.1) is only on Windows'
  }
- Write-Host ($count.ToString()+' collection cases'+$(if($OnWindows){' and the compile'}else{''})+' passed')
+ Write-Host ($count.ToString()+' collection cases and the compile passed')
 }finally{
  $env:APPDATA=$oldAppData
  if($ownScratch -and (Test-Path -LiteralPath $Scratch)){Remove-Item -LiteralPath $Scratch -Recurse -Force}

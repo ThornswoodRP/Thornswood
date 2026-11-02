@@ -1,7 +1,7 @@
 <#
   test-door-outage.ps1
 
-      powershell -NoProfile -File .\launcher\tests\test-door-outage.ps1
+      pwsh -NoProfile -File .\launcher\tests\test-door-outage.ps1
 
   The launcher's half of "Discord did not answer is not a no".
 
@@ -15,18 +15,20 @@
   Door.cs has to treat that the way it treats a site that did not answer: a
   recent yes still opens the door, and nothing is written down as a no.
 
-  This compiles the real Door.cs, with the real Standing class lifted out of
-  Discord.cs by brace match, against a stand-in Discord.Join that returns the
-  answer each case names. It compiles with the compiler the build runs
-  (tests\Launcher-Csc.ps1). Then it
-  drives Door.Check through a real WPF dispatcher, the way Shell does, and
-  reads back whether Play went ahead, whether the box went up, what it said
-  and what door.txt says afterwards. test-join-outage.js is the site's half.
+  This builds the real Door.cs and Ask.cs, with the real Standing class lifted
+  out of Discord.cs by brace match, against a stand-in Discord.Join that
+  returns the answer each case names. It builds them the way the project
+  builds, with the .NET 10 SDK (tests\Launcher-Csc.ps1, #4823), so it runs on
+  any machine that has the SDK. Then it drives Door.Check through Avalonia's
+  dispatcher, the one Shell runs on, and reads back whether Play went ahead,
+  whether the box went up, what it said and what door.txt says afterwards.
+  test-join-outage.js is the site's half.
 
-  Read only apart from files under its own temp folder.
+  Read only apart from files under its own temp folder, and the build under
+  out\harness, which git ignores.
 #>
 [CmdletBinding()]
-param([string]$DoorPath, [string]$DiscordPath)
+param([string]$DoorPath, [string]$DiscordPath, [string]$AskPath)
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
@@ -36,6 +38,7 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 $Here = Split-Path -Parent (Split-Path -Parent $Here)
 if (-not $DoorPath) { $DoorPath = Join-Path $Here 'launcher\app\Door.cs' }
 if (-not $DiscordPath) { $DiscordPath = Join-Path $Here 'launcher\app\Discord.cs' }
+if (-not $AskPath) { $AskPath = Join-Path $Here 'launcher\app\Ask.cs' }
 
 $script:pass = 0
 $script:fail = 0
@@ -49,14 +52,9 @@ function Done {
     if ($script:fail) { exit 1 } else { exit 0 }
 }
 
-# ---- the compiler the launcher is built with (tests\Launcher-Csc.ps1) -------
-if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'; Done }
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
-$refs = @('System.dll', 'System.Core.dll', 'System.Xaml.dll', 'WindowsBase.dll', 'PresentationCore.dll', 'PresentationFramework.dll') |
-    ForEach-Object { Join-Path $LauncherRefDir $_ }
-foreach ($r in $refs) { Yes "$([IO.Path]::GetFileName($r)) is there to compile against" (Test-Path -LiteralPath $r) }
-if (@($refs | Where-Object { -not (Test-Path -LiteralPath $_) }).Count) { Done }
+# ---- the SDK the launcher is built with (tests\Launcher-Csc.ps1) -----------
+Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 # ---- the real Standing, out of Discord.cs -----------------------------------
 $discordSrc = Get-Content -LiteralPath $DiscordPath -Raw
@@ -82,8 +80,7 @@ $driver = @'
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Windows;
-using System.Windows.Threading;
+using Avalonia.Threading;
 
 namespace Thornswood
 {
@@ -138,20 +135,21 @@ namespace Thornswood
             bool allowed = false, shouted = false, done = false;
             string told = "";
             List<string> logged = new List<string>();
-            Window win = new Window();
             DispatcherFrame frame = new DispatcherFrame();
             DispatcherTimer timer = new DispatcherTimer();
+            // A Check that never calls back ends the run here, and the
+            // harness reads done=False as the failure it is.
             timer.Interval = TimeSpan.FromSeconds(10);
             timer.Tick += delegate { timer.Stop(); frame.Continue = false; };
             timer.Start();
 
             Door.Forget();
-            Door.Check(win,
+            Door.Check(
                 delegate (string line) { logged.Add(line); },
                 delegate (Standing s) { shouted = true; told = s.Message ?? ""; },
                 delegate { allowed = true; },
                 delegate { done = true; frame.Continue = false; });
-            Dispatcher.PushFrame(frame);
+            Dispatcher.UIThread.PushFrame(frame);
             timer.Stop();
 
             string after = "none";
@@ -169,30 +167,19 @@ namespace Thornswood
 '@
 $driver = $driver.Replace('STANDING_GOES_HERE', $standing)
 
+$exe = $null
+try { $exe = Build-LauncherCode -File $DoorPath, $AskPath -Source $driver -Exe }
+catch { Write-Host ('      ' + $_.Exception.Message) }
+Yes 'Door.cs builds the way the project builds it' ($null -ne $exe)
+if (-not $exe) { Done }
+
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-door-outage-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 try {
-    $driverFile = Join-Path $tmp 'DoorOutageTest.cs'
-    [IO.File]::WriteAllText($driverFile, $driver, (New-Object System.Text.UTF8Encoding($false)))
-    $exe = Join-Path $tmp 'door-outage-test.exe'
     $work = Join-Path $tmp 'profile'
 
-    # /noconfig, as the build does: csc.rsp adds its own copies of the
-    # framework, and beside the reference assemblies that stops on CS1703.
-    $cscArgs = @('/noconfig', '/nologo', '/target:exe', '/warn:0', "/out:$exe")
-    foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-    $cscArgs += (Resolve-Path -LiteralPath $DoorPath).Path
-    $cscArgs += $driverFile
-    $compiled = & $LauncherCsc @cscArgs
-    $built = ($LASTEXITCODE -eq 0) -and (Test-Path -LiteralPath $exe)
-    Yes 'Door.cs compiles with the compiler the build runs' $built
-    if (-not $built) {
-        foreach ($l in @($compiled)) { Write-Host "      $l" }
-        Done
-    }
-
     function Knock([string]$why, [string]$note) {
-        $lines = & $exe $work $why $note
+        $lines = Invoke-LauncherExe $exe $work $why $note
         $r = @{ ran = ($LASTEXITCODE -eq 0) }
         foreach ($l in @($lines)) {
             $s = [string]$l

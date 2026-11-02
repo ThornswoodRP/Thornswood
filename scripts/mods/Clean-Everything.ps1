@@ -115,12 +115,13 @@ function Folder-Bytes($path) {
 }
 
 # ------------------------------------------------------- this machine ---
-# Where releases stage (#3004). Since 22 September Ship, Publish-Update and
-# Package-Thornswood stage in <Where.ps1 Dist>\<install root's name>\_dist, one
-# per install root, and One ships from more than one root (release-main and
-# release-devbuild), so every _dist under Dist is looked at, not one root's.
-# Until then this looked only in $Root\_dist, where they staged before, and
-# missed the 5 GB installers a Ship leaves. $Root\_dist is still looked at
+# Where releases stage (#3004). Since 22 September Ship and Publish-Update
+# stage in <Where.ps1 Dist>\<install root's name>\_dist, one per install root
+# (and so did the old installer's Package-Thornswood until #4824, whose
+# installers and stage may still be there), and One ships from more than one
+# root (release-main and release-devbuild), so every _dist under Dist is
+# looked at, not one root's. Until then this looked only in $Root\_dist, where
+# they staged before, and missed the 5 GB installers a Ship left. $Root\_dist is still looked at
 # while one is there, since what it holds is left over from before the move.
 # Join-Path stops on a drive this machine does not have (C: off Windows), so
 # the install folder is tested before anything is joined to it (#2989).

@@ -327,12 +327,6 @@
         "Survey": "switch"
       }
     },
-    "Publish-Installer": {
-      "script": "scripts/release/Publish-InstallerOnBox.ps1",
-      "timeoutMinutes": 45,
-      "fixed": [],
-      "params": {}
-    },
     "Rebuild-ContentTables": {
       "script": "scripts/mods/Rebuild-OnBox.ps1",
       "timeoutMinutes": 45,
@@ -353,8 +347,7 @@
         "Title": "text",
         "Detail": "text",
         "Detail2": "text",
-        "Detail3": "text",
-        "ModsOnly": "switch"
+        "Detail3": "text"
       }
     },
     "Ship-Main": {
@@ -366,8 +359,7 @@
         "Title": "text",
         "Detail": "text",
         "Detail2": "text",
-        "Detail3": "text",
-        "ModsOnly": "switch"
+        "Detail3": "text"
       }
     },
     "Send-Backups": {

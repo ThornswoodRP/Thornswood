@@ -4,9 +4,9 @@
       pwsh -NoProfile -File .\tests\test-signer-check.ps1
       pwsh -NoProfile -File .\tests\test-signer-check.ps1 -Signed <a signed Thornswood.exe>
 
-  The check a launcher runs on a downloaded launcher before it swaps it in
-  (launcher\app\Signature.cs, called by Updater.CheckSigner), pointed at real
-  files.
+  The check a launcher runs on a downloaded launcher before it goes in
+  (launcher\app\Signature.cs, which the Velopack update asks in VeloPackage.cs
+  and VeloUpdate.cs since #4825), pointed at real files.
 
   WHY THIS EXISTS. Issue #912. Until then the check read the Subject of the
   embedded certificate (X509Certificate.CreateFromSignedFile) and looked for
@@ -30,19 +30,11 @@
   For the self-made certificate it also runs the old Subject read, to show
   that one passed (the bug this closes).
 
-  Issue #1330: Signature.MicrosoftRefusal, which Voice asks before it runs
-  the WebView2 installer it downloads, is pointed at the same files. It
-  refuses all of them, and an installer signed with a self-made certificate
-  named Microsoft Corporation. A program on this machine that Microsoft
-  signed (Edge, its updater, the WebView2 runtime) is accepted when the
-  chain Windows built from the signature embedded in the file ends at
-  Microsoft's own root and names Microsoft Corporation, and refused
-  otherwise. MicrosoftRefusal accepts the same csc.exe Refusal refused:
-  the signature in the file is Microsoft Corporation under Microsoft Root
-  Certificate Authority 2011. A Windows file signed only in a catalog,
-  with nothing in the file, is refused as not signed. Trust asks
-  WinVerifyTrust with WTD_CHOICE_FILE, so catalogs are never honoured
-  (#2046).
+  A Windows file signed only in a catalog, with nothing in the file, is
+  refused as not signed. Trust asks WinVerifyTrust with WTD_CHOICE_FILE, so
+  catalogs are never honoured (#2046). (Signature.MicrosoftRefusal, which
+  voice asked before it ran the WebView2 installer, #1330, went with the web
+  view in #4823, and its checks here with it.)
 
   The self-made certificates are made with New-SelfSignedCertificate in the
   CurrentUser store, used once, and removed from every CurrentUser store
@@ -54,25 +46,23 @@
   need it say SKIP and are not counted; the refusals are still proved.
 
   It also runs scripts\release\Assert-PublishSigned.ps1's gate on the same
-  files, because Ship and Publish-Installer must refuse whatever the launcher
-  would.
+  files, because Ship must refuse whatever the launcher would.
 
-  Runs under Windows PowerShell 5.1, and restarts itself there from pwsh: the
-  launcher runs on the .NET Framework.
+  Builds Signature.cs with the .NET 10 SDK the way the launcher project
+  does (tests\Launcher-Csc.ps1) and runs it in this PowerShell, which is
+  .NET 10 as the launcher is. Assert-PublishSigned.ps1 compiles the same file
+  with Add-Type when it runs on the box (the check from Sign-OnGitHub.ps1),
+  which runs PowerShell 7 since #5356, so that compile is run too, in this
+  same PowerShell. Windows only: the check is WinVerifyTrust, and the
+  certificates are Windows' own store.
 #>
 [CmdletBinding()]
-param([string]$Signed = (Join-Path ([string](& (Join-Path $PSScriptRoot '..\scripts\release\Where.ps1') InstallDev)) 'Launcher\Thornswood.exe'))
+param([string]$Signed = '')
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
-
-. (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  this runs the launcher''s code on the .NET Framework the launcher runs on, which only Windows has'; exit 0 }
-if ($PSVersionTable.PSEdition -eq 'Core') {
-    $winps = Get-WindowsPowerShell
-    & $winps -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Signed $Signed
-    exit $LASTEXITCODE
-}
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's SDK and settings, and $OnWindows
+if (-not $OnWindows) { Write-Host 'NOT RUN  Signature.Refusal asks WinVerifyTrust, and the certificates are made in Windows'' own store, which only Windows has'; exit 0 }
+if (-not $Signed) { $Signed = Join-Path ([string](& (Join-Path $PSScriptRoot '..\scripts\release\Where.ps1') InstallDev)) 'Launcher\Thornswood.exe' }
 
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
@@ -111,14 +101,22 @@ Yes 'Signature.cs asks WinVerifyTrust with WINTRUST_ACTION_GENERIC_VERIFY_V2' (
 Yes 'Signature.Trust asks WinVerifyTrust with WTD_CHOICE_FILE, never a catalog' (
     $sigSrc -match 'WTD_CHOICE_FILE = 1' -and $sigSrc -match 'dwUnionChoice = WTD_CHOICE_FILE' -and
     $sigSrc -notmatch 'WTD_CHOICE_CATALOG')
-Yes 'Updater.CheckSigner goes through Signature.Refusal' ($upd -match 'Signature\.Refusal\(path, ExpectedSigner, out said\)')
+# Since #4825 the launcher's own update is Velopack's, and its checks ask
+# Signature.Refusal: every program in the package (VeloPackage.cs) and the
+# Update.exe that applies it (VeloUpdate.cs). Updater.CheckSigner went with
+# the self update.
+$velo = [IO.File]::ReadAllText((Join-Path $App 'VeloUpdate.cs'))
+$veloPkg = [IO.File]::ReadAllText((Join-Path $App 'VeloPackage.cs'))
+Yes 'the launcher update checks every program in the package and Velopack''s Update.exe through Signature.Refusal' (
+    $veloPkg -match 'Signature\.Refusal\(tmp, expectedSigner, out signerSaid\)' -and
+    $velo -match 'Signature\.Refusal\(updateExe, ExpectedSigner, out exeSaid\)')
 Yes 'nothing in the launcher decides a signer from CreateFromSignedFile any more' (
     -not (@(Get-ChildItem (Join-Path $App '*.cs') | Where-Object {
         [IO.File]::ReadAllText($_.FullName) -match 'CreateFromSignedFile\s*\(' }).Count))
 
-# ---- compile Signature.cs on its own ----------------------------------------
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Finish }
+# ---- build Signature.cs on its own -------------------------------------------
+Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Finish }
 # Programs Microsoft signed that every Windows has, for the refusals below;
 # nothing is compiled with them.
 $fw = Get-WindowsPath 'Microsoft.NET\Framework64\v4.0.30319'
@@ -126,15 +124,6 @@ $fw = Get-WindowsPath 'Microsoft.NET\Framework64\v4.0.30319'
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('tssigner-' + [Guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Force -Path $tmp
 $made = @()
-
-function Compile([string[]]$cscArgs) {
-    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $said = & $LauncherCsc @cscArgs 2>&1
-    $rc = $LASTEXITCODE
-    $ErrorActionPreference = $old
-    if ($rc -ne 0) { foreach ($l in @($said | Select-Object -First 20)) { Write-Host "      $l" } }
-    return ($rc -eq 0)
-}
 
 function Drop-Cert([string]$thumb) {
     foreach ($store in 'My', 'CA', 'Root', 'TrustedPublisher', 'Disallowed') {
@@ -144,15 +133,28 @@ function Drop-Cert([string]$thumb) {
 }
 
 try {
-    $dll = Join-Path $tmp 'Signature.dll'
-    # At C# 5, not the project's version: Assert-PublishSigned.ps1 compiles
-    # this file with Add-Type, which in Windows PowerShell is the .NET
-    # Framework compiler and stops at C# 5 (docs/guide/settled-design.md).
-    $ok = Compile @('/noconfig', '/nologo', '/langversion:5', '/target:library', '/platform:anycpu',
-                    "/reference:$(Join-Path $LauncherRefDir 'System.dll')", "/out:$dll", $sigCs)
-    Yes 'Signature.cs compiles on its own at C# 5, for Add-Type in Assert-PublishSigned.ps1' $ok
-    if (-not $ok) { Finish }
-    $asm = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($dll))
+    # Assert-PublishSigned.ps1 compiles this file with Add-Type where it runs
+    # on the box (the catalog check), and the box runs PowerShell 7 (#5356),
+    # the one running this harness. It is asked in a new process of that
+    # PowerShell, the way that script asks it, so no type this harness has
+    # already loaded answers for it.
+    $boxPs = [Environment]::ProcessPath
+    $assert = Join-Path (Join-Path (Join-Path $Repo 'scripts') 'release') 'Assert-PublishSigned.ps1'
+    # Single quotes after the path: $t is the child's, not this harness's.
+    $probe = ". '" + $assert.Replace("'", "''") + "'; " + '$t = Get-LauncherSignatureType; if ($t) { ''COMPILED '' + $t.FullName } else { ''NO TYPE'' }'
+    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    $said = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -Command $probe 2>&1 | ForEach-Object { "$_" })
+    $ErrorActionPreference = $old
+    $compiled = @($said | Where-Object { $_ -match '^COMPILED ThornswoodSign[0-9a-f]+\.Signature$' }).Count -eq 1
+    if (-not $compiled) { foreach ($l in @($said | Select-Object -First 20)) { Write-Host "      $l" } }
+    Yes 'Signature.cs compiles in the box''s PowerShell with Add-Type, as Assert-PublishSigned.ps1 compiles it there' $compiled
+
+    # The launcher's own build of it, by the project's settings.
+    $asm = $null
+    try { $asm = Add-LauncherType -File $sigCs }
+    catch { foreach ($l in @(($_.Exception.Message -split "`r?`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20)) { Write-Host "      $l" } }
+    Yes 'Signature.cs builds on its own the way the launcher project builds it' ($null -ne $asm)
+    if ($null -eq $asm) { Finish }
     $S = $asm.GetType('Thornswood.Signature')
     $flags = [Reflection.BindingFlags]'Static, Public'
     $three = $S.GetMethod('Refusal', $flags, $null,
@@ -227,12 +229,17 @@ try {
     }
 
     # ---- an unsigned exe is refused ----------------------------------------
-    $stubCs = Join-Path $tmp 'stub.cs'
-    [IO.File]::WriteAllText($stubCs, 'static class P { static void Main() { } }')
+    # A program built here, so signed by nobody: the SDK's build of a Main
+    # that does nothing, under the launcher's name.
     $stub = Join-Path $tmp 'unsigned\Thornswood.exe'
     $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $stub)
-    $ok = Compile @('/noconfig', '/nologo', '/target:exe', "/out:$stub", $stubCs)
-    Yes 'a stand-in exe compiles' $ok
+    $ok = $false
+    try {
+        $built = Build-LauncherCode -Source 'static class P { static void Main() { } }' -Exe
+        Copy-Item -LiteralPath $built -Destination $stub
+        $ok = Test-Path -LiteralPath $stub
+    } catch { foreach ($l in @(($_.Exception.Message -split "`r?`n") | Select-Object -First 20)) { Write-Host "      $l" } }
+    Yes 'a stand-in program builds' $ok
     if ($ok) {
         $r = Check $stub $Signer
         Yes ('an unsigned exe is refused: ' + $r.Why) ($r.Why -eq 'is not signed.')
@@ -286,7 +293,7 @@ try {
     foreach ($c in $candidates) {
         if (-not (Test-Path -LiteralPath $c)) { continue }
         # $sig, not $s: PowerShell names are not case sensitive, and $s is $S,
-        # the Signature type that MicrosoftRefusal is read from further down.
+        # the Signature type.
         $sig = Get-AuthenticodeSignature -LiteralPath $c
         # The signature in the file, not a catalog: Trust never honours catalogs.
         if ($sig.Status -eq 'Valid' -and $null -ne (Get-EmbeddedCert $c)) { $other = $c; break }
@@ -326,135 +333,33 @@ try {
         Skip 'no program signed through Artifact Signing by another publisher on this machine (Git for Windows is one)'
     }
 
-    # ---- Microsoft's own programs (issue #1330) --------------------------------
-    # Signature.MicrosoftRefusal, which Voice asks before it runs the WebView2
-    # installer it downloads. Everything above that is not a program Microsoft
-    # signed under its own root is refused by it too. A program on this
-    # machine that Microsoft did sign is accepted or refused by the chain
-    # Windows built from the signature embedded in the file, never from a
-    # catalog.
-    $ms = $S.GetMethod('MicrosoftRefusal', $flags, $null, [Type[]]@([string], [string].MakeByRefType()), $null)
-    Yes 'Signature.MicrosoftRefusal is there' ($null -ne $ms)
-    if ($ms) {
-        $msRoot = [string]$S.GetField('MicrosoftRoot').GetValue($null)
-        $msName = [string]$S.GetField('MicrosoftSigner').GetValue($null)
-        function MsCheck([string]$path) {
-            $a = [object[]]@($path, $null)
-            $why = [string]$ms.Invoke($null, $a)
-            return @{ Why = $why; Said = [string]$a[1] }
+    # ---- a Windows file signed only in a catalog (#2046) -----------------------
+    # A catalog-only Windows file: Get-AuthenticodeSignature says Valid
+    # from a catalog, CreateFromSignedFile finds nothing in the file.
+    # Trust uses WTD_CHOICE_FILE, so catalogs are never honoured.
+    $catalogOnly = $null
+    foreach ($c in @(
+        (Get-WindowsPath 'System32\notepad.exe'),
+        (Get-WindowsPath 'System32\cmd.exe'),
+        (Get-WindowsPath 'System32\conhost.exe'),
+        (Get-WindowsPath 'System32\svchost.exe'),
+        (Get-WindowsPath 'explorer.exe'),
+        (Get-WindowsPath 'System32\ntdll.dll'),
+        (Get-WindowsPath 'System32\kernel32.dll'),
+        (Get-WindowsPath 'System32\WindowsPowerShell\v1.0\powershell.exe')
+    )) {
+        if (-not (Test-Path -LiteralPath $c)) { continue }
+        $catSig = Get-AuthenticodeSignature -LiteralPath $c
+        if ($catSig.Status -eq 'Valid' -and $catSig.SignatureType -eq 'Catalog' -and $null -eq (Get-EmbeddedCert $c)) {
+            $catalogOnly = $c
+            break
         }
-
-        if ($haveSigned) {
-            $r = MsCheck $Signed
-            Yes ('Thornswood''s own signed launcher is not Microsoft''s program: ' + $r.Why) ($r.Why -match "not under Microsoft's own root")
-            $r = MsCheck $flip
-            Yes ('with one byte changed it is refused for that first: ' + $r.Why) ($r.Why -match 'changed since it was signed')
-        }
-        if ($ok) {
-            $r = MsCheck $stub
-            Yes ('MicrosoftRefusal refuses an unsigned exe: ' + $r.Why) ($r.Why -eq 'is not signed.')
-        }
-        $r = MsCheck $junk
-        Yes ('MicrosoftRefusal refuses a file that is not a program: ' + $r.Why) ($r.Why -ne '')
-        $r = MsCheck (Join-Path $tmp 'gone.exe')
-        Yes ('MicrosoftRefusal refuses a missing file: ' + $r.Why) ($r.Why -match 'could not be opened')
-        if ($peer) {
-            $r = MsCheck $peer
-            Yes ('another publisher''s Artifact Signing program is not Microsoft''s: ' + $r.Why) ($r.Why -match "not under Microsoft's own root")
-        }
-        if ($ok -and (Get-Command New-SelfSignedCertificate -ErrorAction SilentlyContinue)) {
-            $fake = New-SelfSignedCertificate -Type CodeSigningCert -Subject ('CN=' + $msName + ', O=' + $msName + ', C=US') `
-                        -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddDays(2)
-            $made += $fake.Thumbprint
-            $f = Join-Path $tmp 'msfake\MicrosoftEdgeWebview2Setup.exe'
-            $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $f)
-            Copy-Item -LiteralPath $stub -Destination $f
-            $null = Set-AuthenticodeSignature -LiteralPath $f -Certificate $fake -HashAlgorithm SHA256
-            $r = MsCheck $f
-            Yes ('an installer signed with a self-made certificate named ' + $msName + ' is refused: ' + $r.Why) ($r.Why -match 'does not trust')
-        }
-
-        $pf86 = [Environment]::GetFolderPath('ProgramFilesX86')
-        $mine = @()
-        foreach ($c in @((Join-Path $pf86 'Microsoft\Edge\Application\msedge.exe'),
-                         (Join-Path $pf86 'Microsoft\EdgeUpdate\MicrosoftEdgeUpdate.exe'),
-                         (Join-Path $fw 'csc.exe'))) {
-            if (Test-Path -LiteralPath $c) { $mine += $c }
-        }
-        $wv = @(Get-ChildItem -Path (Join-Path $pf86 'Microsoft\EdgeWebView\Application\*\msedgewebview2.exe') -ErrorAction SilentlyContinue)
-        if ($wv.Count) { $mine += $wv[0].FullName }
-        $accepted = 0
-        foreach ($c in $mine) {
-            # Expected cert from the signature in the file, not from
-            # Get-AuthenticodeSignature. On csc.exe that cmdlet returns the
-            # catalog signer (Microsoft Windows, Root 2010) even though the
-            # file also carries Microsoft Corporation under Root 2011, which
-            # is what MicrosoftRefusal sees. Requiring SignatureType
-            # Authenticode would skip csc.exe entirely, because that cmdlet
-            # reports Catalog on a dual-signed file (#2046).
-            $sc = Get-EmbeddedCert $c
-            if (-not $sc) { continue }
-            # Expected chain from the certificates the file's own signature
-            # carries, the ones WinVerifyTrust reads, not only from what this
-            # account's stores and an AIA fetch find. Built from the leaf
-            # alone, on thornswood-vps-3 under load the chain stopped at the
-            # leaf, the leaf was read as the root, and four programs
-            # MicrosoftRefusal rightly accepted were expected refused (#3405).
-            $carried = New-Object Security.Cryptography.X509Certificates.X509Certificate2Collection
-            try { $carried.Import($c) } catch {
-                Yes ((Split-Path -Leaf $c) + ': the certificates in its signature can be read to say what to expect: ' + $_.Exception.Message) $false
-                continue
-            }
-            $ch = New-Object Security.Cryptography.X509Certificates.X509Chain
-            $ch.ChainPolicy.RevocationMode = 'NoCheck'
-            $null = $ch.ChainPolicy.ExtraStore.AddRange($carried)
-            $null = $ch.Build($sc)
-            $top = $ch.ChainElements[$ch.ChainElements.Count - 1].Certificate
-            if ($top.Subject -ne $top.Issuer) {
-                Yes ((Split-Path -Leaf $c) + ': the chain from the ' + $carried.Count + ' certificates in its signature reaches a self-signed root to say what to expect, but stops at ' + $top.Subject + ' issued by ' + $top.Issuer) $false
-                continue
-            }
-            $theirs = ($top.Thumbprint -eq $msRoot) -and ($sc.GetNameInfo('SimpleName', $false) -eq $msName)
-            $r = MsCheck $c
-            if ($theirs) {
-                $accepted++
-                Yes ((Split-Path -Leaf $c) + ', signed by ' + $msName + ' under Microsoft''s own root, is accepted: ' + $(if ($r.Why) { $r.Why } else { $r.Said })) ($r.Why -eq '')
-            } else {
-                Yes ((Split-Path -Leaf $c) + ', signed for ' + $sc.Subject + ' under ' + $top.Subject + ', is refused: ' + $r.Why) ($r.Why -ne '')
-            }
-        }
-        if (-not $accepted) { Skip 'no program Microsoft signed under its own root on this machine (Edge, its updater and the WebView2 runtime are): accepted not run' }
-
-        # A catalog-only Windows file: Get-AuthenticodeSignature says Valid
-        # from a catalog, CreateFromSignedFile finds nothing in the file.
-        # Trust uses WTD_CHOICE_FILE, so catalogs are never honoured.
-        $catalogOnly = $null
-        foreach ($c in @(
-            (Get-WindowsPath 'System32\notepad.exe'),
-            (Get-WindowsPath 'System32\cmd.exe'),
-            (Get-WindowsPath 'System32\conhost.exe'),
-            (Get-WindowsPath 'System32\svchost.exe'),
-            (Get-WindowsPath 'explorer.exe'),
-            (Get-WindowsPath 'System32\ntdll.dll'),
-            (Get-WindowsPath 'System32\kernel32.dll'),
-            (Get-WindowsPath 'System32\WindowsPowerShell\v1.0\powershell.exe')
-        )) {
-            if (-not (Test-Path -LiteralPath $c)) { continue }
-            $catSig = Get-AuthenticodeSignature -LiteralPath $c
-            if ($catSig.Status -eq 'Valid' -and $catSig.SignatureType -eq 'Catalog' -and $null -eq (Get-EmbeddedCert $c)) {
-                $catalogOnly = $c
-                break
-            }
-        }
-        if ($catalogOnly) {
-            $r = MsCheck $catalogOnly
-            Yes ('a catalog-only Windows file (' + (Split-Path -Leaf $catalogOnly) + ') is refused as not signed: ' + $r.Why) (
-                $r.Why -eq 'is not signed.')
-            $r = Check $catalogOnly $Signer
-            Yes ('Refusal also treats a catalog as no signature: ' + $r.Why) ($r.Why -eq 'is not signed.')
-        } else {
-            Skip 'no catalog-only Windows file on this machine (notepad.exe, cmd.exe, powershell.exe are): catalogs-not-honoured not run'
-        }
+    }
+    if ($catalogOnly) {
+        $r = Check $catalogOnly $Signer
+        Yes ('a catalog-only Windows file (' + (Split-Path -Leaf $catalogOnly) + ') is refused as not signed: ' + $r.Why) ($r.Why -eq 'is not signed.')
+    } else {
+        Skip 'no catalog-only Windows file on this machine (notepad.exe, cmd.exe, powershell.exe are): catalogs-not-honoured not run'
     }
 }
 finally {

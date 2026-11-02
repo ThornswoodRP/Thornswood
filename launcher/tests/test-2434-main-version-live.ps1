@@ -29,32 +29,22 @@
     - BuildNews asks only while the News page is the one shown, and keeps the
       header line so an answer lands without rebuilding the list
 
-  HOW. Compiles launcher\app\*.cs into a library with the same compiler and
-  the same references the build uses (tests\Launcher-Csc.ps1), as
-  test-1050-news-file.ps1 does, and calls the methods by reflection. Paths
-  points at a temp folder. Nothing under C:\Thornswood is read or written, and
-  nothing leaves 127.0.0.1.
-
-  Runs under Windows PowerShell 5.1 and restarts itself there from pwsh,
-  because the launcher runs on the .NET Framework.
+  HOW. Builds launcher\app\Thornswood.csproj as it is, with the .NET 10 SDK
+  the launcher builds with (Add-LauncherAssembly, tests\Launcher-Csc.ps1,
+  #4823), loads it into this PowerShell, which runs on .NET 10 as the
+  launcher does, and calls the methods by reflection. So it runs on any
+  machine with the SDK. Paths points at a temp folder. Nothing under
+  C:\Thornswood is read or written, and nothing leaves 127.0.0.1.
 #>
 [CmdletBinding()]
-param([string]$Src)
+param()
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's SDK (#498, #4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $Here = Split-Path -Parent (Split-Path -Parent $Here)
-if (-not $Src) { $Src = Join-Path $Here 'launcher\app' }
-
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  this runs the launcher''s code on the .NET Framework the launcher runs on, which only Windows has'; exit 0 }
-if ($PSVersionTable.PSEdition -eq 'Core') {
-    $winps = Get-WindowsPowerShell
-    & $winps -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Src $Src
-    exit $LASTEXITCODE
-}
+$Src = Join-Path (Join-Path $Here 'launcher') 'app'
 
 $script:pass = 0
 $script:fail = 0
@@ -62,11 +52,6 @@ function Yes([string]$what, [bool]$cond) {
     if ($cond) { $script:pass++; Write-Host "PASS  $what" }
     else { $script:fail++; Write-Host "FAIL  $what" }
 }
-
-# ---- the compiler and the references the build uses (Launcher-Csc.ps1) ------
-
-$needed = @($LauncherNeeded)
-$wv2 = @($LauncherLib)
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('tsmainver-' + [Guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Force -Path $tmp
@@ -139,34 +124,13 @@ public class TsMainFeedServer
 function Utf8([string]$s) { return ,([byte[]][Text.Encoding]::UTF8.GetBytes($s)) }
 
 function Run {
-    Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-    if (-not (Test-Path -LiteralPath $LauncherCsc) -or $needed.Count -eq 0) { Yes 'Thornswood.csproj names the references' $false; return }
-    $refs = @(); $missing = @()
-    foreach ($n in $needed) { $p = Find-LauncherRef $n; if ($p) { $refs += $p } else { $missing += $n } }
-    foreach ($n in $wv2) {
-        $p = $n
-        if (Test-Path -LiteralPath $p) { $refs += $p } else { $missing += $n }
-    }
-    Yes ('every reference is on this machine' + $(if ($missing.Count) { ', missing ' + ($missing -join ', ') } else { '' })) ($missing.Count -eq 0)
-    if ($missing.Count) { return }
+    Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
+    if (-not (Test-Path -LiteralPath $LauncherDotnet)) { return }
+    $asm = $null
+    try { $asm = Add-LauncherAssembly } catch { Write-Host ('      ' + $_.Exception.Message) }
+    Yes 'the launcher builds from its project, the way the build makes it' ($null -ne $asm)
+    if ($null -eq $asm) { return }
 
-    $cs = @(Get-ChildItem (Join-Path $Src '*.cs') -File)
-    $dll = Join-Path $tmp 'Thornswood.dll'
-    $cscArgs = @('/noconfig', '/nologo', '/target:library', '/platform:anycpu', "/langversion:$LauncherLangVersion", "/out:$dll")
-    foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-    foreach ($f in $cs) { $cscArgs += $f.FullName }
-    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $said = & $LauncherCsc @cscArgs 2>&1
-    $rc = $LASTEXITCODE
-    $ErrorActionPreference = $old
-    $built = ($rc -eq 0) -and (Test-Path -LiteralPath $dll)
-    Yes ('the launcher''s {0} source files compile with the compiler the build runs' -f $cs.Count) $built
-    if (-not $built) {
-        foreach ($l in @($said | Where-Object { "$_" -match 'error' } | Select-Object -First 20)) { Write-Host "      $l" }
-        return
-    }
-
-    $asm = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($dll))
     $U = $asm.GetType('Thornswood.Updater')
     $S = $asm.GetType('Thornswood.Shell')
     $P = $asm.GetType('Thornswood.Paths')
@@ -267,11 +231,11 @@ function Run {
     try { [void]$U.GetMethod('CheckUrl', $flags).Invoke($null, @('http://thornswood.net/feed/version.json')) } catch { $thrown = $_.Exception.InnerException.Message }
     Yes '  the fence it goes through refuses plain http' ($thrown -match 'plain http')
     $sn = Get-Content -LiteralPath (Join-Path $Src 'ShellNews.cs') -Raw
-    Yes 'BuildNews asks main''s feed only on a dev build, and only while the News page is the one shown' ($sn -match '(?s)if \(cfg\.IsDev\)\s*\{.*?if \(pages != null && pages\[PageNews\]\.Visibility == Visibility\.Visible\) ReadMainVersion\(\);')
+    Yes 'BuildNews asks main''s feed only on a dev build, and only while the News page is the one shown' ($sn -match '(?s)if \(cfg\.IsDev\)\s*\{.*?if \(pages != null && pages\[PageNews\]\.IsVisible\) ReadMainVersion\(\);')
     Yes 'BuildNews keeps the header line, so an answer is put in without rebuilding the list' ($sn -match 'newsHead = ht;' -and $sn -match '(?s)static void MainVersionRead\(string got, string why\).*?if \(newsHead != null\) newsHead\.Text = DevHeadText\(\);')
-    Yes 'the read is on a pool thread and the answer comes back on the window''s' ($sn -match '(?s)static void ReadMainVersion\(\).*?ThreadPool\.QueueUserWorkItem.*?Updater\.MainLauncherVersion\(cfg\).*?win\.Dispatcher\.BeginInvoke\(new Action\(delegate \{ MainVersionRead\(got, why\); \}\)\);')
+    Yes 'the read is on a pool thread and the answer comes back on the window''s' ($sn -match '(?s)static void ReadMainVersion\(\).*?ThreadPool\.QueueUserWorkItem.*?Updater\.MainLauncherVersion\(cfg\).*?Dispatcher\.UIThread\.Post\(delegate \{ MainVersionRead\(got, why\); \}\);')
     Yes 'one read at a time' ($sn -match '(?s)static void ReadMainVersion\(\)\s*\{\s*if \(mainReading\) return;\s*mainReading = true;')
-    Yes 'the DEV marks still come from the dev feed''s notes' ($sn -match 'if \(items\[i\]\.IsDev\) ahead\+\+;')
+    Yes 'the DEV marks are the notes'' own (ReleaseNews.cs marks them from main''s Deployment)' ($sn -match 'if \(items\[i\]\.IsDev\) ahead\+\+;')
 }
 
 try {

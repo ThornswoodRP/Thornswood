@@ -19,9 +19,10 @@
        (the dev feed lists them by their /feed/assets urls, and /feed-dev/assets
        holds copies), a dev pack, and three dev records (two that say their
        files are up, one from before that, naming the Creation Kit)
-    2. installs made BEFORE the scrub by the launcher's own Updater, compiled
-       from launcher\app: one that replayed every main pack, one synced to the
-       dev record
+    2. installs made BEFORE the scrub by the launcher's own Updater, built
+       from launcher\app\Thornswood.csproj the way the build builds it
+       (tests\Launcher-Csc.ps1, Add-LauncherAssembly): one that replayed
+       every main pack, one synced to the dev record
     3. the real Scrub-Feed.ps1: a dry run changes nothing; dev, then main; every
        pack keeps its id and every other entry byte for byte; records keep every
        other key; the store's baselines follow; the old bytes are deleted only
@@ -40,37 +41,39 @@
   delete line every release carries on purpose (voice-token.txt) stays, and a
   folder entry for Data\Platform, whose folders are ours, stays.
 
-  Runs under Windows PowerShell 5.1 (the launcher runs on the .NET Framework)
-  and restarts itself there from pwsh; Scrub-Feed and Rollback-Feed run in a
-  child pwsh when there is one, as on the shipping machine. Needs node on PATH.
-  Everything it writes is in its own temp folder, and nothing connects anywhere
-  but 127.0.0.1.
+  Runs in pwsh 7 on every machine with the .NET 10 SDK (#4823): the launcher
+  is loaded into this PowerShell, which runs on .NET 10 as it does, and
+  Scrub-Feed and Rollback-Feed run in a child pwsh, as on the shipping
+  machine. The installs, 2 and 4 and the install that follows the rollback,
+  say SKIP off Windows: Updater.Install and the sync lay the game folder out
+  by Windows paths (game\Data\...), which only Windows has. Every check of
+  the site, the feeds, the records and the scripts runs everywhere. Needs
+  node on PATH. Everything it writes is in its own temp folder, and nothing
+  connects anywhere but 127.0.0.1.
 #>
 [CmdletBinding()]
 param()
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
-. (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  this runs the launcher''s code on the .NET Framework the launcher runs on, which only Windows has'; exit 0 }
-if ($PSVersionTable.PSEdition -eq 'Core') {
-    $winps = Get-WindowsPowerShell
-    & $winps -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath
-    exit $LASTEXITCODE
-}
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's SDK and settings (#4823), and $OnWindows
 
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $repo = Split-Path -Parent $Here
-$app = Join-Path $repo 'launcher\app'
-$winps = Get-WindowsPowerShell
-$pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
-$child = if ($pwsh) { $pwsh.Source } else { $winps }
+# Scrub-Feed and Rollback-Feed run in a pwsh of their own, as on the shipping machine.
+$child = (Get-Process -Id $PID).Path
 
 $script:pass = 0; $script:fail = 0
 function Yes([string]$what, [bool]$cond) {
     if ($cond) { $script:pass++; Write-Host "PASS  $what" }
     else { $script:fail++; Write-Host "FAIL  $what" -ForegroundColor Red }
+}
+# What an install ends with: checked on Windows, where Updater.Install and the
+# sync lay the game folder out by the paths a pack and a record carry
+# (game\Data\...); said as SKIP elsewhere.
+function Yes-Install([string]$what, [scriptblock]$cond) {
+    if ($OnWindows) { Yes $what ([bool](& $cond)) }
+    else { Write-Host "SKIP  $what (Updater.Install and the sync write the game folder by Windows paths, which only Windows has)" }
 }
 $script:procs = @()
 $T = Join-Path ([IO.Path]::GetTempPath()) ('ts-scrub-feed-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
@@ -137,25 +140,18 @@ $node = Get-Command node -ErrorAction SilentlyContinue
 Yes 'node is on PATH, for the copy of the site' ($null -ne $node)
 if ($null -eq $node) { Done }
 
-# ---- the launcher, compiled, as test-record-sync.ps1 does it ----------------------
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
-$refs = @(); $missing = @()
-foreach ($n in @($LauncherNeeded)) { $p = Find-LauncherRef $n; if ($p) { $refs += $p } else { $missing += $n } }
-foreach ($n in @($LauncherLib)) { $p = $n; if (Test-Path -LiteralPath $p) { $refs += $p } else { $missing += $n } }
-Yes ('every reference Thornswood.csproj names is here' + $(if ($missing.Count) { ', missing ' + ($missing -join ', ') } else { '' })) ($missing.Count -eq 0 -and $refs.Count -gt 5)
-if ($missing.Count) { Done }
+# ---- the launcher, built --------------------------------------------------------------
+Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 New-Item -ItemType Directory -Force -Path $T | Out-Null
-$dll = Join-Path $T 'Thornswood.dll'
-$cscArgs = @('/noconfig', '/nologo', '/target:library', '/platform:anycpu', "/langversion:$LauncherLangVersion", "/out:$dll")
-foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-foreach ($f in @(Get-ChildItem (Join-Path $app '*.cs') -File)) { $cscArgs += $f.FullName }
-$old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-$said = & $LauncherCsc @cscArgs 2>&1
-$ErrorActionPreference = $old
-Yes 'the launcher compiles with the compiler the build runs' ((Test-Path -LiteralPath $dll) -and $LASTEXITCODE -eq 0)
-if (-not (Test-Path -LiteralPath $dll)) { foreach ($l in @($said | Where-Object { "$_" -match 'error' } | Select-Object -First 10)) { Write-Host "      $l" }; Done }
-$asm = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($dll))
+$asm = $null
+try { $asm = Add-LauncherAssembly }
+catch {
+    Yes 'the launcher project builds' $false
+    foreach ($l in @(($_.Exception.Message -split "`r?`n") | Where-Object { $_ -match 'error' } | Select-Object -First 10)) { Write-Host "      $l" }
+    Done
+}
+Yes 'the launcher project builds' ($null -ne $asm)
 $U = $asm.GetType('Thornswood.Updater'); $P = $asm.GetType('Thornswood.Paths'); $VD = $asm.GetType('Thornswood.VersionDoc')
 $flags = [Reflection.BindingFlags]'Static, Public, NonPublic'
 $mPending = $U.GetMethod('Pending', $flags); $mInstall = $U.GetMethod('Install', $flags); $mSync = $U.GetMethod('Sync', $flags)
@@ -308,7 +304,10 @@ if ($why) { Write-Host "      $why"; Done }
 # ---- installs, the launcher's own code ----------------------------------------------
 function Raw($x) { if ($x -is [Management.Automation.PSObject]) { return $x.PSObject.BaseObject }; return $x }
 function Parse-Feed([string]$prefix) { return (Raw ($mParse.Invoke($null, @(, [IO.File]::ReadAllBytes((Get-FeedVersionFile (Join-Path $site $prefix))))))) }
-function Pending-Of($v) { $a = New-Object 'object[]' 1; $a[0] = (Raw $v); return @($mPending.Invoke($null, $a) | ForEach-Object { Raw $_ }) }
+# Pending asks the config which channel this is, because on dev the game
+# files come with the launcher's own package (#4825); with no package
+# installed here it is the feed's packs and record, as on main.
+function Pending-Of($v) { $a = New-Object 'object[]' 2; $a[0] = (Raw $cfg); $a[1] = (Raw $v); return @($mPending.Invoke($null, $a) | ForEach-Object { Raw $_ }) }
 function New-Install([string]$name) {
     $root = Join-Path $T "inst\$name"
     foreach ($d in 'Game\Data', 'Profile\Default', 'Profile\Packs', 'Launcher') { New-Item -ItemType Directory -Force -Path (Join-Path $root $d) | Out-Null }
@@ -369,13 +368,14 @@ function Fetched { $m = @($script:said | ForEach-Object { [regex]::Match($_, '^D
 
 Write-Host ''; Write-Host 'installs before the scrub'
 $applied = New-Install 'applied-main'
-Yes 'an install replays the three main packs' ((Update $applied 'feed') -eq 3)
-$appliedBefore = Get-Game $applied
-Yes '  and has what they carried, the Creation Kit and the script sources among it' ($appliedBefore.ContainsKey('CreationKit.exe') -and $appliedBefore.ContainsKey('Data\Scripts\Source\SKSE.psc'))
 $synced = New-Install 'synced-dev'
-[void](Update $synced 'feed-dev')
-Yes 'an install syncs to the dev record' ((Synced $synced) -match $rec['R3'].Sha -and (Get-Game $synced).ContainsKey('Data\Scripts\Source\IED.psc'))
-$syncedBefore = Get-Game $synced
+$appliedBefore = @{}; $syncedBefore = @{}
+Yes-Install 'an install replays the three main packs' { (Update $applied 'feed') -eq 3 }
+if ($OnWindows) { $appliedBefore = Get-Game $applied }
+Yes-Install '  and has what they carried, the Creation Kit and the script sources among it' { $appliedBefore.ContainsKey('CreationKit.exe') -and $appliedBefore.ContainsKey('Data\Scripts\Source\SKSE.psc') }
+if ($OnWindows) { [void](Update $synced 'feed-dev') }
+Yes-Install 'an install syncs to the dev record' { (Synced $synced) -match $rec['R3'].Sha -and (Get-Game $synced).ContainsKey('Data\Scripts\Source\IED.psc') }
+if ($OnWindows) { $syncedBefore = Get-Game $synced }
 
 # ---- the scrub ------------------------------------------------------------------------
 $fake = Join-Path $T 'repo'
@@ -386,9 +386,16 @@ foreach ($f in 'installer\licences\GPL-3.0.txt', 'installer\licences\AGPL-3.0.tx
     if (Test-Path -LiteralPath $from) { New-Item -ItemType Directory -Force -Path (Split-Path -Parent (Join-Path $fake $f)) | Out-Null; Copy-Item -LiteralPath $from -Destination (Join-Path $fake $f) -Force -Recurse }
 }
 $work = Join-Path $T 'scrub-work'
+# The install whose config.json names the collection: one of its own with no
+# config.json, so the collection is the launcher's own, as on an install that
+# names none. Left out, Scrub-Feed reads this machine's install (Where.ps1
+# Install), which a harness has no business reading, and off Windows that is
+# C:\Thornswood on a drive that is not there.
+$scrubRoot = Join-Path $T 'install'
+New-Item -ItemType Directory -Force -Path $scrubRoot | Out-Null
 function Scrub([string]$channel, [string[]]$more) {
     $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $fake 'scripts\release\Scrub-Feed.ps1'), '-Channel', $channel, '-NoPause',
-           '-SiteDir', $site, '-SiteUrl', $siteUrl, '-WorkDir', $work, '-ReleaseDir', (Join-Path $T "rel-$channel")) + @($more)
+           '-SiteDir', $site, '-SiteUrl', $siteUrl, '-WorkDir', $work, '-ReleaseDir', (Join-Path $T "rel-$channel"), '-Root', $scrubRoot) + @($more)
     $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
     $out = & $child @a 2>&1 | ForEach-Object { "$_" }
     $rc = $LASTEXITCODE
@@ -398,7 +405,7 @@ function Scrub([string]$channel, [string[]]$more) {
 }
 function Snapshot {
     $m = @{}
-    foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $site 'feed'), (Join-Path $site 'feed-dev') -Recurse -File | Where-Object { $_.FullName -notmatch '\\history\\' })) {
+    foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $site 'feed'), (Join-Path $site 'feed-dev') -Recurse -File | Where-Object { $_.FullName -notmatch '[\\/]history[\\/]' })) {
         $m[$f.FullName.Substring($site.Length + 1)] = Get-BaselineFileSha $f.FullName
     }
     return $m
@@ -435,7 +442,7 @@ $stopper = Join-Path $T 'stop-after-send.ps1'
 Put $stopper ("`$target = `$args[0]`r`n`$rest = @(`$args | Select-Object -Skip 1)`r`n" +
               "`$null = Set-PSBreakpoint -Script `$target -Variable sent -Mode Write -Action { [Environment]::Exit(9) }`r`n& `$target @rest`r`n")
 $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $stopper, (Join-Path $fake 'scripts\release\Scrub-Feed.ps1'), '-Channel', 'dev', '-NoPause',
-       '-SiteDir', $site, '-SiteUrl', $siteUrl, '-WorkDir', $work, '-ReleaseDir', (Join-Path $T 'rel-dev'))
+       '-SiteDir', $site, '-SiteUrl', $siteUrl, '-WorkDir', $work, '-ReleaseDir', (Join-Path $T 'rel-dev'), '-Root', $scrubRoot)
 $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
 $null = & $child @a 2>&1; $rc = $LASTEXITCODE
 $ErrorActionPreference = $old
@@ -551,29 +558,31 @@ Yes 'finds nothing on either feed and changes nothing' ($r1.Code -eq 0 -and $r2.
 Write-Host ''; Write-Host 'installs after the scrub'
 $want = @{ 'Data\Platform\UI\ours.esp' = 'ours two'; 'Data\Platform\Scripts\ours.pex' = 'compiled ours'; 'Data\Platform\UI\new.esp' = 'a new plugin of ours'; 'Data\Platform\textures\ours.dds' = 'a texture of ours' }
 $fresh = New-Install 'fresh-main'
-Yes 'a fresh main install replaying every pack takes all three' ((Update $fresh 'feed') -eq 3)
-Yes '  and ends with the files of ours and none of Bethesda''s or one machine''s' (Same-Files (Get-Game $fresh) $want)
-Use-Install $applied
-Yes 'an install that already applied them is offered nothing: the ids are in its applied.txt' ((Pending-Of (Parse-Feed 'feed')).Count -eq 0)
-Yes '  so nothing is fetched again and its files are as they were' ((Update $applied 'feed') -eq 0 -and (Same-Files (Get-Game $applied) $appliedBefore))
-Use-Install $synced
-$pend = @(Pending-Of (Parse-Feed 'feed-dev'))
-Yes 'an install synced to the old dev record is offered the new one' ($pend.Count -eq 1 -and $null -ne $pend[0].Record -and $pend[0].Record.sha256 -eq $dd.baseline.sha256)
-[void](Update $synced 'feed-dev')
-$after = Get-Game $synced
-$wantAfter = @{}; foreach ($k in $syncedBefore.Keys) { if ($k -ne 'Data\Interface\racesex_menu.swf') { $wantAfter[$k] = $syncedBefore[$k] } }
-Yes '  checks every file, downloads nothing, and removes the matching RaceMenu copy (#1261)' (
+Yes-Install 'a fresh main install replaying every pack takes all three' { (Update $fresh 'feed') -eq 3 }
+Yes-Install '  and ends with the files of ours and none of Bethesda''s or one machine''s' { Same-Files (Get-Game $fresh) $want }
+Yes-Install 'an install that already applied them is offered nothing: the ids are in its applied.txt' { Use-Install $applied; (Pending-Of (Parse-Feed 'feed')).Count -eq 0 }
+Yes-Install '  so nothing is fetched again and its files are as they were' { (Update $applied 'feed') -eq 0 -and (Same-Files (Get-Game $applied) $appliedBefore) }
+Yes-Install 'an install synced to the old dev record is offered the new one' {
+    Use-Install $synced
+    $pend = @(Pending-Of (Parse-Feed 'feed-dev'))
+    $pend.Count -eq 1 -and $null -ne $pend[0].Record -and $pend[0].Record.sha256 -eq $dd.baseline.sha256 }
+Yes-Install '  checks every file, downloads nothing, and removes the matching RaceMenu copy (#1261)' {
+    [void](Update $synced 'feed-dev')
+    $after = Get-Game $synced
+    $wantAfter = @{}; foreach ($k in $syncedBefore.Keys) { if ($k -ne 'Data\Interface\racesex_menu.swf') { $wantAfter[$k] = $syncedBefore[$k] } }
     (Fetched) -eq 0 -and @($script:said | Where-Object { $_ -like 'removed Data\Interface\racesex_menu.swf' }).Count -eq 1 -and (Same-Files $after $wantAfter) -and
-    -not (Test-Path -LiteralPath (Join-Path $synced 'Game\Data\Interface\racesex_menu.swf')))
-Yes '  and writes the new record down, so it is not offered again' ((Synced $synced) -match $dd.baseline.sha256 -and (Pending-Of (Parse-Feed 'feed-dev')).Count -eq 0)
-$freshDev = New-Install 'fresh-dev'
-[void](Update $freshDev 'feed-dev')
+    -not (Test-Path -LiteralPath (Join-Path $synced 'Game\Data\Interface\racesex_menu.swf')) }
+Yes-Install '  and writes the new record down, so it is not offered again' { (Synced $synced) -match $dd.baseline.sha256 -and (Pending-Of (Parse-Feed 'feed-dev')).Count -eq 0 }
 $wantDev = @{}; foreach ($k in $ours.Keys) { $wantDev[$k] = $ours[$k] }
-Yes 'a fresh dev install syncs to the new record and ends without IED.psc, the join pass or the mod menu settings' ((Same-Files (Get-Game $freshDev) $wantDev) -and (Synced $freshDev) -match $dd.baseline.sha256)
-$oldL = New-Install 'old-launcher-dev'
-Use-Install $oldL
-foreach ($pk in @((Parse-Feed 'feed-dev').packs)) { Install-Pack $pk }
-Yes 'an old launcher replaying the dev feed''s packs ends without Bethesda''s or one machine''s files too' (Same-Files (Get-Game $oldL) $wantDev)
+Yes-Install 'a fresh dev install syncs to the new record and ends without IED.psc, the join pass or the mod menu settings' {
+    $freshDev = New-Install 'fresh-dev'
+    [void](Update $freshDev 'feed-dev')
+    (Same-Files (Get-Game $freshDev) $wantDev) -and (Synced $freshDev) -match $dd.baseline.sha256 }
+Yes-Install 'an old launcher replaying the dev feed''s packs ends without Bethesda''s or one machine''s files too' {
+    $oldL = New-Install 'old-launcher-dev'
+    Use-Install $oldL
+    foreach ($pk in @((Parse-Feed 'feed-dev').packs)) { Install-Pack $pk }
+    Same-Files (Get-Game $oldL) $wantDev }
 
 # ---- a rollback on the scrubbed feed ---------------------------------------------------
 Write-Host ''; Write-Host 'Rollback-Feed.ps1 on the scrubbed dev feed'
@@ -591,8 +600,7 @@ Yes 'going back a release reads the new records and finds every file it needs' (
 $rbRec = Read-BaselineFile (Join-Path $da ([string]$db.baseline.sha256))
 Yes '  with every launcher let in syncing, it adds no pack and the feed carries none' (@($db.packs).Count -eq 0 -and [string]$rbRec[':record:files'] -eq '1')
 Yes '  and its record names none of Bethesda''s or one machine''s files' (@($rbRec.Keys | Where-Object { -not $_.StartsWith(':') -and ((Test-ShipBethesda $_) -or (Test-ShipOneMachine $_)) }).Count -eq 0)
-[void](Update $synced 'feed-dev')
-Yes '  and the synced install follows it to the older texture' ((Get-Game $synced)['Data\Platform\textures\ours.dds'] -eq 'a texture of ours, older')
+Yes-Install '  and the synced install follows it to the older texture' { [void](Update $synced 'feed-dev'); (Get-Game $synced)['Data\Platform\textures\ours.dds'] -eq 'a texture of ours, older' }
 
 # ---- a baseline the other feed names that does not read (#2711) ------------------------
 # Before it deletes, a run reads both feeds' baselines for the files their

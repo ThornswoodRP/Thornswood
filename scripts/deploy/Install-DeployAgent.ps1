@@ -229,7 +229,7 @@ Say "Installing the deploy agent on $VpsHost from the newest signed Release..." 
 $out = @(Remote @"
 `$ErrorActionPreference = 'Stop'
 `$ProgressPreference = 'SilentlyContinue'
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 `$root = '$Root'
 `$exe = '$exe'
 `$agentSvc = '$agentSvc'

@@ -196,7 +196,7 @@ through the gate instead, with `gh` signed in as somebody who may run workflows 
 `pwsh scripts/vps/Box-Run.ps1 -Line '<verb>'` ([E. VPS](tools.md#e-vps)). Ships go
 the same way (`Ship-Dev`, `Ship-Main`), so a machine without a key can still
 release; the scripts that ssh to the VPS themselves (`Ship`, `Deploy-*`,
-`Request-Restart`, `Install-Bot`, `Publish-Installer`) do not
+`Request-Restart`, `Install-Bot`) do not
 run from it, and Ship stops before it builds anything there: the feed and its
 baseline are received from the VPS (#907).
 
@@ -215,41 +215,35 @@ client from the site instead (Shipping from another machine, below). The
 release webhooks are on the VPS (`scripts\ops\Discord-Hook.ps1`) and every
 Ship reads them from there, so there is nothing to hand over.
 
-The launcher builds with MSBuild (#498, decided by Patrick on 11 Oct,
-switched 15 Oct). A dev Ship builds the launcher on the machine that runs
-it, so every machine that Ships needs Visual Studio 2022 Build Tools with
-the MSBuild component and the .NET Framework 4.8.1 targeting pack. The VPS
-build runners get the same two parts from `Bootstrap-VPS.ps1
--IncludeBuildTools`. Nothing else is downloaded at build time: no .NET SDK,
-no NuGet. A
-machine with no Build Tools yet, in PowerShell 7 (Windows asks for an
-administrator):
+The launcher is Avalonia on .NET 10, compiled to native code (#4823,
+decided by Patrick on 27 Oct; `launcher\app\ARCHITECTURE.md`).
+`Build-Launcher.ps1` runs `dotnet publish` with Native AOT, so every machine
+that builds it needs the .NET 10 SDK and, for the native step, the Visual
+Studio 2022 C++ build tools ("Desktop development with C++"), which Native
+AOT links with. It builds on Windows only. NuGet restores the libraries
+`launcher\app\Thornswood.csproj` names on the first build. A machine with
+neither yet, in PowerShell 7 (Windows asks for an administrator for the
+second):
 
 ```
-winget install --id Microsoft.VisualStudio.2022.BuildTools -e --accept-package-agreements --accept-source-agreements --override "--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.MSBuildTools --add Microsoft.Net.Component.4.8.1.TargetingPack"
+winget install --id Microsoft.DotNet.SDK.10 -e --accept-package-agreements --accept-source-agreements
+winget install --id Microsoft.VisualStudio.2022.BuildTools -e --accept-package-agreements --accept-source-agreements --override "--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
 ```
 
-A machine that already has Build Tools, for the engine above, adds the one
-component to the install it has:
+A machine that already has the C++ build tools, for the engine above, needs
+only the first line. Visual Studio 2022 or newer itself, any edition, with
+the "Desktop development with C++" workload, is just as good. Then, from
+`Thornswood-Repo`:
 
 ```
-& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe" modify --installPath "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools" --add Microsoft.Net.Component.4.8.1.TargetingPack --quiet --norestart
+dotnet --list-sdks
+.\scripts\release\Build-Launcher.ps1 -Root $env:TEMP\launcher-try -NoPause
 ```
 
-Visual Studio 2022 or newer itself, any edition, with the ".NET desktop
-development" workload, is just as good (GitHub's runner builds it with Visual
-Studio 18). Then, from `Thornswood-Repo`:
-
-```
-.\scripts\release\Find-MSBuild.ps1 -Report
-.\scripts\release\Build-Launcher.ps1 -Root $env:TEMP\msbuild-try -NoPause
-```
-
-The first names MSBuild.exe and the 4.8.1 reference assemblies, or says
-which is missing. The second builds both exes into a scratch folder and
-ends with Done. Since the switch (#498, 15 Oct) this is the only way the
-launcher builds, so `Setup-ShipMachine.ps1 -Check` and `Check-ShipReady.ps1`
-count a machine without it as a gap.
+The first lists a 10.x SDK. The second publishes `Thornswood.exe` and the
+native libraries beside it into a scratch folder and ends with Done. With no
+10.x SDK it stops and says so; with no C++ build tools `dotnet publish` stops
+with "Platform linker not found".
 
 The pack baseline lives on the VPS beside the feed, and every Ship receives it
 first, so there is nothing to pull. If the VPS has none for a channel, Ship

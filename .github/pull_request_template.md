@@ -68,7 +68,7 @@ docs/guide/the-board.md, "Test tasks and known issues". -->
 in docs/guide/after-a-merge.md, "After a pull request is merged", and the command for it is
 in that table, the one copy of them. They all run in the same sitting. -->
 
-- [ ] The launcher (`launcher\app`, `launcher\ui.xaml`), the game plugins (`game\plugins`) or anything else in a pack
+- [ ] The launcher (`launcher\app`), the game plugins (`game\plugins`) or anything else in a pack
 - [ ] The gamemode on the dev server
 - [ ] The gamemode on the live server (`game\gamemode.js`) or the content plugin (`game\content\Thornswood-Content.esp`), whose server command goes before the Ship
 - [ ] The live server build, or the live settings

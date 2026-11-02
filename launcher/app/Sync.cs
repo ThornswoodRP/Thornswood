@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 
 namespace Thornswood
@@ -27,8 +29,21 @@ namespace Thornswood
     /// are taken out. A download cut short carries on where it stopped, and a
     /// file already fetched before an interruption is not fetched again.
     ///
-    /// The launcher exe is not part of this: it still updates only through
-    /// SelfUpdate, with every check Signature.cs makes.
+    /// The launcher exe is not part of this: it updates through Velopack
+    /// (VeloUpdate.cs), with every check that file's header lists.
+    ///
+    /// ON DEV THE GAME FILES COME FROM THE VELOPACK PACKAGE, NOT FROM HERE
+    /// (#4825; the plan: "one update channel carries both the launcher and
+    /// the game payload"). A launcher Velopack installed on the dev channel
+    /// (Velo.GameFromPackage) takes Thornswood's game files from the checked
+    /// package of each update (SyncPackage.cs), and this file's record and
+    /// packs are never offered to it (Pending, RecordDue). What the package
+    /// brings goes in through this file's own write all the same (WriteSync),
+    /// so release.txt, release-files.txt, Keep, installed-into-game.txt, the
+    /// gone and golden entries and the client files left to ClientRuntime are
+    /// kept one way for both. Main stays on the feed's record until main has
+    /// packages (#5181); then the line in Velo.GameFromPackage moves and this
+    /// file's fetching from the site retires with the feed.
     /// </summary>
     static partial class Updater
     {
@@ -172,8 +187,12 @@ namespace Thornswood
         /// the feed names none, this install is on it already, or it was found
         /// to carry no RecordFilesMark.
         /// </summary>
-        static Pack RecordDue(VersionDoc v)
+        static Pack RecordDue(Config cfg, VersionDoc v)
         {
+            // On dev the package of each launcher update carries the game
+            // files (header; Velo.GameFromPackage), so the feed's record is
+            // not this install's to sync to.
+            if (Velo.GameFromPackage(cfg)) return null;
             RecordRef r = v == null ? null : v.record;
             if (r == null) return null;
             SyncState s = ReadSyncState();
@@ -233,10 +252,9 @@ namespace Thornswood
             // plus 64 hex characters, so it cannot be anywhere else.
             CheckUrl(r.url);
             string at = AssetFolder(r);
-            ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072; // Tls12 added, never replaced (#1360)
             if (Sync(cfg, at, r, v, log)) return;
 
-            List<Pack> packs = Pending(v);
+            List<Pack> packs = Pending(cfg, v);
             int count = 0;
             foreach (Pack p in packs) if (p != null && p.Record == null && !string.IsNullOrEmpty(p.url) && p.url.Trim().Length > 0) count++;
             PlayProgress.Plan("Updating", count, "updates");
@@ -260,11 +278,12 @@ namespace Thornswood
         /// </summary>
         public static bool Resync(Config cfg, VersionDoc v, Action<string> log)
         {
+            // On dev the files are the installed package's (SyncPackage.cs).
+            if (Velo.GameFromPackage(cfg)) return ResyncFromPackage(cfg, log);
             RecordRef r = v == null ? null : v.record;
             if (r == null) return false;
             CheckUrl(r.url);
             string at = AssetFolder(r);
-            ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072; // Tls12 added, never replaced (#1360)
             return Sync(cfg, at, r, v, log);
         }
 
@@ -284,6 +303,8 @@ namespace Thornswood
         /// </summary>
         public static Func<string, byte[]> ReleaseCopy(Config cfg, VersionDoc v)
         {
+            // On dev the plugins are the installed package's (SyncPackage.cs).
+            if (Velo.GameFromPackage(cfg)) return PackageCopy(cfg);
             RecordRef r = v == null ? null : v.record;
             if (r == null) return null;
             Func<string, byte[]> at = null;
@@ -292,7 +313,6 @@ namespace Thornswood
                 if (at == null)
                 {
                     CheckUrl(r.url);
-                    ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072; // Tls12 added, never replaced (#1360)
                     at = ReleaseCopyAt(AssetFolder(r), r);
                 }
                 return at(plugin);
@@ -365,7 +385,15 @@ namespace Thornswood
         /// </summary>
         public sealed class SyncPlan
         {
-            internal string At, Stage;
+            // Puts the file with that sha256 and size into the path given,
+            // checked against the sha256: from the site beside the record, or
+            // out of the Velopack package (SyncPackage.cs).
+            internal Blob Fetch;
+            // Run once the plan is written or dropped: lets go of the package.
+            internal Action Close;
+            // True when Fetch reads a file on this PC rather than the site.
+            internal bool Local;
+            internal string Stage;
             internal RecordRef Record;
             internal VersionDoc Doc;
             internal List<SyncItem> Items, Need;
@@ -374,6 +402,9 @@ namespace Thornswood
             internal long Total;
             internal int Fetched;
         }
+
+        /// <summary>One file into dest, by its sha256 and size, checked; onBytes may be null.</summary>
+        internal delegate void Blob(string sha, long bytes, string dest, Action<long> onBytes);
 
         /// <summary>
         /// The sync itself. $at is the folder the record and its files are in
@@ -403,7 +434,6 @@ namespace Thornswood
         {
             CheckUrl(r.url);
             string at = AssetFolder(r);
-            ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072; // Tls12 added, never replaced (#1360)
             return PrepareSync(cfg, at, r, v, log);
         }
 
@@ -425,7 +455,19 @@ namespace Thornswood
                 log("Release " + r.id + " does not have its files on the site one by one, so it goes in pack by pack.");
                 return null;
             }
+            return PlanSync(r, v, map, delegate(string sha, long bytes, string dest, Action<long> onBytes) { FetchInto(at + sha, sha, bytes, dest, onBytes); }, false, log);
+        }
 
+        /// <summary>
+        /// The compare and the fetch, for a record's entries (<paramref name="map"/>,
+        /// in the record's shape: game files, :golden: and :gone:) from
+        /// wherever <paramref name="fetch"/> takes them. Writes nothing into
+        /// the game folder or its records.
+        /// </summary>
+        static SyncPlan PlanSync(RecordRef r, VersionDoc v, Dictionary<string, string> map, Blob fetch, bool local, Action<string> log)
+        {
+            string stage = SyncDir;
+            Directory.CreateDirectory(stage);
             var items = new List<SyncItem>();
             var gone = new List<KeyValuePair<string, string>>();
             var listed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -494,20 +536,20 @@ namespace Thornswood
             }
 
             // ---- fetch what differs, each file once ------------------------
-            var fetch = new Dictionary<string, long>(StringComparer.Ordinal);
-            foreach (SyncItem it in need) fetch[it.Sha] = it.Bytes;
+            var want = new Dictionary<string, long>(StringComparer.Ordinal);
+            foreach (SyncItem it in need) want[it.Sha] = it.Bytes;
             long total = 0;
-            foreach (long b in fetch.Values) total += b;
-            if (fetch.Count > 0)
+            foreach (long b in want.Values) total += b;
+            if (want.Count > 0)
             {
-                log("Downloading " + fetch.Count + (fetch.Count == 1 ? " file, " : " files, ") + Mb(total) + " MB.");
+                log((local ? "Taking " : "Downloading ") + want.Count + (want.Count == 1 ? " file, " : " files, ") + Mb(total) + " MB" + (local ? " out of the update package." : "."));
                 long got = 0; int quarter = 0;
                 PlayProgress.Bytes("Updating", 0, total);
-                foreach (KeyValuePair<string, long> f in fetch)
+                foreach (KeyValuePair<string, long> f in want)
                 {
                     long before = got;
-                    FetchInto(at + f.Key, f.Key, f.Value, Path.Combine(stage, f.Key),
-                              delegate(long had) { PlayProgress.Bytes("Updating", before + Math.Min(had, f.Value), total); });
+                    fetch(f.Key, f.Value, Path.Combine(stage, f.Key),
+                          delegate(long had) { PlayProgress.Bytes("Updating", before + Math.Min(had, f.Value), total); });
                     got += f.Value;
                     PlayProgress.Bytes("Updating", got, total);
                     int now = total > 0 ? (int)(got * 4 / total) : 4;
@@ -518,7 +560,8 @@ namespace Thornswood
             }
 
             var plan = new SyncPlan();
-            plan.At = at;
+            plan.Fetch = fetch;
+            plan.Local = local;
             plan.Stage = stage;
             plan.Record = r;
             plan.Doc = v;
@@ -528,7 +571,7 @@ namespace Thornswood
             plan.Listed = listed;
             plan.Client = client;
             plan.Total = total;
-            plan.Fetched = fetch.Count;
+            plan.Fetched = want.Count;
             return plan;
         }
 
@@ -542,7 +585,7 @@ namespace Thornswood
         /// </summary>
         public static void WriteSync(Config cfg, SyncPlan plan, Action<string> log)
         {
-            string stage = plan.Stage, at = plan.At;
+            string stage = plan.Stage;
             RecordRef r = plan.Record;
             VersionDoc v = plan.Doc;
             List<SyncItem> items = plan.Items;
@@ -564,7 +607,7 @@ namespace Thornswood
                 string blob = Path.Combine(stage, it.Sha);
                 if (!File.Exists(blob))
                 {
-                    FetchInto(at + it.Sha, it.Sha, it.Bytes, blob);
+                    plan.Fetch(it.Sha, it.Bytes, blob, null);
                     total += it.Bytes;
                     fetched++;
                 }
@@ -681,11 +724,12 @@ namespace Thornswood
             state.SyncedId = r.id;
             if (state.PacksOnly == r.sha256) state.PacksOnly = "";
             WriteSyncState(state);
+            if (plan.Close != null) plan.Close();
             try { Directory.Delete(stage, true); } catch (Exception ex) { Swallow.Note("Updater.Sync, tidy", ex); }
 
             string msg = "Release " + r.id + ": " + items.Count + " files checked, " + need.Count +
                          (need.Count == 1 ? " file" : " files") + " put right";
-            if (fetched > 0) msg += " (" + Mb(total) + " MB downloaded)";
+            if (fetched > 0) msg += " (" + Mb(total) + (plan.Local ? " MB from the update package)" : " MB downloaded)");
             if (removed.Count > 0) msg += ", " + removed.Count + " removed";
             msg += ".";
             if (shared > 0) msg += " " + shared + (shared == 1 ? " file this release no longer ships is" : " files this release no longer ships are") + " the collection's now and stayed.";
@@ -780,28 +824,24 @@ namespace Thornswood
 
         static void Transfer(string url, string part, long from, Action<long> onBytes)
         {
-            var req = (HttpWebRequest)WebRequest.Create(url);
-            req.Timeout = 10000;
-            req.ReadWriteTimeout = 60000;
-            req.UserAgent = "ThornswoodLauncher/" + Version;
-            req.Accept = "application/octet-stream";
-            if (from > 0) req.AddRange(from);
-            using (var resp = (HttpWebResponse)req.GetResponse())
+            using (var req = new HttpRequestMessage(HttpMethod.Get, url))
             {
-                // A server that ignores the Range answers 200 with the whole
-                // file, and then the part starts again from nothing.
-                bool carryOn = from > 0 && resp.StatusCode == HttpStatusCode.PartialContent;
-                using (Stream s = resp.GetResponseStream())
-                using (var f = new FileStream(part, carryOn ? FileMode.Append : FileMode.Create, FileAccess.Write, FileShare.None))
+                req.Headers.TryAddWithoutValidation("User-Agent", "ThornswoodLauncher/" + Version);
+                req.Headers.TryAddWithoutValidation("Accept", "application/octet-stream");
+                if (from > 0) req.Headers.Range = new RangeHeaderValue(from, null);
+                // Ten seconds for the answer to start, a minute for each read
+                // of it (Http), as the request had them before.
+                using (HttpResponseMessage resp = Http.Send(req, 10000))
                 {
-                    byte[] buf = new byte[81920];
-                    int n;
-                    long had = carryOn ? from : 0;
-                    while ((n = s.Read(buf, 0, buf.Length)) > 0)
+                    // Anything but a 2xx is an exception, as it was.
+                    resp.EnsureSuccessStatusCode();
+                    // A server that ignores the Range answers 200 with the whole
+                    // file, and then the part starts again from nothing.
+                    bool carryOn = from > 0 && resp.StatusCode == HttpStatusCode.PartialContent;
+                    using (var f = new FileStream(part, carryOn ? FileMode.Append : FileMode.Create, FileAccess.Write, FileShare.None))
                     {
-                        f.Write(buf, 0, n);
-                        had += n;
-                        if (onBytes != null) onBytes(had);
+                        long had = carryOn ? from : 0;
+                        Http.CopyBody(resp, f, 60000, onBytes == null ? (Action<long>)null : n => onBytes(had + n));
                     }
                 }
             }

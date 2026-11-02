@@ -40,8 +40,8 @@
 
   HOW. The real text of AskSteam, Stop, Progress, SizedLine, Percent,
   DepotBytes, ProgressLine, ClipboardLine, Next and Parts is lifted out of
-  Downgrade.cs by brace match and compiled with the compiler the build runs
-  (tests\Launcher-Csc.ps1), beside a Process that records what it was asked to
+  Downgrade.cs by brace match and compiled with the .NET SDK the launcher
+  builds with (tests\Launcher-Csc.ps1), beside a Process that records what it was asked to
   start instead of starting it, and a Steam install in a temp folder. Nothing
   opens Steam. The rest is read off Run's and TypeIntoConsole's text.
 
@@ -51,7 +51,7 @@
 param([string]$AppPath)
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 # This harness is in launcher\tests\, the repository is two folders up.
@@ -235,22 +235,18 @@ foreach ($k in $lifted.Keys) { [void]$body.AppendLine($lifted[$k]) }
 if ($onProgress.Success) { [void]$body.AppendLine($onProgress.Value) }
 $probe = $probe.Replace('__LIFTED__', $body.ToString())
 
-if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'; Done }
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc) -or $lifted.Count -lt $wanted.Count -or -not $onProgress.Success) { Done }
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet) -or $lifted.Count -lt $wanted.Count -or -not $onProgress.Success) { Done }
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-downgrade-why-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 $null = New-Item -ItemType Directory -Force -Path $work
 try {
-    $cs = Join-Path $work 'Probe.cs'
-    [IO.File]::WriteAllText($cs, $probe)
-    $dll = Join-Path $work 'Probe.dll'
-    $out = & $LauncherCsc /nologo /target:library "/out:$dll" $cs 2>&1
-    $built = ($LASTEXITCODE -eq 0) -and (Test-Path -LiteralPath $dll)
-    Yes 'the lifted text compiles with the compiler the build runs' $built
-    if (-not $built) { $out | ForEach-Object { Write-Host "      $_" }; Done }
+    $asm = $null
+    try { $asm = Add-LauncherType -Source $probe }
+    catch { $out = $_.Exception.Message }
+    Yes 'the lifted text compiles with the .NET SDK the launcher builds with' ($null -ne $asm)
+    if (-not $asm) { $out -split "`n" | ForEach-Object { Write-Host "      $_" }; Done }
 
-    $asm = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($dll))
     $D = $asm.GetType('Probe.Downgrade', $true)
     $P = $asm.GetType('Probe.Process', $true)
     $S = $asm.GetType('Probe.Steam', $true)

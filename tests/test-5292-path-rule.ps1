@@ -28,11 +28,11 @@
        passes;
     3. read from this repository: the launcher job's steps are exactly the
        one that says why there is nothing to build, which alone runs when
-       the pick said launcher=false, on Linux, then the launcher window, the
-       ship root tool, the MSBuild launcher and the note, which run only
-       otherwise, on Windows (the 5.1 comparison of the writing check went
-       with #5356), and
-       none of what they build or read names docs, site or bot; the writing
+       the pick said launcher=false, on Linux, then the native launcher's
+       publish, the ship root tool and the note, which run only otherwise,
+       on Windows (the 5.1 comparison of the writing check went with #5356),
+       and none of what they build or read names docs, site or bot (a comment
+       that cites a page is not a read); the writing
        check's harness runs in Tree checks too; Tree checks is on Linux,
        always runs, and has no step that needs Windows.
 
@@ -61,7 +61,10 @@ $pr = Read-Text '.github/workflows/build-pr.yml'
 $launcher = Get-Job $build 'launcher'
 $checks = Get-Job $build 'checks'
 $pick = Get-Job $build 'pick'
-$want = @('Say why there is nothing to build', 'Check the launcher window', 'Build the ship root tool', 'Check the MSBuild launcher against its sources',
+# Since #4823 the launcher is published natively (Build-Launcher.ps1) and its
+# window is compiled markup, so the window check (Check-Controls.ps1) and the
+# MSBuild check (test-498-msbuild.ps1) went; the publish took their place.
+$want = @('Say why there is nothing to build', 'Publish the native launcher', 'Build the ship root tool',
     'Write down the tree these checks passed on')
 $have = Get-StepNames $launcher
 Yes ('the job "Launcher builds" has exactly the step that says why there is nothing to build, the steps that need Windows, and the note (' + ($have -join '; ') + ')') (($have -join '|') -eq ($want -join '|'))
@@ -73,17 +76,20 @@ Yes '  where the first step alone runs, says why, and runs nothing' ($why -match
 $unguarded = @($steps | Select-Object -Skip 1 | Where-Object { $_ -notmatch "\n        if: env\.REACHES != 'false'(\n| && \()" })
 Yes ('  and every other step runs only when the pick did not say so (' + $steps.Count + ' steps)') ($steps.Count -ge 7 -and $unguarded.Count -eq 0)
 # What those steps build and read. Each named here is what one of them runs
-# or compiles; none may name a folder the path rule skips.
-$reads = @('scripts/dev/Check-Controls.ps1', 'scripts/release/ShipRoot/ShipRoot.csproj', 'launcher/tests/test-498-msbuild.ps1', 'launcher/tests/test-app-manifest.ps1',
-    'scripts/release/Build-Launcher.ps1', 'scripts/release/LauncherVersion.ps1', 'scripts/release/Find-MSBuild.ps1',
-    'launcher/app/Thornswood.csproj', 'installer/setup/Setup.csproj')
+# or compiles; no code in it may name a folder the path rule skips. Comments
+# are left out: a header citing docs\studies for a decision reads nothing.
+$reads = @('scripts/release/Build-Launcher.ps1', 'scripts/release/LauncherVersion.ps1', 'scripts/dev/Check-Secrets.ps1',
+    'scripts/release/ShipRoot/ShipRoot.csproj', 'launcher/app/Thornswood.csproj')
 foreach ($f in $reads) {
     $t = Read-Text $f
+    if ($f -like '*.ps1') { $t = (([regex]::Replace($t, '(?s)<#.*?#>', '')) -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n" }
+    else { $t = [regex]::Replace($t, '(?s)<!--.*?-->', '') }
     $named = [regex]::Matches($t, '(?i)(?<![\w.-])(docs|site|bot)[\\/]') | ForEach-Object { $_.Value }
     Yes ("  $f names no folder under docs, site or bot" + $(if ($named) { ' (' + (@($named) -join ', ') + ')' } else { '' })) (-not $named)
 }
 $runs = @([regex]::Matches($launcher, '(?m)^\s*(?:&\s*)?(?:pwsh|powershell)[^\n]*-File\s+(\S+)') | ForEach-Object { $_.Groups[1].Value.Replace('\', '/') })
 $runs += @([regex]::Matches($launcher, '(?m)(scripts\\release\\ShipRoot\\ShipRoot\.csproj)') | ForEach-Object { $_.Groups[1].Value.Replace('\', '/') })
+$runs += @([regex]::Matches($launcher, '(?m)^\s*(?:&\s*)?\.\\(scripts\\\S+\.ps1)') | ForEach-Object { $_.Groups[1].Value.Replace('\', '/') })
 $unlisted = @($runs | Where-Object { $_ -notin $reads })
 Yes ('  and every script or project the job runs is one of those (' + ($runs -join ', ') + ')') ($runs.Count -ge 4 -and -not $unlisted.Count)
 Yes 'the writing check''s harness runs in Tree checks for every change too' ($checks -match "foreach \(\`$n in 'test-check-words\.ps1', 'test-note-rules\.ps1', 'test-ship-check-words\.ps1'\)")

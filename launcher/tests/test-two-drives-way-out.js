@@ -27,7 +27,7 @@
 //      buttons: Steam, Settings, Storage for the Steam library, and Vortex,
 //      Settings, Mods for Vortex's staging folder.
 //   4. It stays one sentence with no line break. The same string goes to a
-//      MessageBox, to the card in Settings, to the one line status strip on
+//      box (Ask.Tell), to the card in Settings, to the one line status strip on
 //      the Play page and to Profile\launcher.log, which is one entry to a line.
 //   5. Everything that shows WhyNot's answer shows all of it, so the drive
 //      letters and the two ways out are what the person reads.
@@ -84,8 +84,13 @@ const said = one ? one[1] : '';
 yes('it names the drive the other side is on', said.indexOf('" + theirs + "') >= 0 || said.indexOf('+ theirs +') >= 0);
 yes("it names Thornswood's folder and the drive it is on",
     said.indexOf('Paths.Root') >= 0 && said.indexOf('Volume(Paths.Root)') >= 0);
-yes('the first way out is installing Thornswood on the other drive',
-    said.indexOf('Install Thornswood on ') >= 0 && said.indexOf('setup program') >= 0);
+yes('the first way out is installing Thornswood on the other drive, with Thornswood-Setup.exe',
+    said.indexOf('Install Thornswood on ') >= 0 && said.indexOf('Thornswood-Setup.exe') >= 0);
+// Velopack's Setup.exe over an install asks to replace it, takes Velopack's
+// folder with install-root.txt away, and the first start's install window
+// asks for the drive again (Shell.Run, InstallPlace.Recorded).
+yes("and says the install window is where the drive is chosen",
+    said.indexOf("install window asks where to put it") >= 0);
 yes('and it says where that lands, <drive>\\Thornswood',
     said.indexOf('\\\\Thornswood') >= 0);
 yes('the second way out is passed in, so each side names its own screen',
@@ -112,7 +117,7 @@ yes('and the log line carries it too', /Log\([\s\S]*?\+ why\);/.test(box));
 
 const ask = /static void AskOwnGame\(bool atStart\)\s*\{([\s\S]*?)\n        \}/.exec(shell);
 yes('Make it, in Settings, shows the whole answer as well',
-    !!ask && /MessageBox\.Show\(why,/.test(ask[1]));
+    !!ask && /Ask\.Tell\(why,/.test(ask[1]));
 yes('and the card in Settings draws it whole', /"Off\. " \+ why/.test(shell));
 yes('nothing cuts the answer down before showing it',
     shell.indexOf('why.Substring') < 0 && shell.indexOf('why.Split') < 0);

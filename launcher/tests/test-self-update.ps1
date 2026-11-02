@@ -1,62 +1,57 @@
 <#
   test-self-update.ps1
 
-  The launcher's self update keeps the old exe until the new one has started,
-  and puts it back when the new one does not.
+      pwsh -NoProfile -File .\tests\test-self-update.ps1
+      pwsh -NoProfile -File .\tests\test-self-update.ps1 -Signed <a signed Thornswood.exe>
+
+  The launcher's own update is applied only once every file in it was
+  checked, and a refusal applies nothing.
 
   WHY THIS EXISTS. On the To Do List as "The launcher's self update destroys
-  the old exe and has no way back". The swap script moved the new exe straight
-  over the old one, so a new build that Defender flagged, or that fell over on
-  its first start, left somebody with no launcher at all. The entry: "An
-  unsigned exe that Defender flags is exactly when a fallback is needed".
+  the old exe and has no way back", and #912, the signer check that read a
+  name anybody can put on a certificate. Until #4825 this harness drove the
+  swap script in launcher\app\SelfSwap.cs. Velopack replaced it: it keeps the
+  version before in its packages folder and puts a new one in from a process
+  of its own (launcher\app\VeloUpdate.cs), so the way back is Velopack's and
+  is not driven here. What stays ours, and is proved here, is what is checked
+  before Velopack is asked to apply anything.
 
-  WHAT IT DOES. Compiles launcher\app\SelfSwap.cs on its own with the
-  compiler the launcher is built with (tests\Launcher-Csc.ps1). Compiles stub
-  launchers around it:
+  WHAT IT DOES. Builds the whole launcher the way the project builds
+  (tests\Launcher-Csc.ps1) with a driver beside it, and runs the driver:
+    - VeloPackage.Refusal, on packages it makes: a game file with other
+      bytes, another size, one the signed list does not name, one missing;
+      a file beside them that differs from setup-files.<channel>.json, or is
+      missing; a file nobody listed; a name that climbs out of its folder; a
+      setup list that names a program; and a package with no program. Each
+      is refused, with the reason in words.
+    - On Windows, an unsigned launcher and an unsigned Update.exe in a
+      package whose every other file matches are refused by
+      Signature.Refusal, and the copy taken out to check leaves nothing in
+      the temp folder. With a signed launcher (-Signed, by default the dev
+      install's), that package passes, and with one byte of the launcher
+      changed it is refused. Off Windows these say SKIP: Signature.Refusal
+      asks WinVerifyTrust.
+    - Updater.ApplyLauncher refuses an update FetchLauncher did not pass,
+      and no update at all, and nothing then waits for the launcher to close;
+      the same call on an update marked checked is held for the close, so the
+      refusals were for that alone. Velo.ExitApply is never called.
+  FetchLauncher itself needs Velopack's download and the release's signed
+  record from GitHub, so what it does in what order is read from its source:
+  the package check, then the Update.exe check, then the mark that it passed,
+  and a refusal deletes the package and replaces nothing.
 
-      old         the launcher asking for the update, and the one put back
-      new-good    starts, calls the real SelfSwap.Settle, stays up
-      new-broken  exits 1 the moment it starts
-      new-late    stays up three seconds and exits 1 without drawing, like
-                  the "could not start" box somebody reads and closes
-      new-hang    stays up past the script's watch without drawing
-
-  Each writes what it did, with its pid, into events.txt beside itself. Then,
-  in a scratch folder laid out like an install (<case>\Launcher\Thornswood.exe),
-  it does what Updater.SelfUpdate does once the new exe is at Thornswood.exe.new:
-  writes the script for the exe, the .new and the pid of the launcher asking,
-  and starts it hidden through the shell. The launcher asking is an old stub
-  that takes two seconds to close, as the real one does. Then it reads what is
-  where, who started, in what order, and who is still running.
-
-  MEASURED 24 SEPTEMBER, and the reason the script looks the way it does:
-      a running exe renames without complaint (move exited 0 under a live stub)
-      it cannot be opened for writing while it runs, and can once it has exited
-      start on a missing file puts up a "Windows cannot find" box and waits
-      start leaves errorlevel as it found it when it works
-
-  Issue #497, 29 Sep: the launcher's name from before the rename is gone from
-  the update path too, so the new build always goes in at the running
-  launcher's own path and nothing renames or repoints anything.
-  tests\test-old-name-gone.js checks that no tracked file names it at all.
-
-  Not driven: start failing on a file that is there (Defender blocking it, a
-  file that is not a program). Windows puts up a box for those too, on the
-  desktop of whoever runs this. The watch covers the same case without start's
-  word for it, because a launcher that never started is not holding its file,
-  and new-broken is that case as far as the script can tell.
-
-  Writes only under its own folder in %TEMP%, and ends every stub it started.
+  Writes only under its own temp folder and out\harness (the build). Nothing
+  touches the network.
 #>
 [CmdletBinding()]
-param()
+param([string]$Signed = '')
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's SDK and settings, and $OnWindows
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $Repo = Split-Path -Parent (Split-Path -Parent $Here)
-$App = Join-Path $Repo 'launcher\app'
+$App = Join-Path (Join-Path $Repo 'launcher') 'app'
 
 $script:pass = 0
 $script:fail = 0
@@ -64,431 +59,249 @@ function Yes([string]$what, [bool]$cond) {
     if ($cond) { $script:pass++; Write-Host "PASS  $what" }
     else { $script:fail++; Write-Host "FAIL  $what" }
 }
-function Finish {
+function Done {
     Write-Host ''
     Write-Host "$($script:pass) passed, $($script:fail) failed"
     if ($script:fail) { exit 1 }
     exit 0
 }
 
-# ---- the sources say what they should ---------------------------------------
-$swapCs = Join-Path $App 'SelfSwap.cs'
-$haveSwap = Test-Path -LiteralPath $swapCs
-Yes 'launcher\app\SelfSwap.cs exists' $haveSwap
+# ---- FetchLauncher and ApplyLauncher, from their source -------------------------
+Write-Host 'what FetchLauncher checks, and in what order (launcher\app\VeloUpdate.cs)'
+$velo = [IO.File]::ReadAllText((Join-Path $App 'VeloUpdate.cs')).Replace("`r`n", "`n")
+$fetchAt = $velo.IndexOf('public static void FetchLauncher(LauncherUpdate u, Action<string> log)')
+$applyAt = $velo.IndexOf('public static void ApplyLauncher(LauncherUpdate u)')
+$fetch = if ($fetchAt -ge 0 -and $applyAt -gt $fetchAt) { $velo.Substring($fetchAt, $applyAt - $fetchAt) } else { '' }
+Yes 'FetchLauncher is there, before ApplyLauncher' ($fetch.Length -gt 0)
+$pkgAt = $fetch.IndexOf('VeloPackage.Refusal(pkg, list, setup, ExpectedSigner,')
+$exeAt = $fetch.IndexOf('Signature.Refusal(updateExe, ExpectedSigner, out exeSaid)')
+$markAt = $fetch.IndexOf('u.Checked = true;')
+$catchAt = $fetch.IndexOf('catch (Exception ex)')
+Yes '  every file in the package is checked, then the Update.exe that applies it, then it is marked as passed' (
+    $pkgAt -gt 0 -and $exeAt -gt $pkgAt -and $markAt -gt $exeAt)
+Yes '  either refusal throws inside the try, before anything is kept on the update' (
+    $fetch -match 'if \(why\.Length > 0\) throw new Exception\("The update package " \+ why\);' -and
+    $fetch -match 'if \(exeWhy\.Length > 0\) throw new Exception\(' -and $catchAt -gt $exeAt -and $fetch.IndexOf('u.Package = pkg;') -lt $catchAt)
+Yes '  a refusal deletes the package and says nothing was replaced, and the mark comes after the catch' (
+    $fetch -match '(?s)catch \(Exception ex\)\s*\{\s*try \{ File\.Delete\(pkg\); \}' -and $fetch.Contains('Nothing has been replaced and the one you are running is untouched.') -and $markAt -gt $catchAt)
+Yes 'ApplyLauncher stages nothing unless FetchLauncher marked it' (
+    $velo -match 'if \(u == null \|\| !u\.Checked\) throw new Exception\("The launcher update was not downloaded and checked, so it is not applied\."\);\s*Velo\.ApplyOnExit\(u\.Manager, u\.Info\.TargetFullRelease\);')
+Yes 'Velopack''s own checksum step also holds each package to the signed record before it keeps it' (
+    $velo -match '(?s)protected override async Task VerifyPackageChecksumAsync\(VelopackAsset release, string filePathOverride = null\)\s*\{\s*await base\.VerifyPackageChecksumAsync\(release, filePathOverride\)\.ConfigureAwait\(false\);\s*string why = VeloRecord\.Vouches\(release\);\s*if \(why\.Length > 0\) throw')
+Yes 'the swap script and its exe kept beside the launcher are gone (SelfSwap.cs)' (-not (Test-Path -LiteralPath (Join-Path $App 'SelfSwap.cs')))
 
-$upd = Get-Content -LiteralPath (Join-Path $App 'Updater.cs') -Raw
-# Since #2210 SelfUpdate is FetchLauncher then SwapIn, so an update can
-# download while the game folder is prepared; SwapIn is what writes the script.
-Yes 'Updater.SelfUpdate is FetchLauncher then SwapIn' ($upd -match 'public static void SelfUpdate\(Config cfg, VersionDoc v, Action<string> log\)\s*\{\s*SwapIn\(FetchLauncher\(cfg, v, log\), log\);\s*\}')
-$at = $upd.IndexOf('public static void SwapIn(')
-Yes 'Updater.SwapIn is there' ($at -ge 0)
-$body = ''
-if ($at -ge 0) {
-    # To the brace that closes the method, at its own indentation.
-    $m = [regex]::Match($upd.Substring($at), '(?s)^.*?\n        \}\r?\n')
-    if ($m.Success) { $body = $m.Value } else { $body = $upd.Substring($at) }
-}
-Yes 'SelfUpdate writes the script SelfSwap builds' ($body -match 'File\.WriteAllText\(bat, SelfSwap\.Script\(exe, neu, me\)\)')
-Yes 'SelfUpdate still starts it hidden' (($body -match 'WindowStyle = System\.Diagnostics\.ProcessWindowStyle\.Hidden') -and ($body -match 'CreateNoWindow = true') -and ($body -match 'UseShellExecute = true'))
-Yes 'SelfUpdate no longer moves the new exe over the old one itself' ($upd -notmatch 'move /y')
+# ---- the driver -------------------------------------------------------------------
+Write-Host ''
+Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
-$shell = Get-Content -LiteralPath (Join-Path $App 'Shell.cs') -Raw
-Yes 'the launcher clears the kept copy once its window has drawn' ($shell -match '(?s)ContentRendered\s*\+=\s*delegate\s*\{.{0,800}?SelfSwap\.Settle\(')
-
-# ---- issue #497: the update path renames nothing -----------------------------
-# Release 1 (#901) taught the update to rename an install still under the
-# launcher's name from before the rename, and Icons to repoint its shortcuts.
-# Patrick, 29 Sep: nobody has those old files any more, so both went. The
-# update puts the new build at the running exe's own path, as before #901.
-$icons = Get-Content -LiteralPath (Join-Path $App 'Icons.cs') -Raw
-$swapAll = ''
-if ($haveSwap) { $swapAll = Get-Content -LiteralPath $swapCs -Raw }
-Yes '#497: SelfSwap has no Target, AimsAtOld, OldName or NewName' ($swapAll -cnotmatch '\b(Target|AimsAtOld|OldName|NewName)\b')
-Yes '#497: SelfSwap names no exe file at all' ($swapAll -notmatch '"[^"]*\.exe"')
-Yes '#497: the updater asks SelfSwap for no other destination' ($upd -cnotmatch 'SelfSwap\.(Target|NewName)')
-Yes '#497: Icons repoints no shortcut aimed at another exe' ($icons -cnotmatch 'AimsAtOld|SelfSwap\.(OldName|NewName)')
-
-if (-not $haveSwap) { Finish }
-
-if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'; Finish }
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Finish }
-
-# `find` in the script has to be Windows' own. A PATH with Git's usr\bin ahead
-# of System32 would hand it GNU find, and the wait would end at once.
-$env:PATH = (Get-WindowsPath 'System32') + ';' + $env:PATH
-
-$root = Join-Path ([IO.Path]::GetTempPath()) ('tsself-' + [Guid]::NewGuid().ToString('N'))
-$bin = Join-Path $root 'bin'
-New-Item -ItemType Directory -Force -Path $bin | Out-Null
-
-$stubSrc = @'
+$driver = @'
 using System;
+using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
-using System.Threading;
+using System.IO.Compression;
+using System.Text;
 
-[assembly: AssemblyInformationalVersion(Stub.Version)]
-[assembly: AssemblyFileVersion(Stub.Version)]
-
-class Stub
+namespace Thornswood
 {
-#if NEW
-    public const string Version = "2.0.0";
-#else
-    public const string Version = "1.0.0";
-#endif
-#if GOOD
-    const string Who = "new-good";
-#elif BROKEN
-    const string Who = "new-broken";
-#elif LATE
-    const string Who = "new-late";
-#elif HANG
-    const string Who = "new-hang";
-#else
-    const string Who = "old";
-#endif
-
-    static void Say(string dir, string line)
+    // Drives VeloPackage.Refusal on packages made here and Updater.ApplyLauncher
+    // on updates made here. args: <scratch folder> <windows: 1 or 0> [<signed exe>]
+    static class SelfUpdateTest
     {
-        for (int i = 0; i < 100; i++)
+        static int pass, fail;
+        static void Yes(string what, bool ok)
         {
-            try { File.AppendAllText(Path.Combine(dir, "events.txt"), line + "\r\n"); return; }
-            catch (IOException) { Thread.Sleep(20); }
+            if (ok) pass++; else fail++;
+            Console.WriteLine((ok ? "PASS  " : "FAIL  ") + what);
         }
-    }
 
-    static int Main(string[] args)
-    {
-        string exe = Assembly.GetExecutingAssembly().Location;
-        string dir = Path.GetDirectoryName(exe);
-        int me = System.Diagnostics.Process.GetCurrentProcess().Id;
-        if (args.Length > 1 && args[0] == "--closing")
+        static string Sha(byte[] b) { return VeloRecord.Sha256(b); }
+
+        static VeloRecord.GameFile File1(string path, byte[] b)
         {
-            Thread.Sleep(int.Parse(args[1]));
-            Say(dir, Who + " closed " + me);
-            return 0;
+            var f = new VeloRecord.GameFile();
+            f.Path = path; f.Size = b.Length; f.Sha256 = Sha(b);
+            return f;
         }
-        Say(dir, Who + " started " + me);
-#if BROKEN
-        return 1;
-#elif LATE
-        Thread.Sleep(3000);
-        Say(dir, Who + " gave up " + me);
-        return 1;
-#elif HANG
-        Thread.Sleep(30000);
-        return 0;
-#else
-        Thread.Sleep(300);
-        string said = Thornswood.SelfSwap.Settle(exe);
-        Say(dir, Who + " settled " + me + (said == null ? "" : ": " + said));
-        Thread.Sleep(20000);
-        return 0;
-#endif
+
+        static VeloRecord.GameList List(string channel, params VeloRecord.GameFile[] files)
+        {
+            var l = new VeloRecord.GameList();
+            l.Schema = 1; l.Channel = channel; l.Files = files;
+            return l;
+        }
+
+        static string dir;
+        static int made;
+
+        // A package with these entries, in this order.
+        static string Pack(params KeyValuePair<string, byte[]>[] entries)
+        {
+            string p = Path.Combine(dir, "pkg-" + (++made) + ".nupkg");
+            using (ZipArchive z = ZipFile.Open(p, ZipArchiveMode.Create))
+            {
+                foreach (var e in entries)
+                {
+                    ZipArchiveEntry en = z.CreateEntry(e.Key);
+                    using (Stream s = en.Open()) s.Write(e.Value, 0, e.Value.Length);
+                }
+            }
+            return p;
+        }
+
+        static KeyValuePair<string, byte[]> E(string name, byte[] b) { return new KeyValuePair<string, byte[]>(name, b); }
+
+        static string Ask(string pkg, VeloRecord.GameList game, VeloRecord.GameList setup, out string said)
+        {
+            return VeloPackage.Refusal(pkg, game, setup, Updater.ExpectedSigner, null, out said);
+        }
+
+        static int Main(string[] args)
+        {
+            dir = args[0];
+            bool windows = args.Length > 1 && args[1] == "1";
+            string signed = args.Length > 2 ? args[2] : "";
+            Directory.CreateDirectory(dir);
+
+            byte[] esp = Encoding.ASCII.GetBytes("TES4 a plugin the release lists");
+            byte[] cfg = Encoding.ASCII.GetBytes("{ \"channel\": \"dev\" }");
+            byte[] note = Encoding.ASCII.GetBytes("SOURCE CODE: https://github.com/EvilPatrick06/Thornswood");
+            var game = List("dev", File1("Data/Thornswood.esp", esp));
+            var setup = List("dev", File1("config.json", cfg), File1("SOURCE CODE.txt", note));
+            var nupkgBits = E("Thornswood.nuspec", Encoding.ASCII.GetBytes("<package/>"));
+            var gameEntry = E("lib/app/Game/Data/Thornswood.esp", esp);
+            var cfgEntry = E("lib/app/config.json", cfg);
+            var noteEntry = E("lib/app/SOURCE%20CODE.txt", note);
+            var ver = E("lib/app/sq.version", Encoding.ASCII.GetBytes("<version/>"));
+            string said, why;
+
+            Console.WriteLine("every file in the package is held to the signed release's lists");
+
+            byte[] changed = (byte[])esp.Clone(); changed[0] ^= 1;
+            why = Ask(Pack(nupkgBits, E("lib/app/Game/Data/Thornswood.esp", changed), cfgEntry, noteEntry, ver), game, setup, out said);
+            Yes("a game file of the listed size with other bytes is refused by its checksum: " + why, why.StartsWith("carries Data/Thornswood.esp with the checksum ", StringComparison.Ordinal) && said.Length == 0);
+
+            why = Ask(Pack(nupkgBits, E("lib/app/Game/Data/Thornswood.esp", Encoding.ASCII.GetBytes("TES4 longer than the list says it is")), cfgEntry, noteEntry, ver), game, setup, out said);
+            Yes("a game file of another size is refused by its size: " + why, why.StartsWith("carries Data/Thornswood.esp at ", StringComparison.Ordinal));
+
+            why = Ask(Pack(nupkgBits, gameEntry, E("lib/app/Game/Data/Extra.esp", esp), cfgEntry, noteEntry, ver), game, setup, out said);
+            Yes("a game file the signed list does not name is refused: " + why, why.Contains("Data/Extra.esp, which the signed release's game-files.json does not list"));
+
+            why = Ask(Pack(nupkgBits, cfgEntry, noteEntry, ver), game, setup, out said);
+            Yes("a package without a game file the list names is refused: " + why, why.StartsWith("lacks 1 of the game files the signed release lists, Data/Thornswood.esp", StringComparison.Ordinal));
+
+            byte[] cfgOther = Encoding.ASCII.GetBytes("{ \"channel\": \"mai\" }");
+            why = Ask(Pack(nupkgBits, gameEntry, E("lib/app/config.json", cfgOther), noteEntry, ver), game, setup, out said);
+            Yes("a file beside the game files that differs from setup-files.dev.json is refused: " + why, why.StartsWith("carries config.json with the checksum ", StringComparison.Ordinal));
+
+            why = Ask(Pack(nupkgBits, gameEntry, cfgEntry, ver), game, setup, out said);
+            Yes("a package without a file setup-files.dev.json names is refused: " + why, why.StartsWith("lacks 1 of the files beside the game files", StringComparison.Ordinal) && why.Contains("SOURCE CODE.txt"));
+
+            why = Ask(Pack(nupkgBits, gameEntry, cfgEntry, noteEntry, ver, E("lib/app/readme.txt", note)), game, setup, out said);
+            Yes("a file nobody listed that is not a program is refused: " + why, why.Contains("lib/app/readme.txt, which is neither a signed program nor a file the signed release lists"));
+
+            why = Ask(Pack(nupkgBits, E("lib/app/Game/../Thornswood.esp", esp), cfgEntry, noteEntry, ver), game, setup, out said);
+            Yes("a name that climbs out of its folder is refused: " + why, why.Contains("a path that climbs out of its folder"));
+
+            why = Ask(Pack(nupkgBits, gameEntry, cfgEntry, noteEntry, ver), game, List("dev", File1("config.json", cfg), File1("Update.exe", cfg)), out said);
+            Yes("a setup-files list that names a program is refused, since every program is held to its signature: " + why, why.Contains("names Update.exe, which is a game file or a program"));
+
+            why = Ask(Pack(nupkgBits, gameEntry, cfgEntry, noteEntry, ver), game, setup, out said);
+            Yes("a package whose files all match but that holds no program is refused, as having no launcher in it: " + why, why == "carries no program at all, so there is no launcher in it." && said.Length == 0);
+
+            Console.WriteLine("");
+            Console.WriteLine("every program in the package is held to Thornswood's signature");
+            if (!windows)
+            {
+                Console.WriteLine("SKIP  the programs: Signature.Refusal asks Windows (WinVerifyTrust), which only Windows has");
+            }
+            else
+            {
+                string tmp = Path.GetTempPath();
+                int before = Directory.GetFiles(tmp, "thornswood-velo-*").Length;
+                byte[] unsigned = File.ReadAllBytes(typeof(SelfUpdateTest).Assembly.Location);
+                why = Ask(Pack(nupkgBits, gameEntry, cfgEntry, noteEntry, ver, E("lib/app/Thornswood.exe", unsigned)), game, setup, out said);
+                Yes("an unsigned launcher in a package whose files all match is refused: " + why, why.StartsWith("carries the program lib/app/Thornswood.exe, which ", StringComparison.Ordinal) && said.Length == 0);
+                why = Ask(Pack(nupkgBits, E("lib/app/Update.exe", unsigned), gameEntry, cfgEntry, noteEntry, ver), game, setup, out said);
+                Yes("  and so is an unsigned Update.exe, the program that would apply it: " + why, why.StartsWith("carries the program lib/app/Update.exe, which ", StringComparison.Ordinal));
+                Yes("  and the copy taken out to check it is not left in the temp folder", Directory.GetFiles(tmp, "thornswood-velo-*").Length == before);
+
+                if (signed.Length == 0 || !File.Exists(signed))
+                {
+                    Console.WriteLine("SKIP  a package with a launcher signed by Thornswood: no signed launcher on this machine (" + signed + ")");
+                }
+                else
+                {
+                    byte[] real = File.ReadAllBytes(signed);
+                    why = Ask(Pack(nupkgBits, gameEntry, cfgEntry, noteEntry, ver, E("lib/app/Thornswood.exe", real)), game, setup, out said);
+                    Yes("a package whose files all match, with the signed launcher, passes: " + (why.Length > 0 ? why : said), why.Length == 0 && said.StartsWith("Every file in the update package checked: 1 game files and 2 files beside them", StringComparison.Ordinal));
+                    byte[] bent = (byte[])real.Clone(); bent[bent.Length / 2] ^= 1;
+                    why = Ask(Pack(nupkgBits, gameEntry, cfgEntry, noteEntry, ver, E("lib/app/Thornswood.exe", bent)), game, setup, out said);
+                    Yes("  the same launcher with one byte changed is refused: " + why, why.StartsWith("carries the program lib/app/Thornswood.exe, which ", StringComparison.Ordinal));
+                }
+            }
+
+            Console.WriteLine("");
+            Console.WriteLine("nothing is applied that was not downloaded and checked");
+            Yes("nothing is waiting to go in at the start", !Velo.Staged);
+            string threw = "";
+            try { Updater.ApplyLauncher(new Updater.LauncherUpdate()); } catch (Exception ex) { threw = ex.Message; }
+            Yes("an update FetchLauncher did not pass is not applied: " + threw, threw == "The launcher update was not downloaded and checked, so it is not applied.");
+            Yes("  and nothing waits for the launcher to close", !Velo.Staged);
+            threw = "";
+            try { Updater.ApplyLauncher(null); } catch (Exception ex) { threw = ex.Message; }
+            Yes("no update at all is not applied either: " + threw, threw == "The launcher update was not downloaded and checked, so it is not applied." && !Velo.Staged);
+            // The control: the same call on an update FetchLauncher marked as
+            // checked is held for the exit, so the two above were refused for
+            // not being checked and for nothing else. ExitApply is never called.
+            var ok = new Updater.LauncherUpdate();
+            ok.Checked = true;
+            ok.Info = new Velopack.UpdateInfo(new Velopack.VelopackAsset(), false);
+            threw = "";
+            try { Updater.ApplyLauncher(ok); } catch (Exception ex) { threw = ex.Message; }
+            Yes("an update FetchLauncher passed is held until the launcher closes" + (threw.Length > 0 ? ": " + threw : ""), threw.Length == 0 && Velo.Staged);
+
+            Console.WriteLine("driver: " + pass + " passed, " + fail + " failed");
+            return fail > 0 ? 1 : 0;
+        }
     }
 }
 '@
 
-$driverSrc = @'
-using System;
-using System.Diagnostics;
-using System.IO;
+$dll = $null
+try { $dll = Build-LauncherCode -Launcher -Source $driver -Exe -Main 'Thornswood.SelfUpdateTest' }
+catch { ($_.Exception.Message -split "`r?`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
+Yes 'the whole launcher and the driver build the way the project does' ($null -ne $dll)
+if ($null -eq $dll) { Done }
 
-class Driver
-{
-    // What Updater.SelfUpdate does once the new exe is at exe.new: write the
-    // script, start it hidden through the shell.
-    // Arguments: bat exe neu pid checks|- [--write-only]
-    static int Main(string[] a)
-    {
-        string bat = a[0], exe = a[1], neu = a[2];
-        int pid = int.Parse(a[3]);
-        string text = a[4] == "-"
-            ? Thornswood.SelfSwap.Script(exe, neu, pid)
-            : Thornswood.SelfSwap.Script(exe, neu, pid, int.Parse(a[4]));
-        File.WriteAllText(bat, text);
-        if (a.Length > 5 && a[5] == "--write-only") return 0;
-        var psi = new ProcessStartInfo(bat);
-        psi.WindowStyle = ProcessWindowStyle.Hidden;
-        psi.CreateNoWindow = true;
-        psi.UseShellExecute = true;
-        Process.Start(psi);
-        return 0;
-    }
-}
-'@
-
-[IO.File]::WriteAllText((Join-Path $bin 'Stub.cs'), $stubSrc)
-[IO.File]::WriteAllText((Join-Path $bin 'Driver.cs'), $driverSrc)
-
-# /noconfig and the one reference by name, as the build compiles: csc.rsp
-# on a machine with the reference assemblies installed (the GitHub runner) is
-# what stopped the old launcher build with CS1703.
-function Build([string]$out, [string]$target, [string]$define, [string[]]$src) {
-    $a = @('/noconfig', '/nologo', "/target:$target", "/out:$out", '/reference:System.dll')
-    if ($define) { $a += "/define:$define" }
-    $a += $src
-    $old = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    $o = & $LauncherCsc @a 2>&1
-    $rc = $LASTEXITCODE
-    $ErrorActionPreference = $old
-    if ($rc -ne 0) { $o | Where-Object { $_ -match 'error' } | ForEach-Object { Write-Host "      $_" } }
-    return ($rc -eq 0 -and (Test-Path -LiteralPath $out))
+# The signed launcher for the passing package: the dev install's, as
+# tests\test-signer-check.ps1 takes it, unless one is given.
+if (-not $Signed -and $OnWindows) {
+    try { $Signed = Join-Path ([string](& (Join-Path $Repo 'scripts\release\Where.ps1') InstallDev)) 'Launcher\Thornswood.exe' }
+    catch { $Signed = '' }
 }
 
-$stubCs = Join-Path $bin 'Stub.cs'
-$driver = Join-Path $bin 'driver.exe'
-$built = Build $driver 'exe' '' @((Join-Path $bin 'Driver.cs'), $swapCs)
-Yes 'SelfSwap.cs compiles with the build''s compiler, alone, into a driver' $built
-$kinds = [ordered]@{ 'old' = ''; 'new-good' = 'NEW;GOOD'; 'new-broken' = 'NEW;BROKEN'; 'new-late' = 'NEW;LATE'; 'new-hang' = 'NEW;HANG' }
-foreach ($k in $kinds.Keys) {
-    $ok = Build (Join-Path $bin "$k.exe") 'winexe' $kinds[$k] @($stubCs, $swapCs)
-    Yes "the $k stub compiles around SelfSwap.cs" $ok
-    $built = $built -and $ok
-}
-if (-not $built) {
-    try { Remove-Item -LiteralPath $root -Recurse -Force } catch { }
-    Finish
-}
-
-$hash = @{}
-foreach ($k in $kinds.Keys) { $hash[$k] = (Get-FileHash -LiteralPath (Join-Path $bin "$k.exe") -Algorithm SHA256).Hash }
-function HashOf([string]$p) {
-    if (-not (Test-Path -LiteralPath $p)) { return '' }
-    return (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash
-}
-
-# Read while a stub may be writing, so shared both ways.
-function Events([string]$dir) {
-    $f = Join-Path $dir 'events.txt'
-    for ($i = 0; $i -lt 20; $i++) {
-        if (-not (Test-Path -LiteralPath $f)) { return @() }
-        try {
-            $fs = New-Object IO.FileStream($f, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
-            try { $t = (New-Object IO.StreamReader($fs)).ReadToEnd() } finally { $fs.Dispose() }
-            return @($t -split "`r`n" | Where-Object { $_ -ne '' })
-        } catch { Start-Sleep -Milliseconds 50 }
-    }
-    return @()
-}
-# @() because a function returning one line hands back a string, not an array.
-function At($ev, [string]$pattern) {
-    $ev = @($ev)
-    for ($i = 0; $i -lt $ev.Count; $i++) { if ($ev[$i] -match $pattern) { return $i } }
-    return -1
-}
-function PidOf($ev, [string]$pattern) {
-    foreach ($l in $ev) { if ($l -match $pattern) { return [int]$Matches[1] } }
-    return 0
-}
-function Alive([int]$id) {
-    if ($id -le 0) { return $false }
-    $p = Get-Process -Id $id -ErrorAction SilentlyContinue
-    return ($null -ne $p) -and (-not $p.HasExited) -and ($p.ProcessName -eq 'Thornswood')
-}
-# The condition is run from here, so it sees the caller's variables by
-# PowerShell's dynamic scoping. GetNewClosure would cut it off from the
-# functions in this file when it runs under -File.
-function Wait-For([scriptblock]$cond, [int]$ms) {
-    $sw = [Diagnostics.Stopwatch]::StartNew()
-    while ($sw.ElapsedMilliseconds -lt $ms) {
-        if (& $cond) { return $true }
-        Start-Sleep -Milliseconds 200
-    }
-    return [bool](& $cond)
-}
-$script:started = New-Object System.Collections.Generic.List[int]
-function Stop-Stubs {
-    $ids = @($script:started)
-    foreach ($d in @(Get-ChildItem -LiteralPath $root -Directory -Recurse -ErrorAction SilentlyContinue)) {
-        foreach ($l in (Events $d.FullName)) { if ($l -match ' (\d+)(:|$)') { $ids += [int]$Matches[1] } }
-    }
-    foreach ($id in $ids) {
-        if (Alive $id) { try { $p = Get-Process -Id $id; $p.Kill(); [void]$p.WaitForExit(5000) } catch { } }
-    }
-}
-
-<#
-  One update. $kind is the stub waiting at Thornswood.exe.new, or '' for none.
-  $before runs once the folder is laid out and before anything starts.
-  $during runs once the script is started; whatever it returns is disposed
-  once the script has finished, so a lock can be held for the whole run.
-#>
-function Update-Case {
-    param([string]$name, [string]$kind, [int]$checks = 0, [scriptblock]$before = $null,
-          [scriptblock]$during = $null, [int]$timeoutMs = 120000)
-    $dir = Join-Path (Join-Path $root $name) 'Launcher'
-    New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    $exe = Join-Path $dir 'Thornswood.exe'
-    $neu = $exe + '.new'
-    Copy-Item -LiteralPath (Join-Path $bin 'old.exe') -Destination $exe
-    if ($kind) { Copy-Item -LiteralPath (Join-Path $bin ($kind + '.exe')) -Destination $neu }
-    if ($before) { & $before $dir $exe }
-    $closing = Start-Process -FilePath $exe -ArgumentList '--closing', '2000' -PassThru
-    $script:started.Add($closing.Id)
-    $bat = Join-Path $dir 'thornswood-update-test.cmd'
-    $c = '-'
-    if ($checks -gt 0) { $c = [string]$checks }
-    & $driver $bat $exe $neu $closing.Id $c | Out-Null
-    $drove = ($LASTEXITCODE -eq 0)
-    $held = $null
-    if ($during) { $held = & $during $dir $exe $neu }
-    $gone = Wait-For { -not (Test-Path -LiteralPath $bat) } $timeoutMs
-    if ($held -is [IDisposable]) { $held.Dispose() }
-    return [pscustomobject]@{
-        Dir = $dir; Exe = $exe; Neu = $neu; Old = $exe + '.old'; Bad = $exe + '.bad'
-        Drove = $drove; Gone = $gone; Closing = $closing.Id
-    }
-}
-
+$T = Join-Path ([IO.Path]::GetTempPath()) ('ts-self-update-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
+$scratchTemp = Join-Path $T 'tmp'
+$null = New-Item -ItemType Directory -Force -Path $scratchTemp
+# The driver's temp folder is its own, so what Refusal takes out to check
+# can be counted. Path.GetTempPath reads TMP and TEMP on Windows and TMPDIR
+# elsewhere.
+$oldTmp = $env:TMP; $oldTemp = $env:TEMP; $oldTmpDir = $env:TMPDIR
 try {
-    # ---- the script itself --------------------------------------------------
-    $tdir = Join-Path $root 'text'
-    New-Item -ItemType Directory -Force -Path $tdir | Out-Null
-    $texe = Join-Path $tdir 'Thornswood.exe'
-    $tbat = Join-Path $tdir 'thornswood-update-4242.cmd'
-    & $driver $tbat $texe ($texe + '.new') 4242 '-' '--write-only' | Out-Null
-    $text = [IO.File]::ReadAllText($tbat)
-    $lines = $text -split "`r`n"
-    Yes 'the script starts @echo off, then chcp 65001 so cmd reads the paths as UTF-8' (($lines[0] -eq '@echo off') -and ($lines[1] -eq 'chcp 65001 >nul'))
-    Yes 'it still waits on tasklist for the launcher that asked' ($text.Contains('tasklist /fi "PID eq 4242" | find "4242" >nul 2>&1'))
-    Yes 'it still pauses with ping, not timeout, because it runs hidden' ($text.Contains('if not errorlevel 1 ( ping 127.0.0.1 -n 2 >nul & goto wait )'))
-    Yes 'it still tries the swap for about a minute' ($text.Contains('if %tries% lss 30 ( ping 127.0.0.1 -n 2 >nul & goto swap )'))
-    Yes 'it still deletes itself, last' ((($lines | Where-Object { $_ -ne '' }) | Select-Object -Last 1) -eq 'del "%~f0"')
-    Yes 'it watches for five minutes by default' ($text.Contains('if %looked% lss 300 goto watch'))
-    Yes 'every line ends CRLF' (-not ($text -match "[^`r]`n"))
-    $bare = 0; $i = $text.IndexOf($tdir)
-    while ($i -ge 0) { if ($i -eq 0 -or $text[$i - 1] -ne '"') { $bare++ }; $i = $text.IndexOf($tdir, $i + 1) }
-    Yes 'every path in it is quoted' ($bare -eq 0)
-    Yes 'it renames the old exe to .old before the new one goes in' ($text.IndexOf('move /y "' + $texe + '" "' + $texe + '.old"') -ge 0 -and $text.IndexOf('move /y "' + $texe + '" "' + $texe + '.old"') -lt $text.IndexOf('move /y "' + $texe + '.new" "' + $texe + '"'))
-    # Issue #497: the new build goes in at the running launcher's own path and
-    # nowhere else, so every move and start in the script names that exe, its
-    # .new, .old or .bad, and no other file.
-    $named = @([regex]::Matches($text, '"([^"]*\.exe[^"]*)"') | ForEach-Object { $_.Groups[1].Value } |
-        Where-Object { $_ -ne $texe -and $_ -ne ($texe + '.new') -and $_ -ne ($texe + '.old') -and $_ -ne ($texe + '.bad') })
-    Yes ('#497: the script names no exe but the running one and its .new, .old and .bad' + $(if ($named.Count) { ': ' + ($named -join ', ') } else { '' })) ($named.Count -eq 0)
-    Yes '#497: and has no second branch for starting another name' (-not $text.Contains(':runnew'))
+    $env:TMP = $scratchTemp; $env:TEMP = $scratchTemp; $env:TMPDIR = $scratchTemp
+    $out = @(Invoke-LauncherExe $dll (Join-Path $T 'work') $(if ($OnWindows) { '1' } else { '0' }) $Signed 2>&1 | ForEach-Object { "$_" })
+    $code = $LASTEXITCODE
+} finally { $env:TMP = $oldTmp; $env:TEMP = $oldTemp; $env:TMPDIR = $oldTmpDir }
 
-    # ---- a good new launcher ------------------------------------------------
-    $r = Update-Case 'good' 'new-good'
-    Yes 'good: the driver wrote and started the script' $r.Drove
-    Yes 'good: the script finished and deleted itself' $r.Gone
-    $ok = Wait-For { (At (Events $r.Dir) '^new-good settled') -ge 0 } 30000
-    $ev = Events $r.Dir
-    Yes 'good: the new launcher started and settled' $ok
-    Yes 'good: the swap waited until the launcher asking had closed' (((At $ev '^old closed') -ge 0) -and ((At $ev '^old closed') -lt (At $ev '^new-good started')))
-    Yes 'good: the new exe is in place' ((HashOf $r.Exe) -eq $hash['new-good'])
-    Yes 'good: the kept .old is gone, cleared by the new launcher' (-not (Test-Path -LiteralPath $r.Old))
-    Yes 'good: no .bad and no .new left' ((-not (Test-Path -LiteralPath $r.Bad)) -and (-not (Test-Path -LiteralPath $r.Neu)))
-    Yes 'good: the old launcher was not started again' ((At $ev '^old started') -lt 0)
-    Yes 'good: the new launcher is running afterwards' (Alive (PidOf $ev '^new-good started (\d+)'))
-    Yes 'good: it said nothing, because there was nothing to say' ((At $ev '^new-good settled \d+$') -ge 0)
-
-    # ---- a new launcher that exits 1 the moment it starts --------------------
-    $r = Update-Case 'broken' 'new-broken'
-    Yes 'broken: the script finished and deleted itself' $r.Gone
-    $ok = Wait-For { (At (Events $r.Dir) '^old settled') -ge 0 } 30000
-    $ev = Events $r.Dir
-    Yes 'broken: the new launcher ran and failed' ((At $ev '^new-broken started') -ge 0)
-    Yes 'broken: then the old launcher was started again' ($ok -and ((At $ev '^old started') -gt (At $ev '^new-broken started')))
-    Yes 'broken: the old exe is back in place' ((HashOf $r.Exe) -eq $hash['old'])
-    Yes 'broken: the old launcher is running afterwards' (Alive (PidOf $ev '^old started (\d+)'))
-    Yes 'broken: the .old went back to being the exe' (-not (Test-Path -LiteralPath $r.Old))
-    Yes 'broken: the launcher that came back named the build that failed' ((At $ev '^old settled \d+: Launcher 2\.0\.0 did not start on this machine, so the launcher you had before was put back\.') -ge 0)
-    Yes 'broken: and cleared the .bad it was kept in' (-not (Test-Path -LiteralPath $r.Bad))
-
-    # ---- a new launcher that is up a while and never draws ------------------
-    $r = Update-Case 'late' 'new-late'
-    Yes 'late: the script finished and deleted itself' $r.Gone
-    $ok = Wait-For { (At (Events $r.Dir) '^old settled') -ge 0 } 30000
-    $ev = Events $r.Dir
-    Yes 'late: nothing was put back while the new launcher was still up' (((At $ev '^new-late gave up') -ge 0) -and ((At $ev '^old started') -gt (At $ev '^new-late gave up')))
-    Yes 'late: once it had gone, the old exe is back and running' (((HashOf $r.Exe) -eq $hash['old']) -and (Alive (PidOf $ev '^old started (\d+)')))
-    Yes 'late: no .old and no .bad left' ((-not (Test-Path -LiteralPath $r.Old)) -and (-not (Test-Path -LiteralPath $r.Bad)))
-
-    # ---- a new launcher still up when the watch ends -------------------------
-    # Three checks instead of three hundred, so this takes seconds.
-    $r = Update-Case 'hang' 'new-hang' 3
-    $null = Wait-For { (At (Events $r.Dir) '^new-hang started') -ge 0 } 30000
-    $ev = Events $r.Dir
-    Yes 'hang: the script stopped watching and deleted itself' $r.Gone
-    Yes 'hang: the new exe that is still running was left in place' (((HashOf $r.Exe) -eq $hash['new-hang']) -and (Alive (PidOf $ev '^new-hang started (\d+)')))
-    Yes 'hang: the old one is kept as .old for that launcher to clear' ((HashOf $r.Old) -eq $hash['old'])
-    Yes 'hang: nothing was put back and nothing was started again' (((At $ev '^old started') -lt 0) -and (-not (Test-Path -LiteralPath $r.Bad)))
-
-    # ---- no .new: somebody else finished the job -----------------------------
-    $r = Update-Case 'no-new' ''
-    Yes 'no new: the script finished and deleted itself' $r.Gone
-    $ok = Wait-For { (At (Events $r.Dir) '^old settled') -ge 0 } 30000
-    $ev = Events $r.Dir
-    Yes 'no new: it started what was there, as it always did' ($ok -and ((HashOf $r.Exe) -eq $hash['old']))
-    Yes 'no new: and kept nothing' ((-not (Test-Path -LiteralPath $r.Old)) -and (-not (Test-Path -LiteralPath $r.Bad)))
-
-    # ---- a read-only .old a launcher could not clear -------------------------
-    $stale = {
-        param($dir, $exe)
-        Copy-Item -LiteralPath (Join-Path $bin 'new-broken.exe') -Destination ($exe + '.old')
-        Set-ItemProperty -LiteralPath ($exe + '.old') -Name IsReadOnly -Value $true
-    }
-    $r = Update-Case 'stale' 'new-good' 0 $stale
-    Yes 'stale: the script finished and deleted itself' $r.Gone
-    $ok = Wait-For { (At (Events $r.Dir) '^new-good settled') -ge 0 } 30000
-    Yes 'stale: the update still went in over a read-only leftover .old' ($ok -and ((HashOf $r.Exe) -eq $hash['new-good']))
-    Yes 'stale: and the .old is gone' (-not (Test-Path -LiteralPath $r.Old))
-
-    # ---- the new exe held open for a few seconds -----------------------------
-    $brief = {
-        param($dir, $exe, $neu)
-        $fs = [IO.File]::Open($neu, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::None)
-        Start-Sleep -Milliseconds 4500
-        $fs.Dispose()
-        return $null
-    }
-    $r = Update-Case 'held-briefly' 'new-good' 0 $null $brief
-    Yes 'held briefly: the script finished and deleted itself' $r.Gone
-    $ok = Wait-For { (At (Events $r.Dir) '^new-good settled') -ge 0 } 30000
-    $ev = Events $r.Dir
-    Yes 'held briefly: the swap kept trying and the new exe went in' ($ok -and ((HashOf $r.Exe) -eq $hash['new-good']))
-    Yes 'held briefly: the .old is gone and the old one never restarted' ((-not (Test-Path -LiteralPath $r.Old)) -and ((At $ev '^old started') -lt 0))
-
-    # ---- the new exe held open for the whole minute of tries -----------------
-    $always = {
-        param($dir, $exe, $neu)
-        return [IO.File]::Open($neu, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::None)
-    }
-    # About forty seconds on a quiet machine. The ceiling is for a busy one.
-    $r = Update-Case 'held' 'new-good' 0 $null $always 240000
-    Yes 'held: the script gave up on the swap and deleted itself' $r.Gone
-    $ok = Wait-For { (At (Events $r.Dir) '^old settled') -ge 0 } 30000
-    $ev = Events $r.Dir
-    Yes 'held: the old exe was put back after every try and is in place' ((HashOf $r.Exe) -eq $hash['old'])
-    Yes 'held: and it was started, so nobody is left with no launcher' ($ok -and (Alive (PidOf $ev '^old started (\d+)')))
-    Yes 'held: the new one is still waiting as .new, nothing kept, nothing bad' (((HashOf $r.Neu) -eq $hash['new-good']) -and (-not (Test-Path -LiteralPath $r.Old)) -and (-not (Test-Path -LiteralPath $r.Bad)))
-    Yes 'held: the new one never ran' ((At $ev '^new-good started') -lt 0)
-
-    # ---- a folder name outside ASCII, with spaces ----------------------------
-    # Built from char codes so this file stays ASCII: an o with an acute, and a
-    # Cyrillic letter, which no Western OEM code page has.
-    $odd = 'Th' + [char]0x00F3 + 'rnswood ' + [char]0x0416 + ' test'
-    $r = Update-Case ($odd + ' good') 'new-good'
-    Yes 'outside ASCII, good: the script finished and deleted itself' $r.Gone
-    $ok = Wait-For { (At (Events $r.Dir) '^new-good settled') -ge 0 } 30000
-    Yes 'outside ASCII, good: the new exe went in and cleared the .old' ($ok -and ((HashOf $r.Exe) -eq $hash['new-good']) -and (-not (Test-Path -LiteralPath $r.Old)))
-    $r = Update-Case ($odd + ' broken') 'new-broken'
-    Yes 'outside ASCII, broken: the script finished and deleted itself' $r.Gone
-    $ok = Wait-For { (At (Events $r.Dir) '^old settled') -ge 0 } 30000
-    $ev = Events $r.Dir
-    Yes 'outside ASCII, broken: the old exe is back and running' ($ok -and ((HashOf $r.Exe) -eq $hash['old']) -and (Alive (PidOf $ev '^old started (\d+)')))
-    Yes 'outside ASCII, broken: no .old and no .bad left' ((-not (Test-Path -LiteralPath $r.Old)) -and (-not (Test-Path -LiteralPath $r.Bad)))
+Write-Host ''
+foreach ($l in $out) {
+    if ($l -match '^PASS  ') { $script:pass++; Write-Host $l }
+    elseif ($l -match '^FAIL  ') { $script:fail++; Write-Host $l }
+    elseif ($l -match '^driver: ') { }
+    else { Write-Host $l }
 }
-finally {
-    Stop-Stubs
-    for ($i = 0; $i -lt 10 -and (Test-Path -LiteralPath $root); $i++) {
-        try { Remove-Item -LiteralPath $root -Recurse -Force } catch { Start-Sleep -Milliseconds 500 }
-    }
-}
+Yes ('the driver ran to the end and reported (exit ' + $code + ')') (@($out | Where-Object { $_ -match '^driver: ' }).Count -eq 1)
 
-Finish
+try { Remove-Item -LiteralPath $T -Recurse -Force } catch { Write-Host "      (scratch left at $T)" }
+Done

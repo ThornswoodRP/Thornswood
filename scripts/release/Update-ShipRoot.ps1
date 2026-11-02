@@ -106,24 +106,25 @@ $game = Join-Path $Root 'Game'
 # ---- 1. the tool, from this checkout's OwnGame -------------------------------
 Head ('The ship root, ' + $Root)
 if (-not $Tool) {
-    . (Join-Path $Here 'Find-MSBuild.ps1') -Load
-    $found = Find-ThornswoodMSBuild
-    if (-not $found.MSBuild -or -not $found.RefAssemblies) {
-        Die ('MSBuild and the .NET Framework 4.8.1 reference assemblies build the ship root tool, as they build the launcher, and this machine lacks ' +
-             $(if (-not $found.MSBuild) { 'MSBuild' } else { 'the reference assemblies' }) + '. docs/guide/set-up-a-machine.md "Setting up a machine" has the install line. The ship root was not touched.')
-    }
+    # The .NET 10 SDK builds it, as it builds the launcher (#4823,
+    # Build-Launcher.ps1): the tool is the launcher's own OwnGame and what it
+    # calls, at the launcher's framework.
+    $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
+    if (-not $dotnet) { Die 'dotnet was not found on this machine. The ship root tool builds with the .NET 10 SDK, as the launcher does; docs/guide/set-up-a-machine.md "Setting up a machine" has the install line. The ship root was not touched.' }
+    $sdks = @(& $dotnet.Source --list-sdks 2>$null | Where-Object { $_ -match '^10\.' })
+    if ($sdks.Count -eq 0) { Die 'This machine has dotnet but no .NET 10 SDK (dotnet --list-sdks lists none starting 10.). The ship root tool targets .NET 10, as the launcher does; install the SDK and run this again. The ship root was not touched.' }
     $proj = Join-Path $Here 'ShipRoot\ShipRoot.csproj'
     if (-not (Test-Path -LiteralPath $proj)) { Die "$proj is not there. It is in the repository, so the path is wrong. The ship root was not touched." }
     $out = & (Join-Path $Here 'Get-ScratchDir.ps1') ('Thornswood-shiproot-' + (Split-Path -Leaf $Root))
     New-Item -ItemType Directory -Force -Path $out | Out-Null
     $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $built = & $found.MSBuild (Resolve-Path -LiteralPath $proj).Path -nologo -v:quiet -nr:false -p:UseSharedCompilation=false -p:Configuration=Release ('-p:OutDir=' + $out.TrimEnd('\') + '\') 2>&1 | Out-String
+    $built = & $dotnet.Source build (Resolve-Path -LiteralPath $proj).Path -c Release -o $out --nologo -v quiet --disable-build-servers 2>&1 | Out-String
     $rc = $LASTEXITCODE
     $ErrorActionPreference = $old
     $Tool = Join-Path $out 'Thornswood-ShipRoot.exe'
     if ($rc -ne 0 -or -not (Test-Path -LiteralPath $Tool)) {
         Write-Host $built.TrimEnd()
-        Die ("The ship root tool did not build (MSBuild exit $rc); the errors are above. The ship root was not touched.")
+        Die ("The ship root tool did not build (dotnet build exit $rc); the errors are above. The ship root was not touched.")
     }
     Say ('  Thornswood-ShipRoot.exe built from this checkout''s launcher\app') 'DarkGray'
 }

@@ -3,14 +3,16 @@
 
       node .\site\tests\test-file-range.js
 
-  The installer's payload is served from /file/ on the site, and Bootstrap.cs
-  resumes a half finished download by asking for the rest with a Range header
-  and appending whatever a 206 brings. From the To Do List: "a Range request
-  was confirmed live to return 200 with the full length and no
-  Accept-Ranges", which is why a dropped connection started the whole download
-  again while the Join page says it carries on.
+  The site's downloads are served from /file/, and a client resumes a half
+  finished download by asking for the rest with a Range header and appending
+  whatever a 206 brings. The old installer's payload was served that way
+  (Bootstrap.cs, gone with it in #4824), and a browser resumes any download
+  the same way. From the To Do List: "a Range request was confirmed live to
+  return 200 with the full length and no Accept-Ranges", which is why a
+  dropped connection started the whole download again while the Join page
+  says it carries on.
 
-  THE START BYTE IS THE WHOLE THING. Bootstrap appends a 206 onto the partial
+  THE START BYTE IS THE WHOLE THING. A client appends a 206 onto the partial
   file without looking at it. A reply that starts one byte early or late is a
   corrupt zip that nothing notices until it will not open, so the resume case
   below puts the two halves back together and compares every byte.
@@ -87,7 +89,11 @@ eval(src.split('\n').filter((l) => /^const (publicAssetVersions|ASSET_NAME|ASSET
 // A const in an eval stays in the eval, so jsonFile is taken as its arrow.
 const JSON_AT = src.indexOf('const jsonFile = (p, fallback) => {');
 const jsonFile = eval('(' + src.slice(src.indexOf('(', JSON_AT), block(JSON_AT)) + ')');
-eval(grab('function payloadZip(') + '\n' + grab('function downloadServed('));
+eval(grab('function oldInstaller(') + '\n' + grab('function downloadServed('));
+// The installer's names answer from their GitHub Release before the folder is
+// looked at (#4824, test-release-copies.js); none is published here.
+const SETUP_KINDS = { main: { name: 'Thornswood-Setup.exe' }, dev: { name: 'Thornswood-Dev-Setup.exe' } };
+function newestSetup() { return null; }
 
 const rangeSrc = grab('function rangeReply(');
 yes('server.js has one range function, rangeReply()', !!rangeSrc);
@@ -104,14 +110,14 @@ yes('and so does the static route, so the two cannot drift apart again', /rangeR
 const fileRoute = eval('(function (p, req, res, head) {\n' + fileSrc + '\n})');
 const staticRoute = eval('(function (p, req, res, head, url) {\n' + staticSrc + '\n})');
 
-// A payload whose every byte depends on where it sits, so an offset that is
+// A file whose every byte depends on where it sits, so an offset that is
 // out by one shows as a mismatch rather than as a run of identical bytes.
 const SIZE = 300007;
 const whole = Buffer.alloc(SIZE);
 for (let i = 0; i < SIZE; i++) whole[i] = (i * 7 + (i >> 8) + (i >> 16)) & 255;
-const NAME = 'Thornswood-Setup-20260924-0100.zip';
+const NAME = 'Guide-20260924-0100.zip';
 fs.writeFileSync(path.join(FILES, NAME), whole);
-fs.writeFileSync(path.join(FILES, 'files.json'), JSON.stringify({ [NAME]: { hidden: true } }));
+fs.writeFileSync(path.join(FILES, 'files.json'), JSON.stringify({ [NAME]: { label: 'a large download' } }));
 fs.writeFileSync(path.join(PUBLIC, 'clip.mp4'), whole.subarray(0, 5000));
 
 // The two lines of handle() that come before every route: HEAD is routed as
@@ -176,14 +182,14 @@ async function main() {
   yes('and still an attachment', /^attachment; filename="/.test(first.h['content-disposition'] || ''));
   yes('and still says Accept-Ranges', first.h['accept-ranges'] === 'bytes');
 
-  // ---- Bootstrap's own case: AddRange(have) sends bytes=have- --------------
+  // ---- a resume: the client sends bytes=have- ------------------------------
   const have = 123457;
   const rest = await ask('GET', FILE, { Range: 'bytes=' + have + '-' });
-  yes('resuming from ' + have + ' is 206, which is what Bootstrap checks for', rest.code === 206);
+  yes('resuming from ' + have + ' is 206, which is what a client checks for', rest.code === 206);
   yes('Content-Range starts at exactly the byte asked for',
       rest.h['content-range'] === 'bytes ' + have + '-' + (SIZE - 1) + '/' + SIZE);
   yes('Content-Length is what is left', rest.h['content-length'] === String(SIZE - have));
-  yes('the partial file plus the reply is the whole payload, every byte',
+  yes('the partial file plus the reply is the whole file, every byte',
       Buffer.concat([whole.subarray(0, have), rest.body]).equals(whole));
 
   const last = await ask('GET', FILE, { Range: 'bytes=' + (SIZE - 1) + '-' });
@@ -226,7 +232,7 @@ async function main() {
   yes('If-Range naming another build gets the whole new file, 200',
       stale.code === 200 && stale.body.equals(whole));
 
-  const none = await ask('GET', '/file/Thornswood-Setup-19990101-0000.zip', { Range: 'bytes=0-9' });
+  const none = await ask('GET', '/file/Guide-19990101-0000.zip', { Range: 'bytes=0-9' });
   yes('a file that is not there is still 404', none.code === 404);
 
   // ---- the static route, which now shares the function ---------------------

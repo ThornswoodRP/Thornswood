@@ -11,9 +11,9 @@
   methods to C# 5 for them; under pwsh 7 it is .NET's Roslyn against .NET 8's
   libraries, so a harness passed code the build refuses on .NET Framework
   4.8.1. Each harness had copied the call from the one before it. Now they
-  call Add-LauncherType (tests\Launcher-Csc.ps1), which compiles with
-  $LauncherCsc at the project's LangVersion against the 4.8.1 reference
-  assemblies. This fails on:
+  call Add-LauncherType (tests\Launcher-Csc.ps1), which builds with the .NET
+  10 SDK the way launcher\app\Thornswood.csproj does: its target framework,
+  its LangVersion and its packages (#4823). This fails on:
     1. a harness in tests\ that names launcher\app or installer\setup and
        hands Add-Type C# that is not a plain string written in the harness
        itself (a variable, a sum, a string with $ in it, or -Path): that is
@@ -23,11 +23,18 @@
   A stand-in the harness writes out in full (a local server, a probe of a
   Windows call) is a plain string and is not a hit. The same reader is run
   over planted harnesses, so one that finds nothing anywhere cannot pass by
-  accident. Then Add-LauncherType itself, on Windows: it takes C# past 5, it
-  compiles against the .NET Framework 4.8.1 and not .NET, and a refusal comes
-  back as a throw with the compiler's words.
+  accident. Then Add-LauncherType itself, on any machine with the SDK: it
+  takes C# past 5, it compiles against the project's packages (Avalonia), two
+  different builds load side by side, the same code is built once, a program
+  built with -Exe runs and gives back its exit code, and a refusal comes back
+  as a throw with the compiler's words. Build-LauncherCode -Launcher builds
+  the whole launcher beside a driver whose Main -Main names, with the
+  project's resources and a stand-in in place of one by -Resource, and a
+  changed stand-in is built again; -Property reaches the project; and
+  Add-LauncherAssembly gives back the launcher itself, built from its project.
 
-  Read only, apart from the planted folder under TEMP, which it removes.
+  Read only, apart from the planted folder and the stand-ins under TEMP,
+  which it removes, and the builds under out\harness, which git ignores.
 #>
 [CmdletBinding()]
 param()
@@ -136,15 +143,20 @@ try {
 }
 
 # ---- 3. Add-LauncherType itself ----------------------------------------------
+# A harness dot-sources the helper, so what the helper sets lands among the
+# harness's own variables: a loop variable in it once replaced test-963's
+# $root. Names a harness uses are set first, and must come through as they were.
+$root = 'harness root'; $p = 'harness p'; $v = 'harness v'; $rel = 'harness rel'; $name = 'harness name'; $value = 'harness value'
+$before = @(Get-Variable -Scope Script | ForEach-Object { $_.Name })
 . (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')
+$added = @(Get-Variable -Scope Script | ForEach-Object { $_.Name } | Where-Object { $before -notcontains $_ -and $_ -ne 'before' })
+Yes ('dot-sourcing the helper leaves the harness''s variables as they were') (
+    $root -eq 'harness root' -and $p -eq 'harness p' -and $v -eq 'harness v' -and $rel -eq 'harness rel' -and $name -eq 'harness name' -and $value -eq 'harness value')
+$stray = @($added | Where-Object { $_ -cnotmatch '^(Launcher|launcher)' -and $_ -ne 'OnWindows' })
+Yes ('and every name it adds starts with Launcher or launcher (' + (@($stray) -join ', ') + ')') ($stray.Count -eq 0)
 $said = ''
-if (-not $OnWindows) {
-    try { $null = Add-LauncherType -Source 'class A { }' } catch { $said = $_.Exception.Message }
-    Yes 'off Windows, Add-LauncherType throws, saying the build''s compiler is only on Windows' ($said -match 'only Windows has')
-    Write-Host 'SKIP  Add-LauncherType compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'
-}
-elseif (-not (Test-Path -LiteralPath $LauncherCsc)) {
-    Yes ('the compiler the build runs is on this machine (' + $LauncherCsc + ')') $false
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) {
+    Yes ('the .NET SDK the build runs is on this machine (' + $LauncherDotnet + ')') $false
 }
 else {
     $ns = 'Ts2821' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
@@ -156,14 +168,73 @@ else {
     if ($asm) {
         Yes 'and gives back the assembly, loaded' ($asm.GetType($ns + '.A')::Say('x') -eq 'said x')
     }
-    # String.Contains(char) is .NET's, not the .NET Framework 4.8.1's: Add-Type
-    # under pwsh takes it, the build does not.
-    $said = ''
-    try { $null = Add-LauncherType -Source ('namespace ' + $ns + 'B { static class B { static bool M(string s) { return s.Contains(''x''); } } }') } catch { $said = $_.Exception.Message }
-    Yes 'it compiles against the .NET Framework 4.8.1, so a call only .NET has is refused' ($said -match 'CS1503|CS1929|cannot convert')
+    # Avalonia is one of the project's packages, not part of .NET: Add-Type
+    # cannot compile this, the build can.
+    $asmB = $null
+    try { $asmB = Add-LauncherType -Source ('namespace ' + $ns + 'B { public static class B { public static bool M() { return Avalonia.Threading.Dispatcher.UIThread.CheckAccess(); } } }') }
+    catch { Write-Host ('      ' + $_.Exception.Message) }
+    Yes 'it compiles against the project''s packages, Avalonia among them' ($null -ne $asmB)
+    if ($asmB -and $asm) {
+        Yes 'two different builds load side by side, each its own assembly' ($asmB.GetName().Name -ne $asm.GetName().Name -and $asmB.GetType($ns + 'B.B')::M())
+    }
+    $code = 'namespace ' + $ns + 'C { public static class P { public static int Main(string[] a) { System.Console.WriteLine("got " + string.Join(",", a)); return 7; } } }'
+    $exe = $null
+    try { $exe = Build-LauncherCode -Exe -Source $code } catch { Write-Host ('      ' + $_.Exception.Message) }
+    Yes 'Build-LauncherCode -Exe builds a program' ($null -ne $exe)
+    if ($exe) {
+        $out = @(Invoke-LauncherExe $exe one two)
+        Yes 'Invoke-LauncherExe runs it with its arguments and gives back its exit code' (($out -join '') -eq 'got one,two' -and $LASTEXITCODE -eq 7)
+        $at = Get-Date
+        $again = Build-LauncherCode -Exe -Source $code
+        Yes 'the same code is built once, and the next ask finds it' ($again -eq $exe -and ((Get-Date) - $at).TotalSeconds -lt 2)
+    }
     $said = ''
     try { $null = Add-LauncherType -Source 'class C { void M() { int x = "s"; } }' } catch { $said = $_.Exception.Message }
     Yes 'a refusal throws with what the compiler said' ($said -match 'CS0029')
+
+    # The whole launcher and a driver of its own, with one resource stood in
+    # for and one added. The same names and contents each run, so the next run
+    # finds these builds made.
+    $stand = Join-Path ([IO.Path]::GetTempPath()) ('ts2821-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+    $null = New-Item -ItemType Directory -Path $stand
+    try {
+        $standIn = Join-Path $stand 'skyrim-files.json'
+        $added = Join-Path $stand 'added.txt'
+        [IO.File]::WriteAllText($standIn, '{"stand":"one"}')
+        [IO.File]::WriteAllText($added, 'added')
+        $driver = 'namespace Ts2821D { public static class Run { static string R(string n) { var s = typeof(Thornswood.Shell).Assembly.GetManifestResourceStream(n); if (s == null) return "none"; using var r = new System.IO.StreamReader(s); return r.ReadToEnd(); } public static int Main(string[] a) { System.Console.WriteLine(R("skyrim-files.json") + "|" + R("added.txt") + "|" + (R("Thornswood.ini") != "none") + "|" + typeof(Thornswood.MainWindow).Name); return 0; } } }'
+        $one = $null
+        try { $one = Build-LauncherCode -Launcher -Source $driver -Exe -Main 'Ts2821D.Run' -Resource @{ 'skyrim-files.json' = $standIn; 'added.txt' = $added } }
+        catch { Write-Host ('      ' + $_.Exception.Message) }
+        Yes 'Build-LauncherCode -Launcher -Main builds the whole launcher beside a driver of its own' ($null -ne $one)
+        if ($one) {
+            $out = (@(Invoke-LauncherExe $one) -join '')
+            Yes ('the driver''s Main is the one that runs, and the project''s resources are in it, MainWindow''s XAML with them (' + $out + ')') ($LASTEXITCODE -eq 0 -and $out -like '*|True|MainWindow')
+            Yes '-Resource puts the stand-in in place of the project''s resource of that name, and adds one the project has not' ($out -like '{"stand":"one"}|added|*')
+            [IO.File]::WriteAllText($standIn, '{"stand":"two"}')
+            $two = Build-LauncherCode -Launcher -Source $driver -Exe -Main 'Ts2821D.Run' -Resource @{ 'skyrim-files.json' = $standIn; 'added.txt' = $added }
+            Yes 'a changed stand-in is built again' ($two -ne $one -and ((@(Invoke-LauncherExe $two) -join '') -like '{"stand":"two"}|*'))
+        }
+    } finally {
+        Remove-Item -LiteralPath $stand -Recurse -Force
+    }
+
+    # A program that carries its own AssemblyFileVersion: the SDK writes one
+    # too, unless the project says not to.
+    $versioned = '[assembly: System.Reflection.AssemblyFileVersion("2.8.2.1")] namespace Ts2821V { public static class P { public static int Main() { System.Console.WriteLine(System.Diagnostics.FileVersionInfo.GetVersionInfo(typeof(P).Assembly.Location).FileVersion); return 0; } } }'
+    $said = ''
+    try { $null = Build-LauncherCode -Exe -Source $versioned } catch { $said = $_.Exception.Message }
+    $exeV = $null
+    try { $exeV = Build-LauncherCode -Exe -Source $versioned -Property @{ GenerateAssemblyInfo = 'false' } } catch { Write-Host ('      ' + $_.Exception.Message) }
+    Yes '-Property reaches the project: GenerateAssemblyInfo false lets a program carry its own version, which is refused without it' ($said -match 'CS0579' -and $exeV -and ((@(Invoke-LauncherExe $exeV) -join '') -eq '2.8.2.1'))
+
+    $whole = $null
+    try { $whole = Add-LauncherAssembly } catch { Write-Host ('      ' + $_.Exception.Message) }
+    Yes 'Add-LauncherAssembly builds launcher\app\Thornswood.csproj and gives back Thornswood, loaded' ($whole -and $whole.GetName().Name -eq 'Thornswood' -and $whole.GetType('Thornswood.Updater') -and $whole.GetType('Thornswood.Paths'))
+    if ($whole) {
+        $at = Get-Date
+        Yes 'the launcher is built once for each state of its files, and the next ask finds it' ((Build-LauncherProject) -eq $whole.Location -and ((Get-Date) - $at).TotalSeconds -lt 2)
+    }
 }
 
 Write-Host ''

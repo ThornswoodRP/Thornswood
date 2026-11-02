@@ -2,12 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
-using Ellipse = System.Windows.Shapes.Ellipse;
-using Rectangle = System.Windows.Shapes.Rectangle;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Styling;
+using Avalonia.Threading;
+using Ellipse = Avalonia.Controls.Shapes.Ellipse;
 
 namespace Thornswood
 {
@@ -32,11 +33,11 @@ namespace Thornswood
 
         static void BindPages()
         {
-            txtDiagNote = F<TextBlock>("TxtDiagNote"); txtDiagHolds = F<TextBlock>("TxtDiagHolds"); txtThemeNote = F<TextBlock>("TxtThemeNote");
-            diagReadings = F<StackPanel>("DiagReadings");
-            diagCollection = F<StackPanel>("DiagCollection");
-            diagAddons = F<StackPanel>("DiagAddons");
-            btnDiagBundle = F<Button>("BtnDiagBundle"); btnDiagOpen = F<Button>("BtnDiagOpen");
+            txtDiagNote = win.TxtDiagNote; txtDiagHolds = win.TxtDiagHolds; txtThemeNote = win.TxtThemeNote;
+            diagReadings = win.DiagReadings;
+            diagCollection = win.DiagCollection;
+            diagAddons = win.DiagAddons;
+            btnDiagBundle = win.BtnDiagBundle; btnDiagOpen = win.BtnDiagOpen;
         }
 
         static void WirePages()
@@ -148,18 +149,18 @@ namespace Thornswood
                 try { path = Diag.Report(cfg, Updater.Version); }
                 catch (Exception ex) { err = ex.Message; }
 
-                win.Dispatcher.BeginInvoke(new Action(delegate
+                Dispatcher.UIThread.Post(delegate
                 {
                     btnDiagBundle.IsEnabled = true;
                     if (err != null) { Log("Could not build the report: " + err); return; }
                     BuildDiag();
                     Log("Report written to " + path);
                     Reveal(path);
-                }));
+                });
             });
         }
 
-        static UIElement ReadingRow(Reading r)
+        static Control ReadingRow(Reading r)
         {
             var g = new Grid();
             var c0 = new ColumnDefinition(); c0.Width = GridLength.Auto;
@@ -175,7 +176,7 @@ namespace Thornswood
 
             var sp = new StackPanel();
             var t = new TextBlock();
-            t.Text = r.Title; t.FontSize = 13.5; t.FontWeight = FontWeights.SemiBold;
+            t.Text = r.Title; t.FontSize = 13.5; t.FontWeight = FontWeight.SemiBold;
             t.Foreground = Res("Ink"); t.TextWrapping = TextWrapping.Wrap;
             sp.Children.Add(t);
 
@@ -188,10 +189,22 @@ namespace Thornswood
             Grid.SetColumn(sp, 1); g.Children.Add(sp);
 
             var card = new Border();
-            card.Style = (Style)win.Resources["Slab"];
+            card.Theme = Look("Slab");
             card.Margin = new Thickness(0, 0, 0, 8);
             card.Child = g;
             return card;
+        }
+
+        /// <summary>
+        /// One of the window's looks by its key in MainWindow.axaml (Slab,
+        /// Ghost, Solid, Eyebrow, Body and the rest), for a control built
+        /// here in code. They are control themes, the Avalonia form of the
+        /// keyed styles the WPF window had, so a control takes one the way it
+        /// took a Style before.
+        /// </summary>
+        static ControlTheme Look(string key)
+        {
+            return (ControlTheme)win.FindResource(key);
         }
     }
 }
