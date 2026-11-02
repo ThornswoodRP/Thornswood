@@ -283,8 +283,9 @@ const C = proc.box.__thornswoodCharacter;
 C.writeState(ME, C.stateOf(ME));
 proc.run(20000);
 
+// The trade window is sent at each arrival as the server holds it (#5464).
 const VIEWS = ['thornswoodCharacter', 'thornswoodNeeds', 'thornswoodNear', 'thornswoodPartyAt',
-               'thornswoodSocialView', 'thornswoodSky', 'thornswoodRecipeCounts'];
+               'thornswoodSocialView', 'thornswoodSky', 'thornswoodRecipeCounts', 'thornswoodTrade'];
 // Records whose at is a stamp that a login moves on purpose: the alchemy
 // lesson goes out under a new stamp so the game is taught it again at each
 // arrival (#3480), and the pack's spoil clock looks at the pack at a login
