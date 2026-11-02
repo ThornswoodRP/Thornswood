@@ -69,9 +69,12 @@
       ],
       "secrets": [
         "RUNNER_TOKEN",
-        "STAFF_WEBHOOK"
+        "STAFF_WEBHOOK",
+        "WATCH_APP_KEY"
       ],
-      "variables": []
+      "variables": [
+        "WATCH_APP_CLIENT_ID"
+      ]
     }
   }
 }
