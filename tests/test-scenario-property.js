@@ -84,7 +84,7 @@ const CORVIN = w.person(0xff000802, { profileId: 1002, name: 'Corvin', prof: 'ta
   w.row(a).thornswoodNeeds = { food: 90, drink: 90, rest: 90, temp: 50, at: w.now() };
 });
 
-yes('P0 the whole gamemode loads over the stand-in' + (w.loaded() ? '' : ''), w.boot() || !console.log(w.loadError()));
+yes('P0 the whole gamemode loads over the stand-in', w.boot());
 if (!w.loaded()) { t.done(w); }
 [BRENNA, ALDIS, CORVIN].forEach(w.arrive);
 w.run(30000);

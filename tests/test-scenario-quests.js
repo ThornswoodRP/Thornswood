@@ -69,7 +69,7 @@ const BRENNA = w.person(0xff000c00, { profileId: 1000, name: 'Brenna', prof: 'sm
 const CORVIN = w.person(0xff000c01, { profileId: 1002, name: 'Corvin', prof: 'tailor', town: 'whiterun', cell: SMITH_AT.cell,
   pos: [SMITH_AT.beside[0], SMITH_AT.beside[1] + 40, SMITH_AT.beside[2]] });
 
-yes('P0 the whole gamemode loads over the stand-in', w.boot() || !console.log(w.loadError()));
+yes('P0 the whole gamemode loads over the stand-in', w.boot());
 if (!w.loaded()) { t.done(w); }
 [BRENNA, CORVIN].forEach(w.arrive);
 w.run(30000);

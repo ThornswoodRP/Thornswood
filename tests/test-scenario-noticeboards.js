@@ -79,7 +79,7 @@ const BRENNA = w.person(0xff000800, { profileId: 1000, name: 'Brenna', town: 'wi
 const ALDIS = w.person(0xff000801, { profileId: 1001, name: 'Aldis', town: 'windhelm', cell: CITY, pos: by(-100, 50) });
 const HROKI = w.person(0xff000802, { profileId: 2000, name: 'Hroki', town: 'windhelm', cell: CITY, pos: by(2050, 0) });
 
-yes('P0 the whole gamemode loads over the stand-in', w.boot() || !console.log(w.loadError()));
+yes('P0 the whole gamemode loads over the stand-in', w.boot());
 if (!w.loaded()) { t.done(w); }
 [BRENNA, ALDIS, HROKI].forEach(w.arrive);
 w.run(30000);

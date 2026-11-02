@@ -44019,7 +44019,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
   */
   var journalFullSaid = {};
   var FULL_SAY_MS = 10000;
-  function journalCommand(soc, actorId, profileId, parts) {
+  function journalCommand(soc, actorId, profileId, parts, text) {
     var verb = String(parts[1] || '').toLowerCase();
     var s = soc.stateOf(actorId);
 
@@ -44049,10 +44049,22 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     }
 
     if (verb === 'page') {
-      var line = parts.slice(2).join(' ');
+      /*
+        THE SEPARATOR IS " :: " (#5429), what the J panel puts between the
+        title and the page (thornswood-journal.js). The space after "::" is
+        the separator's, not the page's: kept, it was saved at the front of
+        the page, the panel opened the page with it, and every save added
+        one more, until a page the panel let through at 4000 reached here as
+        4001 and was refused. A line that ends at "::" has had that space
+        trimmed off with the rest of the line's end, and is an empty page.
+        The line as it came, not parts, which split on every run of spaces
+        and so closed up two spaces or a tab in the page to one space.
+      */
+      var line = String(text || '').trim().replace(/^\S+\s+\S+\s+/, '');
       var cut = line.indexOf('::');
       var head = (cut === -1 ? line : line.slice(0, cut)).trim().split(/\s+/);
       var body = cut === -1 ? '' : line.slice(cut + 2);
+      if (body.charAt(0) === ' ') { body = body.slice(1); }
       var jid = head.shift() || '';
       var pid = head.shift() || '-';
       var title = head.join(' ');
@@ -44466,8 +44478,17 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
              follower list. Somebody who said yes is a friend of the person
              who asked and the other way round, and unfriending is one sided
              on purpose: you can drop somebody without telling them. */
-          soc.addFriend(actorId, themActor);
-          soc.addFriend(themActor, actorId);
+          /* Both or neither (#5428): befriend checks both lists before it
+             writes either, so a full list refuses the accept rather than
+             leaving the name on one side only. */
+          var befriended = soc.befriend(actorId, themActor);
+          if (befriended) {
+            toProfile(profileId, befriended.mine);
+            say(themActor, befriended.theirs);
+            soc.push(actorId);
+            soc.push(themActor);
+            return true;
+          }
           toProfile(profileId, 'You and ' + o.fromName + ' are friends.');
           say(themActor, soc.nameOfPerson(actorId) + ' accepted. You are friends.');
         } else if (o.kind === 'party') {
@@ -44503,7 +44524,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       }
 
       if (word === '/journal') {
-        var jr = journalCommand(soc, actorId, profileId, parts);
+        var jr = journalCommand(soc, actorId, profileId, parts, String(cmd.text || ''));
         if (jr) { toProfile(profileId, jr); }
         soc.push(actorId);
         return true;
@@ -56785,12 +56806,35 @@ module.exports = {
     var s = stateOf(actorId);
     var pid = profileOf(otherActor);
     if (!pid) { return 'That person is not here.'; }
-    if (Object.keys(s.friends).length >= SOCIAL.mostFriends) {
+    if (!s.friends[pid] && Object.keys(s.friends).length >= SOCIAL.mostFriends) {
       return 'Your friends list is full.';
     }
     s.friends[pid] = { name: nameOfPerson(otherActor), since: Date.now() };
     write(actorId, s);
     return '';
+  }
+
+  /*
+    BOTH SIDES OR NEITHER (#5428). A friendship is both lists, so the cap of
+    120 is asked of both before either is written: the 121st accept is
+    refused, and nobody is left on a list with one name in it. Answers null
+    when both are written, or the two lines to say when it is refused.
+  */
+  function befriend(actorId, otherActor) {
+    var mine = stateOf(actorId), theirs = stateOf(otherActor);
+    var myPid = profileOf(actorId), theirPid = profileOf(otherActor);
+    if (!myPid || !theirPid) { return { mine: 'That person is not here.', theirs: 'That person is not here.' }; }
+    var mineFull = !mine.friends[theirPid] && Object.keys(mine.friends).length >= SOCIAL.mostFriends;
+    var theirsFull = !theirs.friends[myPid] && Object.keys(theirs.friends).length >= SOCIAL.mostFriends;
+    if (mineFull) {
+      return { mine: 'Your friends list is full.', theirs: nameOfPerson(actorId) + '\'s friends list is full.' };
+    }
+    if (theirsFull) {
+      return { mine: nameOfPerson(otherActor) + '\'s friends list is full.', theirs: 'Your friends list is full.' };
+    }
+    addFriend(actorId, otherActor);
+    addFriend(otherActor, actorId);
+    return null;
   }
 
   function dropFriend(actorId, pid) {
@@ -57531,7 +57575,7 @@ module.exports = {
     findPerson: findPerson, nameOfPerson: nameOfPerson, profileOf: profileOf,
     actorForProfile: actorForProfile,
     offer: offer, standingOffer: standingOffer, offers: offers,
-    addFriend: addFriend, dropFriend: dropFriend, isFriend: isFriend,
+    addFriend: addFriend, befriend: befriend, dropFriend: dropFriend, isFriend: isFriend,
     toggleMute: toggleMute, toggleText: toggleText, toggleName: toggleName,
     toggleNamesAll: toggleNamesAll, resolveKnown: resolveKnown, friendNow: friendNow,
     partyOf: partyOf, joinParty: joinParty, leaveParty: leaveParty,

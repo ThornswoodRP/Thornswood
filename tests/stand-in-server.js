@@ -163,6 +163,13 @@ function world(opts) {
     fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, typeof files[f] === 'string' ? files[f] : JSON.stringify(files[f]));
   }
+  /*
+    The gamemode's tables (#5191, #5427): the server reads them from
+    <root>\gamemode-tables as it loads, the folder Swap.ps1 moves in beside
+    gamemode.js, so the stand-in's root has the same folder, copied from the
+    one beside the gamemode it runs.
+  */
+  fs.cpSync(path.join(path.dirname(SRC), 'gamemode-tables'), path.join(dir, 'gamemode-tables'), { recursive: true });
   process.chdir(dir);
 
   const SLOTS = slots(opts.loadOrder || readLoadOrder());
@@ -1205,7 +1212,9 @@ function world(opts) {
     MpActor::SendAndSetDeathState: dying and coming back each make the actor
     a new runtime object (InvalidateRuntimeIdentity), and a server-controlled
     one comes back one life generation on (_skympNpcLifeGeneration). A
-    delayMs of null leaves the body lying (a placed NPC's respawn is hours).
+    delayMs of null leaves the body lying (a placed NPC's respawn is hours);
+    left out, the body lies its spawnDelay (MpChangeForm, 25 seconds unless
+    something wrote it), as MpActor::RespawnWithDelay reads it.
   */
   w.die = function (actorId, killerId, delayMs) {
     actorId = actorId >>> 0;
@@ -1214,17 +1223,29 @@ function world(opts) {
     runtimeIds.delete(actorId);
     fire('onDeath', [actorId, killerId || 0]);
     if (delayMs === null) { return; }
-    w.run(delayMs === undefined ? 5000 : delayMs);
+    const lies = Number(store.get(actorId).spawnDelay);
+    w.run(delayMs === undefined ? (lies >= 0 ? lies : 25) * 1000 : delayMs);
     w.respawn(actorId);
   };
+  /*
+    MpActor::Respawn fires RespawnEvent; false from a listener blocks it and
+    the actor stays dead (GameModeEvent::Fire, OnFireBlocked). Otherwise
+    OnFireSuccess stands it up at GetSpawnPoint(): a character's spawnPoint,
+    or a placed reference's own place in the plugin, where it already stands.
+  */
   w.respawn = function (actorId) {
     actorId = actorId >>> 0;
     const row = store.get(actorId);
     if (!row.isDead) { return; }
+    if (fire('onRespawn', [actorId]) === false) { return; }
     if (row.serverControlled) { row._skympNpcLifeGeneration = (Number(row._skympNpcLifeGeneration) || 0) + 1; }
     row.isDead = false;
     runtimeIds.delete(actorId);
-    fire('onRespawn', [actorId]);
+    const sp = row.spawnPoint;
+    if ((row.profileId || actorId >= 0xff000000) && sp && sp.cellOrWorldDesc && Array.isArray(sp.pos)) {
+      row.worldOrCellDesc = sp.cellOrWorldDesc;
+      row.pos = sp.pos.slice();
+    }
   };
 
   // ------------------------------------------------------------ the end --
@@ -1253,9 +1274,13 @@ function world(opts) {
 let catalogueCache = null;
 function npcCatalogue() {
   if (catalogueCache) { return catalogueCache; }
-  const text = fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8');
-  const at = text.indexOf('const NPC_POPULATION_DATA = ');
-  const population = JSON.parse(text.slice(at + 'const NPC_POPULATION_DATA = '.length, text.indexOf('\n', at)).replace(/;\s*$/, ''));
+  const gm = fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8');
+  const at = gm.indexOf('const NPC_POPULATION_DATA = ');
+  const population = JSON.parse(gm.slice(at + 'const NPC_POPULATION_DATA = '.length, gm.indexOf('\n', at)).replace(/;\s*$/, ''));
+  // The item catalogues are tables beside the gamemode since #5191 (#5427).
+  const tables = path.join(REPO_DIR, 'game', 'gamemode-tables');
+  const text = [gm].concat(fs.readdirSync(tables).filter(function (n) { return /\.json$/.test(n); }).sort()
+    .map(function (n) { return fs.readFileSync(path.join(tables, n), 'utf8'); })).join('\n');
   const types = {};
   function objectsAfter(key) {
     const out = [];
@@ -1296,6 +1321,8 @@ function checks() {
     },
     done: function (w) {
       if (w) {
+        // A scenario whose gamemode did not load has checked nothing (#5427).
+        c.yes('Y the gamemode loaded and stayed loaded' + (w.loaded() ? '' : ': ' + String(w.loadError()).split('\n')[0]), w.loaded());
         // Every scenario's last check (#4522): nothing asked the server for a method it does not have.
         const names = Object.keys(w.missing);
         c.yes('Z the gamemode asked the server for no method the engine does not have (' +
