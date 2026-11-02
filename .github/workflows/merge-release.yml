@@ -161,7 +161,9 @@ permissions:
 # has moved past with a workflow change can never be tagged. A newer merge
 # cancels the run of the one before it, and its Release carries every part
 # and the notes of every pull request since the Release before, so nothing
-# a superseded merge changed is left out.
+# a superseded merge changed is left out. A merge this workflow does not run
+# for cancels nothing, so a run that main moved past that way starts a run of
+# main's newest merge itself (Is this still main's newest merge).
 concurrency:
   group: merge-release
   cancel-in-progress: true
@@ -185,6 +187,9 @@ jobs:
       deployments: write
       id-token: write
       attestations: write
+      # To start a run of main's newest merge when main moved on during
+      # this one (Is this still main's newest merge).
+      actions: write
     steps:
       # The whole history: the launcher's number is the time its sources last
       # changed on main (LauncherVersion.ps1), which a shallow clone cannot say.
@@ -639,8 +644,15 @@ jobs:
         with:
           subject-path: ${{ steps.files.outputs.held_subjects }}
 
-      # Main may have moved on while this was built; the newer merge's run
-      # releases this one's changes too (concurrency, above).
+      # Main may have moved on while this was built. A newer merge that this
+      # workflow runs for would have cancelled this run (concurrency, above),
+      # so getting here past main means the merges after it touched none of
+      # the paths above and start no run of their own. Until 2 Nov this step
+      # said a newer run would release the change anyway, and none did: the
+      # site fix #5451 (ed6dfc99) was built, then dropped, because a voice
+      # harness and a docs page merged during its build. So it asks for a
+      # run of main's newest merge now, which carries this one's changes,
+      # and that run is the one released (#5398, Patrick's A).
       - name: Is this still main's newest merge
         id: newest
         if: ${{ steps.changed.outputs.release == 'yes' }}
@@ -651,8 +663,10 @@ jobs:
           $head = gh api "repos/$($env:GITHUB_REPOSITORY)/commits/main" --jq .sha
           if ($LASTEXITCODE -ne 0 -or -not $head) { Write-Host '::error::GitHub did not say what main is'; exit 1 }
           if ([string]$head -eq $env:GITHUB_SHA) { Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'release=yes'; exit 0 }
-          Write-Host "main is $head now, past this merge; that merge's run releases this one's changes with its own"
-          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Main moved on to $head while this was built, so its run releases these changes; nothing was released here."
+          gh workflow run merge-release.yml --repo $env:GITHUB_REPOSITORY --ref main
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::main is $head now, past this merge, and the run that releases it could not be started"; exit 1 }
+          Write-Host "main is $head now, past this merge; a run of main's newest merge was started, and it releases this one's changes"
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Main moved on to $head while this was built, so a run of main's newest merge was started to release these changes; nothing was released here."
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'release=no'
 
       - name: Publish the Release
