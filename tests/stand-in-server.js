@@ -477,7 +477,7 @@ function world(opts) {
       type: 'NPC_', profileId: r.profileId, baseDesc: '7:Skyrim.esm',
       appearance: { name: r.name || 'Somebody', raceId: 0x13746, isFemale: false },
       worldOrCellDesc: r.cell || '3c:Skyrim.esm', pos: r.pos || [0, 0, 0], angle: r.angle || [0, 0, 0],
-      isDead: false, isDisabled: false,
+      isDead: false, isDisabled: false, percentages: { health: 1, magicka: 1, stamina: 1 },
       inventory: r.inventory || { entries: [{ baseId: 0xf, count: 40 }] },
       equipment: { inv: { entries: [] } }
     };
@@ -793,6 +793,12 @@ function world(opts) {
         case 'GetPositionZ': return row.pos[2];
       }
     }
+    // Actor.DamageActorValue (MpActor::DamageActorValue): the value over the
+    // actor's most, off its percentage. Health is modeled; the most is the
+    // row's maxHealth, 100 unless the scenario says (a level 1 character's).
+    if (key === 'method Actor.DamageActorValue' && row) {
+      if (String(args[0]).toLowerCase() === 'health') { w.hurtBy(id, Math.abs(Number(args[1]) || 0), 0); return undefined; }
+    }
     // Actor.GetRace: a person's race from their appearance, anyone else's from their base record's (w.record's race).
     if (key === 'method Actor.GetRace' && row && row.type === 'NPC_') {
       const race = row.appearance && row.appearance.raceId ? w.descOf(row.appearance.raceId) : (records.get(baseOf(row)) || {}).race;
@@ -924,6 +930,15 @@ function world(opts) {
         if (++clientBeats % 2 === 0) { online.forEach(sendActive); }
         continue;
       }
+      // The engine's own timers: a body's respawn (MpActor::RespawnWithDelay).
+      const due = engineTimers.filter(function (e) { return e.at <= end && (!next || e.at <= next.at); })
+        .sort(function (a, b) { return a.at - b.at; })[0];
+      if (due) {
+        clock = Math.max(clock, due.at);
+        engineTimers.splice(engineTimers.indexOf(due), 1);
+        due.fn();
+        continue;
+      }
       // The save storage acknowledges a batch every SAVE_EVERY (WorldState::TickSaveStorage).
       if (saveAt <= end && (!next || saveAt <= next.at)) {
         clock = Math.max(clock, saveAt);
@@ -1015,6 +1030,7 @@ function world(opts) {
   */
   const PASS_EVERY = 60000;
   let passAt = clock + PASS_EVERY;
+  const engineTimers = [];
   const SAVE_EVERY = 100;
   let saveAt = clock + SAVE_EVERY;
   function b64u(b) { return Buffer.from(b).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
@@ -1216,6 +1232,58 @@ function world(opts) {
     left out, the body lies its spawnDelay (MpChangeForm, 25 seconds unless
     something wrote it), as MpActor::RespawnWithDelay reads it.
   */
+  /*
+    A write that takes health to nothing (MpActor::NetSetPercentages,
+    SetPercentage, fork #101): onDying is asked first, and false keeps them
+    alive at dyingHealth; otherwise the death is sent, onDeath is raised with
+    the killer (none for a bleed), and the body lies its spawnDelay before the
+    engine stands it up (RespawnWithDelay).
+  */
+  function maxHealthOf(row) { return Number(row.maxHealth) > 0 ? Number(row.maxHealth) : 100; }
+  w.health = function (actorId) { const r = store.get(actorId >>> 0); return r && r.percentages ? r.percentages.health : undefined; };
+  w.hurtBy = function (actorId, points, killerId) {
+    actorId = actorId >>> 0;
+    const row = store.get(actorId);
+    if (!row || row.isDead) { return; }
+    const p = Object.assign({ health: 1, magicka: 1, stamina: 1 }, row.percentages || {});
+    p.health = Math.max(0, p.health - points / maxHealthOf(row));
+    row.percentages = p;
+    if (p.health > 0) { return; }
+    if (fire('onDying', [actorId, killerId || 0]) === false) {
+      row.percentages = Object.assign({}, p, { health: Number(row.dyingHealth) > 0 ? Number(row.dyingHealth) : 0.1 });
+      return;
+    }
+    row.isDead = true;
+    runtimeIds.delete(actorId);
+    fire('onDeath', [actorId, killerId || 0]);
+    const lies = Number(row.spawnDelay);
+    engineTimers.push({ at: clock + (lies >= 0 ? lies : 25) * 1000, fn: function () { w.respawn(actorId); } });
+  };
+  /*
+    A blow (ActionListener::OnWeaponHit): the server decides a block, sends
+    OnHit to the target (akAggressor, akSource, akProjectile, abPowerAttack,
+    abSneakAttack, abBashAttack, abHitBlocked), then works out the damage and
+    writes health in the same call. opts: { power, sneak, bash, blocked,
+    damage } with damage in health points. A source of 0 is a fist or a claw.
+  */
+  w.hit = function (targetId, aggressorId, source, opts) {
+    opts = opts || {};
+    targetId = targetId >>> 0;
+    fire('onPapyrusEvent:OnHit', [targetId, { type: 'form', desc: w.descOf(aggressorId >>> 0) },
+      source ? { type: 'espm', desc: typeof source === 'string' ? source : w.descOf(source) } : null, null,
+      !!opts.power, !!opts.sneak, !!opts.bash, !!opts.blocked]);
+    if (opts.damage) { w.hurtBy(targetId, opts.damage, aggressorId >>> 0); }
+  };
+  /*
+    The dice: while a scenario holds them at a number, every Math.random in
+    the gamemode comes up that number (a roll it checks, and whatever else
+    rolls in that window); w.dice(null) lets them roll for themselves again.
+  */
+  w.dice = function (value) {
+    proc.box.__standInDice = (value === null || value === undefined) ? null : Number(value);
+    vm.runInContext('if (!Math.__standInRandom) { Math.__standInRandom = Math.random; Math.random = function () {' +
+      ' var d = globalThis.__standInDice; return typeof d === "number" ? d : Math.__standInRandom(); }; }', proc.box);
+  };
   w.die = function (actorId, killerId, delayMs) {
     actorId = actorId >>> 0;
     fire('onDying', [actorId, killerId || 0]);
@@ -1241,6 +1309,8 @@ function world(opts) {
     if (row.serverControlled) { row._skympNpcLifeGeneration = (Number(row._skympNpcLifeGeneration) || 0) + 1; }
     row.isDead = false;
     runtimeIds.delete(actorId);
+    // SendAndSetDeathState: the respawn percentages, full unless written.
+    row.percentages = Object.assign({ health: 1, magicka: 1, stamina: 1 }, row.respawnPercentages || {});
     const sp = row.spawnPoint;
     if ((row.profileId || actorId >= 0xff000000) && sp && sp.cellOrWorldDesc && Array.isArray(sp.pos)) {
       row.worldOrCellDesc = sp.cellOrWorldDesc;
