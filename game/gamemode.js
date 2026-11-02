@@ -34508,8 +34508,12 @@ var MARKET_STALL_TABLE = table('MARKET_STALL_TABLE');
       boxed = true;
     }
     var keeperNote = (w.count > 1 ? w.count + ' ' : '') + whatName + ' sold for ' + (sale.cost.gold ? owed + ' gold.' : owed + ' ' + sale.cost.goods.name + '.');
-    var sayLine = g.__thornswoodSayLine;
-    if (typeof sayLine === 'function') { try { sayLine(done.keeper.profile, keeperNote); } catch (eSay) { } }
+    // Told in their chat (stalls.md, Buying): an ordinary line to their
+    // profile. __thornswoodSayLine is the menu page's data line, which the
+    // chat page reads as data and never draws, so a sentence sent that way
+    // reached nobody (#5473).
+    var tell = g.__thornswoodToProfile;
+    if (typeof tell === 'function') { try { tell(done.keeper.profile, keeperNote); } catch (eSay) { } }
     if (sessions[done.keeper.actor] && sessions[done.keeper.actor].id === id) {
       show(done.keeper.actor, done.keeper.profile, keeperNote);
     }
