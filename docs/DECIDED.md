@@ -561,6 +561,9 @@ issue where the card did.
   2026, [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
 - **The bot stays Python, split into modules** (q-p06-bot-modules). 31 Oct
   2026, [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **The bot's split into modules (#5393) may merge at acc8ce8.**
+  (dec_PYrv5xUa2LixUT43Bwl_Zg) 2 Nov 2026,
+  [#5357](https://github.com/ThornswoodRP/Thornswood/issues/5357#issuecomment-6586544129).
 - **The site stays without outside packages, split into modules**
   (q-p06-site-modules). 31 Oct 2026,
   [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
