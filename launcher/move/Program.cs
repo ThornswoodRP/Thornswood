@@ -48,11 +48,12 @@ namespace Thornswood
     /// is installed over it: it is started, and the old launcher's folder
     /// still goes.
     /// </summary>
-    static class Move
+    static partial class Move
     {
-        // Updater.ExpectedSigner, the name in Thornswood's certificate.
-        // launcher\tests\test-move.ps1 holds the two the same.
-        const string ExpectedSigner = "Gavin Knotts";
+        // ExpectedSigner, the name in Thornswood's certificate, is written
+        // once, in launcher\app\Updater.cs. Move.csproj reads it from there
+        // into Signer.g.cs at each build, and launcher\tests\test-move.ps1
+        // reads it back out of the built program.
 
         [STAThread]
         static int Main(string[] args)

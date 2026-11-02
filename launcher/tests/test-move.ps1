@@ -16,7 +16,8 @@
     - launcher\move builds as it is, with the .NET SDK the launcher builds with.
     - Its Channel() reads config.json the way the old launcher did: "dev" in
       Channel or UpdateBranch is dev, anything else or no file is main.
-    - Its signer is the launcher's own Updater.ExpectedSigner.
+    - Its signer is the launcher's own Updater.ExpectedSigner, read from
+      Updater.cs at its build and read back out of the built program.
     - Its steps run in the order Program.cs gives: the swap script's .old goes
       first, the download is held to the signature before the handover is
       written or anything runs, the handover is written before the setup
@@ -85,6 +86,12 @@ if (Test-Path -LiteralPath $LauncherDotnet) {
                 Yes ("Channel() reads " + $c[2] + " as " + $c[1]) ($channel.Invoke($null, [object[]]@([string]$f)) -eq $c[1])
             }
             Yes 'Channel() reads no config.json as main' ($channel.Invoke($null, [object[]]@([string](Join-Path $cfgDir "none.json"))) -eq "main")
+            # The signer it holds, read back out of the built program: Move.csproj
+            # takes it from Updater.cs, the one file that writes the name.
+            $theirs = [regex]::Match((Get-Content -LiteralPath (Join-Path $repo 'launcher\app\Updater.cs') -Raw), 'public const string ExpectedSigner = "([^"]+)"').Groups[1].Value
+            $field = $move.GetField('ExpectedSigner', [Reflection.BindingFlags]'NonPublic, Static')
+            $mine = if ($field) { [string]$field.GetRawConstantValue() } else { '' }
+            Yes 'the move program holds the download to the launcher''s own signer, read from Updater.cs at its build' ($mine.Length -gt 0 -and $mine -eq $theirs)
         }
     } finally {
         Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
@@ -92,9 +99,8 @@ if (Test-Path -LiteralPath $LauncherDotnet) {
 }
 
 # ---- the signer and the order of the steps
-$mine = [regex]::Match($program, 'const string ExpectedSigner = "([^"]+)"').Groups[1].Value
-$theirs = [regex]::Match($updater, 'public const string ExpectedSigner = "([^"]+)"').Groups[1].Value
-Yes ('the move program holds the download to the launcher''s own signer (' + $theirs + ')') ($mine.Length -gt 0 -and $mine -eq $theirs)
+Yes 'the move program writes no signer name of its own' (-not [regex]::IsMatch($program, 'ExpectedSigner = "'))
+Yes 'its build reads the signer from Updater.cs' ((Get-Content -LiteralPath (Join-Path $repo 'launcher\move\Move.csproj') -Raw).Contains("'app', 'Updater.cs'"))
 Yes 'it is the launcher''s own signature check, the same file' ($program.Length -gt 0 -and (Get-Content -LiteralPath (Join-Path $repo 'launcher\move\Move.csproj') -Raw).Contains('<Compile Include="..\app\Signature.cs"'))
 Yes 'the swap script''s .old goes before anything else' (Before $main 'ClearOld(exe + ".old")' 'string local =')
 Yes 'the setup is held to the signature before the handover is written' (Before $main 'Signature.Refusal(setup, ExpectedSigner' 'Thornswood-moved-from.txt')

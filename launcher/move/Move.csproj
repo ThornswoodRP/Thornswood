@@ -35,4 +35,26 @@
     <!-- The launcher's own signature check, the same file (#912). -->
     <Compile Include="..\app\Signature.cs" Link="Signature.cs" />
   </ItemGroup>
+  <!--
+    The name on Thornswood's signing certificate is written once, as
+    ExpectedSigner in launcher\app\Updater.cs, and tests\test-check-words.ps1
+    holds it to that one file. This reads it from there into Signer.g.cs, a
+    file of the build's own, before the compile, and stops the build when
+    Updater.cs names none.
+  -->
+  <Target Name="ThornswoodExpectedSigner" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <ThornswoodUpdater>$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)', '..', 'app', 'Updater.cs'))</ThornswoodUpdater>
+      <ThornswoodUpdaterText>$([System.IO.File]::ReadAllText('$(ThornswoodUpdater)'))</ThornswoodUpdaterText>
+      <ThornswoodSigner Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(ThornswoodUpdaterText)', 'const string ExpectedSigner = &quot;[^&quot;]+&quot;'))">$([System.Text.RegularExpressions.Regex]::Replace('$(ThornswoodUpdaterText)', '(?s)^.*?const string ExpectedSigner = &quot;([^&quot;]+)&quot;.*$', '$1'))</ThornswoodSigner>
+      <ThornswoodSignerFile>$(IntermediateOutputPath)Signer.g.cs</ThornswoodSignerFile>
+    </PropertyGroup>
+    <Error Condition="'$(ThornswoodSigner)' == ''" Text="$(ThornswoodUpdater) names no ExpectedSigner, so the move program could not check what it downloads." />
+    <WriteLinesToFile File="$(ThornswoodSignerFile)" Overwrite="true" WriteOnlyWhenDifferent="true"
+      Lines="namespace Thornswood { static partial class Move { const string ExpectedSigner = &quot;$(ThornswoodSigner)&quot;%3B } }" />
+    <ItemGroup>
+      <Compile Include="$(ThornswoodSignerFile)" />
+      <FileWrites Include="$(ThornswoodSignerFile)" />
+    </ItemGroup>
+  </Target>
 </Project>
