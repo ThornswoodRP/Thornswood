@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The last update of the launcher from before Velopack (2 Nov 2026). That
+    launcher still reads its own update feed and puts in whatever launcher it
+    names, held to the feed's sha256 and to Thornswood's signature, with the
+    swap script that keeps the old exe until the new one has started. The
+    site names this program there (site\lib\feed.js, the move) once a
+    channel has a Velopack setup program, so every old install moves itself:
+    this runs in the old launcher's place, hands its folder to the new
+    launcher, runs the new launcher's setup, and the old launcher's folder
+    goes. launcher\move\Program.cs says each step and why.
+
+    .NET Framework 4.8, which every Windows 10 and 11 has, as the old
+    launcher was, so it runs where that one ran with nothing installed.
+    Built and signed on GitHub's Windows runner (.github\workflows\move.yml).
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>Thornswood</AssemblyName>
+    <RootNamespace>Thornswood</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>..\app.ico</ApplicationIcon>
+    <Version Condition="'$(Version)' == ''">0.0.0</Version>
+    <Product>Thornswood</Product>
+    <Company>Thornswood</Company>
+    <Description>Thornswood launcher (moves this install to the new launcher)</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Reference assemblies, so it builds with the .NET SDK on any machine. -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <!-- The launcher's own signature check, the same file (#912). -->
+    <Compile Include="..\app\Signature.cs" Link="Signature.cs" />
+  </ItemGroup>
+</Project>

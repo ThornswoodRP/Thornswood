@@ -370,6 +370,10 @@ namespace Thornswood
             // does not end anything. Somebody sent here by Windows Settings to
             // uninstall is not asked to install.
             string recorded = Velo.InstallRoot;
+            // A launcher from before Velopack handed its folder over and ran
+            // this setup (InstallPlace.TakeHandover, launcher\move): that
+            // folder is the install, already made, and nothing is asked.
+            if (recorded == null && root == null && Velo.Installed && !askedToUninstall) recorded = InstallPlace.TakeHandover();
             InstallWindow installing = null;
             if (recorded != null) root = recorded;
             else if (root == null && Velo.Installed && !askedToUninstall)
