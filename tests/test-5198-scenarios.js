@@ -74,7 +74,7 @@ const NOT_HERE = {
   #5198's own list: gamemode systems with no scenario yet. It only shrinks.
 */
 const WAITING = [
-  'carriages.md', 'carts.md', 'chat.md', 'classes.md', 'commands.md', 'creation.md',
+  'carriages.md', 'carts.md', 'chat.md', 'commands.md', 'creation.md',
   'dungeon-loot.md', 'embassy.md', 'emotes.md',
   'factions.md', 'magic.md', 'npcs.md', 'races.md',
   'stalls.md', 'thalmor.md', 'trading-company.md', 'voice.md'
