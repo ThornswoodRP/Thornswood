@@ -172,6 +172,9 @@ async function main() {
   const e = await ask('GET', at('Thornswood-Setup.exe'));
   yes('the installer answers 302 to main\'s Release copy', e.code === 302 && e.h.location === MAIN_SETUP.url);
   yes('  and not one byte of the old exe in the folder goes out', !e.body.toString().includes('old installer'));
+  // Cloudflare turns no-cache on an .exe into four hours in the browser and
+  // keeps only no-store (#5449), so a new release's link is what people get.
+  yes('  and no cache may keep the redirect', e.h['cache-control'] === 'no-store');
   const devNone = await ask('GET', at('Thornswood-Dev-Setup.exe'));
   yes('dev\'s answers 404 while no build Release carries one', devNone.code === 404);
   setupsNow.dev = { name: 'Thornswood-Dev-Setup.exe', size: 5, sha256: 'd'.repeat(64), tag: 'build-20261101.5', at: 1,
