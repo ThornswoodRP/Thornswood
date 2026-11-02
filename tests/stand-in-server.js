@@ -211,14 +211,215 @@ function world(opts) {
     return (id & (slot.light ? 0xfff : 0xffffff)).toString(16) + ':' + slot.file;
   };
 
+  /*
+    A record as mp.lookupEspmRecordById hands it over (ScampServer.cpp):
+    { record: { id, editorId, type, flags, fields: [{ type, data }] },
+    fileIndex, toGlobalRecordId }, or {} for an id no plugin has. record.id is
+    the id as written in its own file: the top byte is the file's place in
+    its own masters, and toGlobalRecordId maps such a local id to the load
+    order. The plugins themselves are not here, so every file's masters are
+    taken to be all the files before it in the load order, which keeps that
+    mapping the engine's in every case a record of this stand-in can reach.
+    A field's data may be { ref: desc }, four bytes naming that form as the
+    record's own file writes it, or { floats: [...] }; anything else is
+    bytes. Records are only what a harness declared with w.record.
+  */
+  function slotAt(i) { return SLOTS[i]; }
+  function slotIndexOf(id) {
+    id = id >>> 0;
+    if ((id >>> 24) === 0xfe) { const li = (id >>> 12) & 0xfff; return SLOTS.findIndex(function (x) { return x.light && x.index === li; }); }
+    const fi = id >>> 24; return SLOTS.findIndex(function (x) { return !x.light && x.index === fi; });
+  }
+  function globalOf(slot, objectId) {
+    return (slot.light ? (0xfe000000 | (slot.index << 12) | (objectId & 0xfff)) : ((slot.index << 24) | (objectId & 0xffffff))) >>> 0;
+  }
+  function localIn(fileAt, globalId) {
+    const target = slotIndexOf(globalId);
+    if (target < 0 || target > fileAt) { throw new Error('a record can only name a form of its own file or its masters'); }
+    const object = (globalId >>> 0) & (SLOTS[target].light ? 0xfff : 0xffffff);
+    return ((target << 24) | object) >>> 0;   // target === fileAt is the file's own: its masters come first
+  }
+  function bytesIn(realm, list) { const U = realm.Uint8Array; return new U(list); }
+  function lookupRecord(id) {
+    const r = records.get(id);
+    if (!r || !r.type || id >= 0xff000000) { return {}; }
+    const at = slotIndexOf(id);
+    if (at < 0) { return {}; }
+    const realm = proc ? vm.runInContext('({ Uint8Array: Uint8Array, Object: Object })', proc.box) : { Uint8Array: Uint8Array, Object: Object };
+    const fields = (r.fields || []).map(function (f) {
+      let data;
+      if (f.data && f.data.ref !== undefined) {
+        const raw = localIn(at, w.idOf(f.data.ref));
+        data = bytesIn(realm, [raw & 0xff, (raw >>> 8) & 0xff, (raw >>> 16) & 0xff, raw >>> 24]);
+      } else if (f.data && f.data.floats) {
+        const b = Buffer.alloc(4 * f.data.floats.length);
+        f.data.floats.forEach(function (x, i) { b.writeFloatLE(x, i * 4); });
+        data = bytesIn(realm, Array.from(b));
+      } else {
+        data = bytesIn(realm, Array.from(f.data || []));
+      }
+      return { type: f.type, data: data };
+    });
+    return {
+      record: { id: localIn(at, id), editorId: r.editorId || '', type: r.type, flags: r.flags || 0, fields: fields },
+      fileIndex: at,
+      toGlobalRecordId: function (local) {
+        local = local >>> 0;
+        const b = local >>> 24;
+        return globalOf(b < at ? slotAt(b) : slotAt(at), local);
+      }
+    };
+  }
+
+  /* The placed cast and the runtime identities, as WorldState keeps them. */
+  let npcExcluded = new Set();
+  let runtimeIds = new Map(), nextRuntime = 1;
+  function runtimeIdentity(id) { if (!runtimeIds.has(id)) { runtimeIds.set(id, nextRuntime++); } return runtimeIds.get(id); }
+  function placedCast() {
+    const ids = [];
+    for (const [id, r] of records) { if (r.type === 'ACHR') { ids.push(id); } }
+    return ids.sort(function (a, b) { return a - b; });
+  }
+  function baseOf(row) { try { return w.idOf(row.baseDesc); } catch (e) { return 0; } }
+  function actorRow(id) {
+    const row = store.get(id >>> 0);
+    if (!row || row.type !== 'NPC_') { throw new Error('Form with id ' + (id >>> 0).toString(16) + ' is not an actor'); }
+    return row;
+  }
+  function loadPlaced(id) {
+    if (store.has(id)) { return store.get(id).type === 'NPC_'; }
+    const r = records.get(id);
+    const name = (r.fields || []).find(function (f) { return f.type === 'NAME'; });
+    const data = (r.fields || []).find(function (f) { return f.type === 'DATA'; });
+    if (!name || !name.data || !name.data.ref) { return false; }
+    const at = data && data.data && data.data.floats ? data.data.floats : [0, 0, 0, 0, 0, 0];
+    store.set(id, {
+      type: 'NPC_', profileId: -1, baseDesc: name.data.ref, worldOrCellDesc: r.cell || '3c:Skyrim.esm',
+      pos: at.slice(0, 3), angle: at.slice(3, 6).map(function (x) { return x * 180 / Math.PI; }),
+      inventory: { entries: [] }, isDead: false, isDisabled: false, isOpen: false
+    });
+    return true;
+  }
+
+  /* What the inventory transactions above share. */
+  let savedReceipts = new Map(), savesHeld = false;
+  const ITEM_TYPES = ['AMMO', 'ARMO', 'BOOK', 'INGR', 'ALCH', 'SCRL', 'SLGM', 'WEAP', 'MISC', 'LIGH'];   // espm::utils::IsItem
+  const ENTRY_INTS = { baseId: 0xffffffff, count: 0xffffffff, enchantmentId: 0xffffffff, poisonId: 0xffffffff, poisonCount: 0xffffffff, soul: 255 };
+  const ENTRY_FLOATS = ['health', 'maxCharge', 'chargePercent'];
+  const ENTRY_OTHER = ['name', 'removeEnchantmentOnUnequip', 'worn', 'wornLeft', 'made'];
+  function inventoryActorId(n) {
+    if (typeof n !== 'number' || !Number.isInteger(n) || n <= 0 || n > 0xffffffff) { throw new Error('formId must be a positive uint32 integer'); }
+    return n >>> 0;
+  }
+  function inventorySnapshot(value) {
+    const dump = JSON.stringify(value);
+    if (dump === undefined || dump.length > 128 * 1024) { throw new Error('Inventory snapshot exceeds 128 KiB'); }
+    const json = JSON.parse(dump);
+    if (!json || typeof json !== 'object' || Array.isArray(json) || !Array.isArray(json.entries)) { throw new Error('Invalid inventory snapshot'); }
+    json.entries.forEach(function (e) {
+      if (!e || typeof e !== 'object' || Array.isArray(e)) { throw new Error('Inventory entries must be objects'); }
+      if (!('baseId' in e) || !('count' in e)) { throw new Error('Inventory entries require baseId and count'); }
+      Object.keys(e).forEach(function (k) {
+        if (k in ENTRY_INTS) {
+          if (!Number.isInteger(e[k]) || e[k] < 0 || e[k] > ENTRY_INTS[k]) { throw new Error('Inventory integer is outside its native range'); }
+        } else if (ENTRY_FLOATS.indexOf(k) >= 0) {
+          if (typeof e[k] !== 'number') { throw new Error('Inventory number is outside its native float range'); }
+        } else if (ENTRY_OTHER.indexOf(k) < 0) {
+          throw new Error('Inventory snapshot cannot be represented exactly');
+        }
+      });
+    });
+    return json;
+  }
+  function checkTransactionInventory(inv) {
+    let total = 0;
+    inv.entries.forEach(function (e) {
+      if (!e.baseId || !e.count) { throw new Error('Invalid transaction inventory entry'); }
+      total += e.count;
+      if (total > 0xffffffff) { throw new Error('Transaction inventory count exceeds its limit'); }
+    });
+  }
+  function sameInventory(a, b) {
+    function canon(v) {
+      if (Array.isArray(v)) { return v.map(canon); }
+      if (v && typeof v === 'object') { const o = {}; Object.keys(v).sort().forEach(function (k) { o[k] = canon(v[k]); }); return o; }
+      return v;
+    }
+    return JSON.stringify(canon(a)) === JSON.stringify(canon(b));
+  }
+  function receiptOf(row) { return typeof row._inventoryReceipt === 'string' ? row._inventoryReceipt : 'null'; }
+  function compareAndSet(id, expectedIn, receipt, nextIn, sequence, profile, property) {
+    id = inventoryActorId(id);
+    const runtimeAtEntry = runtimeIdentity(id);
+    if (!Number.isInteger(sequence) || sequence <= 0 || sequence > Number.MAX_SAFE_INTEGER) { throw new Error('Inventory sequence must be a positive safe integer'); }
+    const expected = inventorySnapshot(expectedIn);
+    if (typeof receipt !== 'string' || receipt.length < 1 || receipt.length > 1024) { throw new Error('expectedReceipt'); }
+    const next = inventorySnapshot(nextIn);
+    if (!Number.isInteger(profile) || profile <= 0 || profile > 2147483647) { throw new Error('Inventory profile must be a positive int32 integer'); }
+    if (property) {
+      if (typeof property.name !== 'string' || !property.name || property.name.length > 128) { throw new Error('property.name'); }
+      if (!Number.isInteger(property.expectedLifeGeneration) || property.expectedLifeGeneration < 0) { throw new Error('Inventory lifeGeneration must be a nonnegative safe integer'); }
+      if (property.name === '_inventoryReceipt' || BUILT_IN.indexOf(property.name) >= 0 || !made.has(property.name) || madeVisible.has(property.name)) {
+        throw new Error('Inventory transaction requires a registered hidden custom property');
+      }
+      [expected, next].forEach(function (inv) {
+        inv.entries.forEach(function (e) {
+          const r = records.get(e.baseId >>> 0);
+          if (!e.made && (!r || ITEM_TYPES.indexOf(r.type) < 0)) { throw new Error('Invalid inventory transaction base form'); }
+        });
+      });
+    }
+    const row = actorRow(id);
+    if (runtimeIdentity(id) !== runtimeAtEntry) { return false; }
+    if (row.profileId !== profile) { throw new Error('Inventory profile does not match the expected human'); }
+    if (receiptOf(row) !== receipt || !sameInventory(row.inventory, expected)) { return false; }
+    const identity = w.descOf(id);
+    let previous = 0;
+    if (receipt !== 'null') {
+      const doc = JSON.parse(receipt);
+      if (!doc || typeof doc !== 'object' || Object.keys(doc).length !== 3 || doc.actor !== identity || doc.profile !== row.profileId ||
+          !Number.isInteger(doc.sequence) || doc.sequence < 0) { throw new Error('Invalid saved inventory receipt'); }
+      previous = doc.sequence;
+      if (previous === 0) { throw new Error('Invalid saved inventory receipt sequence'); }
+    }
+    if (sequence <= previous) { throw new Error('Inventory receipt sequence must advance'); }
+    checkTransactionInventory(expected);
+    checkTransactionInventory(next);
+    if (property) {
+      if (property.expectedRuntimeIdentity !== undefined && String(property.expectedRuntimeIdentity) !== String(runtimeIdentity(id))) { return false; }
+      if (property.expectedLifeGeneration !== (Number(row._skympNpcLifeGeneration) || 0)) { return false; }
+      const now = row[property.name] === undefined ? null : row[property.name];
+      if (!sameInventory(now, property.expected === undefined ? null : property.expected)) { return false; }
+    }
+    // Remembered before the write, so the first save after it moves the saved receipt on.
+    const key = identity + '|' + row.profileId;
+    if (!savedReceipts.has(key) || savedReceipts.get(key).id !== id) { savedReceipts.set(key, { id: id, dump: receiptOf(row) }); }
+    row.inventory = copy(next);
+    if (property) { row[property.name] = copy(property.replacement); }
+    row._inventoryReceipt = JSON.stringify({ actor: identity, profile: row.profileId, sequence: sequence });
+    saw(id, 'inventoryTransaction', sequence, copy(next));
+    return true;
+  }
+  /* A save storage acknowledgement: each remembered human's receipt is now its live one. */
+  function acknowledgeSaves() {
+    if (savesHeld) { return; }
+    for (const [key, held] of savedReceipts) {
+      const row = store.get(held.id);
+      if (row && row.type === 'NPC_' && key === w.descOf(held.id) + '|' + row.profileId) { held.dump = receiptOf(row); }
+    }
+  }
+  w.holdSaves = function (on) { savesHeld = !!on; if (!savesHeld) { acknowledgeSaves(); } };
+
   // ------------------------------------------------------------ the world --
   /* Every change form, as the engine keeps it, by id. */
   let store = new Map();
   /* What kind of record each reference's base is: DOOR, CONT, FURN, ACTI, NPC_, BOOK ... */
   const records = new Map();
+  records.set(0xf, { type: 'MISC', editorId: 'Gold001' });   // the gold every pack carries, Skyrim.esm's own record
   /* Who holds each container or bench open (not saved: the engine keeps it in memory). */
   let occupant = new Map();
   let made = new Set();          // custom properties made with makeProperty, this process
+  let madeVisible = new Set();   // those of them the owner or the neighbours see
   let online = [];               // actor ids, by user id order
   let users = new Map();         // actor -> user id
   let nextUser = 0;
@@ -229,6 +430,14 @@ function world(opts) {
   let eatScaleFor = null;        // the actor inside its own onEatItem
 
   w.record = function (desc, type, extra) { records.set(w.idOf(desc) >>> 0, Object.assign({ type: type }, extra || {})); };
+  w.cast = function (catalogue, races) {
+    races = races || {};
+    catalogue.population.keep.forEach(function (r) {
+      w.record(r[1], 'NPC_', races[r[12]] ? { race: races[r[12]] } : {});
+      w.record(r[0], 'ACHR', { cell: r[2], fields: [{ type: 'NAME', data: { ref: r[1] } }, { type: 'DATA', data: { floats: r[3].concat([0, 0, 0]) } }] });
+    });
+    Object.keys(catalogue.types).forEach(function (d) { w.record(d, catalogue.types[d]); });
+  };
   w.typeOf = function (id) {
     const row = store.get(id >>> 0);
     if (row && row.type) { return row.type; }
@@ -373,17 +582,149 @@ function world(opts) {
         throw new Error('makeProperty ' + name + ': options are not what the engine takes');
       }
       made.add(name);
+      if (options.isVisibleByOwner || options.isVisibleByNeighbors) { madeVisible.add(name); }
     },
     makeEventSource: function () { },
     getDescFromId: function (id) { return w.descOf(id); },
     getIdFromDesc: function (d) { return w.idOf(d); },
     getEspmLoadOrder: function () { return SLOTS.map(function (s) { return s.file; }); },
-    lookupEspmRecordById: function (id) {
-      const r = records.get(id >>> 0);
-      return { record: r ? Object.assign({ id: id >>> 0 }, r) : null };
-    },
+    lookupEspmRecordById: function (id) { return lookupRecord(id >>> 0); },
     getServerSettings: function () { return JSON.parse(fs.readFileSync(path.join(dir, 'server-settings.json'), 'utf8')); },
     writeFileWhole: function (f, text) { fs.writeFileSync(f, text); },
+    /*
+      The placed cast (WorldState PrepareNpcLoad, LoadNpcBatch, GetLoadedNpcIds):
+      every ACHR record a harness declared, by id, made into an actor the first
+      time a batch reaches it, from its record: its base, its cell (w.record's
+      cell), its place and turn (the DATA field). The engine skips the human's
+      own reference (14:Skyrim.esm) and any excluded placement.
+    */
+    prepareNpcLoad: function () { return placedCast().length; },
+    loadNpcBatch: function (cursor, limit) {
+      if (!Number.isInteger(cursor) || cursor < 0 || !Number.isInteger(limit) || limit < 1 || limit > 128) {
+        throw new Error('NPC batch requires an unsigned integer cursor and limit from 1 to 128');
+      }
+      const ids = placedCast();
+      if (cursor > ids.length) { throw new Error('NPC batch cursor exceeds the placed cast'); }
+      const end = cursor + Math.min(limit, ids.length - cursor);
+      const out = [];
+      for (let i = cursor; i < end; i++) {
+        if (npcExcluded.has(ids[i]) || ids[i] === 0x14) { continue; }
+        if (loadPlaced(ids[i])) { out.push(ids[i]); }
+      }
+      return { nextCursor: end, total: ids.length, actorIds: out };
+    },
+    getLoadedNpcIds: function () {
+      const out = [];
+      for (const [id, row] of store) { if (row.type === 'NPC_' && !(row.profileId >= 0) && online.indexOf(id) < 0) { out.push(id); } }
+      return out.sort(function (a, b) { return a - b; });
+    },
+    setNpcPlacementExclusions: function (ids) {
+      if (!Array.isArray(ids)) { throw new Error('NPC exclusions must be an array'); }
+      ids.forEach(function (id) {
+        const r = records.get(id >>> 0);
+        if (!r || r.type !== 'ACHR') { throw new Error('An NPC exclusion must name an ACHR record'); }
+      });
+      npcExcluded = new Set(ids.map(function (id) { return id >>> 0; }));
+      npcExcluded.forEach(function (id) { const row = store.get(id); if (row) { row.serverControlled = true; row.isDisabled = true; } });
+    },
+    setNpcServerControlled: function (id, on) {
+      if (typeof on !== 'boolean') { throw new Error('controlled must be boolean'); }
+      actorRow(id).serverControlled = on;
+    },
+    setNpcDifficultyTier: function (id, tier) {
+      if (!Number.isInteger(tier) || tier < 0 || tier > 4) { throw new Error('tier must be an integer from 0 to 4'); }
+      actorRow(id).difficultyTier = tier;
+    },
+    updateNpcMovement: function (id, pos, angle, speed) {
+      if (!(speed >= 0 && speed <= 300)) { throw new Error('speed must be finite and from 0 to 300'); }
+      const row = actorRow(id); row.pos = [pos[0], pos[1], pos[2]]; row.angle = [angle[0], angle[1], angle[2]];
+    },
+    stopNpcMovement: function (id) { actorRow(id); },
+    getNavmeshRecords: function () { return []; },
+    getFactionReactions: function (list) { if (!Array.isArray(list)) { throw new Error('factionIds must be an array'); } return []; },
+    getLoadedFormCount: function () { return store.size; },
+    getActorRuntimeIdentity: function (id) { actorRow(id); return String(runtimeIdentity(id >>> 0)); },
+    getNpcAIState: function (id) {
+      const row = actorRow(id);
+      const ai = (records.get(baseOf(row)) || {}).ai || [0, 4];
+      return {
+        profileId: typeof row.profileId === 'number' ? row.profileId : -1, pos: row.pos.slice(), rot: row.angle.slice(),
+        cellOrWorld: w.idOf(row.worldOrCellDesc), isDead: !!row.isDead, isDisabled: !!row.isDisabled,
+        isHuman: row.profileId >= 0, isConnected: online.indexOf(id >>> 0) >= 0, isServerControlled: !!row.serverControlled,
+        lifeGeneration: Number(row._skympNpcLifeGeneration) || 0, runtimeLifeIdentity: String(runtimeIdentity(id >>> 0)),
+        difficultyTier: row.difficultyTier || 0, aggression: ai[0], confidence: ai[1],
+        meleeReach: 0, meleeAllowance: 16, canSwim: false, canFly: false, immobile: false, combatTarget: 0, factions: []
+      };
+    },
+    /* PrivateEconomyLedger.h: the marker once, then the ledger replaced whole, in privDir. */
+    writePrivateEconomyLedger: function (name, bytes) {
+      name = String(name); bytes = String(bytes);
+      if (name !== 'merchant' && name !== 'dungeon-rewards') { throw new Error('Unknown private economy ledger'); }
+      const settings = JSON.parse(fs.readFileSync(path.join(dir, 'server-settings.json'), 'utf8'));
+      const priv = path.resolve(dir, settings.privDir || 'private');
+      fs.mkdirSync(priv, { recursive: true });
+      const marker = path.join(priv, name + '-ledger.initialized');
+      if (!fs.existsSync(marker)) { fs.writeFileSync(marker, '1'); }
+      fs.writeFileSync(path.join(priv, name + '-ledger.json.tmp'), bytes);
+      fs.renameSync(path.join(priv, name + '-ledger.json.tmp'), path.join(priv, name + '-ledger.json'));
+      return true;
+    },
+    /*
+      Inventory transactions (ScampServer.cpp ValidateInventoryTransaction,
+      CompareAndSetInventoryImpl, GetInventoryReceipt, GetSavedInventoryReceipt;
+      MpObjectReference::CompareAndSetInventory; WorldState's saved receipts).
+      A human's receipt is its _inventoryReceipt field, "null" until the first
+      transaction, then {actor, profile, sequence}. The saved receipt is the
+      one the last save storage acknowledgement carried: remembered from the
+      live one the first time it is asked for, moved on at each save (w.run),
+      and forgotten when the server starts over. w.holdSaves(true) keeps the
+      save storage from acknowledging anything, as a slow database would.
+    */
+    validateInventoryTransaction: function (snapshot) { checkTransactionInventory(inventorySnapshot(snapshot)); return true; },
+    compareAndSetInventory: function (id, expected, receipt, next, sequence, profile) {
+      return compareAndSet(id, expected, receipt, next, sequence, profile, null);
+    },
+    compareAndSetInventoryAndProperty: function (id, expected, receipt, next, sequence, profile, property) {
+      if (!property || typeof property !== 'object') { throw new Error('property must be an object'); }
+      return compareAndSet(id, expected, receipt, next, sequence, profile, property);
+    },
+    /* ScampServer.cpp CompareAndSetActorProperty, MpActor::CompareAndSetActorProperty: one hidden property, no inventory. */
+    compareAndSetActorProperty: function (id, profile, property) {
+      id = inventoryActorId(id);
+      const runtimeAtEntry = runtimeIdentity(id);
+      if (!Number.isInteger(profile) || profile <= 0 || profile > 2147483647) { throw new Error('Actor profile must be a positive int32 integer'); }
+      if (!property || typeof property !== 'object') { throw new Error('property must be an object'); }
+      const runtime = property.expectedRuntimeIdentity;
+      if (typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) { throw new Error('Invalid actor runtime identity'); }
+      if (typeof property.name !== 'string' || !property.name || property.name.length > 128) { throw new Error('property.name'); }
+      if (!Number.isInteger(property.expectedLifeGeneration) || property.expectedLifeGeneration < 0) { throw new Error('Actor lifeGeneration must be a nonnegative safe integer'); }
+      if (property.name[0] === '_' || BUILT_IN.indexOf(property.name) >= 0 || !made.has(property.name) || madeVisible.has(property.name)) {
+        throw new Error('Actor metadata requires a registered hidden custom property');
+      }
+      const row = actorRow(id);
+      if (runtimeIdentity(id) !== runtimeAtEntry) { return false; }
+      if (!(profile > 0) || row.profileId !== profile || runtime !== String(runtimeIdentity(id))) { return false; }
+      if (property.expectedLifeGeneration !== (Number(row._skympNpcLifeGeneration) || 0)) { return false; }
+      const now = row[property.name] === undefined ? null : row[property.name];
+      if (!sameInventory(now, property.expected === undefined ? null : property.expected)) { return false; }
+      row[property.name] = copy(property.replacement);
+      saw(id, 'set', property.name, copy(property.replacement));
+      return true;
+    },
+    getInventoryReceipt: function (id) {
+      const row = actorRow(inventoryActorId(id));
+      if (!(row.profileId > 0)) { throw new Error('Inventory receipts require a human profile'); }
+      return receiptOf(row);
+    },
+    getSavedInventoryReceipt: function (id) {
+      id = inventoryActorId(id);
+      const row = actorRow(id);
+      if (!(row.profileId > 0)) { throw new Error('Inventory receipts require a human profile'); }
+      const key = w.descOf(id) + '|' + row.profileId;
+      const held = savedReceipts.get(key);
+      if (!held || held.id !== id) { savedReceipts.set(key, { id: id, dump: receiptOf(row) }); }
+      return savedReceipts.get(key).dump;
+    },
     getUserByActor: function (a) { return users.has(a >>> 0) && online.indexOf(a >>> 0) >= 0 ? users.get(a >>> 0) : -1; },
     getUserActor: function (u) { for (const [a, uu] of users) { if (uu === u && online.indexOf(a) >= 0) { return a; } } return 0; },
     getUserGuid: function (u) { return 'guid-' + u; },
@@ -444,6 +785,11 @@ function world(opts) {
         case 'GetPositionY': return row.pos[1];
         case 'GetPositionZ': return row.pos[2];
       }
+    }
+    // Actor.GetRace: a person's race from their appearance, anyone else's from their base record's (w.record's race).
+    if (key === 'method Actor.GetRace' && row && row.type === 'NPC_') {
+      const race = row.appearance && row.appearance.raceId ? w.descOf(row.appearance.raceId) : (records.get(baseOf(row)) || {}).race;
+      return race ? { type: 'espm', desc: race } : undefined;
     }
     unmodeled('papyrus ' + key);
     return undefined;
@@ -522,6 +868,9 @@ function world(opts) {
     vm.createContext(box);
     proc = { box: box, timers: timers, err: null };
     made = new Set();
+    madeVisible = new Set();
+    savedReceipts = new Map();      // a new WorldState remembers no saved receipt
+    runtimeIds = new Map();         // and every actor it loads is a new runtime object
     occupant = new Map();
     reloads = 0;
     load();
@@ -566,6 +915,13 @@ function world(opts) {
         passAt += PASS_EVERY;
         online.forEach(sendPass);
         if (++clientBeats % 2 === 0) { online.forEach(sendActive); }
+        continue;
+      }
+      // The save storage acknowledges a batch every SAVE_EVERY (WorldState::TickSaveStorage).
+      if (saveAt <= end && (!next || saveAt <= next.at)) {
+        clock = Math.max(clock, saveAt);
+        saveAt += SAVE_EVERY;
+        acknowledgeSaves();
         continue;
       }
       if (!next || next.at > end) { break; }
@@ -652,6 +1008,8 @@ function world(opts) {
   */
   const PASS_EVERY = 60000;
   let passAt = clock + PASS_EVERY;
+  const SAVE_EVERY = 100;
+  let saveAt = clock + SAVE_EVERY;
   function b64u(b) { return Buffer.from(b).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
   function sendPass(actorId) {
     const row = store.get(actorId >>> 0);
@@ -843,13 +1201,29 @@ function world(opts) {
   w.equip = function (actorId, baseId) { return fire('onEquipItemAttempt', [actorId >>> 0, baseId]); };
   w.drop = function (actorId, baseId, count) { return fire('onDropItem', [actorId >>> 0, baseId, count]); };
   /* Going down and dying (MpActor): onDying, onDeath, and onRespawn after delayMs. */
+  /*
+    MpActor::SendAndSetDeathState: dying and coming back each make the actor
+    a new runtime object (InvalidateRuntimeIdentity), and a server-controlled
+    one comes back one life generation on (_skympNpcLifeGeneration). A
+    delayMs of null leaves the body lying (a placed NPC's respawn is hours).
+  */
   w.die = function (actorId, killerId, delayMs) {
     actorId = actorId >>> 0;
     fire('onDying', [actorId, killerId || 0]);
     store.get(actorId).isDead = true;
+    runtimeIds.delete(actorId);
     fire('onDeath', [actorId, killerId || 0]);
+    if (delayMs === null) { return; }
     w.run(delayMs === undefined ? 5000 : delayMs);
-    store.get(actorId).isDead = false;
+    w.respawn(actorId);
+  };
+  w.respawn = function (actorId) {
+    actorId = actorId >>> 0;
+    const row = store.get(actorId);
+    if (!row.isDead) { return; }
+    if (row.serverControlled) { row._skympNpcLifeGeneration = (Number(row._skympNpcLifeGeneration) || 0) + 1; }
+    row.isDead = false;
+    runtimeIds.delete(actorId);
     fire('onRespawn', [actorId]);
   };
 
@@ -864,6 +1238,52 @@ function world(opts) {
     try { return JSON.parse(fs.readFileSync(path.join(dir, 'private', name), 'utf8')); } catch (e) { return null; }
   };
   return w;
+}
+
+/*
+  The placed cast and the item records the gamemode's NPC startup reads, out
+  of game/gamemode.js itself: NPC_POPULATION_DATA (its plugins, which a world
+  with this load order must have, and keep, the placed people), and the
+  record type of every item its merchant and quest catalogues name (their
+  "types" and "itemTypes" tables and each "item" named with an "itemType").
+  w.cast(catalogue, races) declares them all: each kept person's base as an
+  NPC_ (with races[species] as its race when given) and its placement as an
+  ACHR at its cell, place and turn, and each item record by its type.
+*/
+let catalogueCache = null;
+function npcCatalogue() {
+  if (catalogueCache) { return catalogueCache; }
+  const text = fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8');
+  const at = text.indexOf('const NPC_POPULATION_DATA = ');
+  const population = JSON.parse(text.slice(at + 'const NPC_POPULATION_DATA = '.length, text.indexOf('\n', at)).replace(/;\s*$/, ''));
+  const types = {};
+  function objectsAfter(key) {
+    const out = [];
+    for (let from = 0; ;) {
+      const k = text.indexOf(key, from);
+      if (k < 0) { break; }
+      const open = k + key.length - 1;
+      let depth = 0, quoted = false, escaped = false;
+      for (let n = open; n < text.length; n++) {
+        const c = text[n];
+        if (quoted) { if (escaped) { escaped = false; } else if (c === '\\') { escaped = true; } else if (c === '"') { quoted = false; } continue; }
+        if (c === '"') { quoted = true; } else if (c === '{') { depth++; } else if (c === '}' && --depth === 0) {
+          try { out.push(JSON.parse(text.slice(open, n + 1))); } catch (e) { }
+          break;
+        }
+      }
+      from = k + 1;
+    }
+    return out;
+  }
+  objectsAfter('"types":{').concat(objectsAfter('"itemTypes":{')).forEach(function (o) {
+    Object.keys(o).forEach(function (k) { if (typeof o[k] === 'string') { types[k] = o[k]; } });
+  });
+  const re = /"item":"([0-9a-f]+:[^"]+)"[^{}[\]]*?"itemType":"([A-Z]+)"/g;
+  let m;
+  while ((m = re.exec(text))) { types[m[1]] = m[2]; }
+  catalogueCache = { population: population, types: types };
+  return catalogueCache;
 }
 
 /* The PASS and FAIL lines every harness prints, and the exit code. */
@@ -890,4 +1310,4 @@ function checks() {
   return c;
 }
 
-module.exports = { world: world, checks: checks, ENGINE_METHODS: ENGINE_METHODS, BUILT_IN: BUILT_IN, REPO_DIR: REPO_DIR };
+module.exports = { world: world, checks: checks, npcCatalogue: npcCatalogue, ENGINE_METHODS: ENGINE_METHODS, BUILT_IN: BUILT_IN, REPO_DIR: REPO_DIR };

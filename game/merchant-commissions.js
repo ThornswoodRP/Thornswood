@@ -423,7 +423,9 @@ function createCommissions(deps) {
   const next={purse:state.purse-held.gold,stock,supply:copy(state.supply||{}),commissions:completed.next};
   const moved=deps.settlement.begin({merchantId:merchant,humanId:actor,profileId:human.profileId,kind:'commission',
    previous:state,next,expected,debit,credit:held.gold?[{baseId:15,count:held.gold}]:[],caller:()=>current(false)});
-  return {ok:!!moved.done,why:moved.done?'':'waiting'};
+  // A turn-in finishes once the save storage acknowledges it, a later tick (#5419): the trader says it then.
+  return {ok:!!moved.done,why:moved.done?'':'waiting',
+   settling:!moved.done&&moved.accepted&&typeof moved.id==='string'?{id:moved.id,gold:held.gold}:undefined};
  }
  return {has:id=>rows.has(id),view,act};
 }
