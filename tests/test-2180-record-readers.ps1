@@ -1,7 +1,6 @@
 # test-2180-record-readers.ps1
 #
 #     pwsh -NoProfile -File .\tests\test-2180-record-readers.ps1
-#     powershell -NoProfile -File .\tests\test-2180-record-readers.ps1
 #
 # The local readers of the four high-risk records hold them to RecordShape.ps1
 # (#2180, second slice), so a record at a version this checkout does not know,

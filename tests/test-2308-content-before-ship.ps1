@@ -151,7 +151,7 @@ try {
     Yes '  nor outside the harness' ((Get-ThornswoodServerContentStandIn 'Administrator@127.0.0.1') -eq '')
     $env:THORNSWOOD_HARNESS = '1'
     $text = $ThornswoodServerContentText
-    Yes 'the box text is ASCII and reads with .NET, as Windows PowerShell 5.1 on the box needs' (
+    Yes 'the box text is ASCII and reads with .NET, not Get-FileHash' (
         -not ($text.ToCharArray() | Where-Object { [int]$_ -gt 127 }) -and $text -notmatch 'Get-FileHash' -and $text.Contains('Security.Cryptography.SHA256'))
 
     # ---- 3. the real Publish-Update.ps1 ------------------------------------------------

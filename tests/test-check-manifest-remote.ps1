@@ -1,7 +1,6 @@
 <#
   test-check-manifest-remote.ps1
 
-      powershell -NoProfile -File .\tests\test-check-manifest-remote.ps1
       pwsh -NoProfile -File .\tests\test-check-manifest-remote.ps1
 
   scripts\mods\Check-Manifest.ps1: the two scripts it runs on the VPS (find the

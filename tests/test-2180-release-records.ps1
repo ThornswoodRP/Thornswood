@@ -1,7 +1,6 @@
 # test-2180-release-records.ps1
 #
 #     pwsh -NoProfile -File .\tests\test-2180-release-records.ps1
-#     powershell -NoProfile -File .\tests\test-2180-release-records.ps1
 #
 # #2180 slice 3: the release records the launcher and Ship are built on
 # (skyrim-pin, skyrim-files, ui-gone, generated) are held to RecordShape.ps1,

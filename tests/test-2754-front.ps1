@@ -1,7 +1,6 @@
 # test-2754-front.ps1
 #
 #     pwsh -NoProfile -File .\tests\test-2754-front.ps1
-#     powershell -NoProfile -File .\tests\test-2754-front.ps1
 #
 # The front is built from the pinned fork and recorded (#2754, step 1 of
 # Patrick's A, Ships from the feed): Front.ps1 writes the same zip for the

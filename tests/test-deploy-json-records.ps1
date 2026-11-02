@@ -1,7 +1,6 @@
 # test-deploy-json-records.ps1
 #
 #     pwsh -NoProfile -File .\tests\test-deploy-json-records.ps1
-#     powershell -NoProfile -File .\tests\test-deploy-json-records.ps1
 #
 # The deploy scripts read their JSON records and configs on this machine
 # through ConvertFrom-ThornswoodJson (scripts\release\Read-JsonFile.ps1), so

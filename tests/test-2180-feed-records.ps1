@@ -1,7 +1,6 @@
 # test-2180-feed-records.ps1
 #
 #     pwsh -NoProfile -File .\tests\test-2180-feed-records.ps1
-#     powershell -NoProfile -File .\tests\test-2180-feed-records.ps1
 #
 # The feed store's version.json, published.json and releases.json held to
 # RecordShape.ps1's feed contracts (#2180, slice 5), and Check-Records -Feed

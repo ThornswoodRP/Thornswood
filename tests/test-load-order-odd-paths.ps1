@@ -1,7 +1,6 @@
 <#
   test-load-order-odd-paths.ps1
 
-      powershell -NoProfile -File .\tests\test-load-order-odd-paths.ps1
       pwsh -NoProfile -File .\tests\test-load-order-odd-paths.ps1
 
   The load order and collection scripts on folders whose names PowerShell

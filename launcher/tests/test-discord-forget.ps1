@@ -1,7 +1,7 @@
 <#
   test-discord-forget.ps1
 
-      powershell -NoProfile -File .\launcher\tests\test-discord-forget.ps1
+      pwsh -NoProfile -File .\launcher\tests\test-discord-forget.ps1
 
   Unlinking drops the last account's staff answer. Discord.Forget used to
   delete the ticket, the name and the avatar, and leave dev-allowed.txt,

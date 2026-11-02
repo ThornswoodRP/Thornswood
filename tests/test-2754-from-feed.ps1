@@ -94,7 +94,7 @@ try {
     Yes 'a copy writes the shipped bytes over what was there' ([IO.File]::ReadAllText($dst) -eq "a`r`nb`r`n")
     Yes '  and leaves the source as it was' ([IO.File]::ReadAllText($lf) -eq "a`nb`n")
     $sb = [IO.File]::ReadAllText((Join-Path $rel 'ShippedBytes.ps1'))
-    Yes 'ShippedBytes.ps1 is ASCII, for Windows PowerShell 5.1' (-not ($sb.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
+    Yes 'ShippedBytes.ps1 is ASCII' (-not ($sb.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
 
     # ---- 2. the last release's plugin list against the server's order --------------
     Write-Host ''; Write-Host 'the plugin list against the server'
@@ -318,12 +318,12 @@ try {
     $dl = @($script:calls | Where-Object { $_[0] -eq 'run' -and $_[1] -eq 'download' })
     Yes '  and takes the catalog from that run, by the request''s own name' ($dl.Count -eq 1 -and @($dl[0]) -contains '42' -and @($dl[0]) -contains 'release-cat-r1')
     Yes 'the box is sent the catalog, release.json and the launcher''s own check' ($script:boxScript.Contains([Convert]::ToBase64String([IO.File]::ReadAllBytes($sign))) -and $script:boxScript.Contains('Get-PublishSignRefusal') -and $script:boxScript.Contains('Test-FileCatalog') -and $script:boxScript.Contains('Signature.cs'))
-    Yes '  as ASCII, for its Windows PowerShell 5.1' (-not ($script:boxScript.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
+    Yes '  as ASCII' (-not ($script:boxScript.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
     Yes '  and its folder goes whatever happens' ($script:boxScript -match 'finally \{ Remove-Item -LiteralPath \$d -Recurse')
     # The box runs that text as Send-Script.ps1's runner hands it over: read
     # from its file and run as a block from -EncodedCommand, so there is no
-    # script root. Here it runs the same way, under Windows PowerShell where
-    # there is one. On 22 Oct 2026 the first cloud dev Ship stopped at
+    # script root. Here it runs the same way, in this pwsh, the PowerShell
+    # the box runs. On 22 Oct 2026 the first cloud dev Ship stopped at
     # Assert-PublishSigned.ps1's Join-Path on that empty root, before the check
     # began, and nothing had ever run the text.
     $runDir = Join-Path $Scratch 'box-run'
@@ -337,7 +337,7 @@ try {
     $runText = Join-Path $runDir 'check.ps1'
     [IO.File]::WriteAllText($runText, (New-SignedCatalogCheckScript $sign $runCat 'Thornswood' $repo), (New-Object Text.UTF8Encoding($false)))
     $runner = '$b = [scriptblock]::Create([IO.File]::ReadAllText(''' + $runText.Replace("'", "''") + ''', [Text.Encoding]::UTF8)); . $b'
-    $exe = if ($onWin) { 'powershell.exe' } else { (Get-Process -Id $PID).Path }
+    $exe = (Get-Process -Id $PID).Path
     # The box's text puts its folder in TEMP, which off Windows nothing sets.
     $hadTemp = $env:TEMP
     $env:TEMP = $runDir
@@ -372,7 +372,7 @@ try {
     $why = Invoke-ReleaseCatalogSignOnGitHub -Json $sign -Catalog $cat -RepoDir $repo -Request 'r8' -LauncherUrl $launcherUrl -Gh { throw 'HTTP 403' } -Box $box -WaitSeconds 1 -Poll 0
     Yes 'a dispatch GitHub refuses: refused, saying so' ($why -match 'could not be started' -and $why -match '403')
     $so = [IO.File]::ReadAllText((Join-Path $rel 'Sign-OnGitHub.ps1'))
-    Yes 'Sign-OnGitHub.ps1 is ASCII, for Windows PowerShell 5.1' (-not ($so.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
+    Yes 'Sign-OnGitHub.ps1 is ASCII' (-not ($so.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
 
     # ---- 5b. the launcher from GitHub (#3312) ------------------------------------------
     Write-Host ''; Write-Host 'the launcher from GitHub'
@@ -432,7 +432,7 @@ try {
     $why = Get-SignedFileRefusal $exeFile 'Thornswood' $repo $fbox
     Yes ("a box that accepts the file: '' ('{0}')" -f $why) ($why -eq '')
     Yes '  the box is sent the file, Signature.cs and Get-PublishSignRefusal' ($script:fboxScript.Contains([Convert]::ToBase64String([IO.File]::ReadAllBytes($exeFile))) -and $script:fboxScript.Contains('Get-PublishSignRefusal -Path $f') -and $script:fboxScript.Contains('Signature.cs'))
-    Yes '  as ASCII, for its Windows PowerShell 5.1' (-not ($script:fboxScript.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
+    Yes '  as ASCII' (-not ($script:fboxScript.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
     Yes '  and its folder goes whatever happens' ($script:fboxScript -match 'finally \{ Remove-Item -LiteralPath \$d -Recurse')
     $script:fboxSaid = @('SIGNED REFUSED Thornswood.exe is not Authenticode Valid (status NotSigned).')
     Yes 'a box that refuses: refused, with its reason' ((Get-SignedFileRefusal $exeFile 'Thornswood' $repo $fbox) -match 'NotSigned')

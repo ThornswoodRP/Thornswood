@@ -6,9 +6,8 @@
   Issue #3184. The box's build runners kept every log they wrote in _diag
   (1.6 GB, about 4,000 files, the oldest from 25 Sep on 21 Oct 2026).
   scripts\vps\vps-runner-logs.ps1 runs on the box once a day and removes the
-  runner and worker logs older than two weeks. It is run here, under Windows
-  PowerShell 5.1 on Windows and pwsh elsewhere, against a scratch C:\ with
-  two runner folders. This fails on:
+  runner and worker logs older than two weeks. It is run here, under
+  PowerShell 7 as on the box, against a scratch C:\ with two runner folders. This fails on:
     1. either script not parsing, or vps-runner-logs.ps1 not plain ASCII;
     2. an old Runner_ or Worker_ log, or an old page log, left behind;
     3. anything else removed: a new log, a file of another name in _diag, a

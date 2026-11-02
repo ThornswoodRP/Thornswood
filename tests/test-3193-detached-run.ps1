@@ -2,7 +2,6 @@
   test-3193-detached-run.ps1
 
       pwsh -NoProfile -File .\tests\test-3193-detached-run.ps1
-      powershell -NoProfile -File .\tests\test-3193-detached-run.ps1
 
   Issue #3193. Setup-Domain.ps1 stops Caddy in the script it sends to the
   box, and from One ssh to the box goes through the bridge, which goes

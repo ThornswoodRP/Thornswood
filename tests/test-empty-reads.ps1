@@ -1,7 +1,6 @@
 <#
   test-empty-reads.ps1
 
-      powershell -NoProfile -File .\tests\test-empty-reads.ps1
       pwsh -NoProfile -File .\tests\test-empty-reads.ps1
 
   Get-Content -Raw hands back $null for an empty file, not '', so

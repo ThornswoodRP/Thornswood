@@ -1,7 +1,6 @@
 <#
   test-native-stderr.ps1
 
-      powershell -NoProfile -File .\tests\test-native-stderr.ps1
       pwsh -NoProfile -File .\tests\test-native-stderr.ps1
 
   Native programs other than git, run under $ErrorActionPreference = 'Stop'.

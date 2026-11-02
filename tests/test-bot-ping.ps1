@@ -2,7 +2,6 @@
   test-bot-ping.ps1
 
       pwsh -NoProfile -File .\tests\test-bot-ping.ps1
-      powershell -NoProfile -File .\tests\test-bot-ping.ps1
 
   Install-Bot.ps1 -SetPing puts the outside monitor's ping address into the
   bot's bot.env.json on the VPS, on ssh's standard input, and never prints it

@@ -2,7 +2,6 @@
   test-bot-login-rotation.ps1
 
       pwsh -NoProfile -File .\tests\test-bot-login-rotation.ps1
-      powershell -NoProfile -File .\tests\test-bot-login-rotation.ps1
 
   The Discord bot token goes into both files on the VPS that use it, or into
   neither, and is never printed on the way (issue #466).
@@ -26,7 +25,6 @@
   at a prompt and only ever sends it base64, and no webhook file is tracked.
 
   Talks to nothing. Writes only to its own scratch folder, removed at the end.
-  Run it with both, since the VPS runs the writer under Windows PowerShell 5.1.
 #>
 [CmdletBinding()]
 param([string]$Scratch)

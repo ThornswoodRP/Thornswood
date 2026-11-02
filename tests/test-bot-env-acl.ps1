@@ -2,7 +2,6 @@
   test-bot-env-acl.ps1
 
       pwsh -NoProfile -File .\tests\test-bot-env-acl.ps1
-      powershell -NoProfile -File .\tests\test-bot-env-acl.ps1
 
   bot.env.json keeps the bot's own account's read rule through a full
   Install-Bot.ps1 run (issue #2158).

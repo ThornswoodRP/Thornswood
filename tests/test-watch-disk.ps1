@@ -69,8 +69,9 @@ if ($null -eq $text) { Done }
 $werrs = $null
 $inner = [System.Management.Automation.Language.Parser]::ParseInput($text, [ref]$null, [ref]$werrs)
 Yes 'the watch.ps1 it writes on the box parses' ($werrs.Count -eq 0)
-# Written out as UTF-8 with no byte order mark and run by Windows PowerShell,
-# which reads such a file as ANSI. Anything past ASCII arrives mangled.
+# Written out as UTF-8 with no byte order mark. Windows PowerShell 5.1, which
+# the box ran until #5356, read such a file as ANSI, and the box's scripts are
+# still held to plain ASCII.
 Yes 'the watch.ps1 it writes is plain ASCII' (-not ($text -match '[^\x00-\x7F]'))
 
 $fns = @{}

@@ -1,7 +1,6 @@
 <#
   test-set-collection.ps1
 
-      powershell -NoProfile -File .\tests\test-set-collection.ps1
       pwsh -NoProfile -File .\tests\test-set-collection.ps1
 
   scripts\ops\Set-Collection.ps1, which writes the collection address into

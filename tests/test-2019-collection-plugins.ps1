@@ -1,7 +1,6 @@
 # test-2019-collection-plugins.ps1
 #
 #     pwsh -NoProfile -File .\tests\test-2019-collection-plugins.ps1
-#     powershell -NoProfile -File .\tests\test-2019-collection-plugins.ps1
 #
 # The full deploys hold the plugins they send to the collection's own bytes
 # (#2019): records\collection-plugins.json, written by

@@ -2,7 +2,6 @@
   test-2888-artifact-folder-name.ps1
 
       pwsh -NoProfile -File .\tests\test-2888-artifact-folder-name.ps1
-      powershell -NoProfile -File .\tests\test-2888-artifact-folder-name.ps1
 
   Issue #2888. On 20 Oct a Deploy-Docs run on One stopped at the site
   artifact: the folder it had just unpacked "could not be named ...: Access

@@ -124,7 +124,7 @@ try {
     $errs = $null; $tokens = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseInput($boxText, [ref]$tokens, [ref]$errs)
     Yes 'vps-ssh-scope.ps1 parses' (-not $errs -or $errs.Count -eq 0)
-    Yes '  and is plain ASCII, which Windows PowerShell on the box reads right without a byte order mark' (-not ($boxText.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
+    Yes '  and is plain ASCII' (-not ($boxText.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
     $driverText = [IO.File]::ReadAllText($Driver)
     Yes 'Set-SshScope.ps1 is plain ASCII too' (-not ($driverText.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
 

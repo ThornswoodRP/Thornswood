@@ -8,9 +8,9 @@
 #
 # This lifts the real lines out of Deploy-Docs, from the hash listing to the
 # count it prints, and runs them with Remote standing in for ssh (the script
-# it would send runs in Windows PowerShell 5.1 when this machine has it, the
-# shell the VPS runs it in, and in this shell otherwise) and Push standing in
-# for scp (a copy into a scratch folder that refuses the file marked as held).
+# it would send runs in PowerShell 7, the shell the box runs it in) and Push
+# standing in for scp (a copy into a scratch folder that refuses the file
+# marked as held).
 # It touches nothing outside that scratch folder.
 #
 #   pwsh -File tests\test-docs-public.ps1                 the repo's copy

@@ -230,7 +230,7 @@ try {
     $errs = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseInput($boxText, [ref]$null, [ref]$errs)
     Yes 'vps-openssh.ps1 parses' (-not $errs -or $errs.Count -eq 0)
-    Yes '  and is plain ASCII, which Windows PowerShell on the box reads right without a byte order mark' (-not ($boxText.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
+    Yes '  and is plain ASCII' (-not ($boxText.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
     $drvText = [IO.File]::ReadAllText($Driver)
     Yes 'Upgrade-OpenSsh.ps1 parses and is plain ASCII' ([System.Management.Automation.Language.Parser]::ParseInput($drvText, [ref]$null, [ref]$errs) -and (-not $errs -or $errs.Count -eq 0) -and -not ($drvText.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
 

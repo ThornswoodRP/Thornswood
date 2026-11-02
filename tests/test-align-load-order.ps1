@@ -1,7 +1,6 @@
 <#
   test-align-load-order.ps1
 
-      powershell -NoProfile -File .\tests\test-align-load-order.ps1
       pwsh -NoProfile -File .\tests\test-align-load-order.ps1
 
   scripts\mods\Align-LoadOrder.ps1, the check that the plugins the game gives

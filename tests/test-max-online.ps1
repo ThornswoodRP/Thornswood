@@ -22,7 +22,7 @@
     4. Deploy-Gamemode.ps1's settings section, lifted by text and run against
        a scratch build folder, writes both keys and keeps every other key.
     5. Deploy-DevGamemode.ps1's block that edits the dev settings on the VPS,
-       lifted by text and run by Windows PowerShell against a scratch file,
+       lifted by text and run by PowerShell 7 against a scratch file,
        writes both keys, keeps the dev port and name, and treats an unknown
        number as nothing to change.
     6. Publish-Server.ps1's block, lifted by text and run against a scratch
@@ -303,8 +303,7 @@ if ($open -ge 0 -and $close -gt $marker) {
         $text = Expand-Remote $rootWin $maxOnline $seats
         $file = Join-Path $tmp ('remote-' + [Guid]::NewGuid().ToString('N').Substring(0, 8) + '.ps1')
         [IO.File]::WriteAllText($file, $text, (New-Object Text.UTF8Encoding($true)))
-        # Continue, so a line on stderr is output to read rather than a stop
-        # under Windows PowerShell.
+        # Continue, so a line on stderr is output to read rather than a stop.
         $ErrorActionPreference = 'Continue'
         return @(& $psExe -NoProfile -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { [string]$_ })
     }

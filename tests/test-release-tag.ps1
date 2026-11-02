@@ -1,7 +1,6 @@
 # test-release-tag.ps1
 #
 #     pwsh -NoProfile -File .\tests\test-release-tag.ps1
-#     powershell -NoProfile -File .\tests\test-release-tag.ps1
 #
 # The launcher release builds only a real v<version> tag on the commit meant,
 # and only on main (#2202, #3890). Resolve-ThornswoodReleaseTag

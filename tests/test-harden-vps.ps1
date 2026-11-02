@@ -264,7 +264,7 @@ try {
     $errs = $null; $tokens = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseInput($boxText, [ref]$tokens, [ref]$errs)
     Yes 'vps-harden.ps1 parses' (-not $errs -or $errs.Count -eq 0)
-    Yes '  and is plain ASCII, which Windows PowerShell on the box reads right without a byte order mark' (-not ($boxText.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
+    Yes '  and is plain ASCII' (-not ($boxText.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
 
     $layerNames = @('Get-RdpDeny', 'Set-RdpDeny', 'Get-InboundRules', 'Disable-InboundRule', 'Get-TermService', 'Stop-TermService', 'Disable-TermService', 'Get-IdleService', 'Stop-IdleService', 'Disable-IdleService', 'Get-WindowsTask', 'Disable-WindowsTask', 'Get-PolicyValue', 'Set-PolicyValue', 'Get-BoxTimeZone', 'Get-TaskNextRun', 'Test-SshdFile', 'Start-SshdRestart', 'Register-Rollback', 'New-PrivateFile', 'Get-EdgeInstall', 'Remove-EdgeInstall')
     $defined = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true) | ForEach-Object { $_.Name })

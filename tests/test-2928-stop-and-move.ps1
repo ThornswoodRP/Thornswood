@@ -2,7 +2,6 @@
   test-2928-stop-and-move.ps1
 
       pwsh -NoProfile -File .\tests\test-2928-stop-and-move.ps1
-      powershell -NoProfile -File .\tests\test-2928-stop-and-move.ps1
 
   Issue #2928. Every swap on the box stopped what was running and then
   renamed its files in a loop with a sleep between tries (Swap.ps1's Shift,
@@ -86,7 +85,7 @@ if (-not (Test-Path -LiteralPath $libPath)) { Done }
 $lib = Text $libPath
 $e = $null
 [void][System.Management.Automation.Language.Parser]::ParseInput($lib, [ref]$null, [ref]$e)
-Yes 'it parses, and is plain ASCII, which Windows PowerShell 5.1 on the box reads right' (@($e).Count -eq 0 -and $lib -notmatch '[^\x00-\x7F]')
+Yes 'it parses, and is plain ASCII' (@($e).Count -eq 0 -and $lib -notmatch '[^\x00-\x7F]')
 Yes 'it has no sleep, and no loop that tries a rename again' ($lib -notmatch 'Start-Sleep|Thread\]::Sleep' -and $lib -notmatch 'for \(\$i')
 foreach ($fn in 'Get-ThornswoodProcessHeld', 'Stop-ThornswoodProcessHeld', 'Get-ThornswoodPathHolders', 'Get-ThornswoodPathOpeners', 'Get-ThornswoodProcessWords', 'Get-ThornswoodFileHolders', 'Get-ThornswoodPathHandles', 'Move-ThornswoodPath') {
     Yes "  and defines $fn" ([bool](FunctionText $lib $fn))

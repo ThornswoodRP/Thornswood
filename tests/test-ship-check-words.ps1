@@ -1,7 +1,7 @@
 <#
   test-ship-check-words.ps1
 
-      powershell -NoProfile -File .\tests\test-ship-check-words.ps1
+      pwsh -NoProfile -File .\tests\test-ship-check-words.ps1
 
   Ship checks the release notes (Note-Rules.ps1) and, since issue #1081, the
   files people read (scripts\dev\Check-Words.ps1) before it builds. A dev Ship

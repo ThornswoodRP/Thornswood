@@ -1,7 +1,6 @@
 <#
   test-git-stderr.ps1
 
-      powershell -NoProfile -File .\tests\test-git-stderr.ps1
       pwsh -NoProfile -File .\tests\test-git-stderr.ps1
 
   git writes "fatal" on stderr for a ref or folder it does not know. Under

@@ -2,7 +2,6 @@
   test-2891-box-access.ps1
 
       pwsh -NoProfile -File .\tests\test-2891-box-access.ps1
-      powershell -NoProfile -File .\tests\test-2891-box-access.ps1
 
   Each person and machine reaches the box through the bridge with a key and a
   token of their own (#2891). This holds the PowerShell half of that:
@@ -113,7 +112,7 @@ $tokens = Join-Path $BridgeRoot 'tokens'
 # front of the script so its calls find them first.
 $stubs = @'
 function Get-ScheduledTask { param($TaskName, $EA, $ErrorAction) if ($global:Armed) { 'a task' } }
-function New-ScheduledTaskAction { param($Execute, $Argument) $global:PutBackArg = $Argument; 'action' }
+function New-ScheduledTaskAction { param($Execute, $Argument) $global:PutBackExe = $Execute; $global:PutBackArg = $Argument; 'action' }
 function New-ScheduledTaskTrigger { param([switch]$Once, $At) 'trigger' }
 function New-ScheduledTaskPrincipal { param($UserId, $LogonType, $RunLevel) 'principal' }
 function Register-ScheduledTask { param($TaskName, $Action, $Trigger, $Principal, [switch]$Force) $global:Armed = $true; 'registered' }
@@ -128,12 +127,20 @@ if (-not $OnWindows) {
 function Lock-ThornswoodFolder { param([string]$Path, [switch]$Only) $global:Locked = @{ Path = $Path; Only = [bool]$Only; Empty = (@(Get-ChildItem -LiteralPath $Path -Force).Count -eq 0) } }
 '@
 }
+# Where the box keeps the pwsh its tasks run.
+$boxPwsh = 'C:\Program Files\PowerShell\7\pwsh.exe'
+if ($OnWindows) { $boxPwsh = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe' }
 function OnScratch([string]$script) {
     $s = $script.Replace('C:\ProgramData\ssh\administrators_authorized_keys', $keys).Replace('C:\ProgramData\ssh\box-access-before', $save)
-    # On the box a STOP ends powershell.exe; here, run in this one, it ends
-    # the script block, so the harness goes on.
+    # On the box a STOP ends its pwsh; here, run in this one, it ends the
+    # script block, so the harness goes on.
     $s = $s.Replace('; exit 1 }', '; return }')
-    if (-not $OnWindows) { $s = $s.Replace('function Lock-ThornswoodFolder {', 'function Lock-ThornswoodFolder-OnTheBox {') }
+    if (-not $OnWindows) {
+        $s = $s.Replace('function Lock-ThornswoodFolder {', 'function Lock-ThornswoodFolder-OnTheBox {')
+        # The put back's task names the box's pwsh under Program Files, which
+        # off Windows no variable names, so it is named as the box has it.
+        $s = $s.Replace("(Join-Path `$env:ProgramFiles 'PowerShell\7\pwsh.exe')", "'" + $boxPwsh + "'")
+    }
     return ($stubs + "`n" + $s)
 }
 function RunBox([string]$script) {
@@ -175,6 +182,7 @@ try {
     Yes '  the old djinn line goes and the new one, only through the bridge, comes' ($after -contains ('from="127.0.0.1" ' + $pubB + ' thornswood-djinn') -and -not ($after -match 'AAAAolddjinn'))
     Yes '  every other key line stays as it was' ($after[0] -eq ($pubA + ' thornswood') -and $after[1] -match 'thornswood-cloud$' -and $after[2] -eq 'ssh-rsa AAAAsomebody someone-else' -and $after.Count -eq 4)
     Yes '  the digest is written under the name, and the cloud token stays' ((Text (Join-Path $tokens 'djinn')) -eq $digest -and (Text (Join-Path $tokens 'cloud')) -eq ('c' * 64))
+    Yes '  the put back task runs the box''s PowerShell 7' ($global:PutBackExe -eq $boxPwsh)
     Yes '  the put back task carries its command inline' ($global:PutBackArg -match '^-NoProfile -Command ".*Unregister-ScheduledTask.*"$')
 
     # The put back, as the task would run it: the command out of its argument.
@@ -294,7 +302,7 @@ try {
     Yes 'Setup-SshKey.ps1 never turns host key checking down' ($setup -notmatch '(?i)StrictHostKeyChecking\s*[= ]\s*"?(no|off|accept-new|ask)\b')
 }
 finally {
-    foreach ($n in 'Armed', 'PutBackArg', 'Locked') { Remove-Variable -Name $n -Scope Global -ErrorAction SilentlyContinue }
+    foreach ($n in 'Armed', 'PutBackExe', 'PutBackArg', 'Locked') { Remove-Variable -Name $n -Scope Global -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
 

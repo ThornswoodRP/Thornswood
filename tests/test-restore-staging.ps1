@@ -2,7 +2,6 @@
   test-restore-staging.ps1
 
       pwsh -NoProfile -File .\tests\test-restore-staging.ps1
-      powershell -NoProfile -File .\tests\test-restore-staging.ps1
 
   Restore-Backup.ps1 touches nothing at -To until the whole backup has been
   unpacked and checked somewhere else (issue #2203).

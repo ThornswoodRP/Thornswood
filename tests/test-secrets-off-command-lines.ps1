@@ -308,7 +308,7 @@ $Password = $null
 '@
         'a webhook piped into ssh (Watch-Services -Webhook)' = @'
 $e = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($put))
-$out = $url | & ssh @ssh "$User@$Vps" "powershell -NoProfile -EncodedCommand $e" 2>&1
+$out = $url | & ssh @ssh "$User@$Vps" "pwsh -NoProfile -EncodedCommand $e" 2>&1
 '@
         'Remote.ps1 -Secret from a function of the script' = @'
 function OnVpsWith([string]$body, [string]$value) { return @(& $RemoteScript $body -Secret $value 2>&1) }

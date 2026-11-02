@@ -1,7 +1,7 @@
 <#
   test-3034-private-ssh-copies.ps1
 
-      powershell -NoProfile -File .\tests\test-3034-private-ssh-copies.ps1
+      pwsh -NoProfile -File .\tests\test-3034-private-ssh-copies.ps1
 
   The copies our box scripts leave in C:\ProgramData\ssh are open only to
   SYSTEM and Administrators (#3034). That folder gives Authenticated Users

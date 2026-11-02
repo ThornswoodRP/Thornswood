@@ -1,7 +1,6 @@
 <#
   test-ship-revision-gate.ps1
 
-      powershell -NoProfile -File .\tests\test-ship-revision-gate.ps1
       pwsh -NoProfile -File .\tests\test-ship-revision-gate.ps1
 
   Ship's collection revision gate in scripts\release\Ship-Rules.ps1:

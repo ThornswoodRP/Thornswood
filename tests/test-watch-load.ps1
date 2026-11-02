@@ -10,7 +10,7 @@
   minutes on the box and Read-Load.ps1 says which service leads CPU, memory
   and I/O. Neither can be tried on the box from here, so this proves them here:
 
-    - the collector is RUN, under Windows PowerShell 5.1 as the box runs it,
+    - the collector is RUN, under PowerShell 7 as the box runs it,
       against a scratch folder, with a port held open by this process standing
       in for the game server. The line it writes has to find this process by
       that port and carry its pid, processor time and memory.
@@ -85,7 +85,7 @@ Write-Host ''
 Write-Host '--- the collector, run for real' -ForegroundColor Cyan
 
 $bytes = [IO.File]::ReadAllBytes($collector)
-Yes 'vps-load.ps1 is plain ASCII, so Windows PowerShell 5.1 reads it the same with no byte order mark' (
+Yes 'vps-load.ps1 is plain ASCII' (
     @($bytes | Where-Object { $_ -gt 127 }).Count -eq 0)
 
 $ctext = [IO.File]::ReadAllText($collector)
@@ -405,7 +405,7 @@ Yes 'free disk went from 50.00 to 49.73 GB' ((Near $res.DiskFirst 50 0.001) -and
 Yes 'a dev server that was never up is up 0% of the time' ($dev.Up -eq 0)
 Yes 'three hours is not a week, and it says so' (-not $res.AWeek)
 
-# The printed note, under Windows PowerShell 5.1 as it is likely to be run.
+# The printed note, under PowerShell 7 as it is run.
 $printed = (& $ps -NoProfile -ExecutionPolicy Bypass -File $reader -Path $fake -NoPause 2>&1 | Out-String)
 $printRc = $LASTEXITCODE
 Yes 'the note prints and exits 0' ($printRc -eq 0 -and $printed.Length -gt 0)

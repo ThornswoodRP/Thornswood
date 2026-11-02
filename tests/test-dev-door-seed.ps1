@@ -1,7 +1,7 @@
 <#
   test-dev-door-seed.ps1
 
-      powershell -NoProfile -File .\tests\test-dev-door-seed.ps1 [-Temp <folder>]
+      pwsh -NoProfile -File .\tests\test-dev-door-seed.ps1 [-Temp <folder>]
 
   The dev server's door asks the dev list, and a dev publish leaves the dev
   server's own files alone (#964).
@@ -17,7 +17,7 @@
   own door.log, characters.json and property files with it.
 
   This lifts the script Publish-Server.ps1 sends to the VPS out of the file,
-  runs it the way the VPS does (Windows PowerShell, -EncodedCommand) against
+  runs it the way the box does (PowerShell 7, -EncodedCommand) against
   two folders standing in for the live and dev private folders, and reads back
   what each file holds afterwards. It also runs Set-Door.ps1's dev default.
   No key is printed: the stand-in keys are checked for in the output.
@@ -121,7 +121,7 @@ try {
     Put (Join-Path $dev 'door.log') "dev door log`n"
     Put (Join-Path $dev 'property.json') '{"dev":"property"}'
     $r = Seed $case 'https://thornswood.net'
-    Yes 'the seed runs under Windows PowerShell' ($r.code -eq 0)
+    Yes 'the seed runs under the box''s PowerShell' ($r.code -eq 0)
     $d = Door (Join-Path $r.dev 'door.json')
     Yes 'the dev door asks the dev list, https://thornswood.net/dev' ($d.site -eq 'https://thornswood.net/dev')
     Yes 'and carries the live bot key, so a rotated key reaches dev' ($d.key -eq $LIVEKEY)

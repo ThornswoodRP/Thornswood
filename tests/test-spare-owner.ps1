@@ -1,7 +1,7 @@
 <#
   test-spare-owner.ps1
 
-      powershell -NoProfile -File .\tests\test-spare-owner.ps1
+      pwsh -NoProfile -File .\tests\test-spare-owner.ps1
 
   The launcher's half of To Do List entry 142's join check: the id the
   menu's New character uses belongs to the Discord account it was minted

@@ -2,7 +2,6 @@
   test-scripts-no-literal-feff.ps1
 
       pwsh -NoProfile -File .\tests\test-scripts-no-literal-feff.ps1
-      powershell -NoProfile -File .\tests\test-scripts-no-literal-feff.ps1
 
   No script under scripts\ may embed a literal U+FEFF (byte order mark)
   character in its source. A leading UTF-8 BOM on the file itself is fine;

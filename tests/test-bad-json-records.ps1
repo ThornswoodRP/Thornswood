@@ -1,7 +1,6 @@
 <#
   test-bad-json-records.ps1
 
-      powershell -NoProfile -File .\tests\test-bad-json-records.ps1
       pwsh -NoProfile -File .\tests\test-bad-json-records.ps1
 
   A record that is empty, cut off or not JSON at all, fed straight to

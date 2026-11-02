@@ -2,7 +2,6 @@
   test-2753-cloud-ssh.ps1
 
       pwsh -NoProfile -File .\tests\test-2753-cloud-ssh.ps1
-      powershell -NoProfile -File .\tests\test-2753-cloud-ssh.ps1
 
   The PowerShell half of ssh from cloud Claude threads (#2753):
   Install-Bridge.ps1 (the box's end, as a task) and Setup-CloudSsh.ps1 (the
@@ -30,9 +29,8 @@
     6. The Caddyfile carries /box/ to the port the bridge and its installer
        use, and Setup-Domain.ps1 refuses a Caddyfile without it.
     7. Get-PlainAnswer, the one way Install-Bridge.ps1 reads an answer, run
-       in pwsh and in Windows PowerShell 5.1 where it is installed (the box
-       runs 5.1) against bridge.js itself, a stand-in for the site's 404 and
-       a port nobody holds: the bridge's line, the site's, and nothing (#2875).
+       in pwsh, which the box runs, against bridge.js itself, a stand-in for
+       the site's 404 and a port nobody holds: the bridge's line, the site's, and nothing (#2875).
   Section 7 starts bridge.js and a stand-in on loopback ports of its own and
   stops them; nothing else connects and nothing leaves this machine.
 #>
@@ -176,8 +174,9 @@ Yes '  and on the port, at install and in the status, never by status code alone
     $install.Contains('if (`$a.Code -eq 404 -and `$a.Body -eq ''$Plain'') { ''port'))
 Yes '  each through Get-PlainAnswer, which goes with the scripts that call it' (
     $installCode.Contains('function Get-PlainAnswer {') -and $installCode.IndexOf('function Get-PlainAnswer {') -lt $installCode.IndexOf('function Answers'))
-# On the box's Windows PowerShell 5.1 a 404 leaves Invoke-WebRequest's
-# ErrorDetails empty, so a body read that way is never seen (#2875).
+# On Windows PowerShell 5.1, which the box ran until #5356, a 404 left
+# Invoke-WebRequest's ErrorDetails empty, so a body read that way was never
+# seen (#2875).
 Yes '  and none through Invoke-WebRequest or ErrorDetails' ($install -notmatch 'Invoke-WebRequest -' -and $install -notmatch '\.ErrorDetails')
 Yes 'the status names whose tokens are there, never what they are' ($install -match "'tokens    for '" -and $install -notmatch 'Get-Content[^\r\n]*tokens')
 
@@ -271,8 +270,8 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
         $procs += StartNode (P 'scripts', 'vps', 'bridge', 'bridge.js') @{ THORNSWOOD_BRIDGE_PORT = $bridgePort; THORNSWOOD_BRIDGE_TOKENS = (Join-Path $ptmp 'tokens'); THORNSWOOD_BRIDGE_TARGET = ('127.0.0.1:' + $nobody) }
         $procs += StartNode $sitePath @{ PORT = $sitePort }
         Yes 'bridge.js and the stand-in site start' ((Until "http://127.0.0.1:$bridgePort/") -and (Until "http://127.0.0.1:$sitePort/"))
-        $shells = @()
-        foreach ($sh in 'pwsh', 'powershell.exe') { if (Get-Command $sh -ErrorAction SilentlyContinue) { $shells += $sh } }
+        # The box runs its scripts in pwsh since #5356.
+        $shells = @('pwsh')
         foreach ($sh in $shells) {
             $asks = @($bridgePort, $sitePort, $nobody) | ForEach-Object { "`$a = Get-PlainAnswer 'http://127.0.0.1:$_/' 3; 'ANSWER ' + `$a.Code + ' ' + `$a.Body" }
             $code = $SendPlainAnswer + "`n" + ($asks -join "`n")

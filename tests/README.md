@@ -104,30 +104,37 @@ by the rest of the line, in the report scripts\dev\Nightly-Harnesses.ps1
 -Report writes and on the run's page. So give each check a line of its own
 that names it, and print nothing else that starts with one of those words.
 
-## A harness that needs Windows
+## A harness that runs box code, or needs Windows
 
-Windows PowerShell 5.1, cmd.exe, a scheduled task, a folder's ACL and the
-.NET Framework are only on Windows, and the harnesses also run under pwsh on
-Linux. A `.ps1` harness that needs any of them dot-sources `tests\Windows.ps1`
-and asks `$OnWindows` before it names a Windows path:
+The box runs its scripts in PowerShell 7 (#5356), the same pwsh that runs the
+harnesses, on Windows and on Linux. A `.ps1` harness that runs a box script
+in a child shell dot-sources `tests\Windows.ps1` and asks it for that shell,
+which works on every OS:
 
 ```
 . (Join-Path $PSScriptRoot 'Windows.ps1')
+$boxPs = Get-BoxPowerShell
+$o = & $boxPs -NoProfile -NonInteractive -File $script 2>&1
+```
+
+cmd.exe, a scheduled task, a folder's ACL, WMI and the .NET Framework are
+only on Windows. A harness that needs one asks `$OnWindows` before it names a
+Windows path, and its SKIP line names what Windows has that it needs:
+
+```
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the runs: they need Windows PowerShell 5.1, which only Windows has'
+    Write-Host 'SKIP  the task check: it registers a scheduled task, which only Windows has'
     Done
 }
-$ps51 = Get-WindowsPowerShell
 $cmd = Get-WindowsPath 'System32\cmd.exe'
 ```
 
 Off Windows it says SKIP for that part and checks the rest, or, when the
 whole harness is about Windows, prints one `NOT RUN` line saying why and
-exits 0. When what it runs on the box can run here as well, it may run it in
-this shell instead, and says so on a `NOTE` line. On Windows,
-`Get-WindowsPowerShell` fails the harness when powershell.exe is not where
-Windows keeps it, rather than letting it skip or run pwsh in its place. A
-harness that loads `tests\Launcher-Csc.ps1` has `$OnWindows` from it too.
+exits 0. `Get-WindowsPowerShell` is kept only for the launcher harnesses,
+whose scripts run on people's own PCs, until the launcher's pull request
+lands; nothing on the box starts Windows PowerShell 5.1. A harness that
+loads `tests\Launcher-Csc.ps1` has `$OnWindows` from it too.
 
 Before issue #2957 each harness found these itself, by joining onto
 `$env:SystemRoot` or asking `Get-Command` for powershell.exe, and copied the

@@ -1,7 +1,6 @@
 # test-2180-feed-sends.ps1
 #
 #     pwsh -NoProfile -File .\tests\test-2180-feed-sends.ps1
-#     powershell -NoProfile -File .\tests\test-2180-feed-sends.ps1
 #
 # Every feed file is held to its contract before it is sent (#2180). Send-FeedStore
 # in scripts\release\Feed-Store.ps1 is the one way version.json, published.json

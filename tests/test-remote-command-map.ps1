@@ -2,7 +2,6 @@
   test-remote-command-map.ps1
 
       pwsh -NoProfile -File .\tests\test-remote-command-map.ps1
-      powershell -NoProfile -File .\tests\test-remote-command-map.ps1
 
   Every call under scripts\ that reaches the VPS is in
   records\remote-commands.json, with what it does and the class it needs: a

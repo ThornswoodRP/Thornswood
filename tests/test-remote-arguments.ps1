@@ -32,7 +32,7 @@ function Yes([string]$what, [bool]$cond) {
 
 function global:ssh {
     $line = [string]$args[-1]
-    $m = [regex]::Match($line, '^powershell -NoProfile -EncodedCommand (\S+)$')
+    $m = [regex]::Match($line, '^pwsh -NoProfile -EncodedCommand (\S+)$')
     if (-not $m.Success) { Write-Output "UNEXPECTED $line"; $global:LASTEXITCODE = 99; return }
     $text = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($m.Groups[1].Value))
     Write-Output (& ([scriptblock]::Create($text)) 2>&1)

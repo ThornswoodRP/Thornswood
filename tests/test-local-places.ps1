@@ -171,11 +171,17 @@ try {
     $appdata = Join-Path $T 'appdata'
     New-Item -ItemType Directory -Force -Path $appdata | Out-Null
     $argsFile = Join-Path $T 'task-args.txt'
+    $exeFile = Join-Path $T 'task-exe.txt'
+    # The task runs pwsh from Program Files, which off Windows no variable
+    # names, so the driver names one under the scratch folder, as it does
+    # LOCALAPPDATA.
+    $programs = Join-Path $T 'programs'
     $driver = Join-Path $T 'schedule.ps1'
     $fetchMain = Join-Path $main 'scripts\vps\Fetch-Backups.ps1'
     $lines = @(
         ('$env:LOCALAPPDATA = ''{0}''' -f $appdata),
-        ('function New-ScheduledTaskAction {{ param($Execute, $Argument, $WorkingDirectory) [IO.File]::WriteAllText(''{0}'', $Argument); ''action'' }}' -f $argsFile),
+        ('$env:ProgramFiles = ''{0}''' -f $programs),
+        ('function New-ScheduledTaskAction {{ param($Execute, $Argument, $WorkingDirectory) [IO.File]::WriteAllText(''{0}'', $Argument); [IO.File]::WriteAllText(''{1}'', $Execute); ''action'' }}' -f $argsFile, $exeFile),
         'function New-ScheduledTaskTrigger { ''trigger'' }',
         'function New-ScheduledTaskPrincipal { ''principal'' }',
         'function New-ScheduledTaskSettingsSet { ''settings'' }',
@@ -193,6 +199,9 @@ try {
     Yes ("Fetch-Backups -Schedule registers (stand-in, exit $($r.Code))") ($r.Code -eq 0 -and $taskArgs)
     if (-not $taskArgs) { Write-Host $r.Out }
     Yes ('  and gives the task -To "' + $mainBackups + '"') ($taskArgs.Contains('-To "' + $mainBackups + '"'))
+    $taskExe = ''
+    if (Test-Path -LiteralPath $exeFile) { $taskExe = [IO.File]::ReadAllText($exeFile) }
+    Yes '  and the task runs PowerShell 7 from Program Files' ($taskExe -eq (Join-Path $programs 'PowerShell\7\pwsh.exe'))
     $copied = Join-Path $appdata 'Thornswood\Backups-Fetch\Fetch-Backups.ps1'
     Yes '  and copies the script to its own folder' (Test-Path -LiteralPath $copied)
 

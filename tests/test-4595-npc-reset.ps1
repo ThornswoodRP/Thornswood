@@ -13,9 +13,7 @@
   This runs the box half, as the script sends it, over stand-in server
   folders in a scratch folder:
 
-    P  both scripts parse, and the box half is plain ASCII (Windows
-       PowerShell 5.1 on the box reads a file with no byte order mark as
-       ANSI)
+    P  both scripts parse, and the box half is plain ASCII
     K  which change form is which: an actor with no profile is an NPC, by
        kind (placed, patrol, staff-run, staff-kept, runtime); a character,
        profile 0 included, any other reference, and a file that does not

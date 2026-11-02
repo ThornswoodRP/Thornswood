@@ -1,7 +1,6 @@
 # test-2180-box-reads.ps1
 #
 #     pwsh -NoProfile -File .\tests\test-2180-box-reads.ps1
-#     powershell -NoProfile -File .\tests\test-2180-box-reads.ps1
 #
 # The box-side reads of server-settings.json and server-build.json hold them to
 # RecordShape.ps1 (#2180, slice 4). The box has no checkout, so the contract

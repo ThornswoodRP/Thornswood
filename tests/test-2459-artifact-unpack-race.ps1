@@ -2,7 +2,6 @@
   test-2459-artifact-unpack-race.ps1
 
       pwsh -NoProfile -File .\tests\test-2459-artifact-unpack-race.ps1
-      powershell -NoProfile -File .\tests\test-2459-artifact-unpack-race.ps1
 
   Two runs at one commit from one checkout build the same artifact under the
   same names in out\deploys\<component>: the zip, its .json record and the

@@ -3,9 +3,8 @@
 
       pwsh -NoProfile -File .\tests\test-ssh-stderr.ps1
 
-  A line ssh or scp writes on stderr is not an error by itself, in Windows
-  PowerShell 5.1 and in PowerShell 7 alike, and a real failure still is,
-  by its exit code. Issue #941.
+  A line ssh or scp writes on stderr is not an error by itself, and a real
+  failure still is, by its exit code. Issue #941.
 
   WHY. From 28 September the OpenSSH client on Patrick's machine prints
   "** WARNING: connection is not using a post-quantum key exchange
@@ -20,10 +19,10 @@
 
   HOW. A stand-in ssh.cmd and scp.cmd, first on PATH, print that warning on
   stderr, echo their standard input, and exit with the code this test asks
-  for. The same checks run once under each PowerShell on the machine
-  (powershell.exe and pwsh), in a child process, so each gets its own engine:
-    1. The stand-in reproduces the fault: a bare "& ssh ... 2>&1" under
-       Stop throws in 5.1 (and not in 7, which is how 7 always behaved).
+  for. The checks run in a child pwsh, the PowerShell the scripts run in
+  since #5356, so they get an engine of their own:
+    1. A bare "& ssh ... 2>&1" under Stop does not throw in PowerShell 7,
+       which is how 7 always behaved.
     2. Through Invoke-ThornswoodNative, under Stop: 2>&1, 2>$null, | Out-Null
        and no redirection all go through, the stdout lines come back as
        strings and the warning as an error record, and $LASTEXITCODE is 0.
@@ -72,8 +71,7 @@ if ($Child) {
     # 1. The fault, reproduced without the helper.
     $threw = $false
     try { $null = & ssh -o BatchMode=yes tester@box.invalid 'echo hi' 2>&1 } catch { $threw = $true }
-    if ($v -lt 6) { Yes "$tag the stand-in reproduces #941: a bare & ssh 2>&1 under Stop throws on the warning" $threw }
-    else { Yes "$tag PowerShell 7 never threw on stderr, so a bare call does not" (-not $threw) }
+    Yes "$tag PowerShell 7 never threw on stderr, so a bare call does not" (-not $threw)
 
     # 2. Through the helper.
     $threw = $false; $out = @()
@@ -180,17 +178,10 @@ try {
         }
     }
 
-    # Each PowerShell by the name its platform gives it: off Windows there is
-    # only pwsh.
-    $shells = @()
-    foreach ($s in $(if ($OnWindows) { 'powershell.exe', 'pwsh.exe' } else { 'pwsh' })) {
-        $c = Get-Command $s -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($c) { $shells += $c.Source }
-    }
-    Yes ("there is at least one PowerShell to run the checks in (" + $shells.Count + ")") ($shells.Count -ge 1)
+    # The scripts run in PowerShell 7 only (#5356).
+    $shells = @(Get-BoxPowerShell)
     # This runs under Stop too, and the children write on stderr.
     . (Join-Path $repo 'scripts\vps\Vps.ps1')
-    $saw51 = $false
     foreach ($sh in $shells) {
         $lines = @(Invoke-ThornswoodNative { & $sh -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Child $bin } 2>&1 | ForEach-Object { [string]$_ })
         $rc = $LASTEXITCODE
@@ -198,12 +189,10 @@ try {
             if ($l -match '^PASS  ') { $script:pass++; Write-Host $l }
             elseif ($l -match '^FAIL  ') { $script:fail++; Write-Host $l }
         }
-        if (@($lines | Where-Object { $_ -match '^PASS  \[PS 5\]' }).Count) { $saw51 = $true }
         $done = @($lines | Where-Object { $_ -match '^CHILD ' })
         Yes ("the checks ran to the end under " + (Split-Path -Leaf $sh)) ($done.Count -eq 1 -and ($rc -eq 0 -or $script:fail))
         if (-not $done.Count) { $lines | Select-Object -Last 15 | ForEach-Object { Write-Host ("    " + $_) } }
     }
-    if ($shells -match 'powershell\.exe$') { Yes 'Windows PowerShell 5.1 was one of them' $saw51 }
 }
 finally {
     Remove-Item -LiteralPath $bin -Recurse -Force -ErrorAction SilentlyContinue

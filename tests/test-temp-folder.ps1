@@ -1,7 +1,6 @@
 # test-temp-folder.ps1
 #
 #     pwsh -NoProfile -File .\tests\test-temp-folder.ps1
-#     powershell -NoProfile -File .\tests\test-temp-folder.ps1
 #
 # The deploy, release and ops scripts run on any developer's machine, and
 # since #2903 on a Linux cloud machine too. There $env:TEMP is not set, so

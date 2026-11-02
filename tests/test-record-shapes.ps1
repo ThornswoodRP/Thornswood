@@ -1,7 +1,6 @@
 # test-record-shapes.ps1
 #
 #     pwsh -NoProfile -File .\tests\test-record-shapes.ps1
-#     powershell -NoProfile -File .\tests\test-record-shapes.ps1
 #
 # The high-risk records are held to a known version and the fields their
 # readers depend on, fail closed (#2180, first slice): RecordShape.ps1's

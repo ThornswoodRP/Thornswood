@@ -1,7 +1,7 @@
 <#
   test-temp-short-path.ps1
 
-      powershell -NoProfile -File .\tests\test-temp-short-path.ps1
+      pwsh -NoProfile -File .\tests\test-temp-short-path.ps1
 
   Issue #1156. A relative path cut from a file's FullName by the length of a
   root that is still the short 8.3 form of TEMP comes out wrong. Restore-Server

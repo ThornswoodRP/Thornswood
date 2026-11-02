@@ -2,7 +2,6 @@
   test-2947-chargen-box-light.ps1
 
       pwsh -NoProfile -File .\tests\test-2947-chargen-box-light.ps1
-      powershell -NoProfile -File .\tests\test-2947-chargen-box-light.ps1
 
   Check-Chargen.ps1 -From dev and -From live read which plugins are light on
   the box, from the files the server loads, and whether its engine loads

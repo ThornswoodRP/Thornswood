@@ -2,7 +2,6 @@
   test-3597-collection-revision.ps1
 
       pwsh -NoProfile -File .\tests\test-3597-collection-revision.ps1
-      powershell -NoProfile -File .\tests\test-3597-collection-revision.ps1
 
   The collection revision a release names (#3597). Both feeds said revision 2,
   the one One's Vortex had installed, while records\collection-plugins.json

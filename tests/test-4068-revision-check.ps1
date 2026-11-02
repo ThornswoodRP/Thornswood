@@ -2,7 +2,6 @@
   test-4068-revision-check.ps1
 
       pwsh -NoProfile -File .\tests\test-4068-revision-check.ps1
-      powershell -NoProfile -File .\tests\test-4068-revision-check.ps1
 
   Every release and every launcher on the newest published collection
   revision (#4068). Revision 5 was published on 21 Oct and both feeds named

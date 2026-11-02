@@ -17,7 +17,7 @@
 
     1. Show-BotLog.ps1 parses, and the script it sends fills in only rootWin,
        filter and Lines, so it is safe to expand here;
-    2. run the way the VPS runs it (Windows PowerShell, handed the script as
+    2. run the way the box runs it (PowerShell 7, handed the script as
        an encoded command) against a temp folder standing in for
        C:\Thornswood-Bot: bot.log.1's lines come out, before bot.log's;
     3. the filter still leaves out what the bot did not say itself, in both

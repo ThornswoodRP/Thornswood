@@ -2,7 +2,6 @@
   test-watch-outside.ps1
 
       pwsh -NoProfile -File .\tests\test-watch-outside.ps1
-      powershell -NoProfile -File .\tests\test-watch-outside.ps1
 
   scripts\vps\Watch-Outside.ps1 runs on GitHub's Linux runners, from a public
   repository, outside the VPS (#2755), and tells staff in Discord when the

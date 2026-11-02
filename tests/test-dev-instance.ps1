@@ -1,7 +1,7 @@
 <#
   test-dev-instance.ps1
 
-      powershell -NoProfile -File .\tests\test-dev-instance.ps1
+      pwsh -NoProfile -File .\tests\test-dev-instance.ps1
 
   vps-dev-instance.ps1 makes the dev game server and dev voice from the live
   ones without taking anything private of live's, and starts dev voice the way

@@ -1,7 +1,6 @@
 <#
   test-collection-export.ps1
 
-      powershell -NoProfile -File .\tests\test-collection-export.ps1
       pwsh -NoProfile -File .\tests\test-collection-export.ps1
 
   How scripts\mods\LoadOrder.ps1 finds the collection.json an authored

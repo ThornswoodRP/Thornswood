@@ -2,7 +2,6 @@
   test-shipped-not-ours.ps1
 
       pwsh -NoProfile -File .\tests\test-shipped-not-ours.ps1
-      powershell -NoProfile -File .\tests\test-shipped-not-ours.ps1
 
   Other authors' loose files our old packs shipped leave every install they
   reached, where the bytes still match, and never anybody's own copy (#1178).

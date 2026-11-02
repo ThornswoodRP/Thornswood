@@ -2,7 +2,6 @@
   test-3035-file-script.ps1
 
       pwsh -NoProfile -File .\tests\test-3035-file-script.ps1
-      powershell -NoProfile -File .\tests\test-3035-file-script.ps1
 
   Issue #3035. Six scripts put a file of their own on the box and removed it
   with a later step that a run cut short never reached, so it stayed there

@@ -345,7 +345,7 @@ try {
     $r = Get-DevRoom
     Yes 'a half written online.json is unknown, not nobody' ($r.Online -eq -1)
 
-    # Windows PowerShell reads an empty file as no object at all rather than an
+    # PowerShell reads an empty file as no object at all rather than an
     # error, and the first cut of this read turned that into nobody on. The
     # gamemode writes the file whole since #2740, but an empty one still means
     # nothing is known.
@@ -427,7 +427,7 @@ function Held { $false }
     $script:local = $false
     $rootWin = 'C:\Thornswood-Server-Dev'
     Yes 'what goes to the box stays well inside a command line' (
-        ('powershell -NoProfile -EncodedCommand ' +
+        ('pwsh -NoProfile -EncodedCommand ' +
          [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script:sent[-1]))).Length -le 6000)
 
     # ---- nobody on ------------------------------------------------------------------

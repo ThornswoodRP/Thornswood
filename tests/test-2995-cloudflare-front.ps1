@@ -147,7 +147,7 @@ try {
     $errs = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseInput($boxText, [ref]$null, [ref]$errs)
     Yes 'vps-web-firewall.ps1 parses' (-not $errs -or $errs.Count -eq 0)
-    Yes '  and is plain ASCII, which Windows PowerShell on the box reads right' (-not ($boxText.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
+    Yes '  and is plain ASCII' (-not ($boxText.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
     foreach ($f in $Driver, $Shared) {
         $t = [IO.File]::ReadAllText($f)
         $e = $null

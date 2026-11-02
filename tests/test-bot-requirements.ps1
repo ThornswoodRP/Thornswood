@@ -1,7 +1,6 @@
 # test-bot-requirements.ps1
 #
 #     pwsh -NoProfile -File .\tests\test-bot-requirements.ps1
-#     powershell -NoProfile -File .\tests\test-bot-requirements.ps1
 #
 # The bot's libraries are pinned by hash, and every installer insists on it
 # (issue #2190). Reads the checkout only: nothing is downloaded or installed.

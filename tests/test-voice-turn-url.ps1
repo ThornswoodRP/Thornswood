@@ -27,7 +27,7 @@
     the shape      what a relay address may look like, since it goes onto a
                    cmd.exe line where an & would start a second command
     the probe      what is already running, read through a stand-in Remote.ps1
-                   that runs the probe in Windows PowerShell on this machine,
+                   that runs the probe in PowerShell 7 on this machine,
                    which is what sshd runs on the box, against real copies of
                    voice\voice-server.js started here on spare ports
     the command    the service's command line, built from the install's own

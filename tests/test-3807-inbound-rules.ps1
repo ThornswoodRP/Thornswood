@@ -107,7 +107,7 @@ try {
     $errs = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseInput($boxText, [ref]$null, [ref]$errs)
     Yes 'vps-inbound-rules.ps1 parses' (-not $errs -or $errs.Count -eq 0)
-    Yes '  and is plain ASCII, which Windows PowerShell on the box reads right' (-not ($boxText.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
+    Yes '  and is plain ASCII' (-not ($boxText.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
     $dt = [IO.File]::ReadAllText($Driver)
     $e = $null
     $null = [System.Management.Automation.Language.Parser]::ParseInput($dt, [ref]$null, [ref]$e)

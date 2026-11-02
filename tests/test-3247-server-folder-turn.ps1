@@ -2,7 +2,6 @@
   test-3247-server-folder-turn.ps1
 
       pwsh -NoProfile -File .\tests\test-3247-server-folder-turn.ps1
-      powershell -NoProfile -File .\tests\test-3247-server-folder-turn.ps1
 
   Issue #3247. On 22 Oct 2026 at 2:21 AM a dev Publish-Server stopped dev and
   was refused the rename of C:\Thornswood-Server-Dev, because the nightly

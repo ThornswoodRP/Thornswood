@@ -1,7 +1,7 @@
 <#
   test-server-acl.ps1
 
-      powershell -NoProfile -File .\tests\test-server-acl.ps1
+      pwsh -NoProfile -File .\tests\test-server-acl.ps1
 
   No BUILTIN\Users rule reaches the game servers' folders, and private is
   SYSTEM's and Administrators' alone, at every install and now (issue #1105).
