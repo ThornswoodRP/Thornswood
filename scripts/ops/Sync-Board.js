@@ -330,11 +330,14 @@ async function syncIssue(gh, o, issue, board, fresh) {
 // its Order (null when it has none). One read of the whole board, a page of
 // 100 cards a call.
 async function cardsOf(gh, kind, owner, number, orderId, repo) {
-  const name = repo.split('/')[1].toLowerCase();
+  // The whole owner/name: matching the name alone would take an issue of
+  // another owner's repository called the same, with the same number as one
+  // here, for this repository's.
+  const want = '/repos/' + repo.toLowerCase();
   const out = new Map();
   for (const it of await gh.all(kind + '/' + owner + '/projectsV2/' + number + '/items?fields=' + orderId)) {
     const c = it.content || {};
-    if (String(it.content_type || '') !== 'Issue' || !c.number || String(c.repository_url || '').split('/').pop().toLowerCase() !== name) { continue; }
+    if (String(it.content_type || '') !== 'Issue' || !c.number || !String(c.repository_url || '').toLowerCase().endsWith(want)) { continue; }
     const f = (it.fields || []).find(x => String(x.id) === String(orderId));
     out.set(Number(c.number), { item: it.id, node: String(c.node_id || ''), order: numberOf(f && f.value) });
   }
