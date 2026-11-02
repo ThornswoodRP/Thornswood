@@ -16,9 +16,11 @@
 
   REPOSITORY SETTINGS (#3683, Patrick's answers of 26 Oct 2026). With
   -RepoSettings it asks for records\github-repo-settings.json instead, which
-  names Thornswood and the engine fork, ThornswoodRP/skymp, and for each its
-  rulesets and, where it says, private vulnerability reporting, immutable
-  releases, secret scanning and push protection: each ruleset is made on
+  names Thornswood, the engine fork, ThornswoodRP/skymp, and the ops
+  repository, and for each its rulesets (none for the ops repository, which
+  GitHub Free keeps none for) and, where it says, private vulnerability
+  reporting, immutable releases, secret scanning, push protection,
+  auto-merge and the three merge methods: each ruleset is made on
   GitHub, or put back, with exactly its target, enforcement, conditions,
   rules and bypass list, and the rest are switched on or off as the record
   says. A ruleset GitHub has that the record does not name stops it and is

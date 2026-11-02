@@ -233,8 +233,10 @@ The short form of the rules. The same decisions, with the dates they were made, 
   compile error or a trim or native code warning, issue #4823), checks the
   programs it made for secrets, and builds the ship root tool. The window is
   compiled markup, so a renamed control is a compile error there. A pull request that changes only files under
-  `docs`, `site` or `bot` skips it, because nothing it checks reads those
-  folders (`scripts\dev\Launcher-Reach.ps1`, #5292). Beside them, the job
+  `docs`, `site` or `bot` runs it on Linux instead, where it passes with
+  one step that says why, because nothing it checks reads those folders
+  (`scripts\dev\Launcher-Reach.ps1`, #5292). It is never skipped for that,
+  so it has a result of its own on every pull request. Beside them, the job
   "gate" runs
   the gate harnesses (every `test-*.js` and `test-*.ps1` in `tests` or in a
   product's own `tests` folder, such as `launcher\tests`, that
@@ -258,8 +260,9 @@ The short form of the rules. The same decisions, with the dates they were made, 
   ran less.
 - The checks are **Tree checks**, **Launcher builds** and the shares of the
   **Gate harnesses** on Windows and on Linux, and on a pull request **Build
-  check result** passes only when all of them did, or were skipped because
-  the pick said they had nothing to check (#3683, #5292, #5293).
+  check result** passes only when all of them did, or, for the gate's
+  shares, were skipped because the pick said they had nothing to check
+  (#3683, #5292, #5293).
   The repository is public since 30 Oct 2026, so hosted minutes are free, and
   nothing builds on the VPS any more: no fallback job and no `BUILD_RUNNER`
   switch (#4983). A push

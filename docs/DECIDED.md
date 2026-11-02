@@ -310,6 +310,10 @@ link, and the old line goes.
   every file, the signed manifest, the baseline record) rebuilt on top of
   it, not dropped (#4065). 26 Oct 2026,
   [#3209](https://github.com/EvilPatrick06/Thornswood/issues/3209#issuecomment-6434829911).
+- **The ops repository's tunnel.yml replaces tunnel-token.yml, so the tunnel
+  token is sealed in one run that takes no key from whoever starts it.**
+  (dec_ezVpLbFt9vfdknnW36cqkw) 1 Nov 2026,
+  [#5334](https://github.com/ThornswoodRP/Thornswood/issues/5334#issuecomment-6570922212).
 
 ## Work and crafting
 

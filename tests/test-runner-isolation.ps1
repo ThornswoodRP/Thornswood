@@ -98,6 +98,13 @@ try {
     Set-Content (Join-Path $wfIs 'label.yml') "on:`n  issue_comment:`npermissions:`n  issues: write`njobs:`n  a:`n    runs-on: `${{ github.event.repository.private && fromJSON('[`"self-hosted`", `"Windows`", `"thornswood-vps`"]') || 'ubuntu-latest' }}`n  b:`n    runs-on: [self-hosted, Windows, thornswood-vps]`n"
     $x = Run (Facts) $wfIs
     T ($x.Out -match 'RISK  workflow label\.yml started by anyone') '  and one job left on it beside one that picks it only while private is still a risk'
+    # A choice between two runners named outright is either of them (#5292).
+    Set-Content (Join-Path $wfIs 'label.yml') "on:`n  issue_comment:`npermissions:`n  issues: write`njobs:`n  a:`n    runs-on: `${{ needs.pick.outputs.launcher == 'false' && 'ubuntu-24.04-arm' || 'windows-latest' }}`n"
+    $x = Run (Facts) $wfIs
+    T ($x.Out -notmatch 'RISK  workflow label\.yml started by anyone' -and $x.Report -match '\| workflow \| label\.yml started by anyone \|[^\n]*; not on thornswood-vps[^\n]*\| ok \|') '  a job that picks one of two hosted runners by name is on neither of the box''s (#5292)'
+    Set-Content (Join-Path $wfIs 'label.yml') "on:`n  issue_comment:`npermissions:`n  issues: write`njobs:`n  a:`n    runs-on: `${{ github.event.comment.body == 'x' && 'thornswood-vps' || 'ubuntu-latest' }}`n"
+    $x = Run (Facts) $wfIs
+    T ($x.Out -match 'RISK  workflow label\.yml started by anyone') '  and one whose choice names the production label is a risk'
     Set-Content (Join-Path $wfIs 'label.yml') "on:`n  issue_comment:`npermissions:`n  issues: write`njobs:`n  a:`n    runs-on: `${{ github.event.repository.private && fromJSON('[`"self-hosted`", `"Windows`", `"thornswood-vps`"]') || 'ubuntu-latest' }}`n"
     $x = Run (Facts) $wfIs
     T ($x.Out -notmatch 'RISK  workflow label\.yml started by anyone') '  a job that picks it only while private is not'

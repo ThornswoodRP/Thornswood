@@ -7,8 +7,11 @@
   starts no Windows job. The checks of the tree that need no Windows run in
   build.yml's job "Tree checks" on Linux for every change; the pick says
   whether the job "Launcher builds" has anything to check
-  (scripts\dev\Launcher-Reach.ps1); and "Build check result" counts that job,
-  or the gate, as passed when it was skipped only when the pick said so.
+  (scripts\dev\Launcher-Reach.ps1), and when it has not, that job still runs,
+  on Linux, and passes with one step that says why, so it is never skipped
+  for the path rule (Magpie's finding of 1 Nov 2026); and "Build check
+  result" needs that job to pass, and counts the gate as passed when it was
+  skipped only when the pick said so.
   This checks that:
 
     1. Launcher-Reach.ps1, run for real against commits in a scratch
@@ -18,15 +21,18 @@
        only starts like docs); true on main and a run by hand, with no base,
        and with a base git cannot find, each saying why;
     2. "Build check result"'s own script, run with bash for each result and
-       output it can be given, passes only when the pick and the tree checks
-       passed and the launcher build and the gate, its Windows shares and
+       output it can be given, passes only when the pick, the tree checks
+       and the launcher build passed and the gate, its Windows shares and
        since #5293 its Linux shares, each passed or were skipped because
-       the pick said they had nothing to do;
-    3. read from this repository: the Windows job's steps are exactly the
-       native launcher's publish, the ship root tool and the note (the 5.1
-       comparison of the writing check went with #5356), and no code of what
-       they build or read names docs, site or bot (a comment that cites a
-       page is not a read); the writing
+       the pick said they had nothing to do; a skipped launcher build never
+       passes;
+    3. read from this repository: the launcher job's steps are exactly the
+       one that says why there is nothing to build, which alone runs when
+       the pick said launcher=false, on Linux, then the native launcher's
+       publish, the ship root tool and the note, which run only otherwise,
+       on Windows (the 5.1 comparison of the writing check went with #5356),
+       and none of what they build or read names docs, site or bot (a comment
+       that cites a page is not a read); the writing
        check's harness runs in Tree checks too; Tree checks is on Linux,
        always runs, and has no step that needs Windows.
 
@@ -58,10 +64,17 @@ $pick = Get-Job $build 'pick'
 # Since #4823 the launcher is published natively (Build-Launcher.ps1) and its
 # window is compiled markup, so the window check (Check-Controls.ps1) and the
 # MSBuild check (test-498-msbuild.ps1) went; the publish took their place.
-$want = @('Publish the native launcher', 'Build the ship root tool', 'Write down the tree these checks passed on')
+$want = @('Say why there is nothing to build', 'Publish the native launcher', 'Build the ship root tool',
+    'Write down the tree these checks passed on')
 $have = Get-StepNames $launcher
-Yes ('the Windows job "Launcher builds" has exactly the steps that need Windows, and the note (' + ($have -join '; ') + ')') (($have -join '|') -eq ($want -join '|'))
-Yes '  and runs only when the pick does not say the change cannot reach it' ($launcher -match "(?m)^    if: \$\{\{ !cancelled\(\) && needs\.tested\.outputs\.run == '' && needs\.pick\.outputs\.launcher != 'false' \}\}$")
+Yes ('the job "Launcher builds" has exactly the step that says why there is nothing to build, the steps that need Windows, and the note (' + ($have -join '; ') + ')') (($have -join '|') -eq ($want -join '|'))
+Yes '  and always runs, never skipped for the path rule' ($launcher -match "(?m)^    if: \$\{\{ !cancelled\(\) && needs\.tested\.outputs\.run == '' \}\}$" -and $launcher -notmatch 'outputs\.launcher != ''false'' \}\}')
+Yes '  on Linux when the pick says the change cannot reach it, and on Windows otherwise, a failed or silent pick included' ($launcher -match "(?m)^    runs-on: \$\{\{ needs\.pick\.outputs\.launcher == 'false' && 'ubuntu-24\.04-arm' \|\| 'windows-latest' \}\}$" -and $launcher -match "(?m)^      REACHES: \$\{\{ needs\.pick\.outputs\.launcher \}\}$")
+$steps = @([regex]::Split(($launcher -replace '(?s)^.*?\n    steps:\n', ''), '\n(?=      - )') | Where-Object { $_ -match '^      - ' })
+$why = $steps[0]
+Yes '  where the first step alone runs, says why, and runs nothing' ($why -match "^      - name: Say why there is nothing to build\n        if: env\.REACHES == 'false'\n" -and $why -notmatch '(?m)^\s+(uses|shell):|pwsh|powershell|\.ps1 |node ')
+$unguarded = @($steps | Select-Object -Skip 1 | Where-Object { $_ -notmatch "\n        if: env\.REACHES != 'false'(\n| && \()" })
+Yes ('  and every other step runs only when the pick did not say so (' + $steps.Count + ' steps)') ($steps.Count -ge 7 -and $unguarded.Count -eq 0)
 # What those steps build and read. Each named here is what one of them runs
 # or compiles; no code in it may name a folder the path rule skips. Comments
 # are left out: a header citing docs\studies for a decision reads nothing.
@@ -102,9 +115,10 @@ else {
         [IO.File]::WriteAllText($file, $script + "`n")
         $cases = @(
             @('everything passed', 'success', 'success', 'success', 'success', 'true', '[1,2]', 'success', '[1]', 0),
-            @('the launcher build skipped because the pick said the change cannot reach it', 'success', 'success', 'skipped', 'success', 'false', '[1]', 'success', '[1]', 0),
+            @('the launcher build passed on Linux because the pick said the change cannot reach it', 'success', 'success', 'success', 'success', 'false', '[1]', 'success', '[1]', 0),
+            @('the launcher build skipped, though the pick said the change cannot reach it (a skip is not a pass)', 'success', 'success', 'skipped', 'success', 'false', '[1]', 'success', '[1]', 1),
             @('the gate skipped because the pick gave it no share', 'success', 'success', 'success', 'skipped', 'true', '[]', 'success', '[1]', 0),
-            @('both skipped, a change to a doc no harness reads', 'success', 'success', 'skipped', 'skipped', 'false', '[]', 'success', '[1]', 0),
+            @('a change to a doc no harness reads: the launcher build passed on Linux and the gate skipped', 'success', 'success', 'success', 'skipped', 'false', '[]', 'success', '[1]', 0),
             @('the launcher build skipped though the pick said it reaches it', 'success', 'success', 'skipped', 'success', 'true', '[1]', 'success', '[1]', 1),
             @('the launcher build skipped and the pick said nothing', 'success', 'success', 'skipped', 'success', '', '[1]', 'success', '[1]', 1),
             @('the launcher build skipped beside a failed pick', 'failure', 'success', 'skipped', 'skipped', 'false', '[]', 'success', '[1]', 1),
@@ -115,7 +129,7 @@ else {
             @('the launcher build was cancelled', 'success', 'success', 'cancelled', 'success', 'true', '[1]', 'success', '[1]', 1),
             @('a share of the gate failed', 'success', 'success', 'success', 'failure', 'true', '[1]', 'success', '[1]', 1),
             @('the Linux shares skipped because the pick gave them none (#5293)', 'success', 'success', 'success', 'success', 'true', '[1]', 'skipped', '[]', 0),
-            @('every gate skipped, a change to a doc no harness reads', 'success', 'success', 'skipped', 'skipped', 'false', '[]', 'skipped', '[]', 0),
+            @('every gate skipped, a change to a doc no harness reads', 'success', 'success', 'success', 'skipped', 'false', '[]', 'skipped', '[]', 0),
             @('the Linux shares skipped though the pick gave them some', 'success', 'success', 'success', 'success', 'true', '[1]', 'skipped', '[1,2]', 1),
             @('the Linux shares skipped and the pick said nothing', 'success', 'success', 'success', 'success', 'true', '[1]', 'skipped', '', 1),
             @('a Linux share failed', 'success', 'success', 'success', 'success', 'true', '[1]', 'failure', '[1]', 1),

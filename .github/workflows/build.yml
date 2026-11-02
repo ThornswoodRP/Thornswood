@@ -819,40 +819,60 @@ jobs:
   # compiled markup since #4823), and the writing check's harness runs in
   # "Tree checks" for every change (tests\test-5292-path-rule.ps1 holds all
   # of that). The pick says
-  # so (scripts\dev\Launcher-Reach.ps1), and this job is skipped; Build check
-  # result counts a skip as passed only then. Main and a run by hand always
-  # build. A pick that failed or said nothing builds too.
+  # so (scripts\dev\Launcher-Reach.ps1), and this job still runs and reports
+  # a result of its own: on Linux, with one step that says why there is
+  # nothing to build, and it passes. It is never skipped for the path rule,
+  # so "Launcher builds" is a pass or a failure on every pull request, and a
+  # skipped one means something went wrong (#5292, Magpie's finding of
+  # 1 Nov 2026). Main and a run by hand always build. A pick that failed or
+  # said nothing builds too.
   launcher:
     name: Launcher builds
     needs: [tested, pick]
-    if: ${{ !cancelled() && needs.tested.outputs.run == '' && needs.pick.outputs.launcher != 'false' }}
-    runs-on: windows-latest
+    if: ${{ !cancelled() && needs.tested.outputs.run == '' }}
+    runs-on: ${{ needs.pick.outputs.launcher == 'false' && 'ubuntu-24.04-arm' || 'windows-latest' }}
     permissions:
       contents: read
+    env:
+      # What the pick said: 'false' only when the change reaches nothing
+      # this job checks.
+      REACHES: ${{ needs.pick.outputs.launcher }}
     # Its steps took about three minutes once the gate went to the job above,
     # and less since the tree checks went to Linux; twenty is Patrick's mark
     # for something seriously wrong.
     timeout-minutes: 20
     steps:
+      - name: Say why there is nothing to build
+        if: env.REACHES == 'false'
+        run: |
+          msg='This change touches only files under docs, site or bot, and nothing this job checks reads those folders (the pick ran scripts/dev/Launcher-Reach.ps1, #5292). So there is nothing to build, and this check passes.'
+          echo "$msg"
+          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+
       # One commit, no history: this job checks the tree alone (#3182), and
       # the publish below takes the number a bare build carries rather than
       # the one history gives a release.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: env.REACHES != 'false'
 
       # The hosted image ships whatever node, python and .NET it has this
       # month; these are pinned so a check means the same thing every month.
       # The .NET 10 SDK publishes the launcher (#4823).
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: env.REACHES != 'false'
         with:
           node-version: '24'
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: env.REACHES != 'false'
         with:
           python-version: '3.12'
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        if: env.REACHES != 'false'
         with:
           dotnet-version: '10.0.x'
 
       - name: Publish the native launcher
+        if: env.REACHES != 'false'
         shell: pwsh
         run: |
           # Issue #4823. The launcher is Avalonia on .NET 10, published with
@@ -885,6 +905,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host '::error file=scripts/dev/Check-Secrets.ps1::a published launcher program carries something that must not ship; the lines above say which'; exit 1 }
 
       - name: Build the ship root tool
+        if: env.REACHES != 'false'
         shell: pwsh
         run: |
           # Issue #2019. Every Ship builds Thornswood-ShipRoot.exe from
@@ -922,7 +943,7 @@ jobs:
       # In the merge queue (#5182) the checkout is the queue's own merge, the
       # very commit that lands on main, so the note is written there too.
       - name: Write down the tree these checks passed on
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        if: env.REACHES != 'false' && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
         shell: pwsh
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}

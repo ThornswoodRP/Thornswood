@@ -75,9 +75,8 @@ const NOT_HERE = {
 */
 const WAITING = [
   'apprenticeship.md', 'carriages.md', 'carts.md', 'chat.md', 'classes.md', 'commands.md', 'creation.md',
-  'death.md', 'disease.md', 'dungeon-loot.md', 'durability.md', 'embassy.md', 'emotes.md',
-  'enchantments.md', 'factions.md', 'friends.md', 'gold.md', 'hair-dye.md', 'injury.md', 'journal.md',
-  'magic.md', 'merchants-guild.md', 'mixtures.md', 'npcs.md', 'party.md', 'quests.md', 'races.md',
+  'disease.md', 'dungeon-loot.md', 'durability.md', 'embassy.md', 'emotes.md', 'enchantments.md',
+  'factions.md', 'gold.md', 'hair-dye.md', 'injury.md', 'magic.md', 'mixtures.md', 'npcs.md', 'races.md',
   'skill-tree.md', 'spoilage.md', 'stalls.md', 'thalmor.md', 'trade.md', 'trading-company.md', 'voice.md'
 ];
 
