@@ -43,7 +43,7 @@
   the line, main's commit, the exit code and how long it took. Each run's
   whole output is runs\<id>\output.txt; the newest 30 runs are kept.
 
-  Windows PowerShell 5.1.
+  PowerShell 7 (pwsh), which its task starts since #5356 (Update-Gate.ps1).
 #>
 param([string]$Root = 'C:\Thornswood-Gate')
 
@@ -128,9 +128,9 @@ function Send([string]$m) {
 }
 
 # A short program's lines, its errors among them, and its exit code. The
-# broker runs under Windows PowerShell 5.1, where a redirected line on stderr
-# under 'Stop' ends the script before the exit code is read (the gate's
-# install stopped that way on 29 Oct), so 'Continue' holds here alone.
+# exit code decides, not a line on stderr, so 'Continue' holds here alone
+# (under Windows PowerShell, which ran the broker until #5356, such a line
+# under 'Stop' ended the script before the exit code was read, 29 Oct).
 function Invoke-Short([string]$File, [string[]]$Words) {
     $ErrorActionPreference = 'Continue'
     $o = @(& $File @Words 2>&1 | ForEach-Object { "$_" })

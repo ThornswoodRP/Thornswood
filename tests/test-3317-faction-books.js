@@ -28,10 +28,11 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const siteFiles = require('./site-files');
 
 const ROOT = path.join(__dirname, '..');
 const CR = String.fromCharCode(13);
-const site = fs.readFileSync(path.join(ROOT, 'site', 'server.js'), 'utf8').split(CR).join('');
+const site = siteFiles.source().split(CR).join('');
 const gm = fs.readFileSync(path.join(ROOT, 'game', 'gamemode.js'), 'utf8').split(CR).join('');
 
 let pass = 0, fail = 0;

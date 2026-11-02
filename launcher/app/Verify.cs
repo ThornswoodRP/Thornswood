@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Net;
-using System.Runtime.Serialization;
-using System.Runtime.Serialization.Json;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Thornswood
 {
@@ -111,7 +110,7 @@ namespace Thornswood
         public const string Steam = "steam";
     }
 
-    static class Verify
+    static partial class Verify
     {
         static List<string> Enabled(string file)
         {
@@ -479,32 +478,38 @@ namespace Thornswood
             "ccQDRSSE001-SurvivalMode.esl", "_ResourcePack.esl"
         };
 
-        [DataContract]
         class ServerManifest
         {
-            [DataMember] public ServerMod[] mods;
+            [JsonInclude] public ServerMod[] mods;
             // Thornswood's own plugins, by the gamemode's server manifest
             // block (#1180), full and, since #2627, light. Only names: Fix
             // takes their bytes from the release (#3386).
-            [DataMember] public string[] served;
+            [JsonInclude] public string[] served;
             // A server that loads light plugins publishes them apart from
             // mods, in light index order (#1715): mods stays the full plugins
             // the client's own check compares with Game.getModName. loadOrder
             // is the server's whole order, full and light together. Both are
             // absent on a server that loads no light plugin.
-            [DataMember] public ServerMod[] light;
-            [DataMember] public string[] loadOrder;
+            [JsonInclude] public ServerMod[] light;
+            [JsonInclude] public string[] loadOrder;
         }
 
-        [DataContract]
         class ServerMod
         {
-            [DataMember] public string filename;
-            [DataMember] public long size;
-            [DataMember] public long crc32;   // the server writes it as a signed 32 bit number
+            [JsonInclude] public string filename;
+            [JsonInclude] public long size;
+            [JsonInclude] public long crc32;   // the server writes it as a signed 32 bit number
             // Named in the manifest's "served" list, set by Manifest (#1180).
             public bool Served;
         }
+
+        /// <summary>
+        /// The server's manifest.json for System.Text.Json, with the code made
+        /// at build time (#4823). Strings read loosely (LooseString).
+        /// </summary>
+        [JsonSourceGenerationOptions(Converters = new[] { typeof(LooseString) })]
+        [JsonSerializable(typeof(ServerManifest))]
+        partial class ServerManifestJson : JsonSerializerContext { }
 
         /// <summary>True when the last Run got a manifest out of the server, so "Everything matches" can say what it covered.</summary>
         public static bool BytesChecked;
@@ -541,9 +546,7 @@ namespace Thornswood
             if (raw == null) { manifestFailedFrom = url; manifestFailedAt = DateTime.UtcNow; return null; }
             try
             {
-                var ser = new DataContractJsonSerializer(typeof(ServerManifest));
-                ServerManifest doc;
-                using (var ms = new MemoryStream(raw)) doc = (ServerManifest)ser.ReadObject(ms);
+                ServerManifest doc = JsonSerializer.Deserialize(raw, ServerManifestJson.Default.ServerManifest);
                 if (doc == null || doc.mods == null || doc.mods.Length == 0) return null;
                 var served = new HashSet<string>(doc.served ?? new string[0], StringComparer.OrdinalIgnoreCase);
                 ServerMod[] light = doc.light ?? new ServerMod[0];
@@ -1084,24 +1087,10 @@ namespace Thornswood
             return (int)(crc ^ 0xFFFFFFFFu);
         }
 
-        // WebClient has no timeout worth the name. This one does.
+        // ms for the answer to start and ms for each read of it (Http).
         static byte[] Get(string url, int ms)
         {
-            try
-            {
-                var req = (HttpWebRequest)WebRequest.Create(url);
-                req.Timeout = ms;
-                req.ReadWriteTimeout = ms;
-                req.UserAgent = "ThornswoodLauncher/" + Updater.Version;
-                using (var res = (HttpWebResponse)req.GetResponse())
-                using (var s = res.GetResponseStream())
-                using (var ms_ = new MemoryStream())
-                {
-                    s.CopyTo(ms_);
-                    return ms_.ToArray();
-                }
-            }
-            catch { return null; }
+            return Http.GetOrNull(url, ms, ms);
         }
 
         /// <summary>

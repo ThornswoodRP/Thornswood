@@ -12,15 +12,21 @@ any more.
 - `mods`: one line per Nexus file the collection installs, in modId then
   fileId order: `modId`, `fileId`, `name` (for people only), and `plugins`,
   the plugins that file puts in Data, spelled as the plugin list spells them.
-  `dropPatch` is only for a file that moves and leaves patches of its old
-  file behind (`New-NexusRevision.ps1 -DropPatch`).
+  `choices` is only for a file the change adds whose archive has a FOMOD
+  installer: its answers, written the way Vortex writes them in a
+  collection (see "A mod with an installer" below). `dropPatch` is only for a
+  file that moves and leaves patches of its old file behind
+  (`New-NexusRevision.ps1 -DropPatch`).
 - `plugins`: every plugin of the collection in its load order: `name`,
   `master` and `light` (what the game reads it as), `masters` (what its
   header names), `after` (the collection's load-after rule for it), and
   `"enabled": false` only for a plugin the collection's own list leaves out,
   so it is installed but switched off. Revision 6 has two, `CBBE.esp` and
   `RaceMenuMorphsCBBE.esp`. The servers load both, and the launcher's plugin
-  list switches them on, so a rule may name them.
+  list switches them on, so a rule may name them. They come last, after
+  every plugin of the list and in name order, because that is where the
+  layout of a revision puts them, and the draft is held to the record in
+  that order.
 - `dropped`: the plugins the servers load that this change takes out, each
   with `name`, `mod` and `why` (why every form it added can go from a world
   that keeps running). Empty when nothing goes.
@@ -38,15 +44,24 @@ any more.
    whose page does not allow it in a collection.
 2. Add its line under `mods`, in modId order. The file id is the number in
    the file's download link on the mod's Files tab.
-3. For each plugin it brings, print the plugin's line from the file itself
-   (Vortex's staging folder has it once the mod is downloaded):
+3. Read the file. This downloads it with the Nexus key on GitHub's runner
+   and prints which installer Vortex runs for it, every plugin in it with
+   its line for the record, and, for a FOMOD, every question it asks:
+
+   ```
+   pwsh scripts/release/Nexus-Run.ps1 -Line 'Read-NexusFile -Mod <mod> -FileId <file id>'
+   ```
+
+   With a plugin file already on the machine, its line alone:
 
    ```
    pwsh scripts/release/New-CollectionRecord.ps1 -Plugin <path to the plugin>
    ```
 
-   Paste the line under `plugins` where the plugin loads. A new plugin goes
-   at the end of its own kind, so nothing the servers already load moves.
+   Paste the line of each plugin the file puts in Data under `plugins`,
+   where the plugin loads. A new plugin goes
+   at the end of its own kind, so nothing the servers already load moves,
+   and above the plugins switched off.
 4. Fill in its `after`: at least the plugin right above it, so no two full
    plugins sit next to each other with nothing keeping them in that order.
 5. Check it, and see what the merge will ask of Nexus:
@@ -54,6 +69,30 @@ any more.
    ```
    pwsh scripts/release/Check-CollectionRecord.ps1 -Base origin/main
    ```
+
+## A mod with an installer
+
+When Read-NexusFile says the file has a FOMOD script, the mod's line carries
+`choices`, the answers the collection gives it, so Vortex installs it with
+no dialog. They are written the way Vortex writes them in a collection, one
+entry per step, each group of it, and the options picked in that group, by
+their names exactly as Read-NexusFile prints them, with the idx it prints:
+
+```
+"choices": { "type": "fomod", "options": [{ "name": "<step>", "groups": [{ "name": "<group>", "choices": [{ "name": "<option>", "idx": 0 }] }] }] }
+```
+
+A group left out gets only what the script requires there: its required
+options, every option of a select-all group, or the first option of a
+select-exactly-one group. The plugins the mod puts in
+Data are then the ones those answers install: the script's required files,
+the options picked and the files its flags add. Only those go under its
+`plugins`. `New-NexusRevision.ps1` runs the script with the answers before
+it drafts (the same code that lays the draft out), and refuses the draft
+when the plugins it gets are not the ones named.
+
+Choices go with a file the change adds. A file the collection already has
+keeps the answers the published revision gave it.
 
 ## Taking a mod out
 
@@ -127,8 +166,6 @@ the card comes down by itself and Scan and Fix run (#5200).
 
 ## Not done by the record yet
 
-- A mod with an installer (FOMOD): `New-NexusRevision.ps1` refuses them, so
-  one is still added by hand.
 - Switching a plugin's light flag, or switching a plugin off: the draft is
   not made from these, so the merge discards a draft that would need them.
 - The records that follow a publish and the box rebuild of the Last plugin

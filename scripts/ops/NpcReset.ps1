@@ -6,8 +6,8 @@
   Dot-sourced by Reset-Npcs.ps1, which sends $ThornswoodNpcReset to the box
   with the step that stops and starts the server, and by
   tests\test-4595-npc-reset.ps1, which runs it over stand-in server folders.
-  It does nothing on its own. Keep it ASCII and Windows PowerShell 5.1: the
-  box reads a file with no byte order mark as ANSI.
+  It does nothing on its own. Keep it ASCII. It runs on the box, in
+  PowerShell 7.
 
   WHY. The engine fork's #98 gives an NPC only the gear it fights and looks
   with, marked as its own (npcEquipment), and never its plugin's death list.

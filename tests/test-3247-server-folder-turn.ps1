@@ -21,8 +21,8 @@
        where it is, as its other refusals before the swap now do; the backup
        around the servers' Grab lines only, given back in a finally, and a
        run that did not get it ends non-zero saying so.
-    3. Run for real, here and in second processes (Windows PowerShell 5.1,
-       the box's, where there is one; this PowerShell elsewhere):
+    3. Run for real, here and in second processes of PowerShell 7, the
+       box's:
        with no backup folder there is no turn ($null); the turn is taken and
        says who has it; a second run waits, says once who it waits for, and
        is refused naming them when its time is up; it gets the turn the
@@ -79,7 +79,7 @@ if (-not (Test-Path -LiteralPath $libPath)) { Done }
 $lib = Text $libPath
 $e = $null
 [void][System.Management.Automation.Language.Parser]::ParseInput($lib, [ref]$null, [ref]$e)
-Yes 'it parses, and is plain ASCII, which Windows PowerShell 5.1 on the box reads right' (@($e).Count -eq 0 -and $lib -notmatch '[^\x00-\x7F]')
+Yes 'it parses, and is plain ASCII' (@($e).Count -eq 0 -and $lib -notmatch '[^\x00-\x7F]')
 $turnFn = FunctionText $lib 'Enter-ThornswoodServerFolderTurn'
 Yes '  and defines Enter-ThornswoodServerFolderTurn, which opens its file with no sharing' (
     $turnFn -match '\[IO\.FileShare\]::None' -and $turnFn -match '\[IO\.FileMode\]::OpenOrCreate')
@@ -161,10 +161,9 @@ Yes '  and a run that did not get it says so and ends non-zero' (
 $work = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-3247-' + [Guid]::NewGuid().ToString('N'))
 $folder = Join-Path $work 'Thornswood-Backup'
 [void](New-Item -ItemType Directory -Path $folder -Force)
-# The second runs are Windows PowerShell 5.1 where there is one, which is
-# what runs the backup and the installs on the box; elsewhere this PowerShell.
-$shell = (Get-Process -Id $PID).Path
-if ($OnWindows) { $shell = Get-WindowsPowerShell }
+# The second runs are PowerShell 7, which runs the backup and the installs
+# on the box.
+$shell = Get-BoxPowerShell
 Write-Host ('second runs: ' + $shell)
 $started = @()
 $held = $null

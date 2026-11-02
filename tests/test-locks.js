@@ -29,7 +29,7 @@ const fs = require('fs');
 const path = require('path');
 const SRC = process.env.GM || path.join(REPO_DIR, 'game', 'gamemode.js');
 const CR = String.fromCharCode(13);
-const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const src = require('./gamemode-tables.js').joined(fs.readFileSync(SRC, 'utf8')).split(CR).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -399,9 +399,9 @@ function liftFn(name) {
   const wayM = /const WAY_OUT = (\{.*\});/.exec(src);
   const byM = /const BUILDING_BY_DOOR = (\{.*\});/.exec(src);
   const nameM = /const BUILDING_NAME = (\{.*\});/.exec(src);
-  yes('WAY_OUT is generated into the gamemode',
-      !!wayM && src.indexOf('// ==== WAY_OUT, generated ====') >= 0 &&
-      src.indexOf('// ==== end WAY_OUT ====') >= 0);
+  // The gamemode reads it from game/gamemode-tables (#5191).
+  yes('WAY_OUT is generated into game/gamemode-tables and the gamemode reads it',
+      !!wayM && fs.existsSync(require('./gamemode-tables.js').file('WAY_OUT')));
   let doorsJson = null;
   try { doorsJson = JSON.parse(fs.readFileSync(path.join(REPO_DIR, 'game', 'data', 'doors.json'), 'utf8')); }
   catch (e) { doorsJson = null; }

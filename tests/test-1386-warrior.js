@@ -23,7 +23,7 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.join(__dirname, '..');
-const gm = fs.readFileSync(path.join(root, 'game', 'gamemode.js'), 'utf8').replace(/\r/g, '');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(root, 'game', 'gamemode.js'), 'utf8')).replace(/\r/g, '');
 /*
   One topic of the help panel (#1633), as a fresh install reads it: /help's
   topics moved out of the gamemode into game/ui/thornswood-help.js, each a
@@ -62,8 +62,8 @@ const progression = slice(gm, '// ==== thornswood progression ====', '// ==== en
 const maneuvers = slice(gm, '// ==== thornswood warrior maneuvers ====', '// ==== end thornswood warrior maneuvers ====');
 const killTable = slice(gm, 'const WARRIOR_KILL = {', '\n};');
 const kills = ['function warriorRaceBand(', 'function warriorPieces(', 'function raceEdidOf(', 'function killPieces('].map(cut);
-const hunts = slice(gm, 'var HUNTS_BY_BASE = {', '\n};');
-const racesLine = /^const RACES = (\{.*\});$/m.exec(gm);
+const hunts = slice(gm, 'var HUNTS_BY_BASE = {', ';\n');
+const racesLine = require('./gamemode-tables.js').lineOf(gm, 'RACES');
 const onDeath = slice(gm, "mp.onDeath = guard('onDeath', function (actorId, killerId) {", '\n});');
 const credit = cut('function creditWork(actorId, key, n) {');
 const withManeuvers = slice(gm, '  function withManeuvers(actorId, base) {', '\n  }\n');

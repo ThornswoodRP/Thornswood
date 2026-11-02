@@ -15,7 +15,7 @@
   Install-Voice.ps1 built the service's whole environment from -Site, -Port,
   -Bind and -Auth, so no relay address could ever reach the running service.
   Its key does not go this way at all: it sits in turn-key.txt beside the
-  service, which voice\test-turn-key.js covers.
+  service, which voice\tests\test-turn-key.js covers.
 
   Nobody has stood up a relay yet, so the first thing held here is that an
   install without one is the same install, to the character.
@@ -259,13 +259,9 @@ New-Item -ItemType Directory -Force -Path (Join-Path $stubDir 'deploy'), (Join-P
 # Remote.ps1's own parameters, running here instead of on the VPS. A canned
 # answer stands in for a service that is not there, or one saying something
 # no real one would.
-# The box runs what Remote.ps1 sends in Windows PowerShell 5.1; off Windows
-# the stand-in runs it in this shell.
-if ($OnWindows) { $farShell = Get-WindowsPowerShell }
-else {
-    $farShell = (Get-Process -Id $PID).Path
-    Write-Host 'NOTE  the far side runs in this shell, not in Windows PowerShell 5.1 as on the box: this is not Windows'
-}
+# The box runs what Remote.ps1 sends in PowerShell 7 (#5356), and so does
+# the stand-in, on every machine.
+$farShell = Get-BoxPowerShell
 Set-Content -LiteralPath (Join-Path $stubDir 'vps\Remote.ps1') -Encoding ASCII -Value (@'
 param([Parameter(Position = 0)][string]$Script, [string]$VpsHost, [string]$VpsUser)
 if ($env:TS_PROBE_ANSWER) { $env:TS_PROBE_ANSWER; return }

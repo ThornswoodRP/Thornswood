@@ -14,26 +14,45 @@
 // to the world. The race menu's close is never sent after a face: the engine
 // closes the menu as it takes the face, so the gamemode's closeRaceMenu sends
 // nothing (PartOne::SetRaceMenuOpen). After a restart the character comes
-// as the world holds it. Then the same with each part broken, one at a
-// time, and the pass has to FAIL on that step and name it:
+// as the world holds it.
+//
+// The voice service is the real voice/voice-server.js, run by the pass in a
+// folder of its own on a port the system hands out, and the bot joins it
+// with a join token from its /token (scripts/bot/relay.js). The stand-in
+// gamemode collects the relay's commands from it as gamemode.js does
+// (GET /commands?ack=1, POST /commands/ack) and answers over it (POST /say):
+// it takes a join pass signed with the key in the copy's private/door.json
+// for this server, ends creation on "/pick town whiterun" (thornswoodChargen
+// at stage done over the game connection, the welcome over the relay), and
+// answers "/needs" with the needs line.
+//
+// Then the same with each part broken, one at a time, and the pass has to
+// FAIL on that step and name it:
 //
 //  - the gamemode does not load, or a different one loads;
+//  - the bot part carries no voice service;
+//  - the gamemode does not take the join pass; the home pick does not end
+//    creation; /needs is not answered with the needs;
 //  - the server holds logins for a join pass (not a bot pass copy);
 //  - the character is not new; creation is not opened for it; the gamemode
 //    takes it for a returning one; creation does not move on after a face;
 //  - nothing is written to the world;
 //  - after the restart the character comes back somewhere else, or nameless.
 //
-// Read only, apart from a temp folder it deletes. Nothing connects anywhere.
+// Read only, apart from a temp folder it deletes. Nothing connects anywhere
+// but loopback, on ports the system hands out.
 'use strict';
 const crypto = require('crypto');
 const EventEmitter = require('events');
 const fs = require('fs');
+const http = require('http');
+const net = require('net');
 const os = require('os');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const botPass = require(path.join(ROOT, 'scripts', 'bot', 'Bot-Pass.js'));
 const character = require(path.join(ROOT, 'scripts', 'bot', 'character.js'));
+const relay = require(path.join(ROOT, 'scripts', 'bot', 'relay.js'));
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -50,27 +69,109 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-5196p-'));
 process.on('exit', () => { fs.rmSync(TMP, { recursive: true, force: true }); });
 
 const SPAWN = [133857, -61130, 14662];
+const WHITERUN = [20000, -5000, -2000];
 
-// A server folder: settings, a gamemode, an empty world.
-function folder(name, settings) {
-  const root = path.join(TMP, name);
+function freePort() {
+  return new Promise((ok, bad) => {
+    const srv = net.createServer();
+    srv.on('error', bad);
+    srv.listen(0, '127.0.0.1', () => { const p = srv.address().port; srv.close(() => ok(p)); });
+  });
+}
+
+// A server folder: settings, a gamemode, an empty world, a run folder of its
+// own (the server copy in server, the voice copy beside it in voice).
+async function folder(name, settings) {
+  const root = path.join(TMP, name, 'server');
   fs.mkdirSync(path.join(root, 'world', 'changeForms'), { recursive: true });
   fs.writeFileSync(path.join(root, 'gamemode.js'), '// the gamemode under test ' + name + '\n');
   fs.writeFileSync(path.join(root, 'server-settings.json'), JSON.stringify(Object.assign({
-    port: 7801, password: 'pw-' + name, thornswoodRequirePass: false, databaseName: 'world'
+    port: 7801, password: 'pw-' + name, thornswoodRequirePass: false, databaseName: 'world',
+    thornswoodVoicePort: await freePort(), thornswoodServer: 'dev'
   }, settings || {})));
   return root;
 }
 
+function ask(port, method, route, body) {
+  return new Promise((ok) => {
+    const data = body === undefined ? '' : JSON.stringify(body);
+    const req = http.request({ host: '127.0.0.1', port, path: route, method, agent: false,
+      headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(data), connection: 'close' } }, (res) => {
+      let t = ''; res.on('data', (d) => { t += d; }); res.on('end', () => ok({ status: res.statusCode, text: t }));
+    });
+    req.on('error', () => ok({ status: 0, text: '' }));
+    req.end(data);
+  });
+}
+
+// gamemode.js's join pass block, readPass: the signature, the profile and
+// the server, nothing more.
+function passOk(raw, key, profileId, server) {
+  const parts = String(raw || '').split('.');
+  if (parts.length !== 3 || parts[0] !== 'jp1') { return 'not a join pass'; }
+  const want = crypto.createHmac('sha256', key).update('jp1.' + parts[1]).digest('base64')
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  if (want !== parts[2]) { return 'a signature that does not check out'; }
+  const o = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+  if (Number(o.p) !== profileId) { return 'a pass for profile ' + o.p; }
+  if (String(o.s) !== server) { return 'a pass for the ' + o.s + ' server'; }
+  if (!(Number(o.x) > Date.now())) { return 'an expired pass'; }
+  return '';
+}
+
 // The stand-in. break_ names the one thing it gets wrong.
 function standIn(root, break_) {
-  const state = { up: false, runs: 0, moved: false };
+  const state = { up: false, runs: 0, moved: false, commands: [], current: null };
+  const settings0 = JSON.parse(fs.readFileSync(path.join(root, 'server-settings.json'), 'utf8'));
+  const vport = settings0.thornswoodVoicePort;
+  // The gamemode's end of the relay: collect, acknowledge, run, answer.
+  let polling = false;
+  async function poll() {
+    if (polling || !state.up) { return; }
+    polling = true;
+    try {
+      const r = await ask(vport, 'GET', '/commands?ack=1');
+      let doc = null;
+      try { doc = JSON.parse(r.text); } catch (e) { doc = null; }
+      const list = doc && Array.isArray(doc.commands) ? doc.commands : [];
+      if (list.length) { await ask(vport, 'POST', '/commands/ack', { ids: list.map((c) => c.id) }); }
+      for (const c of list) { await command(c); }
+    } finally { polling = false; }
+  }
+  async function command(c) {
+    state.commands.push(c.text.split(' ')[0]);
+    const parts = c.text.split(/\s+/);
+    const pid = Number(c.profileId);
+    const cur = state.current;
+    if (parts[0] === '/joinpass') {
+      const key = JSON.parse(fs.readFileSync(path.join(root, 'private', 'door.json'), 'utf8')).passKey;
+      const why = break_ === 'no pass' ? 'a signature that does not check out' : passOk(parts[1], key, pid, 'dev');
+      child0.stdout.emit('data', why ? '[thornswood] join pass from profile ' + pid + ' not taken: ' + why + '\n'
+                                     : '[thornswood] join pass for profile ' + pid + ', launcher bot pass\n');
+      return;
+    }
+    if (parts[0] === '/pick' && parts[1] === 'town') {
+      if (break_ === 'no home' || !cur || cur.stage() !== 'choosing' || parts[2] !== 'whiterun') {
+        await ask(vport, 'POST', '/say', { profileId: pid, text: 'No: there is no town called ' + parts[2] + '.' });
+        return;
+      }
+      cur.arrive();
+      await ask(vport, 'POST', '/say', { profileId: pid, text: 'Welcome to Whiterun Hold, Safe Travels.' });
+      return;
+    }
+    if (parts[0] === '/needs') {
+      await ask(vport, 'POST', '/say', { profileId: pid, text: break_ === 'no needs' ? 'That is not running on this server.'
+        : 'Hunger 100% (full), Thirst 100% (quenched), Rest 100% (rested), Temp comfortable 50. The Body page on K says what sets each one.' });
+    }
+  }
   // Every message the stand-in sent a bot.
   const sent = [];
   // The running server, so the stand-in engine can print the gamemode's lines.
   let child0 = null;
   const blob = botPass.gitBlob(path.join(root, 'gamemode.js'));
-  const formFile = path.join(root, 'world', 'changeForms', '1.json');
+  // Named as the engine names a form made on the server: its id in hex
+  // (FormDesc::ToString, %x), here the refrId it sends, 0xff000801.
+  const formFile = path.join(root, 'world', 'changeForms', 'ff000801.json');
 
   function spawn() {
     const child = new EventEmitter();
@@ -78,7 +179,8 @@ function standIn(root, break_) {
     child.stderr = new EventEmitter();
     state.runs++;
     child0 = child;
-    child.kill = () => { setTimeout(() => { state.up = false; child.emit('exit', null, 'SIGTERM'); }, 5); };
+    const poller = setInterval(() => { poll(); }, 50);
+    child.kill = () => { clearInterval(poller); setTimeout(() => { state.up = false; child.emit('exit', null, 'SIGTERM'); }, 5); };
     setTimeout(() => {
       child.stdout.emit('data', 'Using data dir \'data\'\n');
       if (break_ === 'no load') { child.stdout.emit('data', '[thornswood] gamemode did not load; the error is above\n'); return; }
@@ -102,6 +204,20 @@ function standIn(root, break_) {
       if (!state.up) { out.push({ type: 'connectionFailed' }); }
       else if (password !== settings.password) { out.push({ type: 'connectionDenied', error: 'Invalid password' }); }
       else { out.push({ type: 'connectionAccepted' }); }
+      // Where the character stands now: arriving moves it to the town.
+      let at = SPAWN.slice();
+      state.current = {
+        stage: () => stage,
+        arrive() {
+          stage = 'done';
+          at = WHITERUN.slice();
+          let form = null;
+          try { form = JSON.parse(fs.readFileSync(formFile, 'utf8')); } catch (e) { form = null; }
+          if (form) { form.position = at.slice(); fs.writeFileSync(formFile, JSON.stringify(form)); }
+          out.push({ type: 'message', message: { t: 7, idx: actor.idx, refrId: 0xff000801, propName: 'thornswoodChargen',
+                                                dataDump: JSON.stringify({ stage, at: 3 }) } });
+        }
+      };
       return {
         tick() { const got = out.splice(0); for (const e of got) { if (e.message) { sent.push(e.message); } } return got; },
         isConnected() { return true; },
@@ -142,7 +258,7 @@ function standIn(root, break_) {
           if (m.t === 4 && actor && open && m.idx === actor.idx) {
             open = false;
             if (break_ !== 'not saved') {
-              fs.writeFileSync(formFile, JSON.stringify({ profileId: actor ? lastPid(m) : 0, position: SPAWN.map((x) => x + 0.25),
+              fs.writeFileSync(formFile, JSON.stringify({ profileId: actor ? lastPid(m) : 0, position: at.map((x) => x + 0.25),
                                                           appearanceDump: JSON.stringify(m.data) }));
             }
             if (stage !== 'appearance' || break_ === 'stays') { return; }
@@ -159,12 +275,24 @@ function standIn(root, break_) {
   return { spawn, addon, state, sent };
 }
 
+// The voice files the bot part carries, as merge-release.yml puts them in.
+const VOICE = path.join(ROOT, 'voice');
+const NO_VOICE = path.join(TMP, 'a bot part with no voice');
+fs.mkdirSync(NO_VOICE);
+
 async function run(name, break_, settings) {
-  const root = folder(name, settings);
+  const root = await folder(name, settings);
   const s = standIn(root, break_);
   const said = [];
-  const r = await botPass.pass({ root, spawn: s.spawn, addon: s.addon, loadMs: 2000, stepMs: 1500, log: (l) => said.push(l) });
-  return { r, s, said, root };
+  const r = await botPass.pass({ root, spawn: s.spawn, addon: s.addon, loadMs: 2000, stepMs: 4000, log: (l) => said.push(l),
+                                 voiceFrom: break_ === 'no voice' ? NO_VOICE : VOICE });
+  return { r, s, said, root, voiceDir: path.join(path.dirname(root), 'voice') };
+}
+
+// Whether anything still answers on the copy's voice port.
+async function voiceUp(root) {
+  const port = JSON.parse(fs.readFileSync(path.join(root, 'server-settings.json'), 'utf8')).thornswoodVoicePort;
+  return (await ask(port, 'GET', '/health')).status !== 0;
 }
 
 function failedAt(r, step) {
@@ -176,8 +304,19 @@ function failedAt(r, step) {
   // ------------------------------------------------------------------ whole
   const good = await run('good');
   yes('a good server passes the whole pass', good.r.ok === true);
-  yes('every step is a line: loads, login, new, face, saved, restart, loads back',
-    good.r.lines.map((l) => l.step).join(',') === 'loads,login,new,face,saved,restart,loads back');
+  yes('every step is a line: loads, login, relay, new, face, home, needs, saved, restart, loads back',
+    good.r.lines.map((l) => l.step).join(',') === 'loads,login,relay,new,face,home,needs,saved,restart,loads back');
+  if (!good.r.ok) { console.log(JSON.stringify(good.r.lines, null, 1)); }
+  yes('the relay carried the join pass, the home pick and /needs to the gamemode, in that order',
+    good.s.state.commands.join(',') === '/joinpass,/pick,/needs');
+  yes('  and the home line says what the gamemode said back over it',
+    /Welcome to Whiterun Hold/.test((good.r.lines.find((l) => l.step === 'home') || {}).detail || ''));
+  yes('the voice service ran from its own folder beside the copy, with its log there',
+    relay.VOICE_FILES.every((n) => fs.existsSync(path.join(good.voiceDir, n))) && /\[voice\] listening on 127\.0\.0\.1:/.test(fs.readFileSync(path.join(good.voiceDir, 'bot-pass-voice.log'), 'utf8')));
+  yes('  and it is stopped at the end, with its site', !(await voiceUp(good.root)));
+  yes('the copy\'s join pass key is its own, in its private folder',
+    /^[0-9a-f]{64}$/.test(JSON.parse(fs.readFileSync(path.join(good.root, 'private', 'door.json'), 'utf8')).passKey));
+  yes('the character came back where the home put it', good.r.ok && /came back where it was saved/.test(good.r.lines[good.r.lines.length - 1].detail));
   yes('the server was started twice (once, then after the restart)', good.s.state.runs === 2);
   yes('the server is stopped at the end', good.s.state.up === false);
   yes('the result names the gamemode\'s git blob', good.r.blob === botPass.gitBlob(path.join(good.root, 'gamemode.js')));
@@ -189,8 +328,42 @@ function failedAt(r, step) {
   yes('the face is a Nord with the engine\'s 19 morphs and 4 presets',
     (() => { const f = botPass.face('X'); return f.raceId === 0x13746 && f.options.length === 19 && f.presets.length === 4 && f.name === 'X'; })());
 
+  // ------------------------------------- where a pass that runs on got to
+  // The pass says each step as it starts, before it waits on it, so the
+  // last line of bot-pass.log names the wait a pass that never ends is in.
+  const order = ['loading the engine', 'the server started; it has 2 s', 'PASS  loads', 'a bot connects to port 7801',
+    'PASS  login', 'the bot sends a face', 'PASS  face', 'waiting for the world on disk', 'PASS  saved',
+    'the server is stopped', 'the server started again', 'PASS  restart', 'a second bot connects', 'PASS  loads back', 'the pass ends'];
+  const at = order.map((o) => good.said.findIndex((l) => l.startsWith(o)));
+  yes('the pass says each step as it starts, in order, before its PASS line', at.every((x, i) => x >= 0 && (i === 0 || x > at[i - 1])));
+  {
+    const cp = require('child_process');
+    const root = await folder('mainlog', { thornswoodRequirePass: true });
+    const out = path.join(TMP, 'mainlog-run', 'result.json');
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    const ran = cp.spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'bot', 'Bot-Pass.js'), '--root', root, '--out', out], { encoding: 'utf8' });
+    const logAt = path.join(path.dirname(out), 'bot-pass.log');
+    const text = fs.existsSync(logAt) ? fs.readFileSync(logAt, 'utf8') : '';
+    yes('run as the task runs it, the pass writes bot-pass.log beside its result as it goes, each line timed',
+      ran.status === 1 && fs.existsSync(out) && /^\d{4}-\d\d-\d\dT[\d:.]+Z  the bot pass starts in /.test(text) &&
+      /FAIL  loads: .*not a bot pass copy/.test(text) && /BOT PASS FAILED\n$/.test(text));
+  }
+
   // ------------------------------------------------------------- broken
   yes('the gamemode does not load: FAIL on loads', failedAt((await run('noload', 'no load')).r, 'loads'));
+  const novoice = await run('novoice', 'no voice');
+  yes('a bot part with no voice service: FAIL on loads, before the server is started, saying so',
+    failedAt(novoice.r, 'loads') && novoice.s.state.runs === 0 && /carries no voice service/.test(novoice.r.lines[0].detail));
+  const nopass = await run('nopass', 'no pass');
+  yes('the gamemode does not take the join pass: FAIL on relay, with what it said',
+    failedAt(nopass.r, 'relay') && /The gamemode said: \[thornswood\] join pass from profile \d+ not taken: a signature/.test(nopass.r.lines.find((l) => !l.ok).detail));
+  const nohome = await run('nohome', 'no home');
+  yes('the home pick does not end creation: FAIL on home, with what came back over the relay',
+    failedAt(nohome.r, 'home') && /Over the relay it was told: No: there is no town/.test(nohome.r.lines.find((l) => !l.ok).detail));
+  const noneeds = await run('noneeds', 'no needs');
+  yes('/needs is not answered with the needs: FAIL on needs, with what came back',
+    failedAt(noneeds.r, 'needs') && /That is not running on this server/.test(noneeds.r.lines.find((l) => !l.ok).detail));
+  yes('a failed pass stops its voice service too', !(await voiceUp(noneeds.root)) && !(await voiceUp(nopass.root)));
   const other = await run('other', 'other gamemode');
   yes('another gamemode loads: FAIL on loads, naming both blobs',
     failedAt(other.r, 'loads') && /a different gamemode loaded, git blob f{40}, not [0-9a-f]{40}/.test(other.r.lines[0].detail));
@@ -230,10 +403,15 @@ function failedAt(r, step) {
     good.r.ok && !good.s.sent.some((m) => m.t === 28 || m.t === 29));
 
   // ---------------------------------------- the world folder is the engine's
-  const w = folder('worldname', { databaseName: 'saves' });
+  const w = await folder('worldname', { databaseName: 'saves' });
   fs.mkdirSync(path.join(w, 'saves', 'changeForms'), { recursive: true });
   fs.writeFileSync(path.join(w, 'saves', 'changeForms', '7.json'), JSON.stringify({ profileId: 77, position: [1, 2, 3] }));
   yes('Bot-Pass reads the world where databaseName says', !!botPass.formOf(w, { databaseName: 'saves' }, 77));
+  fs.writeFileSync(path.join(w, 'saves', 'changeForms', 'ff000a3c.json'), JSON.stringify({ profileId: 78, position: [1, 2, 3] }));
+  fs.writeFileSync(path.join(w, 'saves', 'changeForms', '14_Skyrim.esm.json'), JSON.stringify({ profileId: 79 }));
+  yes('Bot-Pass finds a character whose file the engine named in hex, as a made one is (#5379)', !!botPass.formOf(w, { databaseName: 'saves' }, 78));
+  yes('and not a plugin\'s form, which is no character', botPass.formOf(w, { databaseName: 'saves' }, 79) === null);
+  yes('and none when the world folder is not there', botPass.formOf(path.join(TMP, 'no-world'), {}, 78) === null);
   yes('character.js reads it there too (not a worldDir setting the engine does not have)',
     character.characters(w, { databaseName: 'saves' }).some((c) => c.profileId === 77));
 

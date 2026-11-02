@@ -1,6 +1,6 @@
 {
   "issue": 2841,
-  "what": "Every Nexus script a session can run with the key it does not hold, and all it can run (scripts/release/Nexus-Run.ps1 reads this, through scripts/vps/gate/GateRules.ps1, the rules the deploy gate holds a line to). A verb is one script of main, run by .github/workflows/nexus-run.yml with only the parameters named here. A parameter's rule is 'switch' (no value), 'text' (the text rule below) or a pattern its value must match whole. 'fixed' goes on every run of that verb. 'lists' are parameters whose value is several, split on commas. 'out' is the parameter Nexus-Run sets to a folder of the run's own and sends back sealed. Three are Nexus-Run's own and never reach the script: Send-NexusFile's -PackRoot, -Pack and -PackName, which zip files of main into the archive it uploads. New-NexusRevision's -Archive is never given: Nexus-Run downloads each -FileId from Nexus, the archive that was uploaded as that file. Its -Add names a JSON file of main whose archives Nexus-Run downloads the same way. Its -Rule names a JSON file of main under docs, which the script reads as main holds it. Anything a script takes from a file of the machine it runs on (-Archive of your own, -From, -Layout, -CollectionArchive, -Game) is One's, with the key file there.",
+  "what": "Every Nexus script a session can run with the key it does not hold, and all it can run (scripts/release/Nexus-Run.ps1 reads this, through scripts/vps/gate/GateRules.ps1, the rules the deploy gate holds a line to). A verb is one script of main, run by .github/workflows/nexus-run.yml with only the parameters named here. A parameter's rule is 'switch' (no value), 'text' (the text rule below) or a pattern its value must match whole. 'fixed' goes on every run of that verb. 'lists' are parameters whose value is several, split on commas. 'out' is the parameter Nexus-Run sets to a folder of the run's own and sends back sealed. Three are Nexus-Run's own and never reach the script: Send-NexusFile's -PackRoot, -Pack and -PackName, which zip files of main into the archive it uploads. New-NexusRevision's -Archive is never given: Nexus-Run downloads each -FileId from Nexus, the archive that was uploaded as that file. Its -Add names a JSON file of main whose archives Nexus-Run downloads the same way. Its -Rule names a JSON file of main under docs, which the script reads as main holds it. Read-NexusFile downloads the one file it names itself, and keeps nothing. Anything a script takes from a file of the machine it runs on (-Archive of your own, -From, -Layout, -CollectionArchive, -Game) is One's, with the key file there.",
   "text": "^[A-Za-z0-9][A-Za-z0-9 .,:;'()!?_+&/-]{0,399}$",
   "verbs": {
     "Set-NexusKey": {
@@ -75,6 +75,16 @@
         "AddLine": "text",
         "AfterLine": "^[0-9]{1,3}$",
         "WhatIf": "switch"
+      }
+    },
+    "Read-NexusFile": {
+      "script": "scripts/release/Read-NexusFile.ps1",
+      "timeoutMinutes": 20,
+      "fixed": ["-NoPause"],
+      "params": {
+        "Mod": "^[0-9]{1,9}$",
+        "FileId": "^[0-9]{1,12}$",
+        "Game": "^[a-z0-9]{1,40}$"
       }
     }
   }

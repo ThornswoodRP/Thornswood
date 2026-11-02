@@ -121,6 +121,35 @@ Yes 'Set-InboundRules takes -Check and -Own, never another box, user, record or 
     (Words 'Set-InboundRules -Vps x') -eq 'REFUSED' -and (Words 'Set-InboundRules -Record x') -eq 'REFUSED' -and (Words 'Set-InboundRules -KnownHosts x') -eq 'REFUSED')
 Yes 'Setup-Discord runs on the box and only audits or checks: -Prune, -Posts, -Give and another guild wait for Patrick' ((Words 'Setup-Discord -Audit') -eq '-OnBox|-Audit' -and
     (Words 'Setup-Discord -Prune') -eq 'REFUSED' -and (Words 'Setup-Discord -Posts') -eq 'REFUSED' -and (Words 'Setup-Discord -Give x') -eq 'REFUSED' -and (Words 'Setup-Discord -Guild 1') -eq 'REFUSED')
+# The last box scripts a person ran from One with its ssh key (#2862, 1 Nov):
+# the nightly backup's install (#5168 waited on it), a deletion request, and
+# four reads. None takes a host, user, folder, task or passphrase file.
+Yes 'Install-Backup installs, runs or reads through the gate, never -Remove, -AsSystem, a folder, a task or a passphrase file' ((Words 'Install-Backup') -eq '-FromGate|-NoPause' -and
+    (Words 'Install-Backup -RunNow') -eq '-FromGate|-NoPause|-RunNow' -and (Words 'Install-Backup -Status') -eq '-FromGate|-NoPause|-Status' -and
+    (Words 'Install-Backup -Remove') -eq 'REFUSED' -and (Words 'Install-Backup -AsSystem') -eq 'REFUSED' -and (Words 'Install-Backup -Root x') -eq 'REFUSED' -and
+    (Words 'Install-Backup -KeyOut x') -eq 'REFUSED' -and (Words 'Install-Backup -TaskName x') -eq 'REFUSED' -and (Words 'Install-Backup -At 01:00Z') -eq 'REFUSED')
+$ib = Text 'scripts\deploy\Install-Backup.ps1'
+# A Windows checkout may hold it CRLF (core.autocrlf), and the checks below read line breaks.
+$ib = $ib.Replace("`r`n", "`n")
+Yes '  -FromGate runs only under the gate, refuses what the verb leaves out, and never copies, sends or makes the passphrase' (
+    $ib.Contains("if (`$env:THORNSWOOD_GATE -ne '1') { Die '-FromGate is for the deploy gate") -and
+    $ib.Contains("if (`$Remove -or `$AsSystem -or @(`$handPicked).Count) { Die 'through the gate") -and
+    $ib.Contains("if (`$FromGate) {`n  # Neither copied down nor sent up") -and $ib.Contains("if (`"`$there`" -notmatch 'KEY THERE') { Die") -and
+    $ib.IndexOf('if (-not $FromGate) {' + "`n" + '$made = Remote') -gt 0 -and $ib.IndexOf("Copying it down") -gt $ib.IndexOf('if (-not $FromGate) {' + "`n" + '$made = Remote'))
+Yes '  and its last words send nobody to Fetch-Backups on One' (-not $ib.Contains('Fetch-Backups.ps1 -Schedule'))
+Yes 'Delete-Person takes a Discord id in digits, -Delete with a name for the record, or -Reapply; never a folder, a merge list or -AllowGamingPc' (
+    (Words 'Delete-Person -DiscordId 123456789012345678') -eq '-DiscordId|123456789012345678' -and
+    (Words 'Delete-Person -DiscordId 123456789012345678 -Delete -By Patrick') -eq '-DiscordId|123456789012345678|-Delete|-By|Patrick' -and
+    (Words 'Delete-Person -Reapply') -eq '-Reapply' -and (Words 'Delete-Person -DiscordId 12345') -eq 'REFUSED' -and (Words 'Delete-Person -DiscordId abc') -eq 'REFUSED' -and
+    (Words 'Delete-Person -Reapply -Merge x') -eq 'REFUSED' -and (Words 'Delete-Person -DiscordId 123456789012345678 -SiteRoot C:/x') -eq 'REFUSED' -and
+    (Words 'Delete-Person -DiscordId 123456789012345678 -AllowGamingPc') -eq 'REFUSED' -and (Words 'Delete-Person -DiscordId 123456789012345678 -RecordRoot x') -eq 'REFUSED')
+foreach ($check in 'Check-Roster', 'Check-Load', 'Check-ServerPriority', 'Chargen-Log') {
+    Yes "$check takes no host, user or folder of the caller's" ((Words "$check -Vps x") -eq 'REFUSED' -and (Words "$check -User x") -eq 'REFUSED' -and (Words "$check -Root x") -eq 'REFUSED' -and (Words $check) -ne 'REFUSED')
+}
+Yes 'Rotate-ServerPassword makes the site''s new password on the box after a ban, never one the caller types or names' ((Words 'Rotate-ServerPassword') -eq '-Yes' -and
+    (Words 'Rotate-ServerPassword -Password') -eq 'REFUSED' -and (Words 'Rotate-ServerPassword -DocsRoot C:/x') -eq 'REFUSED' -and (Words 'Rotate-ServerPassword -Vps x') -eq 'REFUSED')
+Yes '  Check-Load never waits for Enter or watches, and Chargen-Log takes a line count only' ((Words 'Check-Load') -eq '-NoPause' -and (Words 'Check-Load -Watch 10') -eq 'REFUSED' -and
+    (Words 'Chargen-Log -Lines 200') -eq '-Lines|200' -and (Words 'Chargen-Log -Lines all') -eq 'REFUSED')
 # What has a server's folder open, read on the box (#5211): live or dev, and
 # a minute of Defender's log, never a folder, a file or a process of the caller's.
 Yes 'Read-ServerHolders takes live or dev and a UTC minute of Defender''s log, never a folder, file or task' ((Words 'Read-ServerHolders') -eq '' -and
@@ -226,15 +255,15 @@ Yes '  and Run-OnBox.ps1 copies what came back into -Out as well as the checkout
 # The Ship verbs (Patrick's A, 30 Oct 2026: the box admin App mints the
 # token a Ship from the feed signs with, and the whole Ship runs on the box).
 Yes 'Ship-Dev is a dev Ship from the feed, its note as a title and detail lines' ((Words 'Ship-Dev -Title "Market stalls take your prices" -Detail "Claim a stall"') -eq '-Channel|dev|-Title|Market stalls take your prices|-Detail|Claim a stall' -and
-    (Words 'Ship-Dev -Title x -Detail y -ModsOnly') -eq '-Channel|dev|-Title|x|-Detail|y|-ModsOnly' -and
+    (Words 'Ship-Dev -Title x -Detail y -ModsOnly') -eq 'REFUSED' -and
     (Words 'Ship-Dev -Channel main -Title x -Detail y') -eq 'REFUSED' -and (Words 'Ship-Dev -Title x -Detail y -Root C:/x') -eq 'REFUSED' -and (Words 'Ship-Dev -Title x -Detail y -Package') -eq 'REFUSED')
 Yes 'Ship-Dev takes -Detail2 and -Detail3, whose names end in digits (#5144)' ((Words 'Ship-Dev -Title x -Detail y -Detail2 z -Detail3 w') -eq '-Channel|dev|-Title|x|-Detail|y|-Detail2|z|-Detail3|w' -and (Words 'Ship-Dev -Title x -2Detail y') -eq 'REFUSED')
 Yes 'Ship-Main is held to a build and to -Channel main' ($verbs.verbs.'Ship-Main'.build -eq $true -and (Words 'Ship-Main -Title x -Detail y') -eq 'REFUSED' -and
-    (Words "Ship-Main -Build $sha -Title x -Detail y -ModsOnly") -eq '-Channel|main|-Title|x|-Detail|y|-ModsOnly' -and (Words "Ship-Main -Build $sha -Title x -Detail y -MoveServer") -eq 'REFUSED')
+    (Words "Ship-Main -Build $sha -Title x -Detail y -ModsOnly") -eq 'REFUSED' -and (Words "Ship-Main -Build $sha -Title x -Detail y -MoveServer") -eq 'REFUSED')
 $shipBox = Text 'scripts/release/Ship-OnBox.ps1'
-Yes '  Ship-OnBox.ps1 runs Ship.ps1 from the feed, keeping the launcher only when asked, with the token in GH_TOKEN alone and gone after' (
+Yes '  Ship-OnBox.ps1 runs Ship.ps1 from the feed, with no switch about a launcher (Ship sends none, #4825), with the token in GH_TOKEN alone and gone after' (
     $shipBox.Contains("`$ship = @{ Notes = `$notes; FromFeed = `$true; NoPause = `$true }") -and $shipBox.Contains("if (`$Channel -eq 'dev') { `$ship['Channel'] = 'dev' }") -and
-    $shipBox.Contains("if (`$ModsOnly) { `$ship['ModsOnly'] = `$true }") -and -not $shipBox.Contains("elseif (`$ModsOnly)") -and
+    -not $shipBox.Contains('ModsOnly') -and
     $shipBox.Contains('$env:GH_TOKEN = $token') -and $shipBox.Contains('finally { Remove-Item -LiteralPath Env:\GH_TOKEN'))
 Yes '  a main Ship goes from the branch main at the fetched origin/main' ($shipBox.Contains("checkout --quiet -B main refs/remotes/origin/main"))
 # The DEV marks and the shipped issues read main's history and the release
@@ -252,18 +281,14 @@ Yes '  a Ship deepens the gate''s checkout to main''s history and tags as origin
 Yes 'Wipe-Dev wipes the dev server alone and takes nothing' ((Words 'Wipe-Dev') -eq '-Server|dev|-Yes|-NoPause' -and (Words 'Wipe-Dev -Server main') -eq 'REFUSED' -and
     (Words 'Wipe-Dev -Vps 1.2.3.4') -eq 'REFUSED' -and -not $verbs.verbs.'Wipe-Dev'.build -and $verbs.verbs.'Wipe-Dev'.script -eq 'scripts/ops/Wipe-Saves.ps1')
 Yes '  and no verb wipes main or every server' (@($verbs.verbs.PSObject.Properties | Where-Object { $_.Value.script -eq 'scripts/ops/Wipe-Saves.ps1' -and (@($_.Value.fixed) -join ' ') -ne '-Server dev -Yes -NoPause' }).Count -eq 0)
-# The installer for the site (#5109): no parameter at all, the token the
-# Ship's, and the publish from the branch main.
-Yes 'Publish-Installer takes nothing, and is not a live verb' ((Words 'Publish-Installer') -eq '' -and (Words 'Publish-Installer -OutDir C:/x') -eq 'REFUSED' -and
-    (Words 'Publish-Installer -AllowStaleCheckout') -eq 'REFUSED' -and (Words 'Publish-Installer -WaitSeconds 10') -eq 'REFUSED' -and -not $verbs.verbs.'Publish-Installer'.build -and
-    $verbs.verbs.'Publish-Installer'.script -eq 'scripts/release/Publish-InstallerOnBox.ps1')
-$instBox = Text 'scripts/release/Publish-InstallerOnBox.ps1'
-Yes '  Publish-InstallerOnBox.ps1 runs Publish-InstallerFromGitHub.ps1 with the App''s token in GH_TOKEN alone and gone after, from the branch main' (
-    $instBox.Contains('Get-ThornswoodShipAccess -Repo $repo -AdminState $AdminState') -and $instBox.Contains("& (Join-Path `$Here 'Publish-InstallerFromGitHub.ps1') -WaitSeconds `$WaitSeconds") -and
-    $instBox.Contains('$env:GH_TOKEN = $token') -and $instBox.Contains('finally { Remove-Item -LiteralPath Env:\GH_TOKEN') -and
-    $instBox.Contains('checkout --quiet -B main refs/remotes/origin/main') -and
-    $instBox.IndexOf('checkout --quiet -B main') -lt $instBox.IndexOf('Get-ThornswoodShipAccess -Repo') -and -not $instBox.Contains('AllowStaleCheckout'))
-Yes '  and its wait for installer.yml fits inside the verb''s timeout' ([int]([regex]::Match($instBox, '\[int\]\$WaitSeconds = (\d+)').Groups[1].Value) -lt 60 * [int]$verbs.verbs.'Publish-Installer'.timeoutMinutes)
+# The installer for the site (#5109) went with the old installer pipeline
+# (#4824): the download is Velopack's Setup.exe on the GitHub Release, which
+# merge-release.yml makes, so the gate has no verb for it and no script of it
+# is left to run.
+Yes 'no verb publishes the old installer, and no Publish-Installer script is left (#4824)' (
+    -not $verbs.verbs.PSObject.Properties['Publish-Installer'] -and
+    @($verbs.verbs.PSObject.Properties | Where-Object { [string]$_.Value.script -match 'Publish-Installer' }).Count -eq 0 -and
+    @(Get-ChildItem -LiteralPath (Join-Path $Repo 'scripts/release') -Filter 'Publish-Installer*' -File).Count -eq 0)
 $gt = Text 'scripts/vps/admin/ship-access.js'
 Yes '  the token is the App''s, for the fork and Thornswood only, Actions write and Contents read and nothing more' (
     $gt.Contains("const REPOS = ['skymp', 'Thornswood'];") -and $gt.Contains("const PERMISSIONS = { actions: 'write', contents: 'read' };") -and $gt.Contains('{ repositories: REPOS, permissions: PERMISSIONS }'))
@@ -568,11 +593,11 @@ $GateScript = 'C:\Thornswood-Gate\Gate.ps1'
 $SayStaff = 'C:\Thornswood-Watch\say-staff.ps1'
 $bare = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKk0ZXN0a2V5Zm9ydGhlZ2F0ZXRlc3QwMDAwMDAwMDAw'
 $line = Get-BoxKeyLine $bare 'desk' $false $true
-Yes 'a deploy key''s line: from the box only, restricted, forced to Gate.ps1' ($line -eq ('from="127.0.0.1",restrict,command="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\Thornswood-Gate\Gate.ps1" ' + $bare + ' thornswood-desk'))
+Yes 'a deploy key''s line: from the box only, restricted, forced to Gate.ps1' ($line -eq ('from="127.0.0.1",restrict,command="pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\Thornswood-Gate\Gate.ps1" ' + $bare + ' thornswood-desk'))
 $parts = Read-BoxKeyLine $line
 Yes '  and its reader sees the bridge and the gate in it, and no notices command' ($parts.Bridge -and $parts.Gate -and -not $parts.Notices -and $parts.Key -eq $bare)
 Yes 'a plain key''s line is unchanged' ((Get-BoxKeyLine $bare 'one' $false) -eq ('from="127.0.0.1" ' + $bare + ' thornswood-one'))
-Yes 'a notices key''s line is unchanged' ((Get-BoxKeyLine $bare 'claude' $true) -like 'from="127.0.0.1",restrict,command="powershell.exe * -File C:\Thornswood-Watch\say-staff.ps1 -From claude" *')
+Yes 'a notices key''s line is forced to say-staff.ps1 through pwsh' ((Get-BoxKeyLine $bare 'claude' $true) -like 'from="127.0.0.1",restrict,command="pwsh * -File C:\Thornswood-Watch\say-staff.ps1 -From claude" *')
 $grant = Text 'scripts/vps/Grant-BoxAccess.ps1'
 Yes 'a deploy key goes into the gate account''s authorized_keys, and stops without the account' ($grant.Contains("Run scripts\deploy\Install-Gate.ps1 first") -and $grant.Contains("ProfileImagePath '.ssh\authorized_keys'"))
 Yes 'its proof needs a refused command and GATE READY' ($grant.Contains("@('echo THORNSWOOD_OK', 'ping')") -and $grant.Contains("'^\| GATE READY'") -and $grant.Contains('($NoticesOnly -or $Deploy) -and @($proof | Where-Object { $_ -match ''THORNSWOOD_OK'' }).Count'))

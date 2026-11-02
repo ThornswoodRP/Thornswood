@@ -2,7 +2,7 @@
   test-say-staff.ps1
 
       pwsh -NoProfile -File .\tests\test-say-staff.ps1
-      powershell -NoProfile -File .\tests\test-say-staff.ps1
+      pwsh -NoProfile -File .\tests\test-say-staff.ps1
 
   Agents post their own staff notices in #staff-updates through the bot
   (#2934): scripts\ops\Say-Staff.ps1 hands the notice over ssh to
@@ -264,7 +264,7 @@ for aid, text in due:
         Yes 'bot.py watch_alerts_due takes the line the box half wrote, with its text' (
             $probe -eq 'DUE 1' -and $dueId.Count -eq 1 -and ('QUEUED ' + $dueId[0]) -eq $r.Last -and $dueText.Count -eq 1 -and $dueText[0] -eq '[cloud] for the bot')
     } else {
-        Write-Host ('SKIP  bot.py could not be imported here (' + $(if ($probe) { $probe } else { 'no python' }) + '); bot\test-watch-services.py covers its reader')
+        Write-Host ('SKIP  bot.py could not be imported here (' + $(if ($probe) { $probe } else { 'no python' }) + '); bot\tests\test-watch-services.py covers its reader')
     }
 
     # ---- 4. Say-Staff.ps1 end to end -----------------------------------------
@@ -311,7 +311,7 @@ process.exit(r.status === null ? 1 : r.status);
     $sent = @([IO.File]::ReadAllLines($argsFile))
     Yes '  ssh is asked for the box with BatchMode and StrictHostKeyChecking, to run say-staff.ps1 as claude' (
         $sent -contains 'BatchMode=yes' -and $sent -contains 'StrictHostKeyChecking=yes' -and $sent -contains 'Administrator@box.invalid' -and
-        $sent[-1] -eq 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\Thornswood-Watch\say-staff.ps1 -From claude')
+        $sent[-1] -eq 'pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\Thornswood-Watch\say-staff.ps1 -From claude')
     Yes '  the text went on standard input and is on no command line' (
         -not (($sent -join ' ').Contains('Shell.cs')) -and ([IO.File]::ReadAllText("$argsFile.in")).Trim() -eq (SayLine $text))
     $s = SayStaff @('-Check', $id)
@@ -536,7 +536,7 @@ no('gh: Not Found (HTTP 404)');
     $notice = Get-BoxKeyLine $pub 'codex' $true
     Yes 'an ordinary key line is as it was: from="127.0.0.1" <key> thornswood-<name>' ($plain -eq ('from="127.0.0.1" ' + $pub + ' thornswood-djinn'))
     Yes 'a notices key line: only through the bridge, restricted, forced to say-staff.ps1 as its own name' (
-        $notice -eq ('from="127.0.0.1",restrict,command="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\Thornswood-Watch\say-staff.ps1 -From codex" ' + $pub + ' thornswood-codex'))
+        $notice -eq ('from="127.0.0.1",restrict,command="pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\Thornswood-Watch\say-staff.ps1 -From codex" ' + $pub + ' thornswood-codex'))
     $rp = Read-BoxKeyLine $plain
     $rn = Read-BoxKeyLine $notice
     Yes '-List reads an ordinary line: its key, through the bridge, not a notices key' ($rp.Key -eq $pub -and $rp.Bridge -and -not $rp.Notices)

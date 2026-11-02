@@ -1,6 +1,6 @@
 <#
   A stand-in Data\Platform\UI for harnesses that run the real Publish-Update
-  or Package-Thornswood. Save-ShipUiHashedAssets refuses a game folder whose
+  (the old installer's builder too, until #4824). Save-ShipUiHashedAssets refuses a game folder whose
   build.js is missing or names nothing (#1318). Font names are derived from
   the real shipped build.js's asset modules (tests/fixtures/ui-front-build.js,
   cut from the whole build in #3761), so they follow that file. They are the

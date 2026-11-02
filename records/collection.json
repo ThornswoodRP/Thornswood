@@ -4,7 +4,7 @@
   "what": "The Thornswood collection on Nexus as it should be: each Nexus file it installs and the plugins that file puts in Data, every plugin in the collection's order with the rule that holds it there and what its header says, and the plugins the servers load that a change takes out. A mod change is a pull request to this file (docs\\COLLECTION-CHANGES.md): Check-CollectionRecord.ps1 holds it to the load order, the pages' permissions and the servers' order, and the merge drafts the revision it describes, lays it out, holds it to this record and publishes it (Publish-CollectionRecord.ps1). revision is the newest published revision the record has followed.",
   "collection": "7essxf",
   "game": "skyrimspecialedition",
-  "revision": 6,
+  "revision": 7,
   "mods": [
     { "modId": 198, "fileId": 489053, "name": "Caliente's Beautiful Bodies Enhancer CBBE - v2.0.3", "plugins": ["CBBE.esp", "RaceMenuMorphsCBBE.esp"] },
     { "modId": 201, "fileId": 767958, "name": "BodySlide and Outfit Studio - v5.8.2", "plugins": [] },
@@ -27,6 +27,7 @@
     { "modId": 6289, "fileId": 189705, "name": "JK's Skyrim all in one", "plugins": ["JKs Skyrim.esp"] },
     { "modId": 8379, "fileId": 23767, "name": "Carriage and Ferry Travel Overhaul", "plugins": [] },
     { "modId": 9138, "fileId": 307456, "name": "Zim's Immersive Artifacts V1.7.4", "plugins": ["ZIA_Complete Pack.esp"] },
+    { "modId": 9141, "fileId": 23215, "name": "Improved Eyes Skyrim SSE 1.6", "plugins": ["Improved Eyes Skyrim.esp"] },
     { "modId": 9320, "fileId": 81323, "name": "Skyrim Sewers 415", "plugins": ["SkyrimSewers.esp"] },
     { "modId": 12604, "fileId": 749043, "name": "SkyUI", "plugins": ["SkyUI_SE.esp"] },
     { "modId": 12688, "fileId": 803483, "name": "moreHUD for SE and AE", "plugins": ["AHZmoreHUD.esp"] },
@@ -224,6 +225,7 @@
     { "name": "Water for ENB - Patch - Generic Landscape Patch.esp", "master": false, "light": true, "masters": ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm", "Water for ENB.esm", "Water for ENB (Shades of Skyrim).esp"], "after": [] },
     { "name": "Playable Rieklings.esp", "master": false, "light": false, "masters": ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "Dragonborn.esm", "RaceCompatibility.esm"], "after": ["Water for ENB (Shades of Skyrim).esp"] },
     { "name": "KS_Hairdo's_Lite_NoNPCs.esp", "master": false, "light": false, "masters": ["Skyrim.esm", "Update.esm", "Dragonborn.esm", "Dawnguard.esm"], "after": ["Playable Rieklings.esp"] },
+    { "name": "Improved Eyes Skyrim.esp", "master": false, "light": false, "masters": ["Skyrim.esm"], "after": ["KS_Hairdo's_Lite_NoNPCs.esp", "RaceMenuMorphsCBBE.esp"] },
     { "name": "CBBE.esp", "enabled": false, "master": false, "light": false, "masters": ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "Dragonborn.esm"], "after": [] },
     { "name": "RaceMenuMorphsCBBE.esp", "enabled": false, "master": false, "light": false, "masters": ["Skyrim.esm"], "after": ["RaceMenuPlugin.esp"] }
   ],

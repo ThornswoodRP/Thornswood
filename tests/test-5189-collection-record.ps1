@@ -87,7 +87,11 @@ try {
         $cpNames = @(@($cp.plugins) | Where-Object { -not (Test-CollectionName $script:CollectionGameOwn $_.name) } | ForEach-Object { ([string]$_.name).ToLowerInvariant() } | Sort-Object)
         $rrNames = @(@($rr.plugins) | Where-Object { -not (Test-CollectionName $script:CollectionOurs $_.name) } | ForEach-Object { ([string]$_.name).ToLowerInvariant() } | Sort-Object)
         $dropNames = @(@($rr.dropped) | Where-Object { $_ } | ForEach-Object { ([string]$_.name).ToLowerInvariant() })
-        Yes 'R4 with no change on its way, the plugins it installs are collection-plugins.json''s (dropped names a change on its way)' ($dropNames.Count -or (($cpNames -join '|') -eq ($rrNames -join '|')))
+        # A change on its way (merged, not yet followed by the records)
+        # adds plugins collection-plugins.json does not have yet, and takes
+        # out only the ones its dropped names.
+        $gone = @($cpNames | Where-Object { $rrNames -notcontains $_ -and $dropNames -notcontains $_ })
+        Yes 'R4 every plugin collection-plugins.json has is still installed, or under dropped for the change on its way' (-not $gone.Count) ($gone -join ', ')
     }
 
     # ---------------------------------------------------------------- C ----
@@ -160,6 +164,39 @@ try {
             $c.Plugins.plugins = @($c.Plugins.plugins) + @([ordered]@{ name = 'Off.esp'; size = 1; sha256 = ('0' * 64) })
             $c.Last.loadOrder = @('Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm', '_ResourcePack.esl', 'A.esm', 'L.esl', 'B.esp', 'Off.esp', 'C.esp', 'Thornswood-Content.esp') })
     Yes 'C2b a plugin installed switched off that the servers load: a rule may name it and chain through it, and it is not taken out' ($r.Code -eq 0 -and $r.Out -match 'YES') $r.Out
+
+    # #4603: the layout of a revision puts the plugins switched off after the
+    # list, in name order, and the draft is held to the record in that order.
+    # Revision 7's first draft was discarded for a new plugin written below one.
+    $offBelow = { param($c)
+        $p = @($c.Record.plugins)
+        $c.Record.plugins = @($p[0], $p[1], $p[2], $p[3], [pscustomobject][ordered]@{ name = 'Off.esp'; enabled = $false; master = $false; light = $false; masters = @('Skyrim.esm'); after = @() }, $p[4])
+        $m = @($c.Record.mods)
+        $c.Record.mods = @($m[0], $m[1], $m[2], [pscustomobject][ordered]@{ modId = 400; fileId = 4000; name = 'Delta'; plugins = @('Off.esp') }, $m[3])
+        $pm = @($c.Permissions.mods)
+        $c.Permissions.mods = @($pm[0], $pm[1], $pm[2], [ordered]@{ modId = 400; name = 'Delta'; author = 'd'; files = @(@{ fileId = 4000 }); plugins = @('Off.esp'); page = 'https://www.nexusmods.com/skyrimspecialedition/mods/400?tab=description'; ours = $true; reading = $null }, $pm[3], $pm[4])
+        $c.Plugins.plugins = @($c.Plugins.plugins) + @([ordered]@{ name = 'Off.esp'; size = 1; sha256 = ('0' * 64) }) }
+    $r = Invoke-Check (New-Fixture 'off-below' $offBelow)
+    Yes 'C2c a plugin of the list below one switched off: NO, saying where the layout puts it' ($r.Code -eq 1 -and $r.Out -match 'Thornswood-Content\.esp is below Off\.esp, which is switched off') $r.Out
+    $r = Invoke-Check (New-Fixture 'off-order' { param($c) & $offBelow $c
+            $p = @($c.Record.plugins)
+            $c.Record.plugins = @($p[0], $p[1], $p[2], $p[3], $p[5], $p[4], [pscustomobject][ordered]@{ name = 'Aoff.esp'; enabled = $false; master = $false; light = $false; masters = @('Skyrim.esm'); after = @() })
+            $m = @($c.Record.mods); $m[3].plugins = @('Off.esp', 'Aoff.esp')
+            $c.Permissions.mods[3].plugins = @('Off.esp', 'Aoff.esp')
+            $c.Plugins.plugins = @($c.Plugins.plugins) + @([ordered]@{ name = 'Aoff.esp'; size = 1; sha256 = ('0' * 64) }) })
+    Yes 'C2c and plugins switched off out of name order: NO, giving the order' ($r.Code -eq 1 -and $r.Out -match 'not in name order, the order the layout of the revision gives them: Aoff\.esp, Off\.esp' -and $r.Out -notmatch 'is below') $r.Out
+
+    # #4603: held to a base whose record already has a FOMOD file, the file
+    # keeps its answers, as the published entry carries them.
+    $fb = New-Fixture 'fomod-base' { param($c) $c.Record.mods[1] | Add-Member -NotePropertyName choices -NotePropertyValue ([pscustomobject]@{ type = 'fomod'; options = @([pscustomobject]@{ name = 'Main'; groups = @([pscustomobject]@{ name = 'Pick'; choices = @([pscustomobject]@{ name = 'Full'; idx = 0 }) }) }) }) }
+    $gitOk = $true
+    try {
+        foreach ($g in @(@('init', '-q'), @('add', '-A'), @('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'base'))) { & git -C $fb @g 2>&1 | Out-Null; if ($LASTEXITCODE -ne 0) { $gitOk = $false } }
+    } catch { $gitOk = $false }
+    if ($gitOk) {
+        $o = @(& $shell -NoProfile -File (Join-Path $Repo 'scripts/release/Check-CollectionRecord.ps1') -Root $fb -Record (Join-Path $fb 'records/collection.json') -Base HEAD 2>&1 | ForEach-Object { "$_" }) -join "`n"
+        Yes 'C2d held to a base that has a FOMOD file, the file keeps its answers: no change for Nexus' ($LASTEXITCODE -eq 0 -and $o -match 'against HEAD: no change for Nexus' -and $o -notmatch 'gives choices that are not') $o
+    } else { Write-Host 'SKIP  C2d needs git' }
 
     $r = Invoke-Check (New-Fixture 'broken' { param($c)
             $p = @($c.Record.plugins); $c.Record.plugins = @($p[0], $p[1], $p[3], $p[2], $p[4]) })
@@ -253,6 +290,26 @@ try {
     Yes 'S8 a dropPatch on a file that does not move is refused' (@($cs2.Problems | Where-Object { $_ -match 'names dropPatch and its file does not move' }).Count -eq 1) (@($cs2.Problems) -join ' | ')
     $same = [pscustomobject]@{ mods = @($pubJson.mods | ForEach-Object { [pscustomobject]@{ modId = $_.source.modId; fileId = $_.source.fileId; name = $_.name; plugins = @() } }); plugins = @([pscustomobject]@{ name = 'B.esp'; after = @('A.esm') }, [pscustomobject]@{ name = 'C.esp'; after = @('B.esp') }) }
     Yes 'S9 a record that is the published revision asks for nothing' ((Get-CollectionChangeSet $same $pubJson).Empty)
+    # A FOMOD's answers (#5189): they go with a file the record adds, the
+    # record writes them on the mod's line, and a kept or moved file's are
+    # the published revision's.
+    $ch = '{"type":"fomod","options":[{"name":"Options","groups":[{"name":"Add-ons","choices":[{"name":"Dawnguard","idx":0}]}]}]}' | ConvertFrom-Json
+    $rec3 = [pscustomobject]@{ mods = @($rec.mods | ForEach-Object { if ($_.modId -eq 5) { [pscustomobject]@{ modId = 5; fileId = 50; name = 'five'; plugins = @('E.esp'); choices = $ch } } else { $_ } }); plugins = $rec.plugins }
+    $cs3 = Get-CollectionChangeSet $rec3 $pubJson
+    Yes 'S10 a new file''s choices go with it to -Add' ($cs3.Add[0].choices.options[0].groups[0].choices[0].name -eq 'Dawnguard' -and -not @($cs3.Problems).Count) (@($cs3.Problems) -join ' | ')
+    $rec4 = [pscustomobject]@{ mods = @($rec.mods | ForEach-Object { if ($_.modId -eq 1) { [pscustomobject]@{ modId = 1; fileId = 10; name = 'one'; plugins = @('A.esm'); choices = $ch } } elseif ($_.modId -eq 2) { [pscustomobject]@{ modId = 2; fileId = 21; name = 'two'; plugins = @('B.esp'); choices = $ch; dropPatch = @('B.esp') } } else { $_ } }); plugins = $rec.plugins }
+    $cs4 = Get-CollectionChangeSet $rec4 $pubJson
+    Yes 'S11 choices on a kept file that are not the published entry''s are refused' (@($cs4.Problems | Where-Object { $_ -match 'mod 1 file 10 gives choices that are not the published revision''s' }).Count -eq 1) (@($cs4.Problems) -join ' | ')
+    Yes 'S12 and so are choices on a file that moves' (@($cs4.Problems | Where-Object { $_ -match 'mod 2 moves to file 21 with choices' }).Count -eq 1) (@($cs4.Problems) -join ' | ')
+    $pubJson.mods[0] | Add-Member -NotePropertyName choices -NotePropertyValue $ch
+    $cs5 = Get-CollectionChangeSet ([pscustomobject]@{ mods = @($rec4.mods | Where-Object { $_.modId -ne 2 }); plugins = $rec.plugins }) $pubJson
+    Yes 'S13 a kept file''s choices that say the published ones again are fine' (-not @($cs5.Problems | Where-Object { $_ -match 'choices' }).Count) (@($cs5.Problems) -join ' | ')
+    $pubJson.mods[0].PSObject.Properties.Remove('choices')
+    $rr5 = [pscustomobject]@{ version = 1; issue = 5189; what = 'w'; collection = '7essxf'; game = 'skyrimspecialedition'; revision = 6; mods = @([pscustomobject]@{ modId = 5; fileId = 50; name = 'five'; plugins = @('E.esp'); choices = $ch }); plugins = @([pscustomobject]@{ name = 'E.esp'; master = $false; light = $false; masters = @(); after = @('Skyrim.esm') }); dropped = @() }
+    $t5 = ConvertTo-CollectionRecordText $rr5
+    Yes 'S14 the record writes a mod''s choices on its line, and they read back the same' ($t5 -match '"choices": \{ "type": "fomod", "options": \[\{ "name": "Options", "groups": \[\{ "name": "Add-ons", "choices": \[\{ "name": "Dawnguard", "idx": 0 \}\] \}\] \}\] \}' -and (ConvertTo-CollectionRecordText ($t5 | ConvertFrom-Json)) -ceq $t5 -and -not @(Get-CollectionRecordShapeProblems ($t5 | ConvertFrom-Json)).Count) (@(Get-CollectionRecordShapeProblems ($t5 | ConvertFrom-Json)) -join ' | ')
+    $bad = $t5.Replace('"idx": 0', '"idx": -1')
+    Yes 'S15 choices not shaped as Vortex writes them are refused' (@(Get-CollectionRecordShapeProblems ($bad | ConvertFrom-Json) | Where-Object { $_ -match 'mod 5 file 50: a choice in group "Add-ons"' }).Count -eq 1)
 
     # ---------------------------------------------------------------- L ----
     # A plugin file with a TES4 header: flags (0x1 master, 0x200 light) and a

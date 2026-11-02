@@ -17,8 +17,10 @@
   name, the file its line is in, the environment and secret it goes into.
   The new line takes the old line's options word for word (from="127.0.0.1",
   restrict, and the forced command: the deploy gate for desk, say-staff.ps1
-  as claude for notices), and the run stops, changing nothing, when there is
-  no such line or its options are not those. No new name, person, file or
+  as claude for notices), but for the forced command's program, which is
+  pwsh since #5356 where an older line named powershell.exe. The run stops,
+  changing nothing, when there is no such line or its options are not
+  those. No new name, person, file or
   environment can come of it; Grant-BoxAccess.ps1 stays the way to make one.
   The private half is written nowhere but a folder only SYSTEM and
   Administrators may open, for the length of the run, and into the secret by
@@ -118,6 +120,10 @@ if (@($parts | Where-Object { -not $_ }).Count) { Die ("a line for thornswood-" 
 $opts = @($parts | ForEach-Object { $_.Options } | Select-Object -Unique)
 if ($opts.Count -ne 1) { Die ("the lines for thornswood-" + $K.Name + " carry different options, so which to keep is not this script's to choose. Nothing was changed.") }
 $opts = [string]$opts[0]
+# The forced command's program is PowerShell 7 (#5356): a line Grant-BoxAccess
+# made before then starts Windows PowerShell, and its renewed line starts
+# pwsh with the same arguments. The login below proves pwsh runs it.
+$opts = $opts -replace '(^|,)command="powershell\.exe ', '$1command="pwsh '
 $wantCommand = if ($K.Gate) { 'command="[^"]*-File C:\\Thornswood-Gate\\Gate\.ps1"' } else { 'command="[^"]*\\say-staff\.ps1 -From ' + $K.Name + '"' }
 foreach ($need in '(^|,)from="127\.0\.0\.1"(,|$)', '(^|,)restrict(,|$)', ('(^|,)' + $wantCommand + '(,|$)')) {
     if ($opts -notmatch $need) { Die ("the line for thornswood-" + $K.Name + " lacks what it must hold (from=""127.0.0.1"", restrict and its forced command), so a key renewed from it could do more than the old one. Nothing was changed.") }

@@ -146,6 +146,10 @@ function Get-ThornswoodFileScript {
 #             at most $ThornswoodStdinLimit bytes with its line end. A long
 #             script's runner reads none of it, so the script reads it as
 #             its first line either way
+#   -NewBox   run it in the Windows PowerShell a new Windows Server comes
+#             with, for Bootstrap-VPS.ps1 alone, which is what puts
+#             PowerShell 7 on a new box (Remote.ps1 says so). Everything
+#             else runs in pwsh, as the box's own tasks do (#5356).
 function Invoke-ThornswoodRemote {
     param(
         [Parameter(Mandatory = $true)][string]$Target,
@@ -153,8 +157,11 @@ function Invoke-ThornswoodRemote {
         [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Script,
         [switch]$Bypass,
         [int]$Limit = 6000,
-        [AllowEmptyString()][string]$Stdin
+        [AllowEmptyString()][string]$Stdin,
+        [switch]$NewBox
     )
+    $shell = 'pwsh'
+    if ($NewBox) { $shell = 'powershell' }
     $weak = @($SshArgs | Where-Object { $_ -match '(?i)StrictHostKeyChecking\s*=\s*(?!yes\b)' })
     if ($weak.Count) { throw ('ssh options with host key checking turned down (' + ($weak -join ', ') + '). Only the box whose key is pinned is talked to. Nothing was sent.') }
     $ssh = @(@($SshArgs | Where-Object { $_ }) + @('-o', 'StrictHostKeyChecking=yes'))
@@ -169,7 +176,7 @@ function Invoke-ThornswoodRemote {
     $policy = ''
     if ($Bypass) { $policy = ' -ExecutionPolicy Bypass' }
     $e = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Script))
-    $cmd = 'powershell -NoProfile' + $policy + ' -EncodedCommand ' + $e
+    $cmd = $shell + ' -NoProfile' + $policy + ' -EncodedCommand ' + $e
     if ($cmd.Length -le $Limit) {
         if ($piped) { return ($Stdin | Invoke-ThornswoodNative { $input | & ssh @ssh $Target $cmd } 2>&1) }
         return (Invoke-ThornswoodNative { & ssh @ssh $Target $cmd } 2>&1)
@@ -180,7 +187,7 @@ function Invoke-ThornswoodRemote {
     # runs it, with the caller's line on its standard input.
     $id = [Guid]::NewGuid().ToString('N')
     $far = 'C:\Windows\Temp\thornswood-remote-' + $id + '.ps1'
-    $run = 'powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes((Get-ThornswoodRemoteRunner -Path $far)))
+    $run = $shell + ' -NoProfile -ExecutionPolicy Bypass -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes((Get-ThornswoodRemoteRunner -Path $far)))
     $tmp = [IO.Path]::GetTempFileName()
     $rc = 1
     try {
@@ -227,7 +234,7 @@ function Start-ThornswoodRemote {
     )
     $weak = @($SshArgs | Where-Object { $_ -match '(?i)StrictHostKeyChecking\s*=\s*(?!yes\b)' })
     if ($weak.Count) { throw ('ssh options with host key checking turned down (' + ($weak -join ', ') + '). Only the box whose key is pinned is talked to. Nothing was sent.') }
-    $cmd = 'powershell -NoProfile -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Script))
+    $cmd = 'pwsh -NoProfile -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Script))
     if ($cmd.Length -gt $Limit) { throw ('a held script goes on the command line, and this one is ' + $cmd.Length + ' characters there, over ' + $Limit + '. Nothing was sent.') }
     $words = @(@($SshArgs | Where-Object { $_ }) + @('-o', 'StrictHostKeyChecking=yes', $Target, $cmd))
     $bad = @($words | Where-Object { $_ -match '["\r\n]' })
@@ -304,7 +311,7 @@ finally {
   Put ('END ' + `$rc)
 }
 "@
-    $cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($runner))
+    $cmd = 'pwsh -NoProfile -ExecutionPolicy Bypass -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($runner))
     $body = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Script + "`r`nexit 0`r`n"))
     $start = @"
 `$ErrorActionPreference = 'Stop'

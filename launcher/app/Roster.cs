@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Net;
 using System.Text.RegularExpressions;
 
 namespace Thornswood
@@ -223,13 +222,14 @@ namespace Thornswood
             var got = new Dictionary<int, Row>();
             try
             {
-                // Read with a regex rather than a serializer on purpose. The
-                // launcher targets the .NET Framework that ships in Windows,
-                // whose only serializer is the data contract one, and that
-                // cannot read a dictionary keyed by an arbitrary number without
-                // being told the shape in advance. This file has to survive the
-                // gamemode adding a field to it, which a declared shape would
-                // not.
+                // Read with a regex rather than a serializer. It was written
+                // while the launcher ran on the .NET Framework that ships in
+                // Windows, whose only serializer was the data contract one,
+                // and that cannot read a dictionary keyed by an arbitrary
+                // number without being told the shape in advance. This file
+                // has to survive the gamemode adding a field to it, which a
+                // declared shape would not. On .NET 10 (#4823) JsonNode reads
+                // it with no declared shape; this was not moved to it.
                 var each = Regex.Matches(text,
                     "\"(\\d+)\"\\s*:\\s*\\{(.*?)\\}", RegexOptions.Singleline);
                 foreach (Match m in each)
@@ -281,19 +281,6 @@ namespace Thornswood
             return m.Groups[1].Value
                     .Replace("\\\"", "\"")
                     .Replace("\\\\", "\\");
-        }
-
-        // WebClient has no timeout worth the name, and the default is long
-        // enough that a server which is merely slow looks like a hung launcher.
-        class Quick : WebClient
-        {
-            public int Ms = 2500;
-            protected override WebRequest GetWebRequest(Uri address)
-            {
-                var r = base.GetWebRequest(address);
-                if (r != null) { r.Timeout = Ms; }
-                return r;
-            }
         }
 
         /// <summary>

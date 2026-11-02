@@ -7,11 +7,10 @@
   widget's secret in a form anybody can read (#3216, Patrick's A of 22 Oct).
 
   HOW. Three parts, nothing connecting anywhere:
-    1. scripts\vps\Seal.ps1's box-side blocks run in Windows PowerShell 5.1 on
-       Windows (the box's PowerShell) and in this PowerShell anywhere else,
-       against a scratch folder: the key is made once and kept, its private
-       half is never printed, a value sealed to it opens, and one sealed to
-       another key or cut short does not.
+    1. scripts\vps\Seal.ps1's box-side blocks run in PowerShell 7, the box's
+       PowerShell, against a scratch folder: the key is made once and kept,
+       its private half is never printed, a value sealed to it opens, and
+       one sealed to another key or cut short does not.
     2. The workflow's half, Set-Turnstile.ps1 -SealOnGitHub, is run as the
        workflow runs it: it leaves only the sealed token, as an annotation
        titled Turnstile, and with no token it stops and says so.
@@ -50,7 +49,7 @@ function Done {
 . (Join-Path $Root 'scripts\vps\Seal.ps1')
 . (Join-Path $PSScriptRoot 'Windows.ps1')
 $thisShell = (Get-Process -Id $PID).Path
-if ($OnWindows) { $boxShell = Get-WindowsPowerShell } else { $boxShell = $thisShell }
+$boxShell = Get-BoxPowerShell
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-3216-seal-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work -Force | Out-Null
@@ -79,10 +78,6 @@ function Run-Box([string]$t, [string]$stdin = '') {
     $psi.RedirectStandardInput = $true
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
-    # Windows PowerShell 5.1 started from PowerShell 7 inherits 7's module
-    # path, and then cannot load its own Get-Acl (measured on runner 1,
-    # 22 Oct). The box's ssh session has 5.1's own.
-    if ([IO.Path]::GetFileNameWithoutExtension($boxShell) -eq 'powershell') { $psi.EnvironmentVariables.Remove('PSModulePath') }
     $p = [Diagnostics.Process]::Start($psi)
     $p.StandardInput.Write($stdin)
     $p.StandardInput.Close()

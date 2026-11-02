@@ -55,7 +55,6 @@ $Box = P 'scripts', 'vps', 'vps-web-firewall.ps1'
 $Driver = P 'scripts', 'vps', 'Set-WebFirewall.ps1'
 $Outside = P 'scripts', 'vps', 'Watch-Outside.ps1'
 
-. (Join-Path $PSScriptRoot 'Windows.ps1')
 . (P 'scripts', 'vps', 'Vps.ps1')
 # The box's own address, from vps.json through Vps.ps1, never written here.
 $VpsAddr = Get-ThornswoodVpsAddress
@@ -82,7 +81,8 @@ $cf = [IO.File]::ReadAllText($Caddyfile)
 $tp = [regex]::Match($cf, '(?m)^[ \t]*trusted_proxies static ([^\r\n]+)')
 $trusted = @($tp.Groups[1].Value.Trim() -split '\s+' | Where-Object { $_ })
 Yes 'the Caddyfile trusts a static list' ($tp.Success)
-Yes '  and it is cloudflare-ranges.txt, range for range, in its order' (($trusted -join ' ') -eq ($ranges -join ' '))
+# Then loopback, where cloudflared brings the tunnel's requests in (#5334).
+Yes '  and it is cloudflare-ranges.txt, range for range, in its order, then loopback for the tunnel' (($trusted -join ' ') -eq ((@($ranges) + @('127.0.0.1/32', '::1/128')) -join ' '))
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-2995-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Path $tmp -Force | Out-Null
 $utf8 = New-Object Text.UTF8Encoding($false)
@@ -153,14 +153,6 @@ try {
         $e = $null
         $null = [System.Management.Automation.Language.Parser]::ParseInput($t, [ref]$null, [ref]$e)
         Yes ((Split-Path -Leaf $f) + ' parses and is plain ASCII') ((-not $e -or $e.Count -eq 0) -and -not ($t.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
-    }
-    if ($OnWindows) {
-        $ps51 = Get-WindowsPowerShell
-        $chk = "`$e = `$null; `$null = [System.Management.Automation.Language.Parser]::ParseFile('" + $Box.Replace("'", "''") + "', [ref]`$null, [ref]`$e); if (`$e) { 'ERR ' + `$e[0].Message } else { 'OK' }"
-        $said = (& $ps51 -NoProfile -NonInteractive -Command $chk) -join ' '
-        Yes ('  and Windows PowerShell 5.1, which runs it on the box, parses it: ' + $said) ($said -eq 'OK')
-    } else {
-        Write-Host 'NOT RUN  the Windows PowerShell 5.1 parse, which only Windows has'
     }
 
     $layerNames = @('Get-ThornswoodBoxRefusal', 'Get-AllowRules', 'Get-WebRule', 'Set-RuleRemote', 'Get-Profiles', 'Resolve-Name')

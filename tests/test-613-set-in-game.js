@@ -31,7 +31,7 @@ const { spawnSync } = require('child_process');
 const REPO = path.join(__dirname, '..');
 const SRC = path.join(REPO, 'game', 'gamemode.js');
 const CR = String.fromCharCode(13);
-const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const src = require('./gamemode-tables.js').joined(fs.readFileSync(SRC, 'utf8')).split(CR).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -53,8 +53,8 @@ const manifest = JSON.parse(fs.readFileSync(path.join(REPO, 'game', 'data', 'las
 const policy = JSON.parse(fs.readFileSync(path.join(REPO, 'game', 'data', 'last-plugin-policy.json'), 'utf8'));
 const recipes = JSON.parse(fs.readFileSync(path.join(REPO, 'game', 'data', 'recipes.json'), 'utf8')).recipes;
 
-const BLOCK = take('// ==== RECIPES_SET_IN_GAME, generated ====', '// ==== end RECIPES_SET_IN_GAME ====');
-const FLOOR = take('// ==== HELD_BY_SERVER, generated ====', '// ==== end HELD_BY_SERVER ====');
+const BLOCK = take('var RECIPES_SET_IN_GAME = ', ';\n');
+const FLOOR = take('var HELD_BY_SERVER = ', ';\n');
 const PARTS = [
   take('function recipeCountsScript() {'),
   take('function handRecipeCounts(actorId) {'),

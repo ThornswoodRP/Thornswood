@@ -34,11 +34,12 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const siteFiles = require('./site-files');
 const CR = String.fromCharCode(13);
 const ROOT = path.join(__dirname, '..');
 function read(p) { return fs.readFileSync(path.join(ROOT, p), 'utf8').split(CR).join(''); }
 const src = read('game/gamemode.js');
-const site = read('site/server.js');
+const site = siteFiles.source();
 // The home page's script, out of home.html since #1479.
 const home = read('site/public/home.js');
 const chatJs = read('game/ui/thornswood-chat.js');
@@ -78,7 +79,7 @@ yes('its own server falls back to its own feed\'s number',
 yes('the other build\'s server has no fallback, only the number it announces',
     /return AskPort\(cfg, other, 0\);/.test(onlineCs) && /got\.Max = fallbackMax;/.test(onlineCs) &&
     /"\\"max\\"\\\\s\*:\\\\s\*\(\\\\d\+\)"/.test(onlineCs));
-yes('and no seat count is built into the launcher', /\[DataMember\] public int MaxOnline = 0;/.test(configCs));
+yes('and no seat count is built into the launcher', /\[JsonInclude\] public int MaxOnline = 0;/.test(configCs));
 
 // ------------------------------------------------------------ the block
 const a = src.indexOf('// ==== thornswood seats ====');

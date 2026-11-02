@@ -42,10 +42,10 @@ function rig() {
   const clock = { now: 1000000000000 };
   const g = {};
   const Fake = {
-    getOnlinePlayers: function () { return online.slice(); },
     makeProperty: function () { },
     getDescFromId: function () { return ''; },
     get: function (id, key) {
+      if (id === 0 && key === 'onlinePlayers') { return online.slice(); }
       if (key === 'worldOrCellDesc') { return 'cell:X.esm'; }
       return store[id];
     },

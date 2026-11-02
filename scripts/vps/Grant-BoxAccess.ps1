@@ -39,7 +39,7 @@
 
   A NOTICES KEY (-NoticesOnly, with -MakeKey; #2934). Every other key logs
   in as the box's Administrator. This one's line carries
-      restrict,command="powershell.exe ... -File C:\Thornswood-Watch\say-staff.ps1 -From <name>"
+      restrict,command="pwsh ... -File C:\Thornswood-Watch\say-staff.ps1 -From <name>"
   so sshd runs say-staff.ps1 whatever the client asks for, with no shell,
   no file copy and no forwarding, and the notice it queues says it is from
   <name>. That script only appends one notice line to the watchdog's outbox
@@ -55,7 +55,7 @@
   Administrator but in the authorized_keys of thornswood-deploy, an account
   with no administrator rights that scripts\deploy\Install-Gate.ps1 makes,
   as
-      from="127.0.0.1",restrict,command="powershell.exe ... -File C:\Thornswood-Gate\Gate.ps1"
+      from="127.0.0.1",restrict,command="pwsh ... -File C:\Thornswood-Gate\Gate.ps1"
   so whatever the client asks for, sshd runs the gate's dispatcher, which
   hands the line to the gate's broker; the broker runs only the verbs in
   scripts\vps\gate\verbs.json, each one a script of main with the switches
@@ -178,8 +178,8 @@ $GateUser = 'thornswood-deploy'
 # the quotes.
 function Get-BoxKeyLine([string]$Bare, [string]$Who, [bool]$Notices, [bool]$Gate = $false) {
     $opts = 'from="127.0.0.1"'
-    if ($Gate) { $opts += ',restrict,command="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ' + $GateScript + '"' }
-    elseif ($Notices) { $opts += ',restrict,command="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ' + $SayStaff + ' -From ' + $Who + '"' }
+    if ($Gate) { $opts += ',restrict,command="pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ' + $GateScript + '"' }
+    elseif ($Notices) { $opts += ',restrict,command="pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ' + $SayStaff + ' -From ' + $Who + '"' }
     return ($opts + ' ' + $Bare + ' thornswood-' + $Who)
 }
 
@@ -292,7 +292,7 @@ Unregister-ScheduledTask -TaskName '$PutBack' -Confirm:`$false
 # in place, so a deploy account's read rule on its file stays.
 `$back = `$back.Replace('__KEYS__', `$keys)
 `$cmd = (@(`$back -split '\r?\n' | Where-Object { `$_.Trim() }) -join '; ')
-`$a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -Command "' + `$cmd + '"')
+`$a = New-ScheduledTaskAction -Execute (Join-Path `$env:ProgramFiles 'PowerShell\7\pwsh.exe') -Argument ('-NoProfile -Command "' + `$cmd + '"')
 `$t = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(10))
 `$p = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 Register-ScheduledTask -TaskName `$task -Action `$a -Trigger `$t -Principal `$p -Force | Out-Null

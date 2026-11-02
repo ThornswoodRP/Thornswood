@@ -151,9 +151,9 @@ function Recurse([string]$dir) {
 }
 function Status([string]$dir) { return @(G $dir status --porcelain --untracked-files=no | Where-Object { $_ }) }
 
-# Update-Checkout.ps1 run whole, as One runs it: Windows PowerShell 5.1 on
-# Windows, pwsh anywhere else.
-$shell = $(if ($OnWindows) { Get-WindowsPowerShell } else { (Get-Process -Id $PID).Path })
+# Update-Checkout.ps1 run whole, as One runs it: in PowerShell 7, which runs
+# every script since #5356.
+$shell = Get-BoxPowerShell
 function Run([string]$dir, [string[]]$more = @()) {
     $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
     $out = & $shell -NoProfile -ExecutionPolicy Bypass -File $Update -RepoDir $dir -NoPause @more *>&1 | Out-String

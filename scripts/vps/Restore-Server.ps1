@@ -19,7 +19,7 @@
              door.json, allowed.json. Nothing in a build ships into it.
     data     only the files the folder does not already have, so a build
              already installed there keeps its own shipped files
-    server-settings.json and gamemode.js
+    server-settings.json, gamemode.js and gamemode-tables (#5191)
              only when the folder has none, for the same reason, EXCEPT the
              keys that say which server this is: port, name,
              thornswoodVoicePort, thornswoodServer and
@@ -381,6 +381,13 @@ foreach ($n in 'server-settings.json', 'gamemode.js') {
     Copy-Item -LiteralPath $from -Destination (Join-Path $Root $n)
     Say "  $n from the backup, because the folder had none" 'Yellow'
   }
+}
+# The tables gamemode.js reads as it loads (#5191), whole, on the same rule:
+# a folder that has them keeps its own, which go with its own gamemode.js.
+$srcTables = Join-Path $src 'gamemode-tables'
+if (-not (Test-Path -LiteralPath (Join-Path $Root 'gamemode-tables')) -and (Test-Path -LiteralPath $srcTables)) {
+  Copy-Item -LiteralPath $srcTables -Destination (Join-Path $Root 'gamemode-tables') -Recurse
+  Say "  gamemode-tables from the backup, because the folder had none" 'Yellow'
 }
 
 # ------------------------------------------------------------ load order ---

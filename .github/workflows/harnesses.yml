@@ -12,7 +12,7 @@
 # How. Dispatch it on main, or on a branch to try that branch's harnesses,
 # with the names as the nightly prints them, split by spaces or commas:
 #
-#   gh workflow run harnesses.yml --ref main -f harnesses='test-deploy-swaps.ps1 voice/test-most.js'
+#   gh workflow run harnesses.yml --ref main -f harnesses='test-deploy-swaps.ps1 voice/tests/test-most.js'
 #
 # A name that is no harness in that commit fails the run before anything
 # runs. The names reach the script through the environment, never pasted into

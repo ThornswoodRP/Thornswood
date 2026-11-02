@@ -177,7 +177,7 @@ $listing = $listing.Replace('WANTED', ($wanted -join ', '))
 function Read-Box([string]$Remote) {
     $wrapped = "`$ErrorActionPreference = 'Stop'; `$ProgressPreference = 'SilentlyContinue'`ntry {`n$Remote`n} catch { [Console]::Error.WriteLine(`$_.Exception.Message); exit 1 }"
     $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($wrapped))
-    $said = @(Invoke-ThornswoodNative { & ssh -o BatchMode=yes -o StrictHostKeyChecking=yes $target "powershell -NoProfile -EncodedCommand $enc" } 2>&1)
+    $said = @(Invoke-ThornswoodNative { & ssh -o BatchMode=yes -o StrictHostKeyChecking=yes $target "pwsh -NoProfile -EncodedCommand $enc" } 2>&1)
     # What the box printed is the answer. What ssh or powershell wrote on
     # stderr is about the connection or the failure, never part of a log.
     [pscustomobject]@{

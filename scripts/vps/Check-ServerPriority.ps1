@@ -37,7 +37,7 @@ if (-not $User) { $User = Get-ThornswoodVpsUser }
 if (-not $Vps) { $Vps = Get-ThornswoodVpsAddress }
 $ssh = @('-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes')
 
-# Runs on the box, in Windows PowerShell. One line per finding, and a
+# Runs on the box, in PowerShell 7. One line per finding, and a
 # RESULT|<task>|HIGH or RESULT|<task>|NOT HIGH|<why> line for each task.
 $far = @'
 $ProgressPreference = 'SilentlyContinue'

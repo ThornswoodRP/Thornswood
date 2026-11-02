@@ -2,8 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
-using System.Windows;
-using System.Windows.Threading;
+using Avalonia.Threading;
 
 namespace Thornswood
 {
@@ -34,11 +33,11 @@ namespace Thornswood
             string upd = SteamUpdates.Report(target);
             if (upd != null) Log(upd);
             if (what != SteamUpdates.Ask) return;
-            win.Dispatcher.BeginInvoke(new Action(delegate
+            Dispatcher.UIThread.Post(delegate
             {
                 try { AskToHoldSteamUpdates(); }
                 catch (Exception ex) { Swallow.Note("Shell.HoldSteamUpdatesOnStart, the question", ex); }
-            }), DispatcherPriority.ApplicationIdle);
+            }, DispatcherPriority.ApplicationIdle);
         }
 
         /// <summary>
@@ -70,8 +69,7 @@ namespace Thornswood
             // Steam closed since the start looked: nothing to close, so nothing to ask.
             if (!SteamUpdates.SteamRunning()) { Log(SteamUpdates.Hold(manifest)); return; }
 
-            MessageBoxResult r = MessageBox.Show(win, SteamUpdates.Question(manifest), "Thornswood", MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (r != MessageBoxResult.Yes)
+            if (!Ask.YesNo(SteamUpdates.Question(manifest), "Thornswood", Ask.Icon.Question))
             {
                 Log(SteamUpdates.NotNow + " " + SteamUpdates.How);
                 return;
@@ -132,7 +130,7 @@ namespace Thornswood
         /// <summary>A line for the log from a pool thread, through the window's thread.</summary>
         static void SayFromPool(string said)
         {
-            try { win.Dispatcher.BeginInvoke(new Action(delegate { Log(said); })); }
+            try { Dispatcher.UIThread.Post(delegate { Log(said); }); }
             catch (Exception ex) { Swallow.Note("Shell.AskToHoldSteamUpdates, saying what happened", ex); LogOnly(said); }
         }
 

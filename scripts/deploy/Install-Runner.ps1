@@ -260,7 +260,7 @@
   NO PRIORITY TASK (#1969). Until 5 October each install registered a task,
   Thornswood Runner Priority (Thornswood Runner N Priority from the second
   on), that set Runner.Listener and Runner.Worker to Normal at start and
-  every five minutes: a timer that repairs state, which Developer-Guide.md
+  every five minutes: a timer that repairs state, which docs/guide/rules.md
   "Fix the cause, no band-aids" does not allow. Until 25 September it set
   them to BelowNormal, which is where they ran then; since then it had nothing
   to repair. The runner is a Windows service (config.cmd --runasservice),
@@ -501,8 +501,8 @@ function Invoke-Here([string]$script, $secret = $null) {
   [IO.File]::WriteAllText($file, $pre + $script, (New-Object Text.UTF8Encoding $true))
   $ErrorActionPreference = 'Continue'
   try {
-    if ($null -ne $secret) { $out = @([string]$secret | & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" }) }
-    else { $out = @(& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" }) }
+    if ($null -ne $secret) { $out = @([string]$secret | & pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" }) }
+    else { $out = @(& pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" }) }
     $code = $LASTEXITCODE
   } finally { Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue }
   $global:LASTEXITCODE = $code
@@ -1261,7 +1261,7 @@ function Get-RunnerMigrationState([string]$acct, [string]$svc, [string]$root) {
   }
   $task = Get-ScheduledTask -TaskName 'Thornswood Runner Drive' -EA Stop
   $start = Join-Path $env:ProgramData 'Thornswood-RunnerDrive\start.ps1'
-  if (-not $task -or $task.State -eq 'Disabled' -or $task.Principal.UserId -notin @('SYSTEM','S-1-5-18') -or @($task.Actions).Count -ne 1 -or $task.Actions[0].Execute -notin @('powershell.exe', 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe') -or $task.Actions[0].Arguments -ne ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $start + '"') -or -not (Test-Path -LiteralPath $start -PathType Leaf)) { throw 'Runner drive startup task does not match the managed SYSTEM attach/start task' }
+  if (-not $task -or $task.State -eq 'Disabled' -or $task.Principal.UserId -notin @('SYSTEM','S-1-5-18') -or @($task.Actions).Count -ne 1 -or $task.Actions[0].Execute -ne (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe') -or $task.Actions[0].Arguments -ne ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $start + '"') -or -not (Test-Path -LiteralPath $start -PathType Leaf)) { throw 'Runner drive startup task does not match the managed SYSTEM attach/start task' }
   Assert-RunnerMigrationPath $start
   # -Migrate is -OffBox only, and off the box the guards are in this machine's
   # own store (Set-RunnerFirewall's $grdStore), so that is where they are read.

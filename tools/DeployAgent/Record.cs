@@ -104,5 +104,26 @@ public static class Records
         return logBase == "" ? "" : logBase.TrimEnd('/') + "/" + name;
     }
 
+    static readonly Regex StepsName = new(@"^deploy-([A-Za-z0-9._-]+)\.after\.json$");
+
+    /// <summary>Leaves what became of each step after a deploy (#5186) beside
+    /// the deploy's log, as deploy-&lt;id&gt;.after.json, the newest ten kept.
+    /// .github/workflows/after-deploy.yml reads it from the address beside
+    /// the log's. A file that cannot be written is said in the log already
+    /// published; the steps ran either way.</summary>
+    public static void PublishSteps(Server s, string id, string commit, List<StepResult> steps)
+    {
+        var dir = s.DataDir();
+        try
+        {
+            var body = new Dictionary<string, object> { ["format"] = 1, ["deployment"] = id, ["commit"] = commit, ["steps"] = steps };
+            Files.WriteWhole(Path.Combine(dir, $"deploy-{id}.after.json"), JsonSerializer.SerializeToUtf8Bytes(body, new JsonSerializerOptions { WriteIndented = true }));
+            var old = new DirectoryInfo(dir).EnumerateFiles("deploy-*.after.json").Where(f => StepsName.IsMatch(f.Name))
+                .OrderByDescending(f => f.LastWriteTimeUtc).Skip(10);
+            foreach (var f in old) f.Delete();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+    }
+
     public static string UtcNow() => DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
 }

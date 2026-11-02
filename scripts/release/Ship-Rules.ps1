@@ -1,16 +1,16 @@
 <#
   Ship-Rules.ps1
 
-  The one list of what never leaves a machine inside a Thornswood pack or
-  installer. Publish-Update.ps1 (packs) and Package-Thornswood.ps1 (the
-  installer) both dot-source this file, so the two can never disagree about
+  The one list of what never leaves a machine inside a Thornswood pack.
+  Publish-Update.ps1 dot-sources it, and until #4824 the old installer's
+  builder did too, so the two could never disagree about
   which files are the build's and which are one machine's, another server's,
   or somebody's sign in.
 
   It had to become one file the night the installer turned out to carry
   Data\Platform\PluginsNoLoad\auth-data-no-load.js, the SkyMP client's saved
   sign in token from the machine it was built on. Publish-Update had grown a
-  careful list of what to leave out; Package-Thornswood had its own, shorter
+  careful list of what to leave out; the installer's builder had its own, shorter
   one, and the token file fell through the gap. Every rule lives here now.
 
       . (Join-Path $PSScriptRoot 'Ship-Rules.ps1')
@@ -31,7 +31,6 @@
                                    Vortex's records, window layouts, settings saved from a mod's menu, saves); never packed, recorded or on the site
       Get-ShipOwnGameCollection    the collection's files in a Game folder the launcher made; never shipped
       Test-ShipGenerated $rel      an animation or body file the launcher builds on each computer (#3715); never shipped, never removed
-      Get-ShipLooseArt $files      loose textures and meshes an installer carries that are not ours, by folder
       Test-ShipNotOurs $rel        another author's loose file (outside Data\Platform, not named ours); never packed, recorded or listed as removed
       Test-ShipOurs $rel           ours outside Data\Platform: the named files, the client runtime, required data, the menu, the BodySlide builds until #1259
       Test-ShipHeld $rel           a loose file that ships until the collection revision that carries its mod, or while the content plugin names it
@@ -232,15 +231,13 @@ if (Test-Path -LiteralPath $clientRecord) {
 
 # Whether the file at one of the six recorded paths is the recorded build, byte
 # for byte. $full is the file when the caller has it. Without it the file is
-# $rel under $GameDir: Publish-Update and Package-Thornswood both name the
-# folder they scan $GameDir, and dot-sourcing this puts these functions in their
-# scope, so their existing calls, which pass only the path, are answered by the
+# $rel under $GameDir: Publish-Update names the folder it scans $GameDir, and
+# dot-sourcing this puts these functions in its scope, so its existing calls, which pass only the path, are answered by the
 # bytes on disk. With no file and no $GameDir there is nothing to hash, and the
 # answer is no.
 #
-# Hashed with .NET rather than Get-FileHash, for the reason Package-Thornswood
-# gives over its own Get-Sha256: a script started with -NoProfile can find
-# itself without the module Get-FileHash lives in.
+# Hashed with .NET rather than Get-FileHash: a script started with -NoProfile
+# can find itself without the module Get-FileHash lives in.
 function Test-ShipClientRecorded([string]$rel, [string]$full = '') {
     if (-not $ShipClientHashes.ContainsKey($rel)) { return $false }
     if (-not $full) {
@@ -552,8 +549,8 @@ function Test-ShipOtherServer([string]$rel) {
     if ($ShipClientFiles.Contains($rel)) { return (-not (Test-ShipClientRecorded $rel)) }
     # NirnLab UI Platform. SkyrimPlatform will not start on its own browser
     # while this is in the game folder, and it is what brings CEFSubprocess.exe,
-    # the second program Windows Firewall asks about. Package-Thornswood has
-    # kept it out of the installer all along; nothing kept it out of a pack.
+    # the second program Windows Firewall asks about. The old installer kept it
+    # out all along; nothing kept it out of a pack until this.
     if ($rel -match '^Data\\NirnLabUIPlatform($|\\)') { return $true }
     if ((Split-Path $rel -Leaf) -ieq 'NirnLabUIPlugin.dll') { return $true }
     # Other launchers' parking folders inside our own game folder, Djinn, 25
@@ -632,8 +629,8 @@ function Test-ShipOtherServer([string]$rel) {
 # BETHESDA'S OWN FILES, AND OTHER PEOPLE'S FRAMEWORKS AND TOOLS.
 #
 # Never shipped, and never listed as removed. Until 24 September these were
-# two lists, one inside Publish-Update.ps1 and a longer one inside
-# Package-Thornswood.ps1, which is exactly what the header of this file says
+# two lists, one inside Publish-Update.ps1 and a longer one inside the old
+# installer's builder, which is exactly what the header of this file says
 # must not happen, and they had drifted.
 #
 # MEASURED 24 SEPTEMBER over all 30,697 files in C:\Thornswood\Game on the
@@ -1234,21 +1231,13 @@ function Get-ShipOwnGameCollection([string]$ProfileDir) {
     return ,$set
 }
 
-# LOOSE ART NOBODY HAS ACCOUNTED FOR, named so a build says what it carries.
-#
-# Measured from Profile\OwnGame\files.txt on 24 September: 563 files and 539
-# MB under Data\textures and Data\meshes, the menu backdrop not counted, that
-# Vortex never deployed, dropped into the Steam copy by hand. Lost Ark armour
-# ports, somebody's custom weapons, BodySlide output built for one person's
-# body, Nemesis output, and leftovers of mods no longer installed. The
-# installer leaves out what the collection provides and nothing else, so every
-# one of them went to everybody who installed, and nothing on screen said so.
-#
-# Since #1178 (29 September) Test-ShipNotOurs below keeps unaccounted-for files
-# out of packs, records and the installer, so this report should name nothing.
-# It stays as the alarm: a row here means a file reached what is about to ship
-# that the rule did not stop. The behavior files and bodies the launcher
-# builds on each computer never ship (#3715, Test-ShipGenerated).
+# THE MAIN MENU BACKDROP IS OURS. On 24 September Profile\OwnGame\files.txt
+# held 563 files and 539 MB under Data\textures and Data\meshes that Vortex
+# never deployed, and the old installer carried every one; Get-ShipLooseArt
+# named them a folder at a time for its build until it went (#4824). Since
+# #1178 Test-ShipNotOurs below keeps such files out of packs and records,
+# and the behavior files and bodies the launcher builds on each computer
+# never ship (#3715, Test-ShipGenerated).
 #
 # Ours is the main menu backdrop: the three files Go.ps1 writes from
 # game\menu ($menuPairs there; change the two together).
@@ -1257,31 +1246,6 @@ $ShipOwnArt = @(
     'Data\meshes\interface\logo\logo01ae.nif',
     'Data\textures\interface\objects\Mainmenuwallpaper.dds'
 )
-
-# $files is what is about to ship: anything with a Rel (the path under the game
-# folder) and a Len (its bytes). Returns one row per first folder under
-# Data\textures or Data\meshes, biggest first, as Folder, Files and Bytes.
-# Files straight under Data\textures or Data\meshes are a row of their own.
-function Get-ShipLooseArt($files) {
-    $rows = @{}
-    foreach ($f in @($files)) {
-        if ($null -eq $f) { continue }
-        $rel = [string]$f.Rel
-        if (Test-ShipOurs $rel) { continue }
-        $parts = $rel -split '\\'
-        if ($parts.Count -lt 3 -or $parts[0] -ne 'Data') { continue }
-        if ($parts[1] -ne 'textures' -and $parts[1] -ne 'meshes') { continue }
-        if ($parts.Count -eq 3) { $folder = $parts[0] + '\' + $parts[1] }
-        else { $folder = $parts[0] + '\' + $parts[1] + '\' + $parts[2] }
-        $key = $folder.ToLowerInvariant()
-        if (-not $rows.ContainsKey($key)) {
-            $rows[$key] = [pscustomobject]@{ Folder = $folder; Files = 0; Bytes = [long]0 }
-        }
-        $rows[$key].Files++
-        $rows[$key].Bytes += [long]$f.Len
-    }
-    return ,@($rows.Values | Sort-Object -Property @{ Expression = 'Bytes'; Descending = $true }, 'Folder')
-}
 
 # ---------------------------------------------------------------------------
 # OTHER PEOPLE'S LOOSE FILES NEVER SHIP. Issue #1178.
@@ -1584,7 +1548,7 @@ $ShipHeldForCollection = @(
 )
 
 # The collection revision this release is built against: what the feed's
-# collectionRevision says. Publish-Update and Package-Thornswood set it
+# collectionRevision says. Publish-Update sets it
 # (Get-ShipCollectionRevision); 0 when it is not known, and then everything held
 # above still ships, so nothing leaves before the collection carries it.
 $ShipCollectionRevision = 0
@@ -1991,8 +1955,8 @@ function Get-ShipTravelsWith([string[]]$changed) {
 # it. It is empty today: ElysiumEstateSSE.esp was here from 27 to 29 September,
 # until the servers moved to the collection's ElysiumEstate.esp (#690).
 #
-# Go.ps1, Publish-Update and Package-Thornswood call Ensure-ShipRequiredData so
-# each file here lands at Data\<name> before the pack / installer scan. They are
+# Go.ps1 and Publish-Update call Ensure-ShipRequiredData so each file here
+# lands at Data\<name> before the pack scan. They are
 # not origin V in files.txt, so packs carry them. Take a file out of
 # game\required-data when the collection deploys that same Data\ path.
 function Get-ShipRequiredDataRoot([string]$RepoDir) {
@@ -2055,12 +2019,11 @@ function Ensure-ShipRequiredData([string]$GameDir, [string]$RepoDir) {
 
 # ------------------------------------------------------------ launcher symbols
 #
-# Issue #462. /debug:pdbonly makes Thornswood.pdb (and setup-stub.pdb) beside
-# the built exes. Those files carry absolute source paths from the build
-# machine and method names. They NEVER leave this machine inside a pack, the
-# installer, or a public release asset. Package-Thornswood.ps1 and
-# Publish-Update.ps1 already skip any *.pdb under the game folder; this names
-# the same rule for the launcher and the setup stub.
+# Issue #462. The launcher's publish makes Thornswood.pdb beside the built exe.
+# It carries absolute source paths from the build machine and method names. It
+# NEVER leaves this machine inside a pack or a public release asset.
+# Publish-Update.ps1 already skips any *.pdb under the game folder; this names
+# the same rule for the launcher.
 #
 # Kept per version under Get-ShipSymbolDir so a customer's launcher.log IL
 # offsets (Shell.cs fault handler) can be mapped to a line later. Shipping the

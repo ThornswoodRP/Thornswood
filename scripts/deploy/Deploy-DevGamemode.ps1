@@ -405,9 +405,12 @@ $alsoSends = @('records/most-online.json', 'records/server-build.json')
 # Thornswood-Last.esp is made on the box from the recipe (#2791,
 # LastPluginOnBox.ps1), which goes up with the make's own tools.
 if ($LoadOrder) { $alsoSends += 'game/content/Thornswood-Content.esp', 'game/data/last-plugin.recipe', 'game/data/last-plugin.json' }
-$artifact = New-ThornswoodArtifact -Component gamemode -RepoDir (Join-Path $Here '..\..') -Paths 'game/gamemode.js' -AlsoSends $alsoSends
+# The gamemode's tables (#5191) are in the artifact with it: the gamemode
+# reads them from the folder beside it as it loads.
+$artifact = New-ThornswoodArtifact -Component gamemode -RepoDir (Join-Path $Here '..\..') -Paths 'game/gamemode.js', 'game/gamemode-tables' -AlsoSends $alsoSends
 Write-Host ('  artifact ' + (Format-ThornswoodArtifact $artifact))
 $Gamemode = Join-Path $artifact.Folder 'game\gamemode.js'
+$GamemodeTables = Join-Path $artifact.Folder 'game\gamemode-tables'
 
 # Syntax first, before the artifact leaves this machine. A gamemode that does
 # not parse takes the dev server down at start, for everybody testing on it.
@@ -420,8 +423,11 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'node is not 
 & node --check $Gamemode
 if ($LASTEXITCODE -ne 0) { throw 'gamemode.js does not parse. Nothing was sent.' }
 Write-Host '  gamemode.js parses'
-# The id the gamemode logs as it loads (Reload.ps1), which a reload waits for.
+# The ids the gamemode logs as it loads (Reload.ps1), which a reload waits
+# for: its own blob, and the tree of the tables it reads.
 $newBlob = Get-ThornswoodGamemodeBlob $Gamemode
+$newTree = Get-ThornswoodTablesTree $GamemodeTables
+if (-not $newTree) { throw "the artifact holds no game\gamemode-tables, and the gamemode reads its tables from there (#5191). Nothing was sent." }
 
 # THE ENGINE THIS GAMEMODE IS WRITTEN FOR (#2076). A gamemode goes onto the
 # server build its commit records, the comparison Deploy-Server -GamemodeOnly
@@ -947,7 +953,7 @@ if (-not '$RequirePass' -and -not (`$s.thornswoodRequirePass -is [bool])) { 'NO 
 Get-ChildItem -LiteralPath '$rootWin' -Directory -Force -EA SilentlyContinue |
   Where-Object { `$_.Name -like '.stage-*' } |
   ForEach-Object { Remove-Item -LiteralPath `$_.FullName -Recurse -Force -EA SilentlyContinue }
-New-Item -ItemType Directory -Path '$stageWin\plugins' -Force | Out-Null
+New-Item -ItemType Directory -Path '$stageWin\plugins', '$stageWin\gamemode-tables' -Force | Out-Null
 Copy-Item -LiteralPath '$rootWin\server-settings.json' -Destination '$stageWin\server-settings.json' -Force
 'dev port ' + `$s.port + ', name ' + `$s.name
 'STAGE MADE'
@@ -974,6 +980,13 @@ Copy-Item -LiteralPath '$rootWin\server-settings.json' -Destination '$stageWin\s
     if ($LASTEXITCODE -ne 0) { throw "scp failed for $rel. The dev server has not been touched." }
     Write-Host "  $rel"
   }
+  # The tables (#5191), in one scp: each is held to its hash on the box like
+  # any file sent, and the swap and the reload put the folder in whole.
+  $tableFiles = @(Get-ThornswoodTableFiles $GamemodeTables)
+  Invoke-ThornswoodNative { & scp @ssh @($tableFiles | ForEach-Object { $_.FullName }) "$User@${Vps}:$stageFar/gamemode-tables/" }
+  if ($LASTEXITCODE -ne 0) { throw "scp failed for the gamemode tables. The dev server has not been touched." }
+  foreach ($t in $tableFiles) { $send['gamemode-tables/' + $t.Name] = $t.FullName }
+  Write-Host ('  gamemode-tables/ ({0} tables, git tree {1})' -f $tableFiles.Count, $newTree)
   $hashes = Get-SwapHashes $send
   # Thornswood-Last.esp, made into the stage from the plugins just sent and
   # then the dev server's own (#2791); the stage check holds it to the
@@ -1345,7 +1358,7 @@ if (-not $PutBack -and -not $Restart) {
   $eap = $ErrorActionPreference
   $ErrorActionPreference = 'Continue'
   try {
-    $reloadOut = @(Remote ((ReloadVars $Root $Task $stageName $prevName $Wait $hashes $newBlob) + $reloadBlock) |
+    $reloadOut = @(Remote ((ReloadVars $Root $Task $stageName $prevName $Wait $hashes $newBlob $newTree) + $reloadBlock) |
                    ForEach-Object { Write-Host ('  ' + $_); "$_".Trim() })
   } finally { $ErrorActionPreference = $eap }
   if ($reloadOut -contains 'RELOAD OK') { $outcome = 'reloaded' }

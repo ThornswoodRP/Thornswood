@@ -1,0 +1,22 @@
+{
+  "issue": 5190,
+  "what": "The cache rule on the thornswood.net zone (Cloudflare's free plan) that lets Cloudflare keep the site's public pages. It makes only those paths eligible and keeps only what the site marks with Cloudflare-CDN-Cache-Control (edge_ttl bypass_by_default), which site/server.js puts on the public pages alone (PUBLIC_EDGE_SECONDS). It is put on the zone as this rule, by its ref, through Cloudflare's rulesets API (the zone's http_request_cache_settings entrypoint). tests/test-5190-cloudflare-cache.js holds its paths to server.js's PUBLIC_PAGES.",
+  "zone": "thornswood.net",
+  "phase": "http_request_cache_settings",
+  "rule": {
+    "ref": "thornswood_public_pages",
+    "description": "Thornswood public pages: cache what the site marks (#5190)",
+    "expression": "(http.host in {\"thornswood.net\" \"www.thornswood.net\"} and http.request.method eq \"GET\" and http.request.uri.path in {\"/\" \"/world\" \"/rules\" \"/credits\" \"/join\" \"/classes\" \"/roadmap\" \"/news\" \"/gallery\" \"/downloads\" \"/report\" \"/known\" \"/help\" \"/privacy\" \"/terms\" \"/cookies\"})",
+    "action": "set_cache_settings",
+    "action_parameters": {
+      "cache": true,
+      "edge_ttl": {
+        "mode": "bypass_by_default"
+      },
+      "browser_ttl": {
+        "mode": "respect_origin"
+      }
+    },
+    "enabled": true
+  }
+}

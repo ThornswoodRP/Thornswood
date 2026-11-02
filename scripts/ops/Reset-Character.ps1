@@ -150,7 +150,7 @@ if ($still.Count) {
     Write-Host 'STOP. The server has not exited, so nothing was thrown away and it was not started again.'
     exit 1
 }
-& powershell -NoProfile -ExecutionPolicy Bypass -File C:\thornswood-reset.ps1 -Root $Root
+& pwsh -NoProfile -ExecutionPolicy Bypass -File C:\thornswood-reset.ps1 -Root $Root
 $resetCode = $LASTEXITCODE
 $startWhy = ''
 try { Start-ScheduledTask -TaskName $Task -EA Stop }
@@ -205,7 +205,7 @@ if ($UseLocal) {
 
     $tmp = Join-Path ([IO.Path]::GetTempPath()) 'thornswood-reset.ps1'
     Set-Content -LiteralPath $tmp -Value $body -Encoding UTF8
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $tmp -Root $Local
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File $tmp -Root $Local
     Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
 
     Write-Host ''
@@ -238,7 +238,7 @@ else {
     Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
     if ($scpCode -ne 0) { Die "scp exited with $scpCode" }
 
-    $remote = "powershell -NoProfile -ExecutionPolicy Bypass -Command `"& C:\thornswood-reset-run.ps1 -Root '$VpsRoot' -Task '$TaskName'; exit `$LASTEXITCODE`""
+    $remote = "pwsh -NoProfile -ExecutionPolicy Bypass -Command `"& C:\thornswood-reset-run.ps1 -Root '$VpsRoot' -Task '$TaskName'; exit `$LASTEXITCODE`""
     $answer = ''
     # Said line by line as the box says it: the wait for the start can be minutes.
     Invoke-ThornswoodNative { & ssh @ssh $target $remote } | ForEach-Object {

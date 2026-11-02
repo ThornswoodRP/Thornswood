@@ -130,7 +130,7 @@ namespace Thornswood
     ///     state in it (above). A file already on 1 that is only read only has
     ///     just the mark taken off, its bytes untouched.
     /// </summary>
-    static class SteamUpdates
+    static partial class SteamUpdates
     {
         const string AppId = "489830";
         public const string Key = "AutoUpdateBehavior";
@@ -535,7 +535,7 @@ namespace Thornswood
         // ------------------------------------------------------------ writing
         //
         // Declared here rather than borrowed from OwnGame.WriteRecord, because
-        // tests\test-steam-updates.ps1 compiles this file on its own. The same
+        // launcher\tests\test-steam-updates.ps1 compiles this file on its own. The same
         // call: a file flushed to the disk, then one rename over the manifest.
 
         /// <summary>The bytes into path, flushed to the disk before it returns.</summary>
@@ -558,8 +558,9 @@ namespace Thornswood
 
         const int MoveReplaceExisting = 0x1;
         const int MoveWriteThrough = 0x8;
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        static extern bool MoveFileEx(string existing, string replacement, int flags);
+        [LibraryImport("kernel32.dll", EntryPoint = "MoveFileExW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool MoveFileEx(string existing, string replacement, int flags);
 
         // ------------------------------------------------------------ reading
 

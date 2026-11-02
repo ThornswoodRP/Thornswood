@@ -7,8 +7,7 @@
   packet capture as a reviewed file, sent to the box by Remote.ps1 -File, in
   place of lines typed into a shell there. This proves, without the box:
 
-    1. it parses, under pwsh and (where there is one) Windows PowerShell 5.1,
-       which is what runs it on the box;
+    1. it parses under pwsh, which is what runs it on the box;
     2. it does nothing unless told exactly one of -Start, -Status, -Stop,
        and takes no capture longer than 30 minutes;
     3. it keeps only TCP SYN and RST on port 443, 128 bytes a packet, in a
@@ -30,7 +29,6 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $repo = Split-Path -Parent $Here
 $script = Join-Path (Join-Path (Join-Path $repo 'scripts') 'vps') 'vps-capture-443.ps1'
-. (Join-Path $PSScriptRoot 'Windows.ps1')
 
 $script:pass = 0
 $script:fail = 0
@@ -45,14 +43,6 @@ $t = [IO.File]::ReadAllText($script)
 $errs = $null
 [void][System.Management.Automation.Language.Parser]::ParseInput($t, [ref]$null, [ref]$errs)
 Yes 'it parses under pwsh' (-not ($errs -and $errs.Count))
-if ($OnWindows) {
-    $ps51 = Get-WindowsPowerShell
-    $check = '$e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile(''' + $script + ''', [ref]$null, [ref]$e); if ($e -and $e.Count) { $e | ForEach-Object { $_.Message }; exit 1 }; exit 0'
-    $said = & $ps51 -NoProfile -NonInteractive -Command $check 2>&1 | Out-String
-    Yes ("  and under Windows PowerShell 5.1, which runs it on the box" + $(if ($LASTEXITCODE) { ': ' + $said.Trim() } else { '' })) ($LASTEXITCODE -eq 0)
-} else {
-    Write-Host 'SKIP  the 5.1 parse: Windows PowerShell 5.1 is only on Windows; the Windows runners parse it'
-}
 
 # ---- 2. one thing at a time, and a limit -----------------------------------------
 function Run([string[]]$a) {

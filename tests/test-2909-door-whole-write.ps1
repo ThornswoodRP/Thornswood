@@ -17,8 +17,8 @@
     1. The flip writes no WriteAllText to the list itself, writes a file
        beside it, and puts it over the list with Move-FeedStoreInto, which
        it sends up with the script.
-    2. In this shell and in Windows PowerShell 5.1 (the box runs it with
-       that), the script the flip sends, run against a list in a temp folder:
+    2. In PowerShell 7 (the box runs it with that since #5356), the script
+       the flip sends, run against a list in a temp folder:
        enforce is set, every profile is kept, nothing is left beside it, and
        a reader that opened the list before the flip, sharing ReadWrite and
        Delete as the gamemode's node does, still reads the old list whole.
@@ -63,9 +63,7 @@ Yes '...and stops when the list could not be put back' ($flip -match "-match '[^
 # ---- 2: the script the flip sends, run --------------------------------------------
 $storePs1 = Join-Path $Repo 'scripts\release\Feed-Store.ps1'
 if (-not $sent -or -not (Test-Path -LiteralPath $storePs1)) { Done }
-# The rename and the reader's share are Windows' file sharing.
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'SKIP  2, the flip run: it is Windows'' file sharing, in this shell and in Windows PowerShell 5.1, and this is not Windows'; Done }
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('ts-2909-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 $null = New-Item -ItemType Directory -Force -Path $work
@@ -83,8 +81,7 @@ $r = New-Object IO.StreamReader($h); $was = $r.ReadToEnd(); $r.Dispose()
 'SAID ' + ($said -join ' / ')
 'HELD ' + $was
 '@)
-    $shells = @(@{ Name = 'this shell'; Exe = (Get-Process -Id $PID).Path })
-    $shells += @{ Name = 'Windows PowerShell 5.1'; Exe = (Get-WindowsPowerShell) }
+    $shells = @(@{ Name = 'the box''s PowerShell 7'; Exe = (Get-BoxPowerShell) })
     foreach ($sh in $shells) {
         $root = Join-Path $work ($sh.Name -replace '\W', '')
         $priv = Join-Path $root 'private'

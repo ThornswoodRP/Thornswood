@@ -75,7 +75,7 @@
   It is made in a folder beside it and moved into place whole, so a folder
   there is one that passed.
 
-  Keep it Windows PowerShell 5.1 and pwsh alike. It reads nothing over the
+  It runs in PowerShell 7 (#5356). It reads nothing over the
   network itself: Get-EngineArtifact.ps1 hands it gh and the registry's
   HTTP (New-EnginePackageHttp), the harness stand-ins.
 #>

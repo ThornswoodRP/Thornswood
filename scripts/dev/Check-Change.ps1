@@ -23,8 +23,9 @@
   SKIP for those checks, and the shares run them on Windows.
 
   With -Body, the pull request's body in a file is checked as its checks
-  will: its release note line as "Release note" holds it
-  (scripts\dev\Check-PrBody.ps1, #5179), and its test tasks to the bot's
+  will: its release note line as "Release note" holds it (thornswood-notes
+  in tools\ReleaseNotes, #5179, which needs the .NET 10 SDK), and its test
+  tasks to the bot's
   post rules as "Test tasks in the pull request" holds them
   (bot\pr_tasks.py, #5199), which needs the bot's libraries
   (bot\requirements.txt).
@@ -136,8 +137,15 @@ try {
         if (-not (Test-Path -LiteralPath $Body)) { Say ('FAIL  there is no body at ' + $Body); $code = 1 }
         else {
             # Its release note, as the check "Release note" holds it (#5179).
-            & (Join-Path $Here 'Check-PrBody.ps1') -BodyFile (Resolve-Path -LiteralPath $Body).Path
-            if ($LASTEXITCODE -ne 0) { $code = 1 }
+            $dotnet = Get-Command dotnet -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $dotnet) {
+                Say 'FAIL  the release note: the .NET 10 SDK is not on this machine, and the rules are in tools\ReleaseNotes (docs/guide/set-up-a-machine.md, "Install the tools", has its line)'
+                $code = 1
+            } else {
+                $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'; $env:DOTNET_NOLOGO = '1'
+                & $dotnet.Source run --project (Join-Path (Join-Path $Repo 'tools') 'ReleaseNotes') --verbosity quiet -- pr --body-file (Resolve-Path -LiteralPath $Body).Path
+                if ($LASTEXITCODE -ne 0) { $code = 1 }
+            }
             $py = $null
             foreach ($c in 'python3.12', 'python3', 'python') { if (Get-Command $c -ErrorAction SilentlyContinue) { $py = $c; break } }
             if (-not $py) { Say 'SKIP  the test tasks: there is no Python here' }

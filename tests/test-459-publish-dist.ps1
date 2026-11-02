@@ -27,7 +27,6 @@
     1. with no -Dist, from the fresh checkout, the publish stops naming the
        checkout's own build folder, -Dist and the engine commit the record
        names, before the gamemode artifact is built and with no ssh or scp;
-       the same under Windows PowerShell 5.1 when this machine has it;
     2. -Dist naming no folder, or a folder with no server-settings.json, stops
        the same way, naming that folder;
     3. -Dist naming a built server goes past that stop, and a build that is
@@ -80,6 +79,8 @@ try {
     Copy-Item -LiteralPath (Join-Path $repo 'layout.json') -Destination (Join-Path $fresh 'layout.json') -Force
     New-Item -ItemType Directory -Force -Path (Join-Path $fresh 'game') | Out-Null
     Copy-Item -LiteralPath (Join-Path $repo 'game\gamemode.js') -Destination (Join-Path $fresh 'game\gamemode.js') -Force
+    # And its tables (#5191), which the gamemode artifact carries with it.
+    Copy-Item -LiteralPath (Join-Path $repo 'game\gamemode-tables') -Destination (Join-Path $fresh 'game\gamemode-tables') -Recurse -Force
     $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
     try {
         $null = & git -C $fresh init -q 2>&1
@@ -125,13 +126,8 @@ try {
     $artifacts = Join-Path $fresh 'out\deploys'
 
     # ---- 1. no -Dist, from the fresh checkout -----------------------------------------------
-    $shells = @([pscustomobject]@{ Name = 'PowerShell 7'; Path = (Get-Process -Id $PID).Path })
-    if (-not $OnWindows) { Write-Host 'SKIP  the same under Windows PowerShell 5.1: this is not Windows, which is the only place 5.1 runs' }
-    else {
-        $ps51 = Get-WindowsPowerShell
-        if ($shells[0].Path -ne $ps51) { $shells += [pscustomobject]@{ Name = 'Windows PowerShell 5.1'; Path = $ps51 } }
-        else { $shells[0].Name = 'Windows PowerShell 5.1' }
-    }
+    # The scripts run in PowerShell 7 only (#5356).
+    $shells = @([pscustomobject]@{ Name = 'PowerShell 7'; Path = (Get-BoxPowerShell) })
     foreach ($sh in $shells) {
         Write-Host ''; Write-Host ("no -Dist, from the fresh checkout, under {0}" -f $sh.Name)
         $r = Run $sh.Path @()
@@ -157,8 +153,8 @@ try {
 
     # ---- 2b. a record that does not read (#2711) ------------------------------------------------
     # It was read here in a try with an empty catch, and the refusal came only
-    # after the payload was built. Now it stops first, saying why, under both
-    # PowerShells. -Record names a scratch file, so the checkout stays clean.
+    # after the payload was built. Now it stops first, saying why. -Record
+    # names a scratch file, so the checkout stays clean.
     $badRecord = Join-Path $Scratch 'server-build-cut-off.json'
     Put $badRecord '{ "binary": "scam_native.node", "sha256": '
     foreach ($sh in $shells) {

@@ -12,6 +12,12 @@
     .\Rotate-ServerPassword.ps1 -Password      asks for one you chose, not shown
     .\Rotate-ServerPassword.ps1 -Minutes 10 -Why 'a ban'
 
+  From a cloud session, or any machine with no key to the box, the deploy
+  gate's Rotate-ServerPassword verb runs it on the box with -Yes and a
+  password it makes (#2862); -Password, which asks, stays off the gate:
+
+    pwsh scripts/vps/Box-Run.ps1 -Line 'Rotate-ServerPassword'
+
   READ THIS FIRST. It used to also write the password into the game server's
   settings and restart it, and that step was always a lie. SkyMP has no join
   password: there is no sPassword in server-settings.json, nothing in

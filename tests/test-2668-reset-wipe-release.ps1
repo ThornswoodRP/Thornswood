@@ -13,8 +13,8 @@
   profile, since the profile keeps its id and what it holds.
 
   This lifts the steps each script sends to the server out of the real
-  script, filled in as the script fills them, and runs them under Windows
-  PowerShell 5.1, which is what runs them there, against stand-in server
+  script, filled in as the script fills them, and runs them under PowerShell
+  7, which is what runs them there since #5356, against stand-in server
   folders in a scratch folder:
 
     S  both scripts carry the one writer, and the wipe marks done exactly
@@ -154,7 +154,7 @@ if (@($rights | Where-Object { $_ }).Count -eq 3) {
 }
 $e = $null
 if ($resetRun) { [void][System.Management.Automation.Language.Parser]::ParseInput($resetRun, [ref]$null, [ref]$e) }
-Yes 'B1 the box''s stop and start script parses, and is ASCII for Windows PowerShell 5.1' (
+Yes 'B1 the box''s stop and start script parses, and is plain ASCII' (
     $resetRun -and $e.Count -eq 0 -and -not ($resetRun.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
 function At([string]$s) { if (-not $resetRun) { return -1 }; return $resetRun.IndexOf($s) }
 $order = @((At '$held = @(Get-ThornswoodProcessHeld $pids)'), (At 'Stop-ScheduledTask -TaskName $Task'), (At '$still = @(Stop-ThornswoodProcessHeld $held)'),
@@ -178,11 +178,7 @@ Yes 'B6 this machine tries the resources port the box named once from outside, b
     $R.text.Contains('$outside = Test-ThornswoodFromOutside $VpsHost $resPort $witness'))
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) {
-    Write-Host 'SKIP  the runs need Windows PowerShell 5.1, which runs these on the VPS; this is not Windows'
-    Done
-}
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 
 $T = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-2668-' + [Guid]::NewGuid().ToString('N'))
 $A1 = 4278192641; $A2 = 4278192642; $A9 = 4278192649     # ff000a01, ff000a02, ff000a09
@@ -191,12 +187,12 @@ function Put([string]$path, [string]$body) {
     [IO.File]::WriteAllText($path, $body)
 }
 function Lit($a) { return (($a | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }) -join ',') }
-function Run51([string]$body, [string[]]$arg) {
+function RunBox([string]$body, [string[]]$arg) {
     $f = Join-Path $T ('step-' + [Guid]::NewGuid().ToString('N') + '.ps1')
     [IO.File]::WriteAllText($f, $body, (New-Object Text.UTF8Encoding $true))
     $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
     try {
-        $out = @(& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $f @arg 2>&1 | ForEach-Object { "$_" })
+        $out = @(& $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $f @arg 2>&1 | ForEach-Object { "$_" })
         return @{ out = $out; code = $LASTEXITCODE }
     }
     finally { $ErrorActionPreference = $eap; Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue }
@@ -222,7 +218,7 @@ try {
     # ---- R: a reset ----------------------------------------------------------------
     $r1 = Server 'reset-merge' '{"privDir":"private"}'
     Put (Join-Path $r1 'private\deleted-characters.json') ('{"profiles":[6001],"actors":[' + $A9 + '],"done":{"farms":1,"property":2}}')
-    $x = Run51 $resetBody @('-Root', $r1)
+    $x = RunBox $resetBody @('-Root', $r1)
     $l = ListOf (Join-Path $r1 'private\deleted-characters.json')
     Yes ('R1 a reset throws the characters away and says it wrote the list (' + ($x.out -join ' / ') + ')') (
         $x.code -eq 0 -and @($x.out | Where-Object { $_ -like 'release list: *3 character(s)*' }).Count -eq 1 -and
@@ -235,7 +231,7 @@ try {
     $lists.reset = [IO.File]::ReadAllText((Join-Path $r1 'private\deleted-characters.json'))
 
     $r2 = Server 'reset-fresh' '{"privDir":"secret"}'
-    $x = Run51 $resetBody @('-Root', $r2)
+    $x = RunBox $resetBody @('-Root', $r2)
     $file = Join-Path $r2 'secret\deleted-characters.json'
     $l = ListOf $file
     Yes 'R6 with no list there, the list goes in the server''s own privDir' ($x.code -eq 0 -and $l -and -not (Test-Path -LiteralPath (Join-Path $r2 'private\deleted-characters.json')))
@@ -245,7 +241,7 @@ try {
 
     $r3 = Server 'reset-bad' '{}'
     Put (Join-Path $r3 'private\deleted-characters.json') '{"profiles":"nobody"}'
-    $x = Run51 $resetBody @('-Root', $r3)
+    $x = RunBox $resetBody @('-Root', $r3)
     Yes ('R8 a list there that is not one stops the reset (' + ($x.out -join ' / ') + ')') ($x.code -eq 1 -and @($x.out | Where-Object { $_ -like 'STOP. *not a list of deleted characters, so nothing was thrown away*' }).Count -eq 1)
     Yes 'R9 with nothing moved and the list left as it was' (
         @(Get-ChildItem -LiteralPath (Join-Path $r3 'world\changeForms') -Filter '*.json' -File).Count -eq 4 -and
@@ -254,11 +250,11 @@ try {
     $r4 = Join-Path $T 'reset-empty'
     Put (Join-Path $r4 'server-settings.json') '{}'
     Put (Join-Path $r4 'world\changeForms\13164_JKs Whiterun.esp.json') '{}'
-    $x = Run51 $resetBody @('-Root', $r4)
+    $x = RunBox $resetBody @('-Root', $r4)
     Yes 'R10 with nobody to throw away, no list is written' ($x.code -eq 0 -and -not (Test-Path -LiteralPath (Join-Path $r4 'private\deleted-characters.json')))
 
     $r5 = Server 'reset-badsettings' '{"privDir": '
-    $x = Run51 $resetBody @('-Root', $r5)
+    $x = RunBox $resetBody @('-Root', $r5)
     Yes ('R11 a server-settings.json that will not parse stops the reset: where the list goes is not guessed (' + ($x.out -join ' / ') + ')') (
         $x.code -eq 1 -and @($x.out | Where-Object { $_ -like 'STOP. *server-settings.json will not parse*Nothing was thrown away.' }).Count -eq 1 -and
         @(Get-ChildItem -LiteralPath (Join-Path $r5 'world\changeForms') -Filter '*.json' -File).Count -eq 4 -and
@@ -266,20 +262,20 @@ try {
 
     # The box's stop and start, as far as it goes before anything is stopped.
     $b7 = Server 'run-badsettings' '{"port": '
-    $x = Run51 $resetRun @('-Root', $b7, '-Task', 'Thornswood test task that is not there')
+    $x = RunBox $resetRun @('-Root', $b7, '-Task', 'Thornswood test task that is not there')
     Yes ('B7 settings that will not read stop the box''s script before anything is stopped (' + ($x.out -join ' / ') + ')') (
         $x.code -eq 1 -and @($x.out | Where-Object { $_ -like 'STOP. *server-settings.json will not read*Nothing was stopped or thrown away.' }).Count -eq 1 -and
         -not @($x.out | Where-Object { $_ -like 'stopped pid*' }).Count -and
         @(Get-ChildItem -LiteralPath (Join-Path $b7 'world\changeForms') -Filter '*.json' -File).Count -eq 4)
     $b8 = Server 'run-noport' '{"privDir":"private"}'
-    $x = Run51 $resetRun @('-Root', $b8, '-Task', 'Thornswood test task that is not there')
+    $x = RunBox $resetRun @('-Root', $b8, '-Task', 'Thornswood test task that is not there')
     Yes ('B8 settings that name no port stop it too: which server is not guessed (' + ($x.out -join ' / ') + ')') (
         $x.code -eq 1 -and @($x.out | Where-Object { $_ -like 'STOP. *names no port*Nothing was stopped or thrown away.' }).Count -eq 1 -and
         @(Get-ChildItem -LiteralPath (Join-Path $b8 'world\changeForms') -Filter '*.json' -File).Count -eq 4)
 
     $r6 = Server 'reset-badform' '{}'
     Put (Join-Path $r6 'world\changeForms\3.json') '{"formDesc":"ff000a0'
-    $x = Run51 $resetBody @('-Root', $r6)
+    $x = RunBox $resetBody @('-Root', $r6)
     $l = ListOf (Join-Path $r6 'private\deleted-characters.json')
     Yes ('R12 a change form that will not parse is named, and the others are still listed (' + ($x.out -join ' / ') + ')') (
         $x.code -eq 0 -and @($x.out | Where-Object { $_ -like '*3.json will not parse, so its character, if it is one, is not on the release list' }).Count -eq 1 -and
@@ -304,7 +300,7 @@ try {
     Registers $w1
     $old = '{"profiles":[7001],"actors":[' + $A9 + '],"done":{"farms":1}}'
     Put (Join-Path $w1 'private\deleted-characters.json') $old
-    $x = Run51 (FillMove $w1)
+    $x = RunBox (FillMove $w1)
     $file = Join-Path $w1 'private\deleted-characters.json'
     $l = ListOf $file
     Yes ('W1 a wipe moves everything and writes the list (' + (@($x.out | Where-Object { $_ -like 'RELEASE*' }) -join ' / ') + ')') (
@@ -324,13 +320,13 @@ try {
     Put (Join-Path $w2 'server-settings.json') '{}'
     Put (Join-Path $w2 'world\changeForms\13164_JKs Whiterun.esp.json') '{}'
     Registers $w2
-    $x = Run51 (FillMove $w2)
+    $x = RunBox (FillMove $w2)
     Yes 'W7 with nobody to name and no list set aside, no list is written' (($x.out -contains 'RELEASE|none') -and -not (Test-Path -LiteralPath (Join-Path $w2 'private\deleted-characters.json')))
 
     $w3 = Server 'wipe-badlist' '{}'
     Registers $w3
     Put (Join-Path $w3 'private\deleted-characters.json') '{"file":"not a list"}'
-    $x = Run51 (FillMove $w3)
+    $x = RunBox (FillMove $w3)
     $l = ListOf (Join-Path $w3 'private\deleted-characters.json')
     Yes ('W8 a list set aside that is not one is said, not carried, and left as it was (' + (@($x.out | Where-Object { $_ -like 'RELEASENOTE*' }) -join ' / ') + ')') (
         @($x.out | Where-Object { $_ -like 'RELEASENOTE|*not a list of deleted characters, so nothing was carried from it*' }).Count -eq 1 -and
@@ -341,14 +337,18 @@ try {
         $dk3.Count -eq ($expect.Count + 1) -and ($dk3 -contains 'saves') -and @($expect | Where-Object { $dk3 -notcontains $_ }).Count -eq 0)
     $lists.wipeNoProfile = [IO.File]::ReadAllText((Join-Path $w3 'private\deleted-characters.json'))
 
-    $w4 = Server 'wipe-held' '{}'
-    Registers $w4
-    $lock = [IO.File]::Open((Join-Path $w4 'private\embassy.json'), 'Open', 'Read', 'None')
-    try { $x = Run51 (FillMove $w4) } finally { $lock.Dispose() }
-    Yes ('W9 a server whose move did not finish gets no list, and says so (' + (@($x.out | Where-Object { $_ -like 'RELEASENOTE*' }) -join ' / ') + ')') (
-        @($x.out | Where-Object { $_ -like 'FAILED*embassy.json*' }).Count -eq 1 -and
-        @($x.out | Where-Object { $_ -like 'RELEASENOTE|*no release list, because the move did not finish' }).Count -eq 1 -and
-        -not (Test-Path -LiteralPath (Join-Path $w4 'private\deleted-characters.json')))
+    # A file held open with no sharing stops its move only where share modes
+    # are kept, which is Windows, the box's system: off Windows the move goes.
+    if ($OnWindows) {
+        $w4 = Server 'wipe-held' '{}'
+        Registers $w4
+        $lock = [IO.File]::Open((Join-Path $w4 'private\embassy.json'), 'Open', 'Read', 'None')
+        try { $x = RunBox (FillMove $w4) } finally { $lock.Dispose() }
+        Yes ('W9 a server whose move did not finish gets no list, and says so (' + (@($x.out | Where-Object { $_ -like 'RELEASENOTE*' }) -join ' / ') + ')') (
+            @($x.out | Where-Object { $_ -like 'FAILED*embassy.json*' }).Count -eq 1 -and
+            @($x.out | Where-Object { $_ -like 'RELEASENOTE|*no release list, because the move did not finish' }).Count -eq 1 -and
+            -not (Test-Path -LiteralPath (Join-Path $w4 'private\deleted-characters.json')))
+    } else { Write-Host 'SKIP  W9 a move that does not finish: it holds a file open with no sharing, and share modes are Windows''; off Windows an open file stops no move' }
 
     # ---- G: the gamemode reads what they wrote --------------------------------------
     $node = Get-Command node -ErrorAction SilentlyContinue

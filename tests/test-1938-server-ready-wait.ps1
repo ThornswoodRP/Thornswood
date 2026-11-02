@@ -111,10 +111,10 @@ Yes 'Publish-Server sends ServerReadyWait.ps1 beside the installer, and refuses 
 # ---- run, against a scratch folder ------------------------------------------
 . (Join-Path $PSScriptRoot 'Windows.ps1')
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the runs need Windows PowerShell 5.1 and Get-NetUDPEndpoint, which only Windows has, and this is not Windows'
+    Write-Host 'SKIP  the runs need Get-NetUDPEndpoint, which only Windows has, and this is not Windows'
     Done
 }
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 $node = Get-Command node -EA SilentlyContinue
 if (-not $node -or -not (Get-Command Get-NetUDPEndpoint -EA SilentlyContinue)) {
     Write-Host 'SKIP  the runs need node and Get-NetUDPEndpoint as well, and this machine lacks one'
@@ -236,7 +236,7 @@ function Start-ScheduledTask { [CmdletBinding()] param([string]`$TaskName)
     [IO.File]::WriteAllText($f, $body, (New-Object Text.UTF8Encoding($true)))
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    try { $out = @(& $ps51 -NoProfile -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_".Trim() }) }
+    try { $out = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_".Trim() }) }
     finally { $ErrorActionPreference = $eap }
     $script:lastFar = $out
     return $out

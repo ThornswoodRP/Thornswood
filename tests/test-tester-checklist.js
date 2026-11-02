@@ -5,7 +5,7 @@
 //
 // WHY THIS EXISTS. Entry 295 on the To Do List: the first thing the checklist
 // asked a tester to check was "Build 1.0.193 and up." Main was on 1.1.47 when
-// the entry was written and launcher/app/Updater.cs says 1.1.92 today, so the one
+// the entry was written and launcher/app/Updater.cs said 1.1.92 at the fix, so the one
 // line meant to stop a stale report was itself the stalest line on the page.
 // The entry's words: "Either take the version out of the checklist entirely,
 // which is the better answer, or generate that line from the feed." It was
@@ -18,7 +18,7 @@
 //
 // What stays is where to find the build, since the load order section still
 // asks for it. That sentence is checked against the launcher's own layout
-// (launcher/ui.xaml and Shell.cs) so it cannot drift either.
+// (launcher/app/MainWindow.axaml and Shell.cs) so it cannot drift either.
 //
 // Read only.
 const REPO_DIR = require('path').join(__dirname, '..'); // the tests are in tests\, the repository is one folder up
@@ -27,7 +27,7 @@ const path = require('path');
 
 const ROOT = REPO_DIR;
 const CHECKLIST = path.join(ROOT, 'site', 'data', 'tests.md');
-const UI = path.join(ROOT, 'launcher', 'ui.xaml');
+const UI = path.join(ROOT, 'launcher', 'app', 'MainWindow.axaml');
 const SHELL = path.join(ROOT, 'launcher', 'app', 'Shell.cs');
 
 let pass = 0, fail = 0;
@@ -57,13 +57,13 @@ pinned.forEach(function (p) { console.log('      ' + p); });
 yes('no line of the checklist names a build number', pinned.length === 0);
 yes('no line sets a build floor ("Build N and up")', !/\bbuild\s+\d/i.test(md) && !/\band up\b/i.test(md));
 
-// The version Ship reads today, so a reader can see what the old line was
-// behind. Not compared with anything in the checklist, because the checklist
-// should carry no number at all.
+// Since #4825 the launcher's number is the one the build gives the exe, and no
+// source file carries it, so there is no number here to copy into the
+// checklist; the scan above holds it to none.
 const upd = read(path.join(ROOT, 'launcher', 'app', 'Updater.cs'));
-const m = /const string Version = "([^"]+)"/.exec(upd);
-yes('Updater.cs carries the launcher version (' + (m ? m[1] : 'not found') + '), the one place it lives', !!m);
-yes('that version is not written into the checklist', !m || md.indexOf(m[1]) < 0);
+yes('the launcher reads its version off its own exe, so no source file carries a number to copy',
+  /public static readonly string Version = BuiltVersion\(\);/.test(upd) &&
+  /typeof\(Updater\)\.Assembly\.GetName\(\)\.Version/.test(upd) && !/const string Version = "/.test(upd));
 
 // The old name.
 yes('the checklist does not name Gavin', !/\bGavin\b/.test(md));

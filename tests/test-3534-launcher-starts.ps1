@@ -22,20 +22,17 @@
        and the slowest per launcher version, says "not written" for a mod
        check an older line lacks, prints no account, and says so when there
        are no starts;
-    3. on Windows, the same run in Windows PowerShell 5.1, which is what the
-       box runs it in.
 
   Nothing connects anywhere. Everything it writes is in its own temp folder.
 #>
 [CmdletBinding()]
-param([switch]$Child)
+param()
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $repo = Split-Path -Parent $Here
-. (Join-Path $PSScriptRoot 'Windows.ps1')
 
 $script:pass = 0
 $script:fail = 0
@@ -54,19 +51,17 @@ $reader = Join-Path $repo 'scripts/vps/Read-LauncherStarts.ps1'
 $shell = Join-Path $repo 'launcher/app/Shell.cs'
 
 # ---- 1. the launcher's line -------------------------------------------------------
-if (-not $Child) {
-    Write-Host 'the launcher'
-    $cs = [IO.File]::ReadAllText($shell) -replace "`r`n", "`n"
-    $fn = [regex]::Match($cs, '(?ms)static void LogStartTime\(\)\n\s+\{\n(.*?)\n        \}\n').Groups[1].Value
-    Yes 'Shell.cs has LogStartTime' ($fn.Length -gt 0)
-    Yes '  timed from the process''s own start' ($fn.Contains('Process.GetCurrentProcess()') -and $fn.Contains('.StartTime'))
-    Yes '  in the reader''s words, through LogOnly' ($fn -match 'LogOnly\("Launcher start: the window was on screen " \+' -and $fn.Contains('" s after the launcher started"') -and
-        $fn.Contains('" s of it the mod check"') -and $fn.Contains('", on launcher " + Updater.Version + "."') -and $fn.Contains('InvariantCulture'))
-    Yes 'it is written once the window has drawn' ($cs -match '(?ms)win\.ContentRendered \+= delegate\n\s+\{\n\s+try \{ LogStartTime\(\); \}')
-    Yes 'the mod check is timed around RunScan' ($cs -match '(?ms)var scanClock = Stopwatch\.StartNew\(\);\n\s+try \{ RunScan\(\); \}\n[^\n]*\n\s+startScanSeconds = scanClock\.Elapsed\.TotalSeconds;')
-    $readerText = [IO.File]::ReadAllText($reader)
-    Yes 'the reader names where the line comes from' ($readerText.Contains('Shell.cs LogStartTime'))
-}
+Write-Host 'the launcher'
+$cs = [IO.File]::ReadAllText($shell) -replace "`r`n", "`n"
+$fn = [regex]::Match($cs, '(?ms)static void LogStartTime\(\)\n\s+\{\n(.*?)\n        \}\n').Groups[1].Value
+Yes 'Shell.cs has LogStartTime' ($fn.Length -gt 0)
+Yes '  timed from the process''s own start' ($fn.Contains('Process.GetCurrentProcess()') -and $fn.Contains('.StartTime'))
+Yes '  in the reader''s words, through LogOnly' ($fn -match 'LogOnly\("Launcher start: the window was on screen " \+' -and $fn.Contains('" s after the launcher started"') -and
+    $fn.Contains('" s of it the mod check"') -and $fn.Contains('", on launcher " + Updater.Version + "."') -and $fn.Contains('InvariantCulture'))
+Yes 'it is written once the window has drawn' ($cs -match '(?ms)win\.ContentRendered \+= delegate\n\s+\{\n\s+try \{ LogStartTime\(\); \}')
+Yes 'the mod check is timed around RunScan' ($cs -match '(?ms)var scanClock = Stopwatch\.StartNew\(\);\n\s+try \{ RunScan\(\); \}\n[^\n]*\n\s+startScanSeconds = scanClock\.Elapsed\.TotalSeconds;')
+$readerText = [IO.File]::ReadAllText($reader)
+Yes 'the reader names where the line comes from' ($readerText.Contains('Shell.cs LogStartTime'))
 
 # ---- 2. the reader ---------------------------------------------------------------------
 Write-Host ''; Write-Host ('the reader, in ' + $PSVersionTable.PSEdition + ' ' + $PSVersionTable.PSVersion)
@@ -118,20 +113,6 @@ try {
     Yes 'no folder: ends 1 and says so' ($LASTEXITCODE -eq 1 -and ($out -join ' ') -match 'STOP\. There is no')
 } finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
-}
-
-# ---- 3. in Windows PowerShell 5.1 -------------------------------------------------------
-if (-not $Child) {
-    Write-Host ''
-    if (-not $OnWindows) {
-        Write-Host 'SKIP  the reader in Windows PowerShell 5.1: this is not Windows (the box runs it there; the Windows runner checks it)'
-    } else {
-        $winps = Get-WindowsPowerShell
-        $o = @(& $winps -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Child 2>&1 | ForEach-Object { "$_" })
-        $childRc = $LASTEXITCODE
-        foreach ($l in $o) { if ($l -match '^(PASS|FAIL)  ') { Write-Host ('  ' + $l) } }
-        Yes ("the reader passes the same in Windows PowerShell 5.1 ($childRc)") ($childRc -eq 0 -and @($o | Where-Object { $_ -match '^PASS  ' }).Count -ge 8)
-    }
 }
 
 Done

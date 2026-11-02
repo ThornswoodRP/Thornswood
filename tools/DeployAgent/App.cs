@@ -99,9 +99,11 @@ public sealed class App(EnvConfig env, HttpClient http, IAppControl control)
 
     /// <summary>What the site's swap holds to the Release: the files at the
     /// top of public (its folders, such as downloads, are filled by other
-    /// scripts) and the public pages. Anything there the Release does not
-    /// carry goes aside (Swap.ps1's $Gone, #2572).</summary>
-    static readonly string[] SiteHeld = ["public", "data/site"];
+    /// scripts), the public pages and the program's modules in lib (#5357).
+    /// Anything there the Release does not carry goes aside (Swap.ps1's
+    /// $Gone, #2572), so a module the site no longer has is not left
+    /// beside the ones it loads.</summary>
+    static readonly string[] SiteHeld = ["public", "data/site", "lib"];
 
     /// <summary>What a Release carries for voice, the files Install-Voice.ps1
     /// sends: its program, the headlines it reads, and the log writer its
@@ -485,13 +487,15 @@ public sealed class App(EnvConfig env, HttpClient http, IAppControl control)
     }
 
     /// <summary>What a Release may carry into this app's folder. The site: its
-    /// program, its public files and its public pages, never the documents,
+    /// program (server.js and its modules in lib, #5357), its public files
+    /// and its public pages, never the documents,
     /// boards, uploads or anything else the site writes. The bot: its code
     /// and its card art, never anything Get-ThornswoodBotOwned names.</summary>
     bool Allowed(string rel)
     {
         if (env.Kind == AppKinds.Site)
             return rel == "server.js" || (rel.StartsWith("public/", StringComparison.Ordinal) && rel.Count(c => c == '/') == 1)
+                || (rel.StartsWith("lib/", StringComparison.Ordinal) && rel.EndsWith(".js", StringComparison.Ordinal) && rel.Count(c => c == '/') == 1)
                 || (rel.StartsWith("data/site/", StringComparison.Ordinal) && rel.Count(c => c == '/') == 2);
         if (env.Kind == AppKinds.Discord)
         {

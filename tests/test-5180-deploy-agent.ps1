@@ -16,7 +16,7 @@
       the Release.
     - The gate has the verbs Deploy-Release (-Tag build-<...> and
       -Environment dev, site or discord only) and Install-DeployAgent
-      (-Status, -Tag, -NoBotPass, -EndHung, -Main and -NoMain only). -Main
+      (-Status, -Pass, -Tag, -NoBotPass, -EndHung, -Main and -NoMain only). -Main
       has agent.json name main (#5181) and -NoMain takes it off; with
       neither it is kept.
     - Deploy-Release.ps1 and Install-DeployAgent.ps1 send the box scripts that
@@ -38,6 +38,11 @@
       then; -NoBotPass leaves it off; New-SignedManifest.ps1 -BotFiles adds
       the bot part merge-release.yml puts in every Release, with
       the same files the agent asks for.
+    - After a dev Deployment (#5180): the load order line and Check-ProdParity
+      are lines main's gate takes, the load order verb fits the agent's wait,
+      the REVIEW rows are printed as the agent reads them, each file the
+      agent watches is one Deploy-DevGamemode -LoadOrder -FromRecord reads,
+      and only the service takes these steps.
     - dotnet test on tools/DeployAgent.Tests, from the locked packages, when
       dotnet is on PATH; SKIP otherwise (the Deploy agent workflow runs them
       on every pull request that touches it).
@@ -117,7 +122,7 @@ try {
     Yes '  -Tag takes build-<...> and nothing else' (('build-20261101.12' -match $d.params.Tag) -and -not ('build-1; rm' -match $d.params.Tag) -and -not ('agent-v1.0.1' -match $d.params.Tag))
     $v = $verbs.verbs.'Install-DeployAgent'
     Yes 'the gate has Install-DeployAgent' ($null -ne $v -and $v.script -eq 'scripts/deploy/Install-DeployAgent.ps1')
-    Yes '  with -Status, -Tag, -NoBotPass, -EndHung, -Main and -NoMain only, and -NoPause fixed' ((@($v.params.PSObject.Properties.Name) -join ',') -eq 'Status,Tag,NoBotPass,EndHung,Main,NoMain' -and (@($v.fixed) -join ',') -eq '-NoPause' -and
+    Yes '  with -Status, -Pass, -Tag, -NoBotPass, -EndHung, -Main and -NoMain only, and -NoPause fixed' ((@($v.params.PSObject.Properties.Name) -join ',') -eq 'Status,Pass,Tag,NoBotPass,EndHung,Main,NoMain' -and (@($v.fixed) -join ',') -eq '-NoPause' -and
         $v.params.NoBotPass -eq 'switch' -and $v.params.EndHung -eq 'switch' -and $v.params.Main -eq 'switch' -and $v.params.NoMain -eq 'switch')
     Yes '  -Tag takes agent-v<a.b.c> and nothing else' (('agent-v1.0.12' -match $v.params.Tag) -and -not ('agent-v1.0.12; rm' -match $v.params.Tag) -and -not ('build-1' -match $v.params.Tag))
 
@@ -126,10 +131,18 @@ try {
     # handed and answers the line the script looks for.
     function Probe([string]$name, [string]$answer, [string[]]$more) {
         $src = [IO.File]::ReadAllText((Join-Path $Repo ('scripts\deploy\' + $name)))
-        $probe = Join-Path $Repo ('scripts\deploy\_probe-5180-' + [guid]::NewGuid().ToString('N').Substring(0, 6) + '.ps1')
+        # The probe lives in this harness's own temp folder, never in scripts\:
+        # other harnesses read that folder while this one runs, and a file that
+        # comes and goes under them breaks them (test-local-accounts on #5420).
+        # It is told the real scripts\deploy folder, so it loads what the script does.
+        $probe = Join-Path $tmp ('_probe-5180-' + [guid]::NewGuid().ToString('N').Substring(0, 6) + '.ps1')
         $hook = 'function Remote($script) { [IO.File]::WriteAllText($env:PROBE_OUT, $script); return @("' + $answer + '") }'
+        $hereLine = '$Here = ''' + (Join-Path $Repo 'scripts\deploy').Replace("'", "''") + ''''
         $probeSrc = [regex]::Replace($src, '(?m)^function Remote\(\$script\) \{.*$', $hook.Replace('$', '$$'))
         if ($probeSrc -eq $src) { return $null }
+        $placed = [regex]::Replace($probeSrc, '(?m)^\$Here = \$PSScriptRoot\s*$', $hereLine.Replace('$', '$$'))
+        if ($placed -eq $probeSrc) { return $null }
+        $probeSrc = $placed
         [IO.File]::WriteAllText($probe, $probeSrc)
         $sent = Join-Path $tmp ('sent-' + [guid]::NewGuid().ToString('N').Substring(0, 6) + '.ps1')
         try {
@@ -167,6 +180,14 @@ try {
             Yes '  at below normal priority, on demand, with a time limit' ($t.Contains('-Priority 7') -and $t.Contains('-ExecutionTimeLimit (New-TimeSpan -Minutes 40)') -and -not ($t -match 'TaskName \$passTask[^\r\n]*-Trigger'))
             $safe = $t.IndexOf('Test-ThornswoodServiceCannotReach (Get-ThornswoodServiceNeverReach -Own $passRoot')
             Yes '  and the fail-safe on what no service may read comes first' ($safe -gt 0 -and $safe -lt $t.IndexOf('Register-ScheduledTask -TaskName $passTask'))
+            $st = Probe 'Install-DeployAgent.ps1' 'INSTALLED: probe' @('-Repo', 'O/R', '-Status')
+            Yes '  and -Status prints where the last pass got to, its own lines and the copy server''s, addresses taken out' (
+                $null -ne $st -and $st.Parses -and $st.Text.Contains("'C:\Thornswood-BotPass\run'") -and $st.Text.Contains("'bot-pass.log'") -and
+                $st.Text.Contains('server\bot-pass-server.log') -and $st.Text.Contains("'<address>'") -and $st.Text.Contains('C:\Thornswood-BotPass\passes'))
+            $kp = Probe 'Install-DeployAgent.ps1' 'INSTALLED: probe' @('-Repo', 'O/R', '-Status', '-Pass', '20261101-234130-unnamed')
+            Yes '  and -Status -Pass prints that kept pass from passes\' ($null -ne $kp -and $kp.Parses -and $kp.Text.Contains("'C:\Thornswood-BotPass\passes\20261101-234130-unnamed'"))
+            $bad = Probe 'Install-DeployAgent.ps1' 'INSTALLED: probe' @('-Repo', 'O/R', '-Status', '-Pass', '..\..\Windows')
+            Yes '  and -Pass that is not a kept pass''s name sends nothing' ($null -eq $bad -or -not $bad.Text)
             Yes '  and only once dev''s engine has the bot client (skymp #137)' ($t.Contains("Contains('createBotClient')") -and $t.IndexOf("Contains('createBotClient')") -lt $t.IndexOf('Register-ScheduledTask -TaskName $passTask'))
             Yes '  and names the folder in agent.json only once the task is set up' ($t.Contains('-NotePropertyName botPassRoot') -and $t.Contains('$noPass = [bool]0'))
             $off = Probe 'Install-DeployAgent.ps1' 'INSTALLED: probe' @('-Repo', 'O/R', '-NoBotPass')
@@ -211,9 +232,9 @@ $h = @{}; $want = ''
     $null = & pwsh -NoProfile -Command "& '$(Join-Path $Repo 'scripts\release\New-SignedManifest.ps1')' -Out '$out2' -Tag build-1.3 -Commit $commit -Part gamemode -Files '$gmf' -BotFiles '$gmf' -Repo O/R -NoCatalog" 2>&1
     Yes '  and refuses two files of one name, which the agent puts in one folder' ($LASTEXITCODE -ne 0)
     $wf = [IO.File]::ReadAllText((Join-Path $Repo '.github\workflows\merge-release.yml'))
-    Yes 'merge-release.yml puts the bot pass in every Release' ($wf.Contains('-BotFiles $bot') -and $wf.Contains("@('Bot-Pass.js', 'bot.js', 'character.js')") -and $wf.Contains("- 'scripts/bot/Bot-Pass.js'"))
+    Yes 'merge-release.yml puts the bot pass in every Release' ($wf.Contains('-BotFiles $bot') -and $wf.Contains("@('Bot-Pass.js', 'bot.js', 'character.js', 'relay.js')") -and $wf.Contains("@('voice-server.js', 'headlines.js') | ForEach-Object { Join-Path 'voice' `$_ }") -and $wf.Contains("- 'scripts/bot/relay.js'") -and $wf.Contains("- 'scripts/bot/Bot-Pass.js'"))
     $cs = [IO.File]::ReadAllText((Join-Path $Repo 'tools\DeployAgent\BotPass.cs'))
-    Yes '  the same three files the agent asks the bot part for' ($cs.Contains('BotFiles = ["Bot-Pass.js", "bot.js", "character.js"]'))
+    Yes '  and the agent takes that part whole, needing only the file the task runs' ($cs.Contains('public const string Runs = "Bot-Pass.js";') -and $cs.Contains('foreach (var n in bot) Files.Copy(files[n], Path.Combine(BotDir, n));') -and -not $cs.Contains('BotFiles ='))
     $r = Probe 'Deploy-Release.ps1' 'DEPLOYED: probe' @('-Tag', 'build-20261101.3')
     Yes 'Deploy-Release.ps1: the script it sends the box parses and runs the agent''s deploy for dev' ($null -ne $r -and $r.Parses -and $r.Code -eq 0 -and $r.Text.Contains("deploy --environment 'dev' --tag 'build-20261101.3'"))
     $r = Probe 'Deploy-Release.ps1' 'DEPLOYED: probe' @('-Tag', 'v1.2.3')
@@ -240,6 +261,28 @@ $h = @{}; $want = ''
     }
     $iso = Get-Content -Raw (Join-Path $Repo 'records\runner-isolation.json') | ConvertFrom-Json
     Yes 'runner-isolation.json keeps every runner account out of C:\Thornswood-Agent' (@($iso.noReach) -contains 'C:\Thornswood-Agent')
+
+    # ---- what the agent asks the gate for after a dev Deployment ------------------
+    . (Join-Path $Repo 'scripts\vps\gate\GateRules.ps1')
+    $agentCs = [IO.File]::ReadAllText((Join-Path $Repo 'tools\DeployAgent\Agent.cs'))
+    $verbs = Read-ThornswoodGateVerbs (Join-Path $Repo 'scripts\vps\gate\verbs.json')
+    $lo = [regex]::Match($agentCs, 'LoadOrderLine = "([^"]+)"').Groups[1].Value
+    # The rules read verbs.json the way the broker does, which is not strict.
+    function Ask([string]$line) { Set-StrictMode -Off; Test-ThornswoodGateRequest -Line $line -Verbs $verbs }
+    $req = Ask $lo
+    Yes "the agent's load order line is one the gate takes: $lo" ($lo -ne '' -and $req.Ok -and $req.Verb -eq 'Deploy-DevGamemode' -and -not $req.Build)
+    Yes '  and it runs no longer than the 50 minutes the agent waits for the gate' ($req.Minutes -le 50 -and $agentCs.Contains('Gate!.Run(LoadOrderLine, TimeSpan.FromMinutes(50)'))
+    $req = Ask 'Check-ProdParity'
+    Yes 'the gate takes the parity line the agent sends, Check-ProdParity' ($req.Ok -and $agentCs.Contains('Gate!.Run("Check-ProdParity"'))
+    $parity = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\vps\Check-ProdParity.ps1'))
+    Yes '  and it prints the REVIEW rows the agent reads' ($parity.Contains('"REVIEW  {0} {1}: expected {2}, found {3}"') -and $agentCs.Contains('^REVIEW  (\S+) (.+?): expected (.*?), found (.*)$'))
+    $dg = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\deploy\Deploy-DevGamemode.ps1'))
+    foreach ($f in 'records/collection-plugins.json', 'records/collection-dropped.json', 'game/data/last-plugin.json', 'game/data/last-plugin.recipe', 'game/content/Thornswood-Content.esp') {
+        $win = $f.Replace('/', '\')
+        Yes "  the agent moves the order when $f changes, a file -LoadOrder -FromRecord reads" ($agentCs.Contains('"' + $f + '"') -and ($dg.Contains($f) -or $dg.Contains($win) -or $dg.Contains("'" + (Split-Path -Leaf $win) + "'")))
+    }
+    $prog = [IO.File]::ReadAllText((Join-Path $Repo 'tools\DeployAgent\Program.cs'))
+    Yes 'only the service takes the gate steps, never a deploy by tag inside a gate verb' ($prog -match '(?s)if \(verb == "service"\)\s*\{\s*agent\.Gate = new GatePipe\(\);')
 
     # ---- the C# code ----------------------------------------------------------------
     $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue

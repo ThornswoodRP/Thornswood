@@ -7,11 +7,12 @@
 
   So Ship-Stack takes -Note now and hands it to Deploy-DevGamemode as -Note.
   This runs the real Ship-Stack.ps1 from a scratch copy of scripts\ whose
-  five scripts it calls (Deploy-DevGamemode, Deploy-Gamemode, Deploy-Server,
-  Package-Thornswood, Publish-PostShip) are stand-ins: each has the real
-  script's own param block, lifted by the parser, so the arguments bind
-  exactly as they would against the real one, and a body that only writes
-  down what it was given. Nothing is deployed, packaged or sent.
+  four scripts it calls (Deploy-DevGamemode, Deploy-Gamemode, Deploy-Server,
+  Publish-PostShip) are stand-ins: each has the real script's own param
+  block, lifted by the parser, so the arguments bind exactly as they would
+  against the real one, and a body that only writes down what it was given.
+  Nothing is deployed or sent. The stack's installer step went with the old
+  installer (#4824).
 
   Runs under PowerShell 7 and Windows PowerShell 5.1.
 #>
@@ -81,7 +82,6 @@ exit 0
 New-StandIn (Join-Path $repo 'scripts\deploy\Deploy-DevGamemode.ps1') (Join-Path $deploy 'Deploy-DevGamemode.ps1')
 New-StandIn (Join-Path $repo 'scripts\deploy\Deploy-Gamemode.ps1') (Join-Path $deploy 'Deploy-Gamemode.ps1')
 New-StandIn (Join-Path $repo 'scripts\deploy\Deploy-Server.ps1') (Join-Path $deploy 'Deploy-Server.ps1')
-New-StandIn (Join-Path $repo 'scripts\release\Package-Thornswood.ps1') (Join-Path $release 'Package-Thornswood.ps1')
 New-StandIn (Join-Path $repo 'scripts\release\Publish-PostShip.ps1') (Join-Path $release 'Publish-PostShip.ps1')
 
 function Get-Record([string]$name) {
@@ -108,15 +108,15 @@ try {
     # ---- dev, with a note: it reaches Deploy-DevGamemode as -Note ---------------
     $r = Invoke-Stack @{ Channel = 'dev'; Note = $note; DistRoot = $dist; NoPause = $true }
     Yes 'a dev run with -Note finishes' ($r.Code -eq 0)
-    Yes '  and runs the dev gamemode, the installer and the remirror' (($r.Ran -join ',') -eq 'Deploy-DevGamemode,Package-Thornswood,Publish-PostShip')
+    Yes '  and runs the dev gamemode and the remirror' (($r.Ran -join ',') -eq 'Deploy-DevGamemode,Publish-PostShip')
     $g = Get-Record 'Deploy-DevGamemode'
     Yes '  Deploy-DevGamemode is given the note as -Note, every line of it' ($null -ne $g -and $g.PSObject.Properties['Note'] -and $g.Note -eq $note)
     Yes '  and nothing else, so it deploys with its own defaults as before' ($null -ne $g -and @($g.PSObject.Properties).Count -eq 1)
-    $pkg = Get-Record 'Package-Thornswood'
-    Yes '  the installer step is not given the note' ($null -ne $pkg -and -not $pkg.PSObject.Properties['Note'])
+    $post = Get-Record 'Publish-PostShip'
+    Yes '  the remirror is not given the note' ($null -ne $post -and -not $post.PSObject.Properties['Note'])
 
     # ---- dev, the note bare --------------------------------------------------
-    $r = Invoke-Stack @{ DistRoot = $dist; NoPause = $true; SkipInstaller = $true } $note
+    $r = Invoke-Stack @{ DistRoot = $dist; NoPause = $true } $note
     $g = Get-Record 'Deploy-DevGamemode'
     Yes 'a bare note after the script is the note' ($r.Code -eq 0 -and $null -ne $g -and $g.Note -eq $note)
 
@@ -130,14 +130,14 @@ try {
 
     # ---- dev, gamemode skipped: no note wanted ------------------------------
     $r = Invoke-Stack @{ Channel = 'dev'; SkipGameMode = $true; DistRoot = $dist; NoPause = $true }
-    Yes 'a dev run with -SkipGameMode needs no note' ($r.Code -eq 0 -and ($r.Ran -join ',') -eq 'Package-Thornswood,Publish-PostShip')
+    Yes 'a dev run with -SkipGameMode needs no note' ($r.Code -eq 0 -and ($r.Ran -join ',') -eq 'Publish-PostShip')
     $r = Invoke-Stack @{ Channel = 'dev'; SkipGameMode = $true; Note = $note; DistRoot = $dist; NoPause = $true }
     Yes '  and refuses one, which nothing would post, before any step runs' ($r.Code -eq 1 -and $r.Ran.Count -eq 0 -and $r.Out -match 'SkipGameMode leaves it out')
 
     # ---- main: no note, the two main deploys as before ----------------------
-    $r = Invoke-Stack @{ Channel = 'main'; SkipInstaller = $true; DistRoot = $dist; NoPause = $true }
+    $r = Invoke-Stack @{ Channel = 'main'; DistRoot = $dist; NoPause = $true }
     Yes 'a main run needs no note and runs Deploy-Gamemode then Deploy-Server' ($r.Code -eq 0 -and ($r.Ran -join ',') -eq 'Deploy-Gamemode,Deploy-Server,Publish-PostShip')
-    $r = Invoke-Stack @{ Channel = 'main'; SkipInstaller = $true; Note = $note; DistRoot = $dist; NoPause = $true }
+    $r = Invoke-Stack @{ Channel = 'main'; Note = $note; DistRoot = $dist; NoPause = $true }
     Yes '  and refuses a note, which its deploys do not post, before any step runs' ($r.Code -eq 1 -and $r.Ran.Count -eq 0 -and $r.Out -match 'Main''s gamemode deploys post none')
 }
 finally { Remove-Item -LiteralPath $box -Recurse -Force }

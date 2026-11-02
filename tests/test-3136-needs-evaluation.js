@@ -60,13 +60,13 @@ function rig() {
   const types = {};
   types[ALE] = 'ALCH'; types[BREAD] = 'ALCH'; types[ROOT] = 'INGR';
   const Fake = {
-    getOnlinePlayers: function () { return online.slice(); },
     makeProperty: function () { },
     getDescFromId: function () { return ''; },
     lookupEspmRecordById: function (id) {
       return types[id] ? { record: { type: types[id] } } : { record: null };
     },
     get: function (id, key) {
+      if (id === 0 && key === 'onlinePlayers') { return online.slice(); }
       if (key === 'worldOrCellDesc') { return 'cell:X.esm'; }
       return store[id] ? store[id].v : undefined;
     },

@@ -765,35 +765,3 @@ function Read-SiteFeed([string]$Channel, [string]$SiteDir, [string]$SiteUrl = 'h
     finally { $wc.Dispose() }
     return (Join-FeedSettings (([Text.Encoding]::UTF8.GetString($bytes) -replace '^\uFEFF', '') | ConvertFrom-Json) $feedUrl)
 }
-
-# The site's list of downloads as it is published: files.json, which
-# Publish-Installer.ps1 writes on the box and the site serves at
-# https://thornswood.net/file/files.json like any other download. Its
-# Thornswood-Setup.exe entry names the release that installer carries (#3043),
-# which is what Ship.ps1's installer gate counts from. With -SiteDir (or the
-# test variable) files\files.json in that folder, the shape the box has under
-# C:/Thornswood-Docs. $null when the site has no list. Throws when the site
-# does not answer or the list does not read, so a caller can never mistake no
-# answer for no installer.
-function Read-SiteDownloads([string]$SiteDir, [string]$SiteUrl = 'https://thornswood.net') {
-    $sd = Get-FeedStoreSiteDir $SiteDir
-    if ($sd) {
-        $f = Join-Path (Join-Path $sd 'files') 'files.json'
-        if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { return $null }
-        return (ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($f)) $f)
-    }
-    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-    $wc = New-Object Net.WebClient
-    $wc.Headers['User-Agent'] = 'Thornswood-Publish'
-    $wc.Headers['Cache-Control'] = 'no-cache'
-    $listUrl = $SiteUrl.TrimEnd('/') + '/file/files.json'
-    try { $bytes = $wc.DownloadData($listUrl) }
-    catch {
-        $e = $_.Exception
-        while ($null -ne $e -and -not ($e -is [Net.WebException])) { $e = $e.InnerException }
-        if ($null -ne $e -and $null -ne $e.Response -and [int]$e.Response.StatusCode -eq 404) { return $null }
-        throw
-    }
-    finally { $wc.Dispose() }
-    return (ConvertFrom-ThornswoodJson ([Text.Encoding]::UTF8.GetString($bytes)) $listUrl)
-}

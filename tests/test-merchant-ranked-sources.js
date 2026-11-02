@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
-const gm=fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8'),progression={};
+const gm=require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8')),progression={};
 vm.runInNewContext(gm.slice(gm.indexOf('// ==== thornswood progression ===='),gm.indexOf('// ==== end thornswood progression ====')),progression);
 const gates=require('../game/quest-eligibility').createQuestEligibility({table:progression.__thornswoodProgression.TABLE,
  spellIds:progression.__thornswoodProgression.SPELL_IDS});

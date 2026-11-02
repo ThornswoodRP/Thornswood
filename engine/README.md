@@ -296,7 +296,7 @@ A change to the engine goes like this:
    the fork's build is green, and when that has recorded it, moves the pin on
    the rolling branch `engine-pin/next` and opens or updates its pull request
    ("The pin moves by itself", below).
-4. The Desk merges that pull request under the merge rule, like any other.
+4. Bramble merges that pull request under the merge rule, like any other.
    It carries the pin, the four records engine.yml handed back, the front
    built again at the commit (`records\front-build.json` and
    `records\front-licences`), the pin's lines of `THIRD-PARTY.md` and

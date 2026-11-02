@@ -44,7 +44,7 @@ const REPORTS = ['sendassaultalarm', 'sendstealalarm', 'sendtrespassalarm'];
 
 const CR = String.fromCharCode(13);
 const front = fs.readFileSync(path.join(REPO_DIR, 'game', 'plugins', 'thornswood-front.js'), 'utf8').split(CR).join('');
-const gm = fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8').split(CR).join('');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8')).split(CR).join('');
 let table = null;
 try { table = JSON.parse(fs.readFileSync(path.join(REPO_DIR, 'game', 'data', 'crime-factions.json'), 'utf8')); } catch (e) { table = null; }
 yes('game/data/crime-factions.json is in the repo, written by the script',

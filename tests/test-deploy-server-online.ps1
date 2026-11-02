@@ -62,15 +62,12 @@ Yes 'Deploy-Server.ps1 carries the live warning block between its markers' ($a -
 if (-not ($a -ge 0 -and $b -gt $a)) { Done }
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if ($OnWindows) { $winPs = Get-WindowsPowerShell }
-else {
-    $winPs = (Get-Process -Id $PID).Path
-    Write-Host 'NOTE  the far side runs in this shell, not in Windows PowerShell 5.1 as on the box: this is not Windows'
-}
+# The far side runs in PowerShell 7, as on the box since #5356.
+$boxPs = Get-BoxPowerShell
 function RunHere($text) {
     $ErrorActionPreference = 'Continue'
     $e = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($text))
-    return @(& $winPs -NoProfile -NonInteractive -EncodedCommand $e 2>&1 | ForEach-Object { [string]$_ })
+    return @(& $boxPs -NoProfile -NonInteractive -EncodedCommand $e 2>&1 | ForEach-Object { [string]$_ })
 }
 function Remote($text) { return RunHere $text }
 function L2([string[]]$lines) { return ($lines -join "`r`n") }
@@ -175,12 +172,12 @@ try {
                 'function Remote($text) {',
                 ('  if ($text -like ''Remove-Item*'') { Add-Content -LiteralPath ' + (& $q $calls) + ' -Value $text; return }'),
                 '  $e = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($text))',
-                ('  return @(& ' + (& $q $winPs) + ' -NoProfile -NonInteractive -EncodedCommand $e 2>&1 | ForEach-Object { [string]$_ })'),
+                ('  return @(& ' + (& $q $boxPs) + ' -NoProfile -NonInteractive -EncodedCommand $e 2>&1 | ForEach-Object { [string]$_ })'),
                 '}',
                 ('Invoke-Expression ([IO.File]::ReadAllText(' + (& $q $block) + '))'),
                 'Warn-LiveRoom', 'Write-Host ''AFTER WARN'''))
             [IO.File]::WriteAllText($child, $text)
-            $out = @(& $winPs -NoProfile -ExecutionPolicy Bypass -File $child 2>&1 | ForEach-Object { [string]$_ })
+            $out = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $child 2>&1 | ForEach-Object { [string]$_ })
             return @{ Code = $LASTEXITCODE; Said = ($out -join "`n"); Calls = $(if (Test-Path -LiteralPath $calls) { [IO.File]::ReadAllText($calls) } else { '' }) }
         }
         $w = Run-Warn $false

@@ -23,8 +23,9 @@
     credential coturn takes (HMAC-SHA1 of the expiry);
     every answer may be read by a page on a null origin;
     the token never reaches the service's log;
-    and neither page that holds a token, the game's voice overlay and the
-    launcher's voice page, sends it to /ice.
+    and neither client that holds a token, the game's voice overlay and the
+    launcher's voice (C#, VoiceSession.cs and Voice.cs since #4823), sends
+    it to /ice.
 
   VOICE points it at another copy of voice-server.js, which is how it was
   shown to fail on the code before the change. Writes only to a temp folder,
@@ -173,10 +174,10 @@ const relayOf = (r) => (r.list || []).find((s) => [].concat(s.urls)[0] === 'turn
   yes('the token never reaches the service\'s log', srvLog.indexOf(good) < 0);
   const overlay = fs.readFileSync(path.join(REPO_DIR, 'game', 'ui', 'thornswood-voice.js'), 'utf8').split(CR).join('');
   const chat = fs.readFileSync(path.join(REPO_DIR, 'game', 'ui', 'thornswood-chat.js'), 'utf8').split(CR).join('');
-  const host = fs.readFileSync(path.join(REPO_DIR, 'launcher', 'voice-host.html'), 'utf8').split(CR).join('');
+  const host = ['VoiceSession.cs', 'Voice.cs'].map((f) => fs.readFileSync(path.join(REPO_DIR, 'launcher', 'app', f), 'utf8').split(CR).join('')).join('\n');
   yes('the chat socket hands its token to nothing else on the page (#1821)', !/token: function/.test(chat));
   yes('the game\'s voice overlay sends no token to /ice, nor asks it anything', !/\/ice'/.test(overlay) && !/\.token\(\)/.test(overlay));
-  yes('nor does the launcher\'s voice page', !/\/ice'/.test(host));
+  yes('nor does the launcher\'s voice', !/\/ice["']/.test(host));
 
   await new Promise((ok) => { srv.once('exit', ok); srv.kill(); });
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

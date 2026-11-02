@@ -59,9 +59,10 @@ function Yes([string]$what, [bool]$cond) {
 
 $roller = Join-Path $RepoPath 'scripts\vps\Roll-Log.ps1'
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  Roll-Log.ps1 runs on the box under Windows PowerShell 5.1, from tasks that start it through cmd.exe, and only Windows has either'; exit 0 }
-$winps  = Get-WindowsPowerShell
-$cmdExe = Get-WindowsPath 'System32\cmd.exe'
+$boxPs  = Get-BoxPowerShell
+# cmd.exe runs the task lines, as Task Scheduler does, and only Windows has it.
+$cmdExe = $null
+if ($OnWindows) { $cmdExe = Get-WindowsPath 'System32\cmd.exe' }
 $node   = $null
 $nc = Get-Command node -ErrorAction SilentlyContinue
 if ($nc) { $node = $nc.Source }
@@ -86,12 +87,12 @@ function Count([string]$text, [string]$what) {
     return ([regex]::Matches($text, [regex]::Escape($what))).Count
 }
 
-# The roller the way the task and run.ps1 run it: Windows PowerShell, in a
-# process of its own.
+# The roller the way the task and run.ps1 run it: PowerShell 7, in a process
+# of its own.
 function Roll([string]$path, [string[]]$more) {
     $ErrorActionPreference = 'Continue'
     if (-not $more) { $more = @() }
-    $out = & $winps -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $roller -Path $path @more 2>&1
+    $out = & $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $roller -Path $path @more 2>&1
     return [pscustomobject]@{ Code = $LASTEXITCODE; Out = ((@($out) | ForEach-Object { "$_" }) -join "`n") }
 }
 
@@ -184,22 +185,26 @@ try {
     Yes 'the live log is out of the way for the service to start a fresh one' (-not (Test-Path -LiteralPath $f))
 
     # A log cmd is still holding, the whole reason this runs at start.
-    $held = Join-Path $d 'held.log'
-    Put ($held + '.1') 'OLDER'
-    $holder = RunCmd ('/c "ping -n 30 127.0.0.1 >> "' + $held + '""') $d 0
-    for ($i = 0; $i -lt 50 -and (Size $held) -le 0; $i++) { Start-Sleep -Milliseconds 100 }
-    $r = Roll $held @('-Force')
-    Yes 'a log cmd holds open is refused, and the roller says so' ($r.Code -eq 0 -and $r.Out -match 'held')
-    Yes 'the held log is still where it was' ((Size $held) -gt 0)
-    Yes 'and the older ones were not moved around it' ((Get ($held + '.1')) -eq 'OLDER' -and -not (Test-Path -LiteralPath ($held + '.2')))
-    foreach ($c in @(Get-CimInstance Win32_Process -Filter ("ParentProcessId=" + $holder.Id) -ErrorAction SilentlyContinue)) {
-        Stop-Process -Id $c.ProcessId -Force -ErrorAction SilentlyContinue
+    if (-not $OnWindows) {
+        Write-Host 'SKIP  a log cmd holds open: the holder is cmd.exe, and only Windows keeps a file it writes from being renamed'
+    } else {
+        $held = Join-Path $d 'held.log'
+        Put ($held + '.1') 'OLDER'
+        $holder = RunCmd ('/c "ping -n 30 127.0.0.1 >> "' + $held + '""') $d 0
+        for ($i = 0; $i -lt 50 -and (Size $held) -le 0; $i++) { Start-Sleep -Milliseconds 100 }
+        $r = Roll $held @('-Force')
+        Yes 'a log cmd holds open is refused, and the roller says so' ($r.Code -eq 0 -and $r.Out -match 'held')
+        Yes 'the held log is still where it was' ((Size $held) -gt 0)
+        Yes 'and the older ones were not moved around it' ((Get ($held + '.1')) -eq 'OLDER' -and -not (Test-Path -LiteralPath ($held + '.2')))
+        foreach ($c in @(Get-CimInstance Win32_Process -Filter ("ParentProcessId=" + $holder.Id) -ErrorAction SilentlyContinue)) {
+            Stop-Process -Id $c.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+        Stop-Process -Id $holder.Id -Force -ErrorAction SilentlyContinue
+        [void]$holder.WaitForExit(10000)
+        Start-Sleep -Milliseconds 300
+        $r = Roll $held @('-Force')
+        Yes 'once the holder is gone it rolls' ((Size ($held + '.1')) -gt 0 -and (Get ($held + '.1')) -ne 'OLDER' -and (Get ($held + '.2')) -eq 'OLDER')
     }
-    Stop-Process -Id $holder.Id -Force -ErrorAction SilentlyContinue
-    [void]$holder.WaitForExit(10000)
-    Start-Sleep -Milliseconds 300
-    $r = Roll $held @('-Force')
-    Yes 'once the holder is gone it rolls' ((Size ($held + '.1')) -gt 0 -and (Get ($held + '.1')) -ne 'OLDER' -and (Get ($held + '.2')) -eq 'OLDER')
 
     # ======================================================= the game server task
     # Since #2349 the server runs under server-log.js, which writes server.log
@@ -214,6 +219,8 @@ try {
 
     if (-not $node) {
         Write-Host 'SKIP  node is not on this machine, so the task lines cannot be run'
+    } elseif (-not $OnWindows) {
+        Write-Host 'SKIP  the server line: it runs through cmd.exe as Task Scheduler runs it, and only Windows has cmd.exe'
     } elseif ($m.Success) {
         $srv = Join-Path $tmp 'server'
         New-Item -ItemType Directory -Force -Path (Join-Path $srv 'dist_back') | Out-Null
@@ -244,7 +251,9 @@ try {
     $vtext = Get-Content -LiteralPath (Join-Path $RepoPath 'scripts\deploy\Install-Voice.ps1') -Raw
     $m = [regex]::Match($vtext, '`\$cmd = \(''(/c "set THORNSWOOD_SITE=[^\r\n]*?)'' -f ([^\r\n]+)\)')
     Yes 'the voice task line is in Install-Voice.ps1' $m.Success
-    if ($node -and $m.Success) {
+    if (-not $OnWindows) {
+        Write-Host 'SKIP  the voice line: it runs through cmd.exe as Task Scheduler runs it, and only Windows has cmd.exe'
+    } elseif ($node -and $m.Success) {
         $vr = Join-Path $tmp 'voice'
         New-Item -ItemType Directory -Force -Path $vr | Out-Null
         Put (Join-Path $vr 'voice-server.js') ("console.log('stand-in voice up on ' + process.env.THORNSWOOD_VOICE_PORT + ' auth ' + process.env.THORNSWOOD_VOICE_AUTH);`n")
@@ -281,10 +290,12 @@ try {
     $lb = $dtext.IndexOf('$lines = @(')
     $le = if ($lb -ge 0) { $dtext.IndexOf("`n    )", $lb) } else { -1 }
     Yes 'the dev voice run file is in vps-dev-instance.ps1' ($lb -ge 0 -and $le -gt $lb)
-    if ($node -and $lb -ge 0 -and $le -gt $lb) {
+    if (-not $OnWindows) {
+        Write-Host 'SKIP  the dev voice run file: it is a cmd file, and only Windows has cmd.exe'
+    } elseif ($node -and $lb -ge 0 -and $le -gt $lb) {
         $devVoice = Join-Path $tmp 'devvoice'
         $devVoicePort = 7989
-        $psExe = $winps
+        $psExe = $boxPs
         New-Item -ItemType Directory -Force -Path $devVoice | Out-Null
         Put (Join-Path $devVoice 'voice-server.js') ("console.log('stand-in dev voice up on ' + process.env.THORNSWOOD_VOICE_PORT);`n")
         Copy-Item -LiteralPath $writerSrc -Destination (Join-Path $devVoice 'server-log.js')

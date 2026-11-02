@@ -7,7 +7,7 @@
 .DESCRIPTION
   Do not run this by hand. Set-WebFirewall.ps1 sends this file's text on
   ssh's standard input with the ranges from scripts\deploy\cloudflare-ranges.txt,
-  and Windows PowerShell 5.1 runs it from there, so nothing of it is ever
+  and pwsh runs it from there, so nothing of it is ever
   written on the box (#3035).
 
   WHY. Issue #2995, Patrick's A on q-2995-syn-fix (21 Oct 2026). The box

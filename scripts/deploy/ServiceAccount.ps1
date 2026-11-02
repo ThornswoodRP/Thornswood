@@ -136,10 +136,8 @@ function Test-ThornswoodServiceCannotReach {
 function Set-ThornswoodServiceAcl {
     param([string]$Path, $Acl)
     $item = Get-Item -LiteralPath $Path -Force
-    if ($PSVersionTable.PSEdition -eq 'Core') {
-        if ($item -is [IO.DirectoryInfo]) { [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo]$item, [Security.AccessControl.DirectorySecurity]$Acl) }
-        else { [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]$item, [Security.AccessControl.FileSecurity]$Acl) }
-    } else { $item.SetAccessControl($Acl) }
+    if ($item -is [IO.DirectoryInfo]) { [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo]$item, [Security.AccessControl.DirectorySecurity]$Acl) }
+    else { [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]$item, [Security.AccessControl.FileSecurity]$Acl) }
 }
 
 # What one service's task may do in its folder (the header). Throws when a
@@ -433,11 +431,8 @@ public static class ThornswoodRestorePrivilege
 function Get-ThornswoodServiceItemAcl {
     param($Item)
     $s = [Security.AccessControl.AccessControlSections]'Owner, Access'
-    if ($PSVersionTable.PSEdition -eq 'Core') {
-        if ($Item -is [IO.DirectoryInfo]) { return [IO.FileSystemAclExtensions]::GetAccessControl([IO.DirectoryInfo]$Item, $s) }
-        return [IO.FileSystemAclExtensions]::GetAccessControl([IO.FileInfo]$Item, $s)
-    }
-    return $Item.GetAccessControl($s)
+    if ($Item -is [IO.DirectoryInfo]) { return [IO.FileSystemAclExtensions]::GetAccessControl([IO.DirectoryInfo]$Item, $s) }
+    return [IO.FileSystemAclExtensions]::GetAccessControl([IO.FileInfo]$Item, $s)
 }
 
 # What LOCAL SERVICE owns in -Root, and any rule there that names LOCAL

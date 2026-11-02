@@ -11,7 +11,7 @@
 
   HOW. The same as test-dev-deploy-refuse.ps1: the settings block is lifted out
   of the script, expanded here with the values the script would have, and run
-  in Windows PowerShell (what sshd runs on the box) against a
+  in PowerShell 7 (what the box runs it in since #5356) against a
   server-settings.json in a temp folder. Nothing connects to anything.
 #>
 [CmdletBinding()]
@@ -22,8 +22,7 @@ $env:THORNSWOOD_HARNESS = '1'
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  the dev deploy''s settings block runs on the box under Windows PowerShell 5.1, on the box''s Windows paths, so only Windows can run it'; exit 0 }
-$winPs = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 
 $here = $PSScriptRoot
 if (-not $here) { $here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
@@ -87,7 +86,7 @@ function Run-Block([string]$value, $settings) {
     $expanded = $ExecutionContext.InvokeCommand.ExpandString($body)
     $file = Join-Path $tmp 'block.ps1'
     [IO.File]::WriteAllText($file, $expanded, (New-Object Text.UTF8Encoding $true))
-    $said = & $winPs -NoProfile -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" }
+    $said = & $boxPs -NoProfile -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" }
     $after = Get-Content $p -Raw | ConvertFrom-Json
     return @{ said = ($said -join "`n"); after = $after }
 }

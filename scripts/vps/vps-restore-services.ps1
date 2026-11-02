@@ -43,8 +43,8 @@
   rest. It refuses to start while the site or the bot is running from those
   folders, because either one writes there while it runs.
 
-  It also says whether each game server's gamemode.js is the one the backup
-  was taken with, because the payload installed on a new box carries whatever
+  It also says whether each game server's gamemode.js and gamemode-tables
+  (#5191) are the ones the backup was taken with, because the payload installed on a new box carries whatever
   main has, and a live server should not start on a gamemode nobody tried on
   dev without somebody saying so.
 
@@ -199,6 +199,22 @@ foreach ($g in @(@{ Tag = 'game'; Root = $GameRoot }, @{ Tag = 'game-dev'; Root 
     'gamemode  ' + $has + ' is the one the backup''s ' + $g.Tag + ' ran'
   } else {
     'GAMEMODE DIFFERS  ' + $has + ' is not the one the backup''s ' + $g.Tag + ' ran. Ask before starting it (MOVING-THE-SERVER.md in the ops repo).'
+  }
+  # Its tables, each by name and hash: the gamemode reads them as it loads.
+  $hadT = Join-Path $From ($g.Tag + '\gamemode-tables')
+  $hasT = Join-Path $g.Root 'gamemode-tables'
+  $sumsOf = {
+    param($dir)
+    if (-not (Test-Path -LiteralPath $dir)) { return '' }
+    (@(Get-ChildItem -LiteralPath $dir -Filter '*.json' -File | Sort-Object Name |
+      ForEach-Object { $_.Name + ' ' + (Get-FileHash -LiteralPath $_.FullName).Hash })) -join "`n"
+  }
+  $hadSums = & $sumsOf $hadT
+  $hasSums = & $sumsOf $hasT
+  if ($hadSums -eq $hasSums) {
+    'gamemode  ' + $hasT + ' are the tables the backup''s ' + $g.Tag + ' ran'
+  } else {
+    'GAMEMODE DIFFERS  ' + $hasT + ' are not the tables the backup''s ' + $g.Tag + ' ran. Ask before starting it (MOVING-THE-SERVER.md in the ops repo).'
   }
 }
 

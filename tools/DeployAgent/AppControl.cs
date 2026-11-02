@@ -8,7 +8,7 @@ namespace Thornswood.DeployAgent;
 /// <summary>The box's own ways of stopping, starting and checking the site and
 /// the Discord bot, the ones their deploy scripts' hooks use
 /// (Deploy-Docs.ps1's site hooks, Install-Bot.ps1's bot hooks and
-/// scripts/vps/Bot-Service.ps1): Windows PowerShell for the task, the
+/// scripts/vps/Bot-Service.ps1): PowerShell 7 for the task, the
 /// process list and the listening port, .NET for the service and the
 /// processes.</summary>
 public sealed class WindowsAppControl : IAppControl
@@ -66,7 +66,7 @@ public sealed class WindowsAppControl : IAppControl
                 lines.Add($"COULD NOT STOP the service {e.Service}: {x.Message}");
             }
             EndAndWait(held, within, left);
-            var strays = Pids("@(Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^(python|pythonw|powershell|cmd)' -and $_.CommandLine -and " +
+            var strays = Pids("@(Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^(python|pythonw|powershell|pwsh|cmd)' -and $_.CommandLine -and " +
                               "$_.CommandLine.IndexOf($env:TW_MARK, [StringComparison]::OrdinalIgnoreCase) -ge 0 } | ForEach-Object { [int]$_.ProcessId })",
                               new() { ["TW_MARK"] = e.Root.TrimEnd('\\') + "\\" }, lines);
             var sh = Open(strays, left);

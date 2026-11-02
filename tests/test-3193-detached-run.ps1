@@ -19,8 +19,8 @@
        says REPORT NONE before there is a report; the two files are named
        for the run in the folder given; a folder that would break the
        quoting is refused.
-    2. On Windows, both texts run for real in Windows PowerShell 5.1, which
-       is what the box runs, with a scratch folder standing for
+    2. On Windows, both texts run for real in PowerShell 7, which is what
+       the box runs, with a scratch folder standing for
        C:\Windows\Temp:
          - the run's parent is the WMI service's process, not the
            PowerShell that started it, and it is still going after that one
@@ -40,7 +40,7 @@
            end within its limit runs nothing and is ERROR and END 1 (#3214:
            Install-Bridge's run stopped the bridge its own start rode).
   Setup-Domain.ps1's use of it is in tests\test-setup-domain-taskonly.ps1.
-  Starts only the Windows PowerShell processes it waits for, in the scratch
+  Starts only the PowerShell processes it waits for, in the scratch
   folder it removes; nothing leaves this machine.
 #>
 [CmdletBinding()]
@@ -89,24 +89,24 @@ Yes '  and the run waits for that process to exit before it runs the script' (
     $runnerText.Contains('WaitForExit(120000)') -and $runnerText.IndexOf('WaitForExit(') -lt $runnerText.IndexOf("*>&1 | ForEach-Object"))
 
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the runs: they need Windows PowerShell 5.1 and WMI, which only Windows has'
+    Write-Host 'SKIP  the runs: they start through WMI''s Win32_Process, which only Windows has'
     Done
 }
 
 # ---- 2. the runs, on Windows --------------------------------------------------
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-3193-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Path $scratch | Out-Null
 
-function Invoke-51([string]$text) {
+function Invoke-Box([string]$text) {
     $e = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($text))
-    $out = @(& $ps51 -NoProfile -ExecutionPolicy Bypass -EncodedCommand $e 2>&1 | ForEach-Object { "$_" })
+    $out = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -EncodedCommand $e 2>&1 | ForEach-Object { "$_" })
     return [pscustomobject]@{ Out = $out; Code = $LASTEXITCODE }
 }
 # Starts a run and reads its report until END, a minute at most. With -Go,
 # the run waits for that file, which is made only once the first read is
 # done, so the first read finds it still going however slowly this machine
-# starts a Windows PowerShell (a fixed three seconds was not enough on One,
+# starts a PowerShell (a fixed three seconds was not enough on One,
 # where the start and the first read took longer, #3861).
 #
 # With -GoOnceRead too, the go file is made only once the run has read its
@@ -117,7 +117,7 @@ function Invoke-Run([string]$script, [string]$Go = '', [int]$SessionPid = 0, [in
     # A harness has no ssh session above it, so the start names none; this
     # names a process of the harness's in its place.
     if ($SessionPid) { [IO.File]::WriteAllText($run.File + '.session', [string]$SessionPid) }
-    $s = Invoke-51 $run.Start
+    $s = Invoke-Box $run.Start
     $runPid = 0
     $m = @($s.Out | Where-Object { $_ -match '^STARTED (\d+)$' })
     if ($m.Count) { $runPid = [int]($m[0] -replace '^STARTED ', '') }
@@ -129,7 +129,7 @@ function Invoke-Run([string]$script, [string]$Go = '', [int]$SessionPid = 0, [in
     $lines = @(); $first = $null; $went = $false
     $until = (Get-Date).AddMinutes(1)
     while ((Get-Date) -lt $until) {
-        $rd = Invoke-51 $run.Read
+        $rd = Invoke-Box $run.Read
         if ($null -eq $first) { $first = ($rd.Out -join '|') }
         if ($Go -and -not $went -and -not ($GoOnceRead -and (Test-Path -LiteralPath ($run.File + '.session')))) {
             [IO.File]::WriteAllText($Go, 'go'); $went = $true
@@ -163,9 +163,9 @@ try {
     Write-Host 'A read while the run holds its report open, appending:'
     $h = Get-ThornswoodDetachedRun -Script "'x'" -Folder $scratch
     [IO.File]::WriteAllText($h.Log, "one`r`ntwo`r`n")
-    # As AppendAllText opens it in Windows PowerShell 5.1: append, write, others may read.
+    # As AppendAllText opens it in PowerShell 7: append, write, others may read.
     $held = New-Object IO.FileStream($h.Log, [IO.FileMode]::Append, [IO.FileAccess]::Write, [IO.FileShare]::Read)
-    try { $rd = Invoke-51 $h.Read } finally { $held.Dispose() }
+    try { $rd = Invoke-Box $h.Read } finally { $held.Dispose() }
     $rd.Out | ForEach-Object { Write-Host ('      ' + $_) }
     Yes '  it reads the report, and does not fail for the run having it open (#3233)' (
         $rd.Code -eq 0 -and ($rd.Out -join '|') -eq 'REPORT 2|one|two')
@@ -186,7 +186,7 @@ try {
     # stays until it is let go, once the run has read the session file, and
     # the script asks for that id and that start time both.
     $let = Join-Path $scratch 'session-let-go'
-    $sleeper = Start-Process -FilePath $ps51 -ArgumentList '-NoProfile', '-Command', ("`$t = (Get-Date).AddMinutes(1); while (-not (Test-Path -LiteralPath '" + $let + "') -and (Get-Date) -lt `$t) { Start-Sleep -Milliseconds 100 }") -PassThru -WindowStyle Hidden
+    $sleeper = Start-Process -FilePath $boxPs -ArgumentList '-NoProfile', '-Command', ("`$t = (Get-Date).AddMinutes(1); while (-not (Test-Path -LiteralPath '" + $let + "') -and (Get-Date) -lt `$t) { Start-Sleep -Milliseconds 100 }") -PassThru -WindowStyle Hidden
     try {
         $born = $sleeper.StartTime.Ticks
         $d = Invoke-Run ("`$q = Get-Process -Id " + $sleeper.Id + " -ErrorAction SilentlyContinue`r`nif (`$q -and `$q.StartTime.Ticks -eq " + $born + ") { 'session still open' } else { 'session gone' }") -SessionPid $sleeper.Id -Go $let -GoOnceRead
@@ -196,7 +196,7 @@ try {
 
     Write-Host ''
     Write-Host 'A run whose starting session outlasts its limit:'
-    $stuck = Start-Process -FilePath $ps51 -ArgumentList '-NoProfile', '-Command', 'Start-Sleep -Seconds 60' -PassThru -WindowStyle Hidden
+    $stuck = Start-Process -FilePath $boxPs -ArgumentList '-NoProfile', '-Command', 'Start-Sleep -Seconds 60' -PassThru -WindowStyle Hidden
     try { $e2 = Invoke-Run "'never'" -SessionPid $stuck.Id -SessionWait 2 } finally { Stop-Process -Id $stuck.Id -Force -ErrorAction SilentlyContinue }
     Yes '  runs nothing, and says so with ERROR, then END 1' (
         ($e2.Lines -join '|') -eq ('ERROR the ssh session that started this run (process ' + $stuck.Id + ') did not end within 2 s, so none of the run was started|END 1'))

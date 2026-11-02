@@ -12,7 +12,7 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 const CR = String.fromCharCode(13);
-const gm = fs.readFileSync(path.join(REPO_DIR, "game", "gamemode.js"), "utf8").split(CR).join("");
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(REPO_DIR, "game", "gamemode.js"), "utf8")).split(CR).join("");
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -37,7 +37,7 @@ if (block) { vm.runInNewContext(block, box); }
 const P = box.__thornswoodProgression;
 yes("the rules registered", !!P && !!P.TABLE);
 
-const recSrc = slice(gm, "var RECIPES_BY_ID = {", "\n  };");
+const recSrc = slice(gm, "var RECIPES_BY_ID = {", ";\n");
 let RECIPES = null;
 try {
   RECIPES = recSrc ? new Function("return " + recSrc.slice("var RECIPES_BY_ID = ".length).replace(/;$/, ""))() : null;

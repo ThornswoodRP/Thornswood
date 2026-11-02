@@ -12,5 +12,5 @@
 # An allowance that matches nothing any more fails the check, so this list
 # cannot grow stale. A line that could be reworded is reworded instead.
 
-Developer-Guide.md | banned-word | the Words section names the word it bans | Never "player".
+docs/guide/rules.md | banned-word | the Words section names the word it bans | Never "player".
 docs/FEED.md | banned-word | quotes a news record as it was published on 26 Sep, which is the kind Note-Rules now refuses | This is what players actually got

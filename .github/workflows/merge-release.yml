@@ -6,29 +6,51 @@
 #
 # WHAT A RELEASE CARRIES. Every Release carries every part, so any of them can
 # be put back by its tag:
-#   gamemode  game/gamemode.js and its stamp, thornswood-build.json
+#   gamemode  game/gamemode.js and its stamp, thornswood-build.json, and
+#             gamemode-tables.zip, the tables the gamemode reads (#5191),
+#             zipped by App-Part.ps1 so the same tables give the same bytes
 #   bot       the bot pass a dev Deployment waits on (#5196)
 #   server    the server build the commit records (records/server-build.json),
 #             CI's build of the pin as ServerArtifact.ps1 zips it (#5219)
-#   launcher  Thornswood.exe, signed, with its number in the manifest. Built
-#             only when its sources changed (LauncherVersion.ps1 gives a new
-#             number); otherwise the signed launcher of the Release before is
-#             carried, held to that manifest's sha256 and the launcher's own
-#             signature check, as a Ship keeps the feed's launcher (#921)
+#   launcher  the launcher's folder as Build-Launcher.ps1 publishes it
+#             (#4823, #4825): Thornswood.exe, compiled to native code, and the
+#             native libraries beside it, every one signed, with the sources'
+#             number (LauncherVersion.ps1) in the manifest. Built whenever a
+#             Velopack package is made, with the package's version as its
+#             own (-p:Version), so the number the launcher says is the one
+#             Velopack installed; otherwise the signed files of the Release
+#             before are carried, each held to that manifest's sha256 and the
+#             launcher's own signature check, as a Ship keeps the feed's
+#             launcher (#921)
 #   game      the game files: dev's last release from the site with this
 #             commit's own files built over it, as one zip and its list
 #             (Build-GameFiles.ps1), the folder a Ship -FromFeed builds
 #   site      the site's zip (App-Part.ps1): server.js, its public pages
 #   discord   the Discord bot's zip: its code, not its token or records
 #   voice     the voice service's zip, which rides dev's Deployment
-#   velopack  when the launcher or the game files changed: the Velopack
-#             package of both on the one channel "dev" (Patrick's B on #3209:
-#             one channel for the launcher and the game payload), with its
-#             feed files and a delta from the Velopack release before. No
-#             installer and no portable copy go out: nothing here installs a
-#             launcher until the Velopack launcher (#4823 to #4825) reads it
-# The agent applies gamemode, bot, server, site, discord and voice and names
-# the other parts in its log.
+#   velopack  when the launcher's sources or the game files changed: dev's
+#             Velopack package of both (Patrick's B on #3209: one channel
+#             for the launcher and the game payload), with its feed files, a
+#             delta from the Velopack release before, setup-files.dev.json
+#             (the files beside Game the install reads on the first start,
+#             Build-SetupFiles.ps1) and Thornswood-Dev-Setup.exe, Velopack's
+#             installer, which puts the launcher on a PC and starts it; the
+#             launcher's first start is the install (#4824). A dev launcher
+#             reads its updates from here (launcher/app/Velo*.cs), each
+#             package held to this manifest and its signed catalog, and takes
+#             its game files out of the package (SyncPackage.cs). The
+#             portable copy vpk also makes does not go out
+#   main      with every velopack part: main's package of the same launcher
+#             and game files, whole, with main's feed files,
+#             setup-files.main.json and Thornswood-Setup.exe. Listed in the
+#             manifest and held, not published (MAIN'S PACKAGE below)
+#   after     the steps after a deploy: every step file of deploy/after and
+#             the gate's verbs.json, which says which verbs a step may run
+#             (#5186). The agent runs each step once on each environment,
+#             after a Deployment of this Release succeeds; deploy/after's
+#             README says how a step file is written
+# The agent applies gamemode, bot, server, site, discord, voice and after
+# and names the other parts in its log.
 #
 # WHAT CHANGED. Each part is compared with the same part of the newest build
 # Release before (MergeRelease.ps1 says what is compared). A merge that
@@ -48,7 +70,7 @@
 # request's body and run this again by hand (workflow_dispatch on main).
 #
 # HOW IT IS SIGNED. In the "release" environment, main only (#3930): the
-# launcher (when built) and Velopack's own programs with ThornswoodRelease
+# launcher's programs (when built) and Velopack's own with ThornswoodRelease
 # (Sign-OnRunner.ps1; Velopack calls it for each program, never for a game
 # file), then a manifest of every file with its sha256 and a catalog over the
 # manifest, signed, and held to the manifest before anything is published.
@@ -57,6 +79,17 @@
 # `gh attestation verify <file> -R ThornswoodRP/Thornswood` checks. Releases
 # here are immutable once published, so the files go on a draft that is
 # published only when whole.
+#
+# MAIN'S PACKAGE. Velopack writes the channel into the package, so main's is
+# a package of its own, made by every merge that makes dev's and listed in
+# the same signed record. Its files are never on the build Release: they are
+# kept with this run as the artifact main-<tag> (New-SignedManifest.ps1 puts
+# them in held\, and they get their own attestation), and only a promotion
+# to main publishes them, on a Release main-<tag> of their own, once Patrick
+# approves it (promote-main.yml, MAIN'S LAUNCHER; #5181). A main launcher
+# holds the package to this Release's record all the same (VeloRecord.cs).
+# An artifact is kept 90 days at most, so a build older than that, never
+# promoted, can no longer take its package to main.
 #
 # THE DEPLOYMENT. To Dev, the environment that until this workflow held
 # Record-Deployment.ps1's after-the-fact records of each Ship (#5179 retires
@@ -81,12 +114,18 @@ on:
     paths:
       - 'game/**'
       - 'launcher/**'
+      # Not its harnesses (plan line 42): a change to a check is no new
+      # launcher, as LauncherVersion.ps1 says.
+      - '!launcher/tests/**'
       - 'records/**'
+      - 'deploy/after/*.json'
       - 'scripts/bot/Bot-Pass.js'
       - 'scripts/bot/bot.js'
       - 'scripts/bot/character.js'
+      - 'scripts/bot/relay.js'
       # What App-Part.ps1 puts in the site, the Discord bot and voice.
       - 'site/server.js'
+      - 'site/lib/**'
       - 'site/public/**'
       - 'site/data/site/**'
       - 'bot/bot.py'
@@ -105,6 +144,8 @@ on:
       - 'scripts/release/Build-GameFiles.ps1'
       - 'scripts/release/Build-Front.ps1'
       - 'scripts/release/Build-Launcher.ps1'
+      - 'scripts/release/Build-SetupFiles.ps1'
+      - 'scripts/release/Source-Notice.ps1'
       - 'scripts/release/Go.ps1'
       - 'scripts/release/MergeRelease.ps1'
       - 'scripts/release/New-SignedManifest.ps1'
@@ -114,9 +155,18 @@ on:
 permissions:
   contents: read
 
+# The newest merge is the one released (#5398). GitHub refuses the run's own
+# token any tag on a commit whose workflow files differ from main's (it asks
+# for workflows: write, which that token can never hold), so a merge main
+# has moved past with a workflow change can never be tagged. A newer merge
+# cancels the run of the one before it, and its Release carries every part
+# and the notes of every pull request since the Release before, so nothing
+# a superseded merge changed is left out. A merge this workflow does not run
+# for cancels nothing, so a run that main moved past that way starts a run of
+# main's newest merge itself (Is this still main's newest merge).
 concurrency:
   group: merge-release
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   NOTHING_TO_TELL: 'Nothing people would notice: every change in this release says none.'
@@ -137,6 +187,9 @@ jobs:
       deployments: write
       id-token: write
       attestations: write
+      # To start a run of main's newest merge when main moved on during
+      # this one (Is this still main's newest merge).
+      actions: write
     steps:
       # The whole history: the launcher's number is the time its sources last
       # changed on main (LauncherVersion.ps1), which a shallow clone cannot say.
@@ -201,6 +254,10 @@ jobs:
           if ($rc -eq 3) { [IO.File]::WriteAllText($file, $env:NOTHING_TO_TELL + "`n"); $rc = 0 }
           if ($rc -ne 0) { Write-Host "::error::the notes could not be written (Collect-ReleaseNotes.ps1 exit $rc); the lines above say why, and nothing was built"; exit 1 }
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("file=" + $file)
+          # Exit 3 is an answer, not a failure, but GitHub's pwsh step ends
+          # with "exit $LASTEXITCODE", which still holds the script's 3: the
+          # step says how it went itself (run 41362111729 stopped here).
+          exit 0
 
       - name: Fetch CI's server build of the pin
         id: server
@@ -222,7 +279,42 @@ jobs:
           Write-Host "server build $($ciInfo.serverZip)"
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("zip=" + $zip)
 
-      # Built only when its sources changed (header, WHAT A RELEASE CARRIES).
+      # Before the launcher: whether the game files changed decides whether
+      # a Velopack package is made, and so whether the launcher is built.
+      - name: Build the game files over dev's last release
+        id: game
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIOUS: ${{ steps.names.outputs.previous }}
+          PREVIOUS_MANIFEST: ${{ steps.names.outputs.previous_manifest }}
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'game'
+          $a = @{ Out = $out; Root = (Join-Path $env:RUNNER_TEMP 'game-root'); Commit = $env:GITHUB_SHA }
+          if ($env:PREVIOUS_MANIFEST) {
+            # The list of the Release before, held to its manifest, for what
+            # this one no longer ships (Build-GameFiles.ps1, WHAT IS GONE).
+            $pm = Get-Content -LiteralPath $env:PREVIOUS_MANIFEST -Raw | ConvertFrom-Json
+            $pf = @($pm.parts.PSObject.Properties | Where-Object Name -eq 'game' | ForEach-Object { $_.Value } | Where-Object { $_.name -eq 'game-files.json' })
+            if ($pf.Count -ne 1) { Write-Host "::error::the game part of $($env:PREVIOUS) lists no game-files.json"; exit 1 }
+            $pdir = Join-Path $env:RUNNER_TEMP 'previous-game'
+            New-Item -ItemType Directory -Force -Path $pdir | Out-Null
+            gh release download $env:PREVIOUS -R $env:GITHUB_REPOSITORY -p 'game-files.json' -D $pdir --clobber
+            $plist = Join-Path $pdir 'game-files.json'
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $plist -PathType Leaf)) { Write-Host "::error::game-files.json of $($env:PREVIOUS) could not be downloaded"; exit 1 }
+            if ((Get-FileHash -LiteralPath $plist -Algorithm SHA256).Hash.ToLowerInvariant() -ne ([string]$pf[0].sha256).ToLowerInvariant()) { Write-Host "::error::game-files.json of $($env:PREVIOUS) is not the one its manifest names"; exit 1 }
+            $a['PreviousList'] = $plist
+          }
+          ./scripts/release/Build-GameFiles.ps1 @a
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $zip = Join-Path $out 'game.zip'
+          if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) { Write-Host "::error::Build-GameFiles.ps1 left no game.zip in $out"; exit 1 }
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("zip=" + $zip)
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("list=" + (Join-Path $out 'game-files.json'))
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("sha=" + (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant())
+
+      # Built whenever a Velopack package is made (header, WHAT A RELEASE
+      # CARRIES; MergeRelease.ps1, ONE NUMBER), with the package's version.
       - name: The launcher, built and signed or carried from the Release before
         id: launcher
         shell: pwsh
@@ -230,57 +322,66 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           AZURE_CLIENT_ID: ${{ vars.AZURE_SIGNING_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ vars.AZURE_SIGNING_TENANT_ID }}
+          VERSION: ${{ steps.names.outputs.velopack }}
+          GAME_SHA: ${{ steps.game.outputs.sha }}
           PREVIOUS: ${{ steps.names.outputs.previous }}
           PREVIOUS_MANIFEST: ${{ steps.names.outputs.previous_manifest }}
         run: |
           . ./scripts/release/LauncherVersion.ps1
+          . ./scripts/release/MergeRelease.ps1
           try { $ver = Get-LauncherVersion -RepoDir . }
           catch { Write-Host ('::error::' + $_.Exception.Message); exit 1 }
           $dir = Join-Path $env:RUNNER_TEMP 'launcher'
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
-          $exe = Join-Path $dir 'Thornswood.exe'
-          $carried = $false
-          if ($env:PREVIOUS_MANIFEST) {
-            $pm = Get-Content -LiteralPath $env:PREVIOUS_MANIFEST -Raw | ConvertFrom-Json
-            $pl = @($pm.parts.PSObject.Properties | Where-Object Name -eq 'launcher' | ForEach-Object { $_.Value } | Where-Object { $_.name -eq 'Thornswood.exe' })
-            if ($pm.PSObject.Properties['launcherVersion'] -and [string]$pm.launcherVersion -eq $ver -and $pl.Count -eq 1) {
-              gh release download $env:PREVIOUS -R $env:GITHUB_REPOSITORY -p Thornswood.exe -D $dir --clobber
-              if ($LASTEXITCODE -ne 0) { Write-Host "::error::the launcher of $($env:PREVIOUS) could not be downloaded"; exit 1 }
-              $sha = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
-              if ($sha -ne ([string]$pl[0].sha256).ToLowerInvariant()) { Write-Host "::error::the launcher of $($env:PREVIOUS) is not the one its manifest names"; exit 1 }
-              . ./scripts/release/Assert-PublishSigned.ps1
-              $why = Get-PublishSignRefusal -Path $exe -ExpectedSigner (Get-ExpectedSignerFragment -RepoRoot .)
-              if ($why) { Write-Host ('::error::the launcher of ' + $env:PREVIOUS + ' fails the launcher''s own signature check: ' + $why); exit 1 }
-              $carried = $true
-              Write-Host "launcher $ver is unchanged since $($env:PREVIOUS); its signed exe is carried"
+          $pm = if ($env:PREVIOUS_MANIFEST) { Get-Content -LiteralPath $env:PREVIOUS_MANIFEST -Raw | ConvertFrom-Json } else { $null }
+          $build = Test-MergeReleaseVelopack -LauncherVersion $ver -GameZipSha256 $env:GAME_SHA -Previous $pm
+          if (-not $build) {
+            # Every file of the launcher part before, each held to that
+            # manifest's sha256, and each program to the launcher's own
+            # signature check.
+            . ./scripts/release/Assert-PublishSigned.ps1
+            $signer = Get-ExpectedSignerFragment -RepoRoot .
+            $pl = @($pm.parts.PSObject.Properties | Where-Object Name -eq 'launcher' | ForEach-Object { $_.Value })
+            if (@($pl | Where-Object { $_.name -eq 'Thornswood.exe' }).Count -ne 1) { Write-Host "::error::the launcher part of $($env:PREVIOUS) has no Thornswood.exe"; exit 1 }
+            foreach ($f in $pl) {
+              $file = Join-Path $dir ([string]$f.name)
+              gh release download $env:PREVIOUS -R $env:GITHUB_REPOSITORY -p ([string]$f.name) -D $dir --clobber
+              if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $file -PathType Leaf)) { Write-Host "::error::$($f.name) of $($env:PREVIOUS) could not be downloaded"; exit 1 }
+              $sha = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+              if ($sha -ne ([string]$f.sha256).ToLowerInvariant()) { Write-Host "::error::$($f.name) of $($env:PREVIOUS) is not the one its manifest names"; exit 1 }
+              if ([IO.Path]::GetExtension($file) -in '.exe', '.dll') {
+                $why = Get-PublishSignRefusal -Path $file -ExpectedSigner $signer
+                if ($why) { Write-Host ('::error::' + $f.name + ' of ' + $env:PREVIOUS + ' fails the launcher''s own signature check: ' + $why); exit 1 }
+              }
             }
-          }
-          if (-not $carried) {
+            Write-Host "launcher $ver and the game files are unchanged since $($env:PREVIOUS); its signed launcher is carried"
+          } else {
             # RUNNER_TEMP, never a real install, so no shortcut or running game
             # is touched; signing is its own call, -Required.
             $root = Join-Path $env:RUNNER_TEMP 'Thornswood'
-            New-Item -ItemType Directory -Force -Path (Join-Path $root 'Launcher') | Out-Null
-            ./scripts/release/Build-Launcher.ps1 -Root $root -NoSign -NoPause -Version $ver
+            $built = Join-Path $root 'Launcher'
+            New-Item -ItemType Directory -Force -Path $built | Out-Null
+            ./scripts/release/Build-Launcher.ps1 -Root $root -NoSign -NoPause -Version $env:VERSION
             if ($LASTEXITCODE -ne 0) { Write-Host '::error::Build-Launcher.ps1 failed'; exit 1 }
-            Copy-Item -LiteralPath (Join-Path $root 'Launcher\Thornswood.exe') -Destination $exe -Force
-            ./scripts/release/Sign-OnRunner.ps1 -Path $exe
+            # The programs go out; the symbols, Thornswood.pdb, stay here, and
+            # so do app.ico and app-dev.ico, which Build-Launcher.ps1 puts
+            # beside the exe only for Install-Launcher.ps1 (#887): the
+            # launcher writes its own icon from the copy compiled into it
+            # (launcher/app/Icons.cs, IconFile), so a package never needs
+            # them. Any other file would be refused by the launcher in its
+            # own update (launcher/app/VeloPackage.cs), so it stops the run
+            # here instead.
+            $files = @(Get-ChildItem -LiteralPath $built -File | Where-Object Extension -notin '.pdb', '.ico')
+            $other = @($files | Where-Object { $_.Extension -notin '.exe', '.dll' } | ForEach-Object { $_.Name })
+            if ($other.Count) { Write-Host ("::error::the launcher's publish left files that are not programs: " + ($other -join ', ')); exit 1 }
+            foreach ($f in $files) { Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $dir $f.Name) -Force }
+            ./scripts/release/Sign-OnRunner.ps1 -Path @(Get-ChildItem -LiteralPath $dir -File | ForEach-Object { $_.FullName })
             if ($LASTEXITCODE -ne 0) { exit 1 }
-            Write-Host "launcher $ver built and signed"
+            Write-Host "launcher $ver built as $($env:VERSION) and signed: $(($files | ForEach-Object { $_.Name }) -join ', ')"
           }
-          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("exe=" + $exe)
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("dir=" + $dir)
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("version=" + $ver)
-
-      - name: Build the game files over dev's last release
-        id: game
-        shell: pwsh
-        run: |
-          $out = Join-Path $env:RUNNER_TEMP 'game'
-          ./scripts/release/Build-GameFiles.ps1 -Out $out -Root (Join-Path $env:RUNNER_TEMP 'game-root') -Commit $env:GITHUB_SHA
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          $zip = Join-Path $out 'game.zip'
-          if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) { Write-Host "::error::Build-GameFiles.ps1 left no game.zip in $out"; exit 1 }
-          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("zip=" + $zip)
-          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("list=" + (Join-Path $out 'game-files.json'))
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("built=" + $(if ($build) { 'yes' } else { 'no' }))
 
       # The same files give the same bytes (App-Part.ps1), so an app whose
       # files no merge touched is not a change.
@@ -305,8 +406,9 @@ jobs:
         env:
           TAG: ${{ steps.names.outputs.tag }}
           SERVER_ZIP: ${{ steps.server.outputs.zip }}
-          LAUNCHER_EXE: ${{ steps.launcher.outputs.exe }}
+          LAUNCHER_DIR: ${{ steps.launcher.outputs.dir }}
           LAUNCHER_VERSION: ${{ steps.launcher.outputs.version }}
+          LAUNCHER_BUILT: ${{ steps.launcher.outputs.built }}
           GAME_ZIP: ${{ steps.game.outputs.zip }}
           GAME_LIST: ${{ steps.game.outputs.list }}
           SITE_ZIP: ${{ steps.apps.outputs.site }}
@@ -323,12 +425,21 @@ jobs:
           $stamp = Join-Path $out 'thornswood-build.json'
           $s = Save-ThornswoodBuildStamp -Gamemode $gm -Channel dev -RepoDir . -Path $stamp
           Write-Host (Format-ThornswoodBuildStamp $s)
-          $bot = @('Bot-Pass.js', 'bot.js', 'character.js') | ForEach-Object { Join-Path 'scripts\bot' $_ }
-          $adds = @("launcher=$($env:LAUNCHER_EXE)", "game=$($env:GAME_ZIP)", "game=$($env:GAME_LIST)",
+          $tables = Join-Path $out 'gamemode-tables.zip'
+          ./scripts/release/App-Part.ps1 -Part tables -Out $tables
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Write-Host ('gamemode tables are git tree ' + (git rev-parse "$($env:GITHUB_SHA):game/gamemode-tables"))
+          $bot = @(@('Bot-Pass.js', 'bot.js', 'character.js', 'relay.js') | ForEach-Object { Join-Path 'scripts\bot' $_ }) + @(@('voice-server.js', 'headlines.js') | ForEach-Object { Join-Path 'voice' $_ })
+          $launcher = @(Get-ChildItem -LiteralPath $env:LAUNCHER_DIR -File | ForEach-Object { 'launcher=' + $_.FullName })
+          $adds = $launcher + @("game=$($env:GAME_ZIP)", "game=$($env:GAME_LIST)",
                     "site=$($env:SITE_ZIP)", "discord=$($env:DISCORD_ZIP)", "voice=$($env:VOICE_ZIP)")
+          # The steps after a deploy and the verbs they are held to (#5186).
+          $steps = @(Get-ChildItem -LiteralPath 'deploy\after' -Filter '*.json' -File | Sort-Object Name | ForEach-Object { 'after=' + $_.FullName })
+          $adds += $steps + @('after=' + (Resolve-Path 'scripts\vps\gate\verbs.json').Path)
+          Write-Host ("steps after a deploy: " + $(if ($steps.Count) { ($steps | ForEach-Object { Split-Path -Leaf $_ }) -join ', ' } else { 'none' }))
           Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'parts.txt') -Value $adds
           $probe = Join-Path $env:RUNNER_TEMP 'probe'
-          ./scripts/release/New-SignedManifest.ps1 -Out $probe -Tag $env:TAG -Commit $env:GITHUB_SHA -Part gamemode -Files $gm, $stamp -BotFiles $bot -ServerZip $env:SERVER_ZIP -Add $adds -LauncherVersion $env:LAUNCHER_VERSION -NoCatalog
+          ./scripts/release/New-SignedManifest.ps1 -Out $probe -Tag $env:TAG -Commit $env:GITHUB_SHA -Part gamemode -Files $gm, $stamp, $tables -BotFiles $bot -ServerZip $env:SERVER_ZIP -Add $adds -LauncherVersion $env:LAUNCHER_VERSION -NoCatalog
           if ($LASTEXITCODE -ne 0) { exit 1 }
           $m = Get-Content -LiteralPath (Join-Path $probe 'files\manifest.json') -Raw | ConvertFrom-Json
           $prev = if ($env:PREVIOUS_MANIFEST) { Get-Content -LiteralPath $env:PREVIOUS_MANIFEST -Raw | ConvertFrom-Json } else { $null }
@@ -340,7 +451,13 @@ jobs:
           } else { Write-Host ('changed: ' + ($changed -join ', ')) }
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("parts=" + ($changed -join ','))
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("release=" + $(if ($changed.Count) { 'yes' } else { 'no' }))
-          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("velopack=" + $(if ($changed -contains 'launcher' -or $changed -contains 'game') { 'yes' } else { 'no' }))
+          # The launcher step made the same call before it built anything
+          # (Test-MergeReleaseVelopack, from the same prints); a launcher built
+          # for no package, or a package with a carried launcher, would break
+          # the one number, so a disagreement stops the run.
+          $velopack = $(if ($changed -contains 'launcher' -or $changed -contains 'game') { 'yes' } else { 'no' })
+          if ($velopack -ne $env:LAUNCHER_BUILT) { Write-Host "::error::the parts say velopack=$velopack and the launcher step said built=$($env:LAUNCHER_BUILT)"; exit 1 }
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("velopack=" + $velopack)
           # Where each changed part runs (header, WHAT CHANGED): the site and
           # the bot have environments of their own, and everything else is dev.
           $apps = @($changed | Where-Object { $_ -in 'site', 'discord' })
@@ -349,11 +466,35 @@ jobs:
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("apps=" + ($apps -join ','))
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("gamemode=" + $gm)
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("stamp=" + $stamp)
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("tables=" + $tables)
 
-      # Velopack's programs are signed through Sign-OnRunner.ps1 one at a time;
-      # the game files are never signed (their bytes are the ones the records
-      # name). Setup.exe is not made (--noInst), and the portable copy vpk
-      # must make instead is not published.
+      # What the install reads beside the game files on the first start
+      # (Build-SetupFiles.ps1), from the record the game files were built
+      # over, once for each channel's package: config.json and applied.txt
+      # are the channel's own.
+      - name: Build the files the install reads beside the game files
+        id: setup
+        if: ${{ steps.changed.outputs.velopack == 'yes' }}
+        shell: pwsh
+        run: |
+          foreach ($ch in 'dev', 'main') {
+            $out = Join-Path $env:RUNNER_TEMP "setup-$ch"
+            ./scripts/release/Build-SetupFiles.ps1 -Out $out -GameRoot (Join-Path $env:RUNNER_TEMP 'game-root') -Channel $ch -Commit $env:GITHUB_SHA
+            if ($LASTEXITCODE -ne 0) { Write-Host "::error::Build-SetupFiles.ps1 -Channel $ch failed; the lines above say why"; exit 1 }
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("${ch}_dir=" + (Join-Path $out 'files'))
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("${ch}_list=" + (Join-Path $out "setup-files.$ch.json"))
+          }
+
+      # One package for each channel, from the same launcher and game files
+      # (header, WHAT A RELEASE CARRIES): dev's goes out with this Release,
+      # main's is held for Patrick's approval (#5181). The launcher's
+      # programs come signed from the launcher step; Velopack's own
+      # (Update.exe, the stub and Setup.exe) are signed through
+      # Sign-OnRunner.ps1 one at a time; the game files and the setup files
+      # are never signed (their bytes are the ones the signed lists name).
+      # Setup.exe goes out as Thornswood-Dev-Setup.exe for dev and is held as
+      # Thornswood-Setup.exe for main, the download; the portable copy vpk
+      # also makes is not published.
       - name: Pack the launcher and the game files with Velopack
         id: velopack
         if: ${{ steps.changed.outputs.velopack == 'yes' }}
@@ -363,44 +504,87 @@ jobs:
           AZURE_CLIENT_ID: ${{ vars.AZURE_SIGNING_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ vars.AZURE_SIGNING_TENANT_ID }}
           VERSION: ${{ steps.names.outputs.velopack }}
-          LAUNCHER_EXE: ${{ steps.launcher.outputs.exe }}
+          LAUNCHER_DIR: ${{ steps.launcher.outputs.dir }}
           GAME_ZIP: ${{ steps.game.outputs.zip }}
+          SETUP_DEV_DIR: ${{ steps.setup.outputs.dev_dir }}
+          SETUP_DEV_LIST: ${{ steps.setup.outputs.dev_list }}
+          SETUP_MAIN_DIR: ${{ steps.setup.outputs.main_dir }}
+          SETUP_MAIN_LIST: ${{ steps.setup.outputs.main_list }}
           NOTES: ${{ steps.notes.outputs.file }}
         run: |
           $tools = Join-Path $env:RUNNER_TEMP 'vpk'
           dotnet tool install vpk --version $env:VPK_VERSION --tool-path $tools
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::vpk $($env:VPK_VERSION) could not be installed"; exit 1 }
           $vpk = Join-Path $tools 'vpk.exe'
-          $pack = Join-Path $env:RUNNER_TEMP 'velopack-in'
-          $out = Join-Path $env:RUNNER_TEMP 'velopack-out'
-          New-Item -ItemType Directory -Force -Path $pack, $out | Out-Null
-          Copy-Item -LiteralPath $env:LAUNCHER_EXE -Destination (Join-Path $pack 'Thornswood.exe')
-          Expand-Archive -LiteralPath $env:GAME_ZIP -DestinationPath (Join-Path $pack 'Game')
-          # A delta from the Velopack release before, when there is one: vpk
-          # takes its full package and feed into the output folder first.
+          $game = Join-Path $env:RUNNER_TEMP 'velopack-game'
+          Expand-Archive -LiteralPath $env:GAME_ZIP -DestinationPath $game
+          $sign = 'pwsh -NoProfile -File "' + (Resolve-Path 'scripts\release\Sign-OnRunner.ps1').Path + '" -Path {{file}}'
+          $icon = (Resolve-Path 'launcher\app.ico').Path
           $raw = gh api "repos/$($env:GITHUB_REPOSITORY)/releases?per_page=50"
           if ($LASTEXITCODE -ne 0) { Write-Host '::error::GitHub did not list the Releases'; exit 1 }
-          $before = @(($raw -join "`n") | ConvertFrom-Json | Where-Object { -not $_.draft -and @($_.assets | Where-Object name -eq 'releases.dev.json').Count })
-          $delta = 'None'
-          if ($before.Count) {
-            & $vpk download github --repoUrl "https://github.com/$($env:GITHUB_REPOSITORY)" --channel dev --pre --token $env:GH_TOKEN -o $out
-            if ($LASTEXITCODE -ne 0) { Write-Host "::error::vpk could not take the Velopack release before ($($before[0].tag_name)) for a delta"; exit 1 }
-            $delta = 'BestSpeed'
-            Write-Host "a delta from $($before[0].tag_name)"
-          } else { Write-Host 'the first Velopack release: a full package and no delta' }
-          $sign = 'pwsh -NoProfile -File "' + (Resolve-Path 'scripts\release\Sign-OnRunner.ps1').Path + '" -Path {{file}}'
-          & $vpk pack --packId Thornswood --packVersion $env:VERSION --packDir $pack --mainExe Thornswood.exe --packTitle Thornswood --packAuthors Thornswood `
-            --channel dev --outputDir $out --noInst --skipVeloAppCheck --delta $delta --releaseNotes $env:NOTES `
-            --signTemplate $sign --signExclude '[\\/]Game[\\/]' --signParallel 1
-          if ($LASTEXITCODE -ne 0) { Write-Host '::error::vpk pack failed; the lines above say why'; exit 1 }
-          # This version's packages and the channel's feed files; a full
-          # package of the release before, which vpk took for the delta, stays
-          # on that Release.
-          $files = @(Get-ChildItem -LiteralPath $out -File | Where-Object {
-            $_.Name -in 'releases.dev.json', 'assets.dev.json', 'RELEASES-dev' -or $_.Name -like "Thornswood-$($env:VERSION)-dev-*.nupkg" })
-          if (@($files | Where-Object Name -like '*-full.nupkg').Count -ne 1) { Write-Host "::error::vpk made no full package for $($env:VERSION)"; exit 1 }
-          Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'velopack.txt') -Value ($files | ForEach-Object { 'velopack=' + $_.FullName })
-          Write-Host ('velopack: ' + (($files | ForEach-Object { $_.Name }) -join ', '))
+          $rels = @(($raw -join "`n") | ConvertFrom-Json)
+          $made = @{}
+          foreach ($ch in 'dev', 'main') {
+            $pack = Join-Path $env:RUNNER_TEMP "velopack-in-$ch"
+            $out = Join-Path $env:RUNNER_TEMP "velopack-out-$ch"
+            New-Item -ItemType Directory -Force -Path $pack, $out | Out-Null
+            # The launcher's whole folder, built for this version (the step's
+            # VERSION is the one Build-Launcher took as -Version), and Game.
+            Get-ChildItem -LiteralPath $env:LAUNCHER_DIR -File | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $pack $_.Name) }
+            Copy-Item -LiteralPath $game -Destination (Join-Path $pack 'Game') -Recurse
+            # Beside Game, what the install reads on the first start
+            # (InstallSteps.cs): config.json, profile\, applied.txt, the
+            # source note and the licence texts, this channel's.
+            $setupDir = $(if ($ch -eq 'dev') { $env:SETUP_DEV_DIR } else { $env:SETUP_MAIN_DIR })
+            $setupList = $(if ($ch -eq 'dev') { $env:SETUP_DEV_LIST } else { $env:SETUP_MAIN_LIST })
+            Copy-Item -Path (Join-Path $setupDir '*') -Destination $pack -Recurse
+            # Dev: a delta from the Velopack release before, when there is
+            # one; vpk takes its full package and feed into the output folder
+            # first. Main: always the full package. Main's package goes out
+            # only when Patrick approves a build, and he may approve any of
+            # them, so a delta made now from whatever main had would not be
+            # from what main has then; Velopack would take the full package
+            # anyway.
+            $delta = 'None'
+            if ($ch -eq 'dev') {
+              $before = @($rels | Where-Object { -not $_.draft -and @($_.assets | Where-Object name -eq 'releases.dev.json').Count })
+              if ($before.Count) {
+                & $vpk download github --repoUrl "https://github.com/$($env:GITHUB_REPOSITORY)" --channel dev --pre --token $env:GH_TOKEN -o $out
+                if ($LASTEXITCODE -ne 0) { Write-Host "::error::vpk could not take the Velopack release before ($($before[0].tag_name)) for a delta"; exit 1 }
+                $delta = 'BestSpeed'
+                Write-Host "dev: a delta from $($before[0].tag_name)"
+              } else { Write-Host 'dev: the first Velopack release, a full package and no delta' }
+            } else { Write-Host 'main: a full package, held for the approval' }
+            # packTitle is the name Windows shows in Apps and on the
+            # shortcuts, packAuthors the publisher beside it, and the icon is
+            # Setup.exe's and the installed app's.
+            & $vpk pack --packId Thornswood --packVersion $env:VERSION --packDir $pack --mainExe Thornswood.exe --packTitle Thornswood --packAuthors Thornswood `
+              --icon $icon --channel $ch --outputDir $out --skipVeloAppCheck --delta $delta --releaseNotes $env:NOTES `
+              --signTemplate $sign --signExclude '[\\/]Game[\\/]' --signParallel 1
+            if ($LASTEXITCODE -ne 0) { Write-Host "::error::vpk pack for $ch failed; the lines above say why"; exit 1 }
+            # This version's packages and the channel's feed files; a full
+            # package of the release before, which vpk took for the delta,
+            # stays on that Release.
+            $files = @(Get-ChildItem -LiteralPath $out -File | Where-Object {
+              $_.Name -in "releases.$ch.json", "assets.$ch.json", "RELEASES-$ch" -or $_.Name -like "Thornswood-$($env:VERSION)-$ch-*.nupkg" })
+            if (@($files | Where-Object Name -like '*-full.nupkg').Count -ne 1) { Write-Host "::error::vpk made no full $ch package for $($env:VERSION)"; exit 1 }
+            # Setup.exe, signed by vpk through Sign-OnRunner.ps1 like the
+            # rest. Main's has the name the download has had since the first
+            # installer; dev's says it is dev's, and the names in one Release
+            # record are unique.
+            $setupExe = @(Get-ChildItem -LiteralPath $out -File -Filter '*-Setup.exe')
+            if ($setupExe.Count -ne 1) { Write-Host "::error::vpk made $($setupExe.Count) Setup.exe files for $ch $($env:VERSION), and one is the download"; exit 1 }
+            $download = Join-Path $out $(if ($ch -eq 'dev') { 'Thornswood-Dev-Setup.exe' } else { 'Thornswood-Setup.exe' })
+            Move-Item -LiteralPath $setupExe[0].FullName -Destination $download -Force
+            $files += Get-Item -LiteralPath $download
+            $files += Get-Item -LiteralPath $setupList
+            $made[$ch] = $files
+            Write-Host ("${ch}: " + (($files | ForEach-Object { $_.Name }) -join ', '))
+          }
+          # Dev's in the part velopack, published with the Release; main's in
+          # the part main, which New-SignedManifest.ps1 lists and holds.
+          $lines = @($made['dev'] | ForEach-Object { 'velopack=' + $_.FullName }) + @($made['main'] | ForEach-Object { 'main=' + $_.FullName })
+          Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'velopack.txt') -Value $lines
 
       - name: Write the manifest
         id: files
@@ -413,18 +597,24 @@ jobs:
           LAUNCHER_VERSION: ${{ steps.launcher.outputs.version }}
           GAMEMODE: ${{ steps.changed.outputs.gamemode }}
           STAMP: ${{ steps.changed.outputs.stamp }}
+          TABLES: ${{ steps.changed.outputs.tables }}
         run: |
           $rel = Join-Path $env:RUNNER_TEMP 'merge-release'
-          $bot = @('Bot-Pass.js', 'bot.js', 'character.js') | ForEach-Object { Join-Path 'scripts\bot' $_ }
+          $bot = @(@('Bot-Pass.js', 'bot.js', 'character.js', 'relay.js') | ForEach-Object { Join-Path 'scripts\bot' $_ }) + @(@('voice-server.js', 'headlines.js') | ForEach-Object { Join-Path 'voice' $_ })
           $adds = @(Get-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'parts.txt'))
           $vp = Join-Path $env:RUNNER_TEMP 'velopack.txt'
           if (Test-Path -LiteralPath $vp) { $adds += @(Get-Content -LiteralPath $vp) }
-          ./scripts/release/New-SignedManifest.ps1 -Out $rel -Tag $env:TAG -Commit $env:GITHUB_SHA -Version $env:VERSION -Part gamemode -Files $env:GAMEMODE, $env:STAMP -BotFiles $bot -ServerZip $env:SERVER_ZIP -Add $adds -LauncherVersion $env:LAUNCHER_VERSION
+          ./scripts/release/New-SignedManifest.ps1 -Out $rel -Tag $env:TAG -Commit $env:GITHUB_SHA -Version $env:VERSION -Part gamemode -Files $env:GAMEMODE, $env:STAMP, $env:TABLES -BotFiles $bot -ServerZip $env:SERVER_ZIP -Add $adds -LauncherVersion $env:LAUNCHER_VERSION
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("dir=" + $rel)
           # The attestation's file pattern, in forward slashes, which the
           # action's glob reads the same on every runner.
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("subjects=" + $rel.Replace('\', '/') + '/assets/*')
+          # Main's package, listed in the manifest and held for the approval
+          # (New-SignedManifest.ps1, THE PART "main" IS HELD).
+          $held = Join-Path $rel 'held'
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("held=" + $(if (Test-Path -LiteralPath $held) { $held } else { '' }))
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("held_subjects=" + $held.Replace('\', '/') + '/*')
 
       - name: Sign the catalog
         if: ${{ steps.changed.outputs.release == 'yes' }}
@@ -440,15 +630,47 @@ jobs:
           if ($st -ne 'Valid') { Write-Host "::error::the signed catalog does not hold manifest.json (Test-FileCatalog said $st)"; exit 1 }
           Copy-Item -LiteralPath (Join-Path $env:DIR 'manifest.cat') -Destination (Join-Path $env:DIR 'assets\manifest.cat')
 
-      # One provenance attestation over every file the Release carries.
+      # One provenance attestation over every file the Release carries, and
+      # one over main's held files, which the approval publishes (#5181).
       - name: Attest every file of the Release
         if: ${{ steps.changed.outputs.release == 'yes' }}
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: ${{ steps.files.outputs.subjects }}
 
-      - name: Publish the Release
+      - name: Attest main's held files
+        if: ${{ steps.changed.outputs.release == 'yes' && steps.files.outputs.held != '' }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ steps.files.outputs.held_subjects }}
+
+      # Main may have moved on while this was built. A newer merge that this
+      # workflow runs for would have cancelled this run (concurrency, above),
+      # so getting here past main means the merges after it touched none of
+      # the paths above and start no run of their own. Until 2 Nov this step
+      # said a newer run would release the change anyway, and none did: the
+      # site fix #5451 (ed6dfc99) was built, then dropped, because a voice
+      # harness and a docs page merged during its build. So it asks for a
+      # run of main's newest merge now, which carries this one's changes,
+      # and that run is the one released (#5398, Patrick's A).
+      - name: Is this still main's newest merge
+        id: newest
         if: ${{ steps.changed.outputs.release == 'yes' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $head = gh api "repos/$($env:GITHUB_REPOSITORY)/commits/main" --jq .sha
+          if ($LASTEXITCODE -ne 0 -or -not $head) { Write-Host '::error::GitHub did not say what main is'; exit 1 }
+          if ([string]$head -eq $env:GITHUB_SHA) { Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'release=yes'; exit 0 }
+          gh workflow run merge-release.yml --repo $env:GITHUB_REPOSITORY --ref main
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::main is $head now, past this merge, and the run that releases it could not be started"; exit 1 }
+          Write-Host "main is $head now, past this merge; a run of main's newest merge was started, and it releases this one's changes"
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Main moved on to $head while this was built, so a run of main's newest merge was started to release these changes; nothing was released here."
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'release=no'
+
+      - name: Publish the Release
+        if: ${{ steps.newest.outputs.release == 'yes' }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -464,8 +686,24 @@ jobs:
           gh release edit $env:TAG --draft=false --prerelease --latest=false
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::the draft $($env:TAG) could not be published"; exit 1 }
 
+      # Main's package is never published here (header, MAIN'S PACKAGE): it
+      # is kept with this run, under main-<tag>, for promote-main.yml
+      # (#5181) to publish on a Release of its own once Patrick approves a
+      # promotion that runs with it. Kept once the Release is out, so it is
+      # never there for a Release that is not. Already compressed, so stored
+      # as it is.
+      - name: Keep main's package for the approval
+        if: ${{ steps.newest.outputs.release == 'yes' && steps.files.outputs.held != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: main-${{ steps.names.outputs.tag }}
+          path: ${{ steps.files.outputs.held }}
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
       - name: Ask the dev server for it (a Deployment to Dev)
-        if: ${{ steps.changed.outputs.release == 'yes' && steps.changed.outputs.dev == 'yes' }}
+        if: ${{ steps.newest.outputs.release == 'yes' && steps.changed.outputs.dev == 'yes' }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -497,7 +735,7 @@ jobs:
       # the bot posts the Release's news once, in the dev updates channel,
       # however many places it reached.
       - name: Ask the site and the Discord bot for it (Deployments to Site and Discord bot)
-        if: ${{ steps.changed.outputs.release == 'yes' && steps.changed.outputs.apps != '' }}
+        if: ${{ steps.newest.outputs.release == 'yes' && steps.changed.outputs.apps != '' }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}

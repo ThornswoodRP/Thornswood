@@ -231,7 +231,7 @@ if ($route -eq 'github') {
 } else {
     # What the box is asked to run. A notices key runs it anyway, with its own name.
     $target = "$VpsUser@$VpsHost"
-    $remote = "powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $far -From $From"
+    $remote = "pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $far -From $From"
     $sshArgs = @('-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', '-o', 'ConnectTimeout=20')
     $restore = $null
     # The key, when there is one, for this run only.
@@ -319,8 +319,9 @@ switch -Regex ("$answer") {
     '^REFUSED (.*)$' { Die ('the box refused it: ' + $Matches[1]) }
 }
 $out | Select-Object -Last 5 | ForEach-Object { Say "  $_" 'DarkGray' }
-# What powershell.exe says when the file it is given to run is not there.
-if (($out -join ' ') -match 'to the -File parameter does not exist') {
+# What pwsh says when the file it is given to run is not there (measured
+# with pwsh 7.6, exit 64).
+if (($out -join ' ') -match 'is not recognized as the name of a script file') {
     Die "the box has no $far yet, so nothing was posted. It goes on with .\scripts\vps\Watch-Services.ps1 -Install, run from One (a Releases job)."
 }
 Die ('the box did not answer (ssh exit ' + $code + '), so nothing was posted. The lines above say why: a "box bridge:" line is the bridge or the token, "Permission denied" is the key.')

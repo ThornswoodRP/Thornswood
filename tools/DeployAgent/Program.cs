@@ -17,12 +17,15 @@ public static class Program
         thornswood-agent deploy  --environment dev|site|discord --tag <build-...> [--config <agent.json>]
         thornswood-agent once    [--config <agent.json>]
         thornswood-agent service [--config <agent.json>]
+        thornswood-agent steps   --folder deploy/after --verbs scripts/vps/gate/verbs.json
 
         deploy  applies one signed Release by its tag (the deploy gate's
                 Deploy-Release verb; a rollback is the Release before)
         once    one look at each environment's newest Deployment
         check   says whether the agent can do its job, and changes nothing
         service what the Windows service runs (Install-DeployAgent.ps1)
+        steps   holds a checkout's steps after a deploy to their rules
+                (#5186), as a pull request's check does; runs nothing
         """;
 
     public static string Version =>
@@ -40,9 +43,17 @@ public static class Program
         }
         foreach (var k in opts.Keys)
         {
-            if (k is not ("config" or "environment" or "tag")) { Console.Error.WriteLine($"no option --{k}\n\n{Usage}"); return 2; }
+            if (k is not ("config" or "environment" or "tag" or "folder" or "verbs")) { Console.Error.WriteLine($"no option --{k}\n\n{Usage}"); return 2; }
         }
         if (verb == "version") { Console.WriteLine(Version); return 0; }
+        if (verb == "steps")
+        {
+            var folder = opts.GetValueOrDefault("folder") ?? "";
+            var verbs = opts.GetValueOrDefault("verbs") ?? "";
+            if (folder == "" || verbs == "") { Console.Error.WriteLine($"steps needs --folder and --verbs\n\n{Usage}"); return 2; }
+            try { return AfterDeploy.CheckCommand(folder, verbs, Console.WriteLine); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Console.Error.WriteLine("REFUSED: " + e.Message); return 1; }
+        }
         if (verb is not ("check" or "deploy" or "once" or "service")) { Console.Error.WriteLine($"no command {verb}\n\n{Usage}"); return 2; }
 
         var exe = System.Environment.ProcessPath ?? "";
@@ -72,6 +83,15 @@ public static class Program
         var apps = cfg.Environments.Where(kv => kv.Value.Kind != EnvConfig.ServerKind).ToDictionary(kv => kv.Key, kv => new App(kv.Value, http, control));
         var voices = cfg.Environments.Where(kv => kv.Value.Kind == EnvConfig.ServerKind && kv.Value.Voice != null).ToDictionary(kv => kv.Key, kv => new App(kv.Value.Voice!, http, control));
         var agent = new Agent(cfg, gh, new WindowsVerifier(WindowsVerifier.BuiltInSigner), servers, Version, exe, Log) { Apps = apps, Voices = voices };
+        // The steps after a dev Deployment go through the deploy gate, and only
+        // the service takes them: the gate runs one verb at a time, and a
+        // deploy by tag or a single look may itself be running inside a gate
+        // verb, which would then wait on itself.
+        if (verb == "service")
+        {
+            agent.Gate = new GatePipe();
+            agent.IssuesGh = new GitHub(cfg.Api, cfg.Repo, new AppTokens(cfg.Api, cfg.Repo, cfg.AdminState, http, permissions: AppTokens.IssuesWrite), http);
+        }
 
         switch (verb)
         {

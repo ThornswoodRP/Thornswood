@@ -23,8 +23,8 @@
      server with no order has nothing to keep.
   2. The names cross an ssh command line and the carry script whole: base64
      there and back, and the carry's line, with spaces and a quote in a name.
-  3. The real installer, run by Windows PowerShell 5.1 the way the box runs
-     it, against a scratch root running 102 plugins: a payload of the five
+  3. The real installer, run by PowerShell 7 the way the box runs it
+     (#5356), against a scratch root running 102 plugins: a payload of the five
      masters is INSTALL REFUSED, naming what it leaves out, with the root's
      settings byte for byte as they were and no stage left; with -DropPlugins
      naming them it gets past this check; a payload that adds one gets past it
@@ -111,66 +111,60 @@ Yes '  and to none when none were given' (@($DropPlugins).Count -eq 0)
 $T = Join-Path ([IO.Path]::GetTempPath()) ('ts-2320-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force -Path $T | Out-Null
 try {
-    if (-not $OnWindows) {
-        Write-Host 'SKIP  Install-ThornswoodServer.ps1: it runs only on the box, under Windows PowerShell 5.1, which only Windows has'
-    } else {
-        # ======================================================== 3. the installer
-        Write-Host ''
-        Write-Host 'Install-ThornswoodServer.ps1, by Windows PowerShell 5.1'
-        # The installer and the files it dot-sources from beside it, the way the
-        # box holds them. Not named tools: that folder is retired, and
-        # test-tools-retired.ps1 refuses any code that builds a path into it.
-        $installer = Join-Path $T 'installer'
-        foreach ($f in 'Install-ThornswoodServer.ps1', 'ServerSettings.ps1', 'ServerBuild.ps1', 'ServerReadyWait.ps1') {
-            New-Item -ItemType Directory -Force -Path $installer | Out-Null
-            Copy-Item -LiteralPath (Join-Path $repo "scripts\deploy\$f") -Destination (Join-Path $installer $f)
-        }
-        # The record contracts the installer loads from beside itself (#2180).
-        foreach ($f in 'Read-JsonFile.ps1', 'RecordShape.ps1') { Copy-Item -LiteralPath (Join-Path $repo "scripts\release\$f") -Destination (Join-Path $installer $f) }
-        # The log writer the server's task runs (#2349), which the installer refuses without.
-        Copy-Item -LiteralPath (Join-Path $repo 'scripts\vps\Server-Log.js') -Destination (Join-Path $installer 'Server-Log.js')
-        $ps51 = Get-WindowsPowerShell
-        function New-Payload([string]$name, [string[]]$order) {
-            $d = Join-Path $T ('payload-' + $name)
-            Put (Join-Path $d 'server-settings.json') (ConvertTo-Json -InputObject (Settings $order) -Depth 5)
-            $z = Join-Path $T ($name + '.zip')
-            Compress-Archive -Path (Join-Path $d '*') -DestinationPath $z -Force
-            return $z
-        }
-        function Install([string]$zip, [string]$root, [string[]]$more = @()) {
-            $a = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $installer 'Install-ThornswoodServer.ps1'),
-                   '-Zip', $zip, '-Root', $root, '-NoTask', '-AllowGamingPc') + $more
-            $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-            # A module path from PowerShell 7 makes 5.1 load 7's modules and fail; the box has 5.1's own.
-            $savedPath = $env:PSModulePath; $env:PSModulePath = ''
-            try { $o = @(& $ps51 @a 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $eap; $env:PSModulePath = $savedPath }
-            return [pscustomobject]@{ Code = $LASTEXITCODE; Text = ($o -join "`n") }
-        }
-        $root = Join-Path $T 'Thornswood-Server-Dev'
-        Put (Join-Path $root 'server-settings.json') (ConvertTo-Json -InputObject (Settings $running102) -Depth 5)
-        Put (Join-Path $root 'world\w.txt') 'every character'
-        $before = [IO.File]::ReadAllBytes((Join-Path $root 'server-settings.json'))
-        function Same { return ([Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $root 'server-settings.json'))) -eq [Convert]::ToBase64String($before)) }
-        function NoStage { return (@(Get-ChildItem -LiteralPath $T -Directory | Where-Object { $_.Name -like 'Thornswood-Server-Dev.stage-*' }).Count -eq 0) }
-
-        $five = New-Payload 'five' @($masters | ForEach-Object { $root.Replace('\', '/') + '/plugins/' + $_ })
-        $r = Install $five $root
-        Yes 'a payload of the five masters over a server running 102 is INSTALL REFUSED' ($r.Code -eq 1 -and $r.Text -match 'INSTALL REFUSED')
-        Yes '  saying what it leaves out and how to go past it' ($r.Text -match 'REFUSED: the load order this run would install has 5 plugins and leaves out 97 of the 102' -and $r.Text -match '-DropPlugins')
-        Yes '  before it looks for a single plugin' ($r.Text -notmatch 'not in the payload or on disk')
-        Yes '  with the running server''s settings byte for byte as they were' (Same)
-        Yes '  the world where it was, and no stage left behind' ((Test-Path -LiteralPath (Join-Path $root 'world\w.txt')) -and (NoStage))
-
-        $r = Install $five $root @('-DropPlugins', (ConvertTo-ThornswoodNamesArg $others))
-        Yes 'with -DropPlugins naming the 97, the order gets past this check' ($r.Text -notmatch 'leaves out' -and $r.Text -match 'drops 97 plugin\(s\) this run named with -DropPlugins')
-        Yes '  and on to the next ones (here, plugins this scratch box does not hold), with the settings as they were' ($r.Text -match 'not in the payload or on disk' -and (Same) -and (NoStage))
-
-        $r = Install (New-Payload 'more' (@($running102 | ForEach-Object { $_.Replace('C:/Thornswood-Server-Dev', $root.Replace('\', '/')) }) + @($root.Replace('\', '/') + '/plugins/New One.esp'))) $root
-        Yes 'a payload that keeps all 102 and adds one gets past this check' ($r.Text -notmatch 'leaves out' -and $r.Text -match 'not in the payload or on disk')
-
-        $r = Install $five $root @('-PutBack', '-DropPlugins', (ConvertTo-ThornswoodNamesArg @('Mod 001.esp')))
-        Yes '-PutBack with -DropPlugins is refused, nothing changed' ($r.Code -eq 1 -and $r.Text -match 'does not take -DropPlugins' -and (Same))
+    # ======================================================== 3. the installer
+    Write-Host ''
+    Write-Host 'Install-ThornswoodServer.ps1, by PowerShell 7'
+    # The installer and the files it dot-sources from beside it, the way the
+    # box holds them. Not named tools: that folder is retired, and
+    # test-tools-retired.ps1 refuses any code that builds a path into it.
+    $installer = Join-Path $T 'installer'
+    foreach ($f in 'Install-ThornswoodServer.ps1', 'ServerSettings.ps1', 'ServerBuild.ps1', 'ServerReadyWait.ps1') {
+        New-Item -ItemType Directory -Force -Path $installer | Out-Null
+        Copy-Item -LiteralPath (Join-Path $repo "scripts\deploy\$f") -Destination (Join-Path $installer $f)
     }
+    # The record contracts the installer loads from beside itself (#2180).
+    foreach ($f in 'Read-JsonFile.ps1', 'RecordShape.ps1') { Copy-Item -LiteralPath (Join-Path $repo "scripts\release\$f") -Destination (Join-Path $installer $f) }
+    # The log writer the server's task runs (#2349), which the installer refuses without.
+    Copy-Item -LiteralPath (Join-Path $repo 'scripts\vps\Server-Log.js') -Destination (Join-Path $installer 'Server-Log.js')
+    $boxPs = Get-BoxPowerShell
+    function New-Payload([string]$name, [string[]]$order) {
+        $d = Join-Path $T ('payload-' + $name)
+        Put (Join-Path $d 'server-settings.json') (ConvertTo-Json -InputObject (Settings $order) -Depth 5)
+        $z = Join-Path $T ($name + '.zip')
+        Compress-Archive -Path (Join-Path $d '*') -DestinationPath $z -Force
+        return $z
+    }
+    function Install([string]$zip, [string]$root, [string[]]$more = @()) {
+        $a = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $installer 'Install-ThornswoodServer.ps1'),
+               '-Zip', $zip, '-Root', $root, '-NoTask', '-AllowGamingPc') + $more
+        $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        try { $o = @(& $boxPs @a 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $eap }
+        return [pscustomobject]@{ Code = $LASTEXITCODE; Text = ($o -join "`n") }
+    }
+    $root = Join-Path $T 'Thornswood-Server-Dev'
+    Put (Join-Path $root 'server-settings.json') (ConvertTo-Json -InputObject (Settings $running102) -Depth 5)
+    Put (Join-Path $root 'world\w.txt') 'every character'
+    $before = [IO.File]::ReadAllBytes((Join-Path $root 'server-settings.json'))
+    function Same { return ([Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $root 'server-settings.json'))) -eq [Convert]::ToBase64String($before)) }
+    function NoStage { return (@(Get-ChildItem -LiteralPath $T -Directory | Where-Object { $_.Name -like 'Thornswood-Server-Dev.stage-*' }).Count -eq 0) }
+
+    $five = New-Payload 'five' @($masters | ForEach-Object { $root.Replace('\', '/') + '/plugins/' + $_ })
+    $r = Install $five $root
+    Yes 'a payload of the five masters over a server running 102 is INSTALL REFUSED' ($r.Code -eq 1 -and $r.Text -match 'INSTALL REFUSED')
+    Yes '  saying what it leaves out and how to go past it' ($r.Text -match 'REFUSED: the load order this run would install has 5 plugins and leaves out 97 of the 102' -and $r.Text -match '-DropPlugins')
+    Yes '  before it looks for a single plugin' ($r.Text -notmatch 'not in the payload or on disk')
+    Yes '  with the running server''s settings byte for byte as they were' (Same)
+    Yes '  the world where it was, and no stage left behind' ((Test-Path -LiteralPath (Join-Path $root 'world\w.txt')) -and (NoStage))
+
+    $r = Install $five $root @('-DropPlugins', (ConvertTo-ThornswoodNamesArg $others))
+    Yes 'with -DropPlugins naming the 97, the order gets past this check' ($r.Text -notmatch 'leaves out' -and $r.Text -match 'drops 97 plugin\(s\) this run named with -DropPlugins')
+    Yes '  and on to the next ones (here, plugins this scratch box does not hold), with the settings as they were' ($r.Text -match 'not in the payload or on disk' -and (Same) -and (NoStage))
+
+    $r = Install (New-Payload 'more' (@($running102 | ForEach-Object { $_.Replace('C:/Thornswood-Server-Dev', $root.Replace('\', '/')) }) + @($root.Replace('\', '/') + '/plugins/New One.esp'))) $root
+    Yes 'a payload that keeps all 102 and adds one gets past this check' ($r.Text -notmatch 'leaves out' -and $r.Text -match 'not in the payload or on disk')
+
+    $r = Install $five $root @('-PutBack', '-DropPlugins', (ConvertTo-ThornswoodNamesArg @('Mod 001.esp')))
+    Yes '-PutBack with -DropPlugins is refused, nothing changed' ($r.Code -eq 1 -and $r.Text -match 'does not take -DropPlugins' -and (Same))
 
     # ====================================================== 4. Deploy-Server's carry
     Write-Host ''

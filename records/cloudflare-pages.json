@@ -1,0 +1,29 @@
+{
+  "issue": 5190,
+  "what": "The Cloudflare Pages project that serves the site's plain pages from Cloudflare's network at its pages.dev address (plan line 31). Cloudflare builds it from this repository on every push to main that touches site/ or the export, through its GitHub App, so no token is stored anywhere. The build runs scripts/deploy/Export-Pages.js, which starts this commit's site on loopback and writes the front page and the written pages as files. It is made once through Cloudflare's Pages API from this record; tests/test-5190-pages-export.js holds the record to the script.",
+  "account": "the account thornswood.net is on",
+  "project": {
+    "name": "thornswood",
+    "production_branch": "main",
+    "build_config": {
+      "build_command": "node scripts/deploy/Export-Pages.js pages-out",
+      "destination_dir": "pages-out",
+      "root_dir": "",
+      "build_caching": false
+    },
+    "source": {
+      "type": "github",
+      "config": {
+        "owner": "ThornswoodRP",
+        "repo_name": "Thornswood",
+        "production_branch": "main",
+        "production_deployments_enabled": true,
+        "deployments_enabled": true,
+        "preview_deployment_setting": "none",
+        "pr_comments_enabled": false,
+        "path_includes": ["site/*", "site/**", "scripts/deploy/Export-Pages.js"]
+      }
+    }
+  },
+  "custom_domains": []
+}

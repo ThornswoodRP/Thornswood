@@ -18,9 +18,8 @@
   This checks:
     1. Get-ThornswoodFileScript (Send-Script.ps1), the form a box script
        file is sent in, run the way the box runs it: Send-Script.ps1's
-       runner on the command line of a PowerShell of its own (Windows
-       PowerShell 5.1 on Windows, which is what the box runs; pwsh
-       elsewhere), taking the script from its copy in a scratch folder that
+       runner on the command line of a PowerShell 7 of its own, which is
+       what the box runs since #5356, taking the script from its copy in a scratch folder that
        stands for C:\Windows\Temp, and leaving the copy gone. The
        file's param block takes the arguments, a quoted one whole; a
        function's $script: write reaches the file's own top level, as under
@@ -52,8 +51,8 @@ function Yes([string]$what, [bool]$cond) {
     else { $script:fail++; Write-Host "FAIL  $what" }
 }
 
-# The PowerShell the far side runs under: the box's own on Windows.
-$shell = $(if ($OnWindows) { Get-WindowsPowerShell } else { (Get-Process -Id $PID).Path })
+# The PowerShell the far side runs under: the box's own, PowerShell 7.
+$shell = Get-BoxPowerShell
 
 # Runs $script as the box would run it from Send-Script.ps1: the runner on
 # the command line, the script in its copy, which the runner takes off the

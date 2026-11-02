@@ -14,7 +14,7 @@
   Typing it inline loses the quotes. The local shell strips one layer, ssh
   hands a single string to the remote shell, and that strips another, so
 
-      ssh ... "powershell -NoProfile -Command Remove-NetFirewallRule -DisplayName 'Thornswood Voice'"
+      ssh ... "pwsh -NoProfile -Command Remove-NetFirewallRule -DisplayName 'Thornswood Voice'"
 
   arrives as two bare words and fails with "a positional parameter cannot be
   found that accepts argument 'Voice'". Entry 1 on the To Do List has this in
@@ -129,5 +129,10 @@ if ($PSBoundParameters.ContainsKey('Secret')) {
     exit $LASTEXITCODE
 }
 
-Invoke-ThornswoodRemote -Target "$VpsUser@$VpsHost" -SshArgs $sshArgs -Script $full
+# Everything runs in PowerShell 7 on the box, as its own tasks do (#5356),
+# except Bootstrap-VPS.ps1: it is what puts PowerShell 7 on a new box, so it
+# runs in the Windows PowerShell Windows Server comes with, the only one there
+# until it has run.
+$newBox = ($PSCmdlet.ParameterSetName -eq 'File') -and ((Split-Path -Leaf $File) -eq 'Bootstrap-VPS.ps1')
+Invoke-ThornswoodRemote -Target "$VpsUser@$VpsHost" -SshArgs $sshArgs -Script $full -NewBox:$newBox
 exit $LASTEXITCODE

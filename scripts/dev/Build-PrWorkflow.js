@@ -86,9 +86,9 @@ function build(src) {
   const linuxWaits = "    needs: [tested, pick]\n    if: ${{ !cancelled() && needs.tested.outputs.run == '' && needs.pick.result == 'success' && needs.pick.outputs.linux_shares != '[]' }}\n";
   if (body.split(linuxWaits).length !== 2) { fail('build.yml no longer has the gate\'s Linux shares waiting for the tested and pick jobs, and skipped when the pick gave none'); }
   body = body.replace(linuxWaits, "    needs: pick\n    if: ${{ needs.pick.outputs.linux_shares != '[]' }}\n");
-  const launcherWaits = "    needs: [tested, pick]\n    if: ${{ !cancelled() && needs.tested.outputs.run == '' && needs.pick.outputs.launcher != 'false' }}\n";
-  if (body.split(launcherWaits).length !== 2) { fail('build.yml no longer has the launcher job waiting for the tested job and the pick\'s path rule'); }
-  body = body.replace(launcherWaits, "    needs: pick\n    if: ${{ !cancelled() && needs.pick.outputs.launcher != 'false' }}\n");
+  const launcherWaits = "    needs: [tested, pick]\n    if: ${{ !cancelled() && needs.tested.outputs.run == '' }}\n    runs-on: ${{ needs.pick.outputs.launcher == 'false' && 'ubuntu-24.04-arm' || 'windows-latest' }}\n";
+  if (body.split(launcherWaits).length !== 2) { fail('build.yml no longer has the launcher job waiting for the tested job, and on Linux when the pick\'s path rule says it has nothing to build'); }
+  body = body.replace(launcherWaits, "    needs: pick\n    if: ${{ !cancelled() }}\n    runs-on: ${{ needs.pick.outputs.launcher == 'false' && 'ubuntu-24.04-arm' || 'windows-latest' }}\n");
   if (/needs\.tested|needs: \[?tested|^  tested:/m.test(code(body))) { fail('the pull request build still names the tested job'); }
   /*
     THE ONE CHECK MAIN'S PROTECTION REQUIRES (#3683, Patrick's A on
@@ -101,16 +101,18 @@ function build(src) {
     this needs both: a matrix job's result is success only when every share
     succeeded.
 
-    It runs on GitHub's arm64 Linux runner, ubuntu-24.04-arm, as the pick
-    does (build.yml's pick says why): it is a pull request's job, and a
+    It runs on GitHub's ubuntu-latest: it is a pull request's job, and a
     fork's pull request brings its own copy of this file.
 
-    THE PATH RULE (#5292). The launcher job is skipped when the pick says the
-    change reaches nothing it checks (launcher=false), and the gate's shares
-    when the change reaches no harness (shares=[]). A skip counts as passed
-    only when the pick said exactly that and the pick itself passed; any
-    other skip, a failure or a cancel cannot merge. The tree checks always
-    run and always have to pass. The gate's Linux shares (#5293) the same
+    THE PATH RULE (#5292). When the pick says the change reaches nothing the
+    launcher job checks (launcher=false), that job still runs, on Linux, and
+    passes with a step that says why; it is never skipped for the path rule,
+    so its result here has to be success like the tree checks' (Magpie's
+    finding of 1 Nov 2026: a skipped check is not a pass). The gate's shares
+    are skipped when the change reaches no harness (shares=[]), and that skip
+    counts as passed only when the pick said exactly that and the pick itself
+    passed; any other skip, a failure or a cancel cannot merge. The tree
+    checks always run and always have to pass. The gate's Linux shares (#5293) the same
     way: skipped counts only when the pick gave none (linux_shares=[]).
   */
   if (/\n  result:\n/.test(body)) { fail('build.yml already has a job named result'); }
@@ -123,7 +125,7 @@ function build(src) {
     '    name: Build check result',
     '    needs: [pick, checks, launcher, gate, gate-linux]',
     '    if: ${{ !cancelled() }}',
-    '    runs-on: ubuntu-24.04-arm',
+    '    runs-on: ubuntu-latest',
     '    timeout-minutes: 5',
     '    steps:',
     '      - name: The tree checks, the launcher build and the gate passed',
@@ -145,9 +147,7 @@ function build(src) {
     '          ok=1',
     '          [ "$PICK" = success ] || ok=0',
     '          [ "$CHECKS" = success ] || ok=0',
-    '          if [ "$BUILD" != success ]; then',
-    '            if [ "$BUILD" = skipped ] && [ "$PICK" = success ] && [ "$REACHES_LAUNCHER" = false ]; then echo "Launcher builds was skipped: the change touches only docs, the site or the bot (#5292)"; else ok=0; fi',
-    '          fi',
+    '          [ "$BUILD" = success ] || ok=0',
     '          if [ "$GATE" != success ]; then',
     '            if [ "$GATE" = skipped ] && [ "$PICK" = success ] && [ "$SHARES" = "[]" ]; then echo "The gate was skipped: the change reaches no gate harness (#5292)"; else ok=0; fi',
     '          fi',

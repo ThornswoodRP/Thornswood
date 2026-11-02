@@ -1,14 +1,11 @@
 using System;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Net;
-using System.Reflection;
+using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
-using System.Windows;
-using System.Windows.Controls;
 
 namespace Thornswood
 {
@@ -27,53 +24,27 @@ namespace Thornswood
     /// connected / micOk / talking. The microphone and the audio pipeline live
     /// in their launcher, which is Electron and therefore a real browser.
     ///
-    /// This launcher is WPF, so it has no browser at all. WebView2 is the way
-    /// in: it is Edge's Chromium, it is already installed on this machine as
-    /// part of Windows, and it does getUserMedia and WebRTC the way any browser
-    /// does. The window is never shown. It exists to hold an audio pipeline
-    /// that outlives the game's own browser and is not subject to any of its
-    /// restrictions.
-    ///
-    /// The three WebView2 files ride inside this exe as embedded resources
-    /// rather than sitting beside it. That is not tidiness: the update system
-    /// publishes exactly one asset, the exe, and SelfUpdate replaces exactly
-    /// that one file. Loose sidecar DLLs would mean changing the publisher, the
-    /// version document and the updater together, and would leave everybody's
-    /// launcher broken in between.
+    /// This launcher held its audio in a hidden WebView2 page until #4823
+    /// (voice-host.html), which needed Edge's runtime on the machine and, for
+    /// its audio, the Windows Media components the N editions of Windows do
+    /// not have. It has no browser now. VoiceSession.cs is that page in C#,
+    /// with the same protocol to the same voice service: the microphone and
+    /// speakers through WASAPI (VoiceAudio.cs), the connections through ICE
+    /// and DTLS-SRTP (VoiceIce.cs, VoicePeer.cs), Opus through Concentus, and
+    /// the page's panner and gain in our own mixer (VoiceMix.cs). This class
+    /// is what it always was: the launcher's side, which hands voice its
+    /// config and join tokens, and carries push to talk, the mute list and
+    /// the status between voice and the game.
     /// </summary>
     static class Voice
     {
-        /// <summary>
-        /// The voice browser's own WebView2 folder: its cache and storage, kept
-        /// while the launcher is installed and removed by every uninstall
-        /// (LocalKeep.NotSaves, #3679).
-        /// </summary>
-        public static string BrowserDir { get { return Path.Combine(Paths.ProfileDir, "VoiceBrowser"); } }
-
-        const string CoreDll   = "Microsoft.Web.WebView2.Core.dll";
-        const string WpfDll    = "Microsoft.Web.WebView2.Wpf.dll";
-        const string LoaderDll = "WebView2Loader.dll";
-        const string PageFile  = "voice-host.html";
-
-        static Microsoft.Web.WebView2.Wpf.WebView2 view;
-        static Window hostWindow;
+        static VoiceSession session;
         static Action<string> logger = delegate { };
 
         /// <summary>
-        /// Every line goes through here, and this is not tidiness.
-        ///
-        /// The launcher's Log writes to a WPF control, so calling it from any
-        /// thread but the UI one throws. Two things here run off the UI thread:
-        /// the WebView2 environment callback and the push to talk listener. An
-        /// unhandled exception on a threadpool thread does not show a dialog or
-        /// write a line, it takes the whole process down without a word, which
-        /// is a launcher that opens and vanishes a few seconds later with a log
-        /// that simply stops.
-        /// </summary>
-        /// <summary>
         /// Straight to launcher.log, never to the status line.
         ///
-        /// The voice page reports things that matter when voice is broken and
+        /// Voice reports things that matter when voice is broken and
         /// matter to nobody the rest of the time: which stage of the connection
         /// each pair of people is at, several times a minute, named by peer id.
         /// That belongs in the file somebody sends me when it goes wrong, not on
@@ -83,24 +54,43 @@ namespace Thornswood
         {
             try
             {
-                File.AppendAllText(Paths.LogFile,
-                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + m + Environment.NewLine);
+                // One line at a time: the voice thread, the token fetches and
+                // the file channel all write here, and two appends at once
+                // collide on the file.
+                lock (quietLock)
+                {
+                    File.AppendAllText(Paths.LogFile,
+                        DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + m + Environment.NewLine);
+                }
             }
             catch (Exception ex) { Swallow.Note("Voice.Quiet, log", ex); }
         }
 
+        static readonly object quietLock = new object();
+
+        /// <summary>
+        /// Every line goes through here, and this is not tidiness.
+        ///
+        /// The launcher's Log writes to a control in the window, so calling it
+        /// from any thread but the window's throws. Almost everything here runs
+        /// off that thread: the voice thread, the token fetches and the push to
+        /// talk listener. An unhandled exception on a threadpool thread does not
+        /// show a dialog or write a line, it takes the whole process down
+        /// without a word, which is a launcher that opens and vanishes a few
+        /// seconds later with a log that simply stops. So a line from anywhere
+        /// else is handed to the window's thread (Avalonia's dispatcher).
+        /// </summary>
         static void Say(string m)
         {
             try
             {
-                var app = System.Windows.Application.Current;
-                var d = app == null ? null : app.Dispatcher;
-                if (d != null && !d.CheckAccess())
+                var d = Avalonia.Threading.Dispatcher.UIThread;
+                if (!d.CheckAccess())
                 {
-                    d.BeginInvoke(new Action(delegate
+                    d.Post(delegate
                     {
                         try { logger(m); } catch (Exception ex) { Swallow.Note("Voice.Say, invoke logger", ex); }
-                    }));
+                    });
                     return;
                 }
                 logger(m);
@@ -120,134 +110,27 @@ namespace Thornswood
         static volatile int peerCount;
         static volatile string voiceMode = "local";
 
-        static bool hooked;
         static bool started;
 
         /// <summary>
-        /// Shuts the hidden window down on the way out.
-        ///
-        /// This window is the reason the launcher would not reopen. WPF's
-        /// default ShutdownMode is OnLastWindowClose, and this is a real
-        /// Window that is deliberately never shown, so closing the launcher
-        /// left Application.Run still running with an invisible window and
-        /// nothing on screen. The process stayed up, it kept holding the
-        /// ThornswoodLauncher mutex, and the next launch saw an instance
-        /// already running and exited without a word.
-        ///
-        /// Shell sets ShutdownMode to OnMainWindowClose now, which is the real
-        /// fix. This is the tidy-up that goes with it: WebView2 holds a browser
-        /// process of its own, and letting it go quietly beats leaving it to be
-        /// torn down with the app.
+        /// Ends voice on the way out: every connection closed, the relay's
+        /// addresses handed back, the microphone and speakers let go.
         /// </summary>
         public static void Stop()
         {
             try
             {
-                if (view != null) { view.Dispose(); view = null; }
+                if (session != null) { session.Dispose(); session = null; }
             }
-            catch (Exception ex) { Swallow.Note("Voice.Stop, dispose view", ex); }
-            try
-            {
-                if (hostWindow != null) { hostWindow.Close(); hostWindow = null; }
-            }
-            catch (Exception ex) { Swallow.Note("Voice.Stop, close host", ex); }
+            catch (Exception ex) { Swallow.Note("Voice.Stop, session", ex); }
         }
 
         /// <summary>
-        /// Called once, as early as possible, and before anything touches a
-        /// WebView2 type. Installing the resolver late is the same as not
-        /// installing it: the CLR binds an assembly the first time a method
-        /// using it is compiled, not when it is called.
-        /// </summary>
-        public static void Prepare()
-        {
-            if (hooked) return;
-            hooked = true;
-
-            AppDomain.CurrentDomain.AssemblyResolve += delegate (object s, ResolveEventArgs e)
-            {
-                string want = new AssemblyName(e.Name).Name;
-                string file = null;
-                if (want == "Microsoft.Web.WebView2.Core") file = CoreDll;
-                else if (want == "Microsoft.Web.WebView2.Wpf") file = WpfDll;
-                if (file == null) return null;
-
-                byte[] bytes = Resource(file);
-                if (bytes == null) return null;
-                return Assembly.Load(bytes);
-            };
-        }
-
-        static byte[] Resource(string name)
-        {
-            try
-            {
-                Assembly me = Assembly.GetExecutingAssembly();
-                using (Stream s = me.GetManifestResourceStream(name))
-                {
-                    if (s == null) return null;
-                    byte[] b = new byte[s.Length];
-                    int read = 0;
-                    while (read < b.Length)
-                    {
-                        int n = s.Read(b, read, b.Length - read);
-                        if (n <= 0) break;
-                        read += n;
-                    }
-                    return b;
-                }
-            }
-            catch { return null; }
-        }
-
-        /// <summary>
-        /// The native loader cannot be loaded from memory, so it is written
-        /// beside the exe. Only when it is missing or a different size, because
-        /// this runs on every start and the file may be locked by a previous
-        /// run that has not fully exited.
-        /// </summary>
-        static bool PlaceLoader(out string why)
-        {
-            why = "";
-            try
-            {
-                byte[] want = Resource(LoaderDll);
-                if (want == null) { why = LoaderDll + " is not embedded in this build"; return false; }
-
-                string dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-                string path = Path.Combine(dir, LoaderDll);
-
-                if (File.Exists(path) && new FileInfo(path).Length == want.Length) return true;
-
-                File.WriteAllBytes(path, want);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                why = ex.Message;
-                return false;
-            }
-        }
-
-        /// <summary>
-        /// Bring the audio side up. Safe to call more than once.
+        /// Bring voice up. Safe to call more than once, and from any thread:
+        /// nothing here needs the window.
         /// Returns quietly on any failure: a launcher that will not open
         /// because voice did not start is a worse outcome than silent voice.
         /// </summary>
-
-        /// <summary>
-        /// Places WebView2Loader.dll beside the exe. Menu music needs this
-        /// before CreateAsync; Voice.Start already calls it, but music can be
-        /// queued first at ApplicationIdle.
-        /// </summary>
-        public static bool EnsureLoader(Action<string> say)
-        {
-            Prepare();
-            string why;
-            if (PlaceLoader(out why)) return true;
-            if (say != null) say("Voice: could not place " + LoaderDll + ": " + why);
-            return false;
-        }
         public static void Start(Action<string> log, Config config)
         {
             if (started) return;
@@ -257,293 +140,16 @@ namespace Thornswood
 
             try
             {
-                Prepare();
-
-                string why;
-                if (!PlaceLoader(out why))
-                {
-                    Say("Voice: could not place " + LoaderDll + ": " + why);
-                    return;
-                }
-
-                if (RuntimeVersion() == null)
-                {
-                    Say("Voice: WebView2 runtime is not installed on this machine. Fetching it.");
-                    Bootstrap();
-                    return;
-                }
-
-                Begin(log);
+                session = new VoiceSession(OnSessionEvent, config);
+                Say("Voice: up, in the launcher (no browser)");
+                StartPttListener(log);
+                StartFileChannel(log);
+                Configure(log);
             }
             catch (Exception ex)
             {
                 Say("Voice: did not start: " + ex.Message);
             }
-        }
-
-        /// <summary>
-        /// Split out so that the WebView2 types are only touched from a method
-        /// the CLR compiles after Prepare has run.
-        /// </summary>
-        static void Begin(Action<string> log)
-        {
-            var host = new Window
-            {
-                Width = 320,
-                Height = 200,
-                ShowInTaskbar = false,
-                WindowStyle = WindowStyle.None,
-                ShowActivated = false,
-                Visibility = Visibility.Hidden,
-                Title = "ThornsWood voice"
-            };
-
-            view = new Microsoft.Web.WebView2.Wpf.WebView2();
-            logger = log;
-            host.Content = view;
-
-            // A window with no content never creates its browser, and a window
-            // that is never shown has no content. So it is shown offscreen and
-            // hidden, which costs one frame and nothing else.
-            host.Left = -10000;
-            host.Top = -10000;
-            host.Show();
-            host.Hide();
-            hostWindow = host;
-
-            view.CoreWebView2InitializationCompleted += delegate (
-                object s,
-                Microsoft.Web.WebView2.Core.CoreWebView2InitializationCompletedEventArgs e)
-            {
-                try
-                {
-                    if (!e.IsSuccess)
-                    {
-                        string detail = e.InitializationException == null
-                            ? "no reason given"
-                            : e.InitializationException.Message;
-                        Say("Voice: WebView2 failed to initialise: " + detail);
-                        return;
-                    }
-
-                    var core = view.CoreWebView2;
-                    if (core == null) { Say("Voice: WebView2 came up with no core"); return; }
-
-                    // Grant the microphone without asking. There is nobody to
-                    // ask: this window is never on screen. This is the thing
-                    // the game's own browser could not do, and half of why
-                    // voice never carried audio from in there.
-                    core.PermissionRequested += delegate (
-                        object s2,
-                        Microsoft.Web.WebView2.Core.CoreWebView2PermissionRequestedEventArgs args)
-                    {
-                        try
-                        {
-                            args.State = Microsoft.Web.WebView2.Core.CoreWebView2PermissionState.Allow;
-                            args.Handled = true;
-                        }
-                        catch (Exception ex) { Swallow.Note("Voice.Begin, new window", ex); }
-                    };
-
-                    // The page reports back: status, peer count, talking,
-                    // and its own log lines. Everything voice knows about
-                    // itself now lands in launcher.log rather than in a log
-                    // file inside the game that nobody reads until it breaks.
-                    core.WebMessageReceived += delegate (
-                        object s3,
-                        Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs a)
-                    {
-                        try { OnPageMessage(a.TryGetWebMessageAsString(), log); }
-                        catch (Exception ex) { Swallow.Note("Voice.Begin, page message", ex); }
-                    };
-
-                    core.NavigationCompleted += delegate { Configure(log); };
-
-                    string page = PlacePage(log);
-                    if (page == null) return;
-                    core.Navigate(new Uri(page).AbsoluteUri);
-
-                    Say("Voice: WebView2 is up, runtime " + core.Environment.BrowserVersionString);
-                    StartPttListener(log);
-                    StartFileChannel(log);
-                }
-                catch (Exception ex)
-                {
-                    Say("Voice: WebView2 came up but could not be configured: " + ex.Message);
-                }
-            };
-
-            string profile = BrowserDir;
-            try { Directory.CreateDirectory(profile); } catch (Exception ex) { Swallow.Note("Voice.Begin, create profile", ex); }
-
-            // No mDNS responder in the voice browser, so nothing in it listens
-            // on the network and Windows Firewall has nothing to ask about,
-            // even on a WebView2 installed for one account, which comes with
-            // no rule (#911). The environment variable, not
-            // CoreWebView2EnvironmentOptions: on the shipping machine a
-            // CreateAsync given options faulted (launcher.log: "no WebView2
-            // runtime") while one given none succeeded on the same run,
-            // measured when the menu music still had a browser of its own.
-            // It is read when the environment is created, which is the next
-            // line.
-            try
-            {
-                string key = "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS";
-                Environment.SetEnvironmentVariable(key,
-                    BrowserArgs.DisableFeature(Environment.GetEnvironmentVariable(key), BrowserArgs.NoMdns));
-            }
-            catch (Exception ex) { Swallow.Note("Voice.Begin, browser arguments", ex); }
-
-            var envTask = Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(
-                null, profile, null);
-
-            envTask.ContinueWith(delegate (System.Threading.Tasks.Task<Microsoft.Web.WebView2.Core.CoreWebView2Environment> t)
-            {
-                if (t.IsFaulted || t.Result == null)
-                {
-                    Say("Voice: no WebView2 runtime on this machine, voice is off");
-                    return;
-                }
-                host.Dispatcher.BeginInvoke(new Action(delegate
-                {
-                    try { view.EnsureCoreWebView2Async(t.Result); }
-                    catch (Exception ex) { Say("Voice: could not start WebView2: " + ex.Message); }
-                }));
-            });
-        }
-
-        /// <summary>
-        /// The installed runtime, or null when there isn't one.
-        /// Asked through the SDK rather than by poking at Program Files,
-        /// because the evergreen runtime moves and the per-user copy lives
-        /// somewhere else entirely.
-        /// </summary>
-        static string RuntimeVersion()
-        {
-            try
-            {
-                string v = Microsoft.Web.WebView2.Core.CoreWebView2Environment
-                                    .GetAvailableBrowserVersionString(null);
-                return string.IsNullOrEmpty(v) ? null : v;
-            }
-            catch { return null; }
-        }
-
-        /// <summary>
-        /// Install the WebView2 runtime, once, in the background.
-        ///
-        /// This ships with Windows 11 and most of Windows 10, so for nearly
-        /// everybody RuntimeVersion already answered and none of this runs. For
-        /// the one person it doesn't, the alternative is telling them to go and
-        /// find an installer themselves, which is how a feature quietly never
-        /// reaches half the people it was built for.
-        ///
-        /// Microsoft's evergreen bootstrapper is a permanent link and a tiny
-        /// download that fetches the real thing itself. Its manifest asks for
-        /// asInvoker (read 28 Sep), and started from this launcher, which is
-        /// not elevated, it installs the runtime for this Windows account
-        /// only, with no administrator prompt. That copy comes without
-        /// Microsoft's mDNS firewall rule, which is why Begin turns mDNS off.
-        ///
-        /// The download is run only when Windows says Microsoft signed it
-        /// (Signature.MicrosoftRefusal, #1330); anything else is deleted
-        /// unrun and the log says why.
-        ///
-        /// Failure is not fatal anywhere. Voice stays off, the launcher is
-        /// untouched, and it tries again next start.
-        /// </summary>
-        static void Bootstrap()
-        {
-            ThreadPool.QueueUserWorkItem(delegate
-            {
-                string exe = Path.Combine(Path.GetTempPath(), "MicrosoftEdgeWebview2Setup.exe");
-                try
-                {
-                    // TLS 1.2, because .NET Framework 4 defaults to versions
-                    // Microsoft's servers stopped accepting years ago and the
-                    // failure looks like a network outage rather than a policy.
-                    try { ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072; } catch (Exception ex) { Swallow.Note("Voice.Bootstrap, TLS", ex); }
-
-                    using (var web = new WebClient())
-                    {
-                        web.DownloadFile("https://go.microsoft.com/fwlink/p/?LinkId=2124703", exe);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Say("Voice: could not download the WebView2 runtime: " + ex.Message);
-                    return;
-                }
-
-                // Only a program Microsoft signed is run (#1330). The file came
-                // over the network, so without this whoever could change it on
-                // the way, or at the server it came from, chose what ran here.
-                // Signature.MicrosoftRefusal says what it checks and why.
-                string said;
-                string why = Signature.MicrosoftRefusal(exe, out said);
-                if (why.Length > 0)
-                {
-                    Say("Voice: the WebView2 installer that was downloaded " + why +
-                        " It was not run, and voice is off until the next start.");
-                    try { File.Delete(exe); } catch (Exception ex) { Swallow.Note("Voice.Bootstrap, delete refused installer", ex); }
-                    return;
-                }
-                Say("Voice: the WebView2 installer is Microsoft's. " + said);
-
-                try
-                {
-                    var psi = new ProcessStartInfo(exe, "/silent /install");
-                    psi.UseShellExecute = true;
-                    var proc = Process.Start(psi);
-                    if (proc != null) proc.WaitForExit(10 * 60 * 1000);
-                }
-                catch (Exception ex)
-                {
-                    Say("Voice: the WebView2 installer would not run: " + ex.Message);
-                    return;
-                }
-                finally
-                {
-                    try { File.Delete(exe); } catch (Exception ex) { Swallow.Note("Voice.Bootstrap, delete installer", ex); }
-                }
-
-                string v = RuntimeVersion();
-                if (v == null)
-                {
-                    Say("Voice: the WebView2 runtime still is not there. Voice is off until the next start.");
-                    return;
-                }
-
-                Say("Voice: WebView2 runtime " + v + " installed. Starting voice.");
-                try
-                {
-                    var app = System.Windows.Application.Current;
-                    if (app == null) return;
-                    app.Dispatcher.BeginInvoke(new Action(delegate
-                    {
-                        try { Begin(delegate { }); } catch (Exception ex) { Say("Voice: " + ex.Message); }
-                    }));
-                }
-                catch (Exception ex) { Swallow.Note("Voice.Bootstrap", ex); }
-            });
-        }
-
-        /// <summary>The voice page rides in the exe too, and is written out beside it.</summary>
-        static string PlacePage(Action<string> log)
-        {
-            try
-            {
-                byte[] want = Resource(PageFile);
-                if (want == null) { Say("Voice: " + PageFile + " is not embedded in this build"); return null; }
-                string dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-                string path = Path.Combine(dir, PageFile);
-                if (!File.Exists(path) || new FileInfo(path).Length != want.Length)
-                {
-                    File.WriteAllBytes(path, want);
-                }
-                return path;
-            }
-            catch (Exception ex) { Say("Voice: could not place " + PageFile + ": " + ex.Message); return null; }
         }
 
         /// <summary>
@@ -574,19 +180,6 @@ namespace Thornswood
             catch { return 0; }
         }
 
-        static void Post(string json)
-        {
-            try
-            {
-                if (view == null) return;
-                view.Dispatcher.BeginInvoke(new Action(delegate
-                {
-                    try { view.CoreWebView2.PostWebMessageAsString(json); } catch (Exception ex) { Swallow.Note("Voice.Post, web message", ex); }
-                }));
-            }
-            catch (Exception ex) { Swallow.Note("Voice.Post", ex); }
-        }
-
         /// <summary>
         /// A short lived token saying which profile this launcher may join as.
         /// </summary>
@@ -599,7 +192,7 @@ namespace Thornswood
         ///
         /// The Discord ticket is what proves anything. The voice service asks
         /// the site whether that ticket owns this profile and signs the answer,
-        /// and the page sends what comes back instead of a bare number.
+        /// and voice sends what comes back instead of a bare number.
         ///
         /// Empty on any failure, deliberately. The service refuses a
         /// connection without one (#1303, #1337), so this is the difference
@@ -607,7 +200,7 @@ namespace Thornswood
         ///
         /// One token opens one connection and is good for two minutes
         /// (#1322), so this is called for each connection, just before it
-        /// opens: PageToken for the voice page, PassTokenAsk for the game.
+        /// opens: PageToken for the launcher's voice, PassTokenAsk for the game.
         /// </remarks>
         static string FetchToken(string host, string port, long profile, Action<string> log)
         {
@@ -649,45 +242,38 @@ namespace Thornswood
                           ",\"ticket\":\"" + JsonEscape(ticket) + "\"}";
             try
             {
-                var req = (HttpWebRequest)WebRequest.Create(url);
-                req.Method = "POST";
-                req.ContentType = "application/json";
-                req.Timeout = 5000;
-                req.ReadWriteTimeout = 5000;
-                byte[] rawBody = Encoding.UTF8.GetBytes(body);
-                req.ContentLength = rawBody.Length;
-                using (var s = req.GetRequestStream()) { s.Write(rawBody, 0, rawBody.Length); }
-                using (var resp = (HttpWebResponse)req.GetResponse())
+                using (var req = new HttpRequestMessage(HttpMethod.Post, url))
                 {
-                    string text;
-                    using (var r = new StreamReader(resp.GetResponseStream(), Encoding.UTF8))
+                    req.Content = new StringContent(body, Encoding.UTF8, "application/json");
+                    using (HttpResponseMessage resp = TokenHttp.Send(req))
                     {
-                        text = r.ReadToEnd();
+                        if (resp.StatusCode == HttpStatusCode.Forbidden)
+                        {
+                            if (log != null) log("Voice: the server says this Discord account does not own profile " + profile + ".");
+                            return "";
+                        }
+                        if (!resp.IsSuccessStatusCode)
+                        {
+                            if (log != null) log("Voice: could not get a join token (the server answered " + (int)resp.StatusCode + ").");
+                            return "";
+                        }
+                        string text;
+                        using (var r = new StreamReader(resp.Content.ReadAsStream(), Encoding.UTF8))
+                        {
+                            text = r.ReadToEnd();
+                        }
+                        Match m = Regex.Match(text, "\"token\"\\s*:\\s*\"([^\"]+)\"");
+                        if (!m.Success)
+                        {
+                            if (log != null) log("Voice: the service answered without a token.");
+                            return "";
+                        }
+                        // Never the token itself. It is what somebody would need to
+                        // join as this person, and the log is a file on disk.
+                        if (log != null) log("Voice: got a join token for profile " + profile);
+                        return m.Groups[1].Value;
                     }
-                    Match m = Regex.Match(text, "\"token\"\\s*:\\s*\"([^\"]+)\"");
-                    if (!m.Success)
-                    {
-                        if (log != null) log("Voice: the service answered without a token.");
-                        return "";
-                    }
-                    // Never the token itself. It is what somebody would need to
-                    // join as this person, and the log is a file on disk.
-                    if (log != null) log("Voice: got a join token for profile " + profile);
-                    return m.Groups[1].Value;
                 }
-            }
-            catch (WebException we)
-            {
-                var hr = we.Response as HttpWebResponse;
-                if (hr != null && (int)hr.StatusCode == 403)
-                {
-                    if (log != null) log("Voice: the server says this Discord account does not own profile " + profile + ".");
-                }
-                else if (log != null)
-                {
-                    log("Voice: could not get a join token (" + we.Message + ").");
-                }
-                return "";
             }
             catch (Exception e)
             {
@@ -695,6 +281,12 @@ namespace Thornswood
                 return "";
             }
         }
+
+        /// <summary>
+        /// One client for every token fetch, with the five seconds the old
+        /// request had, in place of a client per fetch.
+        /// </summary>
+        static readonly HttpClient TokenHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
 
         /// <summary>Quote anything that would end a JSON string early.</summary>
         static string JsonEscape(string s)
@@ -712,9 +304,9 @@ namespace Thornswood
         }
 
         /*
-          Who the voice page's tokens are for: the host, port and profile of
+          Who voice's tokens are for: the host, port and profile of
           the last config sent. Written when a config goes out and read when
-          the page asks for a token, on different threads, hence the lock.
+          voice asks for a token, on different threads, hence the lock.
         */
         static string tokenHost = "";
         static string tokenPort = "";
@@ -722,14 +314,14 @@ namespace Thornswood
         static readonly object tokenLock = new object();
 
         /// <summary>
-        /// A join token for the voice page, which is about to connect.
+        /// A join token for the launcher's voice, which is about to connect.
         /// </summary>
         /// <remarks>
         /// Issue #1322. A token opens one connection and is good for two
-        /// minutes, so the page asks for one before every try instead of
+        /// minutes, so voice asks for one before every try instead of
         /// keeping one. The renewal every half hour and the fetch after a
-        /// refusal (#409) went with the hour long token they kept alive. The
-        /// page always gets an answer, an empty token and why when the fetch
+        /// refusal (#409) went with the hour long token they kept alive.
+        /// Voice always gets an answer, an empty token and why when the fetch
         /// failed, so it never waits on one that is not coming, and its own
         /// backoff decides when to ask again.
         /// </remarks>
@@ -751,7 +343,8 @@ namespace Thornswood
             }
             finally
             {
-                Post("{\"t\":\"token\",\"token\":\"" + JsonEscape(token) + "\",\"why\":\"" + JsonEscape(why) + "\"}");
+                VoiceSession s = session;
+                if (s != null) s.Token(token, why);
             }
         }
 
@@ -810,11 +403,11 @@ namespace Thornswood
             });
         }
 
-        // The last config the page was given, as host, port and profile.
+        // The last config voice was given, as host, port and profile.
         static string lastConfig = "";
 
-        // A page that has just loaded knows nothing of what it was sent before,
-        // so that path asks for a config whatever this says.
+        // Voice that has just started knows nothing of what it was sent
+        // before, so that path sends a config whatever this says.
         static void Configure(Action<string> log)
         {
             // Nor who is muted, so the file channel hands that over again.
@@ -835,7 +428,7 @@ namespace Thornswood
                 return;
             }
 
-            // The page opens a socket for every config it is handed and the
+            // Voice opens a socket for every config it is handed and the
             // voice service keeps a peer for every socket. Pressing Play twice
             // in one session on the same character is the same config again,
             // and all the second one leaves behind is a ghost on the roster
@@ -856,13 +449,13 @@ namespace Thornswood
 
             /*
               The rest waits on a network, so it never runs on the window's
-              thread. The page's NavigationCompleted calls this on that thread,
-              and the token fetch below is a web request with five second
+              thread. Reconfigure is called on that thread, and the token
+              fetch below is a web request with five second
               timeouts and a name lookup that can take fifteen seconds
               whatever the timeout says, so a slow network at startup could
               hold the launcher window that long (issue #409). Numbered, so
-              that when two configs are in flight only the newest reaches the
-              page.
+              that when two configs are in flight only the newest reaches
+              voice.
             */
             int seq = Interlocked.Increment(ref configSeq);
             ThreadPool.QueueUserWorkItem(delegate
@@ -876,12 +469,12 @@ namespace Thornswood
 
         static void SendConfig(int seq, string host, string port, long profile)
         {
-            // Fetched here rather than in the page, because the ticket lives in
-            // this process and has no business being handed to a browser.
+            // Fetched here rather than in VoiceSession, because the ticket is
+            // the launcher's and voice has no business holding it.
             string token = FetchToken(host, port, profile, Say);
-            if (seq != Thread.VolatileRead(ref configSeq)) return;
+            if (seq != Volatile.Read(ref configSeq)) return;
 
-            // Who the page's next tokens are for, whether or not this fetch
+            // Who voice's next tokens are for, whether or not this fetch
             // worked. These used to move only on success, so a config for a
             // new id whose first fetch failed went on minting for the
             // previous id.
@@ -892,30 +485,24 @@ namespace Thornswood
                 tokenProfile = profile;
             }
 
-            // This token is the page's alone (#1322). The game's chat asks for
+            // This token is voice's alone (#1322). The game's chat asks for
             // its own when it connects: PassTokenAsk.
 
-            // base and socket are what the page should use. host and port stay on
-            // the message so an older page, or one that has not been rebuilt,
-            // carries on building the url the way it always did.
             // Always https and wss (#1304); Configure returns before this with
             // no config, so the built-in address is only there for the compiler.
             string vbase = conf == null ? Config.Voice : conf.VoiceBase();
             string vsock = conf == null ? ("wss://" + Config.Voice.Substring(8) + "/") : conf.VoiceSocket();
-            Post("{\"t\":\"config\",\"host\":\"" + host + "\",\"port\":\"" + port +
-                 "\",\"profileId\":" + profile + ",\"name\":\"\"" +
-                 ",\"base\":\"" + JsonEscape(vbase) + "\"" +
-                 ",\"socket\":\"" + JsonEscape(vsock) + "\"" +
-                 ",\"token\":\"" + JsonEscape(token) + "\"}");
+            VoiceSession s = session;
+            if (s != null) s.Configure(profile, "", token, vbase, vsock);
             Say("Voice: configured for " + host + ":" + port + " as profile " + profile +
                 (token.Length == 0 ? " with no join token" : ""));
         }
 
         /// <summary>
-        /// Send the voice page its config again.
+        /// Send voice its config again.
         ///
-        /// Voice is configured once, when its page finishes loading, and that
-        /// happens while the launcher is still starting up. Pressing Play on a
+        /// Voice is configured once, when it starts, and that happens while
+        /// the launcher is still starting up. Pressing Play on a
         /// new character rolls a new profile id well after that, so voice went
         /// on announcing itself as whoever last held the slot and nobody was
         /// matched to their own character. The launch at 2026-09-16 02:25 had
@@ -927,10 +514,10 @@ namespace Thornswood
         /// parameterless version the moment a slot's id was written). The id
         /// is passed rather than read back out of the settings file because
         /// the file is not rewritten while the game runs. Safe to call before
-        /// the page exists: Post does nothing without a view, and Configure
-        /// says so and returns when there is no id yet.
+        /// voice has started: SendConfig does nothing without a session, and
+        /// Configure says so and returns when there is no id yet.
         ///
-        /// A config the page already has is not sent twice. Every one it is
+        /// A config voice already has is not sent twice. Every one it is
         /// handed opens a socket, and the service keeps a peer per socket, so a
         /// second Play on the same character used to leave a ghost peer behind
         /// announcing the previous slot.
@@ -941,13 +528,14 @@ namespace Thornswood
             try { Configure(null, false); } catch (Exception ex) { Swallow.Note("Voice.Reconfigure", ex); }
         }
 
-        static void OnPageMessage(string raw, Action<string> log)
+        /// <summary>
+        /// What voice reports, as the page's host(kind, text) reported it:
+        /// talking, debug, token, peers, status, and everything else a line
+        /// for the log. Called on the voice thread.
+        /// </summary>
+        static void OnSessionEvent(string kind, string text)
         {
-            if (string.IsNullOrEmpty(raw)) return;
-            Match t = Regex.Match(raw, "\"t\"\\s*:\\s*\"([^\"]*)\"");
-            Match x = Regex.Match(raw, "\"text\"\\s*:\\s*\"(.*)\"\\s*}\\s*$");
-            string kind = t.Success ? t.Groups[1].Value : "log";
-            string text = x.Success ? x.Groups[1].Value : raw;
+            if (text == null) text = "";
             // Push to talk flips many times a minute and the peer count
             // repeats itself constantly. Neither belongs in a log a person
             // reads, and an unlabelled "Voice: 0" belongs there least of all.
@@ -955,20 +543,20 @@ namespace Thornswood
 
             if (kind == "debug") { Quiet("Voice: " + text); return; }
 
-            // The page is about to connect and needs a token of its own
+            // Voice is about to connect and needs a token of its own
             // (#1322). Fetched off this thread, and always answered.
             if (kind == "token")
             {
                 ThreadPool.QueueUserWorkItem(delegate
                 {
-                    try { PageToken(); } catch (Exception ex) { Swallow.Note("Voice.OnPageMessage, token", ex); }
+                    try { PageToken(); } catch (Exception ex) { Swallow.Note("Voice.OnSessionEvent, token", ex); }
                 });
                 return;
             }
 
             if (kind == "peers")
             {
-                int n; int.TryParse(text, out n); peerCount = n;
+                int n; int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out n); peerCount = n;
                 PublishStatus();
                 if (text == lastPeers) return;
                 lastPeers = text;
@@ -1104,9 +692,9 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// The last mute line handed to the voice page, or null when the page
-        /// has not been given one. Written from the UI thread when the page
-        /// loads and from the file channel's thread, hence volatile.
+        /// The last mute line handed to voice, or null when voice has not been
+        /// given one. Written when voice is configured and from the file
+        /// channel's thread, hence volatile.
         /// </summary>
         static volatile string mutedSeen;
 
@@ -1117,8 +705,8 @@ namespace Thornswood
         static volatile bool readAgain;
 
         /// <summary>
-        /// Who this person has muted, from the game to the page that plays
-        /// the audio.
+        /// Who this person has muted, from the game to the launcher's voice,
+        /// which plays the audio.
         ///
         /// The mute from #133 reached the game's own page and stopped there.
         /// That page carries no audio once the launcher has it, so the voice
@@ -1126,8 +714,8 @@ namespace Thornswood
         /// 23 September, profile 123 muted in the game and beside you, gain 1
         /// here. The server's list reaches the game's page, the voice plugin
         /// writes it into voice-muted.txt, and this passes it on whenever it
-        /// changes. The page reads the ids out of the line itself and drops
-        /// anything that is not one.
+        /// changes. VoiceSession.Muted reads the ids out of the line itself
+        /// and drops anything that is not one.
         /// </summary>
         static void PassMuted(string[] dirs)
         {
@@ -1142,7 +730,8 @@ namespace Thornswood
             }
             if (now == null || now == mutedSeen) return;
             mutedSeen = now;
-            Post("{\"t\":\"muted\",\"list\":\"" + JsonEscape(now) + "\"}");
+            VoiceSession s = session;
+            if (s != null) s.Muted(now);
             int n = Regex.Matches(now, "\\d+").Count;
             Quiet("Voice: the game says " + n + (n == 1 ? " person is" : " people are") + " muted");
         }
@@ -1226,12 +815,13 @@ namespace Thornswood
 
                         string[] bits = now.Split(' ');
                         bool on = bits.Length > 0 && bits[0] == "1";
-                        Post("{\"t\":\"ptt\",\"on\":" + (on ? "true" : "false") + "}");
+                        VoiceSession s = session;
+                        if (s != null) s.Ptt(on);
 
                         if (bits.Length > 1 && bits[1].Length > 0 && bits[1] != voiceMode)
                         {
                             voiceMode = bits[1];
-                            Post("{\"t\":\"mode\",\"mode\":\"" + voiceMode + "\"}");
+                            if (s != null) s.Mode(voiceMode);
                         }
                     }
                     catch (Exception ex) { Swallow.Note("Voice.StartFileChannel", ex); }
@@ -1278,10 +868,11 @@ namespace Thornswood
                     try
                     {
                         string q = c.Request.Url.Query;
+                        VoiceSession s = session;
                         if (c.Request.Url.AbsolutePath == "/ptt")
                         {
                             bool on = q.IndexOf("on=1", StringComparison.Ordinal) >= 0;
-                            Post("{\"t\":\"ptt\",\"on\":" + (on ? "true" : "false") + "}");
+                            if (s != null) s.Ptt(on);
                         }
                         else if (c.Request.Url.AbsolutePath == "/mode")
                         {
@@ -1289,7 +880,7 @@ namespace Thornswood
                             if (m.Success)
                             {
                                 voiceMode = m.Groups[1].Value;
-                                Post("{\"t\":\"mode\",\"mode\":\"" + m.Groups[1].Value + "\"}");
+                                if (s != null) s.Mode(m.Groups[1].Value);
                             }
                         }
                         // Every reply carries the state, so the game's

@@ -22,7 +22,7 @@
       copied or a task is registered (a task name of its own, checked after)
     - a whole -To (C:\...) still works, with -PruneOnly
 
-  The script runs under Windows PowerShell 5.1, which the task uses. Touches
+  The script runs under PowerShell 7, which the task uses since #5356. Touches
   nothing but a scratch folder under the temp folder; LOCALAPPDATA is pointed
   into it for the runs, so even a broken refusal would not copy over the
   real scheduled copy.
@@ -54,10 +54,10 @@ Yes 'Fetch-Backups.ps1 parses' ($errors.Count -eq 0)
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the runs need Windows PowerShell 5.1, which the scheduled task uses; this is not Windows'
+    Write-Host 'SKIP  the runs: they are about Windows drive paths (C:\... whole, C:... drive-relative) and a scheduled task, which only Windows has'
     Done
 }
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 
 $root = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-2199w-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 $cwd = Join-Path $root 'ran-here'
@@ -75,7 +75,7 @@ function Run([string[]]$argv) {
     [Environment]::CurrentDirectory = $cwd
     try {
         $env:LOCALAPPDATA = $app
-        $script:last = @(& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $Fetch @argv 2>&1 | ForEach-Object { "$_" })
+        $script:last = @(& $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $Fetch @argv 2>&1 | ForEach-Object { "$_" })
         $code = $LASTEXITCODE
     } finally {
         $env:LOCALAPPDATA = $oldApp

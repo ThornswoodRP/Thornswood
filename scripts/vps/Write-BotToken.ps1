@@ -138,8 +138,7 @@ function Protect-ThornswoodBotEnv([string]$Path, [string]$Service = 'ThornswoodB
   # Only the access rules are written back, as Set-ThornswoodAclAccess does,
   # so an account without SeSecurityPrivilege can run it (issue #1120).
   $item = Get-Item -LiteralPath $Path -Force
-  if ($PSVersionTable.PSEdition -eq 'Core') { [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]$item, [Security.AccessControl.FileSecurity]$acl) }
-  else { $item.SetAccessControl($acl) }
+  [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]$item, [Security.AccessControl.FileSecurity]$acl)
 }
 
 function Write-ThornswoodBotToken {

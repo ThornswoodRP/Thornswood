@@ -146,6 +146,23 @@ function createSettlement(deps) {
   var now = deps.now || function () { return Date.now(); };
   var active = true, cursor = 0, busy = false;
   var errors = new Map();
+  /*
+    How each transfer this instance finished ended, by its pending id, until
+    the trading layer asks (#5419). A transfer finishes in a later tick, once
+    the engine's save storage has acknowledged its receipts, never inside the
+    begin() that armed it, so this is the only way its outcome reaches the
+    person and the hold's trade count. Bounded: an outcome nobody asks for
+    (a person who walked away) is let go with the oldest.
+  */
+  var outcomes = new Map(), MAX_OUTCOMES = 4 * MAX_PENDING;
+  function finished(pendingId, how) {
+    outcomes.delete(pendingId); outcomes.set(pendingId, how);
+    while (outcomes.size > MAX_OUTCOMES) outcomes.delete(outcomes.keys().next().value);
+    return true;
+  }
+  function released(id, state, pending) {
+    return !!save(id, state, Object.assign({}, copy(state), {pending:null}), pending.id) && finished(pending.id, 'released');
+  }
   function report(id, error) {
     var message=String(error.message || error);
     if(errors.get(id)!==message && deps.log) deps.log('merchant settlement ' + id.toString(16) + ': ' + message);
@@ -393,7 +410,7 @@ function createSettlement(deps) {
       if(Array.isArray(next.commissions.cool[keys[0]]))next.commissions.cool[keys[0]][0]=completedAt;
       else next.commissions.cool[keys[0]]=completedAt;
     }
-    return !!save(id, state, next, pending.id);
+    return !!save(id, state, next, pending.id) && finished(pending.id, 'done');
   }
   function reconcile(id, checked) {
     if (!available()) return false;
@@ -417,7 +434,7 @@ function createSettlement(deps) {
           // Calls are synchronous and busy fences this instance. An unchanged
           // original receipt proves this transaction never changed inventory,
           // including after restart. No original inventory restoration is needed.
-          return !!save(id, state, Object.assign({}, copy(state), {pending:null}), pending.id);
+          return released(id, state, pending);
         }
         if (!active) return false;
         var currentHumanId=identity(pending);
@@ -426,7 +443,7 @@ function createSettlement(deps) {
         if (!active) return false;
         live = transfer.receipt(humanId); saved = transfer.saved(humanId);
         if (changed === false && live === pending.expectedReceipt)
-          return !!save(id, state, Object.assign({}, copy(state), {pending:null}), pending.id);
+          return released(id, state, pending);
       }
       if (live !== pending.debitReceipt || saved !== pending.debitReceipt || !active) return false;
       state = commitMerchant(id, state);
@@ -516,7 +533,9 @@ function createSettlement(deps) {
       }
       var after = active && purses.read(offer.merchantId);
       var cancelled = after && !after.pending && equal(pendingSnapshot(pending,after),pendingSnapshot(pending,pending.previous));
-      return {accepted:!cancelled,done:done && !cancelled,reason:cancelled ? 'Your inventory changed. Choose the trade again.' : done ? '' : 'The transfer is waiting on the save.'};
+      if (done || cancelled) outcomes.delete(pending.id);
+      return {accepted:!cancelled,done:done && !cancelled,id:pending.id,
+        reason:cancelled ? 'Your inventory changed. Choose the trade again.' : done ? '' : 'The transfer is waiting on the save.'};
     } finally { busy = false; }
   }
   function tick() {
@@ -583,7 +602,13 @@ function createSettlement(deps) {
       return save(id,state,next,undefined,caller);
     } finally {busy=false;}
   }
-  return {begin:begin,tick:tick,available:available,canRetire:canRetire,changeCommissions:changeCommissions,pruneSupplyHistory:pruneSupplyHistory,
+  // A finished transfer's outcome, 'done' or 'released', once; null while it waits or when it is not known.
+  function outcome(pendingId) {
+    if (!outcomes.has(pendingId)) return null;
+    var how = outcomes.get(pendingId); outcomes.delete(pendingId);
+    return how;
+  }
+  return {begin:begin,tick:tick,outcome:outcome,available:available,canRetire:canRetire,changeCommissions:changeCommissions,pruneSupplyHistory:pruneSupplyHistory,
     withInventoryMutation:withInventoryMutation,canInventoryMutation:canInventoryMutation,shutdown:function () { active=false; }};
 }
 

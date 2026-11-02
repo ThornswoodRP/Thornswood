@@ -213,7 +213,7 @@ function runClient(env, input, waitMs) {
     // be one the site never sends, or a check through Caddy takes the site
     // for the bridge.
     yes('  saying "box bridge: not here", the line Install-Bridge.ps1 looks for', plain.body === 'box bridge: not here');
-    const siteSays = fs.readFileSync(path.join(REPO, 'site', 'server.js'), 'utf8');
+    const siteSays = require('./site-files').source();
     yes('  which the site never says', siteSays.indexOf('box bridge') < 0);
     yes('an upgrade with no token is a 401', /^HTTP\/1\.1 401/.test(await upgrade(port, WS_HEADERS)));
     yes('an upgrade with a wrong token is a 401', /^HTTP\/1\.1 401/.test(await upgrade(port, WS_HEADERS.concat(['Authorization: Bearer ' + TOKEN + 'x']))));

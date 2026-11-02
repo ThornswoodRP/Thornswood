@@ -25,11 +25,15 @@
                              records that follow a publish move it
       mods                   one entry per Nexus file the collection installs,
                              in modId then fileId order:
-                               { modId, fileId, name, plugins, dropPatch? }
+                               { modId, fileId, name, plugins, choices?, dropPatch? }
                              plugins are the plugins the file puts in Data,
-                             as the plugin list spells them. dropPatch names
-                             patches of the mod's old file to drop when its
-                             file moves (New-NexusRevision -DropPatch)
+                             as the plugin list spells them. choices are the
+                             answers to a FOMOD installer, as Vortex writes
+                             them in the collection, for a file the record
+                             adds (Read-NexusFile.ps1 prints the questions).
+                             dropPatch names patches of the mod's old file to
+                             drop when its file moves (New-NexusRevision
+                             -DropPatch)
       plugins                every plugin of the collection, in its order:
                                { name, enabled?, master, light, masters, after }
                              master and light are what the game reads them
@@ -47,12 +51,13 @@
 
   Mod names are only for people reading the record: nothing compares them.
 
-  Works on PowerShell 7 and Windows PowerShell 5.1. ASCII only.
+  Runs in PowerShell 7. ASCII only.
 #>
 
 $script:CollectionRecordHere = $PSScriptRoot
 if (-not $script:CollectionRecordHere) { $script:CollectionRecordHere = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 . (Join-Path $script:CollectionRecordHere '..\mods\PluginRuleLoops.ps1')
+. (Join-Path $script:CollectionRecordHere 'NexusModPlan.ps1')   # Get-NexusChoicesProblems
 
 # The game's own plugins, which no collection installs: the five base
 # masters the game loads first whatever any list says, and the update's
@@ -63,7 +68,7 @@ $script:CollectionGameOwn = @($script:CollectionBaseMasters + '_ResourcePack.esl
 # the collection, and Last is built on every machine from its recipe.
 $script:CollectionOurs = @('Thornswood-Content.esp', 'Thornswood-Last.esp')
 $script:CollectionRecordKeys = @('version', 'issue', 'what', 'collection', 'game', 'revision', 'mods', 'plugins', 'dropped', 'wipe')
-$script:CollectionModKeys = @('modId', 'fileId', 'name', 'plugins', 'dropPatch')
+$script:CollectionModKeys = @('modId', 'fileId', 'name', 'plugins', 'choices', 'dropPatch')
 $script:CollectionPluginKeys = @('name', 'enabled', 'master', 'light', 'masters', 'after')
 $script:CollectionDroppedKeys = @('name', 'mod', 'why')
 
@@ -115,6 +120,9 @@ function Get-CollectionRecordShapeProblems($R) {
             if (-not (Test-CollectionPluginName $p)) { $out.Add("${who}: '$p' is not a plugin name"); continue }
             $low = $p.ToLowerInvariant()
             if ($placedBy.ContainsKey($low)) { $out.Add("$p is put in Data by two files: $($placedBy[$low]) and $who") } else { $placedBy[$low] = $who }
+        }
+        if ((Get-CollectionKeys $m) -contains 'choices') {
+            foreach ($c in @(Get-NexusChoicesProblems $m.choices)) { $out.Add("${who}: $c") }
         }
         if ((Get-CollectionKeys $m) -contains 'dropPatch') {
             if (-not ($m.dropPatch -is [array]) -or -not @($m.dropPatch).Count) { $out.Add("${who}: dropPatch is not a list of paths") }
@@ -204,6 +212,21 @@ function Get-CollectionRecordHeaders($R) {
 function Get-CollectionRecordOrderProblems($R) {
     $out = New-Object Collections.Generic.List[string]
     $enabled = @(@($R.plugins) | Where-Object { $_.enabled -ne $false })
+    # A plugin switched off has no place in the collection's list, so the
+    # layout of a revision (Install-NexusRevision.ps1) puts every one after the
+    # list, in name order, and the draft is held to the record in that order.
+    # The record writes them there too: on 2 Nov the first change after them
+    # put Improved Eyes Skyrim.esp below CBBE.esp and RaceMenuMorphsCBBE.esp,
+    # and the draft of revision 7 was discarded for it (#4603).
+    $off = @(@($R.plugins) | Where-Object { $_.enabled -eq $false } | ForEach-Object { [string]$_.name })
+    if ($off.Count) {
+        $all = @(@($R.plugins) | ForEach-Object { [string]$_.name })
+        $firstOff = [Array]::IndexOf($all, $off[0])
+        $below = @($all[$firstOff..($all.Count - 1)] | Where-Object { $off -notcontains $_ })
+        if ($below.Count) { $out.Add("$($below[0]) is below $($off[0]), which is switched off: a plugin switched off goes after every plugin of the list, as the layout of the revision puts it") }
+        $sorted = @($off | Sort-Object { $_.ToLowerInvariant() })
+        if (($sorted -join '|') -cne ($off -join '|')) { $out.Add("the plugins switched off are not in name order, the order the layout of the revision gives them: $($sorted -join ', ')") }
+    }
     $pos = @{}
     for ($i = 0; $i -lt $enabled.Count; $i++) { $pos[([string]$enabled[$i].name).ToLowerInvariant()] = $i }
     $canon = @{}
@@ -411,6 +434,19 @@ function ConvertTo-CollectionJsonString([string]$s) {
     return $sb.ToString()
 }
 function ConvertTo-CollectionJsonList($xs) { return ('[' + ((@($xs | Where-Object { $null -ne $_ }) | ForEach-Object { ConvertTo-CollectionJsonString ([string]$_) }) -join ', ') + ']') }
+# A FOMOD's answers on one line, the way the record writes them, and the
+# way two sets of answers are compared.
+function ConvertTo-CollectionChoicesText($C) {
+    $q = { param($s) ConvertTo-CollectionJsonString ([string]$s) }
+    $steps = @(@($C.options) | ForEach-Object {
+            $groups = @(@($_.groups) | ForEach-Object {
+                    $chs = @(@($_.choices) | ForEach-Object { '{ "name": ' + (& $q $_.name) + ', "idx": ' + [long]$_.idx + ' }' })
+                    '{ "name": ' + (& $q $_.name) + ', "choices": [' + ($chs -join ', ') + '] }'
+                })
+            '{ "name": ' + (& $q $_.name) + ', "groups": [' + ($groups -join ', ') + '] }'
+        })
+    return ('{ "type": ' + (& $q $C.type) + ', "options": [' + ($steps -join ', ') + '] }')
+}
 function ConvertTo-CollectionRecordText($R) {
     $L = New-Object Collections.Generic.List[string]
     $q = { param($s) ConvertTo-CollectionJsonString ([string]$s) }
@@ -427,6 +463,7 @@ function ConvertTo-CollectionRecordText($R) {
     for ($i = 0; $i -lt $mods.Count; $i++) {
         $m = $mods[$i]
         $row = '    { "modId": ' + [long]$m.modId + ', "fileId": ' + [long]$m.fileId + ', "name": ' + (& $q $m.name) + ', "plugins": ' + (ConvertTo-CollectionJsonList $m.plugins)
+        if ((Get-CollectionKeys $m) -contains 'choices') { $row += ', "choices": ' + (ConvertTo-CollectionChoicesText $m.choices) }
         if ((Get-CollectionKeys $m) -contains 'dropPatch') { $row += ', "dropPatch": ' + (ConvertTo-CollectionJsonList $m.dropPatch) }
         $L.Add($row + ' }' + $(if ($i -lt $mods.Count - 1) { ',' } else { '' }))
     }
@@ -591,8 +628,8 @@ function Compare-CollectionRecord($Want, $Got) {
   revision the record describes. $Collection is the published revision's
   collection.json, as Vortex wrote it. Returns
     { Add; Remove; Move; Rule; Problems; Empty }
-  Add     one per new file: { modId; fileId; plugins = [{ name; after }] },
-          New-NexusRevision -Add's file
+  Add     one per new file: { modId; fileId; plugins = [{ name; after }];
+          choices? }, New-NexusRevision -Add's file
   Remove  mod numbers, every file of each gone (New-NexusRevision -Remove)
   Move    { modId; fileId; dropPatch } (-Mod, -FileId, -DropPatch)
   Rule    { name; after } for a plugin already on the list whose rule changes
@@ -635,17 +672,28 @@ function Get-CollectionChangeSet($R, $Collection) {
                     $addedPlugins[([string]$n).ToLowerInvariant()] = $true
                     $pl += [pscustomobject][ordered]@{ name = [string]$n; after = [string[]]@($pp.after) }
                 }
-                $add.Add([pscustomobject][ordered]@{ modId = $mid; fileId = $e.FileId; plugins = $pl })
+                $ad = [ordered]@{ modId = $mid; fileId = $e.FileId; plugins = $pl }
+                if ((Get-CollectionKeys $e.Entry) -contains 'choices') { $ad.choices = $e.Entry.choices }
+                $add.Add([pscustomobject]$ad)
             }
             continue
         }
         if ($there.Count -eq 1 -and $here.Count -eq 1 -and $pAll.Count -eq 1) {
+            if ((Get-CollectionKeys $here[0].Entry) -contains 'choices') { $problems.Add("mod $mid moves to file $($here[0].FileId) with choices; New-NexusRevision moves a file and keeps no installer answers for the new one") }
             $mv = [ordered]@{ modId = $mid; fileId = $here[0].FileId; dropPatch = @() }
             if ((Get-CollectionKeys $here[0].Entry) -contains 'dropPatch') { $mv.dropPatch = [string[]]@($here[0].Entry.dropPatch) }
             $move.Add([pscustomobject]$mv)
             continue
         }
         $problems.Add("mod $mid has files $(@($pAll | ForEach-Object { $_.FileId }) -join ', ') in the published revision and $(@(@($R.mods) | Where-Object { [long]$_.modId -eq $mid } | ForEach-Object { $_.fileId }) -join ', ') in the record; New-NexusRevision moves a mod with one file to one new file, so which file becomes which is not known")
+    }
+    # A file both keep: its answers are the published entry's, which the next
+    # revision carries as they are, so the record may only say them again.
+    foreach ($m in @($R.mods)) {
+        if ((Get-CollectionKeys $m) -notcontains 'choices' -or -not $pubKeys.ContainsKey("$([long]$m.modId)/$([long]$m.fileId)")) { continue }
+        $e = @(@($Collection.mods) | Where-Object { $_.source -and $_.source.type -eq 'nexus' -and [long]$_.source.fileId -eq [long]$m.fileId }) | Select-Object -First 1
+        $had = if ($e -and $e.PSObject.Properties['choices'] -and $e.choices) { ConvertTo-CollectionChoicesText $e.choices } else { '' }
+        if ((ConvertTo-CollectionChoicesText $m.choices) -cne $had) { $problems.Add("mod $($m.modId) file $($m.fileId) gives choices that are not the published revision's; New-NexusRevision does not change a kept file's installer answers") }
     }
     foreach ($m in @($R.mods)) {
         if ((Get-CollectionKeys $m) -contains 'dropPatch' -and -not @($move | Where-Object { $_.modId -eq [long]$m.modId }).Count) {

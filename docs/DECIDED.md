@@ -1,7 +1,7 @@
 # Decided
 
 What Patrick decided against, and the settled rules of the game, in one
-place. Read it before filing a new idea or feature (Developer-Guide.md, the
+place. Read it before filing a new idea or feature (the Developer Guide, the
 board). Each line links where the decision was made. An idea that goes
 against one of these says so in its issue and asks for the decision to be
 changed; it is not filed as if the question were open.
@@ -205,6 +205,9 @@ link, and the old line goes.
   only by the Discord staff roles; when it is full, people wait in line at
   the main menu. 29 Sep 2026,
   [#481](https://github.com/EvilPatrick06/Thornswood/issues/481).
+  The beta takes 50 plus 5 staff seats, and the release 100 plus 10, after
+  the load test measured 100 people on the server. 1 Nov 2026,
+  [#4623](https://github.com/ThornswoodRP/Thornswood/issues/4623#issuecomment-6564988985).
 - **One Discord account holds one seat**, on main and on dev: a second game
   from an account already in the world is told why and ended. Staff testing
   two-person scenes on dev use a second Discord account. 20 Oct 2026,
@@ -307,6 +310,13 @@ link, and the old line goes.
   every file, the signed manifest, the baseline record) rebuilt on top of
   it, not dropped (#4065). 26 Oct 2026,
   [#3209](https://github.com/EvilPatrick06/Thornswood/issues/3209#issuecomment-6434829911).
+- **The Avalonia and .NET 10 launcher with Velopack (#5381) may merge at
+  7615293.** (dec_WMq617vlU5XlP_-R4WEcDA) 2 Nov 2026,
+  [#4823](https://github.com/ThornswoodRP/Thornswood/issues/4823#issuecomment-6585437979).
+- **The ops repository's tunnel.yml replaces tunnel-token.yml, so the tunnel
+  token is sealed in one run that takes no key from whoever starts it.**
+  (dec_ezVpLbFt9vfdknnW36cqkw) 1 Nov 2026,
+  [#5334](https://github.com/ThornswoodRP/Thornswood/issues/5334#issuecomment-6570922212).
 
 ## Work and crafting
 
@@ -413,6 +423,383 @@ link, and the old line goes.
   and name that page. A Claude adds this line to the Developer Guide. 22 Oct
   2026,
   [#3192](https://github.com/EvilPatrick06/Thornswood/issues/3192#issuecomment-6335277941).
+
+## The plan of 31 Oct
+
+Patrick answered every card of the redesign plan on 31 Oct 2026 at 7:18 PM
+and approved the plan at 7:19 PM,
+[#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179). One line per
+card, by the plan's parts; a card he said no to is under "Turned down". The
+plan's own issues are #5179 to #5191 and #5196 to #5200; a line names its
+issue where the card did.
+
+### Kept from before
+
+- **Everything already decided stands** (card q-d-keep-others): the engine pin
+  moves by itself on one rolling pull request
+  ([#5148](https://github.com/ThornswoodRP/Thornswood/issues/5148)); upstream
+  SkyMP comes in once a week as a pull request on the fork
+  ([#5154](https://github.com/ThornswoodRP/Thornswood/issues/5154)); the
+  launcher on Avalonia and .NET 10 with Velopack for the launcher and the game
+  files ([#4823](https://github.com/ThornswoodRP/Thornswood/issues/4823),
+  [#4825](https://github.com/ThornswoodRP/Thornswood/issues/4825)); published
+  releases never change
+  ([#3287](https://github.com/ThornswoodRP/Thornswood/issues/3287)); the board's
+  one do-order is the Order field
+  ([#3534](https://github.com/ThornswoodRP/Thornswood/issues/3534)); nothing
+  new goes to One or the Local Desk
+  ([#2862](https://github.com/ThornswoodRP/Thornswood/issues/2862)). 31 Oct
+  2026.
+- **A main release waits for Patrick's Approve click on GitHub** (card
+  q-d-main-approval), and stays that way on the new release path. 31 Oct 2026,
+  [#5181](https://github.com/ThornswoodRP/Thornswood/issues/5181).
+- **Release and box tools are written in C# on .NET 10**, sharing code with the
+  new launcher; Go was the first answer (card q-d-tools-language). 31 Oct 2026,
+  [#5180](https://github.com/ThornswoodRP/Thornswood/issues/5180).
+
+### Where the work lives
+
+- **The repositories move into a free GitHub organization**, Patrick's own,
+  before the switch to the Hermes Bots (cards q-5184-org-move and
+  q-5184-org-name). Done as ThornswoodRP on 31 Oct. 31 Oct 2026,
+  [#5184](https://github.com/ThornswoodRP/Thornswood/issues/5184).
+- **Before the move, signing switches to GitHub's ID-based subject in Azure**,
+  so it survives this move and any later rename (q-p01-signing-subject). 31 Oct
+  2026, [#5184](https://github.com/ThornswoodRP/Thornswood/issues/5184).
+- **Thornswood-Hermes moves into the organization too** (q-p01-hermes-org). 31
+  Oct 2026, [#5184](https://github.com/ThornswoodRP/Thornswood/issues/5184).
+- **Folders are grouped by product** (apps/launcher, apps/site, apps/bot,
+  apps/voice, game, tools) with each product's tests beside its code, after the
+  switch, one product at a time (q-plan-folders). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+
+### The board
+
+- **The board moves to the organization**, the Bots and threads write it
+  directly, and the three board label workflows retire (q-p02-board-org). 31
+  Oct 2026, [#5185](https://github.com/ThornswoodRP/Thornswood/issues/5185).
+- **In Progress follows a linked open pull request, and every new issue is
+  added to the board by itself** (q-p02-board-auto). 31 Oct 2026,
+  [#5185](https://github.com/ThornswoodRP/Thornswood/issues/5185).
+- **Issue types Bug, Feature and Task** (q-p02-issue-types). 31 Oct 2026,
+  [#5185](https://github.com/ThornswoodRP/Thornswood/issues/5185).
+- **Sub-issues for big work like the plan** (q-p02-sub-issues). 31 Oct 2026,
+  [#5185](https://github.com/ThornswoodRP/Thornswood/issues/5185).
+- **A duplicate check when an issue is filed**, which links the likely twin
+  (q-p02-duplicate-check). 31 Oct 2026,
+  [#5185](https://github.com/ThornswoodRP/Thornswood/issues/5185).
+- **A weekly list of issues untouched for 30 days, to re-order, never to
+  close** (q-p02-stale-list). 31 Oct 2026,
+  [#5185](https://github.com/ThornswoodRP/Thornswood/issues/5185).
+- **A saved board view of what is next**, with the long tail hidden
+  (q-p02-next-view). 31 Oct 2026,
+  [#5185](https://github.com/ThornswoodRP/Thornswood/issues/5185).
+
+### Who does what
+
+- **Routine steps need no executor:** auto-merge, the release workflow and the
+  box agent do them (q-p03-no-executor). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **ops/status.md is written each night** from the board, the Releases, the
+  Deployments and the servers' health, never by hand
+  (q-p03-status-generated). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **The project memory and the Desk's handover files move into the ops
+  repository's docs**, where the Bots read them (q-p03-memory-to-ops). 31 Oct
+  2026, [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **One pull request per thread or Bot task** (q-p03-one-pr-per-task). 31 Oct
+  2026, [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+
+### Checking a change
+
+- **One command runs the harnesses a change can reach, before every push**, in
+  the cloud or on a PC; a harness that needs Windows prints SKIP on Linux
+  (q-p04-precheck). 31 Oct 2026,
+  [#5183](https://github.com/ThornswoodRP/Thornswood/issues/5183).
+- **Path rules:** a pull request that touches only docs, the site or the bot
+  skips the launcher build and the Windows gate, and Build check result always
+  runs (q-p04-path-rules). 31 Oct 2026,
+  [#5183](https://github.com/ThornswoodRP/Thornswood/issues/5183).
+- **The reach map is rebuilt each night by tracing on GitHub's Windows
+  runner**; if the trace cannot run there, each harness names the files it
+  reads instead (q-5183-reach-map). 31 Oct 2026,
+  [#5183](https://github.com/ThornswoodRP/Thornswood/issues/5183).
+- **Harnesses that don't need Windows run on GitHub's Linux runner**
+  (q-p04-linux-harnesses). 31 Oct 2026,
+  [#5183](https://github.com/ThornswoodRP/Thornswood/issues/5183).
+- **One report for the gate, not one test runner per language.** The card
+  for node:test and Pester (q-p04-test-runners) was measured on 1 Nov: no
+  faster, and the PowerShell harnesses would collide in one process, so
+  Patrick changed it to the gate and the nightly writing one report with a
+  test case per check (q-5295-gate-report). 1 Nov 2026,
+  [#5295](https://github.com/ThornswoodRP/Thornswood/issues/5295).
+- **A pre-push hook runs the parse and writing checks** (q-p04-prepush-hook).
+  31 Oct 2026, [#5183](https://github.com/ThornswoodRP/Thornswood/issues/5183).
+
+### Merging
+
+- **A pull request merges itself once Build check result is green**
+  (auto-merge). 31 Oct 2026,
+  [#5182](https://github.com/ThornswoodRP/Thornswood/issues/5182).
+- **A merge queue checks each pull request against the newest main**, once the
+  repositories are in the organization; requiring every branch to be up to
+  date was turned down (q-p05-merge-order). 31 Oct 2026,
+  [#5182](https://github.com/ThornswoodRP/Thornswood/issues/5182).
+- **The release note check and the test task check are required checks**
+  (q-p05-required-checks). 31 Oct 2026,
+  [#5182](https://github.com/ThornswoodRP/Thornswood/issues/5182).
+
+### Languages and code
+
+- **gamemode.js is written as many source files, in TypeScript**, joined into
+  the one file the server loads (q-2181-gamemode-language). 31 Oct 2026,
+  [#2181](https://github.com/ThornswoodRP/Thornswood/issues/2181).
+- **PowerShell only where Windows itself needs it** (services, file rights,
+  scheduled tasks) (q-p06-ps-only-windows). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **PowerShell 7 only, no Windows PowerShell 5.1** (q-p06-ps7-only). 31 Oct
+  2026, [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **The bot stays Python, split into modules** (q-p06-bot-modules). 31 Oct
+  2026, [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **The site stays without outside packages, split into modules**
+  (q-p06-site-modules). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+
+### Builds and releases
+
+- **The version comes from the build** (the date and the run), so there are no
+  number pull requests (q-p07-build-version). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **Tables that need game data are built on GitHub** with the five master files
+  the fork's checks already download (q-p07-tables-on-github). 31 Oct 2026,
+  [#5191](https://github.com/ThornswoodRP/Thornswood/issues/5191).
+- **Generated tables are built, not committed** (q-p07-tables-not-committed,
+  q-5191-content-outputs). 1 Nov 2026,
+  [#5191](https://github.com/ThornswoodRP/Thornswood/issues/5191).
+- **Every release file carries a signed provenance record** (GitHub's artifact
+  attestations) (q-p07-provenance). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **The builds keep a cache** for the engine, MSBuild, NuGet and npm, whatever
+  it saves (q-p07-build-cache). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **Each pull request carries a Release note line**, checked while it is open,
+  and the release joins them (q-5179-release-notes). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **The launcher's and the site's News read GitHub Releases**
+  (q-p09-news-from-releases). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+
+### The engine
+
+- **The pin pull request merges itself when green** (q-p08-pin-automerge). 31
+  Oct 2026, [#5188](https://github.com/ThornswoodRP/Thornswood/issues/5188).
+- **The server payload is part of the release build**, so dev takes a pin by
+  itself (q-p08-payload-in-release). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **Fork pull requests carry a Release note line too** (q-p08-fork-notes). 31
+  Oct 2026, [#5224](https://github.com/ThornswoodRP/Thornswood/issues/5224).
+- **The fork wakes Thornswood instead of a 10-minute look**, with the narrowest
+  token GitHub allows, scoped to that one repository (q-p08-fork-wakes; Patrick
+  said yes against the recommendation). 31 Oct 2026,
+  [#5220](https://github.com/ThornswoodRP/Thornswood/issues/5220).
+- **A Linux build of the server** (q-p08-linux-server). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+
+### Deploys and servers
+
+- **A gate verb that deploys a Release by its tag comes first**
+  (q-p10-gate-verb-first). 31 Oct 2026,
+  [#5180](https://github.com/ThornswoodRP/Thornswood/issues/5180).
+- **Rollback is a deploy of the Release before**: the gamemode reloads; plugins,
+  settings and the engine stop, swap and start under a hold. Dev is still never
+  rolled back (q-p10-rollback). 31 Oct 2026,
+  [#5180](https://github.com/ThornswoodRP/Thornswood/issues/5180).
+- **The deploy log is served from the dev server and linked from the
+  Deployment** (q-p10-deploy-log). 31 Oct 2026,
+  [#5180](https://github.com/ThornswoodRP/Thornswood/issues/5180).
+- **After each deploy the agent checks the box against its parity record** and
+  files any difference as an issue, never putting it back by itself
+  (q-p10-parity-check). 31 Oct 2026,
+  [#5180](https://github.com/ThornswoodRP/Thornswood/issues/5180).
+- **One box, for now** (q-p11-one-box). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **Test servers for the bot clients run on the box**, at low priority, as
+  throwaway copies (q-p11-test-servers-box). 31 Oct 2026,
+  [#5196](https://github.com/ThornswoodRP/Thornswood/issues/5196).
+- **Cloudflare Tunnel in front of the site**, only once Cloudflare's own pages
+  confirm it is free for this use (q-p11-cloudflare-tunnel). 31 Oct 2026,
+  [#5190](https://github.com/ThornswoodRP/Thornswood/issues/5190).
+
+### Collections and mods
+
+- **A mod change is one pull request to the collection record**, and its merge
+  drafts the revision (q-p12-mod-change-pr). 31 Oct 2026,
+  [#5189](https://github.com/ThornswoodRP/Thornswood/issues/5189).
+- **A published revision starts the rebuild and the dev release itself**
+  (q-p12-rebuild-itself). 31 Oct 2026,
+  [#5189](https://github.com/ThornswoodRP/Thornswood/issues/5189).
+- **A collection revision publishes to Nexus by itself** once its pull request
+  merges and its checks pass (q-5189-nexus-publish). 31 Oct 2026,
+  [#5189](https://github.com/ThornswoodRP/Thornswood/issues/5189).
+- **The pull request checks load order and plugin rules**
+  (q-p12-load-order-check). 31 Oct 2026,
+  [#5189](https://github.com/ThornswoodRP/Thornswood/issues/5189).
+- **FOMOD mods are installed without Vortex**, by writing the installer choices
+  the way Vortex does (q-p12-fomod-no-vortex). 31 Oct 2026,
+  [#5189](https://github.com/ThornswoodRP/Thornswood/issues/5189).
+
+### The launcher and updates
+
+- **Velopack reads its updates from GitHub Releases directly**
+  (q-4825-velopack-feed). 31 Oct 2026,
+  [#4825](https://github.com/ThornswoodRP/Thornswood/issues/4825).
+- **Velopack signs through Azure itself** (q-p13-velopack-signing). 31 Oct
+  2026, [#4825](https://github.com/ThornswoodRP/Thornswood/issues/4825).
+- **Delta updates**, so an update downloads only what changed
+  (q-p13-delta-updates). 31 Oct 2026,
+  [#4825](https://github.com/ThornswoodRP/Thornswood/issues/4825).
+- **The release workflow makes Velopack packages from its first version**
+  (q-p13-velopack-from-start). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **Which release a channel gets comes from its Dev or Main Deployment**
+  (q-p13-channel-from-deployment). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+
+### The site, the bot and voice
+
+- **Cloudflare cache rules for the plain pages** (q-p14-cache-rules). 31 Oct
+  2026, [#5190](https://github.com/ThornswoodRP/Thornswood/issues/5190).
+- **The plain pages also on Cloudflare Pages**, so they stay up when the box is
+  down (q-p14-pages-backup). 31 Oct 2026,
+  [#5190](https://github.com/ThornswoodRP/Thornswood/issues/5190).
+- **The box agent deploys the bot and voice on any merge that touches them**
+  (q-p15-bot-voice-deploy). 31 Oct 2026,
+  [#5187](https://github.com/ThornswoodRP/Thornswood/issues/5187).
+- **Release news is posted when the Dev or Main Deployment succeeds**
+  (q-p15-news-on-deploy). 31 Oct 2026,
+  [#5187](https://github.com/ThornswoodRP/Thornswood/issues/5187).
+- **A staff notice is an issue with a notice label**; the bot posts it and
+  closes it (q-p15-notice-issues). 31 Oct 2026,
+  [#5187](https://github.com/ThornswoodRP/Thornswood/issues/5187).
+
+### Test tasks and testing
+
+- **The pull request check runs the bot's own post rules on its test task**
+  (q-p16-task-check). 31 Oct 2026,
+  [#5205](https://github.com/ThornswoodRP/Thornswood/issues/5205).
+- **The Dev test task is posted by itself** when a dev release carries the fix
+  (q-p16-dev-task-auto). 31 Oct 2026,
+  [#5264](https://github.com/ThornswoodRP/Thornswood/issues/5264).
+- **A check that automatic testing covers is never written as a test task**
+  (q-p16-no-task-if-tested). 31 Oct 2026,
+  [#5199](https://github.com/ThornswoodRP/Thornswood/issues/5199).
+- **A scenario test for every system the coverage map shows thin**
+  (q-p17-scenarios). 31 Oct 2026,
+  [#5198](https://github.com/ThornswoodRP/Thornswood/issues/5198).
+- **Scripted bot clients log in to a throwaway server on the box** and play
+  through each system before every dev Deployment (q-p17-bot-clients-box). 31
+  Oct 2026, [#5196](https://github.com/ThornswoodRP/Thornswood/issues/5196).
+- **The same bot clients on GitHub's runner** with only the five masters
+  (q-p17-bot-clients-github). 31 Oct 2026,
+  [#5196](https://github.com/ThornswoodRP/Thornswood/issues/5196).
+- **A scripted real game on One for screens and menus**, run when that PC is on
+  (q-p17-real-game-one). 31 Oct 2026,
+  [#5197](https://github.com/ThornswoodRP/Thornswood/issues/5197).
+- **A load test with many bot clients** (q-p17-load-test). 31 Oct 2026,
+  [#5196](https://github.com/ThornswoodRP/Thornswood/issues/5196).
+
+### Ops and docs
+
+- **The steps after a deploy are code** in the pull request that needs them, and
+  run notes stop (q-p18-steps-as-code). 31 Oct 2026,
+  [#5186](https://github.com/ThornswoodRP/Thornswood/issues/5186).
+- **Developer-Guide.md is split into short task pages with a one-page index**
+  (q-p18-guide-split). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **This file gets a line by itself when a decision card is answered**
+  (q-p18-decided-auto). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **The docs folder is pruned:** every page is linked from docs/README.md or
+  moved out to an archive (q-p18-prune-docs). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+
+### Runners
+
+- **Every ops job that needs the box runs on the box's runners**, and every
+  other one moves to a public workflow if nothing in it is private
+  (q-p19-ops-runners). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **Ops jobs that don't need Windows use Ubuntu** (q-p19-ops-ubuntu). 31 Oct
+  2026, [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **Jobs that only read files or the API use the free arm64 Linux runner**
+  (q-p19-arm-runners). 31 Oct 2026,
+  [#5304](https://github.com/ThornswoodRP/Thornswood/issues/5304).
+- **Fewer runners on the box** as the box agent takes over their work
+  (q-p19-fewer-box-runners). 31 Oct 2026,
+  [#5180](https://github.com/ThornswoodRP/Thornswood/issues/5180).
+
+### Security
+
+- **main takes changes only through a pull request**, with auto-merge doing the
+  merging (q-p20-main-needs-pr). 31 Oct 2026,
+  [#5222](https://github.com/ThornswoodRP/Thornswood/issues/5222).
+- **The organization requires two-factor sign-in for every member**, on
+  Patrick's own word (q-p20-org-2fa). 31 Oct 2026,
+  [#5184](https://github.com/ThornswoodRP/Thornswood/issues/5184).
+- **Rulesets let the Bots' Apps bypass only what they must**, named one by one
+  (q-p20-bypass-apps). 31 Oct 2026,
+  [#5184](https://github.com/ThornswoodRP/Thornswood/issues/5184).
+- **An OpenSSF Scorecard workflow** (q-p20-scorecard). 31 Oct 2026,
+  [#5308](https://github.com/ThornswoodRP/Thornswood/issues/5308).
+- **Secret scanning and code scanning on the engine fork too**
+  (q-p20-fork-scanning). 31 Oct 2026,
+  [#5298](https://github.com/ThornswoodRP/Thornswood/issues/5298).
+- **Each Bot's App gets only the permissions its job needs**, written in a
+  record and checked nightly (q-p20-app-permissions). 31 Oct 2026,
+  [#5308](https://github.com/ThornswoodRP/Thornswood/issues/5308).
+
+### Turned down
+
+- **No split of the site, the bot and voice into repositories of their own**:
+  path rules give the same speed (q-p01-split-repos). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **A claim stays a label, not a draft pull request** (q-p02-claim-draft-pr).
+  31 Oct 2026, [#5185](https://github.com/ThornswoodRP/Thornswood/issues/5185).
+- **The report page is not drawn from issues**: it would put private to-dos on
+  the public repository (q-p03-page-from-issues). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **No batched releases**: a release per change stays
+  (q-p09-batch-releases). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **No box runner on the public repository** (q-p10-public-box-runner). 31 Oct
+  2026, [#4013](https://github.com/ThornswoodRP/Thornswood/issues/4013).
+- **No separate dev server**: it costs money (q-p11-separate-dev-box). 31 Oct
+  2026, [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **No test servers on the Oracle VM** for now (q-p11-test-servers-oracle). 31
+  Oct 2026, [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **A known issue still comes down when its fix lands, not at the deploy**
+  (q-p16-known-at-deploy). 31 Oct 2026,
+  [#3140](https://github.com/ThornswoodRP/Thornswood/issues/3140).
+- **The ops repository stays its own private repository**
+  (q-p18-fold-ops). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **No GitHub Team plan and no larger runners**: both cost money
+  (q-p19-github-team, q-p19-larger-runners). 31 Oct 2026,
+  [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+
+### After the plan
+
+- **A commit is authored by the person the session works for, never by an
+  AI**, so only the team and Dependabot are on the Contributors list
+  (q-5231-identity). 1 Nov 2026,
+  [#5231](https://github.com/ThornswoodRP/Thornswood/issues/5231).
+- **The 45 old Releases from before the history rewrite are deleted** once a
+  newer one of each kind exists on the new history (q-5231-immutable-tags). 1
+  Nov 2026, [#5231](https://github.com/ThornswoodRP/Thornswood/issues/5231).
+- **A v tag is moved or deleted only by an admin**; the rule on v tags stays as
+  it was set on 31 Oct (q-3683-lock-tag-creation, kept by
+  q-p20-v-tag-creation). 1 Nov 2026,
+  [#3683](https://github.com/ThornswoodRP/Thornswood/issues/3683).
 
 ## Kept, after being asked
 

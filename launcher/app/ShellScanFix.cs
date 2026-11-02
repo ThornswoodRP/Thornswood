@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Windows;
 
 namespace Thornswood
 {
@@ -394,11 +393,11 @@ namespace Thornswood
             // desktop and taskbar vanish for a second.
             if (Has(Upkeep.LastIssues, IssueKind.Icon) && Has(found, IssueKind.Icon))
             {
-                var r = MessageBox.Show(
+                bool yes = Ask.YesNo(
                     "The shortcut icon is still out of date after pointing the shortcuts at the current icon.\n\n" +
                     "Fix can throw away the pictures Windows has remembered for the shortcuts and redraw them. The desktop and taskbar blink once while Explorer restarts. Nothing is lost.\n\nGo ahead?",
-                    "Thornswood", MessageBoxButton.YesNo, MessageBoxImage.Question);
-                if (r == MessageBoxResult.Yes)
+                    "Thornswood", Ask.Icon.Question);
+                if (yes)
                 {
                     string repaired = null;
                     try { Waiting(delegate { repaired = Icons.Repair(); }); }

@@ -212,7 +212,7 @@ function Get-ScheduledTask {
   [pscustomobject]@{
     State='Ready'; Settings=[pscustomobject]@{ Enabled=$true }
     Principal=[pscustomobject]@{ UserId='SYSTEM' }
-    Actions=@([pscustomobject]@{ Execute='powershell.exe'; Arguments='-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\ProgramData\Thornswood-RunnerDrive\start.ps1"' })
+    Actions=@([pscustomobject]@{ Execute=(Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'); Arguments='-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\ProgramData\Thornswood-RunnerDrive\start.ps1"' })
     Triggers=@([pscustomobject]@{ CimClass=[pscustomobject]@{ CimClassName='MSFT_TaskBootTrigger' } })
   }
 }

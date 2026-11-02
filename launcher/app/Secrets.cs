@@ -90,7 +90,8 @@ namespace Thornswood
             try
             {
                 if (!File.Exists(path)) return;
-                var acl = File.GetAccessControl(path);
+                var file = new FileInfo(path);
+                var acl = file.GetAccessControl();
                 acl.SetAccessRuleProtection(true, false);
                 foreach (FileSystemAccessRule r in
                          acl.GetAccessRules(true, false, typeof(NTAccount)))
@@ -101,7 +102,7 @@ namespace Thornswood
                     WindowsIdentity.GetCurrent().Name,
                     FileSystemRights.FullControl,
                     AccessControlType.Allow));
-                File.SetAccessControl(path, acl);
+                file.SetAccessControl(acl);
             }
             catch (Exception ex) { Swallow.Note("Secrets.LockDown, " + path, ex); }
         }

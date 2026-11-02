@@ -9,7 +9,7 @@
 // pull request that puts the company form back, drops factions.json from
 // Install-Bot, grants a faction lead Discord role, or matches Lead
 // roles by a name prefix goes red here.
-// bot/test-faction-leader.py runs the form and the routing.
+// bot/tests/test-faction-leader.py runs the form and the routing.
 //
 // Read only.
 'use strict';
@@ -29,7 +29,8 @@ const bot = read('bot/bot.py');
 const install = read('scripts/deploy/Install-Bot.ps1');
 const build = read('bot/Build-Discord.py');
 const names = JSON.parse(read('bot/factions.json'));
-const site = read('site/server.js');
+// The site is server.js over its modules in site\lib since #5357.
+const site = require('./site-files').source();
 const page = read('docs/systems/trading-company.md');
 const factions = read('docs/systems/factions.md');
 const STAFF_RULE = 'No GM or staff member (Loremaster, Discord Moderator, or any other staff role) may hold an in-game RP role with faction leadership, such as a Jarl or a faction lead.';
@@ -126,7 +127,7 @@ yes('F6 Build-Discord makes a member and a Leader role for each faction in facti
 
 // #3317 (Patrick, 22 Oct, 11:03 AM, and page card q-3317-seat-rule-check, A):
 // every staff role counts for the seat rule, and the bot refuses rather than
-// flags. bot/test-3317-seats.py runs it.
+// flags. bot/tests/test-3317-seats.py runs it.
 yes('F7 is_staff still leaves Trial Gamemaster out, and the seat rule counts every staff role and refuses',
     /Lead Gamemaster and Trial Gamemaster carry Manage Threads/.test(bot) &&
     /SEAT_RULE_STAFF = \('Owner', 'Co-Owner',/.test(bot) && /'Trial Gamemaster'/.test(bot) &&

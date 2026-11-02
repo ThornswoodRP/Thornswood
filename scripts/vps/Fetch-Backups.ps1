@@ -189,7 +189,7 @@ function Send-OffBoxMark {
   $name = $newest[0].Name
   $file = $WatchRoot.Replace('/', '\') + '\offbox.txt'
   $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes("Set-Content -LiteralPath '$file' -Value '$name' -Encoding ASCII; 'MARKED'"))
-  $said = @(Invoke-ThornswoodNative { & ssh @ssh $target "powershell -NoProfile -EncodedCommand $enc" } 2>&1 | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
+  $said = @(Invoke-ThornswoodNative { & ssh @ssh $target "pwsh -NoProfile -EncodedCommand $enc" } 2>&1 | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
   if ($said -contains 'MARKED') { Say ("  told the box the newest copy here is {0}" -f $name) 'Green'; return }
   $first = $(if ($said.Count) { $said[0] } else { 'it said nothing' })
   Say ("  NOT TOLD  the box did not take {0} into {1}: {2}" -f $name, $file, $first) 'Red'
@@ -254,7 +254,7 @@ if ($Schedule) {
   $me = Join-Path $home2 'Fetch-Backups.ps1'
   $argLine = ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}" -NoPause -To "{1}" -KeyFile "{2}" -KeepDays {3}' -f
               $me, $To, $KeyFile, $KeepDays)
-  $a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $argLine -WorkingDirectory $home2
+  $a = New-ScheduledTaskAction -Execute (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe') -Argument $argLine -WorkingDirectory $home2
   $t = New-ScheduledTaskTrigger -Daily -At $At
   $p = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive
   $s = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -ExecutionTimeLimit (New-TimeSpan -Hours 1)
@@ -289,7 +289,7 @@ Get-ChildItem '$($Remote.Replace('/','\'))' -File -EA SilentlyContinue |
   Where-Object { `$_.Name -match '^thornswood-\d{8}-\d{6}\.zip(\.enc)?`$' } |
   ForEach-Object { `$_.Name + '|' + `$_.Length }
 "@))
-$listing = Invoke-ThornswoodNative { & ssh @ssh $target "powershell -NoProfile -EncodedCommand $e" } 2>&1
+$listing = Invoke-ThornswoodNative { & ssh @ssh $target "pwsh -NoProfile -EncodedCommand $e" } 2>&1
 
 Head 'On the VPS'
 $onBox = @()

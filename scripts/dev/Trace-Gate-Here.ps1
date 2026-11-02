@@ -40,7 +40,7 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $Box = Join-Path $Here 'Trace-Gate-Box.ps1'
 
-if (-not $IsWindows -and $PSVersionTable.PSEdition -eq 'Core') { Write-Host 'STOP. A gate trace is an ETW session, so it runs on Windows only.'; exit 2 }
+if (-not $IsWindows) { Write-Host 'STOP. A gate trace is an ETW session, so it runs on Windows only.'; exit 2 }
 $me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { Write-Host 'STOP. Only an administrator can start an ETW session; run this elevated.'; exit 2 }
 if ($Mode -eq 'read' -and (-not $Starts -or -not $Workspace -or -not $OutFile)) { Write-Host 'STOP. -Mode read needs -Starts, -Workspace and -OutFile.'; exit 2 }
@@ -64,7 +64,7 @@ $script = Join-Path $dir ('Trace-Gate-Box-' + $Mode + '.ps1')
 try {
     [IO.File]::WriteAllText($script, $pre + [IO.File]::ReadAllText($Box), (New-Object Text.UTF8Encoding($true)))
     $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    try { $lines = @(& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script 2>&1 | ForEach-Object { [string]$_ }); $code = $LASTEXITCODE }
+    try { $lines = @(& pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script 2>&1 | ForEach-Object { [string]$_ }); $code = $LASTEXITCODE }
     finally { $ErrorActionPreference = $old }
 } finally {
     Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue

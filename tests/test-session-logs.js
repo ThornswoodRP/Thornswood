@@ -34,9 +34,10 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const siteFiles = require('./site-files');
 
 const SRC = path.join(REPO_DIR, 'site', 'server.js');
-const src = fs.readFileSync(SRC, 'utf8');
+const src = siteFiles.source(SRC);
 
 function grab(name) {
   const at = src.indexOf('function ' + name);

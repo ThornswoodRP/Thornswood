@@ -367,7 +367,7 @@ try {
     `$acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier(`$s)), 'FullControl', 'ContainerInherit, ObjectInherit', 'None', 'Allow')))
   }
   # Only the access rules are written back (issue #1120).
-  (Get-Item -LiteralPath '$Root' -Force).SetAccessControl(`$acl)
+  [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo](Get-Item -LiteralPath '$Root' -Force), `$acl)
 } catch { 'COULD NOT LOCK: ' + `$_.Exception.Message; exit 1 }
 # The App's folder, made once; an install never moves or changes what is in it.
 if (-not (Test-Path -LiteralPath '$state')) { New-Item -ItemType Directory -Path '$state' -Force | Out-Null }
@@ -389,14 +389,15 @@ try {
     `$acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier(`$r[0])), `$r[1], `$tree, 'None', 'Allow')))
   }
   `$acl.SetOwner(`$admins)
-  (Get-Item -LiteralPath '$state' -Force).SetAccessControl(`$acl)
+  [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo](Get-Item -LiteralPath '$state' -Force), `$acl)
   # What is in it keeps only what state gives it, and no LOCAL SERVICE owner.
   foreach (`$i in @(Get-ChildItem -LiteralPath '$state' -Recurse -Force)) {
     `$a = Get-Acl -LiteralPath `$i.FullName
     `$a.SetAccessRuleProtection(`$false, `$false)
     foreach (`$r in @(`$a.GetAccessRules(`$true, `$false, [Security.Principal.SecurityIdentifier]))) { [void]`$a.RemoveAccessRuleSpecific(`$r) }
     `$a.SetOwner(`$admins)
-    `$i.SetAccessControl(`$a)
+    if (`$i -is [IO.DirectoryInfo]) { [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo]`$i, [Security.AccessControl.DirectorySecurity]`$a) }
+    else { [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]`$i, [Security.AccessControl.FileSecurity]`$a) }
   }
 } catch { 'COULD NOT LOCK STATE: ' + `$_.Exception.Message; exit 1 }
 # The bot's token, locked apart the same way, and the bot's own account may
@@ -412,13 +413,14 @@ try {
     `$acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier(`$r[0])), `$r[1], `$tree, 'None', 'Allow')))
   }
   `$acl.SetOwner(`$admins)
-  (Get-Item -LiteralPath '$forBot' -Force).SetAccessControl(`$acl)
+  [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo](Get-Item -LiteralPath '$forBot' -Force), `$acl)
   foreach (`$i in @(Get-ChildItem -LiteralPath '$forBot' -Recurse -Force)) {
     `$a = Get-Acl -LiteralPath `$i.FullName
     `$a.SetAccessRuleProtection(`$false, `$false)
     foreach (`$r in @(`$a.GetAccessRules(`$true, `$false, [Security.Principal.SecurityIdentifier]))) { [void]`$a.RemoveAccessRuleSpecific(`$r) }
     `$a.SetOwner(`$admins)
-    `$i.SetAccessControl(`$a)
+    if (`$i -is [IO.DirectoryInfo]) { [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo]`$i, [Security.AccessControl.DirectorySecurity]`$a) }
+    else { [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]`$i, [Security.AccessControl.FileSecurity]`$a) }
   }
 } catch { 'COULD NOT LOCK FOR-BOT: ' + `$_.Exception.Message; exit 1 }
 Get-ChildItem -LiteralPath '$Root' -Directory -Force -EA SilentlyContinue | Where-Object { `$_.Name -like '.stage-*' } |

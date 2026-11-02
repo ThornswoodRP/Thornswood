@@ -29,11 +29,12 @@
 const REPO_DIR = require('path').join(__dirname, '..'); // the tests are in tests\, the repository is one folder up
 const fs = require('fs');
 const path = require('path');
+const siteFiles = require('./site-files');
 const CR = String.fromCharCode(13);
 
 const SITE = process.env.SITE || path.join(REPO_DIR, 'site', 'server.js');
 const GAME = process.env.GAMEMODE || path.join(REPO_DIR, 'game', 'gamemode.js');
-const site = fs.readFileSync(SITE, 'utf8').split(CR).join('');
+const site = siteFiles.source(SITE).split(CR).join('');
 const game = fs.readFileSync(GAME, 'utf8').split(CR).join('');
 
 let pass = 0, fail = 0;

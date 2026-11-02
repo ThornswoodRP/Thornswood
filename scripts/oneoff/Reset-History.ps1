@@ -27,7 +27,7 @@
        branch protection is written back as it was read.
     6. Pushes the new hotfix commit, deletes every other branch on GitHub, and
        turns on "Automatically delete head branches" so merged branches stop
-       piling up (Developer-Guide.md, How work moves).
+       piling up (docs/guide/how-work-moves.md).
     7. Moves this checkout onto the new main. Your local branches are listed,
        not deleted: some may hold work that was never pushed.
 

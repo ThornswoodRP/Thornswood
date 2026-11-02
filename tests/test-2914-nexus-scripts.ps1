@@ -24,7 +24,7 @@
        account owns both mods, and the prompt never runs against a stand-in;
     2. the CRC-64/NVME the multipart upload is bound to, against the
        algorithm's published check value, and the md5;
-    3. a new file version, under pwsh and under Windows PowerShell 5.1: -WhatIf
+    3. a new file version, under pwsh: -WhatIf
        writes nothing; a bad version, a version already there and a file that
        is not the mod's stop before any write; one part with md5 and
        Content-MD5, and many parts with the CRC, each make the version with
@@ -58,8 +58,8 @@
        else, are refused; the real run discards the draft with
        discardRevision and reads back that no draft is waiting.
 
-  Needs node. The collection part needs 7-Zip and says SKIP without it; the
-  5.1 runs say SKIP where there is no Windows PowerShell. Everything it writes
+  Needs node. The collection part needs 7-Zip and says SKIP without it.
+  Everything it writes
   is under its own temp folder, which it removes.
 #>
 [CmdletBinding()]
@@ -99,7 +99,6 @@ Yes 'node is on PATH, for the stand-in Nexus' ($null -ne $node)
 if ($null -eq $node) { Done }
 $pwsh = (Get-Process -Id $PID).Path
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-$winps = if ($OnWindows) { Get-WindowsPowerShell } else { '' }
 $sz = ''
 if ($env:ProgramFiles -and (Test-Path -LiteralPath (Join-Path $env:ProgramFiles '7-Zip\7z.exe'))) { $sz = Join-Path $env:ProgramFiles '7-Zip\7z.exe' }
 if (-not $sz) { foreach ($n in '7z', '7zz', '7za') { $g = Get-Command $n -ErrorAction SilentlyContinue; if ($g) { $sz = $g.Source; break } } }
@@ -140,11 +139,9 @@ $env:THORNSWOOD_SCRATCH_ROOT = (Join-Path $T 'scratch')
 $realAppData = $env:LOCALAPPDATA
 
 $script:outs = New-Object System.Collections.Generic.List[string]
-function Run([string]$name, [string[]]$arguments, [switch]$Win51) {
-    $exe = $pwsh
-    if ($Win51) { $exe = $winps }
+function Run([string]$name, [string[]]$arguments) {
     $psi = New-Object Diagnostics.ProcessStartInfo
-    $psi.FileName = $exe
+    $psi.FileName = $pwsh
     # New-NexusRevision holds every mod to a permission record (#3649): the
     # stand-in's mods are in one of the test's own, never the real one.
     if ($name -eq 'New-NexusRevision.ps1') { $arguments = @($arguments) + @('-Permissions', $script:perm) }
@@ -257,26 +254,16 @@ Yes 'the stand-in has 1.0.0 archived and the changelog' (@($st.files.'file-runti
 
 $env:THORNSWOOD_NEXUS_STANDIN_SINGLE_MAX = '100000'
 $n0 = Count
-if ($winps) { $r = Run 'Send-NexusFile.ps1' @('-Mod', '192762', '-Archive', $archive, '-Version', '1.0.2') -Win51; $shell = 'Windows PowerShell 5.1' }
-else { Skip 'this is not Windows, which is the only place Windows PowerShell 5.1 runs, so the multipart run is under pwsh'; $r = Run 'Send-NexusFile.ps1' @('-Mod', '192762', '-Archive', $archive, '-Version', '1.0.2'); $shell = 'pwsh' }
+$r = Run 'Send-NexusFile.ps1' @('-Mod', '192762', '-Archive', $archive, '-Version', '1.0.2')
 $env:THORNSWOOD_NEXUS_STANDIN_SINGLE_MAX = $null
 $got = @(Since $n0)
-YesR ("many parts, under $shell" + ': the version is made and its file id printed') ($r.Code -eq 0 -and $r.Out -match 'File id\s+812346' -and $r.Out -match ('md5\s+' + $md5)) $r
+YesR 'many parts: the version is made and its file id printed' ($r.Code -eq 0 -and $r.Out -match 'File id\s+812346' -and $r.Out -match ('md5\s+' + $md5)) $r
 $mk = @($got | Where-Object { $_.path -eq '/v3/uploads/multipart' }) | Select-Object -First 1
 $crc = Get-NexusCrc64Nvme $archive
 Yes 'POST /v3/uploads/multipart carries the CRC-64/NVME and no md5' ($null -ne $mk -and $mk.json.crc64nvme -eq $crc -and $null -eq $mk.json.PSObject.Properties['md5'])
 $parts = @($got | Where-Object { $_.path -like '/s3/part/*' })
 $done = @($got | Where-Object { $_.path -like '/s3/complete/*' }) | Select-Object -First 1
 Yes ('the ' + $parts.Count + ' parts and the complete go to storage with no key, and the complete goes to the address bound to the CRC, with no unsigned x-amz header') ($parts.Count -eq 5 -and @($parts | Where-Object { $_.key -ne 'none' }).Count -eq 0 -and $null -ne $done -and $done.key -eq 'none' -and $done.boundCrc -eq $crc -and $done.crc -eq '' -and $done.contentType -eq 'application/xml')
-
-if ($winps) {
-    $n0 = Count
-    $r = Run 'Send-NexusFile.ps1' @('-Mod', '192001', '-Archive', $archive, '-Version', '1.3', '-Category', 'main') -Win51
-    YesR 'one part under Windows PowerShell 5.1 too' ($r.Code -eq 0 -and $r.Out -match 'File id\s+812347') $r
-    $put = @((Since $n0) | Where-Object { $_.path -like '/s3/single/*' }) | Select-Object -First 1
-    Yes 'with the same Content-MD5 and Content-Disposition' ($null -ne $put -and $put.contentMd5 -eq $facts.Md5Base64 -and $put.contentDisposition -eq 'attachment; filename="Thornswood Client Runtime-1.0.1.7z"')
-}
-else { Skip 'one part under Windows PowerShell 5.1: this is not Windows' }
 
 Control @{ unboundComplete = $true }
 $env:THORNSWOOD_NEXUS_STANDIN_SINGLE_MAX = '100000'
@@ -452,6 +439,28 @@ foreach ($case in @(
     Yes ('adding ' + $case[1] + ' is refused, and nothing is written') ($LASTEXITCODE -eq 1 -and -not (Test-Path -LiteralPath (Join-Path $T 'no.json')))
 }
 
+# #4603: revision 6 installs RaceMenuMorphsCBBE.esp off its list, and the
+# record (checked by Check-CollectionRecord.ps1) lets a new plugin load after
+# it. The publish of 2 Nov stopped here, as the drafter knew only the list.
+Put $addJson ('[' + (AddSpec '8662' $hair 'RaceMenuMorphsCBBE.esp') + ']')
+$err = (& $node.Source $js $cj $addJson (Join-Path $T 'no.json') (Join-Path $T 'no-payload.json') 2>&1) -join ' '
+Yes 'a plugin to load after one installed off the list, with no "unlisted", is refused, saying so' ($LASTEXITCODE -eq 1 -and $err -match 'after RaceMenuMorphsCBBE\.esp, which the plugin list does not name and the revision does not install off its list')
+Put $addJson ('[{"unlisted":["CBBE.esp","RaceMenuMorphsCBBE.esp"]},' + (AddSpec '8662' $hair 'RaceMenuMorphsCBBE.esp') + ']')
+$o1 = Join-Path $T 'unlisted-collection.json'; $o2 = Join-Path $T 'unlisted-payload.json'
+$said = & $node.Source $js $cj $addJson $o1 $o2
+Yes 'with "unlisted" naming it, the plugin is added and says it' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ('KS Hairdos Lite SE NoNPCs' + "`tadded`t`tfile 8662|" + $hair + "`tplugin`t`tafter RaceMenuMorphsCBBE.esp"))
+& $node.Source -e "const fs=require('fs');const b=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));if(JSON.stringify(b.plugins)!==JSON.stringify([{name:process.argv[2],enabled:true}]))process.exit(2);if(JSON.stringify(b.pluginRules.plugins)!==JSON.stringify([{name:process.argv[2].toLowerCase(),after:['racemenumorphscbbe.esp']}]))process.exit(3);process.exit(0)" $o1 $hair
+Yes 'and only the new plugin goes on the list: the rule names the one off it, which stays off' ($LASTEXITCODE -eq 0)
+foreach ($case in @(
+        @('[{"unlisted":["RaceMenuMorphsCBBE.esp"]}]', 'with nothing else to do', 'There are no swaps'),
+        @(('[{"unlisted":"RaceMenuMorphsCBBE.esp"},' + (AddSpec '8662' $hair 'RaceMenuMorphsCBBE.esp') + ']'), 'that is not a list', 'is not a list of plugin names'),
+        @(('[{"unlisted":["Notes.txt"]},' + (AddSpec '8662' $hair 'RaceMenuMorphsCBBE.esp') + ']'), 'naming something that is not a plugin', 'which is not a plugin name'))) {
+    Put $addJson $case[0]
+    Remove-Item -LiteralPath (Join-Path $T 'no.json') -ErrorAction SilentlyContinue
+    $err = (& $node.Source $js $cj $addJson (Join-Path $T 'no.json') (Join-Path $T 'no-payload.json') 2>&1) -join ' '
+    Yes ('an "unlisted" ' + $case[1] + ' is refused, saying so, and nothing is written') ($LASTEXITCODE -eq 1 -and $err -match $case[2] -and -not (Test-Path -LiteralPath (Join-Path $T 'no.json')))
+}
+
 # Issue #2979: a binary patch on the entry that installs a plugin, recorded
 # the way Vortex records one: the file's path in the mod and the CRC-32 of the
 # archive's copy, after the entry's source.
@@ -496,6 +505,18 @@ foreach ($case in @(
     $err = (& $node.Source $js $cjRule $ruJson (Join-Path $T 'no.json') (Join-Path $T 'no-payload.json') 2>&1) -join ' '
     Yes ('a rule for ' + $case[1] + ' is refused, saying so, and nothing is written') ($LASTEXITCODE -eq 1 -and $err -match $case[2] -and -not (Test-Path -LiteralPath (Join-Path $T 'no.json')))
 }
+# A rule may name a plugin installed off the list, as revision 6's
+# CommonClothes.esp names RaceMenuMorphsCBBE.esp; the plugin's place in the
+# list comes from the plugins of the list it names.
+Put $ruJson '[{"unlisted":["RaceMenuMorphsCBBE.esp"]},{"rule":true,"name":"cheddars_mashups.esl","after":["RaceCompatibility.esm","RaceMenuMorphsCBBE.esp"]}]'
+$o1 = Join-Path $T 'rule-unlisted-out.json'
+$said = & $node.Source $js $cjRule $ruJson $o1 (Join-Path $T 'rule-unlisted-payload.json')
+& $node.Source -e "const fs=require('fs');const b=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));if(b.plugins.map(p=>p.name).join('|')!=='Water for ENB.esm|RaceCompatibility.esm|cheddars_mashups.esl|Immersive Weapons.esp')process.exit(2);process.exit(JSON.stringify(b.pluginRules.plugins[1])===JSON.stringify({name:'cheddars_mashups.esl',after:['racecompatibility.esm','racemenumorphscbbe.esp']})?0:3)" $o1
+Yes 'a rule may name a plugin "unlisted" gives, and the plugin is placed by the ones of the list' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ("cheddars_mashups.esl`trule`tafter immersive weapons.esp`tafter racecompatibility.esm, racemenumorphscbbe.esp"))
+Put $ruJson '[{"unlisted":["Immersive Weapons.esp"]},{"rule":true,"name":"cheddars_mashups.esl","after":["RaceCompatibility.esm"]}]'
+Remove-Item -LiteralPath (Join-Path $T 'no.json') -ErrorAction SilentlyContinue
+$err = (& $node.Source $js $cjRule $ruJson (Join-Path $T 'no.json') (Join-Path $T 'no-payload.json') 2>&1) -join ' '
+Yes 'an "unlisted" plugin the list has is refused, saying so, and nothing is written' ($LASTEXITCODE -eq 1 -and $err -match 'which the plugin list has, so it is not installed off the list' -and -not (Test-Path -LiteralPath (Join-Path $T 'no.json')))
 
 # Issue #3649: a mod taken out, with the plugins its hashes put in Data.
 $rmJson = Join-Path $T 'remove.json'
@@ -539,8 +560,7 @@ New-Item -ItemType Directory -Force -Path $tcDir | Out-Null
 Put (Join-Path $tcDir 'Thornswood-Content.esp') 'TES4 remade'
 $tcArc = Join-Path $T 'Thornswood Content-next.7z'
 Push-Location $tcDir; & $sz a -t7z -y $tcArc 'Thornswood-Content.esp' | Out-Null; Pop-Location
-# 1.3 is taken when the 5.1 run above made it.
-$tcVer = if ($winps) { '1.4' } else { '1.3' }
+$tcVer = '1.3'
 $r = Run 'Send-NexusFile.ps1' @('-Mod', '192001', '-Archive', $tcArc, '-Version', $tcVer, '-Category', 'main')
 $tcId = [regex]::Match($r.Out, 'File id\s+(\d+)').Groups[1].Value
 YesR ('Thornswood Content ' + $tcVer + ', an archive with the plugin in it, is uploaded') ($r.Code -eq 0 -and $tcId) $r
@@ -655,12 +675,79 @@ $x4 = Join-Path $T 'unpacked4'
 & $sz x -y ('-o' + $x4) $built4 | Out-Null
 & $node.Source -e "const fs=require('fs');const b=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const e=b.mods.find(m=>m.source.fileId===8662);process.exit(e&&e.source.md5===process.argv[2]&&e.source.fileSize===Number(process.argv[3])&&e.author==='Brataccas'&&/^[0-9A-Za-z_-]{10}$/.test(e.source.tag)&&b.plugins.some(p=>p.name===process.argv[4]&&p.enabled)?0:1)" (Join-Path $x4 'collection.json') ((Get-FileHash -LiteralPath $hairArc -Algorithm MD5).Hash.ToLowerInvariant()) ((Get-Item -LiteralPath $hairArc).Length) $hair
 Yes 'its entry has the archive''s md5 and size, a new tag, and the plugin switched on' ($LASTEXITCODE -eq 0)
+# #4603: the plugins installed off the list come from the record, and only
+# when it follows the revision this starts from; a draft is not that.
+Put $addJson ('[{"modId":1932,"fileId":8662,"archive":' + (ConvertTo-Json $hairArc) + ',"plugins":[{"name":' + (ConvertTo-Json $hair) + ',"after":["RaceMenuMorphsCBBE.esp"]}]}]')
+$r = Run 'New-NexusRevision.ps1' @('-Add', $addJson, '-WhatIf')
+YesR 'building on a draft, no plugin installed off the list is taken from the record, and an "after" naming one is refused' ($r.Code -eq 1 -and $r.Out -match 'the record follows revision \d+ of 7essxf, not this one' -and $r.Out -match 'which the plugin list does not name and the revision does not install off its list') $r
 AddFile $hairArc ''
 $r = Run 'New-NexusRevision.ps1' @('-Add', $addJson, '-WhatIf')
-YesR 'an archive whose plugins are not the ones named is refused' ($r.Code -eq 1 -and $r.Out -match 'are not the ones its archive holds') $r
+YesR 'an archive whose plugins are not the ones named is refused' ($r.Code -eq 1 -and $r.Out -match 'are not the ones the basic installer puts in Data') $r
 AddFile (Join-Path $T 'fomod.7z') $hair
 $r = Run 'New-NexusRevision.ps1' @('-Add', $addJson, '-WhatIf')
-YesR 'an archive with a FOMOD installer is refused' ($r.Code -eq 1 -and $r.Out -match 'has a FOMOD installer') $r
+YesR 'an archive with a FOMOD installer and no choices is refused, naming Read-NexusFile' ($r.Code -eq 1 -and $r.Out -match 'has a FOMOD installer and mod 1932' -and $r.Out -match 'Read-NexusFile\.ps1 -Mod 1932 -FileId 8662') $r
+# Issue #5189: an archive with a FOMOD installer goes in with its choices.
+# The script is run with them as the layout runs it, and only the plugins it
+# puts in Data may be named; the entry carries the choices after its source.
+$fx = Join-Path $T 'fomodreal'
+foreach ($k in 'fomod', 'core', 'dg', 'serana') { New-Item -ItemType Directory -Force -Path (Join-Path $fx $k) | Out-Null }
+Put (Join-Path $fx 'fomod\ModuleConfig.xml') @'
+<?xml version="1.0" encoding="UTF-8"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd">
+  <moduleName>Eyes</moduleName>
+  <requiredInstallFiles><folder source="core" destination="" /></requiredInstallFiles>
+  <installSteps order="Explicit">
+    <installStep name="Options">
+      <optionalFileGroups order="Explicit">
+        <group name="Add-ons" type="SelectAny">
+          <plugins order="Explicit">
+            <plugin name="Dawnguard"><description>d</description><files><folder source="dg" destination="" /></files><typeDescriptor><type name="Optional"/></typeDescriptor></plugin>
+            <plugin name="Serana"><description>s</description><files><folder source="serana" destination="" /></files><typeDescriptor><type name="Optional"/></typeDescriptor></plugin>
+          </plugins>
+        </group>
+      </optionalFileGroups>
+    </installStep>
+  </installSteps>
+</config>
+'@
+Put (Join-Path $fx 'core\Eyes.esp') 'TES4'; Put (Join-Path $fx 'dg\EyesDG.esp') 'TES4'; Put (Join-Path $fx 'serana\EyesSerana.esp') 'TES4'
+$eyesArc = Join-Path $T 'eyes.7z'
+Push-Location $fx; & $sz a -t7z -y $eyesArc '*' | Out-Null; Pop-Location
+$dgChoice = '{"type":"fomod","options":[{"name":"Options","groups":[{"name":"Add-ons","choices":[{"name":"Dawnguard","idx":0}]}]}]}'
+function AddEyes([string[]]$plugins, [string]$choices) {
+    $p = '[' + ((@($plugins) | ForEach-Object { '{"name":"' + $_ + '","after":["Dragonborn.esm"]}' }) -join ',') + ']'
+    Put $addJson ('[{"modId":1932,"fileId":8662,"archive":' + (ConvertTo-Json $eyesArc) + ',"plugins":' + $p + $(if ($choices) { ',"choices":' + $choices } else { '' }) + '}]')
+}
+AddEyes @('Eyes.esp', 'EyesDG.esp') $dgChoice
+$r = Run 'New-NexusRevision.ps1' @('-Add', $addJson, '-WhatIf')
+YesR 'a FOMOD archive with choices is added: its script runs with them and puts in Data the plugins named' ($r.Code -eq 0 -and $r.Out -match '2 plugin\(s\) by FOMOD, with the choices given' -and $r.Out -match 'which makes revision 4 a draft') $r
+$x4f = Join-Path $T 'unpacked4f'
+& $sz x -y ('-o' + $x4f) $built4 | Out-Null
+& $node.Source -e "const fs=require('fs');const b=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const e=b.mods.find(m=>m.source.fileId===8662);const k=Object.keys(e);process.exit(e.choices&&e.choices.type==='fomod'&&e.choices.options[0].groups[0].choices[0].name==='Dawnguard'&&k.indexOf('choices')===k.indexOf('source')+1&&b.plugins.some(p=>p.name==='EyesDG.esp')&&!b.plugins.some(p=>p.name==='EyesSerana.esp')?0:1)" (Join-Path $x4f 'collection.json')
+Yes 'its entry carries the choices straight after its source, where Vortex writes them' ($LASTEXITCODE -eq 0)
+AddEyes @('Eyes.esp', 'EyesDG.esp', 'EyesSerana.esp') $dgChoice
+$r = Run 'New-NexusRevision.ps1' @('-Add', $addJson, '-WhatIf')
+YesR 'a plugin named that the choices do not put in Data is refused' ($r.Code -eq 1 -and $r.Out -match 'named only: EyesSerana\.esp') $r
+AddEyes @('Eyes.esp', 'EyesDG.esp') '{"type":"fomod","options":[{"name":"Options","groups":[{"name":"Add-ons","choices":[{"name":"Dawnguard"}]}]}]}'
+$r = Run 'New-NexusRevision.ps1' @('-Add', $addJson, '-WhatIf')
+YesR 'choices not shaped as Vortex writes them are refused' ($r.Code -eq 1 -and $r.Out -match 'not as Vortex writes them') $r
+AddFile $hairArc $hair
+$h = Get-Content -Raw -LiteralPath $addJson
+Put $addJson ($h.TrimEnd().TrimEnd(']').TrimEnd('}') + ',"choices":' + $dgChoice + '}]')
+$r = Run 'New-NexusRevision.ps1' @('-Add', $addJson, '-WhatIf')
+YesR 'choices for an archive with no FOMOD installer are refused' ($r.Code -eq 1 -and $r.Out -match 'has no FOMOD installer to give them to') $r
+# Read-NexusFile (#5189): the file downloaded with the key, its FOMOD's
+# questions in Vortex's order with each idx, every plugin in it, and nothing
+# of it left behind.
+Control @{ serve = @{ '8662' = @{ path = $eyesArc; name = (Split-Path -Leaf $eyesArc) } } }
+$n0 = Count
+$r = Run 'Read-NexusFile.ps1' @('-Mod', '1932', '-FileId', '8662')
+$got = @(Since $n0)
+YesR 'Read-NexusFile downloads the file with the key and prints its FOMOD''s steps, groups and options with each idx and the files each installs' ($r.Code -eq 0 -and $r.Out -match 'a FOMOD script' -and $r.Out -match 'step "Options"' -and $r.Out -match 'group "Add-ons", SelectAny' -and $r.Out -match 'option "Serana", idx 1, Optional' -and $r.Out -match 'folder dg -> \(the mod''s top\)' -and @($got | Where-Object { $_.path -eq '/v3/games/skyrimspecialedition/mod-file-versions/8662/download-link' -and $_.key -eq 'right' }).Count -eq 1 -and @(Writes $got).Count -eq 0) $r
+YesR '  and every plugin in the archive, where it sits' ($r.Out -match 'core[\\/]Eyes\.esp' -and $r.Out -match 'serana[\\/]EyesSerana\.esp') $r
+Yes '  and keeps nothing of the archive' (-not @(Get-ChildItem -LiteralPath (Join-Path $T 'scratch') -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'nexus-file-1932' }).Count)
+$r = Run 'Read-NexusFile.ps1' @('-Mod', '1932', '-FileId', '12x')
+YesR '  a file id that is not a number is refused' ($r.Code -eq 1 -and $r.Out -match '-FileId 12x is not a file id') $r
 AddFile $hairArc $hair
 Perm @{ 1111 = 'allowed'; 47618 = 'not stated'; 192001 = 'ours'; 192762 = 'ours' }
 $r = Run 'New-NexusRevision.ps1' @('-Add', $addJson, '-WhatIf')

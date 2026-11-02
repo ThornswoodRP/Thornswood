@@ -343,7 +343,7 @@ $(Get-ThornswoodHoldScript -Script 'Install-Gate.ps1')
 Set-ThornswoodHold -Target `$task -Why 'installing the gate broker on a new commit' -By `$HoldBy
 `$t = Get-ScheduledTask -TaskName `$task -EA SilentlyContinue
 if (`$t) { Stop-ScheduledTask -TaskName `$task -EA SilentlyContinue; Unregister-ScheduledTask -TaskName `$task -Confirm:`$false }
-`$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + (Join-Path `$root 'GateBroker.ps1') + '"')
+`$action = New-ScheduledTaskAction -Execute `$pwsh -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + (Join-Path `$root 'GateBroker.ps1') + '"')
 `$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
 `$principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 Register-ScheduledTask -TaskName `$task -Action `$action -Trigger (New-ScheduledTaskTrigger -AtStartup) -Settings `$settings -Principal `$principal | Out-Null

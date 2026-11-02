@@ -144,6 +144,24 @@ foreach ($e in $r.files) {
     # "compare": "config" judges a config file by its body, comment and blank
     # lines left out on both sides (Get-ConfigBodyHash). Facts from before the
     # collector sent fileBodies fall back to the raw hash.
+    # "folder": true holds every .js in the folder to the repository's
+    # folder by name (the site's modules, #5357): each one the box has, and
+    # each one only one side has.
+    if ($e.folder) {
+        $liveNames = @($f.files.PSObject.Properties.Name | Where-Object { $_ -like ($e.live + '\*') } | ForEach-Object { $_.Substring($e.live.Length + 1) })
+        $repoNames = @(Get-ChildItem -LiteralPath (Join-Path $Repo $e.repo) -Filter *.js -File | ForEach-Object Name)
+        foreach ($n in $repoNames) {
+            $item = $e.live + '\' + $n; $rel = $e.repo + '/' + $n
+            $live = [string]$f.files.$item
+            if (-not $live) { Row 'file' $item "same as $rel" 'missing on the box' $false; continue }
+            $ok = (Get-RepoHashes $rel) -contains $live
+            Row 'file' $item "same as $rel at this checkout" $(if ($ok) { 'same' } else { 'differs (or deployed from another commit)' }) $ok
+        }
+        foreach ($n in @($liveNames | Where-Object { $repoNames -notcontains $_ })) {
+            Row 'file' ($e.live + '\' + $n) "in $($e.repo)" 'on the box, not in the repository' $false
+        }
+        continue
+    }
     $body = if ($f.fileBodies) { [string]$f.fileBodies.($e.live) } else { '' }
     if ($e.compare -eq 'config' -and $body) {
         $ok = (Get-ConfigBodyHash ([IO.File]::ReadAllText((Join-Path $Repo $e.repo)))) -eq $body

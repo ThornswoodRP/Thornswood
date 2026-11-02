@@ -30,7 +30,7 @@ const vm = require('vm');
 const REPO = path.join(__dirname, '..');
 const CR = String.fromCharCode(13);
 const read = (p) => fs.readFileSync(path.join(REPO, p), 'utf8').split(CR).join('').replace(/^﻿/, '');
-const src = read('game/gamemode.js');
+const src = require('./gamemode-tables.js').joined(read('game/gamemode.js'));
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -120,7 +120,7 @@ yes('L2 a move goes to each game exactly when its recipe\'s plugin is one the la
     inGame.every(function (x) { return never.indexOf(recipes[x.recipe].plugin.toLowerCase()) >= 0; }) &&
     inLast.every(function (x) { return never.indexOf(recipes[x.recipe].plugin.toLowerCase()) < 0; }));
 
-const BLOCK = take('// ==== RECIPES_MOVED_IN_GAME, generated ====', '// ==== end RECIPES_MOVED_IN_GAME ====');
+const BLOCK = take('var RECIPES_MOVED_IN_GAME = ', ';\n');
 const box = {};
 vm.createContext(box);
 try { vm.runInContext((BLOCK || '') + '\nthis.T = typeof RECIPES_MOVED_IN_GAME === "object" ? RECIPES_MOVED_IN_GAME : null;', box); } catch (e) { box.T = null; }

@@ -1,5 +1,5 @@
 # A pull request that touches one of these files asks the people named here for
-# a review. Developer-Guide.md, "Signing, the build check, and the six shared
+# a review. docs/guide/how-work-moves.md, "Signing, the build check, and the six shared
 # files", says why these. It is a request only: on main, enforce_admins is off,
 # there is no required check, required approving reviews is 0 and the code owner
 # review is off. Read the live settings, and check this file after an edit:

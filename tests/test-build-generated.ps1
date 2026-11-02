@@ -651,14 +651,17 @@ exit code $code"
     Yes 'B: Ship.ps1 has an Animation and body files step' ($at -gt 0)
     $buildAt = if ($at -gt 0) { $shipText.IndexOf('# ------------------------------------------------------------ node', $at) } else { -1 }
     $step = if ($at -gt 0 -and $buildAt -gt $at) { $shipText.Substring($at, $buildAt - $at) } else { '' }
-    Yes 'B: it runs Build-Generated.ps1 -DryRun on this install''s folder, and stops on both channels when that stops, putting the version back' (
+    # Nothing to put back first since #4825: the number goes into the build as
+    # -p:Version and no source file holds it (Unbump went).
+    Yes 'B: it runs Build-Generated.ps1 -DryRun on this install''s folder, and stops on both channels when that stops' (
         $step.Contains("& (Join-Path `$Here '..\mods\Build-Generated.ps1') -Root `$Root -DryRun -NoPause") -and
-        $step -match "if \(\`$genExit -ne 0\) \{\s*Unbump '[^']+'\s*Die " -and $step -notmatch '\$Dev')
+        $step -match "if \(\`$genExit -ne 0\) \{\s*Die " -and $step -notmatch '\$Dev')
     $buildCall = $shipText.IndexOf("'Build-Launcher.ps1') -Root")
     $installCall = $shipText.IndexOf("'Install-Launcher.ps1')")
     $publish = $shipText.IndexOf("Publish-Update.ps1", $at + 1)
-    Yes 'B: before the launcher is built or installed (#1692) and before anything is published' (
-        $buildCall -gt $at -and $installCall -gt $at -and ($publish -lt 0 -or $publish -gt $at))
+    # Ship builds and installs no launcher since #4825 (it ran before both, #1692).
+    Yes 'B: before anything is published, and Ship builds and installs no launcher' (
+        $buildCall -lt 0 -and $installCall -lt 0 -and ($publish -lt 0 -or $publish -gt $at))
     Yes 'B: and Ship no longer reads the record or the covered bodies itself' ($shipText -notmatch "Head 'Covered bodies'" -and $shipText -notmatch 'Get-GeneratedStaleSays')
 
     # ======================================================== C: in use

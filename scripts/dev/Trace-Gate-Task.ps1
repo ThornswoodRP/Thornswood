@@ -260,7 +260,7 @@ function Step-Reader {
     }
     $script:queue.Clear()
     $script:readDir = $next
-    $script:reader = Start-Process -FilePath powershell.exe -PassThru -WindowStyle Hidden -ArgumentList @(
+    $script:reader = Start-Process -FilePath pwsh.exe -PassThru -WindowStyle Hidden -ArgumentList @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $PSCommandPath + '"'), '-Read', ('"' + $next + '"'))
     # Held now, or the exit code is gone by the time it is asked for.
     $null = $script:reader.Handle

@@ -324,10 +324,22 @@ function Answering {
   }
 }
 
+# THE GAMEMODE'S TABLES (#5191). A gamemode from #5191 on reads its tables
+# from <root>\gamemode-tables as it loads, every NAME.json there and nothing
+# else, and names the folder in server.log by its git tree id. So the folder
+# is the deploy's as a whole: each table is in $Want for the check, which
+# holds it to its hash, and the swap moves the folder in one rename, the old
+# one into .prev with any table this deploy no longer has. A put-back's .prev
+# holds the folder it took out, and puts that back the same way. A deploy
+# that sends no table leaves the folder at the root alone.
+$TablesDir = 'gamemode-tables'
+$moveRels = @(@($Want.Keys) | Where-Object { -not $_.StartsWith($TablesDir + '/') })
+if (@(@($Want.Keys) | Where-Object { $_.StartsWith($TablesDir + '/') }).Count) { $moveRels += $TablesDir }
+
 # Each rename is Move-ThornswoodPath (StopAndMove.ps1): once, after StopOurs
 # has waited for the server to exit, saying why when it is refused.
 function PutBack {
-  $rels = @($Want.Keys)
+  $rels = @($moveRels)
   [array]::Reverse($rels)
   foreach ($rel in $rels) {
     $r = $rel -replace '/', '\'
@@ -380,7 +392,7 @@ if ($notGone.Count -or (Held)) {
 $placed = @()
 $aside = @()
 $moved = $true
-foreach ($rel in @($Want.Keys)) {
+foreach ($rel in @($moveRels)) {
   $r = $rel -replace '/', '\'
   $at = Join-Path $Root $r
   if (Test-Path -LiteralPath $at) {

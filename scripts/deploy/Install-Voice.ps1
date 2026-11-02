@@ -842,7 +842,7 @@ if ($Bind -eq '127.0.0.1') {
     if ($reachable) {
         Say "$VpsHost`:$Port IS STILL ANSWERING from outside, and it should not be." 'Red'
         Say '  The bind did not take, or the firewall rule is still open.' 'Red'
-        Say "  ssh $target `"powershell -NoProfile -Command Get-Content '$Root\voice.log' -Tail 20`"" 'DarkGray'
+        Say "  ssh $target `"pwsh -NoProfile -Command Get-Content '$Root\voice.log' -Tail 20`"" 'DarkGray'
     } elseif ($reachWhy) {
         Say "Loopback only, and whether ${VpsHost}:$Port is shut from outside is not known: $reachWhy." 'Yellow'
     } else {

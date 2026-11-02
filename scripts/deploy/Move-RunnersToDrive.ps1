@@ -99,7 +99,7 @@ function Get-MoveDriveProof {
   $startupReady = ($task.State -ne 'Disabled' -and $task.Settings.Enabled -and
     $task.Principal.UserId -in @('SYSTEM', 'S-1-5-18', 'NT AUTHORITY\SYSTEM') -and
     @($task.Triggers).Count -eq 1 -and $task.Triggers[0].CimClass.CimClassName -eq 'MSFT_TaskBootTrigger' -and
-    @($task.Actions).Count -eq 1 -and $task.Actions[0].Execute -eq 'powershell.exe' -and
+    @($task.Actions).Count -eq 1 -and $task.Actions[0].Execute -eq (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe') -and
     $task.Actions[0].Arguments -match ('(?:^|\s)-File\s+"?' + [regex]::Escape($startup) + '"?\s*$'))
   foreach ($path in @((Split-Path -Parent $startup), $startup)) {
     if ((Get-Item -LiteralPath $path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { $startupReady = $false }

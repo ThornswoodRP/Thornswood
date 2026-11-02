@@ -126,7 +126,7 @@ function Stop-ThornswoodBotStrays([string]$Root) {
   $mark = $Root.TrimEnd('\') + '\'
   $strays = @()
   foreach ($p in @(Get-CimInstance Win32_Process -EA SilentlyContinue |
-                   Where-Object { $_.Name -match '^(python|pythonw|powershell|cmd)' -and $_.CommandLine -and $_.ProcessId -ne $PID })) {
+                   Where-Object { $_.Name -match '^(python|pythonw|powershell|pwsh|cmd)' -and $_.CommandLine -and $_.ProcessId -ne $PID })) {
     if ($p.CommandLine.IndexOf($mark, [StringComparison]::OrdinalIgnoreCase) -lt 0) { continue }
     $strays += $p
   }
@@ -364,10 +364,8 @@ function Move-ThornswoodBotRecords([string]$Root) {
 # auditing, so .NET is asked to persist what changed, the access rules.
 function Set-ThornswoodAclAccess([string]$Path, $Acl) {
   $item = Get-Item -LiteralPath $Path -Force
-  if ($PSVersionTable.PSEdition -eq 'Core') {
-    if ($item -is [IO.DirectoryInfo]) { [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo]$item, [Security.AccessControl.DirectorySecurity]$Acl) }
-    else { [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]$item, [Security.AccessControl.FileSecurity]$Acl) }
-  } else { $item.SetAccessControl($Acl) }
+  if ($item -is [IO.DirectoryInfo]) { [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo]$item, [Security.AccessControl.DirectorySecurity]$Acl) }
+  else { [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]$item, [Security.AccessControl.FileSecurity]$Acl) }
 }
 
 # Given again at every install; the same rule added twice is kept once.

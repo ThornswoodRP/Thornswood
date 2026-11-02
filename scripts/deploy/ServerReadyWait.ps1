@@ -22,7 +22,7 @@
   recorded times is kept, and a start that never answers still rolls back
   when the ceiling is reached. -Wait on each script overrides it for one run.
 
-  Keep it ASCII and Windows PowerShell 5.1: the installer loads it on the box.
+  Keep it ASCII. The installer loads it on the box, in PowerShell 7.
 #>
 
 # Seconds from start until both ports answered, as measured on the VPS.

@@ -243,7 +243,7 @@ For the team:
   and more upload: about 52 kbit/s for each voice it sends to each listener
   (Opus, SRTP and the UDP and IP headers), so ten people talking at once with
   five in range of each is about 2.6 Mbit/s, where the box measured
-  93 Mbit/s (`voice/test-cull.js`).
+  93 Mbit/s (`voice/tests/test-cull.js`).
 - Con: voice needs a UDP port on the box that Cloudflare does not carry. The
   game servers' ports already reach the box directly, so this opens no
   address that is not already known.

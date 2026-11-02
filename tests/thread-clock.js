@@ -39,7 +39,7 @@ function build() {
   if (fs.existsSync(target)) return target;
   const vcvars = compiler();
   if (!vcvars) throw new Error('thread-clock.js needs the Visual Studio C compiler (the "Desktop development with C++" ' +
-    'workload or the Build Tools with the C++ tools), the same one the engine build uses; Developer-Guide.md ' +
+    'workload or the Build Tools with the C++ tools), the same one the engine build uses; docs/guide/set-up-a-machine.md ' +
     '"Setting up a machine" has the install.');
   fs.mkdirSync(dir, {recursive: true});
   // cmd /s keeps every quote inside the outer pair, so a path with & in it

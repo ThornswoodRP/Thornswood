@@ -17,8 +17,8 @@
      builder writes (#3425).
   2. The far side text (scripts\mods\OnBox.ps1) is ASCII and parses, and the
      server's plugins folder is only ever read from.
-  3. On Windows, the far side text runs under Windows PowerShell 5.1, as on
-     the box, against a stand-in server and a stand-in artifact: the data
+  3. On Windows, the far side text runs under PowerShell 7, as on the box
+     since #5356, against a stand-in server and a stand-in artifact: the data
      folder is the server's plugins with the commit's own Thornswood plugins
      in their place, '{data}' reaches the tool as that folder, a tool that
      writes into the data folder leaves the server's files as they were,
@@ -31,8 +31,8 @@
      and a tool that opens one to write is refused, the store keeping its
      bytes; the loose string tables in the store's Strings are linked into
      the data folder's Strings, where the tools look for them. Off Windows
-     there is no powershell.exe and no py, and this part says so and is
-     skipped; the Windows runner runs it.
+     the keeper's named event and kernel32 are not there, nor py, and this
+     part says so and is skipped; the Windows runner runs it.
   5. The run's folder lives as long as its keeper (#2999): the keeper's
      text is ASCII, parses, fits on the command line and reads nothing from
      its standard input, which on the box never closes (#3063); the end
@@ -40,7 +40,7 @@
      Start-ThornswoodRemote refuses a weaker host key check, a script too
      long for the command line and a word with a double quote, and hands the
      far side its words whole and its input until it is closed. On Windows,
-     under Windows PowerShell 5.1: a keeper removes the folders whose lock
+     under PowerShell 7: a keeper removes the folders whose lock
      nobody holds (one from before the lock, an orphaned lock) and leaves
      one that is held and anything not named like a run's; its input closing
      does not end it, its end event set from another process does, and an
@@ -166,7 +166,7 @@ Yes 'records\game-strings.json names loose string tables under Strings, each wit
 $far = Get-ThornswoodOnBoxScript -Run 'C:\Windows\Temp\thornswood-onbox-test' -ServerRoot 'C:\Thornswood-Server-Dev' -Tool 'scripts/mods/Add-ContentRecords.py' -Arguments @('--check', '--masters', '{data}', "it's")
 function New-End { 'Global\Thornswood-OnBoxEnd-' + [Guid]::NewGuid().ToString('N') }
 $keep = Get-ThornswoodOnBoxKeepScript -Run 'C:\Windows\Temp\thornswood-onbox-0123456789ab' -End (New-End)
-Yes 'the far side text is ASCII, as Windows PowerShell 5.1 reads it' (-not ($far + $keep).ToCharArray().Where({ [int]$_ -gt 127 }, 'First'))
+Yes 'the far side text is ASCII' (-not ($far + $keep).ToCharArray().Where({ [int]$_ -gt 127 }, 'First'))
 $errs = $null
 [void][Management.Automation.Language.Parser]::ParseInput($far, [ref]$null, [ref]$errs)
 Yes 'and it parses' (-not $errs -or $errs.Count -eq 0)
@@ -209,7 +209,7 @@ Yes '{settings} makes a server-settings.json of the loadOrder alone, each plugin
 $errs = $null
 [void][Management.Automation.Language.Parser]::ParseInput($keep, [ref]$null, [ref]$errs)
 Yes 'the keeper''s text parses' (-not $errs -or $errs.Count -eq 0)
-$keepLine = 'powershell -NoProfile -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($keep))
+$keepLine = 'pwsh -NoProfile -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($keep))
 Yes ('and fits on the command line, so nothing is sent ahead of it as a file (' + $keepLine.Length + ' of 6000)') ($keepLine.Length -le 6000)
 Yes 'and reads nothing from its standard input, which on the box never closes (#3063): it waits on its end event' ($keep -notmatch '\[Console\]::In' -and $keep.Contains('while (-not $end.WaitOne(5000))'))
 Yes 'and it learns its caller is gone from a write WriteFile itself makes, not .NET''s console stream, which swallows a broken pipe' (
@@ -269,7 +269,7 @@ if ($OnWindows) {
         $rest = @($p.StandardOutput.ReadToEnd() -split '\r?\n' | Where-Object { $_ })
         $p.WaitForExit()
         $want = @('ARG -o', 'ARG BatchMode=yes', 'ARG -o', 'ARG StrictHostKeyChecking=yes', 'ARG nobody@box.invalid',
-            ('ARG powershell -NoProfile -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes("'hi there'"))))
+            ('ARG pwsh -NoProfile -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes("'hi there'"))))
         Yes 'ssh is handed its words whole, host key checking on, the script on the command line' (($first -join '|') -eq ($want -join '|'))
         Yes 'and the far side reads its input until it is closed, then ends' (($rest -join '|') -eq 'a line in|EOF' -and $p.ExitCode -eq 0)
     } finally {
@@ -278,13 +278,13 @@ if ($OnWindows) {
     }
 }
 
-# ---- 3. run as on the box, under Windows PowerShell 5.1 ------------------
+# ---- 3. run as on the box, under PowerShell 7 ------------------------------
 . (Join-Path $PSScriptRoot 'Windows.ps1')
 
-# A keeper as the box runs one: Windows PowerShell 5.1, the script on the
+# A keeper as the box runs one: PowerShell 7, the script on the
 # command line, its standard input and output pipes, an end event of its own.
 # Start-Keeper reads up to its MADE line; Stop-Keeper sets its event from
-# another Windows PowerShell, as the second ssh session does on the box, and
+# another PowerShell, as the second ssh session does on the box, and
 # reads what it says after. Each read gives up after a minute, so a keeper
 # that never answers fails the check rather than holding the build.
 function Read-KeeperLine($p) {
@@ -293,11 +293,11 @@ function Read-KeeperLine($p) {
     return $t.Result
 }
 function Set-End([string]$End) {
-    return @(& $ps51 -NoProfile -NonInteractive -EncodedCommand ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes((Get-ThornswoodOnBoxEndScript -End $End)))) 2>&1 | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
+    return @(& $boxPs -NoProfile -NonInteractive -EncodedCommand ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes((Get-ThornswoodOnBoxEndScript -End $End)))) 2>&1 | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
 }
 function Start-Keeper([string]$Run, [string]$End = (New-End)) {
     $psi = New-Object Diagnostics.ProcessStartInfo
-    $psi.FileName = $ps51
+    $psi.FileName = $boxPs
     $psi.Arguments = '-NoProfile -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes((Get-ThornswoodOnBoxKeepScript -Run $Run -End $End)))
     $psi.UseShellExecute = $false
     $psi.RedirectStandardInput = $true
@@ -322,11 +322,11 @@ function Stop-Keeper($k) {
 }
 $py = Get-Command py -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the run under Windows PowerShell 5.1: this is not Windows, which is the only place 5.1 runs (the Windows runner runs it)'
+    Write-Host 'SKIP  the run as on the box: its keeper waits on a Global\ named event and writes through kernel32, which only Windows has (the Windows runner runs it)'
 } elseif (-not $py) {
-    Write-Host 'SKIP  the run under Windows PowerShell 5.1: no py on this machine (the Windows runner runs it)'
+    Write-Host 'SKIP  the run as on the box: no py on this machine (the Windows runner runs it)'
 } else {
-    $ps51 = Get-WindowsPowerShell
+    $boxPs = Get-BoxPowerShell
     $work = Join-Path ([IO.Path]::GetTempPath()) ('ts-2899-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
     try {
         $server = Join-Path $work 'server'
@@ -347,8 +347,8 @@ if (-not $OnWindows) {
         [IO.File]::WriteAllText($table, 'table bytes')
         $roFile = Join-Path $work 'ro.ps1'
         [IO.File]::WriteAllText($roFile, ((Get-ThornswoodArchiveReadOnlyScript) + "`r`nSet-ThornswoodArchiveReadOnly '" + $archive + "'`r`n'RO'"), (New-Object Text.UTF8Encoding($true)))
-        $ro = @(& $ps51 -NoProfile -ExecutionPolicy Bypass -File $roFile 2>&1 | ForEach-Object { "$_" })
-        Yes 'the read-only rule goes on under Windows PowerShell 5.1' ($ro -contains 'RO')
+        $ro = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $roFile 2>&1 | ForEach-Object { "$_" })
+        Yes 'the read-only rule goes on under PowerShell 7' ($ro -contains 'RO')
 
         # The stand-in artifact: a tool, our own plugin and a table.
         $src = Join-Path $work 'src'
@@ -384,7 +384,7 @@ sys.exit(3)
         $file = Join-Path $work 'far.ps1'
         # As Send-Script.ps1 sends a long script: UTF-8 with a byte order mark.
         [IO.File]::WriteAllText($file, $text, (New-Object Text.UTF8Encoding($true)))
-        $lines = @(& $ps51 -NoProfile -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" })
+        $lines = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" })
         # What the far side said, so a red check here names its cause in the log.
         Write-Host '  the far side said:'
         foreach ($l in $lines) { Write-Host ('    ' + $l) }
@@ -441,7 +441,7 @@ exit 0
         $text = Get-ThornswoodOnBoxScript -Run $run2 -ServerRoot $server -Tool 'scripts/mods/t.ps1' -Arguments @('-Data', '{data}', '-PluginsTxt', '{plugins}') -ArchiveStore $store -Watch @('game', 'records', 'docs/systems', 'tests/fixtures/watched.json')
         [IO.File]::WriteAllText($file, $text, (New-Object Text.UTF8Encoding($true)))
         $env:PATH = (Split-Path -Parent $pwsh) + [IO.Path]::PathSeparator + $env:PATH
-        $lines = @(& $ps51 -NoProfile -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" })
+        $lines = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" })
         Write-Host '  the far side said:'
         foreach ($l in $lines) { Write-Host ('    ' + $l) }
         Yes 'a PowerShell tool runs under PowerShell 7 and gets the server''s loadOrder after the five masters as its plugin list' (
@@ -458,11 +458,11 @@ exit 0
     }
 }
 
-# ---- 5b. the keeper, as on the box, under Windows PowerShell 5.1 ---------
+# ---- 5b. the keeper, as on the box, under PowerShell 7 -------------------
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the keeper under Windows PowerShell 5.1: this is not Windows, which is the only place 5.1 runs (the Windows runner runs it)'
+    Write-Host 'SKIP  the keeper as on the box: it waits on a Global\ named event and writes through kernel32, which only Windows has (the Windows runner runs it)'
 } else {
-    $ps51 = Get-WindowsPowerShell
+    $boxPs = Get-BoxPowerShell
     $top = Join-Path ([IO.Path]::GetTempPath()) ('ts-2999-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
     $held = @()
     $keepers = @()
@@ -540,7 +540,7 @@ if (-not $OnWindows) {
         New-Item -ItemType Directory -Force -Path $loose | Out-Null
         $file = Join-Path $top 'far.ps1'
         [IO.File]::WriteAllText($file, (Get-ThornswoodOnBoxScript -Run $loose -ServerRoot $top -Tool 'scripts/mods/t.py'), (New-Object Text.UTF8Encoding($true)))
-        $lines = @(& $ps51 -NoProfile -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" })
+        $lines = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" })
         $code = $LASTEXITCODE
         Yes 'the run stops in a folder no keeper holds, before anything is unpacked' ($code -eq 2 -and @($lines | Where-Object { $_ -like 'STOP. the run''s folder could not be held*' }).Count -eq 1 -and -not (Test-Path -LiteralPath (Join-Path $loose 'repo')))
         Remove-Item -LiteralPath $loose -Recurse -Force

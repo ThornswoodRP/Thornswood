@@ -13,8 +13,8 @@
   started through a fake ssh.cmd (the script starts ssh as a process, so a
   PowerShell function cannot stand in for it); the runs being proved use a
   fake ssh function, as Send-Secret's callers would reach the real one. So the
-  watcher reads this machine's real process list while the real Windows
-  PowerShell 5.1 runs what would run on the VPS.
+  watcher reads this machine's real process list while PowerShell 7 runs
+  what would run on the box.
 
   The value is made here at run time from a fresh GUID, with quotes, a dollar,
   a backtick, an ampersand and an accent in it. Nothing prints it.
@@ -54,10 +54,10 @@ foreach ($f in @($prove, $helper)) {
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the rest: it runs as the VPS does, through cmd.exe into Windows PowerShell 5.1, which only Windows has'
+    Write-Host 'SKIP  the rest: it runs as the box does, through cmd.exe, and the watcher reads Windows'' process list and waits on a Global\ named event, which only Windows has'
     Done
 }
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 # Global: the runs' ssh below is called from closures, which find only what
 # the global scope holds.
 $global:TsCmdExe = Get-WindowsPath 'System32\cmd.exe'
@@ -126,7 +126,7 @@ Start-Sleep -Seconds 2
     Yes 'Send-Secret way: exit code 0' ($r.Code -eq 0)
     Yes 'Send-Secret way: it read some command lines' ($r.Out -match '\((\d+) process command lines read\)' -and [int]$Matches[1] -gt 0)
     Yes 'Send-Secret way: prints neither the value nor its base64' (-not (Leaks $r.Out))
-    Yes 'Send-Secret way: prints no command line' ($r.Out -notmatch 'EncodedCommand|powershell -|cmd\.exe')
+    Yes 'Send-Secret way: prints no command line' ($r.Out -notmatch 'EncodedCommand|pwsh -|powershell -|cmd\.exe')
     # The watcher no longer reads standard input after the value, so only its
     # stop event ends it before the 120 second limit (#2912).
     Yes 'Send-Secret way: the stop event ends the watch when the run is over, not at the limit' ($r.Seconds -lt 60 -and $r.Out -notmatch 'did not reach')
@@ -135,12 +135,12 @@ Start-Sleep -Seconds 2
     # It must say FOUND, or the watcher is known to see nothing.
     $r = Prove {
         $e = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes("`$s = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('$wire'))`r`nStart-Sleep -Seconds 2"))
-        $global:oldOut = @(& ssh 'tester@box.invalid' "powershell -NoProfile -EncodedCommand $e")
+        $global:oldOut = @(& ssh 'tester@box.invalid' "pwsh -NoProfile -EncodedCommand $e")
     }.GetNewClosure()
     Yes 'control, the old way: says FOUND' ($r.Out -match '(?m)^FOUND\s+\d+ processes')
     Yes 'control, the old way: exit code 1' ($r.Code -eq 1)
     Yes 'control, the old way: still prints neither the value nor its base64' (-not (Leaks $r.Out))
-    Yes 'control, the old way: still prints no command line' ($r.Out -notmatch 'EncodedCommand|powershell -|cmd\.exe')
+    Yes 'control, the old way: still prints no command line' ($r.Out -notmatch 'EncodedCommand|pwsh -|powershell -|cmd\.exe')
 
     # ---- 3. the watcher's and the stop's command lines hold their scripts and
     # nothing else, and each stop names its own watcher's event
@@ -204,8 +204,8 @@ Start-Sleep -Seconds 2
     # ---- 6. the watcher ends with standard input still open (#451, #2912).
     # The fake ssh above passes the end of standard input on; the VPS's
     # OpenSSH passes on nothing written after the session starts, and the
-    # watcher never answered until its limit. Here it runs straight in Windows
-    # PowerShell 5.1 with its standard input left open, as on the VPS: its
+    # watcher never answered until its limit. Here it runs straight in
+    # PowerShell 7 with its standard input left open, as on the box: its
     # stop event must end it, set by the same script the second ssh session
     # runs, and so must its time limit with nothing set at all.
     $ast = [Management.Automation.Language.Parser]::ParseFile($prove, [ref]$null, [ref]$null)
@@ -215,7 +215,7 @@ Start-Sleep -Seconds 2
     }
     function Run-Ps([string]$script, [bool]$keepOpen) {
         $psi = New-Object Diagnostics.ProcessStartInfo
-        $psi.FileName = $ps51
+        $psi.FileName = $boxPs
         $psi.Arguments = '-NoProfile -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))
         $psi.UseShellExecute = $false
         $psi.RedirectStandardInput = $true
@@ -247,7 +247,7 @@ Start-Sleep -Seconds 2
     Yes 'standard input open: the stop event ends the watcher well before its limit' ($w.Ended -and $w.Seconds -lt 30)
     Yes 'standard input open: after the stop it answers NOT FOUND over some command lines' ($w.Out -match 'WATCHER NOT FOUND' -and $w.Out -match 'WATCHER READ [1-9]')
     $w = Watch-Open 3 $false
-    Yes 'standard input open, no stop: the time limit ends the watcher, and powershell.exe with it' $w.Ended
+    Yes 'standard input open, no stop: the time limit ends the watcher, and its PowerShell with it' $w.Ended
     Yes 'standard input open, no stop: it still answers' ($w.Out -match 'WATCHER NOT FOUND' -and $w.Out -match 'WATCHER READ [1-9]')
     $late = Run-Ps (Get-ThornswoodSecretWatcherStop ('Global\Thornswood-ProofStop-' + [Guid]::NewGuid().ToString('N'))) $false
     $lateSaid = $late.StandardOutput.ReadToEnd()

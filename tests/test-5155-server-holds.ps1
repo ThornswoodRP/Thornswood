@@ -162,6 +162,7 @@ try {
         'scripts/vps/vps-openssh.ps1'         = 'sshd, which the watchdog does not watch'
         'scripts/vps/BotService.cs'           = 'the bot''s own service program'
         'scripts/vps/Remote.ps1'              = 'runs what it is given; its help names a Windows service as an example'
+        'scripts/deploy/Install-Tunnel.ps1'   = 'stops only cloudflared''s own task, Thornswood Tunnel, which the watchdog does not watch; it refuses that stop while the site is on the tunnel (#5334)'
         'scripts/deploy/Install-DeployAgent.ps1' = 'stops only the deploy agent''s own service, which the watchdog does not watch; it names the site''s task and the bot''s service only to see whether they are set up (the agent holds them itself when it swaps, App.cs)'
     }
     $files = @(Get-ChildItem -LiteralPath (P 'scripts') -Recurse -File -Include '*.ps1' | ForEach-Object { $_.FullName })

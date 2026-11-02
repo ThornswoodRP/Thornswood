@@ -1,7 +1,7 @@
 <#
   test-clear-world-copies.ps1
 
-      powershell -NoProfile -File .\tests\test-clear-world-copies.ps1
+      pwsh -NoProfile -File .\tests\test-clear-world-copies.ps1
 
   Clear-OldWorldCopies.ps1 removes the world copies every server install
   before #446 left in the VPS temp folder, keeps the newest of each kind, and
@@ -30,8 +30,7 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 $repo = (Resolve-Path (Join-Path $Here '..')).Path
 $clear = Join-Path $repo 'scripts\vps\Clear-OldWorldCopies.ps1'
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  Clear-OldWorldCopies.ps1 runs on the box under Windows PowerShell 5.1, and its link case is an NTFS junction; only Windows has either'; exit 0 }
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 . (Join-Path $repo 'scripts\vps\BoxGuard.ps1')
 
 $script:pass = 0; $script:fail = 0
@@ -59,18 +58,20 @@ try {
     foreach ($n in 'world-notastamp', 'world-20260920-100000-extra', 'myworld-20260920-100000', 'World-Backup') { Put (Join-Path $t1 "$n\keep.txt") 'not ours' }
     Put (Join-Path $t1 'world-20260921-100000') 'a file, not a folder'
     Put (Join-Path $t1 'deeper\world-20260921-100000\w.txt') 'below the temp folder, not in it'
-    # A copy holding a link to something that must survive.
+    # A copy holding a link to something that must survive: an NTFS junction
+    # on Windows, as on the box, and a symbolic link elsewhere.
     $target = Join-Path $box 'precious'
     Put (Join-Path $target 'keep.txt') 'must survive'
     $linked = Join-Path $t1 'serverdata-20260921-100000'
     $null = New-Item -ItemType Directory -Force -Path $linked
-    $null = & (Get-WindowsPath 'System32\cmd.exe') /c ('mklink /J "' + (Join-Path $linked 'link') + '" "' + $target + '"')
+    if ($OnWindows) { $null = & (Get-WindowsPath 'System32\cmd.exe') /c ('mklink /J "' + (Join-Path $linked 'link') + '" "' + $target + '"') }
+    else { $null = New-Item -ItemType SymbolicLink -Path (Join-Path $linked 'link') -Target $target }
     $haveLink = There (Join-Path $linked 'link\keep.txt')
 
     function Run([string[]]$more) {
         $a = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $clear, '-TempDirs', ($t1 + ',' + $t2), '-BackupDir', $backups, '-AllowGamingPc') + $more
         $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-        try { $o = @(& $ps51 @a 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $eap }
+        try { $o = @(& $boxPs @a 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $eap }
         $script:code = $LASTEXITCODE
         return ($o -join "`n")
     }
@@ -92,7 +93,7 @@ try {
     if ($haveLink) {
         Yes 'a copy holding a link is left, and said' ((There $linked) -and $o -match ('LEFT ' + [regex]::Escape($linked) + ': it is a link or holds one') -and $script:code -ne 0)
         Yes '  and what the link points at is untouched' ((There (Join-Path $target 'keep.txt')))
-    } else { Write-Host 'SKIP  the link case: mklink /J did not make a junction here' }
+    } else { Write-Host 'SKIP  the link case: no link could be made here' }
     Yes 'nothing that only looks like a copy is touched' (
         (There (Join-Path $t1 'world-notastamp\keep.txt')) -and (There (Join-Path $t1 'world-20260920-100000-extra\keep.txt')) -and
         (There (Join-Path $t1 'myworld-20260920-100000\keep.txt')) -and (There (Join-Path $t1 'World-Backup\keep.txt')) -and
@@ -115,7 +116,9 @@ try {
     $notBox = Get-ThornswoodBoxRefusal
     if ($notBox) {
         $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-        try { $o = (@(& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $clear -TempDirs $t1 2>&1 | ForEach-Object { "$_" }) -join ' ') } finally { $ErrorActionPreference = $eap }
+        # Lines joined as they were said, since the rule's words can run to two
+        # lines (off Windows, the error that says why Windows was not asked).
+        try { $o = (@(& $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $clear -TempDirs $t1 2>&1 | ForEach-Object { "$_" }) -join "`n") } finally { $ErrorActionPreference = $eap }
         Yes 'off the box it refuses, says why, and removes nothing' ($o.Contains('REFUSED: ' + $notBox) -and $LASTEXITCODE -ne 0)
     } else { Write-Host 'SKIP  the refusal off the box: this is the box, a server (tests\test-3041-box-guard.ps1 runs it with a workstation stood in)' }
 } finally {

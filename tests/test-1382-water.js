@@ -21,7 +21,7 @@ const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const CR = String.fromCharCode(13);
-const gm = fs.readFileSync(path.join(ROOT, 'game', 'gamemode.js'), 'utf8').split(CR).join('');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(ROOT, 'game', 'gamemode.js'), 'utf8')).split(CR).join('');
 const UI = fs.readFileSync(path.join(ROOT, 'game', 'ui', 'thornswood-skills.js'), 'utf8').split(CR).join('');
 
 let pass = 0, fail = 0;
@@ -50,9 +50,8 @@ function rig() {
   const clock = { now: Date.UTC(2026, 9, 12, 17, 0, 0) };
   const store = {}, inv = {}, said = [], fouled = [];
   const mp = {
-    getOnlinePlayers: function () { return []; },
     makeProperty: function () { },
-    get: function (id, key) { if (key === 'worldOrCellDesc' || key === 'pos') { return null; } return store[id]; },
+    get: function (id, key) { if (id === 0 && key === 'onlinePlayers') { return []; } if (key === 'worldOrCellDesc' || key === 'pos') { return null; } return store[id]; },
     set: function (id, key, v) { store[id] = JSON.parse(JSON.stringify(v)); }
   };
   function count(id, b) { return (inv[id] && inv[id][b]) || 0; }

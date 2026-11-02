@@ -37,7 +37,7 @@
   those kinds is: a second addon, or a script in dist_back or data\scripts
   that the build did not record, is a server file from somewhere else.
 
-  Keep it ASCII and Windows PowerShell 5.1: it runs on the box.
+  Keep it ASCII. It runs on the box, in PowerShell 7.
 #>
 
 # Every one of these is in every record. data\scripts is by folder: the files

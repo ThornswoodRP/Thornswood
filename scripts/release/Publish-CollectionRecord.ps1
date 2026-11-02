@@ -169,10 +169,12 @@ try {
         $adds = @($cs.Add | ForEach-Object {
                 $g = Get-NexusFileArchive $want.game ([string]$_.fileId) (Join-Path $Work 'archives')
                 Say ("  file $($_.fileId): $($g.Name), $($g.Size) bytes")
-                [ordered]@{ modId = [long]$_.modId; fileId = [long]$_.fileId; archive = $g.Path; plugins = @($_.plugins | ForEach-Object { [ordered]@{ name = $_.name; after = @($_.after) } }) }
+                $one = [ordered]@{ modId = [long]$_.modId; fileId = [long]$_.fileId; archive = $g.Path; plugins = @($_.plugins | ForEach-Object { [ordered]@{ name = $_.name; after = @($_.after) } }) }
+                if ($_.PSObject.Properties['choices']) { $one.choices = $_.choices }
+                $one
             })
         $params.Add = Join-Path $Work 'add.json'
-        [IO.File]::WriteAllText($params.Add, (ConvertTo-Json -InputObject @($adds) -Depth 8), $utf8)
+        [IO.File]::WriteAllText($params.Add, (ConvertTo-Json -InputObject @($adds) -Depth 12), $utf8)
     }
 } catch { Stop-Record $_.Exception.Message }
 if ($cs.Remove.Count) { $params.Remove = [string[]]@($cs.Remove | ForEach-Object { [string]$_ }) }

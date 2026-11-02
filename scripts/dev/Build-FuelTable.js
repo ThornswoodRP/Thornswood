@@ -1,6 +1,7 @@
 // Build-FuelTable.js
 //
-// Writes the FUEL_BY_RECIPE block in game\gamemode.js: for every recipe the
+// Writes the gamemode's FUEL_BY_RECIPE table (game\gamemode-tables, #5191):
+// for every recipe the
 // server is asked about at a forge, a skyforge or a smelter, the grade of
 // charcoal it burns and the metal that asks for it.
 //
@@ -35,17 +36,18 @@
 // KEPT_SMELT keeps is one). A row that is not in this table burns nothing.
 //
 // Run it after Build-RecipeTable.ps1 rebuilds recipes.json. tests\test-1398-fuel.js
-// fails while the installed block and this script disagree.
+// fails while the table and this script disagree.
 //
-// Read only except for gamemode.js, which it rewrites between the markers.
+// Read only except for the FUEL_BY_RECIPE table, which it writes.
 //
 // Usage:
 //   node scripts\dev\Build-FuelTable.js
-//   node scripts\dev\Build-FuelTable.js --recipes <file> --gamemode <file>
+//   node scripts\dev\Build-FuelTable.js --recipes <file> --tables <folder>
 //   node scripts\dev\Build-FuelTable.js --print
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const TABLES = require('./GamemodeTables.js');
 
 // The bench keyword, and what it is called in the sentence that refuses.
 const BENCHES = {
@@ -127,52 +129,33 @@ function fuelTable(data) {
   return out;
 }
 
-/** The block, as the lines that go between the markers. */
-function blockLines(table, recipeCount) {
+/** The table as JSON text, recipe desc -> [grade 1 to 4, the metal that asks
+ *  for it or nothing, the bench], in desc order. */
+function tableJson(table) {
   const keys = Object.keys(table).sort();
-  const per = [0, 0, 0, 0, 0];
-  keys.forEach(function (k) { per[table[k][0]]++; });
-  const lines = [];
-  lines.push('// ==== FUEL_BY_RECIPE, generated ====');
-  lines.push('/* Built by scripts\\dev\\Build-FuelTable.js out of game\\data\\recipes.json. Do not hand edit.');
-  lines.push('   ' + keys.length + ' recipes at a forge, a skyforge or a smelter, out of ' + recipeCount + '.');
-  lines.push('   ' + per[1] + ' burn Poor Charcoal, ' + per[2] + ' Charcoal, ' + per[3] + ' Charcoal Briquette and ' + per[4] + ' Coke.');
-  lines.push('   Recipe desc -> [grade 1 to 4, the metal that asks for it or nothing, the bench]. */');
-  const body = keys.map(function (k) { return JSON.stringify(k) + ':' + JSON.stringify(table[k]); }).join(',');
-  lines.push('const FUEL_BY_RECIPE = {' + body + '};');
-  lines.push('// ==== end FUEL_BY_RECIPE ====');
-  return lines;
+  return '{' + keys.map(function (k) { return JSON.stringify(k) + ':' + JSON.stringify(table[k]); }).join(',') + '}';
 }
 
-module.exports = { METALS: METALS, INGOTS: INGOTS, fuelOf: fuelOf, fuelTable: fuelTable, blockLines: blockLines };
+module.exports = { METALS: METALS, INGOTS: INGOTS, fuelOf: fuelOf, fuelTable: fuelTable, tableJson: tableJson };
 
 if (require.main === module) {
-  const args = process.argv.slice(2);
-  const arg = function (name, dflt) { const i = args.indexOf(name); return i >= 0 && args[i + 1] ? args[i + 1] : dflt; };
+  const opts = TABLES.options(process.argv.slice(2), ['--recipes', '--tables'], ['--print']);
   const ROOT = path.join(__dirname, '..', '..');
-  const RECIPES = arg('--recipes', path.join(ROOT, 'game', 'data', 'recipes.json'));
-  const GM = arg('--gamemode', path.join(ROOT, 'game', 'gamemode.js'));
+  const RECIPES = opts['--recipes'] || path.join(ROOT, 'game', 'data', 'recipes.json');
+  const DIR = opts['--tables'] || TABLES.DIR;
   const data = JSON.parse(fs.readFileSync(RECIPES, 'utf8').replace(/^﻿/, ''));
   const table = fuelTable(data);
-  const lines = blockLines(table, Object.keys(data.recipes || {}).length);
-  if (args.indexOf('--print') !== -1) {
+  if (opts['--print']) {
     Object.keys(table).sort().forEach(function (k) {
       const row = (data.recipes || {})[k] || (data.unowned || {})[k] || {};
       console.log(table[k][2] + '\t' + table[k][0] + '\t' + (table[k][1] || '-') + '\t' + row.name + '\t' + k);
     });
     process.exit(0);
   }
-  let src = fs.readFileSync(GM, 'utf8');
-  src = src.split('\r\n').join('\n');
-  const open = lines[0];
-  const close = lines[lines.length - 1];
-  const a = src.indexOf(open);
-  const b = a < 0 ? -1 : src.indexOf(close, a);
-  if (a < 0 || b < 0) {
-    console.error('no FUEL_BY_RECIPE markers in ' + GM + ', so nothing was written');
-    process.exit(1);
-  }
-  src = src.slice(0, a) + lines.join('\n') + src.slice(b + close.length);
-  fs.writeFileSync(GM, src);
-  console.log('FUEL_BY_RECIPE: ' + Object.keys(table).length + ' recipes written to ' + GM);
+  const per = [0, 0, 0, 0, 0];
+  Object.keys(table).forEach(function (k) { per[table[k][0]]++; });
+  const changed = TABLES.write('FUEL_BY_RECIPE', tableJson(table), DIR);
+  console.log('FUEL_BY_RECIPE: ' + Object.keys(table).length + ' recipes at a forge, a skyforge or a smelter, out of ' +
+    Object.keys(data.recipes || {}).length + '; ' + per[1] + ' burn Poor Charcoal, ' + per[2] + ' Charcoal, ' + per[3] +
+    ' Charcoal Briquette and ' + per[4] + ' Coke' + (changed ? '; written' : '; already current'));
 }

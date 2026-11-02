@@ -45,7 +45,6 @@ $RecordFile = P 'records', 'prod-parity.json'
 $Box = P 'scripts', 'vps', 'vps-inbound-rules.ps1'
 $Driver = P 'scripts', 'vps', 'Set-InboundRules.ps1'
 
-. (Join-Path $PSScriptRoot 'Windows.ps1')
 $script:pass = 0
 $script:fail = 0
 function Yes([string]$what, [bool]$cond) {
@@ -113,14 +112,6 @@ try {
     $e = $null
     $null = [System.Management.Automation.Language.Parser]::ParseInput($dt, [ref]$null, [ref]$e)
     Yes 'Set-InboundRules.ps1 parses and is plain ASCII' ((-not $e -or $e.Count -eq 0) -and -not ($dt.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
-    if ($OnWindows) {
-        $ps51 = Get-WindowsPowerShell
-        $chk = "`$e = `$null; `$null = [System.Management.Automation.Language.Parser]::ParseFile('" + $Box.Replace("'", "''") + "', [ref]`$null, [ref]`$e); if (`$e) { 'ERR ' + `$e[0].Message } else { 'OK' }"
-        $said = (& $ps51 -NoProfile -NonInteractive -Command $chk) -join ' '
-        Yes ('  and Windows PowerShell 5.1, which runs it on the box, parses it: ' + $said) ($said -eq 'OK')
-    } else {
-        Write-Host 'NOT RUN  the Windows PowerShell 5.1 parse, which only Windows has'
-    }
 
     $layerNames = @('Get-ThornswoodBoxRefusal', 'Sync-ThornswoodFirewall', 'Get-InboundRules', 'Disable-Rule', 'Test-RuleEnabled', 'Get-RuleEvents', 'Get-WinRm', 'Get-Ipv6Addresses', 'Get-WideListeners')
     $defined = @($ast.FindAll({ param($n) $n -is $FnAst }, $true) | ForEach-Object { $_.Name })

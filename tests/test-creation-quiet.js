@@ -91,10 +91,10 @@ function world(opts) {
   const said = [];
   const online = [];
   const mp = {
-    getOnlinePlayers: function () { return online.slice(); },
     makeProperty: function (name, o) { made[name] = o; },
     getDescFromId: function () { return ''; },
     get: function (id, key) {
+      if (id === 0 && key === 'onlinePlayers') { return online.slice(); }
       const p = props[id] || {};
       if (key === 'worldOrCellDesc') { return p.worldOrCellDesc || 'a5a5:Skyrim.esm'; }
       return p[key] === undefined ? undefined : JSON.parse(JSON.stringify(p[key]));

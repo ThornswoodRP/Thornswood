@@ -41,7 +41,7 @@ $ThornswoodLastTools = @('scripts/mods/Make-LastPlugin.py', 'scripts/mods/last_r
 # Text for the box: makes the plugin into $Into from the folders $Reads, with
 # the tables of $ArchiveStore, out of tools.zip in the run's folder $Run.
 # Lines out: what Python said, then MADE <bytes> <sha256> when it was made,
-# and EXIT <code>. Windows PowerShell 5.1 on the far side: ASCII, .NET only.
+# and EXIT <code>. PowerShell 7 on the far side: ASCII, .NET only.
 function Get-ThornswoodLastMakeScript {
     param(
         [Parameter(Mandatory = $true)][string]$Run,

@@ -10,7 +10,7 @@
   Harden-VPS.ps1 had left there were readable by every account on the box.
 
   Against a stand-in for that folder under %TEMP%, with the same rule for
-  Authenticated Users and the real Windows PowerShell 5.1 the box runs:
+  Authenticated Users and the real PowerShell 7 the box runs (#5356):
     - New-PrivateFile, as vps-ssh-scope.ps1 and vps-harden.ps1 each carry
       it, leaves a file that takes nothing from the folder and has exactly
       SYSTEM and Administrators, Full Control, for two files in one run, and
@@ -33,8 +33,8 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $repo = (Resolve-Path (Join-Path $Here '..')).Path
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  the copies in C:\ProgramData\ssh get their rights from a Windows ACL, set by scripts the box runs in Windows PowerShell 5.1, which only Windows has'; exit 0 }
-$ps51 = Get-WindowsPowerShell
+if (-not $OnWindows) { Write-Host 'NOT RUN  the copies in C:\ProgramData\ssh get their rights from a Windows ACL, which only Windows has'; exit 0 }
+$boxPs = Get-BoxPowerShell
 . (Join-Path $repo 'scripts\vps\Lock-Folder.ps1')
 
 $script:pass = 0; $script:fail = 0
@@ -56,7 +56,7 @@ function OnlyTheTwo([string]$p) {
 function Run51([string]$text) {
     $f = Join-Path ([IO.Path]::GetTempPath()) ('tw-3034-' + [guid]::NewGuid().ToString('N') + '.ps1')
     [IO.File]::WriteAllText($f, $text, (New-Object Text.UTF8Encoding($true)))
-    try { return @(& $ps51 -NoProfile -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_" }) } finally { Remove-Item -LiteralPath $f -Force -EA SilentlyContinue }
+    try { return @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_" }) } finally { Remove-Item -LiteralPath $f -Force -EA SilentlyContinue }
 }
 function FunctionText([string]$path, [string]$name) {
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$null)
@@ -90,7 +90,7 @@ try {
         # Two in one run: a security object reused across files writes
         # nothing the second time, which is what the box step of 21 Oct did.
         $out = Run51 ($fn + "`r`nNew-PrivateFile " + (Q $f) + "`r`nNew-PrivateFile " + (Q $f2) + "`r`n'MADE'")
-        Yes ('  run in Windows PowerShell 5.1 it makes two files in one run' + $(if (-not ($out -contains 'MADE')) { ': ' + ($out -join ' ') })) (($out -contains 'MADE') -and (Test-Path -LiteralPath $f) -and (Test-Path -LiteralPath $f2))
+        Yes ('  run in the box''s PowerShell 7 it makes two files in one run' + $(if (-not ($out -contains 'MADE')) { ': ' + ($out -join ' ') })) (($out -contains 'MADE') -and (Test-Path -LiteralPath $f) -and (Test-Path -LiteralPath $f2))
         Yes '  each empty, taking nothing from the folder, SYSTEM and Administrators Full Control and nobody else' ((Get-Item -LiteralPath $f).Length -eq 0 -and (OnlyTheTwo $f) -and (OnlyTheTwo $f2))
         # A copy whose rules did not take stops the run instead of carrying on.
         $bad = $fn.Replace('$item.SetAccessControl($acl)', '$null = $acl').Replace('[IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]$item, $acl)', '$null = $acl')
@@ -134,7 +134,7 @@ function Register-ScheduledTask { param($TaskName, $Action, $Trigger, $Principal
 function icacls { }
 '@
         $out = Run51 ($stubs + "`r`n" + $script)
-        Yes ('the change script runs in Windows PowerShell 5.1 against the stand-in folder' + $(if (-not ($out -contains 'DONE')) { ': ' + ($out -join ' ') })) ($out -contains 'DONE')
+        Yes ('the change script runs in the box''s PowerShell 7 against the stand-in folder' + $(if (-not ($out -contains 'DONE')) { ': ' + ($out -join ' ') })) ($out -contains 'DONE')
         $copied = @(Get-ChildItem -LiteralPath $save -Recurse -Force -File)
         Yes '  its copy folder takes nothing from the folder above and gives no broad group a rule' ((Get-Acl -LiteralPath $save).AreAccessRulesProtected -and (Broad $save) -eq 0)
         Yes '  and the key file and token digest copied into it take none either' ($copied.Count -eq 2 -and @($copied | Where-Object { (Broad $_.FullName) -gt 0 }).Count -eq 0)

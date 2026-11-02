@@ -1,5 +1,5 @@
 {
-  "about": "The rulesets, private vulnerability reporting, immutable releases and secret scanning of Thornswood and of the engine fork, ThornswoodRP/skymp (#3683, #3691). A change is a pull request to this file; once it merges, the Desk runs pwsh scripts/deploy/Set-BuildRunners.ps1 -RepoSettings (-Check first), which starts github-admin.yml in the private ops repository, and the box's admin service (scripts/vps/admin/admin.js, repo-settings) makes GitHub match it: each ruleset named here is made or put back by name, one GitHub has that this does not name stops the run and is never deleted, reporting, immutable releases, secret scanning and push protection are switched as each entry says, and where an entry lists collaborators, one GitHub has that the list does not name is taken off and an invitation to one is withdrawn; this only ever takes people off, and one it names who is not there is reported for Patrick to invite by hand. An App or a deploy key may be a bypass actor only on a tag ruleset, never on a branch one; a record that says otherwise stops the run (the redesign's part 20, 1 Nov 2026). Every night github-admin.yml in the ops repository asks the same service for a check, which changes nothing and opens one issue on the board while GitHub differs from this file, and closes it once a check matches (#5298). A why is this file's own note and is never sent to GitHub.",
+  "about": "The rulesets, private vulnerability reporting, immutable releases, secret scanning, auto-merge and merge methods of Thornswood, of the engine fork, ThornswoodRP/skymp (#3683, #3691), and of the private ops repository, ThornswoodRP/Thornswood-Ops (its merge methods only: GitHub Free keeps no rulesets and no auto-merge for a private repository). A change is a pull request to this file; once it merges, the Desk runs pwsh scripts/deploy/Set-BuildRunners.ps1 -RepoSettings (-Check first), which starts github-admin.yml in the private ops repository, and the box's admin service (scripts/vps/admin/admin.js, repo-settings) makes GitHub match it: each ruleset named here is made or put back by name, one GitHub has that this does not name stops the run and is never deleted, reporting, immutable releases, secret scanning, push protection, auto-merge and the three merge methods (all three or none) are switched as each entry says, and where an entry lists collaborators, one GitHub has that the list does not name is taken off and an invitation to one is withdrawn; this only ever takes people off, and one it names who is not there is reported for Patrick to invite by hand. An App or a deploy key may be a bypass actor only on a tag ruleset, never on a branch one; a record that says otherwise stops the run (the redesign's part 20, 1 Nov 2026). Every night github-admin.yml in the ops repository asks the same service for a check, which changes nothing and opens one issue on the board while GitHub differs from this file, and closes it once a check matches (#5298). A why is this file's own note and is never sent to GitHub.",
   "repositories": [
     {
       "repository": "ThornswoodRP/Thornswood",
@@ -10,12 +10,16 @@
       "secret_scanning_push_protection": true,
       "allow_auto_merge": true,
       "allow_auto_merge_why": "Patrick's A on #5182, 31 Oct 2026: a pull request merges itself once Build check result is green, so nobody waits to press merge. The main ruleset below requires that check and has no bypass, so auto-merge can never merge past red, for the owner either. Each pull request's author turns auto-merge (squash) on when it opens.",
+      "allow_squash_merge": true,
+      "allow_merge_commit": false,
+      "allow_rebase_merge": false,
+      "merge_methods_why": "Squash only (2 Nov 2026, after Patrick found all three methods allowed in all three repositories): every merge here is a squash, the merge queue's own method, so neither a button nor gh pr merge nor a Bot can land a merge commit or a rebase on main.",
       "collaborators": ["WiccanDjinn"],
       "collaborators_why": "Everybody besides the owner who may push here, as the team is on 31 Oct 2026. A person who leaves the team is a pull request taking them off this list, and the next run takes them off GitHub. A person who joins is invited by Patrick by hand and then added here.",
       "rulesets": [
         {
           "name": "release tags",
-          "why": "Patrick's A on q-3721-release-tags, 26 Oct 2026: a v* tag names what a release was built from, so only the admin role may move or delete one. GitHub refused the answer as first written, with GitHub Actions (15368) as a second bypass, with 422 Validation Failed on 31 Oct 2026: a personal repository's ruleset can only be bypassed by its roles, deploy keys and installed apps. So making a v* tag stays open to anyone who can push, which release-tag.yml needs, since it makes the tag with the run's own token and never moves or deletes one.",
+          "why": "Patrick's A on q-3721-release-tags, 26 Oct 2026: a v* tag names what a release was built from, so only the admin role may move or delete one. Making a v* tag stays open to anyone who can push (Patrick's A on q-5296-release-tags, 1 Nov 2026: leave it open, nothing by hand). GitHub refuses GitHub Actions (15368), the identity of the run's own token, as a bypass actor: 422 Validation Failed on 31 Oct 2026 while the repository was personal and again on 1 Nov 2026 in the organization, so a creation lock would stop release-tag.yml, which makes the tag with that token and never moves or deletes one. A v* tag pushed by hand builds nothing itself: release.yml hands it to main's own workflow, which builds only a commit on main, the run anyone who can push may start by hand anyway.",
           "target": "tag",
           "enforcement": "active",
           "conditions": { "ref_name": { "include": ["refs/tags/v*"], "exclude": [] } },
@@ -25,27 +29,15 @@
           ]
         },
         {
-          "name": "release tags made by the release workflow",
-          "why": "Patrick's A on q-3721-release-tags (26 Oct 2026) asked for this from the start: a v* tag is made only by release-tag.yml, with the run's own token, which GitHub names the App GitHub Actions (15368). GitHub refused that with 422 on 31 Oct 2026 while the repository was a personal one, so making a v* tag was left open (q-3683-lock-tag-creation, A). Since the move to ThornswoodRP on 1 Nov 2026 an organization's ruleset may name an App, and an App may bypass only a tag ruleset (the redesign's part 20). Every Ship makes its launcher tag through release-tag.yml, from the cloud and on the box (ship-access.js), so a v* tag pushed by a person or a Bot is refused; a pushed v* tag would otherwise start release.yml from that tag's own commit. Kept apart from release tags so the release workflow may make a v* tag and never move or delete one.",
-          "target": "tag",
-          "enforcement": "active",
-          "conditions": { "ref_name": { "include": ["refs/tags/v*"], "exclude": [] } },
-          "rules": [{ "type": "creation" }],
-          "bypass_actors": [
-            { "actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always" },
-            { "actor_id": 15368, "actor_type": "Integration", "bypass_mode": "always" }
-          ]
-        },
-        {
           "name": "main",
-          "why": "Patrick's A on q-3721-main-protection, 26 Oct 2026: admins included, no force push or deletion, and the build check required: the one always-run Build check result job (q-3683-required-check A), since a skipped Launcher builds counts as passing. Active since #3684's history rewrite had its force push (step 7, 31 Oct 2026) and that job runs on every pull request now the repository is public (first passed on #5066, 31 Oct 2026). Test tasks in the pull request (.github/workflows/test-tasks.yml, #5199, the redesign's part 18, 31 Oct 2026) is required beside it: the bot's own post rules read the pull request's test tasks before the merge, so one that the bot would refuse to post is fixed in the body, not found on the issue days after. A pull request is required too (Patrick's yes on q-p20-main-needs-pr, 31 Oct 2026, 7:18 PM, the redesign's part 20): nothing reaches main except through a pull request with its checks, and auto-merge does the merging. No review is required (0 approvals), because the checks are the gate and nobody waits to press approve. Nothing in the repository pushes straight to main (searched 1 Nov 2026). The merge queue (the redesign's part 5, Patrick's A on 31 Oct 2026, possible since the move to the ThornswoodRP organization; #5296): auto-merge puts a green pull request in the queue, and the queue lands it only once Build check result and Test tasks pass again on GitHub's merge of it onto the newest main, where the build runs the whole gate, so main's own build finds that run and builds nothing again. Squash, as every merge here. Each pull request must pass on its own (ALLGREEN), so test-tasks.yml reads each body. Two merges build at once, because each is nine jobs and the hosted runners are shared with every pull request's build; up to five that passed land together; a check that has not answered in 30 minutes is stuck, since the build's own limits end well before that.",
+          "why": "Patrick's A on q-3721-main-protection, 26 Oct 2026: admins included, no force push or deletion, and the build check required: the one always-run Build check result job (q-3683-required-check A), since a skipped Launcher builds counts as passing. Active since #3684's history rewrite had its force push (step 7, 31 Oct 2026) and that job runs on every pull request now the repository is public (first passed on #5066, 31 Oct 2026). Test tasks in the pull request (.github/workflows/test-tasks.yml, #5199, the redesign's part 18, 31 Oct 2026) is required beside it: the bot's own post rules read the pull request's test tasks before the merge, so one that the bot would refuse to post is fixed in the body, not found on the issue days after. A pull request is required too (Patrick's yes on q-p20-main-needs-pr, 31 Oct 2026, 7:18 PM, the redesign's part 20): nothing reaches main except through a pull request with its checks, and auto-merge does the merging. No review is required (0 approvals), because the checks are the gate and nobody waits to press approve. Nothing in the repository pushes straight to main (searched 1 Nov 2026). The merge queue (the redesign's part 5, Patrick's A on 31 Oct 2026, possible since the move to the ThornswoodRP organization; #5296): auto-merge puts a green pull request in the queue, and the queue lands it only once Build check result and Test tasks pass again on GitHub's merge of it onto the newest main, where the build runs the whole gate, so main's own build finds that run and builds nothing again. Squash, as every merge here. Each pull request must pass on its own (ALLGREEN), so test-tasks.yml reads each body. Release note (.github/workflows/pr-body.yml, #5179) is required beside them since 2 Nov 2026: it was not, so the queue landed #5364 with that check red, and every merge release after it stopped at its notes, since a published Release's body never changes; it runs on the queue's merge too and reads the queued pull request's body. Two merges build at once, because each is nine jobs and the hosted runners are shared with every pull request's build; up to five that passed land together; a check that has not answered in 30 minutes is stuck, since the build's own limits end well before that.",
           "target": "branch",
           "enforcement": "active",
           "conditions": { "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] } },
           "rules": [
             { "type": "deletion" },
             { "type": "non_fast_forward" },
-            { "type": "required_status_checks", "parameters": { "strict_required_status_checks_policy": false, "required_status_checks": [{ "context": "Build check result", "integration_id": 15368 }, { "context": "Test tasks in the pull request", "integration_id": 15368 }] } },
+            { "type": "required_status_checks", "parameters": { "strict_required_status_checks_policy": false, "required_status_checks": [{ "context": "Build check result", "integration_id": 15368 }, { "context": "Test tasks in the pull request", "integration_id": 15368 }, { "context": "Release note", "integration_id": 15368 }] } },
             { "type": "pull_request", "parameters": { "required_approving_review_count": 0, "dismiss_stale_reviews_on_push": false, "require_code_owner_review": false, "require_last_push_approval": false, "required_review_thread_resolution": false } },
             { "type": "merge_queue", "parameters": { "merge_method": "SQUASH", "grouping_strategy": "ALLGREEN", "max_entries_to_build": 2, "min_entries_to_merge": 1, "max_entries_to_merge": 5, "min_entries_to_merge_wait_minutes": 0, "check_response_timeout_minutes": 30 } }
           ],
@@ -58,6 +50,11 @@
       "private_vulnerability_reporting": true,
       "secret_scanning": true,
       "secret_scanning_push_protection": true,
+      "allow_auto_merge": true,
+      "allow_squash_merge": false,
+      "allow_merge_commit": true,
+      "allow_rebase_merge": false,
+      "merge_methods_why": "Merge commits only, and auto-merge (2 Nov 2026, after fork #147 sat green and unmerged with auto-merge off): engine/README.md 'One engine' merges a fork pull request with a merge commit, whose files are the branch's, so a build of the branch's last commit is a build of the head. Pull requests go to thornswood/engine-changes, whose ruleset requires build-pr and save-directory-linux with no bypass, so auto-merge never merges past red. Each pull request's author turns auto-merge (merge) on when it opens; Bramble merges the rest.",
       "collaborators": ["WiccanDjinn"],
       "collaborators_why": "The fork's collaborators as GitHub had them on 1 Nov 2026, after Ture-Neko was taken off the fork (Patrick's A on q-5231-ture, #5231), written down so that anybody given push here by hand and not added to this list is taken off at the next run.",
       "rulesets": [
@@ -89,6 +86,13 @@
           "bypass_actors": []
         }
       ]
+    },
+    {
+      "repository": "ThornswoodRP/Thornswood-Ops",
+      "why": "The private ops repository, on GitHub Free, which keeps no rulesets and no auto-merge for a private repository, so this entry names neither and Bramble merges its pull requests once check is green (Thornswood-Hermes policy merge.required_checks). Squash only, as every merge in Thornswood (2 Nov 2026, after Ops #200 and #201 sat green and unmerged).",
+      "allow_squash_merge": true,
+      "allow_merge_commit": false,
+      "allow_rebase_merge": false
     }
   ]
 }

@@ -1,10 +1,11 @@
 using System;
 using System.IO;
 using System.Reflection;
-using System.Security.Cryptography;
-using System.Windows;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using SkiaSharp;
 
 namespace Thornswood
 {
@@ -19,18 +20,16 @@ namespace Thornswood
     /// </summary>
     static class Art
     {
-        static BitmapImage cached;
+        static Bitmap cached;
         static bool tried;
 
         static ImageBrush header;
         static bool triedHeader;
 
-        static string headerVideo;
-        static bool triedHeaderVideo;
-
         /// <summary>
         /// True in the dev build. Set by Shell as soon as the config is read,
-        /// before anything asks for the emblem or the shortcut icon.
+        /// before anything asks for the emblem. The shortcut icon reads
+        /// Icons.Dev, set beside it.
         /// </summary>
         public static bool Dev;
 
@@ -40,13 +39,27 @@ namespace Thornswood
         /// main keeps its own). A dev build without logo-dev.png falls back
         /// to logo.png.
         /// </summary>
-        public static BitmapImage Emblem()
+        public static Bitmap Emblem()
         {
             if (tried) return cached;
             tried = true;
             if (Dev) cached = Load("logo-dev.png");
             if (cached == null) cached = Load("logo.png");
             return cached;
+        }
+
+        /// <summary>
+        /// The window's icon when this build carries no emblem: the exe's own
+        /// icon, app-dev.ico on the dev build and app.ico on main, from the
+        /// same resources. Null when neither is there.
+        /// </summary>
+        public static WindowIcon AppIcon()
+        {
+            byte[] ico = null;
+            if (Dev) ico = Bytes("app-dev.ico");
+            if (ico == null) ico = Bytes("app.ico");
+            if (ico == null) return null;
+            using (var ms = new MemoryStream(ico)) return new WindowIcon(ms);
         }
 
         /// <summary>
@@ -76,14 +89,27 @@ namespace Thornswood
         /// two crop to the same rows and the strip does not jump when the video
         /// starts. Shell.StartHeaderVideo paints with this same rectangle.
         /// </summary>
-        public static readonly Rect HeaderCrop = new Rect(0, 0.08, 1, 0.70);
+        public static readonly RelativeRect HeaderCrop = new RelativeRect(0, 0.08, 1, 0.70, RelativeUnit.Relative);
 
         /// <summary>
-        /// The strip of landscape behind the title on the Play page, as a brush
-        /// that fills the band and crops what does not fit, the way a desktop
-        /// wallpaper does, taking the part of the picture HeaderCrop names. Null
-        /// when this build carries no picture, and the band then keeps its
-        /// pattern.
+        /// A brush that fills the band with the part of a picture HeaderCrop
+        /// names, cropping what does not fit the way a desktop wallpaper does.
+        /// The still picture and the moving one are both painted through one
+        /// of these, so the two line up.
+        /// </summary>
+        public static ImageBrush BandBrush(IImageBrushSource source)
+        {
+            var b = new ImageBrush(source);
+            b.Stretch = Stretch.UniformToFill;
+            b.AlignmentX = AlignmentX.Center;
+            b.AlignmentY = AlignmentY.Center;
+            b.SourceRect = HeaderCrop;
+            return b;
+        }
+
+        /// <summary>
+        /// The strip of landscape behind the title on the Play page. Null when
+        /// this build carries no picture, and the band then keeps its pattern.
         ///
         /// The picture is held still: no zoom, no drift, no scale of any kind.
         /// </summary>
@@ -91,64 +117,30 @@ namespace Thornswood
         {
             if (triedHeader) return header;
             triedHeader = true;
-            try
-            {
-                BitmapImage bi = Load("launcher-header.jpg");
-                if (bi == null) return null;
-                var b = new ImageBrush(bi);
-                b.Stretch = Stretch.UniformToFill;
-                b.AlignmentX = AlignmentX.Center;
-                b.AlignmentY = AlignmentY.Center;
-                b.ViewboxUnits = BrushMappingMode.RelativeToBoundingBox;
-                b.Viewbox = HeaderCrop;
-                b.Freeze();
-                header = b;
-            }
-            catch { header = null; }
+            Bitmap bi = Load("launcher-header.jpg");
+            if (bi != null) header = BandBrush(bi);
             return header;
         }
 
         /// <summary>
-        /// The same strip moving, as a file on disk, because WPF plays video
-        /// from a file and not from a stream. It is written beside the exe once,
-        /// under a name taken from its own contents the way the icon is, so the
-        /// next start finds it already there and a build with a new video writes
-        /// a new file rather than trusting an old one. Null when this build
-        /// carries no video or the file cannot be written, and the band then
+        /// The same strip moving: launcher-header.webp, an animated WebP made
+        /// from the old mp4 with the same 720 frames at 30 a second, the same
+        /// 1536 by 300 and the same endless loop. It is read straight out of
+        /// the exe and decoded here one frame at a time, so nothing is written
+        /// to disk and nothing in Windows has to be able to play video. Null
+        /// when this build carries none or it cannot be read, and the band then
         /// keeps the still picture.
         /// </summary>
-        public static string HeaderVideo()
+        public static HeaderFrames HeaderVideo()
         {
-            if (triedHeaderVideo) return headerVideo;
-            triedHeaderVideo = true;
-            try
-            {
-                byte[] bytes = Bytes("launcher-header.mp4");
-                if (bytes == null || bytes.Length == 0) return null;
-                if (!Directory.Exists(Paths.LauncherDir)) return null;
-
-                string hash;
-                using (SHA256 sha = SHA256.Create())
-                    hash = BitConverter.ToString(sha.ComputeHash(bytes), 0, 4).Replace("-", "").ToLowerInvariant();
-
-                string want = Path.Combine(Paths.LauncherDir, "header-" + hash + ".mp4");
-                if (!File.Exists(want) || new FileInfo(want).Length != bytes.Length)
-                    File.WriteAllBytes(want, bytes);
-
-                // The one an older build wrote is only taking up room now.
-                foreach (string f in Directory.GetFiles(Paths.LauncherDir, "header-*.mp4"))
-                    if (!string.Equals(f, want, StringComparison.OrdinalIgnoreCase))
-                        try { File.Delete(f); } catch (Exception ex) { Swallow.Note("Art.HeaderVideo, deleting old " + f, ex); }
-
-                headerVideo = want;
-            }
-            catch { headerVideo = null; }
-            return headerVideo;
+            byte[] bytes = Bytes("launcher-header.webp");
+            if (bytes == null || bytes.Length == 0) return null;
+            return HeaderFrames.Open(bytes);
         }
 
         static byte[] Bytes(string name)
         {
-            Assembly asm = Assembly.GetExecutingAssembly();
+            Assembly asm = typeof(Art).Assembly;
             string pick = null;
             foreach (string n in asm.GetManifestResourceNames())
                 if (n.EndsWith(name, StringComparison.OrdinalIgnoreCase)) { pick = n; break; }
@@ -163,35 +155,107 @@ namespace Thornswood
             }
         }
 
-        static BitmapImage Load(string name)
+        /// <summary>
+        /// A picture from the resources, decoded now and held in memory, so
+        /// nothing reads the resource again later. Null when this build does
+        /// not carry it.
+        /// </summary>
+        static Bitmap Load(string name)
         {
-            try
+            byte[] bytes = Bytes(name);
+            if (bytes == null) return null;
+            using (var ms = new MemoryStream(bytes)) return new Bitmap(ms);
+        }
+    }
+
+    /// <summary>
+    /// The moving strip, decoded one frame at a time in order and looping.
+    ///
+    /// Each frame of the WebP is drawn on top of the one before it (only frame
+    /// 0 stands on its own: 719 of the 720 are the parts that changed), so the
+    /// frames are decoded in order into one picture that is kept between them,
+    /// and that picture is the frame. Measured on 1 Nov 2026 in a Linux cloud
+    /// container with SkiaSharp 3.119.4, a frame took 10 ms to decode (median
+    /// of two loops, 12 ms at the 95th percentile), a third of the 33 ms it is
+    /// on screen, which is why Shell decodes them off the window's thread.
+    ///
+    /// Only the thread Shell.StartHeaderVideo starts calls Next and CopyTo.
+    /// </summary>
+    sealed class HeaderFrames : IDisposable
+    {
+        readonly SKData data;
+        readonly SKCodec codec;
+        readonly SKCodecFrameInfo[] frames;
+        readonly SKImageInfo info;
+        readonly SKBitmap picture;
+        int at = -1;
+
+        HeaderFrames(SKData data, SKCodec codec)
+        {
+            this.data = data;
+            this.codec = codec;
+            frames = codec.FrameInfo;
+            info = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
+            picture = new SKBitmap(info);
+        }
+
+        /// <summary>Null when the bytes are not a WebP with at least one frame.</summary>
+        public static HeaderFrames Open(byte[] bytes)
+        {
+            SKData data = SKData.CreateCopy(bytes);
+            SKCodec codec = SKCodec.Create(data);
+            if (codec == null || codec.FrameCount < 1 || codec.Info.Width < 1 || codec.Info.Height < 1)
             {
-                Assembly asm = Assembly.GetExecutingAssembly();
-                string pick = null;
-                foreach (string n in asm.GetManifestResourceNames())
-                    if (n.EndsWith(name, StringComparison.OrdinalIgnoreCase)) { pick = n; break; }
-                if (pick == null) return null;
-
-                using (Stream st = asm.GetManifestResourceStream(pick))
-                {
-                    if (st == null) return null;
-                    var ms = new MemoryStream();
-                    st.CopyTo(ms);
-                    ms.Position = 0;
-
-                    var bi = new BitmapImage();
-                    bi.BeginInit();
-                    // OnLoad, or the stream is read lazily and the image is
-                    // blank once this using block has closed it.
-                    bi.CacheOption = BitmapCacheOption.OnLoad;
-                    bi.StreamSource = ms;
-                    bi.EndInit();
-                    bi.Freeze();
-                    return bi;
-                }
+                if (codec != null) codec.Dispose();
+                data.Dispose();
+                return null;
             }
-            catch { return null; }
+            return new HeaderFrames(data, codec);
+        }
+
+        public int Width { get { return info.Width; } }
+        public int Height { get { return info.Height; } }
+
+        /// <summary>
+        /// Decodes the next frame, going back to the first after the last, and
+        /// says how long it stays on screen. Throws with Skia's reason when a
+        /// frame will not decode.
+        /// </summary>
+        public TimeSpan Next()
+        {
+            at = (at + 1) % frames.Length;
+            // The frame this one is drawn on is the one before it, which is
+            // what the picture holds. A frame that stands on its own (the
+            // first) is decoded onto nothing.
+            int prior = frames[at].RequiredFrame == -1 ? -1 : (at == 0 ? frames.Length - 1 : at - 1);
+            SKCodecResult r = codec.GetPixels(info, picture.GetPixels(), info.RowBytes, new SKCodecOptions(at, prior));
+            if (r != SKCodecResult.Success)
+                throw new InvalidDataException("frame " + at + " of the title video did not decode: " + r);
+            // A frame with no length of its own shows for a thirtieth of a
+            // second, the rate the strip was made at.
+            int ms = frames[at].Duration > 0 ? frames[at].Duration : 33;
+            return TimeSpan.FromMilliseconds(ms);
+        }
+
+        /// <summary>
+        /// Copies the frame Next decoded into a locked bitmap of the same size
+        /// and the same 32 bit BGRA layout.
+        /// </summary>
+        public unsafe void CopyTo(IntPtr to, int toRowBytes)
+        {
+            byte* src = (byte*)picture.GetPixels();
+            byte* dst = (byte*)to;
+            int row = info.RowBytes;
+            int width = Math.Min(row, toRowBytes);
+            for (int y = 0; y < info.Height; y++)
+                Buffer.MemoryCopy(src + (long)y * row, dst + (long)y * toRowBytes, width, width);
+        }
+
+        public void Dispose()
+        {
+            picture.Dispose();
+            codec.Dispose();
+            data.Dispose();
         }
     }
 }

@@ -2,18 +2,16 @@
   Check-Secrets.ps1
 
   Read only. Looks for anything that must never leave a machine: in the files
-  this repository tracks, in a pack or installer zip, in the installer's staged
-  folder, or in a built program. For every hit it prints the file, the line and
+  this repository tracks, in a pack or another zip, or in a built program. For every hit it prints the file, the line and
   the name of the rule, and NEVER the thing it matched. A scan that prints what
   it found has just published it, in a build log anybody on the repository can
   read.
 
       .\scripts\dev\Check-Secrets.ps1                            every file git tracks here, and in
                                              each submodule that is checked out
-      .\scripts\dev\Check-Secrets.ps1 -Zip <pack, installer zip, or Setup program>
+      .\scripts\dev\Check-Secrets.ps1 -Zip <pack, zip, or Setup program>
                                              the entries of a zip. A Setup program is a
                                              program with a zip appended; that zip is read too.
-      .\scripts\dev\Check-Secrets.ps1 -Dir <installer stage>     a staged folder
       .\scripts\dev\Check-Secrets.ps1 -Binary <Thornswood.exe>   a built program, byte by byte
 
   Exit 0 when nothing was found, 1 when something was, 2 when something could
@@ -30,8 +28,11 @@
       of the machine that built them, because Ship-Rules did not list it yet.
   Ship-Rules lists both now. This is the check that does not wait for somebody
   to think of the file first: both names say what they are, and the token has
-  a shape. In a pack or the installer it also asks Ship-Rules itself, so a file
-  that the rules keep out and that got in anyway stops the release.
+  a shape. In a pack it also asks Ship-Rules itself, so a file that the rules
+  keep out and that got in anyway stops the release. Until #4824 it read the
+  old installer's zip and staged folder (payload\) the same way; that
+  installer went, and with it -Dir and -ClientRecord, the record of an older
+  launcher's client that only its packing passed.
 
   The tree scan reads what git tracks and nothing else, so the credential files
   that sit gitignored on the shipping machine (the two webhook files,
@@ -55,53 +56,25 @@
 param(
     # The repository to scan. Empty is the one this script is in.
     [string]$Root = '',
-    # Pack or installer zips. Entries under game/ (a pack) or payload/ (the
-    # installer) are also checked against Ship-Rules.
+    # Packs and other zips. Entries under game/ (a pack) are also checked
+    # against Ship-Rules.
     [string[]]$Zip = @(),
-    # A staged folder, the installer's stage. Its payload\ is the game.
-    [string]$Dir = '',
     # A built program, read byte by byte as text and as UTF-16.
     [string[]]$Binary = @(),
     # The allow list. Empty is Check-Secrets.allow.txt beside this script.
     [string]$Allow = '',
     # A submodule the tree scan finds not checked out (#1326): Say names it
     # and carries on; Require also counts it as not read, so the scan exits 2.
-    [ValidateSet('Say', 'Require')][string]$Submodules = 'Say',
-    # The client record the six client runtime files are held to. Empty is
-    # this checkout's records\client-build.json, as Ship-Rules loads it.
-    # Package-Thornswood passes the record of the launcher it packs (#3099):
-    # an installer of an older release carries that launcher's client, and
-    # held to the checkout's record every one of the six failed as
-    # client-not-recorded-build, so no installer of 1.2.5 could be made.
-    [string]$ClientRecord = ''
+    [ValidateSet('Say', 'Require')][string]$Submodules = 'Say'
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $Here = $PSScriptRoot
-# Taken before Ship-Rules is dot-sourced: it sets $clientRecord, the same
-# name to PowerShell, to the checkout's record.
-$givenRecord = $ClientRecord
+# The six client runtime files are held to this checkout's
+# records\client-build.json, as Ship-Rules loads it.
 . (Join-Path $Here '..\release\Ship-Rules.ps1')
-if ($givenRecord) {
-    # Read the way Ship-Rules reads the checkout's: a record that does not
-    # read, or names no files, stops the scan rather than leaving the six
-    # paths unlisted (#2711).
-    try {
-        $given = Get-Content -LiteralPath $givenRecord -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
-        if (-not $given -or -not $given.PSObject.Properties['files'] -or -not $given.files) { throw 'it names no files' }
-    } catch {
-        Write-Host ("Check-Secrets: the client record $givenRecord does not read (" + $_.Exception.Message + '), so the client runtime cannot be held to it. Nothing was scanned.') -ForegroundColor Red
-        exit 2
-    }
-    $ShipClientFiles.Clear()
-    $ShipClientHashes = @{}
-    foreach ($p in $given.files.PSObject.Properties.Name) {
-        [void]$ShipClientFiles.Add($p)
-        $ShipClientHashes[$p] = ([string]$given.files.$p.sha256).ToLowerInvariant()
-    }
-}
 
 # ---------------------------------------------------------------- the rules
 #
@@ -226,7 +199,7 @@ public static class ThornswoodSecretScan1
                                   [string[]]@($ContentRules | ForEach-Object { $_.Rx }))
 
 # By name. Every one of these is gitignored or kept out by Ship-Rules, so
-# finding one tracked, packed or staged means a rule somewhere was missed.
+# finding one tracked or packed means a rule somewhere was missed.
 $SecretNames = @(
     'backup-key.txt', 'thornswood-backup-key.txt', 'bot.env.json', '.env',
     'signing.json', 'id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519'
@@ -304,16 +277,15 @@ function Test-Name([string]$where, [string]$key, [string]$leaf, [bool]$tree) {
     if ($SecretExts -contains $ext) { $hit = $true }
     if ($SecretWord.IsMatch($leaf)) { $hit = $true }
     # The launcher's config.json holds the server address and the update
-    # token. The installer carries one on purpose, so this is the tree only.
+    # token. A download may carry one on purpose (the setup's config.json, the
+    # channel's server and site), so this is the tree only.
     if ($tree -and $leaf -ieq 'config.json') { $hit = $true }
     if ($hit) { Write-Hit $where $key '0' 'credential-file-name' $false }
 }
 
-# Whether a zip entry or a staged file at one of the six client runtime paths
-# is the recorded build, by its own bytes. $source is the zip entry, or the
-# staged file's full path.
+# Whether a zip entry at one of the six client runtime paths is the recorded
+# build, by its own bytes.
 function Test-ClientBytes([string]$rel, $source) {
-    if ($source -is [string]) { return (Test-ShipClientRecorded $rel $source) }
     $sha = [Security.Cryptography.SHA256]::Create()
     try {
         $s = $source.Open()
@@ -324,22 +296,21 @@ function Test-ClientBytes([string]$rel, $source) {
     return ($have -eq $ShipClientHashes[$rel])
 }
 
-# A path inside a pack (game/...) or the installer (payload/...), asked of
-# Ship-Rules the same way Publish-Update and Package-Thornswood ask it before
-# they pack a file. Anything it says never ships and that is here anyway is
+# A path inside a pack (game/...), asked of Ship-Rules the same way
+# Publish-Update asks it before it packs a file. Anything it says never ships and that is here anyway is
 # the failure this whole script is for.
 #
 # The six client runtime files are asked by the bytes in hand, not through
 # Test-ShipMachine (entry 128). Ship-Rules calls one of them ours only when its
 # sha256 is the recorded build, and given just a path it hashes the file under
 # the caller's $GameDir. Here that is the wrong file: the game folder a pack
-# was built from, not the zip or stage being read. Measured 24 September on
-# scratch copies of the real bundle: run on its own, with no $GameDir, this
-# failed a pack and a stage that carried the recorded build as never-ship;
+# was built from, not the zip being read. Measured 24 September on scratch
+# copies of the real bundle: run on its own, with no $GameDir, this failed a
+# pack and the old installer's stage that carried the recorded build as never-ship;
 # called with & from a script that had one, the way Publish-Update calls it, it
 # passed a pack whose bundle had one byte changed.
 function Test-ShipPath([string]$where, [string]$key, [string]$inner, $source) {
-    $m = [regex]::Match($inner, '^(?:game|payload)[/\\](.+)$', 'IgnoreCase')
+    $m = [regex]::Match($inner, '^game[/\\](.+)$', 'IgnoreCase')
     if (-not $m.Success) { return }
     $rel = $m.Groups[1].Value -replace '/', '\'
     if (Test-ShipRuntime $rel) { Write-Hit $where $key '0' 'never-ship-runtime' $false; return }
@@ -474,7 +445,8 @@ function Invoke-Tree([string]$root) {
 }
 
 # .NET ZipFile.OpenRead does not read a zip concatenated onto a program.
-# The Setup is that shape: the program first, then the zip, and the zip own
+# A Setup program can be that shape (the old installer's was): the program
+# first, then the zip, and the zip own
 # offsets count from the zip, not from the first byte of the file. Asked for
 # the central directory, Windows PowerShell throws because the entry count
 # does not match, and PowerShell 7 does not throw at all: Entries is empty,
@@ -719,8 +691,9 @@ function Invoke-Zip([string]$path) {
             Test-Name $where $inner $name $false
             Test-ShipPath $where $inner $inner $e
             $ext = [IO.Path]::GetExtension($name).ToLowerInvariant()
-            # The launcher at the top of the installer is ours and built here,
-            # so it is read byte by byte. Every other program is somebody's mod.
+            # A program at the top of a zip is one built here (the old
+            # installer carried the launcher there), so it is read byte by
+            # byte. Every other program is somebody's mod.
             if ($ext -eq '.exe' -and $inner.IndexOf('/') -lt 0) {
                 if ($e.Length -gt $TextCap) { Write-Unread $where 'larger than the text cap'; continue }
                 Test-Bytes $where $inner (Read-Entry $e)
@@ -739,28 +712,6 @@ function Invoke-Zip([string]$path) {
     }
 }
 
-function Invoke-Dir([string]$dir) {
-    if (-not (Test-Path -LiteralPath $dir -PathType Container)) { Write-Unread $dir 'no such folder'; return }
-    $base = (Resolve-Path -LiteralPath $dir).ProviderPath.TrimEnd('\') + '\'
-    $n = 0
-    foreach ($f in (Get-ChildItem -LiteralPath $base -Recurse -File -Force)) {
-        $n++
-        $rel = $f.FullName.Substring($base.Length)
-        $key = $rel -replace '\\', '/'
-        Test-Name $rel $key $f.Name $false
-        Test-ShipPath $rel $key $key $f.FullName
-        $ext = $f.Extension.ToLowerInvariant()
-        if ($ext -eq '.exe' -and $rel.IndexOf('\') -lt 0) {
-            Test-Bytes $rel $key ([IO.File]::ReadAllBytes($f.FullName))
-            continue
-        }
-        if ($BinaryExts -contains $ext) { continue }
-        if ($f.Length -gt $TextCap) { Write-Unread $rel 'larger than the text cap'; continue }
-        Test-TextBytes $rel $key ([IO.File]::ReadAllBytes($f.FullName))
-    }
-    Write-Host ('  {0}: {1} files' -f $dir, $n)
-}
-
 function Invoke-Binary([string]$path) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { Write-Unread $path 'no such file'; return }
     $leaf = Split-Path $path -Leaf
@@ -773,7 +724,6 @@ try {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $any = $false
     foreach ($z in $Zip) { if ($z) { $any = $true; Invoke-Zip $z } }
-    if ($Dir) { $any = $true; Invoke-Dir $Dir }
     foreach ($b in $Binary) { if ($b) { $any = $true; Invoke-Binary $b } }
     if (-not $any) { Invoke-Tree $Root }
 } catch {

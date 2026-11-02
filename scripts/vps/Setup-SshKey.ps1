@@ -186,6 +186,10 @@ Restart-Service sshd
 'installed ' + `$have.Count + ' key(s)'
 "@
     $b64 = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($remote))
+    # The Windows PowerShell a new Windows Server comes with: this is the
+    # first thing done on a new box, before Bootstrap-VPS.ps1 puts PowerShell
+    # 7 there, so it is the only PowerShell the box has yet. Everything after
+    # it runs in pwsh (#5356).
     Invoke-ThornswoodNative { & ssh -o StrictHostKeyChecking=yes $target "powershell -NoProfile -EncodedCommand $b64" }
     if ($LASTEXITCODE -ne 0) { Die "that did not go through (ssh exited with $LASTEXITCODE). Nothing was changed here. Permission denied means this box takes no password: the VNC console is the way in." }
     try { $null = Set-ThornswoodBridgeSsh -Address $VpsHost -User $VpsUser -KeyPath $KeyPath -Direct } catch { Die $_.Exception.Message }

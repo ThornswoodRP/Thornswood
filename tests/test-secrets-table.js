@@ -1,6 +1,6 @@
 // test-secrets-table.js
 //
-// The secrets table in Developer-Guide.md says what each credential actually
+// The secrets table in the Developer Guide (docs/guide/secrets.md) says what each credential actually
 // protects, and says not enforced where nothing checks it.
 //
 // WHY THIS EXISTS. The table's first row said the game server had a password,
@@ -30,6 +30,7 @@ const REPO_DIR = require('path').join(__dirname, '..'); // the tests are in test
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const siteFiles = require('./site-files');
 
 const ROOT = REPO_DIR;
 const CR = String.fromCharCode(13);
@@ -46,19 +47,16 @@ function read(rel) {
 }
 
 // ------------------------------------------------------------ the section ---
-const doc = read('Developer-Guide.md');
-yes('Developer-Guide.md is there to read', doc.length > 0);
+// The table is the guide's page docs/guide/secrets.md, and the page is the
+// section. The rest of the guide is read whole (tests/guide-text.js) for the
+// lines about it elsewhere.
+const doc = require('./guide-text.js').whole();
+const page = read('docs/guide/secrets.md');
+yes('docs/guide/secrets.md is there to read', page.length > 0);
 
-const head = doc.match(/^#{2,4} (?:[A-Z]\. )?Secrets\b.*$/m);
-yes('there is a secrets section', !!head);
-let section = '';
-if (head) {
-  const from = head.index;
-  const level = head[0].match(/^#+/)[0].length;
-  const rest = doc.slice(from + head[0].length);
-  const next = rest.search(new RegExp('^#{1,' + level + '} ', 'm'));
-  section = head[0] + (next < 0 ? rest : rest.slice(0, next));
-}
+const head = page.match(/^# Secrets\b.*$/m);
+yes('the page is titled as the secrets section', !!head && head.index === 0);
+const section = head ? page : '';
 
 // The heading used to promise none of them was in the repo, over a row that
 // named bot\news-webhook.txt. Ignored by git is not the same thing.
@@ -117,7 +115,7 @@ yes('the join password row names the script that still rotates it', /Rotate-Serv
 // game server has grown a password and the row has to be rewritten.
 const deployGm = read('scripts/deploy/Deploy-Gamemode.ps1');
 const gamemode = read('game/gamemode.js');
-const site = read('site/server.js');
+const site = siteFiles.source();
 const rotate = read('scripts/deploy/Rotate-ServerPassword.ps1');
 const publish = read('scripts/release/Publish-Update.ps1');
 const voice = read('voice/voice-server.js');

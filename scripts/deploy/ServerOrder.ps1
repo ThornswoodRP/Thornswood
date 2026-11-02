@@ -42,7 +42,7 @@
   is (lightPlugins, written by New-ServerBuildRecord.ps1 from the fork's
   source), and Deploy-Gamemode lists light plugins only when it says so.
 
-  Keep it ASCII and Windows PowerShell 5.1.
+  Keep it ASCII. It runs in PowerShell 7.
 #>
 
 . (Join-Path $PSScriptRoot '..\release\Read-JsonFile.ps1')   # ConvertFrom-ThornswoodJson: a bad JSON file named

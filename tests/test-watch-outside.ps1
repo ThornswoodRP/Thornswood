@@ -107,8 +107,10 @@ try {
   $herePath = Join-Path $Root '.github/workflows/watch-outside.yml'
   if (Test-Path -LiteralPath $herePath) { $here = Get-Content -LiteralPath $herePath -Raw }
   Yes 'this repository has the watch as its own workflow' ($here -match "cron: '\*/5 \* \* \* \*'")
-  Yes '  it runs this script from where it is, with the two secrets by name' (
-    $here -match '\./scripts/vps/Watch-Outside\.ps1 -Run -Folder state' -and $here -match 'WATCH_WEBHOOK: \$\{\{ secrets\.STAFF_WEBHOOK \}\}' -and $here -match 'WATCH_RUNNER_TOKEN: \$\{\{ secrets\.RUNNER_TOKEN \}\}')
+  Yes '  it runs this script from where it is, with the webhook by name and the watcher App''s token for the runners (#5259)' (
+    $here -match '\./scripts/vps/Watch-Outside\.ps1 -Run -Folder state' -and $here -match 'WATCH_WEBHOOK: \$\{\{ secrets\.STAFF_WEBHOOK \}\}' -and $here -match 'WATCH_RUNNER_TOKEN: \$\{\{ steps\.app\.outputs\.token \}\}' -and $here -notmatch 'secrets\.RUNNER_TOKEN')
+  Yes '  the token is minted each run for Thornswood-Ops alone, Administration read only, and a failed mint leaves the other checks running' (
+    ($here -replace "`r`n", "`n") -match "(?m)^      - name: The watcher's token for the runners\n        id: app\n        if: \$\{\{ !inputs\.test \}\}\n        continue-on-error: true\n        uses: actions/create-github-app-token@[0-9a-f]{40} # v\S+\n        with:\n          client-id: \$\{\{ vars\.WATCH_APP_CLIENT_ID \}\}\n          private-key: \$\{\{ secrets\.WATCH_APP_KEY \}\}\n          owner: \$\{\{ github\.repository_owner \}\}\n          repositories: Thornswood-Ops\n          permission-administration: read\n(?!          )")
   Yes '  on GitHub''s runners, off the box' ($here -match 'runs-on: ubuntu-latest' -and $here -notmatch 'self-hosted')
   Yes '  only once the variable WATCH_OUTSIDE says here, so it and the old repository''s watcher never both post' ($here -match "if: \$\{\{ vars\.WATCH_OUTSIDE == 'here' \}\}")
   Yes '  its two secrets come from the watch environment, which only main may use' ($here -match '(?m)^\s+environment: watch\s*$')
@@ -320,7 +322,7 @@ try {
   $null = Pass-Once
   Yes 'the twelfth, an hour of them: told once, as the watcher that cannot check' ((Posted '`*`*The outside watcher cannot check the build runners.`*`* GitHub did not answer*') -eq 1)
   Yes '  never as the runners being down' ((Posted '*are not all online*') -eq 0)
-  Yes '  and it says what that leaves unwatched, and where the token is' ((Posted '*could break and nobody would be told*RUNNER_TOKEN*') -eq 1)
+  Yes '  and it says what that leaves unwatched, and where the token is' ((Posted '*could break and nobody would be told*WATCH_APP_KEY*') -eq 1)
   for ($i = 0; $i -lt 6; $i++) { $null = Pass-Once }
   Yes '  and not again while it still cannot' ((Posted '*outside watcher cannot check*') -eq 1)
   $script:runner = 'online'

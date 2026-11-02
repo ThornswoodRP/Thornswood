@@ -49,7 +49,7 @@ function yes(what, cond) {
 
 const gm = read(path.join(ROOT, 'game', 'gamemode.js'));
 const RACES = (function () {
-  const m = /^const RACES = (.*);$/m.exec(gm);
+  const m = require('./gamemode-tables.js').lineOf(gm, 'RACES');
   try { return m ? JSON.parse(m[1]).items : null; } catch (e) { return null; }
 })();
 const json = (function () {

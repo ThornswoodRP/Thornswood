@@ -9,11 +9,11 @@
   files that changed and nothing ever took one away.
 
   What this proves, with no box and no network:
-    1. Deploy-Docs.ps1 names the public files the box has and the repository
-       does not, counts them as a change to the app, and hands them to the
-       swap as $Gone.
+    1. Deploy-Docs.ps1 names the public files (and the modules in lib) the
+       box has and the repository does not, counts them as a change to the
+       app, and hands them to the swap as $Gone.
     2. Swap.ps1's service swap block, run for real on a scratch root under
-       Windows PowerShell: a healthy start takes the gone file out into the
+       PowerShell 7, as on the box: a healthy start takes the gone file out into the
        .prev folder and says so, and a start that does not answer puts it
        back with the old files.
 
@@ -37,21 +37,19 @@ $swap = [IO.File]::ReadAllText((Join-Path $repo 'scripts\deploy\Swap.ps1'))
 Write-Host 'Deploy-Docs.ps1'
 Yes 'it names the top level public files the box has and the repository does not' (
     $docs.Contains('$gonePublic = @($publicThere.Keys | Where-Object { $repoPublic -notcontains $_ }'))
-Yes 'a gone file is a change to the app, so the swap runs' $docs.Contains('$appUnchanged = ($send.Count -eq 0 -and $gonePublic.Count -eq 0)')
+Yes 'it names the modules in lib the box has and the repository does not (#5357)' (
+    $docs.Contains('$goneLib = @($libThere.Keys | Where-Object { $repoLib -notcontains $_ }'))
+Yes 'and takes out both' $docs.Contains('$gone = @(@($goneLib) + @($gonePublic))')
+Yes 'a gone file is a change to the app, so the swap runs' $docs.Contains('$appUnchanged = ($send.Count -eq 0 -and $gone.Count -eq 0)')
 # The line ends as the checkout ends it: CRLF on a Windows runner, LF elsewhere.
-Yes 'and the swap is told them as $Gone, empty for -PutBack' ($docs.Contains("('`$Gone = @(' +") -and $docs -match '(?m)^\s*\$gonePublic = @\(\)\r?$')
+Yes 'and the swap is told them as $Gone, empty for -PutBack' ($docs.Contains("('`$Gone = @(' +") -and $docs -match '(?m)^\s*\$gone = @\(\)\r?$')
 
 # ---- 2. the swap block, run ------------------------------------------------------
 Write-Host ''
 Write-Host 'Swap.ps1, the service swap block'
-# The box runs the block under Windows PowerShell 5.1; off Windows there is
-# none, and it runs in this shell, which is said.
+# The box runs the block under PowerShell 7 since #5356, and so does this.
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if ($OnWindows) { $ps51 = Get-WindowsPowerShell }
-else {
-    $ps51 = (Get-Process -Id $PID).Path
-    Write-Host 'NOTE  the block runs in this shell, not in Windows PowerShell 5.1 as on the box: this is not Windows'
-}
+$boxPs = Get-BoxPowerShell
 $tmpRoot = if ($env:TEST_TMP) { $env:TEST_TMP } else { [IO.Path]::GetTempPath() }
 $work = Join-Path $tmpRoot ('ts-site-gone-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $work | Out-Null
@@ -94,7 +92,7 @@ try {
         )
         $child = Join-Path $work ($name + '.ps1')
         [IO.File]::WriteAllText($child, ($lines -join "`r`n"))
-        $said = (& $ps51 -NoProfile -ExecutionPolicy Bypass -File $child 2>&1 | ForEach-Object { "$_" }) -join "`n"
+        $said = (& $boxPs -NoProfile -ExecutionPolicy Bypass -File $child 2>&1 | ForEach-Object { "$_" }) -join "`n"
         $keep = Join-Path $root 'public\keep.js'
         return [pscustomobject]@{
             Said = $said

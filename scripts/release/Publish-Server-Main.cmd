@@ -1,9 +1,7 @@
 @echo off
 rem Double click this to push the server up to the VPS and start it there.
-rem PowerShell 7 when it is installed, Windows PowerShell otherwise. The two
-rem differ in ways that matter here, most of all whether a text file gets a
-rem byte order mark, and the game stops dead on one.
-set "PS=powershell"
-where /q pwsh && set "PS=pwsh"
+rem PowerShell 7 (pwsh), the only PowerShell these scripts run in (#5356).
+rem docs/guide/set-up-a-machine.md "Install the tools" puts it on every machine.
+where /q pwsh || (echo PowerShell 7 ^(pwsh^) is not installed. docs/guide/set-up-a-machine.md "Install the tools" says how. & pause & exit /b 1)
 cd /d "%~dp0"
-"%PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0Publish-Server.ps1"
+pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0Publish-Server.ps1"

@@ -13,8 +13,8 @@
 
   HOW. The two blocks that run on the box are taken out of Deploy-Server.ps1
   from between its markers, given a scratch folder in place of
-  C:\Thornswood-Server, and run by Windows PowerShell 5.1, which is what runs
-  them on the VPS. The server is a node stub that holds its game port on UDP
+  C:\Thornswood-Server, and run by PowerShell 7, which is what runs them on
+  the box. The server is a node stub that holds its game port on UDP
   and its resources port on TCP the way skymp5-server does, and a second stub
   on other ports stands in for the server that is not being deployed. The
   stop, the port checks, the renames and the health check are the real ones.
@@ -217,10 +217,10 @@ Yes 'and what it makes parses with the swap behind it' ($errors.Count -eq 0)
 $node = Get-Command node -EA SilentlyContinue
 . (Join-Path $PSScriptRoot 'Windows.ps1')
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the runs need Windows PowerShell 5.1 and Get-NetUDPEndpoint, which only Windows has, and this is not Windows'
+    Write-Host 'SKIP  the runs: the swap finds the server by its port with Get-NetUDPEndpoint, which only Windows has, and this is not Windows'
     Done
 }
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 if (-not $node -or -not (Get-Command Get-NetUDPEndpoint -EA SilentlyContinue)) {
     Write-Host 'SKIP  the runs need node and Get-NetUDPEndpoint as well, and this machine lacks one'
     Done
@@ -356,7 +356,7 @@ function Start-ScheduledTask { [CmdletBinding()] param([string]`$TaskName)
     [IO.File]::WriteAllText($f, $body, (New-Object Text.UTF8Encoding($true)))
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    try { $out = @(& $ps51 -NoProfile -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_".Trim() }) }
+    try { $out = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_".Trim() }) }
     finally { $ErrorActionPreference = $eap }
     $script:lastFar = $out
     return $out
@@ -746,7 +746,7 @@ try {
     # ---- -GamemodeOnly, the whole script (#1089) -----------------------------
     # Deploy-Server.ps1 run in this shell, from a scratch repository, with ssh
     # and scp stand-ins that run what it sends against this scratch root in
-    # Windows PowerShell 5.1, the way the box would, with the box's fixed
+    # PowerShell 7, the way the box would, with the box's fixed
     # places (the script folder, the deploy store) mapped into the scratch
     # folder. No -Dist: nothing is read out of a build on this machine.
     $gmRepo = Join-Path $work 'gm-repo'
@@ -759,6 +759,8 @@ try {
     Put (Join-Path $gmRepo 'scripts\vps\vps.json') '{ "address": "127.0.0.1" }'
     Put (Join-Path $gmRepo '.gitignore') "out/`n"
     Put (Join-Path $gmRepo 'game\gamemode.js') '// gamemode only, one'
+    # And its tables (#5191), which the gamemode artifact carries with it.
+    Put (Join-Path $gmRepo 'game\gamemode-tables\WAY_OUT.json') '{}'
     Put (Join-Path $gmRepo 'game\content\Thornswood-Content.esp') 'our plugin, two, longer'
     Put (Join-Path $gmRepo 'records\server-build.json') $gmRecordLf
     $gmPrelude = @"
@@ -770,7 +772,7 @@ function Start-ScheduledTask { [CmdletBinding()] param([string]`$TaskName)
 }
 
 "@
-    $global:TsGm = [pscustomobject]@{ Ps51 = $ps51; FarTemp = $gmFarTemp; Store = $gmStore; Work = $work; Prelude = $gmPrelude
+    $global:TsGm = [pscustomobject]@{ BoxPs = $boxPs; FarTemp = $gmFarTemp; Store = $gmStore; Work = $work; Prelude = $gmPrelude
                                       Ssh = (New-Object Collections.Generic.List[string]); Scp = (New-Object Collections.Generic.List[string]) }
     function global:TsGmMap([string]$s) {
         return $s.Replace('C:/Windows/Temp/', ($global:TsGm.FarTemp + '\')).Replace('C:\Windows\Temp\', ($global:TsGm.FarTemp + '\')).
@@ -803,7 +805,7 @@ function Start-ScheduledTask { [CmdletBinding()] param([string]`$TaskName)
         [IO.File]::WriteAllText($f, ($global:TsGm.Prelude + $body), (New-Object Text.UTF8Encoding($true)))
         $eap = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
-        try { $o = @(& $global:TsGm.Ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_".TrimEnd() }) }
+        try { $o = @(& $global:TsGm.BoxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_".TrimEnd() }) }
         finally { $ErrorActionPreference = $eap }
         $code = $LASTEXITCODE
         Remove-Item -LiteralPath $f -Force -EA SilentlyContinue
@@ -1044,7 +1046,7 @@ function Start-ScheduledTask { [CmdletBinding()] param([string]`$TaskName)
     [IO.File]::WriteAllText($f, ($pre + $putBackPick + $swapBlock), (New-Object Text.UTF8Encoding($true)))
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    try { $out = @(& $ps51 -NoProfile -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_".Trim() }) }
+    try { $out = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_".Trim() }) }
     finally { $ErrorActionPreference = $eap }
     Yes 'a root with no .prev folder is SWAP REFUSED, and stops nothing' (
         ($out -contains 'SWAP REFUSED') -and ($out -notcontains 'SWAP OK') -and

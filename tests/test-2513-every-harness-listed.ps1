@@ -35,6 +35,7 @@ $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $Repo = Split-Path -Parent $Here
+. (Join-Path (Join-Path (Join-Path $Repo 'scripts') 'dev') 'Harness-Files.ps1')
 
 $script:pass = 0
 $script:fail = 0
@@ -64,15 +65,21 @@ function Get-Unlisted([string]$repo) {
     # Comment lines say what a step does and run nothing, so they are left out.
     $yml = ((Get-Content -LiteralPath (Join-Path $repo '.github\workflows\build.yml')) |
         Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
-    $names = @(Get-ChildItem -LiteralPath (Join-Path $repo 'tests') -File |
-        Where-Object { $_.Name -like 'test-*.ps1' -or $_.Name -like 'test-*.js' } |
-        ForEach-Object { $_.Name })
+    # Those in tests by name, and those beside their product by path
+    # (launcher/tests/test-x.ps1), as the gate lists them (plan line 42).
+    $names = @(Get-Harnesses $repo | ForEach-Object { $_.Name })
     $why = Get-Excluded $repo
     foreach ($n in $names) {
         # Named in quotes ('name') or run by path (node tests\name, -File
-        # tests\name), not merely in an ::error line naming the file.
-        $e = [regex]::Escape($n)
-        $own = ($yml -match ("'" + $e + "'")) -or ($yml -match ('(node|-File|python)\s+(\.[\\/])?tests[\\/]' + $e + '(?![\w.-])'))
+        # tests\name), not merely in an ::error line naming the file. One
+        # beside its product by its path either way, with either slash.
+        if ($n.Contains('/')) {
+            $e = (@($n -split '/' | ForEach-Object { [regex]::Escape($_) }) -join '[\\/]')
+            $own = ($yml -match ("'(\.[\\/])?" + $e + "'")) -or ($yml -match ('(node|-File|python)\s+(\.[\\/])?' + $e + '(?![\w.-])'))
+        } else {
+            $e = [regex]::Escape($n)
+            $own = ($yml -match ("'" + $e + "'")) -or ($yml -match ('(node|-File|python)\s+(\.[\\/])?tests[\\/]' + $e + '(?![\w.-])'))
+        }
         $says = $why.ContainsKey($n) -and $why[$n].StartsWith('own step in build.yml')
         if ($own -and -not $why.ContainsKey($n)) { $problems.Add("$n runs in a step of its own in build.yml and is not in tests\gate-excluded.txt, so the gate runs it twice") }
         if ($says -and -not $own) { $problems.Add("gate-excluded.txt says build.yml runs $n in a step of its own, and it does not") }
@@ -103,6 +110,8 @@ foreach ($wf in 'build.yml', 'build-pr.yml') {
 $work = Join-Path ([IO.Path]::GetTempPath()) ('ts-2513-' + [Guid]::NewGuid().ToString('N'))
 try {
     $null = New-Item -ItemType Directory -Force -Path (Join-Path $work '.github\workflows'), (Join-Path $work 'tests')
+    $null = New-Item -ItemType Directory -Force -Path (Join-Path (Join-Path $work 'launcher') 'tests')
+    foreach ($n in 'test-l-own.ps1', 'test-l-forgot.js') { Set-Content -LiteralPath (Join-Path (Join-Path (Join-Path $work 'launcher') 'tests') $n) -Value '# stand-in' }
     foreach ($n in 'test-gate.ps1', 'test-own-ok.js', 'test-own-forgot.ps1', 'test-own-false.js', 'test-quoted.ps1', 'test-off.ps1', 'test-error-only.js') {
         Set-Content -LiteralPath (Join-Path $work "tests\$n") -Value '# stand-in'
     }
@@ -111,9 +120,12 @@ try {
         '          node tests\test-own-ok.js',
         '          & pwsh -NoProfile -File tests\test-own-forgot.ps1',
         "          foreach (`$n in 'test-quoted.ps1') { }",
-        "          Write-Host '::error file=tests/test-error-only.js::no node'")
+        "          Write-Host '::error file=tests/test-error-only.js::no node'",
+        '          & pwsh -NoProfile -File launcher\tests\test-l-own.ps1',
+        '          node launcher/tests/test-l-forgot.js')
     Set-Content -LiteralPath (Join-Path $work 'tests\gate-excluded.txt') -Value @(
         '# comment lines are skipped',
+        'launcher/tests/test-l-own.ps1  own step in build.yml, "A launcher step"',
         'test-off.ps1  needs a game install',
         'test-own-false.js  own step in build.yml, "A step"',
         'test-own-ok.js  own step in build.yml, "A step"',
@@ -121,6 +133,8 @@ try {
     $got = (Get-Unlisted $work) -join "`n"
     Yes 'planted: a harness run by its own step and not excluded is named' ($got -match 'test-own-forgot\.ps1 runs in a step of its own')
     Yes 'planted: an "own step" line for a harness only a comment names is named' ($got -match 'runs test-own-false\.js in a step of its own, and it does not')
+    Yes 'planted: a product harness run by its path in its own step and not excluded is named by its path' ($got -match 'launcher/tests/test-l-forgot\.js runs in a step of its own')
+    Yes 'planted: and one that is excluded is not' ($got -notmatch 'test-l-own\.ps1')
     Yes 'planted: an own-step harness excluded, a quoted one, an excluded one, a gate one and one only in an error line are not named' (
         $got -notmatch 'test-own-ok\.js' -and $got -notmatch 'test-quoted\.ps1' -and $got -notmatch 'test-off\.ps1' -and
         $got -notmatch 'test-gate\.ps1' -and $got -notmatch 'test-error-only\.js')

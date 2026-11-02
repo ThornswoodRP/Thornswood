@@ -18,8 +18,8 @@
     1. The installer's task command line ($cmd) is read out of
        Install-ThornswoodServer.ps1, and so are its ServerProcesses and
        StopServer, and StopAndMove.ps1 is loaded; all of them as they ship.
-    2. On Windows, in Windows PowerShell 5.1 (the box's, which the installer
-       runs in), ten times: a scratch server folder with the real
+    2. On Windows, in PowerShell 7 (the box's, which the installer runs in
+       since #5356), ten times: a scratch server folder with the real
        Server-Log.js as server-log.js and a stand-in server in dist_back
        that holds a file, watches its folder and writes lines, started by
        cmd.exe with that command line and the folder as its working
@@ -75,10 +75,10 @@ if ($script:fail) { Done }
 # ---- 2. run ---------------------------------------------------------------------
 $node = Get-Command node -CommandType Application -EA SilentlyContinue | Select-Object -First 1
 if (-not $OnWindows -or -not $node) {
-    Write-Host ('SKIP  the runs: they need Windows and node, and this is ' + $(if ($OnWindows) { 'Windows with no node' } else { 'not Windows' }))
+    Write-Host ('SKIP  the runs: they start the stand-in server through cmd.exe, which only Windows has, and need node, and this is ' + $(if ($OnWindows) { 'Windows with no node' } else { 'not Windows' }))
     Done
 }
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('ts-3262-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 $null = New-Item -ItemType Directory -Path $work
@@ -128,10 +128,10 @@ for ($n = 0; $n -lt $Runs; $n++) {
 '@
     $childPath = Join-Path $work 'child.ps1'
     [IO.File]::WriteAllText($childPath, $child)
-    Write-Host ('runs in ' + $ps51 + ', under ' + $work)
+    Write-Host ('runs in ' + $boxPs + ', under ' + $work)
     # Said as it goes, so a run that hangs shows how far it got.
     $out = New-Object System.Collections.Generic.List[string]
-    & $ps51 -NoProfile -ExecutionPolicy Bypass -File $childPath -Lib $libPath -Work $work -Node $node.Source -Writer $writerPath -Runs $Runs 2>&1 | ForEach-Object { $l = "$_"; Write-Host ('    ' + $l); $out.Add($l) }
+    & $boxPs -NoProfile -ExecutionPolicy Bypass -File $childPath -Lib $libPath -Work $work -Node $node.Source -Writer $writerPath -Runs $Runs 2>&1 | ForEach-Object { $l = "$_"; Write-Host ('    ' + $l); $out.Add($l) }
     $out = @($out)
     $ready = @($out | Where-Object { $_ -match '^RUN \d+ READY True FOUND ' })
     $three = @($ready | Where-Object { $_ -match 'FOUND (cmd\.exe|node\.exe),(cmd\.exe|node\.exe),(cmd\.exe|node\.exe)$' -and $_ -match 'cmd\.exe' -and ([regex]::Matches($_, 'node\.exe')).Count -eq 2 })

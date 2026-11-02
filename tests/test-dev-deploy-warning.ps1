@@ -224,11 +224,10 @@ function Remote($text) {
 # lists the same thing, the UDP listeners, from .NET, so what it answers is
 # still this machine's own ports.
 $udpStandIn = ''
-if ($OnWindows) { $winPs = Get-WindowsPowerShell }
-else {
-    $winPs = (Get-Process -Id $PID).Path
-    Write-Host 'NOTE  the far side runs in this shell, not in Windows PowerShell 5.1 as on the box: this is not Windows'
-    Write-Host 'NOTE  and Get-NetUDPEndpoint, which only Windows has, is a stand-in there that lists the UDP listeners through .NET'
+# The far side runs in PowerShell 7, as on the box since #5356.
+$boxPs = Get-BoxPowerShell
+if (-not $OnWindows) {
+    Write-Host 'NOTE  Get-NetUDPEndpoint, which only Windows has, is a stand-in here that lists the UDP listeners through .NET'
     $udpStandIn = @'
 function Get-NetUDPEndpoint {
   foreach ($e in [Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveUdpListeners()) {
@@ -245,7 +244,7 @@ function RunHere($text) {
     $ErrorActionPreference = 'Continue'
     $text = $udpStandIn + $text
     $e = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($text))
-    return @(& $winPs -NoProfile -NonInteractive -EncodedCommand $e 2>&1 | ForEach-Object { [string]$_ })
+    return @(& $boxPs -NoProfile -NonInteractive -EncodedCommand $e 2>&1 | ForEach-Object { [string]$_ })
 }
 
 $script:clock = [datetime]'2026-09-24T20:00:00'

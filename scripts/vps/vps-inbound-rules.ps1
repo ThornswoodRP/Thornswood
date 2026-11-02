@@ -5,7 +5,7 @@
 .DESCRIPTION
   Do not run this by hand. Set-InboundRules.ps1 sends this file's text on
   ssh's standard input with the list from records\prod-parity.json
-  ("inboundRules"), and Windows PowerShell 5.1 runs it from there, so
+  ("inboundRules"), and pwsh runs it from there, so
   nothing of it is ever written on the box (#3035).
 
   WHY. Issue #3807, measured 26 Oct 2026. Bootstrap-VPS.ps1,

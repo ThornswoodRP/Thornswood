@@ -17,8 +17,8 @@ param()
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  the nightly backup runs on the box under Windows PowerShell 5.1, and a short TEMP is an 8.3 name, which only Windows has'; exit 0 }
-$winPs = Get-WindowsPowerShell
+if (-not $OnWindows) { Write-Host 'NOT RUN  a short TEMP is an 8.3 name, which only Windows has'; exit 0 }
+$boxPs = Get-BoxPowerShell
 $script:pass = 0
 $script:fail = 0
 function Yes([string]$what, [bool]$cond) {
@@ -73,7 +73,7 @@ try {
         '-KeyFile', (Join-Path $short 'key.txt'),
         '-Plain'
     )
-    $nightlyOut = & $winPs @arg 2>&1 | Out-String
+    $nightlyOut = & $boxPs @arg 2>&1 | Out-String
     $code = $LASTEXITCODE
     Yes "vps-nightly-backup.ps1 runs with TEMP short (exit $code)" ($code -eq 0)
     if ($code -ne 0) { Write-Host $nightlyOut }

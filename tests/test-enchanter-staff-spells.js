@@ -41,7 +41,7 @@ const REPO = path.join(__dirname, '..');
 const SRC = process.env.GM || path.join(REPO, 'game', 'gamemode.js');
 const SKILLS = process.env.SKILLS || path.join(REPO, 'game', 'ui', 'thornswood-skills.js');
 const CR = String.fromCharCode(13);
-const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const src = require('./gamemode-tables.js').joined(fs.readFileSync(SRC, 'utf8')).split(CR).join('');
 const page = fs.readFileSync(SKILLS, 'utf8').split(CR).join('');
 
 let pass = 0, fail = 0;
@@ -83,18 +83,16 @@ yes('the rules, the character store, the tomes, the staff spells and the craft g
 if (!(RULES && CHARACTER && STAFF && TOMES && NO_PROF && GATE_PARTS.every(function (p) { return p !== null; }))) { done(); }
 
 // The recipe table, as it is.
-const tableAt = src.indexOf('  var RECIPES_BY_ID = {');
-const tableEnd = tableAt < 0 ? -1 : src.indexOf('\n  };\n', tableAt);
+// The gamemode reads RECIPES_BY_ID from game/gamemode-tables (#5191).
 let TABLE = {};
-try { TABLE = JSON.parse(src.slice(tableAt + '  var RECIPES_BY_ID = '.length, tableEnd + 4)); } catch (e) { TABLE = {}; }
+try { TABLE = require('./gamemode-tables.js').table('RECIPES_BY_ID'); } catch (e) { TABLE = {}; }
 const STAFF_ROWS = Object.keys(TABLE).map(function (k) { return TABLE[k]; })
   .filter(function (r) { return r.half === 'Bladebinder' && r.spell; });
 
 // Tome desc -> spell desc, and ids both ways, as the engine answers them.
 let STAFF_TABLE = {};
 {
-  const t = /var STAFF_SPELLS = (\{[\s\S]*?\n  \});/.exec(src);
-  try { STAFF_TABLE = t ? JSON.parse(t[1]) : {}; } catch (e) { STAFF_TABLE = {}; }
+  try { STAFF_TABLE = require('./gamemode-tables.js').table('STAFF_SPELLS'); } catch (e) { STAFF_TABLE = {}; }
 }
 const SPELL_OF_TOME = {};
 Object.keys(STAFF_TABLE).forEach(function (sp) {

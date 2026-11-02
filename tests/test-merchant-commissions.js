@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const {createRequire}=require('node:module'),{prepareCommissions}=require('../game/merchant-commissions');
 const policy=require('../game/merchant-commission-state'),crypto=require('node:crypto');
-const mode=fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8'),copy=value=>JSON.parse(JSON.stringify(value));
+const mode=require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8')),copy=value=>JSON.parse(JSON.stringify(value));
 const runtime={require:createRequire(path.join(__dirname,'../game/merchant-trading.js')),Buffer,Uint8Array,console,__dirname:path.join(__dirname,'../game')};
 vm.createContext(runtime);
 vm.runInContext(mode.slice(mode.indexOf('// MERCHANT TRADING BUNDLE BEGIN'),mode.indexOf('// MERCHANT TRADING BUNDLE END'))+

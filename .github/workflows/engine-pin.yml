@@ -58,7 +58,7 @@
 # out of make's log, holds it to one commit on main's head that changes only
 # a pin's paths, force pushes engine-pin/next and opens or updates the pull
 # request (Open-EnginePinPr.ps1). The pull request is the only way the pin
-# reaches main: the Desk merges it under the merge rule like any other, and
+# reaches main: Bramble merges it under the merge rule like any other, and
 # the release after every change takes it to dev and then main.
 #
 # THE PIN ROBOT'S OWN APP (#5256). The push and the pull request are made with

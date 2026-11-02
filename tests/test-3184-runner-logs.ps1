@@ -37,7 +37,8 @@ foreach ($f in @($keeper, $installer)) {
 Yes 'vps-runner-logs.ps1 is plain ASCII' (@([IO.File]::ReadAllBytes($keeper) | Where-Object { $_ -gt 127 }).Count -eq 0)
 if ($script:fail) { Done }
 
-if ($OnWindows) { $ps = Get-WindowsPowerShell } else { $ps = (Get-Process -Id $PID).Path; Write-Host 'NOTE  run in this shell, not in Windows PowerShell 5.1 as on the box: this is not Windows' }
+# Run in PowerShell 7, as on the box since #5356.
+$ps = Get-BoxPowerShell
 
 $scratch = P @([IO.Path]::GetTempPath(), ('ts-3184-' + [guid]::NewGuid().ToString('N').Substring(0, 8)))
 $null = New-Item -ItemType Directory -Path $scratch

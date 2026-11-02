@@ -27,11 +27,8 @@ function Yes([string]$what, [bool]$cond) {
 }
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if ($OnWindows) { $ps = Get-WindowsPowerShell }
-else {
-    $ps = (Get-Process -Id $PID).Path
-    Write-Host 'NOTE  the far side runs in this shell, not in Windows PowerShell 5.1 as on the box: this is not Windows'
-}
+# The far side runs in PowerShell 7, as on the box since #5356.
+$ps = Get-BoxPowerShell
 
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('ts-test-2061-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 $vps = Join-Path $scratch 'vps'

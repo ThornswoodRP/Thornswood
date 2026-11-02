@@ -8,9 +8,8 @@
   forecast that turns writes one message of the watchdog's outbox shape, a
   level that holds writes nothing more, not-enough-data never tells, and
   -TestAlert writes one test message and touches no sample or level. Each
-  case runs under Windows PowerShell 5.1 as well as pwsh, because the task
-  on the box runs powershell. Nothing real is read and nothing reaches the
-  VPS.
+  case runs under PowerShell 7, because the task on the box runs pwsh since
+  #5356. Nothing real is read and nothing reaches the VPS.
 #>
 [CmdletBinding()]
 param()
@@ -22,11 +21,10 @@ $fail = 0; $pass = 0
 $total = 100GB
 $t0 = [datetime]'2026-10-01T00:00:00Z'
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-# Each shell by name, for the lines and the folders named after it; 5.1 is
-# started from where Windows keeps it.
+# Each shell by name, for the lines and the folders named after it: the
+# box's PowerShell 7, the one that runs this.
 $shells = @('pwsh')
-$ps51 = $null
-if ($OnWindows) { $ps51 = Get-WindowsPowerShell; $shells += 'powershell.exe' }
+$boxPs = Get-BoxPowerShell
 function Hist([string]$name, [int]$count, [double]$startFree, [double]$perDay, [double]$stepDays = 1) {
   $p = Join-Path $tmp $name
   $lines = for ($i = 0; $i -lt $count; $i++) {
@@ -35,8 +33,7 @@ function Hist([string]$name, [int]$count, [double]$startFree, [double]$perDay, [
   Set-Content $p $lines -Encoding utf8; $p
 }
 function Run([string]$shell, [object[]]$argv) {
-  $exe = if ($shell -eq 'powershell.exe') { $ps51 } else { $shell }
-  $out = & $exe -NoProfile -ExecutionPolicy Bypass -File $script @argv 2>&1 | Out-String
+  $out = & $boxPs -NoProfile -ExecutionPolicy Bypass -File $script @argv 2>&1 | Out-String
   return @{ Code = $LASTEXITCODE; Out = $out }
 }
 function T([bool]$cond, [string]$what, [string]$detail = '') {
@@ -111,7 +108,7 @@ try {
   $text = [IO.File]::ReadAllText((Resolve-Path $script).Path)
   T ($text -match "schtasks /create /tn '\`$Task' /sc daily /st \`$At /ru SYSTEM" -and $text -match '-Record -History \$boxHistory -Alerts \$boxAlerts') 'the task samples daily as SYSTEM with -Record and the watchdog outbox' ''
   T ($text -match '\[string\]\$Task = ''Thornswood Disk History''' -and $text -match '\[string\]\$Root = ''C:\\Thornswood-Watch''') 'the task name and folder are the ones records\prod-parity.json and the docs name' ''
-  T ($text -match 'powershell -NoProfile -ExecutionPolicy Bypass -File \$boxScript') 'the box runs it with Windows PowerShell, which every box has' ''
+  T ($text -match 'pwsh -NoProfile -ExecutionPolicy Bypass -File \$boxScript' -and $text -notmatch '\bpowershell(\.exe)? -') 'the box runs it with PowerShell 7, as every box task since #5356, and nothing in it starts Windows PowerShell' ''
 } finally { Remove-Item -Recurse -Force $tmp }
 Write-Host ("{0} passed, {1} failed" -f $pass, $fail)
 if ($fail) { exit 1 }

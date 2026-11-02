@@ -13,8 +13,9 @@
 //     23 September 07:47, with Thornswood-Setup.exe beside it.
 //   - "The news feed publishes nothing ... launcher 1.0.196". The live feed,
 //     version.json in the Thornswood-Releases clone, is at launcher 1.1.92
-//     and carries 40 news entries. Publish-News.ps1 reads that clone rather
-//     than the stale copy in this repo, which is where 1.0.196 came from.
+//     and carries 40 news entries. Publish-News.ps1 read that clone rather
+//     than the stale copy in this repo, which is where 1.0.196 came from (the
+//     site reads the feed itself since #5187).
 //   - "The bot is not running". It has run since the certifi fix that row
 //     was waiting on. Its own log line from a deploy on 22 September,
 //     "trouble: speaking in #news", is quoted in 109c80e, and the bot's code

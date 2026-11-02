@@ -23,7 +23,7 @@
   not answer is not counted as nobody on: the caller decides what an unread
   server means.
 
-  Windows PowerShell 5.1 on the box, and pwsh anywhere.
+  PowerShell 7, on the box and anywhere.
 #>
 [CmdletBinding()]
 param(

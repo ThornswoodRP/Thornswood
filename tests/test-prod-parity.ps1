@@ -4,8 +4,7 @@
 # and settings. Nothing reaches the VPS.
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  the parity check and its collector run only on the box, under Windows PowerShell 5.1'; exit 0 }
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 $repo = Split-Path -Parent $PSScriptRoot
 $check = Join-Path $repo 'scripts\vps\Check-ProdParity.ps1'
 $collector = Join-Path $repo 'scripts\vps\Get-ProdFacts.ps1'
@@ -38,7 +37,7 @@ T ($shape -match '"botKey":"string"' -and $shape -match '"port":"number"' -and $
 $sha = [Security.Cryptography.SHA256]::Create()
 function RepoSha([string]$rel) { $t = ([IO.File]::ReadAllText((Join-Path $repo $rel))) -replace "`r`n", "`n"; -join ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($t)) | ForEach-Object { $_.ToString('x2') }) }
 $now = [datetime]'2026-10-11T12:00:00Z'
-function Facts { [ordered]@{
+function Facts { $x = [ordered]@{
     takenUtc = '2026-10-11T12:00:00Z'; host = 'STANDIN'
     listeners = @(
         @{ proto = 'tcp'; address = '0.0.0.0'; port = 443; process = 'caddy' }, @{ proto = 'tcp'; address = '0.0.0.0'; port = 80; process = 'caddy' },
@@ -75,7 +74,10 @@ function Facts { [ordered]@{
     firewallProfiles = @(@{ name = 'Domain'; allowLocalRules = 'False' }, @{ name = 'Private'; allowLocalRules = 'False' }, @{ name = 'Public'; allowLocalRules = 'False' })
     edgeVersion = ''
     edgeInstallBlocked = $true
-} }
+}
+# The site's modules (#5357), as the collector lists them.
+foreach ($m in @(Get-ChildItem -LiteralPath (Join-Path $repo 'site/lib') -Filter *.js -File)) { $x.files[('C:\Thornswood-Docs\lib\' + $m.Name)] = (RepoSha ('site/lib/' + $m.Name)) }
+$x }
 
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('prod-parity-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $scratch | Out-Null
@@ -85,7 +87,7 @@ function Run($facts, [string]$record) {
     $facts | ConvertTo-Json -Depth 6 | Set-Content $fp -Encoding utf8
     $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $check, '-Facts', $fp, '-Report', $rp, '-Now', '2026-10-11T12:00:00Z', '-Strict')
     if ($record) { $a += @('-Record', $record) }
-    $o = & $ps51 @a 2>&1 | Out-String
+    $o = & $boxPs @a 2>&1 | Out-String
     @{ Code = $LASTEXITCODE; Out = $o; Report = $(if (Test-Path $rp) { Get-Content $rp -Raw } else { '' }) }
 }
 try {
@@ -99,7 +101,7 @@ try {
     $od = Join-Path $scratch 'out'
     New-Item -ItemType Directory -Path $od | Out-Null
     Copy-Item (Join-Path $scratch 'facts.json') (Join-Path $od 'prod-facts.json')
-    $o = & $ps51 -NoProfile -ExecutionPolicy Bypass -File $check -Out $od -Now '2026-10-11T12:00:00Z' 2>&1 | Out-String
+    $o = & $boxPs -NoProfile -ExecutionPolicy Bypass -File $check -Out $od -Now '2026-10-11T12:00:00Z' 2>&1 | Out-String
     T ($LASTEXITCODE -eq 0 -and (Test-Path (Join-Path $od 'prod-parity.md'))) '-Out reads prod-facts.json from the folder and writes prod-parity.md beside it'
 
     $b = Facts
@@ -119,6 +121,16 @@ try {
     T ($x.Out -match 'REVIEW  tls thornswood.net: expected valid, 14\+ days, found 4 days left') 'a certificate close to lapsing is caught'
     T ($x.Out -match 'REVIEW  file C:\\Thornswood-Caddy\\Caddyfile') 'a live Caddyfile that differs is caught'
     T ($x.Out -match 'REVIEW  service ThornswoodBot') 'a stopped bot service is caught'
+
+    # #5357: the site's modules, each held by name, and one only the box has.
+    $m = Facts
+    $m.files.'C:\Thornswood-Docs\lib\serve.js' = ('0' * 64)
+    $m.files.'C:\Thornswood-Docs\lib\dropped.js' = ('1' * 64)
+    $m.files.Remove('C:\Thornswood-Docs\lib\news.js')
+    $x = Run $m ''
+    T ($x.Out -match 'REVIEW  file C:\\Thornswood-Docs\\lib\\serve\.js') 'a site module that differs on the box is caught'
+    T ($x.Out -match 'REVIEW  file C:\\Thornswood-Docs\\lib\\news\.js') 'a site module missing on the box is caught'
+    T ($x.Out -match 'REVIEW  file C:\\Thornswood-Docs\\lib\\dropped\.js') 'a module on the box the repository does not have is caught'
 
     $rec = Get-Content (Join-Path $repo 'records\prod-parity.json') -Raw | ConvertFrom-Json
     $rec.intentional = @([pscustomobject]@{ area = 'listener'; item = 'tcp 8080'; why = 'stand-in reason' })

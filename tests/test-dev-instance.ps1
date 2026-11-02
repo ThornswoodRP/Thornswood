@@ -100,12 +100,12 @@ Yes 'the script opens no firewall rule for dev voice' ($body -notmatch "Name = '
 Yes 'and takes an old one down' ($body -match "Remove-NetFirewallRule -PolicyStore localhost -DisplayName 'Thornswood Dev Voice'")
 Yes 'it never copies live''s private folder' ($body -match '& robocopy \$live \$dev [^\r\n]*/XD [^\r\n]*\bprivate\b')
 
-# ---- run -FilesOnly, on the box's Windows PowerShell -----------------------------
+# ---- run -FilesOnly, in the box's PowerShell 7 -----------------------------------
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the -FilesOnly runs: the script runs only on the box, under Windows PowerShell 5.1, with robocopy and Windows ACLs'
+    Write-Host 'SKIP  the -FilesOnly runs: the script copies with robocopy and sets Windows ACLs, which only Windows has'
     Done
 }
-$ps51 = Get-WindowsPowerShell
+$ps = Get-BoxPowerShell
 $box = Join-Path ([IO.Path]::GetTempPath()) ('ts-dev-instance-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 $null = New-Item -ItemType Directory -Force -Path $box
 # The Users rule every folder under C:\ carries, given to the scratch folder
@@ -152,7 +152,7 @@ try {
         $a = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $script, '-FilesOnly',
                '-Live', $live, '-Dev', $dev, '-LiveVoice', $lv, '-DevVoice', $dv)
         $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-        try { $o = @(& $ps51 @a 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $eap }
+        try { $o = @(& $ps @a 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $eap }
         $script:code = $LASTEXITCODE
         return $o
     }

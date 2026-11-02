@@ -30,11 +30,11 @@
        empty catch in a copy of the real site\server.js or bot\bot.py goes
        red against the real baseline's own line for it.
     4. Swallow.Note, compiled from the real Swallow.cs with a stand-in for
-       Paths, with the compiler the build runs (Add-LauncherType,
-       tests\Launcher-Csc.ps1, #2821; off Windows that part says SKIP), and
-       called. It has to write the line, and it has to not throw
+       Paths, with the .NET SDK the launcher builds with (Add-LauncherType,
+       tests\Launcher-Csc.ps1, #2821, #4823), and called, on any machine. It has to write the line, and it has to not throw
        with no log set, with the log's folder missing, or with the log held
-       open by something else, because a helper that throws from inside a
+       open by something else (that one on Windows only, where a file held
+       with no sharing refuses a write), because a helper that throws from inside a
        catch is worse than the empty catch it replaced.
     5. The places the entry named (Config.Save, Swap.Restore and its
        DropLink, Hold.Release, Keep.Unpark), lifted out of the real files by
@@ -53,7 +53,7 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 # The tests are in tests\, the repository is one folder up.
 $Here = Split-Path -Parent $Here
 if (-not $RepoPath) { $RepoPath = $Here }
-. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's compiler and C# version (#2821)
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#2821, #4823)
 
 $script:pass = 0
 $script:fail = 0
@@ -448,8 +448,10 @@ try {
     #
     # The real Swallow.cs under a namespace of its own, with a stand-in Paths
     # that has only the one field it reads, and a public door into it, since
-    # Swallow itself is internal like every class in the launcher.
-    $ns = 'SwallowTest' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
+    # Swallow itself is internal like every class in the launcher. The door is
+    # taken from the assembly this build returns, so another copy loaded in
+    # the same session cannot answer for it.
+    $ns = 'SwallowTest'
     $src = [IO.File]::ReadAllText($SwallowCs)
     Yes 'Swallow.cs sits in the Thornswood namespace' ($src -match 'namespace Thornswood\b')
     $src = $src -replace 'namespace Thornswood\b', ("namespace " + $ns)
@@ -470,17 +472,13 @@ namespace $ns
 }
 "@
     $compiled = $false
-    if (-not $OnWindows) {
-        Write-Host 'SKIP  4, Swallow.Note compiled and called: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'
-    }
-    else {
-        try { $null = Add-LauncherType -Source $src, $stand; $compiled = $true }
-        catch { Write-Host ("      " + $_.Exception.Message) }
-        Yes 'Swallow.cs compiles on its own with only Paths.LogFile beside it, with the compiler the build runs' $compiled
-    }
+    $swAsm = $null
+    try { $swAsm = Add-LauncherType -Source $src, $stand; $compiled = $true }
+    catch { Write-Host ("      " + $_.Exception.Message) }
+    Yes 'Swallow.cs compiles on its own with only Paths.LogFile beside it, with the .NET SDK the launcher builds with' $compiled
 
     if ($compiled) {
-        $door = [type]($ns + '.Door')
+        $door = $swAsm.GetType($ns + '.Door', $true)
         $log = Join-Path $tmp 'launcher.log'
         [IO.File]::WriteAllText($log, "2026-09-24 20:00:00  a line that was already there`r`n")
         $door::SetLog($log)
@@ -490,7 +488,7 @@ namespace $ns
         Yes 'Note adds to the log and keeps what was there' ($text -match 'a line that was already there')
         Yes 'Note writes a stamped line naming the place and the exception' (
             $text -match '(?m)^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d  Swallowed in Config\.Save, writing C:\\somewhere\\config\.json: System\.IO\.IOException: There is not enough space on the disk\.')
-        Yes 'Note carries the stack, so the line says where it was thrown' ($text -match '\bat SwallowTest\w+\.Door\.Fail')
+        Yes 'Note carries the stack, so the line says where it was thrown' ($text -match '\bat SwallowTest\.Door\.Fail')
         Yes 'Note with no exception still writes, and says so' ($text -match 'Swallowed in Keep\.Unpark: no exception given')
 
         $threw = $null
@@ -503,11 +501,15 @@ namespace $ns
         Yes 'Note does not throw when the log folder is missing' ($null -eq $threw)
         Yes 'and does not make the folder' (-not (Test-Path -LiteralPath (Split-Path -Parent $missing)))
 
-        $threw = $null
-        $held = New-Object IO.FileStream($log, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
-        try { $door::SetLog($log); $door::Fail('log held open', 'x') } catch { $threw = $_ }
-        finally { $held.Dispose() }
-        Yes 'Note does not throw when something else has the log open' ($null -eq $threw)
+        if ($OnWindows) {
+            $threw = $null
+            $held = New-Object IO.FileStream($log, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+            try { $door::SetLog($log); $door::Fail('log held open', 'x') } catch { $threw = $_ }
+            finally { $held.Dispose() }
+            Yes 'Note does not throw when something else has the log open' ($null -eq $threw)
+        } else {
+            Write-Host 'SKIP  4, the log held open: a file held with no sharing refuses a write only on Windows'
+        }
     }
 
     # What Note is allowed to touch. Log is private to Shell and sets the

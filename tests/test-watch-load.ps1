@@ -110,11 +110,8 @@ Yes 'Watch-Services.ps1 takes the bot as the python under its service, in the wa
     $stext -notmatch "(?m)^[^#]*-(not)?match 'Thornswood-Bot'")
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if ($OnWindows) { $ps = Get-WindowsPowerShell }
-else {
-    $ps = (Get-Process -Id $PID).Path
-    Write-Host 'NOTE  the far side runs in this shell, not in Windows PowerShell 5.1 as on the box: this is not Windows'
-}
+# The far side runs in PowerShell 7, as on the box since #5356.
+$ps = Get-BoxPowerShell
 Write-Host ("      running it under {0}" -f $ps) -ForegroundColor DarkGray
 
 $watch   = Join-Path $scratch 'watch'

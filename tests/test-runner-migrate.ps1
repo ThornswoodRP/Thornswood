@@ -225,7 +225,7 @@ Check 'child subprocess nonzero survives Invoke-Here despite service Running tex
   $ast=[Management.Automation.Language.Parser]::ParseInput($source,[ref]$tokens,[ref]$errors)
   $fn=$ast.Find({ param($a) $a -is [Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Invoke-Here' },$true)
   . ([scriptblock]::Create($fn.Extent.Text))
-  function powershell.exe { Set-Variable LASTEXITCODE 19 -Scope 1; 'service Running' }
+  function pwsh { Set-Variable LASTEXITCODE 19 -Scope 1; 'service Running' }
   $DryRunTo=''; $global:LASTEXITCODE=0
   $null=Invoke-Here 'nothing executes'
   Assert ($global:LASTEXITCODE -eq 19) 'lost child exit code'
@@ -301,7 +301,7 @@ Check 'real preflight collector validates mocked Windows metadata and supports a
   function Get-Acl { param($LiteralPath) $a=[pscustomobject]@{AreAccessRulesProtected=$true}; $a | Add-Member ScriptMethod GetAccessRules { param($e,$i,$t) [pscustomobject]@{ AccessControlType='Allow'; IdentityReference=[pscustomobject]@{Value='S-1-5-18'}; FileSystemRights=[Security.AccessControl.FileSystemRights]::FullControl; InheritanceFlags='None' } }; $a }
   function Get-LocalGroup { param($ErrorAction) [pscustomobject]@{SID='S-1-5-32-545'; Name='Users'} }
   function Get-LocalGroupMember { throw 'should not inspect Users membership as a privileged group' }
-  function Get-ScheduledTask { param($TaskName,$ErrorAction) [pscustomobject]@{ State='Ready'; Principal=@{UserId='SYSTEM'}; Actions=@(@{Execute='powershell.exe'; Arguments=('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+(Join-Path $env:ProgramData 'Thornswood-RunnerDrive\start.ps1')+'"')}) } }
+  function Get-ScheduledTask { param($TaskName,$ErrorAction) [pscustomobject]@{ State='Ready'; Principal=@{UserId='SYSTEM'}; Actions=@(@{Execute=(Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'); Arguments=('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+(Join-Path $env:ProgramData 'Thornswood-RunnerDrive\start.ps1')+'"')}) } }
   # The guards are read from the store an -OffBox install writes them to.
   function Get-NetFirewallRule { param($PolicyStore,$Group,$ErrorAction) if ($PolicyStore -ne 'PersistentStore') { return @() }; [pscustomobject]@{ Enabled='True'; Direction='Outbound'; Action='Block' } }
   $p=Get-RunnerMigrationState 'thornswood-pr' 'actions.runner.test' 'R:\Thornswood-RunnerPR'

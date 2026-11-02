@@ -1,7 +1,7 @@
 <#
   test-vps-folders-on-create.ps1
 
-      powershell -NoProfile -File .\tests\test-vps-folders-on-create.ps1
+      pwsh -NoProfile -File .\tests\test-vps-folders-on-create.ps1
 
   The scripts that make the VPS service folders lock them as they make them,
   with the rules Lock-VpsFolders.ps1 applies (follow-up to #1183 and #1691),
@@ -10,8 +10,8 @@
   does, with the real Get-Acl and Set-Acl, read back:
     - each creator (Watch-Services -Install and -SetWebhook, Watch-Load,
       Setup-Domain, Artifact, Swap) sends the helper's text for its folder and
-      no bare New-Item for it any more; that text, run in Windows PowerShell
-      for the creator's own variable, leaves the folder locked
+      no bare New-Item for it any more; that text, run in PowerShell 7 for
+      the creator's own variable, leaves the folder locked
     - Send-ThornswoodArtifact's real text, with the far side stood in, locks
       a new store
     - a folder that is already there is left as it is
@@ -26,8 +26,8 @@ $repo = (Resolve-Path (Join-Path $Here '..')).Path
 $helper = Join-Path $repo 'scripts\vps\Lock-Folder.ps1'
 $lockBox = Join-Path $repo 'scripts\vps\Lock-VpsFolders.ps1'
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  each folder is made with its rights already set, a Windows ACL, by scripts the box runs in Windows PowerShell 5.1, which only Windows has'; exit 0 }
-$ps51 = Get-WindowsPowerShell
+if (-not $OnWindows) { Write-Host 'NOT RUN  each folder is made with its rights already set, a Windows ACL, which only Windows has'; exit 0 }
+$boxPs = Get-BoxPowerShell
 . $helper
 
 $script:pass = 0; $script:fail = 0
@@ -57,7 +57,7 @@ function Grant([string]$p, [string]$sid, [string]$type = 'Allow') {
 function Run51([string]$text) {
     $f = Join-Path ([IO.Path]::GetTempPath()) ('tw-oncreate-' + [guid]::NewGuid().ToString('N') + '.ps1')
     [IO.File]::WriteAllText($f, $text, (New-Object Text.UTF8Encoding($true)))
-    try { return @(& $ps51 -NoProfile -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_" }) } finally { Remove-Item -LiteralPath $f -Force -EA SilentlyContinue }
+    try { return @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_" }) } finally { Remove-Item -LiteralPath $f -Force -EA SilentlyContinue }
 }
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('tw-oncreate-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -104,7 +104,7 @@ try {
     $sent = Run51 @"
 `$ErrorActionPreference = 'Stop'
 . '$($repo.Replace("'", "''"))\scripts\deploy\Artifact.ps1'
-function Invoke-ThornswoodArtifactRemote(`$t, `$s, `$text) { `$f = Join-Path `$env:TEMP ('tw-art-' + [guid]::NewGuid().ToString('N') + '.ps1'); [IO.File]::WriteAllText(`$f, `$text); try { & '$ps51' -NoProfile -ExecutionPolicy Bypass -File `$f } finally { Remove-Item `$f -Force } }
+function Invoke-ThornswoodArtifactRemote(`$t, `$s, `$text) { `$f = Join-Path `$env:TEMP ('tw-art-' + [guid]::NewGuid().ToString('N') + '.ps1'); [IO.File]::WriteAllText(`$f, `$text); try { & '$boxPs' -NoProfile -ExecutionPolicy Bypass -File `$f } finally { Remove-Item `$f -Force } }
 function Send-ThornswoodArtifactFile(`$l, `$t, `$s, `$far) { Copy-Item -LiteralPath `$l -Destination `$far.Replace('/', '\') -Force }
 `$zip = Join-Path `$env:TEMP ('tw-art-' + [guid]::NewGuid().ToString('N') + '.zip'); [IO.File]::WriteAllText(`$zip, 'zip')
 `$rec = `$zip + '.json'; [IO.File]::WriteAllText(`$rec, '{}')
@@ -135,7 +135,7 @@ Remove-Item `$zip, `$rec -Force
     foreach ($p in $a, (Join-Path $b 'Thornswood-Caddy'), (Join-Path $b 'Thornswood-Dumps'), (Join-Path $c 'only2')) { $null = New-Item -ItemType Directory -Force -Path $p; Grant $p $runner 'Deny' }
     Lock-ThornswoodFolder -Path $a
     Lock-ThornswoodFolder -Path (Join-Path $c 'only2') -Only -Writers @('S-1-5-19', $runner)
-    $null = & $ps51 -NoProfile -ExecutionPolicy Bypass -File $lockBox -Parent $b -AllowGamingPc -SiteSid none -BotSid none -DumpWriterSids ('S-1-5-19,' + $runner)
+    $null = & $boxPs -NoProfile -ExecutionPolicy Bypass -File $lockBox -Parent $b -AllowGamingPc -SiteSid none -BotSid none -DumpWriterSids ('S-1-5-19,' + $runner)
     function Rules([string]$p) { return ((All $p | ForEach-Object { $_.IdentityReference.Value + '|' + $_.AccessControlType + '|' + [int]$_.FileSystemRights + '|' + [int]$_.InheritanceFlags + '|' + $_.IsInherited }) | Sort-Object) -join ';' }
     Yes 'the helper leaves exactly the rules Lock-VpsFolders.ps1 leaves on a service folder (the runner''s deny kept)' (((Rules $a) -eq (Rules (Join-Path $b 'Thornswood-Caddy'))) -and (Rules $a).Contains($runner))
     Yes 'and -Only -Writers exactly the rules it leaves on Dumps, the writers'' write included' ((Rules (Join-Path $c 'only2')) -eq (Rules (Join-Path $b 'Thornswood-Dumps')))

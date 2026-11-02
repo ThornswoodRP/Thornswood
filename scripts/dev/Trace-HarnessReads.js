@@ -219,6 +219,14 @@ function makeParser(root, extraRoots) {
 
 // ---- running one harness ---------------------------------------------------
 
+// The file a gate name stands for, from the checkout's top: a name with a
+// slash is a product's harness beside its code, by its path
+// (launcher/tests/test-498-msbuild.ps1); one without is in tests\. The same
+// rule as scripts/dev/Harness-Files.ps1 (plan line 42).
+function harnessFile(name) {
+  return name.indexOf('/') >= 0 ? path.join.apply(path, name.split('/')) : path.join('tests', name);
+}
+
 function runOne(name, pristine, work, outDir, clockSeconds) {
   return new Promise((done) => {
     const dir = path.join(work, 'run-' + name.replace(/[^\w.-]/g, '_'));
@@ -227,7 +235,7 @@ function runOne(name, pristine, work, outDir, clockSeconds) {
     cp.execFileSync('cp', ['-a', pristine, dir]);
     fs.mkdirSync(tmp, { recursive: true });
     const traceFile = dir + '.strace';
-    const file = path.join('tests', name);
+    const file = harnessFile(name);
     const cmd = name.endsWith('.js') ? ['node', file] : ['pwsh', '-NoProfile', '-File', file];
     const env = Object.assign({}, process.env, {
       GITHUB_ACTIONS: 'true', CI: 'true', UV_USE_IO_URING: '0', RUNNER_TEMP: tmp, TEMP: tmp, TMP: tmp, TMPDIR: tmp,
@@ -266,7 +274,8 @@ function runOne(name, pristine, work, outDir, clockSeconds) {
           paths: paths,
           tail: output.split('\n').slice(-6).join('\n'),
         };
-        fs.writeFileSync(path.join(outDir, name + '.json'), JSON.stringify(out, null, 1));
+        // A product harness's name has slashes in it; its file here does not.
+        fs.writeFileSync(path.join(outDir, name.split('/').join('%2F') + '.json'), JSON.stringify(out, null, 1));
         cp.execFileSync('rm', ['-rf', dir, tmp, traceFile]);
         done(out);
       });
@@ -295,7 +304,7 @@ async function main() {
       .toString().split('\n').map(s => s.trim()).filter(Boolean);
   }
   // A harness that says RUNS ALONE runs after the rest, alone, as in the gate.
-  const alone = list.filter(n => /RUNS ALONE/.test(fs.readFileSync(path.join(pristine, 'tests', n), 'utf8')));
+  const alone = list.filter(n => /RUNS ALONE/.test(fs.readFileSync(path.join(pristine, harnessFile(n)), 'utf8')));
   const rest = list.filter(n => alone.indexOf(n) < 0);
   fs.writeFileSync(path.join(outDir, '_commit.txt'), head + '\n');
   let doneCount = 0;

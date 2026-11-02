@@ -19,7 +19,7 @@ const vm = require('node:vm');
 const cp = require('node:child_process');
 
 const ROOT = path.join(__dirname, '..');
-const gm = fs.readFileSync(path.join(ROOT, 'game', 'gamemode.js'), 'utf8').split('\r\n').join('\n');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(ROOT, 'game', 'gamemode.js'), 'utf8')).split('\r\n').join('\n');
 const BUILD = require(path.join(ROOT, 'scripts', 'dev', 'Build-StaffData.js'));
 
 let passed = 0, failed = 0;

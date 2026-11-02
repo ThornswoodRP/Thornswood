@@ -43,7 +43,7 @@
   and New-ClientBuildRecord.ps1 then hold every file to the fork's source as
   for any build, with -BuiltBy naming the fork's run.
 
-  Keep it Windows PowerShell 5.1 and pwsh alike. It reads nothing over the
+  It runs in PowerShell 7 (#5356). It reads nothing over the
   network itself: engine.yml hands it the reader, and the harness a stand-in.
 #>
 

@@ -35,7 +35,7 @@ if (-not $User) { $User = Get-ThornswoodVpsUser }
 if (-not $Vps) { $Vps = Get-ThornswoodVpsAddress }
 $ssh = @('-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes')
 
-# Runs on the box, in Windows PowerShell. One line per finding, then one
+# Runs on the box, in PowerShell 7. One line per finding, then one
 # RESULT line.
 $far = @'
 $ProgressPreference = 'SilentlyContinue'
@@ -50,7 +50,7 @@ foreach ($root in @(Get-ChildItem -LiteralPath 'C:\' -Directory -Force | Where-O
   $owned = 0; $rules = 0; $unread = 0
   foreach ($i in @(@(Get-Item -LiteralPath $root.FullName -Force) + @(Get-ChildItem -LiteralPath $root.FullName -Recurse -Force -EA SilentlyContinue))) {
     $a = $null
-    try { $a = $i.GetAccessControl($s) } catch { <# counted as UNREAD below and named on its line, so it is not passed as clear #> }
+    try { if ($i -is [IO.DirectoryInfo]) { $a = [IO.FileSystemAclExtensions]::GetAccessControl([IO.DirectoryInfo]$i, $s) } else { $a = [IO.FileSystemAclExtensions]::GetAccessControl([IO.FileInfo]$i, $s) } } catch { <# counted as UNREAD below and named on its line, so it is not passed as clear #> }
     if (-not $a) { $unread++; continue }
     if ($a.GetOwner([Security.Principal.SecurityIdentifier]).Value -eq $ls) { $owned++ }
     foreach ($r in @($a.GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]))) {

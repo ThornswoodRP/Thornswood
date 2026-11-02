@@ -18,8 +18,8 @@
        ports; the ports chosen skip reserved and busy ones from 7800 up, and
        -Port and -VoicePort are refused when reserved, busy, out of range or
        on top of each other.
-    2. The real script, run whole under Windows PowerShell 5.1 (what runs it
-       on the VPS) on a backup the real vps-nightly-backup.ps1 made:
+    2. On Windows, the real script, run whole under PowerShell 7 (what runs
+       it on the VPS since #5356) on a backup the real vps-nightly-backup.ps1 made:
        -Rehearse puts the world back, says RESTORE OK and REHEARSAL READY,
        gives the folder free ports that are not the backup's, puts
        " (restore rehearsal)" on the name once, turns the join pass hold off,
@@ -129,10 +129,10 @@ Yes 'every game port busy: refused, saying name one with -Port' ($r.Why -match '
 # ---- 2. the real script, run whole -------------------------------------------
 . (Join-Path $PSScriptRoot 'Windows.ps1')
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the whole runs need Windows PowerShell 5.1, which runs these on the VPS; this is not Windows'
+    Write-Host 'SKIP  the whole runs: they restore a backup the nightly backup makes, and it stages under Windows'' TEMP and builds its paths with the \ separator, so it runs only on Windows'
     Done
 }
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 $utf8 = New-Object Text.UTF8Encoding($false)
 function Put([string]$path, [string]$body) {
     [void][IO.Directory]::CreateDirectory((Split-Path -Parent $path))
@@ -142,7 +142,7 @@ $script:last = @()
 function Run([string]$file, [string[]]$argv) {
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    try { $script:last = @(& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $file @argv 2>&1 | ForEach-Object { "$_" }) }
+    try { $script:last = @(& $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $file @argv 2>&1 | ForEach-Object { "$_" }) }
     finally { $ErrorActionPreference = $eap }
     return $LASTEXITCODE
 }

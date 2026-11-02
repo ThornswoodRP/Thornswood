@@ -7,12 +7,9 @@
 # of the box signs since #4013, so the check and its cases went.
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-# What this runs, Windows runs in Windows PowerShell 5.1; off Windows, this shell.
-if ($OnWindows) { $winPs = Get-WindowsPowerShell }
-else {
-    $winPs = (Get-Process -Id $PID).Path
-    Write-Host 'NOTE  what runs in Windows PowerShell 5.1 on Windows runs in this shell here: this is not Windows'
-}
+# What this runs, every machine runs in PowerShell 7 since #5356, the box
+# included, and this harness runs in it too.
+$boxPs = Get-BoxPowerShell
 $repo = Split-Path -Parent $PSScriptRoot
 $check = Join-Path $repo 'scripts\vps\Check-RunnerIsolation.ps1'
 $collector = Join-Path $repo 'scripts\vps\Get-RunnerFacts.ps1'
@@ -71,7 +68,7 @@ function Run($facts, [string]$wf) {
     $facts | ConvertTo-Json -Depth 8 | Set-Content $fp -Encoding utf8
     $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $check, '-Facts', $fp, '-Report', $rp, '-Strict')
     if ($wf) { $a += @('-Workflows', $wf) }
-    $o = & $winPs @a 2>&1 | Out-String
+    $o = & $boxPs @a 2>&1 | Out-String
     @{ Code = $LASTEXITCODE; Out = $o; Report = $(if (Test-Path $rp) { Get-Content $rp -Raw } else { '' }) }
 }
 try {
@@ -101,6 +98,13 @@ try {
     Set-Content (Join-Path $wfIs 'label.yml') "on:`n  issue_comment:`npermissions:`n  issues: write`njobs:`n  a:`n    runs-on: `${{ github.event.repository.private && fromJSON('[`"self-hosted`", `"Windows`", `"thornswood-vps`"]') || 'ubuntu-latest' }}`n  b:`n    runs-on: [self-hosted, Windows, thornswood-vps]`n"
     $x = Run (Facts) $wfIs
     T ($x.Out -match 'RISK  workflow label\.yml started by anyone') '  and one job left on it beside one that picks it only while private is still a risk'
+    # A choice between two runners named outright is either of them (#5292).
+    Set-Content (Join-Path $wfIs 'label.yml') "on:`n  issue_comment:`npermissions:`n  issues: write`njobs:`n  a:`n    runs-on: `${{ needs.pick.outputs.launcher == 'false' && 'ubuntu-24.04-arm' || 'windows-latest' }}`n"
+    $x = Run (Facts) $wfIs
+    T ($x.Out -notmatch 'RISK  workflow label\.yml started by anyone' -and $x.Report -match '\| workflow \| label\.yml started by anyone \|[^\n]*; not on thornswood-vps[^\n]*\| ok \|') '  a job that picks one of two hosted runners by name is on neither of the box''s (#5292)'
+    Set-Content (Join-Path $wfIs 'label.yml') "on:`n  issue_comment:`npermissions:`n  issues: write`njobs:`n  a:`n    runs-on: `${{ github.event.comment.body == 'x' && 'thornswood-vps' || 'ubuntu-latest' }}`n"
+    $x = Run (Facts) $wfIs
+    T ($x.Out -match 'RISK  workflow label\.yml started by anyone') '  and one whose choice names the production label is a risk'
     Set-Content (Join-Path $wfIs 'label.yml') "on:`n  issue_comment:`npermissions:`n  issues: write`njobs:`n  a:`n    runs-on: `${{ github.event.repository.private && fromJSON('[`"self-hosted`", `"Windows`", `"thornswood-vps`"]') || 'ubuntu-latest' }}`n"
     $x = Run (Facts) $wfIs
     T ($x.Out -notmatch 'RISK  workflow label\.yml started by anyone') '  a job that picks it only while private is not'
@@ -183,7 +187,7 @@ try {
     $rp2 = Join-Path $scratch 'rec.json'; $r2 | ConvertTo-Json -Depth 6 | Set-Content $rp2 -Encoding utf8
     $c = Facts; $c.runner.runners[0].firewallRules = 0
     $fp = Join-Path $scratch 'f2.json'; $c | ConvertTo-Json -Depth 8 | Set-Content $fp -Encoding utf8
-    $o = & $winPs -NoProfile -ExecutionPolicy Bypass -File $check -Facts $fp -Record $rp2 -Workflows $wfOk -Strict 2>&1 | Out-String
+    $o = & $boxPs -NoProfile -ExecutionPolicy Bypass -File $check -Facts $fp -Record $rp2 -Workflows $wfOk -Strict 2>&1 | Out-String
     T ($LASTEXITCODE -eq 0 -and $o -match 'intentional: stand-in reason') 'a risk listed as intentional is classed so, with its reason'
 
     $d = Facts; $d.runner.runners[0].account = 'password=hunter2PLANTED'

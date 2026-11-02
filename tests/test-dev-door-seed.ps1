@@ -31,12 +31,9 @@ $env:THORNSWOOD_HARNESS = '1'
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-# What this runs, Windows runs in Windows PowerShell 5.1; off Windows, this shell.
-if ($OnWindows) { $winPs = Get-WindowsPowerShell }
-else {
-    $winPs = (Get-Process -Id $PID).Path
-    Write-Host 'NOTE  what runs in Windows PowerShell 5.1 on Windows runs in this shell here: this is not Windows'
-}
+# What this runs, every machine runs in PowerShell 7 since #5356, the box
+# included, and this harness runs in it too.
+$boxPs = Get-BoxPowerShell
 $Repo = Split-Path -Parent $PSScriptRoot
 $publish = Join-Path $Repo 'scripts\release\Publish-Server.ps1'
 $setDoor = Join-Path $Repo 'scripts\ops\Set-Door.ps1'
@@ -106,7 +103,7 @@ function Seed([string]$case, [string]$liveSite, [bool]$liveDoor = $true, [bool]$
     }
     $s = $seed.Replace("'C:\Thornswood-Server\private'", "'" + $live + "'").Replace('@@DEVROOT@@', $devRoot)
     $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($s))
-    $out = & $winPs -NoProfile -EncodedCommand $enc 2>&1
+    $out = & $boxPs -NoProfile -EncodedCommand $enc 2>&1
     return @{ out = @($out | ForEach-Object { [string]$_ }); dev = (Join-Path $devRoot 'private'); code = $LASTEXITCODE }
 }
 function Quiet($r) {
@@ -182,7 +179,9 @@ if ($m.Success) {
 # ---- the address the door builds lands on the route that lists dev only -------
 $gm = Get-Content -LiteralPath $gamemode -Raw
 Yes 'the door asks <site>/api/allowed' ($gm.Contains("String(conf.site).replace(/\/+`$/, '') + '/api/allowed'"))
-$js = Get-Content -LiteralPath $siteJs -Raw
+# The site is server.js over its modules in site\lib since #5357.
+. (Join-Path $PSScriptRoot 'SiteFiles.ps1')
+$js = Get-SiteSource (Join-Path $Repo 'site')
 Yes 'the site answers /dev/api/allowed' ($js.Contains("const devDoor = (route === '/dev/api/allowed');"))
 # Since #3317 the dev server lets in the dev build's list (access.devBuild:
 # Owner, Co-Owner, Dev and the leads), not the staff list access.dev.

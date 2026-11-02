@@ -1,4 +1,5 @@
 #nullable enable
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -28,7 +29,61 @@ public static class Files
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var tmp = path + ".agent-new";
         File.WriteAllBytes(tmp, bytes);
-        File.Move(tmp, path, true);
+        Into(tmp, path);
+    }
+
+    /// <summary>Puts from in place of to in one rename, while readers that
+    /// opened to sharing delete (the engine, the site, this agent's own
+    /// reads) hold it: they keep the old bytes and the next open gets the new.
+    /// File.Move with overwrite is MoveFileEx with MOVEFILE_REPLACE_EXISTING,
+    /// which Windows refuses with "Access is denied" while any handle is open
+    /// on the file it replaces, even one sharing delete (#2727 measured it:
+    /// 1616 of 2000 swaps refused beside a reader). So on Windows this is the
+    /// rename Feed-Store.ps1 uses, FileRenameInfoEx with
+    /// FILE_RENAME_FLAG_POSIX_SEMANTICS (Windows Server 2019 or later on NTFS;
+    /// the box is 2022). A handle opened without delete sharing still refuses
+    /// it, as it should. Elsewhere File.Move is rename(2), which already
+    /// does this.</summary>
+    public static void Into(string from, string to)
+    {
+        if (!OperatingSystem.IsWindows()) { File.Move(from, to, true); return; }
+        string source = Path.GetFullPath(from), target = Path.GetFullPath(to);
+        using var h = Rename.CreateFileW(source, Rename.Access, Rename.ShareAll, IntPtr.Zero, Rename.OpenExisting, Rename.WriteThrough, IntPtr.Zero);
+        if (h.IsInvalid) throw Rename.Failed(from, to, Marshal.GetLastPInvokeError());
+        // FILE_RENAME_INFO: Flags, RootDirectory (none), FileNameLength in
+        // bytes, then the name.
+        var name = Encoding.Unicode.GetBytes(target);
+        int lengthAt = IntPtr.Size * 2, nameAt = lengthAt + 4, size = nameAt + name.Length + 2;
+        var info = Marshal.AllocHGlobal(size);
+        try
+        {
+            for (int i = 0; i < size; i++) Marshal.WriteByte(info, i, 0);
+            Marshal.WriteInt32(info, 0, Rename.Flags);
+            Marshal.WriteInt32(info, lengthAt, name.Length);
+            Marshal.Copy(name, 0, IntPtr.Add(info, nameAt), name.Length);
+            if (!Rename.SetFileInformationByHandle(h, Rename.FileRenameInfoEx, info, (uint)size)) throw Rename.Failed(from, to, Marshal.GetLastPInvokeError());
+        }
+        finally { Marshal.FreeHGlobal(info); }
+    }
+
+    static class Rename
+    {
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        public static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFileW(string name, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool SetFileInformationByHandle(Microsoft.Win32.SafeHandles.SafeFileHandle file, int infoClass, IntPtr info, uint size);
+        // DELETE | SYNCHRONIZE | FILE_READ_ATTRIBUTES on the new file, shared
+        // all ways, write-through as MOVEFILE_WRITE_THROUGH opens it.
+        public const uint Access = 0x00010000 | 0x00100000 | 0x80;
+        public const uint ShareAll = 0x1 | 0x2 | 0x4;
+        public const uint OpenExisting = 3;
+        public const uint WriteThrough = 0x80000000;
+        public const int FileRenameInfoEx = 22;
+        // FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS
+        public const int Flags = 0x1 | 0x2;
+        public static IOException Failed(string from, string to, int error) =>
+            new(to + " could not be replaced by " + from + ": " + new System.ComponentModel.Win32Exception(error).Message);
     }
 
     /// <summary>A copy that inherits the folder it lands in, flushed to disk.</summary>

@@ -13,20 +13,24 @@
   pwsh in its place, and passed without running what they were for. On main
   that day this reader found 114 harnesses that found Windows their own way.
 
-  Now every harness asks tests\Windows.ps1: $OnWindows first, then
-  Get-WindowsPowerShell or Get-WindowsPath. This fails on:
+  Now every harness asks tests\Windows.ps1: Get-BoxPowerShell for the
+  PowerShell 7 the box runs its scripts in (#5356), and for Windows itself
+  $OnWindows first, then Get-WindowsPath (or Get-WindowsPowerShell, kept
+  only for the launcher harnesses until the launcher's pull request lands).
+  This fails on:
     1. a harness in tests\ that names $env:SystemRoot or $env:WINDIR, in its
        code or in the text of a script it writes;
     2. one that runs powershell or cmd by name, or asks Get-Command for them;
     3. one that asks $IsWindows, which Windows PowerShell 5.1 does not have
        (unset there, and an error under Set-StrictMode);
-    4. one that uses $OnWindows, Get-WindowsPowerShell or Get-WindowsPath
-       without dot-sourcing tests\Windows.ps1 (or tests\Launcher-Csc.ps1,
-       which dot-sources it).
+    4. one that uses $OnWindows, Get-BoxPowerShell, Get-WindowsPowerShell or
+       Get-WindowsPath without dot-sourcing tests\Windows.ps1 (or
+       tests\Launcher-Csc.ps1, which dot-sources it).
   The same reader is run over planted harnesses, one of each, so a reader that
   finds nothing anywhere cannot pass by accident. Then Windows.ps1 itself:
-  off Windows it says so and names no path; on Windows it names powershell.exe
-  where Windows keeps it.
+  Get-BoxPowerShell names the PowerShell 7 running this on every OS; off
+  Windows the Windows paths say so and name nothing; on Windows they name
+  powershell.exe where Windows keeps it.
 
   Read only, apart from the planted folder under TEMP, which it removes.
 #>
@@ -81,7 +85,7 @@ function Get-OtherWay([string]$path) {
             $hits.Add($at + 'starts ' + $tokens[$i + 2].Content + ' by name')
         }
         if (($type -eq 'Variable' -and $t.Content -eq 'OnWindows') -or
-            ($type -eq 'Command' -and $t.Content -match '^Get-Windows(PowerShell|Path)$')) { $usesHelper = $true }
+            ($type -eq 'Command' -and $t.Content -match '^Get-(Windows(PowerShell|Path)|BoxPowerShell)$')) { $usesHelper = $true }
         # Launcher-Csc.ps1 dot-sources it for the harnesses that compile the launcher.
         if ($type -eq 'String' -and $t.Content -match '^(Windows|Launcher-Csc)\.ps1$') { $loadsHelper = $true }
     }
@@ -90,7 +94,10 @@ function Get-OtherWay([string]$path) {
 }
 
 # ---- 1. every harness here --------------------------------------------------
-$harnesses = @(Get-ChildItem -LiteralPath $Here -File -Filter '*.ps1' | Where-Object { $_.Name -ne 'Windows.ps1' -and $_.Name -ne (Split-Path -Leaf $PSCommandPath) })
+# Here and beside each product, in its own tests folder (plan line 42).
+. (Join-Path (Join-Path (Join-Path $Repo 'scripts') 'dev') 'Harness-Files.ps1')
+$harnesses = @(@($Here) + @(Get-ProductTestFolders $Repo | ForEach-Object { $_.Path }) | ForEach-Object {
+    Get-ChildItem -LiteralPath $_ -File -Filter '*.ps1' } | Where-Object { $_.Name -ne 'Windows.ps1' -and $_.FullName -ne $PSCommandPath })
 Yes ('there are harnesses to read (' + $harnesses.Count + ')') ($harnesses.Count -gt 300)
 $bad = 0
 foreach ($h in $harnesses) {
@@ -119,6 +126,8 @@ try {
         'a process started as powershell.exe' = @('$psi.FileName = ''powershell.exe''', 1)
         '$IsWindows asked' = @('$w = ($PSVersionTable.PSVersion.Major -lt 6) -or $IsWindows', 1)
         'the helper used without loading it' = @('if ($OnWindows) { $p = Get-WindowsPowerShell }', 1)
+        'the box''s shell asked for without loading it' = @('$ps = Get-BoxPowerShell', 1)
+        'the box''s shell, loaded and asked for' = @(". (Join-Path `$PSScriptRoot 'Windows.ps1')`r`n`$ps = Get-BoxPowerShell", 0)
         'the helper, loaded and used' = @(". (Join-Path `$PSScriptRoot 'Windows.ps1')`r`nif (-not `$OnWindows) { exit 0 }`r`n`$p = Get-WindowsPowerShell`r`n`$c = Get-WindowsPath 'System32\cmd.exe'", 0)
         'history told in a comment' = @("# before #2957 this joined onto `$env:SystemRoot and ran powershell.exe`r`n<# `$env:WINDIR #>`r`n`$x = 1", 0)
         'a stand-in process named powershell.exe in data' = @('$list = @([pscustomobject]@{ Name = ''powershell.exe''; ProcessId = 7 })', 0)
@@ -138,6 +147,9 @@ try {
 
 # ---- 3. Windows.ps1 itself ---------------------------------------------------
 . (Join-Path $PSScriptRoot 'Windows.ps1')
+$box = Get-BoxPowerShell
+Yes ('Get-BoxPowerShell names the PowerShell 7 running this, on every OS (' + $box + ')') (
+    $box -and (Test-Path -LiteralPath $box) -and $box -eq (Get-Process -Id $PID).Path -and $PSVersionTable.PSVersion.Major -ge 7)
 $platform = [Environment]::OSVersion.Platform
 Yes ('$OnWindows is ' + $OnWindows + ' on ' + $platform) ($OnWindows -eq ($platform -eq [PlatformID]::Win32NT))
 if (-not $OnWindows) {

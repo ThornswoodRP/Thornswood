@@ -88,10 +88,9 @@ function person(id, cell) {
 function needsRig() {
   const g = { __thornswoodChargen: { inCreation: function (id) { return !!creating[id]; } } };
   const fake = {
-    getOnlinePlayers: function () { return online.slice(); },
     makeProperty: function () { },
     getDescFromId: function () { return ''; },
-    get: function (id, key) {
+    get: function (id, key) { if (id === 0 && key === 'onlinePlayers') { return online.slice(); }
       if (key === 'thornswoodNeeds') { return refs[id] ? refs[id].needs : undefined; }
       if (!refs[id]) { throw new Error('no reference ' + id); }
       const v = refs[id][key];
@@ -213,9 +212,11 @@ function typed(N, word, actorId) {
   const buttons = slice(systems, '## Buttons, not commands', '\n## ') || '';
   yes('D4 docs/GAME-SYSTEMS.md "Buttons, not commands" says /needs stays a command, and why',
       /`\/needs`/.test(buttons) && /11 Oct/.test(buttons) && /#2267/.test(buttons) && /hid the bars/.test(buttons));
-  const guide = read('Developer-Guide.md');
-  const rule = slice(guide, '#### Buttons, not chat commands', '\n#### ') || '';
-  yes('D5 the Developer Guide\'s rule names it beside the other exceptions', /`\/needs`/.test(rule) && /#2267/.test(rule));
+  // The rule is the last part of the guide's rules page, so it runs to the end.
+  const guide = read('docs', 'guide', 'rules.md');
+  const at = guide.indexOf('\n## Buttons, not chat commands\n');
+  const rule = at < 0 ? '' : guide.slice(at);
+  yes('D5 docs/guide/rules.md "Buttons, not chat commands" names it beside the other exceptions', /`\/needs`/.test(rule) && /#2267/.test(rule));
   // D5b, CLAUDE.md's list, left with CLAUDE.md for the private ops repo
   // (#3693), whose tests/test-ops-docs.js holds it.
   const commands = read('docs', 'systems', 'commands.md');

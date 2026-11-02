@@ -38,7 +38,7 @@
   other every hour, and files the rebuild on the board when they part.
 
   Dot-sourced by Ship-Rules.ps1; defines functions and
-  nothing else. Works on Windows PowerShell 5.1 and PowerShell 7.
+  nothing else. Runs in PowerShell 7.
 #>
 
 # The record's collection and revision, as { Slug; Revision }. Throws, naming

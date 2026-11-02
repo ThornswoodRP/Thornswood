@@ -289,7 +289,7 @@ launcher when the game closes, as they always have, and the issue links the
 hub's Sessions page at that session (`/sessions?find=<session>`), or, from
 Discord, at the account's sessions. What the tester typed goes into the
 issue inside a `<pre>` block, so nothing in it can mention anybody or turn
-into markup. `bot\test-3155-problems.py` holds the bot's half and
+into markup. `bot\tests\test-3155-problems.py` holds the bot's half and
 `tests\test-3155-report-problem.js` the game's and the site's.
 
 **The one-time setup.** Moving a server from the old shape is the only channel
@@ -348,7 +348,7 @@ whole file at once.
 
 - What keeps a row off: no `Roadmap:` comment, two lane labels, a title over
   45 characters, nothing under the first line, an issue number, a link or
-  code, an em dash, or the word for the people who play that Developer-Guide.md
+  code, an em dash, or the word for the people who play that docs/guide/rules.md
   bans in its Words section. The last two hold for known issue text too,
   since the site shows it to anybody. The issue gets one comment naming the rule, the same as a test
   task; fixing the comment puts the row on at the next pass.
@@ -535,7 +535,7 @@ On a Windows PC with more than one Python installed, plain `python` is
 whichever comes first on PATH (on One that is 3.9), so run them with the
 launcher:
 
-    py -3.12 bot\test-testing-channels.py
+    py -3.12 bot\tests\test-testing-channels.py
 
 With the libraries from `bot\requirements.txt`. On an older Python, bot.py
 and every test stop at once and say so, rather than failing somewhere deep in
@@ -578,8 +578,8 @@ hand, does not reach the box with `-CodeOnly`: that sends the file and leaves
 installs the pinned versions into a new `py-libs` and swaps it in with the
 code, so a bump that stops the bot from starting puts the old libraries back.
 The pull request build only parses the bot; the nightly runs its harnesses.
-So before merging a bump, install the new pins and run `bot\test-*.py` on
-them, the way [Setting up a machine](../Developer-Guide.md#setting-up-a-machine)
+So before merging a bump, install the new pins and run `bot\tests\test-*.py` on
+them, the way [Setting up a machine](../docs/guide/set-up-a-machine.md#setting-up-a-machine)
 installs them (#1401).
 
 What goes up with it: `bot.py`, `card.py`, the channel ids, the card artwork,

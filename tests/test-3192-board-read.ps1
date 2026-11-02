@@ -120,7 +120,8 @@ New-Item -ItemType Directory -Force -Path $work | Out-Null
 $calls = Join-Path $work 'calls.txt'
 # Answers as GitHub would: the board, then its cards in two pages of
 # TS_PAGE cards each (the page after names the cursor the first gave), an
-# error when TS_BOARD_ERROR is set, and no Status field when TS_NO_STATUS is.
+# error when TS_BOARD_ERROR is set, no Status field when TS_NO_STATUS is, and
+# the board App's refusal of the board's workflows when TS_NO_WORKFLOWS is.
 # TS_BIG adds 400 draft cards with titles that do not compress, so the
 # board's lines in the log are more than one.
 $standIn = @'
@@ -130,6 +131,7 @@ function Invoke-RestMethod {
     $rec = [ordered]@{ method = $Method; uri = $Uri; auth = $Headers['Authorization']; body = $b }
     [IO.File]::AppendAllText($env:TS_CALLS, ($rec | ConvertTo-Json -Depth 8 -Compress) + "`n")
     if ($env:TS_BOARD_ERROR) { return [pscustomobject]@{ data = $null; errors = @([pscustomobject]@{ message = $env:TS_BOARD_ERROR }) } }
+    if ($b.query -match 'workflows\(' -and $env:TS_NO_WORKFLOWS) { return [pscustomobject]@{ data = $null; errors = @([pscustomobject]@{ message = 'You do not have permission to access workflows' }) } }
     if ($b.query -notmatch 'items\(') {
         $status = if ($env:TS_NO_STATUS) { $null } else { [pscustomobject]@{ options = @([pscustomobject]@{ name = 'Todo' }, [pscustomobject]@{ name = 'In Progress' }, [pscustomobject]@{ name = 'Done' }) } }
         $flows = [pscustomobject]@{ nodes = @([pscustomobject]@{ name = 'Item closed'; enabled = $true }, [pscustomobject]@{ name = 'Auto-close issue'; enabled = $false }) }
@@ -154,7 +156,7 @@ function Invoke-RestMethod {
 $runner = Join-Path $work 'read.ps1'
 [IO.File]::WriteAllText($runner, $standIn + $script)
 
-$names = 'BOARD_TOKEN', 'BOARD_OWNER', 'BOARD_NUMBER', 'RUNNER_TEMP', 'GITHUB_OUTPUT', 'TS_CALLS', 'TS_BOARD_ERROR', 'TS_NO_STATUS', 'TS_BIG'
+$names = 'BOARD_TOKEN', 'BOARD_OWNER', 'BOARD_NUMBER', 'RUNNER_TEMP', 'GITHUB_OUTPUT', 'TS_CALLS', 'TS_BOARD_ERROR', 'TS_NO_STATUS', 'TS_NO_WORKFLOWS', 'TS_BIG'
 function Invoke-Read([hashtable]$extra = @{}) {
     foreach ($f in $calls, (Join-Path $work 'out.txt')) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force } }
     $temp = Join-Path $work 'runner-temp'
@@ -171,6 +173,7 @@ function Invoke-Read([hashtable]$extra = @{}) {
         $env:TS_CALLS = $calls
         $env:TS_BOARD_ERROR = ''
         $env:TS_NO_STATUS = ''
+        $env:TS_NO_WORKFLOWS = ''
         $env:TS_BIG = ''
         foreach ($k in $extra.Keys) { [Environment]::SetEnvironmentVariable($k, $extra[$k]) }
         $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
@@ -203,15 +206,16 @@ function Back([string[]]$lines) { try { return , (Read-BoardFromLog $lines) } ca
 try {
     $r = Invoke-Read
     Yes ("a board of two pages: the run passes (exit {0})" -f $r.Code) ($r.Code -eq 0)
-    Yes ("  three calls to the board, each with the board token ({0})" -f $r.Calls.Count) ($r.Calls.Count -eq 3 -and @($r.Calls | Where-Object { $_.auth -ne 'Bearer stand-in-board-token' -or $_.uri -ne 'https://api.github.com/graphql' }).Count -eq 0)
-    Yes '  it reads board 3 of the organization ThornswoodRP' ($r.Calls[0].body.variables.o -eq 'ThornswoodRP' -and $r.Calls[0].body.variables.n -eq 3 -and $r.Calls[0].body.query -match 'organization\(login:\$o\)' -and $r.Calls[0].body.query -notmatch 'user\(')
-    Yes '  the first page asks from the start, the second from the cursor the first gave' ($null -eq $r.Calls[1].body.variables.c -and $r.Calls[2].body.variables.c -eq 'cursor-1')
+    Yes ("  four calls to the board (the board, its workflows, two pages), each with the board token ({0})" -f $r.Calls.Count) ($r.Calls.Count -eq 4 -and @($r.Calls | Where-Object { $_.auth -ne 'Bearer stand-in-board-token' -or $_.uri -ne 'https://api.github.com/graphql' }).Count -eq 0)
+    Yes '  it reads board 3 of the organization ThornswoodRP' ($r.Calls[0].body.variables.o -eq 'ThornswoodRP' -and $r.Calls[0].body.variables.n -eq 3 -and $r.Calls[0].body.query -match 'organization\(login:\$o\)' -and $r.Calls[0].body.query -notmatch 'user\(|workflows')
+    Yes '  the workflows are asked for apart' ($r.Calls[1].body.query -match 'workflows\(first:50\)' -and $r.Calls[1].body.query -notmatch 'items')
+    Yes '  the first page asks from the start, the second from the cursor the first gave' ($null -eq $r.Calls[2].body.variables.c -and $r.Calls[3].body.variables.c -eq 'cursor-1')
     Yes '  board.json is written, and the step names its folder' ($null -ne $r.Board -and $r.Output -match ('dir=' + [regex]::Escape($r.Dir)))
     if ($r.Board) {
         $b = $r.Board
         Yes '  with when it was read and the board it is' ($b.read_at -and $b.board.url -eq 'https://github.com/orgs/ThornswoodRP/projects/3' -and $b.board.title -eq 'Thornswood To Do' -and $b.board.number -eq 3)
         Yes '  the Status options in board order' ((@($b.statuses) -join '|') -eq 'Todo|In Progress|Done')
-        Yes '  and the board''s workflows, on or off' (@($b.workflows).Count -eq 2 -and @($b.workflows | Where-Object { $_.name -eq 'Auto-close issue' -and -not $_.enabled }).Count -eq 1)
+        Yes '  and the board''s workflows, on or off' (@($b.workflows).Count -eq 2 -and @($b.workflows | Where-Object { $_.name -eq 'Auto-close issue' -and -not $_.enabled }).Count -eq 1 -and $null -eq $b.workflows_unread)
         $items = @($b.items)
         Yes ("  one entry for every card on both pages ({0})" -f $items.Count) ($items.Count -eq 4)
         $i = @($items | Where-Object { $_.number -eq 3192 })
@@ -267,6 +271,10 @@ try {
 
     $r = Invoke-Read @{ TS_BOARD_ERROR = 'Your token has not been granted the required scopes' }
     Yes ("an error from the board fails the run, says it, and writes no file (exit {0})" -f $r.Code) ($r.Code -ne 0 -and $r.Out -match 'the board answered: Your token has not been granted' -and $null -eq $r.Board)
+
+    $r = Invoke-Read @{ TS_NO_WORKFLOWS = '1' }
+    Yes ("workflows the token is refused: the run passes, the cards are read, and board.json says the workflows were not read and why (exit {0})" -f $r.Code) (
+        $r.Code -eq 0 -and $null -ne $r.Board -and @($r.Board.items).Count -eq 4 -and $null -eq $r.Board.workflows -and $r.Board.workflows_unread -match 'permission to access workflows' -and $r.Out -match 'workflows were not read')
 
     $r = Invoke-Read @{ TS_NO_STATUS = '1' }
     Yes ("a board with no Status field fails the run and writes no file (exit {0})" -f $r.Code) ($r.Code -ne 0 -and $r.Out -match 'no single-select field named Status' -and $null -eq $r.Board)

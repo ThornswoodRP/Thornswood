@@ -1,0 +1,142 @@
+# The load test (#4623): how many people the game server holds, measured
+# with network bots, not chosen. Decided 20 Oct: bots that connect over the
+# game's port, log in and move like a person; the plan puts them on GitHub's
+# runner with the five masters.
+#
+# Each job lays out a server on a fresh windows-2022 runner from the server
+# build records\server-build.json names (as the signed build Release carries
+# it for the deploy agent, every file held to the record), this checkout's gamemode.js and
+# Thornswood-Content.esp, and the five masters the fork's build downloads,
+# held to the same sha256 (scripts\bot\New-LoadServer.js; THIRD-PARTY.md says
+# where they come from, and they go with the runner). Then
+# scripts\bot\Load-Test.js puts more and more bots on it and, at each step,
+# reads the server process's cores and memory and every byte between the bots
+# and the server. Two shapes, one job each:
+#   crowd   everybody at one spot, so everybody sees everybody: the most the
+#           server has to send;
+#   spread  new characters put at 36 spots over Tamriel, so few see each other.
+# A person is also a chat socket on the voice service, which carries their
+# join pass, so the voice service from this checkout runs beside the server.
+# The numbers are in the run's summary and in the load-test-<shape> artifact
+# (result.json, the two services' logs and samples, nothing else), and go on
+# #4623.
+#
+# Why GitHub's runner: this repository is public, so its standard runners cost
+# nothing, and nothing here needs a secret, the box, or a real server. No job
+# here may name a self-hosted runner. Its token reads only: the Releases of
+# this repository and nothing else.
+#
+# The runner is not the box: its cores are a cloud machine's, and the bots run
+# on it beside the server. Load-Test.js reads how busy the whole runner was at
+# each step and stops once it passes 90%, because past that the numbers are the
+# runner's and not the server's.
+
+name: Load test
+
+on:
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: 'How many bots at each step, comma separated'
+        required: false
+        default: '10,20,40,60,80,100'
+      hold:
+        description: 'Seconds each step is measured over'
+        required: false
+        default: '60'
+  pull_request:
+    paths:
+      - 'scripts/bot/Load-Test.js'
+      - 'scripts/bot/New-LoadServer.js'
+      - 'scripts/bot/load-*.js'
+      - '.github/workflows/load-test.yml'
+
+concurrency:
+  group: load-test-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  load:
+    strategy:
+      fail-fast: false
+      matrix:
+        shape: [crowd, spread]
+    runs-on: windows-2022
+    # Each step takes its fill, 20 s of settling and its window, so six
+    # steps of 60 s are about 15 minutes after the downloads and the
+    # gamemode's load; three times that is the limit.
+    timeout-minutes: 45
+    steps:
+      # As the fork's build does: the gamemode's bytes as committed.
+      - name: Check out as committed, LF
+        shell: pwsh
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+
+      # The server build dev runs: the signed build-<date>.<run> Release the
+      # deploy agent takes it from carries it as server-<commit>-<hash>.zip,
+      # with its server-build.json. The newest Release whose record holds the
+      # same scam_native.node as this checkout's is taken, and
+      # New-LoadServer.js then holds every file to this checkout's record.
+      - name: Get the server build the checkout records
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $want = ((Get-Content -Raw records/server-build.json) | ConvertFrom-Json).sha256
+          $h = @{ Authorization = "Bearer $env:GH_TOKEN"; 'X-GitHub-Api-Version' = '2022-11-28' }
+          $api = "https://api.github.com/repos/$env:GITHUB_REPOSITORY"
+          $rels = Invoke-RestMethod -Uri "$api/releases?per_page=100" -Headers $h
+          $found = $null
+          foreach ($r in @($rels | Where-Object { $_.tag_name -like 'build-*' } | Sort-Object created_at -Descending)) {
+            $rec = $r.assets | Where-Object { $_.name -eq 'server-build.json' }
+            $zip = $r.assets | Where-Object { $_.name -like 'server-*.zip' }
+            if (-not $rec -or -not $zip) { continue }
+            $f = Join-Path $env:RUNNER_TEMP "record-$($r.id).json"
+            Invoke-WebRequest -Uri $rec.url -Headers ($h + @{ Accept = 'application/octet-stream' }) -OutFile $f
+            if ((((Get-Content -Raw $f) | ConvertFrom-Json).sha256) -eq $want) { $found = @{ Release = $r; Zip = $zip }; break }
+          }
+          if (-not $found) { Write-Host "::error::no build Release carries the server build records/server-build.json holds (scam_native.node sha256 $want)"; exit 1 }
+          $z = Join-Path $env:RUNNER_TEMP 'server.zip'
+          Invoke-WebRequest -Uri $found.Zip.url -Headers ($h + @{ Accept = 'application/octet-stream' }) -OutFile $z
+          if ((Get-Item -LiteralPath $z).Length -ne [long]$found.Zip.size) { Write-Host "::error::the download of $($found.Zip.name) is $((Get-Item -LiteralPath $z).Length) bytes, and the Release says $($found.Zip.size)"; exit 1 }
+          Expand-Archive -LiteralPath $z -DestinationPath (Join-Path $env:RUNNER_TEMP 'build')
+          Write-Host "$($found.Zip.name) from $($found.Release.tag_name), $($found.Zip.size) bytes"
+
+      - name: Lay out the load server
+        shell: pwsh
+        run: |
+          node scripts/bot/New-LoadServer.js --build "$env:RUNNER_TEMP/build" --masters "$env:RUNNER_TEMP/masters" --out "$env:RUNNER_TEMP/server" --shape ${{ matrix.shape }} --seats 200 --download yes
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Put the bots on it
+        shell: pwsh
+        env:
+          STEPS: ${{ github.event.inputs.steps || '10,20,40,60,80,100' }}
+          HOLD: ${{ github.event.inputs.hold || '60' }}
+        run: |
+          node scripts/bot/Load-Test.js --root "$env:RUNNER_TEMP/server" --out "$env:RUNNER_TEMP/server/result.json" --steps $env:STEPS --hold $env:HOLD --shape ${{ matrix.shape }} --summary $env:GITHUB_STEP_SUMMARY
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Keep the result and the server's log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: load-test-${{ matrix.shape }}
+          path: |
+            ${{ runner.temp }}/server/result.json
+            ${{ runner.temp }}/server/load-test-server.log
+            ${{ runner.temp }}/server/load-samples.jsonl
+            ${{ runner.temp }}/server/load-test-voice.log
+            ${{ runner.temp }}/server/voice-samples.jsonl
+          if-no-files-found: warn
+          retention-days: 30

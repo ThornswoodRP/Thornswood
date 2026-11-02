@@ -23,7 +23,7 @@
   ('ENGINE' + '-RECORDS'), so the step's own text, which the log shows
   before it runs, never holds it.
 
-  Keep it Windows PowerShell 5.1 and pwsh alike.
+  It runs in PowerShell 7 (#5356).
 #>
 
 # What gh needs told to hand a job's log over: a runner's log carries

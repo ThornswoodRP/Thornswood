@@ -226,7 +226,7 @@ if ($OnTheRunner) {
                     $m | Add-Member -NotePropertyName archive -NotePropertyValue $got.Path -Force
                 }
                 $addFile = Join-Path $work 'add.json'
-                [IO.File]::WriteAllText($addFile, (ConvertTo-Json -InputObject @($mods) -Depth 10), $utf8)
+                [IO.File]::WriteAllText($addFile, (ConvertTo-Json -InputObject @($mods) -Depth 12), $utf8)
                 $p['Add'] = $addFile
             }
             if ($req.Verb -eq 'New-NexusRevision' -and $p.Contains('Rule')) {

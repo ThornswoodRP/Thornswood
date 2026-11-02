@@ -37,7 +37,7 @@
 
   Needs the VPS ssh key for the send (scripts\vps\Setup-SshKey.ps1 -Test); the
   reads are plain https. -SiteUrl and -SiteDir point it at a copy of the site
-  on this machine, which is what tests\test-site-assets.ps1 does.
+  on this machine, which is what site\tests\test-site-assets.ps1 does.
 #>
 [CmdletBinding()]
 param(

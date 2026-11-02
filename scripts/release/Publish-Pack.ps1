@@ -17,10 +17,10 @@
   Nothing is uploaded to GitHub; the GitHub release path went with
   Thornswood-Releases.
 
-  These are the files Package-Thornswood.ps1 deliberately left out of the
-  installer. Both scripts read optional-packs.txt, so what comes out of one is
-  exactly what goes into the other, and there is no way to ship an installer
-  missing something nobody can download.
+  These were the files the old installer's builder left out of the installer;
+  both read optional-packs.txt. That builder went with #4824, and nothing
+  reads the list to leave these paths out of a release now (optional-packs.txt
+  says so). None is listed.
 
   THE ONE RULE, and it is checked rather than trusted: a pack may not contain a
   plugin. The server compares every enabled plugin by name, size and crc32, so
@@ -100,12 +100,12 @@ foreach ($line in (Get-Content -LiteralPath $listFile)) {
 
 if ($order.Count -eq 0) {
     Head 'Nothing to do'
-    Say '  optional-packs.txt lists no packs, so the installer still carries everything.' 'Yellow'
+    Say '  optional-packs.txt lists no packs.' 'Yellow'
     Write-Host ''
-    Say '  Add a line to take something out of it:' 'DarkGray'
+    Say '  A line looks like this:' 'DarkGray'
     Say '      hd-textures | High resolution textures | Data\textures\' 'Green'
     Write-Host ''
-    Say '  Then Package-Thornswood.ps1 leaves that path out and this puts it up.' 'DarkGray'
+    Say '  optional-packs.txt says what has to leave that path out of the packs first.' 'DarkGray'
     Write-Host ''
     if (-not $NoPause) { [void](Read-Host 'Enter to close') }
     exit 0

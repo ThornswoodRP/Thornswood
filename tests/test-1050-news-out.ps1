@@ -9,9 +9,10 @@
 
   WHY THIS EXISTS. Measured 12 Oct over https, the news was 31,282 of main's
   95,085 bytes of version.json and 19,980 of dev's 111,305, read by every
-  launcher on every check. Every launcher up to 1.2.3 reads the News tab only
-  out of "news"; from 1.2.4 on it also reads "newsFile" (launcher\app\
-  FeedNews.cs). scripts\release\Feed-News.ps1 is the one place that decides
+  launcher on every check. Launchers 1.2.4 to 2026.1101 read the News tab
+  from "newsFile" as well as "news"; since #5187 the launcher reads it from
+  the build Releases and the site's News page is what reads "newsFile".
+  scripts\release\Feed-News.ps1 is the one place that decides
   which a channel uses and reads either. What this proves, on a stand-in site
   folder (-SiteDir), nothing sent anywhere:
     - Test-FeedNewsOut: from 1.2.4 on, dev numbers included, and never for a
@@ -26,8 +27,8 @@
     - a file the site does not hold, or a newsFile of another shape, stops a
       script rather than letting it write back a list without its older notes
     - Dev-News's marks read every note through it
-    - Publish-News, which copies the notes to the site's News page, reads a
-      feed that keeps them as a file
+    - (the site's News page, which reads the news file itself since #5187,
+      is tests\test-5187-site-news.js)
     - Publish-Update, Rollback-Feed, Publish-Server, Publish-Discord and
       Remirror-Site-Feed go through it (read from their source)
 #>
@@ -66,12 +67,13 @@ try {
     Yes 'not below 1.2.4: 1.2.3 and 1.2.3.9 keep them in the feed' (-not (Test-FeedNewsOut '1.2.3') -and -not (Test-FeedNewsOut '1.2.3.9'))
     Yes 'from 1.2.4 on, a dev number too: 1.2.4, 1.2.4.1, 1.2.10, 1.3.0' ((Test-FeedNewsOut '1.2.4') -and (Test-FeedNewsOut '1.2.4.1') -and (Test-FeedNewsOut '1.2.10') -and (Test-FeedNewsOut '1.3.0'))
     Yes 'never for a minimum that is not a version' (-not (Test-FeedNewsOut '') -and -not (Test-FeedNewsOut 'latest') -and -not (Test-FeedNewsOut '1.2.x'))
-    # The number holds only while every launcher from it on reads the file: a
-    # launcher source at or past it without FeedNews.cs would let in a launcher
-    # that shows no news once the publisher empties "news".
-    $ver = [regex]::Match([IO.File]::ReadAllText((Join-Path $Repo 'launcher\app\Updater.cs')), 'Version\s*=\s*"([^"]+)"').Groups[1].Value
-    $reader = Test-Path -LiteralPath (Join-Path $Repo 'launcher\app\FeedNews.cs')
-    Yes ("this launcher source ({0}) is below {1}, or it reads the news file" -f $ver, $FeedNewsFileLauncher) ((-not (Test-FeedNewsOut $ver)) -or $reader)
+    # The launcher reads its News from the build Releases (ReleaseNews.cs,
+    # #5187) and neither "news" nor the file, so where the feed keeps the
+    # notes is the site's News page's concern alone.
+    $reader = @(Get-ChildItem -LiteralPath (Join-Path $Repo 'launcher\app') -Filter '*.cs' -File |
+                Where-Object { (Get-Content -LiteralPath $_.FullName -Raw) -match '\bclass\s+FeedNews\b' }).Count -gt 0
+    $releases = Test-Path -LiteralPath (Join-Path $Repo 'launcher\app\ReleaseNews.cs')
+    Yes 'the launcher reads its News from the Releases, not the feed''s notes, so emptying "news" takes nothing from it' ($releases -and -not $reader)
 
     $three = @((Note '10-12-2026 1:00 AM' 'Third' 'dev'), (Note '10-11-2026 5:51 PM' 'Second'), (Note '10-10-2026 9:00 AM' 'First'))
 
@@ -139,24 +141,6 @@ try {
     Yes 'Dev-News''s marks read every note out of the file, and leave the whole list in "news" for the sender' (
         [int]$marks.Notes -eq 3 -and (Titles $dev.news) -eq 'Third,Second,First' -and -not $dev.PSObject.Properties['newsFile'] -and [string]$dev.mainVersion -eq '1.2.4')
 
-    $rel = Join-Path $T 'rel'
-    New-Item -ItemType Directory -Force -Path $rel | Out-Null
-    $pub = Feed '1.2.4' @()
-    [void](Set-FeedNewsList $pub @((Note '10-12-2026 1:00 AM' 'Keys open their own doors'), (Note '10-11-2026 5:51 PM' 'Worn gear updates at once')) 'main' '1.2.4' (Join-Path $T 'w8') $site)
-    [IO.File]::WriteAllText((Join-Path $rel 'version.json'), ($pub | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding($false)))
-    $out = Join-Path $T 'news-page.json'
-    $was = $env:THORNSWOOD_TEST_SITE_DIR
-    $env:THORNSWOOD_TEST_SITE_DIR = $site
-    $why = ''
-    try {
-        & (Join-Path $Repo 'scripts\ops\Publish-News.ps1') -ReleaseDir $rel -OutFile $out -From '2026-09-01' -Vps 'nowhere.invalid' -User 'nobody' -Root 'C:/nowhere' -Quiet *>&1 | Out-Null
-    } catch { $why = $_.Exception.Message }
-    finally { $env:THORNSWOOD_TEST_SITE_DIR = $was }
-    $page = if (Test-Path -LiteralPath $out) { (([IO.File]::ReadAllText($out)).TrimStart([char]0xFEFF)) | ConvertFrom-Json } else { $null }
-    $pageTitles = if ($null -ne $page) { @($page.news | ForEach-Object { [string]$_.title }) } else { @() }
-    Yes ('Publish-News reads a feed that keeps its notes as a file' + $(if ($why) { ': ' + $why } else { '' })) (
-        $null -ne $page -and $pageTitles -contains 'Keys open their own doors' -and $pageTitles -contains 'Worn gear updates at once')
-
     $src = @{}
     foreach ($f in 'scripts\release\Publish-Update.ps1', 'scripts\release\Rollback-Feed.ps1', 'scripts\release\Publish-Server.ps1', 'scripts\ops\Publish-Discord.ps1', 'scripts\deploy\Remirror-Site-Feed.ps1', 'scripts\release\Dev-News.ps1') {
         $src[$f] = [IO.File]::ReadAllText((Join-Path $Repo $f))
@@ -167,8 +151,8 @@ try {
         $pu.IndexOf('$marks = Set-DevFeedMarks') -lt $pu.IndexOf('Set-FeedNewsList $doc') -and
         $pu.IndexOf('Set-FeedNewsList $doc') -lt $pu.IndexOf('Write-FeedVersionFile $VersionFile'))
     Yes '  with the minLauncher it writes, and nothing sent on a run that uploads nothing' ($pu -match "Val \`$doc 'minLauncher'" -and $pu -match '-NoSend:\$NoUpload')
-    Yes '  and says the launcher number the feed carries next to main''s, which a packs-only dev Ship left blank' (
-        $pu -match "this one is on \`$\(Val \`$doc 'launcherVersion'\)" -and $pu -notmatch 'this one is on \$launcherVersion')
+    Yes '  and names no launcher number in the note, since the feed carries none that moves (#4825)' (
+        $pu -notmatch 'this one is on' -and $pu -notmatch "Launcher \`$")
     $rb = $src['scripts\release\Rollback-Feed.ps1']
     Yes 'Rollback-Feed adds its note to the whole list and puts it back before the feed is written' ($rb -match 'Open-FeedNewsList \$doc' -and $rb.IndexOf('Set-FeedNewsList $doc') -gt 0 -and
         $rb.IndexOf('Set-FeedNewsList $doc') -lt $rb.IndexOf('Write-FeedVersionFile $VersionFile'))

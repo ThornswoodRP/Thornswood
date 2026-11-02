@@ -26,7 +26,7 @@
     7. with no id it says how to get one and prints no link;
     8. Setup-Discord.ps1 parses and says the bot keeps Administrator.
 
-  The end of a real build is checked in bot\test-bot-overwrites.py, which
+  The end of a real build is checked in bot\tests\test-bot-overwrites.py, which
   drives the builder against a stand-in server and needs discord.py.
 
   Never connects to anything. Writes only under its own temp folder.

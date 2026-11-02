@@ -13,8 +13,8 @@
 
   Wipe-Saves runs its steps on the VPS over ssh. This lifts the three it
   sends (the survey, the stop and the move) out of the real script, fills
-  them in as the script does, and runs each under Windows PowerShell 5.1,
-  which is what runs them there, against a stand-in server folder in a
+  them in as the script does, and runs each under PowerShell 7, which is
+  what runs them there since #5356, against a stand-in server folder in a
   scratch folder:
 
     - the list of what moves names every register that names a character,
@@ -86,11 +86,7 @@ $move = Body "Head 'Moving the old storage aside'"
 Yes 'the survey, the stop and the move are found in the script' ($survey -and $stop -and $move)
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) {
-    Write-Host 'SKIP  the runs need Windows PowerShell 5.1, which runs these on the VPS; this is not Windows'
-    Done
-}
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 
 $T = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-2351-wipe-' + [Guid]::NewGuid().ToString('N'))
 $Root = Join-Path $T 'Thornswood-Server'
@@ -123,7 +119,7 @@ function RunBox([string]$body) {
     $f = Join-Path $T ('step-' + [Guid]::NewGuid().ToString('N') + '.ps1')
     [IO.File]::WriteAllText($f, $body)
     $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    try { return @(& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_" }) }
+    try { return @(& $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_" }) }
     finally { $ErrorActionPreference = $eap; Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue }
 }
 
@@ -152,7 +148,7 @@ try {
 
     # ---- the stop, with a process running from the folder
     $node = (Get-Command node -ErrorAction SilentlyContinue)
-    if ($node) {
+    if ($OnWindows -and $node) {
         $hold = Join-Path $Root 'hold.js'
         Put $hold 'setTimeout(function () {}, 120000);'
         $waiter = Start-Process -FilePath $node.Source -ArgumentList ('"' + $hold + '"') -PassThru -WindowStyle Hidden
@@ -166,7 +162,8 @@ try {
         Yes ('the stop ends what runs from a server folder and says stopped (' + ($out -join ' / ') + ')') (
             @($out | Where-Object { $_ -eq ('ended process ' + $waiter.Id) }).Count -eq 1 -and ($out -contains 'stopped'))
         Yes '  and that process is gone' ($null -eq (Get-Process -Id $waiter.Id -ErrorAction SilentlyContinue))
-    } else { Write-Host 'SKIP  the stop needs node to stand in for the server' }
+    } elseif (-not $OnWindows) { Write-Host 'SKIP  the stop: it finds the server through Win32_Process, which only Windows has' }
+    else { Write-Host 'SKIP  the stop needs node to stand in for the server' }
     Yes 'the script stops with nothing moved while a server is still running, and takes its holds away first (#5155)' (
         $text -match "(?s)if \(\`$running\) \{.{0,400}?Clear-ThornswoodHold.{0,300}?Die 'A server is still running, so nothing was moved\." -and
         $text.IndexOf("if (`$running) {") -lt $text.IndexOf("Head 'Moving the old storage aside'"))

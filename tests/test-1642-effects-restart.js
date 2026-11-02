@@ -19,7 +19,7 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.join(__dirname, '..');
-const gm = fs.readFileSync(path.join(root, 'game', 'gamemode.js'), 'utf8').replace(/\r/g, '');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(root, 'game', 'gamemode.js'), 'utf8')).replace(/\r/g, '');
 const front = fs.readFileSync(path.join(root, 'game', 'plugins', 'thornswood-front.js'), 'utf8').replace(/\r/g, '');
 
 let pass = 0, fail = 0;

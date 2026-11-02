@@ -8,8 +8,7 @@
   The step ran Install-SkyMPClient.ps1, which copied the whole client build
   over the game's Data folder with no look at records\client-build.json, so
   "install everything" could put a client in the game folder that Ship then
-  refused, or that was not what the dev server expects. Developer-Guide.md,
-  Settled design: Sync-Client.ps1 puts the recorded files in the game folder
+  refused, or that was not what the dev server expects. docs/guide/settled-design.md: Sync-Client.ps1 puts the recorded files in the game folder
   and refuses any that is not the recorded build. The step runs Sync-Client
   now and Install-SkyMPClient.ps1 is gone.
 

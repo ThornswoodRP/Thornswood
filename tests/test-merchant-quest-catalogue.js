@@ -9,7 +9,7 @@ const read = name => fs.readFileSync(path.join(root, name), 'utf8').replace(/\r/
 const catalogue = JSON.parse(read('game/data/merchant-quests.json'));
 const roster = JSON.parse(read('game/data/merchant-roster.json'));
 const population = JSON.parse(read('game/data/npc-population.json'));
-const gm = read('game/gamemode.js');
+const gm = require('./gamemode-tables.js').joined(read('game/gamemode.js'));
 const activation=JSON.parse(read('game/data/merchant-quest-activation.json'));
 assert.deepEqual(Object.keys(activation).sort(),['commissions','killScenes','version']);
 assert.equal(activation.version,1);assert.equal(activation.killScenes.length,4);

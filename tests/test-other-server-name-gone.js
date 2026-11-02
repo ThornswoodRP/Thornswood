@@ -31,7 +31,7 @@
 //   - Every tracked file's path: all of them, in any case.
 //   - Text: all of them, in any case, except inside a PEM block (a
 //     certificate written out as base64, where any three letters turn up by
-//     chance: tests\fixtures\webview2-setup-chain.txt holds one).
+//     chance: tests\fixtures\3111-roots.pem holds eight).
 //   - A plugin (.esp, .esm, .esl): its header and every record, compressed
 //     records inflated first, all of them, in any case. That is where the
 //     short forms last lived, on 33 editor ids and one attached script.

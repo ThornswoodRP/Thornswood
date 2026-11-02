@@ -113,7 +113,7 @@ yes('R4 every company ware is riekling race work, and every name in rieklingKept
 
 // ---------------------------------------------------------------- Q
 const ores = json('game/data/ores.json');
-const gm = fs.readFileSync(path.join(REPO, 'game', 'gamemode.js'), 'utf8');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(REPO, 'game', 'gamemode.js'), 'utf8'));
 const rareAt = gm.indexOf('var RARE = {', gm.indexOf('// ==== thornswood custom quests ===='));
 const rareNames = rareAt < 0 ? [] : (gm.slice(rareAt, gm.indexOf('};', rareAt)).match(/'([^']+)':/g) || []).map(function (s) { return s.slice(1, -2); });
 const rareOres = new Set();

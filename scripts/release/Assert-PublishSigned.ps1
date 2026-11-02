@@ -1,20 +1,20 @@
 <#
   Assert-PublishSigned.ps1
 
-  Helpers for the publish sign gate. Dot-source this from Ship.ps1 and
-  Publish-Installer.ps1. Do not call it as a standalone entry: it only
-  defines functions.
+  Helpers for the publish sign gate. Dot-source this from Ship.ps1 (and
+  Test-ReleaseFiles.ps1, which runs the same gate on a release draft). Do
+  not call it as a standalone entry: it only defines functions.
 
   WHY. Since 27 September launchers from ExpectedSigner on refuse an update
-  that is not signed by that certificate (CONTRIBUTING, issue #390). Build and
-  Package may still leave a local binary unsigned: Sign-Artifact.ps1 prints
-  "not signing" and exits 0 when records\signing\signing.json is missing or disabled.
-  That soft skip must not reach the site or the feed. Ship and Publish-
-  Installer refuse instead.
+  that is not signed by that certificate (CONTRIBUTING, issue #390). A local
+  build may still leave a binary unsigned: Sign-Artifact.ps1 prints "not
+  signing" and exits 0 when records\signing\signing.json is missing or
+  disabled. That soft skip must not reach the feed. Ship refuses instead.
 
-  SCOPE. Site and feed publish only. Local Build-Launcher and Package
-  -NoPublish stay soft. Build-Launcher still signs Thornswood.exe only and
-  leaves setup-stub unsigned so OneFile attach can be signed afterwards (#813).
+  SCOPE. Feed publish only. A local Build-Launcher stays soft. It signs every
+  program of the launcher, the native libraries beside Thornswood.exe too
+  (#4823); the setup stub it left unsigned for the old installer went with
+  that installer (#4824).
 
   SAME CHECK AS THE LAUNCHER (#912). After Get-AuthenticodeSignature says
   Valid and the Subject names ExpectedSigner, Get-PublishSignRefusal runs

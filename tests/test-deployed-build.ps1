@@ -15,6 +15,8 @@ $env:THORNSWOOD_HARNESS = '1'
 $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
 $Repo = Split-Path -Parent $Here
+# The site is server.js over its modules in site\lib since #5357.
+. (Join-Path $PSScriptRoot 'SiteFiles.ps1')
 $script:pass = 0; $script:fail = 0
 function Yes([string]$what, [bool]$cond) {
   if ($cond) { $script:pass++; Write-Host "PASS  $what" } else { $script:fail++; Write-Host "FAIL  $what" }
@@ -180,7 +182,7 @@ try {
   $null = Save-ThornswoodDeployedBuild 'u@box' @() $live $docs
   $app = Join-Path $Repo 'site'
   New-Item -ItemType Directory -Force -Path (Join-Path $docs 'public'), (Join-Path $docs 'data\site') | Out-Null
-  Copy-Item -LiteralPath (Join-Path $app 'server.js') -Destination $docs
+  Copy-SiteProgram -To $docs -App $app
   Get-ChildItem -LiteralPath (Join-Path $app 'public') -File | Where-Object { $_.Name -eq 'home.html' -or $_.Name -like 'marked-*.js' } |
     ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $docs 'public') }
   Copy-Item -LiteralPath (Join-Path $app 'data\site\credits.md') -Destination (Join-Path $docs 'data\site')

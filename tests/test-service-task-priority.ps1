@@ -98,7 +98,7 @@ $installers = @(
     [pscustomobject]@{ Name = 'Deploy-Docs.ps1'; Path = $DeployDocs; Task = 'Thornswood Docs'; Program = 'node, started by the task'; Child = $false; High = $false }
     [pscustomobject]@{ Name = 'Install-Voice.ps1'; Path = $InstallVoice; Task = 'Thornswood Voice'; Program = 'node, started by the task''s cmd.exe'; Child = $true; High = $true }
     [pscustomobject]@{ Name = 'Setup-Domain.ps1'; Path = $SetupDomain; Task = 'Thornswood Web'; Program = 'caddy.exe, started by the task'; Child = $false; High = $false }
-    [pscustomobject]@{ Name = 'Watch-Services.ps1'; Path = $WatchServices; Task = 'Thornswood Watch'; Program = 'Windows PowerShell, started by the task'; Child = $false; High = $false }
+    [pscustomobject]@{ Name = 'Watch-Services.ps1'; Path = $WatchServices; Task = 'Thornswood Watch'; Program = 'PowerShell 7, started by the task'; Child = $false; High = $false }
 )
 
 # ---- 1. read, not run ------------------------------------------------------------
@@ -226,7 +226,7 @@ if ($admin) {
     $principal = New-ScheduledTaskPrincipal -UserId $me -LogonType Interactive -RunLevel Limited
     $who = $me + ', logged on interactively (not elevated, so not SYSTEM)'
 }
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 $cmdExe = Get-WindowsPath 'System32\cmd.exe'
 
 
@@ -259,7 +259,7 @@ foreach ($ins in $installers) {
         $action = New-ScheduledTaskAction -Execute $cmdExe -Argument ($fmt -f $nodeCmd.Source, (Join-Path $scratch 'voice.log'), $writerAt) -WorkingDirectory $scratch
     } else {
         $action = New-ScheduledTaskAction -Execute $cmdExe `
-                                          -Argument ('/c ""' + $ps51 + '" ' + $sleep + '"')
+                                          -Argument ('/c ""' + $boxPs + '" ' + $sleep + '"')
     }
     $child = $null
     $parent = $null
@@ -281,7 +281,7 @@ foreach ($ins in $installers) {
                                Where-Object { "$($_.CommandLine)" -like "*$mark*" -and "$($_.CommandLine)" -like '*server-log.js*' }) | Select-Object -First 1
                     if ($child) { $voiceKid = @(Get-CimInstance Win32_Process -Filter ("Name = 'node.exe' AND ParentProcessId = " + [int]$child.ProcessId)) | Select-Object -First 1 }
                 } else {
-                    $child = @(Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" |
+                    $child = @(Get-CimInstance Win32_Process -Filter ("Name = '" + (Split-Path -Leaf $boxPs) + "'") |
                                Where-Object { "$($_.CommandLine)" -like "*$mark*" }) | Select-Object -First 1
                 }
             }

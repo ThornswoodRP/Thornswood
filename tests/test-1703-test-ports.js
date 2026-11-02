@@ -66,6 +66,7 @@ const net = require('net');
 const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
+const siteFiles = require('./site-files');
 const CR = String.fromCharCode(13);
 const read = (p) => fs.readFileSync(p, 'utf8').split(CR).join('');
 
@@ -77,7 +78,11 @@ function yes(what, cond) {
 
 // ------------------------------------------------------------ the harnesses
 const files = [];
-for (const dir of ['tests', 'voice']) {
+// And each product's own tests folder, beside its code (plan line 42).
+const beside = fs.readdirSync(REPO_DIR, { withFileTypes: true })
+  .filter(d => d.isDirectory() && d.name !== 'tests' && d.name !== 'node_modules' && fs.existsSync(path.join(REPO_DIR, d.name, 'tests')))
+  .map(d => d.name + '/tests').sort();
+for (const dir of ['tests'].concat(beside)) {
   for (const n of fs.readdirSync(path.join(REPO_DIR, dir)).sort()) {
     if (/^test-.*\.js$/.test(n)) { files.push(dir + '/' + n); }
   }
@@ -131,10 +136,10 @@ const SELF = 'tests/' + path.basename(__filename);
 const starters = files.filter((f) => f !== SELF && /spawn\(/.test(text[f]) && /'voice-server\.js'/.test(text[f]));
 console.log('\nthe harnesses that start the voice service (' + starters.length + '):');
 yes('there are the twelve this issue found, and test-local-chat.js',
-    ['tests/test-command-ack.js', 'tests/test-deploy-records.js', 'tests/test-staff-commands.js',
-     'voice/test-auth.js', 'voice/test-backpressure.js', 'voice/test-chat-limit.js', 'voice/test-cull.js',
-     'voice/test-ice.js', 'voice/test-keepalive.js', 'voice/test-line-close.js', 'voice/test-local-chat.js',
-     'voice/test-moved.js', 'voice/test-turn-key.js'].every((f) => starters.indexOf(f) >= 0));
+    ['voice/tests/test-command-ack.js', 'tests/test-deploy-records.js', 'tests/test-staff-commands.js',
+     'voice/tests/test-auth.js', 'voice/tests/test-backpressure.js', 'voice/tests/test-chat-limit.js', 'voice/tests/test-cull.js',
+     'voice/tests/test-ice.js', 'voice/tests/test-keepalive.js', 'voice/tests/test-line-close.js', 'voice/tests/test-local-chat.js',
+     'voice/tests/test-moved.js', 'voice/tests/test-turn-key.js'].every((f) => starters.indexOf(f) >= 0));
 function lift(src) {
   const a = src.indexOf('function listening(srv, port) {');
   if (a < 0) { return null; }
@@ -148,17 +153,26 @@ for (const f of starters) {
   yes(f + ' waits for its own service to say it is listening before asking it anything',
       !!waits[f] && /await listening\(srv, (PORT|port)\)/.test(text[f]));
 }
+// The bot pass starts the service through scripts/bot/relay.js (#5196), on
+// the port its copy's settings name, and asks it nothing (not /token) until
+// that copy has said it is listening there.
+{
+  const relay = fs.readFileSync(path.join(REPO_DIR, 'scripts', 'bot', 'relay.js'), 'utf8');
+  yes('scripts/bot/relay.js waits for its own service to say it is listening on its port before asking it anything',
+      relay.indexOf("new RegExp('\\\\[voice\\\\] listening on 127\\\\.0\\\\.0\\\\.1:' + this.port + '\\\\b')") >= 0 &&
+      relay.indexOf('if (this.lines.some((l) => said.test(l))) { return \'\'; }') >= 0);
+}
 
 // ------------------------------------------------------ the site's own word
 const sites = files.filter((f) => f !== SELF && /spawn\(/.test(text[f]) && /THORNSWOOD_DOCS_PORT/.test(text[f]));
-const TWELVE = ['tests/test-bans-pk.js', 'tests/test-discord-callback-hang.js', 'tests/test-for-bot-folder.js',
-  'tests/test-help-report.js', 'tests/test-home-html.js', 'tests/test-report-limits.js', 'tests/test-site-auth.js',
-  'tests/test-site-discovery.js', 'tests/test-site-hangs.js', 'tests/test-site-render.js', 'tests/test-staff-bans.js',
-  'tests/test-submit-answers.js'];
+const TWELVE = ['tests/test-bans-pk.js', 'site/tests/test-discord-callback-hang.js', 'site/tests/test-for-bot-folder.js',
+  'tests/test-help-report.js', 'site/tests/test-home-html.js', 'site/tests/test-report-limits.js', 'tests/test-site-auth.js',
+  'site/tests/test-site-discovery.js', 'site/tests/test-site-hangs.js', 'site/tests/test-site-render.js', 'site/tests/test-staff-bans.js',
+  'site/tests/test-submit-answers.js'];
 console.log('\nthe harnesses that start the site (' + sites.length + '):');
 yes('there are the twelve #1727 found, and the five that already waited for the site\'s line',
-    TWELVE.concat(['tests/test-deploy-records.js', 'tests/test-gallery.js', 'tests/test-hub-staff-gallery.js',
-                   'tests/test-site-headers.js', 'tests/test-site-local.js']).every((f) => sites.indexOf(f) >= 0));
+    TWELVE.concat(['tests/test-deploy-records.js', 'site/tests/test-gallery.js', 'site/tests/test-hub-staff-gallery.js',
+                   'site/tests/test-site-headers.js', 'tests/test-site-local.js']).every((f) => sites.indexOf(f) >= 0));
 // Waiting on the site's own line is "await listening(...)" here, or reading
 // the child's "listening on " line, as the five did before #1727, or its
 // ready line, which the same site says after that one and after its first
@@ -179,12 +193,13 @@ for (const f of TWELVE) {
 }
 
 // ------------------------------------------ the PowerShell harnesses (#1755)
-const psFiles = fs.readdirSync(path.join(REPO_DIR, 'tests')).filter((n) => /^test-.*\.ps1$/.test(n)).sort().map((n) => 'tests/' + n);
+const psFiles = ['tests'].concat(beside).reduce((all, dir) => all.concat(
+  fs.readdirSync(path.join(REPO_DIR, dir)).filter((n) => /^test-.*\.ps1$/.test(n)).sort().map((n) => dir + '/' + n)), []);
 const psText = {};
 for (const f of psFiles) { psText[f] = read(path.join(REPO_DIR, f)).replace(/^\uFEFF/, ''); }
 const psSites = psFiles.filter((f) => /THORNSWOOD_DOCS_PORT/.test(psText[f]));
 const FIVE = ['tests/test-deployed-build.ps1', 'tests/test-feed-store.ps1', 'tests/test-record-sync.ps1', 'tests/test-release-baseline.ps1',
-  'tests/test-scrub-feed.ps1', 'tests/test-site-assets.ps1'];
+  'tests/test-scrub-feed.ps1', 'site/tests/test-site-assets.ps1'];
 console.log('\nthe PowerShell harnesses that start the site (' + psSites.length + '):');
 yes('they are the five #1755 found, and test-deployed-build.ps1', psSites.length === FIVE.length && FIVE.every((f) => psSites.indexOf(f) >= 0));
 // The function, from its line to the brace that closes it at the margin.
@@ -204,7 +219,7 @@ for (const f of psSites) {
 }
 yes('they all carry the same Wait-OwnLine', psSites.every((f) => psWaits[f] && psWaits[f] === psWaits[psSites[0]]));
 {
-  const sa = psText['tests/test-site-assets.ps1'] || '';
+  const sa = psText['site/tests/test-site-assets.ps1'] || '';
   yes('test-site-assets.ps1: the GitHub stand-in says its own line, and is waited on',
       /\.listen\(port, '127\.0\.0\.1', \(\) => console\.log\('\[github\] listening on 127\.0\.0\.1:' \+ port\)\)/.test(sa) &&
       /Wait-OwnLine \$ghProc \$script:errOf\[\$ghProc\.Id\] '\[github\]' \$ghPort/.test(sa));
@@ -237,8 +252,8 @@ function portOne(src, v, ps) {
 }
 const gameSites = sites.filter((f) => /\bgameCheckPort\b/.test(text[f]))
   .concat(psSites.filter((f) => /\bgameCheckPort\b/.test(psText[f])));
-const SEVEN = ['tests/test-site-assets.ps1', 'tests/test-feed-store.ps1', 'tests/test-record-sync.ps1',
-  'tests/test-release-baseline.ps1', 'tests/test-scrub-feed.ps1', 'tests/test-report-limits.js', 'tests/test-for-bot-folder.js'];
+const SEVEN = ['site/tests/test-site-assets.ps1', 'tests/test-feed-store.ps1', 'tests/test-record-sync.ps1',
+  'tests/test-release-baseline.ps1', 'tests/test-scrub-feed.ps1', 'site/tests/test-report-limits.js', 'site/tests/test-for-bot-folder.js'];
 console.log('\nthe game port each site harness gives its site (' + gameSites.length + '):');
 yes('they include the seven #1816 found', SEVEN.every((f) => gameSites.indexOf(f) >= 0));
 // The check itself, on the lines this issue took out.
@@ -259,7 +274,7 @@ for (const n of ['voice-server.js', 'headlines.js']) {
 }
 const siteDir = path.join(scratch, 'site');
 fs.mkdirSync(siteDir);
-fs.copyFileSync(path.join(REPO_DIR, 'site', 'server.js'), path.join(siteDir, 'server.js'));
+siteFiles.copy(siteDir);
 function site(port) {
   const srv = spawn(process.execPath, ['server.js'], { cwd: siteDir,
     env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_DOCS_LOCAL: '1' }) });
@@ -434,7 +449,7 @@ function runHarness(rel) {
     }
   }
 
-  const siteRuns = await Promise.all([1, 2, 3].map(() => runHarness('tests/test-staff-bans.js')));
+  const siteRuns = await Promise.all([1, 2, 3].map(() => runHarness('site/tests/test-staff-bans.js')));
   for (let i = 0; i < siteRuns.length; i++) {
     const r = siteRuns[i];
     const tail = (r.out.trim().split(/\r?\n/).pop() || '');

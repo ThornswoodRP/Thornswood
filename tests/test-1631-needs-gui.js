@@ -35,7 +35,7 @@ const CR = String.fromCharCode(13);
 const read = function () {
   return fs.readFileSync(path.join.apply(path, [ROOT].concat([].slice.call(arguments))), 'utf8').split(CR).join('');
 };
-const gm = read('game', 'gamemode.js');
+const gm = require('./gamemode-tables.js').joined(read('game', 'gamemode.js'));
 /*
   One topic of the help panel (#1633), as a fresh install reads it: /help's
   topics moved out of the gamemode into game/ui/thornswood-help.js, each a
@@ -202,9 +202,9 @@ function needsRig() {
   const g = {};
   const timers = [];
   const fake = {
-    getOnlinePlayers: function () { return online.slice(); },
     makeProperty: function () { },
     get: function (id, key) {
+      if (id === 0 && key === 'onlinePlayers') { return online.slice(); }
       if (key === 'thornswoodNeeds') { return refs[id] ? refs[id].needs : undefined; }
       if (!refs[id]) { throw new Error('no reference ' + id); }
       const v = refs[id][key];

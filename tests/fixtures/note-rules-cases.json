@@ -1,0 +1,946 @@
+{
+  "what": "Every case the release note rules are held to, with the answer scripts/release/Note-Rules.ps1 gives (#5179). tools/ReleaseNotes.Tests holds the C# rules to the same answers and tests/test-note-rules-cases.ps1 the PowerShell ones, so the two cannot disagree while both are in use. The notes are crafted to break each rule, and the published release notes and pull request notes of 1 Nov 2026.",
+  "notes": [
+    {
+      "note": "Hunters can skin rabbits again\n- Skinning a rabbit gives its pelt and meat.",
+      "shape": [],
+      "words": []
+    },
+    {
+      "note": "Fix\n- something here that is long enough",
+      "shape": [
+        "the title 'Fix' is too short to say what changed."
+      ],
+      "words": []
+    },
+    {
+      "note": "Two words\n- something here that is long enough",
+      "shape": [
+        "the title 'Two words' is too short to say what changed."
+      ],
+      "words": []
+    },
+    {
+      "note": "A good title here\nno dash line",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": []
+    },
+    {
+      "note": "",
+      "shape": [
+        "the title '' is too short to say what changed.",
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": []
+    },
+    {
+      "note": "   ",
+      "shape": [
+        "the title '' is too short to say what changed.",
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": []
+    },
+    {
+      "note": "---\n- a detail line that is long",
+      "shape": [
+        "the title '---' is too short to say what changed."
+      ],
+      "words": []
+    },
+    {
+      "note": "This is what players actually got from the update\n- Every player sees it now in the menu.",
+      "shape": [],
+      "words": [
+        "the title says player; the people in the world are customers, testers or people: 'This is what players actually got from the update'",
+        "line 2 says player; the people in the world are customers, testers or people: 'Every player sees it now in the menu.'"
+      ]
+    },
+    {
+      "note": "Place no longer throws walked is not defined (fireWalked / PR #239)\n- The place menu works again for everyone.",
+      "shape": [],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Place no longer throws walked is not defined (fireWalked ...'",
+        "the title names something in the code (fireWalked): 'Place no longer throws walked is not defined (fireWalked ...'"
+      ]
+    },
+    {
+      "note": "Server load order is kept after Fix PutInServerOrder\n- The server keeps its order across a restart.",
+      "shape": [],
+      "words": [
+        "the title names something in the code (PutInServerOrder): 'Server load order is kept after Fix PutInServerOrder'"
+      ]
+    },
+    {
+      "note": "Menu music plays again in the launcher\n- Autoplay uses WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS instead",
+      "shape": [],
+      "words": [
+        "line 2 names a setting or variable (WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS): 'Autoplay uses WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS instead'"
+      ]
+    },
+    {
+      "note": "Bar covers whole run; every stop says why.#617 #618\n- The bar now covers the whole run.",
+      "shape": [],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Bar covers whole run; every stop says why.#617 #618'"
+      ]
+    },
+    {
+      "note": "Launcher 1.1.101 is out now\n- The launcher starts faster than it did.",
+      "shape": [],
+      "words": [
+        "the title names a version; say what changed instead: 'Launcher 1.1.101 is out now'"
+      ]
+    },
+    {
+      "note": "The server moved to a new address\n- Connect to 10.0.0.1 from now on, it is 1.1.92.1 too.",
+      "shape": [],
+      "words": [
+        "line 2 has a four-part number, which reads as a server address: 'Connect to 10.0.0.1 from now on, it is 1.1.92.1 too.'"
+      ]
+    },
+    {
+      "note": "The forge shows its prices\n- Every metal — and its amount.",
+      "shape": [],
+      "words": [
+        "line 2 has an em dash; use a comma or a full stop: 'Every metal — and its amount.'"
+      ]
+    },
+    {
+      "note": "The forge shows its prices\n- The table is read from forge.json and Forge.ps1 now.",
+      "shape": [],
+      "words": [
+        "line 2 names a code file: 'The table is read from forge.json and Forge.ps1 now.'"
+      ]
+    },
+    {
+      "note": "The forge shows its prices\n- We squashed the commits and cherry-picked the fix from a worktree.",
+      "shape": [],
+      "words": [
+        "line 2 uses a word from how we work, not from the game (squashed): 'We squashed the commits and cherry-picked the fix from a ...'"
+      ]
+    },
+    {
+      "note": "The forge shows its prices\n- The CI is green and the ci word is fine.",
+      "shape": [],
+      "words": [
+        "line 2 uses a word from how we work, not from the game (CI): 'The CI is green and the ci word is fine.'"
+      ]
+    },
+    {
+      "note": "The forge shows its prices\n- This was found by demoting the release.",
+      "shape": [],
+      "words": [
+        "line 2 uses a word from how we work, not from the game (demoting): 'This was found by demoting the release.'"
+      ]
+    },
+    {
+      "note": "The forge shows its prices\n- A some_setting value and a BIG_VALUE value.",
+      "shape": [],
+      "words": [
+        "line 2 names a setting or variable (some_setting): 'A some_setting value and a BIG_VALUE value.'"
+      ]
+    },
+    {
+      "note": "The forge shows its prices\n- SkyUI and SkyMP and GitHub and YouTube and WebView are fine.",
+      "shape": [],
+      "words": []
+    },
+    {
+      "note": "The forge shows its prices\n- skyui and Skyui names are fine too, and getValue is not.",
+      "shape": [],
+      "words": [
+        "line 2 names something in the code (getValue): 'skyui and Skyui names are fine too, and getValue is not.'"
+      ]
+    },
+    {
+      "note": "The forge shows its prices\n- EnvironmentOptions faulted, and ForgeTable is two humps.",
+      "shape": [],
+      "words": []
+    },
+    {
+      "note": "The forge shows its prices\n- The forge shows its prices",
+      "shape": [],
+      "words": [
+        "line 2 repeats an earlier line: 'The forge shows its prices'"
+      ]
+    },
+    {
+      "note": "The forge shows its prices\n- A line\n- a line",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "line 3 repeats an earlier line: 'a line'"
+      ]
+    },
+    {
+      "note": "The forge shows its prices\n- Mods in Vortex: Thornswood-Content.esp and SkyUI's error box names a .swf file.",
+      "shape": [],
+      "words": []
+    },
+    {
+      "note": "The forge shows its prices\n- See the pull request and the pr for more.",
+      "shape": [],
+      "words": [
+        "line 2 names an issue or pull request; say what changed for the person instead: 'See the pull request and the pr for more.'"
+      ]
+    },
+    {
+      "note": "The forge shows its prices\r\n- With CRLF line ends, the same note holds.",
+      "shape": [],
+      "words": []
+    },
+    {
+      "note": "  - The forge shows its prices with a lead dash\n  -   An indented detail line here.",
+      "shape": [],
+      "words": []
+    },
+    {
+      "note": "Launcher exe and setup program for v2026.1101.2112, built on GitHub's runner with MSBuild (#498), the launcher signed by ThornswoodRelease (#2163), and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v2026.1101.2112, built...'"
+      ]
+    },
+    {
+      "note": "Launcher exe and setup program for v2026.1101.1724, built on GitHub's runner with MSBuild (#498), the launcher signed by ThornswoodRelease (#2163), and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v2026.1101.1724, built...'"
+      ]
+    },
+    {
+      "note": "Launcher exe and setup program for v1.2.16, built on GitHub's runner with MSBuild (#498), the launcher signed by ThornswoodRelease (#2163), and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.16, built on GitH...'"
+      ]
+    },
+    {
+      "note": "Launcher exe and setup program for v1.2.15.1, built on GitHub's runner with MSBuild (#498), the launcher signed by ThornswoodRelease (#2163), and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names a version; say what changed instead: 'Launcher exe and setup program for v1.2.15.1, built on Gi...'",
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.15.1, built on Gi...'"
+      ]
+    },
+    {
+      "note": "Launcher exe and setup program for v1.2.15, built on GitHub's runner with MSBuild (#498), the launcher signed by ThornswoodRelease (#2163), and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.15, built on GitH...'"
+      ]
+    },
+    {
+      "note": "Launcher exe and setup program for v1.2.14.1, built on GitHub's runner with MSBuild (#498), the launcher signed by ThornswoodRelease (#2163), and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names a version; say what changed instead: 'Launcher exe and setup program for v1.2.14.1, built on Gi...'",
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.14.1, built on Gi...'"
+      ]
+    },
+    {
+      "note": "Launcher exe and setup program for v1.2.14, built on GitHub's runner with MSBuild (#498), the launcher signed by ThornswoodRelease (#2163), and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.14, built on GitH...'"
+      ]
+    },
+    {
+      "note": "Launcher exe and setup program for v1.2.13.1, built on GitHub's runner with MSBuild (#498), the launcher signed by ThornswoodRelease (#2163), and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names a version; say what changed instead: 'Launcher exe and setup program for v1.2.13.1, built on Gi...'",
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.13.1, built on Gi...'"
+      ]
+    },
+    {
+      "note": "Launcher exe and setup program for v1.2.13, built on GitHub's runner with MSBuild (#498), the launcher signed by ThornswoodRelease (#2163), and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.13, built on GitH...'"
+      ]
+    },
+    {
+      "note": "Launcher exe and setup program for v1.2.12, built on GitHub's runner with MSBuild (#498), the launcher signed by ThornswoodRelease (#2163), and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.12, built on GitH...'"
+      ]
+    },
+    {
+      "note": "The files of Thornswood's main release 20261031-144725, each named by its sha256. Launchers fetch them through thornswood.net, which sends them here.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": []
+    },
+    {
+      "note": "Launcher exe and setup program for v1.2.5, built on the VPS runner with the in-box csc, UNSIGNED: Ship signs it on download (#921), and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.5, built on the V...'"
+      ]
+    },
+    {
+      "note": "Launcher exe and setup program for v1.2.4, built on a clean runner and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.4, built on a cle...'"
+      ]
+    },
+    {
+      "note": "Launcher exe and setup program for v1.2.3, built on a clean runner and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.3, built on a cle...'"
+      ]
+    },
+    {
+      "note": "Launcher exe and setup program for v1.2.0, built on a clean runner and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.0, built on a cle...'"
+      ]
+    },
+    {
+      "note": "Launcher exe and setup program for v1.1.106, built on a clean runner and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.1.106, built on a c...'"
+      ]
+    },
+    {
+      "note": "Launcher exe and setup program for v1.1.105, built on a clean runner and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.1.105, built on a c...'"
+      ]
+    },
+    {
+      "note": "Launcher exe and setup program for v1.1.104, built on a clean runner and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.1.104, built on a c...'"
+      ]
+    },
+    {
+      "note": "Launcher exe and setup program for v1.1.103, built on a clean runner and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.1.103, built on a c...'"
+      ]
+    },
+    {
+      "note": "Launcher exe for v1.1.102, built on a clean runner and verified by SHA256SUMS. Ship downloads this and checks the checksum instead of compiling the shipped binary (issue #457).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe for v1.1.102, built on a clean runner and ve...'"
+      ]
+    },
+    {
+      "note": "Launcher exe for v1.1.101, built on a clean runner and verified by SHA256SUMS. Ship downloads this and checks the checksum instead of compiling the shipped binary (issue #457).",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe for v1.1.101, built on a clean runner and ve...'"
+      ]
+    },
+    {
+      "note": "Launcher exe for v1.1.98, built on a clean runner and verified by SHA256SUMS. Ship downloads this and checks the checksum instead of compiling the shipped binary (issue #457).",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe for v1.1.98, built on a clean runner and ver...'"
+      ]
+    },
+    {
+      "note": "Launcher exe for v1.1.97, built on a clean runner and verified by SHA256SUMS. Ship downloads this and checks the checksum instead of compiling the shipped binary (issue #457).",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe for v1.1.97, built on a clean runner and ver...'"
+      ]
+    },
+    {
+      "note": "Launcher exe for v1.1.96, built on a clean runner and verified by SHA256SUMS. Ship downloads this and checks the checksum instead of compiling the shipped binary (issue #457).",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe for v1.1.96, built on a clean runner and ver...'"
+      ]
+    },
+    {
+      "note": "Launcher exe and setup program for v2026.1101.1609, built on GitHub's runner with MSBuild (#498), the launcher signed by ThornswoodRelease (#2163), and verified by SHA256SUMS. Ship downloads these and checks the checksums instead of compiling the shipped binaries (issues #457 and #932).\n\nSource for the SkyMP files Thornswood ships: https://thornswood.net/credits#source",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v2026.1101.1609, built...'"
+      ]
+    },
+    {
+      "note": "The files of Thornswood's main release 20261101-101056, each named by its sha256. Launchers fetch them through thornswood.net, which sends them here.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": []
+    },
+    {
+      "note": "The files of Thornswood's main release 20261031-201816, each named by its sha256. Launchers fetch them through thornswood.net, which sends them here.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": []
+    },
+    {
+      "note": "The files of Thornswood's main release 20261031-184558, each named by its sha256. Launchers fetch them through thornswood.net, which sends them here.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": []
+    },
+    {
+      "note": "The files of Thornswood's main release 20261031-181650, each named by its sha256. Launchers fetch them through thornswood.net, which sends them here.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": []
+    },
+    {
+      "note": "The box deploy agent 1.0.9, built from b1fd156b8038cca192572b602c42c29e32c60cdf and signed with ThornswoodRelease. The agent on the box updates itself from this Release. docs/DEPLOY-AGENT.md says how.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.9, built from b1fd156b8038cca192...'"
+      ]
+    },
+    {
+      "note": "The box deploy agent 1.0.6, built from 3ea929607b5365b03c97de6e25bcd327cd083597 and signed with ThornswoodRelease. The agent on the box updates itself from this Release. docs/DEPLOY-AGENT.md says how.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.6, built from 3ea929607b5365b03c...'"
+      ]
+    },
+    {
+      "note": "The box deploy agent 1.0.32, built from a44de84750ac8f14fcab37812fa822c6149ca469 and signed with ThornswoodRelease. The agent on the box updates itself from this Release. docs/DEPLOY-AGENT.md says how.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.32, built from a44de84750ac8f14f...'"
+      ]
+    },
+    {
+      "note": "The box deploy agent 1.0.28, built from fcb9d019b68b45c0501422ef63c461e57ac25f35 and signed with ThornswoodRelease. The agent on the box updates itself from this Release. docs/DEPLOY-AGENT.md says how.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.28, built from fcb9d019b68b45c05...'"
+      ]
+    },
+    {
+      "note": "The box deploy agent 1.0.27, built from 4c9cef5eb877261af6154da95aabe5075996debf and signed with ThornswoodRelease. The agent on the box updates itself from this Release. docs/DEPLOY-AGENT.md says how.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.27, built from 4c9cef5eb877261af...'"
+      ]
+    },
+    {
+      "note": "The box deploy agent 1.0.24, built from 5c1427817365bb2b8304623f82614b635d09d110 and signed with ThornswoodRelease. The agent on the box updates itself from this Release. docs/DEPLOY-AGENT.md says how.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.24, built from 5c1427817365bb2b8...'"
+      ]
+    },
+    {
+      "note": "The box deploy agent 1.0.21, built from 4c21d1741b89e890c6609e3ef3f19e95619ae77e and signed with ThornswoodRelease. The agent on the box updates itself from this Release. docs/DEPLOY-AGENT.md says how.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.21, built from 4c21d1741b89e890c...'"
+      ]
+    },
+    {
+      "note": "The box deploy agent 1.0.19, built from ba5a0f60e2197eff0cd1cf923e57b970e928438a and signed with ThornswoodRelease. The agent on the box updates itself from this Release. docs/DEPLOY-AGENT.md says how.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.19, built from ba5a0f60e2197eff0...'"
+      ]
+    },
+    {
+      "note": "The box deploy agent 1.0.18, built from 129ce827eef7de79cc143e1989a256399311e17a and signed with ThornswoodRelease. The agent on the box updates itself from this Release. docs/DEPLOY-AGENT.md says how.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.18, built from 129ce827eef7de79c...'"
+      ]
+    },
+    {
+      "note": "The box deploy agent 1.0.17, built from 45698e1772bdd8ba797eaeeaa433a821f4250c38 and signed with ThornswoodRelease. The agent on the box updates itself from this Release. docs/DEPLOY-AGENT.md says how.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.17, built from 45698e1772bdd8ba7...'"
+      ]
+    },
+    {
+      "note": "The box deploy agent 1.0.11, built from faffd779c67d6b60cc7da3a5b726e04a21a85826 and signed with ThornswoodRelease. The agent on the box updates itself from this Release. docs/DEPLOY-AGENT.md says how.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": [
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.11, built from faffd779c67d6b60c...'"
+      ]
+    },
+    {
+      "note": "The files of Thornswood's dev release 20261101-142152-dev, each named by its sha256. Launchers fetch them through thornswood.net, which sends them here.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": []
+    },
+    {
+      "note": "The files of Thornswood's dev release 20261101-140731-dev, each named by its sha256. Launchers fetch them through thornswood.net, which sends them here.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": []
+    },
+    {
+      "note": "The files of Thornswood's dev release 20261101-094048-dev, each named by its sha256. Launchers fetch them through thornswood.net, which sends them here.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": []
+    },
+    {
+      "note": "The files of Thornswood's dev release 20261031-185451-dev, each named by its sha256. Launchers fetch them through thornswood.net, which sends them here.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": []
+    },
+    {
+      "note": "The files of Thornswood's dev release 20261031-183127-dev, each named by its sha256. Launchers fetch them through thornswood.net, which sends them here.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": []
+    },
+    {
+      "note": "The files of Thornswood's dev release 20261031-181122-dev, each named by its sha256. Launchers fetch them through thornswood.net, which sends them here.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": []
+    },
+    {
+      "note": "The gamemode and the server build at 97925885e24f0892e3722a3c263b5a86315a649d, signed with ThornswoodRelease, for the box deploy agent to put on the dev server. Not a release people install: the launcher and game files still go out with a Ship.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": []
+    },
+    {
+      "note": "The gamemode and the server build at c7d0b9856f587b17cc88a95082c87b2d68a68b18, signed with ThornswoodRelease, for the box deploy agent to put on the dev server. Not a release people install: the launcher and game files still go out with a Ship.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": []
+    },
+    {
+      "note": "The gamemode and the server build at 31dbabcdae35dcced81a3fd2e2e89e48119fb61c, signed with ThornswoodRelease, for the box deploy agent to put on the dev server. Not a release people install: the launcher and game files still go out with a Ship.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": []
+    },
+    {
+      "note": "The gamemode and the server build at 7c2140a8ae3fa7800a901855cbf10347be66c8a8, signed with ThornswoodRelease, for the box deploy agent to put on the dev server. Not a release people install: the launcher and game files still go out with a Ship.",
+      "shape": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ],
+      "words": []
+    },
+    {
+      "note": "The mods button opens Vortex at the server's revision\n- The button on the mods card now opens Vortex straight at the collection revision the server runs, with no web page in between.\n- When Vortex is done, the launcher scans and fixes by itself, so nobody has to press Scan and Fix.",
+      "shape": [],
+      "words": []
+    },
+    {
+      "note": "Downloads page names the publisher\n- The line under the installer's button now names who signed it, the same name Windows shows when you run it.",
+      "shape": [],
+      "words": []
+    },
+    {
+      "note": "The character choice answers the mouse again\n- A click on the character choice while the game is still loading no longer picks whoever stands in the middle of the screen.\n- Once the cursor shows, the choice follows the mouse and a click joins as that character.",
+      "shape": [],
+      "words": []
+    },
+    {
+      "note": "The launcher's version is now a date\n- The number under the launcher's name is the day and time it last changed, so a newer launcher always has a higher one",
+      "shape": [],
+      "words": []
+    }
+  ],
+  "bodies": [
+    {
+      "body": "## What changed\n\nThe forge reads its prices from the table.\n\nRelease note: The forge shows the price before you pay\n- The forge window lists each metal a piece takes and how much.\n\nRefs #4242",
+      "author": "someone",
+      "found": true,
+      "none": false,
+      "headline": "The forge shows the price before you pay",
+      "details": [
+        "- The forge window lists each metal a piece takes and how much."
+      ],
+      "text": "The forge shows the price before you pay\n- The forge window lists each metal a piece takes and how much.",
+      "count": 1,
+      "problems": []
+    },
+    {
+      "body": "## What changed\n\nA harness.\n\nRelease note: none\n",
+      "author": "someone",
+      "found": true,
+      "none": true,
+      "headline": "none",
+      "details": [],
+      "text": "",
+      "count": 1,
+      "problems": []
+    },
+    {
+      "body": "Release note: None.",
+      "author": "",
+      "found": true,
+      "none": true,
+      "headline": "None.",
+      "details": [],
+      "text": "",
+      "count": 1,
+      "problems": []
+    },
+    {
+      "body": "**Release note:** none",
+      "author": "",
+      "found": true,
+      "none": true,
+      "headline": "none",
+      "details": [],
+      "text": "",
+      "count": 1,
+      "problems": []
+    },
+    {
+      "body": "<!-- Release note: none -->",
+      "author": "",
+      "found": false,
+      "none": false,
+      "headline": "",
+      "details": [],
+      "text": "",
+      "count": 0,
+      "problems": [
+        "there is no \"Release note:\" line. Add one under \"For the Thornswood team\": \"Release note: none\" when nobody would notice the change, otherwise a headline people read and a \"- \" line under it."
+      ]
+    },
+    {
+      "body": "## What changed\n\nStuff.",
+      "author": "",
+      "found": false,
+      "none": false,
+      "headline": "",
+      "details": [],
+      "text": "",
+      "count": 0,
+      "problems": [
+        "there is no \"Release note:\" line. Add one under \"For the Thornswood team\": \"Release note: none\" when nobody would notice the change, otherwise a headline people read and a \"- \" line under it."
+      ]
+    },
+    {
+      "body": "<!-- Thank you for sending a change. Fill in the first three parts. The part under\n\"For the Thornswood team\" is the team's own checklist: if you are not on the team,\nleave it as it is. CONTRIBUTING.md says how a change gets here. -->\n\n## What changed\n\n<!-- What a person will notice, in plain words, and why. If it fixes a problem, say\nwhat caused it and how you found that out: a log line, a file, the steps. One\nchange per pull request. -->\n\n## How you checked it\n\n<!-- What you ran or did, and what you saw. \"Not checked\" is an answer too; leave\nnothing blank. -->\n\n## Release note\n\n<!-- What people read about this change in the launcher's News, on the site and\nin Discord. A headline of three words or more, then at least one line starting\nwith \"- \" directly under it. Plain words: never the banned word, no em dashes, no issue\nor pull request numbers, no file or code names, no version in the headline.\n\"Release note: none\" when nobody would notice the change in the game, the\nlauncher, the site or Discord. The \"Release note\" check reads it, and the\nrelease carries it as written. -->\n\nRelease note: \n\n## Before you send it\n\n- [ ] It changes one thing.\n- [ ] It removes the cause of the problem, not only what shows of it.\n- [ ] I have read LICENSE and LICENSING.md, which say what a contribution is given under.\n\nWhose work: mine\n<!-- \"Mine\" when everything in it is yours. Otherwise name each part that is somebody else's, who it belongs to and how they gave leave (LICENSING.md, contributor term 3). -->\n\n## For the Thornswood team\n\n<!-- Closes #N when it finishes an issue nobody would notice. A fix people would notice\nsays Refs #N and carries its test task, which moves the issue to Done on merge.\nThat issue stays open until a main Ship puts the fix on the main server, and that\nShip closes it with this test task; never close it at the merge, or testers are\nsent to look for a fix main lacks. Main if any playtester can check it with the\nnormal game (even if a dev command would be quicker); plain words, no numbers,\nlinks, code or \"dev\":\nTest task for #N: <title, at most 45 characters>\nServer: Main\n1. Plain steps.\nWhat should happen: what the tester sees.\nDev only if it needs staff or dev commands, the dev server, logs, the box or a\nsetup testers cannot make; developer terms, posted for staff as soon as a build\ncarries it, and it stays while the fix is on main:\nTest task for #N: <title, at most 45 characters>\nServer: Dev\nBuild: <the dev release or commit it needs>\n1. Steps with the files, commands and log lines.\nWhat should happen: what each prints or shows.\nOne test task per issue and kind; never post one by hand in Discord. The\ncheck \"Test tasks in the pull request\" holds every block to the bot's post\nrules before the merge; when it is red, edit this body and it runs again.\nTest task comments and known-issue text carry no footer: no closing \"---\" line\nand no \"Generated by\" line.\nDeveloper-Guide.md, \"Test tasks and known issues\". -->\n\n### Which parts it touches, and what runs after the merge\n\n<!-- Tick every part this pull request changes. Each line is one row of the table\nin Developer-Guide.md, \"After a pull request is merged\", and the command for it is\nin that table, the one copy of them. They all run in the same sitting. -->\n\n- [ ] The launcher (`launcher\\app`, `launcher\\ui.xaml`), the game plugins (`game\\plugins`) or anything else in a pack\n- [ ] The gamemode on the dev server\n- [ ] The gamemode on the live server (`game\\gamemode.js`) or the content plugin (`game\\content\\Thornswood-Content.esp`), whose server command goes before the Ship\n- [ ] The live server build, or the live settings\n- [ ] The site's app or `site\\public`\n- [ ] The public pages (`site\\data\\site\\*.md`)\n- [ ] The bot's code or join card art (`bot`)\n- [ ] The bot's avatar (`bot\\thornswood-bot-*.png`), which no script sends\n- [ ] The voice service (`voice\\voice-server.js`, `voice\\headlines.js`)\n- [ ] Only scripts that change how a release is built\n- [ ] Docs only\n\n### Before asking for a read\n\n- [ ] It says what the cause was. No band-aids: nothing that notices the damage and undoes it, no retry that hopes a race comes out right, no layer over an earlier band-aid (Developer-Guide.md, \"Fix the cause, no band-aids\").\n- [ ] If it edits Shell.cs, Checks.cs, Keep.cs, Hold.cs, Updater.cs or Publish-Update.ps1 in a way that blocks others' work, a line went in #dev-coordination about it first, as Developer-Guide.md, \"Signing, the build check, and the six shared files\", says. No line anywhere for opening or merging the pull request itself.\n- [ ] If it changes anything in Developer-Guide.md's settled design, the team agreed it in #staff-updates first.\n- [ ] Anything it found or left unfinished is on the board (GitHub Issues).\n",
+      "author": "",
+      "found": true,
+      "none": false,
+      "headline": "",
+      "details": [],
+      "text": "",
+      "count": 1,
+      "problems": [
+        "the Release note line is empty: write a headline, or \"none\".",
+        "the title '' is too short to say what changed.",
+        "there is no detail line: at least one line starting with \"- \"."
+      ]
+    },
+    {
+      "body": "Release note: The forge shows the price",
+      "author": "",
+      "found": true,
+      "none": false,
+      "headline": "The forge shows the price",
+      "details": [],
+      "text": "The forge shows the price",
+      "count": 1,
+      "problems": [
+        "there is no detail line: at least one line starting with \"- \"."
+      ]
+    },
+    {
+      "body": "Release note: Forge prices\n- The forge window lists each metal.",
+      "author": "",
+      "found": true,
+      "none": false,
+      "headline": "Forge prices",
+      "details": [
+        "- The forge window lists each metal."
+      ],
+      "text": "Forge prices\n- The forge window lists each metal.",
+      "count": 1,
+      "problems": [
+        "the title 'Forge prices' is too short to say what changed."
+      ]
+    },
+    {
+      "body": "Release note: none\n\nRelease note: none",
+      "author": "",
+      "found": true,
+      "none": true,
+      "headline": "none",
+      "details": [],
+      "text": "",
+      "count": 2,
+      "problems": [
+        "there are 2 Release note lines; keep one, so the release says one thing for this change."
+      ]
+    },
+    {
+      "body": "Bumps discord.py from 2.4 to 2.5.",
+      "author": "dependabot[bot]",
+      "found": false,
+      "none": false,
+      "headline": "",
+      "details": [],
+      "text": "",
+      "count": 0,
+      "problems": []
+    },
+    {
+      "body": "Bumps discord.py from 2.4 to 2.5.",
+      "author": "Dependabot[bot]",
+      "found": false,
+      "none": false,
+      "headline": "",
+      "details": [],
+      "text": "",
+      "count": 0,
+      "problems": []
+    },
+    {
+      "body": "Bumps discord.py from 2.4 to 2.5.",
+      "author": "someone",
+      "found": false,
+      "none": false,
+      "headline": "",
+      "details": [],
+      "text": "",
+      "count": 0,
+      "problems": [
+        "there is no \"Release note:\" line. Add one under \"For the Thornswood team\": \"Release note: none\" when nobody would notice the change, otherwise a headline people read and a \"- \" line under it."
+      ]
+    },
+    {
+      "body": "release NOTE:   The forge shows the price before you pay  \r\n- The forge window lists each metal a piece takes.\r\n-  And a second line that is long.\r\nnot a detail",
+      "author": "",
+      "found": true,
+      "none": false,
+      "headline": "The forge shows the price before you pay",
+      "details": [
+        "- The forge window lists each metal a piece takes.",
+        "-  And a second line that is long."
+      ],
+      "text": "The forge shows the price before you pay\n- The forge window lists each metal a piece takes.\n-  And a second line that is long.",
+      "count": 1,
+      "problems": []
+    },
+    {
+      "body": "Release note:\n- A detail with no headline at all here.",
+      "author": "",
+      "found": true,
+      "none": false,
+      "headline": "",
+      "details": [
+        "- A detail with no headline at all here."
+      ],
+      "text": "\n- A detail with no headline at all here.",
+      "count": 1,
+      "problems": [
+        "the Release note line is empty: write a headline, or \"none\"."
+      ]
+    },
+    {
+      "body": "<!--\nRelease note: none\n-->\nRelease note: Hunters can skin rabbits again\n- Skinning a rabbit gives its pelt and meat.",
+      "author": "",
+      "found": true,
+      "none": false,
+      "headline": "Hunters can skin rabbits again",
+      "details": [
+        "- Skinning a rabbit gives its pelt and meat."
+      ],
+      "text": "Hunters can skin rabbits again\n- Skinning a rabbit gives its pelt and meat.",
+      "count": 1,
+      "problems": []
+    },
+    {
+      "body": "Release note: The mods button opens Vortex at the server's revision\n- The button on the mods card now opens Vortex straight at the collection revision the server runs, with no web page in between.\n- When Vortex is done, the launcher scans and fixes by itself, so nobody has to press Scan and Fix.",
+      "author": "",
+      "found": true,
+      "none": false,
+      "headline": "The mods button opens Vortex at the server's revision",
+      "details": [
+        "- The button on the mods card now opens Vortex straight at the collection revision the server runs, with no web page in between.",
+        "- When Vortex is done, the launcher scans and fixes by itself, so nobody has to press Scan and Fix."
+      ],
+      "text": "The mods button opens Vortex at the server's revision\n- The button on the mods card now opens Vortex straight at the collection revision the server runs, with no web page in between.\n- When Vortex is done, the launcher scans and fixes by itself, so nobody has to press Scan and Fix.",
+      "count": 1,
+      "problems": []
+    },
+    {
+      "body": "Release note: Downloads page names the publisher\n- The line under the installer's button now names who signed it, the same name Windows shows when you run it.",
+      "author": "",
+      "found": true,
+      "none": false,
+      "headline": "Downloads page names the publisher",
+      "details": [
+        "- The line under the installer's button now names who signed it, the same name Windows shows when you run it."
+      ],
+      "text": "Downloads page names the publisher\n- The line under the installer's button now names who signed it, the same name Windows shows when you run it.",
+      "count": 1,
+      "problems": []
+    },
+    {
+      "body": "Release note: The character choice answers the mouse again\n- A click on the character choice while the game is still loading no longer picks whoever stands in the middle of the screen.\n- Once the cursor shows, the choice follows the mouse and a click joins as that character.",
+      "author": "",
+      "found": true,
+      "none": false,
+      "headline": "The character choice answers the mouse again",
+      "details": [
+        "- A click on the character choice while the game is still loading no longer picks whoever stands in the middle of the screen.",
+        "- Once the cursor shows, the choice follows the mouse and a click joins as that character."
+      ],
+      "text": "The character choice answers the mouse again\n- A click on the character choice while the game is still loading no longer picks whoever stands in the middle of the screen.\n- Once the cursor shows, the choice follows the mouse and a click joins as that character.",
+      "count": 1,
+      "problems": []
+    },
+    {
+      "body": "Release note: The launcher's version is now a date\n- The number under the launcher's name is the day and time it last changed, so a newer launcher always has a higher one",
+      "author": "",
+      "found": true,
+      "none": false,
+      "headline": "The launcher's version is now a date",
+      "details": [
+        "- The number under the launcher's name is the day and time it last changed, so a newer launcher always has a higher one"
+      ],
+      "text": "The launcher's version is now a date\n- The number under the launcher's name is the day and time it last changed, so a newer launcher always has a higher one",
+      "count": 1,
+      "problems": []
+    }
+  ],
+  "joins": [
+    {
+      "bodies": [
+        "## What changed\n\nThe forge reads its prices from the table.\n\nRelease note: The forge shows the price before you pay\n- The forge window lists each metal a piece takes and how much.\n\nRefs #4242",
+        "## What changed\n\nA harness.\n\nRelease note: none\n",
+        "release NOTE:   The forge shows the price before you pay  \r\n- The forge window lists each metal a piece takes.\r\n-  And a second line that is long.\r\nnot a detail"
+      ],
+      "note": "The forge shows the price before you pay\n- The forge window lists each metal a piece takes and how much.\n- The forge window lists each metal a piece takes.\n-  And a second line that is long."
+    },
+    {
+      "bodies": [
+        "<!--\nRelease note: none\n-->\nRelease note: Hunters can skin rabbits again\n- Skinning a rabbit gives its pelt and meat.",
+        "## What changed\n\nThe forge reads its prices from the table.\n\nRelease note: The forge shows the price before you pay\n- The forge window lists each metal a piece takes and how much.\n\nRefs #4242"
+      ],
+      "note": "Hunters can skin rabbits again\n- Skinning a rabbit gives its pelt and meat.\n- The forge shows the price before you pay\n- The forge window lists each metal a piece takes and how much."
+    },
+    {
+      "bodies": [
+        "## What changed\n\nA harness.\n\nRelease note: none\n",
+        "Release note: None."
+      ],
+      "note": ""
+    },
+    {
+      "bodies": [
+        "## What changed\n\nThe forge reads its prices from the table.\n\nRelease note: The forge shows the price before you pay\n- The forge window lists each metal a piece takes and how much.\n\nRefs #4242",
+        "## What changed\n\nThe forge reads its prices from the table.\n\nRelease note: The forge shows the price before you pay\n- The forge window lists each metal a piece takes and how much.\n\nRefs #4242"
+      ],
+      "note": "The forge shows the price before you pay\n- The forge window lists each metal a piece takes and how much."
+    },
+    {
+      "bodies": [
+        "release NOTE:   The forge shows the price before you pay  \r\n- The forge window lists each metal a piece takes.\r\n-  And a second line that is long.\r\nnot a detail",
+        "<!--\nRelease note: none\n-->\nRelease note: Hunters can skin rabbits again\n- Skinning a rabbit gives its pelt and meat.",
+        "## What changed\n\nThe forge reads its prices from the table.\n\nRelease note: The forge shows the price before you pay\n- The forge window lists each metal a piece takes and how much.\n\nRefs #4242",
+        "release NOTE:   The forge shows the price before you pay  \r\n- The forge window lists each metal a piece takes.\r\n-  And a second line that is long.\r\nnot a detail"
+      ],
+      "note": "The forge shows the price before you pay\n- The forge window lists each metal a piece takes.\n-  And a second line that is long.\n- Hunters can skin rabbits again\n- Skinning a rabbit gives its pelt and meat.\n- The forge window lists each metal a piece takes and how much."
+    }
+  ]
+}

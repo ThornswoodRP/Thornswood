@@ -294,7 +294,7 @@ if ($armed) {
     $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cancel))
     $old = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    $said = (@(Invoke-ThornswoodNative { & ssh @ssh "$User@$Vps" "powershell -NoProfile -EncodedCommand $enc" } 2>&1 | ForEach-Object { [string]$_ }) -join ' ')
+    $said = (@(Invoke-ThornswoodNative { & ssh @ssh "$User@$Vps" "pwsh -NoProfile -EncodedCommand $enc" } 2>&1 | ForEach-Object { [string]$_ }) -join ' ')
     $ErrorActionPreference = $old
     if ($said -match 'ROLLBACK_CANCELLED') { Say "  CHANGED the rollback task is cancelled, so the change stays" 'Green' }
     else { Die "Could not cancel the task '$Rollback', so the box will put password login back within ten minutes. Run this again once that has happened." }

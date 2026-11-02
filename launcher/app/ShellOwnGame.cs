@@ -1,10 +1,12 @@
 using System;
 using System.Diagnostics;
+using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
 using System.Threading;
-using System.Windows;
-using System.Windows.Controls;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 
 namespace Thornswood
 {
@@ -21,18 +23,18 @@ namespace Thornswood
         // Play asked for, so OwnGameRefreshIfDue cannot ask for a second one.
         static bool ownGameRefreshedForPlay;
         // Only the window's thread changes this: DrawOwnGame bumps it, and the
-        // background answer compares it on the way back through the Dispatcher.
+        // background answer compares it on the way back through the dispatcher.
         static int ownGameDrawGen;
         static TextBlock txtOwnGameState;
         static Button btnOwnGameMake, btnOwnGamePick, btnOwnGameForget;
 
         static void WireOwnGame()
         {
-            txtOwnGameState = F<TextBlock>("TxtOwnGameState");
-            btnOwnGameMake = F<Button>("BtnOwnGameMake");
-            btnOwnGamePick = F<Button>("BtnOwnGamePick");
-            btnOwnGameForget = F<Button>("BtnOwnGameForget");
-            var panel = F<StackPanel>("PnlOwnGame");
+            txtOwnGameState = win.TxtOwnGameState;
+            btnOwnGameMake = win.BtnOwnGameMake;
+            btnOwnGamePick = win.BtnOwnGamePick;
+            btnOwnGameForget = win.BtnOwnGameForget;
+            var panel = win.PnlOwnGame;
 
             if (btnOwnGameMake != null) btnOwnGameMake.Click += delegate { AskOwnGame(false); };
             // Bring it up to date from Vortex had a button of its own on
@@ -40,27 +42,61 @@ namespace Thornswood
             // Vortex and Fix brings it up to date, so the button went.
             if (btnOwnGamePick != null) btnOwnGamePick.Click += delegate { PickVortexFolder(); };
             if (btnOwnGameForget != null) btnOwnGameForget.Click += delegate { ForgetVortexFolder(); };
-            if (panel != null) panel.IsVisibleChanged += delegate { if (panel.IsVisible) DrawOwnGame(); };
+            if (panel != null) WhenShown(panel, DrawOwnGame);
 
             // Once the window is on screen, so a question has something to sit
             // in front of and the check does not hold up the first draw.
-            win.ContentRendered += delegate
+            OnceOnScreen(delegate
             {
                 if (ownGameStarted) return;
                 ownGameStarted = true;
                 OwnGameAtStart();
-            };
+            });
 
-            win.Closing += delegate(object s, System.ComponentModel.CancelEventArgs e)
+            win.Closing += delegate(object s, WindowClosingEventArgs e)
             {
                 if (!ownGameBusy || restarting) return;
-                var r = MessageBox.Show(
+                if (!Ask.YesNo(
                     "Thornswood's own Skyrim folder is still being prepared.\n\nClose anyway? It starts again from where it can the next time the launcher opens.",
-                    "Thornswood", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-                if (r != MessageBoxResult.Yes) e.Cancel = true;
+                    "Thornswood", Ask.Icon.Warning)) e.Cancel = true;
             };
 
             DrawOwnGame();
+        }
+
+        /// <summary>
+        /// Runs draw each time c comes into view: the card is drawn when the
+        /// Settings page is shown. WPF said so with IsVisibleChanged, which
+        /// counted the page and every other parent. Avalonia's IsVisible is
+        /// the control's own, and the event for the whole chain is internal
+        /// to it, so each parent's IsVisible is watched here and the card is
+        /// in view when all of them are.
+        /// </summary>
+        static void WhenShown(Control c, Action draw)
+        {
+            bool was = AllVisible(c);
+            for (StyledElement e = c; e != null; e = e.Parent)
+            {
+                var watched = e as Visual;
+                if (watched == null) continue;
+                watched.PropertyChanged += delegate (object s, AvaloniaPropertyChangedEventArgs a)
+                {
+                    if (a.Property != Visual.IsVisibleProperty) return;
+                    bool now = AllVisible(c);
+                    if (now && !was) draw();
+                    was = now;
+                };
+            }
+        }
+
+        static bool AllVisible(Control c)
+        {
+            for (StyledElement e = c; e != null; e = e.Parent)
+            {
+                var v = e as Visual;
+                if (v != null && !v.IsVisible) return false;
+            }
+            return true;
         }
 
         static void OwnGameAtStart()
@@ -95,7 +131,7 @@ namespace Thornswood
 
                 This line is what lets the next report be read in ten seconds
                 instead of an evening. It goes to the log on the window's thread,
-                before the pool work below, because Log writes a WPF object.
+                before the pool work below, because Log writes a control.
             */
             if (collection)
             {
@@ -115,7 +151,7 @@ namespace Thornswood
                     if (refused != null)
                     {
                         string say = refused;
-                        try { win.Dispatcher.BeginInvoke((Action)delegate { Log(say); }); }
+                        try { Dispatcher.UIThread.Post(delegate { Log(say); }); }
                         catch (Exception ex) { Swallow.Note("ShellOwnGame.OwnGameAtStart, refused BeginInvoke", ex); }
                     }
                     else if (active) refresh = OwnGame.NeedsRefresh(c);
@@ -137,7 +173,7 @@ namespace Thornswood
                 if (!refresh && !offer) return;
                 try
                 {
-                    win.Dispatcher.BeginInvoke((Action)delegate
+                    Dispatcher.UIThread.Post(delegate
                     {
                         if (refresh) StartOwnGame(false, false);
                         else AskOwnGame(true);
@@ -293,8 +329,7 @@ namespace Thornswood
                 "cannot be made yet. " + why);
             try
             {
-                MessageBox.Show(win, msg, "Thornswood", MessageBoxButton.OK,
-                                MessageBoxImage.Warning);
+                Ask.Tell(msg, "Thornswood", Ask.Icon.Warning);
             }
             catch (Exception ex) { Swallow.Note("ShellOwnGame.OwnGameRequired, MessageBox", ex); }
             return false;
@@ -309,7 +344,7 @@ namespace Thornswood
             if (why != null)
             {
                 Log(why);
-                if (!atStart) MessageBox.Show(why, "Thornswood", MessageBoxButton.OK, MessageBoxImage.Information);
+                if (!atStart) Ask.Tell(why, "Thornswood", Ask.Icon.Info);
                 return;
             }
 
@@ -324,7 +359,7 @@ namespace Thornswood
                 return;
             }
 
-            var r = MessageBox.Show(
+            bool yes = Ask.YesNo(
                 "Give Thornswood a Skyrim folder of its own?\n\n" +
                 "Thornswood and other servers are sharing one Skyrim right now, which is how their menus, plugins and mods get into each other. " +
                 "With a folder of its own, Thornswood only ever starts from " + OwnGame.Folder + ", and switching profiles in Vortex no longer reaches it.\n\n" +
@@ -334,8 +369,8 @@ namespace Thornswood
                 ". The big files are links, so the collection is not on the disk twice. " +
                 "It takes a few minutes, and the launcher restarts when it is done." +
                 (atStart ? "\n\nSay no and the button stays in Settings, under Maintenance." : ""),
-                "Thornswood", MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (r != MessageBoxResult.Yes)
+                "Thornswood", Ask.Icon.Question);
+            if (!yes)
             {
                 if (atStart)
                 {
@@ -376,7 +411,7 @@ namespace Thornswood
             {
                 string msg = "Close Skyrim first, then " + (make ? "make" : "update") + " Thornswood's own folder. " + Checks.StuckReport();
                 Log(msg);
-                if (loud) MessageBox.Show(msg, "Thornswood", MessageBoxButton.OK, MessageBoxImage.Information);
+                if (loud) Ask.Tell(msg, "Thornswood", Ask.Icon.Info);
                 return false;
             }
             if (!make && !OwnGame.Active) { Log("Thornswood does not have its own Skyrim folder yet."); return false; }
@@ -396,7 +431,7 @@ namespace Thornswood
             {
                 Action<string> say = delegate(string m)
                 {
-                    try { win.Dispatcher.BeginInvoke((Action)delegate { Log(m); }); } catch (Exception ex) { Swallow.Note("ShellOwnGame.StartOwnGame, say BeginInvoke", ex); }
+                    try { Dispatcher.UIThread.Post(delegate { Log(m); }); } catch (Exception ex) { Swallow.Note("ShellOwnGame.StartOwnGame, say BeginInvoke", ex); }
                 };
                 // One folder writer at a time (#2210): an update writing what it
                 // downloaded finishes first, and none starts writing until this
@@ -482,14 +517,14 @@ namespace Thornswood
             PlayProgress.FolderFirst(false);
             try
             {
-                win.Dispatcher.BeginInvoke((Action)delegate
+                Dispatcher.UIThread.Post(delegate
                 {
                     ownGameBusy = false;
                     PlayProgress.End();
                     if (fail != null)
                     {
                         Log((make ? "Thornswood's own Skyrim folder was not made. " : "Thornswood's own Skyrim folder was not brought up to date. ") + fail);
-                        if (loud) MessageBox.Show(fail, "Thornswood", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        if (loud) Ask.Tell(fail, "Thornswood", Ask.Icon.Warning);
                     }
                     else
                     {
@@ -570,7 +605,7 @@ namespace Thornswood
                         : "Off. " + why) + askChosen;
                     try
                     {
-                        win.Dispatcher.BeginInvoke((Action)delegate
+                        Dispatcher.UIThread.Post(delegate
                         {
                             if (gen != ownGameDrawGen || txtOwnGameState == null) return;
                             txtOwnGameState.Text = text;
@@ -583,13 +618,13 @@ namespace Thornswood
             if (btnOwnGamePick != null) btnOwnGamePick.IsEnabled = !ownGameBusy;
             if (btnOwnGameForget != null)
             {
-                btnOwnGameForget.Visibility = string.IsNullOrEmpty(cfg.VortexGame) ? Visibility.Collapsed : Visibility.Visible;
+                btnOwnGameForget.IsVisible = !string.IsNullOrEmpty(cfg.VortexGame);
                 btnOwnGameForget.IsEnabled = !ownGameBusy;
             }
 
             if (btnOwnGameMake != null)
             {
-                btnOwnGameMake.Visibility = active ? Visibility.Collapsed : Visibility.Visible;
+                btnOwnGameMake.IsVisible = !active;
                 btnOwnGameMake.IsEnabled = !ownGameBusy && Paths.Collection;
             }
         }
@@ -603,24 +638,27 @@ namespace Thornswood
         static void PickVortexFolder()
         {
             if (ownGameBusy) return;
-            string chosen;
-            using (var dlg = new System.Windows.Forms.FolderBrowserDialog())
+            var pick = new FolderPickerOpenOptions();
+            pick.Title = "Choose the Skyrim folder Vortex deploys into. In Vortex, Mods, Open, Open Game Folder opens it.";
+            pick.AllowMultiple = false;
+            try
             {
-                dlg.Description = "Choose the Skyrim folder Vortex deploys into. In Vortex, Mods, Open, Open Game Folder opens it.";
-                dlg.ShowNewFolderButton = false;
-                try
-                {
-                    string start = OwnGame.DeploysInto(cfg);
-                    if (start.Length > 0 && Directory.Exists(start)) dlg.SelectedPath = start;
-                }
-                catch { /* only where the picker opens; it opens at its own default instead */ }
-                if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
-                chosen = dlg.SelectedPath;
+                string start = OwnGame.DeploysInto(cfg);
+                if (start.Length > 0 && Directory.Exists(start))
+                    pick.SuggestedStartLocation = Pump(win.StorageProvider.TryGetFolderFromPathAsync(start));
             }
+            catch { /* only where the picker opens; it opens at its own default instead */ }
+            // The picker is Windows' own folder dialog, which Avalonia only
+            // offers as a task. Pump keeps the window's messages moving until
+            // it is answered, so this carries on from the next line the way
+            // the WinForms dialog's ShowDialog did.
+            IReadOnlyList<IStorageFolder> picked = Pump(win.StorageProvider.OpenFolderPickerAsync(pick));
+            string chosen = picked != null && picked.Count > 0 ? picked[0].TryGetLocalPath() : null;
+            if (string.IsNullOrEmpty(chosen)) return;
             bool ok;
             string said = OwnGame.PointAt(cfg, chosen, out ok);
             Log(said);
-            if (!ok) MessageBox.Show(said, "Thornswood", MessageBoxButton.OK, MessageBoxImage.Information);
+            if (!ok) Ask.Tell(said, "Thornswood", Ask.Icon.Info);
             else if (OwnGame.Active) Log("Scan and then Fix on Diagnostics take it in now; otherwise the launcher does it the next time it starts.");
             DrawOwnGame();
             DrawStatus();
@@ -644,7 +682,9 @@ namespace Thornswood
         {
             try
             {
-                string exe = Assembly.GetExecutingAssembly().Location;
+                // The exe itself. Assembly.Location is empty in a native
+                // single file exe, so it is the process's own path.
+                string exe = Environment.ProcessPath;
                 string bat = Path.Combine(Path.GetTempPath(), "ts-restart-" + Process.GetCurrentProcess().Id + ".cmd");
                 // cmd reads a .cmd file in the console's OEM code page, not
                 // the UTF-8 this is written in, so a path with any character

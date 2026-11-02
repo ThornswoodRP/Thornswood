@@ -17,7 +17,7 @@
 //      server more than once, and it is fixed in the panel;
 //   3. after the frame leaves, nothing upstream doubles it: the voice service
 //      gives it one command id and the gamemode runs an id once however
-//      often it is offered (tests/test-command-ack.js), so the server takes
+//      often it is offered (voice/tests/test-command-ack.js), so the server takes
 //      every /journal new it gets as a request of its own.
 //
 // Read only. No network.
@@ -171,7 +171,7 @@ function page() {
 // ------------------------------------------- 3. after it leaves ---
 // The service hands every chat command its own id, once (COMMANDS_BOOT +
 // nextCommand), and the gamemode skips an id it has run (commandsRun), which
-// tests/test-command-ack.js runs end to end. So the server's window guarded
+// voice/tests/test-command-ack.js runs end to end. So the server's window guarded
 // against nothing that reaches it, and it is gone.
 yes('3a: the service gives each command line one id',
     /commands\.push\(\{\s*id: COMMANDS_BOOT \+ ':' \+ \(nextCommand\+\+\)/.test(VOICE_SRC));

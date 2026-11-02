@@ -24,8 +24,8 @@
     3. it reads the token from bot.env.json on the box, never carries one,
        and clears it and removes its folder in a finally;
     4. the script itself, run with a stand-in Python and the box's paths
-       pointed at a temp folder, under Windows PowerShell where there is one,
-       because the box runs 5.1: the files are there when the build runs,
+       pointed at a temp folder, under PowerShell 7, because the box runs it
+       since #5356: the files are there when the build runs,
        laid out as in the repository, and the real Python imports content.py
        from that folder (a run on 22 Oct 2026 sent only the bot's files and
        content.py stopped on the box with FileNotFoundError for join.md),
@@ -204,9 +204,8 @@ function python {
     $far = $s.Replace("'C:\Thornswood-Bot'", "'" + $box.Replace("'", "''") + "'").Replace("'C:\Windows\Temp'", "'" + $win.Replace("'", "''") + "'")
     $farPath = Join-Path $work 'far.ps1'
     [IO.File]::WriteAllText($farPath, $standIn.Replace('EXIT_CODE', '0') + $far)
-    # The box runs Windows PowerShell 5.1, so the script runs under it wherever
-    # it is here (the Windows runners); elsewhere under pwsh.
-    $farPs = if ($OnWindows) { Get-WindowsPowerShell } else { $pwsh.Source }
+    # The box runs PowerShell 7 since #5356, so the script runs under it here.
+    $farPs = Get-BoxPowerShell
     Write-Host ('      the box''s script runs under ' + $farPs)
     function Run-Far {
         $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'

@@ -21,7 +21,24 @@
   then it does not matter who finds a backup.
 
   This installs the on-box half. Getting the backups off the box is
-  Fetch-Backups.ps1, which runs here, and restoring one is RESTORING.md in the ops repo.
+  Send-Backups.ps1, which sends each one to the Oracle VM and on to Google
+  Drive (#2862), and restoring one is RESTORING.md in the ops repo.
+
+  THROUGH THE DEPLOY GATE (-FromGate; #2862, #5168). The gate's verb
+  Install-Backup runs this on the box with -FromGate, so a cloud session
+  sends main's vps-nightly-backup.ps1 up and registers the task with
+
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Install-Backup'
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Install-Backup -RunNow'
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Install-Backup -Status'
+
+  and no machine with a box key has to be on. It reaches the box over
+  loopback as every gate verb does. The passphrase is never copied anywhere
+  that way: not down (the copy would land beside the gate on the box itself,
+  which is no copy at all), and not up. A box without its passphrase is a
+  restore (Restore-Box.ps1), so -FromGate stops there and makes none: a new
+  one made on the box would leave Patrick's copy unable to open the backups
+  it takes from then on. -Remove and -AsSystem stay off the gate.
 #>
 [CmdletBinding()]
 param(
@@ -49,6 +66,9 @@ param(
   [switch]$AsSystem,
   [switch]$Status,
   [switch]$Remove,
+  # The deploy gate's Install-Backup verb (the header's THROUGH THE DEPLOY
+  # GATE). Refused anywhere but under the gate.
+  [switch]$FromGate,
   [switch]$NoPause
 )
 
@@ -64,6 +84,13 @@ if (-not $VpsHost) { $VpsHost = Get-ThornswoodVpsAddress }
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
 function Head($m) { Write-Host ''; Write-Host $m -ForegroundColor Cyan; Write-Host ('-' * $m.Length) -ForegroundColor DarkGray }
 function Die($m) { Write-Host ''; Write-Host "STOP. $m" -ForegroundColor Red; if (-not $NoPause) { [void](Read-Host 'Enter to exit') }; exit 1 }
+
+# THROUGH THE DEPLOY GATE (the header's section of that name).
+if ($FromGate) {
+  if ($env:THORNSWOOD_GATE -ne '1') { Die '-FromGate is for the deploy gate''s Install-Backup verb, which runs this on the box: pwsh scripts/vps/Box-Run.ps1 -Line ''Install-Backup''. Nothing was changed.' }
+  $handPicked = @('VpsHost', 'VpsUser', 'Root', 'TaskName', 'At', 'KeyOut') | Where-Object { $PSBoundParameters.ContainsKey($_) }
+  if ($Remove -or $AsSystem -or @($handPicked).Count) { Die 'through the gate the nightly backup is installed, run or read with its own names and folders, never removed or put on SYSTEM. Nothing was changed.' }
+}
 
 $target = "$VpsUser@$VpsHost"
 $ssh = @('-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes')
@@ -152,7 +179,7 @@ try {
     `$acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier(`$s)), 'FullControl', 'ContainerInherit, ObjectInherit', 'None', 'Allow')))
   }
   # Only the access rules are written back (issue #1120).
-  (Get-Item -LiteralPath '$Root' -Force).SetAccessControl(`$acl)
+  [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo](Get-Item -LiteralPath '$Root' -Force), `$acl)
   'LOCKED'
 } catch { 'COULD NOT LOCK: ' + `$_.Exception.Message }
 "@
@@ -169,11 +196,18 @@ Head 'The passphrase'
 # box takes, and the "already a copy here" below would keep it that way
 # without a word (issue #454). Sent as a file, never on a command line.
 $there = Remote "if (Test-Path '$keyFile') { 'KEY THERE' } else { 'KEY NONE' }"
-if ("$there" -match 'KEY NONE' -and (Test-Path -LiteralPath $KeyOut)) {
+if ($FromGate) {
+  # Neither copied down nor sent up, and never made here: the header's THROUGH
+  # THE DEPLOY GATE. The task is registered only once the box holds one.
+  if ("$there" -notmatch 'KEY THERE') { Die "$keyFile is not on the box. A box without its passphrase is a restore (Restore-Box.ps1 puts it back); a new one made here would leave Patrick's copy unable to open what it takes. Nothing was registered." }
+  Say '  on the box, left alone; through the gate it is never copied anywhere' 'Green'
+}
+elseif ("$there" -match 'KEY NONE' -and (Test-Path -LiteralPath $KeyOut)) {
   Invoke-ThornswoodNative { & scp @ssh $KeyOut "${target}:$($keyFile.Replace('\','/'))" }
   if ($LASTEXITCODE -ne 0) { Die 'could not send the passphrase up. Nothing was registered.' }
   Say "  sent this machine's copy up from $KeyOut, so every backup opens with the same file" 'Green'
 }
+if (-not $FromGate) {
 $made = Remote @"
 if (Test-Path '$keyFile') {
   'already there, left alone'
@@ -197,6 +231,7 @@ if (-not (Test-Path -LiteralPath $KeyOut)) {
 } else {
   Say "  There is already a copy at $KeyOut, so that was left alone." 'DarkGray'
 }
+}
 
 Head 'Registering the task'
 # Issue #2612. LOCAL SERVICE, Limited, with a SID of the task's own, not
@@ -209,7 +244,7 @@ Head 'Registering the task'
 $sources = @('C:\Thornswood-Server', 'C:\Thornswood-Server-Dev', 'C:\Thornswood-Docs', 'C:\Thornswood-Bot',
              'C:\Thornswood-Caddy', 'C:\Thornswood-Voice', 'C:\Thornswood-Deletions')
 $registered = @(Remote @"
-`$a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -ExecutionPolicy Bypass -File "$runner"'
+`$a = New-ScheduledTaskAction -Execute (Join-Path `$env:ProgramFiles 'PowerShell\7\pwsh.exe') -Argument '-NoProfile -ExecutionPolicy Bypass -File "$runner"'
 $(Get-ThornswoodServiceAccountScript)
 `$t = New-ScheduledTaskTrigger -Daily -At '$At'
 `$s = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -ExecutionTimeLimit (New-TimeSpan -Hours 1)
@@ -284,11 +319,13 @@ Get-Content '$Root\backup.log' -Tail 20 -EA SilentlyContinue
 }
 
 Head 'What is left to do'
-Say '  1. Put the passphrase where you keep the server password. It is at' 'DarkGray'
-Say "     $KeyOut on this machine. Losing it makes every backup noise." 'DarkGray'
-Say '  2. Run .\scripts\vps\Fetch-Backups.ps1 -Schedule once, so this machine pulls' 'DarkGray'
-Say '     them off the box every day. A backup only on the server is not a backup.' 'DarkGray'
-Say '  3. Restore one, once, following RESTORING.md in the ops repo, and write the date' 'DarkGray'
-Say '     in it. Until that has been done none of this is known to work.' 'DarkGray'
+if (-not $FromGate) {
+  Say '  - Put the passphrase where you keep the server password. It is at' 'DarkGray'
+  Say "     $KeyOut on this machine. Losing it makes every backup noise." 'DarkGray'
+}
+Say '  - The copy off the box is Send-Backups.ps1, started when this task ends:' 'DarkGray'
+Say "     pwsh scripts/vps/Box-Run.ps1 -Line 'Send-Backups -Status' says what it sent." 'DarkGray'
+Say '     A backup only on the server is not a backup.' 'DarkGray'
+Say "  - The monthly restore rehearsal proves one opens: pwsh scripts/vps/Box-Run.ps1 -Line 'Rehearse-Restore -ProfileId <id>'." 'DarkGray'
 Write-Host ''
 if (-not $NoPause) { [void](Read-Host 'Enter to close') }

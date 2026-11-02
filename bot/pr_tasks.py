@@ -36,7 +36,7 @@ THE GRAMMAR is done-on-merge.yml's, line for line: a line "Test task for #N:
 emoji (the "Generated with" footer) or the next such line ends it; the rest
 of the block, trimmed, is the steps, and its first line is the Server line.
 The three patterns below are written in that workflow too, and
-bot/test-5199-pr-tasks.py fails when the two stop matching.
+bot/tests/test-5199-pr-tasks.py fails when the two stop matching.
 
     python bot/pr_tasks.py              the pull request PR_NUMBER names, or the
                                         open one whose head is HEAD_REF, read from
@@ -245,7 +245,7 @@ def main(argv):
         print('SKIP  whether each issue is open: no GITHUB_TOKEN and GITHUB_REPOSITORY to read it with')
     if bad:
         print('\n%d of %d test task(s) break a rule. Edit the pull request body; this '
-              'check runs again on the edit. Developer-Guide.md, "Test tasks and known '
+              'check runs again on the edit. docs/guide/the-board.md, "Test tasks and known '
               'issues", has the shapes.' % (bad, len(results)))
         return 1
     print('\nevery test task in the body passes the bot\'s rules')

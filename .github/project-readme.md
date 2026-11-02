@@ -40,7 +40,7 @@ is not going to get done.
 - #known-issues holds only findings nothing has been done about: an issue
   with a merged change or a test task leaves it by itself.
 - One post per issue per forum: change the comment, never post again by
-  hand. Developer-Guide.md, "Test tasks and known issues", has both shapes.
+  hand. docs/guide/the-board.md, "Test tasks and known issues", has both shapes.
 
 The rules behind all of this are in
 [Developer-Guide.md](https://github.com/ThornswoodRP/Thornswood/blob/main/Developer-Guide.md).

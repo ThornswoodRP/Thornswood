@@ -7,12 +7,11 @@
   the box's port 443 and what it costs, sent to the box by Remote.ps1 -File.
   This proves:
 
-    1. it parses, under pwsh and (where there is one) Windows PowerShell 5.1,
-       which is what runs it on the box;
+    1. it parses under pwsh, which is what runs it on the box;
     2. it only reads: no cmdlet or command that changes the machine, and no
        window longer than five minutes;
     3. it prints no address, only counts and how many /16s;
-    4. on Windows, a short run under Windows PowerShell 5.1, as an account
+    4. on Windows, a short run under PowerShell 7, as an account
        that is not an administrator, reads the TCP totals, prints every line
        it promises, ending in one VERDICT, and exits 0 (or 1 with VERDICT
        UNKNOWN where nothing listens on 443).
@@ -51,15 +50,6 @@ $code = [regex]::Replace($code, '(?m)^\s*#.*$', '')
 $errs = $null
 [void][System.Management.Automation.Language.Parser]::ParseInput($t, [ref]$null, [ref]$errs)
 Yes 'it parses under pwsh' (-not ($errs -and $errs.Count))
-$ps51 = $null
-if ($OnWindows) {
-    $ps51 = Get-WindowsPowerShell
-    $check = '$e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile(''' + $script + ''', [ref]$null, [ref]$e); if ($e -and $e.Count) { $e | ForEach-Object { $_.Message }; exit 1 }; exit 0'
-    $said = & $ps51 -NoProfile -NonInteractive -Command $check 2>&1 | Out-String
-    Yes ("  and under Windows PowerShell 5.1, which runs it on the box" + $(if ($LASTEXITCODE) { ': ' + $said.Trim() } else { '' })) ($LASTEXITCODE -eq 0)
-} else {
-    Write-Host 'SKIP  the 5.1 parse: Windows PowerShell 5.1 is only on Windows; the Windows runners parse it'
-}
 
 # ---- 2. it only reads --------------------------------------------------------
 $writes = [regex]::Matches($code, '(?i)\b(Set|New|Remove|Register|Unregister|Disable|Enable|Stop|Restart|Start-Process|Add|Clear|Rename|Move|Copy|Out-File|Export)-[A-Za-z]+|\bnetsh\b|\breg(\.exe)?\s+(add|delete)|\bpktmon\b|\bschtasks\b|\bsc(\.exe)?\s|\bOut-File\b|\bSet-Content\b|>\s*[^\s=]') | ForEach-Object { $_.Value }
@@ -76,20 +66,20 @@ $printed = @([regex]::Matches($code, "(?m)^[ \t]*'[A-Z-]+ [^\r\n]*") | ForEach-O
 Yes "every line it prints is one of its own labels ($($printed.Count) of them)" ($printed.Count -ge 6)
 Yes '  and none of them prints an address, only counts' (@($printed | Where-Object { $_ -match 'RemoteAddress|\$addrs\.Keys|\$a\b' }).Count -eq 0)
 
-# ---- 4. a short run under 5.1 -------------------------------------------------
+# ---- 4. a short run --------------------------------------------------------------
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the run: Get-NetTCPConnection and Windows PowerShell 5.1 are only on Windows; the Windows runners run it'
+    Write-Host 'SKIP  the run: Get-NetTCPConnection is only on Windows; the Windows runners run it'
     Done
 }
-$out = @(& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -Seconds 10 2>&1 | ForEach-Object { "$_" })
-$code51 = $LASTEXITCODE
+$out = @(& (Get-BoxPowerShell) -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -Seconds 10 2>&1 | ForEach-Object { "$_" })
+$runCode = $LASTEXITCODE
 $all = $out -join "`n"
 Write-Host ($out | ForEach-Object { '      ' + $_ } | Out-String).TrimEnd()
 if ($all -match 'VERDICT UNKNOWN nothing listens on 443') {
-    Yes "where nothing listens on 443 it says so and exits 1 (exit $code51)" ($code51 -eq 1)
+    Yes "where nothing listens on 443 it says so and exits 1 (exit $runCode)" ($runCode -eq 1)
     Done
 }
-Yes "a 10 second run exits 0 (exit $code51)" ($code51 -eq 0)
+Yes "a 10 second run exits 0 (exit $runCode)" ($runCode -eq 0)
 Yes '  having read the TCP totals: segments were sent in the window' ($all -match '(?m)^RETRANSMITS [0-9.,]+/s of ([1-9][0-9,]*\.[0-9]|0\.[1-9])')
 foreach ($label in 'LISTENER', 'HALF-OPEN 443', 'CONNECTS', 'RETRANSMITS', 'COST') {
     Yes "  and prints its $label line" ($all -match "(?m)^$label ")

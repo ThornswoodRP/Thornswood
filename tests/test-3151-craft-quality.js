@@ -20,7 +20,7 @@ const vm = require('vm');
 
 const REPO_DIR = process.env.REPO_DIR || path.join(__dirname, '..');
 const CR = String.fromCharCode(13);
-const gm = fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8').split(CR).join('');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8')).split(CR).join('');
 const page = fs.readFileSync(path.join(REPO_DIR, 'docs', 'systems', 'professions.md'), 'utf8').split(CR).join('');
 
 let pass = 0, fail = 0;
@@ -159,7 +159,7 @@ attempt('3 what is rolled', function () {
   // Every striking family the rule names is one the recipe table has.
   const fam = /^const QUALITY_WEAPON_FAMILIES = (\[.*\]);$/m.exec(gm);
   const names = fam ? JSON.parse(fam[1].replace(/'/g, '"')) : [];
-  const recSrc = slice(gm, 'var RECIPES_BY_ID = {', '\n  };');
+  const recSrc = slice(gm, 'var RECIPES_BY_ID = {', ';\n');
   const RECIPES = new Function('return ' + recSrc.slice('var RECIPES_BY_ID = '.length).replace(/;$/, ''))();
   const have = {};
   Object.keys(RECIPES).forEach(function (k) { if (RECIPES[k].type === 'WEAP') { have[RECIPES[k].family] = true; } });

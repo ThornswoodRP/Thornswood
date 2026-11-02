@@ -30,7 +30,7 @@ $script:pass = 0; $script:fail = 0
 function Yes([string]$what, [bool]$ok) {
     if ($ok) { $script:pass++; Write-Host "PASS  $what" } else { $script:fail++; Write-Host "FAIL  $what" -ForegroundColor Red }
 }
-. (Join-Path $Repo 'scripts\deploy\ServiceAccount.ps1')  # Set-ThornswoodServiceAcl, for Windows PowerShell and pwsh
+. (Join-Path $Repo 'scripts\deploy\ServiceAccount.ps1')  # Set-ThornswoodServiceAcl
 function Text([string]$p) { return [IO.File]::ReadAllText((Join-Path $Repo $p)) }
 $sysRe = "-UserId\s+'SYSTEM'|-User\s+'SYSTEM'|-RunLevel\s+Highest|/ru\s+SYSTEM|/rl\s+HIGHEST"
 
@@ -74,9 +74,9 @@ Yes 'a place it cannot read is said by name and the run ends non-zero' (
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the backup run as the task: it runs under Windows PowerShell 5.1 against folders only SYSTEM may read, a Windows ACL, and this is not Windows'
+    Write-Host 'SKIP  the backup run as the task: it runs against folders only SYSTEM may read, a Windows ACL, and this is not Windows'
 } else {
-    $ps51 = Get-WindowsPowerShell
+    $boxPs = Get-BoxPowerShell
     $root = Join-Path ([IO.Path]::GetTempPath()) ('tw-2612-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
     $locked = Join-Path $root 'game\private'
     # The deletion record's folder as Delete-Person.ps1 locked it on the box on
@@ -101,7 +101,7 @@ if (-not $OnWindows) {
         }
         $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
         try {
-            $said = @(& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $nightlyPath `
+            $said = @(& $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $nightlyPath `
                 -GameRoot (Join-Path $root 'game') -DevGameRoot (Join-Path $root 'no-dev') -SiteRoot (Join-Path $root 'no-site') `
                 -BotRoot (Join-Path $root 'no-bot') -CaddyRoot (Join-Path $root 'no-web') -VoiceRoot (Join-Path $root 'no-voice') `
                 -DeletionRoot $lockedRecord -Out (Join-Path $root 'out') -KeyFile (Join-Path $root 'key.txt') 2>&1 | ForEach-Object { "$_" })
