@@ -16,6 +16,12 @@
     GET  /api/releases         the news feed, either shape of details
     GET  /.well-known/<name>   the Discord domain proof
     GET  /api/page-version/<sha256>   an unknown version
+    GET  /file/<name>          a published file, files.json, and one not listed
+
+  /file/ was added on 2 November, after every request to it answered 500 on
+  the live site: lib/serve.js named SETUP_KINDS, which it never imported, and
+  the harnesses that lift the route by text could not see that. The setup
+  program names are not asked for here, because those go to GitHub.
 
   Nothing leaves the machine: no Discord bot token or guild is set, so the
   site never asks Discord anything, and every secret is random for this run.
@@ -142,6 +148,10 @@ const readJson = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8'))
     }));
     fs.writeFileSync(path.join(A.dir, 'public', '.well-known', 'discord'), 'dh=harness');
     fs.writeFileSync(path.join(A.dir, 'secret.txt'), 'not public');
+    fs.mkdirSync(path.join(A.dir, 'files'), { recursive: true });
+    fs.writeFileSync(path.join(A.dir, 'files', 'files.json'), JSON.stringify({ 'guide.pdf': { title: 'The guide' } }));
+    fs.writeFileSync(path.join(A.dir, 'files', 'guide.pdf'), 'the guide');
+    fs.writeFileSync(path.join(A.dir, 'files', 'notes.txt'), 'not listed');
 
     a = await start(A);
     b = await start(B);
@@ -247,6 +257,17 @@ const readJson = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8'))
     yes('an escaped ../ does not reach a file outside public', r.text.indexOf('not public') < 0);
     r = await request(P, 'GET', '/api/page-version/' + '0'.repeat(64));
     yes('an unknown page version is 404', r.status === 404);
+
+    // ------------------------------------------------------------ GET /file/
+    console.log('\nGET /file/:');
+    r = await request(P, 'GET', '/file/guide.pdf');
+    yes('a file files.json lists is 200 with its bytes', r.status === 200 && r.text === 'the guide');
+    r = await request(P, 'GET', '/file/files.json');
+    yes('files.json itself is 200', r.status === 200 && r.j['guide.pdf'] && r.j['guide.pdf'].title === 'The guide');
+    r = await request(P, 'GET', '/file/notes.txt');
+    yes('a file in the folder that files.json does not list is 404', r.status === 404 && r.text === 'no such file');
+    r = await request(b.port, 'GET', '/file/files.json');
+    yes('with no downloads at all, files.json is 404 and not a server error', r.status === 404);
   } catch (e) {
     fail++; console.log('FAIL  ' + (e && e.stack || e));
   } finally {

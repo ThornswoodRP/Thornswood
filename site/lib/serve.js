@@ -18,7 +18,7 @@ const { andList, cfg, forMode, notAcceptedYet } = require('./config');
 const { BLURB, BOARDS, DOCS, escAttr, fillCreditsCommits, fillLoreLine,
   fillPage, LEVEL, MD_PAGES, pageHtml, pageMarkdown, PUBLIC_EDGE_SECONDS,
   PUBLIC_PAGES, readLines, roadmapBoard } = require('./pages');
-const { feedFile, feedSettings, feedView, nativePublished, nativeTag, newestSetup, releaseCopy } = require('./feed');
+const { feedFile, feedSettings, feedView, nativePublished, nativeTag, newestSetup, releaseCopy, setupChannel } = require('./feed');
 const { creditsFacts, findPageVersion, PAGES, pageSha256, PUBLIC_ORIGIN,
   publicAssetBody, publicAssetVersion, publicDiscovery, publicPageBody,
   singlePageHeading } = require('./public');
@@ -1105,8 +1105,8 @@ async function handle(req, res) {
   const dl = p.match(/^\/file\/([A-Za-z0-9._ -]+)$/);
   if (dl && req.method === 'GET') {
     // The setup programs, from their GitHub Releases (newestSetup, #4824).
-    for (const ch of Object.keys(SETUP_KINDS)) {
-      if (dl[1] !== SETUP_KINDS[ch].name) continue;
+    const ch = setupChannel(dl[1]);
+    if (ch) {
       const setup = newestSetup(ch);
       if (!setup) return send(res, 404, 'the installer is not published yet', 'text/plain');
       res.writeHead(302, { location: setup.url, 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' });

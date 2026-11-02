@@ -83,6 +83,7 @@ eval(grab('function rangeReply('));
 const kindsAt = src.indexOf('const SETUP_KINDS = {');
 yes('the site names the setup programs in SETUP_KINDS', kindsAt >= 0);
 const SETUP_KINDS = eval('(' + src.slice(src.indexOf('{', kindsAt), block(kindsAt)) + ')');
+eval(grab('function setupChannel('));
 const MAIN_SETUP = { name: 'Thornswood-Setup.exe', size: 123456789, sha256: 'c'.repeat(64), tag: 'main-build-20261101.3',
   at: 1761998400000, url: 'https://github.com/ThornswoodRP/Thornswood/releases/download/main-build-20261101.3/Thornswood-Setup.exe' };
 const setupsNow = { main: MAIN_SETUP, dev: null };

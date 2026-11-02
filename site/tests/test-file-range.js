@@ -93,6 +93,7 @@ eval(grab('function oldInstaller(') + '\n' + grab('function downloadServed('));
 // The installer's names answer from their GitHub Release before the folder is
 // looked at (#4824, test-release-copies.js); none is published here.
 const SETUP_KINDS = { main: { name: 'Thornswood-Setup.exe' }, dev: { name: 'Thornswood-Dev-Setup.exe' } };
+eval(grab('function setupChannel('));
 function newestSetup() { return null; }
 
 const rangeSrc = grab('function rangeReply(');
