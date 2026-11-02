@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The launcher's window, started without a screen (Avalonia's headless
+    platform), for launcher\tests\test-window-starts.ps1 (2 Nov 2026). It runs
+    the real compiled window: the Thornswood.dll that harness gives it is
+    launcher\app\Thornswood.csproj built as it is (Build-LauncherProject in
+    tests\Launcher-Csc.ps1), so what this starts is the markup the native exe
+    carries. Built only by that harness: it passes LauncherDll.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The launcher's own Avalonia version, and its headless platform. -->
+    <PackageReference Include="Avalonia" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Headless" Version="12.1.4" />
+    <PackageReference Include="Avalonia.BuildServices" Version="11.3.2" ExcludeAssets="all" PrivateAssets="all" />
+    <Reference Include="Thornswood"><HintPath>$(LauncherDll)</HintPath></Reference>
+  </ItemGroup>
+</Project>
