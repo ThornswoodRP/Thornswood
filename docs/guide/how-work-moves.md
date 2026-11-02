@@ -67,12 +67,19 @@ The short form of the rules. The same decisions, with the dates they were made, 
   stopped at its notes. A ruleset holds the
   admin account too, whatever `enforce_admins` says, so GitHub refuses a
   merge past red for everybody. And since 31 Oct auto-merge is on (#5182,
-  Patrick's A): turn it on when the pull request opens, with
-  `gh pr merge --auto --squash`, and GitHub puts it in the merge queue the
-  moment `Build check result` is green, so nobody waits to press merge. The
+  Patrick's A), and since 2 Nov nobody turns it on by hand:
+  `.github/workflows/auto-merge.yml` (`scripts/ops/Auto-Merge.js`) puts
+  every open pull request on it after each of its builds, and GitHub puts it
+  in the merge queue the moment `Build check result` is green, so nobody
+  waits to press merge (Patrick, 2 Nov: "every PR goes on auto-merge when it
+  opens, dropped PRs go back in the queue"). A draft, a fork's, Djinn's and
+  one that conflicts with main are left off. One the queue lets go goes back
+  on after the next push to main when the queue was cleared, rolled back or
+  timed out; let go for a failed check or a conflict, it is its owner's, and
+  the owner's push with the fix puts it back on. The
   queue (#5296, the redesign's part 5) checks it once more on the newest
-  main, with the whole gate, and squash-merges it. Turning it on
-  is the moment you say you are confident in the change. The last classic
+  main, with the whole gate, and squash-merges it. Opening it ready
+  for review is the moment you say you are confident in the change. The last classic
   setting, "require branches to be up to date" with no check listed, was
   removed on 27 Sep at Patrick's word ("we use the VPS's build checker").
   What changed on 23 Sep, since 22 Sep: the review requirement was one
@@ -317,9 +324,9 @@ this is the long form.
   `Build check result` in `.github/workflows/build-pr.yml`, runs on every pull
   request on GitHub's runners, and main's ruleset makes it a setting, not only
   a rule of ours:
-  turn on auto-merge for your own pull request when you are confident in the
-  change, and GitHub merges it once `Build check result` is green, which main's
-  ruleset requires of everybody (#5182). Each of us does this for our own. Somebody else on the team reading a pull request first is a habit,
+  every pull request goes on auto-merge by itself (auto-merge.yml), and GitHub
+  merges it once `Build check result` is green, which main's ruleset requires
+  of everybody (#5182). Open it as a draft while it is not ready. Somebody else on the team reading a pull request first is a habit,
   not a setting. `.github/CODEOWNERS` asks the rest of the team for a review when
   a pull request touches one of the shared files, and blocks nothing while
   the code owner review is off. The settings change without a commit, so

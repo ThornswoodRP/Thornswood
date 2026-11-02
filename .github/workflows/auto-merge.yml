@@ -1,0 +1,47 @@
+# Puts every open pull request on auto-merge, and puts back one the merge
+# queue let go for a reason that was not its own (Patrick, 2 Nov 2026:
+# "every PR goes on auto-merge when it opens, dropped PRs go back in the
+# queue"). scripts/ops/Auto-Merge.js says the rule; the queue then lands
+# each one once main's ruleset is satisfied, as before (#5182, #5296).
+#
+# WHEN. After every build of a pull request (so a new one, and one pushed
+# again after the queue let it go, goes on), after every push to main (so
+# one the queue let go while main moved goes back), and by hand.
+#
+# WHAT IT HOLDS. A workflow_run and a push run from main, and the checkout
+# is main's scripts/ops with no credential kept, so no pull request's code
+# runs here (no workflow runs on pull_request_target, #1306). Its token can
+# turn auto-merge on and nothing it does pushes, merges or comments; the
+# merge queue does the merge, as github-merge-queue[bot], so main's push
+# workflows run after it as they do for everybody's.
+name: Auto-merge
+on:
+  workflow_run:
+    workflows: ["Build check (pull requests)"]
+    types: [completed]
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: auto-merge
+  cancel-in-progress: true
+jobs:
+  sweep:
+    name: Put open pull requests on auto-merge
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          persist-credentials: false
+          sparse-checkout: scripts/ops
+      - name: Put each ready one on auto-merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: node scripts/ops/Auto-Merge.js
