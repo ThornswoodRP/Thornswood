@@ -879,6 +879,13 @@ function world(opts) {
     };
     box.globalThis = box;
     vm.createContext(box);
+    /*
+      The dice (w.dice) go in before the gamemode loads, so a block that keeps
+      Math.random itself (the durability block's api.random) rolls them too.
+      Until a scenario holds them they roll as Math.random does.
+    */
+    vm.runInContext('Math.__standInRandom = Math.random; Math.random = function () {' +
+      ' var d = globalThis.__standInDice; return typeof d === "number" ? d : Math.__standInRandom(); };', box);
     proc = { box: box, timers: timers, err: null };
     made = new Set();
     madeVisible = new Set();
@@ -1281,8 +1288,6 @@ function world(opts) {
   */
   w.dice = function (value) {
     proc.box.__standInDice = (value === null || value === undefined) ? null : Number(value);
-    vm.runInContext('if (!Math.__standInRandom) { Math.__standInRandom = Math.random; Math.random = function () {' +
-      ' var d = globalThis.__standInDice; return typeof d === "number" ? d : Math.__standInRandom(); }; }', proc.box);
   };
   w.die = function (actorId, killerId, delayMs) {
     actorId = actorId >>> 0;
