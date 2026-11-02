@@ -85,23 +85,44 @@ namespace Thornswood
 
         /// <summary>
         /// How loud each pitch is in what played over the last half second:
-        /// the amplitude of that tone (Goertzel), so a voice heard in front at
-        /// full level reads about 0.25 (the tone through the HRTF panner,
-        /// both ears averaged), and a voice not heard reads about nothing.
+        /// the tone's amplitude in each 40 ms of it (Goertzel, through a
+        /// Hann window), averaged, so a voice heard in front at full level
+        /// reads about 0.25 (the tone through the HRTF panner, both ears
+        /// averaged), and a voice not heard reads about nothing. Measured a
+        /// block at a time because the voice is not one unbroken tone: the
+        /// jitter buffer drops its oldest audio when a burst piles up and
+        /// plays silence when it runs dry (VoiceMix.cs), and each is a jump
+        /// in the tone's phase. Over the whole half second at once the parts
+        /// either side of a jump cancel, so a voice played the whole time
+        /// read about half its level: 0.045 where 40 ms at a time read 0.088,
+        /// on a machine as busy as the Linux gate (2 Nov 2026), and 0.047 failed
+        /// test-voice-moved-clients.js on #5327. A block holds at most one
+        /// jump, and a block of silence still counts as nothing heard.
         /// </summary>
         public double Hear(double hz)
         {
             float[] copy = new float[heard.Length];
             int start;
             lock (gate) { Array.Copy(heard, copy, heard.Length); start = at; }
-            double w = 2 * Math.PI * hz / VoiceMix.Rate, c = 2 * Math.Cos(w), s1 = 0, s2 = 0;
-            for (int i = 0; i < copy.Length; i++)
+            // 40 ms, whose bins are 25 Hz apart: the harnesses' tones are 60 Hz or
+            // more apart, outside each other's main lobe through the window.
+            const int Block = VoiceMix.Rate / 25;
+            int blocks = copy.Length / Block, skip = copy.Length - blocks * Block;
+            double w = 2 * Math.PI * hz / VoiceMix.Rate, c = 2 * Math.Cos(w), sum = 0;
+            for (int b = 0; b < blocks; b++)
             {
-                double s0 = copy[(start + i) % copy.Length] + c * s1 - s2;
-                s2 = s1; s1 = s0;
+                double s1 = 0, s2 = 0;
+                for (int i = 0; i < Block; i++)
+                {
+                    double hann = 0.5 - 0.5 * Math.Cos(2 * Math.PI * i / Block);
+                    double s0 = hann * copy[(start + skip + b * Block + i) % copy.Length] + c * s1 - s2;
+                    s2 = s1; s1 = s0;
+                }
+                double power = s1 * s1 + s2 * s2 - c * s1 * s2;
+                // The Hann window sums to half the block.
+                sum += 2 * Math.Sqrt(Math.Max(0, power)) / (Block / 2.0);
             }
-            double power = s1 * s1 + s2 * s2 - c * s1 * s2;
-            return 2 * Math.Sqrt(Math.Max(0, power)) / copy.Length;
+            return sum / blocks;
         }
 
         public void Dispose()

@@ -147,7 +147,7 @@ async function main() {
   const setupAt = fileBody.indexOf('newestSetup(ch)');
   yes('/file/ answers a setup program\'s name from its Release, before it looks in the downloads folder',
       setupAt >= 0 && setupAt < fileBody.indexOf('path.join(FILES, dl[1])') &&
-      /if \(dl\[1\] !== SETUP_KINDS\[ch\]\.name\) continue;/.test(fileBody));
+      /const ch = setupChannel\(dl\[1\]\);\s*if \(ch\) \{/.test(fileBody));
   yes('  302 to the Release\'s copy, or 404 while there is none, and never a byte from the site',
       /if \(!setup\) return send\(res, 404, /.test(fileBody.slice(setupAt)) &&
       /res\.writeHead\(302, \{ location: setup\.url/.test(fileBody.slice(setupAt)));

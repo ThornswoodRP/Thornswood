@@ -18,7 +18,7 @@ const { andList, cfg, forMode, notAcceptedYet } = require('./config');
 const { BLURB, BOARDS, DOCS, escAttr, fillCreditsCommits, fillLoreLine,
   fillPage, LEVEL, MD_PAGES, pageHtml, pageMarkdown, PUBLIC_EDGE_SECONDS,
   PUBLIC_PAGES, readLines, roadmapBoard } = require('./pages');
-const { feedFile, feedSettings, feedView, nativePublished, nativeTag, newestSetup, releaseCopy } = require('./feed');
+const { feedFile, feedSettings, feedView, nativePublished, nativeTag, newestSetup, releaseCopy, setupChannel } = require('./feed');
 const { creditsFacts, findPageVersion, PAGES, pageSha256, PUBLIC_ORIGIN,
   publicAssetBody, publicAssetVersion, publicDiscovery, publicPageBody,
   singlePageHeading } = require('./public');
@@ -1105,11 +1105,16 @@ async function handle(req, res) {
   const dl = p.match(/^\/file\/([A-Za-z0-9._ -]+)$/);
   if (dl && req.method === 'GET') {
     // The setup programs, from their GitHub Releases (newestSetup, #4824).
-    for (const ch of Object.keys(SETUP_KINDS)) {
-      if (dl[1] !== SETUP_KINDS[ch].name) continue;
+    // Every answer under /file/ is no-store (#5449). Cloudflare caches an
+    // .exe or .zip by its name whatever the site says, and turns no-cache
+    // into four hours in the browser: on 2 Nov the old installer was still
+    // served from its cache after the site answered 404 for it, and this
+    // redirect reached browsers as max-age=14400. no-store it does keep.
+    const ch = setupChannel(dl[1]);
+    if (ch) {
       const setup = newestSetup(ch);
       if (!setup) return send(res, 404, 'the installer is not published yet', 'text/plain');
-      res.writeHead(302, { location: setup.url, 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' });
+      res.writeHead(302, { location: setup.url, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
       return res.end();
     }
     const file = path.join(FILES, dl[1]);
@@ -1128,6 +1133,7 @@ async function handle(req, res) {
     const kind = {
       'content-type': 'application/octet-stream',
       'content-disposition': 'attachment; filename="' + path.basename(file) + '"',
+      'cache-control': 'no-store',
       'etag': '"' + st.size.toString(16) + '-' + Math.floor(st.mtimeMs).toString(16) + '"',
       'last-modified': new Date(st.mtimeMs).toUTCString()
     };
