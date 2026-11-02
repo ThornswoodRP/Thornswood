@@ -10,7 +10,7 @@
 // needs this one back finds them (a function is there from the top of its
 // file).
 module.exports = { askReleaseCopies, feedFile, feedReleaseTag, feedSettings,
-  feedView, nativePublished, nativeTag, newestSetup, readJsonQuiet, releaseCopy };
+  feedView, nativePublished, nativeTag, newestSetup, readJsonQuiet, releaseCopy, setupChannel };
 
 const https  = require('https');
 const fs     = require('fs');
@@ -317,6 +317,13 @@ function askSetups() {
     setups.at = Date.now();
     console.error('[thornswood-docs] setup programs: ' + (e && e.message));
   });
+}
+// The channel, 'main' or 'dev', whose setup program goes by this file name,
+// or '' for any other name. A function, so /file/ can ask it however the
+// modules load (a const is not there yet when module.exports is given).
+function setupChannel(name) {
+  for (const ch of Object.keys(SETUP_KINDS)) { if (SETUP_KINDS[ch].name === name) return ch; }
+  return '';
 }
 // The newest setup program of a channel, 'main' or 'dev', as GitHub last said
 // it, or null: { name, url, size, sha256, tag, at }.
