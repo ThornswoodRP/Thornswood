@@ -10,8 +10,9 @@ long form of every step, and CONTRIBUTING.md says how a change is sent.
   MSBuild and the .NET Framework 4.8.1 targeting pack are there, then
   `.\scripts\release\Build-Launcher.ps1 -Root $env:TEMP\launcher-try -NoPause`
   builds it into a folder of its own.
-- The gamemode is `game\gamemode.js` as it is; `docs\GAMEMODE.md` says how
-  it is laid out and deployed.
+- The gamemode is written in `game\gamemode\*.ts` and built into
+  `game\gamemode.js` by `node scripts\dev\Build-Gamemode.js`;
+  `docs\GAMEMODE.md` says how it is laid out and deployed.
 - The engine (the SkyMP fork in `engine\skymp`): `engine\README.md`.
 
 ## Test

@@ -197,7 +197,7 @@ The words this guide uses. The long alphabetical list, with file names, is [docs
 | Baseline | The record of the files the last release on that channel shipped |
 | Note | The release post: a title, then one line starting with `- ` for each thing a person will notice |
 | VPS | The remote machine that runs the site, the bot, voice, and both game servers |
-| Gamemode | `game\gamemode.js`, the rules the game server runs |
+| Gamemode | The rules the game server runs: written as the TypeScript parts in `game\gamemode`, built into `game\gamemode.js` |
 | Hotfix | A live release of one fix, built from the commit that is already live |
 | Vortex | The mod manager. The Thornswood profile deploys the collection |
 | Pandora | Pandora Behaviour Engine+. It builds the behavior files before a Ship |

@@ -10,6 +10,7 @@
 # reads it, whatever the checkout.
 game/data/** text eol=lf
 game/gamemode.js text eol=lf
+game/gamemode/** text eol=lf
 game/gamemode-tables/** text eol=lf
 game/plugins/thornswood-front.js text eol=lf
 docs/systems/** text eol=lf

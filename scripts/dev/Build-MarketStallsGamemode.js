@@ -24,9 +24,10 @@
 */
 const fs = require('node:fs');
 const path = require('node:path');
+const gamemodeSource = require('./gamemode-source.js');
 const TABLES = require('./GamemodeTables.js');
 const root = path.join(__dirname, '../..');
-const modePath = path.join(root, 'game/gamemode.js');
+const modePath = path.join(root, 'game/gamemode');
 const frontPath = path.join(root, 'game/plugins/thornswood-front.js');
 const tablePath = path.join(root, 'game/data/market-stalls.json');
 const opts = TABLES.options(process.argv.slice(2), ['--tables'], ['--check']);
@@ -49,7 +50,7 @@ const rows = table.stalls;
 require(path.join(root, 'game/market-stalls.js')).checkTable(rows);
 
 const book = fs.readFileSync(path.join(root, 'game/market-stalls.js'), 'utf8').replace(/\r\n/g, '\n');
-const oldMode = fs.readFileSync(modePath, 'utf8').replace(/\r\n/g, '\n');
+const oldMode = gamemodeSource.read(modePath).replace(/\r\n/g, '\n');
 let mode = between(oldMode, 'MARKET STALLS BUNDLE',
   '// Built by scripts\\dev\\Build-MarketStallsGamemode.js out of game\\market-stalls.js. Do not hand edit.\n' +
   'const MARKET_STALLS_BOOK = (function () {\nconst module = { exports: {} };\n' +
@@ -74,7 +75,7 @@ if (opts['--check']) {
   }
   console.log('PASS the market stall bundle, the MARKET_STALL_TABLE table and the front plugin\'s STALL_SPOTS match game/market-stalls.js and game/data/market-stalls.json');
 } else {
-  fs.writeFileSync(modePath, mode);
+  gamemodeSource.write(modePath, mode);
   fs.writeFileSync(frontPath, front);
   TABLES.write('MARKET_STALL_TABLE', stallTable, tablesDir);
 }

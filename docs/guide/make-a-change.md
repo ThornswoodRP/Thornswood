@@ -168,11 +168,19 @@ git rebase origin/main
 git push
 ```
 
-**The pull stopped on a conflict.** Git will not commit while a file is unmerged. Open the file it names, often `game\gamemode.js`. Find the markers `<<<<<<<`, `=======`, and `>>>>>>>`. Keep the code you want and delete the marker lines. Save the file.
+**The pull stopped on a conflict.** Git will not commit while a file is unmerged. Open the file it names. Find the markers `<<<<<<<`, `=======`, and `>>>>>>>`. Keep the code you want and delete the marker lines. Save the file.
 
 ```powershell
-git add game\gamemode.js
-git commit -m "Resolve merge conflict in gamemode.js"
+git add <the file>
+git commit -m "Resolve merge conflict"
+```
+
+When the file is `game\gamemode.js`, do not edit it: it is built. Resolve the parts in `game\gamemode` that conflicted the same way, then build it again, which writes it whole:
+
+```powershell
+node scripts\dev\Build-Gamemode.js
+git add game\gamemode game\gamemode.js
+git commit -m "Resolve merge conflict in the gamemode"
 ```
 
 If the stop was a rebase rather than a merge, the last step is `git rebase --continue` after the `git add`.

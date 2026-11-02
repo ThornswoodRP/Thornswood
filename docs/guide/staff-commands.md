@@ -2,7 +2,7 @@
 
 Part of the [Developer Guide](../../Developer-Guide.md), the index of every page and section.
 
-Staff, testers and admins type these in the game's chat box: Enter opens it. They stay commands, unlike what people do in the world ([Buttons, not chat commands](rules.md#buttons-not-chat-commands)), and the help panel never lists them; the reply to `/help` and to a word the server does not know names `/tp`, `/give`, `/spawn` and `/where` to a tester and nobody else (#1633). [docs/systems/commands.md](../systems/commands.md) has every command there is with the line the server reads it at. The code is the staff block of `game\gamemode.js` (`// ==== thornswood staff ====`) and the `/tp`, `/give`, `/spawn` and `/where` branches of `handle` in its chat commands block. A pull request that adds or changes a staff command changes its row here and on that page too.
+Staff, testers and admins type these in the game's chat box: Enter opens it. They stay commands, unlike what people do in the world ([Buttons, not chat commands](rules.md#buttons-not-chat-commands)), and the help panel never lists them; the reply to `/help` and to a word the server does not know names `/tp`, `/give`, `/spawn` and `/where` to a tester and nobody else (#1633). [docs/systems/commands.md](../systems/commands.md) has every command there is with the line the server reads it at. The code is `game\gamemode\staff.ts` and the `/tp`, `/give`, `/spawn` and `/where` branches of `handle` in `game\gamemode\chat-commands.ts`. A pull request that adds or changes a staff command changes its row here and on that page too.
 
 ## Who may run them
 

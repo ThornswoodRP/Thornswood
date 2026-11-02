@@ -15,9 +15,10 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const gamemodeSource = require('./gamemode-source.js');
 
 const REPO = path.join(__dirname, '..', '..');
-const GAMEMODE = path.join(REPO, 'game', 'gamemode.js');
+const GAMEMODE = path.join(REPO, 'game', 'gamemode');
 const DATA = path.join(REPO, 'game', 'data', 'hair-dyes.json');
 const MODULE = path.join(REPO, 'game', 'hair-dye.js');
 const START = '  // ==== HAIR_DYES ====';
@@ -52,7 +53,7 @@ function build(gamemodeText, dataText, moduleText) {
 function read(p) { return fs.readFileSync(p, 'utf8'); }
 
 if (require.main === module) {
-  const now = read(GAMEMODE);
+  const now = gamemodeSource.read(GAMEMODE);
   const next = build(now, read(DATA), read(MODULE));
   if (process.argv.includes('--check')) {
     if (next !== lf(now)) {
@@ -61,7 +62,7 @@ if (require.main === module) {
     }
     console.log('the hair dye block matches game/data/hair-dyes.json and game/hair-dye.js');
   } else {
-    fs.writeFileSync(GAMEMODE, next);
+    gamemodeSource.write(GAMEMODE, next);
     console.log('wrote the hair dye block into game/gamemode.js');
   }
 }

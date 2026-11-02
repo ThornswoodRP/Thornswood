@@ -124,7 +124,7 @@ Visual Studio Code is the window you work in. The folders sit on the left. The f
 cd C:\Dev\Thornswood
 code .
 code .\Developer-Guide.md
-code .\game\gamemode.js
+code .\game\gamemode\order.json
 ```
 
 ### The parts of the window
@@ -133,7 +133,7 @@ Hover the icons on the far left and read the name.
 
 **Explorer** lists the folders and files. Click a triangle to open a folder. Click a file to open it. A dot on the file's tab means the editor still has unsaved changes. `Ctrl+S` saves. Git sees the saved file.
 
-`Ctrl+P` opens a file by name. Type `gamemode.js` and press Enter.
+`Ctrl+P` opens a file by name. Type `needs.ts` and press Enter: the gamemode's needs part.
 
 `Ctrl+Shift+F` searches the words inside files. Click a result to open that line.
 
@@ -153,7 +153,7 @@ Stay in `C:\Dev\Thornswood`. Each big folder has its own `README.md`. Open that 
 | `Developer-Guide.md` | This guide's index; its pages are in `docs\guide` | `code .\Developer-Guide.md` |
 | `launcher\app` | The launcher program | `Get-ChildItem launcher\app\*.cs` |
 | `launcher\ui.xaml` | The launcher window layout | `code .\launcher\ui.xaml` |
-| `game\gamemode.js` | The server rules | `code .\game\gamemode.js` |
+| `game\gamemode` | The server rules, one part per system, built into `game\gamemode.js` | `Get-ChildItem game\gamemode` |
 | `game\plugins` | Scripts that run in Skyrim | `Get-ChildItem game\plugins` |
 | `site\data\site` | The public website pages | `Get-ChildItem site\data\site` |
 | `bot` | The Discord bot | `Get-ChildItem bot` |
@@ -394,7 +394,7 @@ Get-ChildItem
 Get-ChildItem scripts
 Set-Location game
 Set-Location ..
-code .\game\gamemode.js
+code .\game\gamemode\needs.ts
 ```
 
 `Get-ChildItem` lists the folder you are in. `Set-Location` moves you. `cd` is the short form. Each big folder has a `README.md`. Open that file when you enter the folder. It says what the folder is and how to change it.
@@ -435,7 +435,7 @@ Thornswood
 
 Inside `scripts`, the folders you will use are `release` (build and Ship), `deploy` (put a built thing on the server), `vps` (the key and the log reads), `dev` (checks on your PC), `ops` (news and the door), and `mods` (the generated behavior files).
 
-Inside `game`, `gamemode.js` is the server. `plugins` is what runs inside Skyrim. `ui` is the overlays. `data` is the tables the gamemode reads. `content` is authored content. `menu` is the in-game menu pieces.
+Inside `game`, `gamemode` is the server, as TypeScript parts that `node scripts\dev\Build-Gamemode.js` joins into `gamemode.js`. `plugins` is what runs inside Skyrim. `ui` is the overlays. `data` is the tables the gamemode reads. `content` is authored content. `menu` is the in-game menu pieces.
 
 ### Files you will open often
 
@@ -445,7 +445,7 @@ Click a name to open the file. The line under it says what the file is for.
 | --- | --- |
 | [Developer-Guide.md](../../Developer-Guide.md) | This guide's index; the pages are in [docs/guide](../../Developer-Guide.md#the-pages) |
 | [README.md](../../README.md) | The short map of the repository |
-| [game/gamemode.js](../../game/gamemode.js) | The server's rules. Most game changes start here or in `game\data` |
+| [game/gamemode](../../game/gamemode) | The server's rules, one TypeScript part per system. Most game changes start here or in `game\data` |
 | [game/plugins/README.md](../../game/plugins/README.md) | The scripts that run inside Skyrim. The plugin files sit beside that README |
 | [launcher/ui.xaml](../../launcher/ui.xaml) | The launcher window: buttons, pages, and labels |
 | [launcher/app/ARCHITECTURE.md](../../launcher/app/ARCHITECTURE.md) | How the launcher starts, which class owns which job, and the path from Play to the game |
@@ -542,7 +542,7 @@ JavaScript is the language of the site scripts, the checks in `tests`, the game 
 | --- | --- |
 | [site/public/home.js](../../site/public/home.js) | The public page's script |
 | [site/public/hub.js](../../site/public/hub.js) | The staff hub's script |
-| [game/gamemode.js](../../game/gamemode.js) | The server. It is one long file. Read an overlay before you read this |
+| [game/gamemode](../../game/gamemode) | The server, one part per system, built into one file. Read an overlay before you read this |
 | [game/ui/thornswood-chat.js](../../game/ui/thornswood-chat.js) | One overlay, the chat, and the one socket to the voice service |
 
 A file is a list of statements the program runs from the top. Open `home.js` beside `home.html` and you are looking at the page and the code that runs in it.

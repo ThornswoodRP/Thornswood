@@ -6,12 +6,13 @@
 // and never the bundle. --tables <folder> writes them somewhere else.
 const fs = require('node:fs');
 const path = require('node:path');
+const gamemodeSource = require('./gamemode-source.js');
 const TABLES = require(path.join(__dirname, 'GamemodeTables.js'));
 const opts = TABLES.options(process.argv.slice(2), ['--tables'], ['--check']);
 const tablesDir = opts['--tables'] || TABLES.DIR;
 const root = path.join(__dirname, '../..');
-const modePath = path.join(root, 'game/gamemode.js');
-const old = fs.readFileSync(modePath, 'utf8').replace(/\r\n/g, '\n');
+const modePath = path.join(root, 'game/gamemode');
+const old = gamemodeSource.read(modePath).replace(/\r\n/g, '\n');
 // The progression block reads SPELL_IDS with the gamemode's table().
 const progression={table:name=>TABLES.read(name,tablesDir)};
 require('node:vm').runInNewContext(old.slice(old.indexOf('// ==== thornswood progression ===='),old.indexOf('// ==== end thornswood progression ====')),progression);
@@ -155,6 +156,6 @@ if (opts['--check']) {
     ' is stale. Run scripts/dev/Build-MerchantGamemode.js.');
   console.log('PASS merchant gamemode bundle and its tables match their source and catalogues');
 } else {
-  fs.writeFileSync(modePath, next);
+  gamemodeSource.write(modePath, next);
   for (const name of Object.keys(tables)) TABLES.write(name, tables[name], tablesDir);
 }

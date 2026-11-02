@@ -30,9 +30,25 @@ no two content pull requests could merge side by side. The load reads the
 whole folder once and logs it as a git tree id beside the git blob of
 `gamemode.js`, so a deploy can tell which tables a load ran.
 
-The plan for writing it as many source files that are joined into this one
-file, with the loader's limits read from the fork and the measurements behind
-it, is [GAMEMODE-SOURCE.md](GAMEMODE-SOURCE.md) (#2181).
+## Where its source is
+
+`game\gamemode.js` is built. Its source is `game\gamemode\*.ts`, one
+TypeScript part per section of the file below, in the load order
+`game\gamemode\order.json` lists. `node scripts\dev\Build-Gamemode.js`
+strips each part's types (Node's own strip, which leaves spaces where the
+types were, so every line keeps its number) and joins the parts with nothing
+between them into the one file. A part is a script, not a module: no import
+or export, and every part shares the file's one top-level scope, so the
+banners and `gamemode.js:name` citations below still find code by name.
+
+Change a part, then build. `tests\test-2181-gamemode-source.js` fails when
+`game\gamemode.js` is not exactly what the parts build, so a hand edit to it
+is refused. `Build-Gamemode.js --where <line>` names the part an error's line
+is in. The builders that still write into the code (the bundles, the staff
+data, the NPC population data) edit the parts the same way, through
+`scripts\dev\gamemode-source.js` (and `gamemode_source.py` for Python). The
+design, the loader's limits read from the fork and the stages still to come
+are [GAMEMODE-SOURCE.md](GAMEMODE-SOURCE.md) (#2181).
 
 A handler returns `false` to block an event and anything else to let it
 through. Every handler is wrapped in `guard()` (`gamemode.js:guard`), so a throw

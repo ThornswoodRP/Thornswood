@@ -2,10 +2,12 @@
 
 This page is the design for issue #2181: how `game\gamemode.js` can be written
 as many source files and data files and still reach the server as the one file
-the loader needs. Patrick chose option D on 12 Oct 2026 (on #2181). Nothing has
-been split yet. The issue authorizes no refactor and no behaviour change; each
-stage below is its own later issue and pull request. How the file is laid out
-today is [GAMEMODE.md](GAMEMODE.md).
+the loader needs. Patrick chose option D on 12 Oct 2026 (on #2181), and the
+plan he approved on 31 Oct (rev 64) writes the parts in TypeScript. Stages 1
+and 3 are done (1 Nov 2026): the source is `game\gamemode\*.ts`, and
+`game\gamemode.js` is built from it byte for byte. The tables went to files of
+their own first (#5191), which is stage 2 by another road. "Where it stands"
+below says what is left. How the file is laid out is [GAMEMODE.md](GAMEMODE.md).
 
 Re-measured on 17 Oct 2026 at main a395d3ca, engine fork pin 0714e444. The
 first measurements (12 Oct, main 55c22556, pin 1afaf2ef) are kept where they
@@ -239,9 +241,39 @@ Each stage leaves the server's file behaving the same. Stages 1 to 3 also leave
   put-back. Before stage 5 merges, a run of that put-back from a built
   artifact is part of its proof.
 
-## Scaffold
+## Where it stands (1 Nov 2026)
 
-`scripts\dev\Build-Gamemode.js` is the entry. Today it only `--check`s that the
-merchant bundle is current (it runs `Build-MerchantGamemode.js --check`) and
-prints that the full split is not started (#2181). Stage 1 replaces that with
-the round trip above.
+Stages 1 and 3 went in together, with the parts written as TypeScript, after
+the tables left the file for `game\gamemode-tables` (#5191):
+
+- **The cut.** The committed file was cut once at its banners: each dashed
+  section of the early part, each `// ==== thornswood X ====` block and each
+  `// NAME BEGIN` region starts a part, and a part runs to the next one, so
+  every byte is in exactly one part (the lines after an end marker stay with
+  the block above them). The parts are listed in `game\gamemode\order.json`.
+  Joined as they were cut, they were the committed file byte for byte, and
+  each one parsed as TypeScript and stripped to itself. The only change to
+  the built file is the header comment that says it is built.
+- **The build.** `scripts\dev\gamemode-source.js` strips each part with
+  Node's `module.stripTypeScriptTypes` in strip mode (types become spaces, so
+  each line keeps its number; no source map is needed) and joins them with
+  nothing added. Node prints an ExperimentalWarning for it on 22 and 24; the
+  strip itself is what Node runs `.ts` files with. `Build-Gamemode.js` writes
+  `game\gamemode.js`, `--check` fails when the committed file is not what the
+  parts build, and `--where <line>` names the part. The built file stays
+  committed, so the deploys, the blob id proof and the tests are unchanged.
+- **The builders.** A builder that still writes into the code (the bundles,
+  the staff data, the NPC population data) edits the joined source (each part
+  after a `// @part <file>` line) through `gamemode-source.js`, or
+  `gamemode_source.py`, which calls `Build-Gamemode.js --read` and `--write`.
+  Writing it back refuses a joined source that renames, drops, adds or breaks
+  a part, writes only the parts that changed and builds the file. A builder
+  given a plain file edits that file as before; `tests\gamemode-scratch.js`
+  gives a harness a source folder of its own instead.
+- **The record.** `tests\test-2181-gamemode-source.js` holds all of this.
+
+Left, each its own issue: type checking the parts with `tsc` (#5346; no
+types are written until it runs), the tables built and not committed
+(#5191), stages 4 and 5 (#5348: tests on the build, the artifact builds the
+file and git stops holding it), and regrouping parts by system once nothing
+outside a part uses its names.
