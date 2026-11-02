@@ -16,7 +16,8 @@
     GET  /api/releases         the news feed, either shape of details
     GET  /.well-known/<name>   the Discord domain proof
     GET  /api/page-version/<sha256>   an unknown version
-    GET  /file/<name>          a published file, files.json, and one not listed
+    GET  /file/<name>          a published file, files.json, and one not listed,
+                               each no-store so Cloudflare keeps none (#5449)
 
   /file/ was added on 2 November, after every request to it answered 500 on
   the live site: lib/serve.js named SETUP_KINDS, which it never imported, and
@@ -262,10 +263,15 @@ const readJson = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8'))
     console.log('\nGET /file/:');
     r = await request(P, 'GET', '/file/guide.pdf');
     yes('a file files.json lists is 200 with its bytes', r.status === 200 && r.text === 'the guide');
+    // Cloudflare keeps a file by its name whatever the site says unless it
+    // is no-store, and then serves it after the site has replaced or
+    // removed it (#5449).
+    yes('  and no cache may keep it', r.headers['cache-control'] === 'no-store');
     r = await request(P, 'GET', '/file/files.json');
     yes('files.json itself is 200', r.status === 200 && r.j['guide.pdf'] && r.j['guide.pdf'].title === 'The guide');
     r = await request(P, 'GET', '/file/notes.txt');
     yes('a file in the folder that files.json does not list is 404', r.status === 404 && r.text === 'no such file');
+    yes('  and no cache may keep that either', r.headers['cache-control'] === 'no-store');
     r = await request(b.port, 'GET', '/file/files.json');
     yes('with no downloads at all, files.json is 404 and not a server error', r.status === 404);
   } catch (e) {
