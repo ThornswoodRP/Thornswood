@@ -60,6 +60,7 @@
     "contents": "write",
     "issues": "write",
     "metadata": "read",
+    "organization_projects": "read",
     "pull_requests": "write"
    },
    "events": [],
@@ -69,6 +70,7 @@
     "contents": "Pushes the Bot's own branch. GitHub has no permission that pushes a branch but cannot merge, so the broker refuses a worker's merge (only Bramble merges) and main's ruleset refuses anything but a pull request with green checks.",
     "issues": "Comments, and puts on or takes off its own claim label.",
     "metadata": "Every App holds it; GitHub gives it read and nothing else.",
+    "organization_projects": "Patrick gave it on 2 Nov (the phone Board's option A) so the phone's Board could read the org board's Status and Order. It can only read; moving cards stays the board App's alone. Nothing uses it yet: tw-git's read op passes only GETs inside the three work repos, and the same day Patrick made the Board show only what each Bot is doing right now.",
     "pull_requests": "Opens and edits its own pull requests."
    }
   },
