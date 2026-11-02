@@ -12,8 +12,6 @@
                     "admin":  "needs Administrator: install, service, task registration, ACL, firewall, keys, secrets, or work outside the gate verbs",
                     "transport":  "a helper that carries what its caller hands it; the caller is the row that counts"
                 },
-    "scriptCount":  80,
-    "callCount":  327,
     "calls":  [
                   {
                       "script":  "scripts/deploy/Artifact.ps1",
