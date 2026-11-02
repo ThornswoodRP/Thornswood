@@ -84,7 +84,7 @@
               <Thumb Name="thumb">
                 <Thumb.Template>
                   <ControlTemplate>
-                    <Border Name="th" Background="{DynamicResource Line}" CornerRadius="5" Margin="3,0"/>
+                    <Border Background="{TemplateBinding Background}" CornerRadius="5" Margin="3,0"/>
                   </ControlTemplate>
                 </Thumb.Template>
               </Thumb>
@@ -95,7 +95,13 @@
       <Style Selector="^:vertical"><Setter Property="Width" Value="10"/></Style>
       <Style Selector="^:horizontal"><Setter Property="Height" Value="10"/></Style>
       <Style Selector="^:horizontal /template/ Track#PART_Track"><Setter Property="IsDirectionReversed" Value="False"/></Style>
-      <Style Selector="^ /template/ Thumb#thumb:pointerover /template/ Border#th">
+      <!-- One /template/ step only: Avalonia refuses a theme style with two
+           ("ControlTemplate styles cannot contain multiple template
+           selectors") the first time a scroll bar is drawn, which stopped
+           the launcher at start on 2 Nov. The thumb's own Background, which
+           its border takes, is what lights. -->
+      <Style Selector="^ /template/ Thumb#thumb"><Setter Property="Background" Value="{DynamicResource Line}"/></Style>
+      <Style Selector="^ /template/ Thumb#thumb:pointerover">
         <Setter Property="Background" Value="{DynamicResource Faint}"/>
       </Style>
     </ControlTheme>
