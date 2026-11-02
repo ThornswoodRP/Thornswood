@@ -12,6 +12,10 @@
 #     requirements.txt at the same version.
 #   - Install-Bot.ps1 and nightly.yml install it with --require-hashes and
 #     --only-binary :all:, and nothing installs it without them.
+#   - bot\.python-version names the Python the header compiles for, so
+#     Dependabot compiles its updates for that Python too and not for its
+#     own newer one (#5242 came in with audioop-lts, a library for 3.13 and
+#     later with no 3.12 wheel, and pip refused the install).
 #   - nightly.yml installs it in a job of its own that asks for the check
 #     label, so never on the signing runner, which reaches GitHub and the
 #     signing service only (#4914, Patrick's A on 30 Oct).
@@ -43,6 +47,12 @@ foreach ($l in $logical) {
 }
 Yes ("every line of requirements.txt is name==version with sha256 hashes only ({0} libraries)" -f $pins.Count) ($bad.Count -eq 0 -and $pins.Count -ge 3)
 foreach ($b in $bad) { Write-Host "      $b" }
+
+# ---- the Python it is compiled for, which Dependabot reads from .python-version
+$pyWant = if ($txt -match '--python-version (\d+\.\d+)') { $Matches[1] } else { '' }
+$pyFile = Join-Path $repo 'bot\.python-version'
+$pyHave = if (Test-Path -LiteralPath $pyFile) { ([IO.File]::ReadAllText($pyFile)).Trim() } else { '' }
+Yes ("bot\.python-version says the Python the header compiles for, so Dependabot compiles for it too ({0} and {1})" -f $pyHave, $pyWant) ($pyWant -and $pyHave -eq $pyWant)
 
 # ---- requirements.in: what the bot names, each in the lock at the same version
 $in = @((Text 'bot\requirements.in') -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith('#') })
