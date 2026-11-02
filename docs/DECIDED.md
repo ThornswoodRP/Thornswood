@@ -314,6 +314,10 @@ link, and the old line goes.
   token is sealed in one run that takes no key from whoever starts it.**
   (dec_ezVpLbFt9vfdknnW36cqkw) 1 Nov 2026,
   [#5334](https://github.com/ThornswoodRP/Thornswood/issues/5334#issuecomment-6570922212).
+- **thornswood.net and www move onto the Cloudflare Tunnel by the tunnel run
+  note's steps 1 to 4, once, with play.thornswood.net and ports 80 and 443
+  left as they are.** (dec_FJBVN_ZIWJgrFMjsAXK0Wg) 2 Nov 2026,
+  [#5334](https://github.com/ThornswoodRP/Thornswood/issues/5334#issuecomment-6586969085).
 
 ## Work and crafting
 
