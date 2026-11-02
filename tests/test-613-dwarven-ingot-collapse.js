@@ -35,7 +35,7 @@ function yes(what, cond) {
 }
 
 const recipes = JSON.parse(fs.readFileSync(RECIPES, 'utf8'));
-const gm = fs.readFileSync(GM, 'utf8');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(GM, 'utf8'));
 const esp = fs.readFileSync(ESP);
 
 const scrapUnowned = Object.keys(recipes.unowned || {}).filter(function (id) {
@@ -62,15 +62,12 @@ yes('refused rows name the collapse and no sale price', HIDE.every(function (id)
   return w.indexOf('duplicate Dwarven Metal Ingot scrap smelt') >= 0 && w.indexOf('No sale price') >= 0;
 }));
 
+// The gamemode reads RECIPES_BY_ID from game/gamemode-tables (#5191).
+const BOOK = require('./gamemode-tables.js').table('RECIPES_BY_ID');
 yes('gamemode refuses each hidden scrap id', HIDE.every(function (id) {
-  return gm.indexOf('"' + id + '"') >= 0 && gm.indexOf('duplicate Dwarven Metal Ingot scrap smelt') >= 0;
+  return !!BOOK[id] && (BOOK[id].nobody || '').indexOf('duplicate Dwarven Metal Ingot scrap smelt') >= 0;
 }));
-yes('gamemode does not mark the keeper as nobody', (function () {
-  const i = gm.indexOf('"' + KEEP + '"');
-  if (i < 0) { return true; } // keeper is unowned stock, not in RECIPES_BY_ID
-  const slice = gm.slice(i, i + 400);
-  return slice.indexOf('"nobody"') < 0;
-})());
+yes('gamemode does not mark the keeper as nobody', !BOOK[KEEP] || !BOOK[KEEP].nobody); // the keeper is unowned stock, not in RECIPES_BY_ID
 yes('recipe book race filter from #1495 still present', gm.indexOf('function recipeRaceMatches(actorId, row)') >= 0 && gm.indexOf('if (!recipeRaceMatches(actorId, row)) { continue; }') >= 0);
 
 yes('Content.esp still ships', esp.length > 100000);
@@ -89,10 +86,7 @@ yes('Build-RecipeTable names the collapsed editor ids', (function () {
 // Eligible smith: refused rows carry empty half so recipeIndex skips them;
 // only the one unowned scrap path remains for anybody (including smiths) at the smelter.
 yes('refused scrap rows have empty half (not listed in recipe book)', HIDE.every(function (id) {
-  const i = gm.indexOf('"' + id + '"');
-  if (i < 0) { return false; }
-  const slice = gm.slice(i, i + 350);
-  return slice.indexOf('"half": ""') >= 0;
+  return !!BOOK[id] && BOOK[id].half === '';
 }));
 
 console.log(pass + ' passed, ' + fail + ' failed');

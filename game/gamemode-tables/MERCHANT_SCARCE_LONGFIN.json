@@ -1,0 +1,15 @@
+{
+"version":1,
+"quest":"longfin",
+"label":"Haafingar northern sea",
+"sources":[
+{"reference":"17200:Thornswood-Content.esp","base":"154a5:Thornswood-Content.esp","world":"3c:Skyrim.esm","position":[-143811.796875,143993.71875,-14032],"item":"106e1b:Skyrim.esm","itemType":"INGR","rank":"master","returnMinutes":240},
+{"reference":"17201:Thornswood-Content.esp","base":"154a5:Thornswood-Content.esp","world":"3c:Skyrim.esm","position":[-143934.40625,143937.03125,-14032],"item":"106e1b:Skyrim.esm","itemType":"INGR","rank":"master","returnMinutes":240},
+{"reference":"17202:Thornswood-Content.esp","base":"154a5:Thornswood-Content.esp","world":"3c:Skyrim.esm","position":[-143814.453125,143875.390625,-14032],"item":"106e1b:Skyrim.esm","itemType":"INGR","rank":"master","returnMinutes":240},
+{"reference":"17203:Thornswood-Content.esp","base":"154a5:Thornswood-Content.esp","world":"3c:Skyrim.esm","position":[-144130,143301.265625,-14032],"item":"106e1b:Skyrim.esm","itemType":"INGR","rank":"master","returnMinutes":240},
+{"reference":"17204:Thornswood-Content.esp","base":"154a5:Thornswood-Content.esp","world":"3c:Skyrim.esm","position":[-150180.328125,141408.5625,-14032],"item":"106e1b:Skyrim.esm","itemType":"INGR","rank":"master","returnMinutes":240},
+{"reference":"17205:Thornswood-Content.esp","base":"154a5:Thornswood-Content.esp","world":"3c:Skyrim.esm","position":[-150292.5,141505.890625,-14032],"item":"106e1b:Skyrim.esm","itemType":"INGR","rank":"master","returnMinutes":240},
+{"reference":"17206:Thornswood-Content.esp","base":"154a5:Thornswood-Content.esp","world":"3c:Skyrim.esm","position":[-128727.5390625,141360.34375,-14032],"item":"106e1b:Skyrim.esm","itemType":"INGR","rank":"master","returnMinutes":240},
+{"reference":"17207:Thornswood-Content.esp","base":"154a5:Thornswood-Content.esp","world":"3c:Skyrim.esm","position":[-124530.8671875,145979.84375,-14032],"item":"106e1b:Skyrim.esm","itemType":"INGR","rank":"master","returnMinutes":240}
+]
+}

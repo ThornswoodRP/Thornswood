@@ -30,7 +30,9 @@
     D. Dependabot watches every manifest this repository has, and only those:
        every entry's directory holds the manifest its ecosystem reads, and a
        package.json anywhere means an npm entry is owed. The npm lockfiles
-       that ship are the engine's, watched in the fork (#2759).
+       that ship are the engine's, watched in the fork (#2759). Every entry
+       sets rebase-strategy: disabled, so Dependabot does not push a new
+       head each time main moves and turn a head-pinned yes stale (#5327).
 
   The same readers are then driven over planted text, so a reader that finds
   nothing wrong anywhere cannot pass by accident.
@@ -163,6 +165,29 @@ yes('D  and the reader fails an npm entry with no package.json and a package.jso
     dependabotFaults([{ eco: 'npm', dir: '/site' }], ['site/server.js', 'voice/package.json']).length === 2);
 yes('D  the npm lockfiles that ship are named as watched in the fork',
     ['skymp5-server', 'skymp5-client', 'skymp5-front', 'thornswood/engine-changes'].every((w) => read('.github/dependabot.yml').indexOf(w) >= 0));
+// Each entry, as its own block of text, from its "- package-ecosystem:" line
+// to the next one. Comments are dropped so the file's own words about the
+// setting cannot stand in for it.
+function entryBlocks(t) {
+  const body = code(t);
+  const at = [];
+  const re = /^  - package-ecosystem: "?([a-z-]+)"?$/gm;
+  let m;
+  while ((m = re.exec(body))) { at.push({ eco: m[1], start: m.index }); }
+  return at.map((e, i) => ({ eco: e.eco, text: body.slice(e.start, i + 1 < at.length ? at[i + 1].start : body.length) }));
+}
+function rebaseFaults(t) {
+  const blocks = entryBlocks(t);
+  if (!blocks.length) { return ['has no entries to read']; }
+  return blocks.filter((b) => !/^    rebase-strategy: "?disabled"?\s*$/m.test(b.text)).map((b) => b.eco + ' does not set rebase-strategy: disabled');
+}
+const rbBad = rebaseFaults(read('.github/dependabot.yml'));
+yes('D  every entry sets rebase-strategy: disabled, so main moving does not push a new head (#5327)' + (rbBad.length ? ' (' + rbBad.join('; ') + ')' : ''), rbBad.length === 0);
+yes('D  and the reader fails an entry with no setting, one with it only in a comment, and one set to auto',
+    rebaseFaults('version: 2\nupdates:\n  - package-ecosystem: github-actions\n    directory: /\n' +
+      '  - package-ecosystem: pip\n    directory: /bot\n    # rebase-strategy: disabled\n' +
+      '  - package-ecosystem: npm\n    directory: /x\n    rebase-strategy: auto\n' +
+      '  - package-ecosystem: npm\n    directory: /y\n    rebase-strategy: disabled\n').length === 3);
 
 // ---- E. OpenSSF Scorecard ---------------------------------------------------
 function scorecardFaults(text, codeqlText) {

@@ -1,7 +1,7 @@
 using System;
 using System.IO;
-using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using System.Threading;
 
 namespace Thornswood
@@ -19,7 +19,7 @@ namespace Thornswood
     /// March 2022.
     ///
     /// So the theme is decoded here, by NLayer (a managed MP3 decoder, MIT,
-    /// embedded like the WebView2 files, THIRD-PARTY.md), and handed to
+    /// the NLayer package compiled into the exe, THIRD-PARTY.md), and handed to
     /// waveOut, which every Windows has. The sound then belongs to
     /// Thornswood.exe: the mixer shows the launcher's own entry, and this
     /// build names it ("Thornswood" or "Thornswood Dev", with the build's own
@@ -32,10 +32,8 @@ namespace Thornswood
     /// The Settings slider scales the samples, so it and the mixer's slider
     /// are two separate controls, the way they are for any program.
     /// </summary>
-    static class MenuMusic
+    static partial class MenuMusic
     {
-        const string DecoderDll = "NLayer.dll";
-
         static Playback playback;
         static bool wantPlay;
         static double wantVol = 0.5;
@@ -43,7 +41,6 @@ namespace Thornswood
         static string mixerName = "Thornswood";
         static string mixerIcon;
         static Action<string> log;
-        static bool hooked;
 
         /// <summary>
         /// How many times the playback has been made this session, and closed.
@@ -64,38 +61,6 @@ namespace Thornswood
             wantVol = Clamp(volume);
             if (!string.IsNullOrEmpty(name)) mixerName = name;
             mixerIcon = icon;
-            Hook();
-        }
-
-        /// <summary>
-        /// Hands the CLR the decoder out of this exe's resources. Installed
-        /// before anything touches an NLayer type: the CLR binds an assembly
-        /// the first time a method using it is compiled, and only Playback's
-        /// methods use it.
-        /// </summary>
-        static void Hook()
-        {
-            if (hooked) return;
-            hooked = true;
-            AppDomain.CurrentDomain.AssemblyResolve += delegate (object s, ResolveEventArgs e)
-            {
-                if (new AssemblyName(e.Name).Name != "NLayer") return null;
-                try
-                {
-                    using (Stream st = Assembly.GetExecutingAssembly().GetManifestResourceStream(DecoderDll))
-                    {
-                        if (st == null) { Stamp("Menu music: " + DecoderDll + " is not embedded in this build"); return null; }
-                        var ms = new MemoryStream();
-                        st.CopyTo(ms);
-                        return Assembly.Load(ms.ToArray());
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Stamp("Menu music: could not load " + DecoderDll + " (" + ex.Message + ")");
-                    return null;
-                }
-            };
         }
 
         /// <summary>
@@ -351,39 +316,52 @@ namespace Thornswood
         /// each time a playback opens. Only this process's own session is
         /// touched, never another program's.
         /// </summary>
-        static class MixerEntry
+        internal static partial class MixerEntry
         {
+            // The COM objects are wrapped by ComWrappers with code the compiler
+            // writes ([GeneratedComInterface]), which the native build needs:
+            // the runtime's built-in COM interop is not there in it. Each
+            // wrapper lets go of its object with FinalRelease as soon as it is
+            // done with, as Marshal.ReleaseComObject did for the old ones.
+            static readonly StrategyBasedComWrappers Wrappers = new StrategyBasedComWrappers();
+
             public static void Name(string name, string icon, Action<string> say)
             {
-                object enumerator = null;
+                IMMDeviceEnumerator devices = null;
                 try
                 {
-                    enumerator = new MMDeviceEnumeratorCom();
-                    var devices = (IMMDeviceEnumerator)enumerator;
+                    Guid clsid = MMDeviceEnumeratorClsid, iid = typeof(IMMDeviceEnumerator).GUID;
+                    IntPtr raw;
+                    int made = CoCreateInstance(ref clsid, IntPtr.Zero, ClsCtxAll, ref iid, out raw);
+                    if (made != 0) throw Marshal.GetExceptionForHR(made);
+                    devices = (IMMDeviceEnumerator)Wrap(raw);
                     foreach (int role in new[] { RoleConsole, RoleMultimedia })
                     {
                         IMMDevice device;
                         if (devices.GetDefaultAudioEndpoint(DataFlowRender, role, out device) != 0 || device == null) continue;
                         try
                         {
-                            Guid iid = typeof(IAudioSessionManager).GUID;
-                            object o;
-                            if (device.Activate(ref iid, ClsCtxAll, IntPtr.Zero, out o) != 0 || o == null) continue;
-                            var manager = (IAudioSessionManager)o;
-                            IAudioSessionControl session;
-                            Guid none = Guid.Empty;
-                            if (manager.GetAudioSessionControl(ref none, 0, out session) == 0 && session != null)
+                            Guid managerIid = typeof(IAudioSessionManager).GUID;
+                            IntPtr o;
+                            if (device.Activate(ref managerIid, ClsCtxAll, IntPtr.Zero, out o) != 0 || o == IntPtr.Zero) continue;
+                            var manager = (IAudioSessionManager)Wrap(o);
+                            try
                             {
-                                Guid context = Guid.Empty;
-                                int a = session.SetDisplayName(name, ref context);
-                                int b = string.IsNullOrEmpty(icon) ? 0 : session.SetIconPath(icon, ref context);
-                                if (a != 0 || b != 0)
-                                    say("Menu music: the mixer entry kept its default name or icon (SetDisplayName " + a + ", SetIconPath " + b + ")");
-                                Marshal.ReleaseComObject(session);
+                                IAudioSessionControl session;
+                                Guid none = Guid.Empty;
+                                if (manager.GetAudioSessionControl(ref none, 0, out session) == 0 && session != null)
+                                {
+                                    Guid context = Guid.Empty;
+                                    int a = session.SetDisplayName(name, ref context);
+                                    int b = string.IsNullOrEmpty(icon) ? 0 : session.SetIconPath(icon, ref context);
+                                    if (a != 0 || b != 0)
+                                        say("Menu music: the mixer entry kept its default name or icon (SetDisplayName " + a + ", SetIconPath " + b + ")");
+                                    Release(session);
+                                }
                             }
-                            Marshal.ReleaseComObject(manager);
+                            finally { Release(manager); }
                         }
-                        finally { Marshal.ReleaseComObject(device); }
+                        finally { Release(device); }
                     }
                 }
                 catch (Exception ex)
@@ -392,47 +370,65 @@ namespace Thornswood
                 }
                 finally
                 {
-                    if (enumerator != null) Marshal.ReleaseComObject(enumerator);
+                    Release(devices);
                 }
+            }
+
+            /// <summary>
+            /// The wrapper for a COM pointer handed back with a reference of
+            /// ours on it. The wrapper takes a reference of its own, so ours is
+            /// let go of here.
+            /// </summary>
+            static object Wrap(IntPtr unknown)
+            {
+                try { return Wrappers.GetOrCreateObjectForComInstance(unknown, CreateObjectFlags.UniqueInstance); }
+                finally { Marshal.Release(unknown); }
+            }
+
+            static void Release(object o)
+            {
+                var com = o as ComObject;
+                if (com != null) com.FinalRelease();
             }
 
             const int DataFlowRender = 0;
             const int RoleConsole = 0;
             const int RoleMultimedia = 1;
             const int ClsCtxAll = 0x17;
+            static readonly Guid MMDeviceEnumeratorClsid = new Guid("BCDE0395-E52F-467C-8E3D-C4579291692E");
 
-            [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
-            class MMDeviceEnumeratorCom { }
+            [LibraryImport("ole32.dll")]
+            private static partial int CoCreateInstance(ref Guid clsid, IntPtr outer, int clsCtx, ref Guid iid, out IntPtr instance);
 
             // Each interface lists its methods in vtable order up to the last
             // one called here.
-            [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-            interface IMMDeviceEnumerator
+            [GeneratedComInterface, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6")]
+            internal partial interface IMMDeviceEnumerator
             {
                 [PreserveSig] int EnumAudioEndpoints(int dataFlow, int stateMask, out IntPtr devices);
                 [PreserveSig] int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice endpoint);
             }
 
-            [ComImport, Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-            interface IMMDevice
+            [GeneratedComInterface, Guid("D666063F-1587-4E43-81F1-B948E807363F")]
+            internal partial interface IMMDevice
             {
-                [PreserveSig] int Activate(ref Guid iid, int clsCtx, IntPtr activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object iface);
+                [PreserveSig] int Activate(ref Guid iid, int clsCtx, IntPtr activationParams, out IntPtr iface);
             }
 
-            [ComImport, Guid("BFA971F1-4D5E-40BB-935E-967039BFBEE4"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-            interface IAudioSessionManager
+            [GeneratedComInterface, Guid("BFA971F1-4D5E-40BB-935E-967039BFBEE4")]
+            internal partial interface IAudioSessionManager
             {
                 [PreserveSig] int GetAudioSessionControl(ref Guid sessionGuid, int streamFlags, out IAudioSessionControl session);
             }
 
-            [ComImport, Guid("F4B1A599-7266-4319-A8CA-E70ACB11E8CD"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-            interface IAudioSessionControl
+            [GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16), Guid("F4B1A599-7266-4319-A8CA-E70ACB11E8CD")]
+            internal partial interface IAudioSessionControl
             {
                 [PreserveSig] int GetState(out int state);
                 [PreserveSig] int GetDisplayName(out IntPtr name);
-                [PreserveSig] int SetDisplayName([MarshalAs(UnmanagedType.LPWStr)] string name, ref Guid eventContext);
+                [PreserveSig] int SetDisplayName(string name, ref Guid eventContext);
                 [PreserveSig] int GetIconPath(out IntPtr path);
-                [PreserveSig] int SetIconPath([MarshalAs(UnmanagedType.LPWStr)] string path, ref Guid eventContext);
+                [PreserveSig] int SetIconPath(string path, ref Guid eventContext);
             }
         }
 
@@ -441,8 +437,8 @@ namespace Thornswood
         const int WaveMapper = -1;
         const int CallbackEvent = 0x00050000;
         const int HeaderDone = 0x00000001;
-        static readonly int HeaderSize = Marshal.SizeOf(typeof(WaveHeader));
-        static readonly int FlagsAt = (int)Marshal.OffsetOf(typeof(WaveHeader), "Flags");
+        static readonly int HeaderSize = Marshal.SizeOf<WaveHeader>();
+        static readonly int FlagsAt = (int)Marshal.OffsetOf<WaveHeader>(nameof(WaveHeader.Flags));
 
         [StructLayout(LayoutKind.Sequential, Pack = 2)]
         struct WaveFormat
@@ -469,21 +465,21 @@ namespace Thornswood
             public IntPtr Reserved;
         }
 
-        [DllImport("winmm.dll")]
-        static extern int waveOutOpen(out IntPtr device, int deviceId, ref WaveFormat format, IntPtr callback, IntPtr instance, int flags);
-        [DllImport("winmm.dll")]
-        static extern int waveOutPrepareHeader(IntPtr device, IntPtr header, int size);
-        [DllImport("winmm.dll")]
-        static extern int waveOutUnprepareHeader(IntPtr device, IntPtr header, int size);
-        [DllImport("winmm.dll")]
-        static extern int waveOutWrite(IntPtr device, IntPtr header, int size);
-        [DllImport("winmm.dll")]
-        static extern int waveOutPause(IntPtr device);
-        [DllImport("winmm.dll")]
-        static extern int waveOutRestart(IntPtr device);
-        [DllImport("winmm.dll")]
-        static extern int waveOutReset(IntPtr device);
-        [DllImport("winmm.dll")]
-        static extern int waveOutClose(IntPtr device);
+        [LibraryImport("winmm.dll")]
+        private static partial int waveOutOpen(out IntPtr device, int deviceId, ref WaveFormat format, IntPtr callback, IntPtr instance, int flags);
+        [LibraryImport("winmm.dll")]
+        private static partial int waveOutPrepareHeader(IntPtr device, IntPtr header, int size);
+        [LibraryImport("winmm.dll")]
+        private static partial int waveOutUnprepareHeader(IntPtr device, IntPtr header, int size);
+        [LibraryImport("winmm.dll")]
+        private static partial int waveOutWrite(IntPtr device, IntPtr header, int size);
+        [LibraryImport("winmm.dll")]
+        private static partial int waveOutPause(IntPtr device);
+        [LibraryImport("winmm.dll")]
+        private static partial int waveOutRestart(IntPtr device);
+        [LibraryImport("winmm.dll")]
+        private static partial int waveOutReset(IntPtr device);
+        [LibraryImport("winmm.dll")]
+        private static partial int waveOutClose(IntPtr device);
     }
 }

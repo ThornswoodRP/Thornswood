@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict');
 const trading = require('../game/merchant-trading.js');
 const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
-const mode = fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8');
+const mode = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8'));
 const lookupSource = mode.slice(mode.indexOf('  function findIn('),mode.indexOf('  function findBeast('));
 const lookupContext = {globalThis:{},buildThings:()=>({'iron ingot':{name:'Iron Ingot',desc:'5ace4:Skyrim.esm'}}),idOf:()=>100};
 vm.runInNewContext(lookupSource,lookupContext);

@@ -48,8 +48,9 @@ $eol = ((& git -C $repo ls-files --eol -- .githooks/pre-push) -join '').Trim()
 Yes ".githooks/pre-push is stored LF, so Git for Windows' sh reads it ($eol)" ($eol -match '^i/lf\s')
 $mode = ((& git -C $repo ls-files -s -- .githooks/pre-push) -join '').Trim()
 Yes "and executable ($mode)" ($mode -match '^100755 ')
-$guide = [IO.File]::ReadAllText((Join-Path $repo 'Developer-Guide.md'))
-Yes 'Developer-Guide.md says how a clone turns the hook on' ($guide.Contains('git config core.hooksPath .githooks'))
+. (Join-Path $PSScriptRoot 'Guide-Text.ps1')
+$guide = Get-GuidePage 'set-up-a-machine'
+Yes 'docs/guide/set-up-a-machine.md says how a clone turns the hook on' ($guide.Contains('git config core.hooksPath .githooks'))
 $cloud = [IO.File]::ReadAllText((Join-Path $repo 'scripts/dev/Setup-CloudSession.sh'))
 Yes 'and a cloud session turns it on by itself (Setup-CloudSession.sh, held by test-3055)' ($cloud.Contains('config core.hooksPath .githooks'))
 

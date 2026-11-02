@@ -2,8 +2,10 @@
 
 ## What it is
 
-The Thornswood website, https://thornswood.net, as one file of node,
-`server.js`, with nothing to install from npm. It serves the public pages
+The Thornswood website, https://thornswood.net, as plain node with nothing to
+install from npm: `server.js` starts it, and `lib\` holds the rest, one module
+per area (#5357). Each module says at its top what it holds, and `server.js`
+names them in the order they load. It serves the public pages
 (`data\site\*.md`), the news, the installer download and the member pages
 behind the password, and after a Discord sign in, the admin hub and its boards
 (`data\*.md`, `data\board.json`). It is also the door: the game servers and
@@ -29,18 +31,26 @@ else does.
 | `/api/economy`, `/dev/api/economy` | POST | each game server, with the bot's key, every five minutes: what each hold gathered, crafted and traded, by the day, for the hub's Hold economy page (#3164, the hold economy block in `game\gamemode.js`) |
 | `/api/office`, `/dev/api/office` | POST | each game server, with the bot's key in a header, when a Jarl names or removes their hold's Court, Steward or Guard on the Office page of K; the site checks the Jarl's role again and sets the Discord role with the bot's token, and the game reads it back through `/api/allowed` (#2551, `game\gamemode.js`) |
 | `/api/play/owns` | POST | the voice service, before it keeps a character creation choice (`voice\voice-server.js`) |
-| `/api/payload` | GET | the installer, which then downloads the zip it names from `/file/` (`installer\setup\Bootstrap.cs`) |
 | `/api/ticket` | POST | the Discord bot, for a support ticket (`bot\bot_core.py`) |
 | `/api/public` | GET | the front page and the launchers, for the news and the files; the Discord bot, for the open switch and the hints and lore lines it shows as its status, from `data\site\lines.md` (#3147, `bot\bot_ticket_panels.py`) |
 | `/api/report/game`, `/dev/api/report/game` | POST | each game server, with the bot's key in a header, when somebody types /helpme or /report; the row goes into the inbox and the bot says it in the staff channel (`game\gamemode.js`, the asking staff block) |
 | `/api/play/who` | POST | nothing in the repo asks it now. It says who a ticket belongs to and writes nothing, which makes it the one to try by hand |
 
 The downloads under `/file/` are only what `files\files.json` publishes: a
-name it lists and does not mark hidden, the payload zip it lists (hidden
-because `/api/payload` hands it to the setup program), and `files.json`
-itself, which Ship's installer gate reads (`Read-SiteDownloads` in
-`scripts\release\Feed-Store.ps1`). Anything else put in that folder answers
-404 and is not on the Downloads page (#3798).
+name it lists and does not mark hidden, and `files.json` itself. Anything else
+put in that folder answers 404 and is not on the Downloads page (#3798).
+
+The installer is not in that folder since #4824. It is Velopack's setup
+program, which `merge-release.yml` makes and signs, and `/file/` answers
+302 to its GitHub Release copy (`newestSetup` in `lib/feed.js`):
+`/file/Thornswood-Setup.exe` to the one on the newest Release `main-<tag>`,
+which the approval step publishes once a build is approved (#5181), and
+`/file/Thornswood-Dev-Setup.exe` to the one on the newest build Release
+(`build-YYYYMMDD.N`). Until there is one, the name answers 404 and the
+Downloads page says the installer is not published yet. The old installer's
+exe and payload zip, which `Publish-Installer` left in the folder, are never
+served or listed, whatever `files.json` still says. `/api/payload`, which the
+old setup program asked for its zip, is gone with it.
 
 Every request that is not a GET has to come from this site (#1367). A
 browser names the page that sent it in `Origin`, or in `Referer` when an old
@@ -65,7 +75,7 @@ from the checkout, because it writes beside itself: `config.json` with a fresh
 cookie secret, `site.log`, the `files\` and `uploads\` folders, and anything
 typed into a board or a page in the browser goes into `data\`, which git
 tracks. Copy `config.example.json` into the copy as `config.json` first. It is
-every setting `server.js` reads, holding what it runs on when there is no
+every setting the site reads, holding what it runs on when there is no
 `config.json` at all: an empty member password, the roles, and every Discord
 setting, the bot's key and the cookie secret empty. Empty Discord settings are
 what keep a copy on your machine from asking Discord anything. The empty
@@ -79,7 +89,7 @@ $env:THORNSWOOD_DOCS_PORT = '3101'; $env:THORNSWOOD_DOCS_LOCAL = '1'; node serve
 ```
 
 then open http://127.0.0.1:3101. Left unset it listens on every address on
-3001. Without a `config.json` it runs on the defaults written in `server.js`,
+3001. Without a `config.json` it runs on the defaults written in `lib\config.js`,
 makes a random member password, prints it once, and keeps it in the
 `config.json` it writes. A later start does not print it again. Discord sign
 in and the role checks are off, since there is no client id or bot token. The game status and
@@ -113,7 +123,7 @@ copy of the live `C:\Thornswood-Caddy\Caddyfile`), and `Setup-Domain.ps1` is
 what set `THORNSWOOD_DOCS_LOCAL=1` there. Its `config.json` on the VPS holds
 the member password, the Discord client secret and bot token, the bot's key
 and the cookie secret, and is never in the repo. `.\scripts\deploy\Deploy-Docs.ps1`
-sends `server.js` and everything in `public\` and restarts the task, and
+sends `server.js`, `lib\` and everything in `public\` and restarts the task, and
 `-Site` also sends the public pages. A plain deploy never overwrites a
 document somebody has typed into on the site; `-Boards`, `-Docs` and
 `-SeedDocs` do, after a `.bak` of each. `-Board active` replaces that one board
@@ -199,7 +209,7 @@ leaves the queue and is public at `/shot`, and `/up` closes behind it.
 | `/api/gallery/reports` | GET | staff | none | `200 {reports:[...]}` |
 | `/api/gallery/report/dismiss` | POST | staff | `{id}` | `200 {ok,removed}` |
 
-Every staff row above goes through one gate, `galleryStaff` in `server.js`,
+Every staff row above goes through one gate, `galleryStaff` in `lib\auth.js`,
 and takes either of two things (#743). The hub's `twa` cookie is one, which is
 what the Gallery page sends. A signed launcher ticket in the query,
 `?ticket=<the ticket>`, is the other, read and re-checked against Discord the
@@ -211,7 +221,7 @@ one `403 {why:'banned'}`, and a Discord that could not be asked `503`. Neither
 cookie nor ticket is the `403 {error:'staff only'}` these doors always sent.
 
 A submission lands in `uploads\` under the same stamped name `/api/upload` uses
-(`receiveUpload` in `server.js` is the one helper both go through) and adds
+(`receiveUpload` in `lib\uploads.js` is the one helper both go through) and adds
 `{ name, by, note, at, from: 'web'|'launcher', discordId? }` to the queue. The
 cap is 25 MB rather than the 200 MB `/api/upload` takes for logs, and only
 images are taken: `/shot` serves with a plain `Content-Length` and no range,
@@ -226,6 +236,6 @@ hub's other three pages stay `'admin'`.
 `site\tests\test-gallery.js` drives the routes end to end against a copy, and
 `site\tests\test-hub-staff-gallery.js` drives both gates with a stub standing in for
 Discord, so a Loremaster exists without anybody being in a real server.
-A merge puts `server.js` and the public and hub pages in through the box
+A merge puts `server.js`, `lib\` and the public and hub pages in through the box
 deploy agent (docs\DEPLOY-AGENT.md); `.\scripts\deploy\Deploy-Docs.ps1` sends
 the empty queue and reports files.

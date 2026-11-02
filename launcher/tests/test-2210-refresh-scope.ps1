@@ -48,17 +48,21 @@
        update writes runs after it, and work under Alone may itself refresh.
 
   HOW. As test-own-folder-alone.ps1: the shipped OwnGame.cs and the files it
-  needs, compiled with the compiler the build runs (tests\Launcher-Csc.ps1),
-  stand-ins for Checks, Keep, Updater and Junction, and a driver that builds a
-  pretend Steam, Steam copy and Vortex in a scratch folder.
+  needs, built with the .NET SDK the launcher builds with
+  (tests\Launcher-Csc.ps1, #4823) on every machine, stand-ins for Checks,
+  Keep, Updater and Junction, and a driver that builds a pretend Steam, Steam
+  copy and Vortex in a scratch folder. The driver runs on Windows only:
+  OwnGame lays the game folder out by Windows paths and links with kernel32,
+  so 1 to 3 and 5 to 7 say SKIP elsewhere.
 
-  Nothing outside its own scratch folder is read or written.
+  Nothing outside its own scratch folder and its build under out\harness is
+  read or written.
 #>
 [CmdletBinding()]
 param([string]$AppPath, [string]$Scratch)
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $Here = Split-Path -Parent (Split-Path -Parent $Here)
@@ -100,18 +104,12 @@ Yes 'the refresh that finds nothing to bring in still copies Vortex''s plugin li
 $settle = [regex]::Match($og, '(?s)static void SettleSettings\(bool first\)\s*\{(.*?)\n        \}')
 Yes 'a refresh that brings files in copies it too (SettleSettings)' ($settle.Success -and $settle.Groups[1].Value -match 'BakeVortexList\(\);')
 
-if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'; Done }
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
-# What the launcher compiles against, from the reference assemblies the
-# build uses (Launcher-Csc.ps1). Downgrade.cs puts a line on the clipboard
-# through WPF, so the WPF ones are here too.
-$refs = @('System.dll', 'System.Core.dll', 'System.Runtime.Serialization.dll', 'System.Xml.dll', 'System.Security.dll',
-          'PresentationCore.dll', 'WindowsBase.dll', 'PresentationFramework.dll', 'System.Xaml.dll') |
-    ForEach-Object { Join-Path $LauncherRefDir $_ }
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 # OwnGameKinds and Verify name LastPlugin (#2791), which reads the game's archives through FromGameArchive.cs.
-$real = @('OwnGame.cs', 'OwnGameShare.cs', 'OwnGameKinds.cs', 'Downgrade.cs', 'Steam.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'Swallow.cs', 'Progress.cs', 'LastPlugin.cs', 'FromGameArchive.cs') |
+# Config and OwnGame read their JSON through LooseString.cs, and Downgrade asks with Ask.cs (#4823).
+$real = @('OwnGame.cs', 'OwnGameShare.cs', 'OwnGameKinds.cs', 'Downgrade.cs', 'Steam.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'Swallow.cs', 'Progress.cs', 'LastPlugin.cs', 'FromGameArchive.cs', 'LooseString.cs', 'Ask.cs') |
     ForEach-Object { Join-Path $AppPath $_ }
 foreach ($f in $real) { if (-not (Test-Path -LiteralPath $f)) { Yes "launcher\app\$([IO.Path]::GetFileName($f)) is there" $false; Done } }
 
@@ -702,11 +700,6 @@ $work = Join-Path $Scratch ('thornswood-2210-scope-' + [Guid]::NewGuid().ToStrin
 $null = New-Item -ItemType Directory -Force -Path $work
 try {
     $utf8 = New-Object System.Text.UTF8Encoding($false)
-    $stubFile = Join-Path $work 'Stubs.cs'
-    $driverFile = Join-Path $work 'Driver.cs'
-    [IO.File]::WriteAllText($stubFile, $stubs, $utf8)
-    [IO.File]::WriteAllText($driverFile, $driver, $utf8)
-    $exe = Join-Path $work 'refresh-scope-test.exe'
     # The pretend build's list, as in test-own-folder-alone.ps1: the bytes and
     # SHA-1 of what NewScene writes for 1.6.1170.
     $skyrimList = Join-Path $work 'skyrim-files.json'
@@ -720,22 +713,22 @@ try {
     )
     [IO.File]::WriteAllText($skyrimList, "{`n  ""build"": ""1.6.1170"",`n  ""files"": {`n" + ($listed -join ",`n") + "`n  }`n}`n", $utf8)
     $uiGoneList = Join-Path $Here 'records\ui-gone.json'
-    $cscArgs = @('/noconfig', '/nologo', '/target:exe', '/warn:0', "/out:$exe", "/resource:$skyrimList,skyrim-files.json", "/resource:$uiGoneList,ui-gone.json")
-    foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-    foreach ($f in $real) { $cscArgs += (Resolve-Path -LiteralPath $f).Path }
-    $cscArgs += $stubFile
-    $cscArgs += $driverFile
-    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $compiled = & $LauncherCsc @cscArgs 2>&1
-    $ErrorActionPreference = $old
-    $built = ($LASTEXITCODE -eq 0) -and (Test-Path -LiteralPath $exe)
-    Yes 'the real OwnGame.cs compiles with the driver under the build''s compiler' $built
-    if (-not $built) { foreach ($l in @($compiled)) { Write-Host "      $l" }; Done }
+    $exe = $null
+    try {
+        $exe = Build-LauncherCode -Exe -Main 'Thornswood.RefreshScopeTest' -Source $stubs, $driver -File @($real | ForEach-Object { (Resolve-Path -LiteralPath $_).Path }) `
+            -Resource @{ 'skyrim-files.json' = $skyrimList; 'ui-gone.json' = $uiGoneList }
+    } catch { ($_.Exception.Message -split "`n") | ForEach-Object { Write-Host "      $_" } }
+    Yes 'the real OwnGame.cs builds with the driver, with the .NET SDK the launcher builds with' ($null -ne $exe)
+    if (-not $exe) { Done }
+    if (-not $OnWindows) {
+        Write-Host 'SKIP  1 to 3 and 5 to 7, the driver on a pretend Steam, Steam copy and Vortex: OwnGame lays the game folder out by Windows paths and makes its links with kernel32, so it runs on Windows only'
+        Done
+    }
 
     $scene = Join-Path $work 'machine'
     $null = New-Item -ItemType Directory -Force -Path $scene
     $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $out = & $exe $scene 2>&1
+    $out = Invoke-LauncherExe $exe $scene 2>&1
     $code = $LASTEXITCODE
     $ErrorActionPreference = $old
     foreach ($l in @($out)) {

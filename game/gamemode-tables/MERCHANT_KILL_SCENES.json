@@ -1,0 +1,58 @@
+[
+{
+"id":"q-whiterun-tailor-cloth-road",
+"name":"A clear road for cloth",
+"text":"The Tailor needs the approach to Redoran's Retreat made safer for the next cloth delivery. Defeat the marked bandit inside the retreat, then return.",
+"tier":"novice",
+"gate":{"profession":"warrior","rank":"novice"},
+"merchant":{"reference":"1a684:Skyrim.esm","base":"13b9c:Skyrim.esm","role":"Tailor","hold":"Whiterun","bookHold":"whiterun"},
+"kind":"kill",
+"count":1,
+"targets":[{"ref":"36ce1:Skyrim.esm","base":"1e79d:Skyrim.esm","cell":"15224:Skyrim.esm","world":null,"pos":[-2136.4208984375,1534.8690185546875,-212.0419921875],"leash":2048,"role":"enemy","species":"nord","location":"19295:Skyrim.esm","locationName":"Redoran's Retreat","hold":"Whiterun","habitat":"bandit-camp","tier":null,"returnMinutes":45}],
+"rewardGold":15,
+"cooldownHours":6,
+"sourceHash":"6f6cf4c63de266dff8edfee2ab72213ed9699756c274004d62f775ec3cbfb68f"
+},
+{
+"id":"q-winterhold-enchanter-coast",
+"name":"Coastal preparations",
+"text":"The Enchanter needs the marked stretch of Winterhold's coast cleared before taking measurements there. Defeat its skeever and report back.",
+"tier":"novice",
+"gate":{"profession":"mage","rank":"novice"},
+"merchant":{"reference":"1e7d6:Skyrim.esm","base":"1e7d5:Skyrim.esm","role":"Enchanter","hold":"Winterhold","bookHold":"winterhold"},
+"kind":"kill",
+"count":1,
+"targets":[{"ref":"ef60f:Skyrim.esm","base":"23ab7:Skyrim.esm","cell":"8dea:Skyrim.esm","world":"3c:Skyrim.esm","pos":[99232,128672,-13824],"leash":1536,"role":"animal","species":"skeever","location":"8dea:Skyrim.esm","locationName":"POINorthernCoast18","hold":"Winterhold","habitat":"wilderness","tier":null,"returnMinutes":20}],
+"rewardGold":10,
+"cooldownHours":6,
+"sourceHash":"518c9b2210f63ee6ec1b6b6f388c862c6f5ed9dca284dfb21b115f9350928146"
+},
+{
+"id":"q-rift-tailor-northwind-work",
+"name":"Northwind work clothes",
+"text":"Before I fit out a work party for Northwind, deal with the two marked skeletons inside Northwind Mine.",
+"tier":"advanced",
+"gate":{"profession":"warrior","rank":"advanced"},
+"merchant":{"reference":"31efc3:Riften Expansion.esp","base":"1d0769:Riften Expansion.esp","role":"Tailor","hold":"the Rift","bookHold":"riften"},
+"kind":"kill",
+"count":2,
+"targets":[{"ref":"476c9:Skyrim.esm","base":"2d1fc:Skyrim.esm","cell":"15294:Skyrim.esm","world":null,"pos":[407.26873779296875,3681.330322265625,159.30126953125],"leash":1536,"role":"enemy","species":"skeleton","location":"fdbdf:Skyrim.esm","locationName":"Northwind Mine","hold":"the Rift","habitat":"dungeon","tier":2,"returnMinutes":45},{"ref":"476ca:Skyrim.esm","base":"2d1fd:Skyrim.esm","cell":"15294:Skyrim.esm","world":null,"pos":[-145.48818969726562,2940.852783203125,153.1743927001953],"leash":1536,"role":"enemy","species":"skeleton","location":"fdbdf:Skyrim.esm","locationName":"Northwind Mine","hold":"the Rift","habitat":"dungeon","tier":2,"returnMinutes":45}],
+"rewardGold":35,
+"cooldownHours":6,
+"sourceHash":"fcddb1a76415ade5c37bd149b28a0235a90d9a57ffb7c07176a6ccfd6a0ad239"
+},
+{
+"id":"q-whiterun-enchanter-shimmermist",
+"name":"Shimmermist preparations",
+"text":"Before I plan wards for a Shimmermist survey, deal with the two marked Falmer inside Shimmermist Cave.",
+"tier":"advanced",
+"gate":{"profession":"mage","rank":"advanced"},
+"merchant":{"reference":"1a672:Skyrim.esm","base":"13ba1:Skyrim.esm","role":"Enchanter","hold":"Whiterun","bookHold":"whiterun"},
+"kind":"kill",
+"count":2,
+"targets":[{"ref":"530c0:Skyrim.esm","base":"1e7b3:Skyrim.esm","cell":"1521c:Skyrim.esm","world":null,"pos":[3485.25244140625,-723.4301147460938,-624.6600341796875],"leash":1536,"role":"enemy","species":"falmer","location":"1929d:Skyrim.esm","locationName":"Shimmermist Cave","hold":"Whiterun","habitat":"cave","tier":2,"returnMinutes":45},{"ref":"530c4:Skyrim.esm","base":"1e7b4:Skyrim.esm","cell":"1521c:Skyrim.esm","world":null,"pos":[5013.04150390625,-3487.726806640625,-631.1539916992188],"leash":1536,"role":"enemy","species":"falmer","location":"1929d:Skyrim.esm","locationName":"Shimmermist Cave","hold":"Whiterun","habitat":"cave","tier":2,"returnMinutes":45}],
+"rewardGold":40,
+"cooldownHours":6,
+"sourceHash":"402f870a3f8d330987e97d83c14a5ef54f1474fd3b3fbb644ec38e00928041f4"
+}
+]

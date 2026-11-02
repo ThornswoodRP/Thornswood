@@ -29,7 +29,8 @@ const bot = require('./bot-files').source().split(CR).join('');
 const install = read('scripts/deploy/Install-Bot.ps1');
 const build = read('bot/Build-Discord.py');
 const names = JSON.parse(read('bot/factions.json'));
-const site = read('site/server.js');
+// The site is server.js over its modules in site\lib since #5357.
+const site = require('./site-files').source();
 const page = read('docs/systems/trading-company.md');
 const factions = read('docs/systems/factions.md');
 const STAFF_RULE = 'No GM or staff member (Loremaster, Discord Moderator, or any other staff role) may hold an in-game RP role with faction leadership, such as a Jarl or a faction lead.';

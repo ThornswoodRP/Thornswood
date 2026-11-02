@@ -27,7 +27,7 @@ const vm = require('vm');
 const REPO = path.join(__dirname, '..');
 const CR = String.fromCharCode(13);
 const read = (p) => fs.readFileSync(path.join(REPO, p), 'utf8').split(CR).join('');
-const gm = read('game/gamemode.js');
+const gm = require('./gamemode-tables.js').joined(read('game/gamemode.js'));
 const SK = read('game/ui/thornswood-skills.js');
 
 let pass = 0, fail = 0;

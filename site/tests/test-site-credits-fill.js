@@ -24,10 +24,11 @@ const path = require('path');
 const net = require('net');
 const http = require('http');
 const { spawn } = require('child_process');
+const siteFiles = require('../../tests/site-files');
 
 const REPO = path.join(__dirname, '..', '..');
 const APP = path.join(REPO, 'site');
-const SRC = fs.readFileSync(path.join(APP, 'server.js'), 'utf8');
+const SRC = siteFiles.source();
 const CREDITS = fs.readFileSync(path.join(APP, 'data', 'site', 'credits.md'), 'utf8');
 
 let pass = 0, fail = 0;
@@ -67,7 +68,8 @@ yes('a file with only dev: the page names the test server', one.indexOf('The tes
 yes('one server whose commit is not 40 hex: unchanged', fill(CREDITS, { live: { commit: 'abc' } }, {}) === CREDITS);
 one = fill(CREDITS, { live: { commit: 'zz' + A.slice(2) }, dev: { commit: A } }, {});
 yes('a live commit that is not 40 hex beside a good dev one: only dev is said',
-  one.indexOf('The test server runs [`aaaaaaaa`]') >= 0 && one.indexOf('main server runs') < 0 && one.indexOf('zz') < 0);
+  // The bad commit's own text, not any "zz": the page names HarfBuzz since #4823.
+  one.indexOf('The test server runs [`aaaaaaaa`]') >= 0 && one.indexOf('main server runs') < 0 && one.indexOf('zz' + A.slice(2, 8)) < 0);
 yes('garbage shapes do not throw and change nothing',
   fill(CREDITS, 'nope', 7) === CREDITS && fill(CREDITS, { live: 3, dev: [] }, null) === CREDITS);
 
@@ -126,7 +128,7 @@ function wait(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-credits-fill-'));
   let child = null;
   try {
-    fs.writeFileSync(path.join(dir, 'server.js'), SRC);
+    siteFiles.copy(dir);
     fs.mkdirSync(path.join(dir, 'public'));
     fs.copyFileSync(path.join(APP, 'public', 'home.html'), path.join(dir, 'public', 'home.html'));
     const marked = fs.readdirSync(path.join(APP, 'public')).filter(function (n) { return /^marked-.*\.js$/.test(n); });

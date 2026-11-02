@@ -14,7 +14,7 @@
 
   Every place that tells ours from the collection's reads this list:
     Ship-Rules.ps1           $ShipOursFiles, Ensure-ShipRequiredData
-    Publish-Update.ps1 and Package-Thornswood.ps1   Test-FromCollection
+    Publish-Update.ps1        Test-FromCollection
     ServerContent.ps1        what the box holds, by size and sha256 (#2308)
     Deploy-Server.ps1 and Deploy-DevGamemode.ps1    sent from the repo, held by sha256
     CollectionPlugins.ps1    never held to records\collection-plugins.json (#2019)

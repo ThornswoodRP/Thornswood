@@ -24,10 +24,13 @@
 // everybody: Patrick, asked about the smelter, "yes any bench or thing you can
 // craft or do anything Proffesion or Trade related".
 //
-// This holds the gamemode's markers, the table in the gamemode against the
-// page and against game/data/recipes.json, and runs the builder against a
-// small plugin made here and a copy of the real gamemode. Nothing outside a
-// temporary folder is written.
+// Since #5191 the builder writes the two tables into their own files,
+// game/gamemode-tables/BENCH_ACCESS.json and BENCH_BY_BASE.json, and never
+// touches gamemode.js, so it cannot take the race gate with it again. This
+// holds the gamemode's two table() lines and the race gate beside them, the
+// table against the page and against game/data/recipes.json, and runs the
+// builder against a small plugin made here into a tables folder of its own.
+// Nothing outside a temporary folder is written.
 const REPO_DIR = require("path").join(__dirname, "..");
 const fs = require("fs");
 const os = require("os");
@@ -47,28 +50,21 @@ function between(src, open, close) {
   return a < 0 || b < 0 ? null : src.slice(a + open.length, b);
 }
 
-const OPEN = "// ==== BENCH_ACCESS, generated ====";
-const CLOSE = "// ==== end BENCH_ACCESS ====";
-const BOPEN = "// ==== BENCH_BY_BASE, generated ====";
-const BCLOSE = "// ==== end BENCH_BY_BASE ====";
-const gmRaw = read("game/gamemode.js");
-const gm = gmRaw.split(CR).join("");
+const GT = require('./gamemode-tables.js');
+const gmText = read("game/gamemode.js").split(CR).join("");
+const gm = GT.joined(gmText);
 const py = read("scripts/dev/Build-BenchTable.py").split(CR).join("");
 const page = read("docs/systems/professions.md").split(CR).join("");
 
-// ---- the race gate is outside the generated markers ----------------------
-const inside = between(gm, OPEN, CLOSE);
-const insideBase = between(gm, BOPEN, BCLOSE);
-yes("the gamemode has one BENCH_ACCESS block", inside !== null && gm.split(OPEN).length === 2 && gm.split(CLOSE).length === 2);
-yes("and one BENCH_BY_BASE block", insideBase !== null && gm.split(BOPEN).length === 2);
+// ---- the race gate is the gamemode's own, beside the tables -----------------
+yes("the gamemode reads BENCH_ACCESS from its table file, once", gmText.split("const BENCH_ACCESS = table('BENCH_ACCESS');").length === 2);
+yes("and BENCH_BY_BASE", gmText.split("const BENCH_BY_BASE = table('BENCH_BY_BASE');").length === 2);
 ["var raceIndex", "function raceOf(", "var RACE_CALLED", "function raceGate("].forEach(function (name) {
   yes(name + " is in the gamemode, once", gm.split(name).length === 2);
-  yes(name + " is outside the BENCH_ACCESS markers", !!inside && inside.indexOf(name) < 0);
-  yes(name + " is outside the BENCH_BY_BASE markers", !!insideBase && insideBase.indexOf(name) < 0);
 });
-yes("craftAnswer still calls raceGate", /raceGate\(actorId, row\)/.test(gm.slice(gm.indexOf(CLOSE))));
-yes("the BENCH_ACCESS block holds its comment and the table and nothing else",
-  !!inside && /^\n\/\* Bench keyword -> who can make anything at it\.[\s\S]*?\*\/\nconst BENCH_ACCESS = \{.*\};\n$/.test(inside));
+yes("craftAnswer still calls raceGate", /raceGate\(actorId, row\)/.test(gm.slice(gm.indexOf("const BENCH_ACCESS = "))));
+yes("the builder writes the two tables into their files and nothing into gamemode.js",
+  py.indexOf("'BENCH_ACCESS'") >= 0 && py.indexOf("'BENCH_BY_BASE'") >= 0 && py.indexOf("gamemode.js'") < 0);
 
 // ---- no knob: a bench opens for anybody only on a row nobody owns ---------
 yes("the builder has no OPEN_FURNITURE knob", py.indexOf("OPEN_FURNITURE") < 0);
@@ -91,7 +87,7 @@ tbl.split("\n").forEach(function (l) {
 yes("the professions page calls no bench open furniture", !/open furniture/i.test(page));
 
 let ACCESS = null;
-try { ACCESS = JSON.parse(/const BENCH_ACCESS = (\{.*\});/.exec(gm)[1]); } catch (e) { ACCESS = null; }
+try { ACCESS = GT.table("BENCH_ACCESS"); } catch (e) { ACCESS = null; }
 yes("BENCH_ACCESS parses", !!ACCESS);
 function byName(n) {
   for (const k in (ACCESS || {})) { if (ACCESS[k].name === n) { return ACCESS[k]; } }
@@ -153,10 +149,11 @@ if (RECIPES && ACCESS) {
   yes("every bench carries exactly its rows that reach the server, sorted" +
     (badRows.length ? " (not: " + badRows.join(", ") + ")" : ""), badRows.length === 0);
   const lib = gm.slice(gm.indexOf("const KEPT_SMELT"), gm.indexOf("function craftRow("));
+  const book = GT.table("RECIPES_BY_ID");
   const unresolved = [];
   Object.keys(ACCESS).forEach(function (k) {
     (ACCESS[k].rows || []).forEach(function (d) {
-      if (gm.indexOf('"' + d + '": {') < 0 && lib.indexOf('"' + d + '"') < 0) { unresolved.push(d); }
+      if (!Object.prototype.hasOwnProperty.call(book, d) && lib.indexOf('"' + d + '"') < 0) { unresolved.push(d); }
     });
   });
   yes("every row a bench carries is one craftRow finds" + (unresolved.length ? " (not: " + unresolved.slice(0, 3).join(", ") + ")" : ""),
@@ -216,26 +213,23 @@ try {
     return !r.error && r.status === 0;
   })[0];
   yes("python is on this machine, so the bench builder can be run", !!pyCmd);
-  function build(gamemode, table) {
+  function build(tables, table) {
     const r = cp.spawnSync(pyCmd, [path.join(REPO_DIR, "scripts", "dev", "Build-BenchTable.py"),
-      "--data", data, "--plugins", pluginsTxt, "--recipes", table || recipes, "--gamemode", gamemode], { encoding: "utf8", timeout: 120000 });
+      "--data", data, "--plugins", pluginsTxt, "--recipes", table || recipes, "--tables", tables], { encoding: "utf8", timeout: 120000 });
     return { code: r.status, out: String(r.stdout || "") + String(r.stderr || "") };
   }
+  function file(dir, name) { const f = path.join(dir, name + ".json"); return fs.existsSync(f) ? fs.readFileSync(f, "utf8") : ""; }
   if (pyCmd) {
-    // The real gamemode, as an LF file.
-    const lf = path.join(tmp, "gamemode-lf.js");
-    fs.writeFileSync(lf, gm);
+    // A tables folder of its own.
+    const lf = path.join(tmp, "tables");
+    fs.mkdirSync(lf);
     const r = build(lf);
-    yes("a run into a copy of the gamemode writes both blocks (exit " + r.code + ")", r.code === 0 && /wrote 3 furniture base\(s\)/.test(r.out));
-    const after = fs.readFileSync(lf, "utf8");
-    yes("an LF gamemode stays LF", after.indexOf(CR) < 0);
-    const outside = function (t) {
-      return t.slice(0, t.indexOf(BOPEN)) + t.slice(t.indexOf(BCLOSE), t.indexOf(OPEN)) + t.slice(t.indexOf(CLOSE));
-    };
-    yes("nothing outside the two blocks changed, so the race gate is still there",
-      outside(after) === outside(gm) && after.split("function raceGate(").length === 2);
+    yes("a run writes both tables (exit " + r.code + ")", r.code === 0 && /wrote 3 furniture base\(s\)/.test(r.out));
+    const after = file(lf, "BENCH_ACCESS") + file(lf, "BENCH_BY_BASE");
+    yes("both table files are LF", !!file(lf, "BENCH_ACCESS") && !!file(lf, "BENCH_BY_BASE") && after.indexOf(CR) < 0);
+    yes("and nothing else is written", fs.readdirSync(lf).sort().join(",") === "BENCH_ACCESS.json,BENCH_BY_BASE.json");
     let A = null;
-    try { A = JSON.parse(/const BENCH_ACCESS = (\{.*\});/.exec(after)[1]); } catch (e) { A = null; }
+    try { A = JSON.parse(file(lf, "BENCH_ACCESS")); } catch (e) { A = null; }
     yes("the cookpot holds no row nobody owns, so it opens only for its half",
       !!A && !!A["800:Skyrim.esm"] && !("anyone" in A["800:Skyrim.esm"]) &&
       JSON.stringify(A["800:Skyrim.esm"].halves) === '{"hearthcook":"novice"}');
@@ -245,20 +239,16 @@ try {
     yes("the alchemy lab is placed by its workbench type", !!A && !!A.alchemy && !("anyone" in A.alchemy));
     yes("no bench this plugin does not have is invented", !!A && Object.keys(A).length === 3);
     const r2 = build(lf);
-    yes("a second run changes nothing", r2.code === 0 && fs.readFileSync(lf, "utf8") === after);
+    yes("a second run changes nothing", r2.code === 0 && file(lf, "BENCH_ACCESS") + file(lf, "BENCH_BY_BASE") === after);
 
     yes("the builder writes each bench's rows", !!A && JSON.stringify(A["800:Skyrim.esm"].rows) === '["a1:Skyrim.esm"]' &&
       JSON.stringify(A["801:Skyrim.esm"].rows) === '["a2:Skyrim.esm"]' && !A.alchemy.rows);
 
-    // A gamemode from before .gitattributes, CRLF: both blocks go in LF.
-    const crlf = path.join(tmp, "gamemode-crlf.js");
-    fs.writeFileSync(crlf, ["// head", BOPEN, "old", BCLOSE, "", OPEN, "old", CLOSE, "// tail", ""].join("\r\n"));
-    const r3 = build(crlf);
-    const t3 = fs.readFileSync(crlf, "utf8");
-    function between(t, a, b) { const i = t.indexOf(a), j = t.indexOf(b); return i < 0 || j < i ? null : t.slice(i, j); }
-    const w1 = between(t3, BOPEN, BCLOSE), w2 = between(t3, OPEN, CLOSE);
-    yes("both blocks written into a CRLF gamemode are LF", r3.code === 0 && w1 !== null && w2 !== null &&
-      t3.indexOf("\r\nold\r\n") < 0 && (w1 + w2).indexOf("\r") < 0);
+    // Table files from a checkout before .gitattributes, CRLF: written over LF.
+    fs.writeFileSync(path.join(lf, "BENCH_ACCESS.json"), "{\r\n\"old\":1\r\n}\r\n");
+    fs.writeFileSync(path.join(lf, "BENCH_BY_BASE.json"), "{\r\n\"old\":1\r\n}\r\n");
+    const r3 = build(lf);
+    yes("CRLF table files are written over LF", r3.code === 0 && file(lf, "BENCH_ACCESS") + file(lf, "BENCH_BY_BASE") === after);
   }
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });

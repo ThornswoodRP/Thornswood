@@ -37,7 +37,7 @@ T ($shape -match '"botKey":"string"' -and $shape -match '"port":"number"' -and $
 $sha = [Security.Cryptography.SHA256]::Create()
 function RepoSha([string]$rel) { $t = ([IO.File]::ReadAllText((Join-Path $repo $rel))) -replace "`r`n", "`n"; -join ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($t)) | ForEach-Object { $_.ToString('x2') }) }
 $now = [datetime]'2026-10-11T12:00:00Z'
-function Facts { [ordered]@{
+function Facts { $x = [ordered]@{
     takenUtc = '2026-10-11T12:00:00Z'; host = 'STANDIN'
     listeners = @(
         @{ proto = 'tcp'; address = '0.0.0.0'; port = 443; process = 'caddy' }, @{ proto = 'tcp'; address = '0.0.0.0'; port = 80; process = 'caddy' },
@@ -74,7 +74,10 @@ function Facts { [ordered]@{
     firewallProfiles = @(@{ name = 'Domain'; allowLocalRules = 'False' }, @{ name = 'Private'; allowLocalRules = 'False' }, @{ name = 'Public'; allowLocalRules = 'False' })
     edgeVersion = ''
     edgeInstallBlocked = $true
-} }
+}
+# The site's modules (#5357), as the collector lists them.
+foreach ($m in @(Get-ChildItem -LiteralPath (Join-Path $repo 'site/lib') -Filter *.js -File)) { $x.files[('C:\Thornswood-Docs\lib\' + $m.Name)] = (RepoSha ('site/lib/' + $m.Name)) }
+$x }
 
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('prod-parity-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $scratch | Out-Null
@@ -118,6 +121,16 @@ try {
     T ($x.Out -match 'REVIEW  tls thornswood.net: expected valid, 14\+ days, found 4 days left') 'a certificate close to lapsing is caught'
     T ($x.Out -match 'REVIEW  file C:\\Thornswood-Caddy\\Caddyfile') 'a live Caddyfile that differs is caught'
     T ($x.Out -match 'REVIEW  service ThornswoodBot') 'a stopped bot service is caught'
+
+    # #5357: the site's modules, each held by name, and one only the box has.
+    $m = Facts
+    $m.files.'C:\Thornswood-Docs\lib\serve.js' = ('0' * 64)
+    $m.files.'C:\Thornswood-Docs\lib\dropped.js' = ('1' * 64)
+    $m.files.Remove('C:\Thornswood-Docs\lib\news.js')
+    $x = Run $m ''
+    T ($x.Out -match 'REVIEW  file C:\\Thornswood-Docs\\lib\\serve\.js') 'a site module that differs on the box is caught'
+    T ($x.Out -match 'REVIEW  file C:\\Thornswood-Docs\\lib\\news\.js') 'a site module missing on the box is caught'
+    T ($x.Out -match 'REVIEW  file C:\\Thornswood-Docs\\lib\\dropped\.js') 'a module on the box the repository does not have is caught'
 
     $rec = Get-Content (Join-Path $repo 'records\prod-parity.json') -Raw | ConvertFrom-Json
     $rec.intentional = @([pscustomobject]@{ area = 'listener'; item = 'tcp 8080'; why = 'stand-in reason' })

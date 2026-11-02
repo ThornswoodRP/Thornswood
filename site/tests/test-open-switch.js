@@ -29,10 +29,11 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const siteFiles = require('../../tests/site-files');
 const CR = String.fromCharCode(13);
 const ROOT = path.join(__dirname, '..', '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8').split(CR).join('');
-const src = read('site/server.js');
+const src = siteFiles.source();
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -242,9 +243,9 @@ function standingWith(open, roleIds) {
   yes('and only when the bot sent one', /if \(o\.rules && !noteRules\(/.test(ticket));
 
   // -------------------------------------- nothing people read says it --
-  const PEOPLE = ['README.md', 'SECURITY.md', 'installer/READ ME FIRST.txt', 'site/data/help.md',
+  const PEOPLE = ['README.md', 'SECURITY.md', 'site/data/help.md',
                   'site/public/home.html', 'site/public/home.js', 'bot/content.py',
-                  'launcher/ui.xaml', 'launcher/app/ShellPacks.cs']
+                  'launcher/app/MainWindow.axaml', 'launcher/app/ShellPacks.cs']
     .concat(fs.readdirSync(path.join(ROOT, 'site/data/site')).filter((n) => /\.md$/.test(n))
       .map((n) => 'site/data/site/' + n));
   const said = PEOPLE.filter((rel) => fs.existsSync(path.join(ROOT, rel)) &&

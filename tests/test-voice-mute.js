@@ -9,27 +9,32 @@
 //
 // A reviewer measured on 23 September that the list stopped there. Once the
 // launcher reports in, the game's page goes into relay mode and drops every
-// connection it had, and the audio plays in the launcher's voice page,
-// launcher/voice-host.html, hosted by Voice.cs in WebView2. That page's
-// place() set the gain from levelFor(...) and never looked at a mute: profile
-// 123 muted in the game, in the same cell at zero distance, was played at
-// gain 1. A muted person was still heard.
+// connection it had, and the audio plays in the launcher's voice, then the
+// page launcher/voice-host.html in WebView2. That page's place() set the gain
+// from levelFor(...) and never looked at a mute: profile 123 muted in the
+// game, in the same cell at zero distance, was played at gain 1. A muted
+// person was still heard.
 //
 // The list now goes the whole way: the game's page sends it to the voice
 // plugin, the plugin writes voice-muted.txt where the launcher already reads
-// push to talk, Voice.cs hands the line to its page as a 'muted' message, and
-// that page's place() silences them before distance is considered.
+// push to talk, Voice.cs hands the line to the voice session (Muted), and the
+// session's Placed() silences them before distance is considered. Since #4823
+// that session is C#, launcher\app\VoiceSession.cs.
 //
-// This runs the REAL pages and the REAL plugin in a sandbox with a fake
-// browser, a fake file system and a fake audio graph, rather than reading
-// their text, because the defect was a thing that read like working code.
-// Voice.cs is C# and is checked by text here and by the launcher compile.
+// This runs the REAL game page and the REAL plugin in a sandbox with a fake
+// browser, a fake file system and a fake audio graph, and the REAL voice
+// session (tests\voice-launcher.js) against the real voice service with
+// another launcher talking, rather than reading their text, because the
+// defect was a thing that read like working code. Voice.cs's file channel is
+// checked by text here and by the launcher compile.
 //
-// Read only.
+// Read only, but for the voice driver's build and the service's copy in the
+// temp folder.
 const REPO_DIR = require('path').join(__dirname, '..'); // the tests are in tests\, the repository is one folder up
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const VL = require('./voice-launcher');
 const pluginPass = require('./fixtures/plugin-pass'); // front's whose-game check and the first tick, as the game does (#485)
 // The box's address from the one place that holds it (#459), which is what the
 // plugin's own list is kept equal to by Set-Vps.ps1.
@@ -60,74 +65,6 @@ function pannerNode() {
   };
 }
 
-// ------------------------------------------ the launcher's voice page, loaded
-/*
-  One fresh copy of voice-host.html's script, with a fake WebView2 bridge, a
-  fake socket to the voice service and a fake audio graph. Returns the handles
-  a test needs: tell() is the launcher posting a message, serve() is the voice
-  service sending one, gains lists every gain node the page made, in order.
-*/
-function hostPage() {
-  const html = read('launcher/voice-host.html');
-  const m = /<script>([\s\S]*)<\/script>/.exec(html);
-  if (!m) { throw new Error('voice-host.html has no script'); }
-
-  const gains = [];
-  const sockets = [];
-  let onMessage = null;
-
-  function FakeSocket(url) {
-    this.url = url; this.readyState = 1; this.sent = [];
-    sockets.push(this);
-  }
-  FakeSocket.prototype.send = function (s) { this.sent.push(s); };
-  FakeSocket.prototype.close = function () { };
-
-  function FakePc() { this.signalingState = 'stable'; }
-  FakePc.prototype.addTrack = function () { };
-  FakePc.prototype.addTransceiver = function () { };
-  FakePc.prototype.close = function () { };
-  FakePc.prototype.setLocalDescription = function () { return Promise.resolve(); };
-  FakePc.prototype.setRemoteDescription = function () { return Promise.resolve(); };
-  FakePc.prototype.addIceCandidate = function () { return Promise.resolve(); };
-
-  function FakeAudio() {
-    this.currentTime = 0; this.state = 'running'; this.destination = {};
-  }
-  FakeAudio.prototype.createGain = function () { const g = gainNode(); gains.push(g); return g; };
-  FakeAudio.prototype.createPanner = function () { return pannerNode(); };
-
-  const win = {
-    chrome: { webview: {
-      addEventListener: function (kind, fn) { if (kind === 'message') { onMessage = fn; } },
-      postMessage: function () { }
-    } },
-    AudioContext: FakeAudio
-  };
-  const sandbox = {
-    window: win,
-    document: { getElementById: function () { return { textContent: '' }; } },
-    navigator: { mediaDevices: { getUserMedia: function () { return new Promise(function () { }); } } },
-    WebSocket: FakeSocket,
-    RTCPeerConnection: FakePc,
-    fetch: function () { return Promise.reject(new Error('no network here')); },
-    setTimeout: function () { return 0; }, clearTimeout: function () { },
-    setInterval: function () { return 0; }, clearInterval: function () { },
-    console: console, Promise: Promise, Map: Map, Math: Math, Number: Number, String: String,
-    JSON: JSON, Date: Date, Object: Object, Array: Array, isFinite: isFinite
-  };
-  vm.createContext(sandbox);
-  vm.runInContext(m[1], sandbox);
-
-  function tell(obj) { onMessage({ data: JSON.stringify(obj) }); }
-  function serve(obj) {
-    const ws = sockets[sockets.length - 1];
-    ws.onmessage({ data: JSON.stringify(obj) });
-  }
-  return { tell: tell, serve: serve, gains: gains, sockets: sockets,
-           listening: function () { return !!onMessage; } };
-}
-
 /* Me as profile 1, in cell c, at the origin, facing north. */
 const ME = 1;
 function here(extra) {
@@ -138,72 +75,125 @@ function here(extra) {
 }
 const BESIDE = { pos: [0, 0, 0], angleZ: 0, cell: 'c' };
 
-/* A page configured as profile 1 and joined, with one other person, 123. */
-function joined(others) {
-  const p = hostPage();
-  p.tell({ t: 'config', host: 'voice.test', port: '7778', profileId: ME, token: 't', base: 'https://voice.test/voice' });
-  const ws = p.sockets[p.sockets.length - 1];
-  ws.onopen();
-  p.serve({ t: 'welcome', peer: 1 });
-  p.serve({ t: 'peers', peers: [{ peer: 1, profileId: ME, name: 'Me' }].concat(others) });
-  return p;
-}
+// ------------------------------------------------- the launcher's voice
+/*
+  The launcher's VoiceSession itself (tests\voice-launcher.js), two or three
+  of them in a room of the real voice service: each launcher's microphone is
+  a tone of its own, and what one of them plays is its own mixer, read back.
+  So "heard" here is the other person's tone in what played over the last
+  half second, and "silent" is that tone gone from it, not a number on a
+  node. Each check waits long enough after the change for the level's
+  50 ms glide (setTargetAtTime's tau) to be over before that half second
+  begins.
+*/
+const SERA = 660;
+const HEARD = 0.1;    // a voice at full level in front reads about 0.25
+const SILENT = 0.02;
+const settle = () => new Promise((ok) => setTimeout(ok, 750));
 
-// --------------------------------------- the page that plays the audio
-{
-  const p = joined([{ peer: 2, profileId: 123, name: 'Sera', mode: 'local' }]);
-  yes('the launcher\'s voice page listens for the launcher', p.listening());
-  yes('and made a gain node for the person beside you', p.gains.length === 1);
-  const g = p.gains[0] && p.gains[0].gain;
+async function launcherSide() {
+  const svc = await VL.service();
+  const all = [];
+  const rooms = [];
+  try {
+    async function level(who) { await settle(); return (await who.hear([SERA]))[String(SERA)]; }
 
-  p.serve({ t: 'pos', who: here({ 123: BESIDE }) });
-  yes('before any mute, somebody in your cell at zero distance is heard',
-      g && g.value > 0);
+    // --------------------------------------- what the launcher plays
+    {
+      const me = await VL.join(svc, { profileId: ME, name: 'Me', tone: 440 });
+      const sera = await VL.join(svc, { profileId: 123, name: 'Sera', tone: SERA });
+      all.push(me, sera);
+      await svc.feed([{ profileId: ME, pos: [0, 0, 0], angleZ: 0, cell: 'c', name: 'Me' },
+                      { profileId: 123, pos: [0, 0, 0], angleZ: 0, cell: 'c', name: 'Sera' }]);
+      await sera.send({ do: 'ptt', on: true });
+      await me.until(() => me.says(/^receiving from Sera$/), 20000, 'Sera\'s audio');
+      let v = await level(me);
+      yes('before any mute, somebody in your cell at zero distance is heard (' + v.toFixed(3) + ')', v > HEARD);
 
-  /*
-    THE CHECK THE REVIEWER'S MEASUREMENT FAILED. Profile 123, muted, in the
-    same cell at zero distance: this page used to leave them at gain 1.
-  */
-  p.tell({ t: 'muted', list: '123' });
-  yes('muted, the same person at zero distance is silent', g && g.value === 0);
-  p.serve({ t: 'pos', who: here({ 123: BESIDE }) });
-  yes('and stays silent as positions keep arriving', g && g.value === 0);
+      /*
+        THE CHECK THE REVIEWER'S MEASUREMENT FAILED. Profile 123, muted, in
+        the same cell at zero distance: the page used to leave them at gain 1.
+      */
+      await me.send({ do: 'muted', list: '123' });
+      v = await level(me);
+      yes('muted, the same person at zero distance is silent (' + v.toFixed(3) + ')', v < SILENT);
+      await svc.feed([{ profileId: ME, pos: [0, 0, 0], angleZ: 0, cell: 'c', name: 'Me' },
+                      { profileId: 123, pos: [1, 0, 0], angleZ: 0, cell: 'c', name: 'Sera' }]);
+      v = await level(me);
+      yes('and stays silent as positions keep arriving (' + v.toFixed(3) + ')', v < SILENT);
 
-  p.tell({ t: 'muted', list: '' });
-  yes('an empty list unmutes them, and they are heard again', g && g.value > 0);
+      await me.send({ do: 'muted', list: '' });
+      v = await level(me);
+      yes('an empty list unmutes them, and they are heard again (' + v.toFixed(3) + ')', v > HEARD);
 
-  // Only the listed person. Somebody else muted is nothing to do with 123.
-  p.tell({ t: 'muted', list: '456' });
-  yes('muting somebody else leaves them heard', g && g.value > 0);
+      // Only the listed person. Somebody else muted is nothing to do with 123.
+      await me.send({ do: 'muted', list: '456' });
+      v = await level(me);
+      yes('muting somebody else leaves them heard (' + v.toFixed(3) + ')', v > HEARD);
 
-  // Anything that is not a profile id is dropped rather than trusted.
-  p.tell({ t: 'muted', list: '123abc -123 1.5 "); x' });
-  yes('a line that names nobody properly mutes nobody', g && g.value > 0);
-  p.tell({ t: 'muted', list: '  456   123 ' });
-  yes('extra spaces around the ids do not matter', g && g.value === 0);
-}
+      // Anything that is not a profile id is dropped rather than trusted.
+      await me.send({ do: 'muted', list: '123abc -123 1.5 "); x' });
+      v = await level(me);
+      yes('a line that names nobody properly mutes nobody (' + v.toFixed(3) + ')', v > HEARD);
+      await me.send({ do: 'muted', list: '  456   123 ' });
+      v = await level(me);
+      yes('extra spaces around the ids do not matter (' + v.toFixed(3) + ')', v < SILENT);
+      await me.quit();
+      await sera.quit();
+    }
 
-// ------------------------------------ before anybody's position has arrived
-{
-  const p = joined([{ peer: 2, profileId: 123, name: 'Sera', mode: 'local' }]);
-  const g = p.gains[0] && p.gains[0].gain;
-  // Positions for them but not for me: the page has nowhere to measure from.
-  p.serve({ t: 'pos', who: { 123: BESIDE } });
-  p.tell({ t: 'muted', list: '123' });
-  yes('a mute does not wait for your own position to arrive', g && g.value === 0);
-}
+    // ------------------------------ before anybody's position has arrived
+    /*
+      The real service gives somebody a voice place only once their position
+      is in (#3570), and your own row comes with the first table, so this and
+      the next are a room the harness answers in the service's place
+      (VL.room), with the same messages the old harness served the page.
+    */
+    {
+      const r = await VL.room([{ profileId: ME, name: 'Me', tone: 440 }, { profileId: 123, name: 'Sera', tone: SERA }]);
+      rooms.push(r);
+      const me = r.at(0), sera = r.at(1);
+      await r.all({ t: 'peers', peers: r.rows() });
+      await sera.send({ do: 'ptt', on: true });
+      await me.until(() => me.says(/^receiving from Sera$/), 20000, 'Sera\'s audio');
+      // Positions for them but not for me: the session has nowhere to measure from.
+      await r.say(0, { t: 'pos', who: { 123: BESIDE } });
+      let v = await level(me);
+      yes('with no position of your own, somebody is played as they connected (' + v.toFixed(3) + ')', v > HEARD);
+      await me.send({ do: 'muted', list: '123' });
+      v = await level(me);
+      yes('a mute does not wait for your own position to arrive (' + v.toFixed(3) + ')', v < SILENT);
+      await r.quit();
+    }
 
-// --------------------------------------- somebody already muted connects
-{
-  const p = hostPage();
-  p.tell({ t: 'config', host: 'voice.test', port: '7778', profileId: ME, token: 't', base: 'https://voice.test/voice' });
-  p.sockets[0].onopen();
-  p.tell({ t: 'muted', list: '123' });
-  p.serve({ t: 'welcome', peer: 1 });
-  p.serve({ t: 'peers', peers: [{ peer: 2, profileId: 123, name: 'Sera', mode: 'yell' }] });
-  const g = p.gains[0] && p.gains[0].gain;
-  yes('a connection to somebody already muted starts silent, before any position',
-      g && g.value === 0);
+    // ----------------------------------- somebody already muted connects
+    {
+      const r = await VL.room([{ profileId: ME, name: 'Me', tone: 440 }, { profileId: 123, name: 'Sera', tone: SERA, mode: 'yell' }]);
+      rooms.push(r);
+      const me = r.at(0), sera = r.at(1);
+      await me.send({ do: 'muted', list: '123' });
+      await r.all({ t: 'peers', peers: r.rows() });
+      await sera.send({ do: 'ptt', on: true });
+      await me.until(() => me.says(/^receiving from Sera$/), 20000, 'Sera\'s audio');
+      let v = await level(me);
+      yes('a connection to somebody already muted starts silent, before any position (' + v.toFixed(3) + ')', v < SILENT);
+      // Unmuted, they are placed again by the next table, as distance is.
+      await me.send({ do: 'muted', list: '' });
+      await r.say(0, { t: 'pos', who: here({ 123: BESIDE }) });
+      v = await level(me);
+      yes('and is heard once unmuted and placed, so it was the mute (' + v.toFixed(3) + ')', v > HEARD);
+      for (const l of [me, sera]) { all.push(l); }
+    }
+
+    for (const l of all) {
+      const sw = l.swallowed();
+      if (sw) { yes(l.name + '\'s session swallowed nothing:\n' + sw, false); }
+    }
+  } finally {
+    for (const l of all) { await l.quit(); }
+    for (const r of rooms) { await r.quit(); }
+    await svc.stop();
+  }
 }
 
 // ------------------------------------------------ the game's own page
@@ -361,15 +351,15 @@ function plugin() {
 }
 
 // ------------------------------------------------------ the launcher side
-{
+function launcherText() {
   const cs = read('launcher/app/Voice.cs');
   yes('Voice.cs reads voice-muted.txt from the channel folders',
       /Path\.Combine\(d, "voice-muted\.txt"\)/.test(cs) && /foreach \(string d in dirs\)/.test(cs));
-  yes('and hands the line to its page as a muted message',
-      cs.indexOf('Post("{\\"t\\":\\"muted\\",\\"list\\":\\"" + JsonEscape(now) + "\\"}");') >= 0);
+  yes('and hands the line to the voice session',
+      /VoiceSession s = session;\s*if \(s != null\) s\.Muted\(now\);/.test(cs));
   yes('on every pass of the file channel, ahead of push to talk\'s continue',
       /PassMuted\(dirs\);[\s\S]*?string\[\] bits = now\.Split/.test(cs));
-  yes('and again whenever the page loads, which starts it with nobody muted',
+  yes('and again whenever voice is configured from the start, which starts it with nobody muted',
       /static void Configure\(Action<string> log\)\s*\{\s*\/\/[^\n]*\n\s*mutedSeen = null;/.test(cs));
 
   const rules = read('scripts/release/Ship-Rules.ps1');
@@ -378,6 +368,12 @@ function plugin() {
       !!machine && machine[1].indexOf("'Data\\Platform\\voice-muted.txt'") >= 0);
 }
 
-console.log('');
-console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+launcherText();
+launcherSide().then(() => {
+  console.log('');
+  console.log(pass + ' passed, ' + fail + ' failed');
+  process.exitCode = fail ? 1 : 0;
+}).catch((e) => {
+  console.log('FAIL  the harness itself: ' + (e && e.stack || e));
+  process.exitCode = 1;
+});

@@ -44,7 +44,7 @@ param(
     [string]   $Out      = '',
     [string]   $JsOut    = '',
     [string[]] $Plugins  = @('Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm'),
-    # Print the table and leave game\gamemode.js alone.
+    # Print the table and leave its file in game\gamemode-tables alone.
     [switch]   $NoInstall
 )
 
@@ -628,7 +628,7 @@ if ($fail -gt 0) {
 $lines = New-Object 'System.Collections.Generic.List[string]'
 $lines.Add('/* Built by scripts\dev\Build-SpellTable.ps1 out of the game''s own SPEL records.')
 $lines.Add('     ' + $table.Count + ' spells, the same table as game\data\spells.json.')
-$lines.Add('     Paste it between the SPELL_IDS markers in game\gamemode.js. Do not hand edit. */')
+$lines.Add('     The gamemode reads it from game\gamemode-tables\SPELL_IDS.json. Do not hand edit. */')
 $lines.Add('  var SPELL_IDS = {')
 $n = 0
 foreach ($name in $table.Keys) {
@@ -643,45 +643,22 @@ $literal = $lines -join [Environment]::NewLine
 
 # ---------------------------------------------------------------- install --
 #
-# The gamemode carries the table, because the server is deployed as one file
-# and cannot read game\data\spells.json. Nothing hand edits that block: this
-# writes it between its own markers, the way the other generated blocks in
-# this repo are written. -NoInstall prints it and leaves the file alone.
+# The gamemode reads the table from game\gamemode-tables\SPELL_IDS.json when
+# it loads (#5191): until then this wrote it between markers in gamemode.js,
+# and every content change rewrote the same lines there. -NoInstall prints it
+# and leaves the file alone.
 #
 if (-not $NoInstall -and $fail -eq 0) {
-    $gm = Join-Path $PSScriptRoot '..\..\game\gamemode.js'
-    if (-not (Test-Path -LiteralPath $gm)) {
-        Bad "no gamemode.js beside this script, so the table was not installed"
-    } else {
-        $text = [System.IO.File]::ReadAllText($gm)
-        $open  = '  var SPELL_IDS = {'
-        $close = '  // ==== end SPELL_IDS ===='
-        $a = $text.IndexOf($open)
-        $b = $text.IndexOf($close)
-        if ($a -lt 0 -or $b -lt 0 -or $b -lt $a) {
-            Bad "could not find the SPELL_IDS block in $gm, so nothing was written"
-        } else {
-            $body = New-Object 'System.Collections.Generic.List[string]'
-            $body.Add('  var SPELL_IDS = {')
-            $k = 0
-            foreach ($name in $table.Keys) {
-                $k++
-                $comma = ','
-                if ($k -eq $table.Count) { $comma = '' }
-                $body.Add('    ' + (JsonStr ([string]$name)) + ': ' + (JsonStr ([string]$table[$name])) + $comma)
-            }
-            $body.Add('  };')
-            $body.Add('')
-            $eol = $Eol
-            $new = $text.Substring(0, $a) + (($body -join $eol)) + $eol + $text.Substring($b)
-            [System.IO.File]::WriteAllText($gm, $new, (New-Object System.Text.UTF8Encoding($false)))
-            Ok ("wrote {0} spells into the SPELL_IDS block of {1}" -f $table.Count, $gm)
-        }
-    }
+    . (Join-Path $PSScriptRoot 'GamemodeTables.ps1')
+    $rows = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($name in $table.Keys) { $rows.Add((JsonStr ([string]$name)) + ':' + (JsonStr ([string]$table[$name]))) }
+    $changed = Write-GamemodeTable 'SPELL_IDS' ('{' + ($rows -join ',') + '}')
+    if ($changed) { Ok ("wrote {0} spells into {1}" -f $table.Count, (Get-GamemodeTableFile 'SPELL_IDS')) }
+    else { Ok ("{0} already holds these {1} spells" -f (Get-GamemodeTableFile 'SPELL_IDS'), $table.Count) }
 }
 
 Write-Host ''
-Write-Host 'the same table, ready to paste into the gamemode:' -ForegroundColor Cyan
+Write-Host 'the same table, as JavaScript (the gamemode reads its file in game\gamemode-tables):' -ForegroundColor Cyan
 Write-Host $literal
 if ($JsOut) {
     [System.IO.File]::WriteAllText($JsOut, $literal, (New-Object System.Text.UTF8Encoding($false)))

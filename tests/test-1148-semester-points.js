@@ -20,7 +20,7 @@ const path = require("path");
 const vm = require("vm");
 const CR = String.fromCharCode(13);
 function read(rel) { return fs.readFileSync(path.join(REPO_DIR, rel), "utf8").split(CR).join(""); }
-const gm = read("game/gamemode.js");
+const gm = require('./gamemode-tables.js').joined(read("game/gamemode.js"));
 function flat(s) { return s.replace(/\s+/g, " "); }
 
 let pass = 0, fail = 0;

@@ -38,6 +38,7 @@ const http = require('http');
 const net = require('net');
 const os = require('os');
 const path = require('path');
+const siteFiles = require('../../tests/site-files');
 
 const SITE = process.argv[2] || path.join(__dirname, '..', '..', 'site', 'server.js');
 // The home page's script, which moved out of home.html into home.js in #1479
@@ -94,7 +95,7 @@ const TEMP = process.env.THORNSWOOD_TEMP || os.tmpdir();
 fs.mkdirSync(TEMP, { recursive: true });
 const dir = fs.mkdtempSync(path.join(TEMP, 'ts-submit-answers-'));
 const SECRET = crypto.randomBytes(32).toString('hex');
-fs.copyFileSync(SITE, path.join(dir, 'server.js'));
+siteFiles.copy(dir, SITE);
 fs.mkdirSync(path.join(dir, 'data'), { recursive: true });
 fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({
   password: crypto.randomBytes(12).toString('hex'),

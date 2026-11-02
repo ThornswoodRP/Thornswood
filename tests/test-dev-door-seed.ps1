@@ -179,7 +179,9 @@ if ($m.Success) {
 # ---- the address the door builds lands on the route that lists dev only -------
 $gm = Get-Content -LiteralPath $gamemode -Raw
 Yes 'the door asks <site>/api/allowed' ($gm.Contains("String(conf.site).replace(/\/+`$/, '') + '/api/allowed'"))
-$js = Get-Content -LiteralPath $siteJs -Raw
+# The site is server.js over its modules in site\lib since #5357.
+. (Join-Path $PSScriptRoot 'SiteFiles.ps1')
+$js = Get-SiteSource (Join-Path $Repo 'site')
 Yes 'the site answers /dev/api/allowed' ($js.Contains("const devDoor = (route === '/dev/api/allowed');"))
 # Since #3317 the dev server lets in the dev build's list (access.devBuild:
 # Owner, Co-Owner, Dev and the leads), not the staff list access.dev.

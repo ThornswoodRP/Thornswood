@@ -19,6 +19,7 @@ const http = require('http');
 const net = require('net');
 const os = require('os');
 const path = require('path');
+const siteFiles = require('../../tests/site-files');
 
 const ROOT = path.join(__dirname, '..', '..');
 const SITE = path.join(ROOT, 'site', 'server.js');
@@ -30,7 +31,7 @@ const dir = fs.mkdtempSync(path.join(TEMP, 'ts-bans-broken-'));
 const KEY = crypto.randomBytes(24).toString('hex');
 const SECRET = crypto.randomBytes(32).toString('hex');
 const STAFF_D = '222222222', BJORN_D = '333333333';
-fs.copyFileSync(SITE, path.join(dir, 'server.js'));
+siteFiles.copy(dir, SITE);
 const DATA = path.join(dir, 'data');
 fs.mkdirSync(DATA, { recursive: true });
 fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({

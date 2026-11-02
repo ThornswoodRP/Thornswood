@@ -23,10 +23,11 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const vm = require('vm');
+const siteFiles = require('./site-files');
 const ROOT = path.join(__dirname, '..');
 const rd = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8').split('\r\n').join('\n');
 const CHAT = rd('game/ui/thornswood-chat.js'), VOICE = rd('voice/voice-server.js');
-const SITE = rd('site/server.js'), HUB = rd('site/public/hub.js'), FRONT = rd('game/plugins/thornswood-front.js');
+const SITE = siteFiles.source(), HUB = rd('site/public/hub.js'), FRONT = rd('game/plugins/thornswood-front.js');
 let pass = 0, fail = 0;
 function yes(w, c) { if (c) { pass++; console.log('PASS  ' + w); } else { fail++; console.log('FAIL  ' + w); } }
 function grab(src, name) {

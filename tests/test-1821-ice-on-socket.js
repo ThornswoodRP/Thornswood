@@ -23,10 +23,12 @@
     3. /ice hands a page the STUN list whatever token it sends, and the
        relay only to this machine;
     4. with no relay set, the roster carries the STUN list and nothing else;
-    5. the pages: the game's chat socket keeps no token for anybody once its
-       handshake has spent it, and the game's voice overlay and the
-       launcher's voice page take the list from the roster and ask /ice for
-       nothing.
+    5. the clients: the game's chat socket keeps no token for anybody once
+       its handshake has spent it, the game's voice overlay takes the list
+       from the roster and asks /ice for nothing, and the launcher's voice
+       (C# since #4823, run here by tests\voice-launcher.js) asks the
+       roster's relay for its connections, keeps the list when a roster
+       carries none, says so once, and asks /ice for nothing.
 
   Every join token a page joins with is minted by the service itself, on
   its own clock, the way the launcher gets one: POST /token, with a stand-in
@@ -55,7 +57,9 @@ const net = require('net');
 const http = require('http');
 const vm = require('vm');
 const crypto = require('crypto');
+const dgram = require('dgram');
 const { spawn } = require('child_process');
+const VL = require('./voice-launcher');
 
 const CR = String.fromCharCode(13);
 const VOICE = process.env.VOICE || path.join(REPO_DIR, 'voice', 'voice-server.js');
@@ -293,6 +297,112 @@ function ice(port, method, body, viaCaddy) {
     req.end(body == null ? undefined : body);
   });
 }
+/*
+  A relay that only listens: a UDP socket that counts the TURN
+  Allocate requests it is sent (STUN method 3, class request, with the magic
+  cookie), by the address they came from. Each connection the launcher's
+  voice builds from a list with a relay in it asks the relay for an address
+  of its own from a socket of its own, so the senders here are the
+  connections that used the relay. It answers nothing: what is measured is
+  that the list was used, not the relay.
+
+  It listens on the address the launcher's voice binds to, which is the one
+  the machine reaches the internet from and never loopback (VoiceIce.cs,
+  DefaultLocal, #911), found the same way. Windows sends nothing from a
+  socket bound there to 127.0.0.1, so a relay on loopback heard nothing on
+  Windows while Linux routed it.
+*/
+function usableAddress(a) {
+  return typeof a === 'string' && /^\d+\.\d+\.\d+\.\d+$/.test(a) && !/^(127\.|0\.|169\.254\.)/.test(a);
+}
+function defaultLocal() {
+  const firstUp = () => {
+    for (const list of Object.values(os.networkInterfaces())) {
+      for (const n of list || []) { if (n.family === 'IPv4' && !n.internal && usableAddress(n.address)) { return n.address; } }
+    }
+    return '127.0.0.1';
+  };
+  return new Promise((ok) => {
+    const s = dgram.createSocket('udp4');
+    s.on('error', () => { try { s.close(); } catch (e) { } ok(firstUp()); });
+    s.connect(53, '8.8.8.8', () => {
+      let a = '';
+      try { a = s.address().address; } catch (e) { a = ''; }
+      s.close();
+      ok(usableAddress(a) ? a : firstUp());
+    });
+  });
+}
+async function listeningRelay() {
+  const host = await defaultLocal();
+  return new Promise((ok) => {
+    const u = dgram.createSocket('udp4');
+    const from = new Set();
+    u.on('message', (b, rinfo) => {
+      if (b.length >= 20 && b.readUInt16BE(0) === 0x0003 && b.readUInt32BE(4) === 0x2112A442) { from.add(rinfo.port); }
+    });
+    u.bind(0, host, () => ok({ url: 'turn:' + host + ':' + u.address().port, asked: () => from.size, close: () => u.close() }));
+  });
+}
+
+async function launcherVoice() {
+  const VS = read('launcher/app/VoiceSession.cs');
+  const relay = await listeningRelay();
+  const svc = await VL.service({ env: { THORNSWOOD_TURN_URL: relay.url, THORNSWOOD_TURN_SECRET: SECRET } });
+  const run = [];
+  try {
+    const where = (pid) => ({ profileId: pid, pos: [0, 0, 0], angleZ: 0, cell: 'c', name: 'p' + pid });
+    await svc.feed([where(61), where(62), where(63)]);
+    const a = await VL.join(svc, { profileId: 61, name: 'Aela' });
+    run.push(a);
+    const b = await VL.join(svc, { profileId: 62, name: 'Brynjolf' });
+    run.push(b);
+    await a.until(() => relay.asked() >= 2, 15000, 'Allocate requests at the relay').catch(() => false);
+    yes('the launcher\'s voice asks the roster\'s relay for its connections (' + relay.asked() + ' of them asked)', relay.asked() >= 2);
+    yes('and says it took a list with a relay in it',
+        a.says(/^ice: \d+ server\(s\), relay yes$/) && b.says(/^ice: \d+ server\(s\), relay yes$/));
+    const c = await VL.join(svc, { profileId: 63, name: 'Camilla' });
+    run.push(c);
+    await a.until(() => a.host('peers').slice(-1)[0] === '2', 15000, 'the third person on the roster').catch(() => false);
+    yes('saying so in the launcher log once, not on every roster',
+        a.host('log').filter((l) => /^ice: /.test(l)).length === 1);
+  } finally {
+    for (const l of run) { await l.quit(); }
+    await svc.stop();
+  }
+
+  // A roster that carries no list, which the service never sends but a
+  // session must still read right: the list it had stays. Only the first
+  // launcher is handed the relay, so every request the relay sees is its.
+  const relay2 = await listeningRelay();
+  relay.close();
+  const r = await VL.room([{ profileId: 71, name: 'Aela' }, { profileId: 72, name: 'Brynjolf' }, { profileId: 73, name: 'Camilla' }]);
+  try {
+    const rows = r.rows();
+    const withRelay = [{ urls: relay2.url, username: '1', credential: 'x' }];
+    await r.say(0, { t: 'peers', peers: rows.slice(0, 2), iceServers: withRelay });
+    await r.say(1, { t: 'peers', peers: rows.slice(0, 2), iceServers: [] });
+    await r.at(0).until(() => relay2.asked() >= 1, 15000, 'an Allocate').catch(() => false);
+    const first = relay2.asked();
+    await r.say(0, { t: 'peers', peers: rows });
+    await r.say(1, { t: 'peers', peers: rows, iceServers: [] });
+    await r.say(2, { t: 'peers', peers: rows, iceServers: [] });
+    await r.at(0).until(() => relay2.asked() > first, 15000, 'a second Allocate').catch(() => false);
+    yes('the launcher\'s voice keeps its list when a roster carries none: its next connection asks the same relay (' +
+        first + ' then ' + relay2.asked() + ')', first >= 1 && relay2.asked() > first);
+  } finally {
+    await r.quit();
+    relay2.close();
+  }
+
+  yes('every connection is built from that list, after the roster\'s list is taken',
+      /JsonElement ice, peers;\s*if \(m\.TryGetProperty\("iceServers", out ice\)\) TakeIce\(ice\);\s*OnPeers\(/.test(VS) &&
+      /pc\.Gather\(ICE\);/.test(VS));
+  yes('and it asks /ice for nothing, so its token goes only with the handshake',
+      !/\/ice"/.test(VS) && !/\/ice"/.test(read('launcher/app/Voice.cs')) &&
+      /new\[\] \{ "thornswood", token \}/.test(VS) && !/WriteString\("token"/.test(VS));
+}
+
 const relayOf = (list) => (list || []).find((s) => [].concat(s.urls)[0] === RELAY);
 const coturnTakes = (r) => !!r && r.credential === crypto.createHmac('sha1', SECRET).update(String(r.username)).digest('base64');
 
@@ -409,22 +519,8 @@ function lift(src, name) {
       !/THORNSWOOD \|\| \{\}\)\.token/.test(overlay));
   yes('every peer connection is built from that list', /new RTCPeerConnection\(\{ iceServers: ICE \}\)/.test(overlay));
 
-  // The launcher's voice page.
-  const host = read('launcher/voice-host.html');
-  const said = [];
-  const hp = new Function('say', 'var ICE = ' + STUN + '; var iceSaid = "";\n' + lift(host, 'takeIce') +
-                          '\nreturn { take: takeIce, ice: function () { return ICE; } };')((l) => said.push(l));
-  hp.take(null);
-  yes('the launcher\'s page keeps its list when a roster carries none', JSON.stringify(hp.ice()) === STUN);
-  hp.take(second.iceServers);
-  hp.take(second.iceServers);
-  yes('and takes the roster\'s list, relay and all', !!relayOf(hp.ice()));
-  yes('saying so in the launcher log once, not on every roster', said.length === 1 && /relay yes/.test(said[0]));
-  yes('before it builds anything from that roster',
-      /if \(m\.t === 'peers'\) \{ takeIce\(m\.iceServers\); onPeers\(m\.peers \|\| \[\]\); return; \}/.test(host));
-  yes('and it asks /ice for nothing, so its token goes only with the handshake',
-      !/\/ice'/.test(host) && (host.match(/cfg\.token/g) || []).length > 0 && !/token: \(cfg && cfg\.token\)/.test(host));
-  yes('every peer connection is built from that list', /new RTCPeerConnection\(\{ iceServers: ICE \}\)/.test(host));
+  // The launcher's voice, run.
+  await launcherVoice();
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   /*

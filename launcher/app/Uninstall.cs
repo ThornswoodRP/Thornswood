@@ -485,8 +485,8 @@ namespace Thornswood
             {
                 // The box keeps saves and settings, and Profile holds more
                 // than those: the log, the Discord sign-in with the name and
-                // picture beside it, the support zips and the WebView2
-                // browser folders. Keeping all of Profile kept them on the PC
+                // picture beside it, the support zips and the music's old
+                // browser folder. Keeping all of Profile kept them on the PC
                 // under a box that named none of them (#3679). They go here,
                 // and the farewell names any that are still there.
                 leave.AddRange(LocalKeep.NotSaves());
@@ -514,15 +514,14 @@ namespace Thornswood
             // is how anybody finds out it is still holding something.
             leave.Add(Path.Combine(Paths.Root, "_dist"));
             leave.Add(Path.Combine(Paths.Root, "tools"));
-            // The note on where the SkyMP source is. Setup-Thornswood.ps1 puts
-            // it here, beside the folders above, so without this line the
+            // The note on where the SkyMP source is. The install puts it here
+            // (InstallSteps.cs), beside the folders above, so without this line the
             // install folder is never empty and the farewell calls our own
             // note "not Thornswood's".
             leave.Add(Path.Combine(Paths.Root, "SOURCE CODE.txt"));
-            // Licence texts Package stages beside SOURCE CODE.txt (issue #421).
-            leave.Add(Path.Combine(Paths.Root, "GPL-3.0.txt"));
-            leave.Add(Path.Combine(Paths.Root, "AGPL-3.0.txt"));
-            leave.Add(Path.Combine(Paths.Root, "WebView2-LICENSE.txt"));
+            // The licence texts the install puts beside SOURCE CODE.txt: the GPL
+            // and AGPL (issue #421) and the launcher's libraries' (#4823).
+            foreach (string lic in InstallSteps.LicenceFiles) leave.Add(Path.Combine(Paths.Root, lic));
             // The libraries' licence texts SOURCE CODE.txt lists (issue #3099).
             leave.Add(Path.Combine(Paths.Root, "licences"));
 

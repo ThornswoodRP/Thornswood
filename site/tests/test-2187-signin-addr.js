@@ -18,8 +18,9 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const net = require('net');
+const siteFiles = require('../../tests/site-files');
 
-const SRC = fs.readFileSync(path.join(__dirname, '..', '..', 'site', 'server.js'), 'utf8').split('\r\n').join('\n');
+const SRC = siteFiles.source().split('\r\n').join('\n');
 const PRIV = fs.readFileSync(path.join(__dirname, '..', '..', 'site', 'data', 'site', 'privacy.md'), 'utf8');
 let pass = 0, fail = 0;
 function eq(what, got, want) {

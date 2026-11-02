@@ -20,6 +20,7 @@
 */
 const fs = require('fs');
 const path = require('path');
+const siteFiles = require('../../tests/site-files');
 const os = require('os');
 const net = require('net');
 const http = require('http');
@@ -71,7 +72,7 @@ yes('the template on disk still has both the alpha wording and the open wording'
     rawHome.indexOf('Alpha, eighteen and over.') >= 0 &&
     rawHome.indexOf('Open, eighteen and over.') >= 0);
 
-copy('server.js');
+siteFiles.copy(work);
 copy(path.join('public', 'home.html'));
 copy(path.join('public', 'fonts.css'));
 // Fixed test values so a fresh config does not invent a password and print it.

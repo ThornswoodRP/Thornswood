@@ -9,8 +9,9 @@
 
   THE PATH RULE (decided by Patrick on 31 Oct 2026, plan part 4). A pull
   request that changes only files under docs, site or bot cannot change what
-  "Launcher builds" checks: the launcher's and the installer's projects, the
-  ship root tool and the launcher window read none of those folders, and the
+  "Launcher builds" checks: the launcher's project (its window compiled
+  markup and the install its own code, #4823, #4824) and the ship root tool
+  read none of those folders, and the
   writing check's harness, which that job runs for its Windows PowerShell 5.1
   comparison, runs in "Tree checks" for every change as well
   (tests\test-5292-path-rule.ps1 holds all of it). So that job is skipped

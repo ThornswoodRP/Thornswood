@@ -35,10 +35,11 @@ const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const siteFiles = require('../../tests/site-files');
 
 const APP = path.join(__dirname, '..', '..', 'site');
 const SITE_SRC = process.argv[2] || path.join(APP, 'server.js');
-const src = fs.readFileSync(SITE_SRC, 'utf8');
+const src = siteFiles.source(SITE_SRC);
 
 let pass = 0, fail = 0;
 function yes(what, cond, why) {
@@ -49,7 +50,7 @@ function yes(what, cond, why) {
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-2350-'));
 const SECRET = crypto.randomBytes(32).toString('hex');
 const ADMIN_ID = '111111111111111111';
-fs.copyFileSync(SITE_SRC, path.join(dir, 'server.js'));
+siteFiles.copy(dir, SITE_SRC);
 fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
 fs.mkdirSync(path.join(dir, 'data', 'session-logs'), { recursive: true });
 fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({

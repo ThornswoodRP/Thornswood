@@ -4,8 +4,9 @@
 // of its own (#1909). Every worldspace of the load order that is not laid out
 // in Tamriel's coordinates is a key, and its value lists the halls of the
 // dead, temples and inns whose front door stands in that worldspace. It writes
-// the table into game\data\data.json and into the DATA line of
-// game\gamemode.js, and changes nothing else in either.
+// the table into game\data\data.json and changes nothing else in it, and
+// writes game\gamemode-tables\DATA.json, the same file laid out for the
+// gamemode to read (#5191).
 //
 // WHY
 //
@@ -59,7 +60,7 @@
 //   node scripts\dev\Build-WakeTable.js --print
 //   node scripts\dev\Build-WakeTable.js --data "C:\Thornswood\Game\Data" --plugins "C:\Thornswood\Profile\OwnGame\plugins.txt"
 //
-// --check reads the plugins and says whether data.json and the DATA line hold
+// --check reads the plugins and says whether data.json and the DATA table hold
 // exactly that table, and writes nothing. --print lists each worldspace's
 // frame and places. Exit code 1 if a plugin that is switched on is not in the
 // Data folder or will not parse, if Tamriel or its walled cities are not
@@ -71,6 +72,7 @@ const path = require('path');
 const { pluginPath, loadOrder } = require('./OwnPlugins.js');
 const zlib = require('zlib');
 const Worlds = require('./Build-WorldspaceTable.js');
+const TABLES = require('./GamemodeTables.js');
 
 const ROOT = path.join(__dirname, '..', '..');
 const TAMRIEL = '3c:Skyrim.esm';
@@ -276,47 +278,29 @@ function readLoadOrder(dataDir, pluginsTxt) {
 }
 
 // "ownWorlds" and "ownWorldDoors" written into data.json's text as its last
-// keys, laid out the way the rest of the file is (one space a level), and
-// into the DATA line. Nothing else in either moves.
-const DATA_RE = /^const DATA = (.*);$/m;
+// keys, laid out the way the rest of the file is (one space a level). Nothing
+// else moves. The gamemode's DATA table is that file laid out
+// (GamemodeTables.js), so it is written from it.
 const KEYS = ['ownWorlds', 'ownWorldDoors'];
-function install(tables, jsonText, gmText) {
+function install(tables, jsonText) {
   const nl = '\n';
   const end = jsonText.lastIndexOf(nl + '}');
   if (end < 0) { return { error: 'data.json does not end in a closing brace' }; }
   // Ours are the last keys, so everything from the first of them is rewritten.
-  function firstOf(text, shape) {
-    let at = -1;
-    for (const k of KEYS) { const i = text.indexOf(shape(k)); if (i >= 0 && (at < 0 || i < at)) { at = i; } }
-    return at;
-  }
-  const at = firstOf(jsonText, function (k) { return ',' + nl + ' "' + k + '": '; });
+  let at = -1;
+  for (const k of KEYS) { const i = jsonText.indexOf(',' + nl + ' "' + k + '": '); if (i >= 0 && (at < 0 || i < at)) { at = i; } }
   let json = at >= 0 ? jsonText.slice(0, at) : jsonText.slice(0, end);
   for (const k of KEYS) { json += ',' + nl + ' "' + k + '": ' + JSON.stringify(tables[k], null, 1).split('\n').join(nl + ' '); }
   json += jsonText.slice(end);
-  const m = DATA_RE.exec(gmText);
-  if (!m || m[1][m[1].length - 1] !== '}') { return { error: 'gamemode.js has no "const DATA = {...};" line' }; }
-  // As text, the same as data.json: the line keeps 0.0 where JSON.stringify
-  // would write 0, and only these tables are to move.
-  const was = firstOf(m[1], function (k) { return ',"' + k + '":'; });
-  let obj = was >= 0 ? m[1].slice(0, was) : m[1].slice(0, -1);
-  for (const k of KEYS) { obj += ',"' + k + '":' + JSON.stringify(tables[k]); }
-  obj += '}';
-  const line = 'const DATA = ' + obj + ';' + (m[0][m[0].length - 1] === '\r' ? '\r' : '');
-  const gm = gmText.slice(0, m.index) + line + gmText.slice(m.index + m[0].length);
-  let a, b, c, d;
-  try { a = JSON.parse(jsonText); b = JSON.parse(json); c = JSON.parse(m[1]); d = JSON.parse(DATA_RE.exec(gm)[1]); }
+  let a, b;
+  try { a = JSON.parse(jsonText); b = JSON.parse(json); }
   catch (e) { return { error: 'the tables did not land as JSON (' + e.message + ')' }; }
   for (const k of KEYS) {
-    if (JSON.stringify(b[k]) !== JSON.stringify(tables[k]) || JSON.stringify(d[k]) !== JSON.stringify(tables[k])) {
-      return { error: k + ' did not land as built' };
-    }
-    delete a[k]; delete b[k]; delete c[k]; delete d[k];
+    if (JSON.stringify(b[k]) !== JSON.stringify(tables[k])) { return { error: k + ' did not land as built' }; }
+    delete a[k]; delete b[k];
   }
-  if (JSON.stringify(a) !== JSON.stringify(b) || JSON.stringify(c) !== JSON.stringify(d)) {
-    return { error: 'something besides the tables changed' };
-  }
-  return { json: json, gm: gm };
+  if (JSON.stringify(a) !== JSON.stringify(b)) { return { error: 'something besides the tables changed' }; }
+  return { json: json };
 }
 
 function main(args) {
@@ -327,7 +311,7 @@ function main(args) {
   const dataDir = opt('data', 'C:\\Thornswood\\Game\\Data');
   const pluginsTxt = opt('plugins', 'C:\\Thornswood\\Profile\\OwnGame\\plugins.txt');
   const jsonPath = opt('json', path.join(ROOT, 'game', 'data', 'data.json'));
-  const gmPath = opt('gamemode', path.join(ROOT, 'game', 'gamemode.js'));
+  const tablesDir = opt('tables', TABLES.DIR);
   const check = args.indexOf('--check') !== -1;
 
   if (!fs.existsSync(pluginsTxt)) { console.error('FAIL  no plugins.txt at ' + pluginsTxt); return 1; }
@@ -337,7 +321,8 @@ function main(args) {
   problems.forEach(function (p) { console.error('FAIL  ' + p); });
   if (problems.length) { console.error('nothing written'); return 1; }
   const jsonText = fs.readFileSync(jsonPath, 'utf8');
-  const gmText = fs.readFileSync(gmPath, 'utf8');
+  const tablePath = TABLES.file('DATA', tablesDir);
+  const tableText = fs.existsSync(tablePath) ? fs.readFileSync(tablePath, 'utf8') : null;
   const data = JSON.parse(jsonText);
   const built = buildTable(got.tables, ws.worlds, data.destinations, data.cellToHold);
   const lost = CITIES.filter(function (c) { return !built.frame.has(c); });
@@ -354,18 +339,18 @@ function main(args) {
       console.log('  ' + w.padEnd(28) + ws.worlds[w].padEnd(34) + (p ? 'own: ' + (p.length ? p.map(function (x) { return x.kind + ' ' + x.cell; }).join(', ') : 'nowhere to wake') + ', ' + ins + ' door(s) in' : 'Tamriel'));
     });
   }
-  const out = install({ ownWorlds: built.table, ownWorldDoors: built.doors }, jsonText, gmText);
+  const out = install({ ownWorlds: built.table, ownWorldDoors: built.doors }, jsonText);
   if (out.error) { console.error('FAIL  ' + out.error + '; nothing written'); return 1; }
-  const same = out.json === jsonText && out.gm === gmText;
+  const same = out.json === jsonText && TABLES.layout(out.json) === tableText;
   if (check) {
-    if (!same) { console.error('FAIL  data.json or the DATA line is not this load order\'s wake table; run Build-WakeTable.js'); return 1; }
-    console.log('ok    data.json and the DATA line hold this load order\'s wake table');
+    if (!same) { console.error('FAIL  data.json or the DATA table is not this load order\'s wake table; run Build-WakeTable.js'); return 1; }
+    console.log('ok    data.json and the DATA table hold this load order\'s wake table');
     return 0;
   }
-  if (same) { console.log('data.json and the DATA line already hold this table'); return 0; }
+  if (same) { console.log('data.json and the DATA table already hold this table'); return 0; }
   fs.writeFileSync(jsonPath, out.json);
-  fs.writeFileSync(gmPath, out.gm);
-  console.log('wrote the wake table into ' + jsonPath + ' and the DATA line of ' + gmPath);
+  TABLES.write('DATA', out.json, tablesDir);
+  console.log('wrote the wake table into ' + jsonPath + ' and ' + tablePath);
   return 0;
 }
 

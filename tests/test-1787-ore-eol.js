@@ -10,11 +10,13 @@
 // on every machine, so the builder writes LF and takes nothing from the file.
 //
 // This runs the builder against a small Data folder made here (two ores, two
-// veins) and a copy of the builder beside a copy of the real gamemode, so the
-// install step writes into the copy. An LF table and gamemode stay LF, a CRLF
-// table comes out LF, the block it writes into a CRLF gamemode is LF, a new
-// table is LF, and a second run changes nothing. Nothing outside a temporary
-// folder is written.
+// veins) and a copy of the builder in a repository shape of its own, so the
+// install step writes that copy's game/gamemode-tables/ORES_BY_BASE.json.
+// Since #5191 the gamemode reads the table from that file, which
+// GamemodeTables.ps1 writes LF, and the builder no longer touches gamemode.js.
+// An LF ores.json stays LF, a CRLF one comes out LF, the table file is LF, a
+// new table is LF, and a second run changes nothing. Nothing outside a
+// temporary folder is written.
 const REPO_DIR = require("path").join(__dirname, "..");
 const fs = require("fs");
 const os = require("os");
@@ -28,10 +30,7 @@ function yes(what, cond) {
   else { fail++; console.log("FAIL  " + what); }
 }
 
-const OPEN = "  var ORES_BY_BASE = {";
-const CLOSE = "  // ==== end ORES_BY_BASE ====";
 const script = fs.readFileSync(path.join(REPO_DIR, "scripts", "dev", "Build-OreTable.ps1"), "utf8");
-const gmReal = fs.readFileSync(path.join(REPO_DIR, "game", "gamemode.js"), "utf8").split(CR).join("");
 
 // ---- the script, read ----------------------------------------------------
 yes("Build-OreTable.ps1 writes with LF, the same as Build-RecipeTable.ps1",
@@ -39,9 +38,8 @@ yes("Build-OreTable.ps1 writes with LF, the same as Build-RecipeTable.ps1",
 yes("the table is joined with it",
   script.indexOf("$jsonEol = $Eol") >= 0 && script.indexOf("$json = ($docLines -join $jsonEol) + $jsonEol") >= 0);
 yes("and the detail rows inside it as well", script.indexOf("$docLines.Add(($fields -join (',' + $jsonEol)))") >= 0);
-yes("the gamemode block is joined with it",
-  script.indexOf("$new = $text.Substring(0, $a) + (($body -join $eol)) + $eol + $text.Substring($b)") >= 0 &&
-  /\$eol = \$Eol\s+\$new = \$text\.Substring\(0, \$a\)/.test(script));
+yes("the gamemode's table goes to its own file, through GamemodeTables.ps1 (#5191)",
+  script.indexOf("Write-GamemodeTable 'ORES_BY_BASE'") >= 0 && !/game\\gamemode\.js'|'gamemode\.js'/.test(script));
 yes("no CRLF is written anywhere", script.split('"`r`n"').length - 1 === 0);
 
 // ---- a plugin with two ores and two veins --------------------------------
@@ -103,7 +101,8 @@ try {
   const ps1 = path.join(repo, "scripts", "dev", "Build-OreTable.ps1");
   fs.writeFileSync(ps1, script);
   fs.copyFileSync(path.join(REPO_DIR, "scripts", "dev", "OwnPlugins.ps1"), path.join(repo, "scripts", "dev", "OwnPlugins.ps1"));
-  const gm = path.join(repo, "game", "gamemode.js");
+  fs.copyFileSync(path.join(REPO_DIR, "scripts", "dev", "GamemodeTables.ps1"), path.join(repo, "scripts", "dev", "GamemodeTables.ps1"));
+  const gm = path.join(repo, "game", "gamemode-tables", "ORES_BY_BASE.json");
   const out = path.join(repo, "game", "data", "ores.json");
 
   const ver = cp.spawnSync("pwsh", ["--version"], { encoding: "utf8" });
@@ -113,41 +112,37 @@ try {
       { encoding: "utf8", timeout: 120000 });
     return { code: r.status, out: String(r.stdout || "") + String(r.stderr || "") };
   }
-  function block(t) { const a = t.indexOf(OPEN); const b = t.indexOf(CLOSE); return a < 0 || b < 0 ? null : t.slice(a, b); }
-  function outside(t) { return t.slice(0, t.indexOf(OPEN)) + t.slice(t.indexOf(CLOSE)); }
+  function table(t) { try { return JSON.parse(t); } catch (e) { return null; } }
 
   if (!ver.error && ver.status === 0) {
     // ---- an LF checkout: the table and the real gamemode, both LF ----------
-    fs.writeFileSync(gm, gmReal);
     fs.writeFileSync(out, "{\n  \"old\": true\n}\n");
     const r = build();
-    yes("a run against the small Data folder writes the table and the block (exit " + r.code + ")",
-      r.code === 0 && /wrote .*ores\.json \(2 veins/.test(r.out) && /wrote 2 veins into the ORES_BY_BASE block/.test(r.out));
+    yes("a run against the small Data folder writes the table and the gamemode's table file (exit " + r.code + ")",
+      r.code === 0 && /wrote .*ores\.json \(2 veins/.test(r.out) && /wrote 2 veins into .*ORES_BY_BASE\.json/.test(r.out));
     if (r.code !== 0) { console.log(r.out.split("\n").slice(-30).join("\n")); }
     const t1 = fs.readFileSync(out, "utf8");
-    const g1 = fs.readFileSync(gm, "utf8");
+    const g1 = fs.existsSync(gm) ? fs.readFileSync(gm, "utf8") : "";
     yes("an LF ores.json stays LF", t1.indexOf(CR) < 0 && t1.indexOf("\n") >= 0);
     yes("the detail rows inside it are LF too", /"editorId": "MineOreIron01",\n      "plugin"/.test(t1));
     let doc = null;
     try { doc = JSON.parse(t1); } catch (e) { doc = null; }
     yes("the table parses and holds the two veins", !!doc && doc.count === 2 &&
       !!doc.ores["900:Skyrim.esm"] && doc.ores["900:Skyrim.esm"].ore === "800:Skyrim.esm");
-    yes("an LF gamemode stays LF", g1.indexOf(CR) < 0);
-    yes("the block holds the two veins", (block(g1) || "").indexOf('"901:Skyrim.esm": { "ore": "801:Skyrim.esm"') >= 0);
-    yes("nothing outside the ORES_BY_BASE block changed", outside(g1) === outside(gmReal));
+    yes("the gamemode's table file is LF", g1.indexOf(CR) < 0 && g1.indexOf("\n") >= 0);
+    const gt = table(g1);
+    yes("and holds the two veins", !!gt && Object.keys(gt).length === 2 && !!gt["901:Skyrim.esm"] && gt["901:Skyrim.esm"].ore === "801:Skyrim.esm");
     const r2 = build();
     yes("a second run changes neither file", r2.code === 0 &&
       fs.readFileSync(out, "utf8") === t1 && fs.readFileSync(gm, "utf8") === g1);
 
     // ---- a checkout from before .gitattributes: both CRLF ------------------
-    fs.writeFileSync(gm, ["// head", OPEN, "    old", "  };", "", CLOSE, "// tail", ""].join("\r\n"));
+    fs.writeFileSync(gm, "{\r\n\"old\":1\r\n}\r\n");
     fs.writeFileSync(out, "{\r\n  \"old\": true\r\n}\r\n");
     const r3 = build();
     yes("a CRLF ores.json comes out LF", r3.code === 0 && fs.readFileSync(out, "utf8").indexOf(CR) < 0 &&
       fs.readFileSync(out, "utf8") === t1);
-    const g3 = fs.readFileSync(gm, "utf8");
-    yes("the block written into a CRLF gamemode is LF", r3.code === 0 &&
-      g3.indexOf('"900:Skyrim.esm"') >= 0 && (block(g3) || CR).indexOf(CR) < 0);
+    yes("and a CRLF table file is written over LF", r3.code === 0 && fs.readFileSync(gm, "utf8") === g1);
 
     // ---- no table yet: LF as well ------------------------------------------
     fs.unlinkSync(out);

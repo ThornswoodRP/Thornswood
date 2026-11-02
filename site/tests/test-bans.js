@@ -20,9 +20,10 @@
 const REPO_DIR = require('path').join(__dirname, '..', '..'); // this harness is in site\tests\, the repository is two folders up
 const fs = require('fs');
 const path = require('path');
+const siteFiles = require('../../tests/site-files');
 const CR = String.fromCharCode(13);
 const SRC = path.join(REPO_DIR, 'site', 'server.js');
-const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const src = siteFiles.source(SRC).split(CR).join('');
 const builder = fs.readFileSync(path.join(REPO_DIR, 'bot', 'Build-Discord.py'), 'utf8')
   .split(CR).join('');
 

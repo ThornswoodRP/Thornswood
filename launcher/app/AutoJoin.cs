@@ -17,8 +17,8 @@ namespace Thornswood
     /// skymp5-client-settings.txt at startup and connects on its own, so all
     /// that is left is writing two values into a file.
     ///
-    /// Edited as text rather than parsed and rewritten. DataContractJsonSerializer
-    /// drops keys it was not told about, and this file belongs to SkyMP, not to
+    /// Edited as text rather than parsed and rewritten. A serializer bound to a
+    /// class drops keys it was not told about, and this file belongs to SkyMP, not to
     /// us: a key added upstream would vanish the first time the launcher touched
     /// it. Everything not named here is left exactly as found.
     /// </summary>

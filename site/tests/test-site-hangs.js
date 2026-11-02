@@ -46,6 +46,7 @@ const http = require('http');
 const net = require('net');
 const os = require('os');
 const path = require('path');
+const siteFiles = require('../../tests/site-files');
 
 const SITE = process.argv[2] || path.join(__dirname, '..', '..', 'site', 'server.js');
 // The gallery and report pages live in home.js since the scripts left home.html (#1474).
@@ -77,7 +78,7 @@ const QUICK = 1000;
   the site's wait, for a reason no log from that run shows, and a second
   left 300 ms of room for it. The site's log is printed on any failure now.
 */
-const SITE_TEXT = fs.readFileSync(SITE, 'utf8');
+const SITE_TEXT = siteFiles.source(SITE);
 const constMs = (name) => Number((new RegExp('const ' + name + ' = (\\d+);').exec(SITE_TEXT) || [])[1] || NaN);
 const SUBMIT_WAIT_MS = constMs('SUBMIT_WAIT_MS');
 const PLAY_ANSWER_MS = constMs('PLAY_ANSWER_MS');
@@ -143,7 +144,7 @@ const TEMP = process.env.THORNSWOOD_TEMP || os.tmpdir();
 fs.mkdirSync(TEMP, { recursive: true });
 const dir = fs.mkdtempSync(path.join(TEMP, 'ts-site-hangs-'));
 const SECRET = crypto.randomBytes(32).toString('hex');
-fs.copyFileSync(SITE, path.join(dir, 'server.js'));
+siteFiles.copy(dir, SITE);
 fs.mkdirSync(path.join(dir, 'data'), { recursive: true });
 fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
 fs.copyFileSync(path.join(__dirname, '..', '..', 'site', 'public', 'home.html'), path.join(dir, 'public', 'home.html'));

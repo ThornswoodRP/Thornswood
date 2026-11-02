@@ -79,6 +79,8 @@ try {
     Copy-Item -LiteralPath (Join-Path $repo 'layout.json') -Destination (Join-Path $fresh 'layout.json') -Force
     New-Item -ItemType Directory -Force -Path (Join-Path $fresh 'game') | Out-Null
     Copy-Item -LiteralPath (Join-Path $repo 'game\gamemode.js') -Destination (Join-Path $fresh 'game\gamemode.js') -Force
+    # And its tables (#5191), which the gamemode artifact carries with it.
+    Copy-Item -LiteralPath (Join-Path $repo 'game\gamemode-tables') -Destination (Join-Path $fresh 'game\gamemode-tables') -Recurse -Force
     $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
     try {
         $null = & git -C $fresh init -q 2>&1

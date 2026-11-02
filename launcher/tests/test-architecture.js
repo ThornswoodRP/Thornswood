@@ -15,7 +15,8 @@
 //
 // What it checks:
 //   1. the page is there and the old note is gone;
-//   2. Developer-Guide.md points at the page (the long CLAUDE.md that did
+//   2. the guide's list of where things are written down
+//      (docs/guide/the-system.md) points at the page (the long CLAUDE.md that did
 //      too is in the private ops repo since #3693, and its
 //      tests/test-ops-docs.js checks it there), and no tracked
 //      document still points at the old note (docs/archive is exempt:
@@ -27,7 +28,8 @@
 //   5. under each heading, references into the same method are in the order
 //      the code runs them, so a step moved in Play is a step moved on the page;
 //   6. the page has the four sections the entry asked for, says which
-//      install it describes, and lists every file Developer-Guide.md's #dev rule names.
+//      install it describes, and lists every file the guide's #dev rule names
+//      (docs/guide/how-work-moves.md).
 //
 // A line that has only moved is reported, not failed: every edit above it
 // moves it, and the name is the anchor the page tells people to search for.
@@ -65,11 +67,16 @@ yes('launcher/app/HOOKUP.md, the finished Discord wiring note, is gone',
     !fs.existsSync(path.join(APP, 'HOOKUP.md')));
 
 // ------------------------------------------------------------ 2. the pointers
-['Developer-Guide.md'].forEach(function (doc) {
-  const t = read(path.join(ROOT, doc)) || '';
-  yes(doc + ' points at launcher\\app\\ARCHITECTURE.md', t.indexOf('launcher\\app\\ARCHITECTURE.md') >= 0);
-  yes(doc + ' no longer names HOOKUP.md', !/HOOKUP/i.test(t));
-});
+// The guide is an index, Developer-Guide.md, and its pages in docs/guide.
+// Its list of where things are written down is on the-system.md.
+{
+  const t = read(path.join(ROOT, 'docs', 'guide', 'the-system.md')) || '';
+  yes('docs/guide/the-system.md points at launcher\\app\\ARCHITECTURE.md', t.indexOf('launcher\\app\\ARCHITECTURE.md') >= 0);
+}
+['Developer-Guide.md'].concat(fs.readdirSync(path.join(ROOT, 'docs', 'guide')).map(function (f) { return 'docs/guide/' + f; }))
+  .forEach(function (doc) {
+    yes(doc + ' does not name HOOKUP.md', !/HOOKUP/i.test(read(path.join(ROOT, doc)) || ''));
+  });
 
 let tracked = null;
 try {
@@ -471,15 +478,16 @@ yes('the steps the page lists inside each method are in the order the code runs 
   else console.log('      every .cs file in launcher/app is named on the page');
 }
 
-// The six shared files, as Developer-Guide.md names them today.
+// The six shared files, as the guide's #dev rule names them today
+// (docs/guide/how-work-moves.md, "Signing, the build check, and the six shared files").
 {
-  const claude = (read(path.join(ROOT, 'Developer-Guide.md')) || '').replace(/\s+/g, ' ');
+  const claude = (read(path.join(ROOT, 'docs', 'guide', 'how-work-moves.md')) || '').replace(/\s+/g, ' ');
   const m = claude.match(/An edit to (.+?) that blocks others' work gets a line in #dev-coordination/);
   const s4 = page.slice(Math.max(0, page.indexOf('## 4. The six shared files')));
-  if (!m) note('Developer-Guide.md no longer words its #dev rule as "An edit to ... that blocks others\' work gets a line in #dev-coordination", so section 4 was not compared with it');
+  if (!m) note('docs/guide/how-work-moves.md no longer words its #dev rule as "An edit to ... that blocks others\' work gets a line in #dev-coordination", so section 4 was not compared with it');
   else {
     const named = m[1].match(/[\w-]+\.(?:cs|ps1)/g) || [];
-    yes('Developer-Guide.md\'s #dev rule names files, ' + named.length + ' of them', named.length > 0);
+    yes('docs/guide/how-work-moves.md\'s #dev rule names files, ' + named.length + ' of them', named.length > 0);
     named.forEach(function (f) { yes('section 4 lists ' + f, s4.indexOf(f) >= 0); });
   }
 }

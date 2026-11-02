@@ -30,7 +30,7 @@ namespace Thornswood
     /// folder or doing an update I want a progress bar on the Play button and
     /// not just updating or preparing the game folder".
     ///
-    /// No WPF in here, so launcher\tests\test-play-progress.ps1 can compile it on its
+    /// No Avalonia in here, so launcher\tests\test-play-progress.ps1 can compile it on its
     /// own and drive it. Shell (ShellProgress.cs) paints it: it reads the
     /// state on a timer every DrawEveryMs, and only when something changed,
     /// so a download reporting every 80 KB or a check going through 2,500

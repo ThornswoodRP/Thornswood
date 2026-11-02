@@ -3,13 +3,17 @@
 
       pwsh -NoProfile -File .\tests\test-release-workflow.ps1
 
-  The shape of .github\workflows\release.yml after #2163, #498 and #4013:
+  The shape of .github\workflows\release.yml after #2163, #4013 and #4823:
   where the release launcher is built, who may sign it, the one draft per tag
-  (#2462), and the second machine that checks a signed draft.
+  (#2462), and the second machine that checks a signed draft. Since #4823 the
+  launcher is compiled to native code by the .NET 10 SDK and is a folder:
+  Thornswood.exe and the native libraries beside it, every one signed, listed
+  in SHA256SUMS and put on the draft. The setup program the build also made
+  went with the old installer (#4824).
 
   WHY. Patrick's decisions of 12 Oct on #2163: release.yml builds on GitHub's
-  hosted Windows runner, with #498's MSBuild switch in the same change, and
-  signs there through a federated Azure identity limited to v tags. The VPS
+  hosted Windows runner (then with #498's MSBuild, the .NET 10 SDK since
+  #4823), and signs there through a federated Azure identity limited to v tags. The VPS
   stays the backup for every GitHub runner build, the same way build.yml has
   it. Each of those is one line of YAML that a later edit could drop without
   any other check going red, and the cost of losing one is a release built on
@@ -108,15 +112,16 @@ $gate = "if: `${{ $main }}"
 Yes 'no azure/login: the box keeps no Azure sign in after the job (#3312)' (-not ($code -match 'azure/login'))
 Yes 'the signing client is fetched only in a run of main''s own workflow, on either runner' ($fetch.Contains($gate))
 Yes '  with the pin from Setup-ShipMachine.ps1, not a second copy' ($fetch.Contains("'Get-SigningClientPin'") -and -not ($fetch -match '[0-9a-f]{64}'))
-Yes 'the sign step has the same gate and signs -Required' ($sign.Contains($gate) -and $sign.Contains('Sign-Artifact.ps1 -Path $exe -Required'))
+Yes 'the sign step has the same gate and signs -Required' ($sign.Contains($gate) -and $sign.Contains('Sign-Artifact.ps1 -Path $programs -Required'))
+Yes '  every program of the launcher, the exe and each .exe and .dll beside it (#4823)' ($sign.Contains("`$programs = @(Get-ChildItem -LiteralPath (Split-Path -Parent `$exe) -File | Where-Object { `$_.Extension -in '.exe', '.dll' }"))
 Yes '  with the app and tenant ids from repository variables, no secret' ($sign.Contains('AZURE_CLIENT_ID: ${{ vars.AZURE_SIGNING_CLIENT_ID }}') -and $sign.Contains('AZURE_TENANT_ID: ${{ vars.AZURE_SIGNING_TENANT_ID }}') -and -not ($sign -match 'secrets\.|CLIENT_SECRET|client-secret'))
 $signDoc = [IO.File]::ReadAllText((Join-Path (Split-Path -Parent $Here) 'docs/SIGNED-RELEASES.md')).Replace("`r`n", "`n")
 Yes '  and SIGNED-RELEASES.md names those two variables, not three, and no subscription id is read (#3717)' ($signDoc.Contains('`AZURE_SIGNING_CLIENT_ID` and `AZURE_SIGNING_TENANT_ID`') -and -not ($signDoc -match 'three `AZURE_SIGNING_') -and -not ($code -match 'SUBSCRIPTION_ID'))
 Yes '  asks GitHub for the OIDC token with the audience Azure trusts' ($sign.Contains("&audience=api://AzureADTokenExchange") -and $sign.Contains('ACTIONS_ID_TOKEN_REQUEST_TOKEN'))
 Yes '  masks it and names it to the signing client as a workload identity file' ($sign.Contains("'::add-mask::' + `$answer.value") -and $sign.Contains('$env:AZURE_FEDERATED_TOKEN_FILE = $tokenFile'))
 Yes '  and removes the file in a finally, whatever signtool did' ($sign -match '(?s)\} finally \{\s*Remove-Item -LiteralPath \$tokenFile')
-Yes '  and reads the signature back, Valid and timestamped' ($sign.Contains("`$sig.Status -ne 'Valid'") -and $sign.Contains('TimeStamperCertificate'))
-Yes '  and does not sign setup-stub.exe (Package signs the finished Setup)' (-not ($sign -match 'setup-stub'))
+Yes '  and reads every program''s signature back, Valid and timestamped' ($sign -match '(?s)foreach \(\$f in \$programs\) \{\s*\$sig = Get-AuthenticodeSignature -LiteralPath \$f' -and $sign.Contains("`$sig.Status -ne 'Valid'") -and $sign.Contains('TimeStamperCertificate'))
+Yes 'no setup-stub.exe anywhere in the workflow: the old installer''s program went with it (#4824)' (-not ($code -match 'setup-stub'))
 Yes 'the signing setup comes off the runner after every run, failed ones too' ($clean.Contains('if: ${{ always() }}') -and $clean.Contains('records\signing\signing.json') -and $clean.Contains('records\signing\client'))
 Yes 'no step in release.yml reads a secret but the repository token' (-not (($wf -replace '\$\{\{ github\.token \}\}', '') -match 'secrets\.'))
 $num = Get-Step $wf 'Hold the tag''s number to the launcher''s'
@@ -125,15 +130,22 @@ Yes '  a v<a.b.c> tag must be that number and no other' ($num.Contains('$parts.C
 Yes '  and a v<a.b.c.d> tag must start with it' ($num.Contains('$parts.Count -eq 4 -and $base -ne $main'))
 Yes '  and the number goes to the build as -Version, so git''s Updater.cs is never edited' ($wf.Contains('LAUNCHER_VERSION: ${{ steps.number.outputs.version }}') -and $wf.Contains('Build-Launcher.ps1 -Root $root -NoSign -NoPause -Version $env:LAUNCHER_VERSION'))
 $build = Get-Step $wf 'Build the launcher into RUNNER_TEMP'
-Yes 'the build is MSBuild on either runner, with no -With (#498 switched)' ($build.Contains('Build-Launcher.ps1 -Root $root -NoSign -NoPause') -and $build -notmatch '-With\b' -and $build -notmatch "'csc'")
+Yes 'the build is Build-Launcher''s native publish, with no -With and no MSBuild (#4823)' ($build.Contains('Build-Launcher.ps1 -Root $root -NoSign -NoPause') -and $build -notmatch '-With\b' -and $build -notmatch "'csc'" -and $code -notmatch 'MSBuild')
+$iDotnet = $wf.IndexOf('- uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0')
+Yes '  after the .NET 10 SDK is set up, at the build check''s pin' ($iDotnet -gt 0 -and $wf.Substring($iDotnet).StartsWith("- uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0`n        with:`n          dotnet-version: '10.0.x'"))
 $iBuild = $wf.IndexOf('- name: Build the launcher into RUNNER_TEMP')
 $iFetch = $wf.IndexOf('- name: Fetch the signing client')
 $iNum = $wf.IndexOf("- name: Hold the tag's number to the launcher's")
 $iClean = $wf.IndexOf('- name: Take the signing setup off')
 $iSign = $wf.IndexOf('- name: Sign the launcher')
-$iSums = $wf.IndexOf('- name: Collect the exe')
+$iSums = $wf.IndexOf('- name: Collect the launcher''s programs')
 $iDraft = $wf.IndexOf('- name: Draft a release')
-Yes 'order: number, build, fetch the client, sign, SHA256SUMS, draft, clean up (sums name the signed bytes)' ($iNum -gt 0 -and $iNum -lt $iBuild -and $iBuild -lt $iFetch -and $iFetch -lt $iSign -and $iSign -lt $iSums -and $iSums -lt $iDraft -and $iDraft -lt $iClean)
+Yes 'order: number, SDK, build, fetch the client, sign, SHA256SUMS, draft, clean up (sums name the signed bytes)' ($iNum -gt 0 -and $iNum -lt $iDotnet -and $iDotnet -lt $iBuild -and $iBuild -lt $iFetch -and $iFetch -lt $iSign -and $iSign -lt $iSums -and $iSums -lt $iDraft -and $iDraft -lt $iClean)
+
+$collect = Get-Step $wf 'Collect the launcher''s programs'
+Yes 'the collect step takes every .exe and .dll of the launcher folder, by name, and refuses one with no Thornswood.exe' ($collect.Contains("Where-Object { `$_.Extension -in '.exe', '.dll' -or `$_.Name -in 'app.ico', 'app-dev.ico' } | Sort-Object Name") -and $collect.Contains("`$_.Name -eq 'Thornswood.exe'"))
+Yes '  and the two icons the exe embeds, refusing a folder without either, so Install-Launcher names the icon file after the exe''s art (#887)' ($collect.Contains("`$noIcon = @('app.ico', 'app-dev.ico' | Where-Object { `$programs.Name -notcontains `$_ })") -and $collect -match 'if \(\$noIcon\.Count\) \{[^}]*exit 1 \}')
+Yes '  and writes a SHA256SUMS line for each of them' ($collect -match '(?s)foreach \(\$f in \$programs\) \{\s*\$hash = .*?\$lines \+= \("\$hash  " \+ \$f\.Name\)')
 
 # ---- one draft per tag --------------------------------------------------------
 $draft = Get-Step $wf 'Draft a release'
@@ -144,7 +156,8 @@ Yes '  and stops when the tag has more than one release, naming them' ($draft.Co
 Yes '  and never replaces the files of a published release' ($draft.Contains('if (-not $release.draft)'))
 Yes '  and rewrites an existing draft''s notes with the files it uploads (a signed rebuild kept saying UNSIGNED)' ($draft.Contains('-Method Patch -Uri "$api/releases/$($release.id)"') -and $draft.Contains('@{ body = $notes; tag_name = $tag; target_commitish = $env:RELEASE_COMMIT }'))
 Yes '  naming the tag and commit in that edit, since an edit that does not name the tag drops it from a draft (v1.2.13, 31 Oct)' (@([regex]::Matches($draft, '-Method Patch')).Count -eq 1 -and $draft -match 'tag_name = \$tag; target_commitish = \$env:RELEASE_COMMIT \}')
-Yes '  and the notes name MSBuild on GitHub''s runner, not the csc #498 retired' ($draft.Contains("'built on GitHub''s runner with MSBuild (#498)'") -and -not $draft.Contains('csc') -and -not $draft.Contains('VPS'))
+Yes '  and the notes name the .NET 10 SDK''s native publish on GitHub''s runner' ($draft.Contains("'published natively on GitHub''s runner with the .NET 10 SDK (#4823)'") -and -not $draft.Contains('csc') -and -not $draft.Contains('VPS'))
+Yes '  and it uploads every file the collect step left, not a fixed list' ($draft.Contains('$files = @(Get-ChildItem -LiteralPath $out -File') -and $draft.Contains('foreach ($asset in $files)'))
 Yes '  and an unsigned draft says UNSIGNED' ($draft.Contains("else { `$how += ', UNSIGNED (not a run of main''s workflow, #3930)"))
 Yes '  and writes release_id and signed for the verify job' ($draft.Contains('"release_id=" + $release.id') -and $draft.Contains('("signed=" +'))
 
@@ -156,6 +169,7 @@ Yes '  on a GitHub runner of its own, a fresh machine, never the one that signed
 Yes '  without id-token or the release environment' (-not $ver.Contains('id-token') -and -not $ver.Contains('environment:'))
 Yes '  it checks out the commit the draft was built from, by the job that built it' ($ver.Contains('ref: ${{ env.DRAFT_COMMIT }}') -and $ver.Contains('DRAFT_COMMIT: ${{ needs.launcher.outputs.commit }}'))
 Yes '  downloads each file by its asset id' ($ver.Contains('releases/assets/$($a[0].id)') -and $ver.Contains("Accept = 'application/octet-stream'"))
+Yes '  SHA256SUMS first, then every file it names, so the whole launcher is checked' ($ver -match "(?s)& \`$get 'SHA256SUMS'.*?foreach \(\`$n in \`$named\) \{ & \`$get \`$n \}")
 Yes '  and runs Test-ReleaseFiles.ps1 -RequireSigned, failing on a refusal' ($ver.Contains('Test-ReleaseFiles.ps1 -Dir $dir -RequireSigned') -and $ver.Contains('if ($LASTEXITCODE -ne 0)'))
 $repoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $WorkflowPath))
 Yes '  and that script is in the repository' (Test-Path -LiteralPath (Join-Path $repoRoot 'scripts/release/Test-ReleaseFiles.ps1'))

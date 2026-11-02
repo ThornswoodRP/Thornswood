@@ -1,9 +1,10 @@
 <#
   test-publish-sign-gate.ps1
 
-  Ship and Publish-Installer must refuse an unsigned tip (and a machine that
-  cannot sign), not only print "not signing". Local Build-Launcher may still
-  soft-skip; the gate is on publish to the site / feed (#825).
+  Ship must refuse an unsigned tip (and a machine that cannot sign), not
+  only print "not signing". Local Build-Launcher may still soft-skip; the
+  gate is on publish to the feed (#825). Publish-Installer.ps1, which held
+  the old installer to the same gate, went with it (#4824).
 
   Static wiring plus helper behaviour against temp unsigned files and a fake
   signing.json. No Azure, no network, no real Ship.
@@ -28,12 +29,10 @@ function Yes([string]$what, [bool]$cond) {
 
 $assert = Join-Path $repo 'scripts\release\Assert-PublishSigned.ps1'
 $ship = Join-Path $repo 'scripts\release\Ship.ps1'
-$pub = Join-Path $repo 'scripts\release\Publish-Installer.ps1'
 $build = Join-Path $repo 'scripts\release\Build-Launcher.ps1'
 
 Yes 'Assert-PublishSigned.ps1 is there' (Test-Path -LiteralPath $assert)
 Yes 'Ship.ps1 is there' (Test-Path -LiteralPath $ship)
-Yes 'Publish-Installer.ps1 is there' (Test-Path -LiteralPath $pub)
 Yes 'Build-Launcher.ps1 is there' (Test-Path -LiteralPath $build)
 if (-not (Test-Path -LiteralPath $assert)) {
     Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail)
@@ -43,18 +42,15 @@ if (-not (Test-Path -LiteralPath $assert)) {
 . $assert
 
 $shipSrc = [IO.File]::ReadAllText($ship, $Utf8)
-$pubSrc = [IO.File]::ReadAllText($pub, $Utf8)
 $buildSrc = [IO.File]::ReadAllText($build, $Utf8)
 
 Yes 'Ship dotsources Assert-PublishSigned' ($shipSrc -match 'Assert-PublishSigned\.ps1')
 Yes 'Ship calls Get-SigningConfigRefusal' ($shipSrc -match 'Get-SigningConfigRefusal')
 Yes 'Ship calls Get-PublishSignRefusal for the launcher' ($shipSrc -match 'Get-PublishSignRefusal')
-Yes 'Publish-Installer dotsources Assert-PublishSigned' ($pubSrc -match 'Assert-PublishSigned\.ps1')
-Yes 'Publish-Installer calls Get-PublishSignRefusal' ($pubSrc -match 'Get-PublishSignRefusal')
-Yes 'Build-Launcher still leaves setup-stub unsigned' (
-    ($buildSrc -match 'Do NOT sign setup-stub' -or $buildSrc -match 'Do not sign setup-stub') -and
-    $buildSrc -match '& \$signer -Path \$exe\b' -and
-    $buildSrc -notmatch '\$toSign \+= \$stub')
+Yes 'Build-Launcher signs every program of the launcher, the native libraries too (#4823)' (
+    $buildSrc.Contains('$programs = @(Get-ChildItem -LiteralPath $outDir -File | Where-Object { $_.Extension -in ''.exe'', ''.dll'' })') -and
+    $buildSrc.Contains('& $signer -Path @($programs | ForEach-Object { $_.FullName })'))
+Yes '  and there is no setup stub left to leave unsigned (#4824)' ($buildSrc -notmatch 'setup-stub')
 
 $frag = Get-ExpectedSignerFragment -RepoRoot $repo
 # Compared with Updater.cs read here, rather than with the name written out, so

@@ -8,6 +8,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const siteFiles = require('./site-files');
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
 
@@ -17,7 +18,7 @@ function yes(what, cond) {
   else { fail++; console.log('FAIL  ' + what); }
 }
 
-const server = read('site/server.js');
+const server = siteFiles.source();
 const readme = read('bot/README.md');
 const accessAt = server.indexOf('Discord roles decide everything');
 const access = accessAt < 0 ? '' : server.slice(accessAt, accessAt + 1400);

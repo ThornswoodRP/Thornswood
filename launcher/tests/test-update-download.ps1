@@ -8,13 +8,11 @@
 
       Download / Fetch      checksum is mandatory, a wrong, short or broken
                             download is rejected and its part file deleted,
-                            the url is checked before a byte is asked for
+                            an answer that is not 2xx is refused, the url is
+                            checked before a byte is asked for
       ApplyPack             a pack already in is not fetched twice, a release
                             record syncs instead of downloading, the zip is
                             deleted whether Install worked or threw
-      SelfUpdate            a launcher that fails its checksum or its signer
-                            check never reaches Thornswood.exe.new, and the
-                            download it refused is not left in %TEMP%
       WriteCache/ReadCache  the feed cache round-trips, and a copy from an
                             older shape, cut short, or with a body that does
                             not parse is not believed
@@ -22,26 +20,35 @@
       Applied/Skip/MarkApplied/Unapply/IsInstalled/PackListFile/Requeue
                             the applied.txt bookkeeping the rollback leans on
 
-  Each method is lifted out of the real Updater.cs (the brace-matched body,
-  the way test-play-stuck-game.ps1 does it) and compiled with the compiler and
-  the C# version the build uses (tests\Launcher-Csc.ps1),
-  beside stand-ins for Paths, PlayProgress, Swallow, Signature, VersionDoc,
-  Install and SyncRecord. Downloads come from a stand-in WebClient that hands
-  back scripted bytes, so nothing touches the network, and TMP points at a
-  scratch folder so what a download leaves behind can be counted.
+  and from launcher\app\VeloUpdate.cs, read rather than run, since the
+  launcher's own update is Velopack's (#4825) and needs an install of it:
 
-  No process is started apart from the compiled driver. Writes only to its own
-  temp folder.
+      FetchLauncher         the package and the Update.exe that applies it are
+                            checked against the signer before the update is
+                            marked checked, and a refusal deletes the package
+      ApplyLauncher         only a checked update is applied
+
+  Each method is lifted out of the real Updater.cs (the brace-matched body,
+  the way test-play-stuck-game.ps1 does it), with Http.CopyBody out of the
+  real Http.cs, and built by the .NET 10 SDK the way the launcher project
+  builds (Build-LauncherCode in tests\Launcher-Csc.ps1), beside stand-ins for
+  Paths, PlayProgress, Swallow, VersionDoc, Install and SyncRecord.
+  Http.Send is a stand-in that hands back scripted answers and bytes, so
+  nothing touches the network, and the temp folder points at a scratch
+  folder so what a download leaves behind can be counted.
+
+  No process is started apart from the built driver. Writes only to its own
+  temp folder and the harness builds under out\harness.
 #>
 [CmdletBinding()]
-param([string]$AppDir)
+param()
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the launcher's own build, by the .NET 10 SDK (#4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $Repo = Split-Path -Parent (Split-Path -Parent $Here)
-if (-not $AppDir) { $AppDir = Join-Path $Repo 'launcher\app' }
+$AppDir = Join-Path $Repo 'launcher\app'
 
 $script:pass = 0
 $script:fail = 0
@@ -67,16 +74,21 @@ function Body([string]$src, [string]$start) {
 }
 
 $upPath = Join-Path $AppDir 'Updater.cs'
-Yes 'Updater.cs is in the launcher source' (Test-Path -LiteralPath $upPath)
-if (-not (Test-Path -LiteralPath $upPath)) { Done }
+$httpPath = Join-Path $AppDir 'Http.cs'
+$veloPath = Join-Path $AppDir 'VeloUpdate.cs'
+Yes 'Updater.cs, Http.cs and VeloUpdate.cs are in the launcher source' ((Test-Path -LiteralPath $upPath) -and (Test-Path -LiteralPath $httpPath) -and (Test-Path -LiteralPath $veloPath))
+if (-not ((Test-Path -LiteralPath $upPath) -and (Test-Path -LiteralPath $httpPath) -and (Test-Path -LiteralPath $veloPath))) { Done }
 $up = [IO.File]::ReadAllText($upPath, [Text.Encoding]::UTF8)
+$http = [IO.File]::ReadAllText($httpPath, [Text.Encoding]::UTF8)
+$velo = [IO.File]::ReadAllText($veloPath, [Text.Encoding]::UTF8)
 
 $sigs = @(
+    'static HttpRequestMessage FeedAsk(Config cfg, bool octet, string url, bool gzip)',
+    'static HttpRequestException Refused(HttpResponseMessage res)',
     'static string CacheFile',
     'static void WriteCache(Cached c, byte[] body)',
     'static string OneLine(string s)',
     'static Cached ReadCache()',
-    'static bool NotChanged(WebException wex)',
     'static Exception WrapFeedFail(Exception ex, bool fromHost)',
     'public static HashSet<string> Applied()',
     'public static void Skip(string id)',
@@ -88,11 +100,7 @@ $sigs = @(
     'public static string Fetch(Config cfg, string url, string expectSha, Action<string> log)',
     'static string Download(Config cfg, string url, string expectSha, Action<string> log)',
     'public static void ApplyPack(Config cfg, Pack p, Action<string> log)',
-    'public static int Requeue()',
-    'static void CheckSigner(string path, Action<string> log)',
-    'public static void SelfUpdate(Config cfg, VersionDoc v, Action<string> log)',
-    'public static string FetchLauncher(Config cfg, VersionDoc v, Action<string> log)',
-    'public static void SwapIn(string tmp, Action<string> log)'
+    'public static int Requeue()'
 )
 $bodies = @()
 foreach ($sig in $sigs) {
@@ -100,16 +108,22 @@ foreach ($sig in $sigs) {
     Yes "lifted $sig" ($b.Length -gt 0)
     $bodies += $b
 }
-foreach ($c in @('const string CacheMagic', 'const string ListHeader')) {
-    $m = [regex]::Match($up, [regex]::Escape($c) + '\s*=\s*"[^"]*";')
+foreach ($c in @('const string CacheMagic', 'const string ListHeader', 'const int AnswerMs')) {
+    $m = [regex]::Match($up, [regex]::Escape($c) + '\s*=\s*[^;]+;')
     Yes "lifted $c" $m.Success
     $bodies += $m.Value
 }
+$httpBodies = @()
+$b = Body $http 'public static void CopyBody(HttpResponseMessage response, Stream to, int readMs, Action<long> onBytes)'
+Yes 'lifted Http.CopyBody' ($b.Length -gt 0)
+$httpBodies += $b
+$m = [regex]::Match($http, 'public const int DefaultReadMs\s*=\s*[^;]+;')
+Yes 'lifted Http.DefaultReadMs' $m.Success
+$httpBodies += $m.Value
 if ($script:fail) { Done }
 
-if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'; Done }
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
+Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('ts-update-dl-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $tmp | Out-Null
@@ -122,16 +136,19 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 namespace Thornswood
 {
-    class Config { }
+    class Config { public string UpdateToken; }
     class RecordRef { }
     class Pack { public string id, url, sha256; public RecordRef Record; public VersionDoc Doc; }
     class VersionDoc
     {
-        public string launcherVersion, launcherUrl, launcherSha256, said;
+        public string said;
         public static VersionDoc Parse(byte[] b)
         {
             string s = Encoding.UTF8.GetString(b);
@@ -144,7 +161,6 @@ namespace Thornswood
         public static string ProfileDir, AppliedFile, PacksDir;
         public static bool Collection;
     }
-    static class SelfSwap { public static int Scripts; public static string Script(string exe, string neu, int pid) { Scripts++; return ""; } }
     static class Swallow { public static int Notes; public static void Note(string w, Exception e) { Notes++; } }
     static class PlayProgress
     {
@@ -152,65 +168,75 @@ namespace Thornswood
         public static void Part(long got, long len) { LastGot = got; LastLen = len; }
         public static void PartDone() { Done++; }
     }
-    static class Signature
-    {
-        public static string Why = "";
-        public static string Refusal(string path, string expectedSigner, out string said)
-        { said = "Signed by " + expectedSigner + "."; return Why; }
-    }
 
-    // Scripted downloads: bytes to hand back, a Content-Length to claim, and
-    // a point at which the stream breaks.
+    // Scripted answers: the status, the bytes to hand back, a Content-Length
+    // to claim, and a point at which the stream breaks.
     static class Net
     {
+        public static int Status = 200;
         public static byte[] Body = new byte[0];
         public static long Claim = -1;
         public static int BreakAt = -1;
         public static int Opens;
         public static List<string> UrlsChecked = new List<string>();
-        public static string RefuseUrl;
+        public static string RefuseUrl, Accept, Auth;
     }
-    class BreakingStream : MemoryStream
+    // Not seekable, as a network stream is not, so no length is worked out
+    // from it: only a claimed Content-Length gives one.
+    class BreakingStream : Stream
     {
-        int left;
-        public BreakingStream(byte[] b, int breakAt) : base(b) { left = breakAt; }
+        readonly byte[] data; int pos; int left;
+        public BreakingStream(byte[] b, int breakAt) { data = b; left = breakAt; }
+        public override bool CanRead { get { return true; } }
+        public override bool CanSeek { get { return false; } }
+        public override bool CanWrite { get { return false; } }
+        public override long Length { get { throw new NotSupportedException(); } }
+        public override long Position { get { throw new NotSupportedException(); } set { throw new NotSupportedException(); } }
+        public override void Flush() { }
+        public override long Seek(long o, SeekOrigin s) { throw new NotSupportedException(); }
+        public override void SetLength(long v) { throw new NotSupportedException(); }
+        public override void Write(byte[] b, int o, int c) { throw new NotSupportedException(); }
         public override int Read(byte[] buf, int off, int count)
         {
-            if (left >= 0)
-            {
-                if (left == 0) throw new IOException("connection reset");
-                count = Math.Min(count, left);
-                int n = base.Read(buf, off, count); left -= n; return n;
-            }
-            return base.Read(buf, off, count);
+            if (left == 0) throw new IOException("connection reset");
+            if (left > 0) count = Math.Min(count, left);
+            int n = Math.Min(count, data.Length - pos);
+            Buffer.BlockCopy(data, pos, buf, off, n);
+            pos += n;
+            if (left > 0) left -= n;
+            return n;
+        }
+        public override Task<int> ReadAsync(byte[] buf, int off, int count, CancellationToken t)
+        {
+            try { return Task.FromResult(Read(buf, off, count)); }
+            catch (Exception e) { return Task.FromException<int>(e); }
         }
     }
-    class FakeResponse : WebResponse
+
+    // Http.cs's CopyBody as it is, with Send standing in for the network.
+    static class Http
     {
-        WebHeaderCollection h = new WebHeaderCollection();
-        public FakeResponse() { if (Net.Claim >= 0) h["Content-Length"] = Net.Claim.ToString(); }
-        public override WebHeaderCollection Headers { get { return h; } }
-        public override Stream GetResponseStream() { return new BreakingStream(Net.Body, Net.BreakAt); }
-        public override void Close() { }
-    }
-    class FakeRequest : WebRequest
-    {
-        Uri u; public FakeRequest(Uri u) { this.u = u; }
-        public override Uri RequestUri { get { return u; } }
-        public override WebResponse GetResponse() { return new FakeResponse(); }
-    }
-    class FakeClient : WebClient
-    {
-        protected override WebRequest GetWebRequest(Uri a) { Net.Opens++; return new FakeRequest(a); }
-        protected override WebResponse GetWebResponse(WebRequest r) { return r.GetResponse(); }
+        public static HttpResponseMessage Send(HttpRequestMessage request, int waitMs)
+        {
+            Net.Opens++;
+            IEnumerable<string> v;
+            Net.Accept = request.Headers.TryGetValues("Accept", out v) ? string.Join(",", v) : "";
+            Net.Auth = request.Headers.TryGetValues("Authorization", out v) ? string.Join(",", v) : "";
+            var res = new HttpResponseMessage((HttpStatusCode)Net.Status);
+            res.ReasonPhrase = Net.Status == 200 ? "OK" : "Not Found";
+            res.Content = new StreamContent(new BreakingStream(Net.Body, Net.BreakAt));
+            if (Net.Claim >= 0) res.Content.Headers.ContentLength = Net.Claim;
+            return res;
+        }
+
+/*HTTP*/
     }
 
     static partial class Updater
     {
-        public const string ExpectedSigner = "Test Signer"; // a stand-in: the real name lives only in Updater.cs (#1052)
+        public static readonly string Version = "0.0.0";
         class Cached { public string Url, Etag, LastModified; public VersionDoc Doc; }
 
-        static WebClient Client(Config cfg, bool octet, string url) { return new FakeClient(); }
         static void CheckUrl(string url)
         {
             Net.UrlsChecked.Add(url);
@@ -252,9 +278,10 @@ namespace Thornswood
         static void Clear()
         {
             foreach (string f in Directory.GetFiles(Path.GetTempPath(), "thornswood-*")) File.Delete(f);
-            Net.Body = new byte[0]; Net.Claim = -1; Net.BreakAt = -1; Net.Opens = 0; Net.UrlsChecked.Clear(); Net.RefuseUrl = null;
+            Net.Status = 200; Net.Body = new byte[0]; Net.Claim = -1; Net.BreakAt = -1; Net.Opens = 0; Net.UrlsChecked.Clear(); Net.RefuseUrl = null;
+            Net.Accept = null; Net.Auth = null; cfg.UpdateToken = null;
             PlayProgress.LastGot = -9; PlayProgress.LastLen = -9; PlayProgress.Done = 0;
-            logged.Clear(); Signature.Why = "";
+            logged.Clear();
             Installs = 0; Syncs = 0; InstalledFrom = null; InstallThrows = false; ZipThereDuringInstall = false;
             if (File.Exists(Paths.AppliedFile)) File.Delete(Paths.AppliedFile);
         }
@@ -277,12 +304,13 @@ namespace Thornswood
             const string url = "https://github.com/EvilPatrick06/Thornswood-Releases/releases/download/x/pack.zip";
 
             // ---------- Download ----------
-            Clear(); Net.Body = body; Net.Claim = body.Length;
+            Clear(); Net.Body = body; Net.Claim = body.Length; cfg.UpdateToken = "a token";
             string got = null;
             Exception e = Try(() => got = Updater.Fetch(cfg, url, sha, Log));
             Yes("download: right checksum hands back the file", e == null && got != null && File.Exists(got));
             Yes("download: the file holds exactly the bytes sent", got != null && File.Exists(got) && Hex(File.ReadAllBytes(got)) == sha);
             Yes("download: the url is checked before the fetch", Net.UrlsChecked.Count == 1 && Net.UrlsChecked[0] == url);
+            Yes("download: asks for the bytes as they are, and sends the token to no host but GitHub's API", Net.Accept == "application/octet-stream" && Net.Auth == "");
             Yes("download: says the checksum was verified", logged.Contains("Checksum verified."));
             Yes("download: progress ends at the full length and is closed", PlayProgress.LastGot == body.Length && PlayProgress.LastLen == body.Length && PlayProgress.Done == 1);
 
@@ -308,6 +336,10 @@ namespace Thornswood
             Clear(); Net.Body = body; Net.RefuseUrl = url;
             e = Try(() => Updater.Fetch(cfg, url, sha, Log));
             Yes("download: an address the url check refuses fetches nothing", e != null && e.Message.Contains("Refused") && Net.Opens == 0 && Parts() == 0);
+
+            Clear(); Net.Body = body; Net.Status = 404;
+            e = Try(() => Updater.Fetch(cfg, url, sha, Log));
+            Yes("download: an answer that is not 2xx is refused, saying the status, and leaves nothing", e is HttpRequestException && e.Message.Contains("404") && Parts() == 0 && PlayProgress.Done == 0);
 
             Clear(); Net.Body = body; Net.Claim = body.Length; Net.BreakAt = 100000;
             e = Try(() => Updater.Fetch(cfg, url, sha, Log));
@@ -354,28 +386,8 @@ namespace Thornswood
             e = Try(() => Updater.ApplyPack(cfg, new Pack { id = "release-9", Record = new RecordRef() }, Log));
             Yes("apply: a release record syncs and downloads nothing", e == null && Syncs == 1 && Net.Opens == 0 && Installs == 0);
 
-            // ---------- SelfUpdate ----------
-            string exe = System.Reflection.Assembly.GetExecutingAssembly().Location;
-            var v = new VersionDoc(); v.launcherVersion = "9.9.9"; v.launcherUrl = url; v.launcherSha256 = sha;
-            Clear(); Net.Body = body; Signature.Why = "is not signed.";
-            e = Try(() => Updater.SelfUpdate(cfg, v, Log));
-            Yes("self-update: a launcher failing the signer check is refused", e != null && e.Message.Contains("Nothing has been replaced"));
-            Yes("self-update: nothing is put at Thornswood.exe.new", !File.Exists(exe + ".new"));
-            Yes("self-update: no swap script is written", Directory.GetFiles(Path.GetTempPath(), "thornswood-update-*.cmd").Length == 0);
-            Yes("self-update: the refused download is not left in TEMP", Parts() == 0);
-
-            Clear(); Net.Body = body; v.launcherSha256 = wrong;
-            e = Try(() => Updater.SelfUpdate(cfg, v, Log));
-            Yes("self-update: a launcher failing its checksum is refused", e != null && e.Message.Contains("Checksum did not match"));
-            Yes("self-update: nothing at .new and nothing in TEMP", !File.Exists(exe + ".new") && Parts() == 0);
-
-            Clear(); Net.Body = body; v.launcherSha256 = "";
-            e = Try(() => Updater.SelfUpdate(cfg, v, Log));
-            Yes("self-update: a launcher with no checksum is never fetched", e != null && Net.Opens == 0 && !File.Exists(exe + ".new"));
-
             // ---------- Feed cache ----------
             string cacheFile = Path.Combine(Paths.ProfileDir, "feed-cache.txt");
-            var c = new Updater_Cached();
             byte[] doc = Encoding.UTF8.GetBytes("{\"version\":\"1.2.1\",\"packs\":[]}");
             Updater_Cache.Write("https://thornswood.net/feed/version.json", "W/\"abc\"\r\nX-Evil: 1", "Sat, 10 Oct 2026 00:00:00 GMT", doc);
             Yes("cache: the copy is written to Profile\\feed-cache.txt", File.Exists(cacheFile));
@@ -403,16 +415,17 @@ namespace Thornswood
             Yes("cache: no Profile folder writes nothing and reads null", Updater_Cache.Read() == null && !File.Exists(cacheFile));
             Paths.ProfileDir = keep;
 
-            // ---------- WrapFeedFail / NotChanged ----------
-            Exception w = Updater_Wrap.Wrap(new WebException("t", WebExceptionStatus.Timeout), true);
+            // ---------- WrapFeedFail ----------
+            // Http.Send throws TimeoutException when the answer did not start
+            // in time, and HttpRequestException when there was none at all.
+            Exception w = Updater_Wrap.Wrap(new TimeoutException("t"), true);
             Yes("feed fail: a timeout says the site feed did not answer in time", w.Message.StartsWith("the site update feed did not answer in time"));
-            w = Updater_Wrap.Wrap(new WebException("t", WebExceptionStatus.Timeout), false);
+            w = Updater_Wrap.Wrap(new TimeoutException("t"), false);
             Yes("feed fail: a GitHub timeout names GitHub", w.Message.StartsWith("GitHub did not answer in time"));
             var own = new Exception("The update feed gave an address that is not an address.");
             Yes("feed fail: the launcher's own message passes through untouched", Object.ReferenceEquals(Updater_Wrap.Wrap(own, true), own));
-            w = Updater_Wrap.Wrap(new WebException("The remote name could not be resolved: 'thornswood.net'"), true);
+            w = Updater_Wrap.Wrap(new HttpRequestException("Name or service not known (thornswood.net:443)"), true);
             Yes("feed fail: anything else says could not reach the site feed", w.Message == "could not reach the site update feed");
-            Yes("feed fail: a WebException with no response is not a 304", !Updater_Wrap.NotChanged(new WebException("x")));
 
             // ---------- applied.txt bookkeeping ----------
             Clear();
@@ -427,10 +440,14 @@ namespace Thornswood
             Yes("bookkeeping: Unapply takes out every copy of the id, any case", !left.Contains("pack-x") && left.Contains("a") && left.Contains("b") && left.Count == 2);
             Updater_Book.Unapply("not-there");
             Yes("bookkeeping: Unapply of an id that is not there keeps the rest", Updater.Applied().Count == 2);
-            Yes("bookkeeping: a pack list name has no characters Windows refuses", Path.GetFileName(Updater_Book.ListOf("a/b:c*d?")) == "a_b_c_d_.files");
+            // What the system refuses in a name: on Windows / : * ?, which is
+            // where the launcher runs; elsewhere only /.
+            string listName = OperatingSystem.IsWindows() ? "a_b_c_d_.files" : "a_b:c*d?.files";
+            Yes("bookkeeping: a pack list name has no characters the system refuses in a name", Path.GetFileName(Updater_Book.ListOf("a/b:c*d?")) == listName);
 
             // Requeue
             Clear();
+            Directory.CreateDirectory(Paths.PacksDir);
             File.WriteAllText(Paths.AppliedFile, "headed\r\nbare\r\nseeded\r\n");
             File.WriteAllText(Updater_Book.ListOf("headed"), "\r\n# fence=game\r\nN|game\\x.esp\r\n");
             File.WriteAllText(Updater_Book.ListOf("bare"), "N|profile\\x.ini\r\n");
@@ -450,13 +467,11 @@ namespace Thornswood
     }
 
     // Windows into the private members, so the cases above read plainly.
-    class Updater_Cached { }
     static partial class Updater
     {
         internal static void CacheWrite(string u, string e, string l, byte[] b) { var c = new Cached(); c.Url = u; c.Etag = e; c.LastModified = l; WriteCache(c, b); }
         internal static string[] CacheRead() { var c = ReadCache(); return c == null ? null : new[] { c.Url, c.Etag, c.LastModified, c.Doc.said }; }
         internal static Exception WrapX(Exception e, bool h) { return WrapFeedFail(e, h); }
-        internal static bool NotChangedX(WebException w) { return NotChanged(w); }
         internal static void UnapplyX(string id) { Unapply(id); }
         internal static string ListOfX(string id) { return PackListFile(id); }
     }
@@ -468,7 +483,6 @@ namespace Thornswood
     static class Updater_Wrap
     {
         public static Exception Wrap(Exception e, bool h) { return Updater.WrapX(e, h); }
-        public static bool NotChanged(WebException w) { return Updater.NotChangedX(w); }
     }
     static class Updater_Book
     {
@@ -478,32 +492,50 @@ namespace Thornswood
 }
 '@
 
-$src = Join-Path $tmp 'drive.cs'
-[IO.File]::WriteAllText($src, $driver.Replace('/*BODIES*/', ($bodies -join "`r`n`r`n")), (New-Object Text.UTF8Encoding($false)))
-$exe = Join-Path $tmp 'drive.exe'
-$out = & $LauncherCsc /nologo "/langversion:$LauncherLangVersion" /target:exe "/out:$exe" $src 2>&1
-Yes 'the lifted methods compile with the build''s compiler beside the stand-ins' ($LASTEXITCODE -eq 0)
-if ($LASTEXITCODE -ne 0) { $out | ForEach-Object { Write-Host "    $_" }; Remove-Item -LiteralPath $tmp -Recurse -Force; Done }
+$text = $driver.Replace('/*BODIES*/', ($bodies -join "`r`n`r`n")).Replace('/*HTTP*/', ($httpBodies -join "`r`n`r`n"))
+$dll = $null
+try { $dll = Build-LauncherCode -Source $text -Exe }
+catch {
+    Yes 'the lifted methods build with the launcher''s settings beside the stand-ins' $false
+    foreach ($l in @(($_.Exception.Message -split "`r?`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20)) { Write-Host "    $l" }
+    Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    Done
+}
+Yes 'the lifted methods build with the launcher''s settings beside the stand-ins' ($null -ne $dll)
 
-$oldTmp = $env:TMP; $oldTemp = $env:TEMP
+# Path.GetTempPath reads TMP and TEMP on Windows and TMPDIR elsewhere.
+$oldTmp = $env:TMP; $oldTemp = $env:TEMP; $oldTmpDir = $env:TMPDIR
 try {
-    $env:TMP = $scratchTemp; $env:TEMP = $scratchTemp
-    $lines = & $exe $profile
+    $env:TMP = $scratchTemp; $env:TEMP = $scratchTemp; $env:TMPDIR = $scratchTemp
+    $lines = @(Invoke-LauncherExe $dll $profile)
     $code = $LASTEXITCODE
-} finally { $env:TMP = $oldTmp; $env:TEMP = $oldTemp }
+} finally { $env:TMP = $oldTmp; $env:TEMP = $oldTemp; $env:TMPDIR = $oldTmpDir }
 foreach ($l in $lines) {
     if ($l -match '^PASS  (.*)$') { Yes $Matches[1] $true }
     elseif ($l -match '^FAIL  (.*)$') { Yes $Matches[1] $false }
 }
-Yes 'the driver ran to the end' (($lines | Where-Object { $_ -like 'DRIVER *' }).Count -eq 1)
+Yes ('the driver ran to the end (exit ' + $code + ')') (($lines | Where-Object { $_ -like 'DRIVER *' }).Count -eq 1)
 
-# Order in the real SelfUpdate: the signer check comes before anything is put
-# at .new, and the swap script is only written after the copy.
-# Since #2210 SelfUpdate is FetchLauncher then SwapIn; the swap is SwapIn's.
-$self = Body $up 'public static void SwapIn(string tmp, Action<string> log)'
-$iSign = $self.IndexOf('CheckSigner(tmp'); $iCopy = $self.IndexOf('File.Copy(tmp, neu'); $iBat = $self.IndexOf('SelfSwap.Script(')
-Yes 'SelfUpdate checks the signer before the copy to .new' ($iSign -gt 0 -and $iCopy -gt $iSign)
-Yes 'SelfUpdate writes the swap script only after the copy' ($iBat -gt $iCopy)
+# ---- the launcher's own update (VeloUpdate.cs) ----------------------------------
+# What SelfUpdate made sure of before #4825, in the update Velopack applies: the
+# package and Velopack's Update.exe are checked against the signer before the
+# update is marked checked, a refusal deletes the package and says nothing was
+# replaced, and only a checked update is applied.
+$fetch = Body $velo 'public static void FetchLauncher(LauncherUpdate u, Action<string> log)'
+$apply = Body $velo 'public static void ApplyLauncher(LauncherUpdate u)'
+Yes 'lifted FetchLauncher and ApplyLauncher out of VeloUpdate.cs' ($fetch.Length -gt 0 -and $apply.Length -gt 0)
+$iDown = $fetch.IndexOf('DownloadUpdatesAsync(')
+$iPkg = $fetch.IndexOf('VeloPackage.Refusal(pkg, list, setup, ExpectedSigner,')
+$iExe = $fetch.IndexOf('Signature.Refusal(updateExe, ExpectedSigner,')
+$iCatch = $fetch.IndexOf('catch (Exception ex)')
+$iDel = $fetch.IndexOf('File.Delete(pkg)')
+$iChecked = $fetch.IndexOf('u.Checked = true;')
+Yes 'FetchLauncher checks the package, every file and program in it, against the signer once it is down' ($iDown -ge 0 -and $iPkg -gt $iDown)
+Yes '  and Velopack''s Update.exe, which applies it, against the signer after that' ($iExe -gt $iPkg)
+Yes '  a refusal deletes the package and says nothing was replaced' (
+    $iCatch -gt $iExe -and $iDel -gt $iCatch -and $fetch.IndexOf('Nothing has been replaced', $iCatch) -gt $iCatch)
+Yes '  and the update is marked checked only after every check, outside the refusal' ($iChecked -gt $iDel)
+Yes 'ApplyLauncher applies only an update FetchLauncher checked' ($apply -match '^public static void ApplyLauncher\(LauncherUpdate u\)\s*\{\s*if \(u == null \|\| !u\.Checked\) throw')
 
 Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 Done

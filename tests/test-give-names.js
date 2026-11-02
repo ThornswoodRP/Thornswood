@@ -23,7 +23,7 @@ const { spawnSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 const GM = process.env.GM || path.join(ROOT, 'game', 'gamemode.js');
-const src = fs.readFileSync(GM, 'utf8').split(String.fromCharCode(13)).join('');
+const src = require('./gamemode-tables.js').joined(fs.readFileSync(GM, 'utf8')).split(String.fromCharCode(13)).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -39,9 +39,9 @@ function cut(from, to) {
 }
 
 // ------------------------------------------------------------------ A --
-const recipes = cut('  var RECIPES_BY_ID = {', '\n  };');
-const names = cut('  var ITEM_NAMES = {', '\n  };');
-const admin = cut('  // ==== ADMIN_NAMES ====', '  // ==== end ADMIN_NAMES ====') || '';
+const recipes = cut('  var RECIPES_BY_ID = {', ';\n');
+const names = cut('  var ITEM_NAMES = {', ';\n');
+const admin = (cut('  var ADMIN_ITEMS = {', ';\n') || '') + '\n' + (cut('  var ADMIN_ACTORS = {', ';\n') || '') || '';
 const itemsLine = (src.match(/^const ITEMS = .*;$/m) || [null])[0];
 const fns = cut('  function addThing(idx, name, desc) {', "\n  function buildBeasts() {");
 const finder = cut('  function findIn(idx, want, kind) {', "return findIn(buildThings(), want, 'items'); }");
@@ -89,24 +89,29 @@ yes('the builder is in scripts/dev', fs.existsSync(builder));
 if (fs.existsSync(builder)) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'give-names-'));
   const rj = path.join(tmp, 'recipes.json');
-  const gm = path.join(tmp, 'gamemode.js');
+  // Since #5191 the builder writes ITEM_NAMES into its own file in a tables folder.
+  const dir = path.join(tmp, 'gamemode-tables');
+  const gm = path.join(dir, 'ITEM_NAMES.json');
   fs.writeFileSync(rj, JSON.stringify({ recipes: {
     'a:Skyrim.esm': { name: 'Iron Ingot', out: '5ace4:Skyrim.esm', inputItems: [{ name: 'Iron Ore', item: '71cf3:Skyrim.esm' }] },
     'b:Mod.esp': { name: 'Iron Ingot', out: '800:Mod.esp', inputItems: [{ name: 'Iron  Ore ', item: '900:Mod.esp' }] },
     'c:Mod.esp': { name: 'Odd Thing', out: '801:Mod.esp', inputItems: [] }
   } }));
-  fs.writeFileSync(gm, 'x\r\n  // ==== end RECIPES_BY_ID ====\r\ny\r\n');
-  const run = function () { return spawnSync(process.execPath, [builder, '--recipes', rj, '--gamemode', gm], { encoding: 'utf8' }); };
+  fs.mkdirSync(dir);
+  fs.writeFileSync(gm, '{\r\n"old":["Old","1:Skyrim.esm"]\r\n}\r\n');
+  const run = function () { return spawnSync(process.execPath, [builder, '--recipes', rj, '--tables', dir], { encoding: 'utf8' }); };
   const r1 = run();
   const once = fs.readFileSync(gm, 'utf8');
   const r2 = run();
   const twice = fs.readFileSync(gm, 'utf8');
+  let t = null;
+  try { t = JSON.parse(once); } catch (e) { t = null; }
   yes('the builder runs', r1.status === 0 && r2.status === 0);
   yes('a second run changes nothing', once === twice);
-  yes('a CRLF gamemode comes out LF (#3029)', once.indexOf('\r') < 0 && once.indexOf('\n') >= 0);
-  yes('a shared name goes to Skyrim.esm', once.indexOf('"iron ingot": ["Iron Ingot", "5ace4:Skyrim.esm"]') !== -1);
-  yes('ingredients are named, spaces tidied', once.indexOf('"iron ore": ["Iron Ore", "71cf3:Skyrim.esm"]') !== -1);
-  yes('a mod-only name is kept', once.indexOf('"odd thing": ["Odd Thing", "801:Mod.esp"]') !== -1);
+  yes('a CRLF table comes out LF (#3029)', once.indexOf('\r') < 0 && once.indexOf('\n') >= 0);
+  yes('a shared name goes to Skyrim.esm', !!t && JSON.stringify(t['iron ingot']) === '["Iron Ingot","5ace4:Skyrim.esm"]');
+  yes('ingredients are named, spaces tidied', !!t && JSON.stringify(t['iron ore']) === '["Iron Ore","71cf3:Skyrim.esm"]');
+  yes('a mod-only name is kept', !!t && JSON.stringify(t['odd thing']) === '["Odd Thing","801:Mod.esp"]');
   try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) { }
 }
 

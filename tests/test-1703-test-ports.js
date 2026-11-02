@@ -66,6 +66,7 @@ const net = require('net');
 const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
+const siteFiles = require('./site-files');
 const CR = String.fromCharCode(13);
 const read = (p) => fs.readFileSync(p, 'utf8').split(CR).join('');
 
@@ -273,7 +274,7 @@ for (const n of ['voice-server.js', 'headlines.js']) {
 }
 const siteDir = path.join(scratch, 'site');
 fs.mkdirSync(siteDir);
-fs.copyFileSync(path.join(REPO_DIR, 'site', 'server.js'), path.join(siteDir, 'server.js'));
+siteFiles.copy(siteDir);
 function site(port) {
   const srv = spawn(process.execPath, ['server.js'], { cwd: siteDir,
     env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_DOCS_LOCAL: '1' }) });

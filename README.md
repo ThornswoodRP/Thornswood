@@ -25,10 +25,11 @@ Scrolls and Skyrim are their trademarks.
 
 ## What is in here
 
-- `launcher/`: launcher chrome (window, art, voice page). The C# app lives in
-  `launcher/app/` (C# 13 / WPF), built by `scripts/release/Build-Launcher.ps1`
-  with MSBuild from `launcher/app/Thornswood.csproj` (#498). See
-  `launcher/app/ARCHITECTURE.md`.
+- `launcher/`: the launcher's art. The program lives in `launcher/app/`
+  (C# and Avalonia on .NET 10, the window in `MainWindow.axaml`), published
+  with Native AOT by `scripts/release/Build-Launcher.ps1` from
+  `launcher/app/Thornswood.csproj` and installed and updated by Velopack
+  (#4823). See `launcher/app/ARCHITECTURE.md`.
 - `installer/`: what a new person runs first. `installer/setup/` is the small
   setup program people download (one installer tree, not two products).
 - `game/`: everything that runs as the multiplayer game on the server and

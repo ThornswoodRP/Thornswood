@@ -29,35 +29,28 @@
       launcher always read a feed
     - the feed is asked for compressed and read the same
 
-  HOW. Compiles launcher\app\*.cs into a library with the same compiler and
-  the same references the build uses (tests\Launcher-Csc.ps1), as
-  test-updater.ps1 does, and calls Updater.Conditional by reflection. That is
-  the request FromSite makes after CheckUrl, which only lets https to
-  thornswood.net through, so the local server is reached without loosening
-  what a real launcher accepts. Paths points at a temp folder. Nothing under
-  C:\Thornswood is read or written, and nothing leaves 127.0.0.1.
+  HOW. Builds the launcher project with the .NET 10 SDK, as the build does,
+  and loads it into this PowerShell (Add-LauncherAssembly in
+  tests\Launcher-Csc.ps1), as test-updater.ps1 does, and calls
+  Updater.Conditional by reflection. That is the request FromSite makes after
+  CheckUrl, which only lets https to thornswood.net through, so the local
+  server is reached without loosening what a real launcher accepts. Paths
+  points at a temp folder. Nothing under C:\Thornswood is read or written,
+  and nothing leaves 127.0.0.1.
 
-  Runs under Windows PowerShell 5.1 and restarts itself there from pwsh,
-  because the launcher runs on the .NET Framework.
+  Runs in pwsh 7 on any system the .NET 10 SDK is on, because the launcher
+  is a .NET 10 program now (#4823).
 #>
 [CmdletBinding()]
-param([string]$Src)
+param()
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the launcher's own build, by the .NET 10 SDK (#4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 # This harness is in launcher\tests\, the repository is two folders up.
 $Here = Split-Path -Parent (Split-Path -Parent $Here)
-if (-not $Src) { $Src = Join-Path $Here 'launcher\app' }
-
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  this runs the launcher''s code on the .NET Framework the launcher runs on, which only Windows has'; exit 0 }
-if ($PSVersionTable.PSEdition -eq 'Core') {
-    $winps = Get-WindowsPowerShell
-    & $winps -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Src $Src
-    exit $LASTEXITCODE
-}
+$Src = Join-Path $Here 'launcher\app'
 
 $script:pass = 0
 $script:fail = 0
@@ -65,11 +58,6 @@ function Yes([string]$what, [bool]$cond) {
     if ($cond) { $script:pass++; Write-Host "PASS  $what" }
     else { $script:fail++; Write-Host "FAIL  $what" }
 }
-
-# ---- the compiler and the references the build uses (Launcher-Csc.ps1) ------
-
-$needed = @($LauncherNeeded)
-$wv2 = @($LauncherLib)
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('tsfeedcond-' + [Guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Force -Path $tmp
@@ -237,38 +225,16 @@ function New-Feed([int]$packs, [string]$launcher = '1.1.101') {
 }
 
 function Run {
-    Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-    if (-not (Test-Path -LiteralPath $LauncherCsc) -or $needed.Count -eq 0) { Yes 'Thornswood.csproj names the references' $false; return }
-
-    $refs = @(); $missing = @()
-    foreach ($n in $needed) {
-        $p = Find-LauncherRef $n
-        if ($p) { $refs += $p } else { $missing += $n }
-    }
-    foreach ($n in $wv2) {
-        $p = $n
-        if (Test-Path -LiteralPath $p) { $refs += $p } else { $missing += $n }
-    }
-    Yes ('every reference is on this machine' + $(if ($missing.Count) { ', missing ' + ($missing -join ', ') } else { '' })) ($missing.Count -eq 0)
-    if ($missing.Count) { return }
-
-    $cs = @(Get-ChildItem (Join-Path $Src '*.cs') -File)
-    $dll = Join-Path $tmp 'Thornswood.dll'
-    $cscArgs = @('/noconfig', '/nologo', '/target:library', '/platform:anycpu', "/langversion:$LauncherLangVersion", "/out:$dll")
-    foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-    foreach ($f in $cs) { $cscArgs += $f.FullName }
-    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $said = & $LauncherCsc @cscArgs 2>&1
-    $rc = $LASTEXITCODE
-    $ErrorActionPreference = $old
-    $built = ($rc -eq 0) -and (Test-Path -LiteralPath $dll)
-    Yes ('the launcher''s {0} source files compile with the compiler the build runs' -f $cs.Count) $built
-    if (-not $built) {
-        foreach ($l in @($said | Where-Object { "$_" -match 'error' } | Select-Object -First 20)) { Write-Host "      $l" }
+    Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
+    if (-not (Test-Path -LiteralPath $LauncherDotnet)) { return }
+    $asm = $null
+    try { $asm = Add-LauncherAssembly }
+    catch {
+        Yes 'the launcher project builds' $false
+        foreach ($l in @(($_.Exception.Message -split "`r?`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20)) { Write-Host "      $l" }
         return
     }
-
-    $asm = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($dll))
+    Yes 'the launcher project builds' ($null -ne $asm)
     $U = $asm.GetType('Thornswood.Updater')
     $P = $asm.GetType('Thornswood.Paths')
     $C = $asm.GetType('Thornswood.Config')
@@ -313,7 +279,10 @@ function Run {
             if ($null -eq $doc -or $null -eq $doc.packs) { return @() }
             return @($doc.packs | ForEach-Object { $_.id })
         }
-        function PendingIds($doc) { return @(($pending.Invoke($null, [object[]]@($doc))) | ForEach-Object { $_.id }) }
+        # Pending takes the config first (#4825), for whether the game files
+        # come from the Velopack package instead. Nothing here was installed
+        # by Velopack, so it reads the feed's packs, which is what is tested.
+        function PendingIds($doc) { return @(($pending.Invoke($null, [object[]]@($null, $doc))) | ForEach-Object { $_.id }) }
 
         # ---- 1. the first check downloads and keeps the copy ------------------
         $v1 = New-Feed 200
@@ -437,7 +406,7 @@ function Run {
         $srv.Stop()
         Restart
         $d = Check $url
-        Yes ('a feed that does not answer throws, so Check falls back to GitHub as before: ' + $script:threw) ($null -eq $d -and $null -ne $script:threw)
+        Yes ('a feed that does not answer throws, so Check says the check failed, with no other place to ask (#907): ' + $script:threw) ($null -eq $d -and $null -ne $script:threw)
     }
     finally { $srv.Stop() }
 

@@ -20,6 +20,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const siteFiles = require('../../tests/site-files');
 
 const ROOT = path.join(__dirname, '..', '..');
 let pass = 0, fail = 0;
@@ -33,7 +34,7 @@ function read(rel) {
 }
 
 // ------------------------------------------------------------ one copy --
-const server = read('site/server.js') || '';
+const server = siteFiles.source() || '';
 const home = read('site/public/home.js') || '';
 yes('server.js has the list of page blurbs', /const BLURB\s*=/.test(server));
 yes('home.js keeps no second list of them',

@@ -23,7 +23,10 @@ any more.
   `"enabled": false` only for a plugin the collection's own list leaves out,
   so it is installed but switched off. Revision 6 has two, `CBBE.esp` and
   `RaceMenuMorphsCBBE.esp`. The servers load both, and the launcher's plugin
-  list switches them on, so a rule may name them.
+  list switches them on, so a rule may name them. They come last, after
+  every plugin of the list and in name order, because that is where the
+  layout of a revision puts them, and the draft is held to the record in
+  that order.
 - `dropped`: the plugins the servers load that this change takes out, each
   with `name`, `mod` and `why` (why every form it added can go from a world
   that keeps running). Empty when nothing goes.
@@ -57,7 +60,8 @@ any more.
 
    Paste the line of each plugin the file puts in Data under `plugins`,
    where the plugin loads. A new plugin goes
-   at the end of its own kind, so nothing the servers already load moves.
+   at the end of its own kind, so nothing the servers already load moves,
+   and above the plugins switched off.
 4. Fill in its `after`: at least the plugin right above it, so no two full
    plugins sit next to each other with nothing keeping them in that order.
 5. Check it, and see what the merge will ask of Nexus:

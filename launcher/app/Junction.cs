@@ -20,7 +20,7 @@ namespace Thornswood
     /// same thing Windows does for mklink /J, sets the reparse point itself,
     /// and hands back Windows' own words when it cannot.
     /// </summary>
-    static class Junction
+    static partial class Junction
     {
         const uint FSCTL_SET_REPARSE_POINT    = 0x000900A4;
         const uint IO_REPARSE_TAG_MOUNT_POINT = 0xA0000003;
@@ -31,19 +31,22 @@ namespace Thornswood
         const uint FILE_FLAG_BACKUP_SEMANTICS   = 0x02000000;
         const uint FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000;
 
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        static extern SafeFileHandle CreateFile(string lpFileName, uint dwDesiredAccess, uint dwShareMode,
+        [LibraryImport("kernel32.dll", EntryPoint = "CreateFileW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+        private static partial SafeFileHandle CreateFile(string lpFileName, uint dwDesiredAccess, uint dwShareMode,
             IntPtr lpSecurityAttributes, uint dwCreationDisposition, uint dwFlagsAndAttributes, IntPtr hTemplateFile);
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        static extern bool DeviceIoControl(SafeFileHandle hDevice, uint dwIoControlCode, IntPtr lpInBuffer, int nInBufferSize,
+        [LibraryImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool DeviceIoControl(SafeFileHandle hDevice, uint dwIoControlCode, IntPtr lpInBuffer, int nInBufferSize,
             IntPtr lpOutBuffer, int nOutBufferSize, out int lpBytesReturned, IntPtr lpOverlapped);
 
         // REPARSE_DATA_BUFFER with the MountPointReparseBuffer arm, laid out
         // the way FSCTL_SET_REPARSE_POINT wants it: an 8 byte header, four
-        // ushorts, then both names as UTF-16 with a null after each.
+        // ushorts, then both names as UTF-16 with a null after each. The
+        // names' room is a fixed buffer, so the whole structure is plain
+        // memory with no marshalling code to make at run time (#4823).
         [StructLayout(LayoutKind.Sequential)]
-        struct ReparseData
+        unsafe struct ReparseData
         {
             public uint ReparseTag;
             public ushort ReparseDataLength;
@@ -52,8 +55,7 @@ namespace Thornswood
             public ushort SubstituteNameLength;
             public ushort PrintNameOffset;
             public ushort PrintNameLength;
-            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 0x3FF0)]
-            public byte[] PathBuffer;
+            public fixed byte PathBuffer[0x3FF0];
         }
 
         /// <summary>True when the folder is a junction or symbolic link, not a plain folder.</summary>
@@ -141,11 +143,14 @@ namespace Thornswood
                 data.SubstituteNameLength = (ushort)sub.Length;
                 data.PrintNameOffset = (ushort)(sub.Length + 2);
                 data.PrintNameLength = (ushort)print.Length;
-                data.PathBuffer = new byte[0x3FF0];
-                Array.Copy(sub, 0, data.PathBuffer, 0, sub.Length);
-                Array.Copy(print, 0, data.PathBuffer, sub.Length + 2, print.Length);
+                unsafe
+                {
+                    var names = new Span<byte>(data.PathBuffer, 0x3FF0);
+                    sub.CopyTo(names);
+                    print.CopyTo(names.Slice(sub.Length + 2));
+                }
 
-                int size = Marshal.SizeOf(typeof(ReparseData));
+                int size = Marshal.SizeOf<ReparseData>();
                 IntPtr buf = Marshal.AllocHGlobal(size);
                 try
                 {

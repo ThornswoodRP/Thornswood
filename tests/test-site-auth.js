@@ -34,6 +34,7 @@ const http = require('http');
 const net = require('net');
 const os = require('os');
 const path = require('path');
+const siteFiles = require('./site-files');
 
 const SITE_SRC = process.argv[2] || path.join(REPO_DIR, 'site', 'server.js');
 const GAME_SRC = process.argv[3] || path.join(REPO_DIR, 'game', 'gamemode.js');
@@ -52,7 +53,7 @@ const ADMIN_ID = '111';
 const PROFILE = 5;
 const OUTBOUND = path.join(dir, 'outbound.txt');
 
-fs.copyFileSync(SITE_SRC, path.join(dir, 'server.js'));
+siteFiles.copy(dir, SITE_SRC);
 fs.mkdirSync(path.join(dir, 'data'), { recursive: true });
 fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({
   password: crypto.randomBytes(12).toString('hex'),

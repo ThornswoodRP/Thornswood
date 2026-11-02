@@ -1,0 +1,14 @@
+{
+"version":1,
+"quest":"geode",
+"label":"Blackreach geodes",
+"loadOrderSha256":"17597555b8c439898714ebf725435a36a7102aa84d9ccbfba7a1796b6f6148b5",
+"sources":[
+{"reference":"10fc57:Skyrim.esm","base":"10e93b:Skyrim.esm","world":"1ee62:Skyrim.esm","position":[10850.224609375,6743.7685546875,1174.552734375],"item":"2e4e2:Skyrim.esm","itemType":"SLGM","rank":"novice","returnMinutes":30},
+{"reference":"10eb24:Skyrim.esm","base":"10e93b:Skyrim.esm","world":"1ee62:Skyrim.esm","position":[4929.0908203125,18396.95703125,1021.5740966796875],"item":"2e4e2:Skyrim.esm","itemType":"SLGM","rank":"novice","returnMinutes":30},
+{"reference":"10e994:Skyrim.esm","base":"10e93b:Skyrim.esm","world":"1ee62:Skyrim.esm","position":[7638.52783203125,17578.05078125,1624.3555908203125],"item":"2e4e2:Skyrim.esm","itemType":"SLGM","rank":"novice","returnMinutes":30},
+{"reference":"10e955:Skyrim.esm","base":"10e93b:Skyrim.esm","world":"1ee62:Skyrim.esm","position":[6554.4755859375,17093.744140625,1441.29345703125],"item":"2e4e2:Skyrim.esm","itemType":"SLGM","rank":"novice","returnMinutes":30},
+{"reference":"10e8bb:Skyrim.esm","base":"10e93b:Skyrim.esm","world":"1ee62:Skyrim.esm","position":[6002.3837890625,17703.9375,1296.7362060546875],"item":"2e4e2:Skyrim.esm","itemType":"SLGM","rank":"novice","returnMinutes":30},
+{"reference":"10fc4c:Skyrim.esm","base":"10e93b:Skyrim.esm","world":"1ee62:Skyrim.esm","position":[14032.8125,-3727.707763671875,-1492.2423095703125],"item":"2e4e2:Skyrim.esm","itemType":"SLGM","rank":"novice","returnMinutes":30}
+]
+}

@@ -11,7 +11,9 @@
 
   Compiles the real Discord.cs with the real Secrets.cs and Swallow.cs, and
   a stand-in Paths that only supplies the two fields those files read.
-  The compiler is the one the launcher builds with (tests\Launcher-Csc.ps1).
+  Built with the .NET SDK the launcher builds with (tests\Launcher-Csc.ps1,
+  #4823) and run, on any machine: Forget and DevAllowed only read and delete
+  files in the folder they are given.
 
   Read only apart from files under its own temp folder.
 #>
@@ -19,7 +21,7 @@
 param()
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $Repo = Split-Path -Parent (Split-Path -Parent $Here)
@@ -36,20 +38,11 @@ function Done {
     if ($script:fail) { exit 1 } else { exit 0 }
 }
 
-if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'; Done }
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
-# The references the project names, from the reference assemblies the build
-# compiles against, with /noconfig below as the build has it.
-$refs = @(); $missing = @()
-foreach ($n in @($LauncherNeeded)) { $p = Find-LauncherRef $n; if ($p) { $refs += $p } else { $missing += $n } }
-Yes ('every framework reference Thornswood.csproj names is on this machine' + $(if ($missing.Count) { ', missing ' + ($missing -join ', ') } else { '' })) ($refs.Count -gt 0 -and $missing.Count -eq 0)
-if ($missing.Count -or $refs.Count -eq 0) { Done }
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('discord-forget-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
-$driver = Join-Path $tmp 'driver.cs'
-$exe = Join-Path $tmp 'forget.exe'
 $cs = @(
 'using System;',
 'using System.IO;',
@@ -126,17 +119,12 @@ $cs = @(
 '    }',
 '}'
 )
-[IO.File]::WriteAllText($driver, ($cs -join "`r`n") + "`r`n")
-
-$sources = @(
-    (Join-Path $Repo 'launcher\app\Discord.cs'),
-    (Join-Path $Repo 'launcher\app\Secrets.cs'),
-    (Join-Path $Repo 'launcher\app\Swallow.cs'),
-    $driver
-)
-& $LauncherCsc /noconfig /nologo /t:exe /out:$exe ($refs | ForEach-Object { '/r:' + $_ }) $sources
-Yes 'Discord.cs compiles with Forget under the compiler the build runs' ($LASTEXITCODE -eq 0)
-if ($LASTEXITCODE -ne 0) { Done }
+$app = [IO.Path]::Combine($Repo, 'launcher', 'app')
+$exe = $null
+try { $exe = Build-LauncherCode -Exe -Source (($cs -join "`r`n") + "`r`n") -File (Join-Path $app 'Discord.cs'), (Join-Path $app 'Secrets.cs'), (Join-Path $app 'Swallow.cs'), (Join-Path $app 'Http.cs') }
+catch { ($_.Exception.Message -split "`n") | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
+Yes 'Discord.cs compiles with Forget under the .NET SDK the launcher builds with' ($null -ne $exe)
+if (-not $exe) { Done }
 
 $profile = Join-Path $tmp 'Profile'
 New-Item -ItemType Directory -Force -Path $profile | Out-Null
@@ -147,7 +135,7 @@ $utf8 = New-Object Text.UTF8Encoding($false)
 [IO.File]::WriteAllText((Join-Path $profile 'discord-name.txt'), 'Ada', $utf8)
 [IO.File]::WriteAllText((Join-Path $profile 'discord-avatar.txt'), 'abc', $utf8)
 
-& $exe $profile
+Invoke-LauncherExe $exe $profile | ForEach-Object { Write-Host $_ }
 if ($LASTEXITCODE -ne 0) { $script:fail++ }
 Yes 'the driver finished and agrees' ($LASTEXITCODE -eq 0)
 

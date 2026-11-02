@@ -42,6 +42,7 @@ const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const siteFiles = require('../../tests/site-files');
 
 const APP = path.join(__dirname, '..', '..', 'site');
 const SITE_SRC = process.argv[2] || path.join(APP, 'server.js');
@@ -59,7 +60,7 @@ const ADMIN_ID = '111111111111111111';
 const MEMBER_ID = '222222222222222222';
 const BANNED_ID = '333333333333333333';
 
-fs.copyFileSync(SITE_SRC, path.join(dir, 'server.js'));
+siteFiles.copy(dir, SITE_SRC);
 fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
 try { fs.copyFileSync(path.join(APP, 'public', 'home.html'), path.join(dir, 'public', 'home.html')); } catch (e) { }
 fs.mkdirSync(path.join(dir, 'data'), { recursive: true });

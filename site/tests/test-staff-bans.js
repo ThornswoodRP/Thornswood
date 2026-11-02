@@ -42,6 +42,7 @@ const http = require('http');
 const net = require('net');
 const os = require('os');
 const path = require('path');
+const siteFiles = require('../../tests/site-files');
 
 const ROOT = path.join(__dirname, '..', '..');
 const GM = process.env.GM || path.join(ROOT, 'game', 'gamemode.js');
@@ -68,7 +69,7 @@ const dir = fs.mkdtempSync(path.join(TEMP, 'ts-staff-bans-'));
 const KEY = crypto.randomBytes(24).toString('hex');
 const SECRET = crypto.randomBytes(32).toString('hex');
 const STAFF_D = '222222222', BJORN_D = '333333333', NOBODY_D = '444444444';
-fs.copyFileSync(SITE, path.join(dir, 'server.js'));
+siteFiles.copy(dir, SITE);
 fs.mkdirSync(path.join(dir, 'data'), { recursive: true });
 fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({
   password: crypto.randomBytes(12).toString('hex'),

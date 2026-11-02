@@ -24,10 +24,12 @@
     1. Every record OwnGame writes goes through OwnGame.WriteRecord: no
        File.WriteAllLines or File.WriteAllText is left in OwnGame*.cs, and
        each record named below is written by WriteRecord.
-    2. WriteRecord, lifted out of OwnGame.cs and compiled with the compiler
-       the launcher builds with: it writes a new record, replaces an old one,
-       writes the same bytes File.WriteAllLines did, takes over a .new left by
-       a write that was cut short, and leaves no .new behind.
+    2. WriteRecord, lifted out of OwnGame.cs and compiled with the .NET SDK
+       the launcher builds with (everywhere): it writes a new record, replaces
+       an old one, writes the same bytes File.WriteAllLines did, takes over a
+       .new left by a write that was cut short, and leaves no .new behind.
+       It renames through kernel32's MoveFileEx, so 2 and 3 run on Windows
+       only and say SKIP elsewhere.
     3. Killed while it writes: a child process writes a 3 MB record over and
        over, A then B, and is killed with TerminateProcess at 50 moments. The
        record is A or B whole every time. The same child writing in place,
@@ -94,7 +96,7 @@ Yes 'installed-into-game.txt, which OwnGame rewrites when the Steam copy is clea
 
 # ---- 2 and 3: WriteRecord itself, compiled ---------------------------------------
 $og = [IO.File]::ReadAllText((Join-Path $App 'OwnGame.cs')) -replace "`r`n", "`n"
-$m = [regex]::Match($og, '(?s)\n(        (?:internal )?static void WriteRecord\(string path, IEnumerable<string> lines\)\n        \{\n.*?\n        \}\n.*?static extern bool MoveFileEx\([^)]*\);\n)')
+$m = [regex]::Match($og, '(?s)\n(        (?:internal )?static void WriteRecord\(string path, IEnumerable<string> lines\)\n        \{\n.*?\n        \}\n.*?private static partial bool MoveFileEx\([^)]*\);\n)')
 Yes 'OwnGame.WriteRecord is in OwnGame.cs, with the MoveFileEx it calls' $m.Success
 Yes '...and renames a file beside the record over it in one call, replacing it' ($m.Success -and $m.Groups[1].Value -match 'MoveFileEx\(next, path, MoveReplaceExisting \| MoveWriteThrough\)' -and
     $m.Groups[1].Value -match 'const int MoveReplaceExisting = 0x1;' -and $m.Groups[1].Value -match 'path \+ "\.new"')
@@ -114,7 +116,7 @@ using System.Text;
 
 namespace Thornswood
 {
-    static class AtomicRecordTest
+    static partial class AtomicRecordTest
     {
 __WRITERECORD__
         // A record the size of a real files.txt: about 40,000 lines.
@@ -147,19 +149,16 @@ __WRITERECORD__
 }
 '@
     $driver = $driver.Replace('__WRITERECORD__', $m.Groups[1].Value.TrimEnd())
-    $src = Join-Path $work 'AtomicRecordTest.cs'
-    [IO.File]::WriteAllText($src, $driver, (New-Object Text.UTF8Encoding($false)))
-    $exe = Join-Path $work 'atomic-record-test.exe'
-    $cscArgs = @('/noconfig', '/nologo', '/target:exe', "/langversion:$LauncherLangVersion", "/out:$exe",
-                 "/reference:$(Join-Path $LauncherRefDir 'System.dll')", "/reference:$(Join-Path $LauncherRefDir 'System.Core.dll')", $src)
-    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $compiled = & $LauncherCsc @cscArgs 2>&1
-    $ErrorActionPreference = $old
-    $built = ($LASTEXITCODE -eq 0) -and (Test-Path -LiteralPath $exe)
-    Yes "WriteRecord compiles with the launcher's compiler, C# $LauncherLangVersion" $built
-    if (-not $built) { foreach ($l in @($compiled)) { Write-Host "      $l" }; Done }
+    $dll = $null
+    try { $dll = Build-LauncherCode -Source $driver -Exe }
+    catch { Write-Host ('      ' + $_.Exception.Message) }
+    Yes "WriteRecord compiles with the .NET SDK the launcher builds with, C# $LauncherLangVersion" ($null -ne $dll)
+    if (-not $dll) { Done }
 
-    function Run([string[]]$a) { & $exe @a; return $LASTEXITCODE }
+    if (-not $OnWindows) {
+        Write-Host 'SKIP  2 and 3, run: WriteRecord renames through kernel32''s MoveFileEx, which only Windows has'
+    } else {
+    function Run([string[]]$a) { $null = Invoke-LauncherExe $dll @a; return $LASTEXITCODE }
     function Sha([string]$p) { if (-not (Test-Path -LiteralPath $p)) { return '' }; return (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash }
 
     # 2: what it writes.
@@ -184,7 +183,7 @@ __WRITERECORD__
         $whole = 0; $cut = @()
         $rand = New-Object Random 2586
         for ($i = 0; $i -lt $kills; $i++) {
-            $psi = New-Object Diagnostics.ProcessStartInfo($exe, ('"{0}" "{1}"' -f $mode, $path))
+            $psi = New-Object Diagnostics.ProcessStartInfo($LauncherDotnet, ('"{0}" "{1}" "{2}"' -f $dll, $mode, $path))
             $psi.UseShellExecute = $false
             $psi.RedirectStandardOutput = $true
             $p = [Diagnostics.Process]::Start($psi)
@@ -204,6 +203,7 @@ __WRITERECORD__
     Yes '...and the next write after the last kill replaces it and leaves no .new' ($code -eq 0 -and (Sha (Join-Path $work 'killed\files.txt')) -eq (Sha $plainB) -and -not (Test-Path -LiteralPath (Join-Path $work 'killed\files.txt.new')))
     $r = KillTest 'inplace' (Join-Path $work 'inplace\files.txt') 20
     Yes ('the same kills of a writer that writes in place, as OwnGame did, leave the record cut short ({0} of 20 cut: {1})' -f $r.Cut.Count, (($r.Cut | Select-Object -First 3) -join ', ')) ($r.Cut.Count -gt 0)
+    }
 }
 finally {
     try { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction Stop } catch { Write-Host "NOTE  $work could not be removed: $($_.Exception.Message)" }

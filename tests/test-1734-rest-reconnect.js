@@ -32,7 +32,7 @@ const vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 const SRC = process.env.GM || path.join(ROOT, 'game', 'gamemode.js');
 const CR = String.fromCharCode(13);
-const gm = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(SRC, 'utf8')).split(CR).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -125,9 +125,9 @@ const needsNamed = {};
 const needs = new Function('globalThis', 'mp', 'Date', 'console', 'setInterval', 'clearInterval',
   'guard', 'notify', 'say', needsBlock + '\nreturn globalThis.__thornswoodNeeds;')(
   needsG, {
-    getOnlinePlayers: function () { return online.slice(); },
     makeProperty: function () { },
     get: function (id, key) {
+      if (id === 0 && key === 'onlinePlayers') { return online.slice(); }
       if (key === 'worldOrCellDesc') { return refs[id] ? refs[id].worldOrCellDesc : ''; }
       return needsStore[id];
     },

@@ -54,7 +54,7 @@ public static class Program
         if (problems.Length > 0)
         {
             foreach (var p in problems) o.WriteLine($"STOP  release note: {p}");
-            o.WriteLine("Edit the pull request body and this check runs again by itself. Developer-Guide.md, \"Say so, then write the note\", has the shape.");
+            o.WriteLine("Edit the pull request body and this check runs again by itself. docs/guide/release-to-dev.md, \"Say so, then write the note\", has the shape.");
             return 1;
         }
         var n = PrNote.Read(body);

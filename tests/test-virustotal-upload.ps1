@@ -10,10 +10,10 @@
   a link to VirusTotal's report on that hash since 24 September, and nothing
   ever sent the file, so every one of those links landed on VirusTotal's
   "item not found" page. The upload is the missing half, and the half that
-  matters here is the failure: it runs at the end of Publish-Installer, after
-  a gigabyte has already gone to the VPS and the site is already serving it,
-  so an upload that threw would report a failed publish for a publish that
-  worked.
+  matters here is the failure: it ran at the end of the old installer's
+  publish, after the site was already serving the file, so an upload that
+  threw would have reported a failed publish for a publish that worked. It
+  is a tool run by hand now, and still never stops whatever runs it.
 
   So this runs the real script, in a child PowerShell, and reads what it did:
 
@@ -30,12 +30,8 @@
   and that the key never appears in anything printed, on any of those paths.
 
   It also checks the small name=value outcome file Publish-VirusTotal writes
-  when -OutcomePath is set, and the end-to-end mark Publish-Installer applies
-  to a tip exe entry in files.json: sent / already-has set vtUrl and
-  vtSubmittedAt (UTC ...Z) with no vtSkipReason; over-650mb and no-key set
-  vtSkipReason and neither link field. The mark is applied by running the
-  same remote script body locally against a scratch files.json, so nothing
-  here talks to a real VPS or to VirusTotal.
+  when -OutcomePath is set. The mark the old installer's publish made from it
+  on files.json went with that installer (#4824).
 
   WHY IT IS SAFE TO RUN ANYWHERE. It never reaches VirusTotal. Every case
   points the script at -Api on 127.0.0.1, either at a port where nothing is
@@ -44,9 +40,10 @@
   up string, and the files are made in a temp folder this removes. The two
   large files are sparse: they are the length the case needs and take no disk.
 
-  It also reads Publish-Installer.ps1, which since #813 (27 September) must
-  NOT call it: publish sends nothing to VirusTotal any more, code signing is
-  the trust path, and this script is a manual tool run by hand.
+  It also reads the publish path (Ship, Publish-Update, Publish-PostShip),
+  which since #813 (27 September) must NOT run it: publish sends nothing to
+  VirusTotal any more, code signing is the trust path, and this script is a
+  manual tool run by hand.
 #>
 [CmdletBinding()]
 param([string]$ScriptPath)
@@ -60,8 +57,7 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 $Here = Split-Path -Parent $Here
 $RepoRoot = $Here
 if (-not $ScriptPath) { $ScriptPath = Join-Path $RepoRoot 'scripts\release\Publish-VirusTotal.ps1' }
-$Installer = Join-Path $RepoRoot 'scripts\release\Publish-Installer.ps1'
-$Readme = Join-Path $RepoRoot 'installer\setup\README.md'
+$Doc = Join-Path $RepoRoot 'docs\VIRUSTOTAL-FALSE-POSITIVE.md'
 
 $script:pass = 0
 $script:fail = 0
@@ -334,7 +330,7 @@ try {
 
     $declared = @()
     if ($ast.ParamBlock) { $declared = @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath }) }
-    # The contract Ship and Publish-Installer call, and nothing about a key on
+    # The contract a person or a script calls, and nothing about a key on
     # a command line, where a shell would write it into its own history.
     Yes 'it takes -Path and -Sha256' ($declared -contains 'Path' -and $declared -contains 'Sha256')
     Yes 'and has no parameter for the key' (
@@ -448,7 +444,7 @@ try {
     Yes '  and nothing was sent' (@($r.Seen | Where-Object { $_ -match '^POST' }).Count -eq 0)
     NoKey '  ' $r
 
-    # ===================================== outcome file + files.json mark
+    # ======================================================== outcome file
 
     function Read-Outcome([string]$p) {
         $o = @{ status = ''; sha256 = ''; reportUrl = ''; skipReason = '' }
@@ -460,92 +456,6 @@ try {
             elseif ($line -match '^(?i)skipReason=(.*)$') { $o.skipReason = $Matches[1].Trim() }
         }
         return [pscustomobject]$o
-    }
-
-    # Same remote mark body Publish-Installer sends over ssh, run here against
-    # a scratch files.json. No ssh, no VPS. Mark fields arrive as name=value
-    # lines (base64), never as JSON, so vtSubmittedAt stays a string with Z.
-    function Invoke-MarkLocal([string]$filesJson, [string]$exeName, [string]$markText) {
-        $markB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($markText))
-        $fjEsc = $filesJson.Replace("'", "''")
-        $nameEsc = $exeName.Replace("'", "''")
-        $script = @"
-`$f = '$fjEsc'
-`$all = @{}
-try {
-  (Get-Content `$f -Raw | ConvertFrom-Json).PSObject.Properties |
-    ForEach-Object { `$all[`$_.Name] = `$_.Value }
-} catch { throw 'files.json unread' }
-`$name = '$nameEsc'
-if (-not `$all.ContainsKey(`$name)) { throw 'no tip exe entry' }
-`$entry = `$all[`$name]
-`$raw = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('$markB64'))
-`$mark = @{}
-foreach (`$line in (`$raw -split [char]10)) {
-  `$line = `$line.Trim()
-  if (-not `$line) { continue }
-  `$eq = `$line.IndexOf('=')
-  if (`$eq -lt 1) { continue }
-  `$mark[`$line.Substring(0, `$eq)] = `$line.Substring(`$eq + 1)
-}
-function Set-Note(`$obj, [string]`$n, `$v) {
-  if (`$obj -is [hashtable]) { `$obj[`$n] = `$v; return `$obj }
-  `$p = `$obj.PSObject.Properties[`$n]
-  if (`$p) { `$p.Value = `$v } else { `$obj | Add-Member NoteProperty `$n `$v -Force }
-  return `$obj
-}
-function Clear-Note(`$obj, [string]`$n) {
-  if (`$obj -is [hashtable]) { `$obj.Remove(`$n); return `$obj }
-  if (`$obj.PSObject.Properties[`$n]) { `$obj.PSObject.Properties.Remove(`$n) }
-  return `$obj
-}
-if (`$mark.ContainsKey('vtUrl')) {
-  `$entry = Set-Note `$entry 'vtUrl' `$mark['vtUrl']
-  `$entry = Set-Note `$entry 'vtSubmittedAt' `$mark['vtSubmittedAt']
-  `$entry = Clear-Note `$entry 'vtSkipReason'
-} elseif (`$mark.ContainsKey('vtSkipReason')) {
-  `$entry = Set-Note `$entry 'vtSkipReason' `$mark['vtSkipReason']
-  `$entry = Clear-Note `$entry 'vtUrl'
-  `$entry = Clear-Note `$entry 'vtSubmittedAt'
-}
-`$all[`$name] = `$entry
-[IO.File]::WriteAllText(`$f, (`$all | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding(`$false)))
-"@
-        $tmp = Join-Path $work ('mark-' + [Guid]::NewGuid().ToString('N') + '.ps1')
-        [IO.File]::WriteAllText($tmp, $script, (New-Object Text.UTF8Encoding($false)))
-        try {
-            & $Shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $tmp
-            if ($LASTEXITCODE -ne 0) { throw "mark script exited $LASTEXITCODE" }
-        }
-        finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
-    }
-
-    function Get-EntryField([string]$filesJson, [string]$exeName, [string]$field) {
-        # Read the string out of the JSON text. Windows PowerShell's
-        # ConvertFrom-Json turns an ISO-8601 value into a DateTime, which is
-        # the bug the mark path avoids; the harness must not reintroduce it
-        # when checking the file it just wrote.
-        $raw = [IO.File]::ReadAllText($filesJson)
-        $blockRe = '"' + [regex]::Escape($exeName) + '"\s*:\s*\{([\s\S]*?)\n\s*\}'
-        $bm = [regex]::Match($raw, $blockRe)
-        if (-not $bm.Success) { return $null }
-        $block = $bm.Groups[1].Value
-        $fm = [regex]::Match($block, '"' + [regex]::Escape($field) + '"\s*:\s*"([^"]*)"')
-        if ($fm.Success) { return $fm.Groups[1].Value }
-        return $null
-    }
-
-    function New-FilesJson([string]$exeName, [string]$sha) {
-        $p = Join-Path $work ('files-' + [Guid]::NewGuid().ToString('N') + '.json')
-        $obj = [ordered]@{}
-        $obj[$exeName] = [ordered]@{
-            label   = 'Thornswood installer'
-            version = '9-27-2026 8:00 AM'
-            sha256  = $sha
-            note    = 'tip'
-        }
-        [IO.File]::WriteAllText($p, ($obj | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding($false)))
-        return $p
     }
 
     # --- outcome: no-key
@@ -631,47 +541,7 @@ if (`$mark.ContainsKey('vtUrl')) {
     Yes 'over-650 outcome status is skipped' ($r.Code -eq 0 -and $o.status -eq 'skipped')
     Yes '  skipReason is over-650mb' ($o.skipReason -eq 'over-650mb')
 
-    # --- end-to-end mark on a scratch files.json (ssh stand-in = local body)
-    $exeName = 'Thornswood-Setup-20260927-0830.exe'
-    $vtUrl = 'https://www.virustotal.com/gui/file/' + $smallSha
-
-    $fj = New-FilesJson $exeName $smallSha
-    $vtAt = [DateTime]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [Globalization.CultureInfo]::InvariantCulture)
-    Invoke-MarkLocal $fj $exeName (('vtUrl=' + $vtUrl) + [char]10 + ('vtSubmittedAt=' + $vtAt) + [char]10 + 'clearSkip=1')
-    $gotUrl = Get-EntryField $fj $exeName 'vtUrl'
-    $gotAt = Get-EntryField $fj $exeName 'vtSubmittedAt'
-    $gotSkip = Get-EntryField $fj $exeName 'vtSkipReason'
-    Yes 'mark success sets vtUrl from measured sha' ($gotUrl -eq $vtUrl)
-    Yes '  and vtSubmittedAt as UTC Z' (
-        $gotAt -match '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$' -and $gotAt -eq $vtAt)
-    Yes '  and no vtSkipReason' ($null -eq $gotSkip)
-    $rawJson = [IO.File]::ReadAllText($fj)
-    Yes '  and the JSON keeps the Z on vtSubmittedAt' ($rawJson -match ('"vtSubmittedAt"\s*:\s*"' + [regex]::Escape($vtAt) + '"'))
-
-    $fj2 = New-FilesJson $exeName $smallSha
-    Invoke-MarkLocal $fj2 $exeName 'vtSkipReason=over-650mb'
-    Yes 'mark over-650 sets vtSkipReason' ((Get-EntryField $fj2 $exeName 'vtSkipReason') -eq 'over-650mb')
-    Yes '  and sets neither vtUrl nor vtSubmittedAt' (
-        $null -eq (Get-EntryField $fj2 $exeName 'vtUrl') -and
-        $null -eq (Get-EntryField $fj2 $exeName 'vtSubmittedAt'))
-
-    $fj3 = New-FilesJson $exeName $smallSha
-    Invoke-MarkLocal $fj3 $exeName 'vtSkipReason=no-key'
-    Yes 'mark no-key sets vtSkipReason' ((Get-EntryField $fj3 $exeName 'vtSkipReason') -eq 'no-key')
-    Yes '  and sets neither vtUrl nor vtSubmittedAt' (
-        $null -eq (Get-EntryField $fj3 $exeName 'vtUrl') -and
-        $null -eq (Get-EntryField $fj3 $exeName 'vtSubmittedAt'))
-
-    $fj4 = New-FilesJson $exeName $smallSha
-    Invoke-MarkLocal $fj4 $exeName 'vtSkipReason=upload-failed'
-    Invoke-MarkLocal $fj4 $exeName (('vtUrl=' + $vtUrl) + [char]10 + ('vtSubmittedAt=' + $vtAt))
-    Yes 'mark already-has/success clears vtSkipReason' ($null -eq (Get-EntryField $fj4 $exeName 'vtSkipReason'))
-    Yes '  and keeps vtUrl + vtSubmittedAt' (
-        (Get-EntryField $fj4 $exeName 'vtUrl') -eq $vtUrl -and
-        (Get-EntryField $fj4 $exeName 'vtSubmittedAt') -eq $vtAt)
-
-
-    # ============================================ Publish-Installer calls it
+    # ============================================ what it calls, and who calls it
 
     # Publish-VirusTotal leaves a comment after a successful upload only.
     Yes 'Publish-VirusTotal.ps1 calls Add-VirusTotalComment.ps1 after a send' (
@@ -685,31 +555,23 @@ if (`$mark.ContainsKey('vtUrl')) {
 
     # Since #813 (27 September) publish sends nothing to VirusTotal: code
     # signing (#390) is the trust path, and Publish-VirusTotal.ps1 is a
-    # manual tool somebody runs by hand. So Publish-Installer must not call
-    # it, and must not reach for the key; what it still does is measure the
-    # hash the Downloads page prints and say where the manual tool is.
-    Yes 'Publish-Installer.ps1 is there' (Test-Path -LiteralPath $Installer)
-    $pub = [IO.File]::ReadAllText($Installer, (New-Object Text.UTF8Encoding($false)))
-    $pubCode = ($pub -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
-    Yes 'it does not call Publish-VirusTotal.ps1, since publish sends nothing there (#813)' (
-        $pubCode -notmatch 'Publish-VirusTotal\.ps1')
-    Yes '  nor Add-VirusTotalComment.ps1' ($pubCode -notmatch 'Add-VirusTotalComment\.ps1')
-    Yes '  and reads no VT_API_KEY' ($pubCode -notmatch 'VT_API_KEY')
-    Yes '  and still measures the SHA-256 the Downloads page prints' (
-        $pubCode -match 'Get-FileHash -LiteralPath \$exeItem\.FullName -Algorithm SHA256')
-    Yes '  and its comments say where the manual tool is' (
-        $pub -match 'scripts\\release\\Publish-VirusTotal\.ps1')
+    # manual tool somebody runs by hand. So nothing on the publish path runs
+    # it or reaches for the key. Publish-PostShip names it in a line it
+    # prints, for a person to run.
+    foreach ($n in 'Ship.ps1', 'Publish-Update.ps1', 'Publish-PostShip.ps1') {
+        $src = [IO.File]::ReadAllText((Join-Path $RepoRoot ('scripts\release\' + $n)), (New-Object Text.UTF8Encoding($false)))
+        $code = ($src -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
+        Yes "$n does not run Publish-VirusTotal.ps1 or Add-VirusTotalComment.ps1, and reads no VT_API_KEY (#813)" (
+            $code -notmatch '&\s*[^\n]*(Publish-VirusTotal|Add-VirusTotalComment)\.ps1' -and $code -notmatch 'VT_API_KEY')
+    }
 
     # ================================================= and it is written down
 
-    Yes 'installer\setup\README.md is there' (Test-Path -LiteralPath $Readme)
-    $doc = [IO.File]::ReadAllText($Readme, (New-Object Text.UTF8Encoding($false)))
+    Yes 'docs\VIRUSTOTAL-FALSE-POSITIVE.md is there' (Test-Path -LiteralPath $Doc)
+    $doc = [IO.File]::ReadAllText($Doc, (New-Object Text.UTF8Encoding($false)))
     Yes '  and says the upload needs VT_API_KEY' ($doc -match 'VT_API_KEY')
-    Yes '  and that publish no longer sends anything, so it is a manual tool' (
-        $doc -match 'Publish no longer sends the installer to VirusTotal' -and $doc -match 'optional\s+manual tools')
-    Yes '  and gives the two ways to run it by hand' (
-        $doc -match 'Publish-VirusTotal\.ps1 -Path <file>\s' -and
-        $doc -match 'Publish-VirusTotal\.ps1 -Path <file> -Sha256 <hex>')
+    Yes '  and that publish does not call it, so it is run by hand' ($doc -match 'run by hand: publish does not call\s+it any more')
+    Yes '  and gives the way to run it by hand' ($doc.Contains('Publish-VirusTotal.ps1 -Path <the exe>'))
 }
 catch {
     # Anything that stops the run part way is a failure, said as one, and the

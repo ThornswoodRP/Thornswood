@@ -20,9 +20,9 @@ const pr = read(path.join(WF, 'build-pr.yml'));
 
 yes('build.yml no longer runs on a pull request', build && triggers(build).indexOf('pull_request') < 0);
 yes('build.yml still runs a push to main and a manual run', /push:\n    branches: \[main\]/.test(build) && triggers(build).indexOf('workflow_dispatch') >= 0);
-// #5292: and only when the pick does not say the change reaches nothing it
+// #5292: on Windows unless the pick says the change reaches nothing it
 // checks; on main the pick always says it does (Launcher-Reach.ps1).
-yes('main builds on GitHub\'s hosted runner, unless its pull request already passed the tree (#3182)', /\n  launcher:\n    name: Launcher builds\n    needs: \[tested, pick\]\n    if: \$\{\{ !cancelled\(\) && needs\.tested\.outputs\.run == '' && needs\.pick\.outputs\.launcher != 'false' \}\}\n    runs-on: windows-latest\n/.test(build));
+yes('main builds on GitHub\'s hosted runner, unless its pull request already passed the tree (#3182)', /\n  launcher:\n    name: Launcher builds\n    needs: \[tested, pick\]\n    if: \$\{\{ !cancelled\(\) && needs\.tested\.outputs\.run == '' \}\}\n    runs-on: \$\{\{ needs\.pick\.outputs\.launcher == 'false' && 'ubuntu-24\.04-arm' \|\| 'windows-latest' \}\}\n/.test(build));
 yes('  with no fallback job and nothing on a self-hosted runner (#4983)', !/\n  launcher-vps:\n|\n  tested-vps:\n/.test(build) && code(build).indexOf('self-hosted') < 0);
 yes('  and no runner to pick on a manual run', !/\n    inputs:\n/.test(build) && !/inputs\.runner|vars\.BUILD_RUNNER/.test(code(build)));
 yes('build-pr.yml exists', !!pr);
@@ -36,10 +36,11 @@ yes('on GitHub\'s hosted windows-latest', /\n    runs-on: windows-latest\n/.test
 yes('no pull request job is on a self-hosted runner (#4983)', !!pr && code(pr).indexOf('self-hosted') < 0 && !/\n  launcher-vps:\n/.test(pr));
 yes('it takes no secrets', !!pr && !/\$\{\{\s*secrets\./.test(pr));
 yes('its check keeps the name Launcher builds', /\n    name: Launcher builds\n/.test(pr));
-// #5292: its hosted job runs unless the pick said the change reaches
-// nothing it checks, and a failed pick still builds.
-yes('a pull request build has no "tested" job, and its hosted job runs unless the pick says the change cannot reach it (#3182, #5292)',
-    !/\n  tested:\n|needs\.tested|needs: \[?tested/.test(code(pr)) && /\n  launcher:\n    name: Launcher builds\n    needs: pick\n    if: \$\{\{ !cancelled\(\) && needs\.pick\.outputs\.launcher != 'false' \}\}\n    runs-on: windows-latest\n/.test(pr));
+// #5292: its job always runs and reports a result: on Windows, building,
+// unless the pick said the change reaches nothing it checks, and then on
+// Linux, saying so. A failed pick still builds.
+yes('a pull request build has no "tested" job, and its launcher job always runs, on Windows unless the pick says the change cannot reach it (#3182, #5292)',
+    !/\n  tested:\n|needs\.tested|needs: \[?tested/.test(code(pr)) && /\n  launcher:\n    name: Launcher builds\n    needs: pick\n    if: \$\{\{ !cancelled\(\) \}\}\n    runs-on: \$\{\{ needs\.pick\.outputs\.launcher == 'false' && 'ubuntu-24\.04-arm' \|\| 'windows-latest' \}\}\n/.test(pr));
 yes('  and the tree checks always run, on Linux (#5292)', /\n  checks:\n    name: Tree checks\n    runs-on: ubuntu-latest\n/.test(pr));
 // No workflow runs a pull request on the VPS, and none runs on
 // pull_request_target.

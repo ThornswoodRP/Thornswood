@@ -4,8 +4,9 @@ import collections
 import csv
 import importlib.util
 import json
+import os
 import pathlib
-import re
+import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('population', HERE / 'Build-NpcPopulation.py')
@@ -13,13 +14,15 @@ P = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(P)
 C = P.C
 ROOT = HERE.parent.parent
+sys.path.insert(0, str(HERE))
+import gamemode_tables  # noqa: E402  (the gamemode's tables, #5191)
 
 
-def js_table(source, name):
-    match = re.search(r'^(?:var|const) ' + name + r' = (\{.*?^\});', source, re.M | re.S)
-    if not match:
+def js_table(name):
+    """One of the gamemode's tables (game/gamemode-tables, #5191)."""
+    if not os.path.isfile(gamemode_tables.table_file(name)):
         raise ValueError('Missing production table: ' + name)
-    return json.loads(match.group(1))
+    return gamemode_tables.read(name)
 
 
 def write_csv(filename, rows, columns):
@@ -62,9 +65,8 @@ def main():
         if plugin.failed:
             raise ValueError('Failed compressed records: ' + plugin.name)
     context = C.Cast(tables)
-    source = (ROOT / 'game/gamemode.js').read_text(encoding='utf-8')
-    fish = js_table(source, 'FISH_BY_BASE')
-    racks = js_table(source, 'GAME_BY_BASE')
+    fish = js_table('FISH_BY_BASE')
+    racks = js_table('GAME_BY_BASE')
     waters = json.loads((ROOT / 'game/data/waters.json').read_text(encoding='utf-8'))
     catches, hanging = [], []
     returns = {'novice': 10, 'advanced': 30, 'expert': 60, 'master': 240}

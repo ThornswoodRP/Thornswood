@@ -19,6 +19,7 @@
 // Writes only under its own temp folder.
 const fs = require('fs'), path = require('path'), os = require('os'), http = require('http');
 const { execFile } = require('child_process');
+const siteFiles = require('./site-files');
 const REPO = path.join(__dirname, '..');
 const SCRIPT = path.join(REPO, 'scripts', 'deploy', 'Export-Pages.js');
 
@@ -58,7 +59,7 @@ function run(live, out) {
     if (r.code !== 0) console.log('  it said: ' + r.out.trim().slice(-600));
     yes('it asked the live site for its wording and invite', asked.some((u) => u.startsWith('/api/public')));
     const html = (n) => { try { return fs.readFileSync(path.join(out, n), 'utf8'); } catch (e) { return ''; } };
-    const src = fs.readFileSync(path.join(REPO, 'site', 'server.js'), 'utf8');
+    const src = siteFiles.source();
     const md = (/const MD_PAGES = \[([^\]]*)\]/.exec(src)[1].match(/'\/[a-z-]+'/g) || []).map((s) => s.slice(2, -1)).filter((p) => p !== 'known');
     yes('the front page and every written page but Known Issues are there as <page>.html',
         html('index.html').length > 0 && md.every((p) => html(p + '.html').includes('<title>')) && !fs.existsSync(path.join(out, 'known.html')));

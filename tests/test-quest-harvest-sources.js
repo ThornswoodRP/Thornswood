@@ -66,7 +66,7 @@ assert.throws(()=>validateScarceHarvest(doc,bad),/source evidence/);
 // the controllable adapters used by the harvesting transaction fixture.
 {
  const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
- const gm=fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8');
+ const gm=require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8'));
  const begin=gm.indexOf('// MERCHANT TRADING BUNDLE BEGIN');
  const end=gm.indexOf('// MERCHANT TRADING BUNDLE END',begin);
  const context={require,Buffer,Uint8Array};vm.createContext(context);

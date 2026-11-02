@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Threading;
+using Avalonia.Threading;
 
 namespace Thornswood
 {
@@ -133,13 +134,13 @@ namespace Thornswood
                 catch (Exception ex) { Swallow.Note("Shell.WatchVortex", ex); look = false; }
                 try
                 {
-                    win.Dispatcher.BeginInvoke(new Action(delegate
+                    Dispatcher.UIThread.Post(delegate
                     {
                         vortexLooking = false;
                         if (now == null) return;
                         vortexSeen = now;
                         if (look) VortexChanged(revision, problem);
-                    }));
+                    });
                 }
                 catch (Exception ex) { vortexLooking = false; Swallow.Note("Shell.WatchVortex, dispatch", ex); }
             });

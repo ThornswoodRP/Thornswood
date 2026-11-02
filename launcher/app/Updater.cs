@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
-using System.Net;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -10,11 +10,28 @@ namespace Thornswood
 {
     static partial class Updater
     {
-        // The launcher's number. Git holds 0.0.0 here and never another: the
-        // build writes the real one in for the compile and puts this back
-        // (scripts\release\LauncherVersion.ps1 says how it is worked out,
-        // Build-Launcher.ps1 and Ship.ps1 write it, #5179).
-        public const string Version = "0.0.0";
+        // The launcher's number, the one the build gave the exe (#4825): the
+        // build passes it as -p:Version (scripts\release\Build-Launcher.ps1),
+        // and in a merge release it is the version of the Velopack package
+        // the exe goes out in (merge-release.yml, MergeRelease.ps1), so the
+        // launcher, the package and the signed release record say the same
+        // number. A bare build says 0.0.0. Until #4825 the build wrote the
+        // number into this line and put it back afterwards; nothing writes a
+        // source file for the build any more.
+        public static readonly string Version = BuiltVersion();
+
+        /// <summary>
+        /// The exe's own version, three parts, or four when the build gave
+        /// four (a dev Ship's number, Ship.ps1). Read from the assembly's name,
+        /// which the native build keeps.
+        /// </summary>
+        static string BuiltVersion()
+        {
+            System.Version v = typeof(Updater).Assembly.GetName().Version;
+            if (v == null) return "0.0.0";
+            string three = v.Major + "." + v.Minor + "." + Math.Max(0, v.Build);
+            return v.Revision > 0 ? three + "." + v.Revision : three;
+        }
 
         /// <summary>
         /// The collection revision the last feed named, or 0 when it named
@@ -79,70 +96,85 @@ namespace Thornswood
         static bool cacheRead;
         const string CacheMagic = "Thornswood feed cache 1";
 
-        // WebClient has no timeout worth the name, and the default is long
-        // enough that a GitHub which accepts the connection and then says
-        // nothing looks like a hung launcher. The same helper Online and
-        // Roster use. Timeout is the wait for an answer, not for the body, so
-        // a large asset still downloads for as long as it needs.
-        class Quick : WebClient
+        // The feed's requests go through Http.cs, the launcher's one HttpClient
+        // (#4823, #4825), with ten seconds for the answer to start, so a GitHub
+        // or a site that accepts the connection and then says nothing does not
+        // look like a hung launcher. The wait is for the answer, not the body:
+        // a large asset still downloads for as long as its bytes keep coming
+        // (Http.cs, readMs). Until then they went through a WebClient of their
+        // own, Quick, with the same ten seconds.
+        const int AnswerMs = 10000;
+
+        /// <summary>
+        /// A GET with the launcher's headers. The token only ever goes to
+        /// GitHub's own API, never to whatever host an asset URL happens to
+        /// point at. gzip asks for the answer compressed, for the feed's JSON
+        /// only (#443): a compressed feed is a quarter of the size, and
+        /// FeedBody reads it either way.
+        /// </summary>
+        static HttpRequestMessage FeedAsk(Config cfg, bool octet, string url, bool gzip)
         {
-            public int Ms = 10000;
-            // For the feed only (#443): If-Modified-Since has to go through
-            // the request's own property, because WebClient refuses it as a
-            // plain header, and a compressed feed is a quarter of the size.
-            public DateTime Since = DateTime.MinValue;
-            public bool Gzip;
-            // The status of the last answer that WebClient returned from
-            // rather than threw on, which is every 2xx. 200 and 204 are both
-            // success to it and DownloadData gives back bytes either way (an
-            // empty array for 204), so a caller that has to tell them apart
-            // reads this (#2636). 0 until an answer arrives.
-            public int Status;
-            // The connection group the request goes in, or null for the
-            // shared one. Only the feed watch sets it (WatchGroup).
-            public string Group;
-            protected override WebResponse GetWebResponse(WebRequest request)
+            var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.TryAddWithoutValidation("User-Agent", "ThornswoodLauncher/" + Version);
+            bool github = false;
+            try { github = new Uri(url).Host.Equals("api.github.com", StringComparison.OrdinalIgnoreCase); }
+            catch (Exception ex) { Swallow.Note("Updater.FeedAsk, uri host", ex); }
+            if (github && !string.IsNullOrEmpty(cfg.UpdateToken))
+                req.Headers.TryAddWithoutValidation("Authorization", "Bearer " + cfg.UpdateToken);
+            // GitHub Contents API wants the raw media type; a direct https feed
+            // on thornswood.net is ordinary JSON (#649).
+            string accept;
+            if (github) accept = octet ? "application/octet-stream" : "application/vnd.github.raw";
+            else accept = octet ? "application/octet-stream" : "application/json";
+            req.Headers.TryAddWithoutValidation("Accept", accept);
+            if (gzip) req.Headers.TryAddWithoutValidation("Accept-Encoding", "gzip");
+            return req;
+        }
+
+        /// <summary>The answer's body, unpacked when the server sent it gzip.</summary>
+        static byte[] FeedBody(HttpResponseMessage res, int readMs)
+        {
+            byte[] raw = Http.Body(res, readMs);
+            foreach (string e in res.Content.Headers.ContentEncoding)
             {
-                var r = base.GetWebResponse(request);
-                var h = r as HttpWebResponse;
-                if (h != null) Status = (int)h.StatusCode;
-                return r;
-            }
-            protected override WebRequest GetWebRequest(Uri address)
-            {
-                var r = base.GetWebRequest(address);
-                if (r != null) { r.Timeout = Ms; }
-                var h = r as HttpWebRequest;
-                if (h != null)
+                if (!string.Equals(e, "gzip", StringComparison.OrdinalIgnoreCase)) continue;
+                using (var z = new GZipStream(new MemoryStream(raw), CompressionMode.Decompress))
+                using (var ms = new MemoryStream())
                 {
-                    if (Since != DateTime.MinValue) h.IfModifiedSince = Since;
-                    if (Gzip) h.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-                    if (Group != null) h.ConnectionGroupName = Group;
+                    z.CopyTo(ms);
+                    return ms.ToArray();
                 }
-                return r;
+            }
+            return raw;
+        }
+
+        /// <summary>
+        /// The body of a 2xx answer, and an exception for any other answer,
+        /// worded as WebClient's DownloadData worded it, which is what the
+        /// callers had before.
+        /// </summary>
+        static byte[] FeedGet(Config cfg, bool octet, string url, bool gzip = false)
+        {
+            using (HttpRequestMessage req = FeedAsk(cfg, octet, url, gzip))
+            using (HttpResponseMessage res = Http.Send(req, AnswerMs))
+            {
+                if (!res.IsSuccessStatusCode) throw Refused(res);
+                return FeedBody(res, Http.DefaultReadMs);
             }
         }
 
-        static WebClient Client(Config cfg, bool octet, string url)
+        static HttpRequestException Refused(HttpResponseMessage res)
         {
-            var wc = new Quick();
-            wc.Headers["User-Agent"] = "ThornswoodLauncher/" + Version;
-            // The token only ever goes to GitHub's own API, never to whatever
-            // host an asset URL happens to point at.
-            bool github = false;
-            try { github = new Uri(url).Host.Equals("api.github.com", StringComparison.OrdinalIgnoreCase); }
-            catch (Exception ex) { Swallow.Note("Updater.Client, uri host", ex); }
-            if (github && !string.IsNullOrEmpty(cfg.UpdateToken))
-                wc.Headers["Authorization"] = "Bearer " + cfg.UpdateToken;
-            // GitHub Contents API wants the raw media type; a direct https feed
-            // on thornswood.net is ordinary JSON (#649).
-            if (github)
-                wc.Headers["Accept"] = octet ? "application/octet-stream" : "application/vnd.github.raw";
-            else if (octet)
-                wc.Headers["Accept"] = "application/octet-stream";
-            else
-                wc.Headers["Accept"] = "application/json";
-            return wc;
+            return new HttpRequestException("The remote server returned an error: (" + (int)res.StatusCode + ") " + res.ReasonPhrase + ".", null, res.StatusCode);
+        }
+
+        /// <summary>One header of the answer, from either of its two lists, or null.</summary>
+        static string HeaderOf(HttpResponseMessage res, string name)
+        {
+            IEnumerable<string> v;
+            if (res.Headers.TryGetValues(name, out v) || res.Content.Headers.TryGetValues(name, out v))
+                return string.Join(", ", v);
+            return null;
         }
 
         /// <summary>The feed this build reads when config.json names none of Thornswood's.</summary>
@@ -248,7 +280,11 @@ namespace Thornswood
         /// </summary>
         public static VersionDoc Check(Config cfg)
         {
-            ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072; // Tls12 added, never replaced (#1360)
+            // No line setting the security protocol any more (#4825). On
+            // the .NET Framework it added TLS 1.2 to an old default (#1360). On
+            // .NET 10 the default is whatever Windows allows, TLS 1.3 included,
+            // and adding TLS 1.2 to that default would have turned it into TLS
+            // 1.2 alone.
             LastNotModified = false;
 
             string feedUrl = FeedUrl(cfg);
@@ -289,7 +325,6 @@ namespace Thornswood
         /// </summary>
         public static bool WaitForFeedChange(Config cfg)
         {
-            ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072; // Tls12 added, never replaced (#1360)
             string tip = WatchUrl(cfg);
             CheckUrl(tip);
 
@@ -307,28 +342,21 @@ namespace Thornswood
 
             // The tip holds the socket for fifty seconds on the site and then
             // answers 204 (measured 18 Oct: 204 after 50.7 s). Sixty here, so
-            // the site's own answer always arrives first; Quick's default ten
-            // would cut every quiet wait off before the site could answer.
+            // the site's own answer always arrives first; the feed's usual ten
+            // (AnswerMs) would cut every quiet wait off before the site could
+            // answer.
             return Tip(cfg, tip, tag, 60000);
         }
 
-        /// <summary>
-        /// The connection group the feed watch holds its socket in, apart from
-        /// every other request to thornswood.net.
-        ///
-        /// The .NET Framework lets a program keep two connections to a host
-        /// at a time (ServicePointManager.DefaultConnectionLimit), and a
-        /// request waits for a free one inside its own timeout. Each
-        /// connection group counts its two apart. In the shared group the
-        /// watch held one of the two all the time from #2440 on, so the
-        /// Play page's gallery, its pictures, the voice token and the news
-        /// took turns on the one left: a picture of several megabytes held
-        /// the rest back, and a request whose timeout ran out while it
-        /// waited failed, which left the gallery blank. In a group of its
-        /// own the watch leaves both to them, as before it existed.
-        /// launcher\tests\test-2440-watch-connection.ps1 holds this.
-        /// </summary>
-        public const string WatchGroup = "feed-watch";
+        // THE WATCH'S OWN CONNECTION (#2440, WatchGroup until #4823). The .NET
+        // Framework let a program keep two connections to a host at a time,
+        // and the watch, holding one all the time, left the Play page's
+        // gallery, pictures, voice token and news to take turns on the other,
+        // so it was given a connection group of its own. On .NET 10 the
+        // shared HttpClient (Http.cs) has no such limit: SocketsHttpHandler's
+        // MaxConnectionsPerServer is unlimited unless set, and Http.cs does
+        // not set it, so the watch's open request holds no other back and
+        // needs no group.
 
         /// <summary>
         /// The long-poll request itself, apart from CheckUrl so a test can
@@ -336,8 +364,8 @@ namespace Thornswood
         /// the way Conditional is apart from FromSite.
         ///
         /// The site answers 200 when the feed moved and 204 when its wait ran
-        /// out unchanged. WebClient treats every 2xx as success: DownloadData
-        /// returns for a 204 with an empty array and never throws. Until #2636
+        /// out unchanged. WebClient treated every 2xx as success: DownloadData
+        /// returned for a 204 with an empty array and never threw. Until #2636
         /// this read any return from DownloadData as "moved" and looked for the
         /// 204 in the catch, where it never arrives, so every quiet fifty
         /// second wait ran a full update check, about seventy an hour for each
@@ -348,19 +376,23 @@ namespace Thornswood
         /// </summary>
         static bool Tip(Config cfg, string tip, string tag, int ms)
         {
-            using (var q = (Quick)Client(cfg, false, tip))
+            using (HttpRequestMessage req = FeedAsk(cfg, false, tip, true))
             {
-                q.Ms = ms;
-                q.Group = WatchGroup;
-                q.Gzip = true;
-                if (tag.Length > 0) q.Headers["If-None-Match"] = tag;
-                try { q.DownloadData(tip); }
-                catch (WebException wex) { throw WrapFeedFail(wex, true); }
-                // 200: the feed moved, or there was no tag to compare.
-                if (q.Status == 200) return true;
-                // 204: the wait ran out and the feed is as it was.
-                if (q.Status == 204) return false;
-                throw new Exception("The update feed tip answered HTTP " + q.Status + ", which says neither that the feed moved nor that it did not.");
+                if (tag.Length > 0) req.Headers.TryAddWithoutValidation("If-None-Match", tag);
+                HttpResponseMessage res;
+                try { res = Http.Send(req, ms); }
+                catch (Exception ex) when (ex is HttpRequestException || ex is TimeoutException) { throw WrapFeedFail(ex, true); }
+                using (res)
+                {
+                    // Anything but 2xx failed, as it did when WebClient threw.
+                    if (!res.IsSuccessStatusCode) throw WrapFeedFail(Refused(res), true);
+                    int status = (int)res.StatusCode;
+                    // 200: the feed moved, or there was no tag to compare.
+                    if (status == 200) return true;
+                    // 204: the wait ran out and the feed is as it was.
+                    if (status == 204) return false;
+                    throw new Exception("The update feed tip answered HTTP " + status + ", which says neither that the feed moved nor that it did not.");
+                }
             }
         }
         /// <summary>
@@ -406,51 +438,38 @@ namespace Thornswood
                          && have.Doc != null
                          && (!string.IsNullOrEmpty(have.Etag) || since != DateTime.MinValue)
                          && string.Equals(have.Url, feedUrl, StringComparison.Ordinal);
-            using (var wc = Client(cfg, false, feedUrl))
+            using (HttpRequestMessage req = FeedAsk(cfg, false, feedUrl, true))
             {
-                var q = wc as Quick;
-                if (q != null) q.Gzip = true;
-                if (asked && !string.IsNullOrEmpty(have.Etag)) wc.Headers["If-None-Match"] = have.Etag;
-                if (asked && q != null) q.Since = since;
-                byte[] body;
-                try { body = wc.DownloadData(feedUrl); }
-                catch (WebException wex)
+                if (asked && !string.IsNullOrEmpty(have.Etag)) req.Headers.TryAddWithoutValidation("If-None-Match", have.Etag);
+                if (asked && since != DateTime.MinValue) req.Headers.IfModifiedSince = new DateTimeOffset(since, TimeSpan.Zero);
+                using (HttpResponseMessage res = Http.Send(req, AnswerMs))
                 {
-                    // The .NET Framework hands a 304 back as a WebException
-                    // rather than as an answer, so the one reply this cache
-                    // exists to get arrives as a throw. Anything else really
-                    // is a failed check and goes on up.
-                    if (asked && NotChanged(wex))
+                    // The one reply this cache exists to get. HttpClient hands a
+                    // 304 back as an answer; the .NET Framework's WebClient threw
+                    // it as a WebException, and an empty 2xx was read as one too
+                    // in case some stack answered that way. Only a real 304 is
+                    // one now; anything else that is not 2xx is a failed check
+                    // and goes on up.
+                    if (asked && (int)res.StatusCode == 304)
                     {
                         LastNotModified = true;
                         return have.Doc;
                     }
-                    throw;
+                    if (!res.IsSuccessStatusCode) throw Refused(res);
+                    byte[] body = FeedBody(res, Http.DefaultReadMs);
+                    VersionDoc doc = ReadFeed(body, feedUrl, cfg);
+                    // Kept only once the document parsed, so a tag is never held
+                    // beside something the launcher could not read.
+                    string tag = HeaderOf(res, "ETag"), mod = HeaderOf(res, "Last-Modified");
+                    var fresh = new Cached();
+                    fresh.Url = feedUrl;
+                    fresh.Etag = tag == null ? "" : tag.Trim();
+                    fresh.LastModified = mod == null ? "" : mod.Trim();
+                    fresh.Doc = doc;
+                    cached = fresh;
+                    if (fresh.Etag.Length > 0 || fresh.LastModified.Length > 0) WriteCache(fresh, body);
+                    return doc;
                 }
-                // Belt as well as braces, for a stack that hands a 304 back as
-                // an answer with no body instead of throwing.
-                if (asked && (body == null || body.Length == 0))
-                {
-                    LastNotModified = true;
-                    return have.Doc;
-                }
-                VersionDoc doc = ReadFeed(body, feedUrl, cfg);
-                // Kept only once the document parsed, so a tag is never held
-                // beside something the launcher could not read.
-                string tag = null, mod = null;
-                if (wc.ResponseHeaders != null)
-                {
-                    tag = wc.ResponseHeaders["ETag"];
-                    mod = wc.ResponseHeaders["Last-Modified"];
-                }
-                var fresh = new Cached();
-                fresh.Url = feedUrl;
-                fresh.Etag = tag == null ? "" : tag.Trim();
-                fresh.LastModified = mod == null ? "" : mod.Trim();
-                fresh.Doc = doc;
-                cached = fresh;
-                if (fresh.Etag.Length > 0 || fresh.LastModified.Length > 0) WriteCache(fresh, body);
-                return doc;
             }
         }
 
@@ -539,17 +558,12 @@ namespace Thornswood
             }
         }
 
-        static bool NotChanged(WebException wex)
-        {
-            var r = wex.Response as HttpWebResponse;
-            return r != null && (int)r.StatusCode == 304;
-        }
-
         static Exception WrapFeedFail(Exception ex, bool fromHost)
         {
             string where = fromHost ? "the site update feed" : "GitHub";
-            var wex = ex as WebException;
-            if (wex != null && wex.Status == WebExceptionStatus.Timeout)
+            // Http.Send and its reads throw TimeoutException when the answer
+            // or the next bytes of it did not come in time.
+            if (ex is TimeoutException)
                 return new Exception(where + " did not answer in time. The check runs again by itself.");
             if (!string.IsNullOrEmpty(ex.Message)
                 && (ex.Message.StartsWith("the ", StringComparison.Ordinal)
@@ -687,11 +701,14 @@ namespace Thornswood
         /// names a release record this install has not synced to, that is one
         /// entry standing for the whole release (Sync.cs, #1050), and no pack
         /// is replayed. Otherwise every pack id not in applied.txt, in order.
+        /// Nothing on dev, where the game files come with the launcher's
+        /// Velopack package (Velo.GameFromPackage, SyncPackage.cs).
         /// </summary>
-        public static List<Pack> Pending(VersionDoc v)
+        public static List<Pack> Pending(Config cfg, VersionDoc v)
         {
             var list = new List<Pack>();
-            Pack release = RecordDue(v);
+            if (Velo.GameFromPackage(cfg)) return list;
+            Pack release = RecordDue(cfg, v);
             if (release != null) { list.Add(release); return list; }
             var done = Applied();
             if (v == null || v.packs == null) return list;
@@ -769,28 +786,19 @@ namespace Thornswood
             if (string.IsNullOrEmpty(expectSha))
                 throw new Exception("That update arrived without a checksum, so it has not been downloaded. This is a publishing mistake, not something wrong with your install.");
 
-            ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072; // Tls12 added, never replaced (#1360)
             string tmp = Path.Combine(Path.GetTempPath(), "thornswood-" + Guid.NewGuid().ToString("N") + ".bin");
             // Read in pieces rather than DownloadFile, so the Play button can
             // show the bytes as they come (#1145, PlayProgress.Part).
             try
             {
-                using (var wc = Client(cfg, true, url))
-                using (Stream s = wc.OpenRead(url))
-                using (var f = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
+                using (HttpRequestMessage req = FeedAsk(cfg, true, url, false))
+                using (HttpResponseMessage res = Http.Send(req, AnswerMs))
                 {
-                    long length;
-                    if (wc.ResponseHeaders == null || !long.TryParse(wc.ResponseHeaders["Content-Length"], out length)) length = -1;
-                    byte[] buf = new byte[81920];
-                    long had = 0;
-                    int n;
+                    if (!res.IsSuccessStatusCode) throw Refused(res);
+                    long length = res.Content.Headers.ContentLength ?? -1;
                     PlayProgress.Part(0, length);
-                    while ((n = s.Read(buf, 0, buf.Length)) > 0)
-                    {
-                        f.Write(buf, 0, n);
-                        had += n;
-                        PlayProgress.Part(had, length);
-                    }
+                    using (var f = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
+                        Http.CopyBody(res, f, Http.DefaultReadMs, had => PlayProgress.Part(had, length));
                 }
             }
             catch
@@ -1241,120 +1249,32 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// Who the downloaded launcher has to be signed by.
+        /// Who every program of an update has to be signed by: the launcher,
+        /// the libraries beside it and Velopack's own programs in the package
+        /// (VeloPackage.cs), Velopack's Update.exe, and the catalog of each
+        /// release record (VeloRecord.cs, FeedManifest.cs).
         ///
-        /// Empty means the check is skipped, and that is deliberate. Every
-        /// release before signing begins is unsigned, so a launcher that
-        /// refused them would strand everybody on whatever they already have.
-        ///
-        /// Fill this in with a distinctive part of the certificate's Subject
-        /// line, in the same release that first ships a signed exe, and never
-        /// before. Match on a fragment rather than the whole Subject, because
-        /// certificate authorities add and reorder fields between renewals and
-        /// an exact-match check would refuse a perfectly good update the day
-        /// the certificate is renewed.
+        /// Match on a distinctive part of the certificate's Subject line rather
+        /// than the whole of it, because certificate authorities add and
+        /// reorder fields between renewals and an exact-match check would
+        /// refuse a perfectly good update the day the certificate is renewed.
         ///
         /// Since #912 this is the last of five checks, not the only one:
         /// Signature.cs first has Windows verify the signature and pins
         /// Microsoft's Artifact Signing and Thornswood's durable identity.
         /// scripts\release\Assert-PublishSigned.ps1 reads this line.
         ///
-        /// This is a third layer, not the only one. The host allow list at
-        /// AllowedHosts decides where a byte may come from, the SHA-256 in
-        /// version.json decides the bytes are the ones published, and this
-        /// decides who built them. Removing either of the other two because
-        /// this exists would be a straight loss.
+        /// This is one layer, not the only one. The sha256 a release names
+        /// decides the bytes are the ones published, the signed release record
+        /// decides somebody holding the signing right published them, and this
+        /// decides who built each program. Removing any of them because the
+        /// others exist would be a straight loss.
+        ///
+        /// The launcher's own self update (the download named by version.json's
+        /// launcherUrl, and the swap script in SelfSwap.cs that kept
+        /// Thornswood.exe.old) went with #4825: the launcher updates through
+        /// Velopack now, with every check in VeloUpdate.cs.
         /// </summary>
         public const string ExpectedSigner = "Gavin Knotts";
-
-        /// <summary>
-        /// Refuses a launcher that is not signed by us, and says which check it
-        /// failed, because "it would not update" with no reason is the report
-        /// nobody can act on.
-        ///
-        /// Until #912 this read the Subject of the embedded certificate and
-        /// nothing else, so a certificate anybody can make with this name on
-        /// it passed. Signature.Refusal now has Windows verify the signature
-        /// and its chain, then pins Microsoft's Artifact Signing root and
-        /// Thornswood's durable identity in the certificate, and only then
-        /// looks for ExpectedSigner in the Subject. Signature.cs says why each.
-        /// </summary>
-        static void CheckSigner(string path, Action<string> log)
-        {
-            if (String.IsNullOrEmpty(ExpectedSigner)) return;
-            string said;
-            string why = Signature.Refusal(path, ExpectedSigner, out said);
-            if (why.Length > 0)
-            {
-                throw new Exception(
-                    "The launcher that was downloaded " + why + " " +
-                    "Nothing has been replaced and the one you are running is untouched. " +
-                    "Tell Patrick before running anything.");
-            }
-            log(said);
-        }
-
-        /// <summary>Replaces the running exe and restarts, via a short detached script.</summary>
-        public static void SelfUpdate(Config cfg, VersionDoc v, Action<string> log)
-        {
-            SwapIn(FetchLauncher(cfg, v, log), log);
-        }
-
-        /// <summary>
-        /// The new launcher, downloaded and checked against its checksum, in
-        /// the temp folder; nothing is replaced yet. Apart from SwapIn so an
-        /// update can download while the game folder is prepared (#2210).
-        /// </summary>
-        public static string FetchLauncher(Config cfg, VersionDoc v, Action<string> log)
-        {
-            log("Downloading launcher " + v.launcherVersion + "...");
-            return Download(cfg, v.launcherUrl, v.launcherSha256, log);
-        }
-
-        /// <summary>
-        /// Puts the launcher FetchLauncher downloaded into place once this one
-        /// has gone, after the signer check, and deletes the download either
-        /// way.
-        /// </summary>
-        public static void SwapIn(string tmp, Action<string> log)
-        {
-            string exe = System.Reflection.Assembly.GetExecutingAssembly().Location;
-            string neu = exe + ".new";
-            // Before the copy, not after. Once a file is sitting at exe.new the
-            // swap script will pick it up on the next start whatever happens
-            // here, so a check that ran later would be checking a decision
-            // already made.
-            // The download is deleted whichever way this goes. A launcher the
-            // signer check refused used to stay in %TEMP%, one more copy on
-            // every check that offered it again.
-            try
-            {
-                CheckSigner(tmp, log);
-                File.Copy(tmp, neu, true);
-            }
-            finally
-            {
-                try { File.Delete(tmp); } catch (Exception ex) { Swallow.Note("Updater.SwapIn, delete", ex); }
-            }
-
-            int me = System.Diagnostics.Process.GetCurrentProcess().Id;
-            // Named for the launcher it waits on. The script stays up for a few
-            // minutes now, watching the new launcher start, and with one fixed
-            // name the dev build updating in that time would write over a
-            // script cmd is still reading.
-            string bat = Path.Combine(Path.GetTempPath(), "thornswood-update-" + me + ".cmd");
-
-            // Waits for this launcher to be gone, keeps it as Thornswood.exe.old,
-            // puts the new one in, and puts the old one back if the new one
-            // does not start. SelfSwap.cs has the script and the failures each
-            // line of it is there for.
-            File.WriteAllText(bat, SelfSwap.Script(exe, neu, me));
-
-            var psi = new System.Diagnostics.ProcessStartInfo(bat);
-            psi.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
-            psi.CreateNoWindow = true;
-            psi.UseShellExecute = true;
-            System.Diagnostics.Process.Start(psi);
-        }
     }
 }

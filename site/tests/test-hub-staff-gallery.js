@@ -48,6 +48,7 @@ const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const siteFiles = require('../../tests/site-files');
 
 const ROOT = path.join(__dirname, '..', '..');
 const APP = path.join(ROOT, 'site');
@@ -56,7 +57,7 @@ const SITE_SRC = process.argv[2] || path.join(APP, 'server.js');
 // moved in #1479 (no inline script under the content security policy).
 const HUB = fs.readFileSync(path.join(APP, 'public', 'index.html'), 'utf8') + '\n' +
             fs.readFileSync(path.join(APP, 'public', 'hub.js'), 'utf8');
-const SERVER = fs.readFileSync(SITE_SRC, 'utf8');
+const SERVER = siteFiles.source(SITE_SRC);
 const GALLERY_CS = fs.readFileSync(path.join(ROOT, 'launcher', 'app', 'Gallery.cs'), 'utf8');
 
 let pass = 0, fail = 0;
@@ -113,7 +114,7 @@ const TESTER_ID = '333333333333333333';
 const STRANGER_ID = '444444444444444444';
 const OUTBOUND = path.join(dir, 'outbound.txt');
 
-fs.copyFileSync(SITE_SRC, path.join(dir, 'server.js'));
+siteFiles.copy(dir, SITE_SRC);
 fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
 fs.mkdirSync(path.join(dir, 'data'), { recursive: true });
 // A client id and secret, so Discord sign in is on and the password door is
@@ -187,7 +188,12 @@ function stub() {
     req.end = () => {
       if (ended) return;
       ended = true;
-      const body = host === 'discord.com' ? answer(where) : null;
+      // The Release list too: the site looks there for the installer when a
+      // page lists the downloads (newestSetup, #4824), and is told there is
+      // no Release yet.
+      const body = host === 'discord.com' ? answer(where)
+        : host === 'api.github.com' && /^\/repos\/ThornswoodRP\/Thornswood\/releases\?/.test(where) ? []
+        : null;
       say((body ? 'STUBBED ' : 'OUTBOUND ') + host + where);
       setImmediate(() => {
         if (!body) { req.emit('error', new Error('the harness lets no request leave this machine')); return; }

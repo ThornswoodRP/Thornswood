@@ -348,7 +348,7 @@ whole file at once.
 
 - What keeps a row off: no `Roadmap:` comment, two lane labels, a title over
   45 characters, nothing under the first line, an issue number, a link or
-  code, an em dash, or the word for the people who play that Developer-Guide.md
+  code, an em dash, or the word for the people who play that docs/guide/rules.md
   bans in its Words section. The last two hold for known issue text too,
   since the site shows it to anybody. The issue gets one comment naming the rule, the same as a test
   task; fixing the comment puts the row on at the next pass.
@@ -602,7 +602,7 @@ installs the pinned versions into a new `py-libs` and swaps it in with the
 code, so a bump that stops the bot from starting puts the old libraries back.
 The pull request build only parses the bot; the nightly runs its harnesses.
 So before merging a bump, install the new pins and run `bot\tests\test-*.py` on
-them, the way [Setting up a machine](../Developer-Guide.md#setting-up-a-machine)
+them, the way [Setting up a machine](../docs/guide/set-up-a-machine.md#setting-up-a-machine)
 installs them (#1401).
 
 What goes up with it: `bot.py` and its modules, `card.py`, the channel ids, the card artwork,

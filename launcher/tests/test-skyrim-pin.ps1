@@ -6,7 +6,7 @@
 
   Until 27 September the pin was compiled into the exe: the exe size in
   Config.cs, the three depot manifests and the newer build's size in
-  Downgrade.cs, and a second copy of the depots in Setup-Thornswood.ps1. Now
+  Downgrade.cs, and a second copy of the depots in the install script. Now
   version.json carries expectedExeBytes, newerExeBytes and depots, written by
   Publish-Update from records\skyrim-pin.json, OnVersionDoc takes them through
   Downgrade.AdoptPin into config.json, and the compiled numbers are the
@@ -19,14 +19,19 @@
     - a feed with them moves the checks and the three download_depot lines
     - half a pin, or a depot list the button cannot use, is not taken
     - what the publisher writes is what the launcher reads
-    - the record, the compiled fallback and Setup-Thornswood.ps1 agree
+    - the record and the compiled fallback agree, and the install (the
+      launcher's InstallSteps.cs since #4824) reads the build's exe size out of
+      records\skyrim-files.json rather than keeping a copy
 
-  Config.cs is compiled whole and the pin methods are lifted out of
-  Downgrade.cs by brace matching, with the compiler the build runs at the C#
-  version the project names (Add-LauncherType, tests\Launcher-Csc.ps1,
-  #2821), and run under Windows PowerShell, on the same serializer the
-  launcher reads the feed with. Under pwsh this hands itself to
-  powershell.exe for that reason.
+  Config.cs is compiled whole, with LooseString.cs that its serializer
+  reads strings with, and the pin methods are lifted out of Downgrade.cs by
+  brace matching, all with the .NET 10 SDK the build runs at the C# version
+  the project names (Add-LauncherType, tests\Launcher-Csc.ps1, #2821), and
+  run in this pwsh, which is .NET 10 too, so on any machine (#4823). The
+  feed and config.json are read and written by Config.cs's own
+  System.Text.Json code (VersionDoc.Parse, Config.Save, Config.Load). The
+  launcher from before the pin fields is a WPF one, which read the feed with
+  the DataContract serializer, so P2 reads it with that.
 
   Read only apart from its own scratch folder under the temp folder, which it
   removes.
@@ -41,13 +46,6 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 if (-not $Root) { $Root = Split-Path -Parent (Split-Path -Parent $Here) }
 
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  this runs the launcher''s code on the .NET Framework the launcher runs on, which only Windows has'; exit 0 }
-if ($PSVersionTable.PSEdition -eq 'Core') {
-    $wp = Get-WindowsPowerShell
-    & $wp -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Root $Root
-    exit $LASTEXITCODE
-}
 . (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#2821)
 
 $script:pass = 0
@@ -63,12 +61,12 @@ function Done {
 }
 function Read-Text([string]$p) { return [IO.File]::ReadAllText($p, [Text.Encoding]::UTF8) }
 
-$app = Join-Path $Root 'launcher\app'
+$app = Join-Path (Join-Path $Root 'launcher') 'app'
 $downSrc = Read-Text (Join-Path $app 'Downgrade.cs')
 $configSrc = Read-Text (Join-Path $app 'Config.cs')
 $recordPath = Join-Path $Root 'records\skyrim-pin.json'
 $publishPath = Join-Path $Root 'scripts\release\Publish-Update.ps1'
-$setupPath = Join-Path $Root 'installer\Setup-Thornswood.ps1'
+$setupPath = Join-Path $app 'InstallSteps.cs'
 
 # ---- lift the pin methods out of Downgrade.cs ---------------------------------
 # From the start of the signature's line to the brace that closes it, and the
@@ -121,8 +119,10 @@ if (-not $newerConst.Success -or -not $appIdConst.Success) { Done }
 $downStub = "using System;`r`nusing System.IO;`r`nnamespace Thornswood`r`n{`r`n    static class Downgrade`r`n    {`r`n" +
             $appIdConst.Value + "`r`n" + $newerConst.Value + "`r`n" + $lifted.ToString() + "`r`n    }`r`n}`r`n"
 
-# Config.Load and Save need Secrets and Swallow, which come along; Paths is a
-# stand-in with the one field Swallow reads, left null so nothing is written.
+# Config.Load and Save need Secrets and Swallow, which come along, and its
+# serializer LooseString; Paths is a stand-in with the one field Swallow
+# reads, left null so nothing is written.
+$looseSrc = Read-Text (Join-Path $app 'LooseString.cs')
 $secretsSrc = Read-Text (Join-Path $app 'Secrets.cs')
 $swallowSrc = Read-Text (Join-Path $app 'Swallow.cs')
 $pathsStub = "namespace Thornswood`r`n{`r`n    static class Paths { public static string LogFile; }`r`n}`r`n"
@@ -143,7 +143,7 @@ namespace Older
 '@
 
 $asm = $null
-try { $asm = Add-LauncherType -Source $configSrc, $secretsSrc, $swallowSrc, $pathsStub, $downStub, $oldDoc }
+try { $asm = Add-LauncherType -Source $configSrc, $looseSrc, $secretsSrc, $swallowSrc, $pathsStub, $downStub, $oldDoc }
 catch { Write-Host ('      ' + $_.Exception.Message) }
 Yes 'Config.cs and the pin methods compile with the compiler the build runs' ($null -ne $asm)
 if ($null -eq $asm) { Done }
@@ -229,14 +229,19 @@ try {
     Yes 'P4 a manifest bigger than a long survives as it was written' ($lines[2].EndsWith('13333333333333333333'))
 
     # ---- P5: what is taken survives a restart -----------------------------------
-    $ser = New-Object System.Runtime.Serialization.Json.DataContractJsonSerializer($CfgT)
-    $ms = New-Object IO.MemoryStream
-    $ser.WriteObject($ms, $cfg)
-    $back = $ser.ReadObject((New-Object IO.MemoryStream(, $ms.ToArray())))
+    # Through Config.Save and Config.Load, as the launcher writes and reads it.
+    $cfgFile = Join-Path $scratch 'config.json'
+    $cfg.Save($cfgFile)
+    $back = $CfgT.GetMethod('Load').Invoke($null, [object[]]@([string]$cfgFile))
     Yes 'P5 config.json keeps the pin' ($back.ExpectedExeBytes -eq 40000001 -and $back.NewerExeBytes -eq 41000002 -and $back.SkyrimDepots.Length -eq 3)
     Yes 'P5 and the lines after a restart are the feed''s' (Same @(Down 'Commands' @($back)) $lines)
-    $oldCfg = $ser.ReadObject((New-Object IO.MemoryStream(, [Text.Encoding]::UTF8.GetBytes('{"ExpectedExeBytes":37157144,"ServerPort":"7777"}'))))
-    Yes 'P5 a config.json from before the pin loads onto the fallback' ($oldCfg.NewerExeBytes -eq 0 -and $null -eq $oldCfg.SkyrimDepots -and (Same @(Down 'Commands' @($oldCfg)) $fallback))
+    # A port other than the default, so a file that did not load (Load then
+    # hands back a new Config) cannot pass for one that did.
+    $oldFile = Join-Path $scratch 'config-before-the-pin.json'
+    [IO.File]::WriteAllText($oldFile, '{"ExpectedExeBytes":37157144,"ServerPort":"7778"}')
+    $oldCfg = $CfgT.GetMethod('Load').Invoke($null, [object[]]@([string]$oldFile))
+    Yes 'P5 a config.json from before the pin loads' ($oldCfg.ServerPort -eq '7778')
+    Yes 'P5 and lands on the fallback' ($oldCfg.NewerExeBytes -eq 0 -and $null -eq $oldCfg.SkyrimDepots -and (Same @(Down 'Commands' @($oldCfg)) $fallback))
     Yes 'P5 and names a 1.7.104 exe as before' ((Down 'Describe' @($oldCfg, (Exe 37910440))) -eq '1.7.104, the server runs 1.6.1170')
 
     # ---- P6: half a pin, or depots the button cannot use -------------------------
@@ -340,11 +345,10 @@ try {
     $cfgDefaults = @([regex]::Matches($configSrc, 'ExpectedExeBytes(?: <= 0\) ExpectedExeBytes)? = (\d+);') | ForEach-Object { $_.Groups[1].Value })
     Yes "P8 and the same exe size as both of Config.cs's defaults ($($cfgDefaults -join ', '))" ($cfgDefaults.Count -eq 2 -and @($cfgDefaults | Where-Object { $_ -ne [string]$rec.expectedExeBytes }).Count -eq 0)
     $setup = Read-Text $setupPath
-    $setupExe = [regex]::Match($setup, '(?m)^\$TARGET_EXE_BYTES = (\d+)').Groups[1].Value
-    $setupApp = [regex]::Match($setup, '(?m)^\$AppId\s*=\s*''(\d+)''').Groups[1].Value
-    $setupDepots = @([regex]::Matches($setup, '(?m)^\s*''(\d+)'' = ''(\d+)''') | ForEach-Object { 'download_depot ' + $setupApp + ' ' + $_.Groups[1].Value + ' ' + $_.Groups[2].Value })
-    Yes 'P8 Setup-Thornswood.ps1 checks for the same exe size' ($setupExe -eq [string]$rec.expectedExeBytes)
-    Yes 'P8 and names the same three depots' (Same $setupDepots $recLines)
+    Yes 'P8 the install reads the exe size out of records\skyrim-files.json and keeps no copy of the pin' (
+        $setup.Contains('GetManifestResourceStream("skyrim-files.json")') -and
+        $setup.Contains('GetProperty("SkyrimSE.exe").GetProperty("bytes")') -and
+        -not $setup.Contains([string]$rec.expectedExeBytes) -and -not $setup.Contains('download_depot'))
 
     # ---- P9: the wiring ---------------------------------------------------------
     $ovd = $null
@@ -398,12 +402,11 @@ try {
         $pattern = $pattern.Replace('\\', '\').Replace('\"', '"')
         $readBack = @([regex]::Matches($filesText, $pattern) | ForEach-Object { $_.Groups[1].Value.Replace('\\', '\') })
         Yes "P10 the launcher's own pattern reads every path back out of it ($($readBack.Count))" ($pattern.Length -gt 0 -and (Same @($readBack | Sort-Object) @($paths | Sort-Object)))
-        # Since #498's switch the launcher's project file embeds it, and its
-        # check stops the build by name when an embedded file is missing.
-        $appProj = Read-Text (Join-Path $Root 'launcher\app\Thornswood.csproj')
-        Yes 'P10 Thornswood.csproj puts it inside the launcher as skyrim-files.json, and stops without it' (
-            $appProj -match '<EmbeddedResource Include="\.\.\\\.\.\\records\\skyrim-files\.json"><LogicalName>skyrim-files\.json</LogicalName>' -and
-            $appProj.Contains('<Error Condition="!Exists(''%(EmbeddedResource.FullPath)'')"'))
+        # The launcher's project file embeds it; the compiler stops the build
+        # when an embedded file is missing (CS1566), naming the file.
+        $appProj = Read-Text (Join-Path $app 'Thornswood.csproj')
+        Yes 'P10 Thornswood.csproj puts it inside the launcher as skyrim-files.json' (
+            $appProj -match '<EmbeddedResource Include="\.\.\\\.\.\\records\\skyrim-files\.json"><LogicalName>skyrim-files\.json</LogicalName>')
         $gen = Join-Path $Root 'scripts\release\New-SkyrimFilesRecord.ps1'
         Yes 'P10 New-SkyrimFilesRecord.ps1, which writes it, is there' (Test-Path -LiteralPath $gen)
         # On a machine whose Steam has the three manifests, the record is what

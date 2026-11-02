@@ -11,8 +11,7 @@
   filed, and an issue nobody looks at keeps whatever Order it was given the
   day it was filed. A month untouched is the cue to look again: move it to
   where it belongs now (an order: label), merge it into the issue it
-  repeats, or write what it waits on. Never to close it for being old (Developer-Guide.md, the
-  board: an issue closes when it is done, a duplicate or replaced).
+  repeats, or write what it waits on. Never to close it for being old (docs/guide/the-board.md: an issue closes when it is done, a duplicate or replaced).
 
   WHAT "TOUCHED" MEANS. GitHub's own updated time for the issue: a comment, a
   label, an edit, a pull request or a commit naming it, a close or reopen.

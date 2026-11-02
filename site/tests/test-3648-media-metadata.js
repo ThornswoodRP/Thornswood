@@ -37,6 +37,7 @@ const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn, spawnSync } = require('child_process');
+const siteFiles = require('../../tests/site-files');
 const { cases } = require('../../tests/fixtures/media-3648.js');
 
 const ROOT = path.join(__dirname, '..', '..');
@@ -53,7 +54,7 @@ const SECRET = crypto.randomBytes(32).toString('hex');
 const ADMIN_ID = '111111111111111111';
 const MEMBER_ID = '222222222222222222';
 
-fs.copyFileSync(path.join(APP, 'server.js'), path.join(dir, 'server.js'));
+siteFiles.copy(dir);
 fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
 fs.copyFileSync(path.join(APP, 'public', 'home.html'), path.join(dir, 'public', 'home.html'));
 fs.mkdirSync(path.join(dir, 'data'), { recursive: true });
@@ -139,6 +140,20 @@ function leaks(b) {
   let out = '';
   srv.stdout.on('data', (d) => { out += d; });
   srv.stderr.on('data', (d) => { out += d; });
+  // The site writes its log line before it answers, but the line comes back
+  // on the child's stderr pipe and the answer on its socket, and this process
+  // can read the answer first: on the merge queue's Linux share of 2 Nov 2026
+  // (run 41382651846) the 415 was read while the line was still in the pipe.
+  // So a check of the log waits for the pipe to deliver it, and fails, saying
+  // so, when it never comes.
+  const logged = (re, ms) => new Promise((resolve) => {
+    if (re.test(out)) return resolve(true);
+    const look = () => { if (re.test(out)) { done(true); } };
+    const timer = setTimeout(() => done(false), ms);
+    function done(v) { clearTimeout(timer); srv.stderr.off('data', look); srv.stdout.off('data', look); resolve(v); }
+    srv.stderr.on('data', look);
+    srv.stdout.on('data', look);
+  });
   try {
     for (let i = 0; i < 100 && out.indexOf('listening on ') < 0 && srv.exitCode === null; i++) await wait(50);
     if (out.indexOf('listening on ') < 0) throw new Error('the scratch site never came up:\n' + out);
@@ -152,7 +167,7 @@ function leaks(b) {
       if (c.clean === null) {
         yes(file + ', whose blocks cannot be walked, is refused 415 (' + r.status + ')', r.status === 415);
         yes('and nothing of it is kept', fs.readdirSync(path.join(dir, 'uploads')).length === before);
-        yes('and the site says which upload in its log', /could not clean the upload \S+broken\.jpg: its blocks could not be walked/.test(out));
+        yes('and the site says which upload in its log', await logged(/could not clean the upload \S+broken\.jpg: its blocks could not be walked/, 10000));
         continue;
       }
       const name = r.json && r.json.name;

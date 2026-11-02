@@ -22,7 +22,7 @@ const vm = require('vm');
 const zlib = require('zlib');
 const ROOT = path.join(__dirname, '..');
 const CR = String.fromCharCode(13);
-const gm = fs.readFileSync(path.join(ROOT, 'game', 'gamemode.js'), 'utf8').split(CR).join('');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(ROOT, 'game', 'gamemode.js'), 'utf8')).split(CR).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {

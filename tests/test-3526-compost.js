@@ -7,7 +7,7 @@
 var fs = require('fs');
 var path = require('path');
 var REPO = path.join(__dirname, '..');
-var text = fs.readFileSync(path.join(REPO, 'game', 'gamemode.js'), 'utf8');
+var text = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(REPO, 'game', 'gamemode.js'), 'utf8'));
 
 function slice(fromMark, toMark, includeTo) {
   var a = text.indexOf(fromMark);
@@ -16,7 +16,7 @@ function slice(fromMark, toMark, includeTo) {
   return text.slice(a, includeTo ? b + toMark.length : b);
 }
 
-var cropCode = slice('// ==== CROPS_BY_BASE, generated ====', 'var CROPS = mergeCrops();', true);
+var cropCode = slice('var CROPS_BY_BASE = ', 'var CROPS = mergeCrops();', true);
 var farmCode = slice('// ==== thornswood farming ====', '// ==== end thornswood farming ====');
 var tstart = text.indexOf('    farming: {');
 var tend = text.indexOf('\n    }', tstart);

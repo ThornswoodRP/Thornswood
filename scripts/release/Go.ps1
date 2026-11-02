@@ -20,8 +20,8 @@
      every other plugin's log: chargen's lines were being written into the
      probe's file under the probe's prefix. Every plugin is wrapped now.
 
-  4. Voice runs in the launcher now, in a hidden WebView2 window
-     (launcher\app\Voice.cs and launcher\voice-host.html, which
+  4. Voice runs in the launcher now, in its own code with no web view
+     (launcher\app\Voice.cs and the Voice*.cs files beside it, #4823, which
      launcher\app\ARCHITECTURE.md walks through). It first ran inside the
      game, because the game's browser, served from http on a remote address,
      never exposed a microphone, and it moved out for the same reason.

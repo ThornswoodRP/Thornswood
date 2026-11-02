@@ -2,7 +2,7 @@
   "version": 1,
   "builtBy": "scripts/release/collection-permissions.js update",
   "collection": "7essxf",
-  "revision": 6,
+  "revision": 7,
   "mods": [
     {
       "modId": 198,
@@ -582,7 +582,9 @@
           "version": "1.6"
         }
       ],
-      "plugins": [],
+      "plugins": [
+        "Improved Eyes Skyrim.esp"
+      ],
       "page": "https://www.nexusmods.com/skyrimspecialedition/mods/9141?tab=description",
       "reading": {
         "read": "2026-11-01",

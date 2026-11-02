@@ -50,6 +50,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawnSync } = require('child_process');
+const siteFiles = require('./site-files');
 
 const ROOT = path.join(__dirname, '..');
 const CR = String.fromCharCode(13);
@@ -202,7 +203,7 @@ try {
   yes('E2 bot/roots.pem and its .tmp stay out of git', /^bot\/roots\.pem$/m.test(gi) && /^bot\/roots\.pem\.tmp$/m.test(gi));
 
   // ---- F: the site
-  const site = read('site/server.js');
+  const site = siteFiles.source();
   const from = site.indexOf('\nconst NOT_TRUSTED = ');
   const to = from < 0 ? -1 : site.indexOf('\n}));\n', from);
   const block = (from >= 0 && to > from) ? site.slice(from, to + 5) : '';

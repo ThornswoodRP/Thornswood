@@ -1,6 +1,6 @@
 param([string]$Scratch)
 $ErrorActionPreference='Stop'
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
 $repo=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 if(-not $Scratch){$Scratch=Join-Path ([IO.Path]::GetTempPath()) ('thornswood-collection-draw-'+[guid]::NewGuid().ToString('N'))}
 New-Item -ItemType Directory -Path $Scratch -Force | Out-Null
@@ -48,14 +48,8 @@ namespace Thornswood {
 }
 '@
 # What is above read Shell.cs and held DrawStatus to one observation. What
-# follows compiles the real methods with the build's compiler, which only
-# Windows has.
-if(-not $OnWindows){Write-Host 'SKIP  the real collection methods compiled and run: the build''s compiler (the Build Tools'' csc, against .NET Framework 4.8.1) is only on Windows; DrawStatus was read and passes its one observation on';exit 0}
-$source=Join-Path $Scratch 'CollectionDrawFixture.cs'
-[IO.File]::WriteAllText($source,$harness.Replace('__METHODS__',$methods),(New-Object Text.UTF8Encoding($false)))
-$dll=Join-Path $Scratch 'CollectionDrawFixture.dll'
-& $LauncherCsc /noconfig /nologo /target:library "/langversion:$LauncherLangVersion" ("/out:"+$dll) $source
-if($LASTEXITCODE){throw 'Real collection method compilation failed'}
-$assembly=[Reflection.Assembly]::LoadFrom($dll)
+# follows compiles the real methods with the .NET SDK the launcher builds
+# with and runs them, on any machine (#4823). A refusal throws.
+$assembly=Add-LauncherType -Source $harness.Replace('__METHODS__',$methods)
 [void]$assembly.GetType('Thornswood.CollectionDrawFixture').GetMethod('Run').Invoke($null,@())
 Write-Host 'PASS real collection methods: stale/ahead/unknown/current, default callers, threshold and absent URL; one observation per draw.'

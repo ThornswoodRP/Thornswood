@@ -31,6 +31,7 @@ const net = require('net');
 const os = require('os');
 const path = require('path');
 const vm = require('vm');
+const siteFiles = require('../../tests/site-files');
 
 const ROOT = path.join(__dirname, '..', '..');
 const SITE = path.join(ROOT, 'site', 'server.js');
@@ -44,7 +45,7 @@ const ADMIN_D = '222222222';
 function scratch() {
   const dir = fs.mkdtempSync(path.join(TEMP, 'ts-2188-'));
   const secret = crypto.randomBytes(32).toString('hex');
-  fs.copyFileSync(SITE, path.join(dir, 'server.js'));
+  siteFiles.copy(dir, SITE);
   fs.mkdirSync(path.join(dir, 'data', 'for-bot'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({
     password: crypto.randomBytes(12).toString('hex'),

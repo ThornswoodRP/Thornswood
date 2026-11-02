@@ -29,6 +29,7 @@ const os = require('os');
 const net = require('net');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const siteFiles = require('../../tests/site-files');
 
 const SRC = path.join(REPO_DIR, 'site', 'server.js');
 let pass = 0, fail = 0;
@@ -107,7 +108,7 @@ function stop(s) {
 (async () => {
   let s = null;
   try {
-    fs.copyFileSync(SRC, path.join(dir, 'server.js'));
+    siteFiles.copy(dir, SRC);
     fs.mkdirSync(DATA, { recursive: true });
     // The game check knocks on port 1 (#1816): the system never hands it out
     // for a listen on 0 and no harness listens on a fixed port

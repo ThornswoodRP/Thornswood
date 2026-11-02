@@ -20,6 +20,7 @@ const http = require('http');
 const net = require('net');
 const os = require('os');
 const path = require('path');
+const siteFiles = require('../../tests/site-files');
 
 const SITE = path.join(__dirname, '..', '..', 'site', 'server.js');
 let pass = 0, fail = 0;
@@ -87,7 +88,7 @@ const TEMP = process.env.THORNSWOOD_TEMP || os.tmpdir();
 fs.mkdirSync(TEMP, { recursive: true });
 const dir = fs.mkdtempSync(path.join(TEMP, 'ts-callback-hang-'));
 const SECRET = crypto.randomBytes(32).toString('hex');
-fs.copyFileSync(SITE, path.join(dir, 'server.js'));
+siteFiles.copy(dir, SITE);
 fs.mkdirSync(path.join(dir, 'data'), { recursive: true });
 fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
 fs.copyFileSync(path.join(__dirname, '..', '..', 'site', 'public', 'home.html'), path.join(dir, 'public', 'home.html'));

@@ -68,7 +68,9 @@ $a = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $Repo 
 $fn = $a.Find({ param($x) $x -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $x.Name -eq 'Get-ThornswoodDiscordNoise' }, $true)
 $discordNoise = @(if ($fn) { $fn.Body.FindAll({ param($x) $x -is [System.Management.Automation.Language.StringConstantExpressionAst] }, $true) | ForEach-Object { $_.Value } })
 # The site's list, NEWS_NOISE in server.js, one /pattern/i each.
-$server = [IO.File]::ReadAllText((Join-Path $Repo 'site\server.js'))
+# The site is server.js over its modules in site\lib since #5357.
+. (Join-Path $PSScriptRoot 'SiteFiles.ps1')
+$server = Get-SiteSource (Join-Path $Repo 'site')
 $m = [regex]::Match($server, '(?s)const NEWS_NOISE = \[(.*?)\];')
 $newsNoise = @(if ($m.Success) { [regex]::Matches($m.Groups[1].Value, '/((?:\\/|[^/])+)/i') | ForEach-Object { $_.Groups[1].Value -replace '(?<!\\)\\/', '/' } })
 Yes ("the site's News page strips {0} kinds of line, the load order and the gamemode among them" -f $newsNoise.Count) (($newsNoise -contains '^\s*Load order\s*:') -and ($newsNoise -contains '^\s*The gamemode was rebuilt\b'))

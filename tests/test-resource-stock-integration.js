@@ -3,14 +3,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const source = fs.readFileSync(process.argv[2] || path.join(__dirname,'../game/gamemode.js'),'utf8');
+const source = require('./gamemode-tables.js').joined(fs.readFileSync(process.argv[2] || path.join(__dirname,'../game/gamemode.js'),'utf8'));
 function fn(name,optional = false) {
   const match = source.match(new RegExp('^function '+name+'\\([^\\r\\n]*\\)[\\s\\S]*?^\\}','m'));
   if(optional && !match) return '';
   assert.ok(match,'Extract production '+name); return match[0];
 }
 function table(name) {
-  const match = source.match(new RegExp('^(?:var|const) '+name+' = \\{[\\s\\S]*?^\\};','m'));
+  const match = source.match(new RegExp('^(?:var|const) '+name+' = (?:\\{[^\\n]*\\};$|\\{[\\s\\S]*?^\\};)','m'));
   assert.ok(match,'Extract production '+name); return match[0];
 }
 const begin = source.indexOf('// SHARED RESOURCE STOCK BEGIN'),end = source.indexOf('// SHARED RESOURCE STOCK END');

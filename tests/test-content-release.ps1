@@ -8,7 +8,10 @@ function Yes($label, $ok) {
     if($ok) { $script:pass++; Write-Host "PASS  $label" }
     else { $script:fail++; Write-Host "FAIL  $label" }
 }
-foreach($name in 'Publish-Update.ps1','Package-Thornswood.ps1') {
+# Publish-Update packs what the feed carries, and Velopack's Setup.exe installs
+# those packs, so its Test-FromCollection decides for both. The old installer's
+# own copy in Package-Thornswood.ps1 went with it (#4824).
+foreach($name in 'Publish-Update.ps1') {
     $tokens=$null; $errors=$null
     $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repo "scripts\release\$name"),[ref]$tokens,[ref]$errors)
     $function=$ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Test-FromCollection'},$true)

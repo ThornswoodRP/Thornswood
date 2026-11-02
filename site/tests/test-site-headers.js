@@ -3,13 +3,14 @@
 const fs = require('fs'), path = require('path'), os = require('os');
 const net = require('net'), http = require('http');
 const {spawn} = require('child_process');
+const siteFiles = require('../../tests/site-files');
 const APP = path.join(__dirname, '..', '..', 'site'), PUBLIC = path.join(APP, 'public');
 let pass = 0, fail = 0;
 function yes(what, condition) {
  console.log((condition ? 'PASS  ' : 'FAIL  ') + what);
  if(condition) pass++; else fail++;
 }
-const src = fs.readFileSync(path.join(APP, 'server.js'), 'utf8');
+const src = siteFiles.source();
 const policy = src.match(/const CSP_HEADER = ("[^"\r\n]*");/);
 // Permissions-Policy (#2762): the value is checked against the Caddyfile's in
 // test-2762-door-headers.js; here, that every answer carries it once.
@@ -83,7 +84,7 @@ const made = [];
 function copy() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-headers-'));
   made.push(dir);
-  fs.copyFileSync(path.join(APP, 'server.js'), path.join(dir, 'server.js'));
+  siteFiles.copy(dir);
   fs.mkdirSync(path.join(dir, 'public'));
   ['home.html','home.js','home.css'].forEach(function (f) {
     fs.copyFileSync(path.join(PUBLIC, f), path.join(dir, 'public', f));

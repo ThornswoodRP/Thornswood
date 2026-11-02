@@ -17,11 +17,12 @@
 const REPO_DIR = require('path').join(__dirname, '..', '..');
 const fs = require('fs');
 const path = require('path');
+const siteFiles = require('../../tests/site-files');
 const SRC = process.env.GM || path.join(REPO_DIR, 'game', 'gamemode.js');
 const SITE = process.env.SITE || path.join(REPO_DIR, 'site', 'server.js');
 const CR = String.fromCharCode(13);
 const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
-const site = fs.readFileSync(SITE, 'utf8').split(CR).join('');
+const site = siteFiles.source(SITE).split(CR).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {

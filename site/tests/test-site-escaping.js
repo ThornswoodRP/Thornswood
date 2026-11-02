@@ -28,9 +28,10 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const siteFiles = require('../../tests/site-files');
 
 const ROOT = path.join(__dirname, '..', '..');
-const SERVER = fs.readFileSync(path.join(ROOT, 'site', 'server.js'), 'utf8');
+const SERVER = siteFiles.source();
 const HUB = fs.readFileSync(path.join(ROOT, 'site', 'public', 'hub.js'), 'utf8');
 const MARKED_FILE = path.join(ROOT, 'site', 'public', 'marked-12.0.2.min.js');
 

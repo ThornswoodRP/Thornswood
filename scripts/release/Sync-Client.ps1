@@ -8,8 +8,7 @@
   ships: the bundle, MpClientPlugin.dll, both SkyrimPlatform DLLs, the CEF host
   and TESModPlatform.pex. New-ClientBuildRecord.ps1 writes that record after a
   rebuild; this copies the files it names from the fork's build output into
-  the game folder, from where the next Ship packs them and the next
-  Package-Thornswood puts them in the installer.
+  the game folder, from where the next Ship packs them.
 
   Every file is hashed before it is copied and compared against the record.
   A mismatch stops the whole run with both hashes printed, because a runtime
@@ -177,4 +176,4 @@ foreach ($p in $todo) {
   if ((Sha256 $p.Dst) -ne $rec.files.($p.Rel).sha256) { Stop-Here "copy of $($p.Rel) does not hash as the record; the folder may be in use" }
   Say "  copied $($p.Rel)" 'Green'
 }
-Say ("{0} file(s) in place. The next Ship packs them; Package-Thornswood puts them in the installer." -f $todo.Count) 'Green'
+Say ("{0} file(s) in place. The next Ship packs them." -f $todo.Count) 'Green'

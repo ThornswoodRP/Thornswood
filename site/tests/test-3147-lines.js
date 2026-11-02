@@ -29,6 +29,7 @@
 const fs = require('fs'), path = require('path'), os = require('os');
 const net = require('net'), http = require('http');
 const { spawn, spawnSync } = require('child_process');
+const siteFiles = require('../../tests/site-files');
 const ROOT = path.join(__dirname, '..', '..');
 const APP = path.join(ROOT, 'site');
 
@@ -46,7 +47,7 @@ const flat = (s) => String(s).replace(/\*+/g, '').replace(/\s+/g, ' ').trim();
 // ------------------------------------------------------------ the file --
 const LINES = read('site/data/site/lines.md');
 yes('site/data/site/lines.md is there', LINES !== null);
-const src = read('site/server.js') || '';
+const src = siteFiles.source() || '';
 const cut = /\/\/ ==== thornswood lines ====([\s\S]*?)\/\/ ==== end thornswood lines ====/.exec(src);
 yes('server.js has the lines block between its markers', !!cut);
 const lib = cut ? new Function(cut[1] + '\nreturn { parseLines: parseLines, fillLoreLine: fillLoreLine };')()
@@ -203,7 +204,7 @@ function copyTree(from, to) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-3147-'));
   let child = null, out = '', exited = false;
   try {
-    fs.copyFileSync(path.join(APP, 'server.js'), path.join(dir, 'server.js'));
+    siteFiles.copy(dir);
     copyTree(path.join(APP, 'public'), path.join(dir, 'public'));
     copyTree(path.join(APP, 'data', 'site'), path.join(dir, 'data', 'site'));
     fs.copyFileSync(path.join(APP, 'config.example.json'), path.join(dir, 'config.json'));

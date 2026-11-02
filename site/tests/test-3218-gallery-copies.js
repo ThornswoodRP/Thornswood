@@ -38,6 +38,7 @@ const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const siteFiles = require('../../tests/site-files');
 
 const ROOT = path.join(__dirname, '..', '..');
 const APP = path.join(ROOT, 'site');
@@ -54,7 +55,7 @@ const ADMIN_ID = '111111111111111111';
 const MEMBER_ID = '222222222222222222';
 const OTHER_ID = '444444444444444444';
 
-fs.copyFileSync(path.join(APP, 'server.js'), path.join(dir, 'server.js'));
+siteFiles.copy(dir);
 fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
 fs.copyFileSync(path.join(APP, 'public', 'home.html'), path.join(dir, 'public', 'home.html'));
 fs.mkdirSync(path.join(dir, 'data'), { recursive: true });

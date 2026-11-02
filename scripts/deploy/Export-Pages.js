@@ -10,10 +10,10 @@
   network at the Pages project's own address, built by Cloudflare from this
   repository on every merge that touches site/ with no token stored anywhere.
 
-  HOW. It starts this commit's site/server.js on loopback in a scratch copy,
-  the way the site harnesses do, asks it for the front page and every written
-  page (MD_PAGES), and writes each as <page>.html beside a copy of
-  site/public. So the copy is what the site itself sends for this commit,
+  HOW. It starts this commit's site (server.js and lib) on loopback in a
+  scratch copy, the way the site harnesses do, asks it for the front page
+  and every written page (MD_PAGES), and writes each as <page>.html beside
+  a copy of site/public. So the copy is what the site itself sends for this commit,
   never a second renderer that could drift from it.
 
   WHAT IT TAKES FROM THE LIVE SITE. Two things the site's config holds and
@@ -101,9 +101,9 @@ async function main() {
   const outDir = path.resolve(out);
 
   // The pages the site writes from words alone, read from the site itself.
-  const src = fs.readFileSync(path.join(APP, 'server.js'), 'utf8');
+  const src = fs.readFileSync(path.join(APP, 'lib', 'pages.js'), 'utf8');
   const md = /const MD_PAGES = \[([^\]]*)\]/.exec(src);
-  if (!md) fail('site/server.js has no MD_PAGES list');
+  if (!md) fail('site/lib/pages.js has no MD_PAGES list');
   // Known Issues is written from the issue board the bot keeps on the box,
   // which the repository holds no live copy of, so it stays the site's.
   const pages = ['/'].concat((md[1].match(/'\/[a-z-]+'/g) || []).map((s) => s.slice(1, -1)))
@@ -117,6 +117,7 @@ async function main() {
   let child = null;
   try {
     fs.copyFileSync(path.join(APP, 'server.js'), path.join(scratch, 'server.js'));
+    copyDir(path.join(APP, 'lib'), path.join(scratch, 'lib'));
     copyDir(path.join(APP, 'public'), path.join(scratch, 'public'));
     copyDir(path.join(APP, 'data', 'site'), path.join(scratch, 'data', 'site'));
     fs.copyFileSync(path.join(APP, 'data', 'help.md'), path.join(scratch, 'data', 'help.md'));

@@ -58,8 +58,10 @@ if ($hits.Count) {
 
 $ship = Join-Path $Repo 'scripts\release\Ship.ps1'
 $shipText = [IO.File]::ReadAllText($ship)
-Yes 'Ship.ps1 strips BOM with [char]0xFEFF (ASCII-only source)' (
-    $shipText -match "\[char\]0xFEFF" -and $shipText.IndexOf([char]0xFEFF) -lt 0
+# Ship read the feed's launcher with a BOM stripped until #4825, when it
+# stopped reading one; what it still holds is held the same way.
+Yes 'Ship.ps1 holds no literal U+FEFF, so any mark it strips is written [char]0xFEFF (ASCII-only source)' (
+    $shipText.IndexOf([char]0xFEFF) -lt 0
 )
 
 Write-Host ''

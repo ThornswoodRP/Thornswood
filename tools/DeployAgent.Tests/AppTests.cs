@@ -129,7 +129,7 @@ public sealed class AppTests : IDisposable
     static string Read(string root, string rel) => File.ReadAllText(Path.Combine([root, .. rel.Split('/')]));
     static bool Has(string root, string rel) => File.Exists(Path.Combine([root, .. rel.Split('/')]));
 
-    sealed record Rig(Agent Agent, FakeGitHub Gh, FakeAppControl Control, EnvConfig Env, string Root, string Store, string Logs);
+    sealed record Rig(Agent Agent, FakeGitHub Gh, FakeAppControl Control, EnvConfig Env, string Root, string Store, string Logs, Config Cfg);
 
     Rig Make(string kind)
     {
@@ -152,7 +152,7 @@ public sealed class AppTests : IDisposable
         var app = new App(env, http, control) { Tick = TimeSpan.FromMilliseconds(5) };
         var gh2 = new GitHub(FakeGitHub.Api, "O/R", new StaticToken("t"), http);
         var a = new Agent(cfg, gh2, new FakeVerifier(), new(), "1.0.0", "", l => { lock (said) said.Add(l); }) { Host = "box", Apps = { [kind] = app } };
-        return new Rig(a, gh, control, env, root, env.Store, env.LogDir);
+        return new Rig(a, gh, control, env, root, env.Store, env.LogDir, cfg);
     }
 
     static string LastSaid(FakeGitHub gh, long id) => (string)gh.Last(id)!["description"]!;
@@ -175,9 +175,43 @@ public sealed class AppTests : IDisposable
         ["public/downloads/Thornswood-Setup.exe"] = "MZ",
         ["data/site/rules.md"] = "# Rules",
         ["data/site/old.md"] = "# Old page",
+        ["lib/serve.js"] = "// serve v1",
+        ["lib/dropped.js"] = "// a module the site no longer has",
         ["data/board.json"] = "{\"typed\":true}",
         ["data/help.md"] = "typed on the site",
     };
+
+    /// <summary>#5190: each environment has its own loop, so a site change
+    /// goes in while another environment's pass is still running (dev's bot
+    /// pass takes up to half an hour). Here the Discord bot's pass is held at
+    /// its first question to GitHub for as long as the test likes; with one
+    /// loop for every environment, discord comes before site and the site
+    /// Deployment would wait behind it (build-20261102.2, 1 Nov).</summary>
+    [Fact]
+    public async Task ASiteDeploymentGoesInWhileAnotherEnvironmentIsStillBusy()
+    {
+        var r = Make(AppKinds.Site);
+        r.Cfg.Environments[AppKinds.Discord] = Config.DefaultDiscord();
+        Put(r.Root, SiteNow);
+        AppRelease(r.Gh, "build-1", "site", Zip(new() { ["server.js"] = "// site v2", ["public/home.css"] = "body{}" }));
+        var held = new TaskCompletionSource();
+        var busy = new TaskCompletionSource();
+        var discordEnv = r.Cfg.Environments[AppKinds.Discord].GitHubEnvironment;
+        r.Gh.BeforeDeployments = e => { if (e != discordEnv) return Task.CompletedTask; busy.TrySetResult(); return held.Task; };
+        var id = r.Gh.AddDeployment("Site", Commit, "{\"release\":\"build-1\",\"part\":\"site\"}");
+        using var cts = new CancellationTokenSource();
+        var run = r.Agent.Run(cts.Token);
+        await busy.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var until = DateTime.UtcNow.AddSeconds(20);
+        while ((string?)r.Gh.Last(id)?["state"] != "success" && DateTime.UtcNow < until) await Task.Delay(20);
+        var stillHeld = !held.Task.IsCompleted;
+        cts.Cancel();
+        held.TrySetResult();
+        await run;
+        Assert.True(stillHeld);
+        States(r, id, "in_progress,success");
+        Assert.Equal("// site v2", Read(r.Root, "server.js"));
+    }
 
     [Fact]
     public async Task ASiteDeploymentSwapsInWhatChangedAndTakesOutWhatLeft()
@@ -190,6 +224,8 @@ public sealed class AppTests : IDisposable
             ["public/home.css"] = "body{}",
             ["public/hub.js"] = "let x = 1",
             ["data/site/rules.md"] = "# Rules, new",
+            ["lib/serve.js"] = "// serve v2",
+            ["lib/news.js"] = "// news",
         }));
         var id = r.Gh.AddDeployment("Site", Commit, "{\"release\":\"build-1\",\"part\":\"site\"}");
         await r.Agent.Pass(AppKinds.Site, CancellationToken.None);
@@ -197,6 +233,10 @@ public sealed class AppTests : IDisposable
         Assert.Equal("// site v2", Read(r.Root, "server.js"));
         Assert.Equal("let x = 1", Read(r.Root, "public/hub.js"));
         Assert.Equal("# Rules, new", Read(r.Root, "data/site/rules.md"));
+        // The program's modules (#5357) come with it, and one it dropped goes.
+        Assert.Equal("// serve v2", Read(r.Root, "lib/serve.js"));
+        Assert.Equal("// news", Read(r.Root, "lib/news.js"));
+        Assert.False(Has(r.Root, "lib/dropped.js"));
         // What the Release no longer has goes aside; what the site writes and
         // the folders other scripts fill are never touched.
         Assert.False(Has(r.Root, "public/looks.css"));
@@ -207,10 +247,13 @@ public sealed class AppTests : IDisposable
         var prev = Directory.GetDirectories(r.Root, ".prev-*").Single();
         Assert.Equal("// site v1", Read(prev, "server.js"));
         Assert.Equal("gone soon", Read(prev, "public/looks.css"));
+        Assert.Equal("// a module the site no longer has", Read(prev, "lib/dropped.js"));
         Assert.False(Has(prev, "public/home.css"));
         Assert.Empty(Directory.GetDirectories(r.Root, ".agent-stage-*"));
         Assert.Equal((1, 1), (r.Control.Stops, r.Control.Starts));
         Assert.Contains("server.js", r.Control.Parsed);
+        Assert.Contains("serve.js", r.Control.Parsed);
+        Assert.Contains("news.js", r.Control.Parsed);
         Assert.DoesNotContain("hub.js", r.Control.Parsed);
         // The record, beside the site and in the store, and the log where the outside reads it.
         using var rec = JsonDocument.Parse(File.ReadAllText(Path.Combine(r.Root, "thornswood-deploy.json")));
@@ -318,6 +361,9 @@ public sealed class AppTests : IDisposable
 
     [Theory]
     [InlineData("server.js", "// SYNTAX", "server.js does not parse")]
+    [InlineData("lib/serve.js", "// SYNTAX", "lib/serve.js does not parse")]
+    [InlineData("lib/deeper/x.js", "x", "not one of the site's files a Release may carry")]
+    [InlineData("lib/notes.txt", "x", "not one of the site's files a Release may carry")]
     [InlineData("data/site/pages.json", "{nope", "data/site/pages.json does not parse")]
     [InlineData("data/board.json", "{}", "not one of the site's files a Release may carry")]
     [InlineData("public/downloads/x.exe", "MZ", "not one of the site's files a Release may carry")]

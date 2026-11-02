@@ -186,9 +186,9 @@ if ($IncludeGit -and -not (Get-Command git -ErrorAction SilentlyContinue)) {
 
 # --- Build Tools, only if asked (#498) --------------------------------------
 # What builds the two project files: MSBuild with the Roslyn compiler, and the
-# .NET Framework 4.8.1 reference assemblies. Asked of vswhere and the reference
-# folder the same way scripts\release\Find-MSBuild.ps1 asks, so "present" here
-# means what the build means by it.
+# .NET Framework 4.8.1 reference assemblies. Since #4823 the launcher builds
+# with the .NET 10 SDK and the C++ build tools instead, and this part has not
+# been moved to them yet: a box runner that builds the launcher needs that.
 $pf86 = ${env:ProgramFiles(x86)}
 if (-not $pf86) { $pf86 = $env:ProgramFiles }
 $vswhere = Join-Path $pf86 'Microsoft Visual Studio\Installer\vswhere.exe'

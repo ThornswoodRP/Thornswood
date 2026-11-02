@@ -30,11 +30,12 @@
 */
 const fs = require('fs');
 const path = require('path');
+const siteFiles = require('../../tests/site-files');
 const CR = String.fromCharCode(13);
 
 const SITE = process.env.SITE || path.join(__dirname, '..', '..', 'site', 'server.js');
 const GAME = process.env.GAMEMODE || path.join(__dirname, '..', '..', 'game', 'gamemode.js');
-const site = fs.readFileSync(SITE, 'utf8').split(CR).join('');
+const site = siteFiles.source(SITE).split(CR).join('');
 const game = fs.readFileSync(GAME, 'utf8').split(CR).join('');
 
 let pass = 0, fail = 0;

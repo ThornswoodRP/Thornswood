@@ -32,6 +32,7 @@ const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const siteFiles = require('../../tests/site-files');
 
 const SITE_SRC = process.argv[2] || path.join(__dirname, '..', '..', 'site', 'server.js');
 let pass = 0, fail = 0;
@@ -45,7 +46,7 @@ const SECRET = crypto.randomBytes(32).toString('hex');
 const ADMIN_ID = '111';
 const OUTBOUND = path.join(dir, 'outbound.txt');
 
-fs.copyFileSync(SITE_SRC, path.join(dir, 'server.js'));
+siteFiles.copy(dir, SITE_SRC);
 fs.mkdirSync(path.join(dir, 'data'), { recursive: true });
 fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({
   password: crypto.randomBytes(12).toString('hex'),

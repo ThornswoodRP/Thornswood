@@ -16,7 +16,7 @@
   footer) is re-filed and deleted before the flip, and then that every new
   issue and comment is written plain from now on, so it never needs that
   (his answer A on q-3692-new-issue-style). On 26 Oct 393 issues were opened
-  in one day the old way. Developer-Guide.md "How an issue and a comment are
+  in one day the old way. docs/guide/the-board.md "How an issue and a comment are
   written" is the rule; this is its check.
 
   WHAT IT NAMES. In an issue's title or body, or a comment's body:
@@ -148,7 +148,7 @@ if ($Run) {
     foreach ($f in $r.Found) { Write-Host ("::error::{0} is not written plain: {1}" -f $f.Where, ($f.Rules -join ', ')) }
     Write-Host ("read {0} issue(s) and {1} comment(s) made since {2}" -f $r.Issues, $r.Comments, $r.Since)
     if ($r.Found.Count) {
-        Write-Host ("{0} not written plain; Developer-Guide.md, ""How an issue and a comment are written"", says how. Rewrite each, keeping the evidence in the private ops repo." -f $r.Found.Count)
+        Write-Host ("{0} not written plain; docs/guide/the-board.md, ""How an issue and a comment are written"", says how. Rewrite each, keeping the evidence in the private ops repo." -f $r.Found.Count)
         exit 1
     }
     Write-Host 'every new issue and comment is written plain'

@@ -28,10 +28,11 @@ const os = require('os');
 const net = require('net');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const siteFiles = require('../../tests/site-files');
 
 const CR = String.fromCharCode(13);
 const SRC = path.join(REPO_DIR, 'site', 'server.js');
-const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const src = siteFiles.source(SRC).split(CR).join('');
 // The report form and its request handler moved out of home.html in #1474.
 const HOME = fs.readFileSync(path.join(REPO_DIR, 'site', 'public', 'home.js'), 'utf8')
   .split(CR).join('');
@@ -316,7 +317,7 @@ function finish() {
 
 (async () => {
   const PORT = await freePort();
-  fs.copyFileSync(SRC, path.join(dir, 'server.js'));
+  siteFiles.copy(dir, SRC);
   // A config of its own, so the copy never asks Discord anything and its
   // game check knocks on a port nothing is listening on: port 1 (#1816). The
   // system never hands it out for a listen on 0 and no harness listens on a

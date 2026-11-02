@@ -19,13 +19,14 @@
        run for three made up releases on a scratch dev feed: the list starts
        with the first release that names a record, keeps the last pack of each,
        and is newest first
-    2. the launcher's own Updater and VersionDoc compiled from launcher\app
-       with the compiler the build runs (tests\Launcher-Csc.ps1), reading
-       that feed and applying its packs with Updater.Install into scratch
-       installs: one that took every release as it came, one that was offline
-       since the first, and a fresh install seeded like the installer seeds it
-    3. the real Rollback-Feed.ps1 in a child Windows PowerShell against the
-       scratch site (-SiteDir): -List, -DryRun, -Back 1, then -To the first
+    2. the launcher's own Updater and VersionDoc, built from
+       launcher\app\Thornswood.csproj the way the build builds it
+       (tests\Launcher-Csc.ps1, Add-LauncherAssembly), reading that feed and
+       applying its packs with Updater.Install into scratch installs: one
+       that took every release as it came, one that was offline since the
+       first, and a fresh install seeded like the installer seeds it
+    3. the real Rollback-Feed.ps1 in a child pwsh against the scratch site
+       (-SiteDir): -List, -DryRun, -Back 1, then -To the first
        release (a file only the installer ever had, restored from its sha256
        beside the record with no -FilesFrom, #1051; refused when that asset is
        missing), then -To the last one again. After each,
@@ -41,9 +42,14 @@
        the feed is already on, -To with -Back, a note with a word the notes may
        not carry, and a feed that names no releases
 
-  Runs under Windows PowerShell 5.1 and restarts itself there from pwsh, like
-  test-updater.ps1, because the launcher runs on the .NET Framework. Nothing
-  connects anywhere, and everything it writes is in its own temp folder.
+  Runs in pwsh 7 on every machine with the .NET 10 SDK (#4823): the launcher
+  is loaded into this PowerShell, which runs on .NET 10 as it does. The
+  installs say SKIP off Windows: Updater.Install lays a pack out in the game
+  folder by Windows paths (game\Data\...), which only Windows has, so every
+  check of what an install ends with runs on Windows alone; the feed, the
+  list, the launcher's reading of it and every Rollback-Feed run are checked
+  everywhere. Nothing connects anywhere, and everything it writes is in its
+  own temp folder.
 #>
 [CmdletBinding()]
 param()
@@ -51,26 +57,25 @@ param()
 $env:THORNSWOOD_HARNESS = '1'
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
-. (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  this runs the launcher''s code on the .NET Framework the launcher runs on, which only Windows has'; exit 0 }
-if ($PSVersionTable.PSEdition -eq 'Core') {
-    $winps = Get-WindowsPowerShell
-    & $winps -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath
-    exit $LASTEXITCODE
-}
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's SDK and settings (#4823), and $OnWindows
 
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $repo = Split-Path -Parent $Here
-$app = Join-Path $repo 'launcher\app'
 $rollback = Join-Path $repo 'scripts\release\Rollback-Feed.ps1'
-$winps = Get-WindowsPowerShell
+# Rollback-Feed runs in a pwsh of its own, as on the shipping machine.
+$shell = (Get-Process -Id $PID).Path
 
 $script:pass = 0; $script:fail = 0
 function Yes([string]$what, [bool]$cond) {
     if ($cond) { $script:pass++; Write-Host "PASS  $what" }
     else { $script:fail++; Write-Host "FAIL  $what" -ForegroundColor Red }
+}
+# What an install ends with: checked on Windows, where Updater.Install lays
+# a pack out by the paths it carries (game\Data\...); said as SKIP elsewhere.
+function Yes-Install([string]$what, [scriptblock]$cond) {
+    if ($OnWindows) { Yes $what ([bool](& $cond)) }
+    else { Write-Host "SKIP  $what (Updater.Install writes the game folder by Windows paths, which only Windows has)" }
 }
 function Done {
     Write-Host ''
@@ -239,24 +244,17 @@ $many = [pscustomobject]@{ releases = @(1..40 | ForEach-Object { New-FeedRelease
 $lst = @(Add-FeedRelease $many (New-FeedBaselinePointer 'top' ('b' * 64) (Url ('b' * 64)) 1) 'top' 'r1' '')
 Yes "the list keeps the newest $FeedReleasesKeep" ($lst.Count -eq $FeedReleasesKeep -and $lst[0].id -eq 'top' -and $lst[1].id -eq 'r1')
 
-# ---- the launcher, compiled ------------------------------------------------------
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
-$refs = @(); $missing = @()
-foreach ($n in @($LauncherNeeded)) { $p = Find-LauncherRef $n; if ($p) { $refs += $p } else { $missing += $n } }
-foreach ($n in @($LauncherLib)) { $p = $n; if (Test-Path -LiteralPath $p) { $refs += $p } else { $missing += $n } }
-Yes ('every reference Thornswood.csproj names is here' + $(if ($missing.Count) { ', missing ' + ($missing -join ', ') } else { '' })) ($missing.Count -eq 0 -and $refs.Count -gt 5)
-if ($missing.Count) { Done }
-$dll = Join-Path $T 'Thornswood.dll'
-$cscArgs = @('/noconfig', '/nologo', '/target:library', '/platform:anycpu', "/out:$dll")
-foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-foreach ($f in @(Get-ChildItem (Join-Path $app '*.cs') -File)) { $cscArgs += $f.FullName }
-$old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-$said = & $LauncherCsc @cscArgs 2>&1
-$ErrorActionPreference = $old
-Yes 'the launcher compiles with the compiler the build runs' ((Test-Path -LiteralPath $dll) -and $LASTEXITCODE -eq 0)
-if (-not (Test-Path -LiteralPath $dll)) { foreach ($l in @($said | Where-Object { "$_" -match 'error' } | Select-Object -First 10)) { Write-Host "      $l" }; Done }
-$asm = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($dll))
+# ---- the launcher, built ----------------------------------------------------------
+Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
+$asm = $null
+try { $asm = Add-LauncherAssembly }
+catch {
+    Yes 'the launcher project builds' $false
+    foreach ($l in @(($_.Exception.Message -split "`r?`n") | Where-Object { $_ -match 'error' } | Select-Object -First 10)) { Write-Host "      $l" }
+    Done
+}
+Yes 'the launcher project builds' ($null -ne $asm)
 $U = $asm.GetType('Thornswood.Updater'); $P = $asm.GetType('Thornswood.Paths'); $VD = $asm.GetType('Thornswood.VersionDoc')
 $flags = [Reflection.BindingFlags]'Static, Public, NonPublic'
 $mPending = $U.GetMethod('Pending', $flags); $mInstall = $U.GetMethod('Install', $flags); $mNewer = $U.GetMethod('IsNewer', $flags)
@@ -264,6 +262,10 @@ $mParse = $VD.GetMethod('Parse', $flags)
 Yes 'Updater.Pending, Updater.Install, Updater.IsNewer and VersionDoc.Parse are in the build' (
     $null -ne $mPending -and $null -ne $mInstall -and $null -ne $mNewer -and $null -ne $mParse)
 if ($null -eq $mInstall) { Done }
+# Pending asks the config which channel this is, because on dev the game
+# files come with the launcher's own package (#4825); with no package
+# installed here it is the feed's packs and record, as on main.
+$cfg = [Activator]::CreateInstance($asm.GetType('Thornswood.Config'))
 $log = [Action[string]] { param($m) }
 
 # A scratch install: the game folder, a profile and an applied.txt.
@@ -279,8 +281,8 @@ function New-Install([string]$name, [hashtable]$files, [string[]]$applied) {
     return $root
 }
 # Paths pointed at a scratch install, the way Paths.Init lays one out with a
-# Game folder of its own (Init itself asks where the running exe is, and this
-# assembly was loaded from bytes, so it has no location).
+# Game folder of its own (Init itself asks where the running exe is, and that
+# is this PowerShell, not an install).
 function Use-Install([string]$root) {
     $prof = Join-Path $root 'Profile'
     $set = @{ Root = $root; Game = (Join-Path $root 'Game'); LauncherDir = (Join-Path $root 'Launcher'); ProfileDir = $prof
@@ -298,14 +300,14 @@ function Use-Install([string]$root) {
 function Update-Install([string]$root, [int]$only = -1) {
     Use-Install $root
     $v = $mParse.Invoke($null, @(, [IO.File]::ReadAllBytes((Feed-File))))
-    $pending = @($mPending.Invoke($null, @($v)))
+    $pending = @($mPending.Invoke($null, @($cfg, $v)))
     # A launcher from #1050 on offers the record the feed names as one update.
     # These records do not say their files are on the site (':record:files'),
     # so it writes that down and takes the packs (Sync.cs), which is what this
     # does. tests\test-record-sync.ps1 is the sync itself.
     if ($pending.Count -eq 1 -and $null -ne $pending[0].Record) {
         [IO.File]::WriteAllText((Join-Path $root 'Profile\release.txt'), ('packs ' + [string]$pending[0].Record.sha256))
-        $pending = @($mPending.Invoke($null, @($v)))
+        $pending = @($mPending.Invoke($null, @($cfg, $v)))
     }
     $n = 0
     foreach ($p in $pending) {
@@ -345,9 +347,9 @@ function Plugins-Of([string]$root) { return [IO.File]::ReadAllText((Join-Path $r
 
 # One that took every release as it came, and one offline since the first.
 $A = New-Install 'every-release' $installer @()
-Yes 'a launcher applies the three releases as they come' ((Update-Install $A) -eq 3 -and (Test-Lands $A $records[$R3]))
+Yes-Install 'a launcher applies the three releases as they come' { (Update-Install $A) -eq 3 -and (Test-Lands $A $records[$R3]) }
 $B = New-Install 'offline' $installer @()
-Yes '  and another took only the first before going quiet' ((Update-Install $B 1) -eq 1 -and (Test-Lands $B $records[$R1]))
+Yes-Install '  and another took only the first before going quiet' { (Update-Install $B 1) -eq 1 -and (Test-Lands $B $records[$R1]) }
 # The feed with the list in it still reads in the launcher, and offers no launcher.
 $vNow = $mParse.Invoke($null, @(, [IO.File]::ReadAllBytes((Feed-File))))
 Yes 'the launcher reads a feed carrying "releases" and "baseline"' ($null -ne $vNow -and @($vNow.packs).Count -eq 3)
@@ -358,7 +360,7 @@ function Rollback([string[]]$more) {
     $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $rollback, '-Channel', 'dev', '-NoPause', '-SiteDir', $site,
            '-ReleaseDir', $rel, '-WorkDir', $work) + $more
     $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $out = & $winps @a 2>&1 | ForEach-Object { "$_" }
+    $out = & $shell @a 2>&1 | ForEach-Object { "$_" }
     $rc = $LASTEXITCODE
     $ErrorActionPreference = $old
     return [pscustomobject]@{ Code = $rc; Out = ($out -join "`n") }
@@ -410,13 +412,13 @@ Yes '  the store''s releases.txt has a line for the rollback, not the Ship it le
     @($relTxt | Where-Object { ($_ -split "`t")[0] -eq $RB }).Count -eq 1 -and
     @($relTxt | Where-Object { ($_ -split "`t")[0] -eq $R3 }).Count -eq 0)
 $wantB = $records[$R2]
-Yes 'the launcher that had everything lands on exactly the second release''s files' ((Update-Install $A) -eq 1 -and (Test-Lands $A $wantB))
-Yes '  its plugin list is the one the second release shipped' ((Plugins-Of $A) -eq "*thornswood-a.esp`r`n*thornswood-new2.esp`r`n")
-Yes '  and the client runtime is the one its launcher expects' ((Client-Of $A) -eq (Entry 'client 2'))
-Yes 'the one offline since the first takes the rest and the rollback, and lands on the same files' ((Update-Install $B) -eq 3 -and (Test-Lands $B $wantB))
+Yes-Install 'the launcher that had everything lands on exactly the second release''s files' { (Update-Install $A) -eq 1 -and (Test-Lands $A $wantB) }
+Yes-Install '  its plugin list is the one the second release shipped' { (Plugins-Of $A) -eq "*thornswood-a.esp`r`n*thornswood-new2.esp`r`n" }
+Yes-Install '  and the client runtime is the one its launcher expects' { (Client-Of $A) -eq (Entry 'client 2') }
+Yes-Install 'the one offline since the first takes the rest and the rollback, and lands on the same files' { (Update-Install $B) -eq 3 -and (Test-Lands $B $wantB) }
 $C = New-Install 'fresh' @{} @($R1, $R2, $R3)
 foreach ($k in $state.Keys) { $f = Join-Path $C "Game\$k"; New-Item -ItemType Directory -Force -Path (Split-Path -Parent $f) | Out-Null; [IO.File]::WriteAllText($f, [string]$state[$k], $ascii) }
-Yes 'a fresh install built at the third release takes only the rollback and lands there too' ((Update-Install $C) -eq 1 -and (Test-Lands $C $wantB))
+Yes-Install 'a fresh install built at the third release takes only the rollback and lands there too' { (Update-Install $C) -eq 1 -and (Test-Lands $C $wantB) }
 $vB = $mParse.Invoke($null, @(, [IO.File]::ReadAllBytes((Feed-File))))
 Yes 'no launcher is offered: the version did not move' (-not [bool]$mNewer.Invoke($null, @([string]$vB.launcherVersion, '1.1.102.5')))
 
@@ -444,10 +446,10 @@ $r = Rollback @('-To', $R1, '-Id', $RA); Show $r
 $d = Read-Feed
 Yes 'going back to a file only the installer ever had works from its sha256 on the site, with no -FilesFrom' (
     $r.Code -eq 0 -and [string]$d.baseline.id -eq $RA -and [string](Read-Releases)[0].to -eq $R1 -and (Test-Kept $d))
-Yes '  the launcher lands on the first release''s files, the installer''s back and the later ones gone' ((Update-Install $A) -eq 1 -and (Test-Lands $A $records[$R1]))
-Yes '  with the first release''s plugin list' ((Plugins-Of $A) -eq "*thornswood-a.esp`r`n*thornswood-new1.esp`r`n")
-Yes '  and the client runtime still the launcher''s, not the first release''s' ((Client-Of $A) -eq (Entry 'client 2'))
-Yes '  the offline one lands there as well' ((Update-Install $B) -eq 1 -and (Test-Lands $B $records[$R1]))
+Yes-Install '  the launcher lands on the first release''s files, the installer''s back and the later ones gone' { (Update-Install $A) -eq 1 -and (Test-Lands $A $records[$R1]) }
+Yes-Install '  with the first release''s plugin list' { (Plugins-Of $A) -eq "*thornswood-a.esp`r`n*thornswood-new1.esp`r`n" }
+Yes-Install '  and the client runtime still the launcher''s, not the first release''s' { (Client-Of $A) -eq (Entry 'client 2') }
+Yes-Install '  the offline one lands there as well' { (Update-Install $B) -eq 1 -and (Test-Lands $B $records[$R1]) }
 
 # And forward again, to the third.
 $RF = '20260904-1300-dev'
@@ -458,9 +460,9 @@ Yes '  and "release" names that rollback, with nothing disagreeing' (
     [string]$d.release.id -eq $RF -and [string]$d.release.launcherVersion -eq '1.1.102.5' -and
     (@($d.release.packs | ForEach-Object { [string]$_ }) -join ',') -eq $RF -and [string]$d.release.baseline -eq $RF -and
     [string]$d.release.commit -eq '' -and [string]$d.release.tag -eq '' -and @(Get-ReleaseDisagreements $d (Read-Releases)).Count -eq 0)
-Yes '  every launcher lands on the third release''s files' (
+Yes-Install '  every launcher lands on the third release''s files' {
     (Update-Install $A) -eq 1 -and (Test-Lands $A $records[$R3]) -and (Update-Install $B) -eq 1 -and (Test-Lands $B $records[$R3]) -and
-    (Update-Install $C) -eq 2 -and (Test-Lands $C $records[$R3]))
+    (Update-Install $C) -eq 2 -and (Test-Lands $C $records[$R3]) }
 # Since #1050 the record a rollback names also lists what it takes out
 # (':gone:') and the plugin list as its pack carries it (':golden:'), for
 # launchers that sync to it, so it is the third release's

@@ -13,8 +13,28 @@
   dev root was still the folder made on 3 Oct, at rules 14, from another
   install's game folder, with the old 3BBB.esp and the 12 Oct client in it.
   Copying OwnGame's rules into PowerShell would make two implementations that
-  drift. So this compiles every file of launcher\app, OwnGame and everything
-  it calls, with ShipRoot.cs as the entry point instead of the window.
+  drift. So this compiles OwnGame and every launcher file it calls, with
+  ShipRoot.cs as the entry point instead of the window.
+
+  WHICH FILES, AND WHY NOT THE WHOLE LAUNCHER (#4823). The launcher is an
+  Avalonia program on .NET 10, and a console tool has no use for its window.
+  So this names the files OwnGame's closure needs, every one of the launcher's
+  that OwnGame, Updater's sync and the config reach, and none that uses
+  Avalonia: measured on 1 Nov 2026 by building ShipRoot.cs and
+  OwnGameShipRoot.cs and adding the file that defines each name the compiler
+  could not find until it built, which came to the 46 below. It cannot
+  reference launcher\app\Thornswood.csproj instead: OwnGameShipRoot.cs is a
+  part of OwnGame (static partial class), and a partial class cannot span two
+  assemblies; it reads OwnGame's private record and numbers, and a copy of
+  those would drift. The launcher's PackageReferences come in only where that
+  closure uses them: ProtectedData (Secrets.cs) and Velopack (the sync,
+  Velo*.cs and SyncPackage.cs), at the launcher's versions. When a launcher
+  file in the list starts to call one that is not, this stops building, and
+  the build check says so: add that file here, unless it is a window's, in
+  which case the call is the thing to fix (Icons.Dev, not Art.Dev, is that
+  fix once already). tests\test-2019-ship-roots.ps1 holds the list to no
+  Avalonia file, and the framework, C# version and package versions to the
+  launcher's.
 
   WHY IT IS NOT UNDER launcher\. Ship fingerprints everything under launcher\
   to decide whether a new launcher must be built, signed and published
@@ -26,76 +46,99 @@
   Built by scripts\release\Update-ShipRoot.ps1 at the start of every Ship, so
   it is always the checkout's own OwnGame, and by the Launcher builds check.
   Never signed and never packed: it runs on the machine that ships and
-  nowhere else.
+  nowhere else, on the .NET 10 runtime the SDK that builds it brings.
 
-  Build it (from the repository folder, in PowerShell 7):
-    $msb = .\scripts\release\Find-MSBuild.ps1
-    & $msb scripts\release\ShipRoot\ShipRoot.csproj -nologo -p:OutDir=<folder>\
+  Build it (from the repository folder, in PowerShell 7, with the .NET 10 SDK):
+    dotnet build scripts\release\ShipRoot\ShipRoot.csproj -c Release -o <folder>
 -->
-<Project ToolsVersion="Current" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project>
   <PropertyGroup>
     <ThornswoodRepo>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\..\'))</ThornswoodRepo>
     <ThornswoodApp>$(ThornswoodRepo)launcher\app\</ThornswoodApp>
+    <!-- Before the SDK's props, which read it: nothing is written beside
+         the sources. -->
     <BaseIntermediateOutputPath>$(ThornswoodRepo)out\obj\shiproot\</BaseIntermediateOutputPath>
   </PropertyGroup>
-  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+
   <PropertyGroup>
-    <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
-    <Platform Condition="'$(Platform)' == ''">AnyCPU</Platform>
     <OutputType>Exe</OutputType>
+    <!-- The launcher's framework and C# version
+         (launcher\app\Thornswood.csproj), so its sources compile here
+         exactly as they do there. Not native and not self-contained: the
+         machine that builds this runs it. -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>Thornswood-ShipRoot</AssemblyName>
     <RootNamespace>Thornswood</RootNamespace>
     <StartupObject>Thornswood.ShipRootTool</StartupObject>
-    <!-- The launcher's own framework and C# version, so its sources compile
-         here exactly as they do there (launcher\app\Thornswood.csproj). -->
-    <TargetFrameworkVersion>v4.8.1</TargetFrameworkVersion>
-    <LangVersion>13.0</LangVersion>
-    <PlatformTarget>AnyCPU</PlatformTarget>
-    <Prefer32Bit>false</Prefer32Bit>
-    <Optimize>true</Optimize>
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>pdbonly</DebugType>
-    <NoConfig>true</NoConfig>
-    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
-    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+    <EnableDefaultItems>false</EnableDefaultItems>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
-    <OutDir Condition="'$(OutDir)' == ''">$(ThornswoodRepo)out\shiproot\</OutDir>
-    <OutputPath>$(OutDir)</OutputPath>
+    <!-- CS0649: fields the window sets (Icons.Dev, Ask.Owner and the like)
+         are never set here, because the window is not here. -->
+    <NoWarn>$(NoWarn);CS0649</NoWarn>
+    <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
   </PropertyGroup>
 
   <ItemGroup>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Drawing" />
-    <Reference Include="System.Runtime.Serialization" />
-    <Reference Include="System.Xml" />
-    <Reference Include="System.Security" />
-    <Reference Include="System.IO.Compression" />
-    <Reference Include="System.IO.Compression.FileSystem" />
-    <Reference Include="PresentationFramework" />
-    <Reference Include="PresentationCore" />
-    <Reference Include="WindowsBase" />
-    <Reference Include="System.Xaml" />
-    <Reference Include="System.Windows.Forms" />
-    <!-- Compiled against, never loaded: nothing this program runs reaches the
-         window, its browser or its menu music. -->
-    <Reference Include="Microsoft.Web.WebView2.Core">
-      <HintPath>$(ThornswoodRepo)launcher\lib\webview2\Microsoft.Web.WebView2.Core.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="Microsoft.Web.WebView2.Wpf">
-      <HintPath>$(ThornswoodRepo)launcher\lib\webview2\Microsoft.Web.WebView2.Wpf.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="NLayer">
-      <HintPath>$(ThornswoodRepo)launcher\lib\nlayer\NLayer.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="$(ThornswoodApp)*.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)*.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ShipRoot.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OwnGameShipRoot.cs" />
+    <!-- OwnGame, every part of it. -->
+    <Compile Include="$(ThornswoodApp)OwnGame.cs" />
+    <Compile Include="$(ThornswoodApp)OwnGameClean.cs" />
+    <Compile Include="$(ThornswoodApp)OwnGameKinds.cs" />
+    <Compile Include="$(ThornswoodApp)OwnGameLost.cs" />
+    <Compile Include="$(ThornswoodApp)OwnGameShare.cs" />
+    <!-- What it calls, and what they call. -->
+    <Compile Include="$(ThornswoodApp)Ask.cs" />
+    <Compile Include="$(ThornswoodApp)Checks.cs" />
+    <Compile Include="$(ThornswoodApp)ClientRuntime.cs" />
+    <Compile Include="$(ThornswoodApp)Config.cs" />
+    <Compile Include="$(ThornswoodApp)DevBuild.cs" />
+    <Compile Include="$(ThornswoodApp)Downgrade.cs" />
+    <Compile Include="$(ThornswoodApp)FeedManifest.cs" />
+    <Compile Include="$(ThornswoodApp)FeedSettings.cs" />
+    <Compile Include="$(ThornswoodApp)FromGameArchive.cs" />
+    <Compile Include="$(ThornswoodApp)Http.cs" />
+    <Compile Include="$(ThornswoodApp)Icons.cs" />
+    <Compile Include="$(ThornswoodApp)InstallPlace.cs" />
+    <Compile Include="$(ThornswoodApp)InstallShortcut.cs" />
+    <Compile Include="$(ThornswoodApp)Junction.cs" />
+    <Compile Include="$(ThornswoodApp)Keep.cs" />
+    <Compile Include="$(ThornswoodApp)LastPlugin.cs" />
+    <Compile Include="$(ThornswoodApp)LoadOrder.cs" />
+    <Compile Include="$(ThornswoodApp)LooseString.cs" />
+    <Compile Include="$(ThornswoodApp)MainVersion.cs" />
+    <Compile Include="$(ThornswoodApp)PathFence.cs" />
+    <Compile Include="$(ThornswoodApp)Paths.cs" />
+    <Compile Include="$(ThornswoodApp)Progress.cs" />
+    <Compile Include="$(ThornswoodApp)ReleaseManifest.cs" />
+    <Compile Include="$(ThornswoodApp)Secrets.cs" />
+    <Compile Include="$(ThornswoodApp)Signature.cs" />
+    <Compile Include="$(ThornswoodApp)SkyMp.cs" />
+    <Compile Include="$(ThornswoodApp)Steam.cs" />
+    <Compile Include="$(ThornswoodApp)Swallow.cs" />
+    <Compile Include="$(ThornswoodApp)Swap.cs" />
+    <Compile Include="$(ThornswoodApp)Sync.cs" />
+    <Compile Include="$(ThornswoodApp)SyncPackage.cs" />
+    <Compile Include="$(ThornswoodApp)UpdateStages.cs" />
+    <Compile Include="$(ThornswoodApp)Updater.cs" />
+    <Compile Include="$(ThornswoodApp)Velo.cs" />
+    <Compile Include="$(ThornswoodApp)VeloPackage.cs" />
+    <Compile Include="$(ThornswoodApp)VeloRecord.cs" />
+    <Compile Include="$(ThornswoodApp)VeloUpdate.cs" />
+    <Compile Include="$(ThornswoodApp)Verify.cs" />
+    <Compile Include="$(ThornswoodApp)VortexProfileState.cs" />
+    <Compile Include="$(ThornswoodApp)Watched.cs" />
   </ItemGroup>
 
   <!-- The records OwnGame and the client runtime read out of the exe, under
@@ -106,10 +149,10 @@
     <EmbeddedResource Include="$(ThornswoodRepo)records\ui-gone.json"><LogicalName>ui-gone.json</LogicalName></EmbeddedResource>
   </ItemGroup>
 
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
 
   <Target Name="ThornswoodShipRootInputs" BeforeTargets="BeforeBuild">
     <Error Condition="!Exists('%(EmbeddedResource.FullPath)')" Text="%(EmbeddedResource.Identity) is not in the repository folder where it should be; nothing was built." />
-    <Error Condition="!Exists('$(ThornswoodApp)OwnGame.cs')" Text="launcher\app\OwnGame.cs is not where it should be; nothing was built." />
+    <Error Condition="!Exists('%(Compile.FullPath)')" Text="%(Compile.Identity) is not where it should be; nothing was built." />
   </Target>
 </Project>

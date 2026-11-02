@@ -22,6 +22,9 @@
       mod-audit.json                  local\
       backup-key.txt                  local\
 
+  The setup stub went with the old installer in #4824, so nothing makes or
+  reads setup-stub.exe or its .pdb any more; out\ stays the build output.
+
   A doc that still says .\tools\Ship.ps1 sends somebody to a file that is not
   there, and a script that still reads tools\signing.json would decide a
   signing machine cannot sign, which is what this catches.
@@ -145,17 +148,15 @@ Yes ("no script, harness or workflow builds a path into $T ($codeRead files read
 
 # ---- 4. every file a machine kept there has its own home ---------------------
 # Its new path is ignored by git, the script that reads it names that path,
-# and Developer-Guide.md lists it.
-$dev = [IO.File]::ReadAllText((Join-Path $Repo 'Developer-Guide.md'))
+# and the guide lists it (its index or a page: tests/Guide-Text.ps1).
+. (Join-Path $PSScriptRoot 'Guide-Text.ps1')
+$dev = Get-GuideText
 function Read-Repo([string]$rel) { [IO.File]::ReadAllText((Join-Path $Repo $rel)) }
 $homes = @(
     @{ File = 'signing.json'; At = 'records/signing/signing.json'; Script = 'scripts\release\Sign-Artifact.ps1'; Says = "'..\..\records\signing\signing.json'" },
     @{ File = 'signing.json'; At = 'records/signing/signing.json'; Script = 'scripts\release\Ship.ps1'; Says = "'..\..\records\signing\signing.json'" },
     @{ File = 'signing.json'; At = 'records/signing/signing.json'; Script = 'scripts\release\Setup-ShipMachine.ps1'; Says = "Join-Path `$RepoDir 'records\signing\signing.json'" },
     @{ File = 'signing.json'; At = 'records/signing/signing.json'; Script = 'scripts\release\Check-ShipReady.ps1'; Says = "Join-Path `$RepoDir 'records\signing\signing.json'" },
-    @{ File = 'setup-stub.exe'; At = 'out/setup-stub.exe'; Script = 'scripts\release\Build-Launcher.ps1'; Says = "`$stub = Join-Path (Join-Path `$Here '..\..\out') 'setup-stub.exe'" },
-    @{ File = 'setup-stub.exe'; At = 'out/setup-stub.exe'; Script = 'scripts\release\Package-Thornswood.ps1'; Says = "Join-Path (& (Join-Path `$Here 'Where.ps1') Out) 'setup-stub.exe'" },
-    @{ File = 'setup-stub.pdb'; At = 'out/setup-stub.pdb'; Script = 'scripts\release\Ship.ps1'; Says = "Join-Path (& (Join-Path `$Here 'Where.ps1') Out) 'setup-stub.pdb'" },
     @{ File = 'thornswood-front.zip'; At = 'local/thornswood-front.zip'; Script = 'scripts\release\Go.ps1'; Says = "'..\..\local\thornswood-front.zip'" },
     @{ File = 'mod-audit.json'; At = 'local/mod-audit.json'; Script = 'scripts\mods\Audit-Mods.ps1'; Says = "Join-Path `$outDir 'mod-audit.json'" },
     @{ File = 'backup-key.txt'; At = 'local/backup-key.txt'; Script = 'scripts\vps\Restore-Backup.ps1'; Says = "'..\..\local\backup-key.txt'" }
@@ -166,9 +167,9 @@ foreach ($h in $homes) {
     $text = Read-Repo $h.Script
     Yes ('  ' + $h.File + ' is at ' + $h.At + ', ignored by git, and ' + (Split-Path -Leaf $h.Script) + ' reads it there') (
         $ignored -and $text.Contains($h.Says))
-    Yes ('    and Developer-Guide.md lists ' + $h.File) ($dev.Contains('`' + $h.File + '`'))
+    Yes ('    and the guide lists ' + $h.File) ($dev.Contains('`' + $h.File + '`'))
 }
-# Where.ps1 is what Build-Launcher and Package ask for out\, so it has to say out.
+# Where.ps1 is what Setup-ShipMachine asks for out\, so it has to say out.
 $out = [string](& (Join-Path $Repo 'scripts\release\Where.ps1') Out)
 Yes ('Where.ps1 Out is the out folder in the repository (' + $out + ')') (
     [IO.Path]::GetFullPath($out) -eq [IO.Path]::GetFullPath((Join-Path $Repo 'out')))

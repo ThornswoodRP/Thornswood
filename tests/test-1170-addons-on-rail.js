@@ -11,10 +11,10 @@
 // Diagnostics (#1578). Publish-Pack still told whoever ships a pack that it
 // shows "on the Add-ons tab of the Mods page".
 //
-// This reads launcher\app\*.cs, launcher\ui.xaml, Publish-Pack.ps1 and the
+// This reads launcher\app\*.cs, launcher\app\MainWindow.axaml, Publish-Pack.ps1 and the
 // pages that tell people where the collection link is, and holds:
 //   - the hosts of the add-ons (DiagAddons) and of the collection card
-//     (DiagCollection), followed from ui.xaml to their page's Grid, the pages
+//     (DiagCollection), followed from the window to their page's Grid, the pages
 //     array and the PageXxx constant, are on a page the rail does not hide;
 //   - opening that page runs the builder that fills both hosts, and the
 //     builder fills them: the collection card, then DrawAddons;
@@ -44,7 +44,7 @@ const shell = read('launcher', 'app', 'Shell.cs');
 const pages = read('launcher', 'app', 'Pages.cs');
 const packs = read('launcher', 'app', 'ShellPacks.cs');
 const update = read('launcher', 'app', 'ShellUpdate.cs');
-const xaml = read('launcher', 'ui.xaml');
+const xaml = read('launcher', 'app', 'MainWindow.axaml');
 
 // The body of a C# method, from its declaration to its closing brace.
 function method(src, decl) {
@@ -67,9 +67,9 @@ yes('the PageXxx constants are readable', Object.keys(consts).length >= 5);
 const byIndex = {};
 Object.keys(consts).forEach(function (k) { byIndex[consts[k]] = k; });
 
-const arr = /pages = new UIElement\[\] \{([\s\S]*?)\};/.exec(shell);
+const arr = /pages = new Control\[\] \{([\s\S]*?)\};/.exec(shell);
 const grids = [];
-if (arr) arr[1].replace(/F<Grid>\("(\w+)"\)/g, function (m, n) { grids.push(n); return m; });
+if (arr) arr[1].replace(/win\.(\w+)/g, function (m, n) { grids.push(n); return m; });
 yes('the pages array names a Grid for every constant (' + grids.length + ')', grids.length === Object.keys(consts).length);
 
 const titles = /PageTitles\s*=\s*\{([\s\S]*?)\};/.exec(shell);
@@ -81,9 +81,9 @@ if (titles) titles[1].replace(/"([^"]*)"/g, function (m, t) { titleList.push(t);
 // while the rail names a button for it and nothing collapses one again.
 const navArr = /navButtons = new Button\[\] \{([\s\S]*?)\};/.exec(shell);
 const navs = [];
-if (navArr) navArr[1].replace(/F<Button>\("(\w+)"\)/g, function (m, n) { navs.push(n); return m; });
+if (navArr) navArr[1].replace(/win\.(\w+)/g, function (m, n) { navs.push(n); return m; });
 yes('the rail names a button for every page (' + navs.length + ')', navs.length > 0 && navs.length === grids.length);
-yes('nothing collapses a rail button', !/navButtons\[[^\]]+\]\.Visibility\s*=\s*Visibility\.Collapsed/.test(shell) && !/hiddenNav/.test(shell));
+yes('nothing collapses a rail button', !/navButtons\[[^\]]+\]\.IsVisible\s*=\s*false/.test(shell) && !/hiddenNav/.test(shell));
 const hidden = [];
 
 // The page Grid a named control sits in: the nearest Grid named in the pages
@@ -101,7 +101,7 @@ function pageOf(name) {
 }
 
 function onRail(host, what) {
-  yes('ui.xaml has ' + host + ' once', (xaml.match(new RegExp('x:Name="' + host + '"', 'g')) || []).length === 1);
+  yes('the window has ' + host + ' once', (xaml.match(new RegExp('x:Name="' + host + '"', 'g')) || []).length === 1);
   const grid = pageOf(host);
   const index = grids.indexOf(grid);
   const constant = byIndex[index] || '';
@@ -127,7 +127,7 @@ const draw = diag.indexOf('DrawAddons();');
 yes(builder + ' adds the collection card', card > 0);
 yes(builder + ' draws the add-ons after the collection card', draw > card && card > 0);
 
-yes('Pages.cs binds DiagAddons to diagAddons', /diagAddons = F<StackPanel>\("DiagAddons"\);/.test(pages));
+yes('Pages.cs binds DiagAddons to diagAddons', /diagAddons = win\.DiagAddons;/.test(pages));
 yes('DiagAddons sits after DiagCollection on the page',
     xaml.indexOf('x:Name="DiagAddons"') > xaml.indexOf('x:Name="DiagCollection"'));
 
@@ -167,7 +167,7 @@ yes('Publish-Pack no longer sends anybody to the Mods page', !/Mods page/.test(p
 yes('the scripts index says the same', read('scripts', 'README.md').indexOf('under Add-ons on its ' + pageTitle + ' page') > 0);
 yes('the feed doc names DrawAddons for the optional list', /Add-ons on the Diagnostics page \(`ShellPacks\.cs DrawAddons`/.test(read('docs', 'FEED.md')));
 
-[['site', 'data', 'site', 'join.md'], ['site', 'data', 'help.md'], ['installer', 'READ ME FIRST.txt']].forEach(function (f) {
+[['site', 'data', 'site', 'join.md'], ['site', 'data', 'help.md']].forEach(function (f) {
   const text = read.apply(null, f).replace(/\s+/g, ' ');
   const name = f.join('/');
   yes(name + ' puts the collection link on the launcher\'s ' + pageTitle + ' page',

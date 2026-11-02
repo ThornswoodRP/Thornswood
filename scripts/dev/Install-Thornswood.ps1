@@ -31,7 +31,7 @@ param(
     [string[]]$Skip = @(),
     [switch]$SkipBody,
     # Publishing to the DEV channel is the default, not an extra step to remember.
-    # Developer-Guide.md: everything goes to the dev build first. A bare Ship.ps1 is
+    # docs/guide/release-to-dev.md: everything goes to the dev build first. A bare Ship.ps1 is
     # the live release, so this always passes -Channel dev (never main).
     # -NoShip skips publishing.
     [switch]$NoShip,
@@ -289,7 +289,7 @@ if (-not $NoShip -and ($done -contains 'Launcher')) {
         $shipCmd = Get-Command $ship
         if ($shipCmd.Parameters.ContainsKey('Root'))    { $shipArgs['Root'] = $Root }
         if ($shipCmd.Parameters.ContainsKey('NoPause')) { $shipArgs['NoPause'] = $true }
-        # Never the live channel. Ship.ps1 defaults to main; Developer-Guide.md
+        # Never the live channel. Ship.ps1 defaults to main; docs/guide/release-to-dev.md
         # sends every ordinary change to the dev build first (#1171).
         if ($shipCmd.Parameters.ContainsKey('Channel')) { $shipArgs['Channel'] = 'dev' }
 

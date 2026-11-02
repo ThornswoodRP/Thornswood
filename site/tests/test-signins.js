@@ -7,9 +7,10 @@
 const REPO_DIR = require('path').join(__dirname, '..', '..'); // this harness is in site\tests\, the repository is two folders up
 const fs = require('fs');
 const path = require('path');
+const siteFiles = require('../../tests/site-files');
 
 const SRC = path.join(REPO_DIR, 'site', 'server.js');
-const text = fs.readFileSync(SRC, 'utf8');
+const text = siteFiles.source(SRC);
 const a = text.indexOf('// ==== thornswood signin ageing ====');
 const b = text.indexOf('// ==== end thornswood signin ageing ====');
 if (a < 0 || b < 0) {

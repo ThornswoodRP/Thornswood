@@ -17,6 +17,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const siteFiles = require('../../tests/site-files');
 const { listWriters } = require('../../tests/fixtures/known-page');
 const root = path.join(__dirname, '..', '..');
 let fails = 0;
@@ -24,7 +25,7 @@ function yes(name, ok) { console.log((ok ? 'ok   ' : 'FAIL ') + name); if (!ok) 
 const read = p => fs.readFileSync(path.join(root, p), 'utf8');
 
 // 1. The bot's lists, planted, as server.js turns them into the roadmap.
-const writers = listWriters(read('site/server.js'));
+const writers = listWriters(siteFiles.source());
 yes('server.js has its list writers between their markers', !!writers);
 const rm = writers ? writers.roadmapBoard({
   at: '2026-10-26T08:05:00Z',
@@ -72,7 +73,7 @@ yes('a roadmap the bot has not written is said, not drawn empty',
     /could not be read from the issue board/.test(unread) && !/Nothing on it yet/.test(unread));
 
 // 3. server.js's server-drawn /roadmap skips no Done section
-const srv = read('site/server.js');
+const srv = siteFiles.source();
 const s0 = srv.indexOf("} else if (route === '/roadmap') {");
 const s1 = srv.indexOf("} else if (route === '/gallery') {", s0);
 const block = s0 > 0 && s1 > s0 ? srv.slice(s0, s1) : '';

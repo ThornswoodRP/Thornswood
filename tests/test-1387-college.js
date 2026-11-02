@@ -38,7 +38,7 @@ const vm = require('vm');
 const REPO = path.join(__dirname, '..');
 const SRC = process.env.GM || path.join(REPO, 'game', 'gamemode.js');
 const CR = String.fromCharCode(13);
-const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const src = require('./gamemode-tables.js').joined(fs.readFileSync(SRC, 'utf8')).split(CR).join('');
 const ui = fs.readFileSync(path.join(REPO, 'game', 'ui', 'thornswood-skills.js'), 'utf8').split(CR).join('');
 function doc(p) { return fs.readFileSync(path.join(REPO, 'docs', 'systems', p), 'utf8').split(CR).join(''); }
 const doors = JSON.parse(fs.readFileSync(path.join(REPO, 'game', 'data', 'doors.json'), 'utf8'));

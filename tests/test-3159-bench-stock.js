@@ -27,7 +27,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const CR = String.fromCharCode(13);
-const gm = fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8').split(CR).join('');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8')).split(CR).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -205,7 +205,7 @@ if (Object.keys(naming).every(function (k) { return !!naming[k]; })) {
 }
 
 // --------------------------------------------------------------- 2. the craft
-const recSrc = slice(gm, 'var RECIPES_BY_ID = {', '\n  };');
+const recSrc = slice(gm, 'var RECIPES_BY_ID = {', ';\n');
 let RECIPES = null;
 try { RECIPES = new Function('return ' + recSrc.slice('var RECIPES_BY_ID = '.length).replace(/;$/, ''))(); } catch (e) { RECIPES = null; }
 const keptSrc = slice(gm, 'const KEPT_SMELT = {', '\n};');

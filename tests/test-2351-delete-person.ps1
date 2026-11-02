@@ -412,7 +412,8 @@ try {
     Put $driver @'
 const fs = require('fs'), path = require('path');
 const [repo, site] = process.argv.slice(2);
-const src = fs.readFileSync(path.join(repo, 'site', 'server.js'), 'utf8');
+// The site is server.js over its modules in site\lib since #5357.
+const src = require(path.join(repo, 'tests', 'site-files.js')).source();
 const block = /\/\/ ==== thornswood deletion requests ====([\s\S]*?)\/\/ ==== end thornswood deletion requests ====/.exec(src)[1];
 const D = path.join(site, 'data'), FB = path.join(D, 'for-bot'), UP = path.join(site, 'uploads');
 const putJson = (p, o) => { try { fs.writeFileSync(p, JSON.stringify(o, null, 2)); return true; } catch (e) { return false; } };

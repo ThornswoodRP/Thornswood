@@ -37,24 +37,29 @@
     6. The nothing-deployed sentence says how to find Vortex's folder.
     7. No Steam copy at all: refused in one sentence, nothing built.
 
-  HOW. It compiles the shipped launcher\app\Steam.cs, OwnGame.cs and Verify.cs,
-  with Paths.cs, Config.cs, Secrets.cs and LoadOrder.cs, using the compiler
-  the build runs (tests\Launcher-Csc.ps1), with small stand-ins for the
+  HOW. It builds the shipped launcher\app\Steam.cs, OwnGame.cs and Verify.cs,
+  with Paths.cs, Config.cs, Secrets.cs and LoadOrder.cs, using the .NET SDK
+  the launcher builds with (tests\Launcher-Csc.ps1, #4823), on every machine,
+  with small stand-ins for the
   classes they call that touch the machine (Checks, Keep, Junction, Downgrade,
   SkyMp, Updater). A driver builds a pretend Steam, a pretend Other Server Online
   and a pretend Vortex staging folder in a scratch folder, points Steam.cs at
   it through Steam.RootForTest, and runs the real Scan, Fix, Make and Refresh.
   Members added by this change are reached by name, so the driver also builds
-  against the code before it, where the bleed test fails.
+  against the code before it, where the bleed test fails. The driver runs on
+  Windows only, since OwnGame lays the game folder out by Windows paths and
+  links with kernel32; elsewhere 1 to 7 say SKIP. The checks of the launcher's
+  side, read from the source, run everywhere.
 
-  Nothing outside its own folder in %TEMP% is read or written: not the real
+  Nothing outside its own folder in %TEMP% and its build under out\harness
+  is read or written: not the real
   Steam, not Vortex, not C:\Thornswood, and nothing goes over the network.
 #>
 [CmdletBinding()]
 param([string]$AppPath, [string]$Scratch)
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 # This harness is in launcher\tests\, the repository is two folders up.
@@ -75,18 +80,15 @@ function Done {
     exit 0
 }
 
-# ---- the compiler the launcher is built with --------------------------------
-if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'; Done }
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
-$refs = @('System.dll', 'System.Core.dll', 'System.Runtime.Serialization.dll', 'System.Xml.dll', 'System.Security.dll') |
-    ForEach-Object { Join-Path $LauncherRefDir $_ }
-foreach ($r in $refs) {
-    Yes "$([IO.Path]::GetFileName($r)) is there to compile against" (Test-Path -LiteralPath $r)
-}
+# ---- the .NET SDK the launcher is built with -------------------------------
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 # OwnGameKinds and Verify name LastPlugin (#2791), which reads the game's archives through FromGameArchive.cs.
-$real = @('Steam.cs', 'OwnGame.cs', 'Verify.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'LastPlugin.cs', 'FromGameArchive.cs') |
+# Config, OwnGame and Verify read their JSON through LooseString.cs, and
+# Verify fetches a release's plugin through Http.cs, which nothing here
+# reaches (#4823).
+$real = @('Steam.cs', 'OwnGame.cs', 'Verify.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'LastPlugin.cs', 'FromGameArchive.cs', 'LooseString.cs', 'Http.cs') |
     ForEach-Object { Join-Path $AppPath $_ }
 # Config.Save reports a failed write through Swallow.Note since pull request
 # 311, and Swallow needs nothing but Paths. Taken only where it exists, so the
@@ -990,49 +992,39 @@ $work = Join-Path $Scratch ('thornswood-vortex-folder-' + [Guid]::NewGuid().ToSt
 $null = New-Item -ItemType Directory -Force -Path $work
 try {
     $utf8 = New-Object System.Text.UTF8Encoding($false)
-    $stubFile = Join-Path $work 'Stubs.cs'
-    $driverFile = Join-Path $work 'Driver.cs'
-    [IO.File]::WriteAllText($stubFile, $stubs, $utf8)
-    [IO.File]::WriteAllText($driverFile, $driver, $utf8)
-    $exe = Join-Path $work 'vortex-folder-test.exe'
-
-    # /noconfig, as the build does: csc.rsp adds its own copies of the
-    # framework, and beside the reference assemblies that stops on CS1703.
-    $cscArgs = @('/noconfig', '/nologo', '/target:exe', '/warn:0', "/out:$exe")
+    $resources = @{}
     if (Test-Path -LiteralPath $ownKinds) {
         $skyrimList = Join-Path $work 'skyrim-files.json'
         $listed = @('SkyrimSE.exe', 'bink2w64.dll', 'High.ini', 'installscript.vdf', 'Data\Skyrim.esm', 'Data\Skyrim - Textures0.bsa',
                     'Data\_ResourcePack.esl', 'Data\Scripts\vanilla.pex') |
             ForEach-Object { '    "{0}": {{ "bytes": 1, "sha1": "0", "depot": "1" }}' -f $_.Replace('\', '\') }
         [IO.File]::WriteAllText($skyrimList, "{`n  ""build"": ""1.6.1170"",`n  ""files"": {`n" + ($listed -join ",`n") + "`n  }`n}`n", $utf8)
-        $cscArgs += "/resource:$skyrimList,skyrim-files.json"
-        $uiGoneList = Join-Path $Here 'records\ui-gone.json'
-        $cscArgs += "/resource:$uiGoneList,ui-gone.json"
+        $resources['skyrim-files.json'] = $skyrimList
+        $resources['ui-gone.json'] = Join-Path $Here 'records\ui-gone.json'
     }
-    foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-    foreach ($f in $real) { $cscArgs += (Resolve-Path -LiteralPath $f).Path }
-    $cscArgs += $stubFile
-    $cscArgs += $driverFile
-    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $compiled = & $LauncherCsc @cscArgs 2>&1
-    $ErrorActionPreference = $old
-    $built = ($LASTEXITCODE -eq 0) -and (Test-Path -LiteralPath $exe)
-    Yes 'the real Steam.cs, OwnGame.cs and Verify.cs compile with the driver under the build''s compiler' $built
-    if (-not $built) { foreach ($l in @($compiled)) { Write-Host "      $l" }; Done }
+    $exe = $null
+    try { $exe = Build-LauncherCode -Exe -Main 'Thornswood.VortexFolderTest' -Source $stubs, $driver -File @($real | ForEach-Object { (Resolve-Path -LiteralPath $_).Path }) -Resource $resources }
+    catch { ($_.Exception.Message -split "`n") | ForEach-Object { Write-Host "      $_" } }
+    Yes 'the real Steam.cs, OwnGame.cs and Verify.cs build with the driver, with the .NET SDK the launcher builds with' ($null -ne $exe)
+    if (-not $exe) { Done }
 
-    $scene = Join-Path $work 'machine'
-    $null = New-Item -ItemType Directory -Force -Path $scene
-    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $out = & $exe $scene 2>&1
-    $code = $LASTEXITCODE
-    $ErrorActionPreference = $old
-    foreach ($l in @($out)) {
-        $s = [string]$l
-        if ($s.StartsWith('PASS  ')) { $script:pass++; Write-Host $s }
-        elseif ($s.StartsWith('FAIL  ')) { $script:fail++; Write-Host $s }
-        else { Write-Host $s }
+    if (-not $OnWindows) {
+        Write-Host 'SKIP  1 to 7, the driver on a pretend Steam, other server and Vortex: OwnGame lays the game folder out by Windows paths and makes its links with kernel32, so it runs on Windows only'
+    } else {
+        $scene = Join-Path $work 'machine'
+        $null = New-Item -ItemType Directory -Force -Path $scene
+        $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        $out = Invoke-LauncherExe $exe $scene 2>&1
+        $code = $LASTEXITCODE
+        $ErrorActionPreference = $old
+        foreach ($l in @($out)) {
+            $s = [string]$l
+            if ($s.StartsWith('PASS  ')) { $script:pass++; Write-Host $s }
+            elseif ($s.StartsWith('FAIL  ')) { $script:fail++; Write-Host $s }
+            else { Write-Host $s }
+        }
+        Yes 'the driver finished and agrees' ($code -eq 0)
     }
-    Yes 'the driver finished and agrees' ($code -eq 0)
 
     # ---- the launcher's side, read from the source ----------------------------
     $shell = [IO.File]::ReadAllText((Join-Path $AppPath 'Shell.cs'))
@@ -1042,7 +1034,9 @@ try {
     if (Test-Path -LiteralPath $scanFixCs) { $shell += [IO.File]::ReadAllText($scanFixCs) }
     $verifyCs = [IO.File]::ReadAllText((Join-Path $AppPath 'Verify.cs'))
     $own = [IO.File]::ReadAllText((Join-Path $AppPath 'ShellOwnGame.cs'))
-    $xamlPath = Join-Path (Split-Path -Parent $AppPath) 'ui.xaml'
+    # The window is Avalonia's MainWindow.axaml since #4823, its controls
+    # reached as win.<Name>.
+    $xamlPath = Join-Path $AppPath 'MainWindow.axaml'
     $xaml = if (Test-Path -LiteralPath $xamlPath) { [IO.File]::ReadAllText($xamlPath) } else { '' }
     $down = [IO.File]::ReadAllText((Join-Path $AppPath 'Downgrade.cs'))
 
@@ -1058,7 +1052,7 @@ try {
         ($shell -match 'if \(i\.Fixable && !triedByFix\.Contains\(FixKey\(i\)\)\) canFix\+\+;')
     Yes 'Settings has Choose Vortex''s folder and Forget the chosen folder' `
         (($xaml -match 'x:Name="BtnOwnGamePick"') -and ($xaml -match 'x:Name="BtnOwnGameForget"') -and
-         ($own -match 'F<Button>\("BtnOwnGamePick"\)') -and ($own -match 'F<Button>\("BtnOwnGameForget"\)'))
+         ($own -match 'btnOwnGamePick = win\.BtnOwnGamePick;') -and ($own -match 'btnOwnGameForget = win\.BtnOwnGameForget;'))
     Yes 'the picker goes through OwnGame.PointAt, which refuses a folder with no Vortex record' `
         (($own -match 'OwnGame\.PointAt\(cfg,\s*chosen') -and ($own -match 'OwnGame\.PointAt\(cfg,\s*""'))
     Yes 'Make it, the offer and the Play refusal read the folder Vortex deploys into' `

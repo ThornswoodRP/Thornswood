@@ -28,8 +28,9 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const siteFiles = require('../../tests/site-files');
 
-const text = fs.readFileSync(path.join(__dirname, '..', '..', 'site', 'server.js'), 'utf8');
+const text = siteFiles.source();
 const a = text.indexOf('function makeLog(dir, name, maxBytes, keep, opts) {');
 const b = text.indexOf('// Four megabytes is a few days');
 if (a < 0 || b < 0) { console.error('the site log block is not in server.js the way this expects'); process.exit(1); }

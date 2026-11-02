@@ -13,12 +13,13 @@
        record that sends a route anywhere but Caddy on 127.0.0.1:443, names
        a cloudflared from anywhere but its own release, or lists other names
        for DNS than it routes stops the run before anything is sent.
-    2. The workflow's half, -SealOnGitHub, run as tunnel-token.yml runs it:
-       it leaves only the sealed token, as a notice titled Tunnel, and with no
-       token it stops and says so.
-    3. A plain run, from end to end, with gh, ssh and scp as functions here.
-       gh plays GitHub (the dispatch runs the shipped -SealOnGitHub half), and
-       ssh runs each box script it is handed in this PowerShell against
+    2. The workflow's half, -SealOnGitHub, run as tunnel.yml's seal job runs
+       it: it hands only the sealed token to the next job, as the step output
+       sealed, and with no token it stops and says so.
+    3. A -Sealed run, from end to end, with ssh and scp as functions here; a
+       run with the box's ssh and no -Sealed is refused, since the token
+       reaches the box only through tunnel.yml. ssh runs each box script it
+       is handed in this PowerShell against
        scratch folders, with Cloudflare's API, the download, the task
        cmdlets and cloudflared's own answers replaced by stand-ins. The
        stand-in for Cloudflare answers only the API token. It checks: the
@@ -34,10 +35,13 @@
        restart while the names are on the tunnel is refused.
     5. The gate's halves (#2841): -SealKey prints only the public key,
        -Sealed runs with what the workflow sealed and starts no workflow, and
-       -ThroughGate, against a stand-in Box-Run.ps1 that checks each line
-       with the gate's own GateRules.ps1 and verbs.json, hands the gate
+       -ThroughGate starts one run of the Ops tunnel.yml with the mode and a
+       key of its own for the output, and no seal key. gh plays that run as
+       its three jobs do, against a stand-in Box-Run.ps1 that checks each
+       line with the gate's own GateRules.ps1 and verbs.json: the gate gets
        'Install-Tunnel -SealKey', then the sealed token with the mode, under
-       600 characters; -Status is one line and -Remove is never sent.
+       600 characters, and what the box printed comes back sealed to the
+       caller's key; -Status is one line and -Remove is never sent.
     6. Afterwards every command line, script and input handed to gh, ssh and
        scp, and everything printed, is searched for both tokens, plain and
        base64.
@@ -68,6 +72,7 @@ function Done {
 
 . (Join-Path $Root 'scripts\vps\Seal.ps1')
 . (Join-Path $Root 'scripts\vps\Vps.ps1')
+. (Join-Path $Root 'scripts\ops\Sealed.ps1')
 # vps.json's name, whose DNS-only A record is the box's address. It is not
 # written here either (test-vps-defaults).
 $boxName = [string](Get-ThornswoodVpsAddress)
@@ -242,18 +247,24 @@ try {
         $psi.Environment['GITHUB_ACTIONS'] = 'true'
         $psi.Environment['CLOUDFLARE_TUNNEL_API_TOKEN'] = $token
         $psi.Environment['SEAL_KEY'] = $key
+        $ghOut = Join-Path $work ('output-' + [Guid]::NewGuid().ToString('N'))
+        [IO.File]::WriteAllText($ghOut, '')
+        $psi.Environment['GITHUB_OUTPUT'] = $ghOut
         $p = [Diagnostics.Process]::Start($psi)
         $out = $p.StandardOutput.ReadToEnd() + $p.StandardError.ReadToEnd()
         $p.WaitForExit()
-        return @{ Out = $out; Code = $p.ExitCode }
+        $given = [IO.File]::ReadAllText($ghOut)
+        Remove-Item -LiteralPath $ghOut -Force
+        $sm = [regex]::Match($given, '(?m)^sealed=([A-Za-z0-9+/=]+)$')
+        return @{ Out = $out; Code = $p.ExitCode; Given = $given; Sealed = $(if ($sm.Success) { $sm.Groups[1].Value } else { '' }) }
     }
     $apiToken = 'cf-tunnel-harness-' + [Guid]::NewGuid().ToString('N')
     $r = Run-Seal $apiToken $publicKey
-    $m = [regex]::Match($r.Out, '::notice title=Tunnel::([A-Za-z0-9+/=]+)')
-    Yes '-SealOnGitHub leaves the sealed token as a notice titled Tunnel' ($r.Code -eq 0 -and $m.Success)
-    Yes '  and the token is nowhere in what it printed' (-not $r.Out.Contains($apiToken) -and -not $r.Out.Contains([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($apiToken))))
+    Yes '-SealOnGitHub hands the sealed token to the next job as the step output sealed, and to nothing else' ($r.Code -eq 0 -and $r.Sealed -match '^[A-Za-z0-9+/]{400,560}={0,2}$' -and $r.Out -notmatch '::notice' -and -not $r.Out.Contains($r.Sealed))
+    Yes '  and the token is nowhere in what it printed or handed on' (-not ($r.Out + $r.Given).Contains($apiToken) -and -not ($r.Out + $r.Given).Contains([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($apiToken))))
+    $sealedForBox = $r.Sealed
     $r = Run-Seal '' $publicKey
-    Yes 'with no token it stops with an error titled Tunnel and seals nothing' ($r.Code -ne 0 -and $r.Out -match '::error title=Tunnel::CLOUDFLARE_TUNNEL_API_TOKEN is not' -and $r.Out -notmatch '::notice')
+    Yes 'with no token it stops with an error titled Tunnel and seals nothing' ($r.Code -ne 0 -and $r.Out -match '::error title=Tunnel::CLOUDFLARE_TUNNEL_API_TOKEN is not' -and -not $r.Sealed)
 
     # ---- 3. a plain run ------------------------------------------------------
     $exeBytes = [Text.Encoding]::UTF8.GetBytes('not really cloudflared ' + [Guid]::NewGuid().ToString('N'))
@@ -284,7 +295,7 @@ try {
     [IO.File]::WriteAllText($env:TW_CF, (ConvertTo-Json -InputObject $cf0 -Depth 12))
 
     $handed = New-Object System.Collections.ArrayList
-    $state = @{ copied = $null; sealed = '' }
+    $state = @{ copied = $null; sealed = ''; log = @(); ended = '' }
     function ssh {
         $a = @($args | ForEach-Object { [string]$_ })
         [void]$handed.Add(($a -join ' '))
@@ -305,29 +316,58 @@ try {
         [void]$handed.Add($state.copied)
         $global:LASTEXITCODE = 0
     }
+    # GitHub, playing one run of the Ops tunnel.yml as its three jobs do:
+    # the gate's SealKey line (its key as the step output), the seal job,
+    # then the gate's -Sealed line with the mode, whose output is sealed to
+    # the caller's key in the last job's log. The gate is the stand-in
+    # Box-Run.ps1 of part 5. Its line is built as tunnel.yml's last job
+    # builds it; the Ops test-box-workflows.ps1 holds that step itself.
+    $state.log = @()
+    $state.ended = ''
     function gh {
         $a = @($args | ForEach-Object { [string]$_ })
         $in = @($input) -join "`n"
         [void]$handed.Add('gh ' + ($a -join ' ') + ' ' + $in)
         $global:LASTEXITCODE = 0
         $path = @($a | Where-Object { $_ -like 'repos/*' })[0]
-        if ($path -like '*/dispatches') {
+        if ($path -like '*/actions/workflows/tunnel.yml/dispatches') {
             $body = $in | ConvertFrom-Json
             if ($body.ref -ne 'main') { $global:LASTEXITCODE = 1; return 'not main' }
-            $rr = Run-Seal $apiToken ([string]$body.inputs.seal_key)
-            $n = [regex]::Match($rr.Out, '::notice title=Tunnel::([A-Za-z0-9+/=]+)')
-            $state.sealed = $(if ($n.Success) { $n.Groups[1].Value } else { '' })
-            return '{"workflow_run_id": 4242, "html_url": "https://github.invalid/run/4242"}'
+            if ($body.inputs.PSObject.Properties['seal_key']) { $global:LASTEXITCODE = 1; return 'tunnel.yml takes no seal key' }
+            $k1 = @(& $thisShell -NoProfile -File $fakeBoxRun -Line 'Install-Tunnel -SealKey' 2>&1 | ForEach-Object { "$_" })
+            $km = [regex]::Match(($k1 -join "`n"), '(?m)^SEAL KEY (<RSAKeyValue>.*</RSAKeyValue>)$')
+            $rr = Run-Seal $apiToken $(if ($km.Success) { $km.Groups[1].Value } else { '' })
+            $state.sealed = $rr.Sealed
+            $line = 'Install-Tunnel -Sealed ' + $rr.Sealed
+            switch ([string]$body.inputs.mode) { 'install' { } 'switch' { $line += ' -Switch' } 'back' { $line += ' -Back' } default { $global:LASTEXITCODE = 1; return 'no such mode' } }
+            if ([string]$body.inputs.wait) { $line += ' -Wait ' + [string]$body.inputs.wait }
+            $said = @(& $thisShell -NoProfile -File $fakeBoxRun -Line $line 2>&1 | ForEach-Object { "$_" })
+            $code = $LASTEXITCODE
+            $o = Join-Path $work ('run-' + [Guid]::NewGuid().ToString('N'))
+            [void](New-Item -ItemType Directory -Force -Path (Join-Path $o 'files'))
+            [IO.File]::WriteAllText((Join-Path $o 'output.txt'), (($said -join "`n") + "`n"), $noMark)
+            $sf = $o + '.sealed'
+            [void](Save-ThornswoodSealed $o ([string]$body.inputs.recipient) $sf)
+            $state.log = @(Write-ThornswoodSealedLog $sf 6>&1 | ForEach-Object { '2026-11-02T00:00:00.0000000Z ' + "$_" })
+            $state.ended = 'ENDED ' + $code + ' Install-Tunnel main ' + ('0' * 40)
+            return '{"workflow_run_id": 4343, "html_url": "https://github.invalid/run/4343"}'
         }
-        if ($path -like '*/actions/runs/4242') { return '{"status": "completed", "conclusion": "success", "path": ".github/workflows/tunnel-token.yml", "html_url": "https://github.invalid/run/4242"}' }
-        if ($path -like '*/actions/runs/4242/jobs') { return '{"jobs": [{"id": 77}]}' }
-        if ($path -like '*/check-runs/77/annotations') { return (ConvertTo-Json -Compress -InputObject @(@{ title = 'Tunnel'; annotation_level = 'notice'; message = $state.sealed })) }
+        if ($path -like '*/dispatches') { $global:LASTEXITCODE = 1; return "gh: Not Found (HTTP 404) for $path" }
+        if ($path -like '*/actions/runs/4343') { return '{"status": "completed", "conclusion": "success", "path": ".github/workflows/tunnel.yml", "html_url": "https://github.invalid/run/4343"}' }
+        if ($path -like '*/actions/runs/4343/jobs') { if (($a -join ' ') -match '--jq') { return @('81', '82', '83') }; return '{"jobs": [{"id": 81}, {"id": 82}, {"id": 83}]}' }
+        if ($path -like '*/check-runs/81/annotations') { return (ConvertTo-Json -Compress -InputObject @(@{ title = 'Tunnel key'; annotation_level = 'notice'; message = 'ENDED 0 Install-Tunnel' })) }
+        if ($path -like '*/check-runs/82/annotations') { return '[]' }
+        if ($path -like '*/check-runs/83/annotations') { return (ConvertTo-Json -Compress -InputObject @(@{ title = 'Box-Run'; annotation_level = 'notice'; message = $state.ended })) }
+        if ($path -like '*/actions/jobs/83/logs') { return $state.log }
+        if ($path -like '*/actions/jobs/*/logs') { return @('2026-11-02T00:00:00.0000000Z nothing sealed in this job') }
         $global:LASTEXITCODE = 1
         return "gh: Not Found (HTTP 404)"
     }
     function Tunnel([string]$mode = '') {
         $more = @{}
         if ($mode) { $more[$mode] = $true }
+        if (@('Status', 'Remove', 'SealKey', 'Bare') -notcontains $mode) { $more['Sealed'] = $sealedForBox }
+        if ($mode -eq 'Bare') { $more.Remove('Bare') }
         $said = @(& $Script @more -NoPause -AsSystem -Wait 5 -RecordPath $recPath -Vps 'nowhere.invalid' -User 'nobody' *>&1 | ForEach-Object { [string]$_ })
         $script:printed += $said
         return ($said -join ' | ')
@@ -336,11 +376,12 @@ try {
     function Asked { if (Test-Path -LiteralPath $env:TW_ASKED) { [IO.File]::ReadAllText($env:TW_ASKED) } else { '' } }
     $script:printed = @()
 
+    $all = Tunnel 'Bare'
+    Yes 'a run with the box''s ssh and no -Sealed is refused before anything is sent: the token comes only through tunnel.yml' ($all -match 'only through the tunnel workflow' -and $handed.Count -eq 0)
     $all = Tunnel
     $cf = Cf
-    Yes 'a plain run makes the tunnel once, managed at Cloudflare' ($all -match 'TUNNEL OK' -and $cf.made -eq 1 -and $cf.tunnels[0].remote_config -eq $true -and $cf.tunnels[0].name -eq 'thornswood-box')
+    Yes 'a -Sealed run makes the tunnel once, managed at Cloudflare' ($all -match 'TUNNEL OK' -and $cf.made -eq 1 -and $cf.tunnels[0].remote_config -eq $true -and $cf.tunnels[0].name -eq 'thornswood-box')
     if ($all -notmatch 'TUNNEL OK') { Write-Host ('      it said: ' + $all) }
-    Yes '  through tunnel-token.yml in the private ops repository' (@($handed | Where-Object { $_ -match '^gh api -X POST repos/ThornswoodRP/Thornswood-Ops/actions/workflows/tunnel-token\.yml/dispatches ' }).Count -eq 1)
     Yes '  writes the record''s routes and reads them back' ($cf.puts -eq 1 -and (@($cf.config.ingress | ForEach-Object { [string]$_.hostname + '>' + [string]$_.service }) -join ' ') -eq 'thornswood.net>https://127.0.0.1:443 www.thornswood.net>https://127.0.0.1:443 >http_status:404')
     $tf = Join-Path $tunnelDir 'token.txt'
     Yes '  writes the tunnel''s token to token.txt, and nothing else there' ((Test-Path -LiteralPath $tf) -and [IO.File]::ReadAllText($tf) -ceq $runToken)
@@ -421,11 +462,11 @@ try {
 
     # ---- 5. the gate's halves --------------------------------------------------
     # What the gate runs on the box: -SealKey prints the public half only, and
-    # -Sealed opens what tunnel-token.yml sealed, so no gh is needed there.
+    # -Sealed opens what tunnel.yml's seal job sealed, so no gh is needed there.
     $all = Tunnel 'SealKey'
     Yes '-SealKey prints the box''s public seal key and nothing private' ($all -match 'SEAL KEY <RSAKeyValue><Modulus>' -and $all -notmatch '<P>|<D>|<InverseQ>')
     $asks = @($handed | Where-Object { $_ -match 'dispatches' }).Count
-    $sealedHere = [regex]::Match((Run-Seal $apiToken $publicKey).Out, '::notice title=Tunnel::([A-Za-z0-9+/=]+)').Groups[1].Value
+    $sealedHere = (Run-Seal $apiToken $publicKey).Sealed
     $said = @(& $Script -Sealed $sealedHere -NoPause -AsSystem -Wait 5 -RecordPath $recPath -Vps 'nowhere.invalid' -User 'nobody' *>&1 | ForEach-Object { [string]$_ })
     $script:printed += $said
     Yes '-Sealed runs with the token the workflow sealed and starts no workflow itself' ((($said -join ' ') -match 'TUNNEL OK') -and @($handed | Where-Object { $_ -match 'dispatches' }).Count -eq $asks)
@@ -433,9 +474,12 @@ try {
     # -ThroughGate hands the box only gate lines. A stand-in Box-Run.ps1 in a
     # copy of the scripts records each line and answers as the gate would.
     $tree = Join-Path $work 'tree'
-    foreach ($d in 'scripts/deploy', 'scripts/vps/gate', 'scripts/ops') { [void](New-Item -ItemType Directory -Force -Path (Join-Path $tree $d)) }
+    foreach ($d in 'scripts/deploy', 'scripts/vps/gate', 'scripts/ops', 'scripts/release') { [void](New-Item -ItemType Directory -Force -Path (Join-Path $tree $d)) }
     Copy-Item -LiteralPath $Script -Destination (Join-Path $tree 'scripts/deploy/Install-Tunnel.ps1')
-    foreach ($f in 'scripts/vps/Seal.ps1', 'scripts/vps/Vps.ps1', 'scripts/vps/vps.json', 'scripts/ops/WorkflowRun.ps1', 'scripts/vps/gate/GateRules.ps1', 'scripts/vps/gate/verbs.json') { Copy-Item -LiteralPath (Join-Path $Root $f) -Destination (Join-Path $tree $f) }
+    foreach ($f in 'scripts/vps/Seal.ps1', 'scripts/vps/Vps.ps1', 'scripts/vps/vps.json', 'scripts/ops/WorkflowRun.ps1', 'scripts/ops/Sealed.ps1', 'scripts/release/LogHandBack.ps1', 'scripts/vps/gate/GateRules.ps1', 'scripts/vps/gate/verbs.json') { Copy-Item -LiteralPath (Join-Path $Root $f) -Destination (Join-Path $tree $f) }
+    # Its scratch folder is this test's own.
+    $env:TW_SCRATCH = Join-Path $work 'scratch'
+    [IO.File]::WriteAllText((Join-Path $tree 'scripts/release/Get-ScratchDir.ps1'), 'param([string]$Name) $d = Join-Path $env:TW_SCRATCH $Name; [void](New-Item -ItemType Directory -Force -Path $d); $d', $noMark)
     $env:TW_GATE = Join-Path $work 'gate.txt'
     $env:TW_PUB = $publicKey
     [IO.File]::WriteAllText((Join-Path $tree 'scripts/vps/Box-Run.ps1'), @'
@@ -447,6 +491,7 @@ if (-not $r.Ok) { 'REFUSED ' + $r.Why; exit 1 }
 if ($Line -eq 'Install-Tunnel -SealKey') { 'SEAL KEY ' + $env:TW_PUB; exit 0 }
 'the box ran it'; exit 0
 '@, $noMark)
+    $fakeBoxRun = Join-Path $tree 'scripts/vps/Box-Run.ps1'
     $gated = Join-Path $tree 'scripts/deploy/Install-Tunnel.ps1'
     function Gated([hashtable]$more) {
         if (Test-Path -LiteralPath $env:TW_GATE) { Remove-Item -LiteralPath $env:TW_GATE -Force }
@@ -455,16 +500,22 @@ if ($Line -eq 'Install-Tunnel -SealKey') { 'SEAL KEY ' + $env:TW_PUB; exit 0 }
         $lines = @(if (Test-Path -LiteralPath $env:TW_GATE) { [IO.File]::ReadAllLines($env:TW_GATE) })
         return @{ Said = ($said -join ' | '); Lines = $lines }
     }
+    $before = $handed.Count
     $g = Gated @{ Switch = $true; Wait = 120 }
-    Yes '-ThroughGate asks the gate for the seal key, then hands it the sealed token with the mode' ($g.Lines.Count -eq 2 -and $g.Lines[0] -eq 'Install-Tunnel -SealKey' -and $g.Lines[1] -match '^Install-Tunnel -Sealed [A-Za-z0-9+/]{400,560}={0,2} -Switch -Wait 120$' -and $g.Said -notmatch 'REFUSED')
-    Yes '  and the gate''s own rules take both lines, the longer under 600 characters' ($g.Lines.Count -eq 2 -and $g.Lines[1].Length -le 600 -and $g.Said -match 'the box ran it')
-    Yes '  and the sealed form is the workflow''s, opened only on the box' ($g.Lines.Count -eq 2 -and $g.Lines[1].Contains($state.sealed) -and -not $g.Lines[1].Contains($apiToken))
+    $starts = @($handed | Select-Object -Skip $before | Where-Object { $_ -match 'dispatches' })
+    Yes '-ThroughGate starts one run of the Ops tunnel.yml with the mode, the wait and a key for its output, and no seal key' ($starts.Count -eq 1 -and $starts[0] -match '^gh api -X POST repos/ThornswoodRP/Thornswood-Ops/actions/workflows/tunnel\.yml/dispatches ' -and $starts[0] -match '"mode":"switch"' -and $starts[0] -match '"wait":"120"' -and $starts[0] -match '"recipient":"[A-Za-z0-9+/=]{100,}"' -and $starts[0] -notmatch 'seal_key|RSAKeyValue')
+    Yes '  the run asks the gate for the seal key, then hands it the sealed token with the mode' ($g.Lines.Count -eq 2 -and $g.Lines[0] -eq 'Install-Tunnel -SealKey' -and $g.Lines[1] -match '^Install-Tunnel -Sealed [A-Za-z0-9+/]{400,560}={0,2} -Switch -Wait 120$')
+    Yes '  and the gate''s own rules take both lines, the longer under 600 characters' ($g.Lines.Count -eq 2 -and $g.Lines[1].Length -le 600 -and $g.Said -notmatch 'REFUSED')
+    Yes '  and what the box printed comes back sealed to the caller''s key and is opened here' ($g.Said -match 'the box ran it' -and $g.Said -match 'ENDED 0 Install-Tunnel' -and $state.log.Count -ge 2 -and -not (($state.log -join ' ') -match 'the box ran it'))
+    Yes '  and the sealed token is the seal job''s, opened only on the box' ($g.Lines.Count -eq 2 -and $state.sealed -and $g.Lines[1].Contains($state.sealed) -and -not $g.Lines[1].Contains($apiToken))
+    $g = Gated @{}
+    Yes '  a plain -ThroughGate run is the mode install, with no -Wait' ($g.Lines.Count -eq 2 -and $g.Lines[1] -match '^Install-Tunnel -Sealed [A-Za-z0-9+/]{400,560}={0,2}$')
     $asks = @($handed | Where-Object { $_ -match 'dispatches' }).Count
     $g = Gated @{ Status = $true }
     Yes '-ThroughGate -Status hands the gate one line and starts no workflow' ($g.Lines.Count -eq 1 -and $g.Lines[0] -eq 'Install-Tunnel -Status' -and @($handed | Where-Object { $_ -match 'dispatches' }).Count -eq $asks)
     $g = Gated @{ Remove = $true }
     Yes '-ThroughGate -Remove is refused before the gate is asked anything' ($g.Lines.Count -eq 0 -and $g.Said -match 'not gate words')
-    Remove-Item Env:\TW_GATE, Env:\TW_PUB -ErrorAction SilentlyContinue
+    Remove-Item Env:\TW_GATE, Env:\TW_PUB, Env:\TW_SCRATCH -ErrorAction SilentlyContinue
 
     # ---- 6. no token anywhere -------------------------------------------------
     $handedAll = ($handed -join "`n") + "`n" + ($script:printed -join "`n")

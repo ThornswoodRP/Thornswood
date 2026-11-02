@@ -12,8 +12,8 @@
   WHY IT EXISTS. Issue #421. The six files in records\client-build.json are
   SkyMP, under the GNU GPL version 3 (MpClientPlugin.dll under the AGPL), and
   both licences ask that a copy of the licence and directions to the source go
-  with the files. The installer does that (SOURCE CODE.txt and the texts,
-  Package-Thornswood.ps1). The feed did not: on 28 September the dev feed's
+  with the files. The setup does that (SOURCE CODE.txt and the texts,
+  Build-SetupFiles.ps1). The feed did not: on 28 September the dev feed's
   client-runtime-267ac311.zip and the live feed's client-runtime-a922b480.zip
   held the six files and nothing else, and a pack that carried one of them
   said nothing either. Those are the downloads the launcher takes the files
@@ -57,8 +57,8 @@
   again even though its commit did not move, so the zip that carries the note
   replaces the one that did not.
 
-  The folder and licence of each file are the same as Get-SourceNotice in
-  Package-Thornswood.ps1 says in the installer's SOURCE CODE.txt, and
+  The setup's SOURCE CODE.txt is written from the same entries
+  (Build-SetupFiles.ps1 calls Get-SourceNoticeEntries), and
   tests\test-source-offer.ps1 holds the two to each other.
 #>
 
@@ -267,7 +267,10 @@ function Get-ClientLicenceLines($Licences) {
 
   $Kind 'runtime' is the client runtime zip: its note is README.txt and says
   what the download is. 'pack' is an update pack: its note is SOURCE CODE.txt,
-  the name the installer gives the same note.
+  the name the installer gives the same note. 'setup' is the launcher's
+  Velopack package (#4825, Build-SetupFiles.ps1): its note is SOURCE CODE.txt,
+  which the install copies into the install folder (InstallSteps.cs), so it
+  says what the install put into the Skyrim folder.
 
   Throws when a recorded file has no known source folder, so a new file in
   client-build.json stops the release until somebody says where it is from.
@@ -279,7 +282,7 @@ function Get-ClientLicenceLines($Licences) {
   SkyMP's own, with no commit, as before #2931.
 #>
 function Get-SourceNoticeEntries([string]$ClientRecord, [string[]]$Carried, [string]$Kind, [string]$LicenceDir, [string]$FrontRecord) {
-    if ($Kind -ne 'runtime' -and $Kind -ne 'pack') { throw "Kind is runtime or pack, not $Kind" }
+    if ($Kind -notin 'runtime', 'pack', 'setup') { throw "Kind is runtime, pack or setup, not $Kind" }
     $any = $false
     foreach ($x in @($Carried)) { if ($x -and $SourceNoticeFiles.Contains($x)) { $any = $true; break } }
     if (-not $any) { return @() }
@@ -335,6 +338,16 @@ function Get-SourceNoticeEntries([string]$ClientRecord, [string[]]$Carried, [str
             'download. Nothing here needs copying by hand.',
             '',
             'WHERE THE SOURCE CODE IS',
+            ''
+        )
+    } elseif ($Kind -eq 'setup') {
+        $note = 'SOURCE CODE.txt'
+        $lines = @(
+            'THORNSWOOD: WHERE THE SOURCE CODE IS',
+            '====================================',
+            '',
+            'Thornswood''s setup put SkyMP files into your Skyrim folder, listed below,',
+            'and the launcher''s updates can bring newer builds of them.',
             ''
         )
     } else {

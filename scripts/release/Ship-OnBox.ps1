@@ -10,16 +10,13 @@
 
   Ship-Dev is Ship.ps1 -Channel dev -FromFeed. Ship-Main is Ship.ps1
   -FromFeed, the main release, and the gate runs it only when main is at the
-  commit -Build names (the build Patrick gave his word for). On either,
-  -ModsOnly keeps the feed's launcher. Without it, a launcher that changed is
-  built and signed on GitHub from main's commit, the way Ship.ps1 does it
-  from the feed, so a new launcher goes to dev before main like everything
-  else. Until 31 Oct a dev Ship from the gate always kept dev's launcher, so
-  a launcher change could only reach dev from One, and launcher 1.2.12 would
-  have gone to main untried.
+  commit -Build names (the build Patrick gave his word for). Neither sends a
+  launcher: since #4825 Ship sends none, and the launcher goes out only
+  through Velopack (merge-release.yml, promote-main.yml), so the switch these
+  verbs once took to keep the feed's launcher went with it.
 
   WHAT IS DIFFERENT FROM ONE. Nothing in Ship.ps1. Its box steps
-  (Publish-Update, Sync-Client, Publish-Installer, the feed store,
+  (Publish-Update, Sync-Client, the feed store,
   announced.json) reach the box the way they do from One, as Administrator
   over ssh, here over loopback with the gate's own key. Two things only this
   script does:
@@ -28,8 +25,7 @@
        comes as -Title and up to three -Detail lines, which become the title
        and the "- " lines Ship.ps1 asks for.
     2. GitHub. A Ship from the feed signs its manifest in the engine fork
-       (Sign-OnGitHub.ps1) and, with a new launcher, has release.yml build
-       it, both through gh. The box admin App mints a token for this run
+       (Sign-OnGitHub.ps1), through gh. The box admin App mints a token for this run
        alone (scripts\vps\admin\ShipAccess.ps1 runs ship-access.js;
        Patrick's pick of 30 Oct: Actions write on the fork and Thornswood,
        Contents read on Thornswood), which goes to gh through GH_TOKEN and
@@ -49,8 +45,6 @@ param(
     [Parameter(Mandatory = $true)][string]$Detail,
     [string]$Detail2 = '',
     [string]$Detail3 = '',
-    # Keep the feed's launcher.
-    [switch]$ModsOnly,
     # Where the App's key and id are, for a harness.
     [string]$AdminState = 'C:\Thornswood-Admin\state'
 )
@@ -114,7 +108,6 @@ catch { Die ('the box admin App gave no token for the Ship: ' + $_.Exception.Mes
 
 $ship = @{ Notes = $notes; FromFeed = $true; NoPause = $true }
 if ($Channel -eq 'dev') { $ship['Channel'] = 'dev' }
-if ($ModsOnly) { $ship['ModsOnly'] = $true }
 $env:GH_TOKEN = $token
 $token = $null
 try {

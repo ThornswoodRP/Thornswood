@@ -41,9 +41,8 @@ function rig() {
   const clock = { now: Date.UTC(2026, 9, 12, 16, 0, 0) };
   const store = {};
   const mp = {
-    getOnlinePlayers: function () { return []; },
     makeProperty: function () { },
-    get: function (id) { return store[id]; },
+    get: function (id, key) { if (id === 0 && key === 'onlinePlayers') { return []; } return store[id]; },
     set: function (id, key, v) { store[id] = JSON.parse(JSON.stringify(v)); }
   };
   const g = {};

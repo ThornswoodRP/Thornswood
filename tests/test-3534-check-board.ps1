@@ -95,6 +95,11 @@ try {
     Yes 'an archived card and a pull request with no Order are left out' ($r.Out -notmatch '#8 card 8' -and $r.Out -notmatch '#9 card 9')
     Yes 'an issue made after the read is not called missing' ($r.Out -notmatch '#12')
 
+    $nb = Board $good
+    $nb.workflows = $null; $nb['workflows_unread'] = 'the board answered: You do not have permission to access workflows'
+    $r = Run $nb @('1', '2', '4')
+    Yes ("workflows the board App could not read: no rule broken, and it says Auto-close was not checked: exit 0 ($($r.Code))") ($r.Code -eq 0 -and $r.Out -match '"workflows" not checked' -and $r.Out -match 'Auto-close issue must be off')
+
     $o = @(& $check -Board (Join-Path $tmp 'none.json') -NoIssues 6>&1 2>&1 | ForEach-Object { "$_" })
     Yes 'no file: exit 1' ($LASTEXITCODE -eq 1 -and ($o -join ' ') -match 'Read-Board\.ps1 -OutFile')
     [IO.File]::WriteAllText((Join-Path $tmp 'x.json'), '{"a":1}')

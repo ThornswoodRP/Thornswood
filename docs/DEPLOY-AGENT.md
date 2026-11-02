@@ -18,6 +18,10 @@ It does two jobs with the same code:
   verb. This came first (Patrick, 31 Oct 2026). A rollback is this with the
   Release before.
 - **Apply each new Deployment by itself**, as the Windows service. Dev first.
+  Each environment has its own loop, one Deployment at a time in it, so a
+  site or bot change goes in while dev is still in its bot pass rather than
+  waiting behind it (#5190). The update check waits until no environment is
+  part way through one, so a restart never cuts an apply short.
 
 ## What this first slice does, and what it does not
 
@@ -36,6 +40,7 @@ build** (the engine).
 | Release news | After a Deployment goes in, the agent leaves its Release's notes for the bot, which posts them once (#5187). See "Release news" below. |
 | Launcher and game files | Not the agent's job: they reach people through the launcher's feed and a Ship. Since #5179 every Release carries them as well (the signed launcher, the game files and the Velopack packages of both), attested, for the launcher's move to Velopack; the agent logs them as left alone. |
 | Bot pass before each dev Deployment | Once `Install-DeployAgent` has set up its task, every Deployment waits on a bot pass on a throwaway copy of dev with the new gamemode (#5196, below). A FAIL fails the Deployment and dev keeps what it runs. A deploy by tag (the gate's `Deploy-Release`, a rollback) does not wait on one. |
+| Steps after a deploy | Run by the agent (#5186), once each, after a Deployment of the Release carrying them succeeds: a pull request's file under `deploy/after/` names gate verbs to run and checks for a person in the game, instead of a run note. See "Steps after a deploy" below. merge-release.yml puts them in every Release as the part `after`. |
 | Parity check after a dev Deployment | Run by the agent (#5180): once a dev Deployment is in, it asks the gate for `Check-ProdParity` and opens one issue labelled `parity` for each row to review that has no open issue by the same title. It never puts anything back by itself and never changes how the Deployment went. See "After a dev Deployment" below. |
 
 The old way keeps working beside the agent until the agent has proved itself
@@ -154,6 +159,45 @@ newest ten. The status's log link points there:
 `http://play.thornswood.net:7788/deploy-<id>.log`. Network addresses in
 server log lines are taken out before they go in.
 
+## Steps after a deploy
+
+A pull request whose change needs something done once it is deployed puts a
+file under [deploy/after/](../deploy/after/README.md), which says its shape.
+The signed Release carries every such file and the gate's own
+`scripts/vps/gate/verbs.json` as its part `after` (merge-release.yml; a new
+or changed step file is a change that gets a Release and a Deployment of its
+own, and verbs.json alone is not). After a Deployment of it
+succeeds (never after a failed one, a deploy by tag or a rollback), the agent:
+
+1. holds each file to the rules (`AfterDeploy.cs`, the same code
+   `thornswood-agent steps` runs in the pull request's Tree checks, so a
+   file that breaks one never merges): a `run` step's verb has
+   to be one `verbs.json` lets run after a deploy to that environment (its
+   `afterDeploy` list). That list comes from the signed Release, never from
+   `agent.json` on the box, so nobody widens what the LocalSystem agent runs
+   by editing a file there. A file that breaks a rule is said in the log, and
+   the rest run.
+2. runs each `run` step it has not run on that environment, in file name
+   order, once the Release is wholly in (on dev, after the load order move
+   below), through the same gate client as the load order and the parity
+   check (`Gate.cs`, the broker's pipe), so the gate holds the line to its
+   own rules again and runs main as it is then. It waits up to 30 minutes
+   for the gate's turn; a step the gate never took is not started and runs
+   with the next Deployment.
+3. writes each step down in `state\after-<environment>.json` as started
+   before it starts and as ended when it ends. A step the agent was stopped
+   in the middle of is never run again: it is said as cut short.
+4. lists each `inGame` step, which `.github/workflows/after-deploy.yml`
+   files as an issue labelled `check: in game` when the Deployment succeeds.
+
+Every step's lines go in the Deployment's log, and what became of each in
+`deploy-<id>.after.json` beside it (`http://play.thornswood.net:7788/`), which
+after-deploy.yml reads: it files the in-game checks and says a failed or cut
+short step on that step's issue, with words from the commit's own step
+files, never from the box's file. A failed step leads the Deployment's
+description ("after-deploy FAILED for #<issue>"); the deploy itself stays in,
+since the step ran after it.
+
 ## A new server build
 
 When dev runs another server build than the Release records, the agent puts
@@ -261,7 +305,12 @@ a copy of dev that nobody plays on:
    run at a time and Task Scheduler ignores a start while one runs
    (`IgnoreNew`), so a pass is not started while the task is still running:
    the Deployment fails saying so, rather than waiting on the older run as
-   if it were its own.
+   if it were its own. A pass has ended when Task Scheduler shows a run
+   newer than the one it showed before the start and the task is not
+   running: its own record against its own record. Set against the agent's
+   clock it never held, since Task Scheduler writes a run down 13 to 15 s
+   before the agent's reading of the time just before it starts it, and
+   every pass was waited on for the whole 30 minutes (#5380).
 7. No pass's logs are lost to the next one. Before a pass empties the run
    folder, the agent copies the last pass's `bot-pass.log`,
    `bot-pass-server.log` and `result.json` to
@@ -305,7 +354,7 @@ in with the same halves as Swap.ps1's service swap:
 
 1. The zip is opened into `<root>\.agent-stage-<stamp>` while the app runs.
    Every entry has to be a plain path to one of the files a Release may carry
-   (the site: `server.js`, `public\*`, `data\site\*`; the bot: its code and
+   (the site: `server.js`, `lib\*`, `public\*`, `data\site\*`; the bot: its code and
    `assets\*`, never anything `Get-ThornswoodBotOwned` names; voice:
    `voice-server.js`, `headlines.js`, `server-log.js`). Only the files that
    differ are kept, the programs are parsed and the JSON read. A bot whose
@@ -375,8 +424,13 @@ byte for byte, held to the same signature.
    to **Dev** that ended in success, then waits in the **Main** environment.
 3. Patrick approves it on the run ("Review deployments"). A rejection ends
    it and nothing reaches main.
-4. The approved job makes a Deployment to **Main** naming the Release and
-   its run. The agent holds it to that run before anything is touched: the
+4. The approved job first puts out main's launcher package, when the
+   Release runs with one that is not out yet: the files the merge release
+   kept as the artifact `main-<tag>`, each held to the signed record of the
+   build that made them, on the Release `main-<tag>`, which main's launchers
+   update from and which carries main's download, `Thornswood-Setup.exe`
+   (the header of promote-main.yml, "MAIN'S LAUNCHER"). Then it makes a
+   Deployment to **Main** naming the Release and its run. The agent holds it to that run before anything is touched: the
    Deployment was made by GitHub Actions; the run is `promote-main.yml` on
    main, started by hand; its wait on Main was approved and not rejected; it
    made no Main Deployment before (`state\main-runs.txt`); and dev applied

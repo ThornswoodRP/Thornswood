@@ -29,8 +29,9 @@
 const fs = require('fs'), path = require('path'), os = require('os');
 const crypto = require('crypto');
 const { PassThrough } = require('stream');
+const siteFiles = require('./site-files');
 const REPO = path.join(__dirname, '..');
-const server = fs.readFileSync(path.join(REPO, 'site', 'server.js'), 'utf8');
+const server = siteFiles.source();
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -191,7 +192,7 @@ async function main() {
     yes('a Release copy with ' + what + ' writes nothing, and says why', t.page() === null &&
         t.log.some((l) => /news: release\/main/.test(l)) && !calls.some((u) => new URL(u).host === 'evil.example'));
   }
-  const site = fs.readFileSync(path.join(REPO, 'site', 'server.js'), 'utf8');
+  const site = siteFiles.source();
   yes('the site asks for its news every minute and once it starts', /setInterval\(refreshNews, NEWS_LOOK_MS\)/.test(site) &&
       /setImmediate\(refreshNews\)/.test(site) && /const NEWS_LOOK_MS = 60 \* 1000;/.test(site));
 

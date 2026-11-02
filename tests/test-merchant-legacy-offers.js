@@ -6,7 +6,7 @@ const context={require:createRequire(file),__dirname,console:{log(){}},Buffer};
 vm.runInNewContext(source.slice(0,source.indexOf('let w = boot();'))+
  ';this.harness={boot,form,have,ranks,reset(){forms={};},npcStates,npcIds};',context);
 const h=context.harness;
-const mode=fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8');
+const mode=require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8'));
 const bindings=vm.runInNewContext('('+mode.match(/var LEGACY_OFFER_REF = (\{[^;]+\});/)[1]+')');
 const trades=vm.runInNewContext('('+mode.match(/var LEGACY_TRADE = (\{[^;]+\});/)[1]+')');
 const roster=require('../game/data/merchant-roster.json').merchants;

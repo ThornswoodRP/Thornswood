@@ -46,11 +46,12 @@ const http = require('http');
 const net = require('net');
 const os = require('os');
 const path = require('path');
+const siteFiles = require('../../tests/site-files');
 
 const ROOT = path.join(__dirname, '..', '..');
 const SITE = path.join(ROOT, 'site', 'server.js');
 const CR = String.fromCharCode(13);
-const SERVER = fs.readFileSync(SITE, 'utf8').split(CR).join('');
+const SERVER = siteFiles.source(SITE).split(CR).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -102,7 +103,7 @@ function scratch(name, discord) {
   const dir = fs.mkdtempSync(path.join(TEMP, 'ts-1367-' + name + '-'));
   const secret = crypto.randomBytes(32).toString('hex');
   const password = crypto.randomBytes(12).toString('hex');
-  fs.copyFileSync(SITE, path.join(dir, 'server.js'));
+  siteFiles.copy(dir, SITE);
   fs.mkdirSync(path.join(dir, 'data', 'for-bot'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({
     password,

@@ -155,7 +155,8 @@ try {
     $requiredChecks = @($mainSet | ForEach-Object { $_.rules } | Where-Object { $_.type -eq 'required_status_checks' } | ForEach-Object { $_.parameters.required_status_checks } | ForEach-Object { $_.context })
     $jobName = [regex]::Match($wf, '(?m)^    name: (.+?)\s*$').Groups[1].Value
     Yes ('main''s ruleset requires this check by its job''s name (' + $jobName + '; required: ' + ($requiredChecks -join ', ') + ')') ($jobName -eq 'Release note' -and $requiredChecks -contains $jobName)
-    $guide = [IO.File]::ReadAllText((Join-Path $Repo 'Developer-Guide.md'))
+    . (Join-Path $PSScriptRoot 'Guide-Text.ps1')
+    $guide = Get-GuideText
     Yes 'the guide says how to write the line and how a release gathers it' ($guide -match 'Release note: none' -and $guide -match 'Collect-ReleaseNotes\.ps1')
 } finally {
     Remove-Item -Recurse -Force $temp -ErrorAction SilentlyContinue

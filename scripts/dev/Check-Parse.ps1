@@ -22,8 +22,9 @@
       scripts/dev/Harness-Files.ps1 finds them), with PowerShell's own
       parser, so nothing in them runs.
     Scripts: every *.js under scripts, the *.js at the top of game, in
-      game/plugins and game/ui, and site/server.js and voice/voice-server.js,
-      each with node --check, which compiles and runs nothing.
+      game/plugins and game/ui, site/server.js and the site's modules in
+      site/lib (#5357), and voice/voice-server.js, each with node --check,
+      which compiles and runs nothing.
 
   Each one that does not parse is named with its line; on GitHub as an
   ::error line, so it is marked on the file. Exits 0 when all of them parse,
@@ -81,7 +82,8 @@ if ($What -in 'All', 'Scripts') {
     if (-not (Get-Command node -ErrorAction SilentlyContinue)) { Write-Host 'STOP. There is no node here, which parses the game scripts.'; exit 2 }
     # game since the reorganisation's phase 6 (#440): the gamemode, the
     # plugins and the overlays.
-    $js = @(Under -folders 'scripts' -filter '*.js' -Deep) + @(Under -folders 'game', (Join-Path 'game' 'plugins'), (Join-Path 'game' 'ui') -filter '*.js')
+    $js = @(Under -folders 'scripts' -filter '*.js' -Deep) + @(Under -folders 'game', (Join-Path 'game' 'plugins'), (Join-Path 'game' 'ui') -filter '*.js') +
+          @(Under -folders (Join-Path 'site' 'lib') -filter '*.js')
     foreach ($one in (Join-Path 'site' 'server.js'), (Join-Path 'voice' 'voice-server.js')) {
         $p = Join-Path $Root $one
         if (Test-Path -LiteralPath $p -PathType Leaf) { $js += Get-Item -LiteralPath $p }

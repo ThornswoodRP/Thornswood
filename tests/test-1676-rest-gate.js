@@ -65,9 +65,8 @@ function needsAt(rest) {
   const N = new Function('globalThis', 'mp', 'Date', 'console', 'setInterval', 'clearInterval',
     'guard', 'notify', 'say', needsBlock + '\nreturn globalThis.__thornswoodNeeds;')(
     g, {
-      getOnlinePlayers: function () { return [ME]; },
       makeProperty: function () { },
-      get: function (id, key) { return key === 'worldOrCellDesc' ? 'cell:X.esm' : store[id]; },
+      get: function (id, key) { if (id === 0 && key === 'onlinePlayers') { return [ME]; } return key === 'worldOrCellDesc' ? 'cell:X.esm' : store[id]; },
       set: function (id, key, v) { store[id] = JSON.parse(JSON.stringify(v)); }
     }, { now: function () { return clock.now; } }, { log: function () { } },
     function () { return 0; }, function () { }, function (n, f) { return f; },

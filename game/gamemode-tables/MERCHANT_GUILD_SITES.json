@@ -1,0 +1,104 @@
+[
+{
+"hold":"Haafingar",
+"bookHold":"solitude",
+"place":"Solitude",
+"spot":"the notice board",
+"x":-64867,
+"y":104407.2,
+"z":-8405.9,
+"source":"docs/systems/noticeboards.md"
+},
+{
+"hold":"Whiterun",
+"bookHold":"whiterun",
+"place":"Whiterun",
+"spot":"the notice board",
+"x":23139.4,
+"y":-7891.7,
+"z":-3494.4,
+"source":"docs/systems/noticeboards.md"
+},
+{
+"hold":"the Rift",
+"bookHold":"riften",
+"place":"Riften",
+"spot":"the notice board",
+"x":174559.5,
+"y":-94337,
+"z":11130.2,
+"source":"docs/systems/noticeboards.md"
+},
+{
+"hold":"Eastmarch",
+"bookHold":"windhelm",
+"place":"Windhelm",
+"spot":"the notice board",
+"x":134265.1,
+"y":35842.3,
+"z":-12397.5,
+"source":"docs/systems/noticeboards.md"
+},
+{
+"hold":"the Reach",
+"bookHold":"markarth",
+"place":"Markarth",
+"spot":"the notice board",
+"x":-173494.7,
+"y":5049.1,
+"z":-3447.6,
+"source":"docs/systems/noticeboards.md"
+},
+{
+"hold":"Falkreath",
+"bookHold":"falkreath",
+"place":"Falkreath",
+"spot":"the notice board",
+"x":-30342.2,
+"y":-87022.7,
+"z":-3119.1,
+"source":"docs/systems/noticeboards.md"
+},
+{
+"hold":"Hjaalmarch",
+"bookHold":"morthal",
+"place":"Morthal",
+"spot":"the notice board",
+"x":-38766.1,
+"y":64411.9,
+"z":-13920.9,
+"source":"docs/systems/noticeboards.md"
+},
+{
+"hold":"the Pale",
+"bookHold":"dawnstar",
+"place":"Dawnstar",
+"spot":"the notice board",
+"x":32216.4,
+"y":102314,
+"z":-13263,
+"source":"docs/systems/noticeboards.md"
+},
+{
+"hold":"Winterhold",
+"bookHold":"winterhold",
+"place":"Winterhold",
+"spot":"the notice board",
+"x":109969.6,
+"y":100594.4,
+"z":-9033,
+"source":"docs/systems/noticeboards.md"
+},
+{
+"hold":"Solstheim",
+"bookHold":"ravenrock",
+"place":"Raven Rock",
+"spot":"the town inn, at Geldis Sadri",
+"x":-39.04017639160156,
+"y":-178.24331665039062,
+"z":0,
+"cell":"17ec0:Dragonborn.esm",
+"ref":"18291:Dragonborn.esm",
+"source":"docs/systems/noticeboards.md says Raven Rock's board starts at the town inn; Geldis Sadri is that trader"
+}
+]

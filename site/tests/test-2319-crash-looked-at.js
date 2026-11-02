@@ -31,6 +31,7 @@ const http = require('http');
 const net = require('net');
 const os = require('os');
 const path = require('path');
+const siteFiles = require('../../tests/site-files');
 
 const ROOT = path.join(__dirname, '..', '..');
 const SITE = path.join(ROOT, 'site', 'server.js');
@@ -59,7 +60,7 @@ function adminCookie() {
 
 function scratch() {
   const dir = fs.mkdtempSync(path.join(TEMP, 'ts-2319-'));
-  fs.copyFileSync(SITE, path.join(dir, 'server.js'));
+  siteFiles.copy(dir, SITE);
   fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'data', 'session-logs'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({

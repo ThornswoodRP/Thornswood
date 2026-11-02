@@ -29,6 +29,13 @@
 // Check-Records.ps1 and tests/test-third-party.js, so an accident there fails
 // those instead.
 //
+// And the form feed alone in the licence texts the install hands over,
+// installer/licences (#4823), but its README.txt. Each is byte for byte a
+// file of the package README.txt names (SkiaSharp's THIRD-PARTY-NOTICES.txt
+// quotes the GNU LGPL 2.1, whose pages end with one), so the form feed there
+// is the authors', not an accident. Every other control byte in them is
+// still found, as in any other file.
+//
 // And a translation file for the game (#3133), Data\Interface\Translations\
 // <plugin>_<LANGUAGE>.txt, which Skyrim reads only as UTF-16 with a byte
 // order mark, so every other byte of it is a NUL on purpose. One of those is
@@ -62,6 +69,7 @@ const text = files.filter(function (f) { return TEXT.test(f) && f.indexOf(KEPT_A
 yes('there are tracked text files to read, ' + text.length + ' of them', text.length > 50);
 
 const GAME_TRANSLATION = /(^|\/)Interface\/Translations\/[^/]+_[A-Za-z]+\.txt$/;
+const HANDED_OVER = /^installer\/licences\/(?!README\.txt$)/;
 
 const bad = [];
 text.forEach(function (rel) {
@@ -78,10 +86,12 @@ text.forEach(function (rel) {
     }
     return;
   }
+  const pageBreaks = HANDED_OVER.test(rel);
   let line = 1;
   for (let i = 0; i < d.length; i++) {
     const b = d[i];
     if (b === 10) { line++; continue; }
+    if (b === 12 && pageBreaks) continue;
     if (b < 32 && b !== 9 && b !== 13) {
       const from = Math.max(0, i - 30);
       const near = d.slice(from, Math.min(d.length, i + 12)).toString('latin1')

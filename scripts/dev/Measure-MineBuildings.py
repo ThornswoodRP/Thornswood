@@ -52,8 +52,9 @@ is the only road into the Forgotten Vale's 50 veins and was listed as shutting
 
 WHAT IT READS. The plugins in load order, the five masters and then
 plugins.txt, last one wins, which is the rule Build-DoorTable.py uses and whose
-plugin reader this borrows rather than copies. ORES_BY_BASE, BUILDING_BY_DOOR
-and BUILDING_NAME out of game\\gamemode.js. game\\data\\doors.json.
+plugin reader this borrows rather than copies. The gamemode's ORES_BY_BASE,
+BUILDING_BY_DOOR and BUILDING_NAME tables (game\\gamemode-tables, #5191).
+game\\data\\doors.json.
 
 WHAT IT WRITES. Nothing, unless --out names a file, and then that one file. It
 changes no rule and touches neither the gamemode nor the claim.
@@ -85,6 +86,7 @@ dt = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(dt)
 
 import own_plugins  # noqa: E402
+import gamemode_tables  # noqa: E402  (the gamemode's tables, #5191)
 
 # Record flags. A deleted reference is gone from the world. An initially
 # disabled one is placed but not there until something enables it, so it is
@@ -180,31 +182,12 @@ def walk(pl, ores, cells, worlds, veins, removed):
         p += size
 
 
-def generated(text, name):
-    """One of the gamemode's generated `const NAME = {...};` lines, as a dict."""
-    m = re.search(r'^const ' + name + r' = (\{.*\});[ \t\r]*$', text, re.M)
-    return json.loads(m.group(1)) if m else None
-
-
-def ore_table(text):
-    """ORES_BY_BASE out of its generated block, as a dict, or None."""
-    a = text.find('// ==== ORES_BY_BASE, generated ====')
-    b = text.find('// ==== end ORES_BY_BASE ====')
-    if a < 0 or b < a:
-        return None
-    block = text[a:b]
-    s = block.find('{')
-    e = block.rfind('}')
-    if s < 0 or e < s:
-        return None
-    return json.loads(block[s:e + 1])
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--data', default=r'C:\Thornswood\Game\Data')
     ap.add_argument('--plugins', default=r'C:\Thornswood\Profile\Default\plugins.txt')
-    ap.add_argument('--gamemode', default=os.path.join(HERE, '..', '..', 'game', 'gamemode.js'))
+    ap.add_argument('--tables', default=None,
+                    help='the folder of gamemode tables (#5191); game/gamemode-tables when not given')
     ap.add_argument('--doors', default=os.path.join(HERE, '..', '..', 'game', 'data', 'doors.json'))
     ap.add_argument('--out', default=None, help='write the measurement as JSON to this file')
     ap.add_argument('--open', default='Tamriel,DLC2SolstheimWorld',
@@ -212,17 +195,19 @@ def main():
     args = ap.parse_args()
     open_worlds = set(w.strip() for w in args.open.split(',') if w.strip())
 
-    text = io.open(args.gamemode, encoding='utf-8', newline='').read()
-    ores = ore_table(text)
-    by_door = generated(text, 'BUILDING_BY_DOOR')
-    names = generated(text, 'BUILDING_NAME')
+    def table(name):
+        f = gamemode_tables.table_file(name, args.tables)
+        return gamemode_tables.read(name, args.tables) if os.path.isfile(f) else None
+    ores = table('ORES_BY_BASE')
+    by_door = table('BUILDING_BY_DOOR')
+    names = table('BUILDING_NAME')
     # A table that is not there would make every answer below "no mines", which
     # reads exactly like a world with no mines in it. So it stops instead.
     for label, t in (('ORES_BY_BASE', ores), ('BUILDING_BY_DOOR', by_door),
                      ('BUILDING_NAME', names)):
         if not t:
-            print('STOP. %s is not in %s, so there is nothing to measure against.'
-                  % (label, args.gamemode))
+            print('STOP. the %s table is not in %s, so there is nothing to measure against.'
+                  % (label, args.tables or gamemode_tables.DIR))
             return 1
     doors = json.load(io.open(args.doors, encoding='utf-8'))
     claimable = set(by_door.values())

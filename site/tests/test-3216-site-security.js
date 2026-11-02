@@ -34,10 +34,11 @@ const http = require('http');
 const net = require('net');
 const os = require('os');
 const path = require('path');
+const siteFiles = require('../../tests/site-files');
 
 const SITE = process.argv[2] || path.join(__dirname, '..', '..', 'site', 'server.js');
 const CR = String.fromCharCode(13);
-const SERVER = fs.readFileSync(SITE, 'utf8').split(CR).join('');
+const SERVER = siteFiles.source(SITE).split(CR).join('');
 const HOME = fs.readFileSync(path.join(__dirname, '..', '..', 'site', 'public', 'home.js'), 'utf8').split(CR).join('');
 
 let pass = 0, fail = 0;
@@ -74,7 +75,7 @@ const made = [];
 function scratch(cfgExtra) {
   const dir = fs.mkdtempSync(path.join(TEMP, 'ts-3216-'));
   made.push(dir);
-  fs.copyFileSync(SITE, path.join(dir, 'server.js'));
+  siteFiles.copy(dir, SITE);
   fs.mkdirSync(path.join(dir, 'data'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(Object.assign({
     password: crypto.randomBytes(12).toString('hex'),

@@ -1,8 +1,7 @@
 <#
   test-no-bethesda-files.ps1
 
-  No file of Bethesda's is ever packed, put in the installer or named in a
-  release record: not the game, not its Creation Kit, not a copy of one of its
+  No file of Bethesda's is ever packed or named in a release record: not the game, not its Creation Kit, not a copy of one of its
   programs. And no backup either. Issue #1152.
 
   WHY THIS EXISTS. On 29 September the dev record the feed named
@@ -30,9 +29,10 @@
     2. The measured record itself, where this machine has it
        (%LOCALAPPDATA%\Thornswood\feed\dev\published.json): every Creation Kit
        entry in it is caught, and none of Data\Platform is.
-    3. Check-Secrets, which reads every pack, the installer's stage and a first
-       record before anything is sent: a pack or stage carrying any of them
-       fails, by rule name.
+    3. Check-Secrets, which reads every pack and a first record before
+       anything is sent: a pack carrying any of them fails, by rule name. The
+       old installer, its own scan and its stage went with it (#4824); the
+       setup's game files are the feed's packs and client runtime.
     4. Publish-Update's record guard and Rollback-Feed's filter, each lifted out
        of the shipped script between its markers and run.
     5. The launcher: OwnGame.BethesdaTool, lifted and compiled with the
@@ -55,7 +55,6 @@ $Repo = Split-Path -Parent $Here
 $RulesPath   = Join-Path $Repo 'scripts\release\Ship-Rules.ps1'
 $PublishPath = Join-Path $Repo 'scripts\release\Publish-Update.ps1'
 $RollPath    = Join-Path $Repo 'scripts\release\Rollback-Feed.ps1'
-$PackagePath = Join-Path $Repo 'scripts\release\Package-Thornswood.ps1'
 $SecretsPath = Join-Path $Repo 'scripts\dev\Check-Secrets.ps1'
 $OwnGamePath = Join-Path $Repo 'launcher\app\OwnGame.cs'
 . (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's compiler and C# version (#2821)
@@ -213,7 +212,7 @@ if (Test-Path -LiteralPath $Record) {
     Skip "no dev record at $Record to measure against"
 }
 
-# ---- 3. Check-Secrets, over a pack and a stage ---------------------------------
+# ---- 3. Check-Secrets, over a pack ---------------------------------------------
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('ts-nobethesda-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 Add-Type -AssemblyName System.IO.Compression
@@ -264,20 +263,16 @@ try {
     $r = Invoke-Secrets @('-Zip', $good)
     Yes 'a pack of ours alone passes' ($r.Code -eq 0)
 
-    $stage = Join-Path $tmp 'stage'
-    New-Item -ItemType Directory -Force -Path (Join-Path $stage 'payload\Papyrus Compiler') | Out-Null
-    [IO.File]::WriteAllText((Join-Path $stage 'payload\Papyrus Compiler\PapyrusCompiler.exe'), 'x')
-    $r = Invoke-Secrets @('-Dir', $stage)
-    Yes 'an installer stage carrying the Papyrus compiler fails' ($r.Code -eq 1 -and $r.Out.Contains('never-ship-bethesda'))
+    $pc = Join-Path $tmp 'pack-compiler.zip'
+    New-Zip $pc @('game/Papyrus Compiler/PapyrusCompiler.exe')
+    $r = Invoke-Secrets @('-Zip', $pc)
+    Yes 'a pack carrying the Papyrus compiler fails' ($r.Code -eq 1 -and $r.Out.Contains('never-ship-bethesda'))
 } finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# The installer and the packs both leave them out by the same rule, and both
-# are read by Check-Secrets before anything leaves.
-$pkg = Get-Content -LiteralPath $PackagePath -Raw
-Yes 'the installer''s scan asks Test-ShipMachine' ($pkg -match 'if \(Test-ShipMachine \$rel\)')
-Yes '  and its stage goes through Check-Secrets' ($pkg -match "Check-Secrets\.ps1'\) -Dir \`$stage")
+# The packs leave them out by the rule, and are read by Check-Secrets before
+# anything leaves.
 $pub = Get-Content -LiteralPath $PublishPath -Raw
 Yes 'the packs'' scan asks Test-Machine' ($pub -match 'if \(Test-Machine \$rel\) \{ continue \}')
 Yes '  and every pack goes through Check-Secrets' ($pub -match "Check-Secrets\.ps1'\) -Zip \`$scanZips")

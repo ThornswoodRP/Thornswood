@@ -33,7 +33,7 @@
 // #1560) are not found by any title match; this does not pretend to.
 //
 // The title reaches the script through the environment (TITLE), never pasted
-// into a command. The comment is plain, as Developer-Guide.md says an issue
+// into a command. The comment is plain, as docs/guide/the-board.md says an issue
 // comment is written.
 //
 // Exits 0 when it has looked (a comment made or none due), 1 when GitHub

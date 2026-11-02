@@ -38,6 +38,7 @@
 const REPO_DIR = require('path').join(__dirname, '..', '..'); // this harness is in site\tests\, the repository is two folders up
 const fs = require('fs');
 const path = require('path');
+const siteFiles = require('../../tests/site-files');
 const os = require('os');
 const net = require('net');
 const crypto = require('crypto');
@@ -74,7 +75,7 @@ console.log('THE FILES');
 const home = read(path.join(PUBLIC, 'home.html')) || '';
 const homeScript = read(path.join(PUBLIC, 'home.js')) || '';
 const hub = read(path.join(PUBLIC, 'index.html')) || '';
-const serverText = read(path.join(APP, 'server.js')) || '';
+const serverText = siteFiles.source() || '';
 
 // The file npm and cdnjs both publish as marked 12.0.2's marked.min.js,
 // measured on 24 September 2026. Line endings are taken back to LF first,
@@ -360,7 +361,7 @@ function copy(rel) {
   fs.mkdirSync(path.dirname(to), { recursive: true });
   fs.copyFileSync(path.join(APP, rel), to);
 }
-copy('server.js');
+siteFiles.copy(work);
 ['home.html', 'home.js', 'index.html', MARKED, 'fonts.css'].forEach(function (f) { copy(path.join('public', f)); });
 faces.forEach(function (u) { copy(path.join('public', u.slice(5, -1))); });
 fs.readdirSync(path.join(APP, 'data', 'site')).forEach(function (f) { copy(path.join('data', 'site', f)); });

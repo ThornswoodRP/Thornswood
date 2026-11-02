@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Runtime.Serialization;
-using System.Runtime.Serialization.Json;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Microsoft.Win32.SafeHandles;
 
@@ -68,16 +68,26 @@ namespace Thornswood
     /// </summary>
     static partial class OwnGame
     {
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        static extern bool CreateHardLink(string lpFileName, string lpExistingFileName, IntPtr lpSecurityAttributes);
+        [LibraryImport("kernel32.dll", EntryPoint = "CreateHardLinkW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool CreateHardLink(string lpFileName, string lpExistingFileName, IntPtr lpSecurityAttributes);
+
+        // FILETIME as the structure below holds it. Our own rather than
+        // ComTypes.FILETIME, which is another assembly's, so the generated
+        // call cannot count it as plain memory and refuses it (#4823).
+        struct FileTime
+        {
+            public int dwLowDateTime;
+            public int dwHighDateTime;
+        }
 
         [StructLayout(LayoutKind.Sequential)]
         struct FileInfoByHandle
         {
             public uint FileAttributes;
-            public System.Runtime.InteropServices.ComTypes.FILETIME CreationTime;
-            public System.Runtime.InteropServices.ComTypes.FILETIME LastAccessTime;
-            public System.Runtime.InteropServices.ComTypes.FILETIME LastWriteTime;
+            public FileTime CreationTime;
+            public FileTime LastAccessTime;
+            public FileTime LastWriteTime;
             public uint VolumeSerialNumber;
             public uint FileSizeHigh;
             public uint FileSizeLow;
@@ -86,11 +96,12 @@ namespace Thornswood
             public uint FileIndexLow;
         }
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        static extern bool GetFileInformationByHandle(SafeFileHandle hFile, out FileInfoByHandle info);
+        [LibraryImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool GetFileInformationByHandle(SafeFileHandle hFile, out FileInfoByHandle info);
 
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        static extern SafeFileHandle CreateFile(string lpFileName, uint dwDesiredAccess, uint dwShareMode,
+        [LibraryImport("kernel32.dll", EntryPoint = "CreateFileW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+        private static partial SafeFileHandle CreateFile(string lpFileName, uint dwDesiredAccess, uint dwShareMode,
             IntPtr lpSecurityAttributes, uint dwCreationDisposition, uint dwFlagsAndAttributes, IntPtr hTemplateFile);
 
         // Links opens a file for its attributes alone (#2210).
@@ -150,7 +161,7 @@ namespace Thornswood
         ///
         /// Internal, and the one way the launcher writes a record it keeps
         /// in its Profile (#2591): Updater's release.txt and
-        /// release-files.txt (Sync.cs) and the news cache (FeedNews.cs) go
+        /// release-files.txt (Sync.cs) and the settings cache (FeedSettings.cs) go
         /// through it too. They deleted the old file and then moved the new
         /// one in; killed 150 times, that left the record missing 30 times.
         /// </summary>
@@ -170,7 +181,7 @@ namespace Thornswood
             SwapIn(next, path);
         }
 
-        /// <summary>The same, for a record kept byte for byte (the news cache).</summary>
+        /// <summary>The same, for a record kept byte for byte (the settings cache).</summary>
         internal static void WriteRecord(string path, byte[] bytes)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path));
@@ -268,8 +279,9 @@ namespace Thornswood
 
         const int MoveReplaceExisting = 0x1;
         const int MoveWriteThrough = 0x8;
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        static extern bool MoveFileEx(string existing, string replacement, int flags);
+        [LibraryImport("kernel32.dll", EntryPoint = "MoveFileExW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool MoveFileEx(string existing, string replacement, int flags);
 
         // ---- #2599: one name of the game folder replaced whole ------------------
 
@@ -330,10 +342,11 @@ namespace Thornswood
             }
         }
 
-        [DllImport("kernel32.dll", EntryPoint = "CreateFileW", CharSet = CharSet.Unicode, SetLastError = true)]
-        static extern Microsoft.Win32.SafeHandles.SafeFileHandle OpenForDelete(string name, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
-        [DllImport("kernel32.dll", SetLastError = true)]
-        static extern bool SetFileInformationByHandle(Microsoft.Win32.SafeHandles.SafeFileHandle file, int infoClass, ref int info, int size);
+        [LibraryImport("kernel32.dll", EntryPoint = "CreateFileW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+        private static partial Microsoft.Win32.SafeHandles.SafeFileHandle OpenForDelete(string name, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
+        [LibraryImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool SetFileInformationByHandle(Microsoft.Win32.SafeHandles.SafeFileHandle file, int infoClass, ref int info, int size);
 
         // ---- end #2599 -----------------------------------------------------------
 
@@ -3285,23 +3298,32 @@ namespace Thornswood
             return l;
         }
 
-        [DataContract]
         class VortexRecord
         {
-            [DataMember] public string stagingPath;
-            [DataMember] public VortexFile[] files;
+            [JsonInclude] public string stagingPath;
+            [JsonInclude] public VortexFile[] files;
         }
 
-        [DataContract]
         class VortexFile
         {
-            [DataMember] public string relPath;
-            [DataMember] public string source;
+            [JsonInclude] public string relPath;
+            [JsonInclude] public string source;
             // The file's time as Vortex deployed it, in milliseconds (#2210).
             // Read as whatever the record holds, so a record whose time is not
             // a plain number is not refused whole for it.
-            [DataMember(IsRequired = false)] public object time;
+            [JsonInclude] public object time;
         }
+
+        /// <summary>
+        /// Vortex's deployment records for System.Text.Json, with the code
+        /// made at build time (#4823). time comes back as a JsonElement, whose
+        /// text is the number or string as the record has it, which is what
+        /// the old serializer's boxed value printed as. Strings read loosely
+        /// (LooseString).
+        /// </summary>
+        [JsonSourceGenerationOptions(Converters = new[] { typeof(LooseString) })]
+        [JsonSerializable(typeof(VortexRecord))]
+        partial class VortexJson : JsonSerializerContext { }
 
         /// <summary>What Vortex's records in a folder list, and where Vortex keeps each file.</summary>
         class Record
@@ -3345,7 +3367,7 @@ namespace Thornswood
                     try
                     {
                         using (var fs = File.OpenRead(f))
-                            doc = (VortexRecord)new DataContractJsonSerializer(typeof(VortexRecord)).ReadObject(fs);
+                            doc = JsonSerializer.Deserialize(fs, VortexJson.Default.VortexRecord);
                     }
                     catch { /* doc stays null, and the record is refused just below with a line saying so */ }
                     if (doc == null || doc.files == null || string.IsNullOrEmpty(doc.stagingPath))
@@ -3739,8 +3761,9 @@ namespace Thornswood
             return where + ", on " + theirs + ", and Thornswood is in " + Paths.Root + ", on " + here +
                    ". A hard link is the same file under a second name, and Windows cannot make one across two drives, " +
                    "so the folder cannot be made while they are apart. Either of these puts them on one drive. " +
-                   "Install Thornswood on " + theirs + " by running the Thornswood setup program again, the one from the " +
-                   "Downloads page, and choosing " + theirs + " when it asks where to put it, which installs it in " +
+                   "Install Thornswood on " + theirs + " by running Thornswood-Setup.exe again, the one from the " +
+                   "Downloads page, letting it replace the launcher already installed, and choosing " + theirs +
+                   " when Thornswood's install window asks where to put it, which installs it in " +
                    theirs + "\\Thornswood. Or " + move + ".";
         }
 

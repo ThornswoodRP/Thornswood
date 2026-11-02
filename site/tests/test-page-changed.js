@@ -8,6 +8,7 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const siteFiles = require('../../tests/site-files');
 
 const ROOT = path.join(__dirname, '..', '..');
 const PAGES = ['terms', 'privacy', 'rules'];
@@ -43,7 +44,7 @@ function sha(s) {
 }
 
 const list = JSON.parse(fs.readFileSync(path.join(ROOT, 'site', 'public', 'page-versions.json'), 'utf8'));
-const server = fs.readFileSync(path.join(ROOT, 'site', 'server.js'), 'utf8');
+const server = siteFiles.source();
 
 yes('the site looks a hash up at /api/page-version',
     server.indexOf('page-version') >= 0 && server.indexOf('function findPageVersion') >= 0);

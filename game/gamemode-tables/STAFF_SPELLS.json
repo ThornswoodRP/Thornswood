@@ -1,0 +1,962 @@
+{
+"10f7ee:Skyrim.esm":{
+"name":"Thunderbolt",
+"school":"destruction",
+"rank":"expert",
+"tomes":["10f7f5:Skyrim.esm"]
+},
+"35d81:Skyrim.esm":{
+"name":"Wall of Storms",
+"school":"destruction",
+"rank":"expert",
+"tomes":["a270b:Skyrim.esm"]
+},
+"35d80:Skyrim.esm":{
+"name":"Wall of Frost",
+"school":"destruction",
+"rank":"expert",
+"tomes":["a270a:Skyrim.esm"]
+},
+"35d7f:Skyrim.esm":{
+"name":"Wall of Flames",
+"school":"destruction",
+"rank":"expert",
+"tomes":["a2709:Skyrim.esm"]
+},
+"4b146:Skyrim.esm":{
+"name":"Turn Lesser Undead",
+"school":"restoration",
+"rank":"advanced",
+"tomes":["a271f:Skyrim.esm"]
+},
+"5dd5d:Skyrim.esm":{
+"name":"Turn Undead",
+"school":"restoration",
+"rank":"advanced",
+"tomes":["a2721:Skyrim.esm"]
+},
+"5dd5e:Skyrim.esm":{
+"name":"Turn Greater Undead",
+"school":"restoration",
+"rank":"expert",
+"tomes":["a2729:Skyrim.esm"]
+},
+"2dd2a:Skyrim.esm":{
+"name":"Sparks",
+"school":"destruction",
+"rank":"novice",
+"tomes":["9cd53:Skyrim.esm"]
+},
+"4dba4:Skyrim.esm":{
+"name":"Soul Trap",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["9cd54:Skyrim.esm"]
+},
+"4deef:Skyrim.esm":{
+"name":"Rout",
+"school":"illusion",
+"rank":"expert",
+"tomes":["a2718:Skyrim.esm"]
+},
+"96d94:Skyrim.esm":{
+"name":"Reanimate Greater Corpse",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["a26f2:Skyrim.esm"]
+},
+"247c86:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Toxic Cloud",
+"school":"restoration",
+"rank":"expert",
+"tomes":["a2726:Skyrim.esm"]
+},
+"26121c:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Black Hand",
+"school":"restoration",
+"rank":"advanced",
+"tomes":["a2725:Skyrim.esm"]
+},
+"65bd7:Skyrim.esm":{
+"name":"Reanimate Corpse",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["a26eb:Skyrim.esm"]
+},
+"4deec:Skyrim.esm":{
+"name":"Rally",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["a2713:Skyrim.esm"]
+},
+"7e8e1:Skyrim.esm":{
+"name":"Reanimate Lesser Corpse",
+"school":"conjuration",
+"rank":"novice",
+"tomes":["9e2aa:Skyrim.esm"]
+},
+"5ad5f:Skyrim.esm":{
+"name":"Paralyze",
+"school":"alteration",
+"rank":"expert",
+"tomes":["a26e8:Skyrim.esm"]
+},
+"43323:Skyrim.esm":{
+"name":"Magelight",
+"school":"alteration",
+"rank":"advanced",
+"tomes":["a26e2:Skyrim.esm"]
+},
+"10f7ed:Skyrim.esm":{
+"name":"Incinerate",
+"school":"destruction",
+"rank":"expert",
+"tomes":["10f7f4:Skyrim.esm"]
+},
+"10f7ec:Skyrim.esm":{
+"name":"Icy Spear",
+"school":"destruction",
+"rank":"expert",
+"tomes":["10f7f3:Skyrim.esm"]
+},
+"45f9c:Skyrim.esm":{
+"name":"Ice Storm",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["a2707:Skyrim.esm"]
+},
+"2b96c:Skyrim.esm":{
+"name":"Ice Spike",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["a26fe:Skyrim.esm"]
+},
+"12fd2:Skyrim.esm":{
+"name":"Heal Other",
+"school":"restoration",
+"rank":"advanced",
+"tomes":["a2727:Skyrim.esm"]
+},
+"4d3f2:Skyrim.esm":{
+"name":"Healing Hands",
+"school":"restoration",
+"rank":"advanced",
+"tomes":["a271e:Skyrim.esm"]
+},
+"4deeb:Skyrim.esm":{
+"name":"Fury",
+"school":"illusion",
+"rank":"novice",
+"tomes":["9e2ac:Skyrim.esm"]
+},
+"2b96b:Skyrim.esm":{
+"name":"Frostbite",
+"school":"destruction",
+"rank":"novice",
+"tomes":["9cd52:Skyrim.esm"]
+},
+"4deee:Skyrim.esm":{
+"name":"Frenzy",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["a2714:Skyrim.esm"]
+},
+"12fcd:Skyrim.esm":{
+"name":"Flames",
+"school":"destruction",
+"rank":"novice",
+"tomes":["9cd51:Skyrim.esm"]
+},
+"12fd0:Skyrim.esm":{
+"name":"Firebolt",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["a26fd:Skyrim.esm"]
+},
+"1c789:Skyrim.esm":{
+"name":"Fireball",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["a2706:Skyrim.esm"]
+},
+"4deea:Skyrim.esm":{
+"name":"Fear",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["a2712:Skyrim.esm"]
+},
+"6f952:Skyrim.esm":{
+"name":"Expel Daedra",
+"school":"conjuration",
+"rank":"expert",
+"tomes":["a26f8:Skyrim.esm"]
+},
+"96d95:Skyrim.esm":{
+"name":"Dread Zombie",
+"school":"conjuration",
+"rank":"expert",
+"tomes":["a26f7:Skyrim.esm"]
+},
+"4dee8:Skyrim.esm":{
+"name":"Courage",
+"school":"illusion",
+"rank":"novice",
+"tomes":["9e2ad:Skyrim.esm"]
+},
+"204c5:Skyrim.esm":{
+"name":"Conjure Storm Atronach",
+"school":"conjuration",
+"rank":"expert",
+"tomes":["a26f0:Skyrim.esm"]
+},
+"204c4:Skyrim.esm":{
+"name":"Conjure Frost Atronach",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["a26ef:Skyrim.esm"]
+},
+"204c3:Skyrim.esm":{
+"name":"Conjure Flame Atronach",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["a26ec:Skyrim.esm"]
+},
+"640b6:Skyrim.esm":{
+"name":"Conjure Familiar",
+"school":"conjuration",
+"rank":"novice",
+"tomes":["9e2ab:Skyrim.esm"]
+},
+"6f953:Skyrim.esm":{
+"name":"Command Daedra",
+"school":"conjuration",
+"rank":"expert",
+"tomes":["a26f6:Skyrim.esm"]
+},
+"45f9d:Skyrim.esm":{
+"name":"Chain Lightning",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["a2708:Skyrim.esm"]
+},
+"4dee9:Skyrim.esm":{
+"name":"Calm",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["a2711:Skyrim.esm"]
+},
+"6d22c:Skyrim.esm":{
+"name":"Banish Daedra",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["a26ee:Skyrim.esm"]
+},
+"2dd29:Skyrim.esm":{
+"name":"Lightning Bolt",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["a26ff:Skyrim.esm"]
+},
+"17b5c9:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Panic",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["17b5db:Odin - Skyrim Magic Overhaul.esp"]
+},
+"18c58c:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Conjure Clannfear",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["1afd19:Odin - Skyrim Magic Overhaul.esp"]
+},
+"8558a:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Simulacrum",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["21a2f7:Odin - Skyrim Magic Overhaul.esp"]
+},
+"247c89:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Sun Storm",
+"school":"restoration",
+"rank":"expert",
+"tomes":["261216:Odin - Skyrim Magic Overhaul.esp"]
+},
+"27a7b1:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Corrosion",
+"school":"alteration",
+"rank":"advanced",
+"tomes":["293d18:Odin - Skyrim Magic Overhaul.esp"]
+},
+"173074:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Vulnerability",
+"school":"alteration",
+"rank":"advanced",
+"tomes":["275692:Odin - Skyrim Magic Overhaul.esp"]
+},
+"17b5c2:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Soothe",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["17b5d8:Odin - Skyrim Magic Overhaul.esp"]
+},
+"17b5d1:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Subjugate",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["17b5da:Odin - Skyrim Magic Overhaul.esp"]
+},
+"27569c:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Purge Magic",
+"school":"illusion",
+"rank":"expert",
+"tomes":["27569e:Odin - Skyrim Magic Overhaul.esp"]
+},
+"2a3051:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Frosthand",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["2a3054:Odin - Skyrim Magic Overhaul.esp"]
+},
+"d4349:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Conjure Gloom Wraith",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["d4351:Odin - Skyrim Magic Overhaul.esp"]
+},
+"3f52:Dawnguard.esm":{
+"name":"Sun Fire",
+"school":"restoration",
+"rank":"advanced",
+"tomes":["3f51:Dawnguard.esm"]
+},
+"1e78ad:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Arctic Frost",
+"school":"destruction",
+"rank":"expert",
+"tomes":["26b450:Odin - Skyrim Magic Overhaul.esp"]
+},
+"27f2e:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Ice Shards",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["3e090:Odin - Skyrim Magic Overhaul.esp"]
+},
+"18c58e:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Conjure Daedroth",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["1afd1a:Odin - Skyrim Magic Overhaul.esp"]
+},
+"1967b9:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Conjure Houndmaster",
+"school":"conjuration",
+"rank":"expert",
+"tomes":["1afd1b:Odin - Skyrim Magic Overhaul.esp"]
+},
+"1a5ad7:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Conjure Ursine Familiar",
+"school":"conjuration",
+"rank":"expert",
+"tomes":["1afd1e:Odin - Skyrim Magic Overhaul.esp"]
+},
+"1916b1:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Conjure Dread Shade",
+"school":"conjuration",
+"rank":"expert",
+"tomes":["1afd22:Odin - Skyrim Magic Overhaul.esp"]
+},
+"224526:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Discordant Wail",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["23897e:Odin - Skyrim Magic Overhaul.esp"]
+},
+"1e279f:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Lightning Grasp",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["3db25:Odin - Skyrim Magic Overhaul.esp"]
+},
+"1a5aea:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Conjure Feline Familiar",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["1afd1d:Odin - Skyrim Magic Overhaul.esp"]
+},
+"2a304f:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Firehand",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["2a3053:Odin - Skyrim Magic Overhaul.esp"]
+},
+"21f3fd:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Mute",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["21f417:Odin - Skyrim Magic Overhaul.esp"]
+},
+"27a7b4:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Dire Corrosion",
+"school":"alteration",
+"rank":"expert",
+"tomes":["293d19:Odin - Skyrim Magic Overhaul.esp"]
+},
+"159d8:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Enervate",
+"school":"restoration",
+"rank":"expert",
+"tomes":["3eb87:Odin - Skyrim Magic Overhaul.esp"]
+},
+"1dd699:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Shockbloom",
+"school":"destruction",
+"rank":"expert",
+"tomes":["26b44c:Odin - Skyrim Magic Overhaul.esp"]
+},
+"3e0f:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Destroy Living",
+"school":"restoration",
+"rank":"advanced",
+"tomes":["3eb82:Odin - Skyrim Magic Overhaul.esp"]
+},
+"21a2eb:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Shadow Legion",
+"school":"illusion",
+"rank":"expert",
+"tomes":["21a2f8:Odin - Skyrim Magic Overhaul.esp"]
+},
+"1d347b:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Arctic Blast",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["26b446:Odin - Skyrim Magic Overhaul.esp"]
+},
+"24e49:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Charged Storm",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["26b44e:Odin - Skyrim Magic Overhaul.esp"]
+},
+"1d3482:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Taldam's Scorcher",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["26b445:Odin - Skyrim Magic Overhaul.esp"]
+},
+"17b5bb:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Bravery",
+"school":"illusion",
+"rank":"expert",
+"tomes":["17b5d9:Odin - Skyrim Magic Overhaul.esp"]
+},
+"1d8588:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Firebloom",
+"school":"destruction",
+"rank":"expert",
+"tomes":["26b44a:Odin - Skyrim Magic Overhaul.esp"]
+},
+"293d0e:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Dire Vulnerability",
+"school":"alteration",
+"rank":"expert",
+"tomes":["293d12:Odin - Skyrim Magic Overhaul.esp"]
+},
+"1dd697:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Frostbloom",
+"school":"destruction",
+"rank":"expert",
+"tomes":["26b44b:Odin - Skyrim Magic Overhaul.esp"]
+},
+"1d347e:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Flame Darts",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["26b44d:Odin - Skyrim Magic Overhaul.esp"]
+},
+"2100d4:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Dominate",
+"school":"illusion",
+"rank":"expert",
+"tomes":["2100db:Odin - Skyrim Magic Overhaul.esp"]
+},
+"1e27a7:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Thundering Grasp",
+"school":"destruction",
+"rank":"expert",
+"tomes":["3db2c:Odin - Skyrim Magic Overhaul.esp"]
+},
+"1d858b:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Wildfire",
+"school":"destruction",
+"rank":"expert",
+"tomes":["26b44f:Odin - Skyrim Magic Overhaul.esp"]
+},
+"17b5b3:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Rage",
+"school":"illusion",
+"rank":"expert",
+"tomes":["17b5d7:Odin - Skyrim Magic Overhaul.esp"]
+},
+"38b6:Dawnguard.esm":{
+"name":"Vampire's Bane",
+"school":"restoration",
+"rank":"advanced",
+"tomes":["3f4d:Dawnguard.esm"]
+},
+"7c83b:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Stormhand",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["2a3055:Odin - Skyrim Magic Overhaul.esp"]
+},
+"233865:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Greater Simulacrum",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["23386c:Odin - Skyrim Magic Overhaul.esp"]
+},
+"229634:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Crying Eye",
+"school":"illusion",
+"rank":"novice",
+"tomes":["22e73b:Odin - Skyrim Magic Overhaul.esp"]
+},
+"20afc9:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Command",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["20afd0:Odin - Skyrim Magic Overhaul.esp"]
+},
+"2c169f:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Hush",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["2c16a3:Odin - Skyrim Magic Overhaul.esp"]
+},
+"256fce:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Viperbolt",
+"school":"restoration",
+"rank":"advanced",
+"tomes":["2611fa:Odin - Skyrim Magic Overhaul.esp"]
+},
+"224524:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Dirge",
+"school":"illusion",
+"rank":"expert",
+"tomes":["23897f:Odin - Skyrim Magic Overhaul.esp"]
+},
+"21f405:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Wizard Rend",
+"school":"illusion",
+"rank":"expert",
+"tomes":["21f416:Odin - Skyrim Magic Overhaul.esp"]
+},
+"289aec:Odin - Skyrim Magic Overhaul.esp":{
+"name":"Haste Mount",
+"school":"alteration",
+"rank":"advanced",
+"tomes":["298e2d:Odin - Skyrim Magic Overhaul.esp"]
+},
+"b646:Apocalypse - Magic of Skyrim.esp":{
+"name":"Drop Zone",
+"school":"alteration",
+"rank":"advanced",
+"tomes":["3c51a:Apocalypse - Magic of Skyrim.esp"]
+},
+"15e721:Apocalypse - Magic of Skyrim.esp":{
+"name":"Poisoned Chalice",
+"school":"restoration",
+"rank":"expert",
+"tomes":["15e723:Apocalypse - Magic of Skyrim.esp"]
+},
+"133d6:Apocalypse - Magic of Skyrim.esp":{
+"name":"Conjure Dremora Honor Guard",
+"school":"conjuration",
+"rank":"expert",
+"tomes":["3d5b2:Apocalypse - Magic of Skyrim.esp"]
+},
+"27144:Apocalypse - Magic of Skyrim.esp":{
+"name":"Conjure Cat Totem",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["3d048:Apocalypse - Magic of Skyrim.esp"]
+},
+"12364:Apocalypse - Magic of Skyrim.esp":{
+"name":"Conjure Dremora Pit Fighter",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["3d049:Apocalypse - Magic of Skyrim.esp"]
+},
+"15e73e:Apocalypse - Magic of Skyrim.esp":{
+"name":"Ice Prism",
+"school":"destruction",
+"rank":"expert",
+"tomes":["16160a:Apocalypse - Magic of Skyrim.esp"]
+},
+"1228a8:Apocalypse - Magic of Skyrim.esp":{
+"name":"Conjure Xivilai Sorcerer",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["3d04b:Apocalypse - Magic of Skyrim.esp"]
+},
+"3789f:Apocalypse - Magic of Skyrim.esp":{
+"name":"Seidstone",
+"school":"illusion",
+"rank":"expert",
+"tomes":["3e60f:Apocalypse - Magic of Skyrim.esp"]
+},
+"128e8:Apocalypse - Magic of Skyrim.esp":{
+"name":"Conjure Herne",
+"school":"conjuration",
+"rank":"expert",
+"tomes":["3d5b3:Apocalypse - Magic of Skyrim.esp"]
+},
+"85910:Apocalypse - Magic of Skyrim.esp":{
+"name":"Incendiary Flow",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["3db2b:Apocalypse - Magic of Skyrim.esp"]
+},
+"7c83b:Apocalypse - Magic of Skyrim.esp":{
+"name":"Thundercrack",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["3db25:Apocalypse - Magic of Skyrim.esp"]
+},
+"294cd:Apocalypse - Magic of Skyrim.esp":{
+"name":"Bolide",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["3db27:Apocalypse - Magic of Skyrim.esp"]
+},
+"1879:Apocalypse - Magic of Skyrim.esp":{
+"name":"Electrosphere",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["3db28:Apocalypse - Magic of Skyrim.esp"]
+},
+"24b44:Apocalypse - Magic of Skyrim.esp":{
+"name":"Ice Shiv",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["3db2a:Apocalypse - Magic of Skyrim.esp"]
+},
+"17509:Apocalypse - Magic of Skyrim.esp":{
+"name":"Curse of the Silent",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["3e5ff:Apocalypse - Magic of Skyrim.esp"]
+},
+"1f1fb:Apocalypse - Magic of Skyrim.esp":{
+"name":"Decompose",
+"school":"restoration",
+"rank":"expert",
+"tomes":["3eb8e:Apocalypse - Magic of Skyrim.esp"]
+},
+"2878:Apocalypse - Magic of Skyrim.esp":{
+"name":"Lightning Strike",
+"school":"destruction",
+"rank":"expert",
+"tomes":["3e092:Apocalypse - Magic of Skyrim.esp"]
+},
+"294d4:Apocalypse - Magic of Skyrim.esp":{
+"name":"Bombardment",
+"school":"destruction",
+"rank":"expert",
+"tomes":["3e094:Apocalypse - Magic of Skyrim.esp"]
+},
+"159d8:Apocalypse - Magic of Skyrim.esp":{
+"name":"Ruin",
+"school":"restoration",
+"rank":"advanced",
+"tomes":["3eb87:Apocalypse - Magic of Skyrim.esp"]
+},
+"3682f:Apocalypse - Magic of Skyrim.esp":{
+"name":"Illusory Flames",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["3e602:Apocalypse - Magic of Skyrim.esp"]
+},
+"378a9:Apocalypse - Magic of Skyrim.esp":{
+"name":"Mind Vision",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["3e603:Apocalypse - Magic of Skyrim.esp"]
+},
+"12dc:Apocalypse - Magic of Skyrim.esp":{
+"name":"Nature's Balance",
+"school":"restoration",
+"rank":"expert",
+"tomes":["3eb8c:Apocalypse - Magic of Skyrim.esp"]
+},
+"31c4d:Apocalypse - Magic of Skyrim.esp":{
+"name":"Shadowbond",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["3e60a:Apocalypse - Magic of Skyrim.esp"]
+},
+"a4ef7:Apocalypse - Magic of Skyrim.esp":{
+"name":"Empathic Agony",
+"school":"illusion",
+"rank":"expert",
+"tomes":["3e60c:Apocalypse - Magic of Skyrim.esp"]
+},
+"378ae:Apocalypse - Magic of Skyrim.esp":{
+"name":"Mind Control",
+"school":"illusion",
+"rank":"expert",
+"tomes":["3e60d:Apocalypse - Magic of Skyrim.esp"]
+},
+"13e4fd:Apocalypse - Magic of Skyrim.esp":{
+"name":"Leech Seed",
+"school":"restoration",
+"rank":"advanced",
+"tomes":["3eb7f:Apocalypse - Magic of Skyrim.esp"]
+},
+"3e0f:Apocalypse - Magic of Skyrim.esp":{
+"name":"Slay Living",
+"school":"restoration",
+"rank":"advanced",
+"tomes":["3eb82:Apocalypse - Magic of Skyrim.esp"]
+},
+"35452:Apocalypse - Magic of Skyrim.esp":{
+"name":"Finger of Death",
+"school":"restoration",
+"rank":"advanced",
+"tomes":["3eb84:Apocalypse - Magic of Skyrim.esp"]
+},
+"2cd7e:Apocalypse - Magic of Skyrim.esp":{
+"name":"Atronach Mark",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["3d043:Apocalypse - Magic of Skyrim.esp"]
+},
+"85594:Apocalypse - Magic of Skyrim.esp":{
+"name":"Blaze",
+"school":"destruction",
+"rank":"novice",
+"tomes":["89709:Apocalypse - Magic of Skyrim.esp"]
+},
+"128df:Apocalypse - Magic of Skyrim.esp":{
+"name":"Conjure Dremora Champion",
+"school":"conjuration",
+"rank":"expert",
+"tomes":["3d5b1:Apocalypse - Magic of Skyrim.esp"]
+},
+"88694:Apocalypse - Magic of Skyrim.esp":{
+"name":"Azure Reconstruction",
+"school":"conjuration",
+"rank":"novice",
+"tomes":["89706:Apocalypse - Magic of Skyrim.esp"]
+},
+"124ec5:Apocalypse - Magic of Skyrim.esp":{
+"name":"Summoning Rune",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["3d04e:Apocalypse - Magic of Skyrim.esp"]
+},
+"2e31:Apocalypse - Magic of Skyrim.esp":{
+"name":"Undermine",
+"school":"alteration",
+"rank":"advanced",
+"tomes":["3c520:Apocalypse - Magic of Skyrim.esp"]
+},
+"8558a:Apocalypse - Magic of Skyrim.esp":{
+"name":"Pale Shadow",
+"school":"illusion",
+"rank":"novice",
+"tomes":["8970c:Apocalypse - Magic of Skyrim.esp"]
+},
+"1fcd9:Apocalypse - Magic of Skyrim.esp":{
+"name":"Welling Blood",
+"school":"restoration",
+"rank":"advanced",
+"tomes":["3eb7d:Apocalypse - Magic of Skyrim.esp"]
+},
+"12214:Apocalypse - Magic of Skyrim.esp":{
+"name":"Horrid Wilting",
+"school":"restoration",
+"rank":"advanced",
+"tomes":["3eb85:Apocalypse - Magic of Skyrim.esp"]
+},
+"36a03:Apocalypse - Magic of Skyrim.esp":{
+"name":"Lamb of Mara",
+"school":"restoration",
+"rank":"advanced",
+"tomes":["3eb7e:Apocalypse - Magic of Skyrim.esp"]
+},
+"1a1b79:Apocalypse - Magic of Skyrim.esp":{
+"name":"Gank",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["1a1b7b:Apocalypse - Magic of Skyrim.esp"]
+},
+"803f2:Apocalypse - Magic of Skyrim.esp":{
+"name":"Perilous Path",
+"school":"alteration",
+"rank":"advanced",
+"tomes":["3c51b:Apocalypse - Magic of Skyrim.esp"]
+},
+"109653:Apocalypse - Magic of Skyrim.esp":{
+"name":"Crackle",
+"school":"destruction",
+"rank":"novice",
+"tomes":["3db1f:Apocalypse - Magic of Skyrim.esp"]
+},
+"15b843:Apocalypse - Magic of Skyrim.esp":{
+"name":"Silvery Barbs",
+"school":"illusion",
+"rank":"novice",
+"tomes":["15b845:Apocalypse - Magic of Skyrim.esp"]
+},
+"37e17:Apocalypse - Magic of Skyrim.esp":{
+"name":"Conjure Deadeye Captain",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["3d046:Apocalypse - Magic of Skyrim.esp"]
+},
+"43ce1:Apocalypse - Magic of Skyrim.esp":{
+"name":"Figment of Pain",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["3e607:Apocalypse - Magic of Skyrim.esp"]
+},
+"15b847:Apocalypse - Magic of Skyrim.esp":{
+"name":"Hrormir's Misdirection",
+"school":"illusion",
+"rank":"expert",
+"tomes":["15b84c:Apocalypse - Magic of Skyrim.esp"]
+},
+"2388c:Apocalypse - Magic of Skyrim.esp":{
+"name":"Scorching Hands",
+"school":"destruction",
+"rank":"expert",
+"tomes":["3e08f:Apocalypse - Magic of Skyrim.esp"]
+},
+"1212eb:Apocalypse - Magic of Skyrim.esp":{
+"name":"Corpse Explosion",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["3d04d:Apocalypse - Magic of Skyrim.esp"]
+},
+"1a4a46:Apocalypse - Magic of Skyrim.esp":{
+"name":"Dust in the Clockwork",
+"school":"restoration",
+"rank":"advanced",
+"tomes":["1a4a48:Apocalypse - Magic of Skyrim.esp"]
+},
+"58655:Apocalypse - Magic of Skyrim.esp":{
+"name":"Compelling Whispers",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["3e606:Apocalypse - Magic of Skyrim.esp"]
+},
+"279bd:Apocalypse - Magic of Skyrim.esp":{
+"name":"Creeping Cold",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["3db22:Apocalypse - Magic of Skyrim.esp"]
+},
+"2e25:Apocalypse - Magic of Skyrim.esp":{
+"name":"Tharn's Prison",
+"school":"alteration",
+"rank":"advanced",
+"tomes":["3c524:Apocalypse - Magic of Skyrim.esp"]
+},
+"27f2e:Apocalypse - Magic of Skyrim.esp":{
+"name":"Sleet Storm",
+"school":"destruction",
+"rank":"expert",
+"tomes":["3e090:Apocalypse - Magic of Skyrim.esp"]
+},
+"24361:Apocalypse - Magic of Skyrim.esp":{
+"name":"Dragon's Teeth",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["3db21:Apocalypse - Magic of Skyrim.esp"]
+},
+"279c0:Apocalypse - Magic of Skyrim.esp":{
+"name":"Fracture",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["3db23:Apocalypse - Magic of Skyrim.esp"]
+},
+"253c2:Apocalypse - Magic of Skyrim.esp":{
+"name":"Rift Bolt",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["3db26:Apocalypse - Magic of Skyrim.esp"]
+},
+"18ae7:Apocalypse - Magic of Skyrim.esp":{
+"name":"Oathbound Guardian",
+"school":"conjuration",
+"rank":"expert",
+"tomes":["3d5b5:Apocalypse - Magic of Skyrim.esp"]
+},
+"32c8b:Apocalypse - Magic of Skyrim.esp":{
+"name":"Illusory Pyre",
+"school":"illusion",
+"rank":"advanced",
+"tomes":["3e609:Apocalypse - Magic of Skyrim.esp"]
+},
+"34d12:Apocalypse - Magic of Skyrim.esp":{
+"name":"Necroplague",
+"school":"restoration",
+"rank":"advanced",
+"tomes":["3eb81:Apocalypse - Magic of Skyrim.esp"]
+},
+"12359:Apocalypse - Magic of Skyrim.esp":{
+"name":"Conjure Dremora Churl",
+"school":"conjuration",
+"rank":"advanced",
+"tomes":["3d045:Apocalypse - Magic of Skyrim.esp"]
+},
+"161621:Apocalypse - Magic of Skyrim.esp":{
+"name":"Monarch Mark",
+"school":"conjuration",
+"rank":"expert",
+"tomes":["161623:Apocalypse - Magic of Skyrim.esp"]
+},
+"24e49:Apocalypse - Magic of Skyrim.esp":{
+"name":"Scattershock",
+"school":"destruction",
+"rank":"advanced",
+"tomes":["3db2c:Apocalypse - Magic of Skyrim.esp"]
+},
+"17a8e:Apocalypse - Magic of Skyrim.esp":{
+"name":"Conjure Avenging Wraith",
+"school":"conjuration",
+"rank":"expert",
+"tomes":["3d041:Apocalypse - Magic of Skyrim.esp"]
+},
+"12370:Apocalypse - Magic of Skyrim.esp":{
+"name":"Conjure Xivilai Lord",
+"school":"conjuration",
+"rank":"expert",
+"tomes":["3d5b4:Apocalypse - Magic of Skyrim.esp"]
+},
+"2e634:Apocalypse - Magic of Skyrim.esp":{
+"name":"Hailstone",
+"school":"destruction",
+"rank":"novice",
+"tomes":["3db20:Apocalypse - Magic of Skyrim.esp"]
+},
+"12649c:Apocalypse - Magic of Skyrim.esp":{
+"name":"Wither",
+"school":"alteration",
+"rank":"advanced",
+"tomes":["3c51e:Apocalypse - Magic of Skyrim.esp"]
+},
+"4581c:Apocalypse - Magic of Skyrim.esp":{
+"name":"Entomb",
+"school":"alteration",
+"rank":"expert",
+"tomes":["3f65b:Apocalypse - Magic of Skyrim.esp"]
+},
+"ab69:Apocalypse - Magic of Skyrim.esp":{
+"name":"Detonate Lock",
+"school":"alteration",
+"rank":"expert",
+"tomes":["3c527:Apocalypse - Magic of Skyrim.esp"]
+}
+}

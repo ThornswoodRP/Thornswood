@@ -1,0 +1,338 @@
+{
+"1d90:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["800e4:Skyrim.esm",2],["da0bf1:Update.esm",2]],
+"name":"Fur Hood - White",
+"out":"48e0:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"22fe:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["800e4:Skyrim.esm",2],["da0bf1:Update.esm",2]],
+"name":"Fur Hood - Black",
+"out":"48d9:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"23062:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["800e4:Skyrim.esm",1],["da0bf1:Update.esm",1]],
+"name":"Fur Collar - Loose",
+"out":"23060:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"23063:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["800e4:Skyrim.esm",1],["da0bf1:Update.esm",1]],
+"name":"Fur Collar - Tight",
+"out":"23061:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231c6:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["34cd6:Skyrim.esm",1],["3ad72:Skyrim.esm",3],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",3],["da0bf1:Update.esm",1]],
+"name":"Tribunal Unarmored Boots Black",
+"out":"2317c:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231c7:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["34cd6:Skyrim.esm",1],["3ad72:Skyrim.esm",3],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",3],["da0bf1:Update.esm",1]],
+"name":"Tribunal Unarmored Boots Blue",
+"out":"2317d:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231c8:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["34cd6:Skyrim.esm",1],["3ad72:Skyrim.esm",3],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",3],["da0bf1:Update.esm",1]],
+"name":"Tribunal Unarmored Boots Green",
+"out":"2317e:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231c9:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["34cd6:Skyrim.esm",1],["3ad72:Skyrim.esm",3],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",3],["da0bf1:Update.esm",1]],
+"name":"Tribunal Unarmored Boots Red",
+"out":"2317f:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231ca:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["34cd6:Skyrim.esm",1],["3ad72:Skyrim.esm",3],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",3],["da0bf1:Update.esm",1]],
+"name":"Tribunal Unarmored Boots White",
+"out":"23180:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231cb:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["34cd6:Skyrim.esm",1],["3ad72:Skyrim.esm",3],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",5]],
+"name":"Tribunal Unarmored Gloves Black",
+"out":"23181:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231cc:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["34cd6:Skyrim.esm",1],["3ad72:Skyrim.esm",3],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",5]],
+"name":"Tribunal Unarmored Gloves Blue",
+"out":"23182:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231cd:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["34cd6:Skyrim.esm",1],["3ad72:Skyrim.esm",3],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",5]],
+"name":"Tribunal Unarmored Gloves Green",
+"out":"23183:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231ce:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["34cd6:Skyrim.esm",1],["3ad72:Skyrim.esm",3],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",5]],
+"name":"Tribunal Unarmored Gloves Red",
+"out":"23184:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231cf:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["34cd6:Skyrim.esm",1],["3ad72:Skyrim.esm",3],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",5]],
+"name":"Tribunal Unarmored Gloves White",
+"out":"23185:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231d0:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["3ad72:Skyrim.esm",3],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",6]],
+"name":"Tribunal Unarmored Hood Black",
+"out":"23186:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231d1:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["3ad72:Skyrim.esm",3],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",6]],
+"name":"Tribunal Unarmored Hood Blue",
+"out":"23187:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231d2:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["3ad72:Skyrim.esm",3],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",6]],
+"name":"Tribunal Unarmored Hood Green",
+"out":"23188:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231d3:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["3ad72:Skyrim.esm",3],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",6]],
+"name":"Tribunal Unarmored Hood Red",
+"out":"23189:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231d4:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["3ad72:Skyrim.esm",3],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",6]],
+"name":"Tribunal Unarmored Hood White",
+"out":"2318a:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231d5:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["2e4e6:Skyrim.esm",1],["34cd6:Skyrim.esm",2],["3ad72:Skyrim.esm",5],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",9]],
+"name":"Tribunal Unarmored Robe Black",
+"out":"2318b:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231d6:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["2e4e6:Skyrim.esm",1],["34cd6:Skyrim.esm",2],["3ad72:Skyrim.esm",5],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",9]],
+"name":"Tribunal Unarmored Robe Blue",
+"out":"2318c:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231d7:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["2e4e6:Skyrim.esm",1],["34cd6:Skyrim.esm",2],["3ad72:Skyrim.esm",5],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",9]],
+"name":"Tribunal Unarmored Robe Green",
+"out":"2318d:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231d8:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["2e4e6:Skyrim.esm",1],["34cd6:Skyrim.esm",2],["3ad72:Skyrim.esm",5],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",9]],
+"name":"Tribunal Unarmored Robe Red",
+"out":"2318e:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"231d9:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["2e4e6:Skyrim.esm",1],["34cd6:Skyrim.esm",2],["3ad72:Skyrim.esm",5],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",9]],
+"name":"Tribunal Unarmored Robe White",
+"out":"2318f:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"238fe:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["57f91:Skyrim.esm",4],["5ace3:Skyrim.esm",1],["800e4:Skyrim.esm",2],["9151b:Skyrim.esm",4],["da0bf1:Update.esm",4]],
+"name":"Bosmer Full Cape",
+"out":"238ea:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"23907:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["57f91:Skyrim.esm",3],["5ad9e:Skyrim.esm",1],["800e4:Skyrim.esm",2],["9151b:Skyrim.esm",3],["da0bf1:Update.esm",3]],
+"name":"Bosmer Engraved Shoulder Cape",
+"out":"238e9:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"23918:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["57f91:Skyrim.esm",2],["800e4:Skyrim.esm",2],["9151b:Skyrim.esm",2],["da0bf1:Update.esm",2]],
+"name":"Bosmer Mask",
+"out":"238fb:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"23919:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["57f91:Skyrim.esm",3],["5ace3:Skyrim.esm",1],["800e4:Skyrim.esm",2],["9151b:Skyrim.esm",3],["da0bf1:Update.esm",3]],
+"name":"Bosmer Shoulder Cape",
+"out":"238fc:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"286a:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["f:Skyrim.esm",1],["800e4:Skyrim.esm",1]],
+"name":"Eyepatch",
+"out":"285f:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"2dd7:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["34cd6:Skyrim.esm",2],["800e4:Skyrim.esm",2],["db5d2:Skyrim.esm",1]],
+"name":"Seadog Cape",
+"out":"2dd5:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"372fe:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["3ad72:Skyrim.esm",2],["5ad9d:Skyrim.esm",1],["800e4:Skyrim.esm",2],["db5d2:Skyrim.esm",2]],
+"name":"Ebony Mage Unarmored Boots",
+"out":"372fa:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"372ff:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["3ad72:Skyrim.esm",1],["5ad9d:Skyrim.esm",1],["800e4:Skyrim.esm",2],["db5d2:Skyrim.esm",1]],
+"name":"Ebony Mage Unarmored Gloves",
+"out":"372fb:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"37300:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["3ad72:Skyrim.esm",1],["5ad9d:Skyrim.esm",1],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",3]],
+"name":"Ebony Mage Unarmored Hood",
+"out":"372fc:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"37301:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["3ad72:Skyrim.esm",4],["5ad9d:Skyrim.esm",2],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",6]],
+"name":"Ebony Mage Unarmored Robe",
+"out":"372fd:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"37306:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["3ad72:Skyrim.esm",1],["800e4:Skyrim.esm",3],["db5d2:Skyrim.esm",3],["db8a2:Skyrim.esm",2]],
+"name":"Dwarven Mage Unarmored Robe",
+"out":"37305:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"37307:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["3ad72:Skyrim.esm",1],["800e4:Skyrim.esm",2],["db5d2:Skyrim.esm",3],["db8a2:Skyrim.esm",1]],
+"name":"Dwarven Mage Unarmored Hood",
+"out":"37304:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"37308:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["3ad72:Skyrim.esm",1],["800e4:Skyrim.esm",2],["db5d2:Skyrim.esm",2],["db8a2:Skyrim.esm",1]],
+"name":"Dwarven Mage Unarmored Gauntlets",
+"out":"37303:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"37309:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["3ad72:Skyrim.esm",1],["800e4:Skyrim.esm",2],["db5d2:Skyrim.esm",2],["db8a2:Skyrim.esm",1]],
+"name":"Dwarven Mage Unarmored Boots",
+"out":"37302:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"53b3:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["800e4:Skyrim.esm",2],["da0bf1:Update.esm",4]],
+"name":"Fur Mantle",
+"out":"ba99a:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"53b5:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["800e4:Skyrim.esm",2],["da0bf1:Update.esm",4]],
+"name":"Fur Mantle - Black",
+"out":"22fc:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"53b7:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["800e4:Skyrim.esm",2],["da0bf1:Update.esm",4]],
+"name":"Fur Mantle - White",
+"out":"1d8e:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"6aa09:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["34cd6:Skyrim.esm",2],["5ad93:Skyrim.esm",1],["800e4:Skyrim.esm",2],["db5d2:Skyrim.esm",1]],
+"name":"Imperial Knight Cape",
+"out":"6aa04:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"82ebf:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["3ad72:Skyrim.esm",2],["800e4:Skyrim.esm",2],["db5d2:Skyrim.esm",2],["da0bf1:Update.esm",2]],
+"name":"Shaman Unarmored Boots",
+"out":"82eb5:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"82ec0:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["3ad72:Skyrim.esm",1],["800e4:Skyrim.esm",2],["db5d2:Skyrim.esm",3]],
+"name":"Shaman Unarmored Gloves",
+"out":"82eb6:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"82ec1:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["3ad52:Skyrim.esm",1],["3ad72:Skyrim.esm",2],["db5d2:Skyrim.esm",2]],
+"name":"Shaman Unarmored Cap",
+"out":"82eb7:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"82ec2:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["34cd6:Skyrim.esm",2],["3ad72:Skyrim.esm",3],["800e4:Skyrim.esm",2],["db5d2:Skyrim.esm",3],["da0bf1:Update.esm",2]],
+"name":"Shaman Unarmored Robe",
+"out":"82eb8:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"bc99a:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["800e4:Skyrim.esm",2],["da0bf1:Update.esm",2]],
+"name":"Fur Hood",
+"out":"48d8:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+},
+"f74d:Hothtrooper44_ArmorCompilation.esp":{
+"from":"88105:Skyrim.esm",
+"inputs":[["34cd6:Skyrim.esm",2],["800e4:Skyrim.esm",2],["db5d2:Skyrim.esm",1]],
+"name":"Redguard Knight Cape",
+"out":"f74c:Hothtrooper44_ArmorCompilation.esp",
+"to":"6ce000:Update.esm"
+}
+}

@@ -239,9 +239,10 @@ public sealed class BotPass(EnvConfig env, ITasks tasks)
         // The task takes one instance at a time and ignores a start while one
         // runs (MultipleInstances IgnoreNew), so a pass still running from
         // before would be waited on as if it were this one, to the limit.
+        TaskInfo before;
         try
         {
-            var before = tasks.Info(env.BotPassTask);
+            before = tasks.Info(env.BotPassTask);
             if (before.State is "Running" or "Queued")
             {
                 log($"the bot pass task is already {before.State}, a run from {before.LastRun:yyyy-MM-dd HH:mm:ss}Z, and takes one run at a time (IgnoreNew), so a start now would be ignored and that run waited on as this one; nothing was started");
@@ -260,14 +261,21 @@ public sealed class BotPass(EnvConfig env, ITasks tasks)
         {
             try { info = tasks.Info(env.BotPassTask); }
             catch (InvalidOperationException e) { return new Outcome("failure", "not applied: the bot pass could not be read: " + e.Message); }
-            // Ended: Task Scheduler has a run that began at or after the start
-            // (its times are to the second) and it is not running now.
-            if (info.State is not ("Running" or "Queued") && info.LastRun >= started.AddSeconds(-1)) break;
+            // Ended: Task Scheduler has a run newer than the one it had before
+            // the start, and it is not running now. Its own record is set
+            // against its own record, never against the agent's clock: on the
+            // box it writes a run down 13 to 15 s before the time the agent
+            // read just before starting it, so "began at or after the start"
+            // never held, and a pass that ended OK in 15 s was waited on for
+            // the whole limit (Deployments 7480554210 and 7482471512, #5380).
+            // The run before is settled: a running task is refused above.
+            var ran = info.LastRun > before.LastRun;
+            if (info.State is not ("Running" or "Queued") && ran) break;
             if (DateTime.UtcNow > deadline)
             {
                 // What it had got to, so a pass that runs out says where
                 // (Deployment 7480554210 said only that it ran out).
-                log($"Task Scheduler at the limit: {info.State}, last run {info.LastRun:yyyy-MM-dd HH:mm:ss}Z" + (info.LastRun < started.AddSeconds(-1) ? ", before this start, so this start never ran" : ", this run"));
+                log($"Task Scheduler at the limit: {info.State}, last run {info.LastRun:yyyy-MM-dd HH:mm:ss}Z" + (ran ? ", this run" : $", the run it had before this start ({before.LastRun:yyyy-MM-dd HH:mm:ss}Z), so this start never ran"));
                 try { tasks.End(env.BotPassTask); log("the bot pass was still running at its time limit and was stopped"); }
                 catch (InvalidOperationException e) { log("the bot pass was still running at its time limit and could not be stopped: " + e.Message); }
                 SayWhereItGot(log);

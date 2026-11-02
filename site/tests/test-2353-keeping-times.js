@@ -39,11 +39,12 @@ const os = require('os');
 const net = require('net');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const siteFiles = require('../../tests/site-files');
 
 const ROOT = path.join(__dirname, '..', '..');
 const CR = String.fromCharCode(13);
 const SITE_SRC = path.join(ROOT, 'site', 'server.js');
-const site = fs.readFileSync(SITE_SRC, 'utf8').split(CR).join('');
+const site = siteFiles.source(SITE_SRC).split(CR).join('');
 const game = fs.readFileSync(path.join(ROOT, 'game', 'gamemode.js'), 'utf8').split(CR).join('');
 const privacy = fs.readFileSync(path.join(ROOT, 'site', 'data', 'site', 'privacy.md'), 'utf8').split(CR).join('');
 
@@ -180,7 +181,7 @@ function rules() {
 async function sweep() {
   console.log('\nB  THE SITE, AS IT COMES UP, WITH NOTHING SENT');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-2353-'));
-  fs.copyFileSync(SITE_SRC, path.join(dir, 'server.js'));
+  siteFiles.copy(dir, SITE_SRC);
   for (const d of ['public', path.join('data', 'for-bot'), 'uploads']) fs.mkdirSync(path.join(dir, d), { recursive: true });
   fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({
     password: crypto.randomBytes(12).toString('hex'),

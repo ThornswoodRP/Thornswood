@@ -31,10 +31,11 @@ const os = require('os');
 const net = require('net');
 const crypto = require('crypto');
 const cp = require('child_process');
+const siteFiles = require('./site-files');
 
 const ROOT = path.join(__dirname, '..');
 const SITE_SRC = path.join(ROOT, 'site', 'server.js');
-const site = fs.readFileSync(SITE_SRC, 'utf8');
+const site = siteFiles.source(SITE_SRC);
 const read = (rel) => { try { return fs.readFileSync(path.join(ROOT, rel), 'utf8'); } catch (e) { return ''; } };
 
 let pass = 0, fail = 0;
@@ -74,7 +75,7 @@ const stampOf = (t) => { const d = new Date(t); return d.getFullYear() + '-' + p
 async function keptChatOnASite() {
   console.log('G1  A KEPT SESSION KEEPS ITS CHAT');
   const dir = tmp('site');
-  fs.copyFileSync(SITE_SRC, path.join(dir, 'server.js'));
+  siteFiles.copy(dir, SITE_SRC);
   fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'data', 'session-logs'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'chat'), { recursive: true });

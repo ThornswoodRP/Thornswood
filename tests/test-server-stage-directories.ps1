@@ -17,9 +17,12 @@ $send = [ordered]@{}
 $record = [IO.File]::ReadAllText((Join-Path $repo 'records\server-build.json')) | ConvertFrom-Json
 foreach ($file in $record.files.PSObject.Properties) { $send[$file.Name] = '' }
 $send['gamemode.js'] = ''; $send['plugins/Thornswood-Content.esp'] = ''
+# The gamemode's tables (#5191) go up in one scp of their own, into a folder
+# the block makes with the rest.
+$tableSend = [ordered]@{ 'gamemode-tables/ITEM_NAMES.json' = ''; 'gamemode-tables/RECIPES_BY_ID.json' = '' }
 function Remote([string]$script) { Invoke-Expression $script }
 Invoke-Expression $block.Groups[1].Value
-foreach ($relative in $send.Keys) {
+foreach ($relative in @($send.Keys) + @($tableSend.Keys)) {
     $target = Join-Path "$rootWin\$stageName" ($relative -replace '/', '\')
     [IO.File]::WriteAllText($target, 'staged')
     if (-not [IO.File]::Exists($target)) { throw "Native payload could not stage $relative" }

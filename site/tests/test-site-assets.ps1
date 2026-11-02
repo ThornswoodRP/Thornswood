@@ -34,6 +34,8 @@ $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
 if (-not $here) { $here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $repo = Split-Path -Parent (Split-Path -Parent $here)
+# The site is server.js over its modules in site\lib since #5357.
+. (Join-Path $PSScriptRoot '..\..\tests\SiteFiles.ps1')
 $script:pass = 0
 $script:fail = 0
 function Yes([string]$what, [bool]$cond) {
@@ -187,7 +189,7 @@ $cache   = Join-Path $work 'cache'
 New-Item -ItemType Directory -Force -Path $siteDir, $ghDir, $cache | Out-Null
 $procs = @()
 try {
-    Copy-Item -LiteralPath $serverJs -Destination (Join-Path $siteDir 'server.js')
+    Copy-SiteProgram -To $siteDir -App (Join-Path $repo 'site')
     $secret = ShaOf ([Text.Encoding]::UTF8.GetBytes([Guid]::NewGuid().ToString()))
     $sitePort = Free-Port
     # The game check knocks on port 1 (#1816). The system never hands that port
@@ -444,10 +446,12 @@ http.createServer((req, res) => {
     $pubSite = Join-Path $work 'pubsite'
     $res = Run-Upload @([pscustomobject]@{ Id = 'N1'; Path = $pk; Sha = $pkSha; Url = '' }) $true $ex ([pscustomobject]@{ name = 'c.zip'; path = $cz; sha256 = $czSha; url = '' }) $pubSite
     Yes ("the upload block runs ({0})" -f $res.R) ($res.R -eq 'ok')
-    Yes '  the pack, the launcher and the client runtime are on the site' (
-        (Test-Path (Join-Path $pubSite "feed\assets\$pkSha")) -and (Test-Path (Join-Path $pubSite "feed\assets\$exSha")) -and (Test-Path (Join-Path $pubSite "feed\assets\$czSha")))
+    Yes '  the pack and the client runtime are on the site' (
+        (Test-Path (Join-Path $pubSite "feed\assets\$pkSha")) -and (Test-Path (Join-Path $pubSite "feed\assets\$czSha")))
+    Yes '  and no launcher, even with one built beside it: a publish sends none (#4825)' (
+        -not (Test-Path (Join-Path $pubSite "feed\assets\$exSha")) -and -not $res.Exe)
     Yes '  and the feed will name them there' (
-        $res.Chunks[0].Url -eq "https://thornswood.net/feed/assets/$pkSha" -and $res.Exe -eq "https://thornswood.net/feed/assets/$exSha" -and
+        $res.Chunks[0].Url -eq "https://thornswood.net/feed/assets/$pkSha" -and
         $res.Client.url -eq "https://thornswood.net/feed/assets/$czSha")
     Yes '  and nothing went to GitHub' (-not (($script:said -join "`n") -match 'gh release'))
     $res = Run-Upload @([pscustomobject]@{ Id = 'N2'; Path = (Join-Path $work 'pub\missing.zip'); Sha = ('f' * 64); Url = '' }) $false '' $null $pubSite
@@ -458,8 +462,8 @@ http.createServer((req, res) => {
     $goneSite = Join-Path $work 'gonesite'
     $res = Run-Upload @([pscustomobject]@{ Id = 'N3'; Path = $pk3; Sha = $pk3Sha; Url = '' }) $true $ex3 $null $goneSite $true
     Yes ("with the packs gone the upload block runs ({0})" -f $res.R) ($res.R -eq 'ok')
-    Yes '  and the launcher goes to the site, the pack does not and has no url' (
-        (Test-Path (Join-Path $goneSite "feed\assets\$ex3Sha")) -and -not (Test-Path (Join-Path $goneSite "feed\assets\$pk3Sha")) -and -not $res.Chunks[0].Url)
+    Yes '  and neither the launcher nor the pack goes to the site, and the pack has no url' (
+        -not (Test-Path (Join-Path $goneSite "feed\assets\$ex3Sha")) -and -not (Test-Path (Join-Path $goneSite "feed\assets\$pk3Sha")) -and -not $res.Chunks[0].Url)
 
     # The move block with a pulled feed and the scratch site to ask.
     function Run-Move($docIn, [bool]$devIn, [bool]$noUploadIn) {

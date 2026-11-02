@@ -44,7 +44,8 @@
 param([string]$Repo, [string]$Scratch)
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
+. (Join-Path $PSScriptRoot 'Framework-Csc.ps1')   # C# 5 against the .NET Framework, as Windows PowerShell 5.1's Add-Type
 if (-not $Repo) { $Repo = Split-Path -Parent $PSScriptRoot }
 if (-not $Scratch) { $Scratch = [IO.Path]::GetTempPath() }
 $App = Join-Path $Repo 'launcher\app'
@@ -97,9 +98,7 @@ foreach ($n in @('python', 'python3', 'py')) {
     if ($c) { $python = $c.Source; break }
 }
 Yes 'Python is on this machine, to write the made-up game folders' ([bool]$python)
-if ($OnWindows) { Yes 'the compiler the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherCsc) }
-$refs = @('System.dll', 'System.Core.dll') | ForEach-Object { Find-LauncherRef $_ }
-if ($OnWindows) { Yes 'System.dll and System.Core.dll are there to compile against' (@($refs | Where-Object { $_ }).Count -eq 2) }
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
 if ($script:fail) { Done }
 
 $work = Join-Path $Scratch ('thornswood-2791-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -113,11 +112,6 @@ try {
     Yes ('the fixture writes the made-up game folders (' + ($cases -join ', ') + ')') (
         $rc -eq 0 -and @($cases | Where-Object { -not (Test-Path -LiteralPath (Join-Path $games "$_\Data\Thornswood-Last.recipe")) }).Count -eq 0)
     if ($rc -ne 0) { $said | ForEach-Object { Write-Host "      $_" }; Done }
-
-    if (-not $OnWindows) {
-        Write-Host 'SKIP  1 to 5, the launcher''s LastPlugin compiled and run: the build''s compiler (the Build Tools'' csc, against .NET Framework 4.8.1) is only on Windows'
-        Done
-    }
 
     # ---- 1 to 4: the launcher's own code, with a driver --------------------------
     $driver = @'
@@ -206,26 +200,19 @@ namespace Thornswood
     }
 }
 '@
-    $utf8 = New-Object Text.UTF8Encoding($false)
-    $driverCs = Join-Path $work 'LastPluginTest.cs'
-    [IO.File]::WriteAllText($driverCs, $driver, $utf8)
-    $sources = @((Join-Path $App 'LastPlugin.cs'), (Join-Path $App 'FromGameArchive.cs'), $driverCs)
-    $built = @{}
-    foreach ($lang in @($LauncherLangVersion, '5')) {
-        $exe = Join-Path $work ("last-plugin-test-{0}.exe" -f $lang)
-        $cscArgs = @('/noconfig', '/nologo', '/target:exe', '/platform:anycpu', "/langversion:$lang", '/nowarn:0649,1701', "/out:$exe", '/main:Thornswood.LastPluginTest')
-        foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-        $cscArgs += $sources
-        $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-        $said = & $LauncherCsc @cscArgs 2>&1
-        $rc = $LASTEXITCODE
-        $ErrorActionPreference = $old
-        $built[$lang] = ($rc -eq 0 -and (Test-Path -LiteralPath $exe))
-        $what = if ($lang -eq '5') { 'at C# 5, as Windows PowerShell 5.1''s Add-Type compiles' } else { "at C# $lang, as the build does" }
-        Yes "LastPlugin.cs, FromGameArchive.cs and the driver compile $what" $built[$lang]
-        if (-not $built[$lang]) { $said | Where-Object { "$_" -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
-    }
-    if (-not $built[$LauncherLangVersion]) { Done }
+    $sources = @((Join-Path $App 'LastPlugin.cs'), (Join-Path $App 'FromGameArchive.cs'))
+    # At the build's C# version with the .NET SDK, the program that runs below;
+    # and at C# 5 against the .NET Framework, as Windows PowerShell 5.1's
+    # Add-Type compiles them for Go.ps1, built only.
+    $exe = $null
+    try { $exe = Build-LauncherCode -Exe -Main 'Thornswood.LastPluginTest' -Source $driver -File $sources }
+    catch { ($_.Exception.Message -split "`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
+    Yes "LastPlugin.cs, FromGameArchive.cs and the driver compile at C# $LauncherLangVersion, as the build does" ($null -ne $exe)
+    $five = $null
+    try { $five = Build-FrameworkCode -Exe -Main 'Thornswood.LastPluginTest' -Source $driver -File $sources }
+    catch { ($_.Exception.Message -split "`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
+    Yes 'LastPlugin.cs, FromGameArchive.cs and the driver compile at C# 5, as Windows PowerShell 5.1''s Add-Type compiles' ($null -ne $five)
+    if (-not $exe) { Done }
 
     $recipe = Join-Path $Repo 'game\data\last-plugin.recipe'
     $manifestPath = Join-Path $Repo 'game\data\last-plugin.json'
@@ -235,7 +222,7 @@ namespace Thornswood
         $runArgs += $recipe, ([string][int64]$named.size), ([string]$named.sha256).ToLowerInvariant()
     }
     $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $out = & (Join-Path $work ("last-plugin-test-{0}.exe" -f $LauncherLangVersion)) @runArgs 2>&1
+    $out = Invoke-LauncherExe $exe @runArgs 2>&1
     $ErrorActionPreference = $old
     $sourcesSeen = -1
     foreach ($l in @($out)) {

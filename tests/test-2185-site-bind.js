@@ -25,6 +25,7 @@ const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const siteFiles = require('./site-files');
 
 const SITE_SRC = process.argv[2] || path.join(__dirname, '..', 'site', 'server.js');
 const DEPLOY = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'deploy', 'Deploy-Docs.ps1'), 'utf8');
@@ -35,7 +36,7 @@ function yes(what, cond) {
 }
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-2185-'));
-fs.copyFileSync(SITE_SRC, path.join(dir, 'server.js'));
+siteFiles.copy(dir, SITE_SRC);
 fs.mkdirSync(path.join(dir, 'data'), { recursive: true });
 fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({
   password: crypto.randomBytes(12).toString('hex'),

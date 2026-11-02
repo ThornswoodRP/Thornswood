@@ -21,7 +21,7 @@
 
   This lifts Read-PluginHeader and Sort-MastersFirst out of the shipped
   Deploy-Gamemode.ps1 by text, so the test drives the real code rather than a
-  copy of it, the same way test-dev-version.ps1 lifts the version block out of
+  copy of it, the same way test-ship-gate.ps1 lifts the Git gate out of
   Ship.ps1.
 
   Read only apart from files under its own temp folder.

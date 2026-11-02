@@ -27,6 +27,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const cp = require('child_process');
+const siteFiles = require('../../tests/site-files');
 const { knownPage, knownWriter } = require('../../tests/fixtures/known-page');
 
 const ROOT = path.join(__dirname, '..', '..');
@@ -34,7 +35,7 @@ let pass = 0, fail = 0;
 function yes(what, cond) { if (cond) { pass++; console.log('PASS  ' + what); } else { fail++; console.log('FAIL  ' + what); } }
 function read(rel) { try { return fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n'); } catch (e) { return null; } }
 
-const server = read('site/server.js') || '';
+const server = siteFiles.source() || '';
 const hub = read('site/public/hub.js') || '';
 const deploy = read('scripts/deploy/Deploy-Docs.ps1') || '';
 const bot = require('../../tests/bot-files').source().replace(/\r\n/g, '\n');

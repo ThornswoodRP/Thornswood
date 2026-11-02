@@ -75,7 +75,7 @@ yes('the opening no longer sends anybody to Help for what is on purpose',
 // 3. Help has no list of what is normal, and nothing points at one.
 yes('Help has no Things that are normal here section', !/normal here/i.test(help));
 yes('nor does any public page, the Known Issues intro or the Discord docs point at one',
-    ['site/data/site/join.md', 'site/server.js'].every(function (f) { return !/normal here|on purpose\.?$/im.test(read(f) || ''); }) &&
+    [read('site/data/site/join.md'), require('../../tests/site-files').source()].every(function (t) { return !/normal here|on purpose\.?$/im.test(t || ''); }) &&
     !/lists what works this way on purpose/.test(content));
 yes('Help still says where to look first, and Known Issues lists what is broken',
     /\[Known Issues\]\(\/known\) first/.test(help));

@@ -66,12 +66,14 @@
   the start line says when a file has the mark and how to take it off by
   hand, and nothing in the launcher puts it back.
 
-  It compiles the shipped launcher\app\SteamUpdates.cs with the compiler the
-  build runs (tests\Launcher-Csc.ps1), and drives the
-  real class. Where this machine has Steam and Skyrim, it also parses the
-  real manifest, without writing to it.
+  It builds the shipped launcher\app\SteamUpdates.cs the way the project
+  builds it, with the .NET 10 SDK (Add-LauncherType, tests\Launcher-Csc.ps1,
+  #4823, on any machine that has it), loads it into this PowerShell, and
+  drives the real class. Where this machine has Steam and Skyrim, it also
+  parses the real manifest, without writing to it.
 
-  Read only apart from files under its own temp folder.
+  Read only apart from files under its own temp folder, and the build under
+  out\harness, which git ignores.
 #>
 [CmdletBinding()]
 param([string]$AppPath)
@@ -102,19 +104,16 @@ $src = Join-Path $AppPath 'SteamUpdates.cs'
 Yes 'launcher\app\SteamUpdates.cs is there' (Test-Path -LiteralPath $src)
 if (-not (Test-Path -LiteralPath $src)) { Done }
 
-if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'; Done }
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
+Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-steam-updates-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 $null = New-Item -ItemType Directory -Force -Path $work
-$dll = Join-Path $work 'SteamUpdates.dll'
-$said = & $LauncherCsc /nologo /target:library "/out:$dll" $src 2>&1
-$built = ($LASTEXITCODE -eq 0) -and (Test-Path -LiteralPath $dll)
-Yes 'it compiles on its own with the compiler the build runs' $built
-if (-not $built) { $said | ForEach-Object { Write-Host "      $_" }; Done }
+$asm = $null
+try { $asm = Add-LauncherType -File $src } catch { Write-Host ('      ' + $_.Exception.Message) }
+Yes 'it builds on its own, the way the project builds it' ($null -ne $asm)
+if ($null -eq $asm) { Done }
 
-$asm = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($dll))
 $T = $asm.GetType('Thornswood.SteamUpdates', $true)
 $flags = [Reflection.BindingFlags]'Static, Public, NonPublic'
 function Method([string]$name, [Type[]]$sig) {
@@ -296,8 +295,17 @@ try {
     Yes ('no launcher code names a choice Steam no longer has' + $(if ($named.Count) { ' (' + (($named | ForEach-Object { $_.Name }) -join ', ') + ')' } else { '' })) ($named.Count -eq 0)
 
     # ---- which file ------------------------------------------------------------
-    Yes 'the manifest sits two folders up from the game, in that library' ((ManifestFor 'D:\SteamLibrary\steamapps\common\Skyrim Special Edition') -ceq 'D:\SteamLibrary\steamapps\appmanifest_489830.acf')
-    Yes 'with or without a trailing backslash' ((ManifestFor 'D:\SteamLibrary\steamapps\common\Skyrim Special Edition\') -ceq 'D:\SteamLibrary\steamapps\appmanifest_489830.acf')
+    # Two things the class does are Windows' alone, and off Windows they say
+    # SKIP: a path with a drive letter and backslashes is a Windows path, and
+    # the change goes in through kernel32's MoveFileEx (SwapIn), one rename
+    # that takes the old file's place. Everything else runs anywhere.
+    $winOnly = 'which only Windows has'
+    if ($OnWindows) {
+        Yes 'the manifest sits two folders up from the game, in that library' ((ManifestFor 'D:\SteamLibrary\steamapps\common\Skyrim Special Edition') -ceq 'D:\SteamLibrary\steamapps\appmanifest_489830.acf')
+        Yes 'with or without a trailing backslash' ((ManifestFor 'D:\SteamLibrary\steamapps\common\Skyrim Special Edition\') -ceq 'D:\SteamLibrary\steamapps\appmanifest_489830.acf')
+    } else {
+        Write-Host "SKIP  the manifest two folders up from a game named by a drive letter and backslashes: that is a Windows path, $winOnly"
+    }
     Yes 'a folder that is not in a Steam library has no manifest' ((ManifestFor 'C:\Thornswood\Game') -ceq '')
     Yes 'nor does no folder' ((ManifestFor '') -ceq '')
 
@@ -330,14 +338,23 @@ try {
     Yes 'and it says why' ($r -like '*Steam is still running*')
     Yes 'and leaves no temporary file' (-not (Test-Path -LiteralPath $tmp))
 
-    $r = Hold $m $false
-    $now = [IO.File]::ReadAllBytes($m)
-    Yes 'Steam closed: the file now says 1' ((ReadValue $m) -ceq '1')
-    Yes 'one byte changed and no other' (($was.Length -eq $now.Length) -and ((Differ $Latin.GetString($was) $Latin.GetString($now)) -eq 1))
-    Yes 'no temporary file is left beside it' (-not (Test-Path -LiteralPath $tmp))
-    Yes 'and the log line says what changed and where' (($r -like '*is now "Wait until I launch the game"*') -and ($r -like ('*' + $m + '*')))
-    Yes 'the start line then reads it back as held' ((Report $game) -like '*"Wait until I launch the game"*')
-    Yes 'and the question is not asked again' (-not (Needs $m))
+    if ($OnWindows) {
+        $r = Hold $m $false
+        $now = [IO.File]::ReadAllBytes($m)
+        Yes 'Steam closed: the file now says 1' ((ReadValue $m) -ceq '1')
+        Yes 'one byte changed and no other' (($was.Length -eq $now.Length) -and ((Differ $Latin.GetString($was) $Latin.GetString($now)) -eq 1))
+        Yes 'no temporary file is left beside it' (-not (Test-Path -LiteralPath $tmp))
+        Yes 'and the log line says what changed and where' (($r -like '*is now "Wait until I launch the game"*') -and ($r -like ('*' + $m + '*')))
+        Yes 'the start line then reads it back as held' ((Report $game) -like '*"Wait until I launch the game"*')
+        Yes 'and the question is not asked again' (-not (Needs $m))
+    } else {
+        Write-Host "SKIP  Steam closed, the change written: it goes in through MoveFileEx, $winOnly"
+        # What that write leaves, so the steps after it start where they do on
+        # Windows.
+        Put (Acf '1')
+        Yes 'a file on 1 reads back as held at the start' ((Report $game) -like '*"Wait until I launch the game"*')
+        Yes 'and asks no question' (-not (Needs $m))
+    }
 
     [IO.File]::SetLastWriteTimeUtc($m, [DateTime]::new(2026, 1, 1, 0, 0, 0, [DateTimeKind]::Utc))
     $r = Hold $m $false
@@ -354,11 +371,15 @@ try {
     [IO.File]::SetAttributes($m, [IO.FileAttributes]::ReadOnly -bor [IO.FileAttributes]::Archive)
     Yes 'IsReadOnly sees the mark' (ReadOnlyByClass $m)
     Yes 'the start line on a read-only file says so, and how to take the mark off by hand' (((Report $game) -like '*marked read only*') -and ((Report $game) -like '*clear Read-only*') -and ((Report $game) -like ('*' + $m + '*')))
-    $r = Hold $m $false
-    Yes 'a read-only file is changed' ((ReadValue $m) -ceq '1')
-    Yes 'and is left writable, so Steam can save its state in it (#493)' (-not (IsRO $m))
-    Yes 'and the log line says so' ($r -like '*no longer marked read only*')
-    Yes 'and the start line no longer mentions a mark' ((Report $game) -notlike '*read only*')
+    if ($OnWindows) {
+        $r = Hold $m $false
+        Yes 'a read-only file is changed' ((ReadValue $m) -ceq '1')
+        Yes 'and is left writable, so Steam can save its state in it (#493)' (-not (IsRO $m))
+        Yes 'and the log line says so' ($r -like '*no longer marked read only*')
+        Yes 'and the start line no longer mentions a mark' ((Report $game) -notlike '*read only*')
+    } else {
+        Write-Host "SKIP  a read-only file on 0 changed and left writable: the change goes in through MoveFileEx, $winOnly"
+    }
 
     # Already on 1 and read only, as Patrick's is since 25 September: only the
     # mark comes off, and not a byte of the file changes.
@@ -388,15 +409,21 @@ try {
     [Array]::Copy($utf, 0, $bytes, 3, $utf.Length)
     [IO.File]::SetAttributes($m, [IO.FileAttributes]::Normal)
     [IO.File]::WriteAllBytes($m, $bytes)
-    $r = Hold $m $false
-    $after = [IO.File]::ReadAllBytes($m)
     $insert = [Text.Encoding]::ASCII.GetBytes($Line1 + "`r`n")
     $at = $bytes.Length - 3   # before the final "}\r\n"
     $expect = New-Object byte[] ($bytes.Length + $insert.Length)
     [Array]::Copy($bytes, 0, $expect, 0, $at)
     [Array]::Copy($insert, 0, $expect, $at, $insert.Length)
     [Array]::Copy($bytes, $at, $expect, $at + $insert.Length, 3)
-    Yes 'UTF-8, a byte order mark and CRLF come back byte for byte, with one line added' (Same $expect $after)
+    # What Hold would write, worked out in memory, runs anywhere; the write is Windows'.
+    Yes 'UTF-8, a byte order mark and CRLF are kept byte for byte in what Hold works out, with one line added' (Same $expect $Latin.GetBytes((Held $Latin.GetString($bytes))))
+    if ($OnWindows) {
+        $r = Hold $m $false
+        $after = [IO.File]::ReadAllBytes($m)
+        Yes 'UTF-8, a byte order mark and CRLF come back byte for byte, with one line added' (Same $expect $after)
+    } else {
+        Write-Host "SKIP  the same bytes written to the file: the change goes in through MoveFileEx, $winOnly"
+    }
 
     # Something that is not a manifest is never written.
     Put '{"AppState": {"AutoUpdateBehavior": 0}}'
@@ -488,7 +515,7 @@ try {
 
     # ---- how the launcher reaches it ---------------------------------------------
     #
-    # By text, because these are WPF and cannot be driven from here. What they
+    # By text, because these are the window's and cannot be driven from here. What they
     # pin: the file is only ever written from ShellSteamUpdates.cs; on the way
     # in only when OnStart says Write; in the question only after Yes and with
     # Steam closed (by the person, or by Yes, waited for); and nothing about it
@@ -516,15 +543,17 @@ try {
     Yes 'the start decides by OnStart, with the game''s state and nothing the person answered' (($start -match 'SteamUpdates\.OnStart\(SteamUpdates\.NeedsHolding\(manifest\), SteamUpdates\.SteamRunning\(\), playing\)'))
     Yes 'and writes only when it says Write' ($start -match 'if \(what == SteamUpdates\.Write\) \{ Log\(SteamUpdates\.Hold\(manifest\)\); return; \}')
     Yes 'otherwise logs the start line' ($start -match 'SteamUpdates\.Report\(target\)')
-    Yes 'and puts the question once the window is idle, only when it says Ask' (($start -match 'if \(what != SteamUpdates\.Ask\) return;') -and ($start -match 'AskToHoldSteamUpdates\(\)') -and ($start -match 'DispatcherPriority\.ApplicationIdle'))
+    Yes 'and puts the question once the window is idle, only when it says Ask' (($start -match 'if \(what != SteamUpdates\.Ask\) return;') -and ($start -match '(?s)Dispatcher\.UIThread\.Post\(delegate.*?AskToHoldSteamUpdates\(\).*?\}, DispatcherPriority\.ApplicationIdle\);'))
 
     $ask = Body $askSrc 'static void AskToHoldSteamUpdates()'
     $close = Body $askSrc 'static string CloseSteamAndHold(string manifest)'
-    $yesAt = $ask.IndexOf('MessageBoxResult.Yes')
+    # The box is Ask.YesNo (Ask.cs), which puts the question and gives back
+    # the answer in one call, so the question and Yes are at the same place.
+    $showAt = $ask.IndexOf('if (!Ask.YesNo(SteamUpdates.Question(manifest),')
+    $yesAt = $showAt
     $gameAt = $ask.IndexOf('Checks.GameRunning()')
     $closedAt = $ask.IndexOf('if (!SteamUpdates.SteamRunning()) { Log(SteamUpdates.Hold(manifest)); return; }')
-    $showAt = $ask.IndexOf('MessageBox.Show(')
-    Yes 'the question is never put while Skyrim runs' (($gameAt -ge 0) -and ($gameAt -lt $yesAt))
+    Yes 'the question is never put while Skyrim runs' (($gameAt -ge 0) -and ($showAt -ge 0) -and ($gameAt -lt $yesAt))
     Yes 'nor with Steam closed by then, which is written with nothing to ask, as the start does' (($closedAt -gt $gameAt) -and ($closedAt -lt $showAt))
     Yes 'the only other write is Yes''s, off the window''s thread' (([regex]::Matches($ask, 'SteamUpdates\.Hold\(')).Count -eq 1 -and ($ask -match 'ThreadPool\.QueueUserWorkItem') -and ($ask.IndexOf('CloseSteamAndHold(manifest)') -gt $yesAt))
     Yes 'No is not now: nothing is remembered, and the log says the same as the question and how to do it in Steam' (

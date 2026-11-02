@@ -20,8 +20,8 @@
 
   HOW. BringToFront, SteamInFront, ForegroundIsSteam, IsSteam and InFront are
   lifted out of launcher\app\Downgrade.cs by brace match and compiled with the
-  compiler the build runs (tests\Launcher-Csc.ps1), against a
-  stand-in desktop. Nothing here focuses a window or sends a key.
+  .NET SDK the launcher builds with (tests\Launcher-Csc.ps1), against a
+  stand-in desktop, so it runs on any machine. Nothing here focuses a window or sends a key.
 
   The stand-in follows Windows' rule for SetForegroundWindow as Microsoft
   documents it, reduced to the cases this code meets: the call goes through
@@ -35,7 +35,7 @@
 param([string]$AppPath)
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 # This harness is in launcher\tests\, the repository is two folders up.
@@ -116,7 +116,7 @@ if ($lifted.Count -ne $wanted.Count) { Done }
 # ---- read from the text -------------------------------------------------------
 Yes 'InFront names the program and never reads a window title, which can be private' (-not $lifted['InFront'].Contains('GetWindowText') -and -not $lifted['InFront'].Contains('WindowWords'))
 Yes 'when nothing was typed the log says which program was in front' ($text.Contains("Steam's window would not come to the front (the window in front belongs to "" + InFront() + ""), so nothing was typed. "))
-Yes 'IsHungAppWindow is declared' ([regex]::IsMatch($text, 'DllImport\("user32\.dll"\)\]\s*static extern bool IsHungAppWindow\(IntPtr hWnd\);'))
+Yes 'IsHungAppWindow is declared' ([regex]::IsMatch($text, 'LibraryImport\("user32\.dll"\)\]\s*\[return: MarshalAs\(UnmanagedType\.Bool\)\]\s*private static partial bool IsHungAppWindow\(IntPtr hWnd\);'))
 
 # ---- the second go at the console, read off Run's text -------------------------
 #
@@ -250,22 +250,18 @@ $body = New-Object System.Text.StringBuilder
 foreach ($k in $lifted.Keys) { [void]$body.AppendLine($lifted[$k]) }
 $probe = $probe.Replace('__LIFTED__', $body.ToString())
 
-if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'; Done }
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-downgrade-front-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 $null = New-Item -ItemType Directory -Force -Path $work
 try {
-    $probeCs = Join-Path $work 'Probe.cs'
-    [IO.File]::WriteAllText($probeCs, $probe)
-    $dll = Join-Path $work 'Probe.dll'
-    $out = & $LauncherCsc /nologo /target:library "/out:$dll" $probeCs 2>&1
-    $built = ($LASTEXITCODE -eq 0) -and (Test-Path -LiteralPath $dll)
-    Yes 'the lifted methods compile with the compiler the build runs against the stand-in desktop' $built
-    if (-not $built) { $out | ForEach-Object { Write-Host "      $_" }; Done }
+    $asm = $null
+    try { $asm = Add-LauncherType -Source $probe }
+    catch { $out = $_.Exception.Message }
+    Yes 'the lifted methods compile with the .NET SDK the launcher builds with against the stand-in desktop' ($null -ne $asm)
+    if (-not $asm) { $out -split "`n" | ForEach-Object { Write-Host "      $_" }; Done }
 
-    $asm = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($dll))
     $T = $asm.GetType('Probe.Downgrade', $true)
     $flags = [Reflection.BindingFlags]'Static, Public, NonPublic'
     function Call([string]$name, [object[]]$argv) { return $T.GetMethod($name, $flags).Invoke($null, $argv) }

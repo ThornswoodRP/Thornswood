@@ -253,7 +253,7 @@ def main(argv):
         print('SKIP  whether each issue is open: no GITHUB_TOKEN and GITHUB_REPOSITORY to read it with')
     if bad:
         print('\n%d of %d test task(s) break a rule. Edit the pull request body; this '
-              'check runs again on the edit. Developer-Guide.md, "Test tasks and known '
+              'check runs again on the edit. docs/guide/the-board.md, "Test tasks and known '
               'issues", has the shapes.' % (bad, len(results)))
         return 1
     print('\nevery test task in the body passes the bot\'s rules')

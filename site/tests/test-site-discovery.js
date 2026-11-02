@@ -1,6 +1,7 @@
 'use strict';
 // Real HTTP responses from an isolated copy. No live accounts or data.
 const fs = require('fs'), path = require('path'), os = require('os');
+const siteFiles = require('../../tests/site-files');
 const http = require('http'), net = require('net'), {spawn} = require('child_process');
 const assert = require('assert');
 const app = path.join(__dirname, '..', '..', 'site');
@@ -52,7 +53,7 @@ function listening(srv, port) {
   });
 }
 async function main() {
-  fs.copyFileSync(path.join(app, 'server.js'), path.join(work, 'server.js'));
+  siteFiles.copy(work, path.join(app, 'server.js'));
   fs.cpSync(path.join(app, 'public'), path.join(work, 'public'), {recursive:true});
   fs.cpSync(path.join(app, 'data'), path.join(work, 'data'), {recursive:true});
   fs.writeFileSync(path.join(work, 'public', 'accidental.js.map'), '{"sourcesContent":["private source"]}');

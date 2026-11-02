@@ -70,7 +70,9 @@ namespace Thornswood
 
         public static void Init(string rootOverride)
         {
-            string exeDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            // The exe's own path: a native build has no assembly file of its
+            // own, so Assembly.Location is empty there (#4823).
+            string exeDir = Path.GetDirectoryName(Environment.ProcessPath);
             Root = string.IsNullOrEmpty(rootOverride) ? Path.GetDirectoryName(exeDir) : rootOverride;
 
             string own = Path.Combine(Root, "Game");

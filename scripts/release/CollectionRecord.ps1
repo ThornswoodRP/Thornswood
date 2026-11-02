@@ -212,6 +212,21 @@ function Get-CollectionRecordHeaders($R) {
 function Get-CollectionRecordOrderProblems($R) {
     $out = New-Object Collections.Generic.List[string]
     $enabled = @(@($R.plugins) | Where-Object { $_.enabled -ne $false })
+    # A plugin switched off has no place in the collection's list, so the
+    # layout of a revision (Install-NexusRevision.ps1) puts every one after the
+    # list, in name order, and the draft is held to the record in that order.
+    # The record writes them there too: on 2 Nov the first change after them
+    # put Improved Eyes Skyrim.esp below CBBE.esp and RaceMenuMorphsCBBE.esp,
+    # and the draft of revision 7 was discarded for it (#4603).
+    $off = @(@($R.plugins) | Where-Object { $_.enabled -eq $false } | ForEach-Object { [string]$_.name })
+    if ($off.Count) {
+        $all = @(@($R.plugins) | ForEach-Object { [string]$_.name })
+        $firstOff = [Array]::IndexOf($all, $off[0])
+        $below = @($all[$firstOff..($all.Count - 1)] | Where-Object { $off -notcontains $_ })
+        if ($below.Count) { $out.Add("$($below[0]) is below $($off[0]), which is switched off: a plugin switched off goes after every plugin of the list, as the layout of the revision puts it") }
+        $sorted = @($off | Sort-Object { $_.ToLowerInvariant() })
+        if (($sorted -join '|') -cne ($off -join '|')) { $out.Add("the plugins switched off are not in name order, the order the layout of the revision gives them: $($sorted -join ', ')") }
+    }
     $pos = @{}
     for ($i = 0; $i -lt $enabled.Count; $i++) { $pos[([string]$enabled[$i].name).ToLowerInvariant()] = $i }
     $canon = @{}

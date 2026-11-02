@@ -7,9 +7,10 @@
   CloseGameWaiting, ClearLeftovers and EnsureServer in launcher\app\Shell.cs and ShellPlay.cs.
 
   Each method is lifted out of the real Shell.cs (the brace-matched body, the
-  way test-play-progress.ps1 reads its wiring) and compiled with the compiler
-  and the C# version the build uses (tests\Launcher-Csc.ps1),
-  beside stand-ins for Checks, SkyMp, MessageBox, Waiting and Log. The
+  way test-play-progress.ps1 reads its wiring) and built the way the project
+  builds, with the .NET 10 SDK (tests\Launcher-Csc.ps1, #4823, on any machine
+  that has it), beside stand-ins for Checks, SkyMp, Ask (the launcher's
+  message boxes), Waiting and Log. The
   stand-ins script every answer the real ones can give, so this fails if a
   guard starts closing somebody's other Skyrim, closes a visible game without
   asking, carries on when the game would not close, kills a session that is
@@ -18,7 +19,8 @@
   guards, ClearStuckGame, Verify, EnsureServer, Keep/Hold, and only then
   Process.Start.
 
-  No process is started or ended. Read only apart from its own temp folder.
+  No process is started or ended. Read only apart from the build under
+  out\harness, which git ignores.
 #>
 [CmdletBinding()]
 param([string]$AppDir)
@@ -70,28 +72,25 @@ foreach ($sig in $sigs) {
 }
 if ($script:fail) { Done }
 
-if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'; Done }
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
-
-$tmp = Join-Path ([IO.Path]::GetTempPath()) ('ts-play-stuck-' + [Guid]::NewGuid().ToString('N'))
-New-Item -ItemType Directory -Path $tmp | Out-Null
+Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 $driver = @'
 using System;
 using System.Collections.Generic;
 namespace Thornswood
 {
-    enum MessageBoxButton { OK, YesNo }
-    enum MessageBoxImage { Warning }
-    enum MessageBoxResult { None, OK, Yes, No }
     class Config { }
-    static class MessageBox
+    // Stands in for Ask.cs: every box is recorded, a Yes and No box gets
+    // Answer, and nothing goes on the screen.
+    static class Ask
     {
-        public static MessageBoxResult Answer = MessageBoxResult.No;
+        public enum Icon { None, Error, Question, Warning, Info }
+        public static bool Answer;
         public static List<string> Asked = new List<string>();
-        public static MessageBoxResult Show(string text, string title, MessageBoxButton b, MessageBoxImage i)
-        { Asked.Add(text); return b == MessageBoxButton.OK ? MessageBoxResult.OK : Answer; }
+        public static void Tell(string text, string title = "Thornswood", Icon icon = Icon.Info) { Asked.Add(text); }
+        public static bool YesNo(string text, string title = "Thornswood", Icon icon = Icon.Question, bool noIsDefault = false)
+        { Asked.Add(text); return Answer; }
     }
     static class Checks
     {
@@ -139,7 +138,7 @@ __METHODS__
             Checks.Running = Checks.Other = Checks.Visible = false;
             Checks.Closes = 0; Checks.CloseCalls = 0; Checks.Stuck = "";
             SkyMp.IsUp = SkyMp.Local = SkyMp.Throw = false; SkyMp.StartSays = null; SkyMp.Starts = 0;
-            MessageBox.Answer = MessageBoxResult.No; MessageBox.Asked.Clear();
+            Ask.Answer = false; Ask.Asked.Clear();
             logged.Clear(); young = false; waits = 0; stallSeenInside = null; stallDoing = null;
         }
         static bool LoggedHas(string s) { foreach (string l in logged) if (l.Contains(s)) return true; return false; }
@@ -148,28 +147,28 @@ __METHODS__
         {
             // ---- ClearStuckGame -------------------------------------------
             Reset();
-            Yes("nothing running: Play goes on, nothing asked or closed", ClearStuckGame(true) && MessageBox.Asked.Count == 0 && Checks.CloseCalls == 0);
+            Yes("nothing running: Play goes on, nothing asked or closed", ClearStuckGame(true) && Ask.Asked.Count == 0 && Checks.CloseCalls == 0);
 
             Reset(); Checks.Other = true;
-            Yes("another folder's Skyrim, asked and refused: stop, it is not closed", !ClearStuckGame(true) && MessageBox.Asked.Count == 1 && Checks.CloseCalls == 0);
-            Reset(); Checks.Other = true; MessageBox.Answer = MessageBoxResult.Yes;
+            Yes("another folder's Skyrim, asked and refused: stop, it is not closed", !ClearStuckGame(true) && Ask.Asked.Count == 1 && Checks.CloseCalls == 0);
+            Reset(); Checks.Other = true; Ask.Answer = true;
             Yes("another folder's Skyrim, asked and accepted: go on, still not closed", ClearStuckGame(true) && Checks.CloseCalls == 0);
             Reset(); Checks.Other = true;
-            Yes("another folder's Skyrim with no asking: go on, never closed", ClearStuckGame(false) && MessageBox.Asked.Count == 0 && Checks.CloseCalls == 0);
+            Yes("another folder's Skyrim with no asking: go on, never closed", ClearStuckGame(false) && Ask.Asked.Count == 0 && Checks.CloseCalls == 0);
 
             Reset(); Checks.Running = true; Checks.Visible = true;
             Yes("our game on screen, refused: stop and close nothing", !ClearStuckGame(true) && Checks.CloseCalls == 0 && LoggedHas("Left the game"));
             Reset(); Checks.Running = true; Checks.Visible = true;
-            Yes("our game on screen with no asking: never closed silently", !ClearStuckGame(false) && Checks.CloseCalls == 0 && MessageBox.Asked.Count == 0);
-            Reset(); Checks.Running = true; Checks.Visible = true; MessageBox.Answer = MessageBoxResult.Yes; Checks.Closes = 2;
+            Yes("our game on screen with no asking: never closed silently", !ClearStuckGame(false) && Checks.CloseCalls == 0 && Ask.Asked.Count == 0);
+            Reset(); Checks.Running = true; Checks.Visible = true; Ask.Answer = true; Checks.Closes = 2;
             Yes("our game on screen, accepted: closed and Play goes on", ClearStuckGame(true) && Checks.CloseCalls == 1 && LoggedHas("Closed 2 Skyrim processes"));
 
             Reset(); Checks.Running = true; Checks.Closes = 1;
-            Yes("windowless leftover: closed without asking", ClearStuckGame(true) && MessageBox.Asked.Count == 0 && LoggedHas("Closed 1 Skyrim process that"));
+            Yes("windowless leftover: closed without asking", ClearStuckGame(true) && Ask.Asked.Count == 0 && LoggedHas("Closed 1 Skyrim process that"));
             Reset(); Checks.Running = true; Checks.Stuck = "Still running: SkyrimSE.exe (process 9).";
-            Yes("leftover that will not close: stop, and say what is still running", !ClearStuckGame(true) && MessageBox.Asked.Count == 1 && MessageBox.Asked[0].Contains("SkyrimSE.exe"));
+            Yes("leftover that will not close: stop, and say what is still running", !ClearStuckGame(true) && Ask.Asked.Count == 1 && Ask.Asked[0].Contains("SkyrimSE.exe"));
             Reset(); Checks.Running = true; Checks.Stuck = "Still running: x.";
-            Yes("leftover that will not close, no asking: stop with no box", !ClearStuckGame(false) && MessageBox.Asked.Count == 0);
+            Yes("leftover that will not close, no asking: stop with no box", !ClearStuckGame(false) && Ask.Asked.Count == 0);
 
             // ---- CloseGameWaiting -----------------------------------------
             Reset(); Checks.Closes = 3; Checks.Stuck = null; int n;
@@ -194,15 +193,15 @@ __METHODS__
 
             // ---- EnsureServer ---------------------------------------------
             Reset(); SkyMp.IsUp = true;
-            Yes("server answering: go, nothing started or asked", EnsureServer() && SkyMp.Starts == 0 && MessageBox.Asked.Count == 0);
+            Yes("server answering: go, nothing started or asked", EnsureServer() && SkyMp.Starts == 0 && Ask.Asked.Count == 0);
             Reset();
-            Yes("remote server silent, refused: do not start", !EnsureServer() && MessageBox.Asked.Count == 1 && SkyMp.Starts == 0);
-            Reset(); MessageBox.Answer = MessageBoxResult.Yes;
+            Yes("remote server silent, refused: do not start", !EnsureServer() && Ask.Asked.Count == 1 && SkyMp.Starts == 0);
+            Reset(); Ask.Answer = true;
             Yes("remote server silent, accepted: start anyway, never start a server", EnsureServer() && SkyMp.Starts == 0);
             Reset(); SkyMp.Local = true;
             Yes("local server down and comes up: started inside Waiting, go", EnsureServer() && SkyMp.Starts == 1 && waits == 1 && LoggedHas("The server is up."));
             Reset(); SkyMp.Local = true; SkyMp.StartSays = "Node is missing.";
-            Yes("local server will not start: stop and show why", !EnsureServer() && MessageBox.Asked.Count == 1 && MessageBox.Asked[0] == "Node is missing.");
+            Yes("local server will not start: stop and show why", !EnsureServer() && Ask.Asked.Count == 1 && Ask.Asked[0] == "Node is missing.");
             Reset(); SkyMp.Throw = true;
             Yes("a check that throws is logged and lets Play go on (as written)", EnsureServer() && LoggedHas("Could not check the server: boom"));
 
@@ -215,22 +214,17 @@ __METHODS__
 '@
 $driver = $driver.Replace('__METHODS__', ($bodies -join "`r`n`r`n"))
 
-$src = Join-Path $tmp 'drive.cs'
-$exe = Join-Path $tmp 'drive.exe'
-[IO.File]::WriteAllText($src, $driver, (New-Object Text.UTF8Encoding($false)))
-try {
-    $out = & $LauncherCsc /nologo "/langversion:$LauncherLangVersion" /target:exe "/out:$exe" $src 2>&1
-    Yes 'the lifted guards compile with the build''s compiler' ($LASTEXITCODE -eq 0)
-    if ($LASTEXITCODE -ne 0) { $out | Write-Host; Done }
-    $lines = & $exe
-    $code = $LASTEXITCODE
-    foreach ($l in $lines) {
-        if ($l -like 'PASS  *') { $script:pass++; Write-Host $l }
-        elseif ($l -like 'FAIL  *') { $script:fail++; Write-Host $l }
-    }
-    Yes 'the driver exits 0' ($code -eq 0)
+$exe = $null
+try { $exe = Build-LauncherCode -Source $driver -Exe } catch { Write-Host ('      ' + $_.Exception.Message) }
+Yes 'the lifted guards build the way the project builds them' ($null -ne $exe)
+if (-not $exe) { Done }
+$lines = Invoke-LauncherExe $exe
+$code = $LASTEXITCODE
+foreach ($l in $lines) {
+    if ($l -like 'PASS  *') { $script:pass++; Write-Host $l }
+    elseif ($l -like 'FAIL  *') { $script:fail++; Write-Host $l }
 }
-finally { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue }
+Yes 'the driver exits 0' ($code -eq 0)
 
 # ---- 2. the order of Play's steps, read from the file ----------------------
 $play = Body $shell 'static void Play()'

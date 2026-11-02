@@ -34,6 +34,7 @@ const http = require('http');
 const net = require('net');
 const os = require('os');
 const path = require('path');
+const siteFiles = require('./site-files');
 
 const GM = process.env.GM || path.join(REPO_DIR, 'game', 'gamemode.js');
 const SITE = path.join(REPO_DIR, 'site', 'server.js');
@@ -243,7 +244,7 @@ const TEMP = process.env.THORNSWOOD_TEMP || os.tmpdir();
 fs.mkdirSync(TEMP, { recursive: true });
 const dir = fs.mkdtempSync(path.join(TEMP, 'ts-3155-'));
 const KEY = crypto.randomBytes(24).toString('hex');
-fs.copyFileSync(SITE, path.join(dir, 'server.js'));
+siteFiles.copy(dir, SITE);
 fs.mkdirSync(path.join(dir, 'data'), { recursive: true });
 fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({
   password: crypto.randomBytes(12).toString('hex'),

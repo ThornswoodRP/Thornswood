@@ -115,8 +115,9 @@ function blurb(rel) {
   const m = src.match(/'\/known':\s*\[\s*'([^']*)',\s*'([^']*)'\s*\]/);
   return m ? m[2] : null;
 }
-const serverBlurb = blurb('server.js');
-yes('server.js has a /known preview', serverBlurb !== null);
+// The blurbs are in site\lib\pages.js since server.js was split (#5357).
+const serverBlurb = blurb(path.join('lib', 'pages.js'));
+yes('the site has a /known preview', serverBlurb !== null);
 yes('the preview no longer calls the page permanent',
     serverBlurb !== null && !/permanent/i.test(serverBlurb) && !PROMISE.test(serverBlurb));
 yes('home.js keeps no second copy of it', blurb(path.join('public', 'home.js')) === null);

@@ -47,10 +47,6 @@
 $script:LauncherInputFiles = @('records/client-build.json', 'records/ui-gone.json', 'records/generated.json', 'scripts/release/Build-Launcher.ps1')
 $script:LauncherInputPathspec = @(':(top)launcher', ':(top,exclude,glob)launcher/**/*.md', ':(top,exclude)launcher/tests') + @($script:LauncherInputFiles | ForEach-Object { ':(top)' + $_ })
 
-# The number Updater.cs holds in git. The build writes the real one in for
-# the compile (Build-Launcher.ps1) and puts this back.
-$script:LauncherVersionPlaceholder = '0.0.0'
-
 # year.monthday.hourminute of a UTC time, each part a plain number.
 function Format-LauncherVersion([DateTime]$utc) {
     return ('{0}.{1}.{2}' -f $utc.Year, ($utc.Month * 100 + $utc.Day), ($utc.Hour * 100 + $utc.Minute))
@@ -93,11 +89,4 @@ function Get-LauncherVersion([string]$RepoDir, [string]$Commit = 'HEAD') {
         $at = $t
     }
     return (Format-LauncherVersion $at)
-}
-
-# True when the Version line Updater.cs carries is the one git holds, not a
-# number a build wrote in.
-function Test-LauncherVersionPlaceholder([string]$UpdaterText) {
-    $m = [regex]::Match($UpdaterText, 'Version\s*=\s*"([^"]+)"')
-    return ($m.Success -and $m.Groups[1].Value -eq $script:LauncherVersionPlaceholder)
 }

@@ -13,8 +13,11 @@
     2. PlayPressedBy names the mouse, the keyboard (with the last key down on
        the window) or no device, whether the window was active, and the seconds
        since the last game closed.
-    3. The game's close sets gameClosedAt, and a window-level PreviewKeyDown
-       keeps the last key.
+    3. The game's close sets gameClosedAt, and the window's handlers, seen on
+       the way down before any control (RoutingStrategies.Tunnel), keep the
+       last key and note whether the mouse or the keyboard was used last.
+       Avalonia keeps no record of the last input device, so these handlers
+       are what PlayPressedBy reads.
 #>
 [CmdletBinding()]
 param([string]$Repo)
@@ -39,13 +42,24 @@ $at = $shell.IndexOf('static string PlayPressedBy()')
 $fn = if ($at -ge 0) { $shell.Substring($at, [Math]::Min(2200, $shell.Length - $at)) } else { '' }
 Yes 'PlayPressedBy is in Shell.cs' ($at -ge 0)
 Yes 'it names the mouse, the keyboard with its last key, or no device' (
-    $fn.Contains('dev is MouseDevice') -and $fn.Contains('dev is KeyboardDevice') -and
+    $fn.Contains('lastInput == "mouse"') -and $fn.Contains('leftButtonDown') -and
+    $fn.Contains('lastInput == "keyboard"') -and
     $fn.Contains('lastKeyDown') -and $fn.Contains('no input device'))
 Yes 'it says whether the window was active and how long since the game closed' (
     $fn.Contains('win.IsActive') -and $fn.Contains('gameClosedAt'))
 Yes 'the game''s close sets gameClosedAt' ($shell -match 'gameClosedAt = DateTime\.Now;\s*\r?\n\s*Log\("Game closed after')
-Yes 'a window-level PreviewKeyDown keeps the last key' (
-    $shell.Contains('win.PreviewKeyDown += delegate (object s, KeyEventArgs e)') -and $shell.Contains('lastKeyDownAt = DateTime.Now;'))
+$keyDown = [regex]::Match($shell, '(?s)win\.AddHandler\(InputElement\.KeyDownEvent, delegate \(object s, KeyEventArgs e\)\s*\{(.*?)\}, RoutingStrategies\.Tunnel, true\);')
+Yes 'a window-level key handler, before any control, keeps the last key and notes the keyboard' (
+    $keyDown.Success -and $keyDown.Groups[1].Value.Contains('lastKeyDown = e.Key;') -and
+    $keyDown.Groups[1].Value.Contains('lastKeyDownAt = DateTime.Now;') -and
+    $keyDown.Groups[1].Value.Contains('lastInput = "keyboard";'))
+$press = [regex]::Match($shell, '(?s)win\.AddHandler\(InputElement\.PointerPressedEvent, delegate \(object s, PointerPressedEventArgs e\)\s*\{(.*?)\}, RoutingStrategies\.Tunnel, true\);')
+Yes 'a window-level pointer handler, before any control, notes the mouse and its left button' (
+    $press.Success -and $press.Groups[1].Value.Contains('PointerType.Mouse ? "mouse"') -and
+    $press.Groups[1].Value.Contains('leftButtonDown = true;'))
+$release = [regex]::Match($shell, '(?s)win\.AddHandler\(InputElement\.PointerReleasedEvent, delegate \(object s, PointerReleasedEventArgs e\)\s*\{(.*?)\}, RoutingStrategies\.Tunnel, true\);')
+Yes 'the left button coming up is noted the same way' (
+    $release.Success -and $release.Groups[1].Value.Contains('leftButtonDown = false;'))
 
 Write-Host ''
 Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail)

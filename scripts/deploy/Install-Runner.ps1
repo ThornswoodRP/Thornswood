@@ -260,7 +260,7 @@
   NO PRIORITY TASK (#1969). Until 5 October each install registered a task,
   Thornswood Runner Priority (Thornswood Runner N Priority from the second
   on), that set Runner.Listener and Runner.Worker to Normal at start and
-  every five minutes: a timer that repairs state, which Developer-Guide.md
+  every five minutes: a timer that repairs state, which docs/guide/rules.md
   "Fix the cause, no band-aids" does not allow. Until 25 September it set
   them to BelowNormal, which is where they ran then; since then it had nothing
   to repair. The runner is a Windows service (config.cmd --runasservice),

@@ -143,11 +143,13 @@ yes('standing up still works while the wheel is open, and not while a name is be
   because they are the only instruments anybody can make. Skyrim's own lute,
   drum and flute are MISC records and cannot be held at all.
 */
-const gm = read(GM);
+const gm = require('./gamemode-tables.js').joined(read(GM));
 const made = {};
-gm.split('\n').forEach(function (line) {
-  const m = /"out"\s*:\s*"([0-9a-f]+):PlayFluteLuteDrum\.esp",\s*"name"\s*:\s*"([^"]+)"/.exec(line);
-  if (m) made[m[2]] = m[1];
+// The gamemode reads RECIPES_BY_ID from game/gamemode-tables (#5191).
+const BOOK = require('./gamemode-tables.js').table('RECIPES_BY_ID');
+Object.keys(BOOK).forEach(function (k) {
+  const m = /^([0-9a-f]+):PlayFluteLuteDrum\.esp$/.exec(BOOK[k].out || '');
+  if (m) made[BOOK[k].name] = m[1];
 });
 yes('a flute, a lute and a drum can be made, and all three are ' + PLUGIN + '\'s',
     made.Flute === 'd62' && made.Lute === '1d9b' && made.Drum === '287f');
@@ -224,7 +226,7 @@ if (!fs.existsSync(espPath)) {
   for state.class === bard any more.
 */
 {
-  const gm = read(GM);
+  const gm = require('./gamemode-tables.js').joined(read(GM));
   const code = gm
     .replace(/\/\*[\s\S]*?\*\//g, ' ')
     .replace(/\/\/[^\n]*/g, ' ');

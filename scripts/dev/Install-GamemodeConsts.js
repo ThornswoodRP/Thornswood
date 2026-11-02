@@ -5,11 +5,13 @@
 // recovered into JSON when tools\thornswood-src was retired (5d1f3f0, 21
 // September), and they are maintained as checked-in JSON. The old comment at
 // gamemode.js named respawn-holds.json; that file never lived in this
-// repository. game\data\data.json is the source for const DATA.
+// repository. game\data\data.json is the source for DATA, which the gamemode
+// reads from its table file, game\gamemode-tables\DATA.json (#5191); the
+// other three are const lines in gamemode.js.
 //
 // Except DATA.worldspaces, which scripts\dev\Build-WorldspaceTable.js reads
 // out of the WRLD records of the load order and writes into data.json and the
-// DATA line (#1896). Do not edit that list by hand.
+// DATA table (#1896). Do not edit that list by hand.
 //
 // Does not invent content. Edit the JSON, then run this to write the const
 // lines. --check verifies the gamemode matches the JSON (by value) and writes
@@ -25,9 +27,10 @@ const CHECK = process.argv.indexOf('--check') !== -1;
 const root = path.join(__dirname, '..', '..');
 const gmPath = path.join(root, 'game', 'gamemode.js');
 const dataDir = path.join(root, 'game', 'data');
+const GT = require('./GamemodeTables.js');
 
 const TABLES = [
-  { name: 'DATA', file: 'data.json' },
+  { name: 'DATA', file: 'data.json', table: true },
   { name: 'STATIONS', file: 'stations.json' },
   { name: 'ITEMS', file: 'items.json' },
   { name: 'CHARGEN', file: 'chargen.json' }
@@ -76,6 +79,19 @@ let matched = 0;
 for (const t of TABLES) {
   const obj = loadJson(t.file);
   if (obj === null) continue;
+  if (t.table) {
+    // Laid out from the file's own text, as Build-WorldspaceTable.js writes it.
+    const text = fs.readFileSync(path.join(dataDir, t.file), 'utf8');
+    if (GT.isCurrent(t.name, text)) {
+      console.log('ok    ' + t.name + ' matches game\\data\\' + t.file);
+      matched++;
+    } else {
+      if (!CHECK) { GT.write(t.name, text); }
+      changed++;
+      console.log((CHECK ? 'DIFF  ' : 'wrote ') + t.name + ' table from game\\data\\' + t.file);
+    }
+    continue;
+  }
   const parsed = parseConstLine(next, t.name);
   if (!parsed) {
     console.error('FAIL  gamemode.js has no "const ' + t.name + ' = {...};" line');
@@ -110,8 +126,8 @@ if (CHECK) {
 }
 
 if (changed === 0) {
-  console.log('game\\gamemode.js already holds these tables');
-} else {
+  console.log('game\\gamemode.js and the DATA table already hold these tables');
+} else if (next !== src) {
   fs.writeFileSync(gmPath, next);
   console.log('installed ' + changed + ' const(s) into game\\gamemode.js (' + matched + ' already matched)');
 }

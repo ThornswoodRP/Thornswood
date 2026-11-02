@@ -30,10 +30,11 @@ const os = require('os');
 const net = require('net');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const siteFiles = require('../../tests/site-files');
 
 const ROOT = path.join(__dirname, '..', '..');
 const SITE_SRC = path.join(ROOT, 'site', 'server.js');
-const site = fs.readFileSync(SITE_SRC, 'utf8');
+const site = siteFiles.source(SITE_SRC);
 
 let pass = 0, fail = 0;
 function yes(what, cond, why) {
@@ -65,7 +66,7 @@ const NOW = Date.now();
 async function trouble() {
   console.log('G3  TROUBLE.JSON AGES WITH THE SESSION IT IS ABOUT');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-2166-'));
-  fs.copyFileSync(SITE_SRC, path.join(dir, 'server.js'));
+  siteFiles.copy(dir, SITE_SRC);
   fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'data', 'for-bot'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({

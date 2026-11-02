@@ -95,7 +95,9 @@ Yes '...and every read of a store file in the box''s script shares delete' (
     $body -match '\[IO\.FileShare\]::ReadWrite -bor \[IO\.FileShare\]::Delete' -and
     $body -notmatch '\[IO\.File\]::(OpenRead|ReadAllText|ReadAllBytes|ReadAllLines|Open)\(')
 
-$server = Text $serverJs
+# The site is server.js over its modules in site\lib since #5357.
+. (Join-Path $PSScriptRoot 'SiteFiles.ps1')
+$server = (Get-SiteSource (Join-Path $Repo 'site')) -replace "`r`n", "`n"
 Yes 'site\server.js: the feed route, the watch and the join pass read the newest generation (feedFile)' (
     $server -match "const file = feedFile\(feedVer\[1\]\);" -and $server -match 'const file = feedFile\(channel\);' -and
     $server -match 'const file = feedFile\(dir\);')
@@ -229,7 +231,10 @@ console.log('passes ' + passes + ' missing ' + missing + ' other ' + other + ' g
     [IO.File]::WriteAllText((Join-Path $chan 'version\00000001.json'), $doc)
     $psi = New-Object Diagnostics.ProcessStartInfo
     $doneFile = Join-Path $work 'writer-done'
-    $psi.FileName = $node.Source; $psi.Arguments = '"' + $loopJs + '" "' + $serverJs + '" "' + $root + '" "' + $doneFile + '"'
+    # The whole site as one text (#5357), for the reader to lift feedFile from.
+    $siteText = Join-Path $work 'site-source.js'
+    [IO.File]::WriteAllText($siteText, (Get-SiteSource (Join-Path $Repo 'site')), (New-Object Text.UTF8Encoding($false)))
+    $psi.FileName = $node.Source; $psi.Arguments = '"' + $loopJs + '" "' + $siteText + '" "' + $root + '" "' + $doneFile + '"'
     $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true
     $reader = [Diagnostics.Process]::Start($psi)
     $first = $reader.StandardOutput.ReadLineAsync()

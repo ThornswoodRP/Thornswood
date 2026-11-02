@@ -4,10 +4,11 @@
       pwsh -NoProfile -File .\tests\test-3004-clean-dist-folders.ps1
 
   Issue #3004. Clean-Everything.ps1 -Installers, -Packs and -Stage looked only
-  in $Root\_dist. Since 22 September Ship, Publish-Update and
-  Package-Thornswood stage in <Where.ps1 Dist>\<install root's name>\_dist,
-  one per install root, so it no longer saw the installers a Ship leaves
-  (about 5 GB each), the pack zips or the packaging leftovers.
+  in $Root\_dist. Since 22 September Ship, Publish-Update and the old
+  installer's Package-Thornswood (until #4824) stage in
+  <Where.ps1 Dist>\<install root's name>\_dist, one per install root, so it no
+  longer saw the installers a Ship left (about 5 GB each), the pack zips or the
+  packaging leftovers. A machine that shipped before #4824 still has them.
 
   This proves it now looks in both places: every _dist under Where.ps1 Dist
   (two roots, as One has), and the old $Root\_dist while one is there, said

@@ -1,9 +1,9 @@
 # Every pull request and every push to main gets the checks a release starts
 # with: do all the PowerShell scripts parse, does every game script parse,
 # does the bot parse, do the test harnesses still pass, and does the launcher
-# build with MSBuild from its project files (#498, switched 15 Oct; the step
-# "Check the MSBuild launcher against its sources" holds that build to the
-# repository, resource by resource). A red mark here means the
+# publish as the native exe people run (#4823: Avalonia on .NET 10, Native
+# AOT; the step "Publish the native launcher" fails on any error and on any
+# trim or native code warning). A red mark here means the
 # branch would stop Ship.ps1; a green one means it is worth a person's time
 # to read. It builds only; nothing is published.
 #
@@ -55,7 +55,7 @@
 #
 # FAST, SINCE 25 SEPTEMBER: every pull request and every push to main gets
 # the checks that take seconds (secrets, every script and file parses, the
-# writing rules, the launcher window, the silent catch
+# writing rules, the silent catch
 # count) and the launcher build, about two
 # minutes on the VPS. The ~380 test harnesses in tests/ took over five minutes there
 # on their own, so they run every night instead, in nightly.yml, with the
@@ -257,6 +257,11 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
+      # The harnesses compile and run launcher code with the .NET 10 SDK
+      # (tests\Launcher-Csc.ps1, #4823), pinned as the launcher's publish is.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
 
       - name: Run the gate harnesses
         id: gate
@@ -362,6 +367,11 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
+      # The harnesses compile and run launcher code with the .NET 10 SDK
+      # (tests\Launcher-Csc.ps1, #4823), pinned as the launcher's publish is.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
 
       - name: Run the gate harnesses
         id: gate
@@ -485,7 +495,7 @@ jobs:
       - name: Check the writing rules
         shell: pwsh
         run: |
-          # The Words section of Developer-Guide.md, over every file people read
+          # The Words section of docs/guide/rules.md, over every file people read
           # (every Markdown file outside lore and the archive, the launcher's
           # help and window, the bot's posts, the public pages, the installer's
           # read me). Written down since the start and never checked, and on
@@ -661,6 +671,10 @@ jobs:
         run: |
           # Issue #1216. A Log() from a background thread throws on the
           # window, and the catch then reports a success as a failure.
+          # Avalonia throws on a control touched off its thread just as WPF
+          # did, so this stays (#4823), reading Avalonia's hand back,
+          # Dispatcher.UIThread. The compiled window does not catch it: it is
+          # a thread fault, not a name one.
           # This follows calls out of ThreadPool and Thread delegates in
           # launcher\app. No arguments: the script finds launcher\app from
           # where it lives. A finding exits 1. No python is a check that
@@ -728,6 +742,27 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Write-Host ("{0} Python file(s) name only what exists" -f $files.Count)
 
+      # The steps after a deploy (#5186): each file under deploy/after held to
+      # the rules the box deploy agent holds it to, against this tree's
+      # verbs.json, with the agent's own code, so a step file that would be
+      # refused on the box stops the merge instead. Only when there is one:
+      # most changes carry none, and they skip the .NET set up.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        if: ${{ hashFiles('deploy/after/*.json') != '' }}
+        with:
+          dotnet-version: '10.0.x'
+      - name: Check the steps after a deploy
+        if: ${{ hashFiles('deploy/after/*.json') != '' }}
+        shell: pwsh
+        env:
+          DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+          DOTNET_NOLOGO: '1'
+        run: |
+          dotnet restore tools/DeployAgent --locked-mode
+          if ($LASTEXITCODE -ne 0) { Write-Host '::error::dotnet restore failed for tools/DeployAgent'; exit 1 }
+          dotnet run --project tools/DeployAgent --no-restore -- steps --folder deploy/after --verbs scripts/vps/gate/verbs.json
+          exit $LASTEXITCODE
+
       - name: Count the silent catches in the launcher, the scripts, the site, voice and the bot
         shell: pwsh
         run: |
@@ -779,82 +814,114 @@ jobs:
   #
   # THE PATH RULE (#5292, decided 31 Oct 2026). A pull request that changes
   # only docs, the site or the bot cannot change what this job checks: the
-  # launcher's and the installer's projects, the ship root tool and the
-  # launcher window read none of those folders, and the writing check's
-  # harness runs in "Tree checks" for every change
-  # (tests\test-5292-path-rule.ps1 holds all of that). The pick says
-  # so (scripts\dev\Launcher-Reach.ps1), and this job is skipped; Build check
-  # result counts a skip as passed only then. Main and a run by hand always
-  # build. A pick that failed or said nothing builds too.
+  # launcher's project and the ship root tool read none of those folders
+  # (the installer is the launcher's own code since #4824, and its window
+  # compiled markup since #4823), and the writing check's harness runs in
+  # "Tree checks" for every change (tests\test-5292-path-rule.ps1 holds all
+  # of that). The pick says
+  # so (scripts\dev\Launcher-Reach.ps1), and this job still runs and reports
+  # a result of its own: on Linux, with one step that says why there is
+  # nothing to build, and it passes. It is never skipped for the path rule,
+  # so "Launcher builds" is a pass or a failure on every pull request, and a
+  # skipped one means something went wrong (#5292, Magpie's finding of
+  # 1 Nov 2026). Main and a run by hand always build. A pick that failed or
+  # said nothing builds too.
   launcher:
     name: Launcher builds
     needs: [tested, pick]
-    if: ${{ !cancelled() && needs.tested.outputs.run == '' && needs.pick.outputs.launcher != 'false' }}
-    runs-on: windows-latest
+    if: ${{ !cancelled() && needs.tested.outputs.run == '' }}
+    runs-on: ${{ needs.pick.outputs.launcher == 'false' && 'ubuntu-24.04-arm' || 'windows-latest' }}
     permissions:
       contents: read
+    env:
+      # What the pick said: 'false' only when the change reaches nothing
+      # this job checks.
+      REACHES: ${{ needs.pick.outputs.launcher }}
     # Its steps took about three minutes once the gate went to the job above,
     # and less since the tree checks went to Linux; twenty is Patrick's mark
     # for something seriously wrong.
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Say why there is nothing to build
+        if: env.REACHES == 'false'
+        run: |
+          msg='This change touches only files under docs, site or bot, and nothing this job checks reads those folders (the pick ran scripts/dev/Launcher-Reach.ps1, #5292). So there is nothing to build, and this check passes.'
+          echo "$msg"
+          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
 
-      # The hosted image ships whatever node and python it has this month;
-      # these are pinned so a check means the same thing every month.
+      # One commit, no history: this job checks the tree alone (#3182), and
+      # the publish below takes the number a bare build carries rather than
+      # the one history gives a release.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: env.REACHES != 'false'
+
+      # The hosted image ships whatever node, python and .NET it has this
+      # month; these are pinned so a check means the same thing every month.
+      # The .NET 10 SDK publishes the launcher (#4823).
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: env.REACHES != 'false'
         with:
           node-version: '24'
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: env.REACHES != 'false'
         with:
           python-version: '3.12'
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        if: env.REACHES != 'false'
+        with:
+          dotnet-version: '10.0.x'
 
-      - name: Check the launcher window
-        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
+      - name: Publish the native launcher
+        if: env.REACHES != 'false'
+        shell: pwsh
         run: |
-          # The launcher builds its window from ui.xaml at startup and finds
-          # every control by name, so a renamed control or a window that does
-          # not parse compiles clean and is found by the person using it. This
-          # fails on either. Windows PowerShell on purpose: it parses with the
-          # .NET Framework WPF the launcher runs on, not the newer one in pwsh.
-          # -ExecutionPolicy Bypass on both, as every harness starts 5.1:
-          # Windows 11 keeps 5.1 at Restricted, so on One's runners the plain
-          # shell: powershell could not run this step's own script (#3861).
-          & powershell -NoProfile -ExecutionPolicy Bypass -File scripts\dev\Check-Controls.ps1 -NoPause
-          if ($LASTEXITCODE -ne 0) { Write-Host '::error file=launcher/ui.xaml::the launcher window does not line up with the C#, see the lines above'; exit 1 }
+          # Issue #4823. The launcher is Avalonia on .NET 10, published with
+          # Native AOT for win-x64, and this publishes it the one way every
+          # build does, scripts\release\Build-Launcher.ps1 (a Ship and a merge
+          # release run the same script), unsigned, into RUNNER_TEMP. Red on
+          # any compile error and on any trim or native code warning (IL2xxx,
+          # IL3xxx), which the script refuses itself: each is code that can
+          # fail in the native exe and never in a JIT build. The window is
+          # compiled markup (launcher\app\MainWindow.axaml), so a renamed
+          # control or a window that does not parse is a compile error here;
+          # the check that read ui.xaml at run time (Check-Controls.ps1) went
+          # with it. Until #4823 this step was tests\test-498-msbuild.ps1,
+          # which held the MSBuild build of the .NET Framework launcher.
+          # -Version 0.0.0, the number a bare build carries: this job checks
+          # the tree alone (#3182, the note at the end), and the number a
+          # release takes comes from history (LauncherVersion.ps1), which the
+          # nightly's publish works out on a full checkout.
+          $root = Join-Path $env:RUNNER_TEMP 'launcher'
+          $out = Join-Path $root 'Launcher'
+          & .\scripts\release\Build-Launcher.ps1 -Root $root -OutDir $out -NoSign -NoPause -Version 0.0.0
+          if ($LASTEXITCODE -ne 0) { Write-Host '::error file=scripts/release/Build-Launcher.ps1::the launcher did not publish, or its publish gave a trim or native code warning; the lines above say which'; exit 1 }
+          # The programs it made, byte by byte, by the rules in
+          # scripts\dev\Check-Secrets.ps1 (a key or address compiled in is in
+          # every copy people download). The step above has no other way to
+          # look at them.
+          $programs = @(Get-ChildItem -LiteralPath $out -File | Where-Object { $_.Extension -in '.exe', '.dll' } | ForEach-Object { $_.FullName })
+          if (-not $programs.Count) { Write-Host '::error::the publish left no program to check'; exit 1 }
+          .\scripts\dev\Check-Secrets.ps1 -Binary $programs
+          if ($LASTEXITCODE -ne 0) { Write-Host '::error file=scripts/dev/Check-Secrets.ps1::a published launcher program carries something that must not ship; the lines above say which'; exit 1 }
 
       - name: Build the ship root tool
+        if: env.REACHES != 'false'
         shell: pwsh
         run: |
           # Issue #2019. Every Ship builds Thornswood-ShipRoot.exe from
-          # scripts\release\ShipRoot\ShipRoot.csproj, which compiles all of
-          # launcher\app with its own entry point, and runs it on the folder
+          # scripts\release\ShipRoot\ShipRoot.csproj, which compiles OwnGame
+          # and the launcher files it calls, none of the window's, with its own
+          # entry point, and runs it on the folder
           # the release is built from before anything is packed. A launcher
           # change that stops it compiling would stop every Ship, so it is
-          # built here with the same MSBuild; tests\test-2019-ship-roots.ps1
-          # in the list above runs it on a pretend root.
-          $msb = & .\scripts\release\Find-MSBuild.ps1
-          if ($LASTEXITCODE -ne 0) { Write-Host '::error::MSBuild is not on this runner, so the ship root tool cannot be built'; exit 1 }
+          # built here with the same .NET 10 SDK, as Update-ShipRoot.ps1
+          # builds it; tests\test-2019-ship-roots.ps1 on the gate runs it on
+          # a pretend root.
           $out = Join-Path $env:RUNNER_TEMP 'shiproot'
-          & $msb scripts\release\ShipRoot\ShipRoot.csproj -nologo -v:minimal -nr:false -p:UseSharedCompilation=false -p:Configuration=Release ('-p:OutDir=' + $out + '\')
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path (Join-Path $out 'Thornswood-ShipRoot.exe'))) { Write-Host '::error file=scripts/release/ShipRoot/ShipRoot.csproj::the ship root tool did not build, see the lines above'; exit 1 }
+          dotnet build scripts\release\ShipRoot\ShipRoot.csproj -c Release -o $out --nologo -v minimal --disable-build-servers
+          if ($LASTEXITCODE -ne 0) { throw "the ship root tool did not build (dotnet build exit $LASTEXITCODE)" }
+          if (-not (Test-Path -LiteralPath (Join-Path $out 'Thornswood-ShipRoot.exe'))) { throw 'the ship root tool did not build: no Thornswood-ShipRoot.exe' }
 
-      - name: Check the MSBuild launcher against its sources
-        shell: pwsh
-        run: |
-          # Issue #498 (Patrick's option C, 11 Oct; switched 15 Oct): the
-          # launcher is built only by MSBuild from launcher\app\Thornswood.csproj
-          # and installer\setup\Setup.csproj. This holds that build to what the
-          # comparison with the old csc build proved: every resource byte for
-          # byte its file, the references, the PE kind, the version in the
-          # file details and the manifest, the icon, nothing beside the exe.
-          # GitHub's image has Visual Studio.
-          # It builds both exes with Build-Launcher.ps1, then runs
-          # launcher\tests\test-app-manifest.ps1 (#463) and Check-Secrets.ps1 -Binary on
-          # the pair, so this build has no build, manifest or secrets step of
-          # its own for them: until 22 Oct 2026 it did each twice (#3114).
-          & pwsh -NoProfile -File launcher\tests\test-498-msbuild.ps1 -RequireMSBuild -Scratch (Join-Path $env:RUNNER_TEMP 'msbuild-498')
-          if ($LASTEXITCODE -ne 0) { Write-Host '::error file=launcher/tests/test-498-msbuild.ps1::the MSBuild launcher does not match its sources, see the lines above'; exit 1 }
 
       # The note main's build looks for (#3182, the job "tested" at the top
       # of build.yml): the tree every step before this one passed on, one
@@ -876,7 +943,7 @@ jobs:
       # In the merge queue (#5182) the checkout is the queue's own merge, the
       # very commit that lands on main, so the note is written there too.
       - name: Write down the tree these checks passed on
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        if: env.REACHES != 'false' && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
         shell: pwsh
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}

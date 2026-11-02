@@ -56,7 +56,7 @@ function yes(what, cond) {
 }
 function has(o, k) { return !!o && Object.prototype.hasOwnProperty.call(o, k); }
 
-const m = /^const DATA = (.*);$/m.exec(gm);
+const m = require('./gamemode-tables.js').lineOf(gm, 'DATA');
 let DATA = null;
 try { DATA = m ? JSON.parse(m[1]) : null; } catch (e) { DATA = null; }
 yes('gamemode.js has a DATA line', !!DATA);

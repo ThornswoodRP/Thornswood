@@ -21,7 +21,7 @@ const RECIPES_JSON = process.env.RECIPES || path.join(ROOT, 'game', 'data', 'rec
 const HARVEST_PS1 = path.join(ROOT, 'scripts', 'dev', 'Build-HarvestTable.ps1');
 const RECIPE_PS1 = path.join(ROOT, 'scripts', 'dev', 'Build-RecipeTable.ps1');
 const CR = String.fromCharCode(13);
-const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const src = require('./gamemode-tables.js').joined(fs.readFileSync(SRC, 'utf8')).split(CR).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {

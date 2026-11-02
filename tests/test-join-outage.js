@@ -29,9 +29,10 @@
 const REPO_DIR = require('path').join(__dirname, '..'); // the tests are in tests\, the repository is one folder up
 const fs = require('fs');
 const path = require('path');
+const siteFiles = require('./site-files');
 
 const SRC = process.argv[2] || path.join(REPO_DIR, 'site', 'server.js');
-const src = fs.readFileSync(SRC, 'utf8');
+const src = siteFiles.source(SRC);
 const DOOR = fs.readFileSync(process.argv[3] || path.join(REPO_DIR, 'launcher', 'app', 'Door.cs'), 'utf8');
 
 function braced(at, what) {

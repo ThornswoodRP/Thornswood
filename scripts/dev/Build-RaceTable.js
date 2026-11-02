@@ -46,6 +46,7 @@
 const fs = require('fs');
 const path = require('path');
 const { pluginPath, loadedOrder } = require('./OwnPlugins.js');
+const TABLES = require('./GamemodeTables.js');
 const zlib = require('zlib');
 
 const args = process.argv.slice(2);
@@ -263,33 +264,12 @@ if (PRINT) {
   editor id alone.
 */
 function install() {
-  const gm = path.join(__dirname, '..', '..', 'game', 'gamemode.js');
-  let src;
-  try { src = fs.readFileSync(gm, 'utf8'); } catch (e) {
-    console.error('FAIL  no gamemode.js to install into');
-    process.exitCode = 1;
-    return;
-  }
   const thin = {};
   Object.keys(rows).sort().forEach((d) => {
     thin[d] = { e: rows[d].e || rows[d].n, p: !!rows[d].p };
   });
-  const line = 'const RACES = ' + JSON.stringify({ items: thin }) + ';';
-  const re = /^const RACES = .*;$/m;
-  const next = re.test(src)
-    ? src.replace(re, line)
-    : src.replace(/^(const FOODS = .*;)$/m, '$1\n' + line);
-  if (next === src) {
-    // Run twice on the same load order, the line is already there and is the
-    // same line. That is the table being generated, not a failure to find it,
-    // and it used to say FAIL and exit 1, the way Build-FoodTable.js did.
-    if (re.test(src)) { console.log('game\\gamemode.js already holds this table'); return; }
-    console.error('FAIL  could not find anywhere in gamemode.js to put the table');
-    process.exitCode = 1;
-    return;
-  }
-  fs.writeFileSync(gm, next);
-  console.log('installed ' + Object.keys(thin).length + ' races into game\\gamemode.js');
+  const changed = TABLES.write('RACES', { items: thin });
+  console.log((changed ? 'wrote ' : 'already current: ') + Object.keys(thin).length + ' races' + ' in game\\gamemode-tables\\RACES.json');
 }
 
 if (!Object.keys(rows).length) {

@@ -20,6 +20,15 @@
 // protocol: `= [Net.ServicePointManager]::SecurityProtocol -bor ...`. An
 // assignment that names only the protocols it wants is what this fails on.
 //
+// SINCE .NET 10 (#4823). The C# in the repository (the launcher, the
+// installer, tools\DeployAgent) runs on .NET 10, where HttpClient ignores
+// ServicePointManager and offers whatever Windows allows, TLS 1.3 included.
+// There the setting's default is SystemDefault, which is no bits at all, so
+// even |= Tls12 turns it into TLS 1.2 alone for anything that still reads it.
+// So no C# sets it any more, and the places #1360 named are held to that.
+// The |= / -bor rule stays for PowerShell, which on Windows PowerShell 5.1
+// still runs on the .NET Framework and its old default.
+//
 // Read only.
 const REPO_DIR = require('path').join(__dirname, '..', '..'); // this harness is in launcher\tests\, the repository is two folders up
 const fs = require('fs');
@@ -87,17 +96,23 @@ files.forEach(function (rel) {
 
 yes('there are SecurityProtocol assignments to read, ' + found.length + ' of them', found.length > 20);
 
+const inCs = found.filter(function (a) { return /\.cs$/i.test(a.rel); });
+inCs.forEach(function (a) { console.log('      ' + a.rel + ':' + a.line + '  ' + (a.text || '|=')); });
+yes('no C# sets SecurityProtocol: on .NET 10 HttpClient takes what Windows offers', inCs.length === 0);
+
 const replaces = found.filter(function (a) { return !a.adds; });
 replaces.forEach(function (a) { console.log('      ' + a.rel + ':' + a.line + '  ' + a.text); });
 yes('every one of them adds TLS 1.2 and takes nothing away', replaces.length === 0);
 
-// The places issue #1360 named, by file, so a rewrite that drops the setting
-// altogether or puts the old form back is caught where it was found.
+// The places issue #1360 named, by file, so a rewrite that puts the setting
+// back is caught where it was found. The setup program, Bootstrap.cs, was
+// one; it retired in #4824.
 ['launcher/app/Updater.cs', 'launcher/app/Discord.cs', 'launcher/app/Shell.cs',
- 'launcher/app/Gallery.cs', 'launcher/app/Sync.cs', 'installer/setup/Bootstrap.cs'].forEach(function (rel) {
-  const mine = found.filter(function (a) { return a.rel === rel; });
-  yes(rel + ' still sets TLS 1.2, and only by adding it',
-    mine.length > 0 && mine.every(function (a) { return a.adds; }));
+ 'launcher/app/Gallery.cs', 'launcher/app/Sync.cs'].forEach(function (rel) {
+  let text = null;
+  try { text = fs.readFileSync(path.join(REPO_DIR, rel), 'utf8'); } catch (e) { text = null; }
+  yes(rel + ' is there and sets no SecurityProtocol of its own',
+    text !== null && assignments(rel, text).length === 0);
 });
 
 // The rule itself, against text that is not in the repository, so a harness

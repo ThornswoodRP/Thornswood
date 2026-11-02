@@ -28,6 +28,7 @@
 */
 const fs = require('fs');
 const path = require('path');
+const siteFiles = require('./site-files');
 
 const ROOT = path.join(__dirname, '..');
 let pass = 0, fail = 0;
@@ -37,7 +38,7 @@ function yes(what, condition) {
 }
 
 const caddyText = fs.readFileSync(path.join(ROOT, 'scripts', 'deploy', 'Caddyfile'), 'utf8');
-const server = fs.readFileSync(path.join(ROOT, 'site', 'server.js'), 'utf8');
+const server = siteFiles.source();
 const setup = fs.readFileSync(path.join(ROOT, 'scripts', 'deploy', 'Setup-Domain.ps1'), 'utf8');
 
 const NAMES = ['Strict-Transport-Security', 'X-Content-Type-Options', 'Referrer-Policy', 'Permissions-Policy'];

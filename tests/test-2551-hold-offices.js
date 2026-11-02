@@ -36,10 +36,11 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const vm = require('vm');
+const siteFiles = require('./site-files');
 const CR = String.fromCharCode(13);
 const read = function (p) { return fs.readFileSync(p, 'utf8').split(CR).join(''); };
-const site = read(path.join(REPO_DIR, 'site', 'server.js'));
-const gm = read(path.join(REPO_DIR, 'game', 'gamemode.js'));
+const site = siteFiles.source();
+const gm = require('./gamemode-tables.js').joined(read(path.join(REPO_DIR, 'game', 'gamemode.js')));
 const builder = read(path.join(REPO_DIR, 'bot', 'Build-Discord.py'));
 const botSrc = require('./bot-files').source().split(CR).join('');
 

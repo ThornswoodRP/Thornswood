@@ -648,7 +648,7 @@ function python(args) {
   // as four checks of the bot failing (#1008).
   if (py.missing) {
     yes('a Python here runs the bot with its libraries (none does: from the repository folder, ' +
-        require('./bot-python').INSTALL + ', Developer-Guide.md "Setting up a machine"; ' +
+        require('./bot-python').INSTALL + ', docs/guide/set-up-a-machine.md "Setting up a machine"; ' +
         py.missing + ')', false);
   }
   else {

@@ -1,8 +1,14 @@
 'use strict';
 const fs=require('fs'), path=require('path'), os=require('os'), vm=require('vm'), assert=require('assert'),crypto=require('crypto');
 const {PassThrough}=require('stream');
-const source=fs.readFileSync(path.join(__dirname,'..','..','site','server.js'),'utf8');
-const code=source.split('// ==== thornswood upload guard ====')[1].split('// ==== end thornswood upload guard ====')[0];
+// The guard is two halves since server.js was split (#5357): what takes where
+// and when out of a file (site\lib\media.js, from its marker) and
+// receiveUpload, which checks an upload before it is kept (site\lib\uploads.js,
+// to its marker).
+const media=fs.readFileSync(path.join(__dirname,'..','..','site','lib','media.js'),'utf8');
+const uploads=fs.readFileSync(path.join(__dirname,'..','..','site','lib','uploads.js'),'utf8');
+const code=media.split('// ==== thornswood upload guard ====')[1].split('\nObject.assign(module.exports')[0]+'\n'+
+  uploads.slice(uploads.indexOf('\nfunction receiveUpload(')).split('// ==== end thornswood upload guard ====')[0];
 const work=fs.mkdtempSync(path.join(os.tmpdir(),'tw-upload-guard-'));
 let key='one';
 /* Only the stalled upload needs a short deadline. Compressing every timer to

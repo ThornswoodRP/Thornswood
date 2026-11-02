@@ -32,8 +32,8 @@ read it (issue #440, phase 8):
   Publish-Update writes it into version.json and launchers take it from
   there. No script writes this one: it is changed by hand, in the same pull
   request as the script extender, the collection revision, the launcher's
-  compiled fallback (Downgrade.cs, Config.cs) and Setup-Thornswood.ps1,
-  because a pin move is one release. `launcher\tests\test-skyrim-pin.ps1` fails while
+  compiled fallback (Downgrade.cs, Config.cs), because a pin move is one
+  release; the install reads the exe size from records\skyrim-files.json. `launcher\tests\test-skyrim-pin.ps1` fails while
   they disagree.
 - `ui-gone.json`: the 37 Daedric Online menu files (name and sha256) and the
   41 unused skymp5-front svgs, bg.png, and the four Futura PT and DIN Pro
@@ -112,7 +112,7 @@ read it (issue #440, phase 8):
   `scripts\deploy\MaxOnline.ps1` reads it for Deploy-Gamemode,
   Deploy-DevGamemode (dev), Publish-Server and Publish-Update (each for its
   channel) and Install-Voice (dev for `C:\Thornswood-Voice-Dev`), and
-  `site\server.js` reads `people` and `staffSeats` when the site runs from
+  `site\lib\game.js` reads `people` and `staffSeats` when the site runs from
   the repository. What people are shown, the M of "N of M awake", is the
   seats, people and staffSeats together: 30 on main, 5 on dev. No script writes
   this one: it is changed by hand in a pull request, then each server is

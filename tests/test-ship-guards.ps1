@@ -15,9 +15,11 @@
   shipped nothing. Twice on 17 September, and the second time it looked
   exactly like a broken release. On 21 September the same fault turned up in
   the third file, Updater.cs: a dry run went 1.1.67 to 1.1.68 and left it
-  there. Ship now keeps copies and puts all three back. Here the feed and the
-  baseline are fingerprinted with SHA256 before and after, and the version is
-  read back.
+  there. Ship keeps copies of the feed and the baseline and puts them back.
+  The number has gone into the build as -p:Version since #4825, so no source
+  file holds it and there is no third file to put back. Here the feed and the
+  baseline are fingerprinted with SHA256 before and after, and so is the
+  launcher's own source, which neither a dry run nor a stopped Ship may change.
 
   THE PLUGINS. Ship never copied the in game plugins from the repo into the
   game folder, so on 17 September a dev build went out with day old plugins
@@ -27,7 +29,7 @@
   missing one and an empty source folder each have to stop it.
 
   Both are lifted out of the shipped Ship.ps1 by the parser, the way
-  test-dev-version.ps1 lifts its version block, so this drives the real code
+  test-ship-gate.ps1 lifts the Git gate, so this drives the real code
   and not a copy of it. If a block moves, this says so rather than quietly
   testing nothing.
 
@@ -85,19 +87,18 @@ function Find-If([string]$condition, [int]$after, [string]$mark) {
 $script:dryBefore = Find-If '$DryRun' $src.IndexOf('$dryKeep = @()') '$dryKeep +='
 $script:dryAfter  = Find-If '$DryRun' $src.IndexOf("& (Join-Path `$Here 'Publish-Update.ps1') @pubArgs") 'foreach ($k in $dryKeep)'
 $script:guard     = Find-If '$GameDir' 0 "Join-Path `$Here '..\..\game\plugins'"
-$unbump = ''
-$writeUpdater = ''   # Unbump writes Updater.cs through Write-UpdaterCs (#2035)
-foreach ($fn in $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)) {
-    if ($fn.Name -eq 'Unbump') { $unbump = $fn.Extent.Text }
-    if ($fn.Name -eq 'Write-UpdaterCs') { $writeUpdater = $fn.Extent.Text }
-}
+# Until #4825 Ship wrote the number into Updater.cs (Write-UpdaterCs) and
+# Unbump put git's 0.0.0 back on every stop. The number is the build's now
+# (-p:Version), so neither may come back: a source file holding the number is
+# what a dry run or a stop used to leave behind.
+$numberFns = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true) |
+               Where-Object { $_.Name -eq 'Unbump' -or $_.Name -eq 'Write-UpdaterCs' } | ForEach-Object { $_.Name })
 
 Yes 'the dry run keeps its copies before the publisher runs' ($script:dryBefore -ne '')
 Yes 'and puts them back after it' ($script:dryAfter -ne '')
-Yes 'Ship.ps1 has Unbump' ($unbump -ne '')
-Yes 'and the Write-UpdaterCs it writes with' ($writeUpdater -ne '')
+Yes ('Ship.ps1 writes the number into no source file, so it has nothing to put back (no Unbump, no Write-UpdaterCs)' + $(if ($numberFns.Count) { ': has ' + ($numberFns -join ', ') } else { '' })) ($numberFns.Count -eq 0)
 Yes 'the plugin check is in Ship.ps1' ($script:guard -ne '')
-if (-not ($script:dryBefore -and $script:dryAfter -and $unbump -and $writeUpdater -and $script:guard)) { Done }
+if (-not ($script:dryBefore -and $script:dryAfter -and $script:guard)) { Done }
 # The check hashes the plugins as they ship, and Go.ps1 puts them in the game
 # folder that way (ShippedBytes.ps1, #2903), so the copies here are made the same way.
 . (Join-Path $RepoHere 'scripts\release\ShippedBytes.ps1')
@@ -106,17 +107,16 @@ if (-not ($script:dryBefore -and $script:dryAfter -and $unbump -and $writeUpdate
 function Say($m, $c = 'Gray') { }
 function Head($m) { }
 function Die($m) { throw ('STOP. ' + $m) }
-Invoke-Expression $writeUpdater
-Invoke-Expression $unbump
 
 function Hash([string]$path) {
     if (-not (Test-Path -LiteralPath $path)) { return 'absent' }
     return (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
 }
-function Read-Version([string]$path) {
-    $m = [regex]::Match([IO.File]::ReadAllText($path), 'Version\s*=\s*"([^"]+)"')
-    if ($m.Success) { return $m.Groups[1].Value }
-    return ''
+# The launcher's source, fingerprinted whole: what a run that left the number
+# behind would have changed. Read only.
+function Source-Print {
+    $app = Join-Path $RepoHere 'launcher\app'
+    return (@(Get-ChildItem -LiteralPath $app -File -Recurse | Sort-Object FullName | ForEach-Object { $_.FullName + '=' + (Hash $_.FullName) }) -join '|')
 }
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-ship-guards-' + [Guid]::NewGuid().ToString('N'))
@@ -132,13 +132,7 @@ try {
     $env:LOCALAPPDATA = Join-Path $work 'appdata'
     [IO.File]::WriteAllText((Join-Path $script:relDev 'version.json'), '{"launcherVersion":"1.1.67","packs":[]}')
 
-    # Updater.cs as it stands while Ship builds: the number it worked out from
-    # git written in over the 0.0.0 git holds (#5179), which is when there is
-    # a number to put back.
-    $updaterCs = Join-Path $work 'Updater.cs'
-    [IO.File]::WriteAllText($updaterCs, "        public const string Version = `"1.1.68`";`r`n")
-    $committed = '0.0.0'
-    $target = '1.1.68'
+    $sourceWas = Source-Print
 
     # What the publisher does under -NoUpload -NoPush: it writes version.json
     # in the working folder and records the release in its baseline.
@@ -179,7 +173,7 @@ try {
     Yes 'the publisher did change both files, or this proves nothing' ($script:during.feed -ne $feedWas -and $script:during.base -ne $baseWas)
     Yes 'after a dry run version.json is byte for byte what it was' ((Hash $feed) -eq $feedWas)
     Yes '  and so is the baseline' ((Hash $base) -eq $baseWas)
-    Yes '  and Updater.cs is back on the 0.0.0 git holds' ((Read-Version $updaterCs) -eq $committed)
+    Yes '  and the launcher''s source is as it was' ((Source-Print) -eq $sourceWas)
     Yes '  and the copies it kept are cleaned up' (@($r.Keep | Where-Object { $_.Copy -and (Test-Path -LiteralPath $_.Copy) }).Count -eq 0)
 
     # ---- a dev dry run on a machine with no dev baseline yet ---------------------
@@ -188,7 +182,6 @@ try {
     # real dev Ship reads a baseline nobody published.
     $devBase = Join-Path $script:relDev 'published.json'
     if (Test-Path -LiteralPath $devBase) { Remove-Item -LiteralPath $devBase -Force }
-    [IO.File]::WriteAllText($updaterCs, "        public const string Version = `"1.1.68`";`r`n")
     $r = Invoke-DryRun $true $publish 'published-dev.json'
     Yes 'the publisher did make a dev baseline during the run' ($script:during.base -ne 'absent')
     Yes 'a dev dry run leaves no dev baseline where there was none' (-not (Test-Path -LiteralPath $devBase))
@@ -213,21 +206,18 @@ try {
         Copy-ThornswoodShippedFile (Join-Path $plugins $n) (Join-Path $live $n)
     }
 
-    [IO.File]::WriteAllText($updaterCs, "        public const string Version = `"1.1.68`";`r`n")
     Yes 'plugins that match the source let the release go on' ((Invoke-Guard $repoTools $game) -eq 'went on')
-    Yes '  and leave the version alone' ((Read-Version $updaterCs) -eq $target)
 
     # 17 September: the game folder held yesterday's copy.
     [IO.File]::WriteAllText((Join-Path $live 'thornswood-chat.js'), "// thornswood-chat.js as it was yesterday`n")
     $said = Invoke-Guard $repoTools $game
     Yes 'a day old plugin in the game folder stops the release' ($said -match 'not the ones in this repo')
-    Yes '  and puts git''s 0.0.0 back' ((Read-Version $updaterCs) -eq $committed)
+    Yes '  and leaves the launcher''s source as it was' ((Source-Print) -eq $sourceWas)
     Copy-ThornswoodShippedFile (Join-Path $plugins 'thornswood-chat.js') (Join-Path $live 'thornswood-chat.js')
 
-    [IO.File]::WriteAllText($updaterCs, "        public const string Version = `"1.1.68`";`r`n")
     Remove-Item -LiteralPath (Join-Path $live 'thornswood-voice.js') -Force
     Yes 'a plugin that never arrived stops the release' ((Invoke-Guard $repoTools $game) -match 'not the ones in this repo')
-    Yes '  and puts git''s 0.0.0 back' ((Read-Version $updaterCs) -eq $committed)
+    Yes '  and leaves the launcher''s source as it was' ((Source-Print) -eq $sourceWas)
 
     Get-ChildItem -LiteralPath $plugins -Filter *.js | Remove-Item -Force
     Yes 'a source folder with no plugins in it stops the release' ((Invoke-Guard $repoTools $game) -match 'has no \.js')

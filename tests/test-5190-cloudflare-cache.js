@@ -15,12 +15,13 @@
 //     says who is asking can never be kept at the edge.
 // This reads both and fails when they drift. Read only.
 const fs = require('fs'), path = require('path');
+const siteFiles = require('./site-files');
 const ROOT = path.join(__dirname, '..');
 
 let pass = 0, fail = 0;
 function yes(what, c) { console.log((c ? 'PASS  ' : 'FAIL  ') + what); if (c) pass++; else fail++; }
 
-const server = fs.readFileSync(path.join(ROOT, 'site', 'server.js'), 'utf8');
+const server = siteFiles.source();
 const m = server.match(/const PUBLIC_PAGES = (\[[\s\S]*?\]);/);
 let pages = [];
 try { pages = m ? eval(m[1].replace(/\/\/.*$/mg, '')) : []; } catch (e) { pages = []; }

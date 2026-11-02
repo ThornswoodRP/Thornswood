@@ -31,6 +31,10 @@ sealed class FakeGitHub : HttpMessageHandler
     /// <summary>The answer to a run or approvals read, when not 200 (an App without Actions: read).</summary>
     public HttpStatusCode? RunsAnswer { get; set; }
     public Func<HttpRequestMessage, HttpResponseMessage>? Other { get; set; }
+    /// <summary>Awaited before a list of an environment's Deployments is
+    /// answered, with that environment: a test holds one environment's pass
+    /// here to stand for an apply that takes a long time.</summary>
+    public Func<string, Task>? BeforeDeployments { get; set; }
     /// <summary>What a compare of two commits names; null answers 404.</summary>
     public List<string>? Changed { get; set; } = new();
     public readonly List<string> Compared = new();
@@ -111,6 +115,7 @@ sealed class FakeGitHub : HttpMessageHandler
         var body = r.Content == null ? "" : await r.Content.ReadAsStringAsync(ct);
         var p = r.RequestUri.AbsolutePath;
         var q = System.Web.HttpUtility.ParseQueryString(r.RequestUri.Query);
+        if (r.Method == HttpMethod.Get && p == "/repos/O/R/deployments" && BeforeDeployments is { } before) await before(q["environment"] ?? "");
         lock (gate)
         {
             const string ar = "/repos/O/R/actions/runs/";
@@ -382,7 +387,7 @@ sealed class FakeControl(FakeServer s) : IServerControl
     public bool TcpAnswers(int port) => s.Running;
 }
 
-public sealed class AgentTests : IDisposable
+public sealed partial class AgentTests : IDisposable
 {
     const string Commit = "0123456789abcdef0123456789abcdef01234567";
     readonly List<string> temp = new();
@@ -1238,9 +1243,15 @@ public sealed class AgentTests : IDisposable
         var state = Path.Combine(cfg.Home, "state", "working.json");
         Directory.CreateDirectory(Path.GetDirectoryName(state)!);
         File.WriteAllText(state, $"{{\"Deployment\":\"{id}\",\"Env\":\"dev\",\"Started\":\"then\"}}");
+        // And the record an environment's own loop keeps (Run, #5190).
+        var id2 = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-2\"}");
+        var state2 = Path.Combine(cfg.Home, "state", "working-dev.json");
+        File.WriteAllText(state2, $"{{\"Deployment\":\"{id2}\",\"Env\":\"dev\",\"Started\":\"then\"}}");
         await a.Start(default);
         HasStates(gh, s, id, "error", last: true);
+        HasStates(gh, s, id2, "error", last: true);
         Assert.False(File.Exists(state));
+        Assert.False(File.Exists(state2));
     }
 
     // ---- after a dev Deployment: the load order and the parity check -------------
@@ -1870,6 +1881,37 @@ public sealed class AgentTests : IDisposable
         Assert.Null(new BotPass(new EnvConfig { BotPassRoot = Temp() }, new FakeTasks(() => null)).KeepLast(_ => { }));
     }
 
+    /// <summary>A pass that ended is read as ended at once, though Task
+    /// Scheduler writes its run down before the agent's own reading of the
+    /// time (#5380: 15 s on the box, so every pass was waited on to the
+    /// limit and failed). A start that never runs is still told apart.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task APassIsReadByTaskSchedulersOwnRecordNotTheAgentsClock(bool neverRuns)
+    {
+        var (a, gh, s, bp) = MakeWithPass(bp => WriteResult(bp, true));
+        var tasks = (FakeTasks)a.Tasks;
+        tasks.WrittenEarlier = TimeSpan.FromSeconds(15);
+        tasks.NeverRuns = neverRuns;
+        BotRelease(gh, "build-1", "// new gamemode\n");
+        var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-1\"}");
+        var took = System.Diagnostics.Stopwatch.StartNew();
+        await a.Pass("dev", default);
+        var log = s.Read(Path.Combine("data", $"deploy-{id}.log"));
+        if (!neverRuns)
+        {
+            HasStates(gh, s, id, "success", last: true);
+            Assert.True(took.Elapsed < TimeSpan.FromSeconds(4), $"the pass was waited on for {took.Elapsed}, past its end");
+            Assert.Contains("bot pass: ", log);
+            return;
+        }
+        Assert.Equal("failure", (string)gh.Last(id)!["state"]!);
+        Assert.Contains("did not end within 5 s", (string)gh.Last(id)!["description"]!);
+        Assert.Contains("Task Scheduler at the limit: Ready", log);
+        Assert.Contains("so this start never ran", log);
+    }
+
     /// <summary>The task takes one run at a time and Task Scheduler ignores a
     /// start while one runs (IgnoreNew), so a pass still running from before
     /// is not started over and waited on as if it were this one.</summary>
@@ -2030,12 +2072,20 @@ sealed class FakeTasks(Func<string?> work) : ITasks
     public string? LastName;
     volatile bool running;
     DateTime last = DateTime.MinValue;
+    /// <summary>How much earlier than the agent's clock the run is written
+    /// down. On the box Task Scheduler wrote each run 13 to 15 s before the
+    /// time the agent read just before starting it (#5380), so every test
+    /// runs with that.</summary>
+    public TimeSpan WrittenEarlier { get; set; } = TimeSpan.FromSeconds(15);
+    /// <summary>A start Task Scheduler takes and never runs.</summary>
+    public bool NeverRuns { get; set; }
     public void Start(string name)
     {
         Starts++;
         LastName = name;
+        if (NeverRuns) return;
         running = true;
-        last = DateTime.UtcNow;
+        last = DateTime.UtcNow - WrittenEarlier;
         Task.Run(() => { var w = work(); if (w != "hang") running = false; });
     }
     public TaskInfo Info(string name) => new(running ? "Running" : "Ready", last, 0);

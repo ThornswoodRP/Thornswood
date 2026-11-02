@@ -50,7 +50,7 @@ const REPO_DIR = path.join(__dirname, '..');
 const SRC = path.resolve(process.env.GM || path.join(REPO_DIR, 'game', 'gamemode.js'));
 const UI = path.join(REPO_DIR, 'game', 'ui', 'thornswood-skills.js');
 const CR = String.fromCharCode(13);
-const gm = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(SRC, 'utf8')).split(CR).join('');
 const ui = fs.readFileSync(UI, 'utf8').split(CR).join('');
 
 let pass = 0, fail = 0;
@@ -151,7 +151,6 @@ function makeMp() {
       else { row[k] = copy(v); }
       store.set(id, row);
     },
-    getOnlinePlayers: function () { return online.slice(); },
     makeProperty: function () { }, makeEventSource: function () { },
     getNeighborsByPosition: function () { return online.slice(); },
     callPapyrusFunction: function () { return undefined; },

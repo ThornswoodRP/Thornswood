@@ -9,7 +9,7 @@
   WHY. Install-Runner.ps1 registered a task, Thornswood Runner Priority
   (Thornswood Runner N Priority from the second runner on), that set
   Runner.Listener and Runner.Worker to Normal at start and every five
-  minutes: a timer that repairs state, which Developer-Guide.md "Fix the
+  minutes: a timer that repairs state, which docs/guide/rules.md "Fix the
   cause, no band-aids" does not allow. It had nothing to repair. The runner
   is a Windows service (config.cmd --runasservice), the service control
   manager starts a service at Normal, I/O priority 2 and memory priority 5,

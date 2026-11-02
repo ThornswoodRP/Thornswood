@@ -199,7 +199,12 @@ try:
             'unpk']
     yes('M8 every action the staff block records has a sentence here',
         all(("record('%s'" % d) in gm and d in bot._MOD_DID for d in dids))
-    site = open(os.path.join(HERE, '..', 'site', 'server.js'), encoding='utf-8').read()
+    # The site is server.js over its modules in site/lib since #5357; the hub's
+    # writes are in those modules.
+    site_dir = os.path.join(HERE, '..', 'site')
+    site = ''.join(open(os.path.join(site_dir, f), encoding='utf-8').read()
+                   for f in ['server.js'] + ['lib/' + n for n in sorted(os.listdir(os.path.join(site_dir, 'lib')))
+                                             if n.endswith('.js')])
     yes('M8 and so does every one the hub writes',
         all(("modLog({ did: '%s'" % d) in site and d in bot._MOD_DID
             for d in ('ban', 'unban', 'note', 'banaccount', 'unbanaccount', 'pk', 'unpk')))

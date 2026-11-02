@@ -23,7 +23,8 @@
       types the same strings, so the two cannot drift apart;
     - the words follow the house rules and match the card's own size.
 
-  Read only. It reads launcher\app\*.cs and launcher\ui.xaml and nothing else.
+  Read only. It reads launcher\app\*.cs and launcher\app\MainWindow.axaml and
+  nothing else.
 */
 const REPO_DIR = require('path').join(__dirname, '..', '..'); // this harness is in launcher\tests\, the repository is two folders up
 const fs = require('fs');
@@ -32,7 +33,7 @@ const path = require('path');
 const APP = path.join(REPO_DIR, 'launcher', 'app');
 const SHELL = fs.readFileSync(path.join(APP, 'Shell.cs'), 'utf8');
 const DOWN = fs.readFileSync(path.join(APP, 'Downgrade.cs'), 'utf8');
-const XAML = fs.readFileSync(path.join(REPO_DIR, 'launcher', 'ui.xaml'), 'utf8');
+const XAML = fs.readFileSync(path.join(APP, 'MainWindow.axaml'), 'utf8');
 
 let pass = 0, fail = 0;
 const yes = (w, c) => {
@@ -85,21 +86,21 @@ yes('RunDowngrade is reached from the button and from Fix only, and both go thro
 const run = body(SHELL, 'static void RunDowngrade()');
 yes('RunDowngrade is found in Shell.cs', run.length > 0);
 const iStart = run.indexOf('Downgrade.Start(');
-const iAsk = run.indexOf('MessageBox.Show(');
+const iAsk = run.indexOf('Ask.YesNo(');
 const iDisable = run.indexOf('btnDowngrade.IsEnabled = false');
 yes('RunDowngrade still starts the downgrade', iStart > 0);
 yes('RunDowngrade asks a question', iAsk > 0);
 yes('the question comes before Downgrade.Start', iAsk > 0 && iAsk < iStart);
 yes('the question comes before the button changes to Working', iAsk > 0 && iDisable > 0 && iAsk < iDisable);
-const ask = iAsk > 0 ? run.slice(iAsk, run.indexOf(';', run.indexOf('MessageBoxImage', iAsk)) + 1) : '';
-yes('the question is Yes or No', /MessageBoxButton\.YesNo/.test(ask));
+const ask = iAsk > 0 ? run.slice(iAsk, run.indexOf(';', run.indexOf('Ask.Icon', iAsk)) + 1) : '';
+yes('the question is Yes or No', /^Ask\.YesNo\(/.test(ask));
 const afterAsk = iAsk > 0 ? run.slice(iAsk + ask.length, iStart) : '';
 yes('anything but Yes returns before the downgrade starts',
-    /if \(r != MessageBoxResult\.Yes\) \{[^}]*\breturn;\s*\}/.test(afterAsk));
-yes('saying No leaves a line in the log', /MessageBoxResult\.Yes\) \{ Log\("[^"]+"\); return; \}/.test(afterAsk));
+    /bool r = Ask\.YesNo\(/.test(run) && /if \(!r\) \{[^}]*\breturn;\s*\}/.test(afterAsk));
+yes('saying No leaves a line in the log', /if \(!r\) \{ Log\("[^"]+"\); return; \}/.test(afterAsk));
 // Nothing between the answer and the start may throw the answer away: no
 // second return path that skips the question, no goto, no early Start.
-yes('only one question stands in front of the start', (run.match(/MessageBox\.Show\(/g) || []).length === 1);
+yes('only one question stands in front of the start', (run.match(/Ask\.(YesNo|OkCancel|YesNoCancel|Tell)\(/g) || []).length === 1);
 
 // ---- what it shows is what is typed ----------------------------------------
 yes('the question lists the lines from Downgrade.Commands(cfg)', /Downgrade\.Commands\(cfg\)/.test(ask));
@@ -145,7 +146,7 @@ yes('it says the download is under their own account', /under your own account/.
 const cardGb = (XAML.match(/About (\d+) GB, and Steam has to be signed in/) || [])[1];
 const askGb = (words.match(/about (\d+) GB/) || [])[1];
 yes('the size it names matches the card above the button', cardGb && askGb && cardGb === askGb);
-yes('the title is Thornswood, like every other question here', /"Thornswood", MessageBoxButton\.YesNo/.test(ask));
+yes('the title is Thornswood, like every other question here', /"Thornswood", Ask\.Icon\.Question\);$/.test(ask));
 yes('no "player" in the words', !/player/i.test(words));
 yes('no em or en dash in the words', !/[–—]/.test(words));
 const noLine = (afterAsk.match(/Log\("([^"]+)"\)/) || [])[1] || '';

@@ -8,7 +8,8 @@
   Main on a main one. Until 11 Oct the rows kept the XAML order, Main then Dev,
   and a dev install opened onto Main (Patrick, 11 Oct).
 
-  WHAT IT CHECKS, in launcher\app\Shell.cs and launcher\ui.xaml (text only):
+  WHAT IT CHECKS, in launcher\app\Shell.cs and the window,
+  launcher\app\MainWindow.axaml (text only):
     1. Both rows sit in one panel in the XAML, so one can be moved above the other.
     2. DrawServerPick puts the current server's row at index 0 of that panel,
        chosen by cfg.IsDev, and gives the 2 px gap to whichever row is first.
@@ -25,7 +26,7 @@ function Yes([string]$what, [bool]$cond) {
     else { $script:fail++; Write-Host "FAIL  $what" }
 }
 
-$xaml = [IO.File]::ReadAllText((Join-Path $Repo 'launcher\ui.xaml'))
+$xaml = [IO.File]::ReadAllText((Join-Path $Repo 'launcher\app\MainWindow.axaml'))
 $shell = [IO.File]::ReadAllText((Join-Path $Repo 'launcher\app\Shell.cs'))
 
 $panel = [regex]::Match($xaml, '(?s)<Border x:Name="ServerPickPanel".*?</Border>\s*</Popup>').Value

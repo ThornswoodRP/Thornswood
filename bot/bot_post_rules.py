@@ -192,7 +192,7 @@ def refuse(state, channel, num, problems, say=None):
             % (POST_PLACES.get(channel, 'in #' + channel),
                'bot/README.md, "The site\'s known issues and roadmap"'
                if channel == 'roadmap'
-               else 'Developer-Guide.md, "Test tasks and known issues"',
+               else 'docs/guide/the-board.md, "Test tasks and known issues"',
                '\n'.join('- ' + p for p in problems)))
     try:
         (say or github_say)(num, text)

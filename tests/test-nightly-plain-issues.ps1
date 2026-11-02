@@ -6,7 +6,7 @@
   The nightly names every issue and comment made in the last day that is not
   written plain (#3692, Patrick's answer A on q-3692-new-issue-style:
   every new issue and comment is written plain, the evidence kept in the
-  private ops repo). Developer-Guide.md "How an issue and a comment are
+  private ops repo). docs/guide/the-board.md "How an issue and a comment are
   written" is the rule.
 
   HOW. scripts\dev\Nightly-PlainIssues.ps1 is dot-sourced without -Run, so it
@@ -200,8 +200,9 @@ Yes 'nightly.yml has the step' ($step.Length -gt 0)
 Yes 'it runs Nightly-PlainIssues.ps1 -Run with the token and the repository' (
     $step.Contains('.\scripts\dev\Nightly-PlainIssues.ps1 -Run') -and $step.Contains('GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}') -and
     $step.Contains('REPO: ${{ github.repository }}'))
-$guide = [IO.File]::ReadAllText((Join-Path $repo 'Developer-Guide.md'))
-Yes 'Developer-Guide.md has the rule under its own heading' ($guide.Contains('#### How an issue and a comment are written'))
+. (Join-Path $PSScriptRoot 'Guide-Text.ps1')
+$guide = Get-GuidePage 'the-board'
+Yes 'docs/guide/the-board.md has the rule under its own heading' ($guide -match '(?m)^## How an issue and a comment are written$')
 $form = [IO.File]::ReadAllText((Join-Path (Join-Path (Join-Path $repo '.github') 'ISSUE_TEMPLATE') 'work.yml'))
 Yes "the team's issue form asks only for the plain shape" ($form.Contains('Two to five plain lines') -and $form.Contains('label: Done when') -and -not $form.Contains('What causes it'))
 

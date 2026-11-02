@@ -5,7 +5,7 @@
 # request that finishes an issue says Closes #N, and the board's own "Pull
 # request merged" workflow moves the card. A fix people would notice says
 # Refs #N instead, because its issue stays open until a main Ship puts the
-# fix on the main server (Developer-Guide.md, the board), and nothing moved
+# fix on the main server (docs/guide/the-board.md), and nothing moved
 # its card: the board
 # review of 21 Oct (#3192) found Refs fixes sitting in In Progress for days
 # after they merged, and the weekly review of 19 Oct found 72 issues closed
@@ -140,7 +140,7 @@ jobs:
               # release carries the work, written by that dev Ship (#5199); a
               # Main one when a main Ship does. The main Ship closes the issue
               # either way, and writes this block on it unless a test task of
-              # the same kind was written after the merge (Developer-Guide.md,
+              # the same kind was written after the merge (docs/guide/the-board.md,
               # "Test tasks and known issues").
               if ($steps -match '^\s*Server\s*:\s*Dev\s*(\n|$)') {
                 $when = 'This test task is for developers. The dev Ship that carries it writes it on this issue with its Build: line naming that release, and the bot posts it in #dev-test-tasks (scripts/release/Close-ShippedIssues.ps1 -Dev). The main Ship that carries it closes this issue, and writes this on it if nobody has:'

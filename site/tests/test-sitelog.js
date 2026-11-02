@@ -8,9 +8,10 @@ const REPO_DIR = require('path').join(__dirname, '..', '..'); // this harness is
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const siteFiles = require('../../tests/site-files');
 
 const SRC = path.join(REPO_DIR, 'site', 'server.js');
-const text = fs.readFileSync(SRC, 'utf8');
+const text = siteFiles.source(SRC);
 const a = text.indexOf('function makeLog(dir, name, maxBytes, keep, opts) {');
 const b = text.indexOf('// Four megabytes is a few days');
 if (a < 0 || b < 0) {

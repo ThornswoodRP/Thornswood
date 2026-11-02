@@ -17,12 +17,13 @@
 //      that came that way, and answers /health as before;
 //   3. through a proxy that says it took the request over plain http
 //      (X-Forwarded-Proto), the same; over https, a connection;
-//   4. the launcher's page, the game's chat, its voice overlay and the
-//      launcher's Config build nothing but https and wss;
+//   4. the launcher's voice (C# since #4823, run by tests\voice-launcher.js
+//      on sockets this harness answers), the game's chat, its voice overlay
+//      and the launcher's Config build nothing but https and wss;
 //   5. Install-Voice.ps1 binds loopback unless told otherwise, and opens the
 //      firewall only for a service that answers every interface.
 //
-// Writes only to temp folders.
+// Writes only to temp folders, the voice driver's build among them.
 const fs = require('fs');
 const os = require('os');
 const net = require('net');
@@ -30,6 +31,7 @@ const http = require('http');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const VL = require('./voice-launcher');
 
 const ROOT = path.join(__dirname, '..');
 const VOICE = path.join(ROOT, 'voice', 'voice-server.js');
@@ -234,14 +236,23 @@ for (const list of Object.values(os.networkInterfaces())) {
     }
     return null;
   }
-  const page = read('launcher/voice-host.html');
-  const pf = new Function('cfg', lift(page, 'voiceBase') + '\n' + lift(page, 'voiceSocket') + '; return [voiceBase, voiceSocket];');
-  const [pb, ps] = pf({ host: '203.0.113.7', port: '7778' });
-  yes('the launcher\'s page with only a host and port has no address, not ws:// (' + JSON.stringify(ps()) + ')', ps() === '' && pb() === '');
-  const [, ps2] = pf({ host: 'x', port: '1', base: 'http://box/voice', socket: 'ws://box/voice/' });
-  yes('and with an http base and a ws socket, still none', ps2() === '');
-  const [, ps3] = pf({ base: 'https://thornswood.net/voice' });
-  yes('with an https base, wss', ps3() === 'wss://thornswood.net/voice/');
+  /* The launcher's voice, configured as Voice.cs configures it, on a socket
+     this harness answers: what it dials, if anything. */
+  async function dialled(vbase, vsocket) {
+    const l = await VL.start({ clock: 'manual', wire: 'fake' });
+    try {
+      await l.send({ do: 'configure', profileId: 7, name: '', token: 'a token', base: vbase, socket: vsocket });
+      return { urls: l.dials().map((d) => d.url), off: l.says(/^the launcher gave no secure voice address, so voice is off$/) };
+    } finally { await l.quit(); }
+  }
+  const d1 = await dialled('', '');
+  yes('the launcher\'s voice with no address dials nothing, not ws:// (' + JSON.stringify(d1.urls) + ')', d1.urls.length === 0 && d1.off);
+  const d2 = await dialled('http://box/voice', 'ws://box/voice/');
+  yes('and with an http base and a ws socket, still nothing, and it says so (' + JSON.stringify(d2.urls) + ')', d2.urls.length === 0 && d2.off);
+  const d3 = await dialled('https://thornswood.net/voice', '');
+  yes('with an https base, wss (' + JSON.stringify(d3.urls) + ')', d3.urls.length === 1 && d3.urls[0] === 'wss://thornswood.net/voice/');
+  const d4 = await dialled('https://thornswood.net/voice', 'wss://thornswood.net/voice-dev/');
+  yes('and a wss socket from the launcher is taken as it is', d4.urls.length === 1 && d4.urls[0] === 'wss://thornswood.net/voice-dev/');
   const chat = read('game/ui/thornswood-chat.js');
   const cu = (cfg) => new Function('CFG', lift(chat, 'url') + '; return url;')(cfg)();
   yes('the game\'s chat with no base has no address, not ws://', cu({}) === '');
@@ -259,8 +270,8 @@ for (const list of Object.values(os.networkInterfaces())) {
       /StartsWith\("https:\/\/"/.test(vb) && /IsDev \? Voice \+ "-dev" : Voice/.test(vb) && !/"http:\/\/"/.test(vb) &&
       /public const string Voice = "https:\/\/thornswood\.net\/voice";/.test(conf));
   yes('Config.VoiceSocket is always wss', /return "wss:\/\/" \+ VoiceBase\(\)\.Substring\(8\) \+ "\/";/.test(conf) && !/"ws:\/\/"/.test(conf));
-  const vcs = read('launcher/app/Voice.cs');
-  yes('Voice.cs builds no http:// or ws:// address of its own', !/"http:\/\/" \+ host/.test(vcs) && !/"ws:\/\/"/.test(vcs));
+  const vcs = read('launcher/app/Voice.cs') + read('launcher/app/VoiceSession.cs');
+  yes('Voice.cs and VoiceSession.cs build no http:// or ws:// address of their own', !/"http:\/\/" \+ host/.test(vcs) && !/"ws:\/\/"/.test(vcs));
   yes('and Mics.cs hands the game the resolved https address', /string vurl = cfg == null \? "" : cfg\.VoiceBase\(\);/.test(read('launcher/app/Mics.cs')));
 
   console.log('\n5. Install-Voice.ps1:');

@@ -9,8 +9,11 @@
   the name and icon the session was given, or the exe's description when it
   was given none. So this asks Windows the question the mixer asks.
 
-  It compiles launcher\app\MenuMusic.cs with the compiler the build runs,
-  plays the real theme through it at volume 0 (nothing is heard), and once
+  It compiles launcher\app\MenuMusic.cs with the .NET SDK the launcher
+  builds with, and its decoder, NLayer, from the package the project names
+  (#4823; launcher\lib kept a copy until then). That runs everywhere. On
+  Windows it then plays the real theme through it at volume 0 (nothing is
+  heard), and once
   MenuMusic says the theme is on, reads every audio session on the default
   output through Core Audio, the API the mixer itself reads:
 
@@ -23,7 +26,7 @@
 
   A machine with no sound output (the VPS runners: Windows Server with no
   audio device) cannot open one, and MenuMusic logs that; this says SKIP with
-  the line it logged rather than passing on nothing. Off Windows it says
+  the line it logged rather than passing on nothing. Off Windows 1 to 5 say
   SKIP: waveOut and Core Audio are Windows.
 
   Never starts the launcher or the game. Writes nothing outside a temp folder.
@@ -53,16 +56,16 @@ function Done {
 . (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')
 
 $theme = Join-Path $repo 'game\ui\thornswood-theme.mp3'
-$nlayer = @($LauncherLib | Where-Object { [IO.Path]::GetFileName($_) -eq 'NLayer.dll' })
 Yes 'the theme is in the repository (game\ui\thornswood-theme.mp3)' (Test-Path -LiteralPath $theme)
-Yes 'Thornswood.csproj references NLayer.dll from launcher\lib' ($nlayer.Count -eq 1 -and (Test-Path -LiteralPath $nlayer[0]))
-
-if (-not $OnWindows) {
-    Write-Host 'SKIP  1 to 5, the theme played and the mixer asked: waveOut and Core Audio are Windows, and so is the compiler the build runs'
-    Done
-}
-Yes 'the compiler the build runs is on this machine' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc) -or $nlayer.Count -ne 1) { Done }
+# The decoder is the NLayer package now (#4823), the version THIRD-PARTY.md
+# records, and no copy of it is left in launcher\lib for anything to load.
+$proj = [xml][IO.File]::ReadAllText([IO.Path]::Combine($repo, 'launcher', 'app', 'Thornswood.csproj'))
+$nlayer = @($proj.SelectNodes('//ItemGroup/PackageReference') | Where-Object { $_.Include -eq 'NLayer' })
+Yes 'Thornswood.csproj takes NLayer from its package, version 3.0.0' ($nlayer.Count -eq 1 -and $nlayer[0].Version -eq '3.0.0')
+Yes '  and launcher\lib keeps no NLayer.dll of its own' (-not (Test-Path -LiteralPath ([IO.Path]::Combine($repo, 'launcher', 'lib', 'nlayer', 'NLayer.dll'))) -and
+    @($proj.SelectNodes('//Reference') | Where-Object { $_.Include -match 'NLayer' }).Count -eq 0)
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 # What MenuMusic.cs needs of the rest of the launcher: Swallow, which needs
 # Paths.LogFile. A null log file makes Swallow write nothing.
@@ -93,21 +96,8 @@ namespace Thornswood
             else if (m.StartsWith("Menu music:", StringComparison.Ordinal) && m.IndexOf("mixer entry", StringComparison.Ordinal) < 0) Failed.Set();
         }
 
-        /// <summary>
-        /// The decoder from its file. The compiled library carries no
-        /// resource for MenuMusic's own resolver to hand out, so this one
-        /// answers first; it is C#, because the playback thread is where the
-        /// CLR asks, and a PowerShell script block cannot run there.
-        /// </summary>
-        public static string UseDecoder(string path)
-        {
-            var a = System.Reflection.Assembly.LoadFrom(path);
-            AppDomain.CurrentDomain.AssemblyResolve += delegate (object s, ResolveEventArgs e)
-            {
-                return new System.Reflection.AssemblyName(e.Name).Name == "NLayer" ? a : null;
-            };
-            return a.FullName;
-        }
+        /// <summary>The decoder the build put beside this library, from the NLayer package.</summary>
+        public static string Decoder() { return typeof(NLayer.MpegFile).Assembly.FullName; }
 
         public static void Play(string track, string name)
         {
@@ -207,9 +197,20 @@ namespace Thornswood
 }
 '@
 
-$asm = Add-LauncherType -Source $paths, $swallow, $music, $probe -Reference @($LauncherLib)
+$asm = $null
+try { $asm = Add-LauncherType -Source $paths, $swallow, $music, $probe }
+catch { ($_.Exception.Message -split "`n") | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
+Yes 'MenuMusic.cs compiles with the .NET SDK the launcher builds with, NLayer from its package' ($null -ne $asm)
+if (-not $asm) { Done }
 $P = $asm.GetType('Thornswood.Probe3207')
-Write-Host ('      decoder: ' + $P::UseDecoder($nlayer[0]))
+$decoder = $P::Decoder()
+Write-Host ('      decoder: ' + $decoder)
+Yes '  and the decoder it loads is NLayer 3.0.0' ($decoder -match '^NLayer, Version=3\.0\.0')
+
+if (-not $OnWindows) {
+    Write-Host 'SKIP  1 to 5, the theme played and the mixer asked: waveOut and Core Audio are Windows'
+    Done
+}
 
 $name = 'Thornswood Dev'
 $browsersBefore = @(Get-Process -Name msedgewebview2 -ErrorAction SilentlyContinue | ForEach-Object Id)

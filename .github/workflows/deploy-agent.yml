@@ -7,7 +7,9 @@
 # PULL REQUESTS. dotnet test on Linux and on a Windows runner, which is where
 # it runs (sharing modes on files, the server folders' turn), from the locked
 # packages only. A change to launcher/app/Signature.cs runs this too, because
-# the agent compiles that file in as its signature check.
+# the agent compiles that file in as its signature check. So does a change to
+# a step after a deploy (deploy/after) or to the gate's verbs, which the
+# agent's own rules hold before any Release carries them (#5186).
 #
 # MAIN. The same tests, then, in the "release" environment (its subject is
 # what the Azure federated credential trusts, and only main may use it,
@@ -28,6 +30,10 @@ on:
       - 'tools/DeployAgent.Tests/**'
       - 'launcher/app/Signature.cs'
       - '.github/workflows/deploy-agent.yml'
+      # The steps after a deploy and the verbs they may run (#5186): the
+      # agent's rules hold them here, before they reach a Release.
+      - deploy/after/**
+      - scripts/vps/gate/verbs.json
   push:
     branches: [main]
     paths:
@@ -63,6 +69,12 @@ jobs:
         run: |
           dotnet restore tools/DeployAgent.Tests --locked-mode
           dotnet test tools/DeployAgent.Tests --no-restore
+      - name: Hold the steps after a deploy to their rules
+        env:
+          DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+          DOTNET_NOLOGO: '1'
+        run: |
+          dotnet run --project tools/DeployAgent --no-restore -- steps --folder deploy/after --verbs scripts/vps/gate/verbs.json
 
   # The agent's Windows half (sharing modes on files, the server folders'
   # turn) runs for real only here.

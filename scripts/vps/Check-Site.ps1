@@ -126,8 +126,9 @@ function Ok($m)  { Write-Host "  $m" -ForegroundColor Green }
 function Line($m) { Write-Host "  $m" -ForegroundColor Gray }
 
 # The public pages, as the site itself lists them, so a page added there is
-# checked here without anybody remembering to add it twice.
-$serverJs = Join-Path $Here '..\..\site\server.js'
+# checked here without anybody remembering to add it twice. The list is in
+# the site's pages module since server.js was split (#5357).
+$serverJs = Join-Path $Here '..\..\site\lib\pages.js'
 $pages = @('/')
 if (Test-Path -LiteralPath $serverJs) {
   $js = [IO.File]::ReadAllText($serverJs)
