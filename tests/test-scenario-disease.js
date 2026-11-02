@@ -111,6 +111,16 @@ w.row(FINN).thornswoodNeeds = needs(65, 70);
 
 yes('P0 the whole gamemode loads over the stand-in', w.boot());
 if (!w.loaded()) { t.done(w); }
+/*
+  The sky held to snow. The season block rolls each climate's weather with
+  Math.random, and Aldis's swim reaches spent cold only under some of those
+  skies (under a clear one it stops at bad), so a scenario that left it to
+  the roll passed or failed by the weather. __thornswoodSeasonUnit is the
+  season block's own way in for a fixed roll: just under 1 is the last kind,
+  snow, for the longest spell it rolls.
+*/
+function steadySky() { w.box().__thornswoodSeasonUnit = function () { return 0.999; }; }
+steadySky();
 EVERYONE.forEach(w.arrive);
 EVERYONE.forEach(function (a) { w.say(a, '/place indoors - 0 1 0 -'); });
 w.say(ALDIS, '/place water - 0 0 0 -');
@@ -264,6 +274,7 @@ const fever2 = ill(BRENNA, 'fever');
 until(fever2.at + 30 * MIN + 15000);
 const r = w.restart();
 yes('H1 the server comes back up', r.loaded);
+steadySky();
 EVERYONE.forEach(w.arrive);
 w.run(30000);
 yes('H2 Brenna\'s bad fever is still on her and still bad (' + JSON.stringify(shown(BRENNA)) + ')',
