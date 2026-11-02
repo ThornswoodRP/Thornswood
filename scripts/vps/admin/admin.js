@@ -61,14 +61,18 @@
                     repository, rulesets: [...],
                     private_vulnerability_reporting, immutable_releases,
                     secret_scanning, secret_scanning_push_protection,
-                    allow_auto_merge, collaborators: [login] }] },
-                    for Thornswood and
-                    the engine fork, ThornswoodRP/skymp, and no other
-                    repository: each ruleset an entry names is on GitHub
+                    allow_auto_merge, allow_squash_merge,
+                    allow_merge_commit, allow_rebase_merge,
+                    collaborators: [login] }] }, for Thornswood, the
+                    engine fork, ThornswoodRP/skymp, and the ops
+                    repository, and no other repository (the ops one,
+                    private on GitHub Free, has no rulesets and no
+                    auto-merge, so its entry names neither): each ruleset an entry names is on GitHub
                     with exactly its target, enforcement, conditions, rules
                     and bypass list, made or put back by name, and private
                     vulnerability reporting, immutable releases, secret
-                    scanning and its push protection, and auto-merge, are
+                    scanning and its push protection, auto-merge and the
+                    three merge methods (all three or none), are
                     each on or off as the entry says (left as they are when the entry does not
                     say). An App or a deploy key may bypass only a tag
                     ruleset: a record that lets one bypass a branch
@@ -213,10 +217,15 @@ const RESERVED = ['self-hosted', 'windows', 'linux', 'macos', 'x64', 'arm64', 't
 // from main, and settings reads GitHub's settings alone.
 const ASKS = ['runner-labels', 'installation-repos', 'repo-about', 'settings', 'repo-settings'];
 const SETTINGS_FILE = 'records/github-repo-settings.json';
-// The repositories repo-settings may change: this one and the engine fork.
-// The App reaches only those it is installed on, and this stops a record
-// naming any other even then.
-const SETTINGS_REPOS = [REPO, OWNER + '/skymp'];
+// The repositories repo-settings may change: this one, the engine fork and
+// the private ops repository (its merge settings, 2 Nov 2026). The App
+// reaches only those it is installed on, and this stops a record naming any
+// other even then.
+const SETTINGS_REPOS = [REPO, OWNER + '/skymp', RUNNERS_REPO];
+// The private repositories, on GitHub Free: GitHub keeps no rulesets and no
+// auto-merge for them, so their entry names neither, and Bramble merges
+// their pull requests.
+const FREE_PRIVATE_REPOS = [RUNNERS_REPO];
 // The record's on-or-off switches that have an endpoint of their own, each
 // true or false: its path under the repository, and what a line calls it.
 // Immutable releases (Patrick, 26 Oct 2026, #3287): a published Release's
@@ -235,9 +244,17 @@ const SCANNING_KEYS = ['secret_scanning', 'secret_scanning_push_protection'];
 // #5182, 31 Oct 2026): a pull request merges itself once the checks main's
 // ruleset requires are green, so nobody waits to press merge; the ruleset,
 // with no bypass, still refuses a merge past red for everybody.
-const MERGE_KEYS = ['allow_auto_merge'];
+// The three ways GitHub may merge a pull request (2 Nov 2026, after fork
+// #147 and Ops #200 and #201 sat green and unmerged): each repository allows
+// only the one way it merges, so a button, a gh pr merge or a Bot can never
+// merge another way. An entry that names one names all three, with one on,
+// since GitHub refuses a repository that allows none.
+const METHOD_KEYS = ['allow_squash_merge', 'allow_merge_commit', 'allow_rebase_merge'];
+const MERGE_KEYS = ['allow_auto_merge'].concat(METHOD_KEYS);
+// What a line calls each merge setting.
+const MERGE_NAMES = { allow_auto_merge: 'auto-merge', allow_squash_merge: 'squash merging', allow_merge_commit: 'merge commits', allow_rebase_merge: 'rebase merging' };
 // What repo-settings' token for each repository may do: Thornswood's reads
-// main's record too; the fork's only needs its settings.
+// main's record too; the others' only need their settings.
 const HOME_PERMISSIONS = { administration: 'write', contents: 'read' };
 const FORK_PERMISSIONS = { administration: 'write' };
 // The parts of a ruleset the record says and GitHub is made to match. Any
@@ -407,15 +424,16 @@ function checkRulesets(repo, list) {
   }
 }
 
-// Checks main's settings record: Thornswood and the fork only, each once,
-// with its rulesets, and reporting a yes or no when it is given. Throws.
+// Checks main's settings record: Thornswood, the fork and Ops only, each
+// once, with its rulesets (none for Ops), each switch a yes or no when it is
+// given, and the merge methods all three or none. Throws.
 function checkSettings(doc) {
   const list = doc && doc.repositories;
   if (!Array.isArray(list) || !list.length) throw new Error(SETTINGS_FILE + ' names no repositories');
   const seen = {};
   for (const e of list) {
     const repo = String((e && e.repository) || '');
-    if (SETTINGS_REPOS.indexOf(repo) < 0) throw new Error(SETTINGS_FILE + ' names ' + (repo || 'a repository with no name') + ', and the only ones this changes are ' + SETTINGS_REPOS.join(' and '));
+    if (SETTINGS_REPOS.indexOf(repo) < 0) throw new Error(SETTINGS_FILE + ' names ' + (repo || 'a repository with no name') + ', and the only ones this changes are ' + SETTINGS_REPOS.slice(0, -1).join(', ') + ' and ' + SETTINGS_REPOS[SETTINGS_REPOS.length - 1]);
     if (seen[repo]) throw new Error(SETTINGS_FILE + ' names ' + repo + ' twice');
     seen[repo] = true;
     for (const k of Object.keys(SWITCHES).concat(SCANNING_KEYS, MERGE_KEYS)) {
@@ -423,7 +441,15 @@ function checkSettings(doc) {
     }
     // GitHub has no push protection without the scanning it protects.
     if (e.secret_scanning_push_protection === true && e.secret_scanning !== true) throw new Error(SETTINGS_FILE + ', ' + repo + ': secret_scanning_push_protection is on only with secret_scanning on too');
-    checkRulesets(repo, e.rulesets);
+    const methods = METHOD_KEYS.filter(k => e[k] !== undefined);
+    if (methods.length && methods.length < METHOD_KEYS.length) throw new Error(SETTINGS_FILE + ', ' + repo + ': it names ' + methods.join(' and ') + ' but not ' + METHOD_KEYS.filter(k => methods.indexOf(k) < 0).join(' and ') + '; the merge methods are all three or none');
+    if (methods.length && !METHOD_KEYS.some(k => e[k] === true)) throw new Error(SETTINGS_FILE + ', ' + repo + ': it allows no way to merge, which GitHub refuses; one of ' + METHOD_KEYS.join(', ') + ' is true');
+    if (FREE_PRIVATE_REPOS.indexOf(repo) >= 0) {
+      if (e.rulesets !== undefined) throw new Error(SETTINGS_FILE + ', ' + repo + ': GitHub Free keeps no rulesets on a private repository, so its entry names none');
+      if (e.allow_auto_merge === true) throw new Error(SETTINGS_FILE + ', ' + repo + ': GitHub Free has no auto-merge on a private repository; Bramble merges its pull requests');
+    } else {
+      checkRulesets(repo, e.rulesets);
+    }
     if (e.collaborators !== undefined) checkCollaborators(repo, e.collaborators);
   }
 }
@@ -818,7 +844,7 @@ async function mergeSettings(token, repo, e, check) {
   const keys = MERGE_KEYS.filter(k => typeof e[k] === 'boolean');
   const auth = { Authorization: 'Bearer ' + token };
   const word = k => (e[k] ? 'on' : 'off');
-  const name = k => (k === 'allow_auto_merge' ? 'auto-merge' : k);
+  const name = k => MERGE_NAMES[k];
   const read = async () => {
     const a = await call('GET', API + '/repos/' + repo, auth);
     if (a.status !== 200 || !a.body || keys.some(k => typeof a.body[k] !== 'boolean')) throw new Error('GitHub would not say whether ' + keys.map(name).join(' and ') + ' is on for ' + repo + ' (' + said(a) + ')');
@@ -856,7 +882,8 @@ async function repoSettings(held, now, check) {
         try { token = await installationToken(held, now, e.repository, FORK_PERMISSIONS, inst); }
         catch (err) { throw new Error(err.message + '; is the App installed on it? ' + WEB + '/settings/installations/' + inst.id); }
       }
-      add(await rulesets(token, e.repository, e.rulesets, check));
+      // checkSettings let only a Free private repository's entry leave them out.
+      if (e.rulesets !== undefined) add(await rulesets(token, e.repository, e.rulesets, check));
       for (const k of Object.keys(SWITCHES)) if (typeof e[k] === 'boolean') add(await setSwitch(token, e.repository, k, e[k], check));
       if (SCANNING_KEYS.some(k => typeof e[k] === 'boolean')) add(await scanning(token, e.repository, e, check));
       if (MERGE_KEYS.some(k => typeof e[k] === 'boolean')) add(await mergeSettings(token, e.repository, e, check));
@@ -1347,5 +1374,5 @@ function serve() {
   return server;
 }
 
-module.exports = { said, driftBody, CHANGING_ASKS, DRIFT_TITLE, MACHINE_ACTORS, verifyOidc, appJwt, call, botToken, BOT_PERMISSIONS, planCollaborators, planLabels, planLeftovers, checkRecords, checkAbout, planAbout, runnerNumber, checkRulesets, checkSettings, planRulesets, rulesetBody, says, manifest, RULES, ASKS, REPO, RUNNERS_REPO, SETTINGS_REPOS, SCANNING_KEYS, MERGE_KEYS, SETTINGS_PERMISSIONS, SETTINGS_EXTRA, serve };
+module.exports = { said, driftBody, CHANGING_ASKS, DRIFT_TITLE, MACHINE_ACTORS, verifyOidc, appJwt, call, botToken, BOT_PERMISSIONS, planCollaborators, planLabels, planLeftovers, checkRecords, checkAbout, planAbout, runnerNumber, checkRulesets, checkSettings, planRulesets, rulesetBody, says, manifest, RULES, ASKS, REPO, RUNNERS_REPO, SETTINGS_REPOS, SCANNING_KEYS, MERGE_KEYS, METHOD_KEYS, FREE_PRIVATE_REPOS, SETTINGS_PERMISSIONS, SETTINGS_EXTRA, serve };
 if (require.main === module) serve();

@@ -1,5 +1,5 @@
 {
-  "about": "The rulesets, private vulnerability reporting, immutable releases and secret scanning of Thornswood and of the engine fork, ThornswoodRP/skymp (#3683, #3691). A change is a pull request to this file; once it merges, the Desk runs pwsh scripts/deploy/Set-BuildRunners.ps1 -RepoSettings (-Check first), which starts github-admin.yml in the private ops repository, and the box's admin service (scripts/vps/admin/admin.js, repo-settings) makes GitHub match it: each ruleset named here is made or put back by name, one GitHub has that this does not name stops the run and is never deleted, reporting, immutable releases, secret scanning and push protection are switched as each entry says, and where an entry lists collaborators, one GitHub has that the list does not name is taken off and an invitation to one is withdrawn; this only ever takes people off, and one it names who is not there is reported for Patrick to invite by hand. An App or a deploy key may be a bypass actor only on a tag ruleset, never on a branch one; a record that says otherwise stops the run (the redesign's part 20, 1 Nov 2026). Every night github-admin.yml in the ops repository asks the same service for a check, which changes nothing and opens one issue on the board while GitHub differs from this file, and closes it once a check matches (#5298). A why is this file's own note and is never sent to GitHub.",
+  "about": "The rulesets, private vulnerability reporting, immutable releases, secret scanning, auto-merge and merge methods of Thornswood, of the engine fork, ThornswoodRP/skymp (#3683, #3691), and of the private ops repository, ThornswoodRP/Thornswood-Ops (its merge methods only: GitHub Free keeps no rulesets and no auto-merge for a private repository). A change is a pull request to this file; once it merges, the Desk runs pwsh scripts/deploy/Set-BuildRunners.ps1 -RepoSettings (-Check first), which starts github-admin.yml in the private ops repository, and the box's admin service (scripts/vps/admin/admin.js, repo-settings) makes GitHub match it: each ruleset named here is made or put back by name, one GitHub has that this does not name stops the run and is never deleted, reporting, immutable releases, secret scanning, push protection, auto-merge and the three merge methods (all three or none) are switched as each entry says, and where an entry lists collaborators, one GitHub has that the list does not name is taken off and an invitation to one is withdrawn; this only ever takes people off, and one it names who is not there is reported for Patrick to invite by hand. An App or a deploy key may be a bypass actor only on a tag ruleset, never on a branch one; a record that says otherwise stops the run (the redesign's part 20, 1 Nov 2026). Every night github-admin.yml in the ops repository asks the same service for a check, which changes nothing and opens one issue on the board while GitHub differs from this file, and closes it once a check matches (#5298). A why is this file's own note and is never sent to GitHub.",
   "repositories": [
     {
       "repository": "ThornswoodRP/Thornswood",
@@ -10,6 +10,10 @@
       "secret_scanning_push_protection": true,
       "allow_auto_merge": true,
       "allow_auto_merge_why": "Patrick's A on #5182, 31 Oct 2026: a pull request merges itself once Build check result is green, so nobody waits to press merge. The main ruleset below requires that check and has no bypass, so auto-merge can never merge past red, for the owner either. Each pull request's author turns auto-merge (squash) on when it opens.",
+      "allow_squash_merge": true,
+      "allow_merge_commit": false,
+      "allow_rebase_merge": false,
+      "merge_methods_why": "Squash only (2 Nov 2026, after Patrick found all three methods allowed in all three repositories): every merge here is a squash, the merge queue's own method, so neither a button nor gh pr merge nor a Bot can land a merge commit or a rebase on main.",
       "collaborators": ["WiccanDjinn"],
       "collaborators_why": "Everybody besides the owner who may push here, as the team is on 31 Oct 2026. A person who leaves the team is a pull request taking them off this list, and the next run takes them off GitHub. A person who joins is invited by Patrick by hand and then added here.",
       "rulesets": [
@@ -46,6 +50,11 @@
       "private_vulnerability_reporting": true,
       "secret_scanning": true,
       "secret_scanning_push_protection": true,
+      "allow_auto_merge": true,
+      "allow_squash_merge": false,
+      "allow_merge_commit": true,
+      "allow_rebase_merge": false,
+      "merge_methods_why": "Merge commits only, and auto-merge (2 Nov 2026, after fork #147 sat green and unmerged with auto-merge off): engine/README.md 'One engine' merges a fork pull request with a merge commit, whose files are the branch's, so a build of the branch's last commit is a build of the head. Pull requests go to thornswood/engine-changes, whose ruleset requires build-pr and save-directory-linux with no bypass, so auto-merge never merges past red. Each pull request's author turns auto-merge (merge) on when it opens; Bramble merges the rest.",
       "collaborators": ["WiccanDjinn"],
       "collaborators_why": "The fork's collaborators as GitHub had them on 1 Nov 2026, after Ture-Neko was taken off the fork (Patrick's A on q-5231-ture, #5231), written down so that anybody given push here by hand and not added to this list is taken off at the next run.",
       "rulesets": [
@@ -77,6 +86,13 @@
           "bypass_actors": []
         }
       ]
+    },
+    {
+      "repository": "ThornswoodRP/Thornswood-Ops",
+      "why": "The private ops repository, on GitHub Free, which keeps no rulesets and no auto-merge for a private repository, so this entry names neither and Bramble merges its pull requests once check is green (Thornswood-Hermes policy merge.required_checks). Squash only, as every merge in Thornswood (2 Nov 2026, after Ops #200 and #201 sat green and unmerged).",
+      "allow_squash_merge": true,
+      "allow_merge_commit": false,
+      "allow_rebase_merge": false
     }
   ]
 }

@@ -324,7 +324,19 @@ const settings = () => ({ repositories: [
   { repository: 'ThornswoodRP/skymp', private_vulnerability_reporting: true, rulesets: [forkMain] },
 ] });
 yes('Thornswood and the fork pass together', sstops(settings()) === '');
-yes('the repositories it may change are Thornswood and the fork, and no other', JSON.stringify(admin.SETTINGS_REPOS) === '["ThornswoodRP/Thornswood","ThornswoodRP/skymp"]');
+yes('the repositories it may change are Thornswood, the fork and Ops, and no other', JSON.stringify(admin.SETTINGS_REPOS) === '["ThornswoodRP/Thornswood","ThornswoodRP/skymp","ThornswoodRP/Thornswood-Ops"]');
+// The merge methods and Ops (2 Nov 2026, after fork #147 and Ops #200 and #201 sat green).
+const opsEntry = () => ({ repository: 'ThornswoodRP/Thornswood-Ops', allow_squash_merge: true, allow_merge_commit: false, allow_rebase_merge: false });
+const methods = (e, sq, mc, rb) => Object.assign({}, e, { allow_squash_merge: sq, allow_merge_commit: mc, allow_rebase_merge: rb });
+yes('Ops passes with its merge methods and no rulesets beside the other two', sstops({ repositories: settings().repositories.concat([opsEntry()]) }) === '');
+yes('  Ops with a rulesets list stops, since GitHub Free keeps none on a private repository', /Thornswood-Ops: GitHub Free keeps no rulesets on a private repository/.test(sstops({ repositories: [with_(opsEntry(), 'rulesets', [])] })));
+yes('  Ops with auto-merge on stops, since GitHub Free has none on a private repository', /Thornswood-Ops: GitHub Free has no auto-merge on a private repository/.test(sstops({ repositories: [with_(opsEntry(), 'allow_auto_merge', true)] })));
+yes('  and the fork with no rulesets list still stops', /ThornswoodRP\/skymp: no rulesets list/.test(sstops({ repositories: [with_(settings().repositories[1], 'rulesets', undefined)] })));
+yes('the merge methods pass all three given, one or more on', sstops({ repositories: [methods(settings().repositories[1], false, true, false)] }) === '' &&
+  sstops({ repositories: [methods(settings().repositories[0], true, true, false)] }) === '');
+yes('  one or two of them given stops, naming the missing ones', /names allow_squash_merge but not allow_merge_commit and allow_rebase_merge; the merge methods are all three or none/.test(sstops({ repositories: [with_(settings().repositories[0], 'allow_squash_merge', true)] })));
+yes('  all three off stops, since GitHub refuses a repository with no way to merge', /allows no way to merge/.test(sstops({ repositories: [methods(settings().repositories[0], false, false, false)] })));
+yes('  one that is not true or false stops, named', /allow_merge_commit is true or false/.test(sstops({ repositories: [methods(settings().repositories[0], true, 'no', false)] })));
 yes('a record with no repositories stops', /names no repositories/.test(sstops({})) && /names no repositories/.test(sstops({ repositories: [] })));
 yes('another repository stops, named', /names ThornswoodRP\/other, and the only ones/.test(sstops({ repositories: [{ repository: 'ThornswoodRP/other', rulesets: [] }] })));
 yes('a repository named twice stops', /twice/.test(sstops({ repositories: [settings().repositories[1], settings().repositories[1]] })));
@@ -386,7 +398,7 @@ const gh = {
     runner(13, 'thornswood-vps-3', base.concat('thornswood-build', 'thornswood-sign')),
     runner(14, 'thornswood-vps-4', base),
   ],
-  repo: { full_name: 'ThornswoodRP/Thornswood', description: null, homepage: null, allow_auto_merge: false, security_and_analysis: { secret_scanning: { status: 'disabled' }, secret_scanning_push_protection: { status: 'disabled' } } },
+  repo: { full_name: 'ThornswoodRP/Thornswood', description: null, homepage: null, allow_auto_merge: false, allow_squash_merge: true, allow_merge_commit: true, allow_rebase_merge: true, security_and_analysis: { secret_scanning: { status: 'disabled' }, secret_scanning_push_protection: { status: 'disabled' } } },
   topics: [],
   instToken: 'ghs_' + crypto.randomBytes(16).toString('hex'),
   readToken: 'ghs_' + crypto.randomBytes(16).toString('hex'),
@@ -417,7 +429,11 @@ const gh = {
   sets: { Thornswood: [], skymp: [] },
   pvr: { Thornswood: false, skymp: false },
   immutable: { Thornswood: false, skymp: false },
-  forkRepo: { full_name: 'ThornswoodRP/skymp', security_and_analysis: { secret_scanning: { status: 'enabled' }, secret_scanning_push_protection: { status: 'enabled' } } },
+  forkRepo: { full_name: 'ThornswoodRP/skymp', allow_auto_merge: false, allow_squash_merge: true, allow_merge_commit: true, allow_rebase_merge: true, security_and_analysis: { secret_scanning: { status: 'enabled' }, secret_scanning_push_protection: { status: 'enabled' } } },
+  // The private ops repository on GitHub Free: no rulesets, no auto-merge.
+  // opsIgnores: GitHub answers a PATCH 200 and keeps the old values.
+  opsRepo: { full_name: 'ThornswoodRP/Thornswood-Ops', private: true, allow_auto_merge: false, allow_squash_merge: true, allow_merge_commit: true, allow_rebase_merge: true },
+  opsIgnores: false,
   nextRuleset: 100,
   people: { Thornswood: ['Jhinswife', 'WiccanDjinn'], skymp: ['Ture-Neko', 'WiccanDjinn'] },
   invites: { Thornswood: [], skymp: [{ id: 40, invitee: { login: 'Stale' }, permissions: 'write' }] },
@@ -560,8 +576,18 @@ function standIn(req, res) {
     if (P === '/repos/ThornswoodRP/skymp') {
       if (req.headers.authorization !== 'Bearer ' + gh.forkToken) return send(401, { message: 'Bad credentials' });
       if (req.method === 'GET') return send(200, gh.forkRepo);
-      if (req.method === 'PATCH') { Object.assign(gh.forkRepo.security_and_analysis, body.security_and_analysis || {}); return send(200, gh.forkRepo); }
+      if (req.method === 'PATCH') {
+        const sa = Object.assign({}, gh.forkRepo.security_and_analysis, body.security_and_analysis || {});
+        Object.assign(gh.forkRepo, body, { security_and_analysis: sa });
+        return send(200, gh.forkRepo);
+      }
     }
+    if (P === '/repos/ThornswoodRP/Thornswood-Ops') {
+      if (!asInst()) return send(401, { message: 'Bad credentials' });
+      if (req.method === 'GET') return send(200, gh.opsRepo);
+      if (req.method === 'PATCH') { if (!gh.opsIgnores) Object.assign(gh.opsRepo, body); return send(200, gh.opsRepo); }
+    }
+    if (P.startsWith('/repos/ThornswoodRP/Thornswood-Ops/rulesets')) return send(403, { message: 'Upgrade to GitHub Pro or make this repository public to enable this feature.' });
     if (P === '/repos/ThornswoodRP/Thornswood/topics' && req.method === 'GET') return send(200, { names: gh.topics });
     if (P === '/repos/ThornswoodRP/Thornswood/topics' && req.method === 'PUT') { gh.topics = body.names.slice(); return send(200, { names: gh.topics }); }
     if (P === '/repos/ThornswoodRP/Thornswood-Ops/actions/runners') return send(200, { total_count: gh.runners.length, runners: gh.runners });
@@ -969,6 +995,46 @@ function start(stateDir, ghPort, more) {
     gh.calls = [];
     r = await askRs();
     yes('a second run changes nothing and says it is on', r.status === 200 && r.json.changed === 0 && patches().length === 0 && has(/^ThornswoodRP\/Thornswood: auto-merge is on, as the record says$/));
+
+    // The merge methods, and Ops (2 Nov 2026, after fork #147 and Ops #200
+    // and #201 sat green and unmerged with auto-merge off).
+    const O = 'ThornswoodRP/Thornswood-Ops';
+    const mpatches = () => gh.calls.filter(c => c.method === 'PATCH' && [T, S, O].some(n => c.path === '/repos/' + n));
+    gh.settingsRecord = settings();
+    gh.settingsRecord.repositories[0] = methods(gh.settingsRecord.repositories[0], true, false, false);
+    gh.settingsRecord.repositories[1] = Object.assign(methods(gh.settingsRecord.repositories[1], false, true, false), { allow_auto_merge: true });
+    gh.settingsRecord.repositories.push(opsEntry());
+    gh.calls = [];
+    r = await askRs(true);
+    yes('a check says which merge methods and auto-merge would be switched in all three, and changes nothing', r.status === 200 && r.json.ok && r.json.differs === 7 && r.json.changed === 0 && mpatches().length === 0 &&
+      has(/^ThornswoodRP\/Thornswood: merge commits would be switched off$/) && has(/^ThornswoodRP\/Thornswood: rebase merging would be switched off$/) &&
+      has(/^ThornswoodRP\/Thornswood: squash merging is on, as the record says$/) && has(/^ThornswoodRP\/skymp: auto-merge would be switched on$/) &&
+      has(/^ThornswoodRP\/skymp: squash merging would be switched off$/) && has(/^ThornswoodRP\/Thornswood-Ops: merge commits would be switched off$/));
+    yes('  and never asks GitHub for Ops\' rulesets, which GitHub Free keeps none of', !gh.calls.some(c => c.path.startsWith('/repos/' + O + '/rulesets')));
+    gh.calls = [];
+    r = await askRs();
+    const body = n => JSON.stringify((mpatches().find(c => c.path === '/repos/' + n) || {}).body);
+    yes('a run sends one PATCH to each, of the keys that differ alone, each with its own token', r.status === 200 && r.json.ok && r.json.changed === 7 && mpatches().length === 3 &&
+      body(T) === '{"allow_merge_commit":false,"allow_rebase_merge":false}' && body(S) === '{"allow_auto_merge":true,"allow_squash_merge":false,"allow_rebase_merge":false}' &&
+      body(O) === '{"allow_merge_commit":false,"allow_rebase_merge":false}' &&
+      mpatches().find(c => c.path === '/repos/' + T).auth === 'Bearer ' + gh.aboutToken && mpatches().find(c => c.path === '/repos/' + S).auth === 'Bearer ' + gh.forkToken &&
+      mpatches().find(c => c.path === '/repos/' + O).auth === 'Bearer ' + gh.instToken);
+    yes('  and GitHub has each as the record says, read back', gh.repo.allow_squash_merge && !gh.repo.allow_merge_commit && !gh.repo.allow_rebase_merge &&
+      gh.forkRepo.allow_auto_merge && !gh.forkRepo.allow_squash_merge && gh.forkRepo.allow_merge_commit && !gh.forkRepo.allow_rebase_merge &&
+      gh.opsRepo.allow_squash_merge && !gh.opsRepo.allow_merge_commit && !gh.opsRepo.allow_rebase_merge && gh.opsRepo.allow_auto_merge === false &&
+      has(/^ThornswoodRP\/Thornswood-Ops: rebase merging switched off$/) && gh.calls.filter(c => c.method === 'GET' && c.path === '/repos/' + O).length === 2);
+    gh.calls = [];
+    r = await askRs();
+    yes('a second run changes nothing', r.status === 200 && r.json.changed === 0 && mpatches().length === 0 && has(/^ThornswoodRP\/Thornswood-Ops: merge commits is off, as the record says$/));
+    gh.opsRepo.allow_merge_commit = true;
+    gh.opsIgnores = true;
+    gh.calls = [];
+    r = await askRs();
+    yes('a switch GitHub answers but does not make stops the run, named, and the others still match', r.status === 409 && !r.json.ok &&
+      has(/^STOP ThornswoodRP\/Thornswood-Ops: GitHub still has merge commits on$/) && has(/^ThornswoodRP\/skymp: merge commits is on, as the record says$/));
+    gh.opsIgnores = false;
+    r = await askRs();
+    yes('  and the next run puts it right', r.status === 200 && r.json.ok && gh.opsRepo.allow_merge_commit === false);
 
     // Immutable releases (Patrick, 26 Oct 2026, #3287).
     const immu = () => gh.calls.filter(c => c.path === '/repos/' + T + '/immutable-releases' && c.method !== 'GET');
