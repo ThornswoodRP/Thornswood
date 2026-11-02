@@ -365,9 +365,17 @@ try {
     $newestAt = $wf.IndexOf('- name: Is this still main''s newest merge'); $publishAt = $wf.IndexOf('- name: Publish the Release')
     # Four steps wait on it: the Release, main's held package (kept only for
     # a Release that is out), and the two Deployments.
-    Yes 'a merge main has moved past publishes nothing, keeps no main package, and says the newer merge releases it' ($newestAt -gt 0 -and $publishAt -gt $newestAt -and
+    Yes 'a merge main has moved past publishes nothing and keeps no main package' ($newestAt -gt 0 -and $publishAt -gt $newestAt -and
         $wf.Contains('gh api "repos/$($env:GITHUB_REPOSITORY)/commits/main" --jq .sha') -and $wf.Contains("if ([string]`$head -eq `$env:GITHUB_SHA) { Add-Content -LiteralPath `$env:GITHUB_OUTPUT -Value 'release=yes'; exit 0 }") -and
         ([regex]::Matches($wf, [regex]::Escape("if: `${{ steps.newest.outputs.release == 'yes'"))).Count -eq 4)
+    # A merge outside the paths above starts no run, so it cancels nothing and
+    # releases nothing: the site fix #5451 was built and dropped that way on
+    # 2 Nov. The run main moved past starts one of main's newest merge, and
+    # fails when it cannot, rather than leave the change unreleased.
+    $newestStep = if ($newestAt -gt 0) { $wf.Substring($newestAt, $publishAt - $newestAt) } else { '' }
+    Yes '  and starts a run of main''s newest merge, which releases its changes, or fails' ($newestStep.Contains('gh workflow run merge-release.yml --repo $env:GITHUB_REPOSITORY --ref main') -and
+        $newestStep -match 'if \(\$LASTEXITCODE -ne 0\) \{ Write-Host "::error::[^"]*"; exit 1 \}' -and
+        $wf -match '(?m)^\s+actions: write\s*$' -and $wf -match '(?m)^  workflow_dispatch:\s*$')
     $notes = $wf.IndexOf('Collect-ReleaseNotes.ps1'); $build = $wf.IndexOf('Build-Launcher.ps1 -Root')
     Yes 'the notes are written before anything is built, and "none" from every pull request is the one line' ($notes -gt 0 -and $build -gt $notes -and $wf.Contains('if ($rc -eq 3)') -and $wf.Contains("NOTHING_TO_TELL: 'Nothing people would notice: every change in this release says none.'"))
     # The notes step itself, run the way GitHub runs a pwsh step: its text
