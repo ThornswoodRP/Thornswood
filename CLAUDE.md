@@ -11,8 +11,9 @@ long form of every step, and CONTRIBUTING.md says how a change is sent.
   `.\scripts\release\Build-Launcher.ps1 -Root $env:TEMP\launcher-try -NoSign -NoPause`
   builds it into a folder of its own. `dotnet build launcher\app\Thornswood.csproj`
   compiles it on any machine, Linux too.
-- The gamemode is `game\gamemode.js` as it is; `docs\GAMEMODE.md` says how
-  it is laid out and deployed.
+- The gamemode is written in `game\gamemode\*.ts` and built into
+  `game\gamemode.js` by `node scripts\dev\Build-Gamemode.js`;
+  `docs\GAMEMODE.md` says how it is laid out and deployed.
 - The engine (the SkyMP fork in `engine\skymp`): `engine\README.md`.
 
 ## Test

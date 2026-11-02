@@ -22,10 +22,11 @@
 //   node scripts\dev\Install-GamemodeConsts.js --check
 const fs = require('fs');
 const path = require('path');
+const gamemodeSource = require('./gamemode-source.js');
 
 const CHECK = process.argv.indexOf('--check') !== -1;
 const root = path.join(__dirname, '..', '..');
-const gmPath = path.join(root, 'game', 'gamemode.js');
+const gmPath = path.join(root, 'game', 'gamemode');
 const dataDir = path.join(root, 'game', 'data');
 const GT = require('./GamemodeTables.js');
 
@@ -66,7 +67,7 @@ function sameValue(a, b) {
 
 let src;
 try {
-  src = fs.readFileSync(gmPath, 'utf8');
+  src = gamemodeSource.read(gmPath);
 } catch (e) {
   console.error('FAIL  no gamemode.js at ' + gmPath);
   process.exit(1);
@@ -128,6 +129,6 @@ if (CHECK) {
 if (changed === 0) {
   console.log('game\\gamemode.js and the DATA table already hold these tables');
 } else if (next !== src) {
-  fs.writeFileSync(gmPath, next);
+  gamemodeSource.write(gmPath, next);
   console.log('installed ' + changed + ' const(s) into game\\gamemode.js (' + matched + ' already matched)');
 }

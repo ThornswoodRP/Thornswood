@@ -23,11 +23,12 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const gamemodeSource = require('./gamemode-source.js');
 
 const ROOT = path.join(__dirname, '..', '..');
 const GROUPS_FILE = path.join(ROOT, 'game', 'data', 'food-groups.json');
 const FOOD_FILE = path.join(ROOT, 'game', 'data', 'food.json');
-const GAMEMODE = path.join(ROOT, 'game', 'gamemode.js');
+const GAMEMODE = path.join(ROOT, 'game', 'gamemode');
 
 const groups = JSON.parse(fs.readFileSync(GROUPS_FILE, 'utf8'));
 const food = JSON.parse(fs.readFileSync(FOOD_FILE, 'utf8')).items;
@@ -76,7 +77,7 @@ const text = JSON.stringify(groups);
 fs.writeFileSync(GROUPS_FILE, text);
 
 const CR = String.fromCharCode(13);
-const gm = fs.readFileSync(GAMEMODE, 'utf8');
+const gm = gamemodeSource.read(GAMEMODE);
 const eol = gm.indexOf(CR + '\n') !== -1 ? CR + '\n' : '\n';
 const lines = gm.split(eol);
 let at = -1;
@@ -88,5 +89,5 @@ if (at < 0) {
   process.exit(1);
 }
 lines[at] = 'const FOOD_GROUPS = ' + text + ';';
-fs.writeFileSync(GAMEMODE, lines.join(eol));
+gamemodeSource.write(GAMEMODE, lines.join(eol));
 console.log('Wrote ' + Object.keys(names).length + ' names of foods that spoil into food-groups.json and FOOD_GROUPS.');

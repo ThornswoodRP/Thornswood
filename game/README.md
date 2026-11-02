@@ -5,8 +5,12 @@
 Everything that runs in the game or on the game server, as opposed to the
 scripts that build and ship it:
 
-- `gamemode.js`: the server's gamemode, one file of node that the SkyMP
-  server loads. `Deploy-DevGamemode.ps1` puts it on the dev server, and
+- `gamemode\`: the server's gamemode, written as TypeScript parts, one per
+  system, in the order `gamemode\order.json` lists.
+  `node scripts\dev\Build-Gamemode.js` strips their types and joins them into
+  `gamemode.js`, the one file of node that the SkyMP server loads. Change a
+  part, never `gamemode.js`; the harness test-2181 fails when the two differ.
+  `Deploy-DevGamemode.ps1` puts `gamemode.js` on the dev server, and
   `Deploy-Gamemode.ps1` then `Deploy-Server.ps1` on the live one.
 - `plugins\`: the Skyrim Platform plugins that run in each person's game.
   Its own README says how they are written.

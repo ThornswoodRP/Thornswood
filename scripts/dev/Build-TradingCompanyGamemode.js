@@ -15,9 +15,10 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const gamemodeSource = require('./gamemode-source.js');
 
 const REPO = path.join(__dirname, '..', '..');
-const GAMEMODE = path.join(REPO, 'game', 'gamemode.js');
+const GAMEMODE = path.join(REPO, 'game', 'gamemode');
 const DATA = path.join(REPO, 'game', 'data', 'trading-company.json');
 const MODULE = path.join(REPO, 'game', 'trading-company.js');
 const START = '  // ==== TRADING_COMPANY ====';
@@ -53,7 +54,7 @@ function build(gamemodeText, dataText, moduleText) {
 function read(p) { return fs.readFileSync(p, 'utf8'); }
 
 if (require.main === module) {
-  const now = read(GAMEMODE);
+  const now = gamemodeSource.read(GAMEMODE);
   const next = build(now, read(DATA), read(MODULE));
   if (process.argv.includes('--check')) {
     if (next !== now) {
@@ -64,7 +65,7 @@ if (require.main === module) {
     process.exit(0);
   }
   if (next === now) { console.log('the company terms block is already up to date'); process.exit(0); }
-  fs.writeFileSync(GAMEMODE, next, 'utf8');
+  gamemodeSource.write(GAMEMODE, next);
   console.log('wrote the company terms block into game/gamemode.js');
 }
 

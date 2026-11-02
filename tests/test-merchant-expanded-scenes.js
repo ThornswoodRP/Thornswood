@@ -35,7 +35,7 @@ for(const defect of ['hash','missing','commission','duplicate','too-many']) {
  const fakeFs={readFileSync(file,...args){return file.endsWith('merchant-quest-activation.json')?JSON.stringify(pins):fs.readFileSync(file,...args);},
    writeFileSync(){throw Error('activation validation must never write source');}};
  assert.throws(()=>vm.runInNewContext(fs.readFileSync(buildFile,'utf8'),{__dirname:path.dirname(buildFile),
-   require:name=>name==='node:fs'?fakeFs:require(name),process:{argv:['node',buildFile,'--check']},console:{log(){}}}),
+   require:name=>name==='node:fs'?fakeFs:require(name.startsWith('.')?path.join(path.dirname(buildFile),name):name),process:{argv:['node',buildFile,'--check']},console:{log(){}}}),
    /activation|activated|changed/i,defect);
 }
 const file=path.join(__dirname,'test-1621-quest-state.js'),context={require:createRequire(file),__dirname,Buffer,JSON,console:{log(){}}};

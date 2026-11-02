@@ -19,14 +19,15 @@
 */
 const fs = require('node:fs');
 const path = require('node:path');
+const gamemodeSource = require('./gamemode-source.js');
 const root = path.join(__dirname, '../..');
-const modePath = path.join(root, 'game/gamemode.js');
+const modePath = path.join(root, 'game/gamemode');
 const BUNDLES = [
   { file: 'trade-cargo.js', name: 'TRADE_CARGO', marker: 'TRADE CARGO BUNDLE' },
   { file: 'trade-ship-dock.js', name: 'TRADE_DOCK', marker: 'TRADE DOCK BUNDLE' },
   { file: 'trade-carts.js', name: 'TRADE_CARTS', marker: 'TRADE CARTS BUNDLE' }
 ];
-const old = fs.readFileSync(modePath, 'utf8').replace(/\r\n/g, '\n');
+const old = gamemodeSource.read(modePath).replace(/\r\n/g, '\n');
 let next = old;
 for (const b of BUNDLES) {
   const source = fs.readFileSync(path.join(root, 'game', b.file), 'utf8').replace(/\r\n/g, '\n');
@@ -47,5 +48,5 @@ if (process.argv.includes('--check')) {
   if (next !== old) { throw new Error('A trade ship or cart bundle is stale. Run scripts/dev/Build-TradeCargoGamemode.js.'); }
   console.log('PASS trade ship and cart bundles match game/trade-cargo.js, game/trade-ship-dock.js and game/trade-carts.js');
 } else {
-  fs.writeFileSync(modePath, next);
+  gamemodeSource.write(modePath, next);
 }

@@ -5,9 +5,15 @@
  *
  * Loaded by skymp5-server through requireTemp(), which copies this file to a
  * temp directory and requires it there. Relative requires would break, so
- * everything lives in this one file and all data is inlined. The server watches
- * the file and hot-reloads on change; mp.clear() runs first, so re-registering
+ * all of its code is in this one file. The server watches the file
+ * and hot-reloads on change; mp.clear() runs first, so re-registering
  * handlers at load time is correct and expected.
+ *
+ * This file is built. Its source is the TypeScript parts in game/gamemode,
+ * joined in game/gamemode/order.json order by scripts/dev/Build-Gamemode.js
+ * with their types stripped, so each line here is the same line of its part.
+ * Change a part, never this file; Build-Gamemode.js --where <line> names the
+ * part a line of this file is in.
  *
  * The event contract, read out of ScampServerListener::OnMpApiEvent:
  * the server looks up a function by name on the global `mp` object, calls it

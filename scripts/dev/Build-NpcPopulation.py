@@ -16,6 +16,7 @@ import pathlib
 import re
 import struct
 from MerchantRoster import apply_roster, BOOK_HOLDS, ROLES
+import gamemode_source
 import own_plugins
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -512,14 +513,13 @@ def write_runtime(payload):
                   (1 if r.get('swims') else 0) | (2 if r.get('ambush') else 0), r['species']] +
                  ([r['displayName']] if 'displayName' in r else [])
                  for r in payload['npcs'] if r['keep']]}
-    target = HERE.parent.parent / 'game/gamemode.js'
-    source = target.read_text(encoding='utf-8')
+    target = str(HERE.parent.parent / 'game/gamemode')
+    source = gamemode_source.read(target)
     begin = source.index('// NPC POPULATION DATA BEGIN')
     end = source.index('// NPC POPULATION DATA END')
     block = '// NPC POPULATION DATA BEGIN\nconst NPC_POPULATION_DATA = ' + json.dumps(
         compact, ensure_ascii=False, separators=(',', ':')) + ';\n'
-    with target.open('w', encoding='utf-8', newline='\n') as output:
-        output.write(source[:begin] + block + source[end:])
+    gamemode_source.write(target, source[:begin] + block + source[end:])
 
 
 # docs/HUNTING-SPOTS.csv is every retained animal with what its body gives.
