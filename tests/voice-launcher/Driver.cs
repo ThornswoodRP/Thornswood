@@ -31,6 +31,7 @@ namespace Thornswood
                               it as the service would.
         --jitter x            the random part of each retry's wait, fixed.
         --tone hz             the pitch of this microphone.
+        --amplitude a         how loud it is, 0 to 1 (0.3 unless given).
         --log file            where Swallow writes.
 
       Commands: configure, token, ptt, mode, muted (the five calls Voice.cs
@@ -82,6 +83,7 @@ namespace Thornswood
                     case "--wire": wireArg = v; break;
                     case "--jitter": jitter = double.Parse(v, CultureInfo.InvariantCulture); break;
                     case "--tone": VoiceAudio.Tone = double.Parse(v, CultureInfo.InvariantCulture); break;
+                    case "--amplitude": VoiceAudio.Amplitude = double.Parse(v, CultureInfo.InvariantCulture); break;
                     case "--log": Paths.LogFile = v; break;
                     default: Console.Error.WriteLine("unknown argument " + args[i]); return 2;
                 }

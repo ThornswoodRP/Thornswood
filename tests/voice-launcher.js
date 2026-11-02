@@ -101,7 +101,8 @@ function build() {
 }
 
 /* One launcher's voice. opts: clock ('real' | 'manual'), wire ('ws' | 'fake'),
-   jitter (0 to 1), tone (Hz), name (for messages). */
+   jitter (0 to 1), tone (Hz), amplitude (0 to 1, the microphone's level,
+   0.3 unless given), name (for messages). */
 function start(opts) {
   opts = opts || {};
   const b = build();
@@ -109,6 +110,7 @@ function start(opts) {
   const args = [b.dll, '--clock', opts.clock || 'real', '--wire', opts.wire || 'ws', '--log', log];
   if (opts.jitter !== undefined) { args.push('--jitter', String(opts.jitter)); }
   if (opts.tone !== undefined) { args.push('--tone', String(opts.tone)); }
+  if (opts.amplitude !== undefined) { args.push('--amplitude', String(opts.amplitude)); }
   const child = cp.spawn(b.dotnet, args, { stdio: ['pipe', 'pipe', 'pipe'] });
   let err = '';
   child.stderr.on('data', (d) => { err += d; });
@@ -323,7 +325,7 @@ async function join(svc, opts) {
 async function room(list) {
   const members = [];
   for (let i = 0; i < list.length; i++) {
-    const l = await start({ clock: 'real', wire: 'fake', tone: list[i].tone, name: list[i].name });
+    const l = await start({ clock: 'real', wire: 'fake', tone: list[i].tone, amplitude: list[i].amplitude, name: list[i].name });
     members.push({ l: l, peer: i + 1, n: 0, opts: list[i] });
   }
   function sayTo(m, msg) { return m.n ? m.l.send({ do: 'say', n: m.n, msg: msg }) : Promise.resolve(); }

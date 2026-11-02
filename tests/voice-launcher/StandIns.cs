@@ -33,6 +33,11 @@ namespace Thornswood
     sealed class VoiceAudio : IDisposable
     {
         public static double Tone = 440;
+        // The microphone's level. 0.3, a voice in front reading about 0.25,
+        // suits one or two voices; four at once at 0.3 sum past full scale
+        // in the mix (VoiceMix.Render holds it inside -1 to 1), so a harness
+        // with four sets it lower (test-voice-moved-clients.js).
+        public static double Amplitude = 0.3;
         public static bool Running = true;
         public static VoiceAudio Last;
 
@@ -66,7 +71,7 @@ namespace Thornswood
             {
                 var frame = new float[VoiceMix.Frame];
                 for (int i = 0; i < frame.Length; i++)
-                    frame[i] = 0.3f * (float)Math.Sin(2 * Math.PI * Tone * (n * VoiceMix.Frame + i) / VoiceMix.Rate);
+                    frame[i] = (float)(Amplitude * Math.Sin(2 * Math.PI * Tone * (n * VoiceMix.Frame + i) / VoiceMix.Rate));
                 OnFrame(frame);
                 mix.Render(stereo, VoiceMix.Frame);
                 lock (gate)

@@ -76,18 +76,31 @@ yes('and reads the silence marks off the rows that moved', /noteRows\(m\.who \|\
   The launcher's voice, with four others talking, each a tone of their own.
   Positions are Skyrim units, 70 to the metre; everybody here is within a
   metre of me, where a local voice is at full level.
+
+  Each microphone is at 0.1, not the driver's usual 0.3 (#5456). Four tones
+  at 0.3, all off to one side, sum past full scale in the mix, which
+  VoiceMix.Render holds inside -1 to 1, and a clipped mix reads each tone
+  lower by an amount that turns on how the four line up: measured on 2 Nov
+  2026, the same four at the same spot read 0.130, 0.111, 0.080 and 0.122,
+  and the one at 700 Hz read 0.060 with the positions changed, and 0.043 on
+  the Linux gate. At 0.1 nothing clips: each tone reads what it reads alone
+  (500 Hz 0.051 alone and in the four), wherever the four stand, run after
+  run. What is left between the tones, 0.034 to 0.051, is the HRTF at that
+  angle, which hears pitches differently; a voice not mixed in reads under
+  0.001.
 */
 const TONES = { 2: 500, 3: 600, 4: 700, 5: 800 };
-const HEARD = 0.05, SILENT = 0.02;
+const AMPLITUDE = 0.1;
+const HEARD = 0.02, SILENT = 0.005;
 const settle = () => new Promise((ok) => setTimeout(ok, 750));
 
 async function launcher() {
   const r = await VL.room([
-    { profileId: 1, name: 'me', tone: 440 },
-    { profileId: 2, name: 'still', tone: TONES[2] },
-    { profileId: 3, name: 'walker', tone: TONES[3] },
-    { profileId: 4, name: 'leaver', tone: TONES[4] },
-    { profileId: 5, name: 'arrival', tone: TONES[5] }
+    { profileId: 1, name: 'me', tone: 440, amplitude: AMPLITUDE },
+    { profileId: 2, name: 'still', tone: TONES[2], amplitude: AMPLITUDE },
+    { profileId: 3, name: 'walker', tone: TONES[3], amplitude: AMPLITUDE },
+    { profileId: 4, name: 'leaver', tone: TONES[4], amplitude: AMPLITUDE },
+    { profileId: 5, name: 'arrival', tone: TONES[5], amplitude: AMPLITUDE }
   ]);
   try {
     const me = r.at(0);
