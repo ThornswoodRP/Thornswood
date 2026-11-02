@@ -16,10 +16,11 @@
 
   Nobody has stood up a relay, so what matters first is that this changes
   nothing while the file is not there. That is held here byte for byte: the
-  /ice answer every page reads and its headers, the fields of /health, and the
-  log, as the service wrote them before the file existed. The three pages each
-  start from a list of their own and swap it for whatever /ice says, so the
-  same answer means the same pages.
+  /ice answer every client reads and its headers, the fields of /health, and
+  the log, as the service wrote them before the file existed. The clients (the
+  game's page, and the launcher's voice, C# in VoiceSession.cs since #4823)
+  each start from a list of their own and swap it for whatever the service
+  hands them, so the same answer means the same clients.
 
   Then the file itself: made into credentials the way coturn's REST scheme
   expects, read correctly whatever encoding a Windows box wrote it in, never
@@ -184,20 +185,38 @@ function leaks(r, key) {
   yes('and still says there is no relay', !!r.health && r.health.turn === 'none');
   yes('the log is the two lines every start writes, and nothing about a relay', r.log === startLog(r.port));
 
-  // Each page starts from its own list and swaps in whatever /ice answers, so
-  // an unchanged answer leaves every page exactly where it started.
-  const pages = [
-    ['the in-game page', path.join(REPO, 'game', 'ui', 'thornswood-voice.js')],
-    ['the launcher overlay', path.join(REPO, 'launcher', 'voice-host.html')]
-  ];
-  for (const p of pages) {
+  // Each client starts from its own list and swaps in whatever /ice answers,
+  // so an unchanged answer leaves every client exactly where it started.
+  {
     let text = '';
-    try { text = fs.readFileSync(p[1], 'utf8'); } catch (e) { text = ''; }
+    try { text = fs.readFileSync(path.join(REPO, 'game', 'ui', 'thornswood-voice.js'), 'utf8'); } catch (e) { text = ''; }
     const m = /(?:var|let) ICE = (\[[^\n]*?\]);/.exec(text);
     let start = null;
     try { start = m ? vm.runInNewContext('(' + m[1] + ')') : null; } catch (e) { start = null; }
-    yes(p[0] + ' starts from the very list /ice hands it, so reading it changes nothing',
+    yes('the in-game page starts from the very list /ice hands it, so reading it changes nothing',
         !!start && !!r.ice && same(start, r.ice));
+  }
+  {
+    // The launcher's voice is C# since #4823: VoiceSession.cs starts from
+    // IceServer.From(urls, username, credential), read here as the entry
+    // /ice would hand for it, and takes the roster's iceServers (TakeIce)
+    // in its place for every connection it gathers with.
+    let text = '';
+    try { text = fs.readFileSync(path.join(REPO, 'launcher', 'app', 'VoiceSession.cs'), 'utf8'); } catch (e) { text = ''; }
+    const m = /List<IceServer> ICE = IceServer\.From\(new\[\] \{ ((?:"[^"]*"(?:, )?)+) \}, "([^"]*)", "([^"]*)", null\);/.exec(text);
+    let start = null;
+    if (m) {
+      const urls = m[1].match(/"[^"]*"/g).map((u) => u.slice(1, -1));
+      const one = { urls: urls.length === 1 ? urls[0] : urls };
+      if (m[2]) { one.username = m[2]; }
+      if (m[3]) { one.credential = m[3]; }
+      start = [one];
+    }
+    yes('the launcher\'s voice starts from the very list /ice hands it, so reading it changes nothing',
+        !!start && !!r.ice && same(start, r.ice));
+    yes('and it takes the list the service hands it in place of its own, and gathers with that',
+        /if \(m\.TryGetProperty\("iceServers", out ice\)\) TakeIce\(ice\);/.test(text) && /\n\s*ICE = next;/.test(text) &&
+        /pc\.Gather\(ICE\);/.test(text));
   }
 
   // ---------------------------------------------------------------------------

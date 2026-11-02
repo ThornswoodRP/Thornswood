@@ -12,8 +12,6 @@
                     "admin":  "needs Administrator: install, service, task registration, ACL, firewall, keys, secrets, or work outside the gate verbs",
                     "transport":  "a helper that carries what its caller hands it; the caller is the row that counts"
                 },
-    "scriptCount":  80,
-    "callCount":  327,
     "calls":  [
                   {
                       "script":  "scripts/deploy/Artifact.ps1",
@@ -1753,78 +1751,6 @@
                       "reason":  "reads files, settings, logs or status only"
                   },
                   {
-                      "script":  "scripts/release/Publish-Installer.ps1",
-                      "scope":  "Remote",
-                      "via":  "Invoke-ThornswoodRemote",
-                      "anchor":  "return Invoke-ThornswoodRemote -Target \"$User@$Vps\" -SshArgs $ssh -Script $script",
-                      "does":  "sends a script or file for its caller",
-                      "class":  "transport",
-                      "reason":  "carries what its caller hands it; each caller is mapped"
-                  },
-                  {
-                      "script":  "scripts/release/Publish-Installer.ps1",
-                      "scope":  "\u003ctop\u003e",
-                      "via":  "scp",
-                      "anchor":  "Invoke-ThornswoodNative { \u0026 scp @ssh $pair[0] \"$User@${Vps}:$Root/files/$($pair[1])\" }",
-                      "does":  "uploads the installer to the site files",
-                      "class":  "feed-send",
-                      "reason":  "files store"
-                  },
-                  {
-                      "script":  "scripts/release/Publish-Installer.ps1",
-                      "scope":  "\u003ctop\u003e",
-                      "via":  "Remote",
-                      "anchor":  "$listCheck = @(Remote @\"",
-                      "does":  "reads whether the site's files.json parses, before the installer is sent",
-                      "class":  "read-status",
-                      "reason":  "reads the files store and changes nothing"
-                  },
-                  {
-                      "script":  "scripts/release/Publish-Installer.ps1",
-                      "scope":  "\u003ctop\u003e",
-                      "via":  "Remote",
-                      "anchor":  "$listWrite = @(Remote @\"",
-                      "does":  "writes the feed, news or files store",
-                      "class":  "feed-send",
-                      "reason":  "writes the feed, news or files store"
-                  },
-                  {
-                      "script":  "scripts/release/Publish-Installer.ps1",
-                      "scope":  "\u003ctop\u003e",
-                      "via":  "Remote",
-                      "anchor":  "$made = @(Remote \"New-Item -ItemType Directory -Force -Path \u0027$rootWin\\$incoming\u0027 | Out-Null; \u0027INCOMING|ready\u0027\")",
-                      "does":  "makes the folder beside the site files that an installer signed on GitHub is checked in before it goes into files",
-                      "class":  "feed-send",
-                      "reason":  "files store"
-                  },
-                  {
-                      "script":  "scripts/release/Publish-Installer.ps1",
-                      "scope":  "\u003ctop\u003e",
-                      "via":  "scp",
-                      "anchor":  "Invoke-ThornswoodNative { \u0026 scp @ssh $exeItem.FullName \"$User@${Vps}:$Root/$incoming/$exeOut\" }",
-                      "does":  "uploads an installer signed on GitHub beside the site files, to be checked there",
-                      "class":  "feed-send",
-                      "reason":  "files store"
-                  },
-                  {
-                      "script":  "scripts/release/Publish-Installer.ps1",
-                      "scope":  "\u003ctop\u003e",
-                      "via":  "Remote",
-                      "anchor":  "$null = Remote \"Remove-Item -LiteralPath \u0027$rootWin\\$incoming\\$exeOut\u0027 -Force -ErrorAction SilentlyContinue\"",
-                      "does":  "removes an installer the publish gate refused from beside the site files",
-                      "class":  "feed-send",
-                      "reason":  "files store"
-                  },
-                  {
-                      "script":  "scripts/release/Publish-Installer.ps1",
-                      "scope":  "\u003ctop\u003e",
-                      "via":  "Remote",
-                      "anchor":  "$moved = @(Remote \"Move-Item -LiteralPath \u0027$rootWin\\$incoming\\$exeOut\u0027 -Destination \u0027$rootWin\\files\\$exeOut\u0027 -Force; \u0027MOVED|$exeOut\u0027\")",
-                      "does":  "moves an installer that passed the publish gate into the site files",
-                      "class":  "feed-send",
-                      "reason":  "files store"
-                  },
-                  {
                       "script":  "scripts/release/Publish-Server.ps1",
                       "scope":  "Send-ShapeLibs",
                       "via":  "scp",
@@ -2891,7 +2817,7 @@
                       "scope":  "Invoke-Box",
                       "via":  "Invoke-ThornswoodRemote",
                       "anchor":  "$out = @(Invoke-ThornswoodRemote -Target \"$User@$Vps\" -SshArgs $ssh -Bypass -Script ($pre + [IO.File]::ReadAllText($BoxScript)) |",
-                      "does":  "runs scripts/dev/Trace-Gate-Box.ps1 in one of its modes: the self-test, starting and stopping the gate\u0027s ETW trace session, reading the trace against the run\u0027s start log, emptying C:\\Thornswood-Trace, or installing, reporting on or removing the trace task that traces every main build (scripts/dev/Trace-Gate-Task.ps1, a SYSTEM scheduled task, and the trace and gate-map folders in each build runner\u0027s folder) (#3114)",
+                      "does":  "runs scripts/dev/Trace-Gate-Box.ps1 in one of its modes: the self-test, emptying C:\\Thornswood-Trace, or installing, reporting on or removing the trace task that traces every main build (scripts/dev/Trace-Gate-Task.ps1, a SYSTEM scheduled task, and the trace and gate-map folders in each build runner\u0027s folder) (#3114)",
                       "class":  "admin",
                       "reason":  "only an administrator can start a kernel trace session, set the trace folders\u0027 ACLs and register a SYSTEM task"
                   },

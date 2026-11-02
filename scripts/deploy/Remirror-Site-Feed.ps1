@@ -68,9 +68,8 @@
   list, send and rename happens in that folder and nothing connects to the
   VPS. The tests use it, with a copy of site\server.js serving that folder.
 
-  Nothing about the installer's VirusTotal report is this script's business.
-  That upload belongs to whoever publishes the installer, and
-  scripts\release\Publish-Installer.ps1 says what the site needs from it.
+  Nothing about the setup program is this script's business: since #4824 it
+  is the launcher, released on GitHub, and the site sends people there.
 
   Reads this machine's working copy of the feed, and writes only to the site's
   feed folders.

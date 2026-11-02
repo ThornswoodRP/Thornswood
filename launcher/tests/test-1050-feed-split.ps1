@@ -2,7 +2,6 @@
   test-1050-feed-split.ps1
 
       pwsh -NoProfile -File .\launcher\tests\test-1050-feed-split.ps1
-      pwsh -NoProfile -File .\launcher\tests\test-1050-feed-split.ps1 -OldSrc <launcher\app of an older launcher>, <another>
 
   The launcher half of the split feed (#1050, Patrick's answer of 19 Oct).
   Once a channel's minLauncher reads it, the site answers version.json as the
@@ -22,34 +21,28 @@
     - Join-FeedSettings (scripts\release\Feed-Json.ps1), which every script
       that reads the site's feed goes through, gives back the whole feed
     - no launcher source at or past the split's first number lacks the reader
-    - with -OldSrc, each older launcher reads the split version.json as a feed
-      that is behind: no record to sync, no pack, and the launcher update it
-      needs, which is all a launcher below minLauncher has to do
 
-  HOW. Compiles launcher\app\*.cs with the compiler and references the build
-  uses (tests\Launcher-Csc.ps1) and calls Updater.ReadFeed by reflection,
-  with a server of its own on 127.0.0.1. Runs under Windows PowerShell 5.1
-  and restarts itself there from pwsh, because the launcher runs on the .NET
-  Framework. Nothing under C:\Thornswood is read or written.
+  HOW. Builds the launcher project the way the build does (tests\Launcher-Csc.ps1,
+  Add-LauncherAssembly), loads it into this PowerShell, which runs on .NET 10
+  as the launcher does, and calls Updater.ReadFeed by reflection, with a
+  server of its own on 127.0.0.1. Runs on any machine with the .NET SDK,
+  but the settings downloaded and kept say SKIP off Windows: keeping them
+  swaps the file in with MoveFileEx (OwnGame.WriteRecord). Nothing under
+  C:\Thornswood is read or written.
+
+  Until #4823 it also took -OldSrc, the sources of older launchers, and
+  compiled each to show it read the split version.json as a feed that is
+  behind. Those launchers were built for the .NET Framework (WPF, and
+  JavaScriptSerializer for the feed), which the .NET 10 SDK does not compile,
+  so that part went with the .NET Framework compiler.
 #>
 [CmdletBinding()]
-param([string]$Src, [string[]]$OldSrc = @())
+param()
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's SDK and settings
 $Here = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-if (-not $Src) { $Src = Join-Path $Here 'launcher\app' }
-
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  this runs the launcher''s code on the .NET Framework the launcher runs on, which only Windows has'; exit 0 }
-if ($PSVersionTable.PSEdition -eq 'Core') {
-    $winps = Get-WindowsPowerShell
-    $relaunch = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-Src', $Src)
-    if ($OldSrc.Count) { $relaunch += '-OldSrc'; $relaunch += ($OldSrc -join ',') }
-    & $winps @relaunch
-    exit $LASTEXITCODE
-}
-if ($OldSrc.Count -eq 1 -and $OldSrc[0] -match ',') { $OldSrc = @($OldSrc[0] -split ',') }
+$Src = Join-Path (Join-Path $Here 'launcher') 'app'
 
 $script:pass = 0
 $script:fail = 0
@@ -162,33 +155,16 @@ function Run {
     Yes ('version.json names the settings by their sha256 ({0} bytes; the whole feed is {1})' -f $topBytes.Length, $wholeJson.Length) ([string]$top.settings.sha256 -eq $setSha)
 
     # ---- the launcher -------------------------------------------------------
-    Yes 'the compiler the build runs is on this machine' (Test-Path -LiteralPath $LauncherCsc)
-    $refs = @(); $missing = @()
-    foreach ($n in @($LauncherNeeded)) { $p = Find-LauncherRef $n; if ($p) { $refs += $p } else { $missing += $n } }
-    foreach ($n in @($LauncherLib)) {
-        $p = $n
-        if (Test-Path -LiteralPath $p) { $refs += $p } else { $missing += $n }
+    Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
+    if (-not (Test-Path -LiteralPath $LauncherDotnet)) { return }
+    $asm = $null
+    try { $asm = Add-LauncherAssembly }
+    catch {
+        Yes 'the launcher project builds' $false
+        foreach ($l in @(($_.Exception.Message -split "`r?`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20)) { Write-Host "      $l" }
+        return
     }
-    Yes ('every reference is on this machine' + $(if ($missing.Count) { ', missing ' + ($missing -join ', ') } else { '' })) ($missing.Count -eq 0)
-    if ($missing.Count -or -not (Test-Path -LiteralPath $LauncherCsc)) { return }
-
-    function Build([string]$from, [string]$name) {
-        $dll = Join-Path $tmp ($name + '.dll')
-        $cscArgs = @('/noconfig', '/nologo', '/target:library', '/platform:anycpu', "/langversion:$LauncherLangVersion", "/out:$dll")
-        foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-        foreach ($f in @(Get-ChildItem (Join-Path $from '*.cs') -File)) { $cscArgs += $f.FullName }
-        $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-        $said = & $LauncherCsc @cscArgs 2>&1
-        $rc = $LASTEXITCODE
-        $ErrorActionPreference = $old
-        if ($rc -ne 0 -or -not (Test-Path -LiteralPath $dll)) {
-            foreach ($l in @($said | Where-Object { "$_" -match 'error' } | Select-Object -First 20)) { Write-Host "      $l" }
-            return $null
-        }
-        return [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($dll))
-    }
-    $asm = Build $Src 'Thornswood'
-    Yes 'the launcher compiles with the compiler the build runs' ($null -ne $asm)
+    Yes 'the launcher project builds' ($null -ne $asm)
     if ($null -eq $asm) { return }
     $U = $asm.GetType('Thornswood.Updater'); $P = $asm.GetType('Thornswood.Paths'); $C = $asm.GetType('Thornswood.Config')
     $flags = [Reflection.BindingFlags]'Static, Public, NonPublic'
@@ -216,8 +192,8 @@ function Run {
         $v.maxOnline -eq 30 -and $v.collectionRevision -eq 4 -and @($v.depots).Count -eq 2 -and $v.discordAppId -eq '123456789012345678' -and $v.voiceUrl -eq '')
     Yes '  with the update fields from version.json' ($v.launcherVersion -eq '1.2.6' -and $v.minLauncher -eq '1.2.6' -and $v.launcherUrl -eq ($A + (Hex '1')) -and
         $null -ne $v.packs -and @($v.packs).Count -eq 0 -and $null -ne $v.news)
-    Yes '  the record, the news file and the client runtime at the assets folder plus their sha256' (
-        $v.record.url -eq ($A + (Hex '3')) -and $v.record.notes -eq 'The holds, the boards' -and $v.newsRef.url -eq ($A + (Hex '7')) -and $v.clientRuntime.url -eq ($A + (Hex '2')))
+    Yes '  the record and the client runtime at the assets folder plus their sha256' (
+        $v.record.url -eq ($A + (Hex '3')) -and $v.record.notes -eq 'The holds, the boards' -and $v.clientRuntime.url -eq ($A + (Hex '2')))
     Yes '  and the signed manifest and its catalog the same way' ($v.manifestRef.url -eq ($A + (Hex '5')) -and $v.manifestRef.catalogUrl -eq ($A + (Hex '6')))
 
     # 2. not on disk and nothing to fetch with: the copy kept on disk is not believed
@@ -231,15 +207,23 @@ function Run {
     $srv.Start()
     try {
         $feedUrl = 'http://127.0.0.1:' + $srv.Port + '/feed/version.json'
-        $srv.Body = $setBytes
-        $v = Read-Feed $topBytes $feedUrl $cfg
-        Yes 'the settings are downloaded from the feed''s assets folder by their sha256' ($srv.Count() -eq 1 -and $srv.Seen[0] -eq ('/feed/assets/' + $setSha))
-        Yes '  read whole, every address beside the feed' ($v.serverAddress -eq '203.0.113.7' -and $v.record.url -eq ('http://127.0.0.1:' + $srv.Port + '/feed/assets/' + (Hex '3')))
-        Yes '  and kept in Profile\feed-settings.json' ((Test-Path -LiteralPath $cache) -and (ShaOf ([IO.File]::ReadAllBytes($cache))) -eq $setSha)
-        [void](Read-Feed $topBytes $feedUrl $cfg)
-        Yes '  the next check asks for nothing more' ($srv.Count() -eq 1)
+        # Keeping them goes through OwnGame.WriteRecord, which swaps the file
+        # in with MoveFileEx, so the download and keep run on Windows only.
+        # The refusal writes nothing, and runs everywhere.
+        if ($OnWindows) {
+            $srv.Body = $setBytes
+            $v = Read-Feed $topBytes $feedUrl $cfg
+            Yes 'the settings are downloaded from the feed''s assets folder by their sha256' ($srv.Count() -eq 1 -and $srv.Seen[0] -eq ('/feed/assets/' + $setSha))
+            Yes '  read whole, every address beside the feed' ($v.serverAddress -eq '203.0.113.7' -and $v.record.url -eq ('http://127.0.0.1:' + $srv.Port + '/feed/assets/' + (Hex '3')))
+            Yes '  and kept in Profile\feed-settings.json' ((Test-Path -LiteralPath $cache) -and (ShaOf ([IO.File]::ReadAllBytes($cache))) -eq $setSha)
+            [void](Read-Feed $topBytes $feedUrl $cfg)
+            Yes '  the next check asks for nothing more' ($srv.Count() -eq 1)
+            Remove-Item -LiteralPath $cache
+        }
+        else {
+            Write-Host 'SKIP  the settings downloaded and kept in Profile: keeping them swaps the file in with MoveFileEx, which only Windows has'
+        }
 
-        Remove-Item -LiteralPath $cache
         Restart
         $srv.Body = [Text.Encoding]::UTF8.GetBytes('{"serverAddress":"6.6.6.6"}')
         $why = Threw { Read-Feed $topBytes $feedUrl $cfg }
@@ -256,7 +240,7 @@ function Run {
     Yes ('settings named without a sha256 are a feed it cannot read: ' + $why) ($why -match 'without a checksum')
 
     # ---- Join-FeedSettings, for every script that reads the site's feed -----
-    . (Join-Path $Here 'scripts\release\Feed-Json.ps1')
+    . (Join-Path (Join-Path (Join-Path $Here 'scripts') 'release') 'Feed-Json.ps1')
     $doc = [Text.Encoding]::UTF8.GetString($topBytes) | ConvertFrom-Json
     $joined = Join-FeedSettings $doc 'https://thornswood.net/feed/version.json' { param($u) if ($u -ne ($A + $setSha)) { throw "asked $u" }; return , $setBytes }
     function Sorted($x) {
@@ -273,40 +257,20 @@ function Run {
     Yes '  a feed with no settings comes back as it is' ([object]::ReferenceEquals((Join-FeedSettings $plain 'https://thornswood.net/feed/version.json'), $plain))
 
     # ---- no launcher at or past the split without the reader ----------------
-    # Its own name: PowerShell names are not case sensitive, so a $src here
-    # would replace the -Src folder with Updater.cs's text, and the
-    # FeedSettings.cs check below would throw once the launcher reached the split.
-    $updaterText = [IO.File]::ReadAllText((Join-Path $Src 'Updater.cs'))
-    $ver = [regex]::Match($updaterText, 'public const string Version = "([^"]+)"').Groups[1].Value
+    # Since #4825 no source file holds the number: it is the build's, worked
+    # out from this checkout's history (LauncherVersion.ps1).
+    . (Join-Path (Join-Path (Join-Path $Here 'scripts') 'release') 'LauncherVersion.ps1')
+    $ver = ''
+    try { $ver = Get-LauncherVersion -RepoDir $Here }
+    catch { Write-Host ('      ' + $_.Exception.Message) }
     # The site is server.js over its modules in site\lib since #5357.
     . (Join-Path $Here 'tests\SiteFiles.ps1')
     $site = Get-SiteSource (Join-Path $Here 'site')
     $gate = [regex]::Match($site, "const FEED_SPLIT_LAUNCHER = '([^']+)'").Groups[1].Value
-    . (Join-Path $Here 'scripts\release\Release-Baseline.ps1')
+    . (Join-Path (Join-Path (Join-Path $Here 'scripts') 'release') 'Release-Baseline.ps1')
     $cmp = Compare-FeedVersion $ver $gate
     Yes ("this launcher source ({0}) is below the split's {1}, or reads the settings file" -f $ver, $gate) (
         $gate -and $null -ne $cmp -and ($cmp -lt 0 -or (Test-Path -LiteralPath (Join-Path $Src 'FeedSettings.cs'))))
-
-    # ---- older launchers: behind, and able to update themselves -------------
-    foreach ($o in @($OldSrc | Where-Object { $_ })) {
-        $oa = Build $o ('old-' + [Guid]::NewGuid().ToString('N'))
-        $ov = [regex]::Match([IO.File]::ReadAllText((Join-Path $o 'Updater.cs')), 'public const string Version = "([^"]+)"').Groups[1].Value
-        Yes "launcher $ov compiles" ($null -ne $oa)
-        if ($null -eq $oa) { continue }
-        $oDoc = $oa.GetType('Thornswood.VersionDoc'); $oUpd = $oa.GetType('Thornswood.Updater'); $oPaths = $oa.GetType('Thornswood.Paths')
-        $oProfile = Join-Path $tmp ('p-' + $ov); $null = New-Item -ItemType Directory -Force -Path $oProfile
-        $oPaths.GetField('ProfileDir').SetValue($null, $oProfile)
-        foreach ($f in 'AppliedFile') { $fi = $oPaths.GetField($f); if ($fi) { $fi.SetValue($null, (Join-Path $oProfile 'applied.txt')) } }
-        $d = $oDoc.GetMethod('Parse', $flags, $null, @([byte[]]), $null).Invoke($null, @(, $topBytes))
-        $rec = $oDoc.GetField('record'); $recV = if ($rec) { $rec.GetValue($d) } else { $null }
-        Yes "  $ov reads the split version.json: launcher 1.2.6 at its address, no record to sync, packs and news empty" (
-            $null -ne $d -and $d.launcherVersion -eq '1.2.6' -and $d.launcherUrl -eq ($A + (Hex '1')) -and $null -eq $recV -and
-            $null -ne $d.packs -and @($d.packs).Count -eq 0 -and $null -ne $d.news)
-        $pend = $oUpd.GetMethod('Pending', $flags).Invoke($null, @($d))
-        $newer = $oUpd.GetMethod('IsNewer', $flags).Invoke($null, @('1.2.6', $ov))
-        Yes "  and is offered only the launcher update" (@($pend).Count -eq 0 -and $newer)
-    }
-    if (-not $OldSrc.Count) { Write-Host '      (no -OldSrc: older launchers not checked here)' }
 }
 
 try { Run }

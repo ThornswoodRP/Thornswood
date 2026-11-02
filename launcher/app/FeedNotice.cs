@@ -22,8 +22,8 @@ namespace Thornswood
     ///   minLauncher   a launcher older than this version holds Play.
     ///
     /// Pure on purpose: it takes the document and the running version and
-    /// says what to show, so launcher\tests\test-feed-notice.ps1 compiles this file
-    /// with Config.cs and asks it every case without a window.
+    /// says what to show, so launcher\tests\test-feed-notice.ps1 builds the launcher
+    /// and asks it every case through VersionDoc.Parse without a window.
     ///
     /// It is a kill switch, so every doubt comes out open. A document that was
     /// never read, a field missing from an older feed, a minimum that is not a

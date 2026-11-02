@@ -36,6 +36,17 @@ namespace Thornswood
         public static List<Issue> LastIssues;
 
         /// <summary>
+        /// The launcher waiting on this install's Velopack channel, by its
+        /// number, or null when there is none (#4825). Set by the shell from
+        /// the launcher check's own answer (LauncherAnswer in ShellUpdate.cs),
+        /// which lands before the feed's answer that FeedSays is given, so the
+        /// card and the update card above Play go by the same launcher check.
+        /// The feed's launcherVersion and launcherUrl are not read for this:
+        /// they named the launcher's own self update, which Velopack replaced.
+        /// </summary>
+        public static volatile string LauncherWaiting;
+
+        /// <summary>
         /// Takes one kind off LastIssues once the shell has put it right some
         /// other way: the bring-up-to-date that finished, the update that went
         /// in. The next Look finds it again if it is still there.
@@ -137,10 +148,11 @@ namespace Thornswood
                 }
             }
             if (v == null) return;
-            bool newLauncher = Updater.IsNewer(v.launcherVersion, Updater.Version) && !string.IsNullOrEmpty(v.launcherUrl);
-            List<Pack> packs = Updater.Pending(v);
+            string launcher = LauncherWaiting;
+            bool newLauncher = !string.IsNullOrEmpty(launcher);
+            List<Pack> packs = Updater.Pending(cfg, v);
             var parts = new List<string>();
-            if (newLauncher) parts.Add("launcher " + v.launcherVersion + ", and this one is " + Updater.Version);
+            if (newLauncher) parts.Add("launcher " + launcher + ", and this one is " + Updater.Version);
             if (packs.Count > 0) parts.Add(packs.Count + (packs.Count == 1 ? " mod update" : " mod updates"));
             if (parts.Count > 0)
                 l.Add(Issue.Of(IssueKind.Update, "An update is waiting on the update feed: " + string.Join("; ", parts.ToArray()) + ".",
@@ -216,7 +228,7 @@ namespace Thornswood
                 foreach (Issue i in l) if (i.Kind == IssueKind.Update) waiting = true;
                 if (waiting)
                     l.Add(Issue.Of(IssueKind.OursLost, what, "The update Fix takes puts them back.", "Install now, on the card above Play, puts them back.", true));
-                else if (v != null && v.record != null)
+                else if (Updater.CanResync(cfg, v))
                     l.Add(Issue.Of(IssueKind.OursLost, what, "Fix checks every file of this release and fetches the ones that are missing or changed.",
                         "The release's files could not be fetched; its line in the log says why. Press Fix again when thornswood.net answers.", true));
                 else
@@ -398,7 +410,7 @@ namespace Thornswood
                 }
                 // Thornswood's own files, from the release this install is
                 // on, when no update is waiting to bring them anyway.
-                if (kinds.Contains(IssueKind.OursLost) && !kinds.Contains(IssueKind.Update) && v != null && v.record != null)
+                if (kinds.Contains(IssueKind.OursLost) && !kinds.Contains(IssueKind.Update) && Updater.CanResync(cfg, v))
                 {
                     try
                     {

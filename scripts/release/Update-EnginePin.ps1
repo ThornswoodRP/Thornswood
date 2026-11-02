@@ -151,7 +151,7 @@ $body.Add('')
 # as the block's own steps and refuses their code (#5240).
 $body.Add('### Which parts it touches, and what runs after the merge'); $body.Add('')
 $body.Add('- [x] The live server build, or the live settings')
-$body.Add('- [x] The launcher (`launcher\app`, `launcher\ui.xaml`), the game plugins (`game\plugins`) or anything else in a pack')
+$body.Add('- [x] The launcher (`launcher\app`), the game plugins (`game\plugins`) or anything else in a pack')
 $body.Add('- [x] The public pages (`site\data\site\*.md`)')
 if ($TitleFile) { [IO.File]::WriteAllText($TitleFile, $title, (New-Object Text.UTF8Encoding($false))) }
 if ($BodyFile) { [IO.File]::WriteAllText($BodyFile, (($body -join "`n") + "`n"), (New-Object Text.UTF8Encoding($false))) }

@@ -41,7 +41,25 @@
 
   game-files.json:
       { schema: 1, commit, channel: "dev", from: <the record id staged>,
-        files: [ { path: "Data/...", size, sha256 } ] }
+        files: [ { path: "Data/...", size, sha256 } ],
+        gone:  [ { path: "Data/...", value } ] }
+
+  WHAT IS GONE. On dev the launcher takes the game files out of the Velopack
+  package (launcher/app/SyncPackage.cs), so the list also says which files
+  the release no longer ships, in a release record's own words (Sync.cs,
+  :gone:): "always" for a path taken out of every install, the sha256 of the
+  bytes once shipped for a file taken out only while it still has them, and
+  any other value for a file of ours left alone once Vortex deploys that
+  path. It is, by path:
+    - every :gone: entry of the record staged (-Root's record\record.json),
+      as the Ship that published it judged it (Publish-Update.ps1);
+    - every file the Release before listed (-PreviousList) and this one does
+      not, by the sha256 it had there;
+    - every entry of the Release before's own gone list with a sha256 for a
+      value and no word in this record, so a launcher that skipped releases
+      still takes out what each of them dropped.
+  A path this list ships is never gone. The record's word on a path goes
+  over the Release before's.
 
   Talks to the site (https) and, through New-FeedRoot and Build-Front, to
   GitHub and the npm registry. Never to the VPS. Writes only under -Root and
@@ -58,12 +76,18 @@
   The commit the files are built from (40 hex), written into the list.
   git rev-parse HEAD unless given.
 
+.PARAMETER PreviousList
+  game-files.json of the build Release before, already held to the sha256
+  that Release's manifest names (merge-release.yml), for the gone list.
+  Left out when there is no Release before.
+
 .PARAMETER SkipStage
   Tests only: builds the zip and the list from -Root as it is, without
-  steps 1 to 4.
+  steps 1 to 4. The gone list still reads -Root's record\record.json when
+  it is there.
 
 .EXAMPLE
-  pwsh -File scripts/release/Build-GameFiles.ps1 -Out $env:RUNNER_TEMP\game
+  pwsh -File scripts/release/Build-GameFiles.ps1 -Out $env:RUNNER_TEMP\game -PreviousList $env:RUNNER_TEMP\previous-game\game-files.json
   What merge-release.yml runs.
 #>
 [CmdletBinding()]
@@ -71,6 +95,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Out,
     [string]$Root,
     [string]$Commit,
+    [string]$PreviousList,
     [switch]$SkipStage
 )
 $ErrorActionPreference = 'Stop'
@@ -86,12 +111,13 @@ if ($Commit -notmatch '^[0-9a-f]{40}$') { Stop-Build "the commit '$Commit' is no
 if (-not $Root) { $Root = Join-Path ([IO.Path]::GetTempPath()) 'thornswood-game-files' }
 $game = Join-Path $Root 'Game'
 
+. (Join-Path $Here 'Read-JsonFile.ps1')
+. (Join-Path $Here 'Release-Baseline.ps1')
+
 $from = ''
 if (-not $SkipStage) {
     # Which release is staged, for the list: the record the dev feed names.
-    . (Join-Path $Here 'Read-JsonFile.ps1')
     . (Join-Path $Here 'Feed-Store.ps1')
-    . (Join-Path $Here 'Release-Baseline.ps1')
     try { $ptr = Get-FeedBaselinePointer (Read-SiteFeed 'dev' '') } catch { Stop-Build ('the dev feed could not be read: ' + $_.Exception.Message) }
     if ($null -eq $ptr) { Stop-Build 'the dev feed names no record of its last release, so there is nothing to build over' }
     $from = [string]$ptr.id
@@ -158,9 +184,48 @@ try {
     } finally { $zip.Dispose() }
 } finally { $fs.Dispose() }
 
-$doc = [ordered]@{ schema = 1; commit = $Commit; channel = 'dev'; from = $from; files = $list.ToArray() }
+# ---- what is gone (header, WHAT IS GONE)
+$gone = New-Object 'System.Collections.Generic.Dictionary[string,string]' ([StringComparer]::OrdinalIgnoreCase)
+$recordMap = @{}
+$recordFile = Join-Path (Join-Path $Root 'record') 'record.json'
+if (Test-Path -LiteralPath $recordFile -PathType Leaf) { $recordMap = Read-BaselineFile $recordFile }
+elseif (-not $SkipStage) { Stop-Build "New-FeedRoot.ps1 left no record at $recordFile" }
+$said = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+foreach ($k in @($recordMap.Keys)) {
+    if ($k.StartsWith(':gone:')) { [void]$said.Add($k.Substring(6).Replace('\', '/')) }
+    elseif (-not $k.StartsWith(':')) { [void]$said.Add($k.Replace('\', '/')) }
+}
+if ($PreviousList) {
+    if (-not (Test-Path -LiteralPath $PreviousList -PathType Leaf)) { Stop-Build "there is no list of the Release before at $PreviousList" }
+    $prevDoc = ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($PreviousList)) $PreviousList
+    if ($null -eq $prevDoc -or [int]$prevDoc.schema -ne 1 -or -not $prevDoc.PSObject.Properties['files']) { Stop-Build "$PreviousList is not a game-files.json this reads" }
+    if ($prevDoc.PSObject.Properties['gone']) {
+        foreach ($g in @($prevDoc.gone)) {
+            $gp = ([string]$g.path).Replace('\', '/')
+            $gv = ([string]$g.value).ToLowerInvariant()
+            if ($gp -and $gv -match '^[0-9a-f]{64}$' -and -not $said.Contains($gp)) { $gone[$gp] = $gv }
+        }
+    }
+    foreach ($f in @($prevDoc.files)) {
+        $fp = ([string]$f.path).Replace('\', '/')
+        $fs256 = ([string]$f.sha256).ToLowerInvariant()
+        if ($fs256 -notmatch '^[0-9a-f]{64}$') { Stop-Build "$PreviousList lists $fp without a sha256" }
+        $gone[$fp] = $fs256
+    }
+}
+foreach ($k in @($recordMap.Keys)) {
+    if ($k.StartsWith(':gone:')) { $gone[$k.Substring(6).Replace('\', '/')] = [string]$recordMap[$k] }
+}
+foreach ($e in $arr) { [void]$gone.Remove($e.Path) }
+$goneList = New-Object System.Collections.Generic.List[object]
+$gonePaths = [string[]]@($gone.Keys)
+[Array]::Sort($gonePaths, [StringComparer]::Ordinal)
+foreach ($gp in $gonePaths) { if ($gp) { $goneList.Add([ordered]@{ path = $gp; value = $gone[$gp] }) } }
+
+$doc = [ordered]@{ schema = 1; commit = $Commit; channel = 'dev'; from = $from; files = $list.ToArray(); gone = $goneList.ToArray() }
 $listPath = Join-Path $Out 'game-files.json'
 [IO.File]::WriteAllText($listPath, ($doc | ConvertTo-Json -Depth 5 -Compress), (New-Object Text.UTF8Encoding($false)))
 $mb = (Get-Item -LiteralPath $zipPath).Length / 1MB
 Say ("game files: {0} file(s) in {1} ({2:N1} MB), built over dev release {3}" -f $list.Count, $zipName, $mb, $(if ($from) { $from } else { '(none staged)' })) 'Green'
+Say ("  {0} path(s) the release no longer ships are listed as gone" -f $goneList.Count) 'DarkGray'
 exit 0

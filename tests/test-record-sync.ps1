@@ -19,8 +19,8 @@
        asset, the record says so (':record:files'), carries the plugin list as
        the pack carries it and what is gone, the first one reads what the packs
        before it took out, and the packs still go on the feed
-    2. the launcher's own Updater compiled from launcher\app with the
-       compiler the build runs (tests\Launcher-Csc.ps1), syncing scratch installs
+    2. the launcher's own Updater, the launcher project built by the .NET 10
+       SDK as the build builds it (tests\Launcher-Csc.ps1), syncing scratch installs
        over http from a copy of site\server.js serving that folder: a fresh
        install, one release behind, several behind (with files an old pack took
        out), a download cut off halfway (carried on with a Range request), a
@@ -32,8 +32,8 @@
     4. the real Rollback-Feed.ps1 putting the feed back a release and forward
        again, and both kinds of launcher following it
 
-  Runs under Windows PowerShell 5.1 and restarts itself there from pwsh, like
-  test-updater.ps1, because the launcher runs on the .NET Framework. Needs node
+  Runs in pwsh 7 on Windows, where the launcher runs and reads the record's
+  Windows paths, with the .NET 10 SDK the launcher builds with. Needs node
   on PATH for the copy of the site. Everything it writes is in its own temp
   folder, and nothing connects anywhere but 127.0.0.1.
 #>
@@ -45,20 +45,18 @@ $env:THORNSWOOD_HARNESS = '1'
 $env:THORNSWOOD_VPS = '127.0.0.1'
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the launcher's own build, by the .NET 10 SDK (#4823)
+# The record names every file by its path under the game folder as Windows
+# writes it (Data\Platform\...), and the launcher syncs those paths on the
+# Windows it runs on. Anywhere else a backslash is part of a file's name, so
+# the installs here would not be the ones a launcher makes.
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  this runs the launcher''s code on the .NET Framework the launcher runs on, which only Windows has'; exit 0 }
-if ($PSVersionTable.PSEdition -eq 'Core') {
-    $winps = Get-WindowsPowerShell
-    & $winps -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath
-    exit $LASTEXITCODE
-}
+if (-not $OnWindows) { Write-Host 'NOT RUN  the launcher syncs the record''s Windows paths, which only Windows reads as folders'; exit 0 }
 
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $repo = Split-Path -Parent $Here
 $app = Join-Path $repo 'launcher\app'
-$winps = Get-WindowsPowerShell
 
 $script:pass = 0; $script:fail = 0
 function Yes([string]$what, [bool]$cond) {
@@ -146,25 +144,21 @@ $node = Get-Command node -ErrorAction SilentlyContinue
 Yes 'node is on PATH, for the copy of the site and the stand-in game server' ($null -ne $node)
 if ($null -eq $node) { Done }
 
-# ---- the launcher, compiled ------------------------------------------------------
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
-$refs = @(); $missing = @()
-foreach ($n in @($LauncherNeeded)) { $p = Find-LauncherRef $n; if ($p) { $refs += $p } else { $missing += $n } }
-foreach ($n in @($LauncherLib)) { $p = $n; if (Test-Path -LiteralPath $p) { $refs += $p } else { $missing += $n } }
-Yes ('every reference Thornswood.csproj names is here' + $(if ($missing.Count) { ', missing ' + ($missing -join ', ') } else { '' })) ($missing.Count -eq 0 -and $refs.Count -gt 5)
-if ($missing.Count) { Done }
+# ---- the launcher, built ----------------------------------------------------------
+# The launcher project itself, built by the .NET 10 SDK as the build builds it,
+# and loaded into this PowerShell, which runs on .NET 10 as the launcher does.
+Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 New-Item -ItemType Directory -Force -Path $T | Out-Null
-$dll = Join-Path $T 'Thornswood.dll'
-$cscArgs = @('/noconfig', '/nologo', '/target:library', '/platform:anycpu', "/langversion:$LauncherLangVersion", "/out:$dll")
-foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-foreach ($f in @(Get-ChildItem (Join-Path $app '*.cs') -File)) { $cscArgs += $f.FullName }
-$old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-$said = & $LauncherCsc @cscArgs 2>&1
-$ErrorActionPreference = $old
-Yes 'the launcher compiles with the compiler the build runs' ((Test-Path -LiteralPath $dll) -and $LASTEXITCODE -eq 0)
-if (-not (Test-Path -LiteralPath $dll)) { foreach ($l in @($said | Where-Object { "$_" -match 'error' } | Select-Object -First 10)) { Write-Host "      $l" }; Done }
-$asm = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($dll))
+$asm = $null
+try { $asm = Add-LauncherAssembly }
+catch {
+    Yes 'the launcher project builds' $false
+    foreach ($l in @(($_.Exception.Message -split "`r?`n") | Where-Object { $_ -match 'error' } | Select-Object -First 10)) { Write-Host "      $l" }
+    Done
+}
+Yes 'the launcher project builds' ($null -ne $asm)
+if ($null -eq $asm) { Done }
 $U = $asm.GetType('Thornswood.Updater'); $P = $asm.GetType('Thornswood.Paths'); $VD = $asm.GetType('Thornswood.VersionDoc')
 $flags = [Reflection.BindingFlags]'Static, Public, NonPublic'
 $mPending = $U.GetMethod('Pending', $flags); $mInstall = $U.GetMethod('Install', $flags); $mSync = $U.GetMethod('Sync', $flags)
@@ -396,7 +390,10 @@ Yes ("  and every record carries records\shipped-not-ours.json's files as gone b
 Write-Host ''; Write-Host 'the launcher reads the feed'
 function Raw($x) { if ($x -is [Management.Automation.PSObject]) { return $x.PSObject.BaseObject }; return $x }
 function Parse-Feed { return (Raw ($mParse.Invoke($null, @(, [IO.File]::ReadAllBytes((Site-Feed $feedDir)))))) }
-function Pending-Of($v) { $a = New-Object 'object[]' 1; $a[0] = (Raw $v); return @($mPending.Invoke($null, $a) | ForEach-Object { Raw $_ }) }
+# Pending takes the config first (#4825), for whether the game files come from
+# the Velopack package instead; nothing here was installed by Velopack, so it
+# offers the record and the packs the feed names, which is what is tested.
+function Pending-Of($v) { $a = New-Object 'object[]' 2; $a[0] = (Raw $cfg); $a[1] = (Raw $v); return @($mPending.Invoke($null, $a) | ForEach-Object { Raw $_ }) }
 $v = Parse-Feed
 Yes 'VersionDoc.Parse reads the record the feed names' ($null -ne $v.record -and $v.record.id -eq $R3 -and $v.record.sha256 -eq [string]$d3.baseline.sha256)
 $oddFeeds = @(
@@ -708,7 +705,7 @@ function Rollback([string[]]$more) {
     $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $rbScript, '-Channel', 'main', '-NoPause', '-SiteDir', $site, '-SiteUrl', $siteUrl,
            '-ReleaseDir', $rbRel, '-WorkDir', $work) + $more
     $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $out = & $winps @a 2>&1 | ForEach-Object { "$_" }
+    $out = & $Shell @a 2>&1 | ForEach-Object { "$_" }
     $rc = $LASTEXITCODE
     $ErrorActionPreference = $old
     if ($rc -ne 0) { Write-Host ((@($out) | Select-Object -Last 10) -join "`n") -ForegroundColor DarkGray }
@@ -826,10 +823,15 @@ Yes 'the next release adds its note to the file, and keeps every older one' ((Re
 # ---- nothing here weakens the launcher's own update -------------------------------
 Write-Host ''; Write-Host 'the launcher itself'
 $src = [IO.File]::ReadAllText((Join-Path $app 'Sync.cs'))
-$upd = [IO.File]::ReadAllText((Join-Path $app 'Updater.cs'))
+$upd = [IO.File]::ReadAllText((Join-Path $app 'VeloUpdate.cs'))
 Yes 'the sync never touches the launcher exe: it writes only under the game folder and Profile\Default' (
-    $src -notmatch 'SelfUpdate\(|Paths\.LauncherDir|\.exe\.new' -and $src -match 'Inside\(full, Paths\.Game\)')
-Yes 'SelfUpdate still checks the signer before the swap, and Signature.cs is what it asks' ($upd -match '(?s)public static void SelfUpdate.*?CheckSigner\(tmp, log\);\s*File\.Copy\(tmp, neu, true\)' -and $upd -match 'Signature\.Refusal\(')
+    $src -notmatch 'SelfUpdate\(|FetchLauncher\(|ApplyLauncher\(|Paths\.LauncherDir|\.exe\.new' -and $src -match 'Inside\(full, Paths\.Game\)')
+# The launcher's own update is Velopack's since #4825 (VeloUpdate.cs): the
+# package and the Update.exe that applies it are checked against the signer,
+# by Signature.cs, before it is marked checked, and only a checked one is applied.
+Yes 'the launcher''s own update still checks the signer before it goes in, and Signature.cs is what it asks' (
+    $upd -match '(?s)public static void FetchLauncher.*?VeloPackage\.Refusal\(pkg, list, setup, ExpectedSigner,.*?Signature\.Refusal\(updateExe, ExpectedSigner, .*?u\.Checked = true;' -and
+    $upd -match '(?s)public static void ApplyLauncher\(LauncherUpdate u\)\s*\{\s*if \(u == null \|\| !u\.Checked\) throw')
 Yes 'the public sync checks the record''s address (https, the host list) before a byte is fetched' ($src -match '(?s)public static void SyncRecord.*?CheckUrl\(r\.url\);.*?AssetFolder\(r\)')
 
 Done

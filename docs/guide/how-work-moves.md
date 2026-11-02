@@ -207,10 +207,11 @@ The short form of the rules. The same decisions, with the dates they were made, 
   (`records\signing\README.md`). `ExpectedSigner` in `launcher\app\Updater.cs`
   is set, so every launcher from dev 1.1.101.17 on refuses an update that is
   not signed by that certificate. **Only a machine that signs may Ship, dev
-  included.** `Ship.ps1` and `Publish-Installer.ps1` refuse (non-zero exit) when
-  `records\signing\signing.json` is missing or disabled, or when the launcher / Setup tip
-  is not Authenticode Valid under `ExpectedSigner`. Local `Build-Launcher` /
-  `Package -NoPublish` may still print "not signing" and leave an unsigned
+  included.** `Ship.ps1` refuses (non-zero exit) when
+  `records\signing\signing.json` is missing or disabled, or when the launcher
+  is not Authenticode Valid under `ExpectedSigner`; the release workflow signs
+  the launcher, which is also the setup program since #4824, on GitHub. A local
+  `Build-Launcher` may still print "not signing" and leave an unsigned
   intermediate; that soft skip must not reach the site or the feed. The live main launcher,
   1.1.101, predates signing; the next main Ship is the first signed one.
 - Every pull request gets the build check, `.github/workflows/build-pr.yml`,
@@ -225,12 +226,17 @@ The short form of the rules. The same decisions, with the dates they were made, 
   issue #752), the names that must stay out, that the engine is one commit and
   the high-risk records, runs the voice service's health harness, checks our
   plugins are clean, that the Python names only what exists (ruff, issue
-  #1343) and the count of silent catches (#5292). The job "Launcher builds",
-  on a Windows runner, checks the launcher window and its UI thread, builds
-  the launcher with MSBuild from its project files, held to its sources
-  (`launcher\tests\test-498-msbuild.ps1`, issue #498). A pull request that changes only files under
-  `docs`, `site` or `bot` skips it, because nothing it checks reads those
-  folders (`scripts\dev\Launcher-Reach.ps1`, #5292). Beside them, the job
+  #1343), the count of silent catches (#5292) and that the launcher touches
+  its window only from the UI thread (`scripts\dev\Check-UiThread.py`). The
+  job "Launcher builds", on a Windows runner, publishes the native launcher
+  the way every build does (`scripts\release\Build-Launcher.ps1`, red on a
+  compile error or a trim or native code warning, issue #4823), checks the
+  programs it made for secrets, and builds the ship root tool. The window is
+  compiled markup, so a renamed control is a compile error there. A pull request that changes only files under
+  `docs`, `site` or `bot` runs it on Linux instead, where it passes with
+  one step that says why, because nothing it checks reads those folders
+  (`scripts\dev\Launcher-Reach.ps1`, #5292). It is never skipped for that,
+  so it has a result of its own on every pull request. Beside them, the job
   "gate" runs
   the gate harnesses (every `test-*.js` and `test-*.ps1` in `tests` or in a
   product's own `tests` folder, such as `launcher\tests`, that
@@ -254,8 +260,9 @@ The short form of the rules. The same decisions, with the dates they were made, 
   ran less.
 - The checks are **Tree checks**, **Launcher builds** and the shares of the
   **Gate harnesses** on Windows and on Linux, and on a pull request **Build
-  check result** passes only when all of them did, or were skipped because
-  the pick said they had nothing to check (#3683, #5292, #5293).
+  check result** passes only when all of them did, or, for the gate's
+  shares, were skipped because the pick said they had nothing to check
+  (#3683, #5292, #5293).
   The repository is public since 30 Oct 2026, so hosted minutes are free, and
   nothing builds on the VPS any more: no fallback job and no `BUILD_RUNNER`
   switch (#4983). A push
@@ -328,8 +335,8 @@ this is the long form.
   server. There is one dev feed and the last dev Ship wins, so a Dev says in #dev-coordination before taking it. A main Ship preserves the Dev feed and baseline.
 - **Settled design is a proposal first.** Where the game runs from (its own
   folder, see One Skyrim of its own), Keep and Hold for Data\Platform, the
-  client built from the fork and recorded, the launcher build (MSBuild from
-  the project files, C# 13, #498), one complete release at a time: changing any of these starts as a few lines in #staff-updates, agreed by the
+  client built from the fork and recorded, the launcher build (Avalonia on
+  .NET 10 with Native AOT and Velopack, #4823), one complete release at a time: changing any of these starts as a few lines in #staff-updates, agreed by the
   team before code. Editing `Shell.cs`, `Checks.cs`, `Keep.cs`, `Hold.cs`,
   `Updater.cs` or `Publish-Update.ps1` in a way that blocks others' work gets a
   line in #dev-coordination from a Dev; every machine touches them.
@@ -351,8 +358,7 @@ this is the long form.
   nothing writes `Profile\developer.flag`, which used to let the machine that
   ships keep newer game files instead.
 - **What never leaves a machine** in a pack or an installer is one list,
-  `scripts\release\Ship-Rules.ps1`, read by `Publish-Update.ps1` and
-  `Package-Thornswood.ps1` both: runtime folders, one machine's own files,
+  `scripts\release\Ship-Rules.ps1`, read by `Publish-Update.ps1`: runtime folders, one machine's own files,
   other servers' files, and the SkyMP client's saved sign in
   (`Data\Platform\PluginsNoLoad`). The installer of 16 Sep carried that
   sign in file before the list was shared; the launcher removes that exact

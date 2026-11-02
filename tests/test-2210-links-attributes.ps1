@@ -12,13 +12,13 @@
   WHAT IT CHECKS.
     1. Links opens the file for its attributes alone (FILE_READ_ATTRIBUTES
        through CreateFile), never FileStream with FileAccess.Read.
-    2. Links, lifted from launcher\app\OwnGame.cs with what it needs and
-       compiled with the compiler the build runs (Add-LauncherType,
-       tests\Launcher-Csc.ps1, #2821), over scratch files: one name is 1, a
-       hard link makes 2,
-       dropping it is 1 again, a file another handle holds with no sharing at
-       all is still counted, and a missing file throws FileNotFoundException,
-       as FileStream did, which every caller catches.
+    2. Links, lifted from launcher\app\OwnGame.cs with what it needs, builds
+       the way the launcher project builds (Add-LauncherType, the .NET 10 SDK,
+       tests\Launcher-Csc.ps1, #2821), on any system. On Windows it is run
+       over scratch files: one name is 1, a hard link makes 2, dropping it is
+       1 again, a file another handle holds with no sharing at all is still
+       counted, and a missing file throws FileNotFoundException, as
+       FileStream did, which every caller catches.
 
   Writes only a scratch folder under the temp directory, removed at the end.
 #>
@@ -88,23 +88,25 @@ Yes 'FileReadAttributes is 0x80 and the share mode lets everything else in' (
     $og -match 'const uint FileReadAttributes = 0x80;' -and $og -match 'const uint FileShareAll = 0x7;')
 
 $struct = Get-CsMember $og 'struct FileInfoByHandle'
+$fileTime = Get-CsMember $og 'struct FileTime'
 $consts = ([regex]::Matches($og, '(?m)^\s*const uint (FileReadAttributes|FileShareAll|OpenExisting|BackupSemantics) = [^;]+;') | ForEach-Object { $_.Value.Trim() }) -join "`n"
-$imports = ([regex]::Matches($og, '(?s)\[DllImport\("kernel32\.dll"[^\]]*\]\s*static extern (?:bool GetFileInformationByHandle|SafeFileHandle CreateFile)\([^;]+;') | ForEach-Object { $_.Value }) -join "`n"
-Yes 'lifted the struct, the two imports and the four constants' ($struct -and ($imports -split 'static extern').Count -eq 3 -and ($consts -split "`n").Count -eq 4)
+$imports = ([regex]::Matches($og, '(?s)\[LibraryImport\("kernel32\.dll"[^\]]*\]\s*(?:\[return: [^\]]*\]\s*)?private static partial (?:bool GetFileInformationByHandle|SafeFileHandle CreateFile)\([^;]+;') | ForEach-Object { $_.Value }) -join "`n"
+Yes 'lifted the two structs, the two imports and the four constants' ($struct -and $fileTime -and ($imports -split 'static partial').Count -eq 3 -and ($consts -split "`n").Count -eq 4)
 
-. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's compiler and C# version (#2821)
-if (-not $OnWindows) {
-    Write-Host 'SKIP  2, Links compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, Links opens the file through CreateFile in kernel32, and the links are made with cmd.exe''s mklink, which only Windows has'
-    Done
-}
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # builds launcher code the way the project does (#2821, #4823)
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 $ns = 'Links2210_' + [guid]::NewGuid().ToString('N').Substring(0, 8)
+$built = $true
+try {
 $null = Add-LauncherType -Source @"
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 namespace $ns {
-    public static class OwnGame {
+    public static partial class OwnGame {
+        $fileTime
         [StructLayout(LayoutKind.Sequential)]
         $struct
         $imports
@@ -113,6 +115,13 @@ namespace $ns {
     }
 }
 "@
+} catch { $built = $false; Write-Host $_.Exception.Message }
+Yes 'Links and what it needs build the way the launcher does' $built
+if (-not $built) { Done }
+if (-not $OnWindows) {
+    Write-Host 'SKIP  2, Links run: it opens the file through CreateFile in kernel32, and the links are made with cmd.exe''s mklink, which only Windows has'
+    Done
+}
 $t = [type]"$ns.OwnGame"
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('ts-2210-' + [guid]::NewGuid().ToString('N'))

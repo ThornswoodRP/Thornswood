@@ -1,13 +1,14 @@
 <#
 .SYNOPSIS
-  One Dev or Main command that runs gamemode deploy, the installer package, and the host feed remirror.
+  One Dev or Main command that runs the gamemode deploy and the host feed remirror.
 
 .DESCRIPTION
-  Umbrella for the three steps that used to be run by hand after a build: put
-  the gamemode on the right server, build the installer friends download, and
-  remirror the host feed so the site serves the tip. Ship.ps1 stays the
-  launcher and tip publisher; this script does not bump, package mods, or
-  announce. Issue #784.
+  Umbrella for the steps that used to be run by hand after a build: put the
+  gamemode on the right server, and remirror the host feed so the site serves
+  the tip. Ship.ps1 stays the launcher and tip publisher; this script does not
+  bump, package mods, or announce. Issue #784. It built the old installer too
+  until that went (#4824): the download is Velopack's Setup.exe, which every
+  merge release carries.
 
   ORDER, AND WHAT EACH STEP IS.
 
@@ -20,25 +21,20 @@
                     and restarts it). That is the existing Main path in
                     scripts\deploy. -SkipGameMode leaves this step out.
 
-      2  installer  Package-Thornswood.ps1 -Root <Where.ps1 Install> (MAIN even when Channel=dev) -OutDir DistRoot -NoPause.
-                    Publish-Installer runs from Package unless -NoPublish is
-                    used on Package itself; this stack does not pass
-                    -NoPublish. -SkipInstaller leaves this step out.
-
-      3  remirror   Always. Publish-PostShip.ps1 -Channel -Only Remirror
+      2  remirror   Always. Publish-PostShip.ps1 -Channel -Only Remirror
                     -NoPause. Same warn-not-fail rule as Ship: a refused
                     remirror is a line naming the put-right command, and this
                     stack still exits 0 for that half. A missing or thrown
-                    gamemode or installer step fails the stack.
+                    gamemode step fails the stack.
 
-  Defaults keep gamemode and installer ON. Channel defaults to dev so a Main
+  The gamemode step is ON unless -SkipGameMode. Channel defaults to dev so a Main
   run is deliberate. Nothing here is a dry run against live servers when you
   only want to parse the script; do not run this against Main until Patrick
   says Main.
 
     .\scripts\release\Ship-Stack.ps1 -Note "The door answers on the first knock
     - The door no longer needs a second try before it opens."
-    .\scripts\release\Ship-Stack.ps1 -Channel main -SkipInstaller
+    .\scripts\release\Ship-Stack.ps1 -Channel main
     .\scripts\release\Ship-Stack.ps1 -SkipGameMode -NoPause
 
 .PARAMETER Channel
@@ -56,29 +52,23 @@
   would carry it: Main's gamemode deploys post no note. The one parameter
   taken without its name, as in Deploy-DevGamemode (#1929).
 
-.PARAMETER SkipInstaller
-  Leaves Package-Thornswood.ps1 out. Use when the installer was already built
-  and you only want gamemode and remirror.
-
 .PARAMETER SkipGameMode
   Leaves the Deploy-* gamemode step out. Use when the server already has the
-  gamemode you want and you only want the installer and remirror.
+  gamemode you want and you only want the remirror.
 
 .PARAMETER NoPause
-  Exits without waiting for Enter, and passes -NoPause to Package and
-  PostShip so a caller is not stopped for a keypress. Deploy scripts have no
+  Exits without waiting for Enter, and passes -NoPause to PostShip so a
+  caller is not stopped for a keypress. Deploy scripts have no
   -NoPause; their -Now switch is not passed here, because that skips the
   in-world restart warning.
 
 .PARAMETER Root
-  The MAIN play install Package builds from (Where.ps1 Install by default,
-  C:\Thornswood on most machines, #3031). Always
-  the main Root for packaging, including when Channel=dev: Dev umbrella does
-  not package from a DevBuild folder. Same default Ship uses for the main install.
+  The main play install (Where.ps1 Install by default, C:\Thornswood on most
+  machines, #3031), handed to Publish-PostShip.ps1 as Ship hands it.
 
 .PARAMETER DistRoot
-  Where Package stages the installer (passed as -OutDir) and where PostShip
-  looks for it. Default is Where.ps1 Dist (repo out\dist), matching Ship.
+  Where PostShip looks for the release it remirrors. Default is Where.ps1
+  Dist (repo out\dist), matching Ship.
   Resolved after the script directory is known from PSCommandPath /
   MyInvocation / PSScriptRoot, so an empty PSScriptRoot does not fail the default.
 
@@ -86,18 +76,16 @@
   .\scripts\release\Ship-Stack.ps1 -Channel dev -NoPause -Note "The door answers on the first knock
   - The door no longer needs a second try before it opens."
 
-  Deploys the gamemode to the Dev server, builds the installer, remirrors
-  /feed-dev, and exits without waiting for Enter.
+  Deploys the gamemode to the Dev server, remirrors /feed-dev, and exits
+  without waiting for Enter.
 
 .NOTES
   Exit 0 when every non-skipped step succeeded, or when only the remirror
-  warned (Ship / PostShip policy). Exit 1 when a gamemode or installer step
-  failed. Does not run itself as part of Ship.
+  warned (Ship / PostShip policy). Exit 1 when a gamemode step failed. Does not run itself as part of Ship.
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('main', 'dev')][string]$Channel = 'dev',
-    [switch]$SkipInstaller,
     [switch]$SkipGameMode,
     [switch]$NoPause,
     # The launcher install, Where.ps1 Install, unless told otherwise (#3031).
@@ -184,7 +172,7 @@ function Invoke-Step([string]$what, [string]$path, [hashtable]$withArgs) {
 Head ("SHIP STACK  channel=$Channel")
 Say ("  Root=$Root") 'DarkGray'
 Say ("  DistRoot=$DistRoot") 'DarkGray'
-Say ("  SkipGameMode=$SkipGameMode  SkipInstaller=$SkipInstaller  NoPause=$NoPause") 'DarkGray'
+Say ("  SkipGameMode=$SkipGameMode  NoPause=$NoPause") 'DarkGray'
 
 # ------------------------------------------------------------------ gamemode
 if (-not $SkipGameMode) {
@@ -202,18 +190,6 @@ if (-not $SkipGameMode) {
 else {
     Head 'Gamemode'
     Say '  skipped (-SkipGameMode)' 'Yellow'
-}
-
-# ----------------------------------------------------------------- installer
-if (-not $SkipInstaller) {
-    Head 'Installer (Package-Thornswood)'
-    $pkg = Join-Path $Here 'Package-Thornswood.ps1'
-    $pkgArgs = @{ Root = $Root; OutDir = $DistRoot; NoPause = $true }
-    Invoke-Step 'Package-Thornswood' $pkg $pkgArgs
-}
-else {
-    Head 'Installer'
-    Say '  skipped (-SkipInstaller)' 'Yellow'
 }
 
 # ------------------------------------------------------------------ remirror
@@ -247,7 +223,7 @@ else {
 
 Write-Host ''
 if ($script:RemirrorWarned) {
-    Say 'Stack finished. Gamemode and installer steps that ran are done; the remirror needs a put-right.' 'Yellow'
+    Say 'Stack finished. The gamemode step, when it ran, is done; the remirror needs a put-right.' 'Yellow'
 }
 else {
     Say 'Stack finished.' 'Green'

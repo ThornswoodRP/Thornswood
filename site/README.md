@@ -31,18 +31,26 @@ else does.
 | `/api/economy`, `/dev/api/economy` | POST | each game server, with the bot's key, every five minutes: what each hold gathered, crafted and traded, by the day, for the hub's Hold economy page (#3164, the hold economy block in `game\gamemode.js`) |
 | `/api/office`, `/dev/api/office` | POST | each game server, with the bot's key in a header, when a Jarl names or removes their hold's Court, Steward or Guard on the Office page of K; the site checks the Jarl's role again and sets the Discord role with the bot's token, and the game reads it back through `/api/allowed` (#2551, `game\gamemode.js`) |
 | `/api/play/owns` | POST | the voice service, before it keeps a character creation choice (`voice\voice-server.js`) |
-| `/api/payload` | GET | the installer, which then downloads the zip it names from `/file/` (`installer\setup\Bootstrap.cs`) |
 | `/api/ticket` | POST | the Discord bot, for a support ticket (`bot\bot.py`) |
 | `/api/public` | GET | the front page and the launchers, for the news and the files; the Discord bot, for the open switch and the hints and lore lines it shows as its status, from `data\site\lines.md` (#3147, `bot\bot.py`) |
 | `/api/report/game`, `/dev/api/report/game` | POST | each game server, with the bot's key in a header, when somebody types /helpme or /report; the row goes into the inbox and the bot says it in the staff channel (`game\gamemode.js`, the asking staff block) |
 | `/api/play/who` | POST | nothing in the repo asks it now. It says who a ticket belongs to and writes nothing, which makes it the one to try by hand |
 
 The downloads under `/file/` are only what `files\files.json` publishes: a
-name it lists and does not mark hidden, the payload zip it lists (hidden
-because `/api/payload` hands it to the setup program), and `files.json`
-itself, which Ship's installer gate reads (`Read-SiteDownloads` in
-`scripts\release\Feed-Store.ps1`). Anything else put in that folder answers
-404 and is not on the Downloads page (#3798).
+name it lists and does not mark hidden, and `files.json` itself. Anything else
+put in that folder answers 404 and is not on the Downloads page (#3798).
+
+The installer is not in that folder since #4824. It is Velopack's setup
+program, which `merge-release.yml` makes and signs, and `/file/` answers
+302 to its GitHub Release copy (`newestSetup` in `lib/feed.js`):
+`/file/Thornswood-Setup.exe` to the one on the newest Release `main-<tag>`,
+which the approval step publishes once a build is approved (#5181), and
+`/file/Thornswood-Dev-Setup.exe` to the one on the newest build Release
+(`build-YYYYMMDD.N`). Until there is one, the name answers 404 and the
+Downloads page says the installer is not published yet. The old installer's
+exe and payload zip, which `Publish-Installer` left in the folder, are never
+served or listed, whatever `files.json` still says. `/api/payload`, which the
+old setup program asked for its zip, is gone with it.
 
 Every request that is not a GET has to come from this site (#1367). A
 browser names the page that sent it in `Origin`, or in `Referer` when an old

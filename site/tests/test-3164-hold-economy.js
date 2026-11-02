@@ -294,13 +294,18 @@ yes('and what is counted is the craftOutput the engine is about to hand over',
 yes('a confirmed haul is counted, after the haul is taken down',
     /takedown\(from, at, profileId\);\s*\n\s*\/\/ One haul between two holds[^\n]*\n\s*var economy = g\.__thornswoodEconomy;/.test(GM) &&
     /economy\.hauled\(from, n\.dest\)/.test(GM));
+// A trade finishes when the save storage acknowledges it, a later tick than
+// the request (#5419): it is counted there, from recover, and only when done.
 yes('a guild trade tells the block once the transfer is done, and a failing count never stops the trade',
-    /if \(!moved\.done\) return response\(moved\.reason,current,moved\.reason\);\s*\n\s*\/\/ The pieces that changed hands[^\n]*\n\s*if \(typeof deps\.traded === 'function'\) \{\s*\n\s*try \{ deps\.traded\(/.test(MERCHANT));
+    /function countTrade\(row\) \{[^\n]*\n[^\n]*\n\s*if \(typeof deps\.traded !== 'function'\) return;\s*\n\s*try \{ deps\.traded\(row\); \}\s*\n\s*catch \(error\)/.test(MERCHANT) &&
+    /if \(how === 'done' && done\.counted\) countTrade\(done\.counted\);/.test(MERCHANT) &&
+    /countTrade\(row\.counted\);\s*\n\s*return response\(tradeSaid\(/.test(MERCHANT));
 yes('the installed trader hands it to the hold economy block',
     /traded: function \(row\) \{\s*\n\s*var economy = g\.__thornswoodEconomy;/.test(MERCHANT));
 const bundleAt = GM.indexOf('const MERCHANT_TRADING = (function () {');
 yes('and the merchant bundle in gamemode.js carries both (Build-MerchantGamemode.js was run)',
-    bundleAt > 0 && GM.indexOf('deps.traded({hold:place.bookHold', bundleAt) > bundleAt &&
+    bundleAt > 0 && GM.indexOf('try { deps.traded(row); }', bundleAt) > bundleAt &&
+    GM.indexOf('countTrade(done.counted)', bundleAt) > bundleAt &&
     GM.indexOf('economy.traded(row)', bundleAt) > bundleAt);
 yes('no em dash in anything this change wrote',
     !/\u2014/.test(BLOCK) && !/\u2014/.test(SERVER) && !/\u2014/.test(HUB) && !/\u2014/.test(CSS));

@@ -12,8 +12,9 @@
       box runs) went through File.Replace, which moves the old file aside
       first and then moves the new one in;
     - release.txt and release-files.txt (launcher\app\Sync.cs) and the news
-      cache (launcher\app\FeedNews.cs) deleted the old file and then moved
-      the new one in.
+      cache (launcher\app\FeedNews.cs, gone since #5187) deleted the old
+      file and then moved the new one in. The feed's settings cache
+      (launcher\app\FeedSettings.cs) is written the same way they are now.
 
   Measured 16 Oct on One, a writer swapping a 17 KB file in a loop and killed
   with TerminateProcess 150 times: File.Replace left it missing 6 times (and
@@ -24,17 +25,19 @@
   WHAT IT HOLDS THEM TO.
     1. None of the four replaces a file in two steps any more, and each goes
        through the one rename: SteamUpdates through its own (it is compiled
-       alone, in test-steam-updates.ps1), Sync and FeedNews through
+       alone, in test-steam-updates.ps1), Sync and FeedSettings through
        OwnGame.WriteRecord, the feed store through Move-FeedStoreInto, whose
        type is its own (Thornswood.FeedSwap, a rename with POSIX semantics
        since #2727, tests\test-2727-feed-swap-readers.ps1), so it never
        shares a name with the generated record's Thornswood.GeneratedOs
        (launcher\app\GeneratedBuild.cs, compiled by scripts\mods\Generated.ps1).
-    2. SteamUpdates.cs compiled with the launcher's compiler: its write
-       replaces a manifest, and killed 40 times while it swaps a manifest in
-       a loop, the manifest is whole every time.
-    3. OwnGame.WriteRecord's byte form (the news cache), lifted and compiled:
+    2. SteamUpdates.cs compiled with the .NET SDK the launcher builds with:
+       its write replaces a manifest, and killed 40 times while it swaps a
+       manifest in a loop, the manifest is whole every time.
+    3. OwnGame.WriteRecord's byte form (the settings cache), lifted and compiled:
        the same bytes, and whole after 40 kills.
+       The compile runs everywhere; the runs rename through kernel32's
+       MoveFileEx, so they run on Windows only and say SKIP elsewhere.
     4. The feed store under PowerShell 7, which is what the VPS runs it with
        since #5356: the real swap op, built by New-FeedStoreScript, replaces
        a store file (published.json; version.json is never replaced, it goes
@@ -70,7 +73,7 @@ function Text([string]$p) { return ([IO.File]::ReadAllText($p) -replace "`r`n", 
 # ---- 1: the four places ---------------------------------------------------------
 $steam = Text (Join-Path $App 'SteamUpdates.cs')
 $sync = Text (Join-Path $App 'Sync.cs')
-$news = Text (Join-Path $App 'FeedNews.cs')
+$settings = Text (Join-Path $App 'FeedSettings.cs')
 $store = Text (Join-Path $Repo 'scripts\release\Feed-Store.ps1')
 $gen = Text (Join-Path $App 'GeneratedBuild.cs')
 
@@ -88,7 +91,7 @@ $ws = Body $sync 'static void WriteSyncState(SyncState s)'
 $wr = Body $sync 'static void WriteReleaseFiles(RecordRef r, ICollection<string> rels)'
 Yes 'Sync: release.txt goes through OwnGame.WriteRecord, no delete and move' ($ws -match 'OwnGame\.WriteRecord\(SyncStateFile, lines\);' -and $ws -notmatch 'File\.(Delete|Move)\(')
 Yes 'Sync: release-files.txt the same' ($wr -match 'OwnGame\.WriteRecord\(ReleaseFilesFile, lines\);' -and $wr -notmatch 'File\.(Delete|Move)\(')
-Yes 'FeedNews: the news cache goes through OwnGame.WriteRecord, no delete and move' ($news -match 'OwnGame\.WriteRecord\(cache, raw\);' -and $news -notmatch 'File\.(Delete|Move)\(')
+Yes 'FeedSettings: the settings cache goes through OwnGame.WriteRecord, no delete and move' ($settings -match 'OwnGame\.WriteRecord\(cache, raw\);' -and $settings -notmatch 'File\.(Delete|Move)\(')
 
 $body = [regex]::Match($store, "(?s)\`$script:FeedStoreBody = @'\n(.*?)\n'@")
 $swap = [regex]::Match($store, "(?s)\`$script:FeedStoreSwap = @'\n(.*?)\n'@")
@@ -107,10 +110,8 @@ $work = Join-Path $Scratch ('thornswood-2591-' + [Guid]::NewGuid().ToString('N')
 $null = New-Item -ItemType Directory -Force -Path $work
 try {
     # ---- 2 and 3: the launcher's two, compiled ---------------------------------
-    . (Join-Path $PSScriptRoot 'Windows.ps1')
-    if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s two, compiled and killed mid-swap: they are .NET Framework code that renames through kernel32, which only Windows has'; Done }
     $og = Text (Join-Path $App 'OwnGame.cs')
-    $m = [regex]::Match($og, '(?s)\n(        (?:internal )?static void WriteRecord\(string path, IEnumerable<string> lines\)\n        \{\n.*?\n        \}\n.*?static extern bool MoveFileEx\([^)]*\);\n)')
+    $m = [regex]::Match($og, '(?s)\n(        (?:internal )?static void WriteRecord\(string path, IEnumerable<string> lines\)\n        \{\n.*?\n        \}\n.*?private static partial bool MoveFileEx\([^)]*\);\n)')
     Yes 'OwnGame.WriteRecord and its byte form are in OwnGame.cs' ($m.Success -and $m.Groups[1].Value -match 'internal static void WriteRecord\(string path, byte\[\] bytes\)')
     if (-not $m.Success) { Done }
     $driver = @'
@@ -122,7 +123,7 @@ using System.Text;
 
 namespace Thornswood
 {
-    static class OwnGame
+    static partial class OwnGame
     {
 __WRITERECORD__
     }
@@ -151,59 +152,56 @@ __WRITERECORD__
 }
 '@
     $driver = $driver.Replace('__WRITERECORD__', $m.Groups[1].Value.TrimEnd())
-    $src = Join-Path $work 'WholeRecordTest.cs'
-    [IO.File]::WriteAllText($src, $driver, (New-Object Text.UTF8Encoding($false)))
-    $exe = Join-Path $work 'whole-record-test.exe'
     # Named, as the other harnesses that compile launcher code name it, so a
-    # Windows machine without it fails here rather than saying nothing (#2965).
-    Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-    if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
-    $cscArgs = @('/noconfig', '/nologo', '/target:exe', "/langversion:$LauncherLangVersion", "/out:$exe",
-                 "/reference:$(Join-Path $LauncherRefDir 'System.dll')", "/reference:$(Join-Path $LauncherRefDir 'System.Core.dll')",
-                 $src, (Join-Path $App 'SteamUpdates.cs'))
-    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $compiled = & $LauncherCsc @cscArgs 2>&1
-    $ErrorActionPreference = $old
-    $built = ($LASTEXITCODE -eq 0) -and (Test-Path -LiteralPath $exe)
-    Yes "SteamUpdates.cs and WriteRecord compile with the launcher's compiler, C# $LauncherLangVersion" $built
-    if (-not $built) { foreach ($l in @($compiled)) { Write-Host "      $l" }; Done }
+    # machine without it fails here rather than saying nothing (#2965).
+    Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+    if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
+    $dll = $null
+    try { $dll = Build-LauncherCode -Source $driver -File (Join-Path $App 'SteamUpdates.cs') -Exe }
+    catch { Write-Host ('      ' + $_.Exception.Message) }
+    Yes "SteamUpdates.cs and WriteRecord compile with the .NET SDK the launcher builds with, C# $LauncherLangVersion" ($null -ne $dll)
+    if (-not $dll) { Done }
 
-    $N = 1156   # the size of Steam's manifest for Skyrim on One
-    function Run([string[]]$a) { & $exe @a; return $LASTEXITCODE }
-    function Len([string]$p) { if (Test-Path -LiteralPath $p) { return (Get-Item -LiteralPath $p).Length } else { return -1 } }
+    if (-not $OnWindows) {
+        Write-Host 'SKIP  the launcher''s two, killed mid-swap: they rename through kernel32''s MoveFileEx, which only Windows has'
+    } else {
+        $N = 1156   # the size of Steam's manifest for Skyrim on One
+        function Run([string[]]$a) { $null = Invoke-LauncherExe $dll @a; return $LASTEXITCODE }
+        function Len([string]$p) { if (Test-Path -LiteralPath $p) { return (Get-Item -LiteralPath $p).Length } else { return -1 } }
 
-    $man = Join-Path $work 'steamapps\appmanifest_489830.acf'
-    $null = New-Item -ItemType Directory -Force -Path (Split-Path $man)
-    $null = Run @('seed', $man, $N)
-    $code = Run @('steamonce', $man, $N)
-    Yes 'SteamUpdates replaces a manifest with the new bytes, and leaves nothing beside it' ($code -eq 0 -and (Len $man) -eq ($N + 7) -and
-        @(Get-ChildItem -LiteralPath (Split-Path $man) -Force).Count -eq 1)
-    $rec = Join-Path $work 'Profile\news.json'
-    $code = Run @('recordonce', $rec, 37427)
-    Yes 'WriteRecord''s byte form makes the folder and the record, and leaves no .new' ($code -eq 0 -and (Len $rec) -eq 37434 -and -not (Test-Path -LiteralPath ($rec + '.new')))
+        $man = Join-Path $work 'steamapps\appmanifest_489830.acf'
+        $null = New-Item -ItemType Directory -Force -Path (Split-Path $man)
+        $null = Run @('seed', $man, $N)
+        $code = Run @('steamonce', $man, $N)
+        Yes 'SteamUpdates replaces a manifest with the new bytes, and leaves nothing beside it' ($code -eq 0 -and (Len $man) -eq ($N + 7) -and
+            @(Get-ChildItem -LiteralPath (Split-Path $man) -Force).Count -eq 1)
+        $rec = Join-Path $work 'Profile\feed-settings.json'
+        $code = Run @('recordonce', $rec, 37427)
+        Yes 'WriteRecord''s byte form makes the folder and the record, and leaves no .new' ($code -eq 0 -and (Len $rec) -eq 37434 -and -not (Test-Path -LiteralPath ($rec + '.new')))
 
-    function KillTest([string]$mode, [string]$path, [int]$size, [int]$kills) {
-        $null = New-Item -ItemType Directory -Force -Path (Split-Path $path)
-        $null = Run @('seed', $path, $size)
-        $whole = 0; $bad = @()
-        $rand = New-Object Random 2591
-        for ($i = 0; $i -lt $kills; $i++) {
-            $psi = New-Object Diagnostics.ProcessStartInfo($exe, ('"{0}" "{1}" {2}' -f $mode, $path, $size))
-            $psi.UseShellExecute = $false
-            $psi.RedirectStandardOutput = $true
-            $p = [Diagnostics.Process]::Start($psi)
-            $null = $p.StandardOutput.ReadLine()
-            Start-Sleep -Milliseconds ($rand.Next(15, 160))
-            $p.Kill(); $p.WaitForExit(); $p.Dispose()
-            $l = Len $path
-            if ($l -eq $size -or $l -eq ($size + 7)) { $whole++ } else { $bad += $(if ($l -lt 0) { 'missing' } else { "$l bytes" }); $null = Run @('seed', $path, $size) }
+        function KillTest([string]$mode, [string]$path, [int]$size, [int]$kills) {
+            $null = New-Item -ItemType Directory -Force -Path (Split-Path $path)
+            $null = Run @('seed', $path, $size)
+            $whole = 0; $bad = @()
+            $rand = New-Object Random 2591
+            for ($i = 0; $i -lt $kills; $i++) {
+                $psi = New-Object Diagnostics.ProcessStartInfo($LauncherDotnet, ('"{0}" "{1}" "{2}" {3}' -f $dll, $mode, $path, $size))
+                $psi.UseShellExecute = $false
+                $psi.RedirectStandardOutput = $true
+                $p = [Diagnostics.Process]::Start($psi)
+                $null = $p.StandardOutput.ReadLine()
+                Start-Sleep -Milliseconds ($rand.Next(15, 160))
+                $p.Kill(); $p.WaitForExit(); $p.Dispose()
+                $l = Len $path
+                if ($l -eq $size -or $l -eq ($size + 7)) { $whole++ } else { $bad += $(if ($l -lt 0) { 'missing' } else { "$l bytes" }); $null = Run @('seed', $path, $size) }
+            }
+            return [pscustomobject]@{ Whole = $whole; Bad = $bad }
         }
-        return [pscustomobject]@{ Whole = $whole; Bad = $bad }
+        $r = KillTest 'steam' (Join-Path $work 'killed-steam\appmanifest_489830.acf') $N 40
+        Yes ('killed 40 times while SteamUpdates swaps the manifest in: whole every time ({0} of 40{1})' -f $r.Whole, $(if ($r.Bad) { '; ' + ($r.Bad -join ', ') })) ($r.Whole -eq 40)
+        $r = KillTest 'record' (Join-Path $work 'killed-settings\feed-settings.json') 37427 40
+        Yes ('killed 40 times while WriteRecord swaps the settings cache in: whole every time ({0} of 40{1})' -f $r.Whole, $(if ($r.Bad) { '; ' + ($r.Bad -join ', ') })) ($r.Whole -eq 40)
     }
-    $r = KillTest 'steam' (Join-Path $work 'killed-steam\appmanifest_489830.acf') $N 40
-    Yes ('killed 40 times while SteamUpdates swaps the manifest in: whole every time ({0} of 40{1})' -f $r.Whole, $(if ($r.Bad) { '; ' + ($r.Bad -join ', ') })) ($r.Whole -eq 40)
-    $r = KillTest 'record' (Join-Path $work 'killed-news\news.json') 37427 40
-    Yes ('killed 40 times while WriteRecord swaps the news cache in: whole every time ({0} of 40{1})' -f $r.Whole, $(if ($r.Bad) { '; ' + ($r.Bad -join ', ') })) ($r.Whole -eq 40)
 
     # ---- 4: the feed store, in PowerShell 7 as the VPS runs it (#5356) ------------
     if (-not $OnWindows) { Write-Host 'SKIP  the feed store killed mid-swap: on the VPS it renames through kernel32, which only Windows has'; Done }

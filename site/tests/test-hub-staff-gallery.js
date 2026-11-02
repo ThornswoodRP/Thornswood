@@ -188,7 +188,12 @@ function stub() {
     req.end = () => {
       if (ended) return;
       ended = true;
-      const body = host === 'discord.com' ? answer(where) : null;
+      // The Release list too: the site looks there for the installer when a
+      // page lists the downloads (newestSetup, #4824), and is told there is
+      // no Release yet.
+      const body = host === 'discord.com' ? answer(where)
+        : host === 'api.github.com' && /^\/repos\/ThornswoodRP\/Thornswood\/releases\?/.test(where) ? []
+        : null;
       say((body ? 'STUBBED ' : 'OUTBOUND ') + host + where);
       setImmediate(() => {
         if (!body) { req.emit('error', new Error('the harness lets no request leave this machine')); return; }

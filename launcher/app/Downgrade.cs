@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -41,7 +42,7 @@ namespace Thornswood
     /// in Steam's Betas list; a tester asked for a button instead, for people
     /// who are not at home in Steam's settings. This is that button.
     /// </summary>
-    static class Downgrade
+    static partial class Downgrade
     {
         const int AppId = 489830;
 
@@ -1057,28 +1058,46 @@ namespace Thornswood
         /// <summary>Steam's biggest visible top level window, drawn by steam or by steamwebhelper.</summary>
         static IntPtr MainWindow()
         {
-            IntPtr best = IntPtr.Zero;
-            long bestArea = 0;
             var pids = new HashSet<uint>();
             try { foreach (string name in SteamNames) foreach (Process p in Process.GetProcessesByName(name)) pids.Add((uint)p.Id); } catch (Exception ex) { Swallow.Note("Downgrade.MainWindow, listing Steam processes", ex); }
             if (pids.Count == 0) return IntPtr.Zero;
-            EnumWindows(delegate (IntPtr h, IntPtr l)
+            var search = new WindowSearch { Pids = pids };
+            GCHandle handle = GCHandle.Alloc(search);
+            try { unsafe { EnumWindows(&OnWindow, GCHandle.ToIntPtr(handle)); } }
+            finally { handle.Free(); }
+            return search.Best;
+        }
+
+        /// <summary>
+        /// What MainWindow's walk over the windows has found so far. Windows
+        /// calls OnWindow once for each top level window with a handle to this
+        /// in its second argument: a callback Windows calls is a static
+        /// function in the native build, never a lambda.
+        /// </summary>
+        sealed class WindowSearch
+        {
+            public HashSet<uint> Pids;
+            public IntPtr Best;
+            public long BestArea;
+        }
+
+        [UnmanagedCallersOnly]
+        static int OnWindow(IntPtr h, IntPtr state)
+        {
+            try
             {
-                try
-                {
-                    if (!IsWindowVisible(h)) return true;
-                    uint pid;
-                    GetWindowThreadProcessId(h, out pid);
-                    if (!pids.Contains(pid)) return true;
-                    RECT r;
-                    if (!GetWindowRect(h, out r)) return true;
-                    long area = (long)Math.Max(0, r.Right - r.Left) * Math.Max(0, r.Bottom - r.Top);
-                    if (area > bestArea) { bestArea = area; best = h; }
-                }
-                catch (Exception ex) { Swallow.Note("Downgrade.MainWindow, measuring window", ex); }
-                return true;
-            }, IntPtr.Zero);
-            return best;
+                var s = (WindowSearch)GCHandle.FromIntPtr(state).Target;
+                if (!IsWindowVisible(h)) return 1;
+                uint pid;
+                GetWindowThreadProcessId(h, out pid);
+                if (!s.Pids.Contains(pid)) return 1;
+                RECT r;
+                if (!GetWindowRect(h, out r)) return 1;
+                long area = (long)Math.Max(0, r.Right - r.Left) * Math.Max(0, r.Bottom - r.Top);
+                if (area > s.BestArea) { s.BestArea = area; s.Best = h; }
+            }
+            catch (Exception ex) { Swallow.Note("Downgrade.MainWindow, measuring window", ex); }
+            return 1;
         }
 
         /// <summary>
@@ -1241,7 +1260,7 @@ namespace Thornswood
                 IntPtr me = Process.GetCurrentProcess().MainWindowHandle;
                 if (me == IntPtr.Zero) return;
                 var f = new FLASHWINFO();
-                f.cbSize = (uint)Marshal.SizeOf(typeof(FLASHWINFO));
+                f.cbSize = (uint)Marshal.SizeOf<FLASHWINFO>();
                 f.hwnd = me;
                 f.dwFlags = FLASHW_ALL | FLASHW_TIMERNOFG;
                 f.uCount = uint.MaxValue;
@@ -1270,13 +1289,64 @@ namespace Thornswood
             {
                 try
                 {
-                    System.Windows.Clipboard.SetText(text);
-                    if (string.Equals(System.Windows.Clipboard.GetText(), text, StringComparison.Ordinal)) return true;
+                    SetClipboardText(text);
+                    if (string.Equals(GetClipboardText(), text, StringComparison.Ordinal)) return true;
                 }
                 catch (Exception ex) { Swallow.Note("Downgrade.TryClipboard", ex); }
                 Thread.Sleep(120);
             }
             return false;
+        }
+
+        /// <summary>
+        /// Puts text on Windows' clipboard as CF_UNICODETEXT, the format
+        /// WPF's Clipboard.SetText wrote it in, straight through user32 now
+        /// that there is no WPF. The memory is Windows' once SetClipboardData
+        /// takes it, so it stays on the clipboard after the launcher closes.
+        /// Throws, with Windows' reason, when a step is refused, as
+        /// Clipboard.SetText did.
+        /// </summary>
+        static void SetClipboardText(string text)
+        {
+            if (!OpenClipboard(Ask.Owner)) throw new Win32Exception(Marshal.GetLastPInvokeError(), "OpenClipboard");
+            try
+            {
+                if (!EmptyClipboard()) throw new Win32Exception(Marshal.GetLastPInvokeError(), "EmptyClipboard");
+                IntPtr h = GlobalAlloc(GMEM_MOVEABLE, (UIntPtr)((text.Length + 1) * 2));
+                if (h == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastPInvokeError(), "GlobalAlloc");
+                bool handedOver = false;
+                try
+                {
+                    IntPtr p = GlobalLock(h);
+                    if (p == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastPInvokeError(), "GlobalLock");
+                    try
+                    {
+                        Marshal.Copy(text.ToCharArray(), 0, p, text.Length);
+                        Marshal.WriteInt16(p, text.Length * 2, 0);
+                    }
+                    finally { GlobalUnlock(h); }
+                    if (SetClipboardData(CF_UNICODETEXT, h) == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastPInvokeError(), "SetClipboardData");
+                    handedOver = true;
+                }
+                finally { if (!handedOver) GlobalFree(h); }
+            }
+            finally { CloseClipboard(); }
+        }
+
+        /// <summary>The clipboard's text, or null when it holds none.</summary>
+        static string GetClipboardText()
+        {
+            if (!OpenClipboard(Ask.Owner)) throw new Win32Exception(Marshal.GetLastPInvokeError(), "OpenClipboard");
+            try
+            {
+                IntPtr h = GetClipboardData(CF_UNICODETEXT);
+                if (h == IntPtr.Zero) return null;
+                IntPtr p = GlobalLock(h);
+                if (p == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastPInvokeError(), "GlobalLock");
+                try { return Marshal.PtrToStringUni(p); }
+                finally { GlobalUnlock(h); }
+            }
+            finally { CloseClipboard(); }
         }
 
         // ---------------------------------------------------------- watching
@@ -1631,25 +1701,35 @@ namespace Thornswood
         struct FLASHWINFO { public uint cbSize; public IntPtr hwnd; public uint dwFlags, uCount, dwTimeout; }
         const uint FLASHW_ALL = 3, FLASHW_TIMERNOFG = 12;
 
-        delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+        [LibraryImport("user32.dll")] private static unsafe partial int EnumWindows(delegate* unmanaged<IntPtr, IntPtr, int> cb, IntPtr lParam);
+        [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static partial bool IsWindowVisible(IntPtr hWnd);
+        [LibraryImport("user32.dll")] private static partial uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+        [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static partial bool GetWindowRect(IntPtr hWnd, out RECT rect);
+        [LibraryImport("user32.dll")] private static partial IntPtr GetForegroundWindow();
+        [LibraryImport("user32.dll")] private static partial IntPtr GetAncestor(IntPtr hWnd, uint gaFlags);
+        [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static partial bool IsIconic(IntPtr hWnd);
+        [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static partial bool SetForegroundWindow(IntPtr hWnd);
+        [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static partial bool BringWindowToTop(IntPtr hWnd);
+        [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static partial bool AttachThreadInput(uint idAttach, uint idAttachTo, [MarshalAs(UnmanagedType.Bool)] bool fAttach);
+        [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static partial bool IsHungAppWindow(IntPtr hWnd);
+        [LibraryImport("kernel32.dll")] private static partial uint GetCurrentThreadId();
+        [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static partial bool ShowWindow(IntPtr hWnd, int cmd);
+        [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static partial bool SetCursorPos(int x, int y);
+        [LibraryImport("user32.dll")] private static partial uint GetDpiForWindow(IntPtr hWnd);
+        [LibraryImport("user32.dll", SetLastError = true)] private static partial uint SendInput(uint n, INPUT[] inputs, int size);
+        [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static partial bool FlashWindowEx(ref FLASHWINFO info);
 
-        [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lParam);
-        [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hWnd);
-        [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
-        [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
-        [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
-        [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr hWnd, uint gaFlags);
-        [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hWnd);
-        [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hWnd);
-        [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr hWnd);
-        [DllImport("user32.dll")] static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
-        [DllImport("user32.dll")] static extern bool IsHungAppWindow(IntPtr hWnd);
-        [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
-        [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hWnd, int cmd);
-        [DllImport("user32.dll")] static extern bool SetCursorPos(int x, int y);
-        [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr hWnd);
-        [DllImport("user32.dll", SetLastError = true)] static extern uint SendInput(uint n, INPUT[] inputs, int size);
-        [DllImport("user32.dll")] static extern bool FlashWindowEx(ref FLASHWINFO info);
+        const uint CF_UNICODETEXT = 13;
+        const uint GMEM_MOVEABLE = 0x0002;
+        [LibraryImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static partial bool OpenClipboard(IntPtr owner);
+        [LibraryImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static partial bool CloseClipboard();
+        [LibraryImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static partial bool EmptyClipboard();
+        [LibraryImport("user32.dll", SetLastError = true)] private static partial IntPtr SetClipboardData(uint format, IntPtr data);
+        [LibraryImport("user32.dll", SetLastError = true)] private static partial IntPtr GetClipboardData(uint format);
+        [LibraryImport("kernel32.dll", SetLastError = true)] private static partial IntPtr GlobalAlloc(uint flags, UIntPtr bytes);
+        [LibraryImport("kernel32.dll", SetLastError = true)] private static partial IntPtr GlobalLock(IntPtr mem);
+        [LibraryImport("kernel32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static partial bool GlobalUnlock(IntPtr mem);
+        [LibraryImport("kernel32.dll")] private static partial IntPtr GlobalFree(IntPtr mem);
 
         static void Type(string text)
         {
@@ -1659,7 +1739,7 @@ namespace Thornswood
                 down.u.ki.wScan = c; down.u.ki.dwFlags = KEYEVENTF_UNICODE;
                 var up = new INPUT(); up.type = INPUT_KEYBOARD;
                 up.u.ki.wScan = c; up.u.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
-                SendInput(2, new[] { down, up }, Marshal.SizeOf(typeof(INPUT)));
+                SendInput(2, new[] { down, up }, Marshal.SizeOf<INPUT>());
                 Thread.Sleep(12);
             }
         }
@@ -1668,7 +1748,7 @@ namespace Thornswood
         {
             var down = new INPUT(); down.type = INPUT_KEYBOARD; down.u.ki.wVk = vk;
             var up = new INPUT(); up.type = INPUT_KEYBOARD; up.u.ki.wVk = vk; up.u.ki.dwFlags = KEYEVENTF_KEYUP;
-            SendInput(2, new[] { down, up }, Marshal.SizeOf(typeof(INPUT)));
+            SendInput(2, new[] { down, up }, Marshal.SizeOf<INPUT>());
         }
 
         /// <summary>A modifier held while another key is pressed, Ctrl+A for one.</summary>
@@ -1678,13 +1758,13 @@ namespace Thornswood
             var kDown = new INPUT(); kDown.type = INPUT_KEYBOARD; kDown.u.ki.wVk = vk;
             var kUp = new INPUT(); kUp.type = INPUT_KEYBOARD; kUp.u.ki.wVk = vk; kUp.u.ki.dwFlags = KEYEVENTF_KEYUP;
             var mUp = new INPUT(); mUp.type = INPUT_KEYBOARD; mUp.u.ki.wVk = modifier; mUp.u.ki.dwFlags = KEYEVENTF_KEYUP;
-            SendInput(4, new[] { mDown, kDown, kUp, mUp }, Marshal.SizeOf(typeof(INPUT)));
+            SendInput(4, new[] { mDown, kDown, kUp, mUp }, Marshal.SizeOf<INPUT>());
         }
 
         static void Mouse(uint flag)
         {
             var e = new INPUT(); e.type = INPUT_MOUSE; e.u.mi.dwFlags = flag;
-            SendInput(1, new[] { e }, Marshal.SizeOf(typeof(INPUT)));
+            SendInput(1, new[] { e }, Marshal.SizeOf<INPUT>());
         }
     }
 }

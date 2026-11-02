@@ -12,7 +12,7 @@ live deploy, which wait for Patrick's word.
 
 | You changed | Run |
 | --- | --- |
-| The launcher (`launcher\app`, `launcher\ui.xaml`, the art and video that Build-Launcher.ps1 embeds), the game plugins (`game\plugins`), or anything else that goes out in a pack | `.\scripts\release\Ship.ps1 -Channel dev "what changed"`. The dev build is where it goes first, by the dev-first rule in How work moves. `.\scripts\release\Ship.ps1 "what changed"` with no channel is the live one, for a security fix, for something that leaves the game untestable, or for work the team has agreed goes live. |
+| The launcher (`launcher\app`, the art and video that Build-Launcher.ps1 embeds), the game plugins (`game\plugins`), or anything else that goes out in a pack | `.\scripts\release\Ship.ps1 -Channel dev "what changed"`. The dev build is where it goes first, by the dev-first rule in How work moves. `.\scripts\release\Ship.ps1 "what changed"` with no channel is the live one, for a security fix, for something that leaves the game untestable, or for work the team has agreed goes live. |
 | The gamemode on the dev server | `.\scripts\deploy\Deploy-DevGamemode.ps1` |
 | The gamemode on the live server, `game\gamemode.js` and `game\content\Thornswood-Content.esp` | `.\scripts\deploy\Deploy-Server.ps1 -GamemodeOnly`, from any machine |
 | The live server build, or the live settings Deploy-Gamemode writes | `.\scripts\deploy\Deploy-Gamemode.ps1`, then `.\scripts\deploy\Deploy-Server.ps1`, from a machine with the fork built |

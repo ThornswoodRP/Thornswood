@@ -118,7 +118,18 @@ try {
         Yes '  the one past its clock is killed and named, on the clock its header gives' ($r.Said -match '::error file=.*?test-3-hang\.js::harness timed out after 3s and was killed' -and $r.Said -match '--- test-3-hang\.js  \([0-9.]+s, on a 3 s clock it names[,)]')
         Yes '  what one left running is killed and named' ($r.Said -match '::warning file=.*?test-4-leaves\.js::harness left 1 process\(es\) running when it ended, now killed: node')
         Yes '  the summary names both that failed, the one that timed out as such' ($r.Said -match '(?m)^2 harness\(es\) failed: test-2-fail\.ps1, test-3-hang\.js \(timed out\)\s*$')
-        Yes '  and the slowest' ($r.Said -match '(?m)^slowest: test-3-hang\.js ' -and $r.Said -match '(?m)^all of them, added up: \d+s, in \d+s')
+        # Which ran longest is the machine's to say: on a busy runner the
+        # PowerShell one can take longer than the 3 s clock the hang is
+        # killed on. So the line is held to the times printed above it: every
+        # harness that ran, each with its own time, longest first.
+        $ran = @{}
+        foreach ($m in [regex]::Matches($r.Said, '(?m)^--- (\S+)  \(([0-9.]+)s')) { $ran[$m.Groups[1].Value] = [double]$m.Groups[2].Value }
+        $slow = [regex]::Match($r.Said, '(?m)^slowest: (.+?)\s*$').Groups[1].Value
+        $listed = @($slow -split ', ' | Where-Object { $_ } | ForEach-Object { $n, $t = $_ -split ' ', 2; [pscustomobject]@{ Name = $n; Secs = [double]($t -replace 's$', '') } })
+        $inOrder = $true
+        for ($i = 1; $i -lt $listed.Count; $i++) { if ($listed[$i].Secs -gt $listed[$i - 1].Secs) { $inOrder = $false } }
+        $same = $listed.Count -eq $ran.Count -and -not @($listed | Where-Object { -not $ran.ContainsKey($_.Name) -or $ran[$_.Name] -ne $_.Secs }).Count
+        Yes ('  and the slowest, longest first, with the times above (' + $slow + ')') ($ran.Count -eq 4 -and $same -and $inOrder -and $r.Said -match '(?m)^all of them, added up: \d+s, in \d+s')
 
         # ---- 3. the budget ----------------------------------------------------------
         $c = Join-Path $work 'budget'

@@ -10,8 +10,11 @@
   "news", or the news file the feed names), so this receives the channel's
   feed from the VPS store, puts an empty list back the way the channel keeps
   its notes, and sends version.json through Feed-Store.ps1 like any other feed
-  edit. Every launcher then shows its News tab empty; FeedNews.cs reads the
-  new file by its new sha256, so Profile\news.json is not read again.
+  edit. Every launcher that reads the feed's news (those installed before
+  #5187, with launcher\app\FeedNews.cs) then shows its News tab empty: it
+  reads the new file by its new sha256, so Profile\news.json is not read
+  again. The native launcher's News tab is the GitHub Releases' notes
+  (launcher\app\ReleaseNews.cs), which this does not touch.
 
   For main the site's News page follows by itself: the site writes it from the
   main feed within a minute of a new one (#5187, site/server.js "news from the

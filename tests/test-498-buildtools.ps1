@@ -11,7 +11,7 @@
     1. Bootstrap-VPS.ps1 -IncludeBuildTools installs exactly the two Build Tools
        parts the project files need, refuses a bootstrapper that is not a valid
        Microsoft-signed file before it runs anything, and checks afterwards, the
-       way Find-MSBuild.ps1 does, that MSBuild and the references are there.
+       way the MSBuild build did, that MSBuild and the references are there.
     2. Install-Runner.ps1's needs check asks for MSBuild and the 4.8.1
        references instead of the in-box csc, and names the script that installs
        them.
@@ -62,7 +62,7 @@ Yes '  and must be Valid and signed by Microsoft Corporation, or it is deleted u
 Yes '  0 and 3010 count as done, anything else stops' ($boot -match '\$p\.ExitCode -ne 0 -and \$p\.ExitCode -ne 3010')
 Yes '  and it checks afterwards that vswhere finds MSBuild and the references are there' (
     $boot.IndexOf('$bt = Test-BuildTools', $runAt) -gt $runAt -and $boot -match "v4\.8\.1\\mscorlib\.dll")
-Yes '  asking vswhere the way Find-MSBuild.ps1 does' ($boot -match [regex]::Escape("-requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe'"))
+Yes '  asking vswhere for MSBuild the way the MSBuild build did' ($boot -match [regex]::Escape("-requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe'"))
 Yes '  the header says why, with the decision and the 15 Oct measurement' ($boot -match '#498' -and $boot -match '15 Oct' -and $boot -match 'install the Build\s+Tools on the VPS runners')
 
 # ---- the signature rule, run ---------------------------------------------------

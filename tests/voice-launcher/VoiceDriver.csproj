@@ -1,0 +1,60 @@
+<Project>
+  <!--
+    The launcher's voice, run by the voice harnesses (tests\voice-launcher.js
+    builds and starts it). It compiles the launcher's own VoiceSession.cs,
+    VoiceLoop.cs, VoicePeer.cs, VoiceIce.cs, VoiceStun.cs, VoiceMix.cs,
+    VoiceHrtf.cs (with the HRTF responses) and Swallow.cs as they are, with a stand-in for the parts that need Windows
+    (the microphone and speakers, VoiceAudio.cs) and for Config and Paths,
+    which the session only carries. Since #4823 voice is C# and not a page,
+    so the harnesses that ran voice-host.html's script in node's vm run this
+    instead, on any machine with the .NET 10 SDK.
+
+    The obj folder is the one the helper names (VoiceDriverObj), in the
+    machine's temp folder, so a build leaves nothing in the repository; that
+    is why the SDK is imported by hand below, after it is set.
+  -->
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>$(VoiceDriverObj)</BaseIntermediateOutputPath>
+  </PropertyGroup>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Thornswood</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- The launcher's own C# version, read out of its project. -->
+    <LauncherProject>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../../launcher/app/Thornswood.csproj'))</LauncherProject>
+    <LangVersion>$([System.Text.RegularExpressions.Regex]::Replace($(LauncherProject), '(?s)^.*?&lt;LangVersion&gt;([^&lt;]+)&lt;/LangVersion&gt;.*$', '$1'))</LangVersion>
+    <!-- The same package versions as the launcher, read out of its project,
+         so the harnesses never run voice on other libraries than it ships. -->
+    <ConcentusVersion>$([System.Text.RegularExpressions.Regex]::Replace($(LauncherProject), '(?s)^.*?Include="Concentus" Version="([^"]+)".*$', '$1'))</ConcentusVersion>
+    <SharpSrtpVersion>$([System.Text.RegularExpressions.Regex]::Replace($(LauncherProject), '(?s)^.*?Include="SharpSRTP" Version="([^"]+)".*$', '$1'))</SharpSrtpVersion>
+    <BouncyCastleVersion>$([System.Text.RegularExpressions.Regex]::Replace($(LauncherProject), '(?s)^.*?Include="BouncyCastle.Cryptography" Version="([^"]+)".*$', '$1'))</BouncyCastleVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Concentus" Version="$(ConcentusVersion)" />
+    <PackageReference Include="SharpSRTP" Version="$(SharpSrtpVersion)" />
+    <PackageReference Include="BouncyCastle.Cryptography" Version="$(BouncyCastleVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../../launcher/app/VoiceSession.cs" Link="launcher/VoiceSession.cs" />
+    <Compile Include="../../launcher/app/VoiceLoop.cs" Link="launcher/VoiceLoop.cs" />
+    <Compile Include="../../launcher/app/VoicePeer.cs" Link="launcher/VoicePeer.cs" />
+    <Compile Include="../../launcher/app/VoiceIce.cs" Link="launcher/VoiceIce.cs" />
+    <Compile Include="../../launcher/app/VoiceStun.cs" Link="launcher/VoiceStun.cs" />
+    <Compile Include="../../launcher/app/VoiceMix.cs" Link="launcher/VoiceMix.cs" />
+    <Compile Include="../../launcher/app/VoiceHrtf.cs" Link="launcher/VoiceHrtf.cs" />
+    <Compile Include="../../launcher/app/Swallow.cs" Link="launcher/Swallow.cs" />
+    <!-- The HRTF responses, under the name VoiceHrtf.cs asks for, as the
+         launcher embeds them. -->
+    <EmbeddedResource Include="../../launcher/hrtf-composite.wav" LogicalName="hrtf-composite.wav" />
+  </ItemGroup>
+
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+</Project>

@@ -3,29 +3,36 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
+using System.Net.Http;
 using System.Net.NetworkInformation;
 using System.Reflection;
 using System.Text;
 using System.Threading;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
-using System.Windows.Input;
-using System.Windows.Markup;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using Ellipse = System.Windows.Shapes.Ellipse;   // not the namespace: System.Windows.Shapes.Path would collide with System.IO.Path
-using System.Windows.Threading;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
+using Avalonia.Platform.Storage;
+using Avalonia.Styling;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using Ellipse = Avalonia.Controls.Shapes.Ellipse;   // not the namespace: Avalonia.Controls.Shapes.Path would collide with System.IO.Path
 
 namespace Thornswood
 {
     /// <summary>
     /// The launcher itself: Main, the window, every button, and the Play
-    /// sequence. There is no compiled window class. Run parses launcher\ui.xaml,
-    /// which Build-Launcher.ps1 embeds in the exe, into a live Window at run
-    /// time; Bind finds the named controls in it and Wire attaches every
-    /// handler. So this is one static class, not a Window subclass, split
-    /// across Shell.cs and every other file that declares partial class Shell.
+    /// sequence. The window is MainWindow.axaml, compiled with the launcher,
+    /// and holds no logic of its own: Run makes it, Bind takes the named
+    /// controls from its generated fields and Wire attaches every handler. So
+    /// this is one static class, not a Window subclass, split across Shell.cs
+    /// and every other file that declares partial class Shell.
     ///
     /// launcher\app\ARCHITECTURE.md walks through it: the startup order, what
     /// each of the other classes owns on disk, and every step between the
@@ -36,7 +43,10 @@ namespace Thornswood
     /// </summary>
     static partial class Shell
     {
-        static Window win;
+        // The compiled window (MainWindow.axaml). Its named controls are
+        // generated fields, so win.BtnPlay and the rest are checked when the
+        // launcher is built.
+        static MainWindow win;
         static Config cfg;
         static VersionDoc pendingDoc;
         static bool playing;
@@ -82,6 +92,14 @@ namespace Thornswood
         // The last key that went down on this window, for PlayPressedBy.
         static Key lastKeyDown = Key.None;
         static DateTime lastKeyDownAt;
+        static KeyModifiers lastKeyModifiers = KeyModifiers.None;
+        // What was used last on this window: "mouse", "keyboard", "pen" or
+        // "touch", or null while nothing has been. Avalonia keeps no record of
+        // the last input device, so Wire notes it on the way in.
+        static string lastInput;
+        // Whether the mouse's left button went down on this window and has not
+        // come up yet.
+        static bool leftButtonDown;
 
         // An update published while the game runs. The check that runs every
         // thirty seconds during play notices it; four and a half minutes after it is first
@@ -111,8 +129,8 @@ namespace Thornswood
                           firstRunCard, quickKeysCard, quickKeys;
         // Play hero stats strip: three equal columns (Played / Sessions / Last played).
         static UniformGrid statRow;
-        // GalleryCard is a Grid that fills the Play centre; only Visibility is touched.
-        static FrameworkElement galleryCard;
+        // GalleryCard is a Grid that fills the Play centre; only IsVisible is touched.
+        static Control galleryCard;
         static Image galleryImage; static TextBlock galleryBy;
         // The pictures /api/public is showing and where the card is in turning
         // through them. Null until the feed has answered with at least one.
@@ -131,7 +149,7 @@ namespace Thornswood
         static TextBox boxGalleryBy, boxGalleryNote, boxGalleryWhy;
         static TextBlock txtGalleryChosen, txtGalleryPageSaid, txtGalleryDropLead,
                          txtGalleryApprovedEmpty;
-        static FrameworkElement galleryPageReportRow;
+        static Control galleryPageReportRow;
         static Border galleryDrop;
         static StackPanel galleryChosenList;
         static WrapPanel galleryApprovedList;
@@ -179,18 +197,18 @@ namespace Thornswood
                       btnIcons, btnScan, btnFix, btnInstallNow, btnSaveDisplay,
                       btnQuitGame;
         static Button[] navButtons;
-        static UIElement[] pages;
+        static Control[] pages;
 
         [STAThread]
         static void Main(string[] args)
         {
-            // PerMonitorV2 is in the application manifest (#463). Framework WPF
-            // only rescales on WM_DPICHANGED when this switch is false; its
-            // default depends on a TargetFrameworkAttribute we do not emit.
-            // WPF reads it once and keeps the answer, so it is set here, before
-            // any window, message box or XAML exists.
-            AppContext.SetSwitch("Switch.System.Windows.DoNotScaleForDpiChanges", false);
+            // Velopack first (#4825): when it runs the exe about an install, an
+            // update or an uninstall, this answers and the process ends here.
+            Velo.Start(args);
 
+            // PerMonitorV2 is in the application manifest (#463), and Avalonia
+            // rescales on WM_DPICHANGED by itself; WindowFit keeps the window
+            // inside the work area when the scale changes.
             bool fresh;
             using (var mutex = new Mutex(true, MutexName(args), out fresh))
             {
@@ -211,18 +229,18 @@ namespace Thornswood
                             {
                                 // There is a real window somewhere. Say so
                                 // rather than doing nothing at all.
-                                MessageBox.Show(
+                                Ask.Tell(
                                     "Thornswood is already open.\n\nLook for it in the taskbar. " +
                                     "If you cannot find it, end Thornswood.exe in Task Manager and try again.",
-                                    "Thornswood", MessageBoxButton.OK, MessageBoxImage.Information);
+                                    "Thornswood", Ask.Icon.Info);
                                 return;
                             }
                         }
-                        MessageBox.Show(
+                        Ask.Tell(
                             "Another copy of Thornswood is running but has no window, which means " +
                             "it did not shut down properly last time.\n\nOpen Task Manager, end " +
                             "every Thornswood.exe, then start it again.",
-                            "Thornswood", MessageBoxButton.OK, MessageBoxImage.Warning);
+                            "Thornswood", Ask.Icon.Warning);
                     }
                     catch (Exception ex) { Swallow.Note("Shell.Main", ex); }
                     return;
@@ -242,27 +260,35 @@ namespace Thornswood
                             "  COULD NOT START: " + ex.ToString() + Environment.NewLine);
                     }
                     catch (Exception logEx) { Swallow.Note("Shell.Main, append", logEx); }
-                    MessageBox.Show(ex.ToString(), "Thornswood could not start",
-                                    MessageBoxButton.OK, MessageBoxImage.Error);
+                    Ask.Tell(ex.ToString(), "Thornswood could not start", Ask.Icon.Error);
                 }
             }
+
+            // The very last thing: an update downloaded and checked while the
+            // launcher ran goes in now that the window has closed, everything
+            // it put back is back and the lock is let go (Velo.ExitApply).
+            Velo.ExitApply();
         }
 
         /// <summary>
         /// The single-instance lock, one per install. It used to be one name
         /// for every copy on the machine, which was right when there was one
         /// copy. The dev build lives in its own folder beside the main one and
-        /// both may be open at once, so the folder is part of the name.
+        /// both may be open at once, so the folder is part of the name: the
+        /// install's (Velo.InstallRoot), else the one given with -root, else
+        /// the folder above the exe's, as Run picks it for Paths.Init.
         /// </summary>
         static string MutexName(string[] args)
         {
             string root = null;
             try
             {
-                for (int i = 0; i < args.Length - 1; i++)
-                    if (args[i].Equals("-root", StringComparison.OrdinalIgnoreCase)) root = args[i + 1];
+                root = Velo.InstallRoot;
                 if (string.IsNullOrEmpty(root))
-                    root = Path.GetDirectoryName(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location));
+                    for (int i = 0; i < args.Length - 1; i++)
+                        if (args[i].Equals("-root", StringComparison.OrdinalIgnoreCase)) root = args[i + 1];
+                if (string.IsNullOrEmpty(root))
+                    root = Path.GetDirectoryName(Path.GetDirectoryName(Environment.ProcessPath));
                 root = Path.GetFullPath(root).TrimEnd('\\').ToLowerInvariant();
             }
             catch { root = ""; }
@@ -313,12 +339,43 @@ namespace Thornswood
             for (int i = 0; i < args.Length; i++)
                 if (args[i].Equals("-uninstall", StringComparison.OrdinalIgnoreCase)) askedToUninstall = true;
 
+            // Avalonia first: the terms window below and the uninstall are
+            // Avalonia windows, and no window can be made before the platform
+            // is set up. The launcher runs its own message loop at the end of
+            // Run, until its window closes.
+            AppBuilder.Configure<App>().UsePlatformDetect().SetupWithoutStarting();
+
+            // Where Thornswood is: the folder the install recorded (Velo.
+            // InstallRoot), else the one given with -root, else the folder
+            // above the exe's, which is a launcher built into a test root
+            // (Paths.Init), the same order as the lock in MutexName.
+            //
+            // The first start after Velopack's Setup.exe put the launcher down
+            // is the install (#4824): Velopack installed it, no folder is
+            // recorded and none was given, so the install window asks where
+            // and puts Thornswood there. Closed without installing, the
+            // launcher ends. Installed, it stays up until the launcher's own
+            // window is on screen (InstallWindow says why), and closing it then
+            // does not end anything. Somebody sent here by Windows Settings to
+            // uninstall is not asked to install.
+            string recorded = Velo.InstallRoot;
+            InstallWindow installing = null;
+            if (recorded != null) root = recorded;
+            else if (root == null && Velo.Installed && !askedToUninstall)
+            {
+                installing = new InstallWindow();
+                installing.Show();
+                string installed = Pump(installing.Done);
+                if (installed == null) return;
+                root = installed;
+            }
+
             Paths.Init(root);
             // The log and the support zips are kept for LocalKeep.Days days on
             // this PC, and the privacy page says so (#3679). Here, inside this
             // install's mutex and before anything else in it writes the log.
             LocalKeep.Tidy(DateTime.Now);
-            // Profile\accepted.json is the setup program's record of the terms,
+            // Profile\accepted.json is the install window's record of the terms,
             // the privacy policy and the rules (issue #1009). An install made
             // before that has no file, and silence is not a yes. Ask before
             // anything else is opened. Uninstall must still be reachable.
@@ -328,14 +385,11 @@ namespace Thornswood
             Stats.Load();
             Keep.BuildName = cfg.BuildName;
             Icons.BuildName = cfg.BuildName;
+            Icons.Dev = cfg.IsDev;
             Art.Dev = cfg.IsDev;
             Discord.Channel = cfg.Channel;
 
-            string xaml;
-            using (var s = Assembly.GetExecutingAssembly().GetManifestResourceStream("ui.xaml"))
-            using (var r = new StreamReader(s))
-                xaml = r.ReadToEnd();
-            win = (Window)XamlReader.Parse(xaml);
+            win = new MainWindow();
 
             Bind();
             Themes.Apply(win, Themes.Resolve(cfg.Theme, cfg.CustomColors, cfg.CustomLight));
@@ -414,7 +468,7 @@ namespace Thornswood
                 string cleaned = null;
                 try { cleaned = OwnGame.CleanSteamCopy(cfg); } catch (Exception ex) { Swallow.Note("Shell.Run, taking Thornswood's files out of the Steam copy", ex); }
                 if (cleaned == null) return;
-                try { win.Dispatcher.BeginInvoke((Action)delegate { Log(cleaned); }); } catch (Exception ex) { Swallow.Note("Shell.Run, saying what came out of the Steam copy", ex); }
+                try { Dispatcher.UIThread.Post((Action)delegate { Log(cleaned); }); } catch (Exception ex) { Swallow.Note("Shell.Run, saying what came out of the Steam copy", ex); }
             });
             try { string ini = ThornIni.Ensure(); if (ini != null) Log(ini); } catch (Exception ex) { Swallow.Note("Shell.Run", ex); }
             // Steam's Updates setting for the Steam copy of Skyrim: logged, and set when it does not hold the version (ShellSteamUpdates.cs, #493), only until the own folder is made (#1226).
@@ -439,16 +493,16 @@ namespace Thornswood
 
             // The shortcut points at whatever icon file the last build wrote,
             // and an update brings a new one. Quiet unless it actually had to
-            // move something. After a self-update the previous exe is still
-            // sitting as .old; Ensure sees that and rewrites icons even when
-            // the path string did not change, so blank desktop icons do not
-            // stick until someone opens Settings.
+            // move something. A launcher that changed since the last pass (an
+            // update, a rebuild) rewrites the icons even when the path string
+            // did not change (Icons.Due), so blank desktop icons do not stick
+            // until someone opens Settings.
             ThreadPool.QueueUserWorkItem(delegate
             {
                 int moved = 0;
                 try { moved = Icons.Ensure(); } catch (Exception ex) { Swallow.Note("Shell.Run", ex); }
                 if (moved > 0)
-                    win.Dispatcher.BeginInvoke((Action)delegate { Log("Shortcut icon brought up to date."); });
+                    Dispatcher.UIThread.Post((Action)delegate { Log("Shortcut icon brought up to date."); });
             });
 
             // Chars.Adopt and Chars.Sync ran here until 20 September. Adopt
@@ -465,7 +519,7 @@ namespace Thornswood
                 string said = null;
                 try { said = ClearLeftovers(); } catch (Exception ex) { Swallow.Note("Shell.Run", ex); }
                 if (string.IsNullOrEmpty(said)) return;
-                try { win.Dispatcher.BeginInvoke((Action)delegate { Log(said); DrawStatus(); }); } catch (Exception ex) { Swallow.Note("Shell.Run", ex); }
+                try { Dispatcher.UIThread.Post((Action)delegate { Log(said); DrawStatus(); }); } catch (Exception ex) { Swallow.Note("Shell.Run", ex); }
             });
 
             // The installer unpacks into Thornswood-setup at the root of the
@@ -481,7 +535,7 @@ namespace Thornswood
                 if (freed <= 0) return;
                 try
                 {
-                    win.Dispatcher.BeginInvoke((Action)delegate
+                    Dispatcher.UIThread.Post((Action)delegate
                     {
                         Log("Cleared " + (freed / (1024 * 1024)) +
                             " MB the installer left behind on your drive.");
@@ -510,67 +564,40 @@ namespace Thornswood
             ThreadPool.QueueUserWorkItem(delegate { CheckUpdatesBackground(false); });
             StartFeedWatch();
 
-            /*
-              Voice comes up with the launcher, not with the game.
+            // Voice comes up with the launcher, not with the game. It needs no
+            // window, and its lines come to the status line on the window's
+            // thread whichever thread says them (Voice.Say).
+            Voice.Start(delegate (string m) { Log(m); }, cfg);
 
-              Prepare installs the assembly resolver that hands WebView2 back
-              to the CLR out of this exe's own resources, and it has to happen
-              before any method touching a WebView2 type is compiled, which is
-              why it is here and not inside Start.
+            // The theme starts once the window is on screen: ApplicationIdle
+            // is after the first frame, so the track never holds the window
+            // back. It plays from this process (MenuMusic.cs, #3207).
+            Dispatcher.UIThread.Post(new Action(StartMenuMusic), DispatcherPriority.ApplicationIdle);
 
-              Start itself is queued on the dispatcher rather than called: it
-              creates a Window, and a Window needs a running message loop.
-              ApplicationIdle means it happens once the launcher is actually on
-              screen, so a slow WebView2 runtime cannot delay the window
-              appearing.
-            */
-            Voice.Prepare();
-            win.Dispatcher.BeginInvoke(
-                new Action(delegate
-                {
-                    // The theme starts in the same idle moment, once the
-                    // window is on screen. It plays from this process, not
-                    // from WebView2 (MenuMusic.cs, #3207).
-                    Voice.Start(delegate (string m) { Log(m); }, cfg);
-                    StartMenuMusic();
-                }),
-                System.Windows.Threading.DispatcherPriority.ApplicationIdle);
-
-            // The self update's way back. A launcher that got as far as drawing
-            // its window started cleanly, so the copy of the one before it can
-            // go, and not before: the update script watches for that copy to
-            // disappear and puts it back if this one closes first. SelfSwap.cs.
+            // The rest of an update to the launcher itself, once its window is
+            // up. Velopack started this launcher straight after putting the
+            // update in (Velo.Restarted), so the shortcut icons are redrawn,
+            // which is when blank ones show up, and the same Fix Install an
+            // update that needs no restart runs follows (#3201), after the
+            // icon pass so the two never race.
             win.ContentRendered += delegate
             {
                 try { LogStartTime(); } catch (Exception ex) { Swallow.Note("Shell.Run, saying how long the start took", ex); }
-                string self = Assembly.GetExecutingAssembly().Location;
-                ThreadPool.QueueUserWorkItem(delegate
-                {
-                    // Capture before Settle deletes .old. The early Icons.Ensure
-                    // usually runs while .old is still there; if it raced after
-                    // Settle, this second pass still forces the shortcut redraw.
-                    bool afterUpdate = false;
-                    try { afterUpdate = File.Exists(SelfSwap.OldOf(self)); } catch { /* path unreadable: skip the second icon pass */ }
-                    string said = null;
-                    try { said = SelfSwap.Settle(self); } catch (Exception ex) { Swallow.Note("Shell.Run, clearing the copy the self update kept", ex); }
-                    if (afterUpdate)
+                if (Velo.Restarted)
+                    ThreadPool.QueueUserWorkItem(delegate
                     {
                         int moved = 0;
-                        try { moved = Icons.Ensure(true); } catch (Exception ex) { Swallow.Note("Shell.Run, refreshing shortcut icons after self update", ex); }
+                        try { moved = Icons.Ensure(true); } catch (Exception ex) { Swallow.Note("Shell.Run, refreshing shortcut icons after the update", ex); }
                         if (moved > 0)
-                            try { win.Dispatcher.BeginInvoke((Action)delegate { Log("Shortcut icon brought up to date after the update."); }); } catch (Exception ex) { Swallow.Note("Shell.Run, saying shortcut icons were refreshed", ex); }
-                        // The rest of the update that restarted the launcher
-                        // (#3201): the same Fix Install now runs after an
-                        // update that needs no restart, after the icon pass so
-                        // the two never race. Not without a folder of our own,
-                        // where the offer to make one (OwnGameAtStart) is the
-                        // thing to answer first.
+                            try { Dispatcher.UIThread.Post((Action)delegate { Log("Shortcut icon brought up to date after the update."); }); } catch (Exception ex) { Swallow.Note("Shell.Run, saying shortcut icons were refreshed", ex); }
+                        // Not without a folder of our own, where the offer to
+                        // make one (OwnGameAtStart) is the thing to answer first.
                         if (!Paths.Collection)
-                            try { win.Dispatcher.BeginInvoke((Action)delegate { RunFix(true); }); } catch (Exception ex) { Swallow.Note("Shell.Run, the scan after the launcher update", ex); }
-                    }
-                    if (string.IsNullOrEmpty(said)) return;
-                    try { win.Dispatcher.BeginInvoke((Action)delegate { Log(said); }); } catch (Exception ex) { Swallow.Note("Shell.Run, saying what the self update left", ex); }
-                });
+                            try { Dispatcher.UIThread.Post((Action)delegate { RunFix(true); }); } catch (Exception ex) { Swallow.Note("Shell.Run, the scan after the launcher update", ex); }
+                    });
+                // Message boxes belong to the window from here on, so they
+                // stay in front of it and keep it from being used meanwhile.
+                try { Ask.Owner = win.TryGetPlatformHandle().Handle; } catch (Exception ex) { Swallow.Note("Shell.Run, giving message boxes the window", ex); }
             };
 
             // Inside the screen at any display scale, before it is centred (#463).
@@ -578,70 +605,66 @@ namespace Thornswood
             CentreOnMainScreen();
 
             /*
-              ShutdownMode, and why it is not the default.
+              The launcher's life is this window's, and no other window's.
 
-              WPF closes the application when the LAST window closes. The voice
-              host is a real Window that is deliberately never shown, so with
-              the default the launcher window closing left Application.Run
-              still running against an invisible window: no UI, process alive,
-              and the ThornswoodLauncher mutex still held. Every later launch
-              then hit "if (!fresh) return" and vanished without a word, which
-              reads as the launcher simply refusing to open.
+              The application used to close when the LAST window closed. The
+              voice host was a real Window that was deliberately never shown,
+              so the launcher window closing left the message loop running
+              against an invisible window: no UI, process alive, and the
+              ThornswoodLauncher mutex still held. Every later launch then hit
+              "if (!fresh) return" and vanished without a word, which reads as
+              the launcher simply refusing to open.
 
-              OnMainWindowClose ties the app's life to this window, which is
-              what anyone closing it means.
+              So the loop at the end of Run runs until this window has closed
+              and then stops, whatever else is open, which is what anyone
+              closing it means. What has to be let go on the way out is let go
+              after the loop.
             */
-            var app = new Application();
-            app.ShutdownMode = ShutdownMode.OnMainWindowClose;
-            app.Exit += delegate { StopFeedWatch(); Voice.Stop(); try { Presence.Stop(); } catch (Exception ex) { Swallow.Note("Shell.Run, dispose", ex); } try { Hold.Release(); } catch (Exception ex) { Swallow.Note("Shell.Run, dispose", ex); } };
+            var closed = new CancellationTokenSource();
+            win.Closed += delegate { closed.Cancel(); };
 
             // A fault on the launcher's own thread used to take the window
             // down with no line in the log, or leave it standing and deaf.
             // Now the fault is written down, stack and all, and the launcher
             // stays up. A button that failed once is better than no launcher,
             // and the log line is the only evidence anyone will have.
-            app.DispatcherUnhandledException += delegate (object faultSender,
-                System.Windows.Threading.DispatcherUnhandledExceptionEventArgs fault)
+            Dispatcher.UIThread.UnhandledException += delegate (object faultSender, DispatcherUnhandledExceptionEventArgs fault)
             {
                 try { Log("Fault on the launcher's own thread: " + fault.Exception.GetType().Name + ": " + fault.Exception.Message); } catch (Exception ex) { Swallow.Note("Shell.Run", ex); }
                 try { File.AppendAllText(Paths.LogFile, fault.Exception.ToString() + Environment.NewLine); } catch (Exception ex) { Swallow.Note("Shell.Run, append", ex); }
-                // IL offsets let a pdb kept on the shipping machine map a
-                // customer's report to a source line without shipping symbols
-                // (issue #462). StackTrace(..., false) skips file/line lookup
-                // so a missing pdb on the customer machine does not cost.
+                // The launcher is native code with no symbols on the customer's
+                // machine, so each frame is also written as its method and its
+                // offset into the exe. The pdb the native build writes, kept on
+                // the shipping machine, maps that offset to a source line
+                // (issue #462) without shipping symbols.
                 try
                 {
                     StackTrace st = new StackTrace(fault.Exception, false);
-                    StringBuilder il = new StringBuilder();
-                    il.AppendLine("IL offsets:");
+                    StringBuilder at = new StringBuilder();
+                    at.AppendLine("Native offsets:");
                     for (int fi = 0; fi < st.FrameCount; fi++)
                     {
                         StackFrame fr = st.GetFrame(fi);
                         if (fr == null) continue;
-                        MethodBase mb = fr.GetMethod();
                         string name = "?";
-                        if (mb != null)
-                        {
-                            if (mb.DeclaringType != null)
-                                name = mb.DeclaringType.FullName + "." + mb.Name;
-                            else
-                                name = mb.Name;
-                        }
-                        il.Append("  ");
-                        il.Append(name);
-                        il.Append(" IL_");
-                        il.Append(fr.GetILOffset().ToString("x4"));
-                        il.AppendLine();
+                        DiagnosticMethodInfo mi = DiagnosticMethodInfo.Create(fr);
+                        if (mi != null)
+                            name = string.IsNullOrEmpty(mi.DeclaringTypeName) ? mi.Name : mi.DeclaringTypeName + "." + mi.Name;
+                        long ip = fr.GetNativeIP().ToInt64(), image = fr.GetNativeImageBase().ToInt64();
+                        at.Append("  ");
+                        at.Append(name);
+                        at.Append(ip != 0 && image != 0 ? " +0x" + (ip - image).ToString("x8") : " (no native offset)");
+                        at.AppendLine();
                     }
-                    File.AppendAllText(Paths.LogFile, il.ToString());
+                    File.AppendAllText(Paths.LogFile, at.ToString());
                 }
-                catch (Exception ilEx) { Swallow.Note("Shell.DispatcherUnhandledException, IL offsets", ilEx); }
+                catch (Exception atEx) { Swallow.Note("Shell.UnhandledException, native offsets", atEx); }
                 fault.Handled = true;
             };
             StartStallWatch();
             if (!askedToUninstall && termsOnFile)
             {
-                // The record is already there (the setup program's, or the
+                // The record is already there (the install window's, or the
                 // first start's above). A page is asked again only when its
                 // text has changed since it was accepted, and then only that
                 // page: Patrick, 16 Oct 2026 (#2616), asked once at install,
@@ -655,150 +678,155 @@ namespace Thornswood
                         bool ok = Acceptance.Recheck(Paths.ProfileDir, delegate(bool[] which)
                         {
                             bool ticked = false;
-                            win.Dispatcher.Invoke((Action)delegate { ticked = Acceptance.Ask(which); });
+                            Dispatcher.UIThread.Invoke((Action)delegate { ticked = Acceptance.Ask(which, win); });
                             return ticked;
                         });
                         if (!ok)
                         {
-                            try { win.Dispatcher.Invoke((Action)delegate { if (Application.Current != null) Application.Current.Shutdown(); }); }
+                            try { Dispatcher.UIThread.Invoke((Action)Quit); }
                             catch (Exception ex) { Swallow.Note("Shell.Run, closing after a changed page was declined", ex); }
                         }
                     }
                     catch (Exception ex) { Swallow.Note("Shell.Run, terms recheck", ex); }
                 });
             }
-            app.Run(win);
+            win.Show();
+            if (installing != null) installing.Close();
+            Dispatcher.UIThread.MainLoop(closed.Token);
+
+            StopFeedWatch(); Voice.Stop(); try { Presence.Stop(); } catch (Exception ex) { Swallow.Note("Shell.Run, dispose", ex); } try { Hold.Release(); } catch (Exception ex) { Swallow.Note("Shell.Run, dispose", ex); }
         }
 
         /// <summary>
-        /// WPF's CenterScreen centres on the whole desktop, so on a two monitor
-        /// setup the window lands in the gap between them. The primary monitor's
-        /// work area is what people mean by the middle of their screen, and it
-        /// already excludes the taskbar.
+        /// True once Quit has been asked for: the window then closes without
+        /// asking anything, the way the launcher always closed when it ended
+        /// itself (after an uninstall, or a changed page that was declined).
+        /// </summary>
+        static bool quitting;
+
+        /// <summary>
+        /// Ends the launcher: the window's Closing handler puts things back
+        /// as it does when somebody closes the window, without its questions,
+        /// and then the loop at the end of Run stops.
+        /// </summary>
+        internal static void Quit()
+        {
+            quitting = true;
+            if (win != null) win.Close();
+        }
+
+
+        /// <summary>
+        /// Centres the window on the primary monitor's work area. Centring on
+        /// the whole desktop puts it in the gap between two monitors. The
+        /// primary monitor's work area is what people mean by the middle of
+        /// their screen, and it already excludes the taskbar.
         /// </summary>
         static void CentreOnMainScreen()
         {
             try
             {
-                Rect work = SystemParameters.WorkArea;
+                Screen main = win.Screens.Primary;
+                if (main == null) return;
+                double scale = main.Scaling > 0 ? main.Scaling : 1;
+                PixelRect work = main.WorkingArea;
                 double w = win.Width, h = win.Height;
-                if (double.IsNaN(w) || w <= 0) w = win.ActualWidth;
-                if (double.IsNaN(h) || h <= 0) h = win.ActualHeight;
+                if (double.IsNaN(w) || w <= 0) w = win.Bounds.Width;
+                if (double.IsNaN(h) || h <= 0) h = win.Bounds.Height;
 
-                win.Left = work.Left + Math.Max(0, (work.Width - w) / 2);
-                win.Top = work.Top + Math.Max(0, (work.Height - h) / 2);
+                int pw = (int)Math.Round(w * scale), ph = (int)Math.Round(h * scale);
+                win.Position = new PixelPoint(work.X + Math.Max(0, (work.Width - pw) / 2),
+                                              work.Y + Math.Max(0, (work.Height - ph) / 2));
             }
             catch (Exception ex) { Swallow.Note("Shell.CentreOnMainScreen", ex); }   // a bad monitor layout is not worth refusing to start over
         }
 
-        static T F<T>(string name) where T : class { return win.FindName(name) as T; }
-
-        /// <summary>How far a maximized window hangs past the screen: the sizing frame plus its padding, in WPF units.</summary>
-        static Thickness MaximizedInset()
-        {
-            double scale = 1;
-            try
-            {
-                PresentationSource src = PresentationSource.FromVisual(win);
-                if (src != null && src.CompositionTarget != null) scale = src.CompositionTarget.TransformToDevice.M11;
-            }
-            catch (Exception ex) { Swallow.Note("Shell.MaximizedInset, reading the screen scale", ex); }
-            if (scale <= 0) scale = 1;
-            // At the scale of the monitor the window is on, not the one
-            // Windows started with: they differ on a second monitor (#463).
-            double px = 0;
-            try { px = WindowFit.FramePixels(scale); }   // SM_CXSIZEFRAME + SM_CXPADDEDBORDER
-            catch (Exception ex) { Swallow.Note("Shell.MaximizedInset, asking Windows for the frame size", ex); }
-            if (px <= 0) px = 8;
-            return new Thickness(px / scale);
-        }
-
         static void Bind()
         {
-            txtServer = F<TextBlock>("TxtServer"); txtPing = F<TextBlock>("TxtPing");
-            txtStatus = F<TextBlock>("TxtStatus"); txtStatusRight = F<TextBlock>("TxtStatusRight");
-            txtVersion = F<TextBlock>("TxtVersion"); txtBuildLine = F<TextBlock>("TxtBuildLine");
-            txtUpdateTitle = F<TextBlock>("TxtUpdateTitle"); txtUpdateNote = F<TextBlock>("TxtUpdateNote");
-            txtPageTitle = F<TextBlock>("TxtPageTitle"); txtHeroLine = F<TextBlock>("TxtHeroLine");
-            txtVerifyTitle = F<TextBlock>("TxtVerifyTitle"); txtVerifyNote = F<TextBlock>("TxtVerifyNote");
-            txtDisplayNote = F<TextBlock>("TxtDisplayNote");
-            newsList = F<StackPanel>("NewsList"); statRow = F<UniformGrid>("StatRow");
-            displayModeRow = F<StackPanel>("DisplayModeRow");
-            boxResolution = F<TextBox>("BoxResolution"); boxFrameLimit = F<TextBox>("BoxFrameLimit");
-            chkVSync = F<CheckBox>("ChkVSync"); chkKeepOpen = F<CheckBox>("ChkKeepOpen");
-            btnSaveDisplay = F<Button>("BtnSaveDisplay");
-            btnQuitGame = F<Button>("BtnQuitGame");
-            chkLockRes = F<CheckBox>("ChkLockRes");
-            chkCrashSnapshots = F<CheckBox>("ChkCrashSnapshots"); txtCrashFolder = F<TextBlock>("TxtCrashFolder");
-            btnCrashFolder = F<Button>("BtnCrashFolder");
-            chkMusic = F<CheckBox>("ChkMusic"); sldMusic = F<Slider>("SldMusic"); txtMusic = F<TextBlock>("TxtMusic");
-            dotServer = F<Ellipse>("DotServer"); dotVerify = F<Ellipse>("DotVerify");
-            dotReady = F<Ellipse>("DotReady");
-            txtReadyTitle = F<TextBlock>("TxtReadyTitle"); txtReadyNote = F<TextBlock>("TxtReadyNote");
-            statusList = F<StackPanel>("StatusList");
-            themeRow = F<StackPanel>("ThemeRow"); themeEditor = F<StackPanel>("ThemeEditor");
-            pathRows = F<StackPanel>("PathRows");
-            chkAutoUpdate = F<CheckBox>("ChkAutoUpdate");
-            updateBar = F<Border>("UpdateBar"); titleBar = F<Grid>("TitleBar");
-            downgradeBar = F<Border>("DowngradeBar"); txtDowngradeNote = F<TextBlock>("TxtDowngradeNote"); btnDowngrade = F<Button>("BtnDowngrade");
-            prgDowngrade = F<ProgressBar>("PrgDowngrade");
-            txtDowngradeTitle = F<TextBlock>("TxtDowngradeTitle");
-            noticeBar = F<Border>("NoticeBar"); txtNoticeTitle = F<TextBlock>("TxtNoticeTitle"); txtNoticeNote = F<TextBlock>("TxtNoticeNote");
+            txtServer = win.TxtServer; txtPing = win.TxtPing;
+            txtStatus = win.TxtStatus; txtStatusRight = win.TxtStatusRight;
+            txtVersion = win.TxtVersion; txtBuildLine = win.TxtBuildLine;
+            txtUpdateTitle = win.TxtUpdateTitle; txtUpdateNote = win.TxtUpdateNote;
+            txtPageTitle = win.TxtPageTitle; txtHeroLine = win.TxtHeroLine;
+            txtVerifyTitle = win.TxtVerifyTitle; txtVerifyNote = win.TxtVerifyNote;
+            txtDisplayNote = win.TxtDisplayNote;
+            newsList = win.NewsList; statRow = win.StatRow;
+            displayModeRow = win.DisplayModeRow;
+            boxResolution = win.BoxResolution; boxFrameLimit = win.BoxFrameLimit;
+            chkVSync = win.ChkVSync; chkKeepOpen = win.ChkKeepOpen;
+            btnSaveDisplay = win.BtnSaveDisplay;
+            btnQuitGame = win.BtnQuitGame;
+            chkLockRes = win.ChkLockRes;
+            chkCrashSnapshots = win.ChkCrashSnapshots; txtCrashFolder = win.TxtCrashFolder;
+            btnCrashFolder = win.BtnCrashFolder;
+            chkMusic = win.ChkMusic; sldMusic = win.SldMusic; txtMusic = win.TxtMusic;
+            dotServer = win.DotServer; dotVerify = win.DotVerify;
+            dotReady = win.DotReady;
+            txtReadyTitle = win.TxtReadyTitle; txtReadyNote = win.TxtReadyNote;
+            statusList = win.StatusList;
+            themeRow = win.ThemeRow; themeEditor = win.ThemeEditor;
+            pathRows = win.PathRows;
+            chkAutoUpdate = win.ChkAutoUpdate;
+            updateBar = win.UpdateBar; titleBar = win.TitleBar;
+            downgradeBar = win.DowngradeBar; txtDowngradeNote = win.TxtDowngradeNote; btnDowngrade = win.BtnDowngrade;
+            prgDowngrade = win.PrgDowngrade;
+            txtDowngradeTitle = win.TxtDowngradeTitle;
+            noticeBar = win.NoticeBar; txtNoticeTitle = win.TxtNoticeTitle; txtNoticeNote = win.TxtNoticeNote;
 
-            btnPlay = F<Button>("BtnPlay"); btnCopy = F<Button>("BtnCopy");
-            btnUpdate = F<Button>("BtnUpdate"); btnMin = F<Button>("BtnMin"); btnMax = F<Button>("BtnMax");
-            btnClose = F<Button>("BtnClose");
-            btnCheckNow = F<Button>("BtnCheckNow"); btnInstallNow = F<Button>("BtnInstallNow");
-            btnFolder = F<Button>("BtnFolder");
-            btnOpenLog = F<Button>("BtnOpenLog");
-            btnIcons = F<Button>("BtnIcons");
-            btnServerMain = F<Button>("BtnServerMain"); btnServerDev = F<Button>("BtnServerDev");
-            btnServerPick = F<Button>("BtnServerPick"); serverPickPopup = F<Popup>("ServerPickPopup");
-            serverPickPanel = F<Border>("ServerPickPanel");
-            txtServerPick = F<TextBlock>("TxtServerPick");
-            txtServerPickMeta = F<TextBlock>("TxtServerPickMeta");
-            txtServerMainMeta = F<TextBlock>("TxtServerMainMeta");
-            txtServerDevMeta = F<TextBlock>("TxtServerDevMeta");
-            dotServerPick = F<Ellipse>("DotServerPick");
-            dotServerMain = F<Ellipse>("DotServerMain");
-            dotServerDev = F<Ellipse>("DotServerDev");
-            btnCheckDiagnostics = F<Button>("BtnCheckDiagnostics");
-            btnOpenSteam = F<Button>("BtnOpenSteam");
-            txtBrandSmall = F<TextBlock>("TxtBrandSmall"); txtBrandBig = F<TextBlock>("TxtBrandBig");
-            btnUninstall = F<Button>("BtnUninstall"); chkKeepSaves = F<CheckBox>("ChkKeepSaves");
-            chkDeleteMods = F<CheckBox>("ChkDeleteMods");
-            btnScan = F<Button>("BtnScan"); btnFix = F<Button>("BtnFix");
+            btnPlay = win.BtnPlay; btnCopy = win.BtnCopy;
+            btnUpdate = win.BtnUpdate; btnMin = win.BtnMin; btnMax = win.BtnMax;
+            btnClose = win.BtnClose;
+            btnCheckNow = win.BtnCheckNow; btnInstallNow = win.BtnInstallNow;
+            btnFolder = win.BtnFolder;
+            btnOpenLog = win.BtnOpenLog;
+            btnIcons = win.BtnIcons;
+            btnServerMain = win.BtnServerMain; btnServerDev = win.BtnServerDev;
+            btnServerPick = win.BtnServerPick; serverPickPopup = win.ServerPickPopup;
+            serverPickPanel = win.ServerPickPanel;
+            txtServerPick = win.TxtServerPick;
+            txtServerPickMeta = win.TxtServerPickMeta;
+            txtServerMainMeta = win.TxtServerMainMeta;
+            txtServerDevMeta = win.TxtServerDevMeta;
+            dotServerPick = win.DotServerPick;
+            dotServerMain = win.DotServerMain;
+            dotServerDev = win.DotServerDev;
+            btnCheckDiagnostics = win.BtnCheckDiagnostics;
+            btnOpenSteam = win.BtnOpenSteam;
+            txtBrandSmall = win.TxtBrandSmall; txtBrandBig = win.TxtBrandBig;
+            btnUninstall = win.BtnUninstall; chkKeepSaves = win.ChkKeepSaves;
+            chkDeleteMods = win.ChkDeleteMods;
+            btnScan = win.BtnScan; btnFix = win.BtnFix;
 
-            firstRunCard = F<StackPanel>("FirstRunCard");
-            quickKeysCard = F<StackPanel>("QuickKeysCard");
-            quickKeys = F<StackPanel>("QuickKeys");
-            galleryCard = F<FrameworkElement>("GalleryCard");
-            galleryImage = F<Image>("GalleryImage");
-            galleryBy = F<TextBlock>("GalleryBy");
-            btnGalleryChoose = F<Button>("BtnGalleryChoose");
-            btnGallerySend = F<Button>("BtnGallerySend");
-            btnGalleryRefresh = F<Button>("BtnGalleryRefresh");
-            btnGalleryReportSend = F<Button>("BtnGalleryReportSend");
-            btnGalleryReportCancel = F<Button>("BtnGalleryReportCancel");
-            boxGalleryBy = F<TextBox>("BoxGalleryBy");
-            boxGalleryNote = F<TextBox>("BoxGalleryNote");
-            boxGalleryWhy = F<TextBox>("BoxGalleryWhy");
-            txtGalleryChosen = F<TextBlock>("TxtGalleryChosen");
-            txtGalleryDropLead = F<TextBlock>("TxtGalleryDropLead");
-            txtGalleryPageSaid = F<TextBlock>("TxtGalleryPageSaid");
-            txtGalleryApprovedEmpty = F<TextBlock>("TxtGalleryApprovedEmpty");
-            galleryPageReportRow = F<FrameworkElement>("GalleryPageReportRow");
-            galleryDrop = F<Border>("GalleryDrop");
-            galleryChosenList = F<StackPanel>("GalleryChosenList");
-            galleryApprovedList = F<WrapPanel>("GalleryApprovedList");
+            firstRunCard = win.FirstRunCard;
+            quickKeysCard = win.QuickKeysCard;
+            quickKeys = win.QuickKeys;
+            galleryCard = win.GalleryCard;
+            galleryImage = win.GalleryImage;
+            galleryBy = win.GalleryBy;
+            btnGalleryChoose = win.BtnGalleryChoose;
+            btnGallerySend = win.BtnGallerySend;
+            btnGalleryRefresh = win.BtnGalleryRefresh;
+            btnGalleryReportSend = win.BtnGalleryReportSend;
+            btnGalleryReportCancel = win.BtnGalleryReportCancel;
+            boxGalleryBy = win.BoxGalleryBy;
+            boxGalleryNote = win.BoxGalleryNote;
+            boxGalleryWhy = win.BoxGalleryWhy;
+            txtGalleryChosen = win.TxtGalleryChosen;
+            txtGalleryDropLead = win.TxtGalleryDropLead;
+            txtGalleryPageSaid = win.TxtGalleryPageSaid;
+            txtGalleryApprovedEmpty = win.TxtGalleryApprovedEmpty;
+            galleryPageReportRow = win.GalleryPageReportRow;
+            galleryDrop = win.GalleryDrop;
+            galleryChosenList = win.GalleryChosenList;
+            galleryApprovedList = win.GalleryApprovedList;
 
             // Same order as the PageXxx constants, and as PageTitles.
             navButtons = new Button[] {
-                F<Button>("NavPlay"), F<Button>("NavNews"), F<Button>("NavDiag"),
-                F<Button>("NavSettings"), F<Button>("NavGallery") };
-            pages = new UIElement[] {
-                F<Grid>("PagePlay"), F<Grid>("PageNews"), F<Grid>("PageDiag"),
-                F<Grid>("PageSettings"), F<Grid>("PageGallery") };
+                win.NavPlay, win.NavNews, win.NavDiag,
+                win.NavSettings, win.NavGallery };
+            pages = new Control[] {
+                win.PagePlay, win.PageNews, win.PageDiag,
+                win.PageSettings, win.PageGallery };
 
             /*
               What the launcher keeps once settings and keys are in the game
@@ -822,9 +850,9 @@ namespace Thornswood
               A blocked Play sends people to Diagnostics (ShowPage(PageDiag)),
               where Scan and Fix are since #607.
             */
-            buttonDiscord  = F<Button>("ButtonDiscord");
-            labelDiscord   = F<TextBlock>("LabelDiscord");
-            discordAvatar  = F<Ellipse>("DiscordAvatar");
+            buttonDiscord  = win.ButtonDiscord;
+            labelDiscord   = win.LabelDiscord;
+            discordAvatar  = win.DiscordAvatar;
 
             // Discord.cs keeps the ticket beside launcher.log rather than in
             // config.json, so a config that gets copied between machines does
@@ -863,7 +891,7 @@ namespace Thornswood
                     Discord.Connect(delegate (bool ok, string who)
                     {
                         answered = true;
-                        win.Dispatcher.BeginInvoke(new Action(delegate
+                        Dispatcher.UIThread.Post(new Action(delegate
                         {
                             linkingDiscord = false;
                             SetLinkButtons(true);
@@ -886,7 +914,7 @@ namespace Thornswood
                 catch (Exception ex)
                 {
                     string why = ex.Message;
-                    win.Dispatcher.BeginInvoke(new Action(delegate
+                    Dispatcher.UIThread.Post(new Action(delegate
                     {
                         linkingDiscord = false;
                         SetLinkButtons(true);
@@ -901,7 +929,7 @@ namespace Thornswood
                 // calling back is still not allowed to leave the button dead.
                 if (!answered)
                 {
-                    win.Dispatcher.BeginInvoke(new Action(delegate
+                    Dispatcher.UIThread.Post(new Action(delegate
                     {
                         linkingDiscord = false;
                         SetLinkButtons(true);
@@ -972,7 +1000,7 @@ namespace Thornswood
                 catch (Exception ex) { Swallow.Note("Shell.PullDiscordAvatar", ex); }
                 try
                 {
-                    win.Dispatcher.BeginInvoke(new Action(delegate
+                    Dispatcher.UIThread.Post(new Action(delegate
                     {
                         try { LoadDiscordAvatar(); }
                         catch (Exception ex) { Swallow.Note("Shell.PullDiscordAvatar", ex); }
@@ -997,34 +1025,35 @@ namespace Thornswood
             string want = url;
             ThreadPool.QueueUserWorkItem(delegate
             {
-                BitmapImage bi = null;
+                Bitmap bi = null;
                 try
                 {
                     byte[] raw = null;
                     try
                     {
-                        ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12; // added, never replaced (#1360)
-                        using (var wc = new System.Net.WebClient())
+                        // TLS 1.2 and later are the default on .NET 10; #1360
+                        // had to add 1.2 by hand on the old framework. The
+                        // waits are WebClient's: 100 seconds for an answer.
+                        using (var ask = new HttpRequestMessage(HttpMethod.Get, want))
                         {
-                            wc.Headers["User-Agent"] = "ThornswoodLauncher/" + Updater.Version;
-                            raw = wc.DownloadData(want);
+                            ask.Headers.TryAddWithoutValidation("User-Agent", "ThornswoodLauncher/" + Updater.Version);
+                            using (HttpResponseMessage got = Http.Send(ask, 100000))
+                            {
+                                got.EnsureSuccessStatusCode();
+                                raw = Http.Body(got, Http.DefaultReadMs);
+                            }
                         }
                     }
                     catch (Exception ex) { Swallow.Note("Shell.LoadDiscordAvatar", ex); raw = null; }
                     if (raw == null || raw.Length == 0) return;
-                    bi = new BitmapImage();
-                    bi.BeginInit();
-                    bi.CacheOption = BitmapCacheOption.OnLoad;
-                    bi.StreamSource = new MemoryStream(raw);
-                    bi.EndInit();
-                    bi.Freeze();
+                    using (var ms = new MemoryStream(raw)) bi = new Bitmap(ms);
                 }
                 catch (Exception ex) { Swallow.Note("Shell.LoadDiscordAvatar", ex); bi = null; }
                 if (bi == null) return;
-                BitmapImage pic = bi;
+                Bitmap pic = bi;
                 try
                 {
-                    win.Dispatcher.BeginInvoke(new Action(delegate
+                    Dispatcher.UIThread.Post(new Action(delegate
                     {
                         if (discordAvatar == null || !Discord.Linked) return;
                         // Stale answer: Reconnect or Forget may have changed the account.
@@ -1042,7 +1071,7 @@ namespace Thornswood
             });
         }
 
-        static Brush Res(string key) { return (Brush)win.Resources[key]; }
+        static IBrush Res(string key) { return (IBrush)win.Resources[key]; }
 
         static void Log(string m)
         {
@@ -1074,16 +1103,15 @@ namespace Thornswood
         {
             try
             {
-                InputDevice dev = InputManager.Current.MostRecentInputDevice;
                 string by;
-                if (dev is MouseDevice)
-                    by = "the mouse (left button " + (Mouse.LeftButton == MouseButtonState.Pressed ? "still down" : "up") + ")";
-                else if (dev is KeyboardDevice)
+                if (lastInput == "mouse")
+                    by = "the mouse (left button " + (leftButtonDown ? "still down" : "up") + ")";
+                else if (lastInput == "keyboard")
                     by = "the keyboard (last key " + lastKeyDown + ", " +
                          (lastKeyDownAt == DateTime.MinValue ? "never" : (int)(DateTime.Now - lastKeyDownAt).TotalMilliseconds + " ms ago") +
-                         (Keyboard.Modifiers != ModifierKeys.None ? ", " + Keyboard.Modifiers + " held" : "") + ")";
+                         (lastKeyModifiers != KeyModifiers.None ? ", " + lastKeyModifiers + " held" : "") + ")";
                 else
-                    by = dev == null ? "no input device (UI Automation or a program)" : dev.GetType().Name;
+                    by = lastInput == null ? "no input device (UI Automation or a program)" : lastInput;
                 string when = gameClosedAt == DateTime.MinValue ? "no game closed yet this run"
                     : (DateTime.Now - gameClosedAt).TotalSeconds.ToString("0.0") + " s after the last game closed";
                 return "Play pressed by " + by + ", window " + (win != null && win.IsActive ? "active" : "not active") + ", " + when + ".";
@@ -1104,7 +1132,7 @@ namespace Thornswood
         {
             for (int k = 0; k < pages.Length; k++)
             {
-                pages[k].Visibility = (k == i) ? Visibility.Visible : Visibility.Collapsed;
+                pages[k].IsVisible = k == i;
                 navButtons[k].Tag = (k == i) ? "on" : "off";
             }
             txtPageTitle.Text = PageTitles[i];
@@ -1126,122 +1154,123 @@ namespace Thornswood
         /// <summary>
         /// Puts the moving strip over the still one on the Play page.
         ///
-        /// A MediaPlayer painted through a brush rather than a MediaElement. The
-        /// band takes its height from the title beside it, and a MediaElement
-        /// asks for room at the video's own shape: it took the band from 135 to
-        /// 195 high. A brush asks for no room at all and crops exactly as the
-        /// picture's brush does, so the two line up.
+        /// The frames come out of the exe as an animated WebP (Art.HeaderVideo)
+        /// and are painted through the same brush as the still picture, with
+        /// the same crop, so the two line up. A brush asks for no room at all,
+        /// so the band keeps the height the title gives it: a video control
+        /// asking for room at the video's own shape once took the band from
+        /// 135 to 195 high.
         ///
-        /// The clip is made to loop, and a timeline that repeats forever joins
-        /// the end to the start more smoothly than going back to the start when
-        /// it ends: the band held one picture for 61 to 78 ms at the join that
-        /// way, against 94 to 111 ms, where any two ordinary frames are 33 ms
-        /// apart. While playing, the two cost the same as far as measuring could
-        /// tell: 3 to 14% of one core, varying from run to run.
+        /// The frames are decoded on a thread of their own, in order, each at
+        /// its own time, and the window's thread only puts the finished frame
+        /// on screen: a frame takes about a third of its time on screen to
+        /// decode (HeaderFrames says what was measured), which is too much to
+        /// take from the thread that answers the mouse. After the last frame
+        /// comes the first, with no pause at the join.
         ///
         /// It plays only while somebody can see it: stopped while the window is
-        /// minimised or another page is open, and carried on from the same point
-        /// when the Play page is back. Stopped, not paused, because a paused
-        /// timeline went on costing up to 6.9% of one core with nothing on
-        /// screen, and a stopped one next to nothing. If it will not play (Windows
-        /// N without the Media Feature Pack, a file that will not open) it is
-        /// hidden and the still picture shows exactly as before.
+        /// minimised or another page is open, and carried on from the same
+        /// frame when the Play page is back. Stopped, the thread waits and
+        /// costs nothing. If it will not play (no video in this build, a frame
+        /// that will not decode) it is hidden and the still picture shows
+        /// exactly as before.
         ///
         /// Stopped while the game runs as well, the way the music is. With Keep
         /// Launcher Open ticked the window is never minimised, so until 24
         /// September the video went on decoding behind the game for the whole
-        /// session, 3 to 14% of one core that the game could have had. The one
-        /// time it failed on Patrick's machine, in 42 game starts since 19
-        /// September, came one second after a start: "Starting the game" at
-        /// 20:47:59 on 21 September, then "Title band: the video did not play
-        /// (MILAVERR_UNEXPECTEDWMPFAILURE ...)" at 20:48:00, and a failure keeps
-        /// the still picture until the launcher is restarted. Every place that
-        /// changes playing calls headerVideoDecide straight after, except the
-        /// check at startup, which runs before the window is shown; showing it
-        /// decides then.
+        /// session, 3 to 14% of one core that the game could have had. Every
+        /// place that changes playing calls headerVideoDecide straight after,
+        /// except the check at startup, which runs before the window is shown;
+        /// showing it decides then.
         /// </summary>
         static Action headerVideoDecide = delegate { };
         static void StartHeaderVideo()
         {
-            string file = Art.HeaderVideo();
-            var layer = F<Border>("HeaderArtVideo");
-            var page = F<Grid>("PagePlay");
-            if (file == null || layer == null || page == null) return;
+            var layer = win.HeaderArtVideo;
+            var page = win.PagePlay;
+            if (layer == null || page == null) return;
 
-            MediaPlayer player = null;
-            MediaClock clock = null;
+            HeaderFrames frames;
+            try { frames = Art.HeaderVideo(); }
+            catch (Exception ex) { Stamp("Title band: the video did not play (" + ex.Message + "), the still picture stays"); return; }
+            if (frames == null) return;
+
+            // The frame on screen. The decoding thread copies each finished
+            // frame in under the bitmap's own lock, which is the lock drawing
+            // it takes, so a frame is never drawn half copied.
+            var shown = new WriteableBitmap(new PixelSize(frames.Width, frames.Height), new Vector(96, 96),
+                                            PixelFormat.Bgra8888, AlphaFormat.Premul);
+            // Set while somebody can see the strip; the thread waits on it.
+            var seenNow = new ManualResetEventSlim(false);
             bool gone = false;
-            // Where it was when it was put away. Null while it plays.
-            TimeSpan? heldAt = null;
             Action<string> drop = delegate(string why)
             {
                 if (gone) return;
                 gone = true;
-                layer.Visibility = Visibility.Collapsed;
+                seenNow.Reset();
+                layer.IsVisible = false;
                 layer.Background = null;
-                try { if (player != null) { player.Clock = null; player.Close(); } } catch (Exception ex) { Swallow.Note("Shell.StartHeaderVideo, dispose", ex); }
                 Stamp("Title band: the video did not play (" + why + "), the still picture stays");
             };
             Action decide = delegate
             {
-                if (gone || clock == null) return;
-                bool seen = page.IsVisible && win.WindowState != WindowState.Minimized && !playing;
-                if (seen && heldAt != null)
-                {
-                    TimeSpan at = heldAt.Value;
-                    heldAt = null;
-                    clock.Controller.Begin();
-                    clock.Controller.Seek(at, System.Windows.Media.Animation.TimeSeekOrigin.BeginTime);
-                }
-                else if (!seen && heldAt == null)
-                {
-                    heldAt = clock.CurrentTime ?? TimeSpan.Zero;
-                    clock.Controller.Stop();
-                }
+                if (gone) return;
+                bool seen = win.IsVisible && page.IsVisible && win.WindowState != WindowState.Minimized && !playing;
+                if (seen) seenNow.Set(); else seenNow.Reset();
             };
 
-            try
+            var decoding = new Thread(delegate()
             {
-                player = new MediaPlayer();
-                player.IsMuted = true;
-                player.Volume = 0;
-                var frame = new VideoDrawing();
-                frame.Player = player;
-                var brush = new DrawingBrush(frame);
-                // One crop for the band, the still picture's and this one, so
-                // the two line up and the overlook sits where the approved
-                // picture has it (Art.HeaderCrop says why that is not the
-                // middle of the picture). The video is painted at its own size
-                // and its own timing: no scale, no drift, no speed-up.
-                brush.Stretch = Stretch.UniformToFill;
-                brush.AlignmentX = AlignmentX.Center;
-                brush.AlignmentY = AlignmentY.Center;
-                brush.ViewboxUnits = BrushMappingMode.RelativeToBoundingBox;
-                brush.Viewbox = Art.HeaderCrop;
-
-                player.MediaOpened += delegate
+                bool first = true;
+                Stopwatch clock = Stopwatch.StartNew();
+                TimeSpan due = TimeSpan.Zero;
+                while (true)
                 {
-                    if (player.NaturalVideoWidth <= 0 || player.NaturalVideoHeight <= 0) { drop("no picture in it"); return; }
-                    frame.Rect = new Rect(0, 0, player.NaturalVideoWidth, player.NaturalVideoHeight);
-                    layer.Background = brush;
-                    layer.Visibility = Visibility.Visible;
-                    decide();
-                };
-                player.MediaFailed += delegate(object s, ExceptionEventArgs e)
-                {
-                    drop(e.ErrorException == null ? "no reason given" : e.ErrorException.Message);
-                };
+                    // Put away: wait, then carry on from this frame on its own
+                    // time, not from where the clock got to meanwhile.
+                    if (!seenNow.IsSet) { seenNow.Wait(); due = clock.Elapsed; }
+                    TimeSpan lasts;
+                    try
+                    {
+                        lasts = frames.Next();
+                        using (ILockedFramebuffer to = shown.Lock()) frames.CopyTo(to.Address, to.RowBytes);
+                    }
+                    catch (Exception ex)
+                    {
+                        string why = ex.Message;
+                        Dispatcher.UIThread.Post(delegate { drop(why); });
+                        frames.Dispose();
+                        return;
+                    }
+                    bool putUp = first;
+                    first = false;
+                    Dispatcher.UIThread.Post(delegate
+                    {
+                        if (gone) return;
+                        if (putUp) { layer.Background = Art.BandBrush(shown); layer.IsVisible = true; }
+                        else layer.InvalidateVisual();
+                    }, DispatcherPriority.Render);
 
-                var timeline = new MediaTimeline(new Uri(file));
-                timeline.RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever;
-                clock = timeline.CreateClock();
-                player.Clock = clock;
-            }
-            catch (Exception ex) { drop(ex.Message); return; }
+                    due += lasts;
+                    TimeSpan left = due - clock.Elapsed;
+                    if (left > TimeSpan.Zero) Thread.Sleep(left);
+                    // More than a frame behind (the machine was busy): go on
+                    // from now at the strip's own speed rather than racing
+                    // through the frames that were missed.
+                    else if (-left > lasts) due = clock.Elapsed;
+                }
+            });
+            decoding.IsBackground = true;
+            decoding.Name = "Title video";
+            decoding.Start();
 
             decide();
             win.StateChanged += delegate { decide(); };
-            page.IsVisibleChanged += delegate { decide(); };
+            win.Opened += delegate { decide(); };
+            page.PropertyChanged += delegate(object s, AvaloniaPropertyChangedEventArgs e)
+            {
+                if (e.Property == Visual.IsVisibleProperty) decide();
+            };
             headerVideoDecide = decide;
         }
 
@@ -1354,7 +1383,7 @@ namespace Thornswood
             {
                 List<Gallery.Shot> shots = Gallery.Load();
                 Gallery.Who who = Gallery.AskWho();
-                win.Dispatcher.BeginInvoke(new Action(delegate
+                Dispatcher.UIThread.Post(new Action(delegate
                 {
                     galleryWho = who;
                     galleryShots = (shots != null && shots.Count > 0) ? shots : null;
@@ -1368,6 +1397,7 @@ namespace Thornswood
                         galleryTimer.Interval = TimeSpan.FromSeconds(7);
                         galleryTimer.Tick += delegate { ShowNextShot(); };
                         win.StateChanged += delegate { GalleryDecide(); };
+                        win.Opened += delegate { GalleryDecide(); };
                     }
                     ShowNextShot();
                     GalleryDecide();
@@ -1395,7 +1425,7 @@ namespace Thornswood
 
         static bool GalleryReportOpen
         {
-            get { return galleryPageReportRow != null && galleryPageReportRow.Visibility == Visibility.Visible; }
+            get { return galleryPageReportRow != null && galleryPageReportRow.IsVisible; }
         }
 
         /// <summary>
@@ -1407,11 +1437,11 @@ namespace Thornswood
             if (string.IsNullOrEmpty(line))
             {
                 txtGalleryPageSaid.Text = "";
-                txtGalleryPageSaid.Visibility = Visibility.Collapsed;
+                txtGalleryPageSaid.IsVisible = false;
                 return;
             }
             txtGalleryPageSaid.Text = line;
-            txtGalleryPageSaid.Visibility = Visibility.Visible;
+            txtGalleryPageSaid.IsVisible = true;
         }
 
         /// <summary>
@@ -1448,7 +1478,7 @@ namespace Thornswood
                 // Staff queue is Door / DevAllowed, not who.Answered.
                 bool staff = Discord.Linked && ((Door.Last != null && Door.Last.Dev) || Discord.DevAllowed);
                 if (staff) pending = Gallery.Queue(out pendingBad);
-                win.Dispatcher.BeginInvoke(new Action(delegate
+                Dispatcher.UIThread.Post(new Action(delegate
                 {
                     galleryWho = who;
                     // A list that could not be read leaves the pictures as
@@ -1468,6 +1498,7 @@ namespace Thornswood
                             galleryTimer.Interval = TimeSpan.FromSeconds(7);
                             galleryTimer.Tick += delegate { ShowNextShot(); };
                             win.StateChanged += delegate { GalleryDecide(); };
+                            win.Opened += delegate { GalleryDecide(); };
                         }
                         if (galleryAt < 0) ShowNextShot();
                         GalleryDecide();
@@ -1476,7 +1507,7 @@ namespace Thornswood
                     {
                         galleryShots = null;
                         galleryAt = -1;
-                        if (galleryCard != null) galleryCard.Visibility = Visibility.Collapsed;
+                        if (galleryCard != null) galleryCard.IsVisible = false;
                     }
 
                     galleryPending = pending;
@@ -1512,7 +1543,7 @@ namespace Thornswood
                 txtGalleryApprovedEmpty.Text = any
                     ? ""
                     : "Nothing is on the gallery yet.";
-                txtGalleryApprovedEmpty.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+                txtGalleryApprovedEmpty.IsVisible = !any;
             }
 
             if (anyApproved)
@@ -1540,7 +1571,7 @@ namespace Thornswood
         static Border BuildApprovedCard(Gallery.Shot shot, bool doors, bool staff)
         {
             var card = new Border();
-            card.Style = (Style)win.FindResource("Slab");
+            card.Theme = Look("Slab");
             card.Padding = new Thickness(0);
             card.Margin = new Thickness(0, 0, 14, 14);
             card.Width = 280;
@@ -1550,14 +1581,14 @@ namespace Thornswood
 
             var frame = new Border();
             frame.Height = 200;
-            frame.Background = (Brush)win.FindResource("Line");
+            frame.Background = Res("Line");
             frame.ClipToBounds = true;
 
             var img = new Image();
             img.Stretch = Stretch.UniformToFill;
             img.HorizontalAlignment = HorizontalAlignment.Stretch;
             img.VerticalAlignment = VerticalAlignment.Stretch;
-            RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
+            RenderOptions.SetBitmapInterpolationMode(img, BitmapInterpolationMode.HighQuality);
             if (shot.Image != null) img.Source = shot.Image;
             frame.Child = img;
             stack.Children.Add(frame);
@@ -1568,9 +1599,9 @@ namespace Thornswood
                 Image holdImg = img;
                 ThreadPool.QueueUserWorkItem(delegate
                 {
-                    BitmapImage bi = Gallery.Fetch(hold);
+                    Bitmap bi = Gallery.Fetch(hold);
                     if (bi == null) return;
-                    win.Dispatcher.BeginInvoke(new Action(delegate
+                    Dispatcher.UIThread.Post(new Action(delegate
                     {
                         if (holdImg != null) holdImg.Source = bi;
                     }));
@@ -1581,7 +1612,7 @@ namespace Thornswood
             meta.Margin = new Thickness(12, 10, 12, 12);
 
             var label = new TextBlock();
-            label.Style = (Style)win.FindResource("Body");
+            label.Theme = Look("Body");
             label.TextWrapping = TextWrapping.Wrap;
             string by = (shot.By != null && shot.By.Length > 0) ? shot.By : "";
             label.Text = by.Length > 0 ? ("By " + by) : "On the gallery";
@@ -1594,7 +1625,7 @@ namespace Thornswood
                 acts.Margin = new Thickness(0, 8, 0, 0);
 
                 var report = new Button();
-                report.Style = (Style)win.FindResource("Ghost");
+                report.Theme = Look("Ghost");
                 report.Content = "Report";
                 report.Padding = new Thickness(10, 4, 10, 4);
                 Gallery.Shot holdShot = shot;
@@ -1604,7 +1635,7 @@ namespace Thornswood
                 if (staff)
                 {
                     var del = new Button();
-                    del.Style = (Style)win.FindResource("Ghost");
+                    del.Theme = Look("Ghost");
                     del.Content = "Delete";
                     del.Padding = new Thickness(10, 4, 10, 4);
                     del.Margin = new Thickness(8, 0, 0, 0);
@@ -1623,7 +1654,7 @@ namespace Thornswood
         static Border BuildPendingCard(Gallery.Pending item)
         {
             var card = new Border();
-            card.Style = (Style)win.FindResource("Slab");
+            card.Theme = Look("Slab");
             card.Padding = new Thickness(0);
             card.Margin = new Thickness(0, 0, 14, 14);
             card.Width = 280;
@@ -1633,12 +1664,12 @@ namespace Thornswood
 
             var frame = new Border();
             frame.Height = 200;
-            frame.Background = (Brush)win.FindResource("Line");
+            frame.Background = Res("Line");
             frame.ClipToBounds = true;
 
             var img = new Image();
             img.Stretch = Stretch.UniformToFill;
-            RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
+            RenderOptions.SetBitmapInterpolationMode(img, BitmapInterpolationMode.HighQuality);
             if (item.Image != null) img.Source = item.Image;
             frame.Child = img;
             stack.Children.Add(frame);
@@ -1647,9 +1678,9 @@ namespace Thornswood
             Image holdImg = img;
             ThreadPool.QueueUserWorkItem(delegate
             {
-                BitmapImage bi = Gallery.FetchPending(holdItem);
+                Bitmap bi = Gallery.FetchPending(holdItem);
                 if (bi == null) return;
-                win.Dispatcher.BeginInvoke(new Action(delegate
+                Dispatcher.UIThread.Post(new Action(delegate
                 {
                     if (holdImg != null) holdImg.Source = bi;
                 }));
@@ -1659,7 +1690,7 @@ namespace Thornswood
             meta.Margin = new Thickness(12, 10, 12, 12);
 
             var label = new TextBlock();
-            label.Style = (Style)win.FindResource("Body");
+            label.Theme = Look("Body");
             label.TextWrapping = TextWrapping.Wrap;
             string by = (item.By != null && item.By.Length > 0) ? item.By : "somebody";
             label.Text = "By " + by + " (waiting)";
@@ -1672,7 +1703,7 @@ namespace Thornswood
             if (copies.Length > 0)
             {
                 var said = new TextBlock();
-                said.Style = (Style)win.FindResource("Small");
+                said.Theme = Look("Small");
                 said.TextWrapping = TextWrapping.Wrap;
                 said.Margin = new Thickness(0, 6, 0, 4);
                 said.Text = "Its smaller copies, what most screens show once it is accepted:";
@@ -1686,12 +1717,12 @@ namespace Thornswood
                     small.Width = 120;
                     small.Height = 68;
                     small.Margin = new Thickness(0, 0, 8, 0);
-                    small.Background = (Brush)win.FindResource("Line");
+                    small.Background = Res("Line");
                     small.ClipToBounds = true;
-                    small.ToolTip = "The " + width + " pixel copy";
+                    ToolTip.SetTip(small, "The " + width + " pixel copy");
                     var smallImg = new Image();
                     smallImg.Stretch = Stretch.UniformToFill;
-                    RenderOptions.SetBitmapScalingMode(smallImg, BitmapScalingMode.HighQuality);
+                    RenderOptions.SetBitmapInterpolationMode(smallImg, BitmapInterpolationMode.HighQuality);
                     small.Child = smallImg;
                     strip.Children.Add(small);
 
@@ -1699,9 +1730,9 @@ namespace Thornswood
                     Image holdSmall = smallImg;
                     ThreadPool.QueueUserWorkItem(delegate
                     {
-                        BitmapImage copy = Gallery.FetchCopy(holdItem, holdWidth);
+                        Bitmap copy = Gallery.FetchCopy(holdItem, holdWidth);
                         if (copy == null) return;
-                        win.Dispatcher.BeginInvoke(new Action(delegate { holdSmall.Source = copy; }));
+                        Dispatcher.UIThread.Post(new Action(delegate { holdSmall.Source = copy; }));
                     });
                 }
                 meta.Children.Add(strip);
@@ -1710,7 +1741,7 @@ namespace Thornswood
             if (item.Note != null && item.Note.Length > 0)
             {
                 var note = new TextBlock();
-                note.Style = (Style)win.FindResource("Small");
+                note.Theme = Look("Small");
                 note.TextWrapping = TextWrapping.Wrap;
                 note.Margin = new Thickness(0, 4, 0, 0);
                 note.Text = item.Note;
@@ -1723,7 +1754,7 @@ namespace Thornswood
             buttons.Margin = new Thickness(0, 10, 0, 0);
 
             var accept = new Button();
-            accept.Style = (Style)win.FindResource("Solid");
+            accept.Theme = Look("Solid");
             accept.Content = "Accept";
             accept.Padding = new Thickness(14, 6, 14, 6);
             string name = item.Name;
@@ -1731,7 +1762,7 @@ namespace Thornswood
             buttons.Children.Add(accept);
 
             var del = new Button();
-            del.Style = (Style)win.FindResource("Ghost");
+            del.Theme = Look("Ghost");
             del.Content = "Delete";
             del.Padding = new Thickness(12, 6, 12, 6);
             del.Margin = new Thickness(8, 0, 0, 0);
@@ -1756,14 +1787,14 @@ namespace Thornswood
             galleryReporting = shot;
             SayGallery("Say what is wrong with " + shot.Name + ". Staff read it; nothing comes off the gallery until one of them takes it off.");
             if (boxGalleryWhy != null) boxGalleryWhy.Text = "";
-            if (galleryPageReportRow != null) galleryPageReportRow.Visibility = Visibility.Visible;
+            if (galleryPageReportRow != null) galleryPageReportRow.IsVisible = true;
             if (boxGalleryWhy != null) boxGalleryWhy.Focus();
         }
 
         static void CloseGalleryReport()
         {
             galleryReporting = null;
-            if (galleryPageReportRow != null) galleryPageReportRow.Visibility = Visibility.Collapsed;
+            if (galleryPageReportRow != null) galleryPageReportRow.IsVisible = false;
             if (boxGalleryWhy != null) boxGalleryWhy.Text = "";
             if (btnGalleryReportSend != null) btnGalleryReportSend.IsEnabled = true;
         }
@@ -1781,7 +1812,7 @@ namespace Thornswood
             ThreadPool.QueueUserWorkItem(delegate
             {
                 string bad = Gallery.Report(name, why);
-                win.Dispatcher.BeginInvoke(new Action(delegate
+                Dispatcher.UIThread.Post(new Action(delegate
                 {
                     if (bad.Length == 0)
                     {
@@ -1797,16 +1828,34 @@ namespace Thornswood
             });
         }
 
-﻿        static void GalleryChooseFile()
+        static async void GalleryChooseFile()
         {
-            var dlg = new Microsoft.Win32.OpenFileDialog();
-            dlg.Title = "Choose pictures for the gallery";
-            dlg.Filter = "Pictures|*.png;*.jpg;*.jpeg;*.webp;*.gif|All files|*.*";
-            dlg.CheckFileExists = true;
-            dlg.Multiselect = true;
-            bool? ok = dlg.ShowDialog(win);
-            if (ok != true || dlg.FileNames == null || dlg.FileNames.Length == 0) return;
-            GalleryAddChosen(dlg.FileNames);
+            var ask = new FilePickerOpenOptions();
+            ask.Title = "Choose pictures for the gallery";
+            ask.AllowMultiple = true;
+            ask.FileTypeFilter = new[] {
+                new FilePickerFileType("Pictures") { Patterns = new[] { "*.png", "*.jpg", "*.jpeg", "*.webp", "*.gif" } },
+                new FilePickerFileType("All files") { Patterns = new[] { "*.*" } } };
+            IReadOnlyList<IStorageFile> picked;
+            try { picked = await win.StorageProvider.OpenFilePickerAsync(ask); }
+            catch (Exception ex) { Swallow.Note("Shell.GalleryChooseFile", ex); return; }
+            if (picked == null || picked.Count == 0) return;
+            GalleryAddChosen(LocalPaths(picked));
+        }
+
+        /// <summary>
+        /// The paths on this PC of files picked or dropped. One that is not a
+        /// file on this PC (nothing Windows hands over is that) is left out.
+        /// </summary>
+        static List<string> LocalPaths(IEnumerable<IStorageItem> items)
+        {
+            var paths = new List<string>();
+            foreach (IStorageItem item in items)
+            {
+                string path = item.TryGetLocalPath();
+                if (!string.IsNullOrEmpty(path)) paths.Add(path);
+            }
+            return paths;
         }
 
         static bool GalleryAllowedPath(string path)
@@ -1860,7 +1909,7 @@ namespace Thornswood
             {
                 string path = galleryChosenPaths[i];
                 var row = new Border();
-                row.Style = (Style)win.FindResource("Slab");
+                row.Theme = Look("Slab");
                 row.Padding = new Thickness(8, 8, 8, 8);
                 if (i > 0) row.Margin = new Thickness(0, 8, 0, 0);
 
@@ -1872,19 +1921,13 @@ namespace Thornswood
                 var thumb = new Border();
                 thumb.Width = 56; thumb.Height = 56;
                 thumb.ClipToBounds = true;
-                thumb.Background = (Brush)win.FindResource("Line");
+                thumb.Background = Res("Line");
                 var img = new Image();
                 img.Stretch = Stretch.UniformToFill;
                 try
                 {
-                    var bi = new BitmapImage();
-                    bi.BeginInit();
-                    bi.CacheOption = BitmapCacheOption.OnLoad;
-                    bi.UriSource = new Uri(path);
-                    bi.DecodePixelWidth = 112;
-                    bi.EndInit();
-                    bi.Freeze();
-                    img.Source = bi;
+                    using (FileStream fs = File.OpenRead(path))
+                        img.Source = Bitmap.DecodeToWidth(fs, 112);
                 }
                 catch (Exception ex) { Swallow.Note("Shell.PaintGalleryChosen thumb", ex); }
                 thumb.Child = img;
@@ -1895,7 +1938,7 @@ namespace Thornswood
                 meta.Margin = new Thickness(12, 0, 0, 0);
                 meta.VerticalAlignment = VerticalAlignment.Center;
                 var name = new TextBlock();
-                name.Style = (Style)win.FindResource("Body");
+                name.Theme = Look("Body");
                 name.Text = Path.GetFileName(path);
                 name.TextTrimming = TextTrimming.CharacterEllipsis;
                 meta.Children.Add(name);
@@ -1903,7 +1946,7 @@ namespace Thornswood
                 {
                     long len = new FileInfo(path).Length;
                     var size = new TextBlock();
-                    size.Style = (Style)win.FindResource("Small");
+                    size.Theme = Look("Small");
                     size.Margin = new Thickness(0, 2, 0, 0);
                     if (len < 1024) size.Text = len + " B";
                     else if (len < 1024 * 1024) size.Text = (len / 1024) + " KB";
@@ -1915,7 +1958,7 @@ namespace Thornswood
                 grid.Children.Add(meta);
 
                 var rem = new Button();
-                rem.Style = (Style)win.FindResource("Ghost");
+                rem.Theme = Look("Ghost");
                 rem.Content = "Remove";
                 rem.Padding = new Thickness(10, 4, 10, 4);
                 rem.VerticalAlignment = VerticalAlignment.Center;
@@ -1932,38 +1975,39 @@ namespace Thornswood
         static void WireGalleryDrop()
         {
             if (galleryDrop == null) return;
-            galleryDrop.DragEnter += GalleryDropOver;
-            galleryDrop.DragOver += GalleryDropOver;
-            galleryDrop.DragLeave += delegate
+            galleryDrop.AddHandler(DragDrop.DragEnterEvent, GalleryDropOver);
+            galleryDrop.AddHandler(DragDrop.DragOverEvent, GalleryDropOver);
+            galleryDrop.AddHandler(DragDrop.DragLeaveEvent, delegate (object s, DragEventArgs e)
             {
-                galleryDrop.BorderBrush = (Brush)win.FindResource("Edge");
+                galleryDrop.BorderBrush = Res("Edge");
                 galleryDrop.Background = new SolidColorBrush(Color.FromArgb(0x8C, 0x0B, 0x0E, 0x0A));
-            };
-            galleryDrop.Drop += delegate (object s, DragEventArgs e)
+            });
+            galleryDrop.AddHandler(DragDrop.DropEvent, delegate (object s, DragEventArgs e)
             {
-                galleryDrop.BorderBrush = (Brush)win.FindResource("Edge");
+                galleryDrop.BorderBrush = Res("Edge");
                 galleryDrop.Background = new SolidColorBrush(Color.FromArgb(0x8C, 0x0B, 0x0E, 0x0A));
-                if (e.Data == null || !e.Data.GetDataPresent(DataFormats.FileDrop)) return;
-                string[] files = e.Data.GetData(DataFormats.FileDrop) as string[];
+                IStorageItem[] files = e.DataTransfer == null ? null : e.DataTransfer.TryGetFiles();
                 if (files == null || files.Length == 0) return;
-                GalleryAddChosen(files);
-            };
-            galleryDrop.MouseLeftButtonUp += delegate (object s, MouseButtonEventArgs e)
+                GalleryAddChosen(LocalPaths(files));
+            });
+            galleryDrop.PointerReleased += delegate (object s, PointerReleasedEventArgs e)
             {
-                if (e.OriginalSource is Button) return;
+                if (e.InitialPressMouseButton != MouseButton.Left) return;
+                Visual from = e.Source as Visual;
+                if (from != null && from.FindAncestorOfType<Button>(true) != null) return;
                 GalleryChooseFile();
             };
         }
 
         static void GalleryDropOver(object s, DragEventArgs e)
         {
-            if (e.Data != null && e.Data.GetDataPresent(DataFormats.FileDrop))
+            if (e.DataTransfer != null && e.DataTransfer.Contains(DataFormat.File))
             {
-                e.Effects = DragDropEffects.Copy;
-                galleryDrop.BorderBrush = (Brush)win.FindResource("Accent");
+                e.DragEffects = DragDropEffects.Copy;
+                galleryDrop.BorderBrush = Res("Accent");
                 galleryDrop.Background = new SolidColorBrush(Color.FromArgb(0x28, 0xC9, 0xA2, 0x4B));
             }
-            else e.Effects = DragDropEffects.None;
+            else e.DragEffects = DragDropEffects.None;
             e.Handled = true;
         }
 
@@ -2002,7 +2046,7 @@ namespace Thornswood
                 }
                 // A smaller copy that did not go (#3218) is said after the rest.
                 string copyNote = firstCopy.Length > 0 ? " " + firstCopy : "";
-                win.Dispatcher.BeginInvoke(new Action(delegate
+                Dispatcher.UIThread.Post(new Action(delegate
                 {
                     if (ok == paths.Length)
                     {
@@ -2037,7 +2081,7 @@ namespace Thornswood
             ThreadPool.QueueUserWorkItem(delegate
             {
                 string bad = Gallery.Approve(name, shown);
-                win.Dispatcher.BeginInvoke(new Action(delegate
+                Dispatcher.UIThread.Post(new Action(delegate
                 {
                     if (bad.Length == 0)
                     {
@@ -2056,7 +2100,7 @@ namespace Thornswood
             {
                 // Same staff queue door as the old Reject; UI no longer says Reject.
                 string bad = Gallery.Reject(name);
-                win.Dispatcher.BeginInvoke(new Action(delegate
+                Dispatcher.UIThread.Post(new Action(delegate
                 {
                     if (bad.Length == 0)
                     {
@@ -2074,7 +2118,7 @@ namespace Thornswood
             ThreadPool.QueueUserWorkItem(delegate
             {
                 string bad = Gallery.TakeDown(name);
-                win.Dispatcher.BeginInvoke(new Action(delegate
+                Dispatcher.UIThread.Post(new Action(delegate
                 {
                     if (bad.Length == 0)
                     {
@@ -2102,9 +2146,9 @@ namespace Thornswood
 
             ThreadPool.QueueUserWorkItem(delegate
             {
-                BitmapImage bi = Gallery.Fetch(shot);
+                Bitmap bi = Gallery.Fetch(shot);
                 if (bi == null) return;
-                win.Dispatcher.BeginInvoke(new Action(delegate { ShowShot(shot); }));
+                Dispatcher.UIThread.Post(new Action(delegate { ShowShot(shot); }));
             });
         }
 
@@ -2122,8 +2166,8 @@ namespace Thornswood
                 galleryBy.Text = (shot.By != null && shot.By.Length > 0)
                     ? "By " + shot.By
                     : "";
-            if (galleryCard != null && galleryCard.Visibility != Visibility.Visible)
-                galleryCard.Visibility = Visibility.Visible;
+            if (galleryCard != null && !galleryCard.IsVisible)
+                galleryCard.IsVisible = true;
         }
 
         /// <summary>
@@ -2133,7 +2177,7 @@ namespace Thornswood
         static void GalleryDecide()
         {
             if (galleryTimer == null || galleryShots == null) return;
-            bool seen = pages != null && pages[PagePlay] != null &&
+            bool seen = win.IsVisible && pages != null && pages[PagePlay] != null &&
                         pages[PagePlay].IsVisible &&
                         win.WindowState != WindowState.Minimized && !playing;
             if (seen) { if (!galleryTimer.IsEnabled) galleryTimer.Start(); }
@@ -2164,10 +2208,10 @@ namespace Thornswood
             // Source code, under the version lines: the fork at the commit the
             // six files beside this launcher were built from, or the credits
             // page's source section when the exe carries no record (#421).
-            Button btnSource = F<Button>("BtnSource");
+            Button btnSource = win.BtnSource;
             string source = ClientRuntime.SourceUrl;
             if (string.IsNullOrEmpty(source)) source = cfg.SiteUrl.TrimEnd('/') + "/credits#source";
-            btnSource.ToolTip = "SkyMP is free software. This opens its source, with every change Thornswood made: " + source;
+            ToolTip.SetTip(btnSource, "SkyMP is free software. This opens its source, with every change Thornswood made: " + source);
             btnSource.Click += delegate { Open(source); };
             txtStatusRight.Text = Paths.Root;
             chkKeepOpen.IsChecked = cfg.KeepLauncherOpen;
@@ -2193,26 +2237,19 @@ namespace Thornswood
             // The emblem travels inside the exe rather than beside it, so the
             // update that replaces the launcher carries its artwork with it and
             // there is no second file to lose.
-            BitmapImage emblem = Art.Emblem();
+            Bitmap emblem = Art.Emblem();
             if (emblem != null)
             {
-                win.Icon = emblem;
-                var big = F<Image>("Emblem");
-                if (big != null) { big.Source = emblem; big.Visibility = Visibility.Visible; }
-                var small = F<Image>("EmblemSmall");
-                if (small != null) { small.Source = emblem; small.Visibility = Visibility.Visible; }
+                win.Icon = new WindowIcon(emblem);
+                var big = win.Emblem;
+                if (big != null) { big.Source = emblem; big.IsVisible = true; }
+                var small = win.EmblemSmall;
+                if (small != null) { small.Source = emblem; small.IsVisible = true; }
             }
             else
             {
-                try
-                {
-                    var ico = System.Drawing.Icon.ExtractAssociatedIcon(
-                        File.Exists(Paths.Exe) ? Paths.Exe : Assembly.GetExecutingAssembly().Location);
-                    win.Icon = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
-                        ico.Handle, Int32Rect.Empty,
-                        System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
-                }
-                catch (Exception ex) { Swallow.Note("Shell.Wire", ex); }
+                WindowIcon own = Art.AppIcon();
+                if (own != null) win.Icon = own;
             }
 
             // The landscape behind the title travels the same way. Without it
@@ -2220,35 +2257,17 @@ namespace Thornswood
             ImageBrush headerArt = Art.Header();
             if (headerArt != null)
             {
-                var band = F<Grid>("HeaderArt");
-                var picture = F<Border>("HeaderArtPicture");
-                if (band != null && picture != null) { picture.Background = headerArt; band.Visibility = Visibility.Visible; }
+                var band = win.HeaderArt;
+                var picture = win.HeaderArtPicture;
+                if (band != null && picture != null) { picture.Background = headerArt; band.IsVisible = true; }
                 StartHeaderVideo();
             }
-            // Menu music starts from the Voice ApplicationIdle callback above.
+            // Menu music starts from the ApplicationIdle callback in Run.
 
-            titleBar.MouseLeftButtonDown += delegate(object s, MouseButtonEventArgs e)
-            {
-                if (e.ClickCount == 2)
-                {
-                    win.WindowState = win.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
-                    return;
-                }
-                try { win.DragMove(); } catch (Exception ex) { Swallow.Note("Shell.Wire", ex); }
-            };
-
-            // With WindowChrome a maximized window hangs past the screen by its
-            // resize frame, so the frame is pulled in by that much while maximized.
-            var frame = F<Border>("WindowFrame");
-            if (frame != null)
-            {
-                Action fit = delegate { frame.Margin = win.WindowState == WindowState.Maximized ? MaximizedInset() : new Thickness(0); };
-                win.StateChanged += delegate { fit(); };
-                // Maximized onto a monitor with another scale: that monitor's frame.
-                win.DpiChanged += delegate { fit(); };
-                fit();
-            }
-
+            // Dragging the title bar, a double click on it and snapping are
+            // Windows' own: the bar is the window's caption (TitleBar's
+            // ElementRole in MainWindow.axaml), and a maximised window fits the
+            // screen it is on with nothing hanging past the edges.
             btnMin.Click += delegate { win.WindowState = WindowState.Minimized; };
             btnMax.Click += delegate { win.WindowState = win.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized; };
             btnClose.Click += delegate { win.Close(); };
@@ -2260,17 +2279,30 @@ namespace Thornswood
             }
             // Help is the site's, in the browser: the game has it on F7, and a
             // third copy here is the one that goes stale (#3146).
-            Button navHelp = F<Button>("NavHelp");
+            Button navHelp = win.NavHelp;
             if (navHelp != null) navHelp.Click += delegate { Open(cfg.SiteUrl.TrimEnd('/') + "/help"); };
 
-            btnCopy.Visibility = Visibility.Collapsed;
+            btnCopy.IsVisible = false;
 
-            // For PlayPressedBy: the last key that went down on this window.
-            win.PreviewKeyDown += delegate (object s, KeyEventArgs e)
+            // For PlayPressedBy: the last key that went down on this window,
+            // and whether the mouse or the keyboard was used last. Seen on the
+            // way down to the control, before anything can handle it.
+            win.AddHandler(InputElement.KeyDownEvent, delegate (object s, KeyEventArgs e)
             {
-                lastKeyDown = e.Key == Key.System ? e.SystemKey : e.Key;
+                lastKeyDown = e.Key;
                 lastKeyDownAt = DateTime.Now;
-            };
+                lastKeyModifiers = e.KeyModifiers;
+                lastInput = "keyboard";
+            }, RoutingStrategies.Tunnel, true);
+            win.AddHandler(InputElement.PointerPressedEvent, delegate (object s, PointerPressedEventArgs e)
+            {
+                lastInput = e.Pointer.Type == PointerType.Mouse ? "mouse" : e.Pointer.Type.ToString().ToLowerInvariant();
+                if (e.GetCurrentPoint(win).Properties.IsLeftButtonPressed) leftButtonDown = true;
+            }, RoutingStrategies.Tunnel, true);
+            win.AddHandler(InputElement.PointerReleasedEvent, delegate (object s, PointerReleasedEventArgs e)
+            {
+                if (e.InitialPressMouseButton == MouseButton.Left) leftButtonDown = false;
+            }, RoutingStrategies.Tunnel, true);
             btnPlay.Click += delegate
             {
                 // What pressed it, into the log (#2215). Since 20 September the
@@ -2322,18 +2354,18 @@ namespace Thornswood
             if (cfg.IsDev)
             {
                 btnUninstall.Content = "Remove the dev build";
-                if (chkDeleteMods != null) chkDeleteMods.Visibility = Visibility.Collapsed;
-                if (chkKeepSaves != null) chkKeepSaves.Visibility = Visibility.Collapsed;
+                if (chkDeleteMods != null) chkDeleteMods.IsVisible = false;
+                if (chkKeepSaves != null) chkKeepSaves.IsVisible = false;
                 btnUninstall.Click += delegate
                 {
-                    var r = MessageBox.Show(
+                    bool r = Ask.YesNo(
                         "Remove the dev build?\n\nThis launcher and its folder go. The main build, the game and your characters on the dev server are not touched.",
-                        "Thornswood Dev", MessageBoxButton.YesNo, MessageBoxImage.Question);
-                    if (r != MessageBoxResult.Yes) return;
+                        "Thornswood Dev", Ask.Icon.Question);
+                    if (!r) return;
                     try { Log(DevBuild.RemoveSelf()); }
                     catch (Exception ex) { Log("Could not remove the dev build: " + ex.Message); return; }
                     try { Voice.Stop(); } catch (Exception ex) { Swallow.Note("Shell.Wire", ex); }
-                    Application.Current.Shutdown();
+                    Quit();
                 };
             }
             else
@@ -2350,11 +2382,11 @@ namespace Thornswood
             btnQuitGame.Click += delegate
             {
                 if (!Checks.GameRunning()) { Log("Skyrim is not running."); DrawStatus(); return; }
-                var r = MessageBox.Show(
+                bool r = Ask.YesNo(
                     "Close Skyrim now?\n\nAnything since your last save in that session is lost, and on a shared world "
                     + "the others will see you vanish.",
-                    "Thornswood", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-                if (r != MessageBoxResult.Yes) return;
+                    "Thornswood", Ask.Icon.Warning);
+                if (!r) return;
 
                 Log("Closing Skyrim...");
                 int n;
@@ -2362,7 +2394,7 @@ namespace Thornswood
                 if (still.Length > 0)
                 {
                     Log("Skyrim would not close. " + still);
-                    MessageBox.Show("Skyrim would not close.\n\n" + still, "Thornswood", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Ask.Tell("Skyrim would not close.\n\n" + still, "Thornswood", Ask.Icon.Warning);
                     DrawStatus();
                     return;
                 }
@@ -2438,11 +2470,11 @@ namespace Thornswood
             {
                 // Explorer goes away for a second, so this one says so first
                 // rather than leaving somebody watching their taskbar vanish.
-                var r = MessageBox.Show(
+                bool r = Ask.YesNo(
                     "This throws away the pictures Windows has remembered for the shortcut and redraws them.\n\n" +
                     "The desktop and taskbar will blink once while Explorer restarts. Nothing is lost.\n\nGo ahead?",
-                    "Thornswood", MessageBoxButton.YesNo, MessageBoxImage.Question);
-                if (r != MessageBoxResult.Yes) return;
+                    "Thornswood", Ask.Icon.Question);
+                if (!r) return;
 
                 btnIcons.IsEnabled = false;
                 Log("Refreshing the shortcut icon...");
@@ -2451,7 +2483,7 @@ namespace Thornswood
                     string said;
                     try { said = Icons.Repair(); }
                     catch { said = "Could not refresh the icon."; }
-                    win.Dispatcher.BeginInvoke((Action)delegate
+                    Dispatcher.UIThread.Post((Action)delegate
                     {
                         btnIcons.IsEnabled = true;
                         Log(said);
@@ -2459,17 +2491,18 @@ namespace Thornswood
                 });
             };
 
-            win.Closing += delegate(object s, System.ComponentModel.CancelEventArgs e)
+            win.Closing += delegate(object s, WindowClosingEventArgs e)
             {
                 // Not while Skyrim is being closed. Play or the update that
                 // asked for it carries on once it is gone, window or no window.
-                if (waitDepth > 0) { e.Cancel = true; Log("Wait for Skyrim to finish closing."); return; }
-                if (playing)
+                // The launcher ending itself (Quit) is not asked either.
+                if (!quitting && waitDepth > 0) { e.Cancel = true; Log("Wait for Skyrim to finish closing."); return; }
+                if (!quitting && playing)
                 {
-                    var r = MessageBox.Show(
+                    bool r = Ask.YesNo(
                         "Skyrim is still running. Quit the game first, otherwise this session's saves end up in the wrong folder.\n\nClose the launcher anyway?",
-                        "Thornswood", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-                    if (r != MessageBoxResult.Yes) { e.Cancel = true; return; }
+                        "Thornswood", Ask.Icon.Warning);
+                    if (!r) { e.Cancel = true; return; }
                 }
                 if (timer != null) timer.Stop();
                 Swap.Restore();
@@ -2565,7 +2598,7 @@ namespace Thornswood
                 try { Chars.AddPlaytime(chosenId, DateTime.Now - PlayCountedFrom()); } catch (Exception ex) { Swallow.Note("Shell.Wire", ex); }
                 BuildStatRow();
                 btnPlay.Content = "PLAY";
-                btnQuitGame.Visibility = Visibility.Collapsed;
+                btnQuitGame.IsVisible = false;
                 gameClosedAt = DateTime.Now;
                 Log("Game closed after " + (int)(DateTime.Now - playStartedAt).TotalMinutes + " minutes. Your Windows Skyrim folders are back to normal.");
                 {
@@ -2587,7 +2620,7 @@ namespace Thornswood
                         catch (Exception ex) { Swallow.Note("Shell.Wire, crash snapshot", ex); }
                         try
                         {
-                            win.Dispatcher.BeginInvoke(new Action(delegate
+                            Dispatcher.UIThread.Post(new Action(delegate
                             {
                                 if (crashed != null) Log(crashed);
                                 if (snapshot != null) AskKeepSnapshot(snapshot, keptIn);
@@ -2617,7 +2650,7 @@ namespace Thornswood
                     if (broke == 0) return;
                     try
                     {
-                        win.Dispatcher.BeginInvoke(new Action(delegate
+                        Dispatcher.UIThread.Post(new Action(delegate
                         {
                             Log("Skyrim changed your plugin list on the way out, " + broke +
                                 (broke == 1 ? " problem" : " problems") + ". Mods, then Fix.");
@@ -2798,8 +2831,8 @@ namespace Thornswood
             {
                 collectionBarUp = false;
                 InstallLabel("Install now");
-                updateBar.Visibility = Visibility.Collapsed;
-                InstallShown(Visibility.Collapsed);
+                updateBar.IsVisible = false;
+                InstallShown(false);
             }
 
             // Mods that could not be confirmed (Djinn, 2 Oct). CollectionProblem
@@ -2811,7 +2844,7 @@ namespace Thornswood
                 !wrongBuild && !playing && !playBar.Active)
             {
                 bool unsure = CollectionUnconfirmed(collectionRevision);
-                if (unsure && (collectionNoteUp || updateBar.Visibility != Visibility.Visible))
+                if (unsure && (collectionNoteUp || !updateBar.IsVisible))
                 {
                     txtUpdateTitle.Text = "Your mods could not be confirmed";
                     txtUpdateNote.Text =
@@ -2820,16 +2853,16 @@ namespace Thornswood
                         "the collection and let Vortex install or update it. Play is not held for this.";
                     InstallLabel(CollectionButtonText());
                     btnInstallNow.IsEnabled = true;
-                    updateBar.Visibility = Visibility.Visible;
-                    InstallShown(Visibility.Visible);
+                    updateBar.IsVisible = true;
+                    InstallShown(true);
                     collectionNoteUp = true;
                 }
                 else if (!unsure && collectionNoteUp)
                 {
                     collectionNoteUp = false;
                     InstallLabel("Install now");
-                    updateBar.Visibility = Visibility.Collapsed;
-                    InstallShown(Visibility.Collapsed);
+                    updateBar.IsVisible = false;
+                    InstallShown(false);
                 }
             }
             else if (collectionNoteUp)
@@ -2840,8 +2873,8 @@ namespace Thornswood
                 if (!collectionBarUp && !updatePending && updateBar != null && btnInstallNow != null)
                 {
                     InstallLabel("Install now");
-                    updateBar.Visibility = Visibility.Collapsed;
-                    InstallShown(Visibility.Collapsed);
+                    updateBar.IsVisible = false;
+                    InstallShown(false);
                 }
             }
             // What the card or note was just drawn from, for the tick's look at
@@ -2854,8 +2887,8 @@ namespace Thornswood
             // carry a new expected build and settle the question by itself.
             if (downgradeBar != null)
             {
-                bool updateUp = updateBar != null && updateBar.Visibility == Visibility.Visible;
-                downgradeBar.Visibility = (wrongBuild && !updateUp && !playing) ? Visibility.Visible : Visibility.Collapsed;
+                bool updateUp = updateBar != null && updateBar.IsVisible;
+                downgradeBar.IsVisible = wrongBuild && !updateUp && !playing;
                 if (btnDowngrade != null) btnDowngrade.IsEnabled = !Downgrade.Busy && !ownGameBusy;
                 if (txtDowngradeTitle != null)
                     txtDowngradeTitle.Text = Paths.Collection ? "Skyrim on Steam is not on the server's build"
@@ -2869,7 +2902,7 @@ namespace Thornswood
             // Only worth offering while there is something to quit, and it is
             // the one control on this page that stays live during a session.
             if (btnQuitGame != null)
-                btnQuitGame.Visibility = Checks.GameRunning() ? Visibility.Visible : Visibility.Collapsed;
+                btnQuitGame.IsVisible = Checks.GameRunning();
 
             // Missing mods outrank everything else here. The collection path
             // sets updatePending false, so the old order fell through to the
@@ -2882,14 +2915,14 @@ namespace Thornswood
             if (working && !playing)
             {
                 btnPlay.Content = PlayBarCaption(playBar.Text);
-                btnPlay.ToolTip = "Play comes back when this is done.";
+                ToolTip.SetTip(btnPlay, "Play comes back when this is done.");
             }
             // The game folder itself is being made or brought up to date, so
             // there is nothing complete to start yet.
             else if (ownGameBusy && !playing)
             {
                 btnPlay.Content = "PREPARING THE GAME FOLDER";
-                btnPlay.ToolTip = "Thornswood's own Skyrim folder is being brought up to date from Vortex. Play comes back when it is done.";
+                ToolTip.SetTip(btnPlay, "Thornswood's own Skyrim folder is being brought up to date from Vortex. Play comes back when it is done.");
             }
             // Ahead is the server's to fix, not the person's (#4115). It used to
             // read INSTALL THE MODS FIRST and say to open the collection, which
@@ -2897,24 +2930,24 @@ namespace Thornswood
             else if (collectionBarUp && !playing && CollectionProblem(collectionRevision) == "ahead")
             {
                 btnPlay.Content = "WAITING FOR THE SERVER";
-                btnPlay.ToolTip = "The server was built against collection revision " + Updater.FeedCollectionRevision +
+                ToolTip.SetTip(btnPlay, "The server was built against collection revision " + Updater.FeedCollectionRevision +
                                   " and this copy is on " + collectionRevision + ". Nothing needs installing. " +
-                                  "Play opens once the server is rebuilt on your revision.";
+                                  "Play opens once the server is rebuilt on your revision.");
             }
             else if (collectionBarUp && !playing)
             {
                 btnPlay.Content = CollectionProblem(collectionRevision) == "stale" ? "UPDATE THE MODS FIRST" : "INSTALL THE MODS FIRST";
-                btnPlay.ToolTip = "Open the collection from the card above, install the revision it opens in Vortex, then come back.";
+                ToolTip.SetTip(btnPlay, "Open the collection from the card above, install the revision it opens in Vortex, then come back.");
             }
             else if (updatePending && !playing)
             {
                 btnPlay.Content = checkFailed ? "NO ANSWER FROM THE UPDATE SOURCE"
                                 : updateAnswered ? "UPDATE FIRST" : "CHECKING...";
-                btnPlay.ToolTip = checkFailed
+                ToolTip.SetTip(btnPlay, checkFailed
                     ? "The update source did not answer, so it is not known whether this build is current. Play stays shut until it answers; the check runs again every 30 seconds."
                     : updateAnswered
                     ? "There is an update waiting. Install it and Play comes back."
-                    : "Checking for updates before letting anybody in. A moment.";
+                    : "Checking for updates before letting anybody in. A moment.");
             }
             // The feed holds Play (entry 262). Below the three above because
             // each of those is something to do or already under way, and the
@@ -2924,14 +2957,14 @@ namespace Thornswood
             else if (feedNotice.Hold != null && !playing)
             {
                 btnPlay.Content = feedNotice.Button;
-                btnPlay.ToolTip = feedNotice.Hold;
+                ToolTip.SetTip(btnPlay, feedNotice.Hold);
             }
             else if (wrongBuild && !playing && !collectionBarUp)
             {
                 btnPlay.Content = Downgrade.Busy ? "DOWNGRADING..." : "DOWNGRADE FIRST";
-                btnPlay.ToolTip = ModsMissing()
+                ToolTip.SetTip(btnPlay, ModsMissing()
                     ? "This Skyrim is not build 1.6.1170. The card above puts it right; the mods come after that."
-                    : "This Skyrim is not build 1.6.1170. The card above puts it right.";
+                    : "This Skyrim is not build 1.6.1170. The card above puts it right.");
             }
             // A shared Skyrim is not an install this supports, so the button
             // says the thing that fixes it rather than saying PLAY and then
@@ -2947,12 +2980,12 @@ namespace Thornswood
             else if (Paths.Collection && !playing)
             {
                 btnPlay.Content = "MAKE THORNSWOOD'S OWN FOLDER";
-                btnPlay.ToolTip = NoOwnFolderYet() + " This gives Thornswood a folder " +
-                    "of its own. It takes a few minutes and the launcher restarts when it is done.";
+                ToolTip.SetTip(btnPlay, NoOwnFolderYet() + " This gives Thornswood a folder " +
+                    "of its own. It takes a few minutes and the launcher restarts when it is done.");
             }
             else if (!playing)
             {
-                btnPlay.ToolTip = null;
+                ToolTip.SetTip(btnPlay, null);
                 btnPlay.Content = "PLAY";
             }
             return all;
@@ -3014,7 +3047,7 @@ namespace Thornswood
             var t1 = row.Children[1] as TextBlock;
             var t2 = row.Children[2] as TextBlock;
 
-            Brush wantDot = Res(c.Ok ? "Ok" : c.Advisory ? "Warn" : "Bad");
+            IBrush wantDot = Res(c.Ok ? "Ok" : c.Advisory ? "Warn" : "Bad");
             if (dot != null && !ReferenceEquals(dot.Fill, wantDot)) dot.Fill = wantDot;
 
             if (t1 != null && t1.Text != c.Name) t1.Text = c.Name;
@@ -3022,7 +3055,7 @@ namespace Thornswood
             if (t2 != null)
             {
                 if (t2.Text != c.Detail) t2.Text = c.Detail;
-                Brush wantT2 = Res(c.Ok ? "Muted" : c.Advisory ? "Warn" : "Bad");
+                IBrush wantT2 = Res(c.Ok ? "Muted" : c.Advisory ? "Warn" : "Bad");
                 if (!ReferenceEquals(t2.Foreground, wantT2)) t2.Foreground = wantT2;
             }
         }
@@ -3046,7 +3079,7 @@ namespace Thornswood
             bool all = blocking.Count == 0;
             if (dotReady != null)
             {
-                Brush want = Res(all ? "Ok" : "Bad");
+                IBrush want = Res(all ? "Ok" : "Bad");
                 if (!ReferenceEquals(dotReady.Fill, want)) dotReady.Fill = want;
             }
             if (txtReadyTitle != null)
@@ -3054,12 +3087,12 @@ namespace Thornswood
                 string title = ReadyTitle(blocking);
                 if (txtReadyTitle.Text != title) txtReadyTitle.Text = title;
                 string tip = blocking.Count > 1 ? ReadyList(blocking) : null;
-                if (!Equals(txtReadyTitle.ToolTip, tip)) txtReadyTitle.ToolTip = tip;
-                Brush ink = Res(all ? "Ink" : "Bad");
+                if (!Equals(ToolTip.GetTip(txtReadyTitle), tip)) ToolTip.SetTip(txtReadyTitle, tip);
+                IBrush ink = Res(all ? "Ink" : "Bad");
                 if (!ReferenceEquals(txtReadyTitle.Foreground, ink)) txtReadyTitle.Foreground = ink;
             }
             if (btnCheckDiagnostics != null)
-                btnCheckDiagnostics.Visibility = all ? Visibility.Collapsed : Visibility.Visible;
+                btnCheckDiagnostics.IsVisible = !all;
             if (btnOpenSteam != null)
             {
                 // Whenever the Steam row is one of the problems, not only when
@@ -3067,8 +3100,8 @@ namespace Thornswood
                 // closed still has the button.
                 bool steamDown = false;
                 foreach (Check c in blocking) if (c.Name == Checks.SteamRow) steamDown = true;
-                Visibility want = steamDown ? Visibility.Visible : Visibility.Collapsed;
-                if (btnOpenSteam.Visibility != want) btnOpenSteam.Visibility = want;
+                bool want = steamDown;
+                if (btnOpenSteam.IsVisible != want) btnOpenSteam.IsVisible = want;
             }
         }
 
@@ -3150,7 +3183,7 @@ namespace Thornswood
             if (ownGameBusy) { Log("Thornswood's own Skyrim folder is being prepared. Press Downgrade when that is done."); return; }
             if (Checks.GameRunning()) { Log("Close Skyrim first, then press Downgrade."); return; }
             // Asked first because the downgrade takes over Steam's window, the mouse and the keyboard, and nobody should find that happening without having said yes to it.
-            var r = MessageBox.Show(
+            bool r = Ask.YesNo(
                 "Downgrade Skyrim to 1.6.1170?\n\n" +
                 "Steam only hands over an older build through its own console, so the launcher works that console for you. " +
                 "Steam's window comes to the front, the launcher clicks the console's command line and types these three lines into it, one at a time, each after the one before has finished downloading:\n\n" +
@@ -3159,8 +3192,8 @@ namespace Thornswood
                 (Paths.Collection ? "makes Thornswood's own game folder from those files. " : "puts the files into Thornswood's own game folder. ") +
                 "Your Steam copy of Skyrim is not changed and can stay on any build.\n\n" +
                 "Do not type or click while Steam's window is in front, or the keys go to the wrong place.",
-                "Thornswood", MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (r != MessageBoxResult.Yes) { Log("Left Skyrim on the build it is on."); return; }
+                "Thornswood", Ask.Icon.Question);
+            if (!r) { Log("Left Skyrim on the build it is on."); return; }
             btnDowngrade.IsEnabled = false;
             btnDowngrade.Content = "Working...";
             // The bar under the note: a share while Steam downloads a part
@@ -3170,11 +3203,11 @@ namespace Thornswood
             {
                 try
                 {
-                    win.Dispatcher.BeginInvoke(new Action(delegate
+                    Dispatcher.UIThread.Post(new Action(delegate
                     {
                         if (prgDowngrade == null) return;
-                        if (p == -1) { prgDowngrade.Visibility = Visibility.Collapsed; return; }
-                        prgDowngrade.Visibility = Visibility.Visible;
+                        if (p == -1) { prgDowngrade.IsVisible = false; return; }
+                        prgDowngrade.IsVisible = true;
                         prgDowngrade.IsIndeterminate = p < 0;
                         if (p >= 0) prgDowngrade.Value = Math.Min(100, p);
                     }));
@@ -3183,16 +3216,16 @@ namespace Thornswood
             };
             Downgrade.Start(cfg,
                 PresenceLog,
-                delegate (string s) { try { win.Dispatcher.BeginInvoke(new Action(delegate { txtDowngradeNote.Text = s; })); } catch (Exception ex) { Swallow.Note("Shell.RunDowngrade", ex); } },
+                delegate (string s) { try { Dispatcher.UIThread.Post(new Action(delegate { txtDowngradeNote.Text = s; })); } catch (Exception ex) { Swallow.Note("Shell.RunDowngrade", ex); } },
                 delegate (bool ok)
                 {
                     try
                     {
-                        win.Dispatcher.BeginInvoke(new Action(delegate
+                        Dispatcher.UIThread.Post(new Action(delegate
                         {
                             btnDowngrade.Content = ok ? "Done" : "Try again";
                             btnDowngrade.IsEnabled = !ok;
-                            if (prgDowngrade != null) { prgDowngrade.IsIndeterminate = false; prgDowngrade.Visibility = Visibility.Collapsed; }
+                            if (prgDowngrade != null) { prgDowngrade.IsIndeterminate = false; prgDowngrade.IsVisible = false; }
                             // Before Thornswood has a folder of its own the
                             // download is what the folder is made from, and
                             // the person already said yes to that above. With
@@ -3214,8 +3247,8 @@ namespace Thornswood
         {
             try
             {
-                if (win.Dispatcher.CheckAccess()) Log(m);
-                else win.Dispatcher.BeginInvoke(new Action(delegate { Log(m); }));
+                if (Dispatcher.UIThread.CheckAccess()) Log(m);
+                else Dispatcher.UIThread.Post(new Action(delegate { Log(m); }));
             }
             catch (Exception ex) { Swallow.Note("Shell.SafeLog", ex); }
         }
@@ -3284,14 +3317,14 @@ namespace Thornswood
             var sw = new Border();
             sw.Width = 15; sw.Height = 15;
             sw.CornerRadius = new CornerRadius(2);
-            sw.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(t.Swatch));
+            sw.Background = new SolidColorBrush(Color.Parse(t.Swatch));
             sw.Margin = new Thickness(0, 0, 10, 0);
             sw.VerticalAlignment = VerticalAlignment.Center;
 
             var label = new TextBlock();
             label.Text = t.Name;
             label.VerticalAlignment = VerticalAlignment.Center;
-            label.FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
+            label.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
 
             var sp = new StackPanel();
             sp.Orientation = Orientation.Horizontal;
@@ -3300,7 +3333,7 @@ namespace Thornswood
 
             var b = new Button();
             b.Content = sp;
-            b.Style = (Style)win.Resources["Ghost"];
+            b.Theme = Look("Ghost");
             b.Margin = new Thickness(0, 0, 9, 9);
             b.Padding = new Thickness(12, 9, 16, 9);
             b.MinWidth = 148;
@@ -3333,14 +3366,14 @@ namespace Thornswood
             var sw = new Border();
             sw.Width = 15; sw.Height = 15;
             sw.CornerRadius = new CornerRadius(2);
-            sw.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(swatchHex));
+            sw.Background = new SolidColorBrush(Color.Parse(swatchHex));
             sw.Margin = new Thickness(0, 0, 10, 0);
             sw.VerticalAlignment = VerticalAlignment.Center;
 
             var label = new TextBlock();
             label.Text = "DIY";
             label.VerticalAlignment = VerticalAlignment.Center;
-            label.FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
+            label.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
 
             var sp = new StackPanel();
             sp.Orientation = Orientation.Horizontal;
@@ -3349,7 +3382,7 @@ namespace Thornswood
 
             var b = new Button();
             b.Content = sp;
-            b.Style = (Style)win.Resources["Ghost"];
+            b.Theme = Look("Ghost");
             b.Margin = new Thickness(0, 0, 9, 9);
             b.Padding = new Thickness(12, 9, 16, 9);
             b.MinWidth = 148;
@@ -3391,10 +3424,10 @@ namespace Thornswood
 
             if (!diyPanelOpen)
             {
-                themeEditor.Visibility = Visibility.Collapsed;
+                themeEditor.IsVisible = false;
                 return;
             }
-            themeEditor.Visibility = Visibility.Visible;
+            themeEditor.IsVisible = true;
 
             Theme cur = Themes.Resolve(cfg.Theme, cfg.CustomColors, cfg.CustomLight);
 
@@ -3433,7 +3466,7 @@ namespace Thornswood
 
                 var box = new TextBox();
                 box.Text = val == null ? "" : val;
-                box.Style = (Style)win.Resources["Field"];
+                box.Theme = Look("Field");
                 box.FontFamily = new FontFamily("Cascadia Mono, Consolas");
                 col.Children.Add(box);
 
@@ -3472,7 +3505,7 @@ namespace Thornswood
 
             var apply = new Button();
             apply.Content = "Use these colours";
-            apply.Style = (Style)win.Resources["Solid"];
+            apply.Theme = Look("Solid");
             apply.HorizontalAlignment = HorizontalAlignment.Left;
             apply.Click += delegate { ApplyCustomTheme(); };
             themeEditor.Children.Add(apply);
@@ -3488,7 +3521,7 @@ namespace Thornswood
                 string hex = (box.Text == null ? "" : box.Text).Trim();
 
                 bool good = false;
-                try { ColorConverter.ConvertFromString(hex); good = true; }
+                try { Color.Parse(hex); good = true; }
                 catch (Exception ex) { Swallow.Note("ApplyCustomTheme, reading " + name, ex); }
                 if (!good)
                 {
@@ -3572,8 +3605,8 @@ namespace Thornswood
         static void BuildSideCard()
         {
             bool played = Stats.Sessions > 0 || File.Exists(Paths.PlayedFile);
-            firstRunCard.Visibility = played ? Visibility.Collapsed : Visibility.Visible;
-            quickKeysCard.Visibility = played ? Visibility.Visible : Visibility.Collapsed;
+            firstRunCard.IsVisible = !played;
+            quickKeysCard.IsVisible = played;
             if (!played) return;
 
             quickKeys.Children.Clear();
@@ -3620,7 +3653,7 @@ namespace Thornswood
             g.ColumnDefinitions.Add(c1);
 
             var k = new TextBlock();
-            k.Text = key; k.FontSize = 11.5; k.FontWeight = FontWeights.SemiBold;
+            k.Text = key; k.FontSize = 11.5; k.FontWeight = FontWeight.SemiBold;
             k.FontFamily = new FontFamily("Cascadia Mono, Consolas");
             k.Foreground = Res("Accent");
             k.MinWidth = 52;
@@ -3719,7 +3752,7 @@ namespace Thornswood
                 string captured = mode;
                 var b = new Button();
                 b.Content = mode;
-                b.Style = (Style)win.Resources["Ghost"];
+                b.Theme = Look("Ghost");
                 b.Margin = new Thickness(0, 0, 8, 0);
                 if (mode == current) b.Background = Res("CardHover");
                 b.Click += delegate
@@ -3784,22 +3817,25 @@ namespace Thornswood
         }
 
         /// <summary>Where crash snapshots go: a folder the person chooses (#2626).</summary>
-        static void PickCrashFolder()
+        static async void PickCrashFolder()
         {
-            string chosen;
-            using (var dlg = new System.Windows.Forms.FolderBrowserDialog())
+            // Windows' own folder picker, which can also make a new folder.
+            var ask = new FolderPickerOpenOptions();
+            ask.Title = "Choose the folder crash snapshots are saved in. One can be 9 GB or more, so pick a drive with room.";
+            ask.AllowMultiple = false;
+            try
             {
-                dlg.Description = "Choose the folder crash snapshots are saved in. One can be 9 GB or more, so pick a drive with room.";
-                dlg.ShowNewFolderButton = true;
-                try
-                {
-                    string start = CrashDump.KeptIn(cfg);
-                    if (start.Length > 0 && Directory.Exists(start)) dlg.SelectedPath = start;
-                }
-                catch { /* only where the picker opens; it opens at its own default instead */ }
-                if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
-                chosen = dlg.SelectedPath;
+                string start = CrashDump.KeptIn(cfg);
+                if (start.Length > 0 && Directory.Exists(start))
+                    ask.SuggestedStartLocation = await win.StorageProvider.TryGetFolderFromPathAsync(start);
             }
+            catch (Exception ex) { Swallow.Note("Shell.PickCrashFolder, where the picker opens (it opens at its own default instead)", ex); }
+            IReadOnlyList<IStorageFolder> picked;
+            try { picked = await win.StorageProvider.OpenFolderPickerAsync(ask); }
+            catch (Exception ex) { Swallow.Note("Shell.PickCrashFolder", ex); return; }
+            if (picked == null || picked.Count == 0) return;
+            string chosen = picked[0].TryGetLocalPath();
+            if (string.IsNullOrEmpty(chosen)) return;
             cfg.CrashSnapshotFolder = chosen;
             try { cfg.Save(Paths.CfgFile); } catch (Exception ex) { Swallow.Note("Shell.PickCrashFolder, cfg save", ex); }
             Log("Crash snapshots will be saved in " + chosen + ".");
@@ -3815,13 +3851,13 @@ namespace Thornswood
             long size = 0;
             try { size = new FileInfo(snapshot).Length; } catch (Exception ex) { Swallow.Note("Shell.AskKeepSnapshot, size", ex); }
             // Owned by the launcher's window, so it opens in front of it.
-            var r = MessageBox.Show(win,
+            bool r = Ask.YesNo(
                 "The game crashed, and a full crash snapshot was saved:\n\n" + snapshot + "\n" + CrashDump.Size(size) +
                 "\n\nIt is only needed if somebody is going to look into this crash. Keep it?\n\n" +
                 "Yes keeps it until staff mark this crash looked at on the sessions page; the launcher deletes it at a Play after that. " +
                 "Two are kept at most, so a third crash replaces the oldest. No deletes it now.",
-                "Thornswood", MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (r == MessageBoxResult.Yes)
+                "Thornswood", Ask.Icon.Question);
+            if (r)
             {
                 // Only now are older ones tidied, so a No below never leaves
                 // somebody with fewer than they had. This one is the newest,
@@ -3933,7 +3969,7 @@ namespace Thornswood
                 string mainKey = tcpMain >= 0 ? "Ok" : "Warn";
                 string devKey = tcpDev >= 0 ? "Ok" : "Warn";
 
-                win.Dispatcher.BeginInvoke(new Action(delegate
+                Dispatcher.UIThread.Post(new Action(delegate
                 {
                     string now = up ? ms + " ms" : "no reply";
                     pingMsText = now;
@@ -3981,10 +4017,10 @@ namespace Thornswood
         /// Whether the voice service on the server answers, for its reading on
         /// Diagnostics.
         ///
-        /// The microphone and the audio run in this launcher, in the hidden
-        /// WebView2 page Voice.cs holds; this only asks whether the server's
-        /// half answers, which is worth showing because it is the one part
-        /// nothing on this PC can put right. It was a card on the Server page
+        /// The microphone and the audio run in this launcher, in Voice.cs;
+        /// this only asks whether the server's half answers, which is worth
+        /// showing because it is the one part nothing on this PC can put
+        /// right. It was a card on the Server page
         /// until that page was cut (#3146). The page had been off the rail
         /// since #599, so for weeks the answer went into a TextBlock nobody
         /// could see, under a comment that still said voice ran in the game.
@@ -4010,21 +4046,17 @@ namespace Thornswood
                 bool up = false;
                 try
                 {
-                    try { System.Net.ServicePointManager.SecurityProtocol |= (System.Net.SecurityProtocolType)3072; } catch (Exception ex) { Swallow.Note("Shell.CheckVoice", ex); }
-                    var req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create(where + "/health");
-                    req.Method = "GET";
-                    req.Timeout = 4000;
-                    req.ReadWriteTimeout = 4000;
-                    using (var resp = (System.Net.HttpWebResponse)req.GetResponse())
-                        up = resp.StatusCode == System.Net.HttpStatusCode.OK;
+                    using (var ask = new HttpRequestMessage(HttpMethod.Get, where + "/health"))
+                    using (HttpResponseMessage resp = Http.Send(ask, 4000))
+                        up = resp.StatusCode == HttpStatusCode.OK;
                 }
                 catch (Exception ex) { Swallow.Note("Shell.CheckVoice", ex); }
 
                 bool fUp = up;
-                win.Dispatcher.BeginInvoke(new Action(delegate
+                Dispatcher.UIThread.Post(new Action(delegate
                 {
                     voiceUp = fUp;
-                    if (pages != null && pages[PageDiag].Visibility == Visibility.Visible) DrawReadings();
+                    if (pages != null && pages[PageDiag].IsVisible) DrawReadings();
                 }));
             });
         }
@@ -4043,8 +4075,8 @@ namespace Thornswood
             // so the covered-chip popup is one complete panel, not a second orphan card.
             if (cfg.IsDev) txtServerPick.Text = "Dev";
             else txtServerPick.Text = "Main";
-            btnServerMain.Visibility = Visibility.Visible;
-            btnServerDev.Visibility = Visibility.Visible;
+            btnServerMain.IsVisible = true;
+            btnServerDev.IsVisible = true;
             btnServerMain.IsEnabled = true;
             btnServerDev.IsEnabled = true;
             // The open panel covers the chip, so its first row is where the chip
@@ -4105,8 +4137,8 @@ namespace Thornswood
                 // Exact chip width; cover the chip so open state is one left-aligned
                 // panel (Placement Bottom + VerticalOffset = -height), not a second card.
                 btnServerPick.UpdateLayout();
-                double w = btnServerPick.ActualWidth;
-                double h = btnServerPick.ActualHeight;
+                double w = btnServerPick.Bounds.Width;
+                double h = btnServerPick.Bounds.Height;
                 if (w < 1) w = btnServerPick.MinWidth > 0 ? btnServerPick.MinWidth : 210;
                 if (h < 1) h = 32;
                 if (serverPickPanel != null)
@@ -4146,9 +4178,9 @@ namespace Thornswood
             // there has to be an account to ask about first.
             if (!Discord.Linked)
             {
-                MessageBox.Show(win,
+                Ask.Tell(
                     "Connect Discord in the sidebar first. The launcher checks your Discord roles before it installs the dev build.",
-                    "Thornswood", MessageBoxButton.OK, MessageBoxImage.Information);
+                    "Thornswood", Ask.Icon.Info);
                 return;
             }
 
@@ -4166,7 +4198,7 @@ namespace Thornswood
                     st.Message = "Could not reach thornswood.net: " + ex.Message;
                 }
 
-                win.Dispatcher.BeginInvoke(new Action(delegate
+                Dispatcher.UIThread.Post(new Action(delegate
                 {
                     try
                     {
@@ -4175,31 +4207,31 @@ namespace Thornswood
                         // reflects the fresh answer either way.
                         if (st.Why == "offline" || st.Why == "could not ask Discord")
                         {
-                            MessageBox.Show(win,
+                            Ask.Tell(
                                 "Could not reach thornswood.net to check your roles just now. Try again in a minute.",
-                                "Thornswood", MessageBoxButton.OK, MessageBoxImage.Warning);
+                                "Thornswood", Ask.Icon.Warning);
                             return;
                         }
                         if (st.Why == "link")
                         {
-                            MessageBox.Show(win,
+                            Ask.Tell(
                                 "Connect Discord in the sidebar first, then try again.",
-                                "Thornswood", MessageBoxButton.OK, MessageBoxImage.Information);
+                                "Thornswood", Ask.Icon.Info);
                             return;
                         }
                         if (!st.Dev)
                         {
-                            MessageBox.Show(win,
+                            Ask.Tell(
                                 "The dev build is for the staff roles: Owner, Dev, Gamemaster, Moderator and Loremaster. Your account does not have one; ask Patrick if you need it.",
-                                "Thornswood", MessageBoxButton.OK, MessageBoxImage.Warning);
+                                "Thornswood", Ask.Icon.Warning);
                             return;
                         }
 
-                        var r = MessageBox.Show(win,
+                        bool r = Ask.YesNo(
                             "Your roles allow the dev build. Install it?\n\nIt copies this launcher into " + DevBuild.Root +
                             " and opens it. It follows the dev branch and joins the dev server; this build is not touched.",
-                            "Thornswood", MessageBoxButton.YesNo, MessageBoxImage.Question);
-                        if (r != MessageBoxResult.Yes) return;
+                            "Thornswood", Ask.Icon.Question);
+                        if (!r) return;
                         try { Log(DevBuild.Install(cfg)); }
                         catch (Exception ex) { Log("Could not install the dev build: " + ex.Message); }
                     }
@@ -4231,9 +4263,9 @@ namespace Thornswood
             }
             else
             {
-                MessageBox.Show(win,
+                Ask.Tell(
                     "The main build is not at " + DevBuild.MainRoot + ". Install it again from thornswood.net.",
-                    "Thornswood", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    "Thornswood", Ask.Icon.Warning);
             }
         }
 
@@ -4242,7 +4274,7 @@ namespace Thornswood
             string why = Uninstall.WhyNot();
             if (why != null)
             {
-                MessageBox.Show(why, "Thornswood", MessageBoxButton.OK, MessageBoxImage.Warning);
+                Ask.Tell(why, "Thornswood", Ask.Icon.Warning);
                 return;
             }
 
@@ -4353,13 +4385,13 @@ namespace Thornswood
 
             stays.AppendLine("    Windows' own Skyrim settings and saves");
 
-            var r1 = MessageBox.Show(
+            bool r1 = Ask.YesNo(
                 "This removes:\n\n" + goes +
                 "\nThis is left alone:\n\n" + stays +
                 "\nWindows\u2019 Skyrim settings and saves folders are pointed back at your own copy " +
                 "first. If that fails, nothing is deleted.\n\nContinue?",
-                "Uninstall Thornswood", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-            if (r1 != MessageBoxResult.Yes) return;
+                "Uninstall Thornswood", Ask.Icon.Warning);
+            if (!r1) return;
 
             // Built from what is actually about to happen rather than from
             // four hand written sentences, which is how one of them came to
@@ -4371,14 +4403,14 @@ namespace Thornswood
             string chars = keep ? "your characters stay" : "your characters go";
             string warn = keep ? "" : "  None of that can be got back.";
 
-            var r2 = MessageBox.Show(
+            bool r2 = Ask.YesNo(
                 "Last check. " + mods + ", and " + chars + "." + warn +
                 (Paths.Collection
                    ? "\n\nThe collection itself is Vortex's. Purge Mods there when you want it gone."
                    : "") +
                 "\n\nThe launcher closes as it finishes.",
-                "Uninstall Thornswood", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-            if (r2 != MessageBoxResult.Yes) return;
+                "Uninstall Thornswood", Ask.Icon.Warning);
+            if (!r2) return;
 
             btnUninstall.IsEnabled = false;
             try
@@ -4391,12 +4423,12 @@ namespace Thornswood
             {
                 btnUninstall.IsEnabled = true;
                 Log("Uninstall stopped: " + ex.Message);
-                MessageBox.Show(ex.Message + "\n\nNothing was removed.",
-                                "Thornswood", MessageBoxButton.OK, MessageBoxImage.Warning);
+                Ask.Tell(ex.Message + "\n\nNothing was removed.",
+                                "Thornswood", Ask.Icon.Warning);
                 return;
             }
 
-            Application.Current.Shutdown();
+            Quit();
         }
 
         // ------------------------------------------------------------- updates
@@ -4406,7 +4438,7 @@ namespace Thornswood
         /// <summary>Presence speaks from its own thread; the log lives on this one.</summary>
         static void PresenceLog(string m)
         {
-            try { win.Dispatcher.BeginInvoke(new Action(delegate { Log(m); })); } catch (Exception ex) { Swallow.Note("Shell.PresenceLog", ex); }
+            try { Dispatcher.UIThread.Post(new Action(delegate { Log(m); })); } catch (Exception ex) { Swallow.Note("Shell.PresenceLog", ex); }
         }
 
         static void AskOnline()
@@ -4422,7 +4454,7 @@ namespace Thornswood
                 try { other = Online.AskOther(cfg); } catch (Exception ex) { Swallow.Note("Shell.AskOnline", ex); }
                 Online.Count got = c;
                 Online.Count gotOther = other;
-                win.Dispatcher.BeginInvoke(new Action(delegate
+                Dispatcher.UIThread.Post(new Action(delegate
                 {
                     string extra = Online.Line(got);
                     awakeMineText = extra;
@@ -4480,13 +4512,13 @@ namespace Thornswood
                     n = ClientRuntime.Heal(cfg, delegate(string m)
                     {
                         string line = m;
-                        win.Dispatcher.BeginInvoke(new Action(delegate { Log(line); }));
+                        Dispatcher.UIThread.Post(new Action(delegate { Log(line); }));
                     });
                 }
                 catch (Exception ex)
                 {
                     string why = ex.Message;
-                    win.Dispatcher.BeginInvoke(new Action(delegate
+                    Dispatcher.UIThread.Post(new Action(delegate
                     {
                         Log("Could not put the client runtime back: " + why);
                     }));
@@ -4495,7 +4527,7 @@ namespace Thornswood
                 {
                     healing = false;
                     PlayProgress.End();
-                    if (n > 0) win.Dispatcher.BeginInvoke(new Action(delegate { DrawStatus(); }));
+                    if (n > 0) Dispatcher.UIThread.Post(new Action(delegate { DrawStatus(); }));
                 }
             });
         }
@@ -4633,10 +4665,10 @@ namespace Thornswood
                     "profile of its own, so the Skyrim you already play is left alone. Nothing else " +
                     "here comes right until that is done, updates included.";
             }
-            updateBar.Visibility = Visibility.Visible;
+            updateBar.IsVisible = true;
             // Ahead has no button (#4115): there is nothing to install, and
             // every collection page leads to the same revision or a newer one.
-            InstallShown(problem == "ahead" ? Visibility.Collapsed : Visibility.Visible);
+            InstallShown(problem != "ahead");
             collectionBarUp = true;
 
             // Open to everybody (#428). Patrick, 28 Sep: "we are in alpha so the

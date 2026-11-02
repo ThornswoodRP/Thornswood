@@ -19,7 +19,9 @@
   holds the launcher to that until the launcher lane changes it on purpose.
 
   The launcher cannot be started from here (the ops repo's CLAUDE.md), so this reads the
-  source, the window and site\server.js and checks the shape:
+  source, the window (launcher\app\MainWindow.axaml since the move to
+  Avalonia, #4823, where Shell reaches each named control as win.<Name>) and
+  site\server.js and checks the shape:
 
     - Gallery.Report / Submit / Approve / Reject / TakeDown / Queue talk to
       the right doors over the ticket;
@@ -30,7 +32,8 @@
     - a 403 with no why on a staff door is named as an old site;
     - the words follow the house rules.
 
-  Read only. It reads launcher\app\*.cs, launcher\ui.xaml and site\server.js.
+  Read only. It reads launcher\app\*.cs, launcher\app\MainWindow.axaml and
+  site\server.js.
 */
 const fs = require('fs');
 const path = require('path');
@@ -41,7 +44,7 @@ const APP = path.join(ROOT, 'launcher', 'app');
 const GALLERY = fs.readFileSync(path.join(APP, 'Gallery.cs'), 'utf8');
 const DISCORD = fs.readFileSync(path.join(APP, 'Discord.cs'), 'utf8');
 const SHELL = fs.readFileSync(path.join(APP, 'Shell.cs'), 'utf8');
-const XAML = fs.readFileSync(path.join(ROOT, 'launcher', 'ui.xaml'), 'utf8');
+const XAML = fs.readFileSync(path.join(APP, 'MainWindow.axaml'), 'utf8');
 const SERVER = siteFiles.source();
 
 let pass = 0, fail = 0;
@@ -178,8 +181,8 @@ for (const name of ['BtnGalleryChoose', 'BtnGallerySend', 'BtnGalleryRefresh',
                     'GalleryApprovedList',
                     'GalleryPageReportRow', 'TxtGalleryPageSaid',
                     'GalleryDrop', 'GalleryChosenList', 'TxtGalleryDropLead']) {
-  yes('ui.xaml has ' + name, XAML.indexOf('x:Name="' + name + '"') > 0);
-  yes('Shell.cs looks up ' + name, SHELL.indexOf('"' + name + '"') > 0);
+  yes('MainWindow.axaml has ' + name, XAML.indexOf('x:Name="' + name + '"') > 0);
+  yes('Shell.cs takes ' + name + ' from the window', SHELL.indexOf('win.' + name + ';') > 0);
 }
 yes('no separate waiting section in XAML',
     XAML.indexOf('GalleryStaffBlock') < 0 &&
@@ -192,7 +195,7 @@ yes('Play byline has no from the world suffix',
     /galleryBy\.Text = \(shot\.By != null && shot\.By\.Length > 0\)/.test(SHELL));
 
 yes('Gallery.FetchPending loads waiting thumbs with ticket',
-    /public static BitmapImage FetchPending\(Pending item\)/.test(GALLERY));
+    /public static Bitmap FetchPending\(Pending item\)/.test(GALLERY));
 yes('Shell wires the drop zone', /WireGalleryDrop\(\)/.test(SHELL));
 yes('approved list is a WrapPanel of image cards',
     /WrapPanel x:Name="GalleryApprovedList"/.test(XAML));
@@ -212,12 +215,12 @@ yes('staff Accept is not gated on who.Answered',
   // Last in all three arrays, whatever its number: the Controls page left
   // them in #3126 and the pages after it moved down one.
   const at = Number((/PageGallery = (\d+);/.exec(SHELL) || [])[1]);
-  const nav = (/navButtons = new Button\[\] \{([\s\S]*?)\};/.exec(SHELL) || ['', ''])[1].match(/F<Button>\("(\w+)"\)/g) || [];
-  const grids = (/pages = new UIElement\[\] \{([\s\S]*?)\};/.exec(SHELL) || ['', ''])[1].match(/F<Grid>\("(\w+)"\)/g) || [];
+  const nav = (/navButtons = new Button\[\] \{([\s\S]*?)\};/.exec(SHELL) || ['', ''])[1].match(/win\.(\w+)/g) || [];
+  const grids = (/pages = new Control\[\] \{([\s\S]*?)\};/.exec(SHELL) || ['', ''])[1].match(/win\.(\w+)/g) || [];
   const titles = ((/PageTitles = \{([\s\S]*?)\};/.exec(SHELL) || ['', ''])[1].match(/"[^"]*"/g) || []);
   yes('PageGallery (' + at + ') is the last index of the three arrays (' + nav.length + ', ' + grids.length + ', ' + titles.length + ')',
       at === nav.length - 1 && at === grids.length - 1 && at === titles.length - 1 &&
-      nav[at] === 'F<Button>("NavGallery")' && grids[at] === 'F<Grid>("PageGallery")' && titles[at] === '"Gallery"');
+      nav[at] === 'win.NavGallery' && grids[at] === 'win.PageGallery' && titles[at] === '"Gallery"');
 }
 yes('ShowPage rebuilds the Gallery page',
     /else if \(i == PageGallery\) BuildGalleryPage\(\);/.test(SHELL));

@@ -424,8 +424,13 @@ byte for byte, held to the same signature.
    to **Dev** that ended in success, then waits in the **Main** environment.
 3. Patrick approves it on the run ("Review deployments"). A rejection ends
    it and nothing reaches main.
-4. The approved job makes a Deployment to **Main** naming the Release and
-   its run. The agent holds it to that run before anything is touched: the
+4. The approved job first puts out main's launcher package, when the
+   Release runs with one that is not out yet: the files the merge release
+   kept as the artifact `main-<tag>`, each held to the signed record of the
+   build that made them, on the Release `main-<tag>`, which main's launchers
+   update from and which carries main's download, `Thornswood-Setup.exe`
+   (the header of promote-main.yml, "MAIN'S LAUNCHER"). Then it makes a
+   Deployment to **Main** naming the Release and its run. The agent holds it to that run before anything is touched: the
    Deployment was made by GitHub Actions; the run is `promote-main.yml` on
    main, started by hand; its wait on Main was approved and not rejected; it
    made no Main Deployment before (`state\main-runs.txt`); and dev applied

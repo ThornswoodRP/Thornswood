@@ -13,10 +13,10 @@ namespace Thornswood
     /// would pass a prefix test and be treated as ours. Comparing against
     /// the folder plus its separator is the whole fix.
     ///
-    /// Shared: Setup.csproj compiles this file into the setup program as well
-    /// (#3561: its unpack compared against the scratch folder with a bare
-    /// StartsWith while the launcher already had this rule), so it uses
-    /// nothing else from launcher\app. It compares text and resolves neither
+    /// Setup.csproj compiled this file into the setup program as well (#3561:
+    /// its unpack compared against the scratch folder with a bare StartsWith
+    /// while the launcher already had this rule) until #4824 retired that
+    /// program, which is why it uses nothing else from launcher\app. It compares text and resolves neither
     /// side, so every caller passes a path from Path.GetFullPath.
     /// tests\test-updater.ps1 and installer\tests\test-3561-setup-unpack-fence.ps1 run it.
     /// </summary>

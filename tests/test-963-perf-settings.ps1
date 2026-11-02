@@ -13,7 +13,8 @@
        before every Play and held in the game by the front plugin, whose
        ACTOR_FADE must be the same number.
     3. The menu music browser is closed, not paused, while the game runs.
-    4. Voice keeps full quality: every voice panner is HRTF, none cheaper.
+    4. Voice keeps full quality: every voice panner is HRTF, none cheaper,
+       in the game's voice page and in the launcher's own voice mix.
     5. Half-rate updates for others' movement (SkyMP's skipUpdates) stay off.
     6. #978: while the game runs the launcher lists the machine's processes
        once, not every two seconds, and still sees the game close on the
@@ -25,12 +26,17 @@
 
   HOW. Compiles the shipped Enforce.cs, AutoJoin.cs, Hold.cs, Watched.cs and
   ChannelWait.cs together, with small stand-ins for Paths, Swallow, Config
-  and Keep, with the compiler the build runs (Add-LauncherType,
-  tests\Launcher-Csc.ps1, #2821), and runs them against a pretend game folder in a temp folder
-  Get-ScratchDir.ps1 names (the repository's temp, or %TEMP% outside a checkout).
-  Reads the rest as text. Changes nothing outside that folder. Off Windows
-  it stops before the compile and says SKIP: the build's compiler is only
-  there.
+  and Keep, with the .NET SDK the launcher builds with (Add-LauncherType,
+  tests\Launcher-Csc.ps1, #2821, #4823), and runs them against a pretend game
+  folder in a temp folder Get-ScratchDir.ps1 names (the repository's temp, or
+  %TEMP% outside a checkout). Reads the rest as text. Changes nothing outside
+  that folder.
+
+  The compile, the text checks, Watched (6) and ChannelWait (7) run
+  everywhere. Enforce (1 and 2), AutoJoin (5) and Hold (8) run on Windows
+  only and say SKIP elsewhere: they find the game's files by Windows paths
+  (Data\SKSE\Plugins, Data\Platform), and Enforce asks kernel32 whether a
+  file is a hard link.
 #>
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -55,7 +61,7 @@ namespace Thornswood963
 {
     // Enforce.MakeItOurs splits a hard link with OwnGame.SwapCopyIn (#2599).
     // The real code, lifted out of OwnGame.cs below, as test-2599-whole-swaps.ps1 does.
-    static class OwnGame
+    static partial class OwnGame
     {
 __OWNGAME__
     }
@@ -111,7 +117,7 @@ __OWNGAME__
 # #2599 swaps, and ReplaceName with the MoveFileEx they rest on. Enforce.cs
 # calls SwapCopyIn since #2599, so it does not compile without them.
 $og = [IO.File]::ReadAllText((Join-Path $app 'OwnGame.cs')) -replace "`r`n", "`n"
-$region = [regex]::Match($og, '(?s)\n(        (?:internal )?static void WriteRecord\(string path, IEnumerable<string> lines\)\n.*?static extern bool MoveFileEx\([^)]*\);\n)')
+$region = [regex]::Match($og, '(?s)\n(        (?:internal )?static void WriteRecord\(string path, IEnumerable<string> lines\)\n.*?private static partial bool MoveFileEx\([^)]*\);\n)')
 $block = [regex]::Match($og, '(?s)\n(        // ---- #2599: one name of the game folder replaced whole.*?        // ---- end #2599[^\n]*\n)')
 Yes 'OwnGame.SwapCopyIn and what it rests on are found in OwnGame.cs, to compile with Enforce.cs' ($region.Success -and $block.Success -and $block.Groups[1].Value -match 'internal static void SwapCopyIn\(')
 if (-not ($region.Success -and $block.Success)) { Write-Host ""; Write-Host "$($script:pass) passed, $($script:fail) failed"; exit 1 }
@@ -133,12 +139,13 @@ foreach ($f in 'Enforce.cs', 'AutoJoin.cs', 'Hold.cs', 'Watched.cs', 'ChannelWai
 $stubUsings = [regex]::Matches($sources[0], '(?m)^using [\w.]+;\s*$')
 foreach ($u in $stubUsings) { $null = $usings.Add($u.Value.Trim()) }
 $sources[0] = [regex]::Replace($sources[0], '(?m)^using [\w.]+;\s*$', '')
-if (-not $OnWindows) {
-    Write-Host 'SKIP  1 to 8: they run Enforce.cs, AutoJoin.cs, Hold.cs, Watched.cs and ChannelWait.cs compiled with the compiler the build runs, the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'
-    Write-Host ""; Write-Host "$($script:pass) passed, $($script:fail) failed"; exit $(if ($script:fail) { 1 } else { 0 })
-}
-$null = Add-LauncherType -Source ((@($usings) -join "`n") + "`n" + ($sources -join "`n"))
+$compiled = $null
+try { $null = Add-LauncherType -Source ((@($usings) -join "`n") + "`n" + ($sources -join "`n")); $compiled = $true }
+catch { Write-Host ('      ' + $_.Exception.Message); $compiled = $false }
+Yes "Enforce.cs, AutoJoin.cs, Hold.cs, Watched.cs and ChannelWait.cs compile with the .NET SDK the launcher builds with, C# $LauncherLangVersion" $compiled
+if (-not $compiled) { Write-Host ""; Write-Host "$($script:pass) passed, $($script:fail) failed"; exit 1 }
 $Api = [Thornswood963.Api]
+$fade = $Api::ActorFade()
 
 $tmp = & (Join-Path $root 'scripts\release\Get-ScratchDir.ps1') ('test-963-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
@@ -150,6 +157,7 @@ try {
     New-Item -ItemType Directory -Force -Path $plugins, $myGames | Out-Null
     $Api::SetGame($game, $myGames)
 
+    if ($OnWindows) {
     # --------------------------------------------- 1. SkyrimPlatform.ini
     # As both installs here had it on 28 September: trace and the window on.
     $spIni = Join-Path $plugins 'SkyrimPlatform.ini'
@@ -168,7 +176,6 @@ try {
     Yes 'SkyrimPlatform: the window geometry lines are left alone' ($sp -match '(?m)^CmdOffsetLeft = 0' -and $sp -match '(?m)^CmdOffsetTop = 720')
     Yes 'SkyrimPlatform: the browser and plugin folder lines are left alone' ($sp -match '(?m)^BackendName = tilted' -and $sp -match '(?m)^PluginFolders = Data/Platform/Plugins;Data/Platform/PluginsDev')
 
-    $fade = $Api::ActorFade()
     $pf = Get-Content -LiteralPath $prefs -Raw
     Yes "draw distance: fLODFadeOutMultActors=$fade in SkyrimPrefs.ini, in Skyrim's own key=value style" ($pf -match "(?m)^fLODFadeOutMultActors=$fade\r?$")
     Yes 'draw distance: under [LOD], nothing else in the file moved' ($pf -match "\[LOD\]\r?\nfLODFadeOutMultObjects=5\r?\nfLODFadeOutMultActors=$fade\r?\nfLODFadeOutMultItems=10" -and $pf -match 'fShadowDistance=3000')
@@ -190,6 +197,9 @@ try {
     $null = $Api::RunEnforce()
     Yes 'no SkyrimPrefs.ini: none is made with one line in it' (-not (Test-Path -LiteralPath $prefs))
     Yes 'no SkyrimPlatform.ini: none is made (its own defaults are info and no window)' (-not (Test-Path -LiteralPath $spIni))
+    } else {
+        Write-Host 'SKIP  1 and 2, run: Enforce finds SkyrimPlatform.ini and SkyrimPrefs.ini by Windows paths and asks kernel32 about hard links, which only Windows has'
+    }
 
     $enf = Read 'launcher\app\Enforce.cs'
     $front = Read 'game\plugins\thornswood-front.js'
@@ -220,17 +230,19 @@ try {
     Yes 'the menu music makes no browser at all' ($mm -notmatch 'Microsoft\.Web\.WebView2')
 
     # --------------------------------------------- 4. voice quality kept
-    # Two clients since the service's own page went (#1822).
-    $panners = @('launcher\voice-host.html', 'game\ui\thornswood-voice.js')
-    $allHrtf = $true; $count = 0
-    foreach ($p in $panners) {
-        $t = Read $p
-        foreach ($x in [regex]::Matches($t, "panningModel\s*=\s*'([^']+)'")) { $count++; if ($x.Groups[1].Value -ne 'HRTF') { $allHrtf = $false } }
-        if ($t -match 'equalpower') { $allHrtf = $false }
-    }
-    Yes "voice: every panner is HRTF, none switched to the cheaper equalpower ($count panners in 2 files)" ($allHrtf -and $count -eq 2)
+    # Two clients since the service's own page went (#1822): the game's voice
+    # page, and the launcher's. Since #4823 the launcher's is its own code,
+    # VoiceMix.cs, in place of voice-host.html in a web view, so its panner
+    # is the HrtfPanner each source in VoiceMix.cs holds (VoiceHrtf.cs, the
+    # port of Chromium's) rather than a Web Audio panningModel.
+    $t = Read 'game\ui\thornswood-voice.js'
+    $models = @([regex]::Matches($t, "panningModel\s*=\s*'([^']+)'") | ForEach-Object { $_.Groups[1].Value })
+    Yes "voice: the game's voice page pans with HRTF, not the cheaper equalpower ($($models -join ', '))" ($models.Count -eq 1 -and $models[0] -eq 'HRTF' -and $t -notmatch 'equalpower')
+    $mix = Read 'launcher\app\VoiceMix.cs'
+    Yes "voice: the launcher's voice mix (VoiceMix.cs) pans with HRTF too, not the cheaper equal power" ($null -ne $mix -and $mix -match 'new HrtfPanner\(' -and $mix -notmatch '\bEqualPower\s*\(')
 
     # --------------------------------------------- 5. half-rate updates off
+    if ($OnWindows) {
     $settings = $Api::SettingsFile()
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $settings) | Out-Null
     [IO.File]::WriteAllText($settings, "{`r`n  `"profileId`": 5,`r`n  `"gameData`": { `"profileId`": 5 },`r`n  `"skipUpdates`": true,`r`n  `"server-port`": 7777`r`n}`r`n")
@@ -240,6 +252,9 @@ try {
     [IO.File]::WriteAllText($settings, "{`r`n  `"profileId`": 5,`r`n  `"gameData`": { `"profileId`": 5 },`r`n  `"server-port`": 7777`r`n}`r`n")
     $Api::ChooseAtMenu(5)
     Yes 'half-rate updates: absent stays absent (the client reads that as off)' ((Get-Content -LiteralPath $settings -Raw) -notmatch 'skipUpdates')
+    } else {
+        Write-Host 'SKIP  5, run: AutoJoin finds skymp5-client-settings.txt by its Windows path (Data\Platform\Plugins), which only Windows has'
+    }
     $setsTrue = @(Get-ChildItem -Path (Join-Path $root 'launcher'), (Join-Path $root 'game'), (Join-Path $root 'scripts') -Recurse -File -Include *.cs, *.js, *.ps1, *.json, *.txt -ErrorAction SilentlyContinue |
         Where-Object { (Get-Content -LiteralPath $_.FullName -Raw) -match 'skipUpdates["'']?\s*[:=]\s*true' })
     Yes 'half-rate updates: nothing we ship turns them on' ($setsTrue.Count -eq 0)
@@ -323,6 +338,7 @@ try {
     Yes "#977 with no folder to watch it falls back to the old 100 ms read ($fell ms)" (-not $none.Watching -and $r -and $fell -lt 1000)
 
     # --------------------------------------------- 8. #979 Hold watcher
+    if ($OnWindows) {
     $plat = Join-Path $game 'Data\Platform'
     New-Item -ItemType Directory -Force -Path (Join-Path $plat 'Plugins'), (Join-Path $plat 'UI') | Out-Null
     $null = $Api::HoldTake()
@@ -340,6 +356,9 @@ try {
     [Threading.Thread]::Sleep(500)
     Yes '#979 as is one written into UI' (@($Api::HoldSaid() | Where-Object { $_ -match 'UI\\index\.html' }).Count -eq 1)
     $Api::HoldRelease()
+    } else {
+        Write-Host 'SKIP  8, run: Hold watches Data\Platform\Plugins and Data\Platform\UI by their Windows paths, which only Windows has'
+    }
 }
 finally {
     try { $Api::HoldRelease() } catch { }

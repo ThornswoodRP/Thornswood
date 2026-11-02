@@ -31,15 +31,21 @@
        keeping the rest up to two. site\tests\test-2319-crash-looked-at.js runs
        the site's half.
 
-  HOW. Compiles the shipped CrashDump.cs and Enforce.cs with the build's own
-  compiler (Launcher-Csc.ps1), with small stand-ins for Paths, Files,
-  Swallow and Config, and drives it against pretend installs in a temp folder
-  Get-ScratchDir.ps1 names (the repository's temp, or %TEMP% outside a checkout).
-  Reads Config.cs, Shell.cs, ui.xaml, Diag.cs and Discord.cs as text. Changes
-  nothing outside its temp folder.
+  HOW. Builds the shipped CrashDump.cs and Enforce.cs as a program with the
+  .NET SDK the launcher builds with (Launcher-Csc.ps1, #4823), with small
+  stand-ins for Paths, Files, Swallow and Config, and drives it against
+  pretend installs in a temp folder Get-ScratchDir.ps1 names (the
+  repository's temp, or %TEMP% outside a checkout). Reads Config.cs, Shell.cs,
+  Ask.cs, MainWindow.axaml, Diag.cs and Discord.cs as text. Changes nothing outside its temp
+  folder and its build under out\harness.
+
+  The build and every check by the source run on every machine. Driving it
+  runs on Windows only: CrashDump and Enforce name Crash Logger's files as
+  Data\SKSE\Plugins\..., a Windows path, and Enforce splits a hard link with
+  kernel32, so elsewhere those checks say SKIP.
 #>
 $ErrorActionPreference = 'Stop'
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $app = Join-Path $root 'launcher\app'
 
@@ -56,9 +62,8 @@ function Done {
 function Read([string]$rel) { Get-Content -LiteralPath (Join-Path $root $rel) -Raw }
 
 # ------------------------------------------------------------------ compile
-if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'; Done }
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 $driver = @'
 using System;
@@ -71,7 +76,7 @@ namespace Thornswood
 {
     // Enforce.MakeItOurs splits a hard link with OwnGame.SwapCopyIn (#2599).
     // The real code, lifted out of OwnGame.cs below, as test-2599-whole-swaps.ps1 does.
-    static class OwnGame
+    static partial class OwnGame
     {
 __OWNGAME__
     }
@@ -143,28 +148,65 @@ try {
     # The same two pieces of OwnGame.cs test-2599-whole-swaps.ps1 lifts: the
     # #2599 swaps, and ReplaceName with the MoveFileEx they rest on.
     $og = [IO.File]::ReadAllText((Join-Path $app 'OwnGame.cs')) -replace "`r`n", "`n"
-    $region = [regex]::Match($og, '(?s)\n(        (?:internal )?static void WriteRecord\(string path, IEnumerable<string> lines\)\n.*?static extern bool MoveFileEx\([^)]*\);\n)')
+    $region = [regex]::Match($og, '(?s)\n(        (?:internal )?static void WriteRecord\(string path, IEnumerable<string> lines\)\n.*?private static partial bool MoveFileEx\([^)]*\);\n)')
     $block = [regex]::Match($og, '(?s)\n(        // ---- #2599: one name of the game folder replaced whole.*?        // ---- end #2599[^\n]*\n)')
     Yes 'OwnGame.SwapCopyIn and what it rests on are found in OwnGame.cs, to compile with Enforce.cs' ($region.Success -and $block.Success -and $block.Groups[1].Value -match 'internal static void SwapCopyIn\(')
     if (-not ($region.Success -and $block.Success)) { Done }
     $driver = $driver.Replace('__OWNGAME__', $region.Groups[1].Value.TrimEnd() + "`n" + $block.Groups[1].Value.TrimEnd())
 
-    $driverFile = Join-Path $tmp 'CrashSnapshotTest.cs'
-    [IO.File]::WriteAllText($driverFile, $driver, (New-Object Text.UTF8Encoding($false)))
-    $exe = Join-Path $tmp 'crash-snapshot-test.exe'
-    # /noconfig, as the build does: csc.rsp adds its own framework copies,
-    # and beside the reference assemblies that stops on CS1703.
-    $cscArgs = @('/noconfig', '/nologo', '/target:exe', '/warn:4', "/out:$exe",
-                 "/reference:$(Join-Path $LauncherRefDir 'System.dll')", "/reference:$(Join-Path $LauncherRefDir 'System.Core.dll')",
-                 (Join-Path $app 'CrashDump.cs'), (Join-Path $app 'Enforce.cs'), $driverFile)
-    $out = & $LauncherCsc @cscArgs 2>&1
-    $built = ($LASTEXITCODE -eq 0) -and (Test-Path -LiteralPath $exe)
-    if (-not $built) { $out | ForEach-Object { Write-Host "      $_" } }
-    Yes 'CrashDump.cs and Enforce.cs compile with the compiler the build runs' $built
-    if (-not $built) { Done }
+    $exe = $null
+    try { $exe = Build-LauncherCode -Exe -Main 'Thornswood.CrashSnapshotTest' -Source $driver -File (Join-Path $app 'CrashDump.cs'), (Join-Path $app 'Enforce.cs') }
+    catch { ($_.Exception.Message -split "`n") | ForEach-Object { Write-Host "      $_" } }
+    Yes 'CrashDump.cs and Enforce.cs build with the .NET SDK the launcher builds with' ($null -ne $exe)
+    if (-not $exe) { Done }
 
+    # ------------------------------------------- by the source, on every machine
+    # 1. off until ticked
+    $cfgText = Read 'launcher\app\Config.cs'
+    Yes 'the setting is off for everybody until ticked (Config.CrashSnapshots = false)' ($cfgText -match '\[JsonInclude\] public bool CrashSnapshots = false;')
+    # 4. nothing in the registry
+    $src = Read 'launcher\app\CrashDump.cs'
+    $code = [regex]::Replace($src, '(?m)^\s*///?.*$', '')
+    Yes 'nothing in the registry and nothing that asks for administrator (no LocalDumps, no runas)' ($code -notmatch 'Registry|LocalDumps|runas|HKEY|HKLM|HKCU')
+    # ------------------------------------------- 6. the launcher around it
+    $shell = (Get-ChildItem -LiteralPath $app -Filter 'Shell*.cs' | Sort-Object Name | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
+    $play = [regex]::Match($shell, '(?s)static void Play\(\)\s*\{(.*?)\n        \}\r?\n')
+    $body = $play.Groups[1].Value
+    $iEnf = $body.IndexOf('Enforce.Apply()'); $iDump = $body.IndexOf('CrashDump.Apply(cfg)'); $iSaid = $body.IndexOf('foreach (string note in Enforce.Said)'); $iNote = $body.IndexOf('Keep.LeaveNote')
+    Yes 'Play writes it every time, after the other held settings and before the game starts' ($play.Success -and $iEnf -ge 0 -and $iDump -gt $iEnf -and $iSaid -gt $iDump -and $iNote -gt $iDump)
+    Yes 'the game closing works from what Crash Logger was told at Play, off the window''s thread' ($shell -match 'bool keptAtPlay = CrashDump\.AppliedAtPlay;' -and $shell -match 'ThreadPool\.QueueUserWorkItem\(delegate\s*\{\s*string snapshot = null, crashed = null;' -and $shell -match 'CrashDump\.AfterSession\(crashSince, keptAtPlay, keptIn, out snapshot\)')
+    # The question is Ask.YesNo, Windows' own box over the launcher's window
+    # (Ask.Owner), since Avalonia has none (#4823).
+    $ask = [regex]::Match($shell, '(?s)static void AskKeepSnapshot\(string snapshot, string keptIn\)\s*\{(.*?)\n        \}\r?\n')
+    $askBody = $ask.Groups[1].Value
+    $askCs = Read 'launcher\app\Ask.cs'
+    Yes 'and asks about a saved snapshot back on the window''s thread, in a box over the launcher''s window' ($shell -match '(?s)Dispatcher\.UIThread\.Post\(new Action\(delegate\s*\{[^{}]*if \(snapshot != null\) AskKeepSnapshot\(snapshot, keptIn\);' -and $askBody -match 'bool r = Ask\.YesNo\(' -and $askCs -match 'return MessageBoxW\(Owner, ')
+    Yes 'Apply remembers what it wrote at Play' ($src -match 'AppliedAtPlay = Wanted\(cfg\);')
+    Yes 'asking: Yes keeps it and only then tidies older ones, No deletes it' ($ask.Success -and $askBody -match '(?s)if \(r\)\s*\{.*?int gone = CrashDump\.Tidy\(keptIn, out looked\);.*?return;' -and $askBody.IndexOf('File.Delete(snapshot);') -gt $askBody.IndexOf('CrashDump.Tidy(keptIn'))
+    Yes 'Wanted(cfg) is the person''s own setting and nothing else' ($src -match 'return cfg != null && cfg\.CrashSnapshots;' -and $src -notmatch 'Discord\.' -and $src -notmatch 'IsDev')
+    $ui = Read 'launcher\app\MainWindow.axaml'
+    Yes 'Settings has the box, the size said beside it, and a folder button' ($ui -match 'x:Name="ChkCrashSnapshots"' -and $ui -match 'One can be 9 GB or more' -and $ui -match 'x:Name="BtnCrashFolder"' -and $ui -match 'x:Name="TxtCrashFolder"')
+    Yes 'the box and the folder are saved to the config when changed' ($shell -match 'cfg\.CrashSnapshots = chkCrashSnapshots\.IsChecked == true;' -and $shell -match 'cfg\.CrashSnapshotFolder = chosen;')
+    $files = Read 'launcher\app\Files.cs'
+    Yes 'Crash Logger''s folder is the crash log folder (the stand-in above says what Files.cs says)' ($files -match 'public static string SkseLogDir \{ get \{ return Path\.Combine\(Paths\.LiveMyGames, "SKSE"\); \} \}' -and $src -match 'return Files\.SkseLogDir;')
+    $discord = Read 'launcher\app\Discord.cs'
+    Yes 'the session logs never carry a snapshot (only crash-*.log)' ($discord -notmatch '\.dmp' -and $discord -match 'Directory\.GetFiles\(dir, "crash-\*\.log"\)')
+    $diag = Read 'launcher\app\Diag.cs'
+    $report = [regex]::Match($diag, '(?s)Entry crash = Files\.NewestCrash\(\);\s*if \(crash != null\) Grab\(work, "crash log", crash\.FullPath\);')
+    Yes 'the report zip takes the crash log, not the snapshot' ($report.Success -and $diag -notmatch '\.dmp' -and $files -match '"crash-\*\.log"')
+    # 7. kept until looked at (#2319)
+    Yes 'the check in sends the sessions held and takes the site''s lookedAt only from an answer that carried it' ($discord -match 'string held = CrashDump\.HeldSessions\(\);' -and $discord -match '",\\"snapshots\\":\\"" \+ Escape\(held\)' -and $discord -match 'if \(st\.Ok && reply\.Contains\("\\"lookedAt\\""\)\) CrashDump\.NoteLookedAt\(Field\(reply, "lookedAt"\)\);')
+    Yes 'the session logs remember the crash''s session before they go up' ($discord -match 'CrashDump\.Remember\(want\[1\]\[1\], session\);' -and $discord.IndexOf('CrashDump.Remember(') -lt $discord.IndexOf('/api/play/logs", sb.ToString()'))
+    Yes 'the person is told at the prompt that a kept snapshot waits for staff, two at most' ($shell -match 'Yes keeps it until staff mark this crash looked at on the sessions page' -and $shell -match 'Two are kept at most')
+    Yes 'and the setting says so before it is ticked' ($ui -match 'Each is kept until staff have looked at that crash, two at most\.' -and $src -match 'Each is kept until staff have looked at that crash, two at most\.')
+
+    # ------------------------------------------- driven, on Windows
+    if (-not $OnWindows) {
+        Write-Host 'SKIP  1 to 5 and 7, CrashDump and Enforce driven against pretend installs: they name Crash Logger''s files by the Windows path Data\SKSE\Plugins\..., and Enforce splits a hard link with kernel32, which only Windows has'
+        Done
+    }
     function Run([string[]]$argv) {
-        $lines = & $exe @argv
+        $lines = Invoke-LauncherExe $exe @argv
         $r = @{}
         foreach ($l in $lines) { $i = $l.IndexOf('='); if ($i -gt 0) { $r[$l.Substring(0, $i)] = $l.Substring($i + 1) } }
         return $r
@@ -208,8 +250,6 @@ try {
     }
 
     # ------------------------------------------- 1. off until ticked
-    $cfgText = Read 'launcher\app\Config.cs'
-    Yes 'the setting is off for everybody until ticked (Config.CrashSnapshots = false)' ($cfgText -match '\[DataMember\] public bool CrashSnapshots = false;')
     $inst = NewInstall 'off'
     $r = Apply $inst $false
     Yes 'off: Crash Log Write Minidump = false, and the launcher says nothing (already Crash Logger''s default)' ((Live (IniText $inst) 'Crash Log Write Minidump')[0] -eq 'false' -and $r['WANTED'] -eq 'False' -and $r['SAID'] -eq '(none)')
@@ -264,10 +304,6 @@ try {
     $null = Apply $m $true
     Yes 'no Crash Logger at all: nothing is made' (-not (Test-Path -LiteralPath $m.Ini))
 
-    $src = Read 'launcher\app\CrashDump.cs'
-    $code = [regex]::Replace($src, '(?m)^\s*///?.*$', '')
-    Yes 'nothing in the registry and nothing that asks for administrator (no LocalDumps, no runas)' ($code -notmatch 'Registry|LocalDumps|runas|HKEY|HKLM|HKCU')
-
     # ------------------------------------------- 5. as the game closes
     $s = NewInstall 'session'
     $chosen = Join-Path $tmp 'chosen-session'
@@ -298,27 +334,6 @@ try {
     $r = After $s2 $false '-' $since
     Yes 'crashed, off: the crash log line, no snapshot named, and nothing moved or deleted' ($r['SAID'] -match 'The game crashed\.' -and $r['SAID'] -notmatch 'crash snapshot' -and $r['SNAP'] -eq '(none)' -and (Test-Path -LiteralPath $stray))
 
-    # ------------------------------------------- 6. the launcher around it
-    $shell = (Get-ChildItem -LiteralPath $app -Filter 'Shell*.cs' | Sort-Object Name | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
-    $play = [regex]::Match($shell, '(?s)static void Play\(\)\s*\{(.*?)\n        \}\r?\n')
-    $body = $play.Groups[1].Value
-    $iEnf = $body.IndexOf('Enforce.Apply()'); $iDump = $body.IndexOf('CrashDump.Apply(cfg)'); $iSaid = $body.IndexOf('foreach (string note in Enforce.Said)'); $iNote = $body.IndexOf('Keep.LeaveNote')
-    Yes 'Play writes it every time, after the other held settings and before the game starts' ($play.Success -and $iEnf -ge 0 -and $iDump -gt $iEnf -and $iSaid -gt $iDump -and $iNote -gt $iDump)
-    Yes 'the game closing works from what Crash Logger was told at Play, off the window''s thread' ($shell -match 'bool keptAtPlay = CrashDump\.AppliedAtPlay;' -and $shell -match 'ThreadPool\.QueueUserWorkItem\(delegate\s*\{\s*string snapshot = null, crashed = null;' -and $shell -match 'CrashDump\.AfterSession\(crashSince, keptAtPlay, keptIn, out snapshot\)')
-    Yes 'and asks about a saved snapshot back on the window''s thread' ($shell -match 'if \(snapshot != null\) AskKeepSnapshot\(snapshot, keptIn\);' -and $shell -match 'MessageBox\.Show\(win,')
-    Yes 'Apply remembers what it wrote at Play' ($src -match 'AppliedAtPlay = Wanted\(cfg\);')
-    Yes 'asking: Yes keeps it and only then tidies older ones, No deletes it' ($shell -match 'MessageBoxButton\.YesNo' -and $shell -match 'static void AskKeepSnapshot\(string snapshot, string keptIn\)' -and $shell -match 'int gone = CrashDump\.Tidy\(keptIn, out looked\);' -and $shell -match 'File\.Delete\(snapshot\);')
-    Yes 'Wanted(cfg) is the person''s own setting and nothing else' ($src -match 'return cfg != null && cfg\.CrashSnapshots;' -and $src -notmatch 'Discord\.' -and $src -notmatch 'IsDev')
-    $ui = Read 'launcher\ui.xaml'
-    Yes 'Settings has the box, the size said beside it, and a folder button' ($ui -match 'x:Name="ChkCrashSnapshots"' -and $ui -match 'One can be 9 GB or more' -and $ui -match 'x:Name="BtnCrashFolder"' -and $ui -match 'x:Name="TxtCrashFolder"')
-    Yes 'the box and the folder are saved to the config when changed' ($shell -match 'cfg\.CrashSnapshots = chkCrashSnapshots\.IsChecked == true;' -and $shell -match 'cfg\.CrashSnapshotFolder = chosen;')
-    $files = Read 'launcher\app\Files.cs'
-    Yes 'Crash Logger''s folder is the crash log folder (the stand-in above says what Files.cs says)' ($files -match 'public static string SkseLogDir \{ get \{ return Path\.Combine\(Paths\.LiveMyGames, "SKSE"\); \} \}' -and $src -match 'return Files\.SkseLogDir;')
-    $discord = Read 'launcher\app\Discord.cs'
-    Yes 'the session logs never carry a snapshot (only crash-*.log)' ($discord -notmatch '\.dmp' -and $discord -match 'Directory\.GetFiles\(dir, "crash-\*\.log"\)')
-    $diag = Read 'launcher\app\Diag.cs'
-    $report = [regex]::Match($diag, '(?s)Entry crash = Files\.NewestCrash\(\);\s*if \(crash != null\) Grab\(work, "crash log", crash\.FullPath\);')
-    Yes 'the report zip takes the crash log, not the snapshot' ($report.Success -and $diag -notmatch '\.dmp' -and $files -match '"crash-\*\.log"')
     # ------------------------------------------- 7. kept until looked at (#2319)
     $l = NewInstall 'looked'
     $chosen = Join-Path $tmp 'chosen-looked'
@@ -362,10 +377,6 @@ try {
     $many = NewInstall 'looked-many'
     for ($i = 0; $i -lt 10; $i++) { $r = Run @('remember', $many.Game, $many.My, '1', '-', (Join-Path $many.Skse ('crash-2026-10-18-10-00-0' + $i + '.log')), ([string]$i * 32)) }
     Yes 'at most eight sessions are remembered, the newest' (($r['HELD'] -split ',').Count -eq 8 -and $r['HELD'] -notmatch ('0' * 32) -and $r['HELD'] -match ('9' * 32))
-    Yes 'the check in sends the sessions held and takes the site''s lookedAt only from an answer that carried it' ($discord -match 'string held = CrashDump\.HeldSessions\(\);' -and $discord -match '",\\"snapshots\\":\\"" \+ Escape\(held\)' -and $discord -match 'if \(st\.Ok && reply\.Contains\("\\"lookedAt\\""\)\) CrashDump\.NoteLookedAt\(Field\(reply, "lookedAt"\)\);')
-    Yes 'the session logs remember the crash''s session before they go up' ($discord -match 'CrashDump\.Remember\(want\[1\]\[1\], session\);' -and $discord.IndexOf('CrashDump.Remember(') -lt $discord.IndexOf('/api/play/logs", sb.ToString()'))
-    Yes 'the person is told at the prompt that a kept snapshot waits for staff, two at most' ($shell -match 'Yes keeps it until staff mark this crash looked at on the sessions page' -and $shell -match 'Two are kept at most')
-    Yes 'and the setting says so before it is ticked' ($ui -match 'Each is kept until staff have looked at that crash, two at most\.' -and $src -match 'Each is kept until staff have looked at that crash, two at most\.')
 }
 finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue

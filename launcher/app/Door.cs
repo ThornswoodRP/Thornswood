@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Threading;
-using System.Windows;
+using Avalonia.Threading;
 
 namespace Thornswood
 {
@@ -103,7 +103,7 @@ namespace Thornswood
         /// nothing. onRefused runs on the UI thread either way it finishes, so
         /// a disabled button can be put back.
         /// </summary>
-        public static void Check(Window win, Action<string> log,
+        public static void Check(Action<string> log,
                                  Action<Standing> shout, Action onAllowed, Action onDone)
         {
             if (RecentlyCleared)
@@ -127,7 +127,7 @@ namespace Thornswood
                     st.Message = "Could not reach thornswood.net: " + ex.Message;
                 }
 
-                win.Dispatcher.BeginInvoke(new Action(delegate
+                Dispatcher.UIThread.Post(delegate
                 {
                     try
                     {
@@ -196,12 +196,12 @@ namespace Thornswood
                         shout(st);
                     }
                     finally { if (onDone != null) onDone(); }
-                }));
+                });
             });
         }
 
         /// <summary>The message box, kept here so the wording lives in one place.</summary>
-        public static void Explain(Window win, Standing st, Action connect)
+        public static void Explain(Standing st, Action connect)
         {
             string title = "Thornswood";
             string body = st.Message ?? "Discord said no.";
@@ -209,7 +209,7 @@ namespace Thornswood
             if (st.Why == "link")
             {
                 body += "\n\nPress Connect Discord on the Play page, then try again.";
-                MessageBox.Show(win, body, title, MessageBoxButton.OK, MessageBoxImage.Information);
+                Ask.Tell(body, title, Ask.Icon.Info);
                 if (connect != null) connect();
                 return;
             }
@@ -218,8 +218,7 @@ namespace Thornswood
             if (ask != null)
             {
                 body += "\n\n" + ask;
-                if (MessageBox.Show(win, body, title, MessageBoxButton.YesNo,
-                                    MessageBoxImage.Information) == MessageBoxResult.Yes)
+                if (Ask.YesNo(body, title, Ask.Icon.Info))
                 {
                     try
                     {
@@ -234,7 +233,7 @@ namespace Thornswood
 
             // banned, or no invite to offer. Neither is something the
             // launcher can help with, so it says so once and stops.
-            MessageBox.Show(win, body, title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            Ask.Tell(body, title, Ask.Icon.Warning);
         }
 
         /// <summary>

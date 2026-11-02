@@ -35,9 +35,11 @@
     3. one of the seven scripts not asking Where.ps1 Install, or any script
        writing an install folder (C:\Thornswood, C:\Thornswood-DevBuild or
        a folder under either, on any drive) into a string of its own. Left
-       out: Where.ps1, whose rule starts there; installer\Setup-Thornswood.ps1,
-       which chooses where a new install goes; scripts\oneoff, parked and not run
-       (its README); and tests, whose folders are made up. The box's own
+       out: Where.ps1, whose rule starts there; scripts\oneoff, parked and not
+       run (its README); and tests, whose folders are made up. Where a new
+       install goes is the launcher's own first start since #4824
+       (launcher\app\InstallPlace.cs), not a script, so the leave the old
+       installer\Setup-Thornswood.ps1 had went with it. The box's own
        folders (C:\Thornswood-Server, C:/Thornswood-Docs and the rest) are
        not the install and are not read as one;
     4. Where.ps1's rule answering wrong on made up drives, or Install and
@@ -202,7 +204,6 @@ Write-Host 'every script writes no install folder of its own'
 # Where each one is let off, and why: the header says.
 $letOff = @{
     'scripts/release/Where.ps1'          = 'the rule'
-    'installer/Setup-Thornswood.ps1'     = 'where a new install goes'
 }
 # The box scripts' gaming-PC guard looked for C:\Thornswood\Game\SkyrimSE.exe
 # and was let off here until #3041; it asks Windows what the machine is now

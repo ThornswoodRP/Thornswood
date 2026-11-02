@@ -92,7 +92,7 @@ yes('it is read only when the listing changed',
     /look = now != null && now != was;/.test(look) &&
     look.indexOf('if (look)') >= 0 && look.indexOf('if (look)') < revAt);
 yes('the answer goes back to the UI thread, which clears the look and draws there',
-    look.indexOf('win.Dispatcher.BeginInvoke') > revAt &&
+    look.indexOf('Dispatcher.UIThread.Post') > revAt &&
     /vortexLooking = false;/.test(look) && look.indexOf('VortexChanged(revision, problem)') >= 0);
 
 const disk = code(body(watch, 'static string VortexOnDisk()'));

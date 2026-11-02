@@ -552,12 +552,18 @@ if (Has 'gh') {
 Row 'PowerShell 7' (Has 'pwsh') '' 'winget install --id Microsoft.PowerShell -e'
 Row 'node' (Has 'node') '' 'winget install --id OpenJS.NodeJS.LTS -e'
 Row 'ssh' (Has 'ssh') '' 'Settings, System, Optional features, add OpenSSH Client'
-# MSBuild (#498): since the switch (15 Oct) the launcher is built only from
-# its project files, so a machine without it cannot Ship a launcher.
-. (Join-Path $Here 'Find-MSBuild.ps1') -Load
-$msb = Find-ThornswoodMSBuild
-Row 'MSBuild and the .NET Framework 4.8.1 reference assemblies, which build the launcher' ([bool]($msb.MSBuild -and $msb.Csc -and $msb.RefAssemblies)) $msb.MSBuild `
-    'docs/guide/set-up-a-machine.md "Setting up a machine" has the one install line (Visual Studio 2022 Build Tools with the MSBuild workload and the 4.8.1 targeting pack)'
+# The .NET 10 SDK (#4823): the launcher and the ship root tool are SDK
+# projects on .NET 10 (Build-Launcher.ps1, Update-ShipRoot.ps1), so a machine
+# without it cannot Ship a launcher. Native AOT links with the Visual Studio
+# C++ build tools, which Build-Launcher.ps1 names when they are missing.
+$sdk10 = ''
+if (Has 'dotnet') {
+  $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  $sdk10 = [string](@(& dotnet --list-sdks 2>$null | Where-Object { $_ -match '^10\.' }) | Select-Object -Last 1)
+  $ErrorActionPreference = $old
+}
+Row 'the .NET 10 SDK, which builds the launcher' ([bool]$sdk10) $sdk10 `
+    'winget install --id Microsoft.DotNet.SDK.10 -e   (docs/guide/set-up-a-machine.md "Setting up a machine" has the C++ build tools Native AOT needs)'
 $signtool = Find-Signtool
 Row 'signtool, from the Windows SDK' ([bool]$signtool) $signtool 'winget install --id Microsoft.WindowsSDK.10.0.26100 -e   (its signing tools are what matter)'
 Row 'az, the Azure command line' (Has 'az') '' 'winget install --id Microsoft.AzureCLI -e'

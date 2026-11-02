@@ -92,7 +92,7 @@ function Get-HelpGaps([string]$path) {
 Yes 'Ship.ps1 is there' (Test-Path -LiteralPath $Ship)
 $gaps = Get-HelpGaps $Ship
 Yes 'Ship.ps1 parses' ($gaps.Errors.Count -eq 0)
-Yes ("its param block declares its parameters ({0} of them)" -f $gaps.Declared.Count) ($gaps.Declared.Count -ge 13)
+Yes ("its param block declares its parameters ({0} of them)" -f $gaps.Declared.Count) ($gaps.Declared.Count -ge 12)
 Yes 'it has a help block PowerShell recognises' ($null -ne $gaps.Help)
 Yes ('every declared parameter has a .PARAMETER of its own' +
      $(if ($gaps.Missing.Count) { ', missing: ' + ($gaps.Missing -join ', ') } else { '' })) ($gaps.Missing.Count -eq 0)
@@ -146,18 +146,17 @@ Yes ('Get-Help -Parameter Channel names the refusal of a file git does not know 
      ' (code refuses: ' + $refusesLoose + ', help says: ' + $saysLoose + ')') ($refusesLoose -eq $saysLoose)
 
 # A dry run must not close a running game and must not prune old packs
-# (issue #494). Until then the help had to admit that Install-Launcher and
-# Publish-Update still called Stop-Game on a dry run. Ship now passes -NoClose
-# (and KeepPacks 0) when -DryRun is set; help and the DryRun example must say
-# a dry run does not close, matching that wiring.
+# (issue #494). Until then the help had to admit that Publish-Update still
+# called Stop-Game on a dry run. Ship now passes it -NoClose (and KeepPacks 0)
+# when -DryRun is set; help and the DryRun example must say a dry run does not
+# close, matching that wiring. Ship installs no launcher since #4825.
 $dryHelp = ''
 try { $dryHelp = (Get-Help $Ship -Parameter DryRun -ErrorAction Stop | Out-String) } catch { $dryHelp = '' }
 $dryHelp = $dryHelp -replace '\s+', ' '
 $dryExample = (@($h.examples.example) | Where-Object { $_.code -match '-DryRun' } |
                ForEach-Object { (@($_.remarks) | ForEach-Object { $_.Text }) -join ' ' }) -join ' '
 $dryExample = $dryExample -replace '\s+', ' '
-$dryNoClose = ($shipText -match "(?s)\`$installArgs\['NoClose'\]\s*=\s*\`$true") -and
-              ($shipText -match "(?s)\`$pubArgs\['NoClose'\]\s*=\s*\`$true") -and
+$dryNoClose = ($shipText -match "(?s)\`$pubArgs\['NoClose'\]\s*=\s*\`$true") -and
               ($shipText -match "(?s)\`$pubArgs\['KeepPacks'\]\s*=\s*0")
 $saysNoClose = ($dryHelp -match '(?i)does not\s+close a running game') -and
                ($dryExample -match '(?i)does not\s+close a running game') -and

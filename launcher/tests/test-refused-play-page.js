@@ -12,10 +12,12 @@
 //
 // This reads launcher\app\ShellPlay.cs (where Play() has lived since #2093
 // moved it out of Shell.cs for #500), launcher\app\Shell.cs (the page
-// constants, the pages array and the rail) and launcher\ui.xaml, and holds:
+// constants, the pages array and the rail) and launcher\app\MainWindow.axaml
+// (the window since the move to Avalonia, #4823; Shell names each control as
+// win.<Name>), and holds:
 //   - the page the refusal opens (ShowPage(PageX) in the refusal block),
-//     followed through the PageX constant and the pages array to its Grid in
-//     ui.xaml, is the Grid that holds BtnScan and BtnFix;
+//     followed through the PageX constant and the pages array to its element
+//     in MainWindow.axaml, is the one that holds BtnScan and BtnFix;
 //   - that page has its button on the rail;
 //   - the refusal's boxes name that page by its title and none of the pages
 //     #599 hid and #3146 cut, and never the Add-ons page (a tab of the cut
@@ -39,7 +41,7 @@ function yes(what, cond) {
 
 const shell = read('launcher', 'app', 'Shell.cs');
 const play = read('launcher', 'app', 'ShellPlay.cs');
-const xaml = read('launcher', 'ui.xaml');
+const xaml = read('launcher', 'app', 'MainWindow.axaml');
 
 // ---- the refusal block ------------------------------------------------------
 const start = play.indexOf('Log("Not launching. " + blockers');
@@ -60,12 +62,12 @@ yes('the PageXxx constants are readable', Object.keys(consts).length >= 5);
 const index = consts[target];
 yes(target + ' is a page constant (' + index + ')', typeof index === 'number');
 
-const arr = /pages = new UIElement\[\] \{([\s\S]*?)\};/.exec(shell);
+const arr = /pages = new Control\[\] \{([\s\S]*?)\};/.exec(shell);
 const grids = [];
-if (arr) arr[1].replace(/F<Grid>\("(\w+)"\)/g, function (m, n) { grids.push(n); return m; });
-yes('the pages array names its Grids (' + grids.length + ')', grids.length === Object.keys(consts).length);
+if (arr) arr[1].replace(/win\.(\w+)/g, function (m, n) { grids.push(n); return m; });
+yes('the pages array names its pages (' + grids.length + ')', grids.length === Object.keys(consts).length);
 const gridName = grids[index] || '';
-yes(target + ' is the Grid ' + gridName + ' in the pages array', gridName.length > 0);
+yes(target + ' is the page ' + gridName + ' in the pages array', gridName.length > 0);
 
 const titles = /PageTitles\s*=\s*\{([\s\S]*?)\};/.exec(shell);
 const titleList = [];
@@ -92,10 +94,10 @@ function element(name) {
   return '';
 }
 const page = element(gridName);
-yes('ui.xaml has the Grid ' + gridName, page.length > 0);
+yes('MainWindow.axaml has the page ' + gridName, page.length > 0);
 yes('the page a refused Play opens holds the Fix button (BtnFix)', /x:Name="BtnFix"/.test(page));
 yes('and the Scan button (BtnScan)', /x:Name="BtnScan"/.test(page));
-yes('BtnFix is in ui.xaml once, so it is not also somewhere else', (xaml.match(/x:Name="BtnFix"/g) || []).length === 1);
+yes('BtnFix is in MainWindow.axaml once, so it is not also somewhere else', (xaml.match(/x:Name="BtnFix"/g) || []).length === 1);
 yes('the Mods page does not hold BtnFix, as #607 left it', !/x:Name="BtnFix"/.test(element('PageMods')));
 
 // ---- the rail ---------------------------------------------------------------
@@ -103,10 +105,10 @@ yes('the Mods page does not hold BtnFix, as #607 left it', !/x:Name="BtnFix"/.te
 // had hidden by collapsing theirs.
 const navArr = /navButtons = new Button\[\] \{([\s\S]*?)\};/.exec(shell);
 const navs = [];
-if (navArr) navArr[1].replace(/F<Button>\("(\w+)"\)/g, function (m, n) { navs.push(n); return m; });
+if (navArr) navArr[1].replace(/win\.(\w+)/g, function (m, n) { navs.push(n); return m; });
 yes('the page a refused Play opens is on the rail',
     target && typeof index === 'number' && !!navs[index] && navs.length === grids.length &&
-    !/navButtons\[[^\]]+\]\.Visibility\s*=\s*Visibility\.Collapsed/.test(shell));
+    !/navButtons\[[^\]]+\]\.IsVisible\s*=\s*false/.test(shell));
 const CUT = ['Server', 'Mods', 'What is installed', 'Saves', 'Logs', 'Help'];
 
 // ---- what the boxes say -----------------------------------------------------
@@ -119,13 +121,13 @@ CUT.forEach(function (t) {
 });
 yes('nor to the Add-ons page, a tab of the cut Mods page', words.indexOf('Add-ons') < 0);
 yes('the missing mods box offers to open the collection (#5200: in Vortex where Vortex answers Nexus links)',
-    /MessageBoxButton\.YesNo/.test(block) && /OpenCollection\(\);/.test(block) &&
+    /Ask\.YesNo\(missing,/.test(block) && /OpenCollection\(\);/.test(block) &&
     words.indexOf('press Yes to open it and install it in Vortex') >= 0);
 yes('and says Fix will not help with a mod that is not installed', words.indexOf('Pressing Fix will not help') >= 0);
 yes('no em dash and never the word the project does not use in the boxes', !/—/.test(words) && !/player/i.test(words));
 
 // ---- the comment ------------------------------------------------------------
-const pa = shell.indexOf('pages = new UIElement[] {');
+const pa = shell.indexOf('pages = new Control[] {');
 const na = pa < 0 ? -1 : shell.indexOf('/*', pa);
 const note = na < 0 ? '' : shell.slice(na, shell.indexOf('*/', na));
 yes('the comment under the page arrays says a blocked Play goes to ShowPage(' + target + ')', note.indexOf('ShowPage(' + target + ')') >= 0);

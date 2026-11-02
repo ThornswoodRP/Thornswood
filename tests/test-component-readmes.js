@@ -13,8 +13,9 @@
 // copy. The setup block listed git, gh, node and Python and never mentioned the
 // dev build, although every change goes to the dev build first. And none of
 // these six folders had a word written about it outside the code:
-// launcher reads like the launcher's source and holds one HTML page, and
-// installer\setup holds the installer, not the launcher.
+// launcher reads like the launcher's source and its compiled window, and
+// installer holds what the install hands over, while the install itself is
+// in the launcher's first start (#4824).
 //
 // A README is worth having only while it is true, so this checks what each one
 // states against the code that decides it, not only that the file is there:
@@ -97,7 +98,7 @@ function tracked(rel) {
     return execSync('git ls-files -- "' + rel + '"', { cwd: ROOT }).toString().trim().length > 0;
   } catch (e) { return null; }
 }
-// What a button in ui.xaml says on it, whichever way it is written: the
+// What a button in the launcher's window (launcher\app\MainWindow.axaml) says on it, whichever way it is written: the
 // Content attribute for a plain label, or the first nested TextBlock's Text for
 // one built out of a dot, a label and a line of meta, which is how every entry
 // in the Play page's server dropdown is written. '' when there is no such
@@ -142,7 +143,7 @@ function glob(f) {
 const SIX = ['docs-app', 'voice', 'ts-plugins', 'ts-ui', 'setup', 'launcher'];
 // Where each lives: voice left tools for the repository root on 25 September.
 const AT = { 'voice': 'voice', 'docs-app': 'site', 'ts-plugins': 'game/plugins', 'ts-ui': 'game/ui',
-  'launcher': 'launcher', 'setup': 'installer/setup' };
+  'launcher': 'launcher', 'setup': 'installer' };
 function at(d) { return AT[d] || ('tools/' + d); }
 const HEADS = ['## What it is', '## On your machine', '## Where it runs'];
 const readme = {};
@@ -317,47 +318,56 @@ SIX.forEach(function (d) {
 {
   const t = readme.launcher || '';
   const bl = read('scripts/release/Build-Launcher.ps1') || '';
-  const voice = read('launcher/app/Voice.cs') || '';
+  const art = read('launcher/app/Art.cs') || '';
   const held = files('launcher');
-  // Since phase 7 (issue #440) this is the whole launcher, not only its voice
-  // page: the source, the window, the icon and art, the voice page, WebView2.
-  yes('launcher: holds the source folder, the window and the voice page (' + held.join(', ') + ')',
-      held.indexOf('ui.xaml') >= 0 && held.indexOf('voice-host.html') >= 0 && exists('launcher/app/Shell.cs'));
+  // Since phase 7 (issue #440) this is the whole launcher: the source, the
+  // window, the icon and the art. Since #4823 the window is compiled markup
+  // in launcher\app (MainWindow.axaml, with App.axaml), not a ui.xaml read at
+  // run time, and voice is the launcher's own code, so there is no voice page
+  // and no WebView2 or NLayer file under launcher\lib.
+  yes('launcher: holds the art and the key template, and no ui.xaml or voice page (' + held.join(', ') + ')',
+      held.indexOf('launcher-header.webp') >= 0 && held.indexOf('Thornswood.ini') >= 0 &&
+      held.indexOf('ui.xaml') < 0 && held.indexOf('voice-host.html') < 0 && !exists('launcher/lib'));
+  yes('launcher: the source folder holds the compiled window and the application',
+      exists('launcher/app/Shell.cs') && exists('launcher/app/MainWindow.axaml') &&
+      exists('launcher/app/MainWindow.axaml.cs') && exists('launcher/app/App.axaml'));
   // Since #498's switch the project file says what goes in, and Build-Launcher.ps1 builds it.
   const appProj = read('launcher/app/Thornswood.csproj') || '';
-  yes('launcher: Thornswood.csproj embeds the voice page by name, and Build-Launcher.ps1 builds that project',
-      /<EmbeddedResource Include="\.\.\\voice-host\.html"><LogicalName>voice-host\.html<\/LogicalName>/.test(appProj) &&
+  yes('launcher: Thornswood.csproj embeds the moving header strip by name, and Build-Launcher.ps1 builds that project',
+      /<EmbeddedResource Include="\.\.\\launcher-header\.webp"><LogicalName>launcher-header\.webp<\/LogicalName>/.test(appProj) &&
       bl.indexOf("Join-Path $Src 'Thornswood.csproj'") >= 0);
-  yes('launcher: Voice.cs loads it by that name', voice.indexOf('"voice-host.html"') >= 0);
+  yes('launcher: Art.cs loads it by that name', art.indexOf('"launcher-header.webp"') >= 0);
   yes('launcher: the README says where the source and the window are',
-      t.indexOf('`launcher' + BS + 'app`') >= 0 && t.indexOf('ui.xaml') >= 0 && t.indexOf('voice-host.html') >= 0);
+      t.indexOf('`launcher' + BS + 'app`') >= 0 && t.indexOf('MainWindow.axaml') >= 0 &&
+      t.indexOf('App.axaml') >= 0 && t.indexOf('launcher-header.webp') >= 0);
+  yes('launcher: the README says how it is built, with dotnet publish and Native AOT, not MSBuild',
+      /dotnet publish/.test(t) && /Native AOT/.test(t) && !/\bMSBuild\b/.test(t));
 }
 
-// ------------------------------------------------------------ installer\setup --
+// ------------------------------------------------------------ installer --
+// Since #4824 the install is compiled code in the launcher's first start and
+// Velopack's Setup.exe: no setup program, script or batch file of its own.
 {
   const t = readme.setup || '';
   const bl = read('scripts/release/Build-Launcher.ps1') || '';
-  const boot = read('installer/setup/Bootstrap.cs') || '';
-  const held = files('installer/setup').filter(function (f) { return f !== 'README.md'; });
-  // Setup.manifest since issue #463: the setup program's own application
-  // manifest (per-monitor DPI, asInvoker), embedded by Build-Launcher.ps1.
-  // Setup.csproj since issue #498: the same program as an MSBuild project.
-  yes('installer' + BS + 'setup: holds the three files its README says, Bootstrap.cs, Setup.manifest and Setup.csproj (' + held.join(', ') + ')',
-      held.length === 3 && held.indexOf('Bootstrap.cs') >= 0 && held.indexOf('Setup.manifest') >= 0 && held.indexOf('Setup.csproj') >= 0 &&
-      t.indexOf('`Bootstrap.cs`') >= 0 && t.indexOf('`Setup.manifest`') >= 0 && t.indexOf('`Setup.csproj`') >= 0);
-  const setupProj = read('installer/setup/Setup.csproj') || '';
-  yes('installer' + BS + 'setup: Setup.csproj compiles Bootstrap.cs by name, and Build-Launcher.ps1 builds it into setup-stub.exe',
-      /<Compile Include="Bootstrap\.cs"/.test(setupProj) &&
-      bl.indexOf("installer\\setup\\Setup.csproj'") >= 0 && bl.indexOf("'setup-stub.exe'") >= 0 &&
-      t.indexOf('setup-stub.exe') >= 0);
-  const inst = (/installRoot = @"([^"]+)"/.exec(boot) || [])[1];
-  yes('installer' + BS + 'setup: the README gives the install folder Bootstrap.cs offers, ' + inst,
+  const place = read('launcher/app/InstallPlace.cs') || '';
+  const held = files('installer').filter(function (f) { return f !== 'README.md'; });
+  // READ ME FIRST.txt went with #4824: Velopack's Setup.exe carries no loose
+  // page, and the join guide on the site is what a person reads.
+  yes('installer: holds licences and nothing else, nothing to compile or run (' + held.join(', ') + ')',
+      held.length === 0 && exists('installer/licences/README.txt') && !exists('installer/READ ME FIRST.txt') &&
+      !exists('installer/setup') && t.indexOf('`licences' + BS + '`') >= 0 && /\bhttps:\/\/thornswood\.net\/join\b/.test(t));
+  yes('installer: the README names where the install is, and those files are there',
+      ['InstallWindow.cs', 'InstallSteps.cs', 'InstallPlace.cs'].every(function (f) {
+        return exists('launcher/app/' + f) && t.indexOf('launcher' + BS + 'app' + BS + f) >= 0;
+      }));
+  yes('installer: Build-Launcher.ps1 builds no setup program of its own',
+      bl.indexOf('Setup.csproj') < 0 && bl.indexOf('setup-stub.exe') < 0);
+  const inst = (/return @"([^"]+)";/.exec(place) || [])[1];
+  yes('installer: the README gives the install folder InstallPlace.cs falls back to, ' + inst,
       !!inst && t.indexOf('`' + inst + '`') >= 0);
-  const site = (/const string Site = "([^"]+)"/.exec(boot) || [])[1];
-  yes('installer' + BS + 'setup: and the address it downloads the payload from',
-      !!site && boot.indexOf('Site + "/api/payload"') >= 0 && t.indexOf(site + '/api/payload') >= 0);
-  yes('installer' + BS + 'setup: the README says it is not the launcher source, and where that is',
-      /not the launcher's\s+source/.test(t) && t.indexOf('`launcher' + BS + 'app`') >= 0);
+  yes('installer: the README says the script and the batch files are gone and nothing falls back to them',
+      /Setup-Thornswood/.test(t) && /nothing falls back to them/.test(t));
 }
 
 // ------------------------------------------- nothing carries a README out --
@@ -413,7 +423,7 @@ SIX.forEach(function (d) {
       fileLists.length === 0);
 
   const bl = read('scripts/release/Build-Launcher.ps1') || '';
-  yes('Build-Launcher.ps1 never lists launcher or installer' + BS + 'setup, so only the named file goes in',
+  yes('Build-Launcher.ps1 never lists launcher or installer, so only the named file goes in',
       !bl.split('\n').some(function (l) {
         return /Get-ChildItem/.test(l) && /'(\.\.\\launcher|\.\.\\installer\\setup|launcher|setup)(['\\])/.test(l);
       }));
@@ -457,7 +467,7 @@ SIX.forEach(function (d) {
     while (e < lines.length - 1 && lines[e + 1].trim() !== '') { e++; }
     para = lines.slice(s, e + 1).join('\n');
   }
-  const ui = read('launcher/ui.xaml') || '';
+  const ui = read('launcher/app/MainWindow.axaml') || '';
   const shell = read('launcher/app/Shell.cs') || '';
   const install = label(ui, 'BtnServerDev');
   const make = label(ui, 'BtnOwnGameMake');
@@ -467,11 +477,11 @@ SIX.forEach(function (d) {
   // Which entry that is, measured rather than taken from the paragraph. The
   // label above is only worth checking while this is the control that does it.
   yes('that entry is in the dropdown the paragraph sends a reader to, under the server button',
-      /<Popup x:Name="ServerPickPopup"[^>]*[\s\S]*?ElementName=BtnServerPick/.test(ui) &&
+      /<Popup x:Name="ServerPickPopup"[^>]*[\s\S]*?#BtnServerPick\b/.test(ui) &&
       ui.indexOf('x:Name="BtnServerPick"') < ui.indexOf('x:Name="BtnServerDev"') &&
       /Play page/.test(para) && /dropdown/.test(para));
   yes('and pressing it is what installs the dev build (Shell.cs, SwitchToDev)',
-      /btnServerDev\s*=\s*F<Button>\("BtnServerDev"\)/.test(shell) &&
+      /btnServerDev\s*=\s*win\.BtnServerDev\b/.test(shell) &&
       /btnServerDev\.Click\s*\+=[\s\S]{0,160}?SwitchToDev\(\)/.test(shell) &&
       /static void SwitchToDev\(\)[\s\S]*?DevBuild\.Install\(/.test(shell));
 

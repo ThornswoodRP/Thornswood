@@ -330,9 +330,9 @@ saved fields that come from elsewhere, as their rows say.
 
 | Field | Type | Written by | Read by | If wrong or missing |
 | --- | --- | --- | --- | --- |
-| `launcherVersion` | string, dotted numbers | `Publish-Update.ps1:Set-Prop $doc 'launcherVersion' $launcherVersion`, from `Version` in `launcher/app/Updater.cs:Version` or Ship's dev number | `ShellUpdate.cs:bool newLauncher = Updater.IsNewer(v.launcherVersion, Updater.Version)`, `Updater.IsNewer` (`Updater.cs:IsNewer`) | Offered only when higher, part by part. Equal or lower offers nothing. A number that does not parse is offered whenever it differs. Not saved. |
-| `launcherUrl` | string, https | `Publish-Update.ps1`: since #897 the site address `/feed[-dev]/assets/<sha256>` | `Updater.SelfUpdate` (`Updater.cs:SelfUpdate`) | Empty: no launcher update is offered (`ShellUpdate.cs:&& !string.IsNullOrEmpty(v.launcherUrl);`). Must pass the host list below. |
-| `launcherSha256` | string, 64 hex | `Publish-Update.ps1:Set-Prop $doc 'launcherSha256' $nowSha` | `Updater.Download` (`Updater.cs:Download`) | Empty: download refused. Mismatch: file deleted, update fails. |
+| `launcherVersion` | string, dotted numbers | Nothing since #4825: it stays at the last launcher from before Velopack, so that launcher is never offered the native one as a self-update. A launcher goes out only on its channel's Velopack Releases (`merge-release.yml`, `promote-main.yml`) | The site's join pass for a launcher from before Velopack while its channel has no Velopack setup program (`site/lib/passes.js:feedLaunchers`, with `minLauncher`); a Velopack launcher's number is checked against its Release instead (`site/lib/feed.js:nativePublished`). Main's number for a dev launcher (`MainVersion.cs:MainLauncherVersion`, #5385). Not the launcher's own update: a launcher takes that from its Velopack channel (`VeloUpdate.cs:CheckLauncher`), and Scan goes by the same answer (`Upkeep.cs:LauncherWaiting`) | Not saved. Nothing writes it, so it cannot go wrong by a release. |
+| `launcherUrl` | string, https | Nothing since #4825 but the url move of `Feed-Rules.ps1` (#5385); it names the last launcher from before Velopack on the site, `/feed[-dev]/assets/<sha256>` (#897) | `Watch-Outside.ps1` and `Check-Outside.ps1`. No launcher downloads it since #4825 | Must pass the host list below. |
+| `launcherSha256` | string, 64 hex | Nothing since #4825; it stays the last launcher from before Velopack's | The launcher's manifest check (`FeedManifest.cs:"launcher " + v.launcherVersion, v.launcherSha256`), which holds the feed to its signed release record | Mismatch: the manifest check refuses the feed. |
 | `serverAddress` | string | `Publish-Update.ps1:@('ServerAddress', 'serverAddress')` from config `ServerAddress`; `Set-Server.ps1:@('serverAddress', $Address)`. Not `Set-Vps.ps1`, which moves the launcher's built-in address and leaves the feed to `Set-Server.ps1` (`Set-Vps.ps1:What it does NOT do, because Set-Server.ps1 already does it properly`) | `ShellUpdate.cs:v.serverAddress != cfg.ServerAddress` | Saved, unless the config points at a server on this machine (`SkyMp.IsLocal`: 127.0.0.1, localhost, ::1), which keeps its own address, `serverPort` and `voicePort` (#5020: a restore rehearsal or a developer's own server). A change stops Ship unless `-MoveServer` (`Publish-Update.ps1:-not $MoveServer -and -not $Dev`); the dev channel skips that check. Wrong: everybody connects to the wrong box. |
 | `serverPort` | string | as above, `ServerPort` | `ShellUpdate.cs:OnVersionDoc` | Saved. Must be a string; the launcher field is a string. |
 | `maxOnline` | number | `Publish-Update.ps1`, from `records\most-online.json` by way of `scripts\deploy\MaxOnline.ps1` (#481): the channel's seats, people and staff seats together (30 on main, 5 on dev from its `dev` numbers; Patrick, 12 Oct) | `ShellUpdate.cs:v.maxOnline > 0` | Saved when above 0. Written as a number because a quoted `"30"` reads as 0. It is the M of "N of M awake". The Play page prefers the number the running server announces as `max` in its `online.json` (`Online.cs`), which is the same seats. |
@@ -353,8 +353,8 @@ saved fields that come from elsewhere, as their rows say.
 | `releases` | array, newest first, at most 30, of `{ id, sha256, url, entries, lastPack, to? }` | Gone from the feed since #1050: the list is `releases.json` in the channel's store beside the feed (see "The feed store on the VPS"), written by `Publish-Update.ps1` on every release that names a `baseline` (the release list block, #442) and by `Rollback-Feed.ps1`, with `to` naming the release a rollback went back to. A feed that still carries the field (written before #1050, or by a Ship from a branch without it) is read too, merged by id, and the next write takes it out | No launcher. `Rollback-Feed.ps1`, `Scrub-Feed.ps1`, Ship's release tag check (`Get-StoreReleases`, `Release-Baseline.ps1`; `Read-ReleaseListFile`, `Release-Name.ps1`) | The record each release published, the same shape as `baseline`, plus `lastPack`, the last pack on the feed once that release was out, whose plugin list is the one it shipped ('' once the packs are gone: the record's own `:golden:` entries hold it). What a channel can be put back to; a release older than the newest thirty cannot be. The first release after #442 started the list with the `baseline` the feed already named. |
 | `release` | object `{ id, channel, launcherVersion, packs, baseline, commit, branch, uncommitted, tag }` | `Publish-Update.ps1` on every release (the release record block, #444) | No launcher. Ship, which tags `commit` as `tag` once the feed is out (`Add-ReleaseTag`, `Release-Name.ps1`); the store's `releases.txt` | The release's one name is `id`, the id its packs and its `baseline` carry (`20260928-1630`, dev `20260928-2324-dev`). The rest is what else it is known by: the launcher the feed offers with it (the same across Ships that keep their launcher, #921), the packs it added, its baseline id (empty on a `-NoUpload` run), the commit it was built from and how many tracked files differed from it, and the tag `release/main/<id>` or `release/dev/<id>` (empty when it was not built from a git checkout). `Get-ReleaseDisagreements` says whether they agree, with each other and with `releases`, whose newest entry is the same id ending on its last pack. After a main Ship the dev feed carries main's, `channel` main. `Rollback-Feed.ps1` does not rewrite it yet, so after a rollback it still names the last Ship until the next. |
 | `signedManifest` | object `{ url, sha256, catalogUrl, catalogSha256 }` | `Publish-Update.ps1` on every release that sends to the site (the signed manifest block, #2163 phase B); taken out by a `-NoUpload` run | No launcher yet (phase C of `docs\SIGNED-RELEASES.md`) | `release.json`, the sha256 of every asset of the release that carries code or names files (launcher, client runtime, packs, optional packs, the baseline record) with the commit it was built from, and a Windows catalog over it signed by ThornswoodRelease, both at `/feed[-dev]/assets/<sha256>`. Written only after the catalog was signed and passed the publish gate and `Signature.cs`; a signing failure stops the Ship before this file moves. Feed edits after a Ship carry it forward untouched. |
-| `news` | array, newest first, at most 40 | `Publish-Update.ps1:Set-Prop $doc 'news' $news`; `Publish-Server.ps1:$newsList`. On the dev feed each entry's `channel` is `"dev"` while main has not had it, set by `Dev-News.ps1:Update-DevNewsChannels` | News tab (`ShellNews.cs:BuildNews`); the site's News page reads it from the main feed (`site/lib/news.js` "news from the Release", #5187) | Cosmetic. Every launcher up to 1.2.3 reads the notes only here, so they stay here until the channel's minLauncher reads `newsFile` (#1050), and from then it is `[]`. Every script reads and writes the notes through `scripts\release\Feed-News.ps1` (`Get-FeedNewsList`, `Open-FeedNewsList`, `Set-FeedNewsList`), wherever the channel keeps them. |
-| `newsFile` | object `{ url, sha256, count }` or absent | `Set-FeedNewsList` (`Feed-News.ps1`), called by Publish-Update (the news out block), Rollback-Feed, Publish-Server's news entry and a dev marks refresh (`Update-DevFeedMarks`), once the channel's minLauncher is at or above `$FeedNewsFileLauncher` (1.2.4, the first launcher with FeedNews.cs): every note, at most 40, as one asset at `/feed[-dev]/assets/<sha256>`, sent to the site before the feed names it. Absent before that. `Remirror-Site-Feed.ps1` checks it is on the site like any asset | The launcher from #1050 on (`Updater.FillNews`, `launcher\app\FeedNews.cs`): fetched once on the update check's thread, checked (https, the host list, stored under its own sha256, the bytes hash to it), kept in `Profile\news.json`, and its notes put after the ones `news` carries, each note once by date and title. Read apart from the rest of the feed (`NewsRef.FromFeed`), so one of another shape costs only itself | Cosmetic. A file that cannot be had or read leaves the notes `news` carries and one line in launcher.log; the update check goes on. |
+| `news` | array, newest first, at most 40 | `Publish-Update.ps1:Set-Prop $doc 'news' $news`; `Publish-Server.ps1:$newsList`. On the dev feed each entry's `channel` is `"dev"` while main has not had it, set by `Dev-News.ps1:Update-DevNewsChannels` | The site's News page, which reads it from the main feed (`site/lib/news.js` "news from the Release", #5187). Not the launcher since #5187: its News tab reads the build Releases its channel's Deployment reached (`launcher\app\ReleaseNews.cs`) | Cosmetic. Every launcher up to 1.2.3 reads the notes only here, so they stay here until the channel's minLauncher reads `newsFile` (#1050), and from then it is `[]`. Every script reads and writes the notes through `scripts\release\Feed-News.ps1` (`Get-FeedNewsList`, `Open-FeedNewsList`, `Set-FeedNewsList`), wherever the channel keeps them. |
+| `newsFile` | object `{ url, sha256, count }` or absent | `Set-FeedNewsList` (`Feed-News.ps1`), called by Publish-Update (the news out block), Rollback-Feed, Publish-Server's news entry and a dev marks refresh (`Update-DevFeedMarks`), once the channel's minLauncher is at or above `$FeedNewsFileLauncher` (1.2.4, the first launcher with FeedNews.cs): every note, at most 40, as one asset at `/feed[-dev]/assets/<sha256>`, sent to the site before the feed names it. Absent before that. `Remirror-Site-Feed.ps1` checks it is on the site like any asset | The site's News page. Launchers from #1050 until #5187 read it (`FeedNews.cs`, gone); the launcher now reads the build Releases (`launcher\app\ReleaseNews.cs`) | Cosmetic. A file that cannot be had or read leaves the notes `news` carries and one line in launcher.log; the update check goes on. |
 | `mainVersion` | string | `Dev-News.ps1:Set-DevFeedMarks`: the main feed's `launcherVersion`, read off the site, with the DEV marks, on every dev ship (one with nothing new included), after every main ship (`Refresh-DevNews.ps1`), and by `Refresh-DevNews.ps1` run by hand; `""` on a main ship (`Publish-Update.ps1:Set-Prop $doc 'mainVersion' ''`) | Dev News tab header (`ShellNews.cs:pendingDoc.mainVersion`) | Cosmetic. |
 | `serverPassword` | string | Nobody. Every ship deletes it (`Publish-Update.ps1:$doc.PSObject.Properties.Remove('serverPassword')`) | No longer declared in `Config.cs:VersionDoc`; read by nothing since 1.0.197 | Must never come back: the feed is public. |
 
@@ -370,10 +370,11 @@ saved fields that come from elsewhere, as their rows say.
 
 There is no `size` or `files` field on a pack. The files a pack wrote are
 recorded on each machine in `Profile\Packs\<id>.files`, not in the feed
-(`Updater.cs:PackListFile`). `NewsItem.files` exists and the News tab
-shows it (`Config.cs:files`, `ShellNews.cs:n.files != null && n.files.Length > 0`), but no publisher fills it any
-more: `Publish-Update.ps1:$entry` has no `files`, and `Publish-Server.ps1:$entry`
-writes it empty.
+(`Updater.cs:PackListFile`). A news entry's `files` was shown on the News tab
+of the launchers before #5187; the launcher now reads its news from the build
+Releases' notes (`ReleaseNews.cs:ReadReleaseNews`) and no feed news at all, and
+no publisher fills it any more: `Publish-Update.ps1:$entry` has no `files`, and
+`Publish-Server.ps1:$entry` writes it empty.
 
 A pack is a zip with a `game/` tree (into the game folder), a `profile/` tree
 (into `Profile\Default`, and a carried plugin list is put in place at once),
@@ -397,16 +398,17 @@ same title and body as the newest entry adds nothing (`Publish-Update.ps1:same n
    pending packs are every `packs` entry whose `id` is not a line in
    `Profile\applied.txt`, in feed order (`Updater.cs:Applied`, `Updater.cs:Pending`). Order
    matters: part one before part two.
-3. The launcher is offered when `launcherVersion` is higher and `launcherUrl`
-   is set.
+3. The launcher is not offered by the feed since #4825: it is offered when its
+   Velopack channel on GitHub has a newer one (`VeloUpdate.cs:CheckLauncher`).
 4. Packs go in first, one by one, each id appended to `applied.txt` once it is
-   in (`Updater.cs:MarkApplied`). Then the launcher replaces itself through a
-   swap script that keeps `Thornswood.exe.old` and puts it back if the new one
-   does not start (`Updater.cs:SelfUpdate`).
+   in (`Updater.cs:MarkApplied`). Then Velopack applies the launcher in a
+   process of its own and keeps the version before in its packages folder,
+   after every check in `VeloUpdate.cs:FetchLauncher`.
 5. A fresh install gets an `applied.txt` listing every pack in the feed at
-   build time, because the installer already contains them
-   (`Package-Thornswood.ps1:$appliedOut`). The dev build copies the main build's
-   `applied.txt` when it is installed (`DevBuild.cs:Install`).
+   build time, because the setup package already contains them
+   (`Build-SetupFiles.ps1:applied.txt: every pack the channel's feed lists`).
+   The dev build copies the main build's `applied.txt` when it is installed
+   (`DevBuild.cs:Install`).
 
 A machine that loses `applied.txt` asks for every pack on the feed again. A
 launcher from #1050 on does not: it syncs to the record, which needs no
@@ -640,13 +642,17 @@ reads a feed that is not split the same as before, so the site can go first.
   `objects.githubusercontent.com`, `release-assets.githubusercontent.com`,
   `api.github.com` or `thornswood.net`, or under one of them
   (`Updater.cs:AllowedHosts`). The update token, if any, goes only to
-  `api.github.com` (`Updater.cs:Client`).
-- **sha256.** Required for packs, the launcher and the client runtime; an empty
-  one refuses the download (`Updater.cs:Download`).
-- **Signature.** A downloaded launcher exe must carry a signer whose Subject
-  contains `ExpectedSigner`, the name on the signing certificate
-  (`Updater.CheckSigner`; the profile is ThornswoodRelease), checked
-  before the swap, in every launcher from dev 1.1.101.17 on. Main's live
+  `api.github.com` (`Updater.cs:FeedAsk`).
+- **sha256.** Required for packs and the client runtime; an empty one refuses
+  the download (`Updater.cs:Download`). The launcher's Velopack package is
+  held to its channel's feed and to the Release's signed record
+  (`VeloUpdate.cs:FetchLauncher`).
+- **Signature.** Every program in a downloaded launcher package, and
+  Velopack's Update.exe, must carry a signer whose Subject contains
+  `ExpectedSigner`, the name on the signing certificate (the profile is
+  ThornswoodRelease), checked before anything is replaced
+  (`VeloUpdate.cs:FetchLauncher`). Before #4825 the launcher's own swap
+  checked its new exe the same way, in every launcher from dev 1.1.101.17 on. Main's live
   1.1.101 predates it and is itself unsigned; dev 1.1.101.34 is signed and
   timestamped. Up to #912 the check read only the embedded certificate's
   Subject, so a self-made certificate with that name passed. Since #912
@@ -676,10 +682,11 @@ reads a feed that is not split the same as before, so the site can go first.
   runtime is sent to the site and named there. `Check-Secrets.ps1` scans every zip
   and exe before upload. Nothing is written to the feed if any asset failed to
   upload, and `version.json` is written without a byte order mark.
-- **Signing.** On since 27 Sep: `Ship.ps1` and `Publish-Installer.ps1` refuse
-  a launcher or setup program that is not Authenticode Valid under
-  `ExpectedSigner` (Developer-Guide.md, `records\signing\README.md`), or that
-  the launcher's own `Signature.cs` check refuses (#912).
+- **Signing.** On since 27 Sep: `Ship.ps1` refuses a launcher that is not
+  Authenticode Valid under `ExpectedSigner` (Developer-Guide.md,
+  `records\signing\README.md`), or that the launcher's own `Signature.cs`
+  check refuses (#912). The setup program is Velopack's since #4824, signed
+  by `merge-release.yml` with the launcher's package inside it.
 - **Optional packs go to the site too.** `Publish-Pack.ps1` sends each zip to
   `/feed/assets/<sha256>` with `Remirror-Site-Feed.ps1 -Send` before
   `version.json` is touched, names it there, and sends the feed to the VPS
@@ -693,18 +700,10 @@ reads a feed that is not split the same as before, so the site can go first.
   Ship. It is also what `Set-Server.ps1`, `Set-Collection.ps1` and
   `Publish-Pack.ps1` edit.
 - **dev** is written by `Ship.ps1 -Channel dev` from any branch on any
-  developer's machine; the last dev Ship wins. Its launcher version is main's
-  published number plus a fourth part, `.1`, `.2`, past every dev number
-  already out (`Ship.ps1:Separate Dev work uses the main version with a fourth number`).
-  Main's own launcher takes main's number itself: a dev Ship of exactly what
-  origin/main holds, with nothing uncommitted, whose launcher fingerprint is
-  the `launcherInputs` main's feed recorded for that number, or main's next
-  number before main has shipped it. A clean checkout of origin/main with a
-  launcher change since main's release takes the fourth part like any other,
-  and a case Ship cannot tell stops before anything is built (#2347,
-  `Ship.ps1:Get-DevLauncherLine`). A number either feed already offers with a
-  launcher built from other sources is refused before the build
-  (`Ship.ps1:Assert-DevVersionSelection`).
+  developer's machine; the last dev Ship wins. No Ship of either channel
+  carries a launcher since #4825: the launcher's number is its Velopack
+  version, `<yyyy>.<M*100+d>.<n>`, given by the build Release it goes out on
+  (`MergeRelease.ps1`, New-MergeReleaseNames).
 - **After a main Ship**, the Dev feed, baseline, release identity and history
   stay unchanged. Dev advances through its own Ship and keeps its own server
   and voice addresses. Publish the same source to both channels when both

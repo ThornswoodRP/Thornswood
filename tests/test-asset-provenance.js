@@ -211,8 +211,13 @@ if (reg) {
 }
 
 // ---- 6: operator only --------------------------------------------------------------
-const builders = ['scripts/release/Build-Launcher.ps1', 'scripts/release/Package-Thornswood.ps1', 'scripts/release/Publish-Update.ps1',
+// Build-SetupFiles.ps1 writes what Velopack's Setup.exe installs; until #4824
+// that was Package-Thornswood.ps1, the old installer's builder. A builder that
+// is not there any more is named, so the list cannot go stale in silence.
+const builders = ['scripts/release/Build-Launcher.ps1', 'scripts/release/Build-SetupFiles.ps1', 'scripts/release/Publish-Update.ps1',
   'scripts/release/Ship-Rules.ps1', 'scripts/release/Go.ps1', 'scripts/deploy/Deploy-Docs.ps1', 'site/server.js'];
+const absent = builders.filter((f) => !fs.existsSync(path.join(ROOT, f)));
+yes('every builder this reads is there' + (absent.length ? ' (missing ' + absent.join(', ') + ')' : ''), absent.length === 0);
 const naming = builders.filter((f) => { try { return /asset-provenance/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')); } catch (e) { return false; } });
 yes('nothing that builds a pack, the installer, the launcher or the site names it' + (naming.length ? ' (' + naming.join(', ') + ')' : ''), naming.length === 0);
 yes('  and it is not under site\\public, which the site serves whole', !fs.existsSync(path.join(ROOT, 'site', 'public', 'asset-provenance.json')));

@@ -69,8 +69,9 @@ namespace Thornswood
             public uint FileAttributes;
         }
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        static extern bool GetFileInformationByHandleEx(SafeFileHandle hFile, int infoClass, out FileBasicInfo info, uint size);
+        [LibraryImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool GetFileInformationByHandleEx(SafeFileHandle hFile, int infoClass, out FileBasicInfo info, uint size);
 
         /// <summary>What the Play button says while archives are compared or checked.</summary>
         public const string SharePhase = "Checking Skyrim's archives";
@@ -111,7 +112,7 @@ namespace Thornswood
                 if (!GetFileInformationByHandle(fs.SafeFileHandle, out info))
                     throw new IOException("Windows would not say which file " + path + " is.");
                 FileBasicInfo basic;
-                if (!GetFileInformationByHandleEx(fs.SafeFileHandle, 0, out basic, (uint)Marshal.SizeOf(typeof(FileBasicInfo))))
+                if (!GetFileInformationByHandleEx(fs.SafeFileHandle, 0, out basic, (uint)Marshal.SizeOf<FileBasicInfo>()))
                     throw new IOException("Windows would not say when " + path + " last changed.");
                 var s = new Stamp();
                 s.Id = info.VolumeSerialNumber.ToString("x") + "." + info.FileIndexHigh.ToString("x") + "." + info.FileIndexLow.ToString("x");
@@ -124,7 +125,7 @@ namespace Thornswood
 
         static string Sha256(string path)
         {
-            using (var sha = new SHA256CryptoServiceProvider())
+            using (var sha = SHA256.Create())
             using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 1 << 20, FileOptions.SequentialScan))
             {
                 byte[] h = sha.ComputeHash(fs);

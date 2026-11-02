@@ -1,0 +1,1221 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Thornswood.MainWindow"
+        x:CompileBindings="True"
+        Title="Thornswood" Width="1220" Height="800" MinWidth="1020" MinHeight="670"
+        WindowDecorations="BorderOnly" ExtendClientAreaToDecorationsHint="True"
+        CanResize="True" WindowStartupLocation="Manual"
+        Background="#100D0A" FontFamily="Segoe UI">
+
+  <!-- ===========================================================
+       Everything visual lives here. Themes.cs replaces these
+       brushes by name at runtime, so nothing below holds a literal
+       colour and a theme can change while the window is open.
+
+       Type: Constantia for display, with small caps where the font
+       has them (the smcp font feature). Segoe UI for everything read
+       in sentences. Cascadia Mono, falling back to Consolas, for
+       anything that lines up in a column. All three ship with Windows,
+       so a friend's machine never falls back to something ugly.
+
+       This is compiled XAML (#4823): every x:Name below is a field of
+       MainWindow that Shell reads, so a control renamed here and not
+       there is a build error, not a blank page. The named looks
+       (Ghost, Slab, Body and the rest) are control themes: code gives
+       a control one with its Theme property, and the four kinds of
+       control every page has (scroll bars, ticks) take theirs from
+       here by type.
+
+       WPF's TextFormattingMode has no counterpart: Avalonia lays text
+       out one way, with its own shaping, so the two lines that set it
+       went with the window.
+       =========================================================== -->
+  <Window.Resources>
+    <SolidColorBrush x:Key="Bg"         Color="#100D0A"/>
+    <SolidColorBrush x:Key="Panel"      Color="#171310"/>
+    <SolidColorBrush x:Key="Card"       Color="#1D1813"/>
+    <SolidColorBrush x:Key="CardHover"  Color="#262019"/>
+    <SolidColorBrush x:Key="Deep"       Color="#0A0807"/>
+    <SolidColorBrush x:Key="Line"       Color="#2C251D"/>
+    <SolidColorBrush x:Key="Edge"       Color="#3A3126"/>
+    <SolidColorBrush x:Key="Ink"        Color="#EDE5D8"/>
+    <SolidColorBrush x:Key="Muted"      Color="#A79A88"/>
+    <SolidColorBrush x:Key="Faint"      Color="#998772"/>
+    <SolidColorBrush x:Key="Accent"     Color="#C8763A"/>
+    <SolidColorBrush x:Key="AccentSoft" Color="#3CC8763A"/>
+    <SolidColorBrush x:Key="AccentInk"  Color="#1B1205"/>
+    <SolidColorBrush x:Key="Ok"         Color="#7A9A55"/>
+    <SolidColorBrush x:Key="Warn"       Color="#C79A3E"/>
+    <SolidColorBrush x:Key="Bad"        Color="#CD6F5B"/>
+
+    <!-- A forged surface, not a flat one. Neutral grey at low alpha so it
+         reads the same amount on a dark theme and a light one. -->
+    <DrawingBrush x:Key="Hatch" TileMode="Tile" DestinationRect="0,0,9,9" SourceRect="0,0,9,9" Stretch="None">
+      <DrawingBrush.Drawing>
+        <GeometryDrawing>
+          <GeometryDrawing.Geometry>
+            <LineGeometry StartPoint="0,9" EndPoint="9,0"/>
+          </GeometryDrawing.Geometry>
+          <GeometryDrawing.Pen><Pen Brush="#16808080" Thickness="1"/></GeometryDrawing.Pen>
+        </GeometryDrawing>
+      </DrawingBrush.Drawing>
+    </DrawingBrush>
+
+    <!-- Every scroll bar in the window: a thin rounded thumb in the line
+         colour, lit on hover, on a clear track. -->
+    <ControlTheme x:Key="{x:Type ScrollBar}" TargetType="ScrollBar">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Grid Background="Transparent">
+            <Track Name="PART_Track"
+                   Minimum="{TemplateBinding Minimum}"
+                   Maximum="{TemplateBinding Maximum}"
+                   Value="{TemplateBinding Value, Mode=TwoWay}"
+                   ViewportSize="{TemplateBinding ViewportSize}"
+                   Orientation="{TemplateBinding Orientation}"
+                   IsDirectionReversed="True">
+              <Track.DecreaseButton>
+                <RepeatButton Name="PART_PageUpButton" Opacity="0" Focusable="False"/>
+              </Track.DecreaseButton>
+              <Track.IncreaseButton>
+                <RepeatButton Name="PART_PageDownButton" Opacity="0" Focusable="False"/>
+              </Track.IncreaseButton>
+              <Thumb Name="thumb">
+                <Thumb.Template>
+                  <ControlTemplate>
+                    <Border Name="th" Background="{DynamicResource Line}" CornerRadius="5" Margin="3,0"/>
+                  </ControlTemplate>
+                </Thumb.Template>
+              </Thumb>
+            </Track>
+          </Grid>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:vertical"><Setter Property="Width" Value="10"/></Style>
+      <Style Selector="^:horizontal"><Setter Property="Height" Value="10"/></Style>
+      <Style Selector="^:horizontal /template/ Track#PART_Track"><Setter Property="IsDirectionReversed" Value="False"/></Style>
+      <Style Selector="^ /template/ Thumb#thumb:pointerover /template/ Border#th">
+        <Setter Property="Background" Value="{DynamicResource Faint}"/>
+      </Style>
+    </ControlTheme>
+
+    <!-- ================================================ type -->
+    <ControlTheme x:Key="Display" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="Constantia, Georgia, Times New Roman"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+      <Setter Property="FontSize" Value="27"/>
+      <Setter Property="FontFeatures" Value="+smcp"/>
+    </ControlTheme>
+    <ControlTheme x:Key="H1" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="Constantia, Georgia, Times New Roman"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+      <Setter Property="FontSize" Value="19"/>
+      <Setter Property="Margin" Value="0,0,0,3"/>
+    </ControlTheme>
+    <ControlTheme x:Key="H2" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Margin" Value="0,0,0,4"/>
+    </ControlTheme>
+    <ControlTheme x:Key="Eyebrow" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="Constantia, Georgia, Times New Roman"/>
+      <Setter Property="Foreground" Value="{DynamicResource Faint}"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="FontFeatures" Value="+smcp"/>
+      <Setter Property="Margin" Value="0,0,0,11"/>
+    </ControlTheme>
+    <ControlTheme x:Key="Body" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+      <Setter Property="LineHeight" Value="19.5"/>
+    </ControlTheme>
+    <ControlTheme x:Key="Small" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource Faint}"/>
+      <Setter Property="FontSize" Value="11.5"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+      <Setter Property="LineHeight" Value="17"/>
+    </ControlTheme>
+    <ControlTheme x:Key="Mono" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Courier New"/>
+      <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+      <Setter Property="FontSize" Value="11.5"/>
+    </ControlTheme>
+
+    <!-- ================================================ chrome -->
+    <ControlTheme x:Key="Chrome" TargetType="Button">
+      <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+      <Setter Property="Width" Value="46"/><Setter Property="Height" Value="46"/>
+      <Setter Property="FontSize" Value="12"/><Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Name="b" Background="Transparent">
+            <ContentPresenter Name="PART_ContentPresenter"
+                              Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover /template/ Border#b"><Setter Property="Background" Value="{DynamicResource Card}"/></Style>
+      <Style Selector="^:pointerover"><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Style>
+      <!-- Keyboard focus is drawn the same as hover, so a person
+           moving through the chrome buttons with Tab can see where
+           they are (#602). -->
+      <Style Selector="^:focus-visible /template/ Border#b"><Setter Property="Background" Value="{DynamicResource Card}"/></Style>
+      <Style Selector="^:focus-visible"><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Style>
+    </ControlTheme>
+
+    <ControlTheme x:Key="Nav" TargetType="Button">
+      <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+      <Setter Property="Height" Value="36"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="HorizontalContentAlignment" Value="Left"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Grid Name="g" Background="Transparent">
+            <Rectangle Name="bar" Width="3" HorizontalAlignment="Left" Fill="Transparent"/>
+            <ContentPresenter Name="PART_ContentPresenter"
+                              Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              VerticalAlignment="Center" Margin="22,0,14,0"/>
+          </Grid>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover /template/ Grid#g"><Setter Property="Background" Value="{DynamicResource Card}"/></Style>
+      <Style Selector="^:pointerover"><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Style>
+      <!-- The page that is open: Shell.ShowPage sets its button's Tag to on. -->
+      <Style Selector="^[Tag=on] /template/ Grid#g"><Setter Property="Background" Value="{DynamicResource AccentSoft}"/></Style>
+      <Style Selector="^[Tag=on] /template/ Rectangle#bar"><Setter Property="Fill" Value="{DynamicResource Accent}"/></Style>
+      <Style Selector="^[Tag=on]">
+        <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+      </Style>
+      <!-- Tabbing to a nav item lights its accent bar, so keyboard
+           focus is as plain to see as the page it is on (#602). -->
+      <Style Selector="^:focus-visible /template/ Rectangle#bar"><Setter Property="Fill" Value="{DynamicResource Accent}"/></Style>
+      <Style Selector="^:focus-visible"><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Style>
+    </ControlTheme>
+
+    <ControlTheme x:Key="NavGroup" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="Constantia, Georgia, Times New Roman"/>
+      <Setter Property="Foreground" Value="{DynamicResource Faint}"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="FontFeatures" Value="+smcp"/>
+      <Setter Property="Margin" Value="25,16,0,6"/>
+    </ControlTheme>
+
+    <ControlTheme x:Key="Ghost" TargetType="Button">
+      <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+      <Setter Property="Background" Value="{DynamicResource Card}"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Padding" Value="15,8"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Name="b" Background="{TemplateBinding Background}"
+                  BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="2">
+            <ContentPresenter Name="PART_ContentPresenter"
+                              Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+          </Border>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover /template/ Border#b">
+        <Setter Property="Background" Value="{DynamicResource CardHover}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      </Style>
+      <!-- Keyboard focus lights the accent border, the same edge
+           hover gives, so a Tab lands somewhere a person can see (#602). -->
+      <Style Selector="^:focus-visible /template/ Border#b"><Setter Property="BorderBrush" Value="{DynamicResource Accent}"/></Style>
+      <Style Selector="^:disabled"><Setter Property="Opacity" Value="0.4"/></Style>
+    </ControlTheme>
+
+    <ControlTheme x:Key="Link" TargetType="Button">
+      <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="Transparent" Padding="0,2">
+            <ContentPresenter Name="PART_ContentPresenter"
+                              Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"/>
+          </Border>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover"><Setter Property="Foreground" Value="{DynamicResource Accent}"/></Style>
+      <!-- A link in focus reads in the accent, so Tab shows it the
+           same way the pointer does (#602). -->
+      <Style Selector="^:focus-visible"><Setter Property="Foreground" Value="{DynamicResource Accent}"/></Style>
+    </ControlTheme>
+
+    <ControlTheme x:Key="Primary" TargetType="Button">
+      <Setter Property="Foreground" Value="{DynamicResource AccentInk}"/>
+      <Setter Property="FontFamily" Value="Constantia, Georgia, Times New Roman"/>
+      <Setter Property="FontSize" Value="19"/>
+      <Setter Property="FontFeatures" Value="+smcp"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Height" Value="56"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Grid>
+            <Border Name="b" Background="{DynamicResource Accent}" CornerRadius="2"/>
+            <!-- The Play button as a progress bar (#1145): how far an update,
+                 the game folder or a file check has got, left to right, the
+                 accent faded with a solid accent line along the bottom.
+                 Hidden unless ShellProgress.cs shows it; it sets the width,
+                 and slides a quarter width band while the total is unknown. -->
+            <Grid Name="fill" HorizontalAlignment="Left" Width="0" IsVisible="False" IsHitTestVisible="False">
+              <Border Background="{DynamicResource Accent}" Opacity="0.4" CornerRadius="2"/>
+              <Border Height="3" VerticalAlignment="Bottom" Background="{DynamicResource Accent}" CornerRadius="0,0,2,2"/>
+            </Grid>
+            <Rectangle Height="1" VerticalAlignment="Top" Margin="1,1,1,0" Fill="#33FFFFFF"/>
+            <!-- The focus ring sits on top of the accent fill, drawn in the
+                 ink that reads on it, and shows only when the button is
+                 reached by keyboard (#602). -->
+            <Rectangle Name="ring" RadiusX="2" RadiusY="2" Margin="3" IsVisible="False"
+                       Stroke="{DynamicResource AccentInk}" StrokeThickness="1.5" StrokeDashArray="2,2"/>
+            <ContentPresenter Name="PART_ContentPresenter"
+                              Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Grid>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover /template/ Border#b"><Setter Property="Opacity" Value="0.88"/></Style>
+      <Style Selector="^:focus-visible /template/ Rectangle#ring"><Setter Property="IsVisible" Value="True"/></Style>
+      <Style Selector="^:disabled /template/ Border#b"><Setter Property="Background" Value="{DynamicResource Card}"/></Style>
+      <Style Selector="^:disabled"><Setter Property="Foreground" Value="{DynamicResource Faint}"/></Style>
+    </ControlTheme>
+
+    <ControlTheme x:Key="Solid" TargetType="Button">
+      <Setter Property="Foreground" Value="{DynamicResource AccentInk}"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Padding" Value="20,9"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Grid>
+            <Border Name="sb" Background="{DynamicResource Accent}" CornerRadius="2">
+              <ContentPresenter Name="PART_ContentPresenter"
+                                Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+            </Border>
+            <!-- Shown only on keyboard focus, in the ink that reads on the
+                 accent fill, so Tab lands somewhere visible (#602). -->
+            <Rectangle Name="ring" RadiusX="2" RadiusY="2" Margin="3" IsVisible="False"
+                       Stroke="{DynamicResource AccentInk}" StrokeThickness="1.5" StrokeDashArray="2,2"/>
+          </Grid>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover /template/ Border#sb"><Setter Property="Opacity" Value="0.86"/></Style>
+      <Style Selector="^:focus-visible /template/ Rectangle#ring"><Setter Property="IsVisible" Value="True"/></Style>
+      <Style Selector="^:disabled /template/ Border#sb"><Setter Property="Background" Value="{DynamicResource Card}"/></Style>
+      <Style Selector="^:disabled"><Setter Property="Foreground" Value="{DynamicResource Faint}"/></Style>
+    </ControlTheme>
+
+    <!-- A text field in the launcher's colours. Built on the stock text box,
+         which keeps the caret, selection and typing it has, with its colours,
+         corners and its focus edge made ours. -->
+    <ControlTheme x:Key="Field" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+      <Setter Property="Background" Value="{DynamicResource Deep}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+      <Setter Property="CaretBrush" Value="{DynamicResource Accent}"/>
+      <Setter Property="SelectionBrush" Value="{DynamicResource Accent}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="2"/>
+      <Setter Property="Padding" Value="11,8"/>
+      <Setter Property="MinHeight" Value="0"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Style Selector="^:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+      </Style>
+      <Style Selector="^:pointerover /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="{DynamicResource Deep}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+      </Style>
+      <Style Selector="^:focus">
+        <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+      </Style>
+      <Style Selector="^:focus /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="{DynamicResource Deep}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+      </Style>
+    </ControlTheme>
+
+    <!-- A slider in the launcher's own colours: a thin line, the filled part
+         in the accent, a round thumb. The stock slider is a grey control of
+         another look and would be the one thing on the page that is not ours. -->
+    <ControlTheme x:Key="ThornSlider" TargetType="Slider">
+      <Setter Property="Height" Value="22"/>
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Grid>
+            <Border Height="3" CornerRadius="2" VerticalAlignment="Center" Background="{DynamicResource Line}"/>
+            <Track Name="PART_Track"
+                   Minimum="{TemplateBinding Minimum}"
+                   Maximum="{TemplateBinding Maximum}"
+                   Value="{TemplateBinding Value, Mode=TwoWay}"
+                   IsDirectionReversed="{TemplateBinding IsDirectionReversed}"
+                   Orientation="Horizontal">
+              <Track.DecreaseButton>
+                <RepeatButton Name="PART_DecreaseButton" Focusable="False">
+                  <RepeatButton.Template>
+                    <ControlTemplate>
+                      <Border Height="3" CornerRadius="2" VerticalAlignment="Center" Background="{DynamicResource Accent}"/>
+                    </ControlTemplate>
+                  </RepeatButton.Template>
+                </RepeatButton>
+              </Track.DecreaseButton>
+              <Track.IncreaseButton>
+                <RepeatButton Name="PART_IncreaseButton" Focusable="False">
+                  <RepeatButton.Template>
+                    <ControlTemplate>
+                      <Border Height="22" Background="Transparent"/>
+                    </ControlTemplate>
+                  </RepeatButton.Template>
+                </RepeatButton>
+              </Track.IncreaseButton>
+              <Thumb Width="14" Height="14" Focusable="False">
+                <Thumb.Template>
+                  <ControlTemplate>
+                    <Ellipse Fill="{DynamicResource Ink}" Stroke="{DynamicResource Accent}" StrokeThickness="1.5"/>
+                  </ControlTemplate>
+                </Thumb.Template>
+              </Thumb>
+            </Track>
+          </Grid>
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+
+    <!-- Every tick box in the window. -->
+    <ControlTheme x:Key="{x:Type CheckBox}" TargetType="CheckBox">
+      <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <StackPanel Orientation="Horizontal" Background="Transparent">
+            <Border Name="box" Width="17" Height="17" Margin="0,0,11,0" VerticalAlignment="Center" CornerRadius="2"
+                    Background="{DynamicResource Deep}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
+              <Path Name="tick" Data="M 3.4,8 L 6.6,11.3 L 12.8,4.2" Stroke="{DynamicResource AccentInk}"
+                    StrokeThickness="1.9" IsVisible="False"/>
+            </Border>
+            <ContentPresenter Name="PART_ContentPresenter"
+                              Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              VerticalAlignment="Center"/>
+          </StackPanel>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:checked /template/ Border#box">
+        <Setter Property="Background" Value="{DynamicResource Accent}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      </Style>
+      <Style Selector="^:checked /template/ Path#tick"><Setter Property="IsVisible" Value="True"/></Style>
+      <Style Selector="^:pointerover /template/ Border#box"><Setter Property="BorderBrush" Value="{DynamicResource Accent}"/></Style>
+      <!-- Keyboard focus lights the box edge, the same as hover, so a
+           person tabbing through the settings can see the tick they
+           are about to toggle (#602). -->
+      <Style Selector="^:focus-visible /template/ Border#box"><Setter Property="BorderBrush" Value="{DynamicResource Accent}"/></Style>
+    </ControlTheme>
+
+    <ControlTheme x:Key="Slab" TargetType="Border">
+      <Setter Property="Background" Value="{DynamicResource Card}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="2"/>
+      <Setter Property="Padding" Value="18,16"/>
+    </ControlTheme>
+
+    <ControlTheme x:Key="Well" TargetType="Border">
+      <Setter Property="Background" Value="{DynamicResource Deep}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="2"/>
+      <Setter Property="Padding" Value="15,13"/>
+    </ControlTheme>
+  </Window.Resources>
+
+  <!-- The window draws its own title bar. Windows still gives it a resize
+       edge all round: the window has a border and no caption
+       (WindowDecorations BorderOnly), and its client area is extended over
+       that border, so nothing of Windows' frame is drawn, not even the light
+       strip along the top edge WPF showed without WindowChrome (#596).
+       TitleBar below is marked as the window's title bar, so Windows moves
+       the window when it is dragged, maximises it on a double click and
+       snaps it to the screen's edges; its buttons are marked as ours, so
+       they still take the click. A maximised window is fitted to the screen
+       by Windows itself, so nothing hangs past the edge to pull in. -->
+  <Border x:Name="WindowFrame" BorderBrush="{DynamicResource Line}" BorderThickness="1" Background="{DynamicResource Bg}">
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="46"/>
+        <RowDefinition Height="*"/>
+        <RowDefinition Height="28"/>
+      </Grid.RowDefinitions>
+
+      <!-- ================= title bar ================= -->
+      <Grid x:Name="TitleBar" Grid.Row="0" Background="{DynamicResource Panel}"
+            WindowDecorationProperties.ElementRole="TitleBar">
+        <Rectangle Height="1" VerticalAlignment="Bottom" Fill="{DynamicResource Line}"/>
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="24,0,0,0">
+          <Rectangle Width="3" Height="15" Fill="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+          <TextBlock x:Name="TxtPageTitle" Theme="{StaticResource Eyebrow}" FontSize="15"
+                     Foreground="{DynamicResource Ink}" Margin="0" VerticalAlignment="Center" Text="Play"/>
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+          <!-- Status chip lives on the Play server button now. Names kept so
+               Shell.cs lookups still resolve; collapsed so the title bar stays clean. -->
+          <Border x:Name="TitleServerChip" Theme="{StaticResource Slab}" Padding="12,5" VerticalAlignment="Center" Margin="0,0,14,0" IsVisible="False">
+            <StackPanel Orientation="Horizontal">
+              <Ellipse x:Name="DotServer" Width="7" Height="7" Fill="{DynamicResource Faint}" VerticalAlignment="Center" Margin="0,0,9,0"/>
+              <TextBlock x:Name="TxtServer" Theme="{StaticResource Mono}" Foreground="{DynamicResource Ink}" FontSize="12" VerticalAlignment="Center"/>
+              <TextBlock Text="   " />
+              <TextBlock x:Name="TxtPing" Theme="{StaticResource Mono}" FontSize="11" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Border>
+          <Button x:Name="BtnMin"  Theme="{StaticResource Chrome}" Content="&#x2013;" WindowDecorationProperties.ElementRole="User"/>
+          <Button x:Name="BtnMax"  Theme="{StaticResource Chrome}" Content="&#x2610;" WindowDecorationProperties.ElementRole="User"/>
+          <Button x:Name="BtnClose" Theme="{StaticResource Chrome}" Content="&#x2715;" WindowDecorationProperties.ElementRole="User"/>
+        </StackPanel>
+      </Grid>
+
+      <!-- ================= body ================= -->
+      <Grid Grid.Row="1">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="208"/>
+          <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0">
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,14">
+              <Rectangle Height="1" Fill="{DynamicResource Line}" Margin="20,10,18,10"/>
+              <!-- Discord account sits above Settings: username, profile picture,
+                   Reconnect only. No Forget, no headers, no how-it-works notes. -->
+              <StackPanel x:Name="DiscordCard" Margin="18,2,14,10">
+                <StackPanel Orientation="Horizontal">
+                  <Ellipse x:Name="DiscordAvatar" Width="32" Height="32" Margin="0,0,10,0"
+                           VerticalAlignment="Center" Fill="{DynamicResource Line}"/>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock x:Name="LabelDiscord" FontSize="12.5"
+                               Foreground="{DynamicResource Ink}" Text="Not linked"
+                               TextTrimming="CharacterEllipsis" MaxWidth="120"/>
+                    <Button x:Name="ButtonDiscord" Theme="{StaticResource Link}"
+                            Content="Connect Discord" HorizontalAlignment="Left" Margin="0,2,0,0"/>
+                  </StackPanel>
+                </StackPanel>
+              </StackPanel>
+              <Button x:Name="NavSettings" Theme="{StaticResource Nav}">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="15" Height="15" Stretch="Uniform" Margin="0,0,13,0" VerticalAlignment="Center"
+                        Data="M 0.5,3.5 H 14.5 M 0.5,11.5 H 14.5 M 5,3.5 A 1.6,1.6 0 1 0 5.01,3.5 M 10,11.5 A 1.6,1.6 0 1 0 10.01,11.5" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4"/>
+                  <TextBlock Text="Settings" VerticalAlignment="Center"/>
+                </StackPanel>
+              </Button>
+              <StackPanel Margin="25,12,18,0">
+                <TextBlock x:Name="TxtVersion" Theme="{StaticResource Mono}" Foreground="{DynamicResource Faint}" FontSize="10.5"/>
+                <TextBlock x:Name="TxtBuildLine" Theme="{StaticResource Mono}" Foreground="{DynamicResource Faint}" FontSize="10.5" Margin="0,3,0,0"/>
+                <!-- The SkyMP source offer, where everybody who connects
+                     starts (#421, AGPL section 13). -->
+                <Button x:Name="BtnSource" Theme="{StaticResource Link}" FontSize="10.5"
+                        Content="Source code" HorizontalAlignment="Left" Margin="0,3,0,0"/>
+              </StackPanel>
+            </StackPanel>
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+              <StackPanel Margin="0,0,0,10">
+                <StackPanel Orientation="Horizontal" Margin="22,16,18,0">
+                  <Image x:Name="EmblemSmall" Width="28" Height="28" Margin="0,0,12,0" VerticalAlignment="Center"
+                         RenderOptions.BitmapInterpolationMode="HighQuality" IsVisible="False"/>
+                  <TextBlock x:Name="TxtBrandSmall" Text="Thornswood" FontFamily="Constantia, Georgia" FontSize="17"
+                             FontFeatures="+smcp"
+                             TextWrapping="Wrap" TextAlignment="Center"
+                             Foreground="{DynamicResource Ink}" VerticalAlignment="Center"/>
+                </StackPanel>
+                <Rectangle Height="1" Fill="{DynamicResource Line}" Margin="22,16,18,0"/>
+                <TextBlock Text="Session" Theme="{StaticResource NavGroup}"/>
+              <Button x:Name="NavPlay" Theme="{StaticResource Nav}">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="15" Height="15" Stretch="Uniform" Margin="0,0,13,0" VerticalAlignment="Center"
+                        Data="M 2,1 L 13,7.5 L 2,14 Z" Fill="{Binding $parent[Button].Foreground}"/>
+                  <TextBlock Text="Play" VerticalAlignment="Center"/>
+                </StackPanel>
+              </Button>
+              <Button x:Name="NavGallery" Theme="{StaticResource Nav}">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="15" Height="15" Stretch="Uniform" Margin="0,0,13,0" VerticalAlignment="Center"
+                        Data="M 1.5,2.5 H 13.5 V 12.5 H 1.5 Z M 1.5,9.5 H 13.5 M 5.5,2.5 V 9.5 M 10.5,2.5 V 9.5"
+                        Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4"/>
+                  <TextBlock Text="Gallery" VerticalAlignment="Center"/>
+                </StackPanel>
+              </Button>
+              <Button x:Name="NavNews" Theme="{StaticResource Nav}">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="15" Height="15" Stretch="Uniform" Margin="0,0,13,0" VerticalAlignment="Center"
+                        Data="M 1.5,2 H 13.5 V 13 H 1.5 Z M 3.5,5 H 11.5 M 3.5,7.5 H 11.5 M 3.5,10 H 8" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4"/>
+                  <TextBlock Text="News" VerticalAlignment="Center"/>
+                </StackPanel>
+              </Button>
+                <TextBlock Text="When it breaks" Theme="{StaticResource NavGroup}"/>
+              <Button x:Name="NavDiag" Theme="{StaticResource Nav}">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="15" Height="15" Stretch="Uniform" Margin="0,0,13,0" VerticalAlignment="Center"
+                        Data="M 1,8 H 4.2 L 6,3.4 L 9,12.6 L 10.8,8 H 14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4"/>
+                  <TextBlock Text="Diagnostics" VerticalAlignment="Center"/>
+                </StackPanel>
+              </Button>
+              <!-- Help is the site's help page, opened in the browser (#3146).
+                   In the game it is F7; the launcher keeps no third copy. -->
+              <Button x:Name="NavHelp" Theme="{StaticResource Nav}" ToolTip.Tip="Opens the help on the site">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="15" Height="15" Stretch="Uniform" Margin="0,0,13,0" VerticalAlignment="Center"
+                        Data="M 4.6,4.8 A 3,3 0 1 1 7.6,8.4 L 7.6,10.2 M 7.6,12.6 L 7.6,13.2" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4"/>
+                  <TextBlock Text="Help" VerticalAlignment="Center"/>
+                </StackPanel>
+              </Button>
+              </StackPanel>
+            </ScrollViewer>
+          </DockPanel>
+        </Border>
+
+        <Grid Grid.Column="1">
+
+          <!-- ================ PLAY ================ -->
+          <Grid x:Name="PagePlay">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="*"/>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" Height="100" MaxHeight="100" ClipToBounds="True"
+                    Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1">
+              <Grid>
+                <Rectangle Fill="{StaticResource Hatch}" Opacity="0.85"/>
+                <!-- The landscape behind the title, filled in from Art.Header().
+                     The band's height is the title row's, 100 and no taller, and
+                     the art never sets it: the picture is a brush on a Border and
+                     the moving strip an image inside one, cropped to fill, so
+                     neither can push the row open. Both fill the band and crop
+                     what does not fit (UniformToFill, centred), and both take the
+                     same part of the art, Art.HeaderCrop, so the still and the
+                     moving strip line up and the overlook keeps its approved
+                     framing at any window width. Nothing on this band zooms,
+                     drifts or runs fast.
+                     Hidden when the build carries no picture, which leaves the
+                     pattern above exactly as it was. Every veil is the theme's own
+                     panel colour, so a light theme washes the picture light and a
+                     dark one dark. The two heavier veils are fixed widths anchored
+                     to the sides, because the title and the figures are fixed
+                     widths too: at any window size the text sits on a strong veil
+                     and the picture shows most in the gap between them. -->
+                <Grid x:Name="HeaderArt" IsVisible="False" IsHitTestVisible="False">
+                  <Border x:Name="HeaderArtPicture"/>
+                  <!-- The same strip moving, from Art.HeaderFrames(), drawn
+                       frame by frame into an image the way the picture is
+                       cropped, so the two line up. Stays hidden when the build
+                       has no moving strip or it will not decode, and the picture
+                       shows as it always did. -->
+                  <Border x:Name="HeaderArtVideo" IsVisible="False" ClipToBounds="True"/>
+                  <Rectangle Fill="{DynamicResource Panel}" Opacity="0.45"/>
+                  <Rectangle Fill="{DynamicResource Panel}" Width="520" HorizontalAlignment="Left">
+                    <Rectangle.OpacityMask>
+                      <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                        <GradientStop Color="#B0000000" Offset="0"/>
+                        <GradientStop Color="#B0000000" Offset="0.7"/>
+                        <GradientStop Color="#00000000" Offset="1"/>
+                      </LinearGradientBrush>
+                    </Rectangle.OpacityMask>
+                  </Rectangle>
+                  <Rectangle Fill="{DynamicResource Panel}" Width="520" HorizontalAlignment="Right">
+                    <Rectangle.OpacityMask>
+                      <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                        <GradientStop Color="#00000000" Offset="0"/>
+                        <GradientStop Color="#B0000000" Offset="0.3"/>
+                        <GradientStop Color="#B0000000" Offset="1"/>
+                      </LinearGradientBrush>
+                    </Rectangle.OpacityMask>
+                  </Rectangle>
+                </Grid>
+                <!-- Fixed short landscape/stats strip: Height+MaxHeight lock to main
+                     1.1.96 logo-band height. No MinHeight-only (image/video stretch
+                     was expanding the Auto row). Logo and title stay hidden. -->
+                <Grid Margin="36,8,36,8" Height="84" MaxHeight="84">
+                  <!-- Logo and title text over the hero art were clutter; hidden so Shell lookups still resolve. -->
+                  <StackPanel Orientation="Horizontal" VerticalAlignment="Center" IsVisible="False">
+                    <Image x:Name="Emblem" Width="84" Height="84" Margin="0,0,22,0" VerticalAlignment="Center"
+                           RenderOptions.BitmapInterpolationMode="HighQuality" IsVisible="False"/>
+                    <StackPanel x:Name="BannerTitle" VerticalAlignment="Center">
+                      <TextBlock x:Name="TxtBrandBig" Text="Thornswood" Theme="{StaticResource Display}"/>
+                      <!-- The dash and the plugins / game / launcher line under the name are not shown
+                           on the banner (#596). Kept in the tree because the code still fills the line. -->
+                      <StackPanel Orientation="Horizontal" Margin="2,8,0,0" IsVisible="False">
+                        <Rectangle Width="26" Height="2" Fill="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <TextBlock x:Name="TxtHeroLine" Theme="{StaticResource Small}" FontSize="12" VerticalAlignment="Center"/>
+                      </StackPanel>
+                    </StackPanel>
+                  </StackPanel>
+                  <!-- Played / Sessions / Last played fill the strip evenly. Updated was removed. -->
+                  <UniformGrid x:Name="StatRow" Columns="3" VerticalAlignment="Center">
+                    <UniformGrid.Effect>
+                      <DropShadowEffect Color="Black" OffsetX="0" OffsetY="0" BlurRadius="8" Opacity="0.95"/>
+                    </UniformGrid.Effect>
+                  </UniformGrid>
+                </Grid>
+              </Grid>
+            </Border>
+
+            <!-- No ScrollViewer on Play: the page fits the normal launcher window. Other pages keep theirs.
+                 Gallery fills the large empty centre; compact Ready sits on the right where Server used to. -->
+            <Grid Grid.Row="1" Margin="36,20,36,10" ClipToBounds="True">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="28"/>
+                  <ColumnDefinition Width="250"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Rotating approved spotlight on Play. Filled by StartGallery in Shell.cs,
+                     hidden until the first picture has loaded (#603). Staff and Report
+                     tools are on the Gallery page, not here (#731). Pending never shows here. -->
+                <Grid x:Name="GalleryCard" Grid.Column="0" ClipToBounds="True" IsVisible="False">
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                  </Grid.RowDefinitions>
+                  <TextBlock Grid.Row="0" Text="From the world" Theme="{StaticResource Eyebrow}"/>
+                  <Border Grid.Row="1" Theme="{StaticResource Slab}" Padding="0" ClipToBounds="True"
+                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                    <Image x:Name="GalleryImage" Stretch="UniformToFill"
+                           HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                           RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                  </Border>
+                  <!-- Byline only on Play. Report, Delete, Accept and upload
+                       live on the Gallery page (#731). -->
+                  <TextBlock x:Name="GalleryBy" Grid.Row="2" Theme="{StaticResource Small}"
+                             TextWrapping="Wrap" Margin="2,8,2,0"/>
+                </Grid>
+
+                <StackPanel Grid.Column="2" VerticalAlignment="Top">
+                  <!-- Compact Ready: smaller card in the old Server column, not a wide centre strip. -->
+                  <TextBlock Text="Ready" Theme="{StaticResource Eyebrow}"/>
+                  <Border Theme="{StaticResource Slab}" Padding="14,11">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                      </Grid.ColumnDefinitions>
+                      <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                      </Grid.RowDefinitions>
+                      <Ellipse x:Name="DotReady" Grid.Column="0" Width="8" Height="8" Fill="{DynamicResource Faint}"
+                               VerticalAlignment="Center" Margin="0,0,10,0"/>
+                      <TextBlock x:Name="TxtReadyTitle" Grid.Column="1" Text="Checking..."
+                                 FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Ink}"
+                                 TextWrapping="Wrap" VerticalAlignment="Center"/>
+                      <!-- Kept hidden; Shell still looks it up. Subtitle under the ready line is gone. -->
+                      <TextBlock x:Name="TxtReadyNote" IsVisible="False"/>
+                      <Button x:Name="BtnCheckDiagnostics" Grid.Column="2" Theme="{StaticResource Ghost}"
+                              Content="Diagnostics" Margin="8,0,0,0" VerticalAlignment="Center" Padding="8,4"
+                              IsVisible="False"/>
+                      <!-- Shown while Steam is not running (#3204). Its own row
+                           under the words: beside Diagnostics in a 250 wide
+                           column it would leave the words no room. -->
+                      <Button x:Name="BtnOpenSteam" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                              Theme="{StaticResource Ghost}" Content="Open Steam" Margin="0,8,0,0"
+                              HorizontalAlignment="Left" Padding="8,4" IsVisible="False"/>
+                    </Grid>
+                  </Border>
+
+                  <!-- This card told a new person to name the character after
+                       themselves and to save before connecting, both left over
+                       from the old multiplayer mod. The name is what everybody sees over
+                       your head in a roleplay world, so a person who followed the
+                       card walked into Whiterun under their own name. And there is
+                       no saving: the server holds the character. The site's help
+                       gives the same name rule under Your first character, and
+                       site/tests/test-first-run-words.js keeps the two saying the same
+                       thing. -->
+                  <StackPanel x:Name="FirstRunCard" Margin="0,18,0,0">
+                    <TextBlock Text="First time" Theme="{StaticResource Eyebrow}"/>
+                    <Border Theme="{StaticResource Slab}" Padding="14,12">
+                      <StackPanel>
+                        <TextBlock Theme="{StaticResource Small}" TextWrapping="Wrap"
+                                   Text="Give your character a name that belongs in Skyrim: a first name and a family name or a byname, and not your own. That name is what other people see above your head, and it cannot be changed later without a new character."/>
+                      </StackPanel>
+                    </Border>
+                  </StackPanel>
+
+                  <StackPanel x:Name="QuickKeysCard" IsVisible="False" Margin="0,18,0,0">
+                    <TextBlock Text="In game" Theme="{StaticResource Eyebrow}"/>
+                    <Border Theme="{StaticResource Slab}" Padding="14,12">
+                      <StackPanel x:Name="QuickKeys"/>
+                    </Border>
+                    <TextBlock Theme="{StaticResource Small}" Margin="0,8,0,0" TextWrapping="Wrap"
+                               Text="Every key is changed in the game, on Settings at the foot of the help panel and of the K, P and J panels."/>
+                  </StackPanel>
+                </StackPanel>
+            </Grid>
+
+            <Border x:Name="UpdateBar" Grid.Row="2" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Accent}"
+                    BorderThickness="1" CornerRadius="2" Padding="20,16" Margin="36,0,36,16" IsVisible="False">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                  <TextBlock x:Name="TxtUpdateTitle" Theme="{StaticResource H2}" Text="Update available"/>
+                  <TextBlock x:Name="TxtUpdateNote" Theme="{StaticResource Small}" Margin="0,2,0,0"/>
+                </StackPanel>
+                <Button x:Name="BtnUpdate" Grid.Column="1" Theme="{StaticResource Solid}" Content="Install now" VerticalAlignment="Center" Margin="18,0,0,0"/>
+              </Grid>
+            </Border>
+
+            <!-- CharBar, the two character slots that opened under Play, sat here
+                 until 20 September. You pick your character at the game's main
+                 menu now, so Play starts the game. -->
+
+            <Border x:Name="DowngradeBar" Grid.Row="2" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Accent}"
+                    BorderThickness="1" CornerRadius="2" Padding="20,16" Margin="36,0,36,16" IsVisible="False">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                  <TextBlock x:Name="TxtDowngradeTitle" Theme="{StaticResource H2}" Text="Skyrim is on the wrong build"/>
+                  <TextBlock x:Name="TxtDowngradeNote" Theme="{StaticResource Small}" Margin="0,2,0,0" TextWrapping="Wrap"
+                             Text="The server runs 1.6.1170. Press the button: Steam downloads the 1.6.1170 files under your own account and the launcher puts them into Thornswood's own game folder. Your Steam copy of Skyrim is not changed. About 11 GB, and Steam has to be signed in."/>
+                  <!-- How far the downgrade is: each part of three by the size Steam
+                       gives for it, then the copy. Set through Downgrade.OnProgress
+                       by RunDowngrade in Shell.cs; hidden until a run starts. -->
+                  <ProgressBar x:Name="PrgDowngrade" Height="6" MinHeight="6" Minimum="0" Maximum="100" Margin="0,10,0,0"
+                               Background="{DynamicResource Line}" Foreground="{DynamicResource Accent}" BorderThickness="0"
+                               IsVisible="False"/>
+                </StackPanel>
+                <Button x:Name="BtnDowngrade" Grid.Column="1" Theme="{StaticResource Solid}" Content="Downgrade to 1.6.1170" VerticalAlignment="Center" Margin="18,0,0,0"/>
+              </Grid>
+            </Border>
+
+            <!-- What the update feed says to everybody (To Do List entry 262): its
+                 message, and the reason when it holds Play for maintenance or for
+                 a launcher too old to play. A row of its own, so it can stand
+                 under an update card without covering it; UpdateBar and
+                 DowngradeBar share row 2 because DrawStatus keeps the downgrade
+                 card down while an update card is up.
+                 Filled in by ShowNotice in Shell.cs. -->
+            <Border x:Name="NoticeBar" Grid.Row="3" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Accent}"
+                    BorderThickness="1" CornerRadius="2" Padding="20,16" Margin="36,0,36,16" IsVisible="False">
+              <StackPanel>
+                <TextBlock x:Name="TxtNoticeTitle" Theme="{StaticResource H2}"/>
+                <TextBlock x:Name="TxtNoticeNote" Theme="{StaticResource Small}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+              </StackPanel>
+            </Border>
+
+            <!-- Same columns as the Gallery | gap | Ready row above: PLAY under Gallery,
+                 server chip under the Ready column. Recheck is gone; Diagnostics owns that path. -->
+            <Grid Grid.Row="4" Margin="36,4,36,28">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="28"/>
+                <ColumnDefinition Width="250"/>
+              </Grid.ColumnDefinitions>
+              <Button x:Name="BtnPlay" Grid.Column="0" Theme="{StaticResource Primary}" Content="Play"
+                      HorizontalAlignment="Stretch"/>
+              <Grid Grid.Column="2" VerticalAlignment="Center">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto"/>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Button x:Name="BtnQuitGame" Grid.Column="0" Theme="{StaticResource Ghost}" Content="Quit Skyrim" Margin="0,0,8,0" IsVisible="False"/>
+                <Grid x:Name="ServerPickCard" Grid.Column="1" HorizontalAlignment="Stretch">
+                  <!-- One control open and closed. Closed: Ghost chip full width of the Ready
+                       column. Open: Popup covers the chip (VerticalOffset = -chip height in
+                       Shell) with one Border the exact chip width, both Main and Dev rows. -->
+                  <Button x:Name="BtnServerPick" Theme="{StaticResource Ghost}"
+                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                          Padding="10,8">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                      </Grid.ColumnDefinitions>
+                      <Ellipse x:Name="DotServerPick" Grid.Column="0" Width="7" Height="7"
+                               Fill="{DynamicResource Faint}" VerticalAlignment="Center" Margin="0,0,9,0"/>
+                      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock x:Name="TxtServerPick" Text="Main" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="TxtServerPickMeta" Margin="10,0,0,0" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Muted}" FontSize="11"/>
+                      </StackPanel>
+                      <TextBlock Grid.Column="2" Text="▾" Margin="12,0,0,0"
+                                 VerticalAlignment="Center" Foreground="{DynamicResource Muted}"/>
+                    </Grid>
+                  </Button>
+                  <Popup x:Name="ServerPickPopup" Placement="Bottom"
+                         PlacementTarget="{Binding #BtnServerPick}"
+                         HorizontalOffset="0" VerticalOffset="0"
+                         IsLightDismissEnabled="True">
+                    <Border x:Name="ServerPickPanel"
+                            Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}"
+                            BorderThickness="1" CornerRadius="2" Padding="4">
+                      <StackPanel>
+                        <Button x:Name="BtnServerMain" Theme="{StaticResource Ghost}"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,0,0,2"
+                                Padding="10,8">
+                          <StackPanel Orientation="Horizontal">
+                            <Ellipse x:Name="DotServerMain" Width="7" Height="7"
+                                     Fill="{DynamicResource Faint}" VerticalAlignment="Center" Margin="0,0,9,0"/>
+                            <TextBlock Text="Main" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TxtServerMainMeta" Margin="12,0,0,0" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource Muted}" FontSize="11"/>
+                          </StackPanel>
+                        </Button>
+                        <Button x:Name="BtnServerDev" Theme="{StaticResource Ghost}"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                Padding="10,8">
+                          <StackPanel Orientation="Horizontal">
+                            <Ellipse x:Name="DotServerDev" Width="7" Height="7"
+                                     Fill="{DynamicResource Faint}" VerticalAlignment="Center" Margin="0,0,9,0"/>
+                            <TextBlock Text="Dev" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TxtServerDevMeta" Margin="12,0,0,0" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource Muted}" FontSize="11"/>
+                          </StackPanel>
+                        </Button>
+                      </StackPanel>
+                    </Border>
+                  </Popup>
+                </Grid>
+                <Button x:Name="BtnCopy" Grid.Column="2" Theme="{StaticResource Ghost}" Content="Copy address" IsVisible="False"/>
+              </Grid>
+            </Grid>
+          </Grid>
+
+          <!-- ================ NEWS ================ -->
+          <Grid x:Name="PageNews" IsVisible="False">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+              <StackPanel x:Name="NewsList" Margin="36,30,36,30" MaxWidth="840" HorizontalAlignment="Left"/>
+            </ScrollViewer>
+          </Grid>
+
+          <!-- ================ DIAGNOSTICS ================ -->
+          <Grid x:Name="PageDiag" IsVisible="False">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+              <StackPanel Margin="36,30,36,30" MaxWidth="900" HorizontalAlignment="Left">
+
+                <!-- Scan and Fix first: one truth for plugins / load order / Data.
+                     Ready to launch stays below and reads the same Verify.LastIssues. -->
+                <TextBlock Text="Scan and Fix" Theme="{StaticResource Eyebrow}" Margin="0,0,0,11"/>
+                <Border x:Name="VerifyCard" Theme="{StaticResource Slab}" Padding="20,17">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <Ellipse x:Name="DotVerify" Grid.Column="0" Width="10" Height="10" Fill="{DynamicResource Faint}"
+                             VerticalAlignment="Center" Margin="0,0,15,0"/>
+                    <StackPanel Grid.Column="1">
+                      <TextBlock x:Name="TxtVerifyTitle" Theme="{StaticResource H2}" Text="Not checked yet"/>
+                      <TextBlock x:Name="TxtVerifyNote" Theme="{StaticResource Small}" Margin="0,2,0,0"
+                                 Text="Looks for everything wrong with this install: your plugins against the server's, an update waiting, Thornswood's own folder and files, Windows' Skyrim folders, the shortcut icon, the client, Steam and the Skyrim build. Fix puts right what it can, then says what is left and what will put it right."/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                      <Button x:Name="BtnScan" Theme="{StaticResource Ghost}" Content="Scan" Margin="0,0,8,0"/>
+                      <Button x:Name="BtnFix"  Theme="{StaticResource Solid}" Content="Fix" IsEnabled="False"/>
+                    </StackPanel>
+                  </Grid>
+                </Border>
+
+                <!-- Ready to launch (kept). Mods / Mod list share Scan and Fix's Issue list. -->
+                <TextBlock Text="Ready to launch" Theme="{StaticResource Eyebrow}" Margin="0,30,0,11"/>
+                <StackPanel x:Name="StatusList"/>
+
+                <!-- Collection line: after the last Ready to launch row (Steam),
+                     before Bring it up to date from Vortex. Built in C# so a
+                     missing named control cannot take the page with it. -->
+                <StackPanel x:Name="DiagCollection" Margin="0,8,0,0"/>
+
+                <!-- The optional packs (#1170), under the collection line. Their
+                     Add-ons tab is on the Mods page, which #599 took off the
+                     rail. Built in C# like the collection line, and empty until
+                     the update feed lists a pack. -->
+                <StackPanel x:Name="DiagAddons"/>
+
+                <!-- Bring it up to date from Vortex, Repair and Restore Windows
+                     folders were buttons here until 17 Oct (#2627): Scan finds
+                     each of those and Fix does it. The icon refresh stays,
+                     because a blank picture Windows remembers for a shortcut
+                     cannot be seen from the shortcut, so Scan cannot find it. -->
+                <Border Theme="{StaticResource Slab}" Padding="20,18" Margin="0,16,0,0">
+                  <StackPanel>
+                    <TextBlock Theme="{StaticResource H2}" Text="Refresh the shortcut icon"/>
+                    <TextBlock Theme="{StaticResource Body}" Text="Scan and Fix point your shortcuts at the current artwork, and the launcher does it every time it starts. This is for when the desktop or the taskbar is still showing an old or blank icon anyway, which Windows keeps in a picture of its own that no shortcut shows. Explorer restarts, so the taskbar blinks once. Nothing is lost."/>
+                    <Button x:Name="BtnIcons" Theme="{StaticResource Ghost}" Content="Refresh icon" HorizontalAlignment="Left" Margin="0,13,0,0"/>
+                  </StackPanel>
+                </Border>
+
+                <TextBlock Text="What the launcher can see right now" Theme="{StaticResource Eyebrow}" Margin="0,30,0,11"/>
+                <StackPanel x:Name="DiagReadings"/>
+
+                <!-- Support zip: was the top card; kept at the bottom so Build the report still exists. -->
+                <TextBlock Text="Support report" Theme="{StaticResource Eyebrow}" Margin="0,30,0,11"/>
+                <Border Theme="{StaticResource Slab}" Padding="20,17">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                      <TextBlock Theme="{StaticResource H2}" Text="One zip for Discord"/>
+                      <!-- Diag.WhatTheReportHolds() fills this in (#3565), from the same lists the zip is made from. -->
+                      <TextBlock x:Name="TxtDiagHolds" Theme="{StaticResource Small}" Margin="0,4,0,0"/>
+                      <TextBlock x:Name="TxtDiagNote" Theme="{StaticResource Small}" Margin="0,8,0,0"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="18,0,0,0">
+                      <Button x:Name="BtnDiagBundle" Theme="{StaticResource Solid}" Content="Build the report"/>
+                      <Button x:Name="BtnDiagOpen" Theme="{StaticResource Ghost}" Content="Open the folder" Margin="0,8,0,0"/>
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </StackPanel>
+            </ScrollViewer>
+          </Grid>
+
+
+          <!-- ================ GALLERY ================ -->
+          <!-- Upload (multi + drop), one Gallery grid of approved + staff pending,
+               Report for people, Accept / Delete for staff (#731). No Reject.
+               Play keeps the approved spotlight only. -->
+          <Grid x:Name="PageGallery" IsVisible="False">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+              <StackPanel Margin="36,30,36,34" MaxWidth="980" HorizontalAlignment="Left">
+
+                <TextBlock Text="Send a picture" Theme="{StaticResource Eyebrow}"/>
+                <Border Theme="{StaticResource Slab}" Padding="22,20" Margin="0,0,0,22">
+                  <StackPanel>
+                    <TextBlock Theme="{StaticResource Small}" Margin="0,0,0,12"
+                               Text="png, jpg, jpeg, webp or gif, up to 25 MB each. They go to the queue, not live, until staff Accept."/>
+                    <Border x:Name="GalleryDrop" DragDrop.AllowDrop="True" Padding="26,22" Margin="0,0,0,14"
+                            BorderBrush="{DynamicResource Edge}" BorderThickness="1.5" Background="#8C0B0E0A"
+                            CornerRadius="2" Cursor="Hand">
+                      <StackPanel HorizontalAlignment="Center">
+                        <TextBlock x:Name="TxtGalleryDropLead" Text="Drop pictures here or choose files"
+                                   Theme="{StaticResource Body}" HorizontalAlignment="Center" Margin="0,0,0,14"
+                                   TextAlignment="Center"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                          <Button x:Name="BtnGalleryChoose" Theme="{StaticResource Ghost}"
+                                  Content="Choose pictures" Padding="14,8"/>
+                          <TextBlock x:Name="TxtGalleryChosen" Theme="{StaticResource Small}"
+                                     Text="No file chosen" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                        </StackPanel>
+                      </StackPanel>
+                    </Border>
+                    <StackPanel x:Name="GalleryChosenList" Margin="0,0,0,14"/>
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="16"/>
+                        <ColumnDefinition Width="2*"/>
+                        <ColumnDefinition Width="Auto"/>
+                      </Grid.ColumnDefinitions>
+                      <StackPanel Grid.Column="0">
+                        <TextBlock Text="By" Theme="{StaticResource Small}" Margin="0,0,0,4"/>
+                        <TextBox x:Name="BoxGalleryBy" Theme="{StaticResource Field}" MaxLength="40" Padding="10,6"/>
+                      </StackPanel>
+                      <StackPanel Grid.Column="2">
+                        <TextBlock Text="Note (optional)" Theme="{StaticResource Small}" Margin="0,0,0,4"/>
+                        <TextBox x:Name="BoxGalleryNote" Theme="{StaticResource Field}" MaxLength="300" Padding="10,6"/>
+                      </StackPanel>
+                      <Button x:Name="BtnGallerySend" Grid.Column="3" Theme="{StaticResource Solid}"
+                              Content="Send" Padding="18,8" Margin="16,18,0,0" VerticalAlignment="Bottom"
+                              IsEnabled="False"/>
+                    </Grid>
+                  </StackPanel>
+                </Border>
+
+                <TextBlock x:Name="TxtGalleryPageSaid" Theme="{StaticResource Small}"
+                           TextWrapping="Wrap" Margin="0,0,0,18" IsVisible="False"/>
+
+                <TextBlock Text="On the gallery" Theme="{StaticResource Eyebrow}"/>
+                <TextBlock x:Name="TxtGalleryApprovedEmpty" Theme="{StaticResource Small}" Margin="0,0,0,10"
+                           Text="Nothing is on the gallery yet."/>
+                <!-- Approved and staff-pending share this grid. No separate waiting section. -->
+                <WrapPanel x:Name="GalleryApprovedList" Margin="0,0,0,22"/>
+
+                <Grid x:Name="GalleryPageReportRow" Margin="0,0,0,12" IsVisible="False">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                  </Grid.ColumnDefinitions>
+                  <TextBox x:Name="BoxGalleryWhy" Grid.Column="0" Theme="{StaticResource Field}"
+                           MaxLength="500" Padding="10,6"/>
+                  <Button x:Name="BtnGalleryReportSend" Grid.Column="1" Theme="{StaticResource Ghost}"
+                          Content="Send report" Padding="10,4" Margin="8,0,0,0"/>
+                  <Button x:Name="BtnGalleryReportCancel" Grid.Column="2" Theme="{StaticResource Ghost}"
+                          Content="Cancel" Padding="10,4" Margin="8,0,0,0"/>
+                </Grid>
+
+                <Button x:Name="BtnGalleryRefresh" Theme="{StaticResource Ghost}" Content="Refresh"
+                        HorizontalAlignment="Left" Padding="12,6"/>
+              </StackPanel>
+            </ScrollViewer>
+          </Grid>
+
+          <!-- ================ SETTINGS ================ -->
+          <Grid x:Name="PageSettings" IsVisible="False">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+              <StackPanel Margin="36,30,36,34" MaxWidth="820" HorizontalAlignment="Left">
+
+                <TextBlock Text="Appearance" Theme="{StaticResource Eyebrow}"/>
+                <StackPanel x:Name="ThemeRow" Margin="0,0,0,6"/>
+                <TextBlock x:Name="TxtThemeNote" Theme="{StaticResource Small}" Margin="0,0,0,18"/>
+                <StackPanel x:Name="ThemeEditor" Margin="0,0,0,30"/>
+
+                <TextBlock Text="Music" Theme="{StaticResource Eyebrow}"/>
+                <StackPanel Margin="0,0,0,30">
+                  <CheckBox x:Name="ChkMusic" Content="Play music while the launcher is open"/>
+                  <StackPanel Orientation="Horizontal" Margin="28,12,0,0">
+                    <Slider x:Name="SldMusic" Theme="{StaticResource ThornSlider}" Width="260" Minimum="0" Maximum="100"
+                            TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="TxtMusic" Theme="{StaticResource Small}" Margin="14,0,0,0" VerticalAlignment="Center" Text="45%"/>
+                  </StackPanel>
+                  <TextBlock Theme="{StaticResource Small}" Margin="28,6,0,0"
+                             Text="It stops when the game starts and comes back when the game closes. The dev build plays its test track; the main build has no music yet."/>
+                </StackPanel>
+
+                <TextBlock Text="Updates" Theme="{StaticResource Eyebrow}"/>
+                <StackPanel Margin="0,0,0,30">
+                  <CheckBox x:Name="ChkAutoUpdate" Content="Install updates by themselves"/>
+                  <TextBlock Theme="{StaticResource Small}" Margin="28,6,0,0"
+                             Text="An update goes in as soon as the launcher sees it, and Diagnostics checks the install after it. During a game it waits for the server's countdown. Off, the card above Play waits until you press Install now. The launcher always checks for updates either way."/>
+                  <CheckBox x:Name="ChkKeepOpen" Margin="0,12,0,0" Content="Keep the launcher on screen while playing"/>
+                  <TextBlock Theme="{StaticResource Small}" Margin="28,6,0,0"
+                             Text="It normally minimises. It cannot close, because it has to put your Windows Skyrim folders back when you quit."/>
+                  <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,14,0,0">
+                    <Button x:Name="BtnCheckNow"   Theme="{StaticResource Ghost}" Content="Check now" Margin="0,0,8,0"/>
+                    <Button x:Name="BtnInstallNow" Theme="{StaticResource Solid}" Content="Install now" IsVisible="False"/>
+                  </StackPanel>
+                </StackPanel>
+
+                <TextBlock Text="Crash snapshots" Theme="{StaticResource Eyebrow}"/>
+                <StackPanel Margin="0,0,0,30">
+                  <CheckBox x:Name="ChkCrashSnapshots" Content="Save a full crash snapshot when the game crashes"/>
+                  <TextBlock Theme="{StaticResource Small}" Margin="28,6,0,0" TextWrapping="Wrap"
+                             Text="A snapshot is a copy of everything in the game's memory at the moment it crashed. One can be 9 GB or more, and writing it takes a minute or two. Each is kept until staff have looked at that crash, two at most. It stays on this PC and nothing sends it anywhere. Leave this off unless somebody looking into a crash asks for one."/>
+                  <TextBlock x:Name="TxtCrashFolder" Theme="{StaticResource Small}" Margin="28,10,0,0" TextWrapping="Wrap"/>
+                  <Button x:Name="BtnCrashFolder" Theme="{StaticResource Ghost}" Content="Choose folder" HorizontalAlignment="Left" Margin="28,10,0,0"/>
+                </StackPanel>
+
+                <TextBlock Text="Display" Theme="{StaticResource Eyebrow}"/>
+                <StackPanel Margin="0,0,0,30">
+                  <!-- Where the rest went (#3126, #3146). Its own line, not
+                       TxtDisplayNote: BuildDisplay rewrites that one. -->
+                  <TextBlock Theme="{StaticResource Small}" TextWrapping="Wrap" Margin="0,0,0,14"
+                             Text="Every key, the field of view, the chat and the needs bars are set in the game, on Settings at the foot of the help panel and of the K, P and J panels."/>
+                  <StackPanel x:Name="DisplayModeRow" Orientation="Horizontal" Margin="0,0,0,15"/>
+                  <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="155"/><ColumnDefinition Width="12"/>
+                      <ColumnDefinition Width="112"/><ColumnDefinition Width="14"/>
+                      <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Theme="{StaticResource Small}" Text="Resolution"/>
+                    <TextBlock Grid.Column="2" Theme="{StaticResource Small}" Text="Frame limit"/>
+                  </Grid>
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="155"/><ColumnDefinition Width="12"/>
+                      <ColumnDefinition Width="112"/><ColumnDefinition Width="14"/>
+                      <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="BoxResolution" Grid.Column="0" Theme="{StaticResource Field}" FontFamily="Cascadia Mono, Consolas"/>
+                    <TextBox x:Name="BoxFrameLimit" Grid.Column="2" Theme="{StaticResource Field}" FontFamily="Cascadia Mono, Consolas"/>
+                    <CheckBox x:Name="ChkVSync" Grid.Column="4" Content="VSync" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                  </Grid>
+                  <TextBlock x:Name="TxtDisplayNote" Theme="{StaticResource Small}" Margin="0,10,0,0"
+                             Text="Resolution as 1920x1080, frame limit in frames per second. These take effect when the game next starts. The field of view, the chat and the needs bars are set in the game, on its Settings panel."/>
+                  <CheckBox x:Name="ChkLockRes" Content="Lock resolution" Margin="0,14,0,0"/>
+                  <TextBlock Theme="{StaticResource Body}" Margin="0,4,0,0"
+                             Text="Left unticked, pressing Play sets the game to whatever your screen is currently running at. Tick it to keep the resolution you typed above, even when it does not match the monitor."/>
+                  <Button x:Name="BtnSaveDisplay" Theme="{StaticResource Ghost}" Content="Apply display settings" HorizontalAlignment="Left" Margin="0,14,0,0"/>
+                </StackPanel>
+
+                <TextBlock Text="Folders" Theme="{StaticResource Eyebrow}"/>
+                <StackPanel x:Name="PathRows" Margin="0,0,0,8"/>
+                <TextBlock x:Name="TxtInGameBrowser" Theme="{StaticResource Small}" Margin="0,0,0,16"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,30">
+                  <Button x:Name="BtnFolder"  Theme="{StaticResource Ghost}" Content="Open install folder" Margin="0,0,8,0"/>
+                  <Button x:Name="BtnOpenLog" Theme="{StaticResource Ghost}" Content="Open log"/>
+                </StackPanel>
+
+                <TextBlock Text="Maintenance" Theme="{StaticResource Eyebrow}"/>
+                <Border Theme="{StaticResource Slab}" Padding="20,18">
+                  <StackPanel>
+                    <StackPanel x:Name="PnlOwnGame">
+                      <TextBlock Theme="{StaticResource H2}" Text="Thornswood's own Skyrim folder"/>
+                      <TextBlock Theme="{StaticResource Body}" Text="Runs Thornswood from a Skyrim folder of its own, made from what Vortex has deployed while the Thornswood profile is on. Any other Vortex profile can then use the Steam copy without reaching Thornswood, and switching profiles in Vortex no longer takes Thornswood's mods away. The big files are links to Vortex's copies, so the collection is not on the disk twice. When Vortex deploys a newer Thornswood collection, the launcher brings it in by itself the next time it starts."/>
+                      <TextBlock x:Name="TxtOwnGameState" Theme="{StaticResource Small}" Margin="0,8,0,0"/>
+                      <StackPanel Orientation="Horizontal" Margin="0,13,0,0">
+                        <Button x:Name="BtnOwnGameMake" Theme="{StaticResource Ghost}" Content="Make it"/>
+                      </StackPanel>
+                      <!-- Bring it up to date from Vortex moved to Diagnostics, Scan and Fix (#607). -->
+                      <TextBlock Theme="{StaticResource Small}" Margin="0,13,0,0" Text="The launcher finds the folder Vortex deploys into when it is in a Steam library. If it is somewhere else, choose it here: in Vortex, Mods, Open, Open Game Folder shows which one. Only the files Vortex lists in it are used, and the game itself always comes from the Steam copy."/>
+                      <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button x:Name="BtnOwnGamePick" Theme="{StaticResource Ghost}" Content="Choose Vortex's folder" Margin="0,0,8,0"/>
+                        <Button x:Name="BtnOwnGameForget" Theme="{StaticResource Ghost}" Content="Forget the chosen folder"/>
+                      </StackPanel>
+
+                      <Rectangle Height="1" Fill="{DynamicResource Line}" Margin="0,22,0,22"/>
+                    </StackPanel>
+
+                    <!-- Repair, Restore Windows folders and Refresh the shortcut icon
+                         moved to Diagnostics, Scan and Fix (#607). -->
+
+                    <!-- The dev-build card moved to the Server dropdown on the Play
+                         page (#605). Choosing the dev server there installs or opens
+                         the dev build, after the same Discord role check. -->
+
+                    <TextBlock Theme="{StaticResource H2}" Text="Uninstall Thornswood"/>
+                    <TextBlock Theme="{StaticResource Body}" Text="Puts your Windows Skyrim folders back, then deletes this build and the launcher with it. Your own Skyrim in Steam is never touched: this is a separate copy and Steam does not know it exists. There is no undo, and the whole thing has to be downloaded again afterwards."/>
+                    <CheckBox x:Name="ChkDeleteMods" Content="Delete Thornswood's copy of the game as well" Margin="0,13,0,0" IsChecked="True"/>
+                    <TextBlock Theme="{StaticResource Small}" Margin="28,6,0,0" Text="This is Thornswood's own Game folder, built from what Vortex deployed. It is not the mods themselves and it is not your Skyrim in Steam, neither of which this can touch: taking the mods off is Purge in Vortex and nothing here does it for you. Untick this and the folder stays exactly where it is, so reinstalling reuses what is already on the disk instead of pulling the collection down again, which is the difference between a few minutes and an evening."/>
+                    <CheckBox x:Name="ChkKeepSaves" Content="Keep this build's saves and settings" Margin="0,13,0,0" IsChecked="True"/>
+                    <TextBlock Theme="{StaticResource Small}" Margin="28,6,0,0" Text="Leaves your characters, saves and settings in the Profile folder, so a reinstall picks them back up. The launcher's log, your Discord sign-in, name and picture, the support reports and the voice browser's data are not saves or settings, and go either way."/>
+                    <Button x:Name="BtnUninstall" Theme="{StaticResource Ghost}" Content="Uninstall Thornswood" HorizontalAlignment="Left" Margin="0,15,0,0"/>
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </ScrollViewer>
+          </Grid>
+
+        </Grid>
+      </Grid>
+
+      <!-- ================= status bar ================= -->
+      <Border Grid.Row="2" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
+        <Grid Margin="20,0">
+          <TextBlock x:Name="TxtStatus" Theme="{StaticResource Mono}" Foreground="{DynamicResource Muted}" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,180,0"/>
+          <TextBlock x:Name="TxtStatusRight" Theme="{StaticResource Mono}" Foreground="{DynamicResource Faint}" FontSize="11"
+                     VerticalAlignment="Center" HorizontalAlignment="Right"/>
+        </Grid>
+      </Border>
+
+      <!-- The Overlay and OverlayHost that held the trade and town dialog over
+           the whole window were here until 20 September. There is no dialog:
+           you pick your character at the game's main menu. -->
+
+    </Grid>
+  </Border>
+</Window>

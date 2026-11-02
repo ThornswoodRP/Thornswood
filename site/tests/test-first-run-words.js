@@ -29,7 +29,7 @@ const CR = String.fromCharCode(13);
 function read(rel) {
   return fs.readFileSync(path.join(REPO_DIR, rel), 'utf8').split(CR).join('');
 }
-const xaml = read('launcher/ui.xaml');
+const xaml = read('launcher/app/MainWindow.axaml');
 const site = read(path.join('site', 'data', 'help.md'));
 const lines = read(path.join('site', 'data', 'site', 'lines.md'));
 const shell = read(path.join('launcher', 'app', 'Shell.cs'));
@@ -54,9 +54,9 @@ const RULE_NOT_OWN = 'not your own';
 const a = xaml.search(/<StackPanel x:Name="FirstRunCard"[\s>]/);
 const b = a < 0 ? -1 : xaml.indexOf('</Border>', a);
 const card = (a >= 0 && b > a) ? xaml.slice(a, b) : '';
-yes('ui.xaml still has the FirstRunCard StackPanel', card !== '');
-yes('Shell.cs still looks the card up by that name',
-    shell.indexOf('F<StackPanel>("FirstRunCard")') >= 0);
+yes('the window still has the FirstRunCard StackPanel', card !== '');
+yes('Shell.cs still finds the card by that name',
+    shell.indexOf('firstRunCard = win.FirstRunCard;') >= 0);
 
 // Only what a person reads: the Text attributes, not the markup or comments.
 const cardWords = [];

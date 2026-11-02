@@ -222,9 +222,11 @@ const cardAdd = (w, n) => w.find(x => x.method === 'POST' && x.path === 'graphql
   });
   yes('a merged pull request with its test task: Done', fieldWrite(r.writes, 10).body.fields[0].value === 's2');
 
-  r = await go(['--all'], { open: [issue(1), issue(2, { pull_request: {} }), issue(3), issue(4), issue(5)], issues: {} });
+  r = await go(['--all'], { open: [issue(1), issue(2, { pull_request: {} }), issue(3), issue(4), issue(5)], issues: { 1: issue(1), 3: issue(3), 4: issue(4), 5: issue(5, { state: 'closed' }) } });
   yes('every open issue, across pages, never a pull request: ' + r.lines[0], r.code === 0 && /^4 open issues$/.test(r.lines[0]) &&
-      [1, 3, 4, 5].every(n => fieldWrite(r.writes, n)) && !fieldWrite(r.writes, 2) && !r.reads.some(p => /issues\/[1345]$/.test(p)));
+      [1, 3, 4, 5].every(n => fieldWrite(r.writes, n)) && !fieldWrite(r.writes, 2) && !r.reads.some(p => /issues\/2$/.test(p)));
+  yes('  each read again at its turn: one the list had open, closed since, goes to Done, not back to Todo',
+      [1, 3, 4, 5].every(n => r.reads.indexOf('repos/ThornswoodRP/Thornswood/issues/' + n) >= 0) && fieldWrite(r.writes, 5).body.fields[0].value === 's2');
 
   r = await go(['--issues', '10', '--dry-run'], { issues: { 10: issue(10, { type: null }) } });
   yes('a dry run reads and says, and writes nothing: ' + r.lines[0], r.code === 0 && r.writes.length === 0 && /nothing written/.test(r.lines[0]) && /type Task/.test(r.lines[0]));
@@ -257,6 +259,9 @@ const cardAdd = (w, n) => w.find(x => x.method === 'POST' && x.path === 'graphql
   // The board as the first copy left it (1 Nov): #10 already right, #14 on
   // the board with no Order, #15 with another Order, #16 not on it yet, and
   // an Ops issue with the same number that is not this repository's.
+  r = await go(['--copy-order', 'EvilPatrick06/1'], { oldItems: oldItems.concat([oldItem(10, 99, 'https://api.github.com/repos/SomebodyElse/Thornswood')]) });
+  yes('  a card of another owner\'s repository with the same name and number is not taken for this one: ' + r.lines[0],
+      r.code === 0 && /^2 issues /.test(r.lines[0]) && fieldWrite(r.writes, 10).body.fields[0].value === 52.5);
   const old2 = oldItems.concat([oldItem(15, 9), oldItem(16, 4)]);
   const newItem = (n, order, repoUrl) => ({ id: 9000 + n, content_type: 'Issue', content: { number: n, node_id: 'I_' + n, repository_url: repoUrl || 'https://api.github.com/repos/ThornswoodRP/Thornswood' }, fields: [{ id: 102, name: 'Order', value: order }] });
   const partly = [newItem(10, 52.5), newItem(14, null), newItem(15, 10015), newItem(16, 1, 'https://api.github.com/repos/ThornswoodRP/Thornswood-Ops')];

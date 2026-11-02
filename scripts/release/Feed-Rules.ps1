@@ -27,7 +27,8 @@
   them, answers 404 even with Patrick's token. They were published there before
   releases moved to the public repository on 15 September, and the new feed was
   seeded from the old one with all 164 still on it. Fresh installs never notice
-  because Package-Thornswood.ps1 seeds applied.txt with every id on the feed.
+  because the setup seeds applied.txt with every id on the feed
+  (Build-SetupFiles.ps1, read by launcher\app\InstallSteps.cs).
   A machine that loses applied.txt, or anything that replays the history, asks
   for all 164, the first one fails, and Play stays off.
 

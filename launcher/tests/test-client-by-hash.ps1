@@ -10,37 +10,36 @@
   Until 24 September Test-ShipOtherServer in Ship-Rules.ps1 called a path in
   the record ours without opening the file, while the note over it said "ours
   by recorded hash". A bundle with one byte changed, or another launcher's
-  bundle at the same path, went into a pack as ours. Package-Thornswood.ps1
-  kept whatever sat at those six paths for the installer, including when it
-  builds out of the Steam copy. The entry's words: "A test that passes because
+  bundle at the same path, went into a pack as ours. The old installer's
+  Package-Thornswood.ps1 kept whatever sat at those six paths, including when
+  it built out of the Steam copy; it went with that installer (#4824), and
+  the setup's game files now come from the feed's own packs and client
+  runtime, which parts 2 and 3 hold. The entry's words: "A test that passes because
   of something we did to the file is not a test." Its done-when: a copy of the
   bundle with one byte changed is classified as foreign or unrecognised, while
   the unmodified bundle is still accepted.
 
-  Five parts.
+  Four parts.
     1. The rule, against a made up game folder and a record written for it.
        The recorded bytes are ours. One byte changed, another launcher's file
        and a missing file are not, and none of those is listed as removed.
     2. Publish-Update's own Test-Machine and removal diff, lifted out of the
        script by text, over that folder with one byte of the bundle changed.
-    3. Package-Thornswood's own listing loop and its refusal, lifted out by the
-       PowerShell parser: the altered bundle is not carried and the build stops.
-    4. Check-Secrets.ps1 over a scratch pack and installer stage that carry
-       the client. It judges the bytes it reads, not the game folder's: the
+    3. Check-Secrets.ps1 over a scratch pack that carries the client. It judges the bytes it reads, not the game folder's: the
        recorded build passes run on its own, and a pack with one byte changed
        fails even when the caller's $GameDir holds the recorded build.
-    5. This machine's game folder, when there is one: the real record against
+    4. This machine's game folder, when there is one: the real record against
        the real files, and a scratch copy of the real bundle with one byte
        changed. The game folder is only read.
   And Checks.ClientPatched, the text search for our own name, is gone.
 
   -Repo runs it against another copy of the repository: Ship-Rules.ps1,
-  Publish-Update.ps1, Package-Thornswood.ps1, client-build.json and app\*.cs,
+  Publish-Update.ps1, client-build.json and app\*.cs,
   unpacked from git archive. Pointed at 6851ed4, main before this change, it
   fails 15 of its checks on the machine that ships, 14 where there is no game
-  folder. Part 4 is skipped there, since Check-Secrets.ps1 came later. Pointed
+  folder. Part 3 is skipped there, since Check-Secrets.ps1 came later. Pointed
   at 4e72a03, this branch merged with main before Check-Secrets judged the
-  bytes, it fails the four checks of part 4 that need the bytes to decide.
+  bytes, it fails the three checks of part 3 that need the bytes to decide.
 
   Writes only to a temp folder of its own, and removes it.
 #>
@@ -84,10 +83,9 @@ function Set-OneByteChanged([string]$p, [int]$at) {
     [IO.File]::WriteAllBytes($p, $b)
 }
 
-# What the refusal in Package-Thornswood calls. Say is quiet here, and Die
-# throws so the lifted block's refusal can be caught and read.
+# What the lifted Publish-Update removal diff calls when it says how it
+# compared; quiet here.
 function Say($m, $c = 'Gray') { }
-function Die($m) { throw ('DIE ' + $m) }
 
 $realRecord = Join-Path $Repo 'records\client-build.json'
 $names = @((Get-Content -LiteralPath $realRecord -Raw | ConvertFrom-Json).files.PSObject.Properties.Name)
@@ -209,72 +207,9 @@ foreach ($n in 'RecordShape.ps1', 'Read-JsonFile.ps1', 'RepoPlugins.ps1', 'Colle
         [IO.File]::WriteAllBytes($bundleFull, $goodBundle)
     }
 
-    # ---- 3. Package-Thornswood, lifted by the parser ---------------------------
+    # ---- 3. Check-Secrets, over what was built ----------------------------------
     Write-Host ''
-    Write-Host 'Package-Thornswood.ps1: the listing and the refusal' -ForegroundColor Cyan
-
-    $tok = $null; $err = $null
-    $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $Repo 'scripts\release\Package-Thornswood.ps1'), [ref]$tok, [ref]$err)
-    Yes 'Package-Thornswood.ps1 parses' ($err.Count -eq 0)
-    $loops = @($ast.FindAll({ param($n)
-        $n -is [System.Management.Automation.Language.ForEachStatementAst] -and
-        $n.Body.Extent.Text -match 'Test-Vanilla \$rel' }, $true))
-    $stops = @($ast.FindAll({ param($n)
-        $n -is [System.Management.Automation.Language.IfStatementAst] -and
-        $n.Clauses[0].Item1.Extent.Text -eq '$clientWrong.Count' }, $true))
-    Yes 'it has one listing loop' ($loops.Count -eq 1)
-    Yes 'and one refusal for client files that are not the recorded build' ($stops.Count -eq 1)
-    if ($loops.Count -eq 1) {
-        foreach ($fn in 'Test-Vanilla', 'Test-Runtime', 'Test-Optional', 'Test-FromCollection') {
-            $def = @($ast.FindAll({ param($n)
-                $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $fn }, $true))
-            . ([scriptblock]::Create($def[0].Extent.Text))
-        }
-        $optionalPrefixes = @()
-        $vortexFiles = $null
-        # Root\Game is the made up folder, so the refusal gives the Sync-Client advice.
-        $Root = $scratch
-        # No refusal to lift leaves the try empty. A bare $null there would be
-        # output, and the function would hand back two things instead of one.
-        $stopText = ''
-        if ($stops.Count -eq 1) { $stopText = $stops[0].Extent.Text }
-        $src = @'
-function Invoke-Listing($all, $prefix) {
-    $ship = @(); $skipBytes = 0; $shipBytes = 0; $optionalBytes = 0; $optionalCount = 0; $machineCount = 0
-    $collectionBytes = 0; $collectionCount = 0
-    $notOursBytes = 0; $notOursCount = 0
-    $sep = [string][IO.Path]::DirectorySeparatorChar
-    $clientShipped = 0
-    $clientWrong = @()
-    foreach ($f in $all)
-'@ + $loops[0].Body.Extent.Text + @'
-
-    $stopped = ''
-    try {
-'@ + $stopText + @'
-
-    } catch { $stopped = $_.Exception.Message }
-    return [pscustomobject]@{ Ship = [string[]]@($ship | ForEach-Object { $_.Rel }); Wrong = [string[]]@($clientWrong); Stopped = $stopped }
-}
-'@
-        . ([scriptblock]::Create($src))
-        $prefix = $GameDir.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
-
-        $r = Invoke-Listing @(Get-ChildItem -LiteralPath $GameDir -Recurse -File -Force) $prefix
-        Yes 'the recorded build: all six go into the installer' (@($names | Where-Object { $r.Ship -contains $_ }).Count -eq $names.Count)
-        Yes 'and nothing stops it' ($r.Wrong.Count -eq 0 -and $r.Stopped -eq '')
-
-        Set-OneByteChanged $bundleFull 7
-        $r = Invoke-Listing @(Get-ChildItem -LiteralPath $GameDir -Recurse -File -Force) $prefix
-        Yes 'one byte changed in the bundle: it is not put in the installer' ($r.Ship -notcontains $bundle)
-        Yes 'it is the one file named as not the recorded build' ($r.Wrong.Count -eq 1 -and $r.Wrong[0] -eq $bundle)
-        Yes 'and the build stops' ($r.Stopped -like 'DIE *not the recorded build*')
-        [IO.File]::WriteAllBytes($bundleFull, $goodBundle)
-    }
-
-    # ---- 4. Check-Secrets, over what was built ----------------------------------
-    Write-Host ''
-    Write-Host 'Check-Secrets.ps1: a pack and an installer stage that carry the client' -ForegroundColor Cyan
+    Write-Host 'Check-Secrets.ps1: a pack that carries the client' -ForegroundColor Cyan
 
     $scanSrc = Join-Path $Repo 'scripts\dev\Check-Secrets.ps1'
     if (-not (Test-Path -LiteralPath $scanSrc)) {
@@ -286,14 +221,12 @@ function Invoke-Listing($all, $prefix) {
         $shell = (Get-Process -Id $PID).Path
         Add-Type -AssemblyName System.IO.Compression
         Add-Type -AssemblyName System.IO.Compression.FileSystem
-        # A pack holds the game under game/, the installer's stage under payload\.
+        # A pack holds the game under game/.
         $packDir  = Join-Path $scratch 'pack'
-        $stageDir = Join-Path $scratch 'stage'
         foreach ($n in $names) {
-            foreach ($d in (Join-Path $packDir ('game\' + $n)), (Join-Path $stageDir ('payload\' + $n))) {
-                $null = New-Item -ItemType Directory -Force -Path (Split-Path $d -Parent)
-                Copy-Item -LiteralPath (Join-Path $fixGame $n) -Destination $d
-            }
+            $d = Join-Path $packDir ('game\' + $n)
+            $null = New-Item -ItemType Directory -Force -Path (Split-Path $d -Parent)
+            Copy-Item -LiteralPath (Join-Path $fixGame $n) -Destination $d
         }
         $goodZip = Join-Path $scratch 'pack-recorded.zip'
         [IO.Compression.ZipFile]::CreateFromDirectory($packDir, $goodZip)
@@ -304,8 +237,6 @@ function Invoke-Listing($all, $prefix) {
         # On its own, the way a person runs it over a pack: no $GameDir anywhere.
         $null = & $shell -NoProfile -File $scan -Zip $goodZip
         Yes 'run on its own, a pack carrying the recorded build passes' ($LASTEXITCODE -eq 0)
-        $null = & $shell -NoProfile -File $scan -Dir $stageDir
-        Yes 'and so does an installer stage carrying it' ($LASTEXITCODE -eq 0)
         $out = @(& $shell -NoProfile -File $scan -Zip $badZip)
         Yes 'a pack whose bundle has one byte changed fails' ($LASTEXITCODE -eq 1)
         Yes 'and the line names the bundle and the rule' (($out -join "`n") -match 'skymp5-client\.js.*client-not-recorded-build')
@@ -318,7 +249,7 @@ function Invoke-Listing($all, $prefix) {
         Yes 'called by a script whose $GameDir holds the recorded build, the altered pack still fails' ($LASTEXITCODE -eq 1)
     }
 
-    # ---- 5. this machine's game folder -----------------------------------------
+    # ---- 4. this machine's game folder -----------------------------------------
     Write-Host ''
     Write-Host 'This machine''s game folder' -ForegroundColor Cyan
 

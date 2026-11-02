@@ -13,7 +13,7 @@
 // Steam started by hand left "Steam not running" up until somebody changed
 // page.
 //
-// THE FIX. Ui.xaml has BtnOpenSteam on the Ready card, shown by
+// THE FIX. The window has BtnOpenSteam on the Ready card, shown by
 // UpdateReadySummary whenever the Steam row is one of the failing rows, and
 // Shell.OpenSteam opens Steam's window through steam://open/main
 // (Downgrade.AskSteam, which falls back to steam.exe itself). The window's two
@@ -22,8 +22,8 @@
 // answer differs from what the Steam row last said.
 //
 // What this checks:
-//   A. ui.xaml: BtnOpenSteam is on the Ready card, starts collapsed, and has a
-//      row of its own under the words.
+//   A. MainWindow.axaml: BtnOpenSteam is on the Ready card, starts hidden,
+//      and has a row of its own under the words.
 //   B. Shell.cs: the button is found, pressing it runs OpenSteam, OpenSteam asks
 //      Steam for steam://open/main, and UpdateReadySummary shows it only while
 //      the Steam row fails.
@@ -41,7 +41,7 @@ const REPO_DIR = path.join(__dirname, '..', '..');
 function read(rel) { return fs.readFileSync(path.join(REPO_DIR, rel), 'utf8').split(CR).join(''); }
 const checksCs = read('launcher/app/Checks.cs');
 const shellCs = read('launcher/app/Shell.cs');
-const xaml = read('launcher/ui.xaml');
+const xaml = read('launcher/app/MainWindow.axaml');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -71,15 +71,15 @@ function lift(text, head) {
 const cardAt = xaml.indexOf('x:Name="DotReady"');
 const cardEnd = xaml.indexOf('</Grid>', cardAt);
 const card = cardAt >= 0 && cardEnd > cardAt ? xaml.slice(xaml.lastIndexOf('<Grid>', cardAt), cardEnd) : '';
-yes('ui.xaml has the Ready card', card.length > 0);
+yes('the window has the Ready card', card.length > 0);
 const btn = (/<Button x:Name="BtnOpenSteam"[^>]*\/>/.exec(card) || [''])[0];
 yes('the Ready card has the Open Steam button', btn.length > 0);
 yes('it says "Open Steam"', btn.includes('Content="Open Steam"'));
-yes('it starts collapsed, so it shows only when Shell says Steam is not running', btn.includes('Visibility="Collapsed"'));
+yes('it starts hidden, so it shows only when Shell says Steam is not running', btn.includes('IsVisible="False"'));
 yes('it sits on a row of its own under the words', btn.includes('Grid.Row="1"') && /<RowDefinition Height="Auto"\/>\s*<RowDefinition Height="Auto"\/>/.test(card));
 
 // ============================================== B. pressing it opens Steam
-yes('Shell finds the button', shellCs.includes('btnOpenSteam = F<Button>("BtnOpenSteam");'));
+yes('Shell finds the button', shellCs.includes('btnOpenSteam = win.BtnOpenSteam;'));
 yes('pressing it runs OpenSteam', shellCs.includes('btnOpenSteam.Click += delegate { OpenSteam(); };'));
 const open = lift(shellCs, 'static void OpenSteam()');
 yes('Shell has OpenSteam', !!open);
@@ -89,7 +89,7 @@ yes('and says what happened either way', !!open && (open.match(/Log\("/g) || [])
 const summary = lift(shellCs, 'static void UpdateReadySummary(List<Check> blocking)');
 yes('UpdateReadySummary shows the button while the Steam row is one of the failing rows',
     !!summary && /foreach \(Check c in blocking\) if \(c\.Name == Checks\.SteamRow\) steamDown = true;/.test(summary) &&
-    summary.includes('steamDown ? Visibility.Visible : Visibility.Collapsed'));
+    /bool want = steamDown;\s*if \(btnOpenSteam\.IsVisible != want\) btnOpenSteam\.IsVisible = want;/.test(summary));
 
 // ============================================== C. Steam starting or closing redraws
 const draw = lift(shellCs, 'static bool DrawStatus()');

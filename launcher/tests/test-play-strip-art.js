@@ -18,11 +18,13 @@
 
   WHAT THIS HOLDS. The four bars Tophet asked for, and the no-zoom rule:
 
-    - the band's height is the title row's, the brushes fill and crop
-      (UniformToFill, centred), and the still and the video share one crop;
-    - the video is a MediaPlayer painted through a brush, never a MediaElement,
-      because a MediaElement sizes itself and pushed the band from 135 to 195.5
-      high when this was first built (entry 195 on the To Do List);
+    - the band's height is the title row's, the still and the video are both
+      painted through one brush maker (Art.BandBrush), which fills and crops
+      (UniformToFill, centred) with the one crop;
+    - the video's frames are painted through that brush, never shown in a
+      control of their own, because a video control sizes itself and pushed
+      the band from 135 to 195.5 high when this was first built (entry 195 on
+      the To Do List);
     - inside the HeaderArt grid the still is under the video, and both are under
       the panel veils;
     - no scale, no drift and no speed-up anywhere on the band.
@@ -33,7 +35,8 @@
   launcher allows up to an ultrawide one.
 
   Read only. It reads launcher\app\Art.cs, launcher\app\Shell.cs,
-  launcher\ui.xaml and the first bytes of launcher\launcher-header.jpg.
+  launcher\app\MainWindow.axaml and the first bytes of
+  launcher\launcher-header.jpg.
 */
 const REPO_DIR = require('path').join(__dirname, '..', '..'); // this harness is in launcher\tests\, the repository is two folders up
 const fs = require('fs');
@@ -43,7 +46,7 @@ const CR = String.fromCharCode(13);
 function read(rel) { return fs.readFileSync(path.join(REPO_DIR, rel), 'utf8').split(CR).join(''); }
 const ART = read(path.join('launcher', 'app', 'Art.cs'));
 const SHELL = read(path.join('launcher', 'app', 'Shell.cs'));
-const XAML = read(path.join('launcher', 'ui.xaml'));
+const XAML = read(path.join('launcher', 'app', 'MainWindow.axaml'));
 
 let pass = 0, fail = 0, skip = 0;
 function yes(what, cond) {
@@ -97,34 +100,34 @@ yes('and it is the first row of PagePlay', bandOpen > XAML.indexOf('x:Name="Page
 
 const header = method(ART, 'public static ImageBrush Header()');
 yes('Art.Header is in Art.cs', header.length > 0);
+const band = method(ART, 'public static ImageBrush BandBrush(IImageBrushSource source)');
+yes('Art.BandBrush, the one brush maker for the band, is in Art.cs', band.length > 0);
 const video = method(SHELL, 'static void StartHeaderVideo()');
 yes('StartHeaderVideo is in Shell.cs', video.length > 0);
-if (!header || !video) done();
+if (!header || !band || !video) done();
 
-yes('the still fills the band and crops what does not fit', /Stretch = Stretch\.UniformToFill;/.test(header));
-yes('the video fills the band and crops what does not fit', /Stretch = Stretch\.UniformToFill;/.test(video));
-yes('neither letterboxes the band (no Stretch.Uniform, no Stretch.Fill)',
-    !/Stretch = Stretch\.(Uniform|Fill);/.test(header) && !/Stretch = Stretch\.(Uniform|Fill);/.test(video));
-yes('the still is centred both ways', /AlignmentX = AlignmentX\.Center;/.test(header) && /AlignmentY = AlignmentY\.Center;/.test(header));
-yes('the video is centred both ways', /AlignmentX = AlignmentX\.Center;/.test(video) && /AlignmentY = AlignmentY\.Center;/.test(video));
+yes('the still is painted through BandBrush', /header = BandBrush\(bi\);/.test(header));
+yes('and so is the video, each frame as it is put up', /layer\.Background = Art\.BandBrush\(shown\);/.test(video));
+yes('the brush fills the band and crops what does not fit', /Stretch = Stretch\.UniformToFill;/.test(band));
+yes('it never letterboxes the band (no Stretch.Uniform, no Stretch.Fill), and nothing else sets a stretch',
+    !/Stretch = Stretch\.(Uniform|Fill);/.test(band) && !/Stretch\s*=/.test(header) && !/Stretch\s*=/.test(video));
+yes('it is centred both ways', /AlignmentX = AlignmentX\.Center;/.test(band) && /AlignmentY = AlignmentY\.Center;/.test(band));
 
 yes('Art names the one crop the band shows, as fractions of the art',
-    /public static readonly Rect HeaderCrop = new Rect\(/.test(ART));
-yes('the still paints with that crop', /Viewbox = HeaderCrop;/.test(header));
-yes('the video paints with the same one, not a copy of the numbers', /Viewbox = Art\.HeaderCrop;/.test(video));
-yes('and both read it as fractions, so the art and the video being a pixel apart in width cannot shift one of them',
-    /ViewboxUnits = BrushMappingMode\.RelativeToBoundingBox;/.test(header) &&
-    /ViewboxUnits = BrushMappingMode\.RelativeToBoundingBox;/.test(video));
+    /public static readonly RelativeRect HeaderCrop = new RelativeRect\([^)]*RelativeUnit\.Relative\);/.test(ART));
+yes('the brush paints with that crop, so the still and the video share it, not a copy of the numbers',
+    /SourceRect = HeaderCrop;/.test(band) && !/SourceRect\s*=/.test(header) && !/SourceRect\s*=/.test(video));
 
-// ---- bar 2: a brush, never a MediaElement ------------------------------------
-yes('the video is a MediaPlayer', /new MediaPlayer\(\)/.test(video));
-yes('painted through a VideoDrawing in a DrawingBrush', /new VideoDrawing\(\)/.test(video) && /new DrawingBrush\(frame\)/.test(video));
-yes('onto the HeaderArtVideo border\'s background', /F<Border>\("HeaderArtVideo"\)/.test(video) && /layer\.Background = brush;/.test(video));
-yes('there is no MediaElement in the launcher window', XAML.indexOf('MediaElement') < 0);
+// ---- bar 2: a brush, never a control of its own ---------------------------------
+yes('the video\'s frames go into one bitmap', /var shown = new WriteableBitmap\(/.test(video));
+yes('painted onto the HeaderArtVideo border\'s background', /var layer = win\.HeaderArtVideo;/.test(video));
+const artGridAll = uncommented(between(XAML, '<Grid x:Name="HeaderArt"', '<!-- Fixed short landscape'));
+yes('there is no video or picture control in the band, only borders whose background is the brush',
+    !/<(Image|MediaElement|MediaPlayerElement|VideoView)\b/.test(artGridAll) && XAML.indexOf('MediaElement') < 0);
 yes('and none in the launcher\'s code either, only the comment saying why not',
     code(SHELL).indexOf('MediaElement') < 0 && code(ART).indexOf('MediaElement') < 0);
-yes('that comment is still there, with what a MediaElement did to the band\'s height',
-    /A MediaPlayer painted through a brush rather than a MediaElement/.test(SHELL));
+yes('that comment is still there, with what a video control did to the band\'s height',
+    /a video control\s*\/\/\/ asking for room at the video's own shape once took the band from\s*\/\/\/ 135 to 195 high/.test(SHELL));
 
 // ---- bar 3: the still under the video, both under the veils -------------------
 const artGrid = uncommented(between(XAML, '<Grid x:Name="HeaderArt"', '<!-- Fixed short landscape'));
@@ -141,13 +144,17 @@ yes('the veils are the last thing in the band, so nothing paints over them',
 yes('nothing scales or moves the band in the window file',
     !/HeaderArt[\s\S]{0,2000}?(ScaleTransform|RenderTransform|Storyboard|DoubleAnimation)/.test(uncommented(between(XAML, '<Grid x:Name="HeaderArt"', '<!-- Fixed short landscape'))));
 yes('nothing scales or moves it in the code either',
-    !/(ScaleTransform|RenderTransform|DoubleAnimation|BeginAnimation)/.test(video) && !/(ScaleTransform|RenderTransform|DoubleAnimation)/.test(header));
-yes('the loop plays at its own speed, with no speed-up', !/SpeedRatio/.test(video));
-yes('and it is a MediaTimeline that repeats for ever, as it always was',
-    /new MediaTimeline\(new Uri\(file\)\)/.test(video) && /RepeatBehavior = System\.Windows\.Media\.Animation\.RepeatBehavior\.Forever;/.test(video));
+    !/(ScaleTransform|RenderTransform|DoubleAnimation|BeginAnimation|Transform\s*=)/.test(video) &&
+    !/(ScaleTransform|RenderTransform|DoubleAnimation|Transform\s*=)/.test(header + band));
+yes('the loop plays at its own speed, with no speed-up: each frame waits out its own time',
+    !/SpeedRatio/.test(video) && /due \+= lasts;/.test(video) && /if \(left > TimeSpan\.Zero\) Thread\.Sleep\(left\);/.test(video) &&
+    /lasts = frames\.Next\(\);/.test(video));
+const next = method(ART, 'public TimeSpan Next()');
+yes('and after the last frame comes the first, for ever, as it always was',
+    /at = \(at \+ 1\) % frames\.Length;/.test(next));
 
 // ---- what the named crop works out to ---------------------------------------
-const rect = /public static readonly Rect HeaderCrop = new Rect\(([^)]+)\);/.exec(ART);
+const rect = /public static readonly RelativeRect HeaderCrop = new RelativeRect\(([^)]+), RelativeUnit\.Relative\);/.exec(ART);
 yes('HeaderCrop reads as four numbers', rect !== null && rect[1].split(',').length === 4);
 if (!rect) done();
 const n = rect[1].split(',').map(function (s) { return parseFloat(s.trim()); });

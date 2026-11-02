@@ -81,7 +81,7 @@ w.row(BRENNA).thornswoodNeeds = { food: 90, drink: 90, rest: 90, temp: 50, at: w
 w.row(CORVIN).thornswoodNeeds = { food: 90, drink: 90, rest: 90, temp: 50, at: w.now() };
 w.row(ALDIS).thornswoodNeeds = { food: 90, drink: 90, rest: 5, temp: 50, at: w.now() };
 
-yes('P0 the whole gamemode loads over the stand-in', w.boot() || !console.log(w.loadError()));
+yes('P0 the whole gamemode loads over the stand-in', w.boot());
 if (!w.loaded()) { t.done(w); }
 [BRENNA, CORVIN, ALDIS].forEach(w.arrive);
 w.run(30000);

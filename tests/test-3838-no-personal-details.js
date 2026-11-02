@@ -43,9 +43,11 @@
 // and NOT_ADDRESSES below, each value with what it really is.
 //
 // WHAT IS LEFT ALONE, AND WHY.
-//   - records/client-licences/ and records/front-licences/: third-party
+//   - records/client-licences/, records/front-licences/ and
+//     installer/licences/ (but its README.txt, which is ours): third-party
 //     licence texts keep their authors' notices word for word, as the
-//     licences require.
+//     licences require. installer/licences holds the texts of the libraries
+//     inside the launcher, which go with every install (#4823).
 //   - the same notice lines copied into our own source: a line that is,
 //     past its comment marks, word for word a line of one of those texts
 //     that holds an address. zlib's licence says its notice "may not be
@@ -82,7 +84,7 @@ const NOT_ADDRESSES = [
   [[13, 0, 0, 5].join('.'), 'a made-up block list entry for the runner firewall check', /^tests\/test-runner-offbox\.ps1$/],
   [[13, 0, 0, 6].join('.'), 'a made-up block list entry for the runner firewall check', /^tests\/test-runner-offbox\.ps1$/],
 ];
-const LEFT_ALONE = [/^records\/client-licences\//, /^records\/front-licences\//, /^tests\/fixtures\/ui-front-build\.js$/];
+const LEFT_ALONE = [/^records\/client-licences\//, /^records\/front-licences\//, /^installer\/licences\/(?!README\.txt$)/, /^tests\/fixtures\/ui-front-build\.js$/];
 
 // Every line of a recorded licence text (the client's and the site's
 // front build's) that holds an address, with its

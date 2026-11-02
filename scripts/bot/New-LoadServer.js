@@ -13,8 +13,9 @@
 //                41340857541), and a rebuild is never the same bytes
 //                (engine\README.md), so its scam_native.node is not the one
 //                the record holds;
-//   the game     game\gamemode.js and game\content\Thornswood-Content.esp
-//                from this checkout;
+//   the game     game\gamemode.js, its tables (game\gamemode-tables, which
+//                the gamemode reads as it loads since #5280) and
+//                game\content\Thornswood-Content.esp from this checkout;
 //   the masters  Skyrim.esm, Update.esm, Dawnguard.esm, HearthFires.esm and
 //                Dragonborn.esm, downloaded from the copy the fork's own
 //                build downloads (cmake\download_skyrim_data.cmake in the
@@ -127,6 +128,20 @@ function copyTree(from, to) {
   }
 }
 
+// The gamemode and its tables, as a server's folder holds them: gamemode.js,
+// and gamemode-tables beside it. Since #5280 (Refs #5191) the content tables
+// are their own files, and the gamemode stops as it loads without them, so a
+// load server with gamemode.js alone never started (the load test on #5327,
+// 2 Nov 2026: "the gamemode tables are in neither ...").
+function copyGame(out, repo = REPO) {
+  const tables = path.join(repo, 'game', 'gamemode-tables');
+  if (!fs.existsSync(tables) || !fs.readdirSync(tables).some((n) => n.endsWith('.json'))) {
+    throw new Error('the checkout has no game\\gamemode-tables, which the gamemode reads as it loads (#5191)');
+  }
+  fs.copyFileSync(path.join(repo, 'game', 'gamemode.js'), path.join(out, 'gamemode.js'));
+  copyTree(tables, path.join(out, 'gamemode-tables'));
+}
+
 async function build(o) {
   const shape = o.shape || 'crowd';
   if (!['crowd', 'spread'].includes(shape)) { throw new Error('--shape is crowd or spread, not ' + shape); }
@@ -146,7 +161,7 @@ async function build(o) {
     if (got !== record.files[rel].sha256) { throw new Error(rel + ' in the build is sha256 ' + got + ', not the ' + record.files[rel].sha256 + ' records\\server-build.json holds'); }
   }
   fs.copyFileSync(path.join(REPO, 'records', 'server-build.json'), path.join(out, 'server-build.json'));
-  fs.copyFileSync(path.join(REPO, 'game', 'gamemode.js'), path.join(out, 'gamemode.js'));
+  copyGame(out);
 
   const masters = path.resolve(o.masters);
   fs.mkdirSync(masters, { recursive: true });
@@ -195,7 +210,7 @@ async function build(o) {
 // (its NPCs, the gamemode's NPC runtime, merchants and quests) is laid out on
 // the box, from a server installed there, and never leaves it. From that
 // server, read and never written: its program (dist_back, scam_native.node,
-// package.json), its gamemode.js, the plugins its loadOrder names (by their
+// package.json), its gamemode.js and gamemode-tables, the plugins its loadOrder names (by their
 // full paths, not copied), whether the engine keeps NPCs alive (npcEnabled,
 // npcSettings) and the gameplay switches below. Nothing else of its settings
 // is taken, so the copy has no site, no Discord, no ports and no keys of the
@@ -205,7 +220,7 @@ const GAMEPLAY_KEYS = ['thornswoodCalendar', 'thornswoodPlotLine', 'thornswoodLo
   'thornswoodDoorLine', 'thornswoodCatchFire', 'thornswoodTradeShips', 'thornswoodTradeCarts', 'thornswoodPreserveLine',
   'thornswoodPartyAt', 'thornswoodNear', 'thornswoodHurtCare', 'thornswoodHideAllNames', 'thornswoodBrokenLimbs',
   'thornswoodBodyReset', 'thornswoodLoadOrderRefuse'];
-const PROGRAM = ['dist_back', 'scam_native.node', 'package.json', 'gamemode.js'];
+const PROGRAM = ['dist_back', 'scam_native.node', 'package.json', 'gamemode.js', 'gamemode-tables'];
 
 function plain(v) {
   if (typeof v === 'boolean' || typeof v === 'number') { return true; }
@@ -290,4 +305,4 @@ if (require.main === module) {
   main().then((c) => process.exit(c), (e) => { console.log('NEW LOAD SERVER FAILED: ' + (e && e.message || e)); process.exit(1); });
 }
 
-module.exports = { build, fromInstalled, startPoints, checkMaster, MASTERS, WHITERUN, GAMEPLAY_KEYS };
+module.exports = { build, copyGame, fromInstalled, startPoints, checkMaster, MASTERS, WHITERUN, GAMEPLAY_KEYS };

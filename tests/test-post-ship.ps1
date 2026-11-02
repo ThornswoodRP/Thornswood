@@ -23,10 +23,10 @@
       the feed url in it, so the remirror is how a launcher update reaches
       anybody, and Ship's mid-release Install-Launcher.ps1 refreshes the install
       on the machine that shipped. This fails if a launcher step is ever added
-      after the publish, and it checks the mid-release ones are still there,
+      after the publish, and it checks the mid-release one is still there,
       before the publisher: the built launcher with the root and the build
-      output, and the feed's launcher a kept-launcher -Package Ship puts in
-      the root (#2661).
+      output. The second, the feed's launcher a kept-launcher -Package Ship
+      put in the root (#2661), went with -Package (#4824).
     - Ship runs the helper once, inside a block a dry run never
       reaches, so a dry run cannot touch the VPS or the site.
     - The remirror call sits after the publisher and before the Discord post,
@@ -245,31 +245,16 @@ if ($mirrorCall.Count -eq 1) {
         $atNews -gt 0 -and $atAnnounce -gt $atNews -and $mirrorCall[0].Extent.StartOffset -lt $atNews)
 }
 
-# The launcher installs Ship does are mid-release ones, before the publish,
-# into the root this release was built from: the launcher it built, and, on a
-# main Ship with -Package that keeps the feed's launcher, the feed's one
-# (Install-FeedLauncher, #2661). No launcher step after the tip.
-#
-# The Join-Path inside the call is a CommandAst of its own and names the same
-# file, so the invocation is the one whose command is not Join-Path.
+# Ship installs no launcher (#4825): the launcher goes out through Velopack
+# (merge-release.yml, promote-main.yml), so neither the one it once built nor
+# the feed's (Install-FeedLauncher, #2661, gone with -Package in #4824) is put
+# in place by a release. The Join-Path inside a call is a CommandAst of its
+# own and names the same file, so the invocation is the one whose command is
+# not Join-Path.
 $installs = @($ship.Ast.FindAll({ param($n) $n -is $CmdAst -and $n.Extent.Text.Contains('Install-Launcher.ps1') -and
                                             $n.GetCommandName() -ne 'Join-Path' }, $true))
-Yes ("Ship calls Install-Launcher.ps1 twice, the built launcher and the feed's (#2661) ({0})" -f $installs.Count) ($installs.Count -eq 2)
-$built = @($installs | Where-Object { $_.Extent.Text -match '@installArgs' })
-$fed   = @($installs | Where-Object { $_.GetCommandName() -eq 'Install-FeedLauncher' })
-Yes '  one is the built launcher''s, one is the feed launcher''s' ($built.Count -eq 1 -and $fed.Count -eq 1)
-Yes '  both before the publisher, not after the tip' (
-    $installs.Count -eq 2 -and @($installs | Where-Object { $_.Extent.StartOffset -ge $atPublish }).Count -eq 0)
-if ($built.Count -eq 1) {
-    # Ship builds a hashtable and splats it (@installArgs), so the call site
-    # no longer spells -Root / -From on the same line as Install-Launcher.ps1.
-    Yes '  the built one with the root and the build output' (
-        $shipSrc -match '\$installArgs = @\{[^\}]*Root = \$Root' -and
-        $shipSrc -match '\$installArgs = @\{[^\}]*From = \$buildOut')
-}
-if ($fed.Count -eq 1) {
-    Yes '  the feed''s one into the root this release was built from' ($fed[0].Extent.Text -match 'Install-FeedLauncher \$pubLauncher \$Root ')
-}
+Yes ("Ship calls Install-Launcher.ps1 nowhere ({0})" -f $installs.Count) ($installs.Count -eq 0)
+Yes '  and no Install-FeedLauncher is left (#4824)' ($shipSrc -notmatch 'Install-FeedLauncher')
 
 # What happens when one of them does not happen. The tip is already published by
 # then, so nothing may be unpublished, and the website lane's rule is that even a

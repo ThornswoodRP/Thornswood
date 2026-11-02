@@ -4,7 +4,7 @@
   Where the source of the SkyMP files Thornswood ships is, said on the site and
   in the installed folder, and said truthfully.
 
-  WHY IT MATTERS. Entry 170 on the To Do List. The installer and every pack
+  WHY IT MATTERS. Entry 170 on the To Do List. The setup and every pack
   carry six files built from SkyMP (records\client-build.json), and the server
   runs a seventh (records\server-build.json). SkyMP's folders carry the GNU GPL
   and AGPL version 3, each in its own LICENSE file. Nothing Thornswood put in
@@ -32,13 +32,17 @@
   they do and that the old sentence does not come back.
 
   What this checks:
-    - Get-SourceNotice, lifted out of the shipped Package-Thornswood.ps1 by
-      text, writes SOURCE CODE.txt from the two records, names every recorded
-      file, follows the records when they change, and stops on a file it has
-      no source folder for. Given a payload, it names the SkyMP files there
+    - the setup's SOURCE CODE.txt, Source-Notice.ps1's note of kind setup,
+      which Build-SetupFiles.ps1 writes into the launcher's Velopack package
+      from the client record and the game files it packs (#4824, #4825;
+      Package-Thornswood.ps1's Get-SourceNotice until then): it names every
+      recorded file, follows the record when it changes, and stops on a
+      file it has no source folder for. It names the SkyMP files carried
       that were not built here, as their own group, and only those present.
-    - Setup-Thornswood.ps1 copies that note into the install folder, and
-      Uninstall.cs takes it out again.
+      The server is not in the package, so the note does not name it; the
+      credits page does.
+    - the install (InstallSteps.cs) copies that note and the licence texts
+      into the install folder, and Uninstall.cs takes them out again.
     - credits.md names the fork, the branch, the recorded commits and every
       shipped file. A commit that is not in a record fails here. The two
       channel rows name no commit: the site fills in each feed's client
@@ -78,8 +82,8 @@ function Leaf([string]$p) { return $p.Substring($p.LastIndexOf('\') + 1) }
 
 $clientPath  = Join-Path $Here 'records\client-build.json'
 $serverPath  = Join-Path $Here 'records\server-build.json'
-$packagePath = Join-Path $Here 'scripts\release\Package-Thornswood.ps1'
-$setupPath   = Join-Path $Here 'installer\Setup-Thornswood.ps1'
+$setupFilesPath = Join-Path $Here 'scripts\release\Build-SetupFiles.ps1'
+$stepsPath   = Join-Path $Here 'launcher\app\InstallSteps.cs'
 $creditsPath = Join-Path $Here 'site\data\site\credits.md'
 $homeJsPath  = Join-Path $Here 'site\public\home.js'
 
@@ -94,10 +98,16 @@ Yes ('the client record names a fork, a branch and a commit (' + $cCommit + ')')
 Yes ('the server record names a commit (' + $sCommit.Substring(0, [Math]::Min(8, $sCommit.Length)) + ')') ($sCommit -match '^[0-9a-f]{7,40}$')
 Yes ('the client record lists the six runtime files') ($files.Count -eq 6)
 
-# Every commit either record names, full or short. A hash on the page or in
-# the note has to be a prefix of one of these, or one of these of it.
-$known = @($cCommit, $sCommit, [string]$client.upstreamBase, [string]$server.source.upstreamBase) |
-    Where-Object { $_ -match '^[0-9a-f]{7,40}$' }
+# Every commit a record names, full or short: the client and server records,
+# and since the setup's note is Source-Notice.ps1's (#4824) with the library
+# notices of the runtime note, the records those come from too, Frida's
+# sources (records\frida-sources.json) and the vcpkg ports' versions
+# (records\client-licences.json). A hash on the page or in the note has to be
+# a prefix of one of these, or one of these of it.
+$known = @(@($cCommit, $sCommit, [string]$client.upstreamBase, [string]$server.source.upstreamBase) +
+    @(foreach ($r in 'frida-sources.json', 'client-licences.json') {
+        [regex]::Matches([IO.File]::ReadAllText((Join-Path (Join-Path $Here 'records') $r)), '\b[0-9a-f]{7,40}\b') | ForEach-Object { $_.Value }
+    })) | Where-Object { $_ -match '^[0-9a-f]{7,40}$' }
 function Test-Known([string]$h) {
     foreach ($k in $known) { if ($k.StartsWith($h) -or $h.StartsWith($k)) { return $true } }
     return $false
@@ -106,201 +116,187 @@ function Test-Words([string]$text) {
     return (-not ($text -match '\u2014') -and -not ($text -match '(?i)\bplayers?\b'))
 }
 
-# ---- the note the installer carries ----------------------------------------
+# ---- the note the setup carries ---------------------------------------------
 #
-# Lifted by name and by brace match, so the test drives the shipped function
-# and a rename fails here rather than silently testing nothing.
-function Get-FunctionText([string]$text, [string]$name) {
-    $at = $text.IndexOf("function $name")
-    if ($at -lt 0) { return $null }
-    $b = $text.IndexOf('{', $at)
-    if ($b -lt 0) { return $null }
-    $depth = 0
-    for ($i = $b; $i -lt $text.Length; $i++) {
-        $ch = $text[$i]
-        if ($ch -eq '{') { $depth++ }
-        elseif ($ch -eq '}') { $depth--; if ($depth -eq 0) { return $text.Substring($at, $i - $at + 1) } }
-    }
-    return $null
+# Source-Notice.ps1's note of kind setup, driven as shipped, on the carried
+# files the way Build-SetupFiles.ps1 hands them over (paths in Game).
+. (Join-Path $Here 'scripts\release\Source-Notice.ps1')
+$licenceDir = Join-Path $Here 'installer\licences'
+function Get-SetupEntries([string]$cr, [string[]]$carried, [string]$fr) {
+    return @(Get-SourceNoticeEntries $cr $carried 'setup' $licenceDir $fr)
+}
+function Get-SetupNote([string]$cr, [string[]]$carried, [string]$fr) {
+    $n = @(Get-SetupEntries $cr $carried $fr | Where-Object { $_.Name -eq 'SOURCE CODE.txt' })
+    if ($n.Count -ne 1) { return '' }
+    return [Text.Encoding]::UTF8.GetString($n[0].Bytes)
 }
 
-$package = Get-Content -LiteralPath $packagePath -Raw
-$fn = Get-FunctionText $package 'Get-SourceNotice'
-Yes 'Package-Thornswood.ps1 has a Get-SourceNotice' ($null -ne $fn)
-
-$note = ''
+$entries = @(Get-SetupEntries $clientPath $files '')
+$note = Get-SetupNote $clientPath $files ''
 $rows = @()
-if ($fn) {
-    # Get-ClientLicenceLines, which Package-Thornswood.ps1 dot-sources (#3099).
-    . (Join-Path $Here 'scripts\release\Source-Notice.ps1')
-    . ([ScriptBlock]::Create($fn))
-    $note = Get-SourceNotice $clientPath $serverPath
+Yes 'the setup carries one SOURCE CODE.txt' ($note -ne '')
+Yes 'the note names the fork' ($note.Contains($forkUrl))
+Yes 'the note names the branch' ($note.Contains([string]$client.forkBranch))
+Yes 'the note names the client commit and links its tree' ($note.Contains($forkUrl + '/tree/' + $cCommit))
+# New-ClientBuildRecord writes words here when upstream was not fetched,
+# and the note then says it does not know, which is the honest gap.
+Yes 'the note names the upstream commit it starts from, where the record has one' `
+    (-not ($ub -match '^[0-9a-f]{7,40}$') -or $note.Contains($ub))
+$missing = @($files | Where-Object { -not $note.Contains((Leaf $_)) })
+Yes ('the note names every recorded file' + $(if ($missing.Count) { ', missing ' + ($missing -join ', ') } else { '' })) ($missing.Count -eq 0)
+Yes 'the note points at the credits page for later builds' ($note.Contains('https://thornswood.net/credits'))
+$stray = @([regex]::Matches($note, '\b[0-9a-f]{7,40}\b') | ForEach-Object { $_.Value } | Where-Object { -not (Test-Known $_) })
+Yes 'every commit in the note is one a record names' ($stray.Count -eq 0)
+Yes 'the note is plain ASCII, for Notepad' (-not ($note -match '[^\x09\x0A\x0D\x20-\x7E]'))
+Yes 'the note has no em dash and never says player' (Test-Words $note)
+Yes 'the note does not claim all of it is built from the fork' (-not ($note -match '(?i)All of it'))
+Yes 'carrying only the recorded files, the note names no files it did not build' (-not $note.Contains('did not build'))
 
-    Yes 'the note names the fork' ($note.Contains($forkUrl))
-    Yes 'the note names the branch' ($note.Contains([string]$client.forkBranch))
-    Yes 'the note names the client commit and links its tree' ($note.Contains($forkUrl + '/tree/' + $cCommit))
-    Yes 'the note names the server commit and links its tree' ($note.Contains(($server.source.repo -replace '\.git$', '') + '/tree/' + $sCommit))
-    # New-ClientBuildRecord writes words here when upstream was not fetched,
-    # and the note then says it does not know, which is the honest gap.
-    Yes 'the note names the upstream commit it starts from, where the record has one' `
-        (-not ($ub -match '^[0-9a-f]{7,40}$') -or $note.Contains($ub))
-    $missing = @($files | Where-Object { -not $note.Contains((Leaf $_)) })
-    Yes ('the note names every recorded file' + $(if ($missing.Count) { ', missing ' + ($missing -join ', ') } else { '' })) ($missing.Count -eq 0)
-    Yes 'the note names the server binary' ($note.Contains([string]$server.binary))
-    Yes 'the note points at the credits page for later builds' ($note.Contains('https://thornswood.net/credits'))
-    $stray = @([regex]::Matches($note, '\b[0-9a-f]{7,40}\b') | ForEach-Object { $_.Value } | Where-Object { -not (Test-Known $_) })
-    Yes 'every commit in the note is one a record names' ($stray.Count -eq 0)
-    Yes 'the note is plain ASCII, for Notepad' (-not ($note -match '[^\x09\x0A\x0D\x20-\x7E]'))
-    Yes 'the note has no em dash and never says player' (Test-Words $note)
-    Yes 'the note does not claim all of it is built from the fork' (-not ($note -match '(?i)All of it'))
-    Yes 'with no payload to look in, the note names no files it did not build' (-not $note.Contains('did not build'))
+# The table, as "  file  folder  licence". Only the files Thornswood built:
+# the group it did not build has its own heading and is checked below.
+foreach ($l in ($note -split "`r?`n")) {
+    $m = [regex]::Match($l, '^\s{2}(\S+)\s{2,}(skymp5-client|skyrim-platform|skymp5-server)\s{2,}(GNU A?GPL version 3)\s*$')
+    if ($m.Success) { $rows += [pscustomobject]@{ File = $m.Groups[1].Value; Folder = $m.Groups[2].Value; Licence = $m.Groups[3].Value; Where = 'note' } }
+}
+Yes ('the note gives a folder and a licence for all six files, found ' + $rows.Count) ($rows.Count -eq 6)
 
-    # The table, as "  file  folder  licence". Only the files Thornswood built:
-    # the group it did not build has its own heading and is checked below.
-    foreach ($l in ($note -split "`r?`n")) {
-        $m = [regex]::Match($l, '^\s{2}(\S+)(?: \(the server\))?\s{2,}(skymp5-client|skyrim-platform|skymp5-server)\s{2,}(GNU A?GPL version 3)\s*$')
-        if ($m.Success) { $rows += [pscustomobject]@{ File = $m.Groups[1].Value; Folder = $m.Groups[2].Value; Licence = $m.Groups[3].Value; Where = 'note' } }
+# It follows the record. A different commit in the record has to come out in
+# the note, and the old one must not, or the note was typed and not read.
+$tmp = Join-Path ([IO.Path]::GetTempPath()) ('ts-source-offer-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+$null = New-Item -ItemType Directory -Force -Path $tmp
+try {
+    $c2 = Read-Json $clientPath
+    $c2.forkCommit = 'abcdef12'
+    $cp = Join-Path $tmp 'client-build.json'
+    # The note carries the licence texts of the libraries in the files
+    # (client-licences.json beside the record, #3099), measured from the
+    # record's own commit, so each record written here gets the real texts
+    # beside it under the commit it names.
+    Copy-Item -LiteralPath (Join-Path (Join-Path $Here 'records') 'client-licences') -Destination $tmp -Recurse
+    function Put-Licences([string]$recordPath) {
+        $l = Read-Json (Join-Path (Join-Path $Here 'records') 'client-licences.json')
+        $l.forkCommit = [string](Read-Json $recordPath).forkCommit
+        [IO.File]::WriteAllText((Join-Path (Split-Path -Parent $recordPath) 'client-licences.json'), ($l | ConvertTo-Json -Depth 8))
     }
-    Yes ('the note gives a folder and a licence for all seven files, found ' + $rows.Count) ($rows.Count -eq 7)
-
-    # It follows the records. A different commit in the records has to come out
-    # in the note, and the old one must not, or the note was typed and not read.
-    $tmp = Join-Path ([IO.Path]::GetTempPath()) ('ts-source-offer-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
-    $null = New-Item -ItemType Directory -Force -Path $tmp
-    try {
-        $c2 = Read-Json $clientPath
-        $c2.forkCommit = 'abcdef12'
-        $s2 = Read-Json $serverPath
-        $s2.source.commit = 'abcdef1234567890abcdef1234567890abcdef12'
-        $cp = Join-Path $tmp 'client-build.json'; $sp = Join-Path $tmp 'server-build.json'
-        [IO.File]::WriteAllText($cp, ($c2 | ConvertTo-Json -Depth 6))
-        [IO.File]::WriteAllText($sp, ($s2 | ConvertTo-Json -Depth 6))
-        $n2 = Get-SourceNotice $cp $sp
-        Yes 'a new client commit in the record comes out in the note' ($n2.Contains('/tree/abcdef12'))
-        Yes 'a new server commit in the record comes out in the note' ($n2.Contains('/tree/abcdef1234567890abcdef1234567890abcdef12'))
-        Yes 'the old commit does not survive a new record' (-not $n2.Contains($cCommit) -and -not $n2.Contains($sCommit))
-
-        # Windows PowerShell 5.1 writes a byte order mark with -Encoding UTF8,
-        # and a record saved that way still has to read.
-        [IO.File]::WriteAllText($cp, ($c2 | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding($true)))
-        Yes 'a record saved with a byte order mark still reads' ((Get-SourceNotice $cp $sp).Contains('/tree/abcdef12'))
-
-        # A file the record gains with no known source folder stops the
-        # package rather than shipping a note that leaves it out.
-        $c3 = Read-Json $clientPath
-        $c3.files | Add-Member -NotePropertyName 'Data\SKSE\Plugins\Unheard.dll' -NotePropertyValue ([pscustomobject]@{ sha256 = '00'; bytes = 1 })
-        [IO.File]::WriteAllText($cp, ($c3 | ConvertTo-Json -Depth 6))
-        $threw = $false
-        try { $null = Get-SourceNotice $cp $sp } catch { $threw = $true }
-        Yes 'a recorded file with no known source folder stops it' $threw
-
-        $threw = $false
-        try { $null = Get-SourceNotice (Join-Path $tmp 'nothing.json') $sp } catch { $threw = $true }
-        Yes 'a missing client record stops it' $threw
-
-        $c4 = Read-Json $clientPath
-        $c4.forkCommit = ''
-        [IO.File]::WriteAllText($cp, ($c4 | ConvertTo-Json -Depth 6))
-        $threw = $false
-        try { $null = Get-SourceNotice $cp $sp } catch { $threw = $true }
-        Yes 'a record with no commit stops it' $threw
-
-        # The words New-ClientBuildRecord writes when upstream was not fetched
-        # say so in the note rather than passing for a commit.
-        $c5 = Read-Json $clientPath
-        $c5.upstreamBase = 'unknown, fetch upstream to fill this in'
-        [IO.File]::WriteAllText($cp, ($c5 | ConvertTo-Json -Depth 6))
-        $n5 = Get-SourceNotice $cp $serverPath
-        Yes 'an upstream base the record does not know is said as a gap, not printed as a commit' `
-            ($n5.Contains('a commit the build record does not name') -and -not $n5.Contains('unknown, fetch'))
-
-        # The SkyMP files the payload carries that were not built here. A
-        # payload shaped like the 23 September stage, with records from before
-        # the front was built from the fork (no front-build.json beside them),
-        # gets all three named, as their own group, with the gap said and no
-        # commit claimed for them.
-        $pl = Join-Path $tmp 'payload'
-        $extraFiles = @('Data\Platform\UI\build.js', 'Data\Platform\Modules\skyrimPlatform.ts', 'Data\Scripts\MpClientPlugin.pex')
-        foreach ($rel in $extraFiles) {
-            $p = Join-Path $pl $rel
-            $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $p)
-            [IO.File]::WriteAllText($p, 'x')
-        }
-        [IO.File]::Copy($clientPath, $cp, $true)
-        [IO.File]::Copy($serverPath, $sp, $true)
-        $n6 = Get-SourceNotice $cp $sp $pl
-        $cut = $n6.IndexOf('did not build')
-        Yes 'a payload with build.js and the rest gets a group for what Thornswood did not build' ($cut -gt 0)
-        $tail = if ($cut -gt 0) { $n6.Substring($cut) } else { '' }
-        $head6 = if ($cut -gt 0) { $n6.Substring(0, $cut) } else { $n6 }
-        Yes 'that group names build.js as skymp5-front under the GNU GPL version 3' `
-            ($tail -match '(?m)^\s{2}build\.js\s{2,}skymp5-front\s{2,}GNU GPL version 3\s*$')
-        Yes 'that group names skyrimPlatform.ts as skyrim-platform under the GNU GPL version 3' `
-            ($tail -match '(?m)^\s{2}skyrimPlatform\.ts\s{2,}skyrim-platform\s{2,}GNU GPL version 3\s*$')
-        Yes 'that group names MpClientPlugin.pex and says its folder has no LICENSE' `
-            ($tail -match '(?m)^\s{2}MpClientPlugin\.pex\s{2,}client-deps\s{2,}no LICENSE file in that folder\s*$')
-        Yes 'that group says nobody recorded their version' ($tail.Contains('Nobody recorded which version of SkyMP'))
-        Yes 'the built group does not list them' `
-            (-not ($head6 -match '(?m)^\s{2}(build\.js|skyrimPlatform\.ts|MpClientPlugin\.pex)\s'))
-        $stray6 = @([regex]::Matches($n6, '\b[0-9a-f]{7,40}\b') | ForEach-Object { $_.Value } | Where-Object { -not (Test-Known $_) })
-        Yes 'the note with that group still carries no commit a record does not name' ($stray6.Count -eq 0)
-        Yes 'the note with that group is plain ASCII and in the house words' `
-            (-not ($n6 -match '[^\x09\x0A\x0D\x20-\x7E]') -and (Test-Words $n6))
-
-        # Since #2931 every Ship builds build.js from the fork's skymp5-front
-        # at the pin and holds it to records\front-build.json, so with the
-        # real records it is one of the files Thornswood built, at the
-        # client's commit, and leaves the group of what it did not build.
-        $nf = Get-SourceNotice $clientPath $serverPath $pl
-        $cutF = $nf.IndexOf('did not build')
-        $headF = if ($cutF -gt 0) { $nf.Substring(0, $cutF) } else { $nf }
-        $tailF = if ($cutF -gt 0) { $nf.Substring($cutF) } else { '' }
-        Yes 'with front-build.json beside the client record, build.js is in the built group as skymp5-front' `
-            ($headF -match '(?m)^\s{2}build\.js\s{2,}skymp5-front\s{2,}GNU GPL version 3\s*$')
-        Yes '  and not in the group of what Thornswood did not build, which keeps the other two' `
-            ($cutF -gt 0 -and -not ($tailF -match '(?m)^\s{2}build\.js\s') -and $tailF.Contains('skyrimPlatform.ts') -and $tailF.Contains('MpClientPlugin.pex'))
-        Yes '  and the built group names the client commit' ($headF.Contains($forkUrl + '/tree/' + $cCommit))
-        # A front record of another commit than the client's stops it, since
-        # the note names one commit for everything Thornswood built.
-        $fr = Read-Json (Join-Path $Here 'records\front-build.json')
-        $fr.forkCommit = 'abcdef1234567890abcdef1234567890abcdef12'
-        $fp = Join-Path $tmp 'front-build.json'
-        [IO.File]::WriteAllText($fp, ($fr | ConvertTo-Json -Depth 6))
-        $threw = $false
-        try { $null = Get-SourceNotice $clientPath $serverPath $pl $fp } catch { $threw = $_.Exception.Message -match 'one commit' }
-        Yes 'a front record of another commit than the client record stops it' $threw
-        Remove-Item -LiteralPath $fp -Force
-
-        # Only what is there. A payload with build.js alone names build.js alone.
-        Remove-Item -LiteralPath (Join-Path $pl 'Data\Platform\Modules') -Recurse -Force
-        Remove-Item -LiteralPath (Join-Path $pl 'Data\Scripts') -Recurse -Force
-        $n7 = Get-SourceNotice $cp $sp $pl
-        Yes 'a payload with only build.js names build.js and not the two it does not hold' `
-            ($n7.Contains('skymp5-front') -and -not ($n7 -match 'skyrimPlatform\.ts|MpClientPlugin\.pex'))
-
-        # A payload with none of them says nothing about them.
-        Remove-Item -LiteralPath (Join-Path $pl 'Data') -Recurse -Force
-        $null = New-Item -ItemType Directory -Force -Path $pl
-        $n8 = Get-SourceNotice $cp $sp $pl
-        Yes 'a payload with none of them gets no such group' (-not $n8.Contains('did not build'))
+    function Put-Record($o, [switch]$Bom) {
+        if ($Bom) { [IO.File]::WriteAllText($cp, ($o | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding($true))) }
+        else { [IO.File]::WriteAllText($cp, ($o | ConvertTo-Json -Depth 6)) }
+        Put-Licences $cp
     }
-    finally {
-        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
-    }
+    Put-Record $c2
+    $n2 = Get-SetupNote $cp $files ''
+    Yes 'a new client commit in the record comes out in the note' ($n2.Contains('/tree/abcdef12'))
+    Yes 'the old commit does not survive a new record' (-not $n2.Contains($cCommit))
+
+    # Windows PowerShell 5.1 writes a byte order mark with -Encoding UTF8,
+    # and a record saved that way still has to read.
+    Put-Record $c2 -Bom
+    Yes 'a record saved with a byte order mark still reads' ((Get-SetupNote $cp $files '').Contains('/tree/abcdef12'))
+
+    # A file the record gains with no known source folder stops the setup's
+    # build rather than shipping a note that leaves it out.
+    $c3 = Read-Json $clientPath
+    $c3.files | Add-Member -NotePropertyName 'Data\SKSE\Plugins\Unheard.dll' -NotePropertyValue ([pscustomobject]@{ sha256 = '00'; bytes = 1 })
+    Put-Record $c3
+    $threw = $false
+    try { $null = Get-SetupNote $cp $files '' } catch { $threw = $true }
+    Yes 'a recorded file with no known source folder stops it' $threw
+
+    $threw = $false
+    try { $null = Get-SetupNote (Join-Path $tmp 'nothing.json') $files '' } catch { $threw = $true }
+    Yes 'a missing client record stops it' $threw
+
+    $c4 = Read-Json $clientPath
+    $c4.forkCommit = ''
+    Put-Record $c4
+    $threw = $false
+    try { $null = Get-SetupNote $cp $files '' } catch { $threw = $true }
+    Yes 'a record with no commit stops it' $threw
+
+    # The words New-ClientBuildRecord writes when upstream was not fetched
+    # say so in the note rather than passing for a commit.
+    $c5 = Read-Json $clientPath
+    $c5.upstreamBase = 'unknown, fetch upstream to fill this in'
+    Put-Record $c5
+    $n5 = Get-SetupNote $cp $files ''
+    Yes 'an upstream base the record does not know is said as a gap, not printed as a commit' `
+        ($n5.Contains('a commit the build record does not name') -and -not $n5.Contains('unknown, fetch'))
+
+    # The SkyMP files carried that were not built here. Game files shaped
+    # like the 23 September stage, with a record from before the front was
+    # built from the fork (no front-build.json beside it), get all three
+    # named, as their own group, with the gap said and no commit claimed.
+    [IO.File]::Copy($clientPath, $cp, $true); Put-Licences $cp
+    $extraFiles = @('Data\Platform\UI\build.js', 'Data\Platform\Modules\skyrimPlatform.ts', 'Data\Scripts\MpClientPlugin.pex')
+    $n6 = Get-SetupNote $cp ($files + $extraFiles) ''
+    $cut = $n6.IndexOf('did not build')
+    Yes 'game files with build.js and the rest get a group for what Thornswood did not build' ($cut -gt 0)
+    $tail = if ($cut -gt 0) { $n6.Substring($cut) } else { '' }
+    $head6 = if ($cut -gt 0) { $n6.Substring(0, $cut) } else { $n6 }
+    Yes 'that group names build.js as skymp5-front under the GNU GPL version 3' `
+        ($tail -match '(?m)^\s{2}build\.js\s{2,}skymp5-front\s{2,}GNU GPL version 3\s*$')
+    Yes 'that group names skyrimPlatform.ts as skyrim-platform under the GNU GPL version 3' `
+        ($tail -match '(?m)^\s{2}skyrimPlatform\.ts\s{2,}skyrim-platform\s{2,}GNU GPL version 3\s*$')
+    Yes 'that group names MpClientPlugin.pex and says its folder has no LICENSE' `
+        ($tail -match '(?m)^\s{2}MpClientPlugin\.pex\s{2,}client-deps\s{2,}no LICENSE file in that folder\s*$')
+    Yes 'that group says nobody recorded their version' ($tail -match 'nobody\s+recorded which version of SkyMP')
+    Yes 'the built group does not list them' `
+        (-not ($head6 -match '(?m)^\s{2}(build\.js|skyrimPlatform\.ts|MpClientPlugin\.pex)\s'))
+    $stray6 = @([regex]::Matches($n6, '\b[0-9a-f]{7,40}\b') | ForEach-Object { $_.Value } | Where-Object { -not (Test-Known $_) })
+    Yes 'the note with that group still carries no commit a record does not name' ($stray6.Count -eq 0)
+    Yes 'the note with that group is plain ASCII and in the house words' `
+        (-not ($n6 -match '[^\x09\x0A\x0D\x20-\x7E]') -and (Test-Words $n6))
+
+    # Since #2931 every Ship builds build.js from the fork's skymp5-front
+    # at the pin and holds it to records\front-build.json, so with the
+    # real records it is one of the files Thornswood built, at the
+    # client's commit, and leaves the group of what it did not build.
+    $nf = Get-SetupNote $clientPath ($files + $extraFiles) ''
+    $cutF = $nf.IndexOf('did not build')
+    $headF = if ($cutF -gt 0) { $nf.Substring(0, $cutF) } else { $nf }
+    $tailF = if ($cutF -gt 0) { $nf.Substring($cutF) } else { '' }
+    Yes 'with front-build.json beside the client record, build.js is in the built group as skymp5-front' `
+        ($headF -match '(?m)^\s{2}build\.js\s{2,}skymp5-front\s{2,}GNU GPL version 3\s*$')
+    Yes '  and not in the group of what Thornswood did not build, which keeps the other two' `
+        ($cutF -gt 0 -and -not ($tailF -match '(?m)^\s{2}build\.js\s') -and $tailF.Contains('skyrimPlatform.ts') -and $tailF.Contains('MpClientPlugin.pex'))
+    Yes '  and the built group names the client commit' ($headF.Contains($forkUrl + '/tree/' + $cCommit))
+    # A front record of another commit than the client's stops it, since
+    # the note names one commit for everything Thornswood built.
+    $fr = Read-Json (Join-Path $Here 'records\front-build.json')
+    $fr.forkCommit = 'abcdef1234567890abcdef1234567890abcdef12'
+    $fp = Join-Path $tmp 'front-build.json'
+    [IO.File]::WriteAllText($fp, ($fr | ConvertTo-Json -Depth 6))
+    $threw = $false
+    try { $null = Get-SetupNote $clientPath ($files + $extraFiles) $fp } catch { $threw = $_.Exception.Message -match 'one commit' }
+    Yes 'a front record of another commit than the client record stops it' $threw
+    Remove-Item -LiteralPath $fp -Force
+
+    # Only what is there. Game files with build.js alone name build.js alone.
+    $n7 = Get-SetupNote $cp ($files + @('Data\Platform\UI\build.js')) ''
+    Yes 'game files with only build.js name build.js and not the two they do not hold' `
+        ($n7.Contains('skymp5-front') -and -not ($n7 -match 'skyrimPlatform\.ts|MpClientPlugin\.pex'))
+
+    # Game files with none of them say nothing about them.
+    $n8 = Get-SetupNote $cp $files ''
+    Yes 'game files with none of them get no such group' (-not $n8.Contains('did not build'))
+}
+finally {
+    Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# Written into the stage, which 7-Zip archives whole, and stopped on failure.
-Yes 'Package-Thornswood.ps1 writes SOURCE CODE.txt into the stage from the records' `
-    ($package -match "Join-Path \`$stage 'SOURCE CODE\.txt'" -and $package -match 'Get-SourceNotice \$clientRecordPath')
-# And hands it the payload, or the files it did not build are never named.
-Yes 'Package-Thornswood.ps1 hands Get-SourceNotice the payload it staged' `
-    ($package -match "Get-SourceNotice \`$clientRecordPath \(Join-Path \`$PSScriptRoot '\.\.\\\.\.\\records\\server-build\.json'\) \`$payloadDir")
+# Built into the package from the records and the game files it carries,
+# and stopped when it names nothing.
+$setupFiles = Get-Content -LiteralPath $setupFilesPath -Raw
+Yes 'Build-SetupFiles.ps1 writes the note of kind setup from the client record and the game files it packs' `
+    ($setupFiles -match "Get-SourceNoticeEntries \(Join-Path \`$RepoDir 'records\\client-build\.json'\) \`$carried 'setup' \(Join-Path \`$RepoDir 'installer\\licences'\)" -and
+     $setupFiles -match 'Write-SourceNoticeToFolder \$files \$entries')
+Yes '  and stops when the game files carry no SkyMP file to name' ($setupFiles.Contains("if (`$entries.Count -eq 0) { throw 'The game files carry none of the SkyMP files"))
 
-# The setup program unpacks into a scratch folder, so the note has to be put
-# where a person keeps things.
-$setup = Get-Content -LiteralPath $setupPath -Raw
-Yes 'Setup-Thornswood.ps1 copies SOURCE CODE.txt into the install folder' `
-    ($setup -match "Join-Path \`$Here 'SOURCE CODE\.txt'" -and $setup -match 'Copy-Item -LiteralPath \$srcNote -Destination \$Root')
+# The package is Velopack's, under the launcher, so the note has to be put
+# where a person keeps things: the install copies it into the install folder.
+$steps = Get-Content -LiteralPath $stepsPath -Raw
+Yes 'InstallSteps.cs copies SOURCE CODE.txt into the install folder' `
+    ($steps.Contains('CopyIfThere(Path.Combine(choice.Package, "SOURCE CODE.txt"), Path.Combine(Root, "SOURCE CODE.txt"));'))
 
 # And the uninstall takes it out again. Finish ends with a plain rmdir of the
 # install folder, which only works on an empty one, and the farewell calls
@@ -310,42 +306,50 @@ Yes 'Uninstall.cs removes SOURCE CODE.txt from the install folder' `
     ($uninstall -match 'leave\.Add\(Path\.Combine\(Paths\.Root, "SOURCE CODE\.txt"\)\)')
 
 # The libraries inside the client files, with their texts beside the note (#3099).
-if ($fn) {
-    $libs = @(Get-ClientLicences $clientPath $files)
-    $ln = Get-SourceNotice $clientPath $serverPath -Licences $libs
-    $notListed = @($libs | Where-Object { -not ($ln -match ('(?m)^\s{2}' + [regex]::Escape($_.Port + '.txt') + '\s+' + [regex]::Escape($_.Version) + '\s')) } | ForEach-Object { $_.Port })
-    Yes ('given the client''s libraries, the note lists all ' + $libs.Count + ' with their versions' + $(if ($notListed.Count) { ', not: ' + ($notListed -join ', ') } else { '' })) ($libs.Count -gt 0 -and $notListed.Count -eq 0)
-    Yes '  and says their texts are in the licences folder beside it' ($ln.Contains('in the licences folder beside this note'))
-    Yes '  in plain ASCII' (-not ($ln -match '[^\x09\x0A\x0D\x20-\x7E]'))
-}
-Yes 'Package-Thornswood.ps1 hands Get-SourceNotice the libraries of the client it packs and stages their texts in licences\' `
-    ($package -match 'Get-ClientLicences \$clientRecordPath' -and $package -match '-Licences \$clientLicences' -and $package -match "Join-Path \`$stage 'licences'" -and $package -match 'Save-PackageClientLicences')
-Yes 'Setup-Thornswood.ps1 replaces the licences folder in the install folder whole' `
-    ($setup -match "Join-Path \`$Here 'licences'" -and $setup -match "Join-Path \`$Root 'licences'" -and $setup -match 'Remove-Item -LiteralPath \$libTo -Recurse')
+$libs = @(Get-ClientLicences $clientPath $files)
+$notListed = @($libs | Where-Object { -not ($note -match ('(?m)^\s{2}' + [regex]::Escape($_.Port + '.txt') + '\s+' + [regex]::Escape($_.Version) + '\s')) } | ForEach-Object { $_.Port })
+Yes ('the note lists all ' + $libs.Count + ' of the client''s libraries with their versions' + $(if ($notListed.Count) { ', not: ' + ($notListed -join ', ') } else { '' })) ($libs.Count -gt 0 -and $notListed.Count -eq 0)
+Yes '  and says their texts are in the licences folder beside it' ($note.Contains('in the licences folder beside this note'))
+$libEntries = @($entries | Where-Object { $_.Name -like 'licences/*' } | ForEach-Object { $_.Name })
+$noText = @($libs | Where-Object { $libEntries -notcontains ('licences/' + $_.Port + '.txt') } | ForEach-Object { $_.Port })
+Yes ('  and the setup carries each one''s text in licences\' + $(if ($noText.Count) { ', not: ' + ($noText -join ', ') } else { '' })) ($libs.Count -gt 0 -and $noText.Count -eq 0)
+Yes 'InstallSteps.cs replaces the licences folder in the install folder whole' `
+    ($steps.Contains('string libTo = Path.Combine(Root, "licences");') -and $steps.Contains('if (Directory.Exists(libTo)) Directory.Delete(libTo, true);') -and $steps.Contains('CopyTree(libFrom, libTo);'))
 Yes 'Uninstall.cs removes the licences folder from the install folder' `
     ($uninstall -match 'leave\.Add\(Path\.Combine\(Paths\.Root, "licences"\)\)')
 
-# Full GPL / AGPL / WebView2 texts beside the note (issue #421).
-$licenceDir = Join-Path $Here 'installer\licences'
+# Full GPL / AGPL texts beside the note (issue #421), and the texts of the
+# voice libraries compiled into the launcher (#4823), which took the place of
+# WebView2's when the launcher stopped using it.
 Yes 'installer\licences holds GPL-3.0.txt' (Test-Path -LiteralPath (Join-Path $licenceDir 'GPL-3.0.txt'))
 Yes 'installer\licences holds AGPL-3.0.txt' (Test-Path -LiteralPath (Join-Path $licenceDir 'AGPL-3.0.txt'))
-Yes 'installer\licences holds WebView2-LICENSE.txt' (Test-Path -LiteralPath (Join-Path $licenceDir 'WebView2-LICENSE.txt'))
+$voiceTexts = @('Concentus-LICENSE.txt', 'SharpSRTP-LICENSE.txt', 'BouncyCastle-LICENSE.txt')
+foreach ($v in $voiceTexts) { Yes "installer\licences holds $v" (Test-Path -LiteralPath (Join-Path $licenceDir $v)) }
 $agplHead = if (Test-Path -LiteralPath (Join-Path $licenceDir 'AGPL-3.0.txt')) { Get-Content -LiteralPath (Join-Path $licenceDir 'AGPL-3.0.txt') -TotalCount 5 | Out-String } else { '' }
 $gplHead  = if (Test-Path -LiteralPath (Join-Path $licenceDir 'GPL-3.0.txt'))  { Get-Content -LiteralPath (Join-Path $licenceDir 'GPL-3.0.txt')  -TotalCount 5 | Out-String } else { '' }
 Yes 'AGPL-3.0.txt is the GNU Affero GPL v3' ($agplHead -match 'GNU AFFERO GENERAL PUBLIC LICENSE' -and $agplHead -match 'Version 3')
 Yes 'GPL-3.0.txt is the GNU GPL v3 (not Affero)' ($gplHead -match 'GNU GENERAL PUBLIC LICENSE' -and $gplHead -match 'Version 3' -and $gplHead -notmatch 'AFFERO')
-Yes 'Package-Thornswood.ps1 stages the three licence texts into the stage' `
-    ($package -match "installer\\licences" -and $package -match "'AGPL-3\.0\.txt'" -and $package -match "'GPL-3\.0\.txt'" -and $package -match "'WebView2-LICENSE\.txt'")
-Yes 'Setup-Thornswood.ps1 copies the three licence texts into the install folder' `
-    ($setup -match "'AGPL-3\.0\.txt'" -and $setup -match "'GPL-3\.0\.txt'" -and $setup -match "'WebView2-LICENSE\.txt'")
-Yes 'Uninstall.cs removes AGPL-3.0.txt from the install folder' `
-    ($uninstall -match 'leave\.Add\(Path\.Combine\(Paths\.Root, "AGPL-3\.0\.txt"\)\)')
-Yes 'Uninstall.cs removes GPL-3.0.txt from the install folder' `
-    ($uninstall -match 'leave\.Add\(Path\.Combine\(Paths\.Root, "GPL-3\.0\.txt"\)\)')
-Yes 'Uninstall.cs removes WebView2-LICENSE.txt from the install folder' `
-    ($uninstall -match 'leave\.Add\(Path\.Combine\(Paths\.Root, "WebView2-LICENSE\.txt"\)\)')
-Yes 'SOURCE CODE.txt notice names the three licence files beside it' `
-    ($note -match 'AGPL-3\.0\.txt' -and $note -match 'GPL-3\.0\.txt' -and $note -match 'WebView2-LICENSE\.txt')
+$same = @('GPL-3.0.txt', 'AGPL-3.0.txt' | Where-Object {
+    $n = $_; $e = @($entries | Where-Object { $_.Name -eq $n })
+    $e.Count -eq 1 -and [Convert]::ToBase64String($e[0].Bytes) -eq [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $licenceDir $n))) })
+Yes 'the setup carries the GPL and AGPL texts from installer\licences, byte for byte' ($same.Count -eq 2)
+# Build-SetupFiles.ps1 packs the names InstallSteps.LicenceFiles lists, read
+# off that one list, so the voice texts are packed when the list holds them.
+$licList = [regex]::Match($steps, '(?s)static\s+readonly\s+string\[\]\s+LicenceFiles\s*=\s*\{(.*?)\};')
+$notStaged = @($voiceTexts | Where-Object { -not $licList.Success -or -not $licList.Groups[1].Value.Contains('"' + $_ + '"') })
+Yes ('Build-SetupFiles.ps1 puts the voice libraries'' texts in the package for the install to copy, off InstallSteps.LicenceFiles' + $(if ($notStaged.Count) { ', not: ' + ($notStaged -join ', ') } else { '' })) (
+    $notStaged.Count -eq 0 -and $setupFiles.Contains("`$stepsCs = Join-Path `$RepoDir 'launcher\app\InstallSteps.cs'") -and
+    $setupFiles.Contains('$launcherLicences = @([regex]::Matches($listAt.Groups[1].Value') -and
+    $setupFiles.Contains("Copy-Item -LiteralPath `$from -Destination (Join-Path `$files `$lic) -Force"))
+$notCopied = @(@('GPL-3.0.txt', 'AGPL-3.0.txt') + $voiceTexts | Where-Object { -not $steps.Contains('"' + $_ + '"') })
+Yes ('InstallSteps.cs copies the GPL, AGPL and voice library texts into the install folder' + $(if ($notCopied.Count) { ', not: ' + ($notCopied -join ', ') } else { '' })) ($notCopied.Count -eq 0)
+# The uninstall takes out every text on that same list, so a text the
+# install copies is one it removes.
+$uninstallsList = $uninstall.Contains('foreach (string lic in InstallSteps.LicenceFiles) leave.Add(Path.Combine(Paths.Root, lic));')
+foreach ($v in @('AGPL-3.0.txt', 'GPL-3.0.txt') + $voiceTexts) {
+    Yes "Uninstall.cs removes $v from the install folder, off InstallSteps.LicenceFiles" ($uninstallsList -and $licList.Success -and $licList.Groups[1].Value.Contains('"' + $v + '"'))
+}
+Yes 'SOURCE CODE.txt names the GPL and AGPL texts beside it' ($note -match 'AGPL-3\.0\.txt' -and $note -match 'GPL-3\.0\.txt')
 
 # ---- where release pages said source is (#421, #907) ----------------------
 $publishUpdatePath = Join-Path $Here 'scripts\release\Publish-Update.ps1'
@@ -356,7 +360,7 @@ $publishPack   = Get-Content -LiteralPath $publishPackPath -Raw
 $releaseYml    = Get-Content -LiteralPath $releaseYmlPath -Raw
 # Update and optional packs have had no GitHub release page since #907 (the
 # downloads are on thornswood.net and Thornswood-Releases is gone), so the
-# footer those pages carried went with them. The installer's SOURCE CODE.txt,
+# footer those pages carried went with them. The setup's SOURCE CODE.txt,
 # the credits page and release.yml's draft notes are what say where source is.
 Yes 'Publish-Update.ps1 makes no GitHub release page to put a footer on (#907)' (
     $publishUpdate -notmatch 'gh release create' -and $publishUpdate -notmatch 'function Get-ReleaseSourceFooter')
@@ -436,7 +440,7 @@ $homeHtml = Get-Content -LiteralPath $homeJsPath -Raw
 $dl = $homeHtml.IndexOf("here === '/downloads'")
 $dlEnd = if ($dl -ge 0) { $homeHtml.IndexOf("here === '/report'", $dl) } else { -1 }
 $dlCode = if ($dl -ge 0 -and $dlEnd -gt $dl) { $homeHtml.Substring($dl, $dlEnd - $dl) } else { '' }
-Yes 'the download page links /credits#source beside the installer' ($dlCode.Contains('href="/credits#source"'))
+Yes 'the download page links /credits#source beside the download' ($dlCode.Contains('href="/credits#source"'))
 
 # ---- read off the fork itself ----------------------------------------------
 #

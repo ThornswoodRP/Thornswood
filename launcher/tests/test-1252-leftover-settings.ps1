@@ -37,20 +37,23 @@
        they are not in the repository (tests\test-no-machine-files.ps1); on a
        machine without them this part says so and is skipped.
 
-  HOW. Compiles every file in launcher\app with a driver into one program
-  (the compiler the build runs, tests\Launcher-Csc.ps1), points Steam.cs at a
-  pretend Steam in a scratch folder, and runs the real Leaks.Clean. For 2 to 6
+  HOW. Builds the whole launcher with a driver into one program (the .NET
+  SDK the launcher builds with, tests\Launcher-Csc.ps1, #4823), on every
+  machine, points Steam.cs at a pretend Steam in a scratch folder, and runs
+  the real Leaks.Clean. The run is Windows only: the launcher lays out its
+  install and the game by Windows paths, and 5 makes the hard link with
+  kernel32; elsewhere 2 to 7 say SKIP. For 2 to 6
   the driver gives each entry of the list planted bytes of its own, through
   reflection on the array, keeping the path; 7 leaves the list alone.
 
-  Nothing outside its own scratch folder is written; the repository and the
-  -Recorded folder are only read.
+  Nothing outside its own scratch folder and its build under out\harness is
+  written; the repository and the -Recorded folder are only read.
 #>
 [CmdletBinding()]
 param([string]$Repo, [string]$Scratch, [string]$Recorded)
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 if (-not $Repo) { $Repo = Split-Path -Parent (Split-Path -Parent $Here) }
@@ -109,14 +112,8 @@ Yes 'a match takes only this folder''s name for the file (OwnGame.DropName), not
     -not ([regex]::Match($src, '(?s)static string CleanSynced\(\).*?\n        \}').Value -match 'SetAttributes'))
 
 # ---- the launcher, compiled with a driver ---------------------------------------
-if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'; Done }
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
-$refs = @(); $missing = @()
-foreach ($n in @($LauncherNeeded)) { $p = Find-LauncherRef $n; if ($p) { $refs += $p } else { $missing += $n } }
-foreach ($n in @($LauncherLib)) { $p = $n; if (Test-Path -LiteralPath $p) { $refs += $p } else { $missing += $n } }
-Yes ('every reference Thornswood.csproj names is on this machine' + $(if ($missing.Count) { ', missing ' + ($missing -join ', ') } else { '' })) ($refs.Count -gt 0 -and $missing.Count -eq 0)
-if ($missing.Count -or $refs.Count -eq 0) { Done }
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 $driver = @'
 using System;
@@ -449,30 +446,22 @@ namespace Thornswood
 }
 '@
 
-$T = Join-Path $Scratch ('leftover-settings-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
-$build = Join-Path $T 'build'
-$null = New-Item -ItemType Directory -Force -Path $build
-$driverCs = Join-Path $build 'LeftoverSettingsTest.cs'
-[IO.File]::WriteAllText($driverCs, $driver, (New-Object Text.UTF8Encoding($false)))
-$exe = Join-Path $build 'LeftoverSettingsTest.exe'
-$cs = @(Get-ChildItem (Join-Path $App '*.cs') -File | ForEach-Object { $_.FullName })
-$cscArgs = @('/noconfig', '/nologo', '/target:exe', '/platform:anycpu', "/langversion:$LauncherLangVersion", '/nowarn:0649,1701,0414,0169', "/out:$exe", '/main:Thornswood.LeftoverSettingsTest')
-foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-$cscArgs += $cs
-$cscArgs += $driverCs
-$old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-$said = & $LauncherCsc @cscArgs 2>&1
-$rc = $LASTEXITCODE
-$ErrorActionPreference = $old
-Yes ('the launcher''s {0} source files and the driver compile with the build''s compiler' -f $cs.Count) ($rc -eq 0 -and (Test-Path -LiteralPath $exe))
-if ($rc -ne 0) { $said | Where-Object { "$_" -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" }; Done }
+$exe = $null
+try { $exe = Build-LauncherCode -Launcher -Exe -Main 'Thornswood.LeftoverSettingsTest' -Source $driver }
+catch { ($_.Exception.Message -split "`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
+Yes 'the whole launcher and the driver build with the .NET SDK the launcher builds with' ($null -ne $exe)
+if (-not $exe) { Done }
+if (-not $OnWindows) {
+    Write-Host 'SKIP  2 to 7, Leaks.Clean run against pretend installs: the launcher lays out its install and the game by Windows paths, and 5 makes its hard link with kernel32, so they run on Windows only'
+    Done
+}
 
-foreach ($r in $refs) { if ($r -like '*webview2*') { Copy-Item -LiteralPath $r -Destination $build -Force } }
+$T = Join-Path $Scratch ('leftover-settings-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 $run = Join-Path $T 'run'
 $null = New-Item -ItemType Directory -Force -Path $run
 $driverArgs = @($run)
 if ($Recorded) { $driverArgs += (Resolve-Path -LiteralPath $Recorded).Path }
-$out = & $exe @driverArgs 2>&1 | ForEach-Object { "$_" }
+$out = Invoke-LauncherExe $exe @driverArgs 2>&1 | ForEach-Object { "$_" }
 foreach ($l in $out) {
     if ($l -match '^PASS  ') { $script:pass++; Write-Host $l }
     elseif ($l -match '^FAIL  ') { $script:fail++; Write-Host $l }

@@ -4,53 +4,57 @@
       pwsh -NoProfile -File .\tests\test-ship-lists.ps1
       pwsh -NoProfile -File .\tests\test-ship-lists.ps1 -Before c32b820
 
-  Whether a pack and the installer leave out the same files.
+  Whether a pack leaves out every file that is not ours, by the one list.
 
-  Ship-Rules.ps1 exists so that they do, and until 24 September they did not.
-  Publish-Update.ps1 (packs) and Package-Thornswood.ps1 (the installer) each
-  kept their own list of Bethesda's files, and the installer's had grown a
-  list of other people's frameworks and tools the packs never had. Measured
-  that day over the 30,697 files in C:\Thornswood\Game: packs carried 90 files
-  (55.5 MB) the installer left out, 82 under Data\Nemesis_Engine, six under
-  BStarData, imgui.ini and steam_appid.txt. The lists are one list in
-  Ship-Rules.ps1 now, and this checks that it stays that way.
+  Ship-Rules.ps1 exists so that every script that packs the game asks one
+  list, and until 24 September there were two. Publish-Update.ps1 (packs) and
+  Package-Thornswood.ps1 (the old installer) each kept their own list of
+  Bethesda's files, and the installer's had grown a list of other people's
+  frameworks and tools the packs never had. Measured that day over the 30,697
+  files in C:\Thornswood\Game: packs carried 90 files (55.5 MB) the installer
+  left out, 82 under Data\Nemesis_Engine, six under BStarData, imgui.ini and
+  steam_appid.txt. The lists are one list in Ship-Rules.ps1 now, and this
+  checks that it stays that way.
 
-  WHAT RUNS IS THE SCRIPTS' OWN CODE, lifted out by the PowerShell parser: from
-  each script its Test-Vanilla, whatever list it still keeps for itself, its
-  other small tests, and the loop that decides what goes in (Publish-Update's
-  "Scanning the build", Package-Thornswood's "Listing the build"), fed made up
-  files for the fixed paths and the real ones for this machine's folder. From
-  Publish-Update also the one line that decides which files a release lists as
-  removed. The rest of those scripts builds and uploads releases, so it never
-  runs here.
+  The old installer went in #4824. Velopack's Setup.exe carries no game
+  files: the game comes from the feed's packs, and on dev from the merge
+  release's game files, built over the dev feed's last release
+  (Build-GameFiles.ps1), so Publish-Update's scan decides what any install
+  gets. Until then this compared the two scripts file by file.
 
-  -Tools <folder> runs it against another copy of the three scripts, flat in
-  that folder or under its scripts\release (a repository). Pointed
-  at c32b820, main just before the lists became one, it fails 29 of its checks.
-  Entry 128 added three client runtime checks that fail there as well, because
-  that code called any file at those paths ours. Run on the machine that ships
-  on 24 September with those three in, it failed 31: the older checks' count
-  moves with this machine's publish baselines, and was 28 that day.
+  WHAT RUNS IS THE SCRIPT'S OWN CODE, lifted out by the PowerShell parser:
+  Publish-Update's Test-Vanilla, whatever list it still keeps for itself, its
+  other small tests, its "Scanning the build" loop that decides what goes in,
+  fed made up files for the fixed paths and the real ones for this machine's
+  folder, and the one line that decides which files a release lists as
+  removed. The rest of it builds and uploads releases, so it never runs here.
+
+  -Tools <folder> runs it against another copy of the scripts, flat in that
+  folder or under its scripts\release (a repository). Pointed at c32b820, main
+  just before the lists became one, it failed 29 of its checks on 24 September,
+  when it still read the old installer as well: that Publish-Update kept its
+  own list, and packs carried the rows below that now go nowhere. Not run
+  against it again since #4824.
 
   Three parts.
-    1. Both scripts use the one list, and nothing else keeps a copy.
-    2. A fixed set of paths, each with what packs and the installer did with it
-       before 24 September and what both do now. The rows whose fate changed
-       are the files that should never have shipped.
-    3. This machine's own game folder, when there is one. Packs and the
-       installer must agree on every file in it, and nothing the installer
+    1. Publish-Update uses the one list, and no other release script keeps a
+       copy.
+    2. A fixed set of paths, each with what packs did with it before 24
+       September and what they do now. The rows whose fate changed are the
+       files that should never have shipped.
+    3. This machine's own game folder, when there is one. Nothing a pack
        leaves out as Bethesda's or somebody else's may be listed as removed
        against this machine's publish baselines. With -Before <commit>, the
-       same folder also goes through the scripts as they were at that commit,
+       same folder also goes through Publish-Update as it was at that commit,
        and every file whose fate changed is listed by name.
 
   Read only. The game folder, the launcher's record and the baselines under
   this machine's working copies of the VPS store (%LOCALAPPDATA%\Thornswood\feed, #907) and legacy LOCALAPPDATA copies are read and never written. -Before writes the old scripts and
   client-build.json into a temp folder of its own and removes it.
 
-  About a minute on the machine that ships, nearly all of it the installer's
-  loop going through 30,000 files the way Package-Thornswood does. On a
-  runner with no game folder, part 3 says SKIP and the rest takes seconds.
+  Under a minute on the machine that ships, nearly all of it the pack's loop
+  going through 30,000 files. On a runner with no game folder, part 3 says
+  SKIP and the rest takes seconds.
 #>
 param(
     [string]$Tools,
@@ -113,8 +117,8 @@ function Get-LoopBody($ast, [string]$script) {
 
 function Quote([string]$s) { return "'" + $s.Replace("'", "''") + "'" }
 
-# One module per script, so the two scripts' old lists (which used the same
-# variable names) cannot see each other. Built with PSModuleInfo rather than
+# One module per copy of the script, so the copy as it is and the copy at
+# -Before cannot see each other. Built with PSModuleInfo rather than
 # New-Module so nothing is imported into this session.
 # A script by name: beside the folder given, as in a copy of the old flat
 # tools\ that -Before unpacks, or in scripts\release since phase 8 of #440.
@@ -123,33 +127,32 @@ function Find-In([string]$toolsDir, [string]$name) {
     if (Test-Path -LiteralPath $flat) { return $flat }
     return (Join-Path $toolsDir ('scripts\release\' + $name))
 }
-function New-Decider([string]$toolsDir, [string]$which) {
+function New-Decider([string]$toolsDir) {
     $rules = Find-In $toolsDir 'Ship-Rules.ps1'
     $sb = New-Object System.Text.StringBuilder
     [void]$sb.AppendLine('. ' + (Quote $rules))
-    if ($which -eq 'pack') {
-        $file = 'Publish-Update.ps1'
-        # Publish-Update's scan records each file by its bytes since #441,
-        # with Get-BaselineEntry from Release-Baseline.ps1. The paths here are
-        # made up and never on disk, and this asks only which of them ship,
-        # so the lifted loop gets a stand-in that records a path without
-        # opening it.
-        [void]$sb.AppendLine('function Get-BaselineEntry([string]$path) { return ''0:fake'' }')
-        $ast = Read-Script (Find-In $toolsDir $file)
-        $own = Get-OwnLists $ast
-        foreach ($a in $own) { [void]$sb.AppendLine($a.Extent.Text) }
-        foreach ($fn in 'Test-Vanilla', 'Test-Runtime', 'Test-Machine', 'Test-FromCollection') {
-            [void]$sb.AppendLine((Get-FunctionText $ast $fn $file))
-        }
-        $body = Get-LoopBody $ast $file
-        $rm = @($ast.FindAll({ param($n)
-            $n -is [System.Management.Automation.Language.AssignmentStatementAst] -and
-            $n.Left.Extent.Text -eq '$removed' -and $n.Right.Extent.Text -match 'Test-Machine' }, $true))
-        if ($rm.Count -ne 1) { throw ("{0} has {1} removal filters that ask Test-Machine, expected one" -f $file, $rm.Count) }
-        # The main channel: $Dev is false, as it is for a live release. $GameDir
-        # is the folder $prefix was made from, as it is in Publish-Update, and
-        # Ship-Rules hashes the six client runtime files there (entry 128).
-        [void]$sb.AppendLine(@'
+    $file = 'Publish-Update.ps1'
+    # Publish-Update's scan records each file by its bytes since #441,
+    # with Get-BaselineEntry from Release-Baseline.ps1. The paths here are
+    # made up and never on disk, and this asks only which of them ship,
+    # so the lifted loop gets a stand-in that records a path without
+    # opening it.
+    [void]$sb.AppendLine('function Get-BaselineEntry([string]$path) { return ''0:fake'' }')
+    $ast = Read-Script (Find-In $toolsDir $file)
+    $own = Get-OwnLists $ast
+    foreach ($a in $own) { [void]$sb.AppendLine($a.Extent.Text) }
+    foreach ($fn in 'Test-Vanilla', 'Test-Runtime', 'Test-Machine', 'Test-FromCollection') {
+        [void]$sb.AppendLine((Get-FunctionText $ast $fn $file))
+    }
+    $body = Get-LoopBody $ast $file
+    $rm = @($ast.FindAll({ param($n)
+        $n -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+        $n.Left.Extent.Text -eq '$removed' -and $n.Right.Extent.Text -match 'Test-Machine' }, $true))
+    if ($rm.Count -ne 1) { throw ("{0} has {1} removal filters that ask Test-Machine, expected one" -f $file, $rm.Count) }
+    # The main channel: $Dev is false, as it is for a live release. $GameDir
+    # is the folder $prefix was made from, as it is in Publish-Update, and
+    # Ship-Rules hashes the six client runtime files there (entry 128).
+    [void]$sb.AppendLine(@'
 function Get-Shipped($files, $collection, $prefix, $optional) {
     $vortexFiles = $collection
     $GameDir = $prefix.TrimEnd('\')
@@ -167,41 +170,8 @@ function Select-Removed([string[]]$removed) {
     return ,([string[]]@($removed))
 }
 '@)
-        $vanilla = Get-FunctionText $ast 'Test-Vanilla' $file
-        $machine = Get-FunctionText $ast 'Test-Machine' $file
-    } else {
-        $file = 'Package-Thornswood.ps1'
-        $ast = Read-Script (Find-In $toolsDir $file)
-        $own = Get-OwnLists $ast
-        foreach ($a in $own) { [void]$sb.AppendLine($a.Extent.Text) }
-        foreach ($fn in 'Test-Vanilla', 'Test-Runtime', 'Test-Optional', 'Test-FromCollection') {
-            [void]$sb.AppendLine((Get-FunctionText $ast $fn $file))
-        }
-        $body = Get-LoopBody $ast $file
-        # The loop's $shipClientFiles is Ship-Rules' $ShipClientFiles here, the
-        # same record read the same way; PowerShell names ignore case.
-        [void]$sb.AppendLine(@'
-function Get-Shipped($files, $collection, $prefix, $optional) {
-    $vortexFiles = $collection
-    $optionalPrefixes = $optional
-    # $GameDir is the folder $prefix was made from, as it is in Package-Thornswood
-    # and in the pack's stand-in above. Without it Ship-Rules cannot find build.js,
-    # so the front's hashed assets under Data\Platform\UI read as somebody else's
-    # and this machine's installer column left them out while the pack kept them.
-    $GameDir = $prefix.TrimEnd('\')
-    $ship = @(); $skipBytes = 0; $shipBytes = 0; $optionalBytes = 0; $optionalCount = 0; $machineCount = 0
-    $collectionBytes = 0; $collectionCount = 0
-    $clientShipped = 0
-    $clientWrong = @()
-    foreach ($f in $files)
-'@ + $body + @'
-
-    return ,([string[]]@($ship | ForEach-Object { $_.Rel }))
-}
-'@)
-        $vanilla = Get-FunctionText $ast 'Test-Vanilla' $file
-        $machine = ''
-    }
+    $vanilla = Get-FunctionText $ast 'Test-Vanilla' $file
+    $machine = Get-FunctionText $ast 'Test-Machine' $file
     $m = [psmoduleinfo]::new([scriptblock]::Create($sb.ToString()))
     return [pscustomobject]@{
         Module   = $m
@@ -212,8 +182,8 @@ function Get-Shipped($files, $collection, $prefix, $optional) {
     }
 }
 
-# Made up files for the fixed paths, carrying the four things the two loops
-# read off a file. This machine's game folder is fed its real files instead.
+# Made up files for the fixed paths, carrying the four things the loop reads
+# off a file. This machine's game folder is fed its real files instead.
 $FakePrefix = 'X:\Game\'
 function New-Fakes([string[]]$paths) {
     $list = New-Object 'System.Collections.Generic.List[object]'
@@ -235,8 +205,8 @@ function Get-Set([string[]]$items) {
     return ,$s
 }
 
-# What one script would carry out of these files, as a set of paths relative
-# to the prefix.
+# What a pack would carry out of these files, as a set of paths relative to
+# the prefix.
 function Invoke-Shipped($decider, $files, [string]$prefix, $collection, $optional) {
     return ,(Get-Set (& $decider.Module { param($a, $b, $c, $d) Get-Shipped $a $b $c $d } $files $collection $prefix $optional))
 }
@@ -255,33 +225,7 @@ function Fate($set, [string]$p) {
     return 'out'
 }
 
-# optional-packs.txt: paths the installer leaves out on purpose and publishes
-# as their own download. Read the way Package-Thornswood reads it, only so
-# those paths can be kept out of the comparison. Empty on 24 September.
-function Get-OptionalPrefixes([string]$toolsDir) {
-    $out = @()
-    $f = Find-In $toolsDir 'optional-packs.txt'
-    if (-not (Test-Path -LiteralPath $f)) { return ,$out }
-    foreach ($line in (Get-Content -LiteralPath $f)) {
-        $t = $line.Trim()
-        if ($t.Length -eq 0 -or $t.StartsWith('#')) { continue }
-        $parts = $t -split '\|'
-        if ($parts.Count -lt 3) { continue }
-        $prefix = $parts[2].Trim().TrimStart('\')
-        if ($prefix.Length -eq 0) { continue }
-        if (-not $prefix.EndsWith('\')) { $prefix += '\' }
-        $out += [pscustomobject]@{ Id = $parts[0].Trim(); Prefix = $prefix }
-    }
-    return ,$out
-}
-function Test-UnderOptional([string]$rel, $optional) {
-    foreach ($o in $optional) { if ($rel.StartsWith($o.Prefix, 'OrdinalIgnoreCase')) { return $true } }
-    return $false
-}
-
-$pack = New-Decider $Tools 'pack'
-$inst = New-Decider $Tools 'installer'
-$optional = Get-OptionalPrefixes $Tools
+$pack = New-Decider $Tools
 
 # ---- 1. one list ---------------------------------------------------------------
 Write-Host ''
@@ -298,117 +242,119 @@ if ($hasVanilla -and $hasForeign) {
         (Test-ShipVanilla 'Data\Platform\Plugins\thornswood-front.js') -or (Test-ShipForeignFramework 'Data\Platform\Plugins\thornswood-front.js') }))
 }
 Yes ('Publish-Update.ps1 keeps no list of its own' + $(if ($pack.OwnLists.Count) { ' (has ' + ($pack.OwnLists -join ', ') + ')' } else { '' })) ($pack.OwnLists.Count -eq 0)
-Yes ('Package-Thornswood.ps1 keeps no list of its own' + $(if ($inst.OwnLists.Count) { ' (has ' + ($inst.OwnLists -join ', ') + ')' } else { '' })) ($inst.OwnLists.Count -eq 0)
-foreach ($d in $pack, $inst) {
-    Yes ($d.File + ' asks Ship-Rules for both lists in its Test-Vanilla') `
-        ($d.Vanilla -match 'Test-ShipVanilla' -and $d.Vanilla -match 'Test-ShipForeignFramework')
-}
+Yes ($pack.File + ' asks Ship-Rules for both lists in its Test-Vanilla') `
+    ($pack.Vanilla -match 'Test-ShipVanilla' -and $pack.Vanilla -match 'Test-ShipForeignFramework')
+# Any other release script with a Test-Vanilla of its own asks Ship-Rules
+# the same way and keeps no list beside it: the old installer's
+# Package-Thornswood.ps1 was the second copy until 24 September.
+$relDir = Split-Path -Parent (Find-In $Tools 'Ship-Rules.ps1')
+$others = @(Get-ChildItem -LiteralPath $relDir -Filter '*.ps1' -File | Where-Object { $_.Name -notin 'Ship-Rules.ps1', $pack.File } | ForEach-Object {
+    $ast = Read-Script $_.FullName
+    $defs = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Test-Vanilla' }, $true))
+    if ($defs.Count) { [pscustomobject]@{ Name = $_.Name; Text = $defs[0].Extent.Text; Own = (Get-OwnLists $ast).Count } }
+})
+$wrong = @($others | Where-Object { $_.Own -gt 0 -or $_.Text -notmatch 'Test-ShipVanilla' -or $_.Text -notmatch 'Test-ShipForeignFramework' } | ForEach-Object { $_.Name })
+Yes ('every other script in ' + (Split-Path -Leaf $relDir) + ' with a Test-Vanilla asks Ship-Rules and keeps no list (' + $others.Count + ' of them' + $(if ($wrong.Count) { '; not ' + ($wrong -join ', ') } else { '' }) + ')') ($wrong.Count -eq 0)
 Yes 'Publish-Update.ps1 decides removals through Test-ShipMachine' ($pack.Machine -match 'Test-ShipMachine')
 
 # ---- 2. a fixed set of paths --------------------------------------------------
 #
-# path, what packs did before 24 September, what the installer did, what both
-# do now. The before columns are what the two scripts did at c32b820 (main when
-# the lists were made one); -Before c32b820 checks them against that code.
+# path, what packs did before 24 September, what they do now. The before
+# column is what Publish-Update did at c32b820 (main when the lists were made
+# one); -Before c32b820 checks it against that code. The old installer's column
+# went with it (#4824).
 Write-Host ''
 Write-Host 'A fixed set of paths' -ForegroundColor Cyan
 
 $rows = @(
-    # Bethesda's, out of both before and after.
-    @('Data\Skyrim.esm',                                      'out',  'out',  'out'),
-    @('Data\_ResourcePack.bsa',                               'out',  'out',  'out'),
-    @('Data\Skyrim - Textures0.bsa',                          'out',  'out',  'out'),
-    @('Data\ccBGSSSE001-Fish.esm',                            'out',  'out',  'out'),
-    @('Data\Strings\Skyrim_English.STRINGS',                  'out',  'out',  'out'),
-    @('Data\Video\BGS_Logo.bik',                              'out',  'out',  'out'),
-    @('SkyrimSE.exe',                                         'out',  'out',  'out'),
-    @('High.ini',                                             'out',  'out',  'out'),
-    @('_DowngraderBackups\20260910-140530\bink2w64.dll',      'out',  'out',  'out'),
-    @('Skyrim\SkyrimPrefs.ini',                               'out',  'out',  'out'),
-    @('src\skse64\skse64\PluginAPI.h',                        'out',  'out',  'out'),
-    # A log is out of a pack by its extension and out of the installer by name.
-    @('d3dx9_42.log',                                         'out',  'out',  'out'),
+    # Bethesda's, out before and after.
+    @('Data\Skyrim.esm',                                      'out',  'out'),
+    @('Data\_ResourcePack.bsa',                               'out',  'out'),
+    @('Data\Skyrim - Textures0.bsa',                          'out',  'out'),
+    @('Data\ccBGSSSE001-Fish.esm',                            'out',  'out'),
+    @('Data\Strings\Skyrim_English.STRINGS',                  'out',  'out'),
+    @('Data\Video\BGS_Logo.bik',                              'out',  'out'),
+    @('SkyrimSE.exe',                                         'out',  'out'),
+    @('High.ini',                                             'out',  'out'),
+    @('_DowngraderBackups\20260910-140530\bink2w64.dll',      'out',  'out'),
+    @('Skyrim\SkyrimPrefs.ini',                               'out',  'out'),
+    @('src\skse64\skse64\PluginAPI.h',                        'out',  'out'),
+    # A log is out of a pack by its extension.
+    @('d3dx9_42.log',                                         'out',  'out'),
 
-    # Only on the installer's list before, so packs carried them. The first six
+    # Only on the old installer's list before, so packs carried them. The first six
     # are the kinds measured in C:\Thornswood\Game on 24 September. The rest
     # are every other entry on that list, as a file the collection does not
     # provide. On the machine that ships, every one of those that is there
     # comes from the collection or is a log, which is why only the first kinds
     # rode in packs.
-    @('BStarData\state.json',                                 'ship', 'out',  'out'),
-    @('BStarData\profiles\b5ef7a061f0d6f8c\_backups\Plugins-backup.txt', 'ship', 'out', 'out'),
-    @('Data\Nemesis_Engine\cache\behavior_path',              'ship', 'out',  'out'),
-    @('Data\Nemesis_Engine\temp_behaviors\xml\0_master.xml',  'ship', 'out',  'out'),
-    @('imgui.ini',                                            'ship', 'out',  'out'),
-    @('steam_appid.txt',                                      'ship', 'out',  'out'),
-    @('skse64_loader.exe',                                    'ship', 'out',  'out'),
-    @('skse64_1_6_1170.dll',                                  'ship', 'out',  'out'),
-    @('VERSION',                                              'ship', 'out',  'out'),
-    @('Data\FNIS Behavior SE 7.6\GenerateFNIS_for_Users\GenerateFNISforUsers.exe', 'ship', 'out', 'out'),
-    @('Data\CalienteTools\BodySlide\BodySlide x64.exe',       'ship', 'out',  'out'),
-    @('Data\tools\xEdit\SSEEdit.exe',                         'ship', 'out',  'out'),
-    @('Data\Source\Scripts\SKI_ConfigBase.psc',               'ship', 'out',  'out'),
-    @('Data\ModderResource\readme.txt',                       'ship', 'out',  'out'),
-    @('Data\FOMod\ModuleConfig.xml',                          'ship', 'out',  'out'),
-    @('Data\Docs\readme.txt',                                 'ship', 'out',  'out'),
-    @('Data\Docs and Screenshots\screenshot.png',             'ship', 'out',  'out'),
-    @('Data\readmes\readme.txt',                              'ship', 'out',  'out'),
-    @('Data\ShaderCache\x.bin',                               'ship', 'out',  'out'),
+    @('BStarData\state.json',                                 'ship', 'out'),
+    @('BStarData\profiles\b5ef7a061f0d6f8c\_backups\Plugins-backup.txt', 'ship', 'out'),
+    @('Data\Nemesis_Engine\cache\behavior_path',              'ship', 'out'),
+    @('Data\Nemesis_Engine\temp_behaviors\xml\0_master.xml',  'ship', 'out'),
+    @('imgui.ini',                                            'ship', 'out'),
+    @('steam_appid.txt',                                      'ship', 'out'),
+    @('skse64_loader.exe',                                    'ship', 'out'),
+    @('skse64_1_6_1170.dll',                                  'ship', 'out'),
+    @('VERSION',                                              'ship', 'out'),
+    @('Data\FNIS Behavior SE 7.6\GenerateFNIS_for_Users\GenerateFNISforUsers.exe', 'ship', 'out'),
+    @('Data\CalienteTools\BodySlide\BodySlide x64.exe',       'ship', 'out'),
+    @('Data\tools\xEdit\SSEEdit.exe',                         'ship', 'out'),
+    @('Data\Source\Scripts\SKI_ConfigBase.psc',               'ship', 'out'),
+    @('Data\ModderResource\readme.txt',                       'ship', 'out'),
+    @('Data\FOMod\ModuleConfig.xml',                          'ship', 'out'),
+    @('Data\Docs\readme.txt',                                 'ship', 'out'),
+    @('Data\Docs and Screenshots\screenshot.png',             'ship', 'out'),
+    @('Data\readmes\readme.txt',                              'ship', 'out'),
+    @('Data\ShaderCache\x.bin',                               'ship', 'out'),
 
-    # Another server's, out of both all along.
-    @('Data\NirnLabUIPlatform\CEFSubprocess.exe',             'out',  'out',  'out'),
-    @('Data\SKSE\Plugins\NirnLabUIPlugin.dll',                'out',  'out',  'out'),
+    # Another server's, out all along.
+    @('Data\NirnLabUIPlatform\CEFSubprocess.exe',             'out',  'out'),
+    @('Data\SKSE\Plugins\NirnLabUIPlugin.dll',                'out',  'out'),
     # One machine's own, and written at runtime.
-    @('Data\SKSE\Plugins\SkyrimPlatform.ini',                 'out',  'out',  'out'),
-    @('Claude outputs\notes.md',                              'out',  'out',  'out'),
-    # The collection's (in the made up record below), out of both.
-    @('Data\Nemesis_Engine\Nemesis Unlimited Behavior Engine.exe', 'out', 'out', 'out'),
-    @('Data\SkyUI_SE.bsa',                                    'out',  'out',  'out'),
+    @('Data\SKSE\Plugins\SkyrimPlatform.ini',                 'out',  'out'),
+    @('Claude outputs\notes.md',                              'out',  'out'),
+    # The collection's (in the made up record below), out.
+    @('Data\Nemesis_Engine\Nemesis Unlimited Behavior Engine.exe', 'out', 'out'),
+    @('Data\SkyUI_SE.bsa',                                    'out',  'out'),
 
-    # Ours, in both before and after.
-    @('Data\Platform\Plugins\thornswood-front.js',            'ship', 'ship', 'ship'),
-    @('Data\Platform\UI\index.html',                          'ship', 'ship', 'ship'),
-    @('Data\Thornswood-Content.esp',                          'ship', 'ship', 'ship'),
+    # Ours, in before and after.
+    @('Data\Platform\Plugins\thornswood-front.js',            'ship', 'ship'),
+    @('Data\Platform\UI\index.html',                          'ship', 'ship'),
+    @('Data\Thornswood-Content.esp',                          'ship', 'ship'),
     # MpClientPlugin.dll and TESModPlatform.pex were rows here, ship in both.
     # The client runtime is ours only when its bytes are the recorded build
     # now (entry 128), which a made up file cannot be, so they have their own
     # checks below the removal side.
     # Nemesis's output, generated from the collection's own patches (#1178).
-    @('Data\meshes\actors\character\behaviors\0_master.hkx', 'ship', 'ship', 'ship'),
-    @('Data\Scripts\FNIS.pex',                                'ship', 'ship', 'ship'),
+    @('Data\meshes\actors\character\behaviors\0_master.hkx', 'ship', 'ship'),
+    @('Data\Scripts\FNIS.pex',                                'ship', 'ship'),
     # The folder names count only straight under Data, and BStarData only at
     # the top: a folder of the same name deeper down is not those rules'. Until
     # #1178 that made these three ours; they are loose files of somebody's
     # mod, and outside Data\Platform only what Ship-Rules names is ours, so
-    # they are out of both now, like RaceMenu's loose menu the packs carried.
-    @('Data\meshes\tools\anvil.nif',                          'ship', 'ship', 'out'),
-    @('Data\textures\Docs\sign.dds',                          'ship', 'ship', 'out'),
-    @('Data\BStarData\note.txt',                              'ship', 'ship', 'out'),
-    @('Data\Interface\racesex_menu.swf',                      'ship', 'ship', 'out')
+    # they are out now, like RaceMenu's loose menu the packs carried.
+    @('Data\meshes\tools\anvil.nif',                          'ship', 'out'),
+    @('Data\textures\Docs\sign.dds',                          'ship', 'out'),
+    @('Data\BStarData\note.txt',                              'ship', 'out'),
+    @('Data\Interface\racesex_menu.swf',                      'ship', 'out')
 )
 $fixtureCollection = Get-Set @('Data\Nemesis_Engine\Nemesis Unlimited Behavior Engine.exe', 'Data\SkyUI_SE.bsa')
 $paths = [string[]]@($rows | ForEach-Object { $_[0] })
 
 $fakes = New-Fakes $paths
 $packNow = Invoke-Shipped $pack $fakes $FakePrefix $fixtureCollection @()
-$instNow = Invoke-Shipped $inst $fakes $FakePrefix $fixtureCollection @()
 
 foreach ($r in $rows) {
-    $p = $r[0]; $want = $r[3]
+    $p = $r[0]; $want = $r[2]
     $gotPack = Fate $packNow $p
-    $gotInst = Fate $instNow $p
-    Yes ("{0,-4} both  {1}" -f $want, $p) ($gotPack -eq $want -and $gotInst -eq $want)
-    if ($gotPack -ne $want -or $gotInst -ne $want) {
-        Write-Host ("      pack says {0}, installer says {1}" -f $gotPack, $gotInst) -ForegroundColor Red
+    Yes ("{0,-4} {1}" -f $want, $p) ($gotPack -eq $want)
+    if ($gotPack -ne $want) {
+        Write-Host ("      pack says {0}" -f $gotPack) -ForegroundColor Red
     }
 }
-# Other people's loose files left the installer too (#1178), and nothing else
-# changed for it.
-$notOursRows = @('Data\meshes\tools\anvil.nif', 'Data\textures\Docs\sign.dds', 'Data\BStarData\note.txt', 'Data\Interface\racesex_menu.swf')
-Yes 'the installer does with every row what it did before, other people''s loose files apart' (@($rows | Where-Object { $_[2] -ne $_[3] -and $notOursRows -notcontains $_[0] }).Count -eq 0)
-Yes '  and those went from the installer to nowhere' (@($rows | Where-Object { $notOursRows -contains $_[0] -and ($_[2] -ne 'ship' -or $_[3] -ne 'out') }).Count -eq 0)
-$changed = @($rows | Where-Object { $_[1] -ne $_[3] })
-Yes 'every row whose fate changed went from a pack to nowhere, none the other way' (@($changed | Where-Object { $_[1] -ne 'ship' -or $_[3] -ne 'out' }).Count -eq 0)
+$changed = @($rows | Where-Object { $_[1] -ne $_[2] })
+Yes 'every row whose fate changed went from a pack to nowhere, none the other way' (@($changed | Where-Object { $_[1] -ne 'ship' -or $_[2] -ne 'out' }).Count -eq 0)
 Write-Host ("      {0} rows packs carried and no longer do" -f $changed.Count) -ForegroundColor DarkGray
 
 # The removal side. Every row packs used to carry is in the baseline of the
@@ -425,15 +371,14 @@ Yes 'a file of ours that left the build is still listed as removed' ($real -cont
 Yes 'and the plugin list is still not' ($real -notcontains ':profile:plugins.txt')
 
 # The client runtime. A made up file at a recorded path is not the recorded
-# build, so neither a pack nor the installer carries it, and no release lists
+# build, so a pack does not carry it, and no release lists
 # it as removed. This machine's real files are in part 3, and
 # test-client-by-hash.ps1 feeds the recorded bytes and one byte changed.
 $clientPaths = [string[]]@('Data\SKSE\Plugins\MpClientPlugin.dll', 'Data\Scripts\TESModPlatform.pex')
 $clientFakes = New-Fakes $clientPaths
 $packClient = Invoke-Shipped $pack $clientFakes $FakePrefix $fixtureCollection @()
-$instClient = Invoke-Shipped $inst $clientFakes $FakePrefix $fixtureCollection @()
 foreach ($p in $clientPaths) {
-    Yes ("out  both  {0}, made up, so not the recorded build" -f $p) ((Fate $packClient $p) -eq 'out' -and (Fate $instClient $p) -eq 'out')
+    Yes ("out  {0}, made up, so not the recorded build" -f $p) ((Fate $packClient $p) -eq 'out')
 }
 Yes 'and neither is listed as removed' ((Invoke-Removed $pack $clientPaths).Count -eq 0)
 
@@ -453,21 +398,17 @@ if ($Before) {
         $oldDir = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-ship-lists-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
         $null = New-Item -ItemType Directory -Force -Path $oldDir
         $zip = Join-Path $oldDir 'before.zip'
-        & git -C $repo archive --format=zip -o $zip $Before scripts/release/Ship-Rules.ps1 scripts/release/Publish-Update.ps1 scripts/release/Package-Thornswood.ps1 records/client-build.json
+        & git -C $repo archive --format=zip -o $zip $Before scripts/release/Ship-Rules.ps1 scripts/release/Publish-Update.ps1 records/client-build.json
         if ($LASTEXITCODE -ne 0) { throw "git archive of $Before failed" }
         Expand-Archive -LiteralPath $zip -DestinationPath $oldDir
-        $old = [pscustomobject]@{
-            Pack = New-Decider $oldDir 'pack'
-            Inst = New-Decider $oldDir 'installer'
-        }
+        $old = [pscustomobject]@{ Pack = New-Decider $oldDir }
         Write-Host ''
         Write-Host ("The fixed paths against {0}" -f $Before) -ForegroundColor Cyan
         $packThen = Invoke-Shipped $old.Pack $fakes $FakePrefix $fixtureCollection @()
-        $instThen = Invoke-Shipped $old.Inst $fakes $FakePrefix $fixtureCollection @()
-        $bad = @($rows | Where-Object { (Fate $packThen $_[0]) -ne $_[1] -or (Fate $instThen $_[0]) -ne $_[2] })
-        Yes ("every row's before columns are what {0} did" -f $Before) ($bad.Count -eq 0)
+        $bad = @($rows | Where-Object { (Fate $packThen $_[0]) -ne $_[1] })
+        Yes ("every row's before column is what {0} did" -f $Before) ($bad.Count -eq 0)
         foreach ($b in $bad) {
-            Write-Host ("      {0}: pack did {1}, installer did {2}" -f $b[0], (Fate $packThen $b[0]), (Fate $instThen $b[0])) -ForegroundColor Red
+            Write-Host ("      {0}: pack did {1}" -f $b[0], (Fate $packThen $b[0])) -ForegroundColor Red
         }
     }
 }
@@ -492,25 +433,18 @@ if (-not $gameHere -or -not (Test-Path -LiteralPath (Join-Path $Game 'SkyrimSE.e
 } else {
     $collection = & $pack.Module { param($p) Get-ShipOwnGameCollection $p } $ProfileDir
     $prefix = $Game.TrimEnd('\') + '\'
-    # Listed the way both scripts list it.
+    # Listed the way Publish-Update lists it.
     $files = @(Get-ChildItem -LiteralPath $Game -Recurse -File -Force)
     Write-Host ("      {0:n0} files in {1}, {2:n0} of them the collection's" -f $files.Count, $Game, $collection.Count) -ForegroundColor DarkGray
 
-    $packLive = Invoke-Shipped $pack $files $prefix $collection $optional
-    $instLive = Invoke-Shipped $inst $files $prefix $collection $optional
-    $packOnly = [string[]]@($packLive | Where-Object { -not $instLive.Contains($_) -and -not (Test-UnderOptional $_ $optional) } | Sort-Object)
-    $instOnly = [string[]]@($instLive | Where-Object { -not $packLive.Contains($_) } | Sort-Object)
-    Write-Host ("      a pack would carry {0:n0}, the installer {1:n0}" -f $packLive.Count, $instLive.Count) -ForegroundColor DarkGray
-    Yes 'nothing a pack carries is left out of the installer' ($packOnly.Count -eq 0)
-    if ($packOnly.Count) { Show-Groups $packOnly 'Red' }
-    Yes 'nothing the installer carries is left out of a pack' ($instOnly.Count -eq 0)
-    if ($instOnly.Count) { Show-Groups $instOnly 'Red' }
+    $packLive = Invoke-Shipped $pack $files $prefix $collection @()
+    Write-Host ("      a pack would carry {0:n0}" -f $packLive.Count) -ForegroundColor DarkGray
 
-    # Every file in a publish baseline that the installer leaves out as
-    # Bethesda's or somebody else's goes through Publish-Update's own removal
-    # filter. Anything that comes out the other side would be deleted from
-    # every tester by the next release.
-    $instVanilla = $inst.Module
+    # Every file in a publish baseline that a pack leaves out as Bethesda's or
+    # somebody else's goes through Publish-Update's own removal filter.
+    # Anything that comes out the other side would be deleted from every
+    # tester by the next release.
+    $packVanilla = $pack.Module
     $repoRoot = $Tools
     $relSibling = Split-Path -Parent $repoRoot
     $where = Join-Path $repoRoot 'scripts\release\Where.ps1'
@@ -533,7 +467,7 @@ if (-not $gameHere -or -not (Test-Path -LiteralPath (Join-Path $Game 'SkyrimSE.e
         }
         $seen[$fp] = $cand.Name
         $keys = [string[]]@(((Get-Content -LiteralPath $cand.Path -Raw) -replace '^\uFEFF', '' | ConvertFrom-Json).PSObject.Properties.Name)
-        $theirs = [string[]]@(& $instVanilla { param($k) $k | Where-Object { $_ -notlike ':*' -and (Test-Vanilla $_) } } $keys)
+        $theirs = [string[]]@(& $packVanilla { param($k) $k | Where-Object { $_ -notlike ':*' -and (Test-Vanilla $_) } } $keys)
         $wouldGo = Invoke-Removed $pack $theirs
         Write-Host ("      {0}: {1:n0} paths, {2} of them Bethesda's or somebody else's" -f $cand.Name, $keys.Count, $theirs.Count) -ForegroundColor DarkGray
         Yes ("none of those would be deleted from testers by the next release ({0})" -f $cand.Name) ($wouldGo.Count -eq 0)
@@ -543,17 +477,12 @@ if (-not $gameHere -or -not (Test-Path -LiteralPath (Join-Path $Game 'SkyrimSE.e
     if ($old) {
         Write-Host ''
         Write-Host ("This machine's game folder against {0}" -f $Before) -ForegroundColor Cyan
-        $packThen = Invoke-Shipped $old.Pack $files $prefix $collection $optional
-        $instThen = Invoke-Shipped $old.Inst $files $prefix $collection $optional
+        $packThen = Invoke-Shipped $old.Pack $files $prefix $collection @()
         $stopped = [string[]]@($packThen | Where-Object { -not $packLive.Contains($_) } | Sort-Object)
         $started = [string[]]@($packLive | Where-Object { -not $packThen.Contains($_) } | Sort-Object)
-        $instLost = [string[]]@($instThen | Where-Object { -not $instLive.Contains($_) } | Sort-Object)
-        $instGained = [string[]]@($instLive | Where-Object { -not $instThen.Contains($_) } | Sort-Object)
-        Write-Host ("      packs: {0:n0} before, {1:n0} now. Installer: {2:n0} before, {3:n0} now" -f $packThen.Count, $packLive.Count, $instThen.Count, $instLive.Count) -ForegroundColor DarkGray
-        Yes 'the installer carries exactly what it did' ($instLost.Count -eq 0 -and $instGained.Count -eq 0)
+        Write-Host ("      packs: {0:n0} before, {1:n0} now" -f $packThen.Count, $packLive.Count) -ForegroundColor DarkGray
         Yes 'packs carry nothing they did not' ($started.Count -eq 0)
         if ($started.Count) { Show-Groups $started 'Red' }
-        Yes 'and what packs stopped carrying is what the installer always left out' (@($stopped | Where-Object { $instThen.Contains($_) }).Count -eq 0)
         $bytes = [int64]0
         foreach ($s in $stopped) { $bytes += (Get-Item -LiteralPath (Join-Path $Game $s) -Force).Length }
         Write-Host ("      packs stopped carrying {0} files, {1:n1} MB:" -f $stopped.Count, ($bytes / 1MB)) -ForegroundColor DarkGray

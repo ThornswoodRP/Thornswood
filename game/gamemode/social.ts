@@ -517,12 +517,35 @@
     var s = stateOf(actorId);
     var pid = profileOf(otherActor);
     if (!pid) { return 'That person is not here.'; }
-    if (Object.keys(s.friends).length >= SOCIAL.mostFriends) {
+    if (!s.friends[pid] && Object.keys(s.friends).length >= SOCIAL.mostFriends) {
       return 'Your friends list is full.';
     }
     s.friends[pid] = { name: nameOfPerson(otherActor), since: Date.now() };
     write(actorId, s);
     return '';
+  }
+
+  /*
+    BOTH SIDES OR NEITHER (#5428). A friendship is both lists, so the cap of
+    120 is asked of both before either is written: the 121st accept is
+    refused, and nobody is left on a list with one name in it. Answers null
+    when both are written, or the two lines to say when it is refused.
+  */
+  function befriend(actorId, otherActor) {
+    var mine = stateOf(actorId), theirs = stateOf(otherActor);
+    var myPid = profileOf(actorId), theirPid = profileOf(otherActor);
+    if (!myPid || !theirPid) { return { mine: 'That person is not here.', theirs: 'That person is not here.' }; }
+    var mineFull = !mine.friends[theirPid] && Object.keys(mine.friends).length >= SOCIAL.mostFriends;
+    var theirsFull = !theirs.friends[myPid] && Object.keys(theirs.friends).length >= SOCIAL.mostFriends;
+    if (mineFull) {
+      return { mine: 'Your friends list is full.', theirs: nameOfPerson(actorId) + '\'s friends list is full.' };
+    }
+    if (theirsFull) {
+      return { mine: nameOfPerson(otherActor) + '\'s friends list is full.', theirs: 'Your friends list is full.' };
+    }
+    addFriend(actorId, otherActor);
+    addFriend(otherActor, actorId);
+    return null;
   }
 
   function dropFriend(actorId, pid) {
@@ -1263,7 +1286,7 @@
     findPerson: findPerson, nameOfPerson: nameOfPerson, profileOf: profileOf,
     actorForProfile: actorForProfile,
     offer: offer, standingOffer: standingOffer, offers: offers,
-    addFriend: addFriend, dropFriend: dropFriend, isFriend: isFriend,
+    addFriend: addFriend, befriend: befriend, dropFriend: dropFriend, isFriend: isFriend,
     toggleMute: toggleMute, toggleText: toggleText, toggleName: toggleName,
     toggleNamesAll: toggleNamesAll, resolveKnown: resolveKnown, friendNow: friendNow,
     partyOf: partyOf, joinParty: joinParty, leaveParty: leaveParty,

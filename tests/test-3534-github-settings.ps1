@@ -164,7 +164,7 @@ $svcAll = ConvertTo-Json -Compress -Depth 8 @{ ok = $true; unread = @(); lines =
         actions = $record.actions; workflow_token = $record.workflow_token; sharing = $record.sharing; fork_pull_requests = $record.fork_pull_requests
         retention = @{ days = 90 }; runners = @(@{ name = 'thornswood-vps'; status = 'online'; labels = @('self-hosted', 'thornswood-vps') })
         secrets = @($record.secrets); variables = @($record.variables)
-        environments = @{ board = @{ secrets = @('BOARD_APP_KEY'); variables = @('BOARD_APP_CLIENT_ID', 'BOARD_NUMBER') }; desk = @{ secrets = @('NEXUS_API_KEY'); variables = @() }; 'engine-pin' = @{ secrets = @('PIN_APP_KEY'); variables = @('PIN_APP_CLIENT_ID') }; release = @{ secrets = @(); variables = @() }; watch = @{ secrets = @('RUNNER_TOKEN', 'STAFF_WEBHOOK'); variables = @() } } } }
+        environments = @{ board = @{ secrets = @('BOARD_APP_KEY'); variables = @('BOARD_APP_CLIENT_ID', 'BOARD_NUMBER') }; desk = @{ secrets = @('NEXUS_API_KEY'); variables = @() }; 'engine-pin' = @{ secrets = @('PIN_APP_KEY'); variables = @('PIN_APP_CLIENT_ID') }; release = @{ secrets = @(); variables = @() }; watch = @{ secrets = @('STAFF_WEBHOOK', 'WATCH_APP_KEY'); variables = @('WATCH_APP_CLIENT_ID') } } } }
 function OnGitHub([hashtable]$envs, [hashtable]$state) {
     $base = @{ tokenCode = 200; code = 200; content = $svcAll; envCode = 200; envs = $envList; policies = $policies }
     foreach ($k in $state.Keys) { $base[$k] = $state[$k] }

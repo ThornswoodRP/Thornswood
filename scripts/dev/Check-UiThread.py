@@ -32,8 +32,9 @@ bug, and reported nothing, which is the only reason it was not believed.
 
 So this follows calls out of the delegate, --depth of them, one by default.
 
-WHAT COUNTS AS SAFE. A call inside a Dispatcher.Invoke or Dispatcher.BeginInvoke
-block is already on the right thread, and so is one in a method that asks
+WHAT COUNTS AS SAFE. A call inside a Dispatcher.UIThread.Post, Invoke or
+InvokeAsync block (Avalonia's, since #4823; WPF's Dispatcher.Invoke and
+BeginInvoke before it) is already on the right thread, and so is one in a method that asks
 CheckAccess() first, which is what SafeLog does. Log itself is not reported:
 touching the window is its whole job, and the fault is calling it from the wrong
 thread rather than its own body.
@@ -85,7 +86,10 @@ UNSAFE_CALLS = {'Log'}
 # A control assigned to directly. Named by the prefixes this launcher uses.
 CONTROL_WRITE = re.compile(
     r'\b((?:txt|btn|lst|img|pnl|grid|chk|lbl|bar|tab|win)[A-Za-z0-9_]*)\s*\.\s*\w+\s*=[^=]')
-DISPATCHER = ('Dispatcher.BeginInvoke', 'Dispatcher.Invoke')
+# Avalonia's (#4823): every hand back to the window goes through
+# Dispatcher.UIThread. The launcher on WPF used Dispatcher.BeginInvoke and
+# Dispatcher.Invoke, which name nothing in the launcher now.
+DISPATCHER = ('Dispatcher.UIThread.Post', 'Dispatcher.UIThread.InvokeAsync', 'Dispatcher.UIThread.Invoke')
 BACKGROUND = ('ThreadPool.QueueUserWorkItem', 'new Thread(', 'Task.Run(')
 
 # Words that are followed by a bracket and are not calls. Without this the
@@ -258,7 +262,7 @@ def scan(app, depth=1):
                 if span:
                     # WITH THE DISPATCHER BLOCKS TAKEN OUT FIRST. A background
                     # delegate almost always ends by marshalling its result back
-                    # with win.Dispatcher.BeginInvoke, and everything inside THAT
+                    # with Dispatcher.UIThread.Post, and everything inside THAT
                     # runs on the window's thread. Seeding from the raw body
                     # marked every page builder in the launcher as background
                     # code: the first run reported 249 places and buried the one
@@ -276,7 +280,7 @@ def scan(app, depth=1):
     248 places, nearly all of them page builders like BuildDiag and BuildNews
     that only ever run on the window's thread. The reason is that a widely used
     helper gets seeded once and then everything IT calls is background too, and
-    within three hops that is most of a WPF launcher.
+    within three hops that is most of the launcher.
 
     A regex cannot tell a method called on the pool path from the same method
     called on the window's thread a page later, so the closure cannot be made

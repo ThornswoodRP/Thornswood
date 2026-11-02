@@ -844,14 +844,23 @@ namespace Thornswood
         struct Info
         {
             public uint Attributes;
-            public System.Runtime.InteropServices.ComTypes.FILETIME C, A, W;
+            // The three FILETIMEs, each two DWORDs, as plain numbers.
+            public uint CLow, CHigh, ALow, AHigh, WLow, WHigh;
             public uint Volume, SizeHigh, SizeLow, Links, IndexHigh, IndexLow;
         }
 
+        // DllImport and not LibraryImport: scripts\mods\Generated.ps1 compiles
+        // this file with Add-Type, in Windows PowerShell 5.1 as well as 7,
+        // and Add-Type runs no source generators, so a LibraryImport partial
+        // has no body there (CS8795). The native build makes these two calls'
+        // marshalling when it compiles (a handle, a plain structure, a UTF-16
+        // string), so nothing is made at run time.
         [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
         static extern bool GetFileInformationByHandle(SafeFileHandle h, out Info info);
 
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [DllImport("kernel32.dll", EntryPoint = "MoveFileExW", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
         static extern bool MoveFileEx(string existing, string replacement, int flags);
 
         const int MoveReplaceExisting = 0x1;

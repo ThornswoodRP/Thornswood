@@ -242,6 +242,8 @@ async function boxChecks() {
     fs.writeFileSync(path.join(inst, 'scam_native.node'), 'engine');
     fs.writeFileSync(path.join(inst, 'package.json'), '{}');
     fs.writeFileSync(path.join(inst, 'gamemode.js'), '// the gamemode');
+    fs.mkdirSync(path.join(inst, 'gamemode-tables'), { recursive: true });
+    fs.writeFileSync(path.join(inst, 'gamemode-tables', 'ADMIN_ITEMS.json'), '[]');
     fs.writeFileSync(path.join(inst, 'world', 'someone.json'), '{}');
     for (const f of ['Skyrim.esm', 'JKs Skyrim.esp']) { fs.writeFileSync(path.join(inst, 'data', f), f); }
     const theirs = { port: 7787, dataDir: 'data', loadOrder: ['Skyrim.esm', 'JKs Skyrim.esp'], npcEnabled: true, npcSettings: { x: 1 },
@@ -258,7 +260,8 @@ async function boxChecks() {
       st.thornswoodSite === undefined && st.discordWebhook === undefined && st.password === undefined && st.thornswoodLoadOrderRefuse === undefined);
     yes('its own ports, seats, a dev name, the pass held, and a pass key of its own', st.port === 7797 && st.thornswoodVoicePort === 7799 && st.maxPlayers === 50 &&
       st.thornswoodServer === 'dev' && st.thornswoodRequirePass === true && /^[0-9a-f]{64}$/.test(JSON.parse(fs.readFileSync(path.join(out, 'private', 'door.json'), 'utf8')).passKey));
-    yes('the server\'s program and gamemode are copied, and not its world', fs.existsSync(path.join(out, 'dist_back', 'skymp5-server.js')) && fs.existsSync(path.join(out, 'gamemode.js')) &&
+    yes('the server\'s program and gamemode are copied, its gamemode tables too, and not its world', fs.existsSync(path.join(out, 'dist_back', 'skymp5-server.js')) && fs.existsSync(path.join(out, 'gamemode.js')) &&
+      fs.existsSync(path.join(out, 'gamemode-tables', 'ADMIN_ITEMS.json')) &&
       !fs.existsSync(path.join(out, 'world')) && /^[0-9a-f]{64}$/.test(r.engine));
     let err = '';
     try { server.fromInstalled({ from: inst, out: path.join(tmp, 'c2'), port: '7787', 'voice-port': '7799' }); } catch (e) { err = e.message; }
@@ -412,6 +415,21 @@ async function serverChecks() {
     err = '';
     try { await server.build({ build: dist, masters: path.join(tmp, 'm'), out: path.join(tmp, 'out2') }); } catch (e) { err = e.message; }
     yes('a file that is not the one the record holds is refused, by name', /in the build is sha256 [0-9a-f]{64}, not the [0-9a-f]{64} records\\server-build.json holds/.test(err));
+    // #5327, 2 Nov 2026: the load server had gamemode.js and not its tables
+    // (game/gamemode-tables since #5280), so the gamemode stopped as it loaded.
+    const game = path.join(tmp, 'game-out');
+    fs.mkdirSync(game);
+    server.copyGame(game);
+    const tables = fs.readdirSync(path.join(ROOT, 'game', 'gamemode-tables')).filter((n) => n.endsWith('.json'));
+    yes('the load server gets gamemode.js and every table of game/gamemode-tables beside it, byte for byte',
+      tables.length > 0 && fs.readFileSync(path.join(game, 'gamemode.js')).equals(fs.readFileSync(path.join(ROOT, 'game', 'gamemode.js'))) &&
+      tables.every((n) => fs.readFileSync(path.join(game, 'gamemode-tables', n)).equals(fs.readFileSync(path.join(ROOT, 'game', 'gamemode-tables', n)))));
+    const bare = path.join(tmp, 'bare');
+    fs.mkdirSync(path.join(bare, 'game'), { recursive: true });
+    fs.writeFileSync(path.join(bare, 'game', 'gamemode.js'), '// the gamemode');
+    err = '';
+    try { server.copyGame(path.join(tmp, 'game-out2'), bare); } catch (e) { err = e.message; }
+    yes('a checkout with no gamemode tables is refused, by name, before anything is laid out', /no game\\gamemode-tables/.test(err) && !fs.existsSync(path.join(tmp, 'game-out2')));
     const fake = path.join(tmp, 'Skyrim.esm');
     fs.writeFileSync(fake, 'not Skyrim.esm');
     err = '';

@@ -1,8 +1,8 @@
 <#
   test-not-ours.ps1
 
-  Other people's loose mod files never go into a pack, a release record or the
-  installer again. Issue #1178.
+  Other people's loose mod files never go into a pack or a release record
+  again. Issue #1178.
 
   WHY THIS EXISTS. Measured 29 September: the installer's payload, the dev
   build, the dev record 20260929-140118-dev and the last main record carried
@@ -22,13 +22,14 @@
        out and no release lists them as removed; the collection revision is
        set before the scan; the gone list still keeps what an earlier release
        took out. Lifted out of the shipped script and run.
-    3. Package-Thornswood asks it too, after the collection's files.
-    4. Check-Secrets fails a stage that carries one, by rule name.
-    5. Rollback-Feed's filter, lifted and run: going back hands none out.
-    6. On this machine, where there is one: packing C:\Thornswood\Game the way
-       Publish-Update and Package-Thornswood do ships nothing outside
+    3. Check-Secrets fails a pack that carries one, by rule name.
+    4. Rollback-Feed's filter, lifted and run: going back hands none out.
+    5. On this machine, where there is one: packing C:\Thornswood\Game the way
+       Publish-Update does ships nothing outside
        Data\Platform that is not ours, and the Nemesis patches the generator ran
        are all collection mods'.
+  The old installer's Package-Thornswood.ps1 asked the rule too, and its
+  stage was what Check-Secrets read here; both went with it (#4824).
 
   Read only apart from its own scratch folder. Never connects to anything.
 #>
@@ -43,7 +44,6 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 $Repo = Split-Path -Parent $Here
 $RulesPath   = Join-Path $Repo 'scripts\release\Ship-Rules.ps1'
 $PublishPath = Join-Path $Repo 'scripts\release\Publish-Update.ps1'
-$PackagePath = Join-Path $Repo 'scripts\release\Package-Thornswood.ps1'
 $RollPath    = Join-Path $Repo 'scripts\release\Rollback-Feed.ps1'
 $SecretsPath = Join-Path $Repo 'scripts\dev\Check-Secrets.ps1'
 
@@ -229,51 +229,43 @@ try {
         Yes '  our page stays, neither changed nor removed' ($r2.Now.ContainsKey('Data\Platform\UI\index.html') -and $r2.Removed -notcontains 'Data\Platform\UI\index.html')
     }
 
-    # ---- 3. Package-Thornswood ---------------------------------------------------------
-    $pkg = Get-Content -LiteralPath $PackagePath -Raw
-    $atNot = $pkg.IndexOf('if (Test-ShipNotOurs $rel) {')
-    Yes 'Package-Thornswood leaves out what Test-ShipNotOurs claims' ($atNot -gt 0)
-    Yes '  after the collection''s files, so those are counted as the collection''s' ($atNot -gt $pkg.IndexOf('if (Test-FromCollection $rel) {'))
-    # One assignment, the feed's revision with -FromFeed and this machine's
-    # Vortex otherwise (#3412, #4091).
-    $atRev = $pkg.IndexOf('$ShipCollectionRevision = if ($FromFeed) {')
-    $atLoad = $pkg.IndexOf("    & { . (Join-Path `$Here '..\mods\LoadOrder.ps1'); Get-ShipCollectionRevision `$Root }")
-    Yes '  asked at the revision it sets before the loop' ($atRev -gt 0 -and $atRev -lt $atNot)
-    Yes '  loading LoadOrder.ps1 only for that' ($atLoad -gt $atRev -and $atLoad -lt $atNot)
-
-    # ---- 4. Check-Secrets --------------------------------------------------------------
+    # ---- 3. Check-Secrets --------------------------------------------------------------
+    # Each folder is a pack's shape (game\...), zipped and read as a pack.
     $pwsh = (Get-Process -Id $PID).Path
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
     function Invoke-Secrets([string]$dir) {
+        $zip = $dir + '.zip'
+        [IO.Compression.ZipFile]::CreateFromDirectory($dir, $zip)
         $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-        try { $o = & $pwsh -NoProfile -NonInteractive -File $SecretsPath -Dir $dir 2>&1 | Out-String }
+        try { $o = & $pwsh -NoProfile -NonInteractive -File $SecretsPath -Zip $zip 2>&1 | Out-String }
         finally { $ErrorActionPreference = $old }
         return @{ Code = $LASTEXITCODE; Out = $o }
     }
     $clean = Join-Path $T 'clean'
     $dirty = Join-Path $T 'dirty'
-    foreach ($f in @('payload\Data\Platform\UI\index.html', 'payload\Data\Scripts\fnis.pex', 'payload\Data\Interface\loadwaitspinner.swf')) {
+    foreach ($f in @('game\Data\Platform\UI\index.html', 'game\Data\Scripts\fnis.pex', 'game\Data\Interface\loadwaitspinner.swf')) {
         foreach ($d in $clean, $dirty) {
             $p = Join-Path $d $f; New-Item -ItemType Directory -Force -Path (Split-Path -Parent $p) | Out-Null
             [IO.File]::WriteAllText($p, 'x')
         }
     }
-    $p = Join-Path $dirty 'payload\Data\Interface\racesex_menu.swf'
+    $p = Join-Path $dirty 'game\Data\Interface\racesex_menu.swf'
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $p) | Out-Null
     [IO.File]::WriteAllText($p, 'x')
     $rc = Invoke-Secrets $clean
-    Yes 'Check-Secrets passes a stage of ours alone' ($rc.Code -eq 0)
+    Yes 'Check-Secrets passes a pack of ours alone' ($rc.Code -eq 0)
     $rd = Invoke-Secrets $dirty
     Yes '  and fails one that carries RaceMenu''s loose menu, by rule name' ($rd.Code -ne 0 -and $rd.Out -match 'never-ship-not-ours')
     # The main menu is made on each machine from its own game since #2827,
-    # so a stage that carries it hands on Bethesda's file.
+    # so a pack that carries it hands on Bethesda's file.
     $menu = Join-Path $T 'menu'
-    $p = Join-Path $menu 'payload\Data\Interface\startmenu.swf'
+    $p = Join-Path $menu 'game\Data\Interface\startmenu.swf'
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $p) | Out-Null
     [IO.File]::WriteAllText($p, 'x')
     $rm = Invoke-Secrets $menu
     Yes '  and one that carries the main menu, which is made from each game (#2827)' ($rm.Code -ne 0 -and $rm.Out -match 'never-ship-bethesda')
 
-    # ---- 5. Rollback-Feed --------------------------------------------------------------
+    # ---- 4. Rollback-Feed --------------------------------------------------------------
     $roll = Get-Content -LiteralPath $RollPath -Raw
     $a = $roll.IndexOf('# ==== thornswood no bethesda in a rollback ====')
     $b = $roll.IndexOf('# ==== end thornswood no bethesda in a rollback ====')
@@ -295,7 +287,7 @@ try {
     Remove-Item -LiteralPath $T -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# ---- 6. this machine ------------------------------------------------------------------
+# ---- 5. this machine ------------------------------------------------------------------
 # Join-Path stops on a drive this machine does not have (C: off Windows),
 # so whether the folder is here at all is asked first.
 if (-not (Test-Path -LiteralPath $Root)) {

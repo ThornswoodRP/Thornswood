@@ -12,8 +12,9 @@
     Restore-Backup.ps1 and vps-nightly-backup.ps1  the passphrase file
     Set-DevNews.ps1 -Check                         bot\dev-channel.txt
     Discord-Hook.ps1 -Check                        the local webhook copy
-    Source-Notice.ps1 Get-SourceNoticeEntries      client-build.json
-    Package-Thornswood.ps1 Get-SourceNotice        both build records (lifted)
+    Source-Notice.ps1 Get-SourceNoticeEntries      client-build.json, and the
+                                                   front record the setup's
+                                                   note reads (Build-SetupFiles)
   Scratch folders and scratch copies only; the VPS is a stub that answers
   NOHOOK, and nothing reaches the network.
 #>
@@ -77,21 +78,18 @@ try {
     try { $null = Get-SourceNoticeEntries $client @($one) 'runtime' (Join-Path $T 'lic') } catch { $threw = $_.Exception.Message }
     Yes '  and so is one holding only white space' ($threw -eq "$client is empty")
 
-    $pk = [Management.Automation.Language.Parser]::ParseFile((Join-Path $Repo 'scripts\release\Package-Thornswood.ps1'), [ref]$null, [ref]$null)
-    $fn = $pk.Find({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-SourceNotice' }, $true)
-    Yes 'Get-SourceNotice lifted out of Package-Thornswood.ps1' ($null -ne $fn)
-    . ([scriptblock]::Create($fn.Extent.Text))
-    $server = Join-Path $T 'records\server-build.json'
-    [IO.File]::Copy((Join-Path $Repo 'records\server-build.json'), $server)
+    # The setup's note (kind setup) reads front-build.json beside the client
+    # record as well, the way Build-SetupFiles.ps1 passes it. Until #4824 the
+    # old installer's Get-SourceNotice read the two build records here.
+    [IO.File]::Copy((Join-Path $Repo 'records\client-build.json'), $client, $true)
+    $front = Empty (Join-Path $T 'records\front-build.json')
+    $threw = ''
+    try { & { Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $null = Get-SourceNoticeEntries $client @('Data\Platform\UI\build.js') 'setup' (Join-Path $T 'lic') $front } } catch { $threw = $_.Exception.Message }
+    Yes ("Source-Notice, the setup's note: an empty front record is named as empty ({0})" -f $threw) ($threw -eq "$front is empty")
     [IO.File]::WriteAllBytes($client, [byte[]]@())
     $threw = ''
-    try { & { Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $null = Get-SourceNotice $client $server (Join-Path $T 'payload') } } catch { $threw = $_.Exception.Message }
-    Yes ("Package-Thornswood: an empty client record is named as empty ({0})" -f $threw) ($threw -eq "$client is empty")
-    [IO.File]::Copy((Join-Path $Repo 'records\client-build.json'), $client, $true)
-    [IO.File]::WriteAllBytes($server, [byte[]]@())
-    $threw = ''
-    try { & { Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $null = Get-SourceNotice $client $server (Join-Path $T 'payload') } } catch { $threw = $_.Exception.Message }
-    Yes ("  and so is an empty server record ({0})" -f $threw) ($threw -eq "$server is empty")
+    try { & { Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $null = Get-SourceNoticeEntries $client @('Data\Platform\UI\build.js') 'setup' (Join-Path $T 'lic') $front } } catch { $threw = $_.Exception.Message }
+    Yes ("  and so is an empty client record before it ({0})" -f $threw) ($threw -eq "$client is empty")
 }
 finally { Remove-Item -LiteralPath $T -Recurse -Force -ErrorAction SilentlyContinue }
 Write-Host ''

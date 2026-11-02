@@ -6,6 +6,17 @@ Nothing here is a fix for a real detection: if a build is ever genuinely
 dirty, it comes off the site first and is worked out afterwards. This page
 is for the ones that are wrong, which is all of them so far.
 
+Since #4824 that file is Velopack's setup program. `merge-release.yml` makes
+it with the launcher's Velopack package inside it, signs it, and puts it on a
+GitHub Release: main's as `Thornswood-Setup.exe` on a Release `main-<tag>`
+once Patrick approves that build (#5181), dev's as `Thornswood-Dev-Setup.exe`
+on each build Release. The site links to the newest one (`site\server.js`
+`newestSetup`). It installs the launcher with Thornswood's own files and starts
+it; the launcher's first start asks the install's questions. The program
+measured below is the setup program before it, which downloaded a payload from
+the site and ran a script from it (`installer\setup\Bootstrap.cs`, gone with
+#4824). Nothing on this page has measured the Velopack one yet.
+
 ## What was measured
 
 27 September 2026, the live download, `Thornswood-Setup-20260927-0257.exe`,
@@ -26,25 +37,24 @@ hash reputation verdict rather than a signature for a known family:
 
 Windows reports the file as NotSigned. The version resource is filled in:
 Title and Product are Thornswood Setup, Company is Thornswood, with a
-copyright line, and Build-Launcher stamps FileVersion and ProductVersion from
-the launcher's own version (`installer\setup\Bootstrap.cs:Build-Launcher.ps1 stamps them at compile time`). VirusTotal
+copyright line, and Build-Launcher stamped FileVersion and ProductVersion from
+the launcher's own version. VirusTotal
 also tagged the file `detect-debug-environment` and
 `packers: .NET executable`.
 
 That build is from before two changes made later the same day. Issue #390
 turned signing on (Azure Artifact Signing), and the site stopped stamping the
-date into the name: it publishes one name, `Thornswood-Setup.exe`
-(`scripts\release\Publish-Installer.ps1:$exeOut`), and removes any stamped
-copy left from before
-(`scripts\release\Publish-Installer.ps1:Drop any leftover stamped tips`).
-Nothing on this page measures a signed build yet. Before reporting a file,
+date into the name: from then on the download was one name,
+`Thornswood-Setup.exe`. Nothing on this page measures a signed build yet. Before reporting a file,
 check which kind it is: `Get-AuthenticodeSignature` says Valid for a signed
 build and NotSigned for one from before 27 September.
 
 ## Why an honest installer earns those verdicts
 
-Five things about this program, all of them on purpose, are the same five a
-dropper does.
+Five things about the old program, all of them on purpose, were the same five
+a dropper does. The second and third were its own and went with it: Velopack's
+setup program carries its package inside it rather than downloading one, and
+asks nothing about other programs. The other three hold for it too.
 
 - Until 27 September it was not signed. Authenticode is the one input every
   reputation system weighs heavily and the only one that carries across
@@ -52,19 +62,16 @@ dropper does.
   a build from then on is signed and one from before is not: check which you
   are looking at before reporting it. Everything below still helps a signed
   build whose publisher has little reputation yet.
-- It is a small .NET executable that downloads a much bigger payload and runs
-  what is inside it (`installer\setup\Bootstrap.cs:Download`). That is
-  the definition of a downloader. The one thing that makes ours different is
-  that the payload is checked against the SHA-256 the site published before
-  anything in it runs, and a file that does not match is deleted
-  (`PayloadMatches` and `CheckPayload` in the same file).
-- It ends other programs. StopSkyrim enumerates processes and used to call
-  Kill on anything still alive (`installer\setup\Bootstrap.cs:StopSkyrim`). Killing
-  a process with no consent is behaviour a model can see, so since this page
-  was written it asks first: a Yes or No box naming what is still running,
-  Kill only on Yes, and on No the install stops having changed nothing
-  (`AskToClose`, same file). The enumeration itself stays, because a leftover
-  Skyrim holds the game files open and the install genuinely cannot continue.
+- It was a small .NET executable that downloaded a much bigger payload and
+  ran what was inside it. That is the definition of a downloader. The one
+  thing that made ours different was that the payload was checked against the
+  SHA-256 the site published before anything in it ran, and a file that did
+  not match was deleted.
+- It ended other programs. It enumerated processes and at first called Kill
+  on a Skyrim still alive. Killing a process with no consent is behaviour a
+  model can see, so it came to ask first: a Yes or No box naming what was
+  still running, Kill only on Yes. The launcher's install asks the same way
+  now (`launcher\app\InstallSkyrim.cs:InstallSkyrim`).
 - Its resources have high entropy. The icon and the logo are compressed
   images sitting in `.rsrc`, which reads the same to an entropy check as a
   packed payload does.
@@ -89,12 +96,12 @@ Do this after a build is published and has been looked at on VirusTotal, not
 before: the report has to exist first. Everything below needs the same three
 facts, so write them once and paste them into each form.
 
-    Thornswood Setup, the first-run installer for Thornswood, a private
-    modded Skyrim multiplayer server at https://thornswood.net
-    It downloads the Thornswood payload from thornswood.net, checks it
-    against the SHA-256 the site published, unpacks it and runs the
-    Setup.bat inside it. It is Authenticode signed through Azure
-    Artifact Signing.
+    Thornswood Setup, the installer for Thornswood, a private modded
+    Skyrim multiplayer server at https://thornswood.net
+    It is a Velopack setup program: it installs the Thornswood launcher
+    and its game files from the package inside it, then starts the
+    launcher. It is Authenticode signed through Azure Artifact Signing,
+    and published on the Thornswood GitHub Releases.
     File: Thornswood-Setup.exe
     SHA-256: <the hash of that exact file>
     Report: https://www.virustotal.com/gui/file/<sha256>
@@ -104,10 +111,10 @@ a report is about. For a build from before 27 September, say instead that it
 is not signed, and give the dated name it was published under.
 
 1. **VirusTotal, the report itself.** Get the hash the way the site gets it,
-   in lower case: Publish-Installer measures the exe
-   (`scripts\release\Publish-Installer.ps1:$exeSha`) and writes the hash into
-   the site's `files.json`, and the Downloads page shows it, lower cased by the
-   site, beside the size (`site\lib\downloads.js` `listFiles`, `site\public\home.js` `sum`).
+   in lower case: GitHub measures every Release file and gives its SHA-256 as
+   the asset's digest, the site reads it from there, and the Downloads page
+   shows it, lower cased by the site, beside the size (`site\lib\downloads.js`
+   `listFiles`, `site\public\home.js` `sum`).
    Open `https://www.virustotal.com/gui/file/<sha256>`, read which engines
    flagged it, and leave a community comment with the three facts above.
    `scripts\release\Add-VirusTotalComment.ps1` posts that comment through the
@@ -156,9 +163,9 @@ is not signed, and give the dated name it was published under.
 ## Every release, not once
 
 A new build is a new hash, and none of the work above carries over to it. So
-after each `Package-Thornswood.ps1` and `Publish-Installer.ps1`:
+after each Release that carries a new `Thornswood-Setup.exe`:
 
-- Take the hash off the Downloads page, where Publish-Installer put it.
+- Take the hash off the Downloads page, or off the Release's file list.
 - Send the file, so the report exists. `Publish-VirusTotal.ps1 -Path <the exe>`
   does that, run by hand, or upload the exe on VirusTotal's upload page.
 - Run `scripts\release\Add-VirusTotalComment.ps1 -Path <the exe>` with

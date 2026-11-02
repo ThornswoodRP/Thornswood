@@ -1,5 +1,4 @@
 using System;
-using System.Net;
 
 namespace Thornswood
 {
@@ -70,57 +69,31 @@ namespace Thornswood
                 if (cfg != null && !string.IsNullOrEmpty(cfg.ServerAddress) && resourcePort > 0)
                 {
                     string url = "http://" + cfg.ServerAddress + ":" + resourcePort + "/online.json";
-                    using (var wc = new WebClient())
+                    // A server that is up but has not written the file yet
+                    // should not hold the page for thirty seconds: the answer
+                    // has 2.5 seconds to start (Http).
+                    byte[] raw = Http.GetOrNull(url, 2500, Http.DefaultReadMs);
+                    if (raw != null)
                     {
-                        wc.Headers["User-Agent"] = "ThornswoodLauncher/" + Updater.Version;
-                        // A server that is up but has not written the file yet
-                        // should not hold the page for thirty seconds.
-                        byte[] raw = Fetch(wc, url, 2500);
-                        if (raw != null)
+                        int at = 0;
+                        if (raw.Length >= 3 && raw[0] == 0xEF && raw[1] == 0xBB && raw[2] == 0xBF) at = 3;
+                        string text = System.Text.Encoding.UTF8.GetString(raw, at, raw.Length - at);
+                        var m = System.Text.RegularExpressions.Regex.Match(text, "\"now\"\\s*:\\s*(\\d+)");
+                        if (m.Success)
                         {
-                            int at = 0;
-                            if (raw.Length >= 3 && raw[0] == 0xEF && raw[1] == 0xBB && raw[2] == 0xBF) at = 3;
-                            string text = System.Text.Encoding.UTF8.GetString(raw, at, raw.Length - at);
-                            var m = System.Text.RegularExpressions.Regex.Match(text, "\"now\"\\s*:\\s*(\\d+)");
-                            if (m.Success)
-                            {
-                                got.Known = true;
-                                got.Now = int.Parse(m.Groups[1].Value);
-                            }
-                            // The most the server holds at once, in its own
-                            // words (#481), over the feed's copy of it.
-                            var mx = System.Text.RegularExpressions.Regex.Match(text, "\"max\"\\s*:\\s*(\\d+)");
-                            int most;
-                            if (mx.Success && int.TryParse(mx.Groups[1].Value, out most) && most > 0) got.Max = most;
+                            got.Known = true;
+                            got.Now = int.Parse(m.Groups[1].Value);
                         }
+                        // The most the server holds at once, in its own
+                        // words (#481), over the feed's copy of it.
+                        var mx = System.Text.RegularExpressions.Regex.Match(text, "\"max\"\\s*:\\s*(\\d+)");
+                        int most;
+                        if (mx.Success && int.TryParse(mx.Groups[1].Value, out most) && most > 0) got.Max = most;
                     }
                 }
             }
             catch (Exception ex) { Swallow.Note("Online.AskPort", ex); }
             return got;
-        }
-
-        // WebClient has no timeout worth the name, and the default is long
-        // enough that a server which is merely slow looks like a hung launcher.
-        class Quick : WebClient
-        {
-            public int Ms = 2500;
-            protected override WebRequest GetWebRequest(Uri address)
-            {
-                var r = base.GetWebRequest(address);
-                if (r != null) { r.Timeout = Ms; }
-                return r;
-            }
-        }
-
-        static byte[] Fetch(WebClient _, string url, int ms)
-        {
-            using (var q = new Quick())
-            {
-                q.Ms = ms;
-                q.Headers["User-Agent"] = "ThornswoodLauncher/" + Updater.Version;
-                try { return q.DownloadData(url); } catch { return null; }
-            }
         }
 
         /// <summary>What to put on the Play page. Empty when there is nothing worth saying.</summary>

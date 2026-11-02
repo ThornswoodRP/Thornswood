@@ -14,13 +14,16 @@
   The launcher cannot be started from here (the ops repo's CLAUDE.md), so this does two things:
 
     - It lifts the video's own decide delegate out of Shell.cs as it is written
-      and runs it against a stand-in clock, window and page: a game start and a
-      game close with the window up, minimising and restoring while the game
-      runs, a launcher opened on a game already running, and the old cases
-      (another page, minimised) so they still behave as Djinn measured them.
-    - It reads the source for the wiring: every place that changes playing once
-      the window is up tells the video straight after, and the one at startup
-      runs before the window is shown.
+      and runs it against a stand-in window and page and the signal the
+      decoding thread waits on (seenNow): a game start and a game close with
+      the window up, minimising and restoring while the game runs, a launcher
+      opened on a game already running, and the old cases (another page,
+      minimised) so they still behave as Djinn measured them.
+    - It reads the source for the wiring: the decoding thread waits on that
+      signal before it decodes the next frame, so a stopped video carries on
+      from the frame it stopped on; every place that changes playing once the
+      window is up tells the video straight after, and the one at startup runs
+      before the window is shown.
 
   Read only. It reads launcher\app\*.cs and nothing else.
 */
@@ -76,12 +79,10 @@ const decideSrc = braces(start, decideAt).inner;
 // conditions and calls, so the handful of C# spellings it uses are swapped
 // for JavaScript ones and the rest runs as it is.
 const decideJs = decideSrc
-  .replace(/\bbool\s+(\w+)\s*=/g, 'var $1 =')
-  .replace(/\bTimeSpan\s+(\w+)\s*=/g, 'var $1 =')
-  .replace(/\bheldAt\.Value\b/g, 'heldAt');
+  .replace(/\bbool\s+(\w+)\s*=/g, 'var $1 =');
 let decideFn = null;
 try {
-  // `with` so that the delegate's own names (page, win, clock, heldAt, playing,
+  // `with` so that the delegate's own names (page, win, seenNow, playing,
   // gone) read and write the stand-in's fields, as the C# closure does.
   decideFn = new Function('env', 'with (env) {' + decideJs + '\n}');
 } catch (e) {
@@ -90,37 +91,29 @@ try {
 yes('the decide delegate reads as a function the stand-ins can run', decideFn !== null);
 if (!decideFn) done();
 
-/* A stand-in for the MediaClock: Begin, Seek and Stop, and a time that only
-   moves while it runs. CurrentTime is null once stopped, as a stopped WPF clock
-   reports it. */
-function makeClock() {
-  const c = { state: 'Active', time: 0, calls: [] };
-  Object.defineProperty(c, 'CurrentTime', { get: function () { return c.state === 'Stopped' ? null : c.time; } });
-  c.Controller = {
-    Begin: function () { c.state = 'Active'; c.time = 0; c.calls.push('Begin'); },
-    Seek: function (at) { c.time = at; c.calls.push('Seek ' + at); },
-    Stop: function () { c.state = 'Stopped'; c.calls.push('Stop'); }
-  };
-  c.run = function (seconds) { if (c.state === 'Active') c.time += seconds; };
-  return c;
+/* A stand-in for seenNow, the ManualResetEventSlim the decoding thread waits
+   on: set, the thread decodes and puts up frames; reset, it waits on the frame
+   it is at. */
+function makeSignal() {
+  const s = { IsSet: false, calls: [] };
+  s.Set = function () { s.IsSet = true; s.calls.push('Set'); };
+  s.Reset = function () { s.IsSet = false; s.calls.push('Reset'); };
+  return s;
 }
 function makeWorld(o) {
   o = o || {};
   const env = {
     gone: false,
-    clock: makeClock(),
-    heldAt: null,
+    seenNow: makeSignal(),
     playing: !!o.playing,
     page: { IsVisible: o.visible !== false },
-    win: { WindowState: o.minimised ? 'Minimized' : 'Normal' },
-    WindowState: { Minimized: 'Minimized', Normal: 'Normal', Maximized: 'Maximized' },
-    TimeSpan: { Zero: 0 },
-    System: { Windows: { Media: { Animation: { TimeSeekOrigin: { BeginTime: 'BeginTime' } } } } }
+    win: { IsVisible: o.shown !== false, WindowState: o.minimised ? 'Minimized' : 'Normal' },
+    WindowState: { Minimized: 'Minimized', Normal: 'Normal', Maximized: 'Maximized' }
   };
   env.decide = function () { decideFn(env); };
   return env;
 }
-function runs(env) { return env.clock.state === 'Active'; }
+function runs(env) { return env.seenNow.IsSet; }
 
 let threw = null;
 try {
@@ -129,11 +122,8 @@ try {
   let w = makeWorld();
   w.decide();
   yes('before the game, with the Play page up, the video plays', runs(w));
-  w.clock.run(7.5);
   w.playing = true; w.decide();
   yes('the game starts with the window still up: the video stops', !runs(w));
-  yes('and it remembers where it was, 7.5 seconds in', w.heldAt === 7.5);
-  w.clock.run(60);
   w.win.WindowState = 'Minimized'; w.decide();
   w.win.WindowState = 'Normal'; w.decide();
   yes('minimising and restoring while the game runs does not start it', !runs(w));
@@ -142,31 +132,27 @@ try {
   yes('another page and back while the game runs does not start it', !runs(w));
   w.playing = false; w.decide();
   yes('the game closes: the video plays again', runs(w));
-  yes('from where it stopped, not from the start',
-      w.clock.time === 7.5 && w.clock.calls.slice(-2).join(',') === 'Begin,Seek 7.5');
-  yes('and it is not held any more', w.heldAt === null);
 
   // Keep Launcher Open off: Play minimises the window after the start. The
   // game ends while it is still minimised, and restoring it is what resumes.
   w = makeWorld();
   w.decide();
-  w.clock.run(3);
   w.playing = true; w.decide();
   w.win.WindowState = 'Minimized'; w.decide();
-  yes('the game starts and the window is minimised: stopped', !runs(w) && w.heldAt === 3);
+  yes('the game starts and the window is minimised: stopped', !runs(w));
   w.playing = false; w.decide();
   yes('the game closes while minimised: still stopped', !runs(w));
   w.win.WindowState = 'Normal'; w.decide();
-  yes('the window comes back: it plays from 3 seconds', runs(w) && w.clock.time === 3);
+  yes('the window comes back: it plays', runs(w));
 
   // A launcher opened while the game is already running. The first decide
-  // runs before the window is shown, so the page is not visible yet; showing
-  // the window is the next decide, and the game is still up.
-  w = makeWorld({ visible: false });
+  // runs before the window is shown; showing the window (its Opened event) is
+  // the next decide, and the game is still up.
+  w = makeWorld({ shown: false });
   w.decide();
-  yes('before the window is shown, the video is stopped', !runs(w) && w.heldAt === 0);
+  yes('before the window is shown, the video is stopped', !runs(w));
   w.playing = true;
-  w.page.IsVisible = true; w.decide();
+  w.win.IsVisible = true; w.decide();
   yes('a launcher opened on a running game shows its window with the video stopped', !runs(w));
   w.playing = false; w.decide();
   yes('and the video starts when that game closes', runs(w));
@@ -174,25 +160,25 @@ try {
   // What Djinn measured stays as it was.
   w = makeWorld();
   w.decide();
-  w.clock.run(12);
   w.page.IsVisible = false; w.decide();
-  yes('another page, no game: stopped, as before', !runs(w) && w.heldAt === 12);
+  yes('another page, no game: stopped, as before', !runs(w));
   w.page.IsVisible = true; w.decide();
-  yes('back on the Play page: plays from the same point, as before', runs(w) && w.clock.time === 12);
+  yes('back on the Play page: plays again, as before', runs(w));
   w.win.WindowState = 'Minimized'; w.decide();
   yes('minimised, no game: stopped, as before', !runs(w));
   w.win.WindowState = 'Maximized'; w.decide();
   yes('maximised counts as seen, as before', runs(w));
-  const before = w.clock.calls.length;
   w.decide(); w.decide();
-  yes('deciding twice in the same state changes nothing', w.clock.calls.length === before);
+  yes('deciding twice in the same state changes nothing', runs(w));
+  w.win.WindowState = 'Minimized'; w.decide(); w.decide();
+  yes('nor twice while stopped', !runs(w));
 
   // A video that failed to play is left alone, game or no game.
   w = makeWorld();
   w.gone = true;
   w.playing = true; w.decide();
   w.playing = false; w.decide();
-  yes('once the video has been dropped, deciding does nothing', w.clock.calls.length === 0);
+  yes('once the video has been dropped, deciding does nothing', w.seenNow.calls.length === 0);
 } catch (e) {
   threw = e;
 }
@@ -201,12 +187,19 @@ yes('the lifted decide ran without an error' + (threw ? ' (' + threw.message + '
 // ---- the wiring -----------------------------------------------------------------
 yes('headerVideoDecide is a field that does nothing until the video starts, so a call can never throw',
     /\bstatic Action headerVideoDecide = delegate \{ \};/.test(SHELL));
+// The thread waits on seenNow before it decodes the next frame, and takes its
+// clock from then, so a stopped video carries on from the frame it stopped on
+// at its own speed, not from the start and not racing to catch up.
+const wait = start.indexOf('if (!seenNow.IsSet) { seenNow.Wait(); due = clock.Elapsed; }');
+yes('the decoding thread waits while nobody can see the strip, then carries on from the same frame',
+    wait > 0 && start.indexOf('frames.Next()', wait) > wait);
 const handOver = start.indexOf('headerVideoDecide = decide;');
-const lastWire = start.indexOf('page.IsVisibleChanged += delegate { decide(); };');
+const lastWire = start.indexOf('if (e.Property == Visual.IsVisibleProperty) decide();');
 yes('StartHeaderVideo hands its decide over', handOver > 0);
 yes('only once the video is set up and wired to the window and the page',
     handOver > 0 && lastWire > 0 && handOver > lastWire);
 yes('the window being minimised still decides', start.indexOf('win.StateChanged += delegate { decide(); };') > 0);
+yes('and so does the window being shown', start.indexOf('win.Opened += delegate { decide(); };') > 0);
 
 // Every assignment to playing in the Shell class, whichever file it is in.
 const shellFiles = fs.readdirSync(APP).filter(function (f) {
@@ -215,7 +208,7 @@ const shellFiles = fs.readdirSync(APP).filter(function (f) {
 yes('the Shell class is found in more than one file, and all of them are read', shellFiles.length > 1);
 
 const runBody = method(SHELL, 'static void Run(string[] args)');
-const shown = runBody.indexOf('app.Run(win);');
+const shown = runBody.indexOf('win.Show();');
 let assignments = 0;
 for (const f of shellFiles) {
   const lines = read(f).split('\n');
@@ -241,19 +234,19 @@ for (const f of shellFiles) {
       yes(where + ' tells the video straight after', told);
     } else if (f === 'Shell.cs' && m[2].trim() === 'Checks.GameRunning()') {
       // The launcher opened on a game already running. The window is shown by
-      // app.Run, and the page becoming visible is the decide that counts.
+      // win.Show, and its Opened event is the decide that counts.
       const inRun = runBody.indexOf(line.trim());
       yes(where + ' is in Run, before the window is shown', inRun > 0 && shown > 0 && inRun < shown);
-      yes('and the video cannot play before the window is shown, because it needs the page visible',
-          /bool seen = page\.IsVisible\b/.test(decideSrc));
+      yes('and the video cannot play before the window is shown, because it needs the window visible',
+          /bool seen = win\.IsVisible && page\.IsVisible\b/.test(decideSrc));
     } else if (m[2].trim() === 'Checks.GameRunning()') {
       // The same check in another way in, such as OpenForUninstall in
       // ShellUninstall.cs (pull request 270): it has to come before that
-      // method shows the window with its own app.Run, for the same reason.
+      // method shows the window with its own win.Show, for the same reason.
       let runAt = -1;
       for (let k = i + 1; k < lines.length; k++) {
         if (/^\s*(public |private |internal )?static\s+\w[\w<>\[\]]*\s+\w+\s*\(/.test(lines[k])) break;
-        if (lines[k].indexOf('app.Run(win);') >= 0) { runAt = k; break; }
+        if (lines[k].indexOf('win.Show();') >= 0) { runAt = k; break; }
       }
       yes(where + ' comes before its own method shows the window', runAt > i);
     } else {

@@ -1,18 +1,21 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Net;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Documents;
+using System.Threading;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Threading;
 
 namespace Thornswood
 {
     /// <summary>
-    /// Profile\accepted.json, the same file the setup program writes when the
+    /// Profile\accepted.json, the same file the install window writes when the
     /// terms, the privacy policy and the rules are ticked (issue #1009).
     ///
     /// An install made before that lock has no file, and nothing else in the
@@ -207,32 +210,43 @@ namespace Thornswood
         /// </summary>
         public static bool Ask(bool[] only)
         {
+            return Ask(only, null);
+        }
+
+        /// <summary>
+        /// The same, over owner when it is on screen, so the question blocks
+        /// the launcher behind it. At startup there is no window yet and the
+        /// question stands on its own.
+        ///
+        /// Synchronous, as WPF's ShowDialog was: the window's messages keep
+        /// moving until this window closes, then the answer is returned, so
+        /// Ensure and Recheck read it on their next line.
+        /// </summary>
+        public static bool Ask(bool[] only, Window owner)
+        {
             bool yes = false;
             var boxes = new CheckBox[Pages.Length];
             var w = new Window();
             w.Title = "Thornswood";
             w.Width = 560;
             w.SizeToContent = SizeToContent.Height;
-            w.ResizeMode = ResizeMode.NoResize;
-            w.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            w.CanResize = false;
+            w.WindowStartupLocation = owner != null && owner.IsVisible
+                ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen;
             w.Content = Build(boxes, only, delegate
             {
                 if (!AllTicked(boxes)) return;
                 yes = true;
-                w.DialogResult = true;
-            });
-            try
+                w.Close();
+            }, delegate { w.Close(); });
+            using (var closed = new CancellationTokenSource())
             {
-                if (Application.Current != null && Application.Current.MainWindow != null &&
-                    Application.Current.MainWindow.IsVisible)
-                    w.Owner = Application.Current.MainWindow;
+                w.Closed += delegate { closed.Cancel(); };
+                if (owner != null && owner.IsVisible) w.ShowDialog(owner);
+                else w.Show();
+                Dispatcher.UIThread.MainLoop(closed.Token);
             }
-            catch (Exception)
-            {
-                // No owner yet, at startup. The window still shows on its own.
-            }
-            bool? r = w.ShowDialog();
-            return yes && r == true;
+            return yes;
         }
 
         /// <summary>
@@ -284,7 +298,7 @@ namespace Thornswood
                    (names.Count == 1 ? "it is" : "they are") + " ticked.";
         }
 
-        static UIElement Build(CheckBox[] boxes, bool[] only, Action goOn)
+        static Control Build(CheckBox[] boxes, bool[] only, Action goOn, Action notNow)
         {
             var root = new StackPanel();
             root.Margin = new Thickness(22);
@@ -314,18 +328,19 @@ namespace Thornswood
                 box.Content = Words[i];
                 box.VerticalAlignment = VerticalAlignment.Center;
                 int closed = i;
-                box.Checked += delegate { go.IsEnabled = AllTicked(boxes); };
-                box.Unchecked += delegate { go.IsEnabled = AllTicked(boxes); };
+                box.IsCheckedChanged += delegate { go.IsEnabled = AllTicked(boxes); };
                 boxes[closed] = box;
                 row.Children.Add(box);
 
-                var linkText = new TextBlock();
-                linkText.Margin = new Thickness(10, 0, 0, 0);
-                linkText.VerticalAlignment = VerticalAlignment.Center;
-                var link = new Hyperlink(new Run(LinkWords[i]));
+                // The theme's own link, as the WPF Hyperlink was. No
+                // NavigateUri: OpenPage opens it, so the page is checked
+                // against the three first.
+                var link = new HyperlinkButton();
+                link.Content = LinkWords[i];
+                link.Margin = new Thickness(10, 0, 0, 0);
+                link.VerticalAlignment = VerticalAlignment.Center;
                 link.Click += delegate { OpenPage(pageUrl); };
-                linkText.Inlines.Add(link);
-                row.Children.Add(linkText);
+                row.Children.Add(link);
                 root.Children.Add(row);
             }
 
@@ -337,6 +352,7 @@ namespace Thornswood
             no.Content = "Not now";
             no.MinWidth = 110;
             no.IsCancel = true;
+            no.Click += delegate { notNow(); };
             buttons.Children.Add(no);
             buttons.Children.Add(go);
             root.Children.Add(buttons);
@@ -410,17 +426,28 @@ namespace Thornswood
             return shas;
         }
 
+        // The site's three pages, eight seconds for the answer and eight for
+        // the text, as the HttpWebRequest this replaced was given.
+        static readonly HttpClient web = new HttpClient() { Timeout = Timeout.InfiniteTimeSpan };
+
         static string FetchPage(string name)
         {
-            ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072; // Tls12 added, never replaced (#1360)
-            var req = (HttpWebRequest)WebRequest.Create(Site + "/api/page/" + name);
-            req.UserAgent = "ThornswoodLauncher";
-            req.Timeout = 8000;
-            req.ReadWriteTimeout = 8000;
-            using (var resp = (HttpWebResponse)req.GetResponse())
-            using (var r = new StreamReader(resp.GetResponseStream(), new UTF8Encoding(false)))
+            using (var req = new HttpRequestMessage(HttpMethod.Get, Site + "/api/page/" + name))
+            using (var answer = new CancellationTokenSource(8000))
             {
-                return JsonString(r.ReadToEnd(), "md");
+                req.Headers.TryAddWithoutValidation("User-Agent", "ThornswoodLauncher");
+                using (HttpResponseMessage resp = web.Send(req, HttpCompletionOption.ResponseHeadersRead, answer.Token))
+                using (var read = new CancellationTokenSource(8000))
+                {
+                    // A refusal throws, as GetResponse did, and FetchShas
+                    // takes it as the site not answering.
+                    resp.EnsureSuccessStatusCode();
+                    // Read with the token, so the eight seconds hold for the
+                    // whole text and not only for its start.
+                    byte[] text = resp.Content.ReadAsByteArrayAsync(read.Token).GetAwaiter().GetResult();
+                    using (var r = new StreamReader(new MemoryStream(text), new UTF8Encoding(false)))
+                        return JsonString(r.ReadToEnd(), "md");
+                }
             }
         }
 

@@ -2,8 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
-using System.Windows;
-using System.Windows.Controls;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Threading;
 
 namespace Thornswood
 {
@@ -39,7 +42,7 @@ namespace Thornswood
             var have = pendingDoc == null ? null : pendingDoc.optional;
             if (have == null) return;
 
-            var rows = new List<UIElement>();
+            var rows = new List<Control>();
             foreach (var p in have)
             {
                 if (p == null || string.IsNullOrEmpty(p.id)) continue;
@@ -49,7 +52,7 @@ namespace Thornswood
 
             var head = new TextBlock();
             head.Text = "Add-ons";
-            head.Style = win.Resources["Eyebrow"] as Style;
+            head.Theme = Look("Eyebrow");
             head.Margin = new Thickness(0, 22, 0, 11);
             diagAddons.Children.Add(head);
 
@@ -59,11 +62,11 @@ namespace Thornswood
                          "which is why they are safe: the server compares plugin lists and " +
                          "never looks at anything in here. Nobody is at a disadvantage for " +
                          "leaving them off.";
-            about.Style = win.Resources["Body"] as Style;
+            about.Theme = Look("Body");
             about.Margin = new Thickness(0, 0, 8, 12);
             diagAddons.Children.Add(about);
 
-            foreach (UIElement r in rows) diagAddons.Children.Add(r);
+            foreach (Control r in rows) diagAddons.Children.Add(r);
         }
 
         static string Bytes(long n)
@@ -73,7 +76,7 @@ namespace Thornswood
             return (n / 1024.0).ToString("0") + " KB";
         }
 
-        static UIElement PackRow(Pack p, bool installed)
+        static Control PackRow(Pack p, bool installed)
         {
             var g = new Grid();
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -103,7 +106,7 @@ namespace Thornswood
             var b = new Button();
             bool busy = packBusy.Contains(p.id);
             b.Content = busy ? "Working..." : (installed ? "Remove" : "Install");
-            b.Style = (Style)win.Resources[installed ? "Ghost" : "Solid"];
+            b.Theme = Look(installed ? "Ghost" : "Solid");
             b.IsEnabled = !busy;
             b.VerticalAlignment = VerticalAlignment.Center;
             b.MinWidth = 96;
@@ -129,12 +132,15 @@ namespace Thornswood
         /// Since #599 took the Mods page off the rail, the Mods page's card was
         /// the only way to the collection and nobody could reach it.
         ///
-        /// Built here rather than in ui.xaml on purpose: a named control the
-        /// C# looks up and the xaml does not have comes back null and takes
-        /// the whole page with it, and this is the one row that must not be
-        /// the thing that breaks.
+        /// Built here rather than in the window's XAML, from when the window
+        /// was read at run time: a named control the C# looked up and the
+        /// xaml did not have came back null and took the whole page with it,
+        /// and this is the one row that must not be the thing that breaks.
+        /// MainWindow.axaml is compiled now, so a missing name is a build
+        /// error instead, and the card stays here because nothing needs it
+        /// moved.
         /// </summary>
-        static UIElement CollectionStatusCard()
+        static Control CollectionStatusCard()
         {
             int have = 0;
             try { have = Checks.CollectionRevision(cfg); }
@@ -163,7 +169,7 @@ namespace Thornswood
                            : ". The server's revision was not known just now, so it was not compared."));
         }
 
-        static UIElement CollectionCard(string title, string body, bool button = true)
+        static Control CollectionCard(string title, string body, bool button = true)
         {
             var g = new Grid();
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -192,7 +198,7 @@ namespace Thornswood
                 // The revision the server was built against, not the
                 // collection's front page, which is always its newest (#4115).
                 b.Content = CollectionButtonText();
-                b.Style = (Style)win.Resources["Solid"];
+                b.Theme = Look("Solid");
                 b.VerticalAlignment = VerticalAlignment.Center;
                 b.MinWidth = 96;
                 Grid.SetColumn(b, 1); g.Children.Add(b);
@@ -245,12 +251,12 @@ namespace Thornswood
                 }
                 finally
                 {
-                    win.Dispatcher.BeginInvoke(new Action(delegate
+                    Dispatcher.UIThread.Post(delegate
                     {
                         packBusy.Remove(p.id);
                         DrawAddons();
                         DrawStatus();
-                    }));
+                    });
                 }
             });
         }

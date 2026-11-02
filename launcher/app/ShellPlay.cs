@@ -4,18 +4,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
-using System.Reflection;
 using System.Text;
 using System.Threading;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
-using System.Windows.Input;
-using System.Windows.Markup;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using Ellipse = System.Windows.Shapes.Ellipse;   // not the namespace: System.Windows.Shapes.Path would collide with System.IO.Path
-using System.Windows.Threading;
+using Avalonia.Controls;
+using Avalonia.Threading;
 
 namespace Thornswood
 {
@@ -44,11 +36,11 @@ namespace Thornswood
                 if (Checks.OtherSkyrimRunning())
                 {
                     if (!askIfVisible) return true;
-                    var other = MessageBox.Show(
+                    bool other = Ask.YesNo(
                         "A different Skyrim is already running, from another folder on this PC.\n\n" +
                         "Steam will not run two at once. Close that one first.\n\nTry to start this one anyway?",
-                        "Thornswood", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-                    if (other != MessageBoxResult.Yes) { Log("Left the other Skyrim alone."); return false; }
+                        "Thornswood", Ask.Icon.Warning);
+                    if (!other) { Log("Left the other Skyrim alone."); return false; }
                 }
                 return true;
             }
@@ -56,11 +48,11 @@ namespace Thornswood
             if (Checks.GameVisible())
             {
                 if (!askIfVisible) return false;
-                var r = MessageBox.Show(
+                bool close = Ask.YesNo(
                     "Skyrim is already open.\n\n" +
                     "Close it and carry on? Anything not saved in that session is lost.",
-                    "Thornswood", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-                if (r != MessageBoxResult.Yes) { Log("Left the game where it was."); return false; }
+                    "Thornswood", Ask.Icon.Warning);
+                if (!close) { Log("Left the game where it was."); return false; }
             }
 
             Log("Closing what is left of Skyrim...");
@@ -70,8 +62,8 @@ namespace Thornswood
             {
                 Log("Skyrim would not close. " + still);
                 if (askIfVisible)
-                    MessageBox.Show("Skyrim would not close, so this has to wait.\n\n" + still,
-                                    "Thornswood", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Ask.Tell("Skyrim would not close, so this has to wait.\n\n" + still,
+                             "Thornswood", Ask.Icon.Warning);
                 return false;
             }
             if (n > 0) Log("Closed " + n + " Skyrim process" + (n == 1 ? "" : "es") + " that was still open.");
@@ -119,12 +111,12 @@ namespace Thornswood
 
                 if (!SkyMp.IsLocal(cfg))
                 {
-                    var r = MessageBox.Show(
+                    bool anyway = Ask.YesNo(
                         "The server is not answering.\n\n" +
                         "Starting anyway gives you a long wait, a black screen and then Skyrim on your own: " +
                         "no character creation, and nothing anyone else can see.\n\nStart the game anyway?",
-                        "Thornswood", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-                    if (r != MessageBoxResult.Yes) { Log("Not starting. The server is not answering."); return false; }
+                        "Thornswood", Ask.Icon.Warning);
+                    if (!anyway) { Log("Not starting. The server is not answering."); return false; }
                     Log("Starting anyway. The server is not answering.");
                     return true;
                 }
@@ -138,7 +130,7 @@ namespace Thornswood
                 if (why == null) { Log("The server is up."); return true; }
 
                 Log(why);
-                MessageBox.Show(why, "Thornswood", MessageBoxButton.OK, MessageBoxImage.Warning);
+                Ask.Tell(why, "Thornswood", Ask.Icon.Warning);
                 return false;
             }
             catch (Exception ex)
@@ -189,7 +181,7 @@ namespace Thornswood
                     {
                         Log("Not launching. " + archives);
                         DrawStatus();
-                        MessageBox.Show(archives, "Thornswood", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        Ask.Tell(archives, "Thornswood", Ask.Icon.Warning);
                         return;
                     }
                 }
@@ -214,7 +206,7 @@ namespace Thornswood
                     // the rail still shows. It was the Mods page until #982,
                     // which by then had no Fix on it and no rail button back.
                     // launcher\tests\test-refused-play-page.js holds this to the page
-                    // that has BtnFix in ui.xaml.
+                    // that has BtnFix in MainWindow.axaml.
                     ShowPage(PageDiag);
 
                     // Two different problems wearing the same coat. A list in
@@ -228,25 +220,27 @@ namespace Thornswood
                         // the mods back, so the box offers it rather than
                         // naming a page the rail no longer shows (#982).
                         bool canOpen = !string.IsNullOrEmpty(cfg.CollectionUrl);
-                        MessageBoxResult open = MessageBox.Show(
+                        bool open = false;
+                        string missing =
                             (absent == 1 ? "A mod the server needs is not installed." : absent + " mods the server needs are not installed.") +
                             "\n\nThe usual reason is that a different profile is active in Vortex. Open Vortex, go to " +
                             "Profiles, and press Enable under Thornswood. Close Skyrim first if it is open.\n\n" +
                             "Pressing Fix will not help with this one. Fix repairs the plugin list, it cannot install a mod." +
-                            (canOpen ? "\n\nIf you have never installed the collection, press Yes to open it and install it in Vortex." : ""),
-                            "Thornswood", canOpen ? MessageBoxButton.YesNo : MessageBoxButton.OK, MessageBoxImage.Warning);
-                        if (canOpen && open == MessageBoxResult.Yes)
+                            (canOpen ? "\n\nIf you have never installed the collection, press Yes to open it and install it in Vortex." : "");
+                        if (canOpen) open = Ask.YesNo(missing, "Thornswood", Ask.Icon.Warning);
+                        else Ask.Tell(missing, "Thornswood", Ask.Icon.Warning);
+                        if (canOpen && open)
                         {
                             OpenCollection();
                         }
                     }
                     else
                     {
-                        MessageBox.Show(
+                        Ask.Tell(
                             "Your mod list does not match the one this build shipped with.\n\n" +
                             "Joining like this desyncs the whole server, so the launcher will not start the game until it is sorted.\n\n" +
                             "Press Fix on the Diagnostics page, which is open behind this box, then try again.",
-                            "Thornswood", MessageBoxButton.OK, MessageBoxImage.Warning);
+                            "Thornswood", Ask.Icon.Warning);
                     }
                     return;
                 }
@@ -324,7 +318,7 @@ namespace Thornswood
                 {
                     Log("Not launching. " + notBuilt);
                     DrawStatus();
-                    MessageBox.Show(notBuilt + "\n\nThe launcher log on the Diagnostics page has each step it took.", "Thornswood", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Ask.Tell(notBuilt + "\n\nThe launcher log on the Diagnostics page has each step it took.", "Thornswood", Ask.Icon.Warning);
                     return;
                 }
 
@@ -367,7 +361,7 @@ namespace Thornswood
                 GalleryDecide();
                 btnPlay.IsEnabled = false;
                 btnPlay.Content = "RUNNING";
-                btnQuitGame.Visibility = Visibility.Visible;
+                btnQuitGame.IsVisible = true;
 
                 // Working directory must be the game root. Address Library
                 // resolves Data/SKSE/Plugins/versionlib-*.bin relative to it,
@@ -490,8 +484,7 @@ namespace Thornswood
                 {
                     try
                     {
-                        MessageBox.Show(win, reason, "Thornswood could not start",
-                                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                        Ask.Tell(reason, "Thornswood could not start", Ask.Icon.Warning);
                     }
                     catch (Exception boxEx) { Swallow.Note("Shell.Play, start failed box", boxEx); }
                 }

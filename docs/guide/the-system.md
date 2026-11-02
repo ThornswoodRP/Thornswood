@@ -25,7 +25,7 @@ release, launcher, game files and server together, are in How work moves.
 | Source repo | github.com/ThornswoodRP/Thornswood (private), clone at `C:\Users\<you>\Downloads\Thornswood-Repo` | Launcher source, plugins, site, bot, every script |
 | Feed store | On the VPS beside the feed the site serves: `C:\Thornswood-Docs\feed\{version.json, published.json, launchers.txt, history\}` and the same under `feed-dev`. Each machine's working copy is `%LOCALAPPDATA%\Thornswood\feed\main` and `\dev` | `version.json` (the feed, served at `/feed[-dev]/version.json`), `published.json` (the pack baseline), every launcher version the channel published, and each replaced file, none of those three served. Ship receives and sends them through `scripts\release\Feed-Store.ps1` (#907). Until then they were the `Thornswood-Releases` GitHub repository and its two clones |
 | Downloads | On the VPS, `C:\Thornswood-Docs\feed\assets` and `feed-dev\assets`, served at `https://thornswood.net/feed[-dev]/assets/<sha256>` | Every pack, launcher exe and client runtime a feed names, one file per sha256, one folder per channel (`docs\FEED.md` "Downloads come from the site") |
-| Launcher | `launcher\app\*.cs` + `launcher\ui.xaml`, built by `scripts\release\Build-Launcher.ps1` with MSBuild from `launcher\app\Thornswood.csproj`, C# 13 (#498) | WPF app at `<drive>:\Thornswood\Launcher\Thornswood.exe` (C: on most machines); profile, config and packs under that folder. The scripts find the install on whichever fixed drive holds it; `-Root` overrides |
+| Launcher | `launcher\app\*.cs` + `launcher\app\*.axaml`, published by `scripts\release\Build-Launcher.ps1` with `dotnet publish` (Native AOT) from `launcher\app\Thornswood.csproj` (#4823) | Avalonia app, installed by Velopack, at `<drive>:\Thornswood\Launcher\Thornswood.exe` (C: on most machines); profile, config and packs under that folder. The scripts find the install on whichever fixed drive holds it; `-Root` overrides |
 | Dev build | `<drive>:\Thornswood-DevBuild`, beside the main install, put there by the main launcher's Play page Server dropdown | Same exe, `config.json` says `Channel: dev`, `UpdateBranch: dev`, port 7787, voice 7789. Staff roles only (Owner, Dev, Gamemaster, Moderator, Loremaster) |
 | Game | `<Root>\Game`, Thornswood's own folder, which the launcher builds from the Steam copy of Skyrim Special Edition and what Vortex deployed from the Nexus collection (see One Skyrim of its own) | The launcher will not Play from the Steam copy itself. Thornswood's own loose files live in `Data\Platform` (plugins in `Plugins\thornswood-*.js`, page in `UI\`) and `Data\SKSE\Plugins\Thornswood.ini` |
 | Plugins | `game\plugins\thornswood-{front,emotes,mark,voice}.js`, UI in `game\ui` | Skyrim Platform JavaScript. Idle unless the client points at our server and the launcher left a fresh session note |
@@ -53,8 +53,7 @@ folder went:
 
 | File | Where | What it is | Read by |
 | --- | --- | --- | --- |
-| `signing.json` | `records\signing` | Whether this machine signs, and with what. No key in it | Sign-Artifact, Ship, Publish-Installer, Setup-ShipMachine |
-| `setup-stub.exe`, `setup-stub.pdb` | `out` | The setup program, compiled by Build-Launcher | Package-Thornswood, Ship |
+| `signing.json` | `records\signing` | Whether this machine signs, and with what. No key in it | Sign-Artifact, Ship, Setup-ShipMachine |
 | `thornswood-front.zip` | `local` | The front build, made outside the repository | Go |
 | `mod-audit.json` | `local` | What Audit-Mods found last time | Audit-Mods |
 | `backups` | `local` | The backups brought off the VPS, since 5 Oct (`Downloads\Thornswood-Backups` before). Secrets are inside them | Fetch-Backups, Backup-Server, Clean-Everything |
@@ -115,9 +114,8 @@ checkout with no `engine\skymp` (a fresh Ship worktree) can still Ship, and
 launcher's Client row on the Play page compares all six with the same record
 (`ClientRuntime`), and `ClientRuntime.Heal` puts back any that is missing or
 not the recorded build.
-`Ship-Rules.ps1` counts one of them as ours, for a pack or the installer, only
-when its sha256 is the recorded one, and `Package-Thornswood.ps1` stops rather
-than build an installer around any other.
+`Ship-Rules.ps1` counts one of them as ours, for a pack, only when its sha256
+is the recorded one.
 
 **Links, not copies.** Big files (archives, textures, meshes, plugins) are hard
 links to Vortex's copies, so a collection is not on the disk twice; this needs
@@ -161,10 +159,9 @@ cannot be, the command goes on the clipboard and the log says where to paste.
 
 **Records.** `Profile\OwnGame\files.txt` lists each file brought in, whether it
 was linked or copied and whether Vortex deployed it. Ship-Rules.ps1 reads that
-list (`Get-ShipOwnGameCollection`) so Publish-Update and Package-Thornswood keep
-the collection out of packs and the installer, exactly as they read
-`vortex.deployment.json` when the game is the Steam copy, and both refuse to go
-on if the list is empty. `Profile\OwnGame\plugins.txt` and `loadorder.txt` are
+list (`Get-ShipOwnGameCollection`) so Publish-Update keeps the collection out
+of packs, exactly as it reads `vortex.deployment.json` when the game is the
+Steam copy, and refuses to go on if the list is empty. `Profile\OwnGame\plugins.txt` and `loadorder.txt` are
 the Vortex profile's lists as of the folder's last update, and are the
 reference load order a release carries (`Get-ShipLoadOrderDir`). Ship checks
 the client in `<Root>\Game` against `records\client-build.json`.
@@ -236,7 +233,8 @@ channels when the collection installed there could not build them.
 installs stay apart from the build folders, so he has the same files as
 everybody else. So every Ship first runs `scripts\release\Update-ShipRoot.ps1`,
 which builds `Thornswood-ShipRoot.exe` from `scripts\release\ShipRoot`
-(all of `launcher\app` with its own entry point, so OwnGame has one
+(OwnGame and the launcher files it calls, none of the window's, built
+with the .NET 10 SDK and its own entry point, so OwnGame has one
 implementation) and runs OwnGame's own Make or Refresh on the root: a new root
 takes Thornswood's own files of the channel's release from its feed, as an
 install does, and a root made at older rules or from another folder is brought

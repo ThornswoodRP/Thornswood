@@ -54,9 +54,11 @@
        shipping machine out of the pack.
     4. The launcher side, compiled. OwnGame's Skip and Foreign, and Keep's
        Seed and Forget, are lifted by text out of the launcher source and
-       compiled against stubs for Paths and Checks, with the compiler the
-       build runs (Add-LauncherType, tests\Launcher-Csc.ps1, #2821; off
-       Windows 4 and 5 say SKIP, that compiler is only there). Then the whole sequence
+       compiled against stubs for Paths and Checks, with the .NET SDK the
+       launcher builds with (Add-LauncherType, tests\Launcher-Csc.ps1, #2821,
+       #4823), on every machine. OwnGame and Keep read the game's files by
+       Windows paths, so from here 4 and 5 run on Windows only and say SKIP
+       elsewhere. Then the whole sequence
        runs on scratch folders: a Steam copy holding the old dresser, a game
        folder and a kept copy holding the stub, the pack's delete.txt with
        Keep.Forget, a refresh modelled on OwnGame.Refresh's own loop, and
@@ -77,7 +79,7 @@ param(
 $env:THORNSWOOD_HARNESS = '1'
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 # The tests are in tests\, the repository is one folder up.
@@ -389,15 +391,54 @@ namespace $ns
     }
 }
 "@
-if (-not $OnWindows) {
-    Write-Host 'SKIP  4 and 5, OwnGame''s Skip and Foreign and Keep''s Seed and Forget compiled and run: their compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'
-    Done
-}
 $compiled = $true
 try { $null = Add-LauncherType -Source $cs }
 catch { $compiled = $false; Write-Host ('      ' + $_.Exception.Message) }
-Yes 'OwnGame''s Skip and Foreign and Keep''s Seed and Forget compile as lifted, with the compiler the build runs' $compiled
+Yes 'OwnGame''s Skip and Foreign and Keep''s Seed and Forget compile as lifted, with the .NET SDK the launcher builds with' $compiled
 if (-not $compiled) { Done }
+
+$rulesNum = [regex]::Match($og, '(?m)^\s*const int Rules = (\d+);')
+$rulesDoc = [regex]::Match($og, '(?m)^\s*/// (\d+): the retired dresser, thornswood-chargen\.js')
+# At least the dresser's number, not equal to it: rules 5 and 6 (#640 and the
+# Distribution links) moved Rules on past it on purpose, and a folder made
+# under anything before 4 still refreshes once.
+Yes 'OwnGame.Rules moved for it, so every folder made under the old rules refreshes once and records it as left out' (
+    $rulesNum.Success -and $rulesDoc.Success -and [int]$rulesNum.Groups[1].Value -ge [int]$rulesDoc.Groups[1].Value)
+
+# The model of Refresh below has two branches: a name Skip lets through that
+# the folder lacks is copied in, and one it holds is left alone. That is only
+# true while Refresh's own loop reads that way.
+$refresh = Get-CsMember $og 'static string RefreshNow(Config cfg, Action<string> say)'
+$order = @(
+    'foreach (Found f in all)',
+    'string skip = Skip(f.Rel);',
+    'if (skip != null) { left.Add(f.Rel + "  (" + skip + ")"); continue; }',
+    'bool exists = File.Exists(dest);',
+    'if (exists && (',
+    'if (exists) DropName(dest);',
+    # f.From since the Vortex folder fix: each file is placed from where Gather
+    # found it, which is the Steam copy for the game and Vortex's mods folder
+    # for what Vortex deployed. The loop's shape, and so this model, is the same.
+    'Place(f.From, dest, copy, out asLink);'
+)
+$inOrder = $null -ne $refresh
+$from = 0
+foreach ($o in $order) {
+    if (-not $inOrder) { break }
+    $at = $refresh.IndexOf($o, $from, [StringComparison]::Ordinal)
+    if ($at -lt 0) { $inOrder = $false; Write-Host "      Refresh no longer has: $o" } else { $from = $at + $o.Length }
+}
+Yes 'OwnGame.Refresh still asks Skip first and copies in whatever it lets through that the folder lacks' $inOrder
+$place = Get-CsMember $og 'static void Place(string from, string to, bool copy, out bool linked)'
+Yes 'and Place copies a script with File.Copy, which keeps the Steam copy''s write time' ($null -ne $place -and $place.Contains('File.Copy(from, to, false);'))
+
+# OwnGame and Keep name the game's files by Windows paths (Path.GetFileName on
+# Data\Platform\..., Path.Combine with Data\...), so they are asked and run on
+# Windows only; the build above and the source checks run everywhere.
+if (-not $OnWindows) {
+    Write-Host 'SKIP  4 and 5, OwnGame''s Skip and Foreign and Keep''s Seed and Forget asked and run on scratch folders, and this machine''s Steam copy and records: OwnGame and Keep read and lay out the game''s files by Windows paths, so they run on Windows only'
+    Done
+}
 $OwnGameT = [type]($ns + '.OwnGame')
 $KeepT    = [type]($ns + '.Keep')
 $PathsT   = [type]($ns + '.Paths')
@@ -520,11 +561,7 @@ try {
     New-Item -ItemType Directory -Force -Path $emptyDir | Out-Null
     $emptyRes = Join-Path $emptyDir 'ui-gone.json'
     [IO.File]::WriteAllBytes($emptyRes, [byte[]]@())
-    $csFile = Join-Path $emptyDir 'lifted.cs'
-    $driverFile = Join-Path $emptyDir 'driver.cs'
-    $emptyExe = Join-Path $emptyDir 'empty-gone.exe'
-    [IO.File]::WriteAllText($csFile, $csEmpty)
-    [IO.File]::WriteAllText($driverFile, @"
+    $emptyDriver = @"
 using System;
 namespace $emptyNs {
     static class EmptyGoneProgram {
@@ -539,32 +576,15 @@ namespace $emptyNs {
         }
     }
 }
-"@)
-    if (-not $OnWindows) { Write-Host 'SKIP  the empty embedded record, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has' }
-    else { Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc) }
-    $emptyBuilt = $false
-    if (Test-Path -LiteralPath $LauncherCsc) {
-        $cscArgs = @(
-            '/noconfig', '/nologo', '/target:exe', '/warn:0',
-            "/out:$emptyExe",
-            "/resource:$emptyRes,ui-gone.json",
-            "/reference:$(Join-Path $LauncherRefDir 'System.dll')",
-            "/reference:$(Join-Path $LauncherRefDir 'System.Core.dll')",
-            $csFile,
-            $driverFile
-        )
-        $cscOut = & $LauncherCsc @cscArgs 2>&1
-        $emptyBuilt = ($LASTEXITCODE -eq 0) -and (Test-Path -LiteralPath $emptyExe)
-        if (-not $emptyBuilt) { Write-Host ('      ' + ($cscOut | Out-String).Trim()) }
-    }
+"@
+    $emptyExe = $null
+    try { $emptyExe = Build-LauncherCode -Exe -Main ($emptyNs + '.EmptyGoneProgram') -Source $csEmpty, $emptyDriver -Resource @{ 'ui-gone.json' = $emptyRes } }
+    catch { Write-Host ('      ' + $_.Exception.Message.Trim()) }
+    Yes 'the lifted OwnGame with an empty ui-gone.json embedded builds with the .NET SDK the launcher builds with' ($null -ne $emptyExe)
     $emptySaid = ''
-    if ($emptyBuilt) {
-        $emptySaid = & $emptyExe 2>&1 | Out-String
-    }
-    if ($OnWindows) {
-        Yes 'OwnGame refuses when the embedded gone record is empty' (
-            $emptySaid -match 'is empty' -and $emptySaid -match 'ui-gone\.json')
-    }
+    if ($emptyExe) { $emptySaid = Invoke-LauncherExe $emptyExe 2>&1 | Out-String }
+    Yes 'OwnGame refuses when the embedded gone record is empty' (
+        $emptySaid -match 'is empty' -and $emptySaid -match 'ui-gone\.json')
 
     $OwnGameT::SetUiGoneRecordForTest($goneText)
     $PathsT::Game = $savedGame
@@ -573,41 +593,6 @@ namespace $emptyNs {
 } finally {
     Remove-Item -LiteralPath $uiOwn -Recurse -Force -ErrorAction SilentlyContinue
 }
-
-$rulesNum = [regex]::Match($og, '(?m)^\s*const int Rules = (\d+);')
-$rulesDoc = [regex]::Match($og, '(?m)^\s*/// (\d+): the retired dresser, thornswood-chargen\.js')
-# At least the dresser's number, not equal to it: rules 5 and 6 (#640 and the
-# Distribution links) moved Rules on past it on purpose, and a folder made
-# under anything before 4 still refreshes once.
-Yes 'OwnGame.Rules moved for it, so every folder made under the old rules refreshes once and records it as left out' (
-    $rulesNum.Success -and $rulesDoc.Success -and [int]$rulesNum.Groups[1].Value -ge [int]$rulesDoc.Groups[1].Value)
-
-# The model of Refresh below has two branches: a name Skip lets through that
-# the folder lacks is copied in, and one it holds is left alone. That is only
-# true while Refresh's own loop reads that way.
-$refresh = Get-CsMember $og 'static string RefreshNow(Config cfg, Action<string> say)'
-$order = @(
-    'foreach (Found f in all)',
-    'string skip = Skip(f.Rel);',
-    'if (skip != null) { left.Add(f.Rel + "  (" + skip + ")"); continue; }',
-    'bool exists = File.Exists(dest);',
-    'if (exists && (',
-    'if (exists) DropName(dest);',
-    # f.From since the Vortex folder fix: each file is placed from where Gather
-    # found it, which is the Steam copy for the game and Vortex's mods folder
-    # for what Vortex deployed. The loop's shape, and so this model, is the same.
-    'Place(f.From, dest, copy, out asLink);'
-)
-$inOrder = $null -ne $refresh
-$from = 0
-foreach ($o in $order) {
-    if (-not $inOrder) { break }
-    $at = $refresh.IndexOf($o, $from, [StringComparison]::Ordinal)
-    if ($at -lt 0) { $inOrder = $false; Write-Host "      Refresh no longer has: $o" } else { $from = $at + $o.Length }
-}
-Yes 'OwnGame.Refresh still asks Skip first and copies in whatever it lets through that the folder lacks' $inOrder
-$place = Get-CsMember $og 'static void Place(string from, string to, bool copy, out bool linked)'
-Yes 'and Place copies a script with File.Copy, which keeps the Steam copy''s write time' ($null -ne $place -and $place.Contains('File.Copy(from, to, false);'))
 
 # The sequence, on scratch folders. Times are the ones measured on Patrick's
 # machine: the Steam copy's dresser 16 Sep 18:12:50 MDT, the stub 20 Sep

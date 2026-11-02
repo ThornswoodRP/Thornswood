@@ -80,7 +80,7 @@ function list(name) {
       !!people && /J opens your journals/.test(people) && /New business and New faction/.test(people) &&
       /Leave there/.test(people) && !/\/book/.test(people) && !/\/journal/.test(people));
 
-  const jc = slice(gm, '  function journalCommand(soc, actorId, profileId, parts) {', '\n  }\n');
+  const jc = slice(gm, '  function journalCommand(soc, actorId, profileId, parts, text) {', '\n  }\n');
   let empty = '';
   try {
     empty = new Function('return ' + jc.trim())()({ stateOf: function () { return { journals: [] }; } }, 1, 1, ['/journal']);

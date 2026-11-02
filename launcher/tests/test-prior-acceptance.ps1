@@ -1,23 +1,24 @@
 <#
   test-prior-acceptance.ps1
 
-      powershell -NoProfile -File .\launcher\tests\test-prior-acceptance.ps1
+      pwsh -NoProfile -File .\launcher\tests\test-prior-acceptance.ps1
 
   Installs made before the terms lock (issue #1009) have no
   Profile\accepted.json. Nothing else in the install records the terms, the
   privacy policy and the rules, so a later run cannot treat a missing file as
   a yes. The launcher (launcher\app\Acceptance.cs) asks the setup window's
   three questions when the record is missing or a page's hash has changed,
-  and writes that same file. Declining writes nothing.
+  and writes that same file. Declining writes nothing. The setup window is
+  the launcher's own install window since #4824 (InstallWindow.cs, with the
+  pages and words in InstallAgreements.cs), so its questions are read there.
 
-  This compiles the launcher's own class with the compiler the build runs, at
-  the C# version the project names (Add-LauncherType, tests\Launcher-Csc.ps1,
-  #2821), and runs it against a scratch folder that stands in for an install
+  This builds the whole launcher the way the project builds it, with the .NET
+  10 SDK (Add-LauncherType -Launcher, tests\Launcher-Csc.ps1, #2821, #4823),
+  loads it into this PowerShell, which runs on .NET 10 as the launcher does,
+  and runs Acceptance against a scratch folder that stands in for an install
   made before the lock: a config.json, a Profile folder, and no accepted.json.
-  No Skyrim, no C:\Thornswood, no window. The site is not asked.
-
-  Under pwsh this starts itself again under Windows PowerShell, because the
-  class is WPF's and the launcher runs it on the .NET Framework, not .NET.
+  No Skyrim, no C:\Thornswood, no window. The site is not asked. It runs on
+  any machine with the SDK.
 #>
 [CmdletBinding()]
 param()
@@ -27,14 +28,7 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $Repo = Split-Path -Parent (Split-Path -Parent $Here)
 
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  this runs the launcher''s code on the .NET Framework the launcher runs on, which only Windows has'; exit 0 }
-if ($PSVersionTable.PSEdition -eq 'Core') {
-    $wp = Get-WindowsPowerShell
-    & $wp -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath
-    exit $LASTEXITCODE
-}
-. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's compiler and C# version (#2821)
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')   # the build's SDK and C# version (#2821, #4823)
 
 $script:pass = 0
 $script:fail = 0
@@ -48,12 +42,12 @@ function Done {
     if ($script:fail) { exit 1 } else { exit 0 }
 }
 
-$accPath = Join-Path $Repo 'launcher\app\Acceptance.cs'
-$bootPath = Join-Path $Repo 'installer\setup\Bootstrap.cs'
-$shellPath = Join-Path $Repo 'launcher\app\Shell.cs'
+$app = Join-Path (Join-Path $Repo 'launcher') 'app'
+$accPath = Join-Path $app 'Acceptance.cs'
 $acc = [IO.File]::ReadAllText($accPath)
-$boot = [IO.File]::ReadAllText($bootPath)
-$shell = [IO.File]::ReadAllText($shellPath)
+$agree = [IO.File]::ReadAllText((Join-Path $app 'InstallAgreements.cs'))
+$installWin = [IO.File]::ReadAllText((Join-Path $app 'InstallWindow.cs'))
+$shell = [IO.File]::ReadAllText((Join-Path $app 'Shell.cs'))
 
 $tokens = $null; $errs = $null
 [void][Management.Automation.Language.Parser]::ParseFile($PSCommandPath, [ref]$tokens, [ref]$errs)
@@ -67,14 +61,23 @@ $said = $acc
 Yes 'no em dash in Acceptance.cs' (-not ($said -match [char]0x2014))
 Yes 'Acceptance.cs does not use the word the project does not use' (-not ($said -match '(?i)\bplayers?\b'))
 
-$m = [regex]::Match($boot, 'static readonly string\[\] Pages = \{([^}]*)\};')
-$windowPages = @([regex]::Matches($m.Groups[1].Value, '"(\w+)"') | ForEach-Object { $_.Groups[1].Value })
-Yes 'the setup window still has three pages' ($windowPages.Count -eq 3)
+# What the install window asks: its pages and box words in
+# InstallAgreements, its link words in InstallWindow.
+function Strings([string]$src, [string]$head) {
+    $m = [regex]::Match($src, [regex]::Escape($head) + '\s*\{([^}]*)\};')
+    @([regex]::Matches($m.Groups[1].Value, '"([^"]*)"') | ForEach-Object { $_.Groups[1].Value })
+}
+$windowPages = Strings $agree 'public static readonly string[] Pages ='
+$windowWords = Strings $agree 'public static readonly string[] Words ='
+$windowLinks = Strings $installWin 'string[] linkWords ='
+Yes 'the install window still has three pages, three boxes and three links' ($windowPages.Count -eq 3 -and $windowWords.Count -eq 3 -and $windowLinks.Count -eq 3)
+Yes 'and makes its boxes and links from those, in page order' (
+    $installWin.Contains('agree[i] = Box(InstallAgreements.Words[i],') -and $installWin.Contains('Content = linkWords[i]'))
 
 $asm = $null
-try { $asm = Add-LauncherType -Source $acc }
+try { $asm = Add-LauncherType -Launcher }
 catch { Write-Host ('      ' + $_.Exception.Message) }
-Yes 'Acceptance.cs compiles with the compiler the build runs' ($null -ne $asm)
+Yes 'the launcher, Acceptance.cs in it, builds the way the project builds it' ($null -ne $asm)
 if ($null -eq $asm) { Done }
 
 $T = $asm.GetType('Thornswood.Acceptance')
@@ -87,11 +90,8 @@ $links = @($T::LinkWords)
 Yes 'three boxes and three links' ($words.Count -eq 3 -and $links.Count -eq 3)
 for ($i = 0; $i -lt $pages.Count; $i++) {
     $p = $pages[$i]
-    $cap = $p.Substring(0, 1).ToUpper() + $p.Substring(1)
-    $box = [regex]::Match($boot, 'x:Name=""Chk' + $cap + '""[\s\S]*?Text=""([^""]+)""').Groups[1].Value
-    $lnk = [regex]::Match($boot, 'x:Name=""Lnk' + $cap + '""[\s\S]*?>([^<]+)</Hyperlink>').Groups[1].Value
-    Yes "$p box is the setup window's words" ($box -eq $words[$i])
-    Yes "$p link is the setup window's words" ($lnk -eq $links[$i])
+    Yes "$p box is the install window's words" ($windowWords[$i] -eq $words[$i])
+    Yes "$p link is the install window's words" ($windowLinks[$i] -eq $links[$i])
 }
 Yes 'the file is accepted.json' ($T::FileName -eq 'accepted.json')
 Yes 'the pages are on https://thornswood.net' ($T::Site -eq 'https://thornswood.net')
@@ -140,7 +140,7 @@ try {
             Yes "$p carries its address and the hash that was ticked" (
                 $j.pages.$p.url -eq ("https://thornswood.net/$p") -and $j.pages.$p.sha256 -eq $same[$pages.IndexOf($p)])
         }
-        Yes 'and nothing about the person or the machine' (-not ($raw -match [regex]::Escape($env:USERNAME)) -and -not ($raw -match [regex]::Escape($env:COMPUTERNAME)))
+        Yes 'and nothing about the person or the machine' (-not ($raw -match [regex]::Escape([Environment]::UserName)) -and -not ($raw -match [regex]::Escape([Environment]::MachineName)))
         Yes 'a later run with the same hashes does not ask again' (-not $T::NeedsAsk($raw, $same))
     }
 
@@ -217,8 +217,8 @@ Yes 'uninstall does not ask' ($run -match 'if \(!askedToUninstall && !termsOnFil
 # A record already on disk is rechecked off the window thread, and only the
 # changed pages are shown (#2616, Patrick 16 Oct).
 Yes 'a record already on disk is rechecked off the window thread' (
-    $run -match 'if \(!askedToUninstall && termsOnFile\)' -and $run.Contains('Acceptance.Recheck(') -and $run.Contains('Acceptance.Ask(which)'))
-Yes 'declining a change closes the launcher' ($run.Contains('Application.Current.Shutdown()'))
+    $run -match 'if \(!askedToUninstall && termsOnFile\)' -and $run.Contains('Acceptance.Recheck(') -and $run.Contains('Acceptance.Ask(which, win)'))
+Yes 'declining a change closes the launcher' ($run -match '(?s)Acceptance\.Recheck\(.{0,400}if \(!ok\)\s*\{\s*try \{ Dispatcher\.UIThread\.Invoke\(\(Action\)Quit\); \}')
 Yes 'the recheck asks only when a page changed, and writes the merged record' (
     $acc.Contains('if (!Any(changed)) return true;') -and $acc.Contains('Merge(json, current, changed)'))
 Yes 'the three questions are the only way Ensure writes' (
