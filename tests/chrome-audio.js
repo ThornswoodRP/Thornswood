@@ -64,6 +64,8 @@ async function evaluate(exe, expression, ms) {
   { stdio: ['ignore', 'ignore', 'pipe'] });
   let said = '';
   chrome.stderr.on('data', (d) => { said += d; });
+  const exited = new Promise((ok) => { if (chrome.exitCode !== null) { ok(); } else { chrome.once('exit', ok); } });
+  let browserWs = '';
   try {
     const file = path.join(dir, 'DevToolsActivePort');
     while (!fs.existsSync(file) || fs.readFileSync(file, 'utf8').split('\n').length < 2) {
@@ -71,7 +73,9 @@ async function evaluate(exe, expression, ms) {
       if (chrome.exitCode !== null) { throw new Error('Chrome stopped (exit ' + chrome.exitCode + '). It said:\n' + said); }
       await sleep(50);
     }
-    const port = fs.readFileSync(file, 'utf8').split('\n')[0].trim();
+    const lines = fs.readFileSync(file, 'utf8').split('\n');
+    const port = lines[0].trim();
+    browserWs = 'ws://127.0.0.1:' + port + lines[1].trim();
     const list = await (await fetch('http://127.0.0.1:' + port + '/json/list')).json();
     const page = list.find((t) => t.type === 'page');
     if (!page) { throw new Error('Chrome has no page to run in'); }
@@ -93,10 +97,39 @@ async function evaluate(exe, expression, ms) {
     ws.close();
     return value;
   } finally {
-    chrome.kill();
-    await new Promise((ok) => { if (chrome.exitCode !== null) { ok(); } else { chrome.once('exit', ok); } });
+    await close(chrome, exited, browserWs, dir);
     fs.rmSync(dir, { recursive: true, force: true });
   }
+}
+
+/* Ends Chrome and every process it started on the profile in dir, so the
+   folder can go. Killing the browser process alone left its children
+   holding files in the profile on Windows, and deleting it then failed
+   with EPERM (merge queue run 41506188065). So Chrome is asked to close
+   (Browser.close) when DevTools is up, killed only when it is not, and on
+   Windows the folder waits until no process that names it is left. Named by
+   its own name, ts-chrome- and six letters, the same in a short path and a
+   long one. */
+async function close(chrome, exited, browserWs, dir) {
+  let asked = false;
+  if (browserWs && chrome.exitCode === null) {
+    try {
+      const ws = new WebSocket(browserWs);
+      await new Promise((ok, bad) => { ws.onopen = ok; ws.onerror = () => bad(new Error('no browser socket')); });
+      ws.send(JSON.stringify({ id: 1, method: 'Browser.close' }));
+      asked = true;
+    } catch (e) { asked = false; }
+  }
+  if (!asked) { chrome.kill(); }
+  await exited;
+  if (os.platform() !== 'win32') { return; }
+  const r = cp.spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+    '$d = $env:TS_CHROME_DIR; $ids = @(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($d) } | ForEach-Object { $_.ProcessId }); ' +
+    'if ($ids.Count) { Wait-Process -Id $ids -Timeout 60 -ErrorAction SilentlyContinue }; ' +
+    '$left = @(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($d) }); ' +
+    'if ($left.Count) { \'still running on the profile: \' + (($left | ForEach-Object { $_.Name + \' \' + $_.ProcessId }) -join \', \'); exit 1 }'],
+  { encoding: 'utf8', env: Object.assign({}, process.env, { TS_CHROME_DIR: path.basename(dir) }) });
+  if (r.status !== 0) { throw new Error('Chrome left processes on its profile after it closed: ' + ((r.stdout || '') + (r.stderr || '')).trim()); }
 }
 
 module.exports = { find: find, version: version, evaluate: evaluate };
