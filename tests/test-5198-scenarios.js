@@ -77,7 +77,7 @@ const WAITING = [
   'apprenticeship.md', 'carriages.md', 'carts.md', 'chat.md', 'classes.md', 'commands.md', 'creation.md',
   'dungeon-loot.md', 'durability.md', 'embassy.md', 'emotes.md', 'enchantments.md',
   'factions.md', 'gold.md', 'hair-dye.md', 'magic.md', 'mixtures.md', 'npcs.md', 'races.md',
-  'skill-tree.md', 'spoilage.md', 'stalls.md', 'thalmor.md', 'trade.md', 'trading-company.md', 'voice.md'
+  'skill-tree.md', 'stalls.md', 'thalmor.md', 'trade.md', 'trading-company.md', 'voice.md'
 ];
 
 // ------------------------------------------------------- what the guide lists --
