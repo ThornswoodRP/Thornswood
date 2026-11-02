@@ -260,7 +260,18 @@ namespace Thornswood
                             "  COULD NOT START: " + ex.ToString() + Environment.NewLine);
                     }
                     catch (Exception logEx) { Swallow.Note("Shell.Main, append", logEx); }
-                    Ask.Tell(ex.ToString(), "Thornswood could not start", Ask.Icon.Error);
+                    // The update check is otherwise asked from the window, so a
+                    // launcher that cannot open its window asks here, and a
+                    // newer one goes in when this process ends (ExitApply,
+                    // below), with nothing for the person to run.
+                    string update = Updater.AfterFailedStart(cfg, delegate (string line)
+                    {
+                        try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + line + Environment.NewLine); }
+                        catch (Exception logEx) { Swallow.Note("Shell.Main, update line", logEx); }
+                    });
+                    try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + update + Environment.NewLine); }
+                    catch (Exception logEx) { Swallow.Note("Shell.Main, update said", logEx); }
+                    Ask.Tell(update + Environment.NewLine + Environment.NewLine + ex.ToString(), "Thornswood could not start", Ask.Icon.Error);
                 }
             }
 
@@ -359,6 +370,10 @@ namespace Thornswood
             // does not end anything. Somebody sent here by Windows Settings to
             // uninstall is not asked to install.
             string recorded = Velo.InstallRoot;
+            // A launcher from before Velopack handed its folder over and ran
+            // this setup (InstallPlace.TakeHandover, launcher\move): that
+            // folder is the install, already made, and nothing is asked.
+            if (recorded == null && root == null && Velo.Installed && !askedToUninstall) recorded = InstallPlace.TakeHandover();
             InstallWindow installing = null;
             if (recorded != null) root = recorded;
             else if (root == null && Velo.Installed && !askedToUninstall)

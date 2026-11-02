@@ -10,7 +10,7 @@
 // needs this one back finds them (a function is there from the top of its
 // file).
 module.exports = { askReleaseCopies, feedFile, feedReleaseTag, feedSettings,
-  feedView, nativePublished, nativeTag, newestSetup, readJsonQuiet, releaseCopy, setupChannel };
+  feedMove, feedMoveVersion, feedView, nativePublished, nativeTag, newestSetup, readJsonQuiet, releaseCopy, setupChannel };
 
 const https  = require('https');
 const fs     = require('fs');
@@ -86,14 +86,24 @@ function feedSplit(doc) {
    finds the settings it names. Throws when the file is gone. */
 function feedView(channel, file) {
   const st = fs.statSync(file);
+  const move = feedMove(channel);
+  const moveSha = move ? move.sha256 : null;
   const list = feedViews[channel] || (feedViews[channel] = []);
-  for (const v of list) if (v.file === file && v.size === st.size && v.mtimeMs === st.mtimeMs) return v;
+  for (const v of list) if (v.file === file && v.size === st.size && v.mtimeMs === st.mtimeMs && v.moveSha === moveSha) return v;
   const raw = fs.readFileSync(file);
-  const v = { file: file, size: st.size, mtimeMs: st.mtimeMs, body: raw, sha: null, settings: null,
+  const v = { file: file, size: st.size, mtimeMs: st.mtimeMs, moveSha: moveSha, body: raw, sha: null, settings: null,
               tag: '"' + st.size.toString(16) + '-' + Math.floor(st.mtimeMs).toString(16) + '"' };
   let doc = null;
-  try { doc = JSON.parse(raw.toString('utf8').replace(/^﻿/, '')); } catch (e) { doc = null; }
-  if (doc && typeof doc === 'object' && !Array.isArray(doc) && feedAtLeast(doc.minLauncher, FEED_SPLIT_LAUNCHER)) {
+  try { doc = JSON.parse(raw.toString('utf8').replace(/^\uFEFF/, '')); } catch (e) { doc = null; }
+  const isDoc = doc && typeof doc === 'object' && !Array.isArray(doc);
+  if (isDoc && move) {
+    doc.launcherVersion = feedMoveVersion(doc.launcherVersion);
+    doc.launcherUrl = move.url;
+    doc.launcherSha256 = move.sha256;
+    v.body = Buffer.from(JSON.stringify(doc), 'utf8');
+    v.tag = v.tag.slice(0, -1) + '-move-' + move.sha256.slice(0, 16) + '"';
+  }
+  if (isDoc && feedAtLeast(doc.minLauncher, FEED_SPLIT_LAUNCHER)) {
     const s = feedSplit(doc);
     v.body = s.body; v.sha = s.sha; v.settings = s.settings;
     v.tag = v.tag.slice(0, -1) + '-split"';
@@ -101,6 +111,34 @@ function feedView(channel, file) {
   list.unshift(v);
   if (list.length > 4) list.length = 4;
   return v;
+}
+/* THE OLD LAUNCHER MOVES ITSELF TO THE NEW ONE (2 Nov 2026). Patrick: "is
+   there not a way to from the current launchers people have have it update
+   to the new one or install the new one and delete the old". The launcher
+   from before Velopack reads this feed and puts in the launcher it names,
+   held to launcherSha256 and Thornswood's signature, by itself (automatic
+   updates are on unless somebody switched them off, #3202). Once a channel
+   has a Velopack setup program with the move program on the same Release
+   (merge-release.yml; launcher\move\Program.cs), version.json names the move
+   program as that launcher: launcherVersion one step past the feed's own,
+   so every old launcher takes it, launcherUrl its Release download (a host
+   the old launcher allows) and launcherSha256 GitHub's digest of it. The
+   move program then installs the new launcher for that channel, hands it
+   the install's folder and removes the old one. The store's file is not
+   touched: Ship and every script still read it whole. 'feed' and 'feed-dev'
+   are the feed folders; null while there is nothing to move to. */
+function feedMove(channel) {
+  const ch = channel === 'feed-dev' ? 'dev' : channel === 'feed' ? 'main' : '';
+  if (!ch) return null;
+  const setup = newestSetup(ch);
+  return setup && setup.move ? setup.move : null;
+}
+// One step past the launcher the feed names, so the old launcher's IsNewer
+// (dotted numbers, each compared) reads it as newer: 2026.1102.716 becomes
+// 2026.1102.716.1. A feed without a number of its own gets 1.
+function feedMoveVersion(was) {
+  const v = String(was || '').trim();
+  return /^\d+(\.\d+)*$/.test(v) ? v + '.1' : '1';
 }
 /* The settings a view of this channel names, or null. The newest generation
    is looked at first, for a site that restarted since the feed was read. */
@@ -268,8 +306,8 @@ function releaseCopy(channel, sha, size) {
    Release is made only on an approval and can be older than the newest thirty
    build Releases. */
 const SETUP_KINDS = {
-  main: { tag: /^main-build-\d{8}\.\d+$/, name: 'Thornswood-Setup.exe' },
-  dev: { tag: /^build-\d{8}\.\d+$/, name: 'Thornswood-Dev-Setup.exe' }
+  main: { tag: /^main-build-\d{8}\.\d+$/, name: 'Thornswood-Setup.exe', move: 'Thornswood-Move.exe' },
+  dev: { tag: /^build-\d{8}\.\d+$/, name: 'Thornswood-Dev-Setup.exe', move: 'Thornswood-Dev-Move.exe' }
 };
 const SETUP_PAGES = 5;
 const setups = { main: null, dev: null, at: 0, busy: false };
@@ -290,12 +328,23 @@ async function lookSetups() {
         const url = String(a.browser_download_url || '');
         const m = /^sha256:([0-9a-f]{64})$/.exec(String(a.digest || ''));
         if (url !== RELEASE_DOWNLOAD + r.tag_name + '/' + k.name || !m || !Number.isInteger(a.size) || a.size <= 0) continue;
-        out[ch] = { name: k.name, url, size: a.size, sha256: m[1], tag: r.tag_name, at: Date.parse(r.published_at || '') || 0 };
+        out[ch] = { name: k.name, url, size: a.size, sha256: m[1], tag: r.tag_name, at: Date.parse(r.published_at || '') || 0,
+                    move: setupMove(r, k.move) };
       }
     }
     if (list.body.length < 100) break;
   }
   return { found: true, main: out.main, dev: out.dev };
+}
+// The move program on the same Release as a setup program (feedMove), as
+// { name, url, size, sha256 }, or null when that Release has none.
+function setupMove(r, name) {
+  const a = r.assets.find((x) => x && x.name === name && x.state === 'uploaded');
+  if (!a) return null;
+  const url = String(a.browser_download_url || '');
+  const m = /^sha256:([0-9a-f]{64})$/.exec(String(a.digest || ''));
+  if (url !== RELEASE_DOWNLOAD + r.tag_name + '/' + name || !m || !Number.isInteger(a.size) || a.size <= 0) return null;
+  return { name, url, size: a.size, sha256: m[1] };
 }
 function askSetups() {
   if (setups.busy || (setups.at && Date.now() - setups.at < RELEASE_LOOK_MS)) return;
