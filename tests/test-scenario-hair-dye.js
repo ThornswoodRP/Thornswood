@@ -20,7 +20,8 @@
        he is told it is a Haberdasher's or Liverywright's work, and nothing
        is taken.
     B  Dagny presses it at the fire: the Copper dye is set to steep for its
-       minute. Her client reports the fire after the minute: it has steeped,
+       minute, and the cooking menu stays shut without a line saying nothing
+       can be made there. Her client reports the fire after the minute: it has steeped,
        the makings and the bottle are gone, and the dye is in her pack as a
        Bowl named for it.
     C  A second steep, and she walks away from the fire before it is done:
@@ -117,6 +118,8 @@ w.activate(POT, DAGNY);
 w.run(300);
 yes('B1 Dagny presses the cooking spot at the fire: the Copper dye steeps for its minute (' + w.heardSince(DAGNY, heardAt).join(' | ') + ')',
   w.heardSince(DAGNY, heardAt).indexOf('You set Copper Hair Dye to steep. Stay by the fire for 1 minute.') >= 0);
+yes('B1 and the cooking menu, which is not hers, stays shut without telling her nothing can be made there (#5465)',
+  !w.heardSince(DAGNY, heardAt).some(function (l) { return /^There is nothing you can make here/.test(l); }));
 const dagnyHad = COPPER.inputs.map(function (x) { return w.count(DAGNY, id(x.item)); });
 function less(times) { return COPPER.inputs.map(function (x, i) { return dagnyHad[i] - times * x.count; }).join(','); }
 w.run(LIST.steepSeconds * 1000 + 1000);
