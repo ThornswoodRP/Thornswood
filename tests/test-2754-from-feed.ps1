@@ -454,12 +454,9 @@ try {
     $ship = [IO.File]::ReadAllText((Join-Path $rel 'Ship.ps1')).Replace("`r`n", "`n")
     Yes 'Ship -FromFeed asks gh, not a signing machine, at the sign gate' ($ship.Contains('$signWhy = if ($FromFeed) { Get-SignOnGitHubRefusal $RepoDir } else { Get-SigningConfigRefusal'))
     Yes '  and loads Sign-OnGitHub.ps1 only then' ($ship.Contains("if (`$FromFeed) { . (Join-Path `$Here 'Sign-OnGitHub.ps1') }"))
-    Yes 'Ship -FromFeed with a new launcher no longer sends it to One (#3312)' (-not $ship.Contains('a new launcher is compiled and signed on One'))
-    Yes '  it asks GitHub to build and sign it from main''s commit, by tag v<number>' ($ship.Contains("Invoke-ReleaseLauncherOnGitHub -Repo `$srcRepo -Tag ('v' + `$target) -Commit `$releaseSource.Commit"))
-    Yes '  takes the draft held to its SHA256SUMS, then to the launcher''s own check' ($ship.Contains('if (-not $why) { $why = Get-ReleaseLauncher $srcRepo $target $buildOut }') -and $ship.Contains("if (-not `$why) { `$why = & `$hold (Join-Path `$buildOut 'Thornswood.exe') `$ciSigner }"))
-    Yes '  only from a checkout that is exactly origin/main' ($ship -match '(?s)if \(\$FromFeed -and -not \$ModsOnly\) \{\s*if \(-not \$MainSourceAligned\)')
-    Yes '  and climbs past a dev number tagged on another commit' ($ship.Contains('if (-not $on -or $on -eq $releaseSource.Commit) { break }'))
-    Yes '  and the publish gate holds it on the box off Windows' ($ship.Contains('$signWhy = Get-SignedFileRefusal $pubExe $expectWho $RepoDir'))
+    Yes 'Ship -FromFeed builds, fetches and signs no launcher: a Ship sends none (#4825)' (
+        -not $ship.Contains('Invoke-ReleaseLauncherOnGitHub') -and -not $ship.Contains('Get-ReleaseLauncher') -and -not $ship.Contains('Get-SignedFileRefusal') -and
+        -not $ship.Contains('$MainSourceAligned') -and -not $ship.Contains('a new launcher is compiled and signed on One'))
     Yes '  and carries SkyUI''s check only through Get-ShipSkyUIFeedChange' ($ship.Contains('$skyuiMoved = @(Get-ShipSkyUIFeedChange $GameDir $feedRecord @(Get-ShipDeleteAlways))'))
     $pu = [IO.File]::ReadAllText((Join-Path $rel 'Publish-Update.ps1')).Replace("`r`n", "`n")
     Yes 'Publish-Update -FromFeed writes release.json without a catalog' ($pu.Contains('-NoCatalog:$FromFeed'))

@@ -229,6 +229,12 @@
       "repo": "site/server.js"
     },
     {
+      "live": "C:\\Thornswood-Docs\\lib",
+      "repo": "site/lib",
+      "folder": true,
+      "why": "the site's modules (#5357): every .js on each side, by name"
+    },
+    {
       "live": "C:\\Thornswood-Voice\\voice-server.js",
       "repo": "voice/voice-server.js"
     },

@@ -1,0 +1,104 @@
+{
+"21474:Hothtrooper44_ArmorCompilation.esp":{
+"bench":"88105:Skyrim.esm",
+"inputs":[["5ad9f:Skyrim.esm",1,4],["5ada1:Skyrim.esm",1,4]],
+"name":"Glass Buckler",
+"out":"21464:Hothtrooper44_ArmorCompilation.esp"
+},
+"21478:Hothtrooper44_ArmorCompilation.esp":{
+"bench":"88105:Skyrim.esm",
+"inputs":[["5ace4:Skyrim.esm",1,2],["5ad99:Skyrim.esm",1,2]],
+"name":"Orcish Buckler",
+"out":"21468:Hothtrooper44_ArmorCompilation.esp"
+},
+"2147a:Hothtrooper44_ArmorCompilation.esp":{
+"bench":"88105:Skyrim.esm",
+"inputs":[["5ace4:Skyrim.esm",1,2],["5ace5:Skyrim.esm",1,2]],
+"name":"Steel Buckler",
+"out":"2146a:Hothtrooper44_ArmorCompilation.esp"
+},
+"2147b:Hothtrooper44_ArmorCompilation.esp":{
+"bench":"88105:Skyrim.esm",
+"inputs":[["5ad9d:Skyrim.esm",1,2],["5ada0:Skyrim.esm",1,2]],
+"name":"Winterhold Battlemage Buckler",
+"out":"2146b:Hothtrooper44_ArmorCompilation.esp"
+},
+"2147c:Hothtrooper44_ArmorCompilation.esp":{
+"bench":"88105:Skyrim.esm",
+"inputs":[["5ace5:Skyrim.esm",1,2],["5ad99:Skyrim.esm",1,2]],
+"name":"Buckler of Ysgramor",
+"out":"2146c:Hothtrooper44_ArmorCompilation.esp"
+},
+"22f7:Hothtrooper44_ArmorCompilation.esp":{
+"bench":"88105:Skyrim.esm",
+"inputs":[["f:Skyrim.esm",50,0],["5ad9d:Skyrim.esm",2,2],["5ad9f:Skyrim.esm",2,2],["db5d2:Skyrim.esm",1,1]],
+"name":"Paladin Boots",
+"out":"ab63:Hothtrooper44_ArmorCompilation.esp"
+},
+"22f9:Hothtrooper44_ArmorCompilation.esp":{
+"bench":"88105:Skyrim.esm",
+"inputs":[["f:Skyrim.esm",50,0],["5ad9d:Skyrim.esm",1,1],["5ad9f:Skyrim.esm",2,2],["db5d2:Skyrim.esm",1,1]],
+"name":"Paladin Gauntlets",
+"out":"ab61:Hothtrooper44_ArmorCompilation.esp"
+},
+"22fa:Hothtrooper44_ArmorCompilation.esp":{
+"bench":"88105:Skyrim.esm",
+"inputs":[["f:Skyrim.esm",50,0],["5ad9d:Skyrim.esm",2,2],["5ad9f:Skyrim.esm",2,2],["db5d2:Skyrim.esm",1,1],["e7ed0:Skyrim.esm",2,2]],
+"name":"Paladin Barbut",
+"out":"ab60:Hothtrooper44_ArmorCompilation.esp"
+},
+"238ff:Hothtrooper44_ArmorCompilation.esp":{
+"bench":"88105:Skyrim.esm",
+"inputs":[["57f91:Skyrim.esm",2,1],["5ace5:Skyrim.esm",1,1],["5ad9f:Skyrim.esm",2,1],["800e4:Skyrim.esm",2,1],["9151b:Skyrim.esm",2,1],["db5d2:Skyrim.esm",1,1],["da0bf1:Update.esm",2,1]],
+"name":"Bosmer Coif",
+"out":"238e1:Hothtrooper44_ArmorCompilation.esp"
+},
+"2390a:Hothtrooper44_ArmorCompilation.esp":{
+"bench":"88105:Skyrim.esm",
+"inputs":[["57f91:Skyrim.esm",2,1],["5ace5:Skyrim.esm",1,1],["5ad93:Skyrim.esm",1,1],["5ad9f:Skyrim.esm",1,1],["800e4:Skyrim.esm",2,1],["9151b:Skyrim.esm",2,1],["db5d2:Skyrim.esm",1,1],["da0bf1:Update.esm",2,1]],
+"name":"Bosmer Reinforced Coif",
+"out":"238ed:Hothtrooper44_ArmorCompilation.esp"
+},
+"286a:Hothtrooper44_ArmorCompilation.esp":{
+"bench":"6ce000:Update.esm",
+"inputs":[["f:Skyrim.esm",1,0],["800e4:Skyrim.esm",1,1]],
+"name":"Eyepatch",
+"out":"285f:Hothtrooper44_ArmorCompilation.esp"
+},
+"3dee:Hothtrooper44_ArmorCompilation.esp":{
+"bench":"88105:Skyrim.esm",
+"inputs":[["f:Skyrim.esm",50,0],["5ad9d:Skyrim.esm",2,2],["5ad9f:Skyrim.esm",2,2],["db5d2:Skyrim.esm",1,1],["e7ed0:Skyrim.esm",2,2]],
+"name":"Paladin Great Helm",
+"out":"3ded:Hothtrooper44_ArmorCompilation.esp"
+},
+"d9a:Hothtrooper44_ArmorCompilation.esp":{
+"bench":"88105:Skyrim.esm",
+"inputs":[["f:Skyrim.esm",25,0],["5ace5:Skyrim.esm",1,1],["5ad93:Skyrim.esm",1,1],["800e4:Skyrim.esm",2,2],["da0bf1:Update.esm",1,1]],
+"name":"Falkreath Boots",
+"out":"d62:Hothtrooper44_ArmorCompilation.esp"
+},
+"d9e:Hothtrooper44_ArmorCompilation.esp":{
+"bench":"88105:Skyrim.esm",
+"inputs":[["f:Skyrim.esm",25,0],["5ace5:Skyrim.esm",1,1],["5ad93:Skyrim.esm",1,1],["800e4:Skyrim.esm",2,2],["da0bf1:Update.esm",1,1]],
+"name":"Falkreath Gauntlets",
+"out":"d65:Hothtrooper44_ArmorCompilation.esp"
+},
+"d9f:Hothtrooper44_ArmorCompilation.esp":{
+"bench":"88105:Skyrim.esm",
+"inputs":[["f:Skyrim.esm",25,0],["5ace5:Skyrim.esm",2,2],["5ad93:Skyrim.esm",1,1],["800e4:Skyrim.esm",2,2],["da0bf1:Update.esm",1,1]],
+"name":"Falkreath Helmet",
+"out":"d66:Hothtrooper44_ArmorCompilation.esp"
+},
+"da1:Hothtrooper44_ArmorCompilation.esp":{
+"bench":"88105:Skyrim.esm",
+"inputs":[["f:Skyrim.esm",25,0],["5ace5:Skyrim.esm",2,2],["5ad93:Skyrim.esm",2,2],["800e4:Skyrim.esm",2,2]],
+"name":"Hedge Knight Boots",
+"out":"d95:Hothtrooper44_ArmorCompilation.esp"
+},
+"da3:Hothtrooper44_ArmorCompilation.esp":{
+"bench":"88105:Skyrim.esm",
+"inputs":[["f:Skyrim.esm",25,0],["5ace5:Skyrim.esm",2,2],["5ad93:Skyrim.esm",2,2],["800e4:Skyrim.esm",2,2]],
+"name":"Hedge Knight Gauntlets",
+"out":"d97:Hothtrooper44_ArmorCompilation.esp"
+}
+}

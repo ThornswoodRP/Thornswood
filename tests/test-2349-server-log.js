@@ -34,6 +34,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const cp = require('child_process');
+const siteFiles = require('./site-files');
 
 const REPO = path.resolve(__dirname, '..');
 const WRITER = path.join(REPO, 'scripts', 'vps', 'Server-Log.js');
@@ -123,8 +124,21 @@ try {
     fs.writeFileSync(held, allOld);
     const hold = cp.spawn('powershell.exe', ['-NoProfile', '-Command',
       "$f = [IO.File]::Open('" + held.replace(/'/g, "''") + "', 'Open', 'Read', 'Read'); 'held'; Start-Sleep -Seconds 20"], { stdio: ['ignore', 'pipe', 'ignore'] });
-    const waitHeld = new Promise((res) => { hold.stdout.on('data', () => res()); setTimeout(res, 15000); });
-    waitHeld.then(() => {
+    // The sweep runs once Windows PowerShell says it holds the file, never on
+    // a clock: on a busy runner its start alone took over 15 seconds, and a
+    // sweep before the hold deleted the file (gate run 41502686958).
+    let saidHeld = '';
+    const waitHeld = new Promise((res) => {
+      hold.stdout.on('data', (d) => { saidHeld += d; if (/held/.test(saidHeld)) res(true); });
+      hold.on('exit', () => res(false));
+    });
+    waitHeld.then((isHeld) => {
+      if (!isHeld) {
+        yes('a rolled file another program holds is named with the error, and left for the next pass (Windows PowerShell ended without holding it)', false);
+        fs.rmSync(held, { force: true });
+        runPart();
+        return;
+      }
       const s2 = W.sweep(log, now);
       yes('a rolled file another program holds is named with the error, and left for the next pass',
         fs.existsSync(held) && s2.some((l) => l.indexOf(path.basename(held)) >= 0 && /could not/.test(l)));
@@ -176,7 +190,7 @@ function runPart() {
 
     // ---- the site reads across the dated files -------------------------------
     process.env.THORNSWOOD_HARNESS = '1';
-    const site = rd(path.join(REPO, 'site', 'server.js')) || '';
+    const site = siteFiles.source() || '';
     const at = site.indexOf('function serverLogSlice(');
     yes('the site still reads the server log for a session (serverLogSlice)', at >= 0);
     yes('  and lists the rolled files rather than counting .1 to .5', site.indexOf('const keep = 5;') < 0 && /serverLogGenerations/.test(site));

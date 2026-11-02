@@ -301,7 +301,9 @@ foreach ($account in @('', 'SYSTEM', 'LOCAL SERVICE')) {
 # the day the site stops being SYSTEM, with nothing in any log to say why.
 $real = BlockOf (Build 'LOCAL SERVICE' 'C:\Thornswood-Docs')
 Yes 'LOCAL SERVICE: its own folder gets Modify' ($real -and $real.Contains("@('C:\Thornswood-Docs', '(OI)(CI)M')"))
-$serverJs = Get-Content -LiteralPath (Join-Path $RepoPath 'site\server.js') -Raw
+# The site is server.js over its modules in site\lib since #5357.
+. (Join-Path $PSScriptRoot 'SiteFiles.ps1')
+$serverJs = Get-SiteSource (Join-Path $RepoPath 'site')
 $outside = @()
 foreach ($m in [regex]::Matches($serverJs, "'([A-Za-z]:(?:\\\\|/)[^']*)'")) {
     $p = $m.Groups[1].Value.Replace('\\', '\').Replace('/', '\')

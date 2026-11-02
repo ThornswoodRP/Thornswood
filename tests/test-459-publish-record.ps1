@@ -220,6 +220,8 @@ try {
   Put $record (([ordered]@{ binary = 'scam_native.node'; sha256 = $files['scam_native.node'].sha256; bytes = $files['scam_native.node'].bytes
                             source = [ordered]@{ commit = ('a' * 40) }; files = $files }) | ConvertTo-Json -Depth 5)
   Put (Join-Path $dist 'gamemode.js') $gmText
+  # And its tables (#5191), which the payload carries beside it.
+  Put (Join-Path $dist 'gamemode-tables\WAY_OUT.json') '{}'
   Put (Join-Path $dist 'thornswood-build.json') '{ "channel": "main", "note": "the build''s own" }'
   $esp = (Join-Path $tmp 'plugins\ours.esp')
   Put $esp 'a plugin'

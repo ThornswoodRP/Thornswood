@@ -25,7 +25,7 @@
        gate's exit code; with no answer, or no trace folder, it runs the
        whole gate untraced and takes its ask back;
     4. the gate's exit code is the step's, and -StartLog given by hand
-       (trace-gate.yml) reaches Nightly-Harnesses.ps1;
+       (gate-map.yml) reaches Nightly-Harnesses.ps1;
     5. the trace task (scripts\dev\Trace-Gate-Task.ps1) parses, looks only
        in the build runners' folders it was installed for, and on Windows
        its check of an ask is run for real: an ask is refused unless it
@@ -239,7 +239,7 @@ exit 0
 
     # ---- 4. by hand
     $r = Invoke-Gate 'workflow_dispatch' -extra @('-StartLog', (Join-Path $scratch 'hand.jsonl'))
-    Yes 'a dispatch runs the whole gate with the -StartLog it was given (trace-gate.yml)' ($r.Asked -and $r.Asked.Only -eq 'test-a.js test-b.js test-c.js' -and $r.Asked.StartLog -eq (Join-Path $scratch 'hand.jsonl') -and $r.Whole)
+    Yes 'a dispatch runs the whole gate with the -StartLog it was given (gate-map.yml)' ($r.Asked -and $r.Asked.Only -eq 'test-a.js test-b.js test-c.js' -and $r.Asked.StartLog -eq (Join-Path $scratch 'hand.jsonl') -and $r.Whole)
 
     # ---- 6. shares of the gate (31 Oct 2026): build.yml's job "gate" runs
     # -Shard n -Of 5 on five hosted runners at once. With no plan from the

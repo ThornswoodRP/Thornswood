@@ -2111,6 +2111,13 @@ if (-not $PutBack) {
         try { $said = @(& $node.Source --check $gm 2>&1) } finally { $ErrorActionPreference = $eap }
         if ($LASTEXITCODE -ne 0) { $bad += ('gamemode.js does not parse: ' + ((@($said | ForEach-Object { "$_".Trim() } | Where-Object { $_ }) | Select-Object -First 6) -join ' | ')) }
     }
+    # And its tables (#5191), the gamemode-tables folder the gamemode reads as
+    # it loads: a load without them stops, so a payload with none stops here.
+    # The folder is the payload's own and is never carried from the old one.
+    $tablesAt = Join-Path $stageDir 'gamemode-tables'
+    if (-not @(Get-ChildItem -LiteralPath $tablesAt -Filter '*.json' -File -ErrorAction SilentlyContinue).Count) {
+        $bad += 'the payload has no gamemode-tables, so the gamemode would stop as it loads (#5191)'
+    }
     # Every server file is the build the payload's own record names: the
     # binary, the JavaScript half the task starts, and the rest the fork
     # builds, and no server file the record does not list (#1214). A payload

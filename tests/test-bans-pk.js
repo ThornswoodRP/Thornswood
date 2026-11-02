@@ -68,6 +68,7 @@ const http = require('http');
 const net = require('net');
 const os = require('os');
 const path = require('path');
+const siteFiles = require('./site-files');
 
 const ROOT = path.join(__dirname, '..');
 const GM = process.env.GM || path.join(ROOT, 'game', 'gamemode.js');
@@ -79,7 +80,7 @@ const MENU = path.join(ROOT, 'game', 'ui', 'thornswood-select.js');
 const CR = String.fromCharCode(13);
 const read = (f) => fs.readFileSync(f, 'utf8').split(CR).join('');
 const src = read(GM);
-const siteSrc = read(SITE);
+const siteSrc = siteFiles.source(SITE);
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -98,7 +99,7 @@ const KEY = crypto.randomBytes(24).toString('hex');
 const SECRET = crypto.randomBytes(32).toString('hex');
 const PASSKEY = crypto.randomBytes(32).toString('hex');
 const STAFF_D = '222222222', STAFF2_D = '555555555', BJORN_D = '333333333', CARA_D = '666666666', NOBODY_D = '444444444';
-fs.copyFileSync(SITE, path.join(dir, 'server.js'));
+siteFiles.copy(dir, SITE);
 fs.mkdirSync(path.join(dir, 'data'), { recursive: true });
 fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({
   password: crypto.randomBytes(12).toString('hex'),
@@ -349,7 +350,7 @@ async function adminRoleOnly() {
   const ids = { owner: '710000001', mod: '720000002', tova: '730000003', mira: '740000004' };
   const key2 = crypto.randomBytes(24).toString('hex');
   const secret2 = crypto.randomBytes(32).toString('hex');
-  fs.copyFileSync(SITE, path.join(d2, 'server.js'));
+  siteFiles.copy(d2, SITE);
   fs.mkdirSync(path.join(d2, 'data'), { recursive: true });
   fs.writeFileSync(path.join(d2, 'config.json'), JSON.stringify({
     password: crypto.randomBytes(12).toString('hex'),
@@ -848,11 +849,16 @@ async function adminRoleOnly() {
     const readIds = lift(rosterCs, 'public static HashSet<int> ReadIds(string text, string key)');
     yes('Roster.cs reads the site\'s pk and banned lists', !!readIds &&
         /ReadIds\(text, "pk"\)/.test(rosterCs) && /ReadIds\(text, "banned"\)/.test(rosterCs));
-    const csc = require('./launcher-csc').csc || path.join(require('os').tmpdir(), 'no-build-tools-roslyn-csc', 'csc.exe');
-    const onWindows = require('./launcher-csc').onWindows;
-    if (readIds && !onWindows) {
-      console.log('SKIP  the lifted ReadIds compiled and run: the compiler the launcher builds with is the Roslyn csc of Visual Studio\'s Build Tools, which only Windows has');
-    } else if (readIds && fs.existsSync(csc)) {
+    // Built the way the project builds, by the .NET 10 SDK (tests/launcher-csc.js),
+    // which runs here on any machine that has it (#4823).
+    const lc = require('./launcher-csc');
+    const buildAndRun = (prog) => {
+      try { return lc.run(lc.build({ sources: [prog], exe: true }), []).stdout; }
+      catch (e) { return 'ERROR ' + e.message; }
+    };
+    if (readIds && !lc.dotnet) {
+      yes('the .NET SDK the launcher builds with is on this machine', false);
+    } else if (readIds) {
       const prog = 'using System; using System.Collections.Generic; using System.Text.RegularExpressions;\n' +
         'static class T {\n ' + readIds + '\n static void Main() {\n' +
         '  string a = "{\\"ok\\":true,\\"rows\\":{\\"2003\\":{\\"name\\":\\"H\\"}},\\"gone\\":[],\\"goneAt\\":0,\\"pk\\":[2003, 4002],\\"banned\\":[2002]}";\n' +
@@ -860,18 +866,10 @@ async function adminRoleOnly() {
         '  Console.WriteLine("pk " + pk.Count + " " + pk.Contains(2003) + " " + pk.Contains(4002));\n' +
         '  Console.WriteLine("banned " + b.Count + " " + b.Contains(2002));\n' +
         '  Console.WriteLine("none " + none.Count);\n } }\n';
-      const cdir = fs.mkdtempSync(path.join(dir, 'cs-'));
-      fs.writeFileSync(path.join(cdir, 'r.cs'), prog);
-      let out = '';
-      try {
-        cp.execFileSync(csc, ['/nologo', '/langversion:' + require('./launcher-csc').langVersion, '/out:' + path.join(cdir, 'r.exe'), path.join(cdir, 'r.cs')], { stdio: 'pipe' });
-        out = cp.execFileSync(path.join(cdir, 'r.exe'), { encoding: 'utf8' });
-      } catch (e) { out = 'ERROR ' + ((e.stdout || '') + (e.stderr || '') || e.message); }
+      const out = buildAndRun(prog);
       yes('the lifted ReadIds compiles with the compiler the launcher builds with, and reads pk [2003, 4002], banned [2002], and nothing from an answer without them',
           /pk 2 True True/.test(out) && /banned 1 True/.test(out) && /none 0/.test(out));
       if (/ERROR/.test(out)) console.log(out);
-    } else if (readIds) {
-      yes('the Build Tools csc the launcher builds with is on this machine (' + csc + ')', false);
     }
     const bury = lift(charsCs, 'static string BuryDead(List<Row> rows)') || '';
     yes('Chars moves a dead character out of its slot to DeadSlot and saves',
@@ -900,9 +898,9 @@ async function adminRoleOnly() {
     yes('Chars has RaiseRevived, run in Prepare after BuryDead and before the slots are tidied',
         !!raise && prep.indexOf('RaiseRevived(rows)') > prep.indexOf('BuryDead(rows)') &&
         prep.indexOf('RaiseRevived(rows)') < prep.indexOf('TidySlots(rows, slots)'));
-    if (raise && nextSlot && findSlot && !onWindows) {
-      console.log('SKIP  the lifted RaiseRevived compiled and run: the compiler the launcher builds with is the Roslyn csc of Visual Studio\'s Build Tools, which only Windows has');
-    } else if (raise && nextSlot && findSlot && fs.existsSync(csc)) {
+    if (raise && nextSlot && findSlot && !lc.dotnet) {
+      yes('the .NET SDK the launcher builds with is on this machine', false);
+    } else if (raise && nextSlot && findSlot) {
       const prog = 'using System; using System.Collections.Generic;\n' +
         'static class Roster { public static HashSet<int> back = new HashSet<int>();\n' +
         '  public static bool Revived(int id) { return back.Contains(id); } }\n' +
@@ -917,13 +915,7 @@ async function adminRoleOnly() {
         '  string line = RaiseRevived(rows);\n' +
         '  Console.WriteLine("back " + rows[2].Slot + " " + rows[3].Slot + " " + saved);\n' +
         '  Console.WriteLine(line);\n } }\n';
-      const cdir = fs.mkdtempSync(path.join(dir, 'cs-'));
-      fs.writeFileSync(path.join(cdir, 'r.cs'), prog);
-      let out = '';
-      try {
-        cp.execFileSync(csc, ['/nologo', '/langversion:' + require('./launcher-csc').langVersion, '/out:' + path.join(cdir, 'r.exe'), path.join(cdir, 'r.cs')], { stdio: 'pipe' });
-        out = cp.execFileSync(path.join(cdir, 'r.exe'), { encoding: 'utf8' });
-      } catch (e) { out = 'ERROR ' + ((e.stdout || '') + (e.stderr || '') || e.message); }
+      const out = buildAndRun(prog);
       yes('the lifted RaiseRevived compiles with the compiler the launcher builds with, and moves nobody when the site named nobody',
           /none True 0 -1/.test(out));
       yes('and puts the one the site names as revived into the lowest free slot, leaves the other dead, and saves',

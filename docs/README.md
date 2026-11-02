@@ -1,11 +1,13 @@
 # docs
 
 Pages about how Thornswood works, for everybody on the team. The rules,
-and the long form of each, are in [Developer-Guide.md](../Developer-Guide.md)
-at the root.
+and the long form of each, are in the Developer Guide's pages under
+[guide/](../Developer-Guide.md#the-pages), indexed by
+[Developer-Guide.md](../Developer-Guide.md) at the root.
 
 | Page | What it answers |
 | --- | --- |
+| [guide/](../Developer-Guide.md#the-pages) | The Developer Guide's pages, one task each, in the order a first day reads them: [Set up a machine](guide/set-up-a-machine.md), [Make a change](guide/make-a-change.md), [The rules](guide/rules.md), [The board, issues and test tasks](guide/the-board.md), [Settled design](guide/settled-design.md), [How work moves](guide/how-work-moves.md), [Release to dev](guide/release-to-dev.md), [Release to main](guide/release-to-main.md), [After a pull request is merged](guide/after-a-merge.md), [How the system fits together](guide/the-system.md), [The tools, A to O](guide/tools.md), [Secrets](guide/secrets.md), [Staff commands](guide/staff-commands.md). [Developer-Guide.md](../Developer-Guide.md) is their index. |
 | [FEED.md](FEED.md) | The update feed launchers read: every field of version.json, who writes it, who reads it, and what happens when it is wrong. |
 | [JSON-STATE-INVENTORY.md](JSON-STATE-INVENTORY.md) | Every critical JSON file, who writes and reads it, how it is checked, and the four records held to a version and shape (#2180). |
 | [ICONS.md](ICONS.md) | Which icon file is which: Main launcher badge, Dev launcher monogram, site favicon. |

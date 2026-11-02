@@ -40,14 +40,24 @@ function Yes([string]$what, [bool]$cond) {
 }
 function Read-Text([string]$p) { return [IO.File]::ReadAllText($p, [Text.Encoding]::UTF8) }
 
-# ---- Publish-Update writes minLauncher --------------------------------------
+# ---- nothing publishes a launcher field (#4825) -----------------------------
+# minLauncher, the floor the site's join pass reads, was written by every
+# publish as the launcher the feed offered. Since #4825 the launcher goes out
+# only through Velopack, and neither Publish-Update nor Ship writes any of the
+# feed's launcher fields or sends a launcher: the feed keeps the ones it has,
+# the last launcher it sent and its floor.
 $pub = Read-Text (Join-Path $repo 'scripts\release\Publish-Update.ps1')
-$a = $pub.IndexOf('# ==== thornswood min launcher ====')
-$b = $pub.IndexOf('# ==== end thornswood min launcher ====')
-Yes 'the minLauncher block is marked in Publish-Update.ps1' ($a -ge 0 -and $b -gt $a)
-$launcherBlock = $pub.IndexOf("Set-Prop `$doc 'launcherVersion' `$launcherVersion")
-$written = $pub.IndexOf('Write-FeedVersionFile $VersionFile')
-Yes 'it runs after the launcher is recorded and before version.json is written' ($launcherBlock -gt 0 -and $a -gt $launcherBlock -and $written -gt $b)
+$ship = Read-Text (Join-Path $repo 'scripts\release\Ship.ps1')
+foreach ($f in 'launcherVersion', 'launcherUrl', 'launcherSha256', 'launcherInputs', 'minLauncher') {
+    Yes "Publish-Update.ps1 writes no $f" ($pub -notmatch ("Set-Prop \`$doc '" + $f + "'") -and $pub -notmatch ('\.' + $f + '\s*='))
+    Yes "  and Ship.ps1 does not name it at all" (-not $ship.Contains($f))
+}
+Yes 'Publish-Update.ps1 takes no -Launcher, -VersionOverride or -LauncherInputs' ($pub -notmatch '\[switch\]\$Launcher\b' -and $pub -notmatch '\$VersionOverride' -and $pub -notmatch '\$LauncherInputs')
+Yes '  and sends no launcher exe to the site or to the secret scan' ($pub -notmatch 'Get-LauncherExe' -and $pub -notmatch '\$exePath' -and $pub -notmatch '-Binary ')
+Yes 'Ship.ps1 passes the publisher no launcher' ($ship -notmatch "pubArgs\['(Launcher|VersionOverride|LauncherInputs)'\]")
+Yes '  and builds, installs, fetches or signs none' ($ship -notmatch 'Build-Launcher\.ps1''\) -Root' -and $ship -notmatch "'Install-Launcher\.ps1'" -and
+    $ship -notmatch 'Invoke-ReleaseLauncherOnGitHub' -and $ship -notmatch 'Get-ReleaseLauncher' -and $ship -notmatch 'Set-ReleaseLauncherSignature')
+Yes 'the packs-gone floor reads the feed''s own minLauncher, which nothing moves' ($pub.Contains("foreach (`$k in 'minLauncher', 'launcherVersion')"))
 
 function Lift([string]$src, [string]$head) {
     $at = $src.IndexOf($head)
@@ -59,32 +69,6 @@ function Lift([string]$src, [string]$head) {
         elseif ($src[$i] -eq '}') { $depth--; if ($depth -eq 0) { return $src.Substring($at, $i - $at + 1) } }
     }
     return ''
-}
-$helpers = (Lift $pub 'function Set-Prop(') + "`n" + (Lift $pub 'function Val(')
-Yes 'Set-Prop and Val are in Publish-Update.ps1' ($helpers -match 'function Set-Prop' -and $helpers -match 'function Val')
-
-if ($a -ge 0 -and $b -gt $a) {
-    $block = $pub.Substring($a, $b - $a)
-    $script:said = @()
-    function Say($m, $c) { $script:said += [string]$m }
-    . ([scriptblock]::Create($helpers))
-    $run = [scriptblock]::Create($block)
-    function Publish([string]$json) {
-        $script:said = @()
-        $doc = $json | ConvertFrom-Json
-        . $run
-        return $doc
-    }
-
-    $d = Publish '{"launcherVersion":"1.1.103","packs":[]}'
-    Yes 'a feed with no minLauncher gets the launcher it offers' ($d.minLauncher -eq '1.1.103')
-    Yes 'and says so' (($script:said -join ' ') -match 'minLauncher 1\.1\.103')
-    $d = Publish '{"launcherVersion":"1.1.103.4","minLauncher":"1.1.103.2"}'
-    Yes 'a dev feed moves its minimum up to the dev launcher just published' ($d.minLauncher -eq '1.1.103.4')
-    $d = Publish '{"launcherVersion":"1.1.103","minLauncher":"1.1.103"}'
-    Yes 'a Ship that kept the launcher keeps the minimum, and says nothing' ($d.minLauncher -eq '1.1.103' -and $script:said.Count -eq 0)
-    $d = Publish '{"packs":[]}'
-    Yes 'a feed with no launcher at all is left without a minimum' (-not ($d.PSObject.Properties.Name -contains 'minLauncher'))
 }
 
 # ---- the launcher asks for a pass and hands it to the game -----------------

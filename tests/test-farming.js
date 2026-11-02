@@ -8,7 +8,7 @@ var path = require('path');
 // that names somebody's home folder is a test only that machine can run,
 // which is what entry 196 is about and why this one sat in a scratchpad.
 var REPO = path.resolve(REPO_DIR);
-var text = fs.readFileSync(path.join(REPO, 'game', 'gamemode.js'), 'utf8');
+var text = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(REPO, 'game', 'gamemode.js'), 'utf8'));
 
 function slice(fromMark, toMark, includeTo) {
   var a = text.indexOf(fromMark);
@@ -17,7 +17,7 @@ function slice(fromMark, toMark, includeTo) {
   return text.slice(a, includeTo ? b + toMark.length : b);
 }
 
-var cropCode = slice('// ==== CROPS_BY_BASE, generated ====', 'var CROPS = mergeCrops();', true);
+var cropCode = slice('var CROPS_BY_BASE = ', 'var CROPS = mergeCrops();', true);
 var farmCode = slice('// ==== thornswood farming ====', '// ==== end thornswood farming ====');
 
 // TUNING.farming, lifted whole out of the file.

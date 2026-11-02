@@ -14,6 +14,8 @@
     data                  the door's own records and the online count
     server-settings.json  the port, the name, the load order
     gamemode.js           so a restore is a working server and not a puzzle
+    gamemode-tables       the tables gamemode.js reads as it loads (#5191),
+                          which it cannot start without
     the site's uploads    the gallery's pictures and what staff put up;
                           every upload, including larger recordings
     the feed's store      each channel's feed generations (version\, #2727),
@@ -27,8 +29,8 @@
                           them before anything starts
     the Caddyfile         whatever is answering on 443 for thornswood.net
 
-    the dev server        its world, private, data, server-settings.json and
-                          gamemode.js, under game-dev. Since issue #401: dev
+    the dev server        its world, private, data, server-settings.json,
+                          gamemode.js and gamemode-tables, under game-dev. Since issue #401: dev
                           is where new work is tested before it goes live, so
                           the characters there are somebody's afternoon too,
                           and it is a few MB.
@@ -343,6 +345,7 @@ else {
       Grab (Join-Path $sv.Root 'data')                 ($sv.Tag + '\data')
       Grab (Join-Path $sv.Root 'server-settings.json') ($sv.Tag + '\server-settings.json')
       Grab (Join-Path $sv.Root 'gamemode.js')          ($sv.Tag + '\gamemode.js')
+      Grab (Join-Path $sv.Root 'gamemode-tables')      ($sv.Tag + '\gamemode-tables')
     }
   } finally {
     if ($serverTurn) { $serverTurn.Dispose() }

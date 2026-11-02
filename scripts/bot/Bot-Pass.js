@@ -41,6 +41,10 @@
 // The server's own output goes to bot-pass-server.log beside it, and the
 // last lines of it into the result, so a FAIL says what the server said. The
 // voice service's goes to bot-pass-voice.log in its folder.
+// The pass's own lines, each step as it starts and ends, go to bot-pass.log
+// beside the result as they happen, so a pass that never ends says where it
+// was (the task keeps no output of its own, and result.json is written only
+// at the end; Deployment 7480554210 ran out with neither).
 //
 // The waits are on things the server says or writes, each with a time
 // limit: nothing is sent twice, and nothing is put right after the fact.
@@ -51,6 +55,7 @@ const fs = require('fs');
 const path = require('path');
 const { Bot, MSG, loadAddon, mintPass } = require('./bot.js');
 const { VoiceRun, Relay } = require('./relay.js');
+const { characters } = require('./character.js');
 
 const LOADED = '[thornswood] gamemode client scripts ';
 const NOT_LOADED = ['[thornswood] gamemode did not load', 'Bad syntax, ignoring'];
@@ -103,20 +108,17 @@ function face(name) {
   };
 }
 
-// The character with this profile id in the world folder, or null. The
-// engine's own setting names the folder (databaseName, "world" when unset,
-// DatabaseFactory.cpp).
+// The character with this profile id in the world folder, or null. It is
+// read as character.js reads every world (the restore rehearsal and the
+// nightly count read the same way, #5287): the engine names a form's file by
+// its id in hex (FormDesc::ToString with %x, FileDatabase), so a character
+// made on the server is ff000800.json, never digits alone. Reading digits
+// only is how the first pass to reach saved failed (#5379).
 function formOf(root, settings, profileId) {
-  const dir = path.join(root, String(settings.databaseName || 'world'), 'changeForms');
-  let names = [];
-  try { names = fs.readdirSync(dir); } catch (e) { return null; }
-  for (const n of names) {
-    if (!/^\d+\.json$/.test(n)) { continue; }
-    let o = null;
-    try { o = readJson(path.join(dir, n)); } catch (e) { continue; }
-    if (o && Number(o.profileId) === profileId && !o.isDeleted) { return o; }
-  }
-  return null;
+  let all = [];
+  try { all = characters(root, settings); } catch (e) { return null; }
+  const c = all.find((x) => x.profileId === profileId);
+  return c ? c.form : null;
 }
 
 function nameIn(form) {
@@ -258,21 +260,25 @@ async function pass(opts) {
       say('loads', false, 'this server holds every login for a join pass (thornswoodRequirePass is not false), so it is not a bot pass copy');
       return result();
     }
+    log('loading the engine\'s addon, scam_native.node');
     const addon = opts.addon || loadAddon(root);
     const key = doorKey(root, settings);
 
     // The voice service first, as on the box: the gamemode pushes positions
     // to it and collects commands from it from the moment it loads.
+    log('the voice service starts beside the copy');
     why = await voice.start(stepMs);
     if (why) { say('loads', false, 'the voice service beside the copy did not start: ' + why + voiceSaid()); return result(); }
 
     server.start();
+    log('the server started; it has ' + Math.round(loadMs / 1000) + ' s to say gamemode.js loaded');
     why = await server.awaitLoad(blob, loadMs);
     if (!say('loads', why === '', why || 'gamemode.js, git blob ' + blob.slice(0, 12) + ', loaded')) { return result(); }
 
     const first = new Bot(addon, { port, password, name: 'bot', log });
     bots.push(first);
     try {
+      log('a bot connects to port ' + port);
       await first.connect(stepMs);
       const me = await first.login(profileId, null, stepMs);
       say('login', me.isMe === true, 'profile ' + profileId + ' was sent its character, idx ' + me.idx);
@@ -285,6 +291,7 @@ async function pass(opts) {
     const relay = new Relay(voice, { profileId, name: 'bot', log });
     relays.push(relay);
     try {
+      log('the bot joins the voice service and sends its join pass');
       await relay.connect(stepMs);
       const now = Date.now();
       const serverName = String(settings.thornswoodServer || '').trim().toLowerCase() || 'main';
@@ -326,6 +333,7 @@ async function pass(opts) {
     // (PartOne::SetRaceMenuOpen). Waiting for that close is how the first
     // real pass (Deployment 7475814060) failed at face.
     const sentAt = first.inbox.length;
+    log('the bot sends a face');
     first.send({ t: 4, idx: me.idx, data: face(name) }, true);
     try {
       await first.until(() => first.inbox.slice(sentAt).some((x) => x.message && stageOf(x.message, me.idx) === 'choosing'),
@@ -337,6 +345,7 @@ async function pass(opts) {
     // ends creation (arriveAt) and says the welcome over the relay.
     let heardAt = relay.heard.length;
     const inboxAt = first.inbox.length;
+    log('the bot picks its home, ' + HOME);
     relay.say('/pick town ' + HOME);
     try {
       await first.until(() => first.inbox.slice(inboxAt).some((x) => x.message && stageOf(x.message, me.idx) === 'done'),
@@ -351,6 +360,7 @@ async function pass(opts) {
     }
 
     heardAt = relay.heard.length;
+    log('the bot asks for its needs');
     relay.say('/needs');
     try {
       const line = await relay.until(() => relay.said(heardAt).find((t) => /^Hunger \d+% /.test(t)), stepMs, 'an answer to /needs over the relay');
@@ -363,6 +373,7 @@ async function pass(opts) {
     relay.close();
 
     let form = null;
+    log('waiting for the world on disk to hold ' + name);
     const end = Date.now() + stepMs;
     while (Date.now() < end) {
       form = formOf(root, settings, profileId);
@@ -376,16 +387,19 @@ async function pass(opts) {
     }
     first.close();
 
+    log('the server is stopped');
     if (!await server.stop(stepMs)) { say('restart', false, 'the server did not end within ' + Math.round(stepMs / 1000) + ' s of being stopped'); return result(); }
     // What it was saved as, read once it has ended and written its last.
     form = formOf(root, settings, profileId) || form;
     server.start();
+    log('the server started again; it has ' + Math.round(loadMs / 1000) + ' s to say gamemode.js loaded');
     why = await server.awaitLoad(blob, loadMs);
     if (!say('restart', why === '', why || 'stopped, started again, and the gamemode loaded again')) { return result(); }
 
     const second = new Bot(addon, { port, password, name: 'bot again', log });
     bots.push(second);
     try {
+      log('a second bot connects to port ' + port);
       await second.connect(stepMs);
       const again = await second.login(profileId, null, stepMs);
       const p = again.props || {};
@@ -406,6 +420,7 @@ async function pass(opts) {
   } finally {
     for (const b of bots) { try { b.close(); } catch (e) { /* closing a closed bot */ } }
     for (const r of relays) { r.close(); }
+    log('the pass ends; the server is stopped');
     await server.stop(stepMs);
     await voice.stop(stepMs);
   }
@@ -428,13 +443,21 @@ async function main() {
     return 2;
   }
   const started = new Date().toISOString();
-  const r = await pass({ root: a.root, log: (s) => console.log(s) });
+  // Fresh for each pass: the agent empties the run folder before it starts one.
+  const progress = path.join(path.dirname(path.resolve(a.out)), 'bot-pass.log');
+  const log = (s) => {
+    const l = new Date().toISOString() + '  ' + s;
+    console.log(l);
+    try { fs.appendFileSync(progress, l + '\n'); } catch (e) { /* the result still holds the steps */ }
+  };
+  log('the bot pass starts in ' + path.resolve(a.root));
+  const r = await pass({ root: a.root, log });
   const doc = Object.assign({ schema: 1, id: a.id || '', started, ended: new Date().toISOString() }, r);
   // Whole or not at all: the agent reads this file once the task has ended.
   const tmp = a.out + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(doc, null, 2));
   fs.renameSync(tmp, a.out);
-  console.log(r.ok ? 'BOT PASS OK' : 'BOT PASS FAILED');
+  log(r.ok ? 'BOT PASS OK' : 'BOT PASS FAILED');
   return r.ok ? 0 : 1;
 }
 

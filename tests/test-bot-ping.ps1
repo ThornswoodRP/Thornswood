@@ -5,7 +5,7 @@
 
   Install-Bot.ps1 -SetPing puts the outside monitor's ping address into the
   bot's bot.env.json on the VPS, on ssh's standard input, and never prints it
-  (issue #449). bot\test-uptime-ping.py checks the bot's half.
+  (issue #449). bot\tests\test-uptime-ping.py checks the bot's half.
 
   WHY. The bot pings an outside monitor every minute while it is on Discord,
   so a bot or a whole VPS that stops is noticed whether or not One is on. The

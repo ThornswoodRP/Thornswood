@@ -17,7 +17,7 @@ const path = require('path');
 const vm = require('vm');
 
 const REPO_DIR = path.join(__dirname, '..');
-const gm = fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8').split(String.fromCharCode(13)).join('');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8')).split(String.fromCharCode(13)).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -34,7 +34,7 @@ function slice(src, start, end) {
 const block = slice(gm, '// ==== thornswood embassy and remnant ====', '// ==== end thornswood embassy and remnant ====');
 yes('the embassy and remnant block is in the gamemode', block !== null);
 
-const recSrc = slice(gm, 'var RECIPES_BY_ID = {', '\n  };');
+const recSrc = slice(gm, 'var RECIPES_BY_ID = {', ';\n');
 let RECIPES = null;
 try { RECIPES = new Function('return ' + recSrc.slice('var RECIPES_BY_ID = '.length).replace(/;$/, ''))(); } catch (e) { RECIPES = null; }
 yes('the recipe table reads', !!RECIPES && Object.keys(RECIPES).length > 1500);
@@ -42,7 +42,7 @@ yes('the recipe table reads', !!RECIPES && Object.keys(RECIPES).length > 1500);
 // collection revision that adds Empire or Thalmor gear adds rows to them
 // (#4087, Cheddar's Mashups in revision 5).
 const CUT_COUNTS = JSON.parse(fs.readFileSync(path.join(REPO_DIR, 'docs', 'systems', 'cut-items.json'), 'utf8')).counts || {};
-const adminSrc = slice(gm, 'var ADMIN_ITEMS = {', '\n  };');
+const adminSrc = slice(gm, 'var ADMIN_ITEMS = {', ';\n');
 let ADMIN_ITEMS = null;
 try { ADMIN_ITEMS = new Function('return ' + adminSrc.slice('var ADMIN_ITEMS = '.length).replace(/;$/, ''))(); } catch (e) { ADMIN_ITEMS = null; }
 yes('the /give table reads', !!ADMIN_ITEMS && !!ADMIN_ITEMS['thalmor robes']);

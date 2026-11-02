@@ -82,14 +82,24 @@
   (#5189). Each plugin goes
   on the end of the plugin list after the plugins its "after" names
   (docs\LIGHT-ORDER-DRIFT.md: a new plugin goes on the end of its own kind,
-  never mid-order). Install-NexusRevision.ps1 -CollectionArchive lays the new
+  never mid-order).
+
+  PLUGINS OFF THE LIST (#4603). An "after", of an added plugin or a rule, may
+  name a plugin the revision installs that its own list leaves out, as
+  revision 6 does with CBBE.esp and RaceMenuMorphsCBBE.esp: the game still
+  loads it where the servers do. collection.json does not say which plugins
+  those are, so they are read from records\collection.json (its "enabled":
+  false plugins) when the record follows the published revision this starts
+  from, and given to nexus-collection.js. Until 2 November only the list was
+  known, and the record's first FOMOD mod stopped there. Install-NexusRevision.ps1 -CollectionArchive lays the new
   archive out to check it, from One or a cloud session.
 
   A PLUGIN RULE (27 Oct). -Rule names a JSON file of plugins whose "load
   after" rule the revision replaces:
       [{ "name": "cheddars_mashups.esl", "after": ["RaceCompatibility.esm"] }]
   Each plugin has to be one the list names, and so does each "after", unless
-  it is one of the five base masters. The plugin moves in the list to
+  it is one of the five base masters or a plugin the revision installs off
+  its list. The plugin moves in the list to
   straight after the last plugin its "after" names. Why: revision 5's -Add
   gave cheddars_mashups.esl "after" three plugins that are not masters, and
   the game loads an .esl as a master, before all of them, so LOOT reported a
@@ -855,6 +865,25 @@ foreach ($d in $dropped) {
     Remove-Item -LiteralPath $dir -Force
     $dropped += $dir.Substring($build.Length + 1).Replace('/', '\')
   }
+}
+# The plugins the revision installs that its own list leaves out, which an
+# added plugin's or a rule's "after" may name (nexus-collection.js, PLUGINS
+# OFF THE LIST). collection.json does not say which those are; the record
+# does, as its "enabled": false plugins, when it follows the revision this
+# starts from (#4603: Improved Eyes Skyrim.esp loads after
+# RaceMenuMorphsCBBE.esp, which revision 6 installs off its list).
+if ($adds.Count -or $rules.Count) {
+  $recordFile = Join-Path $Here '..\..\records\collection.json'
+  $unlisted = @()
+  if (Test-Path -LiteralPath $recordFile) {
+    $rec = Step { ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($recordFile)) $recordFile }
+    if ([string]$rec.collection -eq $Slug -and [int]$rec.revision -eq $start -and $startStatus -eq 'published') {
+      $unlisted = @(@($rec.plugins) | Where-Object { $_ -and $_.enabled -eq $false } | ForEach-Object { [string]$_.name })
+      if ($unlisted.Count) { Say ('  installed off the list, by the record: ' + ($unlisted -join ', ')) 'DarkGray' }
+    }
+    else { Say ('  the record follows revision ' + $rec.revision + ' of ' + $rec.collection + ', not this one, so no plugin installed off the list is known') 'DarkGray' }
+  }
+  if ($unlisted.Count) { $swaps.Add([ordered]@{ unlisted = [string[]]$unlisted }) }
 }
 $swapsJson = Join-Path $scratch 'swaps.json'
 $payloadJson = Join-Path $scratch 'payload.json'

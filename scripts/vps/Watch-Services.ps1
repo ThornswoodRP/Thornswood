@@ -65,7 +65,7 @@
   same webhook itself, because a runner cannot reach this box over ssh.
   tests\test-watch-alerts.ps1 drives the real
   code below against fakes: down, back, flapping, the bot down, a webhook
-  that fails. bot\test-watch-services.py reads what that harness writes.
+  that fails. bot\tests\test-watch-services.py reads what that harness writes.
 
   What it checks:
     caddy     https://thornswood.net answers, which is the only one of these

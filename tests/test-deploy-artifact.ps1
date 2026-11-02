@@ -550,7 +550,9 @@ if ($dd) {
 # One store, named the same in the three places that name it.
 $storeLine = [regex]::Match((Get-Content -LiteralPath $helper -Raw), "\`$script:ThornswoodDeployStore = '([^']+)'").Groups[1].Value
 Yes "Artifact.ps1 names the store ($storeLine)" ($storeLine -eq 'C:/Thornswood-Deploys')
-$siteSrc = Get-Content -LiteralPath (Join-Path $Repo 'site\server.js') -Raw
+# The site is server.js over its modules in site\lib since #5357.
+. (Join-Path $PSScriptRoot 'SiteFiles.ps1')
+$siteSrc = Get-SiteSource (Join-Path $Repo 'site')
 Yes "the site reads current\ in that store by default" ($siteSrc.Contains('process.env.THORNSWOOD_DEPLOYS_DIR || ''C:\\Thornswood-Deploys\\current'''))
 $docsSrc = Get-Content -LiteralPath (Join-Path $Repo 'scripts\deploy\Deploy-Docs.ps1') -Raw
 # Named from the folder the site's root is in, C: on the box (#1273).

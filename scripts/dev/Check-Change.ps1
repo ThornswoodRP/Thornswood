@@ -139,7 +139,7 @@ try {
             # Its release note, as the check "Release note" holds it (#5179).
             $dotnet = Get-Command dotnet -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
             if (-not $dotnet) {
-                Say 'FAIL  the release note: the .NET 10 SDK is not on this machine, and the rules are in tools\ReleaseNotes (Developer-Guide.md, "Install the tools", has its line)'
+                Say 'FAIL  the release note: the .NET 10 SDK is not on this machine, and the rules are in tools\ReleaseNotes (docs/guide/set-up-a-machine.md, "Install the tools", has its line)'
                 $code = 1
             } else {
                 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'; $env:DOTNET_NOLOGO = '1'

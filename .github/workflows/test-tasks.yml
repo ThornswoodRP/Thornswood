@@ -16,7 +16,7 @@
 # for one issue, a body that also closes the issue (the merge would close it
 # before the task is copied), and an issue that is closed, missing or a pull
 # request. A body with no block passes. Its own harness,
-# bot/test-5199-pr-tasks.py, runs first, so a check that reads nothing
+# bot/tests/test-5199-pr-tasks.py, runs first, so a check that reads nothing
 # cannot pass by accident. pr_tasks.py's header says the rest.
 #
 # WHEN. Opened, pushed to, reopened, and edited: an edit to the body is how a
@@ -98,7 +98,7 @@ jobs:
           THORNSWOOD_BOT_DATA: ${{ runner.temp }}/bot-data
         run: |
           mkdir -p "$THORNSWOOD_BOT_DATA"
-          "$RUNNER_TEMP/bot-venv/bin/python" bot/test-5199-pr-tasks.py
+          "$RUNNER_TEMP/bot-venv/bin/python" bot/tests/test-5199-pr-tasks.py
 
       - name: Check the test tasks in the body
         shell: bash

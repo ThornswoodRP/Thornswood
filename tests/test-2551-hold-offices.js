@@ -9,7 +9,7 @@
     - If two accounts hold the same Jarl role, neither acts as Jarl until staff
       fix it, and staff are told which accounts clash.
     - Each hold has "<Hold> Court", "Steward of <Hold>" and "Guard of <Hold>"
-      (bot/Build-Discord.py; bot/test-2551-hold-offices.py holds the roles and
+      (bot/Build-Discord.py; bot/tests/test-2551-hold-offices.py holds the roles and
       the bot's panel).
     - That hold's Jarl gives and takes those three. In the game the Office
       page asks the site, and the bot's account sets the role, so the role
@@ -36,10 +36,11 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const vm = require('vm');
+const siteFiles = require('./site-files');
 const CR = String.fromCharCode(13);
 const read = function (p) { return fs.readFileSync(p, 'utf8').split(CR).join(''); };
-const site = read(path.join(REPO_DIR, 'site', 'server.js'));
-const gm = read(path.join(REPO_DIR, 'game', 'gamemode.js'));
+const site = siteFiles.source();
+const gm = require('./gamemode-tables.js').joined(read(path.join(REPO_DIR, 'game', 'gamemode.js')));
 const builder = read(path.join(REPO_DIR, 'bot', 'Build-Discord.py'));
 const botSrc = read(path.join(REPO_DIR, 'bot', 'bot.py'));
 

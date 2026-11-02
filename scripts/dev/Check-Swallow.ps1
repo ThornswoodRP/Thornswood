@@ -41,8 +41,9 @@
   Not read: node_modules (somebody else's packages), a .min.js (a vendored
   library, minified onto one line, such as site\public\marked-12.0.2.min.js),
   __pycache__ and a venv or .venv (the bot's installed packages), and the
-  harnesses kept beside the code, test-*.js in voice\ and test-*.py in bot\,
-  for the same reason tests\ is not read.
+  harnesses: everything in a product's own tests folder (voice\tests\,
+  bot\tests\, installer\tests\, plan line 42) and any test-* file still
+  beside the code, for the same reason tests\ is not read.
 
   WHY. Entry 239 on the To Do List. Measured on 24 Sep: 386 of the 618 catch
   clauses in launcher\app\*.cs had nothing between their braces, so a failure in
@@ -194,6 +195,9 @@ function Key-Of($f) {
 function Skip-Source($f, [string]$dir) {
   $below = '\' + $f.FullName.Substring($dir.TrimEnd($Sep).Length + 1).Replace($Sep, '\')
   if ($below -match '\\(node_modules|__pycache__|venv|\.venv)\\') { return $true }
+  # A product's harnesses in its own tests folder (plan line 42), for the
+  # same reason tests\ is not read.
+  if ($below -match '^\\tests\\') { return $true }
   if ($f.Name -like '*.min.js') { return $true }
   if ($f.Name -like 'test-*') { return $true }
   return $false
@@ -203,7 +207,9 @@ foreach ($f in @(Get-ChildItem -LiteralPath $AppDir -Filter '*.cs' -File | Sort-
   $paths[$f.Name] = $f.FullName
 }
 foreach ($d in @($ScriptDirs)) {
-  foreach ($f in @(Get-ChildItem -LiteralPath $d -Recurse -File | Where-Object { $_.Extension -eq '.ps1' -or $_.Extension -eq '.psm1' } | Sort-Object FullName)) {
+  $full = [IO.Path]::GetFullPath($d)
+  foreach ($f in @(Get-ChildItem -LiteralPath $full -Recurse -File | Where-Object { $_.Extension -eq '.ps1' -or $_.Extension -eq '.psm1' } | Sort-Object FullName)) {
+    if ((Split-Path -Leaf (Split-Path -Parent $f.FullName)) -eq 'tests' -and (Skip-Source $f $full)) { continue }
     $key = Key-Of $f
     $found[$key] = (Find-Silent $f.FullName $SilentPs)
     $paths[$key] = $f.FullName

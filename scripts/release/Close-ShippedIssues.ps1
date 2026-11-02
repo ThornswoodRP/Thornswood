@@ -55,7 +55,7 @@
   DEV AND MAIN. A test task is Main, for any playtester, or Dev, with
   "Server: Dev" under its first line, for what only a developer can check;
   the bot keeps the two apart, in #test-tasks and #dev-test-tasks, and a Dev
-  one stays up after the fix is on main (Patrick, 22 Oct; Developer-Guide.md,
+  one stays up after the fix is on main (Patrick, 22 Oct; docs/guide/the-board.md,
   "Test tasks and known issues"). So a Dev test task never keeps an issue
   open, and the block is written unless a person wrote a "Test task:" comment
   of the same kind after the merge, which stands instead: the bot reads the

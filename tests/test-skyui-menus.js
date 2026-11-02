@@ -314,8 +314,10 @@ yes('  a move from the feed runs it too, on the revision\'s own files from the b
 yes('  it runs Check-SkyUIMenus.js on the game folder with the order Ship ships',
   /Check-SkyUIMenus\.js'\) --data \(Join-Path \$GameDir 'Data'\) --plugins \$skyuiPlugins/.test(step) && /Get-ShipLoadOrderDir/.test(step));
 yes('  it reads the paths every pack deletes as gone', /--gone \(@\(Get-ShipDeleteAlways\) -join ';'\)/.test(step));
-yes('  it refuses on exit 2, dev and main alike, and puts the version back',
-  /if \(\$skyuiExit -eq 2\) \{\s*Unbump '[^\n]*'\s*Die /.test(step) && !/\$Dev/.test(step));
+// No source file holds the launcher's number since #4825, so there is nothing
+// to put back before it stops.
+yes('  it refuses on exit 2, dev and main alike',
+  /if \(\$skyuiExit -eq 2\) \{\s*Die /.test(step) && !/\$Dev/.test(step) && !/\bUnbump\b/.test(step));
 yes('  and it reads the exit code off the global one', /\$global:LASTEXITCODE = 0/.test(step));
 const bodies = ship.indexOf("Head 'Animation and body files'");
 const pub = ship.indexOf('Publish-Update.ps1', at + 1);

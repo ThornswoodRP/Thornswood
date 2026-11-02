@@ -3,9 +3,9 @@
   Signs a built binary, or says plainly that it is not signing and carries on.
 
 .DESCRIPTION
-  One implementation, called from Build-Launcher.ps1 and Package-Thornswood.ps1,
-  so the launcher, the setup stub and the installer are all signed the same way
-  or all left alone together.
+  One implementation, so every program of the launcher is signed the same way
+  wherever it is signed: Build-Launcher.ps1 on a machine that signs, and the
+  release workflow on GitHub.
 
   It does nothing unless records\signing\signing.json exists. That file is gitignored and
   lives only on a machine that holds a certificate, so Djinn's machine and every
@@ -56,9 +56,8 @@
   a federated token, no secret. A caller can name its own token file in
   AZURE_FEDERATED_TOKEN_FILE, as release.yml does right before its one call.
   When none is named and GitHub gave the job a way to ask for one, this asks
-  for it itself, right before each file: the token lasts minutes, and the
-  installer from the feed (installer.yml) fetches the release for longer than
-  that before it gets here. The token is written to a file under RUNNER_TEMP
+  for it itself, right before each file: the token lasts minutes, and a job
+  can build or fetch for longer than that before it gets here. The token is written to a file under RUNNER_TEMP
   for that one signtool call and removed with it. AZURE_CLIENT_ID and
   AZURE_TENANT_ID come from the job, as release.yml sets them.
 
@@ -78,7 +77,7 @@
   setting this up.
 
 .EXAMPLE
-  .\Sign-Artifact.ps1 -Path .\Thornswood.exe, .\setup-stub.exe
+  .\Sign-Artifact.ps1 -Path .\Thornswood.exe, .\libSkiaSharp.dll
 #>
 [CmdletBinding()]
 param(

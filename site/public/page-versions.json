@@ -443,6 +443,14 @@
       {
         "sha256": "0de0fe1733ac6cd87c4408f2fa1578fa4bd789582435bae7ee25daa70b06c96b",
         "changed": "2026-11-01"
+      },
+      {
+        "sha256": "8eaa652f34067e921a7857fc21fec431b606da6010203000d5bab226314b570c",
+        "changed": "2026-11-01"
+      },
+      {
+        "sha256": "46b8260c376f2efce190e0da5e3c2848672ea90da666d4317379e8b7e71bbe22",
+        "changed": "2026-11-01"
       }
     ],
     "rules": [

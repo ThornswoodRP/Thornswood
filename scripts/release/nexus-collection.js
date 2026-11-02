@@ -80,7 +80,8 @@
 // Each plugin goes on the end of the plugin list, switched on, and its
 // "after" becomes a plugin rule, lower case as Vortex keeps them, so Vortex
 // and LOOT put it where the list does. Every "after" has to be a plugin the
-// list already has, or one added before it. It refuses a file the revision
+// list already has, one added before it, or one the revision installs off
+// its list ("unlisted" below). It refuses a file the revision
 // already carries and a plugin the list already names. The tag Vortex gives
 // an installed mod is made the way shortid makes one, unless "tag" is given.
 // On stdout: <entry name>\tadded\t\tfile <id>, and <plugin>\tplugin\t\tafter <names>.
@@ -98,14 +99,28 @@
 // A RULE (27 Oct). An entry with "rule": true gives a plugin the list already
 // names a new "load after" rule in place of the one it has:
 //   { "rule": true, "name": "cheddars_mashups.esl", "after": ["RaceCompatibility.esm"] }
-// Every "after" has to be a plugin the list names, or one of the five base
-// masters. The plugin moves in the list to straight after the last plugin its
+// Every "after" has to be a plugin the list names, one the revision installs
+// off its list ("unlisted" below), or one of the five base masters. The
+// plugin moves in the list to straight after the last plugin of the list its
 // "after" names, so the list keeps its own rules. Revision 5's rule for
 // cheddars_mashups.esl named three plugins the game always loads after it,
 // because it loads an .esl as a master, and LOOT reported each as a cyclic
 // interaction; Install-NexusRevision.ps1 reads a revision's rules against the
 // plugins' headers (PluginRuleLoops.ps1) and stops on one.
 // On stdout: <plugin>\trule\tafter <old names>\tafter <new names>.
+//
+// PLUGINS OFF THE LIST (#4603). An entry with "unlisted" names the plugins
+// the revision installs that its plugin list leaves out, so Vortex installs
+// them switched off:
+//   { "unlisted": ["CBBE.esp", "RaceMenuMorphsCBBE.esp"] }
+// collection.json does not say which those are (the list names only the
+// plugins it orders, and a FOMOD's files are worked out on install), and the
+// game still loads them where the servers do, so a plugin rule may name one:
+// revision 6 has CommonClothes.esp after RaceMenuMorphsCBBE.esp. An added
+// plugin's "after" and a rule's "after" may name one of these as well as a
+// plugin of the list. New-NexusRevision.ps1 gives them from the record
+// (records/collection.json, "enabled": false). It refuses a name the list
+// already has. It changes nothing by itself and writes no line.
 //
 // TAKING A MOD OUT (#3649). An entry with "remove": true takes Nexus mod
 // modId out of the revision, with the plugins it puts in Data:
@@ -205,10 +220,32 @@ function named(rule, entry) {
   return false;
 }
 
+// The plugins the revision installs off its list, lower case, as the
+// "unlisted" entries of the swaps gave them (PLUGINS OFF THE LIST above).
+const UNLISTED = new WeakMap();
+function unlistedOf(collection) { return UNLISTED.get(collection) || new Set(); }
+
+function setUnlisted(collection, swaps) {
+  const set = new Set();
+  const listed = new Set((Array.isArray(collection.plugins) ? collection.plugins : []).map(p => String(p.name).toLowerCase()));
+  for (const sw of swaps) {
+    if (!sw || sw.unlisted === undefined) continue;
+    if (!Array.isArray(sw.unlisted)) stop('"unlisted" is not a list of plugin names.');
+    for (const n of sw.unlisted) {
+      if (typeof n !== 'string' || !/^[^\\/]+\.es[mpl]$/i.test(n)) stop('"unlisted" names ' + JSON.stringify(n) + ', which is not a plugin name (.esm, .esp or .esl).');
+      if (listed.has(n.toLowerCase())) stop('"unlisted" names ' + n + ', which the plugin list has, so it is not installed off the list.');
+      set.add(n.toLowerCase());
+    }
+  }
+  UNLISTED.set(collection, set);
+}
+
 function applySwaps(collection, swaps) {
   const lines = [];
   if (!Array.isArray(collection.mods)) stop('collection.json has no mods list, so it is not a collection Vortex wrote.');
+  setUnlisted(collection, swaps);
   for (const sw of swaps) {
+    if (sw.unlisted !== undefined && Object.keys(sw).length === 1) continue;
     if (sw.add === true) { applyAdd(collection, sw, lines); continue; }
     if (sw.patch === true) { applyPatch(collection, sw, lines); continue; }
     if (sw.rule === true) { applyRule(collection, sw, lines); continue; }
@@ -335,13 +372,14 @@ function applyAdd(collection, add, lines) {
   if (!Array.isArray(collection.pluginRules.plugins)) collection.pluginRules.plugins = [];
   const known = new Set(collection.plugins.map(p => String(p.name).toLowerCase()));
   for (const m of ['skyrim.esm', 'update.esm', 'dawnguard.esm', 'hearthfires.esm', 'dragonborn.esm']) known.add(m);
+  for (const u of unlistedOf(collection)) known.add(u);
   for (const p of plugins) {
     if (!p || !p.name || !/\.es[mpl]$/i.test(p.name)) stop('A plugin of ' + add.name + ' has no plugin name (.esm, .esp or .esl).');
     const low = String(p.name).toLowerCase();
     if (collection.plugins.some(q => String(q.name).toLowerCase() === low)) stop('The plugin list already names ' + p.name + ', so ' + add.name + ' would put a second one in Data.');
     const after = Array.isArray(p.after) ? p.after : [];
     if (!after.length) stop(p.name + ' says nothing to load after, so Vortex and LOOT would place it where they liked.');
-    for (const a of after) if (!known.has(String(a).toLowerCase())) stop(p.name + ' is to load after ' + a + ', which the plugin list does not name.');
+    for (const a of after) if (!known.has(String(a).toLowerCase())) stop(p.name + ' is to load after ' + a + ', which the plugin list does not name and the revision does not install off its list.');
     known.add(low);
   }
   if (add.choices !== undefined && add.choices !== null) checkChoices(add);
@@ -429,7 +467,7 @@ function applyRule(collection, ru, lines) {
     const al = a.toLowerCase();
     if (al === low) stop(ru.name + ' is to load after itself.');
     const i = collection.plugins.findIndex(p => String(p.name).toLowerCase() === al);
-    if (i < 0 && base.indexOf(al) < 0) stop(ru.name + ' is to load after ' + a + ', which the plugin list does not name.');
+    if (i < 0 && base.indexOf(al) < 0 && !unlistedOf(collection).has(al)) stop(ru.name + ' is to load after ' + a + ', which the plugin list does not name and the revision does not install off its list.');
     if (i >= 0 && i !== at) last = Math.max(last, i);
   }
   if (!collection.pluginRules || typeof collection.pluginRules !== 'object') collection.pluginRules = { plugins: [], groups: [] };
@@ -489,7 +527,7 @@ function main(argv) {
   try { swaps = JSON.parse(fs.readFileSync(swapsPath, 'utf8').replace(/^﻿/, '')); }
   catch (e) { stop(swapsPath + ' is not JSON this can read: ' + e.message); }
   if (!Array.isArray(swaps)) swaps = [swaps];
-  if (!swaps.length) stop('There are no swaps, so the revision would be the same as the one published.');
+  if (!swaps.some(sw => !(sw && sw.unlisted !== undefined && Object.keys(sw).length === 1))) stop('There are no swaps, so the revision would be the same as the one published.');
   const lines = applySwaps(collection, swaps);
   fs.writeFileSync(outPath, JSON.stringify(collection, undefined, 2));
   fs.writeFileSync(payloadPath, JSON.stringify(payloadOf(collection)));

@@ -22,7 +22,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const SRC = process.env.GM || path.join(ROOT, 'game', 'gamemode.js');
 const CR = String.fromCharCode(13);
-const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const src = require('./gamemode-tables.js').joined(fs.readFileSync(SRC, 'utf8')).split(CR).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -147,13 +147,9 @@ for (const race of ['1rieklingbluerace', '1rieklingpurplerace']) {
 }
 
 // ------------------------------------------------- the tailor makes them
-const blockAt = src.indexOf('  var RECIPES_BY_ID = {');
-const blockEnd = blockAt < 0 ? -1 : src.indexOf('\n  };\n', blockAt);
-const block = blockAt >= 0 && blockEnd >= 0 ? src.slice(blockAt, blockEnd) : '';
-function row(desc) {
-  const m = new RegExp('"' + desc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '": (\\{[^\\n]*\\}),?\\n').exec(block + '\n');
-  try { return m ? JSON.parse(m[1]) : null; } catch (e) { return null; }
-}
+// The gamemode reads RECIPES_BY_ID from game/gamemode-tables (#5191).
+const BOOK = require('./gamemode-tables.js').inGamemode(src, 'RECIPES_BY_ID') || {};
+function row(desc) { return BOOK[desc] || null; }
 const RECIPE = {
   'bfee5:Playable Rieklings.esp': TUNIC,
   'bfefb:Playable Rieklings.esp': FEET

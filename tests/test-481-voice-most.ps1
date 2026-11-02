@@ -4,7 +4,7 @@
   The voice service's number goes from records\most-online.json to the
   service's command line (issue #481, step 4).
 
-  voice\test-most.js drives the service itself with THORNSWOOD_VOICE_MOST
+  voice\tests\test-most.js drives the service itself with THORNSWOOD_VOICE_MOST
   set. A setting only counts if the install hands it over, so this proves the
   path to it:
 

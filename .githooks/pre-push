@@ -10,7 +10,7 @@
 # Stored LF (.gitattributes) so Git for Windows' sh reads it as Linux's does.
 repo="$(git rev-parse --show-toplevel)" || exit 2
 if ! command -v pwsh >/dev/null 2>&1; then
-  echo "pre-push: STOP. PowerShell 7 (pwsh) is not on PATH, and the checks before a push need it. Developer-Guide.md, Install the tools, installs it." >&2
+  echo "pre-push: STOP. PowerShell 7 (pwsh) is not on PATH, and the checks before a push need it. docs/guide/set-up-a-machine.md, "Install the tools", installs it." >&2
   exit 2
 fi
 exec pwsh -NoProfile -File "$repo/scripts/dev/Check-Push.ps1"

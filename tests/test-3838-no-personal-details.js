@@ -43,9 +43,11 @@
 // and NOT_ADDRESSES below, each value with what it really is.
 //
 // WHAT IS LEFT ALONE, AND WHY.
-//   - records/client-licences/ and records/front-licences/: third-party
+//   - records/client-licences/, records/front-licences/ and
+//     installer/licences/ (but its README.txt, which is ours): third-party
 //     licence texts keep their authors' notices word for word, as the
-//     licences require.
+//     licences require. installer/licences holds the texts of the libraries
+//     inside the launcher, which go with every install (#4823).
 //   - the same notice lines copied into our own source: a line that is,
 //     past its comment marks, word for word a line of one of those texts
 //     that holds an address. zlib's licence says its notice "may not be
@@ -74,15 +76,15 @@ const WAITING = [];
 // Four-part numbers that are not anybody's address, with what each one is.
 // A value here is passed over only in the files named beside it.
 const NOT_ADDRESSES = [
-  [[20, 2, 0, 7].join('.'), 'the Gamebryo nif format version Skyrim SE uses', /^(?:launcher\/app\/(?:CoveredBodies|FromGame)\.cs|scripts\/dev\/Build-Backdrop\.py|scripts\/mods\/Build-NoticeBoard\.py|tests\/fixtures\/2827\/from-game-fixture\.py|tests\/test-(?:build-generated|covered-bodies)\.ps1|tests\/test-menu-backdrop\.js)$/],
+  [[20, 2, 0, 7].join('.'), 'the Gamebryo nif format version Skyrim SE uses', /^(?:launcher\/app\/(?:CoveredBodies|FromGame)\.cs|scripts\/dev\/Build-Backdrop\.py|scripts\/mods\/Build-NoticeBoard\.py|tests\/fixtures\/2827\/from-game-fixture\.py|tests\/test-build-generated\.ps1|launcher\/tests\/test-covered-bodies\.ps1|tests\/test-menu-backdrop\.js)$/],
   [[192, 135, 119, 166].join('.'), "the old product's server, which the docs check refuses", /^tests\/test-repo-docs\.js$/],
-  [[128, 0, 0, 1].join('.'), 'a made-up caller next to loopback, for the sign-in address check', /^tests\/test-2187-signin-addr\.js$/],
+  [[128, 0, 0, 1].join('.'), 'a made-up caller next to loopback, for the sign-in address check', /^site\/tests\/test-2187-signin-addr\.js$/],
   [[104, 28, 0, 1].join('.'), 'the first address past a Cloudflare range, for the range check', /^tests\/test-2995-cloudflare-front\.ps1$/],
   [[13, 0, 0, 4].join('.'), 'a made-up block list entry for the runner firewall check', /^tests\/test-runner-offbox\.ps1$/],
   [[13, 0, 0, 5].join('.'), 'a made-up block list entry for the runner firewall check', /^tests\/test-runner-offbox\.ps1$/],
   [[13, 0, 0, 6].join('.'), 'a made-up block list entry for the runner firewall check', /^tests\/test-runner-offbox\.ps1$/],
 ];
-const LEFT_ALONE = [/^records\/client-licences\//, /^records\/front-licences\//, /^tests\/fixtures\/ui-front-build\.js$/];
+const LEFT_ALONE = [/^records\/client-licences\//, /^records\/front-licences\//, /^installer\/licences\/(?!README\.txt$)/, /^tests\/fixtures\/ui-front-build\.js$/];
 
 // Every line of a recorded licence text (the client's and the site's
 // front build's) that holds an address, with its

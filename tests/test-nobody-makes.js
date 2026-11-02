@@ -21,7 +21,7 @@ const path = require('path');
 
 const SRC = process.env.GM || path.join(REPO_DIR, 'game', 'gamemode.js');
 const CR = String.fromCharCode(13);
-const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const src = require('./gamemode-tables.js').joined(fs.readFileSync(SRC, 'utf8')).split(CR).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -30,18 +30,13 @@ function yes(what, cond) {
 }
 
 // ------------------------------------------------------------- the table
-const block = /var RECIPES_BY_ID = \{\n([\s\S]*?)\n  \};/.exec(src);
-yes('the recipe block is installed', !!block);
+// The gamemode reads RECIPES_BY_ID from game/gamemode-tables (#5191).
+const book = require('./gamemode-tables.js').inGamemode(src, 'RECIPES_BY_ID');
+yes('the recipe block is installed', !!book);
 
 const rows = {};
-if (block) {
-  block[1].split('\n').forEach(function (line) {
-    const m = /^\s*"([^"]+)":\s*(\{.*\}),?\s*$/.exec(line);
-    if (!m) { return; }
-    let v = null;
-    try { v = JSON.parse(m[2].replace(/,\s*$/, '')); } catch (e) { v = null; }
-    if (v) { rows[m[1]] = v; }
-  });
+if (book) {
+  Object.keys(book).forEach(function (k) { if (book[k] && typeof book[k] === 'object') { rows[k] = book[k]; } });
 }
 yes('and it parses, ' + Object.keys(rows).length + ' rows', Object.keys(rows).length > 1500);
 

@@ -585,6 +585,11 @@ function Payload {
         $null = [IO.Directory]::CreateDirectory($dir)
         Copy-Item -LiteralPath $GamemodeFrom -Destination (Join-Path $dir 'gamemode.js') -Force
     } else { Put (Join-Path $dir 'gamemode.js') $Gamemode }
+    # Its tables (#5191): the artifact's beside its gamemode.js, or one of
+    # the harness's own, since the installer refuses a payload with none.
+    $tablesFrom = if ($GamemodeFrom) { Join-Path (Split-Path -Parent $GamemodeFrom) 'gamemode-tables' } else { '' }
+    if ($tablesFrom -and (Test-Path -LiteralPath $tablesFrom)) { Copy-Item -LiteralPath $tablesFrom -Destination (Join-Path $dir 'gamemode-tables') -Recurse -Force }
+    else { Put (Join-Path $dir 'gamemode-tables\WAY_OUT.json') '{}' }
     if ($StampFor) {
         Put (Join-Path $dir 'thornswood-build.json') (([ordered]@{ channel = $StampFor; commit = 'harness'; gamemodeMatchesCommit = $true
                                                                   gamemodeSha256 = (Sha (Join-Path $dir 'gamemode.js')) }) | ConvertTo-Json)
@@ -1049,7 +1054,7 @@ try {
         $siteBuild = Join-Path $box 'Thornswood-Docs\data\deployed-build.json'
         # The gamemode artifact this checkout makes, which Publish-Server
         # builds and holds the payload to (#459).
-        $art = & { . (Join-Path $Here 'scripts\deploy\Artifact.ps1'); New-ThornswoodArtifact -Component gamemode -RepoDir $Here -Paths 'game/gamemode.js' }
+        $art = & { . (Join-Path $Here 'scripts\deploy\Artifact.ps1'); New-ThornswoodArtifact -Component gamemode -RepoDir $Here -Paths 'game/gamemode.js', 'game/gamemode-tables' }
         $artGm = Join-Path $art.Folder 'game\gamemode.js'
         $script:PayloadGamemodeFrom = $artGm
         $script:PayloadStampFor = 'dev'

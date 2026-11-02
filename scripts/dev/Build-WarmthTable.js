@@ -46,6 +46,7 @@
 const fs = require('fs');
 const path = require('path');
 const { pluginPath, loadedOrder } = require('./OwnPlugins.js');
+const TABLES = require('./GamemodeTables.js');
 const zlib = require('zlib');
 
 const args = process.argv.slice(2);
@@ -362,36 +363,21 @@ if (PRINT) {
 }
 
 /*
-  INSTALLED INTO gamemode.js AS WELL, AND THINNER THAN THE JSON.
+  WRITTEN FOR THE GAMEMODE AS WELL, AND THINNER THAN THE JSON.
 
   warmth.json keeps the editor id and the weight because that is what makes a
   row auditable: "why is this thing cloth" has to be answerable. The server
-  needs neither, and at 3,166 rows they are most of the file. So the line that
-  goes into the gamemode carries the material and what it covers and nothing
-  else, and the json beside it stays the record of where each row came from.
+  needs neither, and at 3,166 rows they are most of the file. So the table
+  the gamemode reads, game/gamemode-tables/WARMTH.json (#5191), carries the
+  material and what it covers and nothing else, and the json beside it stays
+  the record of where each row came from.
 */
 function install() {
-  const gm = path.join(__dirname, '..', '..', 'game', 'gamemode.js');
-  let src;
-  try { src = fs.readFileSync(gm, 'utf8'); } catch (e) { fail('no gamemode.js to install into'); return; }
   const thin = {};
   const keys = Object.keys(items).sort();
   for (const d of keys) { thin[d] = { m: items[d].m, c: items[d].c }; }
-  const line = 'const WARMTH = ' + JSON.stringify({ items: thin }) + ';';
-  const re = /^const WARMTH = .*;$/m;
-  const next = re.test(src)
-    ? src.replace(re, line)
-    : src.replace(/^(const ITEMS = .*;)$/m, '$1\n' + line);
-  if (next === src) {
-    // Run on a load order that has not changed, the line is already there and
-    // is the same line. That is the table being current, not a failure to
-    // find a place for it, and it used to say FAIL and exit 1 (#1138), the
-    // way Build-FoodTable.js did before it.
-    if (re.test(src)) { console.log('game\\gamemode.js already holds this table'); return; }
-    fail('could not find anywhere in gamemode.js to put the table'); return;
-  }
-  fs.writeFileSync(gm, next);
-  console.log('installed ' + keys.length + ' rows into game\\gamemode.js');
+  const changed = TABLES.write('WARMTH', { items: thin });
+  console.log((changed ? 'wrote ' : 'already current: ') + keys.length + ' rows in game\\gamemode-tables\\WARMTH.json');
 }
 
 if (process.exitCode === 1) {

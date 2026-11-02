@@ -5,8 +5,11 @@ using System.Text.RegularExpressions;
 
 namespace Thornswood.DeployAgent;
 
-/// <summary>What one gate verb printed, and how it ended.</summary>
-public sealed record GateRun(int Code, List<string> Lines);
+/// <summary>What one gate verb printed, and how it ended. Taken is false
+/// when the broker never took the line (it was busy past the wait, or its
+/// pipe refused this account), so the verb never started; a step after a
+/// deploy (#5186) then runs with the next Deployment instead.</summary>
+public sealed record GateRun(int Code, List<string> Lines, bool Taken = true);
 
 /// <summary>Runs a verb of the deploy gate (#2841) on this box.</summary>
 public interface IGate
@@ -32,8 +35,8 @@ public sealed class GatePipe(string pipeName = "thornswood-gate") : IGate
         var lines = new List<string>();
         using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
         try { await pipe.ConnectAsync(wait, ct); }
-        catch (TimeoutException) { return new GateRun(65, [$"the gate did not take the request within {wait.TotalMinutes:0} minutes (it was running another verb all that time, or the task Thornswood Gate is not running)"]); }
-        catch (UnauthorizedAccessException e) { return new GateRun(65, ["the gate's pipe refused this account (" + e.Message + "); the broker admits SYSTEM and thornswood-deploy only"]); }
+        catch (TimeoutException) { return new GateRun(65, [$"the gate did not take the request within {wait.TotalMinutes:0} minutes (it was running another verb all that time, or the task Thornswood Gate is not running)"], Taken: false); }
+        catch (UnauthorizedAccessException e) { return new GateRun(65, ["the gate's pipe refused this account (" + e.Message + "); the broker admits SYSTEM and thornswood-deploy only"], Taken: false); }
         var enc = new UTF8Encoding(false);
         var gone = "";
         try

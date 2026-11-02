@@ -140,6 +140,39 @@ function createMerchantTrading(deps) {
   var sessions = new Map();
   var viewOwners = new WeakMap();
   var sessionSerial = 0;
+  /*
+    Trades armed and not yet finished, by their settlement's pending id
+    (#5419): what to count for the hold and what to tell the person once the
+    save storage has acknowledged the transfer, which is always a later tick.
+    Bounded like the settlement's own outcomes.
+  */
+  var awaiting = new Map(), MAX_AWAITING = 4 * SETTLEMENT.MAX_PENDING;
+  function tradeSaid(row, gold, purse) {
+    return (row.verb === 'buy' ? 'Bought ' : 'Sold ') + row.count + ' ' + row.name + ' for ' + gold + '. Purse ' + purse + '.';
+  }
+  function countTrade(row) {
+    // The pieces that changed hands, for staff's hold economy page (#3164).
+    if (typeof deps.traded !== 'function') return;
+    try { deps.traded(row); }
+    catch (error) { if (typeof deps.log === 'function') deps.log('hold economy count failed: ' + error); }
+  }
+  function await_(pendingId, entry) {
+    awaiting.delete(pendingId);
+    awaiting.set(pendingId, entry);
+    while (awaiting.size > MAX_AWAITING) awaiting.delete(awaiting.keys().next().value);
+  }
+  // Each awaited transfer the settlement finished: counted, and its words left on its session's panel.
+  function settleAwaited() {
+    Array.from(awaiting.entries()).forEach(function (entry) {
+      var how = typeof settlement.outcome === 'function' ? settlement.outcome(entry[0]) : null;
+      if (!how) return;
+      awaiting.delete(entry[0]);
+      var done = entry[1], state = purses.read(done.merchantId);
+      if (how === 'done' && done.counted) countTrade(done.counted);
+      var note = how === 'done' ? done.said(state) : done.released;
+      if (sessions.get(done.profileId) === done.session) { done.session.note = note; done.session.view = null; }
+    });
+  }
   var settlement = SETTLEMENT.createSettlement({purses:purses,transfer:transfer,world:deps.namespace || purses.namespace,log:deps.log,now:now});
   var retirementRequired=deps.retirementRequired===true;
   var active = deps.suspended !== true && !retirementRequired, closed = false;
@@ -380,6 +413,7 @@ function createMerchantTrading(deps) {
   function recover() {
     if (!active) return [];
     settlement.tick();
+    settleAwaited();
     var views = [];
     Array.from(sessions.entries()).forEach(function (entry) {
       var profileId=entry[0],session=entry[1];
@@ -536,6 +570,12 @@ function createMerchantTrading(deps) {
         session:'Choose the work again from the trader.'};
       var text=result.ok ? (parts[2]==='take'?'You take the work.':parts[2]==='return'?'The work is turned in.':isCommission?'You leave the work without payment.':'You give back what you drew and leave the work.') :
         reasons[result.why] || 'The work could not be changed.';
+      if (isCommission && result.settling) {
+        var settling=result.settling;
+        await_(settling.id, {merchantId:merchantId,counted:null,profileId:profileId,session:originalSession,
+          said:function () { return 'The work is turned in. Paid ' + settling.gold + ' gold.'; },
+          released:'Your inventory changed before the turn-in. Nothing moved. Turn the work in again.'});
+      }
       if (!ownsSession(actorId,profileId,originalSession)) return {text:'',view:null};
       var questState=purses.prepare(merchantId),questPlace=questState && placeOf(questState.reference);
       var questResponse=questState && questPlace ? viewFor(merchantId,questState,questPlace,actorId,profileId,text,{session:originalSession,identity:originalSession.identity}) : closedView(actorId,profileId,originalSession);
@@ -651,16 +691,18 @@ function createMerchantTrading(deps) {
       return fail(settlement.available() ? String(error.message || error) : 'Trading is unavailable. The saved transfer is retained.');
     }
     var current = purses.prepare(merchantId);
-    if (!moved.done) return response(moved.reason,current,moved.reason);
-    // The pieces that changed hands, for staff's hold economy page (#3164).
-    if (typeof deps.traded === 'function') {
-      try { deps.traded({hold:place.bookHold,verb:verb,baseId:resolved.baseId,name:itemName,count:asked.count}); }
-      catch (error) { if (typeof deps.log === 'function') deps.log('hold economy count failed: ' + error); }
+    var row = {verb:verb,count:asked.count,name:itemName,
+      counted:{hold:place.bookHold,verb:verb,baseId:resolved.baseId,name:itemName,count:asked.count}};
+    if (!moved.done) {
+      if (moved.accepted && typeof moved.id === 'string') {
+        await_(moved.id, {merchantId:merchantId,counted:row.counted,profileId:profileId,session:originalSession,
+          said:function (state) { return tradeSaid(row, gold, state ? state.purse : nextPurse); },
+          released:'Your inventory changed before the trade. Nothing moved. Choose the trade again.'});
+      }
+      return response(moved.reason,current,moved.reason);
     }
-    var said = npcBuys
-      ? ('Sold ' + asked.count + ' ' + itemName + ' for ' + gold + '. Purse ' + current.purse + '.')
-      : ('Bought ' + asked.count + ' ' + itemName + ' for ' + gold + '. Purse ' + current.purse + '.');
-    return response(said,current);
+    countTrade(row.counted);
+    return response(tradeSaid(row, gold, current.purse),current);
   }
 
   function activate(actorId, merchantId) {

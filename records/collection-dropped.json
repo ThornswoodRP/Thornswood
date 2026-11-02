@@ -3,12 +3,6 @@
   "issue": 4069,
   "what": "The plugins a server may stop loading when it moves to this collection revision, because the revision takes them out. Deploy-DevGamemode.ps1 -LoadOrder -FromRecord lets the order of last-plugin.json leave out these and no other plugin the running server loads (Test-ThornswoodLoadOrderDrop, #2320), and only while revision is the one records/collection-plugins.json names. A row says why every form the plugin added can go from a world that keeps running.",
   "collection": "7essxf",
-  "revision": 6,
-  "dropped": [
-    {
-      "name": "atlas map markers.esp",
-      "mod": 24104,
-      "why": "Atlas Map Markers SE's page does not allow it in a collection (#3649, Patrick's B on q-3649-atlas). It is a light plugin of map markers, and the header read of 27 Oct found that no form a server stores moves when it goes, so main takes revision 6 with no wipe (#3649, comment 6435660887, Patrick's A on q-3649-rev6-wipe)."
-    }
-  ]
+  "revision": 7,
+  "dropped": []
 }

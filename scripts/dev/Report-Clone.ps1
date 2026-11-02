@@ -16,7 +16,7 @@
   WHY THIS EXISTS. The 25 Oct 2026 weekly review listed "One's worktrees and
   stashes" under "Could not read": a cloud thread cannot reach One, and the
   rules about them (CLAUDE.md in the private ops repo, "On the shipping
-  machine"; Developer-Guide.md,
+  machine"; docs/guide/how-work-moves.md,
   "No stray branches, worktrees or pull requests") were checked by nobody.
   When the Local Desk read them by hand on 26 Oct (#3534), the shared clone
   held 29 worktrees, 7 stashes and about 96 dead branches (#3537). So One

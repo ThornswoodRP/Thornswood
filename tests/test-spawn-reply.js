@@ -23,6 +23,11 @@ const path = require('path');
 const vm = require('vm');
 
 const GM = process.env.GM || path.join(__dirname, '..', 'game', 'gamemode.js');
+// The whole gamemode loads below, and it reads its tables from the folder it
+// runs in, which is the server's folder on the box and here the repository's
+// root, where game/gamemode-tables is (#5191). So this runs from the root
+// wherever it was started from.
+process.chdir(path.join(__dirname, '..'));
 const src = fs.readFileSync(GM, 'utf8');
 
 let pass = 0, fail = 0;

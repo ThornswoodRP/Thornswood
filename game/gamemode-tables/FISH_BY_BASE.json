@@ -1,0 +1,128 @@
+{
+"108e35:Skyrim.esm":{
+"produce":"65c9f:Skyrim.esm",
+"name":"Salmon Meat",
+"from":"Salmon",
+"rank":"novice"
+},
+"108e36:Skyrim.esm":{
+"produce":"65c9f:Skyrim.esm",
+"name":"Salmon Meat",
+"from":"Salmon",
+"rank":"novice"
+},
+"108e37:Skyrim.esm":{
+"produce":"65c9f:Skyrim.esm",
+"name":"Salmon Meat",
+"from":"Salmon",
+"rank":"novice"
+},
+"108e38:Skyrim.esm":{
+"produce":"65c9f:Skyrim.esm",
+"name":"Salmon Meat",
+"from":"Salmon",
+"rank":"novice"
+},
+"154a0:Thornswood-Content.esp":{
+"produce":"106e18:Skyrim.esm",
+"name":"Histcarp",
+"from":"Histcarp",
+"rank":"advanced"
+},
+"154a1:Thornswood-Content.esp":{
+"produce":"106e1a:Skyrim.esm",
+"name":"River Betty",
+"from":"River Betty",
+"rank":"advanced"
+},
+"154a2:Thornswood-Content.esp":{
+"produce":"3ad70:Skyrim.esm",
+"name":"Slaughterfish Scales",
+"from":"Slaughterfish Scales",
+"rank":"advanced"
+},
+"154a3:Thornswood-Content.esp":{
+"produce":"106e1c:Skyrim.esm",
+"name":"Silverside Perch",
+"from":"Silverside Perch",
+"rank":"expert"
+},
+"154a4:Thornswood-Content.esp":{
+"produce":"106e19:Skyrim.esm",
+"name":"Cyrodilic Spadetail",
+"from":"Cyrodilic Spadetail",
+"rank":"expert"
+},
+"154a5:Thornswood-Content.esp":{
+"produce":"106e1b:Skyrim.esm",
+"name":"Abecean Longfin",
+"from":"Abecean Longfin",
+"rank":"master"
+},
+"176b2:Skyrim.esm":{
+"produce":"65c9f:Skyrim.esm",
+"name":"Salmon Meat",
+"from":"Salmon",
+"rank":"novice"
+},
+"176cd:Skyrim.esm":{
+"produce":"65c9f:Skyrim.esm",
+"name":"Salmon Meat",
+"from":"Salmon",
+"rank":"novice"
+},
+"3828c:Dragonborn.esm":{
+"produce":"854fe:Skyrim.esm",
+"name":"Pearl",
+"from":"Pearl Oyster",
+"rank":"expert"
+},
+"3828d:Dragonborn.esm":{
+"produce":"85500:Skyrim.esm",
+"name":"Small Pearl",
+"from":"Pearl Oyster",
+"rank":"advanced"
+},
+"38a7a:Dragonborn.esm":{
+"produce":"65c9b:Skyrim.esm",
+"name":"Horker Meat",
+"from":"Horker meat",
+"rank":"advanced"
+},
+"7e8c6:Skyrim.esm":{
+"produce":"7e8c5:Skyrim.esm",
+"name":"Slaughterfish Egg",
+"from":"Slaughterfish Egg Nest",
+"rank":"master"
+},
+"85f80:Skyrim.esm":{
+"produce":"eba03:Skyrim.esm",
+"name":"Clam Meat",
+"from":"Clam",
+"rank":"novice"
+},
+"85f82:Skyrim.esm":{
+"produce":"eba03:Skyrim.esm",
+"name":"Clam Meat",
+"from":"Clam",
+"rank":"novice"
+},
+"85f83:Skyrim.esm":{
+"produce":"eba03:Skyrim.esm",
+"name":"Clam Meat",
+"from":"Clam",
+"rank":"novice"
+},
+"f5eca:Skyrim.esm":{
+"produce":"65c9f:Skyrim.esm",
+"name":"Salmon Meat",
+"from":"Salmon",
+"rank":"novice"
+},
+"f5ecb:Skyrim.esm":{
+"produce":"65c9f:Skyrim.esm",
+"name":"Salmon Meat",
+"from":"Salmon",
+"rank":"novice"
+}
+}

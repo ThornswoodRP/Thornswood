@@ -19,10 +19,12 @@
 
   2. -Version on a main release. It wrote a new number into Updater.cs, built,
      published, and nothing committed it or put it back, so every launcher
-     would be told a version main had never heard of.
+     would be told a version main had never heard of. Since #4825 Ship sends
+     no launcher and has no number at all, so this holds that its param block
+     declares none of the switches that chose one (-Version, -NoBump,
+     -ModsOnly, -RebuildLauncher).
 
-  It lifts the Git gate and the version block out of the shipped Ship.ps1 and
-  drives them against a throwaway repository with its own origin, so nothing
+  It lifts the Git gate out of the shipped Ship.ps1 and drives it against a throwaway repository with its own origin, so nothing
   here touches this repository, the network or any launcher. Read only apart
   from files under its own temp folder.
 #>
@@ -71,31 +73,22 @@ function Statement([string]$text, [int]$at) {
 
 $gateAt = $src.IndexOf('if (-not $DryRun -and (Test-Path (Join-Path $RepoDir ''.git''))) {')
 Yes 'the Git gate is in Ship.ps1' ($gateAt -ge 0)
-# The version chain runs from "if ($ModsOnly) {" to the statement that writes
-# whatever it chose, and it is an if with three elseifs, so it is cut by text.
-$verAt = $src.IndexOf('if ($ModsOnly) {')
-$verEnd = if ($verAt -ge 0) { $src.IndexOf('if ($target -ne $current) {', $verAt) } else { -1 }
-Yes 'the version block is in Ship.ps1' ($verAt -ge 0 -and $verEnd -gt $verAt)
-if ($gateAt -lt 0 -or $verAt -lt 0 -or $verEnd -lt 0) { Done }
+# No number to choose (#4825): the param block declares none of the switches
+# that chose the launcher's, so no Ship can tell a launcher a version.
+$declared = @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
+$gone = @('Version', 'NoBump', 'ModsOnly', 'RebuildLauncher' | Where-Object { $declared -contains $_ })
+Yes ("V1 Ship.ps1 declares no -Version, -NoBump, -ModsOnly or -RebuildLauncher: '" + ($gone -join ', ') + "'") ($declared.Count -gt 0 -and $gone.Count -eq 0)
+Yes 'V2 and nothing in it works out a launcher number' (-not $src.Contains('Get-LauncherVersion') -and -not $src.Contains('$target') -and -not $src.Contains('VersionOverride'))
+if ($gateAt -lt 0) { Done }
 $gate = Statement $src $gateAt
-$ver = $src.Substring($verAt, $verEnd - $verAt)
 
 # Die is Ship's own exit; here it throws, so a refusal comes back as its words.
 $stubs = 'function Say($m, $c) { }; function Head($m) { }; function Die($m) { throw ("STOP. " + $m) };'
 $gateSb = [scriptblock]::Create('$RepoDir = $args[0]; $Dev = $args[1]; $DryRun = $false;' + $stubs + $gate)
-$versionGuard = $ast.Find({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Assert-DevVersionSelection' }, $true)
-$feedStubs = 'function Get-FeedStoreLaunchers($ch) { return @() }; function Get-FeedStoreDir($ch) { return "" }; function Get-PublishedLauncher($dir, $ch) { return $null };'
-$verSb = [scriptblock]::Create(
-    '$current = $args[0]; $Version = $args[1]; $Dev = $args[2]; $ModsOnly = $args[3];' +
-    '$MainReleaseDir = $args[4]; $ReleaseDir = $args[4]; $MainSourceAligned = $false; $MainEquivalent = $false; $LauncherInputs = '''';' + $stubs + $feedStubs + $versionGuard.Extent.Text + $ver + '; return $target')
 
 # '' when the gate lets the release through, the STOP line when it does not.
 function Gate([string]$repo, [bool]$dev) {
     try { & $gateSb $repo $dev | Out-Null; return '' }
-    catch { return [string]$_.Exception.Message }
-}
-function Ver([string]$current, [string]$version, [bool]$dev, [bool]$modsOnly) {
-    try { return [string](& $verSb $current $version $dev $modsOnly $tmp) }
     catch { return [string]$_.Exception.Message }
 }
 
@@ -188,21 +181,6 @@ try {
     $r = Gate $work $false
     Yes "G7 a commit not yet pushed still stops it: '$r'" ($r -match 'ahead of origin')
 
-    # ---- -Version ---------------------------------------------------------------
-    # V1: THE HOLE. A new number on a main release.
-    $r = Ver '1.1.92' '1.2.0' $false $false
-    Yes "V1 -Version 1.2.0 on a main release is refused: '$r'" ($r -like 'STOP.*')
-    Yes 'V1 and it says main ships its own number, worked out from git' ($r -match 'LauncherVersion\.ps1' -and $r -match 'Ship without -Version')
-
-    # V2 to V5: everything else about the version stays as it was.
-    $r = Ver '1.1.92' '' $false $false
-    Yes "V2 a main release keeps the number on main: '$r'" ($r -eq '1.1.92')
-    $r = Ver '1.1.92' '1.1.92' $false $false
-    Yes "V3 -Version naming the number already on main is not refused: '$r'" ($r -eq '1.1.92')
-    $r = Ver '1.1.92' '1.1.92.7' $true $false
-    Yes "V4 -Version on a dev release still sets the dev number: '$r'" ($r -eq '1.1.92.7')
-    $r = Ver '1.1.92' '1.2.0' $false $true
-    Yes "V5 -ModsOnly still leaves the version alone: '$r'" ($r -eq '1.1.92')
 }
 finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue

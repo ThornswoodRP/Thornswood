@@ -63,10 +63,16 @@ function Invoke-Lister([string]$root) {
 }
 
 # A planted repository: these files in tests, and gate-excluded.txt as given.
+# A file named with a slash goes where its path says, from the top: the
+# product harnesses beside their code (plan line 42).
 function New-Planted([string[]]$files, [string[]]$excluded) {
     $root = Join-Path ([IO.Path]::GetTempPath()) ('ts-gate-' + [Guid]::NewGuid().ToString('N'))
     $null = New-Item -ItemType Directory -Force -Path (Join-Path $root 'tests')
-    foreach ($n in $files) { Set-Content -LiteralPath (Join-Path (Join-Path $root 'tests') $n) -Value '# stand-in' }
+    foreach ($n in $files) {
+        $at = $(if ($n.Contains('/')) { Join-Path $root $n } else { Join-Path (Join-Path $root 'tests') $n })
+        $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $at)
+        Set-Content -LiteralPath $at -Value '# stand-in'
+    }
     if ($null -ne $excluded) { Set-Content -LiteralPath (Join-Path (Join-Path $root 'tests') 'gate-excluded.txt') -Value $excluded }
     $root
 }
@@ -77,29 +83,34 @@ if (-not (Test-Path -LiteralPath $Lister)) { Done }
 # --- 1. planted
 $planted = @()
 try {
-    $files = 'test-b.ps1', 'test-a.js', 'test-c.js', 'test-off.ps1', 'test-own.js', 'test-x.py', 'helper.js', 'test-z.txt'
+    $files = 'test-b.ps1', 'test-a.js', 'test-c.js', 'test-off.ps1', 'test-own.js', 'test-x.py', 'helper.js', 'test-z.txt',
+        'launcher/tests/test-l.ps1', 'launcher/tests/test-loff.js', 'launcher/tests/helper.ps1', 'launcher/test-beside.js',
+        'site/tests/test-s.js', 'node_modules/tests/test-pkg.js', 'game/data/tests/test-deep.js'
     $good = New-Planted $files @(
         '# comment lines are skipped',
         '',
+        'launcher/tests/test-loff.js  needs the launcher built',
         'test-off.ps1  needs a game install',
         'test-own.js  own step in build.yml, "Some step"')
     $planted += $good
     $r = Invoke-Lister $good
     Yes 'planted: a good list exits 0' ($r.Code -eq 0)
-    Yes ('planted: it prints every test-*.js and test-*.ps1 not excluded, in name order, and nothing else (' + ($r.Out -join ', ') + ')') (
-        ($r.Out -join '|') -eq 'test-a.js|test-b.ps1|test-c.js')
+    Yes ('planted: it prints every test-*.js and test-*.ps1 not excluded, in tests by name and in a product''s tests folder by path, in name order, and nothing else (' + ($r.Out -join ', ') + ')') (
+        ($r.Out -join '|') -eq 'launcher/tests/test-l.ps1|site/tests/test-s.js|test-a.js|test-b.ps1|test-c.js')
 
     $none = New-Planted $files $null
     $planted += $none
     $r = Invoke-Lister $none
-    Yes 'planted: with no gate-excluded.txt every harness is on the gate' ($r.Code -eq 0 -and ($r.Out -join '|') -eq 'test-a.js|test-b.ps1|test-c.js|test-off.ps1|test-own.js')
+    Yes 'planted: with no gate-excluded.txt every harness is on the gate' ($r.Code -eq 0 -and ($r.Out -join '|') -eq 'launcher/tests/test-l.ps1|launcher/tests/test-loff.js|site/tests/test-s.js|test-a.js|test-b.ps1|test-c.js|test-off.ps1|test-own.js')
 
     $cases = @(
         @{ What = 'a line with no reason'; Lines = @('test-off.ps1'); Want = 'line=1::test-off\.ps1 has no reason' },
-        @{ What = 'a file that is not in tests'; Lines = @('test-gone.ps1  removed long ago'); Want = 'line=1::test-gone\.ps1 is not a file in tests' },
+        @{ What = 'a file that is not in tests'; Lines = @('test-gone.ps1  removed long ago'); Want = 'line=1::test-gone\.ps1 is not a harness in tests or a product''s tests folder' },
+        @{ What = 'a product harness that is not there'; Lines = @('launcher/tests/test-gone.ps1  removed long ago'); Want = 'line=1::launcher/tests/test-gone\.ps1 is not a harness' },
+        @{ What = 'a path to a file that is no harness'; Lines = @('launcher/tests/helper.ps1  a helper'); Want = 'line=1::launcher/tests/helper\.ps1 is not a harness' },
         @{ What = 'a name twice'; Lines = @('test-off.ps1  one', 'test-off.ps1  two'); Want = 'line=2::test-off\.ps1 is on line 1 already' },
         @{ What = 'lines out of name order'; Lines = @('test-own.js  one', 'test-off.ps1  two'); Want = 'line=2::test-off\.ps1 is out of name order, after test-own\.js' },
-        @{ What = 'nothing left to run'; Lines = @('test-a.js  a', 'test-b.ps1  b', 'test-c.js  c', 'test-off.ps1  d', 'test-own.js  e'); Want = 'no harness in .* is on the gate' }
+        @{ What = 'nothing left to run'; Lines = @('launcher/tests/test-l.ps1  l', 'launcher/tests/test-loff.js  lo', 'site/tests/test-s.js  s', 'test-a.js  a', 'test-b.ps1  b', 'test-c.js  c', 'test-off.ps1  d', 'test-own.js  e'); Want = 'no harness in .* is on the gate' }
     )
     foreach ($c in $cases) {
         $root = New-Planted $files $c.Lines
@@ -119,7 +130,7 @@ $r = Invoke-Lister $Repo
 foreach ($l in @($r.Out | Where-Object { $_ -notmatch '^test-' })) { Write-Host "        $l" }
 Yes 'this repository''s gate list has no fault' ($r.Code -eq 0)
 Yes ('and has harnesses in it ({0})' -f $r.Out.Count) ($r.Out.Count -gt 10)
-Yes 'test-page-changed.js is on the gate (#1589)' ($r.Out -contains 'test-page-changed.js')
+Yes 'site/tests/test-page-changed.js is on the gate (#1589)' ($r.Out -contains 'site/tests/test-page-changed.js')
 Yes 'and so is this harness' ($r.Out -contains 'test-gate-list.ps1')
 
 # --- 3. build.yml's gate step, and scripts\dev\Run-Gate.ps1, which it runs

@@ -56,8 +56,8 @@ namespace Thornswood
 
         static string Exe()
         {
-            try { return Assembly.GetExecutingAssembly().Location; }
-            catch { return ""; }
+            // The exe's own path; Assembly.Location is empty in a native build.
+            return Environment.ProcessPath ?? "";
         }
 
         static string Version()

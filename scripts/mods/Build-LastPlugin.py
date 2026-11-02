@@ -103,8 +103,8 @@ WHAT IT PUTS IN THE PLUGIN
      22 Oct 2026, q-613-ia-recipes); one standing in a cell or world such a
      plugin wins would need that plugin's record of the place copied, or
      its edit of it undone. Each of those is listed in the manifest
-     (floorItems.heldByServer) and in the HELD_BY_SERVER block this
-     writes into game/gamemode.js, and the server holds it disabled
+     (floorItems.heldByServer) and in the HELD_BY_SERVER table this
+     writes (game/gamemode-tables, #5191), and the server holds it disabled
      itself, the way it holds the three chopping blocks (#495). A cut actor
      (1) standing in such a place is held off the same way
      (refs.heldByServer).
@@ -146,8 +146,8 @@ WHAT IT PUTS IN THE PLUGIN
      get moved". A winning record whose bench is not the one recipes.json says
      its mod put it at stops the build. A re-costed recipe (6) that moves is
      one record carrying both. A recipe of a plugin the policy never copies
-     from is not copied: it is listed in the RECIPES_MOVED_IN_GAME block this
-     writes into game/gamemode.js, and each person's game moves its own copy
+     from is not copied: it is listed in the RECIPES_MOVED_IN_GAME table this
+     writes (game/gamemode-tables, #5191), and each person's game moves its own copy
      of the record, the way RECIPES_SET_IN_GAME sets the re-costed counts.
 
   9. Skyrim's own perks gate no recipe (#4826; Patrick, 22 Oct 2026, B: the
@@ -324,6 +324,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, '..', '..'))
 sys.path.insert(0, os.path.join(ROOT, 'scripts', 'dev'))
 import bsa  # noqa: E402  (the repository's archive reader)
+import gamemode_tables  # noqa: E402  (where a table the gamemode reads is written, #5191)
 sys.path.insert(0, HERE)
 import last_recipe  # noqa: E402  (the recipe each machine builds this plugin from, #2791)
 import own_plugins  # noqa: E402  (where each plugin of the load order is read from, #2923)
@@ -339,9 +340,6 @@ RECOST = os.path.join(ROOT, 'game', 'data', 'recost.json')
 RECIPES = os.path.join(ROOT, 'game', 'data', 'recipes.json')
 OWN_DIR = os.path.join(ROOT, 'game', 'content')
 RECIPE = os.path.join(ROOT, 'game', 'data', 'last-plugin.recipe')
-GAMEMODE = os.path.join(ROOT, 'game', 'gamemode.js')
-HELD_BLOCK = ('// ==== HELD_BY_SERVER, generated ====', '// ==== end HELD_BY_SERVER ====')
-MOVED_BLOCK = ('// ==== RECIPES_MOVED_IN_GAME, generated ====', '// ==== end RECIPES_MOVED_IN_GAME ====')
 
 COMPRESSED = 0x00040000
 DELETED = 0x20
@@ -1915,7 +1913,7 @@ def build(data_dir):
             'deleted': len(floor_rows['deleted']),
             'alreadyOff': len(floor_rows['alreadyOff']),
             # Placed by a plugin never copied from: not in the plugin, held
-            # off by the server (HELD_BY_SERVER in game/gamemode.js).
+            # off by the server (the gamemode's HELD_BY_SERVER table).
             'heldByServer': sorted(desc_of(g, canon) for g, _ in by_server),
             'cellsAdded': len(floor_cells),
             'cellsAddedByWinner': dict(sorted(collections.Counter(plugins[cells[g].pi].name
@@ -2589,6 +2587,8 @@ def main():
     ap.add_argument('--data', default=os.environ.get('THORNSWOOD_DATA', DATA_DIR))
     ap.add_argument('--check', action='store_true', help='build in memory and compare; write nothing')
     ap.add_argument('--verify', action='store_true', help='check the plugin the committed recipe makes, in the load order')
+    ap.add_argument('--tables', default=None,
+                    help='the folder of gamemode tables (#5191); game/gamemode-tables when not given')
     ap.add_argument('--out', default='', help='where the plugin is written; Thornswood-Last.esp in --data when not given')
     args = ap.parse_args()
     out = args.out or os.path.join(args.data, PLUGIN)
@@ -2682,15 +2682,13 @@ def main():
         b = have == json.loads(manifest_bytes(manifest).decode('utf-8'))
         print('  %s game/data/last-plugin.json %s' % (('ok   ', 'says what this builds') if b else
                                                        ('DIFFERS', 'is not what this builds')))
-        gm = io.open(GAMEMODE, encoding='utf-8', newline='').read()
-        c = held_block(manifest, gm) == gm
-        print('  %s the HELD_BY_SERVER block %s' % (('ok   ', 'is what this builds') if c else
+        c = gamemode_tables.is_current('HELD_BY_SERVER', held_table(manifest), args.tables)
+        print('  %s the HELD_BY_SERVER table %s' % (('ok   ', 'is what this builds') if c else
                                                           ('DIFFERS', 'is not what this builds')))
-        d = moved_block(manifest, gm) == gm
-        print('  %s the RECIPES_MOVED_IN_GAME block %s' % (('ok   ', 'is what this builds') if d else
+        d = gamemode_tables.is_current('RECIPES_MOVED_IN_GAME', moved_table(manifest), args.tables)
+        print('  %s the RECIPES_MOVED_IN_GAME table %s' % (('ok   ', 'is what this builds') if d else
                                                                  ('DIFFERS', 'is not what this builds')))
         return 0 if a and b and c and d else 1
-    gm = moved_block(manifest, held_block(manifest, io.open(GAMEMODE, encoding='utf-8', newline='').read()))
     with open(out + '.making', 'wb') as f:
         f.write(plugin)
     os.replace(out + '.making', out)
@@ -2698,53 +2696,35 @@ def main():
         f.write(recipe)
     with open(MANIFEST, 'wb') as f:
         f.write(manifest_bytes(manifest))
-    with io.open(GAMEMODE, 'w', encoding='utf-8', newline='') as f:
-        f.write(gm)
-    print('Wrote %s, game/data/%s, game/data/last-plugin.json, the HELD_BY_SERVER block (%d) and the '
-          'RECIPES_MOVED_IN_GAME block (%d)'
+    gamemode_tables.write('HELD_BY_SERVER', held_table(manifest), args.tables)
+    gamemode_tables.write('RECIPES_MOVED_IN_GAME', moved_table(manifest), args.tables)
+    print('Wrote %s, game/data/%s, game/data/last-plugin.json, the HELD_BY_SERVER table (%d) and the '
+          'RECIPES_MOVED_IN_GAME table (%d)'
           % (out, os.path.basename(RECIPE), len(manifest['floorItems']['heldByServer']) + len(manifest['refs']['heldByServer']) +
              len((manifest.get('holdOnly') or {}).get('heldByServer', [])), len(manifest['benchMovesInGame'])))
     return 0
 
 
-def held_block(manifest, gamemode):
-    """game/gamemode.js with its HELD_BY_SERVER block: the floor items, cut
-    actors and hold-only plants and ores Thornswood-Last.esp cannot switch
-    off without copying a plugin it never copies from, which the server holds
-    off instead (#3077, #2454, #3150)."""
-    a, b = gamemode.find(HELD_BLOCK[0]), gamemode.find(HELD_BLOCK[1])
-    if a < 0 or b < a:
-        raise SystemExit('STOP. no HELD_BY_SERVER markers in game/gamemode.js. Nothing was written.')
-    block = '\n'.join([
-        HELD_BLOCK[0],
-        '// Generated by scripts\\mods\\Build-LastPlugin.py (game\\data\\last-plugin.json: floorItems.heldByServer',
-        '// and refs.heldByServer); do not hand edit. Placed by, or standing where, a plugin it never copies from.',
-        'var HELD_BY_SERVER = %s;' % json.dumps(sorted(manifest['floorItems']['heldByServer'] +
-                                                     manifest['refs']['heldByServer'] +
-                                                     (manifest.get('holdOnly') or {}).get('heldByServer', []))),
-        HELD_BLOCK[1]])
-    return gamemode[:a] + block + gamemode[b + len(HELD_BLOCK[1]):]
+def held_table(manifest):
+    """The HELD_BY_SERVER table, as JSON text: the floor items, cut actors and
+    hold-only plants and ores Thornswood-Last.esp cannot switch off without
+    copying a plugin it never copies from, which the server holds off instead
+    (#3077, #2454, #3150). game/data/last-plugin.json says the same in
+    floorItems.heldByServer, refs.heldByServer and holdOnly.heldByServer."""
+    return json.dumps(sorted(manifest['floorItems']['heldByServer'] +
+                             manifest['refs']['heldByServer'] +
+                             (manifest.get('holdOnly') or {}).get('heldByServer', [])))
 
 
-def moved_block(manifest, gamemode):
-    """game/gamemode.js with its RECIPES_MOVED_IN_GAME block: the recipes
-    moved to their trade's bench (#3120) that Thornswood-Last.esp cannot
-    carry without copying a plugin it never copies from, which each person's
-    game moves instead."""
-    a, b = gamemode.find(MOVED_BLOCK[0]), gamemode.find(MOVED_BLOCK[1])
-    if a < 0 or b < a:
-        raise SystemExit('STOP. no RECIPES_MOVED_IN_GAME markers in game/gamemode.js. Nothing was written.')
+def moved_table(manifest):
+    """The RECIPES_MOVED_IN_GAME table, as JSON text: the recipes moved to
+    their trade's bench (#3120) that Thornswood-Last.esp cannot carry without
+    copying a plugin it never copies from, which each person's game moves
+    instead: the bench keyword each moves from and to, and its inputs as
+    [item, count] as the record asks them."""
     rows = {r['recipe']: {'name': r['name'], 'out': r['out'], 'from': r['from'], 'to': r['to'],
                           'inputs': r['inputs']} for r in manifest['benchMovesInGame']}
-    block = '\n'.join([
-        MOVED_BLOCK[0],
-        '// Generated by scripts\\mods\\Build-LastPlugin.py from game\\data\\recipes.json; do not hand edit.',
-        '// The recipes moved to their trade\'s bench (#3120) of a plugin Thornswood-Last.esp never copies',
-        '// from, moved in each person\'s game instead: the bench keyword each moves from and to, and its',
-        '// inputs as [item, count] as the record asks them.',
-        'var RECIPES_MOVED_IN_GAME = %s;' % json.dumps(rows, sort_keys=True, ensure_ascii=False),
-        MOVED_BLOCK[1]])
-    return gamemode[:a] + block + gamemode[b + len(MOVED_BLOCK[1]):]
+    return json.dumps(rows, sort_keys=True, ensure_ascii=False)
 
 
 if __name__ == '__main__':

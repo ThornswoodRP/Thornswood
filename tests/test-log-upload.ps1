@@ -231,7 +231,8 @@ console.log((o && o.ticket === 'tk1.x.y' ? 'TICKET ' : 'NOTICKET ') +
       $reader = Join-Path $root 'read-crash.js'
       [IO.File]::WriteAllText($reader, @'
 const fs = require('fs');
-const src = fs.readFileSync(process.argv[2], 'utf8');
+// The site is server.js over its modules in site\lib since #5357.
+const src = require(process.argv[2]).source();
 function grab(name) {
   const at = src.indexOf('function ' + name);
   const b = src.indexOf('{', at);
@@ -259,7 +260,7 @@ const o = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
 const f = readTrouble(o.logs);
 console.log(f ? (f.level + '|' + f.why + '|' + f.line) : 'NONE');
 '@, $utf8)
-      $said = (& $node.Source $reader (Join-Path $Here 'site\server.js') $bodyFile | Out-String).Trim()
+      $said = (& $node.Source $reader (Join-Path $Here 'tests\site-files.js') $bodyFile | Out-String).Trim()
       Yes "the site marks the session red when its crash log was empty ($said)" ($said.StartsWith('bad|the game crashed, and its crash log is empty|'))
     }
   }

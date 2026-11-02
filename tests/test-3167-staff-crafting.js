@@ -41,7 +41,7 @@ const vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 const CR = String.fromCharCode(13);
 const read = function (p) { return fs.readFileSync(p, 'utf8').split(CR).join(''); };
-const src = read(process.env.GM || path.join(ROOT, 'game', 'gamemode.js'));
+const src = require('./gamemode-tables.js').joined(read(process.env.GM || path.join(ROOT, 'game', 'gamemode.js')));
 const ui = read(path.join(ROOT, 'game', 'ui', 'thornswood-skills.js'));
 
 let pass = 0, fail = 0;
@@ -74,7 +74,7 @@ const CHARACTER = slice('// ==== thornswood character ====', '// ==== end thorns
 const tableAt = src.indexOf('  var RECIPES_BY_ID = {');
 const tableEnd = tableAt < 0 ? -1 : src.indexOf('\n  };\n', tableAt);
 let TABLE = null;
-try { TABLE = JSON.parse(src.slice(tableAt + '  var RECIPES_BY_ID = '.length, tableEnd + 4)); } catch (e) { TABLE = null; }
+try { TABLE = require('./gamemode-tables.js').inGamemode(src, 'RECIPES_BY_ID'); } catch (e) { TABLE = null; }
 const OFFICE_VIEW = between('  function officeView(actorId, profileId) {', '\n  /*\n    THE JAIL RULE');
 [['the chat command block', COMMANDS], ['the staff block', STAFF], ['the staff crafting block', CRAFT],
  ['the progression block', RULES], ['placeActors', PLACE_ACTORS], ['the recipe list writer', HIDDEN],

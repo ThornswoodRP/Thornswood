@@ -408,7 +408,7 @@ param(
     [string[]] $Plugins    = @(),
     [string]   $Out        = '',
     [string]   $JsOut      = '',
-    # Print the block and leave game\gamemode.js alone.
+    # Print the block and leave its files in game\gamemode-tables alone.
     [switch]   $NoInstall
 )
 
@@ -5955,66 +5955,27 @@ $literal = $lines -join [Environment]::NewLine
 
 # ---------------------------------------------------------------- install --
 #
-# The gamemode carries the table, because the server is deployed as one file and
-# cannot read game\data\recipes.json. Nothing hand edits that block: this writes it
-# between its own markers, the way the ore table does. -NoInstall prints it and
-# leaves the file alone, and so does a gamemode.js that has no markers yet: this
-# never invents a place to put it.
-#
-# THE COMMENT OVER THE TABLE IS PART OF THE TABLE, and it was not until
-# 21 September. The opening marker used to be the var line itself, so the
-# paragraph above it describing what every field means was hand written and was
-# never regenerated. It went on saying that rank came from the price of what a
-# recipe makes for a full day after input cost had replaced that rule and had
-# changed 344 of the 1728 installed rows. The only statement in the repository
-# of what the field the gate reads MEANS was contradicting the data beside it,
-# in the file that ships to the server. So the marker moved up above the
-# generated comment, and the script now owns the sentence as well as the rows.
-# Whatever prose is still hand written sits above the opening marker, where it
-# is about the block rather than about the fields.
+# The gamemode reads both tables from game\gamemode-tables\RECIPES_BY_ID.json
+# and STAFF_SPELLS.json when it loads (#5191): until then this wrote them
+# between markers in gamemode.js, the comment over each with them, and every
+# content change rewrote the same lines there. What each field means is
+# written over `var RECIPES_BY_ID = table(...)` in the gamemode and in the
+# comment printed below; the counts are in game\data\recipes.json.
+# -NoInstall prints them and leaves the files alone.
 if (-not $NoInstall -and $fail -eq 0) {
-    $gm = Join-Path $PSScriptRoot '..\..\game\gamemode.js'
-    $open  = '  // ==== RECIPES_BY_ID ===='
-    $close = '  // ==== end RECIPES_BY_ID ===='
-    if (-not (Test-Path -LiteralPath $gm)) {
-        Note "no gamemode.js beside this script, so the table was not installed"
-    } else {
-        $text = [System.IO.File]::ReadAllText($gm)
-        $a = $text.IndexOf($open)
-        $b = $text.IndexOf($close)
-        if ($a -lt 0 -or $b -lt 0 -or $b -lt $a) {
-            Note ("there is no RECIPES_BY_ID block in {0} yet, so nothing was written into it." -f $gm)
-            Note ("  When the gamemode grows one, it is these two lines, and this fills between them:")
-            Note ("    {0}" -f $open)
-            Note ("    {0}" -f $close)
-        } else {
-            $body = New-Object 'System.Collections.Generic.List[string]'
-            $body.Add($open)
-            foreach ($l in $lines) { $body.Add($l) }
-            $body.Add('')
-            $eol = $Eol
-            $new = $text.Substring(0, $a) + (($body -join $eol)) + $eol + $text.Substring($b)
-            [System.IO.File]::WriteAllText($gm, $new, (New-Object System.Text.UTF8Encoding($false)))
-            Ok ("wrote {0} recipes and the comment over them into the RECIPES_BY_ID block of {1}" -f $blockRows.Count, $gm)
-        }
-        # The staff spells, between their own markers, the same way.
-        $text = [System.IO.File]::ReadAllText($gm)
-        $sOpen  = '  // ==== STAFF_SPELLS ===='
-        $sClose = '  // ==== end STAFF_SPELLS ===='
-        $a = $text.IndexOf($sOpen)
-        $b = $text.IndexOf($sClose)
-        if ($a -lt 0 -or $b -lt 0 -or $b -lt $a) {
-            Note ("there is no STAFF_SPELLS block in {0}, so the staff spells were not written into it." -f $gm)
-        } else {
-            $body = New-Object 'System.Collections.Generic.List[string]'
-            $body.Add($sOpen)
-            foreach ($l in $staffLines) { $body.Add($l) }
-            $eol = $Eol
-            $new = $text.Substring(0, $a) + (($body -join $eol)) + $eol + $text.Substring($b)
-            [System.IO.File]::WriteAllText($gm, $new, (New-Object System.Text.UTF8Encoding($false)))
-            Ok ("wrote {0} staff spells into the STAFF_SPELLS block of {1}" -f $staffSpells.Count, $gm)
-        }
-    }
+    . (Join-Path $PSScriptRoot 'GamemodeTables.ps1')
+    # Every row is written with a comma after it, as a JavaScript object took
+    # them; JSON takes none after the last.
+    $rowText = ($blockRows -join "`n").TrimEnd().TrimEnd(',')
+    $changed = Write-GamemodeTable 'RECIPES_BY_ID' ('{' + $rowText + '}')
+    if ($changed) { Ok ("wrote {0} recipes into {1}" -f $blockRows.Count, (Get-GamemodeTableFile 'RECIPES_BY_ID')) }
+    else { Ok ("{0} already holds these {1} recipes" -f (Get-GamemodeTableFile 'RECIPES_BY_ID'), $blockRows.Count) }
+    # The staff spells: the rows between the var line and the closing brace.
+    $at = $staffLines.IndexOf('  var STAFF_SPELLS = {')
+    $staffRows = @($staffLines | Select-Object -Skip ($at + 1) | Select-Object -First ($staffLines.Count - $at - 2))
+    $changed = Write-GamemodeTable 'STAFF_SPELLS' ('{' + ($staffRows -join "`n") + '}')
+    if ($changed) { Ok ("wrote {0} staff spells into {1}" -f $staffSpells.Count, (Get-GamemodeTableFile 'STAFF_SPELLS')) }
+    else { Ok ("{0} already holds these {1} staff spells" -f (Get-GamemodeTableFile 'STAFF_SPELLS'), $staffSpells.Count) }
 }
 
 Write-Host ''

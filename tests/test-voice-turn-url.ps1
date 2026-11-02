@@ -15,7 +15,7 @@
   Install-Voice.ps1 built the service's whole environment from -Site, -Port,
   -Bind and -Auth, so no relay address could ever reach the running service.
   Its key does not go this way at all: it sits in turn-key.txt beside the
-  service, which voice\test-turn-key.js covers.
+  service, which voice\tests\test-turn-key.js covers.
 
   Nobody has stood up a relay yet, so the first thing held here is that an
   install without one is the same install, to the character.

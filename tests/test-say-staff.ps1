@@ -264,7 +264,7 @@ for aid, text in due:
         Yes 'bot.py watch_alerts_due takes the line the box half wrote, with its text' (
             $probe -eq 'DUE 1' -and $dueId.Count -eq 1 -and ('QUEUED ' + $dueId[0]) -eq $r.Last -and $dueText.Count -eq 1 -and $dueText[0] -eq '[cloud] for the bot')
     } else {
-        Write-Host ('SKIP  bot.py could not be imported here (' + $(if ($probe) { $probe } else { 'no python' }) + '); bot\test-watch-services.py covers its reader')
+        Write-Host ('SKIP  bot.py could not be imported here (' + $(if ($probe) { $probe } else { 'no python' }) + '); bot\tests\test-watch-services.py covers its reader')
     }
 
     # ---- 4. Say-Staff.ps1 end to end -----------------------------------------

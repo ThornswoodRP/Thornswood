@@ -9,9 +9,11 @@ WebSocket to it for those positions, for the WebRTC signalling that sets up
 voice between two people, and for text chat, which it relays to the room and
 writes to `chat\`, one file a day. Slash lines are written there too, a
 key's or a panel's marked as a key press, but not the front plugin's own
-reports to the game server (`PLUGIN_REPORTS`, `tests\test-2723-plugin-reports.js`).
+reports to the game server (`PLUGIN_REPORTS`, `voice\tests\test-2723-plugin-reports.js`).
 The audio goes straight between people and
-never passes through it. The `test-*.js` files beside it are its harnesses.
+never passes through it. The `test-*.js` files in `voice\tests` are its harnesses
+(they sat beside it until 1 Nov 2026, and joined the build check's gate when they
+moved there).
 It serves no page of its own: its two clients are the launcher's voice page
 and the game's overlay, both loaded off disk. The plain browser page it used
 to serve at `/` went in #1822, because it had no way to get a join token and
@@ -87,7 +89,7 @@ voice is full, and takes a place when one frees; `/health` gives `most`,
 or 0 is no cap. Install-Voice.ps1 sets it from `voice` in
 `records\most-online.json` (its `dev` object's for `C:\Thornswood-Voice-Dev`),
 which is never fewer than that server's seats, so everybody seated has a
-place. `test-most.js` and `tests\test-3570-voice-line-room.js` cover it. `load-voice.js` is not a harness: it
+place. `test-most.js` and `voice\tests\test-3570-voice-line-room.js` cover it. `load-voice.js` is not a harness: it
 plays an evening at a copy of the service with no people (two sockets each, a
 join storm, the WebRTC signalling for every pair, walking and talk) and prints
 what the service cost at each size, which is where that number came from.
@@ -118,7 +120,7 @@ voice reach; a number of units caps it, never past the voice reach) and
 `THORNSWOOD_CAPTION_TEXT_MUTE` (`off` leaves captions to the voice switch
 alone) tune it without a release. Nothing sends one yet, so every service is left without it
 until the questions on #2475 are decided.
-`tests\test-2475-voice-captions.js` covers it.
+`voice\tests\test-2475-voice-captions.js` covers it.
 `THORNSWOOD_VOICE_AUTH`, which once let unproven joins in, is not read any
 more. `/health`
 reports
@@ -131,11 +133,11 @@ answer another (#1703). They need nothing else. Most put their own
 `token-key.txt` beside their copy and sign the tokens they join with. A
 harness that joins the moment its copy is up asks that copy's `/token`
 instead, with a small site of its own that says yes, as `test-auth.js` does
-(`test-local-chat.js`, and `test-1304`, `test-1351` and `test-1821` in
+(`test-local-chat.js`, `test-1351`, and `test-1304` and `test-1821` in
 `tests`): on Windows two node processes can read the wall clock a few ms
 apart, and a token signed in the harness then can read as minted before the
 service started, which it refuses (#1867).
-`node voice\test-auth.js` and the rest.
+`node voice\tests\test-auth.js` and the rest.
 
 A TURN relay, for the pairs of people who cannot reach each other directly,
 is `THORNSWOOD_TURN_URL`. Its key is `THORNSWOOD_TURN_SECRET` or, so it stays

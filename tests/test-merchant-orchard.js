@@ -143,7 +143,7 @@ for(const defect of ['none','reentry','identity']) {
 {
  const s=setup(),ctx=s.w.ctx;
  ctx.__thornswoodFarming=s.farm.F;
- const gm=fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8').replace(/\r\n/g,'\n');
+ const gm=require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8')).replace(/\r\n/g,'\n');
  vm.runInContext(gm.match(/^function farmActivate\([^\n]*\)[\s\S]*?^\}/m)[0],ctx);
  assert.match(ctx.farmActivate(500,8000,data.sources[0].base),/standing here/,'ordinary farming remains available without accepted work');
  ctx.__thornswoodQuestOrchardRefs=null;

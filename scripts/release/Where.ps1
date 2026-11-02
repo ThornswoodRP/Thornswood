@@ -138,8 +138,8 @@ $repo = Split-Path -Parent (Split-Path -Parent $here)
 # layout.json, read the first time a place or folder of the repository is
 # asked for. This machine's own places (MachineData and the files under it)
 # come from the platform and never from it, so asking for one of those does
-# not need it (#2903): Publish-Update, Publish-Discord and Package-Thornswood
-# ask Where.ps1 for them since then, and run in harnesses from a copy of the
+# not need it (#2903): Publish-Update and Publish-Discord ask Where.ps1 for
+# them since then, and run in harnesses from a copy of the
 # scripts with no layout.json beside them.
 $script:layout = $null
 function Get-Layout {

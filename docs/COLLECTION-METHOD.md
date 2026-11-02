@@ -50,14 +50,14 @@ The plan below is from 15 September. The collection half of it happened: the
 mods come from the Nexus collection deployed by Vortex, and the installer
 carries the launcher and Thornswood's own content, not the mods. The game
 folder half did not. On 17 and 18 September Patrick and Djinn decided the
-opposite (Developer-Guide.md, Settled design): Thornswood runs from its own
+opposite ([Settled design](guide/settled-design.md)): Thornswood runs from its own
 folder, `<Root>\Game`, which the launcher builds from the Steam copy and what
 Vortex deployed into it, the big files as hard links. So `Paths.Game` is
 `<Root>\Game`, not the Steam copy; the game folder is built, by the launcher
 rather than the installer; and `Swap.cs` still junctions the Windows Skyrim
 folders every session. The rows of the table and the steps below that say
 otherwise are the plan as it stood, kept for the reasoning, not what is true
-now. Developer-Guide.md, One Skyrim of its own, is what is true now.
+now. [One Skyrim of its own](guide/the-system.md#one-skyrim-of-its-own) is what is true now.
 
 ## What changes (the 15 September plan)
 

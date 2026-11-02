@@ -412,7 +412,8 @@ try {
     Put $driver @'
 const fs = require('fs'), path = require('path');
 const [repo, site] = process.argv.slice(2);
-const src = fs.readFileSync(path.join(repo, 'site', 'server.js'), 'utf8');
+// The site is server.js over its modules in site\lib since #5357.
+const src = require(path.join(repo, 'tests', 'site-files.js')).source();
 const block = /\/\/ ==== thornswood deletion requests ====([\s\S]*?)\/\/ ==== end thornswood deletion requests ====/.exec(src)[1];
 const D = path.join(site, 'data'), FB = path.join(D, 'for-bot'), UP = path.join(site, 'uploads');
 const putJson = (p, o) => { try { fs.writeFileSync(p, JSON.stringify(o, null, 2)); return true; } catch (e) { return false; } };
@@ -441,7 +442,7 @@ new Function('fs', 'path', 'putJson', 'DATA', 'UP', 'LINKED', 'RULES_OK', 'ATTEM
         finally { $ErrorActionPreference = $eap; Remove-Item Env:\THORNSWOOD_BOT_DATA, Env:\DISCORD_TOKEN -ErrorAction SilentlyContinue }
         $botRan = $true
         Yes 'the bot took its request as it started, and said so with counts' ($botSaid -match 'join numbers 1, open tickets 1; done' -and -not (Test-Path (Join-Path $Bot 'data\deletion-requests.json')))
-    } else { Write-Host 'SKIP  the bot''s start: no Python 3.11 with discord.py here (bot\test-2758-deletion-requests.py runs it nightly)' }
+    } else { Write-Host 'SKIP  the bot''s start: no Python 3.11 with discord.py here (bot\tests\test-2758-deletion-requests.py runs it nightly)' }
 
     $D = Join-Path $Site 'data'
     $lk = J (Join-Path $D 'linked.json')

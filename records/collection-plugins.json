@@ -2,7 +2,7 @@
   "version": 1,
   "builtBy": "scripts/mods/New-CollectionPluginRecord.ps1",
   "collection": "7essxf",
-  "revision": 6,
+  "revision": 7,
   "plugins": [
     { "name": "_ResourcePack.esl", "size": 78418, "sha256": "d231915a4bbfe6e89536dfb0a46c5adc8e4d2d23ce95d248dc24943776eb76fb" },
     { "name": "3BBB.esp", "size": 20257, "sha256": "ce4f554616458a10b4809f705828f9d3e3e2d1457abe73ee32fe5f8f044a8549" },
@@ -56,6 +56,7 @@
     { "name": "Immersive Patrols II.esp", "size": 151863, "sha256": "3b4758ed23fd0c195b9426f6e226ea66866da51c7f8edecab6af8b6007ff5e16" },
     { "name": "Immersive Sounds - Compendium.esp", "size": 1048415, "sha256": "5a1b36a7961d767c0937957767055dcf1bcb53b79b574003a40a66d382d3350e" },
     { "name": "Immersive Weapons.esp", "size": 408425, "sha256": "bc084ae9f523c167eea11d1d7363314250b8fe7e7912607f58292e91e788e3c7" },
+    { "name": "Improved Eyes Skyrim.esp", "size": 447637, "sha256": "e7e66190e4e2063482a8f92e60fd40c35e31c510abfeadcc80c8b5688cc51780" },
     { "name": "JK's Castle Volkihar.esp", "size": 950572, "sha256": "45188a89845711d3047e0fa39ba3e5672078a1bc6822a0f323eb2641dada8514" },
     { "name": "JK's Markarth Outskirts.esp", "size": 578111, "sha256": "cf159c93b89b379ea7d91b29534f20e7b3194edf9ac5e1fb774ce33fd7df2b58" },
     { "name": "JK's Riften Outskirts.esp", "size": 461558, "sha256": "3129ec5357c6d6e0093957eea251706308f202a6c752aec98d77a0639b6a75f5" },

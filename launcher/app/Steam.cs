@@ -48,7 +48,7 @@ namespace Thornswood
 
         /// <summary>
         /// Where Steam is, instead of asking the registry. Only
-        /// tests\test-vortex-folder.ps1 sets it, to a pretend Steam in a
+        /// launcher\tests\test-vortex-folder.ps1 sets it, to a pretend Steam in a
         /// scratch folder, so the search for Vortex's folder can be run
         /// against libraries it made. The launcher leaves it null.
         /// </summary>

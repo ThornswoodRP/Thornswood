@@ -30,10 +30,11 @@
   the build is right and the row must not send somebody the other way.
 
   This lifts class Check and the three AddressLibrary methods out of the
-  shipped Checks.cs by text and compiles them with the compiler the build runs
-  (tests\Launcher-Csc.ps1), so what runs is the shipped code rather than a
-  copy of it. The fake game folders get a SkyrimSE.exe built by that
-  csc with a version resource of the build under test.
+  shipped Checks.cs by text and builds them the way the launcher project
+  builds (the .NET 10 SDK, tests\Launcher-Csc.ps1), so what runs is the
+  shipped code rather than a copy of it. The fake game folders get a
+  SkyrimSE.exe built the same way, an assembly whose file version is the
+  build under test, which FileVersionInfo reads on Windows and Linux alike.
 
   Read only apart from files under its own temp folder. It reads
   C:\Thornswood\Game when it is there and says SKIP when it is not.
@@ -42,14 +43,14 @@
 param([string]$ChecksPath, [string]$ShellPath, [string]$UiPath)
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # builds launcher code the way the project does (#498, #4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 # The tests are in tests\, the repository is one folder up.
 $Here = Split-Path -Parent $Here
 if (-not $ChecksPath) { $ChecksPath = Join-Path $Here 'launcher\app\Checks.cs' }
 if (-not $ShellPath)  { $ShellPath  = Join-Path $Here 'launcher\app\Shell.cs' }
-if (-not $UiPath)     { $UiPath     = Join-Path $Here 'launcher\ui.xaml' }
+if (-not $UiPath)     { $UiPath     = Join-Path $Here 'launcher\app\MainWindow.axaml' }
 
 $pass = 0; $fail = 0
 function Yes($what, $cond) {
@@ -100,24 +101,18 @@ if (-not ($checkClass -and $row -and $file -and $name)) {
   Done
 }
 
-if (-not $OnWindows) {
-  Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'
-  Done
-}
-if (-not (Test-Path -LiteralPath $LauncherCsc)) {
-  Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' $false
-  Done
-}
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 $root = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-addrlib-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 $null = New-Item -ItemType Directory -Force -Path $root
 
-function Csc([string]$source, [string]$out) {
-  $cs = Join-Path $root ('src-' + [Guid]::NewGuid().ToString('N').Substring(0, 8) + '.cs')
-  [IO.File]::WriteAllText($cs, $source)
-  $said = & $LauncherCsc /nologo /target:library ('/out:' + $out) $cs 2>&1 | Out-String
-  if ($LASTEXITCODE -ne 0) { Write-Host $said; return $false }
-  return $true
+# An assembly whose file version is the one given, copied to $out. The SDK's
+# own version attributes are left out, so the one in the source is the one
+# FileVersionInfo reads.
+function New-Versioned([string]$version, [string]$out) {
+  $dll = Build-LauncherCode -Source ('[assembly: System.Reflection.AssemblyFileVersion("' + $version + '")] class FakeSkyrim { }') -Property @{ GenerateAssemblyInfo = 'false' }
+  Copy-Item -LiteralPath $dll -Destination $out -Force
 }
 
 # A game folder: a SkyrimSE.exe with this version (or none, or one that is not
@@ -129,9 +124,7 @@ function New-Game([string]$label, [string]$version, [string[]]$bins, [switch]$No
   if ($NotAnExe) {
     [IO.File]::WriteAllText($exe, 'not an exe')
   } elseif ($version) {
-    $cls = 'Fake' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
-    $ok = Csc ('[assembly: System.Reflection.AssemblyFileVersion("' + $version + '")] class ' + $cls + ' { }') $exe
-    if (-not $ok) { throw "could not build a fake SkyrimSE.exe for $version" }
+    New-Versioned $version $exe
   }
   if (-not $NoPlugins) {
     $plugins = Join-Path $game 'Data\SKSE\Plugins'
@@ -160,12 +153,11 @@ namespace TsTest264
     }
 }
 "@
-  $dll = Join-Path $root 'lifted.dll'
-  $compiled = Csc $lifted $dll
-  Yes 'the lifted launcher code compiles with the compiler the build runs' $compiled
+  $compiled = $true
+  try { $null = Add-LauncherType -Source $lifted }
+  catch { $compiled = $false; Write-Host $_.Exception.Message }
+  Yes 'the lifted launcher code builds the way the launcher does' $compiled
   if (-not $compiled) { Done }
-  # Loaded from bytes so the temp folder can still be removed afterwards.
-  $null = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($dll))
 
   # ---- the name, for one build ----------------------------------------------
   Yes '1.6.1170 is versionlib-1-6-1170-0.bin, the file Setup-Thornswood.ps1 tests for' `
@@ -187,59 +179,13 @@ namespace TsTest264
   Yes 'an advisory row that fails does not shut Play' `
       (-not [TsTest264.Check]::new('x', $false, 'y', $true).Blocks)
 
-  # ---- the row, against game folders ----------------------------------------
-  $good = New-Game 'good' '1.6.1170.0' @('versionlib-1-6-1170-0.bin', 'versionlib-1-6-1130-0.bin', 'version-1-5-97-0.bin')
-  $r = [TsTest264.Checks]::AddressLibraryRow($good, $true)
-  Yes 'the row is called Address Library'                        ($r.Name -eq 'Address Library')
-  Yes 'installed: the row is green'                              ($r.Ok)
-  Yes 'installed: it names the build, "versionlib 1.6.1170"'     ($r.Detail -eq 'versionlib 1.6.1170')
-  Yes 'installed: it does not shut Play'                         (-not $r.Blocks)
-
-  $b = ''
-  $f = [TsTest264.Checks]::AddressLibraryFile($good, [ref]$b)
-  Yes 'the file it looks for is under Data\SKSE\Plugins' `
-      ($f -eq (Join-Path $good 'Data\SKSE\Plugins\versionlib-1-6-1170-0.bin'))
-  Yes 'and the build comes back as 1.6.1170'                     ($b -eq '1.6.1170')
-
-  # Other builds' files sitting there are not this build's. This is the case
-  # a "is any versionlib there" test would have called green.
-  $wrong = New-Game 'wrong' '1.6.1170.0' @('versionlib-1-6-1130-0.bin', 'versionlib-1-6-1179-0.bin', 'version-1-5-97-0.bin')
-  $r = [TsTest264.Checks]::AddressLibraryRow($wrong, $true)
-  Yes 'only other builds'' files: the row fails'                  (-not $r.Ok)
-  Yes 'it says what is missing and what fixes it' `
-      ($r.Detail -eq 'missing for 1.6.1170, install the collection in Vortex')
-  Yes 'it is advisory'                                           ($r.Advisory)
-  Yes 'and it does not shut Play'                                (-not $r.Blocks)
-
-  # A Steam update moved the exe on and the Address Library has no file for
-  # the new build. Vortex does not fix that; the downgrade does, and the
-  # collection card is held down until it has.
-  $newer = New-Game 'newer' '1.7.104.0' @('versionlib-1-6-1170-0.bin', 'versionlib-1-6-1179-0.bin')
-  $r = [TsTest264.Checks]::AddressLibraryRow($newer, $false)
-  Yes 'wrong build, no file for it: the row fails' `
-      (-not $r.Ok)
-  Yes 'wrong build: it sends somebody to the downgrade, not to Vortex' `
-      ($r.Detail -eq 'missing for 1.7.104, downgrade first')
-  Yes 'wrong build: still advisory, the Game build row is what shuts Play' `
-      ($r.Advisory -and -not $r.Blocks)
-
-  $none = New-Game 'none' '1.6.1170.0' @() -NoPlugins
-  $r = [TsTest264.Checks]::AddressLibraryRow($none, $true)
-  Yes 'no Plugins folder at all: the row fails without throwing' `
-      ((-not $r.Ok) -and $r.Detail -eq 'missing for 1.6.1170, install the collection in Vortex')
-  Yes 'and does not shut Play'                                   (-not $r.Blocks)
-
-  # The row follows the exe, not a pinned name, so moving the pin needs no
-  # edit here.
-  $other = New-Game 'other' '1.6.1130.0' @('versionlib-1-6-1130-0.bin')
-  $r = [TsTest264.Checks]::AddressLibraryRow($other, $false)
-  Yes 'a 1.6.1130 exe looks for the 1.6.1130 file, not a pinned one' `
-      ($r.Ok -and $r.Detail -eq 'versionlib 1.6.1130')
-
+  # ---- the row, with nothing for it to find ----------------------------------
+  # These read no Address Library file, so they run on any system.
   # A missing exe also fails the Game build row, so buildRight is false here.
   # Not knowing the build has to win over naming a fix for it.
   $noexe = New-Game 'noexe' '' @('versionlib-1-6-1170-0.bin')
   $r = [TsTest264.Checks]::AddressLibraryRow($noexe, $false)
+  Yes 'the row is called Address Library'                        ($r.Name -eq 'Address Library')
   Yes 'no SkyrimSE.exe: it says it cannot tell rather than guessing' `
       ((-not $r.Ok) -and $r.Detail -eq 'cannot tell, SkyrimSE.exe gives no version')
   Yes 'and does not shut Play'                                   (-not $r.Blocks)
@@ -252,6 +198,61 @@ namespace TsTest264
   $r = [TsTest264.Checks]::AddressLibraryRow($null, $true)
   Yes 'a game folder that is not known yet does not throw' `
       ((-not $r.Ok) -and (-not $r.Blocks))
+
+  # ---- the row, against game folders ----------------------------------------
+  # The row looks under Data\SKSE\Plugins with Windows' separator, as the
+  # game is a Windows game, so these run on Windows.
+  if ($OnWindows) {
+    $good = New-Game 'good' '1.6.1170.0' @('versionlib-1-6-1170-0.bin', 'versionlib-1-6-1130-0.bin', 'version-1-5-97-0.bin')
+    $r = [TsTest264.Checks]::AddressLibraryRow($good, $true)
+    Yes 'installed: the row is green'                              ($r.Ok)
+    Yes 'installed: it names the build, "versionlib 1.6.1170"'     ($r.Detail -eq 'versionlib 1.6.1170')
+    Yes 'installed: it does not shut Play'                         (-not $r.Blocks)
+
+    $b = ''
+    $f = [TsTest264.Checks]::AddressLibraryFile($good, [ref]$b)
+    Yes 'the file it looks for is under Data\SKSE\Plugins' `
+        ($f -eq (Join-Path $good 'Data\SKSE\Plugins\versionlib-1-6-1170-0.bin'))
+    Yes 'and the build comes back as 1.6.1170'                     ($b -eq '1.6.1170')
+
+    # Other builds' files sitting there are not this build's. This is the case
+    # a "is any versionlib there" test would have called green.
+    $wrong = New-Game 'wrong' '1.6.1170.0' @('versionlib-1-6-1130-0.bin', 'versionlib-1-6-1179-0.bin', 'version-1-5-97-0.bin')
+    $r = [TsTest264.Checks]::AddressLibraryRow($wrong, $true)
+    Yes 'only other builds'' files: the row fails'                  (-not $r.Ok)
+    Yes 'it says what is missing and what fixes it' `
+        ($r.Detail -eq 'missing for 1.6.1170, install the collection in Vortex')
+    Yes 'it is advisory'                                           ($r.Advisory)
+    Yes 'and it does not shut Play'                                (-not $r.Blocks)
+
+    # A Steam update moved the exe on and the Address Library has no file for
+    # the new build. Vortex does not fix that; the downgrade does, and the
+    # collection card is held down until it has.
+    $newer = New-Game 'newer' '1.7.104.0' @('versionlib-1-6-1170-0.bin', 'versionlib-1-6-1179-0.bin')
+    $r = [TsTest264.Checks]::AddressLibraryRow($newer, $false)
+    Yes 'wrong build, no file for it: the row fails' `
+        (-not $r.Ok)
+    Yes 'wrong build: it sends somebody to the downgrade, not to Vortex' `
+        ($r.Detail -eq 'missing for 1.7.104, downgrade first')
+    Yes 'wrong build: still advisory, the Game build row is what shuts Play' `
+        ($r.Advisory -and -not $r.Blocks)
+
+    $none = New-Game 'none' '1.6.1170.0' @() -NoPlugins
+    $r = [TsTest264.Checks]::AddressLibraryRow($none, $true)
+    Yes 'no Plugins folder at all: the row fails without throwing' `
+        ((-not $r.Ok) -and $r.Detail -eq 'missing for 1.6.1170, install the collection in Vortex')
+    Yes 'and does not shut Play'                                   (-not $r.Blocks)
+
+    # The row follows the exe, not a pinned name, so moving the pin needs no
+    # edit here.
+    $other = New-Game 'other' '1.6.1130.0' @('versionlib-1-6-1130-0.bin')
+    $r = [TsTest264.Checks]::AddressLibraryRow($other, $false)
+    Yes 'a 1.6.1130 exe looks for the 1.6.1130 file, not a pinned one' `
+        ($r.Ok -and $r.Detail -eq 'versionlib 1.6.1130')
+
+  } else {
+    Write-Host 'SKIP  the row against game folders with the Address Library in them: the row reads Data\SKSE\Plugins with Windows'' separator, which only Windows has'
+  }
 
   # ---- how the launcher uses it ---------------------------------------------
   $all = LiftAfter $checksSrc 'public static List<Check> All(Config cfg)'
@@ -272,25 +273,27 @@ namespace TsTest264
   $fill = LiftAfter $shellSrc 'static void FillStatusRow(Border back, Check c)'
   Yes 'FillStatusRow draws a failing advisory row amber, not red, dot and text both' `
       ($fill -and ([regex]::Matches($fill, 'c\.Advisory \? "Warn" : "Bad"')).Count -eq 2)
-  Yes 'the Warn brush it uses exists in ui.xaml' `
+  Yes 'the Warn brush it uses exists in the window' `
       ($uiSrc.Contains('x:Key="Warn"'))
 
-  # ---- this machine, read only ----------------------------------------------
-  # Proves the naming rule against a real install rather than against itself:
-  # when the Address Library is installed here at all, the name read off the
-  # real exe must be one of its files.
-  $real = Join-Path ([string](& (Join-Path $Here 'scripts\release\Where.ps1') Install)) 'Game'
-  $realPlugins = Join-Path $real 'Data\SKSE\Plugins'
-  if ((Test-Path (Join-Path $real 'SkyrimSE.exe')) -and (Test-Path $realPlugins) -and
-      @(Get-ChildItem $realPlugins -Filter 'version*.bin' -File -ErrorAction SilentlyContinue).Count -gt 0) {
-    $rb = ''
-    $rf = [TsTest264.Checks]::AddressLibraryFile($real, [ref]$rb)
-    $r = [TsTest264.Checks]::AddressLibraryRow($real, $true)
-    Write-Host ("      this machine: {0}  [{1}]" -f $r.Detail, $rf)
-    Yes 'on this machine the name read off the real exe is a file the Address Library installed' `
-        ($rf.Length -gt 0 -and (Test-Path $rf))
-  } else {
-    Write-Host "SKIP  no Address Library install at $real to measure against"
+  if ($OnWindows) {
+    # ---- this machine, read only ----------------------------------------------
+    # Proves the naming rule against a real install rather than against itself:
+    # when the Address Library is installed here at all, the name read off the
+    # real exe must be one of its files.
+    $real = Join-Path ([string](& (Join-Path $Here 'scripts\release\Where.ps1') Install)) 'Game'
+    $realPlugins = Join-Path $real 'Data\SKSE\Plugins'
+    if ((Test-Path (Join-Path $real 'SkyrimSE.exe')) -and (Test-Path $realPlugins) -and
+        @(Get-ChildItem $realPlugins -Filter 'version*.bin' -File -ErrorAction SilentlyContinue).Count -gt 0) {
+      $rb = ''
+      $rf = [TsTest264.Checks]::AddressLibraryFile($real, [ref]$rb)
+      $r = [TsTest264.Checks]::AddressLibraryRow($real, $true)
+      Write-Host ("      this machine: {0}  [{1}]" -f $r.Detail, $rf)
+      Yes 'on this machine the name read off the real exe is a file the Address Library installed' `
+          ($rf.Length -gt 0 -and (Test-Path $rf))
+    } else {
+      Write-Host "SKIP  no Address Library install at $real to measure against"
+    }
   }
 }
 finally {

@@ -59,7 +59,7 @@ param(
     [string[]] $Plugins    = @(),
     [string]   $Out        = '',
     [string]   $JsOut      = '',
-    # Print the table and leave game\gamemode.js alone.
+    # Print the table and leave game\gamemode-tables\ORES_BY_BASE.json alone.
     [switch]   $NoInstall
 )
 
@@ -937,51 +937,26 @@ $literal = $lines -join [Environment]::NewLine
 
 # ---------------------------------------------------------------- install --
 #
-# The gamemode carries the table, because the server is deployed as one file
-# and cannot read game\data\ores.json. Nothing hand edits that block: this writes
-# it between its own markers, the way the other generated blocks in this repo
-# are written. -NoInstall prints it and leaves the file alone, and so does a
-# gamemode.js that has no markers yet: this never invents a place to put it.
+# The gamemode reads the table from game\gamemode-tables\ORES_BY_BASE.json
+# when it loads (#5191): until then this wrote it between markers in
+# gamemode.js, and every content change rewrote the same lines there.
+# -NoInstall prints it and leaves the file alone.
 #
 if (-not $NoInstall -and $fail -eq 0) {
-    $gm = Join-Path $PSScriptRoot '..\..\game\gamemode.js'
-    $open  = '  var ORES_BY_BASE = {'
-    $close = '  // ==== end ORES_BY_BASE ===='
-    if (-not (Test-Path -LiteralPath $gm)) {
-        Note "no gamemode.js beside this script, so the table was not installed"
-    } else {
-        $text = [System.IO.File]::ReadAllText($gm)
-        $a = $text.IndexOf($open)
-        $b = $text.IndexOf($close)
-        if ($a -lt 0 -or $b -lt 0 -or $b -lt $a) {
-            Note ("there is no ORES_BY_BASE block in {0} yet, so nothing was written into it." -f $gm)
-            Note ("  When the gamemode grows one, it is these two lines, and this fills between them:")
-            Note ("    {0}" -f $open)
-            Note ("    {0}" -f $close)
-        } else {
-            $body = New-Object 'System.Collections.Generic.List[string]'
-            $body.Add($open)
-            $k = 0
-            foreach ($desc in $table.Keys) {
-                $k++
-                $comma = ','
-                if ($k -eq $table.Count) { $comma = '' }
-                $r = $table[$desc]
-                $body.Add('    ' + (JsonStr $desc) + ': { "ore": ' + (JsonStr $r.Ore) + ', "name": ' + (JsonStr $r.Name) +
-                          ', "rank": ' + (JsonStr $r.Rank) + ', "yield": ' + $r.Yield + ' }' + $comma)
-            }
-            $body.Add('  };')
-            $body.Add('')
-            $eol = $Eol
-            $new = $text.Substring(0, $a) + (($body -join $eol)) + $eol + $text.Substring($b)
-            [System.IO.File]::WriteAllText($gm, $new, (New-Object System.Text.UTF8Encoding($false)))
-            Ok ("wrote {0} veins into the ORES_BY_BASE block of {1}" -f $table.Count, $gm)
-        }
+    . (Join-Path $PSScriptRoot 'GamemodeTables.ps1')
+    $rows = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($desc in $table.Keys) {
+        $r = $table[$desc]
+        $rows.Add((JsonStr $desc) + ':{"ore":' + (JsonStr $r.Ore) + ',"name":' + (JsonStr $r.Name) +
+                  ',"rank":' + (JsonStr $r.Rank) + ',"yield":' + $r.Yield + '}')
     }
+    $changed = Write-GamemodeTable 'ORES_BY_BASE' ('{' + ($rows -join ',') + '}')
+    if ($changed) { Ok ("wrote {0} veins into {1}" -f $table.Count, (Get-GamemodeTableFile 'ORES_BY_BASE')) }
+    else { Ok ("{0} already holds these {1} veins" -f (Get-GamemodeTableFile 'ORES_BY_BASE'), $table.Count) }
 }
 
 Write-Host ''
-Write-Host 'the same table, ready to paste into the gamemode:' -ForegroundColor Cyan
+Write-Host 'the same table, as JavaScript (the gamemode reads its file in game\gamemode-tables):' -ForegroundColor Cyan
 Write-Host $literal
 if ($JsOut) {
     [System.IO.File]::WriteAllText($JsOut, $literal, (New-Object System.Text.UTF8Encoding($false)))

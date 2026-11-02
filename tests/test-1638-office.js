@@ -33,7 +33,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const CR = String.fromCharCode(13);
-const gm = fs.readFileSync(process.env.GM || path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8').split(CR).join('');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(process.env.GM || path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8')).split(CR).join('');
 /*
   One topic of the help panel (#1633), as a fresh install reads it: /help's
   topics moved out of the gamemode into game/ui/thornswood-help.js, each a

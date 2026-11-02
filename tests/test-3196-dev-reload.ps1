@@ -11,9 +11,11 @@
   folder: by PowerShell 7, which is what runs it on the box since #5356. The
   engine is a node stand-in that does what
   skymp5-server does with a gamemode (ts/index.ts and ts/gamemodeLoad.ts in
-  Thornswood's fork): it loads gamemode.js again when its bytes change, and
-  says in server.log what the gamemode says as it loads (gamemodeId, taken
-  out of game\gamemode.js itself) and then how the load went. Marker files in
+  Thornswood's fork): it loads gamemode.js again when its bytes or its write
+  time change, and says in server.log what the gamemode says as it loads
+  (gamemodeId, taken out of game\gamemode.js itself, and the git tree of its
+  tables folder) and then how the load went; a table holding BROKEN stops
+  the load the way a table that does not parse would. Marker files in
   the scratch folder make it a load that throws, an engine that never loads,
   and a server.log rolled half way through a load. The only other stand-in is
   Get-NetUDPEndpoint, which answers from a file in the scratch folder, so the
@@ -37,6 +39,12 @@
     - Deploy-DevGamemode.ps1 reloads only when neither -PutBack nor -Restart
       is given, before the warning, and restarts with the put-back after
       RELOAD FAILED
+    - the gamemode's tables (#5191): the deploy's tree id is git's; a run
+      that changes only the tables puts the folder in whole, the gamemode
+      again, and waits for the server to say it loaded that tree, keeping
+      the old folder in .prev; a table that stops the load is put back with
+      the old folder, and the old tree loads again; a load of other tables
+      is not taken for the new ones
 
   Connects to nothing.
 #>
@@ -98,16 +106,32 @@ const gm = path.join(root, 'gamemode.js'), log = path.join(root, 'server.log');
 const has = (m) => fs.existsSync(path.join(root, m));
 function say(l) { fs.appendFileSync(log, '[' + new Date().toISOString() + '] ' + l + '\n'); }
 let last = null, loads = 0, failed = false;
+// The tables folder as the gamemode names it (game/gamemode.js, tableFolder).
+function tables() {
+  const dir = path.join(root, 'gamemode-tables');
+  if (!fs.existsSync(dir)) return null;
+  const crypto = require('crypto');
+  let broken = false;
+  const parts = fs.readdirSync(dir).filter((n) => /^[A-Z][A-Z0-9_]*\.json$/.test(n)).sort().map((n) => {
+    const b = fs.readFileSync(path.join(dir, n));
+    if (b.toString('latin1').indexOf('BROKEN') >= 0) broken = true;
+    return Buffer.concat([Buffer.from('100644 ' + n + '\0'), Buffer.from(gamemodeId(b).blob, 'hex')]);
+  });
+  const body = Buffer.concat(parts);
+  return { tree: crypto.createHash('sha1').update('tree ' + body.length + '\0').update(body).digest('hex'), count: parts.length, broken: broken };
+}
 function load() {
-  let b;
-  try { b = fs.readFileSync(gm); } catch (e) { return; }
-  const t = b.toString('latin1');
+  let b, st;
+  try { b = fs.readFileSync(gm); st = fs.statSync(gm); } catch (e) { return; }
+  const t = b.toString('latin1') + '@' + st.mtimeMs;
   if (t === last) return;
   if (loads > 0 && (has('.stub-deaf') || (failed && has('.stub-deaf-after-fail')))) return;
   last = t;
   loads++;
   say('[thornswood] gamemode.js is git blob ' + gamemodeId(b).blob + ', ' + b.length + ' bytes');
-  if (t.indexOf('THROW') >= 0) {
+  const tb = tables();
+  if (tb) { say('[thornswood] gamemode tables are git tree ' + tb.tree + ', ' + tb.count + ' files, in ' + path.join(root, 'gamemode-tables')); }
+  if (t.indexOf('THROW') >= 0 || (tb && tb.broken)) {
     failed = true;
     say('Error: the gamemode threw at load');
     say('[thornswood] gamemode did not load; the error is above');
@@ -137,6 +161,7 @@ function Get-NetUDPEndpoint {
 
 $oldGm = "'use strict';`r`n// the gamemode that runs`r`nmp.x = 1;`r`n"
 $newGm = "'use strict';`r`n// the gamemode this deploy sends`r`nmp.x = 2;`r`n"
+$oldTables = [ordered]@{ 'KEPT.json' = "{`n`"a`":1`n}`n"; 'OLD_ONLY.json' = "[`n1`n]`n" }
 $script:case = 0
 # A server folder running $oldGm, a stage holding what $send names, and the
 # engine started on it. Returns what the case needs.
@@ -157,6 +182,9 @@ function New-Server([hashtable]$send, [string[]]$marks = @(), [string]$engineSay
   [IO.File]::WriteAllText((Join-Path $root 'thornswood-build.json'), '{"commit":"old"}')
   [IO.File]::WriteAllText((Join-Path (Join-Path $root 'dist_back') 'skymp5-server.js'), 'console.log("' + $engineSays + '")')
   [IO.File]::WriteAllText((Join-Path $root 'server.log'), "[start] Current process ID is 1`n")
+  # The tables the running gamemode reads (#5191).
+  $null = New-Item -ItemType Directory -Path (Join-Path $root 'gamemode-tables') -Force
+  foreach ($k in $oldTables.Keys) { [IO.File]::WriteAllText((Join-Path (Join-Path $root 'gamemode-tables') $k), $oldTables[$k]) }
   if ($running) { [IO.File]::WriteAllText((Join-Path $root '.stub-udp'), '7787') }
   foreach ($m in $marks) { [IO.File]::WriteAllText((Join-Path $root $m), '') }
   $stamp = '20261022-' + (100000 + $script:case)
@@ -183,7 +211,8 @@ function Invoke-Reload($srv, [int]$wait = 6) {
   $blob = ''
   $staged = Join-Path $srv.Stage 'gamemode.js'
   if (Test-Path -LiteralPath $staged) { $blob = Get-ThornswoodGamemodeBlob $staged } else { $blob = Get-ThornswoodGamemodeBlob (Join-Path $srv.Root 'gamemode.js') }
-  $vars = ReloadVars $srv.Root 'Thornswood Dev Server' $srv.StageName $srv.PrevName $wait $srv.Sums $blob
+  $tree = Get-ThornswoodTablesTree (Join-Path $srv.Stage 'gamemode-tables')
+  $vars = ReloadVars $srv.Root 'Thornswood Dev Server' $srv.StageName $srv.PrevName $wait $srv.Sums $blob $tree
   # SwapVars writes the root the box's way; off Windows the scratch root is
   # a path with forward slashes, so it goes in as it is.
   if (-not $OnWindows) { $vars = [regex]::Replace($vars, "(?m)^\`$Root  = '.*'\r?$", ("`$Root  = '" + $srv.Root.Replace("'", "''") + "'")) }
@@ -281,6 +310,58 @@ try {
     (Read-At $srv 'gamemode.js') -eq $oldGm -and (Read-At $srv 'thornswood-build.json') -eq '{"commit":"old"}' -and
     [IO.File]::ReadAllText((Join-Path $prev 'gamemode.js')) -eq $oldGm -and (Test-Path -LiteralPath (Join-Path $prev 'server-settings.json')) -and -not (Test-Path -LiteralPath $srv.Stage))
   Stop-Server $srv
+
+  # ---- the tables (#5191) --------------------------------------------------------
+  $tablesTmp = Join-Path $scratch 'tree'
+  $null = New-Item -ItemType Directory -Path $tablesTmp -Force
+  [IO.File]::WriteAllText((Join-Path $tablesTmp 'KEPT.json'), $oldTables['KEPT.json'])
+  [IO.File]::WriteAllText((Join-Path $tablesTmp 'NEW_ONE.json'), "{`n`"n`":2`n}`n")
+  $gitTree = ''
+  try {
+    $gd = Join-Path $scratch 'treegit'
+    $null = & git init -q $gd 2>&1
+    Copy-Item -LiteralPath $tablesTmp -Destination (Join-Path $gd 'gamemode-tables') -Recurse
+    $null = & git -C $gd add -A 2>&1
+    $gitTree = [string](& git -C $gd write-tree 2>$null)
+    if ($gitTree) { $gitTree = [string](& git -C $gd rev-parse ($gitTree.Trim() + ':gamemode-tables')) }
+  } catch { $gitTree = '' }
+  if ($gitTree) { Yes 'the deploy''s tree id for a tables folder is git''s' ((Get-ThornswoodTablesTree $tablesTmp) -eq $gitTree.Trim()) }
+  Yes '  and a folder that is not there has none' ((Get-ThornswoodTablesTree (Join-Path $scratch 'no-such')) -eq '')
+
+  $srv = New-Server ([ordered]@{ 'gamemode.js' = $oldGm; 'thornswood-build.json' = '{"commit":"tables"}'; 'gamemode-tables/KEPT.json' = $oldTables['KEPT.json']; 'gamemode-tables/NEW_ONE.json' = "{`n`"n`":2`n}`n" })
+  $oldTree = Get-ThornswoodTablesTree (Join-Path $srv.Root 'gamemode-tables')
+  $newTree = Get-ThornswoodTablesTree (Join-Path $srv.Stage 'gamemode-tables')
+  $out = Invoke-Reload $srv 30
+  Yes 'a run that changes only the tables reloads: RELOAD OK' ($out -contains 'RELOAD OK')
+  Yes '  it waited for the server to say it loaded the new tree' (@($out | Where-Object { $_ -like "*gamemode tables are git tree $newTree*" }).Count -eq 1 -and @($out | Where-Object { $_ -like "PASS: *with tables git tree $newTree*" }).Count -eq 1)
+  $now = @(Get-ChildItem -LiteralPath (Join-Path $srv.Root 'gamemode-tables') -File | ForEach-Object { $_.Name } | Sort-Object)
+  Yes ('  the folder is the one sent, and a table it no longer has is gone (' + ($now -join ', ') + ')') (($now -join ',') -eq 'KEPT.json,NEW_ONE.json')
+  $kept = Join-Path (Join-Path $srv.Root $srv.PrevName) 'gamemode-tables'
+  Yes '  the old folder is kept in .prev, for -PutBack' ((Get-ThornswoodTablesTree $kept) -eq $oldTree -and $oldTree)
+  Yes '  and the server was never stopped' (-not $srv.Engine.HasExited)
+  Stop-Server $srv
+
+  $srv = New-Server ([ordered]@{ 'gamemode.js' = $newGm; 'thornswood-build.json' = '{"commit":"broken"}'; 'gamemode-tables/KEPT.json' = "{`n`"BROKEN`":1`n}`n" })
+  $oldTree = Get-ThornswoodTablesTree (Join-Path $srv.Root 'gamemode-tables')
+  $out = Invoke-Reload $srv
+  Yes 'a table that stops the load is put back: RELOAD PUT BACK' ($out -contains 'RELOAD PUT BACK')
+  Yes '  the old gamemode and the old folder are back, and the old tree loaded again' (
+    (Read-At $srv 'gamemode.js') -eq $oldGm -and (Get-ThornswoodTablesTree (Join-Path $srv.Root 'gamemode-tables')) -eq $oldTree -and
+    @($out | Where-Object { $_ -like "*gamemode tables are git tree $oldTree*" }).Count -ge 1 -and -not (Test-Path -LiteralPath $srv.Stage))
+  Stop-Server $srv
+
+  # A server that loads the gamemode with other tables than the ones sent:
+  # the engine here reads the folder, so the stage's tree is given wrong.
+  $srv = New-Server ([ordered]@{ 'gamemode.js' = $newGm; 'thornswood-build.json' = '{"commit":"other"}'; 'gamemode-tables/KEPT.json' = "{`n`"b`":3`n}`n" })
+  $vars = ReloadVars $srv.Root 'Thornswood Dev Server' $srv.StageName $srv.PrevName 6 $srv.Sums (Get-ThornswoodGamemodeBlob (Join-Path $srv.Stage 'gamemode.js')) ('0' * 40)
+  if (-not $OnWindows) { $vars = [regex]::Replace($vars, "(?m)^\`$Root  = '.*'\r?$", ("`$Root  = '" + $srv.Root.Replace("'", "''") + "'")) }
+  $f = Join-Path $scratch ('reload-other.ps1')
+  [IO.File]::WriteAllText($f, $vars + $udpStandIn + $reloadBlock)
+  $out = @(& $ps -NoProfile -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_".Trim() })
+  foreach ($l in $out) { Write-Host ('      ' + $l) -ForegroundColor DarkGray }
+  Yes 'a load of other tables than the ones sent is not taken for them: RELOAD PUT BACK' (
+    $out -contains 'RELOAD PUT BACK' -and @($out | Where-Object { $_ -like '*loaded a different set of tables, git tree*' }).Count -eq 1)
+  Stop-Server $srv
 } finally {
   Get-Process -Name node -EA SilentlyContinue | Where-Object { try { $_.CommandLine -like "*$engineJs*" } catch { $false } } | Stop-Process -Force -EA SilentlyContinue
 }
@@ -289,7 +370,7 @@ try {
 $dev = [IO.File]::ReadAllText((Join-Path $repo 'scripts\deploy\Deploy-DevGamemode.ps1'))
 $cmd = Get-Command -Name (Join-Path $repo 'scripts\deploy\Deploy-DevGamemode.ps1')
 Yes 'Deploy-DevGamemode.ps1 takes -Restart and loads Reload.ps1' ($cmd.Parameters.ContainsKey('Restart') -and $dev.Contains(". (Join-Path `$Here 'Reload.ps1')"))
-Yes '  it waits for the blob of the gamemode it sends' ($dev.Contains('$newBlob = Get-ThornswoodGamemodeBlob $Gamemode') -and $dev.Contains('(ReloadVars $Root $Task $stageName $prevName $Wait $hashes $newBlob) + $reloadBlock'))
+Yes '  it waits for the blob of the gamemode it sends, and the tree of its tables (#5191)' ($dev.Contains('$newBlob = Get-ThornswoodGamemodeBlob $Gamemode') -and $dev.Contains('$newTree = Get-ThornswoodTablesTree $GamemodeTables') -and $dev.Contains('(ReloadVars $Root $Task $stageName $prevName $Wait $hashes $newBlob $newTree) + $reloadBlock'))
 $atReload = $dev.IndexOf('+ $reloadBlock')
 $atWarn = $dev.IndexOf("Write-Host 'Who is on the dev server...'")
 Yes '  it reloads before the warning, and only without -PutBack and -Restart' ($atReload -gt 0 -and $atWarn -gt $atReload -and $dev.Contains('if (-not $PutBack -and -not $Restart) {'))

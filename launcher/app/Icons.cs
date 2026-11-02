@@ -4,7 +4,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using System.Security.Cryptography;
+using System.Threading;
 
 namespace Thornswood
 {
@@ -31,8 +33,13 @@ namespace Thornswood
     /// those too. A shortcut still carrying an old name goes on saying so
     /// forever otherwise, and the pinned taskbar copy is its own file in its
     /// own folder that no build script was ever looking at.
+    ///
+    /// Shortcuts are read and written through the shell's own ShellLink
+    /// object (Link, below), the object WScript.Shell's CreateShortcut wraps.
+    /// This went through WScript.Shell by late binding until the move to
+    /// native code (#4823), which cannot call a COM object by name.
     /// </summary>
-    static class Icons
+    static partial class Icons
     {
         const int SHCNE_ASSOCCHANGED = 0x08000000;
         const int SHCNE_UPDATEITEM = 0x00002000;
@@ -41,31 +48,22 @@ namespace Thornswood
         const uint SHCNF_PATHW = 0x0005;
         const uint SHCNF_FLUSH = 0x1000;
 
-        [DllImport("shell32.dll", CharSet = CharSet.Auto)]
-        static extern void SHChangeNotify(int eventId, uint flags, IntPtr item1, IntPtr item2);
+        [LibraryImport("shell32.dll")]
+        private static partial void SHChangeNotify(int eventId, uint flags, IntPtr item1, IntPtr item2);
 
         // Same entry point, path form: telling Explorer about one .lnk is what
         // makes a blank shortcut redraw without clearing the whole icon cache.
-        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-        static extern void SHChangeNotify(int eventId, uint flags, string item1, string item2);
+        [LibraryImport("shell32.dll", EntryPoint = "SHChangeNotify", StringMarshalling = StringMarshalling.Utf16)]
+        private static partial void SHChangeNotifyPath(int eventId, uint flags, string item1, string item2);
 
         /// <summary>
         /// The running launcher, wherever it is and whatever it is called.
-        /// Asking the assembly means the shortcut points at the one that is
+        /// Asking the process means the shortcut points at the one that is
         /// actually there.
         /// </summary>
         static string LauncherExe
         {
-            get
-            {
-                try
-                {
-                    string me = System.Reflection.Assembly.GetExecutingAssembly().Location;
-                    if (!string.IsNullOrEmpty(me) && File.Exists(me)) return me;
-                }
-                catch (Exception ex) { Swallow.Note("Icons.LauncherExe", ex); }
-                return Path.Combine(Paths.LauncherDir, "Thornswood.exe");
-            }
+            get { return Environment.ProcessPath; }
         }
 
         /// <summary>
@@ -100,6 +98,14 @@ namespace Thornswood
         static bool iconWritten;
 
         /// <summary>
+        /// True in the dev build. Set by the shell from the config, as
+        /// BuildName is, so the shortcuts' icon is chosen here and not by the
+        /// window's art (Art.cs, which is Avalonia's). The ship root tool
+        /// builds this file without the window (#4823).
+        /// </summary>
+        public static bool Dev;
+
+        /// <summary>
         /// The artwork this build's shortcuts show, out of the exe, or null
         /// when it carries none. The dev build's shortcuts get the dev icon,
         /// app-dev.ico; the main build keeps app.ico. A dev build without it
@@ -108,8 +114,8 @@ namespace Thornswood
         static byte[] IconBytes(out string pick)
         {
             pick = null;
-            Assembly asm = Assembly.GetExecutingAssembly();
-            if (Art.Dev)
+            Assembly asm = typeof(Icons).Assembly;
+            if (Dev)
                 foreach (string n in asm.GetManifestResourceNames())
                     if (n.EndsWith("app-dev.ico", StringComparison.OrdinalIgnoreCase)) { pick = n; break; }
             if (pick == null)
@@ -135,8 +141,8 @@ namespace Thornswood
 
         /// <summary>
         /// Whether the shortcuts need redrawing even where IconLocation already
-        /// reads right, issue #887. A rebuild or a Ship copies a new exe over
-        /// the old one and leaves no .old, and Install-Launcher used to delete
+        /// reads right, issue #887. An update, a rebuild or a Ship puts a new
+        /// exe where the old one was, and Install-Launcher used to delete
         /// the icon file the Start menu and pinned shortcuts name; Windows then
         /// drew them blank and kept that. So Profile\icons.stamp remembers the
         /// icon and the exe (size, write time) of the last redraw, and a start
@@ -225,14 +231,15 @@ namespace Thornswood
         /// Returns how many it had to change, so a start that changed nothing
         /// can stay quiet. Never throws and never restarts anything.
         ///
-        /// Pass force after a self-update: Windows can blank the cached picture
-        /// for a shortcut even when IconLocation still names the right file, and
-        /// a quiet Ensure then skips the notify that would redraw it. Force
+        /// Pass force after an update to the launcher (Velo.Restarted): Windows
+        /// can blank the cached picture for a shortcut even when IconLocation
+        /// still names the right file, and a quiet Ensure then skips the
+        /// notify that would redraw it. Force
         /// rewrites the same IconLocation, tells Explorer about each .lnk, and
         /// asks ie4uinit to refresh, without killing Explorer (Repair still does
         /// that from Settings when somebody needs the heavy pass). Ensure also
         /// forces itself when the exe or the icon changed since the last pass
-        /// (Due), which covers a rebuild or a Ship that leaves no .old.
+        /// (Due), which covers an update, a rebuild or a Ship.
         /// </summary>
         public static int Ensure()
         {
@@ -247,138 +254,114 @@ namespace Thornswood
             string exe = LauncherExe;
             string want = (icon == null ? exe : icon) + ",0";
 
-            // SelfSwap keeps the previous exe as Thornswood.exe.old until this
-            // window has drawn. Seeing that file means this is the first start
-            // after an update, which is when blank icons show up.
-            if (!force)
-            {
-                try { if (File.Exists(exe + ".old")) force = true; } catch { /* .old gone mid-check: treat as ordinary start */ }
-            }
-            // A rebuild or a Ship leaves no .old; the stamp catches those.
+            // A launcher that changed since the last pass (an update, a
+            // rebuild, a Ship), which is when blank icons show up: the stamp
+            // says so.
             if (!force && Due(exe, want, iconWritten)) force = true;
 
             int changed = 0;
             var touchedLinks = new List<string>();
-            object shell = null;
-            Type shellType = null;
+            bool forced = force;
             try
             {
-                shellType = Type.GetTypeFromProgID("WScript.Shell");
-                if (shellType == null) return 0;
-                shell = Activator.CreateInstance(shellType);
-
-                foreach (Place spot in Places())
+                OnSta(delegate
                 {
-                    string place = spot.Dir;
-                    if (string.IsNullOrEmpty(place) || !Directory.Exists(place)) continue;
-                    string[] links;
-                    try { links = Directory.GetFiles(place, "*.lnk"); }
-                    catch { continue; }
-                    bool found = false;
-
-                    foreach (string lnk in links)
+                    foreach (Place spot in Places())
                     {
-                        object sc = null;
-                        try
+                        string place = spot.Dir;
+                        if (string.IsNullOrEmpty(place) || !Directory.Exists(place)) continue;
+                        string[] links;
+                        try { links = Directory.GetFiles(place, "*.lnk"); }
+                        catch (Exception ex) { Swallow.Note("Icons.Ensure, listing " + place, ex); continue; }
+                        bool found = false;
+
+                        foreach (string lnk in links)
                         {
-                            sc = shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod,
-                                                        null, shell, new object[] { lnk });
-                            if (sc == null) continue;
-                            Type t = sc.GetType();
-
-                            string target = t.InvokeMember("TargetPath", BindingFlags.GetProperty,
-                                                           null, sc, null) as string;
-                            // The multiplayer client carries the same file name
-                            // as the launcher, so this has to match the whole
-                            // path or a shortcut to the game gets an icon that
-                            // is not the game's.
-                            if (string.IsNullOrEmpty(target)) continue;
-                            if (!string.Equals(Full(target), Full(exe),
-                                               StringComparison.OrdinalIgnoreCase)) continue;
-
-                            // Wrong file name, which is where an old name
-                            // survives: the label under a shortcut and the one
-                            // that appears on hover are the file name, not
-                            // anything inside the program.
-                            found = true;
-                            if (spot.MayRename &&
-                                !string.Equals(Path.GetFileName(lnk), Name,
-                                               StringComparison.OrdinalIgnoreCase))
+                            try
                             {
-                                string dest = Path.Combine(place, Name);
-                                if (File.Exists(dest))
+                                using (Link sc = Link.Open(lnk))
                                 {
-                                    // The right one is already sitting beside
-                                    // it, so this is the leftover.
-                                    if (Kill(lnk)) changed++;
+                                    string target = sc.Target;
+                                    // The multiplayer client carries the same file name
+                                    // as the launcher, so this has to match the whole
+                                    // path or a shortcut to the game gets an icon that
+                                    // is not the game's.
+                                    if (string.IsNullOrEmpty(target)) continue;
+                                    if (!string.Equals(Full(target), Full(exe),
+                                                       StringComparison.OrdinalIgnoreCase)) continue;
+
+                                    // Wrong file name, which is where an old name
+                                    // survives: the label under a shortcut and the one
+                                    // that appears on hover are the file name, not
+                                    // anything inside the program.
+                                    found = true;
+                                    if (spot.MayRename &&
+                                        !string.Equals(Path.GetFileName(lnk), Name,
+                                                       StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        string dest = Path.Combine(place, Name);
+                                        if (File.Exists(dest))
+                                        {
+                                            // The right one is already sitting beside
+                                            // it, so this is the leftover.
+                                            if (Kill(lnk)) changed++;
+                                        }
+                                        else if (Rename(sc, dest, want))
+                                        {
+                                            Kill(lnk);
+                                            touchedLinks.Add(dest);
+                                            changed++;
+                                        }
+                                        continue;
+                                    }
+
+                                    bool touched = false;
+                                    string now = sc.IconLocation;
+                                    // Force rewrites even when the string matches: the
+                                    // .lnk timestamp and a shell notify are what clear a
+                                    // blank cache entry after an update replaced the exe.
+                                    if (forced || !string.Equals(now, want, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        sc.IconLocation = want;
+                                        touched = true;
+                                    }
+
+                                    if (!string.Equals(sc.Description, Label, StringComparison.Ordinal))
+                                    {
+                                        sc.Description = Label;
+                                        touched = true;
+                                    }
+
+                                    if (touched)
+                                    {
+                                        sc.Save(lnk);
+                                        touchedLinks.Add(lnk);
+                                        changed++;
+                                    }
                                 }
-                                else if (Rename(shellType, shell, sc, dest, want))
-                                {
-                                    Kill(lnk);
-                                    touchedLinks.Add(dest);
-                                    changed++;
-                                }
-                                continue;
                             }
+                            catch (Exception ex) { Swallow.Note("Icons.Ensure, shortcut", ex); }
+                        }
 
-                            bool touched = false;
-                            string now = t.InvokeMember("IconLocation", BindingFlags.GetProperty,
-                                                        null, sc, null) as string;
-                            // Force rewrites even when the string matches: the
-                            // .lnk timestamp and a shell notify are what clear a
-                            // blank cache entry after SelfSwap replaced the exe.
-                            if (force || !string.Equals(now, want, StringComparison.OrdinalIgnoreCase))
+                        // A desktop that has lost its shortcut gets it back, and
+                        // the Start menu gets one it never had. Only the places
+                        // the build wants one in; never the taskbar pins.
+                        if (!found && spot.MakeIfMissing && File.Exists(exe))
+                        {
+                            string made = Path.Combine(place, Name);
+                            if (Make(made, exe, want))
                             {
-                                t.InvokeMember("IconLocation", BindingFlags.SetProperty,
-                                               null, sc, new object[] { want });
-                                touched = true;
-                            }
-
-                            string desc = t.InvokeMember("Description", BindingFlags.GetProperty,
-                                                         null, sc, null) as string;
-                            if (!string.Equals(desc, Label, StringComparison.Ordinal))
-                            {
-                                t.InvokeMember("Description", BindingFlags.SetProperty,
-                                               null, sc, new object[] { Label });
-                                touched = true;
-                            }
-
-                            if (touched)
-                            {
-                                t.InvokeMember("Save", BindingFlags.InvokeMethod, null, sc, null);
-                                touchedLinks.Add(lnk);
+                                touchedLinks.Add(made);
                                 changed++;
                             }
                         }
-                        catch (Exception ex) { Swallow.Note("Icons.Ensure, shortcut", ex); }
-                        finally
-                        {
-                            if (sc != null) try { Marshal.ReleaseComObject(sc); } catch (Exception ex) { Swallow.Note("Icons.Ensure, release shortcut", ex); }
-                        }
                     }
-
-                    // A desktop that has lost its shortcut gets it back, and
-                    // the Start menu gets one it never had. Only the places
-                    // the build wants one in; never the taskbar pins.
-                    if (!found && spot.MakeIfMissing && File.Exists(exe))
-                    {
-                        string made = Path.Combine(place, Name);
-                        if (Make(shellType, shell, made, exe, want))
-                        {
-                            touchedLinks.Add(made);
-                            changed++;
-                        }
-                    }
-                }
+                });
                 // Every shortcut has been walked, so the next start with the
                 // same exe and icon can stay quiet.
                 Remember(exe, want);
             }
             catch (Exception ex) { Swallow.Note("Icons.Ensure", ex); }
-            finally
-            {
-                if (shell != null) try { Marshal.ReleaseComObject(shell); } catch (Exception ex) { Swallow.Note("Icons.Ensure, release shell", ex); }
-            }
 
             if (icon != null) Sweep(icon);
 
@@ -386,11 +369,11 @@ namespace Thornswood
             {
                 // The icon file first, since Windows keeps the picture against
                 // its path, then one .lnk at a time: ASSOCCHANGED alone leaves
-                // blank shortcut icons after a self-update on some machines.
+                // blank shortcut icons after an update on some machines.
                 if (icon != null)
-                    try { SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW | SHCNF_FLUSH, icon, null); } catch (Exception ex) { Swallow.Note("Icons.Ensure, notify icon file", ex); }
+                    try { SHChangeNotifyPath(SHCNE_UPDATEITEM, SHCNF_PATHW | SHCNF_FLUSH, icon, null); } catch (Exception ex) { Swallow.Note("Icons.Ensure, notify icon file", ex); }
                 foreach (string lnk in touchedLinks)
-                    try { SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW | SHCNF_FLUSH, lnk, null); } catch { /* shell notify is best-effort */ }
+                    try { SHChangeNotifyPath(SHCNE_UPDATEITEM, SHCNF_PATHW | SHCNF_FLUSH, lnk, null); } catch { /* shell notify is best-effort */ }
                 try { SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, IntPtr.Zero, IntPtr.Zero); } catch { /* shell notify is best-effort */ }
                 // Same soft ask Install-Launcher uses before it ever kills Explorer.
                 AskIconCache();
@@ -426,56 +409,45 @@ namespace Thornswood
             string want = (icon == null ? exe : icon) + ",0";
             if (l.Count == 0 && Due(exe, want, false)) l.Add("the launcher changed since the shortcuts were last redrawn");
 
-            object shell = null;
-            Type shellType = null;
             try
             {
-                shellType = Type.GetTypeFromProgID("WScript.Shell");
-                if (shellType == null) return l;
-                shell = Activator.CreateInstance(shellType);
-                foreach (Place spot in Places())
+                OnSta(delegate
                 {
-                    string place = spot.Dir;
-                    if (string.IsNullOrEmpty(place) || !Directory.Exists(place)) continue;
-                    string[] links;
-                    try { links = Directory.GetFiles(place, "*.lnk"); }
-                    catch (Exception ex) { Swallow.Note("Icons.OutOfDate, listing " + place, ex); continue; }
-                    bool found = false;
-                    foreach (string lnk in links)
+                    foreach (Place spot in Places())
                     {
-                        object sc = null;
-                        try
+                        string place = spot.Dir;
+                        if (string.IsNullOrEmpty(place) || !Directory.Exists(place)) continue;
+                        string[] links;
+                        try { links = Directory.GetFiles(place, "*.lnk"); }
+                        catch (Exception ex) { Swallow.Note("Icons.OutOfDate, listing " + place, ex); continue; }
+                        bool found = false;
+                        foreach (string lnk in links)
                         {
-                            sc = shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[] { lnk });
-                            if (sc == null) continue;
-                            Type t = sc.GetType();
-                            string target = t.InvokeMember("TargetPath", BindingFlags.GetProperty, null, sc, null) as string;
-                            if (string.IsNullOrEmpty(target) || !string.Equals(Full(target), Full(exe), StringComparison.OrdinalIgnoreCase)) continue;
-                            found = true;
-                            if (spot.MayRename && !string.Equals(Path.GetFileName(lnk), Name, StringComparison.OrdinalIgnoreCase))
+                            try
                             {
-                                l.Add(lnk + " has an old name");
-                                continue;
+                                using (Link sc = Link.Open(lnk))
+                                {
+                                    string target = sc.Target;
+                                    if (string.IsNullOrEmpty(target) || !string.Equals(Full(target), Full(exe), StringComparison.OrdinalIgnoreCase)) continue;
+                                    found = true;
+                                    if (spot.MayRename && !string.Equals(Path.GetFileName(lnk), Name, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        l.Add(lnk + " has an old name");
+                                        continue;
+                                    }
+                                    string now = sc.IconLocation;
+                                    string desc = sc.Description;
+                                    if (!string.Equals(now, want, StringComparison.OrdinalIgnoreCase)) l.Add(lnk + " shows another icon");
+                                    else if (!string.Equals(desc, Label, StringComparison.Ordinal)) l.Add(lnk + " has another label");
+                                }
                             }
-                            string now = t.InvokeMember("IconLocation", BindingFlags.GetProperty, null, sc, null) as string;
-                            string desc = t.InvokeMember("Description", BindingFlags.GetProperty, null, sc, null) as string;
-                            if (!string.Equals(now, want, StringComparison.OrdinalIgnoreCase)) l.Add(lnk + " shows another icon");
-                            else if (!string.Equals(desc, Label, StringComparison.Ordinal)) l.Add(lnk + " has another label");
+                            catch (Exception ex) { Swallow.Note("Icons.OutOfDate, shortcut", ex); }
                         }
-                        catch (Exception ex) { Swallow.Note("Icons.OutOfDate, shortcut", ex); }
-                        finally
-                        {
-                            if (sc != null) try { Marshal.ReleaseComObject(sc); } catch (Exception ex) { Swallow.Note("Icons.OutOfDate, release shortcut", ex); }
-                        }
+                        if (!found && spot.MakeIfMissing && File.Exists(exe)) l.Add(Path.Combine(place, Name) + " is missing");
                     }
-                    if (!found && spot.MakeIfMissing && File.Exists(exe)) l.Add(Path.Combine(place, Name) + " is missing");
-                }
+                });
             }
             catch (Exception ex) { Swallow.Note("Icons.OutOfDate", ex); }
-            finally
-            {
-                if (shell != null) try { Marshal.ReleaseComObject(shell); } catch (Exception ex) { Swallow.Note("Icons.OutOfDate, release shell", ex); }
-            }
             return l;
         }
 
@@ -556,43 +528,34 @@ namespace Thornswood
             foreach (Place spot in Places()) dirs.Add(spot.Dir);
             try { dirs.Add(Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory)); } catch (Exception ex) { Swallow.Note("Icons.ShortcutsTo, shared desktop", ex); }
 
-            object shell = null;
             try
             {
-                Type shellType = Type.GetTypeFromProgID("WScript.Shell");
-                if (shellType == null) return l;
-                shell = Activator.CreateInstance(shellType);
-                foreach (string place in dirs)
+                OnSta(delegate
                 {
-                    if (string.IsNullOrEmpty(place) || !Directory.Exists(place)) continue;
-                    string[] links;
-                    try { links = Directory.GetFiles(place, "*.lnk"); }
-                    catch (Exception ex) { Swallow.Note("Icons.ShortcutsTo, listing " + place, ex); continue; }
-                    foreach (string lnk in links)
+                    foreach (string place in dirs)
                     {
-                        object sc = null;
-                        try
+                        if (string.IsNullOrEmpty(place) || !Directory.Exists(place)) continue;
+                        string[] links;
+                        try { links = Directory.GetFiles(place, "*.lnk"); }
+                        catch (Exception ex) { Swallow.Note("Icons.ShortcutsTo, listing " + place, ex); continue; }
+                        foreach (string lnk in links)
                         {
-                            sc = shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[] { lnk });
-                            if (sc == null) continue;
-                            string target = sc.GetType().InvokeMember("TargetPath", BindingFlags.GetProperty, null, sc, null) as string;
-                            if (!string.IsNullOrEmpty(target) && string.Equals(Full(target), Full(exe), StringComparison.OrdinalIgnoreCase)
-                                && !l.Contains(lnk))
-                                l.Add(lnk);
-                        }
-                        catch (Exception ex) { Swallow.Note("Icons.ShortcutsTo, shortcut", ex); }
-                        finally
-                        {
-                            if (sc != null) try { Marshal.ReleaseComObject(sc); } catch (Exception ex) { Swallow.Note("Icons.ShortcutsTo, release shortcut", ex); }
+                            try
+                            {
+                                using (Link sc = Link.Open(lnk))
+                                {
+                                    string target = sc.Target;
+                                    if (!string.IsNullOrEmpty(target) && string.Equals(Full(target), Full(exe), StringComparison.OrdinalIgnoreCase)
+                                        && !l.Contains(lnk))
+                                        l.Add(lnk);
+                                }
+                            }
+                            catch (Exception ex) { Swallow.Note("Icons.ShortcutsTo, shortcut", ex); }
                         }
                     }
-                }
+                });
             }
             catch (Exception ex) { Swallow.Note("Icons.ShortcutsTo", ex); }
-            finally
-            {
-                if (shell != null) try { Marshal.ReleaseComObject(shell); } catch (Exception ex) { Swallow.Note("Icons.ShortcutsTo, release shell", ex); }
-            }
             return l;
         }
 
@@ -608,7 +571,7 @@ namespace Thornswood
             {
                 try { File.Delete(lnk); gone++; }
                 catch (Exception ex) { Swallow.Note("Icons.Drop, delete", ex); continue; }
-                try { SHChangeNotify(SHCNE_DELETE, SHCNF_PATHW | SHCNF_FLUSH, lnk, null); } catch (Exception ex) { Swallow.Note("Icons.Drop, notify", ex); }
+                try { SHChangeNotifyPath(SHCNE_DELETE, SHCNF_PATHW | SHCNF_FLUSH, lnk, null); } catch (Exception ex) { Swallow.Note("Icons.Drop, notify", ex); }
             }
             return gone;
         }
@@ -628,61 +591,180 @@ namespace Thornswood
 
         /// <summary>
         /// Writes the same shortcut out under the right name. A shortcut cannot
-        /// be renamed through the scripting object, so the properties are read
-        /// off the old one and written to a new one beside it.
+        /// be renamed through the shell object, so the properties are read off
+        /// the old one and written to a new one beside it.
         /// </summary>
-        static bool Rename(Type shellType, object shell, object src, string dest, string icon)
+        static bool Rename(Link src, string dest, string icon)
         {
-            object made = null;
             try
             {
-                Type st = src.GetType();
-                string target = st.InvokeMember("TargetPath", BindingFlags.GetProperty, null, src, null) as string;
-                string args   = st.InvokeMember("Arguments", BindingFlags.GetProperty, null, src, null) as string;
-                string wd     = st.InvokeMember("WorkingDirectory", BindingFlags.GetProperty, null, src, null) as string;
-
-                made = shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod,
-                                              null, shell, new object[] { dest });
-                if (made == null) return false;
-                Type mt = made.GetType();
-                mt.InvokeMember("TargetPath", BindingFlags.SetProperty, null, made, new object[] { target });
-                mt.InvokeMember("Arguments", BindingFlags.SetProperty, null, made, new object[] { args == null ? "" : args });
-                mt.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, made, new object[] { wd == null ? "" : wd });
-                mt.InvokeMember("IconLocation", BindingFlags.SetProperty, null, made, new object[] { icon });
-                mt.InvokeMember("Description", BindingFlags.SetProperty, null, made, new object[] { Label });
-                mt.InvokeMember("Save", BindingFlags.InvokeMethod, null, made, null);
+                string target = src.Target, args = src.Arguments, wd = src.WorkingDirectory;
+                using (Link made = Link.New())
+                {
+                    made.Target = target;
+                    made.Arguments = args ?? "";
+                    made.WorkingDirectory = wd ?? "";
+                    made.IconLocation = icon;
+                    made.Description = Label;
+                    made.Save(dest);
+                }
                 return true;
             }
-            catch { return false; }
-            finally
-            {
-                if (made != null) try { Marshal.ReleaseComObject(made); } catch (Exception ex) { Swallow.Note("Icons.Rename, release", ex); }
-            }
+            catch (Exception ex) { Swallow.Note("Icons.Rename", ex); return false; }
         }
 
-        static bool Make(Type shellType, object shell, string dest, string exe, string icon)
+        static bool Make(string dest, string exe, string icon)
         {
-            object made = null;
             try
             {
-                made = shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod,
-                                              null, shell, new object[] { dest });
-                if (made == null) return false;
-                Type mt = made.GetType();
-                mt.InvokeMember("TargetPath", BindingFlags.SetProperty, null, made, new object[] { exe });
-                mt.InvokeMember("Arguments", BindingFlags.SetProperty, null, made, new object[] { "" });
-                mt.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, made,
-                                new object[] { Path.GetDirectoryName(exe) });
-                mt.InvokeMember("IconLocation", BindingFlags.SetProperty, null, made, new object[] { icon });
-                mt.InvokeMember("Description", BindingFlags.SetProperty, null, made, new object[] { Label });
-                mt.InvokeMember("Save", BindingFlags.InvokeMethod, null, made, null);
+                using (Link made = Link.New())
+                {
+                    made.Target = exe;
+                    made.Arguments = "";
+                    made.WorkingDirectory = Path.GetDirectoryName(exe);
+                    made.IconLocation = icon;
+                    made.Description = Label;
+                    made.Save(dest);
+                }
                 return true;
             }
-            catch { return false; }
-            finally
+            catch (Exception ex) { Swallow.Note("Icons.Make", ex); return false; }
+        }
+
+        /// <summary>
+        /// Runs the work on a thread of its own in a single threaded apartment,
+        /// which the shell's ShellLink object wants, whatever thread asked, and
+        /// waits for it. What the work throws is thrown here.
+        /// </summary>
+        static void OnSta(Action work)
+        {
+            Exception failed = null;
+            var t = new Thread(delegate()
             {
-                if (made != null) try { Marshal.ReleaseComObject(made); } catch (Exception ex) { Swallow.Note("Icons.Make, release", ex); }
+                try { work(); }
+                catch (Exception ex) { failed = ex; }
+            });
+            t.SetApartmentState(ApartmentState.STA);
+            t.Start();
+            t.Join();
+            if (failed != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(failed);
+        }
+
+        /// <summary>
+        /// One shortcut file, through the shell's ShellLink object, with the
+        /// five things WScript.Shell's shortcut object gave this class:
+        /// TargetPath, Arguments, WorkingDirectory, Description and
+        /// IconLocation ("file,index"). The interfaces are InstallShortcut's,
+        /// generated for native code. Used on OnSta's thread only.
+        /// </summary>
+        sealed partial class Link : IDisposable
+        {
+            static readonly Guid ShellLinkClass = new Guid("00021401-0000-0000-C000-000000000046");
+            static readonly StrategyBasedComWrappers Wrappers = new StrategyBasedComWrappers();
+            // Long enough for any path Windows will hand back.
+            const int Chars = 32768;
+
+            readonly object com;
+            readonly InstallShortcut.IShellLinkW link;
+
+            Link(object com)
+            {
+                this.com = com;
+                link = (InstallShortcut.IShellLinkW)com;
             }
+
+            /// <summary>A new, empty shortcut, written with Save.</summary>
+            public static Link New()
+            {
+                Guid clsid = ShellLinkClass, iid = typeof(InstallShortcut.IShellLinkW).GUID;
+                int hr = CoCreateInstance(in clsid, IntPtr.Zero, ClsctxInprocServer, in iid, out IntPtr unknown);
+                if (hr < 0) Marshal.ThrowExceptionForHR(hr);
+                try { return new Link(Wrappers.GetOrCreateObjectForComInstance(unknown, CreateObjectFlags.UniqueInstance)); }
+                finally { Marshal.Release(unknown); }
+            }
+
+            /// <summary>The shortcut file at lnk, read.</summary>
+            public static Link Open(string lnk)
+            {
+                Link l = New();
+                try { ((InstallShortcut.IPersistFile)l.com).Load(lnk, 0); }
+                catch { l.Dispose(); throw; }
+                return l;
+            }
+
+            public string Target
+            {
+                get { return Read(delegate(IntPtr b) { link.GetPath(b, Chars, IntPtr.Zero, 0); }); }
+                set { link.SetPath(value); }
+            }
+
+            public string Arguments
+            {
+                get { return Read(delegate(IntPtr b) { link.GetArguments(b, Chars); }); }
+                set { link.SetArguments(value); }
+            }
+
+            public string WorkingDirectory
+            {
+                get { return Read(delegate(IntPtr b) { link.GetWorkingDirectory(b, Chars); }); }
+                set { link.SetWorkingDirectory(value); }
+            }
+
+            public string Description
+            {
+                get { return Read(delegate(IntPtr b) { link.GetDescription(b, Chars); }); }
+                set { link.SetDescription(value); }
+            }
+
+            /// <summary>"file,index", as WScript.Shell wrote and read it.</summary>
+            public string IconLocation
+            {
+                get
+                {
+                    int index = 0;
+                    string file = Read(delegate(IntPtr b) { link.GetIconLocation(b, Chars, out index); });
+                    return file + "," + index;
+                }
+                set
+                {
+                    string file = value ?? "";
+                    int index = 0;
+                    int comma = file.LastIndexOf(',');
+                    if (comma >= 0 && int.TryParse(file.Substring(comma + 1).Trim(), out index)) file = file.Substring(0, comma);
+                    else index = 0;
+                    link.SetIconLocation(file, index);
+                }
+            }
+
+            /// <summary>Writes the shortcut to lnk.</summary>
+            public void Save(string lnk)
+            {
+                ((InstallShortcut.IPersistFile)com).Save(lnk, true);
+            }
+
+            static string Read(Action<IntPtr> into)
+            {
+                IntPtr b = Marshal.AllocHGlobal(Chars * 2);
+                try
+                {
+                    Marshal.WriteInt16(b, 0);
+                    into(b);
+                    return Marshal.PtrToStringUni(b) ?? "";
+                }
+                finally { Marshal.FreeHGlobal(b); }
+            }
+
+            public void Dispose()
+            {
+                // The shell object goes now, not whenever the collector runs:
+                // a shortcut left open stays locked against the rename.
+                ((ComObject)com).FinalRelease();
+            }
+
+            const uint ClsctxInprocServer = 0x1;
+
+            [LibraryImport("ole32.dll")]
+            private static partial int CoCreateInstance(in Guid clsid, IntPtr outer, uint context, in Guid iid, out IntPtr obj);
         }
 
         /// <summary>

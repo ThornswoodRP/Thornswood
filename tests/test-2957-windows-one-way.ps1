@@ -94,7 +94,10 @@ function Get-OtherWay([string]$path) {
 }
 
 # ---- 1. every harness here --------------------------------------------------
-$harnesses = @(Get-ChildItem -LiteralPath $Here -File -Filter '*.ps1' | Where-Object { $_.Name -ne 'Windows.ps1' -and $_.Name -ne (Split-Path -Leaf $PSCommandPath) })
+# Here and beside each product, in its own tests folder (plan line 42).
+. (Join-Path (Join-Path (Join-Path $Repo 'scripts') 'dev') 'Harness-Files.ps1')
+$harnesses = @(@($Here) + @(Get-ProductTestFolders $Repo | ForEach-Object { $_.Path }) | ForEach-Object {
+    Get-ChildItem -LiteralPath $_ -File -Filter '*.ps1' } | Where-Object { $_.Name -ne 'Windows.ps1' -and $_.FullName -ne $PSCommandPath })
 Yes ('there are harnesses to read (' + $harnesses.Count + ')') ($harnesses.Count -gt 300)
 $bad = 0
 foreach ($h in $harnesses) {

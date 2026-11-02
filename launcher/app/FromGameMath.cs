@@ -14,8 +14,10 @@ namespace Thornswood
     ///   matrix times a vector (gemv) is fma(a2, b2, fma(a0, b0, a1 * b1)).
     ///   Measured 19 Oct on numpy 2.5 with OpenBLAS 0.3.34 (Haswell kernels):
     ///   every one of 160,000 products matched these, and no unfused or other
-    ///   order did. The .NET Framework has no fused multiply-add, so Fma below
-    ///   computes it exactly with integers.
+    ///   order did. Fma below computes it exactly with integers, written
+    ///   while the launcher ran on the .NET Framework, which has no fused
+    ///   multiply-add. .NET 10 (#4823) has Math.FusedMultiplyAdd; nothing here
+    ///   was moved to it.
     /// - numpy's sum along a row of three adds left to right, and a norm is
     ///   the square root of that sum of squares.
     /// - numpy's inv() is OpenBLAS's dgesv; Inverse below follows it step for

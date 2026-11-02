@@ -2520,8 +2520,8 @@ def site_open():
 # list, is one of Thornswood's hints and lore lines, a new one every
 # LINES_EVERY seconds. Their one copy is site\data\site\lines.md; the site
 # hands them out in /api/public as "lines", read here at every change, so a
-# line edited there reaches the bot at the next Deploy-Docs.ps1 -Site, with
-# no bot install. Hints and lore lines take turns, each list in its own order.
+# line edited there reaches the bot once its merge's Release is on the site
+# (the deploy agent, #5190), with no bot install. Hints and lore lines take turns, each list in its own order.
 LINES_EVERY = 15 * 60
 
 
@@ -2614,7 +2614,7 @@ def panel_is_current(msg, desk=None):
     True when the posted panel already says what it should, text and options.
 
     Its own function so it can be run without a Discord to run it against:
-    bot/test-ready.py drives it with a made up message. The decision
+    bot/tests/test-ready.py drives it with a made up message. The decision
     is the part worth pinning, because getting it wrong in either direction is
     a real fault: too eager and the panel is edited on every reconnect, too
     lazy and a ticket kind added later never appears for anybody.
@@ -5258,7 +5258,7 @@ def refuse(state, channel, num, problems, say=None):
             % (POST_PLACES.get(channel, 'in #' + channel),
                'bot/README.md, "The site\'s known issues and roadmap"'
                if channel == 'roadmap'
-               else 'Developer-Guide.md, "Test tasks and known issues"',
+               else 'docs/guide/the-board.md, "Test tasks and known issues"',
                '\n'.join('- ' + p for p in problems)))
     try:
         (say or github_say)(num, text)

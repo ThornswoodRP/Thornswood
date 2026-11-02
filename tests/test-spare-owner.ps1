@@ -21,19 +21,22 @@
 
   So Chars.EnsureSpare writes down which account a spare was minted under and
   mints a fresh one when the install is linked to another. This compiles the
-  real Chars.cs and Slots.cs with the compiler the launcher is built with
-  (tests\Launcher-Csc.ps1), against stand-ins for what
-  they call. Discord.AccountIdOf and the Field it reads with are lifted out of
+  real Chars.cs and Slots.cs with the .NET SDK the launcher is built with
+  (tests\Launcher-Csc.ps1, #4823), against stand-ins for what they call, on
+  every machine. The ticket reading runs everywhere; the walk through Chars
+  runs on Windows only, since Chars names the install's files by Windows
+  paths (Data\Platform\...), and says SKIP elsewhere. Discord.AccountIdOf and the Field it reads with are lifted out of
   the real Discord.cs by brace match, so the ticket is read the way the
   launcher reads it. test-play-join.js is the site's half.
 
-  Read only apart from files under its own temp folder.
+  Read only apart from files under its own temp folder and its build under
+  out\harness.
 #>
 [CmdletBinding()]
 param([string]$CharsPath, [string]$SlotsPath, [string]$DiscordPath)
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 if (-not $CharsPath) { $CharsPath = Join-Path $Here '..\launcher\app\Chars.cs' }
@@ -52,13 +55,9 @@ function Done {
     if ($script:fail) { exit 1 } else { exit 0 }
 }
 
-# ---- the compiler the launcher is built with (tests\Launcher-Csc.ps1) -------
-if (-not $OnWindows) { Write-Host 'SKIP  the launcher''s code, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'; Done }
-Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
-$refs = @('System.dll', 'System.Core.dll') | ForEach-Object { Join-Path $LauncherRefDir $_ }
-foreach ($r in $refs) { Yes "$([IO.Path]::GetFileName($r)) is there to compile against" (Test-Path -LiteralPath $r) }
-if (@($refs | Where-Object { -not (Test-Path -LiteralPath $_) }).Count) { Done }
+# ---- the .NET SDK the launcher is built with (tests\Launcher-Csc.ps1) -------
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 # ---- the real ticket reading, out of Discord.cs -----------------------------
 $discordSrc = Get-Content -LiteralPath $DiscordPath -Raw
@@ -264,6 +263,8 @@ namespace Thornswood
             Say("id.badbody", Discord.AccountIdOf("tk1.!!!!.sig"));
             Say("id.letters", Discord.AccountIdOf("tk1." + Body("12ab", "x") + ".sig"));
             Say("id.nod", Discord.AccountIdOf("tk1." + B64Url(Encoding.UTF8.GetBytes("{\"n\":\"x\"}")) + ".sig"));
+            // "ids": the ticket reading only, which touches no file.
+            if (root == "ids") return 0;
 
             // a: account A, a fresh install.
             Discord.Ticket = ta;
@@ -339,27 +340,16 @@ $driver = $driver.Replace('ACCOUNT_ID_OF_GOES_HERE', $accountIdOf).Replace('FIEL
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-spare-owner-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 try {
-    $driverFile = Join-Path $tmp 'SpareOwnerTest.cs'
-    [IO.File]::WriteAllText($driverFile, $driver, (New-Object System.Text.UTF8Encoding($false)))
-    $exe = Join-Path $tmp 'spare-owner-test.exe'
     $work = Join-Path $tmp 'install'
+    $exe = $null
+    try { $exe = Build-LauncherCode -Exe -Main 'Thornswood.SpareOwnerTest' -Source $driver -File (Resolve-Path -LiteralPath $CharsPath).Path, (Resolve-Path -LiteralPath $SlotsPath).Path }
+    catch { ($_.Exception.Message -split "`n") | ForEach-Object { Write-Host "      $_" } }
+    Yes 'Chars.cs and the lifted ticket reading build with the .NET SDK the launcher builds with' ($null -ne $exe)
+    if (-not $exe) { Done }
 
-    # /noconfig, as the build does: csc.rsp adds its own copies of the
-    # framework, and beside the reference assemblies that stops on CS1703.
-    $cscArgs = @('/noconfig', '/nologo', '/target:exe', '/warn:0', "/out:$exe")
-    foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-    $cscArgs += (Resolve-Path -LiteralPath $CharsPath).Path
-    $cscArgs += (Resolve-Path -LiteralPath $SlotsPath).Path
-    $cscArgs += $driverFile
-    $compiled = & $LauncherCsc @cscArgs
-    $built = ($LASTEXITCODE -eq 0) -and (Test-Path -LiteralPath $exe)
-    Yes 'Chars.cs and the lifted ticket reading compile with the compiler the build runs' $built
-    if (-not $built) {
-        foreach ($l in @($compiled)) { Write-Host "      $l" }
-        Done
-    }
-
-    $out = & $exe $work
+    # The whole walk on Windows; elsewhere the ticket reading alone, since
+    # Chars names the install's files by Windows paths.
+    $out = Invoke-LauncherExe $exe $(if ($OnWindows) { $work } else { 'ids' })
     Yes 'the driver ran to the end' ($LASTEXITCODE -eq 0)
     $f = @{}
     foreach ($l in @($out)) {
@@ -379,6 +369,10 @@ try {
         ($f['id.null'] -eq '' -and $f['id.empty'] -eq '' -and $f['id.garbage'] -eq '' -and
          $f['id.otherkind'] -eq '' -and $f['id.badbody'] -eq '' -and $f['id.nod'] -eq '')
     Yes 'and an id that is not all digits is not a Discord id' ($f['id.letters'] -eq '')
+    if (-not $OnWindows) {
+        Write-Host 'SKIP  the reviewer''s case driven through Chars: Chars names the install''s files by Windows paths (Data\Platform\thornswood-characters.json and the rest), so it runs on Windows only'
+        Done
+    }
 
     # ---- account A
     $a1 = $f['a1.spare']

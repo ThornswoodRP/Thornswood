@@ -143,7 +143,20 @@ try {
     Yes 'the workflow runs on an edited body' ($wf -match 'types: \[[^\]]*\bedited\b')
     Yes 'the workflow passes the body through the environment, not into the script' ($wf -match 'PR_BODY: \$\{\{ github\.event\.pull_request\.body \}\}' -and $wf -notmatch 'run:[^\n]*github\.event\.pull_request\.body')
     Yes 'the workflow runs thornswood-notes from the locked packages with a read-only token' ($wf -match 'thornswood-notes\.dll''\) @with' -and $wf -match 'dotnet restore tools/ReleaseNotes --locked-mode' -and $wf -match 'contents: read' -and $wf -notmatch '(?m)^\s+[a-z-]+: write\s*$')
-    $guide = [IO.File]::ReadAllText((Join-Path $Repo 'Developer-Guide.md'))
+    # The queue landed #5364 with this check red on 1 Nov 2026, and every
+    # merge release after it stopped at its notes: the check is required on
+    # main and runs on the queue's merge too.
+    Yes 'the workflow runs in the merge queue' ($wf -match '(?m)^  merge_group:\s*$' -and $wf -match 'QUEUE_REF: \$\{\{ github\.event\.merge_group\.head_ref \}\}')
+    $queueRule = [regex]::Match($wf, "-notmatch '([^']+)'").Groups[1].Value
+    Yes '  and reads the pull request its queue branch names' ($queueRule -and ('refs/heads/gh-readonly-queue/main/pr-5364-' + ('a' * 40)) -match $queueRule -and $Matches[2] -eq '5364' -and
+        -not ('refs/heads/main' -match $queueRule) -and $wf.Contains('"repos/$env:GITHUB_REPOSITORY/pulls/$num"'))
+    $settings = [IO.File]::ReadAllText((Join-Path $Repo 'records/github-repo-settings.json')) | ConvertFrom-Json
+    $mainSet = @(@($settings.repositories | Where-Object { $_.repository -eq 'ThornswoodRP/Thornswood' })[0].rulesets | Where-Object { $_.name -eq 'main' })
+    $requiredChecks = @($mainSet | ForEach-Object { $_.rules } | Where-Object { $_.type -eq 'required_status_checks' } | ForEach-Object { $_.parameters.required_status_checks } | ForEach-Object { $_.context })
+    $jobName = [regex]::Match($wf, '(?m)^    name: (.+?)\s*$').Groups[1].Value
+    Yes ('main''s ruleset requires this check by its job''s name (' + $jobName + '; required: ' + ($requiredChecks -join ', ') + ')') ($jobName -eq 'Release note' -and $requiredChecks -contains $jobName)
+    . (Join-Path $PSScriptRoot 'Guide-Text.ps1')
+    $guide = Get-GuideText
     Yes 'the guide says how to write the line and how a release gathers it' ($guide -match 'Release note: none' -and $guide -match 'Collect-ReleaseNotes\.ps1')
 } finally {
     Remove-Item -Recurse -Force $temp -ErrorAction SilentlyContinue

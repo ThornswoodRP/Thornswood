@@ -155,6 +155,12 @@ foreach ($wf in Get-ChildItem -LiteralPath $Workflows -Filter *.yml) {
             $ro = @(Get-List $runsOn @(Get-Block $jl $k['runs-on'].At 4) | ForEach-Object { $_.ToLowerInvariant() })
             if ($ro.Count) { $labels = $ro }
         }
+        # One of two runners named outright, chosen by a condition (#5292: the
+        # launcher job is on Linux when the pick says the change cannot reach
+        # it, and on Windows otherwise): it can only be one of those two.
+        if ($k.Contains('runs-on') -and $runsOn -match '^\$\{\{\s*.+?\s*&&\s*''([^'']+)''\s*\|\|\s*''([^'']+)''\s*\}\}$') {
+            $labels = @($Matches[1].ToLowerInvariant(), $Matches[2].ToLowerInvariant())
+        }
         # Only while the repository is private (#3685): the box's labels inside
         # the expression while private, a GitHub-hosted runner once public.
         $gated = $false

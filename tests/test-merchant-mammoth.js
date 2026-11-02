@@ -79,7 +79,7 @@ for(const stage of ['draw','return','abandon']) {
  assert.equal(s.draw(s.ids[0]).ok,false);assert.equal(h.have(500,'3ad6c:Skyrim.esm'),2,'revoked service cannot replay the grant');
 }
 {
- const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path'),s=setup(),gm=fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8');
+ const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path'),s=setup(),gm=require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8'));
  const at=gm.indexOf('function loot(actorId'),end=gm.indexOf('\n}',at)+2;let credit=0;
  s.w.ctx.creditWork=()=>{credit++;return '';};vm.runInContext(gm.slice(at,end),s.w.ctx);
  s.take();assert.match(s.w.ctx.loot(500,s.ids[0],'dd641:Skyrim.esm'),/Mammoth Tusk/);assert.equal(credit,1);

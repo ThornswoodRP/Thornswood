@@ -3,6 +3,7 @@
   Build-MarketStallsGamemode.js (#3160)
 
       node scripts/dev/Build-MarketStallsGamemode.js           write the bundle and the tables
+      node scripts/dev/Build-MarketStallsGamemode.js --tables <folder>   the gamemode tables somewhere else
       node scripts/dev/Build-MarketStallsGamemode.js --check   fail when one is stale
 
   The server loads one file, and native hot reload copies only gamemode.js, so
@@ -10,9 +11,10 @@
   carries the trade ships' manifest:
 
     game\market-stalls.js              between the MARKET STALLS BUNDLE markers, as MARKET_STALLS_BOOK
-    game\data\market-stalls.json       between the MARKET STALL TABLE markers, as MARKET_STALL_TABLE
 
-  both in the market stalls block, and the same stalls into the front plugin
+  in the market stalls block. The stalls of game\data\market-stalls.json go
+  into the gamemode's MARKET_STALL_TABLE table (game\gamemode-tables, #5191),
+  which the gamemode reads where it runs, and the same stalls into the front plugin
   (game\plugins\thornswood-front.js, between its own MARKET STALL SPOTS
   markers) as STALL_SPOTS, which puts the lock key's line up at a stall:
   [id, world or cell id, its file, x, y, z, reach].
@@ -22,10 +24,13 @@
 */
 const fs = require('node:fs');
 const path = require('node:path');
+const TABLES = require('./GamemodeTables.js');
 const root = path.join(__dirname, '../..');
 const modePath = path.join(root, 'game/gamemode.js');
 const frontPath = path.join(root, 'game/plugins/thornswood-front.js');
 const tablePath = path.join(root, 'game/data/market-stalls.json');
+const opts = TABLES.options(process.argv.slice(2), ['--tables'], ['--check']);
+const tablesDir = opts['--tables'] || TABLES.DIR;
 
 function between(text, marker, block, where) {
   const BEGIN = '// ' + marker + ' BEGIN';
@@ -49,11 +54,9 @@ let mode = between(oldMode, 'MARKET STALLS BUNDLE',
   '// Built by scripts\\dev\\Build-MarketStallsGamemode.js out of game\\market-stalls.js. Do not hand edit.\n' +
   'const MARKET_STALLS_BOOK = (function () {\nconst module = { exports: {} };\n' +
   book.trimEnd() + '\nreturn module.exports;\n})();\n', 'gamemode.js');
-mode = between(mode, 'MARKET STALL TABLE',
-  '// Built by scripts\\dev\\Build-MarketStallsGamemode.js out of game\\data\\market-stalls.json. Do not hand edit.\n' +
-  'var MARKET_STALL_TABLE = ' + JSON.stringify(rows.map(function (r) {
-    return { id: r.id, hold: r.hold, place: r.place, world: r.world, pos: r.pos, reach: r.reach };
-  })) + ';\n', 'gamemode.js');
+const stallTable = JSON.stringify(rows.map(function (r) {
+  return { id: r.id, hold: r.hold, place: r.place, world: r.world, pos: r.pos, reach: r.reach };
+}));
 
 const oldFront = fs.readFileSync(frontPath, 'utf8').replace(/\r\n/g, '\n');
 const spots = rows.map(function (r) {
@@ -65,12 +68,13 @@ const front = between(oldFront, 'MARKET STALL SPOTS',
   '  // Built by scripts\\dev\\Build-MarketStallsGamemode.js out of game\\data\\market-stalls.json. Do not hand edit.\n' +
   '  const STALL_SPOTS = [' + (spots.length ? '\n' + spots.join(',\n') + '\n  ' : '') + '];\n  ', 'thornswood-front.js');
 
-if (process.argv.includes('--check')) {
-  if (mode !== oldMode || front !== oldFront) {
+if (opts['--check']) {
+  if (mode !== oldMode || front !== oldFront || !TABLES.isCurrent('MARKET_STALL_TABLE', stallTable, tablesDir)) {
     throw new Error('The market stall bundle or a stall table is stale. Run scripts/dev/Build-MarketStallsGamemode.js.');
   }
-  console.log('PASS the market stall bundle and both stall tables match game/market-stalls.js and game/data/market-stalls.json');
+  console.log('PASS the market stall bundle, the MARKET_STALL_TABLE table and the front plugin\'s STALL_SPOTS match game/market-stalls.js and game/data/market-stalls.json');
 } else {
   fs.writeFileSync(modePath, mode);
   fs.writeFileSync(frontPath, front);
+  TABLES.write('MARKET_STALL_TABLE', stallTable, tablesDir);
 }

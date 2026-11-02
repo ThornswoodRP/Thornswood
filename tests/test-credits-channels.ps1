@@ -38,6 +38,8 @@ $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $Repo = Split-Path -Parent $Here
+# The site is server.js over its modules in site\lib since #5357.
+. (Join-Path $PSScriptRoot 'SiteFiles.ps1')
 if (-not $Credits) { $Credits = Join-Path $Repo 'site\data\site\credits.md' }
 
 $script:pass = 0
@@ -65,12 +67,11 @@ function Get-ShownCommit([string]$text, [string]$channel, [string]$feed) {
     return $null
 }
 
-$Server = Join-Path $Repo 'site\server.js'
 $FillJs = @'
 const fs = require('fs');
 const src = fs.readFileSync(process.env.TS_SERVER, 'utf8');
 const cut = /\/\/ ==== thornswood credits fill ====([\s\S]*?)\/\/ ==== end thornswood credits fill ====/.exec(src);
-if (!cut) { process.stderr.write('server.js has no credits fill between its markers'); process.exit(2); }
+if (!cut) { process.stderr.write('the site has no credits fill between its markers'); process.exit(2); }
 const fill = new Function(cut[1] + '\nreturn fillCreditsCommits;')();
 const feeds = {};
 if (process.env.TS_PUB) feeds.public = process.env.TS_PUB;
@@ -82,7 +83,10 @@ process.stdout.write(fill(fs.readFileSync(process.env.TS_PAGE, 'utf8'), null, fe
 function Get-ServedPage([string]$pagePath, [string]$pub, [string]$dev, [string]$dir) {
     $js = Join-Path $dir 'fill.js'
     [IO.File]::WriteAllText($js, $FillJs)
-    $env:TS_SERVER = $Server; $env:TS_PAGE = $pagePath; $env:TS_PUB = $pub; $env:TS_DEV = $dev
+    # The whole site as one text (#5357), for the fill to be lifted from.
+    $server = Join-Path $dir 'site-source.js'
+    [IO.File]::WriteAllText($server, (Get-SiteSource (Join-Path $Repo 'site')))
+    $env:TS_SERVER = $server; $env:TS_PAGE = $pagePath; $env:TS_PUB = $pub; $env:TS_DEV = $dev
     try { $out = & node $js; if ($LASTEXITCODE -ne 0) { return $null }; return ($out -join "`n") }
     finally { Remove-Item Env:TS_SERVER, Env:TS_PAGE, Env:TS_PUB, Env:TS_DEV -ErrorAction SilentlyContinue }
 }

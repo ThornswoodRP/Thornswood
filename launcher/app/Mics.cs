@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Thornswood
@@ -9,8 +8,9 @@ namespace Thornswood
     /// <summary>
     /// Which microphone Windows is set to record from.
     ///
-    /// The game's browser is what actually opens a capture device, and asking
-    /// it for nothing in particular gets whatever Chromium calls the default.
+    /// Voice opens the microphone itself (VoiceAudio.cs, through OpenForVoice
+    /// below). The game's browser can still open one, and asking it for
+    /// nothing in particular gets whatever Chromium calls the default.
     /// That is not the same as the one in Windows' own sound settings: on this
     /// machine it took a pair of speakers with an input on them over the
     /// microphone that was actually selected.
@@ -22,7 +22,9 @@ namespace Thornswood
     /// writes it into that machine's own ini, which makes it right for each
     /// person without anybody being asked anything.
     ///
-    /// Read through the MMDevice COM API, which is the documented way to ask.
+    /// Read through the MMDevice COM API, which is the documented way to ask,
+    /// declared in VoiceCom.cs as source-generated COM so that it works in
+    /// the native build.
     /// The registry holds the same information, but which endpoint currently
     /// holds a role is recorded in undocumented binary values that have moved
     /// between Windows versions, and guessing at those would trade a hundred
@@ -34,10 +36,10 @@ namespace Thornswood
         // eCapture, and the communications role first: that is the one Windows
         // means by "the microphone apps should use for voice", and it is set
         // separately from the console default in the same dialog.
-        const int eCapture = 1;
-        const int eConsole = 0;
-        const int eCommunications = 2;
-        const int DEVICE_STATE_ACTIVE = 0x1;
+        const int eCapture = VoiceCom.eCapture;
+        const int eConsole = VoiceCom.eConsole;
+        const int eCommunications = VoiceCom.eCommunications;
+        const int DEVICE_STATE_ACTIVE = VoiceCom.DEVICE_STATE_ACTIVE;
 
         /// <summary>
         /// The friendly name of the default recording device, or "" if it
@@ -55,11 +57,14 @@ namespace Thornswood
         public static List<string> All()
         {
             var outp = new List<string>();
-            IMMDeviceEnumerator en = null;
-            IMMDeviceCollection col = null;
+            bool com = VoiceCom.Enter();
+            VoiceCom.IMMDeviceEnumerator en = null;
+            VoiceCom.IMMDeviceCollection col = null;
             try
             {
-                en = (IMMDeviceEnumerator)new MMDeviceEnumerator();
+                int hr;
+                en = VoiceCom.Enumerator(out hr);
+                if (en == null) return outp;
                 if (en.EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE, out col) != 0 || col == null)
                     return outp;
 
@@ -67,20 +72,73 @@ namespace Thornswood
                 if (col.GetCount(out count) != 0) return outp;
                 for (int i = 0; i < count; i++)
                 {
-                    IMMDevice dev = null;
+                    VoiceCom.IMMDevice dev = null;
                     try
                     {
                         if (col.Item(i, out dev) != 0 || dev == null) continue;
-                        string n = NameOf(dev);
+                        string n = VoiceCom.NameOf(dev);
                         if (n.Length > 0) outp.Add(n);
                     }
                     catch (Exception ex) { Swallow.Note("Mics.All, reading one device", ex); }
-                    finally { Release(dev); }
+                    finally { VoiceCom.Release(dev); }
                 }
             }
             catch (Exception ex) { Swallow.Note("Mics.All, enumerating devices", ex); }
-            finally { Release(col); Release(en); }
+            finally { VoiceCom.Release(col); VoiceCom.Release(en); VoiceCom.Leave(com); }
             return outp;
+        }
+
+        /// <summary>
+        /// The recording device voice opens: the one chosen in the launcher's
+        /// settings when a device by that name is plugged in, otherwise the
+        /// one Windows holds for communications, otherwise its console
+        /// default. The same order Apply writes into the ini, so the game and
+        /// voice name the same microphone.
+        ///
+        /// The voice page could not do this. It asked the browser for a
+        /// microphone and got whatever Chromium calls the default, which is
+        /// the device this class was written to get away from. Voice opens
+        /// the device itself now (VoiceAudio.cs), so it takes it from here.
+        ///
+        /// The caller owns the device and COM on its thread; null when there
+        /// is no recording device at all, with the reason in why.
+        /// </summary>
+        public static VoiceCom.IMMDevice OpenForVoice(VoiceCom.IMMDeviceEnumerator en, Config cfg, out string name, out string why)
+        {
+            name = "";
+            why = "";
+            string want = cfg == null ? "" : (cfg.MicrophoneName ?? "").Trim();
+            if (want.Length > 0)
+            {
+                VoiceCom.IMMDeviceCollection col = null;
+                try
+                {
+                    int count;
+                    if (en.EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE, out col) == 0 && col != null &&
+                        col.GetCount(out count) == 0)
+                    {
+                        for (int i = 0; i < count; i++)
+                        {
+                            VoiceCom.IMMDevice dev;
+                            if (col.Item(i, out dev) != 0 || dev == null) continue;
+                            string n = VoiceCom.NameOf(dev);
+                            if (string.Equals(n, want, StringComparison.OrdinalIgnoreCase)) { name = n; return dev; }
+                            VoiceCom.Release(dev);
+                        }
+                    }
+                }
+                finally { VoiceCom.Release(col); }
+                why = "the chosen microphone '" + want + "' is not plugged in, so the Windows default is used. ";
+            }
+
+            foreach (int role in new int[] { eCommunications, eConsole })
+            {
+                VoiceCom.IMMDevice dev;
+                int hr = en.GetDefaultAudioEndpoint(eCapture, role, out dev);
+                if (hr == 0 && dev != null) { name = VoiceCom.NameOf(dev); return dev; }
+                if (role == eConsole) why += "Windows has no recording device (0x" + hr.ToString("X8") + ")";
+            }
+            return null;
         }
 
         /// <summary>
@@ -173,121 +231,24 @@ namespace Thornswood
         }
 
         // ------------------------------------------------------------- interop
+        // The interfaces themselves are in VoiceCom.cs, shared with voice,
+        // which opens the device this class names.
 
         static string Endpoint(int role)
         {
-            IMMDeviceEnumerator en = null;
-            IMMDevice dev = null;
+            bool com = VoiceCom.Enter();
+            VoiceCom.IMMDeviceEnumerator en = null;
+            VoiceCom.IMMDevice dev = null;
             try
             {
-                en = (IMMDeviceEnumerator)new MMDeviceEnumerator();
+                int hr;
+                en = VoiceCom.Enumerator(out hr);
+                if (en == null) return "";
                 if (en.GetDefaultAudioEndpoint(eCapture, role, out dev) != 0 || dev == null)
                     return "";
-                return NameOf(dev);
+                return VoiceCom.NameOf(dev);
             }
-            finally { Release(dev); Release(en); }
-        }
-
-        static string NameOf(IMMDevice dev)
-        {
-            IPropertyStore store = null;
-            try
-            {
-                // STGM_READ
-                if (dev.OpenPropertyStore(0, out store) != 0 || store == null) return "";
-
-                var key = new PROPERTYKEY();
-                // PKEY_Device_FriendlyName. The one that reads
-                // "Microphone (FIFINE K669B)" rather than just the driver's
-                // idea of the hardware.
-                key.fmtid = new Guid("a45c254e-df1c-4efd-8020-67d146a850e0");
-                key.pid = 14;
-
-                PROPVARIANT v;
-                if (store.GetValue(ref key, out v) != 0) return "";
-                try
-                {
-                    // VT_LPWSTR
-                    if (v.vt != 31 || v.pointerValue == IntPtr.Zero) return "";
-                    return Marshal.PtrToStringUni(v.pointerValue) ?? "";
-                }
-                finally { try { PropVariantClear(ref v); } catch (Exception ex) { Swallow.Note("Mics.NameOf, PropVariantClear", ex); } }
-            }
-            catch { return ""; }
-            finally { Release(store); }
-        }
-
-        static void Release(object o)
-        {
-            if (o == null) return;
-            try { if (Marshal.IsComObject(o)) Marshal.ReleaseComObject(o); } catch (Exception ex) { Swallow.Note("Mics.Release", ex); }
-        }
-
-        [DllImport("ole32.dll")]
-        static extern int PropVariantClear(ref PROPVARIANT pvar);
-
-        [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
-        class MMDeviceEnumerator { }
-
-        [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown),
-         Guid("A95664D2-9614-4F35-A746-DE8DB63617E6")]
-        interface IMMDeviceEnumerator
-        {
-            int EnumAudioEndpoints(int dataFlow, int stateMask, out IMMDeviceCollection devices);
-            int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice device);
-            // The rest of the interface is not called, but the slots have to be
-            // here or the vtable lines up wrong and the two above land on the
-            // wrong functions.
-            int GetDevice(string id, out IMMDevice device);
-            int RegisterEndpointNotificationCallback(IntPtr client);
-            int UnregisterEndpointNotificationCallback(IntPtr client);
-        }
-
-        [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown),
-         Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E")]
-        interface IMMDeviceCollection
-        {
-            int GetCount(out int count);
-            int Item(int index, out IMMDevice device);
-        }
-
-        [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown),
-         Guid("D666063F-1587-4E43-81F1-B948E807363F")]
-        interface IMMDevice
-        {
-            int Activate(ref Guid iid, int clsCtx, IntPtr activationParams,
-                         [MarshalAs(UnmanagedType.IUnknown)] out object iface);
-            int OpenPropertyStore(int access, out IPropertyStore properties);
-            int GetId([MarshalAs(UnmanagedType.LPWStr)] out string id);
-            int GetState(out int state);
-        }
-
-        [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown),
-         Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99")]
-        interface IPropertyStore
-        {
-            int GetCount(out int count);
-            int GetAt(int index, out PROPERTYKEY key);
-            int GetValue(ref PROPERTYKEY key, out PROPVARIANT value);
-            int SetValue(ref PROPERTYKEY key, ref PROPVARIANT value);
-            int Commit();
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        struct PROPERTYKEY
-        {
-            public Guid fmtid;
-            public int pid;
-        }
-
-        // Only the shape matters, and only the first union member is read. The
-        // real thing is bigger than this on paper, which is why the explicit
-        // size is here rather than left to the marshaller.
-        [StructLayout(LayoutKind.Explicit, Size = 16)]
-        struct PROPVARIANT
-        {
-            [FieldOffset(0)] public short vt;
-            [FieldOffset(8)] public IntPtr pointerValue;
+            finally { VoiceCom.Release(dev); VoiceCom.Release(en); VoiceCom.Leave(com); }
         }
     }
 }

@@ -29,9 +29,10 @@
 const REPO_DIR = require('path').join(__dirname, '..'); // the tests are in tests\, the repository is one folder up
 const fs = require('fs');
 const path = require('path');
+const siteFiles = require('./site-files');
 
 const SRC = process.argv[2] || path.join(REPO_DIR, 'site', 'server.js');
-const src = fs.readFileSync(SRC, 'utf8');
+const src = siteFiles.source(SRC);
 const DOOR = fs.readFileSync(process.argv[3] || path.join(REPO_DIR, 'launcher', 'app', 'Door.cs'), 'utf8');
 
 function braced(at, what) {
@@ -81,7 +82,7 @@ const jsonFile = (f, def) => (f in files ? JSON.parse(JSON.stringify(files[f])) 
 // The real putJson answers whether the write landed; the check in refuses one that did not (#2180).
 const putJson = (f, v) => { files[f] = v; return true; };
 // standing() reads bans through bansNow() since #2186; this stand-in never
-// reports a broken file (tests/test-bans-broken.js runs that on the real site).
+// reports a broken file (site/tests/test-bans-broken.js runs that on the real site).
 const bansNow = () => ({ table: jsonFile(BANS, {}) || {}, broken: '' });
 const BANS_BROKEN_WHY = '';
 const readTicket = (t) => (String(t || '').startsWith('tk:') ? { d: String(t).slice(3), n: 'From the ticket' } : null);

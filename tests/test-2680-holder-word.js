@@ -38,7 +38,7 @@ const os = require('os');
 const path = require('path');
 const vm = require('vm');
 const CR = String.fromCharCode(13);
-const gm = fs.readFileSync(process.env.GM || path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8').split(CR).join('');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(process.env.GM || path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8')).split(CR).join('');
 const front = fs.readFileSync(path.join(REPO_DIR, 'game', 'plugins', 'thornswood-front.js'), 'utf8').split(CR).join('');
 const RULES_FILE = path.join(REPO_DIR, 'game', 'data', 'property-word.json');
 

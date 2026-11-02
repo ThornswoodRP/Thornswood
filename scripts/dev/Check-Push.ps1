@@ -8,7 +8,7 @@
 
       git config core.hooksPath .githooks
 
-  (Developer-Guide.md, Clone the repository; a cloud session sets it by
+  (docs/guide/set-up-a-machine.md, "Clone the repository"; a cloud session sets it by
   itself, scripts/dev/Setup-CloudSession.sh). By hand, for HEAD:
 
       pwsh scripts/dev/Check-Push.ps1 -Commit HEAD
@@ -24,7 +24,7 @@
   commit), the two checks the build check's "Launcher builds" job makes, run
   from that commit's own copy of them so they are the ones GitHub will run:
       scripts/dev/Check-Parse.ps1   every PowerShell and game script parses
-      scripts/dev/Check-Words.ps1   the Words section of Developer-Guide.md
+      scripts/dev/Check-Words.ps1   the Words section of docs/guide/rules.md
   side by side. A deleted ref sends nothing and is not checked. A commit the
   same as the checkout's HEAD, with no tracked file changed since, is checked
   in place; any other gets a detached worktree in the repository's temp

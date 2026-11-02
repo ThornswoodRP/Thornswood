@@ -2,7 +2,7 @@
 //
 // The Known Issues page as the site serves it. Since #3140 it is written from
 // the issue board: the bot puts the #known-issues list into
-// data/from-bot/lists.json, and knownMarkdown in site/server.js turns that
+// data/from-bot/lists.json, and knownMarkdown in site/lib/pages.js turns that
 // into the markdown /known and /api/page/known serve. The rows live on GitHub,
 // so the part of the page the repository holds is the page around them: its
 // title, its intro and its headings. A test that reads what the page says
@@ -18,6 +18,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const siteFiles = require('../site-files');
 
 const REPO = path.join(__dirname, '..', '..');
 const MARK = /\/\/ ==== thornswood lists ====([\s\S]*?)\/\/ ==== end thornswood lists ====/;
@@ -41,7 +42,7 @@ function knownWriter(serverSource) {
 // server.js has no writer.
 function knownPage(root, lists) {
   let src;
-  try { src = fs.readFileSync(path.join(root || REPO, 'site', 'server.js'), 'utf8'); } catch (e) { return null; }
+  try { src = siteFiles.source(path.join(root || REPO, 'site', 'server.js')); } catch (e) { return null; }
   const write = knownWriter(src);
   if (!write) return null;
   return write(lists || { at: new Date().toISOString(), known: [] });

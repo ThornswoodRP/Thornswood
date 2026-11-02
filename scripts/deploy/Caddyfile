@@ -84,8 +84,8 @@
 # sets one too (the site sets all four) would add a second copy beside it.
 # No page on this name uses the camera, the microphone, the location, a
 # payment or a USB device: voice takes the microphone in the launcher's own
-# page (launcher\voice-host.html), which is a file on the PC and not served
-# from here. The site sends the same values itself (PERMISSIONS_POLICY and
+# code (launcher\app\Voice.cs), which runs on the PC and is not served from
+# here. The site sends the same values itself (PERMISSIONS_POLICY and
 # the rest in server.js), and tests\test-2762-door-headers.js keeps the two
 # equal and keeps this block at the top of the site.
 # ---------------------------------------------------------------------------

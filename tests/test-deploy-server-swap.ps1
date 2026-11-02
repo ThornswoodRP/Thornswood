@@ -759,6 +759,8 @@ try {
     Put (Join-Path $gmRepo 'scripts\vps\vps.json') '{ "address": "127.0.0.1" }'
     Put (Join-Path $gmRepo '.gitignore') "out/`n"
     Put (Join-Path $gmRepo 'game\gamemode.js') '// gamemode only, one'
+    # And its tables (#5191), which the gamemode artifact carries with it.
+    Put (Join-Path $gmRepo 'game\gamemode-tables\WAY_OUT.json') '{}'
     Put (Join-Path $gmRepo 'game\content\Thornswood-Content.esp') 'our plugin, two, longer'
     Put (Join-Path $gmRepo 'records\server-build.json') $gmRecordLf
     $gmPrelude = @"

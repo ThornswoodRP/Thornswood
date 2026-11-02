@@ -5,8 +5,9 @@
 
   #1925. Every connection to the voice service is a peer on its roster, the
   game's chat socket (game\ui\thornswood-chat.js) included, and the
-  launcher's voice page (launcher\voice-host.html) built a WebRTC connection
-  to everybody on the roster but itself. While a launcher holds the audio,
+  launcher's voice (then the page launcher\voice-host.html, C# since #4823,
+  launcher\app\VoiceSession.cs) built a WebRTC connection to everybody on
+  the roster but itself. While a launcher holds the audio,
   which is the usual case, the game's overlay (game\ui\thornswood-voice.js)
   is in relay mode and takes no signalling, so each of those connections
   sent its offer and candidates through the service and then waited in
@@ -26,9 +27,9 @@
      to it.
 
   2. A room where two games have no launcher, so their overlays carry the
-     voice, and a third person's launcher has it. The two games and the
-     launcher all connect to each other and hear each other, and nobody
-     connects to the third person's chat socket.
+     voice, and a third person's launcher has it. The two games connect to
+     each other and hear each other, the launcher builds a connection to
+     each of them, and nobody connects to the third person's chat socket.
 
   3. The service on its own: a join that says it carries no voice is marked
      on the first roster; the mark only ever goes on, once, so a socket that
@@ -38,12 +39,14 @@
   4. The chat on its own: noVoice before the socket opens goes in the join;
      on an open socket it is sent once.
 
-  The pages run in node's vm with their own sources, against a real
+  The game's pages run in node's vm with their own sources, against a real
   WebSocket to the real voice-server.js, with the stand-in browser of
-  tests\test-1869-voice-negotiation.js. VOICE_SERVER, VOICE_HOST,
-  VOICE_OVERLAY and VOICE_CHAT point it at other copies, which is how it is
-  shown to fail on the code before #1925. Writes only to a temp folder, on
-  loopback ports the system hands out.
+  tests\test-1869-voice-negotiation.js. The launchers are the launcher's
+  own voice (tests\voice-launcher.js), real connections between them, each
+  microphone a tone of its own and each mixer read back for what it plays.
+  VOICE_SERVER, VOICE_OVERLAY and VOICE_CHAT point it at other copies,
+  which is how it is shown to fail on the code before #1925. Writes only to
+  temp folders, on loopback ports the system hands out.
 */
 'use strict';
 const fs = require('fs');
@@ -53,11 +56,11 @@ const path = require('path');
 const vm = require('vm');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const VL = require('./voice-launcher');
 
 const REPO = path.join(__dirname, '..');
 const CR = String.fromCharCode(13);
 const SERVER = process.env.VOICE_SERVER || path.join(REPO, 'voice', 'voice-server.js');
-const HOST_PAGE = process.env.VOICE_HOST || path.join(REPO, 'launcher', 'voice-host.html');
 const OVERLAY = process.env.VOICE_OVERLAY || path.join(REPO, 'game', 'ui', 'thornswood-voice.js');
 const CHAT = process.env.VOICE_CHAT || path.join(REPO, 'game', 'ui', 'thornswood-chat.js');
 const read = (f) => fs.readFileSync(f, 'utf8').split(CR).join('');
@@ -396,42 +399,22 @@ function closePage(page) {
   for (const pc of page.pcs) pc.close();
 }
 
-const HOST_SRC = (function () {
-  const html = read(HOST_PAGE);
-  const a = html.indexOf('<script>');
-  const b = html.lastIndexOf('</script>');
-  return a >= 0 && b > a ? html.slice(a + 8, b) : '';
-})();
 const CHAT_SRC = read(CHAT);
 const OVERLAY_SRC = read(OVERLAY);
 
-/* The launcher's voice page, as WebView2 runs it, with the launcher's config. */
-function launcherPage(name, pid) {
-  const page = newPage(name, pid, 'launcher');
-  const heard = [];
-  const box = Object.assign({
-    document: { getElementById: () => element() },
-    navigator: { mediaDevices: mediaFor(page) },
-    AudioContext: audioFor(page),
-    RTCPeerConnection: rtcFor(page),
-    Audio: FakeAudio,
-    WebSocket: socketFor(page),
-    console: { log: (l) => page.said.push('console: ' + l) },
-  }, timersFor(page));
-  box.window = box;
-  box.chrome = { webview: {
-    addEventListener: (kind, fn) => heard.push(fn),
-    postMessage: (s) => { let m = {}; try { m = JSON.parse(s); } catch (e) { } page.said.push(m.t + ': ' + m.text); },
-  } };
-  vm.createContext(box);
-  vm.runInContext(HOST_SRC, box, { filename: 'voice-host.html' });
-  page.box = box;
-  page.peer = () => Number(box.myPeer) || 0;
-  page.start = () => heard.forEach((fn) => fn({ data: JSON.stringify({
-    t: 'config', host: 'thornswood.test', port: 443, profileId: pid, name: name, token: tokenFor(pid),
-    base: 'https://thornswood.test/voice', socket: 'wss://thornswood.test/voice/' }) }));
-  pages.push(page);
-  return page;
+/*
+  A launcher: its own voice, configured as Voice.cs configures it, with a
+  join token for its profile, and every later ask answered with a fresh
+  one. Its microphone is a tone of its own.
+*/
+const launchers = [];
+async function launcher(name, pid, tone) {
+  const l = await VL.start({ clock: 'real', wire: 'ws', tone: tone, name: name });
+  launchers.push(l);
+  l.tone = tone;
+  l.listeners.push((e) => { if (e.ev === 'host' && e.kind === 'token' && e.text === 'need') l.send({ do: 'token', token: tokenFor(pid) }); });
+  await l.send({ do: 'configure', profileId: pid, name: name, token: tokenFor(pid), base: 'https://127.0.0.1:' + PORT });
+  return l;
 }
 
 /*
@@ -487,11 +470,6 @@ function link(P, Q) {
   }
   return null;
 }
-/* Each side of the pair took candidates the other sent. */
-function bothTook(P, Q) {
-  const l = link(P, Q);
-  return !!l && !!l.a.applied[l.b.uid] && !!l.b.applied[l.a.uid];
-}
 /* P hears Q. */
 function hears(P, Q) {
   const l = link(P, Q);
@@ -501,82 +479,71 @@ function hears(P, Q) {
 function troubles(page) {
   return page.said.filter((l) => /offer failed|sdp failed|could not offer|listener threw|threw/i.test(l));
 }
-/* The offers page P was sent that connection pc made, as connection/version. */
-function offersBy(P, pc) {
-  return P.wire.filter((m) => m.t === 'sdp' && m.sdp && m.sdp.type === 'offer' && (descOf(m.sdp) || {}).pc === pc.uid)
-               .map((m) => { const d = descOf(m.sdp); return d.pc + '/' + d.v; });
-}
-/*
-  The roles in one pair. The lower peer id is impolite: it never rolls back,
-  and an offer that crosses its own is ignored. The higher is polite.
-*/
-function roles(P, Q) {
-  const l = link(P, Q);
-  if (!l) return null;
-  const pFirst = P.peer() < Q.peer();
-  return { rude: pFirst ? l.a : l.b, polite: pFirst ? l.b : l.a,
-           rudePage: pFirst ? P : Q, politePage: pFirst ? Q : P };
-}
-
 
 // ---------------------------------------------------------------- reading --
 const openPcs = (P) => P.pcs.filter((pc) => !pc.closed);
-/* The last peer count a launcher page reported to the launcher. */
-function reported(P) {
-  const said = P.said.filter((l) => /^peers: \d+$/.test(l));
-  return said.length ? Number(said[said.length - 1].slice(7)) : -1;
+/* The last peer count a launcher reported to the launcher, and the most it
+   reported from its event `from` on. */
+function reported(l) {
+  const said = l.host('peers');
+  return said.length ? Number(said[said.length - 1]) : -1;
+}
+function maxSince(l, from) {
+  return l.events.slice(from).filter((e) => e.ev === 'host' && e.kind === 'peers').reduce((m, e) => Math.max(m, Number(e.text)), 0);
 }
 function lastRoster(P) {
   const all = P.wire.filter((m) => m.t === 'peers');
   return all.length ? all[all.length - 1] : null;
 }
-function allLinked(list) {
-  for (let i = 0; i < list.length; i++) {
-    for (let j = i + 1; j < list.length; j++) { if (!link(list[i], list[j])) return false; }
+/* Every launcher hears every other's tone in what it plays. */
+async function allHear(list) {
+  const from = Date.now();
+  while (Date.now() - from < 20000) {
+    let all = true;
+    for (const l of list) {
+      const lv = await l.hear(list.filter((o) => o !== l).map((o) => o.tone));
+      if (!list.every((o) => o === l || lv[String(o.tone)] > 0.05)) { all = false; break; }
+    }
+    if (all) return true;
+    await sleep(250);
   }
-  return true;
+  return false;
 }
-function allHear(list) {
-  return list.every((P) => list.every((Q) => P === Q || hears(P, Q)));
-}
+/* What a launcher said that means a negotiation went wrong. */
+const troubleRe = /offer failed|sdp failed|could not offer|listener threw|threw|could not reach/i;
+function launcherTroubles(l) { return l.host('log').filter((t) => troubleRe.test(t)); }
 const relay = (G) => G.box.thornswoodVoice.setLauncherStatus(true, 0, false, 'local');
 
 // ----------------------------------------------------------------- part 1 --
 async function partOne() {
   console.log('1. three people, each with a launcher holding the audio and a game in relay mode:');
-  const L = [launcherPage('Aela', 601), launcherPage('Brynjolf', 602), launcherPage('Camilla', 603)];
-  for (const l of L) { l.start(); await until(() => l.peer() > 0); }
+  const L = [await launcher('Aela', 601, 440), await launcher('Brynjolf', 602, 550), await launcher('Camilla', 603, 660)];
+  yes('the three launchers join', await until(() => L.every((l) => l.host('status').indexOf('connected') >= 0), 15000));
   const G = [gamePage('Aela', 601, true), gamePage('Brynjolf', 602, true), gamePage('Camilla', 603, true)];
   yes('the three games\' chat sockets join', await until(() => G.every((g) => g.peer() > 0 && g.box.thornswoodNet.isUp())));
-  G.forEach((g) => g.configure(false));
   yes('before the overlays hand over, every launcher has built a connection to all five other sockets, chat sockets included',
-      await until(() => L.every((l) => openPcs(l).length === 5)));
-  // Settled first, so going into relay mode closes no negotiation halfway.
-  yes('and every pair of the six sockets is connected', await until(() => allLinked(L.concat(G))));
-  const before = L.map((l) => l.pcs.slice());
+      await until(() => L.every((l) => reported(l) === 5), 15000));
 
-  // The plugin pushes each launcher's state in, which is relay mode.
+  // The plugin pushes each launcher's state in, which is relay mode, from
+  // the first word the launcher gets to the page (thornswood-voice.js).
   G.forEach(relay);
   yes('once the overlays are in relay mode, the roster marks the three chat sockets as carrying no voice',
-      await until(() => L.every((l) => {
-        const r = lastRoster(l);
+      await until(() => G.every((g) => {
+        const r = lastRoster(g);
         return !!r && r.peers.length === 6 &&
-               G.every((g) => r.peers.some((p) => p.peer === g.peer() && p.voice === false)) &&
-               L.every((m) => r.peers.some((p) => p.peer === m.peer() && p.voice !== false));
+               G.every((h) => r.peers.some((p) => p.peer === h.peer() && p.voice === false)) &&
+               r.peers.filter((p) => p.voice !== false).length === 3;
       })));
-  yes('every launcher closes the connections it had to the chat sockets and keeps the two to the other launchers',
-      await until(() => L.every((l) => openPcs(l).length === 2)) &&
-      before.every((pcs) => pcs.filter((pc) => pc.closed).length === 3));
-  yes('those two are connected, one to each other launcher', await until(() => allLinked(L)));
-  yes('and every launcher reports 2 peers (' + L.map(reported).join(', ') + ')', await until(() => L.every((l) => reported(l) === 2)));
+  const kept = await until(() => L.every((l) => reported(l) === 2), 15000);
+  yes('every launcher closes the connections it had to the chat sockets and keeps the two to the other launchers (' + L.map(reported).join(', ') + ')', kept);
   yes('the overlays in relay mode hold no connection at all', G.every((g) => openPcs(g).length === 0));
 
-  L.forEach((l) => l.mic());
-  yes('with the microphones open, everybody hears everybody', await until(() => allHear(L)));
-  yes('and no launcher has built anything more', L.every((l) => openPcs(l).length === 2 && reported(l) === 2));
+  for (const l of L) { await l.send({ do: 'ptt', on: true }); }
+  yes('with the microphones open, everybody hears everybody', await allHear(L));
+  yes('and no launcher has built anything more', L.every((l) => maxSince(l, 0) <= 5 && reported(l) === 2));
 
   // A new name closes the chat's connection and opens another, a new peer.
-  const made = L.map((l) => l.pcs.length);
+  const marks = L.map((l) => l.events.length);
   const firstId = G[0].peer();
   const asked = () => G[0].said.filter((l) => /^thornswood-front: token\? 601$/.test(l)).length;
   const n = asked();
@@ -585,52 +552,60 @@ async function partOne() {
   G[0].box.thornswoodNet.setToken(tokenFor(601));
   yes('a game in relay mode that joins again does so as a new peer', await until(() => G[0].peer() > 0 && G[0].peer() !== firstId));
   const newId = G[0].peer();
-  yes('every launcher is sent a roster naming it', await until(() => L.every((l) => {
-    const r = lastRoster(l);
+  yes('the room is sent a roster naming it', await until(() => G.slice(1).every((g) => {
+    const r = lastRoster(g);
     return !!r && r.peers.some((p) => p.peer === newId);
   })));
-  const firstNaming = L[1].wire.find((m) => m.t === 'peers' && m.peers.some((p) => p.peer === newId));
+  const firstNaming = G[1].wire.find((m) => m.t === 'peers' && m.peers.some((p) => p.peer === newId));
   yes('and the first roster that names it already marks it, because its join said so',
       !!firstNaming && firstNaming.peers.find((p) => p.peer === newId).voice === false);
-  await sleep(200);
+  await sleep(500);
   yes('so no launcher built a connection to it, even for a moment',
-      L.every((l, i) => l.pcs.length === made[i] && openPcs(l).length === 2 && reported(l) === 2));
-  const said = [].concat(...L.map(troubles), ...G.map(troubles));
-  yes('and no page said anything failed', !said.length);
+      L.every((l, i) => maxSince(l, marks[i]) <= 2 && reported(l) === 2));
+  const said = [].concat(...L.map(launcherTroubles), ...G.map(troubles));
+  yes('and no launcher or page said anything failed', !said.length);
   if (said.length) console.log('      ' + said.join('\n      '));
-  L.concat(G).forEach(closePage);
+  G.forEach(closePage);
+  for (const l of L) { await l.quit(); }
   await sleep(200);
 }
 
 // ----------------------------------------------------------------- part 2 --
+/*
+  The stand-in browser speaks its own descriptions, which a real WebRTC
+  stack, and so the launcher's C# voice since #4823, cannot read, nor it
+  theirs. So what is checked between the launcher and the two games is the
+  launcher's side of it: it builds a connection to each game that carries
+  voice and none to its own game's chat socket in relay mode. Whether the
+  launcher's voice and a game's own browser hear each other needs that
+  browser, not this stand-in (the report for #4823 says so).
+*/
 async function partTwo() {
   console.log('\n2. two games with no launcher, and one person whose launcher has the audio:');
-  const K = launcherPage('Kodlak', 703);
-  K.start();
-  await until(() => K.peer() > 0);
+  const K = await launcher('Kodlak', 703, 440);
+  await until(() => K.host('status').indexOf('connected') >= 0, 15000);
   const GK = gamePage('Kodlak', 703, true);
   await until(() => GK.peer() > 0);
-  GK.configure(false);
-  yes('the game whose launcher will hold the audio connects to it first', await until(() => !!link(K, GK)));
   relay(GK);
   const H = gamePage('Hulda', 701, true);
   const V = gamePage('Vilkas', 702, true);
   await until(() => H.peer() > 0 && V.peer() > 0);
   H.configure(true);
   V.configure(true);
-  H.mic(); V.mic(); K.mic();
-  const room = [H, V, K];
-  yes('the two games and the launcher all connect to each other', await until(() => allLinked(room)));
-  yes('and everybody hears everybody', await until(() => allHear(room)));
-  yes('the games with no launcher hold one connection each to the other two, and none to the chat socket in relay mode',
+  H.mic(); V.mic();
+  yes('the two games connect to each other', await until(() => !!link(H, V)));
+  yes('and hear each other', await until(() => hears(H, V) && hears(V, H)));
+  const two = await until(() => reported(K) === 2, 15000);
+  yes('the launcher holds two connections, one to each game that carries voice, and none to its own game\'s chat socket (' + reported(K) + ')',
+      two && maxSince(K, 0) <= 3);
+  yes('the games with no launcher hold one connection each to the other game and the launcher, and none to the chat socket in relay mode',
       openPcs(H).length === 2 && openPcs(V).length === 2);
-  yes('the launcher holds two, reports 2, and has none to its own game\'s chat socket',
-      openPcs(K).length === 2 && reported(K) === 2);
   yes('the game in relay mode holds no connection', openPcs(GK).length === 0);
-  const said = [].concat(...room.map(troubles), troubles(GK));
-  yes('and no page said anything failed', !said.length);
+  const said = [].concat(troubles(GK), K.host('log').filter((l) => /could not reach/.test(l)));
+  yes('and the game in relay mode and the launcher said nothing failed', !said.length);
   if (said.length) console.log('      ' + said.join('\n      '));
-  room.concat([GK]).forEach(closePage);
+  [H, V, GK].forEach(closePage);
+  await K.quit();
   await sleep(200);
 }
 
@@ -746,9 +721,10 @@ function partFour() {
 })().catch((e) => {
   fail++;
   console.log('FAIL  the harness itself: ' + (e && e.stack || e));
-}).then(() => {
+}).then(async () => {
   pages.forEach(closePage);
   for (const s of plain) { try { s.onclose = null; s.close(); } catch (e) { } }
+  for (const l of launchers) { await l.quit(); }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   const rm = () => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { } };
   if (srv && srv.exitCode === null) { srv.once('exit', () => { rm(); process.exit(fail ? 1 : 0); }); srv.kill(); }

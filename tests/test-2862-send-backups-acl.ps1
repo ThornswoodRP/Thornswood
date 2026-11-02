@@ -9,10 +9,10 @@
   FileInfo; it is [IO.FileSystemAclExtensions] there. Every script runs in
   PowerShell 7 since #5356, so there is one way to lock an item and no
   branch on the edition. Held here:
-    - no .ps1 or .psm1 outside tests\ calls .SetAccessControl( or
+    - no .ps1 or .psm1 outside a tests folder calls .SetAccessControl( or
       .GetAccessControl( on an item, in its own code or in the text it sends
       to the box, so each goes through [IO.FileSystemAclExtensions];
-    - no .ps1 or .psm1 outside tests\ asks $PSVersionTable.PSEdition, so
+    - no .ps1 or .psm1 outside a tests folder asks $PSVersionTable.PSEdition, so
       nothing keeps a Windows PowerShell 5.1 path;
     - each [IO.FileSystemAclExtensions] call is given a typed item
       ([IO.DirectoryInfo] or [IO.FileInfo]), which is what the method takes;
@@ -31,10 +31,12 @@ function Yes([string]$what, [bool]$ok) {
 }
 function Rel([string]$p) { $p.Substring($Repo.Length + 1) }
 
-$tests = Join-Path $Repo 'tests'
+# The harnesses are left out: tests\ and a product's own tests folder,
+# launcher\tests\ (#5341), which name the very things they look for.
+$harnesses = '^([^\\/]+[\\/])?tests[\\/]'
 $skip = '[\\/](\.git|node_modules|temp|worktrees|engine)[\\/]'
 $files = @(Get-ChildItem -LiteralPath $Repo -Recurse -File -Include *.ps1, *.psm1 |
-    Where-Object { -not $_.FullName.StartsWith($tests + [IO.Path]::DirectorySeparatorChar) -and $_.FullName -notmatch $skip })
+    Where-Object { (Rel $_.FullName) -notmatch $harnesses -and $_.FullName -notmatch $skip })
 Yes "there are scripts to read ($($files.Count))" ($files.Count -gt 50)
 
 # ---- no item ACL method, in code or in text sent to the box ---------------------------

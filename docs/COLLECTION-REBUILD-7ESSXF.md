@@ -44,18 +44,18 @@ installed. The steps are under "On the ship PC" below.
 This was the main worry behind the cleanup, and the shipping path already
 answers it by construction rather than by a hand-kept list:
 
-- `scripts/release/Package-Thornswood.ps1` builds the installer from the game
-  folder and then leaves out every file Vortex deployed. It reads Vortex's own
-  deployment record (`Get-ShipOwnGameCollection` in `Ship-Rules.ps1`, backed by
-  `Profile\OwnGame\files.txt` origin `V`, or `vortex.deployment.json`). Its own
-  header: "Leave out every file the Vortex collection installs, because anybody
-  following the collection already has them and shipping them again is both a
-  14 GB download and somebody else's mod in your installer."
-- Because the exclusion is driven by what Vortex actually deployed, the
-  installer shrinks as the collection fills in. Every mod the rebuilt 7essxf list
-  adds (the JK's city expansions, Container Distribution Framework, SKSE Menu
-  Framework, imGui Icons, and the rest) stops being carried by the installer the
-  moment Vortex provides it, with no code change here.
+- A pack leaves out every file Vortex deployed: `Publish-Update.ps1` reads
+  Vortex's own deployment record (`Get-ShipOwnGameCollection` in
+  `Ship-Rules.ps1`, backed by `Profile\OwnGame\files.txt` origin `V`). The
+  installer's game files are Velopack's package since #4824, built by
+  `scripts/release/Build-GameFiles.ps1` from dev's last release, whose files
+  were held to those rules when it was published, with this checkout's own
+  files over it, so no file of the collection goes in. Until #4824 the old
+  installer's builder left them out the same way, by the same record.
+- Because the exclusion is driven by what Vortex actually deployed, every mod
+  the rebuilt 7essxf list adds (the JK's city expansions, Container
+  Distribution Framework, SKSE Menu Framework, imGui Icons, and the rest) stops
+  being carried the moment Vortex provides it, with no code change here.
 - `scripts/release/Ship-Rules.ps1` already treats the script extender, NirnLab
   UI Platform, other people's frameworks and tools, and Bethesda's own files as
   never-shipped. The SKSE note there already reads "it is in the collection now,

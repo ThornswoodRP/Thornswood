@@ -37,7 +37,7 @@ function yes(what, cond) {
   else { fail++; console.log("FAIL  " + what); }
 }
 
-const gm = read("game/gamemode.js");
+const gm = require('./gamemode-tables.js').joined(read("game/gamemode.js"));
 const py = read("scripts/dev/Build-BenchTable.py");
 const page = read("docs/systems/professions.md");
 const durability = read("docs/systems/durability.md");
@@ -205,22 +205,21 @@ try {
       "b5:Skyrim.esm": { benchName: "CraftingSmithingArmorTable", why: "the recipe carries no CNAM" }
     }
   }));
-  const gmFile = path.join(tmp, "gamemode.js");
-  const OPEN = "// ==== BENCH_ACCESS, generated ====", CLOSE = "// ==== end BENCH_ACCESS ====";
-  const BOPEN = "// ==== BENCH_BY_BASE, generated ====", BCLOSE = "// ==== end BENCH_BY_BASE ====";
-  fs.writeFileSync(gmFile, ["// head", BOPEN, "old", BCLOSE, "", OPEN, "old", CLOSE, "// tail", ""].join("\n"));
+  // The gamemode's tables, a folder of their own (#5191).
+  const tablesDir = path.join(tmp, "gamemode-tables");
+  fs.mkdirSync(tablesDir);
+  function tablesText() { return fs.readdirSync(tablesDir).sort().map(function (n) { return n + "\n" + fs.readFileSync(path.join(tablesDir, n), "utf8"); }).join("\n"); }
+  function tableOf(n) { try { return JSON.parse(fs.readFileSync(path.join(tablesDir, n + ".json"), "utf8")); } catch (e) { return null; } }
   function build() {
     const r = cp.spawnSync(pyCmd, [path.join(REPO_DIR, "scripts", "dev", "Build-BenchTable.py"),
-      "--data", data, "--plugins", pluginsTxt, "--recipes", recipes, "--gamemode", gmFile], { encoding: "utf8", timeout: 120000 });
+      "--data", data, "--plugins", pluginsTxt, "--recipes", recipes, "--tables", tablesDir], { encoding: "utf8", timeout: 120000 });
     return { code: r.status, out: String(r.stdout || "") + String(r.stderr || "") };
   }
   if (pyCmd) {
     const r = build();
-    yes("a run writes both blocks (exit " + r.code + ")", r.code === 0 && /wrote 3 furniture base\(s\)/.test(r.out));
-    const after = fs.readFileSync(gmFile, "utf8");
-    let A = null, B = null;
-    try { A = JSON.parse(/const BENCH_ACCESS = (\{.*\});/.exec(after)[1]); } catch (e) { A = null; }
-    try { B = JSON.parse(/const BENCH_BY_BASE = (\{.*\});/.exec(after)[1]); } catch (e) { B = null; }
+    yes("a run writes both tables (exit " + r.code + ")", r.code === 0 && /wrote 3 furniture base\(s\)/.test(r.out));
+    const after = tablesText();
+    const A = tableOf("BENCH_ACCESS"), B = tableOf("BENCH_BY_BASE");
     yes("the wheel's temper rows no longer open it for the Edgewright or the Woodwright",
       !!A && !!A[WHEEL] && !A[WHEEL].rows && JSON.stringify(A[WHEEL].halves) === "{}" && A[WHEEL].shut === SAYS);
     yes("the armour table's owned temper row and the row nobody owns no longer open it",
@@ -233,7 +232,7 @@ try {
     yes("the run says both benches are shut", /CraftingSmithingArmorTable\s+adb78:Skyrim\.esm\s+shut/.test(r.out) &&
       /CraftingSmithingSharpeningWheel\s+88108:Skyrim\.esm\s+shut/.test(r.out));
     const r2 = build();
-    yes("a second run changes nothing", r2.code === 0 && fs.readFileSync(gmFile, "utf8") === after);
+    yes("a second run changes nothing", r2.code === 0 && tablesText() === after);
   }
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });

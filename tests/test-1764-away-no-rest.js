@@ -58,11 +58,9 @@ function rig(startAt, g) {
   };
   g.__thornswoodBeds = { off: function (id) { off.push(id); return ''; } };
   const mp = {
-    getOnlinePlayers: function () {
-      return Object.keys(store).map(Number).filter(function (id) { return !gone[id]; });
-    },
     makeProperty: function () { },
     get: function (id, key) {
+      if (id === 0 && key === 'onlinePlayers') { return Object.keys(store).map(Number).filter(function (id) { return !gone[id]; }); }
       if (key === 'worldOrCellDesc') { return 'cell:X.esm'; }
       return store[id];
     },

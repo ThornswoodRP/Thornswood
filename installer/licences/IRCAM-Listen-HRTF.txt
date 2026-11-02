@@ -1,0 +1,35 @@
+The head related impulse responses in the launcher's voice
+(launcher\hrtf-composite.wav, built into Thornswood.exe)
+
+They are Chromium's Composite.flac
+(third_party/blink/renderer/platform/audio/resources/Composite.flac at
+Chromium commit dd2ed7a22c23f9c9a85e9514c8c3308bf6ae4fbe, sha256
+40bda2ad9170fa2bcdc2d5f20cdd98c70609ad33a94df49fe7d6007cacab2ada), the same
+samples written as 16-bit PCM: 240 stereo responses of 256 frames at
+44.1 kHz, the concatenation of Chromium's
+IRC_Composite_C_R0195_T<azimuth>_P<elevation>.wav files. Chromium and
+Firefox both ship them for Web Audio's HRTF panning.
+
+Where they are from, as Firefox records it
+(dom/media/webaudio/blink/IRC_Composite_C_R0195-incl.cpp):
+
+  "The sample data in the arrays here was derived for Webkit by Chris Rogers
+  through averaging of impulse responses from the IRCAM Listen HRTF
+  Database. The responses here are half the length of the Listen responses.
+  This sample data has been granted to the Public Domain."
+
+The IRCAM Listen HRTF Database (http://recherche.ircam.fr/equipes/salles/listen/)
+states its terms as follows. IRCAM's page could not be reached on 1 November
+2026, so the words are as the Ambisonic Toolkit's licensing notes quote them
+(https://depts.washington.edu/dxscdoc/Help/Other/ATKLicensing.html):
+
+  "Copyright (c) 2002 IRCAM (Institut de Recherche et Coordination
+  Acoustique/Musique). All Rights Reserved"
+
+  "Use of Materials: The Listen database is public and available for any
+  use. We would however appreciate an acknowledgment of the database
+  somewhere in the description of your work (e.g. paper) or in your
+  development."
+
+Thornswood acknowledges it here, in THIRD-PARTY.md and on the public credits
+page (https://thornswood.net/credits).

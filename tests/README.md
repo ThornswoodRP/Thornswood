@@ -28,8 +28,47 @@ has a line there too, "own step in build.yml", so the gate does not run it
 twice. The "not sorted yet" lines are minutes together, which is why they
 come onto the gate a few at a time.
 
-The voice service's own harnesses stay beside it in `voice\`, and the bot's in
-`bot\`, because they are run from there.
+The voice service's own harnesses are beside it in `voice\tests\`, and the
+bot's Python ones in `bot\`, because they are run from there.
+
+## Beside their product
+
+The repository's folders are being grouped by product, with each product's
+harnesses beside its code (plan line 42, 1 Nov 2026), one product at a time.
+A product's harnesses go in a `tests` folder of its own, one folder below the
+top: `launcher\tests\`, `site\tests\`. This folder keeps the checks that are
+about the whole repository (the gate, the words, the secrets, the scripts'
+paths), the shared helpers (`Windows.ps1`, `Launcher-Csc.ps1`,
+`launcher-csc.js`, `fork-git.js` and the rest) and `fixtures\`, and every
+harness whose product has not moved yet. Moved on 1 Nov 2026: the launcher's
+(`launcher\tests\`), voice's (`voice\tests\`), the setup program's
+(`installer\tests\`) and the site's (`site\tests\`). Its harnesses are no part of the launcher:
+`LauncherVersion.ps1` and Ship's launcher fingerprint leave that folder out,
+so a change to one gives no launcher a new number.
+
+The gate and the nightly find both kinds through one list,
+`scripts\dev\Harness-Files.ps1`. A harness here goes by its file name, as
+before; one beside its product goes by its path from the repository with
+forward slashes, `launcher/tests/test-498-msbuild.ps1`, in the gate's report,
+in a pull request's pick, in `gate-excluded.txt` and in
+`Nightly-Harnesses.ps1 -Only`. A shared helper stays here. A `.ps1` harness
+beside its product reaches it from the repository folder, the shape
+`test-2957-windows-one-way.ps1` looks for, and a `.js` one two folders up:
+
+```
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'Launcher-Csc.ps1')
+const lc = require('../../tests/launcher-csc');
+```
+
+A check that reads a whole product folder for something its code must never
+do leaves that folder's `tests` out, since a harness names the very thing it
+looks for (`test-browser-args.ps1`, `test-3003-one-install-rule.ps1`).
+
+Moving a product's harnesses is one pull request for that product, and only
+while no open pull request changes any of them: a moved file and an edit to
+it in another pull request conflict. The move changes, in that same pull
+request, every line that names a moved harness by its old path, here, in the
+workflows, in the scripts' comments and in the docs.
 
 ## Where they look
 
@@ -38,6 +77,8 @@ They moved here from `tools\` on 25 September (issue #440, phase 5), and
 folder from here, one folder up: a `.js` harness through `REPO_DIR`, declared at
 its top as `path.join(__dirname, '..')`, and a `.ps1` harness through the line
 after its `$Here = $PSScriptRoot` that points `$Here` at the repository folder.
+One beside its product is two folders below the top, so its `REPO_DIR` is
+`path.join(__dirname, '..', '..')` and its `$Here` goes up twice.
 A new harness does the same; copying the top of an existing one is the easy way.
 
 ## Running them
@@ -48,6 +89,9 @@ From the repository folder:
 node tests\test-farming.js
 pwsh -NoProfile -File tests\test-ship-rules.ps1
 ```
+
+and one beside its product by its path, `pwsh -NoProfile -File
+launcher\tests\test-498-msbuild.ps1`.
 
 Each prints a PASS or FAIL line per check and ends on `N passed, M failed`,
 and exits 1 when anything failed. A harness that reads something only one
@@ -115,28 +159,50 @@ Windows it says SKIP for the part that needs Windows, with why, and checks
 the rest. A path it builds from a name written with `\` splits the name
 first (`path.join.apply(path, [dir].concat(rel.split('\\')))`), and a script
 that reads the game folder matches each folder and file in any case, as
-Windows does (`Check-SkyUIMenus.js` `looseFile`). The C# compiler is
-`tests\launcher-csc.js`, whose `onWindows` is asked before its `csc`; the
-bot's Python is `tests\bot-python.js` (#3005).
+Windows does (`Check-SkyUIMenus.js` `looseFile`). Launcher C# is built by
+`tests\launcher-csc.js` (`build`, `run`, `buildProject`), which works on any
+machine with the .NET SDK; the bot's Python is `tests\bot-python.js` (#3005).
 
 ## A harness that compiles launcher code
 
-A `.ps1` harness that compiles C# out of `launcher\app` or `installer\setup`
-dot-sources `tests\Launcher-Csc.ps1` and hands the source to
-`Add-LauncherType`, which compiles it the way the build does: the Roslyn csc
-beside MSBuild, the project's `LangVersion`, the .NET Framework 4.8.1
-reference assemblies. It returns the loaded assembly and throws with the
-compiler's words when the code does not compile. Off Windows that compiler is
-not there, so the harness says SKIP for the compiled part:
+A `.ps1` harness that compiles C# out of `launcher\app` dot-sources
+`tests\Launcher-Csc.ps1`, which builds it the way
+`launcher\app\Thornswood.csproj` does: the .NET 10 SDK, the project's target
+framework, `LangVersion` and packages (#4823). That works on Linux as well as
+on Windows, so the harness builds and runs the code everywhere, and says SKIP
+only for a part where the code under test itself does something only Windows
+has (a kernel32 call, an NTFS hard link). `Add-LauncherType` loads a library
+into this PowerShell, which runs on .NET 10 too; `Build-LauncherCode -Exe`
+with `Invoke-LauncherExe` runs a driver as a program; `-Launcher` builds the
+whole launcher beside it; `Add-LauncherAssembly` builds the project itself.
+The file's header has every switch. A build throws with the compiler's words
+when the code does not build:
 
 ```
 . (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')
-if (-not $OnWindows) {
-    Write-Host 'SKIP  Updater.IsNewer, compiled and run: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'
-    Done
-}
+Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
 $asm = Add-LauncherType -Source $configSrc, $stub
 $T = $asm.GetType('Thornswood.Updater')
+```
+
+A few launcher files are also loaded by scripts with `Add-Type`, which under
+Windows PowerShell 5.1 is the .NET Framework's own compiler: C# 5, and none
+of .NET 10's libraries (`scripts\mods\LoadOrder.ps1` loads
+`VortexProfileState.cs`, `scripts\mods\Generated.ps1` loads `Generated.cs`
+and the files beside it, `scripts\release\Go.ps1` loads `LastPlugin.cs` and
+the `FromGame*.cs` files). A harness for such a file (`test-2791-last-plugin`,
+`test-2827-from-game`, `test-vortex-profile-state`) dot-sources
+`tests\Framework-Csc.ps1` as well and builds the file with
+`Build-FrameworkCode` too: a .NET Framework 4.8 project at C# 5, through the
+same .NET SDK, which fetches the Framework's reference assemblies as a
+package, so it works on Linux as well. So a file that only .NET 10 compiles
+fails in the harness, not on the machine that runs the script. It is for
+compiling only; off Windows there is no .NET Framework to run the result on.
+The file's header has every switch:
+
+```
+. (Join-Path $PSScriptRoot 'Framework-Csc.ps1')
+$null = Build-FrameworkCode -File (Join-Path $App 'VortexProfileState.cs') -Reference System.Xml
 ```
 
 Before issue #2821 eighteen harnesses compiled launcher code with `Add-Type`
@@ -176,5 +242,28 @@ child's output up to that line, and so does any stand-in it starts on a port
 it let go (the GitHub stand-in in `test-site-assets.ps1`, the game server in
 `test-record-sync.ps1`); before #1755 five of them drained the output unread
 and polled the port. `test-1703-test-ports.js` fails on any `.js` harness here
-or in `voice\` that names a fixed port, or on any `.js` or `.ps1` harness that
+or in a product's tests folder that names a fixed port, or on any `.js` or `.ps1` harness that
 starts the site without waiting for that line.
+
+## A harness that runs the launcher's voice
+
+Since #4823 the launcher's voice is C# (`launcher\app\VoiceSession.cs` and
+the `Voice*.cs` beside it), not the page `voice-host.html` that harnesses ran
+in node's vm. A `.js` harness runs it with `tests\voice-launcher.js`, which
+builds `tests\voice-launcher\VoiceDriver.csproj` with the .NET 10 SDK on any
+machine, into the temp folder, and starts one copy per launcher. The driver
+compiles the launcher's own voice files with a stand-in only for the Windows
+audio (a tone for a microphone, and the session's own mixer read back for the
+speakers), and is driven by JSON lines: `clock: 'manual'` with `wire: 'fake'`
+runs the session's jobs and timers only when the harness says, against
+sockets the harness answers for the service, and `clock: 'real'` with
+`wire: 'ws'` connects it to a voice service the harness started, with real
+connections between launchers. The header of `voice-launcher.js` has the
+calls.
+
+`test-voice-hrtf.js` holds the launcher's HRTF panner (`launcher\app\VoiceHrtf.cs`)
+to Chrome's own: the driver's `--hrtf` tool renders a signal through it, and
+`tests\chrome-audio.js` renders the same signal through a PannerNode in a
+headless Chrome over the DevTools protocol, with node's own WebSocket and no
+packages. `chrome-audio.js` finds Chrome on its own (CHROME names one); with
+none on the machine those checks say SKIP.

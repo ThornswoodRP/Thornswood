@@ -169,7 +169,6 @@
 # fails after the work is done, or where a dev Ship fails open on purpose, is
 # said (releases.txt, the pending note, the icon cache, Explorer, what main
 # and dev have published). 82 are left.
-installer\Setup-Thornswood.ps1 7
 scripts\dev\Check-Outside.ps1 6
 scripts\dev\Close-Launcher.ps1 8
 scripts\dev\Start-Thornswood.ps1 3
@@ -180,7 +179,6 @@ scripts\mods\Check-Manifest.ps1 1
 scripts\mods\Fix-Icons.ps1 1
 scripts\mods\LoadOrder.ps1 3
 scripts\oneoff\Undo-DiscordBuild.ps1 3
-scripts\ops\Publish-News.ps1 1
 scripts\ops\Reset-Character.ps1 0
 scripts\ops\Set-Door.ps1 6
 scripts\ops\Set-Server.ps1 1
@@ -214,7 +212,7 @@ scripts\vps\Write-BotToken.ps1 1
 # whole body is pass. A comment in the body, or on the except line, says why
 # and does not count. Not read: node_modules, a .min.js (the vendored
 # marked-12.0.2.min.js), __pycache__, a venv, and the harnesses kept beside
-# the code (test-*.js in voice\, test-*.py in bot\).
+# the code (voice\tests\, bot\tests\).
 #
 # Measured on 18 Oct on main at a49b90e2: 84 in 10 files, 32 of them in
 # site\server.js. #2736 took out all 32 there: each one now says what failed

@@ -165,6 +165,39 @@ try {
             $c.Last.loadOrder = @('Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm', '_ResourcePack.esl', 'A.esm', 'L.esl', 'B.esp', 'Off.esp', 'C.esp', 'Thornswood-Content.esp') })
     Yes 'C2b a plugin installed switched off that the servers load: a rule may name it and chain through it, and it is not taken out' ($r.Code -eq 0 -and $r.Out -match 'YES') $r.Out
 
+    # #4603: the layout of a revision puts the plugins switched off after the
+    # list, in name order, and the draft is held to the record in that order.
+    # Revision 7's first draft was discarded for a new plugin written below one.
+    $offBelow = { param($c)
+        $p = @($c.Record.plugins)
+        $c.Record.plugins = @($p[0], $p[1], $p[2], $p[3], [pscustomobject][ordered]@{ name = 'Off.esp'; enabled = $false; master = $false; light = $false; masters = @('Skyrim.esm'); after = @() }, $p[4])
+        $m = @($c.Record.mods)
+        $c.Record.mods = @($m[0], $m[1], $m[2], [pscustomobject][ordered]@{ modId = 400; fileId = 4000; name = 'Delta'; plugins = @('Off.esp') }, $m[3])
+        $pm = @($c.Permissions.mods)
+        $c.Permissions.mods = @($pm[0], $pm[1], $pm[2], [ordered]@{ modId = 400; name = 'Delta'; author = 'd'; files = @(@{ fileId = 4000 }); plugins = @('Off.esp'); page = 'https://www.nexusmods.com/skyrimspecialedition/mods/400?tab=description'; ours = $true; reading = $null }, $pm[3], $pm[4])
+        $c.Plugins.plugins = @($c.Plugins.plugins) + @([ordered]@{ name = 'Off.esp'; size = 1; sha256 = ('0' * 64) }) }
+    $r = Invoke-Check (New-Fixture 'off-below' $offBelow)
+    Yes 'C2c a plugin of the list below one switched off: NO, saying where the layout puts it' ($r.Code -eq 1 -and $r.Out -match 'Thornswood-Content\.esp is below Off\.esp, which is switched off') $r.Out
+    $r = Invoke-Check (New-Fixture 'off-order' { param($c) & $offBelow $c
+            $p = @($c.Record.plugins)
+            $c.Record.plugins = @($p[0], $p[1], $p[2], $p[3], $p[5], $p[4], [pscustomobject][ordered]@{ name = 'Aoff.esp'; enabled = $false; master = $false; light = $false; masters = @('Skyrim.esm'); after = @() })
+            $m = @($c.Record.mods); $m[3].plugins = @('Off.esp', 'Aoff.esp')
+            $c.Permissions.mods[3].plugins = @('Off.esp', 'Aoff.esp')
+            $c.Plugins.plugins = @($c.Plugins.plugins) + @([ordered]@{ name = 'Aoff.esp'; size = 1; sha256 = ('0' * 64) }) })
+    Yes 'C2c and plugins switched off out of name order: NO, giving the order' ($r.Code -eq 1 -and $r.Out -match 'not in name order, the order the layout of the revision gives them: Aoff\.esp, Off\.esp' -and $r.Out -notmatch 'is below') $r.Out
+
+    # #4603: held to a base whose record already has a FOMOD file, the file
+    # keeps its answers, as the published entry carries them.
+    $fb = New-Fixture 'fomod-base' { param($c) $c.Record.mods[1] | Add-Member -NotePropertyName choices -NotePropertyValue ([pscustomobject]@{ type = 'fomod'; options = @([pscustomobject]@{ name = 'Main'; groups = @([pscustomobject]@{ name = 'Pick'; choices = @([pscustomobject]@{ name = 'Full'; idx = 0 }) }) }) }) }
+    $gitOk = $true
+    try {
+        foreach ($g in @(@('init', '-q'), @('add', '-A'), @('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'base'))) { & git -C $fb @g 2>&1 | Out-Null; if ($LASTEXITCODE -ne 0) { $gitOk = $false } }
+    } catch { $gitOk = $false }
+    if ($gitOk) {
+        $o = @(& $shell -NoProfile -File (Join-Path $Repo 'scripts/release/Check-CollectionRecord.ps1') -Root $fb -Record (Join-Path $fb 'records/collection.json') -Base HEAD 2>&1 | ForEach-Object { "$_" }) -join "`n"
+        Yes 'C2d held to a base that has a FOMOD file, the file keeps its answers: no change for Nexus' ($LASTEXITCODE -eq 0 -and $o -match 'against HEAD: no change for Nexus' -and $o -notmatch 'gives choices that are not') $o
+    } else { Write-Host 'SKIP  C2d needs git' }
+
     $r = Invoke-Check (New-Fixture 'broken' { param($c)
             $p = @($c.Record.plugins); $c.Record.plugins = @($p[0], $p[1], $p[3], $p[2], $p[4]) })
     Yes 'C3 a list that breaks a rule: NO' ($r.Code -eq 1 -and $r.Out -match 'the list puts C\.esp above B\.esp') $r.Out

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
-using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Thornswood
 {
@@ -102,9 +103,8 @@ namespace Thornswood
             if (raw == null)
             {
                 if (fetchWith == null) throw new Exception("The update feed's settings file is not on this machine.");
-                ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072; // Tls12 added, never replaced (#1360)
                 string url = assets + sha;
-                using (var wc = Client(fetchWith, true, url)) raw = wc.DownloadData(url);
+                raw = FeedGet(fetchWith, true, url);
                 if (ShaOf(raw) != sha)
                     throw new Exception("The update feed's settings file did not match its checksum, so it was not read.");
                 if (cache != null) OwnGame.WriteRecord(cache, raw);
@@ -115,6 +115,18 @@ namespace Thornswood
                 settingsHeld = sha;
             }
             return raw;
+        }
+
+        /// <summary>The sha256 of b, in lower case hex.</summary>
+        static string ShaOf(byte[] b)
+        {
+            using (var h = SHA256.Create())
+            {
+                byte[] d = h.ComputeHash(b);
+                var sb = new StringBuilder();
+                foreach (byte x in d) sb.Append(x.ToString("x2"));
+                return sb.ToString();
+            }
         }
     }
 }

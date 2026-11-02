@@ -276,15 +276,6 @@ function Get-SignedFileRefusal([string]$Path, [string]$ExpectedSigner, [string]$
     return (Invoke-SignedCheckOnBox (New-SignedFileCheckScript $Path $ExpectedSigner $RepoDir) (Split-Path -Leaf $Path) $Box)
 }
 
-# The same check for a file already on the box at $BoxPath, one too big to
-# send inside a script: the installer, which Publish-Installer sends to the
-# box first and holds there before it replaces the one people download
-# (#3412). '' when it passes, else why.
-function Get-SignedBoxFileRefusal([string]$BoxPath, [string]$ExpectedSigner, [string]$RepoDir, [scriptblock]$Box) {
-    $leaf = @($BoxPath -split '[\\/]')[-1]
-    return (Invoke-SignedCheckOnBox (New-SignedFileCheckScript '' $ExpectedSigner $RepoDir $BoxPath) $leaf $Box)
-}
-
 # Runs a script New-SignedFileCheckScript made on the box (-Box stands in for
 # it) and reads its one line back: '' when the box accepted $leaf, else why.
 function Invoke-SignedCheckOnBox([string]$script, [string]$leaf, [scriptblock]$Box) {
@@ -309,20 +300,15 @@ function Invoke-SignedCheckOnBox([string]$script, [string]$leaf, [scriptblock]$B
 # The script the box runs for one file: the file and Signature.cs as base64
 # (Send-Script.ps1 sends a long script by scp), the check from
 # Assert-PublishSigned.ps1 as it is here, and one line back, SIGNED ACCEPTED
-# or SIGNED REFUSED <why>. Its folder goes whatever happens. With $BoxPath the
-# file is the one already there, and only Signature.cs is sent.
-function New-SignedFileCheckScript([string]$Path, [string]$ExpectedSigner, [string]$RepoDir, [string]$BoxPath = '') {
+# or SIGNED REFUSED <why>. Its folder goes whatever happens.
+function New-SignedFileCheckScript([string]$Path, [string]$ExpectedSigner, [string]$RepoDir) {
     $b64 = { param($p) [Convert]::ToBase64String([IO.File]::ReadAllBytes($p)) }
     $assert = [IO.File]::ReadAllText((Join-Path $RepoDir 'scripts\release\Assert-PublishSigned.ps1'))
     $q = { param($s) "'" + ([string]$s).Replace("'", "''") + "'" }
-    if ($BoxPath) {
-        $file = @(('    $f = ' + (& $q $BoxPath)))
-    } else {
-        $leaf = [IO.Path]::GetFileName($Path)
-        if ($leaf -notmatch '^[A-Za-z0-9._-]+$') { $leaf = 'file.bin' }
-        $file = @(('    $f = Join-Path $d ' + (& $q $leaf)),
-                  ('    [IO.File]::WriteAllBytes($f, [Convert]::FromBase64String(' + (& $q (& $b64 $Path)) + '))'))
-    }
+    $leaf = [IO.Path]::GetFileName($Path)
+    if ($leaf -notmatch '^[A-Za-z0-9._-]+$') { $leaf = 'file.bin' }
+    $file = @(('    $f = Join-Path $d ' + (& $q $leaf)),
+              ('    [IO.File]::WriteAllBytes($f, [Convert]::FromBase64String(' + (& $q (& $b64 $Path)) + '))'))
     return @(
         '$ErrorActionPreference = ''Stop'''
         '$d = Join-Path $env:TEMP (''thornswood-signed-'' + [Guid]::NewGuid().ToString(''N''))'

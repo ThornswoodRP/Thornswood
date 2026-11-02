@@ -12,7 +12,7 @@ namespace Thornswood
     /// to uncomment the existing line rather than append a duplicate the game
     /// would ignore.
     /// </summary>
-    static class Display
+    static partial class Display
     {
         public static string IniPath
         {
@@ -174,25 +174,31 @@ namespace Thornswood
         // resolution the screen does not have. EnumDisplaySettings asks the
         // display driver what mode it is in and answers in real pixels, whatever
         // the scaling is set to.
+        //
+        // The wide version, with the two names as fixed buffers, so the
+        // structure is plain memory the call can be handed as it is, with no
+        // marshalling code to make at run time (#4823). The answer is the same
+        // mode either way.
 
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-        struct DEVMODE
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        unsafe struct DEVMODE
         {
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName;
+            public fixed char dmDeviceName[32];
             public short dmSpecVersion, dmDriverVersion, dmSize, dmDriverExtra;
             public int dmFields;
             public short dmOrientation, dmPaperSize, dmPaperLength, dmPaperWidth,
                          dmScale, dmCopies, dmDefaultSource, dmPrintQuality;
             public short dmColor, dmDuplex, dmYResolution, dmTTOption, dmCollate;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName;
+            public fixed char dmFormName[32];
             public short dmLogPixels;
             public int dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
             public int dmICMMethod, dmICMIntent, dmMediaType, dmDitherType,
                        dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
         }
 
-        [DllImport("user32.dll", CharSet = CharSet.Ansi)]
-        static extern bool EnumDisplaySettings(string deviceName, int modeNum, ref DEVMODE devMode);
+        [LibraryImport("user32.dll", EntryPoint = "EnumDisplaySettingsW", StringMarshalling = StringMarshalling.Utf16)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool EnumDisplaySettings(string deviceName, int modeNum, ref DEVMODE devMode);
 
         const int ENUM_CURRENT_SETTINGS = -1;
 
@@ -208,9 +214,7 @@ namespace Thornswood
             try
             {
                 var dm = new DEVMODE();
-                dm.dmDeviceName = "";
-                dm.dmFormName = "";
-                dm.dmSize = (short)Marshal.SizeOf(typeof(DEVMODE));
+                dm.dmSize = (short)Marshal.SizeOf<DEVMODE>();
                 if (!EnumDisplaySettings(null, ENUM_CURRENT_SETTINGS, ref dm)) return null;
 
                 // Anything outside this is a driver answering nonsense, and a

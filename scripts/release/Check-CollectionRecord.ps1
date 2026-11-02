@@ -97,7 +97,12 @@ if ($Base) {
         $b = ($text -join "`n") | ConvertFrom-Json
         # The base record as the collection.json the merge reads from Nexus.
         $asCollection = [pscustomobject]@{
-            mods        = @(@($b.mods) | ForEach-Object { [pscustomobject]@{ name = $_.name; source = [pscustomobject]@{ type = 'nexus'; modId = $_.modId; fileId = $_.fileId } } })
+            # A FOMOD file's answers go with it, as Vortex writes them in its
+            # entry, so a file the base already has keeps them (#4603).
+            mods        = @(@($b.mods) | ForEach-Object {
+                    $e = [pscustomobject][ordered]@{ name = $_.name; source = [pscustomobject]@{ type = 'nexus'; modId = $_.modId; fileId = $_.fileId } }
+                    if ($_.PSObject.Properties['choices'] -and $_.choices) { $e | Add-Member -NotePropertyName choices -NotePropertyValue $_.choices }
+                    $e })
             pluginRules = [pscustomobject]@{ plugins = @(@($b.plugins) | Where-Object { @($_.after).Count } | ForEach-Object { [pscustomobject]@{ name = ([string]$_.name).ToLowerInvariant(); after = @(@($_.after) | ForEach-Object { ([string]$_).ToLowerInvariant() }) } }) }
         }
         $cs = Get-CollectionChangeSet $r $asCollection

@@ -44,9 +44,10 @@ $wordsReal = Join-Path $Repo 'scripts\dev\Check-Words.ps1'
 $shipText = [IO.File]::ReadAllText($shipReal)
 $callAt = $shipText.IndexOf('scripts\dev\Check-Words.ps1')
 $gitAt = $shipText.IndexOf("Head 'Git'")
-$buildAt = $shipText.IndexOf("Head 'Building the launcher'")
+# Ship builds no launcher since #4825; the first thing it builds is the ship root.
+$buildAt = $shipText.IndexOf("Head 'The ship root'")
 Yes 'Ship.ps1 runs Check-Words.ps1' ($callAt -ge 0)
-Yes 'and before the git gate and before the launcher build' ($callAt -ge 0 -and $gitAt -gt $callAt -and $buildAt -gt $gitAt)
+Yes 'and before the git gate and before anything is built' ($callAt -ge 0 -and $gitAt -gt $callAt -and $buildAt -gt $gitAt)
 Yes 'a non-zero result names the hits and stops' ($shipText.Contains('The writing rules do not hold. Nothing was built.'))
 
 $T = Join-Path ([IO.Path]::GetTempPath()) ('ts-ship-words-' + [Guid]::NewGuid().ToString('N'))
@@ -96,7 +97,7 @@ if (Test-Path -LiteralPath $readme) {
     $left = [IO.File]::ReadAllText($readme).Contains('HARNESS1081')
 }
 Yes 'the planted hit is not in the repository README' (-not $left)
-$porcelain = @(& git -C $Repo status --porcelain -- 'README.md' 'launcher/ui.xaml')
+$porcelain = @(& git -C $Repo status --porcelain -- 'README.md' 'launcher/app/MainWindow.axaml')
 Yes 'the planted hit did not touch the files people read' ($porcelain.Count -eq 0)
 
 Done

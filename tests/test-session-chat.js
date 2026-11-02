@@ -28,9 +28,10 @@ const REPO_DIR = require('path').join(__dirname, '..'); // the tests are in test
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const siteFiles = require('./site-files');
 
 const SRC = path.join(REPO_DIR, 'site', 'server.js');
-const src = fs.readFileSync(SRC, 'utf8');
+const src = siteFiles.source(SRC);
 
 function grab(name) {
   const at = src.indexOf('function ' + name);

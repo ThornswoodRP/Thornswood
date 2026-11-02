@@ -11,7 +11,7 @@
   One has, and the az sign in behind it) and the client runtime the record
   names (held only in One's dev game folder) were the two things a Ship needs
   that no other machine could get. scripts\release\Setup-ShipMachine.ps1
-  fetches or writes them, and Developer-Guide.md "Shipping from another machine"
+  fetches or writes them, and docs/guide/set-up-a-machine.md "Shipping from another machine"
   says the rest. This proves both do what they say.
 
   What it runs. The helpers out of Setup-ShipMachine.ps1 and Get-SigningRows
@@ -318,9 +318,13 @@ try {
     Yes 'the identity the launcher pins is read out of Signature.cs' ($ids -contains '1.3.6.1.4.1.311.97.203948530.216998690.847558466.123546472')
 
     # --------------------------------------------------------- 6. the runbook --
-    $dev = [IO.File]::ReadAllText((Join-Path $Repo 'Developer-Guide.md'))
+    # The runbook is a section of the guide's set up page, and the secrets
+    # table is the guide's secrets page (tests/Guide-Text.ps1).
+    . (Join-Path $PSScriptRoot 'Guide-Text.ps1')
+    $dev = Get-GuidePage 'set-up-a-machine'
+    $secrets = Get-GuidePage 'secrets'
     $m = [regex]::Match($dev, '(?m)^(?<hashes>#{2,3}) Shipping from another machine\s*$')
-    Yes '6. Developer-Guide.md has the section "Shipping from another machine"' ($m.Success)
+    Yes '6. docs/guide/set-up-a-machine.md has the section "Shipping from another machine"' ($m.Success)
     $level = $m.Groups['hashes'].Value.Length
     $rest = $dev.Substring($m.Index + $m.Length)
     $end = [regex]::Match($rest, ('(?m)^#{1,' + $level + '} '))
@@ -335,7 +339,7 @@ try {
     # Sep's rule that only his account signs (#1121). And the domain is in his
     # own Cloudflare login, signed in with GitHub.
     Yes '6. it says each person signs with an account of their own, made once by Patrick, never with a device code' (
-        $sec -match 'an account of their own' -and $sec -match '(?m)^#### Your own signing sign in\s*$' -and
+        $sec -match 'an account of their own' -and $sec -match '(?m)^### Your own signing sign in\s*$' -and
         $sec -match 'AADSTS530035' -and $sec -notmatch "Only Patrick's Azure account has signing access" -and
         $sec -notmatch 'signs only while it is signed in as him')
     Yes '4. Setup-ShipMachine sends a sign in with no role to that step, not to Patrick''s own sign in' (
@@ -343,9 +347,9 @@ try {
         $setupText -notmatch 'as Patrick: only his Azure account' -and $setupText -notmatch 'signs only while signed in as him')
     # The same two rows of OWNERSHIP.md are checked by tests/test-ops-docs.js
     # in the private ops repo, where that page went with #3693.
-    Yes 'Developer-Guide.md secrets table has the domain row and signing with an account of their own' (
-        $dev -match '(?m)^\| The domain, thornswood\.net \| Registered at Cloudflare, in Patrick''s own Cloudflare login, which he signs in to with GitHub' -and
-        $dev -match '(?m)^\| Code signing \|.*an account of their own')
+    Yes 'docs/guide/secrets.md has the domain row and signing with an account of their own' (
+        $secrets -match '(?m)^\| The domain, thornswood\.net \| Registered at Cloudflare, in Patrick''s own Cloudflare login, which he signs in to with GitHub' -and
+        $secrets -match '(?m)^\| Code signing \|.*an account of their own')
     Yes '6. it names this harness' ($sec -match 'tests\\test-ship-machine\.ps1')
     Yes '6. and the dev channel for the Ship it ends on' ($sec -match '\.\\scripts\\release\\Ship\.ps1 -Channel dev')
 

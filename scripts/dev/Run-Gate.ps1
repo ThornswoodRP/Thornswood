@@ -122,9 +122,9 @@
 
 .PARAMETER StartLog
   Where Nightly-Harnesses.ps1 -StartLog writes which process was which
-  harness's, for the ops repository's trace-gate.yml (#4013), the trace taken by hand
-  (scripts\dev\Trace-Gate.ps1). A main build the trace task traces writes
-  its own in <runner>\trace.
+  harness's, for gate-map.yml's trace on GitHub's runner (#5183). A main
+  build the trace task traces on a box build runner writes its own in
+  <runner>\trace.
 
 .PARAMETER Report
   A JUnit file for this share, as Nightly-Harnesses.ps1 -Report writes it:

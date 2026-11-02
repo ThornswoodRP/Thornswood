@@ -46,14 +46,17 @@
        SWF takes its edits on the bytes as they are; and a mod file that is not
        the pinned one names the mod.
 
-  Reads the repository; writes only its own folder under the scratch folder.
-  Needs Python (the fixture is plain Python) and the compiler the build runs.
+  Reads the repository; writes only its own folder under the scratch folder
+  and its builds under out\harness. Needs Python (the fixture is plain
+  Python) and the .NET SDK the launcher builds with, which also builds the C#
+  5 copy against the .NET Framework (tests\Framework-Csc.ps1), so all of it
+  runs on every machine.
 #>
 [CmdletBinding()]
 param([string]$Repo, [string]$Scratch)
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path $PSScriptRoot 'Framework-Csc.ps1')  # the .NET SDK the launcher builds with, and C# 5 against the .NET Framework (#498, #4823)
 if (-not $Repo) { $Repo = Split-Path -Parent $PSScriptRoot }
 if (-not $Scratch) { $Scratch = [IO.Path]::GetTempPath() }
 $App = Join-Path $Repo 'launcher\app'
@@ -87,10 +90,7 @@ foreach ($n in 'python', 'python3') {
     if ($c) { $python = $c.Source; break }
 }
 Yes 'Python is on this machine, to write the made-up game' ([bool]$python)
-# The launcher's own code is compiled with the build's compiler, the Build
-# Tools' csc against .NET Framework 4.8.1, which only Windows has; off Windows
-# the made-up game and the recipes are still checked, and that part says SKIP.
-if ($OnWindows) { Yes 'the compiler the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherCsc) }
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
 $real = @('FromGame.cs', 'FromGameArchive.cs', 'FromGameDeflate.cs', 'FromGameMath.cs', 'FromGameBoard.cs', 'FromGameMenu.cs', 'FromGameModMenus.cs') |
     ForEach-Object { Join-Path $App $_ }
 foreach ($f in $real) {
@@ -100,8 +100,6 @@ foreach ($f in $real) {
     if ($f -like '*FromGameModMenus.cs') { $why = ' (written from the collection''s archives by scripts\mods\Build-ModMenus.py)' }
     Yes ("launcher\app\{0} is there{1}" -f [IO.Path]::GetFileName($f), $why) (Test-Path -LiteralPath $f)
 }
-$refs = @('System.dll', 'System.Core.dll') | ForEach-Object { Find-LauncherRef $_ }
-if ($OnWindows) { Yes 'System.dll and System.Core.dll are there to compile against' (@($refs | Where-Object { $_ }).Count -eq 2) }
 if ($script:fail) { Done }
 
 $work = Join-Path $Scratch ('thornswood-2827-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -152,10 +150,6 @@ try {
     # ---- 1, 3, 4 and 5: the launcher's own code, with a driver ------------------
     # 7 holds the lists to the files the compiled FromGame says it makes, so it
     # waits on this too.
-    if (-not $OnWindows) {
-        Write-Host 'SKIP  1, 3 to 5 and 7, the launcher''s FromGame compiled and run: the build''s compiler (the Build Tools'' csc, against .NET Framework 4.8.1) is only on Windows'
-        Done
-    }
     $driver = @'
 using System;
 using System.Collections.Generic;
@@ -292,30 +286,24 @@ namespace Thornswood
 }
 '@
     $utf8 = New-Object Text.UTF8Encoding($false)
-    $driverCs = Join-Path $work 'FromGameTest.cs'
-    [IO.File]::WriteAllText($driverCs, $driver, $utf8)
     $sources = @($real | ForEach-Object { (Resolve-Path -LiteralPath $_).Path }) +
-        @((Join-Path $Fixture 'FixtureMenu.cs'), (Join-Path $Fixture 'FixtureBoard.cs'), $driverCs)
-    $built = @{}
-    foreach ($lang in @($LauncherLangVersion, '5')) {
-        $exe = Join-Path $work ("from-game-test-{0}.exe" -f $lang)
-        $cscArgs = @('/noconfig', '/nologo', '/target:exe', '/platform:anycpu', "/langversion:$lang", '/nowarn:0649,1701', "/out:$exe", '/main:Thornswood.FromGameTest')
-        foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-        $cscArgs += $sources
-        $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-        $said = & $LauncherCsc @cscArgs 2>&1
-        $rc = $LASTEXITCODE
-        $ErrorActionPreference = $old
-        $built[$lang] = ($rc -eq 0 -and (Test-Path -LiteralPath $exe))
-        $what = if ($lang -eq '5') { 'at C# 5, as Windows PowerShell 5.1''s Add-Type compiles them for Go.ps1' } else { "at C# $lang, as the build does" }
-        Yes "the launcher's FromGame files, the fixture's recipes and the driver compile $what" $built[$lang]
-        if (-not $built[$lang]) { $said | Where-Object { "$_" -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
-    }
-    if (-not $built[$LauncherLangVersion]) { Done }
+        @((Join-Path $Fixture 'FixtureMenu.cs'), (Join-Path $Fixture 'FixtureBoard.cs'))
+    # At the build's C# version with the .NET SDK, the program that runs below;
+    # and at C# 5 against the .NET Framework, as Windows PowerShell 5.1's
+    # Add-Type compiles them for Go.ps1, built only.
+    $exe = $null
+    try { $exe = Build-LauncherCode -Exe -Main 'Thornswood.FromGameTest' -Source $driver -File $sources }
+    catch { ($_.Exception.Message -split "`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
+    Yes "the launcher's FromGame files, the fixture's recipes and the driver compile at C# $LauncherLangVersion, as the build does" ($null -ne $exe)
+    $five = $null
+    try { $five = Build-FrameworkCode -Exe -Main 'Thornswood.FromGameTest' -Source $driver -File $sources }
+    catch { ($_.Exception.Message -split "`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
+    Yes 'and at C# 5 against the .NET Framework, as Windows PowerShell 5.1''s Add-Type compiles them for Go.ps1' ($null -ne $five)
+    if (-not $exe) { Done }
 
     $zdir = Join-Path $work 'zlib'
     $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $out = & (Join-Path $work ("from-game-test-{0}.exe" -f $LauncherLangVersion)) $game $changed $noMenu $zdir 2>&1
+    $out = Invoke-LauncherExe $exe $game $changed $noMenu $zdir 2>&1
     $ErrorActionPreference = $old
     $files = @()
     foreach ($l in @($out)) {

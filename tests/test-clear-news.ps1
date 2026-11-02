@@ -9,14 +9,14 @@
 
     - Clear-News.ps1 -Check names every note and sends nothing.
     - On main, whose notes are a news file (minLauncher 1.2.4 on), the feed
-      names an empty file afterwards, the site's News page is written with no
-      notes, and the record of #news posts loses its lines while the
+      names an empty file afterwards, which the site writes its News page
+      from by itself (#5187, tests/test-5187-site-news.js), and the record of #news posts loses its lines while the
       releases it says were announced stay.
     - On dev, whose notes are in "news" (minLauncher before 1.2.4), "news"
       is empty afterwards and no news page is written.
     - A second run finds nothing.
-    - Publish-News.ps1 puts no hand-written history under the feed's notes,
-      and news-public.json is gone.
+    - Nothing puts hand-written history back: news-public.json and
+      Publish-News.ps1 are gone (#5187), and Clear-News sends no news page.
 #>
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
@@ -72,8 +72,7 @@ try {
     Yes 'main clears' ($LASTEXITCODE -eq 0)
     Yes 'the main feed names a news file with no notes, and "news" is empty' ($after.newsFile.count -eq 0 -and @($after.news).Count -eq 0 -and $after.newsFile.sha256 -ne $sha)
     Yes 'and that file is on the site' ((Test-Path (Join-Path $site "feed\assets\$($after.newsFile.sha256)")) -and @(Get-FeedNewsList $after $site).Count -eq 0)
-    $page = [IO.File]::ReadAllText((Join-Path $site 'data\news.json')) | ConvertFrom-Json
-    Yes 'the site''s News page is written with no notes' (@($page.news).Count -eq 0 -and $page.launcher -eq '1.2.5')
+    Yes 'no News page is sent: the site writes it from the feed itself (#5187)' (-not (Test-Path (Join-Path $site 'data\news.json')) -and $out -match 'site writes its News page')
     $rec = [IO.File]::ReadAllText((Join-Path $site 'feed\announced.json')) | ConvertFrom-Json
     Yes 'the record loses its post lines and keeps the release it says was announced' (-not $rec.PSObject.Properties['posts-main'] -and $rec.version -eq '1.2.5' -and $rec.title -eq 'Merchants and quests')
 
@@ -88,8 +87,7 @@ try {
 
     # ---- nothing puts the old notes back
     Yes 'news-public.json is gone' (-not (Test-Path (Join-Path $repo 'scripts\ops\news-public.json')))
-    $pn = [IO.File]::ReadAllText((Join-Path $repo 'scripts\ops\Publish-News.ps1'))
-    Yes 'Publish-News.ps1 reads no hand-written history' ($pn -notmatch "Join-Path \`$Here 'news-public.json'")
+    Yes 'Publish-News.ps1 is gone: the site writes its own News page (#5187)' (-not (Test-Path (Join-Path $repo 'scripts\ops\Publish-News.ps1')))
 } finally {
     Remove-Item Env:\THORNSWOOD_TEST_SITE_DIR -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue

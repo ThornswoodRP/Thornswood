@@ -4,7 +4,7 @@
 // word to the character block's command, and that hands the property words on
 // to the property block from a fixed list. /jarl was answered by the property
 // block (jarlCmd) and missing from that list, so it fell through to "No
-// command called /jarl". tests/test-offices.js called jarlCmd directly and
+// command called /jarl". site/tests/test-offices.js called jarlCmd directly and
 // never saw the route.
 //
 // Since #2551 (Patrick, 15 Oct) the offices are Discord roles: nobody takes

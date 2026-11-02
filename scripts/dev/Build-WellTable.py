@@ -16,8 +16,8 @@ pattern at run time: a mod adding a static called SomethingWell does not
 become drinking water by accident.
 
 WHAT IT WRITES. game\\data\\wells.json (the bases, every placement and where
-it came from) and the WELLS line in game\\gamemode.js, which is what the
-server reads: one row per placed well, [cellOrWorld, x, y, z].
+it came from) and game\\gamemode-tables\\WELLS.json, which is what the
+server reads: one row per placed well, [cellOrWorld, x, y, z] (#5191).
 
 Read only apart from those two files.
 
@@ -31,13 +31,13 @@ import importlib.util
 import io
 import json
 import os
-import re
 import struct
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import own_plugins  # noqa: E402
+import gamemode_tables  # noqa: E402
 _spec = importlib.util.spec_from_file_location('doortable', os.path.join(HERE, 'Build-DoorTable.py'))
 dt = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(dt)
@@ -135,7 +135,6 @@ def main():
     ap.add_argument('--data', default=r'C:\Thornswood\Game\Data')
     ap.add_argument('--plugins', default=r'C:\Thornswood\Profile\Default\plugins.txt')
     ap.add_argument('--out', default=os.path.join(HERE, '..', '..', 'game', 'data', 'wells.json'))
-    ap.add_argument('--gamemode', default=os.path.join(HERE, '..', '..', 'game', 'gamemode.js'))
     ap.add_argument('--check', action='store_true', help='say what it found, write nothing')
     args = ap.parse_args()
 
@@ -189,17 +188,8 @@ def main():
             'bases': bases, 'byBase': byBase, 'placed': placed
         }, f, indent=1, sort_keys=True)
         f.write('\n')
-    gm = io.open(args.gamemode, encoding='utf-8', newline='').read()
-    line = 'const WELLS = ' + json.dumps({'items': rows}, separators=(',', ':')) + ';'
-    if re.search(r'^const WELLS = .*;$', gm, re.M):
-        gm2 = re.sub(r'^const WELLS = .*;$', lambda m: line, gm, count=1, flags=re.M)
-    else:
-        gm2 = re.sub(r'^(const WATERS = .*;)\n', lambda m: m.group(1) + '\n' + line + '\n', gm, count=1, flags=re.M)
-    if gm2 == gm and line not in gm:
-        print('could not find where to put WELLS in gamemode.js')
-        return 1
-    io.open(args.gamemode, 'w', encoding='utf-8', newline='').write(gm2)
-    print('wrote %s and the WELLS line' % args.out)
+    gamemode_tables.write('WELLS', json.dumps({'items': rows}, separators=(',', ':')))
+    print('wrote %s and %s' % (args.out, gamemode_tables.table_file('WELLS')))
     return 0
 
 

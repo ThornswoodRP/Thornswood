@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Net;
+using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
+using System.Threading;
+using Avalonia.Media.Imaging;
+using SkiaSharp;
 
 namespace Thornswood
 {
@@ -59,7 +60,7 @@ namespace Thornswood
             public string Name = "";
             public string By = "";
             public string ImageUrl = "";     // absolute, ready to fetch
-            public BitmapImage Image;        // null until Fetch has loaded it
+            public Bitmap Image;             // null until Fetch has loaded it
         }
 
         /// <summary>
@@ -104,7 +105,7 @@ namespace Thornswood
             /// <summary>Local time it was sent, or MinValue when the site did not say.</summary>
             public DateTime When = DateTime.MinValue;
             /// <summary>Loaded image once FetchPending has got it, or null.</summary>
-            public BitmapImage Image;
+            public Bitmap Image;
             /// <summary>
             /// The widths of the smaller copies that came with it (#3218),
             /// which the card shows beside it and Accept names.
@@ -188,7 +189,7 @@ namespace Thornswood
         /// call it off the UI thread. Null when it cannot be loaded, and the
         /// caller then turns to the next one.
         /// </summary>
-        public static BitmapImage Fetch(Shot shot)
+        public static Bitmap Fetch(Shot shot)
         {
             if (shot == null) return null;
             if (shot.Image != null) return shot.Image;
@@ -197,14 +198,12 @@ namespace Thornswood
                 byte[] raw = GetBytes(shot.ImageUrl, 8000);
                 if (raw == null || raw.Length == 0) return null;
 
-                var bi = new BitmapImage();
-                bi.BeginInit();
-                // OnLoad, so the stream can close under it and the image is not
-                // read lazily and left blank, the same as Art.Load does.
-                bi.CacheOption = BitmapCacheOption.OnLoad;
-                bi.StreamSource = new MemoryStream(raw);
-                bi.EndInit();
-                bi.Freeze();
+                // Avalonia reads the whole picture when the Bitmap is made, so
+                // the stream can close under it and nothing is read lazily and
+                // left blank. A Bitmap may be made off the window's thread and
+                // drawn on it.
+                Bitmap bi;
+                using (var ms = new MemoryStream(raw)) bi = new Bitmap(ms);
                 shot.Image = bi;
                 return bi;
             }
@@ -217,7 +216,7 @@ namespace Thornswood
         /// see it without a browser cookie (#755). Null when the site refuses
         /// or the picture will not load; the card still shows Accept / Delete.
         /// </summary>
-        public static BitmapImage FetchPending(Pending item)
+        public static Bitmap FetchPending(Pending item)
         {
             if (item == null || item.Name == null || item.Name.Length == 0) return null;
             if (item.Image != null) return item.Image;
@@ -230,13 +229,13 @@ namespace Thornswood
         /// picture (#3218), from /up/&lt;name&gt;?w=&lt;width&gt; the same
         /// way, for the card to show beside it. Null when it will not load.
         /// </summary>
-        public static BitmapImage FetchCopy(Pending item, int width)
+        public static Bitmap FetchCopy(Pending item, int width)
         {
             if (item == null || item.Name == null || item.Name.Length == 0) return null;
             return LoadUp(item.Name, width);
         }
 
-        static BitmapImage LoadUp(string name, int width)
+        static Bitmap LoadUp(string name, int width)
         {
             if (Discord.Ticket == null) return null;
             try
@@ -247,13 +246,7 @@ namespace Thornswood
                 byte[] raw = GetBytes(url, 8000);
                 if (raw == null || raw.Length == 0) return null;
 
-                var bi = new BitmapImage();
-                bi.BeginInit();
-                bi.CacheOption = BitmapCacheOption.OnLoad;
-                bi.StreamSource = new MemoryStream(raw);
-                bi.EndInit();
-                bi.Freeze();
-                return bi;
+                using (var ms = new MemoryStream(raw)) return new Bitmap(ms);
             }
             catch (Exception ex)
             {
@@ -456,9 +449,11 @@ namespace Thornswood
         /// /api/gallery/copy, because the site cannot make a picture smaller:
         /// one for each of CopyWidths the picture is wider than, as it is shown
         /// (a camera JPEG turned a quarter by its Exif is turned here too, as
-        /// the site reads it), at the picture's shape. JPEG, because WPF
-        /// writes no WebP. The site checks each against the picture's own
-        /// size, and staff see them beside it before Accept.
+        /// the site reads it), at the picture's shape. JPEG, as the WPF
+        /// launcher sent them, since it could write no WebP; SkiaSharp, which
+        /// reads and writes them now, could, and that would be a change of
+        /// its own. The site checks each against the picture's own size, and
+        /// staff see them beside it before Accept.
         ///
         /// "" when they went or none was needed (a gif, a recording, a picture
         /// 800 wide or less), or a sentence saying the first that did not go.
@@ -471,138 +466,134 @@ namespace Thornswood
             const string Full = ", so it will show at full size until staff make them.";
             if (name.Length == 0) return "The site took it but did not say its name, so its smaller copies were not sent" + Full;
 
-            BitmapFrame head;
+            // The whole picture, decoded once, four bytes a pixel with its
+            // alpha as it is (not premultiplied), so SeeThrough can read it.
+            SKBitmap whole;
             int turn;
             try
             {
-                head = BitmapFrame.Create(new MemoryStream(data), BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
-                turn = Orientation(head);
+                using (var codec = SKCodec.Create(new MemoryStream(data)))
+                {
+                    if (codec == null) throw new InvalidDataException("SkiaSharp knows no decoder for it.");
+                    turn = ext == ".jpg" || ext == ".jpeg" ? Orientation(codec) : 1;
+                    SKImageInfo info = codec.Info;
+                    whole = SKBitmap.Decode(codec, new SKImageInfo(info.Width, info.Height, SKColorType.Bgra8888,
+                        info.AlphaType == SKAlphaType.Opaque ? SKAlphaType.Opaque : SKAlphaType.Unpremul));
+                    if (whole == null) throw new InvalidDataException("SkiaSharp could not decode it.");
+                }
             }
             catch (Exception ex)
             {
                 Swallow.Note("Gallery.SendCopies read", ex);
                 return "This copy of Windows could not read it to make its smaller copies" + Full;
             }
-            bool quarter = turn >= 5 && turn <= 8;
-            int shownWide = quarter ? head.PixelHeight : head.PixelWidth;
-
-            foreach (int width in CopyWidths)
+            using (whole)
             {
-                if (width >= shownWide) continue;
-                byte[] jpg;
-                try
-                {
-                    var bi = new BitmapImage();
-                    bi.BeginInit();
-                    bi.CacheOption = BitmapCacheOption.OnLoad;
-                    bi.StreamSource = new MemoryStream(data);
-                    // Turned a quarter, its height on disk is its width shown.
-                    if (quarter) bi.DecodePixelHeight = width; else bi.DecodePixelWidth = width;
-                    bi.EndInit();
-                    bi.Freeze();
-                    if (SeeThrough(bi)) return "It has see-through parts, which a JPEG copy cannot keep" + Full;
+                bool quarter = turn >= 5 && turn <= 8;
+                int shownWide = quarter ? whole.Height : whole.Width;
 
-                    BitmapSource shown = bi;
-                    Transform t = TurnFor(turn);
-                    if (t != null)
-                    {
-                        var tb = new TransformedBitmap(bi, t);
-                        tb.Freeze();
-                        shown = tb;
-                    }
-                    var flat = new FormatConvertedBitmap(shown, PixelFormats.Bgr24, null, 0);
-                    flat.Freeze();
-                    var enc = new JpegBitmapEncoder();
-                    enc.QualityLevel = 85;
-                    enc.Frames.Add(BitmapFrame.Create(flat));
-                    using (var ms = new MemoryStream())
-                    {
-                        enc.Save(ms);
-                        jpg = ms.ToArray();
-                    }
-                }
-                catch (Exception ex)
+                foreach (int width in CopyWidths)
                 {
-                    Swallow.Note("Gallery.SendCopies make " + width, ex);
-                    return "Its " + width + " pixel copy could not be made here" + Full;
-                }
+                    if (width >= shownWide) continue;
+                    byte[] jpg;
+                    try
+                    {
+                        // Turned a quarter, its height on disk is its width shown.
+                        int wide, high;
+                        if (quarter) { high = width; wide = Math.Max(1, (int)Math.Round(whole.Width * (double)width / whole.Height)); }
+                        else { wide = width; high = Math.Max(1, (int)Math.Round(whole.Height * (double)width / whole.Width)); }
+                        using (SKBitmap small = whole.Resize(new SKImageInfo(wide, high, whole.ColorType, whole.AlphaType),
+                                                             new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear)))
+                        {
+                            if (small == null) throw new InvalidOperationException("SkiaSharp could not make it " + width + " wide.");
+                            if (SeeThrough(small)) return "It has see-through parts, which a JPEG copy cannot keep" + Full;
+                            using (SKBitmap shown = Turned(small, turn))
+                            using (SKData enc = shown.Encode(SKEncodedImageFormat.Jpeg, 85))
+                            {
+                                if (enc == null) throw new InvalidOperationException("SkiaSharp could not write it as a JPEG.");
+                                jpg = enc.ToArray();
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Swallow.Note("Gallery.SendCopies make " + width, ex);
+                        return "Its " + width + " pixel copy could not be made here" + Full;
+                    }
 
-                string url = Discord.Site + "/api/gallery/copy?ticket=" +
-                             Uri.EscapeDataString(Discord.Ticket) +
-                             "&name=" + Uri.EscapeDataString(name) +
-                             "&w=" + width;
-                string reply = "";
-                int code;
-                try { code = Discord.PostBytes(url, jpg, "image/jpeg", 60000, out reply); }
-                catch (Exception ex)
-                {
-                    Swallow.Note("Gallery.SendCopies send " + width, ex);
-                    code = 0;
+                    string url = Discord.Site + "/api/gallery/copy?ticket=" +
+                                 Uri.EscapeDataString(Discord.Ticket) +
+                                 "&name=" + Uri.EscapeDataString(name) +
+                                 "&w=" + width;
+                    string reply = "";
+                    int code;
+                    try { code = Discord.PostBytes(url, jpg, "image/jpeg", 60000, out reply); }
+                    catch (Exception ex)
+                    {
+                        Swallow.Note("Gallery.SendCopies send " + width, ex);
+                        code = 0;
+                    }
+                    if (code == 200) continue;
+                    string said = Str(reply, "error");
+                    if (said.Length == 0) said = code == 0 ? "thornswood.net could not be reached" : "the site answered " + code;
+                    return "Its " + width + " pixel copy did not go (" + said.TrimEnd('.') + ")" + Full;
                 }
-                if (code == 200) continue;
-                string said = Str(reply, "error");
-                if (said.Length == 0) said = code == 0 ? "thornswood.net could not be reached" : "the site answered " + code;
-                return "Its " + width + " pixel copy did not go (" + said.TrimEnd('.') + ")" + Full;
             }
             return "";
         }
 
         /// <summary>
-        /// The Exif orientation of a picture, 1 to 8, or 1 when it says none.
-        /// A PNG or WebP keeps no Exif here, so a format whose metadata WPF
-        /// cannot query is 1.
+        /// The Exif orientation of a JPEG, 1 to 8, or 1 when it says none.
+        /// Only a JPEG is asked: the WPF launcher could not read a PNG's or a
+        /// WebP's, and took them as 1, and so does this.
         /// </summary>
-        static int Orientation(BitmapFrame frame)
+        static int Orientation(SKCodec codec)
         {
-            BitmapMetadata md;
-            try { md = frame.Metadata as BitmapMetadata; }
-            catch (NotSupportedException) { return 1; }
-            if (md == null) return 1;
-            object v;
-            try
-            {
-                if (!md.ContainsQuery("System.Photo.Orientation")) return 1;
-                v = md.GetQuery("System.Photo.Orientation");
-            }
-            catch (NotSupportedException) { return 1; }
-            int n;
-            if (v == null || !int.TryParse(v.ToString(), out n) || n < 1 || n > 8) return 1;
-            return n;
+            int n = (int)codec.EncodedOrigin;
+            return n < 1 || n > 8 ? 1 : n;
         }
 
         /// <summary>
-        /// What turns a picture stored with that Exif orientation the way it is
-        /// shown: a mirror, a quarter turn clockwise, or both, in that order.
-        /// Null for 1, which is shown as it is stored.
+        /// A picture stored with that Exif orientation, the way it is shown: a
+        /// mirror, a quarter turn, or both. Each matrix maps a pixel where it
+        /// is stored to where it is shown; a quarter turn swaps the width and
+        /// the height. 1 is shown as it is stored, and comes back as a copy.
         /// </summary>
-        static Transform TurnFor(int turn)
+        static SKBitmap Turned(SKBitmap src, int turn)
         {
-            if (turn <= 1 || turn > 8) return null;
-            var g = new TransformGroup();
-            if (turn == 3) g.Children.Add(new RotateTransform(180));
-            if (turn == 5 || turn == 6) g.Children.Add(new RotateTransform(90));
-            if (turn == 7 || turn == 8) g.Children.Add(new RotateTransform(270));
-            if (turn == 2 || turn == 5 || turn == 7) g.Children.Add(new ScaleTransform(-1, 1));
-            if (turn == 4) g.Children.Add(new ScaleTransform(1, -1));
-            g.Freeze();
-            return g;
+            if (turn < 1 || turn > 8) turn = 1;
+            bool quarter = turn >= 5;
+            float w = quarter ? src.Height : src.Width, h = quarter ? src.Width : src.Height;
+            SKMatrix m;
+            switch (turn)
+            {
+                case 2: m = new SKMatrix(-1, 0, w, 0, 1, 0, 0, 0, 1); break;    // mirrored
+                case 3: m = new SKMatrix(-1, 0, w, 0, -1, h, 0, 0, 1); break;   // half a turn
+                case 4: m = new SKMatrix(1, 0, 0, 0, -1, h, 0, 0, 1); break;    // upside down, mirrored
+                case 5: m = new SKMatrix(0, 1, 0, 1, 0, 0, 0, 0, 1); break;     // a quarter turn clockwise, mirrored
+                case 6: m = new SKMatrix(0, -1, w, 1, 0, 0, 0, 0, 1); break;    // a quarter turn clockwise
+                case 7: m = new SKMatrix(0, -1, w, -1, 0, h, 0, 0, 1); break;   // three quarters clockwise, mirrored
+                case 8: m = new SKMatrix(0, 1, 0, -1, 0, h, 0, 0, 1); break;    // three quarters clockwise
+                default: m = SKMatrix.Identity; break;
+            }
+            var dst = new SKBitmap(new SKImageInfo((int)w, (int)h, src.ColorType, src.AlphaType));
+            using (var canvas = new SKCanvas(dst))
+            {
+                canvas.SetMatrix(m);
+                canvas.DrawBitmap(src, 0, 0);
+            }
+            return dst;
         }
 
         /// <summary>
         /// Whether any pixel of a picture is less than solid. A picture saved
         /// with an alpha channel that is solid throughout, as many screenshots
-        /// are, is not.
+        /// are, is not. The picture is four bytes a pixel, alpha last.
         /// </summary>
-        static bool SeeThrough(BitmapSource bi)
+        static bool SeeThrough(SKBitmap bi)
         {
-            PixelFormat f = bi.Format;
-            if (f != PixelFormats.Bgra32 && f != PixelFormats.Pbgra32 && f != PixelFormats.Prgba64 &&
-                f != PixelFormats.Rgba64 && f != PixelFormats.Prgba128Float && f != PixelFormats.Rgba128Float)
-                return false;
-            var solid = new FormatConvertedBitmap(bi, PixelFormats.Bgra32, null, 0);
-            int stride = solid.PixelWidth * 4;
-            var px = new byte[stride * solid.PixelHeight];
-            solid.CopyPixels(px, stride, 0);
+            if (bi.AlphaType == SKAlphaType.Opaque) return false;
+            ReadOnlySpan<byte> px = bi.GetPixelSpan();
             for (int i = 3; i < px.Length; i += 4)
                 if (px[i] != 255) return true;
             return false;
@@ -795,30 +786,29 @@ namespace Thornswood
             return "";
         }
 
-        // WebClient's own timeout is far too long, so a site that is merely
-        // slow does not look like a hung launcher. The same Quick both Online
-        // and Roster use.
-        class Quick : WebClient
-        {
-            public int Ms = 5000;
-            protected override WebRequest GetWebRequest(Uri address)
-            {
-                var r = base.GetWebRequest(address);
-                if (r != null) { r.Timeout = Ms; }
-                return r;
-            }
-        }
+        // One client for every read here, as HttpClient is meant to be used.
+        // Its own timeout is far too long, so each read has its own: ms for
+        // the site to answer, so a site that is merely slow does not look like
+        // a hung launcher, and five minutes for the bytes after that, the
+        // read limit the WebClient this replaced had.
+        static readonly HttpClient web = new HttpClient() { Timeout = Timeout.InfiniteTimeSpan };
 
+        /// <summary>The body of a GET, or null when it failed or did not answer 2xx.</summary>
         static byte[] GetBytes(string url, int ms)
         {
             try
             {
-                ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12; // added, never replaced (#1360)
-                using (var q = new Quick())
+                using (var req = new HttpRequestMessage(HttpMethod.Get, url))
+                using (var answer = new CancellationTokenSource(ms))
                 {
-                    q.Ms = ms;
-                    q.Headers["User-Agent"] = "ThornswoodLauncher/" + Updater.Version;
-                    return q.DownloadData(url);
+                    req.Headers.TryAddWithoutValidation("User-Agent", "ThornswoodLauncher/" + Updater.Version);
+                    using (HttpResponseMessage resp = web.Send(req, HttpCompletionOption.ResponseHeadersRead, answer.Token))
+                    using (var read = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+                    {
+                        if (!resp.IsSuccessStatusCode) return null;
+                        // With the token, so the limit holds for the whole body.
+                        return resp.Content.ReadAsByteArrayAsync(read.Token).GetAwaiter().GetResult();
+                    }
                 }
             }
             catch { return null; }
@@ -865,9 +855,9 @@ namespace Thornswood
 
         /// <summary>
         /// One string field out of an object body. Read with a regex rather
-        /// than a serializer for the same reason Roster does it: the launcher
-        /// targets the .NET Framework that ships in Windows, and its only
-        /// serializer cannot read a shape it is not told in advance.
+        /// than a serializer, as Roster does it: written when the launcher's
+        /// only serializer could not read a shape it was not told in advance,
+        /// and still enough for the few fields read here.
         /// </summary>
         /// <summary>
         /// A list of copy widths out of an object body, such as

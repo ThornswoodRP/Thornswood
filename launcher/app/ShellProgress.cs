@@ -1,10 +1,15 @@
 using System;
+using System.Linq;
 using System.Threading;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Media.Animation;
-using System.Windows.Threading;
+using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
+using Avalonia.Media;
+using Avalonia.Styling;
+using Avalonia.Threading;
 
 namespace Thornswood
 {
@@ -15,19 +20,23 @@ namespace Thornswood
     /// has got. PlayBar in Progress.cs decides the words and the fill; this
     /// only paints them, at most every PlayBar.DrawEveryMs.
     ///
-    /// The fill is "fill" in the Primary style's template in ui.xaml, behind
-    /// the text: the accent colour, faded, with a solid accent line along its
-    /// bottom edge. The button is off while it runs, so its face is the Card
-    /// colour, and the text is drawn in Ink so it reads on both.
+    /// The fill is "fill" in the Primary theme's template in MainWindow.axaml,
+    /// behind the text: the accent colour, faded, with a solid accent line
+    /// along its bottom edge. The button is off while it runs, so its face is
+    /// the Card colour, and the text is drawn in Ink so it reads on both.
     /// </summary>
     static partial class Shell
     {
         static readonly PlayBar playBar = new PlayBar();
         static DispatcherTimer playBarTimer;
         static int playBarTicking;
-        static FrameworkElement playFill;
+        static Control playFill;
         static TranslateTransform playFillSlide;
         static bool playFillMoving;
+        // Stops the slide when the total becomes known or the bar goes.
+        static CancellationTokenSource playFillSlideStop;
+        // The button's text in Ink while the bar runs; null when it is not.
+        static IDisposable playInk;
 
         static void WireProgress()
         {
@@ -45,7 +54,7 @@ namespace Thornswood
         static void WakePlayBar()
         {
             if (Interlocked.CompareExchange(ref playBarTicking, 1, 0) != 0) return;
-            try { win.Dispatcher.BeginInvoke(new Action(StartPlayBarTimer)); }
+            try { Dispatcher.UIThread.Post(StartPlayBarTimer); }
             catch (Exception ex) { Interlocked.Exchange(ref playBarTicking, 0); Swallow.Note("Shell.WakePlayBar", ex); }
         }
 
@@ -80,8 +89,10 @@ namespace Thornswood
             {
                 btnPlay.IsEnabled = false;
                 btnPlay.Content = PlayBarCaption(text);
-                btnPlay.ToolTip = "Play comes back when this is done.";
-                btnPlay.SetResourceReference(Control.ForegroundProperty, "Ink");
+                ToolTip.SetTip(btnPlay, "Play comes back when this is done.");
+                // Following the theme's Ink, the way a resource reference does,
+                // so a theme changed while the bar runs repaints it.
+                if (playInk == null) playInk = btnPlay.Bind(TemplatedControl.ForegroundProperty, btnPlay.GetResourceObservable("Ink"));
                 PaintPlayFill(false);
                 return;
             }
@@ -102,7 +113,7 @@ namespace Thornswood
             if (playFill != null) return true;
             if (btnPlay == null || btnPlay.Template == null) return false;
             btnPlay.ApplyTemplate();
-            playFill = btnPlay.Template.FindName("fill", btnPlay) as FrameworkElement;
+            playFill = btnPlay.GetTemplateDescendants().OfType<Control>().FirstOrDefault(c => c.Name == "fill");
             if (playFill == null) return false;
             playFillSlide = new TranslateTransform();
             playFill.RenderTransform = playFillSlide;
@@ -113,34 +124,50 @@ namespace Thornswood
         {
             if (!FindPlayFill()) return;
             double f = playBar.Fill;
-            double w = btnPlay.ActualWidth;
-            playFill.Visibility = Visibility.Visible;
+            double w = btnPlay.Bounds.Width;
+            playFill.IsVisible = true;
             if (f >= 0)
             {
-                if (playFillMoving) { playFillSlide.BeginAnimation(TranslateTransform.XProperty, null); playFillSlide.X = 0; playFillMoving = false; }
+                if (playFillMoving) StopPlayFillSlide();
                 playFill.Width = Math.Max(0, Math.Min(1.0, f)) * w;
                 return;
             }
             // Nobody knows the total yet: a quarter of the button sliding
             // steadily from end to end and back.
             if (playFillMoving && !resized) return;
+            if (playFillMoving) StopPlayFillSlide();
             double band = w / 4;
             playFill.Width = band;
-            var slide = new DoubleAnimation(0, Math.Max(0, w - band), new Duration(TimeSpan.FromMilliseconds(1400)));
-            slide.AutoReverse = true;
-            slide.RepeatBehavior = RepeatBehavior.Forever;
-            slide.EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut };
-            playFillSlide.BeginAnimation(TranslateTransform.XProperty, slide);
+            var slide = new Animation();
+            slide.Duration = TimeSpan.FromMilliseconds(1400);
+            slide.IterationCount = IterationCount.Infinite;
+            slide.PlaybackDirection = PlaybackDirection.Alternate;
+            slide.Easing = new SineEaseInOut();
+            var from = new KeyFrame { Cue = new Cue(0d) };
+            from.Setters.Add(new Setter(TranslateTransform.XProperty, 0d));
+            var to = new KeyFrame { Cue = new Cue(1d) };
+            to.Setters.Add(new Setter(TranslateTransform.XProperty, Math.Max(0, w - band)));
+            slide.Children.Add(from);
+            slide.Children.Add(to);
+            playFillSlideStop = new CancellationTokenSource();
+            slide.RunAsync(playFillSlide, playFillSlideStop.Token);
             playFillMoving = true;
+        }
+
+        static void StopPlayFillSlide()
+        {
+            if (playFillSlideStop != null) { playFillSlideStop.Cancel(); playFillSlideStop.Dispose(); playFillSlideStop = null; }
+            playFillSlide.X = 0;
+            playFillMoving = false;
         }
 
         static void HidePlayFill()
         {
-            if (btnPlay != null) btnPlay.ClearValue(Control.ForegroundProperty);
+            if (playInk != null) { playInk.Dispose(); playInk = null; }
             if (playFill == null) return;
-            if (playFillMoving) { playFillSlide.BeginAnimation(TranslateTransform.XProperty, null); playFillSlide.X = 0; playFillMoving = false; }
+            if (playFillMoving) StopPlayFillSlide();
             playFill.Width = 0;
-            playFill.Visibility = Visibility.Collapsed;
+            playFill.IsVisible = false;
         }
     }
 }

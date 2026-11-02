@@ -2,18 +2,29 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
-using System.Windows;
+using Avalonia.Threading;
 
 namespace Thornswood
 {
     // The update check, the feed notice, the in-play update clock, and the
-    // Install path that applies pending packs (and the launcher self-update).
-    // They live apart from Shell.cs because they are one self-contained
-    // slice, and Shell.cs was long enough (#500).
+    // Install path that applies pending packs (and the launcher's update,
+    // through Velopack, #4825). They live apart from Shell.cs because they
+    // are one self-contained slice, and Shell.cs was long enough (#500).
     static partial class Shell
     {
         static List<Pack> pendingPacks = new List<Pack>();
+        // A newer launcher on this install's Velopack channel, from the last
+        // launcher check that answered (CheckUpdatesBackground), or null.
+        // Only ever set and read on the window's thread.
+        static Updater.LauncherUpdate pendingLauncher;
         static bool selfUpdateOffered;
+        // When the launcher's channel on GitHub was last asked (LauncherCheckDue).
+        static DateTime launcherAskedAt = DateTime.MinValue;
+        static readonly object launcherAskGate = new object();
+        // Said once each in launcher.log, and again when it changes: what the
+        // launcher check found, and why one could not be made.
+        static string launcherSaid = "";
+        static string launcherFailSaid = "";
         static bool retryQueued;
         static bool checkingInPlay = false;
         // True from the moment RunUpdate starts one until it has gone in or
@@ -75,22 +86,82 @@ namespace Thornswood
                     }
                 }
             });
+            // A merge release that changes the launcher or the game files goes
+            // out on GitHub and does not move the site's feed, so the tip above
+            // never sees it. GitHub tells nobody when a Release is published, so
+            // an open launcher asks the channel itself, every half hour, through
+            // the same check the start path runs (LauncherCheckDue keeps it to
+            // that). Not while the game runs: a new launcher waits for it.
+            var poll = new Thread(delegate ()
+            {
+                while (!feedWatchStop)
+                {
+                    Thread.Sleep(LauncherPoll);
+                    if (feedWatchStop) break;
+                    if (playing) continue;
+                    CheckUpdatesBackground(false);
+                }
+            });
+            poll.IsBackground = true;
+            poll.Name = "launcher update poll";
+            poll.Start();
         }
 
         static void StopFeedWatch()
         {
             feedWatchStop = true;
         }
+
+        // How often an open launcher asks its channel, and how soon after one
+        // ask another may be made without a press of Check now. GitHub allows
+        // sixty anonymous API requests an hour for each address, shared by
+        // every launcher behind it, and the feed check runs far more often than
+        // that (a failed one again after thirty seconds, every feed move).
+        static readonly TimeSpan LauncherPoll = TimeSpan.FromMinutes(30);
+        static readonly TimeSpan LauncherMinGap = TimeSpan.FromMinutes(10);
+
+        /// <summary>
+        /// Whether this feed check asks GitHub for a new launcher too: always
+        /// for Check now (loud), otherwise when the last ask is LauncherMinGap
+        /// old. Claims the ask, so two checks at once ask once.
+        /// </summary>
+        static bool LauncherCheckDue(bool loud)
+        {
+            lock (launcherAskGate)
+            {
+                DateTime now = DateTime.UtcNow;
+                if (!loud && now - launcherAskedAt < LauncherMinGap) return false;
+                launcherAskedAt = now;
+                return true;
+            }
+        }
+
         static void CheckUpdatesBackground(bool loud)
         {
+            // The launcher's own channel first, when it is due (#4825). A failed
+            // ask is not "no update": what was known stays, and the next due
+            // check asks again. It does not hold Play: the feed check below
+            // does, and the site lets in only the launchers its channel names.
+            bool asked = false;
+            Updater.LauncherUpdate launcher = null;
+            string launcherWhy = null;
+            if (LauncherCheckDue(loud))
+            {
+                try { launcher = Updater.CheckLauncher(cfg); asked = true; }
+                catch (Exception ex) { launcherWhy = ex.Message; }
+            }
+            string launcherNote = Updater.LastLauncherCheck;
+            Dispatcher.UIThread.Post(delegate { LauncherAnswer(asked, launcher, launcherNote, launcherWhy); });
+
             try
             {
                 VersionDoc v = Updater.Check(cfg);
-                if (v == null) { win.Dispatcher.BeginInvoke(new Action(delegate { CheckFailed("the update source had nothing to say"); })); return; }
-                // The news file the feed names, if any, here on the check's own
-                // thread, so the News tab has it (#1050, FeedNews.cs). Never throws.
+                if (v == null) { Dispatcher.UIThread.Post(delegate { CheckFailed("the update source had nothing to say"); }); return; }
+                // The notes of the Releases this channel's Deployment reached,
+                // here on the check's own thread, so the News tab has them
+                // (#5187, ReleaseNews.cs). Never throws.
                 Updater.FillNews(cfg, v);
-                win.Dispatcher.BeginInvoke(new Action(delegate { OnVersionDoc(v, loud); UpdateBySelf(); FixAfterVortex(); }));
+                Dispatcher.UIThread.Post(delegate { OnVersionDoc(v, loud); UpdateBySelf(); FixAfterVortex(); });
                 // Whether the release's signed manifest vouches for every
                 // asset the feed names (#2163, FeedManifest.cs). Only said in
                 // launcher.log for now (phase C), once per manifest, on a
@@ -99,13 +170,40 @@ namespace Thornswood
                 ThreadPool.QueueUserWorkItem(delegate
                 {
                     string manifest = Updater.ManifestLine(cfg, v);
-                    if (manifest != null) win.Dispatcher.BeginInvoke(new Action(delegate { LogOnly(manifest); }));
+                    if (manifest != null) Dispatcher.UIThread.Post(delegate { LogOnly(manifest); });
                 });
             }
             catch (Exception ex)
             {
                 string why = ex.Message;
-                win.Dispatcher.BeginInvoke(new Action(delegate { CheckFailed(why); }));
+                Dispatcher.UIThread.Post(delegate { CheckFailed(why); });
+            }
+        }
+
+        /// <summary>
+        /// What the launcher check found, on the window's thread, before the
+        /// feed's answer that follows it: kept for OnVersionDoc, and said in
+        /// launcher.log once, and again whenever it changes.
+        /// </summary>
+        static void LauncherAnswer(bool asked, Updater.LauncherUpdate launcher, string note, string why)
+        {
+            if (why != null)
+            {
+                if (why != launcherFailSaid)
+                {
+                    launcherFailSaid = why;
+                    LogOnly("The launcher update check could not be made: " + why + " It is asked again at the next update check.");
+                }
+                return;
+            }
+            if (!asked) return;
+            launcherFailSaid = "";
+            pendingLauncher = launcher;
+            Upkeep.LauncherWaiting = launcher == null ? null : launcher.Version;
+            if (!string.IsNullOrEmpty(note) && note != launcherSaid)
+            {
+                launcherSaid = note;
+                LogOnly(note);
             }
         }
 
@@ -149,7 +247,7 @@ namespace Thornswood
             feedNotice = FeedNotice.From(v, Updater.Version);
             if (noticeBar != null)
             {
-                noticeBar.Visibility = feedNotice.Title == null ? Visibility.Collapsed : Visibility.Visible;
+                noticeBar.IsVisible = feedNotice.Title != null;
                 noticeBar.BorderBrush = Res(feedNotice.Hold != null ? "Bad" : "Accent");
             }
             if (txtNoticeTitle != null) txtNoticeTitle.Text = feedNotice.Title == null ? "" : feedNotice.Title;
@@ -260,9 +358,11 @@ namespace Thornswood
                     " never reached the game folder on this install, a launcher fault fixed in " +
                     Updater.Version + ". " + (again == 1 ? "It goes" : "They go") +
                     " in again with this update.");
-            pendingPacks = Updater.Pending(v);
-            bool newLauncher = Updater.IsNewer(v.launcherVersion, Updater.Version)
-                               && !string.IsNullOrEmpty(v.launcherUrl);
+            pendingPacks = Updater.Pending(cfg, v);
+            // The launcher is offered by its Velopack channel (#4825), never by
+            // the feed's launcherVersion: the launcher check that ran before
+            // this answer (CheckUpdatesBackground) found it.
+            bool newLauncher = pendingLauncher != null;
             // Scan and Fix's card goes by the same answer (#2627), so the Fix
             // button knows about an update waiting without Scan being pressed.
             FeedOnCard(v);
@@ -308,8 +408,8 @@ namespace Thornswood
 
             if (pendingPacks.Count == 0 && !newLauncher)
             {
-                updateBar.Visibility = Visibility.Collapsed;
-                InstallShown(Visibility.Collapsed);
+                updateBar.IsVisible = false;
+                InstallShown(false);
                 updatePending = false;
                 updateAnswered = true;
                 DrawStatus();
@@ -322,15 +422,15 @@ namespace Thornswood
 
             selfUpdateOffered = newLauncher;
             var parts = new List<string>();
-            if (newLauncher) parts.Add("launcher " + v.launcherVersion);
+            if (newLauncher) parts.Add("launcher " + pendingLauncher.Version);
             if (pendingPacks.Count > 0) parts.Add(pendingPacks.Count + (pendingPacks.Count == 1 ? " mod update" : " mod updates"));
             txtUpdateTitle.Text = "Update available";
             string note = string.Join(", ", parts.ToArray());
             if (pendingPacks.Count > 0 && !string.IsNullOrEmpty(pendingPacks[0].notes))
                 note += "  ·  " + pendingPacks[0].notes;
             txtUpdateNote.Text = note;
-            updateBar.Visibility = Visibility.Visible;
-            InstallShown(Visibility.Visible);
+            updateBar.IsVisible = true;
+            InstallShown(true);
             Log(cfg.AutoUpdate
                 ? "Update available."
                 : "Update available. Install it from the card above the Play button, or in Settings.");
@@ -427,14 +527,15 @@ namespace Thornswood
                             LogOnly("The update feed answered that nothing has changed, so this check cost " +
                                     "a few bytes instead of the whole feed. This is said once a session.");
                         }
-                        List<Pack> packs = Updater.Pending(v);
-                        bool newLauncher = Updater.IsNewer(v.launcherVersion, Updater.Version)
-                                           && !string.IsNullOrEmpty(v.launcherUrl);
-                        due = packs.Count > 0 || newLauncher;
-                        var parts = new List<string>();
-                        if (newLauncher) parts.Add("launcher " + v.launcherVersion);
-                        if (packs.Count > 0) parts.Add(packs.Count + (packs.Count == 1 ? " mod update" : " mod updates"));
-                        what = string.Join(", ", parts.ToArray());
+                        // The mod updates only (#4825). A new launcher does not
+                        // close a game: it changes nothing the game reads, so
+                        // it waits for the game to end and is found by the
+                        // launcher check after it. The launcher's channel is
+                        // on GitHub, which is not asked every thirty seconds
+                        // (LauncherCheckDue).
+                        List<Pack> packs = Updater.Pending(cfg, v);
+                        due = packs.Count > 0;
+                        what = packs.Count + (packs.Count == 1 ? " mod update" : " mod updates");
                     }
                 }
                 catch (Exception ex)
@@ -458,7 +559,7 @@ namespace Thornswood
                 }
                 try
                 {
-                    win.Dispatcher.BeginInvoke(new Action(delegate
+                    Dispatcher.UIThread.Post(delegate
                     {
                         checkingInPlay = false;
                         // Leave the clock alone when there was no answer. Only
@@ -488,7 +589,7 @@ namespace Thornswood
                             closedForUpdate = false;
                             Log("Skyrim would not close. Quit it yourself and the update goes in.");
                         }
-                    }));
+                    });
                 }
                 catch { checkingInPlay = false; }
             });
@@ -503,8 +604,8 @@ namespace Thornswood
         /// and Ready to launch show the install after the update, not before
         /// it. An update that failed still gets the rest of Fix, and is not
         /// taken again (FixRest). A new launcher restarts the launcher; the
-        /// new one runs the same Fix once its window is up (Shell.cs,
-        /// win.ContentRendered).
+        /// new one runs the same Fix once its window is up (Shell.cs, when
+        /// Velo.Restarted says Velopack started it after an update).
         ///
         /// Patrick, 21 Oct, 6:30 PM: "when you click update now it should let
         /// you click it only once and do it all and not have to click twice
@@ -537,10 +638,10 @@ namespace Thornswood
         }
 
         /// <summary>Whether both of those buttons show, so the card's is hidden where Settings' is, as for a collection ahead of the server (#4115).</summary>
-        static void InstallShown(Visibility shown)
+        static void InstallShown(bool shown)
         {
-            if (btnInstallNow != null) btnInstallNow.Visibility = shown;
-            if (btnUpdate != null) btnUpdate.Visibility = shown;
+            if (btnInstallNow != null) btnInstallNow.IsVisible = shown;
+            if (btnUpdate != null) btnUpdate.IsVisible = shown;
         }
 
         /// <summary>What both of those buttons say, so the card's never says Install now over a card about the mods.</summary>
@@ -558,12 +659,17 @@ namespace Thornswood
         static HashSet<string> updateTried = null;
         static bool updateTriedWentIn;
 
-        /// <summary>Each pack of <paramref name="packs"/>, by id and checksum, and the feed's launcher when <paramref name="launcher"/>.</summary>
+        /// <summary>
+        /// Each pack of <paramref name="packs"/>, by id and checksum, and the
+        /// launcher waiting on its channel (pendingLauncher) when
+        /// <paramref name="launcher"/>. <paramref name="v"/> is the feed the
+        /// packs came from; the launcher is no longer read from it (#4825).
+        /// </summary>
         static HashSet<string> UpdateParts(List<Pack> packs, VersionDoc v, bool launcher)
         {
             var parts = new HashSet<string>(StringComparer.Ordinal);
             if (packs != null) foreach (Pack p in packs) if (p != null) parts.Add(p.id + "@" + p.sha256);
-            if (launcher && v != null) parts.Add("launcher " + v.launcherVersion);
+            if (launcher && pendingLauncher != null) parts.Add("launcher " + pendingLauncher.Version);
             return parts;
         }
 
@@ -586,6 +692,7 @@ namespace Thornswood
             var doc = pendingDoc;
             var packs = pendingPacks;
             bool withLauncher = selfUpdateOffered;
+            Updater.LauncherUpdate launcherUpdate = withLauncher ? pendingLauncher : null;
             // The Play button shows how far it has got (#1145). One download
             // per pack with a link; a release synced to its record says its
             // own counts from Sync.cs.
@@ -608,7 +715,7 @@ namespace Thornswood
             {
                 Action<string> log = delegate(string m)
                 {
-                    win.Dispatcher.BeginInvoke(new Action(delegate { Log(m); }));
+                    Dispatcher.UIThread.Post(delegate { Log(m); });
                 };
                 Updater.Fetched got = null;
                 // What this thread reports stays off the Play button while the
@@ -616,29 +723,33 @@ namespace Thornswood
                 PlayProgress.Second(true);
                 try
                 {
-                    // The download: nothing in the game folder or its records
-                    // changes, so it runs beside a refresh.
-                    got = Updater.FetchUpdate(cfg, packs, withLauncher ? doc : null, log);
+                    // The download, and every check on the launcher's package:
+                    // nothing in the game folder or its records changes, so it
+                    // runs beside a refresh.
+                    got = Updater.FetchUpdate(cfg, packs, launcherUpdate, log);
                     // The write: after a refresh under way, and none starts
                     // until it is done (OwnGame.Alone).
                     Updater.Fetched write = got;
                     OwnGame.Alone(delegate { Updater.WriteUpdate(cfg, write, log); },
                         delegate { log("The update is downloaded. It goes in as soon as Thornswood's own Skyrim folder is ready."); });
 
-                    string launcher = Updater.LauncherOf(got);
+                    // The launcher last, once the release is in: Velopack puts
+                    // the checked package in when this launcher has closed and
+                    // starts the new one (Velo.ExitApply, the end of Main).
+                    Updater.LauncherUpdate launcher = Updater.LauncherOf(got);
                     if (launcher != null)
                     {
                         log("Updating the launcher. It will restart.");
                         got = null;
-                        Updater.SwapIn(launcher, log);
-                        win.Dispatcher.BeginInvoke(new Action(delegate { win.Close(); }));
+                        Updater.ApplyLauncher(launcher);
+                        Dispatcher.UIThread.Post(delegate { win.Close(); });
                         return;
                     }
 
-                    win.Dispatcher.BeginInvoke(new Action(delegate
+                    Dispatcher.UIThread.Post(delegate
                     {
-                        updateBar.Visibility = Visibility.Collapsed;
-                        InstallShown(Visibility.Collapsed);
+                        updateBar.IsVisible = false;
+                        InstallShown(false);
                         Stats.LastUpdate = DateTime.Now.ToString("d MMM HH:mm");
                         Stats.Save();
                         BuildStatRow();
@@ -651,12 +762,12 @@ namespace Thornswood
                         updateTriedWentIn = true;
                         Log("Update finished.");
                         if (after != null) after(true);
-                    }));
+                    });
                 }
                 catch (Exception ex)
                 {
                     Updater.Drop(got);
-                    win.Dispatcher.BeginInvoke(new Action(delegate
+                    Dispatcher.UIThread.Post(delegate
                     {
                         Log("Update failed: " + ex.Message);
                         // Everything before the pack that broke is in. Without
@@ -664,7 +775,7 @@ namespace Thornswood
                         // again unpacks them a second time, which rewrites each
                         // one's file list with every path marked as one the pack
                         // wrote over, so a later Remove leaves its own files.
-                        pendingPacks = Updater.Pending(doc);
+                        pendingPacks = Updater.Pending(cfg, doc);
                         txtUpdateTitle.Text = "Update failed";
                         updating = false;
                         btnUpdate.IsEnabled = true;
@@ -675,7 +786,7 @@ namespace Thornswood
                         updateTried = UpdateParts(packs, doc, withLauncher);
                         updateTriedWentIn = false;
                         if (after != null) after(false);
-                    }));
+                    });
                 }
                 finally { PlayProgress.Second(false); }
             });

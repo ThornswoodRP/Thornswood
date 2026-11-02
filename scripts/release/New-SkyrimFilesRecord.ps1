@@ -26,7 +26,7 @@
 
   Build-Launcher.ps1 puts the record inside the launcher, which reads it back
   in OwnGame (OwnGameKinds.cs). Run this in the same pull request as a move of
-  the pin; tests\test-skyrim-pin.ps1 fails while the two disagree.
+  the pin; launcher\tests\test-skyrim-pin.ps1 fails while the two disagree.
 
   Read only apart from the one file it writes. It never starts Steam and never
   talks to the VPS.

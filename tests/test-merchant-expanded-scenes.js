@@ -16,7 +16,7 @@ const published={
  'q-whiterun-enchanter-shimmermist':'402f870a3f8d330987e97d83c14a5ef54f1474fd3b3fbb644ec38e00928041f4'
 };
 for(const [id,hash] of Object.entries(published))assert.equal(activation.killScenes.find(row=>row.id===id)?.sha256,hash);
-const mode=fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8'),bundleContext={require,Buffer,Uint8Array};
+const mode=require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8')),bundleContext={require,Buffer,Uint8Array};
 vm.createContext(bundleContext);
 vm.runInContext(mode.slice(mode.indexOf('// MERCHANT TRADING BUNDLE BEGIN'),mode.indexOf('// MERCHANT TRADING BUNDLE END'))+
  '\nglobalThis.rows=MERCHANT_TRADING.expandedScenes();',bundleContext);

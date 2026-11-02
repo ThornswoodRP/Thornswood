@@ -47,7 +47,9 @@ function evalObjectLiteral(fromMark, toMark) {
 const COTTON = 'bb947:Skyrim.esm';
 const WHEAT = 'bb953:Skyrim.esm';
 
-const cropsBlock = cut('// ==== CROPS_BY_BASE, generated ====', '// ==== end CROPS_BY_BASE ====');
+// The gamemode reads both tables from game/gamemode-tables (#5191).
+const GT = require('./gamemode-tables.js');
+const cropsBlock = JSON.stringify(GT.table('CROPS_BY_BASE'));
 yes('CROPS_BY_BASE block is present', !!cropsBlock);
 yes('Tundra Cotton is NOT in CROPS_BY_BASE',
   !!cropsBlock && !cropsBlock.includes('"' + COTTON + '"') && !/Tundra Cotton/.test(cropsBlock));
@@ -62,24 +64,13 @@ yes('Tundra Cotton is NOT in CROP_RULES',
   !!rules && !rules.includes("'" + COTTON + "'") && !/Tundra Cotton/.test(rules));
 yes('Wheat stays in CROP_RULES', !!rules && rules.includes("'" + WHEAT + "'"));
 
-const harvestsStart = src.indexOf('var HARVESTS_BY_BASE = {');
-const harvestsEnd = src.indexOf('\n};\n', harvestsStart);
-const harvests = harvestsStart >= 0 && harvestsEnd > harvestsStart
-  ? src.slice(harvestsStart, harvestsEnd + 3) : '';
+const harvests = JSON.stringify(GT.table('HARVESTS_BY_BASE'));
 yes('HARVESTS_BY_BASE is present', !!harvests);
 yes('Tundra Cotton stays in HARVESTS_BY_BASE as gatherer flora',
-  !!harvests && harvests.includes('"' + COTTON + '"') && /"name": "Tundra Cotton"/.test(harvests));
+  !!harvests && harvests.includes('"' + COTTON + '"') && /"name":"Tundra Cotton"/.test(harvests));
 
-const CROPS_BY_BASE = (function () {
-  const m = src.match(/var CROPS_BY_BASE = (\{[\s\S]*?\n\});/);
-  if (!m) { return null; }
-  try { return eval('(' + m[1] + ')'); } catch (e) { return null; }
-})();
-const HARVESTS_BY_BASE = (function () {
-  const m = src.match(/var HARVESTS_BY_BASE = (\{[\s\S]*?\n\});/);
-  if (!m) { return null; }
-  try { return eval('(' + m[1] + ')'); } catch (e) { return null; }
-})();
+const CROPS_BY_BASE = GT.table('CROPS_BY_BASE');
+const HARVESTS_BY_BASE = GT.table('HARVESTS_BY_BASE');
 const CROP_RULES = (function () {
   const m = src.match(/var CROP_RULES = (\{[\s\S]*?\n\});/);
   if (!m) { return null; }

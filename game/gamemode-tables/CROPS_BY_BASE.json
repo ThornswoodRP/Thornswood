@@ -1,0 +1,86 @@
+{
+"141081:JK's Whiterun's Outskirts.esp":{
+"produce":"64b2e:Skyrim.esm",
+"name":"Red Apple",
+"rank":"expert",
+"growMinutes":75
+},
+"141088:JK's Whiterun's Outskirts.esp":{
+"produce":"64b2f:Skyrim.esm",
+"name":"Green Apple",
+"rank":"expert",
+"growMinutes":75
+},
+"1503ff:JK's Whiterun's Outskirts.esp":{
+"produce":"64b40:Skyrim.esm",
+"name":"Carrot",
+"rank":"novice",
+"growMinutes":75
+},
+"18d5d7:JK's Whiterun's Outskirts.esp":{
+"produce":"64b42:Skyrim.esm",
+"name":"Tomato",
+"rank":"advanced",
+"growMinutes":75
+},
+"206e8:Dragonborn.esm":{
+"produce":"206e7:Dragonborn.esm",
+"name":"Ash Yam",
+"rank":"advanced",
+"growMinutes":75
+},
+"2493d:JKs Skyrim.esp":{
+"produce":"64b40:Skyrim.esm",
+"name":"Carrot",
+"rank":"novice",
+"growMinutes":75
+},
+"2493e:JKs Skyrim.esp":{
+"produce":"669a5:Skyrim.esm",
+"name":"Leek",
+"rank":"novice",
+"growMinutes":75
+},
+"2c91:JKs Skyrim.esp":{
+"produce":"64b2e:Skyrim.esm",
+"name":"Red Apple",
+"rank":"expert",
+"growMinutes":75
+},
+"3274:JKs Skyrim.esp":{
+"produce":"64b2f:Skyrim.esm",
+"name":"Green Apple",
+"rank":"expert",
+"growMinutes":75
+},
+"bb952:Skyrim.esm":{
+"produce":"669a5:Skyrim.esm",
+"name":"Leek",
+"rank":"novice",
+"growMinutes":75
+},
+"bb953:Skyrim.esm":{
+"produce":"4b0ba:Skyrim.esm",
+"name":"Wheat",
+"rank":"advanced",
+"growMinutes":135
+},
+"bcf47:Skyrim.esm":{
+"produce":"64b41:Skyrim.esm",
+"name":"Potato",
+"rank":"novice",
+"growMinutes":75
+},
+"bcf48:Skyrim.esm":{
+"produce":"64b3f:Skyrim.esm",
+"name":"Cabbage",
+"rank":"novice",
+"growMinutes":75
+},
+"be3e6:Skyrim.esm":{
+"produce":"10d666:Skyrim.esm",
+"name":"Gourd",
+"rank":"novice",
+"growMinutes":75
+}
+}

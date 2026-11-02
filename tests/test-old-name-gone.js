@@ -15,7 +15,7 @@
 // There is no exception. Until 29 Sep the update path kept the old exe file
 // name, so that an install still running under it was renamed by its next
 // update and its shortcuts repointed (launcher\app\SelfSwap.cs and Icons.cs,
-// driven by tests\test-self-update.ps1). Patrick, 29 Sep: "We can actually do
+// driven by launcher\tests\test-self-update.ps1). Patrick, 29 Sep: "We can actually do
 // that now nobody has those old files anymore." So that went too, and the
 // name may appear nowhere at all, the update path and this harness included.
 //

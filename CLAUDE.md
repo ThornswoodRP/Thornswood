@@ -6,10 +6,11 @@ long form of every step, and CONTRIBUTING.md says how a change is sent.
 
 ## Build
 
-- The launcher: `.\scripts\release\Find-MSBuild.ps1 -Report` says whether
-  MSBuild and the .NET Framework 4.8.1 targeting pack are there, then
-  `.\scripts\release\Build-Launcher.ps1 -Root $env:TEMP\launcher-try -NoPause`
-  builds it into a folder of its own.
+- The launcher needs the .NET 10 SDK and the Visual Studio 2022 C++ build
+  tools ("Desktop development with C++") for its Native AOT publish;
+  `.\scripts\release\Build-Launcher.ps1 -Root $env:TEMP\launcher-try -NoSign -NoPause`
+  builds it into a folder of its own. `dotnet build launcher\app\Thornswood.csproj`
+  compiles it on any machine, Linux too.
 - The gamemode is `game\gamemode.js` as it is; `docs\GAMEMODE.md` says how
   it is laid out and deployed.
 - The engine (the SkyMP fork in `engine\skymp`): `engine\README.md`.

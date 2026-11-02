@@ -31,6 +31,10 @@ sealed class FakeGitHub : HttpMessageHandler
     /// <summary>The answer to a run or approvals read, when not 200 (an App without Actions: read).</summary>
     public HttpStatusCode? RunsAnswer { get; set; }
     public Func<HttpRequestMessage, HttpResponseMessage>? Other { get; set; }
+    /// <summary>Awaited before a list of an environment's Deployments is
+    /// answered, with that environment: a test holds one environment's pass
+    /// here to stand for an apply that takes a long time.</summary>
+    public Func<string, Task>? BeforeDeployments { get; set; }
     /// <summary>What a compare of two commits names; null answers 404.</summary>
     public List<string>? Changed { get; set; } = new();
     public readonly List<string> Compared = new();
@@ -111,6 +115,7 @@ sealed class FakeGitHub : HttpMessageHandler
         var body = r.Content == null ? "" : await r.Content.ReadAsStringAsync(ct);
         var p = r.RequestUri.AbsolutePath;
         var q = System.Web.HttpUtility.ParseQueryString(r.RequestUri.Query);
+        if (r.Method == HttpMethod.Get && p == "/repos/O/R/deployments" && BeforeDeployments is { } before) await before(q["environment"] ?? "");
         lock (gate)
         {
             const string ar = "/repos/O/R/actions/runs/";
@@ -382,7 +387,7 @@ sealed class FakeControl(FakeServer s) : IServerControl
     public bool TcpAnswers(int port) => s.Running;
 }
 
-public sealed class AgentTests : IDisposable
+public sealed partial class AgentTests : IDisposable
 {
     const string Commit = "0123456789abcdef0123456789abcdef01234567";
     readonly List<string> temp = new();
@@ -1238,9 +1243,15 @@ public sealed class AgentTests : IDisposable
         var state = Path.Combine(cfg.Home, "state", "working.json");
         Directory.CreateDirectory(Path.GetDirectoryName(state)!);
         File.WriteAllText(state, $"{{\"Deployment\":\"{id}\",\"Env\":\"dev\",\"Started\":\"then\"}}");
+        // And the record an environment's own loop keeps (Run, #5190).
+        var id2 = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-2\"}");
+        var state2 = Path.Combine(cfg.Home, "state", "working-dev.json");
+        File.WriteAllText(state2, $"{{\"Deployment\":\"{id2}\",\"Env\":\"dev\",\"Started\":\"then\"}}");
         await a.Start(default);
         HasStates(gh, s, id, "error", last: true);
+        HasStates(gh, s, id2, "error", last: true);
         Assert.False(File.Exists(state));
+        Assert.False(File.Exists(state2));
     }
 
     // ---- after a dev Deployment: the load order and the parity check -------------
@@ -1692,7 +1703,7 @@ public sealed class AgentTests : IDisposable
         // without its game files, nothing private, no world.
         Assert.NotNull(copyTree);
         Assert.Equal(string.Join("\n", new[] {
-            "bot/Bot-Pass.js", "bot/bot.js", "bot/character.js",
+            "bot/Bot-Pass.js", "bot/bot.js", "bot/character.js", "pass.txt",
             "server/data/scripts/ActiveMagicEffect.pex", "server/dist_back/skymp5-server.js",
             "server/gamemode.js", "server/scam_native.node", "server/server-settings.json", "server/thornswood-build.json",
         }.Order(StringComparer.Ordinal)), copyTree);
@@ -1778,6 +1789,148 @@ public sealed class AgentTests : IDisposable
         Assert.DoesNotContain("10.0.0.5", log);
         if (how == "hang") Assert.Equal(1, ((FakeTasks)a.Tasks).Ends);
         if (how == "face") Assert.Contains("FAIL  face", log);
+    }
+
+    /// <summary>A pass that runs out says where it got to: what Task
+    /// Scheduler says of it, the pass's own last lines (bot-pass.log, which
+    /// Bot-Pass.js writes as each step starts) and the copy's server's, all
+    /// redacted. Deployment 7480554210 said only that it ran out.</summary>
+    [Fact]
+    public async Task APassThatRunsOutSaysWhereItGot()
+    {
+        var (a, gh, s, bp) = MakeWithPass(bp =>
+        {
+            File.WriteAllText(bp.PassLogPath, "2026-11-01T23:11:40.000Z  the bot pass starts in C:\\x\n2026-11-01T23:11:41.000Z  the server started; it has 600 s to say gamemode.js loaded\n");
+            File.WriteAllText(bp.ServerLogPath, "[thornswood] loading plugins\r\nlistening on 10.0.0.5:7901\r\n");
+            return "hang";
+        });
+        BotRelease(gh, "build-1", "// new gamemode\n");
+        var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-1\"}");
+        await a.Pass("dev", default);
+        Assert.Contains("did not end within 5 s", (string)gh.Last(id)!["description"]!);
+        var log = s.Read(Path.Combine("data", $"deploy-{id}.log"));
+        Assert.Contains("Task Scheduler at the limit: Running", log);
+        Assert.Contains(", this run", log);
+        Assert.Contains("  2026-11-01T23:11:41.000Z  the server started; it has 600 s to say gamemode.js loaded", log);
+        Assert.Contains("  [thornswood] loading plugins", log);
+        Assert.Contains("listening on <address>", log);
+        Assert.DoesNotContain("10.0.0.5", log);
+        Assert.True(log.IndexOf("bot-pass.log") < log.IndexOf("bot-pass-server.log"), "the pass's own lines come first");
+        Assert.Equal("// old gamemode\r\n", s.Read("gamemode.js"));
+    }
+
+    /// <summary>Each pass's logs are kept once the next pass needs the run
+    /// folder, named by the pass's Deployment, so no measurement is lost to
+    /// the pass after it; a pass from before pass.txt is kept as unnamed;
+    /// the newest 30 stay.</summary>
+    [Fact]
+    public async Task EachPassKeepsItsLogsWhenTheNextPassEmptiesTheFolder()
+    {
+        var n = 0;
+        var (a, gh, s, bp) = MakeWithPass(bp =>
+        {
+            n++;
+            File.WriteAllText(bp.PassLogPath, $"pass {n} said this\n");
+            File.WriteAllText(bp.ServerLogPath, $"server {n} said this\n");
+            return WriteResult(bp, true);
+        });
+        // What an agent from before left: logs and no pass.txt.
+        Directory.CreateDirectory(bp.ServerDir);
+        File.WriteAllText(bp.ServerLogPath, "the hung pass's server\n");
+        File.SetLastWriteTimeUtc(bp.ServerLogPath, new DateTime(2026, 11, 1, 23, 41, 30, DateTimeKind.Utc));
+        // Old kept passes, more than the newest 30.
+        for (var i = 0; i < BotPass.KeepPasses + 2; i++) Directory.CreateDirectory(Path.Combine(bp.KeptDir, $"20200101-0000{i:00}-deployment-{i}"));
+
+        BotRelease(gh, "build-1", "// new gamemode\n");
+        var first = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-1\"}");
+        await a.Pass("dev", default);
+        HasStates(gh, s, first, "success", last: true);
+        var unnamed = Path.Combine(bp.KeptDir, "20261101-234130-unnamed");
+        Assert.Equal("the hung pass's server\n", File.ReadAllText(Path.Combine(unnamed, "bot-pass-server.log")));
+        Assert.Equal($"deployment-{first}", File.ReadAllText(Path.Combine(bp.RunDir, BotPass.PassName)));
+
+        BotRelease(gh, "build-2", "// newer gamemode\n");
+        var second = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-2\"}");
+        await a.Pass("dev", default);
+        HasStates(gh, s, second, "success", last: true);
+        var kept = Directory.GetDirectories(bp.KeptDir).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
+        var mine = kept.Single(k => k!.EndsWith($"-deployment-{first}"));
+        Assert.Equal("pass 1 said this\n", File.ReadAllText(Path.Combine(bp.KeptDir, mine!, "bot-pass.log")));
+        Assert.Equal("server 1 said this\n", File.ReadAllText(Path.Combine(bp.KeptDir, mine!, "bot-pass-server.log")));
+        Assert.True(File.Exists(Path.Combine(bp.KeptDir, mine!, "result.json")));
+        Assert.Contains($"the last pass's logs are kept in {Path.Combine(bp.KeptDir, mine!)}", s.Read(Path.Combine("data", $"deploy-{second}.log")));
+        Assert.Equal(BotPass.KeepPasses, kept.Count);
+        Assert.Contains("20261101-234130-unnamed", kept);
+        Assert.DoesNotContain("20200101-000000-deployment-0", kept);
+        Assert.Equal("pass 2 said this\n", File.ReadAllText(bp.PassLogPath));
+    }
+
+    /// <summary>A log past the limit is kept by its end, saying so.</summary>
+    [Fact]
+    public void AKeptLogPastTheLimitKeepsItsEnd()
+    {
+        var root = Temp();
+        var env = new EnvConfig { BotPassRoot = root };
+        var bp = new BotPass(env, new FakeTasks(() => null));
+        Directory.CreateDirectory(bp.ServerDir);
+        using (var f = File.Create(bp.ServerLogPath)) { f.SetLength(BotPass.KeepBytes + 10); f.Seek(-4, SeekOrigin.End); f.Write("END\n"u8); }
+        var dir = bp.KeepLast(_ => { });
+        var text = File.ReadAllText(Path.Combine(dir!, "bot-pass-server.log"));
+        Assert.StartsWith("[the first 10 bytes of " + (BotPass.KeepBytes + 10) + " were left out; this is its end]\n", text);
+        Assert.EndsWith("END\n", text);
+        Assert.Null(new BotPass(new EnvConfig { BotPassRoot = Temp() }, new FakeTasks(() => null)).KeepLast(_ => { }));
+    }
+
+    /// <summary>A pass that ended is read as ended at once, though Task
+    /// Scheduler writes its run down before the agent's own reading of the
+    /// time (#5380: 15 s on the box, so every pass was waited on to the
+    /// limit and failed). A start that never runs is still told apart.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task APassIsReadByTaskSchedulersOwnRecordNotTheAgentsClock(bool neverRuns)
+    {
+        var (a, gh, s, bp) = MakeWithPass(bp => WriteResult(bp, true));
+        var tasks = (FakeTasks)a.Tasks;
+        tasks.WrittenEarlier = TimeSpan.FromSeconds(15);
+        tasks.NeverRuns = neverRuns;
+        BotRelease(gh, "build-1", "// new gamemode\n");
+        var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-1\"}");
+        var took = System.Diagnostics.Stopwatch.StartNew();
+        await a.Pass("dev", default);
+        var log = s.Read(Path.Combine("data", $"deploy-{id}.log"));
+        if (!neverRuns)
+        {
+            HasStates(gh, s, id, "success", last: true);
+            Assert.True(took.Elapsed < TimeSpan.FromSeconds(4), $"the pass was waited on for {took.Elapsed}, past its end");
+            Assert.Contains("bot pass: ", log);
+            return;
+        }
+        Assert.Equal("failure", (string)gh.Last(id)!["state"]!);
+        Assert.Contains("did not end within 5 s", (string)gh.Last(id)!["description"]!);
+        Assert.Contains("Task Scheduler at the limit: Ready", log);
+        Assert.Contains("so this start never ran", log);
+    }
+
+    /// <summary>The task takes one run at a time and Task Scheduler ignores a
+    /// start while one runs (IgnoreNew), so a pass still running from before
+    /// is not started over and waited on as if it were this one.</summary>
+    [Fact]
+    public async Task APassStillRunningFromBeforeIsNotWaitedOnAsThisOne()
+    {
+        var (a, gh, s, bp) = MakeWithPass(bp => WriteResult(bp, true));
+        var tasks = (FakeTasks)a.Tasks;
+        tasks.AlreadyRunning(DateTime.UtcNow.AddMinutes(-31));
+        BotRelease(gh, "build-1", "// new gamemode\n");
+        var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-1\"}");
+        await a.Pass("dev", default);
+        var d = (string)gh.Last(id)!["description"]!;
+        Assert.Equal("failure", (string)gh.Last(id)!["state"]!);
+        Assert.Contains("the bot pass task is still Running", d);
+        Assert.Contains("nothing was started", s.Read(Path.Combine("data", $"deploy-{id}.log")));
+        Assert.Equal(0, tasks.Starts);
+        Assert.Equal(0, tasks.Ends);
+        Assert.Equal("// old gamemode\r\n", s.Read("gamemode.js"));
     }
 
     /// <summary>The bot part goes into the copy whole: a file the bot carries
@@ -1919,16 +2072,25 @@ sealed class FakeTasks(Func<string?> work) : ITasks
     public string? LastName;
     volatile bool running;
     DateTime last = DateTime.MinValue;
+    /// <summary>How much earlier than the agent's clock the run is written
+    /// down. On the box Task Scheduler wrote each run 13 to 15 s before the
+    /// time the agent read just before starting it (#5380), so every test
+    /// runs with that.</summary>
+    public TimeSpan WrittenEarlier { get; set; } = TimeSpan.FromSeconds(15);
+    /// <summary>A start Task Scheduler takes and never runs.</summary>
+    public bool NeverRuns { get; set; }
     public void Start(string name)
     {
         Starts++;
         LastName = name;
+        if (NeverRuns) return;
         running = true;
-        last = DateTime.UtcNow;
+        last = DateTime.UtcNow - WrittenEarlier;
         Task.Run(() => { var w = work(); if (w != "hang") running = false; });
     }
     public TaskInfo Info(string name) => new(running ? "Running" : "Ready", last, 0);
     public void End(string name) { Ends++; running = false; }
+    public void AlreadyRunning(DateTime since) { running = true; last = since; }
 }
 
 sealed class Stub(Func<HttpRequestMessage, Task<HttpResponseMessage>> f) : HttpMessageHandler

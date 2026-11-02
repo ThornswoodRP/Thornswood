@@ -15,7 +15,7 @@
   hold each copy to it, so a rule changed here is changed there too.
 
   WHY IT EXISTS. Release notes are read by customers in three places: the
-  launcher's News tab, the site's News page and Discord. Developer-Guide.md says
+  launcher's News tab, the site's News page and Discord. docs/guide/rules.md says
   plain words, never "player", no em dashes, and never pull request numbers or
   branch names in them. Ship checked only that there was a title and a detail
   line (25 September), so on 26 and 27 September these went out anyway:

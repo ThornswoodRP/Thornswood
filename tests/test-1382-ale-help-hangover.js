@@ -33,10 +33,10 @@ function rig(startAt) {
   const said = [];
   const g = {};
   const Fake = {
-    getOnlinePlayers: function () { return online.slice(); },
     makeProperty: function () { },
     getDescFromId: function () { return ''; },
     get: function (id, key) {
+      if (id === 0 && key === 'onlinePlayers') { return online.slice(); }
       if (key === 'worldOrCellDesc') { return (store[id] && store[id].cell) || 'cell:X.esm'; }
       return store[id] ? store[id].v : undefined;
     },

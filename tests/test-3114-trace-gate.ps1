@@ -3,30 +3,25 @@
 
       pwsh -NoProfile -File .\tests\test-3114-trace-gate.ps1
 
-  Issue #3114. scripts\dev\Trace-Gate.ps1 traces one run of the pull request
-  gate on the VPS, so the read map that picks a pull request's harnesses is
-  measured where the gate runs. Nothing here starts a trace: it holds the
-  three parts to each other and to build.yml.
+  Issue #3114. scripts\dev\Trace-Gate.ps1 is the box's half of the gate
+  trace: the trace's self-test there and the trace task that traced main
+  builds on the box's build runners. The whole gate is traced on GitHub's
+  hosted runner by gate-map.yml (#5183), which tests\test-4009-gate-map.ps1
+  holds. Nothing here starts a trace:
 
-    1. trace-gate.yml is not here: it moved to the private ops repository
-       with the VPS runners (#4013), whose tests\test-box-workflows.ps1
-       holds it to build.yml's gate step; Trace-Gate.ps1 dispatches it there
-       on main with the branch to trace, and downloads its start log;
-    2. Trace-Gate.ps1 runs the self-test first, stops the session in a
-       finally, deletes a trace that was refused or not read, and pushes
-       only to a claude/3114-trace-<run> branch it makes, from an index of
-       its own with nothing piped into git; -PushRun pushes a kept read;
+    1. no trace-gate.yml, here or started from here: the private ops
+       repository's copy ran the gate on a box build runner, checking out
+       any ref it was given, and is gone with the box's other jobs that do
+       not need the box (#5270); Trace-Gate.ps1 starts no workflow, takes
+       no ref and pushes nothing;
+    2. Trace-Gate.ps1 parses, says what to run when given no mode, names
+       gate-map.yml for the whole gate, and its -Install runs the self-test
+       first and installs nothing when it fails;
     3. scripts\dev\Trace-Gate-Box.ps1 parses, its C# compiles as C# 5 (what
        Windows PowerShell 5.1 builds) against stand-ins for the event log
        reader, it keeps the trace in a folder only administrators and the
        system can open, refuses a trace that lost events, and deletes the
        trace once read.
-    4. Trace-Gate.ps1's push, run for real against a scratch repository and
-       a bare one standing in for GitHub: the branch holds the four files
-       byte for byte, the scratch checkout's index, HEAD and files are as
-       they were, and the kept folder is gone. This is the step the first
-       gate trace stopped at (run 39731778532, 22 Oct: what pwsh piped into
-       git mktree ended in a blank line, which git refused).
 
   Writes only its scratch folder, in the system's temp folder, and deletes it.
 #>
@@ -39,22 +34,24 @@ function Yes([string]$what, [bool]$cond) {
 }
 function Text([string]$rel) { [IO.File]::ReadAllText((Join-Path $repo $rel)) }
 
-# ---- 1. the workflow is in the ops repository (#4013) ----------------------------
-Yes 'trace-gate.yml is not in this repository, which has no VPS runner once public' (-not (Test-Path -LiteralPath (Join-Path $repo '.github\workflows\trace-gate.yml')))
+# ---- 1. no trace-gate.yml (#5270) --------------------------------------------
+Yes 'trace-gate.yml is not in this repository' (-not (Test-Path -LiteralPath (Join-Path $repo '.github\workflows\trace-gate.yml')))
+$t = Text 'scripts\dev\Trace-Gate.ps1'
+# The script after its help, with its comment lines taken out.
+$body = (@($t.Substring($t.IndexOf('#>') + 2) -split "`r?`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n")
+Yes 'Trace-Gate.ps1 starts no workflow and names no trace-gate.yml outside its help' ($body -notmatch 'trace-gate\.yml' -and $body -notmatch '&\s*gh\b' -and $body -notmatch 'Invoke-Gh' -and $body -notmatch 'Start-ThornswoodWorkflow')
+Yes '  takes no ref, so nothing it is handed is checked out anywhere' ($t -notmatch '\[string\]\$Ref\b' -and $t -notmatch '\$PushRun')
+Yes '  and pushes nothing' ($body -notmatch 'git ')
 
 # ---- 2. the script on the shipping machine --------------------------------------
-$t = Text 'scripts\dev\Trace-Gate.ps1'
 $e = $null; $null = [Management.Automation.Language.Parser]::ParseInput($t, [ref]$null, [ref]$e)
 Yes 'Trace-Gate.ps1 parses' (-not $e.Count)
-$self = $t.IndexOf("Invoke-Box 'selftest'"); $start = $t.IndexOf("Invoke-Box 'start'")
-Yes '  runs the self-test before it starts the session' ($self -gt 0 -and $start -gt $self -and $t -match "if \(\`$b\.Code -ne 0\) \{ Die \('the self-test did not pass")
-Yes '  dispatches trace-gate.yml in the private ops repository, on its main, with the branch to trace as ref' ($t.Contains("[string]`$Repo = 'ThornswoodRP/Thornswood-Ops'") -and $t.Contains("workflow run trace-gate.yml --repo `$Repo --ref main '-f' ('ref=' + `$Ref)") -and $t.Contains('--workflow trace-gate.yml --branch main --event workflow_dispatch'))
-Yes '  and downloads its gate-trace artifact' ($t -match 'run download \$run\.databaseId --repo \$Repo -n gate-trace')
-Yes '  stops the session in a finally, whatever the run did' ($t -match "(?s)\} finally \{\s*Head '3\. The session stopped'\s*\`$s = Invoke-Box 'stop'")
-Yes '  deletes the trace when there is no finished run, a refusal, or no read' (@([regex]::Matches($t, "\`$null = Invoke-Box 'clean'; Die")).Count -eq 3)
-Yes '  pushes only to the branch it names for the run' (@([regex]::Matches($t, 'git -C \$RepoRoot push')).Count -eq 1 -and $t -match "\`$branch = 'claude/3114-trace-' \+ \`$runId" -and $t -match "\(\`$commit \+ ':refs/heads/' \+ \`$branch\)" -and $t -match 'Push-Trace \$run\.databaseId \$work' -and $t -match 'Push-Trace \$PushRun \$work')
-Yes '  with the plumbing, in an index of its own, so the checkout it runs in is not touched' ($t -match 'hash-object -w' -and $t -match "\`$env:GIT_INDEX_FILE = \`$index" -and $t -match 'update-index --add --cacheinfo' -and $t -match 'write-tree' -and $t -match 'commit-tree' -and $t -notmatch 'git -C \$RepoRoot (checkout|switch|commit |add |reset|stash)')
-Yes '  and nothing piped into git, whose bytes depend on the PowerShell' ($t -notmatch '\|\s*&\s*git\b' -and $t -notmatch '& git -C \$RepoRoot mktree')
+Yes '  given no mode it says which to give, and names gate-map.yml for the whole gate' ($body -match [regex]::Escape("if (-not (`$SelfTest -or `$Clean -or `$Install -or `$Status -or `$Uninstall)) {") -and $body -match [regex]::Escape('gh workflow run gate-map.yml --ref main'))
+$g = Text '.github\workflows\gate-map.yml'
+Yes '  and gate-map.yml is here and runs the whole gate under the trace' ($g -match 'Trace-Gate-Here\.ps1' -and $g -match '(?m)^\s+\.\\scripts\\dev\\Run-Gate\.ps1 -Throttle \d+ -BudgetSeconds \d+ -StartLog ')
+$ins = $body.IndexOf('if ($Install) {')
+$self = $body.IndexOf("Invoke-Box 'selftest'", [Math]::Max(0, $ins)); $put = $body.IndexOf("Invoke-Box 'install'")
+Yes '  -Install runs the self-test before it installs, and installs nothing when it fails' ($ins -gt 0 -and $self -gt $ins -and $put -gt $self -and $body.Contains('Nothing was installed.'))
 
 # ---- 3. the script on the box ---------------------------------------------------
 $x = Text 'scripts\dev\Trace-Gate-Box.ps1'
@@ -76,54 +73,6 @@ Yes '  the trace folder is closed to all but administrators and the system' ($x 
 Yes '  a trace that lost events is refused' ($x -match "(?s)'stop' \{\s*Stop-TraceSession \`$sessionName\s*if \(\`$script:lost\) \{ 'REFUSED: '.*?exit 1 \}")
 Yes '  the trace is deleted once read, and only paths in the checkout leave' ($x -match "(?s)'END'\s*Remove-Item -LiteralPath \(Join-Path \`$traceRoot 'gate\.etl'\), \(Join-Path \`$traceRoot 'gate\.etl\.procs'\) -Force" -and $x -match 'if \(!inside\) \{ if \(objO != null\) objects\.Remove\(Address\(objO\)\); continue; \}')
 Yes '  every mode Trace-Gate.ps1 asks for is there' (@('selftest', 'start', 'stop', 'read', 'clean', 'install', 'status', 'uninstall' | Where-Object { $x -notmatch ("(?m)^    '" + $_ + "' \{") }).Count -eq 0)
-
-# ---- 4. the push, for real -------------------------------------------------------
-$fn = [Management.Automation.Language.Parser]::ParseInput($t, [ref]$null, [ref]$null).FindAll({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Push-Trace' }, $true) | Select-Object -First 1
-Yes 'Trace-Gate.ps1 has its push as Push-Trace' ($null -ne $fn)
-if ($fn) {
-    $scratch = Join-Path ([IO.Path]::GetTempPath()) ('trace-push-' + [Guid]::NewGuid().ToString('N'))
-    $null = New-Item -ItemType Directory -Path $scratch
-    try {
-        function GitOk { $o = @(& git @args 2>&1); if ($LASTEXITCODE -ne 0) { throw ('git ' + ($args -join ' ') + ': ' + ($o -join ' ')) }; $o }
-        $bare = Join-Path $scratch 'github.git'; $RepoRoot = Join-Path $scratch 'clone'
-        $null = GitOk init -q --bare $bare
-        $null = GitOk init -q $RepoRoot
-        [IO.File]::WriteAllText((Join-Path $RepoRoot 'kept.txt'), "as it was`n")
-        $null = GitOk -C $RepoRoot add kept.txt
-        # A name to commit as, as the shipping machine's checkout has; a build
-        # runner has none of its own.
-        $null = GitOk -C $RepoRoot config user.name 'Trace test'
-        $null = GitOk -C $RepoRoot config user.email 'trace-test@example.invalid'
-        $null = GitOk -C $RepoRoot commit -q -m one
-        $null = GitOk -C $RepoRoot remote add origin $bare
-        $headBefore = (GitOk -C $RepoRoot rev-parse HEAD) -join ''
-        $indexBefore = (Get-FileHash -LiteralPath (Join-Path $RepoRoot '.git/index')).Hash
-        $work = Join-Path $RepoRoot 'temp-trace-gate-7'
-        $null = New-Item -ItemType Directory -Path $work
-        $want = @{
-            'traces.jsonl.gz' = [byte[]](31, 139, 8, 0, 0, 0, 0, 0, 0, 3, 75, 4, 0, 67, 190, 183, 232, 1, 0, 0, 0)
-            'starts.jsonl' = [Text.Encoding]::UTF8.GetBytes("{`"name`":`"test-a.js`",`"pid`":4,`"start`":`"2026-10-22T06:05:00.0000000Z`"}`n")
-            'run.json' = [Text.Encoding]::UTF8.GetBytes('{"commit":"' + ('a' * 40) + '","workspace":"C:\\w"}')
-            'summary.txt' = [Text.Encoding]::UTF8.GetBytes("Gate trace`nline two`n")
-        }
-        foreach ($k in $want.Keys) { [IO.File]::WriteAllBytes((Join-Path $work $k), $want[$k]) }
-        function Say($m, $c) { }
-        function Die($m) { throw $m }
-        $died = ''
-        try { & ([ScriptBlock]::Create($fn.Extent.Text + "`nPush-Trace '7' '" + $work.Replace("'", "''") + "'")) } catch { $died = $_.Exception.Message }
-        Yes ('  pushes the run''s branch' + $(if ($died) { ': ' + $died } else { '' })) (-not $died -and ((GitOk --git-dir $bare branch --list) -join '') -match 'claude/3114-trace-7')
-        $same = $true
-        foreach ($k in $want.Keys) {
-            if ($died) { $same = $false; break }
-            $tmp = Join-Path $scratch ('want-' + $k)
-            [IO.File]::WriteAllBytes($tmp, $want[$k])
-            if (((GitOk --git-dir $bare rev-parse ('claude/3114-trace-7:' + $k)) -join '') -ne ((GitOk --git-dir $bare hash-object $tmp) -join '')) { $same = $false }
-        }
-        Yes '  with the four files byte for byte, and only those' ($same -and @(GitOk --git-dir $bare ls-tree --name-only claude/3114-trace-7).Count -eq 4)
-        Yes '  and the checkout it ran in has its own HEAD, index and files as they were' (((GitOk -C $RepoRoot rev-parse HEAD) -join '') -eq $headBefore -and (Get-FileHash -LiteralPath (Join-Path $RepoRoot '.git/index')).Hash -eq $indexBefore -and ((GitOk -C $RepoRoot status --porcelain) -join '') -eq '' -and -not (Test-Path Env:\GIT_INDEX_FILE))
-        Yes '  and the kept folder is gone once pushed' (-not (Test-Path -LiteralPath $work))
-    } finally { Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction SilentlyContinue }
-}
 
 Write-Host ''
 Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail)

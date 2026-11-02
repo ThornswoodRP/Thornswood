@@ -30,7 +30,7 @@
        the recorded client, NOT READY when it does not.
     5. The main-only row (the server build, issue #932): none on dev, WARN
        on main, and never a change to the verdict. The setup stub is not a
-       row: a main Ship takes the one CI built (test-ship-ci-launcher.ps1).
+       row: a Ship builds no installer and sends no launcher (#4825).
     6. The script's own text: no row asks for the fork, stale plugins and
        required-data in the game folder are notes (Ship's Go.ps1 step copies
        them in before it checks), and the main-only rows are asked only when
@@ -47,11 +47,7 @@
        where it installs, and recording a folder with Setup-ShipMachine for
        any other; since #2662 a folder named by -Root or recorded passes
        with no Launcher folder, as a dev Ship makes one there itself.
-       Get-PackageLauncherRows: a
-       warning only, passing when the Ship builds a launcher (another number
-       on main's feed), when the folder holds the feed's, and, since #2661,
-       when the Ship keeps the feed's and the feed names a whole launcher
-       for it to download, check and put there; warning when it names none.
+       The -Package launcher row went with the old installer (#4824).
        And the script's text: no "Install Thornswood from thornswood.net",
        no "press Play", and the game folder's fix is Update-ShipRoot alone:
        the animation and body files are built on each computer by the
@@ -79,7 +75,7 @@ $errs = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($Ready, [ref]$null, [ref]$errs)
 Yes 'Check-ShipReady.ps1 parses' (@($errs).Count -eq 0)
 $fns = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true))
-foreach ($name in 'New-Row', 'Get-ShipVerdict', 'Get-ClientRows', 'Get-MainOnlyRows', 'Get-LauncherRows', 'Get-PackageLauncherRows') {
+foreach ($name in 'New-Row', 'Get-ShipVerdict', 'Get-ClientRows', 'Get-MainOnlyRows', 'Get-LauncherRows') {
     $f = @($fns | Where-Object { $_.Name -eq $name })
     Yes "Check-ShipReady.ps1 has $name" ($f.Count -eq 1)
     if ($f.Count -eq 1) { Invoke-Expression $f[0].Extent.Text }
@@ -339,44 +335,6 @@ try {
         -not (@(Get-LauncherRows 'dev' ''))[0].Ok -and (@(Get-LauncherRows 'main' ''))[0].Ok)
     Yes '8.   and named makes no difference to a folder that is not known' (-not (@(Get-LauncherRows 'dev' '' $true))[0].Ok)
 
-    # What -Package packs as the launcher, a warning on main.
-    $exe = Join-Path $mainRoot 'Launcher\Thornswood.exe'
-    $feedSha = Sha $exe
-    function Feed([string]$v, [string]$s, [string]$u = '') {
-        $f = [pscustomobject]@{ launcherVersion = $v; launcherSha256 = $s }
-        if ($u) { $f | Add-Member -NotePropertyName launcherUrl -NotePropertyValue $u }
-        return $f
-    }
-    $feedUrl = 'https://thornswood.net/feed/launcher/Thornswood.exe'
-    $r = @(Get-PackageLauncherRows '1.2.5' (Feed '1.2.4' 'e079f4e484129540c24b076185886d6a2e945f52ff2d02b94b3880f4fa7efe20') $exe)
-    Yes '8. -Package: another number on main''s feed passes, as a warning row' ($r.Count -eq 1 -and $r[0].Ok -and $r[0].Level -eq 'warn')
-    Yes '8.   saying the Ship builds this checkout''s number and puts it there first' ($r[0].Detail -match 'builds 1\.2\.5' -and $r[0].Detail -match 'before -Package')
-    $r = @(Get-PackageLauncherRows '1.2.5' (Feed '1.2.4' 'aa') (Join-Path $tmp 'nowhere\Thornswood.exe'))
-    Yes '8.   even with no launcher in the folder' ($r[0].Ok)
-    $r = @(Get-PackageLauncherRows '1.2.4' (Feed '1.2.4' $feedSha.ToUpperInvariant()) $exe)
-    Yes '8. -Package: the same number and the folder holds the feed''s launcher passes' ($r[0].Ok -and $r[0].Detail -match 'is the 1\.2\.4')
-    # Since #2661 a Ship that keeps the feed's launcher downloads it, checks it
-    # and puts it in the folder before -Package, so another launcher or none
-    # in the folder passes when the feed names a whole launcher.
-    $r = @(Get-PackageLauncherRows '1.2.4' (Feed '1.2.4' ('0' * 64) $feedUrl) $exe)
-    Yes '8. -Package: the same number and another launcher in the folder passes, as a warning row (#2661)' ($r[0].Ok -and $r[0].Level -eq 'warn')
-    Yes '8.   saying the Ship that keeps the feed''s puts it there, checked, before -Package, and naming #2661' (
-        $r[0].Detail -match 'is not the 1\.2\.4' -and $r[0].Detail -match 'keeps the feed' -and $r[0].Detail -match 'sha256 and signature' -and
-        $r[0].Detail -match 'before -Package' -and $r[0].Detail -match '#2661')
-    $r = @(Get-PackageLauncherRows '1.2.4' (Feed '1.2.4' $feedSha $feedUrl) (Join-Path $tmp 'nowhere\Thornswood.exe'))
-    Yes '8. -Package: the same number and no launcher in the folder passes, the Ship puts the feed''s there (#2661)' (
-        $r[0].Ok -and $r[0].Detail -match 'there is no ' -and $r[0].Detail -match 'puts it there before -Package')
-    $r = @(Get-PackageLauncherRows '1.2.4' (Feed '1.2.4' ('0' * 64)) $exe)
-    Yes '8. -Package: the same number, another launcher and a feed with no launcherUrl warns' (-not $r[0].Ok -and $r[0].Level -eq 'warn')
-    Yes '8.   saying that Ship stops before anything is published, with -RebuildLauncher as the fix' (
-        $r[0].Detail -match 'no whole launcher' -and $r[0].Detail -match 'stops before anything is published' -and $r[0].Fix -match '-RebuildLauncher')
-    $r = @(Get-PackageLauncherRows '1.2.4' (Feed '1.2.4' 'aa' $feedUrl) (Join-Path $tmp 'nowhere\Thornswood.exe'))
-    Yes '8. -Package: the same number, no launcher and a feed sha256 that is not 64 hex digits warns' (-not $r[0].Ok -and $r[0].Detail -match 'no whole launcher')
-    $r = @(Get-PackageLauncherRows '1.2.4' $null $exe)
-    Yes '8. -Package: main''s feed unread warns, saying so' (-not $r[0].Ok -and $r[0].Level -eq 'warn' -and $r[0].Detail -match 'could not be read')
-    $v = Get-ShipVerdict (@(Get-LauncherRows 'main' (Join-Path $tmp 'nowhere')) + @(Get-PackageLauncherRows '1.2.4' (Feed '1.2.4' $feedSha) ''))
-    Yes '8. a main root with no launcher and the -Package warning is still READY' ($v.Ready -and $v.Warns.Count -eq 1)
-
     # The script's text.
     Yes '8. no fix says to install Thornswood from thornswood.net' ($text -notmatch 'Install Thornswood from thornswood\.net')
     Yes '8. no fix says to open the launcher and press Play' ($text -notmatch 'press Play')
@@ -384,8 +342,7 @@ try {
     Yes '8. the game folder''s fix is Update-ShipRoot, with -SkyrimFrom named, and no Build-Generated (#3715)' (
         $text -match "(?s)Ready 'it has its own game folder'.{0,400}Update-ShipRoot\.ps1 -Channel.{0,300}-SkyrimFrom" -and $text -notmatch 'Build-Generated' -and $text -notmatch 'Get-GeneratedRows')
     Yes '8. the launcher row is asked of the folder Ship would build from' ($text -match 'foreach \(\$r in @\(Get-LauncherRows \$Channel \$Root \$rootNamed\)\) \{ Show-Row \$r \}')
-    Yes '8. the -Package launcher row is asked on main only, beside the other -Package row' (
-        $text -match '(?s)if \(-not \$Dev\) \{\s*Head [^\n]*\n\s*foreach \(\$r in @\(Get-MainOnlyRows.{0,1200}Get-PackageLauncherRows')
+    Yes '8. no row asks for a launcher for -Package any more (#4824)' ($text -notmatch 'Get-PackageLauncherRows' -and $text -notmatch '-Package')
 }
 finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue

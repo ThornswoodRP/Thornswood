@@ -53,7 +53,7 @@ function find() {
 }
 
 // The line that puts the bot's libraries where find() looks, for a harness
-// to print when none loads the bot. On Windows it is Developer-Guide.md
+// to print when none loads the bot. On Windows it is docs/guide/set-up-a-machine.md
 // "Setting up a machine"'s. Off Windows the system's python3.12 refuses a
 // plain pip install (PEP 668), so it goes into the user's own packages.
 const INSTALL = process.platform === 'win32'

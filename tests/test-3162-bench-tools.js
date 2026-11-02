@@ -31,7 +31,7 @@ const path = require('path');
 const vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 const CR = String.fromCharCode(13);
-const gm = fs.readFileSync(process.env.GM || path.join(ROOT, 'game', 'gamemode.js'), 'utf8').split(CR).join('');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(process.env.GM || path.join(ROOT, 'game', 'gamemode.js'), 'utf8')).split(CR).join('');
 const addContent = fs.readFileSync(path.join(ROOT, 'scripts', 'mods', 'Add-ContentRecords.py'), 'utf8').split(CR).join('');
 const recipeOwners = JSON.parse(fs.readFileSync(path.join(ROOT, 'records', 'recipe-owners.json'), 'utf8').replace(/^\uFEFF/, '')).owner || {};
 
@@ -61,7 +61,7 @@ const BENCH_TRADES = ['smith', 'tailor', 'cook', 'alchemist', 'enchanter'];
 // ------------------------------------------------------------ the pieces
 const toolsSrc = slice(gm, 'const TOOLS = {', '\n};');
 const TOOLS = toolsSrc ? new Function(toolsSrc.replace(/^const TOOLS = /, 'return '))() : null;
-const recSrc = slice(gm, 'var RECIPES_BY_ID = {', '\n  };');
+const recSrc = slice(gm, 'var RECIPES_BY_ID = {', ';\n');
 const RECIPES = recSrc ? new Function('return ' + recSrc.slice('var RECIPES_BY_ID = '.length).replace(/;$/, ''))() : null;
 const keptSrc = slice(gm, 'const KEPT_SMELT = {', '\n};');
 const KEPT = keptSrc ? new Function('return ' + keptSrc.slice('const KEPT_SMELT = '.length).replace(/;$/, ''))() : null;

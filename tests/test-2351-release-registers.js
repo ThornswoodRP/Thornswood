@@ -61,7 +61,7 @@ const vm = require('vm');
 const crypto = require('crypto');
 
 const REPO = path.join(__dirname, '..');
-const gm = fs.readFileSync(path.join(REPO, 'game', 'gamemode.js'), 'utf8').split(String.fromCharCode(13)).join('');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(REPO, 'game', 'gamemode.js'), 'utf8')).split(String.fromCharCode(13)).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -78,7 +78,7 @@ function slice(start, end, withEnd) {
 
 const parts = {
   release: slice('// ==== thornswood release of deleted characters ====', '// ==== end thornswood release of deleted characters ====', true),
-  crops: slice('// ==== CROPS_BY_BASE, generated ====', 'var CROPS = mergeCrops();', true),
+  crops: slice('var CROPS_BY_BASE = ', 'var CROPS = mergeCrops();', true),
   farming: slice('// ==== thornswood farming ====', '// ==== end thornswood farming ===='),
   property: slice('// ==== thornswood property ====', '// ==== end thornswood property ===='),
   embassy: slice('// ==== thornswood embassy and remnant ====', '// ==== end thornswood embassy and remnant ===='),

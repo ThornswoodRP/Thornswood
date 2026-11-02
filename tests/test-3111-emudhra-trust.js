@@ -39,7 +39,7 @@
        else: the block, run on this Node, leaves out every emSign root and
        nothing else, and comes before the first request in the file.
 
-  bot\test-3111-trust.py, in the nightly, does A and C again with the real
+  bot\tests\test-3111-trust.py, in the nightly, does A and C again with the real
   certifi the bot pins and the real bot.py import.
 
   Standard library Python only. Nothing leaves the machine; the scratch folder
@@ -49,6 +49,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawnSync } = require('child_process');
+const siteFiles = require('./site-files');
 
 const ROOT = path.join(__dirname, '..');
 const CR = String.fromCharCode(13);
@@ -190,7 +191,7 @@ try {
   yes('E2 bot/roots.pem and its .tmp stay out of git', /^bot\/roots\.pem$/m.test(gi) && /^bot\/roots\.pem\.tmp$/m.test(gi));
 
   // ---- F: the site
-  const site = read('site/server.js');
+  const site = siteFiles.source();
   const from = site.indexOf('\nconst NOT_TRUSTED = ');
   const to = from < 0 ? -1 : site.indexOf('\n}));\n', from);
   const block = (from >= 0 && to > from) ? site.slice(from, to + 5) : '';

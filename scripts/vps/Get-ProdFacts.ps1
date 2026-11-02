@@ -79,6 +79,11 @@ function Get-ProdFacts {
     foreach ($f in 'C:\Thornswood-Caddy\Caddyfile', 'C:\Thornswood-Docs\server.js', 'C:\Thornswood-Voice\voice-server.js', 'C:\Thornswood-Voice-Dev\voice-server.js') {
         $files[$f] = if (Test-Path -LiteralPath $f) { (Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash.ToLower() } else { '' }
     }
+    # The site's modules (#5357), every one there, so one the repository
+    # does not have shows as well as one that differs.
+    foreach ($f in @(Get-ChildItem -LiteralPath 'C:\Thornswood-Docs\lib' -Filter *.js -File)) {
+        $files[$f.FullName] = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash.ToLower()
+    }
     $fileBodies = [ordered]@{}
     foreach ($f in 'C:\Thornswood-Caddy\Caddyfile') {
         $fileBodies[$f] = if (Test-Path -LiteralPath $f) { Get-ConfigBodyHash (Get-Content -LiteralPath $f -Raw) } else { '' }

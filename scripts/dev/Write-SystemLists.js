@@ -394,13 +394,8 @@ write('README.md', index.join('\n') + '\n');
 // The profession and class pages carry the same rows, so a count is not
 // the only place the item lives. Markers keep the hand-written rules.
 function spellBook() {
-  const gm = fs.readFileSync(path.join(ROOT, 'game', 'gamemode.js'), 'utf8');
-  const block = gm.split('var SPELL_IDS = {')[1].split('};')[0];
-  const book = {};
-  block.replace(/"([^"]+)": "([^"]+)"/g, function (_, name, id) {
-    book[name] = id;
-    return _;
-  });
+  // The gamemode's SPELL_IDS table (game/gamemode-tables, #5191).
+  const book = require(path.join(ROOT, 'scripts', 'dev', 'GamemodeTables.js')).read('SPELL_IDS');
   const flat = {};
   Object.keys(book).forEach(function (name) {
     flat[name.toLowerCase().replace(/[^a-z0-9]/g, '')] = name;
@@ -597,7 +592,7 @@ const spellLists = {
 };
 Object.keys(schoolPages).forEach(function (school) {
   const lines = ['## The book', '',
-    'Generated from the spell book and `SPELL_IDS` in `game/gamemode.js` by `scripts/dev/Write-SystemLists.js`. ' +
+    'Generated from the spell book and the gamemode\'s `SPELL_IDS` table by `scripts/dev/Write-SystemLists.js`. ' +
     'Apprentice and Adept are both Advanced. A blank id means the name is in the book and not yet granted.',
     '',
     '| Spell | Rank | Id |',

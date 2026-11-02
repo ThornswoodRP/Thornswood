@@ -18,7 +18,7 @@
 # <key>.tree.gz (the traced tree's listing, so a change is measured from it
 # without fetching it). The raw trace never leaves the runner: the read keeps
 # only paths inside the checkout and deletes the trace. Only a run of main's
-# own file, on main, from the schedule or by hand, keeps it under that name
+# own file, on main, from the schedule, a push or by hand, keeps it under that name
 # (Gate-Map.ps1 -Fetch also checks the run it reads is one). A pull request
 # that changes the trace's own scripts runs it too, so a broken trace is red
 # before it merges; its map is kept as gate-map-trial, which nothing reads.
@@ -28,6 +28,19 @@
 #   gh workflow run gate-map.yml --ref main
 # A map is measured from its own tree, so merges since it count as part of a
 # pull request's change; a day-old map runs a little more, never less.
+#
+# AND AFTER A MERGE THAT CHANGES WHAT RUNS THE GATE (#5296). A change to the
+# files Affected-Harnesses.js FORCE names runs the whole gate, and that holds
+# between a pull request and the map's commit too, so once main merged one
+# every pull request ran all of it until the night's trace. Measured 1 Nov
+# 2026: the map was of 5c142781 (18:32 UTC); build.yml, build-pr.yml,
+# Run-Gate.ps1 and Nightly-Harnesses.ps1 changed on main after it, and the 12
+# pull request runs from 20:20 to 21:55 UTC each picked 733 to 738 of 738
+# harnesses, five Windows shares of about 670 s apiece, while 120 jobs waited
+# on the organisation's 20 at once. So a push to main that changes one of
+# those files traces again, and the map is of that commit once it ends.
+# The push paths below are FORCE's, as GitHub's filter writes them, and
+# tests/test-4009-gate-map.ps1 holds the two the same file by file.
 #
 # WHERE EACH HARNESS RUNS (#5293). The job "linux" runs the whole gate on
 # GitHub's ubuntu-latest beside the trace, and the job "platforms" compares
@@ -65,6 +78,29 @@ on:
   schedule:
     - cron: '30 10 * * *'
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/build.yml
+      - .github/workflows/build-pr.yml
+      - scripts/dev/Run-Gate.ps1
+      - scripts/dev/Gate-Map.ps1
+      - scripts/dev/Nightly-Harnesses.ps1
+      - scripts/dev/Gate-Harnesses.ps1
+      - scripts/dev/Affected-Harnesses.js
+      - scripts/dev/Trace-HarnessReads.js
+      - tests/gate-excluded.txt
+      - 'tests/*.ps1'
+      - 'tests/*.psm1'
+      - 'tests/*.js'
+      - 'tests/*.cjs'
+      - 'tests/*.mjs'
+      - 'tests/*.py'
+      - 'tests/*.c'
+      - '!tests/test-*'
+      - records/build-runners.json
+      - .gitattributes
+      - .gitmodules
   pull_request:
     paths:
       - .github/workflows/gate-map.yml
@@ -171,7 +207,7 @@ jobs:
           if-no-files-found: error
 
       # Main's map, which Gate-Map.ps1 -Fetch reads, only from main's own
-      # schedule or a run by hand on main.
+      # schedule, a push to main or a run by hand on main.
       - name: Keep the map
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -258,7 +294,7 @@ jobs:
       - name: Fetch the map and both runs' lines
         id: fetch
         continue-on-error: true
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           path: ${{ runner.temp }}/parts
 

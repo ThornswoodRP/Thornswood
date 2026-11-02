@@ -179,6 +179,24 @@ Yes 'Gate-Map.ps1 has no -Hand left' (-not $gm.Contains('[switch]$Hand'))
 # ---- 4. gate-map.yml
 $w = [IO.File]::ReadAllText((Join-Path (Join-Path (Join-Path $repo '.github') 'workflows') 'gate-map.yml')).Replace("`r`n", "`n")
 Yes 'gate-map.yml runs nightly, by hand, and on a pull request that changes the trace' ($w -match "(?m)^  schedule:\n    - cron: '[^']+'" -and $w -match '(?m)^  workflow_dispatch:' -and $w -match '(?m)^  pull_request:\n    paths:')
+# After a merge that changes what runs the gate (#5296): the push paths are
+# Affected-Harnesses.js FORCE's, so a merge that makes every pull request run
+# the whole gate traces a new map, and no other merge does.
+$pushPaths = @()
+if ($w -match "(?m)^  push:\n    branches: \[main\]\n    paths:\n((?:      - .+\n)+)") { $pushPaths = @($Matches[1].Trim() -split '\n' | ForEach-Object { $_.Trim().Substring(2).Trim("'") }) }
+$samples = @('.github/workflows/build.yml', '.github/workflows/build-pr.yml', '.github/workflows/nightly.yml', '.github/workflows/gate-map.yml',
+    'scripts/dev/Run-Gate.ps1', 'scripts/dev/Gate-Map.ps1', 'scripts/dev/Nightly-Harnesses.ps1', 'scripts/dev/Gate-Harnesses.ps1',
+    'scripts/dev/Affected-Harnesses.js', 'scripts/dev/Trace-HarnessReads.js', 'scripts/dev/Check-Change.ps1', 'tests/gate-excluded.txt',
+    'tests/Harness.psm1', 'tests/helper.ps1', 'tests/helper.js', 'tests/helper.cjs', 'tests/helper.mjs', 'tests/helper.py', 'tests/helper.c',
+    'tests/test-4009-gate-map.ps1', 'tests/test-3182-tested-tree.js', 'tests/test-x.py', 'tests/fixtures/a.ps1', 'tests/notes.md',
+    'records/build-runners.json', 'records/github-repo-settings.json', '.gitattributes', '.gitmodules', 'game/gamemode.js')
+# GitHub's filter: * is anything but /, a later ! pattern takes a path out.
+$byFilter = { param($f) $hit = $false; foreach ($p in $pushPaths) { $neg = $p.StartsWith('!'); $g = $p.TrimStart('!'); $re = '^' + ([regex]::Escape($g) -replace '\\\*', '[^/]*') + '$'; if ($f -match $re) { $hit = -not $neg } }; $hit }
+$forceJs = "const f=require(process.argv[1]).FORCE;for(const p of process.argv.slice(2))console.log(f.some(r=>r[0].test(p))?'1':'0')"
+$forced = @(node -e $forceJs (Join-Path (Join-Path (Join-Path $repo 'scripts') 'dev') 'Affected-Harnesses.js') @samples)
+$differ = @(for ($i = 0; $i -lt $samples.Count; $i++) { if (($forced[$i] -eq '1') -ne [bool](& $byFilter $samples[$i])) { $samples[$i] } })
+if ($differ.Count) { Write-Host ('  the push paths and FORCE differ for: ' + ($differ -join ', ')) }
+Yes 'gate-map.yml traces again on a push to main that changes what forces the whole gate, and on no other (#5296)' ($pushPaths.Count -gt 0 -and $forced.Count -eq $samples.Count -and -not $differ.Count)
 Yes '  its gate step ends 0 with the gate''s code kept, so the map is read whatever the gate did' ($w -match "(?m)^          Add-Content -LiteralPath \`$env:GITHUB_OUTPUT -Value \('code=' \+ \`$LASTEXITCODE\)\r?\n          exit 0\r?\n")
 Yes '  keeps gate-map only from main, and never from a pull request' ($w -match "(?ms)- name: Keep the map\n\s+if: github\.event_name != 'pull_request' && github\.ref == 'refs/heads/main'\n.*?name: gate-map\n")
 Yes '  keeps a pull request''s as gate-map-trial' ($w -match "(?ms)- name: Keep the trial map\n\s+if: github\.event_name == 'pull_request'\n.*?name: gate-map-trial\n")

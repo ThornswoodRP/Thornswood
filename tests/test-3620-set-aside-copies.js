@@ -37,6 +37,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const cp = require('child_process');
+const siteFiles = require('./site-files');
 
 const REPO = path.resolve(__dirname, '..');
 const WRITER = path.join(REPO, 'scripts', 'vps', 'Server-Log.js');
@@ -149,7 +150,7 @@ try {
   // The site's half of a restore (vps-restore-services.ps1): data, uploads and
   // config.json set aside beside them in the site's folder, aged by the
   // site's retention sweep, lifted out of site\server.js.
-  const SITE = read('site/server.js').split(String.fromCharCode(13)).join('');
+  const SITE = siteFiles.source().split(String.fromCharCode(13)).join('');
   const from = SITE.indexOf('const RESTORE_ASIDE_DAYS'), to = SITE.indexOf('function retentionSweep()');
   yes('site\\server.js has the restore-copy sweep', from > 0 && to > from);
   const siteSaid = [];

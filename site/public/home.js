@@ -658,13 +658,10 @@ if (AGE_PATHS[here] && !ageOk()) {
 
     // The stamp under the download button, read the way a clock is read.
     //
-    // Publish-Installer writes it as a 24 hour time and it is shown to people,
-    // not to a machine. Reformatted here as well as at the writer, because the
-    // string already published sits in files.json on the server and would
-    // otherwise stay 22:06 until the next installer goes up. Anything that is
-    // not a plain date and time is left exactly as it is, since this field also
-    // carries real version numbers, and so is a stamp already written month
-    // first by a newer Publish-Installer.
+    // A file in the downloads folder may carry a 24 hour time, which is shown
+    // to people, not to a machine. Anything that is not a plain date and time
+    // is left exactly as it is: the installer's is the tag of the Release it
+    // is on (build-20261101.7 and the like), which says which build it is.
     function clock(v) {
       var m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(String(v || ''));
       if (!m) return v;
@@ -681,9 +678,9 @@ if (AGE_PATHS[here] && !ageOk()) {
       if (b >= 1048576)    return Math.round(b / 1048576) + ' MB';
       return Math.max(1, Math.round(b / 1024)) + ' KB';
     }
-    // The installer's SHA-256, under the size and date. An installer published
-    // before Publish-Installer wrote a hash has none, and then nothing shows
-    // rather than a link to nothing.
+    // The installer's SHA-256, under the size and date, as GitHub measured it
+    // on the Release. A file with none shows nothing rather than a link to
+    // nothing.
     function hash(f) {
       return f && /^[0-9a-f]{64}$/.test(f.sha256 || '') ? f.sha256 : '';
     }
@@ -697,9 +694,8 @@ if (AGE_PATHS[here] && !ageOk()) {
       return '<br><span class="nowrap">SHA-256</span>&nbsp;' +
              '<span class="wrap-anywhere">' + h + '</span>';
     }
-    // hidden is the payload: on the site because the installer fetches it,
-    // never on this page, because clicking it gets you 700 MB that does
-    // nothing on its own.
+    // hidden is a file on the site for something other than people, never on
+    // this page.
     function pick(ext) {
       for (var i = 0; i < files.length; i++) {
         if (files[i].hidden) continue;
@@ -707,11 +703,9 @@ if (AGE_PATHS[here] && !ageOk()) {
       }
       return null;
     }
-    var exe = pick('.exe'), zip = pick('.zip');
-    // The payload lives inside the exe when the build was made that way, and
-    // beside it when it was not. A stub on its own is under a megabyte, so the
-    // size says which one this is without the page being told.
-    var single = exe && exe.size > 67108864;
+    // The installer is Velopack's setup program from a GitHub Release, the
+    // launcher's package inside it (#4824): one file, nothing beside it.
+    var exe = pick('.exe');
 
     var out = '<h1>Download</h1>';
     if (d.launcher) out += '<p>Launcher <strong>' + esc(d.launcher) + '</strong> is current.</p>';
@@ -741,31 +735,19 @@ if (AGE_PATHS[here] && !ageOk()) {
     // the list where it is the first thing you meet and the instructions are
     // something you scroll past afterwards.
     // "Published by" names who Windows names (#5275, Patrick's answer A on
-    // q-installer-publisher): the signer Publish-Installer's sign gate held the
-    // exe to, carried in files.json. It said "Thornswood", which is not what the
-    // Windows prompt says next. An entry with no publisher names nobody.
+    // q-installer-publisher), when the entry says so. It said "Thornswood",
+    // which is not what the Windows prompt says next. An entry with no
+    // publisher names nobody, which the Release's installer is until the site
+    // can say who signed it.
     var by = exe && exe.publisher ? 'Published by ' + esc(exe.publisher) + '<br>' : '';
     var grab = '';
     if (!exe) {
-      grab = '<p class="faint">' + (zip
-               ? 'The setup program is missing from the site, so this will not run yet. ' +
-                 'Only the payload is up.'
-               : 'Nothing uploaded yet.') + '</p>';
-    } else if (single || !zip || zip.hidden) {
+      grab = '<p class="faint">The installer is not published yet.</p>';
+    } else {
       grab = '<div class="grab"><a class="btn first" href="/file/' + encodeURIComponent(exe.name) + '">' +
              'Download the installer</a>' +
              '<p class="also faintly">' + by + esc(human(exe.size)) +
              (exe.version ? ' · ' + esc(clock(exe.version)) : '') + sum(exe) + '</p></div>';
-    } else {
-      grab = '<div class="grab"><a class="btn first" href="/file/' + encodeURIComponent(exe.name) + '">' +
-             'Download the installer</a>' +
-             '<p class="also">and its payload, <a href="/file/' +
-             encodeURIComponent(zip.name) + '">' + esc(zip.name) + '</a>, ' +
-             esc(human(zip.size)) + '. Both into the same folder, then run the exe. ' +
-             'Do not unzip anything yourself.</p>' +
-             '<p class="also faintly">' + by + esc(human(exe.size)) + ' and ' +
-             esc(human(zip.size)) + (exe.version ? ' · ' + esc(clock(exe.version)) : '') +
-             sum(exe) + '</p></div>';
     }
 
     out += (d.open === true
@@ -798,10 +780,9 @@ if (AGE_PATHS[here] && !ageOk()) {
                : '') +
              '</div></div>' +
            '<div class="step"><div><h3>Take the installer</h3>' +
-             '<p>One file. Download it and run it. It is small because the mods are ' +
-             'not in it, and it fetches what it needs while you watch, so a ' +
-             'connection that drops does not mean starting again. It puts in the ' +
-             'launcher, the script extender and Thornswood&rsquo;s own content, and it ' +
+             '<p>One file. Download it and run it. The mods are not in it. It puts in ' +
+             'the launcher with Thornswood&rsquo;s own content and opens it, and the ' +
+             'launcher asks where to install, puts in the script extender and ' +
              'builds a game folder of its own from the Skyrim you already have, with ' +
              'most of it as hard links, and leaves your own Skyrim alone. The SkyMP files in it are free software, and the credits page ' +
              // Beside the download button because that is where the files are

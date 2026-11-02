@@ -255,15 +255,15 @@ Yes '  and Run-OnBox.ps1 copies what came back into -Out as well as the checkout
 # The Ship verbs (Patrick's A, 30 Oct 2026: the box admin App mints the
 # token a Ship from the feed signs with, and the whole Ship runs on the box).
 Yes 'Ship-Dev is a dev Ship from the feed, its note as a title and detail lines' ((Words 'Ship-Dev -Title "Market stalls take your prices" -Detail "Claim a stall"') -eq '-Channel|dev|-Title|Market stalls take your prices|-Detail|Claim a stall' -and
-    (Words 'Ship-Dev -Title x -Detail y -ModsOnly') -eq '-Channel|dev|-Title|x|-Detail|y|-ModsOnly' -and
+    (Words 'Ship-Dev -Title x -Detail y -ModsOnly') -eq 'REFUSED' -and
     (Words 'Ship-Dev -Channel main -Title x -Detail y') -eq 'REFUSED' -and (Words 'Ship-Dev -Title x -Detail y -Root C:/x') -eq 'REFUSED' -and (Words 'Ship-Dev -Title x -Detail y -Package') -eq 'REFUSED')
 Yes 'Ship-Dev takes -Detail2 and -Detail3, whose names end in digits (#5144)' ((Words 'Ship-Dev -Title x -Detail y -Detail2 z -Detail3 w') -eq '-Channel|dev|-Title|x|-Detail|y|-Detail2|z|-Detail3|w' -and (Words 'Ship-Dev -Title x -2Detail y') -eq 'REFUSED')
 Yes 'Ship-Main is held to a build and to -Channel main' ($verbs.verbs.'Ship-Main'.build -eq $true -and (Words 'Ship-Main -Title x -Detail y') -eq 'REFUSED' -and
-    (Words "Ship-Main -Build $sha -Title x -Detail y -ModsOnly") -eq '-Channel|main|-Title|x|-Detail|y|-ModsOnly' -and (Words "Ship-Main -Build $sha -Title x -Detail y -MoveServer") -eq 'REFUSED')
+    (Words "Ship-Main -Build $sha -Title x -Detail y -ModsOnly") -eq 'REFUSED' -and (Words "Ship-Main -Build $sha -Title x -Detail y -MoveServer") -eq 'REFUSED')
 $shipBox = Text 'scripts/release/Ship-OnBox.ps1'
-Yes '  Ship-OnBox.ps1 runs Ship.ps1 from the feed, keeping the launcher only when asked, with the token in GH_TOKEN alone and gone after' (
+Yes '  Ship-OnBox.ps1 runs Ship.ps1 from the feed, with no switch about a launcher (Ship sends none, #4825), with the token in GH_TOKEN alone and gone after' (
     $shipBox.Contains("`$ship = @{ Notes = `$notes; FromFeed = `$true; NoPause = `$true }") -and $shipBox.Contains("if (`$Channel -eq 'dev') { `$ship['Channel'] = 'dev' }") -and
-    $shipBox.Contains("if (`$ModsOnly) { `$ship['ModsOnly'] = `$true }") -and -not $shipBox.Contains("elseif (`$ModsOnly)") -and
+    -not $shipBox.Contains('ModsOnly') -and
     $shipBox.Contains('$env:GH_TOKEN = $token') -and $shipBox.Contains('finally { Remove-Item -LiteralPath Env:\GH_TOKEN'))
 Yes '  a main Ship goes from the branch main at the fetched origin/main' ($shipBox.Contains("checkout --quiet -B main refs/remotes/origin/main"))
 # The DEV marks and the shipped issues read main's history and the release
@@ -281,18 +281,14 @@ Yes '  a Ship deepens the gate''s checkout to main''s history and tags as origin
 Yes 'Wipe-Dev wipes the dev server alone and takes nothing' ((Words 'Wipe-Dev') -eq '-Server|dev|-Yes|-NoPause' -and (Words 'Wipe-Dev -Server main') -eq 'REFUSED' -and
     (Words 'Wipe-Dev -Vps 1.2.3.4') -eq 'REFUSED' -and -not $verbs.verbs.'Wipe-Dev'.build -and $verbs.verbs.'Wipe-Dev'.script -eq 'scripts/ops/Wipe-Saves.ps1')
 Yes '  and no verb wipes main or every server' (@($verbs.verbs.PSObject.Properties | Where-Object { $_.Value.script -eq 'scripts/ops/Wipe-Saves.ps1' -and (@($_.Value.fixed) -join ' ') -ne '-Server dev -Yes -NoPause' }).Count -eq 0)
-# The installer for the site (#5109): no parameter at all, the token the
-# Ship's, and the publish from the branch main.
-Yes 'Publish-Installer takes nothing, and is not a live verb' ((Words 'Publish-Installer') -eq '' -and (Words 'Publish-Installer -OutDir C:/x') -eq 'REFUSED' -and
-    (Words 'Publish-Installer -AllowStaleCheckout') -eq 'REFUSED' -and (Words 'Publish-Installer -WaitSeconds 10') -eq 'REFUSED' -and -not $verbs.verbs.'Publish-Installer'.build -and
-    $verbs.verbs.'Publish-Installer'.script -eq 'scripts/release/Publish-InstallerOnBox.ps1')
-$instBox = Text 'scripts/release/Publish-InstallerOnBox.ps1'
-Yes '  Publish-InstallerOnBox.ps1 runs Publish-InstallerFromGitHub.ps1 with the App''s token in GH_TOKEN alone and gone after, from the branch main' (
-    $instBox.Contains('Get-ThornswoodShipAccess -Repo $repo -AdminState $AdminState') -and $instBox.Contains("& (Join-Path `$Here 'Publish-InstallerFromGitHub.ps1') -WaitSeconds `$WaitSeconds") -and
-    $instBox.Contains('$env:GH_TOKEN = $token') -and $instBox.Contains('finally { Remove-Item -LiteralPath Env:\GH_TOKEN') -and
-    $instBox.Contains('checkout --quiet -B main refs/remotes/origin/main') -and
-    $instBox.IndexOf('checkout --quiet -B main') -lt $instBox.IndexOf('Get-ThornswoodShipAccess -Repo') -and -not $instBox.Contains('AllowStaleCheckout'))
-Yes '  and its wait for installer.yml fits inside the verb''s timeout' ([int]([regex]::Match($instBox, '\[int\]\$WaitSeconds = (\d+)').Groups[1].Value) -lt 60 * [int]$verbs.verbs.'Publish-Installer'.timeoutMinutes)
+# The installer for the site (#5109) went with the old installer pipeline
+# (#4824): the download is Velopack's Setup.exe on the GitHub Release, which
+# merge-release.yml makes, so the gate has no verb for it and no script of it
+# is left to run.
+Yes 'no verb publishes the old installer, and no Publish-Installer script is left (#4824)' (
+    -not $verbs.verbs.PSObject.Properties['Publish-Installer'] -and
+    @($verbs.verbs.PSObject.Properties | Where-Object { [string]$_.Value.script -match 'Publish-Installer' }).Count -eq 0 -and
+    @(Get-ChildItem -LiteralPath (Join-Path $Repo 'scripts/release') -Filter 'Publish-Installer*' -File).Count -eq 0)
 $gt = Text 'scripts/vps/admin/ship-access.js'
 Yes '  the token is the App''s, for the fork and Thornswood only, Actions write and Contents read and nothing more' (
     $gt.Contains("const REPOS = ['skymp', 'Thornswood'];") -and $gt.Contains("const PERMISSIONS = { actions: 'write', contents: 'read' };") -and $gt.Contains('{ repositories: REPOS, permissions: PERMISSIONS }'))

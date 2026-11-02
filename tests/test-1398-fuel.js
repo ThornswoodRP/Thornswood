@@ -23,7 +23,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const CR = String.fromCharCode(13);
-const gm = fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8').split(CR).join('');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8')).split(CR).join('');
 const RECIPES_JSON = JSON.parse(fs.readFileSync(path.join(REPO_DIR, 'game', 'data', 'recipes.json'), 'utf8').replace(/^﻿/, ''));
 const SMITH = fs.readFileSync(path.join(REPO_DIR, 'docs', 'systems', 'professions', 'smith.md'), 'utf8').split(CR).join('');
 const Fuel = require(path.join(REPO_DIR, 'scripts', 'dev', 'Build-FuelTable.js'));
@@ -50,9 +50,10 @@ const fuelLine = /^const FUEL_BY_RECIPE = (\{.*\});$/m.exec(gm);
 const FUEL = fuelLine ? JSON.parse(fuelLine[1]) : {};
 yes('FUEL_BY_RECIPE is installed in the gamemode', !!fuelLine && Object.keys(FUEL).length > 200);
 {
-  const built = Fuel.blockLines(Fuel.fuelTable(RECIPES_JSON), Object.keys(RECIPES_JSON.recipes || {}).length).join('\n');
-  const installed = slice(gm, '// ==== FUEL_BY_RECIPE, generated ====', '// ==== end FUEL_BY_RECIPE ====');
-  yes('the installed block is what Build-FuelTable.js builds out of recipes.json today', installed === built);
+  // The gamemode reads the table from game/gamemode-tables/FUEL_BY_RECIPE.json (#5191).
+  const built = JSON.parse(Fuel.tableJson(Fuel.fuelTable(RECIPES_JSON)));
+  yes('the installed table is what Build-FuelTable.js builds out of recipes.json today',
+    JSON.stringify(require('./gamemode-tables.js').table('FUEL_BY_RECIPE')) === JSON.stringify(built));
 }
 {
   // The page's table, row by row, is the script's METALS.
@@ -68,7 +69,7 @@ yes('FUEL_BY_RECIPE is installed in the gamemode', !!fuelLine && Object.keys(FUE
       JSON.stringify(Object.keys(want).sort().map(function (k) { return k + want[k]; })) ===
       JSON.stringify(Object.keys(Fuel.METALS).sort().map(function (k) { return k + Fuel.METALS[k]; })));
 }
-const recSrc = slice(gm, 'var RECIPES_BY_ID = {', '\n  };');
+const recSrc = slice(gm, 'var RECIPES_BY_ID = {', ';\n');
 let RECIPES = null;
 try { RECIPES = new Function('return ' + recSrc.slice('var RECIPES_BY_ID = '.length).replace(/;$/, ''))(); } catch (e) { RECIPES = null; }
 const keptSrc = slice(gm, 'const KEPT_SMELT = {', '\n};');
@@ -453,9 +454,9 @@ if (RECIPES && KEPT && pieces.onCraft && P) {
 // ----------------------------------------------- 3. the warmth, driven
 const needsSrc = slice(gm, '// ==== thornswood needs: hunger, thirst and exhaustion ====', '// ==== end thornswood needs ====');
 yes('the needs block is in the gamemode', !!needsSrc);
-const WARMTH = JSON.parse(/^const WARMTH = (\{.*\});$/m.exec(gm)[1]);
-const WEATHER = JSON.parse(/^const WEATHER = (\{.*\});$/m.exec(gm)[1]);
-const WATERS = JSON.parse(/^const WATERS = (\{.*\});$/m.exec(gm)[1]);
+const WARMTH = JSON.parse(require('./gamemode-tables.js').lineOf(gm, 'WARMTH')[1]);
+const WEATHER = JSON.parse(require('./gamemode-tables.js').lineOf(gm, 'WEATHER')[1]);
+const WATERS = JSON.parse(require('./gamemode-tables.js').lineOf(gm, 'WATERS')[1]);
 
 function needsRig(states) {
   const store = {}, cells = {}, pos = {}, worn = {};
@@ -463,10 +464,10 @@ function needsRig(states) {
   let next = 0x10;
   function idOf(d) { if (!ids[d]) { ids[d] = next++; } return ids[d]; }
   const mp = {
-    getOnlinePlayers: function () { return Object.keys(store).map(Number); },
     makeProperty: function () { },
     getDescFromId: function (id) { for (const d in ids) { if (ids[d] === id) { return d; } } return ''; },
     get: function (id, key) {
+      if (id === 0 && key === 'onlinePlayers') { return Object.keys(store).map(Number); }
       if (key === 'worldOrCellDesc') { return cells[id] || 'cell:X.esm'; }
       if (key === 'inventory') { return { entries: worn[id] || [] }; }
       if (key === 'equipment') { return { inv: { entries: worn[id] || [] } }; }

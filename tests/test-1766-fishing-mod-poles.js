@@ -32,7 +32,7 @@ const recipes = JSON.parse(read("game/data/recipes.json"));
 const cutDoc = JSON.parse(read("docs/systems/cut-items.json"));
 const cutById = {};
 cutDoc.items.forEach(function (i) { cutById[i.id] = i; });
-const gm = read("game/gamemode.js");
+const gm = require('./gamemode-tables.js').joined(read("game/gamemode.js"));
 
 // ---- the cut file and the recipe table -----------------------------------
 MOD.forEach(function (id) {
@@ -57,10 +57,11 @@ vm.runInNewContext(gm.slice(a, b + 3).replace("const TOOLS", "TOOLS"), box);
 const accept = box.TOOLS && box.TOOLS.fisher ? box.TOOLS.fisher.accept : [];
 const outs = OURS.map(function (id) { return recipes.recipes[id].out; });
 yes("the poles that fish are what our three recipes make", accept.slice().sort().join() === outs.slice().sort().join());
+const BOOK = require('./gamemode-tables.js').table('RECIPES_BY_ID');
+const FUEL = require('./gamemode-tables.js').table('FUEL_BY_RECIPE');
 MOD.forEach(function (id) {
-  const m = new RegExp('"' + id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + '": \\{[^}]*"nobody": "Cut from the open book').test(gm);
-  yes("RECIPES_BY_ID refuses " + id + " as cut", m);
-  yes("  and FUEL_BY_RECIPE no longer burns charcoal for it", !new RegExp('"' + id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + '":\\[').test(gm));
+  yes("RECIPES_BY_ID refuses " + id + " as cut", !!BOOK[id] && /^Cut from the open book/.test(BOOK[id].nobody || ""));
+  yes("  and FUEL_BY_RECIPE no longer burns charcoal for it", !Object.prototype.hasOwnProperty.call(FUEL, id));
 });
 
 // ---- the Woodwright's pages list only poles that fish -----------------------

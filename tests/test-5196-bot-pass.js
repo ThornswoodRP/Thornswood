@@ -169,7 +169,9 @@ function standIn(root, break_) {
   // The running server, so the stand-in engine can print the gamemode's lines.
   let child0 = null;
   const blob = botPass.gitBlob(path.join(root, 'gamemode.js'));
-  const formFile = path.join(root, 'world', 'changeForms', '1.json');
+  // Named as the engine names a form made on the server: its id in hex
+  // (FormDesc::ToString, %x), here the refrId it sends, 0xff000801.
+  const formFile = path.join(root, 'world', 'changeForms', 'ff000801.json');
 
   function spawn() {
     const child = new EventEmitter();
@@ -326,6 +328,27 @@ function failedAt(r, step) {
   yes('the face is a Nord with the engine\'s 19 morphs and 4 presets',
     (() => { const f = botPass.face('X'); return f.raceId === 0x13746 && f.options.length === 19 && f.presets.length === 4 && f.name === 'X'; })());
 
+  // ------------------------------------- where a pass that runs on got to
+  // The pass says each step as it starts, before it waits on it, so the
+  // last line of bot-pass.log names the wait a pass that never ends is in.
+  const order = ['loading the engine', 'the server started; it has 2 s', 'PASS  loads', 'a bot connects to port 7801',
+    'PASS  login', 'the bot sends a face', 'PASS  face', 'waiting for the world on disk', 'PASS  saved',
+    'the server is stopped', 'the server started again', 'PASS  restart', 'a second bot connects', 'PASS  loads back', 'the pass ends'];
+  const at = order.map((o) => good.said.findIndex((l) => l.startsWith(o)));
+  yes('the pass says each step as it starts, in order, before its PASS line', at.every((x, i) => x >= 0 && (i === 0 || x > at[i - 1])));
+  {
+    const cp = require('child_process');
+    const root = await folder('mainlog', { thornswoodRequirePass: true });
+    const out = path.join(TMP, 'mainlog-run', 'result.json');
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    const ran = cp.spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'bot', 'Bot-Pass.js'), '--root', root, '--out', out], { encoding: 'utf8' });
+    const logAt = path.join(path.dirname(out), 'bot-pass.log');
+    const text = fs.existsSync(logAt) ? fs.readFileSync(logAt, 'utf8') : '';
+    yes('run as the task runs it, the pass writes bot-pass.log beside its result as it goes, each line timed',
+      ran.status === 1 && fs.existsSync(out) && /^\d{4}-\d\d-\d\dT[\d:.]+Z  the bot pass starts in /.test(text) &&
+      /FAIL  loads: .*not a bot pass copy/.test(text) && /BOT PASS FAILED\n$/.test(text));
+  }
+
   // ------------------------------------------------------------- broken
   yes('the gamemode does not load: FAIL on loads', failedAt((await run('noload', 'no load')).r, 'loads'));
   const novoice = await run('novoice', 'no voice');
@@ -384,6 +407,11 @@ function failedAt(r, step) {
   fs.mkdirSync(path.join(w, 'saves', 'changeForms'), { recursive: true });
   fs.writeFileSync(path.join(w, 'saves', 'changeForms', '7.json'), JSON.stringify({ profileId: 77, position: [1, 2, 3] }));
   yes('Bot-Pass reads the world where databaseName says', !!botPass.formOf(w, { databaseName: 'saves' }, 77));
+  fs.writeFileSync(path.join(w, 'saves', 'changeForms', 'ff000a3c.json'), JSON.stringify({ profileId: 78, position: [1, 2, 3] }));
+  fs.writeFileSync(path.join(w, 'saves', 'changeForms', '14_Skyrim.esm.json'), JSON.stringify({ profileId: 79 }));
+  yes('Bot-Pass finds a character whose file the engine named in hex, as a made one is (#5379)', !!botPass.formOf(w, { databaseName: 'saves' }, 78));
+  yes('and not a plugin\'s form, which is no character', botPass.formOf(w, { databaseName: 'saves' }, 79) === null);
+  yes('and none when the world folder is not there', botPass.formOf(path.join(TMP, 'no-world'), {}, 78) === null);
   yes('character.js reads it there too (not a worldDir setting the engine does not have)',
     character.characters(w, { databaseName: 'saves' }).some((c) => c.profileId === 77));
 

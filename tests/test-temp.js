@@ -45,12 +45,12 @@ yes('the needs block is in the gamemode', block !== null);
 
 // The installed table, lifted rather than re-read from warmth.json, because
 // what the server runs on is the line in gamemode.js.
-const warmLine = /^const WARMTH = (\{.*\});$/m.exec(src);
+const warmLine = require('./gamemode-tables.js').lineOf(src, 'WARMTH');
 yes('the warmth table is installed in the gamemode', !!warmLine);
 const WARMTH = warmLine ? JSON.parse(warmLine[1]) : { items: {} };
-const skyLine = /^const WEATHER = (\{.*\});$/m.exec(src);
+const skyLine = require('./gamemode-tables.js').lineOf(src, 'WEATHER');
 const WEATHER = skyLine ? JSON.parse(skyLine[1]) : { most: 0, mid: 0, items: {} };
-const wetLine = /^const WATERS = (\{.*\});$/m.exec(src);
+const wetLine = require('./gamemode-tables.js').lineOf(src, 'WATERS');
 const WATERS = wetLine ? JSON.parse(wetLine[1]) : { items: {} };
 
 /*
@@ -77,7 +77,6 @@ function rig() {
     return ids[desc];
   }
   const Fake = {
-    getOnlinePlayers: function () { return Object.keys(store).map(Number); },
     makeProperty: function () { },
     // The real one turns a form id back into its descriptor. The rig knows
     // both halves already, because it is what hands out the ids.
@@ -88,6 +87,7 @@ function rig() {
       return '';
     },
     get: function (id, key) {
+      if (id === 0 && key === 'onlinePlayers') { return Object.keys(store).map(Number); }
       if (key === 'worldOrCellDesc') { return cells[id] || 'cell:X.esm'; }
       if (key === 'inventory') { return { entries: worn[id] || [] }; }
       if (key === 'equipment') {
