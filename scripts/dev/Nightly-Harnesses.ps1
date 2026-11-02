@@ -334,6 +334,26 @@ function Get-Marked($mark) {
     }
 }
 
+# What each process of a harness's run is doing (Get-Marked's list), for a
+# harness still running at its clock: its id, name, state and the kernel
+# call it sleeps in from /proc, and its command line. The loop below ends a
+# harness at its clock only when the harness itself has not ended (one that
+# ended but left a child is finished then without a timeout and the child is
+# killed), so this names what the harness was waiting on when it was killed
+# (#5459).
+function Get-RunProcesses($mark) {
+    foreach ($q in @(Get-Marked $mark)) {
+        $d = '/proc/' + $q.Id
+        $state = ''; $wchan = ''; $cmd = ''
+        try { $st = [IO.File]::ReadAllText($d + '/stat'); $state = ($st.Substring($st.LastIndexOf(')') + 2) -split ' ')[0] }
+        catch { $state = '(ended)' }
+        try { $wchan = [IO.File]::ReadAllText($d + '/wchan').Trim() } catch { <# not readable here; the state still says whether it sleeps #> }
+        try { $cmd = ([IO.File]::ReadAllText($d + '/cmdline') -replace "`0", ' ').Trim() } catch { <# it ended after its name was read; the name and id still say who it was #> }
+        if ($cmd.Length -gt 200) { $cmd = $cmd.Substring(0, 200) + '...' }
+        '{0} {1} {2}{3} ({4})' -f $q.Id, $q.Name, $state, $(if ($wchan -and $wchan -ne '0') { ' in ' + $wchan } else { '' }), $cmd
+    }
+}
+
 # The machine's processor, busy, as a share of all its cores between two
 # readings: GetSystemTimes on Windows, the cpu line of /proc/stat elsewhere.
 function Read-Cpu {
@@ -445,6 +465,8 @@ function Finish-One($r, [bool]$timedOut) {
         $cpu = [Math]::Round($acct[0] / 1e7, 1); $procs = [int]$acct[1]
     } elseif (-not $onWindows) {
         if ($timedOut) {
+            $was = @(Get-RunProcesses $r.Mark)
+            Write-Host ("::warning file={0}::at its clock its processes were: {1}" -f $t.File.FullName, $(if ($was.Count) { $was -join '; ' } else { 'none left' }))
             foreach ($q in @(Get-Marked $r.Mark)) { Stop-Process -Id $q.Id -Force -ErrorAction SilentlyContinue }
             $null = $p.WaitForExit(10000)
         }

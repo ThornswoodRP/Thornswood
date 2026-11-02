@@ -16,8 +16,10 @@
        on the suites and the report add up;
     2. a harness that fails with no FAIL line of its own (it threw, it was
        killed at its clock) gets one failing case saying how it ended, with
-       the end of what it printed; a harness not run, out of time, gets one
-       too; so every harness the run's summary names as failed is in the
+       the end of what it printed, and on Linux one killed at its clock has
+       each of its processes named with its state, the kernel call it was
+       sleeping in and its command line (#5459); a harness not run, out of
+       time, gets one too; so every harness the run's summary names as failed is in the
        report as failing;
     3. what a check says is kept whole: quotes, angle brackets, ampersands
        and bars come back as written, and a control character in the output
@@ -127,6 +129,10 @@ try {
         Yes '   with the end of what it printed' ($body -match 'the last words' -and $body -match 'it broke here')
         $hc = @(Cases (Suite $doc 'test-4-hang.js'))
         Yes ('2. one killed at its clock says so (' + ($hc -join ' / ') + ')') ($hc.Count -eq 2 -and $hc[1] -eq 'FAIL the harness timed out after 3 s and was killed')
+        if ($IsLinux) {
+            $w = [regex]::Match($r.Said, '(?m)^::warning file=[^:]*test-4-hang\.js::at its clock its processes were: (.*)$')
+            Yes ('   and on Linux names what each of its processes was doing when it was killed (' + $w.Groups[1].Value.Trim() + ')') ($w.Success -and $w.Groups[1].Value -match '^\d+ \S+ [A-Z] in \S+ \(\S*node\S* .*test-4-hang\.js\)')
+        } else { Write-Host 'SKIP  what a hung harness was doing is read from /proc, on Linux' }
         $lc = @(Cases (Suite $doc 'test-5-late.js'))
         Yes ('2. one not run, out of time, is a failing case (' + ($lc -join ' / ') + ')') (($lc -join '') -eq 'FAIL the harness was not run, out of time')
         $root = $doc.DocumentElement
