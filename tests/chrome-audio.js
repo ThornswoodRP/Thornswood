@@ -51,8 +51,13 @@ function version(exe) {
 
 const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
 
-/* Runs expression in a blank page and gives back its value (returnByValue). */
+/* Runs expression in a blank page and gives back its value (returnByValue).
+   ms is the whole run's time, Chrome's start with it: on a runner with every
+   core busy, Chrome took more than the 20 s its start once had of its own
+   (gate run 41503513653), and a start that is only slow is no failure. */
 async function evaluate(exe, expression, ms) {
+  const limit = ms || 60000;
+  const by = Date.now() + limit;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-chrome-'));
   const chrome = cp.spawn(exe, ['--headless=new', '--no-sandbox', '--disable-gpu', '--no-first-run',
     '--no-default-browser-check', '--remote-debugging-port=0', '--user-data-dir=' + dir, 'about:blank'],
@@ -61,9 +66,8 @@ async function evaluate(exe, expression, ms) {
   chrome.stderr.on('data', (d) => { said += d; });
   try {
     const file = path.join(dir, 'DevToolsActivePort');
-    const from = Date.now();
     while (!fs.existsSync(file) || fs.readFileSync(file, 'utf8').split('\n').length < 2) {
-      if (Date.now() - from > 20000) { throw new Error('Chrome did not open its DevTools port in 20 s. It said:\n' + said); }
+      if (Date.now() > by) { throw new Error('Chrome did not open its DevTools port in ' + Math.round(limit / 1000) + ' s. It said:\n' + said); }
       if (chrome.exitCode !== null) { throw new Error('Chrome stopped (exit ' + chrome.exitCode + '). It said:\n' + said); }
       await sleep(50);
     }
@@ -74,7 +78,7 @@ async function evaluate(exe, expression, ms) {
     const ws = new WebSocket(page.webSocketDebuggerUrl);
     await new Promise((ok, bad) => { ws.onopen = ok; ws.onerror = () => bad(new Error('no DevTools socket')); });
     const answer = new Promise((ok, bad) => {
-      const late = setTimeout(() => bad(new Error('Chrome gave no answer in ' + Math.round((ms || 60000) / 1000) + ' s')), ms || 60000);
+      const late = setTimeout(() => bad(new Error('Chrome gave no answer in ' + Math.round(limit / 1000) + ' s')), Math.max(0, by - Date.now()));
       ws.onmessage = (ev) => {
         const m = JSON.parse(ev.data);
         if (m.id !== 1) { return; }
