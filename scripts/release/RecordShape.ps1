@@ -30,7 +30,7 @@
   No record is rewritten and no field is added: this is the check, not a
   migration. scripts\release\Check-Records.ps1 runs it over the committed
   records, and tests\test-record-shapes.ps1 holds it.
-  Works on Windows PowerShell 5.1 and PowerShell 7.
+  Runs in PowerShell 7.
 #>
 # Slice 4 (#2180): the box has no checkout, so the scripts that run there get
 # this file's text with Read-JsonFile.ps1's in front of it ($ThornswoodRecordShapeText

@@ -134,6 +134,11 @@ const FORM = {
 };
 fs.writeFileSync(path.join(ROOM, 'world', 'changeForms', '0.json'), JSON.stringify(FORM));
 fs.writeFileSync(path.join(ROOM, 'world', 'changeForms', '1.json'), JSON.stringify({ profileId: -1, isDeleted: true }));
+// The engine names runtime forms in hex (FormDesc::ToString, %x, #5168), so
+// slot 10 is a.json and slot 31 is 1f.json; a placed form names its plugin.
+fs.writeFileSync(path.join(ROOM, 'world', 'changeForms', '1f.json'), JSON.stringify(Object.assign({}, FORM, { profileId: 4242, appearanceDump: JSON.stringify({ name: 'Hexa' }) })));
+fs.writeFileSync(path.join(ROOM, 'world', 'changeForms', 'a.json'), JSON.stringify({ profileId: -1, recType: 1 }));
+fs.writeFileSync(path.join(ROOM, 'world', 'changeForms', '1a2b_Skyrim.esm.json'), JSON.stringify(Object.assign({}, FORM, { profileId: 5151 })));
 fs.writeFileSync(path.join(ROOM, 'world', 'changeForms', '2.json'), JSON.stringify(Object.assign({}, FORM, { profileId: 77, appearanceDump: JSON.stringify({ name: 'Other' }) })));
 
 const GOOD = {
@@ -191,6 +196,11 @@ const GOOD = {
 
   const want = character.expected(ROOM, 1909688825);
   yes('the character is found by profile id, past a deleted slot', want.file === '0.json' && want.name === 'Jeff' && want.port === 7801);
+  const hexa = character.expected(ROOM, 4242);
+  yes('a character whose file name has a letter is found too (1f.json, #5168)', hexa.file === '1f.json' && hexa.name === 'Hexa');
+  let placed = '';
+  try { character.expected(ROOM, 5151); } catch (err) { placed = err.message; }
+  yes('a form that names a plugin is no character', /no living character/.test(placed));
   let none = '';
   try { character.expected(ROOM, 5); } catch (err) { none = err.message; }
   yes('a profile with no living character is named', /no living character/.test(none));

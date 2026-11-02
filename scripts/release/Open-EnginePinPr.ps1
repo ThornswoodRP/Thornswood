@@ -8,12 +8,11 @@
   and body are the head commit's own message (Update-EnginePin.ps1 wrote
   them), so the pull request always says what its head is.
 
-  It needs a token that may write pull requests (GH_TOKEN, through gh). A
-  workflow's own token may open one only while Thornswood's Actions setting
-  "Allow GitHub Actions to create and approve pull requests" is on
-  (records\github-settings.json, workflow_token, Patrick's yes on 31 Oct
-  2026). When GitHub refuses for that reason it stops saying so: the branch
-  is ready and its checks run, and the pull request waits for the setting.
+  It needs a token that may write pull requests (GH_TOKEN, through gh).
+  engine-pin.yml gives it the pin robot's App token (#5256), so the pull
+  request it opens starts its checks like anybody's; a pull request the
+  run's own token opened waited for a person to approve its checks after the
+  move to ThornswoodRP. When GitHub refuses it stops saying why.
 
   Exit 0: open, with its number printed. 1: why not.
 
@@ -60,12 +59,7 @@ try {
     }
     [IO.File]::WriteAllText($file, (([ordered]@{ title = $title; body = $body; head = $EnginePinBranch; base = 'main'; maintainer_can_modify = $true } | ConvertTo-Json -Compress)), (New-Object Text.UTF8Encoding($false)))
     $r = Invoke-Gh @('api', '-X', 'POST', "repos/$repo/pulls", '--input', $file)
-    if ($r.Code -ne 0) {
-        if ($r.Text -match 'not permitted to create or approve pull requests') {
-            Stop-Here "GitHub refused to let this workflow open the pull request, because Thornswood's Actions setting 'Allow GitHub Actions to create and approve pull requests' is off on GitHub while records\github-settings.json says it is on. pwsh scripts/deploy/Check-GitHubSettings.ps1 names the difference. $EnginePinBranch is ready at $($k.sha) and its checks are running."
-        }
-        Stop-Here "GitHub refused the pull request: $($r.Text)"
-    }
+    if ($r.Code -ne 0) { Stop-Here "GitHub refused the pull request: $($r.Text)" }
     $p = $r.Text | ConvertFrom-Json
     Write-Host ("opened pull request #{0} ({1}) at {2}: {3}" -f $p.number, $p.html_url, $k.sha.Substring(0, 12), $title)
     exit 0

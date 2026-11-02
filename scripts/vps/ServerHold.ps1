@@ -44,8 +44,7 @@
   watchdog. A script that dies in between leaves the hold, and the watchdog
   starts the server when it runs out and says so in #staff-updates.
 
-  Keep it ASCII and Windows PowerShell 5.1: the box reads a file with no byte
-  order mark as ANSI.
+  Keep it ASCII. It runs on the box, in PowerShell 7.
 #>
 
 # The folder the watchdog lives in on the box. Holds go in holds\ under it.

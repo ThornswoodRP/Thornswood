@@ -14,8 +14,9 @@
   What it checks:
     1. the workflow is there, starts only by hand (workflow_dispatch, which
        is how Read-Board.ps1 starts it), gives its own token no permissions,
-       takes the board token from the "board" environment, runs on GitHub's
-       runner as board-status.yml does, with a timeout, keeps nothing as an
+       takes the board App's key from the "board" environment and asks its
+       token for the organization's Projects to read and nothing more
+       (#5185), runs on GitHub's runner, with a timeout, keeps nothing as an
        artifact (#3410: the repository's artifact storage filled on 25 Oct
        2026 and three reads in a row could not hand the board back), and
        removes board.json from the runner however the run ended;
@@ -73,16 +74,21 @@ $text = [IO.File]::ReadAllText($Workflow) -replace "`r`n", "`n"
 $on = [regex]::Match($text, '(?ms)^on:\n(.*?)^\S').Groups[1].Value
 Yes 'it starts by hand (workflow_dispatch) and on nothing else' ($on -match '(?m)^\s+workflow_dispatch:\s*$' -and @([regex]::Matches($on, '(?m)^  [a-z_]+:')).Count -eq 1)
 Yes 'its own token is given no permissions' ($text -match '(?m)^permissions:\s*\{\}\s*$' -and @([regex]::Matches($text, '(?m)^\s+permissions:')).Count -eq 0)
-Yes 'the board token comes from the "board" environment, which only main may use' (
-    $text -match '(?m)^\s+environment:\s*board\s*$' -and $text -match [regex]::Escape('BOARD_TOKEN: ${{ secrets.BOARD_TOKEN }}'))
+Yes 'the board App''s key comes from the "board" environment, which only main may use (#5185)' (
+    $text -match '(?m)^\s+environment:\s*board\s*$' -and $text -match [regex]::Escape('private-key: ${{ secrets.BOARD_APP_KEY }}') -and
+    $text -match [regex]::Escape('client-id: ${{ vars.BOARD_APP_CLIENT_ID }}') -and $text -match [regex]::Escape('BOARD_TOKEN: ${{ steps.app.outputs.token }}'))
+Yes '  its token may read the organization''s Projects and nothing else' (
+    $text -match '(?m)^\s+permission-organization-projects:\s*read\s*$' -and @([regex]::Matches($text, '(?m)^\s+permission-')).Count -eq 1)
+Yes '  the board is the organization''s, its number the environment''s variable' (
+    $text -match [regex]::Escape('BOARD_OWNER: ${{ github.repository_owner }}') -and $text -match [regex]::Escape('BOARD_NUMBER: ${{ vars.BOARD_NUMBER }}') -and $text -notmatch 'EvilPatrick06')
 
 $runsOn = [regex]::Match($text, '(?m)^\s*runs-on:\s*(.+)$').Groups[1].Value.Trim()
-$status = [IO.File]::ReadAllText((Join-Path $Repo '.github\workflows\board-status.yml'))
-$statusRunsOn = [regex]::Match($status, '(?m)^\s*runs-on:\s*(.+)$').Groups[1].Value.Trim()
-Yes ("it runs on GitHub's Windows runner, as board-status does (#4983) ({0})" -f $runsOn) ($runsOn -eq 'windows-latest' -and $runsOn -eq $statusRunsOn)
+Yes ("it runs on GitHub's hosted runner ({0})" -f $runsOn) ($runsOn -eq 'ubuntu-latest')
 Yes '  with a timeout' ($text -match '(?m)^\s+timeout-minutes:\s*\d+\s*$')
 
-Yes 'it keeps no artifact: the board comes back in the log (#3410)' ($text -notmatch 'upload-artifact' -and $text -notmatch '(?m)^\s+uses:')
+$uses = @([regex]::Matches($text, '(?m)^\s+(?:- )?uses:\s*(\S+)') | ForEach-Object { $_.Groups[1].Value })
+Yes 'it keeps no artifact: the board comes back in the log (#3410); its one action is the App token''s' (
+    $text -notmatch 'upload-artifact' -and $uses.Count -eq 1 -and $uses[0] -match '^actions/create-github-app-token@[0-9a-f]{40}$')
 Yes 'the runner''s copy is removed however the run ended' ($text -match '(?ms)- name: Remove board\.json from the runner\n\s+if: always\(\)')
 
 # ---- 2. nothing pasted into the script, nothing written to the board --------
@@ -114,7 +120,8 @@ New-Item -ItemType Directory -Force -Path $work | Out-Null
 $calls = Join-Path $work 'calls.txt'
 # Answers as GitHub would: the board, then its cards in two pages of
 # TS_PAGE cards each (the page after names the cursor the first gave), an
-# error when TS_BOARD_ERROR is set, and no Status field when TS_NO_STATUS is.
+# error when TS_BOARD_ERROR is set, no Status field when TS_NO_STATUS is, and
+# the board App's refusal of the board's workflows when TS_NO_WORKFLOWS is.
 # TS_BIG adds 400 draft cards with titles that do not compress, so the
 # board's lines in the log are more than one.
 $standIn = @'
@@ -124,31 +131,32 @@ function Invoke-RestMethod {
     $rec = [ordered]@{ method = $Method; uri = $Uri; auth = $Headers['Authorization']; body = $b }
     [IO.File]::AppendAllText($env:TS_CALLS, ($rec | ConvertTo-Json -Depth 8 -Compress) + "`n")
     if ($env:TS_BOARD_ERROR) { return [pscustomobject]@{ data = $null; errors = @([pscustomobject]@{ message = $env:TS_BOARD_ERROR }) } }
+    if ($b.query -match 'workflows\(' -and $env:TS_NO_WORKFLOWS) { return [pscustomobject]@{ data = $null; errors = @([pscustomobject]@{ message = 'You do not have permission to access workflows' }) } }
     if ($b.query -notmatch 'items\(') {
         $status = if ($env:TS_NO_STATUS) { $null } else { [pscustomobject]@{ options = @([pscustomobject]@{ name = 'Todo' }, [pscustomobject]@{ name = 'In Progress' }, [pscustomobject]@{ name = 'Done' }) } }
         $flows = [pscustomobject]@{ nodes = @([pscustomobject]@{ name = 'Item closed'; enabled = $true }, [pscustomobject]@{ name = 'Auto-close issue'; enabled = $false }) }
-        return [pscustomobject]@{ data = [pscustomobject]@{ user = [pscustomobject]@{ projectV2 = [pscustomobject]@{ title = 'Thornswood To Do'; url = 'https://github.com/users/EvilPatrick06/projects/1'; status = $status; workflows = $flows } } } }
+        return [pscustomobject]@{ data = [pscustomobject]@{ organization = [pscustomobject]@{ projectV2 = [pscustomobject]@{ title = 'Thornswood To Do'; url = 'https://github.com/orgs/ThornswoodRP/projects/3'; status = $status; workflows = $flows } } } }
     }
-    $repo = [pscustomobject]@{ nameWithOwner = 'EvilPatrick06/Thornswood' }
+    $repo = [pscustomobject]@{ nameWithOwner = 'ThornswoodRP/Thornswood' }
     if (-not $b.variables.c) {
         $nodes = @(
             [pscustomobject]@{ isArchived = $false; status = [pscustomobject]@{ name = 'In Progress' }; order = [pscustomobject]@{ number = 52.5 }; content = [pscustomobject]@{ __typename = 'Issue'; number = 3192; title = 'Review the board'; state = 'OPEN'; repository = $repo } }
             [pscustomobject]@{ isArchived = $false; status = $null; order = $null; content = [pscustomobject]@{ __typename = 'PullRequest'; number = 3121; title = 'SYN gate'; state = 'MERGED'; repository = $repo } })
-        return [pscustomobject]@{ data = [pscustomobject]@{ user = [pscustomobject]@{ projectV2 = [pscustomobject]@{ items = [pscustomobject]@{ pageInfo = [pscustomobject]@{ hasNextPage = $true; endCursor = 'cursor-1' }; nodes = $nodes } } } } }
+        return [pscustomobject]@{ data = [pscustomobject]@{ organization = [pscustomobject]@{ projectV2 = [pscustomobject]@{ items = [pscustomobject]@{ pageInfo = [pscustomobject]@{ hasNextPage = $true; endCursor = 'cursor-1' }; nodes = $nodes } } } } }
     }
     if ($b.variables.c -ne 'cursor-1') { throw "stand-in: unexpected cursor $($b.variables.c)" }
     $nodes = @(
         [pscustomobject]@{ isArchived = $true; status = [pscustomobject]@{ name = 'Done' }; order = [pscustomobject]@{}; content = [pscustomobject]@{ __typename = 'Issue'; number = 2863; title = 'Board labels'; state = 'CLOSED'; repository = $repo } }
         [pscustomobject]@{ isArchived = $false; status = [pscustomobject]@{ name = 'Todo' }; order = $null; content = [pscustomobject]@{ __typename = 'DraftIssue'; title = 'A draft' } })
     if ($env:TS_BIG) { foreach ($n in 1..400) { $nodes += [pscustomobject]@{ isArchived = $false; status = $null; order = $null; content = [pscustomobject]@{ __typename = 'DraftIssue'; title = ([Guid]::NewGuid().ToString('N') + [Guid]::NewGuid().ToString('N')) } } } }
-    return [pscustomobject]@{ data = [pscustomobject]@{ user = [pscustomobject]@{ projectV2 = [pscustomobject]@{ items = [pscustomobject]@{ pageInfo = [pscustomobject]@{ hasNextPage = $false; endCursor = 'cursor-2' }; nodes = $nodes } } } } }
+    return [pscustomobject]@{ data = [pscustomobject]@{ organization = [pscustomobject]@{ projectV2 = [pscustomobject]@{ items = [pscustomobject]@{ pageInfo = [pscustomobject]@{ hasNextPage = $false; endCursor = 'cursor-2' }; nodes = $nodes } } } } }
 }
 
 '@
 $runner = Join-Path $work 'read.ps1'
 [IO.File]::WriteAllText($runner, $standIn + $script)
 
-$names = 'BOARD_TOKEN', 'BOARD_OWNER', 'BOARD_NUMBER', 'RUNNER_TEMP', 'GITHUB_OUTPUT', 'TS_CALLS', 'TS_BOARD_ERROR', 'TS_NO_STATUS', 'TS_BIG'
+$names = 'BOARD_TOKEN', 'BOARD_OWNER', 'BOARD_NUMBER', 'RUNNER_TEMP', 'GITHUB_OUTPUT', 'TS_CALLS', 'TS_BOARD_ERROR', 'TS_NO_STATUS', 'TS_NO_WORKFLOWS', 'TS_BIG'
 function Invoke-Read([hashtable]$extra = @{}) {
     foreach ($f in $calls, (Join-Path $work 'out.txt')) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force } }
     $temp = Join-Path $work 'runner-temp'
@@ -158,13 +166,14 @@ function Invoke-Read([hashtable]$extra = @{}) {
     foreach ($k in $names) { $keep[$k] = [Environment]::GetEnvironmentVariable($k) }
     try {
         $env:BOARD_TOKEN = 'stand-in-board-token'
-        $env:BOARD_OWNER = 'EvilPatrick06'
-        $env:BOARD_NUMBER = '1'
+        $env:BOARD_OWNER = 'ThornswoodRP'
+        $env:BOARD_NUMBER = '3'
         $env:RUNNER_TEMP = $temp
         $env:GITHUB_OUTPUT = Join-Path $work 'out.txt'
         $env:TS_CALLS = $calls
         $env:TS_BOARD_ERROR = ''
         $env:TS_NO_STATUS = ''
+        $env:TS_NO_WORKFLOWS = ''
         $env:TS_BIG = ''
         foreach ($k in $extra.Keys) { [Environment]::SetEnvironmentVariable($k, $extra[$k]) }
         $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
@@ -197,20 +206,21 @@ function Back([string[]]$lines) { try { return , (Read-BoardFromLog $lines) } ca
 try {
     $r = Invoke-Read
     Yes ("a board of two pages: the run passes (exit {0})" -f $r.Code) ($r.Code -eq 0)
-    Yes ("  three calls to the board, each with the board token ({0})" -f $r.Calls.Count) ($r.Calls.Count -eq 3 -and @($r.Calls | Where-Object { $_.auth -ne 'Bearer stand-in-board-token' -or $_.uri -ne 'https://api.github.com/graphql' }).Count -eq 0)
-    Yes '  it reads board 1 of EvilPatrick06' ($r.Calls[0].body.variables.o -eq 'EvilPatrick06' -and $r.Calls[0].body.variables.n -eq 1)
-    Yes '  the first page asks from the start, the second from the cursor the first gave' ($null -eq $r.Calls[1].body.variables.c -and $r.Calls[2].body.variables.c -eq 'cursor-1')
+    Yes ("  four calls to the board (the board, its workflows, two pages), each with the board token ({0})" -f $r.Calls.Count) ($r.Calls.Count -eq 4 -and @($r.Calls | Where-Object { $_.auth -ne 'Bearer stand-in-board-token' -or $_.uri -ne 'https://api.github.com/graphql' }).Count -eq 0)
+    Yes '  it reads board 3 of the organization ThornswoodRP' ($r.Calls[0].body.variables.o -eq 'ThornswoodRP' -and $r.Calls[0].body.variables.n -eq 3 -and $r.Calls[0].body.query -match 'organization\(login:\$o\)' -and $r.Calls[0].body.query -notmatch 'user\(|workflows')
+    Yes '  the workflows are asked for apart' ($r.Calls[1].body.query -match 'workflows\(first:50\)' -and $r.Calls[1].body.query -notmatch 'items')
+    Yes '  the first page asks from the start, the second from the cursor the first gave' ($null -eq $r.Calls[2].body.variables.c -and $r.Calls[3].body.variables.c -eq 'cursor-1')
     Yes '  board.json is written, and the step names its folder' ($null -ne $r.Board -and $r.Output -match ('dir=' + [regex]::Escape($r.Dir)))
     if ($r.Board) {
         $b = $r.Board
-        Yes '  with when it was read and the board it is' ($b.read_at -and $b.board.url -eq 'https://github.com/users/EvilPatrick06/projects/1' -and $b.board.title -eq 'Thornswood To Do' -and $b.board.number -eq 1)
+        Yes '  with when it was read and the board it is' ($b.read_at -and $b.board.url -eq 'https://github.com/orgs/ThornswoodRP/projects/3' -and $b.board.title -eq 'Thornswood To Do' -and $b.board.number -eq 3)
         Yes '  the Status options in board order' ((@($b.statuses) -join '|') -eq 'Todo|In Progress|Done')
-        Yes '  and the board''s workflows, on or off' (@($b.workflows).Count -eq 2 -and @($b.workflows | Where-Object { $_.name -eq 'Auto-close issue' -and -not $_.enabled }).Count -eq 1)
+        Yes '  and the board''s workflows, on or off' (@($b.workflows).Count -eq 2 -and @($b.workflows | Where-Object { $_.name -eq 'Auto-close issue' -and -not $_.enabled }).Count -eq 1 -and $null -eq $b.workflows_unread)
         $items = @($b.items)
         Yes ("  one entry for every card on both pages ({0})" -f $items.Count) ($items.Count -eq 4)
         $i = @($items | Where-Object { $_.number -eq 3192 })
         Yes '  an issue card has its repository, number, kind, title, state, Status and Order' (
-            $i.Count -eq 1 -and $i[0].repo -eq 'EvilPatrick06/Thornswood' -and $i[0].kind -eq 'Issue' -and $i[0].title -eq 'Review the board' -and $i[0].state -eq 'OPEN' -and $i[0].status -eq 'In Progress' -and $i[0].order -eq 52.5 -and $i[0].archived -eq $false)
+            $i.Count -eq 1 -and $i[0].repo -eq 'ThornswoodRP/Thornswood' -and $i[0].kind -eq 'Issue' -and $i[0].title -eq 'Review the board' -and $i[0].state -eq 'OPEN' -and $i[0].status -eq 'In Progress' -and $i[0].order -eq 52.5 -and $i[0].archived -eq $false)
         $p = @($items | Where-Object { $_.number -eq 3121 })
         Yes '  a pull request card with no Status or Order has null for both' ($p.Count -eq 1 -and $p[0].kind -eq 'PullRequest' -and $p[0].state -eq 'MERGED' -and $null -eq $p[0].status -and $null -eq $p[0].order)
         $a = @($items | Where-Object { $_.number -eq 2863 })
@@ -218,7 +228,7 @@ try {
         $d = @($items | Where-Object { $_.kind -eq 'DraftIssue' })
         Yes '  a draft card has its title and null for repository and number' ($d.Count -eq 1 -and $d[0].title -eq 'A draft' -and $null -eq $d[0].repo -and $null -eq $d[0].number)
     }
-    Yes '  the log says how many cards and how many in each Status' ($r.Out -match 'read 4 cards from https://github.com/users/EvilPatrick06/projects/1' -and $r.Out -match '\(no Status\): 1' -and $r.Out -match 'In Progress: 1')
+    Yes '  the log says how many cards and how many in each Status' ($r.Out -match 'read 4 cards from https://github.com/orgs/ThornswoodRP/projects/3' -and $r.Out -match '\(no Status\): 1' -and $r.Out -match 'In Progress: 1')
 
     # ---- the hand-back: board.json in the log ----
     $lines = @($r.Out -split "`r?`n")
@@ -261,6 +271,10 @@ try {
 
     $r = Invoke-Read @{ TS_BOARD_ERROR = 'Your token has not been granted the required scopes' }
     Yes ("an error from the board fails the run, says it, and writes no file (exit {0})" -f $r.Code) ($r.Code -ne 0 -and $r.Out -match 'the board answered: Your token has not been granted' -and $null -eq $r.Board)
+
+    $r = Invoke-Read @{ TS_NO_WORKFLOWS = '1' }
+    Yes ("workflows the token is refused: the run passes, the cards are read, and board.json says the workflows were not read and why (exit {0})" -f $r.Code) (
+        $r.Code -eq 0 -and $null -ne $r.Board -and @($r.Board.items).Count -eq 4 -and $null -eq $r.Board.workflows -and $r.Board.workflows_unread -match 'permission to access workflows' -and $r.Out -match 'workflows were not read')
 
     $r = Invoke-Read @{ TS_NO_STATUS = '1' }
     Yes ("a board with no Status field fails the run and writes no file (exit {0})" -f $r.Code) ($r.Code -ne 0 -and $r.Out -match 'no single-select field named Status' -and $null -eq $r.Board)

@@ -250,7 +250,7 @@ function Read-WorkFile([string]$Name) { return (Read-TextFile ($Work + '\' + $Na
 function Remove-WorkFolder { Remove-Item -LiteralPath $Work -Recurse -Force }
 
 function Register-OneShot([string]$Task, [string]$PhaseName, [datetime]$At, [int]$Minutes) {
-    $a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -ExecutionPolicy Bypass -File "' + $Work + '\phase.ps1" -Phase ' + $PhaseName)
+    $a = New-ScheduledTaskAction -Execute (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe') -Argument ('-NoProfile -ExecutionPolicy Bypass -File "' + $Work + '\phase.ps1" -Phase ' + $PhaseName)
     $t = New-ScheduledTaskTrigger -Once -At $At
     $p = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
     $s = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes $Minutes) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries

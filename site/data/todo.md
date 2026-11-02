@@ -122,14 +122,6 @@ the Discord, then gives the world five minutes.
 .\scripts\release\Ship.ps1 "what changed, in a sentence"
 ```
 
-Rebuild the installer. `-Vortex` builds out of the Steam copy and leaves out
-everything the collection provides, which is what makes it half a gigabyte
-instead of fourteen.
-
-```
-.\scripts\release\Package-Thornswood.ps1 -Vortex
-```
-
 The public pages and the boards.
 
 ```

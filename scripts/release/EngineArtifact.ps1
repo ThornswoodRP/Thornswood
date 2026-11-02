@@ -31,7 +31,7 @@
   month and is private, and on 25 Oct it filled: engine.yml's upload was
   refused (run 40249618462), and after the prune (#3410) it stayed refused,
   because what is used up is time stored, which a delete does not give back.
-  The fork, EvilPatrick06/skymp, is public, so its artifacts cost nothing and
+  The fork, ThornswoodRP/skymp, is public, so its artifacts cost nothing and
   count against no quota, and every push to thornswood/engine-changes keeps
   the build as thornswood-engine-<commit> for 90 days (ForkEngineBuild.ps1).
   engine.yml makes the records from exactly that build, so those are the
@@ -75,7 +75,7 @@
   It is made in a folder beside it and moved into place whole, so a folder
   there is one that passed.
 
-  Keep it Windows PowerShell 5.1 and pwsh alike. It reads nothing over the
+  It runs in PowerShell 7 (#5356). It reads nothing over the
   network itself: Get-EngineArtifact.ps1 hands it gh and the registry's
   HTTP (New-EnginePackageHttp), the harness stand-ins.
 #>
@@ -128,7 +128,7 @@ function Get-EngineArtifactPin([string]$Repo) {
 <#
   THE FORK'S PACKAGE OF THE BUILD (#5152). Since fork #131 every push build
   of thornswood/engine-changes is also kept as
-  ghcr.io/evilpatrick06/thornswood-engine:<commit>, the same folder as one
+  ghcr.io/<owner>/thornswood-engine:<commit>, the same folder as one
   zip (the fork's misc\thornswood\Push-EnginePackage.ps1), kept until
   somebody deletes it and read with no account. An artifact goes after 90
   days, so until #5152 a pin older than that could not be shipped again, and
@@ -144,7 +144,13 @@ function Get-EngineArtifactPin([string]$Repo) {
   200; a failure to reach the registry throws, and that is not "there is
   none". New-EnginePackageHttp makes the real one; a harness passes its own.
 #>
-$EngineArtifactPackage = 'evilpatrick06/thornswood-engine'
+# WHERE A PACKAGE IS (#5184). The fork pushes to the package of the owner it
+# is under when it builds (Push-EnginePackage.ps1 takes it from
+# GITHUB_REPOSITORY). A build from before the fork moved to ThornswoodRP
+# is under evilpatrick06, which keeps it, and one from after is under
+# thornswoodrp. A package is never in both, so the two are asked in turn,
+# the newer first, and the first that has the commit is the one.
+$EngineArtifactPackages = @('thornswoodrp/thornswood-engine', 'evilpatrick06/thornswood-engine')
 
 function New-EnginePackageHttp {
     Add-Type -AssemblyName System.Net.Http
@@ -178,6 +184,18 @@ function New-EnginePackageHttp {
 # Anything the registry answers that is not the package of this commit
 # throws a sentence.
 function Get-EnginePackageBuild([string]$Commit, [string]$Registry, [scriptblock]$Http, [string]$Into, [switch]$Look) {
+    $whys = @()
+    foreach ($p in $EngineArtifactPackages) {
+        $r = Get-EnginePackageBuildIn -Package $p -Commit $Commit -Registry $Registry -Http $Http -Into $Into -Look:$Look
+        if ($r.State -ne 'none') { return $r }
+        $whys += $r.Why
+    }
+    return [pscustomobject]@{ State = 'none'; Run = $null; Artifact = $null; Why = ($whys -join '; ') }
+}
+
+# One package's answer, as above.
+function Get-EnginePackageBuildIn([string]$Package, [string]$Commit, [string]$Registry, [scriptblock]$Http, [string]$Into, [switch]$Look) {
+    $EngineArtifactPackage = $Package
     $Commit = $Commit.ToLowerInvariant()
     $base = $Registry.TrimEnd('/')
     $hostName = ([uri]$base).Host
@@ -187,6 +205,16 @@ function Get-EnginePackageBuild([string]$Commit, [string]$Registry, [scriptblock
     try {
         $tf = Join-Path $tmp 'token.json'
         $code = & $Http "$base/token?scope=repository:$($EngineArtifactPackage):pull&service=$hostName" @{} $tf
+        # ghcr.io refuses an anonymous pull token, 403 DENIED, for a package
+        # it has no public copy of: one that is not there and one that is not
+        # public alike (measured on 1 Nov 2026 for thornswoodrp's, before any
+        # build went there, and for a made-up name). So that owner has none to
+        # read, and the next is asked; until #5184 it stopped every gamemode
+        # release after the fork moved, though evilpatrick06 kept the pin's.
+        if ($code -eq 401 -or $code -eq 403) {
+            return [pscustomobject]@{ State = 'none'; Run = $null; Artifact = $null
+                Why = "the registry at $base has no package $EngineArtifactPackage that can be read without an account (HTTP ${code}: there is none, or it is not public)" }
+        }
         if ($code -ne 200) { throw "the registry at $base gave no pull token for $EngineArtifactPackage (HTTP $code)" }
         $token = [string](([IO.File]::ReadAllText($tf) | ConvertFrom-Json).token)
         $auth = @{ Authorization = "Bearer $token"; Accept = 'application/vnd.oci.image.manifest.v1+json' }

@@ -70,7 +70,10 @@ function Find-TempPathReads($ast) {
         $n -is [System.Management.Automation.Language.VariableExpressionAst] -and
         $n.VariablePath.UserPath -match '^env:(TEMP|TMP)$' }, $true) | Where-Object { -not (Test-TempSaveOrSet $_) })
 }
-$harnesses = @(Get-ChildItem -LiteralPath (Join-Path $repo 'tests') -Recurse -File | Where-Object { $_.Extension -eq '.ps1' -or $_.Extension -eq '.psm1' })
+# In tests and beside each product, in its own tests folder (plan line 42).
+. (Join-Path (Join-Path (Join-Path $repo 'scripts') 'dev') 'Harness-Files.ps1')
+$harnesses = @(@(Join-Path $repo 'tests') + @(Get-ProductTestFolders $repo | ForEach-Object { $_.Path }) | ForEach-Object {
+    Get-ChildItem -LiteralPath $_ -Recurse -File } | Where-Object { $_.Extension -eq '.ps1' -or $_.Extension -eq '.psm1' })
 Yes ('there are harnesses to read, ' + $harnesses.Count + ' of them') ($harnesses.Count -ge 100)
 $found = @()
 foreach ($f in $harnesses) {

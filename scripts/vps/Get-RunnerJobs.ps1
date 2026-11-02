@@ -30,7 +30,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Since,
     [string]$Job = '',
     [int]$LookBack = 3,
-    [string]$Repo = 'EvilPatrick06/Thornswood'
+    [string]$Repo = 'ThornswoodRP/Thornswood'
 )
 
 $ErrorActionPreference = 'Stop'

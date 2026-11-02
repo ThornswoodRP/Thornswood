@@ -347,7 +347,7 @@ function Test-SshdFile([string]$Path) {
 # A task, not Restart-Service here: an ssh session's own processes go with it,
 # and restarting sshd from inside the session could cut this answer off.
 function Start-SshdRestart {
-    $a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ("-NoProfile -Command `"Start-Sleep -Seconds 5; Restart-Service sshd -Force; Unregister-ScheduledTask -TaskName '" + $RestartTask + "' -Confirm:`$false`"")
+    $a = New-ScheduledTaskAction -Execute (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe') -Argument ("-NoProfile -Command `"Start-Sleep -Seconds 5; Restart-Service sshd -Force; Unregister-ScheduledTask -TaskName '" + $RestartTask + "' -Confirm:`$false`"")
     $p = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
     Register-ScheduledTask -TaskName $RestartTask -Action $a -Principal $p -Force | Out-Null
     Start-ScheduledTask -TaskName $RestartTask
@@ -355,7 +355,7 @@ function Start-SshdRestart {
 
 function Register-Rollback([string]$Backup) {
     $cmd = "Copy-Item -LiteralPath '" + $Backup + "' -Destination '" + $SshdConfig + "' -Force; Restart-Service sshd -Force; Unregister-ScheduledTask -TaskName '" + $RollbackTask + "' -Confirm:`$false"
-    $a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -Command "' + $cmd + '"')
+    $a = New-ScheduledTaskAction -Execute (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe') -Argument ('-NoProfile -Command "' + $cmd + '"')
     $t = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(10))
     $p = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
     Register-ScheduledTask -TaskName $RollbackTask -Action $a -Trigger $t -Principal $p -Force | Out-Null
@@ -375,7 +375,7 @@ function New-PrivateFile([string]$Path) {
         $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier($s)), 'FullControl', 'Allow')))
     }
     $item = Get-Item -LiteralPath $Path -Force
-    if ($PSVersionTable.PSEdition -eq 'Core') { [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]$item, $acl) } else { $item.SetAccessControl($acl) }
+    [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]$item, $acl)
     # Read back, not taken from the call: a FileSecurity already written once
     # writes nothing the second time and says nothing (#3034, on the box).
     $got = Get-Acl -LiteralPath $Path

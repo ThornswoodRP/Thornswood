@@ -32,13 +32,14 @@
       sent a book without them
     - server-log.js's RELEASE_PARTS is the gamemode's PARTS
 
-  The bot's start step is tested by bot\test-2758-deletion-requests.py.
+  The bot's start step is tested by bot\tests\test-2758-deletion-requests.py.
   Nothing leaves this machine.
 */
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const cp = require('child_process');
+const siteFiles = require('./site-files');
 
 const REPO = path.resolve(__dirname, '..');
 const WRITER = path.join(REPO, 'scripts', 'vps', 'Server-Log.js');
@@ -164,10 +165,12 @@ try {
   yes('  and it reads the chat folder voice reads, THORNSWOOD_CHAT_DIR when it is set', rd(path.join(VC, 'elsewhere', '2026-10-01.jsonl')) === '');
 
   // ---- the site
-  const SRC = rd(path.join(REPO, 'site', 'server.js'));
+  const SRC = siteFiles.source();
   const cut = /\/\/ ==== thornswood deletion requests ====([\s\S]*?)\/\/ ==== end thornswood deletion requests ====/.exec(SRC);
-  yes('server.js has the deletion block between its markers, and calls it before it listens',
-      !!cut && /\/\/ ==== end thornswood deletion requests ====\r?\napplyDeletionRequests\(\);\r?\n\r?\nhttp\.createServer/.test(SRC));
+  // The block is in site\lib\deletion.js since the split (#5357), and
+  // server.js still calls it the line before it listens.
+  yes('the site has the deletion block between its markers, and server.js calls it before it listens',
+      !!cut && /\napplyDeletionRequests\(\);\r?\n\r?\nhttp\.createServer/.test(fs.readFileSync(path.join(REPO, 'site', 'server.js'), 'utf8')));
   const S = path.join(scratch, 'site'), D = path.join(S, 'data'), UP = path.join(S, 'uploads'), FB = path.join(D, 'for-bot');
   function site() {
     fs.rmSync(S, { recursive: true, force: true });

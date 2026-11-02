@@ -38,7 +38,7 @@ const CR = String.fromCharCode(13);
 function read() {
   return fs.readFileSync(path.join.apply(path, [ROOT].concat([].slice.call(arguments))), 'utf8').split(CR).join('');
 }
-const gm = read('game', 'gamemode.js');
+const gm = require('./gamemode-tables.js').joined(read('game', 'gamemode.js'));
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -167,9 +167,9 @@ function needsRig() {
   const store = {};
   const g = {};
   const fake = {
-    getOnlinePlayers: function () { return online.slice(); },
     makeProperty: function () { },
     get: function (id, key) {
+      if (id === 0 && key === 'onlinePlayers') { return online.slice(); }
       if (key === 'worldOrCellDesc') { return refs[id] ? refs[id].worldOrCellDesc : ''; }
       if (key === 'thornswoodNeeds') { return store[id] ? JSON.parse(JSON.stringify(store[id])) : undefined; }
       return refs[id] ? refs[id][key] : undefined;

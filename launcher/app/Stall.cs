@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Threading;
-using System.Windows.Threading;
+using Avalonia.Threading;
 
 namespace Thornswood
 {
@@ -48,7 +48,7 @@ namespace Thornswood
                         if (was == 0)
                         {
                             Interlocked.Exchange(ref posted, now);
-                            win.Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(delegate
+                            Dispatcher.UIThread.Post(delegate
                             {
                                 long asked = Interlocked.Exchange(ref posted, 0);
                                 if (stallReported)
@@ -57,7 +57,7 @@ namespace Thornswood
                                     double secs = (DateTime.UtcNow.Ticks - asked) / (double)TimeSpan.TicksPerSecond;
                                     Stamp("The launcher window is responding again after " + (int)secs + " seconds.");
                                 }
-                            }));
+                            }, DispatcherPriority.Normal);
                             continue;
                         }
                         double waited = (now - was) / (double)TimeSpan.TicksPerSecond;

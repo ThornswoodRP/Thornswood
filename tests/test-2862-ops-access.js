@@ -43,7 +43,7 @@ const server = http.createServer((req, res) => {
   req.on('end', () => {
     asked.push({ method: req.method, url: req.url, auth: req.headers.authorization || '', body });
     res.setHeader('Content-Type', 'application/json');
-    if (req.method === 'GET' && req.url === '/repos/EvilPatrick06/Thornswood-Ops/installation') { res.end(JSON.stringify({ id: 88 })); return; }
+    if (req.method === 'GET' && req.url === '/repos/ThornswoodRP/Thornswood-Ops/installation') { res.end(JSON.stringify({ id: 88 })); return; }
     if (req.method === 'POST' && req.url === '/app/installations/88/access_tokens') {
       if (refuse) { res.statusCode = 422; res.end(JSON.stringify({ message: 'The permissions requested are not granted to this installation.' })); return; }
       res.statusCode = 201; res.end(JSON.stringify({ token: 'ghs_' + 'b'.repeat(36) })); return;

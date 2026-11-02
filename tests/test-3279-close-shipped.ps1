@@ -43,7 +43,10 @@
    10. a merge this checkout does not hold stays open only when GitHub says
        it is on main; one that is not (an id from before main's history was
        rewritten, #3684), or that GitHub does not know, is a stop naming it,
-       and the issues beside it are still closed.
+       and the issues beside it are still closed;
+   11. with -Dev and a dev release's name (#5199), a carried Dev block with
+       no Dev test task after its merge is written with its Build: line
+       naming that release, a Main one waits, and nothing is closed.
 
   It never reaches GitHub. Files under its own temp folder only.
 #>
@@ -149,7 +152,7 @@ try {
     }
 
     # Not $Slug: PowerShell names are not case sensitive, and $r is each run.
-    $Slug = 'EvilPatrick06/Thornswood'
+    $Slug = 'ThornswoodRP/Thornswood'
     function Card([int]$n, [string]$status = 'Done', [string]$state = 'OPEN', [string]$repo = $Slug) {
         return [ordered]@{ repo = $repo; number = $n; kind = 'Issue'; title = "issue $n"; state = $state; status = $status; order = $null; archived = $false }
     }
@@ -286,6 +289,33 @@ try {
     $r = Run @() $nine @($cmp)
     Yes ("#9, a merge GitHub does not know: a stop that says what GitHub answered (exit {0})" -f $r.Code) (
         $r.Code -eq 1 -and @($r.Writes | Where-Object { $_ -match '/issues/9[ /]' }).Count -eq 0 -and $r.Out -match '#9: .*which is not on main \(GitHub answered GET .*403')
+    $script:boardFile = $keepBoard
+
+    # ---- 11: a dev release (-Dev, #5199) ---------------------------------------
+    # #10's Dev block is carried and has only a Main test task after it, so it
+    # is written with its Build: line set to the release; #15's has a newer
+    # Dev one, so nothing; #2's merge is not carried; Main blocks wait; and
+    # nothing is closed.
+    $r = Run @('-Dev', '-Build', '20261101-020000-dev') $answers
+    $w = $r.Writes
+    $want = $devBlock.Replace('Build: 20261022-063057-dev', ('Build: dev release 20261101-020000-dev, from ' + $script:shipped.Substring(0, 12)))
+    $c10 = @($w | Where-Object { $_ -like "POST repos/$Slug/issues/10/comments *" })
+    Yes ("a dev release passes (exit {0})" -f $r.Code) ($r.Code -eq 0)
+    Yes '  #10''s carried Dev block is written, its Build: line naming the dev release' ($c10.Count -eq 1 -and ($c10[0].Substring($c10[0].IndexOf('{')) | ConvertFrom-Json).body -ceq $want)
+    Yes '  and that is the only write: no close, no Main block, nothing for #15''s newer Dev one or #2''s later merge' ($w.Count -eq 1 -and @($w | Where-Object { $_ -match '^PATCH ' }).Count -eq 0)
+    Yes '  saying which are for main and which are already there' ($r.Out -match '#1: its test task is for main' -and $r.Out -match '#15: its Dev test task is already written after the merge')
+    $r = Run @('-Dev', '-Build', '20261101-020000-dev', '-Check') $answers
+    Yes '  with -Check it writes nothing and says what it would' ($r.Code -eq 0 -and $r.Writes.Count -eq 0 -and $r.Out -match '#10: would write its Dev test task, Build: dev release 20261101-020000-dev')
+    $r = Run @('-Dev') $answers
+    Yes '  with no -Build it stops before anything is read' ($r.Code -eq 1 -and $r.Calls.Count -eq 0 -and $r.Out -match 'named with -Build')
+    # A Dev block with no Build: line gets one under its Server line.
+    $keepBoard = $script:boardFile
+    $script:boardFile = Join-Path $work 'board-22.json'
+    [IO.File]::WriteAllText($script:boardFile, ([ordered]@{ read_at = '2026-11-01T02:00:00Z'; items = @((Card 22)) } | ConvertTo-Json -Depth 6))
+    $bare = "Test task: Measure the bellows`nServer: Dev`n1. Read the log for bellows: lines."
+    $r = Run @('-Dev', '-Build', '20261101-020000-dev') @{ (Page 22) = @((Robot $mergeA 3330 'github-actions[bot]' $bare)) }
+    $c22 = @($r.Writes | Where-Object { $_ -like "POST repos/$Slug/issues/22/comments *" })
+    Yes '  a Dev block with no Build: line gets one under its Server line' ($c22.Count -eq 1 -and ($c22[0].Substring($c22[0].IndexOf('{')) | ConvertFrom-Json).body -ceq ("Test task: Measure the bellows`nServer: Dev`nBuild: dev release 20261101-020000-dev, from " + $script:shipped.Substring(0, 12) + "`n1. Read the log for bellows: lines."))
     $script:boardFile = $keepBoard
 
     # ---- 8: what stops before anything is read -------------------------------

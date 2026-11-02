@@ -22,11 +22,11 @@
        and allowed.json through a FileStream sharing ReadWrite and Delete,
        never Get-Content.
     2. Warn-DevRoom looks once: no Start-Sleep, no second Get-DevRoom.
-    3. In this shell and in Windows PowerShell 5.1 (the box runs these
-       reads with it): the read the deploys send, run while the file is
+    3. In PowerShell 7 (the box runs these reads with it since #5356): the
+       read the deploys send, run while the file is
        replaced by a POSIX rename (Feed-Store.ps1's Move-FeedStoreInto, the
        same rename as the engine's), does not stop the rename and reads the
-       old count whole; Get-Content's open does stop it.
+       old count whole; on Windows, Get-Content's open does stop it.
 
   -Repo runs it against another checkout's scripts (main before #2740 fails
   1, 2 and 3). Nothing outside its own temp folder is written.
@@ -92,9 +92,8 @@ $readShared = [regex]::Match($liveRoom, '(?s)function ReadShared\(.*?\n\}').Valu
 $storePs1 = Join-Path $Repo 'scripts\release\Feed-Store.ps1'
 Yes 'the read the deploys send and Feed-Store.ps1''s POSIX rename are both there' ($readShared.Length -gt 0 -and (Test-Path -LiteralPath $storePs1))
 if (-not $readShared -or -not (Test-Path -LiteralPath $storePs1)) { Done }
-# 3 is how Windows shares an open file with a rename, in the shells the box has.
+# 3 is how an open file is shared with a rename, in the shell the box has.
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'SKIP  3, the reads while the file is renamed: they are Windows'' file sharing, in this shell and in Windows PowerShell 5.1, and this is not Windows'; Done }
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('ts-2740-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 $null = New-Item -ItemType Directory -Force -Path $work
@@ -138,12 +137,16 @@ $err = Swap $part $to
 $h.Dispose()
 Say 'get-content' ($err -match 'being used by another process' -and [IO.File]::ReadAllText($to) -eq '{"now":3}') ("error '" + $err + "'")
 '@))
-    $shells = @(@{ Name = 'this shell'; Exe = (Get-Process -Id $PID).Path })
-    $shells += @{ Name = 'Windows PowerShell 5.1'; Exe = (Get-WindowsPowerShell) }
+    $shells = @(@{ Name = 'the box''s PowerShell 7'; Exe = (Get-BoxPowerShell) })
     foreach ($sh in $shells) {
         $dir = Join-Path $work ($sh.Name -replace '\W', '')
         $out = @(& $sh.Exe -NoProfile -ExecutionPolicy Bypass -File $held $storePs1 $dir 2>&1 | ForEach-Object { [string]$_ })
-        foreach ($name in 'shared', 'loop', 'get-content') {
+        # Share modes are Windows': off Windows an open file refuses no
+        # rename, so Get-Content's open has nothing to stop there.
+        $names = @('shared', 'loop')
+        if ($OnWindows) { $names += 'get-content' }
+        else { Write-Host ("SKIP  {0}: Get-Content's open stops the rename: share modes are Windows', and off Windows an open file refuses no rename" -f $sh.Name) }
+        foreach ($name in $names) {
             $line = @($out | Where-Object { $_ -match "^(OK|NO) $name \|" }) | Select-Object -First 1
             $what = switch ($name) {
                 'shared' { 'the deploys'' read holding online.json does not stop the POSIX rename, and reads the old count whole' }

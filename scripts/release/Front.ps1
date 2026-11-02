@@ -17,7 +17,7 @@
   recorded like the client's (records\front-build.json) and a zip that is not
   that build is refused.
 
-  Works on Windows PowerShell 5.1 and PowerShell 7, on Windows and Linux.
+  Runs in PowerShell 7, on Windows and Linux.
 #>
 
 $ThornswoodFrontRecordPath = Join-Path $PSScriptRoot '..\..\records\front-build.json'

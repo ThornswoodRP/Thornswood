@@ -57,7 +57,7 @@
   front), and 30 an hour for each <from>. Mentions are off in both the bot
   and the webhook, so @everyone in a notice is text.
 
-  Windows PowerShell 5.1, which is what the box runs.
+  PowerShell 7, which is what the box runs.
   tests\test-say-staff.ps1 runs this against a scratch folder.
 #>
 param(

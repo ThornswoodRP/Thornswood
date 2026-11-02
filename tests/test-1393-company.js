@@ -36,6 +36,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const siteFiles = require('./site-files');
 const REPO = path.join(__dirname, '..');
 const CR = String.fromCharCode(13);
 const read = function (p) { return fs.readFileSync(path.join(REPO, p), 'utf8').split(CR).join(''); };
@@ -890,7 +891,7 @@ attempt('the wiring', function () {
       /companyProfiles: merged\(doc\.companyProfiles, had\.companyProfiles\),/.test(door) &&
       /doc\.companyProfiles = kept\.companyProfiles;/.test(door));
 
-  const site = read('site/server.js');
+  const site = siteFiles.source();
   const def = /cfg\.access\.company = \['([^']+)'\];/.exec(site);
   yes('W8 the site gives the role a default name, reads it, and sends companyProfiles to the door',
       !!def && /out\.company = has\(cfg\.access\.company\);/.test(site) &&

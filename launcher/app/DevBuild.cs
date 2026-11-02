@@ -12,7 +12,7 @@ namespace Thornswood
     /// the build everybody plays on stays playable while it is being tested.
     ///
     /// Made from the Server card on the Play page of the main build, out of the
-    /// main build's own files: the launcher folder is copied, the config is copied with the
+    /// main build's own files: the launcher's program is copied, the config is copied with the
     /// channel, branch and ports changed, and the profile records that say
     /// which packs are already applied are copied so the
     /// dev launcher does not try to re-apply a year of updates on its first
@@ -95,12 +95,19 @@ namespace Thornswood
             Directory.CreateDirectory(Path.Combine(root, "Launcher"));
             Directory.CreateDirectory(Path.Combine(root, "Profile"));
 
-            // The program: exe, WebView2 loader, icon, the voice host page.
-            // Never a half-downloaded .new.
+            // The program: the running exe and the native libraries beside it,
+            // from the folder this exe runs in. Under Velopack that is its
+            // current folder in %LocalAppData%\Thornswood, not Root\Launcher,
+            // which a Velopack install does not have. That folder also holds
+            // what the package carries for the install (config.json, SOURCE
+            // CODE.txt, the licence texts, Game), so only the .exe and .dll
+            // files are copied, the program as Build-Launcher.ps1 counts it.
+            string exeDir = Path.GetDirectoryName(Environment.ProcessPath);
             int copied = 0;
-            foreach (string f in Directory.GetFiles(Paths.LauncherDir))
+            foreach (string f in Directory.GetFiles(exeDir))
             {
-                if (f.EndsWith(".new", StringComparison.OrdinalIgnoreCase)) continue;
+                string ext = Path.GetExtension(f);
+                if (!ext.Equals(".exe", StringComparison.OrdinalIgnoreCase) && !ext.Equals(".dll", StringComparison.OrdinalIgnoreCase)) continue;
                 File.Copy(f, Path.Combine(root, "Launcher", Path.GetFileName(f)), true);
                 copied++;
             }

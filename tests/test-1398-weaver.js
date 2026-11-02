@@ -28,7 +28,7 @@ const vm = require('vm');
 const REPO = path.join(__dirname, '..');
 const CR = String.fromCharCode(13);
 function read(...bits) { return fs.readFileSync(path.join(REPO, ...bits), 'utf8').split(CR).join(''); }
-const gm = read('game', 'gamemode.js');
+const gm = require('./gamemode-tables.js').joined(read('game', 'gamemode.js'));
 const ui = read('game', 'ui', 'thornswood-skills.js');
 const page = read('docs', 'systems', 'professions', 'tailor.md');
 

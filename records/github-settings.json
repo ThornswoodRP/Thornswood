@@ -29,9 +29,12 @@
         "branch main"
       ],
       "secrets": [
-        "BOARD_TOKEN"
+        "BOARD_APP_KEY"
       ],
-      "variables": []
+      "variables": [
+        "BOARD_APP_CLIENT_ID",
+        "BOARD_NUMBER"
+      ]
     },
     "desk": {
       "deploy_from": [
@@ -41,6 +44,17 @@
         "NEXUS_API_KEY"
       ],
       "variables": []
+    },
+    "engine-pin": {
+      "deploy_from": [
+        "branch main"
+      ],
+      "secrets": [
+        "PIN_APP_KEY"
+      ],
+      "variables": [
+        "PIN_APP_CLIENT_ID"
+      ]
     },
     "release": {
       "deploy_from": [
@@ -54,10 +68,12 @@
         "branch main"
       ],
       "secrets": [
-        "RUNNER_TOKEN",
-        "STAFF_WEBHOOK"
+        "STAFF_WEBHOOK",
+        "WATCH_APP_KEY"
       ],
-      "variables": []
+      "variables": [
+        "WATCH_APP_CLIENT_ID"
+      ]
     }
   }
 }

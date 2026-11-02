@@ -15,7 +15,7 @@
        angle, and what was measured there (the ground under it, the nearest
        solid thing); every town of the placement brief is either a site or
        skipped with its reason; no bench stands near a charcoal kiln
-    G  the gamemode's WOODWORKING_BENCHES block is the table, row for row
+    G  the gamemode's WOODWORKING_BENCHES table is the table, row for row
     P  the bench is furniture in the repository's content plugin, carrying
        the woodworking keyword
     B  the table was built against the collection's own bytes and the
@@ -50,7 +50,7 @@ const RECIPES = path.join(ROOT, 'game', 'data', 'recipes.json');
 const CONTENT = path.join(ROOT, 'game', 'content', 'Thornswood-Content.esp');
 const COLLECTION = path.join(ROOT, 'records', 'collection-plugins.json');
 const TOOL = path.join(ROOT, 'scripts', 'dev', 'Build-WoodworkingBenches.py');
-const gm = read(path.join(ROOT, 'game', 'gamemode.js'));
+const gm = require('./gamemode-tables.js').joined(read(path.join(ROOT, 'game', 'gamemode.js')));
 const BENCH = '154e2:Thornswood-Content.esp';
 const KEYWORD = '154e1:Thornswood-Content.esp';
 const OURS = ['Thornswood-Content.esp', 'Thornswood-Last.esp'];
@@ -193,14 +193,11 @@ yes('B3 and ours are the repository\'s, Thornswood-Last.esp the one its manifest
     (stale.length ? ' (not: ' + stale.join(', ') + ')' : ''), stale.length === 0);
 
 // ---------------------------------------------------------------- G
-const block = slice(gm, '  // ==== WOODWORKING_BENCHES, generated ====', '  // ==== end WOODWORKING_BENCHES ====');
-yes('G1 the gamemode carries the WOODWORKING_BENCHES block', !!block);
+// The gamemode reads both from game/gamemode-tables (#5191).
+const GT = require('./gamemode-tables.js');
 let base = null, inBlock = null;
-try {
-  const box = {};
-  vm.runInNewContext((block || '').replace(/var /g, 'this.'), box);
-  base = box.WOODWORKING_BENCH_BASE; inBlock = box.WOODWORKING_BENCHES;
-} catch (e) { inBlock = null; }
+try { base = GT.inGamemode(gm, 'WOODWORKING_BENCH_BASE'); inBlock = GT.inGamemode(gm, 'WOODWORKING_BENCHES'); } catch (e) { inBlock = null; }
+yes('G1 the gamemode carries WOODWORKING_BENCH_BASE and WOODWORKING_BENCHES', base !== null && !!inBlock);
 yes('G2 and it is the table, row for row', !!inBlock && base === BENCH &&
     JSON.stringify(Object.keys(inBlock).sort()) === JSON.stringify(names.slice().sort()) &&
     names.every((s) => inBlock[s].forge === sites[s].forge && inBlock[s].cell === sites[s].cell &&

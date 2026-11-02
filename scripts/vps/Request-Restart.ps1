@@ -111,7 +111,7 @@ if (-not (Test-Path '$Data')) { New-Item -ItemType Directory -Path '$Data' -Forc
 "@
 $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($remote))
 
-$out = Invoke-ThornswoodNative { & ssh @ssh "$User@$Vps" "powershell -NoProfile -EncodedCommand $enc" } 2>&1
+$out = Invoke-ThornswoodNative { & ssh @ssh "$User@$Vps" "pwsh -NoProfile -EncodedCommand $enc" } 2>&1
 if ($LASTEXITCODE -ne 0) {
   Write-Host "  could not reach the server to announce it: $out" -ForegroundColor Yellow
   exit 1

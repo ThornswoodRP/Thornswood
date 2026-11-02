@@ -9,7 +9,7 @@
   WHY. Install-Runner.ps1 registered a task, Thornswood Runner Priority
   (Thornswood Runner N Priority from the second runner on), that set
   Runner.Listener and Runner.Worker to Normal at start and every five
-  minutes: a timer that repairs state, which Developer-Guide.md "Fix the
+  minutes: a timer that repairs state, which docs/guide/rules.md "Fix the
   cause, no band-aids" does not allow. It had nothing to repair. The runner
   is a Windows service (config.cmd --runasservice), the service control
   manager starts a service at Normal, I/O priority 2 and memory priority 5,
@@ -42,7 +42,7 @@
 
   Registers and removes tasks named Thornswood priority harness <guid> ...
   (not 'Thornswood Test...', which test-deploy-swaps and test-install-server
-  clear away, #1135) and stops the Windows PowerShell part 3 started; writes
+  clear away, #1135) and stops the PowerShell 7 part 3 started; writes
   nothing else. Where a task cannot be registered or does not start for this
   account (a build runner's service account), that part says SKIP and why.
 
@@ -136,7 +136,7 @@ if (-not (Get-Module ScheduledTasks)) { Write-Host 'SKIP  the ScheduledTasks mod
 
 $me = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 $cmdExe = Get-WindowsPath 'System32\cmd.exe'
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 $mine = New-ScheduledTaskPrincipal -UserId $me -LogonType Interactive -RunLevel Limited
 $prefix = 'Thornswood priority harness ' + [Guid]::NewGuid().ToString('N') + ' Runner'
 $goes = @(($prefix + ' Priority'), ($prefix + ' 3 Priority'))
@@ -231,7 +231,7 @@ $child = $null
 $skip = $null
 try {
     try {
-        Register-ScheduledTask -TaskName $name -Action (New-ScheduledTaskAction -Execute $ps51 -Argument ('-NoProfile -NonInteractive -Command Start-Sleep -Seconds 90 #' + $mark)) `
+        Register-ScheduledTask -TaskName $name -Action (New-ScheduledTaskAction -Execute $boxPs -Argument ('-NoProfile -NonInteractive -Command Start-Sleep -Seconds 90 #' + $mark)) `
                               -Principal $mine -ErrorAction Stop | Out-Null
     } catch { $skip = 'a task could not be registered for ' + $me + ': ' + $_.Exception.Message }
     if (-not $skip) {
@@ -239,7 +239,7 @@ try {
         Start-ScheduledTask -TaskName $name
         for ($i = 0; $i -lt 40 -and -not $child; $i++) {
             Start-Sleep -Milliseconds 500
-            $child = @(Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" |
+            $child = @(Get-CimInstance Win32_Process -Filter ("Name = '" + (Split-Path -Leaf $boxPs) + "'") |
                        Where-Object { "$($_.CommandLine)" -like "*$mark*" }) | Select-Object -First 1
         }
         if (-not $child) { $skip = 'the scratch task was registered but no process of it appeared in 20 s; an account with no session cannot start an interactive task' }

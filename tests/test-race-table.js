@@ -155,16 +155,16 @@ fs.writeFileSync(path.join(TMP, 'Profile', 'Default', 'plugins.txt'),
   ['*RaceMod.esp', '*LowerCase.esp', ''].join(String.fromCharCode(13, 10)));
 fs.copyFileSync(path.join(REPO, 'scripts', 'dev', 'Build-RaceTable.js'), path.join(TMP, 'scripts', 'dev', 'Build-RaceTable.js'));
 fs.copyFileSync(path.join(REPO, 'scripts', 'dev', 'OwnPlugins.js'), path.join(TMP, 'scripts', 'dev', 'OwnPlugins.js'));
-fs.writeFileSync(path.join(TMP, 'game', 'gamemode.js'),
-  ['const FOODS = {"items":{}};', 'const RACES = {"items":{}};', ''].join(String.fromCharCode(10)));
+fs.copyFileSync(path.join(REPO, 'scripts', 'dev', 'GamemodeTables.js'), path.join(TMP, 'scripts', 'dev', 'GamemodeTables.js'));
+// The table the gamemode reads is its own file since #5191.
+const TABLE = path.join(TMP, 'game', 'gamemode-tables', 'RACES.json');
 
 function build() {
   return spawnSync(process.execPath, [path.join(TMP, 'scripts', 'dev', 'Build-RaceTable.js'), '--data', DATA],
                    { encoding: 'utf8' });
 }
 function installed() {
-  const m = /^const RACES = (.*);$/m.exec(fs.readFileSync(path.join(TMP, 'game', 'gamemode.js'), 'utf8'));
-  try { return m ? JSON.parse(m[1]).items : null; } catch (e) { return null; }
+  try { return JSON.parse(fs.readFileSync(TABLE, 'utf8')).items; } catch (e) { return null; }
 }
 
 const run1 = build();
@@ -223,10 +223,10 @@ yes('A8 and races.json has the same seven',
   which it did before 24 September whenever nothing had changed.
 */
 {
-  const before = fs.readFileSync(path.join(TMP, 'game', 'gamemode.js'), 'utf8');
+  const before = fs.readFileSync(TABLE, 'utf8');
   const run2 = build();
-  const after = fs.readFileSync(path.join(TMP, 'game', 'gamemode.js'), 'utf8');
-  yes('A9 run again on the same plugins, it exits 0 and leaves the same line',
+  const after = fs.readFileSync(TABLE, 'utf8');
+  yes('A9 run again on the same plugins, it exits 0 and leaves the same table',
       run2.status === 0 && before === after);
 }
 
@@ -241,8 +241,7 @@ yes('A8 and races.json has the same seven',
   // Only LowerCase.esp: no RaceMod.esp, so Falmer stays unplayable and
   // SnowElfRace is never made.
   fs.writeFileSync(alt, ['*LowerCase.esp', ''].join(String.fromCharCode(13, 10)));
-  fs.writeFileSync(path.join(TMP, 'game', 'gamemode.js'),
-    ['const FOODS = {"items":{}};', 'const RACES = {"items":{}};', ''].join(String.fromCharCode(10)));
+  fs.rmSync(TABLE, { force: true });
   const runAlt = spawnSync(process.execPath,
     [path.join(TMP, 'scripts', 'dev', 'Build-RaceTable.js'), '--data', DATA, '--plugins', alt],
     { encoding: 'utf8' });
@@ -262,7 +261,7 @@ try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) { }
 // ------------------------------------------------------------------ B --
 
 const RACES = (function () {
-  const m = /^const RACES = (.*);$/m.exec(src);
+  const m = require('./gamemode-tables.js').lineOf(src, 'RACES');
   try { return m ? JSON.parse(m[1]) : null; } catch (e) { return null; }
 })();
 yes('B0 the RACES line is in the gamemode and parses', !!(RACES && RACES.items));

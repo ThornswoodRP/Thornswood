@@ -8,7 +8,7 @@
   [known issues](https://thornswood.net/known) first. Then report it on
   [thornswood.net/report](https://thornswood.net/report), which needs no
   account, or open an issue here with one of the
-  [forms](https://github.com/EvilPatrick06/Thornswood/issues/new/choose).
+  [forms](https://github.com/ThornswoodRP/Thornswood/issues/new/choose).
 - **The server is down.** Say so in the Discord.
 - **Somebody behaving badly.** Report them on
   [thornswood.net/report](https://thornswood.net/report), signed in, never as

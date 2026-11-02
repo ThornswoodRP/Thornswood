@@ -6,8 +6,8 @@
   Issue #3288. Two SYSTEM tasks on the box, Thornswood Maint Update and
   Thornswood Dev Crash Capture, were made by hand and run from folders
   nothing in the repository makes. scripts\vps\Remove-HandMadeTasks.ps1 takes
-  them and their folders off the box. It is run here, under Windows
-  PowerShell 5.1 on Windows and pwsh elsewhere, with its layer stood in for
+  them and their folders off the box. It is run here, under PowerShell 7 as
+  on the box since #5356, with its layer stood in for
   (the tasks and who uses a folder, from a scratch file) against a scratch
   C:\ holding both folders as they were read on 27 Oct 2026. This fails on:
     1. the script not parsing, or not plain ASCII, or a layer function the
@@ -36,7 +36,7 @@ $remover = P @($Repo, 'scripts', 'vps', 'Remove-HandMadeTasks.ps1')
 $errs = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($remover, [ref]$null, [ref]$errs)
 Yes 'Remove-HandMadeTasks.ps1 parses' (-not $errs -or $errs.Count -eq 0)
-Yes '  and is plain ASCII, which Windows PowerShell on the box reads right' (@([IO.File]::ReadAllBytes($remover) | Where-Object { $_ -gt 127 }).Count -eq 0)
+Yes '  and is plain ASCII, which every PowerShell reads right' (@([IO.File]::ReadAllBytes($remover) | Where-Object { $_ -gt 127 }).Count -eq 0)
 
 $layerNames = @('Get-HandTask', 'Remove-HandTask', 'Get-FolderUsers', 'Remove-HandFolder')
 $layerText = @'
@@ -73,7 +73,7 @@ $outside = @($changes | Where-Object {
 Yes 'every task read, task removal and folder removal is inside a layer function' ($outside.Count -eq 0)
 if ($script:fail) { Done }
 
-if ($OnWindows) { $ps = Get-WindowsPowerShell } else { $ps = (Get-Process -Id $PID).Path; Write-Host 'NOTE  run in this shell, not in Windows PowerShell 5.1 as on the box: this is not Windows' }
+$ps = Get-BoxPowerShell
 
 $scratch = P @([IO.Path]::GetTempPath(), ('ts-3288-' + [guid]::NewGuid().ToString('N').Substring(0, 8)))
 $box = P @($scratch, 'box')
@@ -103,7 +103,7 @@ function Fresh([scriptblock]$change) {
         tasks = @(
             [pscustomobject]@{ name = 'Thornswood Maint Update'; execute = 'powershell.exe'; arguments = ('-NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $maint 'update.ps1') + '"'); triggers = 0; state = 'Ready' },
             [pscustomobject]@{ name = 'Thornswood Dev Crash Capture'; execute = 'powershell.exe'; arguments = ('-NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $diag 'Capture-DevCrash.ps1') + '"'); triggers = 0; state = 'Ready' },
-            [pscustomobject]@{ name = 'Thornswood Watch'; execute = 'powershell.exe'; arguments = '-File watch.ps1'; triggers = 1; state = 'Running' }
+            [pscustomobject]@{ name = 'Thornswood Watch'; execute = 'C:\Program Files\PowerShell\7\pwsh.exe'; arguments = '-File watch.ps1'; triggers = 1; state = 'Running' }
         )
         users = @()
     }

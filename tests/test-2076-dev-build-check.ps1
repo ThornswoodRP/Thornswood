@@ -28,7 +28,7 @@ $old = ('a' * 64); $new = ('b' * 64)
 $put = 'scripts\release\Publish-Server.ps1 -Channel dev'
 $same = Get-ThornswoodBoxBuildProblem $new '9fd1f69b6c3893e47511fd3f49ce914737d5d633' $new '9fd1f69b6c3893e47511fd3f49ce914737d5d633' 'dev server' $put
 Yes 'the build the commit records: no problem' ($null -eq $same)
-$other = Get-ThornswoodBoxBuildProblem $old '0f54ad45aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' $new '9fd1f69b6c3893e47511fd3f49ce914737d5d633' 'dev server' $put
+$other = Get-ThornswoodBoxBuildProblem $old '720a5f7caaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' $new '9fd1f69b6c3893e47511fd3f49ce914737d5d633' 'dev server' $put
 Yes 'another build: refused, naming both commits and how to put the right one on' (
   $other -and $other -match 'commit 720a5f7c' -and $other -match 'commit 9fd1f69b' -and $other.Contains($put))
 $none = Get-ThornswoodBoxBuildProblem 'none' '' $new '9fd1f69b' 'dev server' $put
@@ -64,19 +64,15 @@ Yes '  and the commit check runs before the record is read' ($built -gt 0 -and $
 # dev box's commit read and the live box's commit and light reads sat in a try
 # with an empty catch: dev then refused with no why, and live's -FromStore
 # took the load order as written for an engine with no light plugins. Each
-# box read runs here, in Windows PowerShell as on the box, against a folder
+# box read runs here, in PowerShell 7 as on the box (#5356), against a folder
 # standing in for the server root.
 . (Join-Path $repo 'scripts\deploy\ServerContent.ps1')
 . (Join-Path $repo 'scripts\deploy\ServerSettings.ps1')
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if ($OnWindows) { $winPs = Get-WindowsPowerShell }
-else {
-    $winPs = (Get-Process -Id $PID).Path
-    Write-Host 'NOTE  the far side runs in this shell, not in Windows PowerShell 5.1 as on the box: this is not Windows'
-}
+$boxPs = Get-BoxPowerShell
 function On-Box([string]$text) {
   $e = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($text))
-  return @(& $winPs -NoProfile -NonInteractive -EncodedCommand $e 2>&1 | ForEach-Object { "$_".Trim() })
+  return @(& $boxPs -NoProfile -NonInteractive -EncodedCommand $e 2>&1 | ForEach-Object { "$_".Trim() })
 }
 $box = Join-Path ([IO.Path]::GetTempPath()) ('ts-2076-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $box | Out-Null

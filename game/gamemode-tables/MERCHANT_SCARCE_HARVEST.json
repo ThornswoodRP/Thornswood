@@ -1,0 +1,16 @@
+{
+"version":1,
+"quest":"crimson",
+"label":"Blackreach",
+"loadOrderSha256":"17597555b8c439898714ebf725435a36a7102aa84d9ccbfba7a1796b6f6148b5",
+"sources":[
+{"reference":"f3b51:Skyrim.esm","base":"b6fb9:Skyrim.esm","world":"1ee62:Skyrim.esm","position":[6737.6865234375,7109.41552734375,985.5054321289062],"item":"b701a:Skyrim.esm","itemType":"INGR","rank":"novice","returnMinutes":10},
+{"reference":"f3b54:Skyrim.esm","base":"b6fb9:Skyrim.esm","world":"1ee62:Skyrim.esm","position":[1864.7017822265625,1518.39697265625,992.927490234375],"item":"b701a:Skyrim.esm","itemType":"INGR","rank":"novice","returnMinutes":10},
+{"reference":"f3b5d:Skyrim.esm","base":"b6fb9:Skyrim.esm","world":"1ee62:Skyrim.esm","position":[22377.798828125,13522.2265625,1997.456787109375],"item":"b701a:Skyrim.esm","itemType":"INGR","rank":"novice","returnMinutes":10},
+{"reference":"10ffac:Skyrim.esm","base":"b6fb9:Skyrim.esm","world":"1ee62:Skyrim.esm","position":[22487.3359375,11976.064453125,2067.111572265625],"item":"b701a:Skyrim.esm","itemType":"INGR","rank":"novice","returnMinutes":10},
+{"reference":"10ffaf:Skyrim.esm","base":"b6fb9:Skyrim.esm","world":"1ee62:Skyrim.esm","position":[20627.134765625,7700.14599609375,1233.974609375],"item":"b701a:Skyrim.esm","itemType":"INGR","rank":"novice","returnMinutes":10},
+{"reference":"10ffb0:Skyrim.esm","base":"b6fb9:Skyrim.esm","world":"1ee62:Skyrim.esm","position":[17847.103515625,6733.818359375,1515.8726806640625],"item":"b701a:Skyrim.esm","itemType":"INGR","rank":"novice","returnMinutes":10},
+{"reference":"f3b56:Skyrim.esm","base":"b6fb9:Skyrim.esm","world":"1ee62:Skyrim.esm","position":[20210.73828125,5823.5986328125,970.6233520507812],"item":"b701a:Skyrim.esm","itemType":"INGR","rank":"novice","returnMinutes":10},
+{"reference":"10ffa9:Skyrim.esm","base":"b6fb9:Skyrim.esm","world":"1ee62:Skyrim.esm","position":[22159.330078125,16684.431640625,1486.5172119140625],"item":"b701a:Skyrim.esm","itemType":"INGR","rank":"novice","returnMinutes":10}
+]
+}

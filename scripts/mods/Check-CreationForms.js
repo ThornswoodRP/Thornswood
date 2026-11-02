@@ -41,7 +41,8 @@
 //      record that is itself one of them (an override) is left alone: it
 //      changes something nobody places. So is a reference Update.esm's own
 //      copy of the same record already makes: that is the base game's.
-//   3. The gamemode (game\gamemode.js, game\data\*.json, game\plugins\*.js):
+//   3. The gamemode (game\gamemode.js, its tables in game\gamemode-tables,
+//      game\data\*.json, game\plugins\*.js):
 //      no form key names a Creation Club file, and none names one of those
 //      records outside the tables that only describe a record (DESCRIBE_ONLY
 //      below says which and why).
@@ -285,7 +286,7 @@ function sectionAt(lines, i) {
 function gamemodeUses(cc, files, all) {
   if (!files) {
     files = [path.join(REPO, 'game', 'gamemode.js')];
-    for (const dir of [path.join(REPO, 'game', 'data'), path.join(REPO, 'game', 'plugins')]) {
+    for (const dir of [path.join(REPO, 'game', 'gamemode-tables'), path.join(REPO, 'game', 'data'), path.join(REPO, 'game', 'plugins')]) {
       for (const f of fs.readdirSync(dir)) {
         if (/\.(json|js)$/i.test(f)) { files.push(path.join(dir, f)); }
       }
@@ -316,7 +317,11 @@ function gamemodeUses(cc, files, all) {
           why = 'a Creation Club file';
         } else if (plugin.toLowerCase() === 'update.esm' && cc[low]) {
           why = cc[low];
-          if (/\.json$/.test(base)) {
+          if (path.basename(path.dirname(f)) === 'gamemode-tables') {
+            // One of the gamemode's tables (#5191), named like its constant.
+            table = path.basename(f, '.json');
+            allowed = DESCRIBE_ONLY.indexOf(table) >= 0;
+          } else if (/\.json$/.test(base)) {
             table = base;
             allowed = DESCRIBE_ONLY_FILES.indexOf(base) >= 0 ||
                       DESCRIBE_ONLY_FILES.indexOf(base + '#' + sectionAt(lines, i)) >= 0;

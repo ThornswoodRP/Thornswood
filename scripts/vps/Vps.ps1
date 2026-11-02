@@ -362,7 +362,7 @@ function Write-ThornswoodPrivateFile([string]$Path, [string]$Text) {
             $acl.SetAccessRuleProtection($true, $false)
             $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($me, 'FullControl', 'Allow')))
             $item = Get-Item -LiteralPath $Path -Force
-            if ($PSVersionTable.PSEdition -eq 'Core') { [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]$item, $acl) } else { $item.SetAccessControl($acl) }
+            [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]$item, $acl)
             # Read back, not taken from the call (#3034).
             $got = Get-Acl -LiteralPath $Path
             $who = @($got.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) | ForEach-Object { $_.IdentityReference.Value } | Sort-Object -Unique)

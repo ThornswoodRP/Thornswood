@@ -45,7 +45,13 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'RunnerDriveMove.ps1')
-$repository = 'EvilPatrick06/Thornswood'
+$repository = 'ThornswoodRP/Thornswood'
+# A runner's Windows service is named for the repository it was registered
+# to, actions.runner.<owner>-<name>.<runner>, and keeps that name when the
+# repository moves: the runners registered before the move into ThornswoodRP
+# (#5184) are still actions.runner.EvilPatrick06-Thornswood.*. Either is this
+# repository's runner; a new registration takes the name it has now.
+$repositoryNames = @($repository, 'EvilPatrick06/Thornswood')
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $computer = [Environment]::MachineName.ToLower()
 
@@ -93,7 +99,7 @@ function Get-MoveDriveProof {
   $startupReady = ($task.State -ne 'Disabled' -and $task.Settings.Enabled -and
     $task.Principal.UserId -in @('SYSTEM', 'S-1-5-18', 'NT AUTHORITY\SYSTEM') -and
     @($task.Triggers).Count -eq 1 -and $task.Triggers[0].CimClass.CimClassName -eq 'MSFT_TaskBootTrigger' -and
-    @($task.Actions).Count -eq 1 -and $task.Actions[0].Execute -eq 'powershell.exe' -and
+    @($task.Actions).Count -eq 1 -and $task.Actions[0].Execute -eq (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe') -and
     $task.Actions[0].Arguments -match ('(?:^|\s)-File\s+"?' + [regex]::Escape($startup) + '"?\s*$'))
   foreach ($path in @((Split-Path -Parent $startup), $startup)) {
     if ((Get-Item -LiteralPath $path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { $startupReady = $false }
@@ -129,10 +135,12 @@ try {
   $moves = @(Get-RunnerMovePlan -Drive $drive -PerformanceMode $driveState.PerformanceMode -Numbers @(1..$Count) -Accounts $accounts -Services $services -Workers $workers -Profiles $profiles)
   foreach ($move in $moves) {
     $runnerName = 'thornswood-pr-' + $computer + $(if ($move.Number -gt 1) { '-' + $move.Number } else { '' })
-    $expectedService = 'actions.runner.' + $repository.Replace('/', '-') + '.' + $runnerName
-    if ($move.ServiceName -and $move.ServiceName -ne $expectedService) { throw ($move.Account + ' has an unexpected service identity.') }
-    $move.ServiceName = $expectedService
-    if ($move.SourceRoot -eq $move.TargetRoot) { continue }
+    $expectedServices = @($repositoryNames | ForEach-Object { 'actions.runner.' + $_.Replace('/', '-') + '.' + $runnerName })
+    if ($move.ServiceName -and $expectedServices -notcontains $move.ServiceName) { throw ($move.Account + ' has an unexpected service identity.') }
+    # One already in its target folder keeps the service it has; one the
+    # installer registers again gets the name the repository has now.
+    if ($move.SourceRoot -eq $move.TargetRoot) { if (-not $move.ServiceName) { $move.ServiceName = $expectedServices[0] }; continue }
+    $move.ServiceName = $expectedServices[0]
     if (Test-Path -LiteralPath $move.TargetRoot) { throw ($move.TargetRoot + ' already exists without its verified service. Inspect the partial state; it will not be deleted or reused blindly.') }
     if ($Recover) {
       if ($move.AccountSid -or $move.SourceRoot) { throw ($move.Account + ' still exists without a verified target service. Recovery will not replace a live account; inspect it or use a healthy migration.') }

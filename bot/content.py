@@ -23,7 +23,7 @@ import re
 # questions take what you need and what happens to your own Skyrim out of its
 # "What you need" section. Change the page and the next Setup-Discord.ps1
 # -Posts says the same thing. join.md rather than help.md because the site's
-# pages go out from the repo with Deploy-Docs.ps1 -Site, while help.md is
+# pages go out from the repo with each merge's Release, while help.md is
 # edited in the hub and a redeploy never overwrites it, so the repo copy of
 # help.md is not always the one people read.
 #
@@ -99,7 +99,7 @@ _JOIN_BODY = re.sub(r'\A# [^\n]*\n+', '', JOIN)
 # "What you need" is four paragraphs, and the one about your own Skyrim is
 # the answer to a question of its own. Picked by what it says rather than
 # where it sits, and refused if it has gone, because the welcome would
-# otherwise quietly lose it. bot\test-read-channels.py runs on
+# otherwise quietly lose it. bot\tests\test-read-channels.py runs on
 # every pull request, so an edit to join.md that does this goes red there.
 _NEED = section(JOIN, 'What you need').split('\n\n')
 _YOURS = [p for p in _NEED if 'the Skyrim you already have' in p]

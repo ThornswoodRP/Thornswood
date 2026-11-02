@@ -2,8 +2,9 @@
 //
 // Builds DATA.worldspaces, the set the server reads as "a worldspace, not a
 // room": every WRLD record of the load order, by descriptor. It writes the
-// list into game\data\data.json and into the DATA line of game\gamemode.js,
-// and changes nothing else in either.
+// list into game\data\data.json and changes nothing else in it, and writes
+// game\gamemode-tables\DATA.json, the same file laid out for the gamemode to
+// read (#5191).
 //
 // WHY THERE IS ANYTHING TO BUILD
 //
@@ -40,7 +41,7 @@
 //   node scripts\dev\Build-WorldspaceTable.js --check
 //   node scripts\dev\Build-WorldspaceTable.js --data "C:\Thornswood\Game\Data" --plugins "C:\Thornswood\Profile\OwnGame\plugins.txt"
 //
-// --check reads the plugins and says whether data.json and the DATA line hold
+// --check reads the plugins and says whether data.json and the DATA table hold
 // exactly that list, and writes nothing. --print lists every WRLD record with
 // its editor id. Exit code 1 if a plugin that is switched on is not in the
 // Data folder or will not parse, if Tamriel is not found (the reader is
@@ -49,6 +50,7 @@
 const fs = require('fs');
 const path = require('path');
 const { pluginPath, loadOrder } = require('./OwnPlugins.js');
+const TABLES = require('./GamemodeTables.js');
 const zlib = require('zlib');
 
 const ROOT = path.join(__dirname, '..', '..');
@@ -155,28 +157,21 @@ function replaceList(text, list) {
   });
 }
 
-const DATA_RE = /^const DATA = (.*);$/m;
-
-// The two texts with list written in, or { error }.
-function install(list, jsonText, gmText) {
+// data.json with list written in, or { error }. The gamemode's DATA table is
+// that file laid out (GamemodeTables.js), so it is written from it.
+function install(list, jsonText) {
   const json = replaceList(jsonText, list);
   if (json === null) { return { error: 'data.json does not hold exactly one "worldspaces" list' }; }
-  const m = DATA_RE.exec(gmText);
-  if (!m) { return { error: 'gamemode.js has no "const DATA = {...};" line' }; }
-  const line = replaceList(m[0], list);
-  if (line === null) { return { error: 'the DATA line does not hold exactly one "worldspaces" list' }; }
-  const gm = gmText.slice(0, m.index) + line + gmText.slice(m.index + m[0].length);
-  // Nothing but the list moved, in either.
+  // Nothing but the list moved.
   const a = JSON.parse(jsonText), b = JSON.parse(json);
-  const c = JSON.parse(m[1]), d = JSON.parse(DATA_RE.exec(gm)[1]);
-  if (JSON.stringify(b.worldspaces) !== JSON.stringify(list) || JSON.stringify(d.worldspaces) !== JSON.stringify(list)) {
+  if (JSON.stringify(b.worldspaces) !== JSON.stringify(list)) {
     return { error: 'the list did not land as built' };
   }
-  delete a.worldspaces; delete b.worldspaces; delete c.worldspaces; delete d.worldspaces;
-  if (JSON.stringify(a) !== JSON.stringify(b) || JSON.stringify(c) !== JSON.stringify(d)) {
+  delete a.worldspaces; delete b.worldspaces;
+  if (JSON.stringify(a) !== JSON.stringify(b)) {
     return { error: 'something besides the list changed' };
   }
-  return { json: json, gm: gm };
+  return { json: json };
 }
 
 function main(args) {
@@ -187,7 +182,7 @@ function main(args) {
   const dataDir = opt('data', 'C:\\Thornswood\\Game\\Data');
   const pluginsTxt = opt('plugins', 'C:\\Thornswood\\Profile\\OwnGame\\plugins.txt');
   const jsonPath = opt('json', path.join(ROOT, 'game', 'data', 'data.json'));
-  const gmPath = opt('gamemode', path.join(ROOT, 'game', 'gamemode.js'));
+  const tables = opt('tables', TABLES.DIR);
   const check = args.indexOf('--check') !== -1;
 
   if (!fs.existsSync(pluginsTxt)) { console.error('FAIL  no plugins.txt at ' + pluginsTxt); return 1; }
@@ -201,24 +196,25 @@ function main(args) {
   }
 
   const jsonText = fs.readFileSync(jsonPath, 'utf8');
-  const gmText = fs.readFileSync(gmPath, 'utf8');
+  const tablePath = TABLES.file('DATA', tables);
+  const tableText = fs.existsSync(tablePath) ? fs.readFileSync(tablePath, 'utf8') : null;
   const was = JSON.parse(jsonText).worldspaces || [];
-  const out = install(list, jsonText, gmText);
+  const out = install(list, jsonText);
   if (out.error) { console.error('FAIL  ' + out.error + '; nothing written'); return 1; }
   const added = list.filter(function (d) { return was.indexOf(d) < 0; });
   const gone = was.filter(function (d) { return list.indexOf(d) < 0; });
   added.forEach(function (d) { console.log('  in   ' + d + '  ' + got.worlds[d]); });
   gone.forEach(function (d) { console.log('  out  ' + d); });
-  const same = out.json === jsonText && out.gm === gmText;
+  const same = out.json === jsonText && TABLES.layout(out.json) === tableText;
   if (check) {
-    if (!same) { console.error('FAIL  data.json or the DATA line is not this load order\'s worldspaces; run Build-WorldspaceTable.js'); return 1; }
-    console.log('ok    data.json and the DATA line hold this load order\'s ' + list.length + ' worldspaces');
+    if (!same) { console.error('FAIL  data.json or the DATA table is not this load order\'s worldspaces; run Build-WorldspaceTable.js'); return 1; }
+    console.log('ok    data.json and the DATA table hold this load order\'s ' + list.length + ' worldspaces');
     return 0;
   }
-  if (same) { console.log('data.json and the DATA line already hold this list'); return 0; }
+  if (same) { console.log('data.json and the DATA table already hold this list'); return 0; }
   fs.writeFileSync(jsonPath, out.json);
-  fs.writeFileSync(gmPath, out.gm);
-  console.log('wrote ' + list.length + ' worldspaces into ' + jsonPath + ' and the DATA line of ' + gmPath);
+  TABLES.write('DATA', out.json, tables);
+  console.log('wrote ' + list.length + ' worldspaces into ' + jsonPath + ' and ' + tablePath);
   return 0;
 }
 

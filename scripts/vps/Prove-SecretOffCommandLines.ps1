@@ -141,7 +141,7 @@ function ConvertTo-ThornswoodArg([string]$a) {
 # One ssh session to the VPS running $Script, every stream this side's.
 function Start-ThornswoodProofSsh([string]$Script) {
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Script))
-    $sshArgs = @($SshCommand | Select-Object -Skip 1) + @('-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', "$VpsUser@$VpsHost", "powershell -NoProfile -EncodedCommand $encoded")
+    $sshArgs = @($SshCommand | Select-Object -Skip 1) + @('-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', "$VpsUser@$VpsHost", "pwsh -NoProfile -EncodedCommand $encoded")
     $psi = New-Object Diagnostics.ProcessStartInfo
     $psi.FileName = $SshCommand[0]
     $psi.Arguments = (@($sshArgs | ForEach-Object { ConvertTo-ThornswoodArg $_ }) -join ' ')

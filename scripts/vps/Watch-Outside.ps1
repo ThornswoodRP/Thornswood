@@ -68,11 +68,13 @@
               the numbered ones beside it, thornswood-vps-2 and up
               (Install-Runner.ps1 -Number, 4 October). Since the flip
               (#4013, 30 Oct 2026) they are registered to the private
-              EvilPatrick06/Thornswood-Ops, where the box's own jobs run,
+              ThornswoodRP/Thornswood-Ops, where the box's own jobs run,
               and the public repository has none on purpose (#3792), so
               that is the repository asked. Asked over REST with
-              WATCH_RUNNER_TOKEN, a fine-grained token that can only read
-              that repository's runners (Administration: read on it alone).
+              WATCH_RUNNER_TOKEN, which watch-outside.yml fills with a token
+              of the thornswood-watch App, minted each run, that can only
+              read that repository's runners (Administration: read on it
+              alone; #5259).
               With none online, the box's jobs (deploys through the gate,
               staff notices from cloud threads, the admin App's asks) wait;
               with some, they wait longer. Three runs in a row, because a
@@ -181,7 +183,7 @@ function Read-Settings([string]$repo, [string]$saved) {
     Site = 'https://thornswood.net/'; SiteHost = 'thornswood.net'
     Feeds = @(); GameHost = ''; FrontRanges = @(); StaffChannel = ''
     # The repository the box's runners are registered to (#4013).
-    Repo = 'EvilPatrick06/Thornswood-Ops'; RunnerName = 'thornswood-vps'
+    Repo = 'ThornswoodRP/Thornswood-Ops'; RunnerName = 'thornswood-vps'
     NexusGame = ''; NexusSlug = ''
     CertDays = 14; DomainDays = 30; Minutes = $(if ($Minutes) { $Minutes } else { 5 })
   }
@@ -569,8 +571,8 @@ function Get-Checks($S) {
     @{ Name = 'domain'; Say = ('The registration of ' + $S.SiteHost); What = ('the registration of ' + $S.SiteHost); Fails = 'runs out soon'; Recovers = 'was renewed'; Misses = 1; Back = 1; Every = 1440
        Fix = 'It is registered through Cloudflare: renew it there, under Domain Registration.' },
     @{ Name = 'runner'; Say = ('The build runners, ' + $S.RunnerName + ' and the numbered ones,'); What = 'the build runners'; Fails = 'are not all online on GitHub'; Recovers = 'are all online again'; Misses = 3; Back = 2; Every = 0; Private = $true
-       Fix = 'They are registered to EvilPatrick06/Thornswood-Ops (#4013). With none of them online the box''s jobs wait: deploys through the gate, staff notices from cloud threads and the admin App''s asks; with some, they wait longer. .\scripts\deploy\Install-Runner.ps1 -Status says what the VPS sees of the first, and -Number <n> -Status of the others.'
-       Blind = 'It asks with RUNNER_TOKEN, a secret of the outside watcher''s repository: a fine-grained token that reads only the runners of EvilPatrick06/Thornswood-Ops. A new one goes there.' },
+       Fix = 'They are registered to ThornswoodRP/Thornswood-Ops (#4013). With none of them online the box''s jobs wait: deploys through the gate, staff notices from cloud threads and the admin App''s asks; with some, they wait longer. .\scripts\deploy\Install-Runner.ps1 -Status says what the VPS sees of the first, and -Number <n> -Status of the others.'
+       Blind = 'It asks with a token of the thornswood-watch App, minted each run from WATCH_APP_KEY in Thornswood''s watch environment, that reads only the runners of ThornswoodRP/Thornswood-Ops. The run log says why it could not mint one; a new key goes in that environment.' },
     @{ Name = 'nexus'; Say = 'The Nexus collection'; What = 'the Nexus collection'; Fails = 'cannot be reached'; Recovers = 'is reachable again'; Misses = 2; Back = 2; Every = 60
        Fix = 'A new install gets its mods through this collection.' }
   )

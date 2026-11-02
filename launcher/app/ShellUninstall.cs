@@ -1,6 +1,8 @@
 using System;
 using System.IO;
-using System.Windows;
+using System.Threading;
+using Avalonia.Controls;
+using Avalonia.Threading;
 
 namespace Thornswood
 {
@@ -31,7 +33,7 @@ namespace Thornswood
     /// before it deletes anything. Both questions and that order live in
     /// DoUninstall and Uninstall.Begin, and neither is touched here.
     ///
-    /// So Run parses the window, binds it, wires it and draws the Settings
+    /// So Run makes the window, binds it, wires it and draws the Settings
     /// page and its folder rows, then comes here instead of going on. Two
     /// things Wire starts are stood down below before the window's message
     /// loop has run once, so neither ever fires: the two second timer, which
@@ -65,21 +67,19 @@ namespace Thornswood
             // The last thing on a long page. Scrolled to once the page has been
             // laid out, since before then there is nothing to scroll. Not
             // focused, because then Enter would press it.
-            win.ContentRendered += delegate
+            OnceOnScreen(delegate
             {
                 try { if (btnUninstall != null) btnUninstall.BringIntoView(); } catch (Exception ex) { Swallow.Note("Shell.OpenForUninstall, scrolling to Uninstall", ex); }
-            };
+            });
 
             CentreOnMainScreen();
 
-            // The same Application Run makes, and for the same reason: tied to
-            // this window, so closing it ends the process and lets the mutex
-            // go. Nothing to do on Exit, because nothing was started that needs
-            // stopping: no voice, no presence, no files held.
-            var app = new Application();
-            app.ShutdownMode = ShutdownMode.OnMainWindowClose;
-            app.DispatcherUnhandledException += delegate (object faultSender,
-                System.Windows.Threading.DispatcherUnhandledExceptionEventArgs fault)
+            // The same loop Run ends in, and for the same reason: tied to this
+            // window, so closing it ends the loop, Main returns and the mutex
+            // goes. Nothing to do on the way out, because nothing was started
+            // that needs stopping: no voice, no presence, no files held.
+            Dispatcher.UIThread.UnhandledException += delegate (object faultSender,
+                DispatcherUnhandledExceptionEventArgs fault)
             {
                 try { Log("Fault on the launcher's own thread: " + fault.Exception.GetType().Name + ": " + fault.Exception.Message); } catch (Exception ex) { Swallow.Note("Shell.OpenForUninstall, writing a fault to the status line", ex); }
                 try { File.AppendAllText(Paths.LogFile, fault.Exception.ToString() + Environment.NewLine); }
@@ -91,7 +91,12 @@ namespace Thornswood
                 fault.Handled = true;
             };
             StartStallWatch();
-            app.Run(win);
+            using (var closed = new CancellationTokenSource())
+            {
+                win.Closed += delegate { closed.Cancel(); };
+                win.Show();
+                Dispatcher.UIThread.MainLoop(closed.Token);
+            }
         }
     }
 }

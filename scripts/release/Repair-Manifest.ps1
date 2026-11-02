@@ -20,9 +20,9 @@
   measurement). On 24 September that was 164 of the 227 packs on the live feed,
   20260910-2345 to 20260914-1917, all in the private source repository, which
   has no releases left, so nothing can download them with or without a token.
-  Taking them out loses nothing a launcher could have had. The installer is
-  built from a game they were applied to, which is why Package-Thornswood.ps1
-  seeds applied.txt with their ids.
+  Taking them out loses nothing a launcher could have had. A fresh install
+  starts from a game they were applied to, which is why the setup seeds
+  applied.txt with their ids (Build-SetupFiles.ps1).
 
   It works on the feed launchers read: since #907 it receives version.json
   from the VPS store into this machine's working folder for the channel

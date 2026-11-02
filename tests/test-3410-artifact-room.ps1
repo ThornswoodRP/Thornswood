@@ -127,44 +127,44 @@ function Invoke-RestMethod {
         return [pscustomobject]@{ id = $id; name = $name; size_in_bytes = $size; expired = $expired; created_at = '2026-10-20T12:00:00Z'; workflow_run = [pscustomobject]@{ id = $run } }
     }
     if ($Method -eq 'Delete') {
-        if ($p -notmatch '^repos/EvilPatrick06/Thornswood/actions/artifacts/(\d+)$') { throw "stand-in: unexpected delete $p" }
+        if ($p -notmatch '^repos/ThornswoodRP/Thornswood/actions/artifacts/(\d+)$') { throw "stand-in: unexpected delete $p" }
         if ($Matches[1] -eq $env:TS_FAIL_DELETE) { throw 'stand-in: 500 Internal Server Error' }
         return $null
     }
     if ($Method -ne 'Get') { throw "stand-in: unexpected $Method $p" }
     switch -regex ($p) {
-        '^repos/EvilPatrick06/Thornswood/contents/engine/skymp\?ref=main$' {
+        '^repos/ThornswoodRP/Thornswood/contents/engine/skymp\?ref=main$' {
             Fail 'main'
             if ($env:TS_NOT_SUBMODULE) { return [pscustomobject]@{ type = 'file'; sha = $c['1'] } }
             return [pscustomobject]@{ type = 'submodule'; sha = $c['1'].ToUpperInvariant() + "`n" }
         }
         '^repos/(.+?)/contents/engine/skymp\?ref=([0-9a-f]{40})$' {
             Fail 'pin'
-            if ($Matches[1] -eq 'EvilPatrick06/Thornswood' -and $Matches[2] -eq ('a' * 40)) { return [pscustomobject]@{ type = 'submodule'; sha = $c['3'] } }
+            if ($Matches[1] -eq 'ThornswoodRP/Thornswood' -and $Matches[2] -eq ('a' * 40)) { return [pscustomobject]@{ type = 'submodule'; sha = $c['3'] } }
             if ($Matches[1] -eq 'someone/Thornswood' -and $Matches[2] -eq ('b' * 40)) { return [pscustomobject]@{ type = 'submodule'; sha = $c['1'] } }
             throw "stand-in: 404 for $p"
         }
-        '^repos/EvilPatrick06/skymp/branches/thornswood%2Fengine-changes$' {
+        '^repos/ThornswoodRP/skymp/branches/thornswood%2Fengine-changes$' {
             Fail 'tip'
             return [pscustomobject]@{ name = 'thornswood/engine-changes'; commit = [pscustomobject]@{ sha = $c['2'] } }
         }
-        '^repos/EvilPatrick06/Thornswood/pulls\?state=open&per_page=100&page=(\d+)$' {
+        '^repos/ThornswoodRP/Thornswood/pulls\?state=open&per_page=100&page=(\d+)$' {
             Fail 'pulls'
             if ($Matches[1] -ne '1') { return @() }
             return @(
-                [pscustomobject]@{ number = 10; head = [pscustomobject]@{ sha = 'a' * 40; repo = [pscustomobject]@{ full_name = 'EvilPatrick06/Thornswood' } } }
+                [pscustomobject]@{ number = 10; head = [pscustomobject]@{ sha = 'a' * 40; repo = [pscustomobject]@{ full_name = 'ThornswoodRP/Thornswood' } } }
                 [pscustomobject]@{ number = 11; head = [pscustomobject]@{ sha = 'c' * 40; repo = $null } }
                 [pscustomobject]@{ number = 12; head = [pscustomobject]@{ sha = 'b' * 40; repo = [pscustomobject]@{ full_name = 'someone/Thornswood' } } })
         }
-        '^repos/EvilPatrick06/Thornswood/actions/runs/900/artifacts\?per_page=100$' {
+        '^repos/ThornswoodRP/Thornswood/actions/runs/900/artifacts\?per_page=100$' {
             Fail 'built'
             return [pscustomobject]@{ total_count = 1; artifacts = @(Art 40 ('engine-' + $c['4'].Substring(0, 12)) 900 12000000) }
         }
-        '^repos/EvilPatrick06/Thornswood/actions/workflows/engine\.yml/runs\?status=in_progress&per_page=100$' {
+        '^repos/ThornswoodRP/Thornswood/actions/workflows/engine\.yml/runs\?status=in_progress&per_page=100$' {
             Fail 'going'
             return [pscustomobject]@{ total_count = 1; workflow_runs = @([pscustomobject]@{ id = 950; status = 'in_progress' }) }
         }
-        '^repos/EvilPatrick06/Thornswood/actions/artifacts\?per_page=100&page=(\d+)$' {
+        '^repos/ThornswoodRP/Thornswood/actions/artifacts\?per_page=100&page=(\d+)$' {
             Fail 'list'
             $n = [int]$Matches[1]
             if ($n -eq 1) {
@@ -208,9 +208,9 @@ function Invoke-Prune([hashtable]$extra = @{}) {
     try {
         $env:GH_TOKEN = 'stand-in-run-token'
         $env:BUILT_RUN = '900'
-        $env:FORK = 'EvilPatrick06/skymp'
+        $env:FORK = 'ThornswoodRP/skymp'
         $env:FORK_BRANCH = 'thornswood/engine-changes'
-        $env:GITHUB_REPOSITORY = 'EvilPatrick06/Thornswood'
+        $env:GITHUB_REPOSITORY = 'ThornswoodRP/Thornswood'
         $env:TS_CALLS = $calls
         $env:TS_FAIL = ''
         $env:TS_NOT_SUBMODULE = ''

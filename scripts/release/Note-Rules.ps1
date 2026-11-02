@@ -5,8 +5,17 @@
   break it, before anything is built. tests\test-note-rules.ps1 drives the same
   function, so the rule and its test cannot disagree.
 
+  TWO COPIES, ONE ANSWER (plan rev 64). The same rules are in C# in
+  tools\ReleaseNotes (thornswood-notes), which the "Release note" check runs
+  on every pull request. This copy stays while Ship.ps1, Rollback-Feed.ps1,
+  Deploy-DevGamemode.ps1, Collect-ReleaseNotes.ps1 and EnginePin.ps1 read it,
+  some of them on the box, which has no .NET SDK, and goes when they move to
+  C# or retire. tests\fixtures\note-rules-cases.json holds the answer for
+  every case, and tests\test-note-rules-cases.ps1 and tools\ReleaseNotes.Tests
+  hold each copy to it, so a rule changed here is changed there too.
+
   WHY IT EXISTS. Release notes are read by customers in three places: the
-  launcher's News tab, the site's News page and Discord. Developer-Guide.md says
+  launcher's News tab, the site's News page and Discord. docs/guide/rules.md says
   plain words, never "player", no em dashes, and never pull request numbers or
   branch names in them. Ship checked only that there was a title and a detail
   line (25 September), so on 26 and 27 September these went out anyway:
@@ -103,7 +112,7 @@ function Get-NoteProblems([string]$Notes) {
   A release's note was written by whoever shipped it, from merged pull request
   titles, after the fact. Since #5179 each pull request carries its own note,
   written by the person who made the change, and the build check reads it
-  while the pull request is open (scripts\dev\Check-PrBody.ps1, run by
+  while the pull request is open (thornswood-notes pr, run by
   .github\workflows\pr-body.yml). Collect-ReleaseNotes.ps1 joins the notes of
   every pull request merged since the last release into the release's note, so
   nobody writes one at release time and nothing in it is new to the rules.

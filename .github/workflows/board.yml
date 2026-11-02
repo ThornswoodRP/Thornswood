@@ -1,0 +1,155 @@
+# Keeps the board in step with what GitHub knows (#5185, the redesign's
+# part 5, approved by Patrick on 31 Oct 2026).
+#
+# WHY. The board's Status and Order used to be set by hand, or by a board: or
+# order: label that board-status.yml carried out, and order-on-filing.yml and
+# done-on-merge.yml put those labels on. The card said whatever the last hand
+# or label said, which was often not what the pull requests said, and every
+# move went through Patrick's personal token, because the board was his own
+# account's and no GitHub App can reach one. The board is the ThornswoodRP
+# organization's now, and this is the one workflow that writes it: every
+# card's Status and the issue's type follow from the issue and the pull
+# requests that name it, and its Order, the one do-order (Patrick, 27 Oct,
+# #3534), is 10000 plus the issue's number until an order: label moves it
+# (scripts/ops/Sync-Board.js has the rules). Nobody moves a card by hand; a
+# person or a Bot changes the facts instead (opens a pull request, puts on a
+# claim or an order: label, closes the issue), and the card follows within a
+# minute.
+#
+# WHEN.
+#   an issue is opened, reopened or closed, or a claimed: or order: label
+#     goes on or comes off it: that issue
+#   a pull request is opened, reopened, edited, closed or merged: every issue
+#     it names, and every one it named before an edit. A pull_request run
+#     cannot use the board environment, so pr-events.yml runs on the pull
+#     request with nothing and this runs when it completes (its header says
+#     why)
+#   started by hand: the issues named, or every open issue (all), or the
+#     Order field made (setup); with dry_run it writes nothing
+#
+# THE TOKEN. The board App's (Thornswood board, a GitHub App of ThornswoodRP),
+# minted for the job by actions/create-github-app-token from its key in the
+# board environment, which only main may use (records/github-settings.json):
+# the organization's Projects, read and write, and Thornswood's issues (to
+# set a type) and pull requests (read). An App's token has its own hourly
+# allowance, so a whole-board run takes nothing from anybody's. The run's own
+# token only reads pr-events.yml's log.
+#
+# Every action is named by a full length commit SHA with its tag beside it,
+# and main's code is all that runs: an issues, workflow_run or manual run on
+# main reads this file and the script from main, never a branch's.
+#
+# WHERE IT RUNS. GitHub's ubuntu-latest. One issue is a few calls and a few
+# seconds; all of them is about three calls an issue.
+name: Board from what GitHub knows
+run-name: ${{ github.event_name == 'issues' && format('Board for issue {0}', github.event.issue.number) || github.event_name == 'workflow_run' && format('Board for pull request event run {0}', github.event.workflow_run.id) || format('Board by hand ({0})', inputs.what) }}
+on:
+  issues:
+    types: [opened, reopened, closed, labeled, unlabeled]
+  workflow_run:
+    workflows: [Pull request changed]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      what:
+        description: 'Issue numbers by commas, or all, or setup'
+        required: true
+      dry_run:
+        description: 'Read and say, and write nothing'
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  sync:
+    name: Put the cards where the facts say
+    # An issue's label run only for the labels the board reads; every other
+    # label starts nothing. Main only, for a run by hand.
+    if: >-
+      ${{ github.ref == 'refs/heads/main' && (
+        (github.event_name == 'issues' && (github.event.action == 'opened' || github.event.action == 'reopened' || github.event.action == 'closed' ||
+          startsWith(github.event.label.name, 'claimed:') || startsWith(github.event.label.name, 'order:'))) ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+        github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    environment: board
+    permissions:
+      contents: read
+      actions: read
+    # One run per issue or pull request at a time. GitHub keeps the newest
+    # waiting run and cancels an older waiting one, which is right here: each
+    # run reads the facts as they are when it starts.
+    concurrency:
+      group: board-${{ github.event_name == 'issues' && github.event.issue.number || github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.run_id }}
+      cancel-in-progress: false
+    # A few calls an issue, and all the open issues by hand.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/ops/Sync-Board.js
+            scripts/release/LogHandBack.ps1
+          sparse-checkout-cone-mode: false
+
+      - name: Read which pull request changed
+        id: pull
+        if: github.event_name == 'workflow_run'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ github.event.workflow_run.id }}
+        # A runner's log carries escape sequences, which gh 2.92 and newer
+        # hand over only when told (#5202): Get-GhLogFlags says whether to.
+        run: |
+          . ./scripts/release/LogHandBack.ps1
+          $jobs = (gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:RUN/jobs" | ConvertFrom-Json).jobs
+          $say = @($jobs | Where-Object { [string]$_.name -eq 'Say which pull request changed' })
+          if ($say.Count -ne 1) { Write-Host "::error::run $env:RUN has $($say.Count) jobs that say which pull request changed, not one"; exit 1 }
+          $flags = @(Get-GhLogFlags)
+          $log = @(gh api "repos/$env:GITHUB_REPOSITORY/actions/jobs/$($say[0].id)/logs" @flags)
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::run $env:RUN's log could not be read"; exit 1 }
+          $pullMark = 'BOARD' + '-PULL'; $beforeMark = 'BOARD' + '-BEFORE'
+          $pull = ''; $before = ''
+          foreach ($l in $log) {
+            if (-not $pull -and $l -match ('^(\S+ )?' + $pullMark + ' (\d+)\s*$')) { $pull = $Matches[2] }
+            if (-not $before -and $l -match ('^(\S+ )?' + $beforeMark + ' ([\d ]*)$')) { $before = $Matches[2].Trim() }
+          }
+          if (-not $pull) { Write-Host "::error::run $env:RUN's log names no pull request"; exit 1 }
+          Write-Host ("pull request #{0}; before an edit it named: {1}" -f $pull, $(if ($before) { $before } else { 'nothing' }))
+          "pull=$pull" >> $env:GITHUB_OUTPUT
+          "before=$before" >> $env:GITHUB_OUTPUT
+
+      - name: The board App's token
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.BOARD_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BOARD_APP_KEY }}
+          permission-organization-projects: write
+          permission-issues: write
+          permission-pull-requests: read
+
+      - name: Put each card where the facts say
+        env:
+          BOARD_TOKEN: ${{ steps.app.outputs.token }}
+          BOARD_OWNER: ${{ github.repository_owner }}
+          BOARD_NUMBER: ${{ vars.BOARD_NUMBER }}
+          EVENT: ${{ github.event_name }}
+          ISSUE: ${{ github.event.issue.number }}
+          PULL: ${{ steps.pull.outputs.pull }}
+          EARLIER_ISSUES: ${{ steps.pull.outputs.before }}
+          WHAT: ${{ inputs.what }}
+          DRY: ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: |
+          case "$EVENT" in
+            issues) exec node scripts/ops/Sync-Board.js --issues "$ISSUE" ;;
+            workflow_run) exec node scripts/ops/Sync-Board.js --pull "$PULL" ;;
+          esac
+          what="$(printf '%s' "$WHAT" | tr -d ' ')"
+          case "$what" in
+            all) exec node scripts/ops/Sync-Board.js --all $DRY ;;
+            setup) exec node scripts/ops/Sync-Board.js --setup $DRY ;;
+            *) exec node scripts/ops/Sync-Board.js --issues "$what" $DRY ;;
+          esac

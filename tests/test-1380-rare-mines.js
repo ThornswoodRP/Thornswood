@@ -21,7 +21,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const CR = String.fromCharCode(13);
-const gm = fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8').split(CR).join('');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8')).split(CR).join('');
 const page = fs.readFileSync(path.join(REPO_DIR, 'docs', 'systems', 'classes', 'miner.md'), 'utf8').split(CR).join('');
 const oresJson = JSON.parse(fs.readFileSync(path.join(REPO_DIR, 'game', 'data', 'ores.json'), 'utf8'));
 const buildOre = fs.readFileSync(path.join(REPO_DIR, 'scripts', 'dev', 'Build-OreTable.ps1'), 'utf8');
@@ -55,7 +55,7 @@ function tableAfter(md, head) {
 }
 
 // ------------------------------------------------------------ the tables ---
-const oresSrc = slice(gm, '  var ORES_BY_BASE = {', '\n  };');
+const oresSrc = slice(gm, '  var ORES_BY_BASE = {', ';\n');
 let ORES = null;
 try { ORES = new Function('return ' + oresSrc.slice('  var ORES_BY_BASE = '.length).replace(/;$/, ''))(); } catch (e) { ORES = null; }
 yes('ORES_BY_BASE reads', !!ORES && Object.keys(ORES).length === 581);

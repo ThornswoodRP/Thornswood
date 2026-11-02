@@ -18,7 +18,7 @@
     3. Publish-Update.ps1 asks it on both paths before anything is packed,
        writes the recorded revision into the feed, and no longer writes the
        number Vortex has.
-    4. Ship.ps1 asks it on both paths before the version moves.
+    4. Ship.ps1 asks it on both paths before the version is worked out.
     5. The launcher's bars call the feed's number the revision the server was
        built against, never the collection's own.
 
@@ -101,14 +101,16 @@ Yes 'and never the number Vortex has, nor keeps the last feed''s quietly' (-not 
 Write-Host ''; Write-Host 'Ship.ps1'
 $ship = [IO.File]::ReadAllText((Join-Path (Join-Path (Join-Path $Repo 'scripts') 'release') 'Ship.ps1')).Replace("`r`n", "`n")
 $sAsks = [regex]::Matches($ship, 'Get-ShipCollectionRevisionProblem -RepoDir \$RepoDir -Built \$revBuilt')
-$bump = $ship.IndexOf("`$updaterCs = Join-Path `$Here '..\..\launcher\app\Updater.cs'")
+# Where Ship starts building from the root. It read the launcher's number
+# there until #4825, when Ship stopped building a launcher.
+$bump = $ship.IndexOf("Head 'Animation and body files'")
 $root = $ship.IndexOf("Head 'The ship root'")
 Yes 'it asks on both paths' ($sAsks.Count -eq 2)
-Yes '  after the ship root is staged and before the version moves' ($root -gt 0 -and $bump -gt 0 -and $sAsks.Count -eq 2 -and $sAsks[0].Index -gt $root -and $sAsks[1].Index -lt $bump)
+Yes '  after the ship root is staged and before anything is built from it' ($root -gt 0 -and $bump -gt 0 -and $sAsks.Count -eq 2 -and $sAsks[0].Index -gt $root -and $sAsks[1].Index -lt $bump)
 Yes '  from the feed, the revision the last release named' ($ship.Contains('$revFeed = Read-SiteFeed $Channel') -and $ship.Contains('the $Channel feed''s last release'))
 Yes '  from One, this machine''s Vortex' ($ship.Contains("Get-ShipCollectionRevision `$Root") -and $ship.Contains("this machine's Vortex"))
 $stopAt = $ship.IndexOf('if ($revWhy) { Die $revWhy }')
-Yes '  and stops on the answer, before the version moves' ($stopAt -gt 0 -and $stopAt -lt $bump)
+Yes '  and stops on the answer, before anything is built' ($stopAt -gt 0 -and $stopAt -lt $bump)
 
 # ---- 5. the launcher's words ---------------------------------------------------------
 Write-Host ''; Write-Host 'the launcher'

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Threading;
+using Avalonia.Threading;
 
 namespace Thornswood
 {
@@ -41,6 +42,11 @@ namespace Thornswood
     /// card follows Vortex to where it stops. Play's own gates (Verify, and
     /// OwnGameRefreshIfDue for Thornswood's own folder) still judge the
     /// folder Vortex left, as they always have.
+    ///
+    /// Since #5200 the card's button opens Vortex itself at the server's
+    /// revision (Shell.OpenCollection), and when the card comes down here
+    /// Scan and Fix run after the feed's answer (FixAfterVortex), so the
+    /// press on Diagnostics Patrick made by hand is made for him.
     /// </summary>
     static partial class Shell
     {
@@ -128,13 +134,13 @@ namespace Thornswood
                 catch (Exception ex) { Swallow.Note("Shell.WatchVortex", ex); look = false; }
                 try
                 {
-                    win.Dispatcher.BeginInvoke(new Action(delegate
+                    Dispatcher.UIThread.Post(delegate
                     {
                         vortexLooking = false;
                         if (now == null) return;
                         vortexSeen = now;
                         if (look) VortexChanged(revision, problem);
-                    }));
+                    });
                 }
                 catch (Exception ex) { vortexLooking = false; Swallow.Note("Shell.WatchVortex, dispatch", ex); }
             });
@@ -158,13 +164,51 @@ namespace Thornswood
                     LogOnly("Vortex now has collection revision " + revision + " installed; the server's is " + Updater.FeedCollectionRevision + ".");
                 return;
             }
-            Log("Vortex now has collection revision " + revision + " installed, the one the server was built against. Checking for the updates that waited on it.");
+            Log("Vortex now has collection revision " + revision + " installed, the one the server was built against. Checking for the updates that waited on it, then scanning and fixing.");
+            // Scan and Fix follow the answer (FixAfterVortex), once the
+            // update it brings has been taken or left on the card (#5200).
+            fixAfterVortex = true;
             // Play stays shut on CHECKING until the feed answers, as at the
             // start: the release built on this revision may have mod updates.
             updatePending = true;
             updateAnswered = false;
             DrawStatus();
             ThreadPool.QueueUserWorkItem(delegate { CheckUpdatesBackground(false); });
+        }
+
+        /// <summary>
+        /// Set when the collection card came down because Vortex finished,
+        /// so the feed's answer is followed by Scan and Fix (#5200). Cleared
+        /// by the one answer that runs them.
+        /// </summary>
+        static bool fixAfterVortex;
+
+        /// <summary>
+        /// After a feed answer on the UI thread (CheckUpdatesBackground,
+        /// after OnVersionDoc and UpdateBySelf): Scan and Fix, once, when the
+        /// collection card came down because Vortex finished (#5200).
+        ///
+        /// Patrick, 31 Oct, after updating to revision 6 through the card:
+        /// "I had to click in the diagnasotics page and manually click scan
+        /// and fix". The card already came down by itself (#5136); this is
+        /// the press he made by hand. Vortex has just rewritten the plugin
+        /// list and the mods, so the folder Play reads is judged and put
+        /// right now, not at the next Play.
+        ///
+        /// The order is the one a press of Install now and then Fix has.
+        /// When UpdateBySelf started the update the new revision's release
+        /// brought, the update's own end runs Fix (FixAfterUpdate), so this
+        /// does not run a second one beside it. Otherwise Fix runs here and
+        /// leaves the update where UpdateBySelf left it, on the card: it is
+        /// waiting because automatic updates are off, or a game is open, and
+        /// Fix after Vortex does not overrule that (FixRest).
+        /// </summary>
+        static void FixAfterVortex()
+        {
+            if (!fixAfterVortex) return;
+            fixAfterVortex = false;
+            if (updating) return;
+            RunFix(false, true);
         }
     }
 }

@@ -22,10 +22,11 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const http = require('http');
+const siteFiles = require('./site-files');
 
 const CR = String.fromCharCode(13);
 const SRC = path.join(__dirname, '..', 'site', 'server.js');
-const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const src = siteFiles.source(SRC).split(CR).join('');
 const CSP_HEADER = JSON.parse(src.match(/const CSP_HEADER = ("[^"\r\n]*");/)[1]);
 // send() names it beside the CSP (#2762).
 const PERMISSIONS_POLICY = src.match(/const PERMISSIONS_POLICY = '([^'\r\n]*)';/)[1];
@@ -211,7 +212,7 @@ async function main() {
   // Once the feed's release has a public GitHub Release holding the asset at
   // this size, the route answers 302 to it, and sends no bytes (#3686).
   const TAG = 'release/main/20261026-170000';
-  const COPY = 'https://github.com/EvilPatrick06/Thornswood/releases/download/' + TAG + '/' + SHA;
+  const COPY = 'https://github.com/ThornswoodRP/Thornswood/releases/download/' + TAG + '/' + SHA;
   fs.writeFileSync(path.join(ROOT, 'feed', 'version', '00000003.json'),
     JSON.stringify({ launcherUrl: 'https://thornswood.net/feed/assets/' + SHA, release: { id: '20261026-170000', tag: TAG } }));
   const before = await ask('GET', '/feed/assets/' + SHA);

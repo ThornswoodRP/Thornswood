@@ -86,7 +86,7 @@ if (-not $Commit) {
 }
 if (-not (Test-ThornswoodForkClone $Fork)) {
     $sub = Join-Path (Join-Path $repo 'engine') 'skymp'
-    if ((Get-ThornswoodFullPath $Fork) -ne (Get-ThornswoodFullPath $sub)) { throw "there is no clone of the fork at $Fork. Give -Fork a clone of EvilPatrick06/skymp. Nothing was written." }
+    if ((Get-ThornswoodFullPath $Fork) -ne (Get-ThornswoodFullPath $sub)) { throw "there is no clone of the fork at $Fork. Give -Fork a clone of ThornswoodRP/skymp. Nothing was written." }
     # This checkout's own engine\skymp, never fetched (a cloud checkout):
     # the pin says which commit, so it is fetched here at that commit alone.
     Say "  engine\skymp is not fetched in this checkout, fetching the pinned commit"

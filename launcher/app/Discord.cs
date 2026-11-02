@@ -28,6 +28,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Net;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -336,10 +337,8 @@ namespace Thornswood
             // has to come back on the answer, so a request that did not start
             // here is dropped and the listener keeps waiting.
             string nonce;
-            using (var rng = new RNGCryptoServiceProvider())
             {
-                var nb = new byte[24];
-                rng.GetBytes(nb);
+                byte[] nb = RandomNumberGenerator.GetBytes(24);
                 var sb = new StringBuilder();
                 foreach (byte b in nb) sb.Append(b.ToString("x2"));
                 nonce = sb.ToString();
@@ -1193,42 +1192,29 @@ namespace Thornswood
             var took = System.Diagnostics.Stopwatch.StartNew();
             try
             {
-                ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12; // added, never replaced (#1360)
-                var req = (HttpWebRequest)WebRequest.Create(url);
-                req.Method = method;
-                req.Timeout = 15000;
-                req.UserAgent = "Thornswood";
-                if (json != null)
+                using (var req = new HttpRequestMessage(new HttpMethod(method), url))
                 {
-                    req.ContentType = "application/json";
-                    var bytes = Encoding.UTF8.GetBytes(json);
-                    req.ContentLength = bytes.Length;
-                    using (var s = req.GetRequestStream()) s.Write(bytes, 0, bytes.Length);
-                }
-                using (var res = (HttpWebResponse)req.GetResponse())
-                using (var r = new StreamReader(res.GetResponseStream()))
-                {
-                    reply = r.ReadToEnd();
-                    return (int)res.StatusCode;
+                    req.Headers.TryAddWithoutValidation("User-Agent", "Thornswood");
+                    if (json != null)
+                    {
+                        req.Content = new ByteArrayContent(Encoding.UTF8.GetBytes(json));
+                        req.Content.Headers.TryAddWithoutValidation("Content-Type", "application/json");
+                    }
+                    using (HttpResponseMessage res = Http.Send(req, 15000))
+                    {
+                        // A refusal is an answer, not a failure. 403 with a
+                        // reason in it is exactly what this wants to read.
+                        reply = ReadReply(res, "Discord.Send, reading refusal body");
+                        return (int)res.StatusCode;
+                    }
                 }
             }
-            catch (WebException we)
+            catch (Exception ex) when (ex is HttpRequestException || ex is TimeoutException)
             {
-                // A refusal is an answer, not a failure. 403 with a reason in it
-                // is exactly what this wants to read.
-                var res = we.Response as HttpWebResponse;
-                if (res != null)
-                {
-                    try
-                    {
-                        using (var r = new StreamReader(res.GetResponseStream())) reply = r.ReadToEnd();
-                    }
-                    catch (Exception ex) { Swallow.Note("Discord.Send, reading refusal body", ex); }
-                    return (int)res.StatusCode;
-                }
-                // WebExceptionStatus names the kind: Timeout, ConnectFailure,
-                // NameResolutionFailure, SecureChannelFailure and the like.
-                LastFailure = we.Status + " after " + took.ElapsedMilliseconds + " ms";
+                // The kind, in the words the log has always used for it:
+                // Timeout, ConnectFailure, NameResolutionFailure,
+                // SecureChannelFailure and the like.
+                LastFailure = FailureKind(ex) + " after " + took.ElapsedMilliseconds + " ms";
                 return 0;
             }
             catch (Exception ex)
@@ -1236,6 +1222,48 @@ namespace Thornswood
                 Swallow.Note("Discord.Send", ex);
                 LastFailure = ex.GetType().Name + " after " + took.ElapsedMilliseconds + " ms";
                 return 0;
+            }
+        }
+
+        /// <summary>
+        /// What kind of failure left a request with no answer, named as
+        /// .NET Framework's WebExceptionStatus named it, so the log line
+        /// (Discord.LastFailure) reads as it always has.
+        /// </summary>
+        static string FailureKind(Exception ex)
+        {
+            if (ex is TimeoutException) return "Timeout";
+            var h = ex as HttpRequestException;
+            if (h == null) return ex.GetType().Name;
+            switch (h.HttpRequestError)
+            {
+                case HttpRequestError.NameResolutionError: return "NameResolutionFailure";
+                case HttpRequestError.ConnectionError: return "ConnectFailure";
+                case HttpRequestError.SecureConnectionError: return "SecureChannelFailure";
+                case HttpRequestError.ProxyTunnelError: return "ProxyNameResolutionFailure";
+                case HttpRequestError.ResponseEnded: return "ConnectionClosed";
+                case HttpRequestError.InvalidResponse: return "ServerProtocolViolation";
+                default: return h.HttpRequestError.ToString();
+            }
+        }
+
+        /// <summary>
+        /// The answer's body as text, read as the old StreamReader over the
+        /// response read it (UTF-8 unless a byte order mark says otherwise).
+        /// A body that will not read leaves the reply empty, said in the log
+        /// under where.
+        /// </summary>
+        static string ReadReply(HttpResponseMessage res, string where)
+        {
+            try
+            {
+                using (var r = new StreamReader(new MemoryStream(Http.Body(res, Http.DefaultReadMs)))) return r.ReadToEnd();
+            }
+            catch (Exception ex)
+            {
+                if (res.IsSuccessStatusCode) throw;
+                Swallow.Note(where, ex);
+                return "";
             }
         }
 
@@ -1251,33 +1279,20 @@ namespace Thornswood
             if (data == null) data = new byte[0];
             try
             {
-                ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12; // added, never replaced (#1360)
-                var req = (HttpWebRequest)WebRequest.Create(url);
-                req.Method = "POST";
-                req.ContentType = string.IsNullOrEmpty(contentType) ? "application/octet-stream" : contentType;
-                req.Timeout = timeoutMs > 0 ? timeoutMs : 60000;
-                req.UserAgent = "Thornswood";
-                req.ContentLength = data.Length;
-                using (var s = req.GetRequestStream()) s.Write(data, 0, data.Length);
-                using (var res = (HttpWebResponse)req.GetResponse())
-                using (var r = new StreamReader(res.GetResponseStream()))
+                using (var req = new HttpRequestMessage(HttpMethod.Post, url))
                 {
-                    reply = r.ReadToEnd();
-                    return (int)res.StatusCode;
+                    req.Headers.TryAddWithoutValidation("User-Agent", "Thornswood");
+                    req.Content = new ByteArrayContent(data);
+                    req.Content.Headers.TryAddWithoutValidation("Content-Type", string.IsNullOrEmpty(contentType) ? "application/octet-stream" : contentType);
+                    using (HttpResponseMessage res = Http.Send(req, timeoutMs > 0 ? timeoutMs : 60000))
+                    {
+                        reply = ReadReply(res, "Discord.PostBytes, reading refusal body");
+                        return (int)res.StatusCode;
+                    }
                 }
             }
-            catch (WebException we)
+            catch (Exception ex) when (ex is HttpRequestException || ex is TimeoutException)
             {
-                var res = we.Response as HttpWebResponse;
-                if (res != null)
-                {
-                    try
-                    {
-                        using (var r = new StreamReader(res.GetResponseStream())) reply = r.ReadToEnd();
-                    }
-                    catch (Exception ex) { Swallow.Note("Discord.PostBytes, reading refusal body", ex); }
-                    return (int)res.StatusCode;
-                }
                 return 0;
             }
             catch (Exception ex)

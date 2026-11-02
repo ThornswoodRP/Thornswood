@@ -204,9 +204,10 @@ try {
     Write-ServerFile 'data/manifest.json' '{ "written": "by the server, while it ran here" }'
     Write-Binary 'the recorded binary'
     $recSum = Write-Record
-    # The gamemode artifact a publish from this checkout builds (#459): the
-    # stand-in box says its store holds it, and what it records.
-    $art = & { Set-StrictMode -Off; . (Join-Path $repo 'scripts\deploy\Artifact.ps1'); New-ThornswoodArtifact -Component gamemode -RepoDir $repo -Paths 'game/gamemode.js' }
+    # The gamemode artifact a publish from this checkout builds (#459), with
+    # its tables (#5191): the stand-in box says its store holds it, and what
+    # it records.
+    $art = & { Set-StrictMode -Off; . (Join-Path $repo 'scripts\deploy\Artifact.ps1'); New-ThornswoodArtifact -Component gamemode -RepoDir $repo -Paths 'game/gamemode.js', 'game/gamemode-tables' }
     $artGm = (Get-FileHash -LiteralPath (Join-Path $art.Folder 'game\gamemode.js') -Algorithm SHA256).Hash.ToLowerInvariant()
     $env:TS_PUB_HAS = $art.Sha256
     # PowerShell scripts rather than .cmd files: a .cmd runs through cmd.exe,

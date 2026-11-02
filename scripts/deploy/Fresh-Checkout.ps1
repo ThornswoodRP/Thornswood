@@ -113,7 +113,7 @@ function Get-FreshCheckoutState {
         $r.Branch = $at.Out[2].Trim()
     } else {
         $top = Invoke-FreshGit $RepoDir @('rev-parse', '--show-toplevel')
-        if ($top.Code -ne 0) { $r.Problem = 'notrepo'; $r.Message = "$RepoDir is not a git checkout, so nothing says what it was built from"; $r.Fix = 'git clone https://github.com/EvilPatrick06/Thornswood.git'; return [pscustomobject]$r }
+        if ($top.Code -ne 0) { $r.Problem = 'notrepo'; $r.Message = "$RepoDir is not a git checkout, so nothing says what it was built from"; $r.Fix = 'git clone https://github.com/ThornswoodRP/Thornswood.git'; return [pscustomobject]$r }
     }
     $want = 'main'
     if ($AnyBranch -and $r.Branch -and $r.Branch -ne 'HEAD') { $want = $r.Branch }

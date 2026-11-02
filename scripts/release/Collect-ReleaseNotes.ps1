@@ -29,7 +29,7 @@
 param(
     [string]$Since,
     [string]$Until = 'main',
-    [string]$Repo = 'EvilPatrick06/Thornswood',
+    [string]$Repo = 'ThornswoodRP/Thornswood',
     [string]$OutFile,
     [string]$PullsFile
 )

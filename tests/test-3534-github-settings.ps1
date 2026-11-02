@@ -13,7 +13,7 @@
   What it checks:
     1. records\github-settings.json is JSON with every part the compare
        reads, names only, and its environments are the ones the workflows
-       name (environment: board, desk, release, watch);
+       name (environment: board, desk, engine-pin, release, watch);
     2. Get-DeployFrom and Compare-GitHubSettings: a match says nothing; a
        setting that differs, a secret, variable or environment on one side
        only, and an environment deploying from somewhere else are each one
@@ -111,7 +111,7 @@ Yes 'a repository secret the record does not name: one line' ($d.Count -eq 1 -an
 $r = Matching
 $r.environments['board'].secrets = @()
 $d = @(Compare-GitHubSettings $record $r)
-Yes 'an environment secret the record names and GitHub lacks: one line' ($d.Count -eq 1 -and $d[0] -eq 'environment board secrets: BOARD_TOKEN is in the record and not on GitHub')
+Yes 'an environment secret the record names and GitHub lacks: one line' ($d.Count -eq 1 -and $d[0] -eq 'environment board secrets: BOARD_APP_KEY is in the record and not on GitHub')
 $r = Matching
 $r.environments['board'].deploy_from = @('any')
 $d = @(Compare-GitHubSettings $record $r)
@@ -146,24 +146,25 @@ function Invoke-WebRequest {
     $u = [string]$Uri
     if ($u -like 'https://token.test/*') { return [pscustomobject]@{ StatusCode = $s.tokenCode; Content = '{"value":"oidc-for-this-run"}' } }
     if ($u -eq 'http://127.0.0.1:7791/converge') { return [pscustomobject]@{ StatusCode = $s.code; Content = $s.content } }
-    if ($u.StartsWith('https://api.test/repos/EvilPatrick06/Thornswood/environments?')) { return [pscustomobject]@{ StatusCode = $s.envCode; Content = $s.envs } }
-    if ($u -match '^https://api\.test/repos/EvilPatrick06/Thornswood/environments/[^/]+/deployment-branch-policies\?') {
+    if ($u.StartsWith('https://api.test/repos/ThornswoodRP/Thornswood/environments?')) { return [pscustomobject]@{ StatusCode = $s.envCode; Content = $s.envs } }
+    if ($u -match '^https://api\.test/repos/ThornswoodRP/Thornswood/environments/[^/]+/deployment-branch-policies\?') {
         $n = [uri]::UnescapeDataString(($u -split '/')[7])
         return [pscustomobject]@{ StatusCode = 200; Content = (ConvertTo-Json -Compress -Depth 4 @{ total_count = 1; branch_policies = @($s.policies[$n]) }) }
     }
     return [pscustomobject]@{ StatusCode = 599; Content = '' }
 }
-$envList = ConvertTo-Json -Compress -Depth 6 @{ total_count = 4; environments = @(
+$envList = ConvertTo-Json -Compress -Depth 6 @{ total_count = 5; environments = @(
         @{ name = 'board'; protection_rules = @(@{ type = 'branch_policy' }); deployment_branch_policy = @{ protected_branches = $false; custom_branch_policies = $true } },
         @{ name = 'desk'; protection_rules = @(@{ type = 'branch_policy' }); deployment_branch_policy = @{ protected_branches = $false; custom_branch_policies = $true } },
+        @{ name = 'engine-pin'; protection_rules = @(@{ type = 'branch_policy' }); deployment_branch_policy = @{ protected_branches = $false; custom_branch_policies = $true } },
         @{ name = 'release'; protection_rules = @(@{ type = 'branch_policy' }); deployment_branch_policy = @{ protected_branches = $false; custom_branch_policies = $true } },
         @{ name = 'watch'; protection_rules = @(@{ type = 'branch_policy' }); deployment_branch_policy = @{ protected_branches = $false; custom_branch_policies = $true } }) }
-$policies = @{ board = @{ name = 'main'; type = 'branch' }; desk = @{ name = 'main'; type = 'branch' }; release = @{ name = 'main'; type = 'branch' }; watch = @{ name = 'main'; type = 'branch' } }
+$policies = @{ board = @{ name = 'main'; type = 'branch' }; desk = @{ name = 'main'; type = 'branch' }; 'engine-pin' = @{ name = 'main'; type = 'branch' }; release = @{ name = 'main'; type = 'branch' }; watch = @{ name = 'main'; type = 'branch' } }
 $svcAll = ConvertTo-Json -Compress -Depth 8 @{ ok = $true; unread = @(); lines = @(); readings = @{
         actions = $record.actions; workflow_token = $record.workflow_token; sharing = $record.sharing; fork_pull_requests = $record.fork_pull_requests
         retention = @{ days = 90 }; runners = @(@{ name = 'thornswood-vps'; status = 'online'; labels = @('self-hosted', 'thornswood-vps') })
         secrets = @($record.secrets); variables = @($record.variables)
-        environments = @{ board = @{ secrets = @('BOARD_TOKEN'); variables = @() }; desk = @{ secrets = @('NEXUS_API_KEY'); variables = @() }; release = @{ secrets = @(); variables = @() }; watch = @{ secrets = @('RUNNER_TOKEN', 'STAFF_WEBHOOK'); variables = @() } } } }
+        environments = @{ board = @{ secrets = @('BOARD_APP_KEY'); variables = @('BOARD_APP_CLIENT_ID', 'BOARD_NUMBER') }; desk = @{ secrets = @('NEXUS_API_KEY'); variables = @() }; 'engine-pin' = @{ secrets = @('PIN_APP_KEY'); variables = @('PIN_APP_CLIENT_ID') }; release = @{ secrets = @(); variables = @() }; watch = @{ secrets = @('STAFF_WEBHOOK', 'WATCH_APP_KEY'); variables = @('WATCH_APP_CLIENT_ID') } } } }
 function OnGitHub([hashtable]$envs, [hashtable]$state) {
     $base = @{ tokenCode = 200; code = 200; content = $svcAll; envCode = 200; envs = $envList; policies = $policies }
     foreach ($k in $state.Keys) { $base[$k] = $state[$k] }
@@ -185,21 +186,22 @@ function OnGitHub([hashtable]$envs, [hashtable]$state) {
 
 $r = OnGitHub @{} @{}
 Yes ("everything read and matching: exit 0, MATCHES ($($r.Code))") ($r.Code -eq 0 -and $r.Out -match '::notice title=Check-GitHubSettings::MATCHES%0A')
-Yes '  the environments listed with the run''s own token' (@($r.Calls | Where-Object { $_.Uri -like 'https://api.test/*' -and $_.Auth -eq 'Bearer run-token' }).Count -eq 5)
+Yes '  the environments listed with the run''s own token' (@($r.Calls | Where-Object { $_.Uri -like 'https://api.test/*' -and $_.Auth -eq 'Bearer run-token' }).Count -eq 6)
 Yes '  the service asked for settings alone, with this run''s OIDC token, past any proxy' (
     @($r.Calls | Where-Object { $_.Uri -eq 'http://127.0.0.1:7791/converge' -and $_.Method -eq 'POST' -and $_.Auth -eq 'Bearer oidc-for-this-run' -and $_.NoProxy -and $_.Body.what -eq 'settings' -and @($_.Body.PSObject.Properties).Count -eq 1 }).Count -eq 1)
-Yes '  and nothing else was called, nothing but GETs to GitHub' (@($r.Calls | Where-Object { $_.Uri -like 'https://api.test/*' -and $_.Method -ne 'GET' }).Count -eq 0 -and $r.Calls.Count -eq 7)
+Yes '  and nothing else was called, nothing but GETs to GitHub' (@($r.Calls | Where-Object { $_.Uri -like 'https://api.test/*' -and $_.Method -ne 'GET' }).Count -eq 0 -and $r.Calls.Count -eq 8)
 Yes '  every reading is in the answer' ($r.Out -match 'read workflow_token: default_workflow_permissions=read' -and $r.Out -match 'read runner thornswood-vps: online' -and $r.Out -match 'read environment release: deploy_from branch main')
 
-$r = OnGitHub @{} @{ content = (ConvertTo-Json -Compress -Depth 8 @{ ok = $true; unread = @('secrets: the App has no Secrets permission, so GitHub gives it none of these names'); lines = @(); readings = @{ actions = $record.actions; environments = @{ board = @{}; desk = @{}; release = @{}; watch = @{} } } }) }
+$r = OnGitHub @{} @{ content = (ConvertTo-Json -Compress -Depth 8 @{ ok = $true; unread = @('secrets: the App has no Secrets permission, so GitHub gives it none of these names'); lines = @(); readings = @{ actions = $record.actions; environments = @{ board = @{}; desk = @{}; 'engine-pin' = @{}; release = @{}; watch = @{} } } }) }
 Yes 'names the App may not read: exit 0, MATCHES UNREAD 1 with why' ($r.Code -eq 0 -and $r.Out -match 'Check-GitHubSettings::MATCHES UNREAD 1%0Anot read: secrets: the App has no Secrets permission')
-$anyBranch = ConvertTo-Json -Compress -Depth 6 @{ total_count = 4; environments = @(
+$anyBranch = ConvertTo-Json -Compress -Depth 6 @{ total_count = 5; environments = @(
         @{ name = 'board'; protection_rules = @(); deployment_branch_policy = $null },
         @{ name = 'desk'; protection_rules = @(); deployment_branch_policy = $null },
+        @{ name = 'engine-pin'; protection_rules = @(); deployment_branch_policy = $null },
         @{ name = 'release'; protection_rules = @(); deployment_branch_policy = $null },
         @{ name = 'watch'; protection_rules = @(); deployment_branch_policy = $null }) }
 $r = OnGitHub @{} @{ envs = $anyBranch }
-Yes 'environments any branch may use: DIFFERS with each' ($r.Code -eq 0 -and $r.Out -match 'Check-GitHubSettings::DIFFERS 4' -and $r.Out -match 'differs: environment board deploys from any, and the record says branch main')
+Yes 'environments any branch may use: DIFFERS with each' ($r.Code -eq 0 -and $r.Out -match 'Check-GitHubSettings::DIFFERS 5' -and $r.Out -match 'differs: environment board deploys from any, and the record says branch main')
 $r = OnGitHub @{} @{ envCode = 403; envs = '{"message":"Resource not accessible by integration"}' }
 Yes 'environments the run''s token may not list: said as not read, and no environment called missing' ($r.Out -match 'not read: environments: GET environments answered HTTP 403' -and $r.Out -notmatch 'is in the record and not on GitHub')
 $r = OnGitHub @{} @{ content = '{"ok":true,"lines":["records/build-runners.json: GitHub matches it"],"changed":0,"differs":0}' }

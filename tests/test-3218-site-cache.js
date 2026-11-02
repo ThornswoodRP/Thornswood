@@ -27,6 +27,7 @@
 const fs = require('fs'), path = require('path'), os = require('os');
 const net = require('net'), http = require('http'), crypto = require('crypto');
 const { spawn, execFileSync } = require('child_process');
+const siteFiles = require('./site-files');
 const ROOT = path.join(__dirname, '..');
 const APP = path.join(ROOT, 'site'), PUBLIC = path.join(APP, 'public');
 
@@ -74,7 +75,7 @@ const made = [];
 function copy() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-3218-'));
   made.push(dir);
-  fs.copyFileSync(path.join(APP, 'server.js'), path.join(dir, 'server.js'));
+  siteFiles.copy(dir);
   fs.mkdirSync(path.join(dir, 'public'));
   for (const f of fs.readdirSync(PUBLIC)) {
     if (fs.statSync(path.join(PUBLIC, f)).isFile()) fs.copyFileSync(path.join(PUBLIC, f), path.join(dir, 'public', f));
@@ -126,7 +127,7 @@ function named(html) {
 
 (async function () {
   // ---- what is in the repository, read without a server --------------------
-  const src = fs.readFileSync(path.join(APP, 'server.js'), 'utf8');
+  const src = siteFiles.source();
   const csp = JSON.parse((src.match(/const CSP_HEADER = ("[^"\r\n]*");/) || [, '""'])[1]);
   yes('the CSP lets Cloudflare\'s analytics script in', /script-src 'self' https:\/\/static\.cloudflareinsights\.com[ ;]/.test(csp));
   yes('and lets it report', /connect-src 'self' https:\/\/cloudflareinsights\.com;/.test(csp));
@@ -166,6 +167,11 @@ function named(html) {
     yes('and /api/public, which the front page fetches', api.headers['cache-control'] === 'no-cache');
     const hub = await ask(run.port, '/hub');
     yes('the hub, which says who is signed in, stays no-store', hub.headers['cache-control'] === 'no-store');
+    // #5190: Cloudflare's cache rule keeps only what carries this header.
+    yes('Cloudflare keeps the front page and a written page five minutes, by its own header',
+      home.headers['cloudflare-cdn-cache-control'] === 'max-age=300' && rules.headers['cloudflare-cdn-cache-control'] === 'max-age=300');
+    yes('and never the hub or /api/public', hub.headers['cloudflare-cdn-cache-control'] === undefined &&
+      api.headers['cloudflare-cdn-cache-control'] === undefined);
 
     const refs = named(home.body).filter((r) => fs.existsSync(path.join(PUBLIC, r.split('?')[0].slice(1))));
     yes('the front page names files of public/ (' + refs.length + ')', refs.length >= 8);

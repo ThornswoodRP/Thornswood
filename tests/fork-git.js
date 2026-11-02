@@ -7,12 +7,12 @@
 // requests an hour per address, and a cloud thread (or a developer behind a
 // carrier's shared address) leaves from an address others use, so the
 // allowance was gone before the harness asked and both failed with a 403 that
-// said nothing about the engine (measured 21 Oct from a cloud container:
-// "API rate limit exceeded for 34.66.28.202"). The question is about commits,
-// and git answers it itself over the same https address it clones from, which
-// that API limit does not cover and which needs no token: both repositories
-// are public. So nothing here reads a token, and none is needed on any
-// machine.
+// said nothing about the engine (measured 21 Oct from a cloud container,
+// whose address GitHub named in "API rate limit exceeded for ..."). The
+// question is about commits, and git answers it itself over the same https
+// address it clones from, which that API limit does not cover and which
+// needs no token: both repositories are public. So nothing here reads a
+// token, and none is needed on any machine.
 //
 // open(what) makes an empty bare repository in the system temp folder.
 // fetch(name, url, refspecs) brings in commits only (--filter=tree:0, a few

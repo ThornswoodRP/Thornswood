@@ -130,7 +130,7 @@ function Invoke-Drop([string[]]$labels, [string]$gone = '', [string]$broken = ''
     try {
         $env:GH_TOKEN = 'stand-in-token'
         $env:ISSUE = '1863'
-        $env:GITHUB_REPOSITORY = 'EvilPatrick06/Thornswood'
+        $env:GITHUB_REPOSITORY = 'ThornswoodRP/Thornswood'
         # What toJSON hands the step: a JSON array of the names, [] for none.
         $env:LABELS = ConvertTo-Json -InputObject @($labels) -Compress
         $env:TS_CALLS = $calls
@@ -146,7 +146,7 @@ function Invoke-Drop([string[]]$labels, [string]$gone = '', [string]$broken = ''
     if (Test-Path -LiteralPath $calls) { $made = @(Get-Content -LiteralPath $calls | Where-Object { $_ }) }
     return [pscustomobject]@{ Code = $code; Out = $out; Calls = $made }
 }
-$base = 'https://api.github.com/repos/EvilPatrick06/Thornswood/issues/1863/labels/'
+$base = 'https://api.github.com/repos/ThornswoodRP/Thornswood/issues/1863/labels/'
 
 try {
     $r = Invoke-Drop @('claimed: Claude', 'area: Release', 'claimed:GitHub', 'anyone can start', 'needs: Patrick')

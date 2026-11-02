@@ -70,9 +70,9 @@ $name = Get-ForkEngineArtifactName $C
 try {
     # ---- 1. which build ------------------------------------------------------
     Write-Host ''; Write-Host 'Find-ForkEngineBuild'
-    function Run-Of([long]$id, [string]$status, [string]$conclusion, [string]$sha = $C, [string]$branch = 'thornswood/engine-changes', [string]$event = 'push', [string]$repo = 'EvilPatrick06/skymp', [long]$repoId = 1375283516) {
+    function Run-Of([long]$id, [string]$status, [string]$conclusion, [string]$sha = $C, [string]$branch = 'thornswood/engine-changes', [string]$event = 'push', [string]$repo = 'ThornswoodRP/skymp', [long]$repoId = 1375283516) {
         return [pscustomobject]@{ id = $id; status = $status; conclusion = $conclusion; head_sha = $sha; head_branch = $branch; event = $event
-                                  repository = [pscustomobject]@{ id = $repoId; full_name = $repo }; html_url = "https://github.com/EvilPatrick06/skymp/actions/runs/$id" }
+                                  repository = [pscustomobject]@{ id = $repoId; full_name = $repo }; html_url = "https://github.com/ThornswoodRP/skymp/actions/runs/$id" }
     }
     function Art([long]$id, [bool]$expired = $false, [string]$n = $name) {
         return [pscustomobject]@{ id = $id; name = $n; expired = $expired; archive_download_url = "https://api.github.com/x/$id/zip"; digest = 'sha256:' + ('0' * 64) }
@@ -93,7 +93,7 @@ try {
     $s = Stand-In @() @{}
     $f = Find-ForkEngineBuild $C $s.Get
     Yes 'no fork build at all: none, and nothing is built in its place' ($f.State -eq 'none' -and $f.Why -match 'has no build' -and $f.Why -match 'no build of it to record' -and $f.Why -notmatch 'builds it')
-    Yes '  the runs are asked of the fork''s workflow, for this commit, a push, and the branch' ($s.Asked[0] -match '^repos/EvilPatrick06/skymp/actions/workflows/thornswood-pr-windows\.yml/runs\?' -and
+    Yes '  the runs are asked of the fork''s workflow, for this commit, a push, and the branch' ($s.Asked[0] -match '^repos/ThornswoodRP/skymp/actions/workflows/thornswood-pr-windows\.yml/runs\?' -and
         $s.Asked[0] -match "head_sha=$C" -and $s.Asked[0] -match 'event=push' -and $s.Asked[0] -match 'branch=thornswood%2Fengine-changes')
 
     $s = Stand-In @((Run-Of 9 'completed' 'success' -branch 'thornswood/1649-x'), (Run-Of 8 'completed' 'success' -event 'pull_request'),
@@ -101,14 +101,14 @@ try {
     $f = Find-ForkEngineBuild $C $s.Get
     Yes 'a build of another branch, event, repository or commit is not taken, whatever the query gave' ($f.State -eq 'none' -and $s.Asked.Count -eq 1)
 
-    $s = Stand-In @((Run-Of 14 'completed' 'success' -repo 'Thornswood/skymp'), (Run-Of 15 'completed' 'success' -repo 'EvilPatrick06/skymp' -repoId 99)) @{ 14 = (Art 140); 15 = (Art 150) }
+    $s = Stand-In @((Run-Of 14 'completed' 'success' -repo 'Thornswood/skymp'), (Run-Of 15 'completed' 'success' -repo 'ThornswoodRP/skymp' -repoId 99)) @{ 14 = (Art 140); 15 = (Art 150) }
     $f = Find-ForkEngineBuild $C $s.Get
     Yes 'a run is the fork''s by its id, so one under the fork''s new owner is taken and another repository under its old name is not (#5184)' ($f.State -eq 'found' -and $f.Run.id -eq 14)
 
     $s = Stand-In @((Run-Of 10 'completed' 'success'), (Run-Of 12 'completed' 'success'), (Run-Of 11 'completed' 'failure')) @{ 10 = (Art 100); 12 = (Art 120) }
     $f = Find-ForkEngineBuild $C $s.Get
     Yes 'a green push build with its artifact is found, the newest such' ($f.State -eq 'found' -and $f.Run.id -eq 12 -and $f.Artifact.id -eq 120)
-    Yes '  its artifact is asked for by name' ($s.Asked[1] -eq "repos/EvilPatrick06/skymp/actions/runs/12/artifacts?name=$name&per_page=100")
+    Yes '  its artifact is asked for by name' ($s.Asked[1] -eq "repos/ThornswoodRP/skymp/actions/runs/12/artifacts?name=$name&per_page=100")
 
     $s = Stand-In @((Run-Of 13 'completed' 'success')) @{ 13 = (Art 130 $true) }
     $f = Find-ForkEngineBuild $C $s.Get
@@ -145,8 +145,8 @@ try {
             $p = Join-Path $dir $rel
             $files[$rel] = [ordered]@{ sha256 = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant(); bytes = (Get-Item -LiteralPath $p).Length; lastWriteUtc = $times[$rel] }
         }
-        $m = [ordered]@{ repository = 'EvilPatrick06/skymp'; event = 'push'; ref = 'refs/heads/thornswood/engine-changes'; commit = $C; runId = 42; runAttempt = 1
-                         runUrl = 'https://github.com/EvilPatrick06/skymp/actions/runs/42'; files = $files }
+        $m = [ordered]@{ repository = 'ThornswoodRP/skymp'; repositoryId = 1375283516; event = 'push'; ref = 'refs/heads/thornswood/engine-changes'; commit = $C; runId = 42; runAttempt = 1
+                         runUrl = 'https://github.com/ThornswoodRP/skymp/actions/runs/42'; files = $files }
         if ($edit) { & $edit $dir $m }
         Put (Join-Path $dir 'fork-build.json') ($m | ConvertTo-Json -Depth 5)
         $zip = Join-Path $T ('art-' + $tag + '.zip')
@@ -183,13 +183,13 @@ try {
     Yes 'a build of another commit is refused' ($r.Error -match 'names commit' -and -not $r.Put)
     $r = Try-Expand $good 'run' -run 43
     Yes 'a build from another run is refused' ($r.Error -match 'names run 42, not 43' -and -not $r.Put)
-    $a = New-Artifact 'moved' { param($d, $m) $m.repository = 'Thornswood/skymp'; $m['repositoryId'] = 1375283516 }
-    $r = Try-Expand $a 'moved'
-    Yes 'a build that names the fork''s id is taken under the fork''s new owner (#5184)' (-not $r.Error -and $r.Put)
+    $a = New-Artifact 'old' { param($d, $m) $m.repository = 'EvilPatrick06/skymp'; $m.Remove('repositoryId') }
+    $r = Try-Expand $a 'old'
+    Yes 'a build from before the fork wrote its id, under its old name, is taken (#5184)' (-not $r.Error -and $r.Put)
     $a = New-Artifact 'otherid' { param($d, $m) $m['repositoryId'] = 99 }
     $r = Try-Expand $a 'otherid'
     Yes '  one that names another repository''s id is refused, whatever name it gives' ($r.Error -match 'names repository id 99' -and -not $r.Put)
-    $a = New-Artifact 'noid' { param($d, $m) $m.repository = 'Thornswood/skymp' }
+    $a = New-Artifact 'noid' { param($d, $m) $m.Remove('repositoryId') }
     $r = Try-Expand $a 'noid'
     Yes '  one with no id is held to the name the fork had before builds named it, EvilPatrick06/skymp' ($r.Error -match 'and no id, not EvilPatrick06/skymp' -and -not $r.Put)
     $a = New-Artifact 'pr' { param($d, $m) $m.event = 'pull_request'; $m.ref = 'refs/pull/79/merge' }
@@ -285,7 +285,7 @@ try {
         Set-BuildTime $built
         $srvOut = Join-Path $T 'server-build.json'
         $cliOut = Join-Path $T 'client-build.json'
-        $run = 'https://github.com/EvilPatrick06/skymp/actions/runs/42'
+        $run = 'https://github.com/ThornswoodRP/skymp/actions/runs/42'
 
         $r = Run-Script 'scripts\release\New-ServerBuildRecord.ps1' @('-Dist', $dist, '-Clone', $fk, '-Out', $srvOut)
         Yes 'without -BuiltBy, a build older than the checkout''s sources says they are newer than the binary' ($r.Out -match 'addon\.cpp is newer than the binary')
@@ -293,7 +293,7 @@ try {
         $r = Run-Script 'scripts\release\New-ServerBuildRecord.ps1' @('-Dist', $dist, '-Clone', $fk, '-Out', $srvOut, '-BuiltBy', $run)
         $rec = if (Test-Path -LiteralPath $srvOut) { [IO.File]::ReadAllText($srvOut) | ConvertFrom-Json } else { $null }
         Yes 'with -BuiltBy, the server is recorded, held to the commit''s time and not the checkout''s dates' ($r.Code -eq 0 -and $rec -and [string]$rec.source.commit -eq $commit -and
-            $r.Out -match 'built by https://github\.com/EvilPatrick06/skymp/actions/runs/42' -and $r.Out -notmatch 'newer than the binary')
+            $r.Out -match 'built by https://github\.com/ThornswoodRP/skymp/actions/runs/42' -and $r.Out -notmatch 'newer than the binary')
         Yes '  and builtUtc is the binary''s own time' ($rec -and ([string]$rec.builtUtc -eq '2026-10-16T13:00:00Z' -or ($rec.builtUtc -is [DateTime] -and $rec.builtUtc.ToUniversalTime() -eq $built)))
         # Papyrus the build compiled: newer than the commit, older than this checkout's .psc.
         Put (Join-Path $fk 'build\skymp5-scripts\pex\ActiveMagicEffect.pex') 'compiled here'
@@ -314,7 +314,7 @@ try {
         $r = Run-Script 'scripts\release\New-ClientBuildRecord.ps1' @('-Dist', $cd, '-Clone', $fk, '-Out', $cliOut, '-BuiltBy', $run)
         $crec = if (Test-Path -LiteralPath $cliOut) { [IO.File]::ReadAllText($cliOut) | ConvertFrom-Json } else { $null }
         Yes 'with -BuiltBy, the client is recorded, held to the commit''s time, with no stale warning' ($r.Code -eq 0 -and $crec -and $commit.StartsWith([string]$crec.forkCommit) -and
-            $r.Out -match 'built by https://github\.com/EvilPatrick06/skymp/actions/runs/42' -and $r.Out -notmatch 'newer than the build')
+            $r.Out -match 'built by https://github\.com/ThornswoodRP/skymp/actions/runs/42' -and $r.Out -notmatch 'newer than the build')
 
         # Written before the commit was made: not a build of it.
         $early = [DateTime]::Parse('2026-10-16T11:00:00Z', [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AdjustToUniversal)

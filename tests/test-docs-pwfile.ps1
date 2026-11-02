@@ -7,8 +7,8 @@
 
   HOW. Offline. The two if ($Password) blocks are lifted out of the shipped
   Deploy-Docs.ps1 by the parser, so this tests what ships. ssh and scp are
-  swapped for functions that run what they were handed in Windows PowerShell
-  5.1 on this machine (what the box runs), against scratch folders. The
+  swapped for functions that run what they were handed in PowerShell 7 on
+  this machine (what the box runs since #5356), against scratch folders. The
   password file is a scratch file whose ACL this sets the way the box's has to
   be, or wrong on purpose. Read-ThornswoodSecret is swapped for one that
   records it was asked. Never connects to anything, never touches the box.
@@ -28,8 +28,8 @@ function Yes([string]$what, [bool]$cond) {
 function Done { Write-Host ''; Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail); if ($script:fail) { exit 1 }; exit 0 }
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'SKIP  the runs: they need Windows PowerShell 5.1, which only Windows has'; Done }
-$ps51 = Get-WindowsPowerShell
+if (-not $OnWindows) { Write-Host 'SKIP  the runs: the password file''s safety is its Windows ACL, which only Windows has'; Done }
+$boxPs = Get-BoxPowerShell
 
 . (Join-Path $Repo 'scripts\vps\Vps.ps1')
 . (Join-Path $Repo 'scripts\vps\Send-Script.ps1')
@@ -71,10 +71,10 @@ function ssh {
         $said = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($run))
         $copy = Get-ThornswoodRemoteRunnerPath $said
         if ($copy) { $run = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($said.Replace($copy, (MapFar $copy.Replace('\', '/'))).Replace("'C:\Windows\Temp'", ("'" + $script:fakeBox + "'")))) }
-        @($input) | & $ps51 -NoProfile -NonInteractive -EncodedCommand $run; return
+        @($input) | & $boxPs -NoProfile -NonInteractive -EncodedCommand $run; return
     }
     $m = [regex]::Match($cmd, '-File (\S+)$')
-    if ($m.Success) { @($input) | & $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (MapFar $m.Groups[1].Value); return }
+    if ($m.Success) { @($input) | & $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (MapFar $m.Groups[1].Value); return }
     if ($cmd -match 'Remove-Item') { $global:LASTEXITCODE = 0; return }
     throw "the fake ssh was handed something it does not know: $cmd"
 }
@@ -90,7 +90,7 @@ function Lock([string]$f, [switch]$AlsoUsers, [switch]$Inherit) {
     $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($meSid, 'FullControl', 'Allow')))
     if ($AlsoUsers) { $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($users, 'Read', 'Allow'))) }
     $fi = New-Object IO.FileInfo($f)
-    if ($PSVersionTable.PSVersion.Major -ge 6) { [IO.FileSystemAclExtensions]::SetAccessControl($fi, $acl) } else { $fi.SetAccessControl($acl) }
+    [IO.FileSystemAclExtensions]::SetAccessControl($fi, $acl)
 }
 function Probe([string]$f) {
     $out = @(Invoke-ThornswoodRemote -Target 'u@box' -SshArgs @() -Script (Get-ThornswoodDocsPasswordProbe $f) | ? { $_ -is [string] })
@@ -102,7 +102,7 @@ $typed  = 'pw-typed-here-' + [Guid]::NewGuid().ToString('N').Substring(0, 12)
 $enc = New-Object Text.UTF8Encoding($false)
 try {
     Write-Host ''
-    Write-Host 'THE CHECK, IN 5.1, ON SCRATCH FILES'
+    Write-Host 'THE CHECK, IN THE BOX''S POWERSHELL, ON SCRATCH FILES'
     $f = Join-Path $work 'pw.txt'
     Yes 'no file: MISSING' ((Probe $f) -eq 'PWFILE MISSING')
     [IO.File]::WriteAllText($f, $secret + "`r`n", $enc)

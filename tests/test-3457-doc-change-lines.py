@@ -14,7 +14,7 @@ The fingerprints live in content.py now (doc_print, unrecorded), which needs
 nothing but the standard library, so this runs on every pull request and a
 change to a doc's words without its line goes red on the change itself. The
 nightly still runs check_docs over the build's own list of written channels
-(bot/test-3317-layout.py, bot/test-3336-changelogs.py). It proves:
+(bot/tests/test-3317-layout.py, bot/tests/test-3336-changelogs.py). It proves:
   - every doc that is not a draft has its change line today;
   - with the newest line of one doc taken off, unrecorded names that doc
     and the fingerprint its words have;

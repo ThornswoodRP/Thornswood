@@ -28,9 +28,28 @@ public sealed class DeploymentStatus
 
 /// <summary>A published Release. The tag lookup never returns a draft, so a
 /// draft can never be deployed.</summary>
+public sealed class WorkflowRun
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("path")] public string Path { get; set; } = "";
+    [JsonPropertyName("head_branch")] public string HeadBranch { get; set; } = "";
+    [JsonPropertyName("event")] public string Event { get; set; } = "";
+}
+
+public sealed class RunApproval
+{
+    [JsonPropertyName("state")] public string State { get; set; } = "";
+    [JsonPropertyName("user")] public Deployment.Login? User { get; set; }
+    [JsonPropertyName("environments")] public List<Named> Environments { get; set; } = new();
+    public sealed class Named { [JsonPropertyName("name")] public string Name { get; set; } = ""; }
+}
+
 public sealed class Release
 {
     [JsonPropertyName("tag_name")] public string TagName { get; set; } = "";
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("body")] public string Body { get; set; } = "";
+    [JsonPropertyName("html_url")] public string HtmlUrl { get; set; } = "";
     [JsonPropertyName("draft")] public bool Draft { get; set; }
     [JsonPropertyName("assets")] public List<Asset> Assets { get; set; } = new();
     public Asset? Asset(string name) => Assets.FirstOrDefault(a => a.Name == name);
@@ -113,8 +132,56 @@ public sealed class GitHub(string api, string repo, ITokenSource tokens, HttpCli
         return Call<bool>(HttpMethod.Post, $"{RepoPath}/deployments/{id}/statuses", body, ct);
     }
 
+    /// <summary>One workflow run: which workflow, on which branch, started how.</summary>
+    public Task<WorkflowRun> Run(long id, CancellationToken ct) =>
+        Call<WorkflowRun>(HttpMethod.Get, $"{RepoPath}/actions/runs/{id}", null, ct);
+
+    /// <summary>Who approved or rejected a run's wait on an environment's
+    /// required reviewers (#5181). Needs Actions: read.</summary>
+    public Task<List<RunApproval>> RunApprovals(long id, CancellationToken ct) =>
+        Call<List<RunApproval>>(HttpMethod.Get, $"{RepoPath}/actions/runs/{id}/approvals", null, ct);
+
     public Task<Release> ReleaseByTag(string tag, CancellationToken ct) =>
         Call<Release>(HttpMethod.Get, $"{RepoPath}/releases/tags/{Uri.EscapeDataString(tag)}", null, ct);
+
+    /// <summary>The paths a compare of two commits names, or null when GitHub
+    /// says it cut the list short (300 files) or knows no such commit, so the
+    /// caller treats every path as changed.</summary>
+    public async Task<List<string>?> ChangedPaths(string from, string to, CancellationToken ct)
+    {
+        Compare c;
+        try { c = await Call<Compare>(HttpMethod.Get, $"{RepoPath}/compare/{Uri.EscapeDataString(from)}...{Uri.EscapeDataString(to)}", null, ct); }
+        catch (GitHubException e) when (e.Status is 404 or 422) { return null; }
+        if (c.Files == null || c.Files.Count >= 300) return null;
+        return c.Files.SelectMany(f => new[] { f.Name, f.Previous ?? "" }).Where(n => n != "").ToList();
+    }
+
+    sealed class Compare { [JsonPropertyName("files")] public List<CompareFile>? Files { get; set; } }
+    sealed class CompareFile
+    {
+        [JsonPropertyName("filename")] public string Name { get; set; } = "";
+        [JsonPropertyName("previous_filename")] public string? Previous { get; set; }
+    }
+
+    /// <summary>The titles of the open issues that carry a label.</summary>
+    public async Task<List<string>> OpenIssueTitles(string label, CancellationToken ct)
+    {
+        var got = await Call<List<Issue>>(HttpMethod.Get, $"{RepoPath}/issues?state=open&labels={Uri.EscapeDataString(label)}&per_page=100", null, ct);
+        return got.Select(i => i.Title).ToList();
+    }
+
+    /// <summary>Makes the label when the repository has none by that name.</summary>
+    public async Task EnsureLabel(string name, string color, string description, CancellationToken ct)
+    {
+        try { await Call<bool>(HttpMethod.Post, $"{RepoPath}/labels", new Dictionary<string, object> { ["name"] = name, ["color"] = color, ["description"] = description }, ct); }
+        // 422 is GitHub saying a label by that name is there already.
+        catch (GitHubException e) when (e.Status == 422) { return; }
+    }
+
+    public Task OpenIssue(string title, string body, string label, CancellationToken ct) =>
+        Call<bool>(HttpMethod.Post, $"{RepoPath}/issues", new Dictionary<string, object> { ["title"] = title, ["body"] = body, ["labels"] = new[] { label } }, ct);
+
+    sealed class Issue { [JsonPropertyName("title")] public string Title { get; set; } = ""; }
 
     /// <summary>The names of every tag that starts with prefix. GitHub's list
     /// of Releases is a page of them in its own order (a Release's created_at
@@ -170,8 +237,20 @@ public sealed class AppTokens(string api, string repo, string stateDir, HttpClie
     /// <summary>All a deploy by tag (the gate's Deploy-Release) asks: Releases
     /// to read. It reports on no Deployment, so it works before the App holds
     /// Deployments.</summary>
+    /// <summary>The service with main to look after (#5181): also Actions to
+    /// read, for who approved the run behind each Main Deployment. Asked only
+    /// then, so dev keeps working on an App that does not hold it.</summary>
+    public static readonly IReadOnlyDictionary<string, string> WithApprovals =
+        new SortedDictionary<string, string> { ["actions"] = "read", ["contents"] = "read", ["deployments"] = "write" };
+
     public static readonly IReadOnlyDictionary<string, string> ReleasesOnly =
         new SortedDictionary<string, string> { ["contents"] = "read" };
+
+    /// <summary>What filing the parity check's rows asks (#5180): issues to
+    /// read and open, and nothing else, minted apart from the service's own
+    /// token so an App without Issues write costs only the filing.</summary>
+    public static readonly IReadOnlyDictionary<string, string> IssuesWrite =
+        new SortedDictionary<string, string> { ["issues"] = "write" };
 
     readonly IReadOnlyDictionary<string, string> asks = permissions ?? Permissions;
 

@@ -83,11 +83,19 @@ function Get-NexusField($obj, [string]$name) {
 
 # Main's launcher number for this checkout (LauncherVersion.ps1, #5179): git
 # holds 0.0.0 in Updater.cs, so the number is worked out from the history,
-# which a shallow checkout does not have and says so.
+# which a shallow checkout does not have and says so. Worked out once in a
+# run, the first time a request needs it: the checkout does not move under a
+# run, so every request sends the same number. Asked of git for each request,
+# as it was from #5179 until 1 Nov, every request started two git processes,
+# and tests\test-2914-nexus-scripts.ps1 went from about 390 processes to
+# about 1300 and past its 300 seconds on a Windows runner.
+$script:NexusAppVersion = ''
 function Get-NexusAppVersion {
+  if ($script:NexusAppVersion) { return $script:NexusAppVersion }
   . (Join-Path $script:NexusHere 'LauncherVersion.ps1')
-  try { return (Get-LauncherVersion -RepoDir (Join-Path $script:NexusHere '..\..')) }
+  try { $script:NexusAppVersion = Get-LauncherVersion -RepoDir (Join-Path $script:NexusHere '..\..') }
   catch { throw ($_.Exception.Message + ' It is sent to Nexus as Application-Version.') }
+  return $script:NexusAppVersion
 }
 
 # The address every request goes to: Nexus itself, or the harness's stand-in.
@@ -433,6 +441,37 @@ function Receive-NexusPresigned([string]$Url, [string]$Folder, [string]$What, [s
     return [pscustomobject]@{ Path = $path; Name = $name; Size = $got; Md5Hex = (($md5.GetHashAndReset() | ForEach-Object { $_.ToString('x2') }) -join '') }
   }
   finally { $resp.Dispose(); $req.Dispose() }
+}
+
+# The archive Nexus holds as file $FileId of $Game, downloaded through its
+# download-link with the key, into $Folder\<file id>. Returns what
+# Receive-NexusPresigned returns. Nexus-Run.ps1 fetches -FileId and -Add's
+# archives this way, and Publish-CollectionRecord.ps1 those of a merged
+# record's change (#5189).
+function Get-NexusFileArchive([string]$Game, [string]$FileId, [string]$Folder) {
+  $dl = Get-NexusField (Invoke-NexusApi 'GET' ('/v3/games/' + $Game + '/mod-file-versions/' + $FileId + '/download-link') '' ('Asking for the download of file ' + $FileId)) 'data'
+  $url = [string](Get-NexusField (@(Get-NexusField $dl 'links') | Select-Object -First 1) 'url')
+  if (-not $url) { throw ('Nexus gave no download address for file ' + $FileId + '.') }
+  return (Receive-NexusPresigned $url (Join-Path $Folder $FileId) ('Downloading file ' + $FileId) ($FileId + '.archive'))
+}
+
+# The archive of revision $Revision of collection $Slug (its collection.json
+# and the folders Vortex packs beside it), downloaded with the key through
+# the revision's downloadLink into $Folder. Returns Path, Name, Size and
+# Md5Hex as Receive-NexusPresigned does, with the revision's Id and Status.
+# A link that is not the API's own path stops it before anything is asked.
+function Receive-NexusRevisionArchive([string]$Slug, [string]$Game, [int]$Revision, [string]$Folder) {
+  $rq = '{ collectionRevision(slug: "' + $Slug + '", revision: ' + $Revision + ', domainName: "' + $Game + '") { id status downloadLink } }'
+  $rev = Get-NexusField (Invoke-NexusGraph $rq $null ('Reading revision ' + $Revision)) 'collectionRevision'
+  $link = [string](Get-NexusField $rev 'downloadLink')
+  if ($link -notmatch '^/v2/collections/\d+/revisions/\d+/download_link$') { throw ('Nexus gave revision ' + $Revision + ' the download link "' + $link + '", not an API path, so it was not downloaded.') }
+  $links = @(Get-NexusField (Invoke-NexusApi 'GET' $link '' ('Asking for revision ' + $Revision + '''s download')) 'download_links')
+  $uri = [string](Get-NexusField ($links | Select-Object -First 1) 'URI')
+  if (-not $uri) { throw ('Nexus gave no download address for revision ' + $Revision + '.') }
+  $got = Receive-NexusPresigned $uri $Folder ('Downloading revision ' + $Revision) ('collection_' + $Slug + '_' + $Revision + '_.7z')
+  $got | Add-Member -NotePropertyName Id -NotePropertyValue ([string](Get-NexusField $rev 'id'))
+  $got | Add-Member -NotePropertyName Status -NotePropertyValue ([string](Get-NexusField $rev 'status'))
+  return $got
 }
 
 # The wait for Nexus to process a finalised upload. get upload says the state

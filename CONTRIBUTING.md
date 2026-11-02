@@ -7,7 +7,7 @@ the short one, for anybody.
 ## Before you start
 
 - **A problem or an idea** goes in an issue first, with one of the
-  [forms](https://github.com/EvilPatrick06/Thornswood/issues/new/choose), so we
+  [forms](https://github.com/ThornswoodRP/Thornswood/issues/new/choose), so we
   can say whether a change for it is wanted before you spend time on one.
 - **A security hole** never goes in an issue or a pull request.
   [SECURITY.md](SECURITY.md) says where to send it.

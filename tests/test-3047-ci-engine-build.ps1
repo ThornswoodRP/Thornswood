@@ -123,12 +123,12 @@ try {
     function ClientRecordText([string]$c, [string]$at = '2026-10-21T11:00:08Z') {
         $files = [ordered]@{}
         foreach ($k in $client.Keys) { $files[$k] = [ordered]@{ sha256 = (ShaText $client[$k]); bytes = $client[$k].Length } }
-        return (([ordered]@{ recordedUtc = $at; fork = 'https://github.com/EvilPatrick06/skymp'; forkBranch = 'thornswood/engine-changes'; forkCommit = $c.Substring(0, 8); files = $files }) | ConvertTo-Json -Depth 5).Replace("`r`n", "`n")
+        return (([ordered]@{ recordedUtc = $at; fork = 'https://github.com/ThornswoodRP/skymp'; forkBranch = 'thornswood/engine-changes'; forkCommit = $c.Substring(0, 8); files = $files }) | ConvertTo-Json -Depth 5).Replace("`r`n", "`n")
     }
     function ServerRecordText([string]$c) {
         $files = [ordered]@{}
         foreach ($k in $fork.Keys) { $files[$k] = [ordered]@{ sha256 = (ShaText $fork[$k]); bytes = $fork[$k].Length; commit = $c } }
-        $src = [ordered]@{ repo = 'https://github.com/EvilPatrick06/skymp.git'; commit = $c }
+        $src = [ordered]@{ repo = 'https://github.com/ThornswoodRP/skymp.git'; commit = $c }
         return (([ordered]@{ binary = 'scam_native.node'; sha256 = (ShaText $fork['scam_native.node']); source = $src; files = $files }) | ConvertTo-Json -Depth 5).Replace("`r`n", "`n")
     }
     # The libraries in the client file and their texts (#3099).
@@ -155,7 +155,7 @@ try {
     # size and time. -Rebuilt changes a client file's bytes (a build run again
     # in the fork is other bytes); $edit changes the folder or the manifest
     # before fork-build.json is written.
-    $ForkRepo = 'EvilPatrick06/skymp'
+    $ForkRepo = 'ThornswoodRP/skymp'
     function New-ForkBuild([string]$dir, [long]$runId = 39588485569, [string]$c = $commit, [hashtable]$Rebuilt = @{}, [scriptblock]$edit) {
         if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }
         $put = [ordered]@{}
@@ -173,7 +173,7 @@ try {
             Put $pth $put[$rel]
             $files[$rel] = [ordered]@{ sha256 = (ShaFile $pth); bytes = (Get-Item -LiteralPath $pth).Length; lastWriteUtc = '2026-10-21T10:40:00Z' }
         }
-        $m = [ordered]@{ repository = $ForkRepo; event = 'push'; ref = 'refs/heads/thornswood/engine-changes'; commit = $c; runId = $runId; runAttempt = 1
+        $m = [ordered]@{ repository = $ForkRepo; repositoryId = 1375283516; event = 'push'; ref = 'refs/heads/thornswood/engine-changes'; commit = $c; runId = $runId; runAttempt = 1
                          runUrl = "https://github.com/$ForkRepo/actions/runs/$runId"; files = $files }
         if ($edit) { & $edit $dir $m }
         Put (Join-Path $dir 'fork-build.json') ($m | ConvertTo-Json -Depth 5)
@@ -234,7 +234,7 @@ try {
     $f = Find-EngineArtifact $commit $si.Get
     Yes '1. the green push build is found, naming its run' ($f.State -eq 'found' -and $f.Why -match '39588485569')
     Yes '1.   asked of the fork''s build, for this commit, a push and the branch, never of this repository' ($si.Asked[0] -match "^repos/$ForkRepo/actions/workflows/thornswood-pr-windows\.yml/runs\?head_sha=$commit&event=push&branch=thornswood%2Fengine-changes" -and
-        @($si.Asked | Where-Object { $_ -cmatch 'EvilPatrick06/Thornswood' }).Count -eq 0)
+        @($si.Asked | Where-Object { $_ -cmatch 'ThornswoodRP/Thornswood' }).Count -eq 0)
     $e = Threw { Find-EngineArtifact $commit { param($p) throw 'HTTP 401: Bad credentials' } }
     Yes '1. a GitHub that cannot be read throws, and is not "none"' ($e -match 'Bad credentials')
 
@@ -328,11 +328,11 @@ try {
 $state = $env:TS_GH_STATE
 [IO.File]::AppendAllText((Join-Path $state 'calls.txt'), (($args -join ' ') + "`n"))
 if ($env:TS_GH_FAIL) { [Console]::Error.WriteLine('HTTP 401: Bad credentials'); exit 1 }
-if ($args[0] -eq 'api' -and $args[1] -like 'repos/EvilPatrick06/skymp/actions/workflows/thornswood-pr-windows.yml/runs?*') {
+if ($args[0] -eq 'api' -and $args[1] -like 'repos/ThornswoodRP/skymp/actions/workflows/thornswood-pr-windows.yml/runs?*') {
   if ($env:TS_GH_NONE) { '{"workflow_runs":[]}' } else { [IO.File]::ReadAllText((Join-Path $state 'runs.json')) }
   exit 0
 }
-if ($args[0] -eq 'api' -and $args[1] -match '^repos/EvilPatrick06/skymp/actions/runs/(\d+)/artifacts\?') {
+if ($args[0] -eq 'api' -and $args[1] -match '^repos/ThornswoodRP/skymp/actions/runs/(\d+)/artifacts\?') {
   $one = Join-Path $state ('arts-' + $Matches[1] + '.json')
   if (Test-Path -LiteralPath $one) { [IO.File]::ReadAllText($one) } else { '{"artifacts":[]}' }
   exit 0
@@ -362,8 +362,8 @@ if ($args[0] -eq 'run' -and $args[1] -eq 'download') {
     Yes '4.   and nothing was fetched or written' (-not (Test-Path -LiteralPath $into) -and -not ([IO.File]::ReadAllText((Join-Path $ghState 'calls.txt')) -match 'run download'))
     $r = Fetch @()
     Yes ("4. a run fetches it and makes it the engine build (exit {0})" -f $r.Code) ($r.Code -eq 0 -and $r.Out -match 'every file held to the records' -and (Test-Path -LiteralPath (Join-Path $into 'build\dist\client\Data\Scripts\TESModPlatform.pex')))
-    Yes '4.   it downloaded the fork''s build by its run and name, from the fork' ([IO.File]::ReadAllText((Join-Path $ghState 'calls.txt')) -match "run download 39588485569 --name $name --dir .+ --repo EvilPatrick06/skymp")
-    Yes '4.   and asked this repository for nothing' (-not ([IO.File]::ReadAllText((Join-Path $ghState 'calls.txt')) -cmatch 'EvilPatrick06/Thornswood'))
+    Yes '4.   it downloaded the fork''s build by its run and name, from the fork' ([IO.File]::ReadAllText((Join-Path $ghState 'calls.txt')) -match "run download 39588485569 --name $name --dir .+ --repo ThornswoodRP/skymp")
+    Yes '4.   and asked this repository for nothing' (-not ([IO.File]::ReadAllText((Join-Path $ghState 'calls.txt')) -cmatch 'ThornswoodRP/Thornswood'))
     Yes '4.   and left no scratch behind' (@(Get-ChildItem -LiteralPath $env:THORNSWOOD_SCRATCH_ROOT -Force -ErrorAction SilentlyContinue).Count -eq 0)
     $r = Fetch @()
     Yes ("4. a second run finds it there and fetches nothing (exit {0})" -f $r.Code) ($r.Code -eq 0 -and $r.Out -match 'here already')
@@ -510,7 +510,9 @@ exit $LASTEXITCODE
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [IO.Compression.ZipFile]::CreateFromDirectory($pk, $pkZip)
     $zipSum = ShaFile $pkZip
-    function New-Registry([hashtable]$over = @{}) {
+    # The package is under thornswoodrp, where builds go since the fork moved
+    # there (#5184), unless -Ns says evilpatrick06, where older ones stay.
+    function New-Registry([hashtable]$over = @{}, [string]$Ns = 'thornswoodrp') {
         $m = [ordered]@{
             schemaVersion = 2; mediaType = 'application/vnd.oci.image.manifest.v1+json'
             layers = @([ordered]@{ mediaType = 'application/zip'; digest = "sha256:$zipSum"; size = (Get-Item -LiteralPath $pkZip).Length })
@@ -525,15 +527,20 @@ exit $LASTEXITCODE
         return {
             param([string]$Url, [hashtable]$Headers, [string]$File)
             $asked.Add($Url + ' ' + [string]$Headers['Authorization'])
-            if ($Url -like 'https://reg.test/token?*') { [IO.File]::WriteAllText($File, '{"token":"anon"}'); return 200 }
-            if ($Url -eq "https://reg.test/v2/evilpatrick06/thornswood-engine/manifests/$commit") { if ($over.ContainsKey('gone')) { return 404 }; [IO.File]::WriteAllText($File, $mText); return 200 }
-            if ($Url -eq "https://reg.test/v2/evilpatrick06/thornswood-engine/blobs/sha256:$sum") { Copy-Item -LiteralPath $zipPath -Destination $File; return 200 }
+            # As ghcr.io: no anonymous token for a package it has no public
+            # copy of (#5184).
+            if ($Url -like 'https://reg.test/token?*') {
+                if ($Url -notlike "*scope=repository:$Ns/thornswood-engine:pull*") { [IO.File]::WriteAllText($File, '{"errors":[{"code":"DENIED"}]}'); return 403 }
+                [IO.File]::WriteAllText($File, '{"token":"anon"}'); return 200
+            }
+            if ($Url -eq "https://reg.test/v2/$Ns/thornswood-engine/manifests/$commit") { if ($over.ContainsKey('gone')) { return 404 }; [IO.File]::WriteAllText($File, $mText); return 200 }
+            if ($Url -eq "https://reg.test/v2/$Ns/thornswood-engine/blobs/sha256:$sum") { Copy-Item -LiteralPath $zipPath -Destination $File; return 200 }
             return 404
         }.GetNewClosure()
     }
     $http = New-Registry
     $l = Get-EnginePackageBuild -Commit $commit -Registry 'https://reg.test' -Http $http -Look
-    Yes '7. -Look finds the package by the full commit, and fetches nothing' ($l.State -eq 'found' -and $l.Artifact.name -eq "reg.test/evilpatrick06/thornswood-engine:$commit" -and @($script:asked | Where-Object { $_ -like '*/blobs/*' }).Count -eq 0)
+    Yes '7. -Look finds the package by the full commit, and fetches nothing' ($l.State -eq 'found' -and $l.Artifact.name -eq "reg.test/thornswoodrp/thornswood-engine:$commit" -and @($script:asked | Where-Object { $_ -like '*/blobs/*' }).Count -eq 0)
     $dl = Join-Path $T 'package-out'
     $p = Get-EnginePackageBuild -Commit $commit -Registry 'https://reg.test' -Http $http -Into $dl
     Yes '7. the build comes out of it with its run from fork-build.json' ($p.State -eq 'found' -and $p.Run.id -eq 39588485569 -and (Test-Path -LiteralPath (Join-Path $dl 'fork-build.json')))
@@ -543,6 +550,14 @@ exit $LASTEXITCODE
     Yes '7. installed, engine-artifact.json names the package and its digest' ($stamp.artifact -like '*thornswood-engine:*' -and $stamp.digest -eq "sha256:$zipSum" -and $stamp.runId -eq 39588485569)
     Remove-Item -LiteralPath $into -Recurse -Force
 
+    $old = Get-EnginePackageBuild -Commit $commit -Registry 'https://reg.test' -Http (New-Registry -Ns 'evilpatrick06') -Look
+    Yes '7. a build from before the fork moved is found under evilpatrick06, asked after thornswoodrp, whose refused token is no package there (#5184)' ($old.State -eq 'found' -and $old.Artifact.name -eq "reg.test/evilpatrick06/thornswood-engine:$commit" -and
+        @($script:asked | Where-Object { $_ -like '*/token?*' })[0] -match 'repository:thornswoodrp/' -and @($script:asked | Where-Object { $_ -like '*/token?*' })[1] -match 'repository:evilpatrick06/' -and
+        @($script:asked | Where-Object { $_ -match '/manifests/' }).Count -eq 1 -and @($script:asked | Where-Object { $_ -match '/manifests/' })[0] -match '/v2/evilpatrick06/')
+    $none = Get-EnginePackageBuild -Commit $commit -Registry 'https://reg.test' -Http (New-Registry -Ns 'someone-else') -Look
+    Yes '7. a package neither owner lets anyone read: none, naming both refusals' ($none.State -eq 'none' -and $none.Why -match 'no package thornswoodrp/thornswood-engine that can be read without an account \(HTTP 403' -and $none.Why -match 'evilpatrick06/thornswood-engine')
+    $e = Threw { Get-EnginePackageBuild -Commit $commit -Registry 'https://reg.test' -Http { param($u, $h, $f) return 500 } -Look }
+    Yes '7. any other refusal of the token still throws' ($e -match 'gave no pull token for thornswoodrp/thornswood-engine \(HTTP 500\)')
     $g = Get-EnginePackageBuild -Commit $commit -Registry 'https://reg.test' -Http (New-Registry @{ gone = { param($m) } }) -Look
     Yes '7. no package (a pin from before fork #131): none, saying so' ($g.State -eq 'none' -and $g.Why -match 'keeps no package')
     $e = Threw { Get-EnginePackageBuild -Commit $commit -Registry 'https://reg.test' -Http (New-Registry @{ rev = { param($m) $m.annotations['org.opencontainers.image.revision'] = ('e' * 40) } }) -Look }

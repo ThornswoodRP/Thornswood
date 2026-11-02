@@ -34,8 +34,8 @@ const DRUGS = ['57a7a:Skyrim.esm', '1391d:Dawnguard.esm', '3f4bd:Skyrim.esm', 'd
 const clock = { now: Date.UTC(2026, 9, 12, 18, 0, 0) };
 const store = {};
 const mp = {
-  getOnlinePlayers: function () { return []; }, makeProperty: function () { },
-  get: function (id, key) { if (key === 'worldOrCellDesc' || key === 'pos') { return null; } return store[id]; },
+  makeProperty: function () { },
+  get: function (id, key) { if (id === 0 && key === 'onlinePlayers') { return []; } if (key === 'worldOrCellDesc' || key === 'pos') { return null; } return store[id]; },
   set: function (id, key, v) { store[id] = JSON.parse(JSON.stringify(v)); }
 };
 let N = null;

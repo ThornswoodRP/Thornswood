@@ -1,12 +1,14 @@
 # Reads the whole board, every card's Status and Order, into a file a cloud
 # session can download (#3192).
 #
-# WHY. The board is a user-owned Projects board, and it is read only through
-# GraphQL. A cloud Claude thread is refused GraphQL and the user-scoped
-# projectsV2 routes (403, measured again 22 Oct 2026), and on 22 Oct only 2 of
-# the 242 open issues carried a board: label, so nothing a cloud thread could
-# read said which column an issue was in. board-status.yml (#2863) lets a
-# cloud thread move a card; nothing let it see one. Patrick, 22 Oct, asked
+# WHY. The board is a Projects board, read here through GraphQL. It was a
+# board of Patrick's own account until #5185 moved it to the ThornswoodRP
+# organization. A cloud Claude thread is refused GraphQL and the projectsV2
+# routes, a user's (403, measured again 22 Oct 2026) and the organization's
+# (1 Nov 2026), and on 22 Oct only 2 of the 242 open issues carried a board:
+# label, so nothing a cloud thread could read said which column an issue was
+# in. Nothing a thread does moves a card (board.yml does, from the facts), and
+# this is how one sees them. Patrick, 22 Oct, asked
 # for the whole board to be reviewed from the cloud: "we make it so the cloud
 # can".
 #
@@ -36,12 +38,13 @@
 # Order and whether the card is archived. A card with no Status or Order has
 # null there.
 #
-# THE TOKEN. BOARD_TOKEN, the classic token board-status.yml uses, from the
-# "board" environment, which only main may use. The run's own token is given
-# no permissions at all.
+# THE TOKEN. The board App's (board.yml's header says what it is), minted
+# for the job from its key in the "board" environment, which only main may
+# use, with the organization's Projects to read and nothing else. The run's
+# own token is given no permissions at all.
 #
-# WHERE IT RUNS. On GitHub's Windows runner (#4983). The read is a few
-# GraphQL pages. It runs no action, so there is nothing in it to pin.
+# WHERE IT RUNS. On GitHub's ubuntu-latest. The read is a few GraphQL pages.
+# Its one action, the token's, is pinned by a full commit.
 name: Read the board
 run-name: Board read by ${{ github.actor }}
 on:
@@ -50,21 +53,30 @@ permissions: {}
 jobs:
   read:
     name: Read every card
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     environment: board
     # A dozen calls to GitHub. Past this it is stuck, not slow.
     timeout-minutes: 5
     steps:
+      - name: The board App's token
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.BOARD_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BOARD_APP_KEY }}
+          permission-organization-projects: read
+
       - name: Read the board into board.json
         id: read
         shell: pwsh
         env:
-          BOARD_TOKEN: ${{ secrets.BOARD_TOKEN }}
-          BOARD_OWNER: EvilPatrick06
-          BOARD_NUMBER: '1'
+          BOARD_TOKEN: ${{ steps.app.outputs.token }}
+          BOARD_OWNER: ${{ github.repository_owner }}
+          BOARD_NUMBER: ${{ vars.BOARD_NUMBER }}
         run: |
           $ErrorActionPreference = 'Stop'
-          if (-not $env:BOARD_TOKEN) { throw 'BOARD_TOKEN is not set in the board environment, so nothing can reach the board (#2863 says how to make it)' }
+          if (-not $env:BOARD_TOKEN) { throw 'BOARD_TOKEN is not set: the board App gave no token, so nothing can reach the board (#5185 says how it is made)' }
+          if ($env:BOARD_NUMBER -notmatch '^\d+$') { throw 'BOARD_NUMBER, the board environment''s variable, is not the board''s number (#5185)' }
           function Board([string]$query, [hashtable]$vars) {
             $h = @{ Authorization = "Bearer $env:BOARD_TOKEN"; 'Content-Type' = 'application/json' }
             $body = @{ query = $query; variables = $vars } | ConvertTo-Json -Depth 6 -Compress
@@ -75,16 +87,31 @@ jobs:
           function Has($o, [string]$name) { return ($null -ne $o -and $o.PSObject.Properties[$name] -and $null -ne $o.$name) }
 
           $who = @{ o = $env:BOARD_OWNER; n = [int]$env:BOARD_NUMBER }
-          $d = Board 'query($o:String!,$n:Int!){user(login:$o){projectV2(number:$n){title url status:field(name:"Status"){... on ProjectV2SingleSelectField{options{name}}} workflows(first:50){nodes{name enabled}}}}}' $who
-          $project = $d.user.projectV2
+          $d = Board 'query($o:String!,$n:Int!){organization(login:$o){projectV2(number:$n){title url status:field(name:"Status"){... on ProjectV2SingleSelectField{options{name}}}}}}' $who
+          $project = $d.organization.projectV2
           if (-not $project) { throw "board $env:BOARD_NUMBER of $env:BOARD_OWNER is not there, or the token cannot see it" }
           if (-not (Has $project 'status') -or -not (Has $project.status 'options')) { throw 'the board has no single-select field named Status' }
+
+          # The board's own workflows, asked for apart: GitHub refuses them to
+          # the board App's token ("You do not have permission to access
+          # workflows", run 41350496779, 1 Nov 2026), and nothing else here
+          # needs them. So they are written as not read,
+          # with GitHub's answer, and the cards are still read. Check-Board.ps1
+          # says Auto-close issue was not checked.
+          $workflows = $null; $workflowsUnread = $null
+          try {
+            $wf = Board 'query($o:String!,$n:Int!){organization(login:$o){projectV2(number:$n){workflows(first:50){nodes{name enabled}}}}}' $who
+            $workflows = @(@($wf.organization.projectV2.workflows.nodes) | ForEach-Object { [ordered]@{ name = $_.name; enabled = [bool]$_.enabled } })
+          } catch {
+            $workflowsUnread = $_.Exception.Message
+            Write-Host "the board's workflows were not read: $workflowsUnread"
+          }
 
           $items = New-Object System.Collections.Generic.List[object]
           $after = $null
           do {
             $vars = $who.Clone(); $vars.c = $after
-            $page = (Board 'query($o:String!,$n:Int!,$c:String){user(login:$o){projectV2(number:$n){items(first:100,after:$c){pageInfo{hasNextPage endCursor} nodes{isArchived status:fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}} order:fieldValueByName(name:"Order"){... on ProjectV2ItemFieldNumberValue{number}} content{__typename ... on Issue{number title state repository{nameWithOwner}} ... on PullRequest{number title state repository{nameWithOwner}} ... on DraftIssue{title}}}}}}}' $vars).user.projectV2.items
+            $page = (Board 'query($o:String!,$n:Int!,$c:String){organization(login:$o){projectV2(number:$n){items(first:100,after:$c){pageInfo{hasNextPage endCursor} nodes{isArchived status:fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}} order:fieldValueByName(name:"Order"){... on ProjectV2ItemFieldNumberValue{number}} content{__typename ... on Issue{number title state repository{nameWithOwner}} ... on PullRequest{number title state repository{nameWithOwner}} ... on DraftIssue{title}}}}}}}' $vars).organization.projectV2.items
             foreach ($n in @($page.nodes)) {
               $c = $n.content
               $items.Add([ordered]@{
@@ -105,7 +132,8 @@ jobs:
             read_at   = [DateTime]::UtcNow.ToString('o')
             board     = [ordered]@{ owner = $env:BOARD_OWNER; number = [int]$env:BOARD_NUMBER; title = $project.title; url = $project.url }
             statuses  = @($project.status.options | ForEach-Object { $_.name })
-            workflows = @(@($project.workflows.nodes) | ForEach-Object { [ordered]@{ name = $_.name; enabled = [bool]$_.enabled } })
+            workflows = $workflows
+            workflows_unread = $workflowsUnread
             items     = $items.ToArray()
           }
           $dir = Join-Path $env:RUNNER_TEMP 'board-read'

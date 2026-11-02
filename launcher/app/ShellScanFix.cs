@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Windows;
 
 namespace Thornswood
 {
@@ -278,6 +277,12 @@ namespace Thornswood
         static bool fixWhenFolderReady;
 
         /// <summary>
+        /// With fixWhenFolderReady: the Fix waiting for the folder is the one
+        /// after Vortex finished (FixAfterVortex, #5200), not after an update.
+        /// </summary>
+        static bool fixWhenFolderReadyAfterVortex;
+
+        /// <summary>
         /// Install now's second half (#3201): the update has gone in, or
         /// failed, and Fix's whole path runs on the folder as it left it.
         /// </summary>
@@ -288,7 +293,8 @@ namespace Thornswood
         }
 
         /// <param name="afterUpdate">True when an update has just gone in or failed (Install now, the automatic update, the first start of a new launcher): the log says so, and FixRest never takes that same update a second time (#3201).</param>
-        static void RunFix(bool afterUpdate)
+        /// <param name="afterVortex">True when Vortex has just finished the collection revision the card opened (FixAfterVortex, #5200): the log says so, and FixRest leaves a waiting update on the card, where UpdateBySelf already decided about it.</param>
+        static void RunFix(bool afterUpdate, bool afterVortex = false)
         {
             if (fixing) return;
             // Nothing is written into a folder while it is being made or
@@ -296,6 +302,7 @@ namespace Thornswood
             // while its own folder was being made and wrote into the Steam
             // copy (#2403). After an update, the folder's finish runs it.
             if (ownGameBusy && afterUpdate) { fixWhenFolderReady = true; Log("Thornswood's own Skyrim folder is being prepared. The scan after the update runs, and puts right what it finds, as soon as the folder is ready."); return; }
+            if (ownGameBusy && afterVortex) { fixWhenFolderReady = true; fixWhenFolderReadyAfterVortex = true; Log("Thornswood's own Skyrim folder is being prepared. The scan after Vortex runs, and puts right what it finds, as soon as the folder is ready."); return; }
             if (ownGameBusy) { Log("Thornswood's own Skyrim folder is being prepared. Press Fix when it is done: nothing is put right in a folder while it is being made."); return; }
             if (Downgrade.Busy) { Log("The Downgrade is running. Press Fix when it is done."); return; }
             if (playBar.Active) { Log("An update is going in. Press Fix when it is done."); return; }
@@ -314,7 +321,9 @@ namespace Thornswood
             btnScan.IsEnabled = false;
             triedByFix.Clear();
             Verify.OwnFolderNext = false;
-            Log(afterUpdate ? "The update is done. Scanning everything again, and putting right what the scan finds." : "Fix: scanning everything first.");
+            Log(afterUpdate ? "The update is done. Scanning everything again, and putting right what the scan finds."
+                : afterVortex ? "Vortex is done. Scanning everything, and putting right what the scan finds."
+                : "Fix: scanning everything first.");
             List<Issue> plugins = null, rest = null;
             VersionDoc feed = null;
             try
@@ -335,7 +344,9 @@ namespace Thornswood
             if (AllIssues(plugins).Count == 0)
             {
                 fixing = false;
-                Log(afterUpdate ? "The scan after the update found nothing wrong." : "Fix found nothing to put right.");
+                Log(afterUpdate ? "The scan after the update found nothing wrong."
+                    : afterVortex ? "The scan after Vortex found nothing wrong."
+                    : "Fix found nothing to put right.");
                 ShowVerify(plugins, false);
                 return;
             }
@@ -345,18 +356,18 @@ namespace Thornswood
             // carries on whether it succeeds or not, and the scan after says.
             VersionDoc known = feed;
             if (Has(rest, IssueKind.Behind) &&
-                StartOwnGame(false, true, delegate { FixRest(known, afterUpdate); }, delegate { FixRest(known, afterUpdate); }))
+                StartOwnGame(false, true, delegate { FixRest(known, afterUpdate, afterVortex); }, delegate { FixRest(known, afterUpdate, afterVortex); }))
                 return;
-            FixRest(known, afterUpdate);
+            FixRest(known, afterUpdate, afterVortex);
         }
 
         /// <summary>
         /// Fix after the folder: what writes files, a scan, the report, and
         /// then what asks or restarts. <paramref name="feed"/> is the update
         /// feed Fix's first scan read, so the update is judged on one answer.
-        /// <paramref name="afterUpdate"/> is RunFix's.
+        /// <paramref name="afterUpdate"/> and <paramref name="afterVortex"/> are RunFix's.
         /// </summary>
-        static void FixRest(VersionDoc feed, bool afterUpdate)
+        static void FixRest(VersionDoc feed, bool afterUpdate, bool afterVortex)
         {
             var said = new List<string>();
             Action<string> say = delegate(string m) { lock (said) said.Add(m); };
@@ -382,11 +393,11 @@ namespace Thornswood
             // desktop and taskbar vanish for a second.
             if (Has(Upkeep.LastIssues, IssueKind.Icon) && Has(found, IssueKind.Icon))
             {
-                var r = MessageBox.Show(
+                bool yes = Ask.YesNo(
                     "The shortcut icon is still out of date after pointing the shortcuts at the current icon.\n\n" +
                     "Fix can throw away the pictures Windows has remembered for the shortcuts and redraw them. The desktop and taskbar blink once while Explorer restarts. Nothing is lost.\n\nGo ahead?",
-                    "Thornswood", MessageBoxButton.YesNo, MessageBoxImage.Question);
-                if (r == MessageBoxResult.Yes)
+                    "Thornswood", Ask.Icon.Question);
+                if (yes)
                 {
                     string repaired = null;
                     try { Waiting(delegate { repaired = Icons.Repair(); }); }
@@ -423,12 +434,22 @@ namespace Thornswood
             {
                 OnVersionDoc(feed, false);
                 bool waiting = updatePending && (pendingPacks.Count > 0 || selfUpdateOffered);
+                // UpdateBySelf decided about the update a moment ago and left
+                // it on the card (FixAfterVortex): automatic updates are off,
+                // or a game is open. Fix after Vortex is not a press of Fix
+                // and does not overrule that, and since Fix has not tried the
+                // update it is not marked as tried.
+                bool leftOnCard = waiting && afterVortex;
+                if (leftOnCard)
+                {
+                    Log("The update is on the card above Play. Install now takes it.");
+                }
                 // Straight after an update, only a newer one on the feed is
                 // taken: a Ship that published again while the first was
                 // going in. The one that was just tried is never taken a
                 // second time, whether it went in or failed, because doing
                 // the same thing again is not a fix for why it did not hold.
-                if (waiting && afterUpdate && updateTried != null &&
+                else if (waiting && afterUpdate && updateTried != null &&
                     updateTried.IsSupersetOf(UpdateParts(pendingPacks, feed, selfUpdateOffered)))
                 {
                     Log(updateTriedWentIn
@@ -453,7 +474,7 @@ namespace Thornswood
                     // Fix has tried the update and the card says why it waits.
                     Log("The update waits until the collection is installed, as the card above Play says.");
                 }
-                if (Upkeep.LastIssues != null)
+                if (Upkeep.LastIssues != null && !leftOnCard)
                     foreach (Issue i in Upkeep.LastIssues) if (i.Kind == IssueKind.Update) triedByFix.Add(FixKey(i));
                 ShowVerify(plugins, false);
             }

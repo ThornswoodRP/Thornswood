@@ -279,7 +279,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $Fork 'CMakeLists.txt'))) {
     if ($Check) { Miss "the fork is not checked out at $Fork; this run would fetch it" }
     else {
         Say "  fetching the fork into $Fork (the commit this repository pins)"
-        if ((Run git -C $repo submodule update --init engine/skymp) -ne 0) { Die 'git could not fetch engine\skymp. Is this a clone of the repository, and can this account read EvilPatrick06/skymp?' }
+        if ((Run git -C $repo submodule update --init engine/skymp) -ne 0) { Die 'git could not fetch engine\skymp. Is this a clone of the repository, and can this account read ThornswoodRP/skymp?' }
     }
 }
 # Read with Continue: a fork that is not there yet (-Check says this run would

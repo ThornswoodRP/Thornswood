@@ -10,4 +10,4 @@ half of it, under the `accord` anchor. Change the Accord there, not here.
 This file used to carry a copy of its own, and the two drifted: it lost lines
 under seven of the nine articles that the page kept, and its list of what you
 can play still said a Jarl's seat was found out in character. So the copy went
-(#3138). `tests\test-3138-one-copy.js` fails if a copy comes back.
+(#3138). `site\tests\test-3138-one-copy.js` fails if a copy comes back.

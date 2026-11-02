@@ -61,9 +61,9 @@
   the live one, and it posts through
   bot\dev-webhook.txt, which Set-DevNews.ps1 writes and which points
   at the dev updates channel. Nothing about a dev release reaches #news, the
-  website or the main launcher: Ship.ps1 does not run Publish-News.ps1 on a
-  dev release, and a dev publish only ever writes the dev feed, which only the
-  dev launcher reads.
+  website or the main launcher: the site's News page reads the main feed only
+  (#5187), and a dev publish only ever writes the dev feed, which only the dev
+  launcher reads.
 
   Two things this used to get wrong, both visible in the channel:
 
@@ -74,8 +74,10 @@
 
   And it posted the detail lines raw. The launcher's feed is a developer's
   changelog, so the first bullet under a release title was "Launcher 1.0.197",
-  which the embed already says in its footer. Publish-News.ps1 has always
-  stripped those on the way to the website. The same list is stripped here.
+  which the embed already says in its footer. The site's News page strips
+  those (NEWS_NOISE in site/server.js, #5187; Publish-News.ps1 did before it).
+  The same list is stripped here; tests\test-public-news.ps1 holds the two
+  lists together.
 #>
 [CmdletBinding()]
 param(
@@ -86,8 +88,8 @@ param(
   # Post it even though this exact release has been announced already. For a
   # post that was deleted, or a channel that was cleared.
   [switch]$Force,
-  # Where the LIVE version.json is. Same reason Publish-News.ps1 has this:
-  # releases moved into their own public repo, and the copy still sitting in
+  # Where the LIVE version.json is. Publish-News.ps1, now retired (#5187),
+  # read it from here for the same reason: releases moved into their own public repo, and the copy still sitting in
   # this repo stopped being updated the day that happened. Reading the stale
   # one would post a release nobody shipped. Since #907 it is this machine's
   # working copy of the live feed, which the Ship that runs this has just
@@ -112,8 +114,8 @@ $ErrorActionPreference = 'Stop'   # before any file loads, so one that is missin
 # written without a file list has no 'files' property at all, so reading it
 # straight off the object took the whole post down with "The property 'files'
 # cannot be found on this object", while the same script run on its own worked.
-# Publish-News.ps1 has had these two for the same reason. Every property on a
-# news entry is read through them.
+# Publish-News.ps1, retired by #5187, had these two for the same reason. Every
+# property on a news entry is read through them.
 function Prop($obj, $name) {
   if ($null -eq $obj) { return '' }
   $p = $obj.PSObject.Properties[$name]

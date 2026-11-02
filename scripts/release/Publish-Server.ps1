@@ -408,7 +408,7 @@ if (-not $PSBoundParameters.ContainsKey('Wait')) {
 # What the installer said, printed as it comes, and its last line read: it
 # ends with INSTALL OK, INSTALL REFUSED, INSTALL ROLLED BACK or INSTALL FAILED.
 function Invoke-Installer([string]$instArgs) {
-    $lines = @(Invoke-ThornswoodNative { & ssh @ssh $target "powershell -NoProfile -ExecutionPolicy Bypass -File C:\Install-ThornswoodServer.ps1 $instArgs" } |
+    $lines = @(Invoke-ThornswoodNative { & ssh @ssh $target "pwsh -NoProfile -ExecutionPolicy Bypass -File C:\Install-ThornswoodServer.ps1 $instArgs" } |
                ForEach-Object { Say "  $_"; "$_".Trim() })
     $code = $LASTEXITCODE
     if ($lines -contains 'INSTALL OK' -and $code -eq 0) { return }
@@ -551,10 +551,28 @@ else { Say ('{0,-22} {1}' -f 'built server', $Dist) 'DarkGray' }
 # Deploy-Server.ps1 sends. Its bytes are git's, so a checkout's line endings do
 # not come into it, and the record written on the box once the install answers
 # names it. Built here, after the committed check above, so it is the commit.
-$artifact = New-ThornswoodArtifact -Component gamemode -RepoDir (Join-Path $Here '..\..') -Paths 'game/gamemode.js'
+# Its tables (#5191) are in the artifact with it: the gamemode reads them from
+# the gamemode-tables folder beside it as it loads, and a load without them stops.
+$artifact = New-ThornswoodArtifact -Component gamemode -RepoDir (Join-Path $Here '..\..') -Paths 'game/gamemode.js', 'game/gamemode-tables'
 Say ('{0,-22} {1}' -f 'gamemode artifact', (Format-ThornswoodArtifact $artifact)) 'DarkGray'
 $gmSrc = Join-Path $artifact.Folder 'game\gamemode.js'
 $gmSha = (Get-FileHash -LiteralPath $gmSrc -Algorithm SHA256).Hash.ToLowerInvariant()
+. (Join-Path $Here '..\deploy\GamemodeId.ps1')
+$tablesSrc = Join-Path $artifact.Folder 'game\gamemode-tables'
+$tablesTree = Get-ThornswoodTablesTree $tablesSrc
+if (-not $tablesTree) { Die "the gamemode artifact holds no game\gamemode-tables, and the gamemode reads its tables from there (#5191). Nothing was sent." }
+# Each table's sha256 by name, what the payload's gamemode-tables has to hold.
+$tableSums = @{}
+foreach ($t in @(Get-ThornswoodTableFiles $tablesSrc)) { $tableSums[$t.Name] = (Get-FileHash -LiteralPath $t.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
+Say ('{0,-22} {1} tables, git tree {2}' -f 'gamemode-tables', $tableSums.Count, $tablesTree) 'DarkGray'
+# Copies the artifact's tables into a server folder, as the whole folder, so a
+# table the commit no longer has does not stay behind in it.
+function Copy-GamemodeTables([string]$into) {
+    $to = Join-Path $into 'gamemode-tables'
+    if (Test-Path -LiteralPath $to) { Remove-Item -LiteralPath $to -Recurse -Force }
+    $null = [IO.Directory]::CreateDirectory($to)
+    foreach ($t in @(Get-ThornswoodTableFiles $tablesSrc)) { Copy-Item -LiteralPath $t.FullName -Destination (Join-Path $to $t.Name) }
+}
 # -FromStore has no build to copy it into: the payload takes the artifact's own.
 if (-not $FromStore -and (Test-Path -LiteralPath $Dist)) {
     $gmDst = Join-Path $Dist 'gamemode.js'
@@ -565,6 +583,11 @@ if (-not $FromStore -and (Test-Path -LiteralPath $Dist)) {
         Head 'Gamemode'
         Copy-Item -LiteralPath $gmSrc -Destination $gmDst -Force
         Say ("copied the artifact's game\gamemode.js into the build ({0:N0} bytes)" -f (Get-Item -LiteralPath $gmDst).Length) 'Green'
+    }
+    if ((Get-ThornswoodTablesTree (Join-Path $Dist 'gamemode-tables')) -ne $tablesTree) {
+        Head 'Gamemode tables'
+        Copy-GamemodeTables $Dist
+        Say ("copied the artifact's game\gamemode-tables into the build ({0} tables, git tree {1})" -f $tableSums.Count, $tablesTree) 'Green'
     }
 }
 # Its build stamp, for the channel this goes to, beside the artifact and not
@@ -721,6 +744,7 @@ function New-StorePayload {
     if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }
     $null = [IO.Directory]::CreateDirectory((Join-Path $dir 'plugins'))
     Copy-Item -LiteralPath $gmSrc -Destination (Join-Path $dir 'gamemode.js')
+    Copy-GamemodeTables $dir
     Copy-Item -LiteralPath $stampPath -Destination (Join-Path $dir 'thornswood-build.json')
     Copy-Item -LiteralPath $Record -Destination (Join-Path $dir 'server-build.json')
     # The port is read, not set: the installer keeps the running server's.
@@ -769,12 +793,9 @@ elseif (-not $SkipBuild) {
     Head 'Packing the payload'
     $export = Join-Path $Here 'Export-ServerPayload.ps1'
     if (-not (Test-Path -LiteralPath $export)) { Die "not found: $export" }
-    # The same PowerShell that is running this, not whichever one 'powershell'
-    # resolves to. Handing the job to 5.1 from a 7 session changes how files
-    # get written underneath it, which is how the payload picked up a byte
-    # order mark that only ever showed up as a parse error on the VPS.
-    $ps = (Get-Process -Id $PID).Path
-    if (-not $ps) { $ps = 'powershell' }
+    # The same pwsh that is running this (#5356), not whichever one is on
+    # PATH.
+    $ps = [Environment]::ProcessPath
     # The staging folder beside the zip (out\_payload beside
     # out\thornswood-server.zip, the same as its default).
     & $ps -NoProfile -ExecutionPolicy Bypass -File $export -Dist $Dist -Zip $Zip -VpsRoot $VpsRoot `
@@ -798,6 +819,8 @@ $zipWhy = ''
 # box once it answers will say came from the artifact (#459).
 $zipGmSum = ''
 $zipStamp = $null
+# And its tables (#5191), by name, held to the artifact's.
+$zipTableSums = @{}
 # And Thornswood-Last.esp, when a full payload carries it from this machine's
 # game folder (Export-ServerPayload.ps1), is the one this commit's recipe
 # makes (#2791): the launcher made it there, from that machine's plugins.
@@ -823,6 +846,7 @@ try {
             }
             elseif ($rel -eq 'server-build.json') { $zipRecSum = Get-EntrySum $ze }
             elseif ($rel -eq 'gamemode.js') { $zipGmSum = Get-EntrySum $ze }
+            elseif ($rel -match '^gamemode-tables/([^/]+)$') { $zipTableSums[$Matches[1]] = Get-EntrySum $ze }
             elseif ($rel -eq 'thornswood-build.json') {
                 $zr = New-Object IO.StreamReader($ze.Open())
                 try { $stampText = $zr.ReadToEnd() } finally { $zr.Dispose() }
@@ -873,6 +897,11 @@ else { Say ("payload server files are the recorded build of " + ([string]$recObj
 if ($zipGmSum -ne $gmSha) {
     Die ("the payload's gamemode.js is " + $(if ($zipGmSum) { 'not' } else { 'missing, so it is not' }) + " game\gamemode.js at " + $artifact.Short +
          ", the commit this publish would record, so the box would run one gamemode and say it runs another. Nothing was sent. Run it again without -SkipBuild.")
+}
+$tablesOff = @(@($tableSums.Keys) | Where-Object { $zipTableSums[$_] -ne $tableSums[$_] }) + @(@($zipTableSums.Keys) | Where-Object { -not $tableSums.ContainsKey($_) })
+if ($tablesOff.Count) {
+    Die ("the payload's gamemode-tables are not game\gamemode-tables at " + $artifact.Short + " (" + (($tablesOff | Sort-Object | Select-Object -First 5) -join ', ') +
+         "), so the gamemode would load tables its commit does not hold. Nothing was sent. Run it again without -SkipBuild.")
 }
 $stampSays = if ($zipStamp) { [string]$zipStamp.gamemodeSha256 + '/' + [string]$zipStamp.channel } else { '' }
 if ($stampSays -ne ($gmSha + '/' + $Channel)) {
@@ -1083,7 +1112,7 @@ if ($why) {
 '@
     $seed = $seed.Replace('@@DEVROOT@@', $VpsRoot.TrimEnd('\'))
     $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($seed))
-    $out = @(Invoke-ThornswoodNative { & ssh @ssh $target "powershell -NoProfile -EncodedCommand $enc" } | ForEach-Object { "$_".Trim() })
+    $out = @(Invoke-ThornswoodNative { & ssh @ssh $target "pwsh -NoProfile -EncodedCommand $enc" } | ForEach-Object { "$_".Trim() })
     $carried = $out -contains 'DOOR CARRIED'
     foreach ($line in $out) { Say "  $line" $(if ($carried) { 'Green' } else { 'Red' }) }
     if (-not $carried) {

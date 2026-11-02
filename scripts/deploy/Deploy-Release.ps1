@@ -1,8 +1,9 @@
 <#
   Deploy-Release.ps1
 
-  Puts one signed build Release on the dev server by its tag (#5180, the
-  deploy gate verb that comes first, Patrick 31 Oct 2026). The deploy agent
+  Puts one signed build Release on the dev server, the site or the Discord
+  bot by its tag (#5180, the deploy gate verb that comes first, Patrick 31
+  Oct 2026; the site and the bot since #5190 and #5187). The deploy agent
   on the box does the work (C:\Thornswood-Agent\thornswood-agent.exe deploy):
   it downloads the Release, holds manifest.cat to launcher\app\Signature.cs
   for the signer the agent was built with and the files to the signed
@@ -12,6 +13,13 @@
   previous one goes back and has to load again.
 
       .\scripts\deploy\Deploy-Release.ps1 -Tag build-20261101.12
+      .\scripts\deploy\Deploy-Release.ps1 -Tag build-20261101.12 -Environment site
+      .\scripts\deploy\Deploy-Release.ps1 -Tag build-20261101.12 -Environment discord
+
+  For the site and the bot the agent swaps the Release's site.zip or
+  discord.zip in the way their Deployments do (tools\DeployAgent\App.cs):
+  staged while it runs, stopped under a hold, swapped, started and asked,
+  and put back when it does not answer.
 
   From a cloud thread, which has no ssh, the deploy gate runs it with main's
   script (scripts\vps\gate\verbs.json):
@@ -19,7 +27,8 @@
       pwsh scripts/vps/Box-Run.ps1 -Line 'Deploy-Release -Tag build-20261101.12'
 
   A ROLLBACK is this with the Release before: the gamemode reloads to it the
-  same way. Dev only: main waits on its own approval (#5181).
+  same way, and the site or the bot gets that Release's files back. Not
+  main: main waits on its own approval (#5181).
 
   WHAT IT LEAVES. The box's deploy record (data\thornswood-deploy.json,
   C:\Thornswood-Deploys\current\<part>.json and history.log, the shape
@@ -29,8 +38,8 @@
   served on its resources port; the last line here names its address.
 
   WHAT IT NEEDS. The agent, installed by Install-DeployAgent (a gate verb).
-  The Release is published by .github\workflows\gamemode-release.yml when a
-  gamemode change reaches main. Reading a Release needs no token beyond the
+  The Release is published by .github\workflows\merge-release.yml when a
+  change to one of its parts reaches main. Reading a Release needs no token beyond the
   one the agent mints from the box admin App.
 
   Keep it ASCII: Windows PowerShell 5.1 at the far end reads what is sent as
@@ -39,7 +48,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Tag,
-    [ValidateSet('dev')][string]$Environment = 'dev',
+    [ValidateSet('dev', 'site', 'discord')][string]$Environment = 'dev',
     [string]$VpsHost = '',
     [string]$VpsUser = '',
     [string]$Root    = 'C:\Thornswood-Agent',

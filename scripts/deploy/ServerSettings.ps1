@@ -72,7 +72,7 @@
   what they hold. Nothing here prints a value: server-settings.json is the
   server's config, and only key names are said.
 
-  Keep it ASCII and Windows PowerShell 5.1: it runs on the box.
+  Keep it ASCII. It runs on the box, in PowerShell 7.
 #>
 
 $ThornswoodInstallKeys = @('loadOrder', 'startPoints', 'thornswoodMostOnline', 'maxPlayers')

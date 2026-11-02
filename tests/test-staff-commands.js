@@ -17,7 +17,7 @@
   things it does for this: a queued command says whether its connection was
   proven by a join token, and somebody on the /silenced list reaches nobody.
 
-  PART C checks the bot: moderation_text through python (bot/test-moderation.py
+  PART C checks the bot: moderation_text through python (bot/tests/test-moderation.py
   is the full check of the watcher).
 
   Read only apart from its own temp folder and one loopback port.
@@ -647,7 +647,7 @@ function python(args) {
   // as four checks of the bot failing (#1008).
   if (py.missing) {
     yes('a Python here runs the bot with its libraries (none does: from the repository folder, ' +
-        require('./bot-python').INSTALL + ', Developer-Guide.md "Setting up a machine"; ' +
+        require('./bot-python').INSTALL + ', docs/guide/set-up-a-machine.md "Setting up a machine"; ' +
         py.missing + ')', false);
   }
   else {

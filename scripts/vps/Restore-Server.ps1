@@ -19,7 +19,7 @@
              door.json, allowed.json. Nothing in a build ships into it.
     data     only the files the folder does not already have, so a build
              already installed there keeps its own shipped files
-    server-settings.json and gamemode.js
+    server-settings.json, gamemode.js and gamemode-tables (#5191)
              only when the folder has none, for the same reason, EXCEPT the
              keys that say which server this is: port, name,
              thornswoodVoicePort, thornswoodServer and
@@ -50,9 +50,12 @@
   be on disk. One that is not is named and the run ends with exit 1, the same
   refusal Install-ThornswoodServer.ps1 makes.
 
-  THE CHARACTER CHECK. A character is a change form named with a bare number
-  in world\changeForms (0.json, 1.json, ...: a slot number, not the profile
-  id) whose profileId is set and which is not deleted. A deleted character
+  THE CHARACTER CHECK. A character is a runtime change form in
+  world\changeForms, named with its form id in lowercase hex and no plugin
+  (0.json, 1.json, ..., a.json, 1f.json: the engine's FormDesc::ToString,
+  %x; a slot number, not the profile id), whose profileId is set and which is
+  not deleted. Reading digits alone missed every character whose id has a
+  letter (#5168; the 1 Nov 2026 rehearsal on the box found none in dev). A deleted character
   keeps its slot file with profileId -1 and isDeleted true, so counting the
   files counted the dead too: the first real rehearsal, 28 September, found
   18 slot files on live and 11 people in them. No characters is exit 1.
@@ -145,12 +148,15 @@ function People([string]$worldDir) {
   if (-not (Test-Path -LiteralPath $forms)) { return @() }
   $out = @()
   foreach ($f in @(Get-ChildItem -LiteralPath $forms -File -Filter *.json -EA SilentlyContinue |
-                   Where-Object { $_.BaseName -match '^[0-9]+$' } | Sort-Object { [long]$_.BaseName })) {
+                   Where-Object { $_.BaseName -cmatch '^[0-9a-f]{1,16}$' } | Sort-Object { [Convert]::ToInt64($_.BaseName, 16) })) {
     $o = $null
     try { $o = [IO.File]::ReadAllText($f.FullName) -replace '^\uFEFF', '' | ConvertFrom-Json } catch { $o = $null }
     $id = 0L
     if ($o -and $null -ne $o.profileId) { try { $id = [long]$o.profileId } catch { $id = 0L } }
-    if ($id -le 0 -or ($o -and $o.isDeleted -eq $true)) { $script:deleted++; continue }
+    # A deleted character keeps its slot (profileId -1, isDeleted true); a
+    # runtime NPC's form has a profileId below 0 too and is no slot at all.
+    if ($o -and $o.isDeleted -eq $true) { $script:deleted++; continue }
+    if ($id -le 0) { continue }
     $out += [pscustomobject]@{ Id = $id; File = $f }
   }
   return $out
@@ -375,6 +381,13 @@ foreach ($n in 'server-settings.json', 'gamemode.js') {
     Copy-Item -LiteralPath $from -Destination (Join-Path $Root $n)
     Say "  $n from the backup, because the folder had none" 'Yellow'
   }
+}
+# The tables gamemode.js reads as it loads (#5191), whole, on the same rule:
+# a folder that has them keeps its own, which go with its own gamemode.js.
+$srcTables = Join-Path $src 'gamemode-tables'
+if (-not (Test-Path -LiteralPath (Join-Path $Root 'gamemode-tables')) -and (Test-Path -LiteralPath $srcTables)) {
+  Copy-Item -LiteralPath $srcTables -Destination (Join-Path $Root 'gamemode-tables') -Recurse
+  Say "  gamemode-tables from the backup, because the folder had none" 'Yellow'
 }
 
 # ------------------------------------------------------------ load order ---

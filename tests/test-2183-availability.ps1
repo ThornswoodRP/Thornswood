@@ -23,8 +23,8 @@
        window is not listed
     5. -Days ends at -To, -Service picks services, a window that ends before
        it starts and a file that is not there are refused
-    6. the printed report says both limitations and the same minutes under
-       Windows PowerShell 5.1 and pwsh, and never says a service met a target
+    6. the printed report says both limitations and the minutes under
+       PowerShell 7, the box's since #5356, and never says a service met a target
     7. it reads only: the file is the same after, nothing is added beside it,
        and the script has no command that writes, deletes or connects
 #>
@@ -141,12 +141,10 @@ try {
 
   # ---------------------------------------------------------- 6
   . (Join-Path $PSScriptRoot 'Windows.ps1')
-  # Each shell by name, for the lines; 5.1 is started from where Windows keeps it.
+  # Each shell by name, for the lines: the box's PowerShell 7, the one that runs this.
   $shells = @('pwsh')
-  $ps51 = $null
-  if ($OnWindows) { $ps51 = Get-WindowsPowerShell; $shells += 'powershell.exe' }
   foreach ($sh in $shells) {
-    $exe = if ($sh -eq 'powershell.exe') { $ps51 } else { $sh }
+    $exe = Get-BoxPowerShell
     $out = & $exe -NoProfile -ExecutionPolicy Bypass -File $script -Path $f1 -From $W.From -To $W.To -NoPause 2>&1 | Out-String
     $code = $LASTEXITCODE
     T ($code -eq 0) ($sh + ': the report exits 0') $out

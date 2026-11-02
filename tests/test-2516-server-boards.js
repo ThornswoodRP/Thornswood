@@ -42,7 +42,7 @@ const path = require('path');
 const vm = require('vm');
 const CR = String.fromCharCode(13);
 const read = function (p) { return fs.readFileSync(p, 'utf8').split(CR).join(''); };
-const gm = read(path.join(REPO_DIR, 'game', 'gamemode.js'));
+const gm = require('./gamemode-tables.js').joined(read(path.join(REPO_DIR, 'game', 'gamemode.js')));
 let pass = 0, fail = 0;
 function yes(what, cond) {
   if (cond) { pass++; console.log('PASS  ' + what); } else { fail++; console.log('FAIL  ' + what); }

@@ -1,6 +1,7 @@
 // Build-ItemNameTable.js
 //
-// Writes the ITEM_NAMES block in game\gamemode.js: every item name the recipe
+// Writes the gamemode's ITEM_NAMES table (game\gamemode-tables, #5191): every
+// item name the recipe
 // table knows, as a maker or as an ingredient, with the record it names.
 //
 // WHY
@@ -11,29 +12,28 @@
 // recipes it reads, RECIPES_BY_ID, hold only the recipes a profession owns
 // (1888 of them). Iron Ingot, Steel Ingot and Leather Strips come from
 // recipes nobody owns and anybody may make, which are left out of that
-// table on purpose, and ingredients were never read at all. This block is
+// table on purpose, and ingredients were never read at all. This table is
 // every output and every ingredient in game\data\recipes.json, owned or not.
 //
 // WHEN TWO RECORDS SHARE A NAME the one from the earliest plugin wins, in the
 // order Skyrim.esm, Update.esm, Dawnguard.esm, HearthFires.esm, Dragonborn.esm,
 // then any other plugin by name. That is the record people mean when they
-// type the vanilla name. The rest are counted in the block's header.
+// type the vanilla name. The rest are counted in what it prints.
 //
-// Read only except for gamemode.js, which it rewrites between the markers.
-// It adds the markers after RECIPES_BY_ID the first time.
+// Read only except for the ITEM_NAMES table, which it writes.
 //
 // Usage:
 //   node scripts\dev\Build-ItemNameTable.js
-//   node scripts\dev\Build-ItemNameTable.js --recipes <file> --gamemode <file>
+//   node scripts\dev\Build-ItemNameTable.js --recipes <file> --tables <folder>
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const TABLES = require('./GamemodeTables.js');
 
-const args = process.argv.slice(2);
-function arg(name, dflt) { const i = args.indexOf(name); return i >= 0 && args[i + 1] ? args[i + 1] : dflt; }
+const opts = TABLES.options(process.argv.slice(2), ['--recipes', '--tables']);
 const ROOT = path.join(__dirname, '..', '..');
-const RECIPES = arg('--recipes', path.join(ROOT, 'game', 'data', 'recipes.json'));
-const GM = arg('--gamemode', path.join(ROOT, 'game', 'gamemode.js'));
+const RECIPES = opts['--recipes'] || path.join(ROOT, 'game', 'data', 'recipes.json');
+const DIR = opts['--tables'] || TABLES.DIR;
 
 const FIRST = ['skyrim.esm', 'update.esm', 'dawnguard.esm', 'hearthfires.esm', 'dragonborn.esm'];
 function pluginRank(desc) {
@@ -73,31 +73,11 @@ for (const id of Object.keys(rows)) {
 
 const keys = Object.keys(byName).sort();
 const clashes = Object.keys(clashed).length;
-const NL = '\n';
-const lines = [];
-lines.push('  // ==== ITEM_NAMES ====');
-lines.push('  /* Built by scripts\\dev\\Build-ItemNameTable.js out of game\\data\\recipes.json. Do not hand edit.');
-lines.push('     ' + keys.length + ' item names: every recipe output and every ingredient, owned or not,');
-lines.push('     out of ' + Object.keys(rows).length + ' recipes. ' + clashes + ' name(s) belong to more than one record; each went to the earliest plugin');
-lines.push('     (Skyrim.esm, Update.esm, Dawnguard.esm, HearthFires.esm, Dragonborn.esm, then by name).');
-lines.push('     Lower-case name -> [name as written, record]. /give reads it through buildThings. */');
-lines.push('  var ITEM_NAMES = {');
-keys.forEach(function (k, n) {
-  lines.push('    ' + JSON.stringify(k) + ': [' + JSON.stringify(byName[k].name) + ', ' + JSON.stringify(byName[k].desc) + ']' + (n < keys.length - 1 ? ',' : ''));
-});
-lines.push('  };');
-lines.push('  // ==== end ITEM_NAMES ====');
-
-let src = fs.readFileSync(GM, 'utf8');
-src = src.split('\r\n').join('\n');
-const block = lines.join(NL);
-const re = /  \/\/ ==== ITEM_NAMES ====[\s\S]*?  \/\/ ==== end ITEM_NAMES ====/;
-if (re.test(src)) {
-  src = src.replace(re, function () { return block; });
-} else {
-  const anchor = '  // ==== end RECIPES_BY_ID ====';
-  if (src.indexOf(anchor) === -1) { console.error('no RECIPES_BY_ID end marker in ' + GM); process.exit(1); }
-  src = src.replace(anchor, function () { return anchor + NL + NL + block; });
-}
-fs.writeFileSync(GM, src);
-console.log('ITEM_NAMES: ' + keys.length + ' names from ' + Object.keys(rows).length + ' recipes, ' + clashes + ' shared name(s), written to ' + GM);
+// Lower-case name -> [name as written, record], in name order. /give reads it
+// through buildThings.
+const json = '{' + keys.map(function (k) {
+  return JSON.stringify(k) + ':[' + JSON.stringify(byName[k].name) + ',' + JSON.stringify(byName[k].desc) + ']';
+}).join(',') + '}';
+const changed = TABLES.write('ITEM_NAMES', json, DIR);
+console.log('ITEM_NAMES: ' + keys.length + ' names from ' + Object.keys(rows).length + ' recipes, ' + clashes +
+  ' shared name(s), each to the earliest plugin; ' + (changed ? 'written' : 'already current'));

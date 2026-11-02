@@ -1,0 +1,10 @@
+{
+"version":1,
+"quest":"pearl",
+"label":"Raven Rock coast",
+"sources":[
+{"reference":"3828e:Dragonborn.esm","base":"3828c:Dragonborn.esm","world":"800:Dragonborn.esm","position":[27197.439453125,33044.234375,-82.0891342163086],"item":"854fe:Skyrim.esm","itemType":"INGR","rank":"expert","returnMinutes":60},
+{"reference":"38894:Dragonborn.esm","base":"3828c:Dragonborn.esm","world":"800:Dragonborn.esm","position":[27077.59765625,28003.259765625,-167.68028259277344],"item":"854fe:Skyrim.esm","itemType":"INGR","rank":"expert","returnMinutes":60},
+{"reference":"3919c:Dragonborn.esm","base":"3828c:Dragonborn.esm","world":"800:Dragonborn.esm","position":[25586.798828125,33730.1015625,280.6593017578125],"item":"854fe:Skyrim.esm","itemType":"INGR","rank":"expert","returnMinutes":60}
+]
+}

@@ -32,7 +32,7 @@ const vm = require('vm');
 const REPO = path.join(__dirname, '..');
 const SRC = process.env.GM || path.join(REPO, 'game', 'gamemode.js');
 const CR = String.fromCharCode(13);
-const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const src = require('./gamemode-tables.js').joined(fs.readFileSync(SRC, 'utf8')).split(CR).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -81,7 +81,7 @@ if (!ok) { done(); }
 const tableAt = src.indexOf('  var RECIPES_BY_ID = {');
 const tableEnd = tableAt < 0 ? -1 : src.indexOf('\n  };\n', tableAt);
 let TABLE = {};
-try { TABLE = JSON.parse(src.slice(tableAt + '  var RECIPES_BY_ID = '.length, tableEnd + 4)); } catch (e) { TABLE = {}; }
+try { TABLE = require('./gamemode-tables.js').inGamemode(src, 'RECIPES_BY_ID'); } catch (e) { TABLE = {}; }
 const keptAt = src.indexOf('const KEPT_SMELT = {');
 const keptEnd = keptAt < 0 ? -1 : src.indexOf('\n};\n', keptAt);
 let KEPT = {};

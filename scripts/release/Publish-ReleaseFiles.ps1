@@ -53,7 +53,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-if (-not $Repo) { $Repo = 'EvilPatrick06/Thornswood' }
+if (-not $Repo) { $Repo = 'ThornswoodRP/Thornswood' }
 $script:Api = 'https://api.github.com/repos/' + $Repo
 $script:Uploads = 'https://uploads.github.com/repos/' + $Repo
 

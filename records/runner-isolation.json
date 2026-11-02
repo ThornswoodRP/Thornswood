@@ -7,7 +7,7 @@
     "C:\\Thornswood-Docs\\config.json", "C:\\Thornswood-Docs\\feed", "C:\\Thornswood-Docs\\feed-dev",
     "C:\\Thornswood-Bot\\bot.env.json", "C:\\Thornswood-Backup", "C:\\Thornswood-Backup\\key.txt",
     "C:\\Thornswood-Server\\private", "C:\\Thornswood-Server-Dev\\private", "C:\\Thornswood-Server\\world",
-    "C:\\Thornswood-Deploys", "C:\\Thornswood-Caddy", "C:\\Thornswood-Watch", "C:\\Thornswood-Admin", "C:\\Thornswood-Agent",
+    "C:\\Thornswood-Deploys", "C:\\Thornswood-Caddy", "C:\\Thornswood-Watch", "C:\\Thornswood-Admin", "C:\\Thornswood-Agent", "C:\\Thornswood-BotPass",
     "C:\\ProgramData\\ssh", "C:\\Users\\Administrator"
   ],
   "writeOnly": ["C:\\Thornswood-Dumps"],

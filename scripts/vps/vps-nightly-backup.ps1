@@ -14,6 +14,8 @@
     data                  the door's own records and the online count
     server-settings.json  the port, the name, the load order
     gamemode.js           so a restore is a working server and not a puzzle
+    gamemode-tables       the tables gamemode.js reads as it loads (#5191),
+                          which it cannot start without
     the site's uploads    the gallery's pictures and what staff put up;
                           every upload, including larger recordings
     the feed's store      each channel's feed generations (version\, #2727),
@@ -27,8 +29,8 @@
                           them before anything starts
     the Caddyfile         whatever is answering on 443 for thornswood.net
 
-    the dev server        its world, private, data, server-settings.json and
-                          gamemode.js, under game-dev. Since issue #401: dev
+    the dev server        its world, private, data, server-settings.json,
+                          gamemode.js and gamemode-tables, under game-dev. Since issue #401: dev
                           is where new work is tested before it goes live, so
                           the characters there are somebody's afternoon too,
                           and it is a few MB.
@@ -301,9 +303,11 @@ function Mend($from, $to) {
   if ($bad) { Note ("  TORN      {0}: {1} file(s) would not parse after three copies" -f $to, $bad) }
 }
 
-# How many people a world folder holds: the change forms named with a bare
-# number are character slots (scripts\ops\Reset-Character.ps1 reads them the
-# same way), everything else in there describes the world. A deleted
+# How many people a world folder holds: the runtime change forms, named with
+# their form id in lowercase hex and no plugin (the engine's
+# FormDesc::ToString, %x, so a.json and 1f.json as well as 3.json), are
+# character slots when their profileId is above 0; everything else in there
+# describes the world. Digits alone missed every id with a letter (#5168). A deleted
 # character keeps its slot with profileId -1 and isDeleted true, so only a
 # slot with a profile id that is not deleted is a person (#401: the first
 # rehearsal found 18 slots on live and 11 people).
@@ -312,7 +316,7 @@ function People($to) {
   if (-not (Test-Path -LiteralPath $forms)) { return 0 }
   $n = 0
   foreach ($f in @(Get-ChildItem -LiteralPath $forms -File -Filter *.json -EA SilentlyContinue |
-                   Where-Object { $_.BaseName -match '^[0-9]+$' })) {
+                   Where-Object { $_.BaseName -cmatch '^[0-9a-f]{1,16}$' })) {
     try { $o = [IO.File]::ReadAllText($f.FullName) -replace '^\uFEFF', '' | ConvertFrom-Json } catch { continue }
     if ($null -ne $o.profileId -and [long]$o.profileId -gt 0 -and $o.isDeleted -ne $true) { $n++ }
   }
@@ -341,6 +345,7 @@ else {
       Grab (Join-Path $sv.Root 'data')                 ($sv.Tag + '\data')
       Grab (Join-Path $sv.Root 'server-settings.json') ($sv.Tag + '\server-settings.json')
       Grab (Join-Path $sv.Root 'gamemode.js')          ($sv.Tag + '\gamemode.js')
+      Grab (Join-Path $sv.Root 'gamemode-tables')      ($sv.Tag + '\gamemode-tables')
     }
   } finally {
     if ($serverTurn) { $serverTurn.Dispose() }

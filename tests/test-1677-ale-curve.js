@@ -58,9 +58,8 @@ const clock = { now: Date.UTC(2026, 9, 10, 20, 0, 0) };
 const N = new Function('globalThis', 'mp', 'Date', 'console', 'setInterval', 'clearInterval',
   'guard', 'notify', 'say', 'FOODS', 'idOf', needsBlock + '\nreturn globalThis.__thornswoodNeeds;')(
   {}, {
-    getOnlinePlayers: function () { return [ME]; },
     makeProperty: function () { },
-    get: function (id, key) { return key === 'worldOrCellDesc' ? 'cell:X.esm' : store[id]; },
+    get: function (id, key) { if (id === 0 && key === 'onlinePlayers') { return [ME]; } return key === 'worldOrCellDesc' ? 'cell:X.esm' : store[id]; },
     set: function (id, key, v) { store[id] = JSON.parse(JSON.stringify(v)); }
   }, { now: function () { return clock.now; } }, { log: function () { } },
   function () { return 0; }, function () { }, function (n, f) { return f; },

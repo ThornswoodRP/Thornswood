@@ -40,23 +40,39 @@
 # opens an issue on the board. Upstream skyrim-multiplayer/skymp reaches us
 # only through that branch, so a submodule entry here would not see it.
 #
-# The launcher is C# built by MSBuild from launcher/app/Thornswood.csproj with
-# no package manager at all, by design: WebView2 is vendored in launcher/lib
-# and referenced by path (#498), so there is no manifest here for dependabot
-# to read. WebView2 is watched by the nightly instead (#3683, Patrick's
-# answer on 26 Oct): tests\test-3683-webview2-advisories.js asks GitHub's
-# advisory database (osv.dev when GitHub gives no answer, #4092) for
-# advisories on the version THIRD-PARTY.md records, and a red night opens the
-# board issue. Moving it means taking the fixed package from nuget.org and
-# rewriting that section, files, sha256 and version together.
+# The launcher is C# in launcher/app/Thornswood.csproj, an SDK project whose
+# libraries are PackageReference lines from nuget.org (#4823): Avalonia, and
+# Concentus, SharpSRTP and BouncyCastle for voice. Moving one means rewriting
+# its section of THIRD-PARTY.md, the credits page and its text in
+# installer/licences in the same pull request.
 #
 # Weekly rather than daily: this is a small team, and a pull request a day
 # from a robot is a pull request nobody reads.
+#
+# ONE PULL REQUEST PER ECOSYSTEM A WEEK (#5250). Each pull request runs the
+# whole Build check (six Windows jobs) and CodeQL, and on 1 Nov the week's
+# updates came as six pull requests at once, four of them one action each:
+# about fifty jobs in one burst, which queued for up to sixteen minutes
+# behind everybody's own pull requests. So the actions come as one grouped
+# pull request, the bot's libraries as another, the same as the Electron
+# prototype's always did. A bump that breaks the build is still found: the
+# grouped pull request goes red and names the step.
 #
 # LABELS: each update names the area: label its part already has, so its pull
 # requests sort like everything else. Without a labels list Dependabot puts on
 # its own dependencies and github_actions, and makes them again when they are
 # deleted (#3733, Patrick's A of 26 Oct 2026: both were deleted).
+#
+# NO REBASING (#5327): every entry sets rebase-strategy: disabled. Left out,
+# it is auto, and Dependabot pushes a new head to each of its open pull
+# requests every time main moves. A yes is given for one exact head, and a
+# change under .github/workflows/ needs Patrick's yes at its head, so an
+# auto rebase made that yes stale within minutes of it being given (#5327:
+# answered for 26818b4, rebased to 396dc8a 102 seconds later). Staying
+# current buys nothing here: main's merge queue builds every pull request on
+# the newest main before it lands, and that build has to pass. A pull request
+# with a real conflict is still rebased, by a comment asking Dependabot to,
+# and that new head needs a new yes like any other push.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -65,8 +81,12 @@ updates:
       interval: weekly
     commit-message:
       prefix: "ci"
+    groups:
+      actions:
+        patterns: ["*"]
     labels:
       - "area: GitHub & CI"
+    rebase-strategy: disabled
 
   - package-ecosystem: pip
     directory: /bot
@@ -74,8 +94,12 @@ updates:
       interval: weekly
     commit-message:
       prefix: "bot"
+    groups:
+      bot-libraries:
+        patterns: ["*"]
     labels:
       - "area: Discord"
+    rebase-strategy: disabled
 
   - package-ecosystem: npm
     directory: /docs/studies/launcher-stack/prototypes/electron
@@ -88,3 +112,4 @@ updates:
       prefix: "study"
     labels:
       - "area: Launcher"
+    rebase-strategy: disabled

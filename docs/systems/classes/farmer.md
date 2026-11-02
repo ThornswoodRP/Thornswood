@@ -81,7 +81,7 @@ one more when you bring it in. A plot takes compost once a sowing, and
 the line says "composted" after.
 
 Patrick decided this on his report page on 26 October 2026 ("A+B",
-[#3526](https://github.com/EvilPatrick06/Thornswood/issues/3526)).
+[#3526](https://github.com/ThornswoodRP/Thornswood/issues/3526)).
 
 Only your own sowing, and not the orchard trees of the orchard work,
 which counts what it hands over against the work's own hold.

@@ -81,7 +81,7 @@ MOVED_PAGES.forEach(function (p) {
 // ------------------------------------------------------------ 2. the links
 const NAMES = MOVED_NAMES.join('|');
 // The same file on GitHub, wherever the link is written.
-const BLOB_LINK = new RegExp('github\\.com/EvilPatrick06/Thornswood/(?:blob|tree)/[^/\\s]+/(?:ops/|docs/archive|docs/systems/merchant-plans|docs/(?:' + NAMES + ')\\.md)', 'i');
+const BLOB_LINK = new RegExp('github\\.com/ThornswoodRP/Thornswood/(?:blob|tree)/[^/\\s]+/(?:ops/|docs/archive|docs/systems/merchant-plans|docs/(?:' + NAMES + ')\\.md)', 'i');
 // A markdown link, resolved from the folder of the page it is in.
 const MD_LINK = /\]\(([^)\s]+)\)/g;
 function moved(target) {

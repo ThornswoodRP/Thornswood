@@ -33,7 +33,7 @@ const path = require('path');
 const SRC = process.env.GM || path.join(__dirname, '..', 'game', 'gamemode.js');
 const CR = String.fromCharCode(13);
 const BOM = new RegExp('^' + String.fromCharCode(0xFEFF));
-const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const src = require('./gamemode-tables.js').joined(fs.readFileSync(SRC, 'utf8')).split(CR).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -54,7 +54,7 @@ function liftFn(name) {
 }
 
 function table(name) {
-  const m = new RegExp('^(?:var|const) ' + name + ' = \\{[\\s\\S]*?^\\};', 'm').exec(src);
+  const m = new RegExp('^(?:var|const) ' + name + ' = (?:\\{[^\\n]*\\};$|\\{[\\s\\S]*?^\\};)', 'm').exec(src);
   return m ? m[0] : null;
 }
 

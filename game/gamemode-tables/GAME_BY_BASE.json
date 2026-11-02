@@ -1,0 +1,44 @@
+{
+"38b0c:Skyrim.esm":{
+"produce":"65c9d:Skyrim.esm",
+"name":"Pheasant Breast",
+"from":"Pheasant",
+"rank":"novice"
+},
+"38b0d:Skyrim.esm":{
+"produce":"65c9d:Skyrim.esm",
+"name":"Pheasant Breast",
+"from":"Pheasant",
+"rank":"novice"
+},
+"38b0e:Skyrim.esm":{
+"produce":"65c9e:Skyrim.esm",
+"name":"Raw Rabbit Leg",
+"from":"Rabbit",
+"rank":"novice"
+},
+"38b0f:Skyrim.esm":{
+"produce":"65c9e:Skyrim.esm",
+"name":"Raw Rabbit Leg",
+"from":"Rabbit",
+"rank":"novice"
+},
+"52185:Skyrim.esm":{
+"produce":"e8448:Skyrim.esm",
+"name":"Cooked Skeever",
+"from":"Charred Skeever",
+"rank":"expert"
+},
+"52189:Skyrim.esm":{
+"produce":"e8448:Skyrim.esm",
+"name":"Cooked Skeever",
+"from":"Charred Skeever",
+"rank":"expert"
+},
+"775fe:Skyrim.esm":{
+"produce":"e8448:Skyrim.esm",
+"name":"Cooked Skeever",
+"from":"Charred Skeever",
+"rank":"advanced"
+}
+}

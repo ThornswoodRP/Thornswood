@@ -241,7 +241,7 @@ param(
     [string] $PluginList = ((& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install) + '\Profile\OwnGame\plugins.txt'),
     [string] $Out        = '',
     [string] $JsOut      = '',
-    # Print the table and leave game\gamemode.js alone.
+    # Print the table and leave its file in game\gamemode-tables alone.
     [switch] $NoInstall
 )
 
@@ -2262,7 +2262,7 @@ $lines.Add('/* Built by scripts\dev\Build-HarvestTable.ps1 out of the FLOR and T
 $lines.Add('     ' + $table.Count + ' plants, the same table as game\data\harvests.json.')
 $lines.Add('     The key is the plant''s base record. The server already picks a FLOR or TREE on')
 $lines.Add('     its own, so onActivate only has to look the base up here and decide.')
-$lines.Add('     Paste it between the HARVESTS_BY_BASE markers in game\gamemode.js. Do not hand edit. */')
+$lines.Add('     The gamemode reads it from game\gamemode-tables\HARVESTS_BY_BASE.json. Do not hand edit. */')
 $lines.Add('  var HARVESTS_BY_BASE = {')
 $n = 0
 foreach ($d in $table.Keys) {
@@ -2292,7 +2292,7 @@ $cropLines.Add('     growMinutes is how long after a pick the server counts the 
 $cropLines.Add('     The engine reloots a FLOR or TREE an hour after a pick and the gamemode cannot')
 $cropLines.Add('     set isHarvested or a reloot time, so the plant looks ready before it is: the')
 $cropLines.Add('     server refuses the pick until growMinutes is up and says how long is left.')
-$cropLines.Add('     Paste it between the CROPS_BY_BASE markers in game\gamemode.js. Do not hand edit. */')
+$cropLines.Add('     The gamemode reads it from game\gamemode-tables\CROPS_BY_BASE.json. Do not hand edit. */')
 $cropLines.Add('  var CROPS_BY_BASE = {')
 $n = 0
 foreach ($d in $crops.Keys) {
@@ -2317,7 +2317,7 @@ $fishLines.Add('     in FISH_BY_EDITOR_ID at the top of the script because nothi
 $fishLines.Add('     says water. "from" is what stands in the world, "name" is what it gives.')
 $fishLines.Add('     The rank is named one at a time too: every one of these produce records is priced')
 $fishLines.Add('     at 2 or 3 gold, so the gold rule that ranks a plant puts all of them on one rung.')
-$fishLines.Add('     Paste it between the FISH_BY_BASE markers in game\gamemode.js. Do not hand edit. */')
+$fishLines.Add('     The gamemode reads it from game\gamemode-tables\FISH_BY_BASE.json. Do not hand edit. */')
 $fishLines.Add('  var FISH_BY_BASE = {')
 $n = 0
 foreach ($d in $fish.Keys) {
@@ -2346,7 +2346,7 @@ $gameLines.Add('     "from" is what hangs in the world, "name" is what it gives.
 $gameLines.Add('     The rank is named one at a time in GAME_RANK_BY_EDITOR_ID in the script: the')
 $gameLines.Add('     three produce records are priced at 2, 3 and 4 gold, so the gold rule that ranks')
 $gameLines.Add('     a plant puts all seven on one rung and the ladder would do nothing.')
-$gameLines.Add('     Paste it between the GAME_BY_BASE markers in game\gamemode.js. Do not hand edit. */')
+$gameLines.Add('     The gamemode reads it from game\gamemode-tables\GAME_BY_BASE.json. Do not hand edit. */')
 $gameLines.Add('  var GAME_BY_BASE = {')
 $n = 0
 foreach ($d in $game.Keys) {
@@ -2365,234 +2365,73 @@ $gameLiteral = $gameLines -join [Environment]::NewLine
 
 # ---------------------------------------------------------------- install --
 #
-# The gamemode carries the table, because the server is deployed as one file
-# and cannot read game\data\harvests.json. Nothing hand edits that block: this
-# writes it between its own markers, the way the other generated blocks in
-# this repo are written. -NoInstall prints it and leaves the file alone.
-#
-# The declaration line is found rather than assumed, so whichever of var or
-# const the block is written with, and whatever indent it sits at, is kept.
+# The gamemode reads each of the four tables from game\gamemode-tables\<NAME>.json
+# when it loads (#5191): until then this wrote them between markers in
+# gamemode.js, and every content change rewrote the same lines there. They
+# are four tables rather than one because the gamemode reads them at
+# different moments: the harvests on any pick, the crops at a plot, the fish
+# for a fisher and the game for a hunter. Nothing is written when a check
+# failed, and -NoInstall prints them and leaves the files alone.
 #
 if (-not $NoInstall -and $fail -eq 0) {
-    $gm = Join-Path $PSScriptRoot '..\..\game\gamemode.js'
-    if (-not (Test-Path -LiteralPath $gm)) {
-        Note "no gamemode.js beside this script, so the table was not installed"
-    } else {
-        $text = [System.IO.File]::ReadAllText($gm)
-        $close = '// ==== end HARVESTS_BY_BASE ===='
-        $m = [regex]::Match($text, '(?m)^([ \t]*)(var|const|let)[ \t]+HARVESTS_BY_BASE[ \t]*=[ \t]*\{')
-        $b = $text.IndexOf($close)
-        # back up to the start of that line, so the end marker keeps the indent
-        # it was written with instead of being shunted to column zero
-        while ($b -gt 0 -and $text[$b - 1] -ne "`n") { $b-- }
-        if (-not $m.Success -or $b -lt 0 -or $b -lt $m.Index) {
-            Note ("{0} has no HARVESTS_BY_BASE block yet, so nothing was written into it." -f $gm)
-            Note "  It needs a declaration line and an end marker, in this order:"
-            Note "      var HARVESTS_BY_BASE = {"
-            Note "      };"
-            Note "      // ==== end HARVESTS_BY_BASE ===="
-            Note "  Run this again once they are there, or paste the block printed below."
-        } else {
-            $indent = $m.Groups[1].Value
-            $kw     = $m.Groups[2].Value
-            $body = New-Object 'System.Collections.Generic.List[string]'
-            $body.Add($indent + $kw + ' HARVESTS_BY_BASE = {')
-            $k = 0
-            foreach ($d in $table.Keys) {
-                $k++
-                $comma = ','
-                if ($k -eq $table.Count) { $comma = '' }
-                $e = $table[$d]
-                $body.Add($indent + '  ' + (JsonStr ([string]$d)) + ': { "produce": ' + (JsonStr ([string]$e.Produce)) +
-                          ', "name": ' + (JsonStr ([string]$e.Name)) +
-                          ', "rank": ' + (JsonStr ([string]$e.Rank)) + ' }' + $comma)
-            }
-            $body.Add($indent + '};')
-            $body.Add('')
-            $eol = $Eol
-            $new = $text.Substring(0, $m.Index) + (($body -join $eol)) + $eol + $text.Substring($b)
-            [System.IO.File]::WriteAllText($gm, $new, (New-Object System.Text.UTF8Encoding($false)))
-            Ok ("wrote {0} plants into the HARVESTS_BY_BASE block of {1}" -f $table.Count, $gm)
-        }
+    . (Join-Path $PSScriptRoot 'GamemodeTables.ps1')
+    $rows = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($d in $table.Keys) {
+        $e = $table[$d]
+        $rows.Add((JsonStr ([string]$d)) + ': { "produce": ' + (JsonStr ([string]$e.Produce)) + ', "name": ' + (JsonStr ([string]$e.Name)) + ', "rank": ' + (JsonStr ([string]$e.Rank)) + ' }')
     }
+    $changed = Write-GamemodeTable 'HARVESTS_BY_BASE' ('{' + ($rows -join ',') + '}')
+    if ($changed) { Ok ("wrote {0} plants into {1}" -f $table.Count, (Get-GamemodeTableFile 'HARVESTS_BY_BASE')) }
+    else { Ok ("{0} already holds these {1} plants" -f (Get-GamemodeTableFile 'HARVESTS_BY_BASE'), $table.Count) }
 }
 
-# The crops block goes in the same way and under the same rules: its own
-# markers, never hand edited, and only when nothing failed. It is written
-# separately from the harvests block rather than inside it because the two are
-# read at different moments in the gamemode, the harvests on any pick and the
-# crops only when the pick is at a plot.
-#
-# A gamemode.js with no CROPS_BY_BASE markers yet is the expected case the
-# first time this runs, and it is not a failure and not a place to improvise:
-# the block is printed, the two lines it needs are named, and the file is left
-# exactly as it was. Writing the table anywhere this script chose by itself
-# would put the server's crop rule in a spot nobody agreed on.
-#
 if (-not $NoInstall -and $fail -eq 0) {
-    $gm = Join-Path $PSScriptRoot '..\..\game\gamemode.js'
-    if (-not (Test-Path -LiteralPath $gm)) {
-        Note "no gamemode.js beside this script, so the crops were not installed"
-    } else {
-        $text = [System.IO.File]::ReadAllText($gm)
-        $close = '// ==== end CROPS_BY_BASE ===='
-        $m = [regex]::Match($text, '(?m)^([ \t]*)(var|const|let)[ \t]+CROPS_BY_BASE[ \t]*=[ \t]*\{')
-        $b = $text.IndexOf($close)
-        # back up to the start of that line, so the end marker keeps the indent
-        # it was written with instead of being shunted to column zero
-        while ($b -gt 0 -and $text[$b - 1] -ne "`n") { $b-- }
-        if (-not $m.Success -or $b -lt 0 -or $b -lt $m.Index) {
-            Note ("{0} has no CROPS_BY_BASE block yet, so the crops were NOT written into it." -f $gm)
-            Note "  It needs a declaration line and an end marker, in this order:"
-            Note "      var CROPS_BY_BASE = {"
-            Note "      };"
-            Note "      // ==== end CROPS_BY_BASE ===="
-            Note "  Run this again once they are there, or paste the block printed below."
-        } else {
-            $indent = $m.Groups[1].Value
-            $kw     = $m.Groups[2].Value
-            $body = New-Object 'System.Collections.Generic.List[string]'
-            $body.Add($indent + $kw + ' CROPS_BY_BASE = {')
-            $k = 0
-            foreach ($d in $crops.Keys) {
-                $k++
-                $comma = ','
-                if ($k -eq $crops.Count) { $comma = '' }
-                $c = $crops[$d]
-                $body.Add($indent + '  ' + (JsonStr ([string]$d)) + ': { "produce": ' + (JsonStr ([string]$c.Produce)) +
-                          ', "name": ' + (JsonStr ([string]$c.Name)) +
-                          ', "rank": ' + (JsonStr ([string]$c.Rank)) +
-                          ', "growMinutes": ' + [int]$c.Grow + ' }' + $comma)
-            }
-            $body.Add($indent + '};')
-            $body.Add('')
-            $eol = $Eol
-            $new = $text.Substring(0, $m.Index) + (($body -join $eol)) + $eol + $text.Substring($b)
-            [System.IO.File]::WriteAllText($gm, $new, (New-Object System.Text.UTF8Encoding($false)))
-            Ok ("wrote {0} crops into the CROPS_BY_BASE block of {1}" -f $crops.Count, $gm)
-        }
+    . (Join-Path $PSScriptRoot 'GamemodeTables.ps1')
+    $rows = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($d in $crops.Keys) {
+        $c = $crops[$d]
+        $rows.Add((JsonStr ([string]$d)) + ': { "produce": ' + (JsonStr ([string]$c.Produce)) + ', "name": ' + (JsonStr ([string]$c.Name)) + ', "rank": ' + (JsonStr ([string]$c.Rank)) + ', "growMinutes": ' + [int]$c.Grow + ' }')
     }
+    $changed = Write-GamemodeTable 'CROPS_BY_BASE' ('{' + ($rows -join ',') + '}')
+    if ($changed) { Ok ("wrote {0} crops into {1}" -f $crops.Count, (Get-GamemodeTableFile 'CROPS_BY_BASE')) }
+    else { Ok ("{0} already holds these {1} crops" -f (Get-GamemodeTableFile 'CROPS_BY_BASE'), $crops.Count) }
 }
 
-# The fish block goes in the same way and under the same rules: its own markers,
-# never hand edited, and only when nothing failed. It is written separately from
-# the others rather than inside them because it is read by a different verb: the
-# harvests answer a gatherer, the crops a farmer, these a fisher and the game a
-# hunter, and the gamemode looks each of them up on its own.
-#
-# All four installs work on the text of gamemode.js as it is on disk when they
-# run, and each one re-reads the file, so the order only matters if two of them
-# could find the same markers. They cannot: the four end markers are four
-# different strings. The order here is simply the order they were added in, and
-# each reads the file fresh so the writes above it are already in it.
-#
 if (-not $NoInstall -and $fail -eq 0) {
-    $gm = Join-Path $PSScriptRoot '..\..\game\gamemode.js'
-    if (-not (Test-Path -LiteralPath $gm)) {
-        Note "no gamemode.js beside this script, so the fish were not installed"
-    } else {
-        $text = [System.IO.File]::ReadAllText($gm)
-        $close = '// ==== end FISH_BY_BASE ===='
-        $m = [regex]::Match($text, '(?m)^([ \t]*)(var|const|let)[ \t]+FISH_BY_BASE[ \t]*=[ \t]*\{')
-        $b = $text.IndexOf($close)
-        # back up to the start of that line, so the end marker keeps the indent
-        # it was written with instead of being shunted to column zero
-        while ($b -gt 0 -and $text[$b - 1] -ne "`n") { $b-- }
-        if (-not $m.Success -or $b -lt 0 -or $b -lt $m.Index) {
-            Note ("{0} has no FISH_BY_BASE block yet, so the fish were NOT written into it." -f $gm)
-            Note "  It needs a declaration line and an end marker, in this order:"
-            Note "      var FISH_BY_BASE = {"
-            Note "      };"
-            Note "      // ==== end FISH_BY_BASE ===="
-            Note "  Run this again once they are there, or paste the block printed below."
-        } else {
-            $indent = $m.Groups[1].Value
-            $kw     = $m.Groups[2].Value
-            $body = New-Object 'System.Collections.Generic.List[string]'
-            $body.Add($indent + $kw + ' FISH_BY_BASE = {')
-            $k = 0
-            foreach ($d in $fish.Keys) {
-                $k++
-                $comma = ','
-                if ($k -eq $fish.Count) { $comma = '' }
-                $f = $fish[$d]
-                $body.Add($indent + '  ' + (JsonStr ([string]$d)) + ': { "produce": ' + (JsonStr ([string]$f.Produce)) +
-                          ', "name": ' + (JsonStr ([string]$f.Name)) +
-                          ', "from": ' + (JsonStr ([string]$f.From)) +
-                          ', "rank": ' + (JsonStr ([string]$f.Rank)) + ' }' + $comma)
-            }
-            $body.Add($indent + '};')
-            $body.Add('')
-            $eol = $Eol
-            $new = $text.Substring(0, $m.Index) + (($body -join $eol)) + $eol + $text.Substring($b)
-            [System.IO.File]::WriteAllText($gm, $new, (New-Object System.Text.UTF8Encoding($false)))
-            Ok ("wrote {0} water records into the FISH_BY_BASE block of {1}" -f $fish.Count, $gm)
-        }
+    . (Join-Path $PSScriptRoot 'GamemodeTables.ps1')
+    $rows = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($d in $fish.Keys) {
+        $f = $fish[$d]
+        $rows.Add((JsonStr ([string]$d)) + ': { "produce": ' + (JsonStr ([string]$f.Produce)) + ', "name": ' + (JsonStr ([string]$f.Name)) + ', "from": ' + (JsonStr ([string]$f.From)) + ', "rank": ' + (JsonStr ([string]$f.Rank)) + ' }')
     }
+    $changed = Write-GamemodeTable 'FISH_BY_BASE' ('{' + ($rows -join ',') + '}')
+    if ($changed) { Ok ("wrote {0} water records into {1}" -f $fish.Count, (Get-GamemodeTableFile 'FISH_BY_BASE')) }
+    else { Ok ("{0} already holds these {1} water records" -f (Get-GamemodeTableFile 'FISH_BY_BASE'), $fish.Count) }
 }
 
-# The game block, the same way and under the same rules as the other three. A
-# gamemode.js with no GAME_BY_BASE markers yet is the expected case the first
-# time this runs, the same way CROPS_BY_BASE and FISH_BY_BASE each were: the
-# block is printed, the two lines it needs are named, and the file is left
-# exactly as it was. Writing a table into a spot this script chose by itself
-# would put the hunter's second verb somewhere nobody agreed on.
 if (-not $NoInstall -and $fail -eq 0) {
-    $gm = Join-Path $PSScriptRoot '..\..\game\gamemode.js'
-    if (-not (Test-Path -LiteralPath $gm)) {
-        Note "no gamemode.js beside this script, so the game was not installed"
-    } else {
-        $text = [System.IO.File]::ReadAllText($gm)
-        $close = '// ==== end GAME_BY_BASE ===='
-        $m = [regex]::Match($text, '(?m)^([ \t]*)(var|const|let)[ \t]+GAME_BY_BASE[ \t]*=[ \t]*\{')
-        $b = $text.IndexOf($close)
-        # back up to the start of that line, so the end marker keeps the indent
-        # it was written with instead of being shunted to column zero
-        while ($b -gt 0 -and $text[$b - 1] -ne "`n") { $b-- }
-        if (-not $m.Success -or $b -lt 0 -or $b -lt $m.Index) {
-            Note ("{0} has no GAME_BY_BASE block yet, so the game was NOT written into it." -f $gm)
-            Note "  It needs a declaration line and an end marker, in this order:"
-            Note "      var GAME_BY_BASE = {"
-            Note "      };"
-            Note "      // ==== end GAME_BY_BASE ===="
-            Note "  Run this again once they are there, or paste the block printed below."
-        } else {
-            $indent = $m.Groups[1].Value
-            $kw     = $m.Groups[2].Value
-            $body = New-Object 'System.Collections.Generic.List[string]'
-            $body.Add($indent + $kw + ' GAME_BY_BASE = {')
-            $k = 0
-            foreach ($d in $game.Keys) {
-                $k++
-                $comma = ','
-                if ($k -eq $game.Count) { $comma = '' }
-                $g = $game[$d]
-                $body.Add($indent + '  ' + (JsonStr ([string]$d)) + ': { "produce": ' + (JsonStr ([string]$g.Produce)) +
-                          ', "name": ' + (JsonStr ([string]$g.Name)) +
-                          ', "from": ' + (JsonStr ([string]$g.From)) +
-                          ', "rank": ' + (JsonStr ([string]$g.Rank)) + ' }' + $comma)
-            }
-            $body.Add($indent + '};')
-            $body.Add('')
-            $eol = $Eol
-            $new = $text.Substring(0, $m.Index) + (($body -join $eol)) + $eol + $text.Substring($b)
-            [System.IO.File]::WriteAllText($gm, $new, (New-Object System.Text.UTF8Encoding($false)))
-            Ok ("wrote {0} hanging game records into the GAME_BY_BASE block of {1}" -f $game.Count, $gm)
-        }
+    . (Join-Path $PSScriptRoot 'GamemodeTables.ps1')
+    $rows = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($d in $game.Keys) {
+        $g = $game[$d]
+        $rows.Add((JsonStr ([string]$d)) + ': { "produce": ' + (JsonStr ([string]$g.Produce)) + ', "name": ' + (JsonStr ([string]$g.Name)) + ', "from": ' + (JsonStr ([string]$g.From)) + ', "rank": ' + (JsonStr ([string]$g.Rank)) + ' }')
     }
+    $changed = Write-GamemodeTable 'GAME_BY_BASE' ('{' + ($rows -join ',') + '}')
+    if ($changed) { Ok ("wrote {0} hanging game records into {1}" -f $game.Count, (Get-GamemodeTableFile 'GAME_BY_BASE')) }
+    else { Ok ("{0} already holds these {1} hanging game records" -f (Get-GamemodeTableFile 'GAME_BY_BASE'), $game.Count) }
 }
 
 Write-Host ''
-Write-Host 'the same table, ready to paste into the gamemode:' -ForegroundColor Cyan
+Write-Host 'the same table, as JavaScript (the gamemode reads its file in game\gamemode-tables):' -ForegroundColor Cyan
 Write-Host $literal
 Write-Host ''
-Write-Host 'the crops, ready to paste into the gamemode:' -ForegroundColor Cyan
+Write-Host 'the crops, as JavaScript (the gamemode reads its file in game\gamemode-tables):' -ForegroundColor Cyan
 Write-Host $cropLiteral
 Write-Host ''
-Write-Host 'the fish, ready to paste into the gamemode:' -ForegroundColor Cyan
+Write-Host 'the fish, as JavaScript (the gamemode reads its file in game\gamemode-tables):' -ForegroundColor Cyan
 Write-Host $fishLiteral
 Write-Host ''
-Write-Host 'the hanging game, ready to paste into the gamemode:' -ForegroundColor Cyan
+Write-Host 'the hanging game, as JavaScript (the gamemode reads its file in game\gamemode-tables):' -ForegroundColor Cyan
 Write-Host $gameLiteral
 if ($JsOut) {
     # all four blocks, in the order they are read in the gamemode. -JsOut is

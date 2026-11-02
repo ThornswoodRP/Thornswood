@@ -182,7 +182,7 @@ else { 'GAMEMODE AT ' + `$gm; Find-ThornswoodGamemodeText `$gm @($needleList) }
 `$raw
 "@
     $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($remote))
-    $text = Invoke-ThornswoodNative { & ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$User@$Vps" "powershell -NoProfile -EncodedCommand $enc" } 2>&1
+    $text = Invoke-ThornswoodNative { & ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$User@$Vps" "pwsh -NoProfile -EncodedCommand $enc" } 2>&1
     $lines = @($text | ForEach-Object { "$_" })
     $at = [Array]::IndexOf([string[]]$lines, 'SETTINGS')
     if ($at -lt 0) { throw "could not read $settingsPath from $Vps : $($lines -join "`n")" }

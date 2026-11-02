@@ -23,10 +23,8 @@ let pass = 0, fail = 0;
 function yes(what, ok) {
   if (ok) { pass++; console.log('PASS  ' + what); } else { fail++; console.log('FAIL  ' + what); }
 }
-function table(name) {
-  const m = new RegExp('^const ' + name + ' = (\\{.*\\});$', 'm').exec(gm);
-  return m ? JSON.parse(m[1]) : null;
-}
+// From its file when the gamemode reads it from one (#5191), else its line.
+function table(name) { return require('./gamemode-tables.js').inGamemode(gm, name); }
 const a = gm.indexOf('// ==== thornswood needs: hunger, thirst and exhaustion ====');
 const b = gm.indexOf('// ==== end thornswood needs ====');
 const block = (a >= 0 && b > a) ? gm.slice(a, b) : null;
@@ -46,9 +44,10 @@ function rig() {
   const said = [];
   const cared = [];
   const mp = {
-    getOnlinePlayers: function () { return online.slice(); }, makeProperty: function () { },
+    makeProperty: function () { },
     getDescFromId: function () { return ''; },
-    get: function (id, key) { if (key === 'worldOrCellDesc') { return 'cell:X.esm'; } if (key === 'pos') { return null; } return store[id]; },
+    get: function (id, key) {
+      if (id === 0 && key === 'onlinePlayers') { return online.slice(); } if (key === 'worldOrCellDesc') { return 'cell:X.esm'; } if (key === 'pos') { return null; } return store[id]; },
     set: function (id, key, v) { store[id] = JSON.parse(JSON.stringify(v)); }
   };
   const g = { __thornswoodHurt: { exposed: function () { return false; }, careChanged: function (id) { cared.push(id); } } };

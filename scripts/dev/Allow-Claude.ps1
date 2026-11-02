@@ -147,7 +147,6 @@ $WantAllow = @(
     @{ Script = 'Check-Backdrop.ps1';     Why = 'read only' },
     @{ Script = 'Check-Build.ps1';        Why = 'read only' },
     @{ Script = 'Check-Chargen.ps1';      Why = 'read only' },
-    @{ Script = 'Check-Controls.ps1';     Why = 'read only' },
     @{ Script = 'Check-LiveGamemode.ps1'; Why = 'read only: is the server running what this repo has' },
     @{ Script = 'Check-Plugins.ps1';      Why = 'read only' },
     @{ Script = 'Check-VoiceInstall.ps1'; Why = 'read only' }

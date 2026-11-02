@@ -6,8 +6,9 @@
 // character on a server restored from backup". Here it is a comparison.
 //
 // expected(root, profileId) reads the character from root's world, the same
-// rule Restore-Server.ps1 uses: a change form named with a bare number in
-// world\changeForms whose profileId is the one asked for and which is not
+// rule Restore-Server.ps1 uses: a runtime change form in world\changeForms,
+// named with its form id in lowercase hex and no plugin (FormDesc::ToString,
+// %x, #5168), whose profileId is the one asked for and which is not
 // deleted. It must be read before the bot logs in, since the server writes
 // the form again once the character is loaded.
 //
@@ -76,10 +77,12 @@ function descToId(desc, table) {
 
 // The living characters in root's world: [{ file, profileId, form }].
 function characters(root, settings) {
-  const dir = path.join(root, String(settings.worldDir || 'world'), 'changeForms');
+  // The engine's own setting names the folder: databaseName, "world" when
+  // unset (DatabaseFactory.cpp in the fork).
+  const dir = path.join(root, String(settings.databaseName || 'world'), 'changeForms');
   const out = [];
   for (const f of fs.readdirSync(dir)) {
-    if (!/^\d+\.json$/.test(f)) { continue; }
+    if (!/^[0-9a-f]{1,16}\.json$/.test(f)) { continue; }
     let o;
     try { o = readJson(path.join(dir, f)); } catch (e) { continue; }
     const pid = Number(o && o.profileId);

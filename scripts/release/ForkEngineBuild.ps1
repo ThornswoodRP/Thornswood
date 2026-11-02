@@ -6,7 +6,7 @@
   Dot-sourced by .github\workflows\engine.yml, scripts\release\EngineArtifact.ps1
   (a Ship machine takes the same build, #3399) and tests\test-459-fork-build.ps1.
 
-  WHY, issue #459. Patrick's B of 16 Oct: the fork, EvilPatrick06/skymp, is
+  WHY, issue #459. Patrick's B of 16 Oct: the fork, ThornswoodRP/skymp, is
   public, so GitHub builds it at no cost, and since fork #79 every push to
   thornswood/engine-changes builds the engine there and keeps what Thornswood
   records as one artifact, thornswood-engine-<commit> (the fork's
@@ -43,11 +43,11 @@
   and New-ClientBuildRecord.ps1 then hold every file to the fork's source as
   for any build, with -BuiltBy naming the fork's run.
 
-  Keep it Windows PowerShell 5.1 and pwsh alike. It reads nothing over the
+  It runs in PowerShell 7 (#5356). It reads nothing over the
   network itself: engine.yml hands it the reader, and the harness a stand-in.
 #>
 
-$ForkEngineRepo = 'EvilPatrick06/skymp'
+$ForkEngineRepo = 'ThornswoodRP/skymp'
 # THE FORK BY ITS ID (#5184). A repository moved to another owner keeps its
 # id and changes its name, so a build is held to the fork by the id: a run
 # by its repository.id, and fork-build.json by its repositoryId. A

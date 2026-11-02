@@ -131,9 +131,12 @@ open under the same title is handed back rather than made twice.
 
 **Known issues and test tasks, from the board** (Patrick, 11 Oct: "it is
 supposed to be automatic as we add things and fix things"). Three forums are
-kept from `EvilPatrick06/Thornswood`, every five minutes (`KNOWN_ISSUES_EVERY`,
-never under a minute), with `GITHUB_TOKEN` from `bot.env.json`, a token for
-that repository's issues. Reading them is all these forums need; the token
+kept from `ThornswoodRP/Thornswood`, every five minutes (`KNOWN_ISSUES_EVERY`,
+never under a minute), with a token for that repository's issues: the one
+the box admin service's App makes every half hour into
+`C:\Thornswood-Admin\for-bot\github-token.json` (`GITHUB_TOKEN_FILE`), issues
+write on Thornswood alone (#5184), or while that has none, `GITHUB_TOKEN` from
+`bot.env.json`. Reading them is all these forums need; the token
 also needs issues write, for the comments the bot leaves on an issue and for
 Report a problem below, which files new ones. No token, none is kept, said
 once in the log.
@@ -142,10 +145,9 @@ once in the log.
   or Main Findings whose fix has not landed yet, tagged Dev or Main
   (Patrick, 22 Oct). Its fix has landed once the issue has a `Test task:`
   comment or is in Done: done-on-merge.yml's comment on it, `Pull request #N
-  merged (...)` written by the workflow, or the `board: Done` label for the
-  minute before board-status.yml takes it off. Then it is not a known issue
-  and its post goes at once. A card moved to Done by hand with no merge is
-  not seen, since the bot cannot read the board. A merged pull request alone does
+  merged (...)` written by the workflow, which comes with the card's Done
+  (since #5185 nobody moves a card by hand, and no `board: Done` label goes
+  on). Then it is not a known issue and its post goes at once. A merged pull request alone does
   not take a post down (#3140): when any merged pull request that named the
   issue did, a measuring step on the scripts finding, partial fixes and a
   `Refs` written by mistake kept bugs people still meet off the list. Each
@@ -260,7 +262,7 @@ twice.
 
 **Report a problem** (Patrick, 21 Oct, #3155). Testers file a problem on the
 board themselves, from two places, and each one becomes an issue in
-`EvilPatrick06/Thornswood` labelled `Tester report` and `area: triage`
+`ThornswoodRP/Thornswood` labelled `Tester report` and `area: triage`
 (`PROBLEM_LABELS`), never Main or Dev Findings, so it does not go public in
 `#known-issues` until somebody on the team looks at it and labels it.
 
@@ -287,7 +289,7 @@ launcher when the game closes, as they always have, and the issue links the
 hub's Sessions page at that session (`/sessions?find=<session>`), or, from
 Discord, at the account's sessions. What the tester typed goes into the
 issue inside a `<pre>` block, so nothing in it can mention anybody or turn
-into markup. `bot\test-3155-problems.py` holds the bot's half and
+into markup. `bot\tests\test-3155-problems.py` holds the bot's half and
 `tests\test-3155-report-problem.js` the game's and the site's.
 
 **The one-time setup.** Moving a server from the old shape is the only channel
@@ -346,7 +348,7 @@ whole file at once.
 
 - What keeps a row off: no `Roadmap:` comment, two lane labels, a title over
   45 characters, nothing under the first line, an issue number, a link or
-  code, an em dash, or the word for the people who play that Developer-Guide.md
+  code, an em dash, or the word for the people who play that docs/guide/rules.md
   bans in its Words section. The last two hold for known issue text too,
   since the site shows it to anybody. The issue gets one comment naming the rule, the same as a test
   task; fixing the comment puts the row on at the next pass.
@@ -365,6 +367,13 @@ webhook posts), `#council-decisions`, `#staff-updates`, `#staff-general`,
 `#council`, `#ticket-log` and a Staff Room. Invisible to everybody else.
 `#dev-test-tasks` (a forum the bot keeps, see Testing above) and
 `#dev-test-findings` are in the Dev space.
+
+A staff notice can be filed as an issue labelled `notice: staff`, its body
+the notice: the bot says it in `#staff-updates` within a minute, comments and
+closes the issue, and the label `notice: take back` takes it out again
+(#5187). That is how `scripts\ops\Say-Staff.ps1` posts from a machine with
+no ssh to the box. The issue is public, so a notice that must stay with
+staff goes over ssh.
 
 `#dev-notes`, `#deploys` and `#reports` were here and are gone, and like
 `#bugs` the builder keeps their names so that a prune cannot take a channel of
@@ -526,7 +535,7 @@ On a Windows PC with more than one Python installed, plain `python` is
 whichever comes first on PATH (on One that is 3.9), so run them with the
 launcher:
 
-    py -3.12 bot\test-testing-channels.py
+    py -3.12 bot\tests\test-testing-channels.py
 
 With the libraries from `bot\requirements.txt`. On an older Python, bot.py
 and every test stop at once and say so, rather than failing somewhere deep in
@@ -535,6 +544,14 @@ every `test-*.py`, and Install-Bot.ps1 sends it with bot.py.
 `test-python-version.py` holds that.
 
 ## Putting a bot change on the VPS
+
+A merged change to the bot's files goes on by itself (#5187): the merge's
+Release carries `discord.zip`, its Deployment to **Discord bot** is applied
+by the box's deploy agent the way `-CodeOnly` below does it, libraries
+included when `requirements.txt` changed, and the old files go back when the
+bot does not say it is watching its server. `docs/DEPLOY-AGENT.md` has how.
+What follows is the hand way, for a box without the agent or a change that is
+not merged.
 
 From a checkout of main that has just been pulled, never from a copy of the
 repository that was downloaded earlier:
@@ -561,8 +578,8 @@ hand, does not reach the box with `-CodeOnly`: that sends the file and leaves
 installs the pinned versions into a new `py-libs` and swaps it in with the
 code, so a bump that stops the bot from starting puts the old libraries back.
 The pull request build only parses the bot; the nightly runs its harnesses.
-So before merging a bump, install the new pins and run `bot\test-*.py` on
-them, the way [Setting up a machine](../Developer-Guide.md#setting-up-a-machine)
+So before merging a bump, install the new pins and run `bot\tests\test-*.py` on
+them, the way [Setting up a machine](../docs/guide/set-up-a-machine.md#setting-up-a-machine)
 installs them (#1401).
 
 What goes up with it: `bot.py`, `card.py`, the channel ids, the card artwork,
@@ -616,6 +633,14 @@ yourself on the deploy machine is only that machine saying it has no such
 folder.
 
 ## Release notes posting themselves
+
+Since #5187 a release's news is posted when the release is deployed. The box's
+deploy agent leaves each deployed Release's notes in
+`C:\Thornswood-Deploys\for-bot`, and the bot posts each release once: a
+merge's release in the dev updates channel (`dev-channel.txt`), a main release
+in #news (`news-channel.txt`, by id). Notes that say nothing people would
+notice are not posted. What follows is how a Ship posts, which still holds
+for a release the agent does not deploy.
 
 The build makes a webhook in `#news` and saves it to `news-webhook.txt` beside
 these files. `Ship.ps1` calls `Publish-Discord.ps1` at the end of every

@@ -3,6 +3,11 @@
 # each computer"), so no update and no installer carries them, and no update
 # lists them as removed: an install keeps what its own build made. A nearby
 # file of the collection that nothing builds stays the collection's.
+# Velopack's Setup.exe carries no game files: the game comes from the feed's
+# packs, which Publish-Update makes, and on dev from the merge release's game
+# files, built over the dev feed's last release (Build-GameFiles.ps1). So
+# Publish-Update is the one that decides; the old installer's
+# Package-Thornswood.ps1, read here until #4824, went with it.
 # Scripts this runs whole go to a stand-in box, so the freshness guard lets them be (#2118).
 $env:THORNSWOOD_HARNESS = '1'
 $ErrorActionPreference='Stop'
@@ -20,7 +25,7 @@ $other='Data\meshes\actors\character\character assets\femalehands_0.nif'
 Yes 'a file of the collection nothing builds is not taken for one built here' (-not (Test-ShipGenerated $other))
 $rules=[IO.File]::ReadAllText((Join-Path $repo 'scripts\release\Ship-Rules.ps1'))
 Yes 'Ship-Rules no longer reads the record to ship what it lists' ($rules -notmatch 'function Get-ShipGeneratedFiles' -and $rules -notmatch 'function Assert-ShipGeneratedBod')
-foreach($scriptName in 'Publish-Update.ps1','Package-Thornswood.ps1'){
+foreach($scriptName in 'Publish-Update.ps1'){
   $tokens=$null; $errors=$null
   $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repo ('scripts\release\'+$scriptName)),[ref]$tokens,[ref]$errors)
   Yes "$scriptName parses" ($errors.Count -eq 0)
@@ -38,7 +43,5 @@ foreach($scriptName in 'Publish-Update.ps1','Package-Thornswood.ps1'){
 }
 $publish=[IO.File]::ReadAllText((Join-Path $repo 'scripts\release\Publish-Update.ps1'))
 Yes 'Publish-Update never makes a built file hash-gone, so no update deletes what an install built' ($publish -match '\(Test-ShipBackup \$k\) -or \(Test-ShipGenerated \$k\)\) \{ continue \}')
-$package=[IO.File]::ReadAllText((Join-Path $repo 'scripts\release\Package-Thornswood.ps1'))
-Yes 'Package-Thornswood leaves every machine file, the built ones among them, out of the installer' ($package -match 'if \(Test-ShipMachine \$rel\) \{ \$skipBytes \+= \$f\.Length; \$machineCount\+\+; continue \}')
 Write-Host "$pass passed, $fail failed"
 if($fail){exit 1}

@@ -1,7 +1,7 @@
 // test-3754-pr-template-parts.js
 //
 // The pull request template's parts list names the same parts as the table in
-// Developer-Guide.md, "After a pull request is merged", and gives no command of
+// docs/guide/after-a-merge.md, "After a pull request is merged", and gives no command of
 // its own.
 //
 // WHY THIS EXISTS. Issue #3754: the template's list was a second copy of the
@@ -31,9 +31,10 @@ function yes(what, cond) {
 function read(rel) { return fs.readFileSync(path.join(REPO_DIR, rel), 'utf8').replace(/^﻿/, '').replace(/\r/g, ''); }
 
 // ------------------------------------------------------------ the guide's table
-const guide = read('Developer-Guide.md').split('\n');
-const start = guide.findIndex(function (l) { return /^### After a pull request is merged\s*$/.test(l); });
-yes('Developer-Guide.md has the heading "After a pull request is merged"', start >= 0);
+// The table is the guide's page of its own, docs/guide/after-a-merge.md.
+const guide = read('docs/guide/after-a-merge.md').split('\n');
+const start = guide.findIndex(function (l) { return /^# After a pull request is merged\s*$/.test(l); });
+yes('docs/guide/after-a-merge.md has the title "After a pull request is merged"', start >= 0);
 const rows = [];
 for (let i = start + 1; start >= 0 && i < guide.length && !/^#{1,3} /.test(guide[i]); i++) {
   const l = guide[i];

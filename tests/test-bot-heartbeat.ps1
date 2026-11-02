@@ -9,7 +9,7 @@
   stuck logging in, hung, or cut off from Discord for good is still that
   process, so the watchdog said nothing and, since #447, the staff channel
   heard nothing either: the bot is what posts there. Now the bot writes
-  heartbeat.json beside itself every minute (bot\test-heartbeat.py checks
+  heartbeat.json beside itself every minute (bot\tests\test-heartbeat.py checks
   that half) and the watchdog reads it. This checks the watchdog half:
 
     the rule    BeatProblem, the one function that decides, against a table

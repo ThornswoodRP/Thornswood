@@ -80,7 +80,7 @@ function Build([string]$dir, [hashtable]$change = @{}, [string]$extra = '') {
 function RecordText([string]$c = $commit) {
     $files = [ordered]@{}
     foreach ($k in $fork.Keys) { $files[$k] = [ordered]@{ sha256 = (ShaText $fork[$k]); bytes = $fork[$k].Length; commit = $c } }
-    $src = [ordered]@{ repo = 'https://github.com/EvilPatrick06/skymp.git'; commit = $c }
+    $src = [ordered]@{ repo = 'https://github.com/ThornswoodRP/skymp.git'; commit = $c }
     return ([ordered]@{ binary = 'scam_native.node'; sha256 = (ShaText $fork['scam_native.node']); source = $src; files = $files } | ConvertTo-Json -Depth 5)
 }
 function Entries([string]$zip) {

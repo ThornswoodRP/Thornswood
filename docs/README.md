@@ -1,11 +1,13 @@
 # docs
 
 Pages about how Thornswood works, for everybody on the team. The rules,
-and the long form of each, are in [Developer-Guide.md](../Developer-Guide.md)
-at the root.
+and the long form of each, are in the Developer Guide's pages under
+[guide/](../Developer-Guide.md#the-pages), indexed by
+[Developer-Guide.md](../Developer-Guide.md) at the root.
 
 | Page | What it answers |
 | --- | --- |
+| [guide/](../Developer-Guide.md#the-pages) | The Developer Guide's pages, one task each, in the order a first day reads them: [Set up a machine](guide/set-up-a-machine.md), [Make a change](guide/make-a-change.md), [The rules](guide/rules.md), [The board, issues and test tasks](guide/the-board.md), [Settled design](guide/settled-design.md), [How work moves](guide/how-work-moves.md), [Release to dev](guide/release-to-dev.md), [Release to main](guide/release-to-main.md), [After a pull request is merged](guide/after-a-merge.md), [How the system fits together](guide/the-system.md), [The tools, A to O](guide/tools.md), [Secrets](guide/secrets.md), [Staff commands](guide/staff-commands.md). [Developer-Guide.md](../Developer-Guide.md) is their index. |
 | [FEED.md](FEED.md) | The update feed launchers read: every field of version.json, who writes it, who reads it, and what happens when it is wrong. |
 | [JSON-STATE-INVENTORY.md](JSON-STATE-INVENTORY.md) | Every critical JSON file, who writes and reads it, how it is checked, and the four records held to a version and shape (#2180). |
 | [ICONS.md](ICONS.md) | Which icon file is which: Main launcher badge, Dev launcher monogram, site favicon. |
@@ -23,6 +25,7 @@ at the root.
 | [DEPLOY-AGENT.md](DEPLOY-AGENT.md) | The box deploy agent (#5180): deploying a signed Release by its tag through the gate and rolling back, how a merge reaches the dev server by itself, what it holds, how it updates itself and how it is installed. |
 | [SIGNED-RELEASES.md](SIGNED-RELEASES.md) | The signed release design (#2163): what gets signed and how, custody, rotation, revocation, the rollout that keeps every checksum, and the test-only pilot. |
 | [CLEAN-INSTALL-RUN.md](CLEAN-INSTALL-RUN.md) | The checklist for a stranger's first install, and what each step should show. |
+| [COLLECTION-CHANGES.md](COLLECTION-CHANGES.md) | How a mod is added, taken out or moved: a pull request to records/collection.json, its check, and the merge that drafts and publishes the revision (#5189). |
 | [COLLECTION-REVISION-2.md](COLLECTION-REVISION-2.md) | The Vortex pass for collection revision 2, step by step, and the exact plugin order a clean install must land in. |
 | [COLLECTION-REVISION-3.md](COLLECTION-REVISION-3.md) | Collection revision 3 (#1262): the Unofficial Skyrim Special Edition Patch at 4.3.8a, its two rules and the 49-position order. Local side only until published. |
 | [COLLECTION-REVISION-6.md](COLLECTION-REVISION-6.md) | Collection revision 6: Thornswood Content 1.4, Atlas Map Markers SE out, and the cheddars_mashups.esl rule that ended LOOT's cyclic interactions (#4070), made in one run. |

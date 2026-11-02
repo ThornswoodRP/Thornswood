@@ -20,7 +20,7 @@
     3. a box script doing anything but set variables and define functions
        before it asks;
     4. a box script not refusing when the rule says this is not the box. Each
-       is run, in Windows PowerShell 5.1 on Windows and pwsh elsewhere, with
+       is run, in PowerShell 7 as on the box since #5356, with
        Windows' answer stood in for as a workstation and as no answer, and
        must say the rule's reason and stop. These runs only start once 1 and
        3 have passed, so a script that would go on past a broken rule is
@@ -65,7 +65,7 @@ $carriers = [ordered]@{
 # ---- 1. the rule --------------------------------------------------------------
 Write-Host 'the rule, with Windows'' answer stood in for'
 $guardText = [IO.File]::ReadAllText($guard)
-Yes 'BoxGuard.ps1 is plain ASCII, which Windows PowerShell on the box reads right' (-not ($guardText.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
+Yes 'BoxGuard.ps1 is plain ASCII' (-not ($guardText.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
 $errs = $null
 $gAst = [System.Management.Automation.Language.Parser]::ParseInput($guardText, [ref]$null, [ref]$errs)
 Yes '  and parses' (-not $errs -or $errs.Count -eq 0)
@@ -202,7 +202,7 @@ if (-not ($ruleOk -and $orderOk)) {
     Write-Host 'NOT RUN  the scripts are not run while the rule or the order above fails, so none can go on past a broken guard'
     $script:fail++
 } else {
-    $shell = $(if ($OnWindows) { Get-WindowsPowerShell } else { (Get-Process -Id $PID).Path })
+    $shell = Get-BoxPowerShell
     $scratch = Join-Path ([IO.Path]::GetTempPath()) ('ts-3041-run-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
     $null = New-Item -ItemType Directory -Force -Path $scratch
     try {

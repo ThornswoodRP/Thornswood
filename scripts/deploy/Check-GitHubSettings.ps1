@@ -64,7 +64,7 @@ param(
     [switch]$Load,
     [int]$WaitMinutes = 15,
     # Where github-admin.yml and the VPS runners are (#4013).
-    [string]$GitHubRepo = 'EvilPatrick06/Thornswood-Ops'
+    [string]$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'
 )
 
 Set-StrictMode -Version Latest
@@ -74,7 +74,7 @@ $ErrorActionPreference = 'Stop'
 $workflow = 'github-admin.yml'
 # The repository whose settings are read and compared, which is this one,
 # not the one the workflow runs in.
-$Repo = 'EvilPatrick06/Thornswood'
+$Repo = 'ThornswoodRP/Thornswood'
 $title = 'Check-GitHubSettings'
 # The audience admin.js takes, and nothing else does.
 $audience = 'thornswood-admin'

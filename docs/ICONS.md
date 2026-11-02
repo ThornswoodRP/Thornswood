@@ -24,8 +24,8 @@ then points every shortcut at the new file (lines 315 to 333).
 
 `launcher/app-dev.ico` is the Dev launcher icon, the TF monogram.
 `Build-Launcher.ps1` line 176 requires it, and lines 301 to 302 embed
-it next to the Main icon. `Icons.cs` lines 81 to 88 pick it when
-`Art.Dev` is set. It stays its own file.
+it next to the Main icon. `Icons.cs` (IconBytes) picks it when
+`Icons.Dev` is set. It stays its own file.
 
 ## Website tab
 
@@ -45,7 +45,7 @@ website tab to match the launcher. Djinn, 27 Oct 2026: the tab and the
 launcher are the same badge, with TW at the small sizes or no lettering
 where none can be read. The Dev icon stays the TF monogram.
 
-`tests/test-launcher-icons.js` fails if a favicon frame is not app.ico's
+`launcher/tests/test-launcher-icons.js` fails if a favicon frame is not app.ico's
 frame of the same size, or if `app.ico` and `app-dev.ico` share a frame.
 
 The Main icon reaches the installed launcher only after a launcher

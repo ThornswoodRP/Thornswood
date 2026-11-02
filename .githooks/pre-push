@@ -1,0 +1,16 @@
+#!/bin/sh
+# The pre-push hook (#5291). Git runs it before every push from a clone with
+#
+#     git config core.hooksPath .githooks
+#
+# and the push goes only when it exits 0. It hands git's lines (one per ref
+# being pushed) to scripts/dev/Check-Push.ps1, which says why and what it
+# checks: every script parses and the writing rules hold, in the commit being
+# pushed, in about twenty seconds instead of a round of pull request checks.
+# Stored LF (.gitattributes) so Git for Windows' sh reads it as Linux's does.
+repo="$(git rev-parse --show-toplevel)" || exit 2
+if ! command -v pwsh >/dev/null 2>&1; then
+  echo "pre-push: STOP. PowerShell 7 (pwsh) is not on PATH, and the checks before a push need it. docs/guide/set-up-a-machine.md, "Install the tools", installs it." >&2
+  exit 2
+fi
+exec pwsh -NoProfile -File "$repo/scripts/dev/Check-Push.ps1"

@@ -14,7 +14,7 @@ a starting point here.
 
 ## The book
 
-Generated from the spell book and `SPELL_IDS` in `game/gamemode.js` by `scripts/dev/Write-SystemLists.js`. Apprentice and Adept are both Advanced. A blank id means the name is in the book and not yet granted.
+Generated from the spell book and the gamemode's `SPELL_IDS` table by `scripts/dev/Write-SystemLists.js`. Apprentice and Adept are both Advanced. A blank id means the name is in the book and not yet granted.
 
 | Spell | Rank | Id |
 | --- | --- | --- |

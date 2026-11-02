@@ -1,0 +1,235 @@
+# Puts a Release dev ran on the live server, once Patrick approves it on
+# GitHub (#5181; Patrick chose A on 31 Oct: a Main environment with him as its
+# only required reviewer).
+#
+# WHAT HAPPENS. Somebody starts this by hand on main with the tag of a build
+# Release (merge-release.yml makes one for every merge, #5179):
+#   gh workflow run promote-main.yml --ref main -f tag=build-<yyyyMMdd>.<run>
+# The first job holds the tag to a Release dev ran: a published build-*
+# Release with its signed manifest, and a Deployment of it to Dev that ended
+# in success. The second job is in the Main environment, so it waits until
+# Patrick approves it ("Review deployments" on the run); nothing runs before
+# that, and a rejection ends it. Once approved it makes a Deployment to Main
+# naming the Release and this run, and the box deploy agent puts that same
+# Release on the live server: the files dev ran, byte for byte, held to the
+# same signature (docs/DEPLOY-AGENT.md, "Main").
+#
+# WHY THE AGENT ASKS AGAIN. GitHub holds this job to the reviewer, but a
+# Deployment made any other way would be held to nothing, so the agent
+# applies a Main Deployment only when it names a run of this workflow on main
+# that was approved on Main, made no Deployment before, and is of a Release
+# dev ran (tools/DeployAgent/Agent.cs, NotApproved).
+#
+# MAIN'S LAUNCHER (#4825). Every merge that makes dev's Velopack package
+# makes main's too: listed in the build Release's signed manifest as the part
+# "main", never on that Release, and kept with its run as the artifact
+# main-<tag> (merge-release.yml, MAIN'S PACKAGE). The check job finds the
+# package the promoted Release runs with, its own or the newest one before
+# it (MergeRelease.ps1, Find-MainPackage), and the artifact it is in; once
+# Patrick approves, the promotion puts its files out on the Release
+# main-<build tag>, each held to that record by name and sha256, before it
+# makes the Deployment. That Release is where a main launcher reads its
+# updates (releases.main.json) and setup-files.main.json
+# (launcher/app/VeloRecord.cs, MainRelease), and it carries main's download,
+# Thornswood-Setup.exe. A package already out is checked and left as it is.
+# An artifact is kept 90 days, so a build older than that, never promoted,
+# can no longer take its package to main.
+#
+# Main goes back the same way: promote the Release main ran before. That puts
+# the server back; main's launchers keep the newer package, because Velopack
+# only moves a launcher forward. The gate's Deploy-Release verb never puts a
+# tag on main.
+#
+# GitHub also lists a Deployment of its own for the waiting job (no Release
+# in it); the agent never applies one, since GitHub has put a status on it
+# before the agent sees it.
+name: Promote to main
+run-name: Promote ${{ inputs.tag }} to main
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'The build Release dev ran, build-<yyyyMMdd>.<run>'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promote-main
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Hold the tag to a Release dev ran
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      deployments: read
+      actions: read
+    outputs:
+      commit: ${{ steps.check.outputs.commit }}
+      main_from: ${{ steps.check.outputs.main_from }}
+      main_tag: ${{ steps.check.outputs.main_tag }}
+      main_commit: ${{ steps.check.outputs.main_commit }}
+      main_run: ${{ steps.check.outputs.main_run }}
+    steps:
+      # For MergeRelease.ps1, which finds main's launcher package.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      # The tag reaches the script through env, never pasted into its text.
+      - name: The Release, its manifest, and dev's Deployment of it
+        id: check
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          function Stop-Promote([string]$why) { Write-Host "::error title=Not promoted::$why"; exit 1 }
+          $tag = $env:TAG
+          if ($tag -notmatch '^build-\d{8}\.\d{1,9}$') { Stop-Promote "$tag is not a build Release tag, build-<yyyyMMdd>.<run>" }
+          $repo = $env:GITHUB_REPOSITORY
+          $raw = gh api "repos/$repo/releases/tags/$tag"
+          if ($LASTEXITCODE -ne 0) { Stop-Promote "there is no Release $tag" }
+          $rel = ($raw -join "`n") | ConvertFrom-Json
+          if ($rel.draft) { Stop-Promote "$tag is a draft, never published, so dev never ran it" }
+          $names = @($rel.assets | ForEach-Object { $_.name })
+          if ($names -notcontains 'manifest.json' -or $names -notcontains 'manifest.cat') { Stop-Promote "$tag has no signed manifest" }
+          $asset = @($rel.assets | Where-Object name -eq 'manifest.json')[0]
+          $mraw = gh api -H 'Accept: application/octet-stream' "repos/$repo/releases/assets/$($asset.id)"
+          if ($LASTEXITCODE -ne 0) { Stop-Promote "the manifest of $tag could not be read" }
+          $m = ($mraw -join "`n") | ConvertFrom-Json
+          if ([string]$m.tag -ne $tag -or [string]$m.commit -notmatch '^[0-9a-f]{40}$') { Stop-Promote "the manifest of $tag names $($m.tag) at $($m.commit)" }
+          $draw = gh api "repos/$repo/deployments?environment=Dev&per_page=100"
+          if ($LASTEXITCODE -ne 0) { Stop-Promote 'the Deployments to Dev could not be read' }
+          $ran = $false
+          foreach ($d in @(($draw -join "`n") | ConvertFrom-Json)) {
+            $p = $d.payload
+            if ($p -is [string]) { try { $p = $p | ConvertFrom-Json } catch { continue } }
+            if ($null -eq $p -or [string]$p.release -ne $tag) { continue }
+            $st = gh api "repos/$repo/deployments/$($d.id)/statuses?per_page=100"
+            if ($LASTEXITCODE -ne 0) { Stop-Promote "the statuses of Deployment $($d.id) could not be read" }
+            if (@(($st -join "`n") | ConvertFrom-Json | Where-Object state -eq 'success').Count) { $ran = $true; Write-Host "dev ran $tag: Deployment $($d.id)"; break }
+          }
+          if (-not $ran) { Stop-Promote "dev has not run $tag: no Deployment of it to Dev ended in success" }
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("commit=" + $m.commit)
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "**$tag** (commit $($m.commit.Substring(0, 12))) ran on dev. It goes on the live server once Patrick approves this run."
+
+          # Main's launcher package (MAIN'S LAUNCHER above): found now, so
+          # the approval names it and nothing is missing once it is given.
+          . ./scripts/release/MergeRelease.ps1
+          try { $pkg = Find-MainPackage -Tag $tag -Manifest $m -Repo $repo } catch { Stop-Promote $_.Exception.Message }
+          if ($null -eq $pkg) {
+            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "No build Release up to $tag made a main launcher package, so main's launcher is left as it is."
+          } else {
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("main_from=" + $pkg.From)
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("main_tag=" + $pkg.MainTag)
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("main_commit=" + $pkg.Commit)
+            if ($pkg.Published) {
+              Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Main's launcher package, from **$($pkg.From)**, is out already on **$($pkg.MainTag)**."
+            } else {
+              $araw = gh api "repos/$repo/actions/artifacts?name=$($pkg.MainTag)&per_page=100"
+              if ($LASTEXITCODE -ne 0) { Stop-Promote "the artifacts named $($pkg.MainTag) could not be listed" }
+              try { $art = Select-MainPackageArtifact -Artifacts @((($araw -join "`n") | ConvertFrom-Json).artifacts) -Name $pkg.MainTag -Commit $pkg.Commit } catch { Stop-Promote $_.Exception.Message }
+              $run = [string]$art.workflow_run.id
+              $path = gh api "repos/$repo/actions/runs/$run" --jq .path
+              if ($LASTEXITCODE -ne 0 -or [string]$path -ne '.github/workflows/merge-release.yml') { Stop-Promote "the artifact $($pkg.MainTag) is from run $run, which is not merge-release.yml ($path)" }
+              Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("main_run=" + $run)
+              Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Main's launcher package, from **$($pkg.From)** (run $run), goes out on **$($pkg.MainTag)** once Patrick approves this run."
+            }
+          }
+
+  promote:
+    name: Put it on main, once Patrick approves
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Patrick is the Main environment's only required reviewer: this job
+    # waits for him and runs only once he approves.
+    environment: Main
+    # contents: write and actions: read only for main's launcher package:
+    # the artifact merge-release.yml kept, and the Release it goes out on.
+    permissions:
+      deployments: write
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: ${{ needs.check.outputs.main_run != '' }}
+        with:
+          persist-credentials: false
+
+      # Before the Deployment, so main's launchers can have the files the
+      # live server is about to run. Each file is held to the signed record
+      # of the build that made it, by name and sha256, before it is put out.
+      - name: Put main's launcher package out (the Release main-<tag>)
+        if: ${{ needs.check.outputs.main_run != '' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          MAIN_FROM: ${{ needs.check.outputs.main_from }}
+          MAIN_TAG: ${{ needs.check.outputs.main_tag }}
+          MAIN_COMMIT: ${{ needs.check.outputs.main_commit }}
+          MAIN_RUN: ${{ needs.check.outputs.main_run }}
+        run: |
+          . ./scripts/release/MergeRelease.ps1
+          $repo = $env:GITHUB_REPOSITORY
+          $raw = gh api "repos/$repo/releases/tags/$($env:MAIN_FROM)"
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::the Release $($env:MAIN_FROM) could not be read"; exit 1 }
+          $asset = @((($raw -join "`n") | ConvertFrom-Json).assets | Where-Object name -eq 'manifest.json')[0]
+          $mraw = gh api -H 'Accept: application/octet-stream' "repos/$repo/releases/assets/$($asset.id)"
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::the manifest of $($env:MAIN_FROM) could not be read"; exit 1 }
+          $record = ($mraw -join "`n") | ConvertFrom-Json
+          if ([string]$record.tag -ne $env:MAIN_FROM -or [string]$record.commit -ne $env:MAIN_COMMIT) { Write-Host "::error::the manifest of $($env:MAIN_FROM) names $($record.tag) at $($record.commit)"; exit 1 }
+          $dir = Join-Path $env:RUNNER_TEMP 'main-package'
+          gh run download $env:MAIN_RUN -n $env:MAIN_TAG -D $dir -R $repo
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::the artifact $($env:MAIN_TAG) of run $($env:MAIN_RUN) could not be downloaded"; exit 1 }
+          $files = @(Get-ChildItem -LiteralPath $dir -File -Recurse)
+          $have = @{}
+          foreach ($f in $files) { $have[$f.Name] = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
+          if ($have.Count -ne $files.Count) { Write-Host "::error::the artifact $($env:MAIN_TAG) holds two files of one name"; exit 1 }
+          $why = Get-MainPackageProblem -Record $record -Have $have
+          if ($why) { Write-Host "::error::the artifact $($env:MAIN_TAG) $why"; exit 1 }
+          # Releases here are immutable once published: a draft first, then
+          # published only when every file is on it.
+          $notes = "Main's launcher and game files from $($env:MAIN_FROM), put out when $($env:TAG) was approved for main in run $($env:GITHUB_RUN_ID)."
+          gh release create $env:MAIN_TAG --draft --target $env:MAIN_COMMIT --title "Main $($env:MAIN_FROM)" --notes $notes --latest=false -R $repo
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::the draft $($env:MAIN_TAG) could not be made"; exit 1 }
+          gh release upload $env:MAIN_TAG @($files | ForEach-Object { $_.FullName }) -R $repo
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::the files could not go on the draft $($env:MAIN_TAG)"; exit 1 }
+          gh release edit $env:MAIN_TAG --draft=false --latest=false -R $repo
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::the draft $($env:MAIN_TAG) could not be published"; exit 1 }
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Main's launcher package from **$($env:MAIN_FROM)** is out on **$($env:MAIN_TAG)**."
+
+      - name: Ask the live server for it (a Deployment to Main)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          COMMIT: ${{ needs.check.outputs.commit }}
+        run: |
+          # required_contexts empty: the commit passed its checks before dev
+          # took it, and the Deployment must not wait on whatever else runs.
+          $body = [ordered]@{
+            ref = $env:COMMIT
+            task = 'deploy'
+            environment = 'Main'
+            auto_merge = $false
+            required_contexts = @()
+            production_environment = $true
+            transient_environment = $false
+            payload = [ordered]@{ release = $env:TAG; run = [long]$env:GITHUB_RUN_ID }
+            description = "Release $($env:TAG) to main, approved in run $($env:GITHUB_RUN_ID)"
+          }
+          $file = Join-Path $env:RUNNER_TEMP 'deployment.json'
+          [IO.File]::WriteAllText($file, ($body | ConvertTo-Json -Depth 4 -Compress))
+          $id = gh api --method POST "repos/$($env:GITHUB_REPOSITORY)/deployments" --input $file --jq .id
+          if ($LASTEXITCODE -ne 0 -or -not $id) { Write-Host '::error::GitHub made no Deployment'; exit 1 }
+          Write-Host "Deployment $id asks main for $($env:TAG); the box deploy agent applies it and says how it went on it"
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Deployment $id asks **Main** for **$($env:TAG)**: https://github.com/$($env:GITHUB_REPOSITORY)/deployments"

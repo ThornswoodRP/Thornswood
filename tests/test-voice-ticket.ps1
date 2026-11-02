@@ -15,13 +15,14 @@
   ticket in the clear. Nothing else in the launcher sends the ticket anywhere
   but Discord.Site, which is https.
 
-  This lifts FetchToken and JsonEscape out of the shipped Voice.cs by name and
-  brace match, the same way test-dev-version.ps1 lifts the version block out
-  of Ship.ps1, compiles them against a stub Discord and Config with the
-  compiler the build runs (Add-LauncherType, tests\Launcher-Csc.ps1, #2821;
-  off Windows it says SKIP, that compiler is only there), and points
-  them at a socket on loopback that records every byte it is sent. So the
-  question "did the ticket cross the wire" is answered by the wire.
+  This lifts FetchToken, JsonEscape and the HttpClient FetchToken sends with
+  (TokenHttp) out of the shipped Voice.cs by name and brace match, the same
+  way test-ship-gate.ps1 lifts the Git gate out of Ship.ps1, compiles
+  them against a stub Discord and Config with the .NET 10 SDK the launcher
+  builds with (Add-LauncherType, tests\Launcher-Csc.ps1), which runs on any
+  machine, and points them at a socket on loopback that records every byte
+  it is sent. So the question "did the ticket cross the wire" is answered by
+  the wire.
 
   Read only. It opens sockets on 127.0.0.1 and nothing else.
 #>
@@ -92,9 +93,11 @@ function Get-MethodText([string]$text, [string]$head) {
 $src = Get-Content -LiteralPath $VoicePath -Raw
 $fetch = Get-MethodText $src 'static string FetchToken('
 $escape = Get-MethodText $src 'static string JsonEscape('
+$http = [regex]::Match($src, 'static readonly HttpClient TokenHttp = [^;]*;').Value
 Yes 'FetchToken is in Voice.cs' ($null -ne $fetch)
 Yes 'JsonEscape is in Voice.cs' ($null -ne $escape)
-if ($null -eq $fetch -or $null -eq $escape) { Done }
+Yes 'and the HttpClient FetchToken sends with, TokenHttp' ($http.Length -gt 0)
+if ($null -eq $fetch -or $null -eq $escape -or $http.Length -eq 0) { Done }
 
 # ---- compile the real method against stubs ----------------------------------
 #
@@ -110,6 +113,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Net;
+using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -196,11 +200,14 @@ namespace NS
 
         FETCH
 
+        TOKENHTTP
+
         ESCAPE
 
         public static string Run(string ticket, string vbase, bool haveConf, string host, string port, List<string> lines)
         {
-            WebRequest.DefaultWebProxy = null;
+            // Straight to the loopback socket, whatever proxy this machine names.
+            HttpClient.DefaultProxy = new WebProxy();
             Discord.Ticket = ticket;
             if (haveConf) { conf = new Config(); conf.Base = vbase; } else { conf = null; }
             return FetchToken(host, port, 42, delegate(string s) { lines.Add(s); });
@@ -208,16 +215,11 @@ namespace NS
     }
 }
 '@
-$cs = $cs.Replace('namespace NS', 'namespace ' + $ns).Replace('FETCH', $fetch).Replace('ESCAPE', $escape)
-
-if (-not $OnWindows) {
-    Write-Host 'SKIP  FetchToken, compiled and pointed at the wire: its compiler is the Roslyn csc that comes with Visual Studio''s Build Tools, which only Windows has'
-    Done
-}
+$cs = $cs.Replace('namespace NS', 'namespace ' + $ns).Replace('TOKENHTTP', $http).Replace('ESCAPE', $escape).Replace('FETCH', $fetch)
 $compiled = $true
 try { $null = Add-LauncherType -Source $cs }
 catch { $compiled = $false; Write-Host $_.Exception.Message }
-Yes 'FetchToken compiles against the stubs, with the compiler the build runs' $compiled
+Yes 'FetchToken compiles against the stubs, with the .NET 10 SDK' $compiled
 if (-not $compiled) { Done }
 
 $VoiceT = [type]($ns + '.Voice')

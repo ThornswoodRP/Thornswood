@@ -147,7 +147,7 @@ function Get-SiteJson([string]$Uri) { return Get-Content -Raw -LiteralPath (Join
     function Get-Fake { return [IO.File]::ReadAllText($fake) | ConvertFrom-Json }
     function Run([string]$tag) {
         $env:TS_FAKE = $fake; $env:TS_SITE = $site
-        $out = @(& pwsh -NoProfile -File $copy -Tag $tag -Repo 'EvilPatrick06/Thornswood' 2>&1 | ForEach-Object { [string]$_ })
+        $out = @(& pwsh -NoProfile -File $copy -Tag $tag -Repo 'ThornswoodRP/Thornswood' 2>&1 | ForEach-Object { [string]$_ })
         return @{ Code = $LASTEXITCODE; Out = ($out -join "`n") }
     }
     $base = [ordered]@{ private = $false; calls = @(); releases = @(); tags = @(

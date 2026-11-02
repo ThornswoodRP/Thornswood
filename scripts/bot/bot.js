@@ -23,7 +23,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-const MSG = { CustomPacket: 1, UpdateMovement: 2, DestroyActor: 25, SetInventory: 28, SetRaceMenuOpen: 29, CreateActor: 33 };
+const MSG = { CustomPacket: 1, UpdateMovement: 2, UpdateProperty: 7, DestroyActor: 25, SetInventory: 28, SetRaceMenuOpen: 29, CreateActor: 33 };
 
 function b64u(buf) {
   return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');

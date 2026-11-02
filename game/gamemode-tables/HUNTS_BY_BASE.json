@@ -1,0 +1,2018 @@
+{
+"eb3:Skyrim.esm":{
+"name":"Rabbit",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"65c9e:Skyrim.esm","name":"Raw Rabbit Leg","count":1}]
+},
+"eb2:Skyrim.esm":{
+"name":"Mudcrab",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3540:HearthFires.esm","name":"Mudcrab Legs","count":1},{"item":"6bc00:Skyrim.esm","name":"Mudcrab Chitin","count":1}]
+},
+"10fe05:Skyrim.esm":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"10fc24:Skyrim.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"10f7fd:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"10f2a4:Skyrim.esm":{
+"name":"Pit Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"10f2a3:Skyrim.esm":{
+"name":"Ice Wolf",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad75:Skyrim.esm","name":"Ice Wolf Pelt","count":1}]
+},
+"10f2a2:Skyrim.esm":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"10d29c:Skyrim.esm":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"109e41:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"109e40:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"109e3e:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"109e3d:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"109c1d:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"109c1c:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"109ab1:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"10982b:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"10982a:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"109827:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"109823:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"109487:Skyrim.esm":{
+"name":"Stray Dog",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"10929f:Skyrim.esm":{
+"name":"Chicken",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"f2011:Skyrim.esm","name":"Chicken Breast","count":1}]
+},
+"104f46:Skyrim.esm":{
+"name":"White Stag",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad90:Skyrim.esm","name":"Deer Hide","count":1},{"item":"669a2:Skyrim.esm","name":"Venison","count":1}]
+},
+"102d73:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"102d72:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"102d71:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"10195b:Skyrim.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"101581:Skyrim.esm":{
+"name":"Mammoth",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,5]],
+"gives":[{"item":"3ad6c:Skyrim.esm","name":"Mammoth Tusk","count":1},{"item":"669a4:Skyrim.esm","name":"Mammoth Snout","count":1}]
+},
+"101580:Skyrim.esm":{
+"name":"Mammoth",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,5]],
+"gives":[{"item":"3ad6c:Skyrim.esm","name":"Mammoth Tusk","count":1},{"item":"669a4:Skyrim.esm","name":"Mammoth Snout","count":1}]
+},
+"fe2d6:Skyrim.esm":{
+"name":"Sabre Cat",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6d:Skyrim.esm","name":"Sabre Cat Pelt","count":1},{"item":"6bc04:Skyrim.esm","name":"Sabre Cat Tooth","count":1},{"item":"6bc07:Skyrim.esm","name":"Eye of Sabre Cat","count":1}]
+},
+"fdc5a:Skyrim.esm":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"fa6d9:Skyrim.esm":{
+"name":"Chicken",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"f2011:Skyrim.esm","name":"Chicken Breast","count":1}]
+},
+"f4c90:Skyrim.esm":{
+"name":"Frost Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"f077a:Skyrim.esm":{
+"name":"Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"ef610:Skyrim.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"ef607:Skyrim.esm":{
+"name":"Horker",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad68:Skyrim.esm","name":"Horker Tusk","count":1},{"item":"65c9b:Skyrim.esm","name":"Horker Meat","count":1}]
+},
+"ec96a:Skyrim.esm":{
+"name":"Rabbit",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"65c9e:Skyrim.esm","name":"Raw Rabbit Leg","count":1}]
+},
+"ec968:Skyrim.esm":{
+"name":"Rabbit",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"65c9e:Skyrim.esm","name":"Raw Rabbit Leg","count":1}]
+},
+"ebc2e:Skyrim.esm":{
+"name":"Frost Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"dd641:Skyrim.esm":{
+"name":"Mammoth",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,5]],
+"gives":[{"item":"3ad6c:Skyrim.esm","name":"Mammoth Tusk","count":1},{"item":"669a4:Skyrim.esm","name":"Mammoth Snout","count":1}]
+},
+"d0702:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"b8f25:Skyrim.esm":{
+"name":"Deer",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"669a2:Skyrim.esm","name":"Venison","count":1},{"item":"d284d:Skyrim.esm","name":"Deer Hide","count":1}]
+},
+"b8eca:Skyrim.esm":{
+"name":"Rabbit",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"65c9e:Skyrim.esm","name":"Raw Rabbit Leg","count":1}]
+},
+"b83c1:Skyrim.esm":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"b11a7:Skyrim.esm":{
+"name":"Pumpkin",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"d4b35:Skyrim.esm","name":"Fox Pelt","count":1}]
+},
+"b076a:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"a91a0:Skyrim.esm":{
+"name":"Chicken",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"f2011:Skyrim.esm","name":"Chicken Breast","count":1}]
+},
+"999a5:Skyrim.esm":{
+"name":"Giant Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":2}]
+},
+"9931a:Skyrim.esm":{
+"name":"Alpha Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"68d72:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"68d71:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"68d6e:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"68d6d:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"68d6b:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"68d5b:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"68d07:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"68d04:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"68d03:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"68d02:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"68cfa:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"90ce2:Skyrim.esm":{
+"name":"White Stag",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad90:Skyrim.esm","name":"Deer Hide","count":1},{"item":"669a2:Skyrim.esm","name":"Venison","count":1}]
+},
+"8553b:Skyrim.esm":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"829b6:Skyrim.esm":{
+"name":"Snow Fox",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"d4be7:Skyrim.esm","name":"Snow Fox Pelt","count":1}]
+},
+"829b3:Skyrim.esm":{
+"name":"Fox",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"d4b35:Skyrim.esm","name":"Fox Pelt","count":1}]
+},
+"6dc9d:Skyrim.esm":{
+"name":"Rabbit",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"65c9e:Skyrim.esm","name":"Raw Rabbit Leg","count":1}]
+},
+"6af65:Skyrim.esm":{
+"name":"Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"6af5a:Skyrim.esm":{
+"name":"Frost Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"6681e:Skyrim.esm":{
+"name":"Cow",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad8f:Skyrim.esm","name":"Cow Hide","count":1},{"item":"65c99:Skyrim.esm","name":"Raw Beef","count":1}]
+},
+"5d007:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"5d006:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"5d005:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"5cfd4:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"5487e:Skyrim.esm":{
+"name":"Goat",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad8e:Skyrim.esm","name":"Goat Hide","count":1},{"item":"65c9a:Skyrim.esm","name":"Goat Meat","count":1}]
+},
+"39662:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"21875:Skyrim.esm":{
+"name":"Mudcrab",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3540:HearthFires.esm","name":"Mudcrab Legs","count":1},{"item":"6bc00:Skyrim.esm","name":"Mudcrab Chitin","count":2}]
+},
+"e4011:Skyrim.esm":{
+"name":"Mudcrab",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3540:HearthFires.esm","name":"Mudcrab Legs","count":1},{"item":"6bc00:Skyrim.esm","name":"Mudcrab Chitin","count":1}]
+},
+"e4010:Skyrim.esm":{
+"name":"Mudcrab",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3540:HearthFires.esm","name":"Mudcrab Legs","count":1},{"item":"6bc00:Skyrim.esm","name":"Mudcrab Chitin","count":1}]
+},
+"e1672:Skyrim.esm":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"e160d:Skyrim.esm":{
+"name":"Pit Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"ddcd0:Skyrim.esm":{
+"name":"Pit Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"dc5a3:Skyrim.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"db2ab:Skyrim.esm":{
+"name":"Elk",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad90:Skyrim.esm","name":"Deer Hide","count":1},{"item":"669a2:Skyrim.esm","name":"Venison","count":1}]
+},
+"d9806:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"d95e9:Skyrim.esm":{
+"name":"Meeko",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"d249a:Skyrim.esm":{
+"name":"Deer",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad90:Skyrim.esm","name":"Deer Hide","count":1},{"item":"669a2:Skyrim.esm","name":"Venison","count":1}]
+},
+"d2070:Skyrim.esm":{
+"name":"Elk",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad90:Skyrim.esm","name":"Deer Hide","count":1},{"item":"669a2:Skyrim.esm","name":"Venison","count":1}]
+},
+"d206f:Skyrim.esm":{
+"name":"Deer",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"669a2:Skyrim.esm","name":"Venison","count":1},{"item":"d284d:Skyrim.esm","name":"Deer Hide","count":1}]
+},
+"d206e:Skyrim.esm":{
+"name":"Goat",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad8e:Skyrim.esm","name":"Goat Hide","count":1},{"item":"65c9a:Skyrim.esm","name":"Goat Meat","count":1}]
+},
+"d1684:Skyrim.esm":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"d08c0:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"d0872:Skyrim.esm":{
+"name":"Chaurus",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"cf89d:Skyrim.esm":{
+"name":"Deer",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"669a2:Skyrim.esm","name":"Venison","count":1},{"item":"d284d:Skyrim.esm","name":"Deer Hide","count":1}]
+},
+"cf79e:Skyrim.esm":{
+"name":"Pack Member",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"ce60c:Skyrim.esm":{
+"name":"Dog",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"c96c4:Skyrim.esm":{
+"name":"Snow Bear",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad54:Skyrim.esm","name":"Snow Bear Pelt","count":1},{"item":"6bc02:Skyrim.esm","name":"Bear Claws","count":1}]
+},
+"c96c3:Skyrim.esm":{
+"name":"Cave Bear",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad53:Skyrim.esm","name":"Cave Bear Pelt","count":1},{"item":"6bc02:Skyrim.esm","name":"Bear Claws","count":1}]
+},
+"c96c2:Skyrim.esm":{
+"name":"Bear",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad52:Skyrim.esm","name":"Bear Pelt","count":1},{"item":"6bc02:Skyrim.esm","name":"Bear Claws","count":1}]
+},
+"c96c1:Skyrim.esm":{
+"name":"Ice Wolf",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad75:Skyrim.esm","name":"Ice Wolf Pelt","count":1}]
+},
+"c96c0:Skyrim.esm":{
+"name":"Snowy Sabre Cat",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad6e:Skyrim.esm","name":"Sabre Cat Snow Pelt","count":1},{"item":"6bc04:Skyrim.esm","name":"Sabre Cat Tooth","count":1},{"item":"6bc07:Skyrim.esm","name":"Eye of Sabre Cat","count":1}]
+},
+"c96bf:Skyrim.esm":{
+"name":"Sabre Cat",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6d:Skyrim.esm","name":"Sabre Cat Pelt","count":1},{"item":"6bc04:Skyrim.esm","name":"Sabre Cat Tooth","count":1},{"item":"6bc07:Skyrim.esm","name":"Eye of Sabre Cat","count":1}]
+},
+"c96be:Skyrim.esm":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"c39f1:Skyrim.esm":{
+"name":"Cow",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad8f:Skyrim.esm","name":"Cow Hide","count":1},{"item":"65c99:Skyrim.esm","name":"Raw Beef","count":1}]
+},
+"c214e:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"a19ff:Skyrim.esm":{
+"name":"Lis",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"a19fe:Skyrim.esm":{
+"name":"Lis",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"8327d:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"97e1e:Skyrim.esm":{
+"name":"Frost",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"8cacc:Skyrim.esm":{
+"name":"Mudcrab",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3540:HearthFires.esm","name":"Mudcrab Legs","count":1},{"item":"6bc00:Skyrim.esm","name":"Mudcrab Chitin","count":1}]
+},
+"8b5d1:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"8540e:Skyrim.esm":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"85409:Skyrim.esm":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"84785:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"7932f:Skyrim.esm":{
+"name":"Chaurus",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"753ce:Skyrim.esm":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"72a08:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"654e5:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"471fc:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"b9e1d:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"b70f7:Skyrim.esm":{
+"name":"Bear",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad52:Skyrim.esm","name":"Bear Pelt","count":1},{"item":"6bc02:Skyrim.esm","name":"Bear Claws","count":1}]
+},
+"b6234:Skyrim.esm":{
+"name":"Mammoth",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,5]],
+"gives":[{"item":"3ad6c:Skyrim.esm","name":"Mammoth Tusk","count":1},{"item":"669a4:Skyrim.esm","name":"Mammoth Snout","count":1}]
+},
+"b5559:Skyrim.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"afba2:Skyrim.esm":{
+"name":"Udefrykte",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"abee0:Skyrim.esm":{
+"name":"Deer",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"669a2:Skyrim.esm","name":"Venison","count":1},{"item":"d284d:Skyrim.esm","name":"Deer Hide","count":1}]
+},
+"abedf:Skyrim.esm":{
+"name":"Elk",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad90:Skyrim.esm","name":"Deer Hide","count":1},{"item":"669a2:Skyrim.esm","name":"Venison","count":1}]
+},
+"a5600:Skyrim.esm":{
+"name":"Chaurus",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"9da4b:Skyrim.esm":{
+"name":"Cow",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad8f:Skyrim.esm","name":"Cow Hide","count":1},{"item":"65c99:Skyrim.esm","name":"Raw Beef","count":1}]
+},
+"9d74e:Skyrim.esm":{
+"name":"Dog",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"9ccd7:Skyrim.esm":{
+"name":"Shadowmere",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"9a7aa:Skyrim.esm":{
+"name":"Vigilance",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"8e4fc:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"8c40c:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"8c40b:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"8c40a:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"8c409:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"490f2:Skyrim.esm":{
+"name":"Venomfang Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"48d67:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"48d64:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"23ef1:Skyrim.esm":{
+"name":"Tiber",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"23eed:Skyrim.esm":{
+"name":"Ysgramor",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"79bfd:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"59397:Skyrim.esm":{
+"name":"Sabre Cat",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6d:Skyrim.esm","name":"Sabre Cat Pelt","count":1},{"item":"6bc04:Skyrim.esm","name":"Sabre Cat Tooth","count":1},{"item":"6bc07:Skyrim.esm","name":"Eye of Sabre Cat","count":1}]
+},
+"58272:Skyrim.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"7398a:Skyrim.esm":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"73989:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"640bb:Skyrim.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"640ba:Skyrim.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"640b9:Skyrim.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"5f865:Skyrim.esm":{
+"name":"Karinda",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"54ae3:Skyrim.esm":{
+"name":"Dog",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"481a0:Skyrim.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"4b473:Skyrim.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"424fb:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"424f6:Skyrim.esm":{
+"name":"Giant Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":2}]
+},
+"424f5:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"42478:Skyrim.esm":{
+"name":"Deer",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad90:Skyrim.esm","name":"Deer Hide","count":1},{"item":"669a2:Skyrim.esm","name":"Venison","count":1}]
+},
+"422b7:Skyrim.esm":{
+"name":"Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"422b5:Skyrim.esm":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"422b4:Skyrim.esm":{
+"name":"Goat",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad8e:Skyrim.esm","name":"Goat Hide","count":1},{"item":"65c9a:Skyrim.esm","name":"Goat Meat","count":1}]
+},
+"422b3:Skyrim.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"422b2:Skyrim.esm":{
+"name":"Goat",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad8e:Skyrim.esm","name":"Goat Hide","count":1},{"item":"65c9a:Skyrim.esm","name":"Goat Meat","count":1}]
+},
+"422b1:Skyrim.esm":{
+"name":"Deer",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad90:Skyrim.esm","name":"Deer Hide","count":1},{"item":"669a2:Skyrim.esm","name":"Venison","count":1}]
+},
+"422af:Skyrim.esm":{
+"name":"Deer",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad90:Skyrim.esm","name":"Deer Hide","count":1},{"item":"669a2:Skyrim.esm","name":"Venison","count":1}]
+},
+"42265:Skyrim.esm":{
+"name":"Cave Bear",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad52:Skyrim.esm","name":"Bear Pelt","count":1},{"item":"6bc02:Skyrim.esm","name":"Bear Claws","count":1}]
+},
+"42264:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"421ff:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"4203f:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"41fb5:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"41fb4:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"2a1dc:Skyrim.esm":{
+"name":"Giant Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":2}]
+},
+"22837:Skyrim.esm":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"4359c:Skyrim.esm":{
+"name":"Goat",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad8e:Skyrim.esm","name":"Goat Hide","count":1},{"item":"65c9a:Skyrim.esm","name":"Goat Meat","count":1}]
+},
+"3d278:Skyrim.esm":{
+"name":"Sabre Cat",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6d:Skyrim.esm","name":"Sabre Cat Pelt","count":1},{"item":"6bc04:Skyrim.esm","name":"Sabre Cat Tooth","count":1},{"item":"6bc07:Skyrim.esm","name":"Eye of Sabre Cat","count":1}]
+},
+"3a1e0:Skyrim.esm":{
+"name":"Wounded Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":2}]
+},
+"2f442:Skyrim.esm":{
+"name":"Torom",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"2ebe2:Skyrim.esm":{
+"name":"Goat",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad8e:Skyrim.esm","name":"Goat Hide","count":1},{"item":"65c9a:Skyrim.esm","name":"Goat Meat","count":1}]
+},
+"1fa28:Skyrim.esm":{
+"name":"Chaurus",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"1e62a:Skyrim.esm":{
+"name":"Stump",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"1cb2c:Skyrim.esm":{
+"name":"Gleda the Goat",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad8e:Skyrim.esm","name":"Goat Hide","count":1},{"item":"65c9a:Skyrim.esm","name":"Goat Meat","count":1}]
+},
+"25d3b:Skyrim.esm":{
+"name":"Wolf",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad75:Skyrim.esm","name":"Ice Wolf Pelt","count":1}]
+},
+"23abf:Skyrim.esm":{
+"name":"Ice Wolf",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad75:Skyrim.esm","name":"Ice Wolf Pelt","count":1}]
+},
+"23abe:Skyrim.esm":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"23abb:Skyrim.esm":{
+"name":"Frost Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"23aba:Skyrim.esm":{
+"name":"Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"23ab8:Skyrim.esm":{
+"name":"Slaughterfish",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad70:Skyrim.esm","name":"Slaughterfish Scales","count":1},{"item":"8ae:Gourmet.esp","name":"Slaughterfish Meat","count":1}]
+},
+"23ab7:Skyrim.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"23ab6:Skyrim.esm":{
+"name":"Snowy Sabre Cat",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad6e:Skyrim.esm","name":"Sabre Cat Snow Pelt","count":1},{"item":"6bc04:Skyrim.esm","name":"Sabre Cat Tooth","count":1},{"item":"6bc07:Skyrim.esm","name":"Eye of Sabre Cat","count":1}]
+},
+"23ab5:Skyrim.esm":{
+"name":"Sabre Cat",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6d:Skyrim.esm","name":"Sabre Cat Pelt","count":1},{"item":"6bc04:Skyrim.esm","name":"Sabre Cat Tooth","count":1},{"item":"6bc07:Skyrim.esm","name":"Eye of Sabre Cat","count":1}]
+},
+"23ab4:Skyrim.esm":{
+"name":"Mammoth",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,5]],
+"gives":[{"item":"3ad6c:Skyrim.esm","name":"Mammoth Tusk","count":1},{"item":"669a4:Skyrim.esm","name":"Mammoth Snout","count":1}]
+},
+"23ab2:Skyrim.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"23ab1:Skyrim.esm":{
+"name":"Horker",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad68:Skyrim.esm","name":"Horker Tusk","count":1},{"item":"65c9b:Skyrim.esm","name":"Horker Meat","count":1}]
+},
+"23aad:Skyrim.esm":{
+"name":"Giant Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":2}]
+},
+"23aac:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"23aab:Skyrim.esm":{
+"name":"Giant Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":2}]
+},
+"23aaa:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"23a92:Skyrim.esm":{
+"name":"Dog",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"23a91:Skyrim.esm":{
+"name":"Elk",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad90:Skyrim.esm","name":"Deer Hide","count":1},{"item":"669a2:Skyrim.esm","name":"Venison","count":1}]
+},
+"23a90:Skyrim.esm":{
+"name":"Cow",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad8f:Skyrim.esm","name":"Cow Hide","count":1},{"item":"65c99:Skyrim.esm","name":"Raw Beef","count":1}]
+},
+"23a8f:Skyrim.esm":{
+"name":"Chaurus Reaper",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"23a8c:Skyrim.esm":{
+"name":"Snow Bear",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad54:Skyrim.esm","name":"Snow Bear Pelt","count":1},{"item":"6bc02:Skyrim.esm","name":"Bear Claws","count":1}]
+},
+"23a8b:Skyrim.esm":{
+"name":"Cave Bear",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad53:Skyrim.esm","name":"Cave Bear Pelt","count":1},{"item":"6bc02:Skyrim.esm","name":"Bear Claws","count":1}]
+},
+"23a8a:Skyrim.esm":{
+"name":"Bear",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad52:Skyrim.esm","name":"Bear Pelt","count":1},{"item":"6bc02:Skyrim.esm","name":"Bear Claws","count":1}]
+},
+"1e7c6:Skyrim.esm":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"1e7ba:Skyrim.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"1e7b9:Skyrim.esm":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"1e7b1:Skyrim.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"1e7a4:Skyrim.esm":{
+"name":"Cave Bear",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad52:Skyrim.esm","name":"Bear Pelt","count":1},{"item":"6bc02:Skyrim.esm","name":"Bear Claws","count":1}]
+},
+"1e7a1:Skyrim.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"1e7a0:Skyrim.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"138b8:Dawnguard.esm":{
+"name":"Giant Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":2}]
+},
+"113c1:Dawnguard.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"cef3:Dawnguard.esm":{
+"name":"Husky",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"2b58:Dawnguard.esm":{
+"name":"Chaurusflyer",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"183b7:Dawnguard.esm","name":"Chaurus Hunter Antennae","count":1},{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"29a5:Dawnguard.esm":{
+"name":"Chaurusflyer",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"183b7:Dawnguard.esm","name":"Chaurus Hunter Antennae","count":1},{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"29a4:Dawnguard.esm":{
+"name":"Chaurusflyer",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"183b7:Dawnguard.esm","name":"Chaurus Hunter Antennae","count":1},{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"29a3:Dawnguard.esm":{
+"name":"Chaurusflyer",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"183b7:Dawnguard.esm","name":"Chaurus Hunter Antennae","count":1},{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"29a1:Dawnguard.esm":{
+"name":"Chaurus Hunter Fledgling",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"183b7:Dawnguard.esm","name":"Chaurus Hunter Antennae","count":1},{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"1aa76:Dawnguard.esm":{
+"name":"Sceolang",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"1aa74:Dawnguard.esm":{
+"name":"Bran",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"1a5c6:Dawnguard.esm":{
+"name":"Wounded Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":2}]
+},
+"19820:Dawnguard.esm":{
+"name":"Snow Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"1981e:Dawnguard.esm":{
+"name":"Armored Frost Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"18b34:Dawnguard.esm":{
+"name":"Husky",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"18b30:Dawnguard.esm":{
+"name":"Dog",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"163ce:Dawnguard.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"1511d:Dawnguard.esm":{
+"name":"Frozen Chaurus",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"1511c:Dawnguard.esm":{
+"name":"Frozen Chaurus",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"1511b:Dawnguard.esm":{
+"name":"Frozen Chaurus",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"15119:Dawnguard.esm":{
+"name":"Frozen Chaurus",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"15118:Dawnguard.esm":{
+"name":"Frozen Chaurus",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"15117:Dawnguard.esm":{
+"name":"Frozen Chaurus",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"11ba9:Dawnguard.esm":{
+"name":"Armored Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"117f1:Dawnguard.esm":{
+"name":"Snow Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"1133a:Dawnguard.esm":{
+"name":"Vale Sabre Cat",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"1199a:Dawnguard.esm","name":"Vale Sabre Cat Hide","count":1},{"item":"6bc04:Skyrim.esm","name":"Sabre Cat Tooth","count":1},{"item":"6bc07:Skyrim.esm","name":"Eye of Sabre Cat","count":1}]
+},
+"1063c:Dawnguard.esm":{
+"name":"Vale Sabre Cat",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"1199a:Dawnguard.esm","name":"Vale Sabre Cat Hide","count":1},{"item":"6bc04:Skyrim.esm","name":"Sabre Cat Tooth","count":1},{"item":"6bc07:Skyrim.esm","name":"Eye of Sabre Cat","count":1}]
+},
+"f9a9:Dawnguard.esm":{
+"name":"Cow",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad8f:Skyrim.esm","name":"Cow Hide","count":1},{"item":"65c99:Skyrim.esm","name":"Raw Beef","count":1}]
+},
+"f798:Dawnguard.esm":{
+"name":"Vale Sabre Cat",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"1199a:Dawnguard.esm","name":"Vale Sabre Cat Hide","count":1},{"item":"6bc04:Skyrim.esm","name":"Sabre Cat Tooth","count":1},{"item":"6bc07:Skyrim.esm","name":"Eye of Sabre Cat","count":1}]
+},
+"f797:Dawnguard.esm":{
+"name":"Vale Deer",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"11999:Dawnguard.esm","name":"Vale Deer Hide","count":1},{"item":"669a2:Skyrim.esm","name":"Venison","count":1}]
+},
+"d0bc:Dawnguard.esm":{
+"name":"Snow Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"d0b9:Dawnguard.esm":{
+"name":"Armored Frost Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"d0b8:Dawnguard.esm":{
+"name":"Armored Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"c21d:Dawnguard.esm":{
+"name":"Chaurus Hunter",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"183b7:Dawnguard.esm","name":"Chaurus Hunter Antennae","count":1},{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"9d39:Dawnguard.esm":{
+"name":"Chaurus Hunter",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"183b7:Dawnguard.esm","name":"Chaurus Hunter Antennae","count":1},{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"966d:Dawnguard.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"8a6c:Dawnguard.esm":{
+"name":"Pack Member",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad75:Skyrim.esm","name":"Ice Wolf Pelt","count":1}]
+},
+"8440:Dawnguard.esm":{
+"name":"Chaurus",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"843f:Dawnguard.esm":{
+"name":"Chaurus",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"6d12:Dawnguard.esm":{
+"name":"Frost Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"6d06:Dawnguard.esm":{
+"name":"Frozen Chaurus",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"5204:Dawnguard.esm":{
+"name":"Chaurus Hunter",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"183b7:Dawnguard.esm","name":"Chaurus Hunter Antennae","count":1},{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"3c67:Dawnguard.esm":{
+"name":"Vale Sabre Cat",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"1199a:Dawnguard.esm","name":"Vale Sabre Cat Hide","count":1},{"item":"6bc04:Skyrim.esm","name":"Sabre Cat Tooth","count":1},{"item":"6bc07:Skyrim.esm","name":"Eye of Sabre Cat","count":1}]
+},
+"2c02:Dawnguard.esm":{
+"name":"Vale Deer",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"11999:Dawnguard.esm","name":"Vale Deer Hide","count":1},{"item":"669a2:Skyrim.esm","name":"Venison","count":1}]
+},
+"c3a:HearthFires.esm":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"8e9:HearthFires.esm":{
+"name":"Mudcrab",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3540:HearthFires.esm","name":"Mudcrab Legs","count":1},{"item":"6bc00:Skyrim.esm","name":"Mudcrab Chitin","count":1}]
+},
+"8e6:HearthFires.esm":{
+"name":"Slaughterfish",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad70:Skyrim.esm","name":"Slaughterfish Scales","count":1},{"item":"8ae:Gourmet.esp","name":"Slaughterfish Meat","count":1}]
+},
+"10fbe:HearthFires.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"10fbb:HearthFires.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"f9a8:HearthFires.esm":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"1381b:HearthFires.esm":{
+"name":"Vix",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"d4be7:Skyrim.esm","name":"Snow Fox Pelt","count":1}]
+},
+"1381a:HearthFires.esm":{
+"name":"Kit",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"d4b35:Skyrim.esm","name":"Fox Pelt","count":1}]
+},
+"13819:HearthFires.esm":{
+"name":"Biter",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"13818:HearthFires.esm":{
+"name":"Pincer",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3540:HearthFires.esm","name":"Mudcrab Legs","count":1},{"item":"6bc00:Skyrim.esm","name":"Mudcrab Chitin","count":1}]
+},
+"13817:HearthFires.esm":{
+"name":"Cotton",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"65c9e:Skyrim.esm","name":"Raw Rabbit Leg","count":1}]
+},
+"10a47:HearthFires.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"3a9c4:Dragonborn.esm":{
+"name":"Deer",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad90:Skyrim.esm","name":"Deer Hide","count":1},{"item":"669a2:Skyrim.esm","name":"Venison","count":1}]
+},
+"3a9c3:Dragonborn.esm":{
+"name":"Goat",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad8e:Skyrim.esm","name":"Goat Hide","count":1},{"item":"65c9a:Skyrim.esm","name":"Goat Meat","count":1}]
+},
+"3a9c2:Dragonborn.esm":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"30f26:Dragonborn.esm":{
+"name":"Ash Hopper",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"1cd71:Dragonborn.esm","name":"Ash Hopper Jelly","count":1},{"item":"2b04e:Dragonborn.esm","name":"Chitin Plate","count":1},{"item":"3bd15:Dragonborn.esm","name":"Ash Hopper Meat","count":1},{"item":"3d125:Dragonborn.esm","name":"Ash Hopper Leg","count":1}]
+},
+"28e89:Dragonborn.esm":{
+"name":"Ash Hopper",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"1cd71:Dragonborn.esm","name":"Ash Hopper Jelly","count":1},{"item":"2b04e:Dragonborn.esm","name":"Chitin Plate","count":1},{"item":"3bd15:Dragonborn.esm","name":"Ash Hopper Meat","count":1},{"item":"3d125:Dragonborn.esm","name":"Ash Hopper Leg","count":1}]
+},
+"2857f:Dragonborn.esm":{
+"name":"Netch Calf",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"1cd72:Dragonborn.esm","name":"Netch Jelly","count":1}]
+},
+"2857e:Dragonborn.esm":{
+"name":"Bull Netch",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"1cd72:Dragonborn.esm","name":"Netch Jelly","count":1},{"item":"1cd7c:Dragonborn.esm","name":"Netch Leather","count":1}]
+},
+"26196:Dragonborn.esm":{
+"name":"Lord Tusk",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad68:Skyrim.esm","name":"Horker Tusk","count":1},{"item":"65c9b:Skyrim.esm","name":"Horker Meat","count":1}]
+},
+"25ae4:Dragonborn.esm":{
+"name":"Solstheim Mudcrab",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3540:HearthFires.esm","name":"Mudcrab Legs","count":1},{"item":"6bc00:Skyrim.esm","name":"Mudcrab Chitin","count":1}]
+},
+"1d77a:Dragonborn.esm":{
+"name":"Old Salty",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3540:HearthFires.esm","name":"Mudcrab Legs","count":1},{"item":"6bc00:Skyrim.esm","name":"Mudcrab Chitin","count":2}]
+},
+"1b657:Dragonborn.esm":{
+"name":"Ash Hopper",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"1cd71:Dragonborn.esm","name":"Ash Hopper Jelly","count":1},{"item":"2b04e:Dragonborn.esm","name":"Chitin Plate","count":1},{"item":"3bd15:Dragonborn.esm","name":"Ash Hopper Meat","count":1},{"item":"3d125:Dragonborn.esm","name":"Ash Hopper Leg","count":1}]
+},
+"1b649:Dragonborn.esm":{
+"name":"Betty Netch",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"1cd72:Dragonborn.esm","name":"Netch Jelly","count":1},{"item":"1cd7c:Dragonborn.esm","name":"Netch Leather","count":1}]
+},
+"1b63e:Dragonborn.esm":{
+"name":"Horker Youngling",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad68:Skyrim.esm","name":"Horker Tusk","count":1},{"item":"65c9b:Skyrim.esm","name":"Horker Meat","count":1}]
+},
+"19ad0:Dragonborn.esm":{
+"name":"Ash Hopper",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"1cd71:Dragonborn.esm","name":"Ash Hopper Jelly","count":1},{"item":"2b04e:Dragonborn.esm","name":"Chitin Plate","count":1},{"item":"3bd15:Dragonborn.esm","name":"Ash Hopper Meat","count":1},{"item":"3d125:Dragonborn.esm","name":"Ash Hopper Leg","count":1}]
+},
+"1926c:Dragonborn.esm":{
+"name":"Albino Spider",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"17719:Dragonborn.esm","name":"Albino Spider Pod","count":1},{"item":"1771f:Dragonborn.esm","name":"Damaged Albino Spider Pod","count":1}]
+},
+"c0bf:JKs Skyrim.esp":{
+"name":"Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"d1211:JKs Skyrim.esp":{
+"name":"Aska",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"d6319:JKs Skyrim.esp":{
+"name":"Sigyn",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"d631a:JKs Skyrim.esp":{
+"name":"Loki",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"291791:WindhelmSSE.esp":{
+"name":"Karhu",
+"rank":"master",
+"yield":[[0,0],[0,0],[0,0],[1,5]],
+"gives":[{"item":"2ba5f2:WindhelmSSE.esp","name":"Pelt of Karhu","count":1},{"item":"6bc02:Skyrim.esm","name":"Bear Claws","count":2},{"item":"af5fd:Skyrim.esm","name":"Skull","count":1}]
+},
+"48459:WindhelmSSE.esp":{
+"name":"Sulvar's Dog",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"200a46:WindhelmSSE.esp":{
+"name":"Hugo",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"4c36de:aaaGraniteHill.esp":{
+"name":"Hund",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"e0c0:aaaGraniteHill.esp":{
+"name":"Chicken",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"f2011:Skyrim.esm","name":"Chicken Breast","count":1}]
+},
+"375af:ElysiumEstate.esp":{
+"name":"Chloe",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad8e:Skyrim.esm","name":"Goat Hide","count":1},{"item":"65c9a:Skyrim.esm","name":"Goat Meat","count":1}]
+},
+"1db39:SkyrimSewers.esp":{
+"name":"Cave Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"1ebcf:SkyrimSewers.esp":{
+"name":"Aldhissla",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"25af1:SkyrimSewers.esp":{
+"name":"Stray Dog",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"1000:Solitude Arena.esp":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"5a8b:Solitude Arena.esp":{
+"name":"Big Bear",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad52:Skyrim.esm","name":"Bear Pelt","count":1},{"item":"6bc02:Skyrim.esm","name":"Bear Claws","count":1}]
+},
+"5a8f:Solitude Arena.esp":{
+"name":"The Enchanted Woman",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"c12a:Solitude Arena.esp":{
+"name":"Animal Gladiator",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad52:Skyrim.esm","name":"Bear Pelt","count":1},{"item":"6bc02:Skyrim.esm","name":"Bear Claws","count":1}]
+},
+"c12b:Solitude Arena.esp":{
+"name":"Animal Gladiator",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"c12c:Solitude Arena.esp":{
+"name":"Animal Gladiator",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6d:Skyrim.esm","name":"Sabre Cat Pelt","count":1},{"item":"6bc04:Skyrim.esm","name":"Sabre Cat Tooth","count":1},{"item":"6bc07:Skyrim.esm","name":"Eye of Sabre Cat","count":1}]
+},
+"ea864:ZIA_Complete Pack.esp":{
+"name":"Rabbit",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"65c9e:Skyrim.esm","name":"Raw Rabbit Leg","count":1}]
+},
+"ea865:ZIA_Complete Pack.esp":{
+"name":"Chicken",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"f2011:Skyrim.esm","name":"Chicken Breast","count":1}]
+},
+"ea866:ZIA_Complete Pack.esp":{
+"name":"Skeever",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6f:Skyrim.esm","name":"Skeever Tail","count":1},{"item":"8ac:Gourmet.esp","name":"Skeever Meat","count":1}]
+},
+"ea867:ZIA_Complete Pack.esp":{
+"name":"Cow",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad8f:Skyrim.esm","name":"Cow Hide","count":1},{"item":"65c99:Skyrim.esm","name":"Raw Beef","count":1}]
+},
+"ea868:ZIA_Complete Pack.esp":{
+"name":"Goat",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad8e:Skyrim.esm","name":"Goat Hide","count":1},{"item":"65c9a:Skyrim.esm","name":"Goat Meat","count":1}]
+},
+"ea869:ZIA_Complete Pack.esp":{
+"name":"Fox",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"d4b35:Skyrim.esm","name":"Fox Pelt","count":1}]
+},
+"ea86a:ZIA_Complete Pack.esp":{
+"name":"Snow Fox",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"d4be7:Skyrim.esm","name":"Snow Fox Pelt","count":1}]
+},
+"ea86b:ZIA_Complete Pack.esp":{
+"name":"Wolf",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad74:Skyrim.esm","name":"Wolf Pelt","count":1}]
+},
+"ea86c:ZIA_Complete Pack.esp":{
+"name":"Ice Wolf",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad75:Skyrim.esm","name":"Ice Wolf Pelt","count":1}]
+},
+"ea86d:ZIA_Complete Pack.esp":{
+"name":"Dog",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"ea86e:ZIA_Complete Pack.esp":{
+"name":"Cave Bear",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad53:Skyrim.esm","name":"Cave Bear Pelt","count":1},{"item":"6bc02:Skyrim.esm","name":"Bear Claws","count":1}]
+},
+"ea86f:ZIA_Complete Pack.esp":{
+"name":"Snow Bear",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad54:Skyrim.esm","name":"Snow Bear Pelt","count":1},{"item":"6bc02:Skyrim.esm","name":"Bear Claws","count":1}]
+},
+"ea870:ZIA_Complete Pack.esp":{
+"name":"Sabre Cat",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad6d:Skyrim.esm","name":"Sabre Cat Pelt","count":1},{"item":"6bc04:Skyrim.esm","name":"Sabre Cat Tooth","count":1},{"item":"6bc07:Skyrim.esm","name":"Eye of Sabre Cat","count":1}]
+},
+"ea871:ZIA_Complete Pack.esp":{
+"name":"Snowy Sabre Cat",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad6e:Skyrim.esm","name":"Sabre Cat Snow Pelt","count":1},{"item":"6bc04:Skyrim.esm","name":"Sabre Cat Tooth","count":1},{"item":"6bc07:Skyrim.esm","name":"Eye of Sabre Cat","count":1}]
+},
+"ea872:ZIA_Complete Pack.esp":{
+"name":"Deer",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad90:Skyrim.esm","name":"Deer Hide","count":1},{"item":"669a2:Skyrim.esm","name":"Venison","count":1}]
+},
+"ea874:ZIA_Complete Pack.esp":{
+"name":"Horker",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad68:Skyrim.esm","name":"Horker Tusk","count":1},{"item":"65c9b:Skyrim.esm","name":"Horker Meat","count":1}]
+},
+"ea875:ZIA_Complete Pack.esp":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"ea877:ZIA_Complete Pack.esp":{
+"name":"Mudcrab",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3540:HearthFires.esm","name":"Mudcrab Legs","count":1},{"item":"6bc00:Skyrim.esm","name":"Mudcrab Chitin","count":2}]
+},
+"ea878:ZIA_Complete Pack.esp":{
+"name":"Mudcrab",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3540:HearthFires.esm","name":"Mudcrab Legs","count":1},{"item":"6bc00:Skyrim.esm","name":"Mudcrab Chitin","count":1}]
+},
+"ea87a:ZIA_Complete Pack.esp":{
+"name":"Chaurus",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"ea87b:ZIA_Complete Pack.esp":{
+"name":"Chaurus Reaper",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"ea87c:ZIA_Complete Pack.esp":{
+"name":"Chaurus Hunter Fledgling",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"183b7:Dawnguard.esm","name":"Chaurus Hunter Antennae","count":1},{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"ea87d:ZIA_Complete Pack.esp":{
+"name":"Chaurus Hunter",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"183b7:Dawnguard.esm","name":"Chaurus Hunter Antennae","count":1},{"item":"3ad57:Skyrim.esm","name":"Chaurus Chitin","count":1}]
+},
+"ea87e:ZIA_Complete Pack.esp":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"ea880:ZIA_Complete Pack.esp":{
+"name":"Frostbite Spider",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"e41b8:Skyrim.esm","name":"Frostbite Venom","count":1}]
+},
+"ea887:ZIA_Complete Pack.esp":{
+"name":"Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"ea888:ZIA_Complete Pack.esp":{
+"name":"Frost Troll",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad72:Skyrim.esm","name":"Troll Fat","count":1}]
+},
+"169210:ZIA_Complete Pack.esp":{
+"name":"Giant Mudcrab",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3540:HearthFires.esm","name":"Mudcrab Legs","count":1},{"item":"6bc00:Skyrim.esm","name":"Mudcrab Chitin","count":2}]
+},
+"e0622:ZIA_Complete Pack.esp":{
+"name":"Bear",
+"rank":"expert",
+"yield":[[0,0],[0,0],[1,4],[1,5]],
+"gives":[{"item":"3ad52:Skyrim.esm","name":"Bear Pelt","count":1},{"item":"6bc02:Skyrim.esm","name":"Bear Claws","count":1}]
+},
+"9d8c1:CFTO.esp":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"9d8c2:CFTO.esp":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"b6e5f:CFTO.esp":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"b6e60:CFTO.esp":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"b6e61:CFTO.esp":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"b6e62:CFTO.esp":{
+"name":"Horse",
+"rank":"advanced",
+"yield":[[0,0],[1,3],[1,4],[1,5]],
+"gives":[{"item":"3ad93:Skyrim.esm","name":"Horse Hide","count":1},{"item":"65c9c:Skyrim.esm","name":"Horse Meat","count":1}]
+},
+"19f7:OarsRest.esp":{
+"name":"Barnaby",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+},
+"4d081:OarsRest.esp":{
+"name":"Chicken",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"f2011:Skyrim.esm","name":"Chicken Breast","count":1}]
+},
+"4d083:OarsRest.esp":{
+"name":"Constipated Chicken",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"f2011:Skyrim.esm","name":"Chicken Breast","count":1}]
+},
+"60ec2:Immersive Patrols II.esp":{
+"name":"Dawnguard Husky",
+"rank":"novice",
+"yield":[[1,2],[1,3],[1,4],[1,5]],
+"gives":[{"item":"edb2e:Skyrim.esm","name":"Dog Meat","count":1}]
+}
+}

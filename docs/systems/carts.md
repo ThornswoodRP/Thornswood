@@ -5,7 +5,7 @@ cart stop, driven down a road to another stop by somebody who has goods on
 it, and emptied there by whoever the goods are for. On the road, the cart is
 with its driver, and anybody who catches up with the driver can raid it.
 
-Decided by Patrick on 22 Oct ([#3158](https://github.com/EvilPatrick06/Thornswood/issues/3158)):
+Decided by Patrick on 22 Oct ([#3158](https://github.com/ThornswoodRP/Thornswood/issues/3158)):
 people drive the carts that move goods between holds, and a shipment is lost
 only when people raid it, never by chance. Nothing on the road takes a piece
 by itself: no chance, no clock, no weather.
@@ -63,7 +63,7 @@ the road and cannot be raided.
 A driver who leaves the world on the road takes the cart with them for now,
 and it cannot be raided until they come back. Patrick decided on 26 Oct that
 the cart stays where they left and can be raided there; that is
-[#3531](https://github.com/EvilPatrick06/Thornswood/issues/3531).
+[#3531](https://github.com/ThornswoodRP/Thornswood/issues/3531).
 
 ## Staff
 

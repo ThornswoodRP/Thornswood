@@ -277,7 +277,8 @@ exit 0
     $cd = (Text 'records\collection-dropped.json') | ConvertFrom-Json
     $cp = (Text 'records\collection-plugins.json') | ConvertFrom-Json
     Yes 'collection-dropped.json is for the collection and revision collection-plugins.json names' ($cd.collection -eq $cp.collection -and [int]$cd.revision -eq [int]$cp.revision)
-    Yes 'each plugin it lets go says why, and is not in the revision any more' (@($cd.dropped).Count -ge 1 -and -not @(@($cd.dropped) | Where-Object { -not $_.why -or -not $_.name -or (@($cp.plugins | ForEach-Object { $_.name.ToLowerInvariant() }) -contains $_.name.ToLowerInvariant()) }).Count)
+    # A revision that takes nothing out lets nothing go (revision 7 only adds).
+    Yes 'each plugin it lets go says why, and is not in the revision any more' ($null -ne $cd.PSObject.Properties['dropped'] -and -not @(@($cd.dropped) | Where-Object { -not $_.why -or -not $_.name -or (@($cp.plugins | ForEach-Object { $_.name.ToLowerInvariant() }) -contains $_.name.ToLowerInvariant()) }).Count)
     Yes 'and none of them is in the order last-plugin.json was built against' (-not @(@($cd.dropped) | Where-Object { @((Text 'game\data\last-plugin.json' | ConvertFrom-Json).loadOrder | ForEach-Object { $_.ToLowerInvariant() }) -contains $_.name.ToLowerInvariant() }).Count)
     $lp = (Text 'game\data\last-plugin.json') | ConvertFrom-Json
     Yes 'last-plugin.json has the order to write, without the Last plugin itself' (@($lp.loadOrder).Count -gt 5 -and @($lp.loadOrder) -notcontains 'Thornswood-Last.esp')

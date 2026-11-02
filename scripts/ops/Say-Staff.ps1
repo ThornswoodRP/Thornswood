@@ -43,27 +43,27 @@
     ssh here: ssh to the box the way every script here goes (One, a
         developer's PC set up by Setup-SshKey.ps1). -From is then who the
         notice is from: one lower case word, claude, codex, djinn.
-    no ssh here, gh here (a cloud thread; #3045): it starts the private
-        ops repository's staff-notice.yml (EvilPatrick06/Thornswood-Ops,
-        where the VPS runners are registered, #4013) on its main with the
-        notice, waits for the run to end, and prints the run's answer. The
-        workflow checks out this repository's main and runs this script with
-        -OnTheBox on a VPS runner, with the notices key named claude out of
-        that repository's "notices" environment, which only main may use. gh
-        needs that repository: a cloud thread has it attached. So
-        the notice says [claude], and -From, if given, has to be claude.
-        Nothing secret is in the container or crosses it: the text and the
-        answer do. A run that has not ended in -WaitMinutes still posts when
-        a runner takes it, and -Run <its id> reads its answer then.
+    no ssh here, gh here (a cloud thread; #5187): it files the notice on
+        the board, ThornswoodRP/Thornswood, as an issue titled "Staff notice
+        from <-From>" (claude when not given) with the notice as its body and
+        the label "notice: staff". The bot reads those every minute, says
+        each in #staff-updates as [<-From>] <the notice>, comments "Said in
+        #staff-updates." and closes the issue (bot\bot.py
+        watch_staff_notices). The issue's number is the notice's id for
+        -Check and -Unsay; -Unsay puts the label "notice: take back" on it.
+        The board is public, so a notice filed this way is read by anybody:
+        one that must stay with staff goes from a machine with ssh. Nothing
+        secret is in the container or crosses it. The ops repository's
+        staff-notice.yml still runs -OnTheBox when started by hand.
 
   WHAT IT SAYS AND EXITS.
     queued    0, with the id, after the box wrote it to the outbox
     posted    0 (-Check), by the bot or the webhook
     waiting   2 (-Check), in the outbox, not said yet; the bot reads every
               minute and the webhook takes over after two and a half
-    waiting   2, through GitHub: the run had not ended in -WaitMinutes, or
-              GitHub started it and a read of its answer failed; the notice
-              was sent either way, and -Run <its id> reads the answer
+    filed     0, through GitHub, with the issue's number
+    waiting   2 (-Check), through GitHub: the issue is open and the bot has
+              not said it yet
     unsay     0, with the id, after the box wrote the ask down
     taken back 0 (-Check): deleted, already gone, or withheld (never said)
     waiting   2 (-Check), asked to be taken back, the bot not there yet
@@ -71,8 +71,8 @@
               with why. Nothing was posted. A notice the watchdog's webhook
               said, or one the bot could not delete: 1, with why.
   In a GitHub Actions job it also writes the box's answer, or why it
-  stopped, as an annotation titled Say-Staff, which is how the cloud half
-  reads the runner's answer.
+  stopped, as an annotation titled Say-Staff, which the staff-notice run
+  shows.
 
   The notice: 1800 characters at most, 30 an hour for each sender, no
   mentions (the bot and the webhook both send with mentions off).
@@ -89,14 +89,10 @@ param(
     # Takes a notice back (#3328).
     [Parameter(ParameterSetName = 'Unsay', Mandatory = $true)]
     [string]$Unsay,
-    # Through GitHub: the answer of a staff-notice run that had not ended.
-    [Parameter(ParameterSetName = 'Run', Mandatory = $true)]
-    [long]$Run,
     # The staff-notice workflow's half: this runs on the box itself.
     [switch]$OnTheBox,
-    [int]$WaitMinutes = 15,
-    # Where staff-notice.yml and the VPS runners are (#4013).
-    [string]$GitHubRepo = 'EvilPatrick06/Thornswood-Ops',
+    # Where a notice through GitHub is filed: the board the bot reads (#5187).
+    [string]$NoticeRepo = 'ThornswoodRP/Thornswood',
     [string]$VpsHost = '',
     [string]$VpsUser = ''
 )
@@ -110,11 +106,9 @@ if (-not $VpsUser) { $VpsUser = Get-ThornswoodVpsUser }
 if (-not $VpsHost) { $VpsHost = Get-ThornswoodVpsAddress }
 $far = 'C:\Thornswood-Watch\say-staff.ps1'
 $maxText = 1800
-$workflow = 'staff-notice.yml'
-# The name the workflow's notices key was made with (Grant-BoxAccess.ps1
-# -Name claude -MakeKey -NoticesOnly -ToEnvironment notices). The box sets
-# -From to it, so it is what a notice through GitHub says.
-$workflowSender = 'claude'
+# The labels the bot reads (bot\bot.py STAFF_NOTICE_LABEL, STAFF_TAKE_BACK_LABEL).
+$noticeLabel = 'notice: staff'
+$takeBackLabel = 'notice: take back'
 $inActions = ($env:GITHUB_ACTIONS -eq 'true')
 
 # An annotation on the job, which GitHub keeps on its check run, so the cloud
@@ -142,12 +136,18 @@ if ($OnTheBox) {
 } elseif (Get-Command gh -ErrorAction SilentlyContinue) {
     $route = 'github'
 } else {
-    Die 'there is no ssh here to reach the box and no gh to start the staff-notice workflow with. Nothing was posted.'
+    Die 'there is no ssh here to reach the box and no gh to file the notice on the board with. Nothing was posted.'
 }
-if ($PSCmdlet.ParameterSetName -eq 'Run' -and $route -ne 'github') { Die '-Run reads a staff-notice run on GitHub, which is the way only where there is no ssh.' }
 
 # ----------------------------------------------------------- what to send --
-if ($PSCmdlet.ParameterSetName -eq 'Check') {
+# Through GitHub a notice's id is its issue's number; through the box, the id
+# the box gave it.
+$noticeNumber = 0
+$asked = if ($PSCmdlet.ParameterSetName -eq 'Check') { $Check } elseif ($PSCmdlet.ParameterSetName -eq 'Unsay') { $Unsay } else { '' }
+if ($asked -and $route -eq 'github') {
+    if ($asked -notmatch '^#?([1-9][0-9]{0,8})$') { Die "$asked is not a notice's issue number; through GitHub Say-Staff.ps1 printed one like #5300." }
+    $noticeNumber = [int]$Matches[1]
+} elseif ($PSCmdlet.ParameterSetName -eq 'Check') {
     if ($Check -notmatch '^agent-[a-z0-9-]{1,80}$') { Die "$Check is not a notice id; Say-Staff.ps1 printed one like agent-claude-20261020214500-1a2b3c." }
     $line = 'check ' + $Check
 } elseif ($PSCmdlet.ParameterSetName -eq 'Unsay') {
@@ -161,116 +161,77 @@ if ($PSCmdlet.ParameterSetName -eq 'Check') {
     if (-not $t) { Die 'the notice is empty. Nothing was posted.' }
     if ($t.Length -gt $maxText) { Die ('the notice is ' + $t.Length + ' characters and ' + $maxText + ' is the most. Say it shorter; nothing was cut and nothing was posted.') }
     $line = 'say ' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($t))
-    if ($route -eq 'ssh' -and $From -cnotmatch '^[a-z0-9][a-z0-9-]{0,31}$') {
+    # Through GitHub the issue's title names the sender, and a cloud thread
+    # is a Claude's, so it is claude unless -From says otherwise.
+    if ($route -eq 'github' -and -not $From) { $From = 'claude' }
+    if (($route -eq 'ssh' -or $route -eq 'github') -and $From -cnotmatch '^[a-z][a-z0-9-]{0,30}$') {
         Die '-From says who the notice is from: one lower case word, letters, digits and hyphens (claude, codex, djinn). Nothing was posted.'
-    }
-    if ($route -eq 'github' -and $From -and $From -cne $workflowSender) {
-        Die ("through GitHub a notice is from the workflow's key, named $workflowSender, and the box sets that, so it cannot say it is from $From. Post it from a machine with ssh to the box for another name. Nothing was posted.")
     }
 }
 if (-not $From) { $From = 'agent' }
 
-# ----------------------------------------------------------- through GitHub --
-# The run the dispatch started, once GitHub has named it. From then on the
-# notice is GitHub's to run, so a read that fails here is said as that, with
-# the line that reads the answer later, and never as nothing having been sent.
-$sentRun = 0
+# ------------------------------------------------- through an issue (#5187) --
+# The notice is an issue on the board labelled $noticeLabel, its body the
+# notice and its title the sender. The bot reads those every minute, says
+# each in #staff-updates, comments "Said in #staff-updates." and closes it
+# (bot\bot.py watch_staff_notices). The label $takeBackLabel on it takes it
+# back. Its number is the notice's id here.
 
-# One GET, its answer as an object; a refusal stops the script with why.
-# -NotYet: GitHub's Not Found means not served yet, and comes back as $null.
-function Get-GitHub([string]$path, [switch]$NotYet) {
+# One call to GitHub through gh, its answer as an object; a refusal stops the
+# script with why. $Body goes on gh's standard input, never a command line.
+function Invoke-GitHub([string]$method, [string]$path, $Body = $null) {
     $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $o = @(& gh api $path 2>&1 | ForEach-Object { "$_" })
+    if ($null -ne $Body) {
+        $o = @(($Body | ConvertTo-Json -Compress -Depth 5) | & gh api -X $method $path --input - 2>&1 | ForEach-Object { "$_" })
+    } else {
+        $o = @(& gh api -X $method $path 2>&1 | ForEach-Object { "$_" })
+    }
     $c = $LASTEXITCODE
     $ErrorActionPreference = $old
-    if ($c -ne 0) {
-        if ($NotYet -and ($o -join ' ') -match '\(HTTP 404\)') { return $null }
-        $why = "GitHub answered GET $path with: " + (($o | Select-Object -Last 2) -join ' ')
-        if ($sentRun) { Unread $why }
-        Die $why
-    }
+    if ($c -ne 0) { Die ("GitHub answered $method $path with: " + (($o | Select-Object -Last 2) -join ' ')) }
     return (($o -join "`n") | ConvertFrom-Json)
 }
 
-# Sent, and the answer not read: exit 2, as for a run that has not ended.
-function Unread([string]$why) {
-    Note 'warning' ("sent as run $sentRun; its answer was not read: $why")
-    Say ("the notice was sent: GitHub started run $sentRun with it, and the run posts it. Its answer was not read here: $why") 'Yellow'
-    Say ('  its answer: pwsh scripts/ops/Say-Staff.ps1 -Run ' + $sentRun) 'DarkGray'
-    exit 2
-}
-
-# Waits for the run to end, then reads what the runner said: the Say-Staff
-# annotation on its job. Returns the box's answer line.
-#
-# -Started: the dispatch has just named this run. GitHub writes the run, then
-# answers the dispatch with its id, and serves reads from copies that catch
-# up a moment later, so the first read of a run that new can be Not Found
-# (#3081: run 39647569632 was 404 within the second it was made, during
-# GitHub's Actions incident of 21 Oct, and served a few seconds after). Until
-# a read first serves it, that run is one more state of the wait below, which
-# reads every 5 seconds until the run has ended or -WaitMinutes is up, the
-# same as queued. A run given by -Run, or one already read, that is Not Found
-# stops at once: GitHub never said it exists, or it no longer does.
-function Read-RunAnswer([long]$id, [switch]$Started) {
-    $runPath = "repos/$GitHubRepo/actions/runs/$id"
-    $deadline = [DateTime]::UtcNow.AddMinutes($WaitMinutes)
-    $run = Get-GitHub $runPath -NotYet:$Started
-    $told = ''
-    while (-not $run -or $run.status -ne 'completed') {
-        $state = if ($run) { $run.status } else { 'not served by GitHub yet' }
-        if ([DateTime]::UtcNow -gt $deadline) {
-            Say ("the run has not ended after $WaitMinutes minutes (it was " + $state + '), so every runner is busy. It still posts when one takes it.') 'Yellow'
-            Say ('  its answer then: pwsh scripts/ops/Say-Staff.ps1 -Run ' + $id) 'DarkGray'
-            if ($run) { Say ('  ' + $run.html_url) 'DarkGray' }
-            exit 2
-        }
-        if ($told -ne $state -and $state -ne 'in_progress') {
-            if ($run) { Say ('  waiting for a runner (' + $state + ')') 'DarkGray' } else { Say '  started; GitHub does not serve the new run yet' 'DarkGray' }
-            $told = $state
-        }
-        Start-Sleep -Seconds 5
-        $run = Get-GitHub $runPath -NotYet:($Started -and -not $run)
-    }
-    if ($run.path -notmatch ('/' + [regex]::Escape($workflow) + '$')) { Die ("run $id is not a staff-notice run (it is " + $run.path + ').') }
-    $notes = @()
-    foreach ($job in @((Get-GitHub "$runPath/jobs").jobs)) {
-        $notes += @(Get-GitHub ("repos/$GitHubRepo/check-runs/" + $job.id + '/annotations') | Where-Object { $_.title -eq 'Say-Staff' })
-    }
-    $said = @($notes | Where-Object { $_.annotation_level -eq 'notice' }) | Select-Object -Last 1
-    if ($said) { return ([string]$said.message).Trim() }
-    $why = @($notes | Where-Object { $_.annotation_level -eq 'failure' }) | Select-Object -Last 1
-    if ($why) { Die ('the runner stopped: ' + ([string]$why.message).Trim() + ' (' + $run.html_url + ')') }
-    Die ('the run ended ' + $run.conclusion + ' without an answer from the box, so nothing was posted that it knows of. Its log says why: ' + $run.html_url)
-}
-
 if ($route -eq 'github') {
-    if ($PSCmdlet.ParameterSetName -eq 'Run') {
-        $answer = Read-RunAnswer $Run
-    } else {
-        # The body on gh's standard input, so the text is on no command line.
-        $inputs = if ($PSCmdlet.ParameterSetName -eq 'Check') { @{ check = $Check } } elseif ($PSCmdlet.ParameterSetName -eq 'Unsay') { @{ unsay = $Unsay } } else { @{ text = $t } }
-        $body = @{ ref = 'main'; inputs = $inputs; return_run_details = $true } | ConvertTo-Json -Compress
-        $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-        $o = @($body | & gh api -X POST "repos/$GitHubRepo/actions/workflows/$workflow/dispatches" --input - 2>&1 | ForEach-Object { "$_" })
-        $c = $LASTEXITCODE
-        $ErrorActionPreference = $old
-        if ($c -ne 0) { Die ('GitHub did not start the staff-notice workflow: ' + (($o | Select-Object -Last 2) -join ' ') + '. Nothing was posted.') }
-        $started = ($o -join "`n") | ConvertFrom-Json
-        if (-not $started.workflow_run_id) {
-            Say ('the notice was sent: GitHub started the staff-notice workflow with it, but named no run, so its answer cannot be read here. Its runs: https://github.com/' + $GitHubRepo + '/actions/workflows/' + $workflow) 'Yellow'
-            exit 2
+    if ($PSCmdlet.ParameterSetName -eq 'Say') {
+        $made = Invoke-GitHub 'POST' "repos/$NoticeRepo/issues" @{ title = ('Staff notice from ' + $From); body = $t; labels = @($noticeLabel) }
+        $n = [int]$made.number
+        if (-not $n) { Die 'GitHub made no issue number, so nothing was filed.' }
+        if (-not (@($made.labels | ForEach-Object { [string]$_.name }) -contains $noticeLabel)) {
+            Die ("issue #$n was filed without the label $noticeLabel, so the bot will not say it: only somebody with triage on $NoticeRepo can label an issue. Close it: " + $made.html_url)
         }
-        Say ('sent to the staff-notice workflow: ' + $started.html_url) 'DarkGray'
-        $sentRun = [long]$started.workflow_run_id
-        $answer = Read-RunAnswer $sentRun -Started
+        Say ("filed #$n. The bot says it in #staff-updates within a minute, then closes the issue.") 'Green'
+        Say ("  to see it was said: pwsh scripts/ops/Say-Staff.ps1 -Check $n") 'DarkGray'
+        exit 0
     }
-    $out = @($answer)
-    $code = 1
+    $n = $noticeNumber
+    $issue = Invoke-GitHub 'GET' "repos/$NoticeRepo/issues/$n"
+    $labels = @($issue.labels | ForEach-Object { [string]$_.name })
+    if ($issue.pull_request -or -not ($labels -contains $noticeLabel)) { Die "#$n is not a staff notice: it has no $noticeLabel label." }
+    if ($PSCmdlet.ParameterSetName -eq 'Unsay') {
+        $null = Invoke-GitHub 'POST' "repos/$NoticeRepo/issues/$n/labels" @{ labels = @($takeBackLabel) }
+        Say ("asked the bot to take #$n back. It deletes its post in #staff-updates within a minute, or never says it if it has not yet.") 'Green'
+        Say ("  to see it was done: pwsh scripts/ops/Say-Staff.ps1 -Check $n") 'DarkGray'
+        exit 0
+    }
+    # -Check: what the bot wrote on the issue says where it is. Its comments
+    # are by its App, or by the user of the token it falls back to, so they
+    # are known by their first words.
+    $bodies = @(Invoke-GitHub 'GET' "repos/$NoticeRepo/issues/$n/comments?per_page=100" | ForEach-Object { [string]$_.body })
+    $has = { param($start) @($bodies | Where-Object { $_.StartsWith($start) }) | Select-Object -Last 1 }
+    if (& $has 'The notice is taken out') { Say 'taken back: the bot deleted its post in #staff-updates.' 'Green'; exit 0 }
+    if (& $has 'The notice was already gone') { Say 'taken back: the post was not in #staff-updates any more, so there was nothing to delete.' 'Green'; exit 0 }
+    if (& $has 'The notice was not said yet') { Say 'taken back before it was said: it was never posted.' 'Green'; exit 0 }
+    if ($labels -contains $takeBackLabel) { Say 'asked to be taken back, and the bot has not done it yet. It reads every minute.' 'Yellow'; exit 2 }
+    if (& $has 'Said in #staff-updates') { Say 'posted in #staff-updates, by the bot.' 'Green'; exit 0 }
+    $no = & $has 'The bot did not say this notice'
+    if ($no) { Die ('the bot refused it: ' + (($no -split "`n" | Where-Object { $_ -match '^- ' }) -join ' ')) }
+    if ([string]$issue.state -eq 'open') { Say 'filed, not said yet. The bot reads the board every minute.' 'Yellow'; exit 2 }
+    Die "#$n was closed without the bot saying it, so it never will be. File it again if it still matters."
 } else {
     # What the box is asked to run. A notices key runs it anyway, with its own name.
     $target = "$VpsUser@$VpsHost"
-    $remote = "powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $far -From $From"
+    $remote = "pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $far -From $From"
     $sshArgs = @('-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', '-o', 'ConnectTimeout=20')
     $restore = $null
     # The key, when there is one, for this run only.
@@ -358,8 +319,9 @@ switch -Regex ("$answer") {
     '^REFUSED (.*)$' { Die ('the box refused it: ' + $Matches[1]) }
 }
 $out | Select-Object -Last 5 | ForEach-Object { Say "  $_" 'DarkGray' }
-# What powershell.exe says when the file it is given to run is not there.
-if (($out -join ' ') -match 'to the -File parameter does not exist') {
+# What pwsh says when the file it is given to run is not there (measured
+# with pwsh 7.6, exit 64).
+if (($out -join ' ') -match 'is not recognized as the name of a script file') {
     Die "the box has no $far yet, so nothing was posted. It goes on with .\scripts\vps\Watch-Services.ps1 -Install, run from One (a Releases job)."
 }
 Die ('the box did not answer (ssh exit ' + $code + '), so nothing was posted. The lines above say why: a "box bridge:" line is the bridge or the token, "Permission denied" is the key.')

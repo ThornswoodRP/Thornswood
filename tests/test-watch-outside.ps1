@@ -60,7 +60,7 @@ $ipLike = $null
 Yes 'the game''s name comes from scripts\vps\vps.json, a name and not the box''s address (#3690)' ($S.GameHost -and -not [Net.IPAddress]::TryParse($S.GameHost, [ref]$ipLike))
 Yes 'the certificate line is 14 days' ($S.CertDays -eq 14)
 Yes 'the webhook''s channel is #staff-updates, bot\staff-channel.txt''s id (#2501)' ($S.StaffChannel -eq '1549254991082946570')
-Yes 'the runners are Thornswood-Ops''s, where the box''s runners are registered since the flip (#4013), from thornswood-vps' ($S.Repo -eq 'EvilPatrick06/Thornswood-Ops' -and $S.RunnerName -eq 'thornswood-vps')
+Yes 'the runners are Thornswood-Ops''s, where the box''s runners are registered since the flip (#4013), from thornswood-vps' ($S.Repo -eq 'ThornswoodRP/Thornswood-Ops' -and $S.RunnerName -eq 'thornswood-vps')
 Yes 'signing and the off-box copy are not asked from outside any more (#2755)' (-not $S.ContainsKey('SignAccount') -and -not $S.ContainsKey('BackupsFolder'))
 
 $dir = Join-Path $Temp ('thornswood-watchoutside-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -107,8 +107,10 @@ try {
   $herePath = Join-Path $Root '.github/workflows/watch-outside.yml'
   if (Test-Path -LiteralPath $herePath) { $here = Get-Content -LiteralPath $herePath -Raw }
   Yes 'this repository has the watch as its own workflow' ($here -match "cron: '\*/5 \* \* \* \*'")
-  Yes '  it runs this script from where it is, with the two secrets by name' (
-    $here -match '\./scripts/vps/Watch-Outside\.ps1 -Run -Folder state' -and $here -match 'WATCH_WEBHOOK: \$\{\{ secrets\.STAFF_WEBHOOK \}\}' -and $here -match 'WATCH_RUNNER_TOKEN: \$\{\{ secrets\.RUNNER_TOKEN \}\}')
+  Yes '  it runs this script from where it is, with the webhook by name and the watcher App''s token for the runners (#5259)' (
+    $here -match '\./scripts/vps/Watch-Outside\.ps1 -Run -Folder state' -and $here -match 'WATCH_WEBHOOK: \$\{\{ secrets\.STAFF_WEBHOOK \}\}' -and $here -match 'WATCH_RUNNER_TOKEN: \$\{\{ steps\.app\.outputs\.token \}\}' -and $here -notmatch 'secrets\.RUNNER_TOKEN')
+  Yes '  the token is minted each run for Thornswood-Ops alone, Administration read only, and a failed mint leaves the other checks running' (
+    ($here -replace "`r`n", "`n") -match "(?m)^      - name: The watcher's token for the runners\n        id: app\n        if: \$\{\{ !inputs\.test \}\}\n        continue-on-error: true\n        uses: actions/create-github-app-token@[0-9a-f]{40} # v\S+\n        with:\n          client-id: \$\{\{ vars\.WATCH_APP_CLIENT_ID \}\}\n          private-key: \$\{\{ secrets\.WATCH_APP_KEY \}\}\n          owner: \$\{\{ github\.repository_owner \}\}\n          repositories: Thornswood-Ops\n          permission-administration: read\n(?!          )")
   Yes '  on GitHub''s runners, off the box' ($here -match 'runs-on: ubuntu-latest' -and $here -notmatch 'self-hosted')
   Yes '  only once the variable WATCH_OUTSIDE says here, so it and the old repository''s watcher never both post' ($here -match "if: \$\{\{ vars\.WATCH_OUTSIDE == 'here' \}\}")
   Yes '  its two secrets come from the watch environment, which only main may use' ($here -match '(?m)^\s+environment: watch\s*$')
@@ -320,7 +322,7 @@ try {
   $null = Pass-Once
   Yes 'the twelfth, an hour of them: told once, as the watcher that cannot check' ((Posted '`*`*The outside watcher cannot check the build runners.`*`* GitHub did not answer*') -eq 1)
   Yes '  never as the runners being down' ((Posted '*are not all online*') -eq 0)
-  Yes '  and it says what that leaves unwatched, and where the token is' ((Posted '*could break and nobody would be told*RUNNER_TOKEN*') -eq 1)
+  Yes '  and it says what that leaves unwatched, and where the token is' ((Posted '*could break and nobody would be told*WATCH_APP_KEY*') -eq 1)
   for ($i = 0; $i -lt 6; $i++) { $null = Pass-Once }
   Yes '  and not again while it still cannot' ((Posted '*outside watcher cannot check*') -eq 1)
   $script:runner = 'online'
@@ -349,19 +351,19 @@ try {
 
   # The real Get-Runners, against the fake Get-Http.
   $env:WATCH_RUNNER_TOKEN = ''
-  $g = & $realGetRunners 'EvilPatrick06/Thornswood'
+  $g = & $realGetRunners 'ThornswoodRP/Thornswood'
   Yes 'Get-Runners: no token is said, never asked without one' ($g.Error -match 'no runner token' -and $g.Error -match 'WATCH_RUNNER_TOKEN')
   $env:WATCH_RUNNER_TOKEN = 'github_pat_FAKETOKEN123'
-  $g = & $realGetRunners 'EvilPatrick06/Thornswood'
+  $g = & $realGetRunners 'ThornswoodRP/Thornswood'
   Yes 'Get-Runners: the token goes as a bearer, and the list comes back' ($script:runnerAuth -eq 'Bearer github_pat_FAKETOKEN123' -and @($g.Runners).Count -eq 2 -and @($g.Runners)[1].Status -eq 'offline' -and -not $g.Error)
   $script:ghRunners = 401
-  $g = & $realGetRunners 'EvilPatrick06/Thornswood'
+  $g = & $realGetRunners 'ThornswoodRP/Thornswood'
   Yes 'Get-Runners: a refused token is said as refused' ($g.Error -match 'refused the runner token \(HTTP 401\)')
   $script:ghRunners = 0
-  $g = & $realGetRunners 'EvilPatrick06/Thornswood'
+  $g = & $realGetRunners 'ThornswoodRP/Thornswood'
   Yes 'Get-Runners: GitHub not answering is said in words' ($g.Error -eq 'GitHub did not answer within 20 seconds')
   $script:ghRunners = 502
-  $g = & $realGetRunners 'EvilPatrick06/Thornswood'
+  $g = & $realGetRunners 'ThornswoodRP/Thornswood'
   Yes 'Get-Runners: GitHub answering 502 is said' ($g.Error -eq 'GitHub answered HTTP 502')
   Yes 'Get-Runners: no reason names the repository or holds the token' (-not ($g.Error -match 'Thornswood|FAKETOKEN'))
   $env:WATCH_RUNNER_TOKEN = ''
@@ -524,7 +526,7 @@ try {
     @($script:printed | Where-Object { $_ -match '^\s+runner\s+COULD NOT CHECK\s+\S' }).Count -gt 0 -and
     @($script:printed | Where-Object { $_ -match '^\s+runner\s+COULD NOT CHECK\s+\(about a private' }).Count -eq 0)
   $env:WATCH_RUNNER_TOKEN = 'github_pat_FAKETOKEN123'; $script:ghRunners = 401
-  $u = Unknown (& $realGetRunners 'EvilPatrick06/Thornswood').Error; $u.Private = $true
+  $u = Unknown (& $realGetRunners 'ThornswoodRP/Thornswood').Error; $u.Private = $true
   $env:WATCH_RUNNER_TOKEN = ''
   $shown = (Write-Results ([ordered]@{ runner = $u }) 6>&1 | Out-String)
   Yes '  a refused token is printed as refused, with its HTTP code, and nothing else' ($shown -match 'runner\s+COULD NOT CHECK\s+GitHub refused the runner token \(HTTP 401\)' -and $shown -notmatch 'Thornswood|FAKETOKEN')

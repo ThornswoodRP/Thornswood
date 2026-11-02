@@ -35,7 +35,7 @@ const { appJwt } = require('./admin.js');
 
 const STATE = process.env.THORNSWOOD_ADMIN_STATE || 'C:\\Thornswood-Admin\\state';
 const API = (process.env.THORNSWOOD_ADMIN_GITHUB_API || 'https://api.github.com').replace(/\/$/, '');
-const OWNER = 'EvilPatrick06';
+const OWNER = 'ThornswoodRP'; // the repositories' owner since the move (#5184)
 const REPOS = ['skymp', 'Thornswood'];
 const PERMISSIONS = { actions: 'write', contents: 'read' };
 

@@ -2,7 +2,7 @@
   test-say-staff.ps1
 
       pwsh -NoProfile -File .\tests\test-say-staff.ps1
-      powershell -NoProfile -File .\tests\test-say-staff.ps1
+      pwsh -NoProfile -File .\tests\test-say-staff.ps1
 
   Agents post their own staff notices in #staff-updates through the bot
   (#2934): scripts\ops\Say-Staff.ps1 hands the notice over ssh to
@@ -28,15 +28,12 @@
        -OnTheBox (#3045), the staff-notice workflow's half: ssh to the box's
        own sshd at 127.0.0.1 with only the notices key, the host key held to
        the pins in a known_hosts of its own, both gone when it ends, and the
-       answer left as an annotation. With no ssh, through GitHub: it starts
-       the ops repository's staff-notice.yml on main with the text on gh's standard input, reads
-       the runner's annotation, and says what the box said; -From other than
-       claude, a stopped runner, a run with no answer, a run not taken in
-       time and -Run of another workflow each say so. A run GitHub has
-       started but does not serve yet is waited for like a queued one, never
-       a stop (#3081); a failed read after the start says the notice was
-       sent, exit 2, with the -Run line; -Run of a run GitHub does not have
-       stops at once.
+       answer left as an annotation. With no ssh, through GitHub (#5187): it
+       files an issue on the board titled "Staff notice from <sender>",
+       labelled notice: staff, with the text on gh's standard input; -Check
+       reads where the bot is from its comments and the labels; -Unsay puts
+       the label notice: take back on; a bad -From, a long notice and an
+       issue filed without the label each say so.
     5. Grant-BoxAccess.ps1: a notices key's line is taken only through the
        bridge and only runs say-staff.ps1 as its own name; -List reads that
        back; the box change stops with nothing changed when say-staff.ps1 is
@@ -46,8 +43,9 @@
        secret set on standard input.
     6. staff-notice.yml is not here: it moved to the private ops repository
        with the VPS runners (#4013), whose tests\test-box-workflows.ps1
-       holds its shape and runs its step; Say-Staff.ps1 starts it there and
-       Grant-BoxAccess.ps1 puts its key there.
+       holds its shape and runs its step, and Grant-BoxAccess.ps1 puts its
+       key there. Say-Staff.ps1 files on the board with the labels bot.py
+       reads.
   Nothing connects anywhere and nothing outside the temp folder is touched.
 #>
 [CmdletBinding()]
@@ -266,7 +264,7 @@ for aid, text in due:
         Yes 'bot.py watch_alerts_due takes the line the box half wrote, with its text' (
             $probe -eq 'DUE 1' -and $dueId.Count -eq 1 -and ('QUEUED ' + $dueId[0]) -eq $r.Last -and $dueText.Count -eq 1 -and $dueText[0] -eq '[cloud] for the bot')
     } else {
-        Write-Host ('SKIP  bot.py could not be imported here (' + $(if ($probe) { $probe } else { 'no python' }) + '); bot\test-watch-services.py covers its reader')
+        Write-Host ('SKIP  bot.py could not be imported here (' + $(if ($probe) { $probe } else { 'no python' }) + '); bot\tests\test-watch-services.py covers its reader')
     }
 
     # ---- 4. Say-Staff.ps1 end to end -----------------------------------------
@@ -313,7 +311,7 @@ process.exit(r.status === null ? 1 : r.status);
     $sent = @([IO.File]::ReadAllLines($argsFile))
     Yes '  ssh is asked for the box with BatchMode and StrictHostKeyChecking, to run say-staff.ps1 as claude' (
         $sent -contains 'BatchMode=yes' -and $sent -contains 'StrictHostKeyChecking=yes' -and $sent -contains 'Administrator@box.invalid' -and
-        $sent[-1] -eq 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\Thornswood-Watch\say-staff.ps1 -From claude')
+        $sent[-1] -eq 'pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\Thornswood-Watch\say-staff.ps1 -From claude')
     Yes '  the text went on standard input and is on no command line' (
         -not (($sent -join ' ').Contains('Shell.cs')) -and ([IO.File]::ReadAllText("$argsFile.in")).Trim() -eq (SayLine $text))
     $s = SayStaff @('-Check', $id)
@@ -427,22 +425,17 @@ if (kh) { copy(kh.substring(19), $(Js $seenHosts)); }
     $s = OnTheBox @('-Text', 'hello') ''
     Yes '-OnTheBox with no key stops before connecting and names the environment secret' ($s.Code -eq 1 -and $s.Out -match 'NOTICE_KEY_B64 secret of the "notices" environment' -and -not (Test-Path -LiteralPath $argsFile))
 
-    # ---- 4c. with no ssh: through the staff-notice workflow (#3045) --------
+    # ---- 4c. with no ssh: an issue on the board (#5187) -------------------
     # A path holding only a stand-in for gh, which answers as GitHub does and
-    # writes down each call. The run's annotations come from a file per case.
+    # writes down each call. The issue and its comments come from files.
     $bin2 = Join-Path $tmp 'bin2'
     New-Item -ItemType Directory -Path $bin2 -Force | Out-Null
     $ghIn = Join-Path $tmp 'gh-stand-in.js'
     $ghCalls = Join-Path $tmp 'gh-calls.txt'
     $ghBody = Join-Path $tmp 'gh-body.json'
-    $ghRun = Join-Path $tmp 'gh-run.json'
-    $ghNotes = Join-Path $tmp 'gh-annotations.json'
-    # How many reads of run 77 are Not Found before it is served (-1: every
-    # one), whether its jobs read is refused, and whether the dispatch names
-    # no run (#3081).
-    $ghMiss = Join-Path $tmp 'gh-miss.txt'
-    $ghJobsRefused = Join-Path $tmp 'gh-jobs-refused.txt'
-    $ghNoRun = Join-Path $tmp 'gh-no-run.txt'
+    $ghIssue = Join-Path $tmp 'gh-issue.json'
+    $ghComments = Join-Path $tmp 'gh-comments.json'
+    $ghNoLabel = Join-Path $tmp 'gh-no-label.txt'
     [IO.File]::WriteAllText($ghIn, @"
 const fs = require('fs');
 const all = process.argv.slice(2).map(String);
@@ -452,35 +445,28 @@ if (all.some(a => a.toLowerCase() === '--input')) { fs.writeFileSync($(Js $ghBod
 // writeSync, so nothing is still unwritten when it exits.
 const say = s => { fs.writeSync(1, s + '\n'); process.exit(0); };
 const no = s => { fs.writeSync(2, s + '\n'); process.exit(1); };
-if (/actions\/workflows\/staff-notice\.yml\/dispatches`$/i.test(p)) {
-  if (fs.existsSync($(Js $ghNoRun))) { process.exit(0); }
-  say('{"workflow_run_id":77,"run_url":"https://api.github.com/x/runs/77","html_url":"https://github.com/x/actions/runs/77"}');
+if (/^repos\/ThornswoodRP\/Thornswood\/issues`$/.test(p)) {
+  const labels = fs.existsSync($(Js $ghNoLabel)) ? [] : [{ name: 'notice: staff' }];
+  say(JSON.stringify({ number: 5300, html_url: 'https://github.com/ThornswoodRP/Thornswood/issues/5300', labels }));
 }
-if (/actions\/runs\/77`$/i.test(p)) {
-  const miss = parseInt(fs.readFileSync($(Js $ghMiss), 'utf8'), 10);
-  if (miss !== 0) {
-    if (miss > 0) { fs.writeFileSync($(Js $ghMiss), String(miss - 1)); }
-    no('gh: Not Found (HTTP 404)');
-  }
-  say(fs.readFileSync($(Js $ghRun), 'utf8'));
-}
-if (/actions\/runs\/77\/jobs`$/i.test(p)) {
-  if (fs.existsSync($(Js $ghJobsRefused))) { no('gh: Server Error (HTTP 502)'); }
-  say('{"total_count":1,"jobs":[{"id":555}]}');
-}
-if (/check-runs\/555\/annotations`$/i.test(p)) { say(fs.readFileSync($(Js $ghNotes), 'utf8')); }
+if (/^repos\/ThornswoodRP\/Thornswood\/issues\/5300`$/.test(p)) { say(fs.readFileSync($(Js $ghIssue), 'utf8')); }
+if (/^repos\/ThornswoodRP\/Thornswood\/issues\/5300\/comments\?per_page=100`$/.test(p)) { say(fs.readFileSync($(Js $ghComments), 'utf8')); }
+if (/^repos\/ThornswoodRP\/Thornswood\/issues\/5300\/labels`$/.test(p)) { say('[]'); }
 no('gh: Not Found (HTTP 404)');
 "@, $enc)
     Put-StandIn $bin2 'gh' $ghIn
-    $done = '{"status":"completed","conclusion":"success","path":".github/workflows/staff-notice.yml","html_url":"https://github.com/x/actions/runs/77"}'
-    function Note([string]$level, [string]$title, [string]$message) { return @{ annotation_level = $level; title = $title; message = $message } }
-    function ThroughGitHub([string[]]$a, [string]$run, [object[]]$notes, [int]$miss = 0, [switch]$jobsRefused, [switch]$noRun) {
-        Remove-Item -LiteralPath $ghCalls, $ghBody, $ghJobsRefused, $ghNoRun -ErrorAction SilentlyContinue
-        [IO.File]::WriteAllText($ghMiss, [string]$miss, $enc)
-        if ($jobsRefused) { [IO.File]::WriteAllText($ghJobsRefused, 'yes', $enc) }
-        if ($noRun) { [IO.File]::WriteAllText($ghNoRun, 'yes', $enc) }
-        [IO.File]::WriteAllText($ghRun, $run, $enc)
-        [IO.File]::WriteAllText($ghNotes, (ConvertTo-Json -InputObject @($notes) -Compress), $enc)
+    function Issue([string]$state, [string[]]$labels) {
+        return (ConvertTo-Json -Compress -Depth 4 -InputObject @{ number = 5300; state = $state; labels = @($labels | ForEach-Object { @{ name = $_ } }) })
+    }
+    function Said([string[]]$bodies) {
+        $all = @(@{ user = @{ type = 'User' }; body = 'Thanks.' }) + @($bodies | ForEach-Object { @{ user = @{ type = 'Bot' }; body = $_ } })
+        return (ConvertTo-Json -Compress -Depth 4 -InputObject $all)
+    }
+    function ThroughGitHub([string[]]$a, [string]$issue = '', [string]$comments = '[]', [switch]$noLabel) {
+        Remove-Item -LiteralPath $ghCalls, $ghBody, $ghNoLabel -ErrorAction SilentlyContinue
+        if ($noLabel) { [IO.File]::WriteAllText($ghNoLabel, 'yes', $enc) }
+        [IO.File]::WriteAllText($ghIssue, $issue, $enc)
+        [IO.File]::WriteAllText($ghComments, $comments, $enc)
         $path = $env:PATH
         # Only the stand-in: no ssh is found, the way a cloud container has none.
         $env:PATH = $bin2
@@ -492,51 +478,45 @@ no('gh: Not Found (HTTP 404)');
             Body = $(if (Test-Path -LiteralPath $ghBody) { ConvertFrom-Json ([IO.File]::ReadAllText($ghBody)) } else { $null })
         }
     }
-    $queued = 'QUEUED agent-claude-20261021130000-0a1b2c'
-    $text = 'Merged the scan button fix; it goes out with the next dev Ship.'
-    $g = ThroughGitHub @('-From', 'claude', '-Text', $text) $done @((Note 'failure' '' 'Process completed with exit code 1.'), (Note 'notice' 'Say-Staff' $queued))
-    Yes 'no ssh: it starts staff-notice.yml on main, with the text, and asks for the run' (
-        $g.Body -and $g.Body.ref -eq 'main' -and $g.Body.inputs.text -eq $text -and -not $g.Body.inputs.PSObject.Properties['check'] -and $g.Body.return_run_details -eq $true -and
-        @($g.Calls | Where-Object { $_ -match '^api -X POST repos/EvilPatrick06/Thornswood-Ops/actions/workflows/staff-notice\.yml/dispatches --input -$' }).Count -eq 1)
-    Yes '  the text went on gh''s standard input and is on no command line' (-not (($g.Calls -join ' ').Contains('scan button')))
-    Yes '  it reads the runner''s Say-Staff annotation off the run''s job and says queued, exit 0' (
-        $g.Code -eq 0 -and $g.Out -match 'queued agent-claude-20261021130000-0a1b2c' -and @($g.Calls | Where-Object { $_ -like 'api repos/EvilPatrick06/Thornswood-Ops/check-runs/555/annotations*' }).Count -eq 1)
-    $g = ThroughGitHub @('-Text', $text) $done @((Note 'notice' 'Say-Staff' $queued))
-    Yes '  -From is not needed there' ($g.Code -eq 0 -and $g.Out -match 'queued agent-claude-')
-    $g = ThroughGitHub @('-From', 'codex', '-Text', $text) $done @()
-    Yes '  and a -From other than the workflow key''s name is refused before anything starts' ($g.Code -eq 1 -and $g.Out -match 'named claude' -and $null -eq $g.Body)
-    $g = ThroughGitHub @('-Check', 'agent-claude-20261021130000-0a1b2c') $done @((Note 'notice' 'Say-Staff' 'WAITING'))
-    Yes 'no ssh, -Check: the id goes as check, and not said yet is exit 2' (
-        $g.Body.inputs.check -eq 'agent-claude-20261021130000-0a1b2c' -and -not $g.Body.inputs.PSObject.Properties['text'] -and $g.Code -eq 2 -and $g.Out -match 'not said yet')
-    $g = ThroughGitHub @('-Text', $text) $done @((Note 'notice' 'Say-Staff' 'REFUSED claude has queued 30 notices in the last hour, and 30 is the most.'))
-    Yes '  what the box refused is said as the box said it, exit 1' ($g.Code -eq 1 -and $g.Out -match 'the box refused it: claude has queued 30')
-    $g = ThroughGitHub @('-Text', $text) $done @((Note 'failure' 'Say-Staff' 'THORNSWOOD_NOTICE_KEY_B64 is not set'))
-    Yes '  a runner that stopped says why, exit 1' ($g.Code -eq 1 -and $g.Out -match 'the runner stopped: THORNSWOOD_NOTICE_KEY_B64 is not set')
-    $g = ThroughGitHub @('-Text', $text) $done.Replace('"success"', '"failure"') @()
-    Yes '  a run that ended with no answer at all points at its log, exit 1' ($g.Code -eq 1 -and $g.Out -match 'without an answer from the box' -and $g.Out -match 'actions/runs/77')
-    $g = ThroughGitHub @('-Text', $text, '-WaitMinutes', '0') $done.Replace('"completed"', '"queued"') @()
-    Yes '  a run no runner has taken by -WaitMinutes is exit 2, with the line that reads it later' ($g.Code -eq 2 -and $g.Out -match 'Say-Staff\.ps1 -Run 77')
-    $g = ThroughGitHub @('-Run', '77') $done @((Note 'notice' 'Say-Staff' 'POSTED bot'))
-    Yes '-Run reads that run''s answer, starting nothing' ($g.Code -eq 0 -and $g.Out -match 'by the bot' -and $null -eq $g.Body)
-    $g = ThroughGitHub @('-Run', '77') $done.Replace('staff-notice.yml', 'build.yml') @((Note 'notice' 'Say-Staff' 'POSTED bot'))
-    Yes '  and refuses a run of another workflow' ($g.Code -eq 1 -and $g.Out -match 'not a staff-notice run')
+    $text = 'Restarting the dev server at 4:30 PM for about 5 minutes.'
+    $g = ThroughGitHub @('-Text', $text)
+    Yes 'no ssh: it files the notice on the board, labelled notice: staff, titled from claude' (
+        $g.Body -and $g.Body.title -eq 'Staff notice from claude' -and $g.Body.body -eq $text -and @($g.Body.labels) -contains 'notice: staff' -and
+        @($g.Calls | Where-Object { $_ -match '^api -X POST repos/ThornswoodRP/Thornswood/issues --input -$' }).Count -eq 1)
+    Yes '  the text went on gh''s standard input and is on no command line' (-not (($g.Calls -join ' ').Contains('dev server')))
+    Yes '  it says filed with the number and the -Check line, exit 0' ($g.Code -eq 0 -and $g.Out -match 'filed #5300' -and $g.Out -match 'Say-Staff\.ps1 -Check 5300')
+    $g = ThroughGitHub @('-From', 'djinn', '-Text', $text)
+    Yes '  -From names the sender in the title' ($g.Code -eq 0 -and $g.Body.title -eq 'Staff notice from djinn')
+    $g = ThroughGitHub @('-From', 'Not One', '-Text', $text)
+    Yes '  and a -From that is not one lower case word is refused before anything is filed' ($g.Code -eq 1 -and $g.Out -match 'one lower case word' -and $null -eq $g.Body)
+    $g = ThroughGitHub @('-Text', ('y' * 1801))
+    Yes '  and one over 1800 characters' ($g.Code -eq 1 -and $g.Out -match '1801 characters' -and $g.Calls.Count -eq 0)
+    $g = ThroughGitHub @('-Text', $text) -noLabel
+    Yes '  an issue GitHub filed without the label is said, exit 1: the bot would not say it' ($g.Code -eq 1 -and $g.Out -match 'without the label notice: staff')
 
-    # #3081: the dispatch names the run before every read of GitHub serves it.
-    $runReads = { param($calls) @($calls | Where-Object { $_ -eq 'api repos/EvilPatrick06/Thornswood-Ops/actions/runs/77' }).Count }
-    $g = ThroughGitHub @('-Text', $text) $done @((Note 'notice' 'Say-Staff' $queued)) 1
-    Yes 'a started run GitHub does not serve yet is waited for, then read: queued, exit 0, no stop' (
-        $g.Code -eq 0 -and $g.Out -match 'queued agent-claude-' -and $g.Out -match 'does not serve the new run yet' -and $g.Out -notmatch 'STOP' -and (& $runReads $g.Calls) -eq 2)
-    $g = ThroughGitHub @('-Text', $text, '-WaitMinutes', '0') $done @() -1
-    Yes '  one still not served by -WaitMinutes is exit 2 with the -Run line, not a stop' (
-        $g.Code -eq 2 -and $g.Out -match 'not served by GitHub yet' -and $g.Out -match 'Say-Staff\.ps1 -Run 77' -and $g.Out -notmatch 'STOP')
-    $g = ThroughGitHub @('-Text', $text) $done @((Note 'notice' 'Say-Staff' $queued)) 0 -jobsRefused
-    Yes '  a read that fails after the start says the notice was sent, exit 2, with the -Run line' (
-        $g.Code -eq 2 -and $g.Out -match 'the notice was sent: GitHub started run 77' -and $g.Out -match 'HTTP 502' -and $g.Out -match 'Say-Staff\.ps1 -Run 77' -and $g.Out -notmatch 'STOP')
-    $g = ThroughGitHub @('-Text', $text) $done @() 0 -noRun
-    Yes '  a start that names no run says the notice was sent and where its runs are, exit 2' (
-        $g.Code -eq 2 -and $g.Out -match 'the notice was sent' -and $g.Out -match 'actions/workflows/staff-notice\.yml' -and $g.Out -notmatch 'STOP')
-    $g = ThroughGitHub @('-Run', '77') $done @() -1
-    Yes '-Run of a run GitHub does not have stops at once, exit 1' ($g.Code -eq 1 -and $g.Out -match 'STOP\..*HTTP 404' -and (& $runReads $g.Calls) -eq 1)
+    $g = ThroughGitHub @('-Check', '5300') (Issue 'open' @('notice: staff')) (Said @())
+    Yes 'no ssh, -Check: open and not said is exit 2' ($g.Code -eq 2 -and $g.Out -match 'not said yet')
+    $g = ThroughGitHub @('-Check', '#5300') (Issue 'closed' @('notice: staff')) (Said @('Said in #staff-updates. The label "notice: take back" on this issue takes it out again.'))
+    Yes '  said by the bot is exit 0, and a # is taken' ($g.Code -eq 0 -and $g.Out -match 'posted in #staff-updates, by the bot')
+    $g = ThroughGitHub @('-Check', '5300') (Issue 'open' @('notice: staff')) (Said @("The bot did not say this notice in #staff-updates:`n`n- The notice is 1900 characters and 1800 is the most."))
+    Yes '  what the bot refused is said as it said it, exit 1' ($g.Code -eq 1 -and $g.Out -match 'the bot refused it: - The notice is 1900 characters')
+    $g = ThroughGitHub @('-Check', '5300') (Issue 'closed' @('notice: staff'))
+    Yes '  closed and never said is exit 1' ($g.Code -eq 1 -and $g.Out -match 'never will be')
+    $g = ThroughGitHub @('-Check', '5300') (Issue 'open' @('bug'))
+    Yes '  an issue that is no notice is exit 1' ($g.Code -eq 1 -and $g.Out -match 'not a staff notice')
+    $g = ThroughGitHub @('-Check', 'agent-claude-20261021130000-0a1b2c')
+    Yes '  a box id is not an issue number, and nothing is asked' ($g.Code -eq 1 -and $g.Out -match 'not a notice''s issue number' -and $g.Calls.Count -eq 0)
+
+    $g = ThroughGitHub @('-Unsay', '5300') (Issue 'closed' @('notice: staff'))
+    Yes 'no ssh, -Unsay: the take back label goes on the issue, exit 0' (
+        $g.Code -eq 0 -and $g.Out -match 'asked the bot to take #5300 back' -and @($g.Body.labels) -contains 'notice: take back' -and
+        @($g.Calls | Where-Object { $_ -match '^api -X POST repos/ThornswoodRP/Thornswood/issues/5300/labels --input -$' }).Count -eq 1)
+    $g = ThroughGitHub @('-Check', '5300') (Issue 'closed' @('notice: staff', 'notice: take back')) (Said @('Said in #staff-updates.'))
+    Yes '  -Check while the bot has not done it is exit 2' ($g.Code -eq 2 -and $g.Out -match 'not done it yet')
+    $g = ThroughGitHub @('-Check', '5300') (Issue 'closed' @('notice: staff', 'notice: take back')) (Said @('Said in #staff-updates.', 'The notice is taken out of #staff-updates.'))
+    Yes '  and done is exit 0' ($g.Code -eq 0 -and $g.Out -match 'the bot deleted its post')
+    $g = ThroughGitHub @('-Check', '5300') (Issue 'closed' @('notice: staff', 'notice: take back')) (Said @('The notice was not said yet, and now it never is.'))
+    Yes '  and withheld is exit 0' ($g.Code -eq 0 -and $g.Out -match 'never posted')
 
     # ---- 5. Grant-BoxAccess.ps1's notices key ------------------------------
     $gast = $asts[$grantPath]
@@ -556,7 +536,7 @@ no('gh: Not Found (HTTP 404)');
     $notice = Get-BoxKeyLine $pub 'codex' $true
     Yes 'an ordinary key line is as it was: from="127.0.0.1" <key> thornswood-<name>' ($plain -eq ('from="127.0.0.1" ' + $pub + ' thornswood-djinn'))
     Yes 'a notices key line: only through the bridge, restricted, forced to say-staff.ps1 as its own name' (
-        $notice -eq ('from="127.0.0.1",restrict,command="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\Thornswood-Watch\say-staff.ps1 -From codex" ' + $pub + ' thornswood-codex'))
+        $notice -eq ('from="127.0.0.1",restrict,command="pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\Thornswood-Watch\say-staff.ps1 -From codex" ' + $pub + ' thornswood-codex'))
     $rp = Read-BoxKeyLine $plain
     $rn = Read-BoxKeyLine $notice
     Yes '-List reads an ordinary line: its key, through the bridge, not a notices key' ($rp.Key -eq $pub -and $rp.Bridge -and -not $rp.Notices)
@@ -598,7 +578,7 @@ function icacls { }
         Yes ("Grant-BoxAccess.ps1 has one $n") ($fn.Count -eq 1)
         Invoke-Expression $fn[0].Extent.Text
     }
-    $GitHubRepo = 'EvilPatrick06/Thornswood'
+    $GitHubRepo = 'ThornswoodRP/Thornswood'
     function Say { }
     function Die([string]$m) { throw "DIE $m" }
     $script:ghAnswers = @{}
@@ -621,7 +601,7 @@ function icacls { }
         try { Set-MainOnlyEnvironment 'notices' } catch { $err = $_.Exception.Message }
         return [pscustomobject]@{ Err = $err; Calls = $script:ghCalls; Changes = @($script:ghCalls | Where-Object { $_ -notmatch '^api -X GET ' }) }
     }
-    $envPath = 'repos/EvilPatrick06/Thornswood/environments/notices'
+    $envPath = 'repos/ThornswoodRP/Thornswood/environments/notices'
     $c = EnvCase @{ ("GET " + $envPath) = @(1, 'gh: Not Found (HTTP 404)') }
     Yes '-ToEnvironment: no environment yet, so it is made for chosen branches and main is the one let in' (
         -not $c.Err -and $c.Changes.Count -eq 2 -and
@@ -648,9 +628,12 @@ function icacls { }
     # ---- 6. staff-notice.yml is in the ops repository (#4013) --------------
     Yes 'staff-notice.yml is not in this repository, which has no VPS runner once public' (-not (Test-Path -LiteralPath (P '.github', 'workflows', 'staff-notice.yml')))
     $sayText = [IO.File]::ReadAllText($say)
-    Yes '  Say-Staff.ps1 starts it in the private ops repository by its file name, and says notices through it are from claude' (
-        $sayText.Contains("[string]`$GitHubRepo = 'EvilPatrick06/Thornswood-Ops'") -and $sayText.Contains("`$workflow = 'staff-notice.yml'") -and $sayText.Contains("`$workflowSender = 'claude'"))
-    Yes '  and Grant-BoxAccess.ps1 -ToEnvironment puts the key in that repository''s environment' ($grantText.Contains("[string]`$GitHubRepo = 'EvilPatrick06/Thornswood-Ops'"))
+    Yes '  Say-Staff.ps1 files on the board the bot reads, with the labels the bot reads' (
+        $sayText.Contains("[string]`$NoticeRepo = 'ThornswoodRP/Thornswood'") -and $sayText.Contains("`$noticeLabel = 'notice: staff'") -and $sayText.Contains("`$takeBackLabel = 'notice: take back'"))
+    $botText = [IO.File]::ReadAllText((P 'bot', 'bot.py'))
+    Yes '  and they are the bot''s own' (
+        $botText.Contains("os.environ.get('STAFF_NOTICE_LABEL', 'notice: staff')") -and $botText.Contains("os.environ.get('STAFF_TAKE_BACK_LABEL', 'notice: take back')"))
+    Yes '  and Grant-BoxAccess.ps1 -ToEnvironment puts the key in that repository''s environment' ($grantText.Contains("[string]`$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'"))
 }
 finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue

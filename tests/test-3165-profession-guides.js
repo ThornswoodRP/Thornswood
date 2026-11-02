@@ -27,7 +27,7 @@ const REPO = path.join(__dirname, '..');
 const CR = String.fromCharCode(13);
 function read(...bits) { return fs.readFileSync(path.join(REPO, ...bits), 'utf8').split(CR).join(''); }
 const ui = read('game', 'ui', 'thornswood-skills.js');
-const gm = read('game', 'gamemode.js');
+const gm = require('./gamemode-tables.js').joined(read('game', 'gamemode.js'));
 const recipes = JSON.parse(read('game', 'data', 'recipes.json'));
 
 let pass = 0, fail = 0;
@@ -51,14 +51,12 @@ yes('A2 the K panel carries one GUIDES line between the PROFESSION_GUIDES marker
 if (!G) { done(); }
 
 // ------------------------------------------------- B. against the server --
-const a = gm.indexOf('var RECIPES_BY_ID = {');
-const b = gm.indexOf('// ==== end RECIPES_BY_ID ====');
+// The gamemode reads RECIPES_BY_ID from game/gamemode-tables (#5191).
+const BOOK = require('./gamemode-tables.js').inGamemode(gm, 'RECIPES_BY_ID') || {};
 const book = {};
-gm.slice(a, b).split('\n').forEach(function (l) {
-  const r = /^\s*"([^"]+)": (\{.*\}),?$/.exec(l);
-  if (!r) return;
-  const row = JSON.parse(r[2]);
-  if (!row.half || row.roll) return;
+Object.keys(BOOK).forEach(function (k) {
+  const row = BOOK[k];
+  if (!row || !row.half || row.roll) return;
   const h = row.half.toLowerCase();
   book[h] = (book[h] || 0) + 1;
 });

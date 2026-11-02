@@ -16,8 +16,8 @@
 
   HOW. Each part is run, not read, where it can be, against scratch folders:
     1. Set-ThornswoodServerRecord (Artifact.ps1): its text for the box runs
-       under Windows PowerShell 5.1 when this machine has it, the box's
-       PowerShell, with Invoke-ThornswoodArtifactRemote stood in. A root
+       on Windows under PowerShell 7, the box's PowerShell since #5356, with
+       Invoke-ThornswoodArtifactRemote stood in. A root
        whose gamemode.js and stamp are the artifact's is recorded, beside it
        and in the store, with a history line; a wrong gamemode.js, a missing
        or wrong stamp, no gamemode.js, or an artifact with no gamemode each
@@ -38,7 +38,7 @@
        to both before anything is sent, and the records only once the
        installer has said INSTALL OK, a record not written stopping the run.
 
-  Offline. Windows PowerShell 5.1 and PowerShell 7. Every temp folder is removed.
+  Offline. PowerShell 7. Every temp folder is removed.
 #>
 $env:THORNSWOOD_HARNESS = '1'
 $ErrorActionPreference = 'Stop'
@@ -62,25 +62,20 @@ function ReadJson([string]$path) { if (-not (Test-Path -LiteralPath $path)) { re
 
 . (Join-Path $Repo 'scripts\deploy\Artifact.ps1')
 
-# The box's PowerShell: the text goes up as a file and runs under Windows
-# PowerShell 5.1, as Send-Script.ps1 has it run on the VPS. Off Windows there
-# is none, and the far side's store is Windows paths (run in pwsh on Linux it
-# wrote a file named \tmp\...\thornswood-server-dev.json into the working
-# folder), so sections 1 to 3 say SKIP there.
+# The box's PowerShell: the text goes up as a file and runs under PowerShell
+# 7, as Send-Script.ps1 has it run on the VPS since #5356. The far side's
+# store is Windows paths (run on Linux it wrote a file named
+# \tmp\...\thornswood-server-dev.json into the working folder), so sections
+# 1 to 3 say SKIP off Windows.
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-$ps51 = if ($OnWindows) { Get-WindowsPowerShell } else { $null }
+$boxPs = Get-BoxPowerShell
 $script:sent = @()
 function Invoke-ThornswoodArtifactRemote([string]$Target, [string[]]$SshArgs, [string]$Script) {
   $script:sent += , @($Target, $Script)
   $f = Join-Path ([IO.Path]::GetTempPath()) ('ts-459-far-' + [Guid]::NewGuid().ToString('N') + '.ps1')
   [IO.File]::WriteAllText($f, $Script, (New-Object Text.UTF8Encoding($true)))
-  # The machine's module path, as a service on the box has it: a shell that
-  # PowerShell 7 started hands its own on, and 5.1 then finds 7's Utility
-  # module and loses Get-FileHash.
-  $mp = $env:PSModulePath
-  $env:PSModulePath = [Environment]::GetEnvironmentVariable('PSModulePath', 'Machine')
-  try { return @(& $ps51 -NoProfile -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_".Trim() }) }
-  finally { $env:PSModulePath = $mp; Remove-Item -LiteralPath $f -Force -EA SilentlyContinue }
+  try { return @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_".Trim() }) }
+  finally { Remove-Item -LiteralPath $f -Force -EA SilentlyContinue }
 }
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('ts-459-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -113,7 +108,7 @@ try {
 
   # ---- 1. a publish ------------------------------------------------------------
   if (-not $OnWindows) {
-      Write-Host 'SKIP  1 to 3, a publish, a put-back and the installer''s Carry: the far side runs on the box under Windows PowerShell 5.1, on the box''s Windows paths, so only Windows can run it'
+      Write-Host 'SKIP  1 to 3, a publish, a put-back and the installer''s Carry: the far side writes the store on the box''s Windows paths, with \ between folders, so only Windows can run it'
   } else {
       Write-Host ''; Write-Host 'a publish that answered'
       New-Item -ItemType Directory -Force -Path (Join-Path $store 'current'), (Join-Path $store 'gamemode') | Out-Null
@@ -225,6 +220,8 @@ try {
   Put $record (([ordered]@{ binary = 'scam_native.node'; sha256 = $files['scam_native.node'].sha256; bytes = $files['scam_native.node'].bytes
                             source = [ordered]@{ commit = ('a' * 40) }; files = $files }) | ConvertTo-Json -Depth 5)
   Put (Join-Path $dist 'gamemode.js') $gmText
+  # And its tables (#5191), which the payload carries beside it.
+  Put (Join-Path $dist 'gamemode-tables\WAY_OUT.json') '{}'
   Put (Join-Path $dist 'thornswood-build.json') '{ "channel": "main", "note": "the build''s own" }'
   $esp = (Join-Path $tmp 'plugins\ours.esp')
   Put $esp 'a plugin'

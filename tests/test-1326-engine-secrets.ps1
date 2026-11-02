@@ -156,7 +156,7 @@ try {
     Yes '  and a fetch that failed is a failed step, after the tree is still scanned' (
         $step -match '\$fetched = \(\$LASTEXITCODE -eq 0\)' -and $step -match 'if \(\$code -eq 0 -and -not \$fetched\) \{ \$code = 1 \}' -and $step -match 'exit \$code')
     $build = [IO.File]::ReadAllText((Join-Path $repo '.github\workflows\build.yml'))
-    Yes 'the build on every pull request still scans the tree' ($build -match 'name: Scan the tree for secrets' -and $build -match '\.\\scripts\\dev\\Check-Secrets\.ps1\r?\n')
+    Yes 'the build on every pull request still scans the tree' ($build -match 'name: Scan the tree for secrets' -and $build -match '\.[\\/]scripts[\\/]dev[\\/]Check-Secrets\.ps1\r?\n')
 } finally {
     $env:GITHUB_ACTIONS = $savedActions
     Remove-Item -LiteralPath $T -Recurse -Force -ErrorAction SilentlyContinue

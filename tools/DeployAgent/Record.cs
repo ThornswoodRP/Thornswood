@@ -43,15 +43,29 @@ public static class Records
     /// the log and does not undo the deploy.</summary>
     public static void Write(Server s, DeployRecord rec, Action<string> log)
     {
+        string beside;
+        try { beside = Path.Combine(s.DataDir(), "thornswood-deploy.json"); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException) { log("RECORD NOT WRITTEN: " + e.Message); return; }
+        WriteAt(s.Env.Root, beside, s.Env.Store, rec, log);
+    }
+
+    /// <summary>The same record for an app (the site, the bot): beside it as
+    /// &lt;root&gt;\thornswood-deploy.json, where Set-ThornswoodArtifactCurrent
+    /// leaves it, and in the store.</summary>
+    public static void WriteBeside(string root, string store, DeployRecord rec, Action<string> log) =>
+        WriteAt(root, Path.Combine(root, "thornswood-deploy.json"), store, rec, log);
+
+    static void WriteAt(string root, string beside, string store, DeployRecord rec, Action<string> log)
+    {
         try
         {
-            rec.Part = PartName(s.Env.Root);
-            rec.Root = s.Env.Root.Replace('\\', '/');
+            rec.Part = PartName(root);
+            rec.Root = root.Replace('\\', '/');
             var b = JsonSerializer.SerializeToUtf8Bytes(rec, new JsonSerializerOptions { WriteIndented = true });
-            Files.WriteWhole(Path.Combine(s.DataDir(), "thornswood-deploy.json"), b);
-            if (s.Env.Store == "") return;
-            Files.WriteWhole(Path.Combine(s.Env.Store, "current", rec.Part + ".json"), b);
-            File.AppendAllText(Path.Combine(s.Env.Store, "history.log"), $"{rec.DeployedUtc} {rec.Part} {rec.Name} from {rec.From}\r\n");
+            Files.WriteWhole(beside, b);
+            if (store == "") return;
+            Files.WriteWhole(Path.Combine(store, "current", rec.Part + ".json"), b);
+            File.AppendAllText(Path.Combine(store, "history.log"), $"{rec.DeployedUtc} {rec.Part} {rec.Name} from {rec.From}\r\n");
             log($"the box records {rec.Part} as {rec.Name}");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
@@ -66,7 +80,18 @@ public static class Records
     /// Addresses in server.log lines are taken out before they reach it.</summary>
     public static string PublishLog(Server s, string id, IEnumerable<string> lines)
     {
-        var dir = s.DataDir();
+        string dir;
+        try { dir = s.DataDir(); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException) { return ""; }
+        return PublishLog(dir, s.Env.LogBase, id, lines);
+    }
+
+    /// <summary>The same for an app's Deployment: into its LogDir, which
+    /// Install-DeployAgent.ps1 points at the dev server's data folder (the one
+    /// folder on the box served to the outside), named by the Deployment.</summary>
+    public static string PublishLog(string dir, string logBase, string id, IEnumerable<string> lines)
+    {
+        if (dir == "") return "";
         var name = $"deploy-{id}.log";
         try
         {
@@ -76,7 +101,28 @@ public static class Records
             foreach (var f in old) f.Delete();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return ""; }
-        return s.Env.LogBase == "" ? "" : s.Env.LogBase.TrimEnd('/') + "/" + name;
+        return logBase == "" ? "" : logBase.TrimEnd('/') + "/" + name;
+    }
+
+    static readonly Regex StepsName = new(@"^deploy-([A-Za-z0-9._-]+)\.after\.json$");
+
+    /// <summary>Leaves what became of each step after a deploy (#5186) beside
+    /// the deploy's log, as deploy-&lt;id&gt;.after.json, the newest ten kept.
+    /// .github/workflows/after-deploy.yml reads it from the address beside
+    /// the log's. A file that cannot be written is said in the log already
+    /// published; the steps ran either way.</summary>
+    public static void PublishSteps(Server s, string id, string commit, List<StepResult> steps)
+    {
+        var dir = s.DataDir();
+        try
+        {
+            var body = new Dictionary<string, object> { ["format"] = 1, ["deployment"] = id, ["commit"] = commit, ["steps"] = steps };
+            Files.WriteWhole(Path.Combine(dir, $"deploy-{id}.after.json"), JsonSerializer.SerializeToUtf8Bytes(body, new JsonSerializerOptions { WriteIndented = true }));
+            var old = new DirectoryInfo(dir).EnumerateFiles("deploy-*.after.json").Where(f => StepsName.IsMatch(f.Name))
+                .OrderByDescending(f => f.LastWriteTimeUtc).Skip(10);
+            foreach (var f in old) f.Delete();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
     public static string UtcNow() => DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");

@@ -30,7 +30,7 @@ param(
     [Parameter(ParameterSetName = 'Run', Mandatory = $true)][long]$Run,
     [string]$OutFile,
     [int]$WaitMinutes = 15,
-    [string]$GitHubRepo = 'EvilPatrick06/Thornswood'
+    [string]$GitHubRepo = 'ThornswoodRP/Thornswood'
 )
 
 Set-StrictMode -Version Latest

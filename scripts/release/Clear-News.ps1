@@ -10,14 +10,17 @@
   "news", or the news file the feed names), so this receives the channel's
   feed from the VPS store, puts an empty list back the way the channel keeps
   its notes, and sends version.json through Feed-Store.ps1 like any other feed
-  edit. Every launcher then shows its News tab empty; FeedNews.cs reads the
-  new file by its new sha256, so Profile\news.json is not read again.
+  edit. Every launcher that reads the feed's news (those installed before
+  #5187, with launcher\app\FeedNews.cs) then shows its News tab empty: it
+  reads the new file by its new sha256, so Profile\news.json is not read
+  again. The native launcher's News tab is the GitHub Releases' notes
+  (launcher\app\ReleaseNews.cs), which this does not touch.
 
-  For main it then runs Publish-News.ps1 against the feed it just sent, which
-  writes the site's data/news.json with no notes in it. scripts\ops\
-  news-public.json, the hand-written history Publish-News put under every
-  release, is gone from the repository with this, so no Ship puts the old
-  notes back on the site.
+  For main the site's News page follows by itself: the site writes it from the
+  main feed within a minute of a new one (#5187, site/server.js "news from the
+  Release"), so it shows no notes once this has sent the feed. The
+  hand-written history that used to go under every release is gone from the
+  repository, so nothing puts the old notes back on the site.
 
   The channel's announced.json keeps the lines of every Discord post
   (#3320, "posts-main" or "posts-dev") so a new note cannot say one again.
@@ -46,8 +49,7 @@
 
 .PARAMETER SiteDir
   A folder standing in for the site's root on the VPS, so nothing connects
-  anywhere. Tests only, the same as Feed-Store.ps1's. The site's news page is
-  then written to <SiteDir>\data\news.json.
+  anywhere. Tests only, the same as Feed-Store.ps1's.
 
 .PARAMETER NoPause
   Does not wait for Enter at the end.
@@ -135,22 +137,9 @@ try {
     Finish 1
 }
 
-# The site's News page, from the main feed just sent.
+# The site's News page follows the main feed just sent by itself, within a
+# minute (#5187): nothing to send.
 if ($Channel -eq 'main' -and -not $Check) {
-    $pub = Join-Path $Here '..\ops\Publish-News.ps1'
-    try {
-        $sd = Get-FeedStoreSiteDir $SiteDir
-        if ($sd) {
-            New-Item -ItemType Directory -Force -Path (Join-Path $sd 'data') | Out-Null
-            & $pub -ReleaseDir $Dir -OutFile (Join-Path $sd 'data\news.json') -Quiet
-        } else {
-            & $pub -ReleaseDir $Dir -Quiet
-        }
-        Say '  the site''s News page was written from it' 'Green'
-    } catch {
-        Say "  the site's News page was NOT written: $($_.Exception.Message)" 'Red'
-        Say '  The feed has no notes; .\scripts\ops\Publish-News.ps1 writes the page from it.' 'Yellow'
-        Finish 1
-    }
+    Say '  the site writes its News page from this feed within a minute' 'Green'
 }
 Finish 0

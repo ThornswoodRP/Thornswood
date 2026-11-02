@@ -23,7 +23,7 @@
   webhook post. A fake bot plays the part of
   watch_services in bot.py between runs: it posts whatever is in the outbox
   and not yet posted, and marks it, the way the real one does.
-  bot\test-watch-services.py drives the real bot against what this writes
+  bot\tests\test-watch-services.py drives the real bot against what this writes
   (-Emit).
 
   Read only apart from files under its own temp folder. Never connects to

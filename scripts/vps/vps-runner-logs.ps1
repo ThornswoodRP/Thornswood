@@ -23,7 +23,7 @@
 
   Each run appends a line or two to runner-logs.log beside it: how many it
   removed and how much that was, and each one it could not. Keep it ASCII:
-  Windows PowerShell 5.1 runs it.
+  PowerShell 7 runs it.
 #>
 param(
   [string]$Root = 'C:\',

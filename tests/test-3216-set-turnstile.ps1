@@ -9,8 +9,7 @@
   Set-Turnstile.ps1 by the parser, not copied, and run here with the real
   Send-Secret.ps1, so the secret goes on standard input exactly as it would.
   ssh is a function here that runs the command line it was handed, in
-  Windows PowerShell 5.1 (the box's PowerShell) on Windows and in this
-  PowerShell anywhere else, against a scratch folder, with the site restart's
+  PowerShell 7 (the box's PowerShell since #5356), against a scratch folder, with the site restart's
   commands replaced by ones that only say they were called, and the site's
   answer to /api/report/form made from the config the run wrote, the way
   server.js's turnstileOn() reads it: the site key only when both are there.
@@ -74,7 +73,7 @@ Yes 'it asks for the secret hidden, never as a parameter' (
 
 # ---- what runs it -------------------------------------------------------------
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if ($OnWindows) { $shell = Get-WindowsPowerShell } else { $shell = (Get-Process -Id $PID).Path }
+$shell = Get-BoxPowerShell
 $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node) {
     Write-Host 'SKIP  the runs need node, which is not here'

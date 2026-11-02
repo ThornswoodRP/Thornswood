@@ -78,13 +78,13 @@ public sealed class WindowsVerifier : IVerifier
     public void Catalog(string cat, string dir)
     {
         Check(cat);
-        var ps = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
+        var ps = WindowsServerControl.Pwsh;
         var psi = new ProcessStartInfo(ps, ["-NoProfile", "-NonInteractive", "-Command",
             "[string](Test-FileCatalog -CatalogFilePath $env:TW_CAT -Path $env:TW_DIR)"])
         { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         psi.Environment["TW_CAT"] = cat;
         psi.Environment["TW_DIR"] = dir;
-        using var p = Process.Start(psi) ?? throw new SignatureException("Windows PowerShell did not start for Test-FileCatalog");
+        using var p = Process.Start(psi) ?? throw new SignatureException("PowerShell 7 did not start for Test-FileCatalog");
         var said = p.StandardOutput.ReadToEnd().Trim() + p.StandardError.ReadToEnd().Trim();
         p.WaitForExit();
         if (p.ExitCode != 0 || said != "Valid")

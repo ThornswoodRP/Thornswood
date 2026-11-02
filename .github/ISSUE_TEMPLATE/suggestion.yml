@@ -1,5 +1,6 @@
 name: An idea
 description: Something new, or a change to something that works but could be better.
+type: Feature
 labels: ["triage", "Suggestion"]
 body:
   - type: markdown

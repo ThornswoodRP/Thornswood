@@ -1,6 +1,6 @@
 {
   "_note": "The vcpkg libraries whose code is in each native client file, read from its program database by the fork's build, the fork's own folders under a notice of their own and the npm packages in skymp5-client.js (libraries), and each one's licence text in client-licences\\<name>.txt. Written by scripts\\release\\New-ClientLicenceRecord.ps1 (#3099, #3751).",
-  "forkCommit": "befb8364",
+  "forkCommit": "ec8e20f9",
   "readWith": "LLVM version 20.1.8",
   "files": {
     "Data\\SKSE\\Plugins\\MpClientPlugin.dll": [

@@ -34,10 +34,9 @@ function rig() {
   const clock = { now: 1700000000000 };
   const timers = [];
   const mp = {
-    getOnlinePlayers: function () { return []; },
     makeProperty: function () { },
     getDescFromId: function (id) { return 'ff' + id.toString(16) + ':Runtime'; },
-    get: function (id, key) {
+    get: function (id, key) { if (id === 0 && key === 'onlinePlayers') { return []; }
       if (key === 'profileId') { return id; }
       if (key === 'inventory') { return { entries: [] }; }
       if (key === 'equipment') { return { inv: { entries: [] } }; }

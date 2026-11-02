@@ -1,0 +1,43 @@
+# Rings the board's bell when a pull request changes (#5185).
+#
+# WHY. The board follows the pull requests (scripts/ops/Sync-Board.js says
+# how), so a pull request that opens, closes, merges or is edited has to
+# reach board.yml. board.yml needs the board App's key, in the board
+# environment, which only main may use; a pull_request run is on the pull
+# request's merge ref and may not use it, and no workflow here runs on
+# pull_request_target (tests/test-1306-pr-workflow.js). So this runs on the
+# pull request with nothing, and board.yml runs when it completes
+# (workflow_run), on main, with main's code.
+#
+# WHAT IT DOES. It checks out nothing, runs no action and has no token. It
+# prints two lines for board.yml to read from its log: the pull request's
+# number, and every #N the title and body had before an edit, so an issue an
+# edit took out of the body is looked at again. Nothing it prints is
+# trusted: board.yml only reads which issues to look at, and puts each one
+# where GitHub's own facts say, so a line that named the wrong issues would
+# only look at those issues again. The marker is put together at run time,
+# so the script's own text, which the log shows first, never holds it.
+#
+# WHERE IT RUNS. GitHub's ubuntu-latest, a few seconds a pull request event.
+name: Pull request changed
+on:
+  pull_request:
+    types: [opened, reopened, edited, closed]
+permissions: {}
+jobs:
+  say:
+    name: Say which pull request changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Print its number and the issues it named before
+        env:
+          PULL: ${{ github.event.pull_request.number }}
+          TITLE_BEFORE: ${{ github.event.changes.title.from }}
+          BODY_BEFORE: ${{ github.event.changes.body.from }}
+        run: |
+          mark="$(printf '%s-%s' BOARD PULL)"
+          echo "$mark $PULL"
+          before="$(printf '%s\n%s\n' "$TITLE_BEFORE" "$BODY_BEFORE" | grep -oE '#[0-9]{1,7}\b' | tr -d '#' | sort -un | head -n 50 | tr '\n' ' ')"
+          mark="$(printf '%s-%s' BOARD BEFORE)"
+          echo "$mark $before"

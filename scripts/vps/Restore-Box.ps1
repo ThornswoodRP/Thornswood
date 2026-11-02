@@ -93,7 +93,7 @@ function OnBox([string]$file, [string]$argLine) {
   $eap = $ErrorActionPreference
   $ErrorActionPreference = 'Continue'
   try {
-    Invoke-ThornswoodNative { & ssh @ssh $target "powershell -NoProfile -ExecutionPolicy Bypass -File $far\scripts\vps\$file $argLine" } 2>&1 |
+    Invoke-ThornswoodNative { & ssh @ssh $target "pwsh -NoProfile -ExecutionPolicy Bypass -File $far\scripts\vps\$file $argLine" } 2>&1 |
       ForEach-Object { Say ('  ' + $_) }
   } finally { $ErrorActionPreference = $eap }
   return $LASTEXITCODE

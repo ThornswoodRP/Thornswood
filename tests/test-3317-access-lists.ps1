@@ -35,7 +35,9 @@ function Yes([string]$what, [bool]$cond) {
 }
 
 $login  = Join-Path $repo 'scripts\deploy\Set-DiscordLogin.ps1'
-$server = [IO.File]::ReadAllText((Join-Path $repo 'site\server.js'))
+# The site is server.js over its modules in site\lib since #5357.
+. (Join-Path $PSScriptRoot 'SiteFiles.ps1')
+$server = Get-SiteSource (Join-Path $repo 'site')
 . (Join-Path $repo 'scripts\vps\Write-BotToken.ps1')
 
 # ------------------------------------------------------------------- A1 ---

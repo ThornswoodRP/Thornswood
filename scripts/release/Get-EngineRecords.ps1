@@ -50,7 +50,7 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 . (Join-Path $Here 'EngineRecords.ps1')
 $RepoDir = Split-Path -Parent (Split-Path -Parent $Here)
-$GitHubRepo = 'EvilPatrick06/Thornswood'
+$GitHubRepo = 'ThornswoodRP/Thornswood'
 
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
 function Stop-Here($m) {

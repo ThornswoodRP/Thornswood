@@ -2,8 +2,8 @@
 //
 //     node tests/test-3838-no-personal-details.js
 //
-// No tracked file names a personal mail address or a Windows profile
-// account name.
+// No tracked file names a personal mail address, a Windows profile account
+// name or somebody's public IPv4 address.
 //
 // WHY THIS EXISTS. Issue #3838, found by the #3684 history scan on 26 Oct
 // 2026. Files written on One carried the real paths and addresses they were
@@ -23,14 +23,31 @@
 //   - a profile path, C:\Users\<account>\ in any of its spellings
 //     (C:/Users/, C:\\Users\\, /c/Users/, /mnt/c/Users/, and a Mac's
 //     /Users/), whose account is not a placeholder or one of the box's own
-//     service accounts.
+//     service accounts;
+//   - a public IPv4 address (#3838, 1 Nov 2026: a doc comment in
+//     launcher/app/Chars.cs quoted a server log line with two people's
+//     addresses, and nothing here looked for one). An address is personal
+//     data, and the privacy page keeps a game log's addresses 30 days.
 // Write C:\Users\<you>\..., %USERPROFILE%, $env:USERPROFILE or a role
-// address instead.
+// address instead, and an address from 192.0.2.0/24, 198.51.100.0/24 or
+// 203.0.113.0/24, which are kept for examples (RFC 5737).
+//
+// WHAT IS NOT AN ADDRESS. Four numbers with dots are often something else,
+// so these are passed over: private, loopback and other ranges nobody's
+// machine is reached at; Cloudflare's published ranges (read from
+// scripts/deploy/cloudflare-ranges.txt) and GitHub's (the ones
+// scripts/deploy/Install-Runner.ps1 opens), which the box's firewall names;
+// a number ending .0 or .255, which is the end of a range, not a machine;
+// one under 10.x.x.x unless an address word (ip, IPv4, address, addr) comes
+// just before it, since our launcher's own versions look like 1.1.101.17;
+// and NOT_ADDRESSES below, each value with what it really is.
 //
 // WHAT IS LEFT ALONE, AND WHY.
-//   - records/client-licences/ and records/front-licences/: third-party
+//   - records/client-licences/, records/front-licences/ and
+//     installer/licences/ (but its README.txt, which is ours): third-party
 //     licence texts keep their authors' notices word for word, as the
-//     licences require.
+//     licences require. installer/licences holds the texts of the libraries
+//     inside the launcher, which go with every install (#4823).
 //   - the same notice lines copied into our own source: a line that is,
 //     past its comment marks, word for word a line of one of those texts
 //     that holds an address. zlib's licence says its notice "may not be
@@ -55,7 +72,19 @@ const { execFileSync } = require('child_process');
 const REPO_DIR = path.join(__dirname, '..'); // the tests are in tests\, the repository is one folder up
 
 const WAITING = [];
-const LEFT_ALONE = [/^records\/client-licences\//, /^records\/front-licences\//, /^tests\/fixtures\/ui-front-build\.js$/];
+
+// Four-part numbers that are not anybody's address, with what each one is.
+// A value here is passed over only in the files named beside it.
+const NOT_ADDRESSES = [
+  [[20, 2, 0, 7].join('.'), 'the Gamebryo nif format version Skyrim SE uses', /^(?:launcher\/app\/(?:CoveredBodies|FromGame)\.cs|scripts\/dev\/Build-Backdrop\.py|scripts\/mods\/Build-NoticeBoard\.py|tests\/fixtures\/2827\/from-game-fixture\.py|tests\/test-build-generated\.ps1|launcher\/tests\/test-covered-bodies\.ps1|tests\/test-menu-backdrop\.js)$/],
+  [[192, 135, 119, 166].join('.'), "the old product's server, which the docs check refuses", /^tests\/test-repo-docs\.js$/],
+  [[128, 0, 0, 1].join('.'), 'a made-up caller next to loopback, for the sign-in address check', /^site\/tests\/test-2187-signin-addr\.js$/],
+  [[104, 28, 0, 1].join('.'), 'the first address past a Cloudflare range, for the range check', /^tests\/test-2995-cloudflare-front\.ps1$/],
+  [[13, 0, 0, 4].join('.'), 'a made-up block list entry for the runner firewall check', /^tests\/test-runner-offbox\.ps1$/],
+  [[13, 0, 0, 5].join('.'), 'a made-up block list entry for the runner firewall check', /^tests\/test-runner-offbox\.ps1$/],
+  [[13, 0, 0, 6].join('.'), 'a made-up block list entry for the runner firewall check', /^tests\/test-runner-offbox\.ps1$/],
+];
+const LEFT_ALONE = [/^records\/client-licences\//, /^records\/front-licences\//, /^installer\/licences\/(?!README\.txt$)/, /^tests\/fixtures\/ui-front-build\.js$/];
 
 // Every line of a recorded licence text (the client's and the site's
 // front build's) that holds an address, with its
@@ -87,6 +116,34 @@ const PROFILE = [
 // <you> and <account> never match the account pattern above at all.
 const ACCOUNT_OK = /^(?:you|Public|Default|Default User|All Users|Administrator|runneradmin|x|tester|thornswood-[A-Za-z0-9.<>-]*|[$%].*)$/i;
 
+// IPv4 ranges as [first, last] numbers.
+const ip4 = (a) => a.split('.').reduce((n, o) => n * 256 + Number(o), 0);
+const range4 = (cidr) => {
+  const [a, bits] = cidr.split('/');
+  const size = 2 ** (32 - Number(bits === undefined ? 32 : bits));
+  const first = Math.floor(ip4(a) / size) * size;
+  return [first, first + size - 1];
+};
+const NOT_PUBLIC = ['0.0.0.0/8', '10.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8', '169.254.0.0/16', '172.16.0.0/12', '192.0.0.0/24',
+  '192.0.2.0/24', '192.168.0.0/16', '198.18.0.0/15', '198.51.100.0/24', '203.0.113.0/24', '224.0.0.0/3'].map(range4);
+const CF_FILE = path.join(REPO_DIR, 'scripts', 'deploy', 'cloudflare-ranges.txt');
+const CLOUDFLARE = (fs.existsSync(CF_FILE) ? fs.readFileSync(CF_FILE, 'utf8') : '').split(/\r?\n/)
+  .map((l) => l.trim()).filter((l) => /^\d+\.\d+\.\d+\.\d+\/\d+$/.test(l)).map(range4);
+const GITHUB = ['140.82.112.0/20', '192.30.252.0/22', '4.148.0.0/16'].map(range4);
+const IP4 = /(?<![\w.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?![\w]|\.\d)/g;
+const ADDRESS_WORD = /\b(?:ip|ipv4|address|addr)\b[^0-9\n]{0,16}$/i;
+function publicIp4(line, m, rel) {
+  const o = m.slice(1, 5).map(Number);
+  if (o.some((x) => x > 255)) return false;
+  const v = o.join('.');
+  const n = ip4(v);
+  if ([...NOT_PUBLIC, ...CLOUDFLARE, ...GITHUB].some(([a, b]) => n >= a && n <= b)) return false;
+  if (o[3] === 0 || o[3] === 255) return false;
+  if (o[0] < 10 && !ADDRESS_WORD.test(line.slice(0, m.index))) return false;
+  if (NOT_ADDRESSES.some(([val, , where]) => val === v && where.test(rel || ''))) return false;
+  return true;
+}
+
 let pass = 0, fail = 0;
 function yes(what, cond) {
   if (cond) { pass++; console.log('PASS  ' + what); }
@@ -95,7 +152,7 @@ function yes(what, cond) {
 
 // The findings in one file's text: what kind, the line and the column. The
 // value itself is not printed, so a finding never reaches a build log.
-function findings(text) {
+function findings(text, rel) {
   const out = [];
   const lines = text.split('\n');
   for (let i = 0; i < lines.length; i++) {
@@ -110,6 +167,8 @@ function findings(text) {
       re.lastIndex = 0;
       while ((m = re.exec(l))) if (!ACCOUNT_OK.test(m[1])) out.push({ kind: 'a profile account name', line: i + 1, col: m.index + 1 });
     }
+    IP4.lastIndex = 0;
+    while ((m = IP4.exec(l))) if (publicIp4(l, m, rel)) out.push({ kind: 'a public IPv4 address', line: i + 1, col: m.index + 1 });
   }
   return out;
 }
@@ -134,6 +193,14 @@ yes('a profile path is found', plant('C:' + bs + 'Users' + bs + 'someone' + bs +
 yes('  and with forward slashes, doubled backslashes, Git Bash and WSL', plant('C:/' + U + '/someone/x') === 1 && plant("'C:" + bs + bs + 'Users' + bs + bs + "someone'") === 1 && plant('cd /c/' + U + '/someone/x') === 1 && plant('/mnt/c/' + U + '/someone/x') === 1 && plant('"/' + U + '/someone/github/x"') === 1);
 yes('  but not a placeholder or the box\'s own accounts', plant('C:' + bs + 'Users' + bs + '<you>' + bs + 'x C:' + bs + 'Users' + bs + 'Administrator' + bs + 'x C:' + bs + 'Users' + bs + 'thornswood-runner5' + bs + 'x C:' + bs + 'Users' + bs + '%USERNAME%') === 0);
 yes('  nor a web address with Users in it', plant('https://github.com/users/someone/projects/1') === 0);
+const q = (...o) => o.join('.');
+yes('a public IPv4 address is found, as a server log quotes it', plant('Connecting a user 1 with ip ' + q(24, 168, 10, 118) + '   -> 1 logged as 2') === 1);
+yes('  and one under 10.x.x.x after an address word', plant('the ip ' + q(5, 6, 7, 8) + ' connected') === 1);
+yes('  but not an example, private or loopback one', plant(q(203, 0, 113, 7) + ' ' + q(192, 0, 2, 1) + ' ' + q(198, 51, 100, 9) + ' ' + q(10, 1, 2, 3) + ' ' + q(192, 168, 1, 5) + ' ' + q(127, 0, 0, 1)) === 0);
+yes('  nor a launcher version', plant('dev ' + q(1, 1, 101, 17) + ' and v' + q(1, 2, 6, 1)) === 0);
+yes('  nor a range\'s end, or Cloudflare\'s or GitHub\'s ranges (' + CLOUDFLARE.length + ' read)', CLOUDFLARE.length > 0 && plant(q(11, 0, 0, 0) + ' ' + q(126, 255, 255, 255) + ' ' + q(104, 16, 0, 1) + ' ' + q(140, 82, 112, 9)) === 0);
+yes('  nor a version number with more digits on it', plant(q(1, 2, 3, 4) + '.5 ' + q(20, 2, 0, 7) + 'a') === 0);
+yes('  and a known value only in the file named beside it', plant(q(20, 2, 0, 7)) === 1 && findings(q(20, 2, 0, 7), 'tests/test-menu-backdrop.js').length === 0);
 
 // ------------------------------------------------------- the tracked files ---
 let files = [];
@@ -157,17 +224,21 @@ for (const rel of files) {
   } catch (e) { continue; }
   if (buf.subarray(0, 8000).includes(0)) continue; // binary
   read++;
-  const f = findings(buf.toString('utf8').split('\r').join(''));
+  const f = findings(buf.toString('utf8').split('\r').join(''), rel);
   if (f.length) found.set(rel, f);
 }
 yes('the text files are read (' + read + ')', read > 100);
 
 const unexpected = [...found.keys()].filter((rel) => !waiting.has(rel));
-yes('no tracked file names a personal address or profile account' + (unexpected.length ? ':' : ''), unexpected.length === 0);
+yes('no tracked file names a personal address, profile account or public IPv4 address' + (unexpected.length ? ':' : ''), unexpected.length === 0);
 for (const rel of unexpected) {
   for (const f of found.get(rel)) console.log('        ' + rel + ':' + f.line + ':' + f.col + '  ' + f.kind);
 }
-if (unexpected.length) console.log('      Write C:' + bs + 'Users' + bs + '<you>' + bs + '..., %USERPROFILE%, $env:USERPROFILE or a role address instead.');
+if (unexpected.length) console.log('      Write C:' + bs + 'Users' + bs + '<you>' + bs + '..., %USERPROFILE%, $env:USERPROFILE, a role address or a 203.0.113.x address instead.');
+for (const [val, what, where] of NOT_ADDRESSES) {
+  const at = files.filter((rel) => where.test(rel) && fs.existsSync(path.join(REPO_DIR, rel)) && fs.readFileSync(path.join(REPO_DIR, rel), 'utf8').includes(val));
+  yes(val + ' (' + what + ') is still where NOT_ADDRESSES says' + (at.length ? '' : ': it is gone, so take its line out'), at.length > 0);
+}
 
 for (const [rel, why] of WAITING) {
   const still = found.has(rel);

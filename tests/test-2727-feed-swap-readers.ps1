@@ -31,8 +31,8 @@
        site\server.js reads the feed only through feedFile, the newest
        generation, in the feed route, the watch, the join pass, the credits
        and the most-online fallback.
-    2. In this shell and in Windows PowerShell 5.1 (the VPS runs the store's
-       script with it): a reader holding a file open with share-delete does
+    2. In this shell, PowerShell 7, which the VPS runs the store's script
+       with since #5356: a reader holding a file open with share-delete does
        not stop the POSIX rename and keeps the old bytes; a holder without
        share-delete is refused and the file stays whole; and the real send
        (Receive-FeedStore, then Send-FeedStore on a stand-in -SiteDir) lands
@@ -95,7 +95,9 @@ Yes '...and every read of a store file in the box''s script shares delete' (
     $body -match '\[IO\.FileShare\]::ReadWrite -bor \[IO\.FileShare\]::Delete' -and
     $body -notmatch '\[IO\.File\]::(OpenRead|ReadAllText|ReadAllBytes|ReadAllLines|Open)\(')
 
-$server = Text $serverJs
+# The site is server.js over its modules in site\lib since #5357.
+. (Join-Path $PSScriptRoot 'SiteFiles.ps1')
+$server = (Get-SiteSource (Join-Path $Repo 'site')) -replace "`r`n", "`n"
 Yes 'site\server.js: the feed route, the watch and the join pass read the newest generation (feedFile)' (
     $server -match "const file = feedFile\(feedVer\[1\]\);" -and $server -match 'const file = feedFile\(channel\);' -and
     $server -match 'const file = feedFile\(dir\);')
@@ -109,8 +111,8 @@ $null = New-Item -ItemType Directory -Force -Path $work
 $oldAppData = $env:LOCALAPPDATA
 $reader = $null
 try {
-    # ---- 2: held open, in this shell and in Windows PowerShell 5.1 --------------------
-    # The same script in both: it prints one line a check, OK or NO and what it saw.
+    # ---- 2: held open, in this shell, the box's PowerShell 7 --------------------------
+    # One script: it prints one line a check, OK or NO and what it saw.
     $held = Join-Path $work 'held.ps1'
     [IO.File]::WriteAllText($held, @'
 param($store, $dir)
@@ -165,12 +167,6 @@ Say 'send' ($err -eq '' -and $sent -contains 'version.json' -and $names -eq '000
     $env:LOCALAPPDATA = Join-Path $work 'appdata'
     $shells = @(@{ Name = ('this shell, PowerShell ' + $PSVersionTable.PSVersion.ToString()); Run = { param($d) & $held $storePs1 $d } })
     . (Join-Path $PSScriptRoot 'Windows.ps1')
-    if (-not $OnWindows) {
-        Write-Host 'SKIP  the same under Windows PowerShell 5.1, which the VPS runs the store''s script with: this is not Windows'
-    } else {
-        $ps51 = Get-WindowsPowerShell
-        $shells += @{ Name = 'Windows PowerShell 5.1'; Run = { param($d) & $ps51 -NoProfile -ExecutionPolicy Bypass -File $held $storePs1 $d 2>&1 } }
-    }
     $k = 0
     foreach ($s in $shells) {
         $k++
@@ -235,7 +231,10 @@ console.log('passes ' + passes + ' missing ' + missing + ' other ' + other + ' g
     [IO.File]::WriteAllText((Join-Path $chan 'version\00000001.json'), $doc)
     $psi = New-Object Diagnostics.ProcessStartInfo
     $doneFile = Join-Path $work 'writer-done'
-    $psi.FileName = $node.Source; $psi.Arguments = '"' + $loopJs + '" "' + $serverJs + '" "' + $root + '" "' + $doneFile + '"'
+    # The whole site as one text (#5357), for the reader to lift feedFile from.
+    $siteText = Join-Path $work 'site-source.js'
+    [IO.File]::WriteAllText($siteText, (Get-SiteSource (Join-Path $Repo 'site')), (New-Object Text.UTF8Encoding($false)))
+    $psi.FileName = $node.Source; $psi.Arguments = '"' + $loopJs + '" "' + $siteText + '" "' + $root + '" "' + $doneFile + '"'
     $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true
     $reader = [Diagnostics.Process]::Start($psi)
     $first = $reader.StandardOutput.ReadLineAsync()

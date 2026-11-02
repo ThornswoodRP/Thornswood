@@ -38,7 +38,7 @@ $env:THORNSWOOD_HARNESS = '1'
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-$winPs = if ($OnWindows) { Get-WindowsPowerShell } else { $null }
+$boxPs = Get-BoxPowerShell
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 # The tests are in tests\, the repository is one folder up.
@@ -160,8 +160,7 @@ $dStart = $devText.IndexOf("Write-Host 'Pointing the dev server at the dev voice
 $dOpen = $devText.IndexOf('Remote @"', $dStart)
 $dClose = $devText.IndexOf('"@ | ForEach-Object', $dOpen)
 Yes 'the dev settings block is in Deploy-DevGamemode.ps1' ($dStart -ge 0 -and $dOpen -gt $dStart -and $dClose -gt $dOpen)
-if (-not $OnWindows) { Write-Host 'SKIP  the dev settings block, run: it runs on the box under Windows PowerShell 5.1, on the box''s Windows paths, so only Windows can run it' }
-elseif ($dStart -ge 0 -and $dOpen -gt $dStart -and $dClose -gt $dOpen) {
+if ($dStart -ge 0 -and $dOpen -gt $dStart -and $dClose -gt $dOpen) {
     $devBody = $devText.Substring($dOpen + 'Remote @"'.Length, $dClose - $dOpen - 'Remote @"'.Length).Trim("`r", "`n")
     $box = Join-Path $tmp 'dev-box'
     New-Item -ItemType Directory -Force -Path $box | Out-Null
@@ -174,7 +173,7 @@ elseif ($dStart -ge 0 -and $dOpen -gt $dStart -and $dClose -gt $dOpen) {
         $file = Join-Path $tmp 'dev-block.ps1'
         [IO.File]::WriteAllText($file, $ExecutionContext.InvokeCommand.ExpandString($devBody), (New-Object Text.UTF8Encoding $true))
         $ErrorActionPreference = 'Continue'
-        $said = & $winPs -NoProfile -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" }
+        $said = & $boxPs -NoProfile -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" }
         return ($said -join "`n")
     }
     function Dev-Backups { return @(Get-ChildItem -LiteralPath $box -Filter 'server-settings.json.before-*').Count }

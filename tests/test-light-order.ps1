@@ -282,6 +282,8 @@ try {
 function Get-CollectionState([string]$Url) { [pscustomobject]@{ Slug = 'tslight'; Have = 4; Newest = 4; Behind = $false; Known = $true } }
 '@
         Put (Join-Path $t 'game\gamemode.js') "var thornswoodLight = 1;`n"
+        # And its tables (#5191), which Deploy-Gamemode.ps1 copies in beside it.
+        Put (Join-Path $t 'game\gamemode-tables\WAY_OUT.json') "{}`n"
         Put (Join-Path $t 'dist\server-settings.json') ('{"port":7777,"name":"Thornswood","loadOrder":[' +
             (($masters5 + @('Water for ENB.esm', 'Thornswood-Content.esp', 'Skyrim Unbound.esp') | ForEach-Object { '"' + ((Join-Path $t 'Game\Data') -replace '\\', '/') + '/' + $_ + '"' }) -join ',') + ']}')
         $data = Join-Path $t 'Game\Data'

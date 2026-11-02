@@ -118,8 +118,8 @@ function gh {
     $p = @($a | Where-Object { $_ -match '^repos/' }) | Select-Object -First 1
     if ($a -contains '--input') { $global:TSghBody = (@($input) -join "`n") | ConvertFrom-Json }
     $global:LASTEXITCODE = 0
-    if ($p -match '^repos/EvilPatrick06/Thornswood-Ops/actions/workflows/github-admin\.yml/dispatches$') { return '{"workflow_run_id":91,"html_url":"https://github.com/x/actions/runs/91"}' }
-    if ($p -match '^repos/EvilPatrick06/Thornswood-Ops/actions/runs/91$') { return '{"status":"completed","conclusion":"success","path":".github/workflows/github-admin.yml","html_url":"https://github.com/x/actions/runs/91"}' }
+    if ($p -match '^repos/ThornswoodRP/Thornswood-Ops/actions/workflows/github-admin\.yml/dispatches$') { return '{"workflow_run_id":91,"html_url":"https://github.com/x/actions/runs/91"}' }
+    if ($p -match '^repos/ThornswoodRP/Thornswood-Ops/actions/runs/91$') { return '{"status":"completed","conclusion":"success","path":".github/workflows/github-admin.yml","html_url":"https://github.com/x/actions/runs/91"}' }
     if ($p -match '/actions/runs/91/jobs$') { return '{"jobs":[{"id":557}]}' }
     if ($p -match '/check-runs/557/annotations$') { return $global:TSghNotes }
     $global:LASTEXITCODE = 1

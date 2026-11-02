@@ -7,8 +7,8 @@
 # nothing, so no run had ever left a .bak.
 #
 # This lifts the real here-string Deploy-Docs sends to the VPS, fills in a
-# scratch folder for $rootWin, and runs it under Windows PowerShell 5.1, the
-# shell the VPS runs it in. It touches nothing outside that scratch folder.
+# scratch folder for $rootWin, and runs it under PowerShell 7, the shell the
+# VPS runs it in. It touches nothing outside that scratch folder.
 #
 #   pwsh -File tests\test-docs-backup.ps1                 the repo's copy
 #   pwsh -File tests\test-docs-backup.ps1 -Path <file>    any other copy
@@ -17,12 +17,9 @@ param([string]$Path)
 $env:THORNSWOOD_HARNESS = '1'
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-# What this runs, Windows runs in Windows PowerShell 5.1; off Windows, this shell.
-if ($OnWindows) { $winPs = Get-WindowsPowerShell }
-else {
-    $winPs = (Get-Process -Id $PID).Path
-    Write-Host 'NOTE  what runs in Windows PowerShell 5.1 on Windows runs in this shell here: this is not Windows'
-}
+# What this runs, every machine runs in PowerShell 7 since #5356, the box
+# included, and this harness runs in it too.
+$boxPs = Get-BoxPowerShell
 $here = $PSScriptRoot
 if (-not $here) { $here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 # The tests are in tests\, the repository is one folder up.
@@ -61,7 +58,7 @@ if ($block) {
         $script = Invoke-Expression $block.Extent.Text
         yes 'it names the data folder it was given' ($script -like ('*' + $scratch + '\data*'))
 
-        $said = & $winPs -NoProfile -NonInteractive -Command $script 2>&1 | ForEach-Object { "$_" }
+        $said = & $boxPs -NoProfile -NonInteractive -Command $script 2>&1 | ForEach-Object { "$_" }
         $said = ($said -join ' ').Trim()
         Write-Host ('      it said: ' + $said)
 

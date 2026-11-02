@@ -26,8 +26,8 @@
   they are, and a game server that holds its two ports), and run by this
   PowerShell with ssh and scp replaced by functions, the way
   test-remote-big-script.ps1 replaces them. The ssh stand-in runs what it is
-  sent under Windows PowerShell 5.1, which is what runs it on the VPS, with only
-  the scheduled task and firewall cmdlets replaced: a task is a file here, and
+  sent under PowerShell 7, which is what runs it on the box, with only the
+  scheduled task and firewall cmdlets replaced: a task is a file here, and
   starting it starts its real action. The scp stand-in copies into the scratch
   folder, and can be told to fail or to corrupt a file. The stops, the
   renames, the health checks and the way back are the real ones.
@@ -107,10 +107,10 @@ $node = Get-Command node -CommandType Application -EA SilentlyContinue | Select-
 $python = Get-Command python -CommandType Application -EA SilentlyContinue | Select-Object -First 1
 . (Join-Path $PSScriptRoot 'Windows.ps1')
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the runs need Windows PowerShell 5.1 and Get-NetUDPEndpoint, which only Windows has, and this is not Windows'
+    Write-Host 'SKIP  the runs: the swaps find a server by its port with Get-NetUDPEndpoint, which only Windows has, and this is not Windows'
     Done
 }
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 if (-not $node -or -not $python -or -not (Get-Command Get-NetUDPEndpoint -EA SilentlyContinue)) {
     Write-Host 'SKIP  the runs need node, python and Get-NetUDPEndpoint as well, and this machine lacks one'
     Done
@@ -353,14 +353,14 @@ $prelude = $prelude.Replace('@@PIDLOG@@', $pidLog.Replace("'", "''")).Replace('@
 # Everything the stand-ins below read is in $global:TsBox, not in a variable
 # of this script: they run inside the script under test, and PowerShell
 # finds that script's own variables first (its Remote has a $far of its own).
-$global:TsBox = [pscustomobject]@{ Far = $far; Prelude = $prelude; Work = $work; Ps51 = $ps51; Box = $box; FarTemp = $farTemp }
+$global:TsBox = [pscustomobject]@{ Far = $far; Prelude = $prelude; Work = $work; BoxPs = $boxPs; Box = $box; FarTemp = $farTemp }
 function RunWrapped([string]$body) {
     $f = Join-Path $global:TsBox.Far ('far-' + [Guid]::NewGuid().ToString('N') + '.ps1')
     [IO.File]::WriteAllText($f, ($global:TsBox.Prelude + $body), (New-Object Text.UTF8Encoding($true)))
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     Push-Location -LiteralPath $global:TsBox.Work
-    try { $out = @(& $global:TsBox.Ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_".TrimEnd() }) }
+    try { $out = @(& $global:TsBox.BoxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $f 2>&1 | ForEach-Object { "$_".TrimEnd() }) }
     finally { Pop-Location; $ErrorActionPreference = $eap }
     $global:TsLastCode = $LASTEXITCODE
     if (-not (NoRealTask)) { throw 'a real scheduled task was registered, and has been removed' }
@@ -550,6 +550,8 @@ Put (Join-Path $repo 'bot\factions.json') '[]'
 Put (Join-Path $repo 'bot\staff-channel.txt') '0'
 Put (Join-Path $repo 'bot\assets\join-card.png') 'not really a picture'
 Put (Join-Path $repo 'game\gamemode.js') '// the committed gamemode'
+# And its tables (#5191), which the gamemode artifact carries with it.
+Put (Join-Path $repo 'game\gamemode-tables\WAY_OUT.json') '{}'
 Site 'docs v0'
 Voice 'voice-v0'
 Bot 'bot v0'
@@ -883,7 +885,7 @@ try {
     $null = [IO.Directory]::CreateDirectory((Join-Path $botRoot 'data'))
     Put (Join-Path $botRoot 'run.ps1') ("Set-Location -LiteralPath '" + $bq + "'`r`nwhile (`$true) {`r`n  & cmd /c ""python """"" + $botRoot + "\bot.py"""" >> """"" + $botLog + """"" 2>&1""`r`n  Start-Sleep -Seconds 2`r`n}`r`n")
     # The service $BotService (ThornswoodTest<run>Bot), standing in for ThornswoodBot (#465).
-    Task $BotService 'powershell.exe' ('-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $botRoot + '\run.ps1"') $botRoot
+    Task $BotService $boxPs ('-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $botRoot + '\run.ps1"') $botRoot
     function BotSays([string]$v) { return ((Get $botLog) -match [regex]::Escape($v + ' watching')) }
     # The site's data\for-bot and data\from-bot, which Install-Bot waits for
     # before it sends the bot (#1102, and #3140 for from-bot, where the bot

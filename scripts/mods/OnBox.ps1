@@ -3,8 +3,8 @@
 
   The two scripts Run-OnBox.ps1 sends to the box (issue #2899): the keeper,
   which makes the run's folder and removes it, and the run. Kept apart so
-  tests\test-2899-run-on-box.ps1 runs the same text under Windows PowerShell
-  5.1 against a stand-in folder. Defines functions and nothing else.
+  tests\test-2899-run-on-box.ps1 runs the same text under PowerShell 7, as
+  the box does, against a stand-in folder. Defines functions and nothing else.
 
   The keeper's folder is the one way a script here lands files on the box or
   makes them there to bring back (#3035): Open-ThornswoodOnBoxFolder and
@@ -12,7 +12,7 @@
   alike. A script that only needs its text run there sends it through
   Send-Script.ps1 instead, whose run deletes a long one's copy before it runs.
 
-  The far side runs under Windows PowerShell 5.1: ASCII, and .NET for the
+  The far side runs under PowerShell 7: ASCII, and .NET for the
   hashes, not Get-FileHash (ServerContent.ps1 says why).
 #>
 
@@ -61,7 +61,7 @@ function Set-ThornswoodArchiveReadOnly([string]$Path) {
   foreach ($s in @('S-1-5-32-544', [Security.Principal.WindowsIdentity]::GetCurrent().User.Value)) {
     $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier($s)), 'ReadAndExecute, WriteAttributes, Synchronize', 'Allow')))
   }
-  (Get-Item -LiteralPath $Path -Force).SetAccessControl($acl)
+  [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo](Get-Item -LiteralPath $Path -Force), $acl)
 }
 '@
 }

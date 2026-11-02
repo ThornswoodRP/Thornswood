@@ -24,8 +24,8 @@
     - Fetch-Backups.ps1 -PruneOnly names the copy it could not drop, never
       logs it as dropped, and ends non-zero; then 0 once it goes
 
-  The scripts run under Windows PowerShell 5.1, which is what runs them on the
-  VPS. Touches nothing but a scratch folder under the temp folder.
+  The scripts run under PowerShell 7, which is what runs them on the VPS
+  since #5356, and only on Windows. Touches nothing but a scratch folder under the temp folder.
 #>
 [CmdletBinding()]
 param()
@@ -59,16 +59,16 @@ foreach ($f in $Nightly, $Fetch, $Watch) {
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the runs need Windows PowerShell 5.1, which runs these on the VPS; this is not Windows'
+    Write-Host 'SKIP  the runs: a copy that will not go is one held open, which only Windows'' share modes keep, and the nightly backup stages under Windows'' TEMP with \ between folders'
     Done
 }
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 
 $script:last = @()
 function Run([string]$file, [string[]]$argv) {
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    try { $script:last = @(& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $file @argv 2>&1 | ForEach-Object { "$_" }) }
+    try { $script:last = @(& $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $file @argv 2>&1 | ForEach-Object { "$_" }) }
     finally { $ErrorActionPreference = $eap }
     return $LASTEXITCODE
 }

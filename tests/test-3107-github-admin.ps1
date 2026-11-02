@@ -87,11 +87,11 @@ foreach ($p in $set, $inst, (Join-Path $repo 'scripts/ops/WorkflowRun.ps1')) {
 Write-Host ''; Write-Host 'the workflow'
 Yes 'github-admin.yml is not in this repository, which has no VPS runner once public' (-not (Test-Path -LiteralPath $wf))
 $setText = [IO.File]::ReadAllText($set)
-Yes '  Set-BuildRunners.ps1 starts it in the private ops repository, where the runners are registered' ($setText.Contains("[string]`$GitHubRepo = 'EvilPatrick06/Thornswood-Ops'") -and $setText.Contains("`$workflow = 'github-admin.yml'"))
+Yes '  Set-BuildRunners.ps1 starts it in the private ops repository, where the runners are registered' ($setText.Contains("[string]`$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'") -and $setText.Contains("`$workflow = 'github-admin.yml'"))
 $aboutText = [IO.File]::ReadAllText((Join-Path $repo 'scripts/deploy/Set-RepoAbout.ps1'))
-Yes '  and Set-RepoAbout.ps1 starts it there too' ($aboutText.Contains("[string]`$GitHubRepo = 'EvilPatrick06/Thornswood-Ops'") -and $aboutText.Contains("`$workflow = 'github-admin.yml'"))
+Yes '  and Set-RepoAbout.ps1 starts it there too' ($aboutText.Contains("[string]`$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'") -and $aboutText.Contains("`$workflow = 'github-admin.yml'"))
 $settingsText = [IO.File]::ReadAllText((Join-Path $repo 'scripts/deploy/Check-GitHubSettings.ps1'))
-Yes '  and Check-GitHubSettings.ps1 starts it there, reading this repository''s settings (#3534)' ($settingsText.Contains("[string]`$GitHubRepo = 'EvilPatrick06/Thornswood-Ops'") -and $settingsText.Contains("`$workflow = 'github-admin.yml'") -and $settingsText.Contains("`$Repo = 'EvilPatrick06/Thornswood'"))
+Yes '  and Check-GitHubSettings.ps1 starts it there, reading this repository''s settings (#3534)' ($settingsText.Contains("[string]`$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'") -and $settingsText.Contains("`$workflow = 'github-admin.yml'") -and $settingsText.Contains("`$Repo = 'ThornswoodRP/Thornswood'"))
 
 # ---- 2. the GitHub half ------------------------------------------------------
 Write-Host ''; Write-Host 'the GitHub half'
@@ -141,8 +141,8 @@ $r = OnGitHub @{ ADMIN_CHECK = 'true' } @{ content = '{"ok":true,"lines":["x wou
 Yes 'a check that differs: exit 0, DIFFERS 2, and the check reached the service' ($r.Code -eq 0 -and $r.Out -match 'Set-BuildRunners::DIFFERS 2' -and $r.Calls[1].Body.check -eq $true)
 $r = OnGitHub @{ ADMIN_ASK = 'runner-labels' } @{}
 Yes 'asking for runner-labels by name is the same' ($r.Code -eq 0 -and $r.Calls[1].Body.what -eq 'runner-labels' -and $r.Out -match 'Set-BuildRunners::MATCHES')
-$r = OnGitHub @{ ADMIN_ASK = 'installation-repos'; ADMIN_CHECK = 'true' } @{ content = '{"ok":true,"lines":["installed on EvilPatrick06/Thornswood","installed on EvilPatrick06/Thornswood-Ops"],"repos":["EvilPatrick06/Thornswood","EvilPatrick06/Thornswood-Ops"]}' }
-Yes 'installation-repos: exit 0, REPOS 2 with a line for each' ($r.Code -eq 0 -and $r.Out -match 'Set-BuildRunners::REPOS 2%0Ainstalled on EvilPatrick06/Thornswood%0Ainstalled on EvilPatrick06/Thornswood-Ops')
+$r = OnGitHub @{ ADMIN_ASK = 'installation-repos'; ADMIN_CHECK = 'true' } @{ content = '{"ok":true,"lines":["installed on ThornswoodRP/Thornswood","installed on ThornswoodRP/Thornswood-Ops"],"repos":["ThornswoodRP/Thornswood","ThornswoodRP/Thornswood-Ops"]}' }
+Yes 'installation-repos: exit 0, REPOS 2 with a line for each' ($r.Code -eq 0 -and $r.Out -match 'Set-BuildRunners::REPOS 2%0Ainstalled on ThornswoodRP/Thornswood%0Ainstalled on ThornswoodRP/Thornswood-Ops')
 Yes '  asking for that and nothing else' ($r.Calls[1].Body.what -eq 'installation-repos' -and @($r.Calls[1].Body.PSObject.Properties).Count -eq 1)
 $r = OnGitHub @{ ADMIN_ASK = 'secrets' } @{}
 Yes 'an ask it does not know: exit 1, nothing asked' ($r.Code -eq 1 -and $r.Calls.Count -eq 0 -and $r.Out -match 'neither runner-labels nor installation-repos')
@@ -189,15 +189,15 @@ function Session([hashtable]$a, [string]$run, [object[]]$notes) {
 function Note([string]$level, [string]$message, [string]$title = 'Set-BuildRunners') { return @{ annotation_level = $level; title = $title; message = $message } }
 
 $s = Session @{} $done @((Note 'notice' "CHANGED 1`nrecords/build-runners.json: thornswood-vps-2, thornswood-build put on"))
-Yes ("it starts the ops repository's github-admin.yml on main and says GitHub matches, exit 0 ($($s.Code))") ($s.Code -eq 0 -and $s.Calls[0] -match '^api -X POST repos/EvilPatrick06/Thornswood-Ops/actions/workflows/github-admin\.yml/dispatches' -and $s.Body.ref -eq 'main' -and $s.Out -match 'runner records now; 1 change\(s\) made')
+Yes ("it starts the ops repository's github-admin.yml on main and says GitHub matches, exit 0 ($($s.Code))") ($s.Code -eq 0 -and $s.Calls[0] -match '^api -X POST repos/ThornswoodRP/Thornswood-Ops/actions/workflows/github-admin\.yml/dispatches' -and $s.Body.ref -eq 'main' -and $s.Out -match 'runner records now; 1 change\(s\) made')
 Yes '  with check false, and the service''s lines' ($s.Body.inputs.check -eq 'false' -and $s.Out -match 'thornswood-build put on')
 Yes '  asking for runner-labels' ($s.Body.inputs.ask -eq 'runner-labels')
 $s = Session @{ RepoSettings = $true } $done @((Note 'notice' "CHANGED 1`nrecords/github-repo-settings.json: release tags made (active)" 'Set-RepoSettings'))
 Yes '-RepoSettings: ask repo-settings, it reads the Set-RepoSettings answer, exit 0' ($s.Code -eq 0 -and $s.Body.inputs.ask -eq 'repo-settings' -and $s.Out -match 'matches main''s repository settings record now; 1 change' -and $s.Out -match 'release tags made')
 $s = Session @{ RepoSettings = $true; Check = $true } $done @((Note 'notice' "MATCHES`nx" 'Set-BuildRunners'), (Note 'notice' "DIFFERS 1`nrecords/github-repo-settings.json: main differs and would be put back" 'Set-RepoSettings'))
 Yes '  and with -Check reads its own answer, not the labels'' (exit 1)' ($s.Code -eq 1 -and $s.Out -match 'differs from main''s repository settings record in 1' -and $s.Out -match 'Set-BuildRunners\.ps1 -RepoSettings puts it right')
-$s = Session @{ AppRepos = $true } $done @((Note 'notice' "REPOS 2`ninstalled on EvilPatrick06/Thornswood`ninstalled on EvilPatrick06/Thornswood-Ops"))
-Yes '-AppRepos asks for installation-repos and says where the App is, exit 0' ($s.Code -eq 0 -and $s.Body.inputs.ask -eq 'installation-repos' -and $s.Out -match 'installed on EvilPatrick06/Thornswood-Ops' -and $s.Out -match 'installed on 2 repositories')
+$s = Session @{ AppRepos = $true } $done @((Note 'notice' "REPOS 2`ninstalled on ThornswoodRP/Thornswood`ninstalled on ThornswoodRP/Thornswood-Ops"))
+Yes '-AppRepos asks for installation-repos and says where the App is, exit 0' ($s.Code -eq 0 -and $s.Body.inputs.ask -eq 'installation-repos' -and $s.Out -match 'installed on ThornswoodRP/Thornswood-Ops' -and $s.Out -match 'installed on 2 repositories')
 $s = Session @{ AppRepos = $true; RepoSettings = $true } $done @()
 Yes '-AppRepos with -RepoSettings: exit 1, nothing started' ($s.Code -eq 1 -and $s.Calls.Count -eq 0)
 $s = Session @{ Check = $true } $done @((Note 'notice' "DIFFERS 2`nx would have y put on"))
@@ -235,6 +235,7 @@ function Build($h) {
 }
 . (Join-Path $repo 'scripts/deploy/ServiceAccount.ps1')
 $Root = 'C:\Thornswood-Admin'; $Port = 7791; $TaskName = 'Thornswood Admin'; $Wait = 20; $AsSystem = $false
+$forBot = 'C:\Thornswood-Admin\for-bot'; $botSid = 'S-1-5-80-1-2-3-4-5'
 $log = 'C:\Thornswood-Admin\admin.log'; $state = 'C:\Thornswood-Admin\state'; $stage = '.stage-20261022-000000'; $prev = '.prev-20261022-000000'
 $want = "'admin.js' = 'AA'; 'server-log.js' = 'CC'"
 $pa = @($iast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-PlainAnswer' }, $true))
@@ -263,7 +264,7 @@ Yes '  and records what the box runs only once it answers' ($install.IndexOf('Se
 Yes 'the task is LOCAL SERVICE with its own SID, after the fail-safe' (
     $installCode -match 'New-ThornswoodServicePrincipal -AsSystem:\$system' -and $installCode -match 'Get-ThornswoodTaskSid' -and
     $installCode.IndexOf('Test-ThornswoodServiceCannotReach (') -ge 0 -and $installCode.IndexOf('Test-ThornswoodServiceCannotReach (') -lt $installCode.IndexOf('if (-not $stopOk)'))
-Yes '  granted its folder, its state folder to keep the App in, and its log' ($installCode.Contains("Grant-ThornswoodServiceFolder -Root 'C:\Thornswood-Admin' -Sid `$sid -Writable 'state' -Files 'admin.log', 'admin.log.*'"))
+Yes '  granted its folder, its state folder to keep the App in, and its log' ($installCode.Contains("Grant-ThornswoodServiceFolder -Root 'C:\Thornswood-Admin' -Sid `$sid -Writable 'state', 'for-bot' -Files 'admin.log', 'admin.log.*'"))
 Yes '  at priority 4, normal (#1968)' ($installCode -match 'New-ScheduledTaskSettingsSet [^\r\n]*-Priority 4\b')
 Yes '  running admin.js under server-log.js, kept 90 days with a time on each line, on 7791 with its state folder' (
     $installCode -match '--log "\{1\}" --days 90 --stamp admin\.js' -and $installCode.Contains('set THORNSWOOD_ADMIN_PORT=7791&& set THORNSWOOD_ADMIN_STATE=C:\Thornswood-Admin\state&&'))
@@ -288,7 +289,19 @@ Yes '  owned by Administrators, and so is all in it, which keeps only what state
 $check = $installCode.IndexOf('ANOTHER SERVICE COULD READ')
 Yes 'after the grant and before the start, the install refuses while another service could read the key' (
     $check -gt $installCode.IndexOf('Grant-ThornswoodServiceFolder -Root') -and $check -lt $installCode.IndexOf("Start-ScheduledTask -TaskName 'Thornswood Admin'") -and
-    $installCode -match "Test-ThornswoodServiceCannotReach -Paths \(@\('C:\\Thornswood-Admin\\state'\) \+ [^\r\n]*-Sids @\('S-1-3-0'\)")
+    $installCode -match "Test-ThornswoodServiceCannotReach -Paths \(@\('C:\\Thornswood-Admin\\state', 'C:\\Thornswood-Admin\\for-bot'\) \+ [^\r\n]*-Sids @\('S-1-3-0'\)")
+# #5184, Patrick's A of 1 Nov 2026: the Discord bot's token folder.
+$botAt = $stageCode.IndexOf("# The bot's token, locked apart")
+$botLock = if ($botAt -ge 0) { $stageCode.Substring($botAt, $stageCode.IndexOf("'COULD NOT LOCK FOR-BOT: '") - $botAt) } else { '' }
+Yes 'the bot''s token folder is made and locked apart before anything is stopped, and a lock that fails stops the install (#5184)' (
+    $botLock -and $stageCode.IndexOf("'COULD NOT LOCK FOR-BOT: '") -lt $stageCode.IndexOf("'READY'") -and
+    $botLock.Contains("New-Item -ItemType Directory -Path 'C:\Thornswood-Admin\for-bot'") -and $botLock -match '\$acl\.SetAccessRuleProtection\(\$true, \$false\)')
+Yes '  SYSTEM and Administrators Full, OWNER RIGHTS only Synchronize, the bot''s own account Read, the task''s SID Modify, and no broad group' (
+    $botLock -match "@\('S-1-5-18', 'FullControl'\), @\('S-1-5-32-544', 'FullControl'\), @\('S-1-3-4', 'Synchronize'\), @\('S-1-5-80-1-2-3-4-5', 'Read'\)" -and
+    $botLock -match "if \(\`$taskSid\) \{ \`$rules \+= ,@\(\`$taskSid, 'Modify'\) \}" -and $botLock -notmatch "'S-1-5-19'|'S-1-3-0'|'S-1-1-0'|'S-1-5-11'|'S-1-5-32-545'")
+Yes '  owned by Administrators, and so is all in it' ($botLock -match '\$acl\.SetOwner\(\$admins\)' -and $botLock -match '\$a\.SetOwner\(\$admins\)')
+. (Join-Path $repo 'scripts/vps/Bot-Service.ps1')
+Yes '  the bot''s account is NT SERVICE\ThornswoodBot, worked out from its name' ($install -match "Get-ThornswoodServiceSid \`$BotService" -and $install -match "\[string\]\`$BotService = 'ThornswoodBot'" -and (Get-ThornswoodServiceSid 'ThornswoodBot') -match '^S-1-5-80(-\d+){5}$')
 Yes '  or LOCAL SERVICE owns a file there with no OWNER RIGHTS rule, and leaves the service stopped and disabled' (
     $installCode -match "GetOwner\(\[Security\.Principal\.SecurityIdentifier\]\)\.Value -eq 'S-1-5-19' -and -not \`$capped" -and
     $installCode -match "Disable-ScheduledTask -TaskName 'Thornswood Admin'[^\r\n]*\r?\n\s*'ADMIN REFUSED'; exit 1")

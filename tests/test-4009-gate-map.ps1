@@ -3,27 +3,29 @@
 
       pwsh -NoProfile -File .\tests\test-4009-gate-map.ps1
 
-  Issue #4009: a pull request built off the box (One's runners, GitHub's
-  hosted runner) had no traced map and ran the whole gate. Main's build now
-  prints the box's newest map into its log (scripts\dev\Gate-Map.ps1 -Hand),
-  and a gate off the box reads it back from main's newest finished builds
-  (Gate-Map.ps1 -Fetch). This holds:
+  Issues #4009 and #5183: a pull request built off the box had no traced
+  map and ran the whole gate. Since #5183 main's nightly trace on GitHub's
+  Windows runner (.github\workflows\gate-map.yml) keeps the map as an
+  artifact named gate-map, and scripts\dev\Gate-Map.ps1 -Fetch reads it
+  back. This holds:
 
-    1. -Hand on a box runner with a map prints the built map and the tree as
-       numbered GATE-MAP pieces with each part's sha256, and with no map it
-       prints none and still exits 0, so it never fails main's build;
-    2. -Fetch, against a stand-in for GitHub's API, writes latest.json, the
-       map and the tree from main's newest build that handed one on, and
-       Affected-Harnesses.js pick picks from them as from the box's folder;
-    3. it passes over a run that is not build.yml on a push to main of this
-       repository, a job that did not get through the hand-on step, and a
-       log whose pieces are missing or do not match their sha256, and says
-       why; with nothing usable, or no token, it exits 1; it takes the
-       token from GATE_MAP_TOKEN and leaves none in the environment, and
-       nothing hands it one on a command line (#4079);
-    4. build.yml no longer runs -Hand: only a main build on the box could,
-       and none runs there since #4983. Since 31 Oct 2026 the gate runs in
-       shares that read no map, so none is given the job's token.
+    1. -Fetch, against a stand-in for GitHub's API, writes latest.json, the
+       map and the tree from the newest of main's own traces that kept one,
+       and Affected-Harnesses.js pick picks from them;
+    2. it passes over a run that is not gate-map.yml on main from the
+       schedule or by hand of this repository (a pull request's trial, a
+       branch's, another workflow's, a fork's), a run with no gate-map
+       artifact or an expired one, and an artifact whose latest.json names
+       another run or that lacks the map or the tree, and says why; with
+       nothing usable, or no token, it exits 1; it takes the token from
+       GATE_MAP_TOKEN and leaves none in the environment, and nothing hands
+       it one on a command line (#4079);
+    3. the gate's shares get the job's token for it, with actions: read, and
+       Run-Gate.ps1 takes it out of the environment before any harness runs;
+    4. gate-map.yml keeps gate-map only from main and gate-map-trial from a
+       pull request, traces on windows-2022 and needs no secret; and since
+       #5293 runs the whole gate on Linux beside it and keeps the two runs'
+       comparison in the same map.
 
   Writes only its scratch folder, in the system's temp folder, and deletes it.
 #>
@@ -46,7 +48,7 @@ $gateMap = Join-Path (Join-Path (Join-Path $repo 'scripts') 'dev') 'Gate-Map.ps1
 $affected = Join-Path (Join-Path (Join-Path $repo 'scripts') 'dev') 'Affected-Harnesses.js'
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('gate-map-' + [Guid]::NewGuid().ToString('N'))
 $keepEnv = @{}
-foreach ($n in 'RUNNER_ENVIRONMENT', 'RUNNER_TEMP', 'GITHUB_EVENT_NAME', 'GITHUB_REF', 'GATE_MAP_TOKEN') { $keepEnv[$n] = [Environment]::GetEnvironmentVariable($n) }
+foreach ($n in 'GATE_MAP_TOKEN') { $keepEnv[$n] = [Environment]::GetEnvironmentVariable($n) }
 try {
     # ---- the box runner's folder, and the map the trace task left in it
     $root = Join-Path $scratch 'Thornswood-Runner'
@@ -66,56 +68,45 @@ try {
     $null = & node $affected tree $commit (Join-Path $maps ($key + '.tree.gz'))
     Set-Content -LiteralPath (Join-Path $maps 'latest.json') -Value ('{"key":"' + $key + '","commit":"' + $commit + '","read":"2026-10-27T03:00:00Z","harnesses":402}')
 
-    # ---- 1. -Hand
-    function Invoke-Hand([string]$event = 'push', [string]$ref = 'refs/heads/main') {
-        $env:RUNNER_ENVIRONMENT = 'self-hosted'; $env:RUNNER_TEMP = $temp; $env:GITHUB_EVENT_NAME = $event; $env:GITHUB_REF = $ref
-        $out = @(& pwsh -NoProfile -File $gateMap -Hand 2>&1 | ForEach-Object { "$_" })
-        [pscustomobject]@{ Code = $LASTEXITCODE; Lines = $out; Text = ($out -join "`n") }
+    # ---- the artifact gate-map.yml keeps, as a zip
+    $art = Join-Path $scratch 'art'
+    $null = New-Item -ItemType Directory -Force -Path $art
+    $built = Join-Path $art ($key + '.map.json')
+    $null = & node $affected build (Join-Path $maps ($key + '.traces.jsonl.gz')) $built $commit
+    Copy-Item -LiteralPath (Join-Path $maps ($key + '.tree.gz')) -Destination (Join-Path $art ($key + '.tree.gz'))
+    Set-Content -LiteralPath (Join-Path $art 'latest.json') -Value ('{"key":"' + $key + '","commit":"' + $commit + '","read":"2026-11-01 10:50 UTC"}')
+    function Zip([string]$from, [string]$name) {
+        $z = Join-Path $scratch ($name + '.zip')
+        Compress-Archive -Path (Join-Path $from '*') -DestinationPath $z -Force
+        return $z
     }
-    $h = Invoke-Hand
-    $mapLines = @($h.Lines | Where-Object { $_ -match "^GATE-MAP $key $commit map \d+/\d+ " })
-    $treeLines = @($h.Lines | Where-Object { $_ -match "^GATE-MAP $key $commit tree \d+/\d+ " })
-    Yes ('-Hand on a box runner exits 0 and says which map (exit ' + $h.Code + ')') ($h.Code -eq 0 -and $h.Text -match ('Handing on the map of main ' + $commit.Substring(0, 8) + ', build run ' + $key))
-    Yes ('  prints the map and the tree in numbered pieces (' + $mapLines.Count + ' and ' + $treeLines.Count + ')') ($mapLines.Count -ge 1 -and $treeLines.Count -ge 1 -and $mapLines[0] -match " map 1/$($mapLines.Count) ")
-    Yes '  each piece one log line of at most 8000 characters of base64' (@($h.Lines | Where-Object { $_ -match '^GATE-MAP .* \d+/\d+ (\S+)$' -and $Matches[1].Length -gt 8000 }).Count -eq 0)
-    Yes '  and each part''s sha256' (@($h.Lines | Where-Object { $_ -match "^GATE-MAP $key $commit (map|tree) sha256 [0-9a-f]{64}$" }).Count -eq 2)
-    Yes '  and leaves nothing of its own in the runner''s temp folder' (-not @(Get-ChildItem -LiteralPath $temp).Count)
-    $pr = Invoke-Hand 'pull_request' 'refs/pull/7/merge'
-    Yes '-Hand in a pull request''s build prints no map, and exits 0' ($pr.Code -eq 0 -and $pr.Text -match 'only main''s push build' -and $pr.Text -notmatch 'GATE-MAP ')
-    $br = Invoke-Hand 'push' 'refs/heads/my-branch'
-    Yes '  nor in a branch''s push build' ($br.Code -eq 0 -and $br.Text -notmatch 'GATE-MAP ')
-    Move-Item -LiteralPath (Join-Path $maps 'latest.json') -Destination (Join-Path $scratch 'latest.json')
-    $none = Invoke-Hand
-    Yes '-Hand with no map prints none and exits 0, so main''s build never fails on it' ($none.Code -eq 0 -and $none.Text -match 'No map handed on' -and $none.Text -notmatch 'GATE-MAP ')
-    Move-Item -LiteralPath (Join-Path $scratch 'latest.json') -Destination (Join-Path $maps 'latest.json')
-    $env:RUNNER_ENVIRONMENT = 'github-hosted'
-    $off = @(& pwsh -NoProfile -File $gateMap -Hand 2>&1 | ForEach-Object { "$_" })
-    Yes '  and so does a runner off the box' ($LASTEXITCODE -eq 0 -and ($off -join "`n") -match 'No map handed on' -and ($off -join "`n") -notmatch 'GATE-MAP ')
+    $goodZip = Zip $art 'good'
+    $other = Join-Path $scratch 'other'; Copy-Item -LiteralPath $art -Destination $other -Recurse
+    Set-Content -LiteralPath (Join-Path $other 'latest.json') -Value ('{"key":"12345-1","commit":"' + $commit + '","read":"x"}')
+    $otherZip = Zip $other 'other'
+    $lack = Join-Path $scratch 'lack'; Copy-Item -LiteralPath $art -Destination $lack -Recurse
+    Remove-Item -LiteralPath (Join-Path $lack ($key + '.tree.gz'))
+    $lackZip = Zip $lack 'lack'
 
-    # ---- 2. and 3. -Fetch, against a stand-in for GitHub
-    # A job log is the step's lines with GitHub's timestamp before each.
-    function Log([string[]]$lines) { $lines | ForEach-Object { '2026-10-27T03:30:00.0000000Z ' + $_ } }
-    $good = Log $h.Lines
-    $broken = Log @($h.Lines | ForEach-Object { if ($_ -match "^GATE-MAP .* map 1/") { $_.Substring(0, $_.Length - 8) + 'AAAAAAAA' } else { $_ } })
-    $short = Log @($h.Lines | Where-Object { $_ -notmatch "^GATE-MAP .* tree 1/" })
-    $step = @{ name = 'Hand the traced map to runners off the box'; conclusion = 'success' }
-    function Run([long]$id, [string]$event = 'push', [string]$branch = 'main', [string]$path = '.github/workflows/build.yml', [string]$repoName = 'o/r') {
-        @{ id = $id; event = $event; head_branch = $branch; path = $path; head_repository = @{ full_name = $repoName }; head_sha = $commit; updated_at = '2026-10-27T03:31:00Z' }
+    $runId = [long]($key.Split('-')[0])
+    function Run([long]$id, [string]$event = 'schedule', [string]$branch = 'main', [string]$path = '.github/workflows/gate-map.yml', [string]$repoName = 'o/r') {
+        @{ id = $id; event = $event; head_branch = $branch; path = $path; head_repository = @{ full_name = $repoName } }
     }
+    function Art([long]$id, [string]$name = 'gate-map', [bool]$expired = $false) { @{ id = $id; name = $name; expired = $expired } }
     $global:GateMapStub = $null
     $global:GateMapAsked = @()
     function global:Invoke-RestMethod {
         param([string]$Method, [string]$Uri, $Headers)
         $global:GateMapAsked += $Uri
         if ($Headers.Authorization -ne 'Bearer t0ken') { throw 'no token' }
-        if ($Uri -match '/workflows/build\.yml/runs\?branch=main&event=push&status=completed') { return @{ workflow_runs = $global:GateMapStub.Runs } }
-        if ($Uri -match '/runs/(\d+)/jobs') { return @{ jobs = $global:GateMapStub.Jobs[$Matches[1]] } }
+        if ($Uri -match '/workflows/gate-map\.yml/runs\?branch=main&status=completed') { return @{ workflow_runs = $global:GateMapStub.Runs } }
+        if ($Uri -match '/runs/(\d+)/artifacts\?name=gate-map$') { return @{ artifacts = @($global:GateMapStub.Arts[$Matches[1]]) } }
         throw ('no stand-in for ' + $Uri)
     }
     function global:Invoke-WebRequest {
         param([string]$Method, [string]$Uri, $Headers, [string]$OutFile, [switch]$UseBasicParsing)
-        if ($Uri -notmatch '/jobs/(\d+)/logs$') { throw ('no stand-in for ' + $Uri) }
-        [IO.File]::WriteAllLines($OutFile, [string[]]$global:GateMapStub.Logs[$Matches[1]])
+        if ($Uri -notmatch '/artifacts/(\d+)/zip$') { throw ('no stand-in for ' + $Uri) }
+        Copy-Item -LiteralPath $global:GateMapStub.Zips[$Matches[1]] -Destination $OutFile
     }
     $fetched = Join-Path $scratch 'fetched'
     function Invoke-Fetch([string]$token = 't0ken') {
@@ -124,43 +115,46 @@ try {
         $out = @(& $gateMap -Fetch $fetched -Repository 'o/r' 6>&1 | ForEach-Object { "$_" })
         [pscustomobject]@{ Code = $LASTEXITCODE; Text = ($out -join "`n"); Left = (Test-Path -LiteralPath Env:GATE_MAP_TOKEN) }
     }
-    $job = { param($id, $name = 'Launcher builds (VPS fallback)', $s = $step) @(@{ id = $id; name = $name; steps = @(@{ name = 'Run the gate harnesses'; conclusion = 'success' }, $s) }) }
 
-    $global:GateMapStub = @{ Runs = @((Run 900)); Jobs = @{ '900' = (& $job 9001) }; Logs = @{ '9001' = $good } }
+    # ---- 1. the newest of main's own
+    $global:GateMapStub = @{ Runs = @((Run $runId)); Arts = @{ "$runId" = (Art 77) }; Zips = @{ '77' = $goodZip } }
     $f = Invoke-Fetch
-    Yes ('-Fetch writes main''s newest handed-on map (exit ' + $f.Code + ')') ($f.Code -eq 0 -and $f.Text -match 'run 900 handed on' -and (Test-Path -LiteralPath (Join-Path $fetched 'latest.json')))
+    Yes ('-Fetch writes the map main''s newest trace kept (exit ' + $f.Code + ')') ($f.Code -eq 0 -and $f.Text -match ('run ' + $runId) -and (Test-Path -LiteralPath (Join-Path $fetched 'latest.json')))
     Yes '  taking its token from GATE_MAP_TOKEN, which it leaves out of the environment' (-not $f.Left)
     $lj = $null
     if (Test-Path -LiteralPath (Join-Path $fetched 'latest.json')) { $lj = [IO.File]::ReadAllText((Join-Path $fetched 'latest.json')) | ConvertFrom-Json }
-    Yes '  latest.json names the box''s run and commit' ($lj -and $lj.key -eq $key -and $lj.commit -eq $commit)
-    $built = Join-Path $scratch 'built.json'
-    $null = & node $affected build (Join-Path $maps ($key + '.traces.jsonl.gz')) $built $commit
-    Yes '  the map is the one main''s build built, byte for byte' ((Test-Path -LiteralPath (Join-Path $fetched ($key + '.map.json'))) -and ([IO.File]::ReadAllText($built) -eq [IO.File]::ReadAllText((Join-Path $fetched ($key + '.map.json')))))
-    Yes '  and the tree the box''s' ((Get-FileHash -LiteralPath (Join-Path $fetched ($key + '.tree.gz'))).Hash -eq (Get-FileHash -LiteralPath (Join-Path $maps ($key + '.tree.gz'))).Hash)
+    Yes '  latest.json names the run and commit' ($lj -and $lj.key -eq $key -and $lj.commit -eq $commit)
+    Yes '  the map and the tree are the artifact''s, byte for byte' ((Test-Path -LiteralPath (Join-Path $fetched ($key + '.map.json'))) -and
+        ([IO.File]::ReadAllText($built) -eq [IO.File]::ReadAllText((Join-Path $fetched ($key + '.map.json')))) -and
+        (Get-FileHash -LiteralPath (Join-Path $fetched ($key + '.tree.gz'))).Hash -eq (Get-FileHash -LiteralPath (Join-Path $maps ($key + '.tree.gz'))).Hash)
+    Yes '  and leaves nothing else in the folder' (@(Get-ChildItem -LiteralPath $fetched).Count -eq 3)
     $gateFile = Join-Path $scratch 'gate.txt'
     $picked = Join-Path $scratch 'picked.txt'
     [IO.File]::WriteAllLines($gateFile, [string[]]@('test-a.js', 'test-c.js', 'test-z1.js'))
     $p = @(& node $affected pick (Join-Path $fetched ($key + '.map.json')) (Join-Path $fetched ($key + '.tree.gz')) $commit $gateFile $picked 2>&1 | ForEach-Object { "$_" })
-    Yes ('Affected-Harnesses.js pick picks from it as from the box''s folder: ' + (($p | Select-Object -First 1) -join '')) ($LASTEXITCODE -eq 0 -and @([IO.File]::ReadAllLines($picked)) -join ' ' -eq 'test-c.js')
+    Yes ('Affected-Harnesses.js pick picks from it: ' + (($p | Select-Object -First 1) -join '')) ($LASTEXITCODE -eq 0 -and @([IO.File]::ReadAllLines($picked)) -join ' ' -eq 'test-c.js')
     $p = @(& node $affected pick (Join-Path $fetched ($key + '.map.json')) (Join-Path $fetched ($key + '.tree.gz')) ('0' * 40) $gateFile $picked 2>&1 | ForEach-Object { "$_" })
     Yes '  and refuses a map of another commit than latest.json names' ($LASTEXITCODE -ne 0)
 
+    # ---- 2. what it passes over
     $global:GateMapStub = @{
-        Runs = @((Run 905 'pull_request'), (Run 904 'push' 'my-branch'), (Run 903 'push' 'main' '.github/workflows/build-pr.yml'), (Run 902 'push' 'main' '.github/workflows/build.yml' 'fork/r'), (Run 901), (Run 900))
-        Jobs = @{ '901' = (& $job 9011 'Launcher builds (VPS fallback)' @{ name = 'Hand the traced map to runners off the box'; conclusion = 'skipped' }); '900' = (& $job 9001) }
-        Logs = @{ '9001' = $good }
+        Runs = @((Run 905 'pull_request'), (Run 904 'schedule' 'my-branch'), (Run 903 'schedule' 'main' '.github/workflows/nightly.yml'), (Run 902 'schedule' 'main' '.github/workflows/gate-map.yml' 'fork/r'), (Run 901 'workflow_dispatch'), (Run $runId 'workflow_dispatch'))
+        Arts = @{ '901' = @(); "$runId" = (Art 77) }
+        Zips = @{ '77' = $goodZip }
     }
     $f = Invoke-Fetch
     Yes ('-Fetch passes over a pull request''s run, a branch''s, another workflow''s and a fork''s (exit ' + $f.Code + ')') ($f.Code -eq 0 -and $f.Text -match 'Passed over run 905' -and $f.Text -match 'Passed over run 904' -and $f.Text -match 'Passed over run 903' -and $f.Text -match 'Passed over run 902')
-    Yes '  and a build whose job did not get through the hand-on step, and takes the next' ($f.Text -match 'run 901: no launcher job' -and $f.Text -match 'run 900 handed on')
-    Yes '  and never reads a passed-over run''s jobs' (-not @($global:GateMapAsked | Where-Object { $_ -match '/runs/(90[2-5])/jobs' }).Count)
+    Yes '  and a run that kept no gate-map, and takes the next' ($f.Text -match 'run 901: it kept no gate-map' -and $f.Text -match ('The map of main''s gate trace, run ' + $runId))
+    Yes '  and never asks for a passed-over run''s artifacts' (-not @($global:GateMapAsked | Where-Object { $_ -match '/runs/(90[2-5])/artifacts' }).Count)
 
-    $global:GateMapStub = @{ Runs = @((Run 911), (Run 910)); Jobs = @{ '911' = (& $job 9111); '910' = (& $job 9101) }; Logs = @{ '9111' = $broken; '9101' = $short } }
+    $global:GateMapStub = @{ Runs = @((Run $runId), (Run 931), (Run 930)); Arts = @{ "$runId" = (Art 79 'gate-map' $true); '931' = (Art 78); '930' = (Art 80) }; Zips = @{ '78' = $otherZip; '80' = $lackZip } }
     $f = Invoke-Fetch
-    Yes ('a log whose piece does not match its sha256, or that lacks one, is passed over, and with nothing else it exits 1 (exit ' + $f.Code + ')') ($f.Code -eq 1 -and $f.Text -match 'run 911: its map does not match its sha256' -and $f.Text -match 'run 910: its log lacks piece 1 of the tree' -and -not (Test-Path -LiteralPath (Join-Path $fetched 'latest.json')))
-    $global:GateMapStub = @{ Runs = @((Run 920)); Jobs = @{ '920' = (& $job 9201) }; Logs = @{ '9201' = @('2026-10-27T03:30:00.0000000Z nothing here') } }
+    Yes ('an expired artifact, one whose latest.json names another run and one that lacks the tree are passed over, and with nothing else it exits 1 (exit ' + $f.Code + ')') (
+        $f.Code -eq 1 -and $f.Text -match ('run ' + $runId + ': it kept no gate-map artifact that has not expired') -and $f.Text -match 'run 931: its latest.json names 12345-1' -and $f.Text -match 'run 930: its latest.json names' -and -not (Test-Path -LiteralPath (Join-Path $fetched 'latest.json')))
+    $global:GateMapStub = @{ Runs = @((Run 930)); Arts = @{ '930' = (Art 80) }; Zips = @{ '80' = $lackZip } }
+    $global:GateMapStub.Runs[0].id = $runId; $global:GateMapStub.Arts = @{ "$runId" = (Art 80) }
     $f = Invoke-Fetch
-    Yes '  so is a log with no map' ($f.Code -eq 1 -and $f.Text -match 'its log holds no map')
+    Yes '  an artifact of the right run that lacks its tree is passed over, said' ($f.Code -eq 1 -and $f.Text -match ('it holds no ' + [regex]::Escape($key) + '\.tree\.gz'))
     $f = Invoke-Fetch ''
     Yes 'with no token it exits 1 and asks GitHub nothing' ($f.Code -eq 1 -and $f.Text -match 'No token')
 } finally {
@@ -169,16 +163,64 @@ try {
     Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# ---- 4. build.yml
+# ---- 3. build.yml and Run-Gate.ps1
 $b = [IO.File]::ReadAllText((Join-Path (Join-Path (Join-Path $repo '.github') 'workflows') 'build.yml')).Replace("`r`n", "`n")
-Yes 'build.yml no longer hands a map on, since no build of it runs on the box (#4983)' (-not $b.Contains('Gate-Map.ps1 -Hand') -and $b.IndexOf("        id: gate`n") -gt 0)
-# 31 Oct 2026: the gate runs in shares (the job "gate"), each a share of the
-# whole gate that reads no map, since none can be handed on.
-Yes '  and gives the gate''s shares no token, as they read no map' (-not $b.Contains('GATE_MAP_TOKEN:'))
-Yes '  and the build job may read another run''s job logs' (([regex]::Matches($b, '(?m)^    permissions:\n      actions: read\n      contents: read\n')).Count -ge 1)
+$gateJob = [regex]::Match($b, '(?ms)^  gate:\n.*?(?=^  \S)').Value
+$pickJob = [regex]::Match($b, '(?ms)^  pick:\n.*?(?=^  \S)').Value
+Yes 'build.yml no longer hands a map on (#4983)' (-not $b.Contains('Gate-Map.ps1 -Hand') -and $b.IndexOf("        id: gate`n") -gt 0)
+Yes '  and gives its pick the job''s token for the map, with actions: read (#5183)' ($pickJob.Contains('GATE_MAP_TOKEN: ${{ github.token }}') -and $pickJob -match '(?m)^    permissions:\n      contents: read\n      actions: read\n')
+Yes '  and the shares no token: they fetch nothing' (-not $gateJob.Contains('GATE_MAP_TOKEN') -and -not $gateJob.Contains('github.token'))
 $rg = [IO.File]::ReadAllText((Join-Path (Join-Path (Join-Path $repo 'scripts') 'dev') 'Run-Gate.ps1'))
 Yes 'Run-Gate.ps1 hands Gate-Map.ps1 no token on its command line (#4079)' ($rg.Contains("& (Join-Path `$Here 'Gate-Map.ps1') -Fetch `$maps 2>&1") -and -not ($rg -match '-Token\b'))
 Yes 'Run-Gate.ps1 takes the token out of the environment before any harness starts' ($rg.IndexOf('Remove-Item -LiteralPath Env:GATE_MAP_TOKEN') -gt 0 -and $rg.IndexOf('Remove-Item -LiteralPath Env:GATE_MAP_TOKEN') -lt $rg.IndexOf("& (Join-Path `$Here 'Nightly-Harnesses.ps1')"))
+$gm = [IO.File]::ReadAllText((Join-Path (Join-Path (Join-Path $repo 'scripts') 'dev') 'Gate-Map.ps1'))
+Yes 'Gate-Map.ps1 has no -Hand left' (-not $gm.Contains('[switch]$Hand'))
+
+# ---- 4. gate-map.yml
+$w = [IO.File]::ReadAllText((Join-Path (Join-Path (Join-Path $repo '.github') 'workflows') 'gate-map.yml')).Replace("`r`n", "`n")
+Yes 'gate-map.yml runs nightly, by hand, and on a pull request that changes the trace' ($w -match "(?m)^  schedule:\n    - cron: '[^']+'" -and $w -match '(?m)^  workflow_dispatch:' -and $w -match '(?m)^  pull_request:\n    paths:')
+# After a merge that changes what runs the gate (#5296): the push paths are
+# Affected-Harnesses.js FORCE's, so a merge that makes every pull request run
+# the whole gate traces a new map, and no other merge does.
+$pushPaths = @()
+if ($w -match "(?m)^  push:\n    branches: \[main\]\n    paths:\n((?:      - .+\n)+)") { $pushPaths = @($Matches[1].Trim() -split '\n' | ForEach-Object { $_.Trim().Substring(2).Trim("'") }) }
+$samples = @('.github/workflows/build.yml', '.github/workflows/build-pr.yml', '.github/workflows/nightly.yml', '.github/workflows/gate-map.yml',
+    'scripts/dev/Run-Gate.ps1', 'scripts/dev/Gate-Map.ps1', 'scripts/dev/Nightly-Harnesses.ps1', 'scripts/dev/Gate-Harnesses.ps1',
+    'scripts/dev/Affected-Harnesses.js', 'scripts/dev/Trace-HarnessReads.js', 'scripts/dev/Check-Change.ps1', 'tests/gate-excluded.txt',
+    'tests/Harness.psm1', 'tests/helper.ps1', 'tests/helper.js', 'tests/helper.cjs', 'tests/helper.mjs', 'tests/helper.py', 'tests/helper.c',
+    'tests/test-4009-gate-map.ps1', 'tests/test-3182-tested-tree.js', 'tests/test-x.py', 'tests/fixtures/a.ps1', 'tests/notes.md',
+    'records/build-runners.json', 'records/github-repo-settings.json', '.gitattributes', '.gitmodules', 'game/gamemode.js')
+# GitHub's filter: * is anything but /, a later ! pattern takes a path out.
+$byFilter = { param($f) $hit = $false; foreach ($p in $pushPaths) { $neg = $p.StartsWith('!'); $g = $p.TrimStart('!'); $re = '^' + ([regex]::Escape($g) -replace '\\\*', '[^/]*') + '$'; if ($f -match $re) { $hit = -not $neg } }; $hit }
+$forceJs = "const f=require(process.argv[1]).FORCE;for(const p of process.argv.slice(2))console.log(f.some(r=>r[0].test(p))?'1':'0')"
+$forced = @(node -e $forceJs (Join-Path (Join-Path (Join-Path $repo 'scripts') 'dev') 'Affected-Harnesses.js') @samples)
+$differ = @(for ($i = 0; $i -lt $samples.Count; $i++) { if (($forced[$i] -eq '1') -ne [bool](& $byFilter $samples[$i])) { $samples[$i] } })
+if ($differ.Count) { Write-Host ('  the push paths and FORCE differ for: ' + ($differ -join ', ')) }
+Yes 'gate-map.yml traces again on a push to main that changes what forces the whole gate, and on no other (#5296)' ($pushPaths.Count -gt 0 -and $forced.Count -eq $samples.Count -and -not $differ.Count)
+Yes '  its gate step ends 0 with the gate''s code kept, so the map is read whatever the gate did' ($w -match "(?m)^          Add-Content -LiteralPath \`$env:GITHUB_OUTPUT -Value \('code=' \+ \`$LASTEXITCODE\)\r?\n          exit 0\r?\n")
+Yes '  keeps gate-map only from main, and never from a pull request' ($w -match "(?ms)- name: Keep the map\n\s+if: github\.event_name != 'pull_request' && github\.ref == 'refs/heads/main'\n.*?name: gate-map\n")
+Yes '  keeps a pull request''s as gate-map-trial' ($w -match "(?ms)- name: Keep the trial map\n\s+if: github\.event_name == 'pull_request'\n.*?name: gate-map-trial\n")
+Yes '  traces on windows-2022, where node''s stats are opens the trace sees' ($w -match '(?m)^    runs-on: windows-2022$')
+Yes '  checks the trace on the runner before it starts one' ($w.IndexOf('-Mode selftest') -gt 0 -and $w.IndexOf('-Mode selftest') -lt $w.IndexOf('-Mode start'))
+Yes '  and needs no secret, and keeps no credentials on disk' ($w -notmatch 'secrets\.' -and $w.Contains('persist-credentials: false'))
+$checkoutOf = { param($text) if ($text -match '(?m)^      - uses: actions/checkout@\S+ # v\d+\n        with:\n((?:          .+\n)+)') { @($Matches[1].Trim() -split '\n' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne 'persist-credentials: false' } | Sort-Object) -join ';' } else { '' } }
+$gateCo = & $checkoutOf $gateJob
+Yes '  checks out what the gate''s shares check out, so the trace runs the gate on the same history (#5179)' ($gateCo -ne '' -and $gateCo.Contains('fetch-depth: 0') -and $gateCo -eq (& $checkoutOf $w))
+
+# #5293: the whole gate on Linux beside the trace, and the two runs compared
+# into the same map.
+$at = $w.IndexOf("`n  linux:`n"); $pt = $w.IndexOf("`n  platforms:`n")
+$linuxJob = $(if ($at -gt 0 -and $pt -gt $at) { $w.Substring($at, $pt - $at) } else { '' })
+$platJob = $(if ($pt -gt 0) { $w.Substring($pt) } else { '' })
+Yes '  runs the whole gate on Linux too, with the start log, on the same history (#5293)' ($linuxJob -match '(?m)^    runs-on: ubuntu-latest$' -and
+    $linuxJob -match '(?m)^          \./scripts/dev/Run-Gate\.ps1 -Throttle \d+ -BudgetSeconds \d+ -StartLog ' -and (& $checkoutOf $linuxJob) -eq $gateCo)
+Yes '  where a harness that fails stays on Windows and leaves the job green, and no line at all is red' ($linuxJob -match '(?m)^          exit 0$' -and $linuxJob.Contains("wrote no line for any harness'; exit 1"))
+Yes '  both runs keep what each harness said' ($w -match '(?ms)name: gate-starts-windows\n\s+path: \$\{\{ runner\.temp \}\}/gate-trace/starts\.jsonl' -and $linuxJob -match 'name: gate-starts-linux\n\s+path: \$\{\{ runner\.temp \}\}/gate-linux/starts\.jsonl')
+Yes '  the job "platforms" waits for both, and runs unless cancelled or the trace never ran' ($platJob -match "(?m)^    needs: \[trace, linux\]\n    if: \`$\{\{ !cancelled\(\) && needs\.trace\.result != 'skipped' \}\}$")
+Yes '  compares them with Affected-Harnesses.js platforms into <key>.platforms.json, for the map''s commit' ($platJob.Contains("node scripts/dev/Affected-Harnesses.js platforms `$win `$lin (Join-Path `$map ([string]`$l.key + '.platforms.json')) ([string]`$l.commit)"))
+Yes '  and keeps no platforms file when either run or the map is missing' ($platJob.Contains("'keep=false'") -and $platJob.Contains('the Linux run kept nothing') -and $platJob.Contains('the trace kept no map'))
+Yes '  keeping the map again under its own name, gate-map only from main' ($platJob -match "(?ms)- name: Keep the map with it\n\s+if: steps\.compare\.outputs\.keep == 'true' && github\.event_name != 'pull_request' && github\.ref == 'refs/heads/main'\n.*?name: gate-map\n.*?overwrite: true\n" -and
+    $platJob -match "(?ms)- name: Keep the trial map with it\n\s+if: steps\.compare\.outputs\.keep == 'true' && github\.event_name == 'pull_request'\n.*?name: gate-map-trial\n.*?overwrite: true\n")
 
 Write-Host ''
 Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail)

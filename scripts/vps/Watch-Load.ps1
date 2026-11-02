@@ -117,7 +117,7 @@ $(Get-ThornswoodLockedFolderScript $Root)
 # Every five minutes, as SYSTEM, so it keeps going when nobody is logged in.
 # Its own task rather than a line in the watchdog, so nothing it does can hold
 # up or break a restart.
-`$null = & schtasks /create /tn '$Task' /sc minute /mo 5 /ru SYSTEM /rl HIGHEST /f /tr 'powershell -NoProfile -ExecutionPolicy Bypass -File $Root\load.ps1' 2>&1
+`$null = & schtasks /create /tn '$Task' /sc minute /mo 5 /ru SYSTEM /rl HIGHEST /f /tr 'pwsh -NoProfile -ExecutionPolicy Bypass -File $Root\load.ps1' 2>&1
 if (`$LASTEXITCODE -eq 0) { 'made      the task, every five minutes' } else { 'FAILED    schtasks exited with ' + `$LASTEXITCODE }
 
 # Once now, so any problem shows here rather than in a week.

@@ -7,7 +7,7 @@ each half, with the file and line for each step.
 
 ## The submodule
 
-`.gitmodules:11-15` names the fork, `https://github.com/EvilPatrick06/skymp.git`,
+`.gitmodules:11-15` names the fork, `https://github.com/ThornswoodRP/skymp.git`,
 on the branch `thornswood/engine-changes`, at `engine/skymp`. The repository
 pins a commit, not the branch. This page does not name that commit or the
 hashes built from it, because every engine change moves them: twice it named
@@ -296,7 +296,7 @@ A change to the engine goes like this:
    the fork's build is green, and when that has recorded it, moves the pin on
    the rolling branch `engine-pin/next` and opens or updates its pull request
    ("The pin moves by itself", below).
-4. The Desk merges that pull request under the merge rule, like any other.
+4. Bramble merges that pull request under the merge rule, like any other.
    It carries the pin, the four records engine.yml handed back, the front
    built again at the commit (`records\front-build.json` and
    `records\front-licences`), the pin's lines of `THIRD-PARTY.md` and
@@ -314,7 +314,7 @@ A change to the engine goes like this:
    `Build-Front.ps1 -Record` and `Write-EnginePinText.ps1`, runs the checks
    and stages the change.
 5. After it merges, the dev server takes it by itself (#5219):
-   `gamemode-release.yml` runs because the pin changed
+   `merge-release.yml` runs because the pin changed
    `records\server-build.json`, puts CI's server build of the pin on a signed
    Release beside the gamemode, and the box deploy agent swaps it in under a
    hold and starts dev on it (docs\DEPLOY-AGENT.md, "A new server build").
@@ -555,8 +555,9 @@ Ship will have. No engine build on any machine is part of a release.
 
 It asks the fork's package of the build first (#5152): since fork #131
 every push build is also kept as
-`ghcr.io/evilpatrick06/thornswood-engine:<commit>`, for good and readable
-with no account, so an old pin ships as well as a new one, and reverting a
+`ghcr.io/thornswoodrp/thornswood-engine:<commit>` (before the fork moved to
+ThornswoodRP, `ghcr.io/evilpatrick06/thornswood-engine:<commit>`, which is
+asked second, #5184), for good and readable with no account, so an old pin ships as well as a new one, and reverting a
 pin pull request brings its engine back. The package is held to the records
 exactly as an artifact is; one that is not the records' build (the fork's
 build was run again and the records were made from the later one), or a pin

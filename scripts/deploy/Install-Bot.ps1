@@ -78,7 +78,7 @@ param(
   # Pulled into every ticket thread: the council and the ranks that answer
   # tickets, the same names as bot.py's STAFF_ROLES default and Build-Discord.py's
   # TICKET_STAFF (#3317). A run that wrote the old list left the council out of
-  # every ticket; bot\test-3317-give.py holds the three together.
+  # every ticket; bot\tests\test-3317-give.py holds the three together.
   [string]$StaffRoles    = 'Owner,Co-Owner,Lead Dev,Lead Gamemaster,Lead Loremaster,Lead Moderator,Lead Content Creator,Lead Support,Gamemaster,Dev,Loremaster,Moderator',
   # Pulled into applications to join them and nothing else. Content Creator is
   # social media rather than staff, so it has no business reading a report
@@ -161,7 +161,7 @@ $docsWin = $DocsRoot.Replace('/','\')
 . (Join-Path $Here 'Artifact.ps1')
 $artifact = $null
 if (-not $PutBack -and -not $SetPing) {
-$artifact = New-ThornswoodArtifact -Component bot -RepoDir $Repo -Paths 'bot/bot.py', 'bot/_pyguard.py', 'bot/trust.py', 'bot/card.py', 'bot/staff-channel.txt', 'bot/requirements.txt', 'bot/factions.json', 'bot/assets/join-card.png', 'scripts/vps/BotService.cs'
+$artifact = New-ThornswoodArtifact -Component bot -RepoDir $Repo -Paths 'bot/bot.py', 'bot/_pyguard.py', 'bot/trust.py', 'bot/card.py', 'bot/staff-channel.txt', 'bot/dev-channel.txt', 'bot/requirements.txt', 'bot/factions.json', 'bot/assets/join-card.png', 'scripts/vps/BotService.cs'
 Write-Host ('artifact ' + (Format-ThornswoodArtifact $artifact)) -ForegroundColor DarkGray
 Send-ThornswoodArtifact -Artifact $artifact -Target "$User@$Vps" -SshArgs $ssh
 $Repo = $artifact.Folder
@@ -379,11 +379,12 @@ Head 'Staging it'
 # unlike the webhook files that sit on the box, which are not sent by anything
 # and must not be added here.
 #
-# dev-channel.txt is not sent any more (#2501). It is the dev updates channel,
-# where dev releases are announced, and only Set-DevNews.ps1 on a developer's
-# machine reads it. The bot read it for the watchdog until 12 Oct, which put
-# every outage among the dev release posts. The copy an earlier run left on the
-# box is not the bot's own, so the swap moves it into .prev with the old code.
+# dev-channel.txt goes up again (#5187). It is the dev updates channel, and
+# the bot posts each dev release's news there by its id (watch_release_news).
+# From #2501 until then it was not sent: the bot read it for the watchdog until
+# 12 Oct, which put every outage among the dev release posts. The watchdog
+# reads only staff-channel.txt now (test-watch-services.py W6 holds it), so
+# sending this file cannot bring that back.
 #
 # requirements.txt too, because the full run installs the libraries from it.
 #
@@ -397,7 +398,7 @@ Head 'Staging it'
 $send = [ordered]@{}
 # _pyguard.py is the Python version check bot.py imports first (#2276), and
 # trust.py says which roots it trusts (#3111).
-foreach ($f in 'bot.py', '_pyguard.py', 'trust.py', 'card.py', 'staff-channel.txt', 'requirements.txt', 'factions.json') {
+foreach ($f in 'bot.py', '_pyguard.py', 'trust.py', 'card.py', 'staff-channel.txt', 'dev-channel.txt', 'requirements.txt', 'factions.json') {
   $src = Join-Path $Repo "bot\$f"
   if (-not (Test-Path $src)) { Die "missing: $src" }
   $send[$f] = $src

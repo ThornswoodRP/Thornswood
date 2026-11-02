@@ -11,8 +11,8 @@
 // counts Miner's Barracks and misses a cave full of iron.
 //
 // So this builds a Data folder in a temp directory from nothing: five masters,
-// one plugin that deletes a vein and places another, a gamemode carrying the
-// three generated tables, and a doors.json with a hall in front of one mine
+// one plugin that deletes a vein and places another, a folder of gamemode
+// tables holding the three it reads, and a doors.json with a hall in front of one mine
 // and a cave with two ways in. It runs the measurement on that and checks
 // every answer: a vein in a building, a vein on open ground, a vein in a room
 // no door leads to, a deleted vein, a disabled one, a compressed record, the
@@ -220,25 +220,23 @@ names[d(A)] = 'Test Mine'; names[d(H)] = 'Test Hall'; names[d(M)] = 'Old Mine';
 names[d(S)] = "Miner's Barracks"; names[d(K)] = 'Back Cave'; names[d(T)] = 'Twin Hall';
 names[d(G)] = 'Gate Hall'; names[d(VC)] = 'Vale Cave'; names[d(L1)] = 'Lift One';
 names[d(L2)] = 'Lift Two'; names[d(FR)] = 'Far Den';
-const oreBlock = [
-  '// ==== ORES_BY_BASE, generated ====',
-  '  var ORES_BY_BASE = {',
-  '    "100:Skyrim.esm": { "ore": "5:Skyrim.esm", "name": "Iron Ore", "rank": "novice", "yield": [[1, 2], [1, 3], [1, 4], [1, 5]] },',
-  '    "101:Skyrim.esm": { "ore": "6:Skyrim.esm", "name": "Gold Ore", "rank": "expert", "yield": [[0, 0], [0, 0], [1, 4], [1, 5]] }',
-  '  };',
-  '',
-  '  // ==== end ORES_BY_BASE ===='
-];
-const tables = [
-  'const BUILDING_BY_DOOR = ' + JSON.stringify(byDoor) + ';',
-  'const BUILDING_NAME = ' + JSON.stringify(names) + ';'
-];
-fs.writeFileSync(path.join(ROOT, 'gamemode.js'), ['// a gamemode'].concat(oreBlock, tables).join(CRLF) + CRLF);
-fs.writeFileSync(path.join(ROOT, 'no-ores.js'), ['// a gamemode'].concat(tables).join(CRLF) + CRLF);
+// The gamemode reads its tables from a folder (#5191): one with all three, and
+// one with no ORES_BY_BASE.
+const GT = require('../scripts/dev/GamemodeTables.js');
+const ores = {
+  '100:Skyrim.esm': { ore: '5:Skyrim.esm', name: 'Iron Ore', rank: 'novice', yield: [[1, 2], [1, 3], [1, 4], [1, 5]] },
+  '101:Skyrim.esm': { ore: '6:Skyrim.esm', name: 'Gold Ore', rank: 'expert', yield: [[0, 0], [0, 0], [1, 4], [1, 5]] }
+};
+['tables', 'no-ores'].forEach(function (dir) {
+  fs.mkdirSync(path.join(ROOT, dir));
+  GT.write('BUILDING_BY_DOOR', byDoor, path.join(ROOT, dir));
+  GT.write('BUILDING_NAME', names, path.join(ROOT, dir));
+});
+GT.write('ORES_BY_BASE', ores, path.join(ROOT, 'tables'));
 
-function run(gamemode, out) {
+function run(tables, out) {
   const args = [MEASURE, '--data', DATA, '--plugins', path.join(ROOT, 'plugins.txt'),
-                '--gamemode', path.join(ROOT, gamemode), '--doors', path.join(ROOT, 'doors.json')];
+                '--tables', path.join(ROOT, tables), '--doors', path.join(ROOT, 'doors.json')];
   if (out) args.push('--out', out);
   return py(args);
 }
@@ -247,7 +245,7 @@ function run(gamemode, out) {
 // The measurement on the made-up world
 
 const OUT = path.join(ROOT, 'out.json');
-const r = run('gamemode.js', OUT);
+const r = run('tables', OUT);
 if (r.status !== 0) console.log(r.stdout + r.stderr);
 yes('it runs and exits 0', r.status === 0);
 let got = null;
@@ -335,14 +333,14 @@ yes('the printed list names the worldspace no door reaches',
 // Read only
 
 const before = fs.readdirSync(ROOT).sort().join(',');
-const r2 = run('gamemode.js', null);
+const r2 = run('tables', null);
 yes('without --out it still runs', r2.status === 0);
 yes('without --out it writes nothing and says so',
     fs.readdirSync(ROOT).sort().join(',') === before && /nothing was written/.test(r2.stdout));
 
 // A missing table would make every answer "no mines", which reads like a world
 // with none in it. It has to stop instead.
-const r3 = run('no-ores.js', path.join(ROOT, 'never.json'));
+const r3 = run('no-ores', path.join(ROOT, 'never.json'));
 yes('a gamemode with no ORES_BY_BASE stops rather than reporting no mines',
     r3.status !== 0 && /STOP/.test(r3.stdout) && !fs.existsSync(path.join(ROOT, 'never.json')));
 
@@ -357,10 +355,7 @@ try { real = JSON.parse(fs.readFileSync(COMMITTED, 'utf8')); } catch (e) { real 
 yes('game/data/mine-buildings.json is committed and reads', !!real);
 if (!real) done();
 const gm = fs.readFileSync(path.join(REPO, 'game', 'gamemode.js'), 'utf8');
-function table(name) {
-  const m = new RegExp('^const ' + name + ' = (\\{.*\\});[ \\t\\r]*$', 'm').exec(gm);
-  return m ? JSON.parse(m[1]) : null;
-}
+function table(name) { return require('./gamemode-tables.js').inGamemode(gm, name); }
 const realByDoor = table('BUILDING_BY_DOOR');
 const realNames = table('BUILDING_NAME');
 yes('the real gamemode carries BUILDING_BY_DOOR and BUILDING_NAME', !!realByDoor && !!realNames);

@@ -39,7 +39,7 @@ of them did not survive as words. They are not repeated here.
 ## Eat it first, and your character remembers
 
 Decided by Patrick on 22 Oct
-([#3134](https://github.com/EvilPatrick06/Thornswood/issues/3134)).
+([#3134](https://github.com/ThornswoodRP/Thornswood/issues/3134)).
 An ingredient goes in a brew only once your character has eaten one.
 Eating it teaches its first effect, the game's own rule. A brew with
 an ingredient you have never eaten is refused before anything is
@@ -55,7 +55,7 @@ nothing, and every time you come into the world your game is taught
 it again, so the alchemy menu shows it. A known effect is not a rank.
 
 The Alchemy journal page of the K panel
-([#3142](https://github.com/EvilPatrick06/Thornswood/issues/3142)) shows
+([#3142](https://github.com/ThornswoodRP/Thornswood/issues/3142)) shows
 the same record anywhere, away from a lab: every mix you have brewed,
 what it made and how many times, and every ingredient you have eaten,
 with how many of its effects you know and the names of the ones a brew

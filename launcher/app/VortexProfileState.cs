@@ -369,9 +369,29 @@ namespace Thornswood
             if (json.Length > 4096 || !System.Text.RegularExpressions.Regex.IsMatch(json,
                 "\\A\"(?:[^\"\\\\\\x00-\\x1f]|\\\\(?:[\"\\\\/bfnrt]|u[0-9a-fA-F]{4}))*\"\\z"))
                 throw new InvalidDataException("Profile metadata is not one JSON string");
-            using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(json))) {
-                return (string)new System.Runtime.Serialization.Json.DataContractJsonSerializer(typeof(string)).ReadObject(stream);
+            // The pattern above has made sure it is one string token and every
+            // escape in it is whole, so the escapes are read here by hand.
+            // Not a JSON library: scripts\mods\LoadOrder.ps1 compiles this file
+            // with Add-Type in Windows PowerShell 5.1 too, which has none.
+            var text = new StringBuilder(json.Length);
+            for (int i = 1; i < json.Length - 1; i++) {
+                char c = json[i];
+                if (c != '\\') { text.Append(c); continue; }
+                char e = json[++i];
+                switch (e) {
+                    case 'b': text.Append('\b'); break;
+                    case 'f': text.Append('\f'); break;
+                    case 'n': text.Append('\n'); break;
+                    case 'r': text.Append('\r'); break;
+                    case 't': text.Append('\t'); break;
+                    case 'u':
+                        text.Append((char)Convert.ToInt32(json.Substring(i + 1, 4), 16));
+                        i += 4;
+                        break;
+                    default: text.Append(e); break; // \" \\ \/
+                }
             }
+            return text.ToString();
         }
     }
 }

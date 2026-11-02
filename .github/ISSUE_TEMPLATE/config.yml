@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: A security hole
-    url: https://github.com/EvilPatrick06/Thornswood/blob/main/SECURITY.md
+    url: https://github.com/ThornswoodRP/Thornswood/blob/main/SECURITY.md
     about: Never as an issue, which everybody can read. SECURITY.md says where to send it quietly.
   - name: Somebody behaving badly
     url: https://thornswood.net/report

@@ -11,7 +11,7 @@
       pwsh scripts/ops/Set-Ref.ps1 -DeleteBranch claude/what -Commit <40 hex>
                        the branch, when it is still at that commit
       pwsh scripts/ops/Set-Ref.ps1 -Fork -DeleteBranch claude/what -Commit <40 hex>
-                       the same in the fork, EvilPatrick06/skymp
+                       the same in the fork, ThornswoodRP/skymp
       pwsh scripts/ops/Set-Ref.ps1 -DeleteTag v1.1.47 -Commit <40 hex>
                        the tag, when it still names that commit
       pwsh scripts/ops/Set-Ref.ps1 -DeleteDraft 397526903
@@ -74,11 +74,12 @@
         One already gone is DRAFT-GONE.
     -PublishLauncher: only a v<version> tag with exactly one release, a
         draft named "Launcher v<version>" built from the commit the tag
-        names, holding Thornswood.exe, setup-stub.exe and SHA256SUMS. Its
-        three files are downloaded and Test-ReleaseFiles.ps1 -RequireSigned
-        checks them the way release.yml's verify job does (the checksums,
-        the publish gate and the launcher's own Signature.cs); a draft that
-        fails stays a draft. It is published as not the latest, so the game
+        names, holding SHA256SUMS and exactly one of each file it names:
+        Thornswood.exe and the native libraries beside it (#4823). Those
+        files are downloaded and Test-ReleaseFiles.ps1 -RequireSigned checks
+        them the way release.yml's verify job does (the checksums, the
+        publish gate and the launcher's own Signature.cs on every program);
+        a draft that fails stays a draft. It is published as not the latest, so the game
         release Publish-ReleaseFiles.ps1 marks latest stays latest, and a
         four part version, a dev launcher, as a prerelease. One already
         published is ALREADY-PUBLISHED.
@@ -143,14 +144,14 @@ param(
     [Parameter(ParameterSetName = 'OnGitHub', Mandatory = $true)]
     [switch]$OnGitHub,
     [int]$WaitMinutes = 15,
-    [string]$GitHubRepo = 'EvilPatrick06/Thornswood'
+    [string]$GitHubRepo = 'ThornswoodRP/Thornswood'
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $workflow = 'git-ref.yml'
-if ($Fork) { $GitHubRepo = 'EvilPatrick06/skymp'; $workflow = 'thornswood-git-ref.yml' }
+if ($Fork) { $GitHubRepo = 'ThornswoodRP/skymp'; $workflow = 'thornswood-git-ref.yml' }
 $inActions = ($env:GITHUB_ACTIONS -eq 'true')
 $tagShape = '^release/(dev/\d{8}-\d{4}(\d{2})?-dev|main/\d{8}-\d{4}(\d{2})?)$'
 $maxMessage = 4000
@@ -348,20 +349,26 @@ if ($OnGitHub) {
         if ([string]$rel.name -ne "Launcher $PublishLauncher") { Die ("release " + $rel.id + " is named '" + $rel.name + "', not 'Launcher $PublishLauncher', so it is not a launcher draft. Nothing was changed.") }
         $built = [string]$rel.target_commitish
         if ($built -match '^[0-9a-f]{40}$' -and $built -ne $commitOf) { Die "$PublishLauncher names $commitOf, but its draft was built from $built, so the tag moved after the build. It stays a draft." }
-        $want = @('SHA256SUMS', 'Thornswood.exe', 'setup-stub.exe')
         $assets = @($rel.assets | Where-Object { $_ })
-        foreach ($n in $want) {
-            if (@($assets | Where-Object { [string]$_.name -eq $n }).Count -ne 1) { Die "the $PublishLauncher draft does not hold exactly one $n, so it stays a draft." }
-        }
         $dir = Join-Path ([IO.Path]::GetTempPath()) ('set-ref-' + [Guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         try {
-            foreach ($n in $want) {
-                $a = @($assets | Where-Object { [string]$_.name -eq $n })[0]
-                $r = Invoke-WebRequest -Method GET -Uri ("$apiBase/releases/assets/" + $a.id) -OutFile (Join-Path $dir $n) -PassThru -SkipHttpErrorCheck -TimeoutSec 300 -Headers @{
+            # SHA256SUMS first, then each file it names: the launcher is
+            # Thornswood.exe and the native libraries beside it (#4823).
+            $fetch = {
+                param([string]$n)
+                $one = @($assets | Where-Object { [string]$_.name -eq $n })
+                if ($one.Count -ne 1) { Die "the $PublishLauncher draft does not hold exactly one $n, so it stays a draft." }
+                $r = Invoke-WebRequest -Method GET -Uri ("$apiBase/releases/assets/" + $one[0].id) -OutFile (Join-Path $dir $n) -PassThru -SkipHttpErrorCheck -TimeoutSec 300 -Headers @{
                     Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/octet-stream'; 'X-GitHub-Api-Version' = '2022-11-28' }
                 if ([int]$r.StatusCode -ne 200) { Die ("GitHub did not hand over the draft's $n (HTTP " + $r.StatusCode + '), so it stays a draft.') }
             }
+            & $fetch 'SHA256SUMS'
+            $want = @([IO.File]::ReadAllLines((Join-Path $dir 'SHA256SUMS')) |
+                ForEach-Object { [regex]::Match($_, '(?i)^\s*[0-9a-f]{64}\s+\*?([A-Za-z0-9][A-Za-z0-9._-]*)\s*$') } |
+                Where-Object { $_.Success } | ForEach-Object { $_.Groups[1].Value })
+            if ($want -notcontains 'Thornswood.exe') { Die "the $PublishLauncher draft's SHA256SUMS does not name Thornswood.exe, so it stays a draft." }
+            foreach ($n in $want) { & $fetch $n }
             # The verify job's own check (release.yml), on this run's runner,
             # which holds no signing setup either.
             $global:LASTEXITCODE = 0

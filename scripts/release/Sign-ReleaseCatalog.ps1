@@ -19,7 +19,7 @@
   does for Close-Launcher.ps1. Nothing in the release path skips it: a catalog
   that is not signed and accepted stops the publish before version.json moves.
 
-  Keep it ASCII and Windows PowerShell 5.1.
+  Keep it ASCII. It runs in PowerShell 7.
 #>
 
 . (Join-Path $PSScriptRoot 'Assert-PublishSigned.ps1')

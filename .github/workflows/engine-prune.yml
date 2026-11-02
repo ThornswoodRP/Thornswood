@@ -76,7 +76,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BUILT_RUN: ${{ github.event.workflow_run.id }}
-          FORK: EvilPatrick06/skymp
+          FORK: ThornswoodRP/skymp
           FORK_BRANCH: thornswood/engine-changes
         run: |
           $ErrorActionPreference = 'Stop'

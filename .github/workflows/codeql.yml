@@ -6,14 +6,14 @@
 # and the tests, the bot's Python, and these workflows themselves (actions).
 # Every one is read from source with build-mode none, so nothing is built and
 # no MSBuild or engine is needed. The engine submodule is not checked out:
-# the fork, EvilPatrick06/skymp, is its own repository. The one vendored
+# the fork, ThornswoodRP/skymp, is its own repository. The one vendored
 # script, site/public/marked-12.0.2.min.js, is left out, because a fault in
 # it is upstream's and THIRD-PARTY.md already says where it comes from.
 #
 # ONLY ONCE THE REPOSITORY IS PUBLIC. On a private repository owned by a
 # person, code scanning results can only be uploaded with GitHub Advanced
 # Security, which is paid; on a public one it is free. Measured 26 Oct 2026:
-# api.github.com/repos/EvilPatrick06/Thornswood says private: true. So the job
+# api.github.com/repos/ThornswoodRP/Thornswood says private: true. So the job
 # runs only when the event says the repository is not private, and until the
 # flip every run shows as skipped instead of failing on an upload that cannot
 # succeed. The same commit starts scanning the first push after the flip,
@@ -34,6 +34,21 @@
 # like every other workflow's, and a change to what is scanned is a pull
 # request someone can read. Default setup refuses to run beside an advanced
 # one, so at the flip it stays off.
+#
+# ONE OVERLAY DATABASE PER LANGUAGE (#5315). On a push to main, CodeQL saves
+# the database it built, its "overlay-base", in the Actions cache, so a pull
+# request's scan reads only the files the pull request changed. It saves a
+# new one under a key that names the commit and the run, every push, and
+# never deletes one: measured 1 Nov 2026 on run 41344165952, 468 MB for
+# javascript-typescript, 35 MB for csharp and 26 MB for python, about 530 MB
+# a push. A pull request reads only the newest one for its language, so every
+# older one is dead weight, and with main merging many times a day the
+# repository sat at GitHub's 10 GB cache limit, where GitHub evicts the
+# entries used longest ago, the watch's remembered state among them. The
+# prune job deletes each overlay-base an equal or newer one of the same
+# language replaced, once the scan of a push to main has saved its own. It
+# alone holds actions: write, which deleting a cache needs, runs only on a
+# push to main, checks nothing out and runs nothing but gh.
 #
 # Every action here is named by a full length commit SHA with its tag in the
 # comment, for the reason build.yml gives.
@@ -79,3 +94,46 @@ jobs:
       - uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           category: /language:${{ matrix.language }}
+
+  # The header, ONE OVERLAY DATABASE PER LANGUAGE.
+  prune-overlay:
+    name: Keep the newest CodeQL overlay database per language
+    needs: analyze
+    if: ${{ github.event_name == 'push' && github.event.repository.private == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Delete the overlay databases a newer one replaced
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # codeql-overlay-base-database-<version>-<hash>-<languages>-<CodeQL version>-<commit>-<run>-<attempt>
+          $shape = '^codeql-overlay-base-database-\d+-[0-9a-f]+-(?<lang>.+)-\d+\.\d+\.\d+-[0-9a-f]{40}-\d+-\d+$'
+          $all = New-Object System.Collections.Generic.List[object]
+          for ($page = 1; ; $page++) {
+            $json = gh api -X GET "repos/$env:REPO/actions/caches" -f key=codeql-overlay-base-database- -f ref=$env:REF -f per_page=100 -f page=$page
+            if ($LASTEXITCODE -ne 0) { Write-Host "::error::GitHub refused the cache list (gh exit $LASTEXITCODE)"; exit 1 }
+            $got = @(($json | ConvertFrom-Json).actions_caches)
+            foreach ($c in $got) { $all.Add($c) }
+            if ($got.Count -lt 100) { break }
+          }
+          $kept = 0; $gone = 0; $freed = 0
+          foreach ($g in @($all | Where-Object { $_.key -match $shape } | Group-Object { ([regex]::Match($_.key, $shape)).Groups['lang'].Value })) {
+            $byAge = @($g.Group | Sort-Object { [DateTime]$_.created_at } -Descending)
+            Write-Host ("{0}: keeping {1} ({2:N0} MB)" -f $g.Name, $byAge[0].key, ($byAge[0].size_in_bytes / 1MB))
+            $kept++
+            foreach ($c in @($byAge | Select-Object -Skip 1)) {
+              gh api -X DELETE "repos/$env:REPO/actions/caches/$($c.id)" | Out-Null
+              if ($LASTEXITCODE -ne 0) { Write-Host "::error::GitHub refused to delete $($c.key) (gh exit $LASTEXITCODE)"; exit 1 }
+              $gone++; $freed += $c.size_in_bytes
+            }
+          }
+          $odd = @($all | Where-Object { $_.key -notmatch $shape })
+          foreach ($c in $odd) { Write-Host "::warning::left alone, its key is not the shape this job knows: $($c.key)" }
+          Write-Host ("{0} kept, {1} deleted, {2:N0} MB freed" -f $kept, $gone, ($freed / 1MB))

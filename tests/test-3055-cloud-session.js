@@ -18,7 +18,9 @@
      #5231: it also writes the session's git identity, EvilPatrick06 by his
      noreply address, into the CLAUDE_ENV_FILE Claude Code gives the hook,
      and says so in one line; with no CLAUDE_ENV_FILE it says the identity
-     was not set and goes on. --register writes no identity.
+     was not set and goes on. --register writes no identity. #5291: it
+     sets the clone's core.hooksPath to .githooks, so the pre-push checks
+     run before every push, and says so; --register sets nothing.
   D  --register adds the hook once to the settings it is pointed at and keeps
      every other key; off Linux it refuses and writes nothing.
   E  scripts/dev/cloud-environment-setup.sh, the text of the environment's
@@ -103,8 +105,13 @@ else {
       (code ? 'echo "ERROR: stand-in pip said no" >&2\n' : '') + 'exit ' + code + '\n');
     fs.chmodSync(stub, 0o755);
   }
+  // #5291: the hook sets this clone's core.hooksPath. GIT_DIR points every
+  // git it runs at a bare stand-in, so the real clone's config is never
+  // written, and C7 reads the stand-in's.
+  const fakeGit = path.join(tmp, 'clone.git');
+  cp.execFileSync('git', ['init', '-q', '--bare', fakeGit]);
   function run(args, env) {
-    const e = Object.assign({}, process.env, { PATH: bin + path.delimiter + process.env.PATH }, env || {});
+    const e = Object.assign({}, process.env, { PATH: bin + path.delimiter + process.env.PATH, GIT_DIR: fakeGit }, env || {});
     for (const k of Object.keys(e)) { if (e[k] === null) { delete e[k]; } }
     return cp.spawnSync('bash', [SCRIPT].concat(args || []), { env: e, encoding: 'utf8' });
   }
@@ -124,8 +131,13 @@ else {
     const envFile = path.join(tmp, 'session.env');
     r = run([], { CLAUDE_CODE_REMOTE: 'true', CLAUDE_ENV_FILE: envFile });
     const line = called().trim();
-    yes('C1 in a cloud session it exits 0 (' + r.status + ') with one line for the identity and one for the libraries',
-      r.status === 0 && r.stdout.trim().split('\n').length === 2 && r.stderr === '');
+    yes('C1 in a cloud session it exits 0 (' + r.status + ') with one line each for the identity, the pre-push checks and the libraries',
+      r.status === 0 && r.stdout.trim().split('\n').length === 3 && r.stderr === '');
+    let hooks = '';
+    try { hooks = cp.execFileSync('git', ['--git-dir', fakeGit, 'config', 'core.hooksPath'], { encoding: 'utf8' }).trim(); }
+    catch (e) { hooks = 'not set'; }
+    yes('C7 #5291: it points the clone\'s hooks at .githooks, so a push runs the pre-push checks (' + hooks + '), and says so',
+      hooks === '.githooks' && r.stdout.indexOf('pre-push checks (#5291)') >= 0);
     const envText = fs.existsSync(envFile) ? fs.readFileSync(envFile, 'utf8') : '';
     const envLines = envText.trim().split('\n');
     const NOREPLY = '187923600+EvilPatrick06@users.noreply.github.com';
@@ -164,10 +176,13 @@ else {
     fs.writeFileSync(settings, JSON.stringify({ model: 'kept', hooks: { Stop: [{ hooks: [{ type: 'command', command: 'true' }] }] } }));
     const uname = cp.spawnSync('uname', ['-s'], { encoding: 'utf8' }).stdout.trim();
     const regEnv = path.join(tmp, 'register.env');
+    cp.spawnSync('git', ['--git-dir', fakeGit, 'config', '--unset', 'core.hooksPath']);
     r = run(['--register'], { CLAUDE_CONFIG_DIR: cfg, CLAUDE_CODE_REMOTE: null, CLAUDE_ENV_FILE: regEnv });
     if (uname === 'Linux') {
       r = run(['--register'], { CLAUDE_CONFIG_DIR: cfg, CLAUDE_CODE_REMOTE: null, CLAUDE_ENV_FILE: regEnv });
       yes('D6 #5231: --register, at image build, writes no git identity', !fs.existsSync(regEnv));
+      const regHooks = cp.spawnSync('git', ['--git-dir', fakeGit, 'config', 'core.hooksPath'], { encoding: 'utf8' });
+      yes('D7 #5291: and sets no hooks folder, which is the session\'s clone\'s to set', regHooks.status === 1 && regHooks.stdout === '');
       const s = JSON.parse(fs.readFileSync(settings, 'utf8'));
       const start = ((s.hooks || {}).SessionStart || []);
       const cmds = [].concat.apply([], start.map(function (g) { return (g.hooks || []).map(function (h) { return h.command; }); }));

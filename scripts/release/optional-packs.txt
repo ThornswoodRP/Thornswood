@@ -1,9 +1,10 @@
-# Optional packs: what comes OUT of the installer and goes up as a download.
+# Optional packs: what goes up as a download of its own.
 #
-# Package-Thornswood.ps1 reads this file and leaves every path listed here out
-# of the installer. Publish-Pack.ps1 reads the same file and builds the zips
-# from it. One list, so the two can never drift apart and ship an installer
-# that is missing something nobody can get back.
+# Publish-Pack.ps1 reads this file and builds the zips from it. Until #4824 the
+# old installer's builder read it too and left every path listed here out of
+# the installer. Nothing reads it to leave a path out of a release now, so a
+# line here takes nothing out of what every launcher gets; that needs its own
+# change first.
 #
 # Format, one path per line:
 #
@@ -31,5 +32,4 @@
 #     Data\Shaders\         shader overrides
 #     enbseries\            ENB, if it is ever added
 #
-# Add a line, run Package-Thornswood.ps1, then Publish-Pack.ps1. Nothing here
-# yet, so today's installer is exactly what it was.
+# Nothing here yet.

@@ -12,8 +12,9 @@
     1. a board that keeps every rule names nothing and exits 0;
     2. an open issue with no Order, two open cards sharing one, an open card
        with no Status, a closed issue not in Done, Status options other than
-       Todo, In Progress and Done, Auto-add off and Auto-close on, and an open
-       issue with no card are each named under their rule, and it exits 3;
+       Todo, In Progress and Done, Auto-close on, and an open issue with no
+       card are each named under their rule, and it exits 3; Auto-add to
+       project is no longer read, since board.yml adds every card (#5185);
     3. an archived card and an open pull request with no Order are left out;
        an issue made after the board was read is not called missing;
     4. it stops (exit 1) on no file, a file that is not a board, and issue
@@ -51,12 +52,12 @@ $e = $null
 Yes 'it parses' (@($e).Count -eq 0)
 
 function Card([int]$n, [string]$state, [string]$status, $order, [string]$kind = 'Issue', [bool]$archived = $false) {
-    [ordered]@{ repo = 'EvilPatrick06/Thornswood'; number = $n; kind = $kind; title = "card $n"; state = $state; status = $status; order = $order; archived = $archived }
+    [ordered]@{ repo = 'ThornswoodRP/Thornswood'; number = $n; kind = $kind; title = "card $n"; state = $state; status = $status; order = $order; archived = $archived }
 }
 function Board($items, $statuses = @('Todo', 'In Progress', 'Done'), $addOn = $true, $closeOn = $false) {
     [ordered]@{
         read_at = '2026-10-26T17:41:23Z'
-        board = [ordered]@{ owner = 'EvilPatrick06'; number = 1 }
+        board = [ordered]@{ owner = 'ThornswoodRP'; number = 3 }
         statuses = $statuses
         workflows = @([ordered]@{ name = 'Auto-add to project'; enabled = $addOn }, [ordered]@{ name = 'Auto-close issue'; enabled = $closeOn }, [ordered]@{ name = 'Item closed'; enabled = $true })
         items = @($items)
@@ -77,6 +78,8 @@ try {
     $good = @((Card 1 'OPEN' 'Todo' 10), (Card 2 'OPEN' 'In Progress' 20), (Card 3 'CLOSED' 'Done' $null), (Card 4 'OPEN' 'Done' 30.5))
     $r = Run (Board $good) @('1', '2', '4@2026-10-20T00:00:00Z')
     Yes ("a board that keeps every rule: exit 0 ($($r.Code))") ($r.Code -eq 0 -and $r.Out -match 'Every card keeps every rule')
+    $r = Run (Board $good @('Todo', 'In Progress', 'Done') $false $false) @('1', '2', '4')
+    Yes ("  Auto-add to project off is no rule broken now board.yml adds every card (#5185): exit 0 ($($r.Code))") ($r.Code -eq 0)
 
     $bad = @((Card 1 'OPEN' 'Todo' $null), (Card 2 'OPEN' 'Todo' 20), (Card 5 'OPEN' 'Todo' 20), (Card 6 'OPEN' $null 40), (Card 7 'CLOSED' 'In Progress' 50),
         (Card 8 'OPEN' 'Todo' $null 'Issue' $true), (Card 9 'OPEN' 'Todo' $null 'PullRequest'))
@@ -87,10 +90,15 @@ try {
     Yes '  an open card with no Status' ($r.Out -match '(?m)^no status: 1\n  #6 card 6$')
     Yes '  a closed issue not in Done' ($r.Out -match '(?m)^closed open: 1\n  #7 card 7 \(Status In Progress\)$')
     Yes '  Status options that are not the three' ($r.Out -match 'the Status options are Todo, Doing, Done, not Todo, In Progress, Done')
-    Yes '  Auto-add off and Auto-close on' ($r.Out -match '"Auto-add to project" is off, and should be on' -and $r.Out -match '"Auto-close issue" is on, and should be off')
+    Yes '  Auto-close on' ($r.Out -match '"Auto-close issue" is on, and should be off' -and $r.Out -notmatch 'Auto-add')
     Yes '  an open issue with no card, made before the read' ($r.Out -match '(?m)^no card: 1\n  #11$')
     Yes 'an archived card and a pull request with no Order are left out' ($r.Out -notmatch '#8 card 8' -and $r.Out -notmatch '#9 card 9')
     Yes 'an issue made after the read is not called missing' ($r.Out -notmatch '#12')
+
+    $nb = Board $good
+    $nb.workflows = $null; $nb['workflows_unread'] = 'the board answered: You do not have permission to access workflows'
+    $r = Run $nb @('1', '2', '4')
+    Yes ("workflows the board App could not read: no rule broken, and it says Auto-close was not checked: exit 0 ($($r.Code))") ($r.Code -eq 0 -and $r.Out -match '"workflows" not checked' -and $r.Out -match 'Auto-close issue must be off')
 
     $o = @(& $check -Board (Join-Path $tmp 'none.json') -NoIssues 6>&1 2>&1 | ForEach-Object { "$_" })
     Yes 'no file: exit 1' ($LASTEXITCODE -eq 1 -and ($o -join ' ') -match 'Read-Board\.ps1 -OutFile')

@@ -34,7 +34,7 @@ namespace Thornswood
           Summary() writes names its part in one of these two lists, Held()
           throws for a part that is in neither, and the page's words are made
           from the same lists by WhatTheReportHolds(), so the page cannot say
-          less than the zip carries. tests\test-3565-report-words.js holds the
+          less than the zip carries. launcher\tests\test-3565-report-words.js holds the
           code to it. Several keys may share words; the page says them once.
         */
         class Part

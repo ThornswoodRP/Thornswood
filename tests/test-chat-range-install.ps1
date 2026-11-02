@@ -5,7 +5,7 @@
   whatever range is running.
 
   Entry 150 put local in-character chat into the voice service behind
-  THORNSWOOD_CHAT_RANGE (voice\test-local-chat.js drives the service
+  THORNSWOOD_CHAT_RANGE (voice\tests\test-local-chat.js drives the service
   itself). It shipped off until 4 Oct, when Patrick said local chat "should
   have went out with the other changes to live", and Install-Voice.ps1's
   default became on. A setting only counts if the install hands it over, and

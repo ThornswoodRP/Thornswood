@@ -16,9 +16,11 @@
 
   HOW. The body of the -Password branch is lifted out of Deploy-Docs.ps1 by
   the parser, not copied here, so this tests what ships. Remote is swapped for
-  one that runs the same encoded command in Windows PowerShell 5.1 on this
-  machine instead of on the VPS over ssh. 5.1 on purpose: it is what the VPS
+  one that runs the same encoded command in PowerShell 7 on this machine
+  instead of on the box over ssh. PowerShell 7 on purpose: it is what the box
   runs, and its ConvertFrom-Json and ConvertTo-Json decide what gets written.
+  Off Windows the far side's \config.json is turned to /config.json, the one
+  thing about the box's paths this machine does not share.
   Then node reads the result the way server.js does, with JSON.parse, and
   without stripping a byte order mark first, so a mark is a failure here.
 
@@ -88,11 +90,7 @@ Yes 'the branch sends the password the hidden prompt gave' ($branch -match '-Sec
 
 # ---- what runs it -------------------------------------------------------------
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) {
-    Write-Host 'SKIP  the rest: it runs in Windows PowerShell 5.1, which only Windows has'
-    Done
-}
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node) {
     Write-Host 'SKIP  the rest needs node, which is not here'
@@ -101,7 +99,7 @@ if (-not $node) {
 
 # The password goes through the real Send-Secret.ps1 (issue #451): on ssh's
 # standard input, the script alone on the command line. ssh is swapped for
-# one that runs that command line in Windows PowerShell 5.1 here, with the
+# one that runs that command line in PowerShell 7 here, with the
 # same standard input, and keeps every command line it was handed so the
 # password can be looked for in them afterwards.
 . (Join-Path $Here 'scripts\vps\Send-Secret.ps1')
@@ -112,7 +110,12 @@ function ssh {
     $m = [regex]::Match($a[-1], '-EncodedCommand (\S+)$')
     if (-not $m.Success) { throw 'the fake ssh was handed no encoded command' }
     [void]$script:lines.Add([Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($m.Groups[1].Value)))
-    @($input) | & $ps51 -NoProfile -NonInteractive -EncodedCommand $m.Groups[1].Value
+    $run = $m.Groups[1].Value
+    if (-not $OnWindows) {
+        $text = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($run)).Replace('\config.json', '/config.json')
+        $run = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($text))
+    }
+    @($input) | & $boxPs -NoProfile -NonInteractive -EncodedCommand $run
 }
 
 # Runs the branch with the two things it takes from the rest of Deploy-Docs:

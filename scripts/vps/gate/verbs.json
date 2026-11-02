@@ -1,6 +1,6 @@
 {
   "issue": 2841,
-  "what": "Every verb the deploy gate runs, and all it runs (scripts/vps/gate/GateRules.ps1 reads this). A verb is one script of main, run on the box by the gate broker from a checkout of origin/main, with only the parameters named here. A parameter's rule is 'switch' (no value), 'text' (the text rule below) or a pattern its value must match whole. 'fixed' goes on every run of that verb; a fixed word with no hyphen is the value of the fixed parameter before it, so a verb can be held to one channel. 'build': true marks a live verb: its line must name main's full commit with -Build, and the broker runs it only when main is at exactly that commit (the build Patrick gave his word for); -Build never reaches the script. 'out' is the parameter that names the folder the verb writes its files into: the broker sets it to a folder of the run's own and sends back what lands there.",
+  "what": "Every verb the deploy gate runs, and all it runs (scripts/vps/gate/GateRules.ps1 reads this). A verb is one script of main, run on the box by the gate broker from a checkout of origin/main, with only the parameters named here. A parameter's rule is 'switch' (no value), 'text' (the text rule below) or a pattern its value must match whole. 'fixed' goes on every run of that verb; a fixed word with no hyphen is the value of the fixed parameter before it, so a verb can be held to one channel. 'build': true marks a live verb: its line must name main's full commit with -Build, and the broker runs it only when main is at exactly that commit (the build Patrick gave his word for); -Build never reaches the script. 'out' is the parameter that names the folder the verb writes its files into: the broker sets it to a folder of the run's own and sends back what lands there. 'afterDeploy' lists the environments a step after a deploy (deploy/after, #5186) may run the verb after: the deploy agent runs only those, held to this file as the signed Release carries it. Only a verb whose fixed words hold it to that environment, or one that only reads, goes on it; Check-ProdParity does not, since the agent runs it after every dev Deployment itself (#5180).",
   "text": "^[A-Za-z0-9][A-Za-z0-9 .,:;'()!?_+-]{0,159}$",
   "verbs": {
     "Update-Gate": {
@@ -73,9 +73,10 @@
     "Deploy-Release": {
       "script": "scripts/deploy/Deploy-Release.ps1",
       "timeoutMinutes": 40,
-      "fixed": ["-NoPause", "-Environment", "dev"],
+      "fixed": ["-NoPause"],
       "params": {
-        "Tag": "^build-[A-Za-z0-9._-]{1,80}$"
+        "Tag": "^build-[A-Za-z0-9._-]{1,80}$",
+        "Environment": "^(dev|site|discord)$"
       }
     },
     "Install-DeployAgent": {
@@ -84,7 +85,12 @@
       "fixed": ["-NoPause"],
       "params": {
         "Status": "switch",
-        "Tag": "^agent-v[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,6}$"
+        "Pass": "^[0-9]{8}-[0-9]{6}-[A-Za-z0-9-]{1,64}$",
+        "Tag": "^agent-v[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,6}$",
+        "NoBotPass": "switch",
+        "EndHung": "switch",
+        "Main": "switch",
+        "NoMain": "switch"
       }
     },
     "Install-Voice": {
@@ -119,6 +125,31 @@
         "Install": "switch"
       }
     },
+    "Watch-Load": {
+      "script": "scripts/vps/Watch-Load.ps1",
+      "timeoutMinutes": 10,
+      "fixed": ["-NoPause"],
+      "params": {
+        "Install": "switch"
+      }
+    },
+    "Keep-RunnerLogs": {
+      "script": "scripts/vps/Keep-RunnerLogs.ps1",
+      "timeoutMinutes": 10,
+      "fixed": ["-NoPause"],
+      "params": {
+        "Install": "switch"
+      }
+    },
+    "Forecast-Storage": {
+      "script": "scripts/vps/Forecast-Storage.ps1",
+      "timeoutMinutes": 10,
+      "fixed": ["-NoPause"],
+      "params": {
+        "Install": "switch",
+        "Status": "switch"
+      }
+    },
     "Hold-Server": {
       "script": "scripts/vps/Hold-Server.ps1",
       "timeoutMinutes": 5,
@@ -137,6 +168,19 @@
       "fixed": [],
       "params": {
         "Days": "^[0-9]{1,3}$"
+      }
+    },
+    "Load-Test": {
+      "script": "scripts/bot/Load-Box.ps1",
+      "timeoutMinutes": 45,
+      "fixed": [],
+      "out": "-Out",
+      "params": {
+        "From": "^(live|dev)$",
+        "Shape": "^(crowd|spread)$",
+        "Steps": "^[0-9]{1,3}(,[0-9]{1,3}){0,7}$",
+        "Hold": "^[0-9]{2,3}$",
+        "Play": "^(fight|host|trade)(,(fight|host|trade)){0,2}$"
       }
     },
     "Read-Online": {
@@ -265,11 +309,23 @@
       "fixed": ["-Server", "dev", "-Yes", "-NoPause"],
       "params": {}
     },
-    "Publish-Installer": {
-      "script": "scripts/release/Publish-InstallerOnBox.ps1",
-      "timeoutMinutes": 45,
-      "fixed": [],
-      "params": {}
+    "Reset-Npcs-Dev": {
+      "script": "scripts/ops/Reset-Npcs.ps1",
+      "timeoutMinutes": 15,
+      "afterDeploy": ["dev"],
+      "fixed": ["-Server", "dev", "-Yes", "-NoPause"],
+      "params": {
+        "Survey": "switch"
+      }
+    },
+    "Reset-Npcs-Main": {
+      "script": "scripts/ops/Reset-Npcs.ps1",
+      "timeoutMinutes": 15,
+      "build": true,
+      "fixed": ["-Server", "main", "-Yes", "-NoPause"],
+      "params": {
+        "Survey": "switch"
+      }
     },
     "Rebuild-ContentTables": {
       "script": "scripts/mods/Rebuild-OnBox.ps1",
@@ -291,8 +347,7 @@
         "Title": "text",
         "Detail": "text",
         "Detail2": "text",
-        "Detail3": "text",
-        "ModsOnly": "switch"
+        "Detail3": "text"
       }
     },
     "Ship-Main": {
@@ -304,8 +359,7 @@
         "Title": "text",
         "Detail": "text",
         "Detail2": "text",
-        "Detail3": "text",
-        "ModsOnly": "switch"
+        "Detail3": "text"
       }
     },
     "Send-Backups": {
@@ -323,6 +377,16 @@
       "timeoutMinutes": 45,
       "fixed": ["-NoPause"],
       "params": {}
+    },
+    "Rehearse-Restore": {
+      "script": "scripts/vps/Rehearse-OnBox.ps1",
+      "timeoutMinutes": 40,
+      "fixed": ["-NoPause"],
+      "params": {
+        "Which": "^(live|dev)$",
+        "ProfileId": "^[0-9]{1,10}$"
+      },
+      "out": "-Out"
     },
     "Set-InboundRules": {
       "script": "scripts/vps/Set-InboundRules.ps1",
@@ -359,6 +423,71 @@
         "Status": "switch",
         "Lock": "switch",
         "NetworkOnly": "switch"
+      }
+    },
+    "Install-Backup": {
+      "script": "scripts/deploy/Install-Backup.ps1",
+      "timeoutMinutes": 20,
+      "fixed": ["-FromGate", "-NoPause"],
+      "params": {
+        "RunNow": "switch",
+        "Status": "switch"
+      }
+    },
+    "Delete-Person": {
+      "script": "scripts/vps/Delete-Person.ps1",
+      "timeoutMinutes": 30,
+      "fixed": [],
+      "params": {
+        "DiscordId": "^[0-9]{17,20}$",
+        "Delete": "switch",
+        "By": "^[A-Za-z][A-Za-z0-9_-]{0,31}$",
+        "Reapply": "switch"
+      }
+    },
+    "Check-Roster": {
+      "script": "scripts/ops/Check-Roster.ps1",
+      "timeoutMinutes": 5,
+      "fixed": [],
+      "params": {}
+    },
+    "Chargen-Log": {
+      "script": "scripts/ops/Chargen-Log.ps1",
+      "timeoutMinutes": 5,
+      "fixed": [],
+      "params": {
+        "Lines": "^[0-9]{1,4}$"
+      }
+    },
+    "Check-Load": {
+      "script": "scripts/vps/Check-Load.ps1",
+      "timeoutMinutes": 5,
+      "fixed": ["-NoPause"],
+      "params": {}
+    },
+    "Check-ServerPriority": {
+      "script": "scripts/vps/Check-ServerPriority.ps1",
+      "timeoutMinutes": 5,
+      "fixed": [],
+      "params": {}
+    },
+    "Rotate-ServerPassword": {
+      "script": "scripts/deploy/Rotate-ServerPassword.ps1",
+      "timeoutMinutes": 10,
+      "fixed": ["-Yes"],
+      "params": {}
+    },
+    "Install-Tunnel": {
+      "script": "scripts/deploy/Install-Tunnel.ps1",
+      "timeoutMinutes": 15,
+      "fixed": ["-NoPause"],
+      "params": {
+        "SealKey": "switch",
+        "Sealed": "^[A-Za-z0-9+/]{400,560}={0,2}$",
+        "Switch": "switch",
+        "Back": "switch",
+        "Status": "switch",
+        "Wait": "^[0-9]{1,3}$"
       }
     }
   }

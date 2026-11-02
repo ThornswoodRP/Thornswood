@@ -122,7 +122,7 @@ try {
 '@
 
 $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($remote))
-$out = Invoke-ThornswoodNative { & ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$User@$Vps" "powershell -NoProfile -EncodedCommand $enc" } 2>&1
+$out = Invoke-ThornswoodNative { & ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$User@$Vps" "pwsh -NoProfile -EncodedCommand $enc" } 2>&1
 $out | ForEach-Object { Note $_ }
 
 Head 'From here'

@@ -16,7 +16,7 @@
 # for one issue, a body that also closes the issue (the merge would close it
 # before the task is copied), and an issue that is closed, missing or a pull
 # request. A body with no block passes. Its own harness,
-# bot/test-5199-pr-tasks.py, runs first, so a check that reads nothing
+# bot/tests/test-5199-pr-tasks.py, runs first, so a check that reads nothing
 # cannot pass by accident. pr_tasks.py's header says the rest.
 #
 # WHEN. Opened, pushed to, reopened, and edited: an edit to the body is how a
@@ -24,6 +24,13 @@
 # cancels the older run of the same pull request. Started by hand on a
 # branch, it reads the open pull request whose head that branch is. Either
 # way the body is read from GitHub as it is now, not from the event.
+#
+# IN THE MERGE QUEUE (#5182). The queue lands a pull request only once every
+# check main's ruleset requires has passed on its merge_group run, so this
+# runs there too and reads the body of the pull request the queue's branch
+# names (gh-readonly-queue/main/pr-<number>-<commit>), as it is at that
+# moment: an issue closed while the pull request waited is caught before
+# the merge, not after.
 #
 # THE RESULT IS REQUIRED. The main ruleset requires this job, "Test tasks in
 # the pull request", beside Build check result
@@ -43,6 +50,8 @@ name: Test tasks (pull requests)
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
+  merge_group:
+    types: [checks_requested]
   # engine-pin.yml starts it on engine-pin/next once it has opened or
   # updated the pin's pull request: that pull request is opened with the
   # run's own token, which starts no pull_request run, and this result is
@@ -89,7 +98,7 @@ jobs:
           THORNSWOOD_BOT_DATA: ${{ runner.temp }}/bot-data
         run: |
           mkdir -p "$THORNSWOOD_BOT_DATA"
-          "$RUNNER_TEMP/bot-venv/bin/python" bot/test-5199-pr-tasks.py
+          "$RUNNER_TEMP/bot-venv/bin/python" bot/tests/test-5199-pr-tasks.py
 
       - name: Check the test tasks in the body
         shell: bash
@@ -98,6 +107,16 @@ jobs:
           THORNSWOOD_BOT_DATA: ${{ runner.temp }}/bot-data
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_REF: ${{ github.ref_name }}
+          QUEUE_REF: ${{ github.event.merge_group.head_ref }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          # In the merge queue the pull request is the one its branch names.
+          if [ -n "$QUEUE_REF" ]; then
+            PR_NUMBER=$(printf '%s' "$QUEUE_REF" | sed -nE 's#^(refs/heads/)?gh-readonly-queue/[^/]+/pr-([0-9]+)-[0-9a-f]{40}$#\2#p')
+            if [ -z "$PR_NUMBER" ]; then
+              echo "::error::the merge queue's branch names no pull request: $QUEUE_REF"
+              exit 1
+            fi
+            export PR_NUMBER
+          fi
           "$RUNNER_TEMP/bot-venv/bin/python" bot/pr_tasks.py

@@ -138,7 +138,7 @@ function Invoke-Encoded([string]$script) {
     $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes("`$ProgressPreference = 'SilentlyContinue'`r`n" + $script))
     $old = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    $out = Clean @(Invoke-ThornswoodNative { & ssh @ssh "$User@$Vps" "powershell -NoProfile -EncodedCommand $enc" } 2>&1)
+    $out = Clean @(Invoke-ThornswoodNative { & ssh @ssh "$User@$Vps" "pwsh -NoProfile -EncodedCommand $enc" } 2>&1)
     $ErrorActionPreference = $old
     return $out
 }

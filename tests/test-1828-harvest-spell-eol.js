@@ -29,7 +29,6 @@ function yes(what, cond) {
   else { fail++; console.log("FAIL  " + what); }
 }
 
-const gmReal = fs.readFileSync(path.join(REPO_DIR, "game", "gamemode.js"), "utf8").split(CR).join("");
 const harvestPs1 = fs.readFileSync(path.join(REPO_DIR, "scripts", "dev", "Build-HarvestTable.ps1"), "utf8");
 const spellPs1 = fs.readFileSync(path.join(REPO_DIR, "scripts", "dev", "Build-SpellTable.ps1"), "utf8");
 
@@ -39,8 +38,8 @@ for (const [name, s, installs] of [["Build-HarvestTable.ps1", harvestPs1, 4], ["
     s.indexOf('$Eol = "`n"') >= 0 && s.indexOf("EolOf") < 0);
   yes(name + ": the table is joined with it",
     s.indexOf("$jsonEol = $Eol") >= 0 && s.indexOf("$json = ($docLines -join $jsonEol) + $jsonEol") >= 0);
-  yes(name + ": every gamemode block is joined with it (" + installs + ")",
-    (s.match(/\$eol = \$Eol\s+\$new = \$text\.Substring\(0, \$(m\.Index|a)\) \+ \(\(\$body -join \$eol\)\) \+ \$eol \+ \$text\.Substring\(\$b\)/g) || []).length === installs);
+  yes(name + ": every table the gamemode reads goes to its own file through GamemodeTables.ps1 (" + installs + ", #5191)",
+    (s.match(/Write-GamemodeTable '[A-Z_]+'/g) || []).length === installs);
   yes(name + ": no CRLF is written anywhere", s.split('"`r`n"').length - 1 === 0);
 }
 
@@ -69,14 +68,15 @@ function header() {
 const MASTERS = ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm"];
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "tw-1828-"));
-// The text from a block's declaration to its end marker: what a run writes.
-function written(t, open, close) { const a = t.indexOf(open), b = t.indexOf(close); return a < 0 || b < a ? null : t.slice(a, b); }
+// A table file the gamemode reads, as text, or "" when there is none.
+function text(f) { return fs.existsSync(f) ? fs.readFileSync(f, "utf8") : ""; }
+function parsed(f) { try { return JSON.parse(text(f)); } catch (e) { return null; } }
 function pwshRun(ps1, args) {
   const r = cp.spawnSync("pwsh", ["-NoProfile", "-File", ps1].concat(args), { encoding: "utf8", timeout: 170000 });
   return { code: r.status, out: String(r.stdout || "") + String(r.stderr || "") };
 }
-// The builders install into ..\..\game\gamemode.js beside themselves, so each
-// copy sits in a repository shape of its own.
+// The builders install into ..\..\game\gamemode-tables beside themselves
+// (#5191), so each copy sits in a repository shape of its own.
 function repoFor(name, ps1Text, extra) {
   const repo = path.join(tmp, name);
   fs.mkdirSync(path.join(repo, "scripts", "dev"), { recursive: true });
@@ -85,19 +85,10 @@ function repoFor(name, ps1Text, extra) {
   const ps1 = path.join(repo, "scripts", "dev", name);
   fs.writeFileSync(ps1, ps1Text);
   fs.copyFileSync(path.join(REPO_DIR, "scripts", "dev", "OwnPlugins.ps1"), path.join(repo, "scripts", "dev", "OwnPlugins.ps1"));
+  fs.copyFileSync(path.join(REPO_DIR, "scripts", "dev", "GamemodeTables.ps1"), path.join(repo, "scripts", "dev", "GamemodeTables.ps1"));
   for (const f of extra || []) { fs.copyFileSync(path.join(REPO_DIR, f), path.join(repo, f)); }
-  return { repo: repo, ps1: ps1, gm: path.join(repo, "game", "gamemode.js") };
-}
-function blocks(t, names) {
-  // everything outside the named blocks, so a run can be shown to touch nothing else
-  let out = t;
-  for (const n of names) {
-    const m = new RegExp("^[ \\t]*var[ \\t]+" + n + "[ \\t]*=[ \\t]*\\{", "m").exec(out);
-    const b = out.indexOf("// ==== end " + n + " ====");
-    if (!m || b < 0) { return null; }
-    out = out.slice(0, m.index) + "<" + n + ">" + out.slice(b);
-  }
-  return out;
+  const tables = path.join(repo, "game", "gamemode-tables");
+  return { repo: repo, ps1: ps1, tables: tables, table: function (n) { return path.join(tables, n + ".json"); } };
 }
 
 try {
@@ -155,17 +146,15 @@ try {
     const HB = ["HARVESTS_BY_BASE", "CROPS_BY_BASE", "FISH_BY_BASE", "GAME_BY_BASE"];
     function harvest() { return pwshRun(H.ps1, ["-Data", hData, "-PluginList", hList, "-Out", hOut]); }
 
-    // an LF checkout: the table and the real gamemode, both LF
-    fs.writeFileSync(H.gm, gmReal);
+    // an LF checkout
     fs.writeFileSync(hOut, "{\n  \"old\": true\n}\n");
     const h1 = harvest();
-    yes("a harvest run against the small Data folder writes the table and the four blocks (exit " + h1.code + ")",
+    yes("a harvest run against the small Data folder writes the table and the four table files (exit " + h1.code + ")",
       h1.code === 0 && /wrote .*harvests\.json \(\d+ plants/.test(h1.out) &&
-      /into the HARVESTS_BY_BASE block/.test(h1.out) && /into the CROPS_BY_BASE block/.test(h1.out) &&
-      /into the FISH_BY_BASE block/.test(h1.out) && /into the GAME_BY_BASE block/.test(h1.out));
+      HB.every(function (n) { return new RegExp("into .*" + n + "\\.json").test(h1.out); }));
     if (h1.code !== 0) { console.log(h1.out.split("\n").filter(function (l) { return /FAIL|rror/.test(l); }).slice(0, 30).join("\n")); }
     const ht1 = fs.readFileSync(hOut, "utf8");
-    const hg1 = fs.readFileSync(H.gm, "utf8");
+    const hg1 = HB.map(function (n) { return text(H.table(n)); });
     yes("an LF harvests.json stays LF", ht1.indexOf(CR) < 0 && ht1.indexOf("\n") >= 0);
     yes("the rank rows and the detail rows inside it are LF too",
       /"novice": 1,\n    "advanced"/.test(ht1) && /"rank": "novice",\n      "produce"/.test(ht1));
@@ -173,26 +162,21 @@ try {
     try { hdoc = JSON.parse(ht1); } catch (e) { hdoc = null; }
     yes("the table parses and holds the novice plant", !!hdoc && hdoc.harvests && hdoc.harvests["1000:Skyrim.esm"] &&
       hdoc.harvests["1000:Skyrim.esm"].rank === "novice");
-    yes("an LF gamemode stays LF after the four blocks", hg1.indexOf(CR) < 0);
-    yes("the blocks hold what was built",
-      hg1.indexOf('"1000:Skyrim.esm": { "produce": "800:Skyrim.esm"') >= 0 && hg1.indexOf('"1001:Skyrim.esm"') >= 0);
-    yes("nothing outside the four blocks changed", blocks(hg1, HB) !== null && blocks(hg1, HB) === blocks(gmReal, HB));
+    yes("the four table files are LF", hg1.every(function (t) { return t && t.indexOf(CR) < 0; }));
+    const hb = parsed(H.table("HARVESTS_BY_BASE"));
+    yes("the tables hold what was built",
+      !!hb && !!hb["1000:Skyrim.esm"] && hb["1000:Skyrim.esm"].produce === "800:Skyrim.esm" &&
+      HB.some(function (n) { const t = parsed(H.table(n)); return !!t && !!t["1001:Skyrim.esm"]; }));
     const h2 = harvest();
-    yes("a second harvest run changes neither file", h2.code === 0 &&
-      fs.readFileSync(hOut, "utf8") === ht1 && fs.readFileSync(H.gm, "utf8") === hg1);
+    yes("a second harvest run changes no file", h2.code === 0 &&
+      fs.readFileSync(hOut, "utf8") === ht1 && HB.every(function (n, i) { return text(H.table(n)) === hg1[i]; }));
 
     // a checkout from before .gitattributes: both CRLF
-    const smallGm = ["// head"];
-    for (const n of HB) { smallGm.push("var " + n + " = {", "  \"old\": 1", "};", "", "// ==== end " + n + " ===="); }
-    smallGm.push("// tail", "");
-    fs.writeFileSync(H.gm, smallGm.join("\r\n"));
+    for (const n of HB) { fs.writeFileSync(H.table(n), "{\r\n\"old\":1\r\n}\r\n"); }
     fs.writeFileSync(hOut, "{\r\n  \"old\": true\r\n}\r\n");
     const h3 = harvest();
     yes("a CRLF harvests.json comes out LF", h3.code === 0 && fs.readFileSync(hOut, "utf8") === ht1);
-    const hg3 = fs.readFileSync(H.gm, "utf8");
-    yes("the four blocks written into a CRLF gamemode are LF", h3.code === 0 &&
-      hg3.indexOf('"1000:Skyrim.esm"') >= 0 && hg3.indexOf('"old"') < 0 &&
-      HB.every(function (n) { const w = written(hg3, "var " + n + " = {", "// ==== end " + n + " ===="); return w !== null && w.indexOf(CR) < 0; }));
+    yes("and CRLF table files are written over LF", h3.code === 0 && HB.every(function (n, i) { return text(H.table(n)) === hg1[i]; }));
 
     // no table yet: LF as well
     fs.unlinkSync(hOut);
@@ -221,37 +205,29 @@ try {
     const sOut = path.join(S.repo, "game", "data", "spells.json");
     function spells() { return pwshRun(S.ps1, ["-Data", sData, "-Book", book, "-Out", sOut, "-Plugins", "Skyrim.esm"]); }
 
-    fs.writeFileSync(S.gm, gmReal);
     fs.writeFileSync(sOut, "{\n  \"old\": true\n}\n");
     const s1 = spells();
-    yes("a spell run against the small Data folder writes the table and the block (exit " + s1.code + ")",
-      s1.code === 0 && /wrote .*spells\.json \(2 spells/.test(s1.out) && /wrote 2 spells into the SPELL_IDS block/.test(s1.out));
+    yes("a spell run against the small Data folder writes the table and the gamemode's table file (exit " + s1.code + ")",
+      s1.code === 0 && /wrote .*spells\.json \(2 spells/.test(s1.out) && /wrote 2 spells into .*SPELL_IDS\.json/.test(s1.out));
     if (s1.code !== 0) { console.log(s1.out.split("\n").filter(function (l) { return /FAIL|rror/.test(l); }).slice(0, 30).join("\n")); }
     const st1 = fs.readFileSync(sOut, "utf8");
-    const sg1 = fs.readFileSync(S.gm, "utf8");
+    const sg1 = text(S.table("SPELL_IDS"));
     yes("an LF spells.json stays LF", st1.indexOf(CR) < 0 && st1.indexOf("\n") >= 0);
     yes("the detail rows inside it are LF too", /"desc": "12fcd:Skyrim.esm",\n      "editorId"/.test(st1));
     let sdoc = null;
     try { sdoc = JSON.parse(st1); } catch (e) { sdoc = null; }
     yes("the table parses and holds the two spells", !!sdoc && sdoc.count === 2 && sdoc.spells.Sparks === "2b96b:Skyrim.esm");
-    yes("an LF gamemode stays LF after SPELL_IDS", sg1.indexOf(CR) < 0);
-    yes("the block holds the two spells", sg1.indexOf('    "Flames": "12fcd:Skyrim.esm",\n    "Sparks": "2b96b:Skyrim.esm"\n  };') >= 0);
-    const ga = gmReal.indexOf("  var SPELL_IDS = {"), gb = gmReal.indexOf("  // ==== end SPELL_IDS ====");
-    const sa = sg1.indexOf("  var SPELL_IDS = {"), sb = sg1.indexOf("  // ==== end SPELL_IDS ====");
-    yes("nothing outside the SPELL_IDS block changed", ga >= 0 && sa >= 0 &&
-      sg1.slice(0, sa) === gmReal.slice(0, ga) && sg1.slice(sb) === gmReal.slice(gb));
+    yes("the SPELL_IDS table file is LF", !!sg1 && sg1.indexOf(CR) < 0);
+    yes("and holds the two spells", sg1 === '{\n"Flames":"12fcd:Skyrim.esm",\n"Sparks":"2b96b:Skyrim.esm"\n}\n');
     const s2 = spells();
     yes("a second spell run changes neither file", s2.code === 0 &&
-      fs.readFileSync(sOut, "utf8") === st1 && fs.readFileSync(S.gm, "utf8") === sg1);
+      fs.readFileSync(sOut, "utf8") === st1 && text(S.table("SPELL_IDS")) === sg1);
 
-    fs.writeFileSync(S.gm, ["// head", "  var SPELL_IDS = {", "    \"old\": 1", "  };", "", "  // ==== end SPELL_IDS ====", "// tail", ""].join("\r\n"));
+    fs.writeFileSync(S.table("SPELL_IDS"), "{\r\n\"old\":1\r\n}\r\n");
     fs.writeFileSync(sOut, "{\r\n  \"old\": true\r\n}\r\n");
     const s3 = spells();
     yes("a CRLF spells.json comes out LF", s3.code === 0 && fs.readFileSync(sOut, "utf8") === st1);
-    const sg3 = fs.readFileSync(S.gm, "utf8");
-    const sw3 = written(sg3, "  var SPELL_IDS = {", "  // ==== end SPELL_IDS ====");
-    yes("the SPELL_IDS block written into a CRLF gamemode is LF", s3.code === 0 &&
-      sg3.indexOf('"Flames": "12fcd:Skyrim.esm"') >= 0 && sw3 !== null && sw3.indexOf(CR) < 0);
+    yes("and a CRLF SPELL_IDS file is written over LF", s3.code === 0 && text(S.table("SPELL_IDS")) === sg1);
 
     fs.unlinkSync(sOut);
     const s4 = spells();

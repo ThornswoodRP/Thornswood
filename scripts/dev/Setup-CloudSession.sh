@@ -116,6 +116,21 @@ if [ "$register" = 0 ]; then
   fi
 fi
 
+# The pre-push hook (#5291): the parse and writing checks the build check
+# makes, run on the commit being pushed before it leaves the container
+# (.githooks/pre-push, scripts/dev/Check-Push.ps1). A clone's hooks folder is
+# its own config, so a fresh clone has none until this says where it is.
+# Only this clone's config is written. --register runs at image build, where
+# the session's clone is not the one it will push from yet, so only the hook
+# sets it.
+if [ "$register" = 0 ]; then
+  if git -C "$repo" config core.hooksPath .githooks; then
+    echo "This clone runs the pre-push checks (#5291)."
+  else
+    echo "Setup-CloudSession.sh: git could not set core.hooksPath in $repo, so pushes from this session skip the pre-push checks (#5291)." >&2
+  fi
+fi
+
 if ! command -v python3.12 >/dev/null; then
   echo "Setup-CloudSession.sh: no python3.12 here, so the bot's libraries were not installed and the bot harnesses will say so." >&2
   exit 1

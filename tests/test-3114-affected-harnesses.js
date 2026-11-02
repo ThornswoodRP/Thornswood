@@ -273,5 +273,34 @@ try {
   yes('the repository\'s own two build workflows have a shape', A.gateShape(A.WORKFLOWS.map(f => fs.readFileSync(path.join(REPO, f), 'utf8'))) !== null);
 }
 
+// ---- platforms (#5293): which harnesses Linux runs as fully as Windows ----
+{
+  const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'platforms-'));
+  try {
+    const end = (name, code, skips, passes) => JSON.stringify({ name: name, end: '2026-11-01T00:00:00Z', code: code, secs: 1, skipped: !!(skips && skips.length), skips: skips, passes: passes });
+    const start = name => JSON.stringify({ name: name, pid: 42, start: '2026-11-01T00:00:00Z' });
+    const win = [start('test-a.js'), end('test-a.js', 0, [], 5), end('test-b.ps1', 0, [], 3), end('test-c.ps1', 0, ['SKIP  no box here'], 4),
+      end('test-d.js', 1, [], 2), end('test-e.js', 0, [], 2), end('test-f.js', 0, [], 6), end('test-g.js', 0, undefined, 1), end('test-h.js', 0, [], 1)];
+    const lin = [start('test-a.js'), end('test-a.js', 0, [], 5), end('test-b.ps1', 0, ['SKIP  needs Windows PowerShell 5.1'], 2), end('test-c.ps1', 0, ['SKIP  no box here'], 4),
+      end('test-d.js', 0, [], 2), end('test-e.js', 2, [], 1), end('test-f.js', 0, [], 4), end('test-g.js', 0, [], 1), end('test-i.js', 0, [], 1)];
+    const wf = path.join(dir, 'w.jsonl'), lf = path.join(dir, 'l.jsonl');
+    fs.writeFileSync(wf, win.join('\n') + '\n'); fs.writeFileSync(lf, lin.join('\n') + '\n');
+    const p = A.platforms(wf, lf, 'c'.repeat(40));
+    const h = p.harnesses;
+    yes('platforms: one that passed on both with the same lines runs on Linux', h['test-a.js'].linux === true);
+    yes('  as does one whose SKIP lines on Linux it said on Windows too', h['test-c.ps1'].linux === true);
+    yes('  not one that skips on Linux what it ran on Windows: ' + h['test-b.ps1'].why, h['test-b.ps1'].linux === false && /says on Linux what it does not on Windows: SKIP  needs Windows PowerShell 5\.1/.test(h['test-b.ps1'].why));
+    yes('  nor one that failed on Windows that night: ' + h['test-d.js'].why, h['test-d.js'].linux === false && /did not pass on Windows/.test(h['test-d.js'].why));
+    yes('  nor one that failed on Linux: ' + h['test-e.js'].why, h['test-e.js'].linux === false && /did not pass on Linux \(exit 2\)/.test(h['test-e.js'].why));
+    yes('  nor one that passed fewer checks on Linux, saying no SKIP: ' + h['test-f.js'].why, h['test-f.js'].linux === false && /passed 4 checks on Linux and 6 on Windows/.test(h['test-f.js'].why));
+    yes('  nor one whose run did not list its SKIP lines', h['test-g.js'].linux === false && /did not say which SKIP lines/.test(h['test-g.js'].why));
+    yes('  nor one in only one of the runs', h['test-h.js'].linux === false && /did not run on Linux/.test(h['test-h.js'].why) && h['test-i.js'].linux === false && /did not run on Windows/.test(h['test-i.js'].why));
+    yes('  and it counts them and names the commit', p.format === 1 && p.commit === 'c'.repeat(40) && p.linux === 2 && p.windows === 7);
+    const noCount = [end('test-a.js', 0, [], undefined)];
+    fs.writeFileSync(lf, noCount.join('\n') + '\n');
+    yes('  a run from before the passing lines were counted keeps it on Windows', A.platforms(wf, lf, '').harnesses['test-a.js'].linux === false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
+
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

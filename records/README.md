@@ -32,8 +32,8 @@ read it (issue #440, phase 8):
   Publish-Update writes it into version.json and launchers take it from
   there. No script writes this one: it is changed by hand, in the same pull
   request as the script extender, the collection revision, the launcher's
-  compiled fallback (Downgrade.cs, Config.cs) and Setup-Thornswood.ps1,
-  because a pin move is one release. `tests\test-skyrim-pin.ps1` fails while
+  compiled fallback (Downgrade.cs, Config.cs), because a pin move is one
+  release; the install reads the exe size from records\skyrim-files.json. `launcher\tests\test-skyrim-pin.ps1` fails while
   they disagree.
 - `ui-gone.json`: the 37 Daedric Online menu files (name and sha256) and the
   41 unused skymp5-front svgs, bg.png, and the four Futura PT and DIN Pro
@@ -62,7 +62,7 @@ read it (issue #440, phase 8):
   own folder takes a file from the Steam copy as Skyrim's own only when it is
   on this list, so a mod put into the Steam copy by hand never gets in. Run
   the script again in the same pull request as a pin move;
-  `tests\test-skyrim-pin.ps1` fails while the two disagree.
+  `launcher\tests\test-skyrim-pin.ps1` fails while the two disagree.
 - `recipe-owners.json`: the recipes whose owner or rank is a decision rather
   than a reading, each with the measured reason it cannot be derived:
   `"owner"` is RECIPE_OWNER and `"rank"` is RECIPE_RANK in
@@ -112,7 +112,7 @@ read it (issue #440, phase 8):
   `scripts\deploy\MaxOnline.ps1` reads it for Deploy-Gamemode,
   Deploy-DevGamemode (dev), Publish-Server and Publish-Update (each for its
   channel) and Install-Voice (dev for `C:\Thornswood-Voice-Dev`), and
-  `site\server.js` reads `people` and `staffSeats` when the site runs from
+  `site\lib\game.js` reads `people` and `staffSeats` when the site runs from
   the repository. What people are shown, the M of "N of M awake", is the
   seats, people and staffSeats together: 30 on main, 5 on dev. No script writes
   this one: it is changed by hand in a pull request, then each server is
@@ -165,6 +165,8 @@ names. No script reads them. `THIRD-PARTY.md` and
 - `runner-isolation.json`: what a runner account on the VPS must not reach (production paths, groups), the crash dump folder it may only write, the age limit for files left in its temp folder, and differences agreed as intentional. `scripts\vps\Check-RunnerIsolation.ps1` compares the runners against it (issue #2161).
 - `remote-commands.json`: every call under `scripts\` that reaches the VPS (ssh, scp, Invoke-ThornswoodRemote and its wrappers, Remote.ps1), what it sends, and the class it needs: a gate verb, admin, or transport. Read from the code; the ops repo's `DEPLOY-IDENTITIES.md` section 2a is its summary. `tests\test-remote-command-map.ps1` fails when a remote call has no row or a row has no call (issue #2182). A row names its call by script, function, command and an anchor, a line of text from the call (or just above it), never by its place in the file, so a call put in elsewhere moves no row (#2498).
 - `prod-parity.json`: what the VPS should look like (which ports listen where and as which program, each task's account and triggers, the services' accounts, which live files must match which repository file, the TLS margin, environment variables that must not be set) and the differences agreed as intentional, each with its reason. `scripts\vps\Check-ProdParity.ps1` compares the box against it; no secret belongs in it (issue #2165).
+- `cloudflare-pages.json`: the Cloudflare Pages project that serves the site's plain pages from Cloudflare at its pages.dev address (#5190): built by Cloudflare from this repository with `scripts\deploy\Export-Pages.js`, no custom domain (thornswood.net stays the box's). `tests\test-5190-pages-export.js` holds it to the script.
+- `cloudflare-cache-rules.json`: the cache rule on the thornswood.net zone that lets Cloudflare's free plan keep the site's public pages, and only those (#5190). The site marks each public page with `Cloudflare-CDN-Cache-Control` and nothing else; the rule caches only what is marked. `tests\test-5190-cloudflare-cache.js` holds its paths to `PUBLIC_PAGES` in `site\server.js`.
 - `collection-permissions.json`: what each mod in the Nexus collection says
   on its own page's Permissions and credits about being put in a collection,
   one entry per Nexus mod of the revision `collection-plugins.json` is, with
@@ -189,7 +191,27 @@ names. No script reads them. `THIRD-PARTY.md` and
   running server loads, and only while the two name the same revision.
   Changed by hand in the pull request that moves the records to a new
   revision.
+- `collection.json`: the collection as it should be (issue #5189): each
+  Nexus file it installs with the plugins that file puts in Data, every
+  plugin in the collection's order with its load-after rule and what its
+  header says, and the plugins the servers load that a change takes out. A
+  mod change is a pull request to this file (`docs\COLLECTION-CHANGES.md`).
+  `scripts\release\Check-CollectionRecord.ps1` holds it to the load order,
+  `collection-permissions.json` and the servers' order with no key, and
+  `tests\test-5189-collection-record.ps1` runs it in the gate. Its merge runs
+  `.github\workflows\collection-record.yml`, which drafts the revision it
+  describes, holds the draft to it and publishes it
+  (`Publish-CollectionRecord.ps1`). Made from a laid out revision by
+  `New-CollectionRecord.ps1`, and its `revision` moves with the records
+  that follow a publish.
 - `asset-provenance.json`: the asset provenance register (issue #2177). Every picture, video, sound, font, mesh, texture, interface file and plugin Thornswood hands to people or shows them: where it came from, who made it, its licence or permission, the credit it asks for, who approved it and when, where it is published and its sha256, or which of those is not recorded and who can answer. Files that ship from the game folder but are not in the repository are in it by name, and gallery uploads and the collection's mods are dispositioned. Operator only: nothing that builds a pack, the installer, the launcher or the site reads it. A permission itself is never written in it; an entry says where it is kept. No script writes it: it is changed by hand in the pull request that adds or changes an asset, and `tests	est-asset-provenance.js` fails on a tracked asset with no entry or a changed hash.
+- `cloudflare-tunnel.json`: the Cloudflare Tunnel the site reaches
+  Cloudflare through (#5334): the account, the zone, the tunnel's name, the
+  cloudflared release by SHA-256, the tunnel's routes to Caddy on
+  127.0.0.1:443 and the two DNS names with the box's address.
+  `scripts\deploy\Install-Tunnel.ps1` reads it and makes Cloudflare and the
+  box match it; nothing writes it, and no token is in it. A new cloudflared
+  is its version, URL and SHA-256 changed together, from the release page.
 - `merchant-runtime-provenance.md`: the server module built for merchant
   settlement, and why the six client files kept their e6534129 bytes (fork
   commit a247ef27, 4 October).

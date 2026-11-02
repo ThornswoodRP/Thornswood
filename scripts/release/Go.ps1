@@ -20,8 +20,8 @@
      every other plugin's log: chargen's lines were being written into the
      probe's file under the probe's prefix. Every plugin is wrapped now.
 
-  4. Voice runs in the launcher now, in a hidden WebView2 window
-     (launcher\app\Voice.cs and launcher\voice-host.html, which
+  4. Voice runs in the launcher now, in its own code with no web view
+     (launcher\app\Voice.cs and the Voice*.cs files beside it, #4823, which
      launcher\app\ARCHITECTURE.md walks through). It first ran inside the
      game, because the game's browser, served from http on a remote address,
      never exposed a microphone, and it moved out for the same reason.
@@ -684,7 +684,7 @@ try { (Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:7778/health' -T
 catch { 'voice did not answer its own health check' }
 '@
       $e = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($restart))
-      $r = Invoke-ThornswoodNative { & ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$User@$Vps" "powershell -NoProfile -EncodedCommand $e" } 2>&1
+      $r = Invoke-ThornswoodNative { & ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$User@$Vps" "pwsh -NoProfile -EncodedCommand $e" } 2>&1
       Note ("voice: " + (($r | Where-Object { $_ }) -join ' '))
     } else {
       Bad 'could not copy the voice service to the VPS over ssh'
@@ -701,7 +701,7 @@ if (Test-Path 'C:\Thornswood-Server\server.log') {
 }
 '@
   $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($remote))
-  $out = Invoke-ThornswoodNative { & ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$User@$Vps" "powershell -NoProfile -EncodedCommand $enc" } 2>&1
+  $out = Invoke-ThornswoodNative { & ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$User@$Vps" "pwsh -NoProfile -EncodedCommand $enc" } 2>&1
   $out | ForEach-Object { Note $_ }
 }
 

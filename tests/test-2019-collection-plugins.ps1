@@ -134,12 +134,12 @@ $ask = $dd.IndexOf('Assert-ThornswoodCollectionPlugins -RecordPath')
 $end = if ($lo -ge 0) { $dd.IndexOf("`n}`n", $lo) } else { -1 }
 Yes 'Deploy-DevGamemode asks only under -LoadOrder, which is when it sends plugins' ($lo -gt 0 -and $ask -gt $lo -and $ask -lt $end)
 
-# ---- the committed record (collection 7essxf revision 6, #3649; revision 5 from #3206, revision 2 from 11 Oct before that)
+# ---- the committed record (collection 7essxf revision 7, #4603; revision 6 from #3649; revision 5 from #3206, revision 2 from 11 Oct before that)
 $real = Join-Path $repo 'records\collection-plugins.json'
 $realTable = Read-ThornswoodCollectionPluginRecord $real
 Yes 'records\collection-plugins.json is there and the deploys'' reader takes it' ($null -ne $realTable -and $realTable.Count -ge 100)
 $realDoc = ConvertFrom-ThornswoodJson (Get-Content -LiteralPath $real -Raw) $real
-Yes '  it pins collection 7essxf revision 6' ($realDoc.collection -eq '7essxf' -and $realDoc.revision -eq 6)
+Yes '  it pins collection 7essxf revision 7' ($realDoc.collection -eq '7essxf' -and $realDoc.revision -eq 7)
 Yes '  it holds the collection''s 3BBB.esp, 20,257 bytes (#2019)' ($realTable.ContainsKey('3BBB.esp') -and $realTable['3BBB.esp'].Size -eq 20257 -and $realTable['3BBB.esp'].Sha256 -eq 'ce4f554616458a10b4809f705828f9d3e3e2d1457abe73ee32fe5f8f044a8549')
 Yes '  and not our own plugin, which goes up from the repo' (-not $realTable.ContainsKey('Thornswood-Content.esp'))
 Yes '  and was written by the generator, in its format, whatever the line endings' ([IO.File]::ReadAllText($real).Replace([string][char]13, '').StartsWith('{' + [char]10 + '  "version": 1,' + [char]10 + '  "builtBy": "scripts/mods/New-CollectionPluginRecord.ps1",'))

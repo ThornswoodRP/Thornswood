@@ -1,7 +1,7 @@
 <#
   Check-Board.ps1
 
-  Holds the board's cards to the rules Developer-Guide.md gives them, from a
+  Holds the board's cards to the rules docs/guide/the-board.md gives them, from a
   board.json Read-Board.ps1 wrote, and names every card that breaks one. Run
   by the weekly reviews from a cloud thread (#3534):
 
@@ -16,13 +16,14 @@
   nothing then said what a right Order is. Read again at 11:41 AM on 26 Oct
   (run 40370916888): 315 of the 331 open issues had no Order at all.
 
-  WHAT IT HOLDS EACH CARD TO (Developer-Guide.md, "Everything we need to do
+  WHAT IT HOLDS EACH CARD TO (docs/guide/the-board.md, "Everything we need to do
   goes on the board"):
     no order      an open issue with no Order. "Order is the do-order. A new
                   issue gets the Order of where it belongs." Every open issue
-                  carries one (Patrick, 27 Oct 2026, #3534): order-on-filing.yml
-                  gives a new issue 10000 plus its number, and the board
-                  review moves it to where it belongs in the queue.
+                  carries one (Patrick, 27 Oct 2026, #3534): board.yml gives a
+                  new issue 10000 plus its number (scripts/ops/Sync-Board.js),
+                  and the board review moves it to where it belongs in the
+                  queue with an order: label.
     shared order  two open cards with the same Order, so neither is first.
     no status     an open card with no Status. The options are Todo, In
                   Progress and Done.
@@ -31,9 +32,14 @@
                   is one it missed.
     statuses      the Status options are Todo, In Progress and Done, in that
                   order ("never add one through the API").
-    workflows     Auto-add to project on, so every issue gets a card;
-                  Auto-close issue off, since a Done issue still waits on its
-                  test (#3076).
+    workflows     Auto-close issue off, since a Done issue still waits on its
+                  test (#3076). Every issue gets its card from board.yml
+                  (#5185), so Auto-add to project is neither needed nor
+                  checked. GitHub refuses a board's workflows to the board
+                  App's token, so a board.json read with it says they
+                  were not read (workflows_unread); then this
+                  says so on its own line, breaks no rule, and the setting
+                  is checked on the board's Workflows page by a person.
     no card       an open issue of the repository, made before the board was
                   read, with no card, when the open issues are read too
                   (-Issues, or gh; -NoIssues skips).
@@ -55,7 +61,7 @@ param(
     [string]$Issues,
     # Skip "no card", and with it the read of the open issues.
     [switch]$NoIssues,
-    [string]$GitHubRepo = 'EvilPatrick06/Thornswood',
+    [string]$GitHubRepo = 'ThornswoodRP/Thornswood',
     # Define the functions and stop, which is how the harness loads them.
     [switch]$Load
 )
@@ -92,7 +98,8 @@ function Find-BoardDrift($board, [string]$repo, $open) {
         $out['statuses'].Add(('the Status options are {0}, not {1}' -f ($(if ($statuses.Count) { $statuses -join ', ' } else { 'none' })), ($StatusOptions -join ', ')))
     }
     $flows = @(Get-Prop $board 'workflows')
-    foreach ($want in @(@{ n = 'Auto-add to project'; on = $true }, @{ n = 'Auto-close issue'; on = $false })) {
+    $unread = Get-Prop $board 'workflows_unread'
+    foreach ($want in @(@{ n = 'Auto-close issue'; on = $false } | Where-Object { -not $unread })) {
         $f = @($flows | Where-Object { (Get-Prop $_ 'name') -eq $want.n })
         if (-not $f.Count) { $out['workflows'].Add(('the board has no "{0}" workflow' -f $want.n)); continue }
         if ([bool](Get-Prop $f[0] 'enabled') -ne $want.on) { $out['workflows'].Add(('"{0}" is {1}, and should be {2}' -f $want.n, $(if ($want.on) { 'off' } else { 'on' }), $(if ($want.on) { 'on' } else { 'off' }))) }
@@ -181,6 +188,8 @@ $cards = @(Get-Prop $b 'items')
 $openCards = @($cards | Where-Object { (Get-Prop $_ 'state') -eq 'OPEN' -and -not [bool](Get-Prop $_ 'archived') })
 Write-Host ('{0} cards read at {1}, {2} of them open and not archived' -f $cards.Count, (Get-Prop $b 'read_at'), $openCards.Count)
 if ($null -ne $open) { Write-Host ('{0} open issues on {1}' -f $open.Count, $GitHubRepo) } else { Write-Host '"no card" skipped: the open issues were not read' }
+$unread = Get-Prop $b 'workflows_unread'
+if ($unread) { Write-Host ('"workflows" not checked: the board''s workflows were not read ({0}). Auto-close issue must be off; a person checks it on the board''s Workflows page.' -f $unread) -ForegroundColor DarkYellow }
 
 $named = 0
 foreach ($k in $drift.Keys) {

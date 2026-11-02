@@ -92,7 +92,7 @@ function Get-HelpGaps([string]$path) {
 Yes 'Ship.ps1 is there' (Test-Path -LiteralPath $Ship)
 $gaps = Get-HelpGaps $Ship
 Yes 'Ship.ps1 parses' ($gaps.Errors.Count -eq 0)
-Yes ("its param block declares its parameters ({0} of them)" -f $gaps.Declared.Count) ($gaps.Declared.Count -ge 13)
+Yes ("its param block declares its parameters ({0} of them)" -f $gaps.Declared.Count) ($gaps.Declared.Count -ge 12)
 Yes 'it has a help block PowerShell recognises' ($null -ne $gaps.Help)
 Yes ('every declared parameter has a .PARAMETER of its own' +
      $(if ($gaps.Missing.Count) { ', missing: ' + ($gaps.Missing -join ', ') } else { '' })) ($gaps.Missing.Count -eq 0)
@@ -146,18 +146,17 @@ Yes ('Get-Help -Parameter Channel names the refusal of a file git does not know 
      ' (code refuses: ' + $refusesLoose + ', help says: ' + $saysLoose + ')') ($refusesLoose -eq $saysLoose)
 
 # A dry run must not close a running game and must not prune old packs
-# (issue #494). Until then the help had to admit that Install-Launcher and
-# Publish-Update still called Stop-Game on a dry run. Ship now passes -NoClose
-# (and KeepPacks 0) when -DryRun is set; help and the DryRun example must say
-# a dry run does not close, matching that wiring.
+# (issue #494). Until then the help had to admit that Publish-Update still
+# called Stop-Game on a dry run. Ship now passes it -NoClose (and KeepPacks 0)
+# when -DryRun is set; help and the DryRun example must say a dry run does not
+# close, matching that wiring. Ship installs no launcher since #4825.
 $dryHelp = ''
 try { $dryHelp = (Get-Help $Ship -Parameter DryRun -ErrorAction Stop | Out-String) } catch { $dryHelp = '' }
 $dryHelp = $dryHelp -replace '\s+', ' '
 $dryExample = (@($h.examples.example) | Where-Object { $_.code -match '-DryRun' } |
                ForEach-Object { (@($_.remarks) | ForEach-Object { $_.Text }) -join ' ' }) -join ' '
 $dryExample = $dryExample -replace '\s+', ' '
-$dryNoClose = ($shipText -match "(?s)\`$installArgs\['NoClose'\]\s*=\s*\`$true") -and
-              ($shipText -match "(?s)\`$pubArgs\['NoClose'\]\s*=\s*\`$true") -and
+$dryNoClose = ($shipText -match "(?s)\`$pubArgs\['NoClose'\]\s*=\s*\`$true") -and
               ($shipText -match "(?s)\`$pubArgs\['KeepPacks'\]\s*=\s*0")
 $saysNoClose = ($dryHelp -match '(?i)does not\s+close a running game') -and
                ($dryExample -match '(?i)does not\s+close a running game') -and
@@ -297,25 +296,9 @@ try {
     Yes 'a script with no comment at its top gets a row that says so' (
         $now.Contains('| [Do-Something.ps1](Do-Something.ps1) | Nothing at the top of this script says what it is for. |'))
 
-    # Patrick may run it from Windows PowerShell and the build check runs it in
-    # PowerShell 7. Both have to write the same bytes or the check is red for
-    # a reason nobody can see. Windows PowerShell 5.1 exists only on Windows,
-    # so off Windows the comparison does not apply and says so (#2944). On
-    # Windows it always runs, and a powershell.exe that is not where Windows
-    # keeps it is a failure, never a skip (tests\Windows.ps1, #2957).
-    . (Join-Path $PSScriptRoot 'Windows.ps1')
-    if (-not $OnWindows) {
-        Write-Host 'SKIP  Windows PowerShell 5.1 comparison: this is not Windows, which is the only place 5.1 runs'
-    } else {
-        $ps51 = Get-WindowsPowerShell
-        $o51 = Join-Path $work 'README-51.md'
-        $o7 = Join-Path $work 'README-7.md'
-        & $Gen -Scripts $ToolsPath -Out $o7 6>$null
-        & $ps51 -NoProfile -ExecutionPolicy Bypass -File $Gen -Scripts $ToolsPath -Out $o51 | Out-Null
-        $same = (Test-Path -LiteralPath $o51) -and (Test-Path -LiteralPath $o7) -and
-                ([IO.File]::ReadAllText($o51, $Utf8) -eq [IO.File]::ReadAllText($o7, $Utf8))
-        Yes 'Windows PowerShell 5.1 writes the same index as this PowerShell' $same
-    }
+    # Until #5356 Windows PowerShell 5.1 had to write the same bytes as
+    # PowerShell 7 here (#2944). Nothing runs it in 5.1 now, Patrick and the
+    # build check alike, so that comparison went with it.
 } catch {
     # Anything that stops the run part way is a failure, said as one, and the
     # count below still prints.

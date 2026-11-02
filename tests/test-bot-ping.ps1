@@ -6,7 +6,7 @@
 
   Install-Bot.ps1 -SetPing puts the outside monitor's ping address into the
   bot's bot.env.json on the VPS, on ssh's standard input, and never prints it
-  (issue #449). bot\test-uptime-ping.py checks the bot's half.
+  (issue #449). bot\tests\test-uptime-ping.py checks the bot's half.
 
   WHY. The bot pings an outside monitor every minute while it is on Discord,
   so a bot or a whole VPS that stops is noticed whether or not One is on. The
@@ -15,7 +15,7 @@
 
   HOW. The real Install-Bot.ps1 runs with -SetPing against fakes: Read-Host
   hands it a made up address, ssh runs the command line through cmd.exe and a
-  real Windows PowerShell 5.1 on this machine (what sshd on the VPS does), scp
+  real PowerShell 7 on this machine (what sshd on the VPS does since #5356), scp
   copies into a scratch folder standing in for C:\Windows\Temp on the box,
   and -Root points at a scratch bot folder with a fake bot.env.json. The
   service it restarts is one that does not exist, so nothing here is
@@ -59,12 +59,10 @@ Yes 'a full run keeps settings it does not write, the ping address among them, a
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the rest: it runs as the VPS does, through cmd.exe into Windows PowerShell 5.1, which only Windows has'
+    Write-Host 'SKIP  the rest: it runs as the VPS does, through cmd.exe, which only Windows has'
     Done
 }
-# The far line names powershell, which cmd.exe finds as the VPS does; it has
-# to be Windows PowerShell 5.1, where Windows keeps it.
-$null = Get-WindowsPowerShell
+# The far line names pwsh, which cmd.exe finds on the path as the VPS does.
 $cmdExe = Get-WindowsPath 'System32\cmd.exe'
 
 # ---- scratch --------------------------------------------------------------
@@ -171,7 +169,7 @@ try {
     $all = AllSent
     Yes 'set: the address is in nothing handed to ssh or scp, plain or base64' (-not $all.Contains($key) -and -not $all.Contains($wire))
     $copied = @($ScCalls | Where-Object { $_.Tool -eq 'scp' })
-    Yes 'set: the script went by scp under Send-Script.ps1''s runner, and nothing else was copied up (#3059)' ($copied.Count -eq 1 -and $copied[0].Args[-1] -match ':C:/Windows/Temp/thornswood-remote-[0-9a-f]{32}\.ps1$' -and @($ScCalls | Where-Object { $_.Tool -eq 'ssh' -and $_.Args[-1] -match '^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$' }).Count -eq 1)
+    Yes 'set: the script went by scp under Send-Script.ps1''s runner, and nothing else was copied up (#3059)' ($copied.Count -eq 1 -and $copied[0].Args[-1] -match ':C:/Windows/Temp/thornswood-remote-[0-9a-f]{32}\.ps1$' -and @($ScCalls | Where-Object { $_.Tool -eq 'ssh' -and $_.Args[-1] -match '^pwsh -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$' }).Count -eq 1)
     Yes 'set: with host key checking on' (@($ScCalls | Where-Object { $_.Tool -eq 'ssh' -and ($_.Args -join ' ') -match 'StrictHostKeyChecking=yes' }).Count -ge 1)
     Yes 'set: nothing is left in the box''s temp folder' (@(Get-ChildItem -LiteralPath $farDir -File).Count -eq 0)
     Yes 'set: bot.env.json has no byte order mark' ([IO.File]::ReadAllBytes($envFile)[0] -eq 123)

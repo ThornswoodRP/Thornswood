@@ -61,12 +61,15 @@ const FORCE = [
   // part forces (#3874): see gateShape. A change to the rest of it, which
   // cannot reach a harness's run, leaves it a file like any other.
   [/^\.github\/workflows\/(build|build-pr)\.yml$/, 'the workflow that runs the gate, its steps and its environment', 'shape'],
-  [/^scripts\/dev\/(Run-Gate\.ps1|Gate-Map\.ps1|Nightly-Harnesses\.ps1|Gate-Harnesses\.ps1|Affected-Harnesses\.js|Trace-HarnessReads\.js)$/, 'the scripts that list, choose and run the harnesses'],
+  [/^scripts\/dev\/(Run-Gate\.ps1|Gate-Map\.ps1|Nightly-Harnesses\.ps1|Gate-Harnesses\.ps1|Harness-Files\.ps1|Affected-Harnesses\.js|Trace-HarnessReads\.js)$/, 'the scripts that list, choose and run the harnesses'],
   [/^tests\/gate-excluded\.txt$/, 'the gate list'],
   // Belt and braces: a helper is read by the harnesses that use it, so it is
   // in their maps already. The rule costs little (measured) and covers a
   // helper reached in a way no trace sees, such as one only Windows loads.
   [/^tests\/(?!test-)[^/]+\.(ps1|psm1|js|cjs|mjs|py|c)$/, 'a shared test helper in tests'],
+  // And one beside a product's harnesses, in its own tests folder (plan
+  // line 42), should a product's harnesses ever share one of their own.
+  [/^[^/]+\/tests\/(?!test-)[^/]+\.(ps1|psm1|js|cjs|mjs|py|c)$/, 'a test helper in a product\'s tests folder'],
   [/^records\/build-runners\.json$/, 'the gate step reads it for its share of the cores'],
   [/^\.gitattributes$/, 'line endings of every file a Windows checkout writes'],
   [/^\.gitmodules$/, 'the submodules a checkout has'],
@@ -423,6 +426,54 @@ function pick(tracesFile, treeFile, commit, gate) {
   return r;
 }
 
+// ---- platforms: which harnesses Linux runs as fully as Windows (#5293) -----
+
+/*
+  The gate map's nightly run (gate-map.yml) runs the whole gate twice, on
+  GitHub's Windows runner under the trace and on its Linux runner, each with
+  Nightly-Harnesses.ps1 -StartLog. A harness may run on Linux in a pull
+  request's checks only when, that night, it passed on both, every SKIP or
+  NOT RUN line it said on Linux it said on Windows too, and it printed at
+  least as many passing lines (PASS or ok) on Linux as on Windows: then Linux
+  ran all of what Windows ran, and a check that quietly does less off
+  Windows, printing no SKIP, still shows as fewer passes. Anything else stays on Windows, and says why: it failed on
+  either, it was not in both runs, or it skipped on Linux something it ran on
+  Windows (a Windows PowerShell 5.1 run, a compiler, a Windows API). A harness
+  the map has no line for (a new one) runs on Windows.
+*/
+function readEnds(file) {
+  const out = new Map();
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    if (!line.trim()) { continue; }
+    let o;
+    try { o = JSON.parse(line); } catch (e) { throw new Error(file + ' has a line that is not JSON: ' + line.slice(0, 80)); }
+    if (o && typeof o.name === 'string' && Object.prototype.hasOwnProperty.call(o, 'code')) { out.set(o.name, o); }
+  }
+  return out;
+}
+function platforms(windowsStarts, linuxStarts, commit) {
+  const win = readEnds(windowsStarts), lin = readEnds(linuxStarts);
+  const harnesses = {};
+  for (const name of [...new Set([...win.keys(), ...lin.keys()])].sort()) {
+    const w = win.get(name), l = lin.get(name);
+    let why = '';
+    if (!w) { why = 'did not run on Windows that night'; }
+    else if (!l) { why = 'did not run on Linux that night'; }
+    else if (w.code !== 0) { why = 'did not pass on Windows that night (exit ' + w.code + ')'; }
+    else if (l.code !== 0) { why = 'did not pass on Linux (exit ' + l.code + ')'; }
+    else if (!Array.isArray(l.skips) || !Array.isArray(w.skips)) { why = 'its runs did not say which SKIP lines it printed'; }
+    else if (typeof l.passes !== 'number' || typeof w.passes !== 'number') { why = 'its runs did not count their passing lines'; }
+    else {
+      const more = l.skips.filter(x => w.skips.indexOf(x) < 0);
+      if (more.length) { why = 'says on Linux what it does not on Windows: ' + more[0]; }
+      else if (l.passes < w.passes) { why = 'passed ' + l.passes + ' checks on Linux and ' + w.passes + ' on Windows'; }
+    }
+    harnesses[name] = why ? { linux: false, why: why } : { linux: true };
+  }
+  const all = Object.values(harnesses);
+  return { format: 1, commit: commit || '', linux: all.filter(h => h.linux).length, windows: all.filter(h => !h.linux).length, harnesses: harnesses };
+}
+
 if (require.main === module) {
   const [cmd, a, b, c, d, e] = process.argv.slice(2);
   if (cmd === 'build' && a && b) {
@@ -430,6 +481,11 @@ if (require.main === module) {
     fs.writeFileSync(b, JSON.stringify(map, null, 1) + '\n');
     const all = Object.values(map.harnesses);
     console.log(`wrote ${b}: ${all.length} harnesses, ${all.filter(h => !h.always).length} mapped, ${all.filter(h => h.always).length} always run`);
+  } else if (cmd === 'platforms' && a && b && c) {
+    const p = platforms(a, b, d);
+    fs.writeFileSync(c, JSON.stringify(p, null, 1) + '\n');
+    console.log(`wrote ${c}: ${p.linux} harnesses run on Linux as fully as on Windows, ${p.windows} stay on Windows`);
+    for (const [n, h] of Object.entries(p.harnesses)) { if (!h.linux) { console.log('  Windows: ' + n + ': ' + h.why); } }
   } else if (cmd === 'select' && a && b) {
     const map = JSON.parse(fs.readFileSync(a, 'utf8'));
     const base = git(['rev-parse', map.commit]).toString().trim(), head = git(['rev-parse', b]).toString().trim();
@@ -454,8 +510,8 @@ if (require.main === module) {
       for (const n of r.run) { console.log('  runs ' + n + ': ' + r.why[n]); }
     }
   } else {
-    console.error('usage: Affected-Harnesses.js build <traces> <map.json> [commit] | select <map.json> <head> [gate.txt] | tree <rev> <tree.gz> | pick <traces.jsonl.gz|map.json> <tree.gz> <commit> <gate.txt> <out.txt>');
+    console.error('usage: Affected-Harnesses.js build <traces> <map.json> [commit] | select <map.json> <head> [gate.txt] | tree <rev> <tree.gz> | platforms <windows-starts.jsonl> <linux-starts.jsonl> <out.platforms.json> [commit] | pick <traces.jsonl.gz|map.json> <tree.gz> <commit> <gate.txt> <out.txt>');
     process.exit(2);
   }
 }
-module.exports = { build: build, readTraces: readTraces, select: select, parseTree: parseTree, readTreeFile: readTreeFile, changesBetween: changesBetween, pick: pick, gatePart: gatePart, gateShape: gateShape, WORKFLOWS: WORKFLOWS, FORCE: FORCE, PLATFORM: PLATFORM };
+module.exports = { platforms: platforms, build: build, readTraces: readTraces, select: select, parseTree: parseTree, readTreeFile: readTreeFile, changesBetween: changesBetween, pick: pick, gatePart: gatePart, gateShape: gateShape, WORKFLOWS: WORKFLOWS, FORCE: FORCE, PLATFORM: PLATFORM };

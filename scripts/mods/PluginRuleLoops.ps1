@@ -31,7 +31,7 @@
   when the plugins it names are already ordered the other way by these edges
   and the other rules: then no order keeps everything, and LOOT says so.
 
-  Read only. Keep it ASCII and Windows PowerShell 5.1.
+  Read only. Keep it ASCII. It runs in PowerShell 7.
 #>
 
 # The flags and declared masters out of a plugin's TES4 header, or $null when

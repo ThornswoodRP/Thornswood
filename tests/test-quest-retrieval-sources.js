@@ -34,7 +34,7 @@ for(const defect of ['file-index','raw-id','native-field','disabled','deleted','
 console.log('PASS all seven measured native retrieval records, winning provenance, token types, worlds, reach and live failures');
 {
  const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
- const gm=fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8');
+ const gm=require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8'));
  const begin=gm.indexOf('// MERCHANT TRADING BUNDLE BEGIN'),end=gm.indexOf('// MERCHANT TRADING BUNDLE END',begin);
  const ctx={require,Buffer,Uint8Array};vm.createContext(ctx);
  vm.runInContext(gm.slice(begin,end)+'\nthis.api=MERCHANT_TRADING;',ctx);

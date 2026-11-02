@@ -5,8 +5,8 @@
 
   A file the repository tracks that a build step cannot find stops the build.
 
-  WHY. Build-Launcher.ps1, Package-Thornswood.ps1 and Go.ps1 used to say a
-  missing file in yellow and carry on, so a path that went wrong shipped a
+  WHY. Build-Launcher.ps1, the old Package-Thornswood.ps1 and Go.ps1 used to
+  say a missing file in yellow and carry on, so a path that went wrong shipped a
   release without the file. The reorganisation (issue #440) moves most of the
   repository, and this is phase 0 of it: before anything moves, a wrong path
   has to be loud. Ship's untracked-file gate also looked only under tools, and
@@ -16,6 +16,12 @@
   a Die or a Gone, Go.ps1 exits 1 when anything is Gone, and Ship stops when
   Go.ps1 does. Then checks the files these lines name really are tracked, so
   no build stops on something that was never in the repository.
+
+  Package-Thornswood.ps1 and the setup stub's project went with the old
+  installer (#4824), and the launcher is an SDK project since #4823: the C#
+  compiler stops on an EmbeddedResource that is not there, naming it
+  (CS1566, measured 1 Nov 2026 with a project that embeds a missing file),
+  so the project needs no check target of its own.
 #>
 [CmdletBinding()]
 param([string]$Repo)
@@ -44,25 +50,16 @@ function Read([string]$name) {
 
 # ---- Build-Launcher.ps1 --------------------------------------------------------
 $b = Read 'Build-Launcher.ps1'
-# Since #498's switch the project files hold the list of what goes in, and
-# their ThornswoodCheckInputs target stops MSBuild by name on a missing one;
-# Build-Launcher.ps1 stops when MSBuild does.
+# The launcher project holds the list of what goes in, every file an
+# EmbeddedResource, which the compiler stops on by name when it is not found;
+# Build-Launcher.ps1 stops when dotnet publish does.
 $appProj = [IO.File]::ReadAllText((Join-Path $Repo 'launcher\app\Thornswood.csproj'))
-$setupProj = [IO.File]::ReadAllText((Join-Path $Repo 'installer\setup\Setup.csproj'))
-$checksInputs = '<Error Condition="!Exists(''%(EmbeddedResource.FullPath)'')"'
-Yes 'the launcher project stops the build on any embedded file that is not found' ($appProj.Contains($checksInputs))
-foreach ($n in 'logo.png', 'launcher-header.jpg', 'launcher-header.mp4', 'Thornswood.ini', 'client-build.json', 'ui-gone.json') {
-    Yes "  $n is one of them" ($appProj -match ('<EmbeddedResource Include="[^"]*' + [regex]::Escape($n) + '"'))
+foreach ($n in 'logo.png', 'launcher-header.jpg', 'Thornswood.ini', 'client-build.json', 'ui-gone.json') {
+    Yes "the launcher project embeds $n, so a missing one stops the build" ($appProj -match ('<EmbeddedResource Include="[^"]*' + [regex]::Escape($n) + '"'))
 }
-Yes 'Build-Launcher stops when MSBuild does' ($b -match 'if \(\$rc -ne 0 -or -not \(Test-Path \$exe\)\) \{ Die "MSBuild exited with \$rc" \}')
+Yes '  and nothing in it lets a missing one through (no Condition on an EmbeddedResource)' ($appProj -notmatch '<EmbeddedResource [^>]*Condition=')
+Yes 'Build-Launcher stops when dotnet publish does' ($b -match '(?s)if \(\$rc -ne 0 -or -not \(Test-Path -LiteralPath \$pubExe\)\) \{.*?Die "dotnet publish exited with \$rc"')
 Yes '  and no longer only warns about a missing file' ($b -notmatch "is missing, the launcher will run without its emblem' 'Yellow'" -and $b -notmatch "client-build\.json is missing; the launcher will not be able")
-Yes 'the setup project compiles Bootstrap.cs, so a missing one stops its build' ($setupProj.Contains('<Compile Include="Bootstrap.cs" />') -and $setupProj.Contains($checksInputs))
-Yes 'Build-Launcher stops when the setup stub fails to rebuild' ($b -match "Die 'setup-stub\.exe did not rebuild" -and $b -notmatch "packaging carries on with that one")
-
-# ---- Package-Thornswood.ps1 ----------------------------------------------------
-$p = Read 'Package-Thornswood.ps1'
-Yes 'Package-Thornswood stops when an installer file is not found' ($p -match 'Die "\$f is not at \$s\.')
-Yes '  and no longer only warns' ($p -notmatch 'missing next to this script'' ''Yellow''')
 
 # ---- Go.ps1 ----------------------------------------------------------------------
 $g = Read 'Go.ps1'
@@ -86,9 +83,9 @@ Yes 'Ship''s untracked-file gate looks past tools' ($s -match "\`$moreRoots = @\
 if (Get-Command git -ErrorAction SilentlyContinue) {
     $tracked = @(& git -C $repo ls-files 2>$null)
     foreach ($f in 'launcher/logo.png', 'launcher/launcher-header.jpg', 'launcher/launcher-header.mp4', 'launcher/Thornswood.ini',
-                   'records/client-build.json', 'records/ui-gone.json', 'installer/Setup-Thornswood.ps1', 'installer/Install.bat', 'installer/Setup.bat', 'installer/READ ME FIRST.txt',
+                   'records/client-build.json', 'records/ui-gone.json',
                    'game/ui/index.html', 'site/public/banner.webm', 'site/public/banner.mp4', 'site/public/banner.jpg',
-                   'game/menu/logo.nif', 'game/menu/logo01ae.nif', 'game/menu/Mainmenuwallpaper.dds', 'scripts/release/Sync-Client.ps1', 'installer/setup/Bootstrap.cs') {
+                   'game/menu/logo.nif', 'game/menu/logo01ae.nif', 'game/menu/Mainmenuwallpaper.dds', 'scripts/release/Sync-Client.ps1') {
         Yes "$f is tracked, so its absence is a wrong path" ($tracked -contains $f)
     }
 }

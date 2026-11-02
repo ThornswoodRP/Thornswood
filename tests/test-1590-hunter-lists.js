@@ -43,6 +43,9 @@ try {
     fs.copyFileSync(path.join(REPO_DIR, "game", "data", n + ".json"), path.join(tmp, "game", "data", n + ".json"));
   });
   fs.copyFileSync(path.join(REPO_DIR, "game", "gamemode.js"), path.join(tmp, "game", "gamemode.js"));
+  // The gamemode's tables and the helper that reads them (#5191).
+  fs.copyFileSync(path.join(REPO_DIR, "scripts", "dev", "GamemodeTables.js"), path.join(tmp, "scripts", "dev", "GamemodeTables.js"));
+  copyDir(path.join(REPO_DIR, "game", "gamemode-tables"), path.join(tmp, "game", "gamemode-tables"));
   copyDir(path.join(REPO_DIR, "docs", "systems"), path.join(tmp, "docs", "systems"));
 
   const r = cp.spawnSync(process.execPath, [path.join(tmp, "scripts", "dev", "Write-SystemLists.js")], { encoding: "utf8", timeout: 120000 });

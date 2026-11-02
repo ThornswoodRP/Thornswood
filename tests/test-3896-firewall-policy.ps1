@@ -48,7 +48,6 @@ $Lib = P 'scripts', 'vps', 'BoxFirewall.ps1'
 $Box = P 'scripts', 'vps', 'vps-firewall-policy.ps1'
 $Driver = P 'scripts', 'vps', 'Set-InboundRules.ps1'
 
-. (Join-Path $PSScriptRoot 'Windows.ps1')
 $script:pass = 0
 $script:fail = 0
 function Yes([string]$what, [bool]$cond) {
@@ -167,14 +166,6 @@ try {
     $errs = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseInput($boxText, [ref]$null, [ref]$errs)
     Yes 'vps-firewall-policy.ps1 parses and is plain ASCII' ((-not $errs -or $errs.Count -eq 0) -and -not ($boxText.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
-    if ($OnWindows) {
-        $ps51 = Get-WindowsPowerShell
-        $chk = "`$e = `$null; `$null = [System.Management.Automation.Language.Parser]::ParseFile('" + $Box.Replace("'", "''") + "', [ref]`$null, [ref]`$e); if (`$e) { 'ERR ' + `$e[0].Message } else { 'OK' }"
-        $said = (& $ps51 -NoProfile -NonInteractive -Command $chk) -join ' '
-        Yes ('  and Windows PowerShell 5.1, which runs it on the box, parses it: ' + $said) ($said -eq 'OK')
-    } else {
-        Write-Host 'NOT RUN  the Windows PowerShell 5.1 parse, which only Windows has'
-    }
     $dt = [IO.File]::ReadAllText($Driver)
     Yes 'Set-InboundRules.ps1 -Own sends vps-firewall-policy.ps1 with the same list' ($dt -match '\[switch\]\$Own' -and $dt -match "if \(\`$Own\) \{ 'vps-firewall-policy\.ps1' \} else \{ 'vps-inbound-rules\.ps1' \}" -and $dt -match 'if \(\$Check -and \$Own\)')
 

@@ -19,7 +19,7 @@
   Rotate-ServerPassword.ps1 by the parser, not copied, and run here with the
   real Send-Secret.ps1, so the value goes on standard input exactly as it
   would. ssh is a function here that runs the command line it was handed in
-  Windows PowerShell 5.1, the box's PowerShell, against a scratch folder, with
+  PowerShell 7, the box's PowerShell since #5356, against a scratch folder, with
   the site restart's commands (Get-CimInstance, Stop-Process,
   Start-ScheduledTask, Get-NetTCPConnection, Start-Sleep) replaced by ones that
   only say they were called. Nothing on this machine is stopped or started,
@@ -74,11 +74,7 @@ Yes 'its far side does not read config.json with Get-Content' (-not ($call -matc
 
 # ---- what runs it -------------------------------------------------------------
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) {
-    Write-Host 'SKIP  the rest: it runs in Windows PowerShell 5.1, which only Windows has'
-    Done
-}
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node) {
     Write-Host 'SKIP  the rest needs node, which is not here'
@@ -105,8 +101,12 @@ function ssh {
     if (-not $m.Success) { throw 'the fake ssh was handed no encoded command' }
     $text = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($m.Groups[1].Value))
     [void]$script:lines.Add($text)
+    # Off Windows a backslash is no folder separator to .NET, so the scratch
+    # folder's path is turned round here, as test-3216-set-turnstile.ps1 does;
+    # on Windows the script runs as sent.
+    if (-not $OnWindows) { $text = $text.Replace('\config.json', '/config.json') }
     $run = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($stubs + $text))
-    @($input) | & $ps51 -NoProfile -NonInteractive -EncodedCommand $run
+    @($input) | & $boxPs -NoProfile -NonInteractive -EncodedCommand $run
 }
 # Over the length limit the script would go by file with scp; that is not this
 # path, and nothing here may copy anything anywhere.

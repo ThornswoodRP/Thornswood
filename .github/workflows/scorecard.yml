@@ -1,0 +1,62 @@
+# OpenSSF Scorecard: the Open Source Security Foundation's checks of how
+# the repository itself is kept (the redesign's part 20, plan line 27,
+# 1 Nov 2026): pinned actions, workflow token permissions, branch rules,
+# code review, dangerous workflow patterns, a security policy, signed
+# releases, dependency updates and more. What it finds goes on the Security
+# tab beside CodeQL's, as code scanning alerts, which only people with write
+# access read.
+#
+# WHEN. Weekly, on Monday at 10:00 UTC, after the Sunday board review, and
+# by hand from the Actions tab. Scorecard runs only on the default branch,
+# so there is no pull request trigger; a push trigger would run it on every
+# merge for the same answer.
+#
+# WHAT IT HOLDS. The run's own token, read only apart from uploading the
+# results to the Security tab (security-events: write, this job alone). No
+# secret. publish_results is false: the results stay on this repository and
+# are not sent to the Scorecard API, so the job needs no OIDC token.
+#
+# GITHUB'S RUNNER ONLY, never the VPS, and only in this repository by its id
+# (#5184: a move keeps the id), so a copy of this file elsewhere runs nothing.
+#
+# Every action is named by a full length commit SHA with its tag in the
+# comment, for the reason build.yml gives. The Scorecard action runs its own
+# container image, ghcr.io/ossf/scorecard-action at the version its pinned
+# commit names. upload-sarif is CodeQL's, at the SHA codeql.yml runs.
+# tests\test-3683-security-setup.js holds the shape.
+name: Scorecard
+on:
+  schedule:
+    - cron: '0 10 * * 1'
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: scorecard
+  cancel-in-progress: true
+jobs:
+  scorecard:
+    name: OpenSSF Scorecard
+    if: github.repository_id == '1365246621'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: scorecard.sarif
+          results_format: sarif
+          publish_results: false
+
+      - name: Put the results on the Security tab
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: scorecard.sarif
+          category: scorecard

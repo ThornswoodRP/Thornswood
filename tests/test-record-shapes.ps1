@@ -9,12 +9,9 @@
 # Offline: bad copies are written to a scratch folder; no record is changed.
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-# What this runs, Windows runs in Windows PowerShell 5.1; off Windows, this shell.
-if ($OnWindows) { $winPs = Get-WindowsPowerShell }
-else {
-    $winPs = (Get-Process -Id $PID).Path
-    Write-Host 'NOTE  what runs in Windows PowerShell 5.1 on Windows runs in this shell here: this is not Windows'
-}
+# What this runs, every machine runs in PowerShell 7 since #5356, the box
+# included, and this harness runs in it too.
+$boxPs = Get-BoxPowerShell
 $repo = Split-Path -Parent $PSScriptRoot
 . (Join-Path $repo 'scripts\release\RecordShape.ps1')
 # Kinds with a committed file; server-settings is each box's own (#2180, slice 4).
@@ -31,7 +28,7 @@ foreach ($kind in $fileKinds) {
     $p = Join-Path $repo $script:ThornswoodRecordKinds[$kind].File
     Yes "the committed $kind record reads at a known version with its fields" ((Refusal { Read-ThornswoodRecord -Path $p -Kind $kind }) -eq '')
 }
-$out = & $winPs -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'scripts\release\Check-Records.ps1') 2>&1
+$out = & $boxPs -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'scripts\release\Check-Records.ps1') 2>&1
 # One OK line per record, and three for records held to each other: the
 # Skyrim pin with its files, the client's licences with its build (#3099),
 # and the front's packages with their texts (#3751).

@@ -221,7 +221,7 @@ which chests are yours.
 
 Each bench trade needs its own tool in the pack, 50 uses, like a
 gathering tool (Patrick, 22 Oct 2026,
-[#3162](https://github.com/EvilPatrick06/Thornswood/issues/3162)). It
+[#3162](https://github.com/ThornswoodRP/Thornswood/issues/3162)). It
 is handed at the moment the profession is picked.
 
 | Trade | Tool | Who makes the next one |

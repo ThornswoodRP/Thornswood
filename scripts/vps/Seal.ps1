@@ -25,7 +25,7 @@
 
   THE SEAL. RSA-OAEP with SHA-1 (RSAEncryptionPadding.OaepSHA1), through
   [Security.Cryptography.RSA]::Create(), which every PowerShell here has:
-  Windows PowerShell 5.1 on the box and PowerShell 7 on a runner or
+  PowerShell 7 on the box and on a runner or
   anywhere. The key object is never a named key container, so nothing is
   left in a Windows key store. A 3072-bit key seals
   up to 342 bytes, far more than a token. The sealed value is base64, one line.
@@ -120,7 +120,7 @@ function Lock-ThornswoodSealFolder([string]$dir) {
     $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier($s)), 'FullControl', 'ContainerInherit, ObjectInherit', 'None', 'Allow')))
   }
   # Only the access rules are written back (issue #1120).
-  (Get-Item -LiteralPath $dir -Force).SetAccessControl($acl)
+  [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo](Get-Item -LiteralPath $dir -Force), $acl)
 }
 '@
 }

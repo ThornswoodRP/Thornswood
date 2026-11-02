@@ -29,6 +29,7 @@ const http = require('http');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const siteFiles = require('./site-files');
 
 const REPO = path.resolve(__dirname, '..');
 const CR = String.fromCharCode(13);
@@ -126,7 +127,7 @@ const record = {
 
 async function main() {
   // ------------------------------------------------------------------ site
-  const server = read('site/server.js');
+  const server = siteFiles.source();
   const block = lift(server, '// ==== thornswood deploy records ====', '// ==== end thornswood deploy records ====');
   yes('site/server.js has the deploy records block', !!block);
   yes('it reads the store the deploy scripts write, unless told otherwise',
@@ -180,7 +181,7 @@ async function main() {
     const SECRET = crypto.randomBytes(32).toString('hex');
     const PASSWORD = crypto.randomBytes(12).toString('hex');
     const ADMIN_ID = '111111111111111111';
-    fs.copyFileSync(path.join(REPO, 'site', 'server.js'), path.join(site, 'server.js'));
+    siteFiles.copy(site);
     fs.mkdirSync(path.join(site, 'public'), { recursive: true });
     try { fs.copyFileSync(path.join(REPO, 'site', 'public', 'home.html'), path.join(site, 'public', 'home.html')); } catch (e) { }
     fs.mkdirSync(path.join(site, 'data'), { recursive: true });

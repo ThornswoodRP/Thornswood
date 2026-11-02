@@ -1,8 +1,9 @@
 <#
   Deploy-Gamemode.ps1
 
-  Puts gamemode.js into the built server and writes a server load order that
-  actually lines up with the client's.
+  Puts gamemode.js and its gamemode-tables folder (#5191) into the built
+  server and writes a server load order that actually lines up with the
+  client's.
 
   The load order is the whole game here, so it is worth stating plainly.
 
@@ -279,6 +280,22 @@ if (-not $OrderOnly) {
     Copy-Item -LiteralPath $Gamemode -Destination (Join-Path $Dist 'gamemode.js') -Force
     $kb = [math]::Round((Get-Item (Join-Path $Dist 'gamemode.js')).Length / 1KB)
     Write-Host "gamemode.js -> $Dist  ($kb KB)" -ForegroundColor Cyan
+
+    # Its tables (#5191), the gamemode-tables folder beside it: the gamemode
+    # reads them from the server's folder as it loads, and a load without them
+    # stops. The folder in the build is made the source's whole, so a table
+    # the source no longer has does not stay behind in it.
+    $tablesFrom = Join-Path (Split-Path -Parent $Gamemode) 'gamemode-tables'
+    if (-not (Test-Path -LiteralPath $tablesFrom -PathType Container)) { throw "not found: $tablesFrom, the gamemode's tables (#5191)" }
+    $tablesTo = Join-Path $Dist 'gamemode-tables'
+    if (Test-Path -LiteralPath $tablesTo) { Remove-Item -LiteralPath $tablesTo -Recurse -Force }
+    New-Item -ItemType Directory -Path $tablesTo -Force | Out-Null
+    $tableCount = 0
+    foreach ($t in @(Get-ChildItem -LiteralPath $tablesFrom -Filter '*.json' -File)) {
+        Copy-Item -LiteralPath $t.FullName -Destination (Join-Path $tablesTo $t.Name) -Force
+        $tableCount++
+    }
+    Write-Host "gamemode-tables -> $Dist  ($tableCount tables)" -ForegroundColor Cyan
 
     # What this gamemode is, written beside it, so the server can say which build it
     # runs instead of a person hashing files to find out. Deploy-Server.ps1 carries

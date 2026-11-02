@@ -1,5 +1,6 @@
 name: Something is broken
 description: Something in the game, the launcher, the installer, the website, the bot or voice does not work as it should.
+type: Bug
 labels: ["triage", "bug"]
 body:
   - type: markdown

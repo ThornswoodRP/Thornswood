@@ -12,8 +12,8 @@
        first failed file, with no count, no next file and no read-back.
     2. Install-Runner.ps1 Invoke-Gh: a notice gh writes on stderr stopped a call
        that succeeded; a failure came out as NativeCommandError, not its message.
-    3. Package-Thornswood.ps1: the stub signature strip; a failure skipped the
-       Die that says what failed.
+  The third, the old installer's stub signature strip in
+  Package-Thornswood.ps1, went with that installer (#4824).
   Stub executables only: one small console program, compiled here with the
   .NET Framework compiler, prints what STUB_OUT and STUB_ERR say and exits
   with STUB_CODE. No real signtool, gh, GitHub or network.
@@ -100,24 +100,6 @@ static class P { static int Main(string[] a) {
     try { $null = Invoke-Gh api 'repos/x/y/actions/runners' } catch { $threw = $_.Exception.Message }
     Yes ("a failure throws Invoke-Gh's own message ({0})" -f $threw) ($threw -match '^gh api repos/x/y/actions/runners failed$')
     Yes '  and the caller''s Stop is as it was' ($ErrorActionPreference -eq 'Stop')
-
-    # ---- 3. Package-Thornswood, stripping the stub signature ----------------------
-    $pk = [Management.Automation.Language.Parser]::ParseFile((Join-Path $Repo 'scripts\release\Package-Thornswood.ps1'), [ref]$null, [ref]$null)
-    $strip = $pk.Find({ param($n) $n -is [Management.Automation.Language.IfStatementAst] -and $n.Clauses[0].Item1.Extent.Text -eq '$signtoolStrip' }, $true)
-    Yes 'the strip step lifted out of Package-Thornswood.ps1' ($null -ne $strip)
-    $script:died = ''
-    function Say($m, $c) { }
-    function Die($m) { $script:died = $m; throw 'DIED' }
-    $signtoolStrip = Join-Path $kit 'signtool.exe'; $exe = $a
-    Stub '' 'SignTool Error: The file is not signed.' 1
-    $threw = ''
-    try { & ([scriptblock]::Create($strip.Extent.Text)) } catch { $threw = $_.FullyQualifiedErrorId }
-    Yes ("a failed strip reaches its Die, not NativeCommandError ({0})" -f $threw) ($script:died -match 'could not strip the stub signature')
-    $script:died = ''
-    Stub 'Successfully removed' 'SignTool Warning: notice' 0
-    $threw = ''
-    try { & ([scriptblock]::Create($strip.Extent.Text)) } catch { $threw = $_.FullyQualifiedErrorId }
-    Yes '  and a strip that worked, with a warning on stderr, goes on' (-not $threw -and -not $script:died)
 }
 finally {
     $env:STUB_OUT = $keep.OUT; $env:STUB_ERR = $keep.ERR; $env:STUB_CODE = $keep.CODE; $env:Path = $keep.PATH

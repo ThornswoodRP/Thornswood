@@ -25,8 +25,8 @@
   Exit codes: the verb's own, 64 refused, 65 the broker is not there or went
   away before it said @END.
 
-  Windows PowerShell 5.1, which every Windows Server has. It loads no module
-  and writes through [Console] only, so nothing reaches stderr as CLIXML
+  PowerShell 7 (pwsh), as sshd's forced command starts it since #5356. It
+  loads no module and writes through [Console] only, so nothing reaches stderr as CLIXML
   (#3059).
 #>
 $ErrorActionPreference = 'Stop'

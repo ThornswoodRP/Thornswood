@@ -20,19 +20,28 @@ const pr = read(path.join(WF, 'build-pr.yml'));
 
 yes('build.yml no longer runs on a pull request', build && triggers(build).indexOf('pull_request') < 0);
 yes('build.yml still runs a push to main and a manual run', /push:\n    branches: \[main\]/.test(build) && triggers(build).indexOf('workflow_dispatch') >= 0);
-yes('main builds on GitHub\'s hosted runner, unless its pull request already passed the tree (#3182)', /\n  launcher:\n    name: Launcher builds\n    needs: tested\n    if: \$\{\{ !cancelled\(\) && needs\.tested\.outputs\.run == '' \}\}\n    runs-on: windows-latest\n/.test(build));
+// #5292: on Windows unless the pick says the change reaches nothing it
+// checks; on main the pick always says it does (Launcher-Reach.ps1).
+yes('main builds on GitHub\'s hosted runner, unless its pull request already passed the tree (#3182)', /\n  launcher:\n    name: Launcher builds\n    needs: \[tested, pick\]\n    if: \$\{\{ !cancelled\(\) && needs\.tested\.outputs\.run == '' \}\}\n    runs-on: \$\{\{ needs\.pick\.outputs\.launcher == 'false' && 'ubuntu-24\.04-arm' \|\| 'windows-latest' \}\}\n/.test(build));
 yes('  with no fallback job and nothing on a self-hosted runner (#4983)', !/\n  launcher-vps:\n|\n  tested-vps:\n/.test(build) && code(build).indexOf('self-hosted') < 0);
 yes('  and no runner to pick on a manual run', !/\n    inputs:\n/.test(build) && !/inputs\.runner|vars\.BUILD_RUNNER/.test(code(build)));
 yes('build-pr.yml exists', !!pr);
 // #5148: and a manual run, which engine-pin.yml starts on the pin branch it
 // pushes, since a push with the run's own token starts no pull_request run.
-yes('build-pr.yml runs on a pull request and a manual run, nothing else', JSON.stringify(triggers(pr)) === '["pull_request","workflow_dispatch"]');
+// #5182: and in the merge queue, which lands a pull request only once the
+// checks main's ruleset requires passed on the queue's merge of it.
+yes('build-pr.yml runs on a pull request, in the merge queue and on a manual run, nothing else', JSON.stringify(triggers(pr)) === '["pull_request","merge_group","workflow_dispatch"]' &&
+    /\n  merge_group:\n    types: \[checks_requested\]\n/.test(pr));
 yes('on GitHub\'s hosted windows-latest', /\n    runs-on: windows-latest\n/.test(pr));
 yes('no pull request job is on a self-hosted runner (#4983)', !!pr && code(pr).indexOf('self-hosted') < 0 && !/\n  launcher-vps:\n/.test(pr));
 yes('it takes no secrets', !!pr && !/\$\{\{\s*secrets\./.test(pr));
 yes('its check keeps the name Launcher builds', /\n    name: Launcher builds\n/.test(pr));
-yes('a pull request build has no "tested" job, and its hosted job always runs (#3182)',
-    !/\n  tested:\n|needs\.tested|needs: \[?tested/.test(code(pr)) && /\n  launcher:\n    name: Launcher builds\n    runs-on: windows-latest\n/.test(pr));
+// #5292: its job always runs and reports a result: on Windows, building,
+// unless the pick said the change reaches nothing it checks, and then on
+// Linux, saying so. A failed pick still builds.
+yes('a pull request build has no "tested" job, and its launcher job always runs, on Windows unless the pick says the change cannot reach it (#3182, #5292)',
+    !/\n  tested:\n|needs\.tested|needs: \[?tested/.test(code(pr)) && /\n  launcher:\n    name: Launcher builds\n    needs: pick\n    if: \$\{\{ !cancelled\(\) \}\}\n    runs-on: \$\{\{ needs\.pick\.outputs\.launcher == 'false' && 'ubuntu-24\.04-arm' \|\| 'windows-latest' \}\}\n/.test(pr));
+yes('  and the tree checks always run, on Linux (#5292)', /\n  checks:\n    name: Tree checks\n    runs-on: ubuntu-latest\n/.test(pr));
 // No workflow runs a pull request on the VPS, and none runs on
 // pull_request_target.
 const others = fs.readdirSync(WF).filter(f => /\.ya?ml$/.test(f)).filter(f => {
@@ -48,12 +57,17 @@ yes('no workflow runs a pull request on the VPS (' + (others.join(', ') || 'none
 // repository is public since 30 Oct, so it no longer waits for that.
 const result = /\n  result:\n([\s\S]*)$/.exec(code(pr));
 const rj = result ? result[1] : '';
-yes('a "Build check result" job needs the build and the gate\'s shares (#3683)', /^    name: Build check result\n    needs: \[launcher, gate\]\n/.test(rj));
+yes('a "Build check result" job needs the pick, the tree checks, the build and the gate\'s shares on both platforms (#3683, #5292, #5293)', /^    name: Build check result\n    needs: \[pick, checks, launcher, gate, gate-linux\]\n/.test(rj));
 yes('  runs unless cancelled', /\n    if: \$\{\{ !cancelled\(\) \}\}\n/.test(rj));
 yes('  on GitHub\'s ubuntu-latest, never the box', /\n    runs-on: ubuntu-latest\n/.test(rj) && !/self-hosted|thornswood/.test(rj));
 yes('  with no checkout, action or secret: it reads only their results', !/uses:|secrets\.|checkout/.test(rj) &&
-    /BUILD: \$\{\{ needs\.launcher\.result \}\}/.test(rj) && /GATE: \$\{\{ needs\.gate\.result \}\}/.test(rj));
-yes('  and passes only when both are success', /if \[ "\$BUILD" = success \] && \[ "\$GATE" = success \]; then exit 0; fi\n[\s\S]*exit 1/.test(rj));
+    /BUILD: \$\{\{ needs\.launcher\.result \}\}/.test(rj) && /GATE: \$\{\{ needs\.gate\.result \}\}/.test(rj) &&
+    /CHECKS: \$\{\{ needs\.checks\.result \}\}/.test(rj) && /PICK: \$\{\{ needs\.pick\.result \}\}/.test(rj) &&
+    /GATE_LINUX: \$\{\{ needs\['gate-linux'\]\.result \}\}/.test(rj) && /LINUX_SHARES: \$\{\{ needs\.pick\.outputs\.linux_shares \}\}/.test(rj));
+// Which results pass is run, not read: tests\test-5292-path-rule.ps1 runs
+// this step's script for every result and output it can be given.
+yes('  and passes only when the tree checks passed, and the build and the gate passed or the pick skipped them (#5292)',
+    /\[ "\$CHECKS" = success \] \|\| ok=0/.test(rj) && /if \[ "\$ok" = 1 \]; then exit 0; fi\n[\s\S]*exit 1/.test(rj));
 // 31 Oct 2026: the gate runs in five shares beside the launcher job, each on
 // a hosted runner of its own, and both builds have the same shares.
 for (const [what, t] of [['main\'s build', build], ['the pull request build', pr]]) {
@@ -63,7 +77,11 @@ for (const [what, t] of [['main\'s build', build], ['the pull request build', pr
   const end = rest.search(/\n  \S/);
   const g = end < 0 ? rest : rest.slice(0, end + 1);
   yes(what + ' runs the gate in its own job on GitHub\'s hosted Windows runner', /\n    runs-on: windows-latest\n/.test(g) && !/self-hosted/.test(code(g)));
-  yes('  in shares, every one running to its end', /\n      fail-fast: false\n      matrix:\n        shard: \[1(, \d+)+\]\n/.test(g));
+  // How many is the pick job's SHARES (#5183), handed on as its output.
+  const p = t.indexOf('\n  pick:\n');
+  const pick = p < 0 || p > at ? '' : t.slice(p, at);
+  yes('  in shares, every one running to its end, as many as the pick says', /\n      fail-fast: false\n      matrix:\n        shard: \$\{\{ fromJSON\(needs\.pick\.outputs\.shares\) \}\}\n/.test(g) &&
+      /\n          SHARES: '([2-9]|\d\d)'\n/.test(pick) && /\n    runs-on: ubuntu-latest\n/.test(pick));
 }
 yes('  main\'s own build has no such job: only a pull request is held to it', !/\n  result:\n/.test(code(build)));
 let gen = null;

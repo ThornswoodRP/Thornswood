@@ -255,6 +255,89 @@ namespace Thornswood
         }
 
         /// <summary>
+        /// Nexus's own link to one revision of the collection, the one its
+        /// site's "Add to Vortex" button hands Windows (#5200):
+        /// nxm://skyrimspecialedition/collections/7essxf/revisions/6. Vortex
+        /// reads it (NXMUrl in Vortex's source, the pattern
+        /// /collections/(\w+)/revisions/(\d+|latest)) and opens that revision
+        /// to install or update to, with no page in between.
+        ///
+        /// The game is the path part before /collections/ in the configured
+        /// address, which both of Nexus's address shapes have
+        /// (.../games/skyrimspecialedition/collections/7essxf and
+        /// next.nexusmods.com/skyrimspecialedition/collections/7essxf).
+        ///
+        /// Empty when no revision is known or the address is not a
+        /// collection's: there is no revision to name, and the page
+        /// (CollectionRevisionUrl) is what opens instead.
+        /// </summary>
+        public static string CollectionNxmUrl(Config cfg, int revision)
+        {
+            try
+            {
+                string slug = CollectionSlug(cfg);
+                if (revision <= 0 || slug.Length == 0) return "";
+                string url = cfg.CollectionUrl;
+                int at = url.LastIndexOf("/collections/", StringComparison.OrdinalIgnoreCase);
+                string before = url.Substring(0, at).TrimEnd('/');
+                string game = before.Substring(before.LastIndexOf('/') + 1).ToLowerInvariant();
+                if (game.Length == 0) return "";
+                foreach (char c in game) { if (!char.IsLetterOrDigit(c)) return ""; }
+                return "nxm://" + game + "/collections/" + slug + "/revisions/" + revision;
+            }
+            catch { return ""; }
+        }
+
+        /// <summary>
+        /// Whether the command Windows runs for an nxm link starts Vortex
+        /// (#5200). Vortex writes it when it is set to handle Nexus links,
+        /// as "C:\...\Vortex.exe" -d "%1". Another manager can hold nxm links
+        /// instead (Mod Organizer 2 does), and none but Vortex installs a
+        /// collection, so the launcher only hands the link over when Vortex
+        /// is the one that answers it.
+        /// </summary>
+        public static bool NxmStartsVortex(string command)
+        {
+            try
+            {
+                string c = (command ?? "").Trim();
+                if (c.Length == 0) return false;
+                string exe;
+                if (c[0] == '"')
+                {
+                    int end = c.IndexOf('"', 1);
+                    if (end < 0) return false;
+                    exe = c.Substring(1, end - 1);
+                }
+                else
+                {
+                    int end = c.IndexOf(' ');
+                    exe = end < 0 ? c : c.Substring(0, end);
+                }
+                string name = exe.Substring(exe.LastIndexOfAny(new char[] { '\\', '/' }) + 1);
+                return string.Equals(name, "Vortex.exe", StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
+        }
+
+        /// <summary>
+        /// The command Windows runs for an nxm link, from the classes the
+        /// signed-in account sees (HKEY_CLASSES_ROOT, which is the account's
+        /// own over the machine's). Empty when nothing handles them.
+        /// </summary>
+        public static string NxmCommand()
+        {
+            try
+            {
+                using (var k = Microsoft.Win32.Registry.ClassesRoot.OpenSubKey(@"nxm\shell\open\command"))
+                {
+                    return k == null ? "" : (k.GetValue("") as string ?? "");
+                }
+            }
+            catch (Exception ex) { Swallow.Note("Checks.NxmCommand", ex); return ""; }
+        }
+
+        /// <summary>
         /// At or below this many enabled plugins the collection counts as not
         /// installed. Two things on screen ask it: the Mods row on the checks
         /// list and the "not installed yet" card above Play, which is

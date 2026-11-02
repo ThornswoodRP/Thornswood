@@ -361,10 +361,8 @@ function Test-ThornswoodServiceCannotReach {
 function Set-ThornswoodServiceAcl {
     param([string]$Path, $Acl)
     $item = Get-Item -LiteralPath $Path -Force
-    if ($PSVersionTable.PSEdition -eq 'Core') {
-        if ($item -is [IO.DirectoryInfo]) { [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo]$item, [Security.AccessControl.DirectorySecurity]$Acl) }
-        else { [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]$item, [Security.AccessControl.FileSecurity]$Acl) }
-    } else { $item.SetAccessControl($Acl) }
+    if ($item -is [IO.DirectoryInfo]) { [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo]$item, [Security.AccessControl.DirectorySecurity]$Acl) }
+    else { [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]$item, [Security.AccessControl.FileSecurity]$Acl) }
 }
 function Grant-ThornswoodServiceFolder {
     param([string]$Root, [string]$Sid, [string[]]$Writable = @(), [string[]]$Files = @())
@@ -619,11 +617,8 @@ public static class ThornswoodRestorePrivilege
 function Get-ThornswoodServiceItemAcl {
     param($Item)
     $s = [Security.AccessControl.AccessControlSections]'Owner, Access'
-    if ($PSVersionTable.PSEdition -eq 'Core') {
-        if ($Item -is [IO.DirectoryInfo]) { return [IO.FileSystemAclExtensions]::GetAccessControl([IO.DirectoryInfo]$Item, $s) }
-        return [IO.FileSystemAclExtensions]::GetAccessControl([IO.FileInfo]$Item, $s)
-    }
-    return $Item.GetAccessControl($s)
+    if ($Item -is [IO.DirectoryInfo]) { return [IO.FileSystemAclExtensions]::GetAccessControl([IO.DirectoryInfo]$Item, $s) }
+    return [IO.FileSystemAclExtensions]::GetAccessControl([IO.FileInfo]$Item, $s)
 }
 function Repair-ThornswoodServiceOwner {
     param([string]$Root, [string]$Sid)
@@ -2116,6 +2111,13 @@ if (-not $PutBack) {
         try { $said = @(& $node.Source --check $gm 2>&1) } finally { $ErrorActionPreference = $eap }
         if ($LASTEXITCODE -ne 0) { $bad += ('gamemode.js does not parse: ' + ((@($said | ForEach-Object { "$_".Trim() } | Where-Object { $_ }) | Select-Object -First 6) -join ' | ')) }
     }
+    # And its tables (#5191), the gamemode-tables folder the gamemode reads as
+    # it loads: a load without them stops, so a payload with none stops here.
+    # The folder is the payload's own and is never carried from the old one.
+    $tablesAt = Join-Path $stageDir 'gamemode-tables'
+    if (-not @(Get-ChildItem -LiteralPath $tablesAt -Filter '*.json' -File -ErrorAction SilentlyContinue).Count) {
+        $bad += 'the payload has no gamemode-tables, so the gamemode would stop as it loads (#5191)'
+    }
     # Every server file is the build the payload's own record names: the
     # binary, the JavaScript half the task starts, and the rest the fork
     # builds, and no server file the record does not list (#1214). A payload
@@ -2351,10 +2353,8 @@ function Lock-ServerDir([string]$dir, [string]$from, [string[]]$readers = @()) {
     # part, which needs a privilege the build runner's account does not have
     # (issue #1120, Set-ThornswoodAclAccess in Bot-Service.ps1).
     $item = Get-Item -LiteralPath $dir -Force
-    if ($PSVersionTable.PSEdition -eq 'Core') {
-        if ($item -is [IO.DirectoryInfo]) { [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo]$item, [Security.AccessControl.DirectorySecurity]$acl) }
-        else { [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]$item, [Security.AccessControl.FileSecurity]$acl) }
-    } else { $item.SetAccessControl($acl) }
+    if ($item -is [IO.DirectoryInfo]) { [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo]$item, [Security.AccessControl.DirectorySecurity]$acl) }
+    else { [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]$item, [Security.AccessControl.FileSecurity]$acl) }
 }
 function Lock-ServerRoot([string]$dir, [string]$from, [string]$botSid = '') {
     try {

@@ -29,7 +29,7 @@
   bytes are the collection's, and sending them unchecked is what #2019 was.
 
   Dot-sourced by the two deploy scripts; defines functions and nothing else.
-  Works on Windows PowerShell 5.1 and PowerShell 7.
+  Runs in PowerShell 7.
 #>
 . (Join-Path $PSScriptRoot '..\release\Read-JsonFile.ps1')
 . (Join-Path $PSScriptRoot '..\release\RecordShape.ps1')

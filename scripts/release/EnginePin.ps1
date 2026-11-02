@@ -39,7 +39,7 @@
 . (Join-Path $PSScriptRoot 'Note-Rules.ps1')
 
 $EnginePinBranch = 'engine-pin/next'
-$EnginePinThornswood = 'EvilPatrick06/Thornswood'
+$EnginePinThornswood = 'ThornswoodRP/Thornswood'
 $EnginePinPages = @('THIRD-PARTY.md', 'site/data/site/credits.md')
 $EnginePinBlockNames = [ordered]@{
     'THIRD-PARTY.md'            = @('fork', 'front', 'servers', 'source')

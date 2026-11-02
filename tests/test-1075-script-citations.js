@@ -114,7 +114,7 @@ function holds(text, what, file) {
   const word = /^[A-Za-z_][\w]*$/.test(name);
   if (ext === 'cs' && word) {
     return new RegExp('\\b(?:class|struct|enum|interface)\\s+' + esc(name) + '\\b').test(text) ||
-           new RegExp('^[ \\t]*(?:\\[[^\\]\\n]*\\][ \\t]*)*(?:(?:public|private|internal|protected|static|readonly|const|override|virtual|abstract|async|new)\\s+)*[\\w.<>\\[\\],?]+\\s+' + esc(name) + '\\s*[(={;]', 'm').test(text) ||
+           new RegExp('^[ \\t]*(?:\\[[^\\]\\n]*\\][ \\t]*)*(?:(?:public|private|internal|protected|static|readonly|volatile|const|override|virtual|abstract|async|new)\\s+)*[\\w.<>\\[\\],?]+\\s+' + esc(name) + '\\s*[(={;]', 'm').test(text) ||
            new RegExp('^[ \\t]*(?:(?:public|private|internal|protected|static|readonly|override|virtual|abstract)\\s+)+[\\w.<>\\[\\],?]+\\s+' + esc(name) + '\\s*$\\s*\\{', 'm').test(text)
       ? '' : 'no class, method, field or property called ' + name + ' is declared in it';
   }

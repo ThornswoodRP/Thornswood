@@ -18,7 +18,7 @@ This is not a page: no address serves it. `Deploy-Docs.ps1 -Site` sends it
 with the public pages, and the bot reads it from the site, so a new line
 needs no bot install.
 
-The rules, which `tests\test-3147-lines.js` checks:
+The rules, which `site\tests\test-3147-lines.js` checks:
 
 - one line each, a dash and the line, plain text with no bold, links, code or
   HTML, because a status line and a loading screen show none of it;

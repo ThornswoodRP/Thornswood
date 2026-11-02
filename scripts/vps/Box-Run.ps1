@@ -23,7 +23,7 @@
   else.
 
   HOW. It starts box-run.yml on main of the private ops repository,
-  EvilPatrick06/Thornswood-Ops, where the VPS runners are registered since
+  ThornswoodRP/Thornswood-Ops, where the VPS runners are registered since
   this repository went public (#4013), with the line. That run checks out
   this repository's main, takes a box runner and the desk's deploy key out
   of the ops repository's "desk" environment, which only main may use
@@ -50,7 +50,7 @@ param(
     [long]$Run = 0,
     [switch]$OnTheBox,
     # Where box-run.yml and the VPS runners are (#4013).
-    [string]$GitHubRepo = 'EvilPatrick06/Thornswood-Ops'
+    [string]$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -63,7 +63,11 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 $Workflow = 'box-run.yml'
 $GateUser = 'thornswood-deploy'
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
-function Note([string]$level, [string]$m) { Write-ThornswoodAnnotation $level 'Box-Run' $m }
+# The title of its annotations. One run of a workflow with more than one gate
+# job (the Ops tunnel.yml, #5334) gives the jobs before the last another
+# title, so the run's answer is the last job's ENDED line.
+$NoteTitle = if ([string]$env:BOX_RUN_TITLE -match '^[A-Za-z][A-Za-z -]{0,39}$') { [string]$env:BOX_RUN_TITLE } else { 'Box-Run' }
+function Note([string]$level, [string]$m) { Write-ThornswoodAnnotation $level $NoteTitle $m }
 function Die($m) { Note 'error' $m; Write-Host "STOP. $m" -ForegroundColor Red; exit 1 }
 
 # The Microsoft-signed ssh client, by its full path: a runner account runs
@@ -191,6 +195,17 @@ if ($OnTheBox) {
         if (-not $refused) {
             $r = Invoke-GateLine $Line
             $code = $r.Code; $refused = $r.Refused; $main = $r.Main
+            # The box's public seal key, when the verb printed one and the
+            # workflow asked for it as a step output (BOX_SEAL_KEY_OUTPUT): the
+            # next job of the same run seals a secret to it, so no key comes in
+            # from whoever started the run (#5334). Nothing else the verb said
+            # leaves the runner unsealed, and the key is public.
+            $outName = [string]$env:BOX_SEAL_KEY_OUTPUT
+            if ($code -eq 0 -and $outName -match '^[a-z_]{1,32}$' -and $env:GITHUB_OUTPUT) {
+                $k = @($r.Said | ForEach-Object { [regex]::Match($_, '^SEAL KEY (<RSAKeyValue><Modulus>[A-Za-z0-9+/=]+</Modulus><Exponent>[A-Za-z0-9+/=]+</Exponent></RSAKeyValue>)$') } | Where-Object { $_.Success }) | Select-Object -Last 1
+                if ($k) { [IO.File]::AppendAllText($env:GITHUB_OUTPUT, $outName + '=' + $k.Groups[1].Value + "`n", $utf8) }
+                else { $refused = 'the verb printed no SEAL KEY line, so there is no key for the next job'; $code = 1 }
+            }
         }
 
         # The seal, to the session that asked, or nothing leaves the runner.

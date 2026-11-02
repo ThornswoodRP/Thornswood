@@ -6,7 +6,7 @@
   WHY THIS IS A SCRIPT AND NOT A LINE SOMEBODY TYPES. On 21 September this was
   handed over as a raw ssh with nested quotes:
 
-      ssh Administrator@... "powershell -NoProfile -Command \"Get-ChildItem ...\""
+      ssh Administrator@... "pwsh -NoProfile -Command \"Get-ChildItem ...\""
 
   and the far end answered
 
@@ -85,7 +85,7 @@ if (-not (Test-Path -LiteralPath $p)) {
     $script = $script.Replace('@@ROOT@@', $r.TrimEnd('\'))
     $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))
 
-    $out = Invoke-ThornswoodNative { & ssh @ssh "$User@$Vps" "powershell -NoProfile -EncodedCommand $enc" } 2>&1
+    $out = Invoke-ThornswoodNative { & ssh @ssh "$User@$Vps" "pwsh -NoProfile -EncodedCommand $enc" } 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  could not ask the VPS: $out" -ForegroundColor Red
         continue

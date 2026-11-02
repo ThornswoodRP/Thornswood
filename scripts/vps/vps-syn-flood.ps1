@@ -2,7 +2,7 @@
   vps-syn-flood.ps1
 
   Measures the forged SYN flood on the box's port 443 (#2995) and what it
-  costs the box, over a short window. Runs ON the box, in Windows PowerShell,
+  costs the box, over a short window. Runs ON the box, in PowerShell 7,
   sent by Remote.ps1 from a clean main checkout:
 
       .\scripts\vps\Remote.ps1 -File .\scripts\vps\vps-syn-flood.ps1

@@ -2,7 +2,7 @@
   ops-access.js
 
   An installation token of the "Thornswood box admin" App for one change to
-  the private ops repository, EvilPatrick06/Thornswood-Ops, where the box's
+  the private ops repository, ThornswoodRP/Thornswood-Ops, where the box's
   runners are registered and the box's keys are kept (#2862, Patrick's A on
   q-retire-box-keys, 31 Oct 2026: runners and keys are renewed from the
   cloud, through the deploy gate, never made new). Run as SYSTEM under the
@@ -20,9 +20,10 @@
   Each prints the token alone on its own line. It is for the ops repository
   alone, with that one permission and nothing more, and GitHub ends it within
   the hour. Nothing keeps it: the caller hands it to gh through GH_TOKEN for
-  that run and takes it away after. The App already holds both permissions
+  that run and takes it away after. The App holds both permissions
   (administration write since #3107 for the runner labels, environments write
-  since #4013's go-public), so nothing has to be added on its page.
+  for this; records/github-apps.json lists them), so nothing has to be added
+  on its page.
 
   The key is read and never shown, logged or sent; only the App's own short
   token (appJwt in admin.js) goes to GitHub.
@@ -38,7 +39,7 @@ const { call, said } = require('./ship-access.js');
 
 const STATE = process.env.THORNSWOOD_ADMIN_STATE || 'C:\\Thornswood-Admin\\state';
 const API = (process.env.THORNSWOOD_ADMIN_GITHUB_API || 'https://api.github.com').replace(/\/$/, '');
-const OWNER = 'EvilPatrick06';
+const OWNER = 'ThornswoodRP'; // the repositories' owner since the move (#5184)
 const REPOS = ['Thornswood-Ops'];
 // What each ask may do, and nothing else is ever asked for.
 const ASKS = {

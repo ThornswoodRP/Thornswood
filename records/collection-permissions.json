@@ -2,7 +2,7 @@
   "version": 1,
   "builtBy": "scripts/release/collection-permissions.js update",
   "collection": "7essxf",
-  "revision": 6,
+  "revision": 7,
   "mods": [
     {
       "modId": 198,
@@ -569,6 +569,31 @@
           "Author's notes (summary)": "The author's own scripts and textures (except the spriggan sap) are free to use without permission. Translations into any language are free, with credit."
         },
         "version": "V1.7.4"
+      }
+    },
+    {
+      "modId": 9141,
+      "name": "Improved Eyes Skyrim",
+      "author": "missjennabee and Nazenn",
+      "files": [
+        {
+          "fileId": 23215,
+          "name": "Improved Eyes Skyrim SSE 1.6",
+          "version": "1.6"
+        }
+      ],
+      "plugins": [
+        "Improved Eyes Skyrim.esp"
+      ],
+      "page": "https://www.nexusmods.com/skyrimspecialedition/mods/9141?tab=description",
+      "reading": {
+        "read": "2026-11-01",
+        "by": "Patrick, in a browser (#4603)",
+        "collections": "not stated",
+        "terms": {
+          "Author's notes (summary)": "No standard permission toggles. Anyone may use the assets, with a quick message to the author first (the author says they have never said no). Uploading to any paid modding scheme is not allowed. Nothing is said about collections, rehosting or redistribution. Not opted into Donation Points."
+        },
+        "version": "1.6"
       }
     },
     {

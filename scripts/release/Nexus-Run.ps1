@@ -57,7 +57,7 @@ param(
     [string]$Line = '',
     [long]$Run = 0,
     [switch]$OnTheRunner,
-    [string]$GitHubRepo = 'EvilPatrick06/Thornswood'
+    [string]$GitHubRepo = 'ThornswoodRP/Thornswood'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -169,15 +169,6 @@ function New-NexusRunPack([string]$RepoRoot, [string]$Root, [string[]]$Items, [s
     return [pscustomobject]@{ Path = $zipPath; Entries = @($entries.Keys | Sort-Object) }
 }
 
-# The archive Nexus holds as file $FileId, downloaded through its
-# download-link with the key, into $Folder. Needs Nexus.ps1.
-function Get-NexusRunArchive([string]$Game, [string]$FileId, [string]$Folder) {
-    $dl = Get-NexusField (Invoke-NexusApi 'GET' ('/v3/games/' + $Game + '/mod-file-versions/' + $FileId + '/download-link') '' ('Asking for the download of file ' + $FileId)) 'data'
-    $url = [string](Get-NexusField (@(Get-NexusField $dl 'links') | Select-Object -First 1) 'url')
-    if (-not $url) { throw ('Nexus gave no download address for file ' + $FileId + '.') }
-    return (Receive-NexusPresigned $url (Join-Path $Folder $FileId) ('Downloading file ' + $FileId) ($FileId + '.archive'))
-}
-
 # ===================================================== the runner's half ====
 if ($OnTheRunner) {
     $verbs = Read-ThornswoodGateVerbs $VerbsPath
@@ -217,7 +208,7 @@ if ($OnTheRunner) {
             if ($req.Verb -eq 'New-NexusRevision' -and $p.Contains('FileId')) {
                 $arcs = @()
                 foreach ($fid in @($p['FileId'])) {
-                    $got = Get-NexusRunArchive $game $fid (Join-Path $work 'archives')
+                    $got = Get-NexusFileArchive $game $fid (Join-Path $work 'archives')
                     Tell ('downloaded file ' + $fid + ' from Nexus: ' + $got.Name + ', ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex)
                     $arcs += $got.Path
                 }
@@ -230,12 +221,12 @@ if ($OnTheRunner) {
                 foreach ($m in $mods) {
                     $fid = [string]$m.fileId
                     if ($fid -notmatch '^[0-9]{1,12}$') { throw ($rel + ' has a mod with no fileId, so there is nothing to download for it. Nothing was run.') }
-                    $got = Get-NexusRunArchive $game $fid (Join-Path $work 'archives')
+                    $got = Get-NexusFileArchive $game $fid (Join-Path $work 'archives')
                     Tell ('downloaded file ' + $fid + ' from Nexus for -Add: ' + $got.Name + ', ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex)
                     $m | Add-Member -NotePropertyName archive -NotePropertyValue $got.Path -Force
                 }
                 $addFile = Join-Path $work 'add.json'
-                [IO.File]::WriteAllText($addFile, (ConvertTo-Json -InputObject @($mods) -Depth 10), $utf8)
+                [IO.File]::WriteAllText($addFile, (ConvertTo-Json -InputObject @($mods) -Depth 12), $utf8)
                 $p['Add'] = $addFile
             }
             if ($req.Verb -eq 'New-NexusRevision' -and $p.Contains('Rule')) {

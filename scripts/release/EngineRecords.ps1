@@ -25,7 +25,7 @@
   never under another commit. Then records\client-licences\ is replaced
   whole, so a text the new build no longer has goes.
 
-  Keep it Windows PowerShell 5.1 and pwsh alike.
+  It runs in PowerShell 7 (#5356).
 #>
 
 . (Join-Path $PSScriptRoot 'LogHandBack.ps1')

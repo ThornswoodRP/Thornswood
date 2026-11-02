@@ -1,11 +1,19 @@
 # Affected harnesses on pull requests (#3114): design and measurements
 
-**Not in use since 31 Oct 2026.** No build runs on the box since #5119, so
-no main build is traced and no map is handed on, and every pull request ran
-the whole gate on one hosted runner (18 to 20 minutes). The gate now runs in
-five shares on five hosted runners at once, each a share of the whole gate
-that reads no map (build.yml, the job "gate"; `Run-Gate.ps1 -Shard -Of`).
-What follows is how the map worked while the box built.
+**In use again since #5183 (1 Nov 2026), traced on GitHub's runner.** No
+build runs on the box since #5119, so from 31 Oct no main build was traced
+and every pull request ran the whole gate. Now `.github/workflows/gate-map.yml`
+traces the whole gate every night on GitHub's hosted Windows runner (its job
+runs as an administrator, so the same ETW session starts there, through
+`scripts/dev/Trace-Gate-Here.ps1`) and keeps the map as a workflow artifact.
+build.yml's job "Pick the gate harnesses" (`Run-Gate.ps1 -Pick`) fetches it
+with `Gate-Map.ps1 -Fetch`, picks what a pull request's change can reach,
+and splits that over the five shares by measured seconds; each share runs
+its part (`Run-Gate.ps1 -Shard -Of`). `scripts/dev/Check-Change.ps1` makes
+the same pick before a push. The trace runs on windows-2022: on Windows
+Server 2025 node's stat calls left no event in the trace (gate-map.yml says
+what was measured). What follows is how the map worked while the box built;
+the map, the pick and why a map is enough are unchanged.
 
 The study below was measured in a 4-core Linux container on 22 Oct 2026,
 with a Linux tracer. On 22 Oct Patrick chose option C on his page
@@ -14,11 +22,14 @@ build the affected-only gate from that trace, with the whole gate still
 running on main and nightly. The parts are:
 
 - `scripts/dev/Trace-HarnessReads.js`, the Linux tracer the study used.
-- `scripts/dev/Trace-Gate.ps1` and `scripts/dev/Trace-Gate-Box.ps1`, the
-  Windows tracer. An administrator runs it on the shipping machine. It
-  starts an ETW session on the box, runs the gate through `trace-gate.yml`
-  in the private ops repository (#4013), and reads each harness's opens from
-  the trace against `Nightly-Harnesses.ps1 -StartLog`. Its self-test passed
+- `scripts/dev/Trace-Gate-Box.ps1`, the Windows tracer. It starts an ETW
+  session, the gate runs under it, and it reads each harness's opens from
+  the trace against `Nightly-Harnesses.ps1 -StartLog`. Since #5183
+  `.github/workflows/gate-map.yml` runs it on GitHub's hosted runner through
+  `scripts/dev/Trace-Gate-Here.ps1`; `scripts/dev/Trace-Gate.ps1` keeps only
+  the box's half (its self-test and the trace task), and the ops
+  repository's `trace-gate.yml`, which ran the gate traced on a box build
+  runner, is gone (#5270). Its self-test passed
   on the box at 9:40 PM on 21 Oct (Patrick's time) with no events lost.
 - `scripts/dev/Affected-Harnesses.js`, which builds the map from either
   tracer and picks the harnesses.

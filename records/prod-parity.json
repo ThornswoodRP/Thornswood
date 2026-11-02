@@ -136,6 +136,11 @@
       "why": "Install-Voice.ps1 -TaskName 'Thornswood Dev Voice', LOCAL SERVICE, Limited, with a SID of its own (#2578)"
     },
     {
+      "name": "Thornswood Bot Pass",
+      "user": "LOCAL SERVICE",
+      "why": "Install-DeployAgent.ps1, the bot pass every dev Deployment waits on (#5196): on demand, started by the deploy agent, LOCAL SERVICE, Limited, with a SID of its own and rights in C:\\Thornswood-BotPass only, below normal priority; never SYSTEM"
+    },
+    {
       "name": "Thornswood Docs",
       "user": "LOCAL SERVICE"
     },
@@ -222,6 +227,12 @@
     {
       "live": "C:\\Thornswood-Docs\\server.js",
       "repo": "site/server.js"
+    },
+    {
+      "live": "C:\\Thornswood-Docs\\lib",
+      "repo": "site/lib",
+      "folder": true,
+      "why": "the site's modules (#5357): every .js on each side, by name"
     },
     {
       "live": "C:\\Thornswood-Voice\\voice-server.js",

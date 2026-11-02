@@ -6,10 +6,11 @@ long form of every step, and CONTRIBUTING.md says how a change is sent.
 
 ## Build
 
-- The launcher: `.\scripts\release\Find-MSBuild.ps1 -Report` says whether
-  MSBuild and the .NET Framework 4.8.1 targeting pack are there, then
-  `.\scripts\release\Build-Launcher.ps1 -Root $env:TEMP\launcher-try -NoPause`
-  builds it into a folder of its own.
+- The launcher needs the .NET 10 SDK and the Visual Studio 2022 C++ build
+  tools ("Desktop development with C++") for its Native AOT publish;
+  `.\scripts\release\Build-Launcher.ps1 -Root $env:TEMP\launcher-try -NoSign -NoPause`
+  builds it into a folder of its own. `dotnet build launcher\app\Thornswood.csproj`
+  compiles it on any machine, Linux too.
 - The gamemode is `game\gamemode.js` as it is; `docs\GAMEMODE.md` says how
   it is laid out and deployed.
 - The engine (the SkyMP fork in `engine\skymp`): `engine\README.md`.
@@ -22,7 +23,9 @@ long form of every step, and CONTRIBUTING.md says how a change is sent.
   and exits with 1 when any check fails. Its header says what it checks.
 - A harness that needs Windows PowerShell 5.1 or a Windows tool prints SKIP
   for those checks elsewhere.
-- The whole gate, as the build check runs it:
+- Before a push, what the change can reach, picked as the build check picks
+  it, once the change is committed: `pwsh scripts\dev\Check-Change.ps1`.
+- The whole gate, on this machine:
   `.\scripts\dev\Run-Gate.ps1 -Throttle 6`.
 - The writing in every file people read: `pwsh scripts\dev\Check-Words.ps1`.
 

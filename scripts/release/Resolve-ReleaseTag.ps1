@@ -16,7 +16,7 @@
   -ExpectedSha (a tag push's handover passes the commit the tag named when it
   was pushed, #3930; a manual run may pass one) the commit has to be that one
   as well. Anything else throws, naming the tag and why. Returns the full commit SHA. Reads git only; changes nothing.
-  Works on Windows PowerShell 5.1 and PowerShell 7.
+  Runs in PowerShell 7.
 
   NO RELEASE IS BUILT FROM A COMMIT OFF MAIN (#3890). An expected SHA used to
   stand in for the main check, and a tag push always passes one, so a v tag

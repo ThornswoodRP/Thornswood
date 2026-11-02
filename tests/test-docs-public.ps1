@@ -44,11 +44,8 @@ if ($start -lt 0 -or $end -le $start) {
 $lines = $text.Substring($start, $end + $endMark.Length - $start)
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if ($OnWindows) { $shell = Get-WindowsPowerShell }
-else {
-    $shell = (Get-Process -Id $PID).Path
-    Write-Host 'NOTE  the far side runs in this shell, not in Windows PowerShell 5.1 as on the box: this is not Windows'
-}
+# The far side runs in PowerShell 7, as on the box since #5356.
+$shell = Get-BoxPowerShell
 
 $scratch = Join-Path ([System.IO.Path]::GetTempPath()) ('ts-docs-public-' + [guid]::NewGuid().ToString('N'))
 try {

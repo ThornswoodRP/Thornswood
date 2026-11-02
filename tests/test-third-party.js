@@ -8,7 +8,12 @@
 // third-party notices file anywhere." Its done-when asks that every /resource:
 // in Build-Launcher.ps1 and every file under launcher\lib be "either the project's
 // own or listed by name and licence", and it asks for that cross-check to be
-// made "mechanically rather than by memory". This is that check.
+// made "mechanically rather than by memory". This is that check. Since #4823
+// the launcher keeps no library files under launcher\lib: every library is a
+// package reference in Thornswood.csproj, compiled into the native exe, and
+// three native libraries go beside it. So the check is now every resource the
+// project embeds, every package it references and every package those bring,
+// by version and licence, and each native library by its sha256.
 //
 // It also keeps the source offer honest. The GPL (section 6) and the AGPL
 // (section 13) want the directions to lead to the source of what actually
@@ -21,8 +26,9 @@
 // (#1568 to #1573) while THIRD-PARTY.md kept naming d6c99400, and nothing on
 // those pull requests said so; #1689 put both pages right.
 //
-// Measured when it was written, on 24 September: the three WebView2 files are
-// byte for byte Microsoft.Web.WebView2 1.0.2903.40 from nuget.org, the six
+// Measured when it was written, on 24 September: the three WebView2 files were
+// byte for byte Microsoft.Web.WebView2 1.0.2903.40 from nuget.org (gone with
+// #4823), the six
 // client files in the game folder match client-build.json, and
 // MpClientPlugin.dll is built from skymp5-server, which is AGPL, not GPL.
 //
@@ -74,14 +80,12 @@ const C = creditsRaw || '';
 // Everything Build-Launcher.ps1 compiles into an exe, by the name it is given
 // inside the exe. These are made here, each one for Thornswood:
 const OURS = {
-  'ui.xaml': 'the launcher window, launcher\\ui.xaml',
-  'logo.png': 'the emblem, launcher\\logo.png and logo-192.png for the setup stub',
+  'logo.png': 'the emblem, launcher\\logo.png',
   'logo-dev.png': 'the emblem the dev build shows instead, launcher\\logo-dev.png',
   'launcher-header.jpg': 'a strip of the Thornswood backdrop, launcher\\art',
-  'launcher-header.mp4': 'the same strip moving',
+  'launcher-header.webp': 'the same strip moving, made from launcher\\launcher-header.mp4',
   'app.ico': 'the icon',
   'app-dev.ico': 'the icon the dev build\'s shortcuts carry, launcher\\app-dev.ico',
-  'voice-host.html': 'the voice page, launcher',
   'Thornswood.ini': 'the key template, launcher',
   'client-build.json': 'the record of the client runtime',
   'skyrim-files.json': 'the list of the pinned Skyrim build\'s own files, read from Steam\'s depot manifests',
@@ -90,8 +94,8 @@ const OURS = {
 };
 
 // What goes into the launcher is written in its project file since #498's
-// switch (Build-Launcher.ps1 only runs MSBuild on it): every EmbeddedResource
-// by the LogicalName the code reads it under.
+// switch (Build-Launcher.ps1 only publishes it): every EmbeddedResource by the
+// LogicalName the code reads it under.
 const proj = read(path.join(REPO, 'launcher', 'app', 'Thornswood.csproj')) || '';
 yes('launcher\\app\\Thornswood.csproj is there to read', proj.length > 0);
 
@@ -103,8 +107,10 @@ const unreadable = [];
 });
 unreadable.forEach(function (l) { console.log('      no LogicalName in: ' + l); });
 yes('every EmbeddedResource in Thornswood.csproj names the resource it becomes', unreadable.length === 0);
-const wv2 = resources.filter(function (n) { return /WebView2/i.test(n); });
-yes('Thornswood.csproj embeds the WebView2 files (' + wv2.join(', ') + ')', wv2.length === 3);
+// Since #4823 the window is compiled, voice has no page and no WebView2, and
+// NLayer is a package: none of them is a resource any more.
+const gone = resources.filter(function (n) { return /WebView2|^ui\.xaml$|^voice-host\.html$|^NLayer\.dll$/i.test(n); });
+yes('Thornswood.csproj embeds no WebView2 file, ui.xaml, voice page or NLayer.dll (' + gone.join(', ') + ')', gone.length === 0);
 yes('Thornswood.csproj embeds resources to check (' + resources.length + ')', resources.length >= 10);
 
 const seen = {};
@@ -125,7 +131,7 @@ resources.forEach(function (name) {
 // FromGameDeflate.cs, is zlib 1.3 translated into C#. It went out from #2827
 // with no zlib notice and THIRD-PARTY.md calling everything compiled in
 // Thornswood's own (#3668). So the header of every .cs file under
-// launcher\app and installer\setup (its comments down to the first type it
+// launcher\app (its comments down to the first type it
 // declares) is read for outside projects: the libraries in
 // records\client-licences, the numeric and compression ones the launcher's
 // work touches, and any line saying code was translated, ported, adapted or
@@ -134,7 +140,7 @@ resources.forEach(function (name) {
 // names, and a row that says a file carries a library's code needs that
 // library's notice in the file's header word for word, the file marked as
 // altered, and THIRD-PARTY.md pointing at the licence text.
-const SRC_DIRS = [path.join('launcher', 'app'), path.join('installer', 'setup')];
+const SRC_DIRS = [path.join('launcher', 'app')];
 const LIC_DIR = path.join(REPO, 'records', 'client-licences');
 const licNames = (fs.existsSync(LIC_DIR) ? fs.readdirSync(LIC_DIR) : [])
   .filter(function (n) { return /\.txt$/i.test(n); })
@@ -143,10 +149,14 @@ yes('records\\client-licences has licence texts to name (' + licNames.length + '
 const OUTSIDE = licNames.concat(['deflate.c', 'trees.c', 'inflate.c', 'miniz', 'LZ4', 'LZMA', '7-Zip',
   'OpenBLAS', 'LAPACK', 'BLAS', 'numpy', 'Eigen', 'Newtonsoft', 'Json.NET', 'SharpZipLib', 'DotNetZip',
   'BouncyCastle', 'Mono', 'corefx', 'referencesource']);
+// Names that are also ordinary words are matched as the project's name only,
+// capitalised: voice's WASAPI code says "mono" for one audio channel, which is
+// not the Mono runtime.
+const AS_WRITTEN = { 'Mono': true };
 const SAYS_OUTSIDE = /\btranslat(ed|ion)\s+(of|from|into)\b|\bport(ed)?\s+(of|from)\b|\badapted\s+from\b|\bcopied\s+from\b|\bcopyright\s*(\(C\)|©)|\(C\)\s*\d{4}/i;
 function namesIn(text, name) {
   const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp('(^|[^A-Za-z0-9_-])' + esc + '($|[^A-Za-z0-9_-])', 'i').test(text);
+  return new RegExp('(^|[^A-Za-z0-9_-])' + esc + '($|[^A-Za-z0-9_-])', AS_WRITTEN[name] ? '' : 'i').test(text);
 }
 function header(src) {
   const out = [];
@@ -206,10 +216,14 @@ Object.keys(srcRows).forEach(function (n) {
       !!srcFiles[n] && !!flagged[n]);
 });
 
-// ---------------------------------------------------------------- launcher\lib
+// ---------------------------------------------------------------- the packages
 //
-// Every file, by name and by sha256, so a newer WebView2 dropped in without a
-// word in the notices fails here.
+// Since #4823 the launcher keeps no library under launcher\lib. Every library
+// is a package from nuget.org that Thornswood.csproj references, and Native
+// AOT compiles its code into Thornswood.exe with the .NET runtime; three
+// native libraries go beside the exe. So a package added to the project, or
+// one moved to a new version, without a word in the notices fails here, and so
+// does a native library that is not the bytes the notices give.
 function walk(dir, out) {
   let list = [];
   try { list = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return out; }
@@ -219,97 +233,181 @@ function walk(dir, out) {
   });
   return out;
 }
-const libFiles = walk(path.join(REPO, 'launcher', 'lib'), []);
-yes('launcher\\lib has files to check (' + libFiles.length + ')', libFiles.length > 0);
+function sha256(p) { return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex'); }
+// A line of THIRD-PARTY.md naming the package and its version: a table row or
+// a sentence, so a package named without its version, or at an old one, fails.
+function namedAt(text, name, version) {
+  const n = new RegExp('(^|[^A-Za-z0-9_.-])' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^A-Za-z0-9_.-])', 'i');
+  return text.split('\n').some(function (l) { return n.test(l) && l.indexOf(version) >= 0; });
+}
+yes('launcher\\lib is gone: every library is a package the project references', !fs.existsSync(path.join(REPO, 'launcher', 'lib')));
 
-// The file version out of a Windows version resource: the UTF-16 key
-// "FileVersion", its padding, then the value.
-function fileVersion(buf) {
-  const key = Buffer.from('FileVersion\u0000', 'utf16le');
-  let i = buf.indexOf(key);
-  while (i >= 0) {
-    let j = i + key.length;
-    while (j + 1 < buf.length && buf[j] === 0 && buf[j + 1] === 0) { j += 2; }
-    let s = '';
-    while (j + 1 < buf.length) {
-      const c = buf.readUInt16LE(j);
-      if (c === 0) { break; }
-      s += String.fromCharCode(c);
-      j += 2;
+const pkgRefs = [];
+(proj.match(/<PackageReference\b[^>]*>/g) || []).forEach(function (el) {
+  const i = /\bInclude="([^"]+)"/.exec(el), v = /\bVersion="([^"]+)"/.exec(el);
+  if (i && v) { pkgRefs.push({ name: i[1], version: v[1] }); }
+});
+yes('Thornswood.csproj references packages to check (' + pkgRefs.map(function (r) { return r.name + ' ' + r.version; }).join(', ') + ')',
+    pkgRefs.length >= 5);
+pkgRefs.forEach(function (r) {
+  yes(r.name + ' ' + r.version + ', which the launcher compiles in, is named in THIRD-PARTY.md at that version', namedAt(N, r.name, r.version));
+  // The credits page names each library the way people know it: Avalonia for
+  // the Avalonia packages, .NET for the framework's own, BouncyCastle for
+  // BouncyCastle.Cryptography.
+  const family = /^System\./.test(r.name) ? '.NET' : r.name.split('.')[0];
+  yes('  and the credits page names ' + family, flat(C).indexOf(family) >= 0);
+});
+
+// What the restore says the project takes code from, with the packages the
+// references bring, where a restore has run here (dotnet build or publish
+// writes it under out\, which git ignores). On a fresh clone it is not there,
+// and these lines say SKIP.
+const ASSETS = path.join(REPO, 'out', 'obj', 'launcher', 'project.assets.json');
+let assets = null;
+try { assets = JSON.parse(fs.readFileSync(ASSETS, 'utf8')); } catch (e) { assets = null; }
+if (!assets) {
+  skip('no restore of launcher\\app\\Thornswood.csproj here (out\\obj\\launcher\\project.assets.json), so the packages it brings were not read');
+} else {
+  const target = assets.targets && assets.targets['net10.0-windows/win-x64'];
+  yes('the restore has the win-x64 target the launcher is published for', !!target);
+  const folders = Object.keys(assets.packageFolders || {});
+  if (process.env.NUGET_PACKAGES) { folders.unshift(process.env.NUGET_PACKAGES); }
+  function inCache(name, version, rel) {
+    for (let i = 0; i < folders.length; i++) {
+      const p = path.join(folders[i], name.toLowerCase(), version.toLowerCase(), rel);
+      if (fs.existsSync(p)) { return p; }
     }
-    const v = /^\s*(\d+(\.\d+){1,3})/.exec(s);
-    if (v) { return v[1]; }
-    i = buf.indexOf(key, i + 2);
+    return null;
   }
-  return null;
+  const shipped = [];
+  Object.keys(target || {}).forEach(function (key) {
+    const lib = target[key];
+    if (lib.type !== 'package') { return; }
+    const parts = key.split('/');
+    const code = Object.keys(lib.runtime || {}).filter(function (f) { return !/_\._$/.test(f); });
+    const natives = Object.keys(lib.native || {}).filter(function (f) { return /\.dll$/i.test(f); });
+    if (code.length === 0 && natives.length === 0) { return; }
+    shipped.push({ name: parts[0], version: parts[1], natives: natives });
+  });
+  yes('the restore names packages whose code goes into the launcher (' + shipped.length + ')', shipped.length >= 10);
+  shipped.forEach(function (s) {
+    yes(s.name + ' ' + s.version + ' is named in THIRD-PARTY.md at that version', namedAt(N, s.name, s.version));
+    const nupkg = inCache(s.name, s.version, s.name.toLowerCase() + '.' + s.version.toLowerCase() + '.nupkg');
+    if (nupkg) {
+      const h = sha256(nupkg);
+      yes('  by the sha256 of its .nupkg, ' + h.slice(0, 16), N.indexOf(h) >= 0);
+    } else {
+      skip('  ' + s.name + ' ' + s.version + ' is not in this machine\'s package folder, so its .nupkg was not hashed');
+    }
+    s.natives.forEach(function (rel) {
+      const file = path.basename(rel);
+      yes('  ' + file + ', which goes beside the exe, is named in THIRD-PARTY.md', N.indexOf('`' + file + '`') >= 0);
+      const p = inCache(s.name, s.version, rel);
+      if (p) {
+        const h = sha256(p);
+        yes('  ' + file + ' is in THIRD-PARTY.md by its sha256, ' + h.slice(0, 16), N.indexOf(h) >= 0);
+      } else {
+        skip('  ' + file + ' is not in this machine\'s package folder, so it was not hashed');
+      }
+    });
+  });
+  yes('three native libraries go beside the exe, as THIRD-PARTY.md says', shipped.reduce(function (n, s) { return n + s.natives.length; }, 0) === 3);
+
+  // The .NET runtime Native AOT compiles in: the class libraries, a runtime
+  // pack the restore downloads rather than a package in the target, and the
+  // compiler's own runtime, which is in the target with no assembly of its own.
+  const fw = (assets.project && assets.project.frameworks) || {};
+  let aot = '';
+  Object.keys(fw).forEach(function (k) {
+    (fw[k].downloadDependencies || []).forEach(function (d) {
+      if (d.name === 'Microsoft.NETCore.App.Runtime.NativeAOT.win-x64') { aot = String(d.version).replace(/[\[\]\s]/g, '').split(',')[0]; }
+    });
+  });
+  yes('the restore downloads the Native AOT runtime pack (' + aot + ')', aot.length > 0);
+  if (aot) {
+    yes('Microsoft.NETCore.App.Runtime.NativeAOT.win-x64 ' + aot + ' is named in THIRD-PARTY.md at that version',
+        namedAt(N, 'Microsoft.NETCore.App.Runtime.NativeAOT.win-x64', aot));
+  }
+  const ilc = Object.keys(target || {}).filter(function (k) { return /^runtime\.win-x64\.Microsoft\.DotNet\.ILCompiler\//.test(k); })[0];
+  yes('the restore names the win-x64 Native AOT compiler (' + (ilc || 'none') + ')', !!ilc);
+  if (ilc) {
+    yes(ilc.replace('/', ' ') + ' is named in THIRD-PARTY.md at that version', namedAt(N, ilc.split('/')[0], ilc.split('/')[1]));
+  }
+
+  // The licences the packages carry, word for word on both pages. The MIT and
+  // BSD licences ask for their notice with every copy.
+  [['Microsoft.NETCore.App.Runtime.NativeAOT.win-x64', aot, 'LICENSE.TXT', '.NET'],
+   ['SkiaSharp', (shipped.filter(function (s) { return s.name === 'SkiaSharp'; })[0] || {}).version, 'LICENSE.txt', 'SkiaSharp'],
+   ['Avalonia.Angle.Windows.Natives', (shipped.filter(function (s) { return s.name === 'Avalonia.Angle.Windows.Natives'; })[0] || {}).version, 'LICENSE', 'ANGLE']
+  ].forEach(function (l) {
+    const p = l[1] ? inCache(l[0], l[1], l[2]) : null;
+    if (!p) { skip(l[3] + '\'s licence: ' + l[0] + ' ' + (l[1] || '') + ' is not in this machine\'s package folder'); return; }
+    const text = read(p);
+    yes('THIRD-PARTY.md carries ' + l[3] + '\'s licence word for word, from ' + l[0] + '\'s ' + l[2], flat(N).indexOf(flat(text)) >= 0);
+    yes('the credits page carries it word for word', flat(C).indexOf(flat(text)) >= 0);
+  });
+  // Skia's and HarfBuzz's own notices, as the native packages' notices file
+  // gives them.
+  const sk = shipped.filter(function (s) { return s.name === 'SkiaSharp.NativeAssets.Win32'; })[0];
+  const notices = sk ? inCache(sk.name, sk.version, 'THIRD-PARTY-NOTICES.txt') : null;
+  if (!notices) {
+    skip('SkiaSharp.NativeAssets.Win32\'s THIRD-PARTY-NOTICES.txt is not here, so Skia\'s and HarfBuzz\'s notices were not compared');
+  } else {
+    const all = read(notices);
+    ['skia', 'HarfBuzz'].forEach(function (lib) {
+      const m = new RegExp('\\n# ' + lib + '\\n# [^\\n]*\\n#{80}\\n([\\s\\S]*?)\\n#{80}\\n# END: ' + lib).exec(all);
+      const body = m ? m[1].replace(/\n-{80}\s*$/, '') : '';
+      yes('THIRD-PARTY.md carries ' + lib + '\'s notice from SkiaSharp\'s notices file word for word', body.length > 0 && flat(N).indexOf(flat(body)) >= 0);
+      yes('the credits page carries it word for word', body.length > 0 && flat(C).indexOf(flat(body)) >= 0);
+    });
+  }
 }
 
-const versions = {};
-libFiles.forEach(function (p) {
-  const name = path.basename(p);
-  const buf = fs.readFileSync(p);
-  const sha = crypto.createHash('sha256').update(buf).digest('hex');
-  yes(name + ' (launcher\\lib) is named in THIRD-PARTY.md', N.indexOf(name) >= 0);
-  yes(name + ' is in THIRD-PARTY.md by its sha256, ' + sha.slice(0, 16), N.toLowerCase().indexOf(sha) >= 0);
-  const v = fileVersion(buf);
-  if (v && path.basename(path.dirname(p)) === 'webview2') { versions[v] = (versions[v] || []).concat([name]); }
-});
-wv2.forEach(function (n) {
-  yes(n + ', which the launcher embeds, is in launcher\\lib\\webview2',
-      fs.existsSync(path.join(REPO, 'launcher', 'lib', 'webview2', n)));
-});
-const vList = Object.keys(versions);
-yes('the WebView2 files all carry one file version (' + vList.join(', ') + ')', vList.length === 1);
-if (vList.length === 1) {
-  yes('THIRD-PARTY.md gives the WebView2 version, ' + vList[0], N.indexOf(vList[0]) >= 0);
-  yes('the credits page gives the WebView2 version, ' + vList[0], C.indexOf(vList[0]) >= 0);
-}
-
-// The package's LICENSE.txt, Microsoft.Web.WebView2 1.0.2903.40, read out of
-// the .nupkg from nuget.org on 24 September (sha256 0af8f1b807512aae...). Its
-// second clause wants this notice with every binary copy, so it has to be on
-// the public page as well as in the repo.
-const WV2_LICENCE = [
-  'Copyright (C) Microsoft Corporation. All rights reserved.',
-  'Redistribution and use in source and binary forms, with or without',
-  'modification, are permitted provided that the following conditions are',
-  'met:',
-  '* Redistributions of source code must retain the above copyright',
-  'notice, this list of conditions and the following disclaimer.',
-  '* Redistributions in binary form must reproduce the above',
-  'copyright notice, this list of conditions and the following disclaimer',
-  'in the documentation and/or other materials provided with the',
-  'distribution.',
-  '* The name of Microsoft Corporation, or the names of its contributors',
-  'may not be used to endorse or promote products derived from this',
-  'software without specific prior written permission.',
-  'THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS',
-  '"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT',
-  'LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR',
-  'A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT',
-  'OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,',
-  'SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT',
-  'LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,',
-  'DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY',
-  'THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT',
-  '(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE',
-  'OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.'
+// The licences that no package carries a file of, read from each project's
+// repository at the commit its nuspec names on 1 November 2026: Avalonia's
+// licence.md, Velopack's LICENSE and MicroCom's LICENSE.
+const PKG_MIT_BODY = [
+  'Permission is hereby granted, free of charge, to any person obtaining a copy',
+  'of this software and associated documentation files (the "Software"), to deal',
+  'in the Software without restriction, including without limitation the rights',
+  'to use, copy, modify, merge, publish, distribute, sublicense, and/or sell',
+  'copies of the Software, and to permit persons to whom the Software is',
+  'furnished to do so, subject to the following conditions:',
+  'The above copyright notice and this permission notice shall be included in all',
+  'copies or substantial portions of the Software.',
+  'THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR',
+  'IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,',
+  'FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE',
+  'AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER',
+  'LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,',
+  'OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE',
+  'SOFTWARE.'
 ].join('\n');
-yes('THIRD-PARTY.md carries the WebView2 licence word for word', flat(N).indexOf(flat(WV2_LICENCE)) >= 0);
-yes('the credits page carries the WebView2 licence word for word', flat(C).indexOf(flat(WV2_LICENCE)) >= 0);
+[['Avalonia', 'The MIT License (MIT)\nCopyright (c) AvaloniaUI OÜ\nAll Rights Reserved\n' + PKG_MIT_BODY],
+ ['MicroCom', 'MIT License\nCopyright (c) 2021 Nikita Tsukanov\n' + PKG_MIT_BODY],
+ ['Velopack', 'Copyright © 2021 Caelan Sayler\nCopyright © 2024 Velopack Ltd.\n' +
+   'Permission is hereby granted, free of charge, to any person obtaining a copy of this software and ' +
+   'associated documentation files (the "Software"), to deal in the Software without restriction, including ' +
+   'without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell ' +
+   'copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the ' +
+   'following conditions:\nThe above copyright notice and this permission notice shall be included in all ' +
+   'copies or substantial portions of the Software.\nTHE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY ' +
+   'KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A ' +
+   'PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY ' +
+   'CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF ' +
+   'OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.']
+].forEach(function (l) {
+  yes('THIRD-PARTY.md carries ' + l[0] + '\'s licence word for word', flat(N).indexOf(flat(l[1])) >= 0);
+  yes('the credits page carries ' + l[0] + '\'s licence word for word', flat(C).indexOf(flat(l[1])) >= 0);
+});
 
-// NLayer, the menu theme's MP3 decoder (#3207): NLayer 3.0.0 from nuget.org,
-// its netstandard2.0 file, compared byte for byte on 26 October. The package
-// names MIT as its licence and commit 046c7ce4 of naudio/NLayer as its source;
-// the MIT licence wants its notice with every copy, so it is on the public
-// page too, as the repository's LICENSE at that commit has it.
-const NLAYER_DLL = path.join(REPO, 'launcher', 'lib', 'nlayer', 'NLayer.dll');
-yes('Thornswood.csproj embeds NLayer.dll, the menu theme\'s decoder', resources.indexOf('NLayer.dll') >= 0);
-yes('NLayer.dll, which the launcher embeds, is in launcher\\lib\\nlayer', fs.existsSync(NLAYER_DLL));
-if (fs.existsSync(NLAYER_DLL)) {
-  const nv = fileVersion(fs.readFileSync(NLAYER_DLL));
-  yes('NLayer.dll is file version 3.0.0.0 (' + nv + ')', nv === '3.0.0.0');
-}
+// NLayer, the menu theme's MP3 decoder (#3207): NLayer 3.0.0 from nuget.org.
+// Its netstandard2.0 file was compared byte for byte on 26 October, when the
+// launcher embedded it; since #4823 the package is a reference and its
+// net8.0 file is compiled in. The package names MIT as its licence and commit
+// 046c7ce4 of naudio/NLayer as its source; the MIT licence wants its notice
+// with every copy, so it is on the public page too, as the repository's
+// LICENSE at that commit has it.
 yes('THIRD-PARTY.md gives the NLayer version and its source commit', N.indexOf('Version 3.0.0') >= 0 && N.indexOf('046c7ce422970f8f0f0bc205d6c6341bcb7debf1') >= 0);
 yes('the credits page gives the NLayer version and links its source', C.indexOf('NLayer 3.0.0') >= 0 && C.indexOf('https://github.com/naudio/NLayer') >= 0);
 const NLAYER_LICENCE = [
@@ -941,9 +1039,50 @@ yes('installer/licences/AGPL-3.0.txt exists', (function () {
 yes('installer/licences/GPL-3.0.txt exists', (function () {
   try { return fs.statSync(path.join(ROOT, 'installer', 'licences', 'GPL-3.0.txt')).isFile(); } catch (e) { return false; }
 })());
-yes('installer/licences/WebView2-LICENSE.txt exists', (function () {
-  try { return fs.statSync(path.join(ROOT, 'installer', 'licences', 'WebView2-LICENSE.txt')).isFile(); } catch (e) { return false; }
-})());
+// The voice libraries' notices since #4823, in place of WebView2's, which
+// went with the web view.
+['Concentus-LICENSE.txt', 'SharpSRTP-LICENSE.txt', 'BouncyCastle-LICENSE.txt'].forEach(function (f) {
+  yes('installer/licences/' + f + ' exists', (function () {
+    try { return fs.statSync(path.join(ROOT, 'installer', 'licences', f)).isFile(); } catch (e) { return false; }
+  })());
+});
+yes('installer/licences/WebView2-LICENSE.txt is gone with the web view', !fs.existsSync(path.join(ROOT, 'installer', 'licences', 'WebView2-LICENSE.txt')));
+// The launcher's libraries' texts go with the install as files (#4823): one
+// list in InstallSteps.LicenceFiles, the same names in Build-SetupFiles.ps1,
+// every file of installer/licences on it, and Uninstall.cs removing the list.
+(function () {
+  const licDir = path.join(ROOT, 'installer', 'licences');
+  const onDisk = fs.readdirSync(licDir).filter(function (f) { return f !== 'README.txt'; }).sort();
+  const steps = fs.readFileSync(path.join(ROOT, 'launcher', 'app', 'InstallSteps.cs'), 'utf8');
+  const m = /static readonly string\[\] LicenceFiles =\s*\{([\s\S]*?)\};/.exec(steps);
+  const listed = m ? (m[1].match(/"[^"]+"/g) || []).map(function (s) { return s.slice(1, -1); }).sort() : [];
+  yes('InstallSteps.LicenceFiles names every file in installer/licences but README.txt, and nothing else',
+      listed.length > 0 && JSON.stringify(listed) === JSON.stringify(onDisk));
+  const setup = fs.readFileSync(path.join(ROOT, 'scripts', 'release', 'Build-SetupFiles.ps1'), 'utf8');
+  // Build-SetupFiles.ps1 reads its names off that list in InstallSteps.cs, so
+  // there is no second list: its pattern is run here on the same file, and the
+  // GPL and AGPL (which come with SOURCE CODE.txt) are the ones it leaves out.
+  const s = /\$listAt = \[regex\]::Match\(\[IO\.File\]::ReadAllText\(\$stepsCs\), '([^']+)'\)/.exec(setup);
+  const readsSteps = setup.indexOf("$stepsCs = Join-Path $RepoDir 'launcher\\app\\InstallSteps.cs'") >= 0;
+  let packed = [];
+  if (s) {
+    const pat = s[1].replace(/^\(\?s\)/, '');
+    const got = new RegExp(pat, 's').exec(steps);
+    packed = got ? (got[1].match(/"[^"]+"/g) || []).map(function (x) { return x.slice(1, -1); })
+      .filter(function (f) { return f !== 'GPL-3.0.txt' && f !== 'AGPL-3.0.txt'; }) : [];
+  }
+  const wantPacked = listed.filter(function (f) { return f !== 'GPL-3.0.txt' && f !== 'AGPL-3.0.txt'; });
+  yes('Build-SetupFiles.ps1 packs the launcher licence texts InstallSteps.LicenceFiles names, read off that list (GPL and AGPL come with SOURCE CODE.txt)',
+      readsSteps && /\$launcherLicences = @\(\[regex\]::Matches\(\$listAt\.Groups\[1\]\.Value/.test(setup) &&
+      setup.indexOf("Where-Object { $_ -notin 'GPL-3.0.txt', 'AGPL-3.0.txt' }") >= 0 &&
+      packed.length > 0 && JSON.stringify(packed.slice().sort()) === JSON.stringify(wantPacked));
+  const uninstall = fs.readFileSync(path.join(ROOT, 'launcher', 'app', 'Uninstall.cs'), 'utf8');
+  yes('Uninstall.cs removes every file of InstallSteps.LicenceFiles',
+      /foreach \(string lic in InstallSteps\.LicenceFiles\) leave\.Add\(Path\.Combine\(Paths\.Root, lic\)\);/.test(uninstall));
+  const readme = fs.readFileSync(path.join(licDir, 'README.txt'), 'utf8');
+  const unread = onDisk.filter(function (f) { return readme.indexOf('\n  ' + f) < 0 && readme.indexOf('\r\n  ' + f) < 0; });
+  yes('installer/licences/README.txt says where each text is from' + (unread.length ? ', not: ' + unread.join(', ') : ''), unread.length === 0);
+})();
 // 1.0.1 has no GPL file in it; 1.0.0, which revisions 1 and 2 still install,
 // has ___systemPolyfill.js and skyrim-platform's licence beside it.
 const polyRows = runtimeSec.split('\n').filter(function (l) {

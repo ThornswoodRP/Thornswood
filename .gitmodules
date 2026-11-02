@@ -10,6 +10,6 @@
 # and is committed here alongside the new build records.
 [submodule "engine/skymp"]
 	path = engine/skymp
-	url = https://github.com/EvilPatrick06/skymp.git
+	url = https://github.com/ThornswoodRP/skymp.git
 	branch = thornswood/engine-changes
 	ignore = dirty

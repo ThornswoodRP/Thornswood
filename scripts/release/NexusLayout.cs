@@ -1163,6 +1163,59 @@ namespace Thornswood.Layout
             using (var r = new StreamReader(new MemoryStream(data), true)) return r.ReadToEnd();
         }
 
+        // What a ModuleConfig.xml asks, a line each, in the order Vortex shows
+        // it, for whoever writes a collection's choices for a mod
+        // (Read-NexusFile.ps1, #5189): each step and when it is shown, its
+        // groups, their options with the idx a collection's choices give them
+        // and what each sets, and the files each one, the script as a whole
+        // and its flags put in place. A script this cannot run says why.
+        public static List<string> Describe(string path)
+        {
+            var o = new List<string>();
+            Script s;
+            try { s = Parse(ReadText(File.ReadAllBytes(path))); }
+            catch (Refused r) { o.Add("not run here: " + r.Message); return o; }
+            catch (System.Xml.XmlException x) { o.Add("not XML that reads: " + x.Message); return o; }
+            if (s.Prerequisites != null) o.Add("runs only when " + SayCond(s.Prerequisites));
+            foreach (var f in s.Required) o.Add("always installs " + SayFile(f));
+            foreach (var st in s.Steps)
+            {
+                o.Add("step \"" + st.Name + "\"" + (st.Visible != null ? ", shown only when " + SayCond(st.Visible) : ""));
+                foreach (var g in st.Groups)
+                {
+                    o.Add("  group \"" + g.Name + "\", " + g.Type);
+                    for (int i = 0; i < g.Options.Count; i++)
+                    {
+                        var op = g.Options[i];
+                        var line = "    option \"" + op.Name + "\", idx " + i + ", " + SayType(op.Type);
+                        if (op.Flags.Count > 0) line += ", sets " + string.Join(", ", op.Flags.Select(f => f.Key + "=" + f.Value));
+                        o.Add(line);
+                        foreach (var f in op.Files) o.Add("      " + SayFile(f));
+                    }
+                }
+            }
+            foreach (var c in s.Conditional)
+                foreach (var f in c.Value) o.Add("when " + SayCond(c.Key) + ", installs " + SayFile(f));
+            return o;
+        }
+        static string SayFile(FileItem f) { return (f.IsFolder ? "folder " : "file ") + f.Source + " -> " + (f.Destination.Length > 0 ? f.Destination : "(the mod's top)"); }
+        static string SayType(TypeResolver t)
+        {
+            var st = t as StaticType;
+            if (st != null) return st.Type.ToString();
+            var ct = (CondType)t;
+            return string.Join("", ct.Patterns.Select(p => p.Key + " when " + SayCond(p.Value) + ", ")) + ct.Default + " otherwise";
+        }
+        static string SayCond(Cond c)
+        {
+            var f = c as FlagCond; if (f != null) return "flag " + f.Name + " is \"" + f.Value + "\"";
+            var p = c as PluginCond; if (p != null) return p.File + " is " + p.State.ToString().ToLowerInvariant();
+            var v = c as VersionCond; if (v != null) return (v.Extender ? "the script extender" : "the game") + " is " + v.Min + " or later";
+            var k = c as Composite;
+            if (k != null) return k.Items.Count == 1 ? SayCond(k.Items[0]) : "(" + string.Join(k.Or ? " or " : " and ", k.Items.Select(SayCond)) + ")";
+            return "a condition";
+        }
+
         public static void Install(ModPlan plan, string unpacked, List<string> files, string moduleConfig, World world)
         {
             Script script;

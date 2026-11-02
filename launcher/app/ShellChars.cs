@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
-using System.Windows;
+using Avalonia.Threading;
 
 namespace Thornswood
 {
@@ -55,7 +55,7 @@ namespace Thornswood
                 if (doorCheckOut) { Log("Still asking Discord. One moment."); return; }
                 doorCheckOut = true;
                 btnPlay.IsEnabled = false;
-                Door.Check(win, Log,
+                Door.Check(Log,
                     delegate (Standing st)
                     {
                         // Whatever it said, do not hold on to it. A refusal for
@@ -63,7 +63,7 @@ namespace Thornswood
                         // wrong thirty seconds later, because somebody is
                         // usually giving them the role while they read it.
                         Door.Forget();
-                        Door.Explain(win, st, delegate { ShowPage(PagePlay); });
+                        Door.Explain(st, delegate { ShowPage(PagePlay); });
                     },
                     // Cleared before the start, because this goes straight back
                     // into StartPlay and the whole launch runs inside that call.
@@ -157,7 +157,7 @@ namespace Thornswood
         /// </summary>
         static void DrawInGameBrowser()
         {
-            var line = F<System.Windows.Controls.TextBlock>("TxtInGameBrowser");
+            var line = win != null ? win.TxtInGameBrowser : null;
             if (line == null || cfg == null) return;
             string b = cfg.BrowserBackend;
             line.Text = string.IsNullOrEmpty(b)
@@ -181,10 +181,11 @@ namespace Thornswood
                 // PresenceLog and not Log, and the difference is the whole bug.
                 //
                 // This runs on a pool thread. Log writes txtStatus.Text
-                // straight, which is a WPF object, so off the window's thread
-                // it throws "The calling thread cannot access this object
-                // because a different thread owns it". PresenceLog is the same
-                // line put through win.Dispatcher, which is why the other two
+                // straight, which is a control, so off the window's thread it
+                // throws (WPF said "The calling thread cannot access this
+                // object because a different thread owns it"; Avalonia says
+                // "Call from invalid thread"). PresenceLog is the same line put
+                // through the window's dispatcher, which is why the other two
                 // calls below use it.
                 //
                 // WHAT A PLAYTESTER SAW, 21 September: the throw landed in the
@@ -200,11 +201,11 @@ namespace Thornswood
                     PresenceLog("checked character " + id + " in with thornswood.net");
                     try
                     {
-                        win.Dispatcher.BeginInvoke(new Action(delegate
+                        Dispatcher.UIThread.Post(delegate
                         {
                             try { LoadDiscordAvatar(); }
                             catch (Exception ex) { Swallow.Note("Shell.CheckIn", ex); }
-                        }));
+                        });
                     }
                     catch (Exception ex) { Swallow.Note("Shell.CheckIn", ex); }
                     return true;

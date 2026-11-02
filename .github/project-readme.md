@@ -1,7 +1,7 @@
 # Thornswood To Do
 
 Everything the Thornswood team needs to do, in the order to do it. One card
-is one issue on [EvilPatrick06/Thornswood](https://github.com/EvilPatrick06/Thornswood/issues),
+is one issue on [ThornswoodRP/Thornswood](https://github.com/ThornswoodRP/Thornswood/issues),
 and this board is the only record of outstanding work: if it is not here, it
 is not going to get done.
 
@@ -40,10 +40,10 @@ is not going to get done.
 - #known-issues holds only findings nothing has been done about: an issue
   with a merged change or a test task leaves it by itself.
 - One post per issue per forum: change the comment, never post again by
-  hand. Developer-Guide.md, "Test tasks and known issues", has both shapes.
+  hand. docs/guide/the-board.md, "Test tasks and known issues", has both shapes.
 
 The rules behind all of this are in
-[Developer-Guide.md](https://github.com/EvilPatrick06/Thornswood/blob/main/Developer-Guide.md).
+[Developer-Guide.md](https://github.com/ThornswoodRP/Thornswood/blob/main/Developer-Guide.md).
 Every entry from before the board, finished ones included, is in the team's
 dated To Do List of 25 September, kept in the private ops repo; an "entry 243"
 in the code means entry 243 there.

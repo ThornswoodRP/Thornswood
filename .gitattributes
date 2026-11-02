@@ -10,6 +10,7 @@
 # reads it, whatever the checkout.
 game/data/** text eol=lf
 game/gamemode.js text eol=lf
+game/gamemode-tables/** text eol=lf
 game/plugins/thornswood-front.js text eol=lf
 docs/systems/** text eol=lf
 tests/fixtures/merchant-retrieval-records.json text eol=lf
@@ -28,3 +29,7 @@ records/client-licences/** -text
 # The same for the npm packages' texts in build.js (#3751), which
 # records\front-build.json holds by sha256.
 records/front-licences/** -text
+
+# The pre-push hook (#5291) is read by sh, Git for Windows' too, which needs
+# LF line ends; tests/test-5291-pre-push.ps1 holds it.
+.githooks/** text eol=lf

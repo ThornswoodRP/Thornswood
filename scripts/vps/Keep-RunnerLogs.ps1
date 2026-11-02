@@ -91,7 +91,7 @@ $(Get-ThornswoodLockedFolderScript $Root)
 [IO.File]::WriteAllBytes('$Root\runner-logs.ps1', [Convert]::FromBase64String('$b64'))
 'wrote     $Root\runner-logs.ps1  ' + (Get-Item '$Root\runner-logs.ps1').Length + ' bytes'
 # Daily at 4:30 AM, after the nightly checks and the backup, as SYSTEM.
-`$null = & schtasks /create /tn '$Task' /sc daily /st 04:30 /ru SYSTEM /rl HIGHEST /f /tr 'powershell -NoProfile -ExecutionPolicy Bypass -File $Root\runner-logs.ps1 -Days $Days' 2>&1
+`$null = & schtasks /create /tn '$Task' /sc daily /st 04:30 /ru SYSTEM /rl HIGHEST /f /tr 'pwsh -NoProfile -ExecutionPolicy Bypass -File $Root\runner-logs.ps1 -Days $Days' 2>&1
 if (`$LASTEXITCODE -eq 0) { 'made      the task, daily at 4:30 AM, keeping $Days days' } else { 'FAILED    schtasks exited with ' + `$LASTEXITCODE }
 # Once now, so the 1.6 GB goes today and any problem shows here.
 `$null = & schtasks /run /tn '$Task' 2>&1

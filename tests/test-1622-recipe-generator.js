@@ -22,7 +22,7 @@ const CR = String.fromCharCode(13);
 function read(rel) { return fs.readFileSync(path.join(REPO_DIR, rel), "utf8").split(CR).join(""); }
 
 const ps = read("scripts/dev/Build-RecipeTable.ps1").replace(/^﻿/, "");
-const gm = read("game/gamemode.js");
+const gm = require('./gamemode-tables.js').joined(read("game/gamemode.js"));
 const recipes = JSON.parse(read("game/data/recipes.json"));
 const cutDoc = JSON.parse(read("docs/systems/cut-items.json"));
 const fisher = read("docs/systems/classes/fisher.md");
@@ -87,8 +87,8 @@ yes("and the run says how many were left out", ps.indexOf("line(s) in that list 
 yes("the build writes recipes.json with LF",
   ps.indexOf('$Eol = "`n"') >= 0 && ps.indexOf("EolOf") < 0 &&
   ps.indexOf("$jsonEol = $Eol") >= 0 && ps.indexOf("$json = ($doc -join $jsonEol) + $jsonEol") >= 0);
-yes("and both gamemode blocks", ps.split("$eol = $Eol").length === 3 &&
-  ps.indexOf('"`r`n"') < 0);
+yes("and both gamemode tables go to their own files through GamemodeTables.ps1, which writes LF (#5191)",
+  (ps.match(/Write-GamemodeTable '(RECIPES_BY_ID|STAFF_SPELLS)'/g) || []).length === 2 && ps.indexOf('"`r`n"') < 0);
 
 // ---- the cut file (#1391) ------------------------------------------------
 yes("the build reads docs/systems/cut-items.json",
@@ -132,7 +132,7 @@ const stray = Object.keys(recipes.recipes).filter(function (k) {
 });
 yes("nothing in recipes.json is cut or rolled that the cut file does not name", stray.length === 0);
 
-const recSrc = slice(gm, "var RECIPES_BY_ID = {", "\n  };");
+const recSrc = slice(gm, "var RECIPES_BY_ID = {", ";\n");
 let BLOCK = null;
 try { BLOCK = recSrc ? new Function("return " + recSrc.slice("var RECIPES_BY_ID = ".length).replace(/;$/, ""))() : null; } catch (e) { BLOCK = null; }
 yes("the RECIPES_BY_ID block reads", !!BLOCK && Object.keys(BLOCK).length > 1500);
@@ -273,7 +273,7 @@ const bookRank = {};
     if (m) { bookRank[m[3]] = { name: m[1], rank: m[2] }; }
   });
 });
-const spellSrc = slice(gm, "var STAFF_SPELLS = {", "\n  };");
+const spellSrc = slice(gm, "var STAFF_SPELLS = {", ";\n");
 let STAFF = null;
 try { STAFF = spellSrc ? new Function("return " + spellSrc.slice("var STAFF_SPELLS = ".length).replace(/;$/, ""))() : null; } catch (e) { STAFF = null; }
 const staves = Object.keys(recipes.recipes).filter(function (k) {

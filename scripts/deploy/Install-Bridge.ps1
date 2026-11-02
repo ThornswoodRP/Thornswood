@@ -286,7 +286,7 @@ try {
     `$acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier(`$s)), 'FullControl', 'ContainerInherit, ObjectInherit', 'None', 'Allow')))
   }
   # Only the access rules are written back (issue #1120).
-  (Get-Item -LiteralPath '$Root' -Force).SetAccessControl(`$acl)
+  [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo](Get-Item -LiteralPath '$Root' -Force), `$acl)
 } catch { 'COULD NOT LOCK: ' + `$_.Exception.Message; exit 1 }
 Get-ChildItem -LiteralPath '$Root' -Directory -Force -EA SilentlyContinue | Where-Object { `$_.Name -like '.stage-*' } |
   ForEach-Object { Remove-Item -LiteralPath `$_.FullName -Recurse -Force -EA SilentlyContinue }

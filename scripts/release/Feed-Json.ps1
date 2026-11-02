@@ -27,7 +27,7 @@
   tests\test-1050-feed-compact.ps1 holds every writer to it and parses what it
   writes with the launcher's own VersionDoc.Parse.
 
-  Keep it ASCII and Windows PowerShell 5.1.
+  Keep it ASCII. It runs in PowerShell 7.
 #>
 
 function ConvertTo-FeedJson($Doc) {

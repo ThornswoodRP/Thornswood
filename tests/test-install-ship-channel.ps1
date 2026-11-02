@@ -7,7 +7,7 @@
 
   Its publish block calls Ship.ps1 with only the parameters Ship actually has.
   Before this fix it passed Root and NoPause and never Channel, so Ship used
-  its default Channel=main (the live release). Developer-Guide.md sends every
+  its default Channel=main (the live release). docs/guide/release-to-dev.md sends every
   ordinary change to the dev build first.
 
   This harness reads Install-Thornswood.ps1 and holds that:

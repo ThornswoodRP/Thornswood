@@ -1,0 +1,47 @@
+# Says on a new issue which open issues it may repeat (#5185, the redesign's
+# part 5, approved by Patrick on 31 Oct 2026).
+#
+# WHY. The same problem was filed twice often enough that 17 issues had been
+# closed as duplicates by 1 Nov 2026, each found by hand, some only after work
+# had gone into both. scripts/ops/Find-Duplicate.js reads the new title
+# against every open issue's and, when one is alike, comments with a link to
+# it, so whoever triages sees both at once. Its header says how it matches
+# and what was measured. It never closes, labels or edits: a person decides.
+#
+# WHAT IT USES. The run's own token, issues write, to read the open issues
+# and make the one comment. It checks out only the script, and the title
+# reaches it through the environment, never pasted into a command.
+#
+# WHERE IT RUNS. GitHub's ubuntu-latest (#3685: opening an issue is something
+# anyone can do on a public repository, so this never reaches the box). Main
+# only, so only main's code runs with the token. A few seconds an issue.
+name: Duplicate check on new issues
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: read
+jobs:
+  check:
+    name: Say which open issues it may repeat
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    # About ten calls to read the open issues and one to comment.
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/ops/Find-Duplicate.js
+          sparse-checkout-cone-mode: false
+
+      - name: Read it against the open issues
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          TITLE: ${{ github.event.issue.title }}
+        run: node scripts/ops/Find-Duplicate.js --issue "$ISSUE"

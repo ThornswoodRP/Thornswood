@@ -12,7 +12,7 @@
 # How. Dispatch it on main, or on a branch to try that branch's harnesses,
 # with the names as the nightly prints them, split by spaces or commas:
 #
-#   gh workflow run harnesses.yml --ref main -f harnesses='test-deploy-swaps.ps1 voice/test-most.js'
+#   gh workflow run harnesses.yml --ref main -f harnesses='test-deploy-swaps.ps1 voice/tests/test-most.js'
 #
 # A name that is no harness in that commit fails the run before anything
 # runs. The names reach the script through the environment, never pasted into
@@ -88,4 +88,4 @@ jobs:
           }
           $throttle = 0
           if (-not [int]::TryParse($env:THROTTLE, [ref]$throttle)) { Write-Host ('::error::throttle is not a number: ' + $env:THROTTLE); exit 2 }
-          .\scripts\dev\Nightly-Harnesses.ps1 -Only $env:HARNESSES -Throttle $throttle -BudgetSeconds 2400
+          .\scripts\dev\Nightly-Harnesses.ps1 -Only $env:HARNESSES -Throttle $throttle -BudgetSeconds 2400 -Summary $env:GITHUB_STEP_SUMMARY

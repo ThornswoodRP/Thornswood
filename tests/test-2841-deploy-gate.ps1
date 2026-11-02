@@ -113,10 +113,43 @@ Yes 'Send-Backups installs with an IPv4 address only, reads its status, or sends
     (Words 'Send-Backups -Install -VmHost vm.example') -eq 'REFUSED' -and (Words 'Send-Backups -Root x') -eq 'REFUSED' -and
     (Words 'Send-Backups -WatchRoot x') -eq 'REFUSED' -and (Words 'Send-Backups -Days 400') -eq 'REFUSED')
 Yes 'Start-Backup takes nothing: it starts the nightly''s own task' ((Words 'Start-Backup') -eq '-NoPause' -and (Words 'Start-Backup -TaskName x') -eq 'REFUSED' -and (Words 'Start-Backup -Minutes 1') -eq 'REFUSED')
+Yes 'Rehearse-Restore takes -Which and a profile id in digits, never another backup, key, folder or port' ((Words 'Rehearse-Restore -Which dev -ProfileId 1909688825') -eq '-NoPause|-Which|dev|-ProfileId|1909688825' -and
+    (Words 'Rehearse-Restore -ProfileId 12a') -eq 'REFUSED' -and (Words 'Rehearse-Restore -Which test -ProfileId 1') -eq 'REFUSED' -and
+    (Words 'Rehearse-Restore -ProfileId 1 -Backup x') -eq 'REFUSED' -and (Words 'Rehearse-Restore -ProfileId 1 -KeyFile x') -eq 'REFUSED' -and
+    (Words 'Rehearse-Restore -ProfileId 1 -Root x') -eq 'REFUSED' -and (Test-ThornswoodGateRequest -Line 'Rehearse-Restore -ProfileId 1' -Verbs $verbs).Out -eq '-Out')
 Yes 'Set-InboundRules takes -Check and -Own, never another box, user, record or known_hosts' ((Words 'Set-InboundRules -Own -Check') -eq '-NoPause|-Own|-Check' -and
     (Words 'Set-InboundRules -Vps x') -eq 'REFUSED' -and (Words 'Set-InboundRules -Record x') -eq 'REFUSED' -and (Words 'Set-InboundRules -KnownHosts x') -eq 'REFUSED')
 Yes 'Setup-Discord runs on the box and only audits or checks: -Prune, -Posts, -Give and another guild wait for Patrick' ((Words 'Setup-Discord -Audit') -eq '-OnBox|-Audit' -and
     (Words 'Setup-Discord -Prune') -eq 'REFUSED' -and (Words 'Setup-Discord -Posts') -eq 'REFUSED' -and (Words 'Setup-Discord -Give x') -eq 'REFUSED' -and (Words 'Setup-Discord -Guild 1') -eq 'REFUSED')
+# The last box scripts a person ran from One with its ssh key (#2862, 1 Nov):
+# the nightly backup's install (#5168 waited on it), a deletion request, and
+# four reads. None takes a host, user, folder, task or passphrase file.
+Yes 'Install-Backup installs, runs or reads through the gate, never -Remove, -AsSystem, a folder, a task or a passphrase file' ((Words 'Install-Backup') -eq '-FromGate|-NoPause' -and
+    (Words 'Install-Backup -RunNow') -eq '-FromGate|-NoPause|-RunNow' -and (Words 'Install-Backup -Status') -eq '-FromGate|-NoPause|-Status' -and
+    (Words 'Install-Backup -Remove') -eq 'REFUSED' -and (Words 'Install-Backup -AsSystem') -eq 'REFUSED' -and (Words 'Install-Backup -Root x') -eq 'REFUSED' -and
+    (Words 'Install-Backup -KeyOut x') -eq 'REFUSED' -and (Words 'Install-Backup -TaskName x') -eq 'REFUSED' -and (Words 'Install-Backup -At 01:00Z') -eq 'REFUSED')
+$ib = Text 'scripts\deploy\Install-Backup.ps1'
+# A Windows checkout may hold it CRLF (core.autocrlf), and the checks below read line breaks.
+$ib = $ib.Replace("`r`n", "`n")
+Yes '  -FromGate runs only under the gate, refuses what the verb leaves out, and never copies, sends or makes the passphrase' (
+    $ib.Contains("if (`$env:THORNSWOOD_GATE -ne '1') { Die '-FromGate is for the deploy gate") -and
+    $ib.Contains("if (`$Remove -or `$AsSystem -or @(`$handPicked).Count) { Die 'through the gate") -and
+    $ib.Contains("if (`$FromGate) {`n  # Neither copied down nor sent up") -and $ib.Contains("if (`"`$there`" -notmatch 'KEY THERE') { Die") -and
+    $ib.IndexOf('if (-not $FromGate) {' + "`n" + '$made = Remote') -gt 0 -and $ib.IndexOf("Copying it down") -gt $ib.IndexOf('if (-not $FromGate) {' + "`n" + '$made = Remote'))
+Yes '  and its last words send nobody to Fetch-Backups on One' (-not $ib.Contains('Fetch-Backups.ps1 -Schedule'))
+Yes 'Delete-Person takes a Discord id in digits, -Delete with a name for the record, or -Reapply; never a folder, a merge list or -AllowGamingPc' (
+    (Words 'Delete-Person -DiscordId 123456789012345678') -eq '-DiscordId|123456789012345678' -and
+    (Words 'Delete-Person -DiscordId 123456789012345678 -Delete -By Patrick') -eq '-DiscordId|123456789012345678|-Delete|-By|Patrick' -and
+    (Words 'Delete-Person -Reapply') -eq '-Reapply' -and (Words 'Delete-Person -DiscordId 12345') -eq 'REFUSED' -and (Words 'Delete-Person -DiscordId abc') -eq 'REFUSED' -and
+    (Words 'Delete-Person -Reapply -Merge x') -eq 'REFUSED' -and (Words 'Delete-Person -DiscordId 123456789012345678 -SiteRoot C:/x') -eq 'REFUSED' -and
+    (Words 'Delete-Person -DiscordId 123456789012345678 -AllowGamingPc') -eq 'REFUSED' -and (Words 'Delete-Person -DiscordId 123456789012345678 -RecordRoot x') -eq 'REFUSED')
+foreach ($check in 'Check-Roster', 'Check-Load', 'Check-ServerPriority', 'Chargen-Log') {
+    Yes "$check takes no host, user or folder of the caller's" ((Words "$check -Vps x") -eq 'REFUSED' -and (Words "$check -User x") -eq 'REFUSED' -and (Words "$check -Root x") -eq 'REFUSED' -and (Words $check) -ne 'REFUSED')
+}
+Yes 'Rotate-ServerPassword makes the site''s new password on the box after a ban, never one the caller types or names' ((Words 'Rotate-ServerPassword') -eq '-Yes' -and
+    (Words 'Rotate-ServerPassword -Password') -eq 'REFUSED' -and (Words 'Rotate-ServerPassword -DocsRoot C:/x') -eq 'REFUSED' -and (Words 'Rotate-ServerPassword -Vps x') -eq 'REFUSED')
+Yes '  Check-Load never waits for Enter or watches, and Chargen-Log takes a line count only' ((Words 'Check-Load') -eq '-NoPause' -and (Words 'Check-Load -Watch 10') -eq 'REFUSED' -and
+    (Words 'Chargen-Log -Lines 200') -eq '-Lines|200' -and (Words 'Chargen-Log -Lines all') -eq 'REFUSED')
 # What has a server's folder open, read on the box (#5211): live or dev, and
 # a minute of Defender's log, never a folder, a file or a process of the caller's.
 Yes 'Read-ServerHolders takes live or dev and a UTC minute of Defender''s log, never a folder, file or task' ((Words 'Read-ServerHolders') -eq '' -and
@@ -147,12 +180,12 @@ Yes '  Renew-BoxKey keeps the old line until the secret holds the new key, and p
     $rk.IndexOf('& gh secret set $K.Secret') -lt $rk.IndexOf('Where-Object { $old -notcontains $_ }') -and
     $rk.Contains('if ($changed -and -not $done) { [IO.File]::WriteAllBytes($KeysFile, $before) }'))
 Yes '  its key goes only to the two fixed secrets of the ops repository, with the old line''s options and the App''s environments token' (
-    $rk.Contains("`$GitHubRepo = 'EvilPatrick06/Thornswood-Ops'") -and $rk.Contains("Secret = 'DESK_KEY_B64'") -and $rk.Contains("Secret = 'NOTICE_KEY_B64'") -and
+    $rk.Contains("`$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'") -and $rk.Contains("Secret = 'DESK_KEY_B64'") -and $rk.Contains("Secret = 'NOTICE_KEY_B64'") -and
     $rk.Contains('$newLine = $opts + '' '' + $bare + $tag') -and $rk.Contains('Get-ThornswoodOpsAccess -Repo $RepoRoot -For keys') -and
     $rk.Contains('does not let in main alone'))
 $ir = Text 'scripts/deploy/Install-Runner.ps1'
 Yes '  Install-Runner from the gate is the ops repository''s, with the App''s runners token, and puts back only a runner the records or GitHub already name' (
-    $ir.Contains("`$Repo = 'EvilPatrick06/Thornswood-Ops'") -and $ir.Contains('Get-ThornswoodOpsAccess -Repo') -and $ir.Contains('-For runners') -and
+    $ir.Contains("`$Repo = 'ThornswoodRP/Thornswood-Ops'") -and $ir.Contains('Get-ThornswoodOpsAccess -Repo') -and $ir.Contains('-For runners') -and
     $ir.Contains('is in no runner record and not registered on') -and $ir.IndexOf('function Invoke-Gh') -lt $ir.IndexOf('is in no runner record and not registered on'))
 # Publish-Server through the gate is the dev server's, from the box's store,
 # and nothing else (#4987): main stays with a Main run Patrick approves.
@@ -222,22 +255,23 @@ Yes '  and Run-OnBox.ps1 copies what came back into -Out as well as the checkout
 # The Ship verbs (Patrick's A, 30 Oct 2026: the box admin App mints the
 # token a Ship from the feed signs with, and the whole Ship runs on the box).
 Yes 'Ship-Dev is a dev Ship from the feed, its note as a title and detail lines' ((Words 'Ship-Dev -Title "Market stalls take your prices" -Detail "Claim a stall"') -eq '-Channel|dev|-Title|Market stalls take your prices|-Detail|Claim a stall' -and
-    (Words 'Ship-Dev -Title x -Detail y -ModsOnly') -eq '-Channel|dev|-Title|x|-Detail|y|-ModsOnly' -and
+    (Words 'Ship-Dev -Title x -Detail y -ModsOnly') -eq 'REFUSED' -and
     (Words 'Ship-Dev -Channel main -Title x -Detail y') -eq 'REFUSED' -and (Words 'Ship-Dev -Title x -Detail y -Root C:/x') -eq 'REFUSED' -and (Words 'Ship-Dev -Title x -Detail y -Package') -eq 'REFUSED')
 Yes 'Ship-Dev takes -Detail2 and -Detail3, whose names end in digits (#5144)' ((Words 'Ship-Dev -Title x -Detail y -Detail2 z -Detail3 w') -eq '-Channel|dev|-Title|x|-Detail|y|-Detail2|z|-Detail3|w' -and (Words 'Ship-Dev -Title x -2Detail y') -eq 'REFUSED')
 Yes 'Ship-Main is held to a build and to -Channel main' ($verbs.verbs.'Ship-Main'.build -eq $true -and (Words 'Ship-Main -Title x -Detail y') -eq 'REFUSED' -and
-    (Words "Ship-Main -Build $sha -Title x -Detail y -ModsOnly") -eq '-Channel|main|-Title|x|-Detail|y|-ModsOnly' -and (Words "Ship-Main -Build $sha -Title x -Detail y -MoveServer") -eq 'REFUSED')
+    (Words "Ship-Main -Build $sha -Title x -Detail y -ModsOnly") -eq 'REFUSED' -and (Words "Ship-Main -Build $sha -Title x -Detail y -MoveServer") -eq 'REFUSED')
 $shipBox = Text 'scripts/release/Ship-OnBox.ps1'
-Yes '  Ship-OnBox.ps1 runs Ship.ps1 from the feed, keeping the launcher only when asked, with the token in GH_TOKEN alone and gone after' (
+Yes '  Ship-OnBox.ps1 runs Ship.ps1 from the feed, with no switch about a launcher (Ship sends none, #4825), with the token in GH_TOKEN alone and gone after' (
     $shipBox.Contains("`$ship = @{ Notes = `$notes; FromFeed = `$true; NoPause = `$true }") -and $shipBox.Contains("if (`$Channel -eq 'dev') { `$ship['Channel'] = 'dev' }") -and
-    $shipBox.Contains("if (`$ModsOnly) { `$ship['ModsOnly'] = `$true }") -and -not $shipBox.Contains("elseif (`$ModsOnly)") -and
+    -not $shipBox.Contains('ModsOnly') -and
     $shipBox.Contains('$env:GH_TOKEN = $token') -and $shipBox.Contains('finally { Remove-Item -LiteralPath Env:\GH_TOKEN'))
 Yes '  a main Ship goes from the branch main at the fetched origin/main' ($shipBox.Contains("checkout --quiet -B main refs/remotes/origin/main"))
 # The DEV marks and the shipped issues read main's history and the release
 # tags, which the gate's one-commit checkout has not got (#5133).
-Yes '  a Ship deepens the gate''s checkout to main''s history and tags before it runs, and keeps origin/main at the commit the gate read' (
-    $shipBox.Contains("'fetch', '--quiet', '--unshallow', '--tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'") -and
-    $shipBox.Contains("'fetch', '--quiet', '--tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'") -and
+Yes '  a Ship deepens the gate''s checkout to main''s history and tags as origin has them (a moved tag too, #5231) before it runs, and keeps origin/main at the commit the gate read' (
+    $shipBox.Contains("'fetch', '--unshallow', 'origin', '+refs/heads/main:refs/remotes/origin/main', '+refs/tags/*:refs/tags/*'") -and
+    $shipBox.Contains("'fetch', 'origin', '+refs/heads/main:refs/remotes/origin/main', '+refs/tags/*:refs/tags/*'") -and
+    -not $shipBox.Contains("'--tags'") -and -not $shipBox.Contains("'fetch', '--quiet'") -and
     $shipBox.Contains('update-ref refs/remotes/origin/main $head') -and
     $shipBox.IndexOf('--unshallow') -gt $shipBox.IndexOf('checkout --quiet -B main') -and
     $shipBox.IndexOf('--unshallow') -lt $shipBox.IndexOf("& (Join-Path `$Here 'Ship.ps1') @ship"))
@@ -247,18 +281,14 @@ Yes '  a Ship deepens the gate''s checkout to main''s history and tags before it
 Yes 'Wipe-Dev wipes the dev server alone and takes nothing' ((Words 'Wipe-Dev') -eq '-Server|dev|-Yes|-NoPause' -and (Words 'Wipe-Dev -Server main') -eq 'REFUSED' -and
     (Words 'Wipe-Dev -Vps 1.2.3.4') -eq 'REFUSED' -and -not $verbs.verbs.'Wipe-Dev'.build -and $verbs.verbs.'Wipe-Dev'.script -eq 'scripts/ops/Wipe-Saves.ps1')
 Yes '  and no verb wipes main or every server' (@($verbs.verbs.PSObject.Properties | Where-Object { $_.Value.script -eq 'scripts/ops/Wipe-Saves.ps1' -and (@($_.Value.fixed) -join ' ') -ne '-Server dev -Yes -NoPause' }).Count -eq 0)
-# The installer for the site (#5109): no parameter at all, the token the
-# Ship's, and the publish from the branch main.
-Yes 'Publish-Installer takes nothing, and is not a live verb' ((Words 'Publish-Installer') -eq '' -and (Words 'Publish-Installer -OutDir C:/x') -eq 'REFUSED' -and
-    (Words 'Publish-Installer -AllowStaleCheckout') -eq 'REFUSED' -and (Words 'Publish-Installer -WaitSeconds 10') -eq 'REFUSED' -and -not $verbs.verbs.'Publish-Installer'.build -and
-    $verbs.verbs.'Publish-Installer'.script -eq 'scripts/release/Publish-InstallerOnBox.ps1')
-$instBox = Text 'scripts/release/Publish-InstallerOnBox.ps1'
-Yes '  Publish-InstallerOnBox.ps1 runs Publish-InstallerFromGitHub.ps1 with the App''s token in GH_TOKEN alone and gone after, from the branch main' (
-    $instBox.Contains('Get-ThornswoodShipAccess -Repo $repo -AdminState $AdminState') -and $instBox.Contains("& (Join-Path `$Here 'Publish-InstallerFromGitHub.ps1') -WaitSeconds `$WaitSeconds") -and
-    $instBox.Contains('$env:GH_TOKEN = $token') -and $instBox.Contains('finally { Remove-Item -LiteralPath Env:\GH_TOKEN') -and
-    $instBox.Contains('checkout --quiet -B main refs/remotes/origin/main') -and
-    $instBox.IndexOf('checkout --quiet -B main') -lt $instBox.IndexOf('Get-ThornswoodShipAccess -Repo') -and -not $instBox.Contains('AllowStaleCheckout'))
-Yes '  and its wait for installer.yml fits inside the verb''s timeout' ([int]([regex]::Match($instBox, '\[int\]\$WaitSeconds = (\d+)').Groups[1].Value) -lt 60 * [int]$verbs.verbs.'Publish-Installer'.timeoutMinutes)
+# The installer for the site (#5109) went with the old installer pipeline
+# (#4824): the download is Velopack's Setup.exe on the GitHub Release, which
+# merge-release.yml makes, so the gate has no verb for it and no script of it
+# is left to run.
+Yes 'no verb publishes the old installer, and no Publish-Installer script is left (#4824)' (
+    -not $verbs.verbs.PSObject.Properties['Publish-Installer'] -and
+    @($verbs.verbs.PSObject.Properties | Where-Object { [string]$_.Value.script -match 'Publish-Installer' }).Count -eq 0 -and
+    @(Get-ChildItem -LiteralPath (Join-Path $Repo 'scripts/release') -Filter 'Publish-Installer*' -File).Count -eq 0)
 $gt = Text 'scripts/vps/admin/ship-access.js'
 Yes '  the token is the App''s, for the fork and Thornswood only, Actions write and Contents read and nothing more' (
     $gt.Contains("const REPOS = ['skymp', 'Thornswood'];") -and $gt.Contains("const PERMISSIONS = { actions: 'write', contents: 'read' };") -and $gt.Contains('{ repositories: REPOS, permissions: PERMISSIONS }'))
@@ -438,6 +468,12 @@ Yes '  and the installer no longer puts a verbs.json beside the broker, and take
     (Text 'scripts/deploy/Install-Gate.ps1') -notmatch "\$Files = @\([^)]*verbs\.json" -and (Text 'scripts/deploy/Install-Gate.ps1').Contains('Remove-Item -LiteralPath (Join-Path `$root ''verbs.json'') -Force'))
 Yes 'what runs is the tip of main: fetched into origin/main and checked out from it' (
     $brokerCode.Contains("'+refs/heads/main:refs/remotes/origin/main'") -and $brokerCode.Contains("'--detach', 'refs/remotes/origin/main'") -and $brokerCode.Contains("'clean', '-ffdxq'"))
+Yes '  with the checkout''s origin set to gate.json''s remote first, and each fetched submodule pointed at main''s .gitmodules before it moves (#5184)' (
+    $brokerCode.Contains("'remote', 'set-url', 'origin', ([string]`$Cfg.remote)") -and
+    $brokerCode.IndexOf("'remote', 'set-url', 'origin'") -lt $brokerCode.IndexOf("'fetch', '--quiet'") -and
+    $brokerCode.Contains("'submodule', 'sync', '--quiet'") -and
+    $brokerCode.IndexOf("'submodule', 'sync'") -gt $brokerCode.IndexOf("'--detach', 'refs/remotes/origin/main'") -and
+    $brokerCode.IndexOf("'submodule', 'sync'") -lt $brokerCode.IndexOf("'submodule', 'update'"))
 Yes '  and each fetched submodule is brought to main''s pin after the checkout, never left at the old one' (
     $brokerCode.Contains("'submodule', 'update', '--checkout', '--force', '--depth', '1'") -and -not $brokerCode.Contains("'submodule', 'update', '--init'") -and
     $brokerCode.IndexOf("'submodule', 'update'") -gt $brokerCode.IndexOf("'--detach', 'refs/remotes/origin/main'"))
@@ -474,6 +510,21 @@ if (-not $gitExe) { Write-Host 'SKIP: the submodule move needs git' -ForegroundC
         $after = ((SmGit (Join-Path $gate 'engine/skymp') rev-parse HEAD).Out -join '').Trim()
         $status = (SmGit $gate status --porcelain).Out -join ' '
         Yes '  the move takes the fetched submodule to the new pin, and leaves no change behind' ($r.Code -eq 0 -and $after -eq $pinB -and -not $status.Trim())
+        # The fork moves (#5184): main's .gitmodules names its new address, and
+        # sync points the fetched submodule there before it is moved.
+        $moved = Join-Path $sm 'moved-fork'
+        Copy-Item -LiteralPath $fork -Destination $moved -Recurse
+        Set-Content -LiteralPath (Join-Path $moved 'a.txt') -Value 'three'; [void](SmGit $moved commit -qam three)
+        $pinC = ((SmGit $moved rev-parse HEAD).Out -join '').Trim()
+        [void](SmGit $up config -f .gitmodules submodule.engine/skymp.url $moved)
+        [void](SmGit $up submodule sync -q); [void](SmGit (Join-Path $up 'engine/skymp') fetch -q origin); [void](SmGit (Join-Path $up 'engine/skymp') checkout -q $pinC)
+        [void](SmGit $up add .gitmodules engine/skymp); [void](SmGit $up commit -qm moved)
+        foreach ($st in $steps) { [void](SmGit $gate @st) }
+        $sync = SmGit $gate submodule sync --quiet
+        $r3 = SmGit $gate submodule update --checkout --force --depth 1
+        $url = ((SmGit (Join-Path $gate 'engine/skymp') remote get-url origin).Out -join '').Trim()
+        $at = ((SmGit (Join-Path $gate 'engine/skymp') rev-parse HEAD).Out -join '').Trim()
+        Yes '  a fork that moved is fetched from its new address, at the new pin' ($pinC -ne $pinB -and $sync.Code -eq 0 -and $r3.Code -eq 0 -and $url -eq $moved -and $at -eq $pinC)
         $bare = Join-Path $sm 'gate2'
         [void](SmGit $sm clone -q --depth 1 --no-tags --branch main ('file://' + $up.Replace('\', '/')) $bare)
         $r2 = SmGit $bare submodule update --checkout --force --depth 1
@@ -542,11 +593,11 @@ $GateScript = 'C:\Thornswood-Gate\Gate.ps1'
 $SayStaff = 'C:\Thornswood-Watch\say-staff.ps1'
 $bare = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKk0ZXN0a2V5Zm9ydGhlZ2F0ZXRlc3QwMDAwMDAwMDAw'
 $line = Get-BoxKeyLine $bare 'desk' $false $true
-Yes 'a deploy key''s line: from the box only, restricted, forced to Gate.ps1' ($line -eq ('from="127.0.0.1",restrict,command="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\Thornswood-Gate\Gate.ps1" ' + $bare + ' thornswood-desk'))
+Yes 'a deploy key''s line: from the box only, restricted, forced to Gate.ps1' ($line -eq ('from="127.0.0.1",restrict,command="pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\Thornswood-Gate\Gate.ps1" ' + $bare + ' thornswood-desk'))
 $parts = Read-BoxKeyLine $line
 Yes '  and its reader sees the bridge and the gate in it, and no notices command' ($parts.Bridge -and $parts.Gate -and -not $parts.Notices -and $parts.Key -eq $bare)
 Yes 'a plain key''s line is unchanged' ((Get-BoxKeyLine $bare 'one' $false) -eq ('from="127.0.0.1" ' + $bare + ' thornswood-one'))
-Yes 'a notices key''s line is unchanged' ((Get-BoxKeyLine $bare 'claude' $true) -like 'from="127.0.0.1",restrict,command="powershell.exe * -File C:\Thornswood-Watch\say-staff.ps1 -From claude" *')
+Yes 'a notices key''s line is forced to say-staff.ps1 through pwsh' ((Get-BoxKeyLine $bare 'claude' $true) -like 'from="127.0.0.1",restrict,command="pwsh * -File C:\Thornswood-Watch\say-staff.ps1 -From claude" *')
 $grant = Text 'scripts/vps/Grant-BoxAccess.ps1'
 Yes 'a deploy key goes into the gate account''s authorized_keys, and stops without the account' ($grant.Contains("Run scripts\deploy\Install-Gate.ps1 first") -and $grant.Contains("ProfileImagePath '.ssh\authorized_keys'"))
 Yes 'its proof needs a refused command and GATE READY' ($grant.Contains("@('echo THORNSWOOD_OK', 'ping')") -and $grant.Contains("'^\| GATE READY'") -and $grant.Contains('($NoticesOnly -or $Deploy) -and @($proof | Where-Object { $_ -match ''THORNSWOOD_OK'' }).Count'))
@@ -584,7 +635,7 @@ else if (c === 'nothing') { }
 # ---- 8. box-run.yml, in the ops repository (#4013) ---------------------------
 Yes 'box-run.yml is not in this repository, which has no VPS runner once public' (-not (Test-Path -LiteralPath ([IO.Path]::Combine($Repo, '.github', 'workflows', 'box-run.yml'))))
 $br = Text 'scripts/vps/Box-Run.ps1'
-Yes '  Box-Run.ps1 starts it in the private ops repository, where the runners are registered' ($br.Contains("[string]`$GitHubRepo = 'EvilPatrick06/Thornswood-Ops'") -and $br.Contains("`$Workflow = 'box-run.yml'"))
+Yes '  Box-Run.ps1 starts it in the private ops repository, where the runners are registered' ($br.Contains("[string]`$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'") -and $br.Contains("`$Workflow = 'box-run.yml'"))
 
 # ---- 9. the seal, and the ssh it uses -------------------------------------------
 . (Join-Path $Repo 'scripts/ops/Sealed.ps1')
@@ -693,6 +744,18 @@ $kept = @(Get-ChildItem -LiteralPath (Join-Path $groot 'update') -Directory)
 Yes '  and keeps the files it replaced' ($kept.Count -eq 1 -and [IO.File]::ReadAllText((Join-Path $kept[0].FullName 'Gate.ps1')) -eq "# the old Gate.ps1`n")
 $o = & pwsh -NoProfile -File $ug -Root $groot -NoRestart 2>&1 | Out-String
 Yes '  a second run changes nothing' ($LASTEXITCODE -eq 0 -and $o -match 'ALREADY')
+# The repository's name (#5184): when GitHub names it differently, the
+# remote takes the new name; when GitHub cannot be asked, it stays.
+$cfgAt = Join-Path $groot 'gate.json'
+[IO.File]::WriteAllText($cfgAt, '{"commit":"' + $head + '","git":"git","remote":"ssh://git@ssh.github.com:443/EvilPatrick06/Thornswood.git"}')
+$o = & pwsh -NoProfile -File $ug -Root $groot -NoRestart -FullName 'ThornswoodRP/Thornswood' 2>&1 | Out-String
+Yes '  a repository GitHub names differently now goes into gate.json''s remote' ($LASTEXITCODE -eq 0 -and $o -match "CHANGED the gate's remote from ssh://git@ssh\.github\.com:443/EvilPatrick06/Thornswood\.git to ssh://git@ssh\.github\.com:443/ThornswoodRP/Thornswood\.git" -and
+    ([IO.File]::ReadAllText($cfgAt) | ConvertFrom-Json).remote -ceq 'ssh://git@ssh.github.com:443/ThornswoodRP/Thornswood.git')
+$o = & pwsh -NoProfile -File $ug -Root $groot -NoRestart -FullName 'ThornswoodRP/Thornswood' 2>&1 | Out-String
+Yes '  and once it has, the next run changes nothing' ($LASTEXITCODE -eq 0 -and $o -match 'ALREADY' -and $o -match 'the repository is ThornswoodRP/Thornswood, as GitHub names it')
+$o = & pwsh -NoProfile -File $ug -Root $groot -NoRestart -FullName 'not a name' 2>&1 | Out-String
+Yes '  an answer that is not owner/name changes nothing' ($LASTEXITCODE -eq 0 -and $o -match 'ALREADY' -and $o -match 'not owner/name' -and
+    ([IO.File]::ReadAllText($cfgAt) | ConvertFrom-Json).remote -ceq 'ssh://git@ssh.github.com:443/ThornswoodRP/Thornswood.git')
 $o = & pwsh -NoProfile -File $ug -Root $groot 2>&1 | Out-String
 Yes '  outside the gate it refuses' ($LASTEXITCODE -eq 1 -and $o -match 'Nothing was changed')
 Remove-Item -LiteralPath $groot -Recurse -Force
@@ -703,7 +766,7 @@ Yes '  its restart task starts at once and waits for the broker to end, never fo
     $ugt -notmatch 'New-ScheduledTaskTrigger' -and $ugt -notmatch 'Start-Sleep -Seconds 3')
 Yes 'the broker ends once a request has changed its files on disk, without opening the pipe again' ($gb.Contains('$StartedOn = Get-ThornswoodGateFileLine $Root') -and
     $gb.Contains("Log ('BROKER handing over: its files on disk are now ' + `$onDisk); break") -and $gb.IndexOf('BROKER handing over') -gt $gb.IndexOf('$pipe.Dispose()'))
-Yes 'Update-Gate is a verb that takes nothing' ((Words 'Update-Gate') -eq '' -and (Words 'Update-Gate -Root x') -eq 'REFUSED' -and (Words 'Update-Gate -NoRestart') -eq 'REFUSED')
+Yes 'Update-Gate is a verb that takes nothing' ((Words 'Update-Gate') -eq '' -and (Words 'Update-Gate -Root x') -eq 'REFUSED' -and (Words 'Update-Gate -NoRestart') -eq 'REFUSED' -and (Words 'Update-Gate -FullName x/y') -eq 'REFUSED')
 Yes '  with the host keys held to the checkout''s pins, in a known_hosts of the run''s own' ($br.Contains('Get-ThornswoodVpsCommitted') -and $br.Contains("UserKnownHostsFile=`$knownHosts") -and $br.Contains("'-F', 'none'"))
 Yes '  and prints none of the verb''s output into the run''s log' ($br -notmatch 'Write-Host \$Matches\[1\]' -and $br.Contains("[IO.File]::AppendAllText(`$out, `$Matches[1]"))
 

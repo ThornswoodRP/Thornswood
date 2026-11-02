@@ -62,24 +62,44 @@
       out.
 
   ADDING A MOD (#2969). -Add names a JSON file of mods the revision does not
-  carry yet, each a Nexus file put in with Vortex's basic installer:
+  carry yet, each a Nexus file put in with Vortex's basic installer, or its FOMOD
+  installer and the answers given:
       [{ "modId": 1932, "fileId": 8662, "archive": "<the downloaded archive>",
          "plugins": [{ "name": "KS_Hairdo's_Lite_NoNPCs.esp",
                        "after": ["Playable Rieklings.esp"] }] }]
   The mod's name, author and category and the file's name and version are
   read from Nexus, the md5 and size from the archive, and the archive's own
   plugins have to be the ones "plugins" names. An archive with a FOMOD
-  installer is refused: its answers are Vortex's to work out. Each plugin goes
+  installer needs "choices", its answers as Vortex writes them in an entry:
+      "choices": { "type": "fomod", "options": [ { "name": "<step>",
+        "groups": [ { "name": "<group>", "choices": [ { "name": "<option>", "idx": 0 } ] } ] } ] }
+  Read-NexusFile.ps1 prints every step, group and option, with each idx.
+  The script is run with them as Install-NexusRevision.ps1 runs it
+  (NexusModPlan.ps1, NexusLayout.cs), and the plugins it puts in Data have to
+  be the ones "plugins" names; the entry carries the choices, so Vortex runs
+  the script with the same answers and shows no dialog. Until 1 November an
+  archive with a FOMOD installer was refused here and added in Vortex on One
+  (#5189). Each plugin goes
   on the end of the plugin list after the plugins its "after" names
   (docs\LIGHT-ORDER-DRIFT.md: a new plugin goes on the end of its own kind,
-  never mid-order). Install-NexusRevision.ps1 -CollectionArchive lays the new
+  never mid-order).
+
+  PLUGINS OFF THE LIST (#4603). An "after", of an added plugin or a rule, may
+  name a plugin the revision installs that its own list leaves out, as
+  revision 6 does with CBBE.esp and RaceMenuMorphsCBBE.esp: the game still
+  loads it where the servers do. collection.json does not say which plugins
+  those are, so they are read from records\collection.json (its "enabled":
+  false plugins) when the record follows the published revision this starts
+  from, and given to nexus-collection.js. Until 2 November only the list was
+  known, and the record's first FOMOD mod stopped there. Install-NexusRevision.ps1 -CollectionArchive lays the new
   archive out to check it, from One or a cloud session.
 
   A PLUGIN RULE (27 Oct). -Rule names a JSON file of plugins whose "load
   after" rule the revision replaces:
       [{ "name": "cheddars_mashups.esl", "after": ["RaceCompatibility.esm"] }]
   Each plugin has to be one the list names, and so does each "after", unless
-  it is one of the five base masters. The plugin moves in the list to
+  it is one of the five base masters or a plugin the revision installs off
+  its list. The plugin moves in the list to
   straight after the last plugin its "after" names. Why: revision 5's -Add
   gave cheddars_mashups.esl "after" three plugins that are not masters, and
   the game loads an .esl as a master, before all of them, so LOOT reported a
@@ -266,6 +286,7 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 . (Join-Path $Here 'Nexus.ps1')
 . (Join-Path $Here 'Read-JsonFile.ps1')   # ConvertFrom-ThornswoodJson: a bad JSON file named
+. (Join-Path $Here 'NexusModPlan.ps1')   # an added mod's FOMOD run with its choices
 
 $script:Done = New-Object System.Collections.Generic.List[string]
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
@@ -703,21 +724,43 @@ foreach ($a in $adds) {
   # installer's to work out, and Install-NexusRevision.ps1 does that as
   # Vortex does when the new revision is laid out.
   $paths = @(Step { Get-ArchivePaths $sz $arc })
-  if (@($paths | Where-Object { $_ -match '(^|\\)fomod\\moduleconfig\.xml$' }).Count) { Die ($arc + ' has a FOMOD installer, whose answers Vortex works out when it installs it. Add it in Vortex on One.') }
-  $found = @($paths | Where-Object { $_ -match '\.es[mpl]$' } | ForEach-Object { $_.Substring($_.LastIndexOf('\') + 1) })
+  $hasChoices = $null -ne $a.PSObject.Properties['choices'] -and $null -ne $a.choices
+  if (@($paths | Where-Object { $_ -match '(^|\\)fomod\\moduleconfig\.xml$' }).Count) {
+    # A FOMOD installer, run with the choices given, as Install-NexusRevision.ps1
+    # runs it when it lays the revision out (ADDING A MOD above).
+    if (-not $hasChoices) { Die ($arc + ' has a FOMOD installer and mod ' + $m + ' in ' + $Add + ' gives no choices for it, so Vortex would show its dialog. Read its questions with Read-NexusFile.ps1 -Mod ' + $m + ' -FileId ' + $fid + ' and give the answers as "choices".') }
+    $bad = @(Get-NexusChoicesProblems $a.choices)
+    if ($bad.Count) { Die ('The choices for mod ' + $m + ' in ' + $Add + ' are not as Vortex writes them: ' + ($bad -join '; ') + '.') }
+    $work = Join-Path $scratch ('fomod-' + $m)
+    if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $work | Out-Null
+    $mp = Step { Get-NexusModPlan -SevenZip $sz -Archive $arc -Work $work -Choices $a.choices }
+    if ($mp.Plan.Stop) { Die ('Mod ' + $m + ' cannot be installed unattended with the choices given: ' + $mp.Plan.Stop + '.') }
+    $found = @(Get-NexusPlanPlugins $mp | ForEach-Object { $_.Name })
+    [Thornswood.Layout.NexusLayout]::Forget($mp.Unpacked)
+    Remove-Item -LiteralPath $work -Recurse -Force
+    $installer = 'FOMOD, with the choices given'
+  }
+  else {
+    if ($hasChoices) { Die ('Mod ' + $m + ' in ' + $Add + ' gives choices, and ' + $arc + ' has no FOMOD installer to give them to.') }
+    $found = @($paths | Where-Object { $_ -match '\.es[mpl]$' } | ForEach-Object { $_.Substring($_.LastIndexOf('\') + 1) })
+    $installer = 'the basic installer'
+  }
   $named = @(@($a.plugins) | Where-Object { $_ } | ForEach-Object { [string]$_.name })
   $missing = @($found | Where-Object { $named -inotcontains $_ })
   $extraNamed = @($named | Where-Object { @($found) -inotcontains $_ })
-  if ($missing.Count -or $extraNamed.Count) { Die ('The plugins named for mod ' + $m + ' are not the ones its archive holds (in the archive only: ' + ($missing -join ', ') + '; named only: ' + ($extraNamed -join ', ') + ').') }
+  if ($missing.Count -or $extraNamed.Count) { Die ('The plugins named for mod ' + $m + ' are not the ones ' + $installer + ' puts in Data from its archive (from the archive only: ' + ($missing -join ', ') + '; named only: ' + ($extraNamed -join ', ') + ').') }
 
   # Only its md5 and size: this archive is the mod author's, read and never
   # uploaded, so its name is not held to what an upload header can carry.
   $facts = Step { $it = Get-Item -LiteralPath $arc; [pscustomobject]@{ Name = $it.Name; Size = [long]$it.Length; Md5Hex = (Get-FileHash -LiteralPath $it.FullName -Algorithm MD5).Hash.ToLowerInvariant() } }
   Say ('  mod ' + $m + ' (' + $modName + ' by ' + $author + ', ' + $category + '): file id ' + $fid + ', "' + $fileName + '" ' + (Get-NexusField $v 'version') + ', ' + $cat)
-  Say ('    ' + $facts.Name + ', ' + $facts.Size.ToString('N0') + ' bytes, md5 ' + $facts.Md5Hex + ', ' + @($found).Count + ' plugin(s)') 'DarkGray'
+  Say ('    ' + $facts.Name + ', ' + $facts.Size.ToString('N0') + ' bytes, md5 ' + $facts.Md5Hex + ', ' + @($found).Count + ' plugin(s) by ' + $installer) 'DarkGray'
   $plugins = @(@($a.plugins) | Where-Object { $_ } | ForEach-Object { [ordered]@{ name = [string]$_.name; after = @(@($_.after) | ForEach-Object { [string]$_ }) } })
-  $swaps.Add([ordered]@{ add = $true; modId = $m; fileId = $fid; version = [string](Get-NexusField $v 'version'); md5 = $facts.Md5Hex; fileSize = $facts.Size;
-    logicalFilename = $fileName; name = $entryName; author = $author; category = $category; plugins = $plugins })
+  $sw = [ordered]@{ add = $true; modId = $m; fileId = $fid; version = [string](Get-NexusField $v 'version'); md5 = $facts.Md5Hex; fileSize = $facts.Size;
+    logicalFilename = $fileName; name = $entryName; author = $author; category = $category; plugins = $plugins }
+  if ($hasChoices) { $sw.choices = $a.choices }
+  $swaps.Add($sw)
 }
 
 foreach ($m in $Remove) { $swaps.Add([ordered]@{ remove = $true; modId = $m }) }
@@ -823,9 +866,29 @@ foreach ($d in $dropped) {
     $dropped += $dir.Substring($build.Length + 1).Replace('/', '\')
   }
 }
+# The plugins the revision installs that its own list leaves out, which an
+# added plugin's or a rule's "after" may name (nexus-collection.js, PLUGINS
+# OFF THE LIST). collection.json does not say which those are; the record
+# does, as its "enabled": false plugins, when it follows the revision this
+# starts from (#4603: Improved Eyes Skyrim.esp loads after
+# RaceMenuMorphsCBBE.esp, which revision 6 installs off its list).
+if ($adds.Count -or $rules.Count) {
+  $recordFile = Join-Path $Here '..\..\records\collection.json'
+  $unlisted = @()
+  if (Test-Path -LiteralPath $recordFile) {
+    $rec = Step { ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($recordFile)) $recordFile }
+    if ([string]$rec.collection -eq $Slug -and [int]$rec.revision -eq $start -and $startStatus -eq 'published') {
+      $unlisted = @(@($rec.plugins) | Where-Object { $_ -and $_.enabled -eq $false } | ForEach-Object { [string]$_.name })
+      if ($unlisted.Count) { Say ('  installed off the list, by the record: ' + ($unlisted -join ', ')) 'DarkGray' }
+    }
+    else { Say ('  the record follows revision ' + $rec.revision + ' of ' + $rec.collection + ', not this one, so no plugin installed off the list is known') 'DarkGray' }
+  }
+  if ($unlisted.Count) { $swaps.Add([ordered]@{ unlisted = [string[]]$unlisted }) }
+}
 $swapsJson = Join-Path $scratch 'swaps.json'
 $payloadJson = Join-Path $scratch 'payload.json'
-[IO.File]::WriteAllText($swapsJson, (ConvertTo-Json -InputObject @($swaps.ToArray()) -Depth 6), (New-Object Text.UTF8Encoding($false)))
+# Deep enough for an added mod's choices: steps, groups, choices.
+[IO.File]::WriteAllText($swapsJson, (ConvertTo-Json -InputObject @($swaps.ToArray()) -Depth 12), (New-Object Text.UTF8Encoding($false)))
 $r = Invoke-Tool $node.Source @((Join-Path $Here 'nexus-collection.js'), $baseJson, $swapsJson, (Join-Path $build 'collection.json'), $payloadJson)
 if ($r.Code -ne 0) { Die ($r.Err.Trim() + ' Nothing was built.') }
 foreach ($line in ($r.Out -split "`r?`n" | Where-Object { $_ })) {

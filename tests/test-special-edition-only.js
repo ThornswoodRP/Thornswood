@@ -164,7 +164,6 @@ function listed(rel, re) {
   return m ? (m[1].match(/'[^']+'|"[^"]+"/g) || []).map(function (s) { return s.slice(1, -1).replace(/^Data\\\\/, ''); }) : null;
 }
 const baseLists = [
-  ['the installer\'s copy of the base game', 'installer/Setup-Thornswood.ps1', /\$want = @\(([^)]*)\)/],
   ['the launcher\'s masters (OwnGame)', 'launcher/app/OwnGame.cs', /static readonly string\[\] Masters = \{([^}]*)\}/],
   ['the launcher\'s load order masters', 'launcher/app/LoadOrder.cs', /public static readonly string\[\] Masters = \{([^}]*)\}/],
   ['the publisher\'s load order masters', 'scripts/mods/LoadOrder.ps1', /\$script:LoadOrderMasters = ([^\n]*)/],
@@ -204,13 +203,14 @@ yes('the mentions left are all in tables that only describe a record or list it 
     Object.keys(allowedTables).every(function (t) { return C.DESCRIBE_ONLY.indexOf(t) >= 0 || /\.json$/.test(t); }));
 
 {
+  // The gamemode's tables are files of their own (#5191).
+  const T = require('./gamemode-tables.js');
   const gm = read('game/gamemode.js');
   for (const k of ['306a', '306b', '306c', '306d', '306e', '306f', '30c9', '30ca', '3025']) {
     const re = new RegExp('"' + k + ':Update\\.esm"');
-    const blocks = [['HARVESTS_BY_BASE', /var HARVESTS_BY_BASE = \{[\s\S]*?\n\};/], ['HUNTS_BY_BASE', /var HUNTS_BY_BASE = \{[\s\S]*?\n\};/],
-                    ['ADMIN_ITEMS', /var ADMIN_ITEMS = \{[\s\S]*?\n {2}\};/], ['ADMIN_ACTORS', /var ADMIN_ACTORS = \{[\s\S]*?\n {2}\};/]];
-    for (const b of blocks) {
-      const m = b[1].exec(gm);
+    for (const name of ['HARVESTS_BY_BASE', 'HUNTS_BY_BASE', 'ADMIN_ITEMS', 'ADMIN_ACTORS']) {
+      const m = gm.indexOf("table('" + name + "')") >= 0 && fs.existsSync(T.file(name)) ? [fs.readFileSync(T.file(name), 'utf8')] : null;
+      const b = [name];
       yes(b[0] + ' is in the gamemode and has no ' + k + ':Update.esm (' + records[k] + ')', !!m && !re.test(m[0]));
     }
   }

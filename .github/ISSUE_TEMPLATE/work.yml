@@ -1,5 +1,6 @@
 name: Work for the team
 description: For the Thornswood team. One piece of work for the board, written plain. To report a problem or an idea, pick one of the forms above.
+type: Task
 body:
   - type: markdown
     attributes:

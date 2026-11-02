@@ -1,0 +1,29 @@
+{
+  "about": "The Cloudflare Tunnel the site reaches Cloudflare through (#5334). scripts/deploy/Install-Tunnel.ps1 makes the tunnel from this, writes this ingress to it, installs this cloudflared on the box, and moves these DNS records. -Back puts them back at the box's address, which is the DNS-only record of the name in scripts/vps/vps.json, as Cloudflare holds it. Nothing here is secret: the tunnel's token and the API token stay on GitHub and the box.",
+  "account": "c7738b46d6dea435f5228b00b6198706",
+  "zone": "d2b885b1adae2d20ec1a00300e06d827",
+  "tunnel": "thornswood-box",
+  "cloudflared": {
+    "version": "2026.10.7",
+    "url": "https://github.com/cloudflare/cloudflared/releases/download/2026.10.7/cloudflared-windows-amd64.exe",
+    "sha256": "2493dbc168923bb3e59e5e7716f71deced92992eea9acd6e9d74f84ac7751343"
+  },
+  "metrics": "127.0.0.1:20241",
+  "ingress": [
+    {
+      "hostname": "thornswood.net",
+      "service": "https://127.0.0.1:443",
+      "originRequest": { "originServerName": "thornswood.net" }
+    },
+    {
+      "hostname": "www.thornswood.net",
+      "service": "https://127.0.0.1:443",
+      "originRequest": { "originServerName": "www.thornswood.net" }
+    },
+    { "service": "http_status:404" }
+  ],
+  "dns": [
+    { "name": "thornswood.net" },
+    { "name": "www.thornswood.net" }
+  ]
+}

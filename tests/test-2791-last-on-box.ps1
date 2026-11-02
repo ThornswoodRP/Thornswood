@@ -199,7 +199,7 @@ Yes '    and sends the recipe and manifest, never the plugin' ($dev -match [rege
 $srv = Read-Text 'scripts\deploy\Deploy-Server.ps1'
 Yes 'D4 Deploy-Server.ps1 makes it into its stage too' ($srv -match [regex]::Escape('Invoke-ThornswoodLastPluginMake') -and $srv -match [regex]::Escape('-Into "$rootWin\$stageName\plugins"'))
 Yes '    and holds it with what it sent' ($srv -match [regex]::Escape("`$hashes['plugins/' + `$ThornswoodLastPlugin] = `$lastMade.Sha"))
-foreach ($rel in @('scripts\deploy\Deploy-DevGamemode.ps1', 'scripts\deploy\Deploy-Server.ps1', 'scripts\deploy\Deploy-Gamemode.ps1', 'scripts\release\Publish-Server.ps1', 'scripts\release\Publish-Update.ps1', 'scripts\release\Ship-Rules.ps1', 'scripts\release\Package-Thornswood.ps1')) {
+foreach ($rel in @('scripts\deploy\Deploy-DevGamemode.ps1', 'scripts\deploy\Deploy-Server.ps1', 'scripts\deploy\Deploy-Gamemode.ps1', 'scripts\release\Publish-Server.ps1', 'scripts\release\Publish-Update.ps1', 'scripts\release\Ship-Rules.ps1')) {
     Yes "D5 $rel reads no Thornswood-Last.esp from game\content" ((Read-Text $rel) -notmatch 'game[\\/]content[\\/]Thornswood-Last\.esp')
 }
 $chain = (Read-Text 'scripts\mods\content-tables.json') | ConvertFrom-Json

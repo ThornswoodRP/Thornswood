@@ -3,9 +3,9 @@
 
   Signs files with ThornswoodRelease on GitHub's Windows runner, in a run of
   main's own workflow, and holds each to the launcher's own check before it
-  says yes (#5180). The box deploy agent's two workflows use it:
-  deploy-agent.yml for the agent program and its catalog, and
-  gamemode-release.yml for the gamemode Release's catalog.
+  says yes (#5180). Two workflows use it: deploy-agent.yml for the agent
+  program and its catalog, and merge-release.yml for the launcher, the
+  Velopack packages' files and each Release's catalog (#5179).
 
       pwsh -File scripts/release/Sign-OnRunner.ps1 -Path <file> [-Path <file> ...]
 

@@ -1,5 +1,6 @@
 name: The game or the launcher crashed
 description: Skyrim, the launcher or the installer closed by itself, froze, or showed an error box.
+type: Bug
 labels: ["triage", "bug"]
 body:
   - type: markdown

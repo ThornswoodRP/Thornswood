@@ -15,7 +15,7 @@ namespace Thornswood
     /// blocks are walked and the ones that only describe it are left out, so
     /// every pixel and frame is the one chosen.
     ///
-    /// The rules are the site's (stripMedia in site/server.js, which cleans
+    /// The rules are the site's (stripMedia in site/lib/media.js, which cleans
     /// every upload the same way as it lands, for a browser and a launcher from
     /// before this); a change here is a change there.
     ///

@@ -29,7 +29,7 @@ function setup() {
   ctx.__questRankRead=()=>({v:1,cls:'fisher',ranks:{fisher:standing}});
   ctx.toolGate=()=>tool;ctx.poleTooWeak=()=>null;
  };
- const w=h.boot(into),gm=fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8');
+ const w=h.boot(into),gm=require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8'));
  const at=gm.indexOf('function fish(actorId'),end=gm.indexOf('\n}',at)+2;
  Object.assign(w.ctx,{isFish:()=>true,FISH_BY_BASE:{[doc.sources[0].base]:{produce:item,name:'Abecean Longfin',from:'Longfin Water',rank:'master'}},
   withinResourceReach:()=>true,FISH_TUNING:{cooldownMs:{master:14400000},yieldByStep:{2:[3,3]}},
@@ -83,7 +83,7 @@ function setup() {
  s.w.ctx.FISH_BY_BASE[other]={produce:'a:Skyrim.esm',name:'Salmon',from:'Salmon',rank:'master'};
  assert.match(s.w.ctx.fish(500,6000,other),/unavailable/);
  assert.equal(s.counts().normalGrants,0,'another fish base cannot bypass a selected reference');
- const gm=fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8');
+ const gm=require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8'));
  const hook=gm.match(/^mp\.onActivate = guard\('onActivate',[\s\S]*?^\}\);/m)[0];
  const get=s.w.ctx.mp.get;s.w.ctx.mp.get=(id,key)=>id===6000&&key==='baseDesc'?'other:Skyrim.esm':get(id,key);
  s.w.ctx.guard=(name,fn)=>fn;s.w.ctx.notify=()=>{};
@@ -101,7 +101,7 @@ console.log('PASS longfin actual fishing path: appointed Alchemist, Master rank/
 
 {
  const s=setup();assert.equal(s.take().ok,true);
- const hook=fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8').match(/^mp\.onActivate = guard\('onActivate',[\s\S]*?^\}\);/m)[0];
+ const hook=require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8')).match(/^mp\.onActivate = guard\('onActivate',[\s\S]*?^\}\);/m)[0];
  s.w.ctx.guard=(name,fn)=>fn;s.w.ctx.notify=()=>{};vm.runInContext(hook,s.w.ctx);
  s.w.ctx.mp.get=()=>{throw new Error('native lookup unavailable');};
  assert.equal(s.w.ctx.mp.onActivate(6000,500),false,'a registered longfin cannot fall through a failed native query');
@@ -111,7 +111,7 @@ console.log('PASS longfin actual fishing path: appointed Alchemist, Master rank/
 
 {
  const s=setup();assert.equal(s.take().ok,true);
- const hook=fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8').match(/^mp\.onActivate = guard\('onActivate',[\s\S]*?^\}\);/m)[0];
+ const hook=require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../game/gamemode.js'),'utf8')).match(/^mp\.onActivate = guard\('onActivate',[\s\S]*?^\}\);/m)[0];
  const get=s.w.ctx.mp.get;s.w.ctx.mp.get=(id,key)=>id===6000&&key==='baseDesc'?doc.sources[0].base:get(id,key);
  let toast='',ordinary=0;s.w.ctx.guard=(name,fn)=>fn;s.w.ctx.notify=(actor,line)=>{toast=line;};
  s.w.ctx.__thornswoodProperty={boardActivated(ref){if(ref===999999){ordinary++;return true;}return false;}};

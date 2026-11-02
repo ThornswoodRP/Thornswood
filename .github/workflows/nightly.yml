@@ -5,8 +5,8 @@
 #
 #   security  the secret scan of the tree and of the built launcher
 #   files     every PowerShell, game and bot file parses; the writing rules
-#   code      all ~380 test harnesses in tests/, plus the bot and voice harnesses, the
-#             launcher window check and the launcher build
+#   code      all ~380 test harnesses in tests/, plus the bot and voice harnesses, and
+#             the launcher's native publish
 #   GitHub    pull requests open more than two days and branches other than
 #             main, which CONTRIBUTING.md says are merged or closed; issues
 #             and comments of the last day not written plain (#3692)
@@ -59,6 +59,11 @@ jobs:
         with:
           fetch-depth: 0
           filter: blob:none
+      # The .NET 10 SDK publishes the launcher (#4823), pinned for the reason
+      # build.yml gives.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
 
       - name: Scan the tree for secrets
         if: ${{ !cancelled() }}
@@ -137,17 +142,11 @@ jobs:
         if: ${{ !cancelled() }}
         shell: pwsh
         run: |
-          $bad = 0
-          Get-ChildItem -Path scripts, tests, installer -Filter *.ps1 -Recurse -File | ForEach-Object {
-            $tokens = $null; $errors = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors)
-            foreach ($e in $errors) {
-              $bad++
-              Write-Host ("::error file={0},line={1}::{2}" -f $_.FullName, $e.Extent.StartLineNumber, $e.Message)
-            }
-          }
-          if ($bad) { exit 1 }
-          Write-Host "every script parses"
+          # The folders it parses are one list, in scripts/dev/Check-Parse.ps1,
+          # which the build check and the pre-push hook run too (#5291); this
+          # step had its own copy, which missed a product's tests folder.
+          ./scripts/dev/Check-Parse.ps1 -What PowerShell
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Check the writing rules
         if: ${{ !cancelled() }}
@@ -158,21 +157,6 @@ jobs:
           # down since the start and never checked, and on 24 September eleven
           # hits had gone out in those files. Each hit is marked on its line.
           .\scripts\dev\Check-Words.ps1
-
-      - name: Check the launcher window
-        if: ${{ !cancelled() }}
-        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
-        run: |
-          # The launcher builds its window from ui.xaml at startup and finds
-          # every control by name, so a renamed control or a window that does
-          # not parse compiles clean and is found by the person using it. This
-          # fails on either. Windows PowerShell on purpose: it parses with the
-          # .NET Framework WPF the launcher runs on, not the newer one in pwsh.
-          # -ExecutionPolicy Bypass on both, as every harness starts 5.1:
-          # Windows 11 keeps 5.1 at Restricted, so on One's runners the plain
-          # shell: powershell could not run this step's own script (#3861).
-          & powershell -NoProfile -ExecutionPolicy Bypass -File scripts\dev\Check-Controls.ps1 -NoPause
-          if ($LASTEXITCODE -ne 0) { Write-Host '::error file=launcher/ui.xaml::the launcher window does not line up with the C#, see the lines above'; exit 1 }
 
       - name: Parse every game script
         if: ${{ !cancelled() }}
@@ -242,9 +226,12 @@ jobs:
         if: ${{ !cancelled() }}
         shell: pwsh
         run: |
+          # The native publish every build makes (Build-Launcher.ps1, #4823),
+          # which stops on any trim or native code warning.
           $root = Join-Path $env:RUNNER_TEMP 'Thornswood'
           New-Item -ItemType Directory -Force -Path (Join-Path $root 'Launcher') | Out-Null
-          .\scripts\release\Build-Launcher.ps1 -Root $root -NoPause
+          .\scripts\release\Build-Launcher.ps1 -Root $root -NoSign -NoPause
+          if ($LASTEXITCODE -ne 0) { Write-Host '::error file=scripts/release/Build-Launcher.ps1::the launcher did not publish; the lines above say why'; exit 1 }
           if (-not (Test-Path (Join-Path $root 'Launcher\Thornswood.exe'))) { Write-Host '::error::no Thornswood.exe came out of the build'; exit 1 }
 
       - name: Scan the built launcher for secrets
@@ -253,9 +240,9 @@ jobs:
         run: |
           # The secrets that shipped were in built artefacts, not in the source,
           # so what this build made is read too, byte by byte: the launcher with
-          # everything Build-Launcher embeds in it, and the setup stub.
-          $built = @(Join-Path $env:RUNNER_TEMP 'Thornswood\Launcher\Thornswood.exe')
-          if (Test-Path out\setup-stub.exe) { $built += (Resolve-Path out\setup-stub.exe).Path }
+          # everything Build-Launcher embeds in it, and every native library
+          # published beside it.
+          $built = @(Get-ChildItem -LiteralPath (Join-Path $env:RUNNER_TEMP 'Thornswood\Launcher') -File | Where-Object { $_.Extension -in '.exe', '.dll' } | ForEach-Object { $_.FullName })
           .\scripts\dev\Check-Secrets.ps1 -Binary $built
           exit $LASTEXITCODE
 
@@ -289,7 +276,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
-          # Developer-Guide.md: no stray branches and no stray pull requests.
+          # docs/guide/how-work-moves.md: no stray branches and no stray pull requests.
           # Every page of branches and of open pull requests, not only the
           # first hundred of each (issue #1201); tests\test-nightly-stray.ps1
           # runs it against a stand-in GitHub.
@@ -302,12 +289,28 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
-          # Developer-Guide.md, "How an issue and a comment are written"
+          # docs/guide/the-board.md, "How an issue and a comment are written"
           # (#3692): every issue and comment of the last day, read through
           # the REST API; one written the old way is named and the night is
           # red until it is rewritten. tests\test-nightly-plain-issues.ps1
           # runs it against a stand-in GitHub.
           .\scripts\dev\Nightly-PlainIssues.ps1 -Run
+
+      - name: Each GitHub App holds only what its record gives it
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The redesign's part 20 (plan line 26): the Bots' two Apps, the
+          # box admin App, the watcher and the pin robot each hold exactly
+          # the permissions and events records/github-apps.json gives them,
+          # read from GitHub's GET /apps/<slug>. One holding more, or less,
+          # is named and the night is red until Patrick changes the App or a
+          # pull request changes the record. tests\test-app-permissions.js
+          # runs it against a stand-in GitHub.
+          node scripts/dev/Check-AppPermissions.js
+          exit $LASTEXITCODE
 
   harnesses:
     # The test harnesses, in shares (#2357). One job for each entry under
@@ -366,7 +369,58 @@ jobs:
           # 2400 of the job's 45 minutes: a harness starts only when its
           # whole clock still fits, so the list of what failed is printed
           # before the job could be cancelled.
-          .\scripts\dev\Nightly-Harnesses.ps1 -Shard ${{ matrix.shard }} -Of 2 -BudgetSeconds 2400
+          # One report (#5295): each share keeps a test case for every check,
+          # and the job "Harness report" merges both shares' into one.
+          .\scripts\dev\Nightly-Harnesses.ps1 -Shard ${{ matrix.shard }} -Of 2 -BudgetSeconds 2400 -Report (Join-Path $env:RUNNER_TEMP 'harness-report\share.xml')
+
+      - name: Keep this share's report for the harness report
+        if: ${{ !cancelled() }}
+        # The share's verdict is its harnesses'. When this upload fails, the
+        # report job names this share as having left no report and is red,
+        # so the failure is said where the report is read.
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: harness-report-${{ matrix.shard }}
+          path: ${{ runner.temp }}/harness-report/share.xml
+          if-no-files-found: ignore
+          # Read by the report job of this run, minutes later, and by
+          # nothing after it.
+          retention-days: 1
+
+  harness-report:
+    # The night's checks in one report (#5295): both shares' merged, kept
+    # with the run, and every failing check named by harness on the run's
+    # page. A share that left no report is named and turns this red.
+    name: Harness report
+    needs: harnesses
+    if: ${{ !cancelled() && needs.harnesses.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          sparse-checkout: scripts/dev/Merge-HarnessReports.ps1
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: harness-report-*
+          path: ${{ runner.temp }}/harness-reports
+      - name: Merge the shares' reports into one
+        shell: pwsh
+        run: |
+          $in = Join-Path $env:RUNNER_TEMP 'harness-reports'
+          New-Item -ItemType Directory -Path $in -Force | Out-Null
+          .\scripts\dev\Merge-HarnessReports.ps1 -Path $in -Expect 2 -Out (Join-Path $env:RUNNER_TEMP 'harness-report.xml') -Title 'Nightly harnesses'
+          exit $LASTEXITCODE
+      - name: Keep the merged report with the run
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: harness-report
+          path: ${{ runner.temp }}/harness-report.xml
+          if-no-files-found: ignore
+          retention-days: 14
 
   bot:
     # The bot harnesses install discord.py from pypi. While the repository
@@ -425,7 +479,7 @@ jobs:
           $env:DISCORD_TOKEN = 'not-a-real-token'
           $PER_HARNESS = 300
           $bad = 0
-          foreach ($t in (Get-ChildItem bot -Filter 'test-*.py' -File | Sort-Object Name)) {
+          foreach ($t in (Get-ChildItem bot/tests -Filter 'test-*.py' -File | Sort-Object Name)) {
             Write-Host ("--- {0}" -f $t.Name)
             $p = Start-Process -FilePath $py -ArgumentList ('"' + $t.FullName + '"') -NoNewWindow -PassThru
             $null = $p.Handle
@@ -449,7 +503,7 @@ jobs:
     # harness share stops starting harnesses inside its own budget and
     # prints the list itself.
     name: Put the night on the board
-    needs: [nightly, harnesses, bot]
+    needs: [nightly, harnesses, harness-report, bot]
     # Main only, as "nightly" above says (#3550).
     if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
     runs-on: windows-latest
@@ -458,7 +512,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Put a failure on the board
-        if: ${{ needs.nightly.result != 'success' || needs.harnesses.result != 'success' || needs.bot.result != 'success' }}
+        if: ${{ needs.nightly.result != 'success' || needs.harnesses.result != 'success' || needs.harness-report.result != 'success' || needs.bot.result != 'success' }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -468,11 +522,11 @@ jobs:
           # One "Nightly checks failed" issue, never two: added to when one is
           # open (every page read, the oldest kept, any duplicate closed
           # pointing to it), opened when none is. Issues #905 and #1120.
-          Write-Host ('checks: ${{ needs.nightly.result }}, harnesses: ${{ needs.harnesses.result }}, bot: ${{ needs.bot.result }}')
+          Write-Host ('checks: ${{ needs.nightly.result }}, harnesses: ${{ needs.harnesses.result }}, harness report: ${{ needs.harness-report.result }}, bot: ${{ needs.bot.result }}')
           .\scripts\dev\Nightly-Issue.ps1 -Result failure
 
       - name: Close the failure when every check passed
-        if: ${{ needs.nightly.result == 'success' && needs.harnesses.result == 'success' && needs.bot.result == 'success' }}
+        if: ${{ needs.nightly.result == 'success' && needs.harnesses.result == 'success' && needs.harness-report.result == 'success' && needs.bot.result == 'success' }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

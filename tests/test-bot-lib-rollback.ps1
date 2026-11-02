@@ -35,7 +35,7 @@ $swap = [IO.File]::ReadAllText((Join-Path $repo 'scripts\deploy\Swap.ps1'))
 # checklist came out on 11 Oct), and never joins.json, the bot's own record (#2042).
 Yes 'Install-Bot installs into py-libs with pip --target, and sends the code, never joins.json' (
     $install.Contains('--target ''$rootWin\$stageName\py-libs''') -and
-    $install.Contains('foreach ($f in ''bot.py'', ''_pyguard.py'', ''trust.py'', ''card.py'', ''staff-channel.txt'', ''requirements.txt'', ''factions.json'')') -and
+    $install.Contains('foreach ($f in ''bot.py'', ''_pyguard.py'', ''trust.py'', ''card.py'', ''staff-channel.txt'', ''dev-channel.txt'', ''requirements.txt'', ''factions.json'')') -and
     -not $install.Contains('joins.json'''))
 Yes 'the swap is told to put py-libs back with the code' ($install.Contains('$Dirs = @(''''py-libs'''')') -and $swap.Contains('$moveRels'))
 # pip --target on Python 3.12.4 and later leaves its files with the rules of
@@ -52,11 +52,7 @@ Yes 'Install-Bot puts py-libs under the folder''s rules and refuses before stopp
 # starts the same one. Until #1880 this asked py for 3.9, which neither the
 # bot nor the VPS has, so on the build runner it stopped at the first wheel.
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) {
-    Write-Host 'SKIP  the swap: the bot''s swap runs on the box under Windows PowerShell 5.1, which only Windows has'
-    Done
-}
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 $py = ''
 foreach ($c in @(@('python'), @('py', '-3'))) {
     if (-not (Get-Command $c[0] -CommandType Application -EA SilentlyContinue)) { continue }
@@ -135,17 +131,21 @@ PipTarget $w2 (Join-Path $stage 'py-libs') (Join-Path $stage 'requirements.txt')
 # entries protected with three rules of their own, everything under them
 # inherited. Reading files alone, as this did until then, saw only inherited
 # rules and failed on the runner's 3.12 (#1273).
-$libItems = @(Get-ChildItem -LiteralPath (Join-Path $stage 'py-libs') -Recurse -Force)
-function Unruled($items) {
-    @($items | Where-Object {
-        $acl = Get-Acl -LiteralPath $_.FullName
-        $acl.AreAccessRulesProtected -or -not @($acl.Access | Where-Object { $_.IsInherited }).Count
-    })
-}
-$newPy = "$(& $py -c 'import sys; print(sys.version_info >= (3, 12, 4))')".Trim() -eq 'True'
-if ($newPy) { Yes 'pip --target on Python 3.12.4 or later leaves what it installs outside the folder''s rules' ((Unruled $libItems).Count -gt 0) }
-& icacls (Join-Path $stage 'py-libs') /reset /T /Q | Out-Null
-Yes 'icacls /reset /T puts every py-libs file and folder under the folder''s own rules' ($libItems.Count -gt 0 -and (Unruled $libItems).Count -eq 0)
+# Those rules are Windows ACLs, read with Get-Acl and reset with icacls,
+# which only Windows has; the swap after them runs anywhere.
+if ($OnWindows) {
+    $libItems = @(Get-ChildItem -LiteralPath (Join-Path $stage 'py-libs') -Recurse -Force)
+    function Unruled($items) {
+        @($items | Where-Object {
+            $acl = Get-Acl -LiteralPath $_.FullName
+            $acl.AreAccessRulesProtected -or -not @($acl.Access | Where-Object { $_.IsInherited }).Count
+        })
+    }
+    $newPy = "$(& $py -c 'import sys; print(sys.version_info >= (3, 12, 4))')".Trim() -eq 'True'
+    if ($newPy) { Yes 'pip --target on Python 3.12.4 or later leaves what it installs outside the folder''s rules' ((Unruled $libItems).Count -gt 0) }
+    & icacls (Join-Path $stage 'py-libs') /reset /T /Q | Out-Null
+    Yes 'icacls /reset /T puts every py-libs file and folder under the folder''s own rules' ($libItems.Count -gt 0 -and (Unruled $libItems).Count -eq 0)
+} else { Write-Host 'SKIP  the py-libs rules: they are Windows ACLs, read with Get-Acl and reset with icacls, which only Windows has' }
 
 $botLines = @(
     'import thornslib, sys'
@@ -208,7 +208,7 @@ $childLines = @(
 $childText = ($childLines -join "`r`n").Replace('__ROOT__', $rootLit).Replace('__PY__', $pyLit).Replace('__BLOCK__', $blockLit)
 [IO.File]::WriteAllText($child, $childText)
 
-$said = & $ps51 -NoProfile -ExecutionPolicy Bypass -File $child 2>&1 | ForEach-Object { "$_" }
+$said = & $boxPs -NoProfile -ExecutionPolicy Bypass -File $child 2>&1 | ForEach-Object { "$_" }
 $saidText = $said -join "`n"
 $runs = ''
 $runsPath = Join-Path $rootBot 'runs.txt'

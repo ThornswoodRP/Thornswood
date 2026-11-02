@@ -5,7 +5,7 @@
 # request that finishes an issue says Closes #N, and the board's own "Pull
 # request merged" workflow moves the card. A fix people would notice says
 # Refs #N instead, because its issue stays open until a main Ship puts the
-# fix on the main server (Developer-Guide.md, the board), and nothing moved
+# fix on the main server (docs/guide/the-board.md), and nothing moved
 # its card: the board
 # review of 21 Oct (#3192) found Refs fixes sitting in In Progress for days
 # after they merged, and the weekly review of 19 Oct found 72 issues closed
@@ -24,25 +24,25 @@
 # review page, 21 Oct. bot/pr_tasks.py reads the body with the same three
 # patterns while the pull request is open, and test-tasks.yml holds every
 # block to the bot's post rules there (#5199); change a pattern here and
-# change it there, or bot/test-5199-pr-tasks.py fails.
+# change it there, or bot/tests/test-5199-pr-tasks.py fails.
 #
 # WHAT IT DOES. On each push to main, for every commit in it, it asks GitHub
 # which merged pull request the commit came from, and reads its body. For each
-# "Test task for #N" naming an open issue of this repository: it puts the
-# board: Done label on the issue with the board token, so board-status.yml
-# moves the card (a label put on with the run's own token starts no other
-# workflow, so that one would never run), and it writes a comment on the
-# issue with the test task in a fenced block, so the bot never reads it as a
-# test task to post. The main Ship that carries the merge closes the issue
-# with that block as its "Test task:" comment
+# "Test task for #N" naming an open issue of this repository it writes a
+# comment on the issue with the test task in a fenced block, so the bot never
+# reads it as a test task to post. The card moves to Done by itself: board.yml
+# reads the same merged test task (#5185). Until then this put a board: Done
+# label on with Patrick's board token for board-status.yml to carry out.
+# The main Ship that carries the merge closes the issue with that block as
+# its "Test task:" comment
 # (scripts/release/Close-ShippedIssues.ps1, #3279), reading the merge commit
 # and the block from this comment: change its first line or its footer and
 # that script, and tests/test-3279-close-shipped.ps1, change with it. A closed
 # issue or a pull request number is said and passed over. It checks out
 # nothing and runs no action.
 #
-# THE TOKEN. BOARD_TOKEN, in the board environment, which only main may use,
-# the same as board-status.yml; GITHUB_TOKEN for the reads and the comment.
+# THE TOKEN. The run's own, for the reads and the comment. It has no secret
+# and no environment since #5185.
 #
 # A MERGE THE PUSH RUN MISSED (#1626). Until #3273 was fixed, every run read
 # no pull request behind its commits, so the merges of that morning moved
@@ -75,7 +75,6 @@ jobs:
   done:
     name: Move test-tasked issues to Done
     runs-on: windows-latest
-    environment: board
     # A call per commit and three per issue. Past this it is stuck, not slow.
     timeout-minutes: 3
     steps:
@@ -83,7 +82,6 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          BOARD_TOKEN: ${{ secrets.BOARD_TOKEN }}
           COMMITS: ${{ toJSON(github.event.commits.*.id) }}
           MERGES: ${{ inputs.merges }}
         run: |
@@ -122,7 +120,6 @@ jobs:
               if ($cur) { $cur.rest.Add($l) }
             }
             if ($tasks.Count -eq 0) { Write-Host ("#{0}: no test task in the body, nothing to move" -f $num); continue }
-            if (-not $env:BOARD_TOKEN) { throw 'BOARD_TOKEN is not set in the board environment, so no card can be moved (#2863 says how to make it)' }
             foreach ($t in $tasks) {
               $i = Invoke-RestMethod -Method Get -Uri ("$api/issues/" + $t.issue) -Headers $h
               if (Has $i 'pull_request') { Write-Host ("#{0} names #{1}, which is a pull request; passed over" -f $num, $t.issue); continue }
@@ -138,21 +135,20 @@ jobs:
                 if ($page.Count -lt 100) { break }
               }
               if ($said) { Write-Host ("#{0} finishes #{1}, which already holds its done-on-merge comment; passed over" -f $num, $t.issue); continue }
-              $bh = @{ Authorization = "Bearer $env:BOARD_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
-              Invoke-RestMethod -Method Post -Uri ("$api/issues/" + $t.issue + '/labels') -Headers $bh -Body (@{ labels = @('board: Done') } | ConvertTo-Json -Compress) -ContentType 'application/json' | Out-Null
               $steps = (($t.rest -join "`n").Trim())
               # A Dev test task is for developers and goes up as soon as a dev
-              # release carries the work; a Main one when a main Ship does. The
-              # main Ship closes the issue either way, and writes this block on it
-              # unless a test task of the same kind was written after the merge
-              # (Developer-Guide.md, "Test tasks and known issues").
+              # release carries the work, written by that dev Ship (#5199); a
+              # Main one when a main Ship does. The main Ship closes the issue
+              # either way, and writes this block on it unless a test task of
+              # the same kind was written after the merge (docs/guide/the-board.md,
+              # "Test tasks and known issues").
               if ($steps -match '^\s*Server\s*:\s*Dev\s*(\n|$)') {
-                $when = 'This test task is for developers. When a dev release carries it, write a comment holding exactly this, with its Build: line naming that release, and the bot posts it in #dev-test-tasks. The main Ship that carries it closes this issue (scripts/release/Close-ShippedIssues.ps1), and writes this on it if nobody has:'
+                $when = 'This test task is for developers. The dev Ship that carries it writes it on this issue with its Build: line naming that release, and the bot posts it in #dev-test-tasks (scripts/release/Close-ShippedIssues.ps1 -Dev). The main Ship that carries it closes this issue, and writes this on it if nobody has:'
               } else {
                 $when = 'The main Ship that carries it closes this issue with a comment holding exactly this (scripts/release/Close-ShippedIssues.ps1):'
               }
               $body = ('Pull request #{0} merged ({1}), so this is in Done and stays open: the merge puts the fix on the main branch, not on the main server testers play. {2}' -f $num, ([string]$p.merge_commit_sha).Substring(0, 12), $when) + "`n`n" + '```' + "`n" + 'Test task: ' + $t.title + "`n" + $steps + "`n" + '```' + "`n`n---`n_Done on merge, .github/workflows/done-on-merge.yml_"
               Invoke-RestMethod -Method Post -Uri ("$api/issues/" + $t.issue + '/comments') -Headers $h -Body (@{ body = $body } | ConvertTo-Json -Compress) -ContentType 'application/json' | Out-Null
-              Write-Host ("#{0} finishes #{1}: board: Done put on, test task written on the issue" -f $num, $t.issue)
+              Write-Host ("#{0} finishes #{1}: test task written on the issue" -f $num, $t.issue)
             }
           }

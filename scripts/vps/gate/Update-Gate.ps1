@@ -19,10 +19,13 @@
 
   WHAT IT CHANGES, and nothing else: the three files, written into the files
   already there so each keeps its access list (Gate.ps1 stays readable by
-  thornswood-deploy), and gate.json's commit, which ping and Install-Gate
-  -Status show. The account, the keys, the ssh config, the pinned GitHub CLI
-  and the task stay as Install-Gate made them; a change to any of those is
-  still Install-Gate's.
+  thornswood-deploy), gate.json's commit, which ping and Install-Gate
+  -Status show, and gate.json's remote when GitHub names the repository
+  differently now (THE REPOSITORY'S NAME, below), and the broker task's
+  program, which is the pwsh gate.json names (#5356: a task from before
+  then started the broker in Windows PowerShell). The account, the keys, the
+  ssh config, the pinned GitHub CLI and the rest of the task stay as
+  Install-Gate made them; a change to any of those is still Install-Gate's.
 
   HOW IT KEEPS THE GATE UP. A broker that does not start can only be put back
   from One, so:
@@ -44,13 +47,27 @@
   Box-Run.ps1 -OnTheBox sends this verb by itself before any other when the
   gate's files are not main's (#5178).
 
-  -Root and -NoRestart are for the harness (tests\test-2841-deploy-gate.ps1);
+  THE REPOSITORY'S NAME (#5184). gate.json's remote is the address the
+  broker clones, fetches and pings, and the checkout's origin is set to it
+  before every fetch; Install-DeployAgent.ps1 and Ship.ps1 read the
+  repository's owner/name from that origin. Install-Gate wrote it once, so
+  when the repository moved to ThornswoodRP on 1 Nov 2026 the box kept the
+  old name: git followed GitHub's redirect, but the deploy agent's
+  GET /repos/EvilPatrick06/Thornswood/installation answered 404 and dev took
+  no Deployment. So each run asks GitHub, without a token (the repository is
+  public, and GitHub's answer follows a move), what the repository is called
+  now, and writes that name into the remote when it differs. A GitHub that
+  does not answer leaves the remote as it is, and the run says so.
+
+  -Root, -NoRestart and -FullName (GitHub's answer, so no network is asked)
+  are for the harness (tests\test-2841-deploy-gate.ps1);
   the gate passes neither.
 #>
 [CmdletBinding()]
 param(
     [string]$Root = 'C:\Thornswood-Gate',
-    [switch]$NoRestart
+    [switch]$NoRestart,
+    [string]$FullName = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -87,13 +104,31 @@ function Get-Sha([byte[]]$b) {
 }
 
 $cfg = [IO.File]::ReadAllText($cfgPath) | ConvertFrom-Json
+
+# ---- the repository's name as GitHub has it now (THE REPOSITORY'S NAME)
+$remoteWas = [string]$cfg.remote
+$remoteNow = $remoteWas
+if ($remoteWas -match '^ssh://git@ssh\.github\.com:443/([A-Za-z0-9-]+/[A-Za-z0-9._-]+?)(?:\.git)?$') {
+    $asked = $Matches[1]
+    $full = $FullName
+    if (-not $full) {
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+            $full = [string](Invoke-RestMethod -UseBasicParsing -TimeoutSec 30 -Uri ('https://api.github.com/repos/' + $asked) -Headers @{ 'User-Agent' = 'thornswood-gate'; Accept = 'application/vnd.github+json' }).full_name
+        } catch { Write-Host ("  GitHub did not say what $asked is called now (" + $_.Exception.Message + "), so the gate's remote stays as it is") }
+    }
+    if ($full -and $full -notmatch '^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$') { Write-Host "  GitHub named $asked '$full', which is not owner/name, so the gate's remote stays as it is"; $full = '' }
+    if ($full -and $full -cne $asked) { $remoteNow = 'ssh://git@ssh.github.com:443/' + $full + '.git' }
+    elseif ($full) { Write-Host "  the repository is $full, as GitHub names it" }
+} elseif ($remoteWas) { Write-Host "  gate.json's remote ($remoteWas) is not a GitHub address over ssh port 443, so it is left as it is" }
+
 $changed = @()
 foreach ($n in $Names) {
     $at = Join-Path $Root $n
     $old = if (Test-Path -LiteralPath $at) { [IO.File]::ReadAllBytes($at) } else { [byte[]]@() }
     if ((Get-Sha $old) -ne (Get-Sha $new[$n])) { $changed += $n }
 }
-if (-not $changed.Count -and [string]$cfg.commit -eq $commit) {
+if (-not $changed.Count -and [string]$cfg.commit -eq $commit -and $remoteNow -ceq $remoteWas) {
     Write-Host "  ALREADY the gate's three files are main's, installed from $commit"
     exit 0
 }
@@ -120,8 +155,10 @@ foreach ($n in $Names) {
 }
 $was = [string]$cfg.commit
 $cfg.commit = $commit
+if ($remoteNow -cne $remoteWas) { $cfg.remote = $remoteNow }
 [IO.File]::WriteAllText($cfgPath, ($cfg | ConvertTo-Json), $Utf8)
 Write-Host ("  CHANGED " + $(if ($changed.Count) { $changed -join ', ' } else { 'no file, only the record' }) + " from $commit (installed from $was before)")
+if ($remoteNow -cne $remoteWas) { Write-Host "  CHANGED the gate's remote from $remoteWas to $remoteNow, the name GitHub gives the repository now; the broker sets the checkout's origin to it before its next fetch" }
 
 if ($NoRestart) { Write-Host '  not restarted (-NoRestart)'; exit 0 }
 
@@ -149,7 +186,9 @@ $holdScript
 `$utf8 = New-Object Text.UTF8Encoding(`$false)
 function Note([string]`$m) { [IO.File]::AppendAllText(`$log, ((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') + ' ' + `$m + "`r`n"), `$utf8) }
 function GateNote([string]`$m) { [IO.File]::AppendAllText(`$gateLog, ((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') + ' ' + `$m + "`r`n"), `$utf8) }
-function Broker { @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { `$_.CommandLine -like '*GateBroker.ps1*' }) }
+# The broker by what it runs, whichever PowerShell runs it: one from before
+# #5356 runs in Windows PowerShell, and this run moves it to pwsh.
+function Broker { @(Get-CimInstance Win32_Process -Filter "CommandLine LIKE '%GateBroker.ps1%'" | Where-Object { `$_.ProcessId -ne `$PID }) }
 # Wait, up to two hours, until the broker runs no verb: this run's own
 # verb ends first, so its @END reaches the caller before anything restarts.
 `$until = (Get-Date).AddHours(2)
@@ -167,6 +206,17 @@ if (`$busy.Count) { Note ('the broker still ran a verb after two hours, so it wa
 if (-not `$selfExits) { Note 'the broker running predates #5178, so it is stopped'; Stop-ScheduledTask -TaskName `$task }
 while ((Broker).Count -and (Get-Date) -lt `$gone) { Start-Sleep -Milliseconds 250 }
 if ((Broker).Count) { Note 'the broker had not ended after 30 seconds, so it is stopped'; Stop-ScheduledTask -TaskName `$task; while ((Broker).Count -and (Get-Date) -lt `$gone.AddSeconds(30)) { Start-Sleep -Milliseconds 250 } }
+# The broker runs in PowerShell 7 (#5356), the pwsh gate.json names, which
+# Install-Gate found and every verb already runs in. A task Install-Gate
+# made before then starts it in Windows PowerShell, so its program is set to
+# that pwsh here, with the same arguments; the files going back below put
+# the program it had back with them.
+`$wasAction = @((Get-ScheduledTask -TaskName `$task).Actions)[0]
+`$pwsh = [string](Get-Content -LiteralPath (Join-Path `$root 'gate.json') -Raw | ConvertFrom-Json).pwsh
+if (`$pwsh -and (Test-Path -LiteralPath `$pwsh) -and [string]`$wasAction.Execute -ne `$pwsh) {
+  Set-ScheduledTask -TaskName `$task -Action (New-ScheduledTaskAction -Execute `$pwsh -Argument `$wasAction.Arguments) | Out-Null
+  Note ('the broker starts in ' + `$pwsh + ' from now on, not ' + `$wasAction.Execute)
+}
 Note ('starting the broker on ' + `$commit)
 Start-ScheduledTask -TaskName `$task
 `$ok = `$false
@@ -186,6 +236,7 @@ else {
     `$from = Join-Path `$prev `$n
     if (Test-Path -LiteralPath `$from) { `$b = [IO.File]::ReadAllBytes(`$from); `$fs = [IO.File]::Open((Join-Path `$root `$n), 'Truncate', 'Write'); `$fs.Write(`$b, 0, `$b.Length); `$fs.Dispose() }
   }
+  Set-ScheduledTask -TaskName `$task -Action (New-ScheduledTaskAction -Execute `$wasAction.Execute -Argument `$wasAction.Arguments) | Out-Null
   Start-ScheduledTask -TaskName `$task
   GateNote ('UPDATE to ' + `$commit + ' did not start, so the files it replaced were put back from ' + `$prev)
 }
@@ -200,7 +251,7 @@ Write-Host ('  ' + (Set-ThornswoodHold -Target 'Thornswood Gate' -Why ('restarti
 try {
     $old = Get-ScheduledTask -TaskName 'Thornswood Gate Update' -ErrorAction SilentlyContinue
     if ($old) { Unregister-ScheduledTask -TaskName 'Thornswood Gate Update' -Confirm:$false }
-    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $helper + '"')
+    $action = New-ScheduledTaskAction -Execute (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe') -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $helper + '"')
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 3) -MultipleInstances IgnoreNew
     $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
     Register-ScheduledTask -TaskName 'Thornswood Gate Update' -Action $action -Settings $settings -Principal $principal | Out-Null

@@ -33,7 +33,7 @@
   and seconds.
 
   Reads only. Opens the folder's files, writes nothing, connects to nothing.
-  Runs in Windows PowerShell 5.1 on the box and in pwsh anywhere.
+  Runs in PowerShell 7, on the box and anywhere.
   WHO CAN RUN IT. A cloud thread, the weekly review's included, holds no key
   to the box (#2841), so it asks the deploy gate: Read-LauncherStarts is one
   of the gate's verbs (scripts\vps\gate\verbs.json), run from main on the

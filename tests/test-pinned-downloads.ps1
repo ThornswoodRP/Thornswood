@@ -31,7 +31,7 @@ param([string]$RepoPath)
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-$winPs = if ($OnWindows) { Get-WindowsPowerShell } else { $null }
+$boxPs = Get-BoxPowerShell
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 # The tests are in tests\, the repository is one folder up.
@@ -340,11 +340,8 @@ if ($pyBlocks.Count -eq 1) {
     # machine's temp folder and the same run works where TEMP is not set.
     $boxTemp = Join-Path $work 'box-temp'
     $null = New-Item -ItemType Directory -Force -Path $boxTemp
-    $pyShell = $winPs
-    if (-not $OnWindows) {
-        $pyShell = (Get-Process -Id $PID).Path
-        Write-Host 'NOTE  the python block runs in this shell, not in Windows PowerShell 5.1 as on the box: this is not Windows'
-    }
+    # The box runs it in PowerShell 7 since #5356, and so does this.
+    $pyShell = $boxPs
     $fakeExe = Join-Path $work 'stand-in-python.exe'
     Set-Content -LiteralPath $fakeExe -Value 'stand-in python' -NoNewline
     $fakeSha = (Get-FileHash -LiteralPath $fakeExe -Algorithm SHA256).Hash
@@ -378,8 +375,8 @@ function Start-Process {
     $ErrorActionPreference = 'Continue'
     $savedTemp = $env:TEMP
     $env:TEMP = $boxTemp
-    # -ExecutionPolicy Bypass, as the other harnesses that run a script under
-    # Windows PowerShell do: where its policy is Restricted the runner never
+    # -ExecutionPolicy Bypass, as the other harnesses that run a script do:
+    # where the policy is Restricted the runner never
     # loads, and that non-zero exit is not the checksum refusing anything.
     try { $said = @(& $pyShell -NoProfile -ExecutionPolicy Bypass -File $runner 2>$pinErr) }
     finally { $env:TEMP = $savedTemp }

@@ -11,7 +11,7 @@
   This builds stand-ins of every store scripts\vps\Delete-Person.ps1 knows,
   in a scratch folder under the temp folder, for one person who asked, one
   who did not and a character the two share, and runs the real script under
-  Windows PowerShell 5.1, which is what runs it on the VPS:
+  PowerShell 7, which is what runs it on the VPS since #5356:
 
     - the dry run changes no byte and says, by count, what a real run removes,
       what it keeps and which services take the rest at their next start
@@ -84,10 +84,10 @@ Yes '  and reapplies the record, merged with the backup''s, after the restores a
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the runs need Windows PowerShell 5.1, which runs this on the VPS; this is not Windows'
+    Write-Host 'SKIP  the runs: the script locks the record''s folder with a Windows ACL for the backup task''s account, and asks CIM what the machine is, which only Windows has'
     Done
 }
-$ps51 = Get-WindowsPowerShell
+$boxPs = Get-BoxPowerShell
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     Write-Host 'SKIP  the runs need node, which the script edits the JSON with'
     Done
@@ -97,7 +97,7 @@ $script:last = @()
 function Run([string[]]$argv) {
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    try { $script:last = @(& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $Script @argv 2>&1 | ForEach-Object { "$_" }) }
+    try { $script:last = @(& $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $Script @argv 2>&1 | ForEach-Object { "$_" }) }
     finally { $ErrorActionPreference = $eap }
     return $LASTEXITCODE
 }
@@ -412,7 +412,8 @@ try {
     Put $driver @'
 const fs = require('fs'), path = require('path');
 const [repo, site] = process.argv.slice(2);
-const src = fs.readFileSync(path.join(repo, 'site', 'server.js'), 'utf8');
+// The site is server.js over its modules in site\lib since #5357.
+const src = require(path.join(repo, 'tests', 'site-files.js')).source();
 const block = /\/\/ ==== thornswood deletion requests ====([\s\S]*?)\/\/ ==== end thornswood deletion requests ====/.exec(src)[1];
 const D = path.join(site, 'data'), FB = path.join(D, 'for-bot'), UP = path.join(site, 'uploads');
 const putJson = (p, o) => { try { fs.writeFileSync(p, JSON.stringify(o, null, 2)); return true; } catch (e) { return false; } };
@@ -441,7 +442,7 @@ new Function('fs', 'path', 'putJson', 'DATA', 'UP', 'LINKED', 'RULES_OK', 'ATTEM
         finally { $ErrorActionPreference = $eap; Remove-Item Env:\THORNSWOOD_BOT_DATA, Env:\DISCORD_TOKEN -ErrorAction SilentlyContinue }
         $botRan = $true
         Yes 'the bot took its request as it started, and said so with counts' ($botSaid -match 'join numbers 1, open tickets 1; done' -and -not (Test-Path (Join-Path $Bot 'data\deletion-requests.json')))
-    } else { Write-Host 'SKIP  the bot''s start: no Python 3.11 with discord.py here (bot\test-2758-deletion-requests.py runs it nightly)' }
+    } else { Write-Host 'SKIP  the bot''s start: no Python 3.11 with discord.py here (bot\tests\test-2758-deletion-requests.py runs it nightly)' }
 
     $D = Join-Path $Site 'data'
     $lk = J (Join-Path $D 'linked.json')

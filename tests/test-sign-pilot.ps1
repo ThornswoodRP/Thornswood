@@ -6,19 +6,14 @@
 # records\signing\pilot-2163.json.
 $ErrorActionPreference = 'Stop'   # before any file loads, so one that is missing stops here (#3006)
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  the verify half reads Authenticode signatures, and its unsigned test exe is written with Windows PowerShell''s Add-Type, which only Windows has'; exit 0 }
-$ps51 = Get-WindowsPowerShell
-# PowerShell 7 cannot write an exe with Add-Type, so this runs under Windows PowerShell.
-if ($PSVersionTable.PSEdition -eq 'Core') {
-    & $ps51 -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath @args
-    exit $LASTEXITCODE
-}
+if (-not $OnWindows) { Write-Host 'NOT RUN  the verify half reads Authenticode signatures, which are Windows'' own'; exit 0 }
+$boxPs = Get-BoxPowerShell
 $repo = Split-Path -Parent $PSScriptRoot
 $pilot = Join-Path $repo 'scripts\release\Test-SignPilot.ps1'
 $pass = 0; $fail = 0
 function T([bool]$ok, [string]$what) { if ($ok) { Write-Host "PASS  $what"; $script:pass++ } else { Write-Host "FAIL  $what"; $script:fail++ } }
 function Run([string]$dir) {
-    $o = & $ps51 -NoProfile -ExecutionPolicy Bypass -File $pilot -Verify -Out $dir 2>&1 | Out-String
+    $o = & $boxPs -NoProfile -ExecutionPolicy Bypass -File $pilot -Verify -Out $dir 2>&1 | Out-String
     return @{ Code = $LASTEXITCODE; Text = $o }
 }
 
@@ -36,7 +31,16 @@ try {
     T ($r.Code -eq 1) 'a folder with no pilot.exe is refused'
 
     $exe = Join-Path $scratch 'pilot.exe'
-    Add-Type -TypeDefinition 'public static class P { public static int Main() { return 0; } }' -OutputAssembly $exe -OutputType ConsoleApplication
+    # PowerShell 7's Add-Type writes no exe, so the .NET SDK the launcher
+    # builds with makes it, with its apphost, as Test-SignPilot.ps1 does
+    # (#5356, #4823).
+    . (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')
+    $built = $null
+    try { $built = Build-LauncherCode -Exe -Property @{ UseAppHost = 'true' } -Source 'public static class P { public static int Main() { return 0; } }' }
+    catch { ($_.Exception.Message -split "`n") | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
+    $builtExe = if ($built) { [IO.Path]::ChangeExtension($built, '.exe') } else { '' }
+    T ($builtExe -and (Test-Path -LiteralPath $builtExe)) 'the .NET SDK made the unsigned exe'
+    if ($builtExe -and (Test-Path -LiteralPath $builtExe)) { Copy-Item -LiteralPath $builtExe -Destination $exe }
     $h = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
     Set-Content (Join-Path $scratch 'SHA256SUMS') "$h  pilot.exe" -Encoding ascii
     (@{ signedSha256 = $h; unsignedSha256 = 'x' } | ConvertTo-Json) | Set-Content (Join-Path $scratch 'provenance.json')

@@ -155,6 +155,12 @@ foreach ($wf in Get-ChildItem -LiteralPath $Workflows -Filter *.yml) {
             $ro = @(Get-List $runsOn @(Get-Block $jl $k['runs-on'].At 4) | ForEach-Object { $_.ToLowerInvariant() })
             if ($ro.Count) { $labels = $ro }
         }
+        # One of two runners named outright, chosen by a condition (#5292: the
+        # launcher job is on Linux when the pick says the change cannot reach
+        # it, and on Windows otherwise): it can only be one of those two.
+        if ($k.Contains('runs-on') -and $runsOn -match '^\$\{\{\s*.+?\s*&&\s*''([^'']+)''\s*\|\|\s*''([^'']+)''\s*\}\}$') {
+            $labels = @($Matches[1].ToLowerInvariant(), $Matches[2].ToLowerInvariant())
+        }
         # Only while the repository is private (#3685): the box's labels inside
         # the expression while private, a GitHub-hosted runner once public.
         $gated = $false
@@ -178,7 +184,9 @@ foreach ($wf in Get-ChildItem -LiteralPath $Workflows -Filter *.yml) {
     # A pull request may reach the production label only through a job that
     # names this repository as the head, so a fork never does (Patrick, 12 Oct
     # 2026: the VPS backs up pull request builds too, same-repository only).
-    # pull_request_target is never allowed there.
+    # pull_request_target is never allowed there, and neither is merge_group
+    # (#5296): the merge queue runs any queued pull request's code, a fork's
+    # included, and its event names no head repository to hold it to.
     #
     # Once the repository is public (#3685) that condition is no guard: a pull
     # request runs the workflow files of its own branch, so a fork can carry
@@ -189,7 +197,7 @@ foreach ($wf in Get-ChildItem -LiteralPath $Workflows -Filter *.yml) {
     $onProd = $prodJobs.Count -gt 0
     $sameRepo = $onProd -and $sameRepoAll
     $public = $f.github -and -not $f.github.private -and @($f.github.runners).Count -gt 0
-    $prOnProd = $onProd -and ($triggers -contains 'pull_request_target' -or ($triggers -contains 'pull_request' -and ($public -or -not $sameRepo)))
+    $prOnProd = $onProd -and ($triggers -contains 'pull_request_target' -or $triggers -contains 'merge_group' -or ($triggers -contains 'pull_request' -and ($public -or -not $sameRepo)))
     Row 'workflow' "$name runs on" "not $($r.productionLabel) for untrusted code" ("triggers " + ($triggers -join ',') + $(if ($onProd) { "; on $($r.productionLabel)" } else { '' }) + $(if ($sameRepo) { '; same-repository pull requests only' } else { '' }) + $(if ($onProd -and $public -and $triggers -contains 'pull_request') { '; the repository is public' } else { '' })) (-not $prOnProd)
     # Events anyone can cause on a public repository, with no write access:
     # opening, closing or commenting on their own issue, a discussion, a

@@ -56,22 +56,28 @@
 # (LogHandBack.ps1, the way engine.yml hands back its records, #3399). "push"
 # runs nothing but this repository's own scripts and git: it takes the bundle
 # out of make's log, holds it to one commit on main's head that changes only
-# a pin's paths, force pushes engine-pin/next, starts build-pr.yml on it (a
-# push made with the run's own token starts no pull_request run, and a manual
-# run is the event that token may start) and opens or updates the pull
+# a pin's paths, force pushes engine-pin/next and opens or updates the pull
 # request (Open-EnginePinPr.ps1). The pull request is the only way the pin
-# reaches main: the Desk merges it under the merge rule like any other, and
+# reaches main: Bramble merges it under the merge rule like any other, and
 # the release after every change takes it to dev and then main.
 #
-# THE TOKEN MAY OPEN PULL REQUESTS. Patrick's yes on 31 Oct 2026, 3:51 PM:
-# Thornswood's Actions setting "Allow GitHub Actions to create and approve
-# pull requests" is on (records\github-settings.json, workflow_token). Main's
-# ruleset requires no review, so approving gives a token nothing, and pull
-# requests from forks never get a write token (fork_pull_requests there).
+# THE PIN ROBOT'S OWN APP (#5256). The push and the pull request are made with
+# a token of the Thornswood pin robot, a GitHub App that may write contents
+# and pull requests on this repository and nothing else, minted for the job
+# by actions/create-github-app-token from the key in the engine-pin
+# environment (main only, records\github-settings.json). Its push and its
+# pull request start the pull request checks like anybody's. Until 1 Nov 2026
+# the run's own token did both: a push made with it starts no pull_request
+# run, so this started build-pr.yml, test-tasks.yml and pr-body.yml by hand,
+# and after the move to ThornswoodRP the pull_request runs of a pull request
+# github-actions[bot] opened waited for a person to approve them (#5240's,
+# 58 minutes), so the required check never came by itself.
 #
-# NO SECRET, no self-hosted runner, nothing from the fork run here but the
-# front's locked npm build, read only. Every action is named by a full length
-# commit SHA with its tag in a comment, for the reason build.yml gives.
+# ONE SECRET, the App's key, read only by the two jobs that push or open, in
+# the engine-pin environment. No self-hosted runner, and nothing from the fork
+# runs here but the front's locked npm build, read only, in a job that never
+# sees the key. Every action is named by a full length commit SHA with its
+# tag in a comment, for the reason build.yml gives.
 # tests\test-5148-engine-pin.ps1 holds this file's shape.
 name: Engine pin
 on:
@@ -96,11 +102,12 @@ jobs:
     permissions:
       contents: read
       actions: write
-      pull-requests: write
+      pull-requests: read
     outputs:
       step: ${{ steps.look.outputs.step }}
       head: ${{ steps.look.outputs.head }}
       run: ${{ steps.look.outputs.run }}
+      open: ${{ steps.look.outputs.open }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -142,21 +149,37 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host '::error::engine.yml could not be started'; exit 1 }
           Write-Host "engine.yml started for $env:HEAD_COMMIT; engine.yml's wake starts the next look, which moves the pin once it is green"
 
-      - name: Open the pull request the branch is ready for
-        if: steps.look.outputs.open == 'yes'
+  open:
+    name: Open the pull request the branch is ready for
+    needs: look
+    if: needs.look.outputs.open == 'yes'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: engine-pin
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: The pin robot's token
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.PIN_APP_CLIENT_ID }}
+          private-key: ${{ secrets.PIN_APP_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Open it
         shell: pwsh
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           ./scripts/release/Open-EnginePinPr.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          # The test task check reads the pull request's body, so it starts
-          # once the pull request has it; its result is required (#5199).
-          gh workflow run test-tasks.yml --repo $env:GITHUB_REPOSITORY --ref engine-pin/next
-          if ($LASTEXITCODE -ne 0) { Write-Host '::error::the test task check could not be started on engine-pin/next'; exit 1 }
-          # And the release note check, for the same reason (plan part 8).
-          gh workflow run pr-body.yml --repo $env:GITHUB_REPOSITORY --ref engine-pin/next
-          if ($LASTEXITCODE -ne 0) { Write-Host '::error::the release note check could not be started on engine-pin/next'; exit 1 }
 
   make:
     name: Make the pin
@@ -216,10 +239,10 @@ jobs:
     needs: [look, make]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: engine-pin
     permissions:
-      contents: write
-      actions: write
-      pull-requests: write
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -258,22 +281,24 @@ jobs:
           if ($bad.Count) { Write-Host "::error::engine-pin/next changes more than a pin: $($bad -join ', ')"; exit 1 }
           git show --stat --format='%H %s' engine-pin/next
 
-      - name: Push it, check it, and open or update its pull request
+      - name: The pin robot's token
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.PIN_APP_CLIENT_ID }}
+          private-key: ${{ secrets.PIN_APP_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Push it and open or update its pull request
         shell: pwsh
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
+          # The robot's push and pull request start the pull request checks
+          # (build-pr.yml, test-tasks.yml, pr-body.yml) themselves.
           $basic = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$env:GH_TOKEN"))
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $basic" push --force origin engine-pin/next:refs/heads/engine-pin/next
           if ($LASTEXITCODE -ne 0) { Write-Host '::error::engine-pin/next could not be pushed'; exit 1 }
-          gh workflow run build-pr.yml --repo $env:GITHUB_REPOSITORY --ref engine-pin/next
-          if ($LASTEXITCODE -ne 0) { Write-Host '::error::the build check could not be started on engine-pin/next'; exit 1 }
           ./scripts/release/Open-EnginePinPr.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          # The test task check reads the pull request's body, so it starts
-          # once the pull request has it; its result is required (#5199).
-          gh workflow run test-tasks.yml --repo $env:GITHUB_REPOSITORY --ref engine-pin/next
-          if ($LASTEXITCODE -ne 0) { Write-Host '::error::the test task check could not be started on engine-pin/next'; exit 1 }
-          # And the release note check, for the same reason (plan part 8).
-          gh workflow run pr-body.yml --repo $env:GITHUB_REPOSITORY --ref engine-pin/next
-          if ($LASTEXITCODE -ne 0) { Write-Host '::error::the release note check could not be started on engine-pin/next'; exit 1 }

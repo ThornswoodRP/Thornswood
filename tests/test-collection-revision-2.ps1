@@ -356,7 +356,9 @@ if ($sources -eq 0) { Skip 'nothing to compare the page''s order with here; the 
 # #690: nothing the repository ships or deploys names Elysium Estate's old
 # plugin as something to load, and the old file is on its way out everywhere.
 function RepoText([string]$rel) { return [IO.File]::ReadAllText((Join-Path $Repo $rel), [Text.Encoding]::UTF8) }
-$gmText = RepoText 'game\gamemode.js'
+# The gamemode is gamemode.js and the tables it reads from game\gamemode-tables (#5191).
+$gmText = (@(RepoText 'game\gamemode.js') + @(Get-ChildItem -LiteralPath (Join-Path $Repo 'game\gamemode-tables') -Filter *.json -File |
+            Sort-Object Name | ForEach-Object { [IO.File]::ReadAllText($_.FullName, [Text.Encoding]::UTF8) })) -join "`n"
 Yes 'no gamemode table keys a record to ElysiumEstateSSE.esp' (-not ($gmText -match '[0-9a-fA-F]+:ElysiumEstateSSE\.esp'))
 $dataHits = @(Get-ChildItem -LiteralPath (Join-Path $Repo 'game\data') -Filter *.json -File |
               Where-Object { [IO.File]::ReadAllText($_.FullName) -match '[0-9a-fA-F]+:ElysiumEstateSSE\.esp' } | ForEach-Object Name)

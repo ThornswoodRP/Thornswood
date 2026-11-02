@@ -23,16 +23,17 @@
       the feed url in it, so the remirror is how a launcher update reaches
       anybody, and Ship's mid-release Install-Launcher.ps1 refreshes the install
       on the machine that shipped. This fails if a launcher step is ever added
-      after the publish, and it checks the mid-release ones are still there,
+      after the publish, and it checks the mid-release one is still there,
       before the publisher: the built launcher with the root and the build
-      output, and the feed's launcher a kept-launcher -Package Ship puts in
-      the root (#2661).
+      output. The second, the feed's launcher a kept-launcher -Package Ship
+      put in the root (#2661), went with -Package (#4824).
     - Ship runs the helper once, inside a block a dry run never
       reaches, so a dry run cannot touch the VPS or the site.
-    - The remirror call sits after the publisher and before the site news, in the order
-      the website lane pinned: the remirror, then the news, the
-      Discord post and the server countdown, because those three tell people to
-      update and the feed has to be serving the release before that.
+    - The remirror call sits after the publisher and before the Discord post,
+      in the order the website lane pinned: the remirror, then the Discord
+      post and the server countdown, because those tell people to update and
+      the feed has to be serving the release before that. (The site's News
+      page is not sent: the site writes it from the feed, #5187.)
     - Nothing after the tip can fail the release. A script another lane has not
       landed is a line, a remirror that refuses is a line, and Ship still exits
       0: "Exit 1 = refused publish (do not fail the release)".
@@ -196,7 +197,10 @@ $marksCall = @($allCalls | Where-Object { $_.Extent.Text -match "'Refresh-DevNew
 # Since 22 Oct a third, on main only, closes the Done issues the release
 # carries, after the tag, with the commit the release record names
 # (Close-ShippedIssues.ps1, tests\test-3279-close-shipped.ps1, #3279).
-$closeCall = @($allCalls | Where-Object { $_.Extent.Text -match "'Close-ShippedIssues\.ps1'" })
+$closeCall = @($allCalls | Where-Object { $_.Extent.Text -match "'Close-ShippedIssues\.ps1'" -and $_.Extent.Text -notmatch 'Dev = \$true' })
+# Since 1 Nov a fourth, on dev only, writes the Dev test tasks the dev
+# release carries, with the same script and -Dev (#5199).
+$devTaskCall = @($allCalls | Where-Object { $_.Extent.Text -match "'Close-ShippedIssues\.ps1'" -and $_.Extent.Text -match 'Dev = \$true' })
 $calls = @($allCalls | Where-Object { $_.Extent.Text -notmatch "'(Refresh-DevNews|Close-ShippedIssues)\.ps1'" })
 Yes ("  Ship has one Invoke-PostShip call for the remirror ({0})" -f $calls.Count) ($calls.Count -eq 1)
 Yes ("  and one for the dev feed's DEV marks, main only, never on a dry run ({0})" -f $marksCall.Count) (
@@ -207,8 +211,12 @@ Yes ("  and one closing the Done issues it carries, main only, never on a dry ru
     @(Conditions $closeCall[0] | Where-Object { $_ -match '-not \$DryRun\b' }).Count -gt 0 -and
     $closeCall[0].Extent.Text -match 'Commit = \$tagged\.Commit' -and
     $closeCall[0].Extent.StartOffset -gt $shipSrc.IndexOf('$tagged = Add-ReleaseTag'))
+Yes ("  and one writing the Dev test tasks it carries, dev only, never on a dry run, after the tag, with the release's name ({0})" -f $devTaskCall.Count) (
+    $devTaskCall.Count -eq 1 -and @(Conditions $devTaskCall[0] | Where-Object { $_ -match '-not \$DryRun\b' -and $_ -match '-and \$Dev\b' }).Count -gt 0 -and
+    $devTaskCall[0].Extent.Text -match 'Commit = \$tagged\.Commit' -and $devTaskCall[0].Extent.Text -match 'Build = \$devName' -and
+    $devTaskCall[0].Extent.StartOffset -gt $shipSrc.IndexOf('$tagged = Add-ReleaseTag'))
 $atPublish = $shipSrc.IndexOf("& (Join-Path `$Here 'Publish-Update.ps1') @pubArgs")
-$atNews = $shipSrc.IndexOf("'..\ops\Publish-News.ps1'")
+$atNews = $shipSrc.IndexOf("'..\ops\Publish-Discord.ps1'")
 $atAnnounce = $shipSrc.IndexOf("'..\vps\Request-Restart.ps1'")
 $mirrorCall = @($calls | Where-Object { $_.Extent.Text -match "Only = 'Remirror'" })
 $vtCall = @($calls | Where-Object { $_.Extent.Text -match "Only = 'VirusTotal'" })
@@ -228,41 +236,25 @@ Yes '  and no clone, because the remirror works its own out from the channel' (
     $shipSrc -notmatch '\$postArgs = @\{[^\r\n]*ReleaseDir')
 
 # The order on screen is the order it happens in, and it is the one the website
-# lane pinned: the remirror, then the news, the Discord post and
-# the countdown, because those three send people to fetch a release the feed has
+# lane pinned: the remirror, then the Discord post and the countdown, because those three send people to fetch a release the feed has
 # to be serving.
 if ($mirrorCall.Count -eq 1) {
     Yes 'the remirror follows the publisher' ($atPublish -gt 0 -and $mirrorCall[0].Extent.StartOffset -gt $atPublish)
     Yes '  and no VirusTotal Invoke-PostShip' ($vtCall.Count -eq 0)
-    Yes '  and the remirror comes before the site news, the Discord post and the countdown' (
+    Yes '  and the remirror comes before the Discord post and the countdown' (
         $atNews -gt 0 -and $atAnnounce -gt $atNews -and $mirrorCall[0].Extent.StartOffset -lt $atNews)
 }
 
-# The launcher installs Ship does are mid-release ones, before the publish,
-# into the root this release was built from: the launcher it built, and, on a
-# main Ship with -Package that keeps the feed's launcher, the feed's one
-# (Install-FeedLauncher, #2661). No launcher step after the tip.
-#
-# The Join-Path inside the call is a CommandAst of its own and names the same
-# file, so the invocation is the one whose command is not Join-Path.
+# Ship installs no launcher (#4825): the launcher goes out through Velopack
+# (merge-release.yml, promote-main.yml), so neither the one it once built nor
+# the feed's (Install-FeedLauncher, #2661, gone with -Package in #4824) is put
+# in place by a release. The Join-Path inside a call is a CommandAst of its
+# own and names the same file, so the invocation is the one whose command is
+# not Join-Path.
 $installs = @($ship.Ast.FindAll({ param($n) $n -is $CmdAst -and $n.Extent.Text.Contains('Install-Launcher.ps1') -and
                                             $n.GetCommandName() -ne 'Join-Path' }, $true))
-Yes ("Ship calls Install-Launcher.ps1 twice, the built launcher and the feed's (#2661) ({0})" -f $installs.Count) ($installs.Count -eq 2)
-$built = @($installs | Where-Object { $_.Extent.Text -match '@installArgs' })
-$fed   = @($installs | Where-Object { $_.GetCommandName() -eq 'Install-FeedLauncher' })
-Yes '  one is the built launcher''s, one is the feed launcher''s' ($built.Count -eq 1 -and $fed.Count -eq 1)
-Yes '  both before the publisher, not after the tip' (
-    $installs.Count -eq 2 -and @($installs | Where-Object { $_.Extent.StartOffset -ge $atPublish }).Count -eq 0)
-if ($built.Count -eq 1) {
-    # Ship builds a hashtable and splats it (@installArgs), so the call site
-    # no longer spells -Root / -From on the same line as Install-Launcher.ps1.
-    Yes '  the built one with the root and the build output' (
-        $shipSrc -match '\$installArgs = @\{[^\}]*Root = \$Root' -and
-        $shipSrc -match '\$installArgs = @\{[^\}]*From = \$buildOut')
-}
-if ($fed.Count -eq 1) {
-    Yes '  the feed''s one into the root this release was built from' ($fed[0].Extent.Text -match 'Install-FeedLauncher \$pubLauncher \$Root ')
-}
+Yes ("Ship calls Install-Launcher.ps1 nowhere ({0})" -f $installs.Count) ($installs.Count -eq 0)
+Yes '  and no Install-FeedLauncher is left (#4824)' ($shipSrc -notmatch 'Install-FeedLauncher')
 
 # What happens when one of them does not happen. The tip is already published by
 # then, so nothing may be unpublished, and the website lane's rule is that even a

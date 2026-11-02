@@ -111,7 +111,7 @@ if (/hairDye/.test(skills) && /dye/.test(party)) {
 }
 
 // ------------------------------------------- who may steep, and the refusal
-const gm = read('game/gamemode.js') || '';
+const gm = require('./gamemode-tables.js').joined(read('game/gamemode.js')) || '';
 if (listText && /==== thornswood hair dye ====/.test(gm)) {
   const who = JSON.parse(listText).who || {};
   const halves = who.halves || {};
@@ -139,7 +139,7 @@ if (listText && /==== thornswood hair dye ====/.test(gm)) {
       '. Nothing was taken from your pack.';
   yes('the line the page quotes is the one the block builds from the list', built === REFUSAL);
   yes('the professions table names both halves that way',
-      names.every(function (h) { return gm.indexOf('"half": "' + h.charAt(0).toUpperCase() + h.slice(1) + '"') >= 0; }));
+      names.every(function (h) { return gm.indexOf('"half":"' + h.charAt(0).toUpperCase() + h.slice(1) + '"') >= 0; }));
 } else {
   console.log('SKIP  the hair dye block (tailor gate) is not in this checkout yet');
 }

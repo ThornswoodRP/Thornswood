@@ -98,7 +98,7 @@ if ($Install) {
   foreach ($sid in 'S-1-5-18', 'S-1-5-32-544') {
     $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier($sid)), 'FullControl', 'ContainerInherit, ObjectInherit', 'None', 'Allow')))
   }
-  (Get-Item -LiteralPath $Box -Force).SetAccessControl($acl)
+  [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo](Get-Item -LiteralPath $Box -Force), $acl)
   Note "  $Box is SYSTEM's and the Administrators' only"
   if (-not (Test-Path -LiteralPath $Key)) {
     & $keygen -q -t ed25519 -N '""' -C 'thornswood-box-drops-backups' -f $Key
@@ -126,7 +126,7 @@ if ($Install) {
   $trigger = New-CimInstance -CimClass $class -ClientOnly
   $trigger.Subscription = $q
   $trigger.Enabled = $true
-  $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + (Join-Path $Box 'Send-Backups.ps1') + '"')
+  $action = New-ScheduledTaskAction -Execute (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe') -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + (Join-Path $Box 'Send-Backups.ps1') + '"')
   $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 2) -MultipleInstances IgnoreNew
   $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
   Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
@@ -146,7 +146,7 @@ $todo = @(Get-ChildItem -LiteralPath $Root -File | Where-Object { $_.Name -match
 if (-not $todo.Count) { Note '  nothing new to send'; exit 0 }
 $failed = 0
 foreach ($f in $todo) {
-  $check = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $restore -Backup $f.FullName -KeyFile $keyFile -CheckOnly 2>&1
+  $check = & pwsh -NoProfile -ExecutionPolicy Bypass -File $restore -Backup $f.FullName -KeyFile $keyFile -CheckOnly 2>&1
   if ($LASTEXITCODE -ne 0) { Note ("  NOT SENT $($f.Name): it does not open with the passphrase. " + ("$check" -replace '\s+', ' ')); $failed++; continue }
   $sha = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
   $mark = Join-Path $Box ($f.Name + '.done')

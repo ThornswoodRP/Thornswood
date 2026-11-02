@@ -42,7 +42,7 @@
 
 .PARAMETER GitHubRepo
   The repository whose environment -ToEnvironment writes to.
-  EvilPatrick06/Thornswood unless said otherwise.
+  ThornswoodRP/Thornswood unless said otherwise.
 
 .PARAMETER NoPause
   Does not wait for Enter at the end or on a stop.
@@ -51,7 +51,7 @@
 param(
   [switch]$Check,
   [string]$ToEnvironment = '',
-  [string]$GitHubRepo = 'EvilPatrick06/Thornswood',
+  [string]$GitHubRepo = 'ThornswoodRP/Thornswood',
   [switch]$NoPause
 )
 

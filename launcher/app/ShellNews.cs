@@ -1,8 +1,10 @@
 using System;
 using System.Threading;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Threading;
 
 namespace Thornswood
 {
@@ -23,7 +25,7 @@ namespace Thornswood
         //
         // All four are only touched on the window's thread. newsHead is the
         // header line, so an answer can be put in without rebuilding the list
-        // under somebody who has a note's files open.
+        // under somebody reading it.
         static TextBlock newsHead;
         static string mainLive = "";
         static bool mainReading;
@@ -48,7 +50,7 @@ namespace Thornswood
                 string got = null, why = null;
                 try { got = Updater.MainLauncherVersion(cfg); }
                 catch (Exception ex) { why = ex.Message; }
-                win.Dispatcher.BeginInvoke(new Action(delegate { MainVersionRead(got, why); }));
+                Dispatcher.UIThread.Post(delegate { MainVersionRead(got, why); });
             });
         }
 
@@ -87,7 +89,9 @@ namespace Thornswood
             if (items.Length == 0)
             {
                 var empty = new TextBlock();
-                empty.Text = "Nothing posted yet. Anything Patrick writes to the update feed turns up here.";
+                empty.Text = cfg.IsDev
+                    ? "Nothing posted yet. The notes of each release turn up here once the dev server runs it."
+                    : "Nothing posted yet. The notes of each release turn up here once the live server runs it.";
                 empty.Foreground = Res("Faint"); empty.FontSize = 12.5;
                 empty.TextWrapping = TextWrapping.Wrap;
                 newsList.Children.Add(empty);
@@ -96,7 +100,7 @@ namespace Thornswood
 
             // What this build has that main does not.
             //
-            // The dev feed is main's whole history with the dev notes on top,
+            // The dev tab is main's whole history with the dev notes on top,
             // so the tab used to read as one long list with no seam in it. The
             // seam is the useful part: it is the difference between the build
             // in front of you and the build everybody plays, which is the list
@@ -110,7 +114,7 @@ namespace Thornswood
 
                 var ht = new TextBlock();
                 ht.Text = DevHeadText();
-                ht.FontSize = 13.5; ht.FontWeight = FontWeights.SemiBold;
+                ht.FontSize = 13.5; ht.FontWeight = FontWeight.SemiBold;
                 ht.Foreground = Res("Ink"); ht.TextWrapping = TextWrapping.Wrap;
                 head.Children.Add(ht);
                 newsHead = ht;
@@ -119,7 +123,7 @@ namespace Thornswood
                 // shown (#2434). BuildNews also runs when a check lands and
                 // after a theme change; the read goes out only while the tab is
                 // the page in front of somebody.
-                if (pages != null && pages[PageNews].Visibility == Visibility.Visible) ReadMainVersion();
+                if (pages != null && pages[PageNews].IsVisible) ReadMainVersion();
 
                 var hb = new TextBlock();
                 if (ahead == 0)
@@ -160,19 +164,19 @@ namespace Thornswood
                     {
                         var d = new TextBlock();
                         d.Text = n.DateText.ToUpperInvariant();
-                        d.FontSize = 9.5; d.FontWeight = FontWeights.SemiBold;
+                        d.FontSize = 9.5; d.FontWeight = FontWeight.SemiBold;
                         d.Foreground = Res("Accent");
                         d.VerticalAlignment = VerticalAlignment.Center;
                         stamp.Children.Add(d);
                     }
 
-                    // Only a dev feed ever carries one of these, and inside a
-                    // dev feed only the notes main has not had yet.
+                    // Only a dev launcher ever has one of these, on the notes of
+                    // the Releases main's Deployment has not reached yet.
                     if (n.IsDev)
                     {
                         var ct = new TextBlock();
                         ct.Text = "DEV";
-                        ct.FontSize = 8.5; ct.FontWeight = FontWeights.Bold;
+                        ct.FontSize = 8.5; ct.FontWeight = FontWeight.Bold;
                         ct.Foreground = Res("Warn");
 
                         var chip = new Border();
@@ -190,7 +194,7 @@ namespace Thornswood
                 }
 
                 var t = new TextBlock();
-                t.Text = n.title; t.FontSize = 15; t.FontWeight = FontWeights.SemiBold;
+                t.Text = n.title; t.FontSize = 15; t.FontWeight = FontWeight.SemiBold;
                 t.Foreground = Res("Ink"); t.TextWrapping = TextWrapping.Wrap;
                 sp.Children.Add(t);
 
@@ -234,44 +238,6 @@ namespace Thornswood
                         box.Children.Add(row);
                     }
                     if (box.Children.Count > 0) sp.Children.Add(box);
-                }
-
-                if (n.files != null && n.files.Length > 0)
-                {
-                    var toggle = new Button();
-                    toggle.Style = (Style)win.Resources["Ghost"];
-                    toggle.Content = "Show the " + n.files.Length + " file" + (n.files.Length == 1 ? "" : "s");
-                    toggle.HorizontalAlignment = HorizontalAlignment.Left;
-                    toggle.Margin = new Thickness(0, 12, 0, 0);
-
-                    var filesBox = new StackPanel();
-                    filesBox.Visibility = Visibility.Collapsed;
-                    filesBox.Margin = new Thickness(0, 10, 0, 0);
-                    for (int i = 0; i < n.files.Length; i++)
-                    {
-                        var ft = new TextBlock();
-                        ft.Text = n.files[i];
-                        ft.FontSize = 10.5;
-                        ft.FontFamily = new FontFamily("Cascadia Mono, Consolas");
-                        ft.Foreground = Res(n.files[i].StartsWith("- ") ? "Warn" : "Faint");
-                        ft.TextWrapping = TextWrapping.Wrap;
-                        ft.Margin = new Thickness(0, 0, 0, 2);
-                        filesBox.Children.Add(ft);
-                    }
-
-                    StackPanel captured = filesBox;
-                    Button capturedButton = toggle;
-                    string[] capturedFiles = n.files;
-                    toggle.Click += delegate
-                    {
-                        bool open = captured.Visibility == Visibility.Visible;
-                        captured.Visibility = open ? Visibility.Collapsed : Visibility.Visible;
-                        capturedButton.Content = (open ? "Show the " : "Hide the ") + capturedFiles.Length
-                                               + " file" + (capturedFiles.Length == 1 ? "" : "s");
-                    };
-
-                    sp.Children.Add(toggle);
-                    sp.Children.Add(filesBox);
                 }
 
                 var b = new Border();

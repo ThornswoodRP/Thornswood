@@ -47,7 +47,7 @@ $installer = Join-Path $repo 'scripts\deploy\Install-ThornswoodServer.ps1'
 $lockBox = Join-Path $repo 'scripts\vps\Lock-VpsFolders.ps1'
 . (Join-Path $PSScriptRoot 'Windows.ps1')
 if (-not $OnWindows) { Write-Host 'NOT RUN  who may read the server folders is a Windows ACL, read back with Get-Acl, so this runs only on Windows'; exit 0 }
-$ps51 = Get-WindowsPowerShell
+$ps = Get-BoxPowerShell
 
 $script:pass = 0; $script:fail = 0
 function Yes([string]$what, [bool]$cond) {
@@ -211,7 +211,7 @@ try {
     function Box([string[]]$more) {
         $a = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $lockBox, '-Parent', $c, '-SiteSid', $site, '-BotSid', $bot, '-AllowGamingPc') + $more
         $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-        try { $o = @(& $ps51 @a 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $eap }
+        try { $o = @(& $ps @a 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $eap }
         $script:code = $LASTEXITCODE
         return $o
     }
@@ -260,7 +260,7 @@ try {
     if ($notBox) {
         $a = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $lockBox, '-Parent', $c, '-SiteSid', $site)
         $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-        try { $o = (@(& $ps51 @a 2>&1 | ForEach-Object { "$_" }) -join ' ') } finally { $ErrorActionPreference = $eap }
+        try { $o = (@(& $ps @a 2>&1 | ForEach-Object { "$_" }) -join ' ') } finally { $ErrorActionPreference = $eap }
         Yes 'off the box it refuses, says why, and changes nothing' ($o.Contains('REFUSED: ' + $notBox) -and $LASTEXITCODE -ne 0)
     } else { Write-Host 'SKIP  the refusal off the box: this is the box, a server (tests\test-3041-box-guard.ps1 runs it with a workstation stood in)' }
 } finally {

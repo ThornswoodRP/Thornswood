@@ -49,7 +49,7 @@ const os = require('os');
 const path = require('path');
 const vm = require('vm');
 const CR = String.fromCharCode(13);
-const gm = fs.readFileSync(process.env.GM || path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8').split(CR).join('');
+const gm = require('./gamemode-tables.js').joined(fs.readFileSync(process.env.GM || path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8')).split(CR).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {

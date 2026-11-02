@@ -39,6 +39,8 @@ $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $repo = Split-Path -Parent $Here
+# The site is server.js over its modules in site\lib since #5357.
+. (Join-Path $PSScriptRoot 'SiteFiles.ps1')
 
 $script:pass = 0; $script:fail = 0
 function Yes([string]$what, [bool]$cond) {
@@ -221,7 +223,7 @@ try {
     if (-not $node) {
         Write-Host 'SKIP  node is not on PATH, so the copy of the site was not started'
     } else {
-        Copy-Item -LiteralPath (Join-Path $repo 'site\server.js') -Destination (Join-Path $site 'server.js')
+        Copy-SiteProgram -To $site -App (Join-Path $repo 'site')
         $l = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, 0); $l.Start(); $port = $l.LocalEndpoint.Port; $l.Stop()
         # The game check knocks on port 1 (#1816). The system never hands that port
         # out for a listen on 0 and no harness listens on a fixed port

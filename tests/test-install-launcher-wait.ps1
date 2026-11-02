@@ -19,7 +19,7 @@
 #>
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'   # before any file loads, so one that is missing stops here (#3006)
-. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
 # An exe that another process holds cannot be written only under Windows'
 # share modes, and the launcher it closes is a Windows program.
 if (-not $OnWindows) { Write-Host 'NOT RUN  an exe held open by another process, and a launcher closed and replaced, are Windows'' share modes and a Windows program'; exit 0 }
@@ -56,6 +56,10 @@ $destExe = Join-Path $launcherDir 'Thornswood.exe'
 $builtExe = Join-Path $from 'Thornswood.exe'
 Set-Content -LiteralPath $destExe -Value 'OLD-LAUNCHER-BYTES' -Encoding ASCII
 Set-Content -LiteralPath $builtExe -Value 'NEW-LAUNCHER-BYTES-1190' -Encoding ASCII
+# The two icons the exe embeds, which Build-Launcher.ps1 writes beside it and
+# Install-Launcher.ps1 names the shortcuts' icon file from (#887, #4823).
+Copy-Item -LiteralPath $icon -Destination (Join-Path $from 'app.ico')
+Copy-Item -LiteralPath (Join-Path $RepoDir 'launcher\app-dev.ico') -Destination (Join-Path $from 'app-dev.ico')
 
 function Start-Hold([string]$exePath, [string]$readyPath, [string]$scriptPath, [int]$holdMs, [int]$delayMs = 0) {
     $exeEsc = $exePath.Replace('\', '\\')
@@ -135,14 +139,16 @@ Yes 'Install-Launcher put the new exe bytes in place' ($after -eq 'NEW-LAUNCHER-
 Wait-Process -Id $holder4.Id -Timeout 10 -ErrorAction SilentlyContinue | Out-Null
 
 # ---- Closed only after writable when a real launcher process was closed -----
-Yes 'the compiler the build runs is here for the stand-in launcher' (Test-Path -LiteralPath $LauncherCsc)
-$sleepSrc = Join-Path $work 'sleep.cs'
-$sleepExe = Join-Path $work 'sleep.exe'
-Set-Content -LiteralPath $sleepSrc -Value "using System; using System.Threading;`nclass P { static void Main() { Thread.Sleep(60000); } }`n" -Encoding ASCII
-& $LauncherCsc /nologo /out:$sleepExe $sleepSrc | Out-Null
+Yes 'the .NET SDK the launcher builds with is here for the stand-in launcher' (Test-Path -LiteralPath $LauncherDotnet)
+# A program of its own, with the apphost, so it runs as Thornswood.exe and
+# Stop-Launcher finds it by that name. The apphost starts the dll named in it
+# from its own folder, so the dll and its runtime config go beside it.
+$sleepDll = Build-LauncherCode -Exe -Property @{ UseAppHost = 'true' } -Source "using System; using System.Threading;`nclass P { static void Main() { Thread.Sleep(60000); } }`n"
+$sleepExe = [IO.Path]::ChangeExtension($sleepDll, '.exe')
 Yes 'stand-in sleeper exe compiled' (Test-Path -LiteralPath $sleepExe)
 
 Copy-Item -LiteralPath $sleepExe -Destination $destExe -Force
+Get-ChildItem -LiteralPath (Split-Path -Parent $sleepDll) -File | Where-Object { $_.Extension -ne '.exe' } | Copy-Item -Destination $launcherDir -Force
 $proc2 = Start-Process -FilePath $destExe -PassThru -WindowStyle Hidden
 Start-Sleep -Milliseconds 400
 Yes 'stand-in launcher process is running' (-not $proc2.HasExited)

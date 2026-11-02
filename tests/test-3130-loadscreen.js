@@ -5,7 +5,7 @@
 //
 // #3130: the in-game loading screen is Thornswood's animated backdrop and one
 // of its own hints, with no still first. The engine tells the page the moment
-// the game's Loading Menu opens and closes (EvilPatrick06/skymp,
+// the game's Loading Menu opens and closes (ThornswoodRP/skymp,
 // LoadingScreen.h: window event 'skyrimPlatform:loading' with detail.loading,
 // and window.skyrimPlatformLoading) and draws the page while it is open. This
 // holds the page's half:
@@ -31,6 +31,7 @@
 // Read only apart from its own temp folder. Nothing connects to anything.
 const fs = require('fs'), os = require('os'), path = require('path'), vm = require('vm');
 const { spawnSync } = require('child_process');
+const siteFiles = require('./site-files');
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
 
@@ -219,7 +220,7 @@ yes('no hints or no file fails the run', /Gone 'site\\data\\site\\lines\.md has 
 const retired = /function Remove-RetiredOverlays[\s\S]*?\n}\n/.exec(goText);
 yes('Remove-RetiredOverlays keeps it', !!retired && /\$have \+= 'thornswood-hints\.js'/.test(retired[0]));
 
-const cut = /\/\/ ==== thornswood lines ====([\s\S]*?)\/\/ ==== end thornswood lines ====/.exec(read('site/server.js'));
+const cut = /\/\/ ==== thornswood lines ====([\s\S]*?)\/\/ ==== end thornswood lines ====/.exec(siteFiles.source());
 const parseLines = cut ? new Function(cut[1] + '\nreturn parseLines;')() : null;
 yes('site\\server.js has parseLines', !!parseLines);
 const want = parseLines ? parseLines(read('site/data/site/lines.md')).hints : [];

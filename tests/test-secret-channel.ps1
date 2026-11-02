@@ -15,7 +15,7 @@
   HOW. ssh and scp are swapped for fakes. The fake ssh keeps every argument it
   was handed, then runs the command line through cmd.exe on this machine with
   the same standard input, which is what sshd on the VPS does with it. The
-  script that runs is real Windows PowerShell 5.1, as on the VPS. It reports a
+  script that runs is real PowerShell 7, as on the box. It reports a
   hash of what arrived, never the value, and counts the processes whose
   command line holds the value while it runs (Win32_Process, what a process
   list shows). The fake scp copies into a scratch folder that stands in for
@@ -60,12 +60,10 @@ foreach ($f in @($helper, $remotePs1)) {
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the rest: it runs as the VPS does, through cmd.exe into Windows PowerShell 5.1, which only Windows has'
+    Write-Host 'SKIP  the rest: it runs as the box does, through cmd.exe, and counts what Win32_Process shows, which only Windows has'
     Done
 }
-# The far line names powershell, which cmd.exe finds as the VPS does; it has
-# to be Windows PowerShell 5.1, where Windows keeps it.
-$null = Get-WindowsPowerShell
+# The far line names pwsh, which cmd.exe finds on PATH as the box's does.
 $cmdExe = Get-WindowsPath 'System32\cmd.exe'
 
 # ---- the fakes -----------------------------------------------------------
@@ -166,7 +164,7 @@ try {
     $ScCalls.Clear()
     $old = "`$ThornswoodSecret = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('$wire'))`r`n" + $probe
     $e = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($old))
-    $out = & ssh 'tester@box.invalid' "powershell -NoProfile -EncodedCommand $e"
+    $out = & ssh 'tester@box.invalid' "pwsh -NoProfile -EncodedCommand $e"
     Yes 'control: the old way puts the value where these checks look' ((AllSent).Contains($wire))
     Yes 'control: and the process list shows it while the far side runs' ([int](Said $out 'SEEN') -gt 0)
     $old = $null; $e = $null
@@ -175,7 +173,7 @@ try {
     $ScCalls.Clear()
     $out = Invoke-ThornswoodSecretRemote -Target 'tester@box.invalid' -SshArgs @('-o', 'BatchMode=yes') -Script $probe -Secret $secret
     Yes 'short: one ssh call and no scp' (@($ScCalls | Where-Object { $_.Tool -eq 'ssh' }).Count -eq 1 -and @($ScCalls | Where-Object { $_.Tool -eq 'scp' }).Count -eq 0)
-    Yes 'short: the script went as powershell -NoProfile -EncodedCommand' ($ScCalls.Count -and $ScCalls[0].Args[-1] -match '^powershell -NoProfile -EncodedCommand \S+$')
+    Yes 'short: the script went as pwsh -NoProfile -EncodedCommand' ($ScCalls.Count -and $ScCalls[0].Args[-1] -match '^pwsh -NoProfile -EncodedCommand \S+$')
     # Send-Secret.ps1 adds host key checking after the caller's own options (#450).
     Yes 'short: the ssh options and the target are passed as given, host key checking added' ($ScCalls.Count -and ($ScCalls[0].Args[0..4] -join ' ') -eq '-o BatchMode=yes -o StrictHostKeyChecking=yes tester@box.invalid')
     Yes 'short: the far side got the value whole, quotes, dollar, backtick, ampersand and accent included' ((Said $out 'HASH') -eq (Hash $secret))
@@ -210,7 +208,7 @@ try {
     # ---- 3. -Bypass is passed on
     $ScCalls.Clear()
     $out = Invoke-ThornswoodSecretRemote -Target 'tester@box.invalid' -Script $probe -Secret 'abc' -Bypass
-    Yes '-Bypass: the command line says -ExecutionPolicy Bypass' ($ScCalls.Count -and $ScCalls[0].Args[-1] -match '^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ')
+    Yes '-Bypass: the command line says -ExecutionPolicy Bypass' ($ScCalls.Count -and $ScCalls[0].Args[-1] -match '^pwsh -NoProfile -ExecutionPolicy Bypass -EncodedCommand ')
     Yes '-Bypass: the value still arrives' ((Said $out 'HASH') -eq (Hash 'abc'))
 
     # ---- 4. an empty value arrives empty, and the script can refuse on it

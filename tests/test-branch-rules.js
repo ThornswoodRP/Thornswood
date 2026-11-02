@@ -89,10 +89,24 @@ yml.forEach(function (l) {
 // already passed main's tree, and the build job waits for its answer.
 // 31 Oct 2026: "gate" runs the gate harnesses in shares beside the build;
 // the required "Build check result" (#3683, build-pr.yml) needs both.
-const main = jobs.filter(function (j) { return j.id !== 'tested' && j.id !== 'gate'; });
-yes('build.yml has exactly one build job beside its gate (found ' + main.length + ')', main.length === 1);
+// #5183: "pick" builds nothing; it says what each share of the gate runs.
+// #5295: "report" builds nothing either; it merges the shares' reports.
+// #5310, #5360: "gate-linux" is the gate's shares that run on Linux, and
+// "checks" the tree checks that need no Windows; neither builds (#5386).
+const NOT_BUILDS = ['tested', 'pick', 'gate', 'gate-linux', 'report', 'checks'];
+const main = jobs.filter(function (j) { return NOT_BUILDS.indexOf(j.id) < 0; });
+yes('build.yml has exactly one build job beside its gate and checks (found ' + main.length + ': ' + main.map(function (j) { return j.id; }).join(', ') + ')', main.length === 1);
+// The required check of a pull request needs every job of build-pr.yml
+// whose failure must stop a merge: all of them but the report, which only
+// merges the shares' reports, and itself.
 const prYml = read('.github/workflows/build-pr.yml');
-yes('  and the required check of a pull request needs the build and the gate both', /\n    name: Build check result\n    needs: \[launcher, gate\]\n/.test(prYml));
+const prJobs = (prYml.match(/^  [A-Za-z0-9_-]+:\s*$/gm) || []).map(function (l) { return l.trim().replace(/:$/, ''); })
+  .filter(function (id) { return ['pull_request', 'merge_group', 'workflow_dispatch'].indexOf(id) < 0; });
+const resNeeds = /\n    name: Build check result\n    needs: \[([^\]]*)\]\n/.exec(prYml);
+const needs = resNeeds ? resNeeds[1].split(',').map(function (x) { return x.trim(); }).sort() : [];
+const want = prJobs.filter(function (id) { return id !== 'result' && id !== 'report'; }).sort();
+yes('  and the required check of a pull request needs every job but the report (needs ' + needs.join(', ') + '; jobs ' + want.join(', ') + ')',
+  needs.length > 0 && needs.join(',') === want.join(',') && needs.indexOf('launcher') >= 0 && needs.indexOf('gate') >= 0);
 const CHECK = main.length ? main[0].name : null;
 yes('that job is named "Launcher builds" (found "' + CHECK + '")', CHECK === 'Launcher builds');
 
@@ -185,7 +199,8 @@ yes('LauncherVersion.ps1 runs no git command that writes',
 
 // ------------------------------------------------------------ CODEOWNERS
 const coRaw = read('.github/CODEOWNERS');
-const claudeRaw = read('Developer-Guide.md');
+// The whole guide, the index and its pages (tests/guide-text.js): these rules sit on several pages.
+const claudeRaw = require('./guide-text.js').whole();
 const rules = coRaw.split(/\r?\n/).filter(function (l) { return l.trim() && !/^\s*#/.test(l); })
   .map(function (l) { const p = l.trim().split(/\s+/); return { path: p[0], owners: p.slice(1) }; });
 yes('CODEOWNERS has rules to read (' + rules.length + ')', rules.length >= 6);
@@ -215,7 +230,7 @@ yes('every CODEOWNERS owner is one of the owners on the six shared files', badOw
 
 const shared = /An edit to ([\s\S]*?) that blocks others' work gets a line in #dev-coordination/.exec(claudeRaw);
 const sharedNames = shared ? shared[1].replace(/\s+/g, ' ').split(/,\s*|\s+or\s+/).map(function (s) { return s.trim(); }).filter(Boolean) : [];
-yes('Developer-Guide.md lists the six shared files (' + sharedNames.join(', ') + ')', sharedNames.length === 6);
+yes('The guide lists the six shared files (' + sharedNames.join(', ') + ')', sharedNames.length === 6);
 const uncovered = sharedNames.filter(function (n) {
   return !rules.some(function (r) { return path.posix.basename(r.path) === n && TEAM.every(function (o) { return r.owners.indexOf(o) >= 0; }); });
 });
@@ -224,10 +239,10 @@ yes('each of the six shared files has a CODEOWNERS line naming the whole team ('
 
 // ------------------------------------------------------------ the documents
 const docs = [
-  { name: 'Developer-Guide.md', text: flat(claudeRaw, false) },
+  { name: 'The guide', text: flat(claudeRaw, false) },
   { name: '.github/CODEOWNERS', text: flat(coRaw, true) }
 ];
-const PROTECTION = 'gh api repos/EvilPatrick06/Thornswood/branches/main/protection';
+const PROTECTION = 'gh api repos/ThornswoodRP/Thornswood/branches/main/protection';
 
 docs.forEach(function (d) {
   const t = d.text;
@@ -248,10 +263,24 @@ docs.forEach(function (d) {
 // merges once main's ruleset's required check is green. The guide says so,
 // gives the command, and no longer says auto-merge is off.
 const guideText = docs[0].text;
-yes('Developer-Guide.md says auto-merge is on (#5182)', /auto-merge is on/i.test(guideText));
-yes('Developer-Guide.md gives gh pr merge --auto --squash', guideText.indexOf('gh pr merge --auto --squash') !== -1);
-yes('Developer-Guide.md does not say auto-merge is off', !/auto-merge is off/i.test(guideText));
-yes('Developer-Guide.md says main\'s ruleset requires Build check result', /ruleset[^.]*requires[^.]*Build check result/.test(guideText));
+yes('The guide says auto-merge is on (#5182)', /auto-merge is on/i.test(guideText));
+yes('The guide gives gh pr merge --auto --squash', guideText.indexOf('gh pr merge --auto --squash') !== -1);
+yes('The guide does not say auto-merge is off', !/auto-merge is off/i.test(guideText));
+yes('The guide says main\'s ruleset requires Build check result', /ruleset[^.]*requires[^.]*Build check result/.test(guideText));
+
+// #5296 (the redesign's part 5, Patrick's A on 31 Oct 2026): main's ruleset
+// requires the merge queue, squash, each pull request passing on its own, and
+// the guide says auto-merge puts a green pull request in it.
+const settings = JSON.parse(fs.readFileSync(path.join(ROOT, 'records', 'github-repo-settings.json'), 'utf8'));
+const mainRules = ((((settings.repositories || []).find(r => r.repository === 'ThornswoodRP/Thornswood') || {}).rulesets || []).find(r => r.name === 'main') || {}).rules || [];
+const mq = mainRules.find(r => r && r.type === 'merge_queue');
+const mqp = (mq && mq.parameters) || {};
+yes('main\'s ruleset requires the merge queue (#5296)', !!mq);
+yes('  squash, each pull request passing on its own, merging as soon as one passes',
+    mqp.merge_method === 'SQUASH' && mqp.grouping_strategy === 'ALLGREEN' && mqp.min_entries_to_merge === 1 && mqp.min_entries_to_merge_wait_minutes === 0);
+yes('  with every setting GitHub needs given',
+    ['max_entries_to_build', 'max_entries_to_merge', 'check_response_timeout_minutes'].every(k => Number.isInteger(mqp[k]) && mqp[k] > 0));
+yes('The guide says auto-merge puts a green pull request in the merge queue', /puts it in the merge queue/.test(guideText));
 
 const sd = docs[0].text;
 // #3617. While enforce_admins is off, "GitHub refuses it" is true only for
@@ -263,24 +292,24 @@ const sd = docs[0].text;
   [/went on, because Ship writes nothing/, 'that enforce_admins went on, as if it still is'],
   [/refuses a push from everybody/i, 'that main refuses a push from everybody']
 ].forEach(function (b) {
-  yes('Developer-Guide.md does not say ' + b[1], !b[0].test(sd));
+  yes('The guide does not say ' + b[1], !b[0].test(sd));
 });
-yes('Developer-Guide.md says GitHub holds an admin to none of main\'s rules while enforce_admins is off',
+yes('The guide says GitHub holds an admin to none of main\'s rules while enforce_admins is off',
     /enforce_admins off, GitHub holds an admin to none of main's rules/.test(sd));
-yes('Developer-Guide.md says for whom a push to main is refused: write access, not the admin account',
+yes('The guide says for whom a push to main is refused: write access, not the admin account',
     /GitHub refuses a push to main from write access\. It does not refuse one from the admin account/.test(sd) &&
     /GitHub refuses it from write access; from the admin account it does not/.test(sd));
-yes('Developer-Guide.md says for whom a force push to main is refused',
+yes('The guide says for whom a force push to main is refused',
     /Never force push main: GitHub refuses it from write access, but not from the admin account/.test(sd));
 yes('Ship.ps1 does not say main refuses a push from everybody',
     !/refuses a push from everybody|refuses a\s+#?\s*push from everybody/i.test(flat(shipSrc, true)));
-yes('Developer-Guide.md does not say Ship bumps the version; it says the version comes from the build (#5179)',
-    !/Ship bumps/i.test(sd) && /### The version comes from the build/.test(sd) && /LauncherVersion\.ps1/.test(sd));
-yes('Developer-Guide.md does not say Ship patches the client; it checks it with Sync-Client.ps1 -Check',
+yes('The guide does not say Ship bumps the version; it says the version comes from the build (#5179)',
+    !/Ship bumps/i.test(sd) && /## The version comes from the build/.test(sd) && /LauncherVersion\.ps1/.test(sd));
+yes('The guide does not say Ship patches the client; it checks it with Sync-Client.ps1 -Check',
     !/patches the client/i.test(sd) && /Sync-Client\.ps1 -Check/.test(sd));
-yes('Developer-Guide.md does not say the other person reads every pull request, which nothing enforces',
+yes('The guide does not say the other person reads every pull request, which nothing enforces',
     !/The other person reads the pull request/i.test(sd));
-yes('Developer-Guide.md says Patrick\'s own work goes through a pull request too',
+yes('The guide says Patrick\'s own work goes through a pull request too',
     /Every change goes through a pull request, Patrick's included/.test(sd));
 [docs[0]].forEach(function (d) {
   // scripts\ and the other folders a release is built from since phase 8 of #440.
@@ -315,7 +344,7 @@ if (!LIVE) {
   // holds an admin to none of main's rules" is true only while none reaches main.
   let rs = null;
   try {
-    rs = JSON.parse(execSync('gh api repos/EvilPatrick06/Thornswood/rules/branches/main', { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] }).toString('utf8'));
+    rs = JSON.parse(execSync('gh api repos/ThornswoodRP/Thornswood/rules/branches/main', { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] }).toString('utf8'));
   } catch (e) {
     console.log('      ' + String(e.message).split('\n')[0]);
   }
@@ -330,7 +359,7 @@ if (!LIVE) {
   }
   let auto = null;
   try {
-    auto = execSync('gh api repos/EvilPatrick06/Thornswood --jq .allow_auto_merge', { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] }).toString('utf8').trim();
+    auto = execSync('gh api repos/ThornswoodRP/Thornswood --jq .allow_auto_merge', { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] }).toString('utf8').trim();
   } catch (e) { }
   yes('live: auto-merge is on, as the guide says (#5182; GitHub says ' + auto + ')', auto === 'true');
 }

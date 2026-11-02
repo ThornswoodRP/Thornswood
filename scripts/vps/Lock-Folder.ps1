@@ -48,9 +48,7 @@ function Lock-ThornswoodFolder {
     }
     # Only the access rules are written back, never the audit part (#1120).
     $item = Get-Item -LiteralPath $Path -Force
-    if ($PSVersionTable.PSEdition -eq 'Core') {
-        [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo]$item, [Security.AccessControl.DirectorySecurity]$acl)
-    } else { $item.SetAccessControl($acl) }
+    [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo]$item, [Security.AccessControl.DirectorySecurity]$acl)
 }
 
 # Text for a script that runs on the box: makes $Path when it is missing and

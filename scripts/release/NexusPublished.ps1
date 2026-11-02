@@ -22,7 +22,7 @@
   repository puts its own NexusPublished.ps1 there in place of this one
   (tests\fixtures\collection-revision.ps1), so no harness asks Nexus.
 
-  Works on Windows PowerShell 5.1 and PowerShell 7.
+  Runs in PowerShell 7.
 #>
 [CmdletBinding()]
 param(

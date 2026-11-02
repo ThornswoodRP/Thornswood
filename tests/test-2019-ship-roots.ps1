@@ -45,6 +45,12 @@
           -SkyrimFrom on a made root is said and not used. A file of the
           source that changes after it was checked stops Make (the stamp
           check, called as Make calls it).
+       f. The tool's own project, ShipRoot.csproj (#4823): it names only
+          launcher files that exist and none that uses Avalonia, at the
+          launcher's framework, C# version and package versions; it builds
+          with the .NET SDK on every machine, and the program it builds
+          refuses a channel that is not main or dev. Update-ShipRoot.ps1
+          builds it with dotnet build, not MSBuild.
     2. Where.ps1 and where.js: with no record ClientDist and ServerDist are
        under the checkout's engine\skymp; with Setup-ShipMachine's record they
        are under the recorded fork's build, for every clone; a record naming
@@ -61,8 +67,10 @@
        Ship, N). Setup-ShipMachine.ps1 takes -SkyrimFrom and hands it to
        Update-ShipRoot.ps1, not with -Check.
 
-  Nothing outside its own scratch folder is written. Needs the Build Tools'
-  csc (tests\Launcher-Csc.ps1) and node.
+  Nothing outside its own scratch folder and its build under out\harness is
+  written. Needs the .NET SDK the launcher builds with (tests\Launcher-Csc.ps1,
+  #4823) and node. 1 is built on every machine and run on Windows only: OwnGame
+  lays the game folder out by Windows paths and links with kernel32.
 #>
 [CmdletBinding()]
 param([string]$Scratch)
@@ -70,7 +78,7 @@ param([string]$Scratch)
 $env:THORNSWOOD_HARNESS = '1'
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the .NET SDK the launcher builds with (#498, #4823)
 $Here = Split-Path -Parent $PSScriptRoot
 $App = Join-Path $Here 'launcher\app'
 $Tool = Join-Path $Here 'scripts\release\ShipRoot'
@@ -414,21 +422,14 @@ namespace Thornswood
 }
 '@
 
-if ($OnWindows) {
-    Yes 'the Build Tools csc the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherCsc)
-    if (-not (Test-Path -LiteralPath $LauncherCsc)) { Done }
-    $refs = @(); $missing = @()
-    foreach ($n in $LauncherNeeded) { $p = Find-LauncherRef $n; if ($p) { $refs += $p } else { $missing += $n } }
-    Yes ('every framework reference Thornswood.csproj names is on this machine' + $(if ($missing.Count) { ', missing ' + ($missing -join ', ') } else { '' })) ($missing.Count -eq 0)
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (Test-Path -LiteralPath $LauncherDotnet) {
     # OwnGameKinds and Verify name LastPlugin (#2791), which reads the game's archives through FromGameArchive.cs.
-    $real = @('OwnGame.cs', 'OwnGameShare.cs', 'OwnGameKinds.cs', 'Downgrade.cs', 'Steam.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'Swallow.cs', 'Progress.cs', 'DevBuild.cs', 'LastPlugin.cs', 'FromGameArchive.cs') |
+    # Config and OwnGame read their JSON through LooseString.cs, and Downgrade asks with Ask.cs (#4823).
+    $real = @('OwnGame.cs', 'OwnGameShare.cs', 'OwnGameKinds.cs', 'Downgrade.cs', 'Steam.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'Swallow.cs', 'Progress.cs', 'DevBuild.cs', 'LastPlugin.cs', 'FromGameArchive.cs', 'LooseString.cs', 'Ask.cs') |
         ForEach-Object { Join-Path $App $_ }
     $real += @((Join-Path $Tool 'ShipRoot.cs'), (Join-Path $Tool 'OwnGameShipRoot.cs'))
     foreach ($f in $real) { Yes ("$([IO.Path]::GetFileName($f)) is there") (Test-Path -LiteralPath $f) }
-    $stubFile = Join-Path $work 'Stubs.cs'
-    $driverFile = Join-Path $work 'Driver.cs'
-    [IO.File]::WriteAllText($stubFile, $stubs, $utf8)
-    [IO.File]::WriteAllText($driverFile, $driver, $utf8)
     $skyrimList = Join-Path $work 'skyrim-files.json'
     # Real SHA-1s of what the driver puts in its Steam copy (#2603): the exe is
     # 37,157,144 zero bytes, the rest short texts.
@@ -441,22 +442,20 @@ if ($OnWindows) {
     }
     $rows = @($listed.Keys | ForEach-Object { '    "' + $_ + '": { "bytes": ' + $listed[$_][0] + ', "sha1": "' + $listed[$_][1] + '", "depot": "1" }' })
     [IO.File]::WriteAllText($skyrimList, ("{`n  ""build"": ""1.6.1170"",`n  ""files"": {`n" + ($rows -join ",`n") + "`n  }`n}`n"), $utf8)
-    $exe = Join-Path $work 'ship-root-test.exe'
-    $cscArgs = @('/noconfig', '/nologo', '/target:exe', '/warn:0', "/langversion:$LauncherLangVersion", '/main:Thornswood.ShipRootTest', "/out:$exe",
-                 "/resource:$skyrimList,skyrim-files.json", ("/resource:" + (Join-Path $Here 'records\ui-gone.json') + ",ui-gone.json"))
-    foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-    foreach ($f in $real) { $cscArgs += (Resolve-Path -LiteralPath $f).Path }
-    $cscArgs += $stubFile, $driverFile
-    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $compiled = & $LauncherCsc @cscArgs 2>&1
-    $ErrorActionPreference = $old
-    $built = ($LASTEXITCODE -eq 0) -and (Test-Path -LiteralPath $exe)
-    Yes 'the ship root tool compiles with the real OwnGame and the driver' $built
-    if ($built) {
+    $exe = $null; $compiled = @()
+    try {
+        $exe = Build-LauncherCode -Exe -Main 'Thornswood.ShipRootTest' -Source $stubs, $driver -File @($real | ForEach-Object { (Resolve-Path -LiteralPath $_).Path }) `
+            -Resource @{ 'skyrim-files.json' = $skyrimList; 'ui-gone.json' = (Join-Path $Here 'records\ui-gone.json') }
+    } catch { $compiled = @($_.Exception.Message -split "`n") }
+    Yes 'the ship root tool builds with the real OwnGame and the driver, with the .NET SDK the launcher builds with' ($null -ne $exe)
+    if (-not $exe) { foreach ($l in $compiled) { Write-Host "      $l" } }
+    elseif (-not $OnWindows) {
+        Write-Host 'SKIP  1. the ship root tool run on a pretend Steam, Vortex and root: OwnGame lays the game folder out by Windows paths and makes its links with kernel32, so it runs on Windows only'
+    } else {
         $scene = Join-Path $work 'machine'
         $null = New-Item -ItemType Directory -Force -Path $scene
         $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-        $out = & $exe $scene 2>&1
+        $out = Invoke-LauncherExe $exe $scene 2>&1
         $code = $LASTEXITCODE
         $ErrorActionPreference = $old
         foreach ($l in @($out)) {
@@ -466,15 +465,59 @@ if ($OnWindows) {
             else { Write-Host $s }
         }
         Yes 'the driver finished and agrees' ($code -eq 0)
-    } else { foreach ($l in @($compiled)) { Write-Host "      $l" } }
-} else {
-    Write-Host 'SKIP  1. the ship root tool, compiled with the real OwnGame and run: the build''s compiler (the Build Tools'' csc, against .NET Framework 4.8.1) is only on Windows'
+    }
 }
+
+# ------------------------------------------- 1f. the tool's own project ----
+# What Update-ShipRoot.ps1 builds at the start of every Ship: OwnGame's
+# closure, no window (#4823).
+$projPath = Join-Path $Tool 'ShipRoot.csproj'
+$projText = [IO.File]::ReadAllText($projPath)
+$appDir = $App.TrimEnd('\', '/')
+$named = @([regex]::Matches($projText, '<Compile Include="\$\(ThornswoodApp\)([^"]+)"') | ForEach-Object { $_.Groups[1].Value })
+$toolOwn = @([regex]::Matches($projText, '<Compile Include="\$\(MSBuildThisFileDirectory\)([^"]+)"') | ForEach-Object { $_.Groups[1].Value })
+Yes ('1f. ShipRoot.csproj names its own two files and launcher files (' + $named.Count + ')') (
+    $named.Count -gt 0 -and (@($toolOwn | Sort-Object) -join ',') -eq 'OwnGameShipRoot.cs,ShipRoot.cs' -and
+    $projText -match '<EnableDefaultItems>false</EnableDefaultItems>' -and $projText -notmatch '<Compile Include="[^"]*\*')
+$gone = @($named | Where-Object { -not (Test-Path -LiteralPath (Join-Path $appDir $_)) })
+Yes ('1f.   every one of them is in launcher\app' + $(if ($gone.Count) { ', not ' + ($gone -join ', ') } else { '' })) ($gone.Count -eq 0)
+$ui = @($named | Where-Object { (Test-Path -LiteralPath (Join-Path $appDir $_)) -and ([IO.File]::ReadAllText((Join-Path $appDir $_)) -match '(?m)^\s*using Avalonia') })
+Yes ('1f.   and none of them is the window''s (no using Avalonia)' + $(if ($ui.Count) { ', not ' + ($ui -join ', ') } else { '' })) ($ui.Count -eq 0)
+$parts = @(Get-ChildItem -LiteralPath $appDir -Filter '*.cs' -File | Where-Object { [IO.File]::ReadAllText($_.FullName) -match 'static partial class OwnGame\b' } | ForEach-Object { $_.Name })
+Yes ('1f.   every part of OwnGame is in it (' + ($parts -join ', ') + ')') ($parts.Count -gt 0 -and @($parts | Where-Object { $named -notcontains $_ }).Count -eq 0)
+$launcherProj = [IO.File]::ReadAllText((Join-Path $appDir 'Thornswood.csproj'))
+function ProjValue([string]$text, [string]$name) { $m = [regex]::Match($text, '<' + $name + '>([^<]+)</' + $name + '>'); if ($m.Success) { $m.Groups[1].Value } else { '' } }
+Yes '1f.   at the launcher''s framework and C# version' (
+    (ProjValue $projText 'TargetFramework') -eq (ProjValue $launcherProj 'TargetFramework') -and (ProjValue $projText 'TargetFramework') -ne '' -and
+    (ProjValue $projText 'LangVersion') -eq (ProjValue $launcherProj 'LangVersion'))
+$pkgs = @([regex]::Matches($projText, '<PackageReference Include="([^"]+)" Version="([^"]+)"') | ForEach-Object { [pscustomobject]@{ Name = $_.Groups[1].Value; Version = $_.Groups[2].Value } })
+$offPkg = @($pkgs | Where-Object { $launcherProj -notmatch ('<PackageReference Include="' + [regex]::Escape($_.Name) + '" Version="' + [regex]::Escape($_.Version) + '"') } | ForEach-Object { $_.Name + ' ' + $_.Version })
+Yes ('1f.   with only the launcher''s packages, at its versions' + $(if ($offPkg.Count) { ', not ' + ($offPkg -join ', ') } else { '' })) ($offPkg.Count -eq 0 -and @($pkgs | Where-Object { $_.Name -like 'Avalonia*' }).Count -eq 0)
+if (Test-Path -LiteralPath $LauncherDotnet) {
+    $toolOut = Join-Path $work 'shiproot-tool'
+    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    $built = & $LauncherDotnet build $projPath -c Release -o $toolOut --nologo -v quiet --disable-build-servers 2>&1 | Out-String
+    $rc = $LASTEXITCODE
+    $ErrorActionPreference = $old
+    $toolDll = Join-Path $toolOut 'Thornswood-ShipRoot.dll'
+    Yes '1f. ShipRoot.csproj builds with the .NET SDK the launcher builds with' ($rc -eq 0 -and (Test-Path -LiteralPath $toolDll))
+    if ($rc -ne 0) { ($built -split "`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
+    else {
+        $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        $said = @(& $LauncherDotnet $toolDll -Root (Join-Path $work 'no-root') -Channel nightly 2>&1 | ForEach-Object { "$_" })
+        $rc = $LASTEXITCODE
+        $ErrorActionPreference = $old
+        Yes '1f.   and the program it builds refuses a channel that is not main or dev, with a sentence' ($rc -eq 1 -and ($said -join ' ') -match 'STOP\. -Channel is main or dev, and it was nightly\.')
+    }
+}
+$upd = [IO.File]::ReadAllText((Join-Path $Release 'Update-ShipRoot.ps1'))
+Yes '1f. Update-ShipRoot.ps1 builds it with dotnet build, not MSBuild' (
+    $upd -match "\`$dotnet\.Source build \(Resolve-Path -LiteralPath \`$proj\)\.Path -c Release -o \`$out" -and $upd -notmatch 'Find-MSBuild|Find-ThornswoodMSBuild')
 
 # ============================================== 2. Where.ps1 and where.js ====
 $repo = Join-Path $work 'repo'
 New-Item -ItemType Directory -Force -Path (Join-Path $repo 'scripts\release'), (Join-Path $repo 'records') | Out-Null
-foreach ($n in 'Where.ps1', 'where.js', 'Update-ShipRoot.ps1', 'Sync-Client.ps1', 'RecordShape.ps1', 'Read-JsonFile.ps1', 'Get-ScratchDir.ps1', 'Find-MSBuild.ps1') {
+foreach ($n in 'Where.ps1', 'where.js', 'Update-ShipRoot.ps1', 'Sync-Client.ps1', 'RecordShape.ps1', 'Read-JsonFile.ps1', 'Get-ScratchDir.ps1') {
     Copy-Item -LiteralPath (Join-Path $Release $n) -Destination (Join-Path $repo 'scripts\release')
 }
 Copy-Item -LiteralPath (Join-Path $Here 'layout.json') -Destination $repo
@@ -578,11 +621,10 @@ $callAt = $shipText.IndexOf("& (Join-Path `$Here 'Update-ShipRoot.ps1') -Channel
 Yes '4. Ship.ps1 runs Update-ShipRoot.ps1 for the channel''s root' ($callAt -ge 0)
 $rootAt = $shipText.IndexOf("Where.ps1') `$(if (`$Dev) { 'ShipRootDev' } else { 'ShipRoot' })")
 $vortexAt = $shipText.IndexOf("is a folder Vortex deploys into (Game\Data\vortex.deployment.json is there), so a release is never built from it")
-$versionAt = $shipText.IndexOf('# ------------------------------------------------------------ version')
 $genAt = $shipText.IndexOf("Head 'Animation and body files'")
-$buildAt = $shipText.IndexOf("Head 'Building the launcher'")
+$pubAt = $shipText.IndexOf("Head 'Publishing'")
 Yes '4.   after it knows the root and has refused a folder Vortex deploys into' ($rootAt -ge 0 -and $vortexAt -ge 0 -and $callAt -gt $rootAt -and $callAt -gt $vortexAt)
-Yes '4.   and before the version moves, the collection is asked whether it builds the animation and body files, or the launcher is built' ($callAt -lt $versionAt -and $callAt -lt $genAt -and $callAt -lt $buildAt)
+Yes '4.   and before the collection is asked whether it builds the animation and body files, or anything is published (Ship builds no launcher since #4825)' ($genAt -gt $callAt -and $pubAt -gt $callAt)
 $setupText = [IO.File]::ReadAllText($setup)
 Yes '4. Setup-ShipMachine.ps1 takes -SkyrimFrom and hands it to Update-ShipRoot.ps1, not with -Check (#2603)' (
     $setupText -match '\[string\]\$SkyrimFrom' -and $setupText -match "(?s)if \(\`$Check\) \{ \`$upArgs\['Check'\] = \`$true \}\s*elseif \(\`$SkyrimFrom\) \{ \`$upArgs\['SkyrimFrom'\] = \`$SkyrimFrom \}")

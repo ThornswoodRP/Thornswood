@@ -34,7 +34,7 @@ const vm = require('vm');
 const CR = String.fromCharCode(13);
 const read = function (p) { return fs.readFileSync(p, 'utf8').split(CR).join(''); };
 
-const gm = read(process.env.GM || path.join(REPO_DIR, 'game', 'gamemode.js'));
+const gm = require('./gamemode-tables.js').joined(read(process.env.GM || path.join(REPO_DIR, 'game', 'gamemode.js')));
 /*
   One topic of the help panel (#1633), as a fresh install reads it: /help's
   topics moved out of the gamemode into game/ui/thornswood-help.js, each a
@@ -92,7 +92,7 @@ function liftSpan(src, first, lastOpen) {
   return b < 0 ? null : src.slice(a, b + SHUT.length);
 }
 
-const cropCode = slice(gm, '// ==== CROPS_BY_BASE, generated ====', 'var CROPS = mergeCrops();');
+const cropCode = slice(gm, 'var CROPS_BY_BASE = ', 'var CROPS = mergeCrops();');
 const farmBlock = slice(gm, '// ==== thornswood farming ====', '// ==== end thornswood farming ====');
 const propBlock = slice(gm, '// ==== thornswood property ====', '// ==== end thornswood property ====');
 const tstart = gm.indexOf('    farming: {');

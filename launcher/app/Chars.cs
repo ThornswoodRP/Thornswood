@@ -337,8 +337,8 @@ namespace Thornswood
         /// profile id, so two people on two different machines both connected
         /// as profile 2 and both loaded the same character:
         ///
-        ///     Connecting a user 1 with ip 203.0.113.10   -> 1 logged as 2
-        ///     Connecting a user 2 with ip 203.0.113.20 -> 2 logged as 2
+        ///     Connecting a user 1 with ip 203.0.113.10  -> 1 logged as 2
+        ///     Connecting a user 2 with ip 203.0.113.20  -> 2 logged as 2
         ///     Loading character ff000000                (the same one, twice)
         ///
         /// Which also meant creation never ran for either of them: the server
@@ -1109,8 +1109,8 @@ namespace Thornswood
         /// second program, so the first time it runs Windows Firewall stops
         /// the game to ask about a name nobody recognises.
         ///
-        /// NirnLab is not ours. Package-Thornswood lists NirnLabUIPlatform
-        /// among the folders that never go into the installer, and
+        /// NirnLab is not ours. Ship-Rules.ps1 lists NirnLabUIPlatform
+        /// among the folders that never go into a release ($ShipForeignDataDirs), and
         /// Clean-OtherServers names it as another roleplay server's interface
         /// framework. Machines that have it got it from that server's
         /// collection. Every other part of this repo treats it as somebody

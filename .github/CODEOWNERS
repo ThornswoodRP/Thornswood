@@ -1,11 +1,11 @@
 # A pull request that touches one of these files asks the people named here for
-# a review. Developer-Guide.md, "Signing, the build check, and the six shared
+# a review. docs/guide/how-work-moves.md, "Signing, the build check, and the six shared
 # files", says why these. It is a request only: on main, enforce_admins is off,
 # there is no required check, required approving reviews is 0 and the code owner
 # review is off. Read the live settings, and check this file after an edit:
 #
-#     gh api repos/EvilPatrick06/Thornswood/branches/main/protection
-#     gh api repos/EvilPatrick06/Thornswood/codeowners/errors
+#     gh api repos/ThornswoodRP/Thornswood/branches/main/protection
+#     gh api repos/ThornswoodRP/Thornswood/codeowners/errors
 
 /launcher/app/Shell.cs        @EvilPatrick06 @WiccanDjinn
 /launcher/app/Checks.cs       @EvilPatrick06 @WiccanDjinn

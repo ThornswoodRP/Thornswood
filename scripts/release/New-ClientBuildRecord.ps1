@@ -195,7 +195,7 @@ if (-not $BuiltBy) {
 $record = [ordered]@{
   recordedUtc          = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
   builtUtc             = $newest.ToString('yyyy-MM-ddTHH:mm:ssZ')
-  fork                 = 'https://github.com/EvilPatrick06/skymp'
+  fork                 = 'https://github.com/ThornswoodRP/skymp'
   forkBranch           = $branch
   forkCommit           = $commit
   upstreamBase         = $base

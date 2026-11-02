@@ -23,7 +23,7 @@ const vm = require('vm');
 const REPO = path.join(__dirname, '..');
 const SRC = process.env.GM || path.join(REPO, 'game', 'gamemode.js');
 const CR = String.fromCharCode(13);
-const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const src = require('./gamemode-tables.js').joined(fs.readFileSync(SRC, 'utf8')).split(CR).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -45,7 +45,7 @@ const CHARACTER = between('// ==== thornswood character ====', '// ==== end thor
 const tableAt = src.indexOf('  var RECIPES_BY_ID = {');
 const tableEnd = tableAt < 0 ? -1 : src.indexOf('\n  };\n', tableAt);
 let TABLE = null;
-try { TABLE = JSON.parse(src.slice(tableAt + '  var RECIPES_BY_ID = '.length, tableEnd + 4)); } catch (e) { TABLE = null; }
+try { TABLE = require('./gamemode-tables.js').inGamemode(src, 'RECIPES_BY_ID'); } catch (e) { TABLE = null; }
 yes('the rules, the character store and the recipe table are in the gamemode', !!(RULES && CHARACTER && TABLE));
 if (!(RULES && CHARACTER && TABLE)) { done(); }
 

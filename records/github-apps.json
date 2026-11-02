@@ -1,0 +1,201 @@
+{
+ "about": "What each GitHub App that works on Thornswood's repositories may do: the six Hermes Bots' two Apps, the box's admin App, the outside watcher's App and the engine pin robot (the redesign's part 20, plan lines 26 and 27, 1 Nov 2026). Each App holds exactly the permissions written here, at the level written, and only the webhook events written here, each with its reason in events_why: what its job needs and nothing more. Every night scripts/dev/Check-AppPermissions.js reads each App from GitHub (GET /apps/<slug>) and names any permission or event the App has that this does not give it, and any this gives it that it lacks; the night is red until GitHub and this file agree. An App's permissions are changed only by Patrick, on its settings page, then accepted on each installation; the change is a pull request to this file first, with the reason in the permission's why, and a card on the report page with the clicks. Patrick's own agents are listed apart under patrick_agents: none of them holds a Bot App's key, and no Bot App is one of them. The repositories each App is installed on are written here for people to read; the nightly check cannot see an installation (only the App's own key can), so the box admin App's installation-repos ask and each Bot host's own check read those. A why is this file's own note.",
+ "apps": [
+  {
+   "slug": "thornswood-bramble",
+   "id": 5547080,
+   "for": "Bramble, the Hermes Bots' router: merges, Dev releases, labels for the others, and the workflow changes Magpie writes",
+   "held_by": "the tw-git broker on the Hermes VM, key readable by tw-git alone (Thornswood-Hermes thornswood_guard/policy.yaml, github_apps)",
+   "installed_on": [
+    "ThornswoodRP/Thornswood",
+    "ThornswoodRP/Thornswood-Ops",
+    "ThornswoodRP/skymp"
+   ],
+   "never_on": [
+    "ThornswoodRP/Thornswood-Hermes"
+   ],
+   "permissions": {
+    "actions": "write",
+    "checks": "read",
+    "contents": "write",
+    "issues": "write",
+    "metadata": "read",
+    "pull_requests": "write",
+    "workflows": "write"
+   },
+   "events": [
+    "check_suite",
+    "pull_request"
+   ],
+   "events_why": {
+    "check_suite": "Wakes Bramble when a pull request's checks finish, so it merges a green head or hands a red one back without anyone nudging it (Patrick's answer A on q-hermes-bramble-wake, 1 Nov 2026). The webhook goes through Tailscale Funnel to Hermes's own receiver on the Hermes VM, signed with a secret only root there holds (Thornswood-Hermes policy.yaml, wake).",
+    "pull_request": "Wakes Bramble when a pull request is merged, closed or taken out of the merge queue, so it reports the merge and its Release, or looks at why the queue dropped it. Same route and secret as check_suite."
+   },
+   "why": {
+    "actions": "Starts the release, deploy, Nexus and signing runs the policy lists (git_service.py start_run, POST actions/workflows/<file>/dispatches) and reads runs.",
+    "checks": "Reads the check runs on a pull request's exact head before a merge (the policy's required checks). Never writes one.",
+    "contents": "Pushes its own branches and Magpie's workflow branch, and merges (a merge writes the base branch).",
+    "issues": "Comments, puts on and takes off claim labels, and makes the six claim labels.",
+    "metadata": "Every App holds it; GitHub gives it read and nothing else.",
+    "pull_requests": "Opens, edits and merges pull requests.",
+    "workflows": "Pushes a change to .github/workflows that Magpie wrote, the one thing only Bramble's App may carry (RULES.md). GitHub refuses a workflow file change from a token without it."
+   }
+  },
+  {
+   "slug": "thornswood-workers",
+   "id": 5547094,
+   "for": "the five worker Bots: Rift, Sprocket, Echo, Magpie and Wisp",
+   "held_by": "the tw-git broker on the Hermes VM, key readable by tw-git alone (Thornswood-Hermes thornswood_guard/policy.yaml, github_apps)",
+   "installed_on": [
+    "ThornswoodRP/Thornswood",
+    "ThornswoodRP/Thornswood-Ops",
+    "ThornswoodRP/skymp"
+   ],
+   "never_on": [
+    "ThornswoodRP/Thornswood-Hermes"
+   ],
+   "permissions": {
+    "actions": "read",
+    "checks": "read",
+    "contents": "write",
+    "issues": "write",
+    "metadata": "read",
+    "organization_projects": "read",
+    "pull_requests": "write"
+   },
+   "events": [],
+   "why": {
+    "actions": "Reads runs and their logs for a pull request it opened. Starting a run is Bramble's alone.",
+    "checks": "Reads the check runs on its own pull requests.",
+    "contents": "Pushes the Bot's own branch. GitHub has no permission that pushes a branch but cannot merge, so the broker refuses a worker's merge (only Bramble merges) and main's ruleset refuses anything but a pull request with green checks.",
+    "issues": "Comments, and puts on or takes off its own claim label.",
+    "metadata": "Every App holds it; GitHub gives it read and nothing else.",
+    "organization_projects": "Patrick gave it on 2 Nov (the phone Board's option A) so the phone's Board could read the org board's Status and Order. It can only read; moving cards stays the board App's alone. Nothing uses it yet: tw-git's read op passes only GETs inside the three work repos, and the same day Patrick made the Board show only what each Bot is doing right now.",
+    "pull_requests": "Opens and edits its own pull requests."
+   }
+  },
+  {
+   "slug": "thornswood-box-admin",
+   "id": 5537924,
+   "for": "the box's admin service (scripts/vps/admin/admin.js): runner labels, the repository settings record, the About box and reading the Actions settings; the gate's Ship and box key tokens (ship-access.js, ops-access.js); and the Discord bot's GitHub token",
+   "held_by": "the box, its key's folder locked to SYSTEM, Administrators and the service's task (#4078)",
+   "installed_on": [
+    "ThornswoodRP/Thornswood",
+    "ThornswoodRP/Thornswood-Ops",
+    "ThornswoodRP/skymp"
+   ],
+   "never_on": [
+    "ThornswoodRP/Thornswood-Hermes"
+   ],
+   "permissions": {
+    "actions": "write",
+    "actions_variables": "read",
+    "administration": "write",
+    "contents": "read",
+    "deployments": "write",
+    "environments": "write",
+    "issues": "write",
+    "metadata": "read",
+    "secrets": "read"
+   },
+   "events": [],
+   "why": {
+    "actions": "A Ship through the deploy gate (ship-access.js, #2841): starts thornswood-sign-manifest.yml on the fork and release-tag.yml and release.yml here, and reads their runs.",
+    "actions_variables": "The settings ask reads variable names to compare with records/github-settings.json (#3534). Never a value.",
+    "administration": "Runner labels and the runners' registration on Thornswood-Ops (ops-access.js runners), the rulesets, reporting, immutable releases, scanning, merge settings and collaborators of Thornswood and the fork (repo-settings), and the About box. Each ask takes a token with only the part it needs.",
+    "contents": "Reads the records on Thornswood's main that every ask makes GitHub match, and the launcher a Ship takes.",
+    "deployments": "The deploy agent (tools/DeployAgent/GitHub.cs, #5180) reads the Deployments merge-release.yml asks for and posts each one's status, with a token of this App narrowed to contents read and deployments write.",
+    "environments": "Renew-BoxKey.ps1 puts a box key into an environment secret of Thornswood-Ops (ops-access.js keys), which GitHub gives to Environments write alone; the settings ask reads environment names and where each deploys from (#3534).",
+    "issues": "The Discord bot's token (#5260, Patrick's A): it posts Test tasks and known issues as comments and labels. Taken for Thornswood alone, every 30 minutes.",
+    "metadata": "Every App holds it; GitHub gives it read and nothing else.",
+    "secrets": "The settings ask reads repository secret names (#3534), never a value. Write was held only for go-public, which took the box's secrets off Thornswood before the flip on 30 Oct 2026 and is gone; an environment secret needs Environments write, not this."
+   }
+  },
+  {
+   "slug": "thornswood-watch",
+   "id": 5569440,
+   "for": "the outside watcher (.github/workflows/watch-outside.yml): reads whether the box's runners are online",
+   "held_by": "the watch environment of Thornswood, main only, where its key takes the place of RUNNER_TOKEN",
+   "installed_on": [
+    "ThornswoodRP/Thornswood-Ops"
+   ],
+   "never_on": [
+    "ThornswoodRP/Thornswood",
+    "ThornswoodRP/skymp",
+    "ThornswoodRP/Thornswood-Hermes"
+   ],
+   "permissions": {
+    "administration": "read",
+    "metadata": "read"
+   },
+   "events": [],
+   "why": {
+    "administration": "GitHub lists a repository's self-hosted runners only to administration read, and the box's runners are registered to Thornswood-Ops. Read alone: it changes nothing.",
+    "metadata": "Every App holds it; GitHub gives it read and nothing else."
+   }
+  },
+  {
+   "slug": "thornswood-pin-robot",
+   "id": 5562975,
+   "for": "the engine pin robot (.github/workflows/engine-pin.yml, #5148, #5256): pushes engine-pin/next and opens the pin's pull request",
+   "held_by": "the engine-pin environment of Thornswood, main only (PIN_APP_KEY)",
+   "installed_on": [
+    "ThornswoodRP/Thornswood"
+   ],
+   "never_on": [
+    "ThornswoodRP/Thornswood-Ops",
+    "ThornswoodRP/skymp",
+    "ThornswoodRP/Thornswood-Hermes"
+   ],
+   "permissions": {
+    "contents": "write",
+    "metadata": "read",
+    "pull_requests": "write"
+   },
+   "events": [],
+   "why": {
+    "contents": "Force pushes the one branch engine-pin/next, which changes only the pin's paths, never a workflow.",
+    "metadata": "Every App holds it; GitHub gives it read and nothing else.",
+    "pull_requests": "Opens or updates the pin's pull request (Open-EnginePinPr.ps1)."
+   }
+  },
+  {
+   "slug": "thornswood-board",
+   "id": 5570326,
+   "for": "the org board \"Thornswood To Do\" (#1): board.yml moves cards and board-read.yml reads them (#5185)",
+   "held_by": "the board environment of Thornswood, main only (BOARD_APP_KEY)",
+   "installed_on": [
+    "ThornswoodRP/Thornswood"
+   ],
+   "never_on": [
+    "ThornswoodRP/Thornswood-Ops",
+    "ThornswoodRP/skymp",
+    "ThornswoodRP/Thornswood-Hermes"
+   ],
+   "permissions": {
+    "issues": "write",
+    "metadata": "read",
+    "organization_projects": "write",
+    "pull_requests": "read"
+   },
+   "events": [],
+   "why": {
+    "issues": "Reads and edits the issues the board's cards stand for, as board.yml asks (#5185).",
+    "metadata": "Every App holds it; GitHub gives it read and nothing else.",
+    "organization_projects": "Adds and moves cards on the org board; board-read.yml asks for read only when it mints its token.",
+    "pull_requests": "Reads the pull requests that link to an issue on the board; it never writes one."
+   }
+  }
+ ],
+ "patrick_agents": [
+  {
+   "name": "Claude",
+   "slug": "claude",
+   "why": "Patrick's own Claude sessions, through Anthropic's Claude App installed on all four repositories. It works as Patrick and is never a Bot: no Bot is run through it, and it holds no Bot App's key."
+  },
+  {
+   "name": "Patrick's Hermes (my-hermes)",
+   "why": "Patrick's own agent on the Hermes VM, signed in to gh as EvilPatrick06. It is not one of the six Bots and cannot read the Bots' App keys, which only tw-git reads."
+  }
+ ]
+}

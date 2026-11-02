@@ -14,7 +14,7 @@
   the load was over and the backdrop flashed once. The engine now tells the
   page itself, from the game's own menu event on the game's thread, as the
   Loading Menu opens and closes, and draws the page while it is open
-  (EvilPatrick06/skymp, LoadingScreen.h):
+  (ThornswoodRP/skymp, LoadingScreen.h):
 
       window event 'skyrimPlatform:loading'  detail.loading true or false
       window.skyrimPlatformLoading           the same answer, for a page

@@ -2643,7 +2643,7 @@ async def keep_onboarding_off(guild):
 #
 #     python3.12 bot/Build-Discord.py --layout
 #
-# and bot/test-3317-layout.py fails when the file and the plan differ, so the
+# and bot/tests/test-3317-layout.py fails when the file and the plan differ, so the
 # page is the plan in words and never a second copy that drifts. -Audit says
 # where the live server differs from both.
 LAYOUT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..',
@@ -2754,7 +2754,7 @@ def layout():
     w('')
     w('Made from `bot/Build-Discord.py` (ROLES and PLAN) by')
     w('`python3.12 bot/Build-Discord.py --layout`. Do not edit it by hand:')
-    w('change the plan and run that, and `bot/test-3317-layout.py` fails when')
+    w('change the plan and run that, and `bot/tests/test-3317-layout.py` fails when')
     w('the two differ. `Setup-Discord.ps1 -OnBox -Audit` says where the live')
     w('server differs from this page. Issue #3317 is where it was set out.')
     w('')

@@ -34,7 +34,7 @@
 # that names it.
 #
 # THE FORK'S OWN BUILD, AND ONLY IT (Patrick's B on #459, 16 Oct; #3014;
-# #3399). The fork, EvilPatrick06/skymp, is public, so GitHub builds it at no
+# #3399). The fork, ThornswoodRP/skymp, is public, so GitHub builds it at no
 # cost: every push to thornswood/engine-changes builds the engine there and
 # keeps what this records as the artifact thornswood-engine-<commit> for 90
 # days (the fork's thornswood-pr-windows.yml, since fork #79). "Look for the

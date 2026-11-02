@@ -113,7 +113,7 @@ if ($Install -or $Remove -or $Status) {
   $boxScript = "$Root\forecast-storage.ps1"
   $boxHistory = "$Root\disk-history.jsonl"
   $boxAlerts = "$Root\alerts.jsonl"
-  $run = "powershell -NoProfile -ExecutionPolicy Bypass -File $boxScript -Record -History $boxHistory -Alerts $boxAlerts"
+  $run = "pwsh -NoProfile -ExecutionPolicy Bypass -File $boxScript -Record -History $boxHistory -Alerts $boxAlerts"
   $said = @()
 
   if ($Remove) {
@@ -177,7 +177,7 @@ if (Get-ScheduledTask -TaskName '$Task' -EA SilentlyContinue) { 'task      $Task
 `$t = Get-ScheduledTask -TaskName '$Task' -EA SilentlyContinue
 if (`$t) { `$i = Get-ScheduledTaskInfo -TaskName '$Task'; 'task      ' + `$t.State + ', last ran ' + `$i.LastRunTime + ', result ' + `$i.LastTaskResult }
 else { 'task      NOT installed. Run this with -Install' }
-if (Test-Path '$boxScript') { & powershell -NoProfile -ExecutionPolicy Bypass -File '$boxScript' -History '$boxHistory' 2>&1 | ForEach-Object { "`$_" }; 'exit      ' + `$LASTEXITCODE }
+if (Test-Path '$boxScript') { & pwsh -NoProfile -ExecutionPolicy Bypass -File '$boxScript' -History '$boxHistory' 2>&1 | ForEach-Object { "`$_" }; 'exit      ' + `$LASTEXITCODE }
 else { 'script    NOT on the box. Run this with -Install' }
 "@)
   foreach ($l in $said) {

@@ -40,8 +40,8 @@ function Done {
 }
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-$shells = @((Get-Process -Id $PID).Path)
-if ($OnWindows) { $shells += Get-WindowsPowerShell }
+# The scripts run in PowerShell 7 only (#5356), so the child is this one.
+$shells = @(Get-BoxPowerShell)
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-3216-stdin-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work -Force | Out-Null

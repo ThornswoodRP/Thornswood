@@ -3,7 +3,7 @@
 Food spoils gently. Raw food keeps 1 real week, a dish keeps 2, and
 salted or smoked food never spoils. Patrick decided this on his report
 page on 22 October, on
-[#3163](https://github.com/EvilPatrick06/Thornswood/issues/3163). See
+[#3163](https://github.com/ThornswoodRP/Thornswood/issues/3163). See
 [Decided](../DECIDED.md).
 
 | Food | Keeps |
@@ -50,7 +50,7 @@ on his report page on 26 October (C).
 | Compost | A Farmer works it into a plot they sowed: the crop needs a quarter less time and gives one more ([Farmer](classes/farmer.md#compost)) |
 
 Patrick decided what compost does on his report page on 26 October
-("A+B", [#3526](https://github.com/EvilPatrick06/Thornswood/issues/3526)).
+("A+B", [#3526](https://github.com/ThornswoodRP/Thornswood/issues/3526)).
 
 Spoiled food is one item of Thornswood's own, Spoiled Food, with each
 piece named for its food. It is not the food's own item with a new

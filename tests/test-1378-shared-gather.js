@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 const REPO = path.join(__dirname, '..');
-const src = fs.readFileSync(path.join(REPO, 'game', 'gamemode.js'), 'utf8').replace(/\r/g, '');
+const src = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(REPO, 'game', 'gamemode.js'), 'utf8')).replace(/\r/g, '');
 const page = fs.readFileSync(path.join(REPO, 'docs', 'systems', 'classes', 'gatherer.md'), 'utf8').replace(/\r/g, '');
 const unrankedPage = fs.readFileSync(path.join(REPO, 'docs', 'systems', 'lists', 'unranked.md'), 'utf8').replace(/\r/g, '');
 

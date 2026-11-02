@@ -79,11 +79,8 @@ Yes 'Send-Script.ps1 parses' (@($errs).Count -eq 0)
 . $sendScript
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if ($OnWindows) { $farShell = Get-WindowsPowerShell }
-else {
-    $farShell = (Get-Process -Id $PID).Path
-    Write-Host 'NOTE  the far side runs in this shell, not in Windows PowerShell 5.1 as on the box: this is not Windows'
-}
+# The far side runs in PowerShell 7, as on the box since #5356.
+$farShell = Get-BoxPowerShell
 
 $script:work = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-send-script-' + [Guid]::NewGuid().ToString('N'))
 $far = Join-Path $script:work 'far'
@@ -101,7 +98,7 @@ function global:ssh {
     $cmd = $a[-1]
     $in = @($input)
     $temp = 'C:/Windows/Temp/'
-    $m = [regex]::Match($cmd, '^powershell -NoProfile (-ExecutionPolicy Bypass )?-EncodedCommand ([A-Za-z0-9+/=]+)$')
+    $m = [regex]::Match($cmd, '^pwsh -NoProfile (-ExecutionPolicy Bypass )?-EncodedCommand ([A-Za-z0-9+/=]+)$')
     $said = ''
     if ($m.Success) { $said = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($m.Groups[2].Value)) }
     $r = [regex]::Match($said, '^\$ThornswoodRunFile = ''(C:\\Windows\\Temp\\(thornswood-remote-[0-9a-f]{32}\.ps1))''')
@@ -119,7 +116,7 @@ function global:ssh {
         else { & $global:TsSs.Shell -NoProfile -NonInteractive -EncodedCommand $enc 2>&1 }
         return
     }
-    $m = [regex]::Match($cmd, '^powershell -NoProfile -ExecutionPolicy Bypass -File (C:/Windows/Temp/[A-Za-z0-9._-]+)$')
+    $m = [regex]::Match($cmd, '^pwsh -NoProfile -ExecutionPolicy Bypass -File (C:/Windows/Temp/[A-Za-z0-9._-]+)$')
     if ($m.Success) {
         if ($global:TsSs.RunThrows) { throw 'the run broke on the way' }
         if ($global:TsSs.RunDelayMs) { Start-Sleep -Milliseconds $global:TsSs.RunDelayMs }
@@ -129,7 +126,7 @@ function global:ssh {
         else { & $global:TsSs.Shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $here 2>&1 }
         return
     }
-    $m = [regex]::Match($cmd, '^powershell -NoProfile -Command Remove-Item -LiteralPath ''(C:/Windows/Temp/[A-Za-z0-9._-]+)'' -Force$')
+    $m = [regex]::Match($cmd, '^pwsh -NoProfile -Command Remove-Item -LiteralPath ''(C:/Windows/Temp/[A-Za-z0-9._-]+)'' -Force$')
     if ($m.Success) {
         if ($global:TsSs.TidyCut) { 'ssh: the connection was cut'; $global:LASTEXITCODE = 255; return }
         Remove-Item -LiteralPath (Join-Path $global:TsSs.Far $m.Groups[1].Value.Substring($temp.Length)) -Force -ErrorAction SilentlyContinue
@@ -177,7 +174,7 @@ function Reset { $global:TsSs.Calls.Clear(); $global:TsSs.RunThrows = $false; $g
 function Left { return @(Get-ChildItem -LiteralPath $far -File).Count }
 # The runner a long script runs under: short, on the command line, the same
 # every run but for its copy's name, and the script itself never in it.
-$runnerShape = '^powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand [A-Za-z0-9+/=]+$'
+$runnerShape = '^pwsh -NoProfile -ExecutionPolicy Bypass -EncodedCommand [A-Za-z0-9+/=]+$'
 $copyShape = '^tester@box\.invalid:C:/Windows/Temp/thornswood-remote-[0-9a-f]{32}\.ps1$'
 function Runner-Shape($call) { return $call.Said.Replace(('C:\Windows\Temp\' + $call.Copy), 'COPY') }
 
@@ -276,10 +273,10 @@ function Invoke-OldThreeCalls([string]$Target, [string[]]$SshArgs, [string]$Scri
   try {
     [IO.File]::WriteAllText($tmp, $Script, (New-Object Text.UTF8Encoding($true)))
     & scp @SshArgs $tmp "${Target}:$far" 2>&1 | Out-Null
-    & ssh @SshArgs $Target "powershell -NoProfile -ExecutionPolicy Bypass -File $far" 2>&1
+    & ssh @SshArgs $Target "pwsh -NoProfile -ExecutionPolicy Bypass -File $far" 2>&1
   }
   finally {
-    & ssh @SshArgs $Target "powershell -NoProfile -Command Remove-Item -LiteralPath '$far' -Force" 2>&1 | Out-Null
+    & ssh @SshArgs $Target "pwsh -NoProfile -Command Remove-Item -LiteralPath '$far' -Force" 2>&1 | Out-Null
     Remove-Item -LiteralPath $tmp -Force -EA SilentlyContinue
   }
 }
@@ -354,7 +351,16 @@ try { Invoke-ThornswoodRemote -Target $target -SshArgs $sshArgs -Script "'x'" -S
 Yes '-Stdin: one byte more is refused, before anything is sent' ($null -ne $threw -and "$threw" -match 'Nothing was sent' -and $global:TsSs.Calls.Count -eq 0)
 Reset
 Invoke-ThornswoodRemote -Target $target -SshArgs $sshArgs -Script "'z'" -Bypass | Out-Null
-Yes '-Bypass: the command line says -ExecutionPolicy Bypass' (@(Calls 'ssh').Count -eq 1 -and @(Calls 'ssh')[0].Command -like 'powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand *')
+Yes '-Bypass: the command line says -ExecutionPolicy Bypass' (@(Calls 'ssh').Count -eq 1 -and @(Calls 'ssh')[0].Command -like 'pwsh -NoProfile -ExecutionPolicy Bypass -EncodedCommand *')
+# A new box has only the Windows PowerShell Windows comes with until
+# Bootstrap-VPS.ps1 puts PowerShell 7 on it, so -NewBox, which Remote.ps1
+# passes for that script alone, is the one line that names it (#5356).
+Reset
+Invoke-ThornswoodRemote -Target $target -SshArgs $sshArgs -Script "'z'" -NewBox | Out-Null
+Yes '-NewBox: the command line starts the Windows PowerShell a new box comes with' (@(Calls 'ssh').Count -eq 1 -and @(Calls 'ssh')[0].Command -like 'powershell -NoProfile -EncodedCommand *')
+Reset
+Invoke-ThornswoodRemote -Target $target -SshArgs $sshArgs -Script "'z'" | Out-Null
+Yes '  and without it, pwsh' (@(Calls 'ssh').Count -eq 1 -and @(Calls 'ssh')[0].Command -like 'pwsh -NoProfile -EncodedCommand *')
 
 # ---- 6. two runs at once ------------------------------------------------------------
 #
@@ -369,8 +375,8 @@ function Invoke-OldRemote([string]$Target, [string[]]$SshArgs, [string]$Script) 
   try {
     Set-Content -LiteralPath $tmp -Value $Script -Encoding UTF8
     & scp @SshArgs $tmp "${Target}:$far" 2>&1 | Out-Null
-    & ssh @SshArgs $Target "powershell -NoProfile -ExecutionPolicy Bypass -File $far" 2>&1
-    & ssh @SshArgs $Target "powershell -NoProfile -Command Remove-Item -LiteralPath '$far' -Force" 2>&1 | Out-Null
+    & ssh @SshArgs $Target "pwsh -NoProfile -ExecutionPolicy Bypass -File $far" 2>&1
+    & ssh @SshArgs $Target "pwsh -NoProfile -Command Remove-Item -LiteralPath '$far' -Force" 2>&1 | Out-Null
   }
   finally { Remove-Item -LiteralPath $tmp -Force -EA SilentlyContinue }
 }
@@ -474,7 +480,7 @@ $named = @(
     'scripts\deploy\Install-Bot.ps1', 'scripts\deploy\Remirror-Site-Feed.ps1', 'scripts\deploy\Rotate-ServerPassword.ps1',
     'scripts\deploy\Set-DiscordLogin.ps1', 'scripts\deploy\Setup-Domain.ps1', 'scripts\mods\Check-Manifest.ps1',
     'scripts\mods\Clean-Everything.ps1', 'scripts\ops\Set-Door.ps1', 'scripts\ops\Wipe-Saves.ps1',
-    'scripts\release\Publish-Installer.ps1', 'scripts\vps\Backup-Server.ps1', 'scripts\vps\Check-Load.ps1',
+    'scripts\vps\Backup-Server.ps1', 'scripts\vps\Check-Load.ps1',
     'scripts\vps\Watch-Load.ps1', 'scripts\vps\Watch-Services.ps1',
     'scripts\deploy\Install-Runner.ps1', 'scripts\deploy\Install-Voice.ps1', 'scripts\vps\Check-Site.ps1'
 )

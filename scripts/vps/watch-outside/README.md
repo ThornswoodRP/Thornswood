@@ -29,7 +29,7 @@ Two repository secrets (Settings, Secrets and variables, Actions):
 - `STAFF_WEBHOOK`, the Discord webhook in #staff-updates that the VPS watchdog
   also posts through.
 - `RUNNER_TOKEN`, a fine-grained personal access token whose only repository
-  is EvilPatrick06/Thornswood-Ops, where the box's runners are registered
+  is ThornswoodRP/Thornswood-Ops, where the box's runners are registered
   since the flip (#4013), and whose only permission is Administration:
   Read-only, so it can read those runners and nothing else.
 

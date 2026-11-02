@@ -23,11 +23,13 @@
   THE STAND-INS ARE A SMALL SSHD ON THIS MACHINE, NOT THE VPS. scp puts the
   copy in a scratch folder that stands for C:/Windows/Temp, and ssh hands the
   command to this machine's cmd.exe in that folder, with the runner's paths
-  pointed at it. The runner's line is then run again under a Windows
-  PowerShell outer shell. Windows sshd uses
-  cmd.exe unless it is set to another shell, and Windows PowerShell is the
-  usual other one; the VPS's sshd started a command as powershell.exe -c on
-  21 Oct 2026 (#3059). So what is proved is the helpers' mechanics: no command
+  pointed at it. The runner's line is then run again under a PowerShell 7
+  outer shell. Windows sshd uses
+  cmd.exe unless it is set to another shell, and a PowerShell is the usual
+  other one; the VPS's sshd started a command as powershell.exe -c on
+  21 Oct 2026 (#3059), and the line it hands on starts pwsh since #5356.
+  Off Windows there is no cmd.exe, so only the PowerShell 7 outer shell runs
+  the line there. So what is proved is the helpers' mechanics: no command
   line is longer than cmd.exe takes, the script goes up whole in one copy and
   runs to its last line, what it printed comes back, the runner leaves
   nothing in the far temp folder, and the exit code is the script's. What the
@@ -80,11 +82,11 @@ function Done {
     if ($script:fail) { exit 1 }
     exit 0
 }
-# The far end runs what was sent in the box's own shells, cmd.exe and Windows
-# PowerShell 5.1. Off Windows neither is here, so what is sent is checked and
-# what it does when it runs is not (#2957).
+# The far end runs what was sent in cmd.exe, as the box's sshd does, and
+# again in PowerShell 7. Off Windows there is no cmd.exe, so what is sent is
+# checked, and the line is run under PowerShell 7 alone (#2957).
 function Runs([string]$what, [bool]$cond) { if ($OnWindows) { Yes $what $cond } }
-if (-not $OnWindows) { Write-Host 'SKIP  the runs at the far end: it stands in with the box''s cmd.exe and Windows PowerShell 5.1, which only Windows has, so only what is sent is checked' }
+if (-not $OnWindows) { Write-Host 'SKIP  the runs through cmd.exe at the far end: the box''s sshd hands a line to cmd.exe, which only Windows has, so off Windows only what is sent is checked and the line is run under PowerShell 7' }
 
 # What cmd.exe will carry. Where the VPS cuts a line has not been measured;
 # the helpers send anything over 6,000 characters by scp, for the runner.
@@ -151,7 +153,7 @@ function global:Invoke-TsFarEnd([string]$command, [string]$shell, [string[]]$std
     $line = ''
     # -ExecutionPolicy Bypass as well: the runner's line always has it, and a
     # caller's -Bypass puts it on an inline one.
-    $m = [regex]::Match($command, '^powershell -NoProfile (-ExecutionPolicy Bypass )?-EncodedCommand ([A-Za-z0-9+/=]+)$')
+    $m = [regex]::Match($command, '^pwsh -NoProfile (-ExecutionPolicy Bypass )?-EncodedCommand ([A-Za-z0-9+/=]+)$')
     if ($m.Success) {
         $text = ''
         try { $text = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($m.Groups[2].Value)) } catch { }
@@ -168,7 +170,7 @@ function global:Invoke-TsFarEnd([string]$command, [string]$shell, [string[]]$std
             $copy = Join-Path $far.Disk $leaf
             if (-not (Test-Path -LiteralPath $copy)) { [IO.File]::WriteAllText($copy, $far.Copied[$leaf], (New-Object Text.UTF8Encoding($false))) }
             $here = $text.Replace($rp, $copy).Replace("'C:\Windows\Temp'", ("'" + $far.Disk.Replace("'", "''") + "'"))
-            $line = 'powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($here))
+            $line = 'pwsh -NoProfile -ExecutionPolicy Bypass -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($here))
         }
     }
     if (-not $ok) {
@@ -178,16 +180,14 @@ function global:Invoke-TsFarEnd([string]$command, [string]$shell, [string[]]$std
 
     # The line as it would arrive, the far folder swapped for ./ and the shell
     # started in the stand-in folder. Under cmd.exe, /d leaves out this machine's AutoRun, which belongs to
-    # this machine and not to any server. Under Windows PowerShell the whole
-    # line is its command; the shapes above hold no double quote to break the
-    # one round it. Either way PSModulePath is dropped so the Windows
-    # PowerShell inside builds its own, as a fresh one does, rather than
-    # inheriting pwsh's.
-    if (-not $OnWindows) { return [pscustomobject]@{ Out = @('not run: this is not Windows'); Code = 0 } }
+    # this machine and not to any server. Under PowerShell 7 the whole line is
+    # its command; the shapes above hold no double quote to break the one
+    # round it.
+    if ($shell -ne 'pwsh' -and -not $OnWindows) { return [pscustomobject]@{ Out = @('not run: cmd.exe is not on this machine, which is not Windows'); Code = 0 } }
     $line = $line.Replace($far.Temp, $far.DiskFwd)
     $psi = New-Object System.Diagnostics.ProcessStartInfo
-    if ($shell -eq 'powershell') {
-        $psi.FileName = Get-WindowsPowerShell
+    if ($shell -eq 'pwsh') {
+        $psi.FileName = Get-BoxPowerShell
         $psi.Arguments = '-NoProfile -NonInteractive -Command "' + $line + '"'
     }
     else {
@@ -200,7 +200,6 @@ function global:Invoke-TsFarEnd([string]$command, [string]$shell, [string[]]$std
     $psi.RedirectStandardInput = $true
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
-    if ($psi.EnvironmentVariables.ContainsKey('PSModulePath')) { $psi.EnvironmentVariables.Remove('PSModulePath') }
     $p = [System.Diagnostics.Process]::Start($psi)
     foreach ($l in $stdin) { $p.StandardInput.WriteLine($l) }
     $p.StandardInput.Close()
@@ -300,10 +299,11 @@ function Show-Why($r) {
     }
 }
 
-# The runner's line a helper sent, run again under a Windows PowerShell outer
+# The runner's line a helper sent, run again under a PowerShell 7 outer
 # shell, with the same copy put back for it. Its exit code is not compared:
-# powershell -Command hands back 1 for any program that failed, so the 7 the
-# script exits with cannot come through that way. Every helper sends the
+# Windows PowerShell's -Command, which sshd may hand the line to, hands back
+# 1 for any program that failed, so the 7 the script exits with cannot be
+# counted on to come through that way. Every helper sends the
 # very same runner with the very same copy, so that pair is run this way once
 # and not again. Measured 24 September on a busy machine: run for every
 # helper, it took this from 136 seconds to 213; run once a pair, from 126 to
@@ -322,12 +322,12 @@ function Test-OtherShell($r) {
     return $script:otherShellRan[$key]
 }
 function Invoke-OtherShell([string]$command, [string[]]$stdin) {
-    $ran = Invoke-TsFarEnd $command 'powershell' $stdin
+    $ran = Invoke-TsFarEnd $command 'pwsh' $stdin
     $out = ($ran.Out -join "`n")
     if ($out.Contains($lastLine)) { return $true }
     $first = ($ran.Out | Where-Object { $_ -match 'fail|not|error' } | Select-Object -First 1)
     if (-not $first) { $first = ($ran.Out | Select-Object -First 1) }
-    Write-Host ('      Windows PowerShell said, exit ' + $ran.Code + ': ' + $first)
+    Write-Host ('      PowerShell 7 said, exit ' + $ran.Code + ': ' + $first)
     return $false
 }
 
@@ -338,7 +338,7 @@ function Test-Sends([string]$name, [scriptblock]$sendBig, [scriptblock]$sendShor
     Yes '  as one copy, holding the whole script, and one ssh call' ($r.Scp.Count -eq 1 -and $r.Scp[0].Sent.Contains($big) -and $r.Ssh.Count -eq 1)
     Yes '  the runner on the command line, taking that copy, and nothing on standard input' ($r.Ssh.Count -eq 1 -and $r.Scp.Count -eq 1 -and (Get-RunnerPath $r.Ssh[0]) -and $r.Scp[0].Line.EndsWith(((Get-RunnerPath $r.Ssh[0]) -replace '\\', '/')) -and @($r.Ssh[0].Stdin).Count -eq 0)
     Runs '  runs it to its last line when cmd.exe on this machine hands the line on' $ran
-    Runs '  and when Windows PowerShell on this machine hands the same line on instead' ($OnWindows -and (Test-OtherShell $r))
+    Yes '  and when PowerShell 7 on this machine hands the same line on instead' (Test-OtherShell $r)
     Runs '  and what it printed comes back' ($r.Out.Contains($lastLine))
     Yes '  and the runner leaves nothing in the far temp folder, with no call to tidy it' (@($r.Ssh | Where-Object { $_.Command -match 'Remove-Item|-File' }).Count -eq 0 -and ($r.Left -eq 0 -or -not $OnWindows))
     if ($handsBackCode) {

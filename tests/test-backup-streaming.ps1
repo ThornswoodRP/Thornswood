@@ -1,11 +1,12 @@
-# Real Windows PowerShell 5.1 backups, with disposable data and keys only.
+# Real backups in PowerShell 7, as the box runs them since #5356, with
+# disposable data and keys only.
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $nightly = Join-Path $repo 'scripts\vps\vps-nightly-backup.ps1'
 $restore = Join-Path $repo 'scripts\vps\Restore-Backup.ps1'
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  the nightly backup and its restore run only on the box, under Windows PowerShell 5.1, and this is not Windows'; exit 0 }
-$ps51 = Get-WindowsPowerShell
+if (-not $OnWindows) { Write-Host 'NOT RUN  the nightly backup stages under Windows'' TEMP and builds its paths with the \ separator, so it and its restore run only on Windows'; exit 0 }
+$boxPs = Get-BoxPowerShell
 $root = Join-Path ([IO.Path]::GetTempPath()) ('tw-backup-stream-' + [Guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory($root)
 $utf8 = New-Object Text.UTF8Encoding($false)
@@ -23,7 +24,7 @@ function Put($name, $value) {
 }
 function Run($file, $params) {
     $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    try { $script:said = @(& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $file @params 2>&1 | ForEach-Object { "$_" }); return $LASTEXITCODE }
+    try { $script:said = @(& $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $file @params 2>&1 | ForEach-Object { "$_" }); return $LASTEXITCODE }
     finally { $ErrorActionPreference = $old }
 }
 function Slice([byte[]]$bytes, [int]$offset, [int]$length) {

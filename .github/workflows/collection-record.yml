@@ -1,0 +1,103 @@
+# A merged change to records/collection.json drafts that revision of the
+# collection on Nexus, holds the draft to the record and publishes it (#5189).
+#
+# WHY. A mod change is one pull request to the record
+# (docs/COLLECTION-CHANGES.md), checked there with no key
+# (Check-CollectionRecord.ps1, in the gate). Patrick decided on 31 Oct that a
+# merged mod change drafts and publishes the revision by itself, so nobody
+# works the New-NexusRevision.ps1 line out again by hand, and what Nexus
+# hands out is what the pull request reviewed.
+#
+# WHAT IT DOES. scripts/release/Publish-CollectionRecord.ps1 says it in full:
+# the change against the published revision, one draft with all of it, the
+# draft laid out and held to the record (discarded where they part), then
+# published. Then Check-CollectionRevisions.ps1 -Issue puts the rebuild on the
+# board at once, as its hourly run would (collection-revision.yml), and the
+# files the records follow from are kept as the run's artifact.
+#
+# THE KEY. NEXUS_API_KEY of the "desk" environment, which only main may use,
+# as in nexus-run.yml. It is in the environment of the one step that needs it.
+# The scripts' own output stays off the public log; the steps and any STOP
+# line are what it shows.
+#
+# WHERE IT RUNS. GitHub's Windows runner, as nexus-run.yml: 7-Zip is on its
+# image and nothing here needs the box. One Nexus run at a time with
+# nexus-run.yml's, because Nexus keeps one draft.
+#
+# Every action here is named by a full length commit SHA with its tag in the
+# comment, for the reason build.yml gives.
+name: Collection record
+run-name: Collection record at ${{ github.sha }}
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'records/collection.json'
+  workflow_dispatch:
+    inputs:
+      whatif:
+        description: 'Only say what would be drafted (New-NexusRevision -WhatIf); write nothing to Nexus'
+        type: boolean
+        default: true
+permissions:
+  contents: read
+concurrency:
+  group: nexus-run
+  cancel-in-progress: false
+jobs:
+  publish:
+    name: Draft, hold to the record, publish
+    # Main only (#3550), as the environment is.
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    environment: desk
+    permissions:
+      contents: read
+      issues: write
+    # Install-NexusRevision downloads every mod of the collection (its
+    # timeoutMinutes in nexus-verbs.json), and the draft and publish around it.
+    timeout-minutes: 180
+    steps:
+      # The history without the files' old contents, so Nexus.ps1 can work out
+      # the launcher's number it sends as Application-Version
+      # (LauncherVersion.ps1, #5179).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Draft, hold to the record, publish
+        id: publish
+        shell: pwsh -NoProfile -NonInteractive -Command ". '{0}'"
+        env:
+          THORNSWOOD_NEXUS_API_KEY: ${{ secrets.NEXUS_API_KEY }}
+          RECORD_OUT: ${{ runner.temp }}/collection-record
+          WHATIF: ${{ github.event_name == 'workflow_dispatch' && inputs.whatif }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $a = @{ Out = $env:RECORD_OUT }
+          if ($env:WHATIF -eq 'true') { $a.WhatIf = $true }
+          & (Join-Path $env:GITHUB_WORKSPACE 'scripts/release/Publish-CollectionRecord.ps1') @a
+          exit $LASTEXITCODE
+
+      - name: Put the rebuild on the board
+        if: success() && steps.publish.outputs.published != ''
+        shell: pwsh -NoProfile -NonInteractive -Command ". '{0}'"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          & .\scripts\release\Check-CollectionRevisions.ps1 -Issue
+          exit $LASTEXITCODE
+
+      # Names, hashes and file ids only: the plugins themselves are other
+      # authors' files and never leave the runner.
+      - name: Keep what the records follow from
+        if: success() && steps.publish.outputs.published != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: collection-record
+          path: ${{ runner.temp }}/collection-record
+          if-no-files-found: ignore
+          retention-days: 14

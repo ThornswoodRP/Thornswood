@@ -2,7 +2,7 @@
   "_note": "The source of what is inside frida-gum.lib, which SkyrimPlatformImpl.dll links (#3287). The LGPL parts of it (glib, gobject, proxy-libintl) go out under the GPL with that file, so their source has to stay reachable. Patrick's answer C (26 Oct 2026): one permanent Release of this repository holds each part as an archive of its commit; the six forks it replaced were deleted once every note offered named the Release. Each archive is git archive --format=tar --prefix=<name>-<commit>/ <commit>, measured on 27 Oct 2026. scripts/release/Publish-FridaSources.ps1 makes the Release from this record and checks it; tests/test-3287-frida-sources.ps1 holds the record to the notice and THIRD-PARTY.md.",
   "frida": "16.0.19",
   "release": {
-    "repo": "EvilPatrick06/Thornswood",
+    "repo": "ThornswoodRP/Thornswood",
     "tag": "frida-sources-16.0.19"
   },
   "forkTag": "thornswood-frida-16.0.19",

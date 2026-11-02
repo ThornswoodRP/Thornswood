@@ -57,7 +57,7 @@ yes('no contact link opens the advisory form while SECURITY.md sends reports som
 const links = (config || '').match(/^\s+url:\s*(\S+)\s*$/gm) || [];
 yes('every contact link is an https address (' + links.length + ')',
     links.length >= 1 && links.every(function (l) { return /url:\s*https:\/\//.test(l); }));
-yes('the security link goes to SECURITY.md', /url:\s*https:\/\/github\.com\/EvilPatrick06\/Thornswood\/blob\/main\/SECURITY\.md/.test(config || ''));
+yes('the security link goes to SECURITY.md', /url:\s*https:\/\/github\.com\/ThornswoodRP\/Thornswood\/blob\/main\/SECURITY\.md/.test(config || ''));
 
 // ------------------------------------------------------------ the forms
 const forms = fs.readdirSync(path.join(REPO_DIR, DIR)).filter(function (f) { return /\.ya?ml$/.test(f) && f !== 'config.yml'; }).sort();

@@ -2,7 +2,7 @@
 
 Made from `bot/Build-Discord.py` (ROLES and PLAN) by
 `python3.12 bot/Build-Discord.py --layout`. Do not edit it by hand:
-change the plan and run that, and `bot/test-3317-layout.py` fails when
+change the plan and run that, and `bot/tests/test-3317-layout.py` fails when
 the two differ. `Setup-Discord.ps1 -OnBox -Audit` says where the live
 server differs from this page. Issue #3317 is where it was set out.
 

@@ -26,7 +26,7 @@
 
   Every line it prints starts with a word: NOW, ALREADY, CHANGED, WOULD,
   ROOM, NOTE, RESTARTING or STOP. Set-TimeWait.ps1 sends its text on ssh's
-  standard input and Windows PowerShell 5.1 runs it from there, so nothing
+  standard input and pwsh runs it from there, so nothing
   of it is ever written on the box, restart or no restart (#3035).
 
 .PARAMETER Check

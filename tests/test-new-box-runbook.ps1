@@ -22,7 +22,7 @@
     1. what can run here does: Where.ps1 knows the payload the runbook sends,
        and Restore-Box.ps1 refuses a backup it cannot use before it reaches
        for ssh.
-    2. the box-side half, under Windows PowerShell 5.1 as on the VPS: the real
+    2. the box-side half, under PowerShell 7 as on the box: the real
        vps-nightly-backup.ps1 takes every site upload even over its advisory
        threshold, and the feed store (not its downloads)
        from a scratch site, and the real vps-restore-services.ps1
@@ -126,13 +126,13 @@ try {
         Yes "$s parses" ((ParamsOf (Join-Path $scriptsDir "vps\$s")).Errors -eq 0)
     }
 
-    # ---- the box-side half, under Windows PowerShell 5.1 --------------------
+    # ---- the box-side half, under PowerShell 7 -------------------------------
     . (Join-Path $PSScriptRoot 'Windows.ps1')
     if (-not $OnWindows) {
-        Write-Host 'SKIP  the box-side runs need Windows PowerShell 5.1, which runs them on the VPS; this is not Windows'
+        Write-Host 'SKIP  the box-side runs: they start with a nightly backup, which stages under Windows'' TEMP and builds its paths with the \ separator, so it runs only on Windows'
         throw 'skip'
     }
-    $ps51 = Get-WindowsPowerShell
+    $boxPs = Get-BoxPowerShell
     $old = Join-Path $work 'old'
     $site = Join-Path $old 'site'; $bot = Join-Path $old 'bot'; $caddy = Join-Path $old 'caddy'; $voice = Join-Path $old 'voice'
     Put (Join-Path $site 'data\board.json') '{"cards":[]}'
@@ -161,7 +161,7 @@ try {
         Put (Join-Path $g 'gamemode.js') ('// gamemode of ' + (Split-Path -Leaf $g))
     }
     $plain = Join-Path $work 'backups'
-    $code = Run $ps51 (Join-Path $scriptsDir 'vps\vps-nightly-backup.ps1') @(
+    $code = Run $boxPs (Join-Path $scriptsDir 'vps\vps-nightly-backup.ps1') @(
         '-GameRoot', $game, '-DevGameRoot', $gameDev, '-SiteRoot', $site, '-BotRoot', $bot,
         '-CaddyRoot', $caddy, '-VoiceRoot', $voice, '-DeletionRoot', (Join-Path $work 'no-del'), '-Out', $plain, '-KeyFile', (Join-Path $work 'no-key.txt'), '-Plain')
     $zip = @(Get-ChildItem -LiteralPath $plain -Filter 'thornswood-*.zip' -File -EA SilentlyContinue)
@@ -179,7 +179,7 @@ try {
 
     # The advisory threshold must not omit a recording from recovery.
     $tight = Join-Path $work 'backups-tight'
-    $code = Run $ps51 (Join-Path $scriptsDir 'vps\vps-nightly-backup.ps1') @(
+    $code = Run $boxPs (Join-Path $scriptsDir 'vps\vps-nightly-backup.ps1') @(
         '-GameRoot', $game, '-DevGameRoot', $gameDev, '-SiteRoot', $site, '-BotRoot', $bot,
         '-CaddyRoot', $caddy, '-VoiceRoot', $voice, '-DeletionRoot', (Join-Path $work 'no-del'), '-Out', $tight, '-KeyFile', (Join-Path $work 'no-key.txt'), '-Plain', '-MaxUploadsMB', '5')
     $tz = @(Get-ChildItem -LiteralPath $tight -Filter 'thornswood-*.zip' -File -EA SilentlyContinue)
@@ -191,7 +191,7 @@ try {
         (Said 'uploads exceed the advisory threshold of 5 MB; every file will be taken'))
     if ($tz.Count) {
         $tightRestored = Join-Path $work 'tight-restored'
-        $code = Run $ps51 (Join-Path $scriptsDir 'vps\Restore-Backup.ps1') @('-Backup', $tz[0].FullName, '-To', $tightRestored, '-NoPause')
+        $code = Run $boxPs (Join-Path $scriptsDir 'vps\Restore-Backup.ps1') @('-Backup', $tz[0].FullName, '-To', $tightRestored, '-NoPause')
         $recording = Join-Path $tightRestored 'site\uploads\rec\recording.mp4'
         Yes "the over-threshold recording restores with its original bytes (exit $code)" (
             $code -eq 0 -and (Test-Path -LiteralPath $recording) -and (Get-Item -LiteralPath $recording).Length -eq 11MB -and
@@ -199,7 +199,7 @@ try {
     }
 
     $unpacked = Join-Path $work 'unpacked'
-    $code = Run $ps51 (Join-Path $scriptsDir 'vps\Restore-Backup.ps1') @('-Backup', $zip[0].FullName, '-To', $unpacked, '-NoPause')
+    $code = Run $boxPs (Join-Path $scriptsDir 'vps\Restore-Backup.ps1') @('-Backup', $zip[0].FullName, '-To', $unpacked, '-NoPause')
     Yes "Restore-Backup.ps1 unpacks it (exit $code)" ($code -eq 0)
 
     $new = Join-Path $work 'new'
@@ -215,7 +215,7 @@ try {
     Put (Join-Path $nDev 'gamemode.js') '// gamemode of game-dev'
     $svc = Join-Path $scriptsDir 'vps\vps-restore-services.ps1'
     $roots = @('-SiteRoot', $nSite, '-BotRoot', $nBot, '-CaddyRoot', $nCaddy, '-GameRoot', $nGame, '-DevGameRoot', $nDev)
-    $code = Run $ps51 $svc (@('-From', $unpacked) + $roots)
+    $code = Run $boxPs $svc (@('-From', $unpacked) + $roots)
     Yes "vps-restore-services.ps1 puts it back (exit $code)" ($code -eq 0 -and (Said 'SERVICES OK'))
     if ($code -ne 0) { Show }
     Yes '  the site''s data' ((Test-Path -LiteralPath (Join-Path $nSite 'data\board.json')) -and (Test-Path -LiteralPath (Join-Path $nSite 'data\site\about.md')))
@@ -240,7 +240,7 @@ try {
     Yes '  and says the live gamemode differs from the backup''s and the dev one does not' (
         (Said ('GAMEMODE DIFFERS\s+' + [regex]::Escape($nGame))) -and (Said ('gamemode\s+' + [regex]::Escape($nDev) + '\\gamemode.js is the one')))
 
-    $code = Run $ps51 $svc (@('-From', $unpacked) + $roots)
+    $code = Run $boxPs $svc (@('-From', $unpacked) + $roots)
     Yes "a second run keeps the data folder it replaced (exit $code)" ($code -eq 0 -and @(Get-ChildItem -LiteralPath $nSite -Directory -Filter 'data-before-restore-*').Count -eq 1)
 
     # Two restores inside one second (#1107). What an earlier run kept under
@@ -274,7 +274,7 @@ try {
         return $h
     }
     $before = Kept
-    $code = Run $ps51 $svc (@('-From', $unpacked) + $roots)
+    $code = Run $boxPs $svc (@('-From', $unpacked) + $roots)
     $after = Kept
     $added = @($after.Keys | Where-Object { -not $before.ContainsKey($_) })
     $changed = @($before.Keys | Where-Object { $after[$_] -ne $before[$_] })
@@ -293,10 +293,10 @@ try {
     $thin = Join-Path $work 'thin'
     Copy-Item -LiteralPath $unpacked -Destination $thin -Recurse
     Remove-Item -LiteralPath (Join-Path $thin 'bot\bot.env.json') -Force
-    $code = Run $ps51 $svc (@('-From', $thin) + $roots)
+    $code = Run $boxPs $svc (@('-From', $thin) + $roots)
     Yes "a backup without the bot's settings ends SERVICES INCOMPLETE (exit $code)" ($code -ne 0 -and (Said 'SERVICES INCOMPLETE: not in the backup: bot\\bot.env.json'))
 
-    $code = Run $ps51 $svc (@('-From', (Join-Path $work 'nowhere')) + $roots)
+    $code = Run $boxPs $svc (@('-From', (Join-Path $work 'nowhere')) + $roots)
     Yes "a folder that is not an unpacked backup is refused (exit $code)" ($code -ne 0 -and (Said 'no unpacked backup'))
 
     $node = Get-Command node -EA SilentlyContinue
@@ -304,7 +304,7 @@ try {
         $p = Start-Process -FilePath $node.Source -WindowStyle Hidden -PassThru -ArgumentList @('-e', '"setTimeout(function(){},60000)"', ('"' + $nSite + '\server.js"'))
         try {
             Start-Sleep -Milliseconds 500
-            $code = Run $ps51 $svc (@('-From', $unpacked) + $roots)
+            $code = Run $boxPs $svc (@('-From', $unpacked) + $roots)
             Yes "it refuses while the site runs from the folder (exit $code)" ($code -ne 0 -and (Said 'Running from a folder this writes into'))
         } finally { Stop-Process -Id $p.Id -Force -EA SilentlyContinue }
     } else { Write-Host 'SKIP  no node here to stand in for a running site' }

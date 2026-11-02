@@ -1,0 +1,53 @@
+# The release note rules' tests (#5179, plan rev 64): tools/ReleaseNotes is
+# the rules in C#, which the "Release note" check (pr-body.yml) runs, and
+# scripts/release/Note-Rules.ps1 the same rules in PowerShell, which Ship,
+# Rollback-Feed, Deploy-DevGamemode and Collect-ReleaseNotes still read until
+# they move to C# or retire. tests/fixtures/note-rules-cases.json holds both
+# to the same answer for every case, so they cannot drift apart.
+#
+# PULL REQUESTS that touch either copy, the fixture or this file: dotnet test
+# on tools/ReleaseNotes.Tests from the locked packages, and
+# tests/test-note-rules-cases.ps1, the PowerShell copy against the fixture.
+# Read only, no secret.
+name: Release note rules
+
+on:
+  pull_request:
+    paths:
+      - 'tools/ReleaseNotes/**'
+      - 'tools/ReleaseNotes.Tests/**'
+      - 'tests/fixtures/note-rules-cases.json'
+      - 'tests/test-note-rules-cases.ps1'
+      - 'scripts/release/Note-Rules.ps1'
+      - '.github/workflows/release-notes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-notes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Release note rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: The C# rules against the fixture
+        env:
+          DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+          DOTNET_NOLOGO: '1'
+        run: |
+          dotnet restore tools/ReleaseNotes.Tests --locked-mode
+          dotnet test tools/ReleaseNotes.Tests --no-restore
+      - name: The PowerShell rules against the fixture
+        shell: pwsh
+        run: ./tests/test-note-rules-cases.ps1

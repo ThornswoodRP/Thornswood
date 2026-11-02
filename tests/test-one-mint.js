@@ -49,7 +49,7 @@ const path = require('path');
 const SRC = process.env.GM || path.join(REPO_DIR, 'game', 'gamemode.js');
 const RECIPES = process.env.RECIPES || path.join(REPO_DIR, 'game', 'data', 'recipes.json');
 const CR = String.fromCharCode(13);
-const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
+const src = require('./gamemode-tables.js').joined(fs.readFileSync(SRC, 'utf8')).split(CR).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -718,8 +718,9 @@ function goldDescriptors(text) {
     const b = a < 0 ? -1 : text.indexOf(end, a);
     return a < 0 || b < 0 ? null : text.slice(0, a) + text.slice(b + end.length);
   }
-  const noItems = cut(src, '  // ==== ITEM_NAMES ====', '  // ==== end ITEM_NAMES ====');
-  const noAdmin = noItems && cut(noItems, '  // ==== ADMIN_NAMES ====', '  // ==== end ADMIN_NAMES ====');
+  const noItems = cut(src, '  var ITEM_NAMES = ', ';\n');
+  const noAdminItems = noItems && cut(noItems, '  var ADMIN_ITEMS = ', ';\n');
+  const noAdmin = noAdminItems && cut(noAdminItems, '  var ADMIN_ACTORS = ', ';\n');
   const noDungeon = noAdmin && cut(noAdmin,'// ==== thornswood dungeon loot ====','// ==== end thornswood dungeon loot ====');
   /*
     AND THE RECIPES SET IN EACH GAME (#613, #3115). RECIPES_SET_IN_GAME names
@@ -727,7 +728,7 @@ function goldDescriptors(text) {
     recipe costs no coins. A count of 0 takes nothing and mints nothing, and
     the check below holds that every gold row there asks 0.
   */
-  const setInGame = lift('// ==== RECIPES_SET_IN_GAME, generated ====', '// ==== end RECIPES_SET_IN_GAME ====') || '';
+  const setInGame = lift('var RECIPES_SET_IN_GAME = ', ';\n') || '';
   const setRows = (/var RECIPES_SET_IN_GAME = (\{.*\});/.exec(setInGame) || [])[1];
   let setTable = null;
   try { setTable = JSON.parse(setRows); } catch (e) { setTable = null; }
@@ -743,7 +744,7 @@ function goldDescriptors(text) {
     in game to recipeSetInGame. So gold may stand in that block only as an
     input of a recipe RECIPES_SET_IN_GAME takes it to 0 in.
   */
-  const movedInGame = lift('// ==== RECIPES_MOVED_IN_GAME, generated ====', '// ==== end RECIPES_MOVED_IN_GAME ====') || '';
+  const movedInGame = lift('var RECIPES_MOVED_IN_GAME = ', ';\n') || '';
   const movedRows = (/var RECIPES_MOVED_IN_GAME = (\{.*\});/.exec(movedInGame) || [])[1];
   let movedTable = null;
   try { movedTable = JSON.parse(movedRows); } catch (e) { movedTable = null; }
@@ -754,8 +755,8 @@ function goldDescriptors(text) {
           return !!setTable[k] && setTable[k].inputs.some(function (s) { return s[0] === i[0] && s[1] === i[1] && s[2] === 0; });
         });
       }));
-  const noSet = noDungeon && cut(noDungeon, '// ==== RECIPES_SET_IN_GAME, generated ====', '// ==== end RECIPES_SET_IN_GAME ====');
-  const outside = noSet && cut(noSet, '// ==== RECIPES_MOVED_IN_GAME, generated ====', '// ==== end RECIPES_MOVED_IN_GAME ====');
+  const noSet = noDungeon && cut(noDungeon, 'var RECIPES_SET_IN_GAME = ', ';\n');
+  const outside = noSet && cut(noSet, 'var RECIPES_MOVED_IN_GAME = ', ';\n');
   const dungeon=lift('// ==== thornswood dungeon loot ====','// ==== end thornswood dungeon loot ====');
   const dungeonGold=goldDescriptors(dungeon || '');
   yes('the checked dungeon reward names exactly one gold descriptor as GOLD_DESC',

@@ -48,7 +48,7 @@ param(
     [Parameter(ParameterSetName = 'OnGitHub', Mandatory = $true)]
     [switch]$OnGitHub,
     [int]$WaitMinutes = 15,
-    [string]$GitHubRepo = 'EvilPatrick06/Thornswood-Ops'
+    [string]$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'
 )
 
 Set-StrictMode -Version Latest

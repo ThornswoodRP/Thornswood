@@ -1,0 +1,16 @@
+{
+"version":1,
+"quest":"orchard",
+"sources":[
+{"reference":"141084:JK's Whiterun's Outskirts.esp","base":"141081:JK's Whiterun's Outskirts.esp","cell":"9618:Skyrim.esm","world":"3c:Skyrim.esm","position":[32734.08984375,-10301.1953125,-4197.89208984375],"item":"64b2e:Skyrim.esm","itemType":"ALCH","rank":"expert","returnMinutes":0},
+{"reference":"141083:JK's Whiterun's Outskirts.esp","base":"141081:JK's Whiterun's Outskirts.esp","cell":"9618:Skyrim.esm","world":"3c:Skyrim.esm","position":[32458.767578125,-10103.2978515625,-4139.51171875],"item":"64b2e:Skyrim.esm","itemType":"ALCH","rank":"expert","returnMinutes":0},
+{"reference":"141082:JK's Whiterun's Outskirts.esp","base":"141081:JK's Whiterun's Outskirts.esp","cell":"9618:Skyrim.esm","world":"3c:Skyrim.esm","position":[32243.041015625,-11261.99609375,-4217.8154296875],"item":"64b2e:Skyrim.esm","itemType":"ALCH","rank":"expert","returnMinutes":0},
+{"reference":"141080:JK's Whiterun's Outskirts.esp","base":"141081:JK's Whiterun's Outskirts.esp","cell":"9618:Skyrim.esm","world":"3c:Skyrim.esm","position":[32016.349609375,-11102.0615234375,-4172.181640625],"item":"64b2e:Skyrim.esm","itemType":"ALCH","rank":"expert","returnMinutes":0},
+{"reference":"1699d7:JK's Whiterun's Outskirts.esp","base":"141081:JK's Whiterun's Outskirts.esp","cell":"9618:Skyrim.esm","world":"3c:Skyrim.esm","position":[32340.267578125,-12131.546875,-4276.1220703125],"item":"64b2e:Skyrim.esm","itemType":"ALCH","rank":"expert","returnMinutes":0},
+{"reference":"1831a6:JK's Whiterun's Outskirts.esp","base":"141081:JK's Whiterun's Outskirts.esp","cell":"9637:Skyrim.esm","world":"3c:Skyrim.esm","position":[29450.37890625,-12450.99609375,-4248.1787109375],"item":"64b2e:Skyrim.esm","itemType":"ALCH","rank":"expert","returnMinutes":0},
+{"reference":"1831a3:JK's Whiterun's Outskirts.esp","base":"141081:JK's Whiterun's Outskirts.esp","cell":"9637:Skyrim.esm","world":"3c:Skyrim.esm","position":[30332.349609375,-12917.0849609375,-4313.6650390625],"item":"64b2e:Skyrim.esm","itemType":"ALCH","rank":"expert","returnMinutes":0},
+{"reference":"1699d6:JK's Whiterun's Outskirts.esp","base":"141081:JK's Whiterun's Outskirts.esp","cell":"9637:Skyrim.esm","world":"3c:Skyrim.esm","position":[32620.939453125,-12295.2822265625,-4265.97998046875],"item":"64b2e:Skyrim.esm","itemType":"ALCH","rank":"expert","returnMinutes":0},
+{"reference":"1831a0:JK's Whiterun's Outskirts.esp","base":"141081:JK's Whiterun's Outskirts.esp","cell":"9637:Skyrim.esm","world":"3c:Skyrim.esm","position":[30051.677734375,-12753.349609375,-4311.63037109375],"item":"64b2e:Skyrim.esm","itemType":"ALCH","rank":"expert","returnMinutes":0},
+{"reference":"1831ad:JK's Whiterun's Outskirts.esp","base":"141081:JK's Whiterun's Outskirts.esp","cell":"9637:Skyrim.esm","world":"3c:Skyrim.esm","position":[29923.47265625,-13003.6845703125,-4364.17578125],"item":"64b2e:Skyrim.esm","itemType":"ALCH","rank":"expert","returnMinutes":0}
+]
+}

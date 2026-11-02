@@ -120,7 +120,7 @@ if ($ciSaid) { Say ('  ' + $ciSaid) 'DarkGray' }
 Head 'Where the source is'
 
 if (-not (Test-Path -LiteralPath $Fork)) {
-    Die "there is no fork at $Fork. Developer-Guide.md says how a machine gets one."
+    Die "there is no fork at $Fork. docs/guide/set-up-a-machine.md says how a machine gets one."
 }
 Say ("  fork        " + $Fork)
 
@@ -316,12 +316,9 @@ if ($NoRecord) {
     Head 'The record'
     $rec = Join-Path $Here 'New-ServerBuildRecord.ps1'
     if (-not (Test-Path -LiteralPath $rec)) { Die "not found: $rec, so the record was not updated." }
-    # The same PowerShell that is running this, for the same reason
-    # Publish-Server.ps1 does it: handing the job to 5.1 out of a 7 session
-    # changes how the file gets written underneath it. The build and the
-    # clone just built, not Where.ps1's, or a -Fork build recorded another.
-    $ps = (Get-Process -Id $PID).Path
-    if (-not $ps) { $ps = 'powershell' }
+    # The same pwsh that is running this (#5356). The build and the clone
+    # just built, not Where.ps1's, or a -Fork build recorded another.
+    $ps = [Environment]::ProcessPath
     & $ps -NoProfile -ExecutionPolicy Bypass -File $rec -Dist $dist -Clone $Fork
     if ($LASTEXITCODE -ne 0) {
         Die "New-ServerBuildRecord.ps1 exited with $LASTEXITCODE, so records\server-build.json does not match what was just built."

@@ -13,27 +13,27 @@
   this nothing ran any of them outside a live launcher. The To Do List entry
   put it as "the easiest thing in the codebase to test and the most expensive
   to get wrong, because it decides what gets downloaded and where it is allowed
-  to be written". test-dev-version.ps1 carries a PowerShell copy of IsNewer,
-  which answers for the copy and not for the launcher.
+  to be written". test-dev-version.ps1 carried a PowerShell copy of IsNewer
+  until #4825, which answered for the copy and not for the launcher.
 
-  HOW. It compiles launcher\app\*.cs into a library in a temp folder, with the
-  same csc, the same /noconfig and the same references Build-Launcher.ps1
-  uses (the names are read out of Build-Launcher.ps1 itself, so the two cannot
-  drift), loads it, and calls the functions by reflection. Updater is a
-  private static class, and reaching it this way means the launcher's source
-  does not change for the sake of a test. Nothing in the launcher runs: no
-  Main, no window, no network. Pending and ClaimedElsewhere read applied.txt
-  and the Packs folder, so Paths is pointed at the temp folder for those two
-  first, and nothing under C:\Thornswood or the profile is read or written.
+  HOW. It builds the launcher project itself with the .NET 10 SDK, as the
+  build does (Add-LauncherAssembly, tests\Launcher-Csc.ps1), loads it into
+  this PowerShell, which runs on .NET 10 as the launcher does, and calls the
+  functions by reflection. Updater is a private static class, and reaching it
+  this way means the launcher's source does not change for the sake of a
+  test. Nothing in the launcher runs: no Main, no window, no network. Pending
+  and ClaimedElsewhere read applied.txt and the Packs folder, so Paths is
+  pointed at the temp folder for those two first, and nothing under
+  C:\Thornswood or the profile is read or written.
 
-  It runs under Windows PowerShell 5.1 and restarts itself there when started
-  from pwsh, which is how the build check starts it. The launcher runs on the
-  .NET Framework, and Uri and Path are not promised to answer the same on the
-  runtime pwsh carries.
+  It runs wherever the SDK is, Linux too (#4823). Until then it compiled with
+  the .NET Framework's csc under Windows PowerShell 5.1, because the launcher
+  ran on the .NET Framework. Inside's fence is the system's own separator, so
+  its checks are written in it, and the drive letter check is Windows' alone.
 
-  -Src points it at another copy of the sources. That is how it was shown to
-  catch what it is for. MEASURED 24 SEPTEMBER: eight bugs put back into a
-  scratch copy of Updater.cs one at a time, and every one turned this red.
+  MEASURED 24 SEPTEMBER, on a scratch copy of the sources (a -Src it had
+  until #4823, when it began building the project itself): eight bugs put
+  back into Updater.cs one at a time, and every one turned this red.
   IsNewer as a plain "different" test (7 checks fail), Parts reading letters
   as 0 (7), RepoCandidates forgetting the new name (1), Inside as a plain
   prefix (4), ClaimedElsewhere counting a pack's own list (3), Pending ignoring
@@ -47,24 +47,15 @@
   Read only apart from files under its own temp folder.
 #>
 [CmdletBinding()]
-param([string]$Src)
+param()
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the build's compiler and C# version (#498)
+. (Join-Path $PSScriptRoot 'Launcher-Csc.ps1')   # the launcher's own build, by the .NET 10 SDK (#4823)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 # The tests are in tests\, the repository is one folder up.
 $Here = Split-Path -Parent $Here
-if (-not $Src) { $Src = Join-Path $Here 'launcher\app' }
-
-. (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  this runs the launcher''s code on the .NET Framework the launcher runs on, which only Windows has'; exit 0 }
-# ---- the launcher's runtime, not pwsh's --------------------------------------
-if ($PSVersionTable.PSEdition -eq 'Core') {
-    $winps = Get-WindowsPowerShell
-    & $winps -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Src $Src
-    exit $LASTEXITCODE
-}
+$Src = Join-Path $Here 'launcher\app'
 
 $script:pass = 0
 $script:fail = 0
@@ -74,58 +65,26 @@ function Yes([string]$what, [bool]$cond) {
 }
 function Known([string]$what) { Write-Host "KNOWN $what" }
 
-# ---- the compiler and the references the build uses (Launcher-Csc.ps1) ------
-
-$needed = @($LauncherNeeded)
-$wv2 = @($LauncherLib)
-
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('tsupdater-' + [Guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Force -Path $tmp
 
 function Run {
-    Yes 'the compiler the build runs is on this machine (the Roslyn csc beside MSBuild)' (Test-Path -LiteralPath $LauncherCsc)
-    Yes ('Thornswood.csproj names the references the launcher compiles against, {0} of them' -f ($needed.Count + $wv2.Count)) (
-        $needed.Count -gt 5 -and $wv2.Count -gt 0)
-    if (-not (Test-Path -LiteralPath $LauncherCsc) -or $needed.Count -eq 0) { return }
+    Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
+    if (-not (Test-Path -LiteralPath $LauncherDotnet)) { return }
 
-    $refs = @(); $missing = @()
-    foreach ($n in $needed) {
-        $p = Find-LauncherRef $n
-        if ($p) { $refs += $p } else { $missing += $n }
-    }
-    foreach ($n in $wv2) {
-        # Where the project file's HintPath has them, under launcher\lib
-        # (tests\Launcher-Csc.ps1 works the path out).
-        $p = $n
-        if (Test-Path -LiteralPath $p) { $refs += $p } else { $missing += $n }
-    }
-    Yes ('every one of them is on this machine' + $(if ($missing.Count) { ', missing ' + ($missing -join ', ') } else { '' })) (
-        $missing.Count -eq 0)
-    if ($missing.Count) { return }
-
-    # ---- compile ---------------------------------------------------------------
+    # ---- build ---------------------------------------------------------------
     #
-    # A library, so no Main is picked and nothing starts. /noconfig, as the
-    # build has it: csc.rsp adds the framework by name, and beside the
-    # reference assemblies that is CS1703.
-    $cs = @(Get-ChildItem (Join-Path $Src '*.cs') -File)
-    $dll = Join-Path $tmp 'Thornswood.dll'
-    $cscArgs = @('/noconfig', '/nologo', '/target:library', '/platform:anycpu', "/out:$dll")
-    foreach ($r in $refs) { $cscArgs += "/reference:$r" }
-    foreach ($f in $cs) { $cscArgs += $f.FullName }
-    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    $said = & $LauncherCsc @cscArgs 2>&1
-    $rc = $LASTEXITCODE
-    $ErrorActionPreference = $old
-    $built = ($rc -eq 0) -and (Test-Path -LiteralPath $dll)
-    Yes ('the launcher''s {0} source files compile' -f $cs.Count) $built
-    if (-not $built) {
-        foreach ($l in @($said | Where-Object { "$_" -match 'error' } | Select-Object -First 20)) { Write-Host "      $l" }
+    # The launcher project itself, built as the build builds it, and loaded
+    # into this PowerShell, which runs on .NET 10 as the launcher does. Nothing
+    # in the launcher runs: no Main, no window, no network.
+    $asm = $null
+    try { $asm = Add-LauncherAssembly }
+    catch {
+        Yes 'the launcher project builds' $false
+        foreach ($l in @(($_.Exception.Message -split "`r?`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20)) { Write-Host "      $l" }
         return
     }
-
-    # From bytes, so the file is not held open and the temp folder can go.
-    $asm = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($dll))
+    Yes 'the launcher project builds' ($null -ne $asm)
     $U = $asm.GetType('Thornswood.Updater')
     $P = $asm.GetType('Thornswood.Paths')
     $script:VD = $asm.GetType('Thornswood.VersionDoc')
@@ -161,7 +120,7 @@ function Run {
     Yes 'IsNewer: a missing part counts as 0, 1.1.92.0 over 1.1.92 is not an update' ((Newer '1.1.92.0' '1.1.92') -eq $false)
     Yes 'IsNewer: nor is 1.1.92 over 1.1.92.0' ((Newer '1.1.92' '1.1.92.0') -eq $false)
 
-    # The dev channel's four part numbers, from test-dev-version.ps1 and the
+    # The dev channel's four part numbers, from the old test-dev-version.ps1 and the
     # build of 21 September that nobody already on dev could take.
     Yes 'IsNewer: a dev build 1.1.77.1 is an update over main 1.1.77' ((Newer '1.1.77.1' '1.1.77') -eq $true)
     Yes 'IsNewer: 1.1.76.1 over 1.1.77 is not, the dev build of 21 September' ((Newer '1.1.76.1' '1.1.77') -eq $false)
@@ -256,7 +215,9 @@ function Run {
     $opened = @([regex]::Matches($shellAll, 'updatePending = false')).Count
     $upd = [IO.File]::ReadAllText((Join-Path $Src 'ShellUpdate.cs'))
     $inDoc = $upd.Substring($upd.IndexOf('static void OnVersionDoc('), $upd.IndexOf('static void CheckUpdatesInPlay(') - $upd.IndexOf('static void OnVersionDoc('))
-    $installed = @([regex]::Matches($upd, 'updatePending = false;\s*DrawStatus\(\);\s*Log\("Update finished\."\);')).Count
+    # After the packs went in: the same block, before "Update finished." and
+    # with no other updatePending between.
+    $installed = @([regex]::Matches($upd, '(?s)updatePending = false;(?:(?!updatePending).){0,600}?Log\("Update finished\."\);')).Count
     Yes 'Play is let through only by a feed that was read: every updatePending = false is in OnVersionDoc or after its packs went in' (
         $opened -gt 0 -and $opened -eq (@([regex]::Matches($inDoc, 'updatePending = false')).Count + $installed))
 
@@ -264,26 +225,36 @@ function Run {
     #
     # From the comment above it: "C:\Thornswood2\anything" starts with
     # "C:\Thornswood", so a plain prefix test let a pack reach next door.
-    Yes 'Inside: a file under the game folder is inside it' ((Within 'C:\Thornswood\Game\Data\Thornswood.esp' 'C:\Thornswood\Game') -eq $true)
-    Yes 'Inside: C:\Thornswood2\anything is not inside C:\Thornswood' ((Within 'C:\Thornswood2\anything' 'C:\Thornswood') -eq $false)
-    Yes 'Inside: the folder is not inside itself, so nothing can delete the fence' ((Within 'C:\Thornswood\Game' 'C:\Thornswood\Game') -eq $false)
+    # The fence is the system's own separator (Path.DirectorySeparatorChar),
+    # so the paths here are written in it: C:\ and \ on Windows, where the
+    # launcher runs, / anywhere else this runs, the same rule either way.
+    $s = [string][IO.Path]::DirectorySeparatorChar
+    $top = if ($OnWindows) { 'C:' } else { '' }
+    function W([string]$p) { return ($top + $s + $p.Replace('\', $s)) }
+    Yes 'Inside: a file under the game folder is inside it' ((Within (W 'Thornswood\Game\Data\Thornswood.esp') (W 'Thornswood\Game')) -eq $true)
+    Yes 'Inside: Thornswood2\anything is not inside Thornswood' ((Within (W 'Thornswood2\anything') (W 'Thornswood')) -eq $false)
+    Yes 'Inside: the folder is not inside itself, so nothing can delete the fence' ((Within (W 'Thornswood\Game') (W 'Thornswood\Game')) -eq $false)
     Yes 'Inside: a folder given with its separator on the end' (
-        (Within 'C:\Thornswood\Game\x' 'C:\Thornswood\Game\') -eq $true -and (Within 'C:\Thornswood\Game\x' 'C:\Thornswood\Game/') -eq $true)
-    Yes 'Inside: the case of the letters does not matter on Windows' ((Within 'c:\thornswood\game\data\x' 'C:\Thornswood\Game') -eq $true)
-    Yes 'Inside: the same folder on another drive is not inside' ((Within 'D:\Thornswood\Game\x' 'C:\Thornswood\Game') -eq $false)
+        (Within (W 'Thornswood\Game\x') ((W 'Thornswood\Game') + $s)) -eq $true -and (Within (W 'Thornswood\Game\x') ((W 'Thornswood\Game') + '/')) -eq $true)
+    Yes 'Inside: the case of the letters does not matter, as on Windows' ((Within (W 'thornswood\game\data\x') (W 'Thornswood\Game')) -eq $true)
+    if ($OnWindows) {
+        Yes 'Inside: the same folder on another drive is not inside' ((Within 'D:\Thornswood\Game\x' 'C:\Thornswood\Game') -eq $false)
+    }
     Yes 'Inside: nothing given is inside nothing' (
-        (Within $null 'C:\Thornswood') -eq $false -and (Within 'C:\Thornswood\x' $null) -eq $false -and (Within '' 'C:\Thornswood') -eq $false)
+        (Within $null (W 'Thornswood')) -eq $false -and (Within (W 'Thornswood\x') $null) -eq $false -and (Within '' (W 'Thornswood')) -eq $false)
 
     # Every caller resolves the path first, the way Install does for a line of
     # delete.txt and RemovePack does for a line of a file list: Combine leaves
     # a .. where it is, and it is Delete that would resolve it, outside the
     # game. This is that pattern, on the lines a bad pack would carry.
-    $game = 'C:\Thornswood\Game'
-    foreach ($line in @('..\..\Profile\config.json', '..\Game2\x', 'Data\..\..\x', 'C:\Windows\System32\x.dll', '\Windows\x')) {
-        Yes "Inside: a pack line '$line', resolved as the callers resolve it, stays out" ((Fenced $game $line) -eq $false)
+    $game = W 'Thornswood\Game'
+    $out = @('..\..\Profile\config.json', '..\Game2\x', 'Data\..\..\x', '\Windows\x')
+    if ($OnWindows) { $out += 'C:\Windows\System32\x.dll' }
+    foreach ($line in $out) {
+        Yes "Inside: a pack line '$line', resolved as the callers resolve it, stays out" ((Fenced $game $line.Replace('\', $s)) -eq $false)
     }
     foreach ($line in @('Data\Platform\Plugins\thornswood-front.js', 'Data\..\Data\x.esp')) {
-        Yes "Inside: a pack line '$line', resolved the same way, is let in" ((Fenced $game $line) -eq $true)
+        Yes "Inside: a pack line '$line', resolved the same way, is let in" ((Fenced $game $line.Replace('\', $s)) -eq $true)
     }
 
     # ---- CheckUrl: where an update may come from -----------------------------
@@ -372,7 +343,7 @@ function Run {
     # Measured here and written down, not asserted: each is a decision about
     # Updater.cs, which is one of the six shared files.
     Write-Host ''
-    Known ("Inside('C:\Thornswood\Game\..\..\Windows\x', 'C:\Thornswood\Game') is {0}, and Inside('C:\Thornswood\Game\x', 'C:/Thornswood/Game') is {1}. It compares text and resolves neither side. Every caller resolves the path with Path.GetFullPath first, which is why the resolved lines above stay out; a new caller that forgets gets the first answer, and a folder written with forward slashes would fence everything out." -f (Within 'C:\Thornswood\Game\..\..\Windows\x' 'C:\Thornswood\Game'), (Within 'C:\Thornswood\Game\x' 'C:/Thornswood/Game'))
+    if ($OnWindows) { Known ("Inside('C:\Thornswood\Game\..\..\Windows\x', 'C:\Thornswood\Game') is {0}, and Inside('C:\Thornswood\Game\x', 'C:/Thornswood/Game') is {1}. It compares text and resolves neither side. Every caller resolves the path with Path.GetFullPath first, which is why the resolved lines above stay out; a new caller that forgets gets the first answer, and a folder written with forward slashes would fence everything out." -f (Within 'C:\Thornswood\Game\..\..\Windows\x' 'C:\Thornswood\Game'), (Within 'C:\Thornswood\Game\x' 'C:/Thornswood/Game')) }
     $other = Refusal 'https://github.com/someone-else/anything/releases/download/v1/a.zip'
     Known ("CheckUrl on another account's upload, github.com/someone-else/anything/releases/download/v1/a.zip, is {0}. The list pins the host and not the owner, the checksum comes from the same feed, and ExpectedSigner is empty, so a feed that names somebody else's file is fetched and run." -f $(if ($null -eq $other) { 'let through' } else { "refused ($other)" }))
 }
@@ -416,7 +387,9 @@ function PendingIds($json) {
         $a[0] = [Text.Encoding]::UTF8.GetBytes($json)
         $doc = $script:VD.GetMethod('Parse').Invoke($null, $a)
     }
-    try { $list = Ask 'Pending' $doc }
+    # Pending(cfg, doc): no config is a launcher Velopack did not install,
+    # which takes its packs from the feed (Velo.GameFromPackage).
+    try { $list = Ask 'Pending' $null $doc }
     catch { return 'threw: ' + $_.Exception.Message }
     if ($null -eq $list) { return 'null' }
     return (@($list | ForEach-Object { $_.id }) -join ',')

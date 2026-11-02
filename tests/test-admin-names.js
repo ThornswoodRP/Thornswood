@@ -16,7 +16,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-const src = fs.readFileSync(path.join(__dirname, '..', 'game', 'gamemode.js'), 'utf8').split(String.fromCharCode(13)).join('');
+const src = require('./gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname, '..', 'game', 'gamemode.js'), 'utf8')).split(String.fromCharCode(13)).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -29,12 +29,12 @@ function cut(from, to) {
   return a < 0 || b < 0 ? null : src.slice(a, b + to.length);
 }
 
-const recipes = cut('  var RECIPES_BY_ID = {', '\n  };');
-const names = cut('  var ITEM_NAMES = {', '\n  };');
-const admin = cut('  // ==== ADMIN_NAMES ====', '  // ==== end ADMIN_NAMES ====');
+const recipes = cut('  var RECIPES_BY_ID = {', ';\n');
+const names = cut('  var ITEM_NAMES = {', ';\n');
+const admin = (cut('  var ADMIN_ITEMS = {', ';\n') || '') + '\n' + (cut('  var ADMIN_ACTORS = {', ';\n') || '');
 const itemsLine = (src.match(/^const ITEMS = .*;$/m) || [null])[0];
 const lookups = cut('  function addThing(idx, name, desc) {', '\n  function holdTownOf(');
-yes('the ADMIN_NAMES block is in gamemode.js', !!admin);
+yes('ADMIN_ITEMS and ADMIN_ACTORS are in gamemode.js', /var ADMIN_ITEMS = \{/.test(admin) && /var ADMIN_ACTORS = \{/.test(admin));
 yes('and the lookups, the recipe table, ITEM_NAMES and ITEMS', !!(recipes && names && itemsLine && lookups));
 
 if (admin && recipes && names && itemsLine && lookups) {

@@ -53,4 +53,4 @@ if ($e) { $e | ForEach-Object { $_.Line } } else { 'none' }
 '@ -replace 'LINES', $Lines
 
 $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($remote))
-Invoke-ThornswoodNative { & ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$User@$Vps" "powershell -NoProfile -EncodedCommand $enc" }
+Invoke-ThornswoodNative { & ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$User@$Vps" "pwsh -NoProfile -EncodedCommand $enc" }

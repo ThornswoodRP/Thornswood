@@ -2,12 +2,17 @@
 # change build.yml and run  node scripts/dev/Build-PrWorkflow.js
 #
 # Every pull request runs the same checks as build.yml, on GitHub's hosted
-# windows-latest runner (#1306, #4983). No secrets, no live folders: every
+# windows-latest runner (#1306, #4983), and again on the merge queue's
+# merge of it onto the newest main (#5182). No secrets, no live folders: every
 # scratch path is under RUNNER_TEMP. The job keeps the name "Launcher builds",
-# and the gate runs beside it in shares, "Gate harnesses (n of 5)".
+# and the gate runs beside it in shares, "Gate harnesses (n of 5)", after
+# the job "Pick the gate harnesses" says what each runs, and the harnesses
+# that need nothing from Windows in "Gate harnesses on Linux (n of 4)".
 name: Build check (pull requests)
 on:
   pull_request:
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 permissions:
   contents: read
@@ -27,23 +32,92 @@ concurrency:
 jobs:
   # THE GATE, IN FIVE SHARES (31 Oct 2026). Every gate harness, split over
   # five of GitHub's hosted Windows runners at once, beside the launcher job.
-  # Since #5119 no build runs on the box, so no main build is traced and no
-  # map of what a change can reach is handed on, and every pull request ran
-  # the whole gate on one runner's four cores: 707 harnesses, 3741 s of
+  # Since #5119 no build runs on the box, and every pull request ran the
+  # whole gate on one runner's four cores: 707 harnesses, 3741 s of
   # processor, the gate step 1104 s of a 20.7 minute build (run 41231641217),
   # and 1186 s of 21 minutes on a slower runner (41233444404, 4061 s of
   # processor for the same harnesses). Patrick's mark is under ten minutes
   # for a pull request's checks, and over twenty means something is wrong.
-  # scripts\dev\Run-Gate.ps1 -Shard n -Of 5 takes harness number i of the
-  # gate list when i mod 5 is n - 1, the way nightly.yml splits its own, so
-  # every gate harness runs in exactly one share. The runners are free on a
-  # public repository; each share costs about a minute to start. The check
-  # main's ruleset requires, "Build check result", needs this job and the
-  # launcher job both (scripts\dev\Build-PrWorkflow.js), and
-  # scripts\dev\Tested-Tree.js counts a pull request's tree as tested only
-  # when every share of its run passed.
+  # The runners are free on a public repository; each share costs about a
+  # minute to start. The check main's ruleset requires, "Build check
+  # result", needs this job and the launcher job both
+  # (scripts\dev\Build-PrWorkflow.js).
+  #
+  # THE PICK (#5183). One job first, on Linux, picks what the shares run and
+  # splits it (scripts\dev\Run-Gate.ps1 -Pick): on a pull request the
+  # harnesses its change can reach, from main's newest nightly map
+  # (gate-map.yml traces the whole gate on GitHub's Windows runner and keeps
+  # it as an artifact; Gate-Map.ps1 -Fetch reads it with this job's token,
+  # actions: read), each with why in its log; on main the whole gate. The
+  # split is by the seconds each harness took when traced, so the shares end
+  # together. Every share runs its part of that one plan; a share fetching
+  # the map for itself could read a different one, or none, and a harness
+  # would run twice or not at all. With no map the pull request runs the
+  # whole gate, split by place in the list. How many shares there are is
+  # SHARES below, and nowhere else: at most that many, one for each harness
+  # when the change reaches fewer, and none when it reaches none, and then
+  # the job "gate" is skipped and starts no Windows runner (#5292).
+  # It stays on x64 Linux: on GitHub's arm64 runner (#5302, 1 Nov 2026) it
+  # waited 22 s longer for a runner than the x64 Linux jobs started by the
+  # same push (median of 31), longer in 20 of them, and it holds up every
+  # share.
+  pick:
+    name: Pick the gate harnesses
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      plan: ${{ steps.pick.outputs.plan }}
+      shares: ${{ steps.pick.outputs.shares }}
+      linux_shares: ${{ steps.pick.outputs.linux_shares }}
+      whole: ${{ steps.pick.outputs.whole }}
+      launcher: ${{ steps.reach.outputs.launcher }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Pick and split the gate harnesses
+        id: pick
+        shell: pwsh
+        env:
+          SHARES: '5'
+          # #5293: the harnesses the nightly map says run as fully on Linux
+          # as on Windows go to this many shares on ubuntu-latest instead.
+          LINUX_SHARES: '4'
+          GATE_MAP_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/dev/Run-Gate.ps1 -Pick ([int]$env:SHARES) -LinuxShares ([int]$env:LINUX_SHARES)
+          exit $LASTEXITCODE
+      # THE PATH RULE (#5292): whether the job "Launcher builds" has anything
+      # to check, from the files the pull request changes against its base.
+      # The job above its own says why.
+      - name: Say whether the change reaches the launcher build
+        id: reach
+        shell: pwsh
+        env:
+          # A pull request's base only. The merge queue's run (#5296) gets
+          # none, so it always builds the launcher and writes the note
+          # main's "tested" job reads; skipped there, main would build
+          # everything again after the merge.
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          ./scripts/dev/Launcher-Reach.ps1 -Base $env:BASE
+          exit $LASTEXITCODE
+
+  # Each share runs its part of the pick's plan. A share of what a change can
+  # reach says so in its name, and scripts\dev\Tested-Tree.js counts a pull
+  # request's tree as tested only when every share of its run passed and was
+  # a share of the whole gate, so main runs the whole gate after a pull
+  # request that ran less.
   gate:
-    name: Gate harnesses (${{ matrix.shard }} of ${{ strategy.job-total }})
+    name: Gate harnesses (${{ matrix.shard }} of ${{ strategy.job-total }}${{ needs.pick.outputs.whole != 'true' && ', what the change reaches' || '' }})
+    needs: pick
+    if: ${{ needs.pick.outputs.shares != '[]' }}
     runs-on: windows-latest
     timeout-minutes: 30
     strategy:
@@ -51,7 +125,7 @@ jobs:
       # the others would have found.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5]
+        shard: ${{ fromJSON(needs.pick.outputs.shares) }}
     steps:
       # Every commit and tree, no old file contents (about a second more than
       # a shallow one, measured 1 Nov 2026): the harnesses run the release
@@ -68,6 +142,11 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
+      # The harnesses compile and run launcher code with the .NET 10 SDK
+      # (tests\Launcher-Csc.ps1, #4823), pinned as the launcher's publish is.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
 
       - name: Run the gate harnesses
         id: gate
@@ -75,6 +154,7 @@ jobs:
         env:
           SHARD: ${{ matrix.shard }}
           OF: ${{ strategy.job-total }}
+          GATE_PLAN: ${{ needs.pick.outputs.plan }}
         run: |
           # Issue #3009. The gate is every tests\test-*.js and tests\test-*.ps1
           # that tests\gate-excluded.txt does not name, read from the files by
@@ -87,8 +167,7 @@ jobs:
           # or in Run-Gate.ps1: a name there is a second list
           # (test-gate-list.ps1 fails on one).
           # It began as six that sat red on main unseen (#875) and grew from
-          # there (#1088, #1273, #2513). pwsh on purpose: test-script-index.ps1
-          # starts Windows PowerShell 5.1 itself to compare what the two write.
+          # there (#1088, #1273, #2513).
           # On 21 Oct 2026 the 550 then on the gate took 26 minutes of a 28
           # minute build one at a time, in a foreach here (#3114). They run
           # through scripts\dev\Nightly-Harnesses.ps1 now, -Throttle at once:
@@ -114,32 +193,157 @@ jobs:
           # before the job could be cancelled. A share takes about five
           # minutes, so a share near its budget is a fault to find, and one
           # past it is red and names what did not run.
-          # ONLY WHAT A CHANGE CAN REACH (#3114, Patrick's option A on
-          # q-3114-map-refresh, 22 Oct 2026). scripts\dev\Run-Gate.ps1 runs
-          # all of that. On main, on the VPS, the trace task on the box
-          # traces the gate as it runs (scripts\dev\Trace-Gate-Task.ps1);
-          # on a pull request built on the VPS, the newest traced map says
-          # which harnesses its change can reach, and only those run, each
-          # with why. Only a main build on the box handed a map on
-          # (scripts\dev\Gate-Map.ps1), and none runs there since #4983, so
-          # a share reads no map: each runs its part of the whole gate.
+          # ONLY WHAT A CHANGE CAN REACH (#3114, #5183). scripts\dev\Run-Gate.ps1
+          # runs this share's part of the plan the job "Pick the gate
+          # harnesses" made, in GATE_PLAN, having checked it was made for
+          # this many shares from this checkout's gate. It fetches no map.
           if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
             Write-Host '::error::no node on this runner, so the .js gate harnesses were not run'
             exit 1
           }
-          .\scripts\dev\Run-Gate.ps1 -Shard $env:SHARD -Of $env:OF -Throttle 6 -BudgetSeconds 1200
+          # ONE REPORT (#5295): each share writes a test case for every check
+          # its harnesses printed, and the job "Gate report" merges the
+          # shares' into one and names the failing checks on the run's page.
+          .\scripts\dev\Run-Gate.ps1 -Shard $env:SHARD -Of $env:OF -Throttle 6 -BudgetSeconds 1200 -Report (Join-Path $env:RUNNER_TEMP 'gate-report\share.xml')
           exit $LASTEXITCODE
 
-  # The launcher build and every check, on GitHub's hosted windows-latest
-  # (#1306; the only runner since #4983).
-  launcher:
-    name: Launcher builds
-    runs-on: windows-latest
+      - name: Keep this share's report for the gate report
+        if: ${{ !cancelled() }}
+        # The share's verdict is its harnesses'. When this upload fails, the
+        # report job names this share as having left no report and is red,
+        # so the failure is said where the report is read.
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: gate-report-${{ matrix.shard }}
+          path: ${{ runner.temp }}/gate-report/share.xml
+          if-no-files-found: ignore
+          # Read by the report job of this run, minutes later, and by
+          # nothing after it.
+          retention-days: 1
+
+  # THE LINUX SHARES (#5293). The gate harnesses the nightly map says need
+  # nothing from Windows: each ran on both platforms the night the map was
+  # made, passed on both, and skipped nothing on Linux that it ran on
+  # Windows (scripts\dev\Affected-Harnesses.js, platforms). They run here, on
+  # GitHub's ubuntu-latest, which starts sooner than its Windows runner; every
+  # other harness, and every one when the map has no platforms file for its
+  # commit, runs in the job above. Tested-Tree.js counts these shares with
+  # the Windows ones.
+  gate-linux:
+    name: Gate harnesses on Linux (${{ matrix.shard }} of ${{ strategy.job-total }}${{ needs.pick.outputs.whole != 'true' && ', what the change reaches' || '' }})
+    needs: pick
+    if: ${{ needs.pick.outputs.linux_shares != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.pick.outputs.linux_shares) }}
+    steps:
+      # A full history for the same reason as the Windows shares.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # The harnesses compile and run launcher code with the .NET 10 SDK
+      # (tests\Launcher-Csc.ps1, #4823), pinned as the launcher's publish is.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Run the gate harnesses
+        id: gate
+        shell: pwsh
+        env:
+          SHARD: ${{ matrix.shard }}
+          OF: ${{ strategy.job-total }}
+          GATE_PLAN: ${{ needs.pick.outputs.plan }}
+        run: |
+          # This share's part of the plan's Linux shares, as the Windows
+          # shares run theirs, report and all (the job above says how and why).
+          ./scripts/dev/Run-Gate.ps1 -Shard $env:SHARD -Of $env:OF -Platform Linux -Throttle 6 -BudgetSeconds 1200 -Report (Join-Path $env:RUNNER_TEMP 'gate-report/share.xml')
+          exit $LASTEXITCODE
+
+      - name: Keep this share's report for the gate report
+        if: ${{ !cancelled() }}
+        # The share's verdict is its harnesses'. When this upload fails, the
+        # report job names this share as having left no report and is red,
+        # so the failure is said where the report is read.
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: gate-report-linux-${{ matrix.shard }}
+          path: ${{ runner.temp }}/gate-report/share.xml
+          if-no-files-found: ignore
+          # Read by the report job of this run, minutes later, and by
+          # nothing after it.
+          retention-days: 1
+
+
+  # The gate's checks in one report (#5295). Each share above keeps a JUnit
+  # file with a test case for every PASS, FAIL and SKIP line its harnesses
+  # printed (scripts\dev\Nightly-Harnesses.ps1 -Report); this merges them
+  # into one, kept with the run, and lists every failing check by harness
+  # on the run's page, so a red gate says which check failed without anybody
+  # opening a share's log. The Linux shares (#5293) keep theirs as
+  # gate-report-linux-<n>, which the same pattern reads. A share that left no report is named, and turns
+  # this red: its checks are missing from the report. Failing checks alone
+  # do not, since the share that ran them is red already.
+  report:
+    name: Gate report
+    needs: [pick, gate, gate-linux]
+    if: ${{ !cancelled() && (needs.gate.result != 'skipped' || needs['gate-linux'].result != 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          sparse-checkout: scripts/dev/Merge-HarnessReports.ps1
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: gate-report-*
+          path: ${{ runner.temp }}/gate-reports
+      - name: Merge the shares' reports into one
+        shell: pwsh
+        env:
+          SHARES: ${{ needs.pick.outputs.shares }}
+          LINUX_SHARES: ${{ needs.pick.outputs.linux_shares }}
+        run: |
+          # One report from each share that ran, Windows and Linux.
+          $shares = @($env:SHARES | ConvertFrom-Json).Count + @($env:LINUX_SHARES | ConvertFrom-Json).Count
+          $in = Join-Path $env:RUNNER_TEMP 'gate-reports'
+          New-Item -ItemType Directory -Path $in -Force | Out-Null
+          .\scripts\dev\Merge-HarnessReports.ps1 -Path $in -Expect $shares -Out (Join-Path $env:RUNNER_TEMP 'gate-report.xml') -Title 'Gate harnesses'
+          exit $LASTEXITCODE
+      - name: Keep the merged report with the run
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: gate-report
+          path: ${{ runner.temp }}/gate-report.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # THE TREE CHECKS (#5292). Every check of the whole tree that needs
+  # nothing from Windows, on GitHub's ubuntu-latest, which starts sooner than
+  # its Windows runner. They were steps of the launcher job until 1 Nov 2026,
+  # where a change to one doc waited for a Windows runner to have them run.
+  # Every pull request runs them, whatever it changes, and so does main.
+  # Each step's own comment says why it is there.
+  checks:
+    name: Tree checks
+    runs-on: ubuntu-latest
     permissions:
       contents: read
-    # Its steps take about three minutes since the gate went to the job
-    # above; twenty is Patrick's mark for something seriously wrong.
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -159,28 +363,22 @@ jobs:
           # A hit names the file, the line and the rule and never the value,
           # because anybody on the repository can read this log. A known
           # non-secret goes in scripts\dev\Check-Secrets.allow.txt with its reason.
-          .\scripts\dev\Check-Secrets.ps1
+          ./scripts/dev/Check-Secrets.ps1
           exit $LASTEXITCODE
 
       - name: Parse every PowerShell script
         shell: pwsh
         run: |
-          $bad = 0
-          Get-ChildItem -Path scripts, tests, installer -Filter *.ps1 -Recurse -File | ForEach-Object {
-            $tokens = $null; $errors = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors)
-            foreach ($e in $errors) {
-              $bad++
-              Write-Host ("::error file={0},line={1}::{2}" -f $_.FullName, $e.Extent.StartLineNumber, $e.Message)
-            }
-          }
-          if ($bad) { exit 1 }
-          Write-Host "every script parses"
+          # The list of what is parsed is in scripts\dev\Check-Parse.ps1, which
+          # the pre-push hook runs too (#5291), so a script the hook passed
+          # parses here as well.
+          ./scripts/dev/Check-Parse.ps1 -What PowerShell
+          exit $LASTEXITCODE
 
       - name: Check the writing rules
         shell: pwsh
         run: |
-          # The Words section of Developer-Guide.md, over every file people read
+          # The Words section of docs/guide/rules.md, over every file people read
           # (every Markdown file outside lore and the archive, the launcher's
           # help and window, the bot's posts, the public pages, the installer's
           # read me). Written down since the start and never checked, and on
@@ -192,7 +390,7 @@ jobs:
           # (scripts\release\Note-Rules.ps1), by planting a break of every rule.
           # A few seconds between them. They ran only at night before, and a
           # name in a component README sat red there for a day (#1034).
-          .\scripts\dev\Check-Words.ps1
+          ./scripts/dev/Check-Words.ps1
           if ($LASTEXITCODE -ne 0) { exit 1 }
           $failed = @()
           # Issue #1081: Ship runs Check-Words before it builds. The harness
@@ -219,7 +417,7 @@ jobs:
             Write-Host '::error file=tests/test-old-name-gone.js::no node on this runner, so the old name was not checked'
             exit 1
           }
-          node tests\test-old-name-gone.js
+          node tests/test-old-name-gone.js
           if ($LASTEXITCODE -ne 0) {
             Write-Host '::error file=tests/test-old-name-gone.js::the old multiplayer mod is named again; the lines above say where'
             exit 1
@@ -237,7 +435,7 @@ jobs:
             Write-Host '::error file=tests/test-other-server-name-gone.js::no node on this runner, so the other server''s name was not checked'
             exit 1
           }
-          node tests\test-other-server-name-gone.js
+          node tests/test-other-server-name-gone.js
           if ($LASTEXITCODE -ne 0) {
             Write-Host '::error file=tests/test-other-server-name-gone.js::the other server or one of its short forms is named again; the lines above say where'
             exit 1
@@ -259,7 +457,7 @@ jobs:
             Write-Host '::error file=tests/test-one-engine.js::no node on this runner, so the engine commit was not checked'
             exit 1
           }
-          node tests\test-one-engine.js
+          node tests/test-one-engine.js
           if ($LASTEXITCODE -ne 0) {
             Write-Host '::error file=records/server-build.json::the engine pin and the client and server build records do not name one fork commit, or engine/README.md names a commit or hash in full; the lines above say which'
             exit 1
@@ -274,7 +472,7 @@ jobs:
           # (scripts\release\RecordShape.ps1). The deploys refuse a record that
           # is not; this says so at merge instead. Reads four files, under a
           # second. Fail closed, like the steps above.
-          .\scripts\release\Check-Records.ps1
+          ./scripts/release/Check-Records.ps1
           if ($LASTEXITCODE -ne 0) {
             Write-Host '::error file=records/server-build.json::a high-risk record is at a version this checkout does not know, or is missing a field its readers need; the lines above say which'
             exit 1
@@ -317,14 +515,14 @@ jobs:
       - name: Run the voice service's /health harness
         shell: pwsh
         run: |
-          # Issue #2475. voice\test-turn-key.js checks /health's fields, in
+          # Issue #2475. voice\tests\test-turn-key.js checks /health's fields, in
           # order, and #2677 broke it while this build stayed green, because
           # the harness list above runs only tests\ and voice\test-*.js ran
           # only at night. It starts the real service on a port of its own
           # (#1703), a few seconds.
-          & node voice\test-turn-key.js
+          & node voice/tests/test-turn-key.js
           if ($LASTEXITCODE -ne 0) {
-            Write-Host '::error file=voice/test-turn-key.js::the voice /health harness failed, the FAIL lines above say what'
+            Write-Host '::error file=voice/tests/test-turn-key.js::the voice /health harness failed, the FAIL lines above say what'
             exit 1
           }
 
@@ -351,25 +549,15 @@ jobs:
             exit 1
           }
 
-      - name: Check the launcher window
-        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
-        run: |
-          # The launcher builds its window from ui.xaml at startup and finds
-          # every control by name, so a renamed control or a window that does
-          # not parse compiles clean and is found by the person using it. This
-          # fails on either. Windows PowerShell on purpose: it parses with the
-          # .NET Framework WPF the launcher runs on, not the newer one in pwsh.
-          # -ExecutionPolicy Bypass on both, as every harness starts 5.1:
-          # Windows 11 keeps 5.1 at Restricted, so on One's runners the plain
-          # shell: powershell could not run this step's own script (#3861).
-          & powershell -NoProfile -ExecutionPolicy Bypass -File scripts\dev\Check-Controls.ps1 -NoPause
-          if ($LASTEXITCODE -ne 0) { Write-Host '::error file=launcher/ui.xaml::the launcher window does not line up with the C#, see the lines above'; exit 1 }
-
       - name: Check the launcher UI thread
         shell: pwsh
         run: |
           # Issue #1216. A Log() from a background thread throws on the
           # window, and the catch then reports a success as a failure.
+          # Avalonia throws on a control touched off its thread just as WPF
+          # did, so this stays (#4823), reading Avalonia's hand back,
+          # Dispatcher.UIThread. The compiled window does not catch it: it is
+          # a thread fault, not a name one.
           # This follows calls out of ThreadPool and Thread delegates in
           # launcher\app. No arguments: the script finds launcher\app from
           # where it lives. A finding exits 1. No python is a check that
@@ -387,21 +575,11 @@ jobs:
       - name: Parse every game script
         shell: pwsh
         run: |
-          $bad = 0
           # game\ since the reorganisation's phase 6 (issue #440): the gamemode,
-          # the plugins and the overlays.
-          $files = @(Get-ChildItem -Path scripts -Filter *.js -File -Recurse) + @(Get-ChildItem -Path game -Filter *.js -File) +
-                   @(Get-ChildItem -Path game\plugins, game\ui -Filter *.js -File -ErrorAction SilentlyContinue) +
-                   @(Get-ChildItem -Path site\server.js, voice\voice-server.js -File)
-          foreach ($f in $files) {
-            & node --check $f.FullName 2>&1 | Out-Null
-            if ($LASTEXITCODE -ne 0) {
-              $bad++
-              Write-Host ("::error file={0}::does not parse" -f $f.FullName)
-            }
-          }
-          if ($bad) { exit 1 }
-          Write-Host ("{0} game script(s) parse" -f $files.Count)
+          # the plugins and the overlays, with node --check. The list is in
+          # scripts\dev\Check-Parse.ps1, which the pre-push hook runs too (#5291).
+          ./scripts/dev/Check-Parse.ps1 -What Scripts
+          exit $LASTEXITCODE
 
       - name: Check the Python names what exists
         shell: pwsh
@@ -432,12 +610,12 @@ jobs:
           #   .venv\Scripts\ruff check --isolated --select E9,F63,F7,F82 (git ls-files '*.py')
           $venv = Join-Path $env:RUNNER_TEMP 'ruff-venv'
           python -m venv $venv
-          $py = Join-Path $venv 'Scripts\python.exe'
+          $py = Join-Path (Join-Path $venv 'bin') 'python'
           if (-not (Test-Path -LiteralPath $py)) {
             Write-Host '::error::could not make a venv for ruff, so the Python was not checked'
             exit 1
           }
-          & $py -m pip install --quiet --disable-pip-version-check --only-binary :all: --require-hashes -r .github\ruff-requirements.txt
+          & $py -m pip install --quiet --disable-pip-version-check --only-binary :all: --require-hashes -r .github/ruff-requirements.txt
           if ($LASTEXITCODE -ne 0) {
             Write-Host '::error file=.github/ruff-requirements.txt::could not install the pinned ruff, so the Python was not checked'
             exit 1
@@ -446,6 +624,27 @@ jobs:
           & $py -m ruff check --isolated --no-cache --select E9,F63,F7,F82 --output-format github @files
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Write-Host ("{0} Python file(s) name only what exists" -f $files.Count)
+
+      # The steps after a deploy (#5186): each file under deploy/after held to
+      # the rules the box deploy agent holds it to, against this tree's
+      # verbs.json, with the agent's own code, so a step file that would be
+      # refused on the box stops the merge instead. Only when there is one:
+      # most changes carry none, and they skip the .NET set up.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        if: ${{ hashFiles('deploy/after/*.json') != '' }}
+        with:
+          dotnet-version: '10.0.x'
+      - name: Check the steps after a deploy
+        if: ${{ hashFiles('deploy/after/*.json') != '' }}
+        shell: pwsh
+        env:
+          DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+          DOTNET_NOLOGO: '1'
+        run: |
+          dotnet restore tools/DeployAgent --locked-mode
+          if ($LASTEXITCODE -ne 0) { Write-Host '::error::dotnet restore failed for tools/DeployAgent'; exit 1 }
+          dotnet run --project tools/DeployAgent --no-restore -- steps --folder deploy/after --verbs scripts/vps/gate/verbs.json
+          exit $LASTEXITCODE
 
       - name: Count the silent catches in the launcher, the scripts, the site, voice and the bot
         shell: pwsh
@@ -463,40 +662,7 @@ jobs:
           # file has fewer and its line has not been lowered with it, so the
           # lowering lands in the branch that made the count fall rather than
           # waiting for somebody to notice. The script says what to do.
-          .\scripts\dev\Check-Swallow.ps1
-
-      - name: Build the ship root tool
-        shell: pwsh
-        run: |
-          # Issue #2019. Every Ship builds Thornswood-ShipRoot.exe from
-          # scripts\release\ShipRoot\ShipRoot.csproj, which compiles all of
-          # launcher\app with its own entry point, and runs it on the folder
-          # the release is built from before anything is packed. A launcher
-          # change that stops it compiling would stop every Ship, so it is
-          # built here with the same MSBuild; tests\test-2019-ship-roots.ps1
-          # in the list above runs it on a pretend root.
-          $msb = & .\scripts\release\Find-MSBuild.ps1
-          if ($LASTEXITCODE -ne 0) { Write-Host '::error::MSBuild is not on this runner, so the ship root tool cannot be built'; exit 1 }
-          $out = Join-Path $env:RUNNER_TEMP 'shiproot'
-          & $msb scripts\release\ShipRoot\ShipRoot.csproj -nologo -v:minimal -nr:false -p:UseSharedCompilation=false -p:Configuration=Release ('-p:OutDir=' + $out + '\')
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path (Join-Path $out 'Thornswood-ShipRoot.exe'))) { Write-Host '::error file=scripts/release/ShipRoot/ShipRoot.csproj::the ship root tool did not build, see the lines above'; exit 1 }
-
-      - name: Check the MSBuild launcher against its sources
-        shell: pwsh
-        run: |
-          # Issue #498 (Patrick's option C, 11 Oct; switched 15 Oct): the
-          # launcher is built only by MSBuild from launcher\app\Thornswood.csproj
-          # and installer\setup\Setup.csproj. This holds that build to what the
-          # comparison with the old csc build proved: every resource byte for
-          # byte its file, the references, the PE kind, the version in the
-          # file details and the manifest, the icon, nothing beside the exe.
-          # GitHub's image has Visual Studio.
-          # It builds both exes with Build-Launcher.ps1, then runs
-          # tests\test-app-manifest.ps1 (#463) and Check-Secrets.ps1 -Binary on
-          # the pair, so this build has no build, manifest or secrets step of
-          # its own for them: until 22 Oct 2026 it did each twice (#3114).
-          & pwsh -NoProfile -File tests\test-498-msbuild.ps1 -RequireMSBuild -Scratch (Join-Path $env:RUNNER_TEMP 'msbuild-498')
-          if ($LASTEXITCODE -ne 0) { Write-Host '::error file=tests/test-498-msbuild.ps1::the MSBuild launcher does not match its sources, see the lines above'; exit 1 }
+          ./scripts/dev/Check-Swallow.ps1
 
       - name: Lint (warnings only)
         # Issue #1343. Reports ruff, eslint and PSScriptAnalyzer findings and
@@ -505,31 +671,148 @@ jobs:
         # PSScriptAnalyzer into RUNNER_TEMP on every job and linted every
         # file, 35 s a build on average. Lint.ps1 keeps each pinned tool in
         # the runner account's own folder, named by its version, and a pull
-        # request lints only the files it changed against its base; main
-        # and a manual run lint everything, and so does the nightly. The
-        # last step before the note below, because it fetches the base
-        # commit: no check after it reads git history.
+        # request lints only the files it changed against its base, and so
+        # does its run in the merge queue, against the queue's base (#5182);
+        # main and a manual run lint everything, and so does the nightly. The
+        # last step of its job, because it fetches the base commit: no check
+        # after it reads git history.
         continue-on-error: true
         timeout-minutes: 8
         shell: pwsh
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: |
           if ($env:BASE -match '^[0-9a-f]{40}$') {
             git fetch -q --depth=1 --no-tags origin $env:BASE
             $changed = @(git diff --name-only --diff-filter=d $env:BASE HEAD)
-            if ($LASTEXITCODE -eq 0) { .\scripts\dev\Lint.ps1 -Files $changed; exit 0 }
+            if ($LASTEXITCODE -eq 0) { ./scripts/dev/Lint.ps1 -Files $changed; exit 0 }
             Write-Host "::warning::could not tell what this pull request changed against $env:BASE, so everything is linted"
           }
-          .\scripts\dev\Lint.ps1 -All
+          ./scripts/dev/Lint.ps1 -All
           exit 0
+
+  # The launcher build and the checks that need Windows, on GitHub's hosted
+  # windows-latest (#1306; the only runner since #4983). Every other check of
+  # the tree is in the job "Tree checks" on Linux (#5292).
+  #
+  # THE PATH RULE (#5292, decided 31 Oct 2026). A pull request that changes
+  # only docs, the site or the bot cannot change what this job checks: the
+  # launcher's project and the ship root tool read none of those folders
+  # (the installer is the launcher's own code since #4824, and its window
+  # compiled markup since #4823), and the writing check's harness runs in
+  # "Tree checks" for every change (tests\test-5292-path-rule.ps1 holds all
+  # of that). The pick says
+  # so (scripts\dev\Launcher-Reach.ps1), and this job still runs and reports
+  # a result of its own: on Linux, with one step that says why there is
+  # nothing to build, and it passes. It is never skipped for the path rule,
+  # so "Launcher builds" is a pass or a failure on every pull request, and a
+  # skipped one means something went wrong (#5292, Magpie's finding of
+  # 1 Nov 2026). Main and a run by hand always build. A pick that failed or
+  # said nothing builds too.
+  launcher:
+    name: Launcher builds
+    needs: pick
+    if: ${{ !cancelled() }}
+    runs-on: ${{ needs.pick.outputs.launcher == 'false' && 'ubuntu-24.04-arm' || 'windows-latest' }}
+    permissions:
+      contents: read
+    env:
+      # What the pick said: 'false' only when the change reaches nothing
+      # this job checks.
+      REACHES: ${{ needs.pick.outputs.launcher }}
+    # Its steps took about three minutes once the gate went to the job above,
+    # and less since the tree checks went to Linux; twenty is Patrick's mark
+    # for something seriously wrong.
+    timeout-minutes: 20
+    steps:
+      - name: Say why there is nothing to build
+        if: env.REACHES == 'false'
+        run: |
+          msg='This change touches only files under docs, site or bot, and nothing this job checks reads those folders (the pick ran scripts/dev/Launcher-Reach.ps1, #5292). So there is nothing to build, and this check passes.'
+          echo "$msg"
+          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+
+      # One commit, no history: this job checks the tree alone (#3182), and
+      # the publish below takes the number a bare build carries rather than
+      # the one history gives a release.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: env.REACHES != 'false'
+
+      # The hosted image ships whatever node, python and .NET it has this
+      # month; these are pinned so a check means the same thing every month.
+      # The .NET 10 SDK publishes the launcher (#4823).
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: env.REACHES != 'false'
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: env.REACHES != 'false'
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        if: env.REACHES != 'false'
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish the native launcher
+        if: env.REACHES != 'false'
+        shell: pwsh
+        run: |
+          # Issue #4823. The launcher is Avalonia on .NET 10, published with
+          # Native AOT for win-x64, and this publishes it the one way every
+          # build does, scripts\release\Build-Launcher.ps1 (a Ship and a merge
+          # release run the same script), unsigned, into RUNNER_TEMP. Red on
+          # any compile error and on any trim or native code warning (IL2xxx,
+          # IL3xxx), which the script refuses itself: each is code that can
+          # fail in the native exe and never in a JIT build. The window is
+          # compiled markup (launcher\app\MainWindow.axaml), so a renamed
+          # control or a window that does not parse is a compile error here;
+          # the check that read ui.xaml at run time (Check-Controls.ps1) went
+          # with it. Until #4823 this step was tests\test-498-msbuild.ps1,
+          # which held the MSBuild build of the .NET Framework launcher.
+          # -Version 0.0.0, the number a bare build carries: this job checks
+          # the tree alone (#3182, the note at the end), and the number a
+          # release takes comes from history (LauncherVersion.ps1), which the
+          # nightly's publish works out on a full checkout.
+          $root = Join-Path $env:RUNNER_TEMP 'launcher'
+          $out = Join-Path $root 'Launcher'
+          & .\scripts\release\Build-Launcher.ps1 -Root $root -OutDir $out -NoSign -NoPause -Version 0.0.0
+          if ($LASTEXITCODE -ne 0) { Write-Host '::error file=scripts/release/Build-Launcher.ps1::the launcher did not publish, or its publish gave a trim or native code warning; the lines above say which'; exit 1 }
+          # The programs it made, byte by byte, by the rules in
+          # scripts\dev\Check-Secrets.ps1 (a key or address compiled in is in
+          # every copy people download). The step above has no other way to
+          # look at them.
+          $programs = @(Get-ChildItem -LiteralPath $out -File | Where-Object { $_.Extension -in '.exe', '.dll' } | ForEach-Object { $_.FullName })
+          if (-not $programs.Count) { Write-Host '::error::the publish left no program to check'; exit 1 }
+          .\scripts\dev\Check-Secrets.ps1 -Binary $programs
+          if ($LASTEXITCODE -ne 0) { Write-Host '::error file=scripts/dev/Check-Secrets.ps1::a published launcher program carries something that must not ship; the lines above say which'; exit 1 }
+
+      - name: Build the ship root tool
+        if: env.REACHES != 'false'
+        shell: pwsh
+        run: |
+          # Issue #2019. Every Ship builds Thornswood-ShipRoot.exe from
+          # scripts\release\ShipRoot\ShipRoot.csproj, which compiles OwnGame
+          # and the launcher files it calls, none of the window's, with its own
+          # entry point, and runs it on the folder
+          # the release is built from before anything is packed. A launcher
+          # change that stops it compiling would stop every Ship, so it is
+          # built here with the same .NET 10 SDK, as Update-ShipRoot.ps1
+          # builds it; tests\test-2019-ship-roots.ps1 on the gate runs it on
+          # a pretend root.
+          $out = Join-Path $env:RUNNER_TEMP 'shiproot'
+          dotnet build scripts\release\ShipRoot\ShipRoot.csproj -c Release -o $out --nologo -v minimal --disable-build-servers
+          if ($LASTEXITCODE -ne 0) { throw "the ship root tool did not build (dotnet build exit $LASTEXITCODE)" }
+          if (-not (Test-Path -LiteralPath (Join-Path $out 'Thornswood-ShipRoot.exe'))) { throw 'the ship root tool did not build: no Thornswood-ShipRoot.exe' }
+
 
       # The note main's build looks for (#3182, the job "tested" at the top
       # of build.yml): the tree every step before this one passed on, one
       # line of this job's log. Last, so it is written only when they all
       # did. The gate runs in the job "gate" beside this one, every harness
-      # in one of its shares, and scripts\dev\Tested-Tree.js counts this
-      # note only when every share of the same run passed. While the box
+      # in one of its shares, and the tree checks in the job "Tree checks"
+      # (#5292), and scripts\dev\Tested-Tree.js counts this note only when
+      # every share of the same run and its Tree checks passed. While the box
       # built, this was written only on GitHub's
       # hosted runner (#3874), so a VPS build left main to be built and
       # traced; every build is hosted now (#4983). A pull request's checkout is
@@ -540,8 +823,10 @@ jobs:
       # October's whole allowance by 23 Oct 2026, and from then the note's
       # upload failed and took every pull request's build red. A log costs no
       # storage and is kept 90 days; scripts\dev\Tested-Tree.js reads it.
+      # In the merge queue (#5182) the checkout is the queue's own merge, the
+      # very commit that lands on main, so the note is written there too.
       - name: Write down the tree these checks passed on
-        if: github.event_name == 'pull_request'
+        if: env.REACHES != 'false' && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
         shell: pwsh
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -558,24 +843,49 @@ jobs:
       # of Actions storage, which Patrick's billing page read at 1.8 GB. The
       # pdb was never kept either (#1356 / #462): it carries absolute
       # build-machine source paths.
+      # The gate's reports are the only artifacts of a build (#5295): each
+      # share's, kept a day for the job "Gate report" of the same run, and
+      # the merged one, kept 14 days. #3399's failures were a private
+      # repository's storage allowance; since 30 Oct 2026 this repository is
+      # public, where GitHub bills no Actions storage, and gate-map.yml has
+      # kept its map as an artifact here since.
 
   # The one check main's ruleset requires (#3683): passes only when the
   # build and every share of the gate above succeeded. Written by
   # Build-PrWorkflow.js, which says why.
   result:
     name: Build check result
-    needs: [launcher, gate]
+    needs: [pick, checks, launcher, gate, gate-linux]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: The launcher build and the gate passed
+      - name: The tree checks, the launcher build and the gate passed
         env:
+          PICK: ${{ needs.pick.result }}
+          CHECKS: ${{ needs.checks.result }}
           BUILD: ${{ needs.launcher.result }}
           GATE: ${{ needs.gate.result }}
+          GATE_LINUX: ${{ needs['gate-linux'].result }}
+          REACHES_LAUNCHER: ${{ needs.pick.outputs.launcher }}
+          SHARES: ${{ needs.pick.outputs.shares }}
+          LINUX_SHARES: ${{ needs.pick.outputs.linux_shares }}
         run: |
-          echo "Launcher builds: $BUILD"
-          echo "Gate harnesses, every share: $GATE"
-          if [ "$BUILD" = success ] && [ "$GATE" = success ]; then exit 0; fi
-          echo "::error::the launcher build or a share of the gate did not pass, so this pull request may not merge"
+          echo "Pick the gate harnesses: $PICK"
+          echo "Tree checks: $CHECKS"
+          echo "Launcher builds: $BUILD (the change reaches it: $REACHES_LAUNCHER)"
+          echo "Gate harnesses, every share: $GATE (shares: $SHARES)"
+          echo "Gate harnesses on Linux, every share: $GATE_LINUX (shares: $LINUX_SHARES)"
+          ok=1
+          [ "$PICK" = success ] || ok=0
+          [ "$CHECKS" = success ] || ok=0
+          [ "$BUILD" = success ] || ok=0
+          if [ "$GATE" != success ]; then
+            if [ "$GATE" = skipped ] && [ "$PICK" = success ] && [ "$SHARES" = "[]" ]; then echo "The gate was skipped: the change reaches no gate harness (#5292)"; else ok=0; fi
+          fi
+          if [ "$GATE_LINUX" != success ]; then
+            if [ "$GATE_LINUX" = skipped ] && [ "$PICK" = success ] && [ "$LINUX_SHARES" = "[]" ]; then echo "The gate on Linux was skipped: the change reaches no harness that runs there (#5293)"; else ok=0; fi
+          fi
+          if [ "$ok" = 1 ]; then exit 0; fi
+          echo "::error::the pick, the tree checks, the launcher build or a share of the gate did not pass, so this pull request may not merge"
           exit 1

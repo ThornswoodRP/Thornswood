@@ -23,7 +23,7 @@ namespace Thornswood
     /// reasonably want to change for themselves does not, or the launcher ends
     /// up arguing with them every time they play.
     /// </summary>
-    static class Enforce
+    static partial class Enforce
     {
         class Rule
         {
@@ -65,13 +65,15 @@ namespace Thornswood
 
         static string P(string name) { return Path.Combine(Paths.Game, "Data\\SKSE\\Plugins\\" + name); }
 
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        static extern IntPtr CreateFileW(string name, uint access, uint share, IntPtr sec,
+        [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+        private static partial IntPtr CreateFileW(string name, uint access, uint share, IntPtr sec,
                                          uint disposition, uint flags, IntPtr template);
-        [DllImport("kernel32.dll", SetLastError = true)]
-        static extern bool GetFileInformationByHandle(IntPtr file, out BY_HANDLE_FILE_INFORMATION info);
-        [DllImport("kernel32.dll", SetLastError = true)]
-        static extern bool CloseHandle(IntPtr h);
+        [LibraryImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool GetFileInformationByHandle(IntPtr file, out BY_HANDLE_FILE_INFORMATION info);
+        [LibraryImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool CloseHandle(IntPtr h);
 
         [StructLayout(LayoutKind.Sequential)]
         struct BY_HANDLE_FILE_INFORMATION

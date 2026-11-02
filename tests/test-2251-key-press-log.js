@@ -23,10 +23,11 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const vm = require('vm');
+const siteFiles = require('./site-files');
 const ROOT = path.join(__dirname, '..');
 const rd = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8').split('\r\n').join('\n');
 const CHAT = rd('game/ui/thornswood-chat.js'), VOICE = rd('voice/voice-server.js');
-const SITE = rd('site/server.js'), HUB = rd('site/public/hub.js'), FRONT = rd('game/plugins/thornswood-front.js');
+const SITE = siteFiles.source(), HUB = rd('site/public/hub.js'), FRONT = rd('game/plugins/thornswood-front.js');
 let pass = 0, fail = 0;
 function yes(w, c) { if (c) { pass++; console.log('PASS  ' + w); } else { fail++; console.log('FAIL  ' + w); } }
 function grab(src, name) {
@@ -72,7 +73,7 @@ try { fs.rmSync(CHAT_DIR, { recursive: true, force: true }); } catch (e) { }
 // Since #1131 the text a command writes comes from commandLogText (the pass
 // masked, a waiting menu's repeated /line left out); the press flag is passed
 // on exactly as before. Since #2723 commandLogText also reads it, to leave
-// the front plugin's own reports out (tests\test-2723-plugin-reports.js).
+// the front plugin's own reports out (voice\tests\test-2723-plugin-reports.js).
 yes('B5 the chat handler passes msg.press on only when it is exactly true',
     /const press = msg\.press === true;\s*const logged = commandLogText\(me, text, press\);\s*if \(logged\) chatWrite\('command', myId, me, logged, press \? 'press' : ''\);/.test(VOICE));
 const lbox = {};

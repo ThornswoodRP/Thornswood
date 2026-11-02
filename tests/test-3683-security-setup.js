@@ -20,12 +20,19 @@
     C. SECURITY.md gives the three routes security.txt and it share (the
        Security tab's button, a Discord message to the owner, the site's
        report page; Patrick, 26 Oct, q-3683-report-route A), a reply time, and
-       no head count that goes stale (#3642). tests\test-3216-site-security.js
+       no head count that goes stale (#3642). site\tests\test-3216-site-security.js
        holds security.txt's half.
+    E. OpenSSF Scorecard (.github/workflows/scorecard.yml, the redesign's
+       part 20) runs weekly and by hand, on GitHub's runner only, in this
+       repository alone by its id, with no workflow-wide permission and the
+       job's write limited to the Security tab, publishing nothing outside
+       it, and uploads with CodeQL's upload-sarif at the SHA codeql.yml runs.
     D. Dependabot watches every manifest this repository has, and only those:
        every entry's directory holds the manifest its ecosystem reads, and a
        package.json anywhere means an npm entry is owed. The npm lockfiles
-       that ship are the engine's, watched in the fork (#2759).
+       that ship are the engine's, watched in the fork (#2759). Every entry
+       sets rebase-strategy: disabled, so Dependabot does not push a new
+       head each time main moves and turn a head-pinned yes stale (#5327).
 
   The same readers are then driven over planted text, so a reader that finds
   nothing wrong anywhere cannot pass by accident.
@@ -75,10 +82,12 @@ yes('A  it reads ' + LANGS.join(', ') + ' from source, on GitHub\'s runners, onl
     (cqBad.length ? ' (' + cqBad.join('; ') + ')' : ''), !!cq && cqBad.length === 0);
 yes('A  and the reader fails a scheduled one on the VPS with no gate',
     codeqlFaults('on:\n  schedule:\n    - cron: x\njobs:\n  a:\n    runs-on: [self-hosted, Windows, thornswood-vps]\n').length >= 4);
-// The other workflows that run a pull request: none of them is CodeQL's job.
+// The other workflows: none of them runs CodeQL's analysis. Scorecard (E)
+// only uploads its own results with CodeQL's upload-sarif.
 yes('A  CodeQL runs from this one workflow only',
     fs.readdirSync(path.join(ROOT, '.github', 'workflows')).filter((f) => f !== 'codeql.yml' && /\.ya?ml$/.test(f))
-      .every((f) => !/github\/codeql-action\//.test(read('.github/workflows/' + f))));
+      .every((f) => !/github\/codeql-action\/(?!upload-sarif@)/.test(read('.github/workflows/' + f)) &&
+        (f === 'scorecard.yml' || !/github\/codeql-action\//.test(read('.github/workflows/' + f)))));
 
 // ---- B. the issue chooser --------------------------------------------------
 function chooserFaults(t) {
@@ -156,6 +165,55 @@ yes('D  and the reader fails an npm entry with no package.json and a package.jso
     dependabotFaults([{ eco: 'npm', dir: '/site' }], ['site/server.js', 'voice/package.json']).length === 2);
 yes('D  the npm lockfiles that ship are named as watched in the fork',
     ['skymp5-server', 'skymp5-client', 'skymp5-front', 'thornswood/engine-changes'].every((w) => read('.github/dependabot.yml').indexOf(w) >= 0));
+// Each entry, as its own block of text, from its "- package-ecosystem:" line
+// to the next one. Comments are dropped so the file's own words about the
+// setting cannot stand in for it.
+function entryBlocks(t) {
+  const body = code(t);
+  const at = [];
+  const re = /^  - package-ecosystem: "?([a-z-]+)"?$/gm;
+  let m;
+  while ((m = re.exec(body))) { at.push({ eco: m[1], start: m.index }); }
+  return at.map((e, i) => ({ eco: e.eco, text: body.slice(e.start, i + 1 < at.length ? at[i + 1].start : body.length) }));
+}
+function rebaseFaults(t) {
+  const blocks = entryBlocks(t);
+  if (!blocks.length) { return ['has no entries to read']; }
+  return blocks.filter((b) => !/^    rebase-strategy: "?disabled"?\s*$/m.test(b.text)).map((b) => b.eco + ' does not set rebase-strategy: disabled');
+}
+const rbBad = rebaseFaults(read('.github/dependabot.yml'));
+yes('D  every entry sets rebase-strategy: disabled, so main moving does not push a new head (#5327)' + (rbBad.length ? ' (' + rbBad.join('; ') + ')' : ''), rbBad.length === 0);
+yes('D  and the reader fails an entry with no setting, one with it only in a comment, and one set to auto',
+    rebaseFaults('version: 2\nupdates:\n  - package-ecosystem: github-actions\n    directory: /\n' +
+      '  - package-ecosystem: pip\n    directory: /bot\n    # rebase-strategy: disabled\n' +
+      '  - package-ecosystem: npm\n    directory: /x\n    rebase-strategy: auto\n' +
+      '  - package-ecosystem: npm\n    directory: /y\n    rebase-strategy: disabled\n').length === 3);
+
+// ---- E. OpenSSF Scorecard ---------------------------------------------------
+function scorecardFaults(text, codeqlText) {
+  const t = code(text);
+  const bad = [];
+  const on = (/\non:\n([\s\S]*?)\n(?=[a-z])/.exec(t) || [])[1] || '';
+  if (!/^\s*schedule:/m.test(on)) { bad.push('has no schedule'); }
+  if (/^\s*(pull_request|pull_request_target|push):/m.test(on)) { bad.push('runs on a push or a pull request'); }
+  if (/self-hosted|thornswood-vps/.test(t)) { bad.push('asks for a self-hosted runner'); }
+  if (!/^permissions: \{\}$/m.test(t)) { bad.push('gives the workflow a permission of its own'); }
+  if (!/if: github\.repository_id == '1365246621'/.test(t)) { bad.push('is not held to this repository by its id'); }
+  if (/id-token|secrets\./.test(t)) { bad.push('holds an OIDC token or a secret'); }
+  if (!/publish_results: false/.test(t)) { bad.push('publishes its results outside the repository'); }
+  const writes = t.match(/^\s+[a-z-]+: write$/gm) || [];
+  if (writes.length !== 1 || !/security-events: write/.test(writes[0])) { bad.push('writes more than the Security tab'); }
+  const sarif = (/github\/codeql-action\/upload-sarif@([0-9a-f]{40})/.exec(t) || [])[1];
+  const init = (/github\/codeql-action\/init@([0-9a-f]{40})/.exec(codeqlText) || [])[1];
+  if (!sarif || sarif !== init) { bad.push('does not upload with CodeQL\'s upload-sarif at codeql.yml\'s SHA'); }
+  return bad;
+}
+const sc = fs.existsSync(path.join(ROOT, '.github/workflows/scorecard.yml')) ? read('.github/workflows/scorecard.yml') : '';
+yes('E  .github/workflows/scorecard.yml is there', !!sc);
+const scBad = scorecardFaults(sc, read('.github/workflows/codeql.yml'));
+yes('E  Scorecard runs weekly on GitHub\'s runner, here only, writing only the Security tab' + (scBad.length ? ' (' + scBad.join('; ') + ')' : ''), scBad.length === 0);
+yes('E  and the reader fails one on the VPS that runs on pull requests and publishes',
+    scorecardFaults(sc.replace('runs-on: ubuntu-latest', 'runs-on: [self-hosted, thornswood-vps]').replace('  workflow_dispatch:', '  pull_request:').replace('publish_results: false', 'publish_results: true'), read('.github/workflows/codeql.yml')).length === 3);
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');

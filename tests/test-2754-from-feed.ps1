@@ -274,7 +274,7 @@ try {
             if (-not $script:runState.Seen) { return '[]' }
             $req = ''
             foreach ($c in $script:calls) { $i = [array]::IndexOf($c, 'request=' + $script:want); if ($i -ge 0) { $req = $script:want } }
-            return ('[{"databaseId":42,"displayTitle":"sign ' + $req + '","status":"' + $script:runState.Status + '","conclusion":"' + $script:runState.Conclusion + '","url":"https://github.com/EvilPatrick06/skymp/actions/runs/42"},' +
+            return ('[{"databaseId":42,"displayTitle":"sign ' + $req + '","status":"' + $script:runState.Status + '","conclusion":"' + $script:runState.Conclusion + '","url":"https://github.com/ThornswoodRP/skymp/actions/runs/42"},' +
                     '{"databaseId":41,"displayTitle":"sign somebody-else","status":"completed","conclusion":"success","url":"x"}]')
         }
         if ($args[0] -eq 'run' -and $args[1] -eq 'download') {
@@ -300,7 +300,7 @@ try {
     $sent = if ($d.Count) { @($d[0]) } else { @() }
     $pin = Get-SignOnGitHubClientPin $repo
     $meta = [IO.File]::ReadAllText((Join-Path $repo 'records\signing\metadata.json')) | ConvertFrom-Json
-    Yes 'it asks the fork''s workflow on main' ($sent -contains 'thornswood-sign-manifest.yml' -and $sent -contains 'EvilPatrick06/skymp' -and $sent -contains 'main')
+    Yes 'it asks the fork''s workflow on main' ($sent -contains 'thornswood-sign-manifest.yml' -and $sent -contains 'ThornswoodRP/skymp' -and $sent -contains 'main')
     Yes '  with release.json and its sha256' ($sent -contains ('manifest=' + [Convert]::ToBase64String([IO.File]::ReadAllBytes($sign))) -and $sent -contains ('manifest_sha256=' + (ShaFile $sign)))
     Yes '  with the pin Setup-ShipMachine.ps1 holds' ($sent -contains ('client_version=' + $pin.Version) -and $sent -contains ('client_sha256=' + $pin.Sha256))
     Yes '  with the account and profile metadata.json names' ($sent -contains ('endpoint=' + $meta.Endpoint) -and $sent -contains ('account=' + $meta.CodeSigningAccountName) -and $sent -contains ('certificate_profile=' + $meta.CertificateProfileName))
@@ -399,7 +399,7 @@ try {
         throw "gh was asked something unexpected: $($args -join ' ')"
     }
     $sha40 = 'c' * 40
-    function AskNow { $script:lcalls.Clear(); return (Invoke-ReleaseLauncherOnGitHub -Repo 'EvilPatrick06/Thornswood' -Tag 'v1.2.6.7' -Commit $sha40 -Gh $lgh -WaitSeconds 1 -Poll 0) }
+    function AskNow { $script:lcalls.Clear(); return (Invoke-ReleaseLauncherOnGitHub -Repo 'ThornswoodRP/Thornswood' -Tag 'v1.2.6.7' -Commit $sha40 -Gh $lgh -WaitSeconds 1 -Poll 0) }
     $why = AskNow
     Yes ("a green release.yml run on the tag: '' ('{0}')" -f $why) ($why -eq '')
     $d = @($script:lcalls | Where-Object { $_[0] -eq 'workflow' })
@@ -454,12 +454,9 @@ try {
     $ship = [IO.File]::ReadAllText((Join-Path $rel 'Ship.ps1')).Replace("`r`n", "`n")
     Yes 'Ship -FromFeed asks gh, not a signing machine, at the sign gate' ($ship.Contains('$signWhy = if ($FromFeed) { Get-SignOnGitHubRefusal $RepoDir } else { Get-SigningConfigRefusal'))
     Yes '  and loads Sign-OnGitHub.ps1 only then' ($ship.Contains("if (`$FromFeed) { . (Join-Path `$Here 'Sign-OnGitHub.ps1') }"))
-    Yes 'Ship -FromFeed with a new launcher no longer sends it to One (#3312)' (-not $ship.Contains('a new launcher is compiled and signed on One'))
-    Yes '  it asks GitHub to build and sign it from main''s commit, by tag v<number>' ($ship.Contains("Invoke-ReleaseLauncherOnGitHub -Repo `$srcRepo -Tag ('v' + `$target) -Commit `$releaseSource.Commit"))
-    Yes '  takes the draft held to its SHA256SUMS, then to the launcher''s own check' ($ship.Contains('if (-not $why) { $why = Get-ReleaseLauncher $srcRepo $target $buildOut }') -and $ship.Contains("if (-not `$why) { `$why = & `$hold (Join-Path `$buildOut 'Thornswood.exe') `$ciSigner }"))
-    Yes '  only from a checkout that is exactly origin/main' ($ship -match '(?s)if \(\$FromFeed -and -not \$ModsOnly\) \{\s*if \(-not \$MainSourceAligned\)')
-    Yes '  and climbs past a dev number tagged on another commit' ($ship.Contains('if (-not $on -or $on -eq $releaseSource.Commit) { break }'))
-    Yes '  and the publish gate holds it on the box off Windows' ($ship.Contains('$signWhy = Get-SignedFileRefusal $pubExe $expectWho $RepoDir'))
+    Yes 'Ship -FromFeed builds, fetches and signs no launcher: a Ship sends none (#4825)' (
+        -not $ship.Contains('Invoke-ReleaseLauncherOnGitHub') -and -not $ship.Contains('Get-ReleaseLauncher') -and -not $ship.Contains('Get-SignedFileRefusal') -and
+        -not $ship.Contains('$MainSourceAligned') -and -not $ship.Contains('a new launcher is compiled and signed on One'))
     Yes '  and carries SkyUI''s check only through Get-ShipSkyUIFeedChange' ($ship.Contains('$skyuiMoved = @(Get-ShipSkyUIFeedChange $GameDir $feedRecord @(Get-ShipDeleteAlways))'))
     $pu = [IO.File]::ReadAllText((Join-Path $rel 'Publish-Update.ps1')).Replace("`r`n", "`n")
     Yes 'Publish-Update -FromFeed writes release.json without a catalog' ($pu.Contains('-NoCatalog:$FromFeed'))

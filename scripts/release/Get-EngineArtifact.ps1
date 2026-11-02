@@ -8,7 +8,7 @@
   Issue #3047. A rebuild is never the same bytes (engine\README.md,
   "Rebuilding the same commit"), so the only client and server that match a
   record CI made are the ones in the build CI recorded: the fork's own build
-  of the commit, which the public fork EvilPatrick06/skymp keeps as
+  of the commit, which the public fork ThornswoodRP/skymp keeps as
   thornswood-engine-<fork commit> for 90 days, and which engine.yml records
   (since #3399 it is taken from there, not from this repository's artifact
   storage, which filled on 25 Oct). This takes that build for the commit this

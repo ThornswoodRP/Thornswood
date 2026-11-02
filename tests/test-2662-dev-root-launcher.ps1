@@ -145,8 +145,11 @@ try {
         $vortex = $shipText.IndexOf("Test-Path -LiteralPath (Join-Path `$Root 'Game\Data\vortex.deployment.json')")
         $rootAt = $shipText.IndexOf("Where.ps1') `$(if (`$Dev) { 'ShipRootDev' } else { 'ShipRoot' })")
         Yes '  after the folder is worked out, and before the Vortex refusal' ($rootAt -gt 0 -and $at -gt $rootAt -and $vortex -gt $at)
-        Yes '  and before the version moves or the launcher is built' (
-            $at -lt $shipText.IndexOf('function Unbump') -and $at -lt $shipText.IndexOf("'Build-Launcher.ps1') -Root"))
+        # Ship builds no launcher since #4825; the first thing it builds from
+        # the root is the animation and body files.
+        $version = $shipText.IndexOf("Head 'Animation and body files'")
+        Yes '  and before anything is built from the root, and no launcher is built at all' (
+            $version -gt 0 -and $at -lt $version -and $shipText.IndexOf("'Build-Launcher.ps1')") -lt 0)
         Yes '  and the old refusal of every folder is gone from it' ($block.Extent.Text -notmatch 'if \(-not \(Test-Path \(Join-Path \$Root ''Launcher''\)\)\)')
         $stubDir = Join-Path $T 'stub'
         Put (Join-Path $stubDir 'Where.ps1') @'
@@ -230,7 +233,7 @@ exit 0
     $shipPub = $shipText.IndexOf('$pubArgs = @{ Notes = $Notes; Root = $Root;')
     Yes 'Ship always passes Publish-Update -Root' ($shipPub -gt 0)
     $pubText = [IO.File]::ReadAllText($pubPath)
-    Yes 'Publish-Update still stops on a missing exe when it publishes a launcher' ($pubText -match 'if \(-not \(Test-Path \$exePath\)\) \{ Die "No launcher at \$exePath\.')
+    Yes 'Publish-Update publishes no launcher, so it looks for no exe (#4825)' ($pubText -notmatch '\$exePath')
 
     # ---- 5. Check-ShipReady.ps1 ------------------------------------------------------
     Write-Host ''

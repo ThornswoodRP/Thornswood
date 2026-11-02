@@ -12,9 +12,9 @@
     first: scam_native.node, dist_back\skymp5-server.js and its map,
     package.json, yarn.lock, launch_server.bat and data\scripts
     (scripts\deploy\ServerBuild.ps1 says which and why)
-    gamemode.js and thornswood-build.json, ours (the stamp from -Stamp
-    when it is given, which is how Publish-Server.ps1 sends one made for
-    the channel, #459)
+    gamemode.js, its gamemode-tables folder (#5191) and thornswood-build.json,
+    ours (the stamp from -Stamp when it is given, which is how
+    Publish-Server.ps1 sends one made for the channel, #459)
     server-settings.json, rewritten below
     server-build.json, the record itself, for the installer to hold them again
   Whatever else sits in the build folder stays there and is named: an old
@@ -113,6 +113,14 @@ Write-Host ('every server file is the recorded build of ' + ([string]$rec.source
 if (-not (Test-Path -LiteralPath (Join-Path $Dist 'gamemode.js'))) {
     throw "there is no gamemode.js in $Dist, so the server would start with no gamemode. Publish-Server.ps1 copies game\gamemode.js into the build; Export-ServerPayload.ps1 by itself needs it there first. Nothing was packed."
 }
+# Its tables (#5191) are the gamemode-tables folder beside it, which the
+# gamemode reads as it loads; a load without them stops, so a build with none
+# packs nothing either. Publish-Server.ps1 copies them in with gamemode.js.
+$tablesIn = Join-Path $Dist 'gamemode-tables'
+$tableFiles = @(Get-ChildItem -LiteralPath $tablesIn -Filter '*.json' -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -cmatch '^[A-Z][A-Z0-9_]*\.json$' })
+if (-not $tableFiles.Count) {
+    throw "there are no gamemode tables in $tablesIn, so the gamemode would stop as it loads (#5191). Publish-Server.ps1 copies game\gamemode-tables into the build; Export-ServerPayload.ps1 by itself needs them there first. Nothing was packed."
+}
 if ($Stamp) {
     if (-not (Test-Path -LiteralPath $Stamp)) { throw "there is no build stamp at $Stamp, which this run was told to pack. Nothing was packed." }
 } elseif (-not (Test-Path -LiteralPath (Join-Path $Dist 'thornswood-build.json'))) {
@@ -136,6 +144,8 @@ foreach ($rel in @($recFiles.Keys) + $own) {
     Copy-Item -LiteralPath $from -Destination $to -Force
     $taken[$rel] = $true
 }
+New-Item -ItemType Directory -Path (Join-Path $OutDir 'gamemode-tables') -Force | Out-Null
+foreach ($t in $tableFiles) { Copy-Item -LiteralPath $t.FullName -Destination (Join-Path $OutDir ('gamemode-tables\' + $t.Name)) -Force }
 # The record the files were just held to, for the installer to hold them again.
 Copy-Item -LiteralPath $Record -Destination (Join-Path $OutDir 'server-build.json') -Force
 $distFull = (Get-Item -LiteralPath $Dist).FullName.TrimEnd('\')

@@ -30,7 +30,6 @@ function yes(what, cond) {
 }
 
 const script = fs.readFileSync(path.join(REPO_DIR, "scripts", "dev", "Build-HuntTable.ps1"), "utf8");
-const gmReal = fs.readFileSync(path.join(REPO_DIR, "game", "gamemode.js"), "utf8").split(CR).join("");
 const hunts = JSON.parse(fs.readFileSync(path.join(REPO_DIR, "game", "data", "hunts.json"), "utf8"));
 
 // ---- the checked-in table ----------------------------------------------------
@@ -62,13 +61,10 @@ yes("no row gives ectoplasm", Object.keys(hunts.hunts).every(function (k) {
   return !hunts.hunts[k].gives.some(function (g) { return g.name === "Ectoplasm"; });
 }));
 yes("count matches the rows", hunts.count === Object.keys(hunts.hunts).length);
-const block = (function () {
-  const a = gmReal.indexOf("var HUNTS_BY_BASE = {"); const b = gmReal.indexOf("// ==== end HUNTS_BY_BASE ====");
-  return a >= 0 && b > a ? gmReal.slice(a, b) : "";
-})();
-yes("the gamemode's HUNTS_BY_BASE block holds the same " + hunts.count + " rows as hunts.json",
-  (block.match(/^  "[0-9a-f]+:[^"]+": \{ "name"/gm) || []).length === hunts.count &&
-  Object.keys(GONE).every(function (k) { return block.indexOf('"' + k + '"') < 0; }));
+const huntTable = require('./gamemode-tables.js').table('HUNTS_BY_BASE');
+yes("the gamemode's HUNTS_BY_BASE table holds the same " + hunts.count + " rows as hunts.json",
+  Object.keys(huntTable).length === hunts.count &&
+  Object.keys(GONE).every(function (k) { return !huntTable[k]; }));
 
 // ---- plugin records ------------------------------------------------------------
 function sub(tag, body) {
@@ -226,7 +222,9 @@ try {
   fs.writeFileSync(ps1, script);
   fs.copyFileSync(path.join(REPO_DIR, "scripts", "dev", "OwnPlugins.ps1"), path.join(repo, "scripts", "dev", "OwnPlugins.ps1"));
   fs.copyFileSync(path.join(REPO_DIR, "records", "update-creation-club.json"), path.join(repo, "records", "update-creation-club.json"));
-  const gm = path.join(repo, "game", "gamemode.js");
+  fs.copyFileSync(path.join(REPO_DIR, "scripts", "dev", "GamemodeTables.ps1"), path.join(repo, "scripts", "dev", "GamemodeTables.ps1"));
+  // Since #5191 the builder writes the gamemode's table into its own file.
+  const gm = path.join(repo, "game", "gamemode-tables", "HUNTS_BY_BASE.json");
   const out = path.join(repo, "game", "data", "hunts.json");
 
   const ver = cp.spawnSync("pwsh", ["--version"], { encoding: "utf8" });
@@ -241,11 +239,10 @@ try {
   if (!ver.error && ver.status === 0) {
     const data = path.join(tmp, "Data");
     buildData(data, {});
-    fs.writeFileSync(gm, gmReal);
     fs.writeFileSync(out, "{\n  \"old\": true\n}\n");
     const r = build(data);
-    yes("a run against the small Data folder writes the table and the block (exit " + r.code + ")",
-      r.code === 0 && /wrote .*hunts\.json \(\d+ animals/.test(r.out) && /animals into the HUNTS_BY_BASE block/.test(r.out));
+    yes("a run against the small Data folder writes the table and the gamemode's table file (exit " + r.code + ")",
+      r.code === 0 && /wrote .*hunts\.json \(\d+ animals/.test(r.out) && /animals into .*HUNTS_BY_BASE\.json/.test(r.out));
     if (r.code !== 0) { console.log(failures(r)); }
     let doc = null;
     try { doc = JSON.parse(fs.readFileSync(out, "utf8")); } catch (e) { doc = null; }
@@ -270,24 +267,19 @@ try {
         /SPIRIT_RACES\s+1/.test(r.out) && /LEFT_OUT\s+1/.test(r.out));
     }
     const t1 = fs.readFileSync(out, "utf8");
-    const g1 = fs.readFileSync(gm, "utf8");
+    const g1 = fs.existsSync(gm) ? fs.readFileSync(gm, "utf8") : "";
     yes("an LF hunts.json stays LF", t1.indexOf(CR) < 0 && /"editorId": "TestWolf",\n      "name"/.test(t1));
-    yes("an LF gamemode stays LF", g1.indexOf(CR) < 0 && g1.indexOf('"500:Skyrim.esm": { "name": "Wolf"') >= 0);
-    const a0 = gmReal.indexOf("var HUNTS_BY_BASE = {"), b0 = gmReal.indexOf("// ==== end HUNTS_BY_BASE ====");
-    const a1 = g1.indexOf("var HUNTS_BY_BASE = {"), b1 = g1.indexOf("// ==== end HUNTS_BY_BASE ====");
-    yes("nothing outside the HUNTS_BY_BASE block changed", a0 >= 0 && a1 >= 0 &&
-      g1.slice(0, a1) === gmReal.slice(0, a0) && g1.slice(b1) === gmReal.slice(b0));
+    let gt = null;
+    try { gt = JSON.parse(g1); } catch (e) { gt = null; }
+    yes("the gamemode's table file is LF and holds the wolf", g1.indexOf(CR) < 0 && !!gt && !!gt["500:Skyrim.esm"] && gt["500:Skyrim.esm"].name === "Wolf");
     const r2 = build(data);
     yes("a second run changes neither file", r2.code === 0 && fs.readFileSync(out, "utf8") === t1 && fs.readFileSync(gm, "utf8") === g1);
 
-    fs.writeFileSync(gm, ["// head", "var HUNTS_BY_BASE = {", "  \"old\": 1", "};", "", "// ==== end HUNTS_BY_BASE ====", "// tail", ""].join("\r\n"));
+    fs.writeFileSync(gm, "{\r\n\"old\":1\r\n}\r\n");
     fs.writeFileSync(out, "{\r\n  \"old\": true\r\n}\r\n");
     const r3 = build(data);
     yes("a CRLF hunts.json comes out LF", r3.code === 0 && fs.readFileSync(out, "utf8") === t1);
-    const g3 = fs.readFileSync(gm, "utf8");
-    const a3 = g3.indexOf("var HUNTS_BY_BASE = {"), b3 = g3.indexOf("// ==== end HUNTS_BY_BASE ====");
-    yes("the block written into a CRLF gamemode is LF", r3.code === 0 && g3.indexOf('"500:Skyrim.esm"') >= 0 &&
-      a3 >= 0 && b3 > a3 && g3.slice(a3, b3).indexOf(CR) < 0);
+    yes("and a CRLF table file is written over LF", r3.code === 0 && fs.readFileSync(gm, "utf8") === g1);
     fs.unlinkSync(out);
     const r4 = build(data);
     yes("a new hunts.json is written with LF", r4.code === 0 && fs.readFileSync(out, "utf8") === t1);

@@ -4,7 +4,7 @@
   Captures the SYN and RST packets on port 443 at the box's network card for
   a set time, so #2946 can see whether the TLS connects from a cloud session
   that stall and then reset ever reach the box, and whether the box answers
-  them. Runs ON the box, in Windows PowerShell as Administrator, sent by
+  them. Runs ON the box, in PowerShell 7 as Administrator, sent by
   Remote.ps1 from a clean main checkout:
 
       .\scripts\vps\Remote.ps1 -File .\scripts\vps\vps-capture-443.ps1 -Arguments '-Start -Minutes 15'

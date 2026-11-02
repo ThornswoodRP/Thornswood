@@ -5,8 +5,8 @@
 
   The site is a small node server holding six markdown documents and whatever
   is in its files folder. Patrick and the testers edit the documents in the
-  browser, Claude edits the same files over ssh, and the installer is published
-  into it by Publish-Installer.ps1.
+  browser, and Claude edits the same files over ssh. The setup program is not
+  in it: since #4824 the site serves it from GitHub Releases.
 
   Run once to install, and again whenever the site itself changes. The
   documents are NOT overwritten by a redeploy: only the app is. Anything typed
@@ -46,6 +46,18 @@
                                SYSTEM is moved onto it at the next deploy.
                                A task put on SYSTEM with -RunAs SYSTEM goes
                                back to LOCAL SERVICE at the next plain deploy.
+
+  ONCE THE DEPLOY AGENT HAS THE SITE (#5190), the app (server.js and
+  public) and the public pages (data\site) come only from each merge's
+  Release: merge-release.yml zips them (App-Part.ps1) and the box deploy
+  agent swaps them in when they changed (docs\DEPLOY-AGENT.md). This asks
+  the box whether the agent's agent.json names the site. When it does, a
+  plain run sends no app and no public pages, -Site is refused before
+  anything is sent, and the documents, the boards, -Password, -RunAs, the
+  task and the firewall go on as below. Two senders of the same files would
+  each put back what the other put in. -PutBack still puts back the newest
+  .prev folder, which the agent's swap leaves the same way. Before the agent
+  names it (a new box), this sends the app as it always did.
 
   THE APP IS STAGED, CHECKED, THEN SWAPPED (issue #446). server.js and the
   public files that changed go into $Root\.stage-<stamp> while the site runs,
@@ -124,6 +136,10 @@ param(
   [int]$Wait = 30,
   # Put the app the last deploy replaced back in, and send nothing.
   [switch]$PutBack,
+  # The box deploy agent's settings. Once they name the site (#5190), each
+  # merge's Release puts the app and the public pages in, and this sends
+  # neither. A harness points it at a planted copy.
+  [string]$AgentConfig = 'C:\Thornswood-Agent\agent.json',
     # Go ahead from a checkout that is not exactly origin/main and clean (#2118). Loud.
     [switch]$AllowStaleCheckout
 )
@@ -208,19 +224,46 @@ if ($Board) {
   }
 }
 
+# Whether the box deploy agent has the site (header, ONCE THE DEPLOY AGENT
+# HAS THE SITE). A settings file that is there and does not read stops this:
+# guessing either way would send the app over the agent's or leave it out.
+$agentSite = $false
+if (-not $PutBack) {
+  $agentPath = $AgentConfig.Replace("'", "''")
+  $agentSaid = @(Invoke-ThornswoodRemote -Target "$User@$Vps" -SshArgs $ssh -Script @"
+`$p = '$agentPath'
+if (-not (Test-Path -LiteralPath `$p -PathType Leaf)) { 'AGENT SITE: no' }
+else {
+  try {
+    `$c = [IO.File]::ReadAllText(`$p) | ConvertFrom-Json
+    if (`$c.environments -and `$c.environments.PSObject.Properties['site']) { 'AGENT SITE: yes' } else { 'AGENT SITE: no' }
+  } catch { 'AGENT SITE: unreadable, ' + `$_.Exception.Message }
+}
+"@ | Where-Object { $_ -is [string] } | ForEach-Object { $_.Trim() } | Where-Object { $_ -like 'AGENT SITE:*' })
+  if ($agentSaid.Count -ne 1 -or $agentSaid[0] -notin 'AGENT SITE: yes', 'AGENT SITE: no') {
+    throw ("the box did not say whether the deploy agent has the site (" + $AgentConfig + "): " + $(if ($agentSaid.Count) { $agentSaid -join '; ' } else { 'no answer' }) + '. Nothing was sent.')
+  }
+  $agentSite = ($agentSaid[0] -eq 'AGENT SITE: yes')
+  if ($agentSite -and $Site) {
+    throw '-Site sends the public pages, and the deploy agent puts them in from each merge''s Release now (#5190). A page that changed goes out with its merge; an older one goes back with: pwsh scripts/vps/Box-Run.ps1 -Line ''Deploy-Release -Environment site -Tag <tag>''. Nothing was sent.'
+  }
+  if ($agentSite) { Write-Host 'The deploy agent has the site: the app and the public pages come from each merge''s Release, and this sends neither.' }
+}
+
 # What goes up is the site artifact (issue #459, Artifact.ps1): server.js,
-# public and data as the commit holds them, in one zip named by commit and
-# hash. Everything below sends from its folder, not from the working tree, and
-# the zip itself goes to the box's store first, but only after the expanded
-# tree has been checked against the commit (Assert-ThornswoodSourceIntegrity,
-# issue #1335). A file that is not that commit stops the deploy here, and
-# nothing is sent. The box is told the site runs
-# it at the end, once the files are in place and answering (issue #446).
+# its modules in lib (#5357), public and data as the commit holds them, in
+# one zip named by commit and hash. Everything below sends from its folder,
+# not from the working tree, and the zip itself goes to the box's store
+# first, but only after the expanded tree has been checked against the
+# commit (Assert-ThornswoodSourceIntegrity, issue #1335). A file that is not
+# that commit stops the deploy here, and nothing is sent. The box is told
+# the site runs it at the end, once the files are in place and answering
+# (issue #446).
 # -PutBack builds and sends nothing.
 . (Join-Path $Here 'Artifact.ps1')
 $artifact = $null
 if (-not $PutBack) {
-$artifact = New-ThornswoodArtifact -Component site -RepoDir (Join-Path $Here '..\..') -Paths 'site/server.js', 'site/public', 'site/data'
+$artifact = New-ThornswoodArtifact -Component site -RepoDir (Join-Path $Here '..\..') -Paths 'site/server.js', 'site/lib', 'site/public', 'site/data'
 Write-Host ('Artifact ' + (Format-ThornswoodArtifact $artifact))
 $App = Join-Path $artifact.Folder 'site'
 Assert-ThornswoodSourceIntegrity -Artifact $artifact -RepoDir (Join-Path $Here '..\..')
@@ -263,20 +306,22 @@ $prevName  = '.prev-' + $stamp
 $stageFar  = ($Root -replace '\\', '/') + '/' + $stageName
 $hashes    = [ordered]@{}
 $appUnchanged = $false
-$gonePublic = @()
+$gone = @()
 
-if (-not $PutBack) {
+if ($agentSite) { $appUnchanged = $true }
+if (-not $PutBack -and -not $agentSite) {
 Write-Host 'Making room...'
 # A stage a run that died part way left is cleared first; it was never
 # swapped in.
 Remote @"
-foreach (`$d in @('$rootWin','$rootWin\public','$rootWin\data','$rootWin\files','$rootWin\uploads')) {
+foreach (`$d in @('$rootWin','$rootWin\lib','$rootWin\public','$rootWin\data','$rootWin\files','$rootWin\uploads')) {
   if (-not (Test-Path `$d)) { New-Item -ItemType Directory -Path `$d -Force | Out-Null }
 }
 Get-ChildItem -LiteralPath '$rootWin' -Directory -Force -EA SilentlyContinue |
   Where-Object { `$_.Name -like '.stage-*' } |
   ForEach-Object { Remove-Item -LiteralPath `$_.FullName -Recurse -Force -EA SilentlyContinue }
 New-Item -ItemType Directory -Path '$rootWin\$stageName\public' -Force | Out-Null
+New-Item -ItemType Directory -Path '$rootWin\$stageName\lib' -Force | Out-Null
 'ready'
 "@ | ForEach-Object { "  $_" }
 
@@ -305,6 +350,30 @@ if ($serverThere -eq $serverHash) {
   $send['server.js'] = $serverLocal
   Write-Host '  server.js'
 }
+# Its modules in lib (#5357), each by hash the same way, and the ones the
+# repository no longer has taken out by the swap, so a module the site
+# dropped is not left beside the ones it loads.
+$libThere = @{}
+$hashedLib = Remote @"
+Get-ChildItem '$rootWin\lib' -File -Filter *.js -EA SilentlyContinue | ForEach-Object {
+  `$_.Name + '|' + (Get-FileHash -LiteralPath `$_.FullName -Algorithm SHA256 -EA SilentlyContinue).Hash
+}
+"@
+foreach ($l in @($hashedLib)) {
+  if ($l -is [string] -and $l.Trim() -match '^(.+)\|([0-9A-Fa-f]{64})$') { $libThere[$Matches[1]] = $Matches[2].ToUpper() }
+}
+$sentLib = @()
+$sameLib = 0
+Get-ChildItem (Join-Path $App 'lib') -File -Filter *.js -EA SilentlyContinue | ForEach-Object {
+  if ($libThere[$_.Name] -eq (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash) { $sameLib++; return }
+  Push $_.FullName "$stageFar/lib/$($_.Name)"
+  $send['lib/' + $_.Name] = $_.FullName
+  $sentLib += $_.Name
+}
+if ($sentLib.Count) { Write-Host ('  lib: ' + ($sentLib -join ', ')) }
+Write-Host ('  ' + $sameLib + ' module(s) in lib already the same up there, not sent')
+$repoLib = @(Get-ChildItem (Join-Path $App 'lib') -File -Filter *.js -EA SilentlyContinue | ForEach-Object Name)
+$goneLib = @($libThere.Keys | Where-Object { $repoLib -notcontains $_ } | Sort-Object | ForEach-Object { 'lib/' + $_ })
 # Everything in public\, by listing the folder rather than by a list kept here.
 # robots.txt was added and did not go up, because this was six named files and
 # a seventh is invisible to it.
@@ -336,26 +405,29 @@ Get-ChildItem (Join-Path $App 'public') -File -EA SilentlyContinue | ForEach-Obj
 if ($sentPublic.Count) { Write-Host ('  ' + ($sentPublic -join ', ')) }
 Write-Host ('  ' + $samePublic + ' public file(s) already the same up there, not sent')
 # And the ones the repository no longer has, which the swap takes out
-# (Swap.ps1, $Gone). Only files at the top of public: the folders in it,
-# such as downloads, are filled by other scripts.
+# (Swap.ps1, $Gone), with the modules gone from lib above. Only files at the
+# top of public: the folders in it, such as downloads, are filled by other
+# scripts.
 $repoPublic = @(Get-ChildItem (Join-Path $App 'public') -File -EA SilentlyContinue | ForEach-Object Name)
 $gonePublic = @($publicThere.Keys | Where-Object { $repoPublic -notcontains $_ } | Sort-Object | ForEach-Object { 'public/' + $_ })
-if ($gonePublic.Count) { Write-Host ('  to take out, no longer in the repository: ' + ($gonePublic -join ', ')) }
+$gone = @(@($goneLib) + @($gonePublic))
+if ($gone.Count) { Write-Host ('  to take out, no longer in the repository: ' + ($gone -join ', ')) }
 
 # When nothing in the app changed, skip the stage, the stop and the swap
 # (issue #1118). Documents and the task step still run below.
-$appUnchanged = ($send.Count -eq 0 -and $gonePublic.Count -eq 0)
+$appUnchanged = ($send.Count -eq 0 -and $gone.Count -eq 0)
 if ($appUnchanged) {
   Remote "Remove-Item -LiteralPath '$rootWin\$stageName' -Recurse -Force -EA SilentlyContinue" | Out-Null
   Write-Host '  nothing in the app changed, so the site will not be stopped'
 } else {
 # The box checks the stage while the old site still runs: every file as it
-# left here, and server.js through node --check when it was sent. A refusal
-# clears the stage and this stops, with the documents, the password and the
-# task untouched.
+# left here, and server.js and each module through node --check when it was
+# sent. A refusal clears the stage and this stops, with the documents, the
+# password and the task untouched.
 $hashes = Get-SwapHashes $send
 $parse = @()
 if ($send.Contains('server.js')) { $parse = @('server.js') }
+$parse += @($send.Keys | Where-Object { $_ -like 'lib/*.js' })
 $checkOut = @(Remote ((ServiceSwapVars $Root $stageName $prevName $Wait $hashes $parse) + $serviceCheckBlock) |
               ForEach-Object { Write-Host ('  ' + $_); "$_".Trim() })
 if ($checkOut -notcontains 'STAGE OK') {
@@ -368,6 +440,8 @@ if ($checkOut -notcontains 'STAGE OK') {
 
 # The public pages are markdown like everything else, so they can be edited
 # from the site rather than redeployed. Same rule: only the missing ones go.
+# Once the agent has the site, every Release carries them and this sends none.
+if (-not $agentSite) {
 Remote "if (-not (Test-Path '$rootWin\data\site')) { New-Item -ItemType Directory -Path '$rootWin\data\site' -Force | Out-Null }" | Out-Null
 $siteThere = @((Remote "Get-ChildItem '$rootWin\data\site' -File -EA SilentlyContinue | ForEach-Object Name") |
                Where-Object { $_ -is [string] } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -376,6 +450,7 @@ Get-ChildItem (Join-Path $App 'data/site') -Filter *.md -EA SilentlyContinue | F
     Push $_.FullName "$Root/data/site/$($_.Name)"
     Write-Host "  sent site/$($_.Name)"
   }
+}
 }
 
 # Documents are only sent on the first install, or when asked for outright.
@@ -851,8 +926,7 @@ if (`$own) {
   # account without it (the build runner's) was refused (issue #1120).
   function SetAccess(`$p, `$a) {
     `$item = Get-Item -LiteralPath `$p -Force
-    if (`$PSVersionTable.PSEdition -eq 'Core') { [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo]`$item, [Security.AccessControl.DirectorySecurity]`$a) }
-    else { `$item.SetAccessControl(`$a) }
+    [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo]`$item, [Security.AccessControl.DirectorySecurity]`$a)
   }
   try {
     `$users = New-Object Security.Principal.SecurityIdentifier('S-1-5-32-545')
@@ -1059,7 +1133,7 @@ if ($ok) { 'PASS: ' + (Answer); 'RESTART OK' } else { 'FAIL: it did not answer w
 if ($PutBack -or -not $appUnchanged) {
 $vars = (ServiceSwapVars $Root $stageName $prevName $Wait $hashes @() $Task) +
         ("`$Task = '" + $Task.Replace("'", "''") + "'`r`n`$Port = " + $Port + "`r`n") +
-        ('$Gone = @(' + ((@($gonePublic) | ForEach-Object { "'" + $_.Replace("'", "''") + "'" }) -join ', ') + ")`r`n")
+        ('$Gone = @(' + ((@($gone) | ForEach-Object { "'" + $_.Replace("'", "''") + "'" }) -join ', ') + ")`r`n")
 $pick = ''
 if ($PutBack) { $pick = $putBackPick }
 $eap = $ErrorActionPreference

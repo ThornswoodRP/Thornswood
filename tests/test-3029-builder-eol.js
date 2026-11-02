@@ -24,7 +24,10 @@
      records/client-licences/** -text: the vcpkg licence texts, held byte for
      byte by records/client-licences.json, whose line ends no checkout may
      turn (#3099), and records/front-licences/** -text, the same for the npm
-     packages in build.js, held by records/front-build.json (#3751).
+     packages in build.js, held by records/front-build.json (#3751). And
+     .githooks/** text eol=lf, the pre-push hook, which no step writes: sh
+     reads it, Git for Windows' too, and a CR ends its lines wrong (#5291,
+     held by tests/test-5291-pre-push.ps1).
   E  no step takes its line ending from a file, joins with CRLF, or writes
      with the platform's ending.
   F  merchant-role-tables.json pins the bytes every checkout now has.
@@ -115,9 +118,12 @@ if (tracked) {
   // inside game/data, whose text rule it is taken out of, so A2 holds for it
   // like a plugin.
   const BYTES = ['records/client-licences/** -text', 'records/front-licences/** -text', 'game/data/last-plugin.recipe -text !eol'];
+  // #5291: a script sh runs, no builder's output; test-5291-pre-push.ps1
+  // holds that it is stored LF.
+  const NOT_BUILT = ['.githooks/** text eol=lf'];
   const stray = [];
   for (const l of lines) {
-    if (BYTES.indexOf(l) >= 0) { continue; }
+    if (BYTES.indexOf(l) >= 0 || NOT_BUILT.indexOf(l) >= 0) { continue; }
     const pattern = l.split(/\s+/)[0];
     const hits = git(['ls-files', '--', ':(glob)' + pattern]).split('\n').filter(Boolean);
     if (!hits.some(function (f) { return text.indexOf(f) >= 0; })) { stray.push(l); }

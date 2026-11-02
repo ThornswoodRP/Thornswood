@@ -85,7 +85,7 @@ $verbs = Read-ThornswoodGateVerbs (Join-Path $Repo 'scripts/release/nexus-verbs.
 
 # ---- 1. nexus-verbs.json against the scripts --------------------------------------
 $names = @($verbs.verbs.PSObject.Properties | ForEach-Object { $_.Name })
-Yes 'nexus-verbs.json names the five Nexus scripts' ((($names | Sort-Object) -join ',') -eq 'Install-NexusRevision,New-NexusRevision,Send-NexusFile,Set-NexusDescription,Set-NexusKey')
+Yes 'nexus-verbs.json names the six Nexus scripts' ((($names | Sort-Object) -join ',') -eq 'Install-NexusRevision,New-NexusRevision,Read-NexusFile,Send-NexusFile,Set-NexusDescription,Set-NexusKey')
 $runnerFiles = @('Archive', 'From', 'Layout', 'CollectionArchive', 'Game', 'UploadId', 'Record', 'Cache')
 foreach ($n in $names) {
     $v = $verbs.verbs.$n

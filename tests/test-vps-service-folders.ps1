@@ -1,7 +1,7 @@
 <#
   test-vps-service-folders.ps1
 
-      powershell -NoProfile -File .\tests\test-vps-service-folders.ps1
+      pwsh -NoProfile -File .\tests\test-vps-service-folders.ps1
 
   Lock-VpsFolders.ps1 takes Users off the watchdog's, the deploy store's,
   Caddy's and the dumps folders (issues #1183 and #1691), run against scratch
@@ -24,8 +24,8 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 $repo = (Resolve-Path (Join-Path $Here '..')).Path
 $lockBox = Join-Path $repo 'scripts\vps\Lock-VpsFolders.ps1'
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) { Write-Host 'NOT RUN  who may write the service folders is a Windows ACL that Lock-VpsFolders.ps1 sets under Windows PowerShell 5.1, which only Windows has'; exit 0 }
-$ps51 = Get-WindowsPowerShell
+if (-not $OnWindows) { Write-Host 'NOT RUN  who may write the service folders is a Windows ACL that Lock-VpsFolders.ps1 sets, which only Windows has'; exit 0 }
+$boxPs = Get-BoxPowerShell
 
 $script:pass = 0; $script:fail = 0
 function Yes([string]$what, [bool]$cond) {
@@ -53,7 +53,7 @@ function Grant([string]$p, [string]$sid, [string]$rights, [string]$inh, [string]
 function Box([string]$c, [string]$botSid, [string[]]$more) {
     $a = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $lockBox, '-Parent', $c, '-SiteSid', $site, '-BotSid', $botSid, '-AllowGamingPc', '-DumpWriterSids', ($site + ',' + $runner)) + $more
     $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    try { $o = @(& $ps51 @a 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $eap }
+    try { $o = @(& $boxPs @a 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $eap }
     $script:code = $LASTEXITCODE
     return ($o -join "`n")
 }

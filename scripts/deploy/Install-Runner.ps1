@@ -260,7 +260,7 @@
   NO PRIORITY TASK (#1969). Until 5 October each install registered a task,
   Thornswood Runner Priority (Thornswood Runner N Priority from the second
   on), that set Runner.Listener and Runner.Worker to Normal at start and
-  every five minutes: a timer that repairs state, which Developer-Guide.md
+  every five minutes: a timer that repairs state, which docs/guide/rules.md
   "Fix the cause, no band-aids" does not allow. Until 25 September it set
   them to BelowNormal, which is where they ran then; since then it had nothing
   to repair. The runner is a Windows service (config.cmd --runasservice),
@@ -306,7 +306,7 @@
 param(
   [string]$VpsHost    = '',
   [string]$VpsUser    = '',
-  [string]$Repo       = 'EvilPatrick06/Thornswood',
+  [string]$Repo       = 'ThornswoodRP/Thornswood',
   # Which runner. 1 is the first, with the names below; from 2 up, the three
   # names after it get the number on the end unless they are given.
   [ValidateRange(1, 99)][int]$Number = 1,
@@ -371,7 +371,7 @@ if ($FromGate) {
   if ($env:THORNSWOOD_GATE -ne '1') { Write-Host 'STOP. -FromGate is for the deploy gate''s Install-Runner verb, which runs this on the box: scripts/vps/Box-Run.ps1 Install-Runner -Number <n>. Nothing was changed.' -ForegroundColor Red; exit 1 }
   $handPicked = @('Repo', 'Root', 'Account', 'RunnerName', 'Label', 'VpsHost', 'VpsUser', 'AlsoDeny') | Where-Object { $PSBoundParameters.ContainsKey($_) }
   if ($OffBox -or $Migrate -or $Remove -or $DryRunTo -or $DefenderSkip -or @($handPicked).Count) { Write-Host 'STOP. Through the gate a runner is installed, locked, read or given its network rules with the names and folders its number gives it, on the box, and never removed. Nothing was changed.' -ForegroundColor Red; exit 1 }
-  $Repo = 'EvilPatrick06/Thornswood-Ops'
+  $Repo = 'ThornswoodRP/Thornswood-Ops'
   . (Join-Path $Here '..\vps\admin\ShipAccess.ps1')
   # In this run's environment only: the gate starts every verb as a process
   # of its own, so the token goes with it, and GitHub ends it within the hour.
@@ -501,8 +501,8 @@ function Invoke-Here([string]$script, $secret = $null) {
   [IO.File]::WriteAllText($file, $pre + $script, (New-Object Text.UTF8Encoding $true))
   $ErrorActionPreference = 'Continue'
   try {
-    if ($null -ne $secret) { $out = @([string]$secret | & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" }) }
-    else { $out = @(& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" }) }
+    if ($null -ne $secret) { $out = @([string]$secret | & pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" }) }
+    else { $out = @(& pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_" }) }
     $code = $LASTEXITCODE
   } finally { Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue }
   $global:LASTEXITCODE = $code
@@ -537,6 +537,15 @@ function Invoke-Gh {
 }
 
 $service = 'actions.runner.' + $Repo.Replace('/', '-') + '.' + $RunnerName
+# A runner's Windows service is named for the repository it was registered
+# to, and keeps that name when the repository moves: every runner registered
+# before the move to ThornswoodRP on 1 Nov 2026 has an EvilPatrick06 service
+# (#5184). So the one already there is looked for under both names
+# (Find-RunnerService), and config.cmd gives a runner registered now the first.
+$serviceNames = @($service)
+$repoOwner, $repoName = $Repo.Split('/', 2)
+if ($repoOwner -ne 'EvilPatrick06') { $serviceNames += ('actions.runner.EvilPatrick06-' + $repoName + '.' + $RunnerName) }
+$serviceList = "@('" + ($serviceNames -join "', '") + "')"
 
 # ------------------------------------------------------------- the locks --
 # Run on the box, by the install for its own folder and by -Lock and the end
@@ -746,7 +755,17 @@ function Assert-RunnerIdle([string]$root) {
   $worker = @(Get-RunnerProcesses $root | Where-Object { $_.Name -eq 'Runner.Worker.exe' })
   if ($worker.Count) { throw ('this runner is running a job (Runner.Worker ' + (($worker | ForEach-Object { $_.ProcessId }) -join ', ') + '); nothing was changed. Run it again once -Status says it is idle.') }
 }
-function Stop-RunnerHere([string]$root, [string]$svc) {
+# The service of a runner already here, under any of the names it may have
+# (the first is the name a runner registered now gets), or that first name
+# when there is none.
+function Find-RunnerService([string[]]$names) {
+  $found = @($names | Where-Object { Get-Service -Name $_ -EA SilentlyContinue })
+  if ($found.Count -gt 1) { throw ('this runner has more than one service: ' + ($found -join ', ') + '; nothing was changed') }
+  if ($found.Count) { return $found[0] }
+  $names[0]
+}
+function Stop-RunnerHere([string]$root, [string[]]$names) {
+  $svc = Find-RunnerService $names
   if (Get-Service -Name $svc -EA SilentlyContinue) { Stop-Service -Name $svc -Force -EA Stop }
   $left = @(Get-RunnerProcesses $root)
   if ($left.Count) { throw ('still running from ' + $root + ' after the stop: ' + (($left | ForEach-Object { $_.Name + ' ' + $_.ProcessId }) -join ', ')) }
@@ -1028,12 +1047,13 @@ if ($NetworkOnly) {
 # ------------------------------------------------------------------ status --
 if ($Status) {
   Head 'On the VPS'
-  Remote ($watcherLib + @"
+  Remote ($lockLib + $watcherLib + @"
 `$ErrorActionPreference = 'SilentlyContinue'
 if (Test-Path '$Root\config.cmd') { 'runner    in $Root' } else { 'runner    NOT THERE' }
-`$s = Get-Service -Name '$service'
-if (`$s) { 'service   ' + `$s.Status + ', starts ' + `$s.StartType } else { 'service   NOT REGISTERED' }
-`$w = Get-CimInstance Win32_Service -Filter "Name='$service'"
+`$svc = Find-RunnerService $serviceList
+`$s = Get-Service -Name `$svc
+if (`$s) { 'service   ' + `$svc + ', ' + `$s.Status + ', starts ' + `$s.StartType } else { 'service   NOT REGISTERED' }
+`$w = Get-CimInstance Win32_Service -Filter "Name='`$svc'"
 if (`$w) { 'runs as   ' + `$w.StartName }
 foreach (`$p in (Get-Process Runner.Listener, Runner.Worker)) { 'process   ' + `$p.ProcessName + ' at ' + `$p.PriorityClass }
 if (Get-LocalUser -Name '$Account') { 'account   $Account' } else { 'account   NOT THERE' }
@@ -1080,7 +1100,7 @@ if ((Test-Path '$Root\config.cmd') -and `$t) {
   Remove-Item Env:\ACTIONS_RUNNER_INPUT_TOKEN -EA SilentlyContinue
   Pop-Location
 }
-Stop-RunnerHere '$Root' '$service'
+Stop-RunnerHere '$Root' $serviceList
 Remove-RunnerWatchers
 Open-RunnerAccount '$Account' '$Root' 'C:\' '$liveFilter' $alsoDenyList
 $(if ($onRunnerDrive) { "Open-RunnerAccount '" + $Account + "' '" + $Root + "' '" + $rootDrive + "\' '" + $liveFilter + "'" })
@@ -1241,7 +1261,7 @@ function Get-RunnerMigrationState([string]$acct, [string]$svc, [string]$root) {
   }
   $task = Get-ScheduledTask -TaskName 'Thornswood Runner Drive' -EA Stop
   $start = Join-Path $env:ProgramData 'Thornswood-RunnerDrive\start.ps1'
-  if (-not $task -or $task.State -eq 'Disabled' -or $task.Principal.UserId -notin @('SYSTEM','S-1-5-18') -or @($task.Actions).Count -ne 1 -or $task.Actions[0].Execute -notin @('powershell.exe', 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe') -or $task.Actions[0].Arguments -ne ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $start + '"') -or -not (Test-Path -LiteralPath $start -PathType Leaf)) { throw 'Runner drive startup task does not match the managed SYSTEM attach/start task' }
+  if (-not $task -or $task.State -eq 'Disabled' -or $task.Principal.UserId -notin @('SYSTEM','S-1-5-18') -or @($task.Actions).Count -ne 1 -or $task.Actions[0].Execute -ne (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe') -or $task.Actions[0].Arguments -ne ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $start + '"') -or -not (Test-Path -LiteralPath $start -PathType Leaf)) { throw 'Runner drive startup task does not match the managed SYSTEM attach/start task' }
   Assert-RunnerMigrationPath $start
   # -Migrate is -OffBox only, and off the box the guards are in this machine's
   # own store (Set-RunnerFirewall's $grdStore), so that is where they are read.
@@ -1311,7 +1331,9 @@ if ($Migrate) {
       $migrationPlan = [pscustomobject]@{ SID='S-1-5-21-1-2-3-1001'; Account=$Account; Service=$service; Root=$Root; Source=('C:\Thornswood-RunnerPR' + $n); Profile=('C:\Users\' + $Account); Drive=$runnerDrive; AlreadyThere=$false }
       Say '  migration dry run uses fixture identity/drive metadata, not a live readiness claim' 'Yellow'
     } else {
-      $migrationPlan = Get-RunnerMigrationState $Account $service $Root
+      # Find-RunnerService is in the locks; the selected runner is on this machine.
+      . ([scriptblock]::Create($lockLib))
+      $migrationPlan = Get-RunnerMigrationState $Account (Find-RunnerService $serviceNames) $Root
       $pages = (Invoke-Gh api "repos/$Repo/actions/runners" --paginate --slurp | Out-String) | ConvertFrom-Json
       $registered = @($pages | ForEach-Object { $_.runners } | Where-Object { $_.name -eq $RunnerName })
       if ($registered.Count -ne 1 -or $registered[0].status -ne 'online' -or $registered[0].busy) { throw 'Selected GitHub runner must be uniquely online and idle. Prevent assignments and drain it in the approved maintenance window; a busy read is not an atomic drain.' }
@@ -1323,7 +1345,9 @@ if ($Migrate) {
       }
     }
     $planJson = ($migrationPlan | ConvertTo-Json -Compress).Replace("'", "''")
-    $migrationPrelude = $migrateLib + "`n`$migrationPlan = '" + $planJson + "' | ConvertFrom-Json`nBegin-RunnerMigration `$migrationPlan`n"
+    # Begin-RunnerMigration takes off the service the runner had; the one
+    # config.cmd registers below has the name the repository has now.
+    $migrationPrelude = $migrateLib + "`n`$migrationPlan = '" + $planJson + "' | ConvertFrom-Json`nBegin-RunnerMigration `$migrationPlan`n`$migrationPlan.Service = `$svc`n"
   } catch { Die $_.Exception.Message }
 }
 
@@ -1441,7 +1465,7 @@ if (-not `$regToken) { throw 'NOTHING ARRIVED on standard input, so there is no 
 # -Migrate stops and drains the selected runner its own way instead, keeping
 # the account and its SID (#4048, Begin-RunnerMigration).
 $migrationPrelude
-$(if (-not $Migrate) { "Assert-RunnerIdle `$root`nStop-RunnerHere `$root '$service'" })
+$(if (-not $Migrate) { "Assert-RunnerIdle `$root`nStop-RunnerHere `$root $serviceList" })
 
 # The account. In Users and nothing else. A password nobody ever sees: made
 # here, set, handed to config.cmd for the service, and dropped. Letters and

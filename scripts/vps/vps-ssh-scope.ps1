@@ -5,7 +5,7 @@
 .DESCRIPTION
   Do not run this by hand. Set-SshScope.ps1 proves key login works first, from
   your machine, then sends this file's text on ssh's standard input and
-  Windows PowerShell 5.1 runs it from there, so nothing of it is ever
+  pwsh runs it from there, so nothing of it is ever
   written on the box (#3035).
 
   Issue #2182, decision 2 (Patrick, 11 Oct 2026): restrict the inbound rules on
@@ -143,7 +143,7 @@ function New-PrivateFile([string]$Path) {
         $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier($s)), 'FullControl', 'Allow')))
     }
     $item = Get-Item -LiteralPath $Path -Force
-    if ($PSVersionTable.PSEdition -eq 'Core') { [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]$item, $acl) } else { $item.SetAccessControl($acl) }
+    [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]$item, $acl)
     # Read back, not taken from the call: a FileSecurity already written once
     # writes nothing the second time and says nothing (#3034, on the box).
     $got = Get-Acl -LiteralPath $Path
@@ -167,7 +167,7 @@ function Test-TakesSshd($Rule) {
 # itself, unless Set-SshScope.ps1 cancels it first.
 function Register-Rollback([string]$Saved) {
     $cmd = "`$s = Get-Content -Raw -LiteralPath '" + $Saved + "' | ConvertFrom-Json; foreach (`$r in `$s.rules) { if (`$r.store -eq 'Local') { Set-NetFirewallRule -PolicyStore PersistentStore -Name `$r.name -RemoteAddress @(`$r.remote) } else { Set-NetFirewallRule -PolicyStore localhost -Name `$r.name -RemoteAddress @(`$r.remote) } }; gpupdate.exe /target:computer /force | Out-Null; Unregister-ScheduledTask -TaskName '" + $RollbackTask + "' -Confirm:`$false"
-    $a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -Command "' + $cmd + '"')
+    $a = New-ScheduledTaskAction -Execute (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe') -Argument ('-NoProfile -Command "' + $cmd + '"')
     $t = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(10))
     $p = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
     Register-ScheduledTask -TaskName $RollbackTask -Action $a -Trigger $t -Principal $p -Force | Out-Null

@@ -1,7 +1,8 @@
 <#
 .SYNOPSIS
   Closes the issues in Done whose fix a main Ship carries, each with the test
-  task its pull request wrote, and says which it closed and which stay open.
+  task its pull request wrote, and says which it closed and which stay open;
+  with -Dev, writes the Dev test tasks a dev Ship carries, closing nothing.
 
 .DESCRIPTION
   WHY (#3279). A fix people would notice merges with "Test task for #N" in its
@@ -54,7 +55,7 @@
   DEV AND MAIN. A test task is Main, for any playtester, or Dev, with
   "Server: Dev" under its first line, for what only a developer can check;
   the bot keeps the two apart, in #test-tasks and #dev-test-tasks, and a Dev
-  one stays up after the fix is on main (Patrick, 22 Oct; Developer-Guide.md,
+  one stays up after the fix is on main (Patrick, 22 Oct; docs/guide/the-board.md,
   "Test tasks and known issues"). So a Dev test task never keeps an issue
   open, and the block is written unless a person wrote a "Test task:" comment
   of the same kind after the merge, which stands instead: the bot reads the
@@ -63,6 +64,17 @@
   Whether the release carries a merge is asked of git in -RepoDir, the checkout
   the Ship built from, so a shallow checkout, which cannot answer, is refused.
 
+  A DEV RELEASE (-Dev, #5199). A Dev test task is for developers, and goes
+  up as soon as a dev release carries the fix (Patrick, 22 Oct), which was a
+  hand step: done-on-merge.yml asked whoever saw the release to write it,
+  with a Build: line naming it, and the step had no owner. A dev Ship runs
+  this with -Dev and its release's name: for each issue in Done whose block
+  is Dev and whose merge the release carries, with no Dev "Test task:"
+  comment after the merge, it writes the block with its Build: line set to
+  that release, and the bot posts it in #dev-test-tasks. A Main block waits
+  for a main Ship, and nothing is closed. The main Ship that closes the
+  issue later finds that Dev comment and writes no second one.
+
   NOTHING HERE FAILS A RELEASE. Ship calls it after the release is out, like
   the remirror (Publish-PostShip.ps1): a stop is a line in Ship's Done with
   the command that runs this again. Running it again closes only what is still
@@ -70,6 +82,7 @@
 
     .\scripts\release\Close-ShippedIssues.ps1 -Commit <sha>          close what <sha> carries
     .\scripts\release\Close-ShippedIssues.ps1 -Commit <sha> -Check   say what it would close, close nothing
+    .\scripts\release\Close-ShippedIssues.ps1 -Commit <sha> -Dev -Build <dev release>   write the Dev test tasks it carries
 
 .PARAMETER Commit
   The commit the main release was built from. Ship passes the one its release
@@ -84,6 +97,13 @@
 
 .PARAMETER GitHubRepo
   The repository whose issues are closed.
+
+.PARAMETER Dev
+  The release is a dev release: write each carried Dev test task with its
+  Build: line, close nothing. Needs -Build.
+
+.PARAMETER Build
+  With -Dev, the dev release's name, as its release record gives it.
 
 .PARAMETER Check
   Read and say what would close, and change nothing on GitHub. The board read
@@ -101,8 +121,10 @@ param(
     [Parameter(Mandatory = $true)][string]$Commit,
     [string]$RepoDir = (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
     [string]$BoardFile,
-    [string]$GitHubRepo = 'EvilPatrick06/Thornswood',
+    [string]$GitHubRepo = 'ThornswoodRP/Thornswood',
     [switch]$Check,
+    [switch]$Dev,
+    [string]$Build = '',
     [switch]$NoPause
 )
 
@@ -137,6 +159,21 @@ function Kind-Of([string[]]$Lines) {
     if ($Lines.Count -gt 1 -and $Lines[1] -match '^\s*server\s*:\s*dev\s*$') { return 'Dev' }
     return 'Main'
 }
+# A Dev block with its Build: line naming the dev release that carries it:
+# the bot shows that line on the post (bot.py, BUILD_LINE). The pull
+# request's own Build: line, written before any release existed, is
+# replaced; with none, it goes under the Server line.
+$BuildLine = '^\s*(?:needs\s+)?build\s*:'
+function Set-Build([string]$Task, [string]$Line) {
+    $lines = New-Object System.Collections.Generic.List[string]
+    foreach ($l in @($Task -split "`n")) { $lines.Add($l) }
+    $at = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match $BuildLine) { $at = $i; break } }
+    if ($at -ge 0) { $lines[$at] = $Line } else { $lines.Insert([Math]::Min(2, $lines.Count), $Line) }
+    for ($i = $lines.Count - 1; $i -gt $at -and $at -ge 0; $i--) { if ($lines[$i] -match $BuildLine) { $lines.RemoveAt($i) } }
+    return ($lines -join "`n")
+}
+if ($Dev -and $Build -notmatch '^[0-9A-Za-z][0-9A-Za-z._-]*$') { Stop-Here 'a dev release is named with -Build, its release''s name (letters, digits, dots, dashes).' }
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { Stop-Here 'there is no gh here to read and close the issues with.' }
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Stop-Here 'there is no git here to ask which merges the release carries.' }
@@ -186,7 +223,7 @@ function Get-Comments([int]$Number) {
 }
 
 # ------------------------------------------------------------ the commit
-$what = if ($Check) { 'WHAT A MAIN SHIP WOULD CLOSE (-Check, nothing changes)' } else { 'THE DONE ISSUES THIS MAIN RELEASE CARRIES' }
+$what = if ($Dev) { 'THE DEV TEST TASKS THIS DEV RELEASE CARRIES' + $(if ($Check) { ' (-Check, nothing changes)' } else { '' }) } elseif ($Check) { 'WHAT A MAIN SHIP WOULD CLOSE (-Check, nothing changes)' } else { 'THE DONE ISSUES THIS MAIN RELEASE CARRIES' }
 Write-Host ''
 Write-Host "  $what" -ForegroundColor White
 
@@ -309,6 +346,22 @@ foreach ($card in $done) {
         $notCarried.Add("#$n"); continue
     }
 
+    if ($Dev) {
+        # Only a Dev block goes up on a dev release, once.
+        if ($none -or $kind -ne 'Dev') { Say ("  #{0}: its test task is for main, so the main Ship that carries it writes it" -f $n) 'DarkGray'; $notCarried.Add("#$n"); continue }
+        if ($own) { Say ("  #{0}: its Dev test task is already written after the merge" -f $n) 'DarkGray'; $closed.Add("#$n"); continue }
+        $line = 'Build: dev release ' + $Build + ', from ' + $shipped.Substring(0, 12)
+        if ($Check) { Say ("  #{0}: would write its Dev test task, {1}" -f $n, $line) 'Green'; $closed.Add("#$n"); continue }
+        try {
+            $null = Invoke-GitHub 'POST' "repos/$GitHubRepo/issues/$n/comments" @{ body = (Set-Build $task $line) }
+            Say ("  #{0}: its Dev test task is written, {1}; the bot posts it in #dev-test-tasks" -f $n, $line) 'Green'
+            $closed.Add("#$n")
+        } catch {
+            Say "  #${n}: $($_.Exception.Message)" 'Red'
+            $trouble.Add("#$n")
+        }
+        continue
+    }
     if ($Check) {
         Say ("  #{0}: would close, pull request #{1}'s merge {2} is in this release{3}" -f $n, $pr, $merge, $(if ($none) { ', with no test task, as its Fixed by line says' } elseif ($own) { ', with the test task written on it after the merge' } else { '' })) 'Green'
         $closed.Add("#$n"); continue
@@ -326,17 +379,17 @@ foreach ($card in $done) {
 
 # ------------------------------------------------------------------ done
 Head 'Done'
-$verb = if ($Check) { 'Would close' } else { 'Closed' }
+$verb = if ($Dev) { 'Dev test tasks written or already there' } elseif ($Check) { 'Would close' } else { 'Closed' }
 function Line([string]$label, $list, $colour) {
     if ($list.Count) { Say ("  {0} ({1}): {2}" -f $label, $list.Count, ($list -join ' ')) $colour }
 }
-if (-not $closed.Count) { Say '  Nothing in Done is carried by this release.' 'DarkGray' }
+if (-not $closed.Count) { Say $(if ($Dev) { '  No Dev test task in Done is carried by this release.' } else { '  Nothing in Done is carried by this release.' }) 'DarkGray' }
 Line $verb $closed 'Green'
-Line 'Stay open, their merge is not in this release' $notCarried 'DarkGray'
+Line $(if ($Dev) { 'Not written, not carried or for main' } else { 'Stay open, their merge is not in this release' }) $notCarried 'DarkGray'
 Line 'Stay open, in Done with no test task from a merge to close them with' $noTask 'DarkGray'
 if ($trouble.Count) {
     Line 'Stopped, the lines above say why' $trouble 'Red'
-    Say ("  .\scripts\release\Close-ShippedIssues.ps1 -Commit {0}   runs it again; it closes only what is still open" -f $shipped) 'Yellow'
+    Say ("  .\scripts\release\Close-ShippedIssues.ps1 -Commit {0}{1}   runs it again; it does only what is still to do" -f $shipped, $(if ($Dev) { ' -Dev -Build ' + $Build } else { '' })) 'Yellow'
     Finish 1
 }
 Finish 0

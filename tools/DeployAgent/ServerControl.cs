@@ -26,22 +26,26 @@ public interface IServerControl
 
 public sealed class ControlException(string message) : Exception(message);
 
-/// <summary>The box's own: Windows PowerShell for the port list and the
+/// <summary>The box's own: PowerShell 7 for the port list and the
 /// task, as Swap.ps1 runs them (Get-NetUDPEndpoint, Stop-ScheduledTask,
 /// Start-ScheduledTask), and .NET for the processes and the TCP port.</summary>
 public sealed class WindowsServerControl : IServerControl
 {
-    static string PowerShell(string command, Dictionary<string, string> env)
+    /// <summary>The box's PowerShell 7, where its MSI puts it (Bootstrap-VPS.ps1)
+    /// and every box script runs (#5356).</summary>
+    internal static readonly string Pwsh = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ProgramFiles), "PowerShell", "7", "pwsh.exe");
+
+    internal static string PowerShell(string command, Dictionary<string, string> env)
     {
-        var ps = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
+        var ps = WindowsServerControl.Pwsh;
         var psi = new ProcessStartInfo(ps, ["-NoProfile", "-NonInteractive", "-Command", command])
         { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         foreach (var (k, v) in env) psi.Environment[k] = v;
-        using var p = Process.Start(psi) ?? throw new ControlException("Windows PowerShell did not start");
+        using var p = Process.Start(psi) ?? throw new ControlException("PowerShell 7 did not start");
         var outText = p.StandardOutput.ReadToEnd();
         var err = p.StandardError.ReadToEnd().Trim();
         p.WaitForExit();
-        if (p.ExitCode != 0) throw new ControlException(err == "" ? $"Windows PowerShell ended with {p.ExitCode}" : err);
+        if (p.ExitCode != 0) throw new ControlException(err == "" ? $"PowerShell 7 ended with {p.ExitCode}" : err);
         return outText.Trim();
     }
 

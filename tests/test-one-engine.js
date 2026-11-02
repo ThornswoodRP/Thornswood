@@ -154,9 +154,9 @@ function serverFileProblems(server) {
 // ------------------------------------------------------ planted disagreements
 const P = 'abcdef0123456789abcdef0123456789abcdef01';
 const Q = '0123456789abcdef0123456789abcdef01234567';
-const SUB = { url: 'https://github.com/EvilPatrick06/skymp.git', branch: 'thornswood/engine-changes' };
+const SUB = { url: 'https://github.com/ThornswoodRP/skymp.git', branch: 'thornswood/engine-changes' };
 function C(commit, extra) {
-  return Object.assign({ fork: 'https://github.com/EvilPatrick06/skymp', forkBranch: 'thornswood/engine-changes', forkCommit: commit }, extra || {});
+  return Object.assign({ fork: 'https://github.com/ThornswoodRP/skymp', forkBranch: 'thornswood/engine-changes', forkCommit: commit }, extra || {});
 }
 // A server record whose files were all built from its commit. fileCommits
 // puts another commit on some of them, drop leaves some out.
@@ -169,7 +169,7 @@ function S(commit, extra, fileCommits, drop) {
     files[n] = { sha256: n === 'scam_native.node' ? BIN : String(i).repeat(64), bytes: 1, commit: from };
   });
   return { binary: 'scam_native.node', sha256: BIN, files: files,
-           source: Object.assign({ repo: 'https://github.com/EvilPatrick06/skymp.git', branch: 'thornswood/engine-changes', commit: commit }, extra || {}) };
+           source: Object.assign({ repo: 'https://github.com/ThornswoodRP/skymp.git', branch: 'thornswood/engine-changes', commit: commit }, extra || {}) };
 }
 function caught(what, problems, word) {
   yes(what + ' is caught' + (problems.length ? ' ("' + problems[0] + '")' : ''),
@@ -178,7 +178,7 @@ function caught(what, problems, word) {
 
 yes('one commit everywhere is one engine', oneEngineProblems(P, C(P.slice(0, 8)), S(P), SUB).length === 0);
 yes('a client record may name the commit in full', oneEngineProblems(P, C(P), S(P), SUB).length === 0);
-yes('the fork may be written with or without .git', oneEngineProblems(P, C(P.slice(0, 8), { fork: 'https://github.com/EvilPatrick06/skymp.git' }), S(P, { repo: 'https://github.com/EvilPatrick06/skymp' }), SUB).length === 0);
+yes('the fork may be written with or without .git', oneEngineProblems(P, C(P.slice(0, 8), { fork: 'https://github.com/ThornswoodRP/skymp.git' }), S(P, { repo: 'https://github.com/ThornswoodRP/skymp' }), SUB).length === 0);
 caught('the shape of 29 September, a server record older than the pin and the client', oneEngineProblems(P, C(P.slice(0, 8)), S(Q), SUB), 'the server was built from');
 caught('a client record older than the pin', oneEngineProblems(P, C(Q.slice(0, 8)), S(P), SUB), 'the client runtime was built from');
 caught('a pin moved on with neither record', oneEngineProblems(P, C(Q.slice(0, 8)), S(Q), SUB), 'pinned to');

@@ -262,10 +262,10 @@ if (-not $icacls -or -not $lib) {
         $own2 = Join-Path $box 'Thornswood-Runner9'
         foreach ($d in $dumps, $server, $own2) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
         Set-Content -LiteralPath (Join-Path $dumps 'node.exe.1234.dmp') -Value 'stand-in'
-        $ps51 = Get-WindowsPowerShell
+        $boxPs = Get-BoxPowerShell
         function LockBox {
             $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-            try { $o = @(& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $lvfPath -Parent $box -SiteSid none -BotSid none -AllowGamingPc -DumpWriterSids 'S-1-5-7' 2>&1 | ForEach-Object { "$_" }) }
+            try { $o = @(& $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $lvfPath -Parent $box -SiteSid none -BotSid none -AllowGamingPc -DumpWriterSids 'S-1-5-7' 2>&1 | ForEach-Object { "$_" }) }
             finally { $ErrorActionPreference = $eap }
             return @{ Code = $LASTEXITCODE; Said = ($o -join ' ') }
         }

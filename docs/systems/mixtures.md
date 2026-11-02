@@ -65,10 +65,10 @@ refuses a brew carrying an effect that is off it, or one above the
 rank. The engine works out which effects a brew carries from the
 ingredients it takes, the ones two or more of them share, and hands
 them to the server with the craft
-([#1389](https://github.com/EvilPatrick06/Thornswood/issues/1389)).
+([#1389](https://github.com/ThornswoodRP/Thornswood/issues/1389)).
 
 Every ingredient in a brew must be one your character has eaten, or
 the brew is refused and the ingredients stay in the pack. A brew that
 goes through is remembered on the character, with every effect it
-showed, at any lab ([#3134](https://github.com/EvilPatrick06/Thornswood/issues/3134),
+showed, at any lab ([#3134](https://github.com/ThornswoodRP/Thornswood/issues/3134),
 [Alchemist](professions/alchemist.md)).

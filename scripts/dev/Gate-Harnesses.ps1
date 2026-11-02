@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Prints the harnesses the build check runs on every pull request: every tests\test-*.js and tests\test-*.ps1 that tests\gate-excluded.txt does not name, one a line, in name order.
+  Prints the harnesses the build check runs on every pull request: every test-*.js and test-*.ps1 in tests\ and in a product's own tests folder (launcher\tests\) that tests\gate-excluded.txt does not name, one a line, in name order.
 
 .DESCRIPTION
   Issue #3009. The gate list was a hand-kept array in build.yml, copied into
@@ -22,9 +22,16 @@
       $gate = @(& .\scripts\dev\Gate-Harnesses.ps1)
 
   It stops with exit 1, and runs nothing, on a gate-excluded.txt line with no
-  reason, one naming a file that is not in tests\, a name on two lines, lines
+  reason, one naming a harness there is not, a name on two lines, lines
   out of name order, or no harness left to run. Each fault is printed as a
   GitHub error on its line.
+
+  BESIDE THEIR CODE (plan line 42, 1 Nov 2026). A harness may live in its
+  product's own folder, <product>\tests\, as well as in tests\.
+  scripts\dev\Harness-Files.ps1 says which files are harnesses and what each
+  is called: one in tests\ by its file name, one beside its product by its
+  path with forward slashes (launcher/tests/test-498-msbuild.ps1). A line in
+  gate-excluded.txt names either kind the same way.
 
   tests\test-gate-list.ps1 runs this against planted folders.
   Read only.
@@ -37,6 +44,7 @@
 param([string]$Root = '')
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Harness-Files.ps1')
 if (-not $Root) { $Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot) }
 $tests = Join-Path $Root 'tests'
 $listFile = Join-Path $tests 'gate-excluded.txt'
@@ -54,7 +62,7 @@ if (Test-Path -LiteralPath $listFile) {
         $n = $m.Groups[1].Value
         $at = "::error file=tests/gate-excluded.txt,line=${i}::"
         if (-not $m.Groups[2].Value.Trim()) { $faults.Add("$at$n has no reason") }
-        if (-not (Test-Path -LiteralPath (Join-Path $tests $n) -PathType Leaf)) { $faults.Add("$at$n is not a file in tests") }
+        if (-not (Test-HarnessName (Split-Path -Leaf $n)) -or -not (Test-Path -LiteralPath (Get-HarnessFile $Root $n) -PathType Leaf)) { $faults.Add("$at$n is not a harness in tests or a product's tests folder") }
         if ($excluded.ContainsKey($n)) { $faults.Add("$at$n is on line $($excluded[$n]) already") }
         elseif ([string]::CompareOrdinal($n, $last) -lt 0) { $faults.Add("$at$n is out of name order, after $last") }
         if (-not $excluded.ContainsKey($n)) { $excluded[$n] = $i }
@@ -62,12 +70,9 @@ if (Test-Path -LiteralPath $listFile) {
     }
 }
 
-$names = [string[]]@(Get-ChildItem -LiteralPath $tests -File |
-    Where-Object { $_.Name -like 'test-*.js' -or $_.Name -like 'test-*.ps1' } |
-    ForEach-Object { $_.Name })
-[Array]::Sort($names, [StringComparer]::Ordinal)
+$names = [string[]]@(Get-Harnesses $Root | ForEach-Object { $_.Name })
 $gate = @($names | Where-Object { -not $excluded.ContainsKey($_) })
-if ($gate.Count -eq 0) { $faults.Add("::error::no harness in $tests is on the gate") }
+if ($gate.Count -eq 0) { $faults.Add("::error::no harness in $Root is on the gate") }
 
 if ($faults.Count) {
     foreach ($f in $faults) { Write-Host $f }
