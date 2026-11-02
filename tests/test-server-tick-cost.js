@@ -57,6 +57,8 @@ const scratch = fs.mkdtempSync(path.join(process.env.TICK_TMP || os.tmpdir(), 't
 fs.writeFileSync(path.join(scratch, 'server-settings.json'), JSON.stringify({
   dataDir: 'data', privDir: 'private', port: 7777, name: 'tick cost', loadOrder: []
 }));
+// The tables the server reads from <root>\gamemode-tables as it loads (#5191, #5427).
+fs.cpSync(path.join(path.dirname(SRC), 'gamemode-tables'), path.join(scratch, 'gamemode-tables'), { recursive: true });
 const home = process.cwd();
 process.chdir(scratch);
 

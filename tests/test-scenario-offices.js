@@ -62,7 +62,7 @@ const SVANA = w.person(0xff000900, { profileId: 3000, name: 'Svana', town: 'wind
 const TORVAR = w.person(0xff000901, { profileId: 3001, name: 'Torvar', town: 'windhelm', cell: BARRACKS, pos: [40, 0, 0] });
 const CORVIN = w.person(0xff000902, { profileId: 1002, name: 'Corvin', town: 'windhelm', cell: BARRACKS, pos: [-40, 0, 0] });
 
-yes('P0 the whole gamemode loads over the stand-in', w.boot() || !console.log(w.loadError()));
+yes('P0 the whole gamemode loads over the stand-in', w.boot());
 if (!w.loaded()) { t.done(w); }
 [SVANA, TORVAR, CORVIN].forEach(w.arrive);
 w.run(30000);

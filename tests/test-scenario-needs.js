@@ -70,7 +70,7 @@ const ALDIS = w.person(0xff000a01, { profileId: 1001, name: 'Aldis', prof: 'cook
 const CORVIN = w.person(0xff000a02, { profileId: 1002, name: 'Corvin', prof: 'tailor', cell: CITY, pos: [2150, 0, 0] });
 const ALL = [BRENNA, ALDIS, CORVIN];
 
-yes('P0 the whole gamemode loads over the stand-in', w.boot() || !console.log(w.loadError()));
+yes('P0 the whole gamemode loads over the stand-in', w.boot());
 if (!w.loaded()) { t.done(w); }
 ALL.forEach(w.arrive);
 ALL.forEach(function (a) { w.say(a, '/place indoors - 0 1 0 -'); });
