@@ -257,6 +257,9 @@ const cardAdd = (w, n) => w.find(x => x.method === 'POST' && x.path === 'graphql
   // The board as the first copy left it (1 Nov): #10 already right, #14 on
   // the board with no Order, #15 with another Order, #16 not on it yet, and
   // an Ops issue with the same number that is not this repository's.
+  r = await go(['--copy-order', 'EvilPatrick06/1'], { oldItems: oldItems.concat([oldItem(10, 99, 'https://api.github.com/repos/SomebodyElse/Thornswood')]) });
+  yes('  a card of another owner\'s repository with the same name and number is not taken for this one: ' + r.lines[0],
+      r.code === 0 && /^2 issues /.test(r.lines[0]) && fieldWrite(r.writes, 10).body.fields[0].value === 52.5);
   const old2 = oldItems.concat([oldItem(15, 9), oldItem(16, 4)]);
   const newItem = (n, order, repoUrl) => ({ id: 9000 + n, content_type: 'Issue', content: { number: n, node_id: 'I_' + n, repository_url: repoUrl || 'https://api.github.com/repos/ThornswoodRP/Thornswood' }, fields: [{ id: 102, name: 'Order', value: order }] });
   const partly = [newItem(10, 52.5), newItem(14, null), newItem(15, 10015), newItem(16, 1, 'https://api.github.com/repos/ThornswoodRP/Thornswood-Ops')];
