@@ -1222,11 +1222,19 @@ function start(stateDir, ghPort, more) {
       // that the part file goes: one that a failed rename left stays for good.
       yes('  no half-written file is left beside it', await waitFor(() => !fs.existsSync(file + '.part'), 5000));
       yes('  the log says it once and never holds the token', (botSvc.log().match(/bot token: made for ThornswoodRP\/Thornswood issues/g) || []).length === 1 && !botSvc.log().includes(gh.botToken));
+      // A round that GitHub answered before the grant was taken off still
+      // writes the token it got. The stand-in decides when a request comes
+      // in, so once a refusal is in the log every round answered with a
+      // token has written it, and only then does the old file go in: a
+      // round after that must leave it as it is (it failed in the merge
+      // queue on 2 Nov 2026 when the old file went in first, #5461).
       gh.botGranted = false;
+      const refused = await waitFor(() => /bot token: GitHub gave the App no issues token .*settings\/apps\/thornswood-box-admin\/permissions/.test(botSvc.log()), 5000);
       fs.writeFileSync(file, JSON.stringify({ token: 'old', expires_at: '2026-11-01T04:00:00Z' }));
+      const before = gh.calls.filter(c => /access_tokens$/.test(c.path)).length;
+      const another = await waitFor(() => gh.calls.filter(c => /access_tokens$/.test(c.path)).length >= before + 2, 5000);
       yes('an installation without Issues write: the log says where it is added, and the file is left as it was',
-        await waitFor(() => /bot token: GitHub gave the App no issues token .*settings\/apps\/thornswood-box-admin\/permissions/.test(botSvc.log()), 5000) &&
-        JSON.parse(fs.readFileSync(file, 'utf8')).token === 'old');
+        refused && another && JSON.parse(fs.readFileSync(file, 'utf8')).token === 'old');
     } finally {
       botSvc.kill();
       gh.botGranted = true;
