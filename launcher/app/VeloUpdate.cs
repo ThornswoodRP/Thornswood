@@ -180,6 +180,35 @@ namespace Thornswood
         }
 
         /// <summary>
+        /// The launcher could not start (Shell.Main). Everywhere else the
+        /// launcher's own update is asked for from the window (ShellUpdate.cs),
+        /// so a launcher whose window cannot open would never reach the one
+        /// that fixes it: on 2 Nov the launcher from #5381 stopped as its
+        /// window was first laid out, and the fixed one could reach that PC
+        /// only by running the setup again. Here, with no window, this
+        /// install's channel is asked, a newer launcher is fetched and checked
+        /// like any other (FetchLauncher, every check in this file's header),
+        /// and it is staged, so Velo.ExitApply, the last line of Main, puts it
+        /// in and starts it. Never throws. Returns what to tell the person.
+        /// </summary>
+        public static string AfterFailedStart(Config cfg, Action<string> log)
+        {
+            try
+            {
+                LauncherUpdate u = CheckLauncher(cfg);
+                if (u == null) return LastLauncherCheck;
+                FetchLauncher(u, log);
+                ApplyLauncher(u);
+                return "A newer launcher, " + u.Version + ", was found on the " + u.Channel + " channel and checked. " +
+                       "It goes in when you close this message, and then starts by itself.";
+            }
+            catch (Exception ex)
+            {
+                return "No newer launcher could be put in: " + ex.Message;
+            }
+        }
+
+        /// <summary>
         /// Velopack's update manager with the signed record held in its
         /// checksum step (check 2 in the header): Velopack calls it for the
         /// whole package and for each delta it downloads, before it keeps the

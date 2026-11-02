@@ -260,7 +260,18 @@ namespace Thornswood
                             "  COULD NOT START: " + ex.ToString() + Environment.NewLine);
                     }
                     catch (Exception logEx) { Swallow.Note("Shell.Main, append", logEx); }
-                    Ask.Tell(ex.ToString(), "Thornswood could not start", Ask.Icon.Error);
+                    // The update check is otherwise asked from the window, so a
+                    // launcher that cannot open its window asks here, and a
+                    // newer one goes in when this process ends (ExitApply,
+                    // below), with nothing for the person to run.
+                    string update = Updater.AfterFailedStart(cfg, delegate (string line)
+                    {
+                        try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + line + Environment.NewLine); }
+                        catch (Exception logEx) { Swallow.Note("Shell.Main, update line", logEx); }
+                    });
+                    try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + update + Environment.NewLine); }
+                    catch (Exception logEx) { Swallow.Note("Shell.Main, update said", logEx); }
+                    Ask.Tell(update + Environment.NewLine + Environment.NewLine + ex.ToString(), "Thornswood could not start", Ask.Icon.Error);
                 }
             }
 
