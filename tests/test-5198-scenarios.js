@@ -77,7 +77,7 @@ const WAITING = [
   'carriages.md', 'carts.md', 'chat.md', 'commands.md', 'creation.md',
   'dungeon-loot.md', 'embassy.md', 'emotes.md',
   'factions.md', 'magic.md', 'npcs.md',
-  'stalls.md', 'thalmor.md', 'trading-company.md', 'voice.md'
+  'thalmor.md', 'trading-company.md', 'voice.md'
 ];
 
 // ------------------------------------------------------- what the guide lists --
