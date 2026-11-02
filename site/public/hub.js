@@ -137,7 +137,7 @@ function keyFor(pathname) {
   return ROUTES[clean] || 'home';
 }
 
-function go(key, push) {
+function go(key, push, still) {
   if (!maySee(key)) key = 'home';
   S.at = key;
   S.editing = false;
@@ -146,6 +146,14 @@ function go(key, push) {
   draw();
   var m = document.querySelector('main');
   if (m) m.scrollTop = 0;
+  /* A page change is said by moving focus to the new page's heading, which
+     a screen reader reads out, and which puts the next Tab at the top of the
+     new page rather than back in the sidebar (#5033). Not on the first draw
+     after sign in: nothing changed there, the page simply opened. */
+  if (!still) {
+    var h = el('page').querySelector('h1');
+    if (h) h.focus();
+  }
 }
 
 window.onpopstate = function () { go(keyFor(location.pathname), false); };
@@ -179,7 +187,7 @@ function start() {
     el('gate').style.display = 'none';
     el('shell').style.display = 'grid';
     chrome();
-    go(keyFor(location.pathname), false);
+    go(keyFor(location.pathname), false, true);
   }).catch(function () { el('gate').style.display = 'grid'; });
 }
 
@@ -1556,8 +1564,13 @@ function drawSessions() {
 
 /* ---------------------------------------------------------------- draw -- */
 function draw() {
+  /* The open tab says so in words as well as in colour (#5033): the one
+     tab carries aria-current="page", and no other does. */
   Array.prototype.forEach.call(el('tabs').querySelectorAll('a.tab'), function (a) {
-    a.className = 'tab' + (a.dataset.k === S.at ? ' on' : '');
+    var here = a.dataset.k === S.at;
+    a.className = 'tab' + (here ? ' on' : '');
+    if (here) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
   });
   document.body.className = isBoard(S.at) ? 'wide' : '';
   if (S.at === 'home')    return drawHome();
@@ -1578,10 +1591,13 @@ function crumb() {
   return '<div class="crumb"><a href="/hub">Thornswood</a> / ' + esc(label(S.at)) +
          ' <span class="float-right"><a href="/">the public site</a></span></div>';
 }
+/* Every page's one top heading (#5033). It was an h2 under no h1, so only
+   Home had a top heading. tabindex -1 lets go() put focus on it at a page
+   change without adding a stop to the Tab order. */
 function head(extra, noLede) {
   return crumb() +
-    '<div class="bar"><h2>' + esc(label(S.at)) +
-    ' ' + levelTag(S.at, 'tagline') + '</h2>' +
+    '<div class="bar"><h1 tabindex="-1">' + esc(label(S.at)) +
+    ' ' + levelTag(S.at, 'tagline') + '</h1>' +
     '<span class="said" id="said"></span>' + (extra || '') + '</div>' +
     (ABOUT[S.at] && !noLede ? '<p class="lede">' + esc(ABOUT[S.at]) + '</p>' : '');
 }
@@ -1877,7 +1893,7 @@ function drawHome() {
   var out =
     '<div class="hero">' +
       '<img src="/logo.png" alt="Thornswood">' +
-      '<div><h1>Hub</h1>' +
+      '<div><h1 tabindex="-1">Hub</h1>' +
       '<div class="sub">Gallery, sessions, linked accounts, the report inbox and the hold economy. ' +
       'The public site is at <a href="/">thornswood.net</a>.</div></div>' +
     '</div>' +
@@ -2011,7 +2027,7 @@ function drawBoard() {
        gives it one. */
     if (!cols.length) { out += '</div>'; return; }
 
-    out += '<div class="tablewrap' + (admin ? '' : ' ro') + '"><table class="board"><thead><tr>' +
+    out += '<div class="tablewrap' + (admin ? ' edit' : '') + '"><table class="board"><thead><tr>' +
       '<th class="tick"></th>';
     cols.forEach(function (c) {
       out += '<th data-c="' + c.id + '"><span class="nm"' +
