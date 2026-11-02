@@ -32,7 +32,9 @@
   (#5179): the merge release's launcher (Thornswood.exe), game (the game
   files' zip and game-files.json, Build-GameFiles.ps1), velopack (the
   Velopack package of the launcher and the game files, and its feed files),
-  and site, discord and voice (each app's zip, App-Part.ps1). A part named
+  site, discord and voice (each app's zip, App-Part.ps1), and after (the
+  step files of deploy/after and the gate's verbs.json the agent holds them
+  to, #5186). A part named
   twice holds every file named for it. The agent applies the parts it knows
   and names the others in its log, so a part is added here before the agent
   applies it. -LauncherVersion is written into the manifest beside the
@@ -123,7 +125,7 @@ if ($ServerZip) {
 
 # The parts a merge release adds file by file (#5179). The bot pass is "bot",
 # so the Discord bot is "discord".
-$addParts = @('launcher', 'game', 'velopack', 'site', 'discord', 'voice')
+$addParts = @('launcher', 'game', 'velopack', 'site', 'discord', 'voice', 'after')
 $adds = [ordered]@{}
 foreach ($pair in @($Add)) {
   if ($pair -notmatch '^([a-z]+)=(.+)$') { throw "-Add $pair is not <part>=<path>" }

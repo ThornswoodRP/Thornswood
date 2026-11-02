@@ -387,7 +387,7 @@ sealed class FakeControl(FakeServer s) : IServerControl
     public bool TcpAnswers(int port) => s.Running;
 }
 
-public sealed class AgentTests : IDisposable
+public sealed partial class AgentTests : IDisposable
 {
     const string Commit = "0123456789abcdef0123456789abcdef01234567";
     readonly List<string> temp = new();

@@ -29,8 +29,13 @@
 #             feed files and a delta from the Velopack release before. No
 #             installer and no portable copy go out: nothing here installs a
 #             launcher until the Velopack launcher (#4823 to #4825) reads it
-# The agent applies gamemode, bot, server, site, discord and voice and names
-# the other parts in its log.
+#   after     the steps after a deploy: every step file of deploy/after and
+#             the gate's verbs.json, which says which verbs a step may run
+#             (#5186). The agent runs each step once on each environment,
+#             after a Deployment of this Release succeeds; deploy/after's
+#             README says how a step file is written
+# The agent applies gamemode, bot, server, site, discord, voice and after
+# and names the other parts in its log.
 #
 # WHAT CHANGED. Each part is compared with the same part of the newest build
 # Release before (MergeRelease.ps1 says what is compared). A merge that
@@ -87,6 +92,7 @@ on:
       # launcher, as LauncherVersion.ps1 says.
       - '!launcher/tests/**'
       - 'records/**'
+      - 'deploy/after/*.json'
       - 'scripts/bot/Bot-Pass.js'
       - 'scripts/bot/bot.js'
       - 'scripts/bot/character.js'
@@ -348,6 +354,10 @@ jobs:
           $bot = @(@('Bot-Pass.js', 'bot.js', 'character.js', 'relay.js') | ForEach-Object { Join-Path 'scripts\bot' $_ }) + @(@('voice-server.js', 'headlines.js') | ForEach-Object { Join-Path 'voice' $_ })
           $adds = @("launcher=$($env:LAUNCHER_EXE)", "game=$($env:GAME_ZIP)", "game=$($env:GAME_LIST)",
                     "site=$($env:SITE_ZIP)", "discord=$($env:DISCORD_ZIP)", "voice=$($env:VOICE_ZIP)")
+          # The steps after a deploy and the verbs they are held to (#5186).
+          $steps = @(Get-ChildItem -LiteralPath 'deploy\after' -Filter '*.json' -File | Sort-Object Name | ForEach-Object { 'after=' + $_.FullName })
+          $adds += $steps + @('after=' + (Resolve-Path 'scripts\vps\gate\verbs.json').Path)
+          Write-Host ("steps after a deploy: " + $(if ($steps.Count) { ($steps | ForEach-Object { Split-Path -Leaf $_ }) -join ', ' } else { 'none' }))
           Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'parts.txt') -Value $adds
           $probe = Join-Path $env:RUNNER_TEMP 'probe'
           ./scripts/release/New-SignedManifest.ps1 -Out $probe -Tag $env:TAG -Commit $env:GITHUB_SHA -Part gamemode -Files $gm, $stamp, $tables -BotFiles $bot -ServerZip $env:SERVER_ZIP -Add $adds -LauncherVersion $env:LAUNCHER_VERSION -NoCatalog

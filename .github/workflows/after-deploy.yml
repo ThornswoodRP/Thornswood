@@ -1,0 +1,62 @@
+# What a Deployment's steps after a deploy leave for people (#5186).
+#
+# A pull request that needs something done once it is deployed puts a step
+# file under deploy/after/ (its README says the shape). The box deploy agent
+# runs each step once, after a Deployment of the Release carrying it
+# succeeds, and leaves what became of each beside the Deployment's log as
+# deploy-<id>.after.json (tools/DeployAgent/AfterDeploy.cs). When the agent
+# marks the Deployment a success, this:
+#   - files each in-game check it listed as an issue labelled
+#     "check: in game", once;
+#   - says each step that failed or was cut short on that step's own issue,
+#     once for each Deployment.
+# scripts/release/After-Deploy.js does both, from the step files of the
+# Deployment's own commit: the agent's file only says which step had which
+# result, so nothing read off the box's web port is written into an issue.
+#
+# The run's own token, issues write only. No secret, and nothing reaches the
+# box. Every action is named by a full length commit SHA with its tag in the
+# comment, for the reason build.yml gives.
+name: After deploy
+on:
+  deployment_status:
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: after-deploy-${{ github.event.deployment.id }}
+  cancel-in-progress: false
+jobs:
+  say:
+    name: Say what the steps after the deploy left for people
+    if: ${{ github.event.deployment_status.state == 'success' && github.event.deployment_status.log_url != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.deployment.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            deploy/after
+            scripts/release/After-Deploy.js
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: File the in-game checks and say the failed steps
+        env:
+          DEPLOYMENT: ${{ github.event.deployment.id }}
+          COMMIT: ${{ github.event.deployment.sha }}
+          DEPLOY_ENVIRONMENT: ${{ github.event.deployment.environment }}
+          LOG_URL: ${{ github.event.deployment_status.log_url }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The GitHub environment the agent watches, Dev (merge-release.yml,
+          # #5179), is the step files' "dev"; Main (#5181) is "main".
+          case "$DEPLOY_ENVIRONMENT" in
+            Dev) export ENVIRONMENT=dev ;;
+            Main) export ENVIRONMENT=main ;;
+            *) echo "Deployment $DEPLOYMENT is to $DEPLOY_ENVIRONMENT, which no step after a deploy names"; exit 0 ;;
+          esac
+          node scripts/release/After-Deploy.js

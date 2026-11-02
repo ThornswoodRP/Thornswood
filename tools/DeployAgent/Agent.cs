@@ -47,6 +47,9 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
         "game/content/Thornswood-Content.esp",
     ];
     public const string LoadOrderLine = "Deploy-DevGamemode -LoadOrder -FromRecord -ShipFollows";
+    /// <summary>How long a step after a deploy (#5186) waits for the gate's
+    /// turn; a step the gate never took runs with the next Deployment.</summary>
+    public static readonly TimeSpan StepWait = TimeSpan.FromMinutes(30);
     static readonly Regex ReviewRow = new(@"^REVIEW  (\S+) (.+?): expected (.*?), found (.*)$");
     static readonly Regex MainAt = new(@"^main at ([0-9a-f]{40})$");
     /// <summary>The record of the Deployment an environment is part way
@@ -65,8 +68,10 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
     /// bot pass set up for the environment, nothing goes in until the bot
     /// pass passed on a throwaway copy of the server with this gamemode and
     /// the server build it goes onto (#5196). Writes the record on success.
-    /// Every line goes to log.</summary>
-    public async Task<Outcome> ApplyRelease(string env, string tag, string expectCommit, string workName, Action<string> logf, CancellationToken ct, bool botPass = false)
+    /// With after, the Release's steps after a deploy (its part "after",
+    /// #5186) are read into it, for the Deployment to run once the Release is
+    /// in. Every line goes to log.</summary>
+    public async Task<Outcome> ApplyRelease(string env, string tag, string expectCommit, string workName, Action<string> logf, CancellationToken ct, bool botPass = false, Dictionary<string, byte[]>? after = null)
     {
         if (Apps.ContainsKey(env)) return await ApplyAppRelease(env, tag, expectCommit, workName, logf, ct);
         if (!servers.TryGetValue(env, out var srv)) return new Outcome("failure", $"not applied: this agent does not look after {env}");
@@ -83,7 +88,10 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
             string[] parts = pass ? ["gamemode", "bot"] : ["gamemode"];
             // The server build's zip is fetched only when dev does not run it
             // already: most Releases change the gamemode alone.
-            try { f = await ReleaseFetch.Fetch(gh, verify, rel, dir, parts, logf, ct, optional: Voices.ContainsKey(env) ? ["server", AppKinds.Voice] : ["server"], later: IsServerZip); }
+            var optional = new List<string> { "server" };
+            if (Voices.ContainsKey(env)) optional.Add(AppKinds.Voice);
+            if (after != null) optional.Add(AfterDeploy.Part);
+            try { f = await ReleaseFetch.Fetch(gh, verify, rel, dir, parts, logf, ct, optional: [.. optional], later: IsServerZip); }
             catch (Exception e) when (e is InvalidDataException or IOException or HttpRequestException) { return new Outcome("failure", "not applied: " + e.Message); }
             var m = f.Manifest;
             // The name, not the owner: the repositories move to an
@@ -93,8 +101,14 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
                 return new Outcome("failure", $"not applied: the Release was built from {m.Repo}, not {cfg.Repo}");
             if (expectCommit != "" && m.Commit != expectCommit)
                 return new Outcome("failure", $"not applied: the Release is commit {Short(m.Commit)} and the Deployment is {Short(expectCommit)}");
-            var others = m.Parts.Keys.Where(k => !parts.Contains(k) && k != "server" && !(k == AppKinds.Voice && Voices.ContainsKey(env))).OrderBy(k => k, StringComparer.Ordinal).ToList();
+            var others = m.Parts.Keys.Where(k => !parts.Contains(k) && k != "server" && k != AfterDeploy.Part && !(k == AppKinds.Voice && Voices.ContainsKey(env))).OrderBy(k => k, StringComparer.Ordinal).ToList();
             if (others.Count > 0) logf($"the Release also carries {string.Join(", ", others)}, which this agent does not apply yet; left alone");
+            if (m.Parts.TryGetValue(AfterDeploy.Part, out var afterPart))
+            {
+                // Read now: the work folder goes when this returns.
+                if (after != null) foreach (var x in afterPart) after[x.Name] = File.ReadAllBytes(f.Files[x.Name]);
+                else logf("the Release carries steps after a deploy; they run only with a Deployment, never with a deploy by tag or a rollback");
+            }
             logf($"release {rel.TagName}, commit {m.Commit}");
             var who = $"the deploy agent, {workName}";
             // A Release carries the server build its commit records, so a
@@ -415,6 +429,8 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
             Logf($"deploy agent {version} on {Host}, deployment {d.Id} of {Short(d.Sha)} by {d.Creator?.Name}");
             Outcome outc;
             var tag = "";
+            var after = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+            var steps = new List<StepResult>();
             if (d.Task != "" && d.Task != "deploy") outc = new Outcome("failure", $"not applied: the Deployment's task is {d.Task}, and the agent applies deploy only");
             else
             {
@@ -429,14 +445,25 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
                     else if (refused != "") outc = new Outcome("failure", "not applied: " + refused);
                     else
                     {
-                        outc = await ApplyRelease(env, tag, d.Sha, $"deployment-{d.Id}", Logf, ct, botPass: !approved);
+                        outc = await ApplyRelease(env, tag, d.Sha, $"deployment-{d.Id}", Logf, ct, botPass: !approved, after: Gate != null && servers.ContainsKey(env) ? after : null);
                         if (outc.State == "success" && env == DevEnv && Gate != null) outc = await LoadOrder(env, d.Sha, outc, Logf, ct);
+                        // The steps after a deploy (#5186) once the Release is
+                        // wholly in, load order and all, before it is said.
+                        if (outc.State == "success" && after.Count > 0)
+                        {
+                            steps.AddRange(await new StepRunner(Path.Combine(cfg.Home, "state"), Gate!, StepWait).Run(env, after, $"deployment-{d.Id}", Redacted(Logf), ct));
+                            var (lead, tail) = StepRunner.Summary(steps);
+                            outc = outc with { Summary = lead + outc.Summary + tail };
+                        }
                     }
                 }
                 catch (Exception e) when (e is InvalidDataException or JsonException) { outc = new Outcome("failure", "not applied: " + e.Message); }
             }
             Logf(outc.State.ToUpperInvariant() + ": " + outc.Summary);
             var url = PublishLog(env, d.Id.ToString(), lines);
+            // What became of each step after the deploy, for after-deploy.yml,
+            // which files the in-game checks and says a failed step on its issue.
+            if (steps.Count > 0 && servers.TryGetValue(env, out var stepsSrv)) Records.PublishSteps(stepsSrv, d.Id.ToString(), d.Sha, steps);
             await gh.SetStatus(d.Id, outc.State, outc.Summary, url, ct);
             if (outc.State == "success") await LeaveNews(env, tag, d, ct);
             // The parity check reads the box as it is now, so it runs once the

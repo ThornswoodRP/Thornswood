@@ -1,6 +1,6 @@
 {
   "issue": 2841,
-  "what": "Every verb the deploy gate runs, and all it runs (scripts/vps/gate/GateRules.ps1 reads this). A verb is one script of main, run on the box by the gate broker from a checkout of origin/main, with only the parameters named here. A parameter's rule is 'switch' (no value), 'text' (the text rule below) or a pattern its value must match whole. 'fixed' goes on every run of that verb; a fixed word with no hyphen is the value of the fixed parameter before it, so a verb can be held to one channel. 'build': true marks a live verb: its line must name main's full commit with -Build, and the broker runs it only when main is at exactly that commit (the build Patrick gave his word for); -Build never reaches the script. 'out' is the parameter that names the folder the verb writes its files into: the broker sets it to a folder of the run's own and sends back what lands there.",
+  "what": "Every verb the deploy gate runs, and all it runs (scripts/vps/gate/GateRules.ps1 reads this). A verb is one script of main, run on the box by the gate broker from a checkout of origin/main, with only the parameters named here. A parameter's rule is 'switch' (no value), 'text' (the text rule below) or a pattern its value must match whole. 'fixed' goes on every run of that verb; a fixed word with no hyphen is the value of the fixed parameter before it, so a verb can be held to one channel. 'build': true marks a live verb: its line must name main's full commit with -Build, and the broker runs it only when main is at exactly that commit (the build Patrick gave his word for); -Build never reaches the script. 'out' is the parameter that names the folder the verb writes its files into: the broker sets it to a folder of the run's own and sends back what lands there. 'afterDeploy' lists the environments a step after a deploy (deploy/after, #5186) may run the verb after: the deploy agent runs only those, held to this file as the signed Release carries it. Only a verb whose fixed words hold it to that environment, or one that only reads, goes on it; Check-ProdParity does not, since the agent runs it after every dev Deployment itself (#5180).",
   "text": "^[A-Za-z0-9][A-Za-z0-9 .,:;'()!?_+-]{0,159}$",
   "verbs": {
     "Update-Gate": {
@@ -312,6 +312,7 @@
     "Reset-Npcs-Dev": {
       "script": "scripts/ops/Reset-Npcs.ps1",
       "timeoutMinutes": 15,
+      "afterDeploy": ["dev"],
       "fixed": ["-Server", "dev", "-Yes", "-NoPause"],
       "params": {
         "Survey": "switch"

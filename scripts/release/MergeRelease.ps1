@@ -45,7 +45,10 @@
   differs on every merge), the server zip (ServerArtifact.ps1 zips it on
   each run; its record, server-build.json, says which build it is) and the
   game files' list (game-files.json names the commit; game.zip is the same
-  bytes for the same files, Build-GameFiles.ps1 says how). The
+  bytes for the same files, Build-GameFiles.ps1 says how), and the gate's
+  verbs.json in the steps after a deploy (it travels with them so the agent
+  holds each step to the signed list, #5186, but a change to the gate alone
+  is no reason for a Deployment; a step file that changes is). The
   velopack part is made from the launcher and the game files, so it is never
   compared on its own.
 #>
@@ -92,6 +95,7 @@ function Get-MergeReleasePrint {
     if ($Part -eq 'gamemode' -and $n -eq 'thornswood-build.json') { continue }
     if ($Part -eq 'server' -and $n -ne 'server-build.json') { continue }
     if ($Part -eq 'game' -and $n -ne 'game.zip') { continue }
+    if ($Part -eq 'after' -and $n -eq 'verbs.json') { continue }
     $n + ':' + ([string]$f.sha256).ToLowerInvariant()
   }
   $arr = [string[]]@($lines)

@@ -611,6 +611,27 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Write-Host ("{0} Python file(s) name only what exists" -f $files.Count)
 
+      # The steps after a deploy (#5186): each file under deploy/after held to
+      # the rules the box deploy agent holds it to, against this tree's
+      # verbs.json, with the agent's own code, so a step file that would be
+      # refused on the box stops the merge instead. Only when there is one:
+      # most changes carry none, and they skip the .NET set up.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        if: ${{ hashFiles('deploy/after/*.json') != '' }}
+        with:
+          dotnet-version: '10.0.x'
+      - name: Check the steps after a deploy
+        if: ${{ hashFiles('deploy/after/*.json') != '' }}
+        shell: pwsh
+        env:
+          DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+          DOTNET_NOLOGO: '1'
+        run: |
+          dotnet restore tools/DeployAgent --locked-mode
+          if ($LASTEXITCODE -ne 0) { Write-Host '::error::dotnet restore failed for tools/DeployAgent'; exit 1 }
+          dotnet run --project tools/DeployAgent --no-restore -- steps --folder deploy/after --verbs scripts/vps/gate/verbs.json
+          exit $LASTEXITCODE
+
       - name: Count the silent catches in the launcher, the scripts, the site, voice and the bot
         shell: pwsh
         run: |

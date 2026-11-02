@@ -119,6 +119,12 @@ try {
     $c = Copy-Parts $same; $c['launcher'] = @((F 'Thornswood.exe' 'ff')); $c['site'] = @((F 'site.zip' 'q'))
     $got = @(Get-MergeReleaseChanged -Manifest (M $c) -Previous $prev)
     Yes '  so are a new launcher and a part the Release before did not carry' (($got -join ',') -eq 'launcher,site')
+    $c = Copy-Parts $same; $c['after'] = @((F 'verbs.json' 'w1'))
+    $got = @(Get-MergeReleaseChanged -Manifest (M $c) -Previous $prev)
+    Yes 'the gate''s verbs.json alone in the steps after a deploy is no change (#5186)' ($got.Count -eq 0)
+    $c['after'] = @((F 'verbs.json' 'w1'), (F '2484-gates.json' 'p1'))
+    $got = @(Get-MergeReleaseChanged -Manifest (M $c) -Previous $prev)
+    Yes '  and a step file is' (($got -join ',') -eq 'after')
     $got = @(Get-MergeReleaseChanged -Manifest $prev)
     Yes 'with no Release before, every part but velopack has changed' (($got -join ',') -eq 'gamemode,bot,server,launcher,game')
 
@@ -214,6 +220,8 @@ try {
         $wf -match "(?m)^\s+- 'game/\*\*'\s*$" -and $wf -match "(?m)^\s+- 'launcher/\*\*'\s*$" -and $wf -match "(?m)^\s+- 'records/\*\*'\s*$" -and $wf -match "(?m)^\s+- 'scripts/bot/Bot-Pass\.js'\s*$")
     $self = @('Build-GameFiles.ps1', 'MergeRelease.ps1', 'New-SignedManifest.ps1', 'Build-Launcher.ps1', 'Go.ps1', 'Build-Front.ps1') | Where-Object { $wf -notmatch ("(?m)^\s+- 'scripts/release/" + [regex]::Escape($_) + "'\s*$") }
     Yes ('  and for the scripts it runs that decide what is built' + $(if ($self) { ': not ' + ($self -join ', ') } else { '' })) (-not $self)
+    Yes '  and for a new step after a deploy, carried as the part after with the gate''s verbs (#5186)' ($wf -match "(?m)^\s+- 'deploy/after/\*\.json'\s*$" -and
+        $wf.Contains("Get-ChildItem -LiteralPath 'deploy\after' -Filter '*.json'") -and $wf.Contains("'after=' + (Resolve-Path 'scripts\vps\gate\verbs.json').Path"))
     Yes '  in the release environment, on main only, one run at a time, a newer merge cancelling the run before (#5398)' ($wf -match '(?m)^\s+environment: release\s*$' -and $wf.Contains("if: `${{ github.ref == 'refs/heads/main' }}") -and $wf -match '(?m)^\s+group: merge-release\s*$' -and $wf -match '(?m)^\s+cancel-in-progress: true\s*$')
     # GitHub refuses the run's token a tag on a commit whose workflow files
     # differ from main's (probe runs 41375894899 and 41376016183, #5398), so
