@@ -131,7 +131,7 @@ try {
         Yes ('2. one killed at its clock says so (' + ($hc -join ' / ') + ')') ($hc.Count -eq 2 -and $hc[1] -eq 'FAIL the harness timed out after 3 s and was killed')
         if ($IsLinux) {
             $w = [regex]::Match($r.Said, '(?m)^::warning file=[^:]*test-4-hang\.js::at its clock its processes were: (.*)$')
-            Yes ('   and on Linux names what each of its processes was doing when it was killed (' + $w.Groups[1].Value.Trim() + ')') ($w.Success -and $w.Groups[1].Value -match '^\d+ node S in \S+ \(.*test-4-hang\.js\)')
+            Yes ('   and on Linux names what each of its processes was doing when it was killed (' + $w.Groups[1].Value.Trim() + ')') ($w.Success -and $w.Groups[1].Value -match '^\d+ \S+ [A-Z] in \S+ \(\S*node\S* .*test-4-hang\.js\)')
         } else { Write-Host 'SKIP  what a hung harness was doing is read from /proc, on Linux' }
         $lc = @(Cases (Suite $doc 'test-5-late.js'))
         Yes ('2. one not run, out of time, is a failing case (' + ($lc -join ' / ') + ')') (($lc -join '') -eq 'FAIL the harness was not run, out of time')
