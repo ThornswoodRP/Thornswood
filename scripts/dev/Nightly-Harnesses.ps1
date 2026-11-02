@@ -154,8 +154,8 @@
   its process id and when Windows says it started, in UTC) and as it ends
   (its exit code, its seconds, whether it said SKIP or NOT RUN, and since
   #5293 each such line it said, once, and how many lines it began with PASS
-  or ok). A trace of the gate
-  (scripts\dev\Trace-Gate.ps1, #3114) reads it to know which process tree
+  or ok). A trace of the gate (gate-map.yml through
+  scripts\dev\Trace-Gate-Here.ps1, #3114) reads it to know which process tree
   was which harness's; gate-map.yml compares a Windows run's lines with a
   Linux run's to know which harnesses Linux runs as fully as Windows.
 

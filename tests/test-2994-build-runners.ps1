@@ -57,10 +57,10 @@ Yes '  the build record names no off-box runner: off the box only the pull reque
 
 # ---- 2. which jobs ask for it -----------------------------------------------------
 # None here (#4983). The box's runners serve Thornswood-Ops alone since the
-# flip (#4013): its trace-gate.yml, the gate under a trace (#3114), is the
-# heavy job that asks for the build label, held by tests\test-box-workflows.ps1
-# there. Every workflow of this repository runs on GitHub's runners, the
-# pull request build and main's build with no VPS fallback.
+# flip (#4013), and since #5270 no job there asks for the build label: the
+# gate under a trace (#3114) is gate-map.yml here, on GitHub's runner. Every
+# workflow of this repository runs on GitHub's runners, the pull request
+# build and main's build with no VPS fallback.
 $wfDir = Under @('.github', 'workflows')
 foreach ($l in @($rec.label, $pr.label, 'thornswood-vps')) {
     $on = @(Get-ChildItem -LiteralPath $wfDir -Filter *.yml | Where-Object { [IO.File]::ReadAllText($_.FullName) -match ('(?m)^\s*runs-on:.*\b' + [regex]::Escape($l) + '\b') } | ForEach-Object { $_.Name })
