@@ -222,9 +222,11 @@ const cardAdd = (w, n) => w.find(x => x.method === 'POST' && x.path === 'graphql
   });
   yes('a merged pull request with its test task: Done', fieldWrite(r.writes, 10).body.fields[0].value === 's2');
 
-  r = await go(['--all'], { open: [issue(1), issue(2, { pull_request: {} }), issue(3), issue(4), issue(5)], issues: {} });
+  r = await go(['--all'], { open: [issue(1), issue(2, { pull_request: {} }), issue(3), issue(4), issue(5)], issues: { 1: issue(1), 3: issue(3), 4: issue(4), 5: issue(5, { state: 'closed' }) } });
   yes('every open issue, across pages, never a pull request: ' + r.lines[0], r.code === 0 && /^4 open issues$/.test(r.lines[0]) &&
-      [1, 3, 4, 5].every(n => fieldWrite(r.writes, n)) && !fieldWrite(r.writes, 2) && !r.reads.some(p => /issues\/[1345]$/.test(p)));
+      [1, 3, 4, 5].every(n => fieldWrite(r.writes, n)) && !fieldWrite(r.writes, 2) && !r.reads.some(p => /issues\/2$/.test(p)));
+  yes('  each read again at its turn: one the list had open, closed since, goes to Done, not back to Todo',
+      [1, 3, 4, 5].every(n => r.reads.indexOf('repos/ThornswoodRP/Thornswood/issues/' + n) >= 0) && fieldWrite(r.writes, 5).body.fields[0].value === 's2');
 
   r = await go(['--issues', '10', '--dry-run'], { issues: { 10: issue(10, { type: null }) } });
   yes('a dry run reads and says, and writes nothing: ' + r.lines[0], r.code === 0 && r.writes.length === 0 && /nothing written/.test(r.lines[0]) && /type Task/.test(r.lines[0]));

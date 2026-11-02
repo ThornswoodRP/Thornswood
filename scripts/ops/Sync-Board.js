@@ -417,7 +417,6 @@ async function run(argv, env, fetchImpl, say) {
 
   let numbers = [];
   let fresh = null;
-  const listed = new Map();
   const issues = arg('--issues');
   const pull = arg('--pull');
   if (issues !== null) {
@@ -435,10 +434,15 @@ async function run(argv, env, fetchImpl, say) {
     }
     say('pull request #' + pull + ' names ' + (numbers.length ? numbers.map(x => '#' + x).join(', ') : 'no issue'));
   } else if (argv.indexOf('--all') >= 0) {
+    // Only the numbers: each issue is read again when its turn comes. A run
+    // over every open issue takes about 40 minutes, and the list's copy of an
+    // issue closed meanwhile would put its card back in Todo after the close's
+    // own run had put it in Done (#5296 on 2 Nov 2026, closed at 9:01 PM,
+    // listed open at 8:50 PM by run 41385156551).
     for (const i of await gh.all('repos/' + o.repo + '/issues?state=open')) {
-      if (!i.pull_request) { listed.set(Number(i.number), i); }
+      if (!i.pull_request) { numbers.push(Number(i.number)); }
     }
-    numbers = Array.from(listed.keys()).sort((a, b) => a - b);
+    numbers.sort((a, b) => a - b);
     say(numbers.length + ' open issues');
   } else {
     say('say which issues: --issues, --pull, --all, --setup or --copy-order');
@@ -451,8 +455,7 @@ async function run(argv, env, fetchImpl, say) {
   const failed = [];
   for (const n of numbers) {
     try {
-      let issue = listed.get(n);
-      if (!issue) { issue = (await gh.call('GET', 'repos/' + o.repo + '/issues/' + n)).data; }
+      const issue = (await gh.call('GET', 'repos/' + o.repo + '/issues/' + n)).data;
       if (issue.pull_request) { say('#' + n + ' is a pull request; its card is GitHub\'s to keep'); continue; }
       say(await syncIssue(gh, o, issue, board, fresh));
     } catch (e) {
