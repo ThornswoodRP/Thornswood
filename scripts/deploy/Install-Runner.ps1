@@ -920,7 +920,44 @@ function Remove-RunnerFirewall([string]$group) {
 }
 function Get-RunnerFirewall([string]$group) {
   $r = @(Get-NetFirewallRule -PolicyStore $grdStore -Group $group -EA SilentlyContinue)
-  if ($r.Count) { 'firewall  ' + $r.Count + ' outbound block rule(s), ' + @($r | Where-Object { "$($_.Enabled)" -eq 'True' }).Count + ' on (group ' + $group + ')' } else { 'firewall  NO RULES: a pull request job may reach anywhere. -OffBox -Lock puts them on' }
+  if ($r.Count) { 'firewall  ' + $r.Count + ' outbound block rule(s), ' + @($r | Where-Object { "$($_.Enabled)" -eq 'True' }).Count + ' on (group ' + $group + ')'; Test-RunnerReach $r } else { 'firewall  NO RULES: a pull request job may reach anywhere. -OffBox -Lock puts them on' }
+}
+# The hosts a runner itself has to reach to take a job (GitHub's "Accessible
+# domains by function": its essential operations, downloading actions, and
+# job logs), each resolved here and checked against the account's block
+# rules, so a guard that shuts its own runner out of GitHub says which host
+# it shuts (3 Nov: tw-hermes-box's listener was refused at
+# vstoken.actions.githubusercontent.com:443 with socket error 10013).
+$grdNeeds = @('github.com', 'api.github.com', 'codeload.github.com', 'vstoken.actions.githubusercontent.com', 'broker.actions.githubusercontent.com', 'pipelines.actions.githubusercontent.com', 'results-receiver.actions.githubusercontent.com')
+function ConvertTo-GuardNumber([string]$a) { $n = [bigint]0; foreach ($b in ([Net.IPAddress]::Parse($a)).GetAddressBytes()) { $n = $n * 256 + $b }; $n }
+# One remote address of a rule (a, a-b, a/len or a/mask) as its first and last address.
+function ConvertTo-GuardSpan([string]$a) {
+  $v = $(if ($a.Contains(':')) { 6 } else { 4 })
+  $bits = $(if ($v -eq 4) { 32 } else { 128 })
+  if ($a.Contains('-')) { $p = $a.Split('-'); return New-Object PSObject -Property @{ V = $v; Lo = (ConvertTo-GuardNumber $p[0]); Hi = (ConvertTo-GuardNumber $p[1]) } }
+  if ($a.Contains('/')) {
+    $p = $a.Split('/')
+    $len = $(if ($p[1] -match '^\d+$') { [int]$p[1] } else { $c = 0; foreach ($b in ([Net.IPAddress]::Parse($p[1])).GetAddressBytes()) { for ($i = 0; $i -lt 8; $i++) { if (($b -shr $i) -band 1) { $c++ } } }; $c })
+    $size = [bigint]::Pow(2, $bits - $len)
+    $lo = (ConvertTo-GuardNumber $p[0]); $lo = $lo - ($lo % $size)
+    return New-Object PSObject -Property @{ V = $v; Lo = $lo; Hi = $lo + $size - 1 }
+  }
+  $n = ConvertTo-GuardNumber $a
+  New-Object PSObject -Property @{ V = $v; Lo = $n; Hi = $n }
+}
+function Test-RunnerReach([object[]]$rules) {
+  $spans = @()
+  foreach ($r in $rules) { foreach ($a in @(($r | Get-NetFirewallAddressFilter).RemoteAddress)) { if ($a -and $a -ne 'Any') { $spans += ConvertTo-GuardSpan ([string]$a) } } }
+  foreach ($h in $grdNeeds) {
+    $ips = @()
+    try { $ips = @([Net.Dns]::GetHostAddresses($h) | ForEach-Object { $_.IPAddressToString }) } catch { }
+    if (-not $ips.Count) { 'reach     ' + $h + ': does not resolve here'; continue }
+    $said = @(foreach ($ip in $ips) {
+      $n = ConvertTo-GuardNumber $ip; $v = $(if ($ip.Contains(':')) { 6 } else { 4 })
+      $ip + $(if (@($spans | Where-Object { $_.V -eq $v -and $_.Lo -le $n -and $_.Hi -ge $n }).Count) { ' BLOCKED' } else { ' open' })
+    })
+    'reach     ' + $h + ': ' + ($said -join ', ')
+  }
 }
 # The folders outside C:\Thornswood* it is shut out of. $users, $programData
 # and $drives are C:\Users, C:\ProgramData and the other drives except in

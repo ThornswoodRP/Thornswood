@@ -74,6 +74,7 @@ try {
     Yes 'it asks GitHub through the organization''s runner endpoints for -Hermes' ($text -match [regex]::Escape("`$RunnerApi = `$(if (`$Hermes) { 'orgs/' + `$Repo } else { 'repos/' + `$Repo })"))
     Yes '  and every runner call goes through that one place' ($text -notmatch 'repos/\$Repo/actions/runners')
     Yes '-Status reads the newest listener logs by name, the runner service''s lines and the service manager''s, so an offline runner says why' ($text.Contains("-Filter 'Runner_*.log' | Sort-Object Name") -and $text.Contains("ProviderName = 'ActionsRunnerService'") -and $text.Contains("ProviderName = 'Service Control Manager'"))
+    Yes '-NetworkOnly -Status says, for each host a runner itself has to reach, whether the account''s rules block it' ($text.Contains("`$grdNeeds = @('github.com', 'api.github.com'") -and $text.Contains("'vstoken.actions.githubusercontent.com'") -and $text.Contains('Test-RunnerReach $r'))
     Yes '  and lists only this runner''s own processes' ($text.Contains("-like '`$Root\bin\Runner*'") -and -not $text.Contains('Get-Process Runner.Listener, Runner.Worker'))
 
     # ---- 3. nothing beside it ------------------------------------------------------
