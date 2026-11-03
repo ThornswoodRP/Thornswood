@@ -73,7 +73,8 @@ try {
     $text = [IO.File]::ReadAllText($script)
     Yes 'it asks GitHub through the organization''s runner endpoints for -Hermes' ($text -match [regex]::Escape("`$RunnerApi = `$(if (`$Hermes) { 'orgs/' + `$Repo } else { 'repos/' + `$Repo })"))
     Yes '  and every runner call goes through that one place' ($text -notmatch 'repos/\$Repo/actions/runners')
-    Yes '-Status shows the newest listener and service logs and the service manager''s lines, so an offline runner says why' ($text.Contains('foreach (`$kind in ''Runner_*.log'', ''RunnerService_*.log'')') -and $text.Contains("ProviderName = 'Service Control Manager'"))
+    Yes '-Status reads the newest listener logs by name, the runner service''s lines and the service manager''s, so an offline runner says why' ($text.Contains("-Filter 'Runner_*.log' | Sort-Object Name") -and $text.Contains("ProviderName = 'ActionsRunnerService'") -and $text.Contains("ProviderName = 'Service Control Manager'"))
+    Yes '  and lists only this runner''s own processes' ($text.Contains("-like '`$Root\bin\Runner*'") -and -not $text.Contains('Get-Process Runner.Listener, Runner.Worker'))
 
     # ---- 3. nothing beside it ------------------------------------------------------
     foreach ($bad in @(@('-Number', '2'), @('-RunnerName', 'x'), @('-Account', 'x'), @('-Root', 'C:\Thornswood-RunnerX'), @('-Label', 'x'), @('-Repo', 'ThornswoodRP/Thornswood-Ops'), @('-OffBox'), @('-Lock'))) {
