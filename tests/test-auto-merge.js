@@ -20,6 +20,9 @@
 //      by hand, from main's own script with no credential kept, with the pin
 //      robot's App token from the engine-pin environment, never the run's
 //      own (a queue entry the run's token makes starts no checks).
+//   5. the two skips (Patrick's yes on Bramble's card, 2 Nov 2026): one that
+//      changes what runs on the live box stays off unless it is Patrick's,
+//      and a Bot's stays off until Bramble approved its head.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -31,7 +34,8 @@ function read(f) { try { return fs.readFileSync(path.join(REPO, f), 'utf8').spli
 
 function pr(n, more) {
   return Object.assign({ id: 'PR_' + n, number: n, isDraft: false, isCrossRepository: false, baseRefName: 'main', headRefOid: 'h' + n,
-    mergeable: 'MERGEABLE', isInMergeQueue: false, author: { login: 'EvilPatrick06' }, autoMergeRequest: null, timelineItems: { nodes: [] } }, more || {});
+    mergeable: 'MERGEABLE', isInMergeQueue: false, author: { login: 'EvilPatrick06' }, autoMergeRequest: null, timelineItems: { nodes: [] },
+    headRefName: 'claude/x', paths: ['game/gamemode/a.ts'], reviews: { nodes: [] } }, more || {});
 }
 // The newest of a pull request's drops, commits and force pushes, as the query
 // asks for it: a drop, or (pushed after one) a commit or a force push.
@@ -41,7 +45,7 @@ const on = (p) => A.judge(p, 'main')[0];
 
 // ---- 1. the rule
 yes('1 an open, ready pull request goes on', on(pr(1)));
-yes('  and so do a Bot\'s and Dependabot\'s', on(pr(2, { author: { login: 'thornswood-workers' } })) && on(pr(3, { author: { login: 'dependabot' } })));
+yes('  and so does Dependabot\'s', on(pr(3, { author: { login: 'dependabot' }, headRefName: 'dependabot/npm_and_yarn/x' })));
 yes('1 a draft stays off', !on(pr(4, { isDraft: true })));
 yes('1 one from another repository stays off', !on(pr(5, { isCrossRepository: true })));
 yes('1 Djinn\'s and Jhinswife\'s stay off, their work is hands off', !on(pr(6, { author: { login: 'WiccanDjinn' } })) && !on(pr(7, { author: { login: 'Jhinswife' } })));
@@ -63,6 +67,29 @@ for (const r of ['QUEUE_CLEARED', 'ROLL_BACK', 'CI_TIMEOUT', 'BRANCH_PROTECTIONS
   yes('2 let go for ' + r + ', not its own doing: back on now', on(dropped(22, r)));
 }
 
+// ---- 5. the two skips
+const scripts = A.verbScripts(REPO);
+const judge5 = (p) => A.judge(p, 'main', scripts);
+const on5 = (p) => judge5(p)[0];
+yes('5 the verb scripts are read from both of main\'s verb lists (' + scripts.length + ')',
+  scripts.indexOf('scripts/ops/Reset-Npcs.ps1') >= 0 && scripts.indexOf('scripts/release/Send-NexusFile.ps1') >= 0 && scripts.indexOf('scripts/vps/gate/Update-Gate.ps1') >= 0);
+const worker = { author: { login: 'thornswood-workers' }, headRefName: 'claude/y' };
+for (const f of ['.github/workflows/build-pr.yml', 'scripts/vps/gate/GateRules.ps1', 'scripts/vps/gate/verbs.json', 'scripts/release/nexus-verbs.json', 'scripts/ops/Reset-Npcs.ps1']) {
+  yes('5 one that changes ' + f + ', not Patrick\'s, stays off', !on5(pr(30, Object.assign({}, worker, { paths: ['README.md', f] }))));
+}
+yes('  and says it changes what runs on the live box, naming the file', /changes what runs on the live box \(\.github\/workflows\/build-pr\.yml\)/.test(judge5(pr(30, Object.assign({}, worker, { paths: ['.github/workflows/build-pr.yml'] })))[1]));
+yes('  Dependabot\'s workflow bump stays off too', !on5(pr(31, { author: { login: 'dependabot' }, headRefName: 'dependabot/github_actions/x', paths: ['.github/workflows/build.yml'] })));
+yes('5 Patrick\'s that changes them goes on', on5(pr(32, { paths: ['.github/workflows/build-pr.yml', 'scripts/vps/gate/GateRules.ps1', 'scripts/ops/Reset-Npcs.ps1'] })));
+yes('5 one changing only what the box does not run goes on, whoever\'s it is', on5(pr(33, Object.assign({}, worker, { paths: ['scripts/ops/Auto-Merge.js', 'tests/test-auto-merge.js'] }))));
+const bot = (more) => pr(34, Object.assign({ author: { login: 'thornswood-workers' }, headRefName: 'magpie/5327-dependabot-rebase', headRefOid: 'h34' }, more || {}));
+const review = (login, oid) => ({ nodes: [{ author: { login }, commit: { oid } }] });
+yes('5 a Bot\'s with no review of Bramble\'s stays off, and says Bramble turns it on', !on5(bot()) && /Bramble reviews it and turns auto-merge on/.test(judge5(bot())[1]));
+yes('5 a Bot\'s Bramble approved at its head goes on', on5(bot({ reviews: review('thornswood-bramble', 'h34') })) && on5(bot({ reviews: review('thornswood-bramble[bot]', 'h34') })));
+yes('5 a Bot\'s Bramble approved at an older commit stays off', !on5(bot({ reviews: review('thornswood-bramble', 'h33') })));
+yes('5 a Bot\'s approved by somebody else stays off', !on5(bot({ reviews: review('EvilPatrick06', 'h34') })));
+yes('5 Bramble\'s own branch counts as a Bot\'s', !on5(bot({ author: { login: 'thornswood-bramble' }, headRefName: 'bramble/5334-decided-tunnel-run' })));
+yes('5 the query asks for its files and its approving reviews', /files\(first: 100\)/.test(A.QUERY) && /reviews\(last: 50, states: \[APPROVED\]\)/.test(A.QUERY) && /headRefName/.test(A.QUERY));
+
 // ---- 3. the sweep
 function fake(pages, refuse) {
   const calls = [];
@@ -71,6 +98,9 @@ function fake(pages, refuse) {
     if (q === A.QUERY) {
       const i = v.after ? Number(v.after) : 0;
       return { repository: { pullRequests: { nodes: pages[i], pageInfo: { hasNextPage: i + 1 < pages.length, endCursor: String(i + 1) } } } };
+    }
+    if (q === A.FILES) {
+      return { repository: { pullRequest: { files: { nodes: [{ path: '.github/workflows/build.yml' }], pageInfo: { hasNextPage: false } } } } };
     }
     if (q === A.ENABLE) {
       if (refuse && refuse.indexOf(v.id) >= 0) throw new Error('Pull request is in clean status');
@@ -104,7 +134,7 @@ function fake(pages, refuse) {
     /\non:\n  workflow_run:\n    workflows: \["Build check \(pull requests\)"\]\n    types: \[completed\]\n  push:\n    branches: \[main\]\n  workflow_dispatch:\npermissions: \{\}\n/.test(wf));
   yes('  the workflow it follows is named that', /\nname: Build check \(pull requests\)\n/.test(read('.github/workflows/build-pr.yml')));
   yes('4 it checks out main\'s scripts/ops with no credential kept, never a pull request\'s code',
-    /\n        with:\n          ref: main\n          persist-credentials: false\n          sparse-checkout: scripts\/ops\n/.test(wf) && !/pull_request_target|head_sha|head_branch|github\.event\.pull_request/.test(code_));
+    /\n        with:\n          ref: main\n          persist-credentials: false\n          sparse-checkout: \|\n            scripts\/ops\n/.test(wf) && !/pull_request_target|head_sha|head_branch|github\.event\.pull_request/.test(code_));
   yes('4 it runs in the engine-pin environment, and the run\'s own token only reads',
     /\n    environment: engine-pin\n    permissions:\n      contents: read\n    steps:\n/.test(wf));
   yes('4 it mints the pin robot\'s token there, with contents and pull requests write, and reads no other secret',
@@ -113,6 +143,17 @@ function fake(pages, refuse) {
   yes('4 it runs the script with the App\'s token, never the run\'s own (whose queue entries start no checks)',
     /\n        env:\n          GH_TOKEN: \$\{\{ steps\.app\.outputs\.token \}\}\n          REPO: \$\{\{ github\.repository \}\}\n        run: node scripts\/ops\/Auto-Merge\.js\n/.test(wf) && !/github\.token/.test(code_));
   yes('4 one at a time, the newest wins', /\nconcurrency:\n  group: auto-merge\n  cancel-in-progress: true\n/.test(wf));
+  // ---- 5. the sweep reads every file
+  const many = pr(40, { author: { login: 'thornswood-workers' }, files: { nodes: [{ path: 'README.md' }], pageInfo: { hasNextPage: true, endCursor: 'c1' } } });
+  f = fake([[many, pr(41, { files: { nodes: [{ path: 'README.md' }], pageInfo: { hasNextPage: false } } })]]);
+  said = [];
+  code = await A.sweep('ThornswoodRP/Thornswood', f.gql, (l) => said.push(l), { scripts });
+  yes('5 a file past the first hundred is read: one changing a workflow there stays off',
+    code === 0 && JSON.stringify(f.enabled()) === '["PR_41"]' && f.calls.some(c => c.q === A.FILES && c.v.number === 40 && c.v.after === 'c1') &&
+    said.some(l => /^#40 left: it changes what runs on the live box/.test(l)));
+  yes('5 the workflow checks out the verb lists beside the script, and the script reads them',
+    /\n          sparse-checkout: \|\n            scripts\/ops\n            scripts\/vps\/gate\/verbs\.json\n            scripts\/release\/nexus-verbs\.json\n          sparse-checkout-cone-mode: false\n/.test(wf) &&
+    /verbScripts\(require\('path'\)\.join\(__dirname, '\.\.', '\.\.'\)\)/.test(read('scripts/ops/Auto-Merge.js')));
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
