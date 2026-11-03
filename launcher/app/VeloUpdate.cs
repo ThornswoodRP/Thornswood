@@ -200,7 +200,7 @@ namespace Thornswood
                 FetchLauncher(u, log);
                 ApplyLauncher(u);
                 return "A newer launcher, " + u.Version + ", was found on the " + u.Channel + " channel and checked. " +
-                       "It goes in when you close this message, and then starts by itself.";
+                       "It goes in as this one ends, and starts by itself.";
             }
             catch (Exception ex)
             {
