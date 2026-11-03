@@ -75,7 +75,6 @@ const NOT_HERE = {
 */
 const WAITING = [
   'commands.md',
-  'npcs.md',
   'voice.md'
 ];
 

@@ -818,6 +818,8 @@ function world(opts) {
           row.pos = [to.pos[0] + Number(args[1] || 0), to.pos[1] + Number(args[2] || 0), to.pos[2] + Number(args[3] || 0)];
           return undefined;
         }
+        // MpObjectReference::SetDisplayName keeps the name on the change form, and every listener is told.
+        case 'SetDisplayName': row.displayName = String(args[0]); saw(id, 'set', 'displayName', String(args[0])); return undefined;
         case 'Disable': row.isDisabled = true; return undefined;
         case 'Enable': row.isDisabled = false; return undefined;
         case 'Delete': store.delete(id); return undefined;
@@ -1388,7 +1390,8 @@ function world(opts) {
     MpActor::Respawn fires RespawnEvent; false from a listener blocks it and
     the actor stays dead (GameModeEvent::Fire, OnFireBlocked). Otherwise
     OnFireSuccess stands it up at GetSpawnPoint(): a character's spawnPoint,
-    or a placed reference's own place in the plugin, where it already stands.
+    or a placed reference's own place in the plugin (GetEditorLocationalData),
+    wherever it fell.
   */
   w.respawn = function (actorId) {
     actorId = actorId >>> 0;
@@ -1401,9 +1404,16 @@ function world(opts) {
     // SendAndSetDeathState: the respawn percentages, full unless written.
     row.percentages = Object.assign({ health: 1, magicka: 1, stamina: 1 }, row.respawnPercentages || {});
     const sp = row.spawnPoint;
+    const placed = records.get(actorId);
     if ((row.profileId || actorId >= 0xff000000) && sp && sp.cellOrWorldDesc && Array.isArray(sp.pos)) {
       row.worldOrCellDesc = sp.cellOrWorldDesc;
       row.pos = sp.pos.slice();
+    } else if (!(row.profileId >= 0) && actorId < 0xff000000 && placed && placed.type === 'ACHR') {
+      // GetSpawnPoint for a placed reference is GetEditorLocationalData: its
+      // place in the plugin, wherever it fell.
+      const data = (placed.fields || []).find(function (f) { return f.type === 'DATA'; });
+      row.worldOrCellDesc = placed.cell || '3c:Skyrim.esm';
+      if (data && data.data && data.data.floats) { row.pos = data.data.floats.slice(0, 3); }
     }
   };
 
