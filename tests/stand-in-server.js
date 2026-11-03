@@ -49,8 +49,16 @@
     eat       MpActor::OnEquip: an ALCH or INGR record in the pack fires
               onEatItem, which alone may set eatItemScale (EatItemScaleBinding);
               then one leaves the pack whatever the handler answered.
-    read      MpActor: onReadBook, with the actor and the base id.
+    read      MpActor::OnEquip of a book in the pack: onReadBook, then, unless
+              it answered false, a spell tome teaches its spell and is spent
+              (ReadBookEvent::OnFireSuccess).
+    spells    PapyrusActor AddSpell, RemoveSpell, GetSpellCount and
+              GetNthSpell over the change form's learnedSpells.
     death     MpActor: onDying, then onDeath, then onRespawn after the delay.
+    animate   ActionListener: an animation the client sends for its own
+              character is kept as lastAnimEvent (OnUpdateAnimation); a
+              movement that is not Standing clears it (OnUpdateMovement), and
+              so does coming into the world (PartOne::SetUserActor).
     login     ts/systems/thornswoodLogin.ts: mp.onThornswoodLogin({ userId,
               profileId, nonce, proof: null }) at the login; > 0 hands that
               profile over, 0 refuses, anything else waits for the proof.
@@ -70,7 +78,9 @@
   Lines from a person's game (the front plugin, the K panel, the chat) reach
   the gamemode the way they reach the real one: posted to the voice service,
   which the gamemode polls (GET /commands), and what it says goes back to the
-  voice service (POST /say). say() and heard() are those two.
+  voice service (POST /say). say() and heard() are those two. Whatever else
+  the gamemode posts the voice service (the text mutes, the staff silences)
+  is kept in w.toVoice.
 
   Read only, apart from its temp folders, which done() removes.
 */
@@ -191,6 +201,7 @@ function world(opts) {
     threw: [],       // what a timer threw
     did: [],         // [time, actor, kind, what, value]
     said: [],        // POST /say bodies
+    toVoice: [],     // every other POST to the voice service: { path, body, at }, e.g. /textmute and /silenced
     notified: [],    // Debug.Notification texts
     log: []          // the gamemode's console
   };
@@ -232,8 +243,9 @@ function world(opts) {
     taken to be all the files before it in the load order, which keeps that
     mapping the engine's in every case a record of this stand-in can reach.
     A field's data may be { ref: desc }, four bytes naming that form as the
-    record's own file writes it, or { floats: [...] }; anything else is
-    bytes. Records are only what a harness declared with w.record.
+    record's own file writes it, { bytes: [...], refs: { offset: desc } },
+    bytes with such a form id written at each offset, or { floats: [...] };
+    anything else is bytes. Records are only what a harness declared with w.record.
   */
   function slotAt(i) { return SLOTS[i]; }
   function slotIndexOf(id) {
@@ -262,6 +274,13 @@ function world(opts) {
       if (f.data && f.data.ref !== undefined) {
         const raw = localIn(at, w.idOf(f.data.ref));
         data = bytesIn(realm, [raw & 0xff, (raw >>> 8) & 0xff, (raw >>> 16) & 0xff, raw >>> 24]);
+      } else if (f.data && f.data.bytes) {
+        const b = f.data.bytes.slice();
+        Object.keys(f.data.refs || {}).forEach(function (off) {
+          const raw = localIn(at, w.idOf(f.data.refs[off])), o = Number(off);
+          b[o] = raw & 0xff; b[o + 1] = (raw >>> 8) & 0xff; b[o + 2] = (raw >>> 16) & 0xff; b[o + 3] = raw >>> 24;
+        });
+        data = bytesIn(realm, b);
       } else if (f.data && f.data.floats) {
         const b = Buffer.alloc(4 * f.data.floats.length);
         f.data.floats.forEach(function (x, i) { b.writeFloatLE(x, i * 4); });
@@ -519,7 +538,13 @@ function world(opts) {
     const hit = e.find(function (x) { return x.baseId === baseId && (x.name || '') === name && !x.made; });
     if (hit) { hit.count += count; } else { e.push(Object.assign({ baseId: baseId, count: count }, extra || {})); }
   };
-  w.moveTo = function (id, cell, pos) { const r = store.get(id >>> 0); r.worldOrCellDesc = cell; r.pos = pos.slice(); };
+  /*
+    Moving: a movement message that is not Standing, which also clears the
+    last animation the client sent (ActionListener::OnUpdateMovement).
+  */
+  w.moveTo = function (id, cell, pos) { const r = store.get(id >>> 0); r.worldOrCellDesc = cell; r.pos = pos.slice(); r.lastAnimEvent = null; };
+  /* An animation the client sent for its own character: the engine keeps its name as lastAnimEvent (ActionListener::OnUpdateAnimation). */
+  w.animate = function (id, eventName) { const r = store.get(id >>> 0); r.lastAnimEvent = String(eventName); saw(id >>> 0, 'animation', '', String(eventName)); };
   w.online = function () { return online.slice(); };
   w.now = function () { return clock; };
 
@@ -769,7 +794,10 @@ function world(opts) {
       const desc = w.descOf(baseId);
       if (!records.get(baseId >>> 0)) { throw new Error('place: no record ' + desc); }
       const id = nextPlaced++;
-      w.ref(id, { base: desc });
+      /* ScampServer::Place: an NPC_ record becomes an actor (MpActor), anything else a reference of the record's type. */
+      const rec = records.get(baseId >>> 0);
+      if (rec.type === 'NPC_') { w.ref(id, { base: desc, type: 'NPC_', profileId: -1, isDead: false }); }
+      else { w.ref(id, { base: desc, type: rec.type }); }
       saw(id, 'placed', desc, null);
       return id;
     },
@@ -796,6 +824,8 @@ function world(opts) {
           row.pos = [to.pos[0] + Number(args[1] || 0), to.pos[1] + Number(args[2] || 0), to.pos[2] + Number(args[3] || 0)];
           return undefined;
         }
+        // MpObjectReference::SetDisplayName keeps the name on the change form, and every listener is told.
+        case 'SetDisplayName': row.displayName = String(args[0]); saw(id, 'set', 'displayName', String(args[0])); return undefined;
         case 'Disable': row.isDisabled = true; return undefined;
         case 'Enable': row.isDisabled = false; return undefined;
         case 'Delete': store.delete(id); return undefined;
@@ -809,6 +839,26 @@ function world(opts) {
     // row's maxHealth, 100 unless the scenario says (a level 1 character's).
     if (key === 'method Actor.DamageActorValue' && row) {
       if (String(args[0]).toLowerCase() === 'health') { w.hurtBy(id, Math.abs(Number(args[1]) || 0), 0); return undefined; }
+    }
+    // The spell list (PapyrusActor AddSpell, RemoveSpell, GetSpellCount,
+    // GetNthSpell): the change form's learnedSpells, by global id. Only a SPEL
+    // record is added or taken off; a form no plugin has answers false.
+    if (kind === 'method' && cls === 'Actor' && row && row.type === 'NPC_' &&
+        (fn === 'AddSpell' || fn === 'RemoveSpell' || fn === 'GetSpellCount' || fn === 'GetNthSpell')) {
+      const list = row.learnedSpells = row.learnedSpells || [];
+      if (fn === 'GetSpellCount') { return list.length; }
+      if (fn === 'GetNthSpell') {
+        const n = Number(args[0]);
+        return n >= 0 && n < list.length ? { type: 'espm', desc: w.descOf(list[n]) } : undefined;
+      }
+      let spell = 0;
+      try { spell = args[0] && args[0].desc !== undefined ? w.idOf(args[0].desc) : 0; } catch (e) { spell = 0; }
+      const rec = spell ? records.get(spell) : null;
+      if (!rec || rec.type !== 'SPEL') { return false; }
+      const at = list.indexOf(spell);
+      if (fn === 'AddSpell') { if (at !== -1) { return false; } list.push(spell); saw(id, 'spell', w.descOf(spell), true); return true; }
+      if (at === -1) { return false; }
+      list.splice(at, 1); saw(id, 'spell', w.descOf(spell), false); return true;
     }
     // Actor.GetRace: a person's race from their appearance, anyone else's from their base record's (w.record's race).
     if (key === 'method Actor.GetRace' && row && row.type === 'NPC_') {
@@ -849,6 +899,9 @@ function world(opts) {
         end: function (body) {
           const where = String((o && o.path) || (o && o.pathname) || '');
           if (where === '/say' && body) { try { w.said.push(JSON.parse(body)); } catch (e) { } }
+          else if (body && String((o && o.method) || '').toUpperCase() === 'POST') {
+            try { w.toVoice.push({ path: where, body: JSON.parse(body), at: clock }); } catch (e) { }
+          }
           if (where.indexOf('/commands') === 0 && typeof cb === 'function') {
             const list = waiting.splice(0);
             const h = {};
@@ -1026,6 +1079,7 @@ function world(opts) {
     }
     if (handed !== row.profileId) { fault('login handed over profile ' + handed + ' for ' + row.profileId); }
     users.set(actorId, user);
+    row.lastAnimEvent = null;   // not saved client side, so reset (PartOne::SetUserActor)
     if (online.indexOf(actorId) < 0) { online.push(actorId); }
     sendPass(actorId);
     saw(actorId, 'login', 'handed over', handed);
@@ -1239,7 +1293,36 @@ function world(opts) {
     const taken = moveItems(actorId, 0, baseId, 1, named.name);
     return { sent: true, allowed: allowed, scale: scale, taken: taken };
   };
-  w.readBook = function (actorId, baseId) { return fire('onReadBook', [actorId >>> 0, baseId]); };
+  /*
+    A book read (MpActor::OnEquip, ReadBook): only one in the pack is read.
+    onReadBook goes first; false keeps the book and the spell (the client is
+    told to RemoveSpell, OnFireBlocked). Otherwise, for a book whose DATA
+    carries TeachesSpell (0x04) with the spell at offset 4, a spell the
+    character has not learned is learned and the book leaves the pack; one
+    already learned leaves the book where it is (ReadBookEvent::OnFireSuccess).
+    Answers { sent, allowed, learned }.
+  */
+  w.readBook = function (actorId, baseId) {
+    actorId = actorId >>> 0; baseId = baseId >>> 0;
+    const rec = records.get(baseId);
+    if (!rec || rec.type !== 'BOOK') { return { sent: false, why: 'not a book' }; }
+    if (w.count(actorId, baseId) < 1) { return { sent: false, why: 'not in the pack' }; }
+    const allowed = fire('onReadBook', [actorId, baseId]);
+    if (allowed === false) { return { sent: true, allowed: false, learned: false }; }
+    const res = lookupRecord(baseId);
+    const data = ((res.record && res.record.fields) || []).find(function (f) { return f.type === 'DATA'; });
+    const b = data ? data.data : [];
+    if (!(b.length >= 8 && (b[0] & 0x04))) { return { sent: true, allowed: allowed, learned: false }; }
+    const spellId = res.toGlobalRecordId((b[4] | (b[5] << 8) | (b[6] << 16)) + b[7] * 0x1000000);
+    const row = store.get(actorId);
+    row.learnedSpells = row.learnedSpells || [];
+    if (row.learnedSpells.indexOf(spellId) !== -1) { return { sent: true, allowed: allowed, learned: false }; }
+    row.learnedSpells.push(spellId);
+    moveItems(actorId, 0, baseId, 1, '');
+    return { sent: true, allowed: allowed, learned: true };
+  };
+  /* The spells the engine holds for a character (ChangeForm learnedSpells), as global ids. */
+  w.spellsOf = function (actorId) { const r = store.get(actorId >>> 0); return r && r.learnedSpells ? r.learnedSpells.slice() : []; };
   w.equip = function (actorId, baseId) { return fire('onEquipItemAttempt', [actorId >>> 0, baseId]); };
   w.drop = function (actorId, baseId, count) { return fire('onDropItem', [actorId >>> 0, baseId, count]); };
   /* Going down and dying (MpActor): onDying, onDeath, and onRespawn after delayMs. */
@@ -1316,7 +1399,8 @@ function world(opts) {
     MpActor::Respawn fires RespawnEvent; false from a listener blocks it and
     the actor stays dead (GameModeEvent::Fire, OnFireBlocked). Otherwise
     OnFireSuccess stands it up at GetSpawnPoint(): a character's spawnPoint,
-    or a placed reference's own place in the plugin, where it already stands.
+    or a placed reference's own place in the plugin (GetEditorLocationalData),
+    wherever it fell.
   */
   w.respawn = function (actorId) {
     actorId = actorId >>> 0;
@@ -1329,9 +1413,16 @@ function world(opts) {
     // SendAndSetDeathState: the respawn percentages, full unless written.
     row.percentages = Object.assign({ health: 1, magicka: 1, stamina: 1 }, row.respawnPercentages || {});
     const sp = row.spawnPoint;
+    const placed = records.get(actorId);
     if ((row.profileId || actorId >= 0xff000000) && sp && sp.cellOrWorldDesc && Array.isArray(sp.pos)) {
       row.worldOrCellDesc = sp.cellOrWorldDesc;
       row.pos = sp.pos.slice();
+    } else if (!(row.profileId >= 0) && actorId < 0xff000000 && placed && placed.type === 'ACHR') {
+      // GetSpawnPoint for a placed reference is GetEditorLocationalData: its
+      // place in the plugin, wherever it fell.
+      const data = (placed.fields || []).find(function (f) { return f.type === 'DATA'; });
+      row.worldOrCellDesc = placed.cell || '3c:Skyrim.esm';
+      if (data && data.data && data.data.floats) { row.pos = data.data.floats.slice(0, 3); }
     }
   };
 
@@ -1344,6 +1435,10 @@ function world(opts) {
   };
   w.readPrivate = function (name) {
     try { return JSON.parse(fs.readFileSync(path.join(dir, 'private', name), 'utf8')); } catch (e) { return null; }
+  };
+  /* A file in the private folder written from outside the gamemode, as the door's fetch of the site writes allowed.json. */
+  w.writePrivate = function (name, value) {
+    fs.writeFileSync(path.join(dir, 'private', name), typeof value === 'string' ? value : JSON.stringify(value));
   };
   return w;
 }

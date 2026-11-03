@@ -688,6 +688,10 @@ issue where the card did.
 - **A staff notice is an issue with a notice label**; the bot posts it and
   closes it (q-p15-notice-issues). 31 Oct 2026,
   [#5187](https://github.com/ThornswoodRP/Thornswood/issues/5187).
+- **The Discord bot is a short bot.py over one module an area, as #5393 at
+  acc8ce8 put it.** (dec_ir6kQf5iqY7kKfP8lN39Ug, dec_PYrv5xUa2LixUT43Bwl_Zg)
+  2 Nov 2026,
+  [#5357](https://github.com/ThornswoodRP/Thornswood/issues/5357#issuecomment-6586544129).
 
 ### Test tasks and testing
 
@@ -807,6 +811,10 @@ issue where the card did.
   it was set on 31 Oct (q-3683-lock-tag-creation, kept by
   q-p20-v-tag-creation). 1 Nov 2026,
   [#3683](https://github.com/ThornswoodRP/Thornswood/issues/3683).
+- **No paid Actions usage: the private repositories' checks run on runners of
+  our own.** The spending limit stays at $0; a check with no runner waits for
+  them, and billing is never the fix (q-hermes-ci-free-runners). 2 Nov 2026,
+  [#5484](https://github.com/ThornswoodRP/Thornswood/issues/5484#issuecomment-6593149467).
 
 ## Kept, after being asked
 

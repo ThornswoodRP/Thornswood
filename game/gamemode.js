@@ -31838,10 +31838,10 @@ module.exports = {
     var rolled = { gold: prior.gold, items: prior.items };
     var empty = !(rolled.gold > 0) && !(rolled.items && rolled.items.length);
     if (!empty && !give(actorId, rolled)) return null;
+    // The line is answered, not said: the press handler says every line a
+    // branch answers (scripted-activators, notify and say), so saying it here
+    // as well put it in their chat twice (#5477).
     var line = empty ? 'There is nothing on this body.' : bodyLine(rolled);
-    if (line) {
-      try { say(actorId, line); } catch (e4) { /* the pile is already in the pack */ }
-    }
     return line || null;
   }
 
@@ -34508,8 +34508,12 @@ var MARKET_STALL_TABLE = table('MARKET_STALL_TABLE');
       boxed = true;
     }
     var keeperNote = (w.count > 1 ? w.count + ' ' : '') + whatName + ' sold for ' + (sale.cost.gold ? owed + ' gold.' : owed + ' ' + sale.cost.goods.name + '.');
-    var sayLine = g.__thornswoodSayLine;
-    if (typeof sayLine === 'function') { try { sayLine(done.keeper.profile, keeperNote); } catch (eSay) { } }
+    // Told in their chat (stalls.md, Buying): an ordinary line to their
+    // profile. __thornswoodSayLine is the menu page's data line, which the
+    // chat page reads as data and never draws, so a sentence sent that way
+    // reached nobody (#5473).
+    var tell = g.__thornswoodToProfile;
+    if (typeof tell === 'function') { try { tell(done.keeper.profile, keeperNote); } catch (eSay) { } }
     if (sessions[done.keeper.actor] && sessions[done.keeper.actor].id === id) {
       show(done.keeper.actor, done.keeper.profile, keeperNote);
     }
@@ -36318,19 +36322,31 @@ return module.exports;
       // sent, so the browser is left alone. See drawn() above.
       delete s.panel;
     }
+    var written = false;
     try {
       mp.set(actorId, CHAR_PROPERTY, s);
+      written = true;
       // Only once it is actually written. A write that threw sent nothing,
       // and remembering it as sent would hold the next one back as well.
       if (sending) { lastDrawn[actorId] = sig; }
     } catch (e) {
       clog('could not write', actorId.toString(16), e);
     }
-    // Twin Souls is a second enchantment slot in the menu (#1389). It lives
-    // beside the craft gate, outside this block, the way spellOn does.
-    if (typeof handEnchantSlots === 'function') { handEnchantSlots(actorId, s); }
-    // And what the crafting menu lists, from the same answer the craft gate gives (#613).
-    if (typeof handRecipesHidden === 'function') { handRecipesHidden(actorId); }
+    /*
+      What the menus list goes with the record, so only once it is written
+      (#5475). The recipe list asks the craft gate for every recipe, and the
+      gate asks stateOf; a record that did not write is not there to read, so
+      stateOf built one again and wrote it again, and handed the list again,
+      with no end: an actor whose form is gone (a name taken off the embassy
+      roll after its character went) stopped the server.
+    */
+    if (written) {
+      // Twin Souls is a second enchantment slot in the menu (#1389). It lives
+      // beside the craft gate, outside this block, the way spellOn does.
+      if (typeof handEnchantSlots === 'function') { handEnchantSlots(actorId, s); }
+      // And what the crafting menu lists, from the same answer the craft gate gives (#613).
+      if (typeof handRecipesHidden === 'function') { handRecipesHidden(actorId); }
+    }
     return s;
   }
 

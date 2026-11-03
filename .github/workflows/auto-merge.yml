@@ -11,10 +11,20 @@
 # WHAT IT HOLDS. A workflow_run and a push run from main, and the checkout
 # is main's scripts/ops and its two verb lists (which say what the box runs)
 # with no credential kept, so no pull request's code runs here (no workflow
-# runs on pull_request_target, #1306). Its token can
-# turn auto-merge on and nothing it does pushes, merges or comments; the
-# merge queue does the merge, as github-merge-queue[bot], so main's push
-# workflows run after it as they do for everybody's.
+# runs on pull_request_target, #1306). Nothing it does pushes, merges or
+# comments; the merge queue does the merge, as github-merge-queue[bot], so
+# main's push workflows run after it as they do for everybody's.
+#
+# WHOSE TOKEN. The pin robot's (a GitHub App: contents and pull requests
+# write, this repository only), minted in the engine-pin environment, main
+# only, as engine-pin.yml does since #5256. Auto-merge turned on with the
+# run's own token puts the pull request in the queue as github-actions[bot],
+# and GitHub starts no workflow from that token's events, so the queue's
+# merge_group run never came and the head entry held the queue until its
+# 30 minute timeout: #5393 (queued 4:04 PM, 2 Nov 2026) and #5242 (4:43 PM)
+# got no run at all, while every entry Patrick's account queued got its
+# runs. An App's token starts them like a person's. Patrick's answer A on
+# q-automerge-app-token, 2 Nov 2026.
 name: Auto-merge
 on:
   workflow_run:
@@ -32,9 +42,9 @@ jobs:
     name: Put open pull requests on auto-merge
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    environment: engine-pin
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -45,8 +55,16 @@ jobs:
             scripts/vps/gate/verbs.json
             scripts/release/nexus-verbs.json
           sparse-checkout-cone-mode: false
+      - name: The pin robot's token
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.PIN_APP_CLIENT_ID }}
+          private-key: ${{ secrets.PIN_APP_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
       - name: Put each ready one on auto-merge
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
           REPO: ${{ github.repository }}
         run: node scripts/ops/Auto-Merge.js

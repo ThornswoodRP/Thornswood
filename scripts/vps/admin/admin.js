@@ -1204,7 +1204,7 @@ function manifest() {
     hook_attributes: { url: 'https://thornswood.net/github-app/hook', active: false },
     redirect_url: 'https://thornswood.net/github-app/setup/done',
     public: false,
-    default_permissions: { administration: 'write', contents: 'read', secrets: 'read', actions_variables: 'read', environments: 'write', actions: 'write', issues: 'write', deployments: 'write' },
+    default_permissions: { administration: 'write', contents: 'read', secrets: 'read', actions_variables: 'read', environments: 'write', actions: 'write', issues: 'write', deployments: 'write', organization_self_hosted_runners: 'write' },
     default_events: [],
   };
 }

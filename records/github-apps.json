@@ -96,6 +96,7 @@
     "environments": "write",
     "issues": "write",
     "metadata": "read",
+    "organization_self_hosted_runners": "write",
     "secrets": "read"
    },
    "events": [],
@@ -108,6 +109,7 @@
     "environments": "Renew-BoxKey.ps1 puts a box key into an environment secret of Thornswood-Ops (ops-access.js keys), which GitHub gives to Environments write alone; the settings ask reads environment names and where each deploys from (#3534).",
     "issues": "The Discord bot's token (#5260, Patrick's A): it posts Test tasks and known issues as comments and labels. Taken for Thornswood alone, every 30 minutes.",
     "metadata": "Every App holds it; GitHub gives it read and nothing else.",
+    "organization_self_hosted_runners": "The one organization runner of the box that Thornswood-Hermes's Windows guard rail check runs on (records/hermes-runner.json, Install-Runner.ps1 -Hermes, ops-access.js hermes-runners): its registration token comes from the organization because this App is never on Thornswood-Hermes, so it holds nothing of that repository. Patrick's A on q-hermes-box-runner-token, 2 Nov 2026, 6:17 PM.",
     "secrets": "The settings ask reads repository secret names (#3534), never a value. Write was held only for go-public, which took the box's secrets off Thornswood before the flip on 30 Oct 2026 and is gone; an environment secret needs Environments write, not this."
    }
   },
@@ -137,7 +139,7 @@
   {
    "slug": "thornswood-pin-robot",
    "id": 5562975,
-   "for": "the engine pin robot (.github/workflows/engine-pin.yml, #5148, #5256): pushes engine-pin/next and opens the pin's pull request",
+   "for": "the engine pin robot (.github/workflows/engine-pin.yml, #5148, #5256): pushes engine-pin/next and opens the pin's pull request; and auto-merge.yml, which turns auto-merge on for every ready pull request (q-automerge-app-token, 2 Nov 2026)",
    "held_by": "the engine-pin environment of Thornswood, main only (PIN_APP_KEY)",
    "installed_on": [
     "ThornswoodRP/Thornswood"
@@ -154,9 +156,9 @@
    },
    "events": [],
    "why": {
-    "contents": "Force pushes the one branch engine-pin/next, which changes only the pin's paths, never a workflow.",
+    "contents": "Force pushes the one branch engine-pin/next, which changes only the pin's paths, never a workflow; and turning auto-merge on, which GitHub holds to contents write.",
     "metadata": "Every App holds it; GitHub gives it read and nothing else.",
-    "pull_requests": "Opens or updates the pin's pull request (Open-EnginePinPr.ps1)."
+    "pull_requests": "Opens or updates the pin's pull request (Open-EnginePinPr.ps1), and turns auto-merge on for a ready pull request (scripts/ops/Auto-Merge.js), so its queue entry starts its checks."
    }
   },
   {

@@ -34,6 +34,28 @@
   build records list or one already registered there; -Remove, -OffBox,
   -Migrate and hand-picked names and folders are refused.
 
+  THORNSWOOD-HERMES'S RUNNER (-Hermes). The Windows check of
+  ThornswoodRP/Thornswood-Hermes's guard rail tests runs on the box, on a
+  runner of its own (Patrick's A on q-hermes-ci-free-runners, 2 Nov 2026,
+  5:46 PM: the organization's free private-repository minutes were spent and
+  the spending limit stays at $0). -Hermes takes every name from
+  records\hermes-runner.json, its organization, folder, account, runner
+  name, label and the hosts a job may reach besides GitHub, and refuses a
+  name, a -Number, -OffBox, -Migrate or -Lock beside it. It is an
+  organization runner, not a repository's: the box admin App is never on
+  Thornswood-Hermes (records\github-apps.json), so its token for this is the
+  organization's Self-hosted runners write and nothing of the repository
+  (ops-access.js hermes-runners). Only the organization's private
+  repositories may use an organization runner, and Thornswood-Hermes's
+  workflows are the ones that ask for its label. It carries that label
+  alone, never thornswood-vps or a build label, so no box job reaches it, and
+  its account is shut out of every other runner's folder as theirs are out
+  of its. Through the gate,
+      pwsh scripts/vps/Box-Run.ps1 Install-Runner -Hermes
+  (-Status and -NetworkOnly beside it as for any runner) registers it. It is
+  written down in that record, so the gate's renew only rule counts it as
+  named.
+
   OFF THE BOX (-OffBox, issue #1306). build.yml sends a pull request to the
   label thornswood-pr, which no runner on the VPS carries, so code nobody has
   merged never runs beside the live server. -OffBox puts that runner on the
@@ -340,6 +362,9 @@ param(
   # Run on the box by the deploy gate's Install-Runner verb (THROUGH THE
   # DEPLOY GATE above), with the box admin App's token.
   [switch]$FromGate,
+  # Thornswood-Hermes's one runner, with records\hermes-runner.json's names
+  # (THORNSWOOD-HERMES'S RUNNER above).
+  [switch]$Hermes,
   [switch]$NoPause
 )
 
@@ -366,18 +391,39 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 # Where the box keeps its firewall rules, and the refresh that makes the
 # firewall take a change to them (#3896).
 . (Join-Path $Here '..\vps\BoxFirewall.ps1')
+# THORNSWOOD-HERMES'S RUNNER (-Hermes, the header's section of that name).
+# Every name is the record's; none is taken from the command line, and the
+# gate's -AllowHost is replaced by the record's list.
+if ($Hermes) {
+  $handPicked = @('Repo', 'Root', 'Account', 'RunnerName', 'Label', 'Number') | Where-Object { $PSBoundParameters.ContainsKey($_) }
+  if ($OffBox -or $Migrate -or $Lock -or @($handPicked).Count) { Write-Host 'STOP. -Hermes is the one runner records\hermes-runner.json names, on the box, with that record''s names; it takes no other name, no -Number, -OffBox, -Migrate or -Lock (-Lock locks every runner on the box without it). Nothing was changed.' -ForegroundColor Red; exit 1 }
+  $hermesRecord = Get-Content -LiteralPath (Join-Path $Here '..\..\records\hermes-runner.json') -Raw | ConvertFrom-Json
+  # An organization runner: registered to the organization's URL, through
+  # the organization's runner endpoints.
+  $Repo = [string]$hermesRecord.organization
+  $Root = [string]$hermesRecord.root
+  $Account = [string]$hermesRecord.account
+  $RunnerName = [string]$hermesRecord.name
+  $Label = [string]$hermesRecord.label
+  $AllowHost = @($hermesRecord.allowHost | ForEach-Object { [string]$_ } | Where-Object { $_ })
+}
 # THROUGH THE DEPLOY GATE (-FromGate, the header's section of that name).
 if ($FromGate) {
   if ($env:THORNSWOOD_GATE -ne '1') { Write-Host 'STOP. -FromGate is for the deploy gate''s Install-Runner verb, which runs this on the box: scripts/vps/Box-Run.ps1 Install-Runner -Number <n>. Nothing was changed.' -ForegroundColor Red; exit 1 }
   $handPicked = @('Repo', 'Root', 'Account', 'RunnerName', 'Label', 'VpsHost', 'VpsUser', 'AlsoDeny') | Where-Object { $PSBoundParameters.ContainsKey($_) }
   if ($OffBox -or $Migrate -or $Remove -or $DryRunTo -or $DefenderSkip -or @($handPicked).Count) { Write-Host 'STOP. Through the gate a runner is installed, locked, read or given its network rules with the names and folders its number gives it, on the box, and never removed. Nothing was changed.' -ForegroundColor Red; exit 1 }
-  $Repo = 'ThornswoodRP/Thornswood-Ops'
+  # The box's runners are the ops repository's (#4013); Thornswood-Hermes's
+  # one is its record's, with a token for that repository alone.
+  if (-not $Hermes) { $Repo = 'ThornswoodRP/Thornswood-Ops' }
   . (Join-Path $Here '..\vps\admin\ShipAccess.ps1')
   # In this run's environment only: the gate starts every verb as a process
   # of its own, so the token goes with it, and GitHub ends it within the hour.
-  try { $env:GH_TOKEN = Get-ThornswoodOpsAccess -Repo ([IO.Path]::GetFullPath((Join-Path $Here '..\..'))) -For runners }
+  try { $env:GH_TOKEN = Get-ThornswoodOpsAccess -Repo ([IO.Path]::GetFullPath((Join-Path $Here '..\..'))) -For $(if ($Hermes) { 'hermes-runners' } else { 'runners' }) }
   catch { Write-Host ('STOP. The box admin App gave no token for the runners of ' + $Repo + ': ' + $_.Exception.Message + ' Nothing was changed.') -ForegroundColor Red; exit 1 }
 }
+# Where GitHub keeps this runner: a repository's runners, or for -Hermes the
+# organization's.
+$RunnerApi = $(if ($Hermes) { 'orgs/' + $Repo } else { 'repos/' + $Repo })
 if (-not $OffBox) {
   if (-not $VpsUser) { $VpsUser = Get-ThornswoodVpsUser }
   if (-not $VpsHost) { $VpsHost = Get-ThornswoodVpsAddress }
@@ -424,7 +470,7 @@ if ($OffBox) {
 # One's take the pull request build's fallback by the label below (#4010).
 $registerLabels = $Label
 $buildRecord = Get-Content -LiteralPath (Join-Path $Here '..\..\records\build-runners.json') -Raw | ConvertFrom-Json
-if (-not $OffBox -and -not $PSBoundParameters.ContainsKey('Label')) {
+if (-not $OffBox -and -not $Hermes -and -not $PSBoundParameters.ContainsKey('Label')) {
   if (@($buildRecord.runners | ForEach-Object { [int]$_ }) -contains $Number) { $registerLabels = $Label + ',' + $buildRecord.label }
 }
 # PULL REQUEST BUILDS (#4010). records\pr-build-runners.json's label is the
@@ -433,7 +479,7 @@ if (-not $OffBox -and -not $PSBoundParameters.ContainsKey('Label')) {
 # does an off-box runner its offBox names, which still never carries
 # thornswood-vps, so no box-only job reaches it.
 $prRecord = Get-Content -LiteralPath (Join-Path $Here '..\..\records\pr-build-runners.json') -Raw | ConvertFrom-Json
-if (-not $PSBoundParameters.ContainsKey('Label')) {
+if (-not $Hermes -and -not $PSBoundParameters.ContainsKey('Label')) {
   $takesPr = $(if ($OffBox) { $prRecord.PSObject.Properties['offBox'] -and @($prRecord.offBox) -contains $RunnerName } else { @($prRecord.runners | ForEach-Object { [int]$_ }) -contains $Number })
   if ($takesPr) { $registerLabels = $registerLabels + ',' + $prRecord.label }
 }
@@ -544,7 +590,7 @@ $service = 'actions.runner.' + $Repo.Replace('/', '-') + '.' + $RunnerName
 # (Find-RunnerService), and config.cmd gives a runner registered now the first.
 $serviceNames = @($service)
 $repoOwner, $repoName = $Repo.Split('/', 2)
-if ($repoOwner -ne 'EvilPatrick06') { $serviceNames += ('actions.runner.EvilPatrick06-' + $repoName + '.' + $RunnerName) }
+if ($repoOwner -ne 'EvilPatrick06' -and $repoName) { $serviceNames += ('actions.runner.EvilPatrick06-' + $repoName + '.' + $RunnerName) }
 $serviceList = "@('" + ($serviceNames -join "', '") + "')"
 
 # ------------------------------------------------------------- the locks --
@@ -1069,7 +1115,7 @@ else { 'priority  no watcher task; the service starts the runner at normal' }
   if ($OffBox) { Remote (Get-GuardScript 'status') | ForEach-Object { Say "  $_" } }
   Head 'On GitHub'
   try {
-    $r = (Invoke-Gh api "repos/$Repo/actions/runners" | Out-String) | ConvertFrom-Json
+    $r = (Invoke-Gh api "$RunnerApi/actions/runners" | Out-String) | ConvertFrom-Json
     $mine = @($r.runners | Where-Object { $_.name -eq $RunnerName })
     if ($mine.Count) { foreach ($m in $mine) { Say ('  ' + $m.name + ', ' + $m.status + $(if ($m.busy) { ', running a job' } else { '' }) + ', labels ' + (($m.labels | ForEach-Object { $_.name }) -join ', ')) } }
     else { Say "  no runner called $RunnerName is registered" 'Yellow' }
@@ -1082,7 +1128,7 @@ else { 'priority  no watcher task; the service starts the runner at normal' }
 if ($Remove) {
   Head 'Removing the runner'
   $tok = $null
-  try { $tok = (Invoke-Gh api -X POST "repos/$Repo/actions/runners/remove-token" --jq .token | Out-String).Trim() } catch { Say '  could not get a removal token; the box is cleaned and GitHub is left to forget it' 'Yellow' }
+  try { $tok = (Invoke-Gh api -X POST "$RunnerApi/actions/runners/remove-token" --jq .token | Out-String).Trim() } catch { Say '  could not get a removal token; the box is cleaned and GitHub is left to forget it' 'Yellow' }
   # The removal token goes on ssh's standard input and reaches config.cmd in
   # its environment, never on a command line (Send-Secret.ps1, issue #451).
   # The far side's exit code decides, as for -NetworkOnly -Remove: until
@@ -1334,7 +1380,7 @@ if ($Migrate) {
       # Find-RunnerService is in the locks; the selected runner is on this machine.
       . ([scriptblock]::Create($lockLib))
       $migrationPlan = Get-RunnerMigrationState $Account (Find-RunnerService $serviceNames) $Root
-      $pages = (Invoke-Gh api "repos/$Repo/actions/runners" --paginate --slurp | Out-String) | ConvertFrom-Json
+      $pages = (Invoke-Gh api "$RunnerApi/actions/runners" --paginate --slurp | Out-String) | ConvertFrom-Json
       $registered = @($pages | ForEach-Object { $_.runners } | Where-Object { $_.name -eq $RunnerName })
       if ($registered.Count -ne 1 -or $registered[0].status -ne 'online' -or $registered[0].busy) { throw 'Selected GitHub runner must be uniquely online and idle. Prevent assignments and drain it in the approved maintenance window; a busy read is not an atomic drain.' }
       if ($migrationPlan.AlreadyThere) {
@@ -1356,11 +1402,12 @@ if ($Migrate) {
 # for a runner records\build-runners.json or records\pr-build-runners.json
 # names, or one GitHub already has registered under this name, put back in
 # its place. A runner nobody wrote down is a pull request to a record first.
+# Thornswood-Hermes's is written down in records\hermes-runner.json.
 if ($FromGate) {
-  $named = @(@($buildRecord.runners) + @($prRecord.runners) | ForEach-Object { [int]$_ }) -contains $Number
+  $named = $Hermes -or (@(@($buildRecord.runners) + @($prRecord.runners) | ForEach-Object { [int]$_ }) -contains $Number)
   if (-not $named) {
     $known = @()
-    try { $known = @(((Invoke-Gh api "repos/$Repo/actions/runners" --paginate --slurp | Out-String) | ConvertFrom-Json) | ForEach-Object { $_.runners } | ForEach-Object { [string]$_.name }) }
+    try { $known = @(((Invoke-Gh api "$RunnerApi/actions/runners" --paginate --slurp | Out-String) | ConvertFrom-Json) | ForEach-Object { $_.runners } | ForEach-Object { [string]$_.name }) }
     catch { Write-Host ('STOP. GitHub did not list the runners of ' + $Repo + ': ' + $_.Exception.Message + ' Nothing was changed.') -ForegroundColor Red; exit 1 }
     if ($known -notcontains $RunnerName) { Write-Host ('STOP. ' + $RunnerName + ' is in no runner record and not registered on ' + $Repo + ', and the gate only puts back a runner that is. A new runner goes into records\build-runners.json by pull request first. Nothing was changed.') -ForegroundColor Red; exit 1 }
   }
@@ -1416,7 +1463,7 @@ if ($missing.Count) {
 }
 
 Head 'Registration token'
-$token = (Invoke-Gh api -X POST "repos/$Repo/actions/runners/registration-token" --jq .token | Out-String).Trim()
+$token = (Invoke-Gh api -X POST "$RunnerApi/actions/runners/registration-token" --jq .token | Out-String).Trim()
 if (-not $token) { Die "GitHub gave no registration token. gh has to be signed in as somebody who administers $Repo." }
 Say '  got one, good for an hour, not shown' 'Green'
 
@@ -1593,7 +1640,7 @@ Head 'GitHub'
 # in the nightly.
 $askUntil = (Get-Date).AddSeconds(60)
 while ($true) {
-  $r = (Invoke-Gh api "repos/$Repo/actions/runners" --paginate --slurp | Out-String) | ConvertFrom-Json
+  $r = (Invoke-Gh api "$RunnerApi/actions/runners" --paginate --slurp | Out-String) | ConvertFrom-Json
   $mine = @($r | ForEach-Object { $_.runners } | Where-Object { $_.name -eq $RunnerName })
   if (($mine.Count -and "$($mine[0].status)" -eq 'online') -or (Get-Date) -ge $askUntil) { break }
   Start-Sleep -Seconds 3
@@ -1610,5 +1657,6 @@ $code = $LASTEXITCODE
 $said | ForEach-Object { Say "  $_" }
 if ($code -ne 0) { Die "the runner is installed, but the lock did not finish for every runner (exit $code); the lines above say which. .\scripts\deploy\Install-Runner.ps1 -Lock tries again without touching any runner." }
 Say ''
-Say '  GitHub hands it a waiting build check, nightly or release build as soon as it is free.' 'Gray'
+if ($Hermes) { Say '  GitHub hands it Thornswood-Hermes''s waiting Windows guard rail check as soon as it is free.' 'Gray' }
+else { Say '  GitHub hands it a waiting build check, nightly or release build as soon as it is free.' 'Gray' }
 Done
