@@ -9,8 +9,9 @@
 # one the queue let go while main moved goes back), and by hand.
 #
 # WHAT IT HOLDS. A workflow_run and a push run from main, and the checkout
-# is main's scripts/ops with no credential kept, so no pull request's code
-# runs here (no workflow runs on pull_request_target, #1306). Its token can
+# is main's scripts/ops and its two verb lists (which say what the box runs)
+# with no credential kept, so no pull request's code runs here (no workflow
+# runs on pull_request_target, #1306). Its token can
 # turn auto-merge on and nothing it does pushes, merges or comments; the
 # merge queue does the merge, as github-merge-queue[bot], so main's push
 # workflows run after it as they do for everybody's.
@@ -39,7 +40,11 @@ jobs:
         with:
           ref: main
           persist-credentials: false
-          sparse-checkout: scripts/ops
+          sparse-checkout: |
+            scripts/ops
+            scripts/vps/gate/verbs.json
+            scripts/release/nexus-verbs.json
+          sparse-checkout-cone-mode: false
       - name: Put each ready one on auto-merge
         env:
           GH_TOKEN: ${{ github.token }}

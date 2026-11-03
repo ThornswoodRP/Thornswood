@@ -13,6 +13,13 @@
 // this repository, not somebody's whose work is hands off (HANDS_OFF), not
 // already on auto-merge or in the queue, and has no conflict with main.
 //
+// Two are left off (Patrick's yes on Bramble's card, 2 Nov 2026, "Add the two
+// skips"). One that changes what runs on the live box, unless it is
+// Patrick's: a workflow, the deploy gate, a verb list or a script a verb runs
+// (BOX_DIRS, VERB_LISTS and the scripts main's two verb lists name). And a
+// Bot's (BOT_BRANCH) without Bramble's approving review at its head commit:
+// Bramble reviews the Bots' work and turns auto-merge on for it itself.
+//
 // One the queue let go stays off when it was let go at the commit it is on
 // now for a reason of its own: a failed check of the queue's merge of it, a
 // conflict, or a person taking it out. Putting that back unchanged would only run the same failure
@@ -34,19 +41,55 @@ const HANDS_OFF = ['WiccanDjinn', 'Jhinswife'];
 // owner's to answer.
 const NOT_ITS_OWN = /queue.?cleared|roll.?back|time.?out|timed out|branch.?protection|unreachable/i;
 
+// What runs on the live box: every workflow, the deploy gate, the two verb
+// lists, and each script a verb of theirs runs (verbScripts reads them).
+const BOX_DIRS = ['.github/workflows/', 'scripts/vps/gate/'];
+const VERB_LISTS = ['scripts/vps/gate/verbs.json', 'scripts/release/nexus-verbs.json'];
+const PATRICK = 'EvilPatrick06';
+// A Bot's branch, as the Bots' policy names it (Thornswood-Hermes
+// policy.yaml, branches.pattern), and Bramble's App, whose review counts.
+const BOT_BRANCH = /^(bramble|rift|sprocket|echo|magpie|wisp)\/[0-9]+-[a-z0-9][a-z0-9-]{0,60}$/;
+const BRAMBLE = /^thornswood-bramble(\[bot\])?$/;
+
+// The scripts main's verb lists name, read from the checkout.
+function verbScripts(root) {
+  const fs = require('fs');
+  const path = require('path');
+  const out = [];
+  for (const f of VERB_LISTS) {
+    const verbs = JSON.parse(fs.readFileSync(path.join(root, f), 'utf8')).verbs || {};
+    for (const k of Object.keys(verbs)) { if (verbs[k].script) out.push(verbs[k].script); }
+  }
+  return out;
+}
+
+// The files it changes that run on the box.
+function boxFiles(paths, scripts) {
+  return paths.filter((p) => BOX_DIRS.some((d) => p.indexOf(d) === 0) || VERB_LISTS.indexOf(p) >= 0 || scripts.indexOf(p) >= 0);
+}
+
 const QUERY = `query($owner: String!, $name: String!, $after: String) {
   repository(owner: $owner, name: $name) {
     pullRequests(states: OPEN, first: 50, after: $after, orderBy: {field: CREATED_AT, direction: ASC}) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        id number isDraft isCrossRepository baseRefName headRefOid mergeable isInMergeQueue
+        id number isDraft isCrossRepository baseRefName headRefName headRefOid mergeable isInMergeQueue
         author { login }
+        files(first: 100) { pageInfo { hasNextPage endCursor } nodes { path } }
+        reviews(last: 50, states: [APPROVED]) { nodes { author { login } commit { oid } } }
         autoMergeRequest { enabledAt }
         timelineItems(last: 1, itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT, PULL_REQUEST_COMMIT, HEAD_REF_FORCE_PUSHED_EVENT]) {
           nodes { __typename ... on RemovedFromMergeQueueEvent { createdAt reason } }
         }
       }
     }
+  }
+}`;
+
+// The rest of a pull request's files, past its first hundred.
+const FILES = `query($owner: String!, $name: String!, $number: Int!, $after: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) { files(first: 100, after: $after) { pageInfo { hasNextPage endCursor } nodes { path } } }
   }
 }`;
 
@@ -58,7 +101,8 @@ const ENABLE = `mutation($id: ID!) {
 
 // What to do with one pull request: [true, why] to turn auto-merge on,
 // [false, why] to leave it.
-function judge(pr, base) {
+// pr.paths is every file it changes; scripts, the verb scripts.
+function judge(pr, base, scripts) {
   if (pr.baseRefName !== base) return [false, 'aimed at ' + pr.baseRefName + ', not ' + base];
   if (pr.isDraft) return [false, 'a draft'];
   if (pr.isCrossRepository) return [false, 'from another repository'];
@@ -67,6 +111,14 @@ function judge(pr, base) {
   if (pr.autoMergeRequest) return [false, 'already on auto-merge'];
   if (pr.isInMergeQueue) return [false, 'already in the queue'];
   if (pr.mergeable === 'CONFLICTING') return [false, 'it conflicts with ' + base + '; its owner brings ' + base + ' in'];
+  const box = boxFiles(pr.paths || [], scripts || []);
+  if (box.length && who !== PATRICK) {
+    return [false, 'it changes what runs on the live box (' + box.slice(0, 3).join(', ') + (box.length > 3 ? ', ...' : '') + '), and only Patrick\'s goes on by itself'];
+  }
+  if (BOT_BRANCH.test(pr.headRefName || '')) {
+    const reviewed = ((pr.reviews || {}).nodes || []).some((r) => r.author && BRAMBLE.test(r.author.login) && r.commit && r.commit.oid === pr.headRefOid);
+    if (!reviewed) return [false, "a Bot's, with no approving review of Bramble's at its head; Bramble reviews it and turns auto-merge on"];
+  }
   // The newest of its queue drops, commits and force pushes: when that is a
   // drop, the queue let it go at the commit it is on now. (The drop event's
   // beforeCommit is not the pull request's head: on 2 Nov 2026 the first live
@@ -84,12 +136,20 @@ async function sweep(repo, gql, say, opts) {
   const [owner, name] = repo.split('/');
   const base = (opts && opts.base) || 'main';
   const dry = !!(opts && opts.dryRun);
+  const scripts = (opts && opts.scripts) || [];
   let after = null, put = 0, refused = 0;
   for (;;) {
     const data = await gql(QUERY, { owner, name, after });
     const page = data.repository.pullRequests;
     for (const pr of page.nodes) {
-      const [on, why] = judge(pr, base);
+      const files = pr.files || { nodes: [], pageInfo: {} };
+      pr.paths = files.nodes.map((f) => f.path);
+      for (let more = files.pageInfo; more && more.hasNextPage;) {
+        const next = (await gql(FILES, { owner, name, number: pr.number, after: more.endCursor })).repository.pullRequest.files;
+        pr.paths = pr.paths.concat(next.nodes.map((f) => f.path));
+        more = next.pageInfo;
+      }
+      const [on, why] = judge(pr, base, scripts);
       if (!on) { say('#' + pr.number + ' left: ' + why); continue; }
       if (dry) { say('#' + pr.number + ' would go on auto-merge: ' + why); put++; continue; }
       try {
@@ -124,12 +184,15 @@ function github(token) {
   };
 }
 
-module.exports = { judge, sweep, HANDS_OFF, NOT_ITS_OWN, QUERY, ENABLE };
+module.exports = { judge, sweep, verbScripts, boxFiles, HANDS_OFF, NOT_ITS_OWN, BOX_DIRS, VERB_LISTS, BOT_BRANCH, QUERY, FILES, ENABLE };
 
 if (require.main === module) {
   const repo = process.env.REPO, token = process.env.GH_TOKEN;
   if (!repo || !token) { console.log('REPO and GH_TOKEN must be set'); process.exit(2); }
-  sweep(repo, github(token), (l) => console.log(l), { dryRun: process.argv.includes('--dry-run') })
+  let scripts;
+  try { scripts = verbScripts(require('path').join(__dirname, '..', '..')); }
+  catch (e) { console.log('the verb lists could not be read, so nothing is put on: ' + e.message); process.exit(1); }
+  sweep(repo, github(token), (l) => console.log(l), { dryRun: process.argv.includes('--dry-run'), scripts })
     .then((code) => process.exit(code))
     .catch((e) => { console.log('the open pull requests could not be read: ' + e.message); process.exit(1); });
 }
