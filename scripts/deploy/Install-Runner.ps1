@@ -1111,6 +1111,11 @@ if (Test-Path '$Root') {
 `$old = @(Get-RunnerWatchers)
 if (`$old.Count) { 'priority  OLD WATCHER TASK still here: ' + ((`$old | ForEach-Object { `$_.TaskName }) -join ', ') + '. -Lock takes it off' }
 else { 'priority  no watcher task; the service starts the runner at normal' }
+# The listener's own words on why GitHub has it online or not (3 Nov: the
+# service ran and GitHub listed tw-hermes-box offline, and nothing here could
+# say why). The runner masks every secret it logs.
+`$diag = Get-ChildItem -LiteralPath '$Root\_diag' -Filter 'Runner_*.log' | Sort-Object LastWriteTime | Select-Object -Last 1
+if (`$diag) { 'listener  ' + `$diag.Name + ', last 40 lines:'; Get-Content -LiteralPath `$diag.FullName -Tail 40 | ForEach-Object { '  | ' + `$_ } } else { 'listener  no Runner_*.log in $Root\_diag' }
 "@) | ForEach-Object { Say "  $_" }
   if ($OffBox) { Remote (Get-GuardScript 'status') | ForEach-Object { Say "  $_" } }
   Head 'On GitHub'
