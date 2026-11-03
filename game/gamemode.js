@@ -36322,19 +36322,31 @@ return module.exports;
       // sent, so the browser is left alone. See drawn() above.
       delete s.panel;
     }
+    var written = false;
     try {
       mp.set(actorId, CHAR_PROPERTY, s);
+      written = true;
       // Only once it is actually written. A write that threw sent nothing,
       // and remembering it as sent would hold the next one back as well.
       if (sending) { lastDrawn[actorId] = sig; }
     } catch (e) {
       clog('could not write', actorId.toString(16), e);
     }
-    // Twin Souls is a second enchantment slot in the menu (#1389). It lives
-    // beside the craft gate, outside this block, the way spellOn does.
-    if (typeof handEnchantSlots === 'function') { handEnchantSlots(actorId, s); }
-    // And what the crafting menu lists, from the same answer the craft gate gives (#613).
-    if (typeof handRecipesHidden === 'function') { handRecipesHidden(actorId); }
+    /*
+      What the menus list goes with the record, so only once it is written
+      (#5475). The recipe list asks the craft gate for every recipe, and the
+      gate asks stateOf; a record that did not write is not there to read, so
+      stateOf built one again and wrote it again, and handed the list again,
+      with no end: an actor whose form is gone (a name taken off the embassy
+      roll after its character went) stopped the server.
+    */
+    if (written) {
+      // Twin Souls is a second enchantment slot in the menu (#1389). It lives
+      // beside the craft gate, outside this block, the way spellOn does.
+      if (typeof handEnchantSlots === 'function') { handEnchantSlots(actorId, s); }
+      // And what the crafting menu lists, from the same answer the craft gate gives (#613).
+      if (typeof handRecipesHidden === 'function') { handRecipesHidden(actorId); }
+    }
     return s;
   }
 
