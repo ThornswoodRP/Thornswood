@@ -73,7 +73,7 @@ try {
     $text = [IO.File]::ReadAllText($script)
     Yes 'it asks GitHub through the organization''s runner endpoints for -Hermes' ($text -match [regex]::Escape("`$RunnerApi = `$(if (`$Hermes) { 'orgs/' + `$Repo } else { 'repos/' + `$Repo })"))
     Yes '  and every runner call goes through that one place' ($text -notmatch 'repos/\$Repo/actions/runners')
-    Yes '-Status shows the listener''s newest log, so an offline runner says why' ($text.Contains("Get-ChildItem -LiteralPath '`$Root\_diag' -Filter 'Runner_*.log'") -and $text.Contains('Get-Content -LiteralPath `$diag.FullName -Tail 40'))
+    Yes '-Status shows the newest listener and service logs and the service manager''s lines, so an offline runner says why' ($text.Contains('foreach (`$kind in ''Runner_*.log'', ''RunnerService_*.log'')') -and $text.Contains("ProviderName = 'Service Control Manager'"))
 
     # ---- 3. nothing beside it ------------------------------------------------------
     foreach ($bad in @(@('-Number', '2'), @('-RunnerName', 'x'), @('-Account', 'x'), @('-Root', 'C:\Thornswood-RunnerX'), @('-Label', 'x'), @('-Repo', 'ThornswoodRP/Thornswood-Ops'), @('-OffBox'), @('-Lock'))) {

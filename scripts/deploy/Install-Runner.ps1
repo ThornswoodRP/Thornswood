@@ -1112,10 +1112,22 @@ if (Test-Path '$Root') {
 if (`$old.Count) { 'priority  OLD WATCHER TASK still here: ' + ((`$old | ForEach-Object { `$_.TaskName }) -join ', ') + '. -Lock takes it off' }
 else { 'priority  no watcher task; the service starts the runner at normal' }
 # The listener's own words on why GitHub has it online or not (3 Nov: the
-# service ran and GitHub listed tw-hermes-box offline, and nothing here could
-# say why). The runner masks every secret it logs.
-`$diag = Get-ChildItem -LiteralPath '$Root\_diag' -Filter 'Runner_*.log' | Sort-Object LastWriteTime | Select-Object -Last 1
-if (`$diag) { 'listener  ' + `$diag.Name + ', last 40 lines:'; Get-Content -LiteralPath `$diag.FullName -Tail 40 | ForEach-Object { '  | ' + `$_ } } else { 'listener  no Runner_*.log in $Root\_diag' }
+# service ran and GitHub listed tw-hermes-box offline, and the newest
+# Runner_*.log was config.cmd's own, so the service's listener had written
+# nothing). The newest files in _diag with their times, the last lines of the
+# newest listener and service log, and what Windows said about the service.
+# The runner masks every secret it logs.
+`$d = '$Root\_diag'
+if (Test-Path -LiteralPath `$d) {
+  'diag      newest files in ' + `$d + ':'
+  Get-ChildItem -LiteralPath `$d -File | Sort-Object LastWriteTime | Select-Object -Last 8 | ForEach-Object { '  | ' + `$_.LastWriteTime.ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss') + 'Z ' + `$_.Length + ' ' + `$_.Name }
+  foreach (`$kind in 'Runner_*.log', 'RunnerService_*.log') {
+    `$f = Get-ChildItem -LiteralPath `$d -Filter `$kind | Sort-Object LastWriteTime | Select-Object -Last 1
+    if (`$f) { 'log       ' + `$f.Name + ', last 25 lines:'; Get-Content -LiteralPath `$f.FullName -Tail 25 | ForEach-Object { '  | ' + `$_ } } else { 'log       no ' + `$kind + ' in ' + `$d }
+  }
+} else { 'diag      no ' + `$d }
+`$ev = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'Service Control Manager'; StartTime = (Get-Date).AddDays(-1) } -ErrorAction SilentlyContinue | Where-Object { `$_.Message -like ('*' + `$svc + '*') } | Select-Object -First 8)
+if (`$ev.Count) { 'windows   what the service manager said about ' + `$svc + ' in a day:'; `$ev | ForEach-Object { '  | ' + `$_.TimeCreated.ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss') + 'Z ' + `$_.Id + ' ' + ((`$_.Message -split '\r?\n')[0]) } } else { 'windows   the service manager said nothing about ' + `$svc + ' in a day' }
 "@) | ForEach-Object { Say "  $_" }
   if ($OffBox) { Remote (Get-GuardScript 'status') | ForEach-Object { Say "  $_" } }
   Head 'On GitHub'
