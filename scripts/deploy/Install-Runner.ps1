@@ -1101,7 +1101,11 @@ if (Test-Path '$Root\config.cmd') { 'runner    in $Root' } else { 'runner    NOT
 if (`$s) { 'service   ' + `$svc + ', ' + `$s.Status + ', starts ' + `$s.StartType } else { 'service   NOT REGISTERED' }
 `$w = Get-CimInstance Win32_Service -Filter "Name='`$svc'"
 if (`$w) { 'runs as   ' + `$w.StartName }
-foreach (`$p in (Get-Process Runner.Listener, Runner.Worker)) { 'process   ' + `$p.ProcessName + ' at ' + `$p.PriorityClass }
+# Only this runner's own processes: the box runs several runners, and a
+# listener of another one says nothing about this one (3 Nov).
+`$mine = @(Get-CimInstance Win32_Process | Where-Object { ('' + `$_.ExecutablePath) -like '$Root\bin\Runner*' })
+foreach (`$c in `$mine) { `$p = Get-Process -Id `$c.ProcessId; 'process   ' + `$c.Name + ' ' + `$c.ProcessId + ', started ' + `$c.CreationDate.ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss') + 'Z, at ' + `$p.PriorityClass }
+if (-not `$mine.Count) { 'process   NONE of this runner''s is running' }
 if (Get-LocalUser -Name '$Account') { 'account   $Account' } else { 'account   NOT THERE' }
 if (Test-Path '$Root') {
   `$a = Get-Acl -LiteralPath '$Root'
@@ -1111,21 +1115,29 @@ if (Test-Path '$Root') {
 `$old = @(Get-RunnerWatchers)
 if (`$old.Count) { 'priority  OLD WATCHER TASK still here: ' + ((`$old | ForEach-Object { `$_.TaskName }) -join ', ') + '. -Lock takes it off' }
 else { 'priority  no watcher task; the service starts the runner at normal' }
-# The listener's own words on why GitHub has it online or not (3 Nov: the
-# service ran and GitHub listed tw-hermes-box offline, and the newest
-# Runner_*.log was config.cmd's own, so the service's listener had written
-# nothing). The newest files in _diag with their times, the last lines of the
-# newest listener and service log, and what Windows said about the service.
-# The runner masks every secret it logs.
+# The listener's own words on why GitHub has it online or not. Each
+# Runner_*.log is named for the UTC time its process started, and a log the
+# listener still holds open keeps the size and time it had when it was made in
+# a folder listing (3 Nov: the service's log listed as 0 bytes at 04:53:50Z,
+# the same time as config.cmd's, so a sort by time tailed config's log). So
+# the logs are taken newest first by name and read through, and the service
+# wrapper's lines come from where it writes them, the Application event log
+# under ActionsRunnerService, which every runner on the box shares and whose
+# lines name none, so they come with this runner's processes above to read
+# them by. The runner masks every secret it logs.
 `$d = '$Root\_diag'
 if (Test-Path -LiteralPath `$d) {
-  'diag      newest files in ' + `$d + ':'
-  Get-ChildItem -LiteralPath `$d -File | Sort-Object LastWriteTime | Select-Object -Last 8 | ForEach-Object { '  | ' + `$_.LastWriteTime.ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss') + 'Z ' + `$_.Length + ' ' + `$_.Name }
-  foreach (`$kind in 'Runner_*.log', 'RunnerService_*.log') {
-    `$f = Get-ChildItem -LiteralPath `$d -Filter `$kind | Sort-Object LastWriteTime | Select-Object -Last 1
-    if (`$f) { 'log       ' + `$f.Name + ', last 25 lines:'; Get-Content -LiteralPath `$f.FullName -Tail 25 | ForEach-Object { '  | ' + `$_ } } else { 'log       no ' + `$kind + ' in ' + `$d }
-  }
+  `$logs = @(Get-ChildItem -LiteralPath `$d -File -Filter 'Runner_*.log' | Sort-Object Name | Select-Object -Last 3)
+  if (`$logs.Count) {
+    foreach (`$f in `$logs) {
+      `$lines = @(Get-Content -LiteralPath `$f.FullName)
+      'log       ' + `$f.Name + ', ' + `$lines.Count + ' lines, the last 25:'
+      `$lines | Select-Object -Last 25 | ForEach-Object { '  | ' + `$_ }
+    }
+  } else { 'log       no Runner_*.log in ' + `$d }
 } else { 'diag      no ' + `$d }
+`$ra = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'ActionsRunnerService'; StartTime = (Get-Date).AddDays(-1) } -ErrorAction SilentlyContinue | Select-Object -First 12)
+if (`$ra.Count) { 'service   the last lines any runner service on the box wrote in a day:'; `$ra | ForEach-Object { '  | ' + `$_.TimeCreated.ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss') + 'Z ' + `$_.LevelDisplayName + ' ' + ((`$_.Message -split '\r?\n')[0]) } } else { 'service   no runner service on the box wrote a line in a day' }
 `$ev = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'Service Control Manager'; StartTime = (Get-Date).AddDays(-1) } -ErrorAction SilentlyContinue | Where-Object { `$_.Message -like ('*' + `$svc + '*') } | Select-Object -First 8)
 if (`$ev.Count) { 'windows   what the service manager said about ' + `$svc + ' in a day:'; `$ev | ForEach-Object { '  | ' + `$_.TimeCreated.ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss') + 'Z ' + `$_.Id + ' ' + ((`$_.Message -split '\r?\n')[0]) } } else { 'windows   the service manager said nothing about ' + `$svc + ' in a day' }
 "@) | ForEach-Object { Say "  $_" }
