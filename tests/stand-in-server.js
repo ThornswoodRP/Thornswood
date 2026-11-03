@@ -49,7 +49,11 @@
     eat       MpActor::OnEquip: an ALCH or INGR record in the pack fires
               onEatItem, which alone may set eatItemScale (EatItemScaleBinding);
               then one leaves the pack whatever the handler answered.
-    read      MpActor: onReadBook, with the actor and the base id.
+    read      MpActor::OnEquip of a book in the pack: onReadBook, then, unless
+              it answered false, a spell tome teaches its spell and is spent
+              (ReadBookEvent::OnFireSuccess).
+    spells    PapyrusActor AddSpell, RemoveSpell, GetSpellCount and
+              GetNthSpell over the change form's learnedSpells.
     death     MpActor: onDying, then onDeath, then onRespawn after the delay.
     animate   ActionListener: an animation the client sends for its own
               character is kept as lastAnimEvent (OnUpdateAnimation); a
@@ -236,8 +240,9 @@ function world(opts) {
     taken to be all the files before it in the load order, which keeps that
     mapping the engine's in every case a record of this stand-in can reach.
     A field's data may be { ref: desc }, four bytes naming that form as the
-    record's own file writes it, or { floats: [...] }; anything else is
-    bytes. Records are only what a harness declared with w.record.
+    record's own file writes it, { bytes: [...], refs: { offset: desc } },
+    bytes with such a form id written at each offset, or { floats: [...] };
+    anything else is bytes. Records are only what a harness declared with w.record.
   */
   function slotAt(i) { return SLOTS[i]; }
   function slotIndexOf(id) {
@@ -266,6 +271,13 @@ function world(opts) {
       if (f.data && f.data.ref !== undefined) {
         const raw = localIn(at, w.idOf(f.data.ref));
         data = bytesIn(realm, [raw & 0xff, (raw >>> 8) & 0xff, (raw >>> 16) & 0xff, raw >>> 24]);
+      } else if (f.data && f.data.bytes) {
+        const b = f.data.bytes.slice();
+        Object.keys(f.data.refs || {}).forEach(function (off) {
+          const raw = localIn(at, w.idOf(f.data.refs[off])), o = Number(off);
+          b[o] = raw & 0xff; b[o + 1] = (raw >>> 8) & 0xff; b[o + 2] = (raw >>> 16) & 0xff; b[o + 3] = raw >>> 24;
+        });
+        data = bytesIn(realm, b);
       } else if (f.data && f.data.floats) {
         const b = Buffer.alloc(4 * f.data.floats.length);
         f.data.floats.forEach(function (x, i) { b.writeFloatLE(x, i * 4); });
@@ -820,6 +832,26 @@ function world(opts) {
     if (key === 'method Actor.DamageActorValue' && row) {
       if (String(args[0]).toLowerCase() === 'health') { w.hurtBy(id, Math.abs(Number(args[1]) || 0), 0); return undefined; }
     }
+    // The spell list (PapyrusActor AddSpell, RemoveSpell, GetSpellCount,
+    // GetNthSpell): the change form's learnedSpells, by global id. Only a SPEL
+    // record is added or taken off; a form no plugin has answers false.
+    if (kind === 'method' && cls === 'Actor' && row && row.type === 'NPC_' &&
+        (fn === 'AddSpell' || fn === 'RemoveSpell' || fn === 'GetSpellCount' || fn === 'GetNthSpell')) {
+      const list = row.learnedSpells = row.learnedSpells || [];
+      if (fn === 'GetSpellCount') { return list.length; }
+      if (fn === 'GetNthSpell') {
+        const n = Number(args[0]);
+        return n >= 0 && n < list.length ? { type: 'espm', desc: w.descOf(list[n]) } : undefined;
+      }
+      let spell = 0;
+      try { spell = args[0] && args[0].desc !== undefined ? w.idOf(args[0].desc) : 0; } catch (e) { spell = 0; }
+      const rec = spell ? records.get(spell) : null;
+      if (!rec || rec.type !== 'SPEL') { return false; }
+      const at = list.indexOf(spell);
+      if (fn === 'AddSpell') { if (at !== -1) { return false; } list.push(spell); saw(id, 'spell', w.descOf(spell), true); return true; }
+      if (at === -1) { return false; }
+      list.splice(at, 1); saw(id, 'spell', w.descOf(spell), false); return true;
+    }
     // Actor.GetRace: a person's race from their appearance, anyone else's from their base record's (w.record's race).
     if (key === 'method Actor.GetRace' && row && row.type === 'NPC_') {
       const race = row.appearance && row.appearance.raceId ? w.descOf(row.appearance.raceId) : (records.get(baseOf(row)) || {}).race;
@@ -1250,7 +1282,36 @@ function world(opts) {
     const taken = moveItems(actorId, 0, baseId, 1, named.name);
     return { sent: true, allowed: allowed, scale: scale, taken: taken };
   };
-  w.readBook = function (actorId, baseId) { return fire('onReadBook', [actorId >>> 0, baseId]); };
+  /*
+    A book read (MpActor::OnEquip, ReadBook): only one in the pack is read.
+    onReadBook goes first; false keeps the book and the spell (the client is
+    told to RemoveSpell, OnFireBlocked). Otherwise, for a book whose DATA
+    carries TeachesSpell (0x04) with the spell at offset 4, a spell the
+    character has not learned is learned and the book leaves the pack; one
+    already learned leaves the book where it is (ReadBookEvent::OnFireSuccess).
+    Answers { sent, allowed, learned }.
+  */
+  w.readBook = function (actorId, baseId) {
+    actorId = actorId >>> 0; baseId = baseId >>> 0;
+    const rec = records.get(baseId);
+    if (!rec || rec.type !== 'BOOK') { return { sent: false, why: 'not a book' }; }
+    if (w.count(actorId, baseId) < 1) { return { sent: false, why: 'not in the pack' }; }
+    const allowed = fire('onReadBook', [actorId, baseId]);
+    if (allowed === false) { return { sent: true, allowed: false, learned: false }; }
+    const res = lookupRecord(baseId);
+    const data = ((res.record && res.record.fields) || []).find(function (f) { return f.type === 'DATA'; });
+    const b = data ? data.data : [];
+    if (!(b.length >= 8 && (b[0] & 0x04))) { return { sent: true, allowed: allowed, learned: false }; }
+    const spellId = res.toGlobalRecordId((b[4] | (b[5] << 8) | (b[6] << 16)) + b[7] * 0x1000000);
+    const row = store.get(actorId);
+    row.learnedSpells = row.learnedSpells || [];
+    if (row.learnedSpells.indexOf(spellId) !== -1) { return { sent: true, allowed: allowed, learned: false }; }
+    row.learnedSpells.push(spellId);
+    moveItems(actorId, 0, baseId, 1, '');
+    return { sent: true, allowed: allowed, learned: true };
+  };
+  /* The spells the engine holds for a character (ChangeForm learnedSpells), as global ids. */
+  w.spellsOf = function (actorId) { const r = store.get(actorId >>> 0); return r && r.learnedSpells ? r.learnedSpells.slice() : []; };
   w.equip = function (actorId, baseId) { return fire('onEquipItemAttempt', [actorId >>> 0, baseId]); };
   w.drop = function (actorId, baseId, count) { return fire('onDropItem', [actorId >>> 0, baseId, count]); };
   /* Going down and dying (MpActor): onDying, onDeath, and onRespawn after delayMs. */
