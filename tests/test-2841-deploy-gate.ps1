@@ -185,7 +185,7 @@ Yes '  its key goes only to the two fixed secrets of the ops repository, with th
     $rk.Contains('does not let in main alone'))
 $ir = Text 'scripts/deploy/Install-Runner.ps1'
 Yes '  Install-Runner from the gate is the ops repository''s, with the App''s runners token, and puts back only a runner the records or GitHub already name' (
-    $ir.Contains("`$Repo = 'ThornswoodRP/Thornswood-Ops'") -and $ir.Contains('Get-ThornswoodOpsAccess -Repo') -and $ir.Contains('-For runners') -and
+    $ir.Contains("if (-not `$Hermes) { `$Repo = 'ThornswoodRP/Thornswood-Ops' }") -and $ir.Contains('Get-ThornswoodOpsAccess -Repo') -and $ir.Contains("-For `$(if (`$Hermes) { 'hermes-runners' } else { 'runners' })") -and
     $ir.Contains('is in no runner record and not registered on') -and $ir.IndexOf('function Invoke-Gh') -lt $ir.IndexOf('is in no runner record and not registered on'))
 # Publish-Server through the gate is the dev server's, from the box's store,
 # and nothing else (#4987): main stays with a Main run Patrick approves.
