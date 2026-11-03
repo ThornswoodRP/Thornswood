@@ -791,7 +791,10 @@ function world(opts) {
       const desc = w.descOf(baseId);
       if (!records.get(baseId >>> 0)) { throw new Error('place: no record ' + desc); }
       const id = nextPlaced++;
-      w.ref(id, { base: desc });
+      /* ScampServer::Place: an NPC_ record becomes an actor (MpActor), anything else a reference of the record's type. */
+      const rec = records.get(baseId >>> 0);
+      if (rec.type === 'NPC_') { w.ref(id, { base: desc, type: 'NPC_', profileId: -1, isDead: false }); }
+      else { w.ref(id, { base: desc, type: rec.type }); }
       saw(id, 'placed', desc, null);
       return id;
     },
