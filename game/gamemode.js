@@ -31838,10 +31838,10 @@ module.exports = {
     var rolled = { gold: prior.gold, items: prior.items };
     var empty = !(rolled.gold > 0) && !(rolled.items && rolled.items.length);
     if (!empty && !give(actorId, rolled)) return null;
+    // The line is answered, not said: the press handler says every line a
+    // branch answers (scripted-activators, notify and say), so saying it here
+    // as well put it in their chat twice (#5477).
     var line = empty ? 'There is nothing on this body.' : bodyLine(rolled);
-    if (line) {
-      try { say(actorId, line); } catch (e4) { /* the pile is already in the pack */ }
-    }
     return line || null;
   }
 
