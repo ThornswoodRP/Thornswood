@@ -114,9 +114,9 @@ jobs:
             if ($null -eq $p -or [string]$p.release -ne $tag) { continue }
             $st = gh api "repos/$repo/deployments/$($d.id)/statuses?per_page=100"
             if ($LASTEXITCODE -ne 0) { Stop-Promote "the statuses of Deployment $($d.id) could not be read" }
-            if (@(($st -join "`n") | ConvertFrom-Json | Where-Object state -eq 'success').Count) { $ran = $true; Write-Host "dev ran $tag: Deployment $($d.id)"; break }
+            if (@(($st -join "`n") | ConvertFrom-Json | Where-Object state -eq 'success').Count) { $ran = $true; Write-Host "dev ran ${tag}: Deployment $($d.id)"; break }
           }
-          if (-not $ran) { Stop-Promote "dev has not run $tag: no Deployment of it to Dev ended in success" }
+          if (-not $ran) { Stop-Promote "dev has not run ${tag}: no Deployment of it to Dev ended in success" }
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("commit=" + $m.commit)
           Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "**$tag** (commit $($m.commit.Substring(0, 12))) ran on dev. It goes on the live server once Patrick approves this run."
 
