@@ -345,7 +345,7 @@ try {
         $env:DISCORD_TOKEN = 'not-a-real-token'
         $env:HEARTBEAT_FILE = $real
         $pre = @(); if ($py.Count -gt 1) { $pre = @($py[1]) }
-        $code = "import sys; sys.path.insert(0, sys.argv[1]); import bot; sys.exit(0 if bot.beat_now() else 1)"
+        $code = "import sys; sys.path.insert(0, sys.argv[1]); import harness_bot; sys.exit(0 if harness_bot.whole().beat_now() else 1)"
         $null = & $py[0] @pre -c $code $botDir 2>&1
         $rc = $LASTEXITCODE
         Remove-Item Env:HEARTBEAT_FILE -EA SilentlyContinue

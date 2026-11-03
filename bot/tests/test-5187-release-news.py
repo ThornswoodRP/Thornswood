@@ -41,8 +41,9 @@ os.environ.setdefault('DISCORD_TOKEN', 'not-a-real-token')
 os.environ.pop('GITHUB_TOKEN', None)
 os.environ['GITHUB_TOKEN_FILE'] = ''
 
-import bot  # noqa: E402
+import harness_bot  # noqa: E402
 
+bot = harness_bot.whole()
 FAIL = []
 NOW = 1_800_000_000
 
@@ -157,7 +158,7 @@ yes('the record keeps the newest 200 a channel', len(state['said']['dev']) == bo
     and 'build-9' in state['said']['dev'] and 'old-0' not in state['said']['dev'])
 
 # ---- started, by id --------------------------------------------------------
-src = open(os.path.join(HERE, 'bot.py'), encoding='utf-8').read()
+src = harness_bot.source()
 yes('the loop is started with the others', 'asyncio.create_task(watch_release_news())' in src)
 yes('dev news goes to the id in dev-channel.txt',
     bot.DEV_NEWS_ID == int(open(os.path.join(HERE, 'dev-channel.txt')).read().strip()))

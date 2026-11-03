@@ -4,7 +4,7 @@
 # WHY. A fix people would notice carries "Test task for #N: <title>" in its
 # pull request, with its Server line and steps. done-on-merge.yml copies that
 # block onto the issue at the merge, and the bot reads it and checks its rules
-# (post_problems in bot/bot.py) only when it goes to post it: for a Main one,
+# (post_problems in bot/bot_post_rules.py) only when it goes to post it: for a Main one,
 # when the main release carries the fix, days later. A block that broke a
 # rule then sat on an issue in Done with a refusal comment under it, for a
 # thread that had finished long before. Here the same function reads it while

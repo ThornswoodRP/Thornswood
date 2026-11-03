@@ -637,7 +637,8 @@ function python(args) {
   // ---------------------------------------------------------------- C --
   console.log('\nthe bot:');
   const py = python(['-c',
-    'import bot, json\n' +
+    'import harness_bot, json\n' +
+    'bot = harness_bot.whole()\n' +
     'print(bot.moderation_text("live", {"did":"kick","by":1001,"byName":"Aela","who":2002,"whoName":"@everyone","why":"**spam**"}))\n' +
     'print(bot.moderation_text("dev", {"did":"silence","by":1,"byName":"A","who":2,"whoName":"B","minutes":10}))\n' +
     'print(bot.moderation_text("dev", {"did":"nonsense"}))\n' +

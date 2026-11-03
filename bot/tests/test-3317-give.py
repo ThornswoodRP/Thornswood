@@ -57,7 +57,8 @@ def read(rel):
 
 
 # ------------------------------------------------------------------ G1 --
-bot_src = read('bot/bot.py')
+import harness_bot  # noqa: E402
+bot_src = harness_bot.source()
 m = re.search(r"os\.environ\.get\('STAFF_ROLES',\s*((?:'[^']*'\s*)+)\)", bot_src)
 bot_default = ''.join(re.findall(r"'([^']*)'", m.group(1))) if m else ''
 m = re.search(r"\[string\]\$StaffRoles\s*=\s*'([^']*)'", read('scripts/deploy/Install-Bot.ps1'))

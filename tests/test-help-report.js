@@ -414,7 +414,8 @@ const inbox = () => { try { return JSON.parse(fs.readFileSync(path.join(dir, 'da
         'import json, os, sys',
         'sys.path.insert(0, os.environ["BOT_DIR"])',
         'os.environ.setdefault("DISCORD_TOKEN", "not-a-real-token")',
-        'import bot',
+        'import harness_bot',
+        'bot = harness_bot.whole()',
         'rows = json.load(open(os.environ["INBOX"], encoding="utf-8"))',
         'out = [bot.report_text(r) for r in rows if r.get("kind") != "ticket"]',
         'print(json.dumps(out))'

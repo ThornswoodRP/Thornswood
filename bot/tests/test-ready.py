@@ -37,8 +37,9 @@ import tempfile
 # called, which nothing here does.
 os.environ.setdefault('DISCORD_TOKEN', 'not-a-real-token')
 
-import bot  # noqa: E402
+import harness_bot  # noqa: E402
 
+bot = harness_bot.whole()
 PASS = []
 FAIL = []
 
@@ -315,7 +316,7 @@ try:
         not [n for n in real if n.startswith('live-smoke')])
 
     # ------------------------------------- the views are not in on_ready --
-    src = open(os.path.join(HERE, 'bot.py'), encoding='utf-8').read()
+    src = harness_bot.source()
     ready = src[src.index('async def on_ready():'):]
     yes('the persistent views are registered once, not on every reconnect',
         'add_view' not in ready and 'async def setup_hook' in src)

@@ -133,6 +133,8 @@ on:
       - 'site/public/**'
       - 'site/data/site/**'
       - 'bot/bot.py'
+      # The bot's modules, which bot.py imports (#5357).
+      - 'bot/bot_*.py'
       - 'bot/_pyguard.py'
       - 'bot/trust.py'
       - 'bot/card.py'

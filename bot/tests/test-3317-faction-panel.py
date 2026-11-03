@@ -68,8 +68,9 @@ spec = importlib.util.spec_from_file_location(
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 
-import bot  # noqa: E402
+import harness_bot  # noqa: E402
 
+bot = harness_bot.whole()
 bot.log = lambda *a: None
 STAFF_SAID = []
 

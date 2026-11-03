@@ -142,6 +142,8 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 if (-not $User) { $User = Get-ThornswoodVpsUser }
 if (-not $Vps) { $Vps = Get-ThornswoodVpsAddress }
 . (Join-Path $Here 'Swap.ps1')
+# The bot's code as one list: bot.py and the modules it imports (#5357).
+. (Join-Path $Here 'Bot-Code.ps1')
 # The bot sources live at the repo root, in bot\. This script sits two levels
 # down, in scripts\deploy, since #440 sorted the scripts into scripts\<area> on
 # 25 September, so the repo root is two up from here. The copy loop below kept
@@ -161,7 +163,7 @@ $docsWin = $DocsRoot.Replace('/','\')
 . (Join-Path $Here 'Artifact.ps1')
 $artifact = $null
 if (-not $PutBack -and -not $SetPing) {
-$artifact = New-ThornswoodArtifact -Component bot -RepoDir $Repo -Paths 'bot/bot.py', 'bot/_pyguard.py', 'bot/trust.py', 'bot/card.py', 'bot/staff-channel.txt', 'bot/dev-channel.txt', 'bot/requirements.txt', 'bot/factions.json', 'bot/assets/join-card.png', 'scripts/vps/BotService.cs'
+$artifact = New-ThornswoodArtifact -Component bot -RepoDir $Repo -Paths (@(Get-ThornswoodBotCode $Repo | ForEach-Object { 'bot/' + $_ }) + @('bot/staff-channel.txt', 'bot/dev-channel.txt', 'bot/requirements.txt', 'bot/factions.json', 'bot/assets/join-card.png', 'scripts/vps/BotService.cs'))
 Write-Host ('artifact ' + (Format-ThornswoodArtifact $artifact)) -ForegroundColor DarkGray
 Send-ThornswoodArtifact -Artifact $artifact -Target "$User@$Vps" -SshArgs $ssh
 $Repo = $artifact.Folder
@@ -396,9 +398,10 @@ Head 'Staging it'
 # factions.json too: the named factions the Faction Leader form reads from
 # beside itself. A file this list does not name never reaches the box.
 $send = [ordered]@{}
-# _pyguard.py is the Python version check bot.py imports first (#2276), and
-# trust.py says which roots it trusts (#3111).
-foreach ($f in 'bot.py', '_pyguard.py', 'trust.py', 'card.py', 'staff-channel.txt', 'dev-channel.txt', 'requirements.txt', 'factions.json') {
+# _pyguard.py is the Python version check bot.py imports first (#2276),
+# trust.py says which roots it trusts (#3111), and bot_*.py are the bot's
+# modules, the ones bot.py imports (#5357, Bot-Code.ps1).
+foreach ($f in @(Get-ThornswoodBotCode $Repo) + @('staff-channel.txt', 'dev-channel.txt', 'requirements.txt', 'factions.json')) {
   $src = Join-Path $Repo "bot\$f"
   if (-not (Test-Path $src)) { Die "missing: $src" }
   $send[$f] = $src
@@ -443,7 +446,7 @@ foreach ($rel in $send.Keys) {
   Say "  $rel" 'Green'
 }
 $hashes = Get-SwapHashes $send
-$checkOut = @(Remote ((ServiceSwapVars $Root $stageName $prevName $Wait $hashes @('bot.py', '_pyguard.py', 'trust.py', 'card.py')) + $serviceCheckBlock) |
+$checkOut = @(Remote ((ServiceSwapVars $Root $stageName $prevName $Wait $hashes @(Get-ThornswoodBotCode $Repo)) + $serviceCheckBlock) |
               ForEach-Object { Say "  $_"; "$_".Trim() })
 if ($checkOut -notcontains 'STAGE OK') { Die 'the stage did not check out, so the bot was not stopped or changed. The lines above say why.' }
 }

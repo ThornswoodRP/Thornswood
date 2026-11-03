@@ -18,8 +18,9 @@
        from that file trusts those four and nothing from the machine.
     B  a bundle of nothing but eMudhra roots is refused, not written as an
        empty trust.
-    C  bot.py writes the bundle before it imports discord, from its data
-       folder, and points SSL_CERT_FILE at it whatever the environment said.
+    C  bot.py loads bot_base.py before anything else (#5357), and that
+       writes the bundle before it imports discord, from its data folder,
+       and points SSL_CERT_FILE at it whatever the environment said.
        Every connection it makes, urllib's and discord.py's, goes through a
        context made from that file alone (trust.context), because on Windows
        a default context also loads the machine's stores, and the box's
@@ -129,22 +130,29 @@ try {
     yes('B1 a bundle of only eMudhra roots is refused, saying none is left', b.status !== 0 && /no root certificate is left/.test(b.stderr), b.stdout + b.stderr);
   }
 
-  // ---- C: bot.py
-  const bot = read('bot/bot.py');
-  const iTrust = bot.indexOf('\nimport trust\n');
-  const iDiscord = bot.indexOf('\nimport discord\n');
-  yes('C1 bot.py imports trust before discord', iTrust > 0 && iDiscord > iTrust);
-  const head = bot.slice(iTrust, iDiscord);
+  // ---- C: bot.py, and bot_base.py, the first of its modules it loads (#5357)
+  const start = read('bot/bot.py');
+  const iBase = start.indexOf('\nimport bot_base');
+  const firstImport = /\nimport (?!_pyguard\b|json\b|os\b|sys\b)\w+/.exec(start);
+  yes('C0 bot.py loads bot_base.py before discord or any other module of the bot',
+    iBase > 0 && !!firstImport && firstImport.index === iBase);
+  const base = read('bot/bot_base.py');
+  const iTrust = base.indexOf('\nimport trust\n');
+  const iDiscord = base.indexOf('\nimport discord\n');
+  yes('C1 bot_base.py imports trust before discord', iTrust > 0 && iDiscord > iTrust);
+  const head = base.slice(iTrust, iDiscord);
   yes('C2 it writes the bundle into its data folder before that import',
     head.indexOf("\nROOTS = os.path.join(DATA_DIR, 'roots.pem')\n") !== -1 &&
     head.indexOf('\n_trusted, _left_out = trust.write_bundle(ROOTS)\n') !== -1 &&
-    bot.indexOf('\nDATA_DIR = ') !== -1 && bot.indexOf('\nDATA_DIR = ') < iTrust);
+    base.indexOf('\nDATA_DIR = ') !== -1 && base.indexOf('\nDATA_DIR = ') < iTrust);
+  // All of the bot's code, bot.py and its modules, for what holds of all of it.
+  const bot = require('./bot-files').source().split(CR).join('');
   yes('C4 every urllib request goes through a context made from that file alone',
     head.indexOf('\nCONTEXT = trust.context(ROOTS)\n') !== -1 &&
     head.indexOf('urllib.request.HTTPSHandler(context=CONTEXT)') !== -1 &&
     head.indexOf('urllib.request.install_opener(') !== -1 &&
     !/urlopen\([^)]*context=/.test(bot));
-  const after = bot.slice(iDiscord);
+  const after = base.slice(iDiscord);
   const trustPy = read('bot/trust.py');
   yes('C5 and so does discord.py: TrustedClient, made by trust.client_class, gives its HTTP client a connector on CONTEXT at login',
     after.indexOf('\nTrustedClient = trust.client_class(CONTEXT)\n') !== -1 &&
@@ -154,13 +162,13 @@ try {
   // #3604: backfill.py and redraw.py made a plain discord.Client, so on the
   // box they trusted LocalMachine Root and its emSign root with the bot's
   // token. Every script in bot/ makes its client from trust.client_class,
-  // through bot.TrustedClient or directly, and no other Discord client.
+  // through bot_base.TrustedClient or directly, and no other Discord client.
   const scripts = fs.readdirSync(path.join(ROOT, 'bot')).filter((f) => /\.py$/.test(f) && !/^test-/.test(f) && f !== 'trust.py');
   const plain = /\b(?:discord\.(?:Client|AutoShardedClient)|commands\.(?:Bot|AutoShardedBot)|(?:^|[^.\w])(?:Client|AutoShardedClient|Bot|AutoShardedBot))\s*\(\s*(?:intents|\)|command_prefix)|\(\s*discord\.(?:Client|AutoShardedClient)\s*\)|from discord(?:\.ext\.commands)? import[^\n]*\b(?:Client|Bot)\b/m;
   const wrong = scripts.filter((f) => plain.test(read('bot/' + f)));
   yes('C7 no script in bot/ makes or subclasses a Discord client of its own (' + scripts.length + ' read)', wrong.length === 0, wrong.join(', '));
   const logsIn = scripts.filter((f) => /\bclient\.(?:run|login|start)\(/.test(read('bot/' + f)));
-  const viaTrust = (f) => /\n\s*client = (?:bot\.TrustedClient|trust\.client_class\(\))\(intents=/.test(read('bot/' + f)) ||
+  const viaTrust = (f) => /\n\s*client = (?:bot_base\.TrustedClient|trust\.client_class\(\))\(intents=/.test(read('bot/' + f)) ||
     (f === 'bot.py' && /\nclient = Thornswood\(/.test(bot));
   yes('C8 and every one that logs in makes its client from trust.client_class: ' + logsIn.join(', '),
     logsIn.length >= 5 && logsIn.every(viaTrust), logsIn.filter((f) => !viaTrust(f)).join(', '));
@@ -171,10 +179,14 @@ try {
 
   // ---- D: Install-Bot.ps1
   const ib = read('scripts/deploy/Install-Bot.ps1');
-  yes('D1 Install-Bot packs trust.py into the bot artifact', /New-ThornswoodArtifact -Component bot [^\n]*'bot\/trust\.py'/.test(ib));
+  // The bot's code is one list, Bot-Code.ps1's, trust.py on it (#5357).
+  const code = read('scripts/deploy/Bot-Code.ps1');
+  yes('D1 Install-Bot packs trust.py into the bot artifact, with the bot\'s code',
+    code.indexOf("return @('bot.py', '_pyguard.py', 'trust.py', 'card.py') + @(Get-ThornswoodBotParts $Repo)") !== -1 &&
+    /New-ThornswoodArtifact -Component bot [^\n]*Get-ThornswoodBotCode \$Repo/.test(ib));
   yes('D2 sends it with the code and parse-checks it on the box',
-    ib.indexOf("foreach ($f in 'bot.py', '_pyguard.py', 'trust.py', 'card.py',") !== -1 &&
-    ib.indexOf("$hashes @('bot.py', '_pyguard.py', 'trust.py', 'card.py')") !== -1);
+    ib.indexOf("foreach ($f in @(Get-ThornswoodBotCode $Repo) + @(") !== -1 &&
+    ib.indexOf("$hashes @(Get-ThornswoodBotCode $Repo)) + $serviceCheckBlock") !== -1);
   yes('D3 runs trust.py against the installed certifi and stops before the bot is touched when it cannot',
     ib.indexOf("& python '$rootWin\\$stageName\\trust.py'") !== -1 &&
     /-match 'ROOTS NOT MADE'\) \{ Die /.test(ib));

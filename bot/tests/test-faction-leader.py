@@ -40,8 +40,9 @@ for _k in ('TICKET_CHANNEL', 'TICKET_LOG', 'STAFF_ROLES', 'TICKET_COOLDOWN',
 
 import discord  # noqa: E402
 
-import bot  # noqa: E402
+import harness_bot  # noqa: E402
 
+bot = harness_bot.whole()
 PASS = []
 FAIL = []
 

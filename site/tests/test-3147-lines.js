@@ -129,7 +129,7 @@ yes('the site fills it on the pages it serves', /html = fillLoreLine\(html, read
 yes('and hands every line out in /api/public', /lines: readLines\(\)/.test(src));
 
 // ------------------------------------------------------------- the bot --
-const bot = read('bot/bot.py') || '';
+const bot = require('../../tests/bot-files').source().replace(/\r\n/g, '\n');
 yes('bot.py starts watch_lines when it comes up', /asyncio\.create_task\(watch_lines\(\)\)/.test(bot));
 yes('and reads the lines from /api/public', /def site_lines\(\):[\s\S]*?SITE \+ '\/api\/public'[\s\S]*?\.get\('lines'\)/.test(bot));
 const kept = all.filter((s) => bot.indexOf(s) >= 0 || home.indexOf(s) >= 0);
@@ -142,7 +142,8 @@ else {
   const probe = [
     'import sys, json',
     'sys.path.insert(0, sys.argv[1])',
-    'import bot',
+    'import harness_bot',
+    'bot = harness_bot.whole()',
     'got = json.loads(sys.stdin.read())',
     'print(json.dumps({',
     '  "lines": bot.status_lines(got),',

@@ -1,0 +1,396 @@
+"""
+The known issues and test tasks forums' settings, and the GitHub reads
+the bot makes.
+
+Part of the bot: bot.py loads it (#5357).
+"""
+import datetime
+import json
+import os
+import re
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+from bot_core import _int_env, log
+
+
+# Patrick, 11 Oct: the issue board is not where testers look. Two forums are
+# kept from it, automatically, as things are found and fixed:
+#
+#   #known-issues  one post per open issue labelled Dev Findings or Main
+#                  Findings, tagged Dev or Main by its labels (where it was
+#                  found). The post goes the moment its issue is no longer an
+#                  open finding: fixed and closed, closed any other way, or its
+#                  label taken off.
+#   #test-tasks    one post per issue closed as fixed from the day this began
+#                  (see the since stamp below), for testers to check. Its
+#                  title and body are the issue's last comment that starts
+#                  "Test task:" (written by whoever fixed it); a finding with
+#                  no such comment gets its own title and a plain line. An
+#                  issue that is reopened loses its test task, and comes back
+#                  to #known-issues if it is still a finding.
+#
+# When an issue closes (Patrick, 11 Oct): dev is where the team checks that
+# nothing breaks the game, and main is where testers test, since we are in
+# alpha. So a fix people would notice is closed, with its "Test task:"
+# comment, when it reaches main, not when it merges or reaches dev, and every
+# test task the bot posts in #test-tasks is tagged Main. A "Server:" line
+# under "Known issue:" still sets that post's tag.
+#
+#   #dev-test-tasks (Patrick, 12 Oct) one post per issue whose last "Test
+#                  task:" comment has "Server: Dev" straight under it, open or
+#                  closed: the code is done and someone on dev has to measure
+#                  something. Most test tasks are Main, because testers play
+#                  on main. The post goes when the issue closes as fixed (any
+#                  close after the comment), or when a newer "Test task:"
+#                  comment does not say Server: Dev; a closed issue's newest
+#                  test task then goes to #test-tasks as before, if it is
+#                  Main. An issue whose last test task says Server: Dev gets
+#                  no #test-tasks post from it. A dev post is for developers
+#                  (Patrick, 12 Oct): the issue, its pull requests, commits,
+#                  labels and build linked, and the whole test task over as
+#                  many messages as it takes (dev_render). #test-tasks posts
+#                  stay plain, with no number, link or code.
+#
+# "Server: Dev" counts only on a comment written from the day #dev-test-tasks
+# began (state['dev_since'], set on the first pass that finds the forum).
+# Comments from before that carried "Server: Dev" when every test task went
+# to #test-tasks; they stay Main, so no post already up moves. Until the
+# forum is made, every Server line is read and changes nothing, as before.
+#
+# Each record holds the form of the post it was made with (TASK_FORM,
+# KNOWN_FORM). When the way a post is written changes, the form goes up by
+# one, and every record of an older form is written again on the next pass,
+# once, even though GitHub says its issue did not change.
+#
+# Posts carry no issue number and no link: testers have no GitHub. The bot
+# remembers which post is which issue in known-issues.json in the data folder,
+# written straight after each post, so a restart never posts twice; a post
+# made just before a crash is found again by its title among the bot's own.
+#
+# GitHub: the token github_token() gives, for the issues of KNOWN_ISSUES_REPO
+# (read, and write for the comments and filed problems). No token means
+# neither forum is kept, said once.
+KNOWN_REPO = os.environ.get('KNOWN_ISSUES_REPO', 'ThornswoodRP/Thornswood').strip()
+KNOWN_LABELS = [l.strip() for l in
+                os.environ.get('KNOWN_ISSUES_LABELS',
+                               'Dev Findings,Main Findings').split(',')
+                if l.strip()]
+KNOWN_EVERY = max(60, _int_env('KNOWN_ISSUES_EVERY', 300))
+GITHUB_API = os.environ.get('GITHUB_API', 'https://api.github.com').rstrip('/')
+TASK_MARK = re.compile(r'^\s*test task\s*:\s*(.*)$', re.I)
+KNOWN_MARK = re.compile(r'^\s*known issue\s*:\s*(.*)$', re.I)
+TASK_SERVER = re.compile(r'^\s*server\s*:\s*(dev|main)\s*$', re.I)
+# The one tag a test task from the board carries: testers test on main.
+TASK_TAG = 'Main'
+# The form of the posts each record was made with. 2: test tasks tagged Main
+# whatever their Server line, and both bodies say the fix is on main (11 Oct).
+# 3 (and KNOWN_FORM 3, DEV_FORM 2): the Claude Code line under a comment is
+# not in the post (22 Oct).
+# 4 (and KNOWN_FORM 4, DEV_FORM 3): no post ends with a "---" rule or any
+# "Generated by/with" footer (Patrick, 22 Oct).
+# KNOWN_FORM 5: done-on-merge.yml's comment takes a known post down
+# (merged_fix, 26 Oct), so every finding's comments are read again once.
+TASK_FORM = 4
+KNOWN_FORM = 5
+DEV_FORM = 3
+# A fix that is merged and waits on main: done-on-merge.yml's comment,
+# written by the workflow and starting "Pull request #N merged (", which
+# Close-ShippedIssues.ps1 reads as well. Until #5185 a board: Done label went
+# on beside it for a minute; the card follows the merge by itself now
+# (board.yml), and the comment is the one mark.
+DONE_ON_MERGE = re.compile(r'^Pull request #\d+ merged \(')
+DONE_ON_MERGE_BY = 'github-actions[bot]'
+
+
+def merged_fix(comments):
+    """True when done-on-merge.yml has written its record of a merged fix
+       on the issue: the issue is in Done and its fix has landed."""
+    for c in comments or []:
+        who = str(((c.get('user') or {}).get('login')) or '')
+        if who == DONE_ON_MERGE_BY and DONE_ON_MERGE.match(str(c.get('body') or '')):
+            return True
+    return False
+
+
+# The token the box admin service's App makes for the bot (#5184, Patrick's A
+# of 1 Nov 2026): issues write on KNOWN_REPO alone, for the hour GitHub gives
+# it, written by scripts\vps\admin\admin.js every half hour into a folder
+# only SYSTEM, Administrators, that service and this bot's own account may
+# read. It replaces GITHUB_TOKEN, a fine-grained token of Patrick's bound to
+# EvilPatrick06, which writes nothing once the repository is ThornswoodRP's.
+GITHUB_TOKEN_FILE = os.environ.get(
+    'GITHUB_TOKEN_FILE', r'C:\Thornswood-Admin\for-bot\github-token.json').strip()
+_TOKEN_SAID = {'line': ''}
+
+
+def _token_from_file(path=None, now=None):
+    """(token, why): the App's token in GITHUB_TOKEN_FILE while it has more
+       than two minutes left, else ('', why there is none). Never the token
+       in why."""
+    path = GITHUB_TOKEN_FILE if path is None else path
+    now = time.time() if now is None else now
+    if not path:
+        return '', 'no GITHUB_TOKEN_FILE'
+    try:
+        with open(path, encoding='utf-8') as f:
+            doc = json.load(f)
+    except FileNotFoundError:
+        return '', '%s is not there' % path
+    except (OSError, ValueError) as e:
+        return '', '%s will not read (%s)' % (path, type(e).__name__)
+    token = str((doc or {}).get('token') or '').strip() if isinstance(doc, dict) else ''
+    ends = str((doc or {}).get('expires_at') or '') if isinstance(doc, dict) else ''
+    if not token:
+        return '', '%s holds no token' % path
+    try:
+        left = datetime.datetime.strptime(ends, '%Y-%m-%dT%H:%M:%SZ').replace(
+            tzinfo=datetime.timezone.utc).timestamp() - now
+    except ValueError:
+        return '', '%s says no time it ends' % path
+    if left < 120:
+        return '', 'the token in %s ended at %s' % (path, ends)
+    return token, ''
+
+
+def github_token(path=None, now=None):
+    """The token for KNOWN_REPO's issues: the App's from GITHUB_TOKEN_FILE
+       while it has one, else GITHUB_TOKEN. Says in the log each time the
+       one it uses changes, and why, never the token."""
+    token, why = _token_from_file(path, now)
+    if token:
+        line = 'github: the App\'s token from %s' % (GITHUB_TOKEN_FILE if path is None else path)
+    else:
+        token = os.environ.get('GITHUB_TOKEN', '').strip()
+        line = 'github: %s, so %s' % (why, 'GITHUB_TOKEN from bot.env.json' if token else 'no token')
+    if line != _TOKEN_SAID['line']:
+        _TOKEN_SAID['line'] = line
+        log(line)
+    return token
+
+
+def _github_get(url):
+    token = github_token()
+    req = urllib.request.Request(url, headers={
+        'Accept': 'application/vnd.github+json',
+        'Authorization': 'Bearer ' + token,
+        'User-Agent': 'thornswood-bot',
+        'X-GitHub-Api-Version': '2022-11-28'})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.loads(r.read().decode('utf-8'))
+
+
+def pass_failure(e):
+    """How a pass failed, for the log: the kind, and for an answer from
+       GitHub its status and the path it asked for, so a failure names
+       itself (#5184: 110 lines saying only "HTTPError"). Never the token:
+       the request carries it in a header, and neither the path nor str(e)
+       holds it."""
+    kind = type(e).__name__
+    if isinstance(e, urllib.error.HTTPError):
+        url = str(getattr(e, 'url', None) or getattr(e, 'filename', None) or '')
+        path = url[len(GITHUB_API):] if url.startswith(GITHUB_API) else url.split('?')[0]
+        return '%s %s on %s' % (kind, getattr(e, 'code', '?'), path or '(no path)')
+    if isinstance(e, urllib.error.URLError):
+        return '%s (%s)' % (kind, type(getattr(e, 'reason', None)).__name__)
+    return kind
+
+
+def _github_rows(got, url):
+    """A page of a GitHub list, which is a list. Anything else is an answer
+       that is not the list, and is raised, never read as no issues: a pass
+       that read no findings would take every #known-issues post down."""
+    if got is None:
+        return []
+    if not isinstance(got, list):
+        raise ValueError('GitHub answered %s with a %s, not a list'
+                         % (url.split('?')[0], type(got).__name__))
+    return got
+
+
+def github_open_findings(get=None):
+    """Every open issue (not pull request) carrying one of KNOWN_LABELS, by
+       number. One query per label because GitHub ANDs labels in one."""
+    get = get or _github_get
+    out = {}
+    for label in KNOWN_LABELS:
+        page = 1
+        while True:
+            url = ('%s/repos/%s/issues?state=open&per_page=100&page=%d&labels=%s'
+                   % (GITHUB_API, KNOWN_REPO, page,
+                      urllib.parse.quote(label)))
+            rows = _github_rows(get(url), url)
+            for row in rows:
+                if isinstance(row, dict) and 'pull_request' not in row:
+                    out.setdefault(int(row['number']), row)
+            if len(rows) < 100:
+                break
+            page += 1
+    return out
+
+
+def github_closed_since(since, get=None):
+    """Every issue (not pull request) that is closed and was updated at or
+       after since, an ISO stamp, by number. A close and a new comment both
+       move the update time, so this holds every issue closed since then and
+       every closed issue with a comment since then."""
+    get = get or _github_get
+    out = {}
+    page = 1
+    while True:
+        url = ('%s/repos/%s/issues?state=closed&per_page=100&page=%d'
+               '&sort=updated&direction=desc&since=%s'
+               % (GITHUB_API, KNOWN_REPO, page, urllib.parse.quote(since)))
+        rows = get(url) or []
+        for row in rows:
+            if isinstance(row, dict) and 'pull_request' not in row:
+                out.setdefault(int(row['number']), row)
+        if len(rows) < 100:
+            break
+        page += 1
+    return out
+
+
+def github_changed_since(since, get=None):
+    """Every issue (not pull request), open or closed, updated at or after
+       since, by number. A new comment, a close and a reopen all move the
+       update time, so this holds every issue whose dev test task can have
+       come or gone since then."""
+    get = get or _github_get
+    out = {}
+    page = 1
+    while True:
+        url = ('%s/repos/%s/issues?state=all&per_page=100&page=%d'
+               '&sort=updated&direction=asc&since=%s'
+               % (GITHUB_API, KNOWN_REPO, page, urllib.parse.quote(since)))
+        rows = get(url) or []
+        for row in rows:
+            if isinstance(row, dict) and 'pull_request' not in row:
+                out.setdefault(int(row['number']), row)
+        if len(rows) < 100:
+            break
+        page += 1
+    return out
+
+
+# What KNOWN_REPO is called now, once GitHub has been asked (#5184).
+_KNOWN_REPO_NOW = {'name': ''}
+
+
+def known_repo_now(get=None, again=False):
+    """owner/name GitHub gives KNOWN_REPO now, asked once a process (again
+       asks anew). A repository moved to another owner keeps its issues and
+       GET /repos/KNOWN_REPO follows the move to its new name, but GitHub
+       answers a POST to the old name with a 307 that urllib does not follow,
+       so the bot's writes go to this name. A failure to ask raises."""
+    if _KNOWN_REPO_NOW['name'] and not again:
+        return _KNOWN_REPO_NOW['name']
+    get = get or _github_get
+    repo = get('%s/repos/%s' % (GITHUB_API, KNOWN_REPO))
+    now = str(repo.get('full_name') or '').strip() if isinstance(repo, dict) else ''
+    if '/' not in now:
+        raise ValueError('GitHub answered %s with no full_name' % KNOWN_REPO)
+    _KNOWN_REPO_NOW['name'] = now
+    return now
+
+
+def is_known_repo(name, get=None):
+    """Whether owner/name is KNOWN_REPO, under the name it was given or the
+       one GitHub gives it now. A name that is neither is held to a fresh
+       answer before it counts as another repository. A failure to ask
+       raises, and the pass that asked changes nothing."""
+    name = str(name or '').strip().lower()
+    if not name:
+        return False
+    if name in (KNOWN_REPO.lower(), _KNOWN_REPO_NOW['name'].lower()):
+        return True
+    return name == known_repo_now(get, again=True).lower()
+
+
+def github_token_kind(token=None):
+    """What kind of token github_token() gives, by its prefix, never the
+       token. A fine-grained token is bound to one owner and reaches nothing
+       of the repository once it moves to another (#5184), so the bot says
+       the kind at start, where Get-Logs reads it."""
+    token = github_token() if token is None else token
+    token = str(token).strip()
+    for prefix, kind in (('github_pat_', 'fine-grained'), ('ghp_', 'classic'),
+                         ('ghs_', 'app installation'), ('gho_', 'oauth')):
+        if token.startswith(prefix):
+            return kind
+    return 'no' if not token else 'unknown'
+
+
+def github_issue(number, get=None):
+    get = get or _github_get
+    return get('%s/repos/%s/issues/%d' % (GITHUB_API, KNOWN_REPO, int(number)))
+
+
+def finding_gone(number, get=None):
+    """Why issue number is no longer an open finding, read from the issue
+       itself, or None when it still is one: open, in KNOWN_REPO, carrying
+       one of KNOWN_LABELS.
+
+       The label lists (github_open_findings) are not the issue. On 22 Oct
+       one list, then the other, then both came back from GitHub without
+       issues that were open and labelled the whole time (no label, close or
+       reopen on their timelines), and the same ten #known-issues posts came
+       down and went back up as a set three times in one process (#3438).
+       So a post whose issue a list left out comes down on this answer, not
+       on the list's. Any other failure to read raises, and the pass that
+       asked changes nothing."""
+    try:
+        issue = github_issue(number, get)
+    except urllib.error.HTTPError as e:
+        if e.code in (404, 410):
+            return 'GitHub has no issue #%d any more (%d)' % (int(number), e.code)
+        raise
+    if not isinstance(issue, dict):
+        raise ValueError('GitHub answered issue #%d with a %s, not an issue'
+                         % (int(number), type(issue).__name__))
+    where = str(issue.get('repository_url') or '').lower().split('/repos/')[-1]
+    if not is_known_repo(where, get):
+        return 'it moved to %s' % (where or 'another repository')
+    if str(issue.get('state')) != 'open':
+        return 'it is closed'
+    if not issue_tags_found(issue):
+        return 'it no longer carries %s' % ' or '.join(KNOWN_LABELS)
+    return None
+
+
+def github_comments(number, get=None):
+    get = get or _github_get
+    out, page = [], 1
+    while True:
+        rows = get('%s/repos/%s/issues/%d/comments?per_page=100&page=%d'
+                   % (GITHUB_API, KNOWN_REPO, int(number), page)) or []
+        out += [r for r in rows if isinstance(r, dict)]
+        if len(rows) < 100:
+            break
+        page += 1
+    return out
+
+
+def github_timeline(number, get=None):
+    get = get or _github_get
+    out, page = [], 1
+    while True:
+        rows = get('%s/repos/%s/issues/%d/timeline?per_page=100&page=%d'
+                   % (GITHUB_API, KNOWN_REPO, int(number), page)) or []
+        out += [r for r in rows if isinstance(r, dict)]
+        if len(rows) < 100:
+            break
+        page += 1
+    return out
+
+
+def _labels(issue):
+    return [str((l or {}).get('name') if isinstance(l, dict) else l)
+            for l in (issue.get('labels') or [])]
+
+
+def issue_tags_found(issue):
+    names = _labels(issue)
+    return any(l in names for l in KNOWN_LABELS)

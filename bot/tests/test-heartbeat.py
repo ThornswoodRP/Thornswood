@@ -40,8 +40,9 @@ import time
 # called, which nothing here does.
 os.environ.setdefault('DISCORD_TOKEN', 'not-a-real-token')
 
-import bot  # noqa: E402
+import harness_bot  # noqa: E402
 
+bot = harness_bot.whole()
 PASS = []
 FAIL = []
 
@@ -206,7 +207,7 @@ try:
     finally:
         bot.heartbeat, bot.site_open = real_hb, real_open
     yes('setup_hook starts the heartbeat loop', started == [1])
-    src = open(os.path.join(HERE, 'bot.py'), encoding='utf-8').read()
+    src = harness_bot.source()
     ready = src[src.index('async def on_ready():'):]
     ready = ready[:ready.index('\n\n\n')]
     yes('and on_ready does not, so a reconnect never starts a second one', 'heartbeat' not in ready)

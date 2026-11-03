@@ -42,7 +42,7 @@ const read = function (p) { return fs.readFileSync(p, 'utf8').split(CR).join('')
 const site = siteFiles.source();
 const gm = require('./gamemode-tables.js').joined(read(path.join(REPO_DIR, 'game', 'gamemode.js')));
 const builder = read(path.join(REPO_DIR, 'bot', 'Build-Discord.py'));
-const botSrc = read(path.join(REPO_DIR, 'bot', 'bot.py'));
+const botSrc = require('./bot-files').source().split(CR).join('');
 
 let pass = 0, fail = 0;
 function yes(what, cond) {

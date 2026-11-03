@@ -366,7 +366,7 @@ const putGold = slice(propBlock, '  function boxPutGold(', '\n  }\n') || '';
 yes('S1 paying through the box never sets the rent clock (#3891)', !!putGold && !/since\s*=/.test(strip(putGold)));
 const paid = slice(propBlock, '  function rentPaid(', '\n  }\n') || '';
 yes('S2 nor does Rent paid', !!paid && !/since\s*=/.test(strip(paid)));
-const bot = read(path.join(REPO_DIR, 'bot', 'bot.py'));
+const bot = require('./bot-files').source().split(CR).join('');
 yes('S3 the bot has a sentence for a staff Rent paid, so the staff channel says it',
     /\n    'rentpaid': '[^']+%s'/.test(bot));
 
