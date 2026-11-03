@@ -950,7 +950,7 @@ function Test-RunnerReach([object[]]$rules) {
   foreach ($r in $rules) { foreach ($a in @(($r | Get-NetFirewallAddressFilter).RemoteAddress)) { if ($a -and $a -ne 'Any') { $spans += ConvertTo-GuardSpan ([string]$a) } } }
   foreach ($h in $grdNeeds) {
     $ips = @()
-    try { $ips = @([Net.Dns]::GetHostAddresses($h) | ForEach-Object { $_.IPAddressToString }) } catch { }
+    try { $ips = @([Net.Dns]::GetHostAddresses($h) | ForEach-Object { $_.IPAddressToString }) } catch { <# a host that does not resolve here is said on the next line #> }
     if (-not $ips.Count) { 'reach     ' + $h + ': does not resolve here'; continue }
     $said = @(foreach ($ip in $ips) {
       $n = ConvertTo-GuardNumber $ip; $v = $(if ($ip.Contains(':')) { 6 } else { 4 })
