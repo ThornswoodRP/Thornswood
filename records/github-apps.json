@@ -137,7 +137,7 @@
   {
    "slug": "thornswood-pin-robot",
    "id": 5562975,
-   "for": "the engine pin robot (.github/workflows/engine-pin.yml, #5148, #5256): pushes engine-pin/next and opens the pin's pull request",
+   "for": "the engine pin robot (.github/workflows/engine-pin.yml, #5148, #5256): pushes engine-pin/next and opens the pin's pull request; and auto-merge.yml, which turns auto-merge on for every ready pull request (q-automerge-app-token, 2 Nov 2026)",
    "held_by": "the engine-pin environment of Thornswood, main only (PIN_APP_KEY)",
    "installed_on": [
     "ThornswoodRP/Thornswood"
@@ -154,9 +154,9 @@
    },
    "events": [],
    "why": {
-    "contents": "Force pushes the one branch engine-pin/next, which changes only the pin's paths, never a workflow.",
+    "contents": "Force pushes the one branch engine-pin/next, which changes only the pin's paths, never a workflow; and turning auto-merge on, which GitHub holds to contents write.",
     "metadata": "Every App holds it; GitHub gives it read and nothing else.",
-    "pull_requests": "Opens or updates the pin's pull request (Open-EnginePinPr.ps1)."
+    "pull_requests": "Opens or updates the pin's pull request (Open-EnginePinPr.ps1), and turns auto-merge on for a ready pull request (scripts/ops/Auto-Merge.js), so its queue entry starts its checks."
    }
   },
   {
