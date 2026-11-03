@@ -71,7 +71,7 @@ foreach ($l in @($rec.label, $pr.label, 'thornswood-vps')) {
 $ir = [IO.File]::ReadAllText((Under @('scripts', 'deploy', 'Install-Runner.ps1')))
 Yes 'Install-Runner.ps1 reads the same record' ($ir -match [regex]::Escape('records\build-runners.json'))
 Yes '  and registers with the labels it worked out' ($ir -match [regex]::Escape("--labels '`$registerLabels'"))
-Yes '  never for an off-box runner' ($ir -match [regex]::Escape("if (-not `$OffBox -and -not `$PSBoundParameters.ContainsKey('Label'))"))
+Yes '  never for an off-box runner or Thornswood-Hermes''s (records\hermes-runner.json)' ($ir -match [regex]::Escape("if (-not `$OffBox -and -not `$Hermes -and -not `$PSBoundParameters.ContainsKey('Label'))"))
 Yes '  and the pull request record too, for a box runner by number and an off-box one by name' ($ir -match [regex]::Escape('records\pr-build-runners.json') -and $ir -match [regex]::Escape("@(`$prRecord.offBox) -contains `$RunnerName") -and $ir -match [regex]::Escape("@(`$prRecord.runners | ForEach-Object { [int]`$_ }) -contains `$Number"))
 
 # ---- 4. who puts it on GitHub ------------------------------------------------------

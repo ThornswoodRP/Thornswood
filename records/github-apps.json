@@ -109,7 +109,7 @@
     "environments": "Renew-BoxKey.ps1 puts a box key into an environment secret of Thornswood-Ops (ops-access.js keys), which GitHub gives to Environments write alone; the settings ask reads environment names and where each deploys from (#3534).",
     "issues": "The Discord bot's token (#5260, Patrick's A): it posts Test tasks and known issues as comments and labels. Taken for Thornswood alone, every 30 minutes.",
     "metadata": "Every App holds it; GitHub gives it read and nothing else.",
-    "organization_self_hosted_runners": "The one organization runner of the box that Thornswood-Hermes's Windows guard rail check runs on (records/hermes-runner.json, Install-Runner.ps1 -Hermes, ops-access.js hermes-runners): its registration token comes from the organization because this App is never on Thornswood-Hermes, so it holds nothing of that repository. Patrick's A on q-hermes-box-runner-token.",
+    "organization_self_hosted_runners": "The one organization runner of the box that Thornswood-Hermes's Windows guard rail check runs on (records/hermes-runner.json, Install-Runner.ps1 -Hermes, ops-access.js hermes-runners): its registration token comes from the organization because this App is never on Thornswood-Hermes, so it holds nothing of that repository. Patrick's A on q-hermes-box-runner-token, 2 Nov 2026, 6:17 PM.",
     "secrets": "The settings ask reads repository secret names (#3534), never a value. Write was held only for go-public, which took the box's secrets off Thornswood before the flip on 30 Oct 2026 and is gone; an environment secret needs Environments write, not this."
    }
   },
