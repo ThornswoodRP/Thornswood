@@ -76,7 +76,7 @@ const NOT_HERE = {
 const WAITING = [
   'commands.md', 'creation.md',
   'npcs.md',
-  'trading-company.md', 'voice.md'
+  'voice.md'
 ];
 
 // ------------------------------------------------------- what the guide lists --
