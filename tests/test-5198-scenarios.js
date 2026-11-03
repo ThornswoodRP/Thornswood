@@ -74,7 +74,7 @@ const NOT_HERE = {
   #5198's own list: gamemode systems with no scenario yet. It only shrinks.
 */
 const WAITING = [
-  'commands.md', 'creation.md',
+  'commands.md',
   'npcs.md',
   'voice.md'
 ];
