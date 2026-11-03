@@ -78,7 +78,9 @@
   Lines from a person's game (the front plugin, the K panel, the chat) reach
   the gamemode the way they reach the real one: posted to the voice service,
   which the gamemode polls (GET /commands), and what it says goes back to the
-  voice service (POST /say). say() and heard() are those two.
+  voice service (POST /say). say() and heard() are those two. Whatever else
+  the gamemode posts the voice service (the text mutes, the staff silences)
+  is kept in w.toVoice.
 
   Read only, apart from its temp folders, which done() removes.
 */
@@ -199,6 +201,7 @@ function world(opts) {
     threw: [],       // what a timer threw
     did: [],         // [time, actor, kind, what, value]
     said: [],        // POST /say bodies
+    toVoice: [],     // every other POST to the voice service: { path, body, at }, e.g. /textmute and /silenced
     notified: [],    // Debug.Notification texts
     log: []          // the gamemode's console
   };
@@ -896,6 +899,9 @@ function world(opts) {
         end: function (body) {
           const where = String((o && o.path) || (o && o.pathname) || '');
           if (where === '/say' && body) { try { w.said.push(JSON.parse(body)); } catch (e) { } }
+          else if (body && String((o && o.method) || '').toUpperCase() === 'POST') {
+            try { w.toVoice.push({ path: where, body: JSON.parse(body), at: clock }); } catch (e) { }
+          }
           if (where.indexOf('/commands') === 0 && typeof cb === 'function') {
             const list = waiting.splice(0);
             const h = {};
