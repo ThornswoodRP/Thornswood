@@ -86,12 +86,13 @@ the character.
 Staff are the Discord roles that already take a staff seat: Owner,
 Gamemaster, Dev, Loremaster, Moderator.
 
-`/silence` and the name. Their voice, their local text, the words
-above their head, and the speaking mark stop for everybody. They are
-told. They cannot lift it. `/silence` and the same name again, from
-any staff member, lifts it.
+`/silence` and the name, then the minutes if not 30 (a day at most)
+and why. Their voice, their local text, the words above their head,
+and the speaking mark stop for everybody. They are told how long. They
+cannot lift it. `/unsilence` and the name, from any staff member,
+lifts it, and it lifts by itself when the minutes run out.
 
-`/silence` with nothing after it lists who is silenced.
+`/silence` with nothing after it says how it is used.
 
 It also stops them writing in a faction or business chat. That chat
 is on [Factions and businesses](factions.md). It does not hide their

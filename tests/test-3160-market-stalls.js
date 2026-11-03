@@ -153,6 +153,7 @@ refs[BOB.a].inventory.entries.push({ baseId: INGOT, count: 1 });
 const shown = {};
 const said = {};
 const staffLog = [];
+const dataLines = [];
 // A pack that will not take a write: the id, after skip writes to it go through.
 let failPack = null;
 function makeMp() {
@@ -199,7 +200,9 @@ function makeWorld(releaseWho) {
       unproven: function () { return ''; },
       record: function () { staffLog.push(Array.prototype.slice.call(arguments)); }
     },
-    __thornswoodSayLine: function (pid, what) { (said[pid] = said[pid] || []).push(what); }
+    __thornswoodToProfile: function (pid, what) { (said[pid] = said[pid] || []).push(what); },
+    // The menu page's data line, which the chat never draws (#5473): nothing here sends one.
+    __thornswoodSayLine: function (pid, what) { dataLines.push([pid, what]); }
   };
   if (releaseWho) {
     box.__thornswoodRelease = function (part, f) { if (part === 'stalls') { released = f(releaseWho); } };
@@ -270,7 +273,8 @@ r = stall(BOB, ['buy', String(swordLine.n), '1']);
 yes('S9 Bob buys a sword: 30 gold from his pack to hers, the sword to him, one off the line',
     /Bought Iron Sword/.test(r.view.said) && count(BOB, GOLD) === 70 && count(ALICE, GOLD) === 130 && count(BOB, SWORD) === 1 &&
     r.view.lines.filter(function (l) { return l.n === swordLine.n; })[0].count === 1);
-yes('  and she is told in her chat what sold', (said[ALICE.pid] || []).some(function (m) { return /Iron Sword sold for 30 gold/.test(m); }));
+yes('  and she is told in her chat what sold, as a chat line and not the menu page\'s data line (#5473)',
+    (said[ALICE.pid] || []).some(function (m) { return /Iron Sword sold for 30 gold/.test(m); }) && dataLines.length === 0);
 r = stall(BOB, ['buy', String(saltLine.n), '1']);
 yes('S10 a goods price he cannot pay is refused, and nothing moves', /do not carry 2 Iron Ingot/.test(r.view.said) &&
     count(BOB, INGOT) === 1 && count(BOB, SALT) === 0);
