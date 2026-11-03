@@ -40,7 +40,9 @@ import datetime
 # called, which nothing here does.
 os.environ.setdefault('DISCORD_TOKEN', 'not-a-real-token')
 
-import bot  # noqa: E402
+import harness_bot  # noqa: E402
+
+bot = harness_bot.whole()
 import discord  # noqa: E402
 
 PASS = []
@@ -182,7 +184,7 @@ yes('C7 and the bot log names that id',
     any('channel 1234 is not one this bot can see' in s for s in said))
 
 # The comments still tell the story; the code holds no such name to look for.
-src = open(os.path.join(HERE, 'bot.py'), encoding='utf-8').read()
+src = harness_bot.source()
 yes('C8 bot.py holds no channel name staff-general to fall back to',
     "'staff-general'" not in src and '"staff-general"' not in src)
 

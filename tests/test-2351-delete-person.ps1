@@ -438,7 +438,7 @@ new Function('fs', 'path', 'putJson', 'DATA', 'UP', 'LINKED', 'RULES_OK', 'ATTEM
         $env:THORNSWOOD_BOT_DATA = Join-Path $Bot 'data'
         $env:DISCORD_TOKEN = 'not-a-real-token'
         $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-        try { $botSaid = @(& $pyExe[0] @($pyExe | Select-Object -Skip 1) -c ('import sys; sys.path.insert(0, r"' + (Join-Path $Repo 'bot') + '"); import bot; bot.apply_deletion_requests()') 2>&1 | ForEach-Object { "$_" }) -join "`n" }
+        try { $botSaid = @(& $pyExe[0] @($pyExe | Select-Object -Skip 1) -c ('import sys; sys.path.insert(0, r"' + (Join-Path $Repo 'bot') + '"); import harness_bot; harness_bot.whole().apply_deletion_requests()') 2>&1 | ForEach-Object { "$_" }) -join "`n" }
         finally { $ErrorActionPreference = $eap; Remove-Item Env:\THORNSWOOD_BOT_DATA, Env:\DISCORD_TOKEN -ErrorAction SilentlyContinue }
         $botRan = $true
         Yes 'the bot took its request as it started, and said so with counts' ($botSaid -match 'join numbers 1, open tickets 1; done' -and -not (Test-Path (Join-Path $Bot 'data\deletion-requests.json')))

@@ -2332,6 +2332,17 @@
     if (alchemy && alchemy.arrival) {
       try { alchemy.arrival(actorId); } catch (e) { clog('alchemy at arrival threw for', actorId.toString(16) + ':', e); }
     }
+    /*
+      The trade window as the server holds it (#5464). A trade lives in memory
+      and the window's view is a property the server keeps across a restart,
+      so after one the stored view still names a trade nobody is in. Sent here
+      for the same reason as the view below: arrival is when the game is told
+      what is true now.
+    */
+    var trade = g.__thornswoodTrade;
+    if (trade && trade.refresh) {
+      try { trade.refresh(actorId); } catch (e) { clog('the trade window at arrival threw for', actorId.toString(16) + ':', e); }
+    }
     return writeState(actorId, stateOf(actorId));
   }
 

@@ -47,8 +47,9 @@ for _k in ('TICKET_CHANNEL', 'TICKET_LOG', 'STAFF_ROLES', 'CREATOR_ROLES',
 
 import discord  # noqa: E402
 
-import bot  # noqa: E402
+import harness_bot  # noqa: E402
 
+bot = harness_bot.whole()
 bot.OPEN_TICKETS = os.path.join(tempfile.mkdtemp(prefix='thornswood-fallback-'),
                                 'open-tickets.json')
 
@@ -601,7 +602,7 @@ run('faction thread fails', faction_thread_fails)
 
 
 # -------------------------------------------------------------- source --
-src = open(os.path.join(HERE, 'bot.py'), encoding='utf-8').read()
+src = harness_bot.source()
 yes('no fallback into the panel channel is left in the source',
     'if not posted and ch is not None' not in src)
 

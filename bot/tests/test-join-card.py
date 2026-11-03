@@ -40,7 +40,9 @@ ROOT = os.path.dirname(HERE)
 # called, which nothing here does.
 os.environ.setdefault('DISCORD_TOKEN', 'not-a-real-token')
 
-import bot  # noqa: E402
+import harness_bot  # noqa: E402
+
+bot = harness_bot.whole()
 import card  # noqa: E402
 from PIL import Image, ImageDraw  # noqa: E402
 
@@ -289,12 +291,22 @@ with open(os.path.join(os.path.dirname(HERE), 'scripts', 'deploy', 'Install-Bot.
     install = f.read()
 lines = install.splitlines()
 
-sends = re.search(r"foreach \(\$f in ([^)]*)\)", install)
-listed = re.findall(r"'([^']+)'", sends.group(1)) if sends else None
+# The code is Bot-Code.ps1's list (#5357): four files by name, then the
+# modules bot.py imports, which can only be names of the shape bot_<x>.py.
+with open(os.path.join(os.path.dirname(HERE), 'scripts', 'deploy', 'Bot-Code.ps1'), encoding='utf-8') as f:
+    code_ps = f.read()
+named = re.search(r"return @\(([^)]*)\) \+ @\(Get-ThornswoodBotParts \$Repo\)", code_ps)
+shape = "-cmatch '^import (bot_[a-z0-9_]+)\\s*(#.*)?$'" in code_ps
+sends = re.search(r"foreach \(\$f in @\(Get-ThornswoodBotCode \$Repo\) \+ @\(([^)]*)\)\)", install)
+listed = ((re.findall(r"'([^']+)'", named.group(1)) if named else [])
+          + [n + '.py' for n in harness_bot.parts()]
+          + (re.findall(r"'([^']+)'", sends.group(1)) if sends else [])) if named and sends else None
 yes('I1 the code Install-Bot sends is a fixed list, and the record is not '
     'on it (got %r)' % (listed,),
-    listed == ['bot.py', '_pyguard.py', 'trust.py', 'card.py', 'staff-channel.txt', 'dev-channel.txt',
-               'requirements.txt', 'factions.json']
+    shape and listed == ['bot.py', '_pyguard.py', 'trust.py', 'card.py']
+    + [n + '.py' for n in harness_bot.parts()]
+    + ['staff-channel.txt', 'dev-channel.txt', 'requirements.txt', 'factions.json']
+    and len(harness_bot.parts()) > 0
     and 'joins.json' not in (listed or []))
 
 dests = []

@@ -9,8 +9,9 @@
 //   1. the rule: a ready pull request goes on; a draft, another
 //      repository's, a hands-off person's, one already on or in the queue,
 //      one that conflicts with main, and one aimed elsewhere stay off;
-//   2. a drop: one the queue let go at its current commit for a failed
-//      check, a conflict, by hand or for no reason given stays its owner's,
+//   2. a drop: one the queue let go at its current commit (no commit or
+//      force push after the drop) for a failed check, a conflict, by hand
+//      or for no reason given stays its owner's,
 //      and a push after it puts it back; one let go because the queue was
 //      cleared, rolled back or timed out goes back now;
 //   3. the sweep: every page is read, a dry run turns nothing on, and a
@@ -32,7 +33,10 @@ function pr(n, more) {
   return Object.assign({ id: 'PR_' + n, number: n, isDraft: false, isCrossRepository: false, baseRefName: 'main', headRefOid: 'h' + n,
     mergeable: 'MERGEABLE', isInMergeQueue: false, author: { login: 'EvilPatrick06' }, autoMergeRequest: null, timelineItems: { nodes: [] } }, more || {});
 }
-function dropped(n, reason, at) { return pr(n, { timelineItems: { nodes: [{ createdAt: '2026-11-02T20:00:00Z', reason, beforeCommit: { oid: at || 'h' + n } }] } }); }
+// The newest of a pull request's drops, commits and force pushes, as the query
+// asks for it: a drop, or (pushed after one) a commit or a force push.
+function dropped(n, reason) { return pr(n, { timelineItems: { nodes: [{ __typename: 'RemovedFromMergeQueueEvent', createdAt: '2026-11-02T20:00:00Z', reason }] } }); }
+function pushedAfter(n, kind) { return pr(n, { timelineItems: { nodes: [{ __typename: kind }] } }); }
 const on = (p) => A.judge(p, 'main')[0];
 
 // ---- 1. the rule
@@ -51,7 +55,10 @@ for (const r of ['CI_FAILURE', 'MERGE_CONFLICT', 'INVALID_MERGE_COMMIT', 'GIT_TR
   yes('2 let go at this commit for ' + (r || 'no reason given') + ': its owner\'s, it stays off', !on(dropped(20, r)));
 }
 yes('  and says a push with the fix puts it back', /a push with the fix puts it back/.test(A.judge(dropped(20, 'CI_FAILURE'), 'main')[1]));
-yes('2 let go for a failed check, then pushed again: back on', on(dropped(21, 'CI_FAILURE', 'an-older-commit')));
+yes('2 let go for a failed check, then pushed again: back on', on(pushedAfter(21, 'PullRequestCommit')) && on(pushedAfter(21, 'HeadRefForcePushedEvent')));
+yes('2 the query asks for the newest of its drops, commits and force pushes, not the drop\'s own commit (#5470)',
+  /timelineItems\(last: 1, itemTypes: \[REMOVED_FROM_MERGE_QUEUE_EVENT, PULL_REQUEST_COMMIT, HEAD_REF_FORCE_PUSHED_EVENT\]\)/.test(A.QUERY) &&
+  /__typename/.test(A.QUERY) && !/beforeCommit/.test(A.QUERY));
 for (const r of ['QUEUE_CLEARED', 'ROLL_BACK', 'CI_TIMEOUT', 'BRANCH_PROTECTIONS', 'UNREACHABLE']) {
   yes('2 let go for ' + r + ', not its own doing: back on now', on(dropped(22, r)));
 }

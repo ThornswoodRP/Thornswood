@@ -33,8 +33,9 @@ for _k in ('STAFF_ROLES', 'CREATOR_ROLES', 'MEMBER_ROLE', 'LIVE_SMOKE_ADMIN_ROLE
 # called, which nothing here does.
 os.environ.setdefault('DISCORD_TOKEN', 'not-a-real-token')
 
-import bot  # noqa: E402
+import harness_bot  # noqa: E402
 
+bot = harness_bot.whole()
 PASS = []
 FAIL = []
 
@@ -142,7 +143,7 @@ import subprocess  # noqa: E402
 env = dict(os.environ, LIVE_SMOKE_ADMIN_ROLES='111,222')
 env.pop('TEST_TASK_ROLES', None)
 got = subprocess.run([sys.executable, '-c',
-                      'import bot; print(",".join(bot.TASK_ROLE_NAMES))'],
+                      'import harness_bot; print(",".join(harness_bot.whole().TASK_ROLE_NAMES))'],
                      cwd=HERE, env=env, capture_output=True, text=True)
 yes('an old LIVE_SMOKE_ADMIN_ROLES is read when TEST_TASK_ROLES is not set',
     got.stdout.strip().splitlines()[-1:] == ['111,222'])

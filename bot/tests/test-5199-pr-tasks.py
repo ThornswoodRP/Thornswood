@@ -38,7 +38,9 @@ os.environ.setdefault('DISCORD_TOKEN', 'not-a-real-token')
 os.environ.pop('GITHUB_TOKEN', None)
 os.environ['GITHUB_TOKEN_FILE'] = ''  # nor the box admin service's (#5184)
 
-import bot  # noqa: E402
+import harness_bot  # noqa: E402
+
+bot = harness_bot.whole()
 import pr_tasks  # noqa: E402
 
 FAIL = []

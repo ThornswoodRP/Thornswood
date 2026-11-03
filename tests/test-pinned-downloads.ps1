@@ -290,7 +290,7 @@ $ibPath = Join-Path $RepoPath 'scripts\deploy\Install-Bot.ps1'
 $ib = ParseOf $ibPath
 $ibText = Get-Content -LiteralPath $ibPath -Raw
 Yes 'Install-Bot.ps1 parses' ($ib.Errors.Count -eq 0)
-Yes 'requirements.txt goes up to the VPS with the code' ($ibText -match "foreach \(\`$f in [^)\r\n]*'requirements\.txt'")
+Yes 'requirements.txt goes up to the VPS with the code' ($ibText -match "foreach \(\`$f in [^\r\n]*'requirements\.txt'")
 
 $pipBlocks = @(HereStrings $ib.Ast | Where-Object { $_.Extent.Text -match 'pip install' })
 Yes 'there is exactly one remote block that runs pip install' ($pipBlocks.Count -eq 1)

@@ -39,7 +39,11 @@
       its update with no window: Shell.Main calls Updater.AfterFailedStart
       before the "could not start" box, which checks, fetches and stages a
       newer launcher for ExitApply. On a launcher Velopack did not install
-      it says so and stages nothing.
+      it says so and stages nothing. With a newer launcher staged, by that
+      or by the window's own check, no box is shown: the box held the
+      process open, and the staged launcher goes in only once it ends. The
+      crash line goes to the install's own log, not to a Root Paths.Init(null)
+      would make of the folder above the exe's.
   FetchLauncher itself needs Velopack's download and the release's signed
   record from GitHub, so what it does in what order is read from its source:
   the package check, then the Update.exe check, then the mark that it passed,
@@ -110,6 +114,13 @@ $main = if ($mainAt -ge 0) { $shell.Substring($mainAt, $shell.IndexOf('static st
 $runAt = $main.IndexOf('try { Run(args); }'); $askAt = $main.IndexOf('Updater.AfterFailedStart(cfg,'); $tellAt = $main.IndexOf('"Thornswood could not start"'); $exitAt = $main.IndexOf('Velo.ExitApply();')
 Yes '  Main asks it when the start throws, before the message, and the staged launcher goes in at ExitApply, the last line' (
     $runAt -gt 0 -and $askAt -gt $runAt -and $tellAt -gt $askAt -and $exitAt -gt $tellAt -and $main.Contains('Ask.Tell(update + Environment.NewLine + Environment.NewLine + ex.ToString(), "Thornswood could not start"'))
+Yes '  unless the window''s own check already staged one, and with one staged no box holds the process open' (
+    $main.Contains('string update = Velo.Staged') -and $main.Contains(': Updater.AfterFailedStart(cfg, log);') -and
+    [regex]::IsMatch($main, 'if \(!Velo\.Staged\)\s*Ask\.Tell\(update'))
+$initAt = $main.IndexOf('Paths.Init(')
+Yes '  the crash line goes to the install''s own log: Paths is kept as Run made it, and made from the recorded install only when Run did not' (
+    -not $main.Contains('Paths.Init(null)') -and [regex]::IsMatch($main, 'if \(Paths\.Root == null\)\s*\{\s*try \{ Paths\.Init\(Velo\.InstallRoot\); \}') -and
+    $initAt -gt $runAt -and $initAt -lt $main.IndexOf('log("COULD NOT START: "'))
 $veloCs = [IO.File]::ReadAllText((Join-Path $App 'Velo.cs')).Replace("`r`n", "`n")
 Yes '  before config.json is read, the channel is the one Velopack installed' ($veloCs -match '(?s)public static string ChannelFor\(Config cfg\)\s*\{.*if \(cfg == null\)\s*\{\s*IVelopackLocator l = Locator;\s*return l != null && string\.Equals\(l\.Channel, "dev", StringComparison\.OrdinalIgnoreCase\) \? "dev" : "main";')
 

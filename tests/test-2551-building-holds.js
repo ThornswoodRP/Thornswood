@@ -456,7 +456,7 @@ yes('L5 the line a press arrives on reaches evict and rentCmd: handle, the chara
     !!charBlock && charBlock.indexOf('prop.command(word, parts, actorId, profileId, toProfile, cmd)') !== -1 &&
     !!prop && prop.indexOf("if (word === '/evict') { return evict(actorId, profileId, toProfile, cmd); }") !== -1 &&
     prop.indexOf("if (word === '/rent') { return rentCmd(parts, actorId, profileId, toProfile, cmd); }") !== -1);
-const bot = read(path.join(ROOT, 'bot', 'bot.py'));
+const bot = require('./bot-files').source().split(CR).join('');
 yes('L6 the bot has a sentence for each, so the staff channel says it (bot/tests/test-moderation.py, M14)',
     ['evict', 'rent', 'norent', 'rentpaid'].every((d) => new RegExp("\\n    '" + d + "': '[^']+%s'").test(bot)));
 

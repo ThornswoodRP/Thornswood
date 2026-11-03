@@ -161,7 +161,7 @@ function stop(s) {
 
     // The bot's defaults, read from its source rather than imported, so this
     // needs no python.
-    const bot = fs.readFileSync(path.join(REPO_DIR, 'bot', 'bot.py'), 'utf8');
+    const bot = require('../../tests/bot-files').source();
     yes('the bot reads trouble.json from for-bot by default', bot.indexOf("r'C:\\Thornswood-Docs\\data\\for-bot\\trouble.json'") >= 0);
     yes('and inbox.json', bot.indexOf("r'C:\\Thornswood-Docs\\data\\for-bot\\inbox.json'") >= 0);
     yes('and the site\'s moderation.log beside trouble.json',

@@ -47,8 +47,9 @@ except ImportError:
     print('0 passed, 0 failed')
     sys.exit(0)
 
-import bot  # noqa: E402
+import harness_bot  # noqa: E402
 
+bot = harness_bot.whole()
 bot.log = lambda *a: None
 
 

@@ -250,7 +250,7 @@ const BOWL = idFor(DATA.item);
   yes('T3 ...and the boil on the same press still runs', W.said.length === 1 && /The water has boiled/.test(W.said[0][1]) &&
       W.needs[A].water.boiled === 1 && !W.needs[A].water.river, JSON.stringify(W.said));
   yes('T4 the onActivate hook runs the boil whatever the dye answered',
-      /if \(dLine\) \{ notify\(casterRefrId, dLine\); say\(casterRefrId, dLine\); \}\n\s*var wLine = needsW\.activatedWater\(/.test(gm));
+      /if \(dLine\) \{ notify\(casterRefrId, dLine\); say\(casterRefrId, dLine\); answeredHere = true; \}\n\s*var wLine = needsW\.activatedWater\(/.test(gm));
   W.ranks[A] = { liverywright: 'novice' };
   yes('T5 a Liverywright may steep', /You set Brown Hair Dye to steep/.test(W.HD.pressed(A, COOK)));
   delete W.HD.steeps[A];

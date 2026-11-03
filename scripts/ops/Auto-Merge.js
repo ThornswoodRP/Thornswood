@@ -42,8 +42,8 @@ const QUERY = `query($owner: String!, $name: String!, $after: String) {
         id number isDraft isCrossRepository baseRefName headRefOid mergeable isInMergeQueue
         author { login }
         autoMergeRequest { enabledAt }
-        timelineItems(last: 1, itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT]) {
-          nodes { ... on RemovedFromMergeQueueEvent { createdAt reason beforeCommit { oid } } }
+        timelineItems(last: 1, itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT, PULL_REQUEST_COMMIT, HEAD_REF_FORCE_PUSHED_EVENT]) {
+          nodes { __typename ... on RemovedFromMergeQueueEvent { createdAt reason } }
         }
       }
     }
@@ -67,8 +67,13 @@ function judge(pr, base) {
   if (pr.autoMergeRequest) return [false, 'already on auto-merge'];
   if (pr.isInMergeQueue) return [false, 'already in the queue'];
   if (pr.mergeable === 'CONFLICTING') return [false, 'it conflicts with ' + base + '; its owner brings ' + base + ' in'];
-  const drop = ((pr.timelineItems || {}).nodes || [])[0];
-  if (drop && drop.beforeCommit && drop.beforeCommit.oid === pr.headRefOid) {
+  // The newest of its queue drops, commits and force pushes: when that is a
+  // drop, the queue let it go at the commit it is on now. (The drop event's
+  // beforeCommit is not the pull request's head: on 2 Nov 2026 the first live
+  // run put #5393 straight back after a failed check at its own head, #5470.)
+  const last = ((pr.timelineItems || {}).nodes || [])[0];
+  const drop = last && last.__typename === 'RemovedFromMergeQueueEvent' ? last : null;
+  if (drop) {
     if (NOT_ITS_OWN.test(drop.reason || '')) return [true, 'the queue let it go (' + drop.reason + '), which was not its own doing'];
     return [false, 'the queue let it go at this commit (' + (drop.reason || 'no reason given') + '); a push with the fix puts it back'];
   }

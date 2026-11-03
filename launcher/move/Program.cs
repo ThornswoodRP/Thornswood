@@ -152,17 +152,24 @@ namespace Thornswood
             }
         }
 
-        /// <summary>The Desktop and Start menu shortcuts whose target is the old launcher's exe.</summary>
+        /// <summary>The Desktop, Start menu and taskbar shortcuts whose target is the old launcher's exe.</summary>
         static void RemoveShortcuts(string exe)
         {
             Type shellType = Type.GetTypeFromProgID("WScript.Shell");
             if (shellType == null) return;
             object shell = Activator.CreateInstance(shellType);
+            // The taskbar's pins are shortcuts too, in the profile's roaming
+            // folder: on 2 Nov Patrick's pin still started the old launcher
+            // after the new one was installed.
+            string pins = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar");
+            var dirs = new System.Collections.Generic.List<string> { pins };
             foreach (Environment.SpecialFolder where in new[] {
                 Environment.SpecialFolder.DesktopDirectory, Environment.SpecialFolder.StartMenu,
                 Environment.SpecialFolder.Programs, Environment.SpecialFolder.CommonDesktopDirectory })
+                dirs.Add(Environment.GetFolderPath(where));
+            foreach (string dir in dirs)
             {
-                string dir = Environment.GetFolderPath(where);
                 if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) continue;
                 foreach (string lnk in Directory.GetFiles(dir, "*.lnk", SearchOption.AllDirectories))
                 {

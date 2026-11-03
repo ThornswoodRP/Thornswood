@@ -35,7 +35,7 @@ $swap = [IO.File]::ReadAllText((Join-Path $repo 'scripts\deploy\Swap.ps1'))
 # checklist came out on 11 Oct), and never joins.json, the bot's own record (#2042).
 Yes 'Install-Bot installs into py-libs with pip --target, and sends the code, never joins.json' (
     $install.Contains('--target ''$rootWin\$stageName\py-libs''') -and
-    $install.Contains('foreach ($f in ''bot.py'', ''_pyguard.py'', ''trust.py'', ''card.py'', ''staff-channel.txt'', ''dev-channel.txt'', ''requirements.txt'', ''factions.json'')') -and
+    $install.Contains('foreach ($f in @(Get-ThornswoodBotCode $Repo) + @(''staff-channel.txt'', ''dev-channel.txt'', ''requirements.txt'', ''factions.json''))') -and
     -not $install.Contains('joins.json'''))
 Yes 'the swap is told to put py-libs back with the code' ($install.Contains('$Dirs = @(''''py-libs'''')') -and $swap.Contains('$moveRels'))
 # pip --target on Python 3.12.4 and later leaves its files with the rules of

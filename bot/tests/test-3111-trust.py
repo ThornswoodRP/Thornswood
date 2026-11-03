@@ -50,7 +50,8 @@ PASS, FAIL = [], []
 PROBE = '''
 import asyncio, json, os, ssl, sys, urllib.request
 sys.path.insert(0, sys.argv[1])
-import bot
+import harness_bot
+bot = harness_bot.whole()
 import discord.http
 
 

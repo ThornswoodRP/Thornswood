@@ -9,7 +9,7 @@ Decided by Patrick on 19 Oct: the bot deletes a ticket thread
 TICKET_KEEP_DAYS (365) after it closes, checked every hour like the join
 numbers.
 
-ticket_past_keeping and age_closed_tickets are lifted out of bot/bot.py by
+ticket_past_keeping and age_closed_tickets are lifted out of bot/bot_tickets.py by
 their source and run on their own against made-up servers, channels and
 threads, so this needs neither discord.py nor a token and runs on every pull
 request. It proves:
@@ -38,7 +38,11 @@ import pathlib
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SRC = (ROOT / 'bot' / 'bot.py').read_text(encoding='utf-8')
+# All of the bot's code, bot.py and its modules (#5357), read without
+# importing it, so no discord.py is needed.
+sys.path.insert(0, str(ROOT / 'bot'))
+import harness_bot  # noqa: E402
+SRC = harness_bot.source()
 TREE = ast.parse(SRC)
 
 PASS, FAIL = [], []

@@ -3,7 +3,7 @@ pr_tasks.py
 
 The test tasks a pull request carries in its body, read the way
 .github/workflows/done-on-merge.yml reads them at the merge, and checked
-against the bot's own post rules (post_problems in bot.py) while the pull
+against the bot's own post rules (post_problems in bot_post_rules.py) while the pull
 request is still open (#5199).
 
 WHY. A fix people would notice carries its test task in its pull request,
@@ -56,6 +56,7 @@ import json
 import os
 import re
 import sys
+import types
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -108,8 +109,15 @@ def _bot():
     if here not in sys.path:
         sys.path.insert(0, here)
     os.environ.setdefault('DISCORD_TOKEN', 'not-a-real-token')
-    import bot  # noqa: E402
-    return bot
+    # The four things read here, from the modules of the bot that have them
+    # (#5357).
+    from bot_github import TASK_MARK  # noqa: E402
+    from bot_task_text import _all_marked  # noqa: E402
+    from bot_post_rules import post_problems  # noqa: E402
+    from bot_testing import TASK_BODY_ROOM  # noqa: E402
+    return types.SimpleNamespace(TASK_MARK=TASK_MARK, _all_marked=_all_marked,
+                                 post_problems=post_problems,
+                                 TASK_BODY_ROOM=TASK_BODY_ROOM)
 
 
 def problems(body, read_issue=None, bot=None):

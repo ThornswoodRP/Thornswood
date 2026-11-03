@@ -78,7 +78,13 @@ yes('and reads the silence marks off the rows that moved', /noteRows\(m\.who \|\
   metre of me, where a local voice is at full level.
 */
 const TONES = { 2: 500, 3: 600, 4: 700, 5: 800 };
-const HEARD = 0.05, SILENT = 0.02;
+// What hear() reads is a voice's loudest 40 ms in either ear (StandIns.cs,
+// #5456). Here, with everybody beside me, a voice in the mix read 0.39 to
+// 0.50, with twelve busy loops on four cores as well as without. One out of
+// it read 0.010 to 0.015 on a quiet machine and 0.014 to 0.046 on the busy
+// one: the other three voices' clicks, where their audio ran dry and came
+// back, spill into its pitch. The two lines sit between those.
+const HEARD = 0.2, SILENT = 0.1;
 const settle = () => new Promise((ok) => setTimeout(ok, 750));
 
 async function launcher() {

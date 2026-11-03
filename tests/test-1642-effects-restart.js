@@ -412,10 +412,11 @@ delete srv.ctx.__thornswoodChargen;
     /if \(what === 'refresh'\) \{[\s\S]{0,300}writeState\(actorId, s, true\);/.test(CHARACTER) &&
     (CHARACTER.match(/\.asked = /g) || []).length === 1 && /if \(redraw\) \{ s\.asked = askedNow\(\); \}/.test(CHARACTER));
   yes('F4 arrival is not a redraw, so a view this server already sent is not sent again',
-    // 900, not 300: withered's end is armed first (#1387) and the game is
-    // taught what the character knows of alchemy (#3134), and the view is
-    // still written by writeState, which sends only a view not sent before.
-    /function arrival\(actorId\) \{[\s\S]{0,900}return writeState\(actorId, stateOf\(actorId\)\);/.test(CHARACTER));
+    // 1600, not 300: withered's end is armed first (#1387), the game is
+    // taught what the character knows of alchemy (#3134) and the trade
+    // window is sent as the server holds it (#5464), and the view is still
+    // written by writeState, which sends only a view not sent before.
+    /function arrival\(actorId\) \{[\s\S]{0,1600}return writeState\(actorId, stateOf\(actorId\)\);/.test(CHARACTER));
   yes('F5 nothing here watches for a stale effect: no timer in the character block reads one',
     !/setInterval\(/.test(CHARACTER) && !/setTimeout\(/.test(between(CHARACTER, '  function arrival(actorId) {', '\n  }\n')));
 }

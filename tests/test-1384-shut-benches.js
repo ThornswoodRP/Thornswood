@@ -132,7 +132,9 @@ if (gate) {
 // ---- onActivate refuses on the gate's answer, and the refusal stays behind it
 const act = gm.slice(gm.indexOf("mp.onActivate = guard('onActivate'"));
 yes("mp.onActivate returns false on the gate's sentence, so the crafting menu never opens",
-  /const shut = benchGate\(casterRefrId, baseDesc\);\s*if \(shut\) \{\s*notify\(casterRefrId, shut\);\s*say\(casterRefrId, shut\);\s*return false;\s*\}/.test(act));
+  // The sentence is held back only when the dye or the water already answered
+  // this press (#5465); the menu stays shut either way.
+  /const shut = benchGate\(casterRefrId, baseDesc\);\s*if \(shut\) \{\s*if \(!answeredHere\) \{\s*notify\(casterRefrId, shut\);\s*say\(casterRefrId, shut\);\s*\}\s*return false;\s*\}/.test(act));
 yes("recipelessCraft still refuses a temper that reaches it anyway",
   /var tempering = benchKey === '88108:Skyrim\.esm' \|\| benchKey === 'adb78:Skyrim\.esm';/.test(gm) &&
   /if \(tempering\) \{[\s\S]*?return false;\s*\}/.test(gm));
