@@ -161,9 +161,10 @@ on:
 permissions:
   contents: read
 
-# The newest merge is the one released (#5398). GitHub refuses the run's own
-# token any tag on a commit whose workflow files differ from main's (it asks
-# for workflows: write, which that token can never hold), so a merge main
+# THE NEWEST MERGE. The newest merge is the one released (#5398). GitHub
+# refuses the run's own token any tag on a commit whose workflow files
+# differ from main's (it asks for workflows: write, which that token can
+# never hold), so a merge main
 # has moved past with a workflow change can never be tagged. A newer merge
 # cancels the run of the one before it, and its Release carries every part
 # and the notes of every pull request since the Release before, so nothing
@@ -722,6 +723,24 @@ jobs:
           if-no-files-found: error
           retention-days: 90
           compression-level: 0
+
+      # The tag main-<tag> that the Release of main's package goes on is
+      # made here, at this merge, while main's workflow files are this
+      # merge's own. GitHub refuses the run's own token a new tag on a
+      # commit whose workflow files differ from main's (header, THE NEWEST
+      # MERGE), so a promotion made after any workflow changed could never
+      # make it: promote-main.yml's first run, for build-20261103.2 on
+      # 3 Nov, stopped there with HTTP 403. The promotion publishes its
+      # Release on this tag and makes no ref of its own.
+      - name: Tag main's package for the approval (main-<tag>)
+        if: ${{ steps.newest.outputs.release == 'yes' && steps.files.outputs.held != '' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.names.outputs.tag }}
+        run: |
+          gh api --method POST "repos/$($env:GITHUB_REPOSITORY)/git/refs" -f "ref=refs/tags/main-$($env:TAG)" -f "sha=$($env:GITHUB_SHA)" --silent
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::the tag main-$($env:TAG) could not be made on $($env:GITHUB_SHA)"; exit 1 }
 
       - name: Ask the dev server for it (a Deployment to Dev)
         if: ${{ steps.newest.outputs.release == 'yes' && steps.changed.outputs.dev == 'yes' }}

@@ -28,7 +28,10 @@
 # it (MergeRelease.ps1, Find-MainPackage), and the artifact it is in; once
 # Patrick approves, the promotion puts its files out on the Release
 # main-<build tag>, each held to that record by name and sha256, before it
-# makes the Deployment. That Release is where a main launcher reads its
+# makes the Deployment. That Release goes on the tag main-<build tag> the
+# build's own run made: GitHub refuses this run's token a new tag on a commit
+# whose workflow files differ from main's, which is every older commit once a
+# workflow has changed (the first promotion, 3 Nov, stopped on it). That Release is where a main launcher reads its
 # updates (releases.main.json) and setup-files.main.json
 # (launcher/app/VeloRecord.cs, MainRelease), and it carries main's download,
 # Thornswood-Setup.exe. A package already out is checked and left as it is.
@@ -133,6 +136,13 @@ jobs:
             if ($pkg.Published) {
               Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Main's launcher package, from **$($pkg.From)**, is out already on **$($pkg.MainTag)**."
             } else {
+              # The tag the Release goes on, made by the run that built the
+              # package (merge-release.yml, Tag main's package for the
+              # approval): this run's token cannot make one once main's
+              # workflow files have moved past that commit.
+              $tref = gh api "repos/$repo/git/ref/tags/$($pkg.MainTag)" --jq '.object.type + " " + .object.sha'
+              if ($LASTEXITCODE -ne 0) { Stop-Promote "there is no tag $($pkg.MainTag): only a build whose run made that tag (merge-release.yml, since 3 Nov 2026) can take its package to main, so promote a newer build" }
+              if ([string]$tref -ne ('commit ' + $pkg.Commit)) { Stop-Promote "the tag $($pkg.MainTag) names $tref, not the commit $($pkg.Commit) that built it" }
               $araw = gh api "repos/$repo/actions/artifacts?name=$($pkg.MainTag)&per_page=100"
               if ($LASTEXITCODE -ne 0) { Stop-Promote "the artifacts named $($pkg.MainTag) could not be listed" }
               try { $art = Select-MainPackageArtifact -Artifacts @((($araw -join "`n") | ConvertFrom-Json).artifacts) -Name $pkg.MainTag -Commit $pkg.Commit } catch { Stop-Promote $_.Exception.Message }
@@ -199,7 +209,10 @@ jobs:
           # Releases here are immutable once published: a draft first, then
           # published only when every file is on it.
           $notes = "Main's launcher and game files from $($env:MAIN_FROM), put out when $($env:TAG) was approved for main in run $($env:GITHUB_RUN_ID)."
-          gh release create $env:MAIN_TAG --draft --target $env:MAIN_COMMIT --title "Main $($env:MAIN_FROM)" --notes $notes --latest=false -R $repo
+          # On the tag merge-release.yml made with the build (Tag main's
+          # package for the approval): GitHub refuses this run's token a new
+          # tag on a commit main's workflow files have moved past.
+          gh release create $env:MAIN_TAG --draft --verify-tag --title "Main $($env:MAIN_FROM)" --notes $notes --latest=false -R $repo
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::the draft $($env:MAIN_TAG) could not be made"; exit 1 }
           gh release upload $env:MAIN_TAG @($files | ForEach-Object { $_.FullName }) -R $repo
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::the files could not go on the draft $($env:MAIN_TAG)"; exit 1 }

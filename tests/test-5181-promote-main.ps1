@@ -65,7 +65,12 @@ Yes 'once approved, main''s package goes out before the Deployment, only when th
 Yes '  from the artifact the check found, every file held to the signed record of the build that made it' ($pub.Contains('gh run download $env:MAIN_RUN -n $env:MAIN_TAG -D $dir -R $repo') -and
     $pub.Contains('[string]$record.tag -ne $env:MAIN_FROM -or [string]$record.commit -ne $env:MAIN_COMMIT') -and $pub.Contains('$why = Get-MainPackageProblem -Record $record -Have $have') -and
     $pub.Contains('if ($why) {'))
-Yes '  on main-<build tag>, a draft published only once every file is on it' ($pub.Contains('gh release create $env:MAIN_TAG --draft --target $env:MAIN_COMMIT') -and
+# 3 Nov 2026: the first promotion's token was refused the new tag
+# main-build-20261103.2 (HTTP 403), because main's workflow files had moved
+# past that build's commit. The tag is made by the build's own run instead.
+Yes '  the check holds the package''s tag main-<build tag> to the commit that built it, made by merge-release.yml' ($check.Contains('git/ref/tags/$($pkg.MainTag)') -and
+    $check.Contains("('commit ' + `$pkg.Commit)") -and $check.IndexOf('git/ref/tags/$($pkg.MainTag)') -lt $check.IndexOf('actions/artifacts?name='))
+Yes '  on that tag, a draft published only once every file is on it, making no ref of its own' ($pub.Contains('gh release create $env:MAIN_TAG --draft --verify-tag') -and -not $pub.Contains('--target') -and
     $pub.IndexOf('gh release upload $env:MAIN_TAG') -gt $pub.IndexOf('gh release create') -and $pub.IndexOf('gh release edit $env:MAIN_TAG --draft=false') -gt $pub.IndexOf('gh release upload'))
 $mr = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/release/MergeRelease.ps1'))
 $vr = [IO.File]::ReadAllText((Join-Path $Repo 'launcher/app/VeloRecord.cs'))
