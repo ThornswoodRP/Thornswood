@@ -3,4 +3,4 @@
 # command is at the top of that file. Change a version here, then regenerate.
 discord.py==2.7.1
 pillow==13.0.0
-certifi==2026.10.19
+certifi==2026.10.23
