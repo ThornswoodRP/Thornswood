@@ -162,10 +162,12 @@ async function main() {
   // Newest first by when each was published, whatever order GitHub lists them in.
   const list5 = [
     rel('build-20261101.3', '2026-11-01T12:00:00Z', [setupAsset('build-20261101.3', 'Thornswood-Dev-Setup.exe', E, 50)]),
-    rel('build-20261101.5', '2026-11-01T15:00:00Z', [setupAsset('build-20261101.5', 'Thornswood-Dev-Setup.exe', F, 60)]),
+    rel('build-20261101.5', '2026-11-01T15:00:00Z', [setupAsset('build-20261101.5', 'Thornswood-Dev-Setup.exe', F, 60),
+      setupAsset('build-20261101.5', 'Thornswood-Dev-Move.exe', E, 8)]),
     rel('build-20261101.6', '2026-11-01T16:00:00Z', [setupAsset('build-20261101.6', 'Thornswood-Dev-Setup.exe', A, 70)], { draft: true }),
     rel('build-20261101.7', '2026-11-01T17:00:00Z', [setupAsset('build-20261101.7', 'Thornswood-Dev-Setup.exe', B, 80, { state: 'starter' })]),
-    rel('main-build-20261031.2', '2026-10-31T09:00:00Z', [setupAsset('main-build-20261031.2', 'Thornswood-Setup.exe', C, 90)]),
+    rel('main-build-20261031.2', '2026-10-31T09:00:00Z', [setupAsset('main-build-20261031.2', 'Thornswood-Setup.exe', C, 90),
+      setupAsset('main-build-20261031.2', 'Thornswood-Move.exe', E, 8, { digest: 'sha1:' + 'a'.repeat(40) })]),
     rel('main-build-20261101.3', '2026-11-01T13:00:00Z', [setupAsset('main-build-20261101.3', 'Thornswood-Setup.exe', I, 99, { digest: 'sha1:' + 'a'.repeat(40) })]),
     rel('release/main/20261026-170000', '2026-11-01T18:00:00Z', [setupAsset('release/main/20261026-170000', 'Thornswood-Setup.exe', A, 10)]),
     rel('main-build-20261030.1', '2026-10-30T09:00:00Z', [setupAsset('main-build-20261030.1', 'Thornswood-Setup.exe', A, 11,
@@ -183,6 +185,10 @@ async function main() {
       !!m5 && m5.tag !== 'main-build-20261101.3' && m5.tag !== 'main-build-20261030.1' && m5.tag !== 'release/main/20261026-170000');
   yes('dev\'s is Thornswood-Dev-Setup.exe on the newest published build Release that holds it',
       !!d5 && d5.name === 'Thornswood-Dev-Setup.exe' && d5.tag === 'build-20261101.5' && d5.sha256 === F && d5.size === 60);
+  yes('the move program on the same Release as dev\'s setup is named with it, with GitHub\'s sha256 (feedMove)',
+      !!d5 && !!d5.move && d5.move.name === 'Thornswood-Dev-Move.exe' && d5.move.sha256 === E && d5.move.size === 8 &&
+      d5.move.url === MDL + 'build-20261101.5/Thornswood-Dev-Move.exe');
+  yes('  and one with no sha256 digest is not, so main has none', !!m5 && m5.move === null);
   yes('  passing over a draft and an upload GitHub has not finished', !!d5 && d5.tag !== 'build-20261101.6' && d5.tag !== 'build-20261101.7');
   t.api.newestSetup('main'); await tick();
   yes('not asked again inside the wait', t.calls.length === 1);

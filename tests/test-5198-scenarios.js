@@ -74,10 +74,10 @@ const NOT_HERE = {
   #5198's own list: gamemode systems with no scenario yet. It only shrinks.
 */
 const WAITING = [
-  'apprenticeship.md', 'carriages.md', 'carts.md', 'chat.md', 'classes.md', 'commands.md', 'creation.md',
-  'disease.md', 'dungeon-loot.md', 'durability.md', 'embassy.md', 'emotes.md', 'enchantments.md',
-  'factions.md', 'gold.md', 'hair-dye.md', 'magic.md', 'mixtures.md', 'npcs.md', 'races.md',
-  'skill-tree.md', 'spoilage.md', 'stalls.md', 'thalmor.md', 'trade.md', 'trading-company.md', 'voice.md'
+  'carriages.md', 'carts.md', 'chat.md', 'commands.md', 'creation.md',
+  'dungeon-loot.md', 'embassy.md', 'emotes.md',
+  'factions.md', 'magic.md', 'npcs.md',
+  'stalls.md', 'thalmor.md', 'trading-company.md', 'voice.md'
 ];
 
 // ------------------------------------------------------- what the guide lists --

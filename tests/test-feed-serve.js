@@ -73,10 +73,15 @@ fs.mkdirSync(path.join(ROOT, 'feed', 'version'), { recursive: true });
 fs.mkdirSync(path.join(ROOT, 'feed-dev', 'assets'), { recursive: true });
 fs.mkdirSync(path.join(ROOT, 'feed-dev', 'version'), { recursive: true });
 
+// The setup programs GitHub holds (newestSetup, feed.js) are another block:
+// none here unless a check puts one in setupsNow (feedMove, the old
+// launcher's move to the new one).
+const setupsNow = {};
+const SETUPS_STUB = 'function newestSetup(ch) { return setupsNow[ch] || null; }\n';
 const genSrc = generations();
 yes('server.js has the feed generations block (feedFile)', !!genSrc);
 // feedView and feedSettings are in the same block: what the feed routes answer (#1050).
-const gen = eval('(function () {\n' + genSrc + '\nreturn { feedFile: feedFile, feedView: feedView, feedSettings: feedSettings };\n})()');
+const gen = eval('(function () {\n' + SETUPS_STUB + genSrc + '\nreturn { feedFile: feedFile, feedView: feedView, feedSettings: feedSettings };\n})()');
 const feedFile = gen.feedFile, feedView = gen.feedView, feedSettings = gen.feedSettings;
 
 const sendSrc = grab('function send(');
@@ -224,6 +229,38 @@ async function main() {
   rel.releaseCopies[TAG].files[SHA].size = BODY.length + 1;
   const sized = await ask('GET', '/feed/assets/' + SHA);
   yes('a Release copy of another size is never used', sized.code === 200 && sized.body.equals(BODY));
+
+  // The old launcher moves itself to the new one (feedMove, 2 Nov 2026):
+  // once a channel's setup program has the move program on its Release,
+  // version.json names that as the launcher, one step past the feed's own
+  // number, held to GitHub's sha256 of it; the store's file is untouched and
+  // the other channel is not.
+  const MOVE_SHA = 'e'.repeat(64);
+  const MOVE_URL = 'https://github.com/ThornswoodRP/Thornswood/releases/download/main-build-20261102.20/Thornswood-Move.exe';
+  const storeFile = path.join(ROOT, 'feed', 'version', '00000004.json');
+  const store = JSON.stringify({ launcherVersion: '2026.1102.716', minLauncher: '1.0.0',
+    launcherUrl: 'https://thornswood.net/feed/assets/' + SHA, launcherSha256: SHA });
+  fs.writeFileSync(storeFile, store);
+  const plain = await ask('GET', '/feed/version.json');
+  yes('with no move program on the setup\'s Release, version.json names the feed\'s own launcher',
+      plain.code === 200 && JSON.parse(plain.body.toString('utf8')).launcherSha256 === SHA);
+  setupsNow.main = { name: 'Thornswood-Setup.exe', move: { name: 'Thornswood-Move.exe', url: MOVE_URL, size: 9, sha256: MOVE_SHA } };
+  const mv = await ask('GET', '/feed/version.json', { 'If-None-Match': plain.h['etag'] });
+  const mdoc = mv.code === 200 ? JSON.parse(mv.body.toString('utf8')) : {};
+  yes('with one, a launcher holding the tag from before is given the new document', mv.code === 200 && !!mv.h['etag'] && mv.h['etag'] !== plain.h['etag']);
+  yes('  naming the move program as the launcher, at its Release address and GitHub\'s sha256',
+      mdoc.launcherUrl === MOVE_URL && mdoc.launcherSha256 === MOVE_SHA);
+  yes('  one step past the feed\'s number, which the old launcher reads as newer', mdoc.launcherVersion === '2026.1102.716.1');
+  yes('  and minLauncher as the feed has it', mdoc.minLauncher === '1.0.0');
+  yes('the store\'s file is not touched', fs.readFileSync(storeFile, 'utf8') === store);
+  const mvAgain = await ask('GET', '/feed/version.json', { 'If-None-Match': mv.h['etag'] });
+  yes('the moved document 304s on its own tag', mvAgain.code === 304);
+  const devStill = await ask('GET', '/feed-dev/version.json');
+  yes('dev, with no move program of its own, still names its own launcher',
+      devStill.code === 200 && !/Thornswood-Move/.test(devStill.body.toString('utf8')));
+  delete setupsNow.main;
+  const back = await ask('GET', '/feed/version.json', { 'If-None-Match': mv.h['etag'] });
+  yes('with the move program gone, the feed\'s own launcher is named again', back.code === 200 && JSON.parse(back.body.toString('utf8')).launcherSha256 === SHA);
 
   // Who the ETag above is for, so it is not taken out again as unused: the
   // launcher asks with the tag of the copy it holds and reads a 304 as the

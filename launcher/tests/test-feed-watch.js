@@ -65,10 +65,15 @@ fs.mkdirSync(path.join(ROOT, 'feed', 'version'), { recursive: true });
 fs.mkdirSync(path.join(ROOT, 'feed-dev', 'assets'), { recursive: true });
 fs.mkdirSync(path.join(ROOT, 'feed-dev', 'version'), { recursive: true });
 
+// The setup programs GitHub holds (newestSetup, feed.js) are another block:
+// none here unless a check puts one in setupsNow (feedMove, the old
+// launcher's move to the new one).
+const setupsNow = {};
+const SETUPS_STUB = 'function newestSetup(ch) { return setupsNow[ch] || null; }\n';
 const genSrc = generations();
 yes('server.js has the feed generations block (feedFile)', !!genSrc);
 // feedView and feedSettings are in the same block: what the feed routes answer (#1050).
-const gen = eval('(function () {\n' + genSrc + '\nreturn { feedFile: feedFile, feedView: feedView, feedSettings: feedSettings };\n})()');
+const gen = eval('(function () {\n' + SETUPS_STUB + genSrc + '\nreturn { feedFile: feedFile, feedView: feedView, feedSettings: feedSettings };\n})()');
 const feedFile = gen.feedFile, feedView = gen.feedView, feedSettings = gen.feedSettings;
 
 const sendSrc = grab('function send(');

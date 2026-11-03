@@ -78,8 +78,13 @@ function generations() {
 const sha = (b) => crypto.createHash('sha256').update(b).digest('hex');
 
 let ROOT = '';
+// The setup programs GitHub holds (newestSetup, feed.js) are another block:
+// none here unless a check puts one in setupsNow (feedMove, the old
+// launcher's move to the new one).
+const setupsNow = {};
+const SETUPS_STUB = 'function newestSetup(ch) { return setupsNow[ch] || null; }\n';
 const genSrc = generations();
-const gen = eval('(function () {\n' + genSrc + '\nreturn { feedFile: feedFile, feedView: feedView, feedSettings: feedSettings, FEED_SPLIT_LAUNCHER: FEED_SPLIT_LAUNCHER };\n})()');
+const gen = eval('(function () {\n' + SETUPS_STUB + genSrc + '\nreturn { feedFile: feedFile, feedView: feedView, feedSettings: feedSettings, FEED_SPLIT_LAUNCHER: FEED_SPLIT_LAUNCHER };\n})()');
 const feedFile = gen.feedFile, feedView = gen.feedView, feedSettings = gen.feedSettings;
 
 if (process.argv[2] === '--emit') {
@@ -251,7 +256,7 @@ async function main() {
   yes('a sha256 that is neither a file nor settings is 404', none.code === 404);
 
   // ---- a site that restarted: the views are made again from the newest
-  const fresh = eval('(function () {\n' + genSrc + '\nreturn { feedSettings: feedSettings };\n})()');
+  const fresh = eval('(function () {\n' + SETUPS_STUB + genSrc + '\nreturn { feedSettings: feedSettings };\n})()');
   const b = fresh.feedSettings('feed', top3.settings.sha256);
   yes('after a restart the newest settings are found from the generation alone', !!b && sha(b) === top3.settings.sha256);
   void feedView; void feedSettings;

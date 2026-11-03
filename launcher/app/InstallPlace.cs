@@ -47,6 +47,38 @@ namespace Thornswood
             return root;
         }
 
+        /// <summary>
+        /// The handover from a launcher from before Velopack (launcher\move,
+        /// 2 Nov 2026): its last update writes the folder it was installed in
+        /// here, then runs this launcher's setup, so the first start of the
+        /// new launcher carries on in that folder with nothing asked. Beside
+        /// Velopack's folder, not in it, so nothing Velopack's setup does to
+        /// its own folder can touch it.
+        /// </summary>
+        public static string HandoverFile
+        {
+            get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Thornswood-moved-from.txt"); }
+        }
+
+        /// <summary>
+        /// The folder an old launcher handed over (HandoverFile), recorded as
+        /// this install's and the handover removed, or null when there is none
+        /// or it names no Thornswood install: a folder that exists with
+        /// config.json in it. A handover that names nothing is removed too,
+        /// and the install window asks as on any first start.
+        /// </summary>
+        public static string TakeHandover()
+        {
+            string f = HandoverFile;
+            if (!File.Exists(f)) return null;
+            string root = File.ReadAllText(f, Encoding.UTF8).Trim().TrimEnd('\\');
+            File.Delete(f);
+            if (root.Length == 0 || !Path.IsPathFullyQualified(root)) return null;
+            if (!File.Exists(Path.Combine(root, "config.json"))) return null;
+            Record(root);
+            return root;
+        }
+
         /// <summary>Writes the record. Only once the install finished, so a stopped one is asked again.</summary>
         public static void Record(string root)
         {
