@@ -64,7 +64,8 @@ for _k in ('TEST_TASK_ROLES', 'LIVE_SMOKE_ADMIN_ROLES', 'GITHUB_TOKEN'):
 os.environ['GITHUB_TOKEN_FILE'] = ''  # nor the box admin service's (#5184)
 
 import discord  # noqa: E402
-import bot  # noqa: E402
+import harness_bot  # noqa: E402
+bot = harness_bot.whole()
 bot.POST_RULES = False   # these fixtures predate the post rules; test-post-rules.py checks them
 
 PASS = []
@@ -343,7 +344,7 @@ def run(c):
 
 
 # ---------------------------------------------- 1. the checklist is gone --
-src = open(os.path.join(HERE, 'bot.py'), encoding='utf-8').read()
+src = harness_bot.source()
 yes('bot.py has no Live smoke code left: no live_smoke function, no '
     'LIVE_SMOKE setting, no /live-smoke group',
     not [n for n in dir(bot) if n.lower().startswith('live_smoke')]
@@ -615,7 +616,7 @@ yes('  Discord gets it as an optional choice of Main and Dev, every text in '
     and sorted(c.value for c in _tag_param[0].choices) == ['Dev', 'Main']
     and len(bot.test_task_cmd.description) <= 100
     and all(len(p.description) <= 100 for p in bot.test_task_cmd.parameters))
-_src = _insp.getsource(bot)
+_src = harness_bot.source()
 yes('--post-task --tag takes Main or Dev, Main by default',
     "ap.add_argument('--tag', choices=list(HAND_TAGS), default=TASK_POST_TAG)" in _src
     and bot.TASK_POST_TAG == 'Main' and set(bot.HAND_TAGS) == {'Main', 'Dev'})

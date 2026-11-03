@@ -35,14 +35,18 @@
 #             (the files beside Game the install reads on the first start,
 #             Build-SetupFiles.ps1) and Thornswood-Dev-Setup.exe, Velopack's
 #             installer, which puts the launcher on a PC and starts it; the
-#             launcher's first start is the install (#4824). A dev launcher
+#             launcher's first start is the install (#4824), and
+#             Thornswood-Dev-Move.exe, which a launcher from before Velopack
+#             takes as its last update and which moves that install to the
+#             new launcher (launcher/move). A dev launcher
 #             reads its updates from here (launcher/app/Velo*.cs), each
 #             package held to this manifest and its signed catalog, and takes
 #             its game files out of the package (SyncPackage.cs). The
 #             portable copy vpk also makes does not go out
 #   main      with every velopack part: main's package of the same launcher
 #             and game files, whole, with main's feed files,
-#             setup-files.main.json and Thornswood-Setup.exe. Listed in the
+#             setup-files.main.json, Thornswood-Setup.exe and
+#             Thornswood-Move.exe. Listed in the
 #             manifest and held, not published (MAIN'S PACKAGE below)
 #   after     the steps after a deploy: every step file of deploy/after and
 #             the gate's verbs.json, which says which verbs a step may run
@@ -129,6 +133,8 @@ on:
       - 'site/public/**'
       - 'site/data/site/**'
       - 'bot/bot.py'
+      # The bot's modules, which bot.py imports (#5357).
+      - 'bot/bot_*.py'
       - 'bot/_pyguard.py'
       - 'bot/trust.py'
       - 'bot/card.py'
@@ -523,6 +529,18 @@ jobs:
           $raw = gh api "repos/$($env:GITHUB_REPOSITORY)/releases?per_page=50"
           if ($LASTEXITCODE -ne 0) { Write-Host '::error::GitHub did not list the Releases'; exit 1 }
           $rels = @(($raw -join "`n") | ConvertFrom-Json)
+          # The move program (launcher\move\Program.cs): what a launcher from
+          # before Velopack takes as its last update, which installs this
+          # channel's launcher and removes the old one. Built once, signed like
+          # every program here, and put beside each channel's Setup.exe; the
+          # site names it in that channel's old feed (site\lib\feed.js,
+          # feedMove).
+          $moveOut = Join-Path $env:RUNNER_TEMP 'move'
+          dotnet build launcher\move\Move.csproj -c Release -p:Version=$env:VERSION -p:OutDir="$moveOut\"
+          if ($LASTEXITCODE -ne 0) { Write-Host '::error::the move program did not build'; exit 1 }
+          $moveExe = Join-Path $moveOut 'Thornswood.exe'
+          ./scripts/release/Sign-OnRunner.ps1 -Path $moveExe
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           $made = @{}
           foreach ($ch in 'dev', 'main') {
             $pack = Join-Path $env:RUNNER_TEMP "velopack-in-$ch"
@@ -577,6 +595,9 @@ jobs:
             $download = Join-Path $out $(if ($ch -eq 'dev') { 'Thornswood-Dev-Setup.exe' } else { 'Thornswood-Setup.exe' })
             Move-Item -LiteralPath $setupExe[0].FullName -Destination $download -Force
             $files += Get-Item -LiteralPath $download
+            $move = Join-Path $out $(if ($ch -eq 'dev') { 'Thornswood-Dev-Move.exe' } else { 'Thornswood-Move.exe' })
+            Copy-Item -LiteralPath $moveExe -Destination $move -Force
+            $files += Get-Item -LiteralPath $move
             $files += Get-Item -LiteralPath $setupList
             $made[$ch] = $files
             Write-Host ("${ch}: " + (($files | ForEach-Object { $_.Name }) -join ', '))
@@ -694,7 +715,7 @@ jobs:
       # as it is.
       - name: Keep main's package for the approval
         if: ${{ steps.newest.outputs.release == 'yes' && steps.files.outputs.held != '' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: main-${{ steps.names.outputs.tag }}
           path: ${{ steps.files.outputs.held }}

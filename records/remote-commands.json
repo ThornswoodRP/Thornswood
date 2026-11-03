@@ -746,7 +746,7 @@
                       "script":  "scripts/deploy/Install-Bot.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "Remote",
-                      "anchor":  "$checkOut = @(Remote ((ServiceSwapVars $Root $stageName $prevName $Wait $hashes @(\u0027bot.py\u0027, \u0027_pyguard.py\u0027, \u0027trust.py\u0027, \u0027card.py\u0027)) + $serviceCheckBlock) |",
+                      "anchor":  "$checkOut = @(Remote ((ServiceSwapVars $Root $stageName $prevName $Wait $hashes @(Get-ThornswoodBotCode $Repo)) + $serviceCheckBlock) |",
                       "does":  "writes or checks a stage folder",
                       "class":  "stage",
                       "reason":  "writes or checks a stage folder or file"

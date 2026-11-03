@@ -41,8 +41,9 @@ import time
 # called, which nothing here does.
 os.environ.setdefault('DISCORD_TOKEN', 'not-a-real-token')
 
-import bot  # noqa: E402
+import harness_bot  # noqa: E402
 
+bot = harness_bot.whole()
 PASS = []
 FAIL = []
 
@@ -344,7 +345,7 @@ try:
 finally:
     bot.client, bot.WATCH_ID = keep_c, keep_id
 
-src = open(os.path.join(HERE, 'bot.py'), encoding='utf-8').read()
+src = harness_bot.source()
 guard = src[src.index('    if not _watching:'):src.index("    log('up as")]
 yes('W7 on_ready starts it, once, beside the other watchers',
     'asyncio.create_task(watch_services())' in guard)

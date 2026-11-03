@@ -25,7 +25,7 @@ function yes(what, cond) {
   else { fail++; console.log('FAIL  ' + what); }
 }
 
-const bot = read('bot/bot.py');
+const bot = require('./bot-files').source().split(CR).join('');
 const install = read('scripts/deploy/Install-Bot.ps1');
 const build = read('bot/Build-Discord.py');
 const names = JSON.parse(read('bot/factions.json'));
@@ -112,7 +112,7 @@ yes('F4 the three copied questions stay optional (long), and only the pick is re
 
 yes('F5 Install-Bot sends factions.json on the artifact list and in the copy loop',
     install.indexOf("'bot/factions.json'") !== -1 &&
-    install.indexOf("foreach ($f in 'bot.py', '_pyguard.py', 'trust.py', 'card.py', 'staff-channel.txt', 'requirements.txt', 'factions.json')") !== -1);
+    install.indexOf("foreach ($f in @(Get-ThornswoodBotCode $Repo) + @('staff-channel.txt', 'dev-channel.txt', 'requirements.txt', 'factions.json'))") !== -1);
 
 // #3317 (Patrick, 22 Oct, page card q-3317-faction-roles, A): one
 // "<faction> Leader" role per named faction, from factions.json, short names,

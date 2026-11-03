@@ -112,10 +112,13 @@ yes('on a faked 3.10, bot.py and every bot test stop with the plain message '
 
 install = open(os.path.join(HERE, '..', 'scripts', 'deploy', 'Install-Bot.ps1'),
                encoding='utf-8').read()
+code = open(os.path.join(HERE, '..', 'scripts', 'deploy', 'Bot-Code.ps1'),
+            encoding='utf-8').read()
 yes('Install-Bot.ps1 sends and checks _pyguard.py with bot.py',
-    "'bot/_pyguard.py'" in install
-    and "foreach ($f in 'bot.py', '_pyguard.py'," in install
-    and "@('bot.py', '_pyguard.py', 'trust.py', 'card.py')" in install)
+    "return @('bot.py', '_pyguard.py', 'trust.py', 'card.py') + @(Get-ThornswoodBotParts $Repo)" in code
+    and "-Paths (@(Get-ThornswoodBotCode $Repo | ForEach-Object { 'bot/' + $_ })" in install
+    and "foreach ($f in @(Get-ThornswoodBotCode $Repo) + @(" in install
+    and "$hashes @(Get-ThornswoodBotCode $Repo))" in install)
 
 print('%d passed, %d failed' % (len(PASS), len(FAIL)))
 sys.exit(1 if FAIL else 0)

@@ -35,6 +35,15 @@
       and no update at all, and nothing then waits for the launcher to close;
       the same call on an update marked checked is held for the close, so the
       refusals were for that alone. Velo.ExitApply is never called.
+    - A launcher that cannot start (its window threw, 2 Nov 2026) asks for
+      its update with no window: Shell.Main calls Updater.AfterFailedStart
+      before the "could not start" box, which checks, fetches and stages a
+      newer launcher for ExitApply. On a launcher Velopack did not install
+      it says so and stages nothing. With a newer launcher staged, by that
+      or by the window's own check, no box is shown: the box held the
+      process open, and the staged launcher goes in only once it ends. The
+      crash line goes to the install's own log, not to a Root Paths.Init(null)
+      would make of the folder above the exe's.
   FetchLauncher itself needs Velopack's download and the release's signed
   record from GitHub, so what it does in what order is read from its source:
   the package check, then the Update.exe check, then the mark that it passed,
@@ -89,6 +98,31 @@ Yes 'ApplyLauncher stages nothing unless FetchLauncher marked it' (
 Yes 'Velopack''s own checksum step also holds each package to the signed record before it keeps it' (
     $velo -match '(?s)protected override async Task VerifyPackageChecksumAsync\(VelopackAsset release, string filePathOverride = null\)\s*\{\s*await base\.VerifyPackageChecksumAsync\(release, filePathOverride\)\.ConfigureAwait\(false\);\s*string why = VeloRecord\.Vouches\(release\);\s*if \(why\.Length > 0\) throw')
 Yes 'the swap script and its exe kept beside the launcher are gone (SelfSwap.cs)' (-not (Test-Path -LiteralPath (Join-Path $App 'SelfSwap.cs')))
+
+# A launcher whose window cannot open still reaches the one that fixes it
+# (2 Nov 2026): the launcher from #5381 stopped as its window was first laid
+# out, and every other launcher update is asked for from the window.
+Write-Host ''
+Write-Host 'a launcher that cannot start asks for its update without the window (launcher\app\Shell.cs)'
+$failedAt = $velo.IndexOf('public static string AfterFailedStart(Config cfg, Action<string> log)')
+$failed = if ($failedAt -ge 0) { $velo.Substring($failedAt, $velo.IndexOf('sealed class CheckedUpdates', $failedAt) - $failedAt) } else { '' }
+Yes 'AfterFailedStart checks the channel, fetches and checks the launcher like any other, then stages it, and never throws' (
+    $failed -match '(?s)LauncherUpdate u = CheckLauncher\(cfg\);.*FetchLauncher\(u, log\);\s*ApplyLauncher\(u\);' -and $failed -match '(?s)try\s*\{.*\}\s*catch \(Exception ex\)\s*\{\s*return ')
+$shell = [IO.File]::ReadAllText((Join-Path $App 'Shell.cs')).Replace("`r`n", "`n")
+$mainAt = $shell.IndexOf('static void Main(string[] args)')
+$main = if ($mainAt -ge 0) { $shell.Substring($mainAt, $shell.IndexOf('static string MutexName(', $mainAt) - $mainAt) } else { '' }
+$runAt = $main.IndexOf('try { Run(args); }'); $askAt = $main.IndexOf('Updater.AfterFailedStart(cfg,'); $tellAt = $main.IndexOf('"Thornswood could not start"'); $exitAt = $main.IndexOf('Velo.ExitApply();')
+Yes '  Main asks it when the start throws, before the message, and the staged launcher goes in at ExitApply, the last line' (
+    $runAt -gt 0 -and $askAt -gt $runAt -and $tellAt -gt $askAt -and $exitAt -gt $tellAt -and $main.Contains('Ask.Tell(update + Environment.NewLine + Environment.NewLine + ex.ToString(), "Thornswood could not start"'))
+Yes '  unless the window''s own check already staged one, and with one staged no box holds the process open' (
+    $main.Contains('string update = Velo.Staged') -and $main.Contains(': Updater.AfterFailedStart(cfg, log);') -and
+    [regex]::IsMatch($main, 'if \(!Velo\.Staged\)\s*Ask\.Tell\(update'))
+$initAt = $main.IndexOf('Paths.Init(')
+Yes '  the crash line goes to the install''s own log: Paths is kept as Run made it, and made from the recorded install only when Run did not' (
+    -not $main.Contains('Paths.Init(null)') -and [regex]::IsMatch($main, 'if \(Paths\.Root == null\)\s*\{\s*try \{ Paths\.Init\(Velo\.InstallRoot\); \}') -and
+    $initAt -gt $runAt -and $initAt -lt $main.IndexOf('log("COULD NOT START: "'))
+$veloCs = [IO.File]::ReadAllText((Join-Path $App 'Velo.cs')).Replace("`r`n", "`n")
+Yes '  before config.json is read, the channel is the one Velopack installed' ($veloCs -match '(?s)public static string ChannelFor\(Config cfg\)\s*\{.*if \(cfg == null\)\s*\{\s*IVelopackLocator l = Locator;\s*return l != null && string\.Equals\(l\.Channel, "dev", StringComparison\.OrdinalIgnoreCase\) \? "dev" : "main";')
 
 # ---- the driver -------------------------------------------------------------------
 Write-Host ''
@@ -260,6 +294,14 @@ namespace Thornswood
             threw = "";
             try { Updater.ApplyLauncher(ok); } catch (Exception ex) { threw = ex.Message; }
             Yes("an update FetchLauncher passed is held until the launcher closes" + (threw.Length > 0 ? ": " + threw : ""), threw.Length == 0 && Velo.Staged);
+
+            // A start that failed, on a launcher Velopack did not install
+            // (this driver): it says so and stages nothing, and never throws.
+            Velo.ApplyOnExit(null, null);
+            string after = Updater.AfterFailedStart(null, delegate (string line) { });
+            Yes("a failed start on a launcher Velopack did not install says so and stages nothing: " + after,
+                after == "This launcher was not installed by Thornswood's setup, so it does not update itself." && !Velo.Staged);
+            Yes("  and with no config.json read yet its channel is main, as Velopack installed nothing", Velo.ChannelFor(null) == "main");
 
             Console.WriteLine("driver: " + pass + " passed, " + fail + " failed");
             return fail > 0 ? 1 : 0;

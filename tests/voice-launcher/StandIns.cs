@@ -40,7 +40,8 @@ namespace Thornswood
         public Action<string, string> OnEvent = delegate { };
 
         readonly VoiceMix mix;
-        readonly float[] heard = new float[VoiceMix.Rate / 2];   // mono, the last half second
+        // The last half second, each ear on its own: left, right, left, ...
+        readonly float[] heard = new float[VoiceMix.Rate];
         int at;
         readonly object gate = new object();
         volatile bool stop;
@@ -71,9 +72,9 @@ namespace Thornswood
                 mix.Render(stereo, VoiceMix.Frame);
                 lock (gate)
                 {
-                    for (int i = 0; i < VoiceMix.Frame; i++)
+                    for (int i = 0; i < 2 * VoiceMix.Frame; i++)
                     {
-                        heard[at] = (stereo[2 * i] + stereo[2 * i + 1]) / 2;
+                        heard[at] = stereo[i];
                         at = (at + 1) % heard.Length;
                     }
                 }
@@ -84,20 +85,34 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// How loud each pitch is in what played over the last half second:
-        /// the tone's amplitude in each 40 ms of it (Goertzel, through a
-        /// Hann window), averaged, so a voice heard in front at full level
-        /// reads about 0.25 (the tone through the HRTF panner, both ears
-        /// averaged), and a voice not heard reads about nothing. Measured a
-        /// block at a time because the voice is not one unbroken tone: the
-        /// jitter buffer drops its oldest audio when a burst piles up and
-        /// plays silence when it runs dry (VoiceMix.cs), and each is a jump
-        /// in the tone's phase. Over the whole half second at once the parts
-        /// either side of a jump cancel, so a voice played the whole time
-        /// read about half its level: 0.045 where 40 ms at a time read 0.088,
-        /// on a machine as busy as the Linux gate (2 Nov 2026), and 0.047 failed
-        /// test-voice-moved-clients.js on #5327. A block holds at most one
-        /// jump, and a block of silence still counts as nothing heard.
+        /// How loud each pitch plays: the tone's amplitude in each 40 ms of
+        /// the last half second (Goertzel, through a Hann window), in each
+        /// ear on its own, and the loudest of those. A voice heard in front
+        /// at full level reads about 0.25 and a voice not heard reads about
+        /// nothing (#5456).
+        ///
+        /// Each ear on its own, because that is how it is heard. The two
+        /// ears were once averaged into one, and the panner delays the far
+        /// ear of a voice to the side (VoiceMix.cs), so in the average the
+        /// two ears partly cancelled by an amount that hangs on the pitch:
+        /// on a quiet machine, four voices at the same level beside me read
+        /// 0.148 at 500 Hz, 0.118 at 600, 0.100 at 700 and 0.133 at 800
+        /// (2 Nov 2026), steady in every block.
+        ///
+        /// The loudest 40 ms, because the voice plays only while its audio
+        /// arrives in time: the jitter buffer plays silence when it runs dry
+        /// and waits 40 ms before it plays again (VoiceMix.cs). On a machine
+        /// running several harnesses to a core, the five drivers' 20 ms
+        /// loops fall behind, and blocks of a voice that is mixed in at its
+        /// level read 0.002 between blocks of 0.13. Their average fell under
+        /// the line (0.048 for a voice whose blocks reached 0.138, measured
+        /// with twelve busy loops on four cores, 2 Nov 2026), and dropped
+        /// #5454, #5327 and #5460 from the merge queue. Whether somebody is
+        /// in the mix at their level is what the harnesses ask, not whether
+        /// the machine kept up, and a voice left out of the mix reads about
+        /// nothing in every block. A block holds at most one jump in the
+        /// tone's phase (a drop or a refill), so the parts either side of a
+        /// jump cannot cancel over the whole half second.
         /// </summary>
         public double Hear(double hz)
         {
@@ -107,22 +122,26 @@ namespace Thornswood
             // 40 ms, whose bins are 25 Hz apart: the harnesses' tones are 60 Hz or
             // more apart, outside each other's main lobe through the window.
             const int Block = VoiceMix.Rate / 25;
-            int blocks = copy.Length / Block, skip = copy.Length - blocks * Block;
-            double w = 2 * Math.PI * hz / VoiceMix.Rate, c = 2 * Math.Cos(w), sum = 0;
+            int frames = copy.Length / 2, blocks = frames / Block, skip = frames - blocks * Block;
+            double w = 2 * Math.PI * hz / VoiceMix.Rate, c = 2 * Math.Cos(w), loudest = 0;
             for (int b = 0; b < blocks; b++)
             {
-                double s1 = 0, s2 = 0;
-                for (int i = 0; i < Block; i++)
+                for (int ear = 0; ear < 2; ear++)
                 {
-                    double hann = 0.5 - 0.5 * Math.Cos(2 * Math.PI * i / Block);
-                    double s0 = hann * copy[(start + skip + b * Block + i) % copy.Length] + c * s1 - s2;
-                    s2 = s1; s1 = s0;
+                    double s1 = 0, s2 = 0;
+                    for (int i = 0; i < Block; i++)
+                    {
+                        double hann = 0.5 - 0.5 * Math.Cos(2 * Math.PI * i / Block);
+                        int frame = skip + b * Block + i;
+                        double s0 = hann * copy[(start + 2 * frame + ear) % copy.Length] + c * s1 - s2;
+                        s2 = s1; s1 = s0;
+                    }
+                    double power = s1 * s1 + s2 * s2 - c * s1 * s2;
+                    // The Hann window sums to half the block.
+                    loudest = Math.Max(loudest, 2 * Math.Sqrt(Math.Max(0, power)) / (Block / 2.0));
                 }
-                double power = s1 * s1 + s2 * s2 - c * s1 * s2;
-                // The Hann window sums to half the block.
-                sum += 2 * Math.Sqrt(Math.Max(0, power)) / (Block / 2.0);
             }
-            return sum / blocks;
+            return loudest;
         }
 
         public void Dispose()

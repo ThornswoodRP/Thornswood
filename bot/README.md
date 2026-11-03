@@ -22,7 +22,7 @@ else until the Member button in `#start-here` (THE GATE in the builder).
 ### Tickets and Applications
 
 Each of these five channels has its own panel, with only its kinds of ticket
-(`TICKET_DESKS` in `bot.py`; page card q-3317-ticket-split, A):
+(`TICKET_DESKS` in `bot_core.py`; page card q-3317-ticket-split, A):
 
 | Channel | Category | What it opens |
 |---|---|---|
@@ -245,7 +245,7 @@ A rewritten `Known issue:` or `Test task:` comment edits its post (title,
 body and tag) on the next pass. Comments are read only for an issue GitHub
 says changed since the last pass, or whose record was made with an older
 form of the post: each record in `data\known-issues.json` holds the form it
-was written with (`TASK_FORM` and `KNOWN_FORM` in `bot.py`). When the way a
+was written with (`TASK_FORM` and `KNOWN_FORM` in `bot_github.py`). When the way a
 post is written changes, that number goes up by one, and on the first pass
 after the bot is updated every older post is written again, once. Form 2
 (11 Oct) is test tasks tagged Main and both plain lines saying main. A test
@@ -527,6 +527,29 @@ category and channel whose overwrites differ from what its mode gives, and the
 channels the plan does not name. Each difference starts `DIFFERS`, and the
 last line counts them. Run it before and after any change to roles or access.
 
+## How the bot's code is laid out
+
+`bot.py` is the start: what the bot does, the settings it reads, and the few
+lines that run it. The bot itself is in the modules `bot.py` imports, one area
+each, all beside it in `bot\` (#5357): `bot_base.py` (where its files are and
+the roots it trusts, loaded first), `bot_core.py` (its settings, its client,
+the log and what every part uses), then joins, holds, the staff channel,
+reports, tickets, hold offices, factions, the testing channels, the GitHub
+reads, the forums' post text, rules and passes, the site's lists, staff
+notices, release news, the watchdog, Report a problem, staff in the world,
+the heartbeat, the uptime ping, `on_ready`, the by-hand jobs and deletion
+requests. Each module imports what it uses from the ones before it, by name,
+so the build check's name check (ruff, `F821`) still reads every name the bot
+uses. `bot.py`'s import lines are the one list of them: `Install-Bot.ps1` and
+`App-Part.ps1` send what it imports (`scripts\deploy\Bot-Code.ps1`), and
+nothing else.
+
+The harnesses see the bot as one set of names, as it was when it was one
+file: `bot\harness_bot.py`'s `whole()` reads a name from the module that has
+it, and a name a harness stands in for (`log`, `client`, a record's path) is
+put in every module that uses it. Harnesses that read the code itself read
+all of it, `harness_bot.source()`, `tests\bot-files.js` or `tests\BotFiles.ps1`.
+
 ## Running the bot's tests
 
 The bot and its tests need Python 3.11 or newer (Pillow 13 needs it, #1401),
@@ -582,7 +605,7 @@ So before merging a bump, install the new pins and run `bot\tests\test-*.py` on
 them, the way [Setting up a machine](../docs/guide/set-up-a-machine.md#setting-up-a-machine)
 installs them (#1401).
 
-What goes up with it: `bot.py`, `card.py`, the channel ids, the card artwork,
+What goes up with it: `bot.py` and its modules, `card.py`, the channel ids, the card artwork,
 `requirements.txt`, and `factions.json`, the named factions the Faction
 Leader form reads from beside itself. A file the bot reads and this list does
 not name is a file that is only ever on main, never on the box.

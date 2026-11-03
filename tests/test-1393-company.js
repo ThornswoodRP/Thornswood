@@ -896,7 +896,7 @@ attempt('the wiring', function () {
   yes('W8 the site gives the role a default name, reads it, and sends companyProfiles to the door',
       !!def && /out\.company = has\(cfg\.access\.company\);/.test(site) &&
       /out\.companyProfiles\.push\(n\)/.test(site) && /'devRoleProfiles', 'companyProfiles'\]/.test(site));
-  const bot = read('bot/bot.py');
+  const bot = require('./bot-files').source().split(CR).join('');
   yes('W9 applying for the company is the Faction Leader ticket, not a Trading Company form',
       /\('faction',\s+'Apply: Faction Leader'/.test(bot) && /'faction': \[/.test(bot) &&
       !/\('company',\s+'Apply: Trading Company'/.test(bot) &&

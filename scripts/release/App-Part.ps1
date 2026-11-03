@@ -20,7 +20,8 @@
              (-Site), which nobody edits in the browser. The documents, the
              boards and everything the site writes are the site's own and
              never ride a Release.
-    discord  bot.py, _pyguard.py, trust.py, card.py, staff-channel.txt,
+    discord  bot.py, _pyguard.py, trust.py, card.py, the bot's modules
+             bot_*.py (the ones bot.py imports, #5357), staff-channel.txt,
              dev-channel.txt (where dev news goes), requirements.txt,
              factions.json, assets\join-card.png
              (C:\Thornswood-Bot). The list Install-Bot.ps1 -CodeOnly sends.
@@ -99,7 +100,9 @@ switch ($Part) {
     Add-Tree 'site/data/site' 'data/site'
   }
   'discord' {
-    foreach ($f in 'bot.py', '_pyguard.py', 'trust.py', 'card.py', 'staff-channel.txt', 'dev-channel.txt', 'requirements.txt', 'factions.json') { Add-One $f ('bot/' + $f) }
+    # bot.py and the modules it imports (#5357), the list Install-Bot.ps1 sends.
+    . (Join-Path $PSScriptRoot '..\deploy\Bot-Code.ps1')
+    foreach ($f in @(Get-ThornswoodBotCode $RepoDir) + @('staff-channel.txt', 'dev-channel.txt', 'requirements.txt', 'factions.json')) { Add-One $f ('bot/' + $f) }
     Add-One 'assets/join-card.png' 'bot/assets/join-card.png'
   }
   'voice' {

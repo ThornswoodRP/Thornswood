@@ -30,8 +30,9 @@ os.environ.setdefault('DISCORD_TOKEN', 'not-a-real-token')
 os.environ.pop('GITHUB_TOKEN', None)
 os.environ['GITHUB_TOKEN_FILE'] = ''  # nor the box admin service's (#5184)
 
-import bot  # noqa: E402
+import harness_bot  # noqa: E402
 
+bot = harness_bot.whole()
 PASS = []
 FAIL = []
 
@@ -41,7 +42,7 @@ def yes(what, cond):
     print(('PASS  ' if cond else 'FAIL  ') + what)
 
 
-SRC = open(os.path.join(HERE, 'bot.py'), encoding='utf-8').read()
+SRC = harness_bot.source()
 PLAYER = 'pla' + 'yer'
 EM = chr(0x2014)
 

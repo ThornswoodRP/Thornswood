@@ -113,6 +113,10 @@ const CONTAINER_REACH = 512, BENCH_REACH = 256, WORK_REACH = 512;
 /* A person's half when the scenario names only the profession. */
 const FIRST_HALF = { smith: 'platewright', cook: 'hearthcook', tailor: 'liverywright', alchemist: 'physicker',
   woodworker: 'woodwright', enchanter: 'wardweaver', warrior: 'bulwark' };
+/* Each profession's two halves (progression.ts TABLE): the other one is the sister half. */
+const HALVES = { warrior: ['bulwark', 'berserker'], alchemist: ['blightbrewer', 'physicker'], cook: ['hearthcook', 'confectioner'],
+  smith: ['platewright', 'edgewright'], enchanter: ['bladebinder', 'wardweaver'], tailor: ['liverywright', 'haberdasher'],
+  woodworker: ['charburner', 'woodwright'] };
 
 function copy(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
 
@@ -488,6 +492,9 @@ function world(opts) {
       const half = r.half || FIRST_HALF[prof] || null;
       const ranks = {};
       if (half) { ranks[half] = r.rank || 'novice'; }
+      // progression.ts: 'The sister half is added at novice the moment half is chosen.'
+      const pair = HALVES[prof] || [];
+      if (half && pair.length === 2) { ranks[pair[0] === half ? pair[1] : pair[0]] = 'novice'; }
       out.thornswoodChargen = { stage: 'done', at: 1, destination: r.town || 'whiterun' };
       out.thornswoodPurse = 1;   // the forty gold every character is handed once, already in the pack
       out.thornswoodCharacter = Object.assign({ v: 1, cls: r.cls || null, prof: prof, half: half, schools: [],
@@ -569,7 +576,11 @@ function world(opts) {
           craftWorkFor.ms = v.ms; return;
         case 'craftOutput':
           if (!craftOutputFor || craftOutputFor.actor !== id) { fault('craftOutput set on ' + id.toString(16) + ' outside its own onCraft'); return; }
-          craftOutputFor.out = copy(v); return;
+          // CraftOutputBinding::Set: baseId, count and name each stay what they were when left out; a null name names none.
+          if (v && v.baseId !== undefined) { craftOutputFor.out.baseId = v.baseId >>> 0; }
+          if (v && v.count !== undefined) { craftOutputFor.out.count = v.count >>> 0; }
+          if (v && v.name === null) { delete craftOutputFor.out.name; } else if (v && v.name !== undefined) { craftOutputFor.out.name = String(v.name); }
+          return;
         case 'eatItemScale': {
           // EatItemScaleBinding: outside its own onEatItem the engine warns and does nothing.
           if (!eatScaleFor || eatScaleFor.actor !== id) { fault('eatItemScale set on ' + id.toString(16) + ' outside its own onEatItem'); return; }
@@ -879,6 +890,13 @@ function world(opts) {
     };
     box.globalThis = box;
     vm.createContext(box);
+    /*
+      The dice (w.dice) go in before the gamemode loads, so a block that keeps
+      Math.random itself (the durability block's api.random) rolls them too.
+      Until a scenario holds them they roll as Math.random does.
+    */
+    vm.runInContext('Math.__standInRandom = Math.random; Math.random = function () {' +
+      ' var d = globalThis.__standInDice; return typeof d === "number" ? d : Math.__standInRandom(); };', box);
     proc = { box: box, timers: timers, err: null };
     made = new Set();
     madeVisible = new Set();
@@ -1187,7 +1205,8 @@ function world(opts) {
     if (craftStopped.has(actorId)) { craftStopped.delete(actorId); return { started: true, made: false, workMs: ms, why: 'left the bench' }; }
     if (!near(actorId, bench, WORK_REACH)) { return { started: true, made: false, workMs: ms, why: 'moved away from the bench' }; }
     for (const x of inputs) { if (w.count(actorId, x.baseId) < x.count) { return { started: true, made: false, workMs: ms, why: 'inputs' }; } }
-    craftOutputFor = { actor: actorId, out: undefined };
+    // CraftOutputBinding::Get inside onCraft: the craft's own output until the gamemode names another.
+    craftOutputFor = { actor: actorId, out: { baseId: c.output >>> 0, count: c.count || 1 } };
     let allowed, out;
     try { allowed = fire('onCraft', args.concat([[]])); } finally { out = craftOutputFor.out; craftOutputFor = null; }
     if (!allowed) { return { started: true, made: false, workMs: ms, why: 'refused' }; }
@@ -1281,8 +1300,6 @@ function world(opts) {
   */
   w.dice = function (value) {
     proc.box.__standInDice = (value === null || value === undefined) ? null : Number(value);
-    vm.runInContext('if (!Math.__standInRandom) { Math.__standInRandom = Math.random; Math.random = function () {' +
-      ' var d = globalThis.__standInDice; return typeof d === "number" ? d : Math.__standInRandom(); }; }', proc.box);
   };
   w.die = function (actorId, killerId, delayMs) {
     actorId = actorId >>> 0;

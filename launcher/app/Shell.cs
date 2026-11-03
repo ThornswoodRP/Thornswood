@@ -252,15 +252,41 @@ namespace Thornswood
                     // Into the log as well as onto the screen. A message box
                     // gets closed and then nobody can say what it said, and
                     // "it will not open" is not something anybody can act on.
-                    try
+                    //
+                    // The install's own log, Root\Profile\launcher.log. This
+                    // used to make Paths again first with no root given,
+                    // which set Root to the folder above the exe's: under Velopack that is
+                    // %LocalAppData%\Thornswood, which has no Profile, so the
+                    // line was refused and the crash of 2 Nov is in no log on
+                    // the machine it happened on. Paths is made only when Run
+                    // did not get that far, and then from the recorded install.
+                    if (Paths.Root == null)
                     {
-                        Paths.Init(null);
-                        File.AppendAllText(Paths.LogFile,
-                            DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") +
-                            "  COULD NOT START: " + ex.ToString() + Environment.NewLine);
+                        try { Paths.Init(Velo.InstallRoot); }
+                        catch (Exception initEx) { Swallow.Note("Shell.Main, paths", initEx); }
                     }
-                    catch (Exception logEx) { Swallow.Note("Shell.Main, append", logEx); }
-                    Ask.Tell(ex.ToString(), "Thornswood could not start", Ask.Icon.Error);
+                    Action<string> log = delegate (string line)
+                    {
+                        try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + line + Environment.NewLine); }
+                        catch (Exception logEx) { Swallow.Note("Shell.Main, log", logEx); }
+                    };
+                    log("COULD NOT START: " + ex.ToString());
+                    // The update check is otherwise asked from the window, so a
+                    // launcher that cannot open its window asks here, unless the
+                    // window's own check already put one by (Velo.Staged).
+                    string update = Velo.Staged
+                        ? "A newer launcher was already downloaded and checked."
+                        : Updater.AfterFailedStart(cfg, log);
+                    log(update);
+                    // With a newer launcher waiting, no message box: it would
+                    // hold this process open, and the newer launcher goes in
+                    // only once this process has ended (ExitApply, below). On
+                    // 2 Nov the box stood open while the fix sat downloaded
+                    // behind it, and the setup run over it threw the fix away.
+                    // So the newer one goes in now and starts by itself, and
+                    // the box is for a start that nothing newer can mend.
+                    if (!Velo.Staged)
+                        Ask.Tell(update + Environment.NewLine + Environment.NewLine + ex.ToString(), "Thornswood could not start", Ask.Icon.Error);
                 }
             }
 
@@ -359,6 +385,10 @@ namespace Thornswood
             // does not end anything. Somebody sent here by Windows Settings to
             // uninstall is not asked to install.
             string recorded = Velo.InstallRoot;
+            // A launcher from before Velopack handed its folder over and ran
+            // this setup (InstallPlace.TakeHandover, launcher\move): that
+            // folder is the install, already made, and nothing is asked.
+            if (recorded == null && root == null && Velo.Installed && !askedToUninstall) recorded = InstallPlace.TakeHandover();
             InstallWindow installing = null;
             if (recorded != null) root = recorded;
             else if (root == null && Velo.Installed && !askedToUninstall)

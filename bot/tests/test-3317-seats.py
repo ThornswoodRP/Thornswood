@@ -58,8 +58,9 @@ except ImportError:
     print('0 passed, 0 failed')
     sys.exit(0)
 
-import bot  # noqa: E402
+import harness_bot  # noqa: E402
 
+bot = harness_bot.whole()
 spec = importlib.util.spec_from_file_location(
     'build_discord_seats', os.path.join(HERE, 'Build-Discord.py'))
 B = importlib.util.module_from_spec(spec)

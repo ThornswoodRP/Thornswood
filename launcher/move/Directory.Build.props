@@ -1,0 +1,8 @@
+<Project>
+  <!-- Build scratch under out\, which git ignores, as launcher\app's. -->
+  <PropertyGroup>
+    <ThornswoodRepo>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\'))</ThornswoodRepo>
+    <BaseIntermediateOutputPath>$(ThornswoodRepo)out\obj\move\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(ThornswoodRepo)out\bin\move\</BaseOutputPath>
+  </PropertyGroup>
+</Project>

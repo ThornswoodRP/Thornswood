@@ -20,6 +20,11 @@
   launcher's ten; the real launcher's publish is the Launcher builds check
   (build.yml), which runs Build-Launcher.ps1 over launcher\app itself.
 
+  The publish runs with TEMP moved to this harness's scratch folder, and with
+  NuGet's lock folder left where every other restore on the machine has it,
+  so it never unpacks a package at the same time as a harness beside it in
+  the gate (#5480).
+
   The callers, each shown:
     .github/workflows/nightly.yml its "Build the launcher" step's lines, run the way
                                   GitHub runs them
@@ -152,7 +157,7 @@ function Split-Call([string]$line) {
     return [pscustomobject]@{ What = $f[0]; Root = $f[1]; Dir = $(if ($f.Count -gt 2) { $f[2] } else { '' }); NoPause = $(if ($f.Count -gt 3) { $f[3] } else { '' }); Version = $(if ($f.Count -gt 4) { $f[4] } else { '' }) }
 }
 
-$saved = @{ TEMP = $env:TEMP; TMP = $env:TMP; RUNNER_TEMP = $env:RUNNER_TEMP; TS_TEST_CLOSE_LOG = $env:TS_TEST_CLOSE_LOG;
+$saved = @{ TEMP = $env:TEMP; TMP = $env:TMP; NUGET_SCRATCH = $env:NUGET_SCRATCH; RUNNER_TEMP = $env:RUNNER_TEMP; TS_TEST_CLOSE_LOG = $env:TS_TEST_CLOSE_LOG;
             TS_TEST_CALLS = $env:TS_TEST_CALLS; TS_TEST_BUILD_EXIT = $env:TS_TEST_BUILD_EXIT; TS_TEST_INSTALL_EXIT = $env:TS_TEST_INSTALL_EXIT }
 $held = $null
 try {
@@ -213,8 +218,19 @@ try {
     $ErrorActionPreference = $gitOld
     Yes "the scratch repository has its one commit (git exit $gitCode)" ($gitCode -eq 0)
 
+    # NuGet keeps the lock that lets one restore at a time unpack a package
+    # into the shared packages folder in NuGetScratch under TEMP, unless
+    # NUGET_SCRATCH names another folder. With TEMP moved to this harness's
+    # scratch and nothing else, this publish took its locks where no other
+    # restore looks, and unpacked the ILCompiler packages at the same moment
+    # as the harness beside it in the gate, which failed both (#5480). So the
+    # lock stays in the folder every other restore on this machine uses.
+    if (-not $env:NUGET_SCRATCH) { $env:NUGET_SCRATCH = Join-Path ([IO.Path]::GetTempPath()) 'NuGetScratch' }
+    $machineScratch = $env:NUGET_SCRATCH
     $env:TEMP = $tmp
     $env:TMP = $tmp
+    Yes ('NuGet''s locks stay in the machine''s NuGetScratch while TEMP is this harness''s (' + $machineScratch + ')') (
+        $env:NUGET_SCRATCH -eq $machineScratch -and -not $machineScratch.StartsWith($tmp, [StringComparison]::OrdinalIgnoreCase))
     $env:TS_TEST_CLOSE_LOG = $closeLog
     $env:TS_TEST_CALLS = $callLog
     $env:RUNNER_TEMP = Join-Path $work 'runner'

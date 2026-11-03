@@ -42,8 +42,9 @@ os.environ.pop('PING_URL', None)
 os.environ.pop('PING_EVERY', None)
 os.environ.pop('PING_TIMEOUT', None)
 
-import bot  # noqa: E402
+import harness_bot  # noqa: E402
 
+bot = harness_bot.whole()
 PASS = []
 FAIL = []
 
@@ -165,7 +166,7 @@ try:
     yes('every minute by default', bot.PING_EVERY == 60)
     yes('one ping may take ten seconds at most by default', bot.PING_TIMEOUT == 10)
     yes('no PING_URL in env means none is set', bot.PING_URL == '')
-    src = open(os.path.join(HERE, 'bot.py'), encoding='utf-8').read()
+    src = harness_bot.source()
     hook = src[src.index('async def setup_hook'):src.index('client = Thornswood(')]
     yes('setup_hook starts the loop once per process', 'asyncio.create_task(uptime_ping())' in hook)
     yes("the setting is read from env as PING_URL", "os.environ.get('PING_URL'" in src)

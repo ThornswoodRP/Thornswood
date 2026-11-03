@@ -392,7 +392,7 @@ Once a Deployment's success is on GitHub, the agent reads its Release again
 and writes the tag, name and notes to
 `C:\Thornswood-Deploys\for-bot\news-<environment>.json`, a folder only
 SYSTEM, Administrators and the bot's account read. The bot
-(`watch_release_news` in `bot/bot.py`) posts each tag once: a merge's release
+(`watch_release_news` in `bot/bot_news.py`) posts each tag once: a merge's release
 in the dev updates channel, a main release in #news, each by its id. A release
 whose notes start "Nothing people would notice" (merge-release.yml's line for
 a merge whose pull requests say none), and one deployed over a day ago, are

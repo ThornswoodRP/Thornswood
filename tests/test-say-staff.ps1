@@ -241,7 +241,8 @@ try {
 import json, sys, time
 sys.path.insert(0, sys.argv[1])
 try:
-    import bot
+    import harness_bot
+    bot = harness_bot.whole()
 except Exception as e:
     print('SKIP ' + type(e).__name__)
     sys.exit(0)
@@ -630,7 +631,8 @@ function icacls { }
     $sayText = [IO.File]::ReadAllText($say)
     Yes '  Say-Staff.ps1 files on the board the bot reads, with the labels the bot reads' (
         $sayText.Contains("[string]`$NoticeRepo = 'ThornswoodRP/Thornswood'") -and $sayText.Contains("`$noticeLabel = 'notice: staff'") -and $sayText.Contains("`$takeBackLabel = 'notice: take back'"))
-    $botText = [IO.File]::ReadAllText((P 'bot', 'bot.py'))
+    . (Join-Path $PSScriptRoot 'BotFiles.ps1')
+    $botText = Get-BotSource $repo
     Yes '  and they are the bot''s own' (
         $botText.Contains("os.environ.get('STAFF_NOTICE_LABEL', 'notice: staff')") -and $botText.Contains("os.environ.get('STAFF_TAKE_BACK_LABEL', 'notice: take back')"))
     Yes '  and Grant-BoxAccess.ps1 -ToEnvironment puts the key in that repository''s environment' ($grantText.Contains("[string]`$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'"))

@@ -33,7 +33,8 @@ import traceback
 
 import discord
 
-import bot
+import bot_base
+import bot_joins
 import card
 
 TOKEN = os.environ.get('DISCORD_TOKEN', '').strip()
@@ -48,7 +49,7 @@ if not TOKEN:
 intents = discord.Intents(guilds=True, members=True)
 # The bot's own client class, which verifies against the bot's roots alone
 # and never the machine's stores (#3111, #3604).
-client = bot.TrustedClient(intents=intents)
+client = bot_base.TrustedClient(intents=intents)
 
 
 def say(*a):
@@ -100,16 +101,16 @@ async def work():
         byid[m.id] = m
 
     try:
-        given = bot.joins_given(guild)
+        given = bot_joins.joins_given(guild)
     except Exception:
         say('could not read %s, so nothing is redrawn: every number would be '
             'a guess that can disagree with it.\n%s'
-            % (bot.JOINS, traceback.format_exc()))
+            % (bot_joins.JOINS, traceback.format_exc()))
         return
-    if os.path.exists(bot.JOINS):
-        say('%d numbers in %s' % (len(given), bot.JOINS))
+    if os.path.exists(bot_joins.JOINS):
+        say('%d numbers in %s' % (len(given), bot_joins.JOINS))
     else:
-        say('no %s here, so every number below is by join order' % bot.JOINS)
+        say('no %s here, so every number below is by join order' % bot_joins.JOINS)
 
     todo = []
     for n in CHANNELS:

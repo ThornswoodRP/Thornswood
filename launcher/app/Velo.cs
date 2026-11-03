@@ -114,7 +114,14 @@ namespace Thornswood
         /// </summary>
         public static string ChannelFor(Config cfg)
         {
-            bool dev = cfg != null &&
+            // Before config.json is read (a start that failed that early,
+            // Updater.AfterFailedStart), the channel Velopack installed.
+            if (cfg == null)
+            {
+                IVelopackLocator l = Locator;
+                return l != null && string.Equals(l.Channel, "dev", StringComparison.OrdinalIgnoreCase) ? "dev" : "main";
+            }
+            bool dev =
                        (string.Equals(cfg.Channel, "dev", StringComparison.OrdinalIgnoreCase) ||
                         string.Equals(cfg.UpdateBranch, "dev", StringComparison.OrdinalIgnoreCase));
             return dev ? "dev" : "main";

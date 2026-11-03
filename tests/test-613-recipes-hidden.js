@@ -240,9 +240,14 @@ const COOK = person(0xff000205, 0x13746, 'cook', 'hearthcook');
   srv.rolls.embassy.push(PLATE);
   srv.gate.handRecipesHidden(PLATE);
   yes('B3: going onto the embassy roll lists the embassy\'s plate', srv.sets.length === 1 && !hidden(PLATE)[ROW.embassy]);
-  const t0 = Date.now();
+  // The processor time this process spent, not the wall clock: the gate runs
+  // several harnesses to a core, and a wall clock there counts the time this
+  // one waited for a core as the call's cost (42 ms and 31 ms in the queue on
+  // 2 Nov 2026 for a call that takes about 6 ms, #5406).
+  const c0 = process.cpuUsage();
   for (let i = 0; i < 20; i++) { srv.gate.recipesRefused(NONE); }
-  const ms = (Date.now() - t0) / 20;
+  const used = process.cpuUsage(c0);
+  const ms = (used.user + used.system) / 1000 / 20;
   yes('B4: asking the whole table for one person is cheap enough to do on every write (' + ms.toFixed(2) + ' ms)', ms < 25);
 }
 
