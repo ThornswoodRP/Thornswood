@@ -1,0 +1,15 @@
+{
+  "about": "The one runner of the box that ThornswoodRP/Thornswood-Hermes's guard rail tests run on: their Windows check (guard-rail-tests.yml, runs-on tw-hermes-box). The organization's free private-repository Actions minutes ran out on 2 Nov 2026 and the spending limit stays at $0, so Patrick chose A on q-hermes-ci-free-runners (2 Nov 2026, 5:46 PM): the Linux check runs on the Oracle VM and the Windows check on the box, each under a user of its own, with only the team's own branches, reaching only GitHub and the package feeds. It is an organization runner: the box admin App is never on Thornswood-Hermes (records/github-apps.json), so it registers this one with the organization's Self-hosted runners write and nothing of that repository (scripts/vps/admin/ops-access.js hermes-runners; the choice is q-hermes-box-runner-token). Only the organization's private repositories may use an organization runner, and only Thornswood-Hermes's workflows ask for its label. Install-Runner.ps1 -Hermes registers it with these names and nothing else, through the deploy gate as every box runner is (pwsh scripts/vps/Box-Run.ps1 Install-Runner -Hermes). It carries only its own label, never thornswood-vps or a build label, so no box job reaches it. allowHost is what a job may reach besides GitHub: PyPI for the hash-pinned wheels, and GitHub's asset hosts for the Python that actions/setup-python fetches.",
+  "organization": "ThornswoodRP",
+  "for": "ThornswoodRP/Thornswood-Hermes",
+  "root": "C:\\Thornswood-RunnerHermes",
+  "account": "thornswood-runner-h",
+  "name": "tw-hermes-box",
+  "label": "tw-hermes-box",
+  "allowHost": [
+    "pypi.org",
+    "files.pythonhosted.org",
+    "objects.githubusercontent.com",
+    "release-assets.githubusercontent.com"
+  ]
+}

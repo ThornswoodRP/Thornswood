@@ -422,7 +422,8 @@
         "Number": "^[1-9][0-9]?$",
         "Status": "switch",
         "Lock": "switch",
-        "NetworkOnly": "switch"
+        "NetworkOnly": "switch",
+        "Hermes": "switch"
       }
     },
     "Install-Backup": {
