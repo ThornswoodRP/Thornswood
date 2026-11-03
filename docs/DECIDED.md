@@ -811,6 +811,10 @@ issue where the card did.
   it was set on 31 Oct (q-3683-lock-tag-creation, kept by
   q-p20-v-tag-creation). 1 Nov 2026,
   [#3683](https://github.com/ThornswoodRP/Thornswood/issues/3683).
+- **No paid Actions usage: the private repositories' checks run on runners of
+  our own.** The spending limit stays at $0; a check with no runner waits for
+  them, and billing is never the fix (q-hermes-ci-free-runners). 2 Nov 2026,
+  [#5484](https://github.com/ThornswoodRP/Thornswood/issues/5484#issuecomment-6593149467).
 
 ## Kept, after being asked
 
