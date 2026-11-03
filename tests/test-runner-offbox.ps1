@@ -296,7 +296,8 @@ try {
     $script:stores = New-Object Collections.ArrayList
     $script:syncs = 0
     function New-NetFirewallRule { param($PolicyStore, $DisplayName, $Group, $Direction, $Action, $Profile, $LocalUser, $RemoteAddress, $Description, $ErrorAction) [void]$script:stores.Add($PolicyStore); [void]$script:fw.Add(@{ Name = $DisplayName; Group = $Group; Direction = $Direction; Action = $Action; LocalUser = $LocalUser; Remote = @($RemoteAddress) }) }
-    function Get-NetFirewallRule { param($PolicyStore, $Group, $ErrorAction) [void]$script:stores.Add($PolicyStore); @($script:fw | Where-Object { $_.Group -eq $Group } | ForEach-Object { New-Object PSObject -Property @{ Name = $_.Name; Enabled = 'True' } }) }
+    function Get-NetFirewallRule { param($PolicyStore, $Group, $ErrorAction) [void]$script:stores.Add($PolicyStore); @($script:fw | Where-Object { $_.Group -eq $Group } | ForEach-Object { New-Object PSObject -Property @{ Name = $_.Name; Enabled = 'True'; Remote = $_.Remote } }) }
+    function Get-NetFirewallAddressFilter { param([Parameter(ValueFromPipeline = $true)]$Rule) process { New-Object PSObject -Property @{ RemoteAddress = @($Rule.Remote) } } }
     function Remove-NetFirewallRule { param($PolicyStore, $Name) [void]$script:stores.Add($PolicyStore); [void]$script:gone.Add($Name); $keep = @($script:fw | Where-Object { $_.Name -ne $Name }); $script:fw.Clear(); foreach ($k in $keep) { [void]$script:fw.Add($k) } }
     function Sync-ThornswoodFirewall { $script:syncs++ }
     # On the box the head sets the box's policy store, the only one its firewall takes rules from.
@@ -308,13 +309,23 @@ try {
     Yes '  every rule outbound, block, for that account''s SID only' (@($script:fw | Where-Object { $_.Direction -eq 'Outbound' -and $_.Action -eq 'Block' -and $_.LocalUser -eq 'D:(A;;CC;;;S-1-5-7)' -and $_.Group -eq 'TS test group' }).Count -eq 3)
     $null = Set-RunnerFirewall '*S-1-5-7' 'TS test group' @('1.2.3.4')
     Yes '  run again it replaces its rules, never piles them up' ($script:fw.Count -eq 1 -and $script:gone.Count -eq 3)
-    Yes '  status counts them' ((Get-RunnerFirewall 'TS test group') -match '1 outbound block rule')
+    Yes '  status counts them' (@(@(Get-RunnerFirewall 'TS test group') -match '1 outbound block rule').Count -eq 1)
+    # The reach lines: each host a runner needs, resolved and held against the
+    # rules. localhost stands in for GitHub's hosts, so nothing leaves here.
+    $grdNeeds = @('localhost')
+    $null = Set-RunnerFirewall '*S-1-5-7' 'TS test group' @('127.0.0.0-127.255.255.255', '10.0.0.0/255.0.0.0')
+    $reach = @(Get-RunnerFirewall 'TS test group' | Where-Object { $_ -like 'reach*' })
+    Yes ('  status says a host the rules block is BLOCKED (' + ($reach -join ' | ') + ')') ($reach.Count -eq 1 -and $reach[0] -match '127\.0\.0\.1 BLOCKED')
+    $null = Set-RunnerFirewall '*S-1-5-7' 'TS test group' @('10.0.0.0/8')
+    $reach = @(Get-RunnerFirewall 'TS test group' | Where-Object { $_ -like 'reach*' })
+    Yes '  and one they leave open, open' ($reach.Count -eq 1 -and $reach[0] -match '127\.0\.0\.1 open' -and $reach[0] -notmatch 'BLOCKED')
+    $null = Set-RunnerFirewall '*S-1-5-7' 'TS test group' @('1.2.3.4')
     $threw = $false; try { $null = Set-RunnerFirewall '*S-1-5-7' 'TS test group' @() } catch { $threw = $true }
     Yes '  an empty list changes nothing and says so' ($threw -and $script:fw.Count -eq 1)
     $null = Remove-RunnerFirewall 'TS test group'
     Yes 'Remove-RunnerFirewall takes the group off' ($script:fw.Count -eq 0 -and (Get-RunnerFirewall 'TS test group') -match 'NO RULES')
     Yes '  every rule read, made and taken away in the store the head names, and the policy refreshed after each change (#3896)' (
-        @($script:stores | Where-Object { $_ -ne 'localhost' }).Count -eq 0 -and $script:stores.Count -gt 0 -and $script:syncs -eq 3)
+        @($script:stores | Where-Object { $_ -ne 'localhost' }).Count -eq 0 -and $script:stores.Count -gt 0 -and $script:syncs -eq 6)
 
     $u = Join-Path $work 'Users'; $pd = Join-Path $work 'ProgramData'; $dv = Join-Path $work 'D-root'
     foreach ($n in 'alice', 'Public', 'Default', 'thornswood-pr', 'thornswood-pr.ONE') { New-Item -ItemType Directory -Path (Join-Path $u $n) | Out-Null }
