@@ -75,6 +75,7 @@ try {
     Yes '  and every runner call goes through that one place' ($text -notmatch 'repos/\$Repo/actions/runners')
     Yes '-Status reads the newest listener logs by name, the runner service''s lines and the service manager''s, so an offline runner says why' ($text.Contains("-Filter 'Runner_*.log' | Sort-Object Name") -and $text.Contains("ProviderName = 'ActionsRunnerService'") -and $text.Contains("ProviderName = 'Service Control Manager'"))
     Yes '-NetworkOnly -Status says, for each host a runner itself has to reach, whether the account''s rules block it' ($text.Contains("`$grdNeeds = @('github.com', 'api.github.com'") -and $text.Contains("'vstoken.actions.githubusercontent.com'") -and $text.Contains('Test-RunnerReach $r'))
+    Yes '-Status says which host each of the runner''s settings files names, and whether it took the newer settings, without reading an id or key' ($text.Contains("@('.runner', '.runner_migrated', '.credentials', '.credentials_migrated')") -and $text.Contains('([uri]`$_.Value).Host') -and -not $text.Contains('clientId'))
     Yes '  and lists only this runner''s own processes' ($text.Contains("-like '`$Root\bin\Runner*'") -and -not $text.Contains('Get-Process Runner.Listener, Runner.Worker'))
 
     # ---- 3. nothing beside it ------------------------------------------------------
