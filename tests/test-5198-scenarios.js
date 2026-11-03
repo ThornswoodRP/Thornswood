@@ -75,7 +75,7 @@ const NOT_HERE = {
 */
 const WAITING = [
   'commands.md', 'creation.md',
-  'dungeon-loot.md', 'embassy.md',
+  'dungeon-loot.md',
   'factions.md', 'magic.md', 'npcs.md',
   'thalmor.md', 'trading-company.md', 'voice.md'
 ];
