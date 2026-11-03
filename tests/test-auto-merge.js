@@ -17,8 +17,9 @@
 //   3. the sweep: every page is read, a dry run turns nothing on, and a
 //      refusal from GitHub is said and makes the run red;
 //   4. the wiring: after every pull request build, on every push to main and
-//      by hand, from main's own script with no credential kept, with a token
-//      that can turn auto-merge on and no secret.
+//      by hand, from main's own script with no credential kept, with the pin
+//      robot's App token from the engine-pin environment, never the run's
+//      own (a queue entry the run's token makes starts no checks).
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -104,9 +105,13 @@ function fake(pages, refuse) {
   yes('  the workflow it follows is named that', /\nname: Build check \(pull requests\)\n/.test(read('.github/workflows/build-pr.yml')));
   yes('4 it checks out main\'s scripts/ops with no credential kept, never a pull request\'s code',
     /\n        with:\n          ref: main\n          persist-credentials: false\n          sparse-checkout: scripts\/ops\n/.test(wf) && !/pull_request_target|head_sha|head_branch|github\.event\.pull_request/.test(code_));
-  yes('4 its token can turn auto-merge on and nothing more, and it reads no secret',
-    /\n    permissions:\n      contents: write\n      pull-requests: write\n    steps:\n/.test(wf) && !/secrets\./.test(code_));
-  yes('4 it runs the script with the run\'s token', /\n        env:\n          GH_TOKEN: \$\{\{ github\.token \}\}\n          REPO: \$\{\{ github\.repository \}\}\n        run: node scripts\/ops\/Auto-Merge\.js\n/.test(wf));
+  yes('4 it runs in the engine-pin environment, and the run\'s own token only reads',
+    /\n    environment: engine-pin\n    permissions:\n      contents: read\n    steps:\n/.test(wf));
+  yes('4 it mints the pin robot\'s token there, with contents and pull requests write, and reads no other secret',
+    /\n      - name: The pin robot's token\n        id: app\n        uses: actions\/create-github-app-token@[0-9a-f]{40} # v\S+\n        with:\n          client-id: \$\{\{ vars\.PIN_APP_CLIENT_ID \}\}\n          private-key: \$\{\{ secrets\.PIN_APP_KEY \}\}\n          permission-contents: write\n          permission-pull-requests: write\n/.test(wf) &&
+    (code_.match(/secrets\.\w+/g) || []).every(x => x === 'secrets.PIN_APP_KEY'));
+  yes('4 it runs the script with the App\'s token, never the run\'s own (whose queue entries start no checks)',
+    /\n        env:\n          GH_TOKEN: \$\{\{ steps\.app\.outputs\.token \}\}\n          REPO: \$\{\{ github\.repository \}\}\n        run: node scripts\/ops\/Auto-Merge\.js\n/.test(wf) && !/github\.token/.test(code_));
   yes('4 one at a time, the newest wins', /\nconcurrency:\n  group: auto-merge\n  cancel-in-progress: true\n/.test(wf));
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
