@@ -688,6 +688,10 @@ issue where the card did.
 - **A staff notice is an issue with a notice label**; the bot posts it and
   closes it (q-p15-notice-issues). 31 Oct 2026,
   [#5187](https://github.com/ThornswoodRP/Thornswood/issues/5187).
+- **The Discord bot is a short bot.py over one module an area, as #5393 at
+  acc8ce8 put it.** (dec_ir6kQf5iqY7kKfP8lN39Ug, dec_PYrv5xUa2LixUT43Bwl_Zg)
+  2 Nov 2026,
+  [#5357](https://github.com/ThornswoodRP/Thornswood/issues/5357#issuecomment-6586544129).
 
 ### Test tasks and testing
 
