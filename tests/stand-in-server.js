@@ -1417,6 +1417,10 @@ function world(opts) {
   w.readPrivate = function (name) {
     try { return JSON.parse(fs.readFileSync(path.join(dir, 'private', name), 'utf8')); } catch (e) { return null; }
   };
+  /* A file in the private folder written from outside the gamemode, as the door's fetch of the site writes allowed.json. */
+  w.writePrivate = function (name, value) {
+    fs.writeFileSync(path.join(dir, 'private', name), typeof value === 'string' ? value : JSON.stringify(value));
+  };
   return w;
 }
 
