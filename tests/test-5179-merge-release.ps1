@@ -363,11 +363,12 @@ try {
     # differ from main's (probe runs 41375894899 and 41376016183, #5398), so
     # only main's newest merge is published; the newer run carries the rest.
     $newestAt = $wf.IndexOf('- name: Is this still main''s newest merge'); $publishAt = $wf.IndexOf('- name: Publish the Release')
-    # Four steps wait on it: the Release, main's held package (kept only for
-    # a Release that is out), and the two Deployments.
+    # Five steps wait on it: the Release, main's held package and its tag
+    # (kept and made only for a Release that is out), and the two
+    # Deployments.
     Yes 'a merge main has moved past publishes nothing and keeps no main package' ($newestAt -gt 0 -and $publishAt -gt $newestAt -and
         $wf.Contains('gh api "repos/$($env:GITHUB_REPOSITORY)/commits/main" --jq .sha') -and $wf.Contains("if ([string]`$head -eq `$env:GITHUB_SHA) { Add-Content -LiteralPath `$env:GITHUB_OUTPUT -Value 'release=yes'; exit 0 }") -and
-        ([regex]::Matches($wf, [regex]::Escape("if: `${{ steps.newest.outputs.release == 'yes'"))).Count -eq 4)
+        ([regex]::Matches($wf, [regex]::Escape("if: `${{ steps.newest.outputs.release == 'yes'"))).Count -eq 5)
     # A merge outside the paths above starts no run, so it cancels nothing and
     # releases nothing: the site fix #5451 was built and dropped that way on
     # 2 Nov. The run main moved past starts one of main's newest merge, and
@@ -452,6 +453,10 @@ try {
         $wf.Contains('subject-path: ${{ steps.files.outputs.held_subjects }}') -and $wf -match 'uses: actions/upload-artifact@[0-9a-f]{40} # v' -and
         $wf.Contains('name: main-${{ steps.names.outputs.tag }}') -and $wf.Contains('path: ${{ steps.files.outputs.held }}') -and
         $wf.Contains("Get-ChildItem -LiteralPath (Join-Path `$env:DIR 'assets') -File"))
+    $tagAt = $wf.IndexOf('- name: Tag main''s package for the approval (main-<tag>)')
+    Yes '  and its tag main-<tag> is made on this merge as the package is kept, the tag promote-main.yml publishes on' ($tagAt -gt $keepAt -and $keepAt -gt 0 -and
+        $wf.Contains('-f "ref=refs/tags/main-$($env:TAG)" -f "sha=$($env:GITHUB_SHA)"') -and
+        $wf.Substring($tagAt, 200).Contains("if: `${{ steps.newest.outputs.release == 'yes' && steps.files.outputs.held != '' }}"))
     Yes 'every file of the Release is attested, by a pinned action' ($wf -match 'uses: actions/attest-build-provenance@[0-9a-f]{40} # v' -and $wf.Contains('subject-path: ${{ steps.files.outputs.subjects }}') -and
         $wf -match '(?m)^\s+id-token: write\s*$' -and $wf -match '(?m)^\s+attestations: write\s*$')
     Yes 'a merge that changed nothing publishes nothing' ($wf.Contains("release=") -and ([regex]::Matches($wf, [regex]::Escape("if: `${{ steps.changed.outputs.release == 'yes' }}"))).Count -ge 4)
