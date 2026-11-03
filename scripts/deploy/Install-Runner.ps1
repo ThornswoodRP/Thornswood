@@ -1143,6 +1143,21 @@ if (`$w) { 'runs as   ' + `$w.StartName }
 `$mine = @(Get-CimInstance Win32_Process | Where-Object { ('' + `$_.ExecutablePath) -like '$Root\bin\Runner*' })
 foreach (`$c in `$mine) { `$p = Get-Process -Id `$c.ProcessId; 'process   ' + `$c.Name + ' ' + `$c.ProcessId + ', started ' + `$c.CreationDate.ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss') + 'Z, at ' + `$p.PriorityClass }
 if (-not `$mine.Count) { 'process   NONE of this runner''s is running' }
+# Where this runner asks for its token and its jobs: the host of each URL in
+# its settings, and whether it took the newer settings GitHub hands a runner
+# on a session (3 Nov: tw-hermes-box's first session stopped at
+# vstoken.actions.githubusercontent.com, which its guard blocks, while
+# thornswood-runner, behind the same rules, created one "with migrated
+# settings"). Hosts and the flow flag only; no id, key or token is read.
+foreach (`$n in @('.runner', '.runner_migrated', '.credentials', '.credentials_migrated')) {
+  `$f = Join-Path '$Root' `$n
+  if (-not (Test-Path -LiteralPath `$f)) { 'settings  ' + `$n + ' not there'; continue }
+  `$j = Get-Content -Raw -LiteralPath `$f | ConvertFrom-Json
+  `$o = if (`$j.data) { `$j.data } else { `$j }
+  `$hosts = @(`$o.PSObject.Properties | Where-Object { ('' + `$_.Value) -match '^https?://' } | ForEach-Object { `$_.Name + ' ' + ([uri]`$_.Value).Host })
+  `$flow = @(`$o.PSObject.Properties | Where-Object { `$_.Name -match 'V2Flow' } | ForEach-Object { `$_.Name + ' ' + `$_.Value })
+  'settings  ' + `$n + ', changed ' + (Get-Item -Force -LiteralPath `$f).LastWriteTimeUtc.ToString('yyyy-MM-dd HH:mm:ss') + 'Z: ' + ((`$hosts + `$flow) -join ', ')
+}
 if (Get-LocalUser -Name '$Account') { 'account   $Account' } else { 'account   NOT THERE' }
 if (Test-Path '$Root') {
   `$a = Get-Acl -LiteralPath '$Root'
