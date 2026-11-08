@@ -1547,6 +1547,19 @@ function actorOf(profileId) {
   return v && v.actor ? v.actor : 0;
 }
 
+/* Whether the position feed puts two people within reach of each other:
+   the same cell inside HEAR_UNITS, or the same party. Exactly who one
+   person's view holds, so signalling and the view never disagree (#5516). */
+function withinVoiceReach(aPid, bPid) {
+  if (Number(aPid) === Number(bPid)) return true;
+  const now = Date.now();
+  const a = positions.get(Number(aPid) || 0);
+  const b = positions.get(Number(bPid) || 0);
+  if (!a || !b || now - a.at > STALE_MS || now - b.at > STALE_MS) return false;
+  if (a.party && a.party === b.party) return true;
+  return a.cell === b.cell && inReach(a.pos, b.pos);
+}
+
 /* Same cell, then a straight line. The speaker is always inside their own
    reach, so they see the line above their own head. */
 function inSpeech(aPid, bPid, reach) {
@@ -2787,7 +2800,13 @@ server.on('upgrade', (req, socket, head) => {
       const to = peers.get(Number(msg.to));
       // Only between two voice places (#3570): a socket at the menu is on
       // nobody's roster, and nobody's page builds a connection to it.
-      if (!to || !hasVoice(peers.get(myId)) || !hasVoice(to)) return;
+      // And only between two the position feed puts within reach of each
+      // other (#5516): the pages apply the range themselves with a gain,
+      // so a changed page that ignores it would otherwise open a
+      // connection to anybody on the roster, whispers included.
+      const me = peers.get(myId);
+      if (!to || !hasVoice(me) || !hasVoice(to)) return;
+      if (!withinVoiceReach(me.profileId, to.profileId)) return;
       const out = signal(msg);
       if (!out) return;
       out.from = myId;
