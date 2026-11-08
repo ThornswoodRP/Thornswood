@@ -1303,6 +1303,34 @@ function Remove-RunnerPython([string]$root, [string]$version) {
 }
 '@
 
+# -Status's half of the Python (A RETIRED RUNNER): what Windows holds for the
+# runner's Python outside its folder, read only, so -Remove takes off exactly
+# that. 8 Nov 2026: the first Remove-HermesRunner found PythonCore 3.13 in the
+# tool cache and no installer entry named Python 3.13.17 (64-bit) in HKLM, and
+# stopped before the account and folder went.
+$pythonSeen = @'
+function Show-RunnerPythonEntries([string]$version) {
+  $mm = (($version -split '\.')[0..1]) -join '.'
+  $reg = 'HKLM:\SOFTWARE\Python\PythonCore\' + $mm + '\InstallPath'
+  if (Test-Path -LiteralPath $reg) { 'pythoncore ' + $mm + ' at ' + [string](Get-ItemProperty -LiteralPath $reg).'(default)' } else { 'pythoncore no ' + $mm + ' for all users' }
+  $roots = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall')
+  $roots += @(Get-ChildItem -LiteralPath 'Registry::HKEY_USERS' -EA SilentlyContinue | ForEach-Object { 'Registry::HKEY_USERS\' + $_.PSChildName + '\Software\Microsoft\Windows\CurrentVersion\Uninstall' })
+  $n = 0
+  foreach ($r in $roots) {
+    foreach ($k in @(Get-ChildItem -LiteralPath $r -EA SilentlyContinue)) {
+      $e = Get-ItemProperty -LiteralPath $k.PSPath -EA SilentlyContinue
+      if ([string]$e.DisplayName -notlike ('Python ' + $mm + '*')) { continue }
+      $n++
+      $how = $(if ($e.QuietUninstallString) { ', quiet uninstall ' + $e.QuietUninstallString } elseif ($e.UninstallString) { ', uninstall ' + $e.UninstallString } else { ', no uninstall named' })
+      'installer  ' + $e.DisplayName + ' (' + $e.DisplayVersion + ') in ' + ($r -replace '^Registry::', '') + '\' + $k.PSChildName + $how + $(if ($e.BundleCachePath) { ', bundle ' + $e.BundleCachePath } else { '' })
+    }
+  }
+  if (-not $n) { 'installer  no entry named Python ' + $mm + ' in any uninstall list' }
+  $cached = @(Get-ChildItem -Path (Join-Path $env:ProgramData 'Package Cache\*\python-*.exe') -EA SilentlyContinue | Where-Object { $_.Name -like ('python-' + $version + '*') })
+  if ($cached.Count) { $cached | ForEach-Object { 'cache      ' + $_.FullName } } else { 'cache      no python-' + $version + ' bundle in the Package Cache' }
+}
+'@
+
 # ------------------------------------------------------------------ python --
 # The header's THE RUNNER'S PYTHON: the tool cache alone.
 if ($Python) {
@@ -1400,6 +1428,7 @@ foreach (`$n in @('.runner', '.runner_migrated', '.credentials', '.credentials_m
 `$px = @(if (Test-Path -LiteralPath `$envFile) { Get-Content -LiteralPath `$envFile | Where-Object { `$_ -match '^(https_proxy|http_proxy|no_proxy)=' } })
 if (`$px.Count) { 'proxy     ' + (`$px -join ', ') } else { 'proxy     none named; it goes out directly' }
 $(if ($runnerPython) { "# THE RUNNER'S PYTHON: what its tool cache holds.`n`$py = @(Get-Item -Path '$Root\_work\_tool\Python\*\x64.complete' -EA SilentlyContinue | ForEach-Object { `$_.Directory.Name })`nif (`$py.Count) { 'python    ' + (`$py -join ', ') + ' in its tool cache' } else { 'python    NONE in its tool cache; Install-Runner -Hermes -Python puts $($runnerPython.version) there' }" })
+$(if ($runnerPython) { $pythonSeen + "`nShow-RunnerPythonEntries '" + $runnerPython.version + "'" })
 if (Get-LocalUser -Name '$Account') { 'account   $Account' } else { 'account   NOT THERE' }
 if (Test-Path '$Root') {
   `$a = Get-Acl -LiteralPath '$Root'
