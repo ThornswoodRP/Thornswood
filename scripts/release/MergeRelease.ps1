@@ -298,6 +298,32 @@ function Find-MainPackage {
   return $null
 }
 
+# False when main's newest launcher package up to $Tag can never go out: it
+# is not out on its Release main-<tag> already, and there is no tag
+# main-<tag> for the promotion to put that Release on (merge-release.yml,
+# Tag main's package for the approval; a run's own token cannot make that
+# tag later, #5489). True when it can, or when no Release up to $Tag made
+# one. Throws when GitHub cannot be read, so a failed read never makes a
+# package nobody asked for.
+function Test-MainPackageReachable {
+  param([Parameter(Mandatory = $true)][string]$Tag, [Parameter(Mandatory = $true)]$Manifest,
+        [string]$Repo = $env:GITHUB_REPOSITORY, [string]$ReleasesFile = '', [string]$ManifestDir = '',
+        [scriptblock]$TagCommit = $null)
+  $pkg = Find-MainPackage -Tag $Tag -Manifest $Manifest -Repo $Repo -ReleasesFile $ReleasesFile -ManifestDir $ManifestDir
+  if ($null -eq $pkg -or $pkg.Published) { return $true }
+  if ($null -eq $TagCommit) {
+    $TagCommit = {
+      param($name)
+      $out = gh api "repos/$Repo/git/matching-refs/tags/$name" --jq '.[] | .ref + " " + .object.type + " " + .object.sha'
+      if ($LASTEXITCODE -ne 0) { throw "GitHub did not list the tags $name (gh exit $LASTEXITCODE)" }
+      $hit = @(@($out) | Where-Object { $_ -like "refs/tags/$name *" })
+      if ($hit.Count -eq 0) { return '' }
+      return ($hit[0] -split ' ', 2)[1]
+    }
+  }
+  return ([string](& $TagCommit $pkg.MainTag) -eq ('commit ' + $pkg.Commit))
+}
+
 # The artifact main-<tag> merge-release.yml kept for $Commit on main: the one
 # that has not expired, from a run on main at that commit. Throws when there
 # is none, or more than one.
