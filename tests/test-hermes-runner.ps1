@@ -25,7 +25,16 @@
        names the proxy before its service first starts, -NetworkOnly writes
        the .env before the rules and starts the service again after them,
        and the proxy's list holds its allowHost and the token host GitHub
-       gave it.
+       gave it;
+    7. its Python goes into its tool cache as the box's administrator
+       (#5495: actions/setup-python's own install needs one, and the
+       runner's account holds none): the record pins the build by version,
+       actions/python-versions url and SHA-256; the install puts it there
+       before its service first starts, and -Hermes -Python alone does it
+       and nothing else; the zip is held to the hash and the installer to
+       python.org's signature, nothing else is fetched, no launcher, file
+       type or shortcut goes on the box, a copy of the same minor version
+       for all users elsewhere stops it, and -Status names what is there.
 
   HOW. Reads the files, and runs the script with -DryRunTo, which writes
   the scripts it would send and runs none of them; every gh call gets a
@@ -154,6 +163,35 @@ try {
     Yes 'Ask-Egress says nothing answered when no proxy listens' ((Ask-Egress $free 'github.com') -like 'no answer on 127.0.0.1:*')
     $ins = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/deploy/Install-Runner.ps1'))
     Yes 'the install and -NetworkOnly stop before any change when the proxy does not answer github.com with 200' ($ins.Contains('function Assert-RunnerEgress') -and $ins.Contains("Head 'The way out'; Assert-RunnerEgress") -and ([regex]::Matches($ins, '(?m)^\s+Assert-RunnerEgress\s*$')).Count -eq 1)
+
+    # ---- 7. its Python -------------------------------------------------------------
+    $py = $rec.python
+    Yes "the record pins its Python by version, actions/python-versions url and SHA-256 ($($py.version))" ($py.version -match '^3\.13\.\d+$' -and $py.url -match ('^https://github\.com/actions/python-versions/releases/download/' + [regex]::Escape($py.version) + '-\d+/python-' + [regex]::Escape($py.version) + '-win32-x64\.zip$') -and $py.sha256 -match '^[0-9a-f]{64}$')
+    $call = "Install-RunnerPython `$root `$acct '" + $py.version + "' '" + $py.url + "' '" + $py.sha256 + "'"
+    $iPy = $sent.IndexOf($call)
+    $iProxy = $sent.IndexOf("Set-RunnerProxy `$root '" + $svc + "'")
+    Yes '  and the install puts it in the tool cache before config.cmd starts its service' ($iPy -gt $iProxy -and $iCfg -gt $iPy -and $sent.Contains('function Install-RunnerPython('))
+    $t = Join-Path $work 'python.txt'
+    $r = Run @('-Hermes', '-Python', '-DryRunTo', $t)
+    $one = $(if (Test-Path -LiteralPath $t) { [IO.File]::ReadAllText($t) } else { '' })
+    Yes "-Hermes -Python's dry run ends 0 (exit $($r.Code))" ($r.Code -eq 0 -and $one.Contains("Install-RunnerPython '" + $rec.root + "' '" + $rec.account + "' '" + $py.version + "' '" + $py.url + "' '" + $py.sha256 + "'"))
+    Yes '  and sends nothing else: no registration, rules, proxy or service change' ($one -notmatch 'config\.cmd --unattended|Set-RunnerFirewall \$grdAcct|(?m)^Set-RunnerProxy |Restart-Service' -and $r.Out -notmatch 'Registration token')
+    foreach ($bad in @(@('-Python'), @('-Hermes', '-Python', '-Status'), @('-Hermes', '-Python', '-NetworkOnly'), @('-Number', '2', '-Python'))) {
+        $g = Join-Path $work ('bad-' + [Guid]::NewGuid().ToString('N') + '.txt')
+        $b = Run (@('-DryRunTo', $g) + $bad)
+        Yes ((($bad -join ' ')) + ' is refused and writes nothing') ($b.Code -eq 1 -and $b.Out -match 'Nothing was changed' -and -not (Test-Path -LiteralPath $g))
+    }
+    $lib = [regex]::Match($text, "(?ms)^\`$toolLib = @'.*?^'@").Value
+    Yes 'Install-RunnerPython holds the zip to the record''s SHA-256 and the installer to python.org''s signature' ($lib.Contains("Get-FileHash -LiteralPath `$zip -Algorithm SHA256") -and $lib.Contains("if (`$got -ne `$sha256) { throw") -and $lib.Contains('Get-AuthenticodeSignature') -and $lib.Contains("'O=Python Software Foundation'"))
+    Yes '  fetches the record''s url alone, and never pip' (([regex]::Matches($lib, 'Invoke-WebRequest')).Count -eq 1 -and $lib.Contains('Invoke-WebRequest -Uri $url ') -and $lib -notmatch 'pip install|ensurepip')
+    Yes '  installs for all users into the tool cache with no launcher, file type, shortcut or PATH change' ($lib.Contains("'InstallAllUsers=1', ('DefaultAllUsersTargetDir=") -and $lib.Contains("'Include_launcher=0', 'InstallLauncherAllUsers=0', 'AssociateFiles=0', 'Shortcuts=0', 'PrependPath=0'") -and $lib.Contains("Join-Path `$root '_work\_tool\Python'"))
+    Yes '  stops when the same minor version is installed for all users elsewhere, and never takes another''s registry entries off' ($lib.Contains("'HKLM:\SOFTWARE\Python\PythonCore\' + `$mm + '\InstallPath'") -and $lib -notmatch 'Remove-Item[^\n]*Registry::|Remove-Item -Path HK')
+    Yes '  and marks it complete only once the account may run it, the way setup-python looks for it' ($lib.IndexOf("if (-not `$may.Count) { throw") -gt 0 -and $lib.IndexOf("New-Item -ItemType File -Path `$done") -gt $lib.IndexOf("if (-not `$may.Count) { throw") -and $lib.Contains("Join-Path `$verDir 'x64.complete'"))
+    Yes 'the gate''s Install-Runner verb takes -Python as a switch' ($verbs.verbs.'Install-Runner'.params.Python -eq 'switch')
+    $st = Join-Path $work 'status.txt'
+    $r = Run @('-Hermes', '-Status', '-DryRunTo', $st)
+    $stat = $(if (Test-Path -LiteralPath $st) { [IO.File]::ReadAllText($st) } else { '' })
+    Yes "-Hermes -Status names the Pythons in its tool cache (exit $($r.Code))" ($r.Code -eq 0 -and $stat.Contains("Get-Item -Path '" + $rec.root + "\_work\_tool\Python\*\x64.complete'"))
 } finally {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
