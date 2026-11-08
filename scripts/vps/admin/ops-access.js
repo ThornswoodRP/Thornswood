@@ -16,7 +16,9 @@
                                                      tokens and its list need
       node scripts/vps/admin/ops-access.js keys      for scripts\vps\Renew-BoxKey.ps1:
                                                      Environments write on the ops repository,
-                                                     which an environment's secret needs
+                                                     which an environment's secret needs, and
+                                                     Actions read, which reading the environment
+                                                     and its branch policies needs
       node scripts/vps/admin/ops-access.js hermes-runners
                                                      for Install-Runner.ps1 -FromGate -Hermes:
                                                      the organization's Self-hosted runners write,
@@ -57,7 +59,10 @@ const REPOS = ['Thornswood-Ops'];
 // App is never on that repository (records/github-apps.json).
 const ASKS = {
   runners: { repo: 'Thornswood-Ops', permissions: { administration: 'write' }, needs: 'Administration write' },
-  keys: { repo: 'Thornswood-Ops', permissions: { environments: 'write' }, needs: 'Environments write' },
+  // GitHub reads an environment and its branch policies only to Actions read,
+  // which Renew-BoxKey.ps1 does first; Environments write alone was refused
+  // with 403 on 8 Nov 2026 (#5356).
+  keys: { repo: 'Thornswood-Ops', permissions: { actions: 'read', environments: 'write' }, needs: 'Actions read and Environments write' },
   'hermes-runners': { org: true, permissions: { organization_self_hosted_runners: 'write' }, needs: 'Self-hosted runners write on the organization' },
 };
 

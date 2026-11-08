@@ -85,8 +85,8 @@ server.listen(0, '127.0.0.1', async () => {
 
     const k = await run(['keys'], api);
     want = lastAsk();
-    yes('keys asks for the ops repository alone with Environments write and nothing more',
-      k.code === 0 && JSON.stringify(want.repositories) === '["Thornswood-Ops"]' && JSON.stringify(want.permissions) === '{"environments":"write"}');
+    yes('keys asks for the ops repository alone with Actions read and Environments write and nothing more',
+      k.code === 0 && JSON.stringify(want.repositories) === '["Thornswood-Ops"]' && JSON.stringify(want.permissions) === '{"actions":"read","environments":"write"}');
 
     const h0 = asked.length;
     const h = await run(['hermes-runners'], api);

@@ -201,11 +201,16 @@ function Invoke-FirewallPolicy {
     $policy = @(Get-PolicyRules)
     $move = @($local | Where-Object { $_.Enabled -and (($_.Direction -eq 'Inbound' -and $_.Action -eq 'Allow' -and (Test-Listed $entries $_)) -or $_.Action -eq 'Block') } | Sort-Object Direction, DisplayName)
     $toCopy = @()
+    # For each rule to move, the name the policy store holds it under: its
+    # own once it is copied, or the policy rule that already holds it.
+    $heldAs = @{}
     foreach ($r in $move) {
         # By name, or by display name: a rule the policy already holds under
         # another id (Setup-Domain.ps1 made the web pair there, #5334) is held.
-        if (@($policy | Where-Object { $_.Name -eq $r.Name -or $_.DisplayName -eq $r.DisplayName }).Count) { Say 'HELD' (Show-Rule $r) }
-        else { $toCopy += $r; Say 'MOVE' (Show-Rule $r) }
+        $holder = @($policy | Where-Object { $_.Name -eq $r.Name })
+        if (-not $holder.Count) { $holder = @($policy | Where-Object { $_.DisplayName -eq $r.DisplayName -and $_.Direction -eq $r.Direction -and $_.Action -eq $r.Action }) }
+        if ($holder.Count) { $heldAs[$r.Name] = [string]$holder[0].Name; Say 'HELD' (Show-Rule $r) }
+        else { $heldAs[$r.Name] = $r.Name; $toCopy += $r; Say 'MOVE' (Show-Rule $r) }
     }
     $script:open = $toCopy.Count
 
@@ -244,7 +249,11 @@ function Invoke-FirewallPolicy {
     if (-not $DryRun) {
         $active = @(Get-ActiveRules)
         foreach ($r in $move) {
-            if (-not @($active | Where-Object { $_.Name -eq $r.Name -and $_.Source -eq 'GroupPolicy' -and $_.Enabled }).Count) {
+            # A rule held under another id is taken by that id (8 Nov 2026:
+            # the local 'Thornswood Web 443' was held by Setup-Domain's policy
+            # pair, and asking for the local id stopped the move, #3896).
+            $as = [string]$heldAs[$r.Name]
+            if (-not @($active | Where-Object { $_.Name -eq $as -and $_.Source -eq 'GroupPolicy' -and $_.Enabled }).Count) {
                 $script:stopped = $true
                 Say 'STOP' ((Show-Rule $r) + ' is in the policy store, but the firewall does not take it from there after a refresh. Local rules are still taken, so nothing anybody uses changed.')
                 return

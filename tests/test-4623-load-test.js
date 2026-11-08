@@ -255,6 +255,8 @@ async function boxChecks() {
     const st = JSON.parse(fs.readFileSync(path.join(out, 'server-settings.json'), 'utf8'));
     yes('the copy names the server\'s plugins by their full paths, in order, and copies none',
       st.loadOrder.length === 2 && st.loadOrder[1] === path.join(inst, 'data', 'JKs Skyrim.esp').replace(/\\/g, '/') && !fs.existsSync(path.join(out, 'data', 'Skyrim.esm')));
+    yes('it has a data folder of its own, empty, for the manifest the engine writes there at start',
+      fs.statSync(path.join(out, 'data')).isDirectory() && fs.readdirSync(path.join(out, 'data')).length === 0 && st.dataDir === 'data');
     yes('it keeps the server\'s NPC switch and its plain gameplay switches', st.npcEnabled === true && st.npcSettings.x === 1 && st.thornswoodNear === 3500 && st.thornswoodHurtCare === true);
     yes('and nothing else of its settings: no site, no webhook, no password, no switch that holds an address',
       st.thornswoodSite === undefined && st.discordWebhook === undefined && st.password === undefined && st.thornswoodLoadOrderRefuse === undefined);
