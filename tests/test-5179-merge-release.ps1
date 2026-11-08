@@ -29,8 +29,8 @@
       environment, the notes before anything is built, the launcher built
       with the package's version, the game files built against the Release
       before's list, the setup files and a Velopack package for each of dev
-      and main, dev's published with its installer and main's held as an
-      attested artifact for the approval (#5181), the attestation on every
+      and main, dev's published with its installer and main's held, attested,
+      as a GitHub Package for the approval (#5181), the attestation on every
       file, the site, the Discord bot and voice zipped as parts (#5190,
       #5187), and the Deployments: Dev when a part dev runs changed, Site and
       Discord bot when theirs did. No other workflow makes one.
@@ -223,9 +223,10 @@ try {
     # package again (Test-MainPackageReachable, the launcher step).
     $rf5 = Write-Rels $base5181
     $tagAt = { param($want) { param($name) if ($name -eq 'main-build-20261101.5') { $want } else { '' } }.GetNewClosure() }
-    Yes 'main''s newest package with its main tag on the commit that built it can go out' (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile $rf5 -ManifestDir $md -TagCommit (& $tagAt ('commit ' + ('c' * 40))))
-    Yes '  one with no main tag cannot, so the merge packs again' (-not (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile $rf5 -ManifestDir $md -TagCommit (& $tagAt '')))
-    Yes '  nor one whose main tag names another commit' (-not (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile $rf5 -ManifestDir $md -TagCommit (& $tagAt ('commit ' + ('e' * 40)))))
+    Yes 'main''s newest package with its main tag on the commit that built it can go out' (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile $rf5 -ManifestDir $md -TagCommit (& $tagAt ('commit ' + ('c' * 40))) -Kept { $true })
+    Yes '  one with no main tag cannot, so the merge packs again' (-not (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile $rf5 -ManifestDir $md -TagCommit (& $tagAt '') -Kept { $true }))
+    Yes '  nor one kept only as an artifact, as before 8 Nov, not as a GitHub Package' (-not (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile $rf5 -ManifestDir $md -TagCommit (& $tagAt ('commit ' + ('c' * 40))) -Kept { param($p) $p.From -ne 'build-20261101.5' }))
+    Yes '  nor one whose main tag names another commit' (-not (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile $rf5 -ManifestDir $md -TagCommit (& $tagAt ('commit ' + ('e' * 40))) -Kept { $true }))
     Yes '  one out already can, tag or not' (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile (Write-Rels (& $out5 @((Asset 201 'Thornswood-2026.1101.5-full.nupkg' $pkgSha), (Asset 202 'releases.main.json' $feedSha)) $false)) -ManifestDir $md -TagCommit (& $tagAt ''))
     Yes '  and with no package made at all there is nothing to pack for' (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile (Write-Rels $none) -ManifestDir $md -TagCommit (& $tagAt ''))
     $rec = MM 'build-20261101.5' $lv 'g1' $true
@@ -235,17 +236,78 @@ try {
     Yes '  a file the record does not list' ((Get-MainPackageProblem -Record $rec -Have (@{ 'x.exe' = $feedSha } + $exact)) -match '^holds x\.exe, which')
     Yes '  and a listed name with other bytes are each said' ((Get-MainPackageProblem -Record $rec -Have @{ 'Thornswood-2026.1101.5-full.nupkg' = $feedSha; 'releases.main.json' = $feedSha }) -match '^holds a Thornswood-2026\.1101\.5-full\.nupkg that is not')
     Yes '  and a record with no main package is no package' ((Get-MainPackageProblem -Record (MM 'build-20261102.2' $lv 'g1' $false) -Have $exact) -match 'lists no main package')
-    function Art([string]$name, [bool]$expired, [string]$branch, [string]$sha, [long]$run) { [pscustomobject]@{ name = $name; expired = $expired; workflow_run = [pscustomobject]@{ id = $run; head_branch = $branch; head_sha = $sha } } }
+    # Main's package on GitHub Packages, through a stand-in registry: blobs
+    # by digest, manifests by tag, a token for anybody who asks.
+    function New-Registry {
+        $st = @{ blobs = @{}; manifests = @{}; asked = [Collections.Generic.List[string]]::new() }
+        $http = {
+            param($Method, $Uri, $Headers, $InFile, $OutFile, $Body, $ContentType)
+            $st.asked.Add("$Method $Uri")
+            $u = [uri]$Uri
+            $path = $u.AbsolutePath
+            if ($path -eq '/token') { return [pscustomobject]@{ Status = 200; Location = ''; Text = '{"token":"t"}' } }
+            if ($Headers['Authorization'] -ne 'Bearer t') { return [pscustomobject]@{ Status = 401; Location = ''; Text = '' } }
+            if ($path -match '^/v2/thornswoodrp/thornswood-launcher-main/manifests/(.+)$') {
+                $tag = $Matches[1]
+                if ($Method -eq 'PUT') { $st.manifests[$tag] = [Text.Encoding]::UTF8.GetString($Body); return [pscustomobject]@{ Status = 201; Location = ''; Text = '' } }
+                if ($st.manifests.ContainsKey($tag)) { return [pscustomobject]@{ Status = 200; Location = ''; Text = $st.manifests[$tag] } }
+                return [pscustomobject]@{ Status = 404; Location = ''; Text = '' }
+            }
+            if ($path -eq '/v2/thornswoodrp/thornswood-launcher-main/blobs/uploads/' -and $Method -eq 'POST') { return [pscustomobject]@{ Status = 202; Location = '/v2/thornswoodrp/thornswood-launcher-main/blobs/uploads/u1?state=x'; Text = '' } }
+            if ($path -eq '/v2/thornswoodrp/thornswood-launcher-main/blobs/uploads/u1' -and $Method -eq 'PUT') {
+                $d = [uri]::UnescapeDataString(([string]@($u.Query.TrimStart('?') -split '&' | Where-Object { $_ -like 'digest=*' })[0]).Substring(7))
+                $bytes = $(if ($InFile) { [IO.File]::ReadAllBytes($InFile) } else { $Body })
+                $sha = 'sha256:' + [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+                if ($sha -ne $d) { return [pscustomobject]@{ Status = 400; Location = ''; Text = '' } }
+                $st.blobs[$d] = $bytes
+                return [pscustomobject]@{ Status = 201; Location = ''; Text = '' }
+            }
+            if ($path -match '^/v2/thornswoodrp/thornswood-launcher-main/blobs/(sha256:[0-9a-f]{64})$') {
+                $d = $Matches[1]
+                if (-not $st.blobs.ContainsKey($d)) { return [pscustomobject]@{ Status = 404; Location = ''; Text = '' } }
+                if ($OutFile) { [IO.File]::WriteAllBytes($OutFile, $st.blobs[$d]) }
+                return [pscustomobject]@{ Status = 200; Location = ''; Text = '' }
+            }
+            return [pscustomobject]@{ Status = 418; Location = ''; Text = '' }
+        }.GetNewClosure()
+        return [pscustomobject]@{ State = $st; Http = $http }
+    }
+    $held = Join-Path $tmp 'held'
+    Put (Join-Path $held 'Thornswood-2026.1101.5-full.nupkg') 'package bytes'
+    Put (Join-Path $held 'releases.main.json') '{"Assets":[]}'
     $c40 = 'c' * 40
-    $arts = @((Art 'main-build-20261101.5' $true 'main' $c40 1), (Art 'main-build-20261101.5' $false 'dev' $c40 2), (Art 'main-build-20261101.5' $false 'main' ('e' * 40) 3), (Art 'main-build-20261101.5' $false 'main' $c40 4))
-    $a = Select-MainPackageArtifact -Artifacts $arts -Name 'main-build-20261101.5' -Commit $c40
-    Yes 'the artifact taken is the one kept on main at the record''s commit that has not expired' ($a.workflow_run.id -eq 4)
-    $why = ''; try { Select-MainPackageArtifact -Artifacts @($arts[0]) -Name 'main-build-20261101.5' -Commit $c40 | Out-Null } catch { $why = $_.Exception.Message }
-    Yes ('  an expired one says so: ' + $why) ($why -match 'has expired')
-    $why = ''; try { Select-MainPackageArtifact -Artifacts @($arts[3], $arts[3]) -Name 'main-build-20261101.5' -Commit $c40 | Out-Null } catch { $why = $_.Exception.Message }
-    Yes '  two is not one' ($why -match '2 artifacts')
-    $why = ''; try { Select-MainPackageArtifact -Artifacts @() -Name 'main-build-20261101.5' -Commit $c40 | Out-Null } catch { $why = $_.Exception.Message }
-    Yes '  and none says there is none' ($why -match 'no artifact main-build-20261101\.5')
+    $reg = New-Registry
+    $pp = @{ Repo = 'ThornswoodRP/Thornswood'; Token = 'gh'; Registry = 'reg.test'; Scheme = 'https'; Http = $reg.Http }
+    Yes 'main''s package is kept as a GitHub Package under the build''s tag (#3399: no more artifact)' ((Push-MainPackage -Folder $held -Tag 'build-20261101.5' -Commit $c40 @pp) -eq 'pushed' -and $reg.State.manifests.ContainsKey('build-20261101.5'))
+    $man = $reg.State.manifests['build-20261101.5'] | ConvertFrom-Json
+    Yes '  one layer per file, named by its title, linked to this repository and naming the commit' (@($man.layers).Count -eq 2 -and
+        (@($man.layers | ForEach-Object { $_.annotations.'org.opencontainers.image.title' }) -join ',') -eq 'releases.main.json,Thornswood-2026.1101.5-full.nupkg' -and
+        $man.annotations.'org.opencontainers.image.source' -eq 'https://github.com/ThornswoodRP/Thornswood' -and $man.annotations.'org.opencontainers.image.revision' -eq $c40 -and
+        $man.config.digest -eq 'sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a' -and $reg.State.blobs.ContainsKey($man.config.digest))
+    Yes '  pushed again with the same files, left as it is' ((Push-MainPackage -Folder $held -Tag 'build-20261101.5' -Commit $c40 @pp) -eq 'already')
+    $other = Join-Path $tmp 'held-other'
+    Put (Join-Path $other 'Thornswood-2026.1101.5-full.nupkg') 'other bytes'
+    Put (Join-Path $other 'releases.main.json') '{"Assets":[]}'
+    $why = ''; try { Push-MainPackage -Folder $other -Tag 'build-20261101.5' -Commit $c40 @pp | Out-Null } catch { $why = $_.Exception.Message }
+    Yes ('  and never replaced with other files: ' + $why) ($why -match 'never replaced')
+    $look = Save-MainPackage -Tag 'build-20261101.5' -Commit $c40 -Look @pp
+    Yes 'the promotion''s check reads the package''s files from its manifest, without fetching them' ($look['Thornswood-2026.1101.5-full.nupkg'] -eq (Sha (Join-Path $held 'Thornswood-2026.1101.5-full.nupkg')) -and
+        -not @($reg.State.asked | Where-Object { $_ -match '/blobs/sha256:' -and $_ -like 'GET *' }).Count)
+    $into = Join-Path $tmp 'saved'
+    $got = Save-MainPackage -Tag 'build-20261101.5' -Commit $c40 -Into $into @pp
+    Yes '  and the promotion saves each file, the bytes kept' ([IO.File]::ReadAllText((Join-Path $into 'Thornswood-2026.1101.5-full.nupkg')) -eq 'package bytes' -and $got.Count -eq 2)
+    $why = ''; try { Save-MainPackage -Tag 'build-20261101.5' -Commit ('e' * 40) -Look @pp | Out-Null } catch { $why = $_.Exception.Message }
+    Yes '  a package naming another commit is refused' ($why -match 'names another commit')
+    $why = ''; try { Save-MainPackage -Tag 'build-20261101.4' -Commit $c40 -Look @pp | Out-Null } catch { $why = $_.Exception.Message }
+    Yes ('  none for a build says so, and to promote a newer one: ' + $why) ($why -match 'there is no package reg\.test/thornswoodrp/thornswood-launcher-main:build-20261101\.4' -and $why -match 'promote a newer build')
+    $d = ($man.layers | Where-Object { $_.annotations.'org.opencontainers.image.title' -eq 'releases.main.json' }).digest
+    $reg.State.blobs[$d] = [Text.Encoding]::UTF8.GetBytes('{"Assets":["x"]}')
+    $why = ''; try { Save-MainPackage -Tag 'build-20261101.5' -Commit $c40 -Into (Join-Path $tmp 'saved2') @pp | Out-Null } catch { $why = $_.Exception.Message }
+    Yes '  a file fetched with other bytes than its layer names is refused' ($why -match 'releases\.main\.json fetched from .* is not the file its manifest names')
+    $bad = $reg.State.manifests['build-20261101.5'] -replace '"releases.main.json"', '"../x.exe"'
+    $reg.State.manifests['build-20261101.6'] = $bad.Replace($c40, $c40)
+    $why = ''; try { Save-MainPackage -Tag 'build-20261101.6' -Commit $c40 -Look @pp | Out-Null } catch { $why = $_.Exception.Message }
+    Yes '  and a layer that names no plain file is refused' ($why -match 'names no plain file')
 
     # ---- New-SignedManifest -Add -------------------------------------------------------
     $nsm = Join-Path $Repo 'scripts/release/New-SignedManifest.ps1'
@@ -459,9 +521,10 @@ try {
         $wf.Contains("'velopack=' + `$_.FullName") -and $wf.Contains("'main=' + `$_.FullName"))
     Yes '  and runs only when the launcher or the game files changed' ($wf.Contains("if: `${{ steps.changed.outputs.velopack == 'yes' }}") -and $wf.Contains("`$changed -contains 'launcher' -or `$changed -contains 'game'"))
     $publishAt = $wf.IndexOf('- name: Publish the Release'); $keepAt = $wf.IndexOf('- name: Keep main''s package for the approval')
-    Yes 'main''s package is attested and kept with the run for the approval, once the Release is out, never published here (#5181)' ($keepAt -gt $publishAt -and $publishAt -gt 0 -and
-        $wf.Contains('subject-path: ${{ steps.files.outputs.held_subjects }}') -and $wf -match 'uses: actions/upload-artifact@[0-9a-f]{40} # v' -and
-        $wf.Contains('name: main-${{ steps.names.outputs.tag }}') -and $wf.Contains('path: ${{ steps.files.outputs.held }}') -and
+    Yes 'main''s package is attested and kept as a GitHub Package for the approval, once the Release is out, never published here (#5181, #3399)' ($keepAt -gt $publishAt -and $publishAt -gt 0 -and
+        $wf.Contains('subject-path: ${{ steps.files.outputs.held_subjects }}') -and $wf -notmatch 'name: main-\$\{\{' -and
+        $wf.Contains('Push-MainPackage -Folder $env:HELD -Tag $env:TAG -Commit $env:GITHUB_SHA') -and $wf.Contains('HELD: ${{ steps.files.outputs.held }}') -and
+        $wf -match '(?m)^\s+packages: write\s*$' -and
         $wf.Contains("Get-ChildItem -LiteralPath (Join-Path `$env:DIR 'assets') -File"))
     Yes 'a merge packs main''s launcher again when its newest package has no main tag, and the parts step releases that launcher' (
         $wf.Contains('$reach = Test-MainPackageReachable -Tag $env:PREVIOUS -Manifest $pm') -and $wf.Contains('("repack=" + $(if ($repack)') -and

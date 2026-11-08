@@ -426,7 +426,7 @@ byte for byte, held to the same signature.
    it and nothing reaches main.
 4. The approved job first puts out main's launcher package, when the
    Release runs with one that is not out yet: the files the merge release
-   kept as the artifact `main-<tag>`, each held to the signed record of the
+   kept as the GitHub Package `ghcr.io/thornswoodrp/thornswood-launcher-main:<tag>`, each held to the signed record of the
    build that made them, on the Release `main-<tag>`, which main's launchers
    update from and which carries main's download, `Thornswood-Setup.exe`
    (the header of promote-main.yml, "MAIN'S LAUNCHER"). Then it makes a

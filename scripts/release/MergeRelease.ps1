@@ -27,8 +27,10 @@
           Release main-<tag> is out already (promote-main.yml)
       Get-MainPackageProblem -Record <obj> -Have <name to sha256>
           '' when the files are exactly the record's main package
-      Select-MainPackageArtifact -Artifacts <list> -Name main-<tag> -Commit <sha>
-          the artifact merge-release.yml kept main's package in
+      Push-MainPackage -Folder <dir> -Tag <tag> -Commit <sha>
+      Save-MainPackage -Tag <tag> -Commit <sha> (-Into <dir> | -Look)
+          main's package of a build kept on GitHub Packages, and read back
+          (MAIN'S PACKAGE ON GITHUB PACKAGES below)
 
   THE NAMES. The day and a number give both: the tag the agent applies,
   build-<yyyyMMdd>.<n>, and the Velopack version, which must be SemVer and
@@ -299,18 +301,28 @@ function Find-MainPackage {
 }
 
 # False when main's newest launcher package up to $Tag can never go out: it
-# is not out on its Release main-<tag> already, and there is no tag
-# main-<tag> for the promotion to put that Release on (merge-release.yml,
-# Tag main's package for the approval; a run's own token cannot make that
-# tag later, #5489). True when it can, or when no Release up to $Tag made
+# is not out on its Release main-<tag> already, and either it is not kept as
+# a package (MAIN'S PACKAGE ON GITHUB PACKAGES below; a build before 8 Nov
+# 2026 kept it as an artifact) or there is no tag main-<tag> for the
+# promotion to put that Release on (merge-release.yml, Tag main's package
+# for the approval; a run's own token cannot make that tag later, #5489). True when it can, or when no Release up to $Tag made
 # one. Throws when GitHub cannot be read, so a failed read never makes a
 # package nobody asked for.
 function Test-MainPackageReachable {
   param([Parameter(Mandatory = $true)][string]$Tag, [Parameter(Mandatory = $true)]$Manifest,
         [string]$Repo = $env:GITHUB_REPOSITORY, [string]$ReleasesFile = '', [string]$ManifestDir = '',
-        [scriptblock]$TagCommit = $null)
+        [scriptblock]$TagCommit = $null, [scriptblock]$Kept = $null)
   $pkg = Find-MainPackage -Tag $Tag -Manifest $Manifest -Repo $Repo -ReleasesFile $ReleasesFile -ManifestDir $ManifestDir
   if ($null -eq $pkg -or $pkg.Published) { return $true }
+  if ($null -eq $Kept) {
+    $Kept = {
+      param($p)
+      $auth = Get-MainPackageAuth -Repo $Repo -Token $env:GH_TOKEN -Scope 'pull' -Registry 'ghcr.io' -Scheme 'https' -Http ${function:Invoke-MainPackageHttp}
+      $m = Get-MainPackageManifest -Auth $auth -Tag $p.From -Http ${function:Invoke-MainPackageHttp}
+      return ($null -ne $m)
+    }
+  }
+  if (-not (& $Kept $pkg)) { return $false }
   if ($null -eq $TagCommit) {
     $TagCommit = {
       param($name)
@@ -324,14 +336,188 @@ function Test-MainPackageReachable {
   return ([string](& $TagCommit $pkg.MainTag) -eq ('commit ' + $pkg.Commit))
 }
 
-# The artifact main-<tag> merge-release.yml kept for $Commit on main: the one
-# that has not expired, from a run on main at that commit. Throws when there
-# is none, or more than one.
-function Select-MainPackageArtifact {
-  param([Parameter(Mandatory = $true)][AllowEmptyCollection()]$Artifacts, [Parameter(Mandatory = $true)][string]$Name, [Parameter(Mandatory = $true)][string]$Commit)
-  $hit = @(@($Artifacts) | Where-Object { [string]$_.name -eq $Name -and -not $_.expired -and [string]$_.workflow_run.head_branch -eq 'main' -and [string]$_.workflow_run.head_sha -eq $Commit })
-  if ($hit.Count -eq 1) { return $hit[0] }
-  if ($hit.Count -gt 1) { throw "$($hit.Count) artifacts named $Name were kept for $Commit, not one" }
-  if (@(@($Artifacts) | Where-Object { [string]$_.name -eq $Name -and $_.expired }).Count) { throw "$Name has expired (GitHub keeps an artifact 90 days), so main's package of that build can no longer go out; promote a newer build" }
-  throw "no artifact $Name was kept for $Commit on main"
+<#
+  MAIN'S PACKAGE ON GITHUB PACKAGES (Patrick, 30 Oct and 8 Nov 2026: use
+  GitHub's Releases, Deployments and Packages). Every merge that makes main's
+  launcher package keeps its files as one package version of this
+  repository, ghcr.io/<owner>/thornswood-launcher-main:<build tag>, until
+  promote-main.yml puts them out on the Release main-<tag> once Patrick
+  approves. Until 8 Nov they were an Actions artifact, kept 90 days at most
+  and counted against the artifact storage that was already full (#3399); a
+  package version is kept until somebody deletes it.
+
+  One OCI artifact: each file a layer of its own, named by its
+  org.opencontainers.image.title, the empty config, and annotations that link
+  it to this repository and name the build and its commit. Written and read
+  through the registry's own HTTP API with the run's token (packages: write
+  to push, read to pull), so no tool is installed. A version already there is
+  left as it is when it holds the same files and refused when it holds other
+  ones: a build's package is never replaced. Every file read back is held to
+  the layer's sha256 here, and to the build's signed record by the caller
+  (Get-MainPackageProblem).
+
+  $Http is called as & $Http <method> <url> <headers> <in file> <out file>
+  <body bytes> <content type> and returns @{ Status; Location; Text }; a
+  harness hands in a stand-in registry.
+#>
+$script:MainPackageName = 'thornswood-launcher-main'
+$script:OciEmpty = '44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a'
+
+function Invoke-MainPackageHttp {
+  param([string]$Method, [string]$Uri, [hashtable]$Headers, [string]$InFile = '', [string]$OutFile = '', [byte[]]$Body = $null, [string]$ContentType = '')
+  $a = @{ Method = $Method; Uri = $Uri; Headers = $Headers; SkipHttpErrorCheck = $true }
+  if ($InFile) { $a.InFile = $InFile }
+  if ($OutFile) { $a.OutFile = $OutFile; $a.PassThru = $true }
+  if ($null -ne $Body) { $a.Body = $Body }
+  if ($ContentType) { $a.ContentType = $ContentType }
+  $r = Invoke-WebRequest @a
+  $loc = ''
+  if ($r.Headers -and $r.Headers['Location']) { $loc = [string]@($r.Headers['Location'])[0] }
+  $text = ''
+  if (-not $OutFile -and $null -ne $r.Content) {
+    # A manifest's media type is not text to PowerShell, so it comes back as bytes.
+    $text = $(if ($r.Content -is [byte[]]) { [Text.Encoding]::UTF8.GetString($r.Content) } else { [string]$r.Content })
+  }
+  return [pscustomobject]@{ Status = [int]$r.StatusCode; Location = $loc; Text = $text }
+}
+
+function Get-MainPackageRef([string]$Repo, [string]$Tag) {
+  return ($Repo.Split('/')[0].ToLowerInvariant() + '/' + $script:MainPackageName + ':' + $Tag)
+}
+
+function Get-MainPackageAuth {
+  param([string]$Repo, [string]$Token, [string]$Scope, [string]$Registry, [string]$Scheme, [scriptblock]$Http)
+  if (-not $Repo -or -not $Token) { throw 'GITHUB_REPOSITORY and GH_TOKEN are needed to reach main''s package' }
+  $owner = $Repo.Split('/')[0].ToLowerInvariant()
+  $name = "$owner/$($script:MainPackageName)"
+  $basic = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("${owner}:$Token"))
+  $r = & $Http 'GET' "${Scheme}://$Registry/token?scope=repository:${name}:$Scope&service=$Registry" @{ Authorization = "Basic $basic" } '' '' $null ''
+  if ($r.Status -ne 200) { throw "the registry gave no $Scope token for $Registry/$name (HTTP $($r.Status))" }
+  $tok = [string](($r.Text | ConvertFrom-Json).token)
+  if (-not $tok) { throw "the registry's answer for $Registry/$name holds no token" }
+  return [pscustomobject]@{ Base = "${Scheme}://$Registry/v2/$name"; Headers = @{ Authorization = "Bearer $tok" }; Name = $name }
+}
+
+# The package's manifest for $Tag, or $null when there is none.
+function Get-MainPackageManifest {
+  param($Auth, [string]$Tag, [scriptblock]$Http)
+  $h = @{ Accept = 'application/vnd.oci.image.manifest.v1+json' } + $Auth.Headers
+  $r = & $Http 'GET' "$($Auth.Base)/manifests/$Tag" $h '' '' $null ''
+  if ($r.Status -eq 404) { return $null }
+  if ($r.Status -ne 200) { throw "the registry answered $($r.Status) for $($Auth.Name):$Tag" }
+  return ($r.Text | ConvertFrom-Json)
+}
+
+# name -> sha256 of every layer of a manifest, each a plain file name with a
+# sha256 digest. Throws on any other layer.
+function Get-MainPackageLayers {
+  param($Manifest, [string]$Ref)
+  $have = [ordered]@{}
+  foreach ($l in @($Manifest.layers)) {
+    $t = $null
+    if ($l.PSObject.Properties['annotations'] -and $l.annotations) { $t = $l.annotations.PSObject.Properties['org.opencontainers.image.title'] }
+    $name = $(if ($t) { [string]$t.Value } else { '' })
+    if ($name -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$') { throw "$Ref has a layer that names no plain file ('$name')" }
+    if ([string]$l.digest -notmatch '^sha256:([0-9a-f]{64})$') { throw "$Ref names $name by '$($l.digest)', not a sha256" }
+    if ($have.Contains($name)) { throw "$Ref holds two files named $name" }
+    $have[$name] = [pscustomobject]@{ Sha256 = $Matches[1]; Size = [long]$l.size }
+  }
+  if (-not $have.Count) { throw "$Ref holds no files" }
+  return $have
+}
+
+# Keeps every file of $Folder as main's package of $Tag, built at $Commit.
+# Returns 'pushed' or 'already'; throws when the version holds other files.
+function Push-MainPackage {
+  param([Parameter(Mandatory = $true)][string]$Folder, [Parameter(Mandatory = $true)][string]$Tag, [Parameter(Mandatory = $true)][string]$Commit,
+        [string]$Repo = $env:GITHUB_REPOSITORY, [string]$Token = $env:GH_TOKEN, [string]$Registry = 'ghcr.io', [string]$Scheme = 'https',
+        [scriptblock]$Http = ${function:Invoke-MainPackageHttp})
+  if ((Get-MergeReleaseOrder $Tag) -lt 0) { throw "$Tag is not a build Release tag" }
+  if ($Commit -notmatch '^[0-9a-f]{40}$') { throw "'$Commit' is not a full commit" }
+  $files = @(Get-ChildItem -LiteralPath $Folder -File -Recurse | Sort-Object Name)
+  if (-not $files.Count) { throw "$Folder holds no files of main's package" }
+  $ref = "$Registry/" + (Get-MainPackageRef $Repo $Tag)
+  $want = [ordered]@{}
+  foreach ($f in $files) {
+    if ($want.Contains($f.Name)) { throw "$Folder holds two files named $($f.Name)" }
+    $want[$f.Name] = [pscustomobject]@{ Sha256 = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant(); Size = [long]$f.Length; Path = $f.FullName }
+  }
+  $auth = Get-MainPackageAuth -Repo $Repo -Token $Token -Scope 'pull,push' -Registry $Registry -Scheme $Scheme -Http $Http
+  $old = Get-MainPackageManifest -Auth $auth -Tag $Tag -Http $Http
+  if ($null -ne $old) {
+    $was = Get-MainPackageLayers -Manifest $old -Ref $ref
+    $same = ($was.Count -eq $want.Count)
+    foreach ($k in $want.Keys) { if (-not $was.Contains($k) -or $was[$k].Sha256 -ne $want[$k].Sha256) { $same = $false } }
+    if ($same) { return 'already' }
+    throw "$ref holds other files already; a build's package is never replaced"
+  }
+  $send = {
+    param([string]$Sha, [string]$Path, [byte[]]$Bytes)
+    $digest = "sha256:$Sha"
+    $have = & $Http 'HEAD' "$($auth.Base)/blobs/$digest" $auth.Headers '' '' $null ''
+    if ($have.Status -eq 200) { return }
+    $start = & $Http 'POST' "$($auth.Base)/blobs/uploads/" $auth.Headers '' '' $null ''
+    if ($start.Status -ne 202 -or -not $start.Location) { throw "the registry refused an upload of $digest (HTTP $($start.Status))" }
+    $loc = $start.Location
+    if ($loc -notmatch '^https?://') { $loc = "${Scheme}://$Registry$loc" }
+    $sep = $(if ($loc.Contains('?')) { '&' } else { '?' })
+    $put = & $Http 'PUT' ($loc + $sep + 'digest=' + [uri]::EscapeDataString($digest)) $auth.Headers $Path '' $Bytes 'application/octet-stream'
+    if ($put.Status -ne 201) { throw "the registry did not take $digest (HTTP $($put.Status))" }
+  }
+  & $send $script:OciEmpty '' ([Text.Encoding]::UTF8.GetBytes('{}'))
+  $layers = @()
+  foreach ($k in $want.Keys) {
+    & $send $want[$k].Sha256 $want[$k].Path $null
+    $layers += [ordered]@{ mediaType = 'application/octet-stream'; digest = 'sha256:' + $want[$k].Sha256; size = $want[$k].Size
+                           annotations = [ordered]@{ 'org.opencontainers.image.title' = $k } }
+  }
+  $manifest = [ordered]@{
+    schemaVersion = 2
+    mediaType = 'application/vnd.oci.image.manifest.v1+json'
+    artifactType = 'application/vnd.thornswood.launcher-main.v1'
+    config = [ordered]@{ mediaType = 'application/vnd.oci.empty.v1+json'; digest = "sha256:$($script:OciEmpty)"; size = 2 }
+    layers = $layers
+    annotations = [ordered]@{
+      'org.opencontainers.image.source' = "https://github.com/$Repo"
+      'org.opencontainers.image.revision' = $Commit
+      'org.opencontainers.image.version' = $Tag
+      'org.opencontainers.image.description' = "Main's launcher package of $Tag, held for the promotion to main that puts it out on the Release main-$Tag"
+    }
+  }
+  $body = [Text.Encoding]::UTF8.GetBytes(($manifest | ConvertTo-Json -Depth 8 -Compress))
+  $put = & $Http 'PUT' "$($auth.Base)/manifests/$Tag" $auth.Headers '' '' $body 'application/vnd.oci.image.manifest.v1+json'
+  if ($put.Status -ne 201) { throw "the registry did not take the manifest of $ref (HTTP $($put.Status))" }
+  return 'pushed'
+}
+
+# Main's package of $Tag, built at $Commit: with -Look, name -> sha256 of its
+# files as its manifest names them; otherwise each file saved into $Into
+# (made here, empty) and held to its layer's size and sha256, and the same
+# map returned. Throws when there is none, or it names another build.
+function Save-MainPackage {
+  param([Parameter(Mandatory = $true)][string]$Tag, [Parameter(Mandatory = $true)][string]$Commit, [string]$Into = '', [switch]$Look,
+        [string]$Repo = $env:GITHUB_REPOSITORY, [string]$Token = $env:GH_TOKEN, [string]$Registry = 'ghcr.io', [string]$Scheme = 'https',
+        [scriptblock]$Http = ${function:Invoke-MainPackageHttp})
+  $ref = "$Registry/" + (Get-MainPackageRef $Repo $Tag)
+  $auth = Get-MainPackageAuth -Repo $Repo -Token $Token -Scope 'pull' -Registry $Registry -Scheme $Scheme -Http $Http
+  $m = Get-MainPackageManifest -Auth $auth -Tag $Tag -Http $Http
+  if ($null -eq $m) { throw "there is no package ${ref}: main's packages are kept there since 8 Nov 2026 (before, as an artifact), so promote a newer build" }
+  $ann = $m.PSObject.Properties['annotations']
+  $rev = $(if ($ann -and $ann.Value) { $ann.Value.PSObject.Properties['org.opencontainers.image.revision'] } else { $null })
+  if (-not $rev -or [string]$rev.Value -ne $Commit) { throw "$ref names another commit than $Commit, the one that built $Tag" }
+  $layers = Get-MainPackageLayers -Manifest $m -Ref $ref
+  $map = @{}
+  foreach ($k in $layers.Keys) { $map[$k] = $layers[$k].Sha256 }
+  if ($Look) { return $map }
+  if (-not $Into) { throw 'Save-MainPackage needs -Into or -Look' }
+  if ((Test-Path -LiteralPath $Into) -and @(Get-ChildItem -LiteralPath $Into -Force).Count) { throw "$Into is not empty" }
+  New-Item -ItemType Directory -Force -Path $Into | Out-Null
+  foreach ($k in $layers.Keys) {
+    $file = Join-Path $Into $k
+    $r = & $Http 'GET' "$($auth.Base)/blobs/sha256:$($layers[$k].Sha256)" $auth.Headers '' $file $null ''
+    if ($r.Status -ne 200) { throw "the registry answered $($r.Status) for $k in $ref" }
+    $sha = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ((Get-Item -LiteralPath $file).Length -ne $layers[$k].Size -or $sha -ne $layers[$k].Sha256) { throw "$k fetched from $ref is not the file its manifest names" }
+  }
+  return $map
 }
