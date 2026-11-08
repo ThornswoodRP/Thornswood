@@ -64,7 +64,8 @@ $pick = Get-Job $build 'pick'
 # Since #4823 the launcher is published natively (Build-Launcher.ps1) and its
 # window is compiled markup, so the window check (Check-Controls.ps1) and the
 # MSBuild check (test-498-msbuild.ps1) went; the publish took their place.
-$want = @('Say why there is nothing to build', 'Publish the native launcher', 'Build the ship root tool',
+# Since #5524 the published exe is started for real after the publish.
+$want = @('Say why there is nothing to build', 'Publish the native launcher', 'Start the native launcher', 'Build the ship root tool',
     'Write down the tree these checks passed on')
 $have = Get-StepNames $launcher
 Yes ('the job "Launcher builds" has exactly the step that says why there is nothing to build, the steps that need Windows, and the note (' + ($have -join '; ') + ')') (($have -join '|') -eq ($want -join '|'))
@@ -79,6 +80,7 @@ Yes ('  and every other step runs only when the pick did not say so (' + $steps.
 # or compiles; no code in it may name a folder the path rule skips. Comments
 # are left out: a header citing docs\studies for a decision reads nothing.
 $reads = @('scripts/release/Build-Launcher.ps1', 'scripts/release/LauncherVersion.ps1', 'scripts/dev/Check-Secrets.ps1',
+    'scripts/release/Test-LauncherStarts.ps1',
     'scripts/release/ShipRoot/ShipRoot.csproj', 'launcher/app/Thornswood.csproj')
 foreach ($f in $reads) {
     $t = Read-Text $f

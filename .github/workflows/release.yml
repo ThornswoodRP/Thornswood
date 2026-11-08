@@ -291,6 +291,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::Build-Launcher.ps1 failed"; exit 1 }
           $exe = Join-Path $root 'Launcher\Thornswood.exe'
           if (-not (Test-Path $exe)) { Write-Host '::error::no Thornswood.exe came out of the build'; exit 1 }
+          # Started for real before it is signed (#5524): its window comes up
+          # and it stays up, or no draft gets it.
+          .\scripts\release\Test-LauncherStarts.ps1 -Exe $exe
+          if ($LASTEXITCODE -ne 0) { Write-Host '::error::the built launcher did not start and stay up; its log is above'; exit 1 }
 
       # SIGNING (#2163 section 8): a run of main's own workflow, nothing
       # else (#3930). Microsoft's signing client comes first, at the version and
