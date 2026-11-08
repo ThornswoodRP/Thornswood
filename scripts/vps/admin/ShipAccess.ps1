@@ -19,7 +19,7 @@
   Get-ThornswoodOpsAccess: the same App's token for one change to the ops
   repository, from scripts\vps\admin\ops-access.js (#2862): -For runners
   (Administration write, for Install-Runner.ps1 -FromGate) or -For keys
-  (Environments write, for Renew-BoxKey.ps1); -For hermes-runners is the
+  (Environments write and Actions read, for Renew-BoxKey.ps1); -For hermes-runners is the
   organization's Self-hosted runners write instead, for Install-Runner.ps1
   -FromGate -Hermes. Taken and handed over the same way.
 

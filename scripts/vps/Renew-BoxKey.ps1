@@ -29,8 +29,8 @@
   THE ORDER, so the key that works is never taken away before its successor
   is proved:
     1. the box admin App's token for the ops repository's environments
-       (scripts\vps\admin\ops-access.js keys, Environments write and nothing
-       more), and a read that the environment lets in main alone, so no
+       (scripts\vps\admin\ops-access.js keys, Environments write and the
+       Actions read that reading the environment needs, nothing more), and a read that the environment lets in main alone, so no
        branch's workflow can read what goes into it. Nothing has changed yet.
     2. a new ed25519 pair, and its line put on BESIDE the old one.
     3. a new login with it, from this box to its own sshd on 127.0.0.1, its
