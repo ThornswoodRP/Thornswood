@@ -342,6 +342,22 @@ jobs:
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
           $pm = if ($env:PREVIOUS_MANIFEST) { Get-Content -LiteralPath $env:PREVIOUS_MANIFEST -Raw | ConvertFrom-Json } else { $null }
           $build = Test-MergeReleaseVelopack -LauncherVersion $ver -GameZipSha256 $env:GAME_SHA -Previous $pm
+          # Main's package goes out only on the tag main-<tag> its own run
+          # made (Tag main's package for the approval). A package made
+          # before that step was there has no tag and never can have one, so
+          # with nothing else changed main could never be given a launcher:
+          # build .2's, on 3 Nov, was the only one. Then this merge makes the
+          # package again, with its tag.
+          $repack = $false
+          if (-not $build -and $pm) {
+            try { $reach = Test-MainPackageReachable -Tag $env:PREVIOUS -Manifest $pm }
+            catch { Write-Host ('::error::' + $_.Exception.Message); exit 1 }
+            if (-not $reach) {
+              $build = $true
+              $repack = $true
+              Write-Host "main's newest launcher package, before $($env:PREVIOUS) or from it, has no main tag and can never go out, so this merge makes the package again"
+            }
+          }
           if (-not $build) {
             # Every file of the launcher part before, each held to that
             # manifest's sha256, and each program to the launcher's own
@@ -389,6 +405,7 @@ jobs:
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("dir=" + $dir)
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("version=" + $ver)
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("built=" + $(if ($build) { 'yes' } else { 'no' }))
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("repack=" + $(if ($repack) { 'yes' } else { 'no' }))
 
       # The same files give the same bytes (App-Part.ps1), so an app whose
       # files no merge touched is not a change.
@@ -416,6 +433,7 @@ jobs:
           LAUNCHER_DIR: ${{ steps.launcher.outputs.dir }}
           LAUNCHER_VERSION: ${{ steps.launcher.outputs.version }}
           LAUNCHER_BUILT: ${{ steps.launcher.outputs.built }}
+          LAUNCHER_REPACK: ${{ steps.launcher.outputs.repack }}
           GAME_ZIP: ${{ steps.game.outputs.zip }}
           GAME_LIST: ${{ steps.game.outputs.list }}
           SITE_ZIP: ${{ steps.apps.outputs.site }}
@@ -451,6 +469,10 @@ jobs:
           $m = Get-Content -LiteralPath (Join-Path $probe 'files\manifest.json') -Raw | ConvertFrom-Json
           $prev = if ($env:PREVIOUS_MANIFEST) { Get-Content -LiteralPath $env:PREVIOUS_MANIFEST -Raw | ConvertFrom-Json } else { $null }
           $changed = @(Get-MergeReleaseChanged -Manifest $m -Previous $prev)
+          # A launcher built again for main's package (the launcher step:
+          # the newest one had no main tag) is a new launcher, though its
+          # sources are the same: it goes out, and the package with it.
+          if ($env:LAUNCHER_REPACK -eq 'yes' -and $changed -notcontains 'launcher') { $changed = @($changed) + @('launcher'); Write-Host 'the launcher was built again for a main package that can go out' }
           Remove-Item -LiteralPath $probe -Recurse -Force
           if ($changed.Count -eq 0) {
             Write-Host 'no part changed since the Release before, so nothing is released'
