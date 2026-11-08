@@ -295,9 +295,11 @@ function bodyOf(n) {
     name: 'Tester ' + i
   })).concat(Array.from({ length: CROWD }, (_, i) => ({
     profileId: 200000 + i,
-    pos: [0, 0, 0],
+    // Where the first two testers stand, so they are in reach of each other
+    // and the crowd is on their rosters (#5516).
+    pos: [12345.67, -2345.67 + n, 1234.5],
     angleZ: 0,
-    cell: 'elsewhere',
+    cell: '0x0001a26f',
     // The roster shows the feed's name for a proven join (#410), so it is the one each joins with.
     name: ('Somebody passing through ' + i + ' ').padEnd(40, 'x')
   }))) });
@@ -427,14 +429,14 @@ yes('only the 200 ms position tick uses the dropping send',
     SRC.split('.sendLossy(').length - 1 === 1 && !!TICK && TICK[0].indexOf('.sendLossy(') !== -1);
 /* And only the roster keeps just its newest while backed: each one is the
    whole room, which is not true of anything else sent. */
-/* The roster is framed once for the whole room and handed to sendLatest
-   already framed (sendRoster, #2332), so the check reads that function. A
-   socket that lost its voice place is handed the empty roster there
-   instead (#3570). */
+/* The roster is framed once for everybody who hears the same people and
+   handed to sendLatest already framed (sendRoster, #2332, #5516), so the
+   check reads that function. A socket that lost its voice place is handed
+   the empty roster there instead (#3570). */
 const ANNOUNCE = /function sendRoster\(\) \{[\s\S]*?\n\}/.exec(SRC);
 yes('only the roster is sent newest-only',
     SRC.split('.sendLatest(').length - 1 === 1 && !!ANNOUNCE &&
-    /frame\(JSON\.stringify\(\{ t: 'peers'/.test(ANNOUNCE[0]) && /\.sendLatest\(voice \? once : none\)/.test(ANNOUNCE[0]));
+    /frame\('\{"t":"peers","peers":'/.test(ANNOUNCE[0]) && /\.sendLatest\(frames\.get\(key\)\)/.test(ANNOUNCE[0]));
 
 (async () => {
   const h0 = await ready();

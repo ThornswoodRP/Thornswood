@@ -142,11 +142,16 @@ async function start() {
   await listening(srv, PORT);
   // Everybody below is in the world, since only somebody in the world holds
   // a voice place and is on the roster (#3570): the gamemode's position
-  // feed, stood in for, everybody in one room.
+  // feed, stood in for, everybody in one room. A roster names only who is
+  // in reach, by a view that goes stale after three seconds without the
+  // feed (#5516), so it is sent five times a second, as the gamemode does.
   const who = [601, 602, 603, 701, 702, 703, 801, 802, 803, 804].map((pid) => ({ profileId: pid, pos: [0, 0, 0], angleZ: 0, cell: 'a room' }));
-  const fed = await fetch(BASE + '/positions', { method: 'POST', body: JSON.stringify({ who: who }) });
+  const post = () => fetch(BASE + '/positions', { method: 'POST', body: JSON.stringify({ who: who }) });
+  const fed = await post();
   if (fed.status !== 204) throw new Error('/positions answered ' + fed.status);
+  roomFeed = setInterval(() => { post().catch(() => { }); }, 200);
 }
+let roomFeed = null;
 async function health() { return (await fetch(BASE + '/health')).json(); }
 
 // ------------------------------------------------ the browser, stood in for --
@@ -661,7 +666,11 @@ async function partThree() {
     return !!r && r.peers.find((p) => p.peer === X.peer).voice === false &&
            r.peers.find((p) => p.peer === Y.peer).voice === false && !('voice' in r.peers.find((p) => p.peer === O.peer));
   })());
-  yes('and that join cost one roster too', rosters() - r1 === 1);
+  // One roster names the newcomer. Rosters now name only who is in reach
+  // and come with a newcomer's first view (#5516), so the mode Y said above,
+  // which rides the next roster, can come in one of its own just before.
+  const namingZ = O.got.filter((m) => m.t === 'peers').slice(r1).filter((m) => m.peers.some((p) => p.peer === Z.peer)).length;
+  yes('and that join cost one roster naming it (' + namingZ + ')', namingZ === 1);
 }
 
 // ----------------------------------------------------------------- part 4 --
@@ -722,6 +731,7 @@ function partFour() {
   fail++;
   console.log('FAIL  the harness itself: ' + (e && e.stack || e));
 }).then(async () => {
+  if (roomFeed) clearInterval(roomFeed);
   pages.forEach(closePage);
   for (const s of plain) { try { s.onclose = null; s.close(); } catch (e) { } }
   for (const l of launchers) { await l.quit(); }
