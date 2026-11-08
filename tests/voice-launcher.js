@@ -257,6 +257,7 @@ async function service(opts) {
       req.end(text);
     });
   }
+  let feeding = null;
   return {
     port: port,
     dir: dir,
@@ -270,11 +271,19 @@ async function service(opts) {
       if (r.status !== 200 || !doc || typeof doc.token !== 'string') { throw new Error('the service minted no token for profile ' + pid + ': ' + r.status + ' ' + r.body.slice(0, 200)); }
       return doc.token;
     },
+    // Who is in the world, as the gamemode says it: posted now, and posted
+    // again five times a second until the next feed or stop, as the
+    // gamemode's feed is. A position older than three seconds does not count,
+    // and since #5516 a roster names only who is in view, so a feed posted
+    // once would empty every roster three seconds later.
     feed: async function (who) {
+      clearInterval(feeding);
       const r = await post('/positions', { who: who });
       if (r.status !== 204) { throw new Error('the service did not take the positions: ' + r.status + ' ' + r.body.slice(0, 200)); }
+      feeding = setInterval(() => { post('/positions', { who: who }).catch(() => { /* the service is stopping */ }); }, 200);
     },
     stop: function () {
+      clearInterval(feeding);
       return new Promise((ok) => {
         site.server.close();
         const rm = () => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { /* a file the service still held; the temp folder keeps it */ } ok(); };

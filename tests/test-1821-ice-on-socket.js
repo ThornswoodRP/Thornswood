@@ -164,15 +164,19 @@ async function start(env) {
   srv.stderr.on('data', (d) => { s.log += d; });
   await listening(srv, port);
   // The pages below are in the world, since only they hold a voice place
-  // and are sent a roster (#3570): the gamemode's position feed, stood in for.
+  // and are sent a roster (#3570): the gamemode's position feed, stood in for,
+  // five times a second as it posts, since a position three seconds old does
+  // not count and a roster names only who is in view (#5516).
   const body = JSON.stringify({ who: [41, 42, 43].map((pid) => ({ profileId: pid, pos: [0, 0, 0], angleZ: 0, cell: 'a room' })) });
-  const fed = await fetch('http://127.0.0.1:' + port + '/positions', { method: 'POST', body: body });
+  const post = () => fetch('http://127.0.0.1:' + port + '/positions', { method: 'POST', body: body });
+  const fed = await post();
   if (fed.status !== 204) throw new Error('/positions answered ' + fed.status);
+  s.feeding = setInterval(() => { post().catch(() => { /* the service is stopping */ }); }, 200);
   return s;
 }
 /* Stopped, and resolved once its output has all been read ('close', not
    'exit'), so s.log is then every line it wrote. */
-const stop = (s) => new Promise((ok) => { s.srv.once('close', ok); s.srv.kill(); });
+const stop = (s) => new Promise((ok) => { clearInterval(s.feeding); s.srv.once('close', ok); s.srv.kill(); });
 
 /*
   A join token as the launcher gets one: asked of the service, which mints
