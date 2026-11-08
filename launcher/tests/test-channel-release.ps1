@@ -27,7 +27,7 @@
       downgrade; one on 1.2.17 is offered 1.2.18 with its delta; one already
       on the channel's release is offered nothing. Without downgrades allowed
       the first finds nothing, which is why CheckLauncher allows them.
-    - VeloRecord.TagOf: 1.2.17 is the Release v1.2.17, 2026.1108.2 is
+    - VeloRecord.TagOf: 1.2.17 is the Release build-1.2.17, 2026.1108.2 is
       build-20261108.2, and a prerelease number is refused.
   And from the source: CheckLauncher allows downgrades, ChannelSource cuts
   the feed with ChannelRelease, and Velo.GameFromPackage is every launcher
@@ -189,7 +189,7 @@ namespace Thornswood
 
             Console.WriteLine();
             Console.WriteLine("VeloRecord.TagOf: which Release's signed record holds a package");
-            Yes("1.2.17 is the Release v1.2.17", VeloRecord.TagOf(SemanticVersion.Parse("1.2.17")) == "v1.2.17");
+            Yes("1.2.17 is the Release build-1.2.17", VeloRecord.TagOf(SemanticVersion.Parse("1.2.17")) == "build-1.2.17");
             Yes("2026.1108.2 is build-20261108.2", VeloRecord.TagOf(SemanticVersion.Parse("2026.1108.2")) == "build-20261108.2");
             string why = "";
             try { VeloRecord.TagOf(SemanticVersion.Parse("1.2.17-beta")); } catch (Exception ex) { why = ex.Message; }
