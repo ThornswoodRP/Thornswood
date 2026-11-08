@@ -246,6 +246,8 @@ async function boxChecks() {
     fs.writeFileSync(path.join(inst, 'gamemode-tables', 'ADMIN_ITEMS.json'), '[]');
     fs.writeFileSync(path.join(inst, 'world', 'someone.json'), '{}');
     for (const f of ['Skyrim.esm', 'JKs Skyrim.esp']) { fs.writeFileSync(path.join(inst, 'data', f), f); }
+    fs.mkdirSync(path.join(inst, 'data', 'scripts'), { recursive: true });
+    fs.writeFileSync(path.join(inst, 'data', 'scripts', 'MarkerScript.pex'), 'pex');
     const theirs = { port: 7787, dataDir: 'data', loadOrder: ['Skyrim.esm', 'JKs Skyrim.esp'], npcEnabled: true, npcSettings: { x: 1 },
       thornswoodNear: 3500, thornswoodHurtCare: true, thornswoodSite: 'https://example.invalid', discordWebhook: 'https://example.invalid/hook',
       thornswoodLoadOrderRefuse: 'https://not-a-switch', password: 'theirs' };
@@ -255,8 +257,10 @@ async function boxChecks() {
     const st = JSON.parse(fs.readFileSync(path.join(out, 'server-settings.json'), 'utf8'));
     yes('the copy names the server\'s plugins by their full paths, in order, and copies none',
       st.loadOrder.length === 2 && st.loadOrder[1] === path.join(inst, 'data', 'JKs Skyrim.esp').replace(/\\/g, '/') && !fs.existsSync(path.join(out, 'data', 'Skyrim.esm')));
-    yes('it has a data folder of its own, empty, for the manifest the engine writes there at start',
-      fs.statSync(path.join(out, 'data')).isDirectory() && fs.readdirSync(path.join(out, 'data')).length === 0 && st.dataDir === 'data');
+    yes('it has a data folder of its own, for the manifest the engine writes there at start, holding only the scripts',
+      fs.statSync(path.join(out, 'data')).isDirectory() && fs.readdirSync(path.join(out, 'data')).join(',') === 'scripts' && st.dataDir === 'data');
+    yes('  and a copy of the server\'s Papyrus scripts, which the engine reads from data\\scripts, not a link to them',
+      fs.readFileSync(path.join(out, 'data', 'scripts', 'MarkerScript.pex'), 'utf8') === 'pex' && !fs.lstatSync(path.join(out, 'data', 'scripts')).isSymbolicLink());
     yes('it keeps the server\'s NPC switch and its plain gameplay switches', st.npcEnabled === true && st.npcSettings.x === 1 && st.thornswoodNear === 3500 && st.thornswoodHurtCare === true);
     yes('and nothing else of its settings: no site, no webhook, no password, no switch that holds an address',
       st.thornswoodSite === undefined && st.discordWebhook === undefined && st.password === undefined && st.thornswoodLoadOrderRefuse === undefined);
@@ -278,6 +282,11 @@ async function boxChecks() {
     err = '';
     try { server.fromInstalled({ from: inst, out: path.join(tmp, 'c4'), port: '7797', 'voice-port': '7799' }); } catch (e) { err = e.message; }
     yes('a plugin its loadOrder names that is not there is refused, by name', /names JKs Skyrim\.esp in its loadOrder/.test(err));
+    fs.writeFileSync(path.join(inst, 'data', 'JKs Skyrim.esp'), 'JKs Skyrim.esp');
+    fs.rmSync(path.join(inst, 'data', 'scripts'), { recursive: true, force: true });
+    err = '';
+    try { server.fromInstalled({ from: inst, out: path.join(tmp, 'c6'), port: '7797', 'voice-port': '7799' }); } catch (e) { err = e.message; }
+    yes('a server with no data\\scripts is refused, saying the engine reads its scripts there', /which the engine reads the Papyrus scripts from/.test(err));
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
