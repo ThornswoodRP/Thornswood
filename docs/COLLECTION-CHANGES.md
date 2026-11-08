@@ -12,9 +12,10 @@ any more.
 - `mods`: one line per Nexus file the collection installs, in modId then
   fileId order: `modId`, `fileId`, `name` (for people only), and `plugins`,
   the plugins that file puts in Data, spelled as the plugin list spells them.
-  `choices` is only for a file the change adds whose archive has a FOMOD
-  installer: its answers, written the way Vortex writes them in a
-  collection (see "A mod with an installer" below). `dropPatch` is only for a
+  `choices` is only for a file whose archive has a FOMOD installer, when
+  the change adds it or gives it new answers: its answers, written the way
+  Vortex writes them in a collection (see "A mod with an installer"
+  below). `dropPatch` is only for a
   file that moves and leaves patches of its old file behind
   (`New-NexusRevision.ps1 -DropPatch`).
 - `plugins`: every plugin of the collection in its load order: `name`,
@@ -91,8 +92,23 @@ the options picked and the files its flags add. Only those go under its
 it drafts (the same code that lays the draft out), and refuses the draft
 when the plugins it gets are not the ones named.
 
+The revision does not carry the answers as the record writes them. Vortex
+writes a FOMOD mod's answers on the mod it installed as every step of the
+script, hidden ones too, every group of each step, and what is selected in
+it, and it counts the mod as the collection's only when the entry's answers
+equal those exactly. Revision 7 carried Improved Eyes' answers as the record
+named them, three steps and only the groups picked, so Vortex never matched
+the copy it installed and put in a second one (#5531). So the draft runs the
+script with the record's answers and the entry carries what that run
+selects, in Vortex's form. Writing them that way in the record too keeps the
+record and the revision the same, and Read-NexusFile prints every step and
+group to write.
+
 Choices go with a file the change adds. A file the collection already has
-keeps the answers the published revision gave it.
+keeps the answers the published revision gave it, unless its line gives
+other answers: then the merge gives the file those answers
+(`New-NexusRevision.ps1 -Answers`), and they have to put in Data the same
+plugins.
 
 ## Taking a mod out
 

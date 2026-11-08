@@ -736,6 +736,103 @@ $h = Get-Content -Raw -LiteralPath $addJson
 Put $addJson ($h.TrimEnd().TrimEnd(']').TrimEnd('}') + ',"choices":' + $dgChoice + '}]')
 $r = Run 'New-NexusRevision.ps1' @('-Add', $addJson, '-WhatIf')
 YesR 'choices for an archive with no FOMOD installer are refused' ($r.Code -eq 1 -and $r.Out -match 'has no FOMOD installer to give them to') $r
+# Issue #5531: Vortex records a FOMOD mod's answers as every step of the
+# script, hidden ones too, every group, and what is selected in each, and
+# counts the collection's mod as installed only when the entry's choices are
+# exactly those. So the entry carries them in that form, whatever the answers
+# given leave out; and a kept file can be given its answers again (-Answers).
+$fx2 = Join-Path $T 'fomodfull'
+foreach ($k in 'fomod', 'core', 'full', 'human', 'dg', 'wolf') { New-Item -ItemType Directory -Force -Path (Join-Path $fx2 $k) | Out-Null }
+Put (Join-Path $fx2 'fomod\ModuleConfig.xml') @'
+<?xml version="1.0" encoding="UTF-8"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd">
+  <moduleName>Eyes</moduleName>
+  <requiredInstallFiles><folder source="core" destination="" /></requiredInstallFiles>
+  <installSteps order="Explicit">
+    <installStep name="Options">
+      <optionalFileGroups order="Explicit">
+        <group name="Choose Version" type="SelectExactlyOne">
+          <plugins order="Explicit">
+            <plugin name="Complete"><description>c</description><conditionFlags><flag name="Complete">On</flag></conditionFlags><typeDescriptor><type name="Optional"/></typeDescriptor></plugin>
+            <plugin name="Human Only"><description>h</description><conditionFlags><flag name="Human">On</flag></conditionFlags><typeDescriptor><type name="Optional"/></typeDescriptor></plugin>
+          </plugins>
+        </group>
+      </optionalFileGroups>
+    </installStep>
+    <installStep name="Complete">
+      <visible><flagDependency flag="Complete" value="On"/></visible>
+      <optionalFileGroups order="Explicit">
+        <group name="Choose Version" type="SelectExactlyOne">
+          <plugins order="Explicit">
+            <plugin name="Complete - Full"><description>f</description><files><folder source="full" destination="" /></files><typeDescriptor><type name="Optional"/></typeDescriptor></plugin>
+          </plugins>
+        </group>
+      </optionalFileGroups>
+    </installStep>
+    <installStep name="Human">
+      <visible><flagDependency flag="Human" value="On"/></visible>
+      <optionalFileGroups order="Explicit">
+        <group name="Choose Version" type="SelectExactlyOne">
+          <plugins order="Explicit">
+            <plugin name="Human - Full"><description>h</description><files><folder source="human" destination="" /></files><typeDescriptor><type name="Optional"/></typeDescriptor></plugin>
+          </plugins>
+        </group>
+      </optionalFileGroups>
+    </installStep>
+    <installStep name="Add-Ons">
+      <optionalFileGroups order="Explicit">
+        <group name="Dawnguard Eyes" type="SelectAtMostOne">
+          <plugins order="Explicit">
+            <plugin name="Dawnguard"><description>d</description><files><folder source="dg" destination="" /></files><typeDescriptor><type name="Optional"/></typeDescriptor></plugin>
+          </plugins>
+        </group>
+        <group name="Werewolf Eyes" type="SelectAtMostOne">
+          <plugins order="Explicit">
+            <plugin name="Werewolf"><description>w</description><files><folder source="wolf" destination="" /></files><typeDescriptor><type name="Optional"/></typeDescriptor></plugin>
+          </plugins>
+        </group>
+      </optionalFileGroups>
+    </installStep>
+  </installSteps>
+</config>
+'@
+Put (Join-Path $fx2 'core\Eyes.esp') 'TES4'; Put (Join-Path $fx2 'full\EyesFull.esp') 'TES4'; Put (Join-Path $fx2 'human\EyesHuman.esp') 'TES4'; Put (Join-Path $fx2 'dg\EyesDG.esp') 'TES4'; Put (Join-Path $fx2 'wolf\EyesWolf.esp') 'TES4'
+$eyes2Arc = Join-Path $T 'eyes2.7z'
+Push-Location $fx2; & $sz a -t7z -y $eyes2Arc '*' | Out-Null; Pop-Location
+$given = '{"type":"fomod","options":[{"name":"Options","groups":[{"name":"Choose Version","choices":[{"name":"Complete","idx":0}]}]},{"name":"Complete","groups":[{"name":"Choose Version","choices":[{"name":"Complete - Full","idx":0}]}]},{"name":"Add-Ons","groups":[{"name":"Dawnguard Eyes","choices":[{"name":"Dawnguard","idx":0}]}]}]}'
+$vortexForm = '{"type":"fomod","options":[{"name":"Options","groups":[{"name":"Choose Version","choices":[{"name":"Complete","idx":0}]}]},{"name":"Complete","groups":[{"name":"Choose Version","choices":[{"name":"Complete - Full","idx":0}]}]},{"name":"Human","groups":[{"name":"Choose Version","choices":[]}]},{"name":"Add-Ons","groups":[{"name":"Dawnguard Eyes","choices":[{"name":"Dawnguard","idx":0}]},{"name":"Werewolf Eyes","choices":[]}]}]}'
+$eyes2Plugins = '[{"name":"Eyes.esp","after":["Dragonborn.esm"]},{"name":"EyesDG.esp","after":["Dragonborn.esm"]},{"name":"EyesFull.esp","after":["Dragonborn.esm"]}]'
+Put $addJson ('[{"modId":1932,"fileId":8662,"archive":' + (ConvertTo-Json $eyes2Arc) + ',"plugins":' + $eyes2Plugins + ',"choices":' + $given + '}]')
+$r = Run 'New-NexusRevision.ps1' @('-Add', $addJson, '-WhatIf')
+YesR 'a FOMOD archive added with only the answers picked is drafted' ($r.Code -eq 0 -and $r.Out -match '3 plugin\(s\) by FOMOD, with the choices given' -and $r.Out -match 'its answers as Vortex records them: 4 step\(s\), 5 group\(s\)') $r
+$x4v = Join-Path $T 'unpacked4v'
+& $sz x -y ('-o' + $x4v) $built4 | Out-Null
+& $node.Source -e "const fs=require('fs');const b=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const e=b.mods.find(m=>m.source.fileId===8662);process.exit(JSON.stringify(e.choices)===process.argv[2]?0:1)" (Join-Path $x4v 'collection.json') $vortexForm
+Yes '  its entry carries the answers as Vortex records them: every step, the hidden one too, and every group, with nothing picked as []' ($LASTEXITCODE -eq 0)
+# -Answers on a kept file: the draft revision with an entry for the archive
+# whose answers are the ones given, as revision 7 carried Improved Eyes'.
+$ansBase = Join-Path $T 'answersbase'
+& $sz x -y ('-o' + $ansBase) $draft3 | Out-Null
+& $node.Source -e "const fs=require('fs');const p=process.argv[1];const b=JSON.parse(fs.readFileSync(p,'utf8'));b.mods.push({name:'Eyes SSE',version:'1.6',optional:false,domainName:'skyrimspecialedition',source:{type:'nexus',modId:9141,fileId:23215,md5:process.argv[2],fileSize:Number(process.argv[3]),logicalFilename:'Eyes SSE',updatePolicy:'exact',tag:'PehjAymmtD'},choices:JSON.parse(process.argv[4]),author:'a',details:{category:'c',type:''},phase:0});fs.writeFileSync(p,JSON.stringify(b,null,2))" (Join-Path $ansBase 'collection.json') ((Get-FileHash -LiteralPath $eyes2Arc -Algorithm MD5).Hash.ToLowerInvariant()) ((Get-Item -LiteralPath $eyes2Arc).Length) $given
+$ansJson = Join-Path $T 'answers.json'
+function AnswerEyes([string]$arc, [string]$plugins) { Put $ansJson ('[{"modId":9141,"fileId":23215,"archive":' + (ConvertTo-Json $arc) + ',"plugins":' + $plugins + ',"choices":' + $given + '}]') }
+AnswerEyes $eyes2Arc '["Eyes.esp","EyesDG.esp","EyesFull.esp"]'
+$n0 = Count
+$r = Run 'New-NexusRevision.ps1' @('-From', $ansBase, '-BaseRevision', '3', '-Answers', $ansJson, '-WhatIf')
+YesR '-Answers gives a kept file its answers as Vortex records them, and writes nothing' ($r.Code -eq 0 -and $r.Out -match 'mod 9141 file 23215 \(Eyes SSE\): 3 plugin\(s\) by FOMOD' -and $r.Out -match 'Eyes SSE, answers: 3 step\(s\), 3 group\(s\) -> 4 step\(s\), 5 group\(s\)' -and $r.Out -match 'which makes revision 4 a draft' -and @(Writes @(Since $n0)).Count -eq 0) $r
+$x4a = Join-Path $T 'unpacked4a'
+& $sz x -y ('-o' + $x4a) $built4 | Out-Null
+& $node.Source -e "const fs=require('fs');const b=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const i=b.mods.findIndex(m=>m.source.fileId===23215);const e=b.mods[i];const k=Object.keys(e);process.exit(JSON.stringify(e.choices)===process.argv[2]&&k.indexOf('choices')===k.indexOf('source')+1&&e.source.tag==='PehjAymmtD'&&i===b.mods.length-1?0:1)" (Join-Path $x4a 'collection.json') $vortexForm
+Yes '  the entry keeps its place, its tag and its keys in order, and only its choices change' ($LASTEXITCODE -eq 0)
+AnswerEyes $eyes2Arc '["Eyes.esp","EyesFull.esp"]'
+$r = Run 'New-NexusRevision.ps1' @('-From', $ansBase, '-BaseRevision', '3', '-Answers', $ansJson, '-WhatIf')
+YesR '  answers that put other plugins in Data than the ones named are refused' ($r.Code -eq 1 -and $r.Out -match 'from the archive only: EyesDG\.esp') $r
+AnswerEyes $eyesArc '["Eyes.esp","EyesDG.esp","EyesFull.esp"]'
+$r = Run 'New-NexusRevision.ps1' @('-From', $ansBase, '-BaseRevision', '3', '-Answers', $ansJson, '-WhatIf')
+YesR '  an archive that is not the file the entry installs is refused' ($r.Code -eq 1 -and $r.Out -match 'and the entry for file 23215 installs the archive with md5') $r
+Put $ansJson ('[{"modId":1932,"fileId":8662,"archive":' + (ConvertTo-Json $eyes2Arc) + ',"plugins":["Eyes.esp"],"choices":' + $given + '}]')
+$r = Run 'New-NexusRevision.ps1' @('-From', $ansBase, '-BaseRevision', '3', '-Answers', $ansJson, '-WhatIf')
+YesR '  a file the revision does not carry is refused, pointing at -Add' ($r.Code -eq 1 -and $r.Out -match 'has no entry for mod 1932 file 8662' -and $r.Out -match 'goes in with -Add') $r
 # Read-NexusFile (#5189): the file downloaded with the key, its FOMOD's
 # questions in Vortex's order with each idx, every plugin in it, and nothing
 # of it left behind.

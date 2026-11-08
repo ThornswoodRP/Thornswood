@@ -96,6 +96,16 @@
 // installer answers and file hashes, where Vortex writes it.
 // On stdout: <entry name>\tpatch\t\t<path> CRC-32 <crc>.
 //
+// INSTALLER ANSWERS (#5531). An entry with "answers": true gives a file the
+// revision keeps new FOMOD answers, which take the place of its choices:
+//   { "answers": true, "modId": "9141", "fileId": "23215",
+//     "choices": { "type": "fomod", "options": [ ... ] } }
+// New-NexusRevision.ps1 gives them as Vortex records them on the mod it
+// installed, and an added mod's choices the same way: every step, every group,
+// what is selected. Vortex counts the mod as the collection's only when the
+// entry's choices equal those.
+// On stdout: <entry name>\tanswers\t<steps and groups before>\t<after>.
+//
 // A RULE (27 Oct). An entry with "rule": true gives a plugin the list already
 // names a new "load after" rule in place of the one it has:
 //   { "rule": true, "name": "cheddars_mashups.esl", "after": ["RaceCompatibility.esm"] }
@@ -250,6 +260,7 @@ function applySwaps(collection, swaps) {
     if (sw.patch === true) { applyPatch(collection, sw, lines); continue; }
     if (sw.rule === true) { applyRule(collection, sw, lines); continue; }
     if (sw.remove === true) { applyRemove(collection, sw, lines); continue; }
+    if (sw.answers === true) { applyAnswers(collection, sw, lines); continue; }
     for (const k of ['modId', 'fileId', 'version', 'md5', 'fileSize', 'logicalFilename']) {
       if (sw[k] === undefined || sw[k] === null || sw[k] === '') stop('A swap has no ' + k + '.');
     }
@@ -427,6 +438,22 @@ function checkChoices(add) {
       for (const ch of g.choices) if (!ch || typeof ch.name !== 'string' || !Number.isInteger(ch.idx) || ch.idx < 0) bad();
     }
   }
+}
+
+// New installer answers for a file the revision keeps (#5531): the entry's
+// choices become the ones given, in place, which New-NexusRevision.ps1 worked
+// out by running the mod's FOMOD script with them, as Vortex records them.
+function applyAnswers(collection, an, lines) {
+  for (const k of ['modId', 'fileId']) if (an[k] === undefined || an[k] === null || an[k] === '') stop('Installer answers have no ' + k + '.');
+  const hits = collection.mods.filter(m => m.source && m.source.type === 'nexus' && String(m.source.fileId) === String(an.fileId) && String(m.source.modId) === String(an.modId));
+  if (hits.length !== 1) stop('The revision has ' + hits.length + ' entries for Nexus file ' + an.fileId + ' of mod ' + an.modId + ', so there is no one entry to give answers.');
+  const e = hits[0];
+  if (!e.choices || e.choices.type !== 'fomod') stop(e.name + ' carries no FOMOD answers, so it is not a mod with an installer to give new ones.');
+  checkChoices(an);
+  const steps = c => c.options.length + ' step(s), ' + c.options.reduce((n, s) => n + s.groups.length, 0) + ' group(s)';
+  const was = steps(e.choices);
+  e.choices = an.choices;
+  lines.push([String(e.name), 'answers', was, steps(an.choices)].join('\t'));
 }
 
 function applyPatch(collection, pt, lines) {

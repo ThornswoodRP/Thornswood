@@ -219,11 +219,10 @@ public sealed class EgressProxy(EgressConfig cfg, Action<string> log)
             var (head, rest) = await ReadHead(cs, cts.Token);
             if (head == null) { log($"{from}: REFUSED, no request head within {Wait.TotalSeconds:0} seconds or 8 KB"); return; }
             var parts = head.Split("\r\n", 2)[0].Split(' ');
+            // A refusal is written down before the client hears it, so whoever
+            // reads the answer finds the line already there (#5539).
             if (parts.Length != 3 || parts[0] != "CONNECT" || !parts[2].StartsWith("HTTP/1."))
             {
-                // The line goes in the log before the answer, so whoever
-                // reads the answer finds the reason already written (#5536:
-                // the egress test read the log between the two and failed).
                 log($"{from}: REFUSED {Clip(parts[0])}: only CONNECT to a listed host on port 443 goes out");
                 await Answer(cs, "405 Method Not Allowed", cts.Token);
                 return;
