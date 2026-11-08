@@ -84,7 +84,7 @@ Yes 'the bar''s button, the missing-mods box and the cards open the revision, th
     $packs.Contains('b.Click += delegate { OpenCollection(); };') -and
     $open.Contains('string page = CollectionLink();') -and
     -not ([regex]::IsMatch($update + $play + $packs, 'ProcessStartInfo\((CollectionLink\(\)|url)\)')))
-$buttonText = Method $shell 'static string CollectionButtonText()'
+$buttonText = Method $shell 'static string CollectionButtonText(int revision = -1)'
 Yes 'the button names the revision it opens' ($buttonText.Contains('"Open revision " + wants'))
 
 # ---- ahead ------------------------------------------------------------------

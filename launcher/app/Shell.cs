@@ -2881,7 +2881,7 @@ namespace Thornswood
                         "The launcher could not read which revision of the Thornswood collection " +
                         "Vortex has installed. If you have not installed it, or are not sure, open " +
                         "the collection and let Vortex install or update it. Play is not held for this.";
-                    InstallLabel(CollectionButtonText());
+                    InstallLabel(CollectionButtonText(collectionRevision));
                     btnInstallNow.IsEnabled = true;
                     updateBar.IsVisible = true;
                     InstallShown(true);
@@ -4668,9 +4668,10 @@ namespace Thornswood
                 txtUpdateTitle.Text = "Your mods need updating";
                 txtUpdateNote.Text =
                     "The server was built against collection revision " + wants + " and this copy is on " + mine +
-                    ", so part of what the server expects is not installed. The button opens revision " +
-                    wants + " on Nexus; install that one in Vortex, not a newer one Nexus may show first. " +
-                    "It is one button there and it takes the lot in one go.";
+                    ", so part of what the server expects is not installed. The button brings Vortex " +
+                    "forward: open Collections there and press Update on the Thornswood collection, which " +
+                    "puts revision " + wants + " in place of " + mine + " and takes the lot in one go. " +
+                    "Installing revision " + wants + " from Nexus instead adds a second copy beside this one.";
             }
             else if (problem == "ahead")
             {
@@ -4708,7 +4709,7 @@ namespace Thornswood
             // left somebody still waiting on their application with a button
             // that only said Connect Discord, which the site refuses until they
             // are accepted. The application is what unlocks Play, not the mods.
-            InstallLabel(CollectionButtonText());
+            InstallLabel(CollectionButtonText(revision));
             btnInstallNow.IsEnabled = true;
         }
 
@@ -4722,28 +4723,49 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// What every collection button does (#5200): Vortex opened straight
-        /// at the revision the server was built against, through Nexus's own
-        /// link to it (Checks.CollectionNxmUrl), so a copy on an old revision
-        /// is one press from the live one. Before this every button opened
-        /// the revision's page on the site, where somebody still had to find
-        /// and press the site's own button that hands Vortex this same link.
+        /// What every collection button does.
         ///
-        /// The page opens instead when Vortex is not what answers nxm links
-        /// on this machine (Checks.NxmStartsVortex: nothing does, or another
-        /// manager does), or no revision is known yet. The page says what to
-        /// do from there, as it always has.
+        /// A revision of the collection already installed (#5546): Vortex
+        /// itself comes forward, and the log says to press Update on the
+        /// Thornswood collection there. Vortex's Update is the only way in
+        /// Vortex that takes the old revision off as it puts the new one on
+        /// (collectionUpdate in its collections extension removes the old
+        /// collection mod). A collection that arrives by a Nexus link is
+        /// installed as a collection of its own, beside the one already
+        /// there: Vortex's installer leaves previous versions to Update and
+        /// does not look for one. Up to now the button handed every copy
+        /// that link, and before that the revision's page, whose Add to
+        /// Vortex button sends the same link (#4115), so each update through
+        /// the card left the old revision installed as well. On 8 Nov
+        /// Patrick's Vortex had revisions 6 and 7 side by side, both enabled.
+        ///
+        /// No revision installed: Vortex opened straight at the revision the
+        /// server was built against, through Nexus's own link to it
+        /// (Checks.CollectionNxmUrl, #5200), with no page in between. The
+        /// page opens instead when Vortex is not what answers nxm links on
+        /// this machine (Checks.NxmStartsVortex: nothing does, or another
+        /// manager does), or no revision is known yet.
         ///
         /// When Vortex is done the card comes down by itself and Scan and Fix
         /// run (ShellVortexWatch.cs, VortexChanged).
         /// </summary>
         static void OpenCollection()
         {
-            string nxm = Checks.CollectionNxmUrl(cfg, Updater.FeedCollectionRevision);
-            string page = CollectionLink();
-            bool vortex = nxm.Length > 0 && Checks.NxmStartsVortex(Checks.NxmCommand());
+            int mine = Checks.CollectionRevision(cfg);
+            string command = Checks.NxmCommand();
             try
             {
+                if (mine > 0)
+                {
+                    Log(UpdateInVortexLine(mine));
+                    string exe = Checks.VortexExe(command);
+                    if (exe.Length > 0) Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+                    else LogOnly("Vortex does not answer Nexus links on this machine, so the launcher does not know where it is; open it yourself.");
+                    return;
+                }
+                string nxm = Checks.CollectionNxmUrl(cfg, Updater.FeedCollectionRevision);
+                string page = CollectionLink();
+                bool vortex = nxm.Length > 0 && Checks.NxmStartsVortex(command);
                 if (vortex)
                 {
                     Log("Opening revision " + Updater.FeedCollectionRevision + " of the collection in Vortex. Install it there; the launcher scans and fixes by itself when Vortex is done.");
@@ -4757,10 +4779,32 @@ namespace Thornswood
             catch (Exception ex) { Log("Could not open the collection: " + ex.Message); }
         }
 
-        /// <summary>The button's words, naming the revision it opens when one is known.</summary>
-        static string CollectionButtonText()
+        /// <summary>
+        /// What to do in Vortex when a revision is already installed (#5546):
+        /// Update on the collection it has, never the revision's link, which
+        /// installs a second collection beside it.
+        /// </summary>
+        static string UpdateInVortexLine(int mine)
         {
             int wants = Updater.FeedCollectionRevision;
+            if (wants > mine)
+                return "Vortex has revision " + mine + " of the Thornswood collection. In Vortex, open Collections and press Update " +
+                       "on it, which puts revision " + wants + " in its place. Installing revision " + wants +
+                       " from Nexus would add it beside revision " + mine + " instead.";
+            return "Vortex has revision " + mine + " of the Thornswood collection. In Vortex, open Collections and finish it there " +
+                   "rather than installing it again from Nexus, which would add a second copy beside it.";
+        }
+
+        /// <summary>
+        /// The button's words: Update in Vortex when an older revision is
+        /// installed, Open Vortex when another is (#5546), and otherwise the
+        /// revision it opens when one is known.
+        /// </summary>
+        static string CollectionButtonText(int revision = -1)
+        {
+            int mine = revision < 0 ? Checks.CollectionRevision(cfg) : revision;
+            int wants = Updater.FeedCollectionRevision;
+            if (mine > 0) return wants > mine ? "Update in Vortex" : "Open Vortex";
             return wants > 0 ? "Open revision " + wants : "Open the collection";
         }
 

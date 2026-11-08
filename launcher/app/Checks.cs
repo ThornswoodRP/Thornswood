@@ -298,15 +298,27 @@ namespace Thornswood
         /// </summary>
         public static bool NxmStartsVortex(string command)
         {
+            return VortexExe(command).Length > 0;
+        }
+
+        /// <summary>
+        /// The program an nxm command starts when it is Vortex.exe, the path
+        /// out of "C:\...\Vortex.exe" -d "%1", or empty when it is another
+        /// program or nothing. The collection buttons start Vortex itself
+        /// with it when a revision is already installed (#5546), since Vortex
+        /// keeps one window and a second start brings that one forward.
+        /// </summary>
+        public static string VortexExe(string command)
+        {
             try
             {
                 string c = (command ?? "").Trim();
-                if (c.Length == 0) return false;
+                if (c.Length == 0) return "";
                 string exe;
                 if (c[0] == '"')
                 {
                     int end = c.IndexOf('"', 1);
-                    if (end < 0) return false;
+                    if (end < 0) return "";
                     exe = c.Substring(1, end - 1);
                 }
                 else
@@ -315,9 +327,9 @@ namespace Thornswood
                     exe = end < 0 ? c : c.Substring(0, end);
                 }
                 string name = exe.Substring(exe.LastIndexOfAny(new char[] { '\\', '/' }) + 1);
-                return string.Equals(name, "Vortex.exe", StringComparison.OrdinalIgnoreCase);
+                return string.Equals(name, "Vortex.exe", StringComparison.OrdinalIgnoreCase) ? exe : "";
             }
-            catch { return false; }
+            catch { return ""; }
         }
 
         /// <summary>
