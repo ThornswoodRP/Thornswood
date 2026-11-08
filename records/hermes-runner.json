@@ -13,6 +13,10 @@
     "release-assets.githubusercontent.com"
   ],
   "egress": true,
+  "retired": {
+    "on": "2026-11-08",
+    "why": "Thornswood-Hermes went public as ThornswoodRP/TWHermesAgents on 8 Nov 2026 and its checks run on GitHub's own runners again, so this runner has nothing left to run (#5565)"
+  },
   "python": {
     "about": "The Python its jobs take (Install-Runner.ps1's THE RUNNER'S PYTHON, #5495): the build of actions/python-versions that actions/setup-python fetches for python-version 3.13 on Windows x64, put in the runner's tool cache by the box's administrator because setup-python's own install needs one. sha256 is the zip's, measured on 8 Nov 2026; its installer is python.org's, signed by the Python Software Foundation.",
     "version": "3.13.17",

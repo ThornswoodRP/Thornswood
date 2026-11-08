@@ -427,6 +427,12 @@
         "Python": "switch"
       }
     },
+    "Remove-HermesRunner": {
+      "script": "scripts/deploy/Install-Runner.ps1",
+      "timeoutMinutes": 20,
+      "fixed": ["-FromGate", "-Hermes", "-Remove", "-NoPause"],
+      "params": {}
+    },
     "Install-Backup": {
       "script": "scripts/deploy/Install-Backup.ps1",
       "timeoutMinutes": 20,

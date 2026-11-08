@@ -172,6 +172,9 @@ Yes 'Install-Runner runs from the gate with a number, -Status, -Lock or -Network
     (Words 'Install-Runner -Number 2 -Status') -ne 'REFUSED' -and (Words 'Install-Runner -Remove') -eq 'REFUSED' -and (Words 'Install-Runner -OffBox') -eq 'REFUSED' -and
     (Words 'Install-Runner -Repo x/y') -eq 'REFUSED' -and (Words 'Install-Runner -RunnerName x') -eq 'REFUSED' -and (Words 'Install-Runner -Root C:/x') -eq 'REFUSED' -and
     (Words 'Install-Runner -Number 100') -eq 'REFUSED' -and (Words 'Install-Runner -AllowHost x') -eq 'REFUSED')
+Yes '  a runner comes off only as Remove-HermesRunner, the retired Hermes runner and nothing beside it (#5565)' (
+    (Words 'Remove-HermesRunner') -eq '-FromGate|-Hermes|-Remove|-NoPause' -and (Words 'Remove-HermesRunner -Number 2') -eq 'REFUSED' -and
+    (Words 'Remove-HermesRunner -Remove') -eq 'REFUSED' -and (Words 'Install-Runner -Hermes -Remove') -eq 'REFUSED')
 $rk = Text 'scripts/vps/Renew-BoxKey.ps1'
 Yes '  Renew-BoxKey keeps the old line until the secret holds the new key, and puts the file back on any stop before that' (
     $rk.IndexOf('[IO.File]::WriteAllLines($KeysFile, [string[]](@($have) + $newLine)') -gt 0 -and
