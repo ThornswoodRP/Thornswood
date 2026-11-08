@@ -88,7 +88,7 @@ namespace Thornswood
                 {
                     FetchLauncher(launcher, log);
                     got.Launcher = launcher;
-                    // On dev the package carries the game files too, and they
+                    // The package carries the game files too, and they
                     // go in with WriteUpdate like a release's (SyncPackage.cs).
                     if (Velo.GameFromPackage(cfg)) got.Release = PreparePackage(launcher, log);
                 }
