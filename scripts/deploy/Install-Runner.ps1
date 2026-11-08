@@ -69,7 +69,10 @@
   does not say it is retired, so the gate still never takes a box runner
   that a record keeps. A removal stops before it changes anything when
   GitHub gives no removal token, and after the box's part it asks GitHub
-  whether the runner is still registered and says STOP when it is.
+  whether the runner is still registered and says STOP when it is. Its
+  Python goes first (Remove-RunnerPython): the installer's own quiet
+  uninstall, then the bundle's registration and cached copy in the hive of
+  the user who installed it, which the uninstall run as SYSTEM cannot see.
 
   THE WAY OUT (#5495). A runner record with "egress": true (the Hermes one)
   reaches the internet only through the box runners' way out, the proxy
@@ -1281,25 +1284,42 @@ function Install-RunnerPython([string]$root, [string]$acct, [string]$version, [s
 # bundle's own quiet uninstall runs first. Only a Python whose PythonCore
 # entry is inside this runner's tool cache is touched.
 function Remove-RunnerPython([string]$root, [string]$version) {
+  # python.org's installer is a Burn bundle: its parts are per-machine MSIs
+  # (HKLM), and the bundle registers itself in the hive of the user who ran it
+  # (the box's Administrator, measured by -Status on 8 Nov 2026), with its own
+  # copy in that user's Package Cache. Its quiet uninstall takes the MSIs off;
+  # run here as SYSTEM it cannot see the other user's registration or cache, so
+  # those two go after it, by the path the registration itself names.
   $cache = Join-Path $root '_work\_tool\Python'
   $mm = (($version -split '\.')[0..1]) -join '.'
   $reg = 'HKLM:\SOFTWARE\Python\PythonCore\' + $mm + '\InstallPath'
   $there = ''
   if (Test-Path -LiteralPath $reg) { $there = [string](Get-ItemProperty -LiteralPath $reg).'(default)' }
   $keys = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall')
-  $bundles = @(Get-ChildItem -LiteralPath $keys -EA SilentlyContinue | ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath } | Where-Object { [string]$_.DisplayName -eq ('Python ' + $version + ' (64-bit)') -and [string]$_.QuietUninstallString })
+  $keys += @(Get-ChildItem -LiteralPath 'Registry::HKEY_USERS' -EA SilentlyContinue | ForEach-Object { 'Registry::HKEY_USERS\' + $_.PSChildName + '\Software\Microsoft\Windows\CurrentVersion\Uninstall' })
+  $entries = @(Get-ChildItem -LiteralPath $keys -EA SilentlyContinue | ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath -EA SilentlyContinue } | Where-Object { [string]$_.DisplayName -like ('Python ' + $version + ' *') })
+  $bundles = @($entries | Where-Object { [string]$_.DisplayName -eq ('Python ' + $version + ' (64-bit)') -and [string]$_.QuietUninstallString -and [string]$_.BundleCachePath })
   if (-not $there) {
-    if ($bundles.Count) { return ('Python ' + $mm + ' has no PythonCore entry, so the ' + $bundles.Count + ' installer entries named Python ' + $version + ' (64-bit) are not the runner''s and were left alone') }
+    if ($entries.Count) { return ('Python ' + $mm + ' has no PythonCore entry, so the ' + $entries.Count + ' installer entries named Python ' + $version + ' are not the runner''s and were left alone') }
     return ('no Python ' + $mm + ' is installed for all users')
   }
   if (-not $there.StartsWith($cache, [StringComparison]::OrdinalIgnoreCase)) { return ('Python ' + $mm + ' for all users is at ' + $there + ', not in ' + $cache + ', so it is not the runner''s and was left alone') }
-  if ($bundles.Count -ne 1) { throw ('Python ' + $mm + ' is in ' + $there + ' but Windows lists ' + $bundles.Count + ' installers named Python ' + $version + ' (64-bit), not one') }
-  $q = [regex]::Match([string]$bundles[0].QuietUninstallString, '^\s*"([^"]+\.exe)"\s*(.*)$')
-  if (-not $q.Success) { throw ('the Python ' + $version + ' installer''s quiet uninstall is not a program and its switches: ' + [string]$bundles[0].QuietUninstallString) }
-  $p = Start-Process -FilePath $q.Groups[1].Value -ArgumentList $q.Groups[2].Value -Wait -PassThru
+  if ($bundles.Count -ne 1) { throw ('Python ' + $mm + ' is in ' + $there + ' but Windows lists ' + $bundles.Count + ' bundles named Python ' + $version + ' (64-bit) with a quiet uninstall and a cached copy, in HKLM and every loaded user hive, not one') }
+  $b = $bundles[0]
+  $exe = [string]$b.BundleCachePath
+  if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw ('the Python ' + $version + ' bundle is registered at ' + $b.PSPath + ' but its cached copy ' + $exe + ' is not there') }
+  $q = [regex]::Match([string]$b.QuietUninstallString, '^\s*"([^"]+\.exe)"\s*(.*)$')
+  if (-not $q.Success -or $q.Groups[1].Value -ne $exe) { throw ('the Python ' + $version + ' bundle''s quiet uninstall is not its cached copy and its switches: ' + [string]$b.QuietUninstallString) }
+  $p = Start-Process -FilePath $exe -ArgumentList $q.Groups[2].Value -Wait -PassThru
   if ($p.ExitCode -ne 0) { throw ('the Python ' + $version + ' uninstall stopped with ' + $p.ExitCode) }
   if (Test-Path -LiteralPath $reg) { throw ('the Python ' + $version + ' uninstall ended 0 and PythonCore still names ' + $mm) }
-  return ('Python ' + $version + ' uninstalled from ' + $there + ', with its installer and PythonCore entries')
+  $parts = @(Get-ChildItem -LiteralPath $keys[0..1] -EA SilentlyContinue | ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath -EA SilentlyContinue } | Where-Object { [string]$_.DisplayName -like ('Python ' + $version + ' *') })
+  if ($parts.Count) { throw ('the Python ' + $version + ' uninstall ended 0 and Windows still lists ' + (($parts | ForEach-Object { $_.DisplayName }) -join ', ')) }
+  $own = Split-Path -Parent $exe
+  Remove-Item -LiteralPath $b.PSPath -Recurse -Force
+  if (Test-Path -LiteralPath $own) { Remove-Item -LiteralPath $own -Recurse -Force }
+  if ((Test-Path -LiteralPath $b.PSPath) -or (Test-Path -LiteralPath $own)) { throw ('the Python ' + $version + ' parts are off, and its registration ' + $b.PSPath + ' or cached copy ' + $own + ' is still there') }
+  return ('Python ' + $version + ' uninstalled from ' + $there + ', with its parts, PythonCore, its registration in ' + (($b.PSPath -replace '^Microsoft\.PowerShell\.Core\\Registry::', '') -replace '\\Software\\.*$', '') + ' and its cached copy')
 }
 '@
 
@@ -1307,7 +1327,9 @@ function Remove-RunnerPython([string]$root, [string]$version) {
 # runner's Python outside its folder, read only, so -Remove takes off exactly
 # that. 8 Nov 2026: the first Remove-HermesRunner found PythonCore 3.13 in the
 # tool cache and no installer entry named Python 3.13.17 (64-bit) in HKLM, and
-# stopped before the account and folder went.
+# stopped before the account and folder went; this showed the seven parts in
+# HKLM and the bundle in the Administrator's hive, which Remove-RunnerPython
+# now looks in.
 $pythonSeen = @'
 function Show-RunnerPythonEntries([string]$version) {
   $mm = (($version -split '\.')[0..1]) -join '.'
