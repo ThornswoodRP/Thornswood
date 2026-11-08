@@ -160,6 +160,15 @@ namespace Thornswood
             var on = new[] { d1, d2, d2d, v17, v18, v18d };
             Yes("with 1.2.18 published next, it and its delta are the top, 1.2.17 below it stays: " + Names(Updater.ChannelRelease(on, Published)),
                 Names(Updater.ChannelRelease(on, Published)) == "1.2.17F,1.2.18D,1.2.18F");
+            // A Release's feed lists the full package its delta was made from,
+            // under the same Release (vpk writes it so), before or after its own.
+            var p18 = Asset("1.2.18", VelopackAssetType.Full, 11);
+            var p18d = Asset("1.2.18", VelopackAssetType.Delta, 11);
+            var p17 = Asset("1.2.17", VelopackAssetType.Full, 11);
+            Yes("the newest Release's own package is its highest full one, whichever order its feed lists them in",
+                Names(Updater.ChannelRelease(new[] { v17, p17, p18, p18d }, Published)) == "1.2.17F,1.2.17F,1.2.18D,1.2.18F" &&
+                Ask(new[] { v17, p17, p18, p18d }, "1.2.17", true).TargetFullRelease.Version.ToString() == "1.2.18" &&
+                Ask(new[] { v17, p18, p18d, p17 }, "1.2.17", true).TargetFullRelease.Version.ToString() == "1.2.18");
             // Main promoted back to an older build: published last, numbered lower.
             var back = Asset("1.2.17", VelopackAssetType.Full, 12);
             var promoted = new[] { v17, v18, v18d, back };

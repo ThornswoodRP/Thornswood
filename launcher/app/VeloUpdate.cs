@@ -241,6 +241,11 @@ namespace Thornswood
         /// Release published before it, is dropped, so the newest Release's
         /// package is the highest left and Velopack takes it. Empty when the
         /// newest Release carries no full package.
+        ///
+        /// A Release's feed also lists the full package of the release its
+        /// delta was made from (vpk keeps it in the feed it writes), under the
+        /// same Release, so of the newest Release's full packages the highest
+        /// numbered is its own.
         /// </summary>
         internal static VelopackAsset[] ChannelRelease(VelopackAsset[] assets, Func<VelopackAsset, DateTime?> published)
         {
@@ -252,7 +257,7 @@ namespace Thornswood
                 if (a == null || a.Type != VelopackAssetType.Full || a.Version == null) continue;
                 DateTime? at = published(a);
                 if (at == null) continue;
-                if (target == null || at.Value > newest) { target = a; newest = at.Value; }
+                if (target == null || at.Value > newest || (at.Value == newest && a.Version > target.Version)) { target = a; newest = at.Value; }
             }
             if (target == null) return new VelopackAsset[0];
             return assets.Where(a => a != null && a.Version != null && a.Version <= target.Version).ToArray();
