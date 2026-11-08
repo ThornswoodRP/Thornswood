@@ -122,7 +122,7 @@ public class EgressTests
         using var c = await h.Connect("CONNECT github.com:443 HTTP/1.1\r\n\r\n");
         Assert.StartsWith("HTTP/1.1 200", await ReadHead(c));
         await c.GetStream().WriteAsync("GET / HTTP/1.1\r\nHost: evil\r\n\r\n"u8.ToArray());
-        Assert.Equal(0, await c.GetStream().ReadAsync(new byte[16]));
+        Assert.True(await Ends(c));
         Assert.Equal(0, h.UpstreamConnections);
         Assert.Contains(h.Lines, l => l.Contains("is not TLS"));
     }
@@ -179,6 +179,19 @@ public class EgressTests
         using var t = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         await s.ReadExactlyAsync(b, t.Token);
         return b;
+    }
+
+    /// <summary>True when the proxy ended the connection without sending
+    /// anything. It reads only a record header before refusing, so the rest
+    /// of what was sent is still unread when it closes, and a socket closed
+    /// with unread data ends with a reset rather than a clean close (RFC 1122
+    /// 4.2.2.13; Windows does it every time, Linux when the data is there in
+    /// time). Either way nothing came back.</summary>
+    static async Task<bool> Ends(TcpClient c)
+    {
+        using var t = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        try { return await c.GetStream().ReadAsync(new byte[16], t.Token) == 0; }
+        catch (IOException e) when (e.InnerException is SocketException { SocketErrorCode: SocketError.ConnectionReset }) { return true; }
     }
 
     static async Task<string> ReadHead(TcpClient c)
