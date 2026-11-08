@@ -561,6 +561,19 @@ issue where the card did.
 - **The release note check and the test task check are required checks**
   (q-p05-required-checks). 31 Oct 2026,
   [#5182](https://github.com/ThornswoodRP/Thornswood/issues/5182).
+- **The Dependabot actions bump #5327 may merge at 26818b4.**
+  (dec_fWitODbwp3NuQ7dNhxaRTw) 1 Nov 2026,
+  [#5567](https://github.com/ThornswoodRP/Thornswood/issues/5567#issuecomment-6728771474).
+- **#5327 may merge at 26818b4, asked again as a box card.**
+  (dec_W3dhMXQ8h7PPfh-ReZ_lmw) 2 Nov 2026,
+  [#5568](https://github.com/ThornswoodRP/Thornswood/issues/5568#issuecomment-6728771859).
+- **#5327 may merge at ad18c2c, its head after Dependabot rebased it.**
+  (dec_2XL-fP9HNMMtGBXp_5KW1A) 2 Nov 2026,
+  [#5569](https://github.com/ThornswoodRP/Thornswood/issues/5569#issuecomment-6728772244).
+- **Auto-merge skips a pull request that changes workflows, the gate or its
+  verb scripts unless it is Patrick's, and a Bot's pull request without
+  Bramble's review at its head.** (dec_IL6elJT7TwyCVC_wzMIveA) 2 Nov 2026,
+  [#5572](https://github.com/ThornswoodRP/Thornswood/issues/5572#issuecomment-6728773352).
 
 ### Languages and code
 
@@ -777,6 +790,13 @@ issue where the card did.
 - **Each Bot's App gets only the permissions its job needs**, written in a
   record and checked nightly (q-p20-app-permissions). 31 Oct 2026,
   [#5308](https://github.com/ThornswoodRP/Thornswood/issues/5308).
+- **The git broker gets an op that opens an issue, so a card answer can be
+  recorded on one.** (dec_zf92laU0xp8mvmyfa8C7pA) 2 Nov 2026,
+  [#5570](https://github.com/ThornswoodRP/Thornswood/issues/5570#issuecomment-6728772615).
+- **The workers' missing issues: write is found and fixed, in the
+  installation's accepted permissions or in the broker's label token.**
+  (dec_3yD3Nw8rj2kZM5sNnl6B9g) 2 Nov 2026,
+  [#5571](https://github.com/ThornswoodRP/Thornswood/issues/5571#issuecomment-6728772970).
 
 ### Turned down
 
