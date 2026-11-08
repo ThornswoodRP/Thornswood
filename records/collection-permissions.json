@@ -2,7 +2,7 @@
   "version": 1,
   "builtBy": "scripts/release/collection-permissions.js update",
   "collection": "7essxf",
-  "revision": 7,
+  "revision": 8,
   "mods": [
     {
       "modId": 198,
