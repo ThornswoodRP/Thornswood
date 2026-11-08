@@ -12,6 +12,7 @@
       .\scripts\release\New-NexusRevision.ps1 -Add <mods to add>.json -WhatIf
       pwsh scripts/release/New-NexusRevision.ps1 -Rule <plugin rules>.json -WhatIf
       pwsh scripts/release/New-NexusRevision.ps1 -Remove 24104 -WhatIf
+      pwsh scripts/release/New-NexusRevision.ps1 -Answers <installer answers>.json -WhatIf
       pwsh scripts/release/New-NexusRevision.ps1 -SetLight RaceMenu.esp,XPMSE.esp -Layout <the -Record folder> -WhatIf
       .\scripts\release\New-NexusRevision.ps1 -Publish 3 -WhatIf
       .\scripts\release\New-NexusRevision.ps1 -Publish 3
@@ -187,6 +188,28 @@
   Only tested against the stand-in in tests\test-2914-nexus-scripts.ps1 until
   its first real run.
 
+  INSTALLER ANSWERS, AS VORTEX RECORDS THEM (#5531). Vortex writes a FOMOD
+  mod's answers on the mod it installed as every step of the script in its
+  order, hidden ones too, every group of each step, and the options
+  selected in it when the script has run. It counts a collection's mod as
+  installed only when those equal the entry's choices exactly (its
+  testModReference; modMatchesInstallSpec since June 2026). Revision 7 gave
+  Improved Eyes the answers as the record named them, three steps and only
+  the groups picked, so Vortex never matched the copy it installed and put
+  in another. So the choices given are only the answers: the script is run
+  with them (NexusModPlan.ps1, NexusLayout.cs) and the entry carries what
+  that run selects, in Vortex's form, for every mod added with a FOMOD
+  installer and every file -Answers names.
+
+  -Answers names a JSON file of files the revision already carries whose
+  entries get new answers, each with the plugins it puts in Data and its
+  archive, which has to be the file the entry names (its md5):
+      [{ "modId": 9141, "fileId": 23215, "archive": "<the downloaded archive>",
+         "plugins": ["Improved Eyes Skyrim.esp"],
+         "choices": { "type": "fomod", "options": [ ... ] } }]
+  The answers have to put in Data the plugins named, so nothing the load
+  order holds moves.
+
 .PARAMETER Mod
   The mods to move to a new file, by their numbers on the website, in the same
   order as -FileId and -Archive.
@@ -203,6 +226,10 @@
 
 .PARAMETER Add
   A JSON file of mods to add, as ADDING A MOD above says.
+
+.PARAMETER Answers
+  A JSON file of files the revision keeps whose installer answers change, as
+  INSTALLER ANSWERS above says.
 
 .PARAMETER Rule
   A JSON file of plugins whose rule the revision replaces, as A PLUGIN RULE
@@ -264,6 +291,7 @@ param(
   [string[]]$Archive = @(),
   [string[]]$DropPatch = @(),
   [string]$Add,
+  [string]$Answers,
   [string]$Rule,
   [string[]]$Remove = @(),
   [string[]]$SetLight = @(),
@@ -454,7 +482,7 @@ Say ('  "' + (Get-NexusField $col 'name') + '", id ' + $colId + ', revision ' + 
 
 # --------------------------------------------------------------- publish ---
 if ($Publish) {
-  if ($Discard -or $Mod.Count -or $FileId.Count -or $Archive.Count -or $DropPatch.Count -or $From -or $Add -or $Rule -or $Remove.Count -or $SetLight.Count -or $ClearLight.Count) { Die '-Publish publishes a draft that is already there, so it takes no -Discard, -Mod, -FileId, -Archive, -DropPatch, -Add, -Rule, -Remove, -SetLight, -ClearLight or -From.' }
+  if ($Discard -or $Mod.Count -or $FileId.Count -or $Archive.Count -or $DropPatch.Count -or $From -or $Add -or $Answers -or $Rule -or $Remove.Count -or $SetLight.Count -or $ClearLight.Count) { Die '-Publish publishes a draft that is already there, so it takes no -Discard, -Mod, -FileId, -Archive, -DropPatch, -Add, -Answers, -Rule, -Remove, -SetLight, -ClearLight or -From.' }
   $rq = '{ collectionRevision(slug: "' + $Slug + '", revision: ' + $Publish + ', domainName: "' + $Game + '") { id revisionNumber status downloadLink } }'
   $rev = Get-NexusField (Step { Invoke-NexusGraph $rq $null ('Reading revision ' + $Publish) }) 'collectionRevision'
   $revId = [string](Get-NexusField $rev 'id')
@@ -502,7 +530,7 @@ if ($Publish) {
 
 # --------------------------------------------------------------- discard ---
 if ($Discard) {
-  if ($Mod.Count -or $FileId.Count -or $Archive.Count -or $DropPatch.Count -or $From -or $Add -or $Rule -or $Remove.Count -or $SetLight.Count -or $ClearLight.Count) { Die '-Discard throws away a draft that is already there, so it takes no -Mod, -FileId, -Archive, -DropPatch, -Add, -Rule, -Remove, -SetLight, -ClearLight or -From.' }
+  if ($Mod.Count -or $FileId.Count -or $Archive.Count -or $DropPatch.Count -or $From -or $Add -or $Answers -or $Rule -or $Remove.Count -or $SetLight.Count -or $ClearLight.Count) { Die '-Discard throws away a draft that is already there, so it takes no -Mod, -FileId, -Archive, -DropPatch, -Add, -Answers, -Rule, -Remove, -SetLight, -ClearLight or -From.' }
   $rq = '{ collectionRevision(slug: "' + $Slug + '", revision: ' + $Discard + ', domainName: "' + $Game + '") { id revisionNumber status } }'
   $rev = Get-NexusField (Step { Invoke-NexusGraph $rq $null ('Reading revision ' + $Discard) }) 'collectionRevision'
   $revId = [string](Get-NexusField $rev 'id')
@@ -530,8 +558,29 @@ if ($Discard) {
   exit 0
 }
 
+# A FOMOD archive run with the answers given, as Install-NexusRevision.ps1
+# runs it when it lays the revision out: the plugins it puts in Data, and the
+# answers as Vortex records them on the mod it installs (INSTALLER ANSWERS).
+function Invoke-FomodAnswers([string]$Arc, [string]$M, $Choices, [string]$From) {
+  $bad = @(Get-NexusChoicesProblems $Choices)
+  if ($bad.Count) { Die ('The choices for mod ' + $M + ' in ' + $From + ' are not as Vortex writes them: ' + ($bad -join '; ') + '.') }
+  $work = Join-Path $scratch ('fomod-' + $M)
+  if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
+  New-Item -ItemType Directory -Force -Path $work | Out-Null
+  $mp = Step { Get-NexusModPlan -SevenZip $sz -Archive $Arc -Work $work -Choices $Choices }
+  if ($mp.Plan.Stop) { Die ('Mod ' + $M + ' cannot be installed unattended with the choices given: ' + $mp.Plan.Stop + '.') }
+  $found = @(Get-NexusPlanPlugins $mp | ForEach-Object { $_.Name })
+  $recorded = ConvertTo-NexusRecordedChoices $mp
+  [Thornswood.Layout.NexusLayout]::Forget($mp.Unpacked)
+  Remove-Item -LiteralPath $work -Recurse -Force
+  $given = ConvertTo-Json -InputObject $Choices -Depth 12 -Compress
+  $as = ConvertTo-Json -InputObject $recorded -Depth 12 -Compress
+  if ($given -cne $as) { Say ('    its answers as Vortex records them: ' + @($recorded.options).Count + ' step(s), ' + @($recorded.options | ForEach-Object { @($_.groups).Count } | Measure-Object -Sum).Sum + ' group(s)') 'DarkGray' }
+  return [pscustomobject]@{ Plugins = $found; Choices = $recorded }
+}
+
 # ------------------------------------------------------- refused up front ---
-if (-not $Mod.Count -and -not $Add -and -not $Rule -and -not $Remove.Count -and -not $SetLight.Count -and -not $ClearLight.Count) { Die 'Say which mods move to a new file with -Mod, -FileId and -Archive, which are added with -Add, which are taken out with -Remove, which plugins get a new rule with -Rule, which plugins get or lose the light flag with -SetLight and -ClearLight, or publish a draft with -Publish, or discard one with -Discard.' }
+if (-not $Mod.Count -and -not $Add -and -not $Answers -and -not $Rule -and -not $Remove.Count -and -not $SetLight.Count -and -not $ClearLight.Count) { Die 'Say which mods move to a new file with -Mod, -FileId and -Archive, which are added with -Add, which kept files get new installer answers with -Answers, which are taken out with -Remove, which plugins get a new rule with -Rule, which plugins get or lose the light flag with -SetLight and -ClearLight, or publish a draft with -Publish, or discard one with -Discard.' }
 $Mod = @($Mod | ForEach-Object { ([string]$_).Split(',') } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $FileId = @($FileId | ForEach-Object { ([string]$_).Split(',') } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 if ($Mod.Count -ne $FileId.Count -or $Mod.Count -ne $Archive.Count) { Die ('-Mod, -FileId and -Archive go together, one of each for every mod: ' + $Mod.Count + ', ' + $FileId.Count + ' and ' + $Archive.Count + ' were given.') }
@@ -562,6 +611,21 @@ if ($Add) {
     if ([string]$a.modId -notmatch '^\d+$') { Die ('A mod to add in ' + $Add + ' has the mod number "' + $a.modId + '".') }
     if ([string]$a.fileId -notmatch '^\d+$') { Die ('Mod ' + $a.modId + ' in ' + $Add + ' has the file id "' + $a.fileId + '".') }
     if (-not $a.archive -or -not (Test-Path -LiteralPath ([string]$a.archive) -PathType Leaf)) { Die ('Mod ' + $a.modId + ' in ' + $Add + ' names no archive that is there: "' + $a.archive + '".') }
+  }
+}
+$answerSet = @()
+if ($Answers) {
+  if (-not (Test-Path -LiteralPath $Answers -PathType Leaf)) { Die ('There is no file at ' + $Answers + '.') }
+  try { $answerSet = @(ConvertFrom-Json ([IO.File]::ReadAllText($Answers) -replace ('^' + [char]0xFEFF), '')) }
+  catch { Die ($Answers + ' is not JSON this can read: ' + $_.Exception.Message) }
+  if (-not $answerSet.Count) { Die ($Answers + ' names no files.') }
+  foreach ($a in $answerSet) {
+    if ([string]$a.modId -notmatch '^\d+$') { Die ('A file in ' + $Answers + ' has the mod number "' + $a.modId + '".') }
+    if ([string]$a.fileId -notmatch '^\d+$') { Die ('Mod ' + $a.modId + ' in ' + $Answers + ' has the file id "' + $a.fileId + '".') }
+    if (-not $a.archive -or -not (Test-Path -LiteralPath ([string]$a.archive) -PathType Leaf)) { Die ('Mod ' + $a.modId + ' in ' + $Answers + ' names no archive that is there: "' + $a.archive + '".') }
+    if ($null -eq $a.PSObject.Properties['choices'] -or $null -eq $a.choices) { Die ('Mod ' + $a.modId + ' file ' + $a.fileId + ' in ' + $Answers + ' gives no choices.') }
+    if (@($answerSet | Where-Object { [string]$_.fileId -eq [string]$a.fileId }).Count -gt 1) { Die ('File ' + $a.fileId + ' is named more than once in ' + $Answers + '.') }
+    if (@($adds | Where-Object { [string]$_.fileId -eq [string]$a.fileId }).Count) { Die ('File ' + $a.fileId + ' is in both -Add and -Answers.') }
   }
 }
 $rules = @()
@@ -729,16 +793,9 @@ foreach ($a in $adds) {
     # A FOMOD installer, run with the choices given, as Install-NexusRevision.ps1
     # runs it when it lays the revision out (ADDING A MOD above).
     if (-not $hasChoices) { Die ($arc + ' has a FOMOD installer and mod ' + $m + ' in ' + $Add + ' gives no choices for it, so Vortex would show its dialog. Read its questions with Read-NexusFile.ps1 -Mod ' + $m + ' -FileId ' + $fid + ' and give the answers as "choices".') }
-    $bad = @(Get-NexusChoicesProblems $a.choices)
-    if ($bad.Count) { Die ('The choices for mod ' + $m + ' in ' + $Add + ' are not as Vortex writes them: ' + ($bad -join '; ') + '.') }
-    $work = Join-Path $scratch ('fomod-' + $m)
-    if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
-    New-Item -ItemType Directory -Force -Path $work | Out-Null
-    $mp = Step { Get-NexusModPlan -SevenZip $sz -Archive $arc -Work $work -Choices $a.choices }
-    if ($mp.Plan.Stop) { Die ('Mod ' + $m + ' cannot be installed unattended with the choices given: ' + $mp.Plan.Stop + '.') }
-    $found = @(Get-NexusPlanPlugins $mp | ForEach-Object { $_.Name })
-    [Thornswood.Layout.NexusLayout]::Forget($mp.Unpacked)
-    Remove-Item -LiteralPath $work -Recurse -Force
+    $fa = Invoke-FomodAnswers $arc $m $a.choices $Add
+    $found = @($fa.Plugins)
+    $recordedChoices = $fa.Choices
     $installer = 'FOMOD, with the choices given'
   }
   else {
@@ -759,8 +816,26 @@ foreach ($a in $adds) {
   $plugins = @(@($a.plugins) | Where-Object { $_ } | ForEach-Object { [ordered]@{ name = [string]$_.name; after = @(@($_.after) | ForEach-Object { [string]$_ }) } })
   $sw = [ordered]@{ add = $true; modId = $m; fileId = $fid; version = [string](Get-NexusField $v 'version'); md5 = $facts.Md5Hex; fileSize = $facts.Size;
     logicalFilename = $fileName; name = $entryName; author = $author; category = $category; plugins = $plugins }
-  if ($hasChoices) { $sw.choices = $a.choices }
+  if ($hasChoices) { $sw.choices = $recordedChoices }
   $swaps.Add($sw)
+}
+
+# ---------------------------------------------------- installer answers ---
+if ($answerSet.Count) { Head 'The installer answers' }
+foreach ($a in $answerSet) {
+  $m = [string]$a.modId; $fid = [string]$a.fileId; $arc = [string]$a.archive
+  $entry = @($baseCol.mods | Where-Object { $_.source -and [string]$_.source.fileId -eq $fid -and [string]$_.source.modId -eq $m }) | Select-Object -First 1
+  if (-not $entry) { Die ('Revision ' + $start + ' has no entry for mod ' + $m + ' file ' + $fid + ', so there are no answers of it to change. A file the revision does not carry goes in with -Add.') }
+  $md5 = (Get-FileHash -LiteralPath $arc -Algorithm MD5).Hash.ToLowerInvariant()
+  if ($md5 -ne [string]$entry.source.md5) { Die ($arc + ' has md5 ' + $md5 + ', and the entry for file ' + $fid + ' installs the archive with md5 ' + $entry.source.md5 + '.') }
+  if (-not @(Step { Get-ArchivePaths $sz $arc } | Where-Object { $_ -match '(^|\\)fomod\\moduleconfig\.xml$' }).Count) { Die ($arc + ' has no FOMOD installer, so file ' + $fid + ' takes no installer answers.') }
+  $fa = Invoke-FomodAnswers $arc $m $a.choices $Answers
+  $named = @(@($a.plugins) | Where-Object { $_ } | ForEach-Object { [string]$_ })
+  $missing = @($fa.Plugins | Where-Object { $named -inotcontains $_ })
+  $extraNamed = @($named | Where-Object { @($fa.Plugins) -inotcontains $_ })
+  if ($missing.Count -or $extraNamed.Count) { Die ('The plugins named for mod ' + $m + ' file ' + $fid + ' are not the ones its FOMOD puts in Data with these answers (from the archive only: ' + ($missing -join ', ') + '; named only: ' + ($extraNamed -join ', ') + ').') }
+  Say ('  mod ' + $m + ' file ' + $fid + ' (' + $entry.name + '): ' + @($fa.Plugins).Count + ' plugin(s) by FOMOD, with the answers given')
+  $swaps.Add([ordered]@{ answers = $true; modId = $m; fileId = $fid; choices = $fa.Choices })
 }
 
 foreach ($m in $Remove) { $swaps.Add([ordered]@{ remove = $true; modId = $m }) }

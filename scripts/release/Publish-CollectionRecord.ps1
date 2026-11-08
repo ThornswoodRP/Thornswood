@@ -176,13 +176,22 @@ try {
         $params.Add = Join-Path $Work 'add.json'
         [IO.File]::WriteAllText($params.Add, (ConvertTo-Json -InputObject @($adds) -Depth 12), $utf8)
     }
+    if ($cs.Answers.Count) {
+        $ans = @($cs.Answers | ForEach-Object {
+                $g = Get-NexusFileArchive $want.game ([string]$_.fileId) (Join-Path $Work 'archives')
+                Say ("  file $($_.fileId): $($g.Name), $($g.Size) bytes")
+                [ordered]@{ modId = [long]$_.modId; fileId = [long]$_.fileId; archive = $g.Path; plugins = @($_.plugins); choices = $_.choices }
+            })
+        $params.Answers = Join-Path $Work 'answers.json'
+        [IO.File]::WriteAllText($params.Answers, (ConvertTo-Json -InputObject @($ans) -Depth 12), $utf8)
+    }
 } catch { Stop-Record $_.Exception.Message }
 if ($cs.Remove.Count) { $params.Remove = [string[]]@($cs.Remove | ForEach-Object { [string]$_ }) }
 if ($cs.Rule.Count) {
     $params.Rule = Join-Path $Work 'rule.json'
     [IO.File]::WriteAllText($params.Rule, (ConvertTo-Json -InputObject @($cs.Rule | ForEach-Object { [ordered]@{ name = $_.name; after = @($_.after) } }) -Depth 4), $utf8)
 }
-if (-not $cs.Move.Count -and -not $cs.Add.Count) { Say '  none' }
+if (-not $cs.Move.Count -and -not $cs.Add.Count -and -not $cs.Answers.Count) { Say '  none' }
 
 if ($WhatIf) {
     Head 'What it would draft'

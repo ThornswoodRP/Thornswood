@@ -146,6 +146,27 @@ function Get-NexusModPlan([string]$SevenZip, [string]$Archive, [string]$Work, $C
     return [pscustomobject]@{ Plan = $plan; Unpacked = $u; Fomod = $(if ($fomod) { [Thornswood.Layout.NexusLayout]::OnDisk($u, $fomod) } else { '' }) }
 }
 
+# The choices an entry carries for a mod with a FOMOD installer, as Vortex
+# records them on the mod once the script has run with the answers given:
+# every step, hidden ones too, every group of each, and what is selected in
+# it (ModPlan.Recorded). Vortex counts the collection's mod as installed only
+# when the entry's choices equal these, so an entry written with fewer steps
+# or groups is never matched and Vortex installs the mod again (#5531).
+# $null when the plan ran no FOMOD script.
+function ConvertTo-NexusRecordedChoices($ModPlan) {
+    $rec = $ModPlan.Plan.Recorded
+    if ($null -eq $rec) { return $null }
+    $steps = @(foreach ($s in $rec) {
+            [ordered]@{
+                name   = [string]$s.Name
+                groups = @(foreach ($g in $s.Groups) {
+                        [ordered]@{ name = [string]$g.Name; choices = @(foreach ($c in $g.Choices) { [ordered]@{ name = [string]$c.Name; idx = [long]$c.Idx } }) }
+                    })
+            }
+        })
+    return [pscustomobject][ordered]@{ type = 'fomod'; options = $steps }
+}
+
 # The plugins a plan puts at the top of the mod's folder, which is Data for
 # a mod of the default type: name (as the installer spells it) and the file
 # that holds its bytes.
