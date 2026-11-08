@@ -478,6 +478,14 @@
       "fixed": ["-Yes"],
       "params": {}
     },
+    "Install-RunnerEgress": {
+      "script": "scripts/deploy/Install-RunnerEgress.ps1",
+      "timeoutMinutes": 10,
+      "fixed": ["-NoPause"],
+      "params": {
+        "Status": "switch"
+      }
+    },
     "Install-Tunnel": {
       "script": "scripts/deploy/Install-Tunnel.ps1",
       "timeoutMinutes": 15,

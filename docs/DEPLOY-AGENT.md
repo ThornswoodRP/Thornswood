@@ -540,7 +540,8 @@ Why it exists. The runner accounts' firewall rules decided by address, from
 GitHub's published lists. On 3 Nov GitHub gave the Hermes runner the token
 host `vstoken.actions.githubusercontent.com`, on an edge address many
 Microsoft services share, so the runner never came online, and a rule
-letting that address out would have let a job reach every service on it. Patrick chose to decide by host name instead (3 Nov, #5495).
+letting that address out would have let a job reach every service on it.
+Patrick chose to decide by host name instead (3 Nov, #5495).
 
 What it does. It listens on loopback only, at the address `egress.json`
 names, and serves one thing: `CONNECT` to a host on that file's list, on
@@ -554,6 +555,20 @@ ends the tunnel; each is a line in `logs\egress.log` under its folder. A
 list entry is a name, or `*.a.b` for the names under `a.b`; a pattern with
 fewer than two labels after its star, an address, or an empty list is
 refused when the file is read.
+
+How a runner goes through it. `records/runner-egress.json` holds the
+address it listens on and GitHub's hosts for a self-hosted runner, and a
+runner record with `"egress": true` (`records/hermes-runner.json`) adds its
+`allowHost`. Install-RunnerEgress.ps1 writes that list as `egress.json`,
+checks it with `thornswood-agent egress-check`, starts the task and asks it
+for github.com (200) and example.com (403). Install-Runner.ps1 then blocks
+every address but loopback for that runner's account, names the proxy in
+the runner's `.env` as `https_proxy` and `http_proxy`, and stops before
+changing anything when the proxy does not answer github.com. From a cloud
+thread both go through the deploy gate:
+
+    pwsh scripts/vps/Box-Run.ps1 -Line 'Install-RunnerEgress'
+    pwsh scripts/vps/Box-Run.ps1 -Line 'Install-Runner -Hermes -NetworkOnly'
 
 ## Tests
 

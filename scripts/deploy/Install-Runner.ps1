@@ -56,6 +56,22 @@
   written down in that record, so the gate's renew only rule counts it as
   named.
 
+  THE WAY OUT (#5495). A runner record with "egress": true (the Hermes one)
+  reaches the internet only through the box runners' way out, the proxy
+  Install-RunnerEgress.ps1 runs on loopback at records\runner-egress.json's
+  listen, which lets out only the hosts on its list, by name. Its account's
+  rules block every address but loopback, its .env names the proxy as
+  https_proxy and http_proxy, and its allowHost goes on the proxy's list, not
+  into the rules. Patrick chose that on 3 Nov 2026: GitHub gave tw-hermes-box
+  the token host vstoken.actions.githubusercontent.com on an edge address
+  many Microsoft services share, which a rule by address could only block
+  (the runner never came online) or open to all of them. The
+  install and -NetworkOnly stop before changing anything when the proxy does
+  not answer github.com with 200 (run Install-RunnerEgress first), and
+  -NetworkOnly stops when a job is running, writes the .env, puts the rules
+  on and starts the service again so it reads the .env. -Status asks the
+  proxy for each host the runner needs.
+
   OFF THE BOX (-OffBox, issue #1306). build.yml sends a pull request to the
   label thornswood-pr, which no runner on the VPS carries, so code nobody has
   merged never runs beside the live server. -OffBox puts that runner on the
@@ -391,6 +407,10 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 # Where the box keeps its firewall rules, and the refresh that makes the
 # firewall take a change to them (#3896).
 . (Join-Path $Here '..\vps\BoxFirewall.ps1')
+# The box runners' way out (#5495): its address, and the question that asks
+# it for a host (RunnerEgress.ps1, Install-RunnerEgress.ps1).
+. (Join-Path $Here 'RunnerEgress.ps1')
+$egress = $null
 # THORNSWOOD-HERMES'S RUNNER (-Hermes, the header's section of that name).
 # Every name is the record's; none is taken from the command line, and the
 # gate's -AllowHost is replaced by the record's list.
@@ -406,6 +426,12 @@ if ($Hermes) {
   $RunnerName = [string]$hermesRecord.name
   $Label = [string]$hermesRecord.label
   $AllowHost = @($hermesRecord.allowHost | ForEach-Object { [string]$_ } | Where-Object { $_ })
+  # THE WAY OUT (the header's section of that name): a record with egress
+  # reaches the internet only through the box's proxy, whose list holds its
+  # allowHost.
+  if ($hermesRecord.egress) {
+    try { $egress = Get-ThornswoodRunnerEgress (Join-Path $Here '..\..') } catch { Write-Host ('STOP. ' + $_.Exception.Message + '. Nothing was changed.') -ForegroundColor Red; exit 1 }
+  }
 }
 # THROUGH THE DEPLOY GATE (-FromGate, the header's section of that name).
 if ($FromGate) {
@@ -623,6 +649,26 @@ function Set-RunnerTemp([string]$root, [string]$svcName, [bool]$ownInstall = $fa
   if (($had -join "`n") -eq ($new -join "`n")) { return ($root + ' sends its jobs'' temp files to ' + $temp + ' already') }
   [IO.File]::WriteAllText($file, (($new -join "`r`n") + "`r`n"), (New-Object Text.UTF8Encoding($false)))
   $line = $root + ' now sends its jobs'' temp files to ' + $temp
+  $svc = Get-CimInstance Win32_Service -Filter ("Name='" + $svcName + "'") -EA SilentlyContinue
+  if ($svc -and $svc.State -eq 'Running') { $line += '; its runner is running, so this takes effect when ' + $svcName + ' next starts' }
+  return $line
+}
+# THE WAY OUT (#5495): a runner sent through the box's proxy names it in its
+# .env as https_proxy, http_proxy and no_proxy, which actions/runner reads
+# when its service starts and hands to every job (GitHub's "Using a proxy
+# server with self-hosted runners"). Its account reaches loopback only, so a
+# tool that does not take the proxy reaches nothing. Lines of the runner's
+# own are kept.
+function Set-RunnerProxy([string]$root, [string]$svcName, [string]$url) {
+  $file = Join-Path $root '.env'
+  $want = @(('https_proxy=' + $url), ('http_proxy=' + $url), 'no_proxy=localhost,127.0.0.1,::1')
+  $had = @()
+  if (Test-Path -LiteralPath $file) { $had = @(Get-Content -LiteralPath $file -EA Stop) }
+  $keep = @($had | Where-Object { $_ -notmatch '^(https_proxy|http_proxy|no_proxy)=' })
+  $new = @($keep) + $want
+  if (($had -join "`n") -eq ($new -join "`n")) { return ($root + ' sends its jobs through ' + $url + ' already') }
+  [IO.File]::WriteAllText($file, (($new -join "`r`n") + "`r`n"), (New-Object Text.UTF8Encoding($false)))
+  $line = $root + ' now sends its jobs through ' + $url
   $svc = Get-CimInstance Win32_Service -Filter ("Name='" + $svcName + "'") -EA SilentlyContinue
   if ($svc -and $svc.State -eq 'Running') { $line += '; its runner is running, so this takes effect when ' + $svcName + ' next starts' }
   return $line
@@ -897,11 +943,12 @@ function Get-RunnerBlockRanges([string[]]$allow) {
 # machine's local store, as before, since its firewall is not run that way.
 $guardLib = (Get-ThornswoodFirewallScript) + @'
 # Outbound block rules for the account alone, replacing any it had.
-function Set-RunnerFirewall([string]$acct, [string]$group, [string[]]$blocks, [int]$per = 500) {
+# -Proxy is the way out's port for a runner sent through it (THE WAY OUT), else 0.
+function Set-RunnerFirewall([string]$acct, [string]$group, [string[]]$blocks, [int]$per = 500, [int]$Proxy = 0) {
   $sid = $(if ($acct.StartsWith('*')) { $acct.Substring(1) } else { (New-Object Security.Principal.NTAccount($acct)).Translate([Security.Principal.SecurityIdentifier]).Value })
   if (-not @($blocks).Count) { throw 'there is no address list to block, so the firewall was left as it was' }
   @(Get-NetFirewallRule -PolicyStore $grdStore -Group $group -EA SilentlyContinue) | ForEach-Object { Remove-NetFirewallRule -PolicyStore $grdStore -Name $_.Name }
-  $why = 'Install-Runner.ps1 (#1306, #2161): this account reaches GitHub, loopback and the -AllowHost names only. -NetworkOnly -Remove takes it off.'
+  $why = $(if ($Proxy) { 'Install-Runner.ps1 (#5495): this account reaches loopback only, and the internet through the box runners'' way out on 127.0.0.1:' + $Proxy + '. -NetworkOnly -Remove takes it off.' } else { 'Install-Runner.ps1 (#1306, #2161): this account reaches GitHub, loopback and the -AllowHost names only. -NetworkOnly -Remove takes it off.' })
   $n = 0
   for ($i = 0; $i -lt $blocks.Count; $i += $per) {
     $n++
@@ -909,7 +956,7 @@ function Set-RunnerFirewall([string]$acct, [string]$group, [string[]]$blocks, [i
     New-NetFirewallRule -PolicyStore $grdStore -DisplayName ($group + ' ' + $n) -Group $group -Direction Outbound -Action Block -Profile Any -LocalUser ('D:(A;;CC;;;' + $sid + ')') -RemoteAddress $chunk -Description $why -EA Stop | Out-Null
   }
   if ($grdStore -eq 'localhost') { Sync-ThornswoodFirewall }
-  'firewall: ' + $acct + ' may reach GitHub, this machine and what it was given only, ' + $blocks.Count + ' blocked range(s) in ' + $n + ' outbound rule(s), group ' + $group
+  'firewall: ' + $acct + $(if ($Proxy) { ' may reach this machine only, and the internet through the way out on 127.0.0.1:' + $Proxy } else { ' may reach GitHub, this machine and what it was given only' }) + ', ' + $blocks.Count + ' blocked range(s) in ' + $n + ' outbound rule(s), group ' + $group
 }
 function Remove-RunnerFirewall([string]$group) {
   $r = @(Get-NetFirewallRule -PolicyStore $grdStore -Group $group -EA SilentlyContinue)
@@ -918,9 +965,9 @@ function Remove-RunnerFirewall([string]$group) {
   if ($grdStore -eq 'localhost') { Sync-ThornswoodFirewall }
   'firewall: took off ' + $r.Count + ' rule(s) in ' + $group
 }
-function Get-RunnerFirewall([string]$group) {
+function Get-RunnerFirewall([string]$group, [int]$Proxy = 0) {
   $r = @(Get-NetFirewallRule -PolicyStore $grdStore -Group $group -EA SilentlyContinue)
-  if ($r.Count) { 'firewall  ' + $r.Count + ' outbound block rule(s), ' + @($r | Where-Object { "$($_.Enabled)" -eq 'True' }).Count + ' on (group ' + $group + ')'; Test-RunnerReach $r } else { 'firewall  NO RULES: a pull request job may reach anywhere. -OffBox -Lock puts them on' }
+  if ($r.Count) { 'firewall  ' + $r.Count + ' outbound block rule(s), ' + @($r | Where-Object { "$($_.Enabled)" -eq 'True' }).Count + ' on (group ' + $group + ')'; Test-RunnerReach $r $Proxy } else { 'firewall  NO RULES: a pull request job may reach anywhere. -OffBox -Lock puts them on' }
 }
 # The hosts a runner itself has to reach to take a job (GitHub's "Accessible
 # domains by function": its essential operations, downloading actions, and
@@ -945,7 +992,13 @@ function ConvertTo-GuardSpan([string]$a) {
   $n = ConvertTo-GuardNumber $a
   New-Object PSObject -Property @{ V = $v; Lo = $n; Hi = $n }
 }
-function Test-RunnerReach([object[]]$rules) {
+function Test-RunnerReach([object[]]$rules, [int]$Proxy = 0) {
+  # THE WAY OUT: the account reaches loopback only, so each host is asked of
+  # the proxy, which says 200 for a host on its list.
+  if ($Proxy) {
+    foreach ($h in $grdNeeds) { 'reach     ' + $h + ': ' + (Ask-Egress $Proxy $h) + ' (through the way out on 127.0.0.1:' + $Proxy + ')' }
+    return
+  }
   $spans = @()
   foreach ($r in $rules) { foreach ($a in @(($r | Get-NetFirewallAddressFilter).RemoteAddress)) { if ($a -and $a -ne 'Any') { $spans += ConvertTo-GuardSpan ([string]$a) } } }
   foreach ($h in $grdNeeds) {
@@ -998,12 +1051,12 @@ function Open-RunnerReads([string]$acct, [string[]]$paths) {
 # Where the runner is: the guards, as source. $mode is apply, remove or status.
 function Get-GuardScript([string]$mode, [string[]]$blocks = @()) {
   $list = '@(' + ((@($blocks) | ForEach-Object { "'" + $_ + "'" }) -join ', ') + ')'
-  $head = $guardLib + "`n`$grdAcct = '" + $Account.Replace("'", "''") + "'`n`$grdGroup = '" + $guardGroup.Replace("'", "''") + "'`n`$grdOwn = '" + $(if ($onRunnerDrive) { $rootDrive } else { '' }) + "'`n`$grdStore = '" + $(if ($OffBox) { 'PersistentStore' } else { 'localhost' }) + "'`n"
-  if ($mode -eq 'status') { return $head + 'Get-RunnerFirewall $grdGroup' }
+  $head = $guardLib + "`n" + $(if ($egress) { (Get-ThornswoodEgressAskScript) + "`n" } else { '' }) + "`$grdProxy = " + $(if ($egress) { $egress.Port } else { 0 }) + "`n`$grdAcct = '" + $Account.Replace("'", "''") + "'`n`$grdGroup = '" + $guardGroup.Replace("'", "''") + "'`n`$grdOwn = '" + $(if ($onRunnerDrive) { $rootDrive } else { '' }) + "'`n`$grdStore = '" + $(if ($OffBox) { 'PersistentStore' } else { 'localhost' }) + "'`n"
+  if ($mode -eq 'status') { return $head + 'Get-RunnerFirewall $grdGroup $grdProxy' }
   if ($mode -eq 'network-remove') { return $head + "Remove-RunnerFirewall `$grdGroup`n" }
-  if ($mode -eq 'network') { return $head + "`$grdBlocks = " + $list + "`nSet-RunnerFirewall `$grdAcct `$grdGroup `$grdBlocks`n" }
+  if ($mode -eq 'network') { return $head + "`$grdBlocks = " + $list + "`nSet-RunnerFirewall `$grdAcct `$grdGroup `$grdBlocks -Proxy `$grdProxy`n" }
   if ($mode -eq 'remove') { return $head + "Remove-RunnerFirewall `$grdGroup`nOpen-RunnerReads `$grdAcct (Get-RunnerReadDenies `$grdAcct -Own `$grdOwn)`n" }
-  return $head + "`$grdBlocks = " + $list + "`nSet-RunnerFirewall `$grdAcct `$grdGroup `$grdBlocks`nClose-RunnerReads `$grdAcct (Get-RunnerReadDenies `$grdAcct -Own `$grdOwn)`n"
+  return $head + "`$grdBlocks = " + $list + "`nSet-RunnerFirewall `$grdAcct `$grdGroup `$grdBlocks -Proxy `$grdProxy`nClose-RunnerReads `$grdAcct (Get-RunnerReadDenies `$grdAcct -Own `$grdOwn)`n"
 }
 # WHERE THE LISTS ARE READ (#3312). GitHub's lists are read on the machine
 # the rules go on, the box or (-OffBox) this one, by $listLib: its own
@@ -1044,6 +1097,12 @@ function Get-PublishedLists {
 }
 # GitHub's published lists, loopback and -AllowHost, as the ranges to block.
 function Get-GuardBlocks {
+  # THE WAY OUT: loopback only. GitHub's hosts and allowHost are on the
+  # proxy's list, by name, so no address list is read.
+  if ($egress) {
+    Say ('  every address but loopback; jobs go out through the way out on ' + $egress.Listen + ', which lets out only the hosts on its list') 'Yellow'
+    return Get-RunnerBlockRanges @('127.0.0.0/8', '::1/128')
+  }
   $lists = Get-PublishedLists
   $allow = @('127.0.0.0/8', '::1/128')
   foreach ($k in 'web', 'api', 'git', 'actions') {
@@ -1068,6 +1127,16 @@ function Get-GuardBlocks {
     Say ('  -AllowHost ' + $h + ': ' + ($ips -join ', ') + ' (as of now)') 'Yellow'
   }
   Get-RunnerBlockRanges $allow
+}
+
+# THE WAY OUT: before a runner is sent through the proxy, the proxy has to be
+# there and let GitHub out, or the rules would leave the runner nothing.
+function Assert-RunnerEgress {
+  if (-not $egress -or $DryRunTo) { return }
+  $said = @(Remote ((Get-ThornswoodEgressAskScript) + "`nAsk-Egress " + $egress.Port + " 'github.com'`n"))
+  $line = '' + ($said | Select-Object -Last 1)
+  if ($line -notmatch '^HTTP/1\.[01] 200') { Die ('the way out on ' + $where + ' (' + $egress.Listen + ') answered github.com with "' + $line + '", not 200, so ' + $Account + ' would reach nothing. Put it there first: pwsh scripts/vps/Box-Run.ps1 -Line ''Install-RunnerEgress''. Nothing was changed.') }
+  Say ('  the way out on ' + $egress.Listen + ' answers github.com: ' + $line) 'Green'
 }
 
 # Every runner service on the box, by what Windows says it is: its folder is
@@ -1119,11 +1188,36 @@ if ($NetworkOnly) {
     Done
   }
   Head ('What ' + $Account + ' may reach from ' + $where)
+  if ($egress) {
+    # THE WAY OUT: the proxy answers, no job is running, and the runner's
+    # .env names the proxy before its rules shut it in to loopback.
+    Assert-RunnerEgress
+    $said = @(Remote ($lockLib + "`n`$svc = Find-RunnerService " + $serviceList + "`n" + @"
+`$busy = @(Get-CimInstance Win32_Process -Filter "Name='Runner.Worker.exe'" | Where-Object { ('' + `$_.ExecutablePath) -like '$Root\bin\*' })
+if (`$busy.Count) { 'BUSY: ' + `$svc + ' is running a job; run this again when it is idle'; exit 3 }
+Set-RunnerProxy '$Root' `$svc '$($egress.Url)'
+"@))
+    $code = $LASTEXITCODE
+    $said | ForEach-Object { Say "  $_" }
+    if ($code -ne 0) { Die "the runner was not sent through the way out (exit $code); the lines above say why. No firewall rule was changed." }
+  }
   try { $blocks = @(Get-GuardBlocks) } catch { Die ('no firewall rule was changed: ' + $_.Exception.Message) }
   $said = @(Remote (Get-GuardScript 'network' $blocks))
   $code = $LASTEXITCODE
   $said | ForEach-Object { Say "  $_" }
   if ($code -ne 0) { Die "the firewall rules did not go on (exit $code); the lines above say which. Nothing else was changed." }
+  if ($egress) {
+    # Its service reads .env when it starts, so it starts again to take it.
+    $said = @(Remote ($lockLib + "`n`$svc = Find-RunnerService " + $serviceList + "`n" + @'
+$s = Get-Service -Name $svc -EA SilentlyContinue
+if (-not $s) { $svc + ' is not registered; it takes the way out when it is installed' }
+elseif ($s.Status -eq 'Running') { Restart-Service -Name $svc -Force -EA Stop; $svc + ' started again, so it goes out through the way out now' }
+else { $svc + ' is ' + $s.Status + '; it goes out through the way out when it starts' }
+'@))
+    $code = $LASTEXITCODE
+    $said | ForEach-Object { Say "  $_" }
+    if ($code -ne 0) { Die "the runner's service did not start again (exit $code); its rules and .env are on, and it takes them at its next start." }
+  }
   Done
 }
 
@@ -1158,6 +1252,10 @@ foreach (`$n in @('.runner', '.runner_migrated', '.credentials', '.credentials_m
   `$flow = @(`$o.PSObject.Properties | Where-Object { `$_.Name -match 'V2Flow' } | ForEach-Object { `$_.Name + ' ' + `$_.Value })
   'settings  ' + `$n + ', changed ' + (Get-Item -Force -LiteralPath `$f).LastWriteTimeUtc.ToString('yyyy-MM-dd HH:mm:ss') + 'Z: ' + ((`$hosts + `$flow) -join ', ')
 }
+# THE WAY OUT: the proxy its .env names, if any (no other line of it is read).
+`$envFile = Join-Path '$Root' '.env'
+`$px = @(if (Test-Path -LiteralPath `$envFile) { Get-Content -LiteralPath `$envFile | Where-Object { `$_ -match '^(https_proxy|http_proxy|no_proxy)=' } })
+if (`$px.Count) { 'proxy     ' + (`$px -join ', ') } else { 'proxy     none named; it goes out directly' }
 if (Get-LocalUser -Name '$Account') { 'account   $Account' } else { 'account   NOT THERE' }
 if (Test-Path '$Root') {
   `$a = Get-Acl -LiteralPath '$Root'
@@ -1543,6 +1641,8 @@ if ($missing.Count) {
   Die ("$where is missing " + $missingNames + ". Nothing was installed. Put them there with:" + [Environment]::NewLine + '    ' + ($how -join ([Environment]::NewLine + '    ')))
 }
 
+if ($egress) { Head 'The way out'; Assert-RunnerEgress }
+
 Head 'Registration token'
 $token = (Invoke-Gh api -X POST "$RunnerApi/actions/runners/registration-token" --jq .token | Out-String).Trim()
 if (-not $token) { Die "GitHub gave no registration token. gh has to be signed in as somebody who administers $Repo." }
@@ -1554,7 +1654,7 @@ Say '  got one, good for an hour, not shown' 'Green'
 # outbound limit until a -NetworkOnly run after it (#3956).
 Head 'What a job may reach'
 try { $guard = Get-GuardScript $(if ($OffBox) { 'apply' } else { 'network' }) @(Get-GuardBlocks) } catch { Die ('nothing was installed: ' + $_.Exception.Message) }
-Say '  GitHub''s address lists fetched; every other address is blocked for the account' 'Green'
+Say $(if ($egress) { '  every address but loopback is blocked for the account' } else { '  GitHub''s address lists fetched; every other address is blocked for the account' }) 'Green'
 if ($Migrate) { $guard = "`$guardResult = @(& {`n" + $guard + "`n})`n`$guardResult`nif ((`$guardResult -join ' ') -match 'COULD NOT') { throw 'Selected read guards did not apply; configuration was not attempted' }`n" }
 
 Head "Installing it on $where"
@@ -1642,6 +1742,7 @@ if (-not (Test-Path `$root)) { New-Item -ItemType Directory -Path `$root -Force 
 Lock-RunnerRoot `$root `$acct
 # Before the service first starts, so its first job already has it (#3117).
 Set-RunnerTemp `$root '$service' `$$(if ($OffBox) { 'true' } else { 'false' })
+$(if ($egress) { "# THE WAY OUT (#5495), before the service first starts.`nSet-RunnerProxy `$root '$service' '" + $egress.Url + "'" })
 
 # The runner itself, checked before it is unpacked.
 if (-not (Test-Path (Join-Path `$root 'bin\Runner.Listener.exe')) -or -not (Test-Path (Join-Path `$root 'version-$version.txt'))) {
