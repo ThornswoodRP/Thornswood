@@ -23,6 +23,8 @@
 //   5. the two skips (Patrick's yes on Bramble's card, 2 Nov 2026): one that
 //      changes what runs on the live box stays off unless it is Patrick's,
 //      and a Bot's stays off until Bramble approved its head.
+//   6. outside work (Patrick, 8 Nov 2026): one labelled 'outside work' stays
+//      off whoever opened it, and the sweep asks GitHub for the labels.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -89,6 +91,13 @@ yes('5 a Bot\'s Bramble approved at an older commit stays off', !on5(bot({ revie
 yes('5 a Bot\'s approved by somebody else stays off', !on5(bot({ reviews: review('EvilPatrick06', 'h34') })));
 yes('5 Bramble\'s own branch counts as a Bot\'s', !on5(bot({ author: { login: 'thornswood-bramble' }, headRefName: 'bramble/5334-decided-tunnel-run' })));
 yes('5 the query asks for its files and its approving reviews', /files\(first: 100\)/.test(A.QUERY) && /reviews\(last: 50, states: \[APPROVED\]\)/.test(A.QUERY) && /headRefName/.test(A.QUERY));
+
+// ---- 6. outside work
+const outside = { labels: { nodes: [{ name: 'area: Bot' }, { name: 'outside work' }] } };
+yes('6 Patrick\'s own pull request labelled outside work stays off', !on5(pr(40, outside)));
+yes('  and says it waits for Patrick\'s word', /outside contributor's work \('outside work'\), which merges only on Patrick's word/.test(judge5(pr(40, outside))[1]));
+yes('6 one with other labels and not that one goes on', on5(pr(41, { labels: { nodes: [{ name: 'area: Bot' }] } })));
+yes('6 the query asks for its labels', /labels\(first: 30\) \{ nodes \{ name \} \}/.test(A.QUERY) && A.OUTSIDE_LABEL === 'outside work');
 
 // ---- 3. the sweep
 function fake(pages, refuse) {

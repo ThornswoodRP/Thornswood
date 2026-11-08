@@ -73,7 +73,10 @@ The short form of the rules. The same decisions, with the dates they were made, 
   in the merge queue the moment `Build check result` is green, so nobody
   waits to press merge (Patrick, 2 Nov: "every PR goes on auto-merge when it
   opens, dropped PRs go back in the queue"). A draft, a fork's, Djinn's and
-  one that conflicts with main are left off. One the queue lets go goes back
+  one that conflicts with main are left off. So is one labelled
+  `outside work`, which carries the work of somebody outside the team: it
+  merges only when Patrick says so for that person (8 Nov 2026), whoever
+  opened the pull request that carries it. One the queue lets go goes back
   on after the next push to main when the queue was cleared, rolled back or
   timed out; let go for a failed check or a conflict, it is its owner's, and
   the owner's push with the fix puts it back on. The
