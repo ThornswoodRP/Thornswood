@@ -137,7 +137,9 @@ function load() {
     say('[thornswood] gamemode did not load; the error is above');
     return;
   }
-  if (has('.stub-roll')) {
+  // A roll mid-reload: never on the first load, which is the start's, so the
+  // start wait never meets server.log renamed away (#5223).
+  if (loads > 1 && has('.stub-roll')) {
     const d = new Date();
     fs.renameSync(log, log + '.' + d.getTime());
     fs.unlinkSync(path.join(root, '.stub-roll'));
@@ -258,9 +260,11 @@ try {
 
   # ---- a roll of server.log in the middle of the load ---------------------------
   $srv = New-Server @{ 'gamemode.js' = $newGm; 'thornswood-build.json' = '{"commit":"new"}' } @('.stub-roll')
+  $rolledAtStart = @(Get-ChildItem -LiteralPath $srv.Root -File -Force | Where-Object { $_.Name -match '^server\.log\.\d+$' }).Count
   $out = Invoke-Reload $srv
   Yes 'a load whose lines cross a roll of server.log is still read: RELOAD OK' ($out -contains 'RELOAD OK')
   Yes '  and server.log was rolled in the middle' (@(Get-ChildItem -LiteralPath $srv.Root -File -Force | Where-Object { $_.Name -match '^server\.log\.\d+$' }).Count -eq 1)
+  Yes '    by the reload''s load, not at the start' ($rolledAtStart -eq 0)
   Stop-Server $srv
 
   # ---- not a reload -----------------------------------------------------------
