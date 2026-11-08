@@ -19,7 +19,13 @@
        and changes nothing when given one;
     4. through the gate it asks ops-access.js for hermes-runners, never the
        ops repository's runners token, and the gate's verb takes -Hermes;
-    5. the box admin App stays off Thornswood-Hermes in the record.
+    5. the box admin App stays off Thornswood-Hermes in the record;
+    6. it goes out through the box runners' way out (#5495, Patrick's A on
+       3 Nov 2026): its rules block every address but loopback, its .env
+       names the proxy before its service first starts, -NetworkOnly writes
+       the .env before the rules and starts the service again after them,
+       and the proxy's list holds its allowHost and the token host GitHub
+       gave it.
 
   HOW. Reads the files, and runs the script with -DryRunTo, which writes
   the scripts it would send and runs none of them; every gh call gets a
@@ -95,6 +101,59 @@ try {
     Yes 'the gate''s Install-Runner verb takes -Hermes as a switch' ($verbs.verbs.'Install-Runner'.params.Hermes -eq 'switch')
     $sa = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/vps/admin/ShipAccess.ps1'))
     Yes 'Get-ThornswoodOpsAccess takes hermes-runners' ($sa -match [regex]::Escape("[ValidateSet('runners', 'keys', 'hermes-runners')]"))
+
+    # ---- 6. the way out --------------------------------------------------------------
+    $eg = Get-Content -LiteralPath (Join-Path $Repo 'records/runner-egress.json') -Raw | ConvertFrom-Json
+    Yes 'the record sends it through the way out' ($rec.egress -eq $true)
+    Yes "  which listens on loopback ($($eg.listen))" ($eg.listen -match '^127\.0\.0\.1:\d+$')
+    Yes '  and whose list takes the token host GitHub gave it by pattern' (@($eg.allow) -contains '*.actions.githubusercontent.com' -and @($eg.allow) -contains 'github.com' -and @($eg.allow) -contains 'api.github.com')
+    $port = $eg.listen.Split(':')[1]
+    Yes '  and the install tells the guard where the proxy is' ($sent.Contains("`$grdProxy = $port"))
+    $blocks = [regex]::Match($sent, '\$grdBlocks = (@\([^\n]*\))').Groups[1].Value
+    Yes "  whose rules leave loopback alone open ($blocks)" ($blocks -eq "@('0.0.0.0-126.255.255.255', '128.0.0.0-255.255.255.255', '::', '::2-ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff')")
+    $svc = 'actions.runner.' + $rec.organization + '.' + $rec.name
+    $iTemp = $sent.IndexOf("Set-RunnerTemp `$root '" + $svc + "'")
+    $iProxy = $sent.IndexOf("Set-RunnerProxy `$root '" + $svc + "' 'http://" + $eg.listen + "'")
+    $iCfg = $sent.IndexOf('.\config.cmd --unattended')
+    Yes '  and its .env names the proxy before config.cmd starts its service' ($iTemp -gt 0 -and $iProxy -gt $iTemp -and $iCfg -gt $iProxy)
+
+    $n = Join-Path $work 'net.txt'
+    $r = Run @('-Hermes', '-NetworkOnly', '-DryRunTo', $n)
+    $net = $(if (Test-Path -LiteralPath $n) { [IO.File]::ReadAllText($n) } else { '' })
+    Yes "-Hermes -NetworkOnly's dry run ends 0 (exit $($r.Code))" ($r.Code -eq 0 -and $net.Length -gt 0)
+    $iBusy = $net.IndexOf("'BUSY: '")
+    $iProxy = $net.IndexOf("Set-RunnerProxy '" + $rec.root + "' `$svc 'http://" + $eg.listen + "'")
+    $iRules = $net.IndexOf("`nSet-RunnerFirewall `$grdAcct")
+    $iStart = $net.IndexOf('Restart-Service -Name $svc')
+    Yes '  it stops for a running job, then writes the .env, then the rules, then starts the service again' ($iBusy -gt 0 -and $iProxy -gt $iBusy -and $iRules -gt $iProxy -and $iStart -gt $iRules)
+    Yes '  and asks for no published address list' ($r.Out -notmatch '-AllowHost' -and $net -notmatch '140\.82\.112\.0')
+
+    $o = Join-Path $work 'other.txt'
+    $r = Run @('-Number', '2', '-NetworkOnly', '-DryRunTo', $o)
+    $other = $(if (Test-Path -LiteralPath $o) { [IO.File]::ReadAllText($o) } else { '' })
+    Yes "a runner with no egress keeps its rules by address and no proxy (exit $($r.Code))" ($r.Code -eq 0 -and $other.Contains('$grdProxy = 0') -and $other -notmatch "(?m)^Set-RunnerProxy " -and $other -match "\`$grdBlocks = @\('0\.0\.0\.0-4\.147\.255\.255'")
+
+    # Set-RunnerProxy itself, on a scratch folder: the runner's own lines stay,
+    # an old proxy line goes, and a second run changes nothing.
+    $lib = [regex]::Match($text, '(?ms)^function Set-RunnerProxy\(.*?^\}\r?$').Value
+    if (-not (Get-Command Get-CimInstance -ErrorAction SilentlyContinue)) { function Get-CimInstance { $null } }
+    . ([scriptblock]::Create($lib))
+    $root = Join-Path $work 'runner'
+    New-Item -ItemType Directory -Force -Path $root | Out-Null
+    [IO.File]::WriteAllText((Join-Path $root '.env'), "TEMP=C:\x`r`nHTTPS_PROXY=http://old:1`r`n")
+    $said1 = Set-RunnerProxy $root 'svc' 'http://127.0.0.1:8431'
+    $env1 = @(Get-Content -LiteralPath (Join-Path $root '.env'))
+    Yes 'Set-RunnerProxy keeps the runner''s own lines and takes an old proxy line off' (($env1 -join '|') -eq 'TEMP=C:\x|https_proxy=http://127.0.0.1:8431|http_proxy=http://127.0.0.1:8431|no_proxy=localhost,127.0.0.1,::1')
+    $said2 = Set-RunnerProxy $root 'svc' 'http://127.0.0.1:8431'
+    Yes '  and says so when there is nothing to change' ($said1 -match 'now sends' -and $said2 -match 'already')
+
+    # Ask-Egress, the question the install and -Status ask the proxy.
+    . (Join-Path $Repo 'scripts/deploy/RunnerEgress.ps1')
+    . ([scriptblock]::Create((Get-ThornswoodEgressAskScript)))
+    $l = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0); $l.Start(); $free = $l.LocalEndpoint.Port; $l.Stop()
+    Yes 'Ask-Egress says nothing answered when no proxy listens' ((Ask-Egress $free 'github.com') -like 'no answer on 127.0.0.1:*')
+    $ins = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/deploy/Install-Runner.ps1'))
+    Yes 'the install and -NetworkOnly stop before any change when the proxy does not answer github.com with 200' ($ins.Contains('function Assert-RunnerEgress') -and $ins.Contains("Head 'The way out'; Assert-RunnerEgress") -and ([regex]::Matches($ins, '(?m)^\s+Assert-RunnerEgress\s*$')).Count -eq 1)
 } finally {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }

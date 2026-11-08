@@ -1085,6 +1085,69 @@
                       "reason":  "sends lockAll"
                   },
                   {
+                      "script":  "scripts/deploy/Install-Runner.ps1",
+                      "scope":  "Assert-RunnerEgress",
+                      "via":  "Remote",
+                      "anchor":  "Remote ((Get-ThornswoodEgressAskScript)",
+                      "does":  "asks the box runners\u0027 way out on loopback for github.com before a runner is sent through it (#5495)",
+                      "class":  "read-status",
+                      "reason":  "opens one loopback connection and reads its status line; writes nothing"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-Runner.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Remote",
+                      "anchor":  "Set-RunnerProxy \u0027$Root\u0027 `$svc",
+                      "does":  "writes the proxy lines of a runner sent through the way out into its .env, unless a job is running (#5495)",
+                      "class":  "admin",
+                      "reason":  "writes a runner\u0027s settings file; the gate runs it as Install-Runner -Hermes -NetworkOnly"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-Runner.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Remote",
+                      "anchor":  "Restart-Service -Name $svc -Force",
+                      "does":  "starts a runner sent through the way out again so it reads its .env (#5495)",
+                      "class":  "admin",
+                      "reason":  "restarts a runner service; the gate runs it as Install-Runner -Hermes -NetworkOnly"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-RunnerEgress.ps1",
+                      "scope":  "Remote",
+                      "via":  "Invoke-ThornswoodRemote",
+                      "anchor":  "function Remote($script) { return Invoke-ThornswoodRemote -Target $target -SshArgs $ssh -Script $script }",
+                      "does":  "sends a script for its caller",
+                      "class":  "transport",
+                      "reason":  "carries what its caller hands it; each caller is mapped"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-RunnerEgress.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Remote",
+                      "anchor":  "Remote ($askLib + @\"",
+                      "does":  "reads the way out\u0027s task, program and agent versions and log, and asks it for github.com and example.com",
+                      "class":  "read-status",
+                      "reason":  "reads only; the gate runs it as Install-RunnerEgress -Status"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-RunnerEgress.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Remote",
+                      "anchor":  "Remote @\"",
+                      "does":  "stops and unregisters the way out\u0027s task",
+                      "class":  "admin",
+                      "reason":  "unregisters a task; never a gate word"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-RunnerEgress.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Remote",
+                      "anchor":  "$out = @(Remote ($svcLib + $askLib + @\"",
+                      "does":  "puts the signed agent and its list in a locked folder, registers and starts the way out as LOCAL SERVICE with a task SID, and asks it for github.com and example.com",
+                      "class":  "admin",
+                      "reason":  "installs a program, writes an ACL, registers a task; the gate runs it as Install-RunnerEgress"
+                  },
+                  {
                       "script":  "scripts/deploy/Install-Tunnel.ps1",
                       "scope":  "Remote",
                       "via":  "Invoke-ThornswoodRemote",
