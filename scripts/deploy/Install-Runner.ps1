@@ -56,6 +56,21 @@
   written down in that record, so the gate's renew only rule counts it as
   named.
 
+  A RETIRED RUNNER (#5565). Thornswood-Hermes went public as
+  ThornswoodRP/TWHermesAgents on 8 Nov 2026 and its checks went back to
+  GitHub's own runners, so tw-hermes-box has nothing left to run. A runner
+  comes off the box the way it went on: by its record. When
+  records\hermes-runner.json carries "retired", -Hermes installs nothing and
+  sets no rules or Python (STOP, nothing changed), -Status still reads it,
+  and -Remove takes it off the box and off GitHub. Through the gate that is
+  the verb Remove-HermesRunner, which holds the line to exactly
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Remove-HermesRunner'
+  and this script refuses -Remove from the gate for any runner whose record
+  does not say it is retired, so the gate still never takes a box runner
+  that a record keeps. A removal stops before it changes anything when
+  GitHub gives no removal token, and after the box's part it asks GitHub
+  whether the runner is still registered and says STOP when it is.
+
   THE WAY OUT (#5495). A runner record with "egress": true (the Hermes one)
   reaches the internet only through the box runners' way out, the proxy
   Install-RunnerEgress.ps1 runs on loopback at records\runner-egress.json's
@@ -439,6 +454,10 @@ if ($Hermes) {
   $handPicked = @('Repo', 'Root', 'Account', 'RunnerName', 'Label', 'Number') | Where-Object { $PSBoundParameters.ContainsKey($_) }
   if ($OffBox -or $Migrate -or $Lock -or @($handPicked).Count) { Write-Host 'STOP. -Hermes is the one runner records\hermes-runner.json names, on the box, with that record''s names; it takes no other name, no -Number, -OffBox, -Migrate or -Lock (-Lock locks every runner on the box without it). Nothing was changed.' -ForegroundColor Red; exit 1 }
   $hermesRecord = Get-Content -LiteralPath (Join-Path $Here '..\..\records\hermes-runner.json') -Raw | ConvertFrom-Json
+  # A RETIRED RUNNER (the header's section of that name): read and taken
+  # off, never put back.
+  $hermesRetired = [bool]$hermesRecord.PSObject.Properties['retired']
+  if ($hermesRetired -and -not ($Status -or ($Remove -and -not $NetworkOnly))) { Write-Host ('STOP. ' + [string]$hermesRecord.name + ' is retired (records\hermes-runner.json "retired": ' + [string]$hermesRecord.retired.why + '). -Hermes -Status reads it and -Hermes -Remove takes it off; nothing installs it, its rules or its Python again. Nothing was changed.') -ForegroundColor Red; exit 1 }
   # An organization runner: registered to the organization's URL, through
   # the organization's runner endpoints.
   $Repo = [string]$hermesRecord.organization
@@ -465,7 +484,9 @@ if ($Python -and -not $runnerPython) { Write-Host 'STOP. records\hermes-runner.j
 if ($FromGate) {
   if ($env:THORNSWOOD_GATE -ne '1') { Write-Host 'STOP. -FromGate is for the deploy gate''s Install-Runner verb, which runs this on the box: scripts/vps/Box-Run.ps1 Install-Runner -Number <n>. Nothing was changed.' -ForegroundColor Red; exit 1 }
   $handPicked = @('Repo', 'Root', 'Account', 'RunnerName', 'Label', 'VpsHost', 'VpsUser', 'AlsoDeny') | Where-Object { $PSBoundParameters.ContainsKey($_) }
-  if ($OffBox -or $Migrate -or $Remove -or $DryRunTo -or $DefenderSkip -or @($handPicked).Count) { Write-Host 'STOP. Through the gate a runner is installed, locked, read or given its network rules with the names and folders its number gives it, on the box, and never removed. Nothing was changed.' -ForegroundColor Red; exit 1 }
+  if ($OffBox -or $Migrate -or $DryRunTo -or $DefenderSkip -or @($handPicked).Count) { Write-Host 'STOP. Through the gate a runner is installed, locked, read or given its network rules with the names and folders its number gives it, on the box. Nothing was changed.' -ForegroundColor Red; exit 1 }
+  # A RETIRED RUNNER: the gate takes off only a runner its record retires.
+  if ($Remove -and -not ($Hermes -and $hermesRetired -and -not $NetworkOnly)) { Write-Host 'STOP. Through the gate a runner comes off the box only when its record says it is retired (Remove-HermesRunner, records\hermes-runner.json "retired"); every other runner is renewed, never removed. Nothing was changed.' -ForegroundColor Red; exit 1 }
   # The box's runners are the ops repository's (#4013); Thornswood-Hermes's
   # one is its record's, with a token for that repository alone.
   if (-not $Hermes) { $Repo = 'ThornswoodRP/Thornswood-Ops' }
@@ -1254,6 +1275,32 @@ function Install-RunnerPython([string]$root, [string]$acct, [string]$version, [s
   New-Item -ItemType File -Path $done -Force | Out-Null
   return ('Python ' + $version + ' now in ' + $cache + ', from its SHA-256 and signature; ' + $acct + ' may run it, and actions/setup-python takes it from there')
 }
+# -Remove's half (A RETIRED RUNNER): the installer ran for all users, so it
+# registered the build with Windows and under PythonCore. Deleting the
+# folder alone would leave both naming a Python that is gone, so the
+# bundle's own quiet uninstall runs first. Only a Python whose PythonCore
+# entry is inside this runner's tool cache is touched.
+function Remove-RunnerPython([string]$root, [string]$version) {
+  $cache = Join-Path $root '_work\_tool\Python'
+  $mm = (($version -split '\.')[0..1]) -join '.'
+  $reg = 'HKLM:\SOFTWARE\Python\PythonCore\' + $mm + '\InstallPath'
+  $there = ''
+  if (Test-Path -LiteralPath $reg) { $there = [string](Get-ItemProperty -LiteralPath $reg).'(default)' }
+  $keys = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall')
+  $bundles = @(Get-ChildItem -LiteralPath $keys -EA SilentlyContinue | ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath } | Where-Object { [string]$_.DisplayName -eq ('Python ' + $version + ' (64-bit)') -and [string]$_.QuietUninstallString })
+  if (-not $there) {
+    if ($bundles.Count) { return ('Python ' + $mm + ' has no PythonCore entry, so the ' + $bundles.Count + ' installer entries named Python ' + $version + ' (64-bit) are not the runner''s and were left alone') }
+    return ('no Python ' + $mm + ' is installed for all users')
+  }
+  if (-not $there.StartsWith($cache, [StringComparison]::OrdinalIgnoreCase)) { return ('Python ' + $mm + ' for all users is at ' + $there + ', not in ' + $cache + ', so it is not the runner''s and was left alone') }
+  if ($bundles.Count -ne 1) { throw ('Python ' + $mm + ' is in ' + $there + ' but Windows lists ' + $bundles.Count + ' installers named Python ' + $version + ' (64-bit), not one') }
+  $q = [regex]::Match([string]$bundles[0].QuietUninstallString, '^\s*"([^"]+\.exe)"\s*(.*)$')
+  if (-not $q.Success) { throw ('the Python ' + $version + ' installer''s quiet uninstall is not a program and its switches: ' + [string]$bundles[0].QuietUninstallString) }
+  $p = Start-Process -FilePath $q.Groups[1].Value -ArgumentList $q.Groups[2].Value -Wait -PassThru
+  if ($p.ExitCode -ne 0) { throw ('the Python ' + $version + ' uninstall stopped with ' + $p.ExitCode) }
+  if (Test-Path -LiteralPath $reg) { throw ('the Python ' + $version + ' uninstall ended 0 and PythonCore still names ' + $mm) }
+  return ('Python ' + $version + ' uninstalled from ' + $there + ', with its installer and PythonCore entries')
+}
 '@
 
 # ------------------------------------------------------------------ python --
@@ -1403,14 +1450,18 @@ if (`$ev.Count) { 'windows   what the service manager said about ' + `$svc + ' i
 # ------------------------------------------------------------------ remove --
 if ($Remove) {
   Head 'Removing the runner'
+  # GitHub is told first, with a removal token of its own; with none, the
+  # box would lose the runner while GitHub kept it registered (#5565), so
+  # nothing is changed.
   $tok = $null
-  try { $tok = (Invoke-Gh api -X POST "$RunnerApi/actions/runners/remove-token" --jq .token | Out-String).Trim() } catch { Say '  could not get a removal token; the box is cleaned and GitHub is left to forget it' 'Yellow' }
+  try { $tok = (Invoke-Gh api -X POST "$RunnerApi/actions/runners/remove-token" --jq .token | Out-String).Trim() } catch { Die ('GitHub gave no removal token for ' + $RunnerName + ' (' + $_.Exception.Message + '), so it could not be told. Nothing was changed.') }
+  if (-not $tok) { Die ('GitHub gave an empty removal token for ' + $RunnerName + '. Nothing was changed.') }
   # The removal token goes on ssh's standard input and reaches config.cmd in
   # its environment, never on a command line (Send-Secret.ps1, issue #451).
   # The far side's exit code decides, as for -NetworkOnly -Remove: until
   # #3214 it was not read, so two removals whose ssh was cut 8 minutes in
   # ended with exit 0 and half their lines.
-  $said = @(Send-WithSecret ([string]$tok) ($lockLib + $watcherLib + "`n" + @"
+  $said = @(Send-WithSecret ([string]$tok) ($lockLib + $watcherLib + $(if ($runnerPython) { $toolLib } else { '' }) + "`n" + @"
 `$ErrorActionPreference = 'Continue'
 `$t = `$ThornswoodSecret; `$ThornswoodSecret = `$null
 # Never mid-job, before GitHub is told anything (#3889).
@@ -1423,6 +1474,7 @@ if ((Test-Path '$Root\config.cmd') -and `$t) {
   Pop-Location
 }
 Stop-RunnerHere '$Root' $serviceList
+$(if ($runnerPython) { "try { Remove-RunnerPython '" + $Root + "' '" + $runnerPython.version + "' } catch { 'PYTHON NOT TAKEN OFF: ' + `$_.Exception.Message + '. The runner is off GitHub and stopped; its account and folder stay until this runs again.'; exit 1 }" })
 Remove-RunnerWatchers
 Open-RunnerAccount '$Account' '$Root' 'C:\' '$liveFilter' $alsoDenyList
 $(if ($onRunnerDrive) { "Open-RunnerAccount '" + $Account + "' '" + $Root + "' '" + $rootDrive + "\' '" + $liveFilter + "'" })
@@ -1444,6 +1496,13 @@ if (Test-Path '$Root') { 'the folder is still there, something holds a file in i
   $code = $LASTEXITCODE
   $said | ForEach-Object { Say "  $_" }
   if ($code -ne 0) { Die "the removal did not say it finished (exit $code); the lines above say how far it got, and -Status says what is left." }
+  # What GitHub says now: config.cmd remove prints its own lines and the box's
+  # part goes on, so the registration is read back rather than assumed.
+  try { $left = @(((Invoke-Gh api "$RunnerApi/actions/runners" --paginate --slurp | Out-String) | ConvertFrom-Json) | ForEach-Object { $_.runners } | Where-Object { [string]$_.name -eq $RunnerName }) }
+  catch { Die ('the box''s part finished, but GitHub did not list the runners of ' + $Repo + ' to show ' + $RunnerName + ' gone: ' + $_.Exception.Message) }
+  if ($DryRunTo) { $left = @() }
+  if ($left.Count) { Die ($RunnerName + ' is off the box but still registered on ' + $Repo + ' (' + [string]$left[0].status + '); config.cmd remove''s lines above say why.') }
+  Say ('  GitHub lists no runner called ' + $RunnerName + ' on ' + $Repo) 'Green'
   Done
 }
 

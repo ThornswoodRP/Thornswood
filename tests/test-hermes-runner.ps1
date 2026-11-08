@@ -34,7 +34,19 @@
        and nothing else; the zip is held to the hash and the installer to
        python.org's signature, nothing else is fetched, no launcher, file
        type or shortcut goes on the box, a copy of the same minor version
-       for all users elsewhere stops it, and -Status names what is there.
+       for all users elsewhere stops it, and -Status names what is there;
+    8. now that it is retired (#5565: Thornswood-Hermes went public as
+       TWHermesAgents and its checks run on GitHub's runners), the record
+       says so, and -Hermes installs nothing, sets no rules and no Python;
+       -Status still reads it; -Remove asks GitHub for a removal token
+       first, uninstalls its Python before its folder goes, takes its rules
+       off, and reads GitHub back; through the gate only Remove-HermesRunner
+       says -Remove, and the script refuses it from the gate for a runner
+       whose record does not retire it.
+
+  Checks 2 to 7 run against a copy of scripts and records whose Hermes
+  record is as it was before it retired, so the install it would still
+  make for an unretired record stays held.
 
   HOW. Reads the files, and runs the script with -DryRunTo, which writes
   the scripts it would send and runs none of them; every gh call gets a
@@ -70,10 +82,19 @@ Yes 'the hosts a job may reach are plain names, PyPI and GitHub''s asset hosts' 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('ts-hermes-runner-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 try {
-    function Run([string[]]$more) {
-        $out = @(& $ps -NoProfile -File $script -VpsHost 203.0.113.1 -VpsUser tester -NoPause @more 2>&1 | ForEach-Object { "$_" })
+    # The copy with the record as it was before it retired (the header).
+    $copy = Join-Path $work 'repo'
+    New-Item -ItemType Directory -Force -Path $copy | Out-Null
+    Copy-Item -LiteralPath (Join-Path $Repo 'scripts'), (Join-Path $Repo 'records') -Destination $copy -Recurse
+    $unretired = Get-Content -LiteralPath (Join-Path $copy 'records/hermes-runner.json') -Raw | ConvertFrom-Json
+    $unretired.PSObject.Properties.Remove('retired')
+    [IO.File]::WriteAllText((Join-Path $copy 'records/hermes-runner.json'), ($unretired | ConvertTo-Json -Depth 10))
+    $live = Join-Path $copy 'scripts/deploy/Install-Runner.ps1'
+    function RunAt([string]$at, [string[]]$more) {
+        $out = @(& $ps -NoProfile -File $at -VpsHost 203.0.113.1 -VpsUser tester -NoPause @more 2>&1 | ForEach-Object { "$_" })
         return [pscustomobject]@{ Code = $LASTEXITCODE; Out = ($out -join "`n") }
     }
+    function Run([string[]]$more) { return RunAt $live $more }
     $f = Join-Path $work 'dry.txt'
     $r = Run @('-Hermes', '-DryRunTo', $f)
     $sent = $(if (Test-Path -LiteralPath $f) { [IO.File]::ReadAllText($f) } else { '' })
@@ -192,6 +213,49 @@ try {
     $r = Run @('-Hermes', '-Status', '-DryRunTo', $st)
     $stat = $(if (Test-Path -LiteralPath $st) { [IO.File]::ReadAllText($st) } else { '' })
     Yes "-Hermes -Status names the Pythons in its tool cache (exit $($r.Code))" ($r.Code -eq 0 -and $stat.Contains("Get-Item -Path '" + $rec.root + "\_work\_tool\Python\*\x64.complete'"))
+
+    # ---- 8. retired ----------------------------------------------------------------
+    Yes 'the record says the runner is retired, when and why' ($rec.retired.on -eq '2026-11-08' -and [string]$rec.retired.why -match 'TWHermesAgents')
+    foreach ($bad in @(@(), @('-NetworkOnly'), @('-Python'), @('-NetworkOnly', '-Remove'))) {
+        $g = Join-Path $work ('retired-' + [Guid]::NewGuid().ToString('N') + '.txt')
+        $b = RunAt $script (@('-Hermes', '-DryRunTo', $g) + $bad)
+        Yes ('a retired -Hermes ' + ($bad -join ' ') + ' is refused and writes nothing') ($b.Code -eq 1 -and $b.Out -match 'is retired' -and $b.Out -match 'Nothing was changed' -and -not (Test-Path -LiteralPath $g))
+    }
+    $st = Join-Path $work 'retired-status.txt'
+    $r = RunAt $script @('-Hermes', '-Status', '-DryRunTo', $st)
+    Yes "  but -Hermes -Status still reads it (exit $($r.Code))" ($r.Code -eq 0 -and (Test-Path -LiteralPath $st))
+    $rm = Join-Path $work 'retired-remove.txt'
+    $r = RunAt $script @('-Hermes', '-Remove', '-DryRunTo', $rm)
+    $gone = $(if (Test-Path -LiteralPath $rm) { [IO.File]::ReadAllText($rm) } else { '' })
+    Yes "-Hermes -Remove's dry run ends 0 and reads GitHub back (exit $($r.Code))" ($r.Code -eq 0 -and $r.Out -match ('GitHub lists no runner called ' + [regex]::Escape($rec.name)))
+    $iIdle = $gone.IndexOf("Assert-RunnerIdle '" + $rec.root + "'")
+    $iCfg = $gone.IndexOf('& .\config.cmd remove')
+    $iStop = $gone.IndexOf("Stop-RunnerHere '" + $rec.root + "'")
+    $iPy = $gone.IndexOf("Remove-RunnerPython '" + $rec.root + "' '" + $rec.python.version + "'")
+    $iUser = $gone.IndexOf("Remove-LocalUser -Name '" + $rec.account + "'")
+    $iDir = $gone.IndexOf("Remove-Item -LiteralPath '" + $rec.root + "' -Recurse")
+    Yes '  idle first, then GitHub told, the service stopped, its Python uninstalled, then the account and the folder' ($iIdle -gt 0 -and $iCfg -gt $iIdle -and $iStop -gt $iCfg -and $iPy -gt $iStop -and $iUser -gt $iPy -and $iDir -gt $iUser -and $gone.Contains('function Remove-RunnerPython('))
+    Yes '  and its outbound rules come off' ($gone.Contains('Remove-RunnerFirewall $grdGroup') -and $gone.Contains("`$grdAcct = '" + $rec.account + "'"))
+    Yes 'a removal stops before changing anything when GitHub gives no removal token' ($text.Contains("catch { Die ('GitHub gave no removal token for ") -and $text -notmatch 'GitHub is left to forget')
+    $lib = [regex]::Match($text, '(?ms)^function Remove-RunnerPython\(.*?^\}\r?$').Value
+    Yes 'Remove-RunnerPython touches only a Python whose PythonCore entry is in the runner''s tool cache' ($lib.Contains("if (-not `$there.StartsWith(`$cache, [StringComparison]::OrdinalIgnoreCase)) { return (") -and $lib.Contains("'HKLM:\SOFTWARE\Python\PythonCore\' + `$mm + '\InstallPath'"))
+    Yes '  runs the bundle''s own quiet uninstall, and checks PythonCore after' ($lib.Contains('QuietUninstallString') -and $lib.Contains('Start-Process -FilePath $q.Groups[1].Value') -and $lib.Contains("if (Test-Path -LiteralPath `$reg) { throw"))
+    Yes 'the gate''s Remove-HermesRunner verb is held to -FromGate -Hermes -Remove and takes nothing else' ((@($verbs.verbs.'Remove-HermesRunner'.fixed) -join ' ') -eq '-FromGate -Hermes -Remove -NoPause' -and $verbs.verbs.'Remove-HermesRunner'.script -eq 'scripts/deploy/Install-Runner.ps1' -and @($verbs.verbs.'Remove-HermesRunner'.params.PSObject.Properties).Count -eq 0)
+    Yes '  and Install-Runner takes no -Remove' ($null -eq $verbs.verbs.'Install-Runner'.params.Remove)
+    # As the gate starts it: no -VpsHost or -VpsUser, which it refuses.
+    function Gate([string]$at, [string[]]$more) {
+        $out = @(& $ps -NoProfile -File $at -NoPause @more 2>&1 | ForEach-Object { "$_" })
+        return [pscustomobject]@{ Code = $LASTEXITCODE; Out = ($out -join "`n") }
+    }
+    $env:THORNSWOOD_GATE = '1'
+    try {
+        $b = Gate $script @('-FromGate', '-Number', '2', '-Remove')
+        Yes 'from the gate, -Remove of a runner no record retires is refused' ($b.Code -eq 1 -and $b.Out -match 'only when its record says it is retired')
+        $b = Gate $live @('-FromGate', '-Hermes', '-Remove')
+        Yes '  and so is -Hermes -Remove while its record does not retire it' ($b.Code -eq 1 -and $b.Out -match 'only when its record says it is retired')
+        $b = Gate $script @('-FromGate', '-Hermes', '-Remove')
+        Yes '  while the retired one passes that rule and goes on to ask for its token' ($b.Out -notmatch 'only when its record says it is retired' -and $b.Out -notmatch 'is retired \(')
+    } finally { Remove-Item Env:\THORNSWOOD_GATE -ErrorAction SilentlyContinue }
 } finally {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
