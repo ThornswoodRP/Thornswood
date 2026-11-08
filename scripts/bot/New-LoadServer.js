@@ -67,6 +67,16 @@ const MASTERS = {
 // The engine's own start point (skymp5-server/ts/settings.ts): outside
 // Whiterun, in Tamriel.
 const WHITERUN = { pos: [133857, -61130, 14662], worldOrCell: '0x3c', angleZ: 72 };
+// Where the box's crowd stands: the Frozen Hearth in Winterhold (13814 in
+// Skyrim.esm), the cell with the most guild traders the NPC runtime keeps,
+// four of them (Dagur, Haran, Nelacar and the Woodworker, between 250 and 540
+// units from here, in game/data/npc-population.json). The runner's crowd
+// stands outside Whiterun, where its five masters have nobody to trade with.
+// On the box the copy is there to measure the collection's NPCs and traders,
+// and every one of the 60 traders the runtime keeps is indoors, so a crowd at
+// the engine's own start point never met one (8 Nov 2026, #4623: 4764 NPCs
+// up, and "noTraderNear" for every bot at every step).
+const TRADERS_ROOM = { pos: [1890, 160, 0], worldOrCell: '0x13814', angleZ: 0 };
 
 function sha256(file) {
   const h = crypto.createHash('sha256');
@@ -281,7 +291,7 @@ function fromInstalled(o) {
     maxPlayers: seats,
     npcEnabled: theirs.npcEnabled === true,
     npcSettings: theirs.npcSettings && typeof theirs.npcSettings === 'object' ? theirs.npcSettings : {},
-    startPoints: startPoints(shape),
+    startPoints: shape === 'crowd' ? [TRADERS_ROOM] : startPoints(shape),
     thornswoodServer: 'dev',
     thornswoodRequirePass: true,
     thornswoodChargen: false,
@@ -331,4 +341,4 @@ if (require.main === module) {
   main().then((c) => process.exit(c), (e) => { console.log('NEW LOAD SERVER FAILED: ' + (e && e.message || e)); process.exit(1); });
 }
 
-module.exports = { build, copyGame, fromInstalled, startPoints, checkMaster, MASTERS, WHITERUN, GAMEPLAY_KEYS };
+module.exports = { build, copyGame, fromInstalled, startPoints, checkMaster, MASTERS, WHITERUN, TRADERS_ROOM, GAMEPLAY_KEYS };

@@ -268,6 +268,8 @@ async function boxChecks() {
     yes('  and a copy of the server\'s merchant ledger and its first-start mark, which the NPC runtime will not start without',
       fs.readFileSync(path.join(out, 'private', 'merchant-ledger.json'), 'utf8') === '{"version":1}' && fs.readFileSync(path.join(out, 'private', 'merchant-ledger.initialized'), 'utf8') === '1' &&
       !fs.lstatSync(path.join(out, 'private', 'merchant-ledger.json')).isSymbolicLink() && fs.readdirSync(path.join(out, 'private')).sort().join(',') === 'door.json,merchant-ledger.initialized,merchant-ledger.json');
+    yes('its crowd stands in the Frozen Hearth, among four kept traders, not at the engine\'s start point outside Whiterun',
+      st.startPoints.length === 1 && st.startPoints[0].worldOrCell === '0x13814' && st.startPoints[0].pos.join(',') === '1890,160,0');
     yes('it keeps the server\'s NPC switch and its plain gameplay switches', st.npcEnabled === true && st.npcSettings.x === 1 && st.thornswoodNear === 3500 && st.thornswoodHurtCare === true);
     yes('and nothing else of its settings: no site, no webhook, no password, no switch that holds an address',
       st.thornswoodSite === undefined && st.discordWebhook === undefined && st.password === undefined && st.thornswoodLoadOrderRefuse === undefined);
