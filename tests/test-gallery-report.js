@@ -7,7 +7,7 @@
   keeping the rotating approved spotlight only (#731).
 
   WHY THIS EXISTS. Issue #731 asked for Report and staff Approve/Delete wired
-  to the site's gallery doors. Gavin's ask on 2026-09-27 moved those tools off
+  to the site's gallery doors. Patrick's ask on 2026-09-27 moved those tools off
   the Play card onto a real Gallery tab/page, and stripped Report / Manage from
   Play.
 

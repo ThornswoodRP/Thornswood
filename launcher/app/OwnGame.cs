@@ -1849,7 +1849,7 @@ namespace Thornswood
         /// <summary>
         /// Puts collection plugins the golden list expects but Game\Data does not
         /// have back into Data, from what Vortex has deployed (or its staging).
-        /// Does not remove anything from plugins.txt: Gavin's Diagnostics case
+        /// Does not remove anything from plugins.txt: Patrick's Diagnostics case
         /// (CFTO-Lanterns, CFTO-CoveredCarriages, BeardMaskFix and the like) is
         /// light plugins the person wants kept on, and the server never serves
         /// light plugins, so Fix cannot fetch them. Refreshing the own folder,
