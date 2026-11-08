@@ -221,8 +221,11 @@ public sealed class EgressProxy(EgressConfig cfg, Action<string> log)
             var parts = head.Split("\r\n", 2)[0].Split(' ');
             if (parts.Length != 3 || parts[0] != "CONNECT" || !parts[2].StartsWith("HTTP/1."))
             {
-                await Answer(cs, "405 Method Not Allowed", cts.Token);
+                // The line goes in the log before the answer, so whoever
+                // reads the answer finds the reason already written (#5536:
+                // the egress test read the log between the two and failed).
                 log($"{from}: REFUSED {Clip(parts[0])}: only CONNECT to a listed host on port 443 goes out");
+                await Answer(cs, "405 Method Not Allowed", cts.Token);
                 return;
             }
             var target = parts[1];
@@ -230,8 +233,8 @@ public sealed class EgressProxy(EgressConfig cfg, Action<string> log)
             var host = colon > 0 ? HostRules.Normalize(target[..colon]) : null;
             if (host == null || target[(colon + 1)..] != "443" || !cfg.Allow.Allows(host))
             {
-                await Answer(cs, "403 Forbidden", cts.Token);
                 log($"{from}: REFUSED {Clip(target)}: not a listed host on port 443");
+                await Answer(cs, "403 Forbidden", cts.Token);
                 return;
             }
             await Answer(cs, "200 Connection Established", cts.Token);
