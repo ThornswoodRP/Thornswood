@@ -225,17 +225,31 @@ async def watch_problems():
             return None
         return rows if isinstance(rows, list) else None
 
-    try:
-        filed = await loop.run_in_executor(None, _filed_read)
-    except Exception:
-        # Not read is not empty: empty would file every problem again.
-        log('problems: %s will not read, so nothing is filed until it does:\n' % PROBLEMS_FILED
-            + traceback.format_exc())
-        return
-    log('problems: filing what the game sends from %s every %ds, %d filed so far'
-        % (REPORTS_FILE, REPORTS_EVERY, len(filed)))
+    # Not read is not empty: empty would file every problem again. A record
+    # that will not read is said once, in bot.log with its error and in the
+    # staff channel, and looked at again each round, so a record mended by
+    # hand is taken up without a restart (#5513).
+    filed = None
+    said_unreadable = False
     said_why = ''
     while not client.is_closed():
+        if filed is None:
+            try:
+                filed = await loop.run_in_executor(None, _filed_read)
+            except Exception:
+                if not said_unreadable:
+                    said_unreadable = True
+                    log('problems: %s will not read, so nothing is filed until it does:\n' % PROBLEMS_FILED
+                        + traceback.format_exc())
+                    await report_say('**The bot cannot read %s, its record of the problems '
+                                     'already filed**, so it is filing nothing until the file '
+                                     'reads again. Mend the file by hand rather than deleting '
+                                     'it: without it every problem would be filed again. The bot '
+                                     'starts filing on its own once the file reads.' % PROBLEMS_FILED)
+                await asyncio.sleep(REPORTS_EVERY)
+                continue
+            log('problems: filing what the game sends from %s every %ds, %d filed so far'
+                % (REPORTS_FILE, REPORTS_EVERY, len(filed)))
         try:
             rows = await loop.run_in_executor(None, read_rows)
             if rows is not None:
