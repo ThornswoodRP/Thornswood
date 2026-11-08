@@ -224,6 +224,8 @@ try {
     $st = Join-Path $work 'retired-status.txt'
     $r = RunAt $script @('-Hermes', '-Status', '-DryRunTo', $st)
     Yes "  but -Hermes -Status still reads it (exit $($r.Code))" ($r.Code -eq 0 -and (Test-Path -LiteralPath $st))
+    $seen = $(if (Test-Path -LiteralPath $st) { [IO.File]::ReadAllText($st) } else { '' })
+    Yes '  and names what Windows holds for its Python: PythonCore, every uninstall list and the Package Cache, reading only' ($seen.Contains("Show-RunnerPythonEntries '" + $rec.python.version + "'") -and $seen.Contains("'Registry::HKEY_USERS'") -and $seen.Contains("'Package Cache\*\python-*.exe'") -and ([regex]::Match($seen, '(?ms)^function Show-RunnerPythonEntries\(.*?^\}').Value -notmatch 'Remove-|Set-|New-|Start-Process'))
     $rm = Join-Path $work 'retired-remove.txt'
     $r = RunAt $script @('-Hermes', '-Remove', '-DryRunTo', $rm)
     $gone = $(if (Test-Path -LiteralPath $rm) { [IO.File]::ReadAllText($rm) } else { '' })
