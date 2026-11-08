@@ -20,6 +20,7 @@ public static class Program
         thornswood-agent service [--config <agent.json>]
         thornswood-agent steps   --folder deploy/after --verbs scripts/vps/gate/verbs.json
         thornswood-agent egress  [--config <egress.json>]
+        thornswood-agent egress-check [--config <egress.json>]
 
         deploy  applies one signed Release by its tag (the deploy gate's
                 Deploy-Release verb; a rollback is the Release before)
@@ -30,7 +31,9 @@ public static class Program
                 (#5186), as a pull request's check does; runs nothing
         egress  the box runners' way out (#5495): a proxy on loopback that
                 lets a runner reach only the hosts egress.json lists, until
-                it is stopped (the task Install-RunnerEgress.ps1 makes)
+                it is stopped (the task Install-RunnerEgress.ps1 makes);
+                egress-check reads the file the same way and says whether
+                the proxy would take it, listening nowhere
         """;
 
     public static string Version =>
@@ -59,7 +62,7 @@ public static class Program
             try { return AfterDeploy.CheckCommand(folder, verbs, Console.WriteLine); }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Console.Error.WriteLine("REFUSED: " + e.Message); return 1; }
         }
-        if (verb == "egress")
+        if (verb is "egress" or "egress-check")
         {
             var egPath = opts.GetValueOrDefault("config") ?? Path.Combine(AppContext.BaseDirectory, "egress.json");
             EgressConfig eg;
@@ -68,6 +71,11 @@ public static class Program
             {
                 Console.Error.WriteLine($"REFUSED: {egPath}: {e.Message}");
                 return 1;
+            }
+            if (verb == "egress-check")
+            {
+                Console.WriteLine($"{egPath}: {eg.Allow.Count} host rule(s), listening on {eg.Listen}");
+                return 0;
             }
             using var egLog = new LogFile(Path.Combine(eg.Home, "logs", "egress.log"));
             void EgLog(string s)
