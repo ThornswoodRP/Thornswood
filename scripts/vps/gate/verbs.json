@@ -487,6 +487,14 @@
         "Status": "switch"
       }
     },
+    "Set-WebFirewall": {
+      "script": "scripts/vps/Set-WebFirewall.ps1",
+      "timeoutMinutes": 10,
+      "fixed": ["-OnTheBox", "-NoPause"],
+      "params": {
+        "Check": "switch"
+      }
+    },
     "Remove-GateTrace": {
       "script": "scripts/dev/Trace-Gate-Here.ps1",
       "timeoutMinutes": 5,
