@@ -597,6 +597,7 @@ CHANGES = {
         ('2026-10-26', 'If it goes wrong: the help page has the usual fixes. Its list of what works that way on purpose is gone.', '3c1f3de182b5'),
         ('2026-10-27', "For Thornswood's own plugin, Fix downloads the latest release's copy, no longer the server's.", '1592da4dfb29'),
         ('2026-10-30', 'Step 3: the collection link on the Downloads page, the card above Play and the Diagnostics page opens the revision the server was built against. Install that one, not a newer one Nexus may show first, which keeps Play shut until the server catches up.', 'aa62cb6eaf57'),
+        ('2026-11-08', 'Step 3: when the server moves to a newer revision, update the collection inside Vortex with Update on the Thornswood collection. Installing the new revision from Nexus adds a second collection beside the first.', 'b2e4eaf2c8a6'),
     ],
     'NEWS': [
         ('2026-10-22', 'The changelog starts here; earlier changes are in the repository history.', '90be4dab837f'),
