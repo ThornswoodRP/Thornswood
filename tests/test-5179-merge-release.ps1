@@ -218,6 +218,16 @@ try {
     Yes 'with no package made up to it, there is nothing for main''s launcher' ($null -eq (Find-MainPackage -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile (Write-Rels $none) -ManifestDir $md))
     $why = ''; try { Find-MainPackage -Tag 'build-20261103.1' -Manifest $promoted -ReleasesFile (Write-Rels $base5181) -ManifestDir $md | Out-Null } catch { $why = $_.Exception.Message }
     Yes ('a tag that is not among the Releases read stops it: ' + $why) ($why -match 'not among the hundred newest')
+    # 3 Nov 2026: build .2's package was main's only one and had no main tag
+    # (made before #5489), so it could never go out. A merge then makes the
+    # package again (Test-MainPackageReachable, the launcher step).
+    $rf5 = Write-Rels $base5181
+    $tagAt = { param($want) { param($name) if ($name -eq 'main-build-20261101.5') { $want } else { '' } }.GetNewClosure() }
+    Yes 'main''s newest package with its main tag on the commit that built it can go out' (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile $rf5 -ManifestDir $md -TagCommit (& $tagAt ('commit ' + ('c' * 40))))
+    Yes '  one with no main tag cannot, so the merge packs again' (-not (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile $rf5 -ManifestDir $md -TagCommit (& $tagAt '')))
+    Yes '  nor one whose main tag names another commit' (-not (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile $rf5 -ManifestDir $md -TagCommit (& $tagAt ('commit ' + ('e' * 40)))))
+    Yes '  one out already can, tag or not' (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile (Write-Rels (& $out5 @((Asset 201 'Thornswood-2026.1101.5-full.nupkg' $pkgSha), (Asset 202 'releases.main.json' $feedSha)) $false)) -ManifestDir $md -TagCommit (& $tagAt ''))
+    Yes '  and with no package made at all there is nothing to pack for' (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile (Write-Rels $none) -ManifestDir $md -TagCommit (& $tagAt ''))
     $rec = MM 'build-20261101.5' $lv 'g1' $true
     $exact = @{ 'Thornswood-2026.1101.5-full.nupkg' = $pkgSha.ToUpperInvariant(); 'releases.main.json' = $feedSha }
     Yes 'the files of main''s package are held to the record by name and sha256' ((Get-MainPackageProblem -Record $rec -Have $exact) -eq '')
@@ -453,6 +463,10 @@ try {
         $wf.Contains('subject-path: ${{ steps.files.outputs.held_subjects }}') -and $wf -match 'uses: actions/upload-artifact@[0-9a-f]{40} # v' -and
         $wf.Contains('name: main-${{ steps.names.outputs.tag }}') -and $wf.Contains('path: ${{ steps.files.outputs.held }}') -and
         $wf.Contains("Get-ChildItem -LiteralPath (Join-Path `$env:DIR 'assets') -File"))
+    Yes 'a merge packs main''s launcher again when its newest package has no main tag, and the parts step releases that launcher' (
+        $wf.Contains('$reach = Test-MainPackageReachable -Tag $env:PREVIOUS -Manifest $pm') -and $wf.Contains('("repack=" + $(if ($repack)') -and
+        $wf.Contains('LAUNCHER_REPACK: ${{ steps.launcher.outputs.repack }}') -and $wf.Contains("if (`$env:LAUNCHER_REPACK -eq 'yes' -and `$changed -notcontains 'launcher')") -and
+        $wf.IndexOf("if (`$env:LAUNCHER_REPACK -eq 'yes'") -lt $wf.IndexOf("`$velopack = `$(if (`$changed -contains 'launcher'"))
     $tagAt = $wf.IndexOf('- name: Tag main''s package for the approval (main-<tag>)')
     Yes '  and its tag main-<tag> is made on this merge as the package is kept, the tag promote-main.yml publishes on' ($tagAt -gt $keepAt -and $keepAt -gt 0 -and
         $wf.Contains('-f "ref=refs/tags/main-$($env:TAG)" -f "sha=$($env:GITHUB_SHA)"') -and
