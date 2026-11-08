@@ -50,7 +50,7 @@ namespace Thornswood
             /// <summary>Set by FetchLauncher once the package is downloaded and every check passed.</summary>
             internal bool Checked;
             // What FetchLauncher checked the package against, and where it is:
-            // the game files go in from it on dev (SyncPackage.cs).
+            // the game files go in from it (SyncPackage.cs).
             internal VeloRecord.Manifest Record;
             internal VeloRecord.GameList Game, Setup;
             internal string Package;
@@ -80,11 +80,15 @@ namespace Thornswood
             string channel = Velo.ChannelFor(cfg);
             var opts = new UpdateOptions();
             opts.ExplicitChannel = channel;
+            // The channel's release is the one its newest Release carries
+            // (ChannelSource, THE CHANNEL'S RELEASE), so a lower number than
+            // this one's is taken too: Velopack alone takes only a higher one.
+            opts.AllowVersionDowngrade = true;
             var mgr = new CheckedUpdates(new ChannelSource(channel), opts);
             UpdateInfo info = mgr.CheckForUpdatesAsync().GetAwaiter().GetResult();
             if (info == null)
             {
-                LastLauncherCheck = "The launcher is the newest on the " + channel + " channel.";
+                LastLauncherCheck = "The launcher is the one the " + channel + " channel is on.";
                 return null;
             }
             var u = new LauncherUpdate();
@@ -95,7 +99,9 @@ namespace Thornswood
             long deltas = 0;
             foreach (VelopackAsset d in info.DeltasToTarget) deltas += d.Size;
             u.Size = deltas > 0 && deltas <= info.TargetFullRelease.Size ? deltas : info.TargetFullRelease.Size;
-            LastLauncherCheck = "Launcher " + u.Version + " is out on the " + channel + " channel; this one is " + Version + ".";
+            LastLauncherCheck = info.IsDowngrade
+                ? "The " + channel + " channel is on launcher " + u.Version + " now, a lower number than this one, " + Version + "."
+                : "Launcher " + u.Version + " is out on the " + channel + " channel; this one is " + Version + ".";
             return u;
         }
 
@@ -227,6 +233,37 @@ namespace Thornswood
         }
 
         /// <summary>
+        /// The feed cut to the channel's release (ChannelSource, THE CHANNEL'S
+        /// RELEASE): the full package of the newest published Release among
+        /// <paramref name="assets"/>, by <paramref name="published"/>, and
+        /// every package numbered at or below it, which are the deltas
+        /// Velopack may climb to it by. Anything numbered higher, from a
+        /// Release published before it, is dropped, so the newest Release's
+        /// package is the highest left and Velopack takes it. Empty when the
+        /// newest Release carries no full package.
+        ///
+        /// A Release's feed also lists the full package of the release its
+        /// delta was made from (vpk keeps it in the feed it writes), under the
+        /// same Release, so of the newest Release's full packages the highest
+        /// numbered is its own.
+        /// </summary>
+        internal static VelopackAsset[] ChannelRelease(VelopackAsset[] assets, Func<VelopackAsset, DateTime?> published)
+        {
+            if (assets == null || assets.Length == 0) return new VelopackAsset[0];
+            VelopackAsset target = null;
+            DateTime newest = DateTime.MinValue;
+            foreach (VelopackAsset a in assets)
+            {
+                if (a == null || a.Type != VelopackAssetType.Full || a.Version == null) continue;
+                DateTime? at = published(a);
+                if (at == null) continue;
+                if (target == null || at.Value > newest || (at.Value == newest && a.Version > target.Version)) { target = a; newest = at.Value; }
+            }
+            if (target == null) return new VelopackAsset[0];
+            return assets.Where(a => a != null && a.Version != null && a.Version <= target.Version).ToArray();
+        }
+
+        /// <summary>
         /// The Releases of this repository that carry the channel's feed,
         /// newest first.
         ///
@@ -238,10 +275,31 @@ namespace Thornswood
         /// behind it. This reads a hundred in the same one request and keeps
         /// the ones with the channel's feed: the newest, and the ten before
         /// it that Velopack may take deltas from (MaximumDeltasBeforeFallback).
+        ///
+        /// THE CHANNEL'S RELEASE (the plan: "which release a channel gets
+        /// comes from its Dev or Main Deployment"). Velopack on its own takes
+        /// the highest version anywhere in the feed, and only when it is
+        /// higher than the running one. So a Release published after one with
+        /// a higher number, a promotion of an older build to main or the move
+        /// from the 2026.x numbers back to 1.2.x (Patrick, 8 Nov 2026), would
+        /// never reach anybody. Here the feed is cut to the newest Release's
+        /// full package and what is numbered at or below it (ChannelRelease),
+        /// and CheckLauncher lets Velopack take a lower number than the
+        /// running one, so every install goes to the release its channel is
+        /// on, up or down, with every check in this file's header all the same.
         /// </summary>
         sealed class ChannelSource : GithubSource
         {
             readonly string feedName;
+
+            public override async Task<VelopackAssetFeed> GetReleaseFeed(Velopack.Logging.IVelopackLogger logger, string appId, string channel, Guid? stagingId = null, VelopackAsset latestLocalRelease = null)
+            {
+                VelopackAssetFeed all = await base.GetReleaseFeed(logger, appId, channel, stagingId, latestLocalRelease).ConfigureAwait(false);
+                return new VelopackAssetFeed
+                {
+                    Assets = ChannelRelease(all.Assets, a => a is GitBaseAsset g && g.Release != null ? g.Release.PublishedAt : null)
+                };
+            }
 
             public ChannelSource(string channel) : base(Velo.RepoUrl, null, true, null)
             {

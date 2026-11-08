@@ -32,17 +32,17 @@ namespace Thornswood
     /// The launcher exe is not part of this: it updates through Velopack
     /// (VeloUpdate.cs), with every check that file's header lists.
     ///
-    /// ON DEV THE GAME FILES COME FROM THE VELOPACK PACKAGE, NOT FROM HERE
-    /// (#4825; the plan: "one update channel carries both the launcher and
-    /// the game payload"). A launcher Velopack installed on the dev channel
-    /// (Velo.GameFromPackage) takes Thornswood's game files from the checked
+    /// THE GAME FILES COME FROM THE VELOPACK PACKAGE, NOT FROM HERE (#4825;
+    /// the plan: "one update channel carries both the launcher and the game
+    /// payload"). A launcher Velopack installed, on either channel
+    /// (Velo.GameFromPackage), takes Thornswood's game files from the checked
     /// package of each update (SyncPackage.cs), and this file's record and
     /// packs are never offered to it (Pending, RecordDue). What the package
     /// brings goes in through this file's own write all the same (WriteSync),
     /// so release.txt, release-files.txt, Keep, installed-into-game.txt, the
     /// gone and golden entries and the client files left to ClientRuntime are
-    /// kept one way for both. Main stays on the feed's record until main has
-    /// packages (#5181); then the line in Velo.GameFromPackage moves and this
+    /// kept one way for both. Only a launcher Velopack did not install (a
+    /// build into a test root) still fetches from the site, until this
     /// file's fetching from the site retires with the feed.
     /// </summary>
     static partial class Updater
@@ -189,9 +189,9 @@ namespace Thornswood
         /// </summary>
         static Pack RecordDue(Config cfg, VersionDoc v)
         {
-            // On dev the package of each launcher update carries the game
-            // files (header; Velo.GameFromPackage), so the feed's record is
-            // not this install's to sync to.
+            // The package of each launcher update carries the game files
+            // (header; Velo.GameFromPackage), so the feed's record is not
+            // this install's to sync to.
             if (Velo.GameFromPackage(cfg)) return null;
             RecordRef r = v == null ? null : v.record;
             if (r == null) return null;
@@ -278,7 +278,7 @@ namespace Thornswood
         /// </summary>
         public static bool Resync(Config cfg, VersionDoc v, Action<string> log)
         {
-            // On dev the files are the installed package's (SyncPackage.cs).
+            // The files are the installed package's (SyncPackage.cs).
             if (Velo.GameFromPackage(cfg)) return ResyncFromPackage(cfg, log);
             RecordRef r = v == null ? null : v.record;
             if (r == null) return false;
@@ -303,7 +303,7 @@ namespace Thornswood
         /// </summary>
         public static Func<string, byte[]> ReleaseCopy(Config cfg, VersionDoc v)
         {
-            // On dev the plugins are the installed package's (SyncPackage.cs).
+            // The plugins are the installed package's (SyncPackage.cs).
             if (Velo.GameFromPackage(cfg)) return PackageCopy(cfg);
             RecordRef r = v == null ? null : v.record;
             if (r == null) return null;

@@ -133,19 +133,19 @@ namespace Thornswood
         /// each launcher update (Updater, SyncPackage.cs), and the feed's
         /// release record and packs are not this install's (Sync.cs, Pending).
         ///
-        /// Dev only, and on purpose. The plan has one update channel carry both
-        /// the launcher and the game payload, and the dev channel has a package
-        /// on every merge that changes either. Main has none until Patrick
-        /// approves one (#5181), so a main launcher whose game files waited on
-        /// a package would get none: main stays on the feed's record until main
-        /// has packages. Then this is Installed alone, and the feed's game path
-        /// (Sync.cs fetching from the site) retires. A launcher Velopack did not
-        /// install (a build into a test root) has no package, and stays on the
-        /// feed too.
+        /// Every launcher Velopack installed, on both channels. The plan has one
+        /// update channel carry both the launcher and the game payload. Until
+        /// 8 Nov 2026 this was dev only, because main had no package until
+        /// Patrick approved one (#5181); main-build-20261108.1 was the first,
+        /// and while main stayed on the feed, its game files stayed at the
+        /// feed's last record (release/main/20261102-121621) whatever main's
+        /// packages carried. A launcher Velopack did not install (a build into
+        /// a test root) has no package, and stays on the feed until the feed's
+        /// game path retires.
         /// </summary>
         public static bool GameFromPackage(Config cfg)
         {
-            return Installed && ChannelFor(cfg) == "dev";
+            return Installed;
         }
 
         // The update that goes in when this launcher exits (ApplyOnExit).

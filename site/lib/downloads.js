@@ -74,10 +74,14 @@ function listFiles() {
   // with the sha256 GitHub measured on it. Who signed it is not on the
   // Release, so the page names nobody rather than a name nothing checked
   // (#5275). Dev's is not listed: it is for staff, at /file/ by its name.
+  // Its url is the Release's own download, so the page's button goes
+  // straight to the file on GitHub (Patrick, 8 Nov 2026: "linking the
+  // downloads page to the files on GitHub") rather than through /file/ and
+  // its redirect; /file/<name> still answers for an address given out before.
   const setup = newestSetup('main');
   if (setup) {
     out.push({ name: setup.name, size: setup.size, at: setup.at, hidden: false,
-      label: setup.name, version: setup.tag, note: '', sha256: setup.sha256, publisher: '' });
+      label: setup.name, version: setup.tag, note: '', sha256: setup.sha256, publisher: '', url: setup.url });
   }
   out.sort((a, b) => b.at - a.at);
   return out;

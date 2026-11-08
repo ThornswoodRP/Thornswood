@@ -105,10 +105,21 @@ namespace Thornswood
         /// (MergeRelease.ps1, THE NAMES). Throws for a version no merge
         /// release makes, so a package from anywhere else is never held to
         /// some other Release's record.
+        ///
+        /// Two kinds of number, while the releases move back from the date
+        /// numbers to 1.2.x (Patrick, 8 Nov 2026): 1.2.17 is the Release
+        /// build-1.2.17, and 2026.1108.2 is build-20261108.2. The build- start
+        /// stays, so the deploy agent's build-&lt;...&gt; rule and main's
+        /// main-build-&lt;...&gt; Releases hold for both. A launcher numbered
+        /// 2026.x has to hold the first 1.2.x package to its record, and its
+        /// own installed package to its own, so both are read until no
+        /// release is numbered 2026.x; then the date rule goes.
         /// </summary>
         public static string TagOf(SemanticVersion v)
         {
             if (v == null) throw new Exception("The update package has no version.");
+            if (v.Major >= 1 && v.Major < 2000 && !v.IsPrerelease && string.IsNullOrEmpty(v.Metadata))
+                return "build-" + v.Major + "." + v.Minor + "." + v.Patch;
             long year = v.Major, md = v.Minor, run = v.Patch;
             long month = md / 100, day = md % 100;
             if (year < 2000 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31 || run < 1 || v.IsPrerelease)
