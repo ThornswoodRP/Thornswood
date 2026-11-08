@@ -904,6 +904,20 @@ jobs:
           .\scripts\dev\Check-Secrets.ps1 -Binary $programs
           if ($LASTEXITCODE -ne 0) { Write-Host '::error file=scripts/dev/Check-Secrets.ps1::a published launcher program carries something that must not ship; the lines above say which'; exit 1 }
 
+      - name: Start the native launcher
+        if: env.REACHES != 'false'
+        shell: pwsh
+        run: |
+          # Issue #5524. The exe published above, started for real in a root
+          # of its own under RUNNER_TEMP: its window must come up and it must
+          # stay up with no COULD NOT START line in its log. On 8 Nov 2026 a
+          # launcher that stopped at start went to dev and main because
+          # nothing ever started the native exe; the window start harness
+          # runs the window in .NET on the headless platform, not this.
+          $exe = Join-Path $env:RUNNER_TEMP 'launcher\Launcher\Thornswood.exe'
+          & .\scripts\release\Test-LauncherStarts.ps1 -Exe $exe
+          if ($LASTEXITCODE -ne 0) { Write-Host '::error file=scripts/release/Test-LauncherStarts.ps1::the published launcher did not start and stay up; its log is above'; exit 1 }
+
       - name: Build the ship root tool
         if: env.REACHES != 'false'
         shell: pwsh
