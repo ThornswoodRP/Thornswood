@@ -127,8 +127,9 @@ namespace Thornswood
         /// Rules 13 O was anything not Vortex's), size and write time of the
         /// source when it was brought in, then the path under the game folder.
         /// Publish-Update reads the V lines to keep the collection out of packs.
+        /// With Root\Game it is also what says the folder was made (Paths.Collection).
         /// </summary>
-        static string FilesList { get { return Path.Combine(Dir, "files.txt"); } }
+        static string FilesList { get { return Paths.OwnGameRecord(Paths.Root); } }
         static string MadeFile { get { return Path.Combine(Dir, "made.txt"); } }
         static string LeftOutFile { get { return Path.Combine(Dir, "left-out.txt"); } }
         static string DeclinedFile { get { return Path.Combine(Dir, "declined.txt"); } }
@@ -1280,8 +1281,22 @@ namespace Thornswood
             string src = DeploysInto(cfg);
             string why = WhyNot(cfg, src, skyrimFrom != null);
             if (why != null) throw new Exception(why);
-            if (Directory.Exists(Folder))
+            if (Directory.Exists(Folder) && File.Exists(FilesList))
                 throw new Exception("There is already a Game folder at " + Folder + ", so nothing was made.");
+
+            // A Game folder with no record was never made here (Paths.Collection
+            // reads it as not there): what the launcher's own writers put into
+            // it while it was taken for the game folder, such as the four
+            // folders an update left in one that had been deleted on 8 Nov.
+            // It goes the way a half made Game.new does, and the new folder
+            // takes its place. Never when it is the folder the game's own
+            // files are to come from (#2603).
+            if (Directory.Exists(Folder))
+            {
+                if (skyrimFrom != null && SameFolder(skyrimFrom, Folder))
+                    throw new Exception("The game's own files cannot come from " + Folder + ", the folder being made, so nothing was made.");
+                Directory.Delete(Folder, true);
+            }
 
             // A half made one from an attempt that stopped part way. Only ever
             // this launcher's, and only ever links and copies.

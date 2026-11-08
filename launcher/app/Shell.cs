@@ -4443,11 +4443,10 @@ namespace Thornswood
             if (!r2) return;
 
             btnUninstall.IsEnabled = false;
+            string[] rest;
             try
             {
-                string[] rest = Uninstall.Begin(cfg, keep, dropMods, Log);
-                Log("Handing the rest to Windows and closing...");
-                Uninstall.Finish(rest, keep, dropMods);
+                rest = Uninstall.Begin(cfg, keep, dropMods, Log);
             }
             catch (Exception ex)
             {
@@ -4458,7 +4457,24 @@ namespace Thornswood
                 return;
             }
 
-            Quit();
+            // The folders go while this launcher still holds the install's
+            // mutex, so one opened meanwhile cannot start on a half deleted
+            // install (Uninstall.RemoveNow). Off the window's thread: a Game
+            // folder is tens of thousands of files.
+            Log("Removing Thornswood's folders. The launcher closes when they are gone...");
+            string runningFrom = Path.GetDirectoryName(Environment.ProcessPath);
+            System.Threading.Tasks.Task.Run(delegate
+            {
+                string[] later = rest;
+                try { later = Uninstall.RemoveNow(rest, runningFrom); }
+                catch (Exception ex) { Swallow.Note("Shell.DoUninstall, removing", ex); }
+                Dispatcher.UIThread.Post(new Action(delegate
+                {
+                    try { Uninstall.Finish(later, keep, dropMods); }
+                    catch (Exception ex) { Swallow.Note("Shell.DoUninstall, handing over", ex); }
+                    Quit();
+                }));
+            });
         }
 
         // ------------------------------------------------------------- updates
