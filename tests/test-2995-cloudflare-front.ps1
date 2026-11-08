@@ -466,7 +466,7 @@ Yes 'the gate''s Set-WebFirewall runs Set-WebFirewall.ps1 -OnTheBox, with -Check
 $dt = [IO.File]::ReadAllText($Driver)
 Yes '  and -OnTheBox runs the same box file here, needs no key, and refuses -Open' ($dt -match '\[switch\]\$OnTheBox' -and $dt -match "(?s)if \(\`$OnTheBox\) \{.*?\[scriptblock\]::Create\(`"& '`" \+ \`$BoxScript" -and $dt -match "if \(-not \`$OnTheBox\) \{\s*Head `"2\. The box's own key`"" -and $dt -match 'if \(\$OnTheBox -and \$Open\) \{ Die')
 $fp = [IO.File]::ReadAllText((P 'scripts', 'vps', 'vps-firewall-policy.ps1'))
-Yes 'Set-InboundRules.ps1 -Own holds a rule the policy has under another id by its display name, so it makes no second copy' ($fp.Contains('$_.Name -eq $r.Name -or $_.DisplayName -eq $r.DisplayName'))
+Yes 'Set-InboundRules.ps1 -Own holds a rule the policy has under another id by its display name, so it makes no second copy' ($fp.Contains('$_.DisplayName -eq $r.DisplayName -and $_.Direction -eq $r.Direction -and $_.Action -eq $r.Action') -and $fp.Contains('$heldAs[$r.Name] = [string]$holder[0].Name'))
 
 Write-Host ''
 Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail)
