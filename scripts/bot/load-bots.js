@@ -374,6 +374,11 @@ function main() {
       const perBot = [];
       const play = {};
       let hostedNow = 0;
+      // The NPCs the bots hold as sent to them at the report, and how many of
+      // those are in the bot's own cell, where a trade ask can reach them. The
+      // box's crowd in the Frozen Hearth found no trader at any step (8 Nov
+      // 2026, #4623) and nothing said whether any NPC was sent at all.
+      let npcsKnown = 0; let npcsInCell = 0;
       for (const b of bots) {
         steps[b.step] = (steps[b.step] || 0) + 1;
         if (b.step === 'failed') { failed.push({ profileId: b.profileId, why: b.why }); }
@@ -386,8 +391,11 @@ function main() {
         for (const k of Object.keys(b.played)) { play[k] = (play[k] || 0) + b.played[k]; }
         b.played = {};
         hostedNow += b.hosted.size;
+        for (const [, o] of b.others) {
+          if (o.refrId >= 0x100000000) { npcsKnown++; if (o.cell === b.cell) { npcsInCell++; } }
+        }
       }
-      process.send({ report: { ms: now - at0, cpuMs: (cpu.user + cpu.system) / 1000, steps, counts, failed, teleports, all, movesReadPerBot: perBot, cores: os.cpus().length, wsDown, wsUp, inVoice, play: Object.assign(play, playing.length ? { hostedNow } : {}) } });
+      process.send({ report: { ms: now - at0, cpuMs: (cpu.user + cpu.system) / 1000, steps, counts, failed, teleports, all, movesReadPerBot: perBot, cores: os.cpus().length, wsDown, wsUp, inVoice, play: Object.assign(play, playing.length ? { hostedNow, npcsKnown, npcsInCell } : {}) } });
       cpu0 = process.cpuUsage(); at0 = now;
     }
     if (msg && msg.stop) {
