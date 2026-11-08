@@ -23,6 +23,11 @@
 // "Thornswood". The Release's installer has none, since nothing on the
 // Release says who signed it, and the page then names nobody.
 //
+// So does the Release's download address (Patrick, 8 Nov 2026: "linking the
+// downloads page to the files on GitHub"): listFiles passes it on, and the
+// button goes straight to it, or to /file/ for an entry without one or with
+// an address that is not this repository's Releases.
+//
 // Read only. Writes to a temp folder and nowhere else.
 const REPO_DIR = require('path').join(__dirname, '..', '..'); // this harness is in site\tests\, the repository is two folders up
 const fs = require('fs');
@@ -96,6 +101,8 @@ async function main() {
     yes('  with the Release\'s size and tag, not the old exe left in the folder',
         e.size === setup.size && e.version === setup.tag && e.hidden === false);
     yes('  and names no publisher, which the Release does not say', e.publisher === '');
+    yes('  and the Release\'s own download address, for the page\'s button', e.url === setup.url);
+    yes('a file the site keeps has no address of its own: it goes by /file/', !('url' in g));
     yes('a folder file\'s sha256 from files.json goes out, in lower case', g.sha256 === guideSha);
     yes('  with its publisher', g.publisher === 'Someone Signing');
     yes('an entry with no publisher sends an empty one', (by['Extra.zip'] || {}).publisher === '');
@@ -183,6 +190,15 @@ async function main() {
           (html.match(/Download the installer/g) || []).length === 1 && !/its payload/.test(html) &&
           !/Do not unzip/.test(html));
     }
+    const GH = 'https://github.com/ThornswoodRP/Thornswood/releases/download/main-build-20261108.2/Thornswood-Setup.exe';
+    const href = (html) => (/<a class="btn first" href="([^"]*)">Download the installer<\/a>/.exec(html) || [])[1];
+    yes('the button goes straight to the installer on GitHub when the site read its Release (Patrick, 8 Nov)',
+        href(await render({ files: [exe(400000, H, { url: GH })] })) === GH);
+    yes('  and to /file/ when the entry has no address',
+        href(await render({ files: [exe(400000, H)] })) === '/file/Thornswood-Setup.exe');
+    yes('  and an address anywhere but this repository\'s Releases is never used',
+        href(await render({ files: [exe(400000, H, { url: 'https://example.com/Thornswood-Setup.exe' })] })) === '/file/Thornswood-Setup.exe' &&
+        href(await render({ files: [exe(400000, H, { url: GH + '"><img src=x>' })] })) === '/file/Thornswood-Setup.exe');
     const missing = await render({ files: [zip(false)] });
     yes('with no installer published yet, the page says so and offers no button',
         /The installer is not published yet\./.test(missing) && !/Download the installer/.test(missing));

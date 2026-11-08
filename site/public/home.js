@@ -739,12 +739,20 @@ if (AGE_PATHS[here] && !ageOk()) {
     // which is not what the Windows prompt says next. An entry with no
     // publisher names nobody, which the Release's installer is until the site
     // can say who signed it.
+    // Where the button goes: the installer's own download on GitHub, its
+    // Release's address as the site read it from GitHub (downloads.js), or
+    // /file/ for a file the site keeps itself.
+    function fileHref(f) {
+      var u = String(f.url || '');
+      if (/^https:\/\/github\.com\/ThornswoodRP\/Thornswood\/releases\/download\/[^\s"'<>]+$/.test(u)) return u;
+      return '/file/' + encodeURIComponent(f.name);
+    }
     var by = exe && exe.publisher ? 'Published by ' + esc(exe.publisher) + '<br>' : '';
     var grab = '';
     if (!exe) {
       grab = '<p class="faint">The installer is not published yet.</p>';
     } else {
-      grab = '<div class="grab"><a class="btn first" href="/file/' + encodeURIComponent(exe.name) + '">' +
+      grab = '<div class="grab"><a class="btn first" href="' + esc(fileHref(exe)) + '">' +
              'Download the installer</a>' +
              '<p class="also faintly">' + by + esc(human(exe.size)) +
              (exe.version ? ' · ' + esc(clock(exe.version)) : '') + sum(exe) + '</p></div>';
