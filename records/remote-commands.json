@@ -1112,6 +1112,15 @@
                       "reason":  "restarts a runner service; the gate runs it as Install-Runner -Hermes -NetworkOnly"
                   },
                   {
+                      "script":  "scripts/deploy/Install-Runner.ps1",
+                      "scope":  "\u003ctop\u003e",
+                      "via":  "Remote",
+                      "anchor":  "Remote ($toolLib + ",
+                      "does":  "puts the Hermes runner\u0027s Python, held to the record\u0027s SHA-256 and python.org\u0027s signature, in its tool cache (#5495)",
+                      "class":  "admin",
+                      "reason":  "runs python.org\u0027s installer for all users into the runner\u0027s folder; the gate runs it as Install-Runner -Hermes -Python"
+                  },
+                  {
                       "script":  "scripts/deploy/Install-RunnerEgress.ps1",
                       "scope":  "Remote",
                       "via":  "Invoke-ThornswoodRemote",

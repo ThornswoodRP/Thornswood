@@ -423,7 +423,8 @@
         "Status": "switch",
         "Lock": "switch",
         "NetworkOnly": "switch",
-        "Hermes": "switch"
+        "Hermes": "switch",
+        "Python": "switch"
       }
     },
     "Install-Backup": {
