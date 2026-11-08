@@ -56,10 +56,13 @@ The mods are a collection on Nexus, and the collection has revisions. When the
 server moves to a new one, the launcher says **Your mods need updating** above
 Play and names the revision.
 
-Close the game, select the Thornswood profile in Vortex, and press the card's
-**Open revision** button. It opens that revision's page on Nexus; install it
-from there, not the newest one the collection's own page shows. Let Vortex
-finish installing and deploying it,
+Close the game and press the card's **Update in Vortex** button. It brings
+Vortex forward. Select the Thornswood profile there, open Collections and
+press Update on the Thornswood collection, which puts the new revision in
+place of the old one. Do not install the new revision from Nexus: a
+collection that comes in by a Nexus link is added beside the one you have,
+and the two fight over the same files. Let Vortex finish installing and
+deploying it,
 then open the launcher and let its own update finish before you press Play.
 The collection brings the other authors' mods; the launcher brings
 Thornswood's own files.

@@ -154,10 +154,15 @@ $server = Get-SiteSource (Join-Path $repo 'site')
 Yes 'the site''s public answer carries the revision' ($server.Contains('collectionRevision: Number(feed.collectionRevision) > 0 ? Number(feed.collectionRevision) : 0,'))
 $homeJs = [IO.File]::ReadAllText((Join-Path $repo 'site\public\home.js'))
 Yes 'the Downloads button names the revision and says not to take a newer one' ($homeJs.Contains("'Open revision ' + esc(String(d.collectionRevision))") -and $homeJs.Contains('Nexus may show first.'))
+# The link adds a second collection beside one already installed (#5546), so
+# the step says to press Update in Vortex instead.
+$homeFlat = $homeJs -replace "'\s*\+\s*'", '' -replace '\s+', ' '
+Yes 'the Downloads step tells a copy that has the collection to press Update in Vortex, not the link' ($homeFlat.Contains('Already have the collection? Do not use this link: open Collections in Vortex and press Update on the Thornswood collection.'))
 $join = [IO.File]::ReadAllText((Join-Path $repo 'site\data\site\join.md')) -replace '\s+', ' '
 Yes 'join.md step 3 names the server''s revision' ($join.Contains('opens the revision of the collection the server was built against'))
 $help = [IO.File]::ReadAllText((Join-Path $repo 'site\data\help.md')) -replace '\s+', ' '
 Yes 'help.md says to install the revision the link opens' ($help.Contains('it opens the revision the server was built against'))
+Yes 'help.md updates the collection with Update in Vortex, not a second install from Nexus' ($help.Contains('press Update on the Thornswood collection') -and $help.Contains('Do not install the new revision from Nexus') -and -not $help.Contains('**Open revision** button'))
 Yes 'help.md tells a copy ahead of the server nothing needs installing' ($help.Contains('## When your mods are ahead of the server') -and $help.Contains('nothing needs installing'))
 
 # ---- the real method, compiled ----------------------------------------------

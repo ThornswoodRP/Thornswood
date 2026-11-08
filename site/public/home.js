@@ -814,6 +814,12 @@ if (AGE_PATHS[here] && !ageOk()) {
              // The link opens the revision the server was built against, not
              // the collection's page, which Nexus always shows at its newest
              // (#4115): a newer revision than the server's keeps Play shut.
+             // The number is the main feed's, which a main Ship sets from the
+             // record, so it moves to a new revision by itself the moment the
+             // server is released on it, and not before.
+             // The link is for a first install only: a collection that comes
+             // in by a Nexus link is installed beside the one already there,
+             // and only Vortex's own Update replaces it (#5546).
              (d.collection
                ? '<div class="grab"><a class="btn first" href="' + esc(d.collection) +
                  '" target="_blank" rel="noopener">' +
@@ -825,6 +831,9 @@ if (AGE_PATHS[here] && !ageOk()) {
                      'server was built against. Install that one in Vortex, not a newer one ' +
                      'Nexus may show first.'
                    : 'Opens on Nexus. Vortex takes it from there.') +
+                 ' Already have the collection? Do not use this link: open Collections in ' +
+                 'Vortex and press Update on the Thornswood collection. Installing it again ' +
+                 'from Nexus adds a second copy beside the first.' +
                  '</p></div>'
                : '') +
              '</div></div>' +
