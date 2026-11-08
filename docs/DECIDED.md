@@ -326,6 +326,10 @@ link, and the old line goes.
   through the gate on main at 20a8ef2, in that order.**
   (dec_Z76ZQJgUGvBGQ9ko7cOkWQ) 8 Nov 2026,
   [#5495](https://github.com/ThornswoodRP/Thornswood/issues/5495#issuecomment-6725170404).
+- **The Hermes box runner's Python 3.13.17 goes in its tool cache by one run
+  of Install-Runner -Hermes -Python.** (dec_1ruEJ-WHBkU7N7oQuHdbrw) 8 Nov
+  2026,
+  [#5495](https://github.com/ThornswoodRP/Thornswood/issues/5495#issuecomment-6725427050).
 
 ## Work and crafting
 
