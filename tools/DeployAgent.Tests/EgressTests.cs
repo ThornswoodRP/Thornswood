@@ -24,7 +24,7 @@ public class EgressTests
         Assert.False(r.Allows("evilactions.githubusercontent.com"));
         Assert.False(r.Allows("vstoken.actions.githubusercontent.com.evil.example"));
         Assert.False(r.Allows("api.github.com"));
-        Assert.False(r.Allows("13.107.42.16"));
+        Assert.False(r.Allows("203.0.113.16"));
         Assert.False(r.Allows("github.com:443"));
         Assert.False(r.Allows("git hub.com"));
     }
@@ -63,7 +63,7 @@ public class EgressTests
     {
         foreach (var a in new[] { "127.0.0.1", "10.1.2.3", "172.20.0.1", "192.168.1.1", "169.254.1.1", "100.64.0.1", "0.0.0.0", "224.0.0.1", "::1", "fe80::1", "fd00::1", "::ffff:127.0.0.1" })
             Assert.False(EgressProxy.IsPublic(IPAddress.Parse(a)), a);
-        foreach (var a in new[] { "13.107.42.16", "140.82.112.3", "2606:50c0:8000::153" })
+        foreach (var a in new[] { "203.0.113.16", "198.51.100.3", "2606:50c0:8000::153" })
             Assert.True(EgressProxy.IsPublic(IPAddress.Parse(a)), a);
     }
 

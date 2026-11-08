@@ -538,10 +538,9 @@ Install-RunnerEgress.ps1 puts it there.
 
 Why it exists. The runner accounts' firewall rules decided by address, from
 GitHub's published lists. On 3 Nov GitHub gave the Hermes runner the token
-host `vstoken.actions.githubusercontent.com`, on 13.107.42.16, an edge
-address many Microsoft services share, so the runner never came online, and
-a rule letting that address out would have let a job reach every service on
-it. Patrick chose to decide by host name instead (3 Nov, #5495).
+host `vstoken.actions.githubusercontent.com`, on an edge address many
+Microsoft services share, so the runner never came online, and a rule
+letting that address out would have let a job reach every service on it. Patrick chose to decide by host name instead (3 Nov, #5495).
 
 What it does. It listens on loopback only, at the address `egress.json`
 names, and serves one thing: `CONNECT` to a host on that file's list, on

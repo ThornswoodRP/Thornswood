@@ -12,9 +12,9 @@ namespace Thornswood.DeployAgent;
 // every job it runs reach the internet only through this proxy, on loopback,
 // which lets a connection out only to a host its list names. It decides by
 // name because an address cannot say which host it is: on 3 Nov GitHub gave
-// tw-hermes-box the token host vstoken.actions.githubusercontent.com, on
-// 13.107.42.16, an edge address many Microsoft services share, and a rule
-// that let that address out would have let a job reach all of them.
+// tw-hermes-box the token host vstoken.actions.githubusercontent.com, on an
+// edge address many Microsoft services share, and a rule that let that
+// address out would have let a job reach all of them.
 //
 // What a client may do: CONNECT a listed host on port 443, then speak TLS
 // whose ClientHello names that same host (its SNI). The proxy reads the name
