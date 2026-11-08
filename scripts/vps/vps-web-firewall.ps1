@@ -143,11 +143,20 @@ function Get-AllowRules {
 # One of the two web rules by its display name, enabled or not, as the
 # firewall takes it: Name, Remote and Store (GroupPolicy for the box's own
 # policy, Local for the local store; #3896), or $null when there is none.
+# The box's own policy holds the rule once it is there (#3896), so a copy of
+# it left in the local store is not the one that is scoped: Setup-Domain.ps1
+# made the pair in the policy store on 8 Nov 2026 beside the scoped local
+# pair (#5334). With none in the policy, the rule the firewall takes.
 function Get-WebRule([string]$DisplayName) {
-    $r = @(Get-NetFirewallRule -PolicyStore ActiveStore -DisplayName $DisplayName -ErrorAction SilentlyContinue)
+    $r = @(Get-NetFirewallRule -PolicyStore localhost -DisplayName $DisplayName -ErrorAction SilentlyContinue)
+    $store = 'GroupPolicy'
+    if (-not $r.Count) {
+        $r = @(Get-NetFirewallRule -PolicyStore ActiveStore -DisplayName $DisplayName -ErrorAction SilentlyContinue)
+        if ($r.Count) { $store = [string]$r[0].PolicyStoreSourceType }
+    }
     if (-not $r.Count) { return $null }
     $af = $r[0] | Get-NetFirewallAddressFilter
-    return [pscustomobject]@{ Name = [string]$r[0].Name; Enabled = [string]$r[0].Enabled; Count = $r.Count; Remote = @(@($af.RemoteAddress) | ForEach-Object { [string]$_ }); Store = [string]$r[0].PolicyStoreSourceType }
+    return [pscustomobject]@{ Name = [string]$r[0].Name; Enabled = [string]$r[0].Enabled; Count = $r.Count; Remote = @(@($af.RemoteAddress) | ForEach-Object { [string]$_ }); Store = $store }
 }
 # A rule's remote addresses, changed in the store the firewall took it from:
 # the box's own policy (then Group Policy refreshed, scripts\vps\BoxFirewall.ps1,

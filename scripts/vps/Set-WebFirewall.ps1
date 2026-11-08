@@ -56,6 +56,17 @@
 .PARAMETER RangesFile
   The list of ranges. scripts\deploy\cloudflare-ranges.txt by default.
 
+.PARAMETER OnTheBox
+  Run the box half here, on the box, with no ssh: the deploy gate's verb
+  Set-WebFirewall, which runs it as SYSTEM from main (#5334), so a cloud
+  session scopes the two rules with
+
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Set-WebFirewall'
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Set-WebFirewall -Check'
+
+  The gate has no -Open: putting the rules back to any address stays a step
+  for a machine with the box's key.
+
 .PARAMETER NoPause
   Do not wait for Enter before closing.
 
@@ -84,6 +95,7 @@ param(
     [string]$User = '',
     [string]$KnownHosts = '',
     [string]$RangesFile = '',
+    [switch]$OnTheBox,
     [switch]$NoPause
 )
 
@@ -111,10 +123,17 @@ function Clean($lines) {
 
 function Invoke-Box([string]$mode) {
     if (-not (Test-Path -LiteralPath $BoxScript)) { Die "There is no $BoxScript. Nothing was sent." }
-    $script = Get-ThornswoodFileScript -Path $BoxScript -Arguments $mode
     $old = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    $out = Clean @(Invoke-ThornswoodRemote -Target "$User@$Vps" -SshArgs $ssh -Script ("`$ProgressPreference = 'SilentlyContinue'`r`n" + $script))
+    if ($OnTheBox) {
+        # The same file, run here with the same words (the ranges come from
+        # the checkout's own list, read and checked above).
+        $global:LASTEXITCODE = 0
+        $out = Clean @(& ([scriptblock]::Create("& '" + $BoxScript.Replace("'", "''") + "' " + $mode)) 2>&1)
+    } else {
+        $script = Get-ThornswoodFileScript -Path $BoxScript -Arguments $mode
+        $out = Clean @(Invoke-ThornswoodRemote -Target "$User@$Vps" -SshArgs $ssh -Script ("`$ProgressPreference = 'SilentlyContinue'`r`n" + $script))
+    }
     $rc = $LASTEXITCODE
     $ErrorActionPreference = $old
     foreach ($l in $out) {
@@ -133,7 +152,9 @@ Write-Host ''
 Write-Host '  THORNSWOOD  -  who the box takes 80 and 443 from' -ForegroundColor White
 Say "  $User@$Vps" 'DarkGray'
 
-if (-not (Get-Command ssh -ErrorAction SilentlyContinue)) { Die 'ssh is not on PATH. Windows ships it: Settings, Apps, Optional features, OpenSSH Client.' }
+if ($OnTheBox) { Say '  here, on the box, through the deploy gate' 'DarkGray' }
+if ($OnTheBox -and $Open) { Die '-Open is not run through the gate. Nothing was changed.' }
+if (-not $OnTheBox -and -not (Get-Command ssh -ErrorAction SilentlyContinue)) { Die 'ssh is not on PATH. Windows ships it: Settings, Apps, Optional features, OpenSSH Client.' }
 if ($Check -and $Open) { Die '-Check only reads, so it does not go with -Open.' }
 
 Head "1. Cloudflare's ranges"
@@ -141,12 +162,14 @@ try { $ranges = Read-ThornswoodCloudflareRanges $RangesFile } catch { Die ($_.Ex
 Say ("  " + $ranges.Count + ' ranges from ' + $RangesFile) 'Green'
 $rangeArg = "-Ranges '" + ($ranges -join ',') + "'"
 
-Head "2. The box's own key"
-$hk = Test-ThornswoodKnownHost -Address $Vps -KnownHosts $KnownHosts
-if ($hk.Status -ne 'trusted') {
-    Die ("known_hosts does not hold the key scripts\vps\vps.json pins for $Vps (" + $hk.Status + '). Run .\scripts\vps\Setup-SshKey.ps1 first. Nothing was changed.')
+if (-not $OnTheBox) {
+    Head "2. The box's own key"
+    $hk = Test-ThornswoodKnownHost -Address $Vps -KnownHosts $KnownHosts
+    if ($hk.Status -ne 'trusted') {
+        Die ("known_hosts does not hold the key scripts\vps\vps.json pins for $Vps (" + $hk.Status + '). Run .\scripts\vps\Setup-SshKey.ps1 first. Nothing was changed.')
+    }
+    Say '  known_hosts holds the pinned key' 'Green'
 }
-Say '  known_hosts holds the pinned key' 'Green'
 
 if ($Check) {
     Head '3. On the box, read only'

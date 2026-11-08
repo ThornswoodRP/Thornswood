@@ -202,7 +202,9 @@ function Invoke-FirewallPolicy {
     $move = @($local | Where-Object { $_.Enabled -and (($_.Direction -eq 'Inbound' -and $_.Action -eq 'Allow' -and (Test-Listed $entries $_)) -or $_.Action -eq 'Block') } | Sort-Object Direction, DisplayName)
     $toCopy = @()
     foreach ($r in $move) {
-        if (@($policy | Where-Object { $_.Name -eq $r.Name }).Count) { Say 'HELD' (Show-Rule $r) }
+        # By name, or by display name: a rule the policy already holds under
+        # another id (Setup-Domain.ps1 made the web pair there, #5334) is held.
+        if (@($policy | Where-Object { $_.Name -eq $r.Name -or $_.DisplayName -eq $r.DisplayName }).Count) { Say 'HELD' (Show-Rule $r) }
         else { $toCopy += $r; Say 'MOVE' (Show-Rule $r) }
     }
     $script:open = $toCopy.Count

@@ -226,9 +226,14 @@ if (Test-Path -LiteralPath `$cf) {
 # (scripts\vps\BoxFirewall.ps1, #3896).
 $(Get-ThornswoodFirewallScript)
 `$fwMade = 0
+# Whether the rule is there is read from what the firewall takes (the active
+# store), not the policy store alone: until Set-InboundRules.ps1 -Own has run,
+# the scoped rules are in the local store, and on 8 Nov 2026 a run that looked
+# only in the policy store made a second pair there that took any address
+# (#5334).
 foreach (`$p in 80,443) {
   `$n = 'Thornswood Web ' + `$p
-  if (-not (Get-NetFirewallRule -PolicyStore localhost -DisplayName `$n -EA SilentlyContinue)) {
+  if (-not (Get-NetFirewallRule -PolicyStore ActiveStore -DisplayName `$n -EA SilentlyContinue)) {
     New-NetFirewallRule -PolicyStore localhost -DisplayName `$n -Direction Inbound -Protocol TCP ``
       -LocalPort `$p -Action Allow | Out-Null
     `$fwMade++

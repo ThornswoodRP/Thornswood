@@ -450,6 +450,24 @@ finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# ---- the second pair of 8 Nov 2026 (#5334) ----------------------------------
+# Setup-Domain.ps1 looked only in the policy store, found nothing there while
+# the scoped pair was in the local store, and made a pair there that took any
+# address. It reads what the firewall takes now; the box half scopes the
+# policy's pair when there is one; and the gate runs it.
+Write-Host ''
+Write-Host 'the second pair'
+$sd = [IO.File]::ReadAllText((P 'scripts', 'deploy', 'Setup-Domain.ps1'))
+Yes 'Setup-Domain.ps1 makes a web rule only when the firewall takes none of that name (the active store)' ($sd -match "if \(-not \(Get-NetFirewallRule -PolicyStore ActiveStore -DisplayName ``\`$n -EA SilentlyContinue\)\)" -and $sd -notmatch "Get-NetFirewallRule -PolicyStore localhost -DisplayName ``\`$n")
+$wr = Fn $Box 'Get-WebRule'
+Yes 'the box half reads the policy store''s rule first, and the active store only when the policy holds none' ($wr -match '(?s)-PolicyStore localhost -DisplayName \$DisplayName.*?\$store = ''GroupPolicy''.*?if \(-not \$r\.Count\) \{\s*\$r = @\(Get-NetFirewallRule -PolicyStore ActiveStore')
+$gv = ([IO.File]::ReadAllText((P 'scripts', 'vps', 'gate', 'verbs.json')) | ConvertFrom-Json).verbs.'Set-WebFirewall'
+Yes 'the gate''s Set-WebFirewall runs Set-WebFirewall.ps1 -OnTheBox, with -Check and nothing else, so never -Open' ($null -ne $gv -and $gv.script -eq 'scripts/vps/Set-WebFirewall.ps1' -and (@($gv.fixed) -join ' ') -eq '-OnTheBox -NoPause' -and (@($gv.params.PSObject.Properties | ForEach-Object { $_.Name }) -join ',') -eq 'Check')
+$dt = [IO.File]::ReadAllText($Driver)
+Yes '  and -OnTheBox runs the same box file here, needs no key, and refuses -Open' ($dt -match '\[switch\]\$OnTheBox' -and $dt -match "(?s)if \(\`$OnTheBox\) \{.*?\[scriptblock\]::Create\(`"& '`" \+ \`$BoxScript" -and $dt -match "if \(-not \`$OnTheBox\) \{\s*Head `"2\. The box's own key`"" -and $dt -match 'if \(\$OnTheBox -and \$Open\) \{ Die')
+$fp = [IO.File]::ReadAllText((P 'scripts', 'vps', 'vps-firewall-policy.ps1'))
+Yes 'Set-InboundRules.ps1 -Own holds a rule the policy has under another id by its display name, so it makes no second copy' ($fp.Contains('$_.Name -eq $r.Name -or $_.DisplayName -eq $r.DisplayName'))
+
 Write-Host ''
 Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail)
 if ($script:fail) { exit 1 }

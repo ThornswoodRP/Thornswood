@@ -620,7 +620,8 @@ $rules = @(
 )
 $fwChanged = 0
 foreach ($r in $rules) {
-    if (-not (Get-NetFirewallRule -PolicyStore localhost -DisplayName $r.Name -ErrorAction SilentlyContinue)) {
+    # What the firewall takes, local rules included until -Own has run (#5334).
+    if (-not (Get-NetFirewallRule -PolicyStore ActiveStore -DisplayName $r.Name -ErrorAction SilentlyContinue)) {
         New-NetFirewallRule -PolicyStore localhost -DisplayName $r.Name -Direction Inbound -Action Allow -Protocol $r.Protocol -LocalPort $r.Port | Out-Null
         $fwChanged++
         Say ("  firewall: {0} open" -f $r.Name)
