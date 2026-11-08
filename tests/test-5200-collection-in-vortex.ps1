@@ -21,6 +21,11 @@
     - Shell.OpenCollection opens the nxm link only when Vortex answers it,
       and the revision's page (CollectionLink) otherwise, and every
       collection button is OpenCollection;
+    - with a revision already installed it hands Vortex no link and no page
+      (#5546): a collection that comes in by link is installed beside the
+      old one, and only Vortex's Update takes the old one off, so it starts
+      Vortex itself (Checks.VortexExe) and says to press Update there, the
+      button says Update in Vortex, and the cards say the same;
     - when the card comes down because Vortex finished, VortexChanged asks
       for Scan and Fix after the feed's answer, and the answer runs them
       after OnVersionDoc and UpdateBySelf, once, and not beside an update
@@ -72,14 +77,17 @@ $nxmUrl = Method $checks 'public static string CollectionNxmUrl(Config cfg, int 
 Yes 'Checks.CollectionNxmUrl builds Nexus''s nxm link to the revision' ($nxmUrl.Contains('"nxm://" + game + "/collections/" + slug + "/revisions/" + revision') -and $nxmUrl.Contains('CollectionSlug(cfg)'))
 Yes 'and nothing with no revision or no collection' ($nxmUrl.Contains('if (revision <= 0 || slug.Length == 0) return "";'))
 $starts = Method $checks 'public static bool NxmStartsVortex(string command)'
-Yes 'Checks.NxmStartsVortex asks whether the command''s program is Vortex.exe' ($starts.Contains('"Vortex.exe", StringComparison.OrdinalIgnoreCase'))
+$exeOf = Method $checks 'public static string VortexExe(string command)'
+Yes 'Checks.NxmStartsVortex asks whether the command''s program is Vortex.exe' ($starts.Contains('return VortexExe(command).Length > 0;') -and
+    $exeOf.Contains('string.Equals(name, "Vortex.exe", StringComparison.OrdinalIgnoreCase) ? exe : ""'))
 $cmd = Method $checks 'public static string NxmCommand()'
 Yes 'Checks.NxmCommand reads what Windows runs for an nxm link' ($cmd.Contains('Registry.ClassesRoot.OpenSubKey(@"nxm\shell\open\command")'))
 
 # ---- the buttons ------------------------------------------------------------
 $open = Code (Method $shell 'static void OpenCollection()')
 Yes 'Shell.OpenCollection exists' ($open.Length -gt 0)
-Yes 'it hands Vortex the link only when Vortex answers nxm links' ($open.Contains('bool vortex = nxm.Length > 0 && Checks.NxmStartsVortex(Checks.NxmCommand());') -and
+Yes 'it hands Vortex the link only when Vortex answers nxm links' ($open.Contains('bool vortex = nxm.Length > 0 && Checks.NxmStartsVortex(command);') -and
+    $open.Contains('string command = Checks.NxmCommand();') -and
     $open.IndexOf('if (vortex)') -lt $open.IndexOf('new ProcessStartInfo(nxm)'))
 Yes 'and opens the revision''s page otherwise' ($open.Contains('string page = CollectionLink();') -and $open.Contains('new ProcessStartInfo(page)') -and
     $open.IndexOf('new ProcessStartInfo(page)') -gt $open.IndexOf('new ProcessStartInfo(nxm)'))
@@ -89,6 +97,25 @@ Yes 'the card''s button, the missing-mods box and the Diagnostics cards are Open
     ([regex]::Matches((Code $play), 'OpenCollection\(\);')).Count -eq 1 -and
     $packs.Contains('b.Click += delegate { OpenCollection(); };'))
 Yes 'nothing else opens the collection''s page or link' (-not ([regex]::IsMatch((Code ($update + $play + $packs + $watch + $sf)), 'ProcessStartInfo\((CollectionLink\(\)|url|nxm|page)\)')))
+
+# ---- a revision already installed (#5546) -------------------------------------
+$installed = $open.IndexOf('if (mine > 0)')
+$back = if ($installed -ge 0) { $open.IndexOf('return;', $installed) } else { -1 }
+$branch = if ($back -gt $installed) { $open.Substring($installed, $back - $installed) } else { '' }
+Yes 'OpenCollection reads the installed revision first' ($open.Contains('int mine = Checks.CollectionRevision(cfg);') -and $installed -ge 0 -and
+    $installed -lt $open.IndexOf('new ProcessStartInfo(nxm)') -and $installed -lt $open.IndexOf('new ProcessStartInfo(page)'))
+Yes 'with one installed it starts Vortex itself and returns, with no link and no page' ($branch.Contains('string exe = Checks.VortexExe(command);') -and
+    $branch.Contains('new ProcessStartInfo(exe)') -and -not $branch.Contains('nxm') -and -not $branch.Contains('page'))
+Yes 'and says to press Update on the collection Vortex has' ($branch.Contains('Log(UpdateInVortexLine(mine));') -and
+    (Method $shell 'static string UpdateInVortexLine(int mine)').Contains('open Collections and press Update'))
+$words = Code (Method $shell 'static string CollectionButtonText(int revision = -1)')
+Yes 'the button says Update in Vortex for an older revision and Open Vortex for another' ($words.Contains('if (mine > 0) return wants > mine ? "Update in Vortex" : "Open Vortex";') -and
+    $words.IndexOf('if (mine > 0)') -lt $words.IndexOf('"Open revision "'))
+$bar = Method $shell 'static void ShowCollectionBar(int revision = -1)'
+Yes 'the card above Play says to press Update in Vortex, not to install from Nexus' ($bar.Contains('press Update on the Thornswood collection') -and $bar.Contains('InstallLabel(CollectionButtonText(revision));') -and
+    -not $bar.Contains('install that one in Vortex'))
+Yes 'and so does the Diagnostics card' ((Method $packs 'static Control CollectionStatusCard()').Contains('press Update on the Thornswood collection'))
+Yes 'the join guide says to update inside Vortex' (([IO.File]::ReadAllText((Join-Path $repo 'site\data\site\join.md')) -replace '\s+', ' ').Contains('press Update on the Thornswood collection'))
 
 # ---- Scan and Fix when Vortex is done ---------------------------------------
 $changed = Code (Method $watch 'static void VortexChanged(int revision, string problem)')
@@ -153,12 +180,14 @@ namespace Thornswood {
     { "\"unclosed", false },
    };
    for (int i = 0; i < vortex.GetLength(0); i++) if (NxmStartsVortex((string)vortex[i, 0]) != (bool)vortex[i, 1]) return "handler case " + i;
+   if (VortexExe("\"C:\\Program Files\\Black Tree Gaming Ltd\\Vortex\\Vortex.exe\" -d \"%1\"") != "C:\\Program Files\\Black Tree Gaming Ltd\\Vortex\\Vortex.exe") return "exe case 0";
+   if (VortexExe("\"C:\\Modding\\MO2\\nxmhandler.exe\" \"%1\"") != "") return "exe case 1";
    return "";
   }
  }
 }
 '@
-    $asm = Add-LauncherType -Source ($fixture.Replace('__METHODS__', $slug + "`n" + $nxmUrl + "`n" + $starts))
+    $asm = Add-LauncherType -Source ($fixture.Replace('__METHODS__', $slug + "`n" + $nxmUrl + "`n" + $starts + "`n" + $exeOf))
     $said = [string]$asm.GetType('Thornswood.CollectionNxmFixture').GetMethod('Run').Invoke($null, @())
     Yes ('the real CollectionNxmUrl names the revision for both address shapes and nothing without one, and NxmStartsVortex knows Vortex from another handler' + $(if ($said) { ' (' + $said + ')' } else { '' })) ($said -eq '')
 }

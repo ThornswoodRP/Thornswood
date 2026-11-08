@@ -84,6 +84,13 @@ newer one Nexus may show first: a newer one keeps Play shut until the server
 catches up. Vortex takes it from there: it makes a profile for Thornswood,
 downloads every mod from its own author, and deploys them. Give it time.
 
+When the server later moves to a newer revision, update the collection inside
+Vortex: open Collections and press Update on the Thornswood collection. That
+puts the new revision in place of the old one. Installing the new revision
+from Nexus instead adds a second Thornswood collection beside the first, and
+the two fight over the same files. The launcher's button opens Vortex for this
+once a revision is installed.
+
 If the wrong profile is active in Vortex, the launcher says so before you press
 Play.
 

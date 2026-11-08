@@ -155,7 +155,8 @@ namespace Thornswood
             if (wants > 0 && have < wants)
                 return CollectionCard("Your mods need updating",
                     "Vortex has collection revision " + have + " and the server was built against " +
-                    "revision " + wants + ". Open revision " + wants + " and let Vortex bring it up to date.");
+                    "revision " + wants + ". In Vortex, press Update on the Thornswood collection, which puts revision " +
+                    wants + " in its place. Installing revision " + wants + " from Nexus instead adds a second copy beside it.");
             // No button for ahead (#4115): nothing needs installing, and the
             // collection's pages lead to the same revision or a newer one.
             if (wants > 0 && have > wants)

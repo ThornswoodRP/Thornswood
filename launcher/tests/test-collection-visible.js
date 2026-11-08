@@ -92,7 +92,7 @@ const noteAt = SHELL.indexOf('bool unsure = CollectionUnconfirmed(collectionRevi
 yes('DrawStatus asks it', noteAt > 0);
 const note = noteAt > 0 ? SHELL.slice(noteAt, SHELL.indexOf('// Wrong Skyrim build', noteAt)) : '';
 yes('the note says the mods could not be confirmed', note.indexOf('Your mods could not be confirmed') >= 0);
-yes('the note offers the collection', note.indexOf('InstallLabel(CollectionButtonText());') >= 0);
+yes('the note offers the collection', note.indexOf('InstallLabel(CollectionButtonText(collectionRevision));') >= 0);
 yes('and the label is on the bar\'s button as well as Settings\' (#3201)', /static void InstallLabel\(string text\)[\s\S]*?btnUpdate\.Content = text;/.test(UPDATE));
 yes('the note never sets collectionBarUp, so it never shuts Play', note.indexOf('collectionBarUp = true') < 0);
 yes('the note never touches the Play button', note.indexOf('btnPlay') < 0);
