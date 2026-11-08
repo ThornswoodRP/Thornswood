@@ -1,5 +1,6 @@
 #nullable enable
 using System.Reflection;
+using System.Net.Sockets;
 using System.ServiceProcess;
 
 namespace Thornswood.DeployAgent;
@@ -18,6 +19,8 @@ public static class Program
         thornswood-agent once    [--config <agent.json>]
         thornswood-agent service [--config <agent.json>]
         thornswood-agent steps   --folder deploy/after --verbs scripts/vps/gate/verbs.json
+        thornswood-agent egress  [--config <egress.json>]
+        thornswood-agent egress-check [--config <egress.json>]
 
         deploy  applies one signed Release by its tag (the deploy gate's
                 Deploy-Release verb; a rollback is the Release before)
@@ -26,6 +29,11 @@ public static class Program
         service what the Windows service runs (Install-DeployAgent.ps1)
         steps   holds a checkout's steps after a deploy to their rules
                 (#5186), as a pull request's check does; runs nothing
+        egress  the box runners' way out (#5495): a proxy on loopback that
+                lets a runner reach only the hosts egress.json lists, until
+                it is stopped (the task Install-RunnerEgress.ps1 makes);
+                egress-check reads the file the same way and says whether
+                the proxy would take it, listening nowhere
         """;
 
     public static string Version =>
@@ -53,6 +61,37 @@ public static class Program
             if (folder == "" || verbs == "") { Console.Error.WriteLine($"steps needs --folder and --verbs\n\n{Usage}"); return 2; }
             try { return AfterDeploy.CheckCommand(folder, verbs, Console.WriteLine); }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Console.Error.WriteLine("REFUSED: " + e.Message); return 1; }
+        }
+        if (verb is "egress" or "egress-check")
+        {
+            var egPath = opts.GetValueOrDefault("config") ?? Path.Combine(AppContext.BaseDirectory, "egress.json");
+            EgressConfig eg;
+            try { eg = EgressConfig.Load(egPath); }
+            catch (Exception e) when (e is ConfigException or IOException or System.Text.Json.JsonException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine($"REFUSED: {egPath}: {e.Message}");
+                return 1;
+            }
+            if (verb == "egress-check")
+            {
+                Console.WriteLine($"{egPath}: {eg.Allow.Count} host rule(s), listening on {eg.Listen}");
+                return 0;
+            }
+            using var egLog = new LogFile(Path.Combine(eg.Home, "logs", "egress.log"));
+            void EgLog(string s)
+            {
+                Console.WriteLine(s);
+                egLog.Write(s);
+            }
+            using var stop = new CancellationTokenSource();
+            Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Cancel(); };
+            try { new EgressProxy(eg, EgLog).Run(stop.Token).GetAwaiter().GetResult(); }
+            catch (SocketException e)
+            {
+                EgLog($"REFUSED: cannot listen on {eg.Listen}: {e.SocketErrorCode}");
+                return 1;
+            }
+            return 0;
         }
         if (verb is not ("check" or "deploy" or "once" or "service")) { Console.Error.WriteLine($"no command {verb}\n\n{Usage}"); return 2; }
 

@@ -527,6 +527,34 @@ pwsh scripts/vps/Box-Run.ps1 -Line 'Install-DeployAgent -EndHung'
 On the box itself, `thornswood-agent.exe check` says whether the App gives a
 token, what the newest Deployment says, and whether the dev server answers.
 
+## The box runners' way out
+
+The same signed program carries a second job, `thornswood-agent egress`:
+the proxy the box's runner accounts reach the internet through (#5495). It
+runs from a copy of the program in a folder of its own as the task
+`Thornswood Runner Egress`, LOCAL SERVICE with a SID of its own like the
+game servers (ServiceAccount.ps1), never as LocalSystem;
+Install-RunnerEgress.ps1 puts it there.
+
+Why it exists. The runner accounts' firewall rules decided by address, from
+GitHub's published lists. On 3 Nov GitHub gave the Hermes runner the token
+host `vstoken.actions.githubusercontent.com`, on an edge address many
+Microsoft services share, so the runner never came online, and a rule
+letting that address out would have let a job reach every service on it. Patrick chose to decide by host name instead (3 Nov, #5495).
+
+What it does. It listens on loopback only, at the address `egress.json`
+names, and serves one thing: `CONNECT` to a host on that file's list, on
+port 443. Before it connects anywhere it reads the TLS ClientHello that
+follows and holds its server name to the host asked for, so a tunnel opened
+for a listed host cannot ask the shared edge behind it for another. It
+resolves the name itself and goes only to public addresses, never to
+loopback or a private range. A plain HTTP request gets 405, a host or port
+off the list 403, and a ClientHello that is not TLS or names another host
+ends the tunnel; each is a line in `logs\egress.log` under its folder. A
+list entry is a name, or `*.a.b` for the names under `a.b`; a pattern with
+fewer than two labels after its star, an address, or an empty list is
+refused when the file is read.
+
 ## Tests
 
 - `tools/DeployAgent.Tests` runs the agent against a stand-in GitHub, a
@@ -554,6 +582,11 @@ token, what the newest Deployment says, and whether the dev server answers.
   rename on Windows, as Feed-Store.ps1's is, because MoveFileEx is refused
   while the engine has gamemode.js open, #2727).
   `dotnet test tools/DeployAgent.Tests` runs them.
+- `EgressTests` runs the runners' proxy against a stand-in upstream on
+  loopback with real ClientHellos: a listed host through, a host or port off
+  the list refused before anything leaves, a ClientHello naming another
+  host, plain bytes after `CONNECT`, a plain HTTP request, a name resolving
+  only to a private address, and the list rules.
 - `tests/test-5180-deploy-agent.ps1` checks the manifest script, both gate
   verbs, the scripts they send the box, and both workflows, and runs the C#
   tests when the .NET SDK is on the machine.
