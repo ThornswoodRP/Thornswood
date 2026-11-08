@@ -248,6 +248,10 @@ async function boxChecks() {
     for (const f of ['Skyrim.esm', 'JKs Skyrim.esp']) { fs.writeFileSync(path.join(inst, 'data', f), f); }
     fs.mkdirSync(path.join(inst, 'data', 'scripts'), { recursive: true });
     fs.writeFileSync(path.join(inst, 'data', 'scripts', 'MarkerScript.pex'), 'pex');
+    fs.mkdirSync(path.join(inst, 'private'), { recursive: true });
+    fs.writeFileSync(path.join(inst, 'private', 'merchant-ledger.json'), '{"version":1}');
+    fs.writeFileSync(path.join(inst, 'private', 'merchant-ledger.initialized'), '1');
+    fs.writeFileSync(path.join(inst, 'private', 'door.json'), '{"passKey":"theirs"}');
     const theirs = { port: 7787, dataDir: 'data', loadOrder: ['Skyrim.esm', 'JKs Skyrim.esp'], npcEnabled: true, npcSettings: { x: 1 },
       thornswoodNear: 3500, thornswoodHurtCare: true, thornswoodSite: 'https://example.invalid', discordWebhook: 'https://example.invalid/hook',
       thornswoodLoadOrderRefuse: 'https://not-a-switch', password: 'theirs' };
@@ -261,6 +265,9 @@ async function boxChecks() {
       fs.statSync(path.join(out, 'data')).isDirectory() && fs.readdirSync(path.join(out, 'data')).join(',') === 'scripts' && st.dataDir === 'data');
     yes('  and a copy of the server\'s Papyrus scripts, which the engine reads from data\\scripts, not a link to them',
       fs.readFileSync(path.join(out, 'data', 'scripts', 'MarkerScript.pex'), 'utf8') === 'pex' && !fs.lstatSync(path.join(out, 'data', 'scripts')).isSymbolicLink());
+    yes('  and a copy of the server\'s merchant ledger and its first-start mark, which the NPC runtime will not start without',
+      fs.readFileSync(path.join(out, 'private', 'merchant-ledger.json'), 'utf8') === '{"version":1}' && fs.readFileSync(path.join(out, 'private', 'merchant-ledger.initialized'), 'utf8') === '1' &&
+      !fs.lstatSync(path.join(out, 'private', 'merchant-ledger.json')).isSymbolicLink() && fs.readdirSync(path.join(out, 'private')).sort().join(',') === 'door.json,merchant-ledger.initialized,merchant-ledger.json');
     yes('it keeps the server\'s NPC switch and its plain gameplay switches', st.npcEnabled === true && st.npcSettings.x === 1 && st.thornswoodNear === 3500 && st.thornswoodHurtCare === true);
     yes('and nothing else of its settings: no site, no webhook, no password, no switch that holds an address',
       st.thornswoodSite === undefined && st.discordWebhook === undefined && st.password === undefined && st.thornswoodLoadOrderRefuse === undefined);
@@ -287,6 +294,11 @@ async function boxChecks() {
     err = '';
     try { server.fromInstalled({ from: inst, out: path.join(tmp, 'c6'), port: '7797', 'voice-port': '7799' }); } catch (e) { err = e.message; }
     yes('a server with no data\\scripts is refused, saying the engine reads its scripts there', /which the engine reads the Papyrus scripts from/.test(err));
+    fs.mkdirSync(path.join(inst, 'data', 'scripts'), { recursive: true });
+    fs.unlinkSync(path.join(inst, 'private', 'merchant-ledger.initialized'));
+    err = '';
+    try { server.fromInstalled({ from: inst, out: path.join(tmp, 'c7'), port: '7797', 'voice-port': '7799' }); } catch (e) { err = e.message; }
+    yes('a server whose merchant ledger has no first-start mark is refused, and nothing is laid out', /merchant-ledger\.initialized, without which the NPC runtime does not start/.test(err) && !fs.existsSync(path.join(tmp, 'c7')));
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

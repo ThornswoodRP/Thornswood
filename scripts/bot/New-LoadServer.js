@@ -210,7 +210,8 @@ async function build(o) {
 // (its NPCs, the gamemode's NPC runtime, merchants and quests) is laid out on
 // the box, from a server installed there, and never leaves it. From that
 // server, read and never written: its program (dist_back, scam_native.node,
-// package.json), its gamemode.js and gamemode-tables, the plugins its loadOrder names (by their
+// package.json), its gamemode.js and gamemode-tables, its Papyrus scripts and its
+// merchant ledger (copied), the plugins its loadOrder names (by their
 // full paths, not copied), whether the engine keeps NPCs alive (npcEnabled,
 // npcSettings) and the gameplay switches below. Nothing else of its settings
 // is taken, so the copy has no site, no Discord, no ports and no keys of the
@@ -221,6 +222,7 @@ const GAMEPLAY_KEYS = ['thornswoodCalendar', 'thornswoodPlotLine', 'thornswoodLo
   'thornswoodPartyAt', 'thornswoodNear', 'thornswoodHurtCare', 'thornswoodHideAllNames', 'thornswoodBrokenLimbs',
   'thornswoodBodyReset', 'thornswoodLoadOrderRefuse'];
 const PROGRAM = ['dist_back', 'scam_native.node', 'package.json', 'gamemode.js', 'gamemode-tables'];
+const LEDGER = ['merchant-ledger.json', 'merchant-ledger.initialized'];
 
 function plain(v) {
   if (typeof v === 'boolean' || typeof v === 'number') { return true; }
@@ -252,6 +254,17 @@ function fromInstalled(o) {
     order.push(f.replace(/\\/g, '/'));
   }
   if (!order.length) { throw new Error(from + '\\server-settings.json has no loadOrder'); }
+  // The guild traders' purses and shelves. The gamemode's NPC runtime will
+  // not start without the saved ledger and its first-start mark beside it
+  // (requireMerchantEvidence in npc-merchant-purses.ts), and with a private
+  // folder holding only the door it said "Saved merchant ledger or
+  // initialization evidence is missing" and stood up no NPC, so the bots
+  // found nobody to trade with or carry (the third box run, 8 Nov 2026,
+  // #4623). Copies, so the copy's trades never touch the server's purses.
+  const theirPrivate = path.resolve(from, String(theirs.privDir || 'private'));
+  for (const name of LEDGER) {
+    if (!fs.existsSync(path.join(theirPrivate, name))) { throw new Error(from + ' has no ' + path.join(theirPrivate, name) + ', without which the NPC runtime does not start. Nothing was laid out.'); }
+  }
   fs.mkdirSync(out, { recursive: true });
   for (const name of PROGRAM) {
     const a = path.join(from, name);
@@ -293,6 +306,7 @@ function fromInstalled(o) {
   copyTree(scripts, path.join(out, 'data', 'scripts'));
   fs.mkdirSync(path.join(out, 'private'), { recursive: true });
   fs.writeFileSync(path.join(out, 'private', 'door.json'), JSON.stringify({ passKey: crypto.randomBytes(32).toString('hex') }) + '\n');
+  for (const name of LEDGER) { fs.copyFileSync(path.join(theirPrivate, name), path.join(out, 'private', name)); }
   const engine = sha256(path.join(out, 'scam_native.node'));
   console.log('the load server is in ' + out + ': from ' + from + ', scam_native.node ' + engine + ', ' + shape + ', ' + seats +
     ' seats, ' + order.length + ' plugins, engine NPCs ' + (settings.npcEnabled ? 'on' : 'off') + (kept.length ? ', ' + kept.join(' ') : ''));
