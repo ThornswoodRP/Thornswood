@@ -280,6 +280,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [release/Sign-ReleaseCatalog.ps1](release/Sign-ReleaseCatalog.ps1) | Signs the release manifest's catalog with ThornswoodRelease and checks it the way every installed launcher checks a launcher (#2163, phase B). |
 | [release/Source-Notice.ps1](release/Source-Notice.ps1) | The note and licence texts that go inside every download on the update feed that carries SkyMP files. |
 | [release/Sync-Client.ps1](release/Sync-Client.ps1) | Puts the client runtime built from the fork into the game folder, and refuses any file that is not the recorded build. |
+| [release/Test-LauncherStarts.ps1](release/Test-LauncherStarts.ps1) | Starts a published Thornswood.exe for real and holds it to opening its window and staying up (#5524). |
 | [release/Test-ReleaseFiles.ps1](release/Test-ReleaseFiles.ps1) | Checks the files of a launcher release draft on any machine, with no signing setup: each against SHA256SUMS, and with -RequireSigned every program's signature the way an installed launcher checks it (issue #2163). |
 | [release/Test-SignPilot.ps1](release/Test-SignPilot.ps1) | Signs and verifies a throwaway TEST artifact only, to pilot the signed release design (issue #2163). Never touches a release, the feed or release.yml. |
 | [release/Update-Checkout.ps1](release/Update-Checkout.ps1) | Moves a checkout that sits detached at origin/main, the shared clone on One, to the newest origin/main with engine\skymp at the commit it pins, or says why it cannot and moves nothing. |

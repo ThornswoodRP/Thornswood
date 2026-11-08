@@ -386,6 +386,10 @@ jobs:
             New-Item -ItemType Directory -Force -Path $built | Out-Null
             ./scripts/release/Build-Launcher.ps1 -Root $root -NoSign -NoPause -Version $env:VERSION
             if ($LASTEXITCODE -ne 0) { Write-Host '::error::Build-Launcher.ps1 failed'; exit 1 }
+            # Started for real before it is signed or packed (#5524): its
+            # window comes up and it stays up, or nothing goes out.
+            ./scripts/release/Test-LauncherStarts.ps1 -Exe (Join-Path $built 'Thornswood.exe')
+            if ($LASTEXITCODE -ne 0) { Write-Host '::error::the built launcher did not start and stay up; its log is above'; exit 1 }
             # The programs go out; the symbols, Thornswood.pdb, stay here, and
             # so do app.ico and app-dev.ico, which Build-Launcher.ps1 puts
             # beside the exe only for Install-Launcher.ps1 (#887): the
