@@ -279,6 +279,11 @@ function fromInstalled(o) {
     if (Object.prototype.hasOwnProperty.call(theirs, k) && plain(theirs[k])) { settings[k] = theirs[k]; kept.push(k); }
   }
   fs.writeFileSync(path.join(out, 'server-settings.json'), JSON.stringify(settings, null, 2) + '\n');
+  // The copy's own data folder. Its plugins stay where the installed server
+  // keeps them (loadOrder above names them whole), but the engine writes its
+  // manifest.json into dataDir at start, and with no folder there it ended
+  // before the gamemode loaded (the box's first run, 8 Nov 2026, #4623).
+  fs.mkdirSync(path.join(out, 'data'), { recursive: true });
   fs.mkdirSync(path.join(out, 'private'), { recursive: true });
   fs.writeFileSync(path.join(out, 'private', 'door.json'), JSON.stringify({ passKey: crypto.randomBytes(32).toString('hex') }) + '\n');
   const engine = sha256(path.join(out, 'scam_native.node'));
