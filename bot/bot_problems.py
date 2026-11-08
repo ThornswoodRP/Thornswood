@@ -225,17 +225,31 @@ async def watch_problems():
             return None
         return rows if isinstance(rows, list) else None
 
-    try:
-        filed = await loop.run_in_executor(None, _filed_read)
-    except Exception:
-        # Not read is not empty: empty would file every problem again.
-        log('problems: %s will not read, so nothing is filed until it does:\n' % PROBLEMS_FILED
-            + traceback.format_exc())
-        return
-    log('problems: filing what the game sends from %s every %ds, %d filed so far'
-        % (REPORTS_FILE, REPORTS_EVERY, len(filed)))
+    filed = None
+    said_unreadable = False
     said_why = ''
     while not client.is_closed():
+        if filed is None:
+            try:
+                filed = await loop.run_in_executor(None, _filed_read)
+            except Exception:
+                # Not read is not empty: empty would file every problem again.
+                # Staff are told once and the loop keeps checking (#5513):
+                # a record fixed by hand is picked up without a restart.
+                log('problems: %s will not read, so nothing is filed until it does:\n' % PROBLEMS_FILED
+                    + traceback.format_exc())
+                if not said_unreadable:
+                    said_unreadable = True
+                    await report_say('**The bot cannot read %s, its record of the problems '
+                                     'already filed**, so it is filing nothing until the file '
+                                     'reads again. Fix or remove the file by hand; the bot '
+                                     'picks up on its own the moment it does, and never files '
+                                     'a problem twice.' % PROBLEMS_FILED)
+                await asyncio.sleep(REPORTS_EVERY)
+                continue
+            said_unreadable = False
+            log('problems: filing what the game sends from %s every %ds, %d filed so far'
+                % (REPORTS_FILE, REPORTS_EVERY, len(filed)))
         try:
             rows = await loop.run_in_executor(None, read_rows)
             if rows is not None:
