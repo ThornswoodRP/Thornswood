@@ -87,13 +87,15 @@
 # MAIN'S PACKAGE. Velopack writes the channel into the package, so main's is
 # a package of its own, made by every merge that makes dev's and listed in
 # the same signed record. Its files are never on the build Release: they are
-# kept with this run as the artifact main-<tag> (New-SignedManifest.ps1 puts
-# them in held\, and they get their own attestation), and only a promotion
-# to main publishes them, on a Release main-<tag> of their own, once Patrick
-# approves it (promote-main.yml, MAIN'S LAUNCHER; #5181). A main launcher
-# holds the package to this Release's record all the same (VeloRecord.cs).
-# An artifact is kept 90 days at most, so a build older than that, never
-# promoted, can no longer take its package to main.
+# kept as the GitHub Package ghcr.io/<owner>/thornswood-launcher-main:<tag>
+# (New-SignedManifest.ps1 puts them in held\, and they get their own
+# attestation; MergeRelease.ps1, MAIN'S PACKAGE ON GITHUB PACKAGES), and only
+# a promotion to main publishes them, on a Release main-<tag> of their own,
+# once Patrick approves it (promote-main.yml, MAIN'S LAUNCHER; #5181). A main
+# launcher holds the package to this Release's record all the same
+# (VeloRecord.cs). A package version is kept until somebody deletes it; the
+# Actions artifact it was until 8 Nov 2026 lasted 90 days and filled the
+# artifact storage (#3399).
 #
 # THE DEPLOYMENT. To Dev, the environment that until this workflow held
 # Record-Deployment.ps1's after-the-fact records of each Ship (#5179 retires
@@ -194,6 +196,8 @@ jobs:
       deployments: write
       id-token: write
       attestations: write
+      # Main's launcher package, kept on GitHub Packages (MAIN'S PACKAGE).
+      packages: write
       # To start a run of main's newest merge when main moved on during
       # this one (Is this still main's newest merge).
       actions: write
@@ -343,11 +347,12 @@ jobs:
           $pm = if ($env:PREVIOUS_MANIFEST) { Get-Content -LiteralPath $env:PREVIOUS_MANIFEST -Raw | ConvertFrom-Json } else { $null }
           $build = Test-MergeReleaseVelopack -LauncherVersion $ver -GameZipSha256 $env:GAME_SHA -Previous $pm
           # Main's package goes out only on the tag main-<tag> its own run
-          # made (Tag main's package for the approval). A package made
-          # before that step was there has no tag and never can have one, so
-          # with nothing else changed main could never be given a launcher:
-          # build .2's, on 3 Nov, was the only one. Then this merge makes the
-          # package again, with its tag.
+          # made (Tag main's package for the approval), from the package
+          # version it kept (Keep main's package for the approval). A package
+          # made before either step was there has no tag or no package
+          # version and never can have one, so with nothing else changed
+          # main could never be given a launcher: build .2's, on 3 Nov, was
+          # the only one. Then this merge makes the package again, with both.
           $repack = $false
           if (-not $build -and $pm) {
             try { $reach = Test-MainPackageReachable -Tag $env:PREVIOUS -Manifest $pm }
@@ -735,20 +740,24 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::the draft $($env:TAG) could not be published"; exit 1 }
 
       # Main's package is never published here (header, MAIN'S PACKAGE): it
-      # is kept with this run, under main-<tag>, for promote-main.yml
-      # (#5181) to publish on a Release of its own once Patrick approves a
-      # promotion that runs with it. Kept once the Release is out, so it is
-      # never there for a Release that is not. Already compressed, so stored
-      # as it is.
+      # is kept as a GitHub Package, under the build's tag, for
+      # promote-main.yml (#5181) to publish on a Release of its own once
+      # Patrick approves a promotion that runs with it. Kept once the
+      # Release is out, so it is never there for a Release that is not.
       - name: Keep main's package for the approval
         if: ${{ steps.newest.outputs.release == 'yes' && steps.files.outputs.held != '' }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: main-${{ steps.names.outputs.tag }}
-          path: ${{ steps.files.outputs.held }}
-          if-no-files-found: error
-          retention-days: 90
-          compression-level: 0
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.names.outputs.tag }}
+          HELD: ${{ steps.files.outputs.held }}
+        run: |
+          . ./scripts/release/MergeRelease.ps1
+          try { $done = Push-MainPackage -Folder $env:HELD -Tag $env:TAG -Commit $env:GITHUB_SHA }
+          catch { Write-Host ('::error title=Main''s package::' + $_.Exception.Message); exit 1 }
+          $ref = 'ghcr.io/' + (Get-MainPackageRef $env:GITHUB_REPOSITORY $env:TAG)
+          Write-Host "$done $ref"
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Main's launcher package is kept as **$ref** until a promotion to main puts it out."
 
       # The tag main-<tag> that the Release of main's package goes on is
       # made here, at this merge, while main's workflow files are this

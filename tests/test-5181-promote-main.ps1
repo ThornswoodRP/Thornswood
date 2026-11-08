@@ -15,10 +15,10 @@
       and builds nothing;
     - the check also finds main's launcher package (#4825): the one the
       Release runs with, through MergeRelease.ps1's Find-MainPackage (which
-      tests\test-5179-merge-release.ps1 drives), and the artifact
-      merge-release.yml kept it in;
+      tests\test-5179-merge-release.ps1 drives), and the GitHub Package
+      merge-release.yml kept it as, held to the build's signed record;
     - the job that makes the Deployment waits in the Main environment, needs
-      the check, has deployments: write, and contents: write and actions:
+      the check, has deployments: write, and contents: write and packages:
       read for main's package, nothing else, and names the Release and its
       own run in the payload, to Main;
     - once approved, and before the Deployment, it puts main's package out
@@ -51,25 +51,25 @@ Yes '  and the tag reaches the scripts through env, never pasted into them' ($wf
 Yes 'the check holds the tag to a build Release tag' ($check.Contains("'^build-\d{8}\.\d{1,9}$'"))
 Yes '  published, with its signed manifest, naming itself' ($check.Contains('if ($rel.draft)') -and $check.Contains("'manifest.json'") -and $check.Contains("'manifest.cat'") -and $check.Contains('[string]$m.tag -ne $tag'))
 Yes '  that dev ran: a Deployment of it to Dev ended in success' ($check.Contains('deployments?environment=Dev') -and $check.Contains("Where-Object state -eq 'success'") -and $check.Contains('dev has not run'))
-Yes '  and reads only' ($check -match '(?m)^\s+deployments: read\s*$' -and $check -match '(?m)^\s+actions: read\s*$' -and $check -notmatch ':\s*write' -and $check -notmatch '--method POST' -and $check -notmatch 'gh release (create|upload|edit)')
+Yes '  and reads only' ($check -match '(?m)^\s+deployments: read\s*$' -and $check -match '(?m)^\s+packages: read\s*$' -and $check -notmatch 'actions: read' -and $check -notmatch ':\s*write' -and $check -notmatch '--method POST' -and $check -notmatch 'gh release (create|upload|edit)')
 Yes 'the check finds main''s launcher package before anybody is asked (#4825)' ($check.Contains('$pkg = Find-MainPackage -Tag $tag -Manifest $m -Repo $repo') -and
-    $check.Contains('Select-MainPackageArtifact -Artifacts') -and $check.Contains('actions/artifacts?name=$($pkg.MainTag)') -and
-    $check.Contains("[string]`$path -ne '.github/workflows/merge-release.yml'") -and $check.Contains('("main_run=" + $run)'))
+    $check.Contains('$kept = Save-MainPackage -Tag $pkg.From -Commit $pkg.Commit -Look') -and $check.Contains('Get-MainPackageProblem -Record $pkg.Record -Have $kept') -and
+    $check.Contains('("main_package=" + $ref)') -and $check -notmatch 'actions/artifacts')
 Yes 'the promotion needs the check and waits in the Main environment' ($promote -match '(?m)^\s+needs: check\s*$' -and $promote -match '(?m)^\s+environment: Main\s*$')
-Yes '  with deployments: write, and contents: write and actions: read for main''s package, nothing else' ($promote -match '(?m)^\s+permissions:\s*\n\s+deployments: write\s*\n\s+contents: write\s*\n\s+actions: read\s*\n\s+steps:')
+Yes '  with deployments: write, and contents: write and packages: read for main''s package, nothing else' ($promote -match '(?m)^\s+permissions:\s*\n\s+deployments: write\s*\n\s+contents: write\s*\n\s+packages: read\s*\n\s+steps:')
 Yes '  and makes a Deployment to Main of the Release, naming its own run' ($promote.Contains("environment = 'Main'") -and $promote.Contains('payload = [ordered]@{ release = $env:TAG; run = [long]$env:GITHUB_RUN_ID }') -and $promote.Contains('ref = $env:COMMIT'))
 $pubAt = $promote.IndexOf("- name: Put main's launcher package out")
 $depAt = $promote.IndexOf('- name: Ask the live server for it (a Deployment to Main)')
 $pub = if ($pubAt -gt 0 -and $depAt -gt $pubAt) { $promote.Substring($pubAt, $depAt - $pubAt) } else { '' }
-Yes 'once approved, main''s package goes out before the Deployment, only when the check found one to put out' ($pub.Length -gt 0 -and $pub.Contains("if: `${{ needs.check.outputs.main_run != '' }}"))
-Yes '  from the artifact the check found, every file held to the signed record of the build that made it' ($pub.Contains('gh run download $env:MAIN_RUN -n $env:MAIN_TAG -D $dir -R $repo') -and
+Yes 'once approved, main''s package goes out before the Deployment, only when the check found one to put out' ($pub.Length -gt 0 -and $pub.Contains("if: `${{ needs.check.outputs.main_package != '' }}"))
+Yes '  from the GitHub Package the check found, every file held to the signed record of the build that made it' ($pub.Contains('$have = Save-MainPackage -Tag $env:MAIN_FROM -Commit $env:MAIN_COMMIT -Into $dir') -and -not $pub.Contains('gh run download') -and
     $pub.Contains('[string]$record.tag -ne $env:MAIN_FROM -or [string]$record.commit -ne $env:MAIN_COMMIT') -and $pub.Contains('$why = Get-MainPackageProblem -Record $record -Have $have') -and
     $pub.Contains('if ($why) {'))
 # 3 Nov 2026: the first promotion's token was refused the new tag
 # main-build-20261103.2 (HTTP 403), because main's workflow files had moved
 # past that build's commit. The tag is made by the build's own run instead.
 Yes '  the check holds the package''s tag main-<build tag> to the commit that built it, made by merge-release.yml' ($check.Contains('git/ref/tags/$($pkg.MainTag)') -and
-    $check.Contains("('commit ' + `$pkg.Commit)") -and $check.IndexOf('git/ref/tags/$($pkg.MainTag)') -lt $check.IndexOf('actions/artifacts?name='))
+    $check.Contains("('commit ' + `$pkg.Commit)") -and $check.IndexOf('git/ref/tags/$($pkg.MainTag)') -lt $check.IndexOf('Save-MainPackage'))
 Yes '  on that tag, a draft published only once every file is on it, making no ref of its own' ($pub.Contains('gh release create $env:MAIN_TAG --draft --verify-tag') -and -not $pub.Contains('--target') -and
     $pub.IndexOf('gh release upload $env:MAIN_TAG') -gt $pub.IndexOf('gh release create') -and $pub.IndexOf('gh release edit $env:MAIN_TAG --draft=false') -gt $pub.IndexOf('gh release upload'))
 $mr = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/release/MergeRelease.ps1'))
