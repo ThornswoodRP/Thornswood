@@ -280,7 +280,13 @@ const keys = (o) => Object.keys(o || {}).sort().join(',');
   why = why || await two.until(() => two.got.some((m) => m.t === 'welcome'), 'welcome to Two');
   const oneId = (one.got.find((m) => m.t === 'welcome') || {}).peer;
   const twoId = (two.got.find((m) => m.t === 'welcome') || {}).peer;
-  yes('both are in the room', !!oneId && !!twoId, why);
+  // Signalling passes only between two in reach of each other, the people
+  // their rosters name (#5516), so the feed says where they are now and
+  // each waits for the roster naming the other, as a page does.
+  await inWorld(PORT, [31, 32]);
+  const names = (me, id) => me.got.some((m) => m.t === 'peers' && m.peers.some((p) => p.peer === id));
+  why = why || await one.until(() => names(one, twoId), 'roster naming Two') || await two.until(() => names(two, oneId), 'roster naming One');
+  yes('both are in the room, and each is on the other\'s roster', !!oneId && !!twoId && names(one, twoId) && names(two, oneId), why);
   one.send({ t: 'sdp', to: twoId, from: 999, sdp: { type: 'offer', sdp: 'v=0\r\n', extra: 1 },
              profileId: 1, name: 'Staff', hush: 1, text: 'anything at all' });
   why = await two.until(() => two.got.some((m) => m.t === 'sdp'), 'offer to Two');

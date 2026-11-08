@@ -282,6 +282,9 @@ async function inWorld(port, pids) {
   a.sock.write(textFrame({ t: 'join', profileId: 1, name: 'Alva' }, true));
   let why = await a.until(() => a.msgs.some((m) => m.t === 'welcome'), 'welcome');
   yes('a masked join is welcomed', !why, why);
+  // A roster comes with the first view after a join (#5516).
+  why = await a.until(() => a.msgs.some((m) => m.t === 'peers'), 'first roster');
+  yes('  and sent its roster', !why, why);
 
   /*
     A check that something did not come reads once the socket it would have

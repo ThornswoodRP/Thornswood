@@ -184,12 +184,13 @@ async function openPage(port, pid) {
 /*
   The gamemode's position feed, stood in for: only somebody in the world holds
   a voice place and is on the roster (#3570), so everybody this joins is put
-  in the world first, each in a cell of their own.
+  in the world first. All in one cell, a step apart, so each is in reach of
+  everybody else: a roster names only who is in reach (#5516).
 */
 function inWorld(port, pids) {
   return new Promise((ok, bad) => {
-    const body = JSON.stringify({ who: pids.map((pid) => ({ profileId: pid, pos: [0, 0, 0], angleZ: 0,
-                                                            cell: 'cell ' + pid, name: 'Person ' + pid })) });
+    const body = JSON.stringify({ who: pids.map((pid, k) => ({ profileId: pid, pos: [k, 0, 0], angleZ: 0,
+                                                            cell: 'one cell', name: 'Person ' + pid })) });
     const req = http.request({ host: '127.0.0.1', port: port, path: '/positions', method: 'POST', agent: false,
                                headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } }, (res) => {
       res.resume();

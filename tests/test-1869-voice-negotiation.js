@@ -1159,11 +1159,17 @@ function partSeven() {
 /*
   The pages from part 2 on are in the world, since only somebody in the world
   holds a voice place and is on the roster (#3570). The walkers of part 1 are
-  done with, so the feed is now these, standing in one room.
+  done with, so the feed is now these, standing in one room. A roster names
+  only who is in reach, by a view that goes stale after three seconds
+  without the feed (#5516), so it is sent five times a second from here to
+  the end, as the gamemode sends it.
 */
+let seatFeed = null;
 function seatPages() {
   const who = [201, 202, 301, 302, 303, 304, 401, 402, 501, 502, 503].map((pid) => ({ profileId: pid, pos: [0, 0, 0], angleZ: 0, cell: 'a room' }));
-  return fetch(BASE + '/positions', { method: 'POST', body: JSON.stringify({ who: who }) });
+  const post = () => fetch(BASE + '/positions', { method: 'POST', body: JSON.stringify({ who: who }) });
+  seatFeed = setInterval(() => { post().catch(() => { }); }, 200);
+  return post();
 }
 
 (async () => {
@@ -1180,6 +1186,7 @@ function seatPages() {
   fail++;
   console.log('FAIL  the harness itself: ' + (e && e.stack || e));
 }).then(async () => {
+  if (seatFeed) clearInterval(seatFeed);
   pages.forEach(closePage);
   for (const l of launchers) { await l.quit(); }
   for (const s of raw) { try { s.destroy(); } catch (e) { } }

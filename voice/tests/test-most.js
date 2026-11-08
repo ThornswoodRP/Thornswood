@@ -192,11 +192,12 @@ async function healthUntil(s, test) {
 }
 
 /* The gamemode's position feed, stood in for: these profiles are in the
-   world, each in a cell of their own. The whole list each time, as the
-   gamemode sends it. */
+   world, all in one cell and in reach of each other, since a roster names
+   only who is in reach (#5516). The whole list each time, as the gamemode
+   sends it. */
 async function inWorld(s, pids) {
   const body = JSON.stringify({ who: pids.map((pid) => ({ profileId: pid, pos: [0, 0, 0], angleZ: 0,
-                                                          cell: 'cell ' + pid, name: 'Person ' + pid })) });
+                                                          cell: 'one cell', name: 'Person ' + pid })) });
   const r = await fetch('http://127.0.0.1:' + s.port + '/positions', { method: 'POST', body: body });
   if (r.status !== 204) throw new Error('/positions answered ' + r.status);
 }

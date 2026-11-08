@@ -82,7 +82,14 @@ says "/line" and no voice place, is on nobody's roster and is sent none. A
 place is the profile's, so a person's voice page and chat, and a reconnect
 overlapping the socket it replaces, share one; it is taken the moment the
 feed has them in the world, and when the feed drops them their own pages are
-sent an empty roster so they let go of every connection. Somebody in the
+sent an empty roster so they let go of every connection. A roster names
+only the voice places in that socket's view, the same cell inside 100 metres
+or the same party, and is sent again when that changes; signalling passes
+only between two sockets that each have the other in view (#5516). The
+pages and the launcher open a connection to whoever comes onto their roster
+and close one to whoever leaves it, so voice connects as people walk into
+reach and closes as they walk out, and a changed page cannot reach anybody
+out of range. `voice\tests\test-5516-voice-reach.js` covers it. Somebody in the
 world past the number keeps text chat, is told once in one chat line that
 voice is full, and takes a place when one frees; `/health` gives `most`,
 `people` (places held) and `refusedFull` (kept off voice for numbers). Unset

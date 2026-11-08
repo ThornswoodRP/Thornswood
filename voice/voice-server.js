@@ -1386,11 +1386,41 @@ function signal(msg) {
   and close one they had. A row without it carries voice, which is every
   connection from a page older than this.
 */
-function roster() {
+/*
+  ONLY WHO IS IN REACH (#5516).
+
+  The position feed was limited by distance, but the roster named every voice
+  connection on the server and the relay passed signalling between any two,
+  so every page built a connection to everybody and the range was only a
+  gain the listener's own page set: a changed page could hear anyone,
+  whispers included. Now each connection's roster names only the voice
+  connections whose people are in its view (heard, from the position tick:
+  the same cell inside HEAR_UNITS, or the same party), it is sent again
+  whenever that changes, and sdp and ice pass only between two connections
+  each of which has the other in its view. Both clients already reconcile
+  against every roster (reconcile in game/ui/thornswood-voice.js, OnPeers in
+  launcher/app/VoiceSession.cs): they open a connection to whoever comes on
+  and close one to whoever goes off, so walking into reach connects and
+  walking out closes, on both ends. A changed page that keeps its end open
+  is closed from the other, whose page is not changed. Rahul Ranjan's #5523
+  gated the relay on reach; this is that, with the roster to match.
+
+  heard is null until the first tick after a join, so a newcomer is sent no
+  roster until its first view, and nobody's roster names it before then. That
+  tick sends its roster and the ones naming it to everybody else together,
+  so #1869's order (roster before signalling) holds as before.
+*/
+function hears(p, q) {
+  return !!(p && q && p.heard && p.heard.has(String(q.profileId)));
+}
+function roster(forPeer) {
   const list = [];
   for (const [id, p] of peers) {
     // Only a voice place is on the roster (#3570); see HOW MANY PEOPLE.
     if (!hasVoice(p)) continue;
+    // Each must have the other in view, so nobody's roster names a newcomer
+    // before the newcomer has its own first view and roster.
+    if (!hears(forPeer, p) || !hears(p, forPeer)) continue;
     const row = { peer: id, profileId: p.profileId, name: peerName(p), mode: p.mode || 'local' };
     if (p.voice === false) row.voice = false;
     list.push(row);
@@ -1454,17 +1484,29 @@ function announce() {
 function sendRoster() {
   rosterDue = false;
   if (peers.size === 0) return;
-  const once = frame(JSON.stringify({ t: 'peers', peers: roster(), iceServers: iceServers() }));
-  let none = null;
+  // One list and one frame for every connection that hears the same people
+  // (#2332): a crowd in one place is one stringify, not one each. A
+  // connection is sent its roster only when the list differs from the last
+  // one it was sent (#5516), and every one sent carries a fresh ICE list.
+  const ice = iceServers();
+  const lists = new Map();
+  const frames = new Map();
   for (const [, p] of peers) {
     // A socket that lost its voice place (#3570) is sent an empty roster
     // once, so its page lets go of every connection it built; one that
     // never had a place is sent none.
     const voice = hasVoice(p);
     if (!voice && !p.inRoom) continue;
-    if (!voice && !none) none = frame(JSON.stringify({ t: 'peers', peers: [], iceServers: iceServers() }));
-    p.ws.sendLatest(voice ? once : none);
+    // Nothing until its first view: the tick that gives it one announces.
+    if (voice && !p.heard) continue;
+    const key = voice ? Array.from(p.heard).sort().join(',') : '';
+    if (!lists.has(key)) lists.set(key, JSON.stringify(voice ? roster(p) : []));
+    const list = lists.get(key);
     p.inRoom = voice;
+    if (list === p.rosterSent) continue;
+    if (!frames.has(key)) frames.set(key, frame('{"t":"peers","peers":' + list + ',"iceServers":' + JSON.stringify(ice) + '}'));
+    p.ws.sendLatest(frames.get(key));
+    p.rosterSent = list;
   }
 }
 
@@ -1704,10 +1746,15 @@ setInterval(() => {
   const text = {};
   const rowText = (pid) => text[pid] || (text[pid] = JSON.stringify(snap[pid]));
   const at = Date.now();
+  let heardChanged = false;
   for (const [, p] of peers) {
     const view = viewOf(p.profileId);
     const now = new Map();
     for (const pid of Object.keys(view)) now.set(pid, rowText(pid));
+    // Who this connection's roster and signalling are held to (#5516).
+    const heard = new Set(now.keys());
+    if (!p.heard || p.heard.size !== heard.size || Array.from(heard).some((pid) => !p.heard.has(pid))) heardChanged = true;
+    p.heard = heard;
     let msg;
     if (!p.sent) {
       msg = { t: 'pos', at: at, who: view };
@@ -1724,6 +1771,7 @@ setInterval(() => {
     }
     p.sent = p.ws.sendLossy(msg) ? now : null;
   }
+  if (heardChanged) announce();
 }, 200);
 
 /*
@@ -2787,7 +2835,11 @@ server.on('upgrade', (req, socket, head) => {
       const to = peers.get(Number(msg.to));
       // Only between two voice places (#3570): a socket at the menu is on
       // nobody's roster, and nobody's page builds a connection to it.
-      if (!to || !hasVoice(peers.get(myId)) || !hasVoice(to)) return;
+      // And only between two who each have the other in their view (#5516):
+      // the same people their rosters name. See ONLY WHO IS IN REACH.
+      const me = peers.get(myId);
+      if (!to || !hasVoice(me) || !hasVoice(to)) return;
+      if (!hears(me, to) || !hears(to, me)) return;
       const out = signal(msg);
       if (!out) return;
       out.from = myId;
