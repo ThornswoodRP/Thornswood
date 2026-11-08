@@ -19,7 +19,12 @@ namespace Thornswood
     ///                 above Play until a feed without it arrives. On its own
     ///                 it never holds Play.
     ///   maintenance   true holds Play, with the message as the reason.
-    ///   minLauncher   a launcher older than this version holds Play.
+    ///   minLauncher   a launcher older than this version holds Play. Only a
+    ///                 launcher from before Velopack: one Velopack installed
+    ///                 is held to its channel's Releases instead (the join
+    ///                 pass, site/lib/feed.js nativePublished), and its 1.3.x
+    ///                 numbers (Patrick, 8 Nov 2026) are lower than the
+    ///                 2026.x minimum the old feed still names.
     ///
     /// Pure on purpose: it takes the document and the running version and
     /// says what to show, so launcher\tests\test-feed-notice.ps1 builds the launcher
@@ -42,7 +47,7 @@ namespace Thornswood
         /// <summary>What the Play button says while the feed holds it.</summary>
         public string Button;
 
-        public static FeedNotice From(VersionDoc v, string running)
+        public static FeedNotice From(VersionDoc v, string running, bool velopack)
         {
             var n = new FeedNotice();
             // No document means the check did not answer. That already has its
@@ -56,7 +61,7 @@ namespace Thornswood
             string whole = said;
             if (whole.Length > 0 && ".!?".IndexOf(whole[whole.Length - 1]) < 0) whole += ".";
             string min = v.minLauncher == null ? "" : v.minLauncher.Trim();
-            bool tooOld = IsVersion(min) && IsVersion(running) && Updater.IsNewer(min, running);
+            bool tooOld = !velopack && IsVersion(min) && IsVersion(running) && Updater.IsNewer(min, running);
 
             if (On(v.maintenance))
             {

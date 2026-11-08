@@ -215,14 +215,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           . ./scripts/release/MergeRelease.ps1
-          $now = (Get-Date).ToUniversalTime()
-          # Every name the day already uses, tags and Releases (drafts too).
-          $refs = gh api "repos/$($env:GITHUB_REPOSITORY)/git/matching-refs/tags/build-$($now.ToString('yyyyMMdd'))." --jq '.[].ref'
+          # Every 1.3.x name already used, tags and Releases (drafts too).
+          $refs = gh api --paginate "repos/$($env:GITHUB_REPOSITORY)/git/matching-refs/tags/build-1.3." --jq '.[].ref'
           if ($LASTEXITCODE -ne 0) { Write-Host '::error::GitHub did not list the build tags'; exit 1 }
           $rels = gh api "repos/$($env:GITHUB_REPOSITORY)/releases?per_page=100" --jq '.[].tag_name'
           if ($LASTEXITCODE -ne 0) { Write-Host '::error::GitHub did not list the Releases'; exit 1 }
           $taken = @($refs | ForEach-Object { $_ -replace '^refs/tags/', '' }) + @($rels)
-          $n = New-MergeReleaseNames -Utc $now -Taken $taken
+          $n = New-MergeReleaseNames -Taken $taken
           try {
             $prev = Get-MergeReleasePrevious
             $since = if ($prev) {
@@ -550,6 +549,7 @@ jobs:
           SETUP_MAIN_LIST: ${{ steps.setup.outputs.main_list }}
           NOTES: ${{ steps.notes.outputs.file }}
         run: |
+          . .\scripts\release\MergeRelease.ps1
           $tools = Join-Path $env:RUNNER_TEMP 'vpk'
           dotnet tool install vpk --version $env:VPK_VERSION --tool-path $tools
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::vpk $($env:VPK_VERSION) could not be installed"; exit 1 }
@@ -588,22 +588,32 @@ jobs:
             $setupDir = $(if ($ch -eq 'dev') { $env:SETUP_DEV_DIR } else { $env:SETUP_MAIN_DIR })
             $setupList = $(if ($ch -eq 'dev') { $env:SETUP_DEV_LIST } else { $env:SETUP_MAIN_LIST })
             Copy-Item -Path (Join-Path $setupDir '*') -Destination $pack -Recurse
-            # Dev: a delta from the Velopack release before, when there is
-            # one; vpk takes its full package and feed into the output folder
-            # first. Main: always the full package. Main's package goes out
-            # only when Patrick approves a build, and he may approve any of
-            # them, so a delta made now from whatever main had would not be
-            # from what main has then; Velopack would take the full package
-            # anyway.
+            # Dev: a delta from the release dev is on, the newest published
+            # Release with dev's feed (the one every dev launcher goes to,
+            # VeloUpdate.cs, THE CHANNEL'S RELEASE): its full package and feed
+            # go into the output folder first, the way vpk download would put
+            # them. Not vpk download itself, which takes the highest number
+            # among the ten newest Releases, and vpk pack refuses to make a
+            # version below one in its folder: so the first 1.3.x release
+            # after the date numbers (2026.1108.n, Patrick, 8 Nov 2026) is a
+            # full package with no delta, and every one after it has its delta
+            # from the one before. Main: always the full package. Main's
+            # package goes out only when Patrick approves a build, and he may
+            # approve any of them, so a delta made now from whatever main had
+            # would not be from what main has then; Velopack would take the
+            # full package anyway.
             $delta = 'None'
             if ($ch -eq 'dev') {
-              $before = @($rels | Where-Object { -not $_.draft -and @($_.assets | Where-Object name -eq 'releases.dev.json').Count })
-              if ($before.Count) {
-                & $vpk download github --repoUrl "https://github.com/$($env:GITHUB_REPOSITORY)" --channel dev --pre --token $env:GH_TOKEN -o $out
-                if ($LASTEXITCODE -ne 0) { Write-Host "::error::vpk could not take the Velopack release before ($($before[0].tag_name)) for a delta"; exit 1 }
+              $before = @($rels | Where-Object { -not $_.draft -and @($_.assets | Where-Object name -eq 'releases.dev.json').Count } |
+                          Sort-Object { $_.published_at } -Descending)
+              $was = $(if ($before.Count) { Get-VelopackFullOf -Release $before[0] -Channel dev } else { $null })
+              if ($was -and [version]$was.Version -lt [version]$env:VERSION) {
+                gh release download ([string]$before[0].tag_name) --repo $env:GITHUB_REPOSITORY -p $was.Name -p 'releases.dev.json' -D $out
+                if ($LASTEXITCODE -ne 0) { Write-Host "::error::the full package of $($before[0].tag_name) could not be taken for a delta"; exit 1 }
                 $delta = 'BestSpeed'
-                Write-Host "dev: a delta from $($before[0].tag_name)"
-              } else { Write-Host 'dev: the first Velopack release, a full package and no delta' }
+                Write-Host "dev: a delta from $($before[0].tag_name), $($was.Version)"
+              } elseif ($was) { Write-Host "dev: $($before[0].tag_name) is $($was.Version), not below $($env:VERSION), so a full package and no delta" }
+              else { Write-Host 'dev: the first Velopack release, a full package and no delta' }
             } else { Write-Host 'main: a full package, held for the approval' }
             # packTitle is the name Windows shows in Apps and on the
             # shortcuts, packAuthors the publisher beside it, and the icon is

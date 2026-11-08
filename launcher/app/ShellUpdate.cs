@@ -244,7 +244,7 @@ namespace Thornswood
         static void ShowNotice(VersionDoc v)
         {
             FeedNotice was = feedNotice;
-            feedNotice = FeedNotice.From(v, Updater.Version);
+            feedNotice = FeedNotice.From(v, Updater.Version, Velo.Installed);
             if (noticeBar != null)
             {
                 noticeBar.IsVisible = feedNotice.Title != null;

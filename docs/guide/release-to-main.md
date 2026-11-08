@@ -50,7 +50,7 @@ The gamemode command, then the server command, is the live pair. `-GamemodeOnly`
 Once the box deploy agent looks after main (`Install-DeployAgent -Main`, docs/DEPLOY-AGENT.md "Main"), the gamemode and the server build reach the live server another way: the Release dev ran is promoted, and goes out when Patrick approves it on GitHub, which is his word for that exact build (#5181):
 
 ```powershell
-gh workflow run promote-main.yml --ref main -f tag=build-<yyyyMMdd>.<run>
+gh workflow run promote-main.yml --ref main -f tag=build-1.3.<n>
 ```
 
 ## A hotfix

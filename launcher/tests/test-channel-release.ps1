@@ -7,9 +7,9 @@
   or down, and its game files come from that package on both channels.
 
   WHY THIS EXISTS. Patrick, 8 Nov 2026: the launcher's numbers go back from
-  the date numbers (2026.1108.2) to 1.2.x. Velopack on its own takes only
+  the date numbers (2026.1108.2) to 1.3.x. Velopack on its own takes only
   the highest version anywhere in its feed, and only when it is higher than
-  the one running, so a 1.2.17 package would never reach an install on
+  the one running, so a 1.3.0 package would never reach an install on
   2026.1108.2, and neither would a promotion of an older build to main (the
   plan: "which release a channel gets comes from its Dev or Main
   Deployment"). The same day main's game files were found still coming from
@@ -23,12 +23,12 @@
       numbered, the deltas at or below it stay, a newest Release with no full
       package leaves nothing, and an empty feed is empty.
     - Velopack's own UpdateManager over that feed, with downgrades allowed as
-      CheckLauncher asks: an install on 2026.1108.2 is offered 1.2.17 as a
-      downgrade; one on 1.2.17 is offered 1.2.18 with its delta; one already
+      CheckLauncher asks: an install on 2026.1108.2 is offered 1.3.0 as a
+      downgrade; one on 1.3.0 is offered 1.3.1 with its delta; one already
       on the channel's release is offered nothing. Without downgrades allowed
       the first finds nothing, which is why CheckLauncher allows them.
-    - VeloRecord.TagOf: 1.2.17 is the Release build-1.2.17, 2026.1108.2 is
-      build-20261108.2, and a prerelease number is refused.
+    - VeloRecord.TagOf: 1.3.0 is the Release build-1.3.0, and a date
+      number, a 1.2.x number (the launchers before Velopack), a prerelease and a 0.x number are refused.
   And from the source: CheckLauncher allows downgrades, ChannelSource cuts
   the feed with ChannelRelease, and Velo.GameFromPackage is every launcher
   Velopack installed, not dev alone.
@@ -146,62 +146,67 @@ namespace Thornswood
         static int Main(string[] args)
         {
             Console.WriteLine("Updater.ChannelRelease: the newest Release's package is the channel's");
-            // The move back to 1.2.x: two date numbered Releases, then 1.2.17.
+            // The move back to 1.3.x: two date numbered Releases, then 1.3.0.
             var d1 = Asset("2026.1108.1", VelopackAssetType.Full, 8);
             var d2 = Asset("2026.1108.2", VelopackAssetType.Full, 9);
             var d2d = Asset("2026.1108.2", VelopackAssetType.Delta, 9);
-            var v17 = Asset("1.2.17", VelopackAssetType.Full, 10);
+            var v17 = Asset("1.3.0", VelopackAssetType.Full, 10);
             var move = new[] { d1, d2, d2d, v17 };
-            Yes("1.2.17, published after 2026.1108.2, is the highest left, and nothing above it: " + Names(Updater.ChannelRelease(move, Published)),
-                Names(Updater.ChannelRelease(move, Published)) == "1.2.17F");
+            Yes("1.3.0, published after 2026.1108.2, is the highest left, and nothing above it: " + Names(Updater.ChannelRelease(move, Published)),
+                Names(Updater.ChannelRelease(move, Published)) == "1.3.0F");
             // Ordinary releases after it: each newer and higher, deltas kept.
-            var v18 = Asset("1.2.18", VelopackAssetType.Full, 11);
-            var v18d = Asset("1.2.18", VelopackAssetType.Delta, 11);
+            var v18 = Asset("1.3.1", VelopackAssetType.Full, 11);
+            var v18d = Asset("1.3.1", VelopackAssetType.Delta, 11);
             var on = new[] { d1, d2, d2d, v17, v18, v18d };
-            Yes("with 1.2.18 published next, it and its delta are the top, 1.2.17 below it stays: " + Names(Updater.ChannelRelease(on, Published)),
-                Names(Updater.ChannelRelease(on, Published)) == "1.2.17F,1.2.18D,1.2.18F");
+            Yes("with 1.3.1 published next, it and its delta are the top, 1.3.0 below it stays: " + Names(Updater.ChannelRelease(on, Published)),
+                Names(Updater.ChannelRelease(on, Published)) == "1.3.0F,1.3.1D,1.3.1F");
             // A Release's feed lists the full package its delta was made from,
             // under the same Release (vpk writes it so), before or after its own.
-            var p18 = Asset("1.2.18", VelopackAssetType.Full, 11);
-            var p18d = Asset("1.2.18", VelopackAssetType.Delta, 11);
-            var p17 = Asset("1.2.17", VelopackAssetType.Full, 11);
+            var p18 = Asset("1.3.1", VelopackAssetType.Full, 11);
+            var p18d = Asset("1.3.1", VelopackAssetType.Delta, 11);
+            var p17 = Asset("1.3.0", VelopackAssetType.Full, 11);
             Yes("the newest Release's own package is its highest full one, whichever order its feed lists them in",
-                Names(Updater.ChannelRelease(new[] { v17, p17, p18, p18d }, Published)) == "1.2.17F,1.2.17F,1.2.18D,1.2.18F" &&
-                Ask(new[] { v17, p17, p18, p18d }, "1.2.17", true).TargetFullRelease.Version.ToString() == "1.2.18" &&
-                Ask(new[] { v17, p18, p18d, p17 }, "1.2.17", true).TargetFullRelease.Version.ToString() == "1.2.18");
+                Names(Updater.ChannelRelease(new[] { v17, p17, p18, p18d }, Published)) == "1.3.0F,1.3.0F,1.3.1D,1.3.1F" &&
+                Ask(new[] { v17, p17, p18, p18d }, "1.3.0", true).TargetFullRelease.Version.ToString() == "1.3.1" &&
+                Ask(new[] { v17, p18, p18d, p17 }, "1.3.0", true).TargetFullRelease.Version.ToString() == "1.3.1");
             // Main promoted back to an older build: published last, numbered lower.
-            var back = Asset("1.2.17", VelopackAssetType.Full, 12);
+            var back = Asset("1.3.0", VelopackAssetType.Full, 12);
             var promoted = new[] { v17, v18, v18d, back };
             Yes("an older build promoted again is the channel's, and the higher one before it is dropped: " + Names(Updater.ChannelRelease(promoted, Published)),
-                Names(Updater.ChannelRelease(promoted, Published)) == "1.2.17F,1.2.17F");
-            var deltaOnly = Asset("1.2.19", VelopackAssetType.Delta, 13);
+                Names(Updater.ChannelRelease(promoted, Published)) == "1.3.0F,1.3.0F");
+            var deltaOnly = Asset("1.3.19", VelopackAssetType.Delta, 13);
             Yes("a newest Release with no full package (a delta alone) is not taken; the newest full one is",
-                Names(Updater.ChannelRelease(new[] { v17, v18, v18d, deltaOnly }, Published)) == "1.2.17F,1.2.18D,1.2.18F");
-            var unknown = new VelopackAsset { PackageId = "Thornswood", Version = SemanticVersion.Parse("1.2.20"), Type = VelopackAssetType.Full, FileName = "x" };
+                Names(Updater.ChannelRelease(new[] { v17, v18, v18d, deltaOnly }, Published)) == "1.3.0F,1.3.1D,1.3.1F");
+            var unknown = new VelopackAsset { PackageId = "Thornswood", Version = SemanticVersion.Parse("1.3.20"), Type = VelopackAssetType.Full, FileName = "x" };
             Yes("a package whose Release has no publish time is never the target, and nothing above the target stays",
-                Names(Updater.ChannelRelease(new[] { v17, unknown }, Published)) == "1.2.17F");
+                Names(Updater.ChannelRelease(new[] { v17, unknown }, Published)) == "1.3.0F");
             Yes("no full package with a publish time leaves nothing to take", Updater.ChannelRelease(new[] { deltaOnly }, Published).Length == 0);
             Yes("an empty feed is empty", Updater.ChannelRelease(new VelopackAsset[0], Published).Length == 0 && Updater.ChannelRelease(null, Published).Length == 0);
 
             Console.WriteLine();
             Console.WriteLine("Velopack's UpdateManager over that feed, as CheckLauncher asks it");
             UpdateInfo u = Ask(move, "2026.1108.2", true);
-            Yes("an install on 2026.1108.2 is offered 1.2.17, as a downgrade, the whole package",
-                u != null && u.TargetFullRelease.Version.ToString() == "1.2.17" && u.IsDowngrade && u.DeltasToTarget.Length == 0);
+            Yes("an install on 2026.1108.2 is offered 1.3.0, as a downgrade, the whole package",
+                u != null && u.TargetFullRelease.Version.ToString() == "1.3.0" && u.IsDowngrade && u.DeltasToTarget.Length == 0);
             Yes("  and without downgrades allowed it is offered nothing, which is why CheckLauncher allows them", Ask(move, "2026.1108.2", false) == null);
-            u = Ask(on, "1.2.17", true);
-            Yes("an install on 1.2.17 is offered 1.2.18, not as a downgrade",
-                u != null && u.TargetFullRelease.Version.ToString() == "1.2.18" && !u.IsDowngrade);
-            Yes("an install already on the channel's release is offered nothing", Ask(on, "1.2.18", true) == null);
-            u = Ask(promoted, "1.2.18", true);
-            Yes("main promoted back to 1.2.17 takes an install on 1.2.18 back to it", u != null && u.TargetFullRelease.Version.ToString() == "1.2.17" && u.IsDowngrade);
+            u = Ask(on, "1.3.0", true);
+            Yes("an install on 1.3.0 is offered 1.3.1, not as a downgrade",
+                u != null && u.TargetFullRelease.Version.ToString() == "1.3.1" && !u.IsDowngrade);
+            Yes("an install already on the channel's release is offered nothing", Ask(on, "1.3.1", true) == null);
+            u = Ask(promoted, "1.3.1", true);
+            Yes("main promoted back to 1.3.0 takes an install on 1.3.1 back to it", u != null && u.TargetFullRelease.Version.ToString() == "1.3.0" && u.IsDowngrade);
 
             Console.WriteLine();
             Console.WriteLine("VeloRecord.TagOf: which Release's signed record holds a package");
-            Yes("1.2.17 is the Release build-1.2.17", VeloRecord.TagOf(SemanticVersion.Parse("1.2.17")) == "build-1.2.17");
-            Yes("2026.1108.2 is build-20261108.2", VeloRecord.TagOf(SemanticVersion.Parse("2026.1108.2")) == "build-20261108.2");
+            Yes("1.3.0 is the Release build-1.3.0", VeloRecord.TagOf(SemanticVersion.Parse("1.3.0")) == "build-1.3.0");
             string why = "";
-            try { VeloRecord.TagOf(SemanticVersion.Parse("1.2.17-beta")); } catch (Exception ex) { why = ex.Message; }
+            try { VeloRecord.TagOf(SemanticVersion.Parse("2026.1108.2")); } catch (Exception ex) { why = ex.Message; }
+            Yes("a date number from before 1.3.x is no longer read: " + why, why.Contains("is not one a Thornswood release makes"));
+            why = "";
+            try { VeloRecord.TagOf(SemanticVersion.Parse("1.2.17")); } catch (Exception ex) { why = ex.Message; }
+            Yes("nor is a 1.2.x number, the launchers from before Velopack", why.Contains("is not one a Thornswood release makes"));
+            why = "";
+            try { VeloRecord.TagOf(SemanticVersion.Parse("1.3.0-beta")); } catch (Exception ex) { why = ex.Message; }
             Yes("a prerelease number is no release's, and is refused: " + why, why.Contains("is not one a Thornswood release makes"));
             why = "";
             try { VeloRecord.TagOf(SemanticVersion.Parse("0.1.2")); } catch (Exception ex) { why = ex.Message; }

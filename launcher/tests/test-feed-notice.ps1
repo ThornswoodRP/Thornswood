@@ -125,11 +125,11 @@ $Running = '1.1.92'
 
 # One feed, as the launcher reads it: bytes through VersionDoc.Parse, then
 # FeedNotice.From. A throw anywhere is reported, not swallowed.
-function Ask([string]$json, [string]$running = $Running) {
+function Ask([string]$json, [string]$running = $Running, [bool]$velopack = $false) {
     $r = @{ Threw = $null; Notice = $null }
     try {
         $doc = $mParse.Invoke($null, @(, [Text.Encoding]::UTF8.GetBytes($json)))
-        $r.Notice = $mFrom.Invoke($null, @($doc, $running))
+        $r.Notice = $mFrom.Invoke($null, @($doc, $running, $velopack))
     }
     catch { $r.Threw = $_.Exception.GetBaseException().Message }
     return $r
@@ -168,7 +168,7 @@ Quiet 'S1 a feed from before the message field' '{"launcherVersion":"1.0.1","pac
 Quiet 'S1 an empty document' '{}'
 Quiet 'S1 a message of spaces' '{"message":"   "}'
 Quiet 'S1 every new field null' '{"message":null,"maintenance":null,"minLauncher":null}'
-$none = $mFrom.Invoke($null, @($null, $Running))
+$none = $mFrom.Invoke($null, @($null, $Running, $false))
 Yes 'S1 a check that got no document shows no bar' ($null -eq $none.Title)
 Yes 'S1 and leaves Play open' ($null -eq $none.Hold)
 
@@ -210,6 +210,11 @@ if ($n) {
     Yes "S4 the button says $($n.Button)" ($n.Button -eq 'UPDATE THE LAUNCHER')
     Yes 'S4 the bar names both versions' ($n.Text.Contains('1.1.93') -and $n.Text.Contains($Running))
 }
+$v = Ask '{"minLauncher":"2026.1102.716"}' '1.3.0' $true
+Yes 'S4 a launcher Velopack installed is never held by the old feed''s minimum: 1.3.0 under 2026.1102.716 plays (Patrick, 8 Nov 2026)' (
+    $null -eq $v.Threw -and $null -ne $v.Notice -and $null -eq $v.Notice.Hold -and $null -eq $v.Notice.Title)
+$v = Ask '{"minLauncher":"2026.1102.716"}' '1.2.16' $false
+Yes 'S4 while a launcher from before Velopack under it is still held' ($null -eq $v.Threw -and $null -ne $v.Notice -and $null -ne $v.Notice.Hold)
 Quiet 'S4 a minimum equal to this launcher' '{"minLauncher":"1.1.92"}'
 Quiet 'S4 a minimum below this launcher' '{"minLauncher":"1.1.40"}'
 Quiet 'S4 an empty minimum' '{"minLauncher":""}'
@@ -251,7 +256,7 @@ Yes 'S7 Play() refuses too, for the ways in that are not the button' ($shellSrc.
 $sets = @([regex]::Matches($shellSrc, '\bfeedNotice\s*=[^=]') | ForEach-Object { $_.Value })
 Yes "S7 feedNotice is set in two places, its declaration and ShowNotice ($($sets.Count) found)" ($sets.Count -eq 2)
 Yes 'S7 it starts empty, so nothing is held before a document is read' ($shellSrc.Contains('static FeedNotice feedNotice = new FeedNotice();'))
-Yes 'S7 ShowNotice sets it from the document' ($shellSrc.Contains('feedNotice = FeedNotice.From(v, Updater.Version);'))
+Yes 'S7 ShowNotice sets it from the document' ($shellSrc.Contains('feedNotice = FeedNotice.From(v, Updater.Version, Velo.Installed);'))
 $calls = @([regex]::Matches($shellSrc, '\bShowNotice\(') ).Count
 Yes "S7 ShowNotice is defined once and called once ($calls found)" ($calls -eq 2)
 $ovd = Lift $shellSrc 'static void OnVersionDoc(VersionDoc v, bool loud)'

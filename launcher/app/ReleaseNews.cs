@@ -11,7 +11,7 @@ namespace Thornswood
     /// <summary>
     /// THE NEWS TAB READS THE RELEASES (#5187, plan line 32). Every merge that
     /// changes what Thornswood ships makes one build Release on GitHub,
-    /// "Release build-&lt;yyyyMMdd&gt;.&lt;n&gt;", whose body is the note people
+    /// "Release build-1.3.&lt;n&gt;", whose body is the note people
     /// read: the Release note lines of the pull requests merged since the
     /// Release before (merge-release.yml, THE NOTES). The box deploy agent
     /// puts a Release on dev by its Deployment to Dev and on the live server
@@ -59,6 +59,7 @@ namespace Thornswood
         static readonly Regex NothingToTell = new Regex(@"^\s*nothing people would notice\b", RegexOptions.IgnoreCase);
 
         static readonly Regex BuildTag = new Regex(@"^build-(\d{8})\.(\d{1,9})$");
+        static readonly Regex NumberTag = new Regex(@"^build-1\.3\.(\d{1,5})$");
 
         static readonly object newsLock = new object();
         static NewsItem[] newsHeld;
@@ -210,11 +211,16 @@ namespace Thornswood
 
         /// <summary>
         /// A build tag as a number that sorts the way the Releases were made:
-        /// the day, then the day's count. -1 for anything else.
+        /// build-1.3.&lt;n&gt; by n, after every build-&lt;yyyyMMdd&gt;.&lt;n&gt; from
+        /// before it (the date numbers of 1 to 8 Nov 2026, whose notes stay
+        /// on the tab), those by the day, then the day's count. -1 for
+        /// anything else.
         /// </summary>
         internal static long BuildKey(string tag)
         {
             if (string.IsNullOrEmpty(tag)) return -1;
+            Match v = NumberTag.Match(tag);
+            if (v.Success) return 100000000000000000L + long.Parse(v.Groups[1].Value, CultureInfo.InvariantCulture);
             Match m = BuildTag.Match(tag);
             if (!m.Success) return -1;
             return long.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) * 1000000000L
