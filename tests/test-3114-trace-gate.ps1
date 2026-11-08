@@ -21,7 +21,9 @@
        Windows PowerShell 5.1 builds) against stand-ins for the event log
        reader, it keeps the trace in a folder only administrators and the
        system can open, refuses a trace that lost events, and deletes the
-       trace once read.
+       trace once read;
+    4. the old trace task comes off the box through the gate's verb
+       Remove-GateTrace, Trace-Gate-Here.ps1 -Mode uninstall (#5356).
 
   Writes only its scratch folder, in the system's temp folder, and deletes it.
 #>
@@ -73,6 +75,13 @@ Yes '  the trace folder is closed to all but administrators and the system' ($x 
 Yes '  a trace that lost events is refused' ($x -match "(?s)'stop' \{\s*Stop-TraceSession \`$sessionName\s*if \(\`$script:lost\) \{ 'REFUSED: '.*?exit 1 \}")
 Yes '  the trace is deleted once read, and only paths in the checkout leave' ($x -match "(?s)'END'\s*Remove-Item -LiteralPath \(Join-Path \`$traceRoot 'gate\.etl'\), \(Join-Path \`$traceRoot 'gate\.etl\.procs'\) -Force" -and $x -match 'if \(!inside\) \{ if \(objO != null\) objects\.Remove\(Address\(objO\)\); continue; \}')
 Yes '  every mode Trace-Gate.ps1 asks for is there' (@('selftest', 'start', 'stop', 'read', 'clean', 'install', 'status', 'uninstall' | Where-Object { $x -notmatch ("(?m)^    '" + $_ + "' \{") }).Count -eq 0)
+
+# ---- 4. the old trace task comes off the box through the gate (#5356) --------
+$here = Text 'scripts\dev\Trace-Gate-Here.ps1'
+Yes 'Trace-Gate-Here.ps1 takes -Mode uninstall, and Trace-Gate-Box.ps1 has that mode' ($here -match "ValidateSet\([^)]*'uninstall'" -and $x -match "(?m)^    'uninstall' \{")
+$verbs = (Text 'scripts\vps\gate\verbs.json' | ConvertFrom-Json).verbs
+$rv = $verbs.'Remove-GateTrace'
+Yes '  the gate''s verb Remove-GateTrace runs it with -Mode uninstall and takes nothing more' ($null -ne $rv -and $rv.script -eq 'scripts/dev/Trace-Gate-Here.ps1' -and (@($rv.fixed) -join ' ') -eq '-Mode uninstall' -and @($rv.params.PSObject.Properties).Count -eq 0)
 
 Write-Host ''
 Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail)

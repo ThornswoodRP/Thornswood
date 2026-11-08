@@ -487,6 +487,12 @@
         "Status": "switch"
       }
     },
+    "Remove-GateTrace": {
+      "script": "scripts/dev/Trace-Gate-Here.ps1",
+      "timeoutMinutes": 5,
+      "fixed": ["-Mode", "uninstall"],
+      "params": {}
+    },
     "Install-Tunnel": {
       "script": "scripts/deploy/Install-Tunnel.ps1",
       "timeoutMinutes": 15,

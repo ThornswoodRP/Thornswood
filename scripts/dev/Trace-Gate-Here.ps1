@@ -18,6 +18,15 @@
       .\scripts\dev\Trace-Gate-Here.ps1 -Mode stop
       .\scripts\dev\Trace-Gate-Here.ps1 -Mode read -Starts <starts.jsonl> -Workspace <checkout> -OutFile <traces.jsonl.gz>
       .\scripts\dev\Trace-Gate-Here.ps1 -Mode clean
+      .\scripts\dev\Trace-Gate-Here.ps1 -Mode uninstall
+
+  -Mode uninstall takes the box's old trace task, Thornswood Gate Trace, off
+  the machine it runs on, with its folders (#5356). Since #5119 no main
+  build runs where that task can trace it, so nothing asks it anything, and
+  it was the last box task still started by Windows PowerShell. The deploy
+  gate runs it on the box, as SYSTEM, as its verb Remove-GateTrace:
+
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Remove-GateTrace'
 
   The trace is in C:\Thornswood-Trace, which Trace-Gate-Box.ps1 keeps to
   administrators; read deletes it once read, and only the paths inside the
@@ -29,7 +38,7 @@
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][ValidateSet('selftest', 'start', 'stop', 'read', 'clean')][string]$Mode,
+    [Parameter(Mandatory = $true)][ValidateSet('selftest', 'start', 'stop', 'read', 'clean', 'uninstall')][string]$Mode,
     [string]$Starts = '',
     [string]$Workspace = '',
     [string]$OutFile = ''
