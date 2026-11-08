@@ -2,7 +2,7 @@
   "version": 1,
   "builtBy": "scripts/mods/New-CollectionPluginRecord.ps1",
   "collection": "7essxf",
-  "revision": 7,
+  "revision": 8,
   "plugins": [
     { "name": "_ResourcePack.esl", "size": 78418, "sha256": "d231915a4bbfe6e89536dfb0a46c5adc8e4d2d23ce95d248dc24943776eb76fb" },
     { "name": "3BBB.esp", "size": 20257, "sha256": "ce4f554616458a10b4809f705828f9d3e3e2d1457abe73ee32fe5f8f044a8549" },
