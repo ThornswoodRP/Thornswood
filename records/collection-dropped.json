@@ -3,6 +3,6 @@
   "issue": 4069,
   "what": "The plugins a server may stop loading when it moves to this collection revision, because the revision takes them out. Deploy-DevGamemode.ps1 -LoadOrder -FromRecord lets the order of last-plugin.json leave out these and no other plugin the running server loads (Test-ThornswoodLoadOrderDrop, #2320), and only while revision is the one records/collection-plugins.json names. A row says why every form the plugin added can go from a world that keeps running.",
   "collection": "7essxf",
-  "revision": 7,
+  "revision": 8,
   "dropped": []
 }

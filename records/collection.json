@@ -4,7 +4,7 @@
   "what": "The Thornswood collection on Nexus as it should be: each Nexus file it installs and the plugins that file puts in Data, every plugin in the collection's order with the rule that holds it there and what its header says, and the plugins the servers load that a change takes out. A mod change is a pull request to this file (docs\\COLLECTION-CHANGES.md): Check-CollectionRecord.ps1 holds it to the load order, the pages' permissions and the servers' order, and the merge drafts the revision it describes, lays it out, holds it to this record and publishes it (Publish-CollectionRecord.ps1). revision is the newest published revision the record has followed.",
   "collection": "7essxf",
   "game": "skyrimspecialedition",
-  "revision": 7,
+  "revision": 8,
   "mods": [
     { "modId": 198, "fileId": 489053, "name": "Caliente's Beautiful Bodies Enhancer CBBE - v2.0.3", "plugins": ["CBBE.esp", "RaceMenuMorphsCBBE.esp"] },
     { "modId": 201, "fileId": 767958, "name": "BodySlide and Outfit Studio - v5.8.2", "plugins": [] },

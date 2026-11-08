@@ -9,9 +9,9 @@ using Velopack.Locators;
 namespace Thornswood
 {
     /// <summary>
-    /// THE GAME FILES FROM THE VELOPACK PACKAGE, ON DEV (#4825). The plan has
-    /// one update channel carry both the launcher and the game payload, so on
-    /// the dev channel (Velo.GameFromPackage, which says why main is not yet)
+    /// THE GAME FILES FROM THE VELOPACK PACKAGE (#4825). The plan has one
+    /// update channel carry both the launcher and the game payload, so for a
+    /// launcher Velopack installed, on dev and on main (Velo.GameFromPackage),
     /// each launcher update's package is also where Thornswood's game files
     /// come from, and the feed's release record and packs are not offered
     /// (Sync.cs, Pending).
@@ -39,7 +39,7 @@ namespace Thornswood
     {
         static readonly string[] GoldenFiles = { "plugins.txt", "loadorder.txt" };
 
-        /// <summary>True when a repair can put Thornswood's own files back: from the installed package on dev, or from the feed's record.</summary>
+        /// <summary>True when a repair can put Thornswood's own files back: from the installed package, or from the feed's record.</summary>
         public static bool CanResync(Config cfg, VersionDoc v)
         {
             return Velo.GameFromPackage(cfg) || (v != null && v.record != null);
@@ -64,7 +64,7 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// A repair on dev: the game folder checked against the installed
+        /// A repair: the game folder checked against the installed
         /// version's signed lists, and anything missing or changed put back
         /// from the installed package's own folder. The caller holds the game
         /// folder (OwnGame.Alone). False when Velopack did not install this

@@ -150,7 +150,13 @@ namespace Thornswood
             slide.Children.Add(from);
             slide.Children.Add(to);
             playFillSlideStop = new CancellationTokenSource();
-            slide.RunAsync(playFillSlide, playFillSlideStop.Token);
+            // Run on the fill itself, not on its TranslateTransform: Avalonia
+            // hands a TranslateTransform.X animation to its transform
+            // animator, which takes the control and finds the transform in
+            // its RenderTransform. Given the transform it threw "Specified
+            // cast is not valid" and stopped the launcher at start (8 Nov
+            // 2026; launcher\tests\window-starts drives every state of this).
+            slide.RunAsync(playFill, playFillSlideStop.Token);
             playFillMoving = true;
         }
 

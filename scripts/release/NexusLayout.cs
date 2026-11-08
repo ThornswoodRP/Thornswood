@@ -144,6 +144,14 @@ namespace Thornswood.Layout
         public List<Copy> Copies = new List<Copy>();
         public List<string> Warnings = new List<string>();
         public string Stop;
+        // A FOMOD's answers as Vortex records them on the mod it installed
+        // (installer_fomod_shared getChoicesFromState): every step of the
+        // script in its order, hidden ones too, every group of each, and the
+        // options selected in it when the script has run, by name and their
+        // place in the group. Vortex counts a collection's mod as installed
+        // only when these equal the entry's choices exactly, so an entry
+        // carries them in this form (#5531). Null without a FOMOD.
+        public List<PresetStep> Recorded;
         // destination key (lower case, \) -> the file the mod deploys there
         public Dictionary<string, Staged> Files = new Dictionary<string, Staged>(StringComparer.Ordinal);
     }
@@ -1242,6 +1250,7 @@ namespace Thornswood.Layout
                     Preselect(step, run);
                     FixSelected(step, run);
                 }
+                plan.Recorded = Record(script, run);
                 var toInstall = new List<FileItem>();
                 var seen = new HashSet<FileItem>();
                 Action<FileItem> add = f => { if (seen.Add(f)) toInstall.Add(f); };
@@ -1270,6 +1279,26 @@ namespace Thornswood.Layout
         }
 
         sealed class FolderFailed : Exception { public FolderFailed(string m) : base(m) { } }
+
+        // What Vortex's FOMOD dialog holds when the script has run, which it
+        // writes on the mod as its installerChoices (ModPlan.Recorded).
+        static List<PresetStep> Record(Script s, Run run)
+        {
+            var steps = new List<PresetStep>();
+            foreach (var step in s.Steps)
+            {
+                var ps = new PresetStep { Name = step.Name };
+                foreach (var g in step.Groups)
+                {
+                    var pg = new PresetGroup { Name = g.Name };
+                    for (int i = 0; i < g.Options.Count; i++)
+                        if (run.Selected.Contains(g.Options[i])) pg.Choices.Add(new PresetChoice { Name = g.Options[i].Name, Idx = i });
+                    ps.Groups.Add(pg);
+                }
+                steps.Add(ps);
+            }
+            return steps;
+        }
 
         static void FixSteps(Script s, Run run)
         {

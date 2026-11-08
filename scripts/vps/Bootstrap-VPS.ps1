@@ -324,7 +324,8 @@ if (-not $SkipFirewall) {
     )
     $made = 0
     foreach ($r in $rules) {
-        if (Get-NetFirewallRule -PolicyStore localhost -DisplayName $r.Name -ErrorAction SilentlyContinue) {
+        # What the firewall takes, local rules included until -Own has run (#5334).
+        if (Get-NetFirewallRule -PolicyStore ActiveStore -DisplayName $r.Name -ErrorAction SilentlyContinue) {
             Write-Host "  already there   $($r.Name)" -ForegroundColor DarkGray
         } else {
             New-NetFirewallRule -PolicyStore localhost -DisplayName $r.Name -Direction Inbound -Action Allow `

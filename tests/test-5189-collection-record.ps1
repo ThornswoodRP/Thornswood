@@ -299,11 +299,13 @@ try {
     Yes 'S10 a new file''s choices go with it to -Add' ($cs3.Add[0].choices.options[0].groups[0].choices[0].name -eq 'Dawnguard' -and -not @($cs3.Problems).Count) (@($cs3.Problems) -join ' | ')
     $rec4 = [pscustomobject]@{ mods = @($rec.mods | ForEach-Object { if ($_.modId -eq 1) { [pscustomobject]@{ modId = 1; fileId = 10; name = 'one'; plugins = @('A.esm'); choices = $ch } } elseif ($_.modId -eq 2) { [pscustomobject]@{ modId = 2; fileId = 21; name = 'two'; plugins = @('B.esp'); choices = $ch; dropPatch = @('B.esp') } } else { $_ } }); plugins = $rec.plugins }
     $cs4 = Get-CollectionChangeSet $rec4 $pubJson
-    Yes 'S11 choices on a kept file that are not the published entry''s are refused' (@($cs4.Problems | Where-Object { $_ -match 'mod 1 file 10 gives choices that are not the published revision''s' }).Count -eq 1) (@($cs4.Problems) -join ' | ')
+    # #5531: a kept file's line that gives other answers gives the file those
+    # answers (-Answers), with the plugins it puts in Data.
+    Yes 'S11 choices on a kept file that are not the published entry''s give it new answers' (@($cs4.Answers).Count -eq 1 -and $cs4.Answers[0].modId -eq 1 -and $cs4.Answers[0].fileId -eq 10 -and (@($cs4.Answers[0].plugins) -join ',') -eq 'A.esm' -and $cs4.Answers[0].choices.options[0].groups[0].choices[0].name -eq 'Dawnguard' -and -not @($cs4.Problems | Where-Object { $_ -match 'mod 1 ' }).Count -and (@(Format-CollectionChangeSet $cs4) -join "`n") -match 'give mod 1 file 10 its installer answers as Vortex records them') ((@($cs4.Problems) + @(Format-CollectionChangeSet $cs4)) -join ' | ')
     Yes 'S12 and so are choices on a file that moves' (@($cs4.Problems | Where-Object { $_ -match 'mod 2 moves to file 21 with choices' }).Count -eq 1) (@($cs4.Problems) -join ' | ')
     $pubJson.mods[0] | Add-Member -NotePropertyName choices -NotePropertyValue $ch
     $cs5 = Get-CollectionChangeSet ([pscustomobject]@{ mods = @($rec4.mods | Where-Object { $_.modId -ne 2 }); plugins = $rec.plugins }) $pubJson
-    Yes 'S13 a kept file''s choices that say the published ones again are fine' (-not @($cs5.Problems | Where-Object { $_ -match 'choices' }).Count) (@($cs5.Problems) -join ' | ')
+    Yes 'S13 a kept file''s choices that say the published ones again ask for nothing' (-not @($cs5.Problems | Where-Object { $_ -match 'choices' }).Count -and -not @($cs5.Answers).Count) (@($cs5.Problems) -join ' | ')
     $pubJson.mods[0].PSObject.Properties.Remove('choices')
     $rr5 = [pscustomobject]@{ version = 1; issue = 5189; what = 'w'; collection = '7essxf'; game = 'skyrimspecialedition'; revision = 6; mods = @([pscustomobject]@{ modId = 5; fileId = 50; name = 'five'; plugins = @('E.esp'); choices = $ch }); plugins = @([pscustomobject]@{ name = 'E.esp'; master = $false; light = $false; masters = @(); after = @('Skyrim.esm') }); dropped = @() }
     $t5 = ConvertTo-CollectionRecordText $rr5

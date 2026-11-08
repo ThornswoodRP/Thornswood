@@ -13,6 +13,12 @@
 // this repository, not somebody's whose work is hands off (HANDS_OFF), not
 // already on auto-merge or in the queue, and has no conflict with main.
 //
+// One labelled OUTSIDE_LABEL is left off too: it carries the work of
+// somebody outside the team, and that merges only when Patrick says so for
+// that person (8 Nov 2026: "don't ever let them auto merge tho unless I saw
+// that even if the PR is good unless I specficallyt say that I want that
+// person to automerge"). A fork's own pull request is already left off.
+//
 // Two are left off (Patrick's yes on Bramble's card, 2 Nov 2026, "Add the two
 // skips"). One that changes what runs on the live box, unless it is
 // Patrick's: a workflow, the deploy gate, a verb list or a script a verb runs
@@ -46,6 +52,7 @@ const NOT_ITS_OWN = /queue.?cleared|roll.?back|time.?out|timed out|branch.?prote
 const BOX_DIRS = ['.github/workflows/', 'scripts/vps/gate/'];
 const VERB_LISTS = ['scripts/vps/gate/verbs.json', 'scripts/release/nexus-verbs.json'];
 const PATRICK = 'EvilPatrick06';
+const OUTSIDE_LABEL = 'outside work';
 // A Bot's branch, as the Bots' policy names it (Thornswood-Hermes
 // policy.yaml, branches.pattern), and Bramble's App, whose review counts.
 const BOT_BRANCH = /^(bramble|rift|sprocket|echo|magpie|wisp)\/[0-9]+-[a-z0-9][a-z0-9-]{0,60}$/;
@@ -75,6 +82,7 @@ const QUERY = `query($owner: String!, $name: String!, $after: String) {
       nodes {
         id number isDraft isCrossRepository baseRefName headRefName headRefOid mergeable isInMergeQueue
         author { login }
+        labels(first: 30) { nodes { name } }
         files(first: 100) { pageInfo { hasNextPage endCursor } nodes { path } }
         reviews(last: 50, states: [APPROVED]) { nodes { author { login } commit { oid } } }
         autoMergeRequest { enabledAt }
@@ -108,6 +116,9 @@ function judge(pr, base, scripts) {
   if (pr.isCrossRepository) return [false, 'from another repository'];
   const who = (pr.author && pr.author.login) || '';
   if (HANDS_OFF.indexOf(who) >= 0) return [false, who + "'s, which is hands off"];
+  if (((pr.labels || {}).nodes || []).some((l) => l && l.name === OUTSIDE_LABEL)) {
+    return [false, "it carries an outside contributor's work ('" + OUTSIDE_LABEL + "'), which merges only on Patrick's word"];
+  }
   if (pr.autoMergeRequest) return [false, 'already on auto-merge'];
   if (pr.isInMergeQueue) return [false, 'already in the queue'];
   if (pr.mergeable === 'CONFLICTING') return [false, 'it conflicts with ' + base + '; its owner brings ' + base + ' in'];
@@ -184,7 +195,7 @@ function github(token) {
   };
 }
 
-module.exports = { judge, sweep, verbScripts, boxFiles, HANDS_OFF, NOT_ITS_OWN, BOX_DIRS, VERB_LISTS, BOT_BRANCH, QUERY, FILES, ENABLE };
+module.exports = { judge, sweep, verbScripts, boxFiles, HANDS_OFF, OUTSIDE_LABEL, NOT_ITS_OWN, BOX_DIRS, VERB_LISTS, BOT_BRANCH, QUERY, FILES, ENABLE };
 
 if (require.main === module) {
   const repo = process.env.REPO, token = process.env.GH_TOKEN;

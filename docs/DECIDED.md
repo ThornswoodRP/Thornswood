@@ -321,6 +321,15 @@ link, and the old line goes.
   note's steps 1 to 4, once, with play.thornswood.net and ports 80 and 443
   left as they are.** (dec_FJBVN_ZIWJgrFMjsAXK0Wg) 2 Nov 2026,
   [#5334](https://github.com/ThornswoodRP/Thornswood/issues/5334#issuecomment-6586969085).
+- **The Hermes runner goes out only through the host-name proxy, by one run
+  each of Install-RunnerEgress and Install-Runner -Hermes -NetworkOnly
+  through the gate on main at 20a8ef2, in that order.**
+  (dec_Z76ZQJgUGvBGQ9ko7cOkWQ) 8 Nov 2026,
+  [#5495](https://github.com/ThornswoodRP/Thornswood/issues/5495#issuecomment-6725170404).
+- **The Hermes box runner's Python 3.13.17 goes in its tool cache by one run
+  of Install-Runner -Hermes -Python.** (dec_1ruEJ-WHBkU7N7oQuHdbrw) 8 Nov
+  2026,
+  [#5495](https://github.com/ThornswoodRP/Thornswood/issues/5495#issuecomment-6725427050).
 
 ## Work and crafting
 

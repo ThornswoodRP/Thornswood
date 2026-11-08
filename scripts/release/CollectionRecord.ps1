@@ -627,9 +627,12 @@ function Compare-CollectionRecord($Want, $Got) {
   What New-NexusRevision.ps1 has to do to the published revision to make the
   revision the record describes. $Collection is the published revision's
   collection.json, as Vortex wrote it. Returns
-    { Add; Remove; Move; Rule; Problems; Empty }
+    { Add; Answers; Remove; Move; Rule; Problems; Empty }
   Add     one per new file: { modId; fileId; plugins = [{ name; after }];
           choices? }, New-NexusRevision -Add's file
+  Answers one per file both keep whose installer answers the record gives
+          and the published revision does not: { modId; fileId; plugins;
+          choices }, New-NexusRevision -Answers' file (#5531)
   Remove  mod numbers, every file of each gone (New-NexusRevision -Remove)
   Move    { modId; fileId; dropPatch } (-Mod, -FileId, -DropPatch)
   Rule    { name; after } for a plugin already on the list whose rule changes
@@ -687,13 +690,14 @@ function Get-CollectionChangeSet($R, $Collection) {
         }
         $problems.Add("mod $mid has files $(@($pAll | ForEach-Object { $_.FileId }) -join ', ') in the published revision and $(@(@($R.mods) | Where-Object { [long]$_.modId -eq $mid } | ForEach-Object { $_.fileId }) -join ', ') in the record; New-NexusRevision moves a mod with one file to one new file, so which file becomes which is not known")
     }
-    # A file both keep: its answers are the published entry's, which the next
-    # revision carries as they are, so the record may only say them again.
+    # A file both keep: the record gives answers only to change them. The
+    # next revision carries them as Vortex records them (#5531).
+    $answers = New-Object Collections.Generic.List[object]
     foreach ($m in @($R.mods)) {
         if ((Get-CollectionKeys $m) -notcontains 'choices' -or -not $pubKeys.ContainsKey("$([long]$m.modId)/$([long]$m.fileId)")) { continue }
         $e = @(@($Collection.mods) | Where-Object { $_.source -and $_.source.type -eq 'nexus' -and [long]$_.source.fileId -eq [long]$m.fileId }) | Select-Object -First 1
-        $had = if ($e -and $e.PSObject.Properties['choices'] -and $e.choices) { ConvertTo-CollectionChoicesText $e.choices } else { '' }
-        if ((ConvertTo-CollectionChoicesText $m.choices) -cne $had) { $problems.Add("mod $($m.modId) file $($m.fileId) gives choices that are not the published revision's; New-NexusRevision does not change a kept file's installer answers") }
+        if ($e -and $e.PSObject.Properties['choices'] -and $e.choices -and (ConvertTo-CollectionChoicesText $m.choices) -ceq (ConvertTo-CollectionChoicesText $e.choices)) { continue }
+        $answers.Add([pscustomobject][ordered]@{ modId = [long]$m.modId; fileId = [long]$m.fileId; plugins = [string[]]@($m.plugins); choices = $m.choices })
     }
     foreach ($m in @($R.mods)) {
         if ((Get-CollectionKeys $m) -contains 'dropPatch' -and -not @($move | Where-Object { $_.modId -eq [long]$m.modId }).Count) {
@@ -719,11 +723,12 @@ function Get-CollectionChangeSet($R, $Collection) {
     }
     return [pscustomobject]@{
         Add      = $add.ToArray()
+        Answers  = $answers.ToArray()
         Remove   = [long[]]$remove.ToArray()
         Move     = $move.ToArray()
         Rule     = $rule.ToArray()
         Problems = $problems.ToArray()
-        Empty    = (-not $add.Count -and -not $remove.Count -and -not $move.Count -and -not $rule.Count)
+        Empty    = (-not $add.Count -and -not $answers.Count -and -not $remove.Count -and -not $move.Count -and -not $rule.Count)
     }
 }
 
@@ -731,6 +736,7 @@ function Get-CollectionChangeSet($R, $Collection) {
 function Format-CollectionChangeSet($C) {
     $out = New-Object Collections.Generic.List[string]
     foreach ($a in @($C.Add)) { $out.Add("add mod $($a.modId) file $($a.fileId)" + $(if (@($a.plugins).Count) { ': ' + ((@($a.plugins) | ForEach-Object { $_.name + $(if (@($_.after).Count) { ' after ' + (@($_.after) -join ', ') } else { '' }) }) -join '; ') } else { '' })) }
+    foreach ($a in @($C.Answers)) { $out.Add("give mod $($a.modId) file $($a.fileId) its installer answers as Vortex records them") }
     foreach ($m in @($C.Move)) { $out.Add("move mod $($m.modId) to file $($m.fileId)" + $(if (@($m.dropPatch).Count) { ', dropping its patch of ' + (@($m.dropPatch) -join ', ') } else { '' })) }
     foreach ($r in @($C.Remove)) { $out.Add("take mod $r out") }
     foreach ($r in @($C.Rule)) { $out.Add("$($r.name) loads after $(@($r.after) -join ', ')") }

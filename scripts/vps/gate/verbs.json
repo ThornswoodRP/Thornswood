@@ -423,7 +423,8 @@
         "Status": "switch",
         "Lock": "switch",
         "NetworkOnly": "switch",
-        "Hermes": "switch"
+        "Hermes": "switch",
+        "Python": "switch"
       }
     },
     "Install-Backup": {
@@ -476,6 +477,28 @@
       "script": "scripts/deploy/Rotate-ServerPassword.ps1",
       "timeoutMinutes": 10,
       "fixed": ["-Yes"],
+      "params": {}
+    },
+    "Install-RunnerEgress": {
+      "script": "scripts/deploy/Install-RunnerEgress.ps1",
+      "timeoutMinutes": 10,
+      "fixed": ["-NoPause"],
+      "params": {
+        "Status": "switch"
+      }
+    },
+    "Set-WebFirewall": {
+      "script": "scripts/vps/Set-WebFirewall.ps1",
+      "timeoutMinutes": 10,
+      "fixed": ["-OnTheBox", "-NoPause"],
+      "params": {
+        "Check": "switch"
+      }
+    },
+    "Remove-GateTrace": {
+      "script": "scripts/dev/Trace-Gate-Here.ps1",
+      "timeoutMinutes": 5,
+      "fixed": ["-Mode", "uninstall"],
       "params": {}
     },
     "Install-Tunnel": {
