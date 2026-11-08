@@ -283,6 +283,23 @@ function Set-LocalRulesOff { $global:Fake.log.Add('Set-LocalRulesOff'); $global:
     $r = Invoke-BoxHere ("-Apply -List '" + $keepArg + "'")
     Yes '-Apply again: only the probe, no copy, ALREADY' ($r.Code -eq 0 -and (($global:Fake.log) -join ',') -eq 'New-ProbeRule,Remove-ProbeRule' -and (Has $r.Lines '^ALREADY every profile ignores local rules'))
 
+    # The box on 8 Nov 2026: Setup-Domain.ps1 made the web pair in the policy
+    # store under ids of its own, beside the local pair. The local rule is
+    # HELD by the policy one, and -Apply reads that one back, not the local id.
+    New-Fake
+    $global:Fake.policy = @((Rule '{w1-policy}' 'Thornswood Web 443' 'Inbound' 'Allow' $true 'GroupPolicy'))
+    $global:Fake.active = @(@($global:Fake.active | Where-Object { $_.Name -ne '{w1}' }) + @($global:Fake.policy))
+    # Named by display name, as records/prod-parity.json names the web pair.
+    $byName = ListArg @(@{ rule = 'Thornswood game (UDP)'; required = $true }, @{ rule = 'Thornswood Web 443'; required = $true }, @{ rule = 'OpenSSH-Server-In-TCP'; required = $false })
+    $held = Invoke-BoxHere ("-Check -List '" + $byName + "'")
+    $r = Invoke-BoxHere ("-Apply -List '" + $byName + "'")
+    Yes 'a rule the policy holds under another id: HELD, not copied, and -Apply reads the holder back and goes on' ((Has $held.Lines "^HELD 'Thornswood Web 443' \(\{w1\}\)") -and $r.Code -eq 0 -and
+        -not ($global:Fake.log -contains 'Copy {w1}') -and (Has $r.Lines "^ACTIVE 'Thornswood Web 443' \(\{w1\}\), Inbound Allow, from Group Policy$") -and ($global:Fake.log -contains 'Set-LocalRulesOff'))
+    New-Fake
+    $global:Fake.policy = @((Rule '{w1-out}' 'Thornswood Web 443' 'Outbound' 'Allow' $true 'GroupPolicy'))
+    $r = Invoke-BoxHere ("-Check -List '" + $keepArg + "'")
+    Yes '  a policy rule with that name but another direction does not hold it' (Has $r.Lines "^MOVE 'Thornswood Web 443' \(\{w1\}\)")
+
     New-Fake
     $global:Fake.probeRefused = $true
     $r = Invoke-BoxHere ("-Apply -List '" + $keepArg + "'")
