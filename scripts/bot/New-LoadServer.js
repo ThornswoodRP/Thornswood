@@ -283,7 +283,14 @@ function fromInstalled(o) {
   // keeps them (loadOrder above names them whole), but the engine writes its
   // manifest.json into dataDir at start, and with no folder there it ended
   // before the gamemode loaded (the box's first run, 8 Nov 2026, #4623).
+  // It also reads the Papyrus scripts from dataDir\scripts (the engine's
+  // ScriptStorageFactory) and stops when the folder is not there (the second
+  // run, the same day), so the copy gets the server's scripts. A copy, not a
+  // link: removing the copy afterwards must never reach the server's own.
   fs.mkdirSync(path.join(out, 'data'), { recursive: true });
+  const scripts = path.join(dataDir, 'scripts');
+  if (!fs.existsSync(scripts)) { throw new Error(from + ' has no ' + scripts + ', which the engine reads the Papyrus scripts from'); }
+  copyTree(scripts, path.join(out, 'data', 'scripts'));
   fs.mkdirSync(path.join(out, 'private'), { recursive: true });
   fs.writeFileSync(path.join(out, 'private', 'door.json'), JSON.stringify({ passKey: crypto.randomBytes(32).toString('hex') }) + '\n');
   const engine = sha256(path.join(out, 'scam_native.node'));
