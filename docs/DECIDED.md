@@ -753,10 +753,6 @@ issue where the card did.
 - **Fewer runners on the box** as the box agent takes over their work
   (q-p19-fewer-box-runners). 31 Oct 2026,
   [#5180](https://github.com/ThornswoodRP/Thornswood/issues/5180).
-- **The Hermes box runner goes out only through the host-name proxy, set by
-  one run each of Install-RunnerEgress and Install-Runner -Hermes
-  -NetworkOnly.** (dec_Z76ZQJgUGvBGQ9ko7cOkWQ) 8 Nov 2026,
-  [#5495](https://github.com/ThornswoodRP/Thornswood/issues/5495#issuecomment-6725157192).
 
 ### Security
 
