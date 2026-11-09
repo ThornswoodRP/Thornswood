@@ -36,7 +36,7 @@ build** (the engine).
 | Dev plugins and load order | Moved by the agent after a dev Deployment (#5180): when the Deployment's commit changed what the order is made from since the agent last moved it (`records/collection-plugins.json`, `records/collection-dropped.json`, `game/data/last-plugin.json` or `.recipe`, `game/content/Thornswood-Content.esp`), the agent asks the gate for `Deploy-DevGamemode -LoadOrder -FromRecord -ShipFollows`, the tested move a person runs with Box-Run. See "After a dev Deployment" below. Settings flags (`-RequirePass`, `-Npcs` and the like) stay a person's Deploy-DevGamemode run. |
 | Main | Applied by the agent once `Install-DeployAgent -Main` has run (#5181): the same Release dev ran, after Patrick approves its promotion on GitHub. See "Main" below. |
 | Site, Discord bot | Applied by the agent (#5190, #5187): a merge that changes either makes a Deployment to **Site** or **Discord bot** with the Release's `site.zip` or `discord.zip`, and the agent swaps it in the way Deploy-Docs and Install-Bot -CodeOnly do. See "The site, the Discord bot and voice" below. |
-| Dev voice | Applied with dev's Deployment (#5187): voice has no Deployment of its own, because the gamemode pushes positions to it. |
+| Voice | Applied with its server's Deployment: dev voice with dev's (#5187), live voice with main's (#5610). Voice has no Deployment of its own, because the gamemode pushes positions to it, so a promotion puts on live the voice dev ran with that Release. |
 | Release news | After a Deployment goes in, the agent leaves its Release's notes for the bot, which posts them once (#5187). See "Release news" below. |
 | Launcher and game files | Not the agent's job: they reach people through the launcher's feed and a Ship. Since #5179 every Release carries them as well (the signed launcher, the game files and the Velopack packages of both), attested, for the launcher's move to Velopack; the agent logs them as left alone. |
 | Bot pass before each dev Deployment | Once `Install-DeployAgent` has set up its task, every Deployment waits on a bot pass on a throwaway copy of dev with the new gamemode (#5196, below). A FAIL fails the Deployment and dev keeps what it runs. A deploy by tag (the gate's `Deploy-Release`, a rollback) does not wait on one. |
@@ -372,11 +372,16 @@ in with the same halves as Swap.ps1's service swap:
    folder, so an old copy still on the port is not taken for the new one.
 4. When it does not, everything goes back and it is started on the old files.
 
-Voice goes in with dev's Deployment, after the bot pass and before the
-gamemode, and a voice that does not answer fails the Deployment with the
-gamemode untouched. `Install-DeployAgent` names each one only where its full
-install has set it up (the task `Thornswood Docs`, the service
-`ThornswoodBot`, the task `Thornswood Dev Voice`). The site's and the bot's
+Voice goes in with its server's Deployment, after the bot pass and before
+the gamemode, and a voice that does not answer fails the Deployment with the
+gamemode untouched: dev voice (`C:\Thornswood-Voice-Dev`, port 7789) with
+dev's, live voice (`C:\Thornswood-Voice`, port 7778) with main's (#5610).
+Every Release carries the voice zip whether or not voice changed, so the
+Release a promotion picks puts its own voice on live even when the voice
+change came in an earlier dev Release. `Install-DeployAgent` names each one
+only where its full install has set it up (the task `Thornswood Docs`, the
+service `ThornswoodBot`, the task `Thornswood Dev Voice`, and the task
+`Thornswood Voice` while main is named). The site's and the bot's
 Deployment logs go in the dev server's data folder beside dev's. The gate's
 `Deploy-Release -Environment site` or `discord` rolls either back by tag.
 

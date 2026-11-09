@@ -10,15 +10,16 @@ namespace Thornswood.DeployAgent;
 
 /// <summary>The apps beside the game servers that a Release carries as a zip
 /// of their own (#5190, #5187): the site and the Discord bot, each with its
-/// own Deployment environment, and the voice service (applied with dev's).
+/// own Deployment environment, and the voice service (applied with each
+/// server's: dev voice with dev's, live voice with main's).
 /// scripts/release/App-Part.ps1 makes the zips; this puts one in.</summary>
 public static class AppKinds
 {
     public const string Site = "site";
     public const string Discord = "discord";
     /// <summary>The voice service, which has no Deployment of its own: the
-    /// gamemode pushes positions to it, so it goes in with dev's (and later
-    /// main's), from the same Release.</summary>
+    /// gamemode pushes positions to it, so it goes in with its server's
+    /// Deployment, dev's or main's (#5610), from the same Release.</summary>
     public const string Voice = "voice";
 
     /// <summary>The Release part that carries the kind's zip, and its file name.</summary>

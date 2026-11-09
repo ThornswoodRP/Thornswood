@@ -580,6 +580,33 @@ public sealed class AppTests : IDisposable
     }
 
     [Fact]
+    public void ConfigReadsLiveVoiceForMainAndKeepsItApartFromDevs()
+    {
+        // #5610: main's "voice" starts from live voice, never dev's.
+        var p = Path.Combine(Temp(), "agent.json");
+        File.WriteAllText(p, "{\"repo\":\"O/R\",\"environments\":{\"dev\":{\"voice\":{}},\"main\":{}}}");
+        Assert.Null(Config.Load(p).Environments["main"].Voice);
+        File.WriteAllText(p, "{\"repo\":\"O/R\",\"environments\":{\"dev\":{\"voice\":{}},\"main\":{\"store\":\"D:\\\\Deploys\",\"voice\":{}}}}");
+        var c = Config.Load(p);
+        var lv = c.Environments["main"].Voice!;
+        var dv = c.Environments["dev"].Voice!;
+        Assert.Equal((AppKinds.Voice, @"C:\Thornswood-Voice", "Thornswood Voice", "http://127.0.0.1:7778/health", @"D:\Deploys"),
+            (lv.Kind, lv.Root, lv.Task, lv.Health, lv.Store));
+        Assert.Equal((@"C:\Thornswood-Voice-Dev", "Thornswood Dev Voice"), (dv.Root, dv.Task));
+        foreach (var bad in new[]
+        {
+            "{\"repo\":\"O/R\",\"environments\":{\"dev\":{\"voice\":{}},\"main\":{\"voice\":{\"root\":\"C:\\\\Thornswood-Voice-Dev\"}}}}",
+            "{\"repo\":\"O/R\",\"environments\":{\"dev\":{\"voice\":{}},\"main\":{\"voice\":{\"task\":\"Thornswood Dev Voice\"}}}}",
+            "{\"repo\":\"O/R\",\"environments\":{\"dev\":{\"voice\":{}},\"main\":{\"voice\":{\"health\":\"http://127.0.0.1:7789/health\"}}}}",
+            "{\"repo\":\"O/R\",\"environments\":{\"main\":{\"voice\":{\"root\":\"voice\"}}}}",
+        })
+        {
+            File.WriteAllText(p, bad);
+            Assert.Throws<ConfigException>(() => Config.Load(p));
+        }
+    }
+
+    [Fact]
     public void ConfigReadsTheSiteAndTheBot()
     {
         var p = Path.Combine(Temp(), "agent.json");
