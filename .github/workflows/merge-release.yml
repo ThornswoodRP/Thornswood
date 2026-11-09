@@ -191,8 +191,9 @@ jobs:
     runs-on: windows-latest
     environment: release
     # The engine package (about 100 MB), dev's last release from the site and
-    # the Velopack package are the slow parts.
-    timeout-minutes: 60
+    # the Velopack package are the slow parts; the box taking it, at most 20
+    # more (The box ran it, below).
+    timeout-minutes: 80
     permissions:
       contents: write
       deployments: write
@@ -790,6 +791,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::the tag main-$($env:TAG) could not be made on $($env:GITHUB_SHA)"; exit 1 }
 
       - name: Ask the dev server for it (a Deployment to Dev)
+        id: devdeploy
         if: ${{ steps.newest.outputs.release == 'yes' && steps.changed.outputs.dev == 'yes' }}
         shell: pwsh
         env:
@@ -815,6 +817,7 @@ jobs:
           $id = gh api --method POST "repos/$($env:GITHUB_REPOSITORY)/deployments" --input $file --jq .id
           if ($LASTEXITCODE -ne 0 -or -not $id) { Write-Host '::error::GitHub made no Deployment'; exit 1 }
           Write-Host "Deployment $id asks Dev for $($env:TAG); the box deploy agent applies it and says how it went on it"
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("id=" + $id)
           Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Deployment $id asks **Dev** for **$($env:TAG)** (changed: $($env:PARTS)): https://github.com/$($env:GITHUB_REPOSITORY)/deployments"
 
       # One Deployment for each app that changed, with the part beside the
@@ -822,6 +825,7 @@ jobs:
       # the bot posts the Release's news once, in the dev updates channel,
       # however many places it reached.
       - name: Ask the site and the Discord bot for it (Deployments to Site and Discord bot)
+        id: appdeploy
         if: ${{ steps.newest.outputs.release == 'yes' && steps.changed.outputs.apps != '' }}
         shell: pwsh
         env:
@@ -830,6 +834,7 @@ jobs:
           APPS: ${{ steps.changed.outputs.apps }}
         run: |
           $where = @{ site = 'Site'; discord = 'Discord bot' }
+          $ids = @()
           foreach ($part in ($env:APPS -split ',')) {
             $environment = $where[$part]
             if (-not $environment) { Write-Host "::error::$part has no environment of its own"; exit 1 }
@@ -850,5 +855,23 @@ jobs:
             $id = gh api --method POST "repos/$($env:GITHUB_REPOSITORY)/deployments" --input $file --jq .id
             if ($LASTEXITCODE -ne 0 -or -not $id) { Write-Host "::error::GitHub made no Deployment to $environment"; exit 1 }
             Write-Host "Deployment $id asks $environment for the $part of $($env:TAG)"
+            $ids += $id
             Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Deployment $id asks **$environment** for **$($env:TAG)** ($part): https://github.com/$($env:GITHUB_REPOSITORY)/deployments"
           }
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("ids=" + ($ids -join ' '))
+
+      # A release counts only once the box runs it (9 Nov): every Deployment
+      # this run made has to come back success from the box deploy agent.
+      # A run that made them and stopped was green while the box never
+      # looked at Main for a week (scripts/release/Wait-Deployment.ps1).
+      - name: The box ran it (each Deployment's status)
+        if: ${{ steps.devdeploy.outputs.id != '' || steps.appdeploy.outputs.ids != '' }}
+        timeout-minutes: 20
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IDS: ${{ steps.devdeploy.outputs.id }} ${{ steps.appdeploy.outputs.ids }}
+        run: |
+          $ids = @($env:IDS -split '\s+' | Where-Object { $_ } | ForEach-Object { [long]$_ })
+          & ./scripts/release/Wait-Deployment.ps1 -Repo $env:GITHUB_REPOSITORY -Id $ids -Minutes 15
+          exit $LASTEXITCODE

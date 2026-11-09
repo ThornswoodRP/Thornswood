@@ -184,6 +184,9 @@ function Read-Settings([string]$repo, [string]$saved) {
     Feeds = @(); GameHost = ''; FrontRanges = @(); StaffChannel = ''
     # The repository the box's runners are registered to (#4013).
     Repo = 'ThornswoodRP/Thornswood-Ops'; RunnerName = 'thornswood-vps'
+    # The repository whose Deployments the box deploy agent applies (deploys).
+    DeployRepo = $(if ($env:GITHUB_REPOSITORY) { $env:GITHUB_REPOSITORY } else { 'ThornswoodRP/Thornswood' })
+    DeployEnvs = @('Dev', 'Main', 'Site', 'Discord bot'); DeployMinutes = 15
     NexusGame = ''; NexusSlug = ''
     CertDays = 14; DomainDays = 30; Minutes = $(if ($Minutes) { $Minutes } else { 5 })
   }
@@ -534,6 +537,48 @@ function Check-Runner($S) {
   return (Ok ('all ' + $mine.Count + ' online, ' + $busy + ' running a job'))
 }
 
+# The newest Deployment of each environment the box deploy agent applies,
+# and whether the agent has said anything on it (9 Nov). The Main Deployments
+# of build-20261108.5, build-1.3.0 and build-1.3.4 sat for a week with no
+# status at all, because agent.json never named main, and nothing told
+# anybody. A Deployment the agent has not marked within DeployMinutes is
+# one nobody on the box is looking after. GitHub's own Deployment for an
+# approval wait has no release in its payload and is not one of these.
+# Signed in with the run's own token (deployments: read), never anonymously.
+function Get-Deployments([string]$repo, [string]$env) {
+  $token = ('' + $env:WATCH_DEPLOY_TOKEN).Trim()
+  if (-not $token) { return @{ List = @(); Error = 'no token for the Deployments is set here (WATCH_DEPLOY_TOKEN)' } }
+  $h = @{ Authorization = ('Bearer ' + $token); Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+  $a = Get-Http ('https://api.github.com/repos/' + $repo + '/deployments?per_page=5&environment=' + [uri]::EscapeDataString($env)) 'GET' '' $h
+  if ($a.Code -ne 200) { return @{ List = @(); Error = ('GitHub ' + $(if ($a.Code) { 'answered HTTP ' + $a.Code } else { $a.Error }) + ' for the ' + $env + ' Deployments') } }
+  $list = @()
+  try { $list = @($a.Body | ConvertFrom-Json | Where-Object { $_.payload -and $_.payload.release }) } catch { return @{ List = @(); Error = 'GitHub''s answer was not a Deployment list' } }
+  if ($list.Count -eq 0) { return @{ List = @(); Error = '' } }
+  $d = $list[0]
+  $s = Get-Http ('https://api.github.com/repos/' + $repo + '/deployments/' + $d.id + '/statuses?per_page=1') 'GET' '' $h
+  $token = $null
+  if ($s.Code -ne 200) { return @{ List = @(); Error = ('GitHub ' + $(if ($s.Code) { 'answered HTTP ' + $s.Code } else { $s.Error }) + ' for deployment ' + $d.id + '''s statuses') } }
+  $states = @()
+  try { $states = @($s.Body | ConvertFrom-Json) } catch { return @{ List = @(); Error = 'GitHub''s answer was not a status list' } }
+  return @{ List = @(@{ Id = '' + $d.id; Release = '' + $d.payload.release; Created = [DateTimeOffset]::Parse('' + $d.created_at, [Globalization.CultureInfo]::InvariantCulture); State = $(if ($states.Count) { '' + $states[0].state } else { '' }) }); Error = '' }
+}
+
+function Check-Deploys($S) {
+  $now = [DateTimeOffset](Get-Now)
+  $quiet = @(); $said = @()
+  foreach ($e in $S.DeployEnvs) {
+    $r = Get-Deployments $S.DeployRepo $e
+    if ($r.Error) { return (Unknown $r.Error) }
+    if ($r.List.Count -eq 0) { continue }
+    $d = $r.List[0]
+    $age = [int]($now - $d.Created).TotalMinutes
+    if ($d.State -eq '' -and $age -ge $S.DeployMinutes) { $quiet += ($e + ': deployment ' + $d.Id + ' of ' + $d.Release + ', ' + $age + ' min with no status') }
+    else { $said += ($e + ' ' + $(if ($d.State) { $d.State } else { 'waiting ' + $age + ' min' })) }
+  }
+  if ($quiet.Count) { return (Wrong ('the box deploy agent has said nothing on ' + ($quiet -join '; '))) }
+  return (Ok ($said -join ', '))
+}
+
 function Check-Nexus($S) {
   $q = '{ collection(slug: \"' + $S.NexusSlug + '\", domainName: \"' + $S.NexusGame + '\") { name latestPublishedRevision { revisionNumber } } }'
   $a = Get-Http 'https://api.nexusmods.com/v2/graphql' 'POST' ('{"query":"' + $q + '"}') @{ Accept = 'application/json' }
@@ -573,6 +618,9 @@ function Get-Checks($S) {
     @{ Name = 'runner'; Say = ('The build runners, ' + $S.RunnerName + ' and the numbered ones,'); What = 'the build runners'; Fails = 'are not all online on GitHub'; Recovers = 'are all online again'; Misses = 3; Back = 2; Every = 0; Private = $true
        Fix = 'They are registered to ThornswoodRP/Thornswood-Ops (#4013). With none of them online the box''s jobs wait: deploys through the gate, staff notices from cloud threads and the admin App''s asks; with some, they wait longer. .\scripts\deploy\Install-Runner.ps1 -Status says what the VPS sees of the first, and -Number <n> -Status of the others.'
        Blind = 'It asks with a token of the thornswood-watch App, minted each run from WATCH_APP_KEY in Thornswood''s watch environment, that reads only the runners of ThornswoodRP/Thornswood-Ops. The run log says why it could not mint one; a new key goes in that environment.' },
+    @{ Name = 'deploys'; Say = 'A release the box should be running'; What = 'whether the box takes each release'; Fails = 'has not been taken by the box'; Recovers = 'has been taken by the box'; Misses = 1; Back = 1; Every = 15
+       Fix = 'The box deploy agent marks every Deployment it applies within about a minute. Silence means agent.json does not name that environment or the agent is not running: pwsh scripts/vps/Box-Run.ps1 -Line ''Install-DeployAgent -Status'' says what the box sees, and -Main puts main back in agent.json (#5181).'
+       Blind = 'It reads the Deployments with the run''s own token (deployments: read on this repository).' },
     @{ Name = 'nexus'; Say = 'The Nexus collection'; What = 'the Nexus collection'; Fails = 'cannot be reached'; Recovers = 'is reachable again'; Misses = 2; Back = 2; Every = 60
        Fix = 'A new install gets its mods through this collection.' }
   )
@@ -588,6 +636,7 @@ function Invoke-Check($S, $c) {
     'ranges'  { return (Check-Ranges $S) }
     'domain'  { return (Check-Domain $S) }
     'runner'  { return (Check-Runner $S) }
+    'deploys' { return (Check-Deploys $S) }
     'nexus'   { return (Check-Nexus $S) }
     default   { return (Check-Feed $S $c.Feed) }
   }
