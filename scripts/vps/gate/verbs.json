@@ -422,16 +422,8 @@
         "Number": "^[1-9][0-9]?$",
         "Status": "switch",
         "Lock": "switch",
-        "NetworkOnly": "switch",
-        "Hermes": "switch",
-        "Python": "switch"
+        "NetworkOnly": "switch"
       }
-    },
-    "Remove-HermesRunner": {
-      "script": "scripts/deploy/Install-Runner.ps1",
-      "timeoutMinutes": 20,
-      "fixed": ["-FromGate", "-Hermes", "-Remove", "-NoPause"],
-      "params": {}
     },
     "Install-Backup": {
       "script": "scripts/deploy/Install-Backup.ps1",

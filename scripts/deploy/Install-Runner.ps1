@@ -34,79 +34,6 @@
   build records list or one already registered there; -Remove, -OffBox,
   -Migrate and hand-picked names and folders are refused.
 
-  THORNSWOOD-HERMES'S RUNNER (-Hermes). The Windows check of
-  ThornswoodRP/Thornswood-Hermes's guard rail tests runs on the box, on a
-  runner of its own (Patrick's A on q-hermes-ci-free-runners, 2 Nov 2026,
-  5:46 PM: the organization's free private-repository minutes were spent and
-  the spending limit stays at $0). -Hermes takes every name from
-  records\hermes-runner.json, its organization, folder, account, runner
-  name, label and the hosts a job may reach besides GitHub, and refuses a
-  name, a -Number, -OffBox, -Migrate or -Lock beside it. It is an
-  organization runner, not a repository's: the box admin App is never on
-  Thornswood-Hermes (records\github-apps.json), so its token for this is the
-  organization's Self-hosted runners write and nothing of the repository
-  (ops-access.js hermes-runners). Only the organization's private
-  repositories may use an organization runner, and Thornswood-Hermes's
-  workflows are the ones that ask for its label. It carries that label
-  alone, never thornswood-vps or a build label, so no box job reaches it, and
-  its account is shut out of every other runner's folder as theirs are out
-  of its. Through the gate,
-      pwsh scripts/vps/Box-Run.ps1 Install-Runner -Hermes
-  (-Status and -NetworkOnly beside it as for any runner) registers it. It is
-  written down in that record, so the gate's renew only rule counts it as
-  named.
-
-  A RETIRED RUNNER (#5565). Thornswood-Hermes went public as
-  ThornswoodRP/TWHermesAgents on 8 Nov 2026 and its checks went back to
-  GitHub's own runners, so tw-hermes-box has nothing left to run. A runner
-  comes off the box the way it went on: by its record. When
-  records\hermes-runner.json carries "retired", -Hermes installs nothing and
-  sets no rules or Python (STOP, nothing changed), -Status still reads it,
-  and -Remove takes it off the box and off GitHub. Through the gate that is
-  the verb Remove-HermesRunner, which holds the line to exactly
-      pwsh scripts/vps/Box-Run.ps1 -Line 'Remove-HermesRunner'
-  and this script refuses -Remove from the gate for any runner whose record
-  does not say it is retired, so the gate still never takes a box runner
-  that a record keeps. A removal stops before it changes anything when
-  GitHub gives no removal token, and after the box's part it asks GitHub
-  whether the runner is still registered and says STOP when it is. Its
-  Python goes first (Remove-RunnerPython): the installer's own quiet
-  uninstall, then the bundle's registration and cached copy in the hive of
-  the user who installed it, which the uninstall run as SYSTEM cannot see.
-
-  THE WAY OUT (#5495). A runner record with "egress": true (the Hermes one)
-  reaches the internet only through the box runners' way out, the proxy
-  Install-RunnerEgress.ps1 runs on loopback at records\runner-egress.json's
-  listen, which lets out only the hosts on its list, by name. Its account's
-  rules block every address but loopback, its .env names the proxy as
-  https_proxy and http_proxy, and its allowHost goes on the proxy's list, not
-  into the rules. Patrick chose that on 3 Nov 2026: GitHub gave tw-hermes-box
-  the token host vstoken.actions.githubusercontent.com on an edge address
-  many Microsoft services share, which a rule by address could only block
-  (the runner never came online) or open to all of them. The
-  install and -NetworkOnly stop before changing anything when the proxy does
-  not answer github.com with 200 (run Install-RunnerEgress first), and
-  -NetworkOnly stops when a job is running, writes the .env, puts the rules
-  on and starts the service again so it reads the .env. -Status asks the
-  proxy for each host the runner needs.
-
-  THE RUNNER'S PYTHON (-Python, #5495). actions/setup-python puts a Python it
-  has not got in the runner's tool cache with python.org's installer, run for
-  all users (actions/python-versions' win-setup-template.ps1: InstallAllUsers=1,
-  then a symbolic link python3.exe), and the runner's account holds no
-  administrator right, so on 8 Nov 2026 tw-hermes-box's first Hermes job
-  stopped at "Error happened during Python installation". So the record's
-  python, the build of actions/python-versions that setup-python itself takes,
-  goes into <root>\_work\_tool\Python\<version>\x64 the way setup-python
-  lays one out, by the install and by -Hermes -Python, as the box's
-  administrator, and setup-python finds it there and installs nothing. The
-  zip is held to the record's SHA-256 and its installer to python.org's
-  signature; pip is the one the installer carries, never fetched, and no
-  launcher, file type or shortcut is put on the box. It refuses when the box
-  holds the same minor version for all users anywhere else, which the
-  installer would change instead of making a copy. -Status names what is in
-  the tool cache.
-
   OFF THE BOX (-OffBox, issue #1306). build.yml sends a pull request to the
   label thornswood-pr, which no runner on the VPS carries, so code nobody has
   merged never runs beside the live server. -OffBox puts that runner on the
@@ -413,12 +340,6 @@ param(
   # Run on the box by the deploy gate's Install-Runner verb (THROUGH THE
   # DEPLOY GATE above), with the box admin App's token.
   [switch]$FromGate,
-  # Thornswood-Hermes's one runner, with records\hermes-runner.json's names
-  # (THORNSWOOD-HERMES'S RUNNER above).
-  [switch]$Hermes,
-  # -Hermes only: the record's Python into the runner's tool cache, and
-  # nothing else (THE RUNNER'S PYTHON above).
-  [switch]$Python,
   [switch]$NoPause
 )
 
@@ -445,63 +366,18 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 # Where the box keeps its firewall rules, and the refresh that makes the
 # firewall take a change to them (#3896).
 . (Join-Path $Here '..\vps\BoxFirewall.ps1')
-# The box runners' way out (#5495): its address, and the question that asks
-# it for a host (RunnerEgress.ps1, Install-RunnerEgress.ps1).
-. (Join-Path $Here 'RunnerEgress.ps1')
-$egress = $null
-$runnerPython = $null
-# THORNSWOOD-HERMES'S RUNNER (-Hermes, the header's section of that name).
-# Every name is the record's; none is taken from the command line, and the
-# gate's -AllowHost is replaced by the record's list.
-if ($Hermes) {
-  $handPicked = @('Repo', 'Root', 'Account', 'RunnerName', 'Label', 'Number') | Where-Object { $PSBoundParameters.ContainsKey($_) }
-  if ($OffBox -or $Migrate -or $Lock -or @($handPicked).Count) { Write-Host 'STOP. -Hermes is the one runner records\hermes-runner.json names, on the box, with that record''s names; it takes no other name, no -Number, -OffBox, -Migrate or -Lock (-Lock locks every runner on the box without it). Nothing was changed.' -ForegroundColor Red; exit 1 }
-  $hermesRecord = Get-Content -LiteralPath (Join-Path $Here '..\..\records\hermes-runner.json') -Raw | ConvertFrom-Json
-  # A RETIRED RUNNER (the header's section of that name): read and taken
-  # off, never put back.
-  $hermesRetired = [bool]$hermesRecord.PSObject.Properties['retired']
-  if ($hermesRetired -and -not ($Status -or ($Remove -and -not $NetworkOnly))) { Write-Host ('STOP. ' + [string]$hermesRecord.name + ' is retired (records\hermes-runner.json "retired": ' + [string]$hermesRecord.retired.why + '). -Hermes -Status reads it and -Hermes -Remove takes it off; nothing installs it, its rules or its Python again. Nothing was changed.') -ForegroundColor Red; exit 1 }
-  # An organization runner: registered to the organization's URL, through
-  # the organization's runner endpoints.
-  $Repo = [string]$hermesRecord.organization
-  $Root = [string]$hermesRecord.root
-  $Account = [string]$hermesRecord.account
-  $RunnerName = [string]$hermesRecord.name
-  $Label = [string]$hermesRecord.label
-  $AllowHost = @($hermesRecord.allowHost | ForEach-Object { [string]$_ } | Where-Object { $_ })
-  # THE WAY OUT (the header's section of that name): a record with egress
-  # reaches the internet only through the box's proxy, whose list holds its
-  # allowHost.
-  if ($hermesRecord.egress) {
-    try { $egress = Get-ThornswoodRunnerEgress (Join-Path $Here '..\..') } catch { Write-Host ('STOP. ' + $_.Exception.Message + '. Nothing was changed.') -ForegroundColor Red; exit 1 }
-  }
-  # THE RUNNER'S PYTHON (the header's section of that name).
-  if ($hermesRecord.python) {
-    $runnerPython = $hermesRecord.python
-    if ([string]$runnerPython.version -notmatch '^\d+\.\d+\.\d+$' -or [string]$runnerPython.url -notmatch '^https://github\.com/actions/python-versions/releases/download/' -or [string]$runnerPython.sha256 -notmatch '^[0-9a-f]{64}$') { Write-Host 'STOP. records\hermes-runner.json''s python needs a version x.y.z, an actions/python-versions release url and a SHA-256. Nothing was changed.' -ForegroundColor Red; exit 1 }
-  }
-}
-if ($Python -and (-not $Hermes -or $Status -or $Remove -or $Lock -or $NetworkOnly)) { Write-Host 'STOP. -Python puts the Hermes runner''s Python in its tool cache, alone: Install-Runner -Hermes -Python. Nothing was changed.' -ForegroundColor Red; exit 1 }
-if ($Python -and -not $runnerPython) { Write-Host 'STOP. records\hermes-runner.json names no python for -Python to put in place. Nothing was changed.' -ForegroundColor Red; exit 1 }
 # THROUGH THE DEPLOY GATE (-FromGate, the header's section of that name).
 if ($FromGate) {
   if ($env:THORNSWOOD_GATE -ne '1') { Write-Host 'STOP. -FromGate is for the deploy gate''s Install-Runner verb, which runs this on the box: scripts/vps/Box-Run.ps1 Install-Runner -Number <n>. Nothing was changed.' -ForegroundColor Red; exit 1 }
   $handPicked = @('Repo', 'Root', 'Account', 'RunnerName', 'Label', 'VpsHost', 'VpsUser', 'AlsoDeny') | Where-Object { $PSBoundParameters.ContainsKey($_) }
-  if ($OffBox -or $Migrate -or $DryRunTo -or $DefenderSkip -or @($handPicked).Count) { Write-Host 'STOP. Through the gate a runner is installed, locked, read or given its network rules with the names and folders its number gives it, on the box. Nothing was changed.' -ForegroundColor Red; exit 1 }
-  # A RETIRED RUNNER: the gate takes off only a runner its record retires.
-  if ($Remove -and -not ($Hermes -and $hermesRetired -and -not $NetworkOnly)) { Write-Host 'STOP. Through the gate a runner comes off the box only when its record says it is retired (Remove-HermesRunner, records\hermes-runner.json "retired"); every other runner is renewed, never removed. Nothing was changed.' -ForegroundColor Red; exit 1 }
-  # The box's runners are the ops repository's (#4013); Thornswood-Hermes's
-  # one is its record's, with a token for that repository alone.
-  if (-not $Hermes) { $Repo = 'ThornswoodRP/Thornswood-Ops' }
+  if ($OffBox -or $Migrate -or $Remove -or $DryRunTo -or $DefenderSkip -or @($handPicked).Count) { Write-Host 'STOP. Through the gate a runner is installed, locked, read or given its network rules with the names and folders its number gives it, on the box, and never removed. Nothing was changed.' -ForegroundColor Red; exit 1 }
+  $Repo = 'ThornswoodRP/Thornswood-Ops'
   . (Join-Path $Here '..\vps\admin\ShipAccess.ps1')
   # In this run's environment only: the gate starts every verb as a process
   # of its own, so the token goes with it, and GitHub ends it within the hour.
-  try { $env:GH_TOKEN = Get-ThornswoodOpsAccess -Repo ([IO.Path]::GetFullPath((Join-Path $Here '..\..'))) -For $(if ($Hermes) { 'hermes-runners' } else { 'runners' }) }
+  try { $env:GH_TOKEN = Get-ThornswoodOpsAccess -Repo ([IO.Path]::GetFullPath((Join-Path $Here '..\..'))) -For runners }
   catch { Write-Host ('STOP. The box admin App gave no token for the runners of ' + $Repo + ': ' + $_.Exception.Message + ' Nothing was changed.') -ForegroundColor Red; exit 1 }
 }
-# Where GitHub keeps this runner: a repository's runners, or for -Hermes the
-# organization's.
-$RunnerApi = $(if ($Hermes) { 'orgs/' + $Repo } else { 'repos/' + $Repo })
 if (-not $OffBox) {
   if (-not $VpsUser) { $VpsUser = Get-ThornswoodVpsUser }
   if (-not $VpsHost) { $VpsHost = Get-ThornswoodVpsAddress }
@@ -548,7 +424,7 @@ if ($OffBox) {
 # One's take the pull request build's fallback by the label below (#4010).
 $registerLabels = $Label
 $buildRecord = Get-Content -LiteralPath (Join-Path $Here '..\..\records\build-runners.json') -Raw | ConvertFrom-Json
-if (-not $OffBox -and -not $Hermes -and -not $PSBoundParameters.ContainsKey('Label')) {
+if (-not $OffBox -and -not $PSBoundParameters.ContainsKey('Label')) {
   if (@($buildRecord.runners | ForEach-Object { [int]$_ }) -contains $Number) { $registerLabels = $Label + ',' + $buildRecord.label }
 }
 # PULL REQUEST BUILDS (#4010). records\pr-build-runners.json's label is the
@@ -557,7 +433,7 @@ if (-not $OffBox -and -not $Hermes -and -not $PSBoundParameters.ContainsKey('Lab
 # does an off-box runner its offBox names, which still never carries
 # thornswood-vps, so no box-only job reaches it.
 $prRecord = Get-Content -LiteralPath (Join-Path $Here '..\..\records\pr-build-runners.json') -Raw | ConvertFrom-Json
-if (-not $Hermes -and -not $PSBoundParameters.ContainsKey('Label')) {
+if (-not $PSBoundParameters.ContainsKey('Label')) {
   $takesPr = $(if ($OffBox) { $prRecord.PSObject.Properties['offBox'] -and @($prRecord.offBox) -contains $RunnerName } else { @($prRecord.runners | ForEach-Object { [int]$_ }) -contains $Number })
   if ($takesPr) { $registerLabels = $registerLabels + ',' + $prRecord.label }
 }
@@ -668,7 +544,7 @@ $service = 'actions.runner.' + $Repo.Replace('/', '-') + '.' + $RunnerName
 # (Find-RunnerService), and config.cmd gives a runner registered now the first.
 $serviceNames = @($service)
 $repoOwner, $repoName = $Repo.Split('/', 2)
-if ($repoOwner -ne 'EvilPatrick06' -and $repoName) { $serviceNames += ('actions.runner.EvilPatrick06-' + $repoName + '.' + $RunnerName) }
+if ($repoOwner -ne 'EvilPatrick06') { $serviceNames += ('actions.runner.EvilPatrick06-' + $repoName + '.' + $RunnerName) }
 $serviceList = "@('" + ($serviceNames -join "', '") + "')"
 
 # ------------------------------------------------------------- the locks --
@@ -701,26 +577,6 @@ function Set-RunnerTemp([string]$root, [string]$svcName, [bool]$ownInstall = $fa
   if (($had -join "`n") -eq ($new -join "`n")) { return ($root + ' sends its jobs'' temp files to ' + $temp + ' already') }
   [IO.File]::WriteAllText($file, (($new -join "`r`n") + "`r`n"), (New-Object Text.UTF8Encoding($false)))
   $line = $root + ' now sends its jobs'' temp files to ' + $temp
-  $svc = Get-CimInstance Win32_Service -Filter ("Name='" + $svcName + "'") -EA SilentlyContinue
-  if ($svc -and $svc.State -eq 'Running') { $line += '; its runner is running, so this takes effect when ' + $svcName + ' next starts' }
-  return $line
-}
-# THE WAY OUT (#5495): a runner sent through the box's proxy names it in its
-# .env as https_proxy, http_proxy and no_proxy, which actions/runner reads
-# when its service starts and hands to every job (GitHub's "Using a proxy
-# server with self-hosted runners"). Its account reaches loopback only, so a
-# tool that does not take the proxy reaches nothing. Lines of the runner's
-# own are kept.
-function Set-RunnerProxy([string]$root, [string]$svcName, [string]$url) {
-  $file = Join-Path $root '.env'
-  $want = @(('https_proxy=' + $url), ('http_proxy=' + $url), 'no_proxy=localhost,127.0.0.1,::1')
-  $had = @()
-  if (Test-Path -LiteralPath $file) { $had = @(Get-Content -LiteralPath $file -EA Stop) }
-  $keep = @($had | Where-Object { $_ -notmatch '^(https_proxy|http_proxy|no_proxy)=' })
-  $new = @($keep) + $want
-  if (($had -join "`n") -eq ($new -join "`n")) { return ($root + ' sends its jobs through ' + $url + ' already') }
-  [IO.File]::WriteAllText($file, (($new -join "`r`n") + "`r`n"), (New-Object Text.UTF8Encoding($false)))
-  $line = $root + ' now sends its jobs through ' + $url
   $svc = Get-CimInstance Win32_Service -Filter ("Name='" + $svcName + "'") -EA SilentlyContinue
   if ($svc -and $svc.State -eq 'Running') { $line += '; its runner is running, so this takes effect when ' + $svcName + ' next starts' }
   return $line
@@ -995,12 +851,11 @@ function Get-RunnerBlockRanges([string[]]$allow) {
 # machine's local store, as before, since its firewall is not run that way.
 $guardLib = (Get-ThornswoodFirewallScript) + @'
 # Outbound block rules for the account alone, replacing any it had.
-# -Proxy is the way out's port for a runner sent through it (THE WAY OUT), else 0.
-function Set-RunnerFirewall([string]$acct, [string]$group, [string[]]$blocks, [int]$per = 500, [int]$Proxy = 0) {
+function Set-RunnerFirewall([string]$acct, [string]$group, [string[]]$blocks, [int]$per = 500) {
   $sid = $(if ($acct.StartsWith('*')) { $acct.Substring(1) } else { (New-Object Security.Principal.NTAccount($acct)).Translate([Security.Principal.SecurityIdentifier]).Value })
   if (-not @($blocks).Count) { throw 'there is no address list to block, so the firewall was left as it was' }
   @(Get-NetFirewallRule -PolicyStore $grdStore -Group $group -EA SilentlyContinue) | ForEach-Object { Remove-NetFirewallRule -PolicyStore $grdStore -Name $_.Name }
-  $why = $(if ($Proxy) { 'Install-Runner.ps1 (#5495): this account reaches loopback only, and the internet through the box runners'' way out on 127.0.0.1:' + $Proxy + '. -NetworkOnly -Remove takes it off.' } else { 'Install-Runner.ps1 (#1306, #2161): this account reaches GitHub, loopback and the -AllowHost names only. -NetworkOnly -Remove takes it off.' })
+  $why = 'Install-Runner.ps1 (#1306, #2161): this account reaches GitHub, loopback and the -AllowHost names only. -NetworkOnly -Remove takes it off.'
   $n = 0
   for ($i = 0; $i -lt $blocks.Count; $i += $per) {
     $n++
@@ -1008,7 +863,7 @@ function Set-RunnerFirewall([string]$acct, [string]$group, [string[]]$blocks, [i
     New-NetFirewallRule -PolicyStore $grdStore -DisplayName ($group + ' ' + $n) -Group $group -Direction Outbound -Action Block -Profile Any -LocalUser ('D:(A;;CC;;;' + $sid + ')') -RemoteAddress $chunk -Description $why -EA Stop | Out-Null
   }
   if ($grdStore -eq 'localhost') { Sync-ThornswoodFirewall }
-  'firewall: ' + $acct + $(if ($Proxy) { ' may reach this machine only, and the internet through the way out on 127.0.0.1:' + $Proxy } else { ' may reach GitHub, this machine and what it was given only' }) + ', ' + $blocks.Count + ' blocked range(s) in ' + $n + ' outbound rule(s), group ' + $group
+  'firewall: ' + $acct + ' may reach GitHub, this machine and what it was given only, ' + $blocks.Count + ' blocked range(s) in ' + $n + ' outbound rule(s), group ' + $group
 }
 function Remove-RunnerFirewall([string]$group) {
   $r = @(Get-NetFirewallRule -PolicyStore $grdStore -Group $group -EA SilentlyContinue)
@@ -1017,9 +872,9 @@ function Remove-RunnerFirewall([string]$group) {
   if ($grdStore -eq 'localhost') { Sync-ThornswoodFirewall }
   'firewall: took off ' + $r.Count + ' rule(s) in ' + $group
 }
-function Get-RunnerFirewall([string]$group, [int]$Proxy = 0) {
+function Get-RunnerFirewall([string]$group) {
   $r = @(Get-NetFirewallRule -PolicyStore $grdStore -Group $group -EA SilentlyContinue)
-  if ($r.Count) { 'firewall  ' + $r.Count + ' outbound block rule(s), ' + @($r | Where-Object { "$($_.Enabled)" -eq 'True' }).Count + ' on (group ' + $group + ')'; Test-RunnerReach $r $Proxy } else { 'firewall  NO RULES: a pull request job may reach anywhere. -OffBox -Lock puts them on' }
+  if ($r.Count) { 'firewall  ' + $r.Count + ' outbound block rule(s), ' + @($r | Where-Object { "$($_.Enabled)" -eq 'True' }).Count + ' on (group ' + $group + ')'; Test-RunnerReach $r } else { 'firewall  NO RULES: a pull request job may reach anywhere. -OffBox -Lock puts them on' }
 }
 # The hosts a runner itself has to reach to take a job (GitHub's "Accessible
 # domains by function": its essential operations, downloading actions, and
@@ -1044,13 +899,7 @@ function ConvertTo-GuardSpan([string]$a) {
   $n = ConvertTo-GuardNumber $a
   New-Object PSObject -Property @{ V = $v; Lo = $n; Hi = $n }
 }
-function Test-RunnerReach([object[]]$rules, [int]$Proxy = 0) {
-  # THE WAY OUT: the account reaches loopback only, so each host is asked of
-  # the proxy, which says 200 for a host on its list.
-  if ($Proxy) {
-    foreach ($h in $grdNeeds) { 'reach     ' + $h + ': ' + (Ask-Egress $Proxy $h) + ' (through the way out on 127.0.0.1:' + $Proxy + ')' }
-    return
-  }
+function Test-RunnerReach([object[]]$rules) {
   $spans = @()
   foreach ($r in $rules) { foreach ($a in @(($r | Get-NetFirewallAddressFilter).RemoteAddress)) { if ($a -and $a -ne 'Any') { $spans += ConvertTo-GuardSpan ([string]$a) } } }
   foreach ($h in $grdNeeds) {
@@ -1103,12 +952,12 @@ function Open-RunnerReads([string]$acct, [string[]]$paths) {
 # Where the runner is: the guards, as source. $mode is apply, remove or status.
 function Get-GuardScript([string]$mode, [string[]]$blocks = @()) {
   $list = '@(' + ((@($blocks) | ForEach-Object { "'" + $_ + "'" }) -join ', ') + ')'
-  $head = $guardLib + "`n" + $(if ($egress) { (Get-ThornswoodEgressAskScript) + "`n" } else { '' }) + "`$grdProxy = " + $(if ($egress) { $egress.Port } else { 0 }) + "`n`$grdAcct = '" + $Account.Replace("'", "''") + "'`n`$grdGroup = '" + $guardGroup.Replace("'", "''") + "'`n`$grdOwn = '" + $(if ($onRunnerDrive) { $rootDrive } else { '' }) + "'`n`$grdStore = '" + $(if ($OffBox) { 'PersistentStore' } else { 'localhost' }) + "'`n"
-  if ($mode -eq 'status') { return $head + 'Get-RunnerFirewall $grdGroup $grdProxy' }
+  $head = $guardLib + "`n`$grdAcct = '" + $Account.Replace("'", "''") + "'`n`$grdGroup = '" + $guardGroup.Replace("'", "''") + "'`n`$grdOwn = '" + $(if ($onRunnerDrive) { $rootDrive } else { '' }) + "'`n`$grdStore = '" + $(if ($OffBox) { 'PersistentStore' } else { 'localhost' }) + "'`n"
+  if ($mode -eq 'status') { return $head + 'Get-RunnerFirewall $grdGroup' }
   if ($mode -eq 'network-remove') { return $head + "Remove-RunnerFirewall `$grdGroup`n" }
-  if ($mode -eq 'network') { return $head + "`$grdBlocks = " + $list + "`nSet-RunnerFirewall `$grdAcct `$grdGroup `$grdBlocks -Proxy `$grdProxy`n" }
+  if ($mode -eq 'network') { return $head + "`$grdBlocks = " + $list + "`nSet-RunnerFirewall `$grdAcct `$grdGroup `$grdBlocks`n" }
   if ($mode -eq 'remove') { return $head + "Remove-RunnerFirewall `$grdGroup`nOpen-RunnerReads `$grdAcct (Get-RunnerReadDenies `$grdAcct -Own `$grdOwn)`n" }
-  return $head + "`$grdBlocks = " + $list + "`nSet-RunnerFirewall `$grdAcct `$grdGroup `$grdBlocks -Proxy `$grdProxy`nClose-RunnerReads `$grdAcct (Get-RunnerReadDenies `$grdAcct -Own `$grdOwn)`n"
+  return $head + "`$grdBlocks = " + $list + "`nSet-RunnerFirewall `$grdAcct `$grdGroup `$grdBlocks`nClose-RunnerReads `$grdAcct (Get-RunnerReadDenies `$grdAcct -Own `$grdOwn)`n"
 }
 # WHERE THE LISTS ARE READ (#3312). GitHub's lists are read on the machine
 # the rules go on, the box or (-OffBox) this one, by $listLib: its own
@@ -1149,12 +998,6 @@ function Get-PublishedLists {
 }
 # GitHub's published lists, loopback and -AllowHost, as the ranges to block.
 function Get-GuardBlocks {
-  # THE WAY OUT: loopback only. GitHub's hosts and allowHost are on the
-  # proxy's list, by name, so no address list is read.
-  if ($egress) {
-    Say ('  every address but loopback; jobs go out through the way out on ' + $egress.Listen + ', which lets out only the hosts on its list') 'Yellow'
-    return Get-RunnerBlockRanges @('127.0.0.0/8', '::1/128')
-  }
   $lists = Get-PublishedLists
   $allow = @('127.0.0.0/8', '::1/128')
   foreach ($k in 'web', 'api', 'git', 'actions') {
@@ -1179,16 +1022,6 @@ function Get-GuardBlocks {
     Say ('  -AllowHost ' + $h + ': ' + ($ips -join ', ') + ' (as of now)') 'Yellow'
   }
   Get-RunnerBlockRanges $allow
-}
-
-# THE WAY OUT: before a runner is sent through the proxy, the proxy has to be
-# there and let GitHub out, or the rules would leave the runner nothing.
-function Assert-RunnerEgress {
-  if (-not $egress -or $DryRunTo) { return }
-  $said = @(Remote ((Get-ThornswoodEgressAskScript) + "`nAsk-Egress " + $egress.Port + " 'github.com'`n"))
-  $line = '' + ($said | Select-Object -Last 1)
-  if ($line -notmatch '^HTTP/1\.[01] 200') { Die ('the way out on ' + $where + ' (' + $egress.Listen + ') answered github.com with "' + $line + '", not 200, so ' + $Account + ' would reach nothing. Put it there first: pwsh scripts/vps/Box-Run.ps1 -Line ''Install-RunnerEgress''. Nothing was changed.') }
-  Say ('  the way out on ' + $egress.Listen + ' answers github.com: ' + $line) 'Green'
 }
 
 # Every runner service on the box, by what Windows says it is: its folder is
@@ -1223,147 +1056,6 @@ Remove-LeftProfiles @($profileLike)
 if ($bad) { exit 1 }
 '@
 
-# THE RUNNER'S PYTHON (the header's section of that name), run on the box as
-# its administrator. Windows PowerShell 5.1 runs it, so it is ASCII.
-$toolLib = @'
-function Install-RunnerPython([string]$root, [string]$acct, [string]$version, [string]$url, [string]$sha256) {
-  $cache = Join-Path $root '_work\_tool\Python'
-  $verDir = Join-Path $cache $version
-  $arch = Join-Path $verDir 'x64'
-  $done = Join-Path $verDir 'x64.complete'
-  $exe = Join-Path $arch 'python.exe'
-  if ((Test-Path -LiteralPath $done) -and (Test-Path -LiteralPath $exe)) { return ('Python ' + $version + ' is in ' + $cache + ' already') }
-  $mm = (($version -split '\.')[0..1]) -join '.'
-  # The installer, run for all users, changes a copy of the same minor
-  # version it finds installed for all users instead of making a new one.
-  $reg = 'HKLM:\SOFTWARE\Python\PythonCore\' + $mm + '\InstallPath'
-  if (Test-Path -LiteralPath $reg) {
-    $there = [string](Get-ItemProperty -LiteralPath $reg).'(default)'
-    if ($there -and -not $there.StartsWith($cache, [StringComparison]::OrdinalIgnoreCase)) { throw ('Python ' + $mm + ' is installed for all users at ' + $there + ', and its installer would change that copy instead of making the runner its own; nothing was installed') }
-  }
-  $stage = Join-Path ([IO.Path]::GetTempPath()) ('tw-runner-python-' + [guid]::NewGuid().ToString('N'))
-  New-Item -ItemType Directory -Path $stage -Force | Out-Null
-  try {
-    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-    $zip = Join-Path $stage 'python.zip'
-    $ProgressPreference = 'SilentlyContinue'
-    Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
-    $got = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($got -ne $sha256) { throw ('the Python ' + $version + ' build does not match the record''s SHA-256 (got ' + $got + '); nothing was installed') }
-    Expand-Archive -LiteralPath $zip -DestinationPath $stage -Force
-    $setup = @(Get-ChildItem -LiteralPath $stage -Filter ('python-' + $version + '-amd64.exe'))
-    if ($setup.Count -ne 1) { throw ('the Python ' + $version + ' build holds no python-' + $version + '-amd64.exe; nothing was installed') }
-    $sig = Get-AuthenticodeSignature -LiteralPath $setup[0].FullName
-    if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Python Software Foundation') { throw ('python-' + $version + '-amd64.exe is not signed by the Python Software Foundation (' + $sig.Status + '); nothing was installed') }
-    if (Test-Path -LiteralPath $arch) { Remove-Item -LiteralPath $arch -Recurse -Force }
-    New-Item -ItemType Directory -Path $arch -Force | Out-Null
-    $p = Start-Process -FilePath $setup[0].FullName -ArgumentList @('/quiet', 'InstallAllUsers=1', ('DefaultAllUsersTargetDir="' + $arch + '"'), 'Include_launcher=0', 'InstallLauncherAllUsers=0', 'AssociateFiles=0', 'Shortcuts=0', 'PrependPath=0', 'Include_pip=1', 'Include_test=0') -Wait -PassThru
-    if ($p.ExitCode -ne 0) { throw ('the Python ' + $version + ' installer stopped with ' + $p.ExitCode) }
-  } finally {
-    Remove-Item -LiteralPath $stage -Recurse -Force -EA SilentlyContinue
-  }
-  if (-not (Test-Path -LiteralPath $exe)) { throw ('the Python ' + $version + ' installer ended 0 and left no ' + $exe) }
-  & $exe -c 'import pip' 2>&1 | Out-Null
-  if ($LASTEXITCODE -ne 0) { throw ('Python ' + $version + ' in ' + $arch + ' has no pip') }
-  # Every file under the runner folder's own rules, so its account may read
-  # and run it and a job's pip may install into it.
-  & icacls.exe $cache /reset /T /C /Q 2>&1 | Out-Null
-  if ($LASTEXITCODE -ne 0) { throw ('icacls could not put ' + $cache + ' under ' + $root + '''s rules') }
-  $sid = (New-Object Security.Principal.NTAccount($acct)).Translate([Security.Principal.SecurityIdentifier]).Value
-  $rx = [Security.AccessControl.FileSystemRights]::ReadAndExecute
-  $may = @((Get-Acl -LiteralPath $exe).Access | Where-Object {
-    $_.AccessControlType -eq 'Allow' -and (($_.FileSystemRights -band $rx) -eq $rx) -and $(try { $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -eq $sid } catch { $false })
-  })
-  if (-not $may.Count) { throw ($acct + ' may not run ' + $exe) }
-  New-Item -ItemType File -Path $done -Force | Out-Null
-  return ('Python ' + $version + ' now in ' + $cache + ', from its SHA-256 and signature; ' + $acct + ' may run it, and actions/setup-python takes it from there')
-}
-# -Remove's half (A RETIRED RUNNER): the installer ran for all users, so it
-# registered the build with Windows and under PythonCore. Deleting the
-# folder alone would leave both naming a Python that is gone, so the
-# bundle's own quiet uninstall runs first. Only a Python whose PythonCore
-# entry is inside this runner's tool cache is touched.
-function Remove-RunnerPython([string]$root, [string]$version) {
-  # python.org's installer is a Burn bundle: its parts are per-machine MSIs
-  # (HKLM), and the bundle registers itself in the hive of the user who ran it
-  # (the box's Administrator, measured by -Status on 8 Nov 2026), with its own
-  # copy in that user's Package Cache. Its quiet uninstall takes the MSIs off;
-  # run here as SYSTEM it cannot see the other user's registration or cache, so
-  # those two go after it, by the path the registration itself names.
-  $cache = Join-Path $root '_work\_tool\Python'
-  $mm = (($version -split '\.')[0..1]) -join '.'
-  $reg = 'HKLM:\SOFTWARE\Python\PythonCore\' + $mm + '\InstallPath'
-  $there = ''
-  if (Test-Path -LiteralPath $reg) { $there = [string](Get-ItemProperty -LiteralPath $reg).'(default)' }
-  $keys = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall')
-  $keys += @(Get-ChildItem -LiteralPath 'Registry::HKEY_USERS' -EA SilentlyContinue | ForEach-Object { 'Registry::HKEY_USERS\' + $_.PSChildName + '\Software\Microsoft\Windows\CurrentVersion\Uninstall' })
-  $entries = @(Get-ChildItem -LiteralPath $keys -EA SilentlyContinue | ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath -EA SilentlyContinue } | Where-Object { [string]$_.DisplayName -like ('Python ' + $version + ' *') })
-  $bundles = @($entries | Where-Object { [string]$_.DisplayName -eq ('Python ' + $version + ' (64-bit)') -and [string]$_.QuietUninstallString -and [string]$_.BundleCachePath })
-  if (-not $there) {
-    if ($entries.Count) { return ('Python ' + $mm + ' has no PythonCore entry, so the ' + $entries.Count + ' installer entries named Python ' + $version + ' are not the runner''s and were left alone') }
-    return ('no Python ' + $mm + ' is installed for all users')
-  }
-  if (-not $there.StartsWith($cache, [StringComparison]::OrdinalIgnoreCase)) { return ('Python ' + $mm + ' for all users is at ' + $there + ', not in ' + $cache + ', so it is not the runner''s and was left alone') }
-  if ($bundles.Count -ne 1) { throw ('Python ' + $mm + ' is in ' + $there + ' but Windows lists ' + $bundles.Count + ' bundles named Python ' + $version + ' (64-bit) with a quiet uninstall and a cached copy, in HKLM and every loaded user hive, not one') }
-  $b = $bundles[0]
-  $exe = [string]$b.BundleCachePath
-  if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw ('the Python ' + $version + ' bundle is registered at ' + $b.PSPath + ' but its cached copy ' + $exe + ' is not there') }
-  $q = [regex]::Match([string]$b.QuietUninstallString, '^\s*"([^"]+\.exe)"\s*(.*)$')
-  if (-not $q.Success -or $q.Groups[1].Value -ne $exe) { throw ('the Python ' + $version + ' bundle''s quiet uninstall is not its cached copy and its switches: ' + [string]$b.QuietUninstallString) }
-  $p = Start-Process -FilePath $exe -ArgumentList $q.Groups[2].Value -Wait -PassThru
-  if ($p.ExitCode -ne 0) { throw ('the Python ' + $version + ' uninstall stopped with ' + $p.ExitCode) }
-  if (Test-Path -LiteralPath $reg) { throw ('the Python ' + $version + ' uninstall ended 0 and PythonCore still names ' + $mm) }
-  $parts = @(Get-ChildItem -LiteralPath $keys[0..1] -EA SilentlyContinue | ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath -EA SilentlyContinue } | Where-Object { [string]$_.DisplayName -like ('Python ' + $version + ' *') })
-  if ($parts.Count) { throw ('the Python ' + $version + ' uninstall ended 0 and Windows still lists ' + (($parts | ForEach-Object { $_.DisplayName }) -join ', ')) }
-  $own = Split-Path -Parent $exe
-  Remove-Item -LiteralPath $b.PSPath -Recurse -Force
-  if (Test-Path -LiteralPath $own) { Remove-Item -LiteralPath $own -Recurse -Force }
-  if ((Test-Path -LiteralPath $b.PSPath) -or (Test-Path -LiteralPath $own)) { throw ('the Python ' + $version + ' parts are off, and its registration ' + $b.PSPath + ' or cached copy ' + $own + ' is still there') }
-  return ('Python ' + $version + ' uninstalled from ' + $there + ', with its parts, PythonCore, its registration in ' + (($b.PSPath -replace '^Microsoft\.PowerShell\.Core\\Registry::', '') -replace '\\Software\\.*$', '') + ' and its cached copy')
-}
-'@
-
-# -Status's half of the Python (A RETIRED RUNNER): what Windows holds for the
-# runner's Python outside its folder, read only, so -Remove takes off exactly
-# that. 8 Nov 2026: the first Remove-HermesRunner found PythonCore 3.13 in the
-# tool cache and no installer entry named Python 3.13.17 (64-bit) in HKLM, and
-# stopped before the account and folder went; this showed the seven parts in
-# HKLM and the bundle in the Administrator's hive, which Remove-RunnerPython
-# now looks in.
-$pythonSeen = @'
-function Show-RunnerPythonEntries([string]$version) {
-  $mm = (($version -split '\.')[0..1]) -join '.'
-  $reg = 'HKLM:\SOFTWARE\Python\PythonCore\' + $mm + '\InstallPath'
-  if (Test-Path -LiteralPath $reg) { 'pythoncore ' + $mm + ' at ' + [string](Get-ItemProperty -LiteralPath $reg).'(default)' } else { 'pythoncore no ' + $mm + ' for all users' }
-  $roots = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall')
-  $roots += @(Get-ChildItem -LiteralPath 'Registry::HKEY_USERS' -EA SilentlyContinue | ForEach-Object { 'Registry::HKEY_USERS\' + $_.PSChildName + '\Software\Microsoft\Windows\CurrentVersion\Uninstall' })
-  $n = 0
-  foreach ($r in $roots) {
-    foreach ($k in @(Get-ChildItem -LiteralPath $r -EA SilentlyContinue)) {
-      $e = Get-ItemProperty -LiteralPath $k.PSPath -EA SilentlyContinue
-      if ([string]$e.DisplayName -notlike ('Python ' + $mm + '*')) { continue }
-      $n++
-      $how = $(if ($e.QuietUninstallString) { ', quiet uninstall ' + $e.QuietUninstallString } elseif ($e.UninstallString) { ', uninstall ' + $e.UninstallString } else { ', no uninstall named' })
-      'installer  ' + $e.DisplayName + ' (' + $e.DisplayVersion + ') in ' + ($r -replace '^Registry::', '') + '\' + $k.PSChildName + $how + $(if ($e.BundleCachePath) { ', bundle ' + $e.BundleCachePath } else { '' })
-    }
-  }
-  if (-not $n) { 'installer  no entry named Python ' + $mm + ' in any uninstall list' }
-  $cached = @(Get-ChildItem -Path (Join-Path $env:ProgramData 'Package Cache\*\python-*.exe') -EA SilentlyContinue | Where-Object { $_.Name -like ('python-' + $version + '*') })
-  if ($cached.Count) { $cached | ForEach-Object { 'cache      ' + $_.FullName } } else { 'cache      no python-' + $version + ' bundle in the Package Cache' }
-}
-'@
-
-# ------------------------------------------------------------------ python --
-# The header's THE RUNNER'S PYTHON: the tool cache alone.
-if ($Python) {
-  Head ('The Python ' + $Account + '''s jobs take, on ' + $where)
-  $said = @(Remote ($toolLib + "`ntry { Install-RunnerPython '$Root' '$Account' '$($runnerPython.version)' '$($runnerPython.url)' '$($runnerPython.sha256)' } catch { 'PYTHON NOT PUT IN PLACE: ' + `$_.Exception.Message; exit 1 }`n"))
-  $code = $LASTEXITCODE
-  $said | ForEach-Object { Say "  $_" }
-  if ($code -ne 0) { Die "the Python did not go into the tool cache (exit $code); the line above says why." }
-  Done
-}
-
 # ------------------------------------------------------------ network only --
 # The header's NETWORK ONLY: the firewall group for one account, nothing else.
 if ($NetworkOnly) {
@@ -1381,36 +1073,11 @@ if ($NetworkOnly) {
     Done
   }
   Head ('What ' + $Account + ' may reach from ' + $where)
-  if ($egress) {
-    # THE WAY OUT: the proxy answers, no job is running, and the runner's
-    # .env names the proxy before its rules shut it in to loopback.
-    Assert-RunnerEgress
-    $said = @(Remote ($lockLib + "`n`$svc = Find-RunnerService " + $serviceList + "`n" + @"
-`$busy = @(Get-CimInstance Win32_Process -Filter "Name='Runner.Worker.exe'" | Where-Object { ('' + `$_.ExecutablePath) -like '$Root\bin\*' })
-if (`$busy.Count) { 'BUSY: ' + `$svc + ' is running a job; run this again when it is idle'; exit 3 }
-Set-RunnerProxy '$Root' `$svc '$($egress.Url)'
-"@))
-    $code = $LASTEXITCODE
-    $said | ForEach-Object { Say "  $_" }
-    if ($code -ne 0) { Die "the runner was not sent through the way out (exit $code); the lines above say why. No firewall rule was changed." }
-  }
   try { $blocks = @(Get-GuardBlocks) } catch { Die ('no firewall rule was changed: ' + $_.Exception.Message) }
   $said = @(Remote (Get-GuardScript 'network' $blocks))
   $code = $LASTEXITCODE
   $said | ForEach-Object { Say "  $_" }
   if ($code -ne 0) { Die "the firewall rules did not go on (exit $code); the lines above say which. Nothing else was changed." }
-  if ($egress) {
-    # Its service reads .env when it starts, so it starts again to take it.
-    $said = @(Remote ($lockLib + "`n`$svc = Find-RunnerService " + $serviceList + "`n" + @'
-$s = Get-Service -Name $svc -EA SilentlyContinue
-if (-not $s) { $svc + ' is not registered; it takes the way out when it is installed' }
-elseif ($s.Status -eq 'Running') { Restart-Service -Name $svc -Force -EA Stop; $svc + ' started again, so it goes out through the way out now' }
-else { $svc + ' is ' + $s.Status + '; it goes out through the way out when it starts' }
-'@))
-    $code = $LASTEXITCODE
-    $said | ForEach-Object { Say "  $_" }
-    if ($code -ne 0) { Die "the runner's service did not start again (exit $code); its rules and .env are on, and it takes them at its next start." }
-  }
   Done
 }
 
@@ -1445,12 +1112,6 @@ foreach (`$n in @('.runner', '.runner_migrated', '.credentials', '.credentials_m
   `$flow = @(`$o.PSObject.Properties | Where-Object { `$_.Name -match 'V2Flow' } | ForEach-Object { `$_.Name + ' ' + `$_.Value })
   'settings  ' + `$n + ', changed ' + (Get-Item -Force -LiteralPath `$f).LastWriteTimeUtc.ToString('yyyy-MM-dd HH:mm:ss') + 'Z: ' + ((`$hosts + `$flow) -join ', ')
 }
-# THE WAY OUT: the proxy its .env names, if any (no other line of it is read).
-`$envFile = Join-Path '$Root' '.env'
-`$px = @(if (Test-Path -LiteralPath `$envFile) { Get-Content -LiteralPath `$envFile | Where-Object { `$_ -match '^(https_proxy|http_proxy|no_proxy)=' } })
-if (`$px.Count) { 'proxy     ' + (`$px -join ', ') } else { 'proxy     none named; it goes out directly' }
-$(if ($runnerPython) { "# THE RUNNER'S PYTHON: what its tool cache holds.`n`$py = @(Get-Item -Path '$Root\_work\_tool\Python\*\x64.complete' -EA SilentlyContinue | ForEach-Object { `$_.Directory.Name })`nif (`$py.Count) { 'python    ' + (`$py -join ', ') + ' in its tool cache' } else { 'python    NONE in its tool cache; Install-Runner -Hermes -Python puts $($runnerPython.version) there' }" })
-$(if ($runnerPython) { $pythonSeen + "`nShow-RunnerPythonEntries '" + $runnerPython.version + "'" })
 if (Get-LocalUser -Name '$Account') { 'account   $Account' } else { 'account   NOT THERE' }
 if (Test-Path '$Root') {
   `$a = Get-Acl -LiteralPath '$Root'
@@ -1489,7 +1150,7 @@ if (`$ev.Count) { 'windows   what the service manager said about ' + `$svc + ' i
   if ($OffBox) { Remote (Get-GuardScript 'status') | ForEach-Object { Say "  $_" } }
   Head 'On GitHub'
   try {
-    $r = (Invoke-Gh api "$RunnerApi/actions/runners" | Out-String) | ConvertFrom-Json
+    $r = (Invoke-Gh api "repos/$Repo/actions/runners" | Out-String) | ConvertFrom-Json
     $mine = @($r.runners | Where-Object { $_.name -eq $RunnerName })
     if ($mine.Count) { foreach ($m in $mine) { Say ('  ' + $m.name + ', ' + $m.status + $(if ($m.busy) { ', running a job' } else { '' }) + ', labels ' + (($m.labels | ForEach-Object { $_.name }) -join ', ')) } }
     else { Say "  no runner called $RunnerName is registered" 'Yellow' }
@@ -1501,18 +1162,18 @@ if (`$ev.Count) { 'windows   what the service manager said about ' + `$svc + ' i
 # ------------------------------------------------------------------ remove --
 if ($Remove) {
   Head 'Removing the runner'
+  $tok = $null
   # GitHub is told first, with a removal token of its own; with none, the
   # box would lose the runner while GitHub kept it registered (#5565), so
   # nothing is changed.
-  $tok = $null
-  try { $tok = (Invoke-Gh api -X POST "$RunnerApi/actions/runners/remove-token" --jq .token | Out-String).Trim() } catch { Die ('GitHub gave no removal token for ' + $RunnerName + ' (' + $_.Exception.Message + '), so it could not be told. Nothing was changed.') }
+  try { $tok = (Invoke-Gh api -X POST "repos/$Repo/actions/runners/remove-token" --jq .token | Out-String).Trim() } catch { Die ('GitHub gave no removal token for ' + $RunnerName + ' (' + $_.Exception.Message + '), so it could not be told. Nothing was changed.') }
   if (-not $tok) { Die ('GitHub gave an empty removal token for ' + $RunnerName + '. Nothing was changed.') }
   # The removal token goes on ssh's standard input and reaches config.cmd in
   # its environment, never on a command line (Send-Secret.ps1, issue #451).
   # The far side's exit code decides, as for -NetworkOnly -Remove: until
   # #3214 it was not read, so two removals whose ssh was cut 8 minutes in
   # ended with exit 0 and half their lines.
-  $said = @(Send-WithSecret ([string]$tok) ($lockLib + $watcherLib + $(if ($runnerPython) { $toolLib } else { '' }) + "`n" + @"
+  $said = @(Send-WithSecret ([string]$tok) ($lockLib + $watcherLib + "`n" + @"
 `$ErrorActionPreference = 'Continue'
 `$t = `$ThornswoodSecret; `$ThornswoodSecret = `$null
 # Never mid-job, before GitHub is told anything (#3889).
@@ -1525,7 +1186,6 @@ if ((Test-Path '$Root\config.cmd') -and `$t) {
   Pop-Location
 }
 Stop-RunnerHere '$Root' $serviceList
-$(if ($runnerPython) { "try { Remove-RunnerPython '" + $Root + "' '" + $runnerPython.version + "' } catch { 'PYTHON NOT TAKEN OFF: ' + `$_.Exception.Message + '. The runner is off GitHub and stopped; its account and folder stay until this runs again.'; exit 1 }" })
 Remove-RunnerWatchers
 Open-RunnerAccount '$Account' '$Root' 'C:\' '$liveFilter' $alsoDenyList
 $(if ($onRunnerDrive) { "Open-RunnerAccount '" + $Account + "' '" + $Root + "' '" + $rootDrive + "\' '" + $liveFilter + "'" })
@@ -1549,7 +1209,7 @@ if (Test-Path '$Root') { 'the folder is still there, something holds a file in i
   if ($code -ne 0) { Die "the removal did not say it finished (exit $code); the lines above say how far it got, and -Status says what is left." }
   # What GitHub says now: config.cmd remove prints its own lines and the box's
   # part goes on, so the registration is read back rather than assumed.
-  try { $left = @(((Invoke-Gh api "$RunnerApi/actions/runners" --paginate --slurp | Out-String) | ConvertFrom-Json) | ForEach-Object { $_.runners } | Where-Object { [string]$_.name -eq $RunnerName }) }
+  try { $left = @(((Invoke-Gh api "repos/$Repo/actions/runners" --paginate --slurp | Out-String) | ConvertFrom-Json) | ForEach-Object { $_.runners } | Where-Object { [string]$_.name -eq $RunnerName }) }
   catch { Die ('the box''s part finished, but GitHub did not list the runners of ' + $Repo + ' to show ' + $RunnerName + ' gone: ' + $_.Exception.Message) }
   if ($DryRunTo) { $left = @() }
   if ($left.Count) { Die ($RunnerName + ' is off the box but still registered on ' + $Repo + ' (' + [string]$left[0].status + '); config.cmd remove''s lines above say why.') }
@@ -1766,7 +1426,7 @@ if ($Migrate) {
       # Find-RunnerService is in the locks; the selected runner is on this machine.
       . ([scriptblock]::Create($lockLib))
       $migrationPlan = Get-RunnerMigrationState $Account (Find-RunnerService $serviceNames) $Root
-      $pages = (Invoke-Gh api "$RunnerApi/actions/runners" --paginate --slurp | Out-String) | ConvertFrom-Json
+      $pages = (Invoke-Gh api "repos/$Repo/actions/runners" --paginate --slurp | Out-String) | ConvertFrom-Json
       $registered = @($pages | ForEach-Object { $_.runners } | Where-Object { $_.name -eq $RunnerName })
       if ($registered.Count -ne 1 -or $registered[0].status -ne 'online' -or $registered[0].busy) { throw 'Selected GitHub runner must be uniquely online and idle. Prevent assignments and drain it in the approved maintenance window; a busy read is not an atomic drain.' }
       if ($migrationPlan.AlreadyThere) {
@@ -1788,12 +1448,11 @@ if ($Migrate) {
 # for a runner records\build-runners.json or records\pr-build-runners.json
 # names, or one GitHub already has registered under this name, put back in
 # its place. A runner nobody wrote down is a pull request to a record first.
-# Thornswood-Hermes's is written down in records\hermes-runner.json.
 if ($FromGate) {
-  $named = $Hermes -or (@(@($buildRecord.runners) + @($prRecord.runners) | ForEach-Object { [int]$_ }) -contains $Number)
+  $named = @(@($buildRecord.runners) + @($prRecord.runners) | ForEach-Object { [int]$_ }) -contains $Number
   if (-not $named) {
     $known = @()
-    try { $known = @(((Invoke-Gh api "$RunnerApi/actions/runners" --paginate --slurp | Out-String) | ConvertFrom-Json) | ForEach-Object { $_.runners } | ForEach-Object { [string]$_.name }) }
+    try { $known = @(((Invoke-Gh api "repos/$Repo/actions/runners" --paginate --slurp | Out-String) | ConvertFrom-Json) | ForEach-Object { $_.runners } | ForEach-Object { [string]$_.name }) }
     catch { Write-Host ('STOP. GitHub did not list the runners of ' + $Repo + ': ' + $_.Exception.Message + ' Nothing was changed.') -ForegroundColor Red; exit 1 }
     if ($known -notcontains $RunnerName) { Write-Host ('STOP. ' + $RunnerName + ' is in no runner record and not registered on ' + $Repo + ', and the gate only puts back a runner that is. A new runner goes into records\build-runners.json by pull request first. Nothing was changed.') -ForegroundColor Red; exit 1 }
   }
@@ -1848,10 +1507,8 @@ if ($missing.Count) {
   Die ("$where is missing " + $missingNames + ". Nothing was installed. Put them there with:" + [Environment]::NewLine + '    ' + ($how -join ([Environment]::NewLine + '    ')))
 }
 
-if ($egress) { Head 'The way out'; Assert-RunnerEgress }
-
 Head 'Registration token'
-$token = (Invoke-Gh api -X POST "$RunnerApi/actions/runners/registration-token" --jq .token | Out-String).Trim()
+$token = (Invoke-Gh api -X POST "repos/$Repo/actions/runners/registration-token" --jq .token | Out-String).Trim()
 if (-not $token) { Die "GitHub gave no registration token. gh has to be signed in as somebody who administers $Repo." }
 Say '  got one, good for an hour, not shown' 'Green'
 
@@ -1861,7 +1518,7 @@ Say '  got one, good for an hour, not shown' 'Green'
 # outbound limit until a -NetworkOnly run after it (#3956).
 Head 'What a job may reach'
 try { $guard = Get-GuardScript $(if ($OffBox) { 'apply' } else { 'network' }) @(Get-GuardBlocks) } catch { Die ('nothing was installed: ' + $_.Exception.Message) }
-Say $(if ($egress) { '  every address but loopback is blocked for the account' } else { '  GitHub''s address lists fetched; every other address is blocked for the account' }) 'Green'
+Say '  GitHub''s address lists fetched; every other address is blocked for the account' 'Green'
 if ($Migrate) { $guard = "`$guardResult = @(& {`n" + $guard + "`n})`n`$guardResult`nif ((`$guardResult -join ' ') -match 'COULD NOT') { throw 'Selected read guards did not apply; configuration was not attempted' }`n" }
 
 Head "Installing it on $where"
@@ -1949,8 +1606,6 @@ if (-not (Test-Path `$root)) { New-Item -ItemType Directory -Path `$root -Force 
 Lock-RunnerRoot `$root `$acct
 # Before the service first starts, so its first job already has it (#3117).
 Set-RunnerTemp `$root '$service' `$$(if ($OffBox) { 'true' } else { 'false' })
-$(if ($egress) { "# THE WAY OUT (#5495), before the service first starts.`nSet-RunnerProxy `$root '$service' '" + $egress.Url + "'" })
-$(if ($runnerPython) { "# THE RUNNER'S PYTHON, before the service first starts.`n" + $toolLib + "`nInstall-RunnerPython `$root `$acct '" + $runnerPython.version + "' '" + $runnerPython.url + "' '" + $runnerPython.sha256 + "'" })
 
 # The runner itself, checked before it is unpacked.
 if (-not (Test-Path (Join-Path `$root 'bin\Runner.Listener.exe')) -or -not (Test-Path (Join-Path `$root 'version-$version.txt'))) {
@@ -2030,7 +1685,7 @@ Head 'GitHub'
 # in the nightly.
 $askUntil = (Get-Date).AddSeconds(60)
 while ($true) {
-  $r = (Invoke-Gh api "$RunnerApi/actions/runners" --paginate --slurp | Out-String) | ConvertFrom-Json
+  $r = (Invoke-Gh api "repos/$Repo/actions/runners" --paginate --slurp | Out-String) | ConvertFrom-Json
   $mine = @($r | ForEach-Object { $_.runners } | Where-Object { $_.name -eq $RunnerName })
   if (($mine.Count -and "$($mine[0].status)" -eq 'online') -or (Get-Date) -ge $askUntil) { break }
   Start-Sleep -Seconds 3
@@ -2047,6 +1702,5 @@ $code = $LASTEXITCODE
 $said | ForEach-Object { Say "  $_" }
 if ($code -ne 0) { Die "the runner is installed, but the lock did not finish for every runner (exit $code); the lines above say which. .\scripts\deploy\Install-Runner.ps1 -Lock tries again without touching any runner." }
 Say ''
-if ($Hermes) { Say '  GitHub hands it Thornswood-Hermes''s waiting Windows guard rail check as soon as it is free.' 'Gray' }
-else { Say '  GitHub hands it a waiting build check, nightly or release build as soon as it is free.' 'Gray' }
+Say '  GitHub hands it a waiting build check, nightly or release build as soon as it is free.' 'Gray'
 Done

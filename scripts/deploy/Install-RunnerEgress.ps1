@@ -5,9 +5,9 @@
   thornswood-agent.exe egress (tools\DeployAgent\Egress.cs,
   docs\DEPLOY-AGENT.md "The box runners' way out"), as the task
   "Thornswood Runner Egress", listening on loopback at the address
-  records\runner-egress.json names. A runner whose rules send it through
-  the proxy (Install-Runner.ps1, records\hermes-runner.json "egress")
-  reaches the internet only through it, and only the hosts its list names.
+  records\runner-egress.json names. It was made for tw-hermes-box, which
+  came off the box on 9 Nov 2026 (#5565); no runner goes through it since,
+  and #5577 says whether it stays.
 
       .\scripts\deploy\Install-RunnerEgress.ps1           install it, or put the
                                                         newest agent and the
@@ -38,7 +38,7 @@
 
   THE LIST. records\runner-egress.json's hosts, which GitHub documents for a
   self-hosted runner and the jobs' own downloads, and each runner record's
-  allowHost (records\hermes-runner.json). Its egress.json is written from
+  allowHost (a records\*-runner.json with "egress": true). Its egress.json is written from
   this checkout and the proxy refuses a list it cannot hold to its rules
   (an address, a pattern wider than *.a.b, an empty list).
 
@@ -215,5 +215,5 @@ do { Start-Sleep -Milliseconds 500; `$up = Get-NetTCPConnection -State Listen -L
 if (`$a -match ' 200 ' -and `$b -match ' 403 ') { 'EGRESS OK' } else { if (Test-Path -LiteralPath '$log') { Get-Content -LiteralPath '$log' -Tail 10 | ForEach-Object { 'log       ' + `$_ } }; 'EGRESS NOT ANSWERING AS IT SHOULD' }
 "@) | ForEach-Object { Say "  $_"; "$_".Trim() })
 if ($out -notcontains 'EGRESS OK') { Die 'the proxy is not answering as it should. The lines above say where it stopped.' }
-Say '  The runners'' way out is up. Install-Runner -Hermes sends tw-hermes-box through it.' 'Green'
+Say '  The runners'' way out is up.' 'Green'
 exit 0
