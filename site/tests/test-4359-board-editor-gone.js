@@ -143,10 +143,13 @@ function cookieFor(secret, id, name) {
   }
 
   // ------------------------------------------------------- B. the code --
-  yes('B1 site/data/board.json is gone from the repository', !fs.existsSync(path.join(ROOT, 'site', 'data', 'board.json')));
+  const GONE = ['board.json', 'active.md', 'archive.md', 'suggestions.md', 'todo.md'];
+  const left = GONE.filter((f) => fs.existsSync(path.join(ROOT, 'site', 'data', f)));
+  yes('B1 the five retired board files are gone from site/data' + (left.length ? ' (still there: ' + left.join(', ') + ')' : ''),
+      left.length === 0);
   const src = siteFiles.source();
   yes('B2 the site names no board file, board save or board route',
-      !/board\.json/.test(src) && !/writeBoardOne|boardRev|readBoard\b/.test(src) && !/\/api\/board\//.test(src));
+      !/board\.json/.test(src) && !/writeBoardOne|boardRev|readBoard\b|\bBOARDS\s*[,=)\]}]/.test(src) && !/api\\?\/board\\?\//.test(src));
   const hub = read('site/public/hub.js') || '';
   yes('B3 the hub has no board editor and fetches no board',
       !/saveBoard|\/api\/board\/|boardRevs|S\.boards/.test(hub));

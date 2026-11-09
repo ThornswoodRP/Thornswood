@@ -255,8 +255,7 @@ function standingWith(open, roleIds) {
                                       /closed[\s-]+playtest/i.test(read(rel)));
   yes('no people-facing file says closed playtest, across line breaks too (' + PEOPLE.length +
       ' read' + (said.length ? '; still in ' + said.join(', ') : '') + ')', said.length === 0);
-  const board = JSON.parse(read('site/data/board.json'));
-  yes('nor the Patreon wording kept on the board', !/closed[\s-]+playtest/i.test(JSON.stringify(board)));
+  yes('nor the Patreon wording in docs/PATREON.md', !/closed[\s-]+playtest/i.test(read('docs/PATREON.md')));
   // Known Issues is the page /known writes, from the bot's list since #3140 (#2414).
   yes('nor the Known Issues page, across line breaks too',
       !/closed[\s-]+playtest/i.test(require('../../tests/fixtures/known-page').knownPage() || ''));

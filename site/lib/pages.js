@@ -1,5 +1,5 @@
 /*
-  The written pages: the documents and boards, the public pages and their
+  The written pages: the documents, the public pages and their
   blurbs, the markdown renderer, the Known Issues and Roadmap lists the bot
   builds, the lore lines and the credits.
 */
@@ -25,8 +25,8 @@ const DOCS = {
   help:  'Help'
 };
 
-/* Boards. A board is sections, each section a table with its own columns, so
-   a column can be added to one without touching the rest.
+/* The hub's boards (Active Issues, Suggestions, Archive and Patrick's to do)
+   went in #4359, with their editor and their save.
 
    KNOWN ISSUES AND THE ROADMAP ARE NOT BOARDS ANY MORE (#3140). Both were
    typed here, and both went stale: the known board kept NPC behaviour #504
@@ -35,12 +35,6 @@ const DOCS = {
    the issue board for #known-issues, writes both into data/from-bot/lists.json
    and the site draws them from there (THE KNOWN ISSUES PAGE AND THE ROADMAP,
    below). */
-const BOARDS = {
-  active:      'Active Issues',
-  suggestions: 'Suggestions',
-  archive:     'Archive',
-  todo:        'Patrick'
-};
 
 /* Who may see what. 'member' is the password, 'admin' is Discord (the
    access.admin pair), 'staff' is every access.dev role. The server decides
@@ -258,7 +252,7 @@ function pageHtml(md) {
 /*
   THE KNOWN ISSUES PAGE AND THE ROADMAP, FROM THE ISSUE BOARD (#3140).
 
-  Both used to be boards typed into board.json, and both went stale. Now the
+  Both used to be boards typed into the hub, and both went stale. Now the
   bot builds them from the board each time it reads it for #known-issues
   (bot.py, "the site's known issues and roadmap") and writes them into
   data/from-bot/lists.json:
@@ -480,7 +474,7 @@ function fillCreditsCommits(md, deployed, feeds) {
 }
 // ==== end thornswood credits fill ====
 
-Object.assign(module.exports, { BLURB, BOARDS, DOCS, escAttr, LEVEL,
+Object.assign(module.exports, { BLURB, DOCS, escAttr, LEVEL,
   MD_PAGES, PUBLIC_EDGE_SECONDS, PUBLIC_PAGES });
 
 // From modules loaded after this one, taken once this one is whole, so a

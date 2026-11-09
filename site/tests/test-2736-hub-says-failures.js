@@ -58,8 +58,7 @@ function page(routes) {
   const alerts = [];
   const node = (id) => (els[id] = els[id] || { id, innerHTML: '', querySelectorAll: () => [] });
   const box = {
-    S: { boards: {}, boardRevs: {}, docs: { kept: 1 } },
-    pending: {}, inflight: {},
+    S: { docs: { kept: 1 } },
     alerts,
     api: (p) => {
       const r = routes[p];

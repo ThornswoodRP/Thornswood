@@ -7,8 +7,8 @@ install from npm: `server.js` starts it, and `lib\` holds the rest, one module
 per area (#5357). Each module says at its top what it holds, and `server.js`
 names them in the order they load. It serves the public pages
 (`data\site\*.md`), the news, the installer download and the member pages
-behind the password, and after a Discord sign in, the admin hub and its boards
-(`data\*.md`, `data\board.json`). It is also the door: the game servers and
+behind the password, and after a Discord sign in, the admin hub and its two
+prose pages (`data\tests.md`, `data\help.md`). It is also the door: the game servers and
 the launchers ask it who may play (`/api/allowed`, and `/dev/api/allowed` for
 the dev server), and it answers from the Discord roles in its config.
 `public\` holds the pages and the art it serves as they are.

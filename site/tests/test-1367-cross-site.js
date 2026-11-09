@@ -201,7 +201,7 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
     const admin = cookieFor(A.secret, ADMIN_D, 'Aela');
     const json = { 'content-type': 'application/json' };
 
-    // A note in the inbox, the board and the doc, so a refused write has
+    // A note in the inbox and the doc, so a refused write has
     // something to leave alone.
     fs.writeFileSync(path.join(A.dir, 'data', 'for-bot', 'inbox.json'), JSON.stringify([{ id: 'i1', title: 'kept', state: 'new' }]));
     fs.writeFileSync(path.join(A.dir, 'data', 'tests.md'), 'kept\n');
@@ -210,7 +210,7 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
     const snap = () => JSON.stringify({
       bans: read(A.dir, 'data/bans.json', {}), pk: read(A.dir, 'data/pk.json', {}), notes: read(A.dir, 'data/notes.json', {}),
       inbox: read(A.dir, 'data/for-bot/inbox.json', []), results: read(A.dir, 'data/results.json', null),
-      board: read(A.dir, 'data/board.json', null), doc: text(A.dir, 'data/tests.md'),
+      doc: text(A.dir, 'data/tests.md'),
       uploads: fs.readdirSync(path.join(A.dir, 'uploads')).sort(),
       pending: read(A.dir, 'data/gallery-pending.json', null), gallery: read(A.dir, 'data/gallery.json', null)
     });
@@ -225,7 +225,6 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
       ['PUT', '/api/inbox', []],
       ['PUT', '/api/results', { forged: true }],
       ['PUT', '/api/doc/tests', 'forged'],
-      ['PUT', '/api/board/todo', { intro: 'forged', sections: [] }],
       ['PUT', '/api/session-note', { session: 's1', who: BJORN_D, note: 'forged' }],
       ['POST', '/api/upload?name=forged.txt', 'forged'],
       ['DELETE', '/api/upload/kept.txt', undefined],
@@ -254,7 +253,7 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
           bad.length === 0);
       yes('  and sign out from there set no cookie', !out.some(([w, r]) => /logout/.test(w) && r.headers['set-cookie']));
     }
-    yes('nothing was written by any of them: bans, PKs, notes, inbox, marks, board, page, uploads, gallery', snap() === before);
+    yes('nothing was written by any of them: bans, PKs, notes, inbox, marks, page, uploads, gallery', snap() === before);
     let r = await request(port, 'POST', '/api/staff/ban', Object.assign({ cookie: 'tw=' + 'a'.repeat(64) }, json), { id: BJORN_D, why: 'x' });
     yes('the member cookie with no page named is refused the same way', refused(r));
     yes('  in words that say the browser named no page', /did not say which page/.test(r.j.error));
@@ -311,7 +310,7 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
     // ----------------------------------------------------- a GET changes nothing --
     console.log('\na GET, whatever it names:');
     const mid = snap();
-    const GETS = ['/api/staff/ban', '/api/staff/pk', '/api/inbox', '/api/results', '/api/doc/tests', '/api/board/todo',
+    const GETS = ['/api/staff/ban', '/api/staff/pk', '/api/inbox', '/api/results', '/api/doc/tests',
       '/api/upload', '/api/gallery/approve', '/api/gallery/approved', '/api/report', '/api/logout', '/api/login'];
     let changed = [];
     for (const g of GETS) {

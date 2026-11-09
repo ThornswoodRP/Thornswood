@@ -320,7 +320,7 @@ const asJson = { 'content-type': 'application/json' };
     r = await ask('GET', '/api/staff/records', { cookie: cookieFor(TESTER_ID, 'Tester') });
     yes('a Playtester cannot read the records, notes included (' + r.status + ')', r.status === 401 || r.status === 403);
     yes('and no document or board is sent to them',
-        JSON.stringify(lore.docs) === '{}' && JSON.stringify(lore.boards) === '{}');
+        JSON.stringify(lore.docs) === '{}' && !('boards' in lore));
 
     r = await ask('GET', '/api/all', { cookie: cookieFor(TESTER_ID, 'Tester') });
     yes('a Playtester is still turned away from the hub api (' + r.status + ')',

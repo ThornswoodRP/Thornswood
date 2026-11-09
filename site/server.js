@@ -1,17 +1,17 @@
 /*
-  Thornswood docs, downloads and issue boards.
+  Thornswood docs, downloads and the staff hub.
 
   Two ways in, deliberately.
 
     The password lets anybody who has it read the site, run the tests, upload a
     log and report a bug. That is everyone playing.
 
-    Discord makes you an admin: the boards become editable, and the pages that
-    are only of interest to whoever is fixing things appear at all. Discord
+    Discord makes you an admin: the pages that are only of interest to
+    whoever is fixing things appear at all. Discord
     rather than a second password because the list of admins is then a list of
     Discord ids, which cannot be passed on by accident.
 
-  Data is files, deliberately. A board is JSON, the two prose pages are
+  Data is files, deliberately. The records are JSON, the two prose pages are
   markdown, uploads are the files themselves. A page can be fixed with a text
   editor when something goes wrong, the whole thing is backed up by copying a
   folder, and anyone with ssh can read a crash log without this process being

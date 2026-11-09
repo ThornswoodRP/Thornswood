@@ -362,9 +362,10 @@ function measure(css) {
   yes('D5 the measure covers ' + now.lines.length + ' pairs', now.lines.length >= 50);
   yes('D6 the edit tint under the pointer is only on a board an admin can edit' +
       (now.tinted.length ? ' (also on: ' + now.tinted.join(' | ') + ')' : ''), now.tinted.length === 0);
-  const board = /out \+= '<div class="tablewrap' \+ \(admin \? ' edit' : ''\) \+ '"><table class="board">/.test(HUB_JS);
-  yes('D7 and that board marks its table .edit for an admin, and no other table is marked', board &&
-      (HUB_JS.match(/' edit'/g) || []).length === 1);
+  // The board editor, the one table an admin could edit, went in #4359, so
+  // no table on the hub is marked .edit now.
+  yes('D7 and no table on the hub is marked .edit since the board editor went (#4359)',
+      (HUB_JS.match(/' edit'/g) || []).length === 0);
 }
 
 /* ------------------------------------------------- E, the old colours -- */

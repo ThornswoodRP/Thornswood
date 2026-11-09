@@ -1,6 +1,6 @@
 /*
   Reading and writing the site's JSON and documents without leaving half a
-  file, the issue boards, and who accepted the rules (#428).
+  file, and who accepted the rules (#428).
 */
 
 'use strict';
@@ -8,12 +8,12 @@
 // Its functions, given before it loads any other module, so a module that
 // needs this one back finds them (a function is there from the top of its
 // file).
-module.exports = { boardRev, noteRules, readDoc, writeBoardOne, writeDoc };
+module.exports = { noteRules, readDoc, writeDoc };
 
 const fs     = require('fs');
 const path   = require('path');
 const { DATA, FOR_BOT, LISTS } = require('./base');
-const { BOARDS, DOCS } = require('./pages');
+const { DOCS } = require('./pages');
 
 const jsonFile = (p, fallback) => {
   try { return JSON.parse(fs.readFileSync(p, 'utf8')); }
@@ -92,51 +92,12 @@ function writeDoc(n, text) {
   } catch (e) { return false; }
 }
 
-const BOARDFILE = path.join(DATA, 'board.json');
-const readBoard = () => jsonFile(BOARDFILE, {});
+// The hub's boards, their file and their save (#2188) went in #4359: the
+// known issues and the roadmap are written from the issue board (#3140), and
+// nothing on the hub edits a board.
 // The bot's lists (#3140), or null when there is no file yet or it will not
 // read (jsonFile says which).
 const readLists = () => jsonFile(LISTS, null);
-// EVERY BOARD HAS A REVISION (#2188). One board is saved at a time, so two
-// people on two boards never overwrite each other, but until 11 October two
-// people on the SAME board did, silently: last save won and the other edit
-// was gone. Now board.json keeps _rev, a number per board, bumped on every
-// save. /api/all hands the hub each board's number as boardRevs, the hub
-// sends back the one it last saw in X-Board-Rev, and a save made from an
-// older copy is refused with 409 and a sentence saying to reload, rather
-// than written over somebody else's change. A save with no X-Board-Rev at
-// all (a hub page opened before this went live) is refused with 428 for the
-// same reason: it cannot say which copy it was made from. The check and the
-// write are one synchronous step in one process, so two saves cannot both
-// pass it.
-function boardRev(all, name) {
-  const r = all && all._rev && all._rev[name];
-  return (typeof r === 'number' && r >= 0 && Math.floor(r) === r) ? r : 0;
-}
-function writeBoardOne(name, value, seenRev) {
-  if (!Object.prototype.hasOwnProperty.call(BOARDS, name)) return { ok: false, status: 400, error: 'no such board' };
-  const all = readBoard();
-  const now = boardRev(all, name);
-  if (seenRev === undefined || seenRev === null || seenRev === '') {
-    return { ok: false, status: 428, error: 'no revision', rev: now,
-      message: 'This page was opened before boards checked for clashing saves. Reload it, then make your change again.' };
-  }
-  if (String(seenRev) !== String(now)) {
-    return { ok: false, status: 409, error: 'conflict', rev: now,
-      message: 'Somebody else saved this board since you opened it, so your change was not saved over theirs. Reload to see their change, then make yours again.' };
-  }
-  all[name] = value;
-  all._rev = Object.assign({}, all._rev && typeof all._rev === 'object' ? all._rev : {});
-  all._rev[name] = now + 1;
-  // No boards file yet is the first save and has nothing to keep; one that is
-  // there and cannot be copied is said, and the save goes ahead (#2736).
-  if (fs.existsSync(BOARDFILE)) {
-    try { fs.copyFileSync(BOARDFILE, BOARDFILE + '.bak'); }
-    catch (e) { console.error('[thornswood-docs] could not keep ' + path.basename(BOARDFILE) + '.bak before saving a board (' + (e.code || e.message) + ')'); }
-  }
-  if (!putJson(BOARDFILE, all)) return { ok: false, status: 500, error: 'could not save' };
-  return { ok: true, status: 200, rev: now + 1 };
-}
 
 const RESULTS = path.join(DATA, 'results.json');
 const INBOX   = path.join(FOR_BOT, 'inbox.json');
@@ -176,7 +137,7 @@ function noteRules(file, discordId, rules, by, now) {
 }
 // ==== end thornswood rules accepted ====
 
-Object.assign(module.exports, { INBOX, jsonFile, putFile, putJson, readBoard,
+Object.assign(module.exports, { INBOX, jsonFile, putFile, putJson,
   readLists, RESULTS, RULES_OK });
 
 // From modules loaded after this one, taken once this one is whole, so a
