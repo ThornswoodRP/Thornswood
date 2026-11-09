@@ -205,10 +205,12 @@ function Run {
     Yes ('  the date is when it was published, in this machine''s time, as the tab shows dates: ' + $n.date) ($n.date -eq $want -and $n.DateText -eq $want)
     Yes '  and it is no dev note by itself' ($n.channel -eq '')
     Yes 'a body that is only a "- " headline still has a title' (([string]$mNote.Invoke($null, @('- Only a bullet', $null)).title) -eq 'Only a bullet')
-    Yes 'merge-release.yml''s "Nothing people would notice" body is no note' ($null -eq $mNote.Invoke($null, @("Nothing people would notice: every change in this release says none.`n", [Nullable[DateTimeOffset]]$at)))
-    Yes 'an empty body is no note' ($null -eq $mNote.Invoke($null, @("  `r`n ", [Nullable[DateTimeOffset]]$at)) -and $null -eq $mNote.Invoke($null, @($null, $null)))
+    # Every release is news (Patrick, 9 Nov), a quiet one as merge-release.yml's QUIET_NOTE.
+    Yes 'merge-release.yml''s quiet note is a note, titled with it' (([string]$mNote.Invoke($null, @("Various bug fixes and improvements`n", [Nullable[DateTimeOffset]]$at)).title) -eq 'Various bug fixes and improvements')
+    Yes '  and so is a Release from before 9 Nov that said nothing people would notice' (([string]$mNote.Invoke($null, @("Nothing people would notice: every change in this release says none.`n", [Nullable[DateTimeOffset]]$at)).title) -eq 'Various bug fixes and improvements')
+    Yes '  and an empty body' (([string]$mNote.Invoke($null, @("  `r`n ", [Nullable[DateTimeOffset]]$at)).title) -eq 'Various bug fixes and improvements' -and ([string]$mNote.Invoke($null, @($null, $null)).title) -eq 'Various bug fixes and improvements')
     $mr = Get-Content -LiteralPath (Join-Path $Here '.github/workflows/merge-release.yml') -Raw
-    Yes '  and that is the line merge-release.yml writes' ($mr -match "NOTHING_TO_TELL: 'Nothing people would notice: every change in this release says none\.'")
+    Yes '  and that is the line merge-release.yml writes' ($mr -match "QUIET_NOTE: 'Various bug fixes and improvements'")
     Yes '  and merge-release.yml titles a Release with notes "Release <tag>"' ($mr -match '--title "Release \$\(\$env:TAG\)"')
 
     # ---- 2. build tags ---------------------------------------------------------------
