@@ -160,6 +160,13 @@ if (`$a.Code -eq 404 -and `$a.Body -eq '$Plain') { 'port      $Port answers as t
 elseif (`$a.Code) { 'port      $Port answered ' + `$a.Code + ' but not as the bridge: ' + `$a.Body }
 else { 'port      $Port did not answer: ' + `$a.Why }
 if (Test-Path -LiteralPath '$log') { ''; '--- bridge.log, last 15 ---'; Get-Content -LiteralPath '$log' -Tail 15 }
+# The sessions that outlived their WebSocket (#3214): connect.js carried
+# them over to a new one and they ended whole. Read from every kept log, so
+# the proof a long box run survived a Cloudflare restart comes from here.
+`$kept = @(Get-ChildItem -LiteralPath '$Root' -File -Filter 'bridge.log*' | Sort-Object LastWriteTime)
+`$over = @(`$kept | ForEach-Object { Get-Content -LiteralPath `$_.FullName } | Where-Object { `$_ -match ' ended: .*, carried over to ' })
+''; '--- sessions carried over to a new WebSocket, last 10 of ' + `$over.Count + ' in ' + `$kept.Count + ' kept log(s) ---'
+if (`$over.Count) { `$over | Select-Object -Last 10 } else { '  none' }
 "@ | ForEach-Object { Say "  $_" }
     Write-Host ''
     if (-not $NoPause) { [void](Read-Host 'Enter to close') }
