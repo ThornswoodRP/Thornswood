@@ -209,7 +209,7 @@ namespace Thornswood
             if (ticket == null) ticket = "";
             if (ticket.Length == 0)
             {
-                if (log != null) log("Voice: no join token, because Discord is not linked: " + Discord.NotLinked());
+                if (log != null) log("Voice: not linked to Discord, so no join token. " + Discord.NotLinked());
                 return "";
             }
 
