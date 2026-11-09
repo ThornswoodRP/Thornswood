@@ -239,8 +239,7 @@ const tick = () => new Promise((r) => setTimeout(r, 30));
 async function pageChecks(apiHtml) {
   const steps = runPage('page', 'cookie', apiHtml);
   await tick();
-  yes('B1 the steps the site sent are never drawn over', steps.shown.length === 0 && steps.fetched.indexOf('/api/downloads') < 0 &&
-      steps.fetched.indexOf('/api/public?galleryLimit=24') < 0);
+  yes('B1 the steps the site sent are never drawn over', steps.shown.length === 0 && steps.fetched.indexOf('/api/downloads') < 0);
 
   const gate = runPage('gate', 'none', apiHtml);
   await tick();

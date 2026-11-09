@@ -33,7 +33,6 @@ else does.
 | `/api/play/owns` | POST | the voice service, before it keeps a character creation choice (`voice\voice-server.js`) |
 | `/api/ticket` | POST | the Discord bot, for a support ticket (`bot\bot_core.py`) |
 | `/api/public` | GET | the front page and the launchers, for the news and the files; the Discord bot, for the open switch and the hints and lore lines it shows as its status, from `data\site\lines.md` (#3147, `bot\bot_ticket_panels.py`) |
-| `/api/downloads` | GET | the Downloads page, only in a browser that keeps its age statement in localStorage and not the cookie: the page's body, which the site otherwise sends with the page itself (#4330, `public\home.js`, `lib\downloads.js`) |
 | `/api/report/game`, `/dev/api/report/game` | POST | each game server, with the bot's key in a header, when somebody types /helpme or /report; the row goes into the inbox and the bot says it in the staff channel (`game\gamemode.js`, the asking staff block) |
 | `/api/play/who` | POST | nothing in the repo asks it now. It says who a ticket belongs to and writes nothing, which makes it the one to try by hand |
 
