@@ -1154,10 +1154,17 @@ try {
 } catch (e) { runtimeDir = null; }
 const notedVer = (/version (\d+(?:\.\d+)*), file \d+/.exec(runtimeFlat) || [])[1] || null;
 yes('the Client Runtime section gives the version and file it describes', !!notedVer);
+// The one decision every check on the installed runtime goes by: a machine
+// whose Vortex holds an older upload than the notices describe has not caught
+// up, and its files are not held to the section. The files.txt comparison
+// below reads the same older runtime, as the launcher installed it from
+// Vortex, so it asks this too (#4160).
+const runtimeOlder = !!runtimeDir && !!notedVer && compareVersions(runtimeVer, notedVer) < 0;
+const runtimeOlderWhy = runtimeOlder ? 'Vortex here holds the Client Runtime ' + runtimeVer + ', older than the ' + notedVer + ' THIRD-PARTY.md describes' : '';
 if (!runtimeDir) {
   skip('no copy of the Thornswood Client Runtime in ' + VORTEX_MODS + ', so its files were not read');
-} else if (notedVer && compareVersions(runtimeVer, notedVer) < 0) {
-  skip('Vortex here holds the Client Runtime ' + runtimeVer + ', older than the ' + notedVer + ' THIRD-PARTY.md describes');
+} else if (runtimeOlder) {
+  skip(runtimeOlderWhy);
 } else {
   yes('THIRD-PARTY.md describes the Client Runtime Vortex holds here, ' + runtimeVer,
       !!notedVer && compareVersions(runtimeVer, notedVer) === 0);
@@ -1242,6 +1249,8 @@ if (filesTxt === null) {
     .filter(function (r) { return /^Data\\Platform\\Distribution\\/i.test(r); });
   if (fromCollection.length === 0) {
     skip('files.txt here gives the collection no file under Data\\Platform\\Distribution');
+  } else if (runtimeOlder) {
+    skip('the ' + fromCollection.length + ' files files.txt gives the collection under Data\\Platform\\Distribution were not held to the section: ' + runtimeOlderWhy);
   } else {
     const loose = fromCollection.filter(function (r) {
       if (/\\CEF\\locales\\[^\\]+\.pak$/i.test(r)) { return runtimeSec.indexOf('`CEF\\locales\\*.pak`') < 0; }
