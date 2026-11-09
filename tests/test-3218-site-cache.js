@@ -10,8 +10,9 @@
 //      it four), home.js and home.css with a ?v= the site never read. Now a
 //      page names every file of public/ with its hash, and a file asked for
 //      with the hash it has now is immutable for a year. With no hash, or an
-//      old one, it is the hour, as before. fonts.css names its fonts with
-//      their hashes too, the preloads in home.html name the same addresses,
+//      old one, it is the hour, as before. home.css names its fonts with
+//      their hashes too (the faces moved there from fonts.css, #4334), the
+//      preloads in home.html name the same addresses,
 //      and a stylesheet's own hash moves when a font it names does.
 //   2. Every public page and /api/public went out no-store, which keeps a
 //      page out of the browser's back and forward cache. They are no-cache
@@ -194,31 +195,34 @@ function named(html) {
     yes('its ETag is its hash and answers 304', got.headers.etag === '"' + js.split('=')[1] + '"' && again.status === 304 &&
         again.headers['cache-control'] === 'public, max-age=31536000, immutable');
 
-    const fontsRef = refs.find((r) => /^\/fonts\.css\?/.test(r));
+    // The faces are in home.css since #4334, so it is the sheet whose address
+    // carries the fonts' hashes.
+    const fontsRef = refs.find((r) => /^\/home\.css\?/.test(r));
     const fonts = await ask(run.port, fontsRef);
-    yes('fonts.css is kept a year too', fonts.headers['cache-control'] === 'public, max-age=31536000, immutable');
-    const fontUrls = (fonts.body.match(/url\(([^)]+)\)/g) || []).map((u) => u.slice(4, -1).replace(/["']/g, ''));
+    yes('home.css is kept a year too', fonts.headers['cache-control'] === 'public, max-age=31536000, immutable');
+    const fontUrls = (fonts.body.match(/url\(([^)]+)\)/g) || []).map((u) => u.slice(4, -1).replace(/["']/g, ''))
+      .filter((u) => /\.woff2\?/.test(u));
     yes('it names each font with that font\'s hash',
         fontUrls.length === 6 && fontUrls.every((u) => {
           const name = u.split('?')[0].slice(1);
           return u === '/' + name + '?v=' + hash(fs.readFileSync(path.join(PUBLIC, name)));
         }));
-    yes('fonts.css\'s own hash is of what it serves, font hashes in it', fontsRef === '/fonts.css?v=' + hash(fonts.buf));
+    yes('home.css\'s own hash is of what it serves, font hashes in it', fontsRef === '/home.css?v=' + hash(fonts.buf));
     const preloads = (home.body.match(/<link rel="preload"[^>]*>/g) || []);
     yes('the front page preloads two fonts, as fonts', preloads.length === 2 &&
         preloads.every((l) => /as="font"/.test(l) && /type="font\/woff2"/.test(l) && /crossorigin/.test(l)));
-    yes('at exactly the addresses fonts.css names, so nothing is fetched twice',
+    yes('at exactly the addresses home.css names, so nothing is fetched twice',
         preloads.every((l) => fontUrls.indexOf((l.match(/href="([^"]+)"/) || [])[1]) >= 0));
     const font = await ask(run.port, fontUrls[0]);
     yes('a font asked for that way is kept a year', font.headers['cache-control'] === 'public, max-age=31536000, immutable');
 
-    // A font changes: fonts.css's address has to move with it, or a browser
-    // holding fonts.css for a year would keep asking for the old font.
+    // A font changes: home.css's address has to move with it, or a browser
+    // holding home.css for a year would keep asking for the old font.
     const dir = made[made.length - 1];
     fs.appendFileSync(path.join(dir, 'public', 'cinzel.woff2'), Buffer.from([0]));
     const home2 = await ask(run.port, '/');
-    const fontsRef2 = named(home2.body).find((r) => /^\/fonts\.css\?/.test(r));
-    yes('a changed font moves fonts.css to a new address', !!fontsRef2 && fontsRef2 !== fontsRef);
+    const fontsRef2 = named(home2.body).find((r) => /^\/home\.css\?/.test(r));
+    yes('a changed font moves home.css to a new address', !!fontsRef2 && fontsRef2 !== fontsRef);
     const old = await ask(run.port, fontsRef);
     yes('and the old address is the hour, not a year', old.headers['cache-control'] === 'public, max-age=3600');
 
