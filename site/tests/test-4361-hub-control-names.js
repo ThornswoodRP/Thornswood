@@ -42,7 +42,12 @@ yes('the hub loads its own scripts (' + scripts.join(', ') + ')', scripts.indexO
 
 // Comments say "<button>" in prose; only code builds controls.
 function code(src, isHtml) {
-  if (isHtml) return src.replace(/<!--[\s\S]*?-->/g, '');
+  if (isHtml) {
+    // Again until nothing changes: taking one comment out can join the two
+    // halves of another (#5640).
+    for (let was = null; was !== src;) { was = src; src = src.replace(/<!--[\s\S]*?-->/g, ''); }
+    return src;
+  }
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
 
@@ -98,7 +103,7 @@ sources.forEach((s) => {
   let m;
   while ((m = re.exec(s.src))) {
     const after = s.src.slice(m.index, m.index + 600);
-    const v = m[1].replace(/[$]/g, '\\$&');
+    const v = m[1]; // \w+ only, so nothing in it means anything to a RegExp
     const ok = new RegExp('\\b' + v + '\\.textContent\\s*=\\s*\'[^\']*[A-Za-z]').test(after) ||
                new RegExp('\\b' + v + '\\.setAttribute\\(\'aria-label\'').test(after);
     made.push({ where: s.file + ':' + s.src.slice(0, m.index).split('\n').length, ok: ok });
