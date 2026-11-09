@@ -933,6 +933,37 @@ public sealed partial class AgentTests : IDisposable
     }
 
     [Fact]
+    public async Task LiveVoiceGoesInWithAnApprovedPromotionToMain()
+    {
+        // #5610: until 9 Nov 2026 a Main Deployment left live voice as it was.
+        var (a, gh, s, cfg) = MakeMain();
+        var vroot = Temp();
+        foreach (var (n, t) in OldVoice) File.WriteAllText(Path.Combine(vroot, n), t);
+        var vc = new FakeAppControl(vroot);
+        var venv = Config.DefaultMainVoice();
+        venv.Root = vroot;
+        venv.Store = cfg.Environments["main"].Store;
+        venv.Watch = cfg.Environments["main"].Watch;
+        venv.Health = "https://voice.test/health";
+        venv.WaitSeconds = 1;
+        vc.Start(venv);
+        var server = gh.Other!;
+        gh.Other = r => r.RequestUri!.Host == "voice.test" ? vc.Health(r) : server(r);
+        a.Voices["main"] = new App(venv, new HttpClient(gh), vc) { Tick = TimeSpan.FromMilliseconds(5) };
+        VoiceRelease(gh, "build-24", "// new gamemode\n", "const BUILD = 'new-5';\n");
+        var id = Promoted(gh, "build-24", 57);
+        await a.Pass("main", default);
+        Assert.Equal("in_progress,success", string.Join(",", gh.States(id)));
+        var desc = (string)gh.Last(id)!["description"]!;
+        Assert.Contains("voice runs it too", desc);
+        Assert.Contains("main runs gamemode blob", desc);
+        Assert.Equal("const BUILD = 'new-5';\n", File.ReadAllText(Path.Combine(vroot, "voice-server.js")));
+        Assert.Equal("new-5", vc.RunningBuild);
+        Assert.Equal("the service's own key", File.ReadAllText(Path.Combine(vroot, "token-key.txt")));
+        Assert.Equal("// new gamemode\n", s.Read("gamemode.js"));
+    }
+
+    [Fact]
     public async Task AReleaseWithVoiceOnABoxWithNoVoiceNamedLeavesItAlone()
     {
         var (a, gh, s, _, _) = Make();

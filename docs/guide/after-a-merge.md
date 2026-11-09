@@ -20,7 +20,7 @@ live deploy, which wait for Patrick's word.
 | The public pages, `site\data\site\*.md` | Nothing. They ride the same Release, and `Deploy-Docs.ps1 -Site` is refused once the agent has the site. |
 | The bot's code or join card art in `bot` | Nothing. The merge's Release carries it and the deploy agent swaps it in. `Install-Bot.ps1` is for the service, its libraries and its token. |
 | The bot's avatar, `bot\thornswood-bot-*.png` | No script sends it. Upload it by hand in the Discord developer portal. |
-| The voice service, `voice\voice-server.js` or `voice\headlines.js` | Dev voice: nothing, it goes in with the merge's Deployment to Dev. Live voice: `.\scripts\deploy\Install-Voice.ps1` |
+| The voice service, `voice\voice-server.js` or `voice\headlines.js` | Nothing. Dev voice goes in with the merge's Deployment to Dev, and live voice with the Deployment to Main when that Release is promoted ([docs\DEPLOY-AGENT.md](../DEPLOY-AGENT.md)). `Install-Voice.ps1` is for the service's task and settings. |
 | Scripts that only change how a release is built (Ship.ps1, Publish-Update.ps1, the Deploy scripts) | Nothing more. The pull is the change. |
 
 3. Everybody else, once it is out, from the main folder: `git checkout main`, then

@@ -101,6 +101,28 @@ public sealed class Config
         WaitSeconds = 30,
     };
 
+    /// <summary>Live voice (#5610): the task Install-Voice.ps1 registers for
+    /// C:\Thornswood-Voice, answering on loopback port 7778 behind Caddy's
+    /// /voice. It goes in with main's Deployment, so a promoted Release puts
+    /// on live the voice dev ran with it. Until 9 Nov 2026 the agent knew dev's
+    /// voice only, and live voice stayed on what Install-Voice.ps1 last sent by
+    /// hand (27 Oct) while five voice changes went to dev.</summary>
+    public static EnvConfig DefaultMainVoice() => new()
+    {
+        Kind = AppKinds.Voice,
+        Root = @"C:\Thornswood-Voice",
+        Store = @"C:\Thornswood-Deploys",
+        Task = "Thornswood Voice",
+        Health = "http://127.0.0.1:7778/health",
+        Watch = @"C:\Thornswood-Watch",
+        // Install-Voice.ps1's -Wait.
+        WaitSeconds = 30,
+    };
+
+    /// <summary>The voice service a server named in agent.json starts from:
+    /// live voice for main, dev voice for dev.</summary>
+    public static EnvConfig DefaultVoiceFor(string name) => name == "main" ? DefaultMainVoice() : DefaultDevVoice();
+
     /// <summary>The environment a name in agent.json starts from.</summary>
     public static EnvConfig DefaultFor(string name) => name switch
     {
@@ -153,7 +175,7 @@ public sealed class Config
             {
                 foreach (var e in envs.EnumerateObject())
                 {
-                    c.Environments[e.Name] = DefaultFor(e.Name).Overlay(e.Value);
+                    c.Environments[e.Name] = DefaultFor(e.Name).Overlay(e.Value, () => DefaultVoiceFor(e.Name));
                 }
             }
             else
@@ -220,6 +242,15 @@ public sealed class Config
         if (Environments.TryGetValue("dev", out var d) && Environments.TryGetValue("main", out var mn) &&
             string.Equals(d.Root.TrimEnd('\\', '/'), mn.Root.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
             throw new ConfigException("dev and main name the same server folder");
+        // Dev's voice and live voice are two services: one folder, task or
+        // address named for both would put dev's voice on live, or live's
+        // back on dev, with every Deployment (#5610).
+        if (Environments.TryGetValue("dev", out var dv) && Environments.TryGetValue("main", out var mv) && dv.Voice is { } dvv && mv.Voice is { } mvv)
+        {
+            if (string.Equals(dvv.Root.TrimEnd('\\', '/'), mvv.Root.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)) throw new ConfigException("dev and main name the same voice folder");
+            if (string.Equals(dvv.Task, mvv.Task, StringComparison.OrdinalIgnoreCase)) throw new ConfigException("dev and main name the same voice task");
+            if (string.Equals(dvv.Health, mvv.Health, StringComparison.OrdinalIgnoreCase)) throw new ConfigException("dev and main name the same voice address");
+        }
     }
 }
 
@@ -231,8 +262,9 @@ public sealed class EnvConfig
     /// the Discord bot ("discord"). Set by the environment's name; agent.json
     /// does not change it.</summary>
     public string Kind { get; set; } = ServerKind;
-    /// <summary>A server's voice service, which goes in with its Deployments
-    /// (#5187). null when agent.json names none for it.</summary>
+    /// <summary>A server's voice service, which goes in with its Deployments:
+    /// dev voice with dev's (#5187), live voice with main's (#5610). null when
+    /// agent.json names none for it.</summary>
     public EnvConfig? Voice { get; set; }
     /// <summary>The Windows service an app runs as (the bot's ThornswoodBot).</summary>
     public string Service { get; set; } = "";
@@ -289,7 +321,9 @@ public sealed class EnvConfig
     /// before a swap puts the old build back.</summary>
     public int StartSeconds { get; set; } = 170;
 
-    internal EnvConfig Overlay(JsonElement e)
+    /// <summary>Lays agent.json's fields for this environment over it. voice
+    /// is the voice service a "voice" entry starts from (DefaultVoiceFor).</summary>
+    internal EnvConfig Overlay(JsonElement e, Func<EnvConfig> voice)
     {
         string S(string n, string d) => e.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString()! : d;
         int I(string n, int d) => e.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : d;
@@ -314,7 +348,7 @@ public sealed class EnvConfig
         LogDir = S("logDir", LogDir);
         if (e.TryGetProperty("voice", out var vo) && vo.ValueKind == JsonValueKind.Object)
         {
-            var v = (Voice ?? Config.DefaultDevVoice()).Overlay(vo);
+            var v = (Voice ?? voice()).Overlay(vo, voice);
             v.Store = Store;
             v.Watch = Watch;
             Voice = v;

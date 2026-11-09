@@ -66,7 +66,10 @@
   bot's account read, for the release news the agent leaves after each
   Deployment and the bot posts. Where dev voice is set up (the task
   Thornswood Dev Voice, Install-Voice.ps1), a Release's voice goes in with
-  dev's Deployment, before the gamemode that pushes positions to it.
+  dev's Deployment, before the gamemode that pushes positions to it. Where
+  main is named and live voice is set up (the task Thornswood Voice), the
+  same goes for main's Deployment and live voice (#5610), so a promotion
+  puts on live the voice dev ran with that Release.
 
   MAIN (#5181). -Main has agent.json name main too, so the agent applies the
   Main environment's Deployments to the live server, each one only after
@@ -352,6 +355,19 @@ if (Get-ScheduledTask -TaskName 'Thornswood Dev Voice' -ErrorAction SilentlyCont
   `$cfg.environments.dev | Add-Member -NotePropertyName voice -NotePropertyValue (New-Object PSObject) -Force
   'voice: dev voice named; a Release''s voice goes in with dev''s Deployment'
 } else { 'voice: dev voice left out, its task Thornswood Dev Voice is not on this box' }
+
+# Live voice (#5610): the same for main, into the folder Install-Voice.ps1
+# set up for live, under its task, so a promoted Release puts on live the
+# voice dev ran with it. Named only while main is: the agent applies no
+# voice for a server it does not look after. Until this, live voice was
+# Install-Voice.ps1's alone and stayed on 27 Oct's while dev moved on.
+if (`$cfg.environments.main) {
+  `$cfg.environments.main.PSObject.Properties.Remove('voice')
+  if (Get-ScheduledTask -TaskName 'Thornswood Voice' -ErrorAction SilentlyContinue) {
+    `$cfg.environments.main | Add-Member -NotePropertyName voice -NotePropertyValue (New-Object PSObject) -Force
+    'voice: live voice named; a Release''s voice goes in with main''s Deployment'
+  } else { 'voice: live voice left out, its task Thornswood Voice is not on this box' }
+}
 
 # The release news (#5187): after a Deployment goes in, the agent leaves its
 # Release's notes in for-bot for the bot to post (tools\DeployAgent\News.cs).
