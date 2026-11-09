@@ -23,6 +23,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Ellipse = Avalonia.Controls.Shapes.Ellipse;   // not the namespace: Avalonia.Controls.Shapes.Path would collide with System.IO.Path
+using AutomationProperties = Avalonia.Automation.AutomationProperties;   // the name a screen reader says (#4329), without the rest of that namespace
 
 namespace Thornswood
 {
@@ -1657,6 +1658,7 @@ namespace Thornswood
                 var report = new Button();
                 report.Theme = Look("Ghost");
                 report.Content = "Report";
+                AutomationProperties.SetName(report, "Report " + GalleryPictureName(shot.Name, by));
                 report.Padding = new Thickness(10, 4, 10, 4);
                 Gallery.Shot holdShot = shot;
                 report.Click += delegate { OpenGalleryReport(holdShot); };
@@ -1667,6 +1669,7 @@ namespace Thornswood
                     var del = new Button();
                     del.Theme = Look("Ghost");
                     del.Content = "Delete";
+                    AutomationProperties.SetName(del, "Delete " + GalleryPictureName(shot.Name, by));
                     del.Padding = new Thickness(10, 4, 10, 4);
                     del.Margin = new Thickness(8, 0, 0, 0);
                     string name = shot.Name;
@@ -1679,6 +1682,18 @@ namespace Thornswood
             stack.Children.Add(meta);
             card.Child = stack;
             return card;
+        }
+
+        /// <summary>
+        /// How a screen reader names one picture on a button that acts on it
+        /// (#4329): its name on the site, and who sent it when that is known.
+        /// The buttons themselves say only Report, Delete or Accept, the same
+        /// on every card.
+        /// </summary>
+        static string GalleryPictureName(string name, string by)
+        {
+            string what = "the picture " + (name ?? "");
+            return string.IsNullOrEmpty(by) ? what : what + " by " + by;
         }
 
         static Border BuildPendingCard(Gallery.Pending item)
@@ -1786,6 +1801,7 @@ namespace Thornswood
             var accept = new Button();
             accept.Theme = Look("Solid");
             accept.Content = "Accept";
+            AutomationProperties.SetName(accept, "Accept " + GalleryPictureName(item.Name, item.By));
             accept.Padding = new Thickness(14, 6, 14, 6);
             string name = item.Name;
             accept.Click += delegate { GalleryAccept(name, copies); };
@@ -1794,6 +1810,7 @@ namespace Thornswood
             var del = new Button();
             del.Theme = Look("Ghost");
             del.Content = "Delete";
+            AutomationProperties.SetName(del, "Delete " + GalleryPictureName(item.Name, item.By));
             del.Padding = new Thickness(12, 6, 12, 6);
             del.Margin = new Thickness(8, 0, 0, 0);
             del.Click += delegate { GalleryDeletePending(name); };
@@ -1990,6 +2007,7 @@ namespace Thornswood
                 var rem = new Button();
                 rem.Theme = Look("Ghost");
                 rem.Content = "Remove";
+                AutomationProperties.SetName(rem, "Remove " + Path.GetFileName(path) + " from the pictures to send");
                 rem.Padding = new Thickness(10, 4, 10, 4);
                 rem.VerticalAlignment = VerticalAlignment.Center;
                 string hold = path;
@@ -3363,6 +3381,7 @@ namespace Thornswood
 
             var b = new Button();
             b.Content = sp;
+            AutomationProperties.SetName(b, t.Name + " theme" + (on ? ", in use" : ""));
             b.Theme = Look("Ghost");
             b.Margin = new Thickness(0, 0, 9, 9);
             b.Padding = new Thickness(12, 9, 16, 9);
@@ -3412,6 +3431,7 @@ namespace Thornswood
 
             var b = new Button();
             b.Content = sp;
+            AutomationProperties.SetName(b, on ? "Make your own theme, in use" : "Make your own theme");
             b.Theme = Look("Ghost");
             b.Margin = new Thickness(0, 0, 9, 9);
             b.Padding = new Thickness(12, 9, 16, 9);
@@ -3496,6 +3516,7 @@ namespace Thornswood
 
                 var box = new TextBox();
                 box.Text = val == null ? "" : val;
+                AutomationProperties.SetName(box, name + " colour, as a hex value");
                 box.Theme = Look("Field");
                 box.FontFamily = new FontFamily("Cascadia Mono, Consolas");
                 col.Children.Add(box);
@@ -3782,6 +3803,7 @@ namespace Thornswood
                 string captured = mode;
                 var b = new Button();
                 b.Content = mode;
+                AutomationProperties.SetName(b, mode + " display mode" + (mode == current ? ", in use" : ""));
                 b.Theme = Look("Ghost");
                 b.Margin = new Thickness(0, 0, 8, 0);
                 if (mode == current) b.Background = Res("CardHover");
@@ -4105,6 +4127,9 @@ namespace Thornswood
             // so the covered-chip popup is one complete panel, not a second orphan card.
             if (cfg.IsDev) txtServerPick.Text = "Dev";
             else txtServerPick.Text = "Main";
+            // The chip shows the server as a word beside a dot; a screen reader
+            // hears the same, and that it opens the choice (#4329).
+            AutomationProperties.SetName(btnServerPick, "Server: " + txtServerPick.Text + ", choose which one to play on");
             btnServerMain.IsVisible = true;
             btnServerDev.IsVisible = true;
             btnServerMain.IsEnabled = true;
