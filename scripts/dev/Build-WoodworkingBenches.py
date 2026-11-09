@@ -563,6 +563,36 @@ def load_order(data):
     return out
 
 
+# The collection's record; a test points it at a stand-in.
+COLLECTION_PLUGINS = os.environ.get('THORNSWOOD_COLLECTION_PLUGINS') or \
+    os.path.join(ROOT, 'records', 'collection-plugins.json')
+
+
+def collection_stop(plugins, ours, data):
+    """The STOP line when the load order is not the collection's plugins at the
+    collection's bytes, or None. Every builder that reads last-plugin.json's
+    order asks this before it reads anything else.
+
+    Both ways round (#4423): each plugin read, except ours, is in the record
+    with the record's bytes; and each plugin the record lists is in the order.
+    Asking only the first let a table be built without a plugin the collection
+    installs, with nothing saying so."""
+    record = json.load(io.open(COLLECTION_PLUGINS, encoding='utf-8'))
+    rec = {r['name'].lower(): r for r in record['plugins']}
+    other = [pl.name for pl in plugins if pl.name not in ours and
+             (pl.name.lower() not in rec or rec[pl.name.lower()]['sha256'].lower() != pl.sha256)]
+    if other:
+        return ('STOP. %d plugin(s) in %s are not the collection\'s bytes (revision %s): %s'
+                % (len(other), data, record.get('revision'), ', '.join(other[:6])))
+    read = {pl.name.lower() for pl in plugins}
+    left = [r['name'] for r in record['plugins'] if r['name'].lower() not in read]
+    if left:
+        return ('STOP. %d plugin(s) the collection installs (revision %s) are not in the load order, '
+                'game\\data\\last-plugin.json\'s: %s. Rebuild the last plugin for this revision first.'
+                % (len(left), record.get('revision'), ', '.join(left[:6])))
+    return None
+
+
 def norm_deg(a):
     return round(((a % 360) + 360) % 360, 2)
 
@@ -584,13 +614,9 @@ def main():
         return 1
     plugins = [Plugin(p, n) for p, n in order]
     # The game folder has to hold the collection's own bytes, or this measures another world.
-    record = json.load(io.open(os.path.join(ROOT, 'records', 'collection-plugins.json'), encoding='utf-8'))
-    rec = {r['name'].lower(): r for r in record['plugins']}
-    other = [pl.name for pl in plugins if pl.name not in OURS + AFTER and
-             (pl.name.lower() not in rec or rec[pl.name.lower()]['sha256'].lower() != pl.sha256)]
-    if other:
-        print('STOP. %d plugin(s) in %s are not the collection\'s bytes (revision %s): %s'
-              % (len(other), args.data, record.get('revision'), ', '.join(other[:6])))
+    stop = collection_stop(plugins, OURS + AFTER, args.data)
+    if stop:
+        print(stop)
         return 2
     print('The load order: %d plugins, game\\data\\last-plugin.json\'s then %s; %s read from game\\content'
           % (len(plugins), ' and '.join(AFTER), ', '.join(OURS + AFTER)))
