@@ -154,6 +154,8 @@ try {
     $r = Dry @('-Number', '3')
     Yes '  runner 3 gets the VPS label alone, no signing label and no build label (#4033)' ($r.Code -eq 0 -and $r.Text -match "--name 'thornswood-vps-3' --labels 'thornswood-vps' --work")
     Yes '  and Install-Runner.ps1 reads no signing record' ([IO.File]::ReadAllText($script) -notmatch 'sign-runners')
+    $irAll = [IO.File]::ReadAllText($script)
+    Yes '  and has no Hermes runner, proxy or Python part (#5565, #5577)' ($irAll -notmatch '\[switch\]\$Hermes' -and $irAll -notmatch 'Set-RunnerProxy' -and $irAll -notmatch 'RunnerEgress' -and $irAll -notmatch 'Install-RunnerPython')
     Yes '  GitHub still never asked' (-not (Test-Path -LiteralPath $ghCalled))
 
     # ---- Close-RunnerAccount on scratch folders, the off-box filter ---------
