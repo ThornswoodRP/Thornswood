@@ -19,9 +19,8 @@
   Get-ThornswoodOpsAccess: the same App's token for one change to the ops
   repository, from scripts\vps\admin\ops-access.js (#2862): -For runners
   (Administration write, for Install-Runner.ps1 -FromGate) or -For keys
-  (Environments write and Actions read, for Renew-BoxKey.ps1); -For hermes-runners is the
-  organization's Self-hosted runners write instead, for Install-Runner.ps1
-  -FromGate -Hermes. Taken and handed over the same way.
+  (Environments write and Actions read, for Renew-BoxKey.ps1). Taken and
+  handed over the same way.
 
       $token = Get-ThornswoodOpsAccess -Repo $repo -For keys
 #>
@@ -67,7 +66,7 @@ function Get-ThornswoodShipAccess {
 function Get-ThornswoodOpsAccess {
     param(
         [Parameter(Mandatory = $true)][string]$Repo,
-        [Parameter(Mandatory = $true)][ValidateSet('runners', 'keys', 'hermes-runners')][string]$For,
+        [Parameter(Mandatory = $true)][ValidateSet('runners', 'keys')][string]$For,
         [string]$AdminState = 'C:\Thornswood-Admin\state'
     )
     return (Invoke-ThornswoodAppMinter -Repo $Repo -Script 'ops-access.js' -Arguments @($For) -AdminState $AdminState)

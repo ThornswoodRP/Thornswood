@@ -14,11 +14,7 @@
        write and nothing more;
     3. it prints the token alone, and nothing of the key;
     4. any other ask, or none, ends it with 1 and asks GitHub nothing;
-    5. a refusal from GitHub ends it with 1 and prints no token;
-    6. hermes-runners asks where the App is installed on the organization and
-       for the organization's Self-hosted runners write alone, naming no
-       repository: the App is never on Thornswood-Hermes, whose Windows check
-       runs on an organization runner of the box (records/hermes-runner.json).
+    5. a refusal from GitHub ends it with 1 and prints no token.
 */
 'use strict';
 const http = require('http');
@@ -47,7 +43,7 @@ const server = http.createServer((req, res) => {
   req.on('end', () => {
     asked.push({ method: req.method, url: req.url, auth: req.headers.authorization || '', body });
     res.setHeader('Content-Type', 'application/json');
-    if (req.method === 'GET' && (req.url === '/repos/ThornswoodRP/Thornswood-Ops/installation' || req.url === '/orgs/ThornswoodRP/installation')) { res.end(JSON.stringify({ id: 88 })); return; }
+    if (req.method === 'GET' && req.url === '/repos/ThornswoodRP/Thornswood-Ops/installation') { res.end(JSON.stringify({ id: 88 })); return; }
     if (req.method === 'POST' && req.url === '/app/installations/88/access_tokens') {
       if (refuse) { res.statusCode = 422; res.end(JSON.stringify({ message: 'The permissions requested are not granted to this installation.' })); return; }
       res.statusCode = 201; res.end(JSON.stringify({ token: 'ghs_' + 'b'.repeat(36) })); return;
@@ -87,15 +83,6 @@ server.listen(0, '127.0.0.1', async () => {
     want = lastAsk();
     yes('keys asks for the ops repository alone with Actions read and Environments write and nothing more',
       k.code === 0 && JSON.stringify(want.repositories) === '["Thornswood-Ops"]' && JSON.stringify(want.permissions) === '{"actions":"read","environments":"write"}');
-
-    const h0 = asked.length;
-    const h = await run(['hermes-runners'], api);
-    want = lastAsk();
-    const hGets = asked.slice(h0).filter(a => a.method === 'GET').map(a => a.url);
-    yes('hermes-runners asks where the App is installed on the organization, never on Thornswood-Hermes',
-      h.code === 0 && JSON.stringify(hGets) === '["/orgs/ThornswoodRP/installation"]' && !asked.slice(h0).some(a => a.url.includes('Thornswood-Hermes')));
-    yes('  and for the organization\'s Self-hosted runners write alone, naming no repository',
-      want.repositories === undefined && JSON.stringify(want.permissions) === '{"organization_self_hosted_runners":"write"}' && h.stdout === 'ghs_' + 'b'.repeat(36) + '\n');
 
     const before = asked.length;
     const other = await run(['secrets'], api);

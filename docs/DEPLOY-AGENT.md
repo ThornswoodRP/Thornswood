@@ -556,19 +556,19 @@ list entry is a name, or `*.a.b` for the names under `a.b`; a pattern with
 fewer than two labels after its star, an address, or an empty list is
 refused when the file is read.
 
-How a runner goes through it. `records/runner-egress.json` holds the
-address it listens on and GitHub's hosts for a self-hosted runner, and a
-runner record with `"egress": true` (`records/hermes-runner.json`) adds its
-`allowHost`. Install-RunnerEgress.ps1 writes that list as `egress.json`,
-checks it with `thornswood-agent egress-check`, starts the task and asks it
-for github.com (200) and example.com (403). Install-Runner.ps1 then blocks
-every address but loopback for that runner's account, names the proxy in
-the runner's `.env` as `https_proxy` and `http_proxy`, and stops before
-changing anything when the proxy does not answer github.com. From a cloud
-thread both go through the deploy gate:
+How it is put on the box. `records/runner-egress.json` holds the address
+it listens on and GitHub's hosts for a self-hosted runner, and a
+`records/*-runner.json` with `"egress": true` adds its `allowHost`.
+Install-RunnerEgress.ps1 writes that list as `egress.json`, checks it with
+`thornswood-agent egress-check`, starts the task and asks it for github.com
+(200) and example.com (403). From a cloud thread it goes through the deploy
+gate:
 
     pwsh scripts/vps/Box-Run.ps1 -Line 'Install-RunnerEgress'
-    pwsh scripts/vps/Box-Run.ps1 -Line 'Install-Runner -Hermes -NetworkOnly'
+
+It was made for tw-hermes-box, Thornswood-Hermes's runner, which came off
+the box on 9 Nov 2026 (#5565). No runner goes through it since, and
+Install-Runner.ps1 no longer sends one: #5577 says whether it stays.
 
 ## Tests
 

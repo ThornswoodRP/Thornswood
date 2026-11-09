@@ -1,9 +1,9 @@
 <#
   RunnerEgress.ps1
 
-  The box runners' way out (#5495), as the two scripts that use it need it:
-  Install-RunnerEgress.ps1, which puts the proxy on the box, and
-  Install-Runner.ps1, which sends a runner through it. Dot-source it.
+  The box runners' way out (#5495), as Install-RunnerEgress.ps1, which puts
+  the proxy on the box, needs it. Install-Runner.ps1 sent tw-hermes-box
+  through it until that runner came off on 9 Nov 2026 (#5565). Dot-source it.
 
   Get-ThornswoodRunnerEgress reads records\runner-egress.json and gives its
   listen address, port and the proxy's URL as a runner's .env names it.

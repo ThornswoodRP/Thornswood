@@ -63,7 +63,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [deploy/Rotate-BotToken.ps1](deploy/Rotate-BotToken.ps1) | Puts a new Discord bot token into both places on the VPS that use it, in one go, and restarts both programs that read it. |
 | [deploy/Rotate-ServerPassword.ps1](deploy/Rotate-ServerPassword.ps1) | Changes the server password and hands the new one to the site, so the launcher can fetch it after checking Discord. |
 | [deploy/RunnerDriveMove.ps1](deploy/RunnerDriveMove.ps1) | Shared runner-drive move preflight. Defining these functions changes nothing. |
-| [deploy/RunnerEgress.ps1](deploy/RunnerEgress.ps1) | The box runners' way out (#5495), as the two scripts that use it need it: Install-RunnerEgress.ps1, which puts the proxy on the box, and Install-Runner.ps1, which sends a runner through it. |
+| [deploy/RunnerEgress.ps1](deploy/RunnerEgress.ps1) | The box runners' way out (#5495), as Install-RunnerEgress.ps1, which puts the proxy on the box, needs it. |
 | [deploy/ServerArtifact.ps1](deploy/ServerArtifact.ps1) | The server build as a versioned artifact, kept in the box's store beside the gamemode artifacts. |
 | [deploy/ServerBuild.ps1](deploy/ServerBuild.ps1) | Which server files come from the fork, and whether a folder, a zip or a stage holds the build records\server-build.json names. |
 | [deploy/ServerContent.ps1](deploy/ServerContent.ps1) | Which Thornswood-Content.esp a game server holds, read off the box, and whether a release may send clients a content plugin that server does not hold (#2308). |

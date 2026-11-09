@@ -172,9 +172,6 @@ Yes 'Install-Runner runs from the gate with a number, -Status, -Lock or -Network
     (Words 'Install-Runner -Number 2 -Status') -ne 'REFUSED' -and (Words 'Install-Runner -Remove') -eq 'REFUSED' -and (Words 'Install-Runner -OffBox') -eq 'REFUSED' -and
     (Words 'Install-Runner -Repo x/y') -eq 'REFUSED' -and (Words 'Install-Runner -RunnerName x') -eq 'REFUSED' -and (Words 'Install-Runner -Root C:/x') -eq 'REFUSED' -and
     (Words 'Install-Runner -Number 100') -eq 'REFUSED' -and (Words 'Install-Runner -AllowHost x') -eq 'REFUSED')
-Yes '  a runner comes off only as Remove-HermesRunner, the retired Hermes runner and nothing beside it (#5565)' (
-    (Words 'Remove-HermesRunner') -eq '-FromGate|-Hermes|-Remove|-NoPause' -and (Words 'Remove-HermesRunner -Number 2') -eq 'REFUSED' -and
-    (Words 'Remove-HermesRunner -Remove') -eq 'REFUSED' -and (Words 'Install-Runner -Hermes -Remove') -eq 'REFUSED')
 $rk = Text 'scripts/vps/Renew-BoxKey.ps1'
 Yes '  Renew-BoxKey keeps the old line until the secret holds the new key, and puts the file back on any stop before that' (
     $rk.IndexOf('[IO.File]::WriteAllLines($KeysFile, [string[]](@($have) + $newLine)') -gt 0 -and
@@ -188,7 +185,7 @@ Yes '  its key goes only to the two fixed secrets of the ops repository, with th
     $rk.Contains('does not let in main alone'))
 $ir = Text 'scripts/deploy/Install-Runner.ps1'
 Yes '  Install-Runner from the gate is the ops repository''s, with the App''s runners token, and puts back only a runner the records or GitHub already name' (
-    $ir.Contains("if (-not `$Hermes) { `$Repo = 'ThornswoodRP/Thornswood-Ops' }") -and $ir.Contains('Get-ThornswoodOpsAccess -Repo') -and $ir.Contains("-For `$(if (`$Hermes) { 'hermes-runners' } else { 'runners' })") -and
+    $ir.Contains("`$Repo = 'ThornswoodRP/Thornswood-Ops'") -and $ir.Contains('Get-ThornswoodOpsAccess -Repo') -and $ir.Contains('-For runners') -and
     $ir.Contains('is in no runner record and not registered on') -and $ir.IndexOf('function Invoke-Gh') -lt $ir.IndexOf('is in no runner record and not registered on'))
 # Publish-Server through the gate is the dev server's, from the box's store,
 # and nothing else (#4987): main stays with a Main run Patrick approves.
