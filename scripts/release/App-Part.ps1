@@ -22,7 +22,8 @@
              never ride a Release.
     discord  bot.py, _pyguard.py, trust.py, card.py, the bot's modules
              bot_*.py (the ones bot.py imports, #5357), staff-channel.txt,
-             dev-channel.txt (where dev news goes), requirements.txt,
+             dev-channel.txt (where dev news goes), news-channel.txt (where
+             main news goes, #news), requirements.txt,
              factions.json, assets\join-card.png
              (C:\Thornswood-Bot). The list Install-Bot.ps1 -CodeOnly sends.
              The token, the settings, the records and the libraries are the
@@ -102,7 +103,7 @@ switch ($Part) {
   'discord' {
     # bot.py and the modules it imports (#5357), the list Install-Bot.ps1 sends.
     . (Join-Path $PSScriptRoot '..\deploy\Bot-Code.ps1')
-    foreach ($f in @(Get-ThornswoodBotCode $RepoDir) + @('staff-channel.txt', 'dev-channel.txt', 'requirements.txt', 'factions.json')) { Add-One $f ('bot/' + $f) }
+    foreach ($f in @(Get-ThornswoodBotCode $RepoDir) + @('staff-channel.txt', 'dev-channel.txt', 'news-channel.txt', 'requirements.txt', 'factions.json')) { Add-One $f ('bot/' + $f) }
     Add-One 'assets/join-card.png' 'bot/assets/join-card.png'
   }
   'voice' {

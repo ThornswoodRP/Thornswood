@@ -560,7 +560,7 @@ try {
     Yes 'the site, the Discord bot and voice are zipped by App-Part.ps1 before the parts are compared' ($appsAt -gt 0 -and $stampAt -gt $appsAt -and
         $wf.Contains("foreach (`$p in 'site', 'discord', 'voice')") -and $wf.Contains('./scripts/release/App-Part.ps1 -Part $p -Out $zip'))
     Yes '  and each is a part of every Release' ($wf.Contains('"site=$($env:SITE_ZIP)", "discord=$($env:DISCORD_ZIP)", "voice=$($env:VOICE_ZIP)"'))
-    $appPaths = @(@('site/server.js', 'site/lib/**', 'site/public/**', 'site/data/site/**', 'bot/bot.py', 'bot/bot_*.py', 'bot/dev-channel.txt', 'bot/staff-channel.txt', 'bot/requirements.txt', 'bot/assets/join-card.png',
+    $appPaths = @(@('site/server.js', 'site/lib/**', 'site/public/**', 'site/data/site/**', 'bot/bot.py', 'bot/bot_*.py', 'bot/dev-channel.txt', 'bot/news-channel.txt', 'bot/staff-channel.txt', 'bot/requirements.txt', 'bot/assets/join-card.png',
         'voice/voice-server.js', 'voice/headlines.js', 'scripts/vps/Server-Log.js', 'scripts/release/App-Part.ps1') | Where-Object { $wf -notmatch ("(?m)^\s+- '" + [regex]::Escape($_) + "'\s*$") })
     Yes ('  and a merge that changes one of their files starts it' + $(if ($appPaths) { ': not ' + ($appPaths -join ', ') } else { '' })) ($appPaths.Count -eq 0)
     Yes 'dev gets a Deployment only when a part dev runs changed' ($wf.Contains("if: `${{ steps.newest.outputs.release == 'yes' && steps.changed.outputs.dev == 'yes' }}") -and

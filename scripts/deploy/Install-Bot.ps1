@@ -163,7 +163,7 @@ $docsWin = $DocsRoot.Replace('/','\')
 . (Join-Path $Here 'Artifact.ps1')
 $artifact = $null
 if (-not $PutBack -and -not $SetPing) {
-$artifact = New-ThornswoodArtifact -Component bot -RepoDir $Repo -Paths (@(Get-ThornswoodBotCode $Repo | ForEach-Object { 'bot/' + $_ }) + @('bot/staff-channel.txt', 'bot/dev-channel.txt', 'bot/requirements.txt', 'bot/factions.json', 'bot/assets/join-card.png', 'scripts/vps/BotService.cs'))
+$artifact = New-ThornswoodArtifact -Component bot -RepoDir $Repo -Paths (@(Get-ThornswoodBotCode $Repo | ForEach-Object { 'bot/' + $_ }) + @('bot/staff-channel.txt', 'bot/dev-channel.txt', 'bot/news-channel.txt', 'bot/requirements.txt', 'bot/factions.json', 'bot/assets/join-card.png', 'scripts/vps/BotService.cs'))
 Write-Host ('artifact ' + (Format-ThornswoodArtifact $artifact)) -ForegroundColor DarkGray
 Send-ThornswoodArtifact -Artifact $artifact -Target "$User@$Vps" -SshArgs $ssh
 $Repo = $artifact.Folder
@@ -388,6 +388,11 @@ Head 'Staging it'
 # reads only staff-channel.txt now (test-watch-services.py W6 holds it), so
 # sending this file cannot bring that back.
 #
+# news-channel.txt goes up beside it: #news, where the bot posts each main
+# release (watch_release_news). It was never in the repository, so from #5187
+# until 9 Nov the bot logged "#news is named by no id" and no main release
+# was announced.
+#
 # requirements.txt too, because the full run installs the libraries from it.
 #
 # The Live smoke export went up with these from 6 Oct (#2018) until the Live
@@ -401,7 +406,7 @@ $send = [ordered]@{}
 # _pyguard.py is the Python version check bot.py imports first (#2276),
 # trust.py says which roots it trusts (#3111), and bot_*.py are the bot's
 # modules, the ones bot.py imports (#5357, Bot-Code.ps1).
-foreach ($f in @(Get-ThornswoodBotCode $Repo) + @('staff-channel.txt', 'dev-channel.txt', 'requirements.txt', 'factions.json')) {
+foreach ($f in @(Get-ThornswoodBotCode $Repo) + @('staff-channel.txt', 'dev-channel.txt', 'news-channel.txt', 'requirements.txt', 'factions.json')) {
   $src = Join-Path $Repo "bot\$f"
   if (-not (Test-Path $src)) { Die "missing: $src" }
   $send[$f] = $src

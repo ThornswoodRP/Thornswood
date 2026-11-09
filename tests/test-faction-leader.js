@@ -112,7 +112,7 @@ yes('F4 the three copied questions stay optional (long), and only the pick is re
 
 yes('F5 Install-Bot sends factions.json on the artifact list and in the copy loop',
     install.indexOf("'bot/factions.json'") !== -1 &&
-    install.indexOf("foreach ($f in @(Get-ThornswoodBotCode $Repo) + @('staff-channel.txt', 'dev-channel.txt', 'requirements.txt', 'factions.json'))") !== -1);
+    install.indexOf("foreach ($f in @(Get-ThornswoodBotCode $Repo) + @('staff-channel.txt', 'dev-channel.txt', 'news-channel.txt', 'requirements.txt', 'factions.json'))") !== -1);
 
 // #3317 (Patrick, 22 Oct, page card q-3317-faction-roles, A): one
 // "<faction> Leader" role per named faction, from factions.json, short names,

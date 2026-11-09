@@ -166,6 +166,9 @@ src = harness_bot.source()
 yes('the loop is started with the others', 'asyncio.create_task(watch_release_news())' in src)
 yes('dev news goes to the id in dev-channel.txt',
     bot.DEV_NEWS_ID == int(open(os.path.join(HERE, 'dev-channel.txt')).read().strip()))
+# #news was named by no file until 9 Nov, so no main release was ever posted.
+yes('main news goes to the id in news-channel.txt, which is there',
+    bot.MAIN_NEWS_ID != 0 and bot.MAIN_NEWS_ID == int(open(os.path.join(HERE, 'news-channel.txt')).read().strip()))
 yes('the folder is the one the agent writes', bot.NEWS_DIR == r'C:\Thornswood-Deploys\for-bot'
     or os.environ.get('THORNSWOOD_NEWS_DIR'))
 

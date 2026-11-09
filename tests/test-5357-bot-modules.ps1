@@ -101,7 +101,7 @@ try {
 $install = [IO.File]::ReadAllText((Join-Path $repo 'scripts\deploy\Install-Bot.ps1'))
 Yes 'Install-Bot.ps1 reads the list from Bot-Code.ps1' ($install.Contains(". (Join-Path `$Here 'Bot-Code.ps1')"))
 Yes '  packs it into the bot artifact' ($install.Contains("-Paths (@(Get-ThornswoodBotCode `$Repo | ForEach-Object { 'bot/' + `$_ }) + @("))
-Yes '  sends it' ($install.Contains("foreach (`$f in @(Get-ThornswoodBotCode `$Repo) + @('staff-channel.txt', 'dev-channel.txt', 'requirements.txt', 'factions.json')) {"))
+Yes '  sends it' ($install.Contains("foreach (`$f in @(Get-ThornswoodBotCode `$Repo) + @('staff-channel.txt', 'dev-channel.txt', 'news-channel.txt', 'requirements.txt', 'factions.json')) {"))
 Yes '  and parse-checks it on the box before the bot is stopped' ($install.Contains("`$hashes @(Get-ThornswoodBotCode `$Repo)) + `$serviceCheckBlock"))
 
 $pwsh = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
