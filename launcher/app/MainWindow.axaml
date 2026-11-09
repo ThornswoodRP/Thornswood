@@ -363,10 +363,12 @@
 
     <!-- A slider in the launcher's own colours: a thin line, the filled part
          in the accent, a round thumb. The stock slider is a grey control of
-         another look and would be the one thing on the page that is not ours. -->
+         another look and would be the one thing on the page that is not ours.
+         The slider itself takes keyboard focus, so Tab reaches it and the
+         arrow keys move it a tick at a time (#4327); the thumb and the two
+         halves of the track do not, so Tab stops on it once. -->
     <ControlTheme x:Key="ThornSlider" TargetType="Slider">
       <Setter Property="Height" Value="22"/>
-      <Setter Property="Focusable" Value="False"/>
       <Setter Property="Template">
         <ControlTemplate>
           <Grid>
@@ -403,9 +405,17 @@
                 </Thumb.Template>
               </Thumb>
             </Track>
+            <!-- The buttons' focus ring (Primary, Solid): the same dashed
+                 edge, shown only when the slider is reached by keyboard
+                 (#602). Drawn in the accent, the ink that reads on the page
+                 behind it, and a little wider than the track so the thumb
+                 at either end does not cover it. -->
+            <Rectangle Name="ring" RadiusX="2" RadiusY="2" Margin="-6,0" IsVisible="False" IsHitTestVisible="False"
+                       Stroke="{DynamicResource Accent}" StrokeThickness="1.5" StrokeDashArray="2,2"/>
           </Grid>
         </ControlTemplate>
       </Setter>
+      <Style Selector="^:focus-visible /template/ Rectangle#ring"><Setter Property="IsVisible" Value="True"/></Style>
     </ControlTheme>
 
     <!-- Every tick box in the window. -->

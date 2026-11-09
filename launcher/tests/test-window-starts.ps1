@@ -19,6 +19,11 @@
   window shown and laid out. Its lines are this harness's, one PASS or FAIL a
   check. No screen is needed, so it runs on Linux and Windows alike.
 
+  It also works the Settings music slider from the keyboard (#4327): Tab from
+  the music tick box lands on the slider, the slider shows the buttons' focus
+  ring, and the arrow keys move it. Its theme had made it unfocusable, so Tab
+  passed it by and only a mouse could set the volume.
+
   Builds under out\harness\ (which git ignores) and deletes its own folder.
 #>
 $ErrorActionPreference = 'Stop'

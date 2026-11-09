@@ -5,7 +5,9 @@ using System.Runtime.ExceptionServices;
 using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -90,8 +92,84 @@ namespace Thornswood.Tests
             PlayBarRuns(win);
 
             win.Close();
+
+            MusicSliderKeys();
+
             Console.WriteLine(fails == 0 ? "the window starts" : fails + " check(s) failed");
             return fails == 0 ? 0 : 1;
+        }
+
+        // The Settings music slider from the keyboard, the way a person uses
+        // it: Tab from the music tick box, then the arrow keys. Why (#4327):
+        // the slider's theme set Focusable to False, so Tab went straight past
+        // it, the arrow keys never reached it, and it had no focus ring to
+        // show. A window of its own, so nothing above has shown every hidden
+        // part of it, the ring included, before this looks.
+        static void MusicSliderKeys()
+        {
+            MainWindow win = null;
+            Slider sld = null;
+            Check("a second window is made and its Settings page shown", () =>
+            {
+                win = new MainWindow();
+                Control page = win.FindControl<Control>("PageSettings") ?? throw new InvalidOperationException("the window has no PageSettings");
+                page.IsVisible = true;
+                win.Show();
+                Dispatcher.UIThread.RunJobs();
+                win.UpdateLayout();
+                Dispatcher.UIThread.RunJobs();
+                sld = win.FindControl<Slider>("SldMusic") ?? throw new InvalidOperationException("the window has no SldMusic");
+            });
+            if (sld == null) { win?.Close(); return; }
+
+            Func<Rectangle> ring = () =>
+            {
+                foreach (Visual v in Descendants(sld))
+                    if (v is Rectangle r && r.Name == "ring") return r;
+                throw new InvalidOperationException("the slider's template has no ring");
+            };
+            Action<PhysicalKey> press = key =>
+            {
+                win.KeyPressQwerty(key, RawInputModifiers.None);
+                win.KeyReleaseQwerty(key, RawInputModifiers.None);
+                Dispatcher.UIThread.RunJobs();
+            };
+
+            Check("the music slider shows no focus ring before it has focus", () =>
+            {
+                if (ring().IsVisible) throw new InvalidOperationException("the ring is up already");
+            });
+            Check("Tab from the music tick box lands on the music slider", () =>
+            {
+                CheckBox chk = win.FindControl<CheckBox>("ChkMusic") ?? throw new InvalidOperationException("the window has no ChkMusic");
+                if (!chk.Focus(NavigationMethod.Tab)) throw new InvalidOperationException("the tick box took no focus");
+                Dispatcher.UIThread.RunJobs();
+                press(PhysicalKey.Tab);
+                object now = win.FocusManager?.GetFocusedElement();
+                if (!ReferenceEquals(now, sld))
+                    throw new InvalidOperationException("focus went to " + (now is Control c ? c.GetType().Name + " " + c.Name : "nothing"));
+            });
+            Check("the music slider shows the buttons' focus ring when Tab reaches it", () =>
+            {
+                win.UpdateLayout();
+                Dispatcher.UIThread.RunJobs();
+                if (!ring().IsVisible) throw new InvalidOperationException("the ring stayed hidden");
+            });
+            Check("the right arrow turns the music up", () =>
+            {
+                sld.Value = 50;
+                press(PhysicalKey.ArrowRight);
+                if (!(sld.Value > 50)) throw new InvalidOperationException("the value is " + sld.Value + ", it was 50");
+                if (!ReferenceEquals(win.FocusManager?.GetFocusedElement(), sld)) throw new InvalidOperationException("the key moved focus away instead");
+            });
+            Check("the left arrow turns the music down", () =>
+            {
+                sld.Value = 50;
+                press(PhysicalKey.ArrowLeft);
+                if (!(sld.Value < 50)) throw new InvalidOperationException("the value is " + sld.Value + ", it was 50");
+                if (!ReferenceEquals(win.FocusManager?.GetFocusedElement(), sld)) throw new InvalidOperationException("the key moved focus away instead");
+            });
+            win.Close();
         }
 
         // The Play button as a progress bar, driven through Shell's own code
