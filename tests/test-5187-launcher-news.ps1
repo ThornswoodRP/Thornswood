@@ -258,8 +258,8 @@ function Run {
         $srv.Answer("$base/deployments/800/statuses", '200 OK', (State 'success'))
 
         $items = @($mRead.Invoke($null, @($api, $true)))
-        Yes ('a dev launcher shows the Releases at or before Dev''s newest success, newest first, DEV on what Main has not reached: ' + (Titles $items)) ((Titles $items) -eq 'Assigned loot on bodies*|Downloads page names the publisher|Study at the College')
-        Yes '  so a Release still being deployed, one not deployed, a draft, a gamemode-only build, a Ship''s files, the agent and a nothing to tell are left out' ($items.Count -eq 3)
+        Yes ('a dev launcher shows the Releases at or before Dev''s newest success, newest first, DEV on what Main has not reached: ' + (Titles $items)) ((Titles $items) -eq 'Assigned loot on bodies*|Downloads page names the publisher|Various bug fixes and improvements|Study at the College')
+        Yes '  so a Release still being deployed, one not deployed, a draft, a gamemode-only build, a Ship''s files and the agent are left out, and a nothing to tell is the quiet note (Patrick, 9 Nov)' ($items.Count -eq 4)
         Yes '  each note carries its lines of what changed' (@($items[0].details).Count -eq 1 -and $items[0].details[0] -eq 'A body keeps what it carried')
         $asked = @($srv.Asked())
         $statuses = @($asked | Where-Object { $_ -match '/statuses' })
@@ -273,7 +273,7 @@ function Run {
         $srv.Answer("$base/deployments?environment=Main", '200 OK', ('[' + (Dep 800 '{"release":"build-20261101.9"}') + ']'))
         $srv.Answer("$base/deployments/800/statuses", '200 OK', (State 'success'))
         $items = @($mRead.Invoke($null, @($api, $false)))
-        Yes ('a main launcher shows the Releases at or before Main''s, with no DEV marks: ' + (Titles $items)) ((Titles $items) -eq 'Downloads page names the publisher|Study at the College')
+        Yes ('a main launcher shows the Releases at or before Main''s, with no DEV marks: ' + (Titles $items)) ((Titles $items) -eq 'Downloads page names the publisher|Various bug fixes and improvements|Study at the College')
         Yes '  and asks Main''s Deployments only once' (@($srv.Asked() | Where-Object { $_ -match 'environment=' }).Count -eq 1)
 
         $srv.Clear()
@@ -282,7 +282,7 @@ function Run {
         $srv.Answer("$base/deployments/908/statuses", '200 OK', (State 'success'))
         $srv.Answer("$base/deployments?environment=Main", '200 OK', ('[' + (Dep 801 '{}') + ']'))
         $items = @($mRead.Invoke($null, @($api, $true)))
-        Yes ('before main has run a build Release, every dev note is marked DEV: ' + (Titles $items)) ((Titles $items) -eq 'Assigned loot on bodies*|Downloads page names the publisher*|Study at the College*')
+        Yes ('before main has run a build Release, every dev note is marked DEV: ' + (Titles $items)) ((Titles $items) -eq 'Assigned loot on bodies*|Downloads page names the publisher*|Various bug fixes and improvements*|Study at the College*')
         $items = @($mRead.Invoke($null, @($api, $false)))
         Yes '  and a main launcher shows nothing' ($items.Count -eq 0)
         Yes '  without asking for the Releases' (@($srv.Asked() | Where-Object { $_ -match '/releases' }).Count -eq 1)
