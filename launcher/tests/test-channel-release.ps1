@@ -64,7 +64,7 @@ $velo = [IO.File]::ReadAllText((Join-Path $App 'VeloUpdate.cs')).Replace("`r`n",
 $checkAt = $velo.IndexOf('public static LauncherUpdate CheckLauncher(Config cfg)')
 $check = if ($checkAt -ge 0) { $velo.Substring($checkAt, $velo.IndexOf('public static void FetchLauncher(', $checkAt) - $checkAt) } else { '' }
 Yes 'CheckLauncher allows a lower number than the running one, before it asks' (
-    $check -match '(?s)opts\.AllowVersionDowngrade = true;.*new CheckedUpdates\(new ChannelSource\(channel\), opts\);.*CheckForUpdatesAsync\(\)')
+    $check -match '(?s)opts\.AllowVersionDowngrade = true;.*new CheckedUpdates\(new ChannelSource\(channel, 11\), opts\);.*CheckForUpdatesAsync\(\)')
 Yes 'ChannelSource cuts the feed Velopack reads with ChannelRelease, by when each Release was published' (
     $velo -match '(?s)sealed class ChannelSource : GithubSource.*public override async Task<VelopackAssetFeed> GetReleaseFeed\(.*await base\.GetReleaseFeed\(.*Assets = ChannelRelease\(all\.Assets, a => a is GitBaseAsset g && g\.Release != null \? g\.Release\.PublishedAt : null\)')
 $veloCs = [IO.File]::ReadAllText((Join-Path $App 'Velo.cs')).Replace("`r`n", "`n")
