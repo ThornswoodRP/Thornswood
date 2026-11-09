@@ -241,7 +241,12 @@ try {
     Yes 'a removal stops before changing anything when GitHub gives no removal token' ($text.Contains("catch { Die ('GitHub gave no removal token for ") -and $text -notmatch 'GitHub is left to forget')
     $lib = [regex]::Match($text, '(?ms)^function Remove-RunnerPython\(.*?^\}\r?$').Value
     Yes 'Remove-RunnerPython touches only a Python whose PythonCore entry is in the runner''s tool cache' ($lib.Contains("if (-not `$there.StartsWith(`$cache, [StringComparison]::OrdinalIgnoreCase)) { return (") -and $lib.Contains("'HKLM:\SOFTWARE\Python\PythonCore\' + `$mm + '\InstallPath'"))
-    Yes '  runs the bundle''s own quiet uninstall, and checks PythonCore after' ($lib.Contains('QuietUninstallString') -and $lib.Contains('Start-Process -FilePath $q.Groups[1].Value') -and $lib.Contains("if (Test-Path -LiteralPath `$reg) { throw"))
+    Yes '  runs the bundle''s own quiet uninstall from its cached copy, and checks PythonCore after' ($lib.Contains('QuietUninstallString') -and $lib.Contains('Start-Process -FilePath $exe') -and $lib.Contains('$q.Groups[1].Value -ne $exe') -and $lib.Contains("if (Test-Path -LiteralPath `$reg) { throw"))
+    # 8 Nov 2026, measured by -Status: the parts in HKLM, the bundle in the
+    # hive of the user who ran the installer, its copy in that user's cache.
+    Yes '  finds the bundle in every loaded user hive as well as HKLM' ($lib.Contains("'Registry::HKEY_USERS'") -and $lib.Contains("'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'"))
+    $iRun = $lib.IndexOf('Start-Process -FilePath $exe'); $iParts = $lib.IndexOf('Windows still lists'); $iKey = $lib.IndexOf('Remove-Item -LiteralPath $b.PSPath')
+    Yes '  takes the registration and cached copy off only after the parts are gone' ($iRun -gt 0 -and $iParts -gt $iRun -and $iKey -gt $iParts -and $lib.Contains('Remove-Item -LiteralPath $own -Recurse') -and $lib.Contains("is still there') }"))
     Yes 'the gate''s Remove-HermesRunner verb is held to -FromGate -Hermes -Remove and takes nothing else' ((@($verbs.verbs.'Remove-HermesRunner'.fixed) -join ' ') -eq '-FromGate -Hermes -Remove -NoPause' -and $verbs.verbs.'Remove-HermesRunner'.script -eq 'scripts/deploy/Install-Runner.ps1' -and @($verbs.verbs.'Remove-HermesRunner'.params.PSObject.Properties).Count -eq 0)
     Yes '  and Install-Runner takes no -Remove' ($null -eq $verbs.verbs.'Install-Runner'.params.Remove)
     # As the gate starts it: no -VpsHost or -VpsUser, which it refuses.
