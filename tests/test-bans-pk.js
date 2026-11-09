@@ -785,7 +785,7 @@ async function adminRoleOnly() {
           !/data-act="unpk"/.test(ctl));
       const ctlAdmin = P.linkedControls(u, rec, Date.now(), true);
       yes('to an admin it offers Undo PK, with a reason box',
-          /<input class="unpkwhy" data-id="333333333:2003" placeholder="Why the PK is undone">/.test(ctlAdmin) &&
+          /<input class="unpkwhy" data-id="333333333:2003" placeholder="Why the PK is undone" aria-label="Why the PK of [^"]+ is undone">/.test(ctlAdmin) &&
           /data-act="unpk" data-id="333333333" data-pid="2003" data-name="Hrefna the Bold">Undo PK/.test(ctlAdmin) &&
           !/data-act="unpk"[^>]*data-pid="2002"/.test(ctlAdmin));
       const undoneRec = JSON.parse(JSON.stringify(rec));
