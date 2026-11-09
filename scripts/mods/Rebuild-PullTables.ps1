@@ -166,6 +166,6 @@ $p = Invoke-Git @('push', '--quiet', 'origin', "HEAD:refs/heads/$branch")
 if ($p.Code -ne 0) { Stop-Here ("the tables are committed here as $new, and the push to $branch was refused: " + ($p.Out -join ' ') + ' Nothing on GitHub changed.') }
 
 Say ''
-Say "  $($changed.Count) file(s) committed as $new and pushed to $branch:" 'Green'
+Say "  $($changed.Count) file(s) committed as $new and pushed to ${branch}:" 'Green'
 foreach ($l in $changed) { Say ('    ' + $l) }
 exit 0
