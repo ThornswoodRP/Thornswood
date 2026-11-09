@@ -322,6 +322,29 @@ YesR 'when Nexus keeps something other than what was sent the run stops with the
 
 # ---- 5: a collection revision -----------------------------------------------------
 $js = Join-Path $rel 'nexus-collection.js'
+# What nexus-collection.js says, as the lines it wrote. Node writes UTF-8, and
+# & decodes a program's output in [Console]::OutputEncoding, which is code page
+# 437 on an English Windows console, so a mod name with a letter outside ASCII
+# came back as other letters and its check failed there (#4169). This reads
+# node's output as UTF-8 itself, whatever the console is set to, and leaves the
+# console alone. The exit code is in $LASTEXITCODE, as after &.
+function NodeSaid {
+    $psi = New-Object Diagnostics.ProcessStartInfo
+    $psi.FileName = $node.Source
+    $psi.Arguments = (@($args | ForEach-Object { Q ([string]$_) }) -join ' ')
+    $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
+    $psi.StandardOutputEncoding = New-Object Text.UTF8Encoding($false)
+    $psi.StandardErrorEncoding = New-Object Text.UTF8Encoding($false)
+    $p = [Diagnostics.Process]::Start($psi)
+    $e = $p.StandardError.ReadToEndAsync()
+    $o = $p.StandardOutput.ReadToEnd()
+    $p.WaitForExit()
+    if ($e.Result) { Write-Host $e.Result.TrimEnd() }
+    $global:LASTEXITCODE = $p.ExitCode
+    $o = $o.TrimEnd("`r", "`n")
+    if (-not $o) { return @() }
+    return @($o -split "`r?`n")
+}
 # A name with a letter outside ASCII, so the round trip through node is held to keep it.
 $E = [string][char]0x00C9
 $fixture = [ordered]@{
@@ -355,7 +378,7 @@ Put (Join-Path $T 'fixture\patches\Thornswood Content\Thornswood-Content.esp.dif
 $sw = Join-Path $T 'swap-runtime.json'
 Put $sw ('[{"modId":"192762","fileId":"812346","version":"1.0.2","md5":"' + $md5 + '","fileSize":300000,"logicalFilename":"Thornswood Client Runtime"}]')
 $o1 = Join-Path $T 'map-collection.json'; $o2 = Join-Path $T 'map-payload.json'
-$said = & $node.Source $js $cj $sw $o1 $o2
+$said = NodeSaid $js $cj $sw $o1 $o2
 Yes 'nexus-collection.js changes only the runtime entry''s version, file id, md5 and size' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ('Thornswood Client Runtime' + "`t" + 'version' + "`t" + '1.0.0' + "`t" + '1.0.2|Thornswood Client Runtime' + "`t" + 'source.fileId' + "`t" + '809366' + "`t" + '812346|Thornswood Client Runtime' + "`t" + 'source.md5' + "`t" + 'c515679068f6563750b1ca1f9260031f' + "`t" + $md5 + '|Thornswood Client Runtime' + "`t" + 'source.fileSize' + "`t" + '148896610' + "`t" + '300000'))
 $wantPayload = '{"adult_content":false,"collection_manifest":{"info":{"author":"EvilPatrick06","author_url":null,"name":"Thornswood","description":null,"summary":null,"domain_name":"skyrimspecialedition","game_versions":["1.6.1170.0"]},"mods":[' +
     '{"name":"Thornswood Content","version":"1.2","optional":false,"domain_name":"skyrimspecialedition","source":{"type":"nexus","mod_id":"192001","file_id":"811029","md5":"ee881bf2a869d0810113a82ca1405445","file_size":null,"update_policy":"exact","logical_filename":"Thornswood Content","file_expression":null,"url":null,"adult_content":null},"author":"EvilPatrick06"},' +
@@ -382,7 +405,7 @@ function TcSwap([string]$crcs, [string]$drop, [string]$expr = $tcExpr) {
 }
 $o1 = Join-Path $T 'tc-collection.json'; $o2 = Join-Path $T 'tc-payload.json'
 Put $sw (TcSwap '{"Thornswood-Content.esp":"0A1B2C3D"}' '["thornswood-content.esp"]')
-$said = & $node.Source $js $cj $sw $o1 $o2
+$said = NodeSaid $js $cj $sw $o1 $o2
 $want = @("patches.Thornswood-Content.esp`t023593E0`tdropped", "modRules[0].reference.fileMD5`tee881bf2a869d0810113a82ca1405445`t$md5",
     "modRules[0].reference.fileExpression`tThornswood Content 192001 1.2 2026-09-26T22-15Z EwgfAezil`t$tcExpr", "modRules[0].reference.versionMatch`t1.2.0`t1.3.0",
     "version`t1.2`t1.3", "source.fileId`t811029`t812399", "source.md5`tee881bf2a869d0810113a82ca1405445`t$md5", "source.fileSize`t660022`t1") | ForEach-Object { "Thornswood Content`t" + $_ }
@@ -390,7 +413,7 @@ Yes 'a dropped patch goes, and the rule that names Thornswood Content gets the n
 & $node.Source -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));const c=b.mods[0],r=b.modRules[0];if('patches' in c)process.exit(2);if(JSON.stringify(r.source)!==JSON.stringify(a.modRules[0].source))process.exit(3);c.patches=a.mods[0].patches;c.version='1.2';Object.assign(c.source,{fileId:811029,md5:'ee881bf2a869d0810113a82ca1405445',fileSize:660022});const k=Object.keys(c);k.splice(k.indexOf('patches'),1);k.splice(k.indexOf('source')+1,0,'patches');const o={};for(const x of k)o[x]=c[x];b.mods[0]=o;Object.assign(r.reference,{fileExpression:'Thornswood Content 192001 1.2 2026-09-26T22-15Z EwgfAezil',fileMD5:'ee881bf2a869d0810113a82ca1405445',versionMatch:'1.2.0'});process.exit(JSON.stringify(a)===JSON.stringify(b)?0:1)" $cj $o1
 Yes 'and nothing else in collection.json changes' ($LASTEXITCODE -eq 0)
 Put $sw (TcSwap '{"Thornswood-Content.esp":"023593e0"}' '')
-$said = & $node.Source $js $cj $sw $o1 $o2
+$said = NodeSaid $js $cj $sw $o1 $o2
 & $node.Source -e "const fs=require('fs');const b=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));process.exit(b.mods[0].patches['Thornswood-Content.esp']==='023593E0'&&b.modRules[0].reference.versionMatch==='1.3.0'?0:1)" $o1
 Yes 'a patch whose file the new archive holds unchanged stays, with no line for it' ($LASTEXITCODE -eq 0 -and -not (@($said) -match '^Thornswood Content	patches'))
 foreach ($case in @(
@@ -411,7 +434,7 @@ Put $sw ('[{"modId":"47618","fileId":"999","version":"9","md5":"' + $md5 + '","f
 Remove-Item -LiteralPath (Join-Path $T 'no.json') -ErrorAction SilentlyContinue
 $err = (& $node.Source $js $cjRange $sw (Join-Path $T 'no.json') (Join-Path $T 'no-payload.json') 2>&1) -join ' '
 Yes 'a rule that matches the moved entry by a version range is refused, and nothing is written' ($LASTEXITCODE -eq 1 -and $err -match 'by the version ">=1\.0\.0"' -and -not (Test-Path -LiteralPath (Join-Path $T 'no.json')))
-$said = & $node.Source $js $cj $sw $o1 $o2
+$said = NodeSaid $js $cj $sw $o1 $o2
 Yes 'and one that matches it by its own version moves to the new one' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -match ('modRules\[0\]\.source\.fileMD5\tfa1fe7613d21ab5826d4a3a3b258f14a\t' + $md5) -and (@($said) -join '|') -match 'modRules\[0\]\.source\.versionMatch\t1\.0\.0\t9\.0\.0')
 
 # Issue #2969: a mod the revision does not carry yet, added the way Vortex
@@ -424,7 +447,7 @@ function AddSpec([string]$fileId, [string]$plugin, [string]$after) {
 }
 Put $addJson ('[' + (AddSpec '8662' $hair 'Dragonborn.esm') + ',' + (AddSpec '809224' 'cheddars_mashups.esl' $hair) + ']')
 $o1 = Join-Path $T 'add-collection.json'; $o2 = Join-Path $T 'add-payload.json'
-$said = & $node.Source $js $cj $addJson $o1 $o2
+$said = NodeSaid $js $cj $addJson $o1 $o2
 Yes 'nexus-collection.js adds two mods and their plugins, and says each' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ('KS Hairdos Lite SE NoNPCs' + "`tadded`t`tfile 8662|" + $hair + "`tplugin`t`tafter Dragonborn.esm|KS Hairdos Lite SE NoNPCs`tadded`t`tfile 809224|cheddars_mashups.esl`tplugin`t`tafter " + $hair))
 & $node.Source -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));const e=b.mods[4];const want={name:'KS Hairdos Lite SE NoNPCs',version:'1.3',optional:false,domainName:'skyrimspecialedition',source:{type:'nexus',modId:1932,fileId:8662,md5:process.argv[3],fileSize:52221104,logicalFilename:'KS Hairdos Lite SE NoNPCs',updatePolicy:'exact',tag:'hairTag1234'},author:'Brataccas',details:{category:'Body, Face, and Hair',type:''},phase:0};if(JSON.stringify(e)!==JSON.stringify(want))process.exit(2);if(JSON.stringify(b.plugins)!==JSON.stringify([{name:process.argv[4],enabled:true},{name:'cheddars_mashups.esl',enabled:true}]))process.exit(3);if(JSON.stringify(b.pluginRules.plugins)!==JSON.stringify([{name:process.argv[4].toLowerCase(),after:['dragonborn.esm']},{name:'cheddars_mashups.esl',after:[process.argv[4].toLowerCase()]}]))process.exit(4);b.mods.splice(4,2);b.plugins=[];b.pluginRules.plugins=[];process.exit(JSON.stringify(a)===JSON.stringify(b)?0:1)" $cj $o1 $md5 $hair
 Yes 'the entry is written as Vortex writes a basic install, each plugin goes on the end switched on, and its rule is lower case; nothing else changes' ($LASTEXITCODE -eq 0)
@@ -447,7 +470,7 @@ $err = (& $node.Source $js $cj $addJson (Join-Path $T 'no.json') (Join-Path $T '
 Yes 'a plugin to load after one installed off the list, with no "unlisted", is refused, saying so' ($LASTEXITCODE -eq 1 -and $err -match 'after RaceMenuMorphsCBBE\.esp, which the plugin list does not name and the revision does not install off its list')
 Put $addJson ('[{"unlisted":["CBBE.esp","RaceMenuMorphsCBBE.esp"]},' + (AddSpec '8662' $hair 'RaceMenuMorphsCBBE.esp') + ']')
 $o1 = Join-Path $T 'unlisted-collection.json'; $o2 = Join-Path $T 'unlisted-payload.json'
-$said = & $node.Source $js $cj $addJson $o1 $o2
+$said = NodeSaid $js $cj $addJson $o1 $o2
 Yes 'with "unlisted" naming it, the plugin is added and says it' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ('KS Hairdos Lite SE NoNPCs' + "`tadded`t`tfile 8662|" + $hair + "`tplugin`t`tafter RaceMenuMorphsCBBE.esp"))
 & $node.Source -e "const fs=require('fs');const b=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));if(JSON.stringify(b.plugins)!==JSON.stringify([{name:process.argv[2],enabled:true}]))process.exit(2);if(JSON.stringify(b.pluginRules.plugins)!==JSON.stringify([{name:process.argv[2].toLowerCase(),after:['racemenumorphscbbe.esp']}]))process.exit(3);process.exit(0)" $o1 $hair
 Yes 'and only the new plugin goes on the list: the rule names the one off it, which stays off' ($LASTEXITCODE -eq 0)
@@ -467,7 +490,7 @@ foreach ($case in @(
 $ptJson = Join-Path $T 'patch.json'
 Put $ptJson '[{"patch":true,"fileId":"191234","path":"FishingInSkyrim.esp","crc":"0A1B2C3D"},{"patch":true,"fileId":"811029","path":"Second.esp","crc":"DEADBEEF"}]'
 $o1 = Join-Path $T 'patch-collection.json'; $o2 = Join-Path $T 'patch-payload.json'
-$said = & $node.Source $js $cj $ptJson $o1 $o2
+$said = NodeSaid $js $cj $ptJson $o1 $o2
 Yes 'nexus-collection.js adds a patch to an entry with none and to one that has one, and says each' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ('A Fishing Mod, ' + $E + "dition`tpatch`t`tFishingInSkyrim.esp CRC-32 0A1B2C3D|Thornswood Content`tpatch`t`tSecond.esp CRC-32 DEADBEEF"))
 & $node.Source -e "const fs=require('fs');const m=require(process.argv[4]);const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));const f=b.mods[2],c=b.mods[0];if(Object.keys(f).join()!=='name,version,optional,domainName,source,patches,author,details,phase')process.exit(2);if(Object.keys(f.patches).join()!=='FishingInSkyrim.esp'||f.patches['FishingInSkyrim.esp']!=='0A1B2C3D')process.exit(3);if(Object.keys(c.patches).join()!=='Thornswood-Content.esp,Second.esp'||c.patches['Second.esp']!=='DEADBEEF')process.exit(4);const pay=fs.readFileSync(process.argv[3],'utf8');delete f.patches;delete c.patches['Second.esp'];process.exit(JSON.stringify(a)===JSON.stringify(b)&&pay===JSON.stringify(m.payloadOf(a))?0:1)" $cj $o1 $o2 $js
 Yes 'patches goes after the source as Vortex writes it, the payload does not change, and nothing else does' ($LASTEXITCODE -eq 0)
@@ -490,7 +513,7 @@ $cjRule = Join-Path $T 'rule-collection.json'
 $ruJson = Join-Path $T 'rule.json'
 Put $ruJson '[{"rule":true,"name":"cheddars_mashups.esl","after":["RaceCompatibility.esm"]}]'
 $o1 = Join-Path $T 'rule-out.json'; $o2 = Join-Path $T 'rule-payload.json'
-$said = & $node.Source $js $cjRule $ruJson $o1 $o2
+$said = NodeSaid $js $cjRule $ruJson $o1 $o2
 Yes 'nexus-collection.js replaces a plugin''s rule and says what it was and is' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ("cheddars_mashups.esl`trule`tafter immersive weapons.esp`tafter racecompatibility.esm"))
 & $node.Source -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));if(b.plugins.map(p=>p.name).join('|')!=='Water for ENB.esm|RaceCompatibility.esm|cheddars_mashups.esl|Immersive Weapons.esp')process.exit(2);if(JSON.stringify(b.pluginRules.plugins)!==JSON.stringify([{name:'immersive weapons.esp',after:['racecompatibility.esm']},{name:'cheddars_mashups.esl',after:['racecompatibility.esm']}]))process.exit(3);a.plugins=b.plugins;a.pluginRules=b.pluginRules;process.exit(JSON.stringify(a)===JSON.stringify(b)?0:1)" $cjRule $o1
 Yes 'the plugin moves to straight after the plugin its rule names, the rule is lower case, and nothing else changes' ($LASTEXITCODE -eq 0)
@@ -510,7 +533,7 @@ foreach ($case in @(
 # list comes from the plugins of the list it names.
 Put $ruJson '[{"unlisted":["RaceMenuMorphsCBBE.esp"]},{"rule":true,"name":"cheddars_mashups.esl","after":["RaceCompatibility.esm","RaceMenuMorphsCBBE.esp"]}]'
 $o1 = Join-Path $T 'rule-unlisted-out.json'
-$said = & $node.Source $js $cjRule $ruJson $o1 (Join-Path $T 'rule-unlisted-payload.json')
+$said = NodeSaid $js $cjRule $ruJson $o1 (Join-Path $T 'rule-unlisted-payload.json')
 & $node.Source -e "const fs=require('fs');const b=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));if(b.plugins.map(p=>p.name).join('|')!=='Water for ENB.esm|RaceCompatibility.esm|cheddars_mashups.esl|Immersive Weapons.esp')process.exit(2);process.exit(JSON.stringify(b.pluginRules.plugins[1])===JSON.stringify({name:'cheddars_mashups.esl',after:['racecompatibility.esm','racemenumorphscbbe.esp']})?0:3)" $o1
 Yes 'a rule may name a plugin "unlisted" gives, and the plugin is placed by the ones of the list' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ("cheddars_mashups.esl`trule`tafter immersive weapons.esp`tafter racecompatibility.esm, racemenumorphscbbe.esp"))
 Put $ruJson '[{"unlisted":["Immersive Weapons.esp"]},{"rule":true,"name":"cheddars_mashups.esl","after":["RaceCompatibility.esm"]}]'
@@ -522,12 +545,12 @@ Yes 'an "unlisted" plugin the list has is refused, saying so, and nothing is wri
 $rmJson = Join-Path $T 'remove.json'
 Put $rmJson '[{"remove":true,"modId":"1111"}]'
 $o1 = Join-Path $T 'remove-collection.json'; $o2 = Join-Path $T 'remove-payload.json'
-$said = & $node.Source $js $cj $rmJson $o1 $o2
+$said = NodeSaid $js $cj $rmJson $o1 $o2
 & $node.Source -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));if(b.mods.some(m=>m.source.modId===1111))process.exit(2);a.mods=a.mods.filter(m=>m.source.modId!==1111);process.exit(JSON.stringify(a)===JSON.stringify(b)?0:1)" $cj $o1
 Yes 'nexus-collection.js takes the hashed mod out, says so, and changes nothing else' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ("A Hashed Mod`tremoved`t`tfile 2222"))
 $cjp = Join-Path $T 'remove-plugins.json'
 & $node.Source -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));c.plugins=[{name:'A.esp',enabled:true},{name:'b.esp',enabled:true}];fs.writeFileSync(process.argv[2],JSON.stringify(c,undefined,2))" $cj $cjp
-$said = & $node.Source $js $cjp $rmJson $o1 $o2
+$said = NodeSaid $js $cjp $rmJson $o1 $o2
 & $node.Source -e "const b=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));process.exit(JSON.stringify(b.plugins)===JSON.stringify([{name:'b.esp',enabled:true}])?0:1)" $o1
 Yes 'its plugin comes off the plugin list whatever its case, and the rest stay' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -eq ("A Hashed Mod`tremoved`t`tfile 2222|A.esp`tplugin`t`tremoved"))
 & $node.Source -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));c.plugins=[{name:'a.esp',enabled:true},{name:'b.esp',enabled:true}];c.pluginRules.plugins=[{name:'b.esp',after:['a.esp']}];fs.writeFileSync(process.argv[2],JSON.stringify(c,undefined,2))" $cj $cjp
