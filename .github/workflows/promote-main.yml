@@ -159,7 +159,9 @@ jobs:
     name: Put it on main, once Patrick approves
     needs: check
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The live server taking it is at most 15 minutes of this (The live
+    # server ran it, below).
+    timeout-minutes: 30
     # Patrick is the Main environment's only required reviewer: this job
     # waits for him and runs only once he approves.
     environment: Main
@@ -171,7 +173,6 @@ jobs:
       packages: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        if: ${{ needs.check.outputs.main_package != '' }}
         with:
           persist-credentials: false
 
@@ -217,6 +218,7 @@ jobs:
           Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Main's launcher package from **$($env:MAIN_FROM)** is out on **$($env:MAIN_TAG)**."
 
       - name: Ask the live server for it (a Deployment to Main)
+        id: deploy
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -241,4 +243,18 @@ jobs:
           $id = gh api --method POST "repos/$($env:GITHUB_REPOSITORY)/deployments" --input $file --jq .id
           if ($LASTEXITCODE -ne 0 -or -not $id) { Write-Host '::error::GitHub made no Deployment'; exit 1 }
           Write-Host "Deployment $id asks main for $($env:TAG); the box deploy agent applies it and says how it went on it"
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("id=" + $id)
           Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Deployment $id asks **Main** for **$($env:TAG)**: https://github.com/$($env:GITHUB_REPOSITORY)/deployments"
+
+      # Main is out only once the live server runs it (9 Nov): the box deploy
+      # agent's status on the Deployment, success, within 15 minutes. Until
+      # then this run was green while the agent was not looking after Main at
+      # all (scripts/release/Wait-Deployment.ps1).
+      - name: The live server ran it (the Deployment's status)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ID: ${{ steps.deploy.outputs.id }}
+        run: |
+          & ./scripts/release/Wait-Deployment.ps1 -Repo $env:GITHUB_REPOSITORY -Id ([long]$env:ID) -Minutes 15
+          exit $LASTEXITCODE

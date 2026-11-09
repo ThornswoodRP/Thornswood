@@ -24,6 +24,11 @@ public sealed class Server(EnvConfig env, HttpClient http)
 
     string Root => env.Root;
 
+    /// <summary>The server this applies to, in its success line: "dev" or
+    /// "main". Every Outcome said "dev runs ..." until 9 Nov, the live
+    /// server's first Main Deployment included.</summary>
+    string Which => env.GitHubEnvironment.ToLowerInvariant();
+
     JsonElement Settings()
     {
         var text = File.ReadAllText(Path.Combine(Root, "server-settings.json")).TrimStart('﻿');
@@ -208,7 +213,7 @@ public sealed class Server(EnvConfig env, HttpClient http)
         {
             TryDelete(stage);
             PruneOld(log);
-            return new Outcome("success", $"dev runs gamemode blob {newBlob[..12]}" + (newTree != "" ? $" with tables tree {newTree[..12]}" : "") + ", reloaded with nobody dropped", newBlob, prevName);
+            return new Outcome("success", $"{Which} runs gamemode blob {newBlob[..12]}" + (newTree != "" ? $" with tables tree {newTree[..12]}" : "") + ", reloaded with nobody dropped", newBlob, prevName);
         }
 
         // The way back: the old files from their copies in .prev, through the
@@ -430,7 +435,7 @@ public sealed class Server(EnvConfig env, HttpClient http)
             {
                 TryDelete(stage);
                 PruneOld(log);
-                return new Outcome("success", $"dev runs server build {rec.Short} and gamemode blob {newBlob[..12]}" + (newTree != "" ? $" with tables tree {newTree[..12]}" : "") + ", restarted", newBlob, prevName);
+                return new Outcome("success", $"{Which} runs server build {rec.Short} and gamemode blob {newBlob[..12]}" + (newTree != "" ? $" with tables tree {newTree[..12]}" : "") + ", restarted", newBlob, prevName);
             }
 
             // The way back: stop what was started, the new files out, the old ones in, and the old server started.

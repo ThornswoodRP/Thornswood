@@ -146,6 +146,10 @@ try {
     $script:runner2 = ''
     $script:nexus = '{"data":{"collection":{"name":"Thornswood","latestPublishedRevision":{"revisionNumber":1}}}}'
     $script:ghRunners = 200
+    # The newest Deployment of each environment: its age in minutes and the
+    # agent's state on it ('' for none yet).
+    $script:deploys = @{ 'Dev' = @(30, 'success'); 'Main' = @(30, 'success'); 'Site' = @(30, 'success'); 'Discord bot' = @(30, 'inactive') }
+    $script:deployAnswer = ''
   }
 
   function Get-Now { return $script:clock }
@@ -185,6 +189,14 @@ try {
     if ($script:runner2) { $list += @{ Name = 'thornswood-vps-2'; Status = $script:runner2; Busy = $true }; $list += @{ Name = 'thornswood-vpsx'; Status = 'offline'; Busy = $false } }
     return @{ Runners = $list; Error = '' }
   }
+  # The real one, kept to drive against the fake Get-Http below.
+  $realGetDeployments = ${function:Get-Deployments}
+  function Get-Deployments([string]$repo, [string]$env) {
+    if ($script:deployAnswer) { return @{ List = @(); Error = $script:deployAnswer } }
+    $d = $script:deploys[$env]
+    if (-not $d) { return @{ List = @(); Error = '' } }
+    return @{ List = @(@{ Id = '7648693742'; Release = 'build-1.3.4'; Created = ([DateTimeOffset]$script:clock).AddMinutes(-[int]$d[0]); State = [string]$d[1] }); Error = '' }
+  }
   function Send-Webhook([string]$url, [string]$text) {
     if ($script:hookFails) { return 'HTTP 500' }
     $script:posted.Add($text)
@@ -210,10 +222,34 @@ try {
   # ---- everything fine ----------------------------------------------------
   Reset-World
   $r = Pass-Once
-  Yes 'a healthy world: every check ran, ten of them' ($r.Count -eq 10)
+  Yes 'a healthy world: every check ran, eleven of them' ($r.Count -eq 11)
   Yes 'a healthy world: nothing is wrong and nothing could not be checked' (@($r.Values | Where-Object { $_.Bad -or $_.Unknown }).Count -eq 0)
   Yes 'a healthy world: nothing is posted' ($script:posted.Count -eq 0)
   Yes 'Nexus was asked for the collection from Config.cs' ($script:nexusQuery -match $S.NexusSlug)
+
+  # ---- a release the box never took (9 Nov): Main's Deployment, no status -----
+  Reset-World
+  Tick 15
+  $script:deploys['Main'] = @(20, '')
+  Clear-Posted
+  $null = Pass-Once
+  Yes 'a Main Deployment with no status after 20 minutes: one message' ((Posted '*has not been taken by the box*') -eq 1)
+  Yes '  naming the environment, the Deployment and the release' ((Posted '*Main: deployment 7648693742 of build-1.3.4, 20 min with no status*') -eq 1)
+  Yes '  and what to run' ((Posted '*Install-DeployAgent*') -eq 1)
+  $script:deploys['Main'] = @(5, '')
+  Reset-World; $script:deploys['Main'] = @(5, '')
+  Tick 15; Clear-Posted; $null = Pass-Once
+  Yes 'a Deployment five minutes old with no status yet is not wrong' ((Posted '*has not been taken by the box*') -eq 0)
+  Reset-World
+  Tick 15; $null = Pass-Once
+  Yes 'taken: one message saying so' ((Posted '*has been taken by the box*') -eq 1)
+
+  # The real reader, against the fake Get-Http: signed in, never anonymous.
+  $env:WATCH_DEPLOY_TOKEN = ''
+  $g = & $realGetDeployments 'ThornswoodRP/Thornswood' 'Main'
+  Yes 'Get-Deployments: no token is said, never asked without one' ($g.Error -match 'WATCH_DEPLOY_TOKEN')
+  $wf = Get-Content -LiteralPath (Join-Path (Split-Path -Parent $PSScriptRoot) '.github/workflows/watch-outside.yml') -Raw
+  Yes '  and the workflow gives it the run''s token with deployments: read' ($wf -match 'deployments: read' -and $wf -match 'WATCH_DEPLOY_TOKEN: \$\{\{ github\.token \}\}')
 
   # ---- the hourly and daily ones are not asked every run -------------------
   $script:asked.Clear()

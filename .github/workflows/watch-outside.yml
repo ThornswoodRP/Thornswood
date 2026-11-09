@@ -49,6 +49,9 @@ on:
 
 permissions:
   contents: read
+  # The deploys check: whether the box deploy agent has marked the newest
+  # Deployment of each environment it applies (Watch-Outside.ps1, deploys).
+  deployments: read
 
 # One at a time, so two runs never judge the same state at once.
 concurrency:
@@ -101,6 +104,7 @@ jobs:
         env:
           WATCH_WEBHOOK: ${{ secrets.STAFF_WEBHOOK }}
           WATCH_RUNNER_TOKEN: ${{ steps.app.outputs.token }}
+          WATCH_DEPLOY_TOKEN: ${{ github.token }}
         run: ./scripts/vps/Watch-Outside.ps1 -Run -Folder state -Minutes 5
 
       - name: Keep what it remembers
