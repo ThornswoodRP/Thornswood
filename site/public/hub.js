@@ -383,11 +383,12 @@ function linkedNotes(u, rec, now) {
   return out + '</div>';
 }
 
-/* How long a ban lasts, staff's choice, for good included. */
-function lengthPick(key) {
+/* How long a ban lasts, staff's choice, for good included. A select's options
+   are not its name, so what it sets is said as its label (#4361). */
+function lengthPick(key, label) {
   var lengths = [['30', '30 minutes'], ['120', '2 hours'], ['1440', '1 day'], ['4320', '3 days'],
                  ['10080', '1 week'], ['43200', '30 days'], ['0', 'for good']];
-  return '<select class="banlen" data-id="' + key + '">' +
+  return '<select class="banlen" data-id="' + key + '" aria-label="' + label + '">' +
     lengths.map(function (l) { return '<option value="' + l[0] + '">' + l[1] + '</option>'; }).join('') +
     '</select>';
 }
@@ -400,11 +401,13 @@ function linkedControls(u, rec, now, admin) {
   var raw = String(u && u.id || '');
   var id = esc(raw);
   var b = (rec.bans || {})[raw];
+  /* A placeholder is not a name a screen reader says, and it goes as soon as
+     something is typed, so each field carries its own label too (#4361). */
   var out = '<div class="bar notesbar">' +
-    '<input class="notetext" data-id="' + id + '" placeholder="A note for staff">' +
+    '<input class="notetext" data-id="' + id + '" placeholder="A note for staff" aria-label="A note for staff on this account">' +
     '<button class="btn small" data-act="note" data-id="' + id + '">Add note</button>' +
-    lengthPick(id) +
-    '<input class="banwhy" data-id="' + id + '" placeholder="Why the account is banned">' +
+    lengthPick(id, 'How long the account ban lasts') +
+    '<input class="banwhy" data-id="' + id + '" placeholder="Why the account is banned" aria-label="Why the account is banned">' +
     '<button class="btn small" data-act="ban" data-id="' + id + '">Ban account</button>' +
     (b && b.active ? '<button class="btn small" data-act="unban" data-id="' + id + '">Lift account ban</button>' : '') +
     '</div>';
@@ -416,15 +419,15 @@ function linkedControls(u, rec, now, admin) {
     if (pk && !pk.undone) {
       out += '<div class="bar notesbar charbar"><span class="said">' + esc(name) + ' is dead for good.</span>' +
         (admin
-          ? '<input class="unpkwhy" data-id="' + key + '" placeholder="Why the PK is undone">' +
+          ? '<input class="unpkwhy" data-id="' + key + '" placeholder="Why the PK is undone" aria-label="Why the PK of ' + esc(name) + ' is undone">' +
             '<button class="btn small" data-act="unpk" data-id="' + id + '" data-pid="' + esc(pid) + '" data-name="' + esc(name) + '">Undo PK</button>'
           : ' <span class="said">Only an admin can undo a PK.</span>') +
         '</div>';
       return;
     }
     out += '<div class="bar notesbar charbar"><span class="said">' + esc(name) + '</span>' +
-      lengthPick(key) +
-      '<input class="banwhy" data-id="' + key + '" placeholder="Why, for a ban or a PK">' +
+      lengthPick(key, 'How long the ban on ' + esc(name) + ' lasts') +
+      '<input class="banwhy" data-id="' + key + '" placeholder="Why, for a ban or a PK" aria-label="Why, for a ban or a PK of ' + esc(name) + '">' +
       '<button class="btn small" data-act="ban" data-id="' + id + '" data-pid="' + esc(pid) + '">Ban character</button>' +
       (cb && cb.active ? '<button class="btn small" data-act="unban" data-id="' + id + '" data-pid="' + esc(pid) + '">Lift character ban</button>' : '') +
       '<button class="btn small" data-act="pk" data-id="' + id + '" data-pid="' + esc(pid) + '" data-name="' + esc(name) + '">PK</button>' +
@@ -1350,7 +1353,7 @@ function drawSessions() {
   */
   var out = head() +
     '<div class="bar bar-mb-16">' +
-      '<input type="search" id="sfind" value="' + esc(SFIND.q) + '" ' +
+      '<input type="search" id="sfind" value="' + esc(SFIND.q) + '" aria-label="Find sessions" ' +
         'placeholder="A name, an id, a character, a build, anything in a fault">' +
       '<select id="sshow" aria-label="Show">' +
         [['all','Everything'],['any','Anything that went wrong'],['bad','Crashed only'],
@@ -1449,7 +1452,7 @@ function drawSessions() {
           /* Only worth a search box once there is enough to search. */
           (n > 3
             ? '<div class="bar">' +
-                '<input type="search" class="findmine" data-w="' + esc(p.who) + '" ' +
+                '<input type="search" class="findmine" data-w="' + esc(p.who) + '" aria-label="Search this person\'s sessions" ' +
                   'value="' + esc(mq) + '" placeholder="Search this person\'s ' + n + ' sessions">' +
                 (mq ? '<button class="btn small clearmine" data-w="' + esc(p.who) + '">Clear</button>' : '') +
               '</div>'
@@ -1706,7 +1709,7 @@ function drawEconomy() {
           return '<option value="' + o[0] + '"' + (EFIND.span === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
         }).join('') +
       '</select>' +
-      '<input type="search" id="efind" value="' + esc(EFIND.q) + '" placeholder="One good, or a hold for hauls: iron ore, wheat, Riften">' +
+      '<input type="search" id="efind" value="' + esc(EFIND.q) + '" aria-label="Find a good, or a hold for hauls" placeholder="One good, or a hold for hauls: iron ore, wheat, Riften">' +
     '</div>';
 
   if (!ECON || ECON.loading) {
@@ -1906,7 +1909,7 @@ function drawEdit() {
   el('page').innerHTML = head(
       '<button class="btn" id="cancel">Cancel</button>' +
       '<button class="btn key" id="save">Save</button>') +
-    '<textarea class="md" id="ta"></textarea>' +
+    '<textarea class="md" id="ta" aria-label="The page, in Markdown"></textarea>' +
     '<p class="said mt-12">Markdown. Three backticks make a ' +
     'command block with a copy button. A heading that starts with the word ' +
     'Test gets the pass, fail and skip buttons under it.</p>';
@@ -1952,15 +1955,20 @@ function dressTests() {
     if (!/^test\b/i.test(h.textContent.trim())) return;
     var id = slug(h.textContent);
     var r = S.results[id] || {};
+    /* Which of pass, fail and skip is chosen is said as aria-pressed, not
+       only shown in colour, and the two fields carry the test's name, since a
+       screen reader takes neither a placeholder nor the heading above as
+       one (#4361). */
+    var title = esc(h.textContent.trim());
     var bar = document.createElement('div');
     bar.className = 'res';
     bar.innerHTML =
       ['pass','fail','skip'].map(function (v) {
         return '<button class="mark' + (r.status === v ? ' on' : '') +
-               '" data-v="' + v + '">' + v.toUpperCase() + '</button>';
+               '" data-v="' + v + '" aria-pressed="' + (r.status === v) + '">' + v.toUpperCase() + '</button>';
       }).join('') +
-      '<input class="note" placeholder="what happened" value="' + esc(r.notes || '') + '">' +
-      '<input class="who" placeholder="you" value="' + esc(r.by || remember('who')) + '">' +
+      '<input class="note" placeholder="what happened" aria-label="What happened, ' + title + '" value="' + esc(r.notes || '') + '">' +
+      '<input class="who" placeholder="you" aria-label="Who tested it, ' + title + '" value="' + esc(r.by || remember('who')) + '">' +
       '<span class="when">' + (r.at ? new Date(r.at).toLocaleDateString() : '') + '</span>';
     h.parentNode.insertBefore(bar, h.nextSibling);
 
@@ -1995,6 +2003,7 @@ function saveResult(id, rec, bar) {
     if (bar) {
       each(bar, '.mark', function (b) {
         b.className = 'mark' + (rec.status === b.dataset.v ? ' on' : '');
+        b.setAttribute('aria-pressed', String(rec.status === b.dataset.v));
       });
       bar.querySelector('.when').textContent = new Date(rec.at).toLocaleDateString();
     }
