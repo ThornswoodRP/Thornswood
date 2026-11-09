@@ -59,7 +59,8 @@ yes('only a real true opens it', /cfg\.open = cfg\.open === true;/.test(src));
 yes('and the play list is built from it once the config is read',
     src.indexOf('cfg.access.play = playRoles(cfg.access.play, cfg.open);') >
     src.indexOf("cfg.access  = Object.assign({ admin:[], play:[], banned:[] }, cfg.access || {});"));
-yes('/api/public tells the bot and the pages', /\n      open: cfg\.open === true,\n      invite: cfg\.discord\.invite/.test(src));
+yes('/api/public tells the bot and the pages', /\n    open: cfg\.open === true,\n    invite: cfg\.discord\.invite/.test(src) &&
+    /const dl = downloadsFacts\(\);[\s\S]{0,600}\n      open: dl\.open,\n      invite: dl\.invite,/.test(src));
 
 const PLAY = ['Owner', 'Dev', 'Moderator', 'Gamemaster', 'Loremaster', 'Content Creator', 'Playtester'];
 yes('off: the play list is exactly what it was', JSON.stringify(S.playRoles(PLAY, false)) === JSON.stringify(PLAY));
@@ -173,9 +174,11 @@ function standingWith(open, roleIds) {
       /let html = forMode\(fs\.readFileSync\(path\.join\(PUBLIC, 'home\.html'\), 'utf8'\), cfg\.open\);/.test(src));
   yes('and every written page', /return forMode\(fs\.readFileSync\(file, 'utf8'\), cfg\.open\);/.test(src));
   // Their script moved out of home.html into home.js in #1479 (no inline
-  // script under the content security policy).
+  // script under the content security policy), and the Downloads page into
+  // the site in #4330 (site/lib/downloads.js).
   yes('the downloads page and the status line follow /api/public open',
-      ((home.raw + '\n' + read('site/public/home.js')).match(/d\.open === true/g) || []).length >= 5);
+      ((home.raw + '\n' + read('site/public/home.js') + '\n' + read('site/lib/downloads.js'))
+        .match(/d\.open === true/g) || []).length >= 5);
 
   // ---------------------------------------- what somebody not in is told --
   cfgBox.open = false;

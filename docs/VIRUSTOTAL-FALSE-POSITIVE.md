@@ -114,7 +114,7 @@ is not signed, and give the dated name it was published under.
    in lower case: GitHub measures every Release file and gives its SHA-256 as
    the asset's digest, the site reads it from there, and the Downloads page
    shows it, lower cased by the site, beside the size (`site\lib\downloads.js`
-   `listFiles`, `site\public\home.js` `sum`).
+   `listFiles`, `site\lib\downloads.js` `sum`).
    Open `https://www.virustotal.com/gui/file/<sha256>`, read which engines
    flagged it, and leave a community comment with the three facts above.
    `scripts\release\Add-VirusTotalComment.ps1` posts that comment through the
@@ -182,6 +182,6 @@ downloaded; a new publisher still starts with little reputation. Keep
 the identity strings stable, keep the ask before anything is ended, keep the
 published SHA-256 on the Downloads page, and send the false positive reports.
 Those still help while the signed publisher builds reputation. The Downloads
-page shows the hash and no VirusTotal link (`site\public\home.js` `sum`):
+page shows the hash and no VirusTotal link (`site\lib\downloads.js` `sum`):
 signing is the trust path, and publish no longer sends the file (#802). The
 report address goes in the comment and the vendor messages, not on the site.

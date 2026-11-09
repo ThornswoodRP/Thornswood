@@ -30,7 +30,8 @@ const { NEWS } = require('./news');
 const { galleryPage, loginBackoff, loginBackoffBump, loginKey, loginNote,
   loginWait, publicApiWait, publicJson, reportFrom, reportRefusal,
   reportTaken, requestAddr, trimInbox, turnstileOn, turnstilePasses } = require('./limits');
-const { downloadServed, listFiles } = require('./downloads');
+const { ageGateBody, ageStated, downloadServed, downloadsBody, downloadsFacts,
+  listFiles } = require('./downloads');
 const { deleteUpload, GALLERY, GALLERY_ALLOW, GALLERY_CAP, GALLERY_HOLD_DAYS,
   GPENDING, GREPORTS, KIND, listUploads, pendingCopies, pictureSize,
   receiveUpload, shotSrcset, SMALL_CAP, SMALL_KINDS, SMALL_WIDTHS, smallCopy,
@@ -239,7 +240,7 @@ async function handle(req, res) {
       'text/plain; charset=utf-8');
   }
 
-  if (req.method === 'GET' && (/^\/api\/(?:public|gallery|releases|roadmap|launcher\/releases)$/.test(route) ||
+  if (req.method === 'GET' && (/^\/api\/(?:public|downloads|gallery|releases|roadmap|launcher\/releases)$/.test(route) ||
       /^\/api\/page\/[a-z-]+$/.test(route) || /^\/release\//.test(route))) {
     const retry = publicApiWait(req, Date.now());
     if (retry) return send(res, 429, JSON.stringify({error:'Too many requests. Try again shortly.'}),
@@ -565,6 +566,13 @@ async function handle(req, res) {
         }
         if (md === null) return send(res, 404, notFoundPage(), TYPES['.html']);
         html = fillPage(html, singlePageHeading(pageHtml(md), blurb[0]));
+      } else if (route === '/downloads') {
+        // The page goes out whole, the gate or the steps, by the browser's
+        // age statement (#4330, downloads.js), so its script swaps nothing.
+        // Its title is publicDiscovery's, below, from BLURB.
+        html = fillPage(html, ageStated(req) ? downloadsBody(downloadsFacts())
+          : ageGateBody() + '<noscript><p>Confirming needs JavaScript. <a href="/join">How to join</a> ' +
+            'and <a href="/help">Help</a> read without it.</p></noscript>');
       } else if (route !== '/') {
         // The remaining public pages draw themselves after an API fetch. Do not
         // paint the home landing while that request is in flight.
@@ -588,6 +596,15 @@ async function handle(req, res) {
          nothing that does not carry it, so a page that says who is asking
          can never be kept at the edge. A merge's new page is out everywhere
          within that time of the agent putting it in. */
+      if (route === '/downloads') {
+        /* Except /downloads, which does say something about who is asking:
+           whether this browser gave its age statement (#4330). It is never
+           marked for Cloudflare, so the cache rule passes it through every
+           time and nobody is sent the page somebody else's cookie chose.
+           private keeps it out of any other shared cache, and Vary names
+           the cookie for the browser's own. */
+        return send(res, 200, html, TYPES['.html'], { 'Cache-Control': 'private, no-cache', 'Vary': 'Cookie' });
+      }
       return send(res, 200, html, TYPES['.html'],
         { 'Cache-Control': 'no-cache', 'Cloudflare-CDN-Cache-Control': 'max-age=' + PUBLIC_EDGE_SECONDS });
     } catch (e) { return send(res, 500, 'no home.html', 'text/plain'); }
@@ -611,13 +628,15 @@ async function handle(req, res) {
     // Installed launchers read the original full array. The website opts into
     // pagination until those clients can follow a continuation themselves.
     const gallery = galleryPage(0, url.searchParams.get('galleryLimit') === '24' ? 24 : Number.MAX_SAFE_INTEGER);
+    // What the Downloads page is drawn from (downloads.js), so the two agree.
+    const dl = downloadsFacts();
     // no-cache for the same reason as the public pages: the same answer for
     // everybody, and a no-store answer to the page's own fetch kept the page
     // out of the back and forward cache as well (#3218).
     return send(res, 200, JSON.stringify({
       // The one switch (#428), for the pages and the Discord bot.
-      open: cfg.open === true,
-      invite: cfg.discord.invite || '',
+      open: dl.open,
+      invite: dl.invite,
       patreon: cfg.patreon || '',
       // max is always the number when one is known anywhere, so the page
       // says "N of 25" whether or not the server has said it (#481).
@@ -626,15 +645,21 @@ async function handle(req, res) {
       gallery: gallery.gallery,
       galleryTotal: gallery.total,
       galleryNext: gallery.next,
-      launcher: feed.launcher || '',
-      collection: feed.collection || '',
-      // The revision that link opens, the one the server was built against (#4115).
-      collectionRevision: Number(feed.collectionRevision) > 0 ? Number(feed.collectionRevision) : 0,
-      files: listFiles(),
+      launcher: dl.launcher,
+      collection: dl.collection,
+      collectionRevision: dl.collectionRevision,
+      files: dl.files,
       news: (feed.news || []).slice(0, 6).map((n) => ({ date:n.date, title:n.title })),
       // The hints and lore lines (#3147): the Discord bot's status lines.
       lines: readLines()
     }), 'application/json; charset=utf-8', { 'Cache-Control': 'no-cache' });
+  }
+
+  // The Downloads page's body, for a browser whose age statement is only in
+  // localStorage, which the page above cannot see (#4330, home.js).
+  if (route === '/api/downloads' && req.method === 'GET') {
+    return send(res, 200, JSON.stringify({ html: downloadsBody(downloadsFacts()) }),
+      'application/json; charset=utf-8', { 'Cache-Control': 'no-cache' });
   }
 
   /* Reporting a problem is public on purpose. Somebody whose install will not

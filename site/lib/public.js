@@ -89,11 +89,6 @@ function publicPageBody(route) {
     }
     body += '</div>';
     if (!approved.length) body += '<p>No approved pictures are available yet.</p>';
-  } else if (route === '/downloads') {
-    body += '<p>You need to own Skyrim Special Edition on Steam and be eighteen or older.</p>' +
-      '<p><a href="/join">Read the installation and application steps</a>. ' +
-      '<a href="/help">Get installation help</a>.</p>' +
-      '<p>The download controls appear after the age statement. JavaScript is needed for those controls.</p>';
   } else if (route === '/report') {
     body += '<p>Reports are private. Your Discord name is optional for game faults and ideas. ' +
       'A report about a person requires Discord sign-in.</p>' +

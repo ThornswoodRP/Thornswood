@@ -14,8 +14,8 @@
 //   server.js listFiles() passes it on to /api/public, beside a file the
 //     downloads folder's files.json lists with a sha256 of its own. Lifted and
 //     run against a temp folder, with newestSetup a stand-in.
-//   home.html builds the download block from /api/public. The whole /downloads
-//     branch of the page script is lifted and run with the fetch stubbed.
+//   the Downloads page is drawn from the same facts by the site itself
+//     (downloads.js downloadsBody, #4330), which is lifted and run.
 //
 // The publisher takes the same trip when an entry has one (#5275, Patrick's
 // answer A on q-installer-publisher): listFiles passes it on, and the page
@@ -39,10 +39,12 @@ const siteFiles = require('../../tests/site-files');
 const CR = String.fromCharCode(13);
 const read = (p) => fs.readFileSync(path.join(REPO_DIR, p), 'utf8').split(CR).join('');
 const server = siteFiles.source();
-// The page is home.html and the script that builds it, which moved out of
-// home.html into home.js in #1479. The downloads builder and esc are in the
-// script; the words people read are in either.
+// The page is home.html and the script that runs in it, which moved out of
+// home.html into home.js in #1479. The Downloads page's words are the
+// site's since #4330 (site/lib/downloads.js), so they are read with it for
+// what the entry ruled out.
 const page = read(path.join('site', 'public', 'home.html')) + '\n' + read(path.join('site', 'public', 'home.js'));
+const words = page + '\n' + read(path.join('site', 'lib', 'downloads.js'));
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
@@ -137,21 +139,20 @@ async function main() {
     fs.writeFileSync(path.join(files, 'files.json'), JSON.stringify(meta));
   }
 
-  // ------------------------------------------------ home.html /downloads
-  const a = page.indexOf("} else if (here === '/downloads') {");
-  const b = page.indexOf("} else if (here === '/report') {", a);
-  const body = (a >= 0 && b > a) ? page.slice(a + "} else if (here === '/downloads') {".length, b) : '';
-  const escSrc = (/function esc\(s\)\{[\s\S]*?\}\); \}/.exec(page) || [''])[0];
-  yes('the downloads builder and esc are both on the page', !!body && !!escSrc);
-  if (body && escSrc) {
-    const esc = new Function(escSrc + '\nreturn esc;')();
+  // ------------------------------------------------- the Downloads page
+  // The site writes the page itself since #4330 (downloads.js
+  // downloadsBody), from the same facts /api/public hands out; the page's
+  // script no longer builds it. Lifted out of the site and run.
+  const dbSrc = (/\nfunction downloadsBody\(d\) \{\n[\s\S]*?\n\}\n/.exec(server) || [''])[0];
+  const escSrc = (/\nconst escAttr = \(s\) => [\s\S]*?;\n/.exec(server) || [''])[0];
+  yes('the downloads builder and escAttr are both in the site', !!dbSrc && !!escSrc);
+  yes('and the page\'s script builds no second copy of it',
+      page.indexOf('Download the installer') < 0 && page.indexOf('function sum(') < 0);
+  const body = dbSrc;
+  if (dbSrc && escSrc) {
+    const downloadsBody = new Function(escSrc + dbSrc + '\nreturn downloadsBody;')();
     function render(payload) {
-      let html = null;
-      const fetch = () => Promise.resolve({ json: () => payload });
-      // The builder asks through request(), the page's fetch with a time
-      // limit (#1585); here both answer with the same payload.
-      new Function('fetch', 'request', 'show', 'esc', body)(fetch, fetch, (h) => { html = h; }, esc);
-      return new Promise((r) => setImmediate(() => r(html || '')));
+      return Promise.resolve(downloadsBody(payload));
     }
     const H = sha(Buffer.from('thornswood'));
     const exe = (size, hash, extra) => Object.assign({ name: 'Thornswood-Setup.exe', size: size,
@@ -230,13 +231,13 @@ async function main() {
 
   // ----------------------------------------------- what the entry ruled out
   yes('the detection name appears at most once on the page',
-      (page.match(/Wacatac/g) || []).length <= 1);
+      (words.match(/Wacatac/g) || []).length <= 1);
   yes('nobody is told to upload the file to VirusTotal themselves',
-      !/(put|upload|drop) (the|this) file (in)?to VirusTotal/i.test(page));
+      !/(put|upload|drop) (the|this) file (in)?to VirusTotal/i.test(words));
   yes('nobody is told to switch Defender off',
-      !/(switch|turn)(ing)? off[^.<]{0,40}Defender|Defender[^.<]{0,40}(switch|turn)(ed)? off/i.test(page));
+      !/(switch|turn)(ing)? off[^.<]{0,40}Defender|Defender[^.<]{0,40}(switch|turn)(ed)? off/i.test(words));
   yes('the page does not claim the installer is unsigned',
-      !/not signed yet/i.test(page) && !/publisher Unknown/i.test(page));
+      !/not signed yet/i.test(words) && !/publisher Unknown/i.test(words));
 }
 
 main().catch((e) => { fail++; console.log('FAIL  ' + (e && e.stack || e)); }).then(() => {
