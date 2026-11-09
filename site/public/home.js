@@ -173,7 +173,10 @@ function show(html) {
    the answer the gate reads last, so a store that cannot be used is read as
    one with nothing in it and nothing else is lost (#2736). */
 var AGE_KEY = 'tw-age-18';
-var AGE_PATHS = { '/downloads': 1, '/join': 1 };
+// /downloads is gated by the site itself, which sends the gate or the page
+// by the cookie below (#4330, site/lib/downloads.js, with the same policy
+// number); its branch below gives the gate's button its click.
+var AGE_PATHS = { '/join': 1 };
 var AGE_POLICY = 1;
 var AGE_DAYS = 365;
 var AGE_DAY_MS = 86400000;
@@ -219,6 +222,10 @@ function showAgeGate() {
     '<a class="btn ghost" href="/">Leave</a>' +
     '</div></div>'
   );
+  bindAgeGate();
+}
+// The gate's button, on the gate this page drew or the one the site sent.
+function bindAgeGate() {
   var yes = document.getElementById('ageYes');
   if (yes) {
     yes.addEventListener('click', function () {
@@ -649,216 +656,23 @@ if (AGE_PATHS[here] && !ageOk()) {
     bindGalleryReports();
   }
 } else if (here === '/downloads') {
-  /* This is the How to join section off the front page. It lived there and on
-     this page in two different shapes, which meant two places to keep right
-     and a front page that would not end. It is one place now, and this is the
-     page the front page points at. */
-  request('/api/public?galleryLimit=24').then(function (r) { return r.json(); }).then(function (d) {
-    var files = d.files || [];
-
-    // The stamp under the download button, read the way a clock is read.
-    //
-    // A file in the downloads folder may carry a 24 hour time, which is shown
-    // to people, not to a machine. Anything that is not a plain date and time
-    // is left exactly as it is: the installer's is the tag of the Release it
-    // is on (build-20261101.7 and the like), which says which build it is.
-    function clock(v) {
-      var m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(String(v || ''));
-      if (!m) return v;
-      var h = parseInt(m[4], 10);
-      var half = h < 12 ? 'AM' : 'PM';
-      h = h % 12; if (h === 0) { h = 12; }
-      return parseInt(m[2], 10) + '-' + parseInt(m[3], 10) + '-' + m[1] +
-             ' ' + h + ':' + m[5] + ' ' + half;
-    }
-
-    function human(b) {
-      if (!b) return '';
-      if (b >= 1073741824) return (b / 1073741824).toFixed(1) + ' GB';
-      if (b >= 1048576)    return Math.round(b / 1048576) + ' MB';
-      return Math.max(1, Math.round(b / 1024)) + ' KB';
-    }
-    // The installer's SHA-256, under the size and date, as GitHub measured it
-    // on the Release. A file with none shows nothing rather than a link to
-    // nothing.
-    function hash(f) {
-      return f && /^[0-9a-f]{64}$/.test(f.sha256 || '') ? f.sha256 : '';
-    }
-    function sum(f) {
-      var h = hash(f);
-      if (!h) return '';
-      // The label is held together with white-space:nowrap so the browser cannot
-      // soft-break it at the ASCII hyphen (SHA- / 256). The non-breaking space
-      // keeps the whole label on the same line as the hash's start, and the hash
-      // wraps within itself if the column is narrow.
-      return '<br><span class="nowrap">SHA-256</span>&nbsp;' +
-             '<span class="wrap-anywhere">' + h + '</span>';
-    }
-    // hidden is a file on the site for something other than people, never on
-    // this page.
-    function pick(ext) {
-      for (var i = 0; i < files.length; i++) {
-        if (files[i].hidden) continue;
-        if ((files[i].name || '').toLowerCase().slice(-ext.length) === ext) return files[i];
-      }
-      return null;
-    }
-    // The installer is Velopack's setup program from a GitHub Release, the
-    // launcher's package inside it (#4824): one file, nothing beside it.
-    var exe = pick('.exe');
-
-    var out = '<h1>Download</h1>';
-    if (d.launcher) out += '<p>Launcher <strong>' + esc(d.launcher) + '</strong> is current.</p>';
-
-    out += '<p class="lede">You need a legitimate copy of <strong>Skyrim Special ' +
-           'Edition</strong> on Steam, on build <strong>1.6.1170</strong> (if yours is ' +
-           'newer, the launcher has a button that puts it back; Steam does the download ' +
-           'under your own account), and ' +
-           '<strong>Vortex</strong> with a free Nexus Mods account, which is how the ' +
-           'mods get to you.</p>' +
-           '<p class="lede"><strong>Eighteen and over.</strong> Downloading or playing ' +
-           'Thornswood is you stating that you are eighteen or older.</p>' +
-           // The one switch (#428): /api/public says open when the site's
-           // config does, and this says what is true either way.
-           (d.open === true
-             ? '<p class="lede"><strong>Thornswood is open.</strong> Anyone can download ' +
-               'it, and anyone in the Discord can play. Being there means accepting the ' +
-               '<a href="/rules">rules</a>.</p>'
-             : '<p class="lede"><strong>Thornswood is in alpha, and the world is open by ' +
-               'application.</strong> The installer is open to anybody, so you can download ' +
-               'and install it now. Play unlocks once you have applied in the Discord and been ' +
-               'given the Playtester role. The application asks whether you are eighteen or ' +
-               'over and whether you accept the <a href="/rules">rules</a>, and your answers ' +
-               'are kept against your Discord account.</p>');
-
-    // The button belongs under the step that tells you to take it, not above
-    // the list where it is the first thing you meet and the instructions are
-    // something you scroll past afterwards.
-    // "Published by" names who Windows names (#5275, Patrick's answer A on
-    // q-installer-publisher), when the entry says so. It said "Thornswood",
-    // which is not what the Windows prompt says next. An entry with no
-    // publisher names nobody, which the Release's installer is until the site
-    // can say who signed it.
-    // Where the button goes: /file/<name>, which sends the installer on from
-    // where GitHub keeps it (downloads.js, #5608), and any other file from
-    // the site itself.
-    function fileHref(f) {
-      return '/file/' + encodeURIComponent(f.name);
-    }
-    var by = exe && exe.publisher ? 'Published by ' + esc(exe.publisher) + '<br>' : '';
-    var grab = '';
-    if (!exe) {
-      grab = '<p class="faint">The installer is not published yet.</p>';
+  /* The site sends this page whole (#4330, site/lib/downloads.js): the age
+     gate, or the steps and the download buttons once the browser's cookie
+     says it gave its age statement. So nothing here draws the page over the
+     one the site sent, which is what made it jump. Two things are left to
+     do. The gate's button needs its click. And a browser that keeps the
+     statement only in localStorage, because it will not keep the cookie,
+     was sent the gate the site could not know to leave out: that one asks
+     for the page's body, the same body, and shows it. */
+  if (document.getElementById('ageGate')) {
+    if (ageOk()) {
+      request('/api/downloads').then(function (r) { return r.json(); }).then(function (d) {
+        show(d.html);
+      }).catch(function () { show('<h1>Download</h1><p>Could not load it.</p>'); });
     } else {
-      grab = '<div class="grab"><a class="btn first" href="' + esc(fileHref(exe)) + '">' +
-             'Download the installer</a>' +
-             '<p class="also faintly">' + by + esc(human(exe.size)) +
-             (exe.version ? ' · ' + esc(clock(exe.version)) : '') + sum(exe) + '</p></div>';
+      bindAgeGate();
     }
-
-    out += (d.open === true
-             ? '<h2>Join the Discord, then four steps</h2>' +
-               '<div class="steps">' +
-               '<div class="step"><div><h3>Come into the Discord</h3>' +
-                 '<p>Anyone in the Discord can play. Read the <a href="/rules">rules</a>, ' +
-                 'because being there means accepting them. Your Discord account is what ' +
-                 'lets you through, so there is nothing else to sign up for.</p>'
-             : '<h2>Apply in Discord, then four steps</h2>' +
-               '<div class="steps">' +
-               '<div class="step"><div><h3>Come into the Discord and apply</h3>' +
-                 '<p>The installer is open to anybody, and this is the step that unlocks ' +
-                 'Play. Read the <a href="/rules">rules</a>, then open a ticket and pick ' +
-                 'Apply to be an alpha playtester. It asks whether you are eighteen or over, ' +
-                 'whether you accept the rules, and a few lines about who you want to play. ' +
-                 'It is not an essay, and somebody answers. Once you are accepted your ' +
-                 'Discord account is what lets you through, so there is nothing else to sign ' +
-                 'up for.</p>') +
-             // The first step is the only one that had no way to do it from
-             // here. The installer has its two buttons and the collection has
-             // one, and this said come into the Discord without a door. The
-             // invite comes from version.json by way of the feed, the same as
-             // the collection's address, so there is one copy of it.
-             (d.invite
-               ? '<div class="grab"><a class="btn first" href="' + esc(d.invite) +
-                 '" target="_blank" rel="noopener">Open the Discord</a>' +
-                 '<p class="also faintly">The invite never expires.' +
-                 (d.open === true ? '' : ' Open a ticket once you are in.') + '</p></div>'
-               : '') +
-             '</div></div>' +
-           '<div class="step"><div><h3>Take the installer</h3>' +
-             '<p>One file. Download it and run it. The mods are not in it. It puts in ' +
-             'the launcher with Thornswood&rsquo;s own content and opens it, and the ' +
-             'launcher asks where to install, puts in the script extender and ' +
-             'builds a game folder of its own from the Skyrim you already have, with ' +
-             'most of it as hard links, and leaves your own Skyrim alone. The SkyMP files in it are free software, and the credits page ' +
-             // Beside the download button because that is where the files are
-             // handed over. Entry 170 on the To Do List: the source had to be
-             // reachable "from the download page". It says where the source is
-             // rather than that it is all public, because one SkyMP build in
-             // the installer has no recorded version and the page says so.
-             'says <a href="/credits#source">where their source code is</a>.</p>' +
-             grab + '</div></div>' +
-           '<div class="step"><div><h3>Install the collection in Vortex</h3>' +
-             '<p>Not optional. Without it you have a launcher and no mods, and the ' +
-             'server turns you away when you press Play. The mods come from a ' +
-             'collection on Nexus, so every one of them arrives from its own author ' +
-             'rather than from a copy of ours, and a mod update stops meaning a ' +
-             'reinstall. Vortex keeps them in a profile of their own, so switching ' +
-             'back to your usual profile and running Purge Mods leaves you where you ' +
-             'started.</p>' +
-             // The step said install the collection and never said where. The
-             // address comes from version.json by way of the news feed, so there
-             // is one copy of it and it cannot go stale here.
-             // The link opens the revision the server was built against, not
-             // the collection's page, which Nexus always shows at its newest
-             // (#4115): a newer revision than the server's keeps Play shut.
-             // The number is the main feed's, which a main Ship sets from the
-             // record, so it moves to a new revision by itself the moment the
-             // server is released on it, and not before.
-             // The link is for a first install only: a collection that comes
-             // in by a Nexus link is installed beside the one already there,
-             // and only Vortex's own Update replaces it (#5546).
-             (d.collection
-               ? '<div class="grab"><a class="btn first" href="' + esc(d.collection) +
-                 '" target="_blank" rel="noopener">' +
-                 (d.collectionRevision > 0 ? 'Open revision ' + esc(String(d.collectionRevision)) : 'Open the collection') +
-                 '</a>' +
-                 '<p class="also faintly">' +
-                 (d.collectionRevision > 0
-                   ? 'Opens revision ' + esc(String(d.collectionRevision)) + ' on Nexus, the one the ' +
-                     'server was built against. Install that one in Vortex, not a newer one ' +
-                     'Nexus may show first.'
-                   : 'Opens on Nexus. Vortex takes it from there.') +
-                 ' Already have the collection? Do not use this link: open Collections in ' +
-                 'Vortex and press Update on the Thornswood collection. Installing it again ' +
-                 'from Nexus adds a second copy beside the first.' +
-                 '</p></div>'
-               : '') +
-             '</div></div>' +
-           '<div class="step"><div><h3>Connect your Discord in the launcher</h3>' +
-             '<p>One click. Your browser opens, you say yes, and it closes itself. ' +
-             'You never do it again.</p></div></div>' +
-           '<div class="step"><div><h3>Press Play</h3>' +
-             '<p>No address to type, no password to remember. Once your Discord has the ' +
-             'role, the launcher patches anything that changed and puts you in the ' +
-             'world.</p></div></div>' +
-           '</div>';
-
-    out += (d.open === true
-             ? '<p class="lede lede-mt-34">The installer is open to anybody, ' +
-               'and so is the world: the launcher asks Discord who you are every time it ' +
-               'starts, and being in the Discord is enough.</p>'
-             : '<p class="lede lede-mt-34">The installer is open to anybody, ' +
-               'and the world is open by application: the launcher asks Discord who you are ' +
-               'every time it starts, so downloading it before you have been accepted just ' +
-               'means you are ready when you are.</p>') +
-           '<div class="acts acts-start">' +
-           '<a class="btn first" href="' + esc(d.invite || '/join') + '" target="_blank" ' +
-           'rel="noopener">' + (d.open === true ? 'Join the Discord' : 'Apply in the Discord') + '</a>' +
-           '<a class="btn ghost" href="/join">The long version</a></div>';
-
-    show(out);
-  }).catch(function () { show('<h1>Download</h1><p>Could not load it.</p>'); });
+  }
 
 } else if (here === '/report') {
   /* Open to anybody. Somebody whose install will not start cannot sign in to

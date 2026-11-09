@@ -152,7 +152,8 @@ Yes 'with no revision in the feed it links the collection as it is, revision 0' 
 Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 $server = Get-SiteSource (Join-Path $repo 'site')
 Yes 'the site''s public answer carries the revision' ($server.Contains('collectionRevision: Number(feed.collectionRevision) > 0 ? Number(feed.collectionRevision) : 0,'))
-$homeJs = [IO.File]::ReadAllText((Join-Path $repo 'site\public\home.js'))
+# The Downloads page is written by the site since #4330 (site\lib\downloads.js).
+$homeJs = [IO.File]::ReadAllText((Join-Path $repo 'site\lib\downloads.js'))
 Yes 'the Downloads button names the revision and says not to take a newer one' ($homeJs.Contains("'Open revision ' + esc(String(d.collectionRevision))") -and $homeJs.Contains('Nexus may show first.'))
 # The link adds a second collection beside one already installed (#5546), so
 # the step says to press Update in Vortex instead.

@@ -85,7 +85,7 @@ $serverPath  = Join-Path $Here 'records\server-build.json'
 $setupFilesPath = Join-Path $Here 'scripts\release\Build-SetupFiles.ps1'
 $stepsPath   = Join-Path $Here 'launcher\app\InstallSteps.cs'
 $creditsPath = Join-Path $Here 'site\data\site\credits.md'
-$homeJsPath  = Join-Path $Here 'site\public\home.js'
+$downloadsJsPath = Join-Path $Here 'site\lib\downloads.js'
 
 $client = Read-Json $clientPath
 $server = Read-Json $serverPath
@@ -430,13 +430,12 @@ foreach ($r in $pageRows) {
 }
 Yes 'the page and the note agree on every folder and licence' ($disagree.Count -eq 0)
 
-# The downloads page is drawn by the home page's script, which moved out of
-# home.html into home.js in #1479 (no inline script under the content security
-# policy).
-$homeHtml = Get-Content -LiteralPath $homeJsPath -Raw
-$dl = $homeHtml.IndexOf("here === '/downloads'")
-$dlEnd = if ($dl -ge 0) { $homeHtml.IndexOf("here === '/report'", $dl) } else { -1 }
-$dlCode = if ($dl -ge 0 -and $dlEnd -gt $dl) { $homeHtml.Substring($dl, $dlEnd - $dl) } else { '' }
+# The downloads page is written by the site since #4330 (site\lib\downloads.js,
+# downloadsBody), no longer by the home page's script.
+$dlJs = [IO.File]::ReadAllText($downloadsJsPath)
+$dl = $dlJs.IndexOf('function downloadsBody(d) {')
+$dlEnd = if ($dl -ge 0) { $dlJs.IndexOf("`n}", $dl) } else { -1 }
+$dlCode = if ($dl -ge 0 -and $dlEnd -gt $dl) { $dlJs.Substring($dl, $dlEnd - $dl) } else { '' }
 Yes 'the download page links /credits#source beside the download' ($dlCode.Contains('href="/credits#source"'))
 
 # ---- read off the fork itself ----------------------------------------------

@@ -5,7 +5,7 @@
 
 .DESCRIPTION
   The Downloads page prints the installer's SHA-256 and no VirusTotal link
-  (site\public\home.js, sum). From 24 September it printed a link to
+  (site\lib\downloads.js, sum). From 24 September it printed a link to
   VirusTotal's report on that hash as well (entry 176 on the To Do List), and
   nothing ever sent the file, so the link always landed on VirusTotal's "item
   not found" page. That link is gone: the setup program is signed (#390), and
