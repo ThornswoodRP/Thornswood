@@ -93,11 +93,14 @@ function Get-MethodText([string]$text, [string]$head) {
 $src = Get-Content -LiteralPath $VoicePath -Raw
 $fetch = Get-MethodText $src 'static string FetchToken('
 $escape = Get-MethodText $src 'static string JsonEscape('
+# A 403's why in words (Voice.Refusal), which FetchToken calls.
+$refusal = Get-MethodText $src 'public static string Refusal('
 $http = [regex]::Match($src, 'static readonly HttpClient TokenHttp = [^;]*;').Value
 Yes 'FetchToken is in Voice.cs' ($null -ne $fetch)
 Yes 'JsonEscape is in Voice.cs' ($null -ne $escape)
+Yes 'Refusal is in Voice.cs' ($null -ne $refusal)
 Yes 'and the HttpClient FetchToken sends with, TokenHttp' ($http.Length -gt 0)
-if ($null -eq $fetch -or $null -eq $escape -or $http.Length -eq 0) { Done }
+if ($null -eq $fetch -or $null -eq $escape -or $null -eq $refusal -or $http.Length -eq 0) { Done }
 
 # ---- compile the real method against stubs ----------------------------------
 #
@@ -124,6 +127,7 @@ namespace NS
     public static class Discord
     {
         public static string Ticket = "";
+        public static string NotLinked() { return "This copy is not linked to a Discord account yet."; }
     }
 
     public class Config
@@ -204,6 +208,8 @@ namespace NS
 
         ESCAPE
 
+        REFUSAL
+
         public static string Run(string ticket, string vbase, bool haveConf, string host, string port, List<string> lines)
         {
             // Straight to the loopback socket, whatever proxy this machine names.
@@ -215,7 +221,7 @@ namespace NS
     }
 }
 '@
-$cs = $cs.Replace('namespace NS', 'namespace ' + $ns).Replace('TOKENHTTP', $http).Replace('ESCAPE', $escape).Replace('FETCH', $fetch)
+$cs = $cs.Replace('namespace NS', 'namespace ' + $ns).Replace('TOKENHTTP', $http).Replace('ESCAPE', $escape).Replace('REFUSAL', $refusal).Replace('FETCH', $fetch)
 $compiled = $true
 try { $null = Add-LauncherType -Source $cs }
 catch { $compiled = $false; Write-Host $_.Exception.Message }
