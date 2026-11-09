@@ -11,6 +11,7 @@ and the long form of each, are in the Developer Guide's pages under
 | [FEED.md](FEED.md) | The update feed launchers read: every field of version.json, who writes it, who reads it, and what happens when it is wrong. |
 | [JSON-STATE-INVENTORY.md](JSON-STATE-INVENTORY.md) | Every critical JSON file, who writes and reads it, how it is checked, and the four records held to a version and shape (#2180). |
 | [ICONS.md](ICONS.md) | Which icon file is which: Main launcher badge, Dev launcher monogram, site favicon. |
+| [PATREON.md](PATREON.md) | Every word pasted into Thornswood's Patreon page: the blurb, the tiers, and connecting the tiers to their Discord roles. |
 | [GAMEMODE.md](GAMEMODE.md) | How game/gamemode.js is laid out, where its data lives, how it is deployed and which tests cover it. |
 | [GAMEMODE-SOURCE.md](GAMEMODE-SOURCE.md) | How gamemode.js becomes sources, data and a bundled artifact (#2181, Patrick decision D): measurements, loader limits, stages, and Build-Gamemode. |
 | [GAMEMODE-COVERAGE.md](GAMEMODE-COVERAGE.md) | Which test drives each gamemode event handler, plugin, money function and chat word, and the gaps that were filled. |

@@ -16,7 +16,7 @@
 /* ---------------------------------------------------------------- state -- */
 var S = {
   me:{member:false,admin:false,dev:false,name:''}, titles:{}, level:{},
-  docs:{}, boards:{}, results:{}, files:[], uploads:[], inbox:[], linked:[],
+  docs:{}, results:{}, files:[], uploads:[], inbox:[], linked:[],
   sessions:[], records:{bans:{}, notes:{}, pk:{}, names:{}},
   news:{news:[]}, invite:'', at:'home', editing:false, discord:false
 };
@@ -31,9 +31,8 @@ Object.keys(ROUTES).forEach(function (u) { PATHS[ROUTES[u]] = u; });
 
 /* The hub stopped editing the issue boards in #433, and the Known Issues
    board, the last one it edited (#2414), went in #3140: /known is written
-   from the issue board now. So no page here is a board. */
-var BOARDKEYS = [];
-var isBoard = function (k) { return BOARDKEYS.indexOf(k) >= 0; };
+   from the issue board now. The editor, its save route and the four boards
+   it was left holding went in #4359. */
 
 var ABOUT = {
   uploads:     'Staff Accept waiting shots and Delete pending or live ones. Send and browse pictures on /gallery.',
@@ -102,18 +101,6 @@ function remember(k, v) {
   return v;
 }
 
-/* Markdown inside a table cell. Short things stay on one line; anything with a
-   fenced block or a line break is a small document. */
-function cellHtml(v) {
-  var s = String(v == null ? '' : v);
-  if (!s) return '';
-  // breaks on, for cells only: somebody typing two lines into a box means two
-  // lines, and asking them for a blank line between every one is a rule nobody
-  // will remember.
-  if (/```|\n/.test(s)) return '<div class="mdc">' + marked.parse(s, { breaks: true }) + '</div>';
-  return '<div class="mdc">' + marked.parseInline(s) + '</div>';
-}
-
 /* ------------------------------------------------------------- sign in -- */
 el('go').onclick = signIn;
 el('pw').onkeydown = function (e) { if (e.key === 'Enter') signIn(); };
@@ -177,7 +164,7 @@ function start() {
   }).then(function (d) {
     S.me = d.me || S.me;
     S.titles = d.titles; S.level = d.level || {};
-    S.docs = d.docs || {}; S.boards = d.boards || {}; S.boardRevs = d.boardRevs || {};
+    S.docs = d.docs || {};
     S.results = d.results || {}; S.files = d.files || [];
     S.uploads = d.uploads || []; S.inbox = d.inbox || [];
     S.linked = d.linked || []; S.invite = d.invite || '';
@@ -200,13 +187,7 @@ function refresh() {
     if (!r.ok) throw new Error('the site answered ' + r.status);
     return r.json();
   }).then(function (d) {
-    // A board with a save waiting or on its way keeps its own copy and
-    // number, or the refresh would undo the edit and the save would clash.
-    var boards = d.boards || {}, revs = d.boardRevs || {};
-    Object.keys(S.boards || {}).forEach(function (k) {
-      if (pending[k] || inflight[k]) { boards[k] = S.boards[k]; revs[k] = (S.boardRevs || {})[k]; }
-    });
-    S.docs = d.docs || {}; S.boards = boards; S.boardRevs = revs;
+    S.docs = d.docs || {};
     S.results = d.results || {}; S.files = d.files || [];
     S.uploads = d.uploads || []; S.inbox = d.inbox || [];
     S.linked = d.linked || []; S.sessions = d.sessions || [];
@@ -1572,7 +1553,7 @@ function draw() {
     if (here) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   });
-  document.body.className = isBoard(S.at) ? 'wide' : '';
+  document.body.className = '';
   if (S.at === 'home')    return drawHome();
   if (S.at === 'news')    return drawNews();
   if (S.at === 'uploads') return drawUploads();
@@ -1582,7 +1563,6 @@ function draw() {
   if (S.at === 'linked')  return drawLinked();
   if (S.at === 'sessions') return drawSessions();
   if (S.at === 'economy') return drawEconomy();
-  if (isBoard(S.at))      return drawBoard();
   if (S.editing)          return drawEdit();
   drawDoc();
 }
@@ -1846,13 +1826,6 @@ function tallyOf() {
   });
   return n;
 }
-function rowCount(k) {
-  var b = S.boards[k];
-  if (!b) return 0;
-  var n = 0;
-  (b.sections || []).forEach(function (s) { n += (s.rows || []).length; });
-  return n;
-}
 function countFor(k) {
   if (k === 'tests') {
     var t = tallyOf(), done = t.pass + t.fail + t.skip;
@@ -1875,8 +1848,7 @@ function countFor(k) {
     var w = sessionTotals(S.sessions);
     return w.n ? w.n + ' in the last seven days' : 'nobody yet';
   }
-  var n = rowCount(k);
-  return n === 1 ? '1 entry' : n + ' entries';
+  return '';
 }
 function card(k, lead) {
   if (!maySee(k)) return '';
@@ -1913,400 +1885,9 @@ function drawHome() {
   el('page').innerHTML = out;
 }
 
-/* --------------------------------------------------------------- board -- */
-/*
-  A board is sections, each section a table with its own columns. That is the
-  shape the notes were already in, and it means a column added to Open does not
-  appear on Shipped where it would be empty.
-
-  Editing is a click on the cell. No edit mode, no form, no save button: the
-  cell becomes a box, Enter puts it back, and the board is saved half a second
-  later. Adding is a row that is always sitting at the bottom waiting to be
-  typed in, so putting something down is one click and one Enter.
-*/
-/*
-  Each save says which revision of the board it was made from (#2188), and
-  the server refuses one made from an older copy than it holds, so two people
-  on one board cannot silently overwrite each other. One save per board is on
-  the wire at a time: an edit made while one is out waits for its answer and
-  goes with the new number, so somebody typing quickly never clashes with
-  themselves.
-*/
-var pending = {}, inflight = {}, again = {};
-function saveBoard(k) {
-  saidNow('saving');
-  clearTimeout(pending[k]);
-  pending[k] = setTimeout(function () { pending[k] = 0; sendBoard(k); }, 500);
-}
-function sendBoard(k) {
-  if (inflight[k]) { again[k] = true; return; }
-  inflight[k] = true;
-  S.boardRevs = S.boardRevs || {};
-  var done = function () {
-    inflight[k] = false;
-    if (again[k]) { again[k] = false; sendBoard(k); }
-  };
-  api('/api/board/' + k, {
-    method:'PUT',
-    headers:{ 'Content-Type':'application/json', 'X-Board-Rev': String(S.boardRevs[k] === undefined ? '' : S.boardRevs[k]) },
-    body: JSON.stringify(S.boards[k])
-  }).then(function (r) {
-    return r.json().catch(function () { return null; }).then(function (j) {
-      if (r.ok) {
-        if (j && typeof j.rev === 'number') S.boardRevs[k] = j.rev;
-        saidNow('saved');
-        return done();
-      }
-      // A clash is not retried: what is on screen is older than what is
-      // saved, and sending it again would be the overwrite this refuses.
-      if (r.status === 409 || r.status === 428) again[k] = false;
-      // "did not save" on its own sends somebody looking in the wrong place.
-      // Say which it was.
-      saidNow(r.status === 401 ? 'not saved: signed out, reload the page'
-            : r.status === 403 ? 'not saved: you are not an admin here'
-            : r.status === 409 ? 'not saved: somebody else saved this board since you opened it. Reload to see their change, then make yours again'
-            : r.status === 428 ? 'not saved: this page is older than the board check. Reload, then make your change again'
-            : 'not saved: ' + (j && j.error ? j.error : r.status));
-      done();
-    });
-  }).catch(function () { saidNow('not saved: could not reach the server'); done(); });
-}
-
-var newId = function (p) {
-  return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-};
-var sectionOf = function (k, sid) {
-  return (S.boards[k].sections || []).filter(function (s) { return s.id === sid; })[0];
-};
-var rowOf = function (sec, rid) {
-  return (sec.rows || []).filter(function (r) { return r.id === rid; })[0];
-};
-
-function drawBoard() {
-  var k = S.at, admin = S.me.admin;
-  var b = S.boards[k] || { intro:'', sections:[] };
-  S.boards[k] = b;
-  b.sections = b.sections || [];
-
-  var out = head(admin
-    ? '<button class="btn small" id="addsec">Add section</button>' +
-      (k !== 'archive' ? '<button class="btn small" id="archall">Archive everything ticked</button>' : '')
-    : '', !!b.intro);
-
-  /* The intro and each section's note are markdown, and an admin edits them
-     in place like a cell (#2414): the Known Issues page is written from this
-     board, so its prose has to be editable here or it has no editor at all. */
-  if (b.intro) out += '<div class="doc doc-intro"' + (admin ? ' data-intro="1" title="Click to change"' : '') + '>' +
-    marked.parse(b.intro) + '</div>';
-  else if (admin) out += '<div class="doc doc-intro empty-note" data-intro="1">Add an intro</div>';
-
-  if (!b.sections.length) {
-    out += '<div class="empty">Nothing here yet.' +
-      (admin ? ' Add a section to start.' : '') + '</div>';
-  }
-
-  b.sections.forEach(function (sec) {
-    var cols = sec.columns || (sec.columns = []);
-    var rows = sec.rows || (sec.rows = []);
-    out += '<div class="sec" data-s="' + sec.id + '">' +
-      '<div class="sechead">' +
-        '<h3' + (admin ? ' contenteditable="plaintext-only" data-secname="1"' : '') + '>' +
-          esc(sec.name || 'Untitled') + '</h3>' +
-        '<span class="count">' + rows.length + '</span>' +
-        (admin ? '<div class="acts">' +
-          '<button class="btn small" data-addcol="' + sec.id + '">Add column</button>' +
-          '<button class="btn small" data-delsec="' + sec.id + '">Remove section</button>' +
-        '</div>' : '') +
-      '</div>';
-    if (sec.note) out += '<div class="secnote mdc"' + (admin ? ' data-note="' + sec.id + '" title="Click to change"' : '') + '>' +
-      marked.parse(sec.note) + '</div>';
-    else if (admin) out += '<div class="secnote empty-note" data-note="' + sec.id + '">Add a note</div>';
-
-    /* A section of prose alone (a note and no columns) has no table to draw,
-       and the adder below needs a first column to type into. Add column
-       gives it one. */
-    if (!cols.length) { out += '</div>'; return; }
-
-    out += '<div class="tablewrap' + (admin ? ' edit' : '') + '"><table class="board"><thead><tr>' +
-      '<th class="tick"></th>';
-    cols.forEach(function (c) {
-      out += '<th data-c="' + c.id + '"><span class="nm"' +
-        (admin ? ' contenteditable="plaintext-only" data-colname="' + sec.id + '|' + c.id + '"' : '') +
-        '>' + esc(c.name) + '</span>' +
-        (admin && cols.length > 1 ? '<button class="x" data-delcol="' + sec.id + '|' + c.id +
-          '" title="Remove this column">&times;</button>' : '') + '</th>';
-    });
-    if (admin) out += '<th class="rowacts"></th>';
-    out += '</tr></thead><tbody>';
-
-    rows.forEach(function (r) {
-      out += '<tr data-r="' + r.id + '" class="' + (r.done ? 'done' : '') + '">' +
-        '<td class="tick"><input type="checkbox"' + (r.done ? ' checked' : '') +
-          (admin ? '' : ' disabled') + ' data-tick="' + sec.id + '|' + r.id + '"></td>';
-      cols.forEach(function (c) {
-        out += '<td data-label="' + esc(c.name) + '" data-cell="' + sec.id + '|' + r.id + '|' + c.id + '">' +
-          '<div class="cell">' + cellHtml(r.cells ? r.cells[c.id] : '') + '</div></td>';
-      });
-      if (admin) {
-        out += '<td class="rowacts">' +
-          (k !== 'archive'
-            ? '<button data-arch="' + sec.id + '|' + r.id + '" title="Move to the archive">Archive</button>'
-            : '') +
-          '<button class="del" data-delrow="' + sec.id + '|' + r.id + '" title="Delete">&times;</button>' +
-        '</td>';
-      }
-      out += '</tr>';
-    });
-
-    if (admin) {
-      out += '<tr class="adder"><td class="tick"><span class="plus">+</span></td>' +
-        '<td colspan="' + (cols.length + 1) + '">' +
-        '<input placeholder="Add to ' + esc(sec.name || 'this') + ', then Enter" ' +
-        'data-add="' + sec.id + '"></td></tr>';
-    }
-    out += '</tbody></table></div></div>';
-  });
-
-  el('page').innerHTML = out;
-  wireBoard(k);
-}
-
-function wireBoard(k) {
-  var page = el('page'), admin = S.me.admin;
-  var b = S.boards[k];
-
-  if (!admin) { dressCode(); return; }
-
-  var add = el('addsec');
-  if (add) add.onclick = function () {
-    b.sections.push({ id:newId('s'), name:'New section', note:'',
-      columns:[{id:newId('c'),name:'Item'},{id:newId('c'),name:'Notes'}], rows:[] });
-    saveBoard(k); draw();
-  };
-  var archall = el('archall');
-  if (archall) archall.onclick = function () {
-    var n = 0;
-    b.sections.forEach(function (sec) {
-      (sec.rows || []).slice().forEach(function (r) {
-        if (r.done) { moveToArchive(k, sec, r, true); n++; }
-      });
-    });
-    if (!n) { saidNow('nothing is ticked'); return; }
-    saveBoard(k); saveBoard('archive'); draw();
-  };
-
-  var intro = page.querySelector('[data-intro]');
-  if (intro) intro.onclick = function () {
-    openText(k, intro, b.intro || '', function (v) { b.intro = v; });
-  };
-  each(page, '[data-note]', function (div) {
-    div.onclick = function () {
-      var sec = sectionOf(k, div.dataset.note); if (!sec) return;
-      openText(k, div, sec.note || '', function (v) { sec.note = v; });
-    };
-  });
-
-  each(page, '[data-secname]', function (h) {
-    h.onblur = function () {
-      var sec = sectionOf(k, h.closest('.sec').dataset.s);
-      if (!sec) return;
-      var v = h.textContent.trim();
-      if (v !== sec.name) { sec.name = v; saveBoard(k); }
-    };
-    h.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); h.blur(); } };
-  });
-
-  each(page, '[data-colname]', function (sp) {
-    sp.onblur = function () {
-      var parts = sp.dataset.colname.split('|');
-      var sec = sectionOf(k, parts[0]); if (!sec) return;
-      var col = sec.columns.filter(function (c) { return c.id === parts[1]; })[0];
-      if (col && col.name !== sp.textContent.trim()) { col.name = sp.textContent.trim(); saveBoard(k); }
-    };
-    sp.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); sp.blur(); } };
-  });
-
-  each(page, '[data-addcol]', function (btn) {
-    btn.onclick = function () {
-      var sec = sectionOf(k, btn.dataset.addcol); if (!sec) return;
-      sec.columns.push({ id:newId('c'), name:'New column' });
-      saveBoard(k); draw();
-      var last = page.querySelector('.sec[data-s="' + sec.id + '"] th:nth-last-child(2) .nm');
-      if (last) { last.focus(); document.execCommand && document.execCommand('selectAll', false, null); }
-    };
-  });
-
-  each(page, '[data-delcol]', function (btn) {
-    btn.onclick = function () {
-      var parts = btn.dataset.delcol.split('|');
-      var sec = sectionOf(k, parts[0]); if (!sec) return;
-      var col = sec.columns.filter(function (c) { return c.id === parts[1]; })[0];
-      if (!confirm('Remove the column "' + (col ? col.name : '') + '" and everything in it?')) return;
-      sec.columns = sec.columns.filter(function (c) { return c.id !== parts[1]; });
-      sec.rows.forEach(function (r) { if (r.cells) delete r.cells[parts[1]]; });
-      saveBoard(k); draw();
-    };
-  });
-
-  each(page, '[data-delsec]', function (btn) {
-    btn.onclick = function () {
-      var sec = sectionOf(k, btn.dataset.delsec); if (!sec) return;
-      if (!confirm('Remove "' + sec.name + '" and its ' + sec.rows.length + ' rows?')) return;
-      b.sections = b.sections.filter(function (s) { return s.id !== sec.id; });
-      saveBoard(k); draw();
-    };
-  });
-
-  each(page, '[data-tick]', function (box) {
-    box.onchange = function () {
-      var parts = box.dataset.tick.split('|');
-      var sec = sectionOf(k, parts[0]); if (!sec) return;
-      var r = rowOf(sec, parts[1]); if (!r) return;
-      r.done = box.checked;
-      r.at = Date.now();
-      box.closest('tr').className = r.done ? 'done' : '';
-      saveBoard(k);
-    };
-  });
-
-  each(page, '[data-arch]', function (btn) {
-    btn.onclick = function () {
-      var parts = btn.dataset.arch.split('|');
-      var sec = sectionOf(k, parts[0]); if (!sec) return;
-      var r = rowOf(sec, parts[1]); if (!r) return;
-      moveToArchive(k, sec, r, true);
-      saveBoard(k); saveBoard('archive'); draw();
-    };
-  });
-
-  each(page, '[data-delrow]', function (btn) {
-    btn.onclick = function () {
-      var parts = btn.dataset.delrow.split('|');
-      var sec = sectionOf(k, parts[0]); if (!sec) return;
-      if (!confirm('Delete this row? Archive keeps it, this does not.')) return;
-      sec.rows = sec.rows.filter(function (r) { return r.id !== parts[1]; });
-      saveBoard(k); draw();
-    };
-  });
-
-  each(page, '[data-add]', function (inp) {
-    inp.onkeydown = function (e) {
-      if (e.key !== 'Enter') return;
-      var v = inp.value.trim();
-      if (!v) return;
-      var sec = sectionOf(k, inp.dataset.add); if (!sec) return;
-      var cells = {};
-      cells[sec.columns[0].id] = v;
-      sec.rows.push({ id:newId('r'), done:false, at:Date.now(), by:S.me.name, cells:cells });
-      saveBoard(k);
-      inp.value = '';
-      var keep = sec.id;
-      draw();
-      var again = el('page').querySelector('[data-add="' + keep + '"]');
-      if (again) again.focus();
-    };
-  });
-
-  each(page, '[data-cell] .cell', function (div) {
-    div.onclick = function () { openCell(k, div.parentNode); };
-  });
-
-  dressCode();
-}
-
+/* ------------------------------------------------------------ helpers -- */
 function each(root, sel, fn) {
   Array.prototype.forEach.call(root.querySelectorAll(sel), fn);
-}
-
-/* A cell becomes a box, and putting it back saves it. Enter commits because
-   most of these are one line; shift and Enter when a line break is wanted. */
-function openCell(k, td) {
-  if (td.querySelector('textarea')) return;
-  var parts = td.dataset.cell.split('|');
-  var sec = sectionOf(k, parts[0]); if (!sec) return;
-  var row = rowOf(sec, parts[1]); if (!row) return;
-  row.cells = row.cells || {};
-  var was = row.cells[parts[2]] || '';
-
-  var ta = document.createElement('textarea');
-  ta.value = was;
-  td.innerHTML = '';
-  td.appendChild(ta);
-  var grow = function () { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; };
-  grow();
-  ta.oninput = grow;
-  ta.focus();
-  ta.setSelectionRange(was.length, was.length);
-
-  var close = function (commit) {
-    var v = commit ? ta.value : was;
-    row.cells[parts[2]] = v;
-    td.innerHTML = '<div class="cell">' + cellHtml(v) + '</div>';
-    td.querySelector('.cell').onclick = function () { openCell(k, td); };
-    dressCode();
-    if (commit && v !== was) { row.at = Date.now(); saveBoard(k); }
-  };
-  ta.onblur = function () { close(true); };
-  ta.onkeydown = function (e) {
-    if (e.key === 'Escape') { e.preventDefault(); ta.onblur = null; close(false); }
-    else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ta.blur(); }
-    else if (e.key === 'Tab') {
-      e.preventDefault();
-      var tds = Array.prototype.slice.call(el('page').querySelectorAll('[data-cell]'));
-      var i = tds.indexOf(td);
-      ta.blur();
-      var nxt = tds[i + (e.shiftKey ? -1 : 1)];
-      if (nxt) openCell(k, nxt);
-    }
-  };
-}
-
-/* A board's intro or a section's note becomes a box (#2414). Paragraphs are
-   the point of these, so Enter is a new line here, not the end: clicking away
-   saves, Escape puts back what was there. */
-function openText(k, holder, was, put) {
-  if (holder.querySelector('textarea')) return;
-  var ta = document.createElement('textarea');
-  ta.className = 'notebox';
-  ta.value = was;
-  holder.onclick = null;
-  holder.innerHTML = '';
-  holder.appendChild(ta);
-  var grow = function () { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; };
-  grow();
-  ta.oninput = grow;
-  ta.focus();
-  var close = function (commit) {
-    var v = commit ? ta.value.replace(/\s+$/, '') : was;
-    if (commit && v !== was) { put(v); saveBoard(k); }
-    draw();
-  };
-  ta.onblur = function () { close(true); };
-  ta.onkeydown = function (e) {
-    if (e.key === 'Escape') { e.preventDefault(); ta.onblur = null; close(false); }
-  };
-}
-
-function moveToArchive(from, sec, row, tick) {
-  var arch = S.boards.archive;
-  if (!arch) return;
-  arch.sections = arch.sections || [];
-  var name = label(from) + ' · ' + (sec.name || '');
-  var tgt = arch.sections.filter(function (s) { return s.name === name; })[0];
-  if (!tgt) {
-    tgt = { id:newId('s'), name:name, note:'',
-            columns:[{ id:newId('c'), name:'When' }], rows:[] };
-    arch.sections.unshift(tgt);
-  }
-  var cells = {};
-  cells[tgt.columns[0].id] = new Date().toLocaleDateString();
-  (sec.columns || []).forEach(function (c) {
-    var m = tgt.columns.filter(function (x) { return x.name === c.name; })[0];
-    if (!m) { m = { id:newId('c'), name:c.name }; tgt.columns.push(m); }
-    cells[m.id] = (row.cells || {})[c.id] || '';
-  });
-  tgt.rows.unshift({ id:newId('r'), done:false, at:Date.now(), by:S.me.name, cells:cells });
-  sec.rows = sec.rows.filter(function (r) { return r.id !== row.id; });
 }
 
 /* ------------------------------------------------------------ document -- */

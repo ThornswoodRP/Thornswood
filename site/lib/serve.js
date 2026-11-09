@@ -15,7 +15,7 @@ const path   = require('path');
 const crypto = require('crypto');
 const { FILES, PUBLIC, ROOT, UP } = require('./base');
 const { andList, cfg, forMode, notAcceptedYet } = require('./config');
-const { BLURB, BOARDS, DOCS, escAttr, fillCreditsCommits, fillLoreLine,
+const { BLURB, DOCS, escAttr, fillCreditsCommits, fillLoreLine,
   fillPage, LEVEL, MD_PAGES, pageHtml, pageMarkdown, PUBLIC_EDGE_SECONDS,
   PUBLIC_PAGES, readLines, roadmapBoard } = require('./pages');
 const { assetLocation, feedFile, feedSettings, feedView, nativePublished, nativeTag, newestSetup, releaseAsset, releaseCopy,
@@ -24,8 +24,8 @@ const { creditsFacts, findPageVersion, PAGES, pageSha256, PUBLIC_ORIGIN,
   publicAssetBody, publicAssetVersion, publicDiscovery, publicPageBody,
   singlePageHeading } = require('./public');
 const { gameStatus, mostOnlineFallback, seatsFull, worldFull } = require('./game');
-const { boardRev, INBOX, jsonFile, noteRules, putJson, readBoard, readDoc,
-  readLists, RESULTS, RULES_OK, writeBoardOne, writeDoc } = require('./store');
+const { INBOX, jsonFile, noteRules, putJson, readDoc,
+  readLists, RESULTS, RULES_OK, writeDoc } = require('./store');
 const { NEWS } = require('./news');
 const { galleryPage, loginBackoff, loginBackoffBump, loginKey, loginNote,
   loginWait, publicApiWait, publicJson, reportFrom, reportRefusal,
@@ -2835,16 +2835,13 @@ async function handle(req, res) {
     if (!w.member && !w.dev) return sendJson(res, 401, { error: 'sign in first' });
 
     if (p === '/api/all' && req.method === 'GET') {
-      const docs = {}, boards = {};
+      const docs = {};
       for (const n of Object.keys(DOCS))   if (allowed(n, w)) docs[n]   = readDoc(n);
-      const all = readBoard();
-      const boardRevs = {};
-      for (const n of Object.keys(BOARDS)) if (allowed(n, w)) { boards[n] = all[n] || { intro:'', sections:[] }; boardRevs[n] = boardRev(all, n); }
       return sendJson(res, 200, {
         me: w,
-        titles: Object.assign({}, DOCS, BOARDS),
+        titles: Object.assign({}, DOCS),
         level: LEVEL,
-        docs, boards, boardRevs,
+        docs,
         // Member and admin material, held back from staff who are neither.
         // They are here for the Gallery page, which reads none of these: the
         // queue and the live list are their own doors.
@@ -3010,18 +3007,10 @@ async function handle(req, res) {
       return sendJson(res, 200, { ok: true });
     }
 
-    const mb = p.match(/^\/api\/board\/([a-z]+)$/);
-    if (mb && req.method === 'PUT') {
-      let obj;
-      try { obj = JSON.parse(await body(req)); }
-      catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
-      const saved = writeBoardOne(mb[1], obj, req.headers['x-board-rev']);
-      if (!saved.ok) {
-        if (saved.status === 409) console.warn('board ' + mb[1] + ': a save from revision ' + req.headers['x-board-rev'] + ' was refused, the board is at ' + saved.rev);
-        return sendJson(res, saved.status, { error: saved.error, message: saved.message, rev: saved.rev });
-      }
-      return sendJson(res, 200, { ok: true, rev: saved.rev });
-    }
+    /* The hub's board save (a PUT per board, #2188) was here. It went
+       with the board editor in #4359: nothing on the hub edits a board, and
+       the known issues and the roadmap are written from the issue board
+       (#3140). */
 
     /* Everything from one session, for the View more button on /sessions.
        Admins only, like everything below the line above.

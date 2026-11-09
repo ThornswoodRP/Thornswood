@@ -146,9 +146,9 @@ try {
     $ErrorActionPreference = $old
 } finally { Pop-Location }
 Yes 'vps.json is among the files carrying the address' ($carriers -contains 'scripts/vps/vps.json')
-# Prose that names the box for a person reading it: the .md files, and the
-# site's copy of the board, a record of what was said.
-$prose = @('site/data/board.json')
+# Prose that names the box for a person reading it: the .md files. The
+# site's copy of the hub's boards was here too until they went in #4359.
+$prose = @()
 $outside = @($carriers | Where-Object {
         $_ -ne 'scripts/vps/vps.json' -and $baked -notcontains $_ -and $prose -notcontains $_ -and $_ -notmatch '\.md$'
     })

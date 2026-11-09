@@ -301,9 +301,9 @@ it per session and ignores which profile Vortex has on.
 - `lore\`: history and the Accord. `site\data\site\*.md`: the public
   pages (join, rules, classes, world, credits, privacy, terms), also live on
   the site.
-- The site's hub boards (Active Issues, Test These, Suggestions, Archive, the
-  Patrick runbook) are older than the board and are being retired (issue
-  #433); where they disagree with the board, the board is right. The
+- The site's hub boards (Active Issues, Suggestions, Archive, the Patrick
+  runbook) are gone (issues #433 and #4359): the board is the one record of
+  work, and the words pasted into Patreon are in `docs\PATREON.md`. The
   public Known Issues page and roadmap are not boards: the bot writes both
   from the issue board into the site's `data\from-bot\lists.json`, the
   known list from the `Known issue:` comments on the findings and the

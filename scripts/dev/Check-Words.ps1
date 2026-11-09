@@ -78,13 +78,14 @@ if (-not $Root) { $Root = Split-Path -Parent (Split-Path -Parent $Here) }
 $Root = (Resolve-Path -LiteralPath $Root).Path
 
 # Files that must be there. A missing one is said out loud, not dropped.
-# site/data/board.json because the hub's boards in it are shown on the site.
-# The Known Issues page and the roadmap came out of it in #3140: they are
+# site/data/board.json was here while the hub's boards in it were shown on
+# the site; they went in #4359. The Known Issues page and the roadmap came
+# out of it in #3140: they are
 # written from the issue board, and the bot checks their words (bot.py
 # post_problems).
 $Named = @(
     'README.md', 'SECURITY.md', 'Developer-Guide.md', 'launcher/app/MainWindow.axaml',
-    'bot/content.py', 'site/public/home.html', 'site/data/board.json'
+    'bot/content.py', 'site/public/home.html'
 )
 # README.md and the component READMEs that tests\test-component-readmes.js reads.
 $NameFiles = @(
