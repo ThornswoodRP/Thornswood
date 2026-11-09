@@ -31,8 +31,9 @@
        nothing, and it refuses a site feed that is not the clone's, a clone
        with an unpushed commit, and a baseline already moved on
 
-  Nothing here connects to anything but 127.0.0.1. Everything it writes is in
-  its own temp folder.
+  Nothing here connects to anything but 127.0.0.1: the copy of the site asks
+  GitHub at 127.0.0.1:1, where nothing answers (#5547). Everything it writes
+  is in its own temp folder.
 #>
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -245,6 +246,7 @@ try {
         $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
         $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
         $psi.EnvironmentVariables['THORNSWOOD_DOCS_PORT'] = [string]$port
+        $psi.EnvironmentVariables['THORNSWOOD_GITHUB_API'] = 'http://127.0.0.1:1'
         $psi.EnvironmentVariables['THORNSWOOD_DOCS_LOCAL'] = '1'
         $psi.EnvironmentVariables['THORNSWOOD_CHAT_DIR'] = (Join-Path $site 'chat')
         $p = [Diagnostics.Process]::Start($psi)
@@ -268,8 +270,14 @@ try {
                           '/feed/published.json%00', '/feed-dev/history') {
             Yes "  $path answers 404" ((Code $path) -eq 404)
         }
-        $doc = Read-SiteFeed 'main' -SiteUrl $base
+        # The copy asks GitHub at 127.0.0.1:1, where nothing answers, so no
+        # Release of the live repository moves main's feed (#5547).
+        $doc = $null; $why = ''
+        try { $doc = Read-SiteFeed 'main' -SiteUrl $base } catch { $why = $_.Exception.Message }
         Yes 'Read-SiteFeed reads the live feed over http from the site' ($null -ne $doc -and $doc.launcherVersion -eq '1.1.101')
+        if ($why) { Write-Host "      it threw: $why" }
+        elseif ($null -eq $doc) { Write-Host '      it gave back no feed' }
+        elseif ($doc.launcherVersion -ne '1.1.101') { Write-Host ('      it gave back ' + ($doc | ConvertTo-Json -Compress -Depth 6)) }
         $doc = Read-SiteFeed 'dev' -SiteDir $site
         Yes 'and from the stand-in folder' ($null -ne $doc -and $doc.launcherVersion -eq '1.1.101.35')
         Remove-Item -LiteralPath (Join-Path $site 'feed\version.json.part'), (Join-Path $site 'feed\read.json') -Force

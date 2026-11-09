@@ -231,7 +231,7 @@ async function sweep() {
     const port = await freePort();
     const srv = spawn(process.execPath, ['server.js'], {
       cwd: dir,
-      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_DOCS_LOCAL: '1',
+      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
                                             THORNSWOOD_CHAT_DIR: path.join(dir, 'chat') }, env || {})
     });
     let out = '';

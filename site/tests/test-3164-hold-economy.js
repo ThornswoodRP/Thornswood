@@ -438,7 +438,7 @@ const asJson = { 'content-type': 'application/json' };
   const srv = spawn(process.execPath, ['-r', path.join(sdir, 'stub.js'), 'server.js'], {
     cwd: sdir,
     env: Object.assign({}, process.env, {
-      THORNSWOOD_DOCS_PORT: String(PORT), THORNSWOOD_DOCS_LOCAL: '1',
+      THORNSWOOD_DOCS_PORT: String(PORT), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
       THORNSWOOD_CHAT_DIR: path.join(sdir, 'chat'),
       TS_STUB_GUILD: GUILD, TS_STUB_OWNER: OWNER_ID, TS_STUB_LORE: LORE_ID, TS_STUB_TESTER: TESTER_ID
     })

@@ -55,6 +55,15 @@
 //      to 1, which the system never hands out for a listen on 0 and which no
 //      harness listens on (1. above), so no run can take it.
 //
+// #5547, where the site asks GitHub about Releases. A copy asked the live
+// api.github.com, so once main had a Release with a move program a copy that
+// heard back in time answered main's feed as the move, and
+// test-feed-store.ps1 read another launcherVersion in some runs. This also
+// checks:
+//  10. every harness that starts the site gives every copy it starts
+//      THORNSWOOD_GITHUB_API on 127.0.0.1:1, where nothing answers, so no
+//      copy's answers depend on what the repository's Releases hold.
+//
 // HARNESS_ROOT points it at another copy of the repository, which is how it
 // was shown to fail on the harnesses before the change.
 //
@@ -268,6 +277,26 @@ for (const f of gameSites) {
       vs.length > 0 && vs.every((v) => portOne(ps ? psText[f] : text[f], v, ps)));
 }
 
+// ------------------------------------ where the site asks GitHub (#5547)
+// One THORNSWOOD_GITHUB_API on 127.0.0.1:1 for every THORNSWOOD_DOCS_PORT a
+// harness hands a copy it starts.
+function githubFor(src, ps) {
+  const port = ps ? /EnvironmentVariables\['THORNSWOOD_DOCS_PORT'\]|THORNSWOOD_DOCS_PORT = \[string\]/g : /THORNSWOOD_DOCS_PORT:\s*String\(/g;
+  const gh = ps ? /EnvironmentVariables\['THORNSWOOD_GITHUB_API'\] = 'http:\/\/127\.0\.0\.1:1'|THORNSWOOD_GITHUB_API = 'http:\/\/127\.0\.0\.1:1'/g
+    : /THORNSWOOD_GITHUB_API:\s*'http:\/\/127\.0\.0\.1:1'/g;
+  return { port: (src.match(port) || []).length, gh: (src.match(gh) || []).length };
+}
+console.log('\nwhere each site harness has its site ask GitHub (' + (sites.length + psSites.length) + '):');
+yes('it would have caught a copy started with only its port',
+    githubFor("env: { THORNSWOOD_DOCS_PORT: String(port) }", false).gh === 0 &&
+    githubFor("$psi.EnvironmentVariables['THORNSWOOD_DOCS_PORT'] = [string]$port\n", true).gh === 0);
+for (const f of sites.concat(psSites)) {
+  const ps = /\.ps1$/.test(f);
+  const n = githubFor(ps ? psText[f] : text[f], ps);
+  yes(f + ' gives each copy it starts THORNSWOOD_GITHUB_API on 127.0.0.1:1 (' + n.gh + ' of ' + n.port + ')',
+      n.port > 0 && n.gh === n.port);
+}
+
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-1703-'));
 for (const n of ['voice-server.js', 'headlines.js']) {
   fs.copyFileSync(path.join(REPO_DIR, 'voice', n), path.join(scratch, n));
@@ -277,7 +306,7 @@ fs.mkdirSync(siteDir);
 siteFiles.copy(siteDir);
 function site(port) {
   const srv = spawn(process.execPath, ['server.js'], { cwd: siteDir,
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_DOCS_LOCAL: '1' }) });
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' }) });
   srv.stdout.on('data', () => {}); srv.stderr.on('data', () => {});
   return srv;
 }

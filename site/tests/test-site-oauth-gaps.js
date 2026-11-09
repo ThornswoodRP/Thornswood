@@ -165,7 +165,7 @@ function listening(srv, port) {
 (async () => {
   PORT = await freePort();
   const srv = spawn(process.execPath, ['-r', path.join(dir, 'stub.js'), 'server.js'], {
-    cwd: dir, env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(PORT), THORNSWOOD_DOCS_LOCAL: '1', TS_STUB_LOG: OUTBOUND })
+    cwd: dir, env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(PORT), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1', TS_STUB_LOG: OUTBOUND })
   });
   let out = '';
   srv.stdout.on('data', (d) => { out += d; });

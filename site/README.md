@@ -97,6 +97,12 @@ the chat under each session read files that only exist on the VPS
 (`C:\Thornswood-Server\data\online.json`, `C:\Thornswood-Voice\chat`, and
 `C:\Thornswood-Voice-Dev\chat` for a dev session), so locally the game shows
 as down.
+The Downloads page, the feeds and the asset links ask GitHub, without a
+token, which Releases hold the setup programs and the move program.
+`THORNSWOOD_GITHUB_API` names another address for that, https or http on
+127.0.0.1; every harness that starts a copy sets it to `http://127.0.0.1:1`,
+where nothing answers, so what its copy serves never depends on the live
+Releases (#5547).
 
 To see the door answer, from a second window:
 

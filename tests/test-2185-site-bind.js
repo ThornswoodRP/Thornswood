@@ -75,7 +75,7 @@ function listening(srv, port) {
 }
 async function run(env) {
   const port = await freePort();
-  const e = Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port) });
+  const e = Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1' });
   delete e.THORNSWOOD_DOCS_LOCAL; delete e.THORNSWOOD_DOCS_EXPOSE;
   Object.assign(e, env);
   const srv = spawn(process.execPath, ['server.js'], { cwd: dir, env: e });

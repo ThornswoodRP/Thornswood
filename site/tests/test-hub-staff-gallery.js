@@ -188,12 +188,8 @@ function stub() {
     req.end = () => {
       if (ended) return;
       ended = true;
-      // The Release list too: the site looks there for the installer when a
-      // page lists the downloads (newestSetup, #4824), and is told there is
-      // no Release yet.
-      const body = host === 'discord.com' ? answer(where)
-        : host === 'api.github.com' && /^\/repos\/ThornswoodRP\/Thornswood\/releases\?/.test(where) ? []
-        : null;
+      // GitHub is not asked here: the copy asks it at 127.0.0.1:1 (#5547).
+      const body = host === 'discord.com' ? answer(where) : null;
       say((body ? 'STUBBED ' : 'OUTBOUND ') + host + where);
       setImmediate(() => {
         if (!body) { req.emit('error', new Error('the harness lets no request leave this machine')); return; }
@@ -269,6 +265,7 @@ const asJson = { 'content-type': 'application/json' };
     cwd: dir,
     env: Object.assign({}, process.env, {
       THORNSWOOD_DOCS_PORT: String(PORT),
+      THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1',
       THORNSWOOD_DOCS_LOCAL: '1',
       THORNSWOOD_CHAT_DIR: path.join(dir, 'chat'),
       TS_STUB_LOG: OUTBOUND,

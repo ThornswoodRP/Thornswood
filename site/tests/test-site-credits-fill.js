@@ -139,7 +139,7 @@ function wait(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
     let log = '';
     child = spawn(process.execPath, ['server.js'], {
       cwd: dir,
-      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_DOCS_LOCAL: '1', THORNSWOOD_CHAT_DIR: path.join(dir, 'chat') })
+      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1', THORNSWOOD_CHAT_DIR: path.join(dir, 'chat') })
     });
     child.stdout.on('data', function (d) { log += d; }); child.stderr.on('data', function (d) { log += d; });
     for (let i = 0; i < 200 && log.indexOf('listening on ') < 0; i++) await wait(50);

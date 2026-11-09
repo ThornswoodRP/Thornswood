@@ -67,7 +67,7 @@ async function main() {
     const s = net.createServer(); s.listen(0, '127.0.0.1', () => {const p=s.address().port;s.close(()=>resolve(p));});
   });
   server = spawn(process.execPath, [path.join(work, 'server.js')], {cwd:work,
-    env:{...process.env, THORNSWOOD_DOCS_LOCAL:'1', THORNSWOOD_DOCS_PORT:String(port)}, stdio:'pipe'});
+    env:{...process.env, THORNSWOOD_DOCS_LOCAL:'1', THORNSWOOD_DOCS_PORT:String(port), THORNSWOOD_GITHUB_API:'http://127.0.0.1:1'}, stdio:'pipe'});
   let log = ''; server.stdout.on('data', b => log += b); server.stderr.on('data', b => log += b);
   await listening(server, port);
   const titles = new Set(), descriptions = new Set();
