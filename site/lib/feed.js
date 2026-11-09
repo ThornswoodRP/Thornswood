@@ -15,7 +15,7 @@ module.exports = { askReleaseCopies, feedFile, feedReleaseTag, feedSettings,
 const https  = require('https');
 const fs     = require('fs');
 const path   = require('path');
-const { DATA, ROOT } = require('./base');
+const { DATA, GITHUB_API, ROOT } = require('./base');
 const DEPLOYED_BUILD = path.join(DATA, 'deployed-build.json');
 /* THE FEED'S GENERATIONS (#2727). The store never replaces version.json: each
    feed a Ship or feed edit sends is a new file, <channel>\version\<8 digits>.json,
@@ -204,8 +204,8 @@ function releaseGitHub(apiPath) {
   return new Promise((resolve) => {
     let settled = false;
     const settle = (v) => { if (!settled) { settled = true; clearTimeout(timer); resolve(v); } };
-    const req = https.get({
-      hostname: 'api.github.com', path: '/repos/' + RELEASE_REPO + apiPath,
+    const req = (GITHUB_API.protocol === 'http:' ? require('http') : https).get({
+      hostname: GITHUB_API.hostname, port: GITHUB_API.port || undefined, path: '/repos/' + RELEASE_REPO + apiPath,
       headers: { 'user-agent': 'thornswood-site', accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' }
     }, (res) => {
       let out = '';

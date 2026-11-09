@@ -385,7 +385,7 @@ async function adminRoleOnly() {
   const port2 = await freePort();
   const site2 = spawn(process.execPath, ['-r', path.join(d2, 'stub.js'), path.join(d2, 'server.js')], {
     cwd: d2, stdio: ['ignore', 'pipe', 'pipe'],
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port2), THORNSWOOD_DOCS_LOCAL: '1',
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port2), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
                                           TS_STUB_GUILD: GUILD, TS_STUB_IDS: JSON.stringify(ids) })
   });
   try {
@@ -425,7 +425,7 @@ async function adminRoleOnly() {
   const port = await freePort();
   const site = spawn(process.execPath, [path.join(dir, 'server.js')], {
     cwd: dir, stdio: ['ignore', 'pipe', 'pipe'],
-    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_DOCS_LOCAL: '1' })
+    env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
   });
   try {
     yes('the scratch site starts', await listening(site, port).then(() => true));

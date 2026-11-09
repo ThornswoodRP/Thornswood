@@ -164,7 +164,8 @@ function bothWordings(text) {
     cwd: work,
     env: Object.assign({}, process.env, {
       THORNSWOOD_DOCS_LOCAL: '1',
-      THORNSWOOD_DOCS_PORT: String(port)
+      THORNSWOOD_DOCS_PORT: String(port),
+      THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1'
     })
   });
   started = true;

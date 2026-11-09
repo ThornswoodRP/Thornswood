@@ -253,7 +253,7 @@ http.createServer((req, res) => {
         return $p
     }
     $script:errOf = @{}
-    $siteProc = Start-Node $siteDir @('server.js') @{ THORNSWOOD_DOCS_PORT = [string]$sitePort; THORNSWOOD_DOCS_LOCAL = '1'; THORNSWOOD_CHAT_DIR = (Join-Path $siteDir 'chat') }
+    $siteProc = Start-Node $siteDir @('server.js') @{ THORNSWOOD_DOCS_PORT = [string]$sitePort; THORNSWOOD_GITHUB_API = 'http://127.0.0.1:1'; THORNSWOOD_DOCS_LOCAL = '1'; THORNSWOOD_CHAT_DIR = (Join-Path $siteDir 'chat') }
     $procs += $siteProc
     $ghProc = Start-Node (Split-Path -Parent $ghJs) @($ghJs, $ghDir, [string]$ghPort, $ghLog) @{}
     $procs += $ghProc

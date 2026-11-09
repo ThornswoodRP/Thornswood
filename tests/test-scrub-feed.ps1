@@ -184,6 +184,7 @@ $psi = New-Object Diagnostics.ProcessStartInfo
 $psi.FileName = $node.Source; $psi.Arguments = '"server.js"'; $psi.WorkingDirectory = $site
 $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
 $psi.EnvironmentVariables['THORNSWOOD_DOCS_PORT'] = [string]$sitePort
+$psi.EnvironmentVariables['THORNSWOOD_GITHUB_API'] = 'http://127.0.0.1:1'
 $psi.EnvironmentVariables['THORNSWOOD_DOCS_LOCAL'] = '1'
 $psi.EnvironmentVariables['THORNSWOOD_CHAT_DIR'] = (Join-Path $site 'chat')
 $sp = [Diagnostics.Process]::Start($psi); $spErr = $sp.StandardError.ReadToEndAsync()

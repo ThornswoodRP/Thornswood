@@ -287,6 +287,7 @@ try {
         $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
         $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
         $psi.EnvironmentVariables['THORNSWOOD_DOCS_PORT'] = [string]$port
+        $psi.EnvironmentVariables['THORNSWOOD_GITHUB_API'] = 'http://127.0.0.1:1'
         $psi.EnvironmentVariables['THORNSWOOD_DOCS_LOCAL'] = '1'
         $psi.EnvironmentVariables['THORNSWOOD_CHAT_DIR'] = (Join-Path $site 'chat')
         $p = [Diagnostics.Process]::Start($psi)

@@ -191,6 +191,7 @@ try {
   $psi.FileName = (Get-Command node).Source; $psi.Arguments = 'server.js'; $psi.WorkingDirectory = $docs
   $psi.UseShellExecute = $false; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
   $psi.EnvironmentVariables['THORNSWOOD_DOCS_PORT'] = "$port"
+  $psi.EnvironmentVariables['THORNSWOOD_GITHUB_API'] = 'http://127.0.0.1:1'
   $psi.EnvironmentVariables['THORNSWOOD_DOCS_LOCAL'] = '1'
   $psi.EnvironmentVariables['THORNSWOOD_CHAT_DIR'] = (Join-Path $docs 'chat')
   $node = [Diagnostics.Process]::Start($psi)

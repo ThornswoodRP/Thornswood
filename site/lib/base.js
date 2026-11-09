@@ -44,6 +44,19 @@ const PORT   = Number(process.env.THORNSWOOD_DOCS_PORT || 3001);
    wins over EXPOSE. */
 const EXPOSED = process.env.THORNSWOOD_DOCS_EXPOSE === '1' && process.env.THORNSWOOD_DOCS_LOCAL !== '1';
 const BIND   = EXPOSED ? '0.0.0.0' : '127.0.0.1';
+/* WHERE THE SITE ASKS GITHUB (#5547). The site asks GitHub's API, without a
+   token, which Releases hold the setup programs, the move program and the
+   release copies (feed.js releaseGitHub). A copy a harness starts sets
+   THORNSWOOD_GITHUB_API to an address on 127.0.0.1 that nothing answers, so
+   what the copy serves never depends on the live repository's Releases: on
+   8 Nov main's first Release with a move program made every copy that heard
+   from GitHub in time answer main's feed as the move (test-feed-store.ps1).
+   Only http on 127.0.0.1 or https anywhere; the box never sets it. */
+const GITHUB_API = (() => {
+  const u = new URL(process.env.THORNSWOOD_GITHUB_API || 'https://api.github.com');
+  if (u.protocol === 'https:' || (u.protocol === 'http:' && u.hostname === '127.0.0.1')) return u;
+  throw new Error('THORNSWOOD_GITHUB_API is ' + u.href + ': only https, or http on 127.0.0.1, is asked');
+})();
 const ROOT   = path.join(__dirname, '..');
 const DATA   = path.join(ROOT, 'data');
 const PUBLIC = path.join(ROOT, 'public');
@@ -62,4 +75,4 @@ const FROM_BOT = path.join(DATA, 'from-bot');
 const LISTS = path.join(FROM_BOT, 'lists.json');
 
 Object.assign(module.exports, { BIND, DATA, EXPOSED, FILES, FOR_BOT,
-  FROM_BOT, LEFT_OUT, LISTS, PORT, PUBLIC, ROOT, UP });
+  FROM_BOT, GITHUB_API, LEFT_OUT, LISTS, PORT, PUBLIC, ROOT, UP });
