@@ -797,6 +797,10 @@ issue where the card did.
   installation's accepted permissions or in the broker's label token.**
   (dec_3yD3Nw8rj2kZM5sNnl6B9g) 2 Nov 2026,
   [#5571](https://github.com/ThornswoodRP/Thornswood/issues/5571#issuecomment-6728772970).
+- **The git broker lets Bramble start promote-main.yml, and each promotion
+  still waits for Patrick's approval on its Main Deployment.**
+  (dec_uo8pYszN29ELpg9kkw1V7w) 8 Nov 2026,
+  [#4825](https://github.com/ThornswoodRP/Thornswood/issues/4825#issuecomment-6730901662).
 
 ### Turned down
 
