@@ -848,6 +848,9 @@ issue where the card did.
   it was set on 31 Oct (q-3683-lock-tag-creation, kept by
   q-p20-v-tag-creation). 1 Nov 2026,
   [#3683](https://github.com/ThornswoodRP/Thornswood/issues/3683).
+- **The ops repository stays on GitHub's free plan; nothing is spent on GitHub
+  Team to protect its main.** (dec_3mOoeSeanA16LzIfpJtpyg) 9 Nov 2026,
+  [Ops #256](https://github.com/ThornswoodRP/Thornswood-Ops/issues/256#issuecomment-6751636622).
 - **No paid Actions usage: the private repositories' checks run on runners of
   our own.** The spending limit stays at $0; a check with no runner waits for
   them, and billing is never the fix (q-hermes-ci-free-runners). 2 Nov 2026,
