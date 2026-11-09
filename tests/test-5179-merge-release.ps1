@@ -168,6 +168,26 @@ try {
     [IO.File]::WriteAllText((Join-Path $rd 'build-1.3.23.json'), (@{ tag = 'build-1.3.21'; commit = $commit; parts = @{} } | ConvertTo-Json))
     $threw = $false; try { Get-MergeReleasePrevious -ReleasesFile $rf -ManifestDir $rd | Out-Null } catch { $threw = $_.Exception.Message -match 'says it is build-1\.3\.21' }
     Yes '  a manifest that names another tag is refused' $threw
+    # GitHub's own order on 9 Nov 2026: drafts first, then build-1.3.9 ahead
+    # of build-1.3.13 to build-1.3.10. Taking the first made 1.3.10 to 1.3.13
+    # all start from 1.3.9 and say its next note again.
+    $gh = @(
+        @{ id = 20; tag_name = 'build-1.3.14'; draft = $true; assets = @(@{ id = 30; name = 'manifest.json' }) },
+        @{ id = 21; tag_name = 'main-build-1.3.7'; draft = $false; assets = @(@{ id = 31; name = 'releases.main.json' }) },
+        @{ id = 22; tag_name = 'build-1.3.9'; draft = $false; assets = @(@{ id = 32; name = 'manifest.json' }) },
+        @{ id = 23; tag_name = 'build-1.3.8'; draft = $false; assets = @(@{ id = 33; name = 'manifest.json' }) },
+        @{ id = 24; tag_name = 'build-1.3.13'; draft = $false; assets = @(@{ id = 34; name = 'manifest.json' }) },
+        @{ id = 25; tag_name = 'build-1.3.12'; draft = $false; assets = @(@{ id = 35; name = 'manifest.json' }) },
+        @{ id = 26; tag_name = 'build-1.3.10'; draft = $false; assets = @(@{ id = 36; name = 'manifest.json' }) },
+        @{ id = 27; tag_name = 'build-20261108.5'; draft = $false; assets = @(@{ id = 37; name = 'manifest.json' }) }
+    )
+    [IO.File]::WriteAllText($rf, ($gh | ConvertTo-Json -Depth 5))
+    foreach ($t in 'build-1.3.9', 'build-1.3.13') { [IO.File]::WriteAllText((Join-Path $rd ($t + '.json')), (@{ tag = $t; commit = $commit; parts = @{} } | ConvertTo-Json)) }
+    $p = Get-MergeReleasePrevious -ReleasesFile $rf -ManifestDir $rd
+    Yes '  by the number in its tag, not GitHub''s list order: 1.3.13, never 1.3.9 listed first' ($null -ne $p -and $p.Tag -eq 'build-1.3.13' -and $p.Id -eq 24)
+    $wfText = Get-Content -Raw -LiteralPath (Join-Path $Repo '.github/workflows/merge-release.yml')
+    Yes '  and the workflow reads every page of Releases, never one page alone' (
+        $wfText -notmatch 'releases\?per_page' -and ([regex]::Matches($wfText, 'Get-MergeReleaseList')).Count -ge 2)
     [IO.File]::WriteAllText($rf, '[]')
     Yes '  and with no build Release yet there is none' ($null -eq (Get-MergeReleasePrevious -ReleasesFile $rf -ManifestDir $rd))
 
@@ -233,7 +253,7 @@ try {
     $none = @((Rel 2 'build-1.3.27' $false @(Asset 102 'manifest.json' '')), (Rel 6 'build-1.3.0' $false @(Asset 106 'notes.txt' '')))
     Yes 'with no package made up to it, there is nothing for main''s launcher' ($null -eq (Find-MainPackage -Tag 'build-1.3.27' -Manifest $promoted -ReleasesFile (Write-Rels $none) -ManifestDir $md))
     $why = ''; try { Find-MainPackage -Tag 'build-1.3.29' -Manifest $promoted -ReleasesFile (Write-Rels $base5181) -ManifestDir $md | Out-Null } catch { $why = $_.Exception.Message }
-    Yes ('a tag that is not among the Releases read stops it: ' + $why) ($why -match 'not among the hundred newest')
+    Yes ('a tag that is not among the Releases read stops it: ' + $why) ($why -match 'not among the published Releases')
     # 3 Nov 2026: build .2's package was main's only one and had no main tag
     # (made before #5489), so it could never go out. A merge then makes the
     # package again (Test-MainPackageReachable, the launcher step).
