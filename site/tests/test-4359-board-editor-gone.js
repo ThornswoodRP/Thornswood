@@ -90,7 +90,14 @@ async function start(s) {
     cwd: s.dir, stdio: ['ignore', 'pipe', 'pipe'],
     env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
   });
-  await listening(srv, port);
+  try { await listening(srv, port); }
+  catch (e) {
+    // A site that never said it was listening may still be running.
+    if (srv.exitCode === null && srv.signalCode === null) {
+      await new Promise((ok) => { srv.once('exit', ok); srv.kill(); });
+    }
+    throw e;
+  }
   return { port, srv };
 }
 function request(port, method, where, headers, body) {
@@ -138,7 +145,14 @@ function cookieFor(secret, id, name) {
   } catch (e) {
     yes('the scratch site ran: ' + e.message, false);
   } finally {
-    if (site) site.srv.kill();
+    /* The site has to be gone before its folder is removed (#4359): kill()
+       only sends the signal, and on Windows a file the process still holds
+       open cannot be deleted, so removing the folder at once threw out of
+       this finally and ended the harness with exit 1. Linux deletes open
+       files, which is why only the Windows shares went red. */
+    if (site && site.srv.exitCode === null && site.srv.signalCode === null) {
+      await new Promise((ok) => { site.srv.once('exit', ok); site.srv.kill(); });
+    }
     fs.rmSync(S.dir, { recursive: true, force: true });
   }
 
