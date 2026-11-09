@@ -247,6 +247,10 @@ try {
         $psi.EnvironmentVariables['THORNSWOOD_DOCS_PORT'] = [string]$port
         $psi.EnvironmentVariables['THORNSWOOD_DOCS_LOCAL'] = '1'
         $psi.EnvironmentVariables['THORNSWOOD_CHAT_DIR'] = (Join-Path $site 'chat')
+        # The scratch site asks no GitHub (#5585): once GitHub answered, main's
+        # version.json named the move program on main's newest Release
+        # (launcherVersion 1.1.101.1), not the store's own feed.
+        $psi.EnvironmentVariables['THORNSWOOD_SITE_GITHUB'] = 'off'
         $p = [Diagnostics.Process]::Start($psi)
         $pErr = $p.StandardError.ReadToEndAsync()
         $procs += $p
@@ -270,6 +274,7 @@ try {
         }
         $doc = Read-SiteFeed 'main' -SiteUrl $base
         Yes 'Read-SiteFeed reads the live feed over http from the site' ($null -ne $doc -and $doc.launcherVersion -eq '1.1.101')
+        Yes '  the store''s own feed, the site having asked no GitHub (#5585)' ($null -ne $doc -and -not $doc.PSObject.Properties['launcherUrl'])
         $doc = Read-SiteFeed 'dev' -SiteDir $site
         Yes 'and from the stand-in folder' ($null -ne $doc -and $doc.launcherVersion -eq '1.1.101.35')
         Remove-Item -LiteralPath (Join-Path $site 'feed\version.json.part'), (Join-Path $site 'feed\read.json') -Force

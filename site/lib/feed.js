@@ -200,7 +200,20 @@ const RELEASE_LOOK_MS = 10 * 60 * 1000;
 const RELEASE_TAG_RE = /^release\/(main|dev)\/\d{8}-\d{4,6}(-dev)?$/;
 const releaseCopies = {};   // tag -> { files: { sha: { url, size } }, seen } once found; { at, busy } while not
 const releaseTagOf = {};    // feed generation file -> the release tag it names, or ''
+/* GITHUB OFF FOR A HARNESS (#5585). A scratch copy of the site that a
+   harness starts asks GitHub for the setup programs and the release copies
+   the way the box does, and once GitHub answers, main's version.json names
+   the move program (feedMove) and assets redirect. Measured 9 Nov 2026: with
+   GitHub reachable, test-feed-store.ps1's scratch site served launcherVersion
+   1.1.101.1 and main-build-1.3.0's Thornswood-Move.exe instead of the store's
+   1.1.101, so the check failed whenever GitHub answered before the read, and
+   passed when it was slow or out of unsigned calls. THORNSWOOD_SITE_GITHUB=off
+   makes every ask here answer "not reached" without leaving the machine, so a
+   harness gets the store's own feed every time. Unset, as on the box, the
+   site asks GitHub. */
+const GITHUB_OFF = process.env.THORNSWOOD_SITE_GITHUB === 'off';
 function releaseGitHub(apiPath) {
+  if (GITHUB_OFF) return Promise.resolve({ status: 0, why: 'GitHub is off for this run (THORNSWOOD_SITE_GITHUB=off)' });
   return new Promise((resolve) => {
     let settled = false;
     const settle = (v) => { if (!settled) { settled = true; clearTimeout(timer); resolve(v); } };
