@@ -56,10 +56,26 @@ yes('found the pages: ' + pages.map((p) => p.name).join(', '),
     pages.some((p) => p.name === 'public/home.html') && pages.some((p) => p.name === 'public/index.html') &&
     pages.some((p) => /^lib\/passes\.js/.test(p.name)));
 
+// The text with every <!-- ... --> taken out, by walking it rather than one
+// regex pass: a pass of /<!--[\s\S]*?-->/ can join the halves of two
+// comments, or leave an unclosed one, into a new <!-- (CodeQL, incomplete
+// multi-character sanitization). An unclosed comment runs to the end, as a
+// browser reads it, so nothing after it is counted.
+function withoutComments(text) {
+  let out = '', at = 0;
+  for (;;) {
+    const open = text.indexOf('<!--', at);
+    if (open < 0) return out + text.slice(at);
+    out += text.slice(at, open);
+    const close = text.indexOf('-->', open + 4);
+    if (close < 0) return out;
+    at = close + 3;
+  }
+}
 // A stylesheet link blocks the first draw unless its media keeps it from
 // applying (print, or not all) or it is disabled.
 function blocking(html) {
-  const noComments = html.replace(/<!--[\s\S]*?-->/g, '');
+  const noComments = withoutComments(html);
   const out = [];
   for (const m of noComments.matchAll(/<link\b[^>]*>/gi)) {
     const tag = m[0];
@@ -123,7 +139,7 @@ yes('C and each is a face home.css declares', preloads.every((n) => FACES.some((
 
 // ------------------------------------------------------------ fonts.css --
 yes('D public/fonts.css is gone', !fs.existsSync(path.join(PUB, 'fonts.css')));
-const naming = pages.filter((p) => /href\s*=\s*\\?["']?\/fonts\.css/.test(p.text.replace(/<!--[\s\S]*?-->/g, ''))).map((p) => p.name);
+const naming = pages.filter((p) => /href\s*=\s*\\?["']?\/fonts\.css/.test(withoutComments(p.text))).map((p) => p.name);
 yes('D and no page links it' + (naming.length ? ' (' + naming.join(', ') + ')' : ''), naming.length === 0);
 
 console.log('');
