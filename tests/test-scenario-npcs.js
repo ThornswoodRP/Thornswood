@@ -16,6 +16,9 @@
        the server owns it.
     B  Transport workers show what they do: nine Coach Drivers, sixteen Ferry
        Operators and two Ship Captains, each with the title the server set.
+       The sixty guild traders show their trade the same way: in each of the
+       ten holds one Smith, Woodworker, Tailor, Enchanter, Cook and Alchemist,
+       each named by the server for the roster's role.
     C  Home: a camp bandit's home is its catalogue place, inside its leash.
        A wild horse killed away from home lies its place's return time,
        then stands up at home, the same identity, server-owned, and with no
@@ -23,7 +26,7 @@
     D  Habitat: a wolf that turns up in Whiterun's market is not admitted;
        the server switches it off.
     E  A restart: the cast loads again, owned, the bandit home again, and
-       the coach driver still titled.
+       the coach driver and every guild trader still titled.
     Z  No handler threw, no engine call the engine does not have was made,
        and no timer threw.
 
@@ -63,6 +66,27 @@ const HORSE_ROW = P.keep.find(function (r) { return r[0] === '1015dd:Skyrim.esm'
 const PLACED = P.keep.filter(function (r) { return r[10] === BANDIT_ROW[10] || r[10] === HORSE_ROW[10] || r[6] === 'transport' || r[6] === 'trader' || r[10] === '[["3c:Skyrim.esm",13,5],"wolf"]'; });
 w.cast({ population: Object.assign({}, P, { keep: PLACED }), types: CATALOGUE.types }, { imperial: '13744:Skyrim.esm', nord: '13746:Skyrim.esm' });
 const COACH_ROW = P.keep.find(function (r) { return r[13] === 'Coach Driver'; });
+/*
+  The guild's sixty, read from the roster the server admits rather than from
+  the catalogue rows, so a roster trader the server never names counts as
+  wrong instead of being left out.
+*/
+const ROSTER = require('../game/data/merchant-roster.json').merchants;
+const TRADES = ['Smith', 'Woodworker', 'Tailor', 'Enchanter', 'Cook', 'Alchemist'];
+function guildTitles() {
+  const seen = {};
+  ROSTER.forEach(function (m) {
+    const shown = w.row(w.idOf(m.reference)).displayName;
+    const key = shown === m.role ? m.role : 'wrong';
+    seen[key] = (seen[key] || 0) + 1;
+  });
+  return seen;
+}
+function everyHoldHasEachTrade(seen) {
+  const holds = new Set(ROSTER.map(function (m) { return m.bookHold; }));
+  return ROSTER.length === 60 && holds.size === 10 && !seen.wrong &&
+    TRADES.every(function (role) { return seen[role] === 10; });
+}
 const MARKET = { cell: '1a26f:Skyrim.esm', pos: [20000, -8000, -3500] };
 const WOLF_BASE = '1e7a3:Skyrim.esm';
 w.record(WOLF_BASE, 'NPC_', { race: '1320a:Skyrim.esm' });
@@ -94,6 +118,9 @@ const titled = {};
 PLACED.forEach(function (r) { if (r[6] === 'transport' && w.row(w.idOf(r[0])).displayName === r[13]) { titled[r[13]] = (titled[r[13]] || 0) + 1; } });
 yes('B1 nine Coach Drivers, sixteen Ferry Operators and two Ship Captains, each titled by the server (' + JSON.stringify(titled) + ')',
     titled['Coach Driver'] === 9 && titled['Ferry Operator'] === 16 && titled['Ship Captain'] === 2);
+const guild = guildTitles();
+yes('B2 the sixty guild traders each show their trade, ten of each across the ten holds (' + JSON.stringify(guild) + ')',
+    everyHoldHasEachTrade(guild));
 
 // ---------------------------------------------------------------- C. home --
 const BANDIT = w.idOf(BANDIT_ROW[0]);
@@ -128,6 +155,8 @@ settle();
 yes('E1 the cast loads again, owned (' + KEPT.filter(owned).length + ')', KEPT.filter(owned).length === KEPT.length);
 yes('E2 the bandit owned at home again', owned(BANDIT) && sameSpot((w.box().__thornswoodNpcPopulation.configure(BANDIT, { isHuman: false }) || {}).home, BANDIT_ROW[3]));
 yes('E3 and the coach driver still titled', w.row(w.idOf(COACH_ROW[0])).displayName === 'Coach Driver');
+const guildAgain = guildTitles();
+yes('E4 and every guild trader still shows their trade (' + JSON.stringify(guildAgain) + ')', everyHoldHasEachTrade(guildAgain));
 
 // ------------------------------------------------------------- Z. clean --
 yes('Z no handler threw and nothing the engine would refuse was done (' + w.faults.slice(0, 3).join(' | ') + ')', w.faults.length === 0);
