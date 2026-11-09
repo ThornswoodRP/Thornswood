@@ -6,27 +6,20 @@
 .DESCRIPTION
   .github\workflows\gate-map.yml traces the whole gate every night on
   GitHub's hosted Windows runner, whose job runs as an administrator, so the
-  ETW session the box's trace task started as SYSTEM can be started right
-  there (Patrick's q-3114 option C: the trace is taken on the machine the
-  gate runs on, which since #5119 is GitHub's runner). Each step is
-  Trace-Gate-Box.ps1 with $TraceMode set above it, run by Windows
-  PowerShell 5.1 as on the box, exactly as Trace-Gate.ps1's Invoke-Box sends
-  it over ssh.
+  ETW session can be started right there (Patrick's q-3114 option C: the
+  trace is taken on the machine the gate runs on, which since #5119 is
+  GitHub's runner). Each step is Trace-Gate-Box.ps1 with $TraceMode set
+  above it, run by PowerShell 7.
 
       .\scripts\dev\Trace-Gate-Here.ps1 -Mode selftest
       .\scripts\dev\Trace-Gate-Here.ps1 -Mode start
       .\scripts\dev\Trace-Gate-Here.ps1 -Mode stop
       .\scripts\dev\Trace-Gate-Here.ps1 -Mode read -Starts <starts.jsonl> -Workspace <checkout> -OutFile <traces.jsonl.gz>
       .\scripts\dev\Trace-Gate-Here.ps1 -Mode clean
-      .\scripts\dev\Trace-Gate-Here.ps1 -Mode uninstall
 
-  -Mode uninstall takes the box's old trace task, Thornswood Gate Trace, off
-  the machine it runs on, with its folders (#5356). Since #5119 no main
-  build runs where that task can trace it, so nothing asks it anything, and
-  it was the last box task still started by Windows PowerShell. The deploy
-  gate runs it on the box, as SYSTEM, as its verb Remove-GateTrace:
-
-      pwsh scripts/vps/Box-Run.ps1 -Line 'Remove-GateTrace'
+  The box's old trace task, which traced main builds on the box's build
+  runners, was taken off the box on 9 Nov 2026 and its scripts out of this
+  repository (#5338): no build has run on the box since #5119.
 
   The trace is in C:\Thornswood-Trace, which Trace-Gate-Box.ps1 keeps to
   administrators; read deletes it once read, and only the paths inside the
@@ -38,7 +31,7 @@
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][ValidateSet('selftest', 'start', 'stop', 'read', 'clean', 'uninstall')][string]$Mode,
+    [Parameter(Mandatory = $true)][ValidateSet('selftest', 'start', 'stop', 'read', 'clean')][string]$Mode,
     [string]$Starts = '',
     [string]$Workspace = '',
     [string]$OutFile = ''
@@ -54,9 +47,8 @@ $me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]:
 if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { Write-Host 'STOP. Only an administrator can start an ETW session; run this elevated.'; exit 2 }
 if ($Mode -eq 'read' -and (-not $Starts -or -not $Workspace -or -not $OutFile)) { Write-Host 'STOP. -Mode read needs -Starts, -Workspace and -OutFile.'; exit 2 }
 
-# Trace-Gate-Box.ps1 with what it is told set above it, the way
-# Trace-Gate.ps1's Invoke-Box writes it: each value in base64, so no quote in
-# a path can change the script.
+# Trace-Gate-Box.ps1 with what it is told set above it: each value in
+# base64, so no quote in a path can change the script.
 $vars = [ordered]@{}
 if ($Mode -eq 'read') {
     $vars.TraceStarts = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $Starts).Path)

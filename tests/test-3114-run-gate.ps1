@@ -3,38 +3,32 @@
 
       pwsh -NoProfile -File .\tests\test-3114-run-gate.ps1
 
-  Issue #3114, Patrick's option A on q-3114-map-refresh (22 Oct 2026): every
-  main build's gate is traced on the VPS by the trace task
-  (scripts\dev\Trace-Gate-Task.ps1), and a pull request built there runs
-  only the gate harnesses its change can reach, by the newest map.
-  scripts\dev\Run-Gate.ps1 is build.yml's gate step. This runs it for real
-  in a scratch repository, with Gate-Harnesses.ps1 and Nightly-Harnesses.ps1
-  replaced by stand-ins that list three harnesses and write down what they
-  were asked to run, and a scratch runner folder standing in for the box's:
+  Issue #3114, #4009 and #5183: a pull request runs only the gate harnesses
+  its change can reach, by main's newest nightly map, which gate-map.yml
+  traces on GitHub's hosted Windows runner. scripts\dev\Run-Gate.ps1 is
+  build.yml's gate step. This runs it for real in a scratch repository,
+  with Gate-Harnesses.ps1, Nightly-Harnesses.ps1 and Gate-Map.ps1 replaced
+  by stand-ins that list three harnesses, write down what they were asked
+  to run, and hand on a map:
 
-    1. a pull request on the VPS with a map runs the harnesses that read
-       what it changed and those that always run, says why each runs, and
-       says nothing of whole, so its build keeps no "already tested" note;
-       a change nothing reads runs only those that always run;
-    2. it runs the whole gate, and says whole=true, with no map, on a
-       GitHub-hosted runner, with a map that does not read, and when it
-       changes Run-Gate.ps1 itself;
-    3. a main build on the VPS asks the trace task in <runner>\trace with
-       its run, commit, checkout and process, writes the tree, runs the gate
-       with -StartLog when the answer is tracing, and says done with the
-       gate's exit code; with no answer, or no trace folder, it runs the
-       whole gate untraced and takes its ask back;
+    1. a pull request with main's map runs the harnesses that read what it
+       changed and those that always run, says why each runs, and says
+       nothing of whole, so its build keeps no "already tested" note; a
+       change nothing reads runs only those that always run; the map is
+       fetched into the runner's temp folder, and a runner's own
+       <runner>\gate-map, which the box's old trace task filled, is never
+       read (#5338);
+    2. it runs the whole gate, and says whole=true, with no map, with a map
+       that names no commit or does not read, and when it changes
+       Run-Gate.ps1 itself;
+    3. a main build runs the whole gate and says whole, and asks no trace
+       task (#5338);
     4. the gate's exit code is the step's, and -StartLog given by hand
        (gate-map.yml) reaches Nightly-Harnesses.ps1;
-    5. the trace task (scripts\dev\Trace-Gate-Task.ps1) parses, looks only
-       in the build runners' folders it was installed for, and on Windows
-       its check of an ask is run for real: an ask is refused unless it
-       names a run never asked for, a full commit, a running process with
-       its own start time, and a checkout inside that runner's own _work
-       folder reached through no link;
+    5. Run-Gate.ps1 has nothing left of the box's trace task (#5338);
     6. -Shard n -Of N with no plan runs harness i of the gate when i mod N
-       is n - 1, says whole, reads no map and asks for no trace, and a share
-       that is not one exits 2 and runs nothing (build.yml's job "gate");
+       is n - 1, says whole and reads no map, and a share that is not one
+       exits 2 and runs nothing (build.yml's job "gate");
     7. -Pick N (build.yml's job "pick", #5183) runs nothing and writes a
        plan: on a pull request what its change reaches, on main the whole
        gate, split by the map's seconds, longest first to the least loaded
@@ -47,7 +41,6 @@
   Writes only its scratch folder, in the system's temp folder, and deletes it.
 #>
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'Windows.ps1')
 $repo = Split-Path -Parent $PSScriptRoot
 $script:pass = 0
 $script:fail = 0
@@ -106,22 +99,32 @@ exit 0
     $base = ((GitOk -C $sr rev-parse HEAD) -join '').Trim()
     Set-Location -LiteralPath $sr
 
-    # ---- the runner's folder, and the map the trace task left in it
+    # ---- the runner's folder, and main's nightly map
     $root = Join-Path $scratch 'Thornswood-Runner'
     $temp = Join-Path (Join-Path $root '_work') '_temp'
-    $maps = Join-Path $root 'gate-map'
-    $null = New-Item -ItemType Directory -Force -Path $temp, $maps
+    $traced = Join-Path $scratch 'traced'
+    $null = New-Item -ItemType Directory -Force -Path $temp, $traced
     $key = '39800000001-1'
     $traces = @(
         '{"harness":"test-a.js","platform":"windows","listings":"enumerated","exit":0,"seconds":1,"skipped":false,"execs":["node.exe"],"paths":{"a.txt":"read"}}',
         '{"harness":"test-b.js","platform":"windows","listings":"enumerated","exit":0,"seconds":1,"skipped":false,"execs":["node.exe"],"paths":{"b.txt":"read"}}',
         '{"harness":"test-c.js","platform":"windows","listings":"enumerated","exit":0,"seconds":1,"skipped":false,"always":"another process (git.exe) opened .git in the checkout while it ran","execs":["node.exe"],"paths":{}}'
     ) -join "`n"
-    [IO.File]::WriteAllBytes((Join-Path $maps ($key + '.traces.jsonl.gz')), (Gzip $traces))
-    & node (Join-Path $dev 'Affected-Harnesses.js') tree HEAD (Join-Path $maps ($key + '.tree.gz'))
-    Yes 'Affected-Harnesses.js tree lists a commit''s tree' ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath (Join-Path $maps ($key + '.tree.gz'))))
-    $latest = Join-Path $maps 'latest.json'
-    Set-Content -LiteralPath $latest -Value ('{"key":"' + $key + '","commit":"' + $base + '","read":"2026-10-22T14:00:00Z","harnesses":3}')
+    [IO.File]::WriteAllBytes((Join-Path $traced ($key + '.traces.jsonl.gz')), (Gzip $traces))
+    & node (Join-Path $dev 'Affected-Harnesses.js') tree HEAD (Join-Path $traced ($key + '.tree.gz'))
+    Yes 'Affected-Harnesses.js tree lists a commit''s tree' ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath (Join-Path $traced ($key + '.tree.gz'))))
+    # Main's nightly map, the shape Gate-Map.ps1 -Fetch hands on (#4009).
+    $handed = Join-Path $scratch 'handed'
+    $null = New-Item -ItemType Directory -Path $handed
+    $null = & node (Join-Path $dev 'Affected-Harnesses.js') build (Join-Path $traced ($key + '.traces.jsonl.gz')) (Join-Path $handed ($key + '.map.json')) $base
+    Copy-Item -LiteralPath (Join-Path $traced ($key + '.tree.gz')) -Destination $handed
+    Set-Content -LiteralPath (Join-Path $handed 'latest.json') -Value ('{"key":"' + $key + '","commit":"' + $base + '","read":"2026-10-22T14:00:00Z","harnesses":3}')
+    $env:STUB_MAP = $handed
+    # What the box's old trace task left in a box runner's own folder: never
+    # read again (#5338). Read, it would make every pull request whole.
+    $old = Join-Path $root 'gate-map'
+    $null = New-Item -ItemType Directory -Path $old
+    Set-Content -LiteralPath (Join-Path $old 'latest.json') -Value '{"key":"nothing","commit":"x"}'
 
     $record = Join-Path $scratch 'nightly.json'
     $tokenFile = Join-Path $scratch 'token.txt'
@@ -147,14 +150,19 @@ exit 0
         [pscustomobject]@{ Code = $rc; Text = ($out -join "`n"); Asked = $asked; Whole = ($outputs -match '(?m)^whole=true\s*$'); Plan = $planOut; Outputs = $outputs }
     }
 
-    # ---- 1. a pull request on the VPS, with a map
+    # ---- 1. a pull request, with main's map
     Set-Content -LiteralPath (Join-Path $sr 'a.txt') -Value 'a, changed'
     $null = GitOk -C $sr commit -q -am 'change a'
     $r = Invoke-Gate 'pull_request'
     Yes ('a pull request runs what its change reaches and what always runs (' + $(if ($r.Asked) { $r.Asked.Only } else { 'nothing' }) + ')') ($r.Code -eq 0 -and $r.Asked -and $r.Asked.Only -eq 'test-a.js test-c.js')
     Yes '  with the throttle, the share and the budget' ($r.Asked -and $r.Asked.Throttle -eq 6 -and $r.Asked.Budget -eq 1800 -and $r.Asked.Share -ge 1)
-    Yes '  says which map, and why each one runs' ($r.Text -match ('main ' + $base.Substring(0, 8)) -and $r.Text -match 'runs test-a\.js: reads a\.txt' -and $r.Text -match 'runs test-c\.js: always' -and $r.Text -match '2 of 3 gate harnesses')
+    Yes '  says which map, and why each one runs' ($r.Text -match ('main ' + $base.Substring(0, 8)) -and $r.Text -match 'the handed-on map, standing in' -and $r.Text -match 'runs test-a\.js: reads a\.txt' -and $r.Text -match 'runs test-c\.js: always' -and $r.Text -match '2 of 3 gate harnesses')
     Yes '  and does not say whole, so it keeps no note' (-not $r.Whole)
+    Yes '  having fetched the map into the runner''s temp folder, never read the runner''s own gate-map (#5338)' ((Test-Path -LiteralPath (Join-Path (Join-Path $temp 'gate-map-fetched') 'latest.json')) -and $r.Text -notmatch 'names no commit')
+    Yes '  having asked Gate-Map.ps1 with the job''s token' ((Test-Path -LiteralPath $tokenFile) -and [IO.File]::ReadAllText($tokenFile) -eq 't0ken')
+    Yes '  which no harness gets' ($r.Asked -and -not $r.Asked.Token)
+    $r = Invoke-Gate 'pull_request' 'github-hosted'
+    Yes 'and so does one on GitHub''s hosted runner' ($r.Asked -and $r.Asked.Only -eq 'test-a.js test-c.js' -and -not $r.Whole)
 
     $null = GitOk -C $sr reset -q --hard $base
     Set-Content -LiteralPath (Join-Path $sr 'd.txt') -Value 'd, changed'
@@ -163,79 +171,36 @@ exit 0
     Yes 'a change nothing reads runs only what always runs' ($r.Asked -and $r.Asked.Only -eq 'test-c.js' -and -not $r.Whole)
 
     # ---- 2. the whole gate
-    $r = Invoke-Gate 'pull_request' 'github-hosted'
-    Yes 'a GitHub-hosted runner with no map of its own or on GitHub runs the whole gate and says whole' ($r.Asked -and $r.Asked.Only -eq 'test-a.js test-b.js test-c.js' -and $r.Whole -and $r.Text -match 'The whole gate runs: this runner keeps no map of its own, and main''s nightly gate map could not be fetched')
-    Yes '  having asked Gate-Map.ps1 with the job''s token' ((Test-Path -LiteralPath $tokenFile) -and [IO.File]::ReadAllText($tokenFile) -eq 't0ken')
-    Yes '  which no harness gets' ($r.Asked -and -not $r.Asked.Token)
-
-    # ---- off the box, with the map main's build handed on (#4009)
-    $handed = Join-Path $scratch 'handed'
-    $null = New-Item -ItemType Directory -Path $handed
-    $null = & node (Join-Path $dev 'Affected-Harnesses.js') build (Join-Path $maps ($key + '.traces.jsonl.gz')) (Join-Path $handed ($key + '.map.json')) $base
-    Copy-Item -LiteralPath (Join-Path $maps ($key + '.tree.gz')), $latest -Destination $handed
-    $env:STUB_MAP = $handed
     $null = GitOk -C $sr reset -q --hard $base
     Set-Content -LiteralPath (Join-Path $sr 'a.txt') -Value 'a, changed'
     $null = GitOk -C $sr commit -q -am 'change a'
-    $r = Invoke-Gate 'pull_request' 'github-hosted'
-    Yes ('a runner off the box picks from the map main''s build handed on (' + $(if ($r.Asked) { $r.Asked.Only } else { 'nothing' }) + ')') ($r.Asked -and $r.Asked.Only -eq 'test-a.js test-c.js' -and -not $r.Whole -and $r.Text -match 'the handed-on map, standing in' -and $r.Text -match '2 of 3 gate harnesses')
-    Yes '  into the runner''s temp folder, never the box''s gate-map' (Test-Path -LiteralPath (Join-Path (Join-Path $temp 'gate-map-fetched') 'latest.json'))
-    Move-Item -LiteralPath $latest -Destination ($latest + '.away')
-    $r = Invoke-Gate 'pull_request'
-    Yes '  and so does a box runner before its first map' ($r.Asked -and $r.Asked.Only -eq 'test-a.js test-c.js' -and -not $r.Whole)
-    Move-Item -LiteralPath ($latest + '.away') -Destination $latest
     $env:STUB_MAP = ''
-    Move-Item -LiteralPath $latest -Destination ($latest + '.away')
+    $r = Invoke-Gate 'pull_request' 'github-hosted'
+    Yes 'with no map on GitHub it runs the whole gate and says whole, and why' ($r.Asked -and $r.Asked.Only -eq 'test-a.js test-b.js test-c.js' -and $r.Whole -and $r.Text -match 'The whole gate runs: main''s nightly gate map could not be fetched')
+    $nocommit = Join-Path $scratch 'nocommit'
+    $null = New-Item -ItemType Directory -Path $nocommit
+    Set-Content -LiteralPath (Join-Path $nocommit 'latest.json') -Value '{"key":"nothing","commit":"x"}'
+    $env:STUB_MAP = $nocommit
     $r = Invoke-Gate 'pull_request'
-    Yes 'so does a runner with no map yet' ($r.Asked -and $r.Asked.Only -eq 'test-a.js test-b.js test-c.js' -and $r.Whole -and $r.Text -match 'no traced map')
-    Set-Content -LiteralPath $latest -Value '{"key":"nothing","commit":"x"}'
+    Yes 'and with a map that names no commit' ($r.Asked -and $r.Asked.Only -eq 'test-a.js test-b.js test-c.js' -and $r.Whole -and $r.Text -match 'names no commit')
+    $env:STUB_MAP = $handed
+    $tree = Join-Path $handed ($key + '.tree.gz')
+    Copy-Item -LiteralPath $tree -Destination (Join-Path $scratch 'tree.gz')
+    [IO.File]::WriteAllText($tree, 'not gzip')
     $r = Invoke-Gate 'pull_request'
-    Yes 'and one whose map names no commit' ($r.Asked -and $r.Asked.Only -eq 'test-a.js test-b.js test-c.js' -and $r.Whole)
-    Remove-Item -LiteralPath $latest
-    Move-Item -LiteralPath ($latest + '.away') -Destination $latest
-    Copy-Item -LiteralPath (Join-Path $maps ($key + '.tree.gz')) -Destination (Join-Path $scratch 'tree.gz')
-    [IO.File]::WriteAllText((Join-Path $maps ($key + '.tree.gz')), 'not gzip')
-    $r = Invoke-Gate 'pull_request'
-    Yes 'and one whose map does not read, saying pick failed' ($r.Asked -and $r.Asked.Only -eq 'test-a.js test-b.js test-c.js' -and $r.Whole -and $r.Text -match 'pick failed')
-    Copy-Item -LiteralPath (Join-Path $scratch 'tree.gz') -Destination (Join-Path $maps ($key + '.tree.gz')) -Force
+    Yes 'and with a map that does not read, saying pick failed' ($r.Asked -and $r.Asked.Only -eq 'test-a.js test-b.js test-c.js' -and $r.Whole -and $r.Text -match 'pick failed')
+    Copy-Item -LiteralPath (Join-Path $scratch 'tree.gz') -Destination $tree -Force
     Add-Content -LiteralPath (Join-Path $dev 'Run-Gate.ps1') -Value '# a change to the script that chooses'
     $null = GitOk -C $sr commit -q -am 'change Run-Gate'
     $r = Invoke-Gate 'pull_request'
     Yes 'a change to Run-Gate.ps1 runs the whole gate and says whole' ($r.Asked -and $r.Asked.Only -eq 'test-a.js test-b.js test-c.js' -and $r.Whole -and $r.Text -match 'Run-Gate\.ps1: the scripts that list, choose and run')
     $null = GitOk -C $sr reset -q --hard $base
 
-    # ---- 3. a main build on the VPS
-    $r = Invoke-Gate 'push'
-    Yes 'a main build with no trace folder runs the whole gate untraced and says whole' ($r.Asked -and $r.Asked.Only -eq 'test-a.js test-b.js test-c.js' -and -not $r.Asked.StartLog -and $r.Whole -and $r.Text -match 'Not traced: there is no')
-    $trace = Join-Path $root 'trace'
-    $null = New-Item -ItemType Directory -Path $trace
-    # The trace task, standing in: takes the ask and answers tracing.
-    $task = Start-Job -ArgumentList $trace -ScriptBlock {
-        param($dir)
-        $ask = Join-Path $dir 'ask.json'
-        for ($i = 0; $i -lt 300 -and -not (Test-Path -LiteralPath $ask); $i++) { Start-Sleep -Milliseconds 100 }
-        if (-not (Test-Path -LiteralPath $ask)) { return 'no ask' }
-        $text = [IO.File]::ReadAllText($ask)
-        Remove-Item -LiteralPath $ask
-        $a = $text | ConvertFrom-Json
-        [IO.File]::WriteAllText((Join-Path $dir 'answer.json'), ('{"key":"' + $a.key + '","state":"tracing","why":""}'))
-        $text
-    }
+    # ---- 3. a main build
     $r = Invoke-Gate 'push' -code 3
-    $askText = @(Receive-Job -Job $task -Wait -AutoRemoveJob) -join ''
-    $a = $null
-    try { $a = $askText | ConvertFrom-Json } catch { Write-Host "the ask was not JSON: $askText" }
-    $me = $null
-    Yes ('a main build asks with its run, commit, checkout and process (' + $askText + ')') ($a -and $a.key -eq '39800000002-1' -and $a.commit -eq $base -and $a.workspace -eq $sr -and [int]$a.pid -gt 0 -and ($a.started -is [datetime] -or [string]$a.started -match '^\d{4}-\d\d-\d\dT'))
-    Yes '  having listed its tree for the map' (Test-Path -LiteralPath (Join-Path $trace 'tree.gz'))
-    Yes '  runs the whole gate with -StartLog in the runner''s trace folder' ($r.Asked -and $r.Asked.Only -eq 'test-a.js test-b.js test-c.js' -and $r.Asked.StartLog -eq (Join-Path $trace 'starts.jsonl') -and (Test-Path -LiteralPath (Join-Path $trace 'starts.jsonl')))
-    $done = $null
-    if (Test-Path -LiteralPath (Join-Path $trace 'done.json')) { $done = [IO.File]::ReadAllText((Join-Path $trace 'done.json')) | ConvertFrom-Json }
-    Yes '  says done, with the run and the gate''s exit code' ($done -and $done.key -eq '39800000002-1' -and [int]$done.code -eq 3)
-    Yes '  and the gate''s exit code is the step''s' ($r.Code -eq 3 -and $r.Text -match 'Traced: ')
-    Yes '  and says whole, as it ran every harness' ($r.Whole)
-    $r = Invoke-Gate 'push' -extra @('-AnswerSeconds', '2')
-    Yes 'with no answer it runs untraced and takes its ask back' ($r.Asked -and -not $r.Asked.StartLog -and $r.Text -match 'did not answer' -and -not (Test-Path -LiteralPath (Join-Path $trace 'ask.json')) -and -not (Test-Path -LiteralPath (Join-Path $trace 'done.json')))
+    Yes 'a main build runs the whole gate and says whole' ($r.Asked -and $r.Asked.Only -eq 'test-a.js test-b.js test-c.js' -and $r.Whole)
+    Yes '  asking no trace task, with no -StartLog, and makes no trace folder (#5338)' (-not $r.Asked.StartLog -and $r.Text -notmatch 'Traced|Not traced' -and -not (Test-Path -LiteralPath (Join-Path $root 'trace')))
+    Yes '  and the gate''s exit code is the step''s' ($r.Code -eq 3)
 
     # ---- 4. by hand
     $r = Invoke-Gate 'workflow_dispatch' -extra @('-StartLog', (Join-Path $scratch 'hand.jsonl'))
@@ -244,7 +209,7 @@ exit 0
     # ---- 6. shares of the gate (31 Oct 2026): build.yml's job "gate" runs
     # -Shard n -Of 5 on five hosted runners at once. With no plan from the
     # pick, harness i of the list is share (i mod Of) + 1 of the whole gate,
-    # and none reads a map or asks for a trace.
+    # and none reads a map.
     $union = @()
     foreach ($n in 1, 2, 3) {
         $r = Invoke-Gate 'pull_request' 'github-hosted' -extra @('-Shard', [string]$n, '-Of', '3')
@@ -257,7 +222,7 @@ exit 0
     $r = Invoke-Gate 'pull_request' 'github-hosted' -extra @('-Shard', '1', '-Of', '2')
     Yes 'share 1 of 2 takes the first and third' ($r.Asked -and $r.Asked.Only -eq 'test-a.js test-c.js' -and $r.Whole)
     $r = Invoke-Gate 'push' -extra @('-Shard', '2', '-Of', '2')
-    Yes 'a share on main asks the trace task nothing' ($r.Asked -and $r.Asked.Only -eq 'test-b.js' -and -not $r.Asked.StartLog -and $r.Text -notmatch 'Traced|Not traced' -and -not (Test-Path -LiteralPath (Join-Path $trace 'ask.json')))
+    Yes 'a share on main runs its part, with no -StartLog' ($r.Asked -and $r.Asked.Only -eq 'test-b.js' -and -not $r.Asked.StartLog)
     $r = Invoke-Gate 'pull_request' 'github-hosted' -extra @('-Shard', '3', '-Of', '2')
     Yes 'a share that is not one runs nothing and exits 2' ($r.Code -eq 2 -and -not $r.Asked -and $r.Text -match '-Shard 3 -Of 2 names no share')
     $r = Invoke-Gate 'pull_request' 'github-hosted' -extra @('-Shard', '2', '-Of', '3') -code 4
@@ -377,13 +342,12 @@ exit 0
     $p = $null; if ($r.Plan) { $p = $r.Plan | ConvertFrom-Json }
     Yes ('the pick on main is the whole gate, split by seconds (' + $r.Plan + ')') ($r.Code -eq 0 -and $p -and $p.whole -and $r.Outputs -match '(?m)^whole=true\s*$' -and
         (@(@($p.shares)[0]) -join ' ') -eq 'test-a.js' -and (@(@($p.shares)[1]) -join ' ') -eq 'test-b.js test-c.js' -and $r.Text -match 'Split by the seconds each took' -and $r.Text -match 'Share 1 of 2: 1 harnesses about 10 s')
-    Yes '  asking the trace task nothing' (-not (Test-Path -LiteralPath (Join-Path $trace 'ask.json')) -and $r.Text -cnotmatch 'Traced:|Not traced')
     $r = Invoke-Gate 'push' 'github-hosted' -extra @('-Shard', '2', '-Of', '2') -plan $r.Plan
     Yes '  and a share of it says whole and runs its part' ($r.Asked -and $r.Asked.Only -eq 'test-b.js test-c.js' -and $r.Whole -and $r.Text -match 'Share 2 of 2 of the whole gate: 2 of its 3 harnesses')
     $env:STUB_MAP = ''
     $r = Invoke-Gate 'pull_request' 'github-hosted' -extra @('-Pick', '2')
     $p = $null; if ($r.Plan) { $p = $r.Plan | ConvertFrom-Json }
-    Yes ('with no map the pick is the whole gate by place in the list, saying why (' + $r.Plan + ')') ($r.Code -eq 0 -and $p -and $p.whole -and (@(@($p.shares)[0]) -join ' ') -eq 'test-a.js test-c.js' -and (@(@($p.shares)[1]) -join ' ') -eq 'test-b.js' -and $r.Text -match 'The whole gate runs: this runner keeps no map of its own' -and $r.Text -match 'Split by place in the list')
+    Yes ('with no map the pick is the whole gate by place in the list, saying why (' + $r.Plan + ')') ($r.Code -eq 0 -and $p -and $p.whole -and (@(@($p.shares)[0]) -join ' ') -eq 'test-a.js test-c.js' -and (@(@($p.shares)[1]) -join ' ') -eq 'test-b.js' -and $r.Text -match 'The whole gate runs: main''s nightly gate map could not be fetched' -and $r.Text -match 'Split by place in the list')
 
     # ---- this build's share of the cores (#3860): the machine's cores over
     # the builds it runs at once. One's five builds took the box's count
@@ -411,60 +375,10 @@ exit 0
     Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# ---- 5. the trace task
-$taskFile = Join-Path (Join-Path (Join-Path $repo 'scripts') 'dev') 'Trace-Gate-Task.ps1'
-$tt = [IO.File]::ReadAllText($taskFile)
-$errs = $null
-$ast = [Management.Automation.Language.Parser]::ParseInput($tt, [ref]$null, [ref]$errs)
-Yes 'Trace-Gate-Task.ps1 parses' (-not @($errs).Count)
-Yes '  looks only in the build runners'' folders it was installed for' ($tt -match "(?m)^\`$runners = @\(\(\[IO\.File\]::ReadAllText\(\(Join-Path \`$Here 'task\.json'\)\) \| ConvertFrom-Json\)\.runners\)\s*$" -and $tt -match '(?m)^\s+foreach \(\$w in \$runners\) \{\s*$')
-Yes '  reads at below normal priority, one read at a time, and deletes each trace' ($tt -match "PriorityClass = 'BelowNormal'" -and $tt -match "Remove-Item -LiteralPath \`$Read -Recurse -Force")
-Yes '  stops a trace whose build ended without saying so, ran too long, or lost events' ($tt -match "elseif \(-not \(Test-Alive \`$script:active\.Ask\)\) \{ Stop-Active" -and $tt -match 'TotalMinutes -gt \$MaxMinutes\) \{ Stop-Active' -and $tt -match 'if \(\$script:lost\) \{ Stop-Active')
-$fns = @{}
-foreach ($f in $ast.FindAll({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] }, $true)) { $fns[$f.Name] = $f.Extent.Text }
-Yes '  has its check of an ask as Get-Ask' ($fns.ContainsKey('Get-Ask') -and $fns.ContainsKey('Test-Linked'))
-if ($OnWindows -and $fns.ContainsKey('Get-Ask')) {
-    $box = Join-Path ([IO.Path]::GetTempPath()) ('run-gate-task-' + [Guid]::NewGuid().ToString('N'))
-    try {
-        $w = [pscustomobject]@{ root = (Join-Path $box 'Thornswood-Runner') }
-        $ws = Join-Path $w.root '_work\Thornswood\Thornswood'
-        $outside = Join-Path $box 'elsewhere'
-        $null = New-Item -ItemType Directory -Force -Path $ws, (Join-Path $w.root 'trace'), $outside
-        $null = New-Item -ItemType Junction -Path (Join-Path $w.root '_work\linked') -Target $outside
-        . ([ScriptBlock]::Create($fns['Get-Ask'] + "`n" + $fns['Test-Linked']))
-        $script:seen = New-Object 'System.Collections.Generic.HashSet[string]'
-        $null = $script:seen.Add('1-1')
-        $me = [Diagnostics.Process]::GetCurrentProcess()
-        function Ask($o) {
-            $text = $(if ($o -is [string]) { $o } else { $o | ConvertTo-Json -Compress })
-            [IO.File]::WriteAllText((Join-Path $w.root 'trace\ask.json'), $text)
-            Get-Ask $w
-        }
-        $good = [ordered]@{ key = '2-1'; commit = ('b' * 40); workspace = $ws; pid = $me.Id; started = $me.StartTime.ToUniversalTime().ToString('o') }
-        $a = Ask $good
-        Yes ('on Windows, a good ask is taken (' + $a.Why + ')') ($a.Key -eq '2-1' -and $a.Why -eq '' -and $a.Workspace -eq $ws -and -not (Test-Path -LiteralPath (Join-Path $w.root 'trace\ask.json')))
-        $cases = @(
-            @{ What = 'a run asked for before'; Set = @{ key = '1-1' }; Want = 'asked for once' },
-            @{ What = 'no full commit'; Set = @{ commit = 'abc' }; Want = 'no full commit' },
-            @{ What = 'a checkout outside the runner''s _work'; Set = @{ workspace = $outside }; Want = 'not a folder in' },
-            @{ What = 'a checkout named through ..'; Set = @{ workspace = ($ws + '\..\..\..\..\elsewhere') }; Want = 'not a folder in' },
-            @{ What = 'a checkout reached through a link'; Set = @{ workspace = (Join-Path $w.root '_work\linked') }; Want = 'through a link' },
-            @{ What = 'no process'; Set = @{ pid = 'x' }; Want = 'no process' }
-        )
-        foreach ($c in $cases) {
-            $o = [ordered]@{}; foreach ($k in $good.Keys) { $o[$k] = $good[$k] }
-            foreach ($k in $c.Set.Keys) { $o[$k] = $c.Set[$k] }
-            $a = Ask $o
-            Yes ('  refused: ' + $c.What + ' (' + $a.Why + ')') ($a.Why -match $c.Want)
-        }
-        $a = Ask 'not json'
-        Yes '  refused, with no run to answer: what is not JSON' ($a.Key -eq '' -and $a.Why -match 'not JSON')
-    } finally {
-        Remove-Item -LiteralPath $box -Recurse -Force -ErrorAction SilentlyContinue
-    }
-} else {
-    Write-Host 'SKIP  the check of an ask runs only on Windows, where the box is'
-}
+# ---- 5. nothing left of the box's trace task (#5338)
+$rg = [IO.File]::ReadAllText((Join-Path (Join-Path (Join-Path $repo 'scripts') 'dev') 'Run-Gate.ps1'))
+Yes 'Run-Gate.ps1 asks no trace task: no Request-Trace, no -AnswerSeconds, no ask.json' ($rg -notmatch 'Request-Trace|AnswerSeconds|Trace-Gate-Task|ask\.json|done\.json')
+Yes '  and reads no runner''s own gate-map' ($rg -notmatch "Join-Path \`$root 'gate-map'")
 
 Write-Host ''
 Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail)

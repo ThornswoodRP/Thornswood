@@ -1,13 +1,14 @@
 <#
 .SYNOPSIS
-  The part of a gate trace that runs on the VPS, as an administrator: an ETW
-  session that sees every file each gate harness opens, and the reading of it
-  into one list of paths a harness (#3114).
+  The part of a gate trace that runs as an administrator: an ETW session
+  that sees every file each gate harness opens, and the reading of it into
+  one list of paths a harness (#3114).
 
 .DESCRIPTION
-  Not run by hand. scripts\dev\Trace-Gate.ps1 sends this to the box with the
-  mode it wants set in $TraceMode at the top, the way Install-Runner.ps1
-  sends its scripts, and PowerShell 7 runs it there.
+  Not run by hand. scripts\dev\Trace-Gate-Here.ps1 runs it with the mode it
+  wants set in $TraceMode at the top, on GitHub's hosted Windows runner in
+  .github\workflows\gate-map.yml (#5183). It was written for the box, where
+  the gate ran until #5119, and keeps its name.
 
     selftest  starts a session, runs a probe whose file work is known, stops
               the session and reads it back. Every line says PASS or FAIL;
@@ -22,15 +23,8 @@
               and $TraceWorkspace, the run's checkout) and prints every
               harness's paths, gzipped, as base64 lines between BEGIN and
               END. Then it deletes the trace.
-    clean     deletes whatever a trace left, but for the trace task's own
-              folders.
-    install   installs the trace task (scripts\dev\Trace-Gate-Task.ps1),
-              from $TraceBoxText, $TraceTaskText and $TraceRunners, the
-              build runners' folders and accounts: see -Install in
-              Trace-Gate.ps1.
-    status    what the trace task is doing.
-    uninstall takes it off, with its folders in each build runner's.
-    library   nothing: the trace task loads this for its functions.
+    clean     stops any session a run left and deletes whatever a trace
+              left.
 
   WHAT IS SEEN. Microsoft-Windows-Kernel-File's create events: every open of
   a file or folder, whether it is there or not, which on Windows is also how
@@ -47,7 +41,7 @@
   the process that made it, and each process on the harness whose process
   started it, however deep: the harness's own process is the one with the id
   and start time the start log gives. Only paths inside the run's checkout
-  are kept. The trace itself, which sees the whole box, never leaves C:\Thornswood-Trace,
+  are kept. The trace itself, which sees the whole machine, never leaves C:\Thornswood-Trace,
   a folder only administrators can read, and is deleted once read.
 
   A process that was already running when the session started has no start
@@ -68,13 +62,6 @@
 $ErrorActionPreference = 'Stop'
 $traceRoot = 'C:\Thornswood-Trace'
 $sessionName = 'thornswood-gate-trace'
-# The trace task's (scripts\dev\Trace-Gate-Task.ps1): its session, its
-# scheduled task, its log and its two folders in C:\Thornswood-Trace, task
-# for its scripts and main for the traces it is taking and reading.
-$mainSession = 'thornswood-main-trace'
-$taskName = 'Thornswood Gate Trace'
-$taskLog = Join-Path $traceRoot 'task.log'
-$taskFolders = @('task', 'main')
 
 # PowerShell 7 builds against only the assemblies named here, so each one the
 # C# uses is named (#5356).
@@ -594,10 +581,6 @@ function Read-GateTrace([string]$etl, [string]$startsText, [string]$workspace) {
 New-TraceFolder
 Get-TraceProviders
 
-# scripts\dev\Trace-Gate-Task.ps1 loads this for its functions and the
-# reader, and runs no mode.
-if ($TraceMode -eq 'library') { return }
-
 switch ($TraceMode) {
     'selftest' {
         $fail = 0
@@ -620,7 +603,7 @@ switch ($TraceMode) {
         # The probe: a file read, a file's attributes read, a file that is not
         # there looked for, a folder listed, and a child process that reads a
         # file and looks for another, each the way a harness does them; then
-        # node doing the same through libuv, when the box has node.
+        # node doing the same through libuv, when the machine has node.
         [IO.File]::WriteAllText((Join-Path $probe 'stat.txt'), 's')
         [IO.File]::WriteAllText((Join-Path $probe 'node-stat.txt'), 'n')
         $node = Get-Command node -ErrorAction SilentlyContinue
@@ -669,7 +652,7 @@ exit 0
         # (a directory enumeration with that name as its pattern), so the
         # name is a look at look/c-missing.txt and the folder is no listing.
         $wants = @('a.txt', 'stat.txt', 'missing.txt', 'sub', 'sub/b.txt', 'look', 'look/c-missing.txt', 'only')
-        if ($node) { $wants += @('node-stat.txt', 'node-missing.txt') } else { 'no node on this box, so the probe did not run it' }
+        if ($node) { $wants += @('node-stat.txt', 'node-missing.txt') } else { 'no node on this machine, so the probe did not run it' }
         foreach ($want in $wants) {
             Check ('the probe''s ' + $want + ' is in its list') ($got -contains $want)
         }
@@ -683,7 +666,7 @@ exit 0
         Check 'and not put on the probe' ($got -notcontains 'other.txt')
         Check ('what was running before the session is named as a stray by its name (pwsh.exe early.txt)') (@($strays | Where-Object { $_ -match ' pwsh\.exe early\.txt$' }).Count -ge 1)
         Remove-Item -LiteralPath $etl, ($etl + '.procs'), $probe, $probeFile -Recurse -Force -ErrorAction SilentlyContinue
-        if ($fail) { 'the self-test FAILED: no gate trace from this box can be trusted until it passes'; exit 1 }
+        if ($fail) { 'the self-test FAILED: no gate trace from this machine can be trusted until it passes'; exit 1 }
         'the self-test passed'
         exit 0
     }
@@ -695,7 +678,7 @@ exit 0
     }
     'stop' {
         Stop-TraceSession $sessionName
-        if ($script:lost) { 'REFUSED: ' + $script:lost + ' lost, so some opens were never seen and the trace proves nothing. Trace-Gate.ps1 deletes it.'; exit 1 }
+        if ($script:lost) { 'REFUSED: ' + $script:lost + ' lost, so some opens were never seen and the trace proves nothing. The clean mode deletes it.'; exit 1 }
         exit 0
     }
     'read' {
@@ -712,124 +695,8 @@ exit 0
     'clean' {
         $null = [ThornswoodTrace]::Stop($sessionName)
         $null = [ThornswoodTrace]::Stop('thornswood-trace-selftest')
-        # The trace task's own folders are its to empty, and -Uninstall's.
-        Get-ChildItem -LiteralPath $traceRoot -Force | Where-Object { ($taskFolders + 'task.log', 'task.log.1') -notcontains $_.Name } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-        'the trace folder is empty but for the trace task''s own, and no session but the task''s is running'
-        exit 0
-    }
-    'install' {
-        # The trace task (#3114, Patrick's option A on q-3114-map-refresh):
-        # the scripts into C:\Thornswood-Trace\task, which only
-        # administrators can read, the two folders in each build runner's
-        # own folder, and the scheduled task that runs as SYSTEM.
-        $runners = @(($TraceRunners | ConvertFrom-Json).runners)
-        if (-not $runners.Count) { throw 'no build runners were named' }
-        $taskDir = Join-Path $traceRoot 'task'
-        $t = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-        if ($t) { Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2 }
-        $null = [ThornswoodTrace]::Stop($mainSession)
-        $null = New-Item -ItemType Directory -Force -Path $taskDir
-        # With a byte order mark: Windows PowerShell 5.1 reads a file without
-        # one in the machine's code page.
-        $bom = New-Object Text.UTF8Encoding($true)
-        [IO.File]::WriteAllText((Join-Path $taskDir 'Trace-Gate-Box.ps1'), $TraceBoxText, $bom)
-        [IO.File]::WriteAllText((Join-Path $taskDir 'Trace-Gate-Task.ps1'), $TraceTaskText, $bom)
-        foreach ($f in 'Trace-Gate-Box.ps1', 'Trace-Gate-Task.ps1') {
-            $errs = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $taskDir $f), [ref]$null, [ref]$errs)
-            if ($errs -and $errs.Count) { throw ($f + ' does not parse on the box: ' + $errs[0].Message) }
-        }
-        $kept = @()
-        foreach ($w in $runners) {
-            $root = [string]$w.root
-            if ($root -notmatch '^C:\\Thornswood-Runner\d*$' -or -not (Test-Path -LiteralPath $root -PathType Container)) { throw ('no runner folder ' + $root) }
-            $sid = (New-Object Security.Principal.NTAccount([string]$w.account)).Translate([Security.Principal.SecurityIdentifier]).Value
-            # trace: the runner's to write, as its folder is; the task reads it.
-            $trace = Join-Path $root 'trace'
-            $null = New-Item -ItemType Directory -Force -Path $trace
-            # gate-map: the task's to write and the runner's only to read, so
-            # no job can change the map another job is held to. Owned by
-            # Administrators (an owner may always change the rules) and taking
-            # nothing from the runner's folder, where the account may write.
-            $map = Join-Path $root 'gate-map'
-            $null = New-Item -ItemType Directory -Force -Path $map
-            $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-            $o1 = & icacls.exe $map /setowner '*S-1-5-32-544' /T /C /Q 2>&1
-            $c1 = $LASTEXITCODE
-            $o2 = & icacls.exe $map /reset /T /C /Q 2>&1
-            $c2 = $LASTEXITCODE
-            $o3 = & icacls.exe $map /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' ('*' + $sid + ':(OI)(CI)RX') /C /Q 2>&1
-            $c3 = $LASTEXITCODE
-            $o4 = & icacls.exe $map /inheritance:r /C /Q 2>&1
-            $c4 = $LASTEXITCODE
-            $ErrorActionPreference = $old
-            if ($c1 -or $c2 -or $c3 -or $c4) { throw ('icacls could not lock ' + $map + ': ' + ((@($o1) + @($o2) + @($o3) + @($o4) | ForEach-Object { "$_" }) -join ' ')) }
-            $acl = Get-Acl -LiteralPath $map
-            $write = [Security.AccessControl.FileSystemRights]'Write, Delete, DeleteSubdirectoriesAndFiles, ChangePermissions, TakeOwnership, AppendData, CreateFiles'
-            $open = @($acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) | Where-Object {
-                "$($_.AccessControlType)" -eq 'Allow' -and @('S-1-5-18', 'S-1-5-32-544') -notcontains $_.IdentityReference.Value -and ($_.FileSystemRights -band $write) })
-            if (-not $acl.AreAccessRulesProtected -or $open.Count -or $acl.Owner -notmatch 'Administrators') { throw ($map + ' is still open to writing by ' + (@($open | ForEach-Object { $_.IdentityReference.Value }) -join ', ')) }
-            $kept += [ordered]@{ root = $root; account = [string]$w.account; sid = $sid }
-            $root + ': ' + $trace + ' for its asks, ' + $map + ' locked to reading for ' + $w.account
-        }
-        [IO.File]::WriteAllText((Join-Path $taskDir 'task.json'), ((@{ runners = $kept }) | ConvertTo-Json -Depth 4))
-        $a = New-ScheduledTaskAction -Execute (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe') -Argument ('-NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $taskDir 'Trace-Gate-Task.ps1') + '"')
-        # At startup and never on a timer: the task's loop holds every fault
-        # it meets and writes it to task.log, and a task that is not running
-        # shows on every main build ("the trace task did not answer") and in
-        # -Status, to be found and fixed, not restarted over.
-        # Priority 7, Task Scheduler's below normal, on purpose: nothing it
-        # does may slow a build or the game servers, and a build waits up to
-        # a minute for its answer.
-        # SYSTEM, and not LOCAL SERVICE as the services are
-        # (scripts\deploy\ServiceAccount.ps1): only an administrator, SYSTEM
-        # or the Performance Log Users group may start a kernel trace session,
-        # and putting LOCAL SERVICE in that group would hand it to the site,
-        # voice and Caddy as well. The task runs nothing a job hands it: an
-        # ask is a few checked fields, read as data.
-        $set = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -Priority 7
-        $who = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
-        $null = Register-ScheduledTask -TaskName $taskName -Action $a -Trigger (New-ScheduledTaskTrigger -AtStartup) -Settings $set -Principal $who -Description 'Traces every main build''s gate for the pull request map (#3114, scripts\dev\Trace-Gate-Task.ps1)' -Force
-        Start-ScheduledTask -TaskName $taskName
-        Start-Sleep -Seconds 5
-        $t = Get-ScheduledTask -TaskName $taskName
-        'task ' + $taskName + ': ' + $t.State
-        if (Test-Path -LiteralPath $taskLog) { Get-Content -LiteralPath $taskLog -Tail 5 }
-        exit 0
-    }
-    'status' {
-        $t = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-        if (-not $t) { 'task ' + $taskName + ': NOT INSTALLED'; exit 1 }
-        $i = Get-ScheduledTaskInfo -TaskName $taskName
-        'task ' + $taskName + ': ' + $t.State + ', last started ' + $i.LastRunTime + ', result ' + $i.LastTaskResult
-        $conf = [IO.File]::ReadAllText((Join-Path $traceRoot 'task\task.json')) | ConvertFrom-Json
-        foreach ($w in @($conf.runners)) {
-            $latest = Join-Path $w.root 'gate-map\latest.json'
-            if (Test-Path -LiteralPath $latest) { $w.root + ': map ' + [IO.File]::ReadAllText($latest) } else { $w.root + ': no map yet' }
-        }
-        'free on C: ' + [Math]::Round((Get-PSDrive C).Free / 1GB, 1) + ' GB'
-        '--- task.log, last 25 ---'
-        if (Test-Path -LiteralPath $taskLog) { Get-Content -LiteralPath $taskLog -Tail 25 }
-        exit 0
-    }
-    'uninstall' {
-        $t = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-        if ($t) { Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName $taskName -Confirm:$false }
-        $null = [ThornswoodTrace]::Stop($mainSession)
-        $conf = $null
-        $cf = Join-Path $traceRoot 'task\task.json'
-        if (Test-Path -LiteralPath $cf) { $conf = [IO.File]::ReadAllText($cf) | ConvertFrom-Json }
-        # Without the two folders a main build asks nothing and a pull request
-        # runs the whole gate, as before the task.
-        foreach ($w in @($(if ($conf) { $conf.runners }))) {
-            foreach ($d in 'trace', 'gate-map') {
-                Remove-Item -LiteralPath (Join-Path $w.root $d) -Recurse -Force -ErrorAction SilentlyContinue
-                if (Test-Path -LiteralPath (Join-Path $w.root $d)) { 'COULD NOT remove ' + (Join-Path $w.root $d) } else { 'removed ' + (Join-Path $w.root $d) }
-            }
-        }
-        foreach ($d in $taskFolders) { Remove-Item -LiteralPath (Join-Path $traceRoot $d) -Recurse -Force -ErrorAction SilentlyContinue }
-        Remove-Item -LiteralPath $taskLog, ($taskLog + '.1') -Force -ErrorAction SilentlyContinue
-        'the trace task is gone: ' + $(if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) { 'STILL REGISTERED' } else { 'unregistered' })
+        Get-ChildItem -LiteralPath $traceRoot -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        'the trace folder is empty, and no trace session is running'
         exit 0
     }
     default { throw ('no such mode: ' + $TraceMode) }

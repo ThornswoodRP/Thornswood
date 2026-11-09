@@ -17,7 +17,7 @@
 //      parent's clone returns, joins a call strace split in two, counts a
 //      folder listing, does not take readlink's answer for a path, and
 //      marks a trace blind when an io_uring was set up.
-//   5. a map built from a Windows trace (scripts/dev/Trace-Gate.ps1) holds
+//   5. a map built from a Windows trace (scripts/dev/Trace-Gate-Box.ps1) holds
 //      a harness to what it opened on the box, whatever its code says about
 //      Windows, and always runs one that asked git, did not pass, or that
 //      the box script marked (something else opened the checkout beside it);
@@ -268,8 +268,8 @@ try {
   let threw = false;
   try { A.readTreeFile(Buffer.concat([Buffer.from('#gate-shape nope\0'), listing])); } catch (e) { threw = true; }
   yes('  a header that is not a shape is refused, so the whole gate runs', threw);
-  const ra = fs.readFileSync(path.join(REPO, 'scripts', 'dev', 'Run-Gate.ps1'), 'utf8');
-  yes('Run-Gate.ps1 writes the traced tree with the tree command, which carries the shape', /& node \$Affected tree HEAD /.test(ra));
+  const gm = fs.readFileSync(path.join(REPO, '.github', 'workflows', 'gate-map.yml'), 'utf8');
+  yes('gate-map.yml writes the traced tree with the tree command, which carries the shape', /node scripts\/dev\/Affected-Harnesses\.js tree HEAD /.test(gm));
   yes('the repository\'s own two build workflows have a shape', A.gateShape(A.WORKFLOWS.map(f => fs.readFileSync(path.join(REPO, f), 'utf8'))) !== null);
 }
 

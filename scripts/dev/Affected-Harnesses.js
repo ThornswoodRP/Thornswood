@@ -3,12 +3,13 @@
 //
 // Issue #3114. Says which gate harnesses a change can affect, from a read
 // map: for each harness, every path inside the checkout it opened, looked
-// at, failed to find or listed when it ran on the base commit. On the VPS
-// an administrator task traces every main build's gate
-// (scripts/dev/Trace-Gate-Task.ps1) and scripts/dev/Run-Gate.ps1 picks a
-// pull request's harnesses with "pick" below; scripts/dev/Trace-Gate.ps1
-// traces one run by hand (traces.jsonl.gz, one line a harness), and
-// scripts/dev/Trace-HarnessReads.js traces on Linux (one file a harness).
+// at, failed to find or listed when it ran on the base commit.
+// .github/workflows/gate-map.yml traces main's whole gate every night on
+// GitHub's hosted Windows runner (scripts/dev/Trace-Gate-Here.ps1,
+// traces.jsonl.gz, one line a harness) and builds the map with "build"
+// below; scripts/dev/Run-Gate.ps1 picks a pull request's harnesses from it
+// with "pick"; and scripts/dev/Trace-HarnessReads.js traces on Linux (one
+// file a harness).
 //
 // WHY THAT IS ENOUGH. A harness's result here can only differ between two
 // trees through what its system calls return. When no path it touched is
@@ -228,9 +229,9 @@ function build(from, root, commitArg) {
       ? { always: why, seconds: t.seconds }
       : { seconds: t.seconds, reads: reads.sort(), lists: lists.sort() };
   }
-  const map = { format: 1, commit: commit, tracer: windows ? 'ETW on the VPS, scripts/dev/Trace-Gate.ps1' : 'strace on Linux, scripts/dev/Trace-HarnessReads.js', harnesses: harnesses };
+  const map = { format: 1, commit: commit, tracer: windows ? 'ETW on Windows, scripts/dev/Trace-Gate-Box.ps1' : 'strace on Linux, scripts/dev/Trace-HarnessReads.js', harnesses: harnesses };
   if (windows) { map.platform = 'windows'; }
-  // The box read each folder's enumerations, so a folder in lists was
+  // A Windows trace reads each folder's enumerations, so a folder in lists was
   // listed and one only in reads was opened and never listed.
   if (windows && enumerated) { map.listings = 'enumerated'; }
   return map;
@@ -412,8 +413,8 @@ function readGate(file) {
 // built from the traces here, by this checkout's own build, and the change
 // is measured from the traced tree's listing, so nothing is fetched. The
 // traced workflows' gate shape comes with the listing (the tree command).
-// tracesFile is the trace task's traces, or a map already built from them
-// (a .json, what main's build hands to runners off the box, #4009).
+// tracesFile is a gate trace's traces, or a map already built from them
+// (a .json, what gate-map.yml keeps for pull requests, #4009).
 function pick(tracesFile, treeFile, commit, gate) {
   const map = /\.json$/.test(tracesFile) ? JSON.parse(fs.readFileSync(tracesFile, 'utf8')) : build(tracesFile, REPO, commit);
   if (map.commit !== commit) { throw new Error('the map is of ' + map.commit + ', not ' + commit); }

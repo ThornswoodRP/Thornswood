@@ -36,7 +36,7 @@
        harness used, which its job object counted, children included;
     8. -StartLog (#3114) adds a line of JSON as each harness starts, with
        its process id and start time, and as it ends, with its exit code and
-       whether it said SKIP, for scripts\dev\Trace-Gate.ps1 to read.
+       whether it said SKIP, for scripts\dev\Trace-Gate-Here.ps1 to read.
     9. a heavy harness the script names (#4981, test-2914-nexus-scripts.ps1)
        gets a 600 s clock on an off-box runner (thornswood-pr-*, as
        scripts\dev\Run-Gate.ps1 tells One's runners from the box's), and the
