@@ -39,11 +39,15 @@ AUTOMATABLE = re.compile(
     r'|\bgamemode log\b|\blogs?\b(?=[^.\n]*\b(?:count|read|copy|look|check|grep)\b)'
     r'|\b(?:count|read|copy|check)\b[^.\n]*\blogs?\b'
     r'|\bstaff[- ]notice\b|\bmanifest\b', re.I)
-# What makes a check a dev's and not a playtester's: a staff or dev command,
-# the dev build (offered only to staff) or something only staff can set up.
+# What makes a check a dev's and not a playtester's, the things
+# docs/guide/the-board.md ("#dev-test-tasks") names: a staff or dev command,
+# the dev server, the dev build (offered only to staff) or something only staff
+# can set up. Logs and the box are dev's too, and AUTOMATABLE above refuses
+# them, because a Claude does those. The dev server was left out until #4349,
+# so steps that only need devs on it were refused as playtester steps.
 DEV_ONLY = re.compile(
     r'(?:^|\s)/(?!helpme\b)[a-z]+|\bstaff\b|\bdev command|\badmin\b'
-    r'|\bdev (?:build|launcher|install|release)\b|\bswitch(?:ed)?\b'
+    r'|\bdev (?:build|launcher|install|release|server)\b|\bswitch(?:ed)?\b'
     r'|\bhand-?edit|\bsettings file\b|\bskse loader\b', re.I)
 # A staff or dev command in a main test task, which every playtester runs.
 STAFF_STEP = re.compile(
