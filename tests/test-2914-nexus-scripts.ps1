@@ -329,9 +329,7 @@ $js = Join-Path $rel 'nexus-collection.js'
 # node's output as UTF-8 itself, whatever the console is set to, and leaves the
 # console alone. The exit code is in $LASTEXITCODE, as after &.
 function NodeSaid {
-    & $node.Source @args
-}
-function NodeSaidUtf8 {
+    $psi = New-Object Diagnostics.ProcessStartInfo
     $psi.FileName = $node.Source
     $psi.Arguments = (@($args | ForEach-Object { Q ([string]$_) }) -join ' ')
     $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
