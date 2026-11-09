@@ -446,6 +446,10 @@ function runClient(env, input, waitMs) {
     yes('  and the bridge logs each carry-over', await waitFor(() => (log.match(/carried over to a new WebSocket/g) || []).length >= carriedBefore + 3, 3000));
     yes('  and the session\'s lost WebSocket, held for connect.js to come back', /session \d+ lost its WebSocket: the WebSocket closed, after \d+ s; held 2 s for connect\.js to come back/.test(log));
     yes('  and its end names how many WebSockets it rode', /ended: the far end closed it, \d+ s, \d+ bytes in, \d+ bytes out, carried over to 3 new WebSockets/.test(log));
+    // Install-Bridge.ps1 -Status lists these endings from every kept log, the
+    // proof on the box that a long run outlived its WebSocket (#3214).
+    const status = (fs.readFileSync(path.join(__dirname, '..', 'scripts', 'deploy', 'Install-Bridge.ps1'), 'utf8').match(/-match '( ended: \.\*, carried over to )'/) || [])[1];
+    yes('  and Install-Bridge.ps1 -Status picks that ending out of the log', !!status && log.split(/\r?\n/).some((l) => new RegExp(status).test(l) && /carried over to 3 new WebSockets/.test(l)));
 
     // Deaf: nothing moves and nothing says it has gone, at either end.
     // connect.js takes it for gone after HEAR_MS, and the bridge, which has
