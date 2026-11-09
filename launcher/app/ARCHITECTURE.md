@@ -286,10 +286,14 @@ with Velopack (#4825). The DEV marks on the notes come from main's
 Deployment (ReleaseNews.cs, above).
 The launcher itself is not in the feed any more: it updates through Velopack
 (Velo, below), and VeloUpdate.cs is the same Updater class's half for it.
-`VeloUpdate.cs:68 CheckLauncher()` asks this install's channel on GitHub for a
-newer launcher, `VeloUpdate.cs:103 FetchLauncher()` downloads the package into
-Velopack's own folder and checks it, and `VeloUpdate.cs:167 ApplyLauncher()`
-leaves it to go in once the launcher has closed. `Version` at the top of
+`VeloUpdate.cs:75 CheckLauncher()` asks this install's channel for a newer
+launcher, `VeloUpdate.cs:116 FetchLauncher()` downloads the package into
+Velopack's own folder and checks it, and `VeloUpdate.cs:184 ApplyLauncher()`
+leaves it to go in once the launcher has closed. The list of Releases and
+every file of one, the signed record's included, come through the site
+(`Velo.ReleaseList`, `Velo.ReleaseFile`, #5608), which asks GitHub's API
+signed in and sends each file on to where GitHub keeps it, so the launcher
+asks GitHub nothing itself. `Version` at the top of
 Updater.cs is the launcher's version, read from the exe: the build passes it
 as `-p:Version` (`scripts\release\LauncherVersion.ps1` works it out, #5179),
 in a merge release it is the Velopack package's version, and a bare build is

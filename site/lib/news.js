@@ -10,7 +10,7 @@ const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
 const { DATA, ROOT } = require('./base');
-const { askReleaseCopies, feedFile, feedReleaseTag, readJsonQuiet,
+const { askReleaseCopies, assetLocation, feedFile, feedReleaseTag, readJsonQuiet,
   releaseCopies } = require('./feed');
 const { putJson } = require('./store');
 
@@ -127,11 +127,11 @@ function publicNews(doc, fileNotes, now) {
   return { launcher: String((doc && doc.launcherVersion) || ''), collection, collectionRevision,
            at: now.toISOString(), news };
 }
-// The bytes at a Release copy's address, or why not. GitHub answers it with a
-// redirect to its download host; only GitHub's own hosts are followed, at
-// most three times, and what comes back must be the size and sha256 the
-// Release gave.
-const NEWS_HOSTS = /^(github\.com|objects\.githubusercontent\.com|release-assets\.githubusercontent\.com)$/;
+// The bytes at the address GitHub keeps a Release copy at (assetLocation),
+// or why not. Only GitHub's storage hosts are followed, at most three
+// redirects, and what comes back must be the size and sha256 the Release
+// gave.
+const NEWS_HOSTS = /^(objects\.githubusercontent\.com|release-assets\.githubusercontent\.com)$/;
 function newsFetch(url, sha, size, hops) {
   return new Promise((resolve) => {
     let u;
@@ -189,7 +189,9 @@ async function refreshNews() {
         const c = tag ? (askReleaseCopies(tag), releaseCopies[tag]) : null;
         const f = c && c.files && c.files[sha];
         if (!f) return;    // not on the Release yet: asked again next time
-        const got = await newsFetch(f.url, sha, f.size, 0);
+        // Where GitHub keeps it, from the API's asset route (#5608).
+        const at = await assetLocation(f.id);
+        const got = at.url ? await newsFetch(at.url, sha, f.size, 0) : { why: at.why };
         if (!got.body) {
           if (got.why !== newsLastWhy) console.error('[thornswood-docs] news: ' + tag + ': ' + got.why);
           newsLastWhy = got.why;

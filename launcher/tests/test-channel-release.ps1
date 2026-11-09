@@ -29,9 +29,14 @@
       the first finds nothing, which is why CheckLauncher allows them.
     - VeloRecord.TagOf: 1.3.0 is the Release build-1.3.0, and a date
       number, a 1.2.x number (the launchers before Velopack), a prerelease and a 0.x number are refused.
+    - Velo.ReleaseFile and Velo.SiteReleaseFile (#5608): every file of a
+      Release is fetched through the site's Release route, and an address
+      the site's list gives is taken only when it is that route.
   And from the source: CheckLauncher allows downgrades, ChannelSource cuts
-  the feed with ChannelRelease, and Velo.GameFromPackage is every launcher
-  Velopack installed, not dev alone.
+  the feed with ChannelRelease, reads the Releases from the site and fetches
+  every file through its Release route, the signed record is fetched the
+  same way, nothing in the update asks GitHub or github.com itself, and
+  Velo.GameFromPackage is every launcher Velopack installed, not dev alone.
 
   Writes only under out\harness (the build). Nothing touches the network.
 #>
@@ -67,6 +72,17 @@ Yes 'CheckLauncher allows a lower number than the running one, before it asks' (
     $check -match '(?s)opts\.AllowVersionDowngrade = true;.*new CheckedUpdates\(new ChannelSource\(channel, 11\), opts\);.*CheckForUpdatesAsync\(\)')
 Yes 'ChannelSource cuts the feed Velopack reads with ChannelRelease, by when each Release was published' (
     $velo -match '(?s)sealed class ChannelSource : GithubSource.*public override async Task<VelopackAssetFeed> GetReleaseFeed\(.*await base\.GetReleaseFeed\(.*Assets = ChannelRelease\(all\.Assets, a => a is GitBaseAsset g && g\.Release != null \? g\.Release\.PublishedAt : null\)')
+# #5608, Patrick's B of 9 Nov 2026: GitHub answered every anonymous request
+# to github.com with 504 that day, Release downloads included.
+Yes 'ChannelSource reads the Releases from the site, not GitHub''s API' (
+    $velo -match '(?s)sealed class ChannelSource : GithubSource.*GetReleases\(bool includePrereleases\)\s*\{\s*string json = await Downloader\.DownloadString\(Velo\.ReleaseList,')
+Yes '  and fetches every feed and package through the site''s Release route, never Velopack''s github.com address' (
+    $velo -match '(?s)protected override string GetAssetUrlFromName\(GithubRelease release, string assetName\).*return Velo\.SiteReleaseFile\(asset\.BrowserDownloadUrl\);')
+$recordCs = [IO.File]::ReadAllText((Join-Path $App 'VeloRecord.cs')).Replace("`r`n", "`n")
+Yes 'the signed release record and its lists come through the site''s Release route too' (
+    $recordCs -match '(?s)static string Download\(string tag, string name\)\s*\{\s*return Velo\.ReleaseFile\(tag, name\);\s*\}')
+Yes '  and neither file asks api.github.com or a github.com download address' (
+    ($velo + $recordCs) -notmatch 'api\.github\.com|/releases/download/')
 $veloCs = [IO.File]::ReadAllText((Join-Path $App 'Velo.cs')).Replace("`r`n", "`n")
 Yes 'the game files come from the package for every launcher Velopack installed, main as well as dev' (
     $veloCs -match '(?s)public static bool GameFromPackage\(Config cfg\)\s*\{\s*return Installed;\s*\}')
@@ -211,6 +227,29 @@ namespace Thornswood
             why = "";
             try { VeloRecord.TagOf(SemanticVersion.Parse("0.1.2")); } catch (Exception ex) { why = ex.Message; }
             Yes("nor is a 0.x number", why.Contains("is not one a Thornswood release makes"));
+
+            Console.WriteLine();
+            Console.WriteLine("Velo.ReleaseFile and Velo.SiteReleaseFile: every file through the site (#5608)");
+            Yes("a Release's file is the site's Release route", Velo.ReleaseFile("build-1.3.5", "manifest.json") == "https://thornswood.net/release/build-1.3.5/manifest.json");
+            Yes("  the list's own address for one is made whole against the site",
+                Velo.SiteReleaseFile("/release/build-1.3.5/Thornswood-1.3.5-full.nupkg") == "https://thornswood.net/release/build-1.3.5/Thornswood-1.3.5-full.nupkg");
+            Yes("  and one already whole on the site is kept", Velo.SiteReleaseFile("https://thornswood.net/release/main-build-1.3.4/releases.main.json") ==
+                "https://thornswood.net/release/main-build-1.3.4/releases.main.json");
+            foreach (string bad in new[] {
+                "https://github.com/ThornswoodRP/Thornswood/releases/download/build-1.3.5/x.nupkg",
+                "https://thornswood.net.example.com/release/build-1.3.5/x.nupkg",
+                "//example.com/release/build-1.3.5/x.nupkg",
+                "http://thornswood.net/release/build-1.3.5/x.nupkg",
+                "https://thornswood.net:8443/release/build-1.3.5/x.nupkg",
+                "https://user@thornswood.net/release/build-1.3.5/x.nupkg",
+                "/feed/assets/" + new string('a', 64),
+                "/release/../feed/assets/x",
+                "", null })
+            {
+                string refused = "";
+                try { Velo.SiteReleaseFile(bad); } catch (ArgumentException ex) { refused = ex.Message; }
+                Yes("  anything else the list says is refused: " + (bad ?? "null"), refused.Contains("not the site's own Release route"));
+            }
 
             Console.WriteLine("driver: " + pass + " passed, " + fail + " failed");
             return fail > 0 ? 1 : 0;

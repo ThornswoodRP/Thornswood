@@ -60,15 +60,17 @@ namespace Thornswood
         public static string LastLauncherCheck = "";
 
         /// <summary>
-        /// Asks this install's channel on GitHub for a launcher newer than the
-        /// one running. Null when there is none, or when Velopack did not
-        /// install this launcher (LastLauncherCheck says which). Throws when
-        /// GitHub could not be asked, which is not the same as no update.
+        /// Asks this install's channel for a launcher newer than the one
+        /// running. Null when there is none, or when Velopack did not install
+        /// this launcher (LastLauncherCheck says which). Throws when the
+        /// Releases could not be read, which is not the same as no update.
         ///
-        /// One request to GitHub's API (the list of Releases) and one small
-        /// download per Release that carries this channel's feed. Anonymous
-        /// API requests are sixty an hour for each address, so the caller does
-        /// not ask on every feed check (ShellUpdate.cs, LauncherCheckDue).
+        /// One request to the site for the list of Releases and one small
+        /// download per Release that carries this channel's feed, each through
+        /// the site's Release route (ChannelSource, #5608): nothing is asked of
+        /// GitHub by this launcher, so no address's sixty anonymous calls an
+        /// hour are spent. The caller still does not ask on every feed check
+        /// (ShellUpdate.cs, LauncherCheckDue).
         /// </summary>
         public static LauncherUpdate CheckLauncher(Config cfg)
         {
@@ -287,6 +289,15 @@ namespace Thornswood
         /// and CheckLauncher lets Velopack take a lower number than the
         /// running one, so every install goes to the release its channel is
         /// on, up or down, with every check in this file's header all the same.
+        ///
+        /// READ THROUGH THE SITE (#5608, Patrick's B of 9 Nov 2026). The list
+        /// is the site's (Velo.ReleaseList), in GitHub's own shape, with each
+        /// file's address the site's Release route, and every file Velopack
+        /// fetches, the feeds and the packages, goes there (GetAssetUrlFromName),
+        /// which sends it on to where GitHub keeps it. Velopack's own source,
+        /// with no token, used github.com's download addresses, which GitHub
+        /// stopped answering for anybody not signed in on 9 Nov 2026, and its
+        /// list cost one of an address's sixty anonymous API calls an hour.
         /// </summary>
         sealed class ChannelSource : GithubSource
         {
@@ -314,8 +325,7 @@ namespace Thornswood
 
             protected override async Task<GithubRelease[]> GetReleases(bool includePrereleases)
             {
-                string url = "https://api.github.com/repos/" + Velo.Repo + "/releases?per_page=100&page=1";
-                string json = await Downloader.DownloadString(url, GetRequestHeaders("application/vnd.github.v3+json"), 30.0).ConfigureAwait(false);
+                string json = await Downloader.DownloadString(Velo.ReleaseList, GetRequestHeaders("application/json"), 30.0).ConfigureAwait(false);
                 List<GithubRelease> all = JsonSerializer.Deserialize(json, VeloJson.Default.ListGithubRelease);
                 if (all == null) return new GithubRelease[0];
                 return all
@@ -324,6 +334,20 @@ namespace Thornswood
                     .OrderByDescending(r => r.PublishedAt)
                     .Take(take)
                     .ToArray();
+            }
+
+            /// <summary>
+            /// Where a file of <paramref name="release"/> is fetched from: the
+            /// address the site's list gave it, which has to be the site's own
+            /// Release route (Velo.SiteReleaseFile).
+            /// </summary>
+            protected override string GetAssetUrlFromName(GithubRelease release, string assetName)
+            {
+                GithubReleaseAsset asset = release == null || release.Assets == null ? null :
+                    release.Assets.FirstOrDefault(a => a != null && string.Equals(a.Name, assetName, StringComparison.OrdinalIgnoreCase));
+                if (asset == null)
+                    throw new ArgumentException("The Release " + (release == null ? "" : release.Name) + " has no " + assetName + ".");
+                return Velo.SiteReleaseFile(asset.BrowserDownloadUrl);
             }
         }
     }

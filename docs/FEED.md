@@ -673,7 +673,13 @@ reads a feed that is not split the same as before, so the site can go first.
   still on a feed are browser download addresses (redirected to the asset
   CDN, no quota) or older `api.github.com` asset id addresses; the next Ship on
   each channel, or `Repair-Manifest.ps1 -MoveToSite`, moves them all to the
-  site.
+  site. Since #5608 the Velopack update asks GitHub nothing either: it reads
+  the list of Releases from `/api/launcher/releases` and every file of one,
+  the signed record's included, from `/release/<tag>/<name>`, which the site
+  answers with a 302 to where GitHub keeps the file, asked of the API signed
+  in with the box admin App's read only token. No address the site gives out
+  is a `github.com/.../releases/download/` one any more: on 9 Nov 2026 GitHub
+  answered those with 504 for anybody not signed in.
 - **Publish side.** `Feed-Rules.ps1` refuses a new pack whose url is not a
   thornswood.net feed asset under `/feed/assets/<sha256>` or
   `/feed-dev/assets/<sha256>`; a GitHub release asset passes only on a feed

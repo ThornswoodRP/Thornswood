@@ -92,6 +92,13 @@
   itself stays closed to it. The App makes the token only once Issues write
   is added on its page and accepted on the installation.
 
+  THE SITE'S TOKEN (#5608, Patrick's B of 9 Nov 2026). The same for the
+  site: Contents read on Thornswood alone, which the App already holds, every
+  half hour into -Root\for-site\github-token.json, locked the same way with
+  the site's own task, NT TASK\<-SiteTask>, given Read. The site asks
+  GitHub's API with it where each Release file is, instead of sending people
+  to github.com's download addresses (site\lib\feed.js says why).
+
   THE LOG. admin.log, one line per request (what was asked, by which run,
   what changed), never a token or the key, written by server-log.js with a
   time on each line and kept for 90 days, the same as bridge.log.
@@ -106,6 +113,9 @@ param(
     # The Discord bot's service, whose own account alone besides this task
     # reads the token made for it (#5184).
     [ValidatePattern('^[A-Za-z0-9_-]{1,64}$')][string]$BotService = 'ThornswoodBot',
+    # The site's scheduled task (Deploy-Docs.ps1 -Task), whose own SID alone
+    # besides this task reads the token made for the site (#5608).
+    [ValidatePattern('^[A-Za-z0-9 _-]{1,64}$')][string]$SiteTask = 'Thornswood Docs',
     # The address the outside check asks, and the setup's. The service
     # answers a plain request with "box admin: not here", which the site
     # never says, so that answer through here is the service and Caddy
@@ -191,6 +201,10 @@ $forBot = $Root.TrimEnd('\') + '\for-bot'
 # so the folder can name it whether or not the bot is installed yet.
 . (Join-Path $Here '..\vps\Bot-Service.ps1')
 $botSid = Get-ThornswoodServiceSid $BotService
+# The site's folder (#5608), and NT TASK\<the site's task> worked out from its
+# name (ServiceAccount.ps1), whether or not the site is installed yet.
+$forSite = $Root.TrimEnd('\') + '\for-site'
+$siteSid = Get-ThornswoodTaskSidFromName $SiteTask
 
 # ------------------------------------------------------------------ status --
 if ($Status) {
@@ -423,6 +437,29 @@ try {
     else { [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]`$i, [Security.AccessControl.FileSecurity]`$a) }
   }
 } catch { 'COULD NOT LOCK FOR-BOT: ' + `$_.Exception.Message; exit 1 }
+# The site's token, locked apart the same way, and the site's own task may
+# read it (#5608, the header says why). Made here; the service writes in it.
+if (-not (Test-Path -LiteralPath '$forSite')) { New-Item -ItemType Directory -Path '$forSite' -Force | Out-Null }
+try {
+  `$rules = @(@('S-1-5-18', 'FullControl'), @('S-1-5-32-544', 'FullControl'), @('S-1-3-4', 'Synchronize'), @('$siteSid', 'Read'))
+  if (`$taskSid) { `$rules += ,@(`$taskSid, 'Modify') }
+  `$acl = Get-Acl -LiteralPath '$forSite'
+  `$acl.SetAccessRuleProtection(`$true, `$false)
+  foreach (`$r in @(`$acl.GetAccessRules(`$true, `$false, [Security.Principal.SecurityIdentifier]))) { [void]`$acl.RemoveAccessRuleSpecific(`$r) }
+  foreach (`$r in `$rules) {
+    `$acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier(`$r[0])), `$r[1], `$tree, 'None', 'Allow')))
+  }
+  `$acl.SetOwner(`$admins)
+  [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo](Get-Item -LiteralPath '$forSite' -Force), `$acl)
+  foreach (`$i in @(Get-ChildItem -LiteralPath '$forSite' -Recurse -Force)) {
+    `$a = Get-Acl -LiteralPath `$i.FullName
+    `$a.SetAccessRuleProtection(`$false, `$false)
+    foreach (`$r in @(`$a.GetAccessRules(`$true, `$false, [Security.Principal.SecurityIdentifier]))) { [void]`$a.RemoveAccessRuleSpecific(`$r) }
+    `$a.SetOwner(`$admins)
+    if (`$i -is [IO.DirectoryInfo]) { [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo]`$i, [Security.AccessControl.DirectorySecurity]`$a) }
+    else { [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]`$i, [Security.AccessControl.FileSecurity]`$a) }
+  }
+} catch { 'COULD NOT LOCK FOR-SITE: ' + `$_.Exception.Message; exit 1 }
 Get-ChildItem -LiteralPath '$Root' -Directory -Force -EA SilentlyContinue | Where-Object { `$_.Name -like '.stage-*' } |
   ForEach-Object { Remove-Item -LiteralPath `$_.FullName -Recurse -Force -EA SilentlyContinue }
 New-Item -ItemType Directory -Force -Path '$Root\$stage' | Out-Null
@@ -526,7 +563,7 @@ if (-not `$AsSystem) {
     if (-not `$sid) { `$why = 'the task SID NT TASK\$TaskName could not be looked up' }
     else {
         try {
-            `$null = Grant-ThornswoodServiceFolder -Root '$Root' -Sid `$sid -Writable 'state', 'for-bot' -Files 'admin.log', 'admin.log.*'
+            `$null = Grant-ThornswoodServiceFolder -Root '$Root' -Sid `$sid -Writable 'state', 'for-bot', 'for-site' -Files 'admin.log', 'admin.log.*'
             # What it makes is its own, not every service's (#4077).
             Set-ThornswoodTaskOwner -TaskName '$TaskName' -Sid `$sid -Roots '$Root'
         } catch { `$why = 'its folder could not be granted to it: ' + `$_.Exception.Message }
@@ -537,9 +574,11 @@ if (-not `$AsSystem) {
 # The App's key reaches no other service (#4076), checked after the grant and
 # before the service starts. CREATOR OWNER counts here: what it gives is what
 # a LOCAL SERVICE file's owner gets, and that is every service on the box.
-# The bot's token folder is held to the same, the bot's own account apart (#5184).
-`$inState = @(@(Get-ChildItem -LiteralPath '$state' -Recurse -Force -EA SilentlyContinue) + @(Get-ChildItem -LiteralPath '$forBot' -Recurse -Force -EA SilentlyContinue))
-`$open = @(Test-ThornswoodServiceCannotReach -Paths (@('$state', '$forBot') + @(`$inState | ForEach-Object { `$_.FullName })) -Sids @('S-1-3-0'))
+# The bot's token folder is held to the same, the bot's own account apart (#5184),
+# and the site's, the site's own task apart (#5608).
+`$inState = @(@(Get-ChildItem -LiteralPath '$state' -Recurse -Force -EA SilentlyContinue) + @(Get-ChildItem -LiteralPath '$forBot' -Recurse -Force -EA SilentlyContinue) +
+  @(Get-ChildItem -LiteralPath '$forSite' -Recurse -Force -EA SilentlyContinue))
+`$open = @(Test-ThornswoodServiceCannotReach -Paths (@('$state', '$forBot', '$forSite') + @(`$inState | ForEach-Object { `$_.FullName })) -Sids @('S-1-3-0'))
 foreach (`$i in `$inState) {
     `$a = Get-Acl -LiteralPath `$i.FullName
     `$capped = @(`$a.GetAccessRules(`$true, `$true, [Security.Principal.SecurityIdentifier]) | Where-Object { `$_.IdentityReference.Value -eq 'S-1-3-4' }).Count
@@ -552,7 +591,7 @@ if (`$open.Count) {
     Disable-ScheduledTask -TaskName '$TaskName' -EA SilentlyContinue | Out-Null
     'ADMIN REFUSED'; exit 1
 }
-'state is SYSTEM''s, Administrators'' and the task''s own, and no other service reaches it; for-bot the same, with the bot''s own account to read it'
+'state is SYSTEM''s, Administrators'' and the task''s own, and no other service reaches it; for-bot the same, with the bot''s own account to read it; for-site the same, with the site''s own task to read it'
 try { & `$node.Source `$writer --log '$log' --days 90 --roll } catch { 'could not roll admin.log: ' + `$_.Exception.Message }
 Start-ScheduledTask -TaskName '$TaskName'
 if (Answers @('$Plain')) {

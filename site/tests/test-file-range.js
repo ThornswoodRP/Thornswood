@@ -108,7 +108,7 @@ yes('the static route is where this expects it', !!staticSrc);
 yes('the /file/ route answers ranges through rangeReply', /rangeReply\(/.test(fileSrc));
 yes('and so does the static route, so the two cannot drift apart again', /rangeReply\(/.test(staticSrc));
 
-const fileRoute = eval('(function (p, req, res, head) {\n' + fileSrc + '\n})');
+const fileRoute = eval('(async function (p, req, res, head) {\n' + fileSrc + '\n})');
 const staticRoute = eval('(function (p, req, res, head, url) {\n' + staticSrc + '\n})');
 
 // A file whose every byte depends on where it sits, so an offset that is
@@ -123,14 +123,14 @@ fs.writeFileSync(path.join(PUBLIC, 'clip.mp4'), whole.subarray(0, 5000));
 
 // The two lines of handle() that come before every route: HEAD is routed as
 // GET and the streamed routes are told it was a HEAD.
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = decodeURIComponent(url.pathname);
   const head = req.method === 'HEAD';
   if (head) req.method = 'GET';
   try {
     staticRoute(p, req, res, head, url);
-    if (!res.headersSent) fileRoute(p, req, res, head);
+    if (!res.headersSent) await fileRoute(p, req, res, head);
   } catch (e) {
     if (!res.headersSent) { res.writeHead(500); res.end(String(e && e.message)); }
     return;

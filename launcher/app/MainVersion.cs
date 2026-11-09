@@ -20,9 +20,9 @@ namespace Thornswood
     /// version of that package, and it is read where an update reads it: the
     /// newest Release that carries releases.main.json, through the same
     /// ChannelSource and ChannelRelease the update check uses (VeloUpdate.cs).
-    /// One request to GitHub's API for the list of Releases and one download
-    /// of that Release's feed. The tab is opened by hand, so it is read each
-    /// time rather than kept.
+    /// One request to the site for the list of Releases and one download of
+    /// that Release's feed through the site's Release route (#5608). The tab
+    /// is opened by hand, so it is read each time rather than kept.
     /// </summary>
     static partial class Updater
     {

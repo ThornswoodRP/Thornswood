@@ -120,7 +120,7 @@ yes('the version, watch and asset routes are where this expects them', !!verSrc 
 yes('version.json and /watch both answer feedView\'s tag', /feedView\(feedVer\[1\], file\)/.test(verSrc) && /feedView\(channel, file\)/.test(watchSrc));
 const verRoute = eval('(function (p, req, res, head) {\n' + verSrc + '\n})');
 const watchRoute = eval('(function (p, req, res, head) {\n' + watchSrc + '\n})');
-const assetRoute = eval('(function (p, req, res, head) {\n' + assetSrc + '\n})');
+const assetRoute = eval('(async function (p, req, res, head) {\n' + assetSrc + '\n})');
 
 const A = (c) => 'https://thornswood.net/' + c + '/assets/';
 const H = (ch) => ch.repeat(64);
@@ -150,7 +150,7 @@ function ship(channel, doc) {
   return f;
 }
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = decodeURIComponent(url.pathname);
   const head = req.method === 'HEAD';
@@ -158,7 +158,7 @@ const server = http.createServer((req, res) => {
   try {
     verRoute(p, req, res, head);
     if (!res.headersSent) watchRoute(p, req, res, head);
-    if (!res.headersSent && !/\/watch$/.test(p)) assetRoute(p, req, res, head);
+    if (!res.headersSent && !/\/watch$/.test(p)) await assetRoute(p, req, res, head);
   } catch (e) {
     if (!res.headersSent) { res.writeHead(500); res.end(String(e && e.message)); }
     return;

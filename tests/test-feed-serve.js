@@ -101,10 +101,12 @@ eval(grab('function readJsonQuiet('));
 const relFrom = src.indexOf('/* ---- release copies (#3686) ----');
 const relTo = src.indexOf('/* ---- end release copies ---- */');
 yes('server.js has the release copies block', relFrom >= 0 && relTo > relFrom);
+// GitHub's API answers what githubSays holds, by the path asked (#5608).
+const githubSays = {};
 const rel = eval('(function () {\nconst https = null;\n' + src.slice(relFrom, relTo) +
-  '\nreleaseGitHub = () => Promise.resolve({ status: 404, why: \'GitHub answered 404\' });' +
-  '\nreturn { releaseCopies: releaseCopies, releaseCopy: releaseCopy };\n})()');
-const releaseCopy = rel.releaseCopy;
+  '\nreleaseGitHub = (p) => Promise.resolve(githubSays[p] || { status: 404, why: \'GitHub answered 404\' });' +
+  '\nreturn { releaseCopies: releaseCopies, releaseCopy: releaseCopy, assetLocation: assetLocation };\n})()');
+const releaseCopy = rel.releaseCopy, assetLocation = rel.assetLocation;
 
 const verSrc = route('const feedVer = p.match(', "if (feedVer && req.method === 'GET')");
 const assetSrc = route('const feedAsset = p.match(', "if (feedAsset && req.method === 'GET')");
@@ -115,7 +117,7 @@ yes('rangeReply keeps a caller cache-control on 206',
    /headers\['cache-control'\] \|\| 'no-store'/.test(rangeSrc));
 
 const verRoute = eval('(function (p, req, res, head) {\n' + verSrc + '\n})');
-const assetRoute = eval('(function (p, req, res, head) {\n' + assetSrc + '\n})');
+const assetRoute = eval('(async function (p, req, res, head) {\n' + assetSrc + '\n})');
 
 const SHA = 'a'.repeat(64);
 const BODY = Buffer.from('pack-bytes-for-feed-test-0123456789');
@@ -126,14 +128,14 @@ fs.writeFileSync(path.join(ROOT, 'feed-dev', 'version', '00000001.json'),
   JSON.stringify({ launcherUrl: 'https://thornswood.net/feed-dev/assets/' + SHA }));
 fs.writeFileSync(path.join(ROOT, 'feed-dev', 'assets', SHA), BODY);
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = decodeURIComponent(url.pathname);
   const head = req.method === 'HEAD';
   if (head) req.method = 'GET';
   try {
     verRoute(p, req, res, head);
-    if (!res.headersSent) assetRoute(p, req, res, head);
+    if (!res.headersSent) await assetRoute(p, req, res, head);
   } catch (e) {
     if (!res.headersSent) { res.writeHead(500); res.end(String(e && e.message)); }
     return;
@@ -215,17 +217,23 @@ async function main() {
   yes('GET /feed-dev/assets/<sha256> is 200', da.code === 200);
 
   // Once the feed's release has a public GitHub Release holding the asset at
-  // this size, the route answers 302 to it, and sends no bytes (#3686).
+  // this size, the route answers 302 to where GitHub keeps it, as the API's
+  // asset route says (#5608), and sends no bytes (#3686).
   const TAG = 'release/main/20261026-170000';
-  const COPY = 'https://github.com/ThornswoodRP/Thornswood/releases/download/' + TAG + '/' + SHA;
+  const COPY = 'https://release-assets.githubusercontent.com/github-production-release-asset/1365246621/41?sp=r&sig=x';
+  githubSays['/releases/assets/41'] = { status: 302, location: COPY };
   fs.writeFileSync(path.join(ROOT, 'feed', 'version', '00000003.json'),
     JSON.stringify({ launcherUrl: 'https://thornswood.net/feed/assets/' + SHA, release: { id: '20261026-170000', tag: TAG } }));
   const before = await ask('GET', '/feed/assets/' + SHA);
   yes('a release with no Release copy yet: the site still sends the bytes', before.code === 200 && before.body.equals(BODY));
-  rel.releaseCopies[TAG] = { files: { [SHA]: { url: COPY, size: BODY.length } }, installer: null, seen: Date.now() };
+  rel.releaseCopies[TAG] = { files: { [SHA]: { id: 41, size: BODY.length } }, installer: null, seen: Date.now() };
   const moved = await ask('GET', '/feed/assets/' + SHA);
-  yes('with one, GET /feed/assets/<sha256> is 302 to the Release copy', moved.code === 302 && moved.h['location'] === COPY && moved.body.length === 0);
-  yes('  and the redirect is not cached as if it were the bytes', moved.h['cache-control'] === 'no-cache');
+  yes('with one, GET /feed/assets/<sha256> is 302 to where GitHub keeps the Release copy', moved.code === 302 && moved.h['location'] === COPY && moved.body.length === 0);
+  yes('  and the redirect, good for minutes, is kept by no cache', moved.h['cache-control'] === 'no-store');
+  rel.releaseCopies[TAG].files[SHA].id = 42;
+  const silent = await ask('GET', '/feed/assets/' + SHA);
+  yes('while GitHub cannot say where its copy is, the site sends the bytes itself', silent.code === 200 && silent.body.equals(BODY));
+  rel.releaseCopies[TAG].files[SHA].id = 41;
   rel.releaseCopies[TAG].files[SHA].size = BODY.length + 1;
   const sized = await ask('GET', '/feed/assets/' + SHA);
   yes('a Release copy of another size is never used', sized.code === 200 && sized.body.equals(BODY));
@@ -236,7 +244,7 @@ async function main() {
   // number, held to GitHub's sha256 of it; the store's file is untouched and
   // the other channel is not.
   const MOVE_SHA = 'e'.repeat(64);
-  const MOVE_URL = 'https://github.com/ThornswoodRP/Thornswood/releases/download/main-build-20261102.20/Thornswood-Move.exe';
+  const MOVE_URL = 'https://thornswood.net/release/main-build-20261102.20/Thornswood-Move.exe';
   const storeFile = path.join(ROOT, 'feed', 'version', '00000004.json');
   const store = JSON.stringify({ launcherVersion: '2026.1102.716', minLauncher: '1.0.0',
     launcherUrl: 'https://thornswood.net/feed/assets/' + SHA, launcherSha256: SHA });
@@ -248,7 +256,7 @@ async function main() {
   const mv = await ask('GET', '/feed/version.json', { 'If-None-Match': plain.h['etag'] });
   const mdoc = mv.code === 200 ? JSON.parse(mv.body.toString('utf8')) : {};
   yes('with one, a launcher holding the tag from before is given the new document', mv.code === 200 && !!mv.h['etag'] && mv.h['etag'] !== plain.h['etag']);
-  yes('  naming the move program as the launcher, at its Release address and GitHub\'s sha256',
+  yes('  naming the move program as the launcher, at this site\'s Release route (#5608) and GitHub\'s sha256',
       mdoc.launcherUrl === MOVE_URL && mdoc.launcherSha256 === MOVE_SHA);
   yes('  one step past the feed\'s number, which the old launcher reads as newer', mdoc.launcherVersion === '2026.1102.716.1');
   yes('  and minLauncher as the feed has it', mdoc.minLauncher === '1.0.0');
