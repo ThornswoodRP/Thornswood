@@ -71,7 +71,7 @@ if (-not (Test-Path -LiteralPath $built)) { Die "There is no Thornswood.exe in $
 # with Reflection; a native exe is not an assembly, and its resources cannot
 # be read that way. So Build-Launcher.ps1 writes the two icons the project
 # embeds beside the exe it publishes, app.ico and app-dev.ico, byte for byte,
-# and they travel with that exe (release.yml drafts them with it). They are
+# and they travel with that exe. They are
 # read here, and checked for before anything is closed. The repository's art
 # is never the answer: it is the fault #887 was.
 #

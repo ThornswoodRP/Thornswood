@@ -15,7 +15,7 @@
   Issue #2161: -NetworkOnly writes the outbound rules alone (no read deny,
   lock, account or service step), may name a VPS-label runner, and full
   -OffBox still refuses that label.
-  Issue #4033: no runner signs since release.yml signs on GitHub's runner
+  Issue #4033: no runner signs since launchers are signed on GitHub's runner
   alone (#4013), so runner 3 is registered with the VPS label alone and its
   -NetworkOnly rules are the same as any other runner's.
 #>

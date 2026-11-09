@@ -5,7 +5,7 @@
 
   #5179, the plan's part 7, "the version comes from the build". Dot-sourced
   by Ship.ps1, Build-Launcher.ps1, BuildStamp.ps1, Check-ShipReady.ps1,
-  Nexus.ps1 and release.yml; defines functions and nothing else. ASCII, and
+  and Nexus.ps1; defines functions and nothing else. ASCII, and
   Windows PowerShell 5.1 as well as 7.
 
   WHY. The number was a line in launcher\app\Updater.cs, so every launcher

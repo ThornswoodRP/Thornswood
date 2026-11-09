@@ -100,10 +100,10 @@
    },
    "events": [],
    "why": {
-    "actions": "A Ship through the deploy gate (ship-access.js, #2841): starts thornswood-sign-manifest.yml on the fork and release-tag.yml and release.yml here, and reads their runs.",
+    "actions": "A Ship through the deploy gate (ship-access.js, #2841): starts thornswood-sign-manifest.yml on the fork and reads its runs. Nothing here starts a launcher build any more (#5385).",
     "actions_variables": "The settings ask reads variable names to compare with records/github-settings.json (#3534). Never a value.",
     "administration": "Runner labels and the runners' registration on Thornswood-Ops (ops-access.js runners), the rulesets, reporting, immutable releases, scanning, merge settings and collaborators of Thornswood and the fork (repo-settings), and the About box. Each ask takes a token with only the part it needs.",
-    "contents": "Reads the records on Thornswood's main that every ask makes GitHub match, and the launcher a Ship takes.",
+    "contents": "Reads the records on Thornswood's main that every ask makes GitHub match.",
     "deployments": "The deploy agent (tools/DeployAgent/GitHub.cs, #5180) reads the Deployments merge-release.yml asks for and posts each one's status, with a token of this App narrowed to contents read and deployments write.",
     "environments": "Renew-BoxKey.ps1 puts a box key into an environment secret of Thornswood-Ops (ops-access.js keys), which GitHub gives to Environments write alone; the settings ask reads environment names and where each deploys from (#3534).",
     "issues": "The Discord bot's token (#5260, Patrick's A): it posts Test tasks and known issues as comments and labels. Taken for Thornswood alone, every 30 minutes.",

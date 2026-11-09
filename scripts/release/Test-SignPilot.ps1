@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Signs and verifies a throwaway TEST artifact only, to pilot the signed release design (issue #2163). Never touches a release, the feed or release.yml.
+  Signs and verifies a throwaway TEST artifact only, to pilot the signed release design (issue #2163). Never touches a release or the feed.
 
 .DESCRIPTION
   The pilot in docs\SIGNED-RELEASES.md. Two halves.
@@ -12,7 +12,7 @@
   and an az login that holds the signer role), then runs the verify half on
   what came out and writes, into -Out:
     pilot.exe        the signed test exe
-    SHA256SUMS       its sha256, the same shape release.yml writes
+    SHA256SUMS       its sha256, in sha256sums own shape
     provenance.json  source commit, engine pin, machine, both hashes, signer check,
                      timestamp, the root and durable identity it chained to
 

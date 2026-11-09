@@ -89,7 +89,7 @@
 # start a workflow is never near the fork's files.
 #
 # WHY THE ACTIONS ARE PINNED. Each is a full commit SHA with its tag in a
-# comment, as in build.yml and release.yml.
+# comment, as in build.yml and merge-release.yml.
 # tests\test-459-engine-workflow.ps1 holds this file's shape.
 name: Engine build
 # Its title names the commit, so engine-pin.yml (#5148) finds the run that

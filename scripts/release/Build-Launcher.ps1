@@ -73,8 +73,7 @@ param(
     # The number the exe carries, passed to the compile as -p:Version and
     # read back by the launcher from its own file (Updater.Version, #4825).
     # A merge release passes its Velopack version (MergeRelease.ps1), so the
-    # exe and the package it goes out in carry one number; Ship.ps1 and
-    # release.yml pass theirs (LauncherVersion.ps1, #5179). Left out, this
+    # exe and the package it goes out in carry one number. Left out, this
     # checkout's own number is worked out from its history.
     [string]$Version
 )

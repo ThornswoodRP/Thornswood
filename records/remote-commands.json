@@ -1940,15 +1940,6 @@
                       "reason":  "changes nothing on the box; its scratch folder goes when the check ends"
                   },
                   {
-                      "script":  "scripts/release/Sign-OnGitHub.ps1",
-                      "scope":  "Invoke-SignedCheckOnBox",
-                      "via":  "Invoke-ThornswoodRemote",
-                      "anchor":  "$lines = @(Invoke-ThornswoodRemote -Target $target -SshArgs @(\u0027-o\u0027, \u0027BatchMode=yes\u0027, \u0027-o\u0027, \u0027StrictHostKeyChecking=yes\u0027) -Script $script)",
-                      "does":  "checks a file signed on GitHub, the launcher or the installer, against the signer and the file\u0027s own check, in a temp folder of its own that it removes",
-                      "class":  "read-status",
-                      "reason":  "changes nothing on the box; its scratch folder goes when the check ends"
-                  },
-                  {
                       "script":  "scripts/vps/Backup-Server.ps1",
                       "scope":  "Remote",
                       "via":  "Invoke-ThornswoodRemote",

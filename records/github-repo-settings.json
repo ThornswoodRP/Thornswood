@@ -19,7 +19,7 @@
       "rulesets": [
         {
           "name": "release tags",
-          "why": "Patrick's A on q-3721-release-tags, 26 Oct 2026: a v* tag names what a release was built from, so only the admin role may move or delete one. Making a v* tag stays open to anyone who can push (Patrick's A on q-5296-release-tags, 1 Nov 2026: leave it open, nothing by hand). GitHub refuses GitHub Actions (15368), the identity of the run's own token, as a bypass actor: 422 Validation Failed on 31 Oct 2026 while the repository was personal and again on 1 Nov 2026 in the organization, so a creation lock would stop release-tag.yml, which makes the tag with that token and never moves or deletes one. A v* tag pushed by hand builds nothing itself: release.yml hands it to main's own workflow, which builds only a commit on main, the run anyone who can push may start by hand anyway.",
+          "why": "Patrick's A on q-3721-release-tags, 26 Oct 2026: a v* tag names what a release was built from, so only the admin role may move or delete one. Making a v* tag stays open to anyone who can push (Patrick's A on q-5296-release-tags, 1 Nov 2026: leave it open, nothing by hand). Since Velopack nothing makes a v* tag or builds from one (#5385: release-tag.yml and release.yml are gone, and a launcher's Release is build-1.3.<n> or main-build-...), so the rule keeps the old launchers' tags where they are.",
           "target": "tag",
           "enforcement": "active",
           "conditions": { "ref_name": { "include": ["refs/tags/v*"], "exclude": [] } },

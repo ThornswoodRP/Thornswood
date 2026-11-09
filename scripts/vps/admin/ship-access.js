@@ -12,9 +12,9 @@
 
   WHAT IT CAN DO. Only what a Ship from the feed asks GitHub for: Actions
   write on the engine fork (start thornswood-sign-manifest.yml, read its run,
-  download the signed catalog) and on Thornswood (release-tag.yml and
-  release.yml, for a Ship that carries a new launcher), and Contents read on
-  Thornswood (the launcher release.yml signed). GitHub ends it after an hour,
+  download the signed catalog) and on Thornswood, and Contents read on
+  Thornswood. No Ship starts a launcher build any more: release-tag.yml and
+  release.yml went with Velopack (#5385). GitHub ends it after an hour,
   and nothing keeps it: Ship-OnBox.ps1 hands it to gh through GH_TOKEN for
   that run alone. The installation only gives it these once Patrick has added
   Actions write on the App's page and accepted it on the installation; until

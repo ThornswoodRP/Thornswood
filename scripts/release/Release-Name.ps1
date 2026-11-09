@@ -13,9 +13,9 @@
   (20260928-2324-dev, also the name of its packs and, since #441, of its
   baseline record), the fork commit of the client runtime, and the source
   commit it was built from, which was written down nowhere at all. The only
-  tags in the repository were the v<version> ones a person pushes by hand so
-  CI builds a main launcher (release.yml), and a Ship that kept its launcher
-  had no tag.
+  tags in the repository were the v<version> ones a person pushed by hand so
+  CI built a main launcher (release.yml, gone with Velopack, #5385), and a
+  Ship that kept its launcher had no tag.
 
   So the release id is the one name. It is the only one every release has and
   no two share: a Ship that sends no pack still mints one, and a pack, its
@@ -30,8 +30,8 @@
       release, the id first (Feed-Store.ps1).
     - the repository: an annotated tag, release/main/<id> or release/dev/<id>,
       on the commit that release was built from, made and pushed by Ship only
-      after the publisher has sent the feed (Add-ReleaseTag). Never v<...>, so
-      it cannot start the launcher build in release.yml. In a cloud session,
+      after the publisher has sent the feed (Add-ReleaseTag). Never v<...>, the
+      old launchers' tags. In a cloud session,
       whose git cannot push a tag, GitHub makes it (Set-Ref.ps1, #3314).
 
       git tag -l 'release/dev/*'         every dev release

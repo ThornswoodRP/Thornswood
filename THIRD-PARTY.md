@@ -1600,9 +1600,9 @@ install in the launcher's first start copies them,
 `InstallSteps.LicenceFiles`; Uninstall removes them). The update
 feed's client runtime zip and every pack that carries a SkyMP file hand the
 GPL and AGPL texts with a note naming the recorded commit (Source-Notice.ps1).
-Updates stopped going to GitHub release pages on 28 September (#907); the
-launcher's draft release notes in `.github/workflows/release.yml` still point
-at https://thornswood.net/credits#source. Version 1.0.0 of the Client Runtime
+Updates stopped going to GitHub release pages on 28 September (#907) and
+came back to this repository's Releases with Velopack (#4825), whose notes
+point at https://thornswood.net/credits#source. Version 1.0.0 of the Client Runtime
 also installs
 `Data\Docs\Thornswood Client Runtime\licences\SkyrimPlatform-LICENSE.txt`
 beside its `___systemPolyfill.js`.

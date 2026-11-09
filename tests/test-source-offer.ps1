@@ -354,18 +354,15 @@ Yes 'SOURCE CODE.txt names the GPL and AGPL texts beside it' ($note -match 'AGPL
 # ---- where release pages said source is (#421, #907) ----------------------
 $publishUpdatePath = Join-Path $Here 'scripts\release\Publish-Update.ps1'
 $publishPackPath   = Join-Path $Here 'scripts\release\Publish-Pack.ps1'
-$releaseYmlPath    = Join-Path $Here '.github\workflows\release.yml'
 $publishUpdate = Get-Content -LiteralPath $publishUpdatePath -Raw
 $publishPack   = Get-Content -LiteralPath $publishPackPath -Raw
-$releaseYml    = Get-Content -LiteralPath $releaseYmlPath -Raw
 # Update and optional packs have had no GitHub release page since #907 (the
 # downloads are on thornswood.net and Thornswood-Releases is gone), so the
 # footer those pages carried went with them. The setup's SOURCE CODE.txt,
-# the credits page and release.yml's draft notes are what say where source is.
+# and the credits page are what say where source is.
 Yes 'Publish-Update.ps1 makes no GitHub release page to put a footer on (#907)' (
     $publishUpdate -notmatch 'gh release create' -and $publishUpdate -notmatch 'function Get-ReleaseSourceFooter')
 Yes 'nor does Publish-Pack.ps1' ($publishPack -notmatch 'api\.github\.com/repos/.+/releases')
-Yes 'launcher release.yml draft notes point at credits#source' ($releaseYml -match 'credits#source')
 
 # ---- the credits page ------------------------------------------------------
 $credits = Get-Content -LiteralPath $creditsPath -Raw

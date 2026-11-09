@@ -722,7 +722,9 @@ reads a feed that is not split the same as before, so the site can go first.
   and a tag that did not go on is a line on Ship's last screen with the command
   that finishes it. `git tag -l 'release/dev/*'` lists dev's, `git show
   release/main/<id>` says what one shipped. The `v<version>` tags are not
-  these: a person pushes one so CI builds a main launcher (`release.yml`).
+  these: they named the launchers from before Velopack, and nothing makes one
+  now (#5385); a launcher's Release is `build-1.3.<n>` or `main-build-...`
+  (`merge-release.yml`, `promote-main.yml`).
 
 ## Putting a channel back (#442)
 

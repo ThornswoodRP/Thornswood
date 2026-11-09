@@ -9,8 +9,8 @@
   the action can repoint v7 at any commit, and nothing in this repository
   changes when they do. These jobs run on the VPS, in a local account beside
   the live server, so a repointed tag is somebody else's code on that box with
-  no commit here to read. release.yml was written pinned and says so
-  ("a moved tag on an action cannot change what runs"); build.yml and
+  no commit here to read. release.yml (gone since #5385) was written pinned
+  and said so ("a moved tag on an action cannot change what runs"); build.yml and
   nightly.yml were not, and ran actions/checkout@v7 and
   actions/upload-artifact@v7 until this.
 
@@ -118,7 +118,7 @@ Yes ("it holds workflows to read ({0}: {1})" -f $files.Count, (($files | ForEach
 # The ones that exist today. Named rather than counted, so a renamed or
 # deleted workflow says so here instead of this harness reading two files and
 # reporting that everything is fine.
-foreach ($want in 'build.yml', 'nightly.yml', 'release.yml', 'drop-claims.yml', 'board.yml', 'duplicate-check.yml', 'board-read.yml', 'expire-claims.yml', 'done-on-merge.yml', 'area-label.yml', 'git-ref.yml', 'engine-prune.yml') {
+foreach ($want in 'build.yml', 'nightly.yml', 'merge-release.yml', 'drop-claims.yml', 'board.yml', 'duplicate-check.yml', 'board-read.yml', 'expire-claims.yml', 'done-on-merge.yml', 'area-label.yml', 'git-ref.yml', 'engine-prune.yml') {
     Yes "$want is one of them" (@($files | Where-Object { $_.Name -eq $want }).Count -eq 1)
 }
 # drop-claims.yml (#1863) runs no action on purpose: it checks out nothing and
@@ -133,7 +133,7 @@ foreach ($want in 'build.yml', 'nightly.yml', 'release.yml', 'drop-claims.yml', 
 # tests\test-5185-board-sync.js. board-read.yml runs one action since #5185,
 # the board App's token. promote-main.yml (#5181) runs one since #4825, the
 # checkout, for MergeRelease.ps1, which finds main's launcher package.
-$noActions = @('drop-claims.yml', 'expire-claims.yml', 'done-on-merge.yml', 'area-label.yml', 'release-tag.yml', 'engine-prune.yml', 'clone-report.yml', 'pr-events.yml', 'engine-pin-aside.yml')
+$noActions = @('drop-claims.yml', 'expire-claims.yml', 'done-on-merge.yml', 'area-label.yml', 'engine-prune.yml', 'clone-report.yml', 'pr-events.yml', 'engine-pin-aside.yml')
 
 $all = @()
 foreach ($f in $files) {
