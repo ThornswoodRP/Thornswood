@@ -31,7 +31,9 @@
     B  the bytes it was built against are the ones the collection installs
        (records/collection-plugins.json) and the repository's content plugin,
        so a new collection revision or a content change without a rebuild
-       turns this red (#2486)
+       turns this red (#2486); and it, and the NPC catalogue it is built
+       after, were built against every plugin the collection installs, so a
+       plugin the collection adds turns this red too (#4176)
 
   On a machine with the game (C:\Thornswood\Game\Data, or THORNSWOOD_DATA)
   holding the catalogue's load order, it also rebuilds the plugin and the
@@ -50,7 +52,7 @@ const MANIFEST = path.join(ROOT, 'game', 'data', 'last-plugin.json');
 const POLICY = path.join(ROOT, 'game', 'data', 'last-plugin-policy.json');
 const CATALOGUE = path.join(ROOT, 'game', 'data', 'npc-population.json');
 const GM = path.join(ROOT, 'game', 'gamemode.js');
-const COLLECTION = path.join(ROOT, 'records', 'collection-plugins.json');
+const COLLECTION = process.env.THORNSWOOD_COLLECTION_PLUGINS || path.join(ROOT, 'records', 'collection-plugins.json');
 const CONTENT = path.join(ROOT, 'game', 'content', 'Thornswood-Content.esp');
 const TOOL = path.join(ROOT, 'scripts', 'mods', 'Build-LastPlugin.py');
 const POP_TOOL = path.join(ROOT, 'scripts', 'dev', 'Build-NpcPopulation.py');
@@ -249,6 +251,21 @@ const other = built.filter((r) => r.name !== 'Thornswood-Content.esp' &&
 yes('B2 every plugin but ours is the collection\'s own bytes, revision ' + record.revision +
     (other.length ? ' (not: ' + other.slice(0, 4).map((r) => r.name).join(', ') + '; rebuild the plugin for this revision)' : ''),
     other.length === 0);
+// B2 asks only about the plugins it was built against. A plugin the
+// collection adds is in neither list B2 reads, so these ask the other way
+// round, of the plugin and of the catalogue it is built after (#4176).
+const builtNames = new Set(built.map((r) => r.name.toLowerCase()));
+const notBuilt = record.plugins.filter((r) => !builtNames.has(r.name.toLowerCase())).map((r) => r.name);
+yes('B4 it was built against every plugin the collection installs, revision ' + record.revision +
+    ' (' + (record.plugins.length - notBuilt.length) + ' of ' + record.plugins.length + ')' +
+    (notBuilt.length ? ' (not: ' + notBuilt.slice(0, 4).join(', ') + '; rebuild the catalogue, then the plugin, for this revision)' : ''),
+    notBuilt.length === 0);
+const catalogued = new Set(catalogue.loadOrder.map((r) => r.name.toLowerCase()));
+const notCatalogued = record.plugins.filter((r) => !catalogued.has(r.name.toLowerCase())).map((r) => r.name);
+yes('B5 the NPC catalogue was built from every plugin the collection installs, revision ' + record.revision +
+    ' (' + (record.plugins.length - notCatalogued.length) + ' of ' + record.plugins.length + ')' +
+    (notCatalogued.length ? ' (not: ' + notCatalogued.slice(0, 4).join(', ') + '; rebuild the catalogue for this revision)' : ''),
+    notCatalogued.length === 0);
 const contentRow = built.find((r) => r.name === 'Thornswood-Content.esp');
 yes('B3 and the content plugin is the repository\'s (after a content change, run scripts/mods/Rebuild-ContentTables.ps1)',
     !!contentRow && contentRow.sha256 === crypto.createHash('sha256').update(fs.readFileSync(CONTENT)).digest('hex'));
