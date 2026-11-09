@@ -108,8 +108,50 @@ namespace Thornswood
                     try { ticket = File.Exists(TicketFile) ? Secrets.Unprotect(File.ReadAllText(TicketFile).Trim()) : ""; }
                     catch { ticket = ""; }
                 }
-                return ticket.Length == 0 ? null : ticket;
+                if (ticket.Length == 0) return null;
+                // A ticket past its own end is no sign-in. The site's makeTicket
+                // gives every one thirty days and the site refuses it after
+                // that, at the door and for a voice token alike; this said
+                // linked regardless, so a copy whose sign-in had run out was
+                // never offered Connect Discord again, and voice logged
+                // "does not own profile" every half minute (One, 8 Nov).
+                DateTime? end = RunsOut(ticket);
+                if (end.HasValue && end.Value <= DateTime.UtcNow) { RanOut = end; return null; }
+                return ticket;
             }
+        }
+
+        /// <summary>
+        /// When the sign-in on this PC ran out, in UTC, while that is why this
+        /// copy is not linked; null otherwise. Said where the launcher asks for
+        /// Connect Discord, so the person knows it ran out rather than broke.
+        /// </summary>
+        public static DateTime? RanOut { get; private set; }
+
+        /// <summary>
+        /// When a ticket stops being good, in UTC, out of its own body: the
+        /// site's makeTicket writes tk1.body.signature with the end in x, unix
+        /// milliseconds. Null for anything that is not a ticket or names no end.
+        /// </summary>
+        public static DateTime? RunsOut(string t)
+        {
+            if (string.IsNullOrEmpty(t)) return null;
+            string[] parts = t.Split('.');
+            if (parts.Length != 3 || parts[0] != "tk1" || parts[1].Length == 0) return null;
+            try
+            {
+                string b = parts[1].Replace('-', '+').Replace('_', '/');
+                while (b.Length % 4 != 0) b += "=";
+                using (var doc = System.Text.Json.JsonDocument.Parse(Convert.FromBase64String(b)))
+                {
+                    System.Text.Json.JsonElement x;
+                    if (!doc.RootElement.TryGetProperty("x", out x) || x.ValueKind != System.Text.Json.JsonValueKind.Number) return null;
+                    long ms;
+                    if (!x.TryGetInt64(out ms)) return null;
+                    return DateTimeOffset.FromUnixTimeMilliseconds(ms).UtcDateTime;
+                }
+            }
+            catch { return null; }
         }
 
         public static string Name
@@ -126,6 +168,18 @@ namespace Thornswood
         }
 
         public static bool Linked { get { return Ticket != null; } }
+
+        /// <summary>
+        /// Why this copy is not linked, in the words every refusal uses: the
+        /// sign-in ran out on a day, or there never was one.
+        /// </summary>
+        public static string NotLinked()
+        {
+            if (Ticket == null && RanOut.HasValue)
+                return "The Discord sign-in on this PC ran out on " + RanOut.Value.ToLocalTime().ToString("d MMMM", CultureInfo.InvariantCulture) +
+                       " (a sign-in lasts 30 days). Press Connect Discord to sign in again.";
+            return "This copy is not linked to a Discord account yet.";
+        }
         /// <summary>
         /// Discord avatar hash last saved for this ticket, or "" when unknown.
         /// Used with AccountId to build AvatarUrl. Empty means the default
@@ -296,7 +350,7 @@ namespace Thornswood
                 Secrets.LockDown(TicketFile);
             }
             catch (Exception ex) { Swallow.Note("Discord.Save", ex); }
-            ticket = t ?? ""; name = who ?? ""; avatar = pic ?? "";
+            ticket = t ?? ""; name = who ?? ""; avatar = pic ?? ""; RanOut = null;
         }
 
         /// <summary>Remember a fresh avatar hash from the site without touching the ticket.</summary>
@@ -492,7 +546,7 @@ namespace Thornswood
             if (!Linked)
             {
                 st.Why = "link";
-                st.Message = "This copy is not linked to a Discord account yet.";
+                st.Message = NotLinked();
                 return st;
             }
             int pid = profileId;
@@ -563,7 +617,7 @@ namespace Thornswood
             why = "";
             if (!Linked)
             {
-                why = "This copy is not linked to a Discord account yet.";
+                why = NotLinked();
                 return "";
             }
             string body = "{\"ticket\":\"" + Escape(Ticket) + "\"" +

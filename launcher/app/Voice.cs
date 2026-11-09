@@ -209,7 +209,7 @@ namespace Thornswood
             if (ticket == null) ticket = "";
             if (ticket.Length == 0)
             {
-                if (log != null) log("Voice: not linked to Discord, so no join token. Voice may be refused.");
+                if (log != null) log("Voice: not linked to Discord, so no join token. " + Discord.NotLinked());
                 return "";
             }
 
@@ -249,7 +249,12 @@ namespace Thornswood
                     {
                         if (resp.StatusCode == HttpStatusCode.Forbidden)
                         {
-                            if (log != null) log("Voice: the server says this Discord account does not own profile " + profile + ".");
+                            string why;
+                            using (var r = new StreamReader(resp.Content.ReadAsStream(), Encoding.UTF8))
+                            {
+                                why = r.ReadToEnd();
+                            }
+                            if (log != null) log("Voice: no join token: " + Refusal(why, profile));
                             return "";
                         }
                         if (!resp.IsSuccessStatusCode)
@@ -279,6 +284,29 @@ namespace Thornswood
             {
                 if (log != null) log("Voice: could not get a join token (" + e.Message + ").");
                 return "";
+            }
+        }
+
+        /// <summary>
+        /// The voice service's 403 in words. It carries the site's why
+        /// (owns() in voice-server.js); this said "this Discord account does
+        /// not own profile" for every one of them, which on One on 8 Nov was a
+        /// profile nobody held and a sign-in the site no longer took.
+        /// </summary>
+        public static string Refusal(string why, long profile)
+        {
+            switch ((why ?? "").Trim())
+            {
+                case "ticket":
+                    return "the site no longer accepts the Discord sign-in on this PC. Press Connect Discord to sign in again.";
+                case "role":
+                    return "the site says this Discord account is not allowed in: not accepted yet, or banned.";
+                case "somebody else":
+                    return "profile " + profile + " belongs to another Discord account.";
+                case "a ticket only goes over https":
+                    return "the voice address is not https, and the Discord sign-in only goes over https.";
+                default:
+                    return "the voice service refused profile " + profile + " and gave no reason the launcher knows.";
             }
         }
 

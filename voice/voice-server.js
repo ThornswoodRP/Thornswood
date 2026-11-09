@@ -111,6 +111,13 @@ function peerName(p) {
   'yes' gets a token (#1315); 'unchecked' is not a refusal, so /token says
   the question went unanswered rather than that the profile is not theirs.
 
+  A 'no' comes with the site's why: 'ticket' (the sign-in is not one the
+  site accepts any more, such as one past its thirty days), 'role' (not
+  allowed in) or 'somebody else' (another account holds the profile). /token
+  hands it to the launcher, which used to say "does not own profile" for all
+  three, about a profile nobody held (One, 8 Nov: a sign-in the site no longer
+  took, refused every half minute).
+
   AND THE ANSWER IS READ TO A LIMIT, IN SIZE AND IN TIME (#1352). The site
   answers about thirty bytes ({"ok":true,"why":"theirs"}), and its own limit
   on the question is 8 KB. This used to add every byte that came back to one
@@ -134,7 +141,7 @@ function owns(ticket, profileId, then) {
   const payload = JSON.stringify({ ticket: ticket, profileId: profileId });
   let done = false;
   let late = null;
-  const finish = (v) => { if (!done) { done = true; clearTimeout(late); then(v); } };
+  const finish = (v, why) => { if (!done) { done = true; clearTimeout(late); then(v, why || ''); } };
 
   let req2;
   try {
@@ -161,7 +168,9 @@ function owns(ticket, profileId, then) {
         if (resp.statusCode !== 200) { finish('unchecked'); return; }
         let doc;
         try { doc = JSON.parse(buf); } catch (e) { finish('unchecked'); return; }
-        finish(doc && doc.ok === true ? 'yes' : 'no');
+        if (doc && doc.ok === true) { finish('yes'); return; }
+        const why = doc && typeof doc.why === 'string' ? doc.why : '';
+        finish('no', /^[a-z ]{1,20}$/.test(why) ? why : '');
       });
     });
   } catch (e) { finish('unchecked'); return; }
@@ -2394,11 +2403,11 @@ const server = http.createServer((req, res) => {
       if (pid <= 0) { res.writeHead(400).end('no profileId'); return; }
       const ticket = String(doc.ticket || '');
       if (!ticket) { res.writeHead(400).end('no ticket'); return; }
-      owns(ticket, pid, (verdict) => {
+      owns(ticket, pid, (verdict, why) => {
         if (verdict === 'no') {
           console.log('[voice] REFUSED a token for profile ' + pid +
-                      ': the ticket does not own it');
-          res.writeHead(403).end('not your profile');
+                      ': the site said ' + (why || 'no'));
+          res.writeHead(403, { 'content-type': 'text/plain' }).end(why || 'not your profile');
           return;
         }
         /*

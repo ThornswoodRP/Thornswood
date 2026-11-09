@@ -25,11 +25,19 @@ namespace Thornswood
         /// Vortex into the person's own Skyrim, rather than from a copy of the
         /// game this launcher installed for itself.
         ///
-        /// Decided by looking, not by a setting. An install made before 1.1
-        /// has its own Game folder sitting next to the launcher and keeps
-        /// working exactly as it did. A fresh install has no such folder,
-        /// because the installer stopped shipping one, so the game is the
-        /// Steam copy and the mods are Vortex's.
+        /// Decided by looking, not by a setting: false only when Thornswood's
+        /// own Skyrim folder has been made, which is Root\Game together with
+        /// the record OwnGame.Make writes as it finishes (OwnGameRecord). A
+        /// fresh install has neither, so the game is the Steam copy and the
+        /// mods are Vortex's.
+        ///
+        /// The folder alone used to decide it. On 8 Nov on One, Root\Game was
+        /// deleted while the launcher ran, the update wrote the few files it
+        /// carries back into a new Root\Game, and from then on every start took
+        /// those four folders for Thornswood's own Skyrim: the plugin list was
+        /// read from an empty Profile\LocalAppData, the card above Play said
+        /// the mods were not installed with revision 7 deployed by Vortex, and
+        /// Make refused because a Game folder was already there.
         ///
         /// Anything that behaves differently between the two reads this, and
         /// nothing else has to know which kind of install it is in.
@@ -80,13 +88,14 @@ namespace Thornswood
             try { steam = Steam.SkyrimPath(); } catch (Exception ex) { Swallow.Note("Paths.Init, Steam.SkyrimPath", ex); }
             SteamCopy = steam ?? "";
 
-            // The launcher's own copy wins whenever it is there, so an upgrade
-            // never moves somebody's game out from under them mid-session.
+            // The launcher's own copy wins whenever it has been made, so an
+            // upgrade never moves somebody's game out from under them.
             // Only an install that has no copy of its own goes to Steam, and
             // not even that one when its own folder was chosen at install: its
             // files wait in Payload until the folder is made.
             Payload     = Path.Combine(Root, "Profile\\Payload");
-            Collection  = !Directory.Exists(own) && !string.IsNullOrEmpty(steam);
+            bool made   = Directory.Exists(own) && File.Exists(OwnGameRecord(Root));
+            Collection  = !made && !string.IsNullOrEmpty(steam);
             OwnFirst    = Collection && Directory.Exists(Payload);
             Game        = !Collection ? own : OwnFirst ? Payload : steam;
             LauncherDir = Path.Combine(Root, "Launcher");
@@ -117,6 +126,16 @@ namespace Thornswood
             // under Profile, which is what the junction points at.
             Live        = Collection ? WinLocalAD : LocalAD;
             LiveMyGames = Collection ? WinMyGames : MyGames;
+        }
+
+        /// <summary>
+        /// The list of files OwnGame.Make writes just before it moves the new
+        /// folder into place as Root\Game, so the two together say the folder
+        /// was made (Collection). OwnGame reads and writes it by this name.
+        /// </summary>
+        public static string OwnGameRecord(string root)
+        {
+            return Path.Combine(root, "Profile\\OwnGame\\files.txt");
         }
 
         // SkyMP has no client executable of its own. MpClientPlugin.dll is an

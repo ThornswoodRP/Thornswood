@@ -14,7 +14,8 @@
   This starts the real service in a temp folder with THORNSWOOD_SITE pointed
   at a stand-in site whose answer the test chooses, and proves:
 
-    an ordinary yes and an ordinary no still decide the token;
+    an ordinary yes and an ordinary no still decide the token, and a no
+    hands the launcher the site's why;
     an answer that will not stop is cut off a little past 64 KB, the token
     is not a checked one, it is answered at once, and the service lives;
     an answer that trickles is given up on at three seconds, unchecked;
@@ -154,7 +155,7 @@ async function token(port) {
     const text = await r.text();
     let doc = null;
     try { doc = JSON.parse(text); } catch (e) { }
-    return { status: r.status, doc: doc, ms: Date.now() - t0 };
+    return { status: r.status, doc: doc, text: text, ms: Date.now() - t0 };
   } catch (e) { return { status: 0, doc: null, ms: Date.now() - t0, err: String(e && e.message) }; }
 }
 // A token the site vouched for: 200 with a token that does not say checked
@@ -191,6 +192,9 @@ const checked = (r) => r.status === 200 && !!r.doc && typeof r.doc.token === 'st
   site.mode = 'no';
   r = await token(PORT);
   yes('a no is refused with 403 (' + r.status + ')', r.status === 403);
+  // The site's why goes to the launcher, which used to read every 403 as
+  // "does not own profile" (One, 8 Nov: the site had said the sign-in).
+  yes('and the 403 carries the site why (' + JSON.stringify(r.text) + ')', r.text === 'somebody else');
 
   console.log('\nan answer that will not stop:');
   site.mode = 'endless';

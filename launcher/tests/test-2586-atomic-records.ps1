@@ -89,6 +89,13 @@ $records = [ordered]@{
 foreach ($k in $records.Keys) {
     $prop = $records[$k]
     $named = $all -match ('static string ' + $prop + ' \{ get \{ return Path\.Combine\(Dir, "' + [regex]::Escape($k) + '"\); \} \}')
+    # files.txt is named once, in Paths, since it also says the folder was made
+    # (Paths.OwnGameRecord, test-own-folder-record.ps1).
+    if ($k -eq 'files.txt' -and -not $named) {
+        $paths = [IO.File]::ReadAllText((Join-Path $App 'Paths.cs'))
+        $named = ($all -match 'static string FilesList \{ get \{ return Paths\.OwnGameRecord\(Paths\.Root\); \} \}') -and
+                 $paths.Contains('return Path.Combine(root, "Profile\\OwnGame\\files.txt");')
+    }
     $written = ([regex]::Matches($all, 'WriteRecord\(' + $prop + ',')).Count
     Yes ("$k ($prop) is written by WriteRecord ($written place(s))") ($named -and $written -gt 0)
 }

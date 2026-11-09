@@ -530,7 +530,65 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// Hands the rest to cmd and returns. The launcher has to be gone before
+        /// Deletes every target the running launcher is not inside, here and
+        /// now, and returns the ones it is inside, which only the handover
+        /// script can take once it has exited. Under Velopack the launcher runs
+        /// from %LocalAppData%\Thornswood, outside Root, so nothing is left for
+        /// the script but the install folder itself.
+        ///
+        /// Everything used to go to the script, which deleted it after this
+        /// launcher had closed, with nothing stopping another launcher from
+        /// opening on the same install meanwhile. On One on 8 Nov Patrick
+        /// uninstalled from the launcher, opened it again, and the script went
+        /// on deleting Root\Game, the Discord sign-in and the log under the
+        /// launcher he had just opened: the update found 114 of its files gone
+        /// part way, and what it wrote back was taken for the game folder.
+        /// Deleting here, while this launcher still holds the install's mutex
+        /// (Shell.MutexName), means a launcher opened meanwhile is told one is
+        /// already running instead of starting on a half deleted install.
+        ///
+        /// Fenced to Root like the script: a target outside it is dropped.
+        /// What could not be deleted stays, and the farewell names it.
+        /// </summary>
+        public static string[] RemoveNow(string[] targets, string runningFrom)
+        {
+            string root;
+            try { root = Path.GetFullPath(Paths.Root).TrimEnd('\\') + "\\"; }
+            catch { return new string[0]; }
+            if (root.Length < 4) return new string[0];
+            string from = "";
+            try { from = Path.GetFullPath(runningFrom ?? "").TrimEnd('\\') + "\\"; } catch (Exception ex) { Swallow.Note("Uninstall.RemoveNow, running from", ex); }
+
+            var later = new System.Collections.Generic.List<string>();
+            foreach (string t in targets)
+            {
+                if (string.IsNullOrEmpty(t)) continue;
+                string full;
+                try { full = Path.GetFullPath(t).TrimEnd('\\'); }
+                catch { continue; }
+                if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase)) continue;
+                if (from.Length > 0 && from.StartsWith(full + "\\", StringComparison.OrdinalIgnoreCase)) { later.Add(full); continue; }
+                try
+                {
+                    if (Directory.Exists(full))
+                    {
+                        bool link = (new DirectoryInfo(full).Attributes & FileAttributes.ReparsePoint) != 0;
+                        if (link) Directory.Delete(full, false); else DeleteTree(full);
+                    }
+                    else if (File.Exists(full))
+                    {
+                        File.SetAttributes(full, FileAttributes.Normal);
+                        File.Delete(full);
+                    }
+                }
+                catch (Exception ex) { Swallow.Note("Uninstall.RemoveNow, " + full, ex); }
+            }
+            return later.ToArray();
+        }
+
+        /// <summary>
+        /// Hands the rest to cmd and returns: what RemoveNow left, the empty
+        /// install folder and the farewell. The launcher has to be gone before
         /// its own folder can go, so this waits on the process id rather than
         /// guessing at a delay.
         /// </summary>

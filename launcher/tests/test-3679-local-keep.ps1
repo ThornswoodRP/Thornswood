@@ -315,6 +315,22 @@ namespace Thornswood
             Yes("Profile went whole, the saves with it", Gone(Paths.ProfileDir));
             Yes("and config.json", Gone(Paths.CfgFile));
             Yes("and with nothing left the install folder went too", Gone(root));
+
+            // Deleted by the launcher itself, before it lets the install go
+            // (8 Nov, One): only what it runs from waits for the script.
+            Install(Path.Combine(t, "now", "Thornswood"));
+            string outside = Path.Combine(t, "now", "not-ours.txt");
+            Put(outside, "theirs");
+            targets = Uninstall.Targets(false, false);
+            list = new List<string>(targets);
+            list.Add(outside);
+            string[] later = Uninstall.RemoveNow(list.ToArray(), Paths.LauncherDir);
+            Yes("RemoveNow leaves only the folder the launcher runs from for the script", later.Length == 1 && string.Equals(later[0], Paths.LauncherDir, StringComparison.OrdinalIgnoreCase));
+            Yes("and has deleted Profile and config.json itself", Gone(Paths.ProfileDir) && Gone(Paths.CfgFile));
+            Yes("and the launcher's own folder is still there for the script", Directory.Exists(Paths.LauncherDir));
+            Yes("and nothing outside the install was touched", File.Exists(outside));
+            later = Uninstall.RemoveNow(targets, Path.Combine(t, "elsewhere"));
+            Yes("run from outside the install, as under Velopack, it leaves the script nothing", later.Length == 0 && Gone(Paths.LauncherDir));
         }
     }
 }
