@@ -84,7 +84,7 @@ namespace Thornswood
             // (ChannelSource, THE CHANNEL'S RELEASE), so a lower number than
             // this one's is taken too: Velopack alone takes only a higher one.
             opts.AllowVersionDowngrade = true;
-            var mgr = new CheckedUpdates(new ChannelSource(channel), opts);
+            var mgr = new CheckedUpdates(new ChannelSource(channel, 11), opts);
             UpdateInfo info = mgr.CheckForUpdatesAsync().GetAwaiter().GetResult();
             if (info == null)
             {
@@ -291,6 +291,7 @@ namespace Thornswood
         sealed class ChannelSource : GithubSource
         {
             readonly string feedName;
+            readonly int take;
 
             public override async Task<VelopackAssetFeed> GetReleaseFeed(Velopack.Logging.IVelopackLogger logger, string appId, string channel, Guid? stagingId = null, VelopackAsset latestLocalRelease = null)
             {
@@ -301,9 +302,14 @@ namespace Thornswood
                 };
             }
 
-            public ChannelSource(string channel) : base(Velo.RepoUrl, null, true, null)
+            /// <param name="take">How many of the Releases with the channel's
+            /// feed to read: 11 for an update, the newest and the ten Velopack
+            /// may take deltas from; 1 for what the channel is on
+            /// (MainVersion.cs), which is the newest Release's own package.</param>
+            public ChannelSource(string channel, int take) : base(Velo.RepoUrl, null, true, null)
             {
                 feedName = "releases." + channel + ".json";
+                this.take = take;
             }
 
             protected override async Task<GithubRelease[]> GetReleases(bool includePrereleases)
@@ -316,7 +322,7 @@ namespace Thornswood
                     .Where(r => r != null && (includePrereleases || !r.Prerelease) && r.Assets != null &&
                                 r.Assets.Any(a => a != null && string.Equals(a.Name, feedName, StringComparison.OrdinalIgnoreCase)))
                     .OrderByDescending(r => r.PublishedAt)
-                    .Take(11)
+                    .Take(take)
                     .ToArray();
             }
         }

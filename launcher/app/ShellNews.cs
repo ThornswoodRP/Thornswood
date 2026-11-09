@@ -14,14 +14,17 @@ namespace Thornswood
     {
         static StackPanel newsList;
 
-        // What main is on, for the dev header (#2434). The header used to name
-        // mainVersion out of the dev feed as it was at the launcher's last
-        // update check (pendingDoc), so a dev launcher open since before a main
-        // Ship named the old main for as long as it stayed open: Patrick, 12
-        // Oct, "dev says main is on 1.2.3 even tho it's on 1.2.4". Now the tab
-        // asks main's own feed when it is shown (Updater.MainLauncherVersion,
-        // MainVersion.cs), and the dev feed's copy is the answer only while
-        // main's feed has not answered, or could not be read.
+        // What main is on, for the dev header (#2434, #5385). The header used
+        // to name mainVersion out of the dev feed as it was at the launcher's
+        // last update check (pendingDoc), so a dev launcher open since before
+        // a main Ship named the old main for as long as it stayed open:
+        // Patrick, 12 Oct, "dev says main is on 1.2.3 even tho it's on
+        // 1.2.4". Now the tab asks main's newest Release when it is shown
+        // (Updater.MainLauncherVersion, MainVersion.cs). The feed's own
+        // numbers, this build's launcherVersion and mainVersion, stopped
+        // moving with Velopack (#4825), so neither is named: this build is
+        // Updater.Version, and while main has not answered, or could not be
+        // read, the header names only this build.
         //
         // All four are only touched on the window's thread. newsHead is the
         // header line, so an answer can be put in without rebuilding the list
@@ -33,12 +36,10 @@ namespace Thornswood
 
         static string DevHeadText()
         {
-            string mine = (pendingDoc != null && pendingDoc.launcherVersion != null) ? pendingDoc.launcherVersion : "";
+            string mine = Updater.Version == "0.0.0" ? "" : Updater.Version;
             string on = mine.Length == 0 ? "This is the dev build." : "This is the dev build, on " + mine + ".";
             if (mainLive.Length > 0) return on + " Main is on " + mainLive + ".";
-            string fed = (pendingDoc != null && pendingDoc.mainVersion != null) ? pendingDoc.mainVersion : "";
-            if (fed.Length == 0) return on;
-            return on + " Main was on " + fed + " when the launcher last checked for updates.";
+            return on;
         }
 
         static void ReadMainVersion()
@@ -55,9 +56,9 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// The answer from main's feed, on the window's thread. A read that
-        /// failed puts the header back on the dev feed's copy, worded as what
-        /// it is, and says why once a session in launcher.log.
+        /// The answer from main's newest Release, on the window's thread. A
+        /// read that failed leaves the header naming only this build, and says
+        /// why once a session in launcher.log.
         /// </summary>
         static void MainVersionRead(string got, string why)
         {
@@ -72,8 +73,8 @@ namespace Thornswood
                 if (!mainFailSaid)
                 {
                     mainFailSaid = true;
-                    LogOnly("The News tab could not read what main is on from " + Updater.MainFeed + " (" + why +
-                            "), so it names what the dev feed said at the last update check. This is said once a session.");
+                    LogOnly("The News tab could not read what main is on from " + Updater.MainSource + " (" + why +
+                            "), so it names only this build. This is said once a session.");
                 }
             }
             if (newsHead != null) newsHead.Text = DevHeadText();
@@ -119,8 +120,8 @@ namespace Thornswood
                 head.Children.Add(ht);
                 newsHead = ht;
 
-                // Main's version from main's own feed, each time the tab is
-                // shown (#2434). BuildNews also runs when a check lands and
+                // Main's version from main's newest Release, each time the tab
+                // is shown (#2434, #5385). BuildNews also runs when a check lands and
                 // after a theme change; the read goes out only while the tab is
                 // the page in front of somebody.
                 if (pages != null && pages[PageNews].IsVisible) ReadMainVersion();

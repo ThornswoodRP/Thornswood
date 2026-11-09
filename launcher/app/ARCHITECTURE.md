@@ -274,13 +274,15 @@ feed's own `assets/` folder plus its sha256 (`AssetsOf`,
 `VersionDoc.ParseFeed`), and when it names `settings`, the rest of the feed,
 fetches that once by its sha256, checks it, keeps it in
 `Profile\feed-settings.json`, and joins the two (`VersionDoc.Join`).
-On a dev build the News tab's header says what main is on from main's own
-feed (#2434): each time the tab is shown, `ShellNews.cs ReadMainVersion`
-asks `MainVersion.cs MainLauncherVersion()` for main's `launcherVersion` on a
-pool thread, through `CheckUrl` and the shared client, and puts the answer
-into the header line. Only while main's feed has not answered, or could not
-be read, does the header name the dev feed's `mainVersion` from the last
-update check, worded as such. The DEV marks on the notes come from main's
+On a dev build the News tab's header says what main is on from main's
+newest Release (#2434, #5385): each time the tab is shown,
+`ShellNews.cs ReadMainVersion` asks `MainVersion.cs MainLauncherVersion()` on a
+pool thread, which reads the newest Release carrying `releases.main.json`
+through the update check's own `ChannelSource`, and puts the version of its
+package into the header line. The header names this build by
+`Updater.Version`. While main has not answered, or could not be read, it names
+only this build: the feed's `launcherVersion` and `mainVersion` stopped moving
+with Velopack (#4825). The DEV marks on the notes come from main's
 Deployment (ReleaseNews.cs, above).
 The launcher itself is not in the feed any more: it updates through Velopack
 (Velo, below), and VeloUpdate.cs is the same Updater class's half for it.
