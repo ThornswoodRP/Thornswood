@@ -485,6 +485,12 @@
         "Status": "switch"
       }
     },
+    "Remove-RunnerEgress": {
+      "script": "scripts/deploy/Install-RunnerEgress.ps1",
+      "timeoutMinutes": 10,
+      "fixed": ["-Remove", "-NoPause"],
+      "params": {}
+    },
     "Set-WebFirewall": {
       "script": "scripts/vps/Set-WebFirewall.ps1",
       "timeoutMinutes": 10,

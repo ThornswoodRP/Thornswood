@@ -13,14 +13,20 @@
                                                         newest agent and the
                                                         list in, and start it
       .\scripts\deploy\Install-RunnerEgress.ps1 -Status   what is there and its log
-      .\scripts\deploy\Install-RunnerEgress.ps1 -Remove   take it off again (not a
-                                                        gate verb: every runner
-                                                        sent through it is cut off)
+      .\scripts\deploy\Install-RunnerEgress.ps1 -Remove   take it off: the task,
+                                                        its program and its folder,
+                                                        then read each back
 
-  From a cloud thread the deploy gate runs the first two with main's script:
+  From a cloud thread the deploy gate runs all three with main's script, the
+  last as a verb of its own, since -Remove is never a gate word:
 
       pwsh scripts/vps/Box-Run.ps1 -Line 'Install-RunnerEgress'
       pwsh scripts/vps/Box-Run.ps1 -Line 'Install-RunnerEgress -Status'
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Remove-RunnerEgress'
+
+  Remove-RunnerEgress was added on 9 Nov 2026 so the way out can come off
+  from a cloud thread (#5577). It stops before sending anything while a
+  runner record still sends a runner through it.
 
   WHY BY NAME. The runner accounts' rules decided by address, from GitHub's
   published lists. On 3 Nov 2026 GitHub gave tw-hermes-box the token host
@@ -129,11 +135,23 @@ if (Test-Path -LiteralPath '$log') { '--- egress.log, last 30 ---'; Get-Content 
 
 # ------------------------------------------------------------------ remove --
 if ($Remove) {
-    Remote @"
-Stop-ScheduledTask -TaskName '$TaskName' -EA SilentlyContinue
-Unregister-ScheduledTask -TaskName '$TaskName' -Confirm:`$false -EA SilentlyContinue
-if (Get-ScheduledTask -TaskName '$TaskName' -EA SilentlyContinue) { 'STILL THERE' } else { 'REMOVED the task $TaskName; $Root is left with its logs. Every runner sent through it now reaches nothing.' }
-"@ | ForEach-Object { Say "  $_" }
+    # A runner still sent through it would reach nothing once it is off, so none may be.
+    $sent = @(Get-ChildItem -LiteralPath (Join-Path $RepoDir 'records') -Filter '*-runner.json' -File | Where-Object { (Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json).egress })
+    if ($sent.Count) { Die ('runner record(s) ' + (($sent | ForEach-Object { $_.Name }) -join ', ') + ' still send a runner through it. Nothing was sent.') }
+    $out = @(Remote @"
+`$ErrorActionPreference = 'SilentlyContinue'
+function Mine { @(Get-CimInstance Win32_Process -Filter "Name='thornswood-agent.exe'" | Where-Object { ('' + `$_.ExecutablePath) -ieq '$exe' }) }
+Stop-ScheduledTask -TaskName '$TaskName'
+Unregister-ScheduledTask -TaskName '$TaskName' -Confirm:`$false
+foreach (`$p in Mine) { Stop-Process -Id `$p.ProcessId -Force; Wait-Process -Id `$p.ProcessId -Timeout 20 }
+if (Test-Path -LiteralPath '$Root') { Remove-Item -LiteralPath '$Root' -Recurse -Force }
+if (Get-ScheduledTask -TaskName '$TaskName') { 'task      STILL THERE' } else { 'task      NOT REGISTERED' }
+if ((Mine).Count) { 'program   STILL RUNNING' } else { 'program   not running' }
+if (Test-Path -LiteralPath '$Root') { 'folder    STILL THERE: ' + ((Get-ChildItem -LiteralPath '$Root' -Recurse -Force | Select-Object -First 5 | ForEach-Object { `$_.FullName }) -join ', ') } else { 'folder    $Root NOT THERE' }
+if (Get-NetTCPConnection -State Listen -LocalPort $port) { 'port      $port STILL LISTENED ON' } else { 'port      nothing listens on $port' }
+"@ | ForEach-Object { Say "  $_"; "$_".Trim() })
+    if (-not $out.Count -or @($out | Where-Object { $_ -match 'STILL' }).Count) { Die 'the way out is not all off. The lines above say what is left.' }
+    Say "  REMOVED the runners' way out: its task, program and folder are off the box." 'Green'
     exit 0
 }
 
