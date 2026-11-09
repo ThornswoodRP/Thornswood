@@ -38,14 +38,33 @@ every distinct version, read from every commit of the plugin up to
 SALVAGED_THROUGH, the last main commit before the remake.
 
 Usage:
-    python scripts/mods/List-SalvagedRecords.py           writes the list
+    python scripts/mods/List-SalvagedRecords.py           brings the list up to the station table
     python scripts/mods/List-SalvagedRecords.py --check   exit 1 if it differs
+    --history                 rebuild the whole list from the plugin's history
     --masters <Data folder>   where Skyrim.esm and the DLC are read from
                               (default C:\\Thornswood\\Game\\Data)
 
-Needs the repository's full history (the 13 September and 25 September copies
-are on their own roots) and the five masters, to say what each override of
-Skyrim's own placements did. Read only apart from the list.
+WHAT CAN STILL CHANGE (#4354)
+
+Everything the history gives is fixed at SALVAGED_THROUGH: which records were
+salvaged, every version's hash, what each override did, what was remade and
+what names it. One thing moves after #2553, which salvaged cell or worldspace
+a station Thornswood places stands in (game\\data\\station-sites.json): one a
+station stands in stays as Bethesda's, and one no station stands in is
+dropped. The study desk in the Hall of the Elements (#1387) was the first
+station to stand in a cell the list had dropped.
+
+So by default this reads what the history gave from the committed list and
+sets each salvaged cell and worldspace from the station table, by the same
+rule the history build uses (world_rule). It needs no history, so it runs on
+the box, which is sent a commit's files and no history (Run-OnBox.ps1). It
+reads the masters only for a cell or worldspace that newly stays, for the
+winning master's own hash, and stops without them.
+
+--history rebuilds the whole list as #2553 first did. That needs the
+repository's full history (the 13 September and 25 September copies are on
+their own roots) and the five masters, to say what each override of Skyrim's
+own placements did. Read only apart from the list.
 """
 
 import argparse
@@ -113,8 +132,30 @@ STATIONS = {0x5042E69: 'alchemy lab', 0x501547E: 'charcoal kiln', 0x5DBF8B3: 'be
             0x5DDE4EF: 'salt quarry'}
 STATION_COUNTS = {'alchemy lab': 25, 'charcoal kiln': 8, 'beehive': 13, 'salt quarry': 11}
 STATION_SITES = os.path.join(ROOT, 'game', 'data', 'station-sites.json')
+PLUGIN_FILE = os.path.join(ROOT, 'game', 'content', PLUGIN)
 
 COMPRESSED = 0x00040000
+
+
+def station_cells():
+    """Every cell, and every worldspace of an outdoor site, a station
+    Thornswood places stands in, as (object id, plugin name in lower case)."""
+    out = set()
+    for row in json.load(open(STATION_SITES, encoding='utf-8'))['sites'].values():
+        for field in ('cell',) + (() if row['interior'] else ('space',)):
+            obj, owner = row[field].split(':', 1)
+            out.add((int(obj, 16), owner.lower()))
+    return out
+
+
+def world_rule(held):
+    """What becomes of a salvaged cell or worldspace (#2553): it stays as
+    Bethesda's while a station Thornswood places stands in it, and is dropped
+    once none does. The history build and update() both say it here."""
+    if held:
+        return ("Bethesda's", 'a station Thornswood places stands in it (game/data/station-sites.json), so '
+                              'it stays, written by the tool from the winning master\'s own record')
+    return ('dropped', 'nothing of Thornswood\'s is placed in it once the placements above go')
 
 
 def git(*args, binary=False):
@@ -300,11 +341,10 @@ def build(masters_dir):
         if base in STATIONS and not fl & 0x800:
             stations.add(f)
     low = [n.lower() for n in names]
-    holders = set()
-    for row in json.load(open(STATION_SITES, encoding='utf-8'))['sites'].values():
-        for field in ('cell',) + (() if row['interior'] else ('space',)):
-            obj, owner = row[field].split(':', 1)
-            holders.add((low.index(owner.lower()) << 24) | int(obj, 16))
+    cells = station_cells()
+    holders = {f for (t, fl, f, d, w, c) in last
+               if t in ('CELL', 'WRLD') and f in salvaged_ids and f >> 24 < len(low) and
+               (f & 0xFFFFFF, low[f >> 24]) in cells}
     overrides = [f for (t, fl, f, d, w, c) in last
                  if t == 'REFR' and f in salvaged_ids and f >> 24 != 5]
     bethesda = bethesda_placements(masters_dir, names, overrides)
@@ -346,13 +386,7 @@ def build(masters_dir):
                 else:
                     row['why'] = 'an object of Skyrim\'s placed where the other server chose; no Thornswood design asks for it'
         elif t in ('CELL', 'WRLD'):
-            if f in holders:
-                row['disposition'] = "Bethesda's"
-                row['why'] = ('a station Thornswood places stands in it (game/data/station-sites.json), so '
-                              'it stays, written by the tool from the winning master\'s own record')
-            else:
-                row['disposition'] = 'dropped'
-                row['why'] = 'nothing of Thornswood\'s is placed in it once the placements above go'
+            row['disposition'], row['why'] = world_rule(f in holders)
         elif f in REMADE:
             row['disposition'] = 'remade'
             row['why'] = REMADE[f]
@@ -382,10 +416,7 @@ def build(masters_dir):
         for r, k in kept:
             r['bethesdaSha256'] = body_hash(own[k][1])
 
-    counts = {}
-    for r in rows:
-        k = '%s %s' % (r['type'], r['disposition'])
-        counts[k] = counts.get(k, 0) + 1
+    counts = count(rows)
     return {
         'issue': 2553,
         'decided': ('Patrick, 15 October 2026, option B on #2177: no permission from the other '
@@ -403,19 +434,79 @@ def build(masters_dir):
     }
 
 
+def count(rows):
+    counts = {}
+    for r in rows:
+        k = '%s %s' % (r['type'], r['disposition'])
+        counts[k] = counts.get(k, 0) + 1
+    return counts
+
+
+def update(masters_dir):
+    """The committed list with each salvaged cell and worldspace set from
+    the station table by world_rule, everything else as the history gave
+    it (WHAT CAN STILL CHANGE, above). No history is read; the masters only
+    for a row that newly stays."""
+    if not os.path.isfile(OUT):
+        raise SystemExit('STOP. %s is not here, and only --history on a full clone can write it from '
+                         'nothing.' % OUT)
+    reg = json.load(open(OUT, encoding='utf-8'))
+    cells = station_cells()
+    rows, new = [], []
+    for r in reg['records']:
+        if r['type'] not in ('CELL', 'WRLD') or r['disposition'] == 'gone before #2553':
+            rows.append(r)
+            continue
+        obj, owner = r['formId'].split(':', 1)
+        held = (int(obj, 16), owner.lower()) in cells
+        row = {'formId': r['formId'], 'type': r['type'], 'editorId': r['editorId']}
+        row['disposition'], row['why'] = world_rule(held)
+        row['dataSha256'] = r['dataSha256']
+        if held and r.get('bethesdaSha256') and r['disposition'] == "Bethesda's":
+            row['bethesdaSha256'] = r['bethesdaSha256']
+        elif held:
+            new.append(row)
+        rows.append(row)
+    if new:
+        # A row that newly stays is written by Add-ContentRecords.py from the
+        # winning master's own record, so the list keeps that record's hash,
+        # as the history build does.
+        names = masters(open(PLUGIN_FILE, 'rb').read())
+        keys = [(r['type'].encode('ascii'), localise(r['formId'], names)) for r in new]
+        own = content_tool().bethesdas_world_records(masters_dir, names, keys)
+        if own is None:
+            raise SystemExit('STOP. a station now stands in %s, which the list drops. It stays as Bethesda\'s, '
+                             'written from the winning master\'s own record, so the list keeps that record\'s '
+                             'hash, and the masters are not in %s. Give --masters the game\'s Data folder. '
+                             'Nothing was written.'
+                             % (', '.join('%s %s' % (r['type'], r['formId']) for r in new), masters_dir))
+        for r, k in zip(new, keys):
+            r['bethesdaSha256'] = body_hash(own[k][1])
+    reg['counts'] = dict(sorted(count(rows).items()))
+    reg['records'] = rows
+    return reg
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--check', action='store_true')
+    ap.add_argument('--history', action='store_true',
+                    help='rebuild the whole list from the plugin\'s history, on a full clone')
     ap.add_argument('--masters', default=r'C:\Thornswood\Game\Data',
                     help="the game's Data folder: Skyrim's own placements, to say what each override did")
     args = ap.parse_args()
-    text = json.dumps(build(args.masters), indent=1, ensure_ascii=True) + '\n'
+    if args.history and subprocess.run(['git', '-C', ROOT, 'cat-file', '-e', FIRST[0] + '^{commit}'],
+                                       capture_output=True).returncode != 0:
+        raise SystemExit('STOP. --history reads the plugin\'s whole history, and this checkout does not have it '
+                         '(no git, or a shallow clone). Run it on a full clone, or run this without --history.')
+    text = json.dumps(build(args.masters) if args.history else update(args.masters), indent=1, ensure_ascii=True) + '\n'
     if args.check:
         have = open(OUT, encoding='utf-8').read() if os.path.isfile(OUT) else ''
         if have != text:
-            print('content-salvaged.json is not what the history gives. Run this without --check.')
+            print('content-salvaged.json is not what the %s gives. Run this without --check.'
+                  % ('history' if args.history else 'station table'))
             return 1
-        print('ok    content-salvaged.json is what the history gives')
+        print('ok    content-salvaged.json is what the %s gives' % ('history' if args.history else 'station table'))
         return 0
     open(OUT, 'w', encoding='utf-8', newline='\n').write(text)
     print('wrote %s' % OUT)

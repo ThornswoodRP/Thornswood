@@ -293,7 +293,7 @@ try {
   const git = (args, enc) => spawnSync('git', ['-C', ROOT].concat(args), { encoding: enc || 'utf8', maxBuffer: 1 << 28 });
   const have = reg.sources.every(s => git(['cat-file', '-e', s.commit + ':' + s.path]).status === 0);
   if (!have) {
-    console.log('SKIP  5: this clone does not have the plugin\'s history (a shallow clone); List-SalvagedRecords.py --check on a full one');
+    console.log('SKIP  5: this clone does not have the plugin\'s history (a shallow clone); List-SalvagedRecords.py --history --check on a full one');
   } else {
     const blobs = reg.sources.map(s => git(['show', s.commit + ':' + s.path], 'buffer').stdout);
     yes('5 every source in the register is that commit\'s plugin, byte for byte (' + blobs.length + ')',
