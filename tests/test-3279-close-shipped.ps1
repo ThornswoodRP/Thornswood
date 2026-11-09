@@ -30,6 +30,8 @@
     5. a card not in Done, a closed issue and another repository's are not
        read at all, and a comment on the second page of 100 is found;
     6. -Check writes nothing and says what it would close;
+    (#5611) a box step whose merge is in the release stays open until a
+       comment starting "Box step output:" is on it;
     7. a refused close is a stop: exit 1, the issue named, the command that
        runs it again printed, and the others still closed;
     8. a shallow checkout and a commit the checkout does not hold stop before
@@ -156,7 +158,7 @@ try {
     function Card([int]$n, [string]$status = 'Done', [string]$state = 'OPEN', [string]$repo = $Slug) {
         return [ordered]@{ repo = $repo; number = $n; kind = 'Issue'; title = "issue $n"; state = $state; status = $status; order = $null; archived = $false }
     }
-    $items = @((Card 1), (Card 2), (Card 3), (Card 4 'In Progress'), (Card 5 'Done' 'CLOSED'), (Card 6), (Card 7), (Card 8), (Card 10), (Card 11 'Done' 'OPEN' 'EvilPatrick06/other'), (Card 12), (Card 13), (Card 15), (Card 16), (Card 17), (Card 18), (Card 20), (Card 21))
+    $items = @((Card 1), (Card 2), (Card 3), (Card 4 'In Progress'), (Card 5 'Done' 'CLOSED'), (Card 6), (Card 7), (Card 8), (Card 10), (Card 11 'Done' 'OPEN' 'EvilPatrick06/other'), (Card 12), (Card 13), (Card 15), (Card 16), (Card 17), (Card 18), (Card 20), (Card 21), (Card 22), (Card 23))
     $items += [ordered]@{ repo = $Slug; number = 14; kind = 'PullRequest'; title = 'a pull request'; state = 'OPEN'; status = 'Done'; order = $null; archived = $false }
     $script:boardFile = Join-Path $work 'board.json'
     [IO.File]::WriteAllText($script:boardFile, ([ordered]@{ read_at = '2026-10-22T13:41:52Z'; items = $items } | ConvertTo-Json -Depth 6))
@@ -198,6 +200,10 @@ try {
         (Page 18) = @((Hand $mergeB 3322))
         (Page 20) = @((Robot $mergeB 3323), (Hand $mergeA 3324))
         (Page 21) = @((Hand $mergeA 3325), (Robot $mergeB 3326))
+        (Page 22) = @((Robot $mergeA 3330))
+        (Page 23) = @((Robot $mergeA 3331), (Person "Box step output: Install-Voice ran, gate run 20261109-072344, ENDED 0."))
+        "GET repos/$Slug/issues/22" = [ordered]@{ number = 22; labels = @([ordered]@{ name = 'box step' }) }
+        "GET repos/$Slug/issues/23" = [ordered]@{ number = 23; labels = @([ordered]@{ name = 'box step' }) }
     }
 
     # ---- 1 to 5: a main Ship's run -------------------------------------------
@@ -243,15 +249,17 @@ try {
     Yes '#20, a newer Fixed by line than the done-on-merge comment: the Fixed by line stands, closed with its block' (
         $c20.Count -eq 1 -and ($c20[0].Substring($c20[0].IndexOf('{')) | ConvertFrom-Json).body -ceq $handTask -and
         @($w | Where-Object { $_ -like "PATCH repos/$Slug/issues/20 *" }).Count -eq 1)
+    Yes '#22, a box step whose merge is in the release but with no output on it: stays open, said (#5611)' (@($w | Where-Object { $_ -match '/issues/22[ /]' }).Count -eq 0 -and $r.Out -match '#22: stays open, its box step has no output on it yet' -and $r.Out -match 'box step has no output on them yet \(1\): #22')
+    Yes '#23, a box step with its Box step output comment: closed like any other' (@($w | Where-Object { $_ -like "PATCH repos/$Slug/issues/23 *" -and $_ -match '"state":"closed"' }).Count -eq 1)
     Yes '#21, a newer done-on-merge comment than the Fixed by line: it stands, and its merge is not in the release' (@($w | Where-Object { $_ -match '/issues/21[ /]' }).Count -eq 0 -and $r.Out -match "#21: stays open, pull request #3326's merge")
-    Yes '  and nothing else was written' ($w.Count -eq 15)
+    Yes '  and nothing else was written' ($w.Count -eq 17)
     Yes '  every call carries the token gh is signed in with' ($r.Calls.Count -gt 0 -and @($r.Calls | Where-Object { $_ -notmatch ' Bearer test-token' }).Count -eq 0)
-    Yes '  the summary names what closed' ($r.Out -match 'Closed \(9\): #1 #6 #7 #10 #13 #15 #16 #17 #20')
+    Yes '  the summary names what closed' ($r.Out -match 'Closed \(10\): #1 #6 #7 #10 #13 #15 #16 #17 #20 #23')
 
     # ---- 6: -Check -----------------------------------------------------------
     $r = Run @('-Check') $answers
     Yes ("-Check writes nothing and passes (exit {0})" -f $r.Code) ($r.Code -eq 0 -and $r.Writes.Count -eq 0)
-    Yes '  and says what it would close' ($r.Out -match 'Would close \(9\): #1 #6 #7 #10 #13 #15 #16 #17 #20' -and $r.Out -match '#1: would close' -and $r.Out -match '#17: would close.*with no test task')
+    Yes '  and says what it would close' ($r.Out -match 'Would close \(10\): #1 #6 #7 #10 #13 #15 #16 #17 #20 #23' -and $r.Out -match '#1: would close' -and $r.Out -match '#17: would close.*with no test task')
 
     # ---- 7: a refused close ----------------------------------------------------
     $r = Run @() $answers @("PATCH repos/$Slug/issues/6")

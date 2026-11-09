@@ -31,6 +31,11 @@ hyphens:
   `doneWhen` saying how they know it worked. It becomes an issue labelled
   `check: in game`, filed by `.github/workflows/after-deploy.yml` when the
   Deployment succeeds.
+- A `run` step that ends 0 leaves a comment on its issue whose first line
+  starts `Box step output:`, with the Deployment's log. That is the output
+  an issue whose Done when is a box step closes on (#5611), so the pull
+  request says `Refs #N`, not `Closes #N`: GitHub would close it at the
+  merge, and `.github/workflows/box-step.yml` opens it again.
 - At most ten steps in a file. The text is plain, one line each, with no em
   dash.
 

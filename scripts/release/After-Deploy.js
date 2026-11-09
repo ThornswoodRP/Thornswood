@@ -10,7 +10,11 @@
 //   - each in-game check the agent listed becomes an issue labelled
 //     "check: in game", once;
 //   - each step that failed or was cut short is said on its own issue,
-//     once for each Deployment.
+//     once for each Deployment;
+//   - each step that ran and ended 0 is said on its own issue, once, as a
+//     comment starting "Box step output:" with the Deployment's log, which
+//     is what lets an issue whose Done when is that step close (#5611,
+//     scripts/ops/Box-Step.js).
 //
 // WHAT IS TRUSTED. The agent's file says only which step had which result.
 // The words of an issue come from the step files of this checkout, which is
@@ -70,6 +74,15 @@ function failureComment(id, r, s, o) {
   ].join('\n\n');
 }
 
+// The comment a step that ran leaves on its issue: the line Box-Step.js
+// reads as the step's own output.
+function outputComment(id, s, o) {
+  return [
+    'Box step output: `' + String(s.step.run || '') + '` ran after the deploy to ' + o.environment + ' and ended 0 (Deployment ' + o.deployment + ', ' + marker(id) + ').',
+    'The log: ' + o.logUrl,
+  ].join('\n\n');
+}
+
 /*
   act({ after, steps, deployment, commit, environment, logUrl, gh }) -> lines said
   after is the agent's deploy-<id>.after.json, parsed; steps is readSteps()
@@ -84,6 +97,7 @@ async function act(o) {
   const results = Array.isArray(a.steps) ? a.steps : [];
   const games = results.filter(r => r && r.state === 'in-game');
   const bad = results.filter(r => r && (r.state === 'failure' || r.state === 'cut-short'));
+  const ran = results.filter(r => r && r.state === 'success');
   if (games.length) {
     await o.gh.label(LABEL);
     const open = await o.gh.issues(LABEL);
@@ -106,7 +120,17 @@ async function act(o) {
     await o.gh.comment(n, failureComment(r.id, r, s, o));
     said.push(r.id + ': said on #' + n + ' that it ' + (r.state === 'cut-short' ? 'was cut short' : 'failed'));
   }
-  if (!games.length && !bad.length) { said.push('nothing for people: ' + results.length + ' step(s), none failed and none is in game'); }
+  for (const r of ran) {
+    const s = o.steps.get(r.id);
+    if (!ID.test(String(r.id)) || !s || !s.step.run || s.environment !== o.environment) { said.push('REFUSED ' + r.id + ': this commit has no run step for ' + o.environment + ' by that id'); continue; }
+    const n = Number(s.issue);
+    // Once for each step: it runs once on its environment, ever.
+    const have = await o.gh.comments(n);
+    if (have.some(c => String(c.body || '').indexOf('Box step output:') === 0 && String(c.body || '').indexOf(marker(r.id)) >= 0)) { said.push(r.id + ': its output is already on #' + n); continue; }
+    await o.gh.comment(n, outputComment(r.id, s, o));
+    said.push(r.id + ': said on #' + n + ' that it ran');
+  }
+  if (!games.length && !bad.length && !ran.length) { said.push('nothing for people: ' + results.length + ' step(s), none ran, failed or is in game'); }
   return said;
 }
 
@@ -158,4 +182,4 @@ async function main() {
 }
 
 if (require.main === module) { main().catch(err => { console.log('::error::' + err.message); process.exit(1); }); }
-module.exports = { act: act, readSteps: readSteps, issueFor: issueFor, failureComment: failureComment, marker: marker, LABEL: LABEL };
+module.exports = { act: act, readSteps: readSteps, issueFor: issueFor, failureComment: failureComment, outputComment: outputComment, marker: marker, LABEL: LABEL };
