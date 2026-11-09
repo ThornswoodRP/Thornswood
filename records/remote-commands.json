@@ -2804,15 +2804,6 @@
                       "reason":  "reads files, settings, logs or status only"
                   },
                   {
-                      "script":  "scripts/dev/Trace-Gate.ps1",
-                      "scope":  "Invoke-Box",
-                      "via":  "Invoke-ThornswoodRemote",
-                      "anchor":  "$out = @(Invoke-ThornswoodRemote -Target \"$User@$Vps\" -SshArgs $ssh -Bypass -Script ($pre + [IO.File]::ReadAllText($BoxScript)) |",
-                      "does":  "runs scripts/dev/Trace-Gate-Box.ps1 in one of its modes: the self-test, emptying C:\\Thornswood-Trace, or installing, reporting on or removing the trace task that traces every main build (scripts/dev/Trace-Gate-Task.ps1, a SYSTEM scheduled task, and the trace and gate-map folders in each build runner\u0027s folder) (#3114)",
-                      "class":  "admin",
-                      "reason":  "only an administrator can start a kernel trace session, set the trace folders\u0027 ACLs and register a SYSTEM task"
-                  },
-                  {
                       "script":  "scripts/deploy/Setup-Discord.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "Invoke-ThornswoodRemote",

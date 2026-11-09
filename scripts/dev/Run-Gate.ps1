@@ -21,42 +21,23 @@
   the off-box runners the runner records name for it (#3860), and on
   GitHub's hosted runner one.
 
-  ON MAIN, ON THE VPS. Patrick chose on 22 Oct 2026 (option A on his page,
-  q-3114-map-refresh) that every main build's gate is traced, so pull
-  requests can be held to a map that is never more than a merge or two
-  old. Only an administrator can start the trace, so this asks the trace
-  task (scripts\dev\Trace-Gate-Task.ps1, which runs as SYSTEM) through the
-  runner's own folder, <runner>\trace:
-    tree.gz     every path in this commit's tree with its mode and object,
-                so a pull request can measure its change from this tree
-                without fetching it (Affected-Harnesses.js tree)
-    ask.json    this run, its commit, its checkout and this process
-    answer.json the task's answer: tracing, or why not
-    starts.jsonl  Nightly-Harnesses.ps1 -StartLog, which process was which
-                harness's
-    done.json   the gate ended, and how
-  A main build is never held up by it: no answer in -AnswerSeconds, or any
-  answer but tracing, runs the gate untraced and that commit leaves no map.
-  The gate is the whole gate either way; the trace only watches it.
+  ON A PULL REQUEST (#4009, #5183). It takes main's newest nightly map,
+  which .github\workflows\gate-map.yml traces on GitHub's Windows runner
+  and keeps as an artifact, through scripts\dev\Gate-Map.ps1 -Fetch, with
+  the job's token in GATE_MAP_TOKEN. The token is taken out of the
+  environment here, before any harness starts, and put back only around
+  that call (#4079). Affected-Harnesses.js pick builds the map and measures
+  the change from the traced tree to this checkout's HEAD, GitHub's merge
+  of the pull request into main, and this runs only what that change can
+  reach, printing why each one runs. Anything that goes wrong on the way
+  (no map, a map that does not read, pick failing) runs the whole gate and
+  says why; so does any change to the scripts that list, choose and run the
+  harnesses.
 
-  ON A PULL REQUEST, ON THE VPS. The task leaves the newest map in every
-  build runner's <runner>\gate-map, a folder the runner's account may read
-  and not change. Affected-Harnesses.js pick builds the map from it and
-  measures the change from the traced tree to this checkout's HEAD,
-  GitHub's merge of the pull request into main, and this runs only what
-  that change can reach, printing why each one runs. Anything that goes
-  wrong on the way (no map, a map that does not read, pick failing) runs
-  the whole gate and says why; so does any change to the scripts that list,
-  choose and run the harnesses.
-
-  OFF THE BOX (#4009, #5183). A runner with no gate-map of its own (GitHub's
-  hosted runner, where every build runs since #5119) takes main's newest
-  nightly map, which .github\workflows\gate-map.yml traces on GitHub's
-  Windows runner and keeps as an artifact, through scripts\dev\Gate-Map.ps1
-  -Fetch, with the job's token in GATE_MAP_TOKEN, and picks from it the same
-  way. The token is taken out of the environment here, before any harness
-  starts, and put back only around that call (#4079). No map there either
-  runs the whole gate.
+  The box's old trace task, which traced main builds on the box's build
+  runners and left each a map in <runner>\gate-map, was taken off the box
+  on 9 Nov 2026 and out of this script (#5338): no build has run on the box
+  since #5119.
 
   THE NOTE. It writes whole=true to the step's outputs only when every gate
   harness ran (with shares, when the pick's plan holds every one). Main's
@@ -68,9 +49,8 @@
   gate, and the nightly runs it every night, so whatever a harness left out
   would have caught is still caught there.
 
-  The trace task, the map's folders and how they are kept from the
-  runners' accounts: scripts\dev\Trace-Gate-Task.ps1. Why a map is enough:
-  scripts\dev\Affected-Harnesses.js. tests\test-3114-run-gate.ps1 holds
+  How the map is traced: .github\workflows\gate-map.yml. Why a map is
+  enough: scripts\dev\Affected-Harnesses.js. tests\test-3114-run-gate.ps1 holds
   all of this.
 
 .PARAMETER Shard
@@ -81,8 +61,8 @@
 
 .PARAMETER Of
   How many shares the gate is split into. build.yml's gate job passes the
-  length of its matrix. With more than one no trace is asked for, and each
-  share runs its part of the pick's plan.
+  length of its matrix. With more than one each share runs its part of the
+  pick's plan.
 
   WHY SHARES (31 Oct 2026). Since #5119 nothing builds on the box, and
   every pull request ran the whole gate on one hosted runner's four cores:
@@ -117,14 +97,9 @@
   As Nightly-Harnesses.ps1 takes it: a harness starts only when its whole
   clock still fits.
 
-.PARAMETER AnswerSeconds
-  How long a main build waits for the trace task to say it is tracing.
-
 .PARAMETER StartLog
   Where Nightly-Harnesses.ps1 -StartLog writes which process was which
-  harness's, for gate-map.yml's trace on GitHub's runner (#5183). A main
-  build the trace task traces on a box build runner writes its own in
-  <runner>\trace.
+  harness's, for gate-map.yml's trace on GitHub's runner (#5183).
 
 .PARAMETER Report
   A JUnit file for this share, as Nightly-Harnesses.ps1 -Report writes it:
@@ -145,7 +120,6 @@ param(
     [int]$LinuxShares = 0,
     [int]$Throttle = 6,
     [int]$BudgetSeconds = 1800,
-    [int]$AnswerSeconds = 60,
     [string]$StartLog = '',
     [ValidateSet('Windows', 'Linux')]
     [string]$Platform = 'Windows',
@@ -165,12 +139,6 @@ $mapToken = [string]$env:GATE_MAP_TOKEN
 Remove-Item -LiteralPath Env:GATE_MAP_TOKEN -ErrorAction SilentlyContinue
 function Set-StepOutput([string]$name, [string]$value) {
     if ($env:GITHUB_OUTPUT) { Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ($name + '=' + $value) }
-}
-# Written whole and then renamed, so the task never reads half a file.
-function Write-Whole([string]$file, [string]$text) {
-    $tmp = $file + '.tmp'
-    [IO.File]::WriteAllText($tmp, $text)
-    Move-Item -LiteralPath $tmp -Destination $file -Force
 }
 
 if ($Pick -lt 0 -or $Of -lt 1 -or $Shard -lt 1 -or $Shard -gt $Of) { Write-Host "::error::-Shard $Shard -Of $Of names no share of the gate"; exit 2 }
@@ -201,46 +169,35 @@ $builds = Get-MachineBuilds
 $share = [Math]::Min(6, [Math]::Max(1, [Math]::Floor([Environment]::ProcessorCount / [Math]::Max(1, $builds))))
 Say ('{0} build(s) at once on this machine, so {1} of its {2} cores are this one''s.' -f $builds, $share, [Environment]::ProcessorCount)
 
-# The runner's own folder: RUNNER_TEMP is <runner>\_work\_temp there.
-$root = ''
-if ($env:RUNNER_ENVIRONMENT -eq 'self-hosted' -and $env:RUNNER_TEMP) { $root = Split-Path -Parent (Split-Path -Parent $env:RUNNER_TEMP) }
-
-# The folder holding the newest map: this runner's own on the box, or
-# main's nightly map fetched (gate-map.yml, #5183). '' when there is none,
-# with $script:MapWhy saying why.
+# The folder holding main's nightly map, fetched (gate-map.yml, #5183).
+# '' when there is none, with $script:MapWhy saying why.
 $script:MapWhy = ''
 function Find-Map {
-    $maps = $(if ($root) { Join-Path $root 'gate-map' } else { '' })
-    if ($maps -and (Test-Path -LiteralPath (Join-Path $maps 'latest.json'))) { return $maps }
-    $why = $(if ($maps) { 'there is no traced map in ' + $maps + ' yet' } else { 'this runner keeps no map of its own' })
-    if (-not $env:RUNNER_TEMP) { $script:MapWhy = $why; return '' }
+    if (-not $env:RUNNER_TEMP) { $script:MapWhy = 'this is no GitHub run, so there is no map to fetch'; return '' }
     $maps = Join-Path $env:RUNNER_TEMP 'gate-map-fetched'
     # The token goes in the environment for this call only, never on a
     # command line (#4079); Gate-Map.ps1 takes it out again at once.
     $env:GATE_MAP_TOKEN = $mapToken
     try { & (Join-Path $Here 'Gate-Map.ps1') -Fetch $maps 2>&1 | ForEach-Object { Say ([string]$_) } }
     finally { Remove-Item -LiteralPath Env:GATE_MAP_TOKEN -ErrorAction SilentlyContinue }
-    if ($LASTEXITCODE -ne 0) { $script:MapWhy = $why + ', and main''s nightly gate map could not be fetched (the lines above say why)'; return '' }
+    if ($LASTEXITCODE -ne 0) { $script:MapWhy = 'main''s nightly gate map could not be fetched (the lines above say why)'; return '' }
     return $maps
 }
 
-# The map in a folder: its commit, traces or built map, and tree, with each
-# harness's measured seconds in $script:Seconds. $null when it does not
+# The map in a folder: its commit, the map main's nightly trace built
+# (#4009) and its tree, with each harness's measured seconds in
+# $script:Seconds. $null when it does not
 # read, with $script:MapWhy saying why.
 function Read-Map([string]$maps) {
     $latest = Join-Path $maps 'latest.json'
     try {
         $m = [IO.File]::ReadAllText($latest) | ConvertFrom-Json
         if ([string]$m.commit -notmatch '^[0-9a-f]{40}$' -or [string]$m.key -notmatch '^\d+-\d+$') { $script:MapWhy = $latest + ' names no commit and run'; return $null }
-        $traces = Join-Path $maps ([string]$m.key + '.traces.jsonl.gz')
-        # Off the box, the map main's nightly trace built from them (#4009).
-        if (-not (Test-Path -LiteralPath $traces)) { $traces = Join-Path $maps ([string]$m.key + '.map.json') }
+        $traces = Join-Path $maps ([string]$m.key + '.map.json')
         $read = $m.read
         if ($read -is [datetime]) { $read = $read.ToUniversalTime().ToString('yyyy-MM-dd HH:mm') + ' UTC' }
-        if ($traces -like '*.map.json') {
-            $built = [IO.File]::ReadAllText($traces) | ConvertFrom-Json
-            foreach ($h in $built.harnesses.PSObject.Properties) { if ($null -ne $h.Value.seconds) { $script:Seconds[$h.Name] = [double]$h.Value.seconds } }
-        }
+        $built = [IO.File]::ReadAllText($traces) | ConvertFrom-Json
+        foreach ($h in $built.harnesses.PSObject.Properties) { if ($null -ne $h.Value.seconds) { $script:Seconds[$h.Name] = [double]$h.Value.seconds } }
         Say ('The traced map: main ' + ([string]$m.commit).Substring(0, 8) + ', run ' + $m.key + ', read ' + $read + '.')
         # Which harnesses Linux runs as fully as Windows (#5293): the same
         # night's Linux run beside the trace, by Affected-Harnesses.js
@@ -284,49 +241,6 @@ function Select-Affected {
     }
 }
 
-# Asks the trace task to trace this gate. Returns the ask, or $null when
-# the gate runs untraced, having said why.
-function Request-Trace {
-    if (-not $root) { return $null }
-    $dir = Join-Path $root 'trace'
-    if (-not (Test-Path -LiteralPath $dir -PathType Container)) { Say ('Not traced: there is no ' + $dir + ', so the trace task is not installed for this runner (Trace-Gate.ps1 -Install).'); return $null }
-    $key = [string]$env:GITHUB_RUN_ID + '-' + [string]$env:GITHUB_RUN_ATTEMPT
-    if ($key -notmatch '^\d+-\d+$') { Say 'Not traced: GitHub gave no run and attempt.'; return $null }
-    foreach ($f in 'ask.json', 'answer.json', 'done.json', 'starts.jsonl', 'tree.gz') {
-        Remove-Item -LiteralPath (Join-Path $dir $f) -Force -ErrorAction SilentlyContinue
-    }
-    & node $Affected tree HEAD (Join-Path $dir 'tree.gz') 2>&1 | ForEach-Object { Say ([string]$_) }
-    if ($LASTEXITCODE -ne 0) { Say 'Not traced: the tree could not be listed for the map.'; return $null }
-    $commit = (& git rev-parse HEAD | Out-String).Trim()
-    if ($commit -notmatch '^[0-9a-f]{40}$') { Say ('Not traced: git gave no commit for HEAD (' + $commit + ').'); return $null }
-    $me = [Diagnostics.Process]::GetCurrentProcess()
-    $ask = [ordered]@{
-        key = $key; commit = $commit; workspace = (Get-Location).Path
-        pid = $me.Id; started = $me.StartTime.ToUniversalTime().ToString('o')
-    }
-    Write-Whole (Join-Path $dir 'ask.json') ($ask | ConvertTo-Json -Compress)
-    $answer = Join-Path $dir 'answer.json'
-    $until = [DateTime]::UtcNow.AddSeconds($AnswerSeconds)
-    while ([DateTime]::UtcNow -lt $until) {
-        if (Test-Path -LiteralPath $answer) {
-            $a = $null
-            try { $a = [IO.File]::ReadAllText($answer) | ConvertFrom-Json } catch { Say ('the trace task''s answer did not read yet: ' + $_.Exception.Message) }
-            if ($a -and [string]$a.key -eq $key) {
-                if ([string]$a.state -eq 'tracing') {
-                    Say ('Traced: the trace task is tracing this gate (run ' + $key + ').')
-                    return [pscustomobject]@{ Key = $key; Dir = $dir; Starts = (Join-Path $dir 'starts.jsonl') }
-                }
-                Say ('Not traced: ' + $a.why)
-                return $null
-            }
-        }
-        Start-Sleep -Milliseconds 500
-    }
-    Remove-Item -LiteralPath (Join-Path $dir 'ask.json') -Force -ErrorAction SilentlyContinue
-    Say ('Not traced: the trace task did not answer in ' + $AnswerSeconds + ' s.')
-    return $null
-}
-
 # The list split into $count shares: harness i to share (i mod count) + 1,
 # or, with each harness's seconds from the map, the longest first, each to
 # the share with the least so far (ties to the lowest share), so the shares
@@ -360,7 +274,6 @@ $script:Seconds = @{}
 $script:OnLinux = [System.Collections.Generic.HashSet[string]]::new()
 $run = $gate
 $whole = $true
-$trace = $null
 if ($Pick -gt 0) {
     # THE PICK (#5183): one job before the shares picks and splits, so every
     # share runs its part of one list from one map. Each share fetching the
@@ -419,8 +332,8 @@ if ($Pick -gt 0) {
 if ($Of -gt 1 -or [string]$env:GATE_PLAN) {
     # A share. With the pick's plan in GATE_PLAN, its part of that; without
     # one, its part of the whole gate by place in the list. A share never
-    # fetches a map or asks for a trace: a trace has to see every harness on
-    # one machine (gate-map.yml). Since #5292 the pick makes one share when
+    # fetches a map: the pick fetched one for all of them. Since #5292 the
+    # pick makes one share when
     # the change reaches one harness, so a plan makes this a share whatever
     # -Of says: share 1 of 1 runs the plan's one part, and never fetches a
     # map for itself.
@@ -451,15 +364,13 @@ if ($Of -gt 1 -or [string]$env:GATE_PLAN) {
 } elseif ($env:GITHUB_EVENT_NAME -eq 'pull_request') {
     $picked = Select-Affected
     if ($null -ne $picked) { $run = $picked; $whole = $false }
-} elseif ($env:GITHUB_EVENT_NAME -eq 'push' -and $env:GITHUB_REF -eq 'refs/heads/main') {
-    $trace = Request-Trace
 }
 
 $code = 0
 $title = $(if ($Of -gt 1) { 'Gate harnesses, share {0} of {1}' -f $Shard, $Of } else { 'Gate harnesses' })
 if ($run.Count) {
     $with = @{ Only = ($run -join ' '); Throttle = $Throttle; Share = $share; BudgetSeconds = $BudgetSeconds }
-    if ($trace) { $with.StartLog = $trace.Starts } elseif ($StartLog) { $with.StartLog = $StartLog }
+    if ($StartLog) { $with.StartLog = $StartLog }
     if ($Report) { $with.Report = $Report }
     if ($Summary) { $with.Summary = $Summary; $with.Title = $title }
     & (Join-Path $Here 'Nightly-Harnesses.ps1') @with
@@ -472,10 +383,6 @@ if ($run.Count) {
         [IO.File]::WriteAllText($full, '<?xml version="1.0" encoding="utf-8"?>' + "`n" + '<testsuites name="harnesses" tests="0" failures="0" skipped="0" time="0"></testsuites>' + "`n")
     }
     if ($Summary) { [IO.File]::AppendAllText([IO.Path]::GetFullPath($Summary), "## $title`n`nNo gate harness can be affected by this change, so none ran.`n") }
-}
-if ($trace) {
-    Write-Whole (Join-Path $trace.Dir 'done.json') (([ordered]@{ key = $trace.Key; code = $code }) | ConvertTo-Json -Compress)
-    Say 'The trace task reads the trace at low priority now and leaves the map for pull requests; this build does not wait for it.'
 }
 if ($whole) { Set-StepOutput 'whole' 'true' }
 exit $code

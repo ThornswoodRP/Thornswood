@@ -13,7 +13,9 @@ its part (`Run-Gate.ps1 -Shard -Of`). `scripts/dev/Check-Change.ps1` makes
 the same pick before a push. The trace runs on windows-2022: on Windows
 Server 2025 node's stat calls left no event in the trace (gate-map.yml says
 what was measured). What follows is how the map worked while the box built;
-the map, the pick and why a map is enough are unchanged.
+the map, the pick and why a map is enough are unchanged. The box's trace task
+was taken off the box on 9 Nov 2026, and its scripts out of the repository
+with `Run-Gate.ps1`'s part that asked it (#5338).
 
 The study below was measured in a 4-core Linux container on 22 Oct 2026,
 with a Linux tracer. On 22 Oct Patrick chose option C on his page
@@ -26,8 +28,8 @@ running on main and nightly. The parts are:
   session, the gate runs under it, and it reads each harness's opens from
   the trace against `Nightly-Harnesses.ps1 -StartLog`. Since #5183
   `.github/workflows/gate-map.yml` runs it on GitHub's hosted runner through
-  `scripts/dev/Trace-Gate-Here.ps1`; `scripts/dev/Trace-Gate.ps1` keeps only
-  the box's half (its self-test and the trace task), and the ops
+  `scripts/dev/Trace-Gate-Here.ps1`; `Trace-Gate.ps1`, the box's half (its
+  self-test and the trace task), was taken out on 9 Nov 2026 (#5338), and the ops
   repository's `trace-gate.yml`, which ran the gate traced on a box build
   runner, is gone (#5270). Its self-test passed
   on the box at 9:40 PM on 21 Oct (Patrick's time) with no events lost.
@@ -379,8 +381,8 @@ of 570 gate harnesses. Replayed over the last 40 merges, a fresh map ran
 71%, 10 old 89%. So the map is refreshed on every merge to main:
 
 1. **Main builds are traced.** build.yml's gate step is
-   `scripts/dev/Run-Gate.ps1`. On a push to main on a box runner it asks the
-   trace task, `scripts/dev/Trace-Gate-Task.ps1`, through the runner's own
+   `scripts/dev/Run-Gate.ps1`. On a push to main on a box runner it asked the
+   trace task, `Trace-Gate-Task.ps1` (taken out by #5338), through the runner's own
    `<runner>\trace` folder, and runs the whole gate with
    `Nightly-Harnesses.ps1 -StartLog` while the task traces it. The task runs
    as SYSTEM, the only way to start the session without making the runner
@@ -413,12 +415,11 @@ of 570 gate harnesses. Replayed over the last 40 merges, a fresh map ran
    traced. On main a newer push waits for the build in progress instead of
    cancelling it (#3874), so a busy hour still ends in a traced build. Main
    and the nightly run the whole gate every time.
-5. **Install.** `.\scripts\dev\Trace-Gate.ps1 -Install` from the shipping
-   machine, by somebody with the box's administrator key, runs the self-test
-   and installs the task for the runners `records/build-runners.json` lists.
-   Run it again when that list changes. `-Status` shows the task, the map
-   each runner has and the end of its log. `-Uninstall` takes it all off,
-   and pull requests run the whole gate again.
+5. **Install.** `Trace-Gate.ps1 -Install` from the shipping machine, by
+   somebody with the box's administrator key, ran the self-test and
+   installed the task for the runners `records/build-runners.json` listed.
+   The deploy gate took it off the box on 9 Nov 2026, and #5338 took the
+   scripts out.
 6. **What it does not cover.** A main build on GitHub's hosted runner is not
    traced, so once hosted minutes are back (about 1 Nov) the map refreshes
    only when main builds on the box. A pull request built on the hosted
