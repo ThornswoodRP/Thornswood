@@ -22,10 +22,9 @@ namespace Thornswood
     /// (scripts/release/New-SignedManifest.ps1, Sign-OnRunner.ps1). A file
     /// that manifest lists was released by someone holding the signing right.
     ///
-    /// The Release a package belongs to is named by its version: one time and
-    /// one run number give both (scripts/release/MergeRelease.ps1,
-    /// New-MergeReleaseNames), version yyyy.(month*100+day).run and tag
-    /// build-yyyyMMdd.run. So the record is fetched from that tag whichever
+    /// The Release a package belongs to is named by its version: one number
+    /// gives both (scripts/release/MergeRelease.ps1, New-MergeReleaseNames),
+    /// version 1.3.n and tag build-1.3.n. So the record is fetched from that tag whichever
     /// Release served the package. Main's package of the same version (the
     /// part "main", packed beside dev's and listed in the same record) is
     /// published from a Release of its own once Patrick approves it (#5181),
@@ -102,29 +101,19 @@ namespace Thornswood
 
         /// <summary>
         /// The tag of the merge release that made <paramref name="v"/>
-        /// (MergeRelease.ps1, THE NAMES). Throws for a version no merge
-        /// release makes, so a package from anywhere else is never held to
-        /// some other Release's record.
-        ///
-        /// Two kinds of number, while the releases move back from the date
-        /// numbers to 1.2.x (Patrick, 8 Nov 2026): 1.2.17 is the Release
-        /// build-1.2.17, and 2026.1108.2 is build-20261108.2. The build- start
-        /// stays, so the deploy agent's build-&lt;...&gt; rule and main's
-        /// main-build-&lt;...&gt; Releases hold for both. A launcher numbered
-        /// 2026.x has to hold the first 1.2.x package to its record, and its
-        /// own installed package to its own, so both are read until no
-        /// release is numbered 2026.x; then the date rule goes.
+        /// (MergeRelease.ps1, THE NAMES): 1.3.0 is build-1.3.0. Throws for a
+        /// version no merge release makes, so a package from anywhere else is
+        /// never held to some other Release's record. The date numbers of 1
+        /// to 8 Nov 2026 (2026.1108.2, build-20261108.2) are not read: every
+        /// release since is 1.3.x, and the channel's newest Release is all a
+        /// launcher goes to (VeloUpdate.cs, THE CHANNEL'S RELEASE).
         /// </summary>
         public static string TagOf(SemanticVersion v)
         {
             if (v == null) throw new Exception("The update package has no version.");
-            if (v.Major >= 1 && v.Major < 2000 && !v.IsPrerelease && string.IsNullOrEmpty(v.Metadata))
-                return "build-" + v.Major + "." + v.Minor + "." + v.Patch;
-            long year = v.Major, md = v.Minor, run = v.Patch;
-            long month = md / 100, day = md % 100;
-            if (year < 2000 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31 || run < 1 || v.IsPrerelease)
+            if (v.Major != 1 || v.Minor != 3 || v.Patch > 65534 || v.IsPrerelease || !string.IsNullOrEmpty(v.Metadata))
                 throw new Exception("The update package's version, " + v + ", is not one a Thornswood release makes, so there is no signed record to hold it to.");
-            return "build-" + year.ToString("D4") + md.ToString("D4") + "." + run;
+            return "build-1.3." + v.Patch;
         }
 
         static string Download(string tag, string name)

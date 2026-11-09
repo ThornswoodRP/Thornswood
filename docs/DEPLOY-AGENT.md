@@ -418,7 +418,7 @@ required reviewer). Nothing is built again: main gets the files dev ran,
 byte for byte, held to the same signature.
 
 1. Somebody starts the promotion on main with the Release's tag:
-   `gh workflow run promote-main.yml --ref main -f tag=build-<yyyyMMdd>.<run>`
+   `gh workflow run promote-main.yml --ref main -f tag=build-1.3.<n>`
 2. [promote-main.yml](../.github/workflows/promote-main.yml) holds the tag to
    a published build Release with its signed manifest and a Deployment of it
    to **Dev** that ended in success, then waits in the **Main** environment.

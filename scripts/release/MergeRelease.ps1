@@ -7,8 +7,8 @@
   PowerShell 7. tests\test-5179-merge-release.ps1 drives every function.
 
       . ./scripts/release/MergeRelease.ps1
-      New-MergeReleaseNames -Utc <DateTime> [-Taken <tags>]
-          @{ Tag = 'build-20261101.7'; Velopack = '2026.1101.7' }
+      New-MergeReleaseNames [-Taken <tags>]
+          @{ Tag = 'build-1.3.0'; Velopack = '1.3.0' }
       Resolve-MergeReleaseSince -Commit <sha> -Subject <scriptblock> [-RepoDir .]
           where this history's notes start: the Release before's commit, or
           the same merge in this history when the history was rewritten
@@ -22,6 +22,8 @@
                                 [-Previous <obj>]
           whether this merge makes a Velopack package, and so builds the
           launcher with the release's Velopack version
+      Get-VelopackFullOf -Release <GitHub's Release> -Channel dev|main
+          the channel's own full package on it, Name and Version, or $null
       Find-MainPackage -Tag <tag> -Manifest <obj> [-Repo owner/name]
           the main package a promotion of <tag> puts out, and whether its
           Release main-<tag> is out already (promote-main.yml)
@@ -32,15 +34,16 @@
           main's package of a build kept on GitHub Packages, and read back
           (MAIN'S PACKAGE ON GITHUB PACKAGES below)
 
-  THE NAMES. The day and a number give both: the tag the agent applies,
-  build-<yyyyMMdd>.<n>, and the Velopack version, which must be SemVer and
-  must grow with every release: <yyyy>.<M*100+d>.<n> (no leading zero, so
-  2 Jan is 102). n is one more than the highest the day's tags and Releases
-  (drafts too) already use, so a name is never taken twice. It was the run
-  number until 1 Nov, when renaming the workflow started its runs at 1 again
-  and the first run asked for build-20261101.1, a tag the gamemode workflow
-  had made that morning. Runs never overlap (one concurrency group), and a
-  later day or a higher n is always the higher version.
+  THE NAMES. One number gives both: the tag the agent applies,
+  build-1.3.<n>, and the Velopack version, 1.3.<n>, which must be SemVer and
+  must grow with every release (Patrick, 8 Nov 2026: back to the three-part
+  v1.2.16 style, starting at 1.3.0, from the date numbers
+  build-<yyyyMMdd>.<n> and <yyyy>.<M*100+d>.<n> the releases had from 1
+  Nov). n is one more than the highest any build-1.3. tag or Release (drafts
+  too) already uses, and 0 when there is none: 1.3.0 is the first, a new
+  minor after v1.2.16, the last launcher before Velopack. Runs never overlap (one
+  concurrency group), so a name is never taken twice. Each part of a Windows
+  file version is at most 65534, so n stops there and says so.
 
   WHERE THE NOTES START. The commit of the Release before, when this history
   holds it. The history was rewritten on 1 Nov (#5231), so a Release from
@@ -80,18 +83,19 @@
   built, so the two cannot disagree.
 #>
 
+$script:MergeReleaseFirst = 0
+
 function New-MergeReleaseNames {
-  param([Parameter(Mandatory = $true)][DateTime]$Utc, [string[]]$Taken = @())
-  $u = $Utc.ToUniversalTime()
-  $day = $u.ToString('yyyyMMdd')
-  $n = 0
+  param([string[]]$Taken = @())
+  $n = $script:MergeReleaseFirst - 1
   foreach ($t in @($Taken)) {
-    if ([string]$t -match ('^build-' + $day + '\.(\d{1,9})$')) { $n = [Math]::Max($n, [int]$Matches[1]) }
+    if ([string]$t -match '^(?:main-)?build-1\.3\.(\d{1,9})$') { $n = [Math]::Max($n, [long]$Matches[1]) }
   }
   $n++
+  if ($n -gt 65534) { throw "the next release would be 1.3.$n, and a part of a Windows file version is at most 65534" }
   return [pscustomobject]@{
-    Tag      = ('build-{0}.{1}' -f $day, $n)
-    Velopack = ('{0}.{1}.{2}' -f $u.Year, ($u.Month * 100 + $u.Day), $n)
+    Tag      = ('build-1.3.{0}' -f $n)
+    Velopack = ('1.3.{0}' -f $n)
   }
 }
 
@@ -162,6 +166,22 @@ function Test-MergeReleaseVelopack {
   return ($c -contains 'launcher' -or $c -contains 'game')
 }
 
+# The channel's own full package on a Release, as GitHub lists its assets:
+# Name and Version, or $null when it has none. A Release's feed also names the
+# full package its delta was made from, but that file is on the Release
+# before, so only an asset of this Release counts, and of those the highest
+# numbered (merge-release.yml, the delta's base).
+function Get-VelopackFullOf {
+  param([Parameter(Mandatory = $true)]$Release, [Parameter(Mandatory = $true)][string]$Channel)
+  $best = $null
+  foreach ($a in @($Release.assets)) {
+    if ([string]$a.name -notmatch ('^Thornswood-(\d+\.\d+\.\d+)-' + [regex]::Escape($Channel) + '-full\.nupkg$')) { continue }
+    $v = [version]$Matches[1]
+    if ($null -eq $best -or $v -gt [version]$best.Version) { $best = [pscustomobject]@{ Name = [string]$a.name; Version = $Matches[1] } }
+  }
+  return $best
+}
+
 # The newest published build-* Release, by GitHub's own order (newest first),
 # with its manifest.json read from its assets. Drafts are skipped: a run that
 # stopped part way leaves one, and it was never applied. $null when there is
@@ -207,11 +227,14 @@ function Get-MergeReleasePrevious {
 # sources nor the game files changed (ONE NUMBER above), so every Release in
 # between carries the same launcher number and game.zip, which is checked.
 
-# A build Release tag's place in time, build-<yyyyMMdd>.<n>, or -1.
+# A build Release tag's place in order, build-1.3.<n>, or -1. A tag from the
+# date numbers before it (build-<yyyyMMdd>.<n>) is -1 too: the first 1.3.x
+# release carries a package of its own, since its merge changed the launcher,
+# so no promotion reaches back past it.
 function Get-MergeReleaseOrder {
   param([string]$Tag)
-  if ($Tag -notmatch '^build-(\d{8})\.(\d{1,9})$') { return [long]-1 }
-  return ([long]$Matches[1] * 1000000000 + [long]$Matches[2])
+  if ($Tag -notmatch '^build-1\.3\.(\d{1,9})$') { return [long]-1 }
+  return [long]$Matches[1]
 }
 
 # '' when $Have (file name to sha256) is exactly the record's part "main", by

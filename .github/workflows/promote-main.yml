@@ -4,7 +4,7 @@
 #
 # WHAT HAPPENS. Somebody starts this by hand on main with the tag of a build
 # Release (merge-release.yml makes one for every merge, #5179):
-#   gh workflow run promote-main.yml --ref main -f tag=build-<yyyyMMdd>.<run>
+#   gh workflow run promote-main.yml --ref main -f tag=build-1.3.<n>
 # The first job holds the tag to a Release dev ran: a published build-*
 # Release with its signed manifest, and a Deployment of it to Dev that ended
 # in success. The second job is in the Main environment, so it waits until
@@ -53,7 +53,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'The build Release dev ran, build-<yyyyMMdd>.<run>'
+        description: 'The build Release dev ran, build-1.3.<n>'
         required: true
 
 permissions:
@@ -95,7 +95,7 @@ jobs:
         run: |
           function Stop-Promote([string]$why) { Write-Host "::error title=Not promoted::$why"; exit 1 }
           $tag = $env:TAG
-          if ($tag -notmatch '^build-\d{8}\.\d{1,9}$') { Stop-Promote "$tag is not a build Release tag, build-<yyyyMMdd>.<run>" }
+          if ($tag -notmatch '^build-1\.3\.\d{1,5}$') { Stop-Promote "$tag is not a build Release tag, build-1.3.<n>" }
           $repo = $env:GITHUB_REPOSITORY
           $raw = gh api "repos/$repo/releases/tags/$tag"
           if ($LASTEXITCODE -ne 0) { Stop-Promote "there is no Release $tag" }

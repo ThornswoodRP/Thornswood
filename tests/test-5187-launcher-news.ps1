@@ -214,6 +214,8 @@ function Run {
     # ---- 2. build tags ---------------------------------------------------------------
     $k = { param($t) [long]$mKey.Invoke($null, @([string]$t)) }
     Yes 'build tags sort by day, then by the day''s count (.10 after .9, the next day after both)' ((& $k 'build-20261101.10') -gt (& $k 'build-20261101.9') -and (& $k 'build-20261102.1') -gt (& $k 'build-20261101.10'))
+    Yes 'build-1.3.<n> sorts by n, after every date numbered build before it (Patrick, 8 Nov 2026: back to 1.3.x)' ((& $k 'build-1.3.1') -gt (& $k 'build-1.3.0') -and (& $k 'build-1.3.100') -gt (& $k 'build-1.3.99') -and (& $k 'build-1.3.0') -gt (& $k 'build-20261231.999'))
+    Yes '  and main-build-1.3.<n> and the old launcher''s v1.2.16 are not build tags' ((& $k 'main-build-1.3.0') -eq -1 -and (& $k 'v1.2.16') -eq -1 -and (& $k 'build-1.2.17') -eq -1)
     Yes 'anything else is not a build tag' ((& $k 'release/main/20261101-101056') -eq -1 -and (& $k 'main-build-20261101.9') -eq -1 -and (& $k 'agent-v1.0.40') -eq -1 -and (& $k 'build-2026110.1') -eq -1 -and (& $k '') -eq -1 -and (& $k $null) -eq -1)
 
     # ---- 3. the Releases a channel's Deployment reached -------------------------------

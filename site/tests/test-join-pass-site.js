@@ -360,6 +360,15 @@ async function main() {
   yes('nativeTag reads only a real day: month 13 and day 0 are not Velopack numbers',
       runTag('dev', '2026.1302.1') === '' && runTag('dev', '2026.1100.1') === '' && runTag('dev', '1.1.102') === '' &&
       runTag('dev', '2026.102.7') === 'build-20260102.7' && runTag('main', '2026.1231.12') === 'main-build-20261231.12');
+  yes('1.3.0 and up are Velopack numbers on build-1.3.<n> (Patrick, 8 Nov 2026), and the old launchers\' 1.2.x numbers are not',
+      runTag('dev', '1.3.0') === 'build-1.3.0' && runTag('main', '1.3.40') === 'main-build-1.3.40' &&
+      runTag('dev', '1.2.16') === '' && runTag('dev', '1.2.15.1') === '' && runTag('dev', '1.2.17') === '');
+  r = await ask({ body: { ticket: '111', profileId: 700, channel: 'dev', version: '1.3.0' }, linked: MINE, standing: DEVSTAND,
+                  releases: { 'build-1.3.0': Object.assign({}, DEVREL, { tag_name: 'build-1.3.0' }) }, setups: SETUP });
+  yes('  and a 1.3.0 launcher is let in once build-1.3.0 is out with releases.dev.json', r.code === 200);
+  r = await ask({ body: { ticket: '111', profileId: 700, version: '1.3.0' }, linked: MINE,
+                  releases: { 'main-build-1.3.0': Object.assign({}, MAINREL, { tag_name: 'main-build-1.3.0' }) }, setups: SETUP });
+  yes('  and on main once main-build-1.3.0 is out with releases.main.json', r.code === 200);
 
   try { fs.rmSync(FEEDROOT, { recursive: true, force: true }); } catch (e) { }
   console.log('');

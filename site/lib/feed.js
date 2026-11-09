@@ -305,9 +305,11 @@ function releaseCopy(channel, sha, size) {
    one found. The list is walked a hundred Releases a page, because a main
    Release is made only on an approval and can be older than the newest thirty
    build Releases. */
+// Both kinds of build tag while the date numbers give way to 1.3.x (Patrick,
+// 8 Nov 2026): the newest published Release is taken either way, by its time.
 const SETUP_KINDS = {
-  main: { tag: /^main-build-\d{8}\.\d+$/, name: 'Thornswood-Setup.exe', move: 'Thornswood-Move.exe' },
-  dev: { tag: /^build-\d{8}\.\d+$/, name: 'Thornswood-Dev-Setup.exe', move: 'Thornswood-Dev-Move.exe' }
+  main: { tag: /^main-build-(?:\d{8}\.\d+|1\.3\.\d+)$/, name: 'Thornswood-Setup.exe', move: 'Thornswood-Move.exe' },
+  dev: { tag: /^build-(?:\d{8}\.\d+|1\.3\.\d+)$/, name: 'Thornswood-Dev-Setup.exe', move: 'Thornswood-Dev-Move.exe' }
 };
 const SETUP_PAGES = 5;
 const setups = { main: null, dev: null, at: 0, busy: false };
@@ -381,10 +383,11 @@ function newestSetup(channel) {
   return setups[channel] || null;
 }
 /* THE LAUNCHERS A CHANNEL LETS IN, SINCE VELOPACK (#4825). The launcher goes
-   out only through Velopack: merge-release.yml packs it as version
-   <yyyy>.<M*100+d>.<n> on the build Release build-<yyyyMMdd>.<n>
-   (MergeRelease.ps1, New-MergeReleaseNames), and promote-main.yml puts main's
-   package of the same number on main-build-<yyyyMMdd>.<n>. The launcher says
+   out only through Velopack: merge-release.yml packs it as version 1.3.<n>
+   on the build Release build-1.3.<n> (MergeRelease.ps1,
+   New-MergeReleaseNames; from 1 to 8 Nov 2026 the numbers were
+   <yyyy>.<M*100+d>.<n> on build-<yyyyMMdd>.<n>), and promote-main.yml puts
+   main's package of the same number on main-build-1.3.<n>. The launcher says
    that number at Play (Updater.Version), and a channel lets it in when its
    Release is out on GitHub with that channel's Velopack feed on it,
    releases.dev.json or releases.main.json, since that is the only way a
@@ -406,13 +409,23 @@ const NATIVE_ASK_MS = 90 * 1000;
 const nativeSeen = {};   // '<channel> <number>' -> { ok: true } once found; { at } while not
 let nativeAskedAt = 0;
 // The Release tag a launcher number is from, for a channel, or '' when the
-// number is not a Velopack one (an old launcher's 1.x, or nonsense).
+// number is not a Velopack one (an old launcher's, or nonsense). 1.3.<n> is
+// Velopack's: v1.2.16 was the last launcher before it, and no old launcher
+// was ever numbered 1.3 (VeloRecord.TagOf reads them the same
+// way). A date number, 2026.1108.2, is the Release build-20261108.2.
 function nativeTag(channel, said) {
-  const m = /^(20\d\d)\.(\d{3,4})\.(\d{1,9})$/.exec(String(said || ''));
-  if (!m) return '';
-  const md = Number(m[2]), month = Math.floor(md / 100), day = md % 100;
-  if (month < 1 || month > 12 || day < 1 || day > 31) return '';
-  const tag = 'build-' + m[1] + String(month).padStart(2, '0') + String(day).padStart(2, '0') + '.' + Number(m[3]);
+  const s = String(said || '');
+  let tag = '';
+  const v = /^1\.3\.(\d{1,5})$/.exec(s);
+  if (v) {
+    tag = 'build-1.3.' + Number(v[1]);
+  } else {
+    const m = /^(20\d\d)\.(\d{3,4})\.(\d{1,9})$/.exec(s);
+    if (!m) return '';
+    const md = Number(m[2]), month = Math.floor(md / 100), day = md % 100;
+    if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+    tag = 'build-' + m[1] + String(month).padStart(2, '0') + String(day).padStart(2, '0') + '.' + Number(m[3]);
+  }
   return channel === 'main' ? 'main-' + tag : tag;
 }
 // Whether a channel published this Velopack launcher number: 'yes', 'no', or

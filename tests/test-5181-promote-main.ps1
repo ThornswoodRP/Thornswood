@@ -48,7 +48,7 @@ $promote = if ($i -gt 0) { $wf.Substring($i) } else { '' }
 Yes 'promote-main.yml is started by hand only' ($wf -match '(?m)^on:\s*\n\s+workflow_dispatch:' -and $wf -notmatch '(?m)^\s+(push|pull_request|schedule|workflow_run):')
 Yes '  on main only, one at a time' ($wf.Contains("if: `${{ github.ref == 'refs/heads/main' }}") -and $wf -match '(?m)^\s+cancel-in-progress: false\s*$')
 Yes '  and the tag reaches the scripts through env, never pasted into them' ($wf.Contains('TAG: ${{ inputs.tag }}') -and -not ($wf -match '(?m)^\s+run:.*\$\{\{ inputs\.tag'))
-Yes 'the check holds the tag to a build Release tag' ($check.Contains("'^build-\d{8}\.\d{1,9}$'"))
+Yes 'the check holds the tag to a build Release tag' ($check.Contains("'^build-1\.3\.\d{1,5}$'"))
 Yes '  published, with its signed manifest, naming itself' ($check.Contains('if ($rel.draft)') -and $check.Contains("'manifest.json'") -and $check.Contains("'manifest.cat'") -and $check.Contains('[string]$m.tag -ne $tag'))
 Yes '  that dev ran: a Deployment of it to Dev ended in success' ($check.Contains('deployments?environment=Dev') -and $check.Contains("Where-Object state -eq 'success'") -and $check.Contains('dev has not run'))
 Yes '  and reads only' ($check -match '(?m)^\s+deployments: read\s*$' -and $check -match '(?m)^\s+packages: read\s*$' -and $check -notmatch 'actions: read' -and $check -notmatch ':\s*write' -and $check -notmatch '--method POST' -and $check -notmatch 'gh release (create|upload|edit)')

@@ -64,14 +64,15 @@ try {
     . (Join-Path $Repo 'scripts/release/MergeRelease.ps1')
 
     # ---- the names ----------------------------------------------------------------
-    $n = New-MergeReleaseNames -Utc ([DateTime]::new(2026, 11, 1, 23, 30, 0, [DateTimeKind]::Utc)) -Taken @('build-20261101.1', 'build-20261101.6', 'build-20261031.9', 'v1.2.16', 'agent-v1.0.30')
-    Yes 'the tag is build-<yyyyMMdd>.<n>, n one past the day''s highest, and the Velopack version <yyyy>.<M*100+d>.<n>' ($n.Tag -eq 'build-20261101.7' -and $n.Velopack -eq '2026.1101.7')
-    $f = New-MergeReleaseNames -Utc ([DateTime]::new(2026, 11, 2, 0, 0, 0, [DateTimeKind]::Utc)) -Taken @('build-20261101.6')
-    Yes '  and a new day starts at 1' ($f.Tag -eq 'build-20261102.1')
-    $j = New-MergeReleaseNames -Utc ([DateTime]::new(2027, 1, 2, 0, 0, 0, [DateTimeKind]::Utc))
-    Yes '  with no leading zero, so 2 Jan is 102' ($j.Velopack -eq '2027.102.1')
-    $later = New-MergeReleaseNames -Utc ([DateTime]::new(2026, 12, 31, 0, 0, 0, [DateTimeKind]::Utc))
-    Yes '  and a later day is the higher version' ([version]$later.Velopack -gt [version]$n.Velopack)
+    $n = New-MergeReleaseNames -Taken @('build-1.3.0', 'build-1.3.23', 'main-build-1.3.24', 'build-20261108.2', 'v1.2.16', 'agent-v1.0.30')
+    Yes 'the tag is build-1.3.<n> and the Velopack version 1.3.<n>, n one past the highest 1.3. name, main''s too' ($n.Tag -eq 'build-1.3.25' -and $n.Velopack -eq '1.3.25')
+    $f = New-MergeReleaseNames -Taken @('build-20261108.2', 'v1.2.16', 'v2026.1101.1724', 'build-1.2.30')
+    Yes '  and the first is 1.3.0 (Patrick, 8 Nov 2026), whatever date numbers, old launcher tags and 1.2 names are there' ($f.Tag -eq 'build-1.3.0' -and $f.Velopack -eq '1.3.0')
+    Yes '  and with nothing taken at all it is 1.3.0 too' ((New-MergeReleaseNames).Tag -eq 'build-1.3.0')
+    $later = New-MergeReleaseNames -Taken @('build-1.3.99')
+    Yes '  and a later one is the higher version' ([version]$later.Velopack -gt [version]$n.Velopack -and $later.Velopack -eq '1.3.100')
+    $threw = $false; try { New-MergeReleaseNames -Taken @('build-1.3.65534') | Out-Null } catch { $threw = $_.Exception.Message -match 'at most 65534' }
+    Yes '  and past 65534, the most a Windows file version part holds, it stops and says so' $threw
 
     # ---- where the notes start, across a rewritten history ------------------------
     $g = Join-Path $tmp 'hist'
@@ -153,30 +154,45 @@ try {
     $rd = Join-Path $tmp 'releases'
     New-Item -ItemType Directory -Force -Path $rd | Out-Null
     $rels = @(
-        @{ id = 1; tag_name = 'build-20261101.9'; draft = $true; assets = @(@{ id = 11; name = 'manifest.json' }) },
+        @{ id = 1; tag_name = 'build-1.3.25'; draft = $true; assets = @(@{ id = 11; name = 'manifest.json' }) },
         @{ id = 2; tag_name = 'agent-v1.2.3'; draft = $false; assets = @(@{ id = 12; name = 'manifest.json' }) },
-        @{ id = 3; tag_name = 'build-20261101.8'; draft = $false; assets = @(@{ id = 13; name = 'notes.txt' }) },
-        @{ id = 4; tag_name = 'build-20261101.7'; draft = $false; assets = @(@{ id = 14; name = 'manifest.json' }) },
-        @{ id = 5; tag_name = 'build-20261101.6'; draft = $false; assets = @(@{ id = 15; name = 'manifest.json' }) }
+        @{ id = 3; tag_name = 'build-1.3.24'; draft = $false; assets = @(@{ id = 13; name = 'notes.txt' }) },
+        @{ id = 4; tag_name = 'build-1.3.23'; draft = $false; assets = @(@{ id = 14; name = 'manifest.json' }) },
+        @{ id = 5; tag_name = 'build-1.3.22'; draft = $false; assets = @(@{ id = 15; name = 'manifest.json' }) }
     )
     $rf = Join-Path $tmp 'releases.json'
     [IO.File]::WriteAllText($rf, ($rels | ConvertTo-Json -Depth 5))
-    [IO.File]::WriteAllText((Join-Path $rd 'build-20261101.7.json'), (@{ tag = 'build-20261101.7'; commit = $commit; parts = @{} } | ConvertTo-Json))
+    [IO.File]::WriteAllText((Join-Path $rd 'build-1.3.23.json'), (@{ tag = 'build-1.3.23'; commit = $commit; parts = @{} } | ConvertTo-Json))
     $p = Get-MergeReleasePrevious -ReleasesFile $rf -ManifestDir $rd
-    Yes 'the Release before is the newest published build-* with a manifest, drafts and agent tags skipped' ($null -ne $p -and $p.Tag -eq 'build-20261101.7' -and $p.Commit -eq $commit -and $p.Id -eq 4)
-    [IO.File]::WriteAllText((Join-Path $rd 'build-20261101.7.json'), (@{ tag = 'build-20261101.5'; commit = $commit; parts = @{} } | ConvertTo-Json))
-    $threw = $false; try { Get-MergeReleasePrevious -ReleasesFile $rf -ManifestDir $rd | Out-Null } catch { $threw = $_.Exception.Message -match 'says it is build-20261101\.5' }
+    Yes 'the Release before is the newest published build-* with a manifest, drafts and agent tags skipped' ($null -ne $p -and $p.Tag -eq 'build-1.3.23' -and $p.Commit -eq $commit -and $p.Id -eq 4)
+    [IO.File]::WriteAllText((Join-Path $rd 'build-1.3.23.json'), (@{ tag = 'build-1.3.21'; commit = $commit; parts = @{} } | ConvertTo-Json))
+    $threw = $false; try { Get-MergeReleasePrevious -ReleasesFile $rf -ManifestDir $rd | Out-Null } catch { $threw = $_.Exception.Message -match 'says it is build-1\.3\.21' }
     Yes '  a manifest that names another tag is refused' $threw
     [IO.File]::WriteAllText($rf, '[]')
     Yes '  and with no build Release yet there is none' ($null -eq (Get-MergeReleasePrevious -ReleasesFile $rf -ManifestDir $rd))
 
+    # ---- the delta's base, the channel's own full package on a Release ------------
+    $rel = [pscustomobject]@{ tag_name = 'build-1.3.1'; assets = @(
+        [pscustomobject]@{ name = 'releases.dev.json' }, [pscustomobject]@{ name = 'Thornswood-1.3.1-dev-delta.nupkg' },
+        [pscustomobject]@{ name = 'Thornswood-1.3.1-dev-full.nupkg' }, [pscustomobject]@{ name = 'Thornswood-1.3.1-main-full.nupkg' }) }
+    $got = Get-VelopackFullOf -Release $rel -Channel dev
+    Yes 'the delta''s base is the channel''s own full package on the Release, not its delta or main''s' ($null -ne $got -and $got.Name -eq 'Thornswood-1.3.1-dev-full.nupkg' -and $got.Version -eq '1.3.1')
+    $date = [pscustomobject]@{ tag_name = 'build-20261108.2'; assets = @([pscustomobject]@{ name = 'Thornswood-2026.1108.2-dev-full.nupkg' }) }
+    Yes '  a date numbered one reads as its number, which is not below 1.3.0, so the first 1.3.x makes no delta' ([version](Get-VelopackFullOf -Release $date -Channel dev).Version -ge [version]'1.3.0')
+    Yes '  and a Release with none has none' ($null -eq (Get-VelopackFullOf -Release ([pscustomobject]@{ tag_name = 'x'; assets = @() }) -Channel dev))
+    $wf = [IO.File]::ReadAllText((Join-Path $Repo '.github/workflows/merge-release.yml'))
+    Yes 'merge-release.yml takes the delta''s base from dev''s newest Release by its time, only when numbered below this one, and never by vpk download' (
+        $wf -notmatch 'vpk download github' -and $wf -match 'Get-VelopackFullOf -Release \$before\[0\] -Channel dev' -and
+        $wf -match '\[version\]\$was\.Version -lt \[version\]\$env:VERSION' -and $wf -match "Sort-Object \{ \`$_\.published_at \} -Descending")
+
     # ---- main's launcher package, for promote-main.yml (#5181) ---------------------
-    Yes 'build tags order by day, then number' ((Get-MergeReleaseOrder 'build-20261102.2') -gt (Get-MergeReleaseOrder 'build-20261101.10') -and
-        (Get-MergeReleaseOrder 'build-20261101.10') -gt (Get-MergeReleaseOrder 'build-20261101.9') -and (Get-MergeReleaseOrder 'main-build-20261101.5') -eq -1)
+    Yes 'build tags order by their number' ((Get-MergeReleaseOrder 'build-1.3.27') -gt (Get-MergeReleaseOrder 'build-1.3.21') -and
+        (Get-MergeReleaseOrder 'build-1.3.100') -gt (Get-MergeReleaseOrder 'build-1.3.99') -and (Get-MergeReleaseOrder 'main-build-1.3.21') -eq -1)
+    Yes '  and a date numbered tag from before 1.3.x has no place, so no promotion reaches back past the first 1.3.x' ((Get-MergeReleaseOrder 'build-20261108.2') -eq -1)
     $pkgSha = ('a' * 64); $feedSha = ('b' * 64)
     function MM([string]$tag, [string]$lv, [string]$game, [bool]$withMain) {
         $parts = [ordered]@{ game = @([ordered]@{ name = 'game.zip'; sha256 = $game; size = 1 }) }
-        if ($withMain) { $parts['main'] = @([ordered]@{ name = 'Thornswood-2026.1101.5-full.nupkg'; sha256 = $pkgSha; size = 1 }, [ordered]@{ name = 'releases.main.json'; sha256 = $feedSha; size = 1 }) }
+        if ($withMain) { $parts['main'] = @([ordered]@{ name = 'Thornswood-1.3.21-full.nupkg'; sha256 = $pkgSha; size = 1 }, [ordered]@{ name = 'releases.main.json'; sha256 = $feedSha; size = 1 }) }
         [pscustomobject]@{ tag = $tag; commit = ('c' * 40); launcherVersion = $lv; parts = [pscustomobject]$parts }
     }
     function Rel([int]$id, [string]$tag, [bool]$draft, $assets) { [ordered]@{ id = $id; tag_name = $tag; draft = $draft; assets = @($assets) } }
@@ -186,56 +202,56 @@ try {
     function Write-Rels($list) { $f = Join-Path $tmp ('rels-' + [guid]::NewGuid().ToString('N').Substring(0, 6) + '.json'); [IO.File]::WriteAllText($f, (ConvertTo-Json @($list) -Depth 6)); return $f }
     function Write-M($m) { [IO.File]::WriteAllText((Join-Path $md ($m.tag + '.json')), ($m | ConvertTo-Json -Depth 6)) }
     $lv = '2026.1031.1915'
-    $promoted = MM 'build-20261102.2' $lv 'g1' $false
-    Write-M (MM 'build-20261102.3' $lv 'g1' $true)
-    Write-M (MM 'build-20261101.5' $lv 'g1' $true)
-    Write-M (MM 'build-20261101.4' $lv 'g0' $true)
+    $promoted = MM 'build-1.3.27' $lv 'g1' $false
+    Write-M (MM 'build-1.3.28' $lv 'g1' $true)
+    Write-M (MM 'build-1.3.21' $lv 'g1' $true)
+    Write-M (MM 'build-1.3.20' $lv 'g0' $true)
     $base5181 = @(
-        (Rel 1 'build-20261102.3' $false @(Asset 101 'manifest.json' '')),
-        (Rel 2 'build-20261102.2' $false @(Asset 102 'manifest.json' '')),
-        (Rel 3 'build-20261102.1' $true @(Asset 103 'manifest.json' '')),
-        (Rel 4 'build-20261101.5' $false @(Asset 104 'manifest.json' '')),
-        (Rel 5 'build-20261101.4' $false @(Asset 105 'manifest.json' ''))
+        (Rel 1 'build-1.3.28' $false @(Asset 101 'manifest.json' '')),
+        (Rel 2 'build-1.3.27' $false @(Asset 102 'manifest.json' '')),
+        (Rel 3 'build-1.3.26' $true @(Asset 103 'manifest.json' '')),
+        (Rel 4 'build-1.3.21' $false @(Asset 104 'manifest.json' '')),
+        (Rel 5 'build-1.3.20' $false @(Asset 105 'manifest.json' ''))
     )
-    $pk = Find-MainPackage -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile (Write-Rels $base5181) -ManifestDir $md
+    $pk = Find-MainPackage -Tag 'build-1.3.27' -Manifest $promoted -ReleasesFile (Write-Rels $base5181) -ManifestDir $md
     Yes 'a promotion of a Release that made no package puts out the newest one before it, never a later one' (
-        $null -ne $pk -and $pk.From -eq 'build-20261101.5' -and $pk.MainTag -eq 'main-build-20261101.5' -and $pk.Commit -eq ('c' * 40) -and -not $pk.Published)
-    $own = MM 'build-20261102.2' $lv 'g1' $true
-    $pk = Find-MainPackage -Tag 'build-20261102.2' -Manifest $own -ReleasesFile (Write-Rels $base5181) -ManifestDir $md
-    Yes '  and its own when it made one' ($null -ne $pk -and $pk.From -eq 'build-20261102.2' -and $pk.MainTag -eq 'main-build-20261102.2')
-    Write-M (MM 'build-20261101.5' '2026.1030.1200' 'g1' $true)
-    $why = ''; try { Find-MainPackage -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile (Write-Rels $base5181) -ManifestDir $md | Out-Null } catch { $why = $_.Exception.Message }
-    Yes ('  a package before it of another launcher is not taken: ' + $why) ($why -match 'so no package goes with build-20261102\.2')
-    Write-M (MM 'build-20261101.5' $lv 'g1' $true)
-    $out5 = { param($assets, $draft) @($base5181) + @(Rel 9 'main-build-20261101.5' $draft $assets) }
-    $pk = Find-MainPackage -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile (Write-Rels (& $out5 @((Asset 201 'Thornswood-2026.1101.5-full.nupkg' $pkgSha), (Asset 202 'releases.main.json' $feedSha)) $false)) -ManifestDir $md
+        $null -ne $pk -and $pk.From -eq 'build-1.3.21' -and $pk.MainTag -eq 'main-build-1.3.21' -and $pk.Commit -eq ('c' * 40) -and -not $pk.Published)
+    $own = MM 'build-1.3.27' $lv 'g1' $true
+    $pk = Find-MainPackage -Tag 'build-1.3.27' -Manifest $own -ReleasesFile (Write-Rels $base5181) -ManifestDir $md
+    Yes '  and its own when it made one' ($null -ne $pk -and $pk.From -eq 'build-1.3.27' -and $pk.MainTag -eq 'main-build-1.3.27')
+    Write-M (MM 'build-1.3.21' '2026.1030.1200' 'g1' $true)
+    $why = ''; try { Find-MainPackage -Tag 'build-1.3.27' -Manifest $promoted -ReleasesFile (Write-Rels $base5181) -ManifestDir $md | Out-Null } catch { $why = $_.Exception.Message }
+    Yes ('  a package before it of another launcher is not taken: ' + $why) ($why -match 'so no package goes with build-1\.3\.27')
+    Write-M (MM 'build-1.3.21' $lv 'g1' $true)
+    $out5 = { param($assets, $draft) @($base5181) + @(Rel 9 'main-build-1.3.21' $draft $assets) }
+    $pk = Find-MainPackage -Tag 'build-1.3.27' -Manifest $promoted -ReleasesFile (Write-Rels (& $out5 @((Asset 201 'Thornswood-1.3.21-full.nupkg' $pkgSha), (Asset 202 'releases.main.json' $feedSha)) $false)) -ManifestDir $md
     Yes 'main-<tag> out already with exactly the record''s files is left as it is' ($null -ne $pk -and $pk.Published)
-    $why = ''; try { Find-MainPackage -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile (Write-Rels (& $out5 @((Asset 201 'Thornswood-2026.1101.5-full.nupkg' ('d' * 64)), (Asset 202 'releases.main.json' $feedSha)) $false)) -ManifestDir $md | Out-Null } catch { $why = $_.Exception.Message }
-    Yes ('  one out with another file under a listed name stops it: ' + $why) ($why -match 'is out already and holds a Thornswood-2026\.1101\.5-full\.nupkg')
-    $why = ''; try { Find-MainPackage -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile (Write-Rels (& $out5 @() $true)) -ManifestDir $md | Out-Null } catch { $why = $_.Exception.Message }
-    Yes ('  and so does one left a draft: ' + $why) ($why -match 'main-build-20261101\.5 is a draft')
-    $none = @((Rel 2 'build-20261102.2' $false @(Asset 102 'manifest.json' '')), (Rel 6 'build-20261101.1' $false @(Asset 106 'notes.txt' '')))
-    Yes 'with no package made up to it, there is nothing for main''s launcher' ($null -eq (Find-MainPackage -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile (Write-Rels $none) -ManifestDir $md))
-    $why = ''; try { Find-MainPackage -Tag 'build-20261103.1' -Manifest $promoted -ReleasesFile (Write-Rels $base5181) -ManifestDir $md | Out-Null } catch { $why = $_.Exception.Message }
+    $why = ''; try { Find-MainPackage -Tag 'build-1.3.27' -Manifest $promoted -ReleasesFile (Write-Rels (& $out5 @((Asset 201 'Thornswood-1.3.21-full.nupkg' ('d' * 64)), (Asset 202 'releases.main.json' $feedSha)) $false)) -ManifestDir $md | Out-Null } catch { $why = $_.Exception.Message }
+    Yes ('  one out with another file under a listed name stops it: ' + $why) ($why -match 'is out already and holds a Thornswood-1\.3\.21-full\.nupkg')
+    $why = ''; try { Find-MainPackage -Tag 'build-1.3.27' -Manifest $promoted -ReleasesFile (Write-Rels (& $out5 @() $true)) -ManifestDir $md | Out-Null } catch { $why = $_.Exception.Message }
+    Yes ('  and so does one left a draft: ' + $why) ($why -match 'main-build-1\.3\.21 is a draft')
+    $none = @((Rel 2 'build-1.3.27' $false @(Asset 102 'manifest.json' '')), (Rel 6 'build-1.3.0' $false @(Asset 106 'notes.txt' '')))
+    Yes 'with no package made up to it, there is nothing for main''s launcher' ($null -eq (Find-MainPackage -Tag 'build-1.3.27' -Manifest $promoted -ReleasesFile (Write-Rels $none) -ManifestDir $md))
+    $why = ''; try { Find-MainPackage -Tag 'build-1.3.29' -Manifest $promoted -ReleasesFile (Write-Rels $base5181) -ManifestDir $md | Out-Null } catch { $why = $_.Exception.Message }
     Yes ('a tag that is not among the Releases read stops it: ' + $why) ($why -match 'not among the hundred newest')
     # 3 Nov 2026: build .2's package was main's only one and had no main tag
     # (made before #5489), so it could never go out. A merge then makes the
     # package again (Test-MainPackageReachable, the launcher step).
     $rf5 = Write-Rels $base5181
-    $tagAt = { param($want) { param($name) if ($name -eq 'main-build-20261101.5') { $want } else { '' } }.GetNewClosure() }
-    Yes 'main''s newest package with its main tag on the commit that built it can go out' (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile $rf5 -ManifestDir $md -TagCommit (& $tagAt ('commit ' + ('c' * 40))) -Kept { $true })
-    Yes '  one with no main tag cannot, so the merge packs again' (-not (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile $rf5 -ManifestDir $md -TagCommit (& $tagAt '') -Kept { $true }))
-    Yes '  nor one kept only as an artifact, as before 8 Nov, not as a GitHub Package' (-not (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile $rf5 -ManifestDir $md -TagCommit (& $tagAt ('commit ' + ('c' * 40))) -Kept { param($p) $p.From -ne 'build-20261101.5' }))
-    Yes '  nor one whose main tag names another commit' (-not (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile $rf5 -ManifestDir $md -TagCommit (& $tagAt ('commit ' + ('e' * 40))) -Kept { $true }))
-    Yes '  one out already can, tag or not' (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile (Write-Rels (& $out5 @((Asset 201 'Thornswood-2026.1101.5-full.nupkg' $pkgSha), (Asset 202 'releases.main.json' $feedSha)) $false)) -ManifestDir $md -TagCommit (& $tagAt ''))
-    Yes '  and with no package made at all there is nothing to pack for' (Test-MainPackageReachable -Tag 'build-20261102.2' -Manifest $promoted -ReleasesFile (Write-Rels $none) -ManifestDir $md -TagCommit (& $tagAt ''))
-    $rec = MM 'build-20261101.5' $lv 'g1' $true
-    $exact = @{ 'Thornswood-2026.1101.5-full.nupkg' = $pkgSha.ToUpperInvariant(); 'releases.main.json' = $feedSha }
+    $tagAt = { param($want) { param($name) if ($name -eq 'main-build-1.3.21') { $want } else { '' } }.GetNewClosure() }
+    Yes 'main''s newest package with its main tag on the commit that built it can go out' (Test-MainPackageReachable -Tag 'build-1.3.27' -Manifest $promoted -ReleasesFile $rf5 -ManifestDir $md -TagCommit (& $tagAt ('commit ' + ('c' * 40))) -Kept { $true })
+    Yes '  one with no main tag cannot, so the merge packs again' (-not (Test-MainPackageReachable -Tag 'build-1.3.27' -Manifest $promoted -ReleasesFile $rf5 -ManifestDir $md -TagCommit (& $tagAt '') -Kept { $true }))
+    Yes '  nor one kept only as an artifact, as before 8 Nov, not as a GitHub Package' (-not (Test-MainPackageReachable -Tag 'build-1.3.27' -Manifest $promoted -ReleasesFile $rf5 -ManifestDir $md -TagCommit (& $tagAt ('commit ' + ('c' * 40))) -Kept { param($p) $p.From -ne 'build-1.3.21' }))
+    Yes '  nor one whose main tag names another commit' (-not (Test-MainPackageReachable -Tag 'build-1.3.27' -Manifest $promoted -ReleasesFile $rf5 -ManifestDir $md -TagCommit (& $tagAt ('commit ' + ('e' * 40))) -Kept { $true }))
+    Yes '  one out already can, tag or not' (Test-MainPackageReachable -Tag 'build-1.3.27' -Manifest $promoted -ReleasesFile (Write-Rels (& $out5 @((Asset 201 'Thornswood-1.3.21-full.nupkg' $pkgSha), (Asset 202 'releases.main.json' $feedSha)) $false)) -ManifestDir $md -TagCommit (& $tagAt ''))
+    Yes '  and with no package made at all there is nothing to pack for' (Test-MainPackageReachable -Tag 'build-1.3.27' -Manifest $promoted -ReleasesFile (Write-Rels $none) -ManifestDir $md -TagCommit (& $tagAt ''))
+    $rec = MM 'build-1.3.21' $lv 'g1' $true
+    $exact = @{ 'Thornswood-1.3.21-full.nupkg' = $pkgSha.ToUpperInvariant(); 'releases.main.json' = $feedSha }
     Yes 'the files of main''s package are held to the record by name and sha256' ((Get-MainPackageProblem -Record $rec -Have $exact) -eq '')
-    Yes '  a file missing' ((Get-MainPackageProblem -Record $rec -Have @{ 'releases.main.json' = $feedSha }) -match '^lacks Thornswood-2026\.1101\.5-full\.nupkg')
+    Yes '  a file missing' ((Get-MainPackageProblem -Record $rec -Have @{ 'releases.main.json' = $feedSha }) -match '^lacks Thornswood-1\.3\.21-full\.nupkg')
     Yes '  a file the record does not list' ((Get-MainPackageProblem -Record $rec -Have (@{ 'x.exe' = $feedSha } + $exact)) -match '^holds x\.exe, which')
-    Yes '  and a listed name with other bytes are each said' ((Get-MainPackageProblem -Record $rec -Have @{ 'Thornswood-2026.1101.5-full.nupkg' = $feedSha; 'releases.main.json' = $feedSha }) -match '^holds a Thornswood-2026\.1101\.5-full\.nupkg that is not')
-    Yes '  and a record with no main package is no package' ((Get-MainPackageProblem -Record (MM 'build-20261102.2' $lv 'g1' $false) -Have $exact) -match 'lists no main package')
+    Yes '  and a listed name with other bytes are each said' ((Get-MainPackageProblem -Record $rec -Have @{ 'Thornswood-1.3.21-full.nupkg' = $feedSha; 'releases.main.json' = $feedSha }) -match '^holds a Thornswood-1\.3\.21-full\.nupkg that is not')
+    Yes '  and a record with no main package is no package' ((Get-MainPackageProblem -Record (MM 'build-1.3.27' $lv 'g1' $false) -Have $exact) -match 'lists no main package')
     # Main's package on GitHub Packages, through a stand-in registry: blobs
     # by digest, manifests by tag, a token for anybody who asks.
     function New-Registry {
@@ -273,40 +289,40 @@ try {
         return [pscustomobject]@{ State = $st; Http = $http }
     }
     $held = Join-Path $tmp 'held'
-    Put (Join-Path $held 'Thornswood-2026.1101.5-full.nupkg') 'package bytes'
+    Put (Join-Path $held 'Thornswood-1.3.21-full.nupkg') 'package bytes'
     Put (Join-Path $held 'releases.main.json') '{"Assets":[]}'
     $c40 = 'c' * 40
     $reg = New-Registry
     $pp = @{ Repo = 'ThornswoodRP/Thornswood'; Token = 'gh'; Registry = 'reg.test'; Scheme = 'https'; Http = $reg.Http }
-    Yes 'main''s package is kept as a GitHub Package under the build''s tag (#3399: no more artifact)' ((Push-MainPackage -Folder $held -Tag 'build-20261101.5' -Commit $c40 @pp) -eq 'pushed' -and $reg.State.manifests.ContainsKey('build-20261101.5'))
-    $man = $reg.State.manifests['build-20261101.5'] | ConvertFrom-Json
+    Yes 'main''s package is kept as a GitHub Package under the build''s tag (#3399: no more artifact)' ((Push-MainPackage -Folder $held -Tag 'build-1.3.21' -Commit $c40 @pp) -eq 'pushed' -and $reg.State.manifests.ContainsKey('build-1.3.21'))
+    $man = $reg.State.manifests['build-1.3.21'] | ConvertFrom-Json
     Yes '  one layer per file, named by its title, linked to this repository and naming the commit' (@($man.layers).Count -eq 2 -and
-        (@($man.layers | ForEach-Object { $_.annotations.'org.opencontainers.image.title' }) -join ',') -eq 'releases.main.json,Thornswood-2026.1101.5-full.nupkg' -and
+        (@($man.layers | ForEach-Object { $_.annotations.'org.opencontainers.image.title' }) -join ',') -eq 'releases.main.json,Thornswood-1.3.21-full.nupkg' -and
         $man.annotations.'org.opencontainers.image.source' -eq 'https://github.com/ThornswoodRP/Thornswood' -and $man.annotations.'org.opencontainers.image.revision' -eq $c40 -and
         $man.config.digest -eq 'sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a' -and $reg.State.blobs.ContainsKey($man.config.digest))
-    Yes '  pushed again with the same files, left as it is' ((Push-MainPackage -Folder $held -Tag 'build-20261101.5' -Commit $c40 @pp) -eq 'already')
+    Yes '  pushed again with the same files, left as it is' ((Push-MainPackage -Folder $held -Tag 'build-1.3.21' -Commit $c40 @pp) -eq 'already')
     $other = Join-Path $tmp 'held-other'
-    Put (Join-Path $other 'Thornswood-2026.1101.5-full.nupkg') 'other bytes'
+    Put (Join-Path $other 'Thornswood-1.3.21-full.nupkg') 'other bytes'
     Put (Join-Path $other 'releases.main.json') '{"Assets":[]}'
-    $why = ''; try { Push-MainPackage -Folder $other -Tag 'build-20261101.5' -Commit $c40 @pp | Out-Null } catch { $why = $_.Exception.Message }
+    $why = ''; try { Push-MainPackage -Folder $other -Tag 'build-1.3.21' -Commit $c40 @pp | Out-Null } catch { $why = $_.Exception.Message }
     Yes ('  and never replaced with other files: ' + $why) ($why -match 'never replaced')
-    $look = Save-MainPackage -Tag 'build-20261101.5' -Commit $c40 -Look @pp
-    Yes 'the promotion''s check reads the package''s files from its manifest, without fetching them' ($look['Thornswood-2026.1101.5-full.nupkg'] -eq (Sha (Join-Path $held 'Thornswood-2026.1101.5-full.nupkg')) -and
+    $look = Save-MainPackage -Tag 'build-1.3.21' -Commit $c40 -Look @pp
+    Yes 'the promotion''s check reads the package''s files from its manifest, without fetching them' ($look['Thornswood-1.3.21-full.nupkg'] -eq (Sha (Join-Path $held 'Thornswood-1.3.21-full.nupkg')) -and
         -not @($reg.State.asked | Where-Object { $_ -match '/blobs/sha256:' -and $_ -like 'GET *' }).Count)
     $into = Join-Path $tmp 'saved'
-    $got = Save-MainPackage -Tag 'build-20261101.5' -Commit $c40 -Into $into @pp
-    Yes '  and the promotion saves each file, the bytes kept' ([IO.File]::ReadAllText((Join-Path $into 'Thornswood-2026.1101.5-full.nupkg')) -eq 'package bytes' -and $got.Count -eq 2)
-    $why = ''; try { Save-MainPackage -Tag 'build-20261101.5' -Commit ('e' * 40) -Look @pp | Out-Null } catch { $why = $_.Exception.Message }
+    $got = Save-MainPackage -Tag 'build-1.3.21' -Commit $c40 -Into $into @pp
+    Yes '  and the promotion saves each file, the bytes kept' ([IO.File]::ReadAllText((Join-Path $into 'Thornswood-1.3.21-full.nupkg')) -eq 'package bytes' -and $got.Count -eq 2)
+    $why = ''; try { Save-MainPackage -Tag 'build-1.3.21' -Commit ('e' * 40) -Look @pp | Out-Null } catch { $why = $_.Exception.Message }
     Yes '  a package naming another commit is refused' ($why -match 'names another commit')
-    $why = ''; try { Save-MainPackage -Tag 'build-20261101.4' -Commit $c40 -Look @pp | Out-Null } catch { $why = $_.Exception.Message }
-    Yes ('  none for a build says so, and to promote a newer one: ' + $why) ($why -match 'there is no package reg\.test/thornswoodrp/thornswood-launcher-main:build-20261101\.4' -and $why -match 'promote a newer build')
+    $why = ''; try { Save-MainPackage -Tag 'build-1.3.20' -Commit $c40 -Look @pp | Out-Null } catch { $why = $_.Exception.Message }
+    Yes ('  none for a build says so, and to promote a newer one: ' + $why) ($why -match 'there is no package reg\.test/thornswoodrp/thornswood-launcher-main:build-1\.3\.20' -and $why -match 'promote a newer build')
     $d = ($man.layers | Where-Object { $_.annotations.'org.opencontainers.image.title' -eq 'releases.main.json' }).digest
     $reg.State.blobs[$d] = [Text.Encoding]::UTF8.GetBytes('{"Assets":["x"]}')
-    $why = ''; try { Save-MainPackage -Tag 'build-20261101.5' -Commit $c40 -Into (Join-Path $tmp 'saved2') @pp | Out-Null } catch { $why = $_.Exception.Message }
+    $why = ''; try { Save-MainPackage -Tag 'build-1.3.21' -Commit $c40 -Into (Join-Path $tmp 'saved2') @pp | Out-Null } catch { $why = $_.Exception.Message }
     Yes '  a file fetched with other bytes than its layer names is refused' ($why -match 'releases\.main\.json fetched from .* is not the file its manifest names')
-    $bad = $reg.State.manifests['build-20261101.5'] -replace '"releases.main.json"', '"../x.exe"'
-    $reg.State.manifests['build-20261101.6'] = $bad.Replace($c40, $c40)
-    $why = ''; try { Save-MainPackage -Tag 'build-20261101.6' -Commit $c40 -Look @pp | Out-Null } catch { $why = $_.Exception.Message }
+    $bad = $reg.State.manifests['build-1.3.21'] -replace '"releases.main.json"', '"../x.exe"'
+    $reg.State.manifests['build-1.3.22'] = $bad.Replace($c40, $c40)
+    $why = ''; try { Save-MainPackage -Tag 'build-1.3.22' -Commit $c40 -Look @pp | Out-Null } catch { $why = $_.Exception.Message }
     Yes '  and a layer that names no plain file is refused' ($why -match 'names no plain file')
 
     # ---- New-SignedManifest -Add -------------------------------------------------------
@@ -317,7 +333,7 @@ try {
     $gl = Join-Path $tmp 'in/game-files.json'; Put $gl '{}'
     $other = Join-Path $tmp 'in2/game.zip'; Put $other 'PK2'
     function Run-Nsm([string]$out, [string[]]$extra) {
-        $line = "& '$nsm' -Out '$out' -Tag build-20261101.7 -Commit $commit -Part gamemode -Files '$gm' -Repo O/R -NoCatalog " + ($extra -join ' ')
+        $line = "& '$nsm' -Out '$out' -Tag build-1.3.23 -Commit $commit -Part gamemode -Files '$gm' -Repo O/R -NoCatalog " + ($extra -join ' ')
         $null = & pwsh -NoProfile -Command $line 2>&1
         return $LASTEXITCODE
     }
@@ -515,7 +531,7 @@ try {
         $wf.Contains("Build-SetupFiles.ps1 -Out `$out -GameRoot (Join-Path `$env:RUNNER_TEMP 'game-root') -Channel `$ch") -and $wf.Contains('"setup-files.$ch.json"'))
     Yes 'Velopack is pinned and packs both channels from the same files, signing its programs only' ($wf -match "VPK_VERSION: '\d+\.\d+\.\d+'" -and $wf.Contains('--channel $ch') -and
         -not $wf.Contains('--noInst') -and $wf.Contains("--signExclude '[\\/]Game[\\/]'") -and $wf.Contains('Sign-OnRunner.ps1') -and $wf.Contains('--signParallel 1'))
-    Yes '  dev with a delta from the Velopack release before, main whole' ($wf.Contains("--channel dev --pre --token `$env:GH_TOKEN") -and $wf.Contains("`$delta = 'BestSpeed'") -and
+    Yes '  dev with a delta from the release dev is on, main whole' ($wf.Contains("-p `$was.Name -p 'releases.dev.json' -D `$out") -and $wf.Contains("`$delta = 'BestSpeed'") -and
         $wf.Contains("`$delta = 'None'") -and $wf.Contains('--delta $delta'))
     Yes '  dev''s installer published as Thornswood-Dev-Setup.exe, main''s held as Thornswood-Setup.exe' ($wf.Contains("'Thornswood-Dev-Setup.exe'") -and $wf.Contains("'Thornswood-Setup.exe'") -and
         $wf.Contains("'velopack=' + `$_.FullName") -and $wf.Contains("'main=' + `$_.FullName"))

@@ -158,7 +158,7 @@ namespace Thornswood
                 l.Add(Issue.Of(IssueKind.Update, "An update is waiting on the update feed: " + string.Join("; ", parts.ToArray()) + ".",
                     "Fix takes it last, after everything else" + (newLauncher ? ", and the launcher restarts into the new one." : "."),
                     "Install now, on the card above Play, takes it too. Mod updates wait until the Thornswood collection is installed in Vortex, and when the update itself failed, its line in the log says why.", true));
-            FeedNotice notice = FeedNotice.From(v, Updater.Version);
+            FeedNotice notice = FeedNotice.From(v, Updater.Version, Velo.Installed);
             if (notice.Hold != null && !newLauncher)
                 l.Add(Issue.Of(IssueKind.Feed, notice.Hold, null, "Nothing on this machine changes that: the update feed holds Play for everybody until staff lift it.", true));
         }

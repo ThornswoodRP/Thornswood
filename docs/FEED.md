@@ -702,8 +702,10 @@ reads a feed that is not split the same as before, so the site can go first.
 - **dev** is written by `Ship.ps1 -Channel dev` from any branch on any
   developer's machine; the last dev Ship wins. No Ship of either channel
   carries a launcher since #4825: the launcher's number is its Velopack
-  version, `<yyyy>.<M*100+d>.<n>`, given by the build Release it goes out on
-  (`MergeRelease.ps1`, New-MergeReleaseNames).
+  version, `1.3.<n>`, given by the build Release `build-1.3.<n>` it goes out
+  on (`MergeRelease.ps1`, New-MergeReleaseNames). From 1 to 8 Nov 2026 it was
+  the date, `<yyyy>.<M*100+d>.<n>`, until Patrick asked for the three-part
+  v1.2.16 style back, starting at 1.3.0.
 - **After a main Ship**, the Dev feed, baseline, release identity and history
   stay unchanged. Dev advances through its own Ship and keeps its own server
   and voice addresses. Publish the same source to both channels when both

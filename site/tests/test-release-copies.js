@@ -201,6 +201,17 @@ async function main() {
   t.api.newestSetup('main'); await tick(); await tick();
   yes('with no Release main-<tag> yet, main has none and dev has its own',
       t.api.newestSetup('main') === null && !!t.api.newestSetup('dev') && t.api.newestSetup('dev').tag === 'build-20261101.9');
+  // The move back to 1.3.x (Patrick, 8 Nov 2026): build-1.3.<n> Releases,
+  // published after the date numbered ones, are each channel's newest.
+  t = load(() => releases([
+    rel('build-20261108.2', '2026-11-08T19:34:00Z', [setupAsset('build-20261108.2', 'Thornswood-Dev-Setup.exe', E, 5)]),
+    rel('build-1.3.0', '2026-11-09T10:00:00Z', [setupAsset('build-1.3.0', 'Thornswood-Dev-Setup.exe', F, 6)]),
+    rel('main-build-20261108.2', '2026-11-08T19:42:00Z', [setupAsset('main-build-20261108.2', 'Thornswood-Setup.exe', E, 7)]),
+    rel('main-build-1.3.0', '2026-11-09T12:00:00Z', [setupAsset('main-build-1.3.0', 'Thornswood-Setup.exe', F, 8)])]), {});
+  t.api.newestSetup('main'); await tick(); await tick();
+  yes('a build-1.3.<n> Release published after the date numbered ones is the newest, on dev and on main',
+      !!t.api.newestSetup('dev') && t.api.newestSetup('dev').tag === 'build-1.3.0' &&
+      !!t.api.newestSetup('main') && t.api.newestSetup('main').tag === 'main-build-1.3.0');
   // A main Release older than the first hundred build Releases is still found.
   const page1 = [];
   for (let n = 0; n < 100; n++) page1.push(rel('build-20261101.' + (100 + n), '2026-11-01T10:00:00Z', []));
