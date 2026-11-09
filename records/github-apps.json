@@ -48,11 +48,11 @@
    "held_by": "the tw-git broker on the Hermes VM, key readable by tw-git alone (Thornswood-Hermes thornswood_guard/policy.yaml, github_apps)",
    "installed_on": [
     "ThornswoodRP/Thornswood",
-    "ThornswoodRP/Thornswood-Ops",
     "ThornswoodRP/skymp"
    ],
    "never_on": [
-    "ThornswoodRP/Thornswood-Hermes"
+    "ThornswoodRP/Thornswood-Hermes",
+    "ThornswoodRP/Thornswood-Ops"
    ],
    "permissions": {
     "actions": "read",
