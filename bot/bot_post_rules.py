@@ -178,7 +178,13 @@ def refuse(state, channel, num, problems, say=None):
     """Remembers that the post for issue num in channel breaks problems and
        comments that on the issue once (again only when the rules broken
        change). With no problems, forgets any earlier refusal and returns
-       False; otherwise True: the caller does not post."""
+       False; otherwise True: the caller does not post.
+
+       Remembered only once GitHub took the comment (#4348). It used to be
+       remembered when the comment failed too, so a refusal GitHub would not
+       take was never said again and nobody learned the post was held back.
+       Now a failed one is logged and left unremembered, and the next pass,
+       which reads the issue again anyway, says it again."""
     if not POST_RULES:
         return False
     seen = state.setdefault('refused', {})
@@ -201,7 +207,9 @@ def refuse(state, channel, num, problems, say=None):
     try:
         (say or github_say)(num, text)
     except Exception as e:
-        log('refused %s post for #%s, and could not comment: %s' % (channel, num, e))
+        log('refused %s post for #%s, and could not comment, so it is said '
+            'again on the next pass: %s' % (channel, num, e))
+        return True
     seen[key] = sig
     state['_dirty'] = True
     return True
