@@ -1333,8 +1333,8 @@ own name table gives its copyright, "Copyright 2020 The Cinzel Project Authors
 (https://github.com/NDISCOVER/Cinzel)" or "Copyright 2017 The Spectral Project
 Authors (https://github.com/productiontype/Spectral)", and the licence's
 address: https://scripts.sil.org/OFL in Cinzel and https://openfontlicense.org
-in the five Spectral files. The name tables give no version. `fonts.css`, beside
-them, names the SIL Open Font License, Version 1.1.
+in the five Spectral files. The name tables give no version. `home.css` and
+`hub.css`, which declare them, name the SIL Open Font License, Version 1.1.
 
 The licence texts are served beside them, since 21 October 2026 (#421), each
 the copy the project's own Google Fonts folder keeps with its copyright line:

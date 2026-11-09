@@ -508,7 +508,7 @@ Open these in Visual Studio Code. `Ctrl+P`, then the file name.
 | [site/public/index.html](../../site/public/index.html) | The staff hub at https://thornswood.net/hub |
 | [game/ui/index.html](../../game/ui/index.html) | The page Skyrim Platform opens over the game |
 
-In `home.html`, the `<title>` is the tab name. Two `<link>` tags pull in the stylesheets, `fonts.css` and `home.css`. The page loads nothing from another site. Keep it that way: a test fails if a `src`, a `url()`, or a stylesheet link points anywhere else.
+In `home.html`, the `<title>` is the tab name. One `<link>` tag pulls in the stylesheet, `home.css`, which holds the font faces too, so the first paint waits on one sheet (#4334). The page loads nothing from another site. Keep it that way: a test fails if a `src`, a `url()`, or a stylesheet link points anywhere else.
 
 The public page and the hub go out with the site deploy in [F. Website](#f-website). The in-game page is different. With the game closed, from the repository folder:
 
@@ -524,10 +524,9 @@ CSS is the look of a page: colour, type, and spacing. A rule names a part of the
 
 | File | What it styles |
 | --- | --- |
-| [site/public/home.css](../../site/public/home.css) | The public page |
-| [site/public/hub.css](../../site/public/hub.css) | The staff hub |
+| [site/public/home.css](../../site/public/home.css) | The public page, with the Spectral and Cinzel faces at its top |
+| [site/public/hub.css](../../site/public/hub.css) | The staff hub, with the same faces |
 | [site/public/door.css](../../site/public/door.css) | The door page. `site\lib\passes.js` is what links it |
-| [site/public/fonts.css](../../site/public/fonts.css) | Spectral and Cinzel. The font files sit beside it |
 
 Open `home.css`. The `:root` block at the top names the colours and the fonts the rest of the file uses. `--night` is the ground. `--gold` is the warm colour. A change here shows on https://thornswood.net after the deploy in [F. Website](#f-website).
 

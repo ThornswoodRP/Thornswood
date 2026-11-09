@@ -74,7 +74,7 @@ yes('the template on disk still has both the alpha wording and the open wording'
 
 siteFiles.copy(work);
 copy(path.join('public', 'home.html'));
-copy(path.join('public', 'fonts.css'));
+copy(path.join('public', 'home.css'));
 // Fixed test values so a fresh config does not invent a password and print it.
 fs.writeFileSync(path.join(work, 'config.json'), JSON.stringify({
   secret: 'home-html-test-secret',
@@ -203,7 +203,7 @@ function bothWordings(text) {
   const queried = await raw(port, '/home.html?from=old');
   yes('GET /home.html?from=old is a 301 to /', queried.status === 301 && queried.where === '/');
 
-  const css = await raw(port, '/fonts.css');
+  const css = await raw(port, '/home.css');
   yes('a real file in public/ is still served', css.status === 200 && css.text.length > 0);
 
   const front = await raw(port, '/');

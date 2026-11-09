@@ -21,7 +21,7 @@
      Google and the markdown renderer from Cloudflare's library CDN, so
      a visitor's address reached those two by the fact of loading the
      page, and the privacy page had to say so. The fonts are files in
-     this folder now (fonts.css and the woff2 files beside it), and the
+     this folder now (the woff2 files, whose faces home.css names), and the
      written pages are rendered by server.js before they are sent, so
      this page loads nothing from anywhere but this site. Keep it that
      way: tools/test-site-render.js fails on any address from another
@@ -61,15 +61,17 @@
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192">
 <!-- The two faces every page sets its first words in, asked for with the
-     page rather than after fonts.css has come back and been read (#3218):
-     the font files hung off fonts.css, which put about 850 ms before the
-     text was in its own face. The addresses are the ones fonts.css names,
-     ?v= and all, which send() writes into both (versionAssets). crossorigin
-     because a font is always fetched that way, and a preload without it is
-     fetched twice. -->
+     page rather than after the stylesheet has come back and been read
+     (#3218): the font files hung off the stylesheet, which put about 850 ms
+     before the text was in its own face. The addresses are the ones
+     home.css names, ?v= and all, which send() writes into both
+     (versionAssets). crossorigin because a font is always fetched that way,
+     and a preload without it is fetched twice. -->
 <link rel="preload" href="/cinzel.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/spectral-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/fonts.css">
+<!-- ONE STYLESHEET (#4334). The faces are in home.css; they had a sheet of
+     their own, fonts.css, and a page draws nothing until every stylesheet in
+     the head is in, so the first paint waited on both. -->
 <link rel="stylesheet" href="/home.css">
 </head>
 <body>

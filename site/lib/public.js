@@ -114,7 +114,7 @@ function publicPageBody(route) {
   now as immutable for a year. A deploy that changes a file changes its hash,
   so the page names a new address and nothing old is shown. A stylesheet's
   hash is of the stylesheet as served, its fonts' hashes included, so a new
-  font file moves fonts.css's address with it. Asked for with no hash, or an
+  font file moves home.css's and hub.css's addresses with it. Asked for with no hash, or an
   old one, a file is the hour and its ETag, as before.
 
   The hash of a stylesheet is kept against its own file and the hashes of what

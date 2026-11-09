@@ -12,7 +12,7 @@
 //
 // Four parts:
 //   1. The files: marked is the real 12.0.2, the fonts are real woff2 files
-//      that fonts.css names, and neither page reaches off the site.
+//      that home.css and hub.css name, and neither page reaches off the site.
 //   2. The renderer, taken out of server.js between its markers and driven on
 //      its own: headings come out, HTML typed into a page does not, a link
 //      only goes to http, https, mailto or this site, and the real pages come
@@ -87,20 +87,29 @@ yes('and it is the file cdnjs served for marked 12.0.2, byte for byte',
       .update(markedText.replace(/\r\n/g, '\n'), 'utf8').digest('hex') ===
       '15fabce5b65898b32b03f5ed25e9f891a729ad4c0d6d877110a7744aa847a894');
 
-const fontsCss = read(path.join(PUBLIC, 'fonts.css'));
-yes('public/fonts.css is there', fontsCss !== null);
-const faces = (fontsCss || '').match(/url\(\/[A-Za-z0-9._-]+\.woff2\)/g) || [];
-yes('it names six font files, one Cinzel and five Spectral', faces.length === 6);
-faces.forEach(function (u) {
-  const name = u.slice(5, -1);
-  let head = null;
-  try { head = fs.readFileSync(path.join(PUBLIC, name)).slice(0, 4).toString('latin1'); } catch (e) { }
-  yes(name + ' is in public/ itself, where Deploy-Docs sends from, and is a woff2', head === 'wOF2');
+// Each page's one stylesheet holds the faces (#4334): home.css for the front,
+// hub.css for the hub. Both name the same six files.
+const sheetFaces = {};
+['home.css', 'hub.css'].forEach(function (sheet) {
+  const text = read(path.join(PUBLIC, sheet));
+  yes('public/' + sheet + ' is there', text !== null);
+  const faces = (text || '').match(/url\(\/[A-Za-z0-9._-]+\.woff2\)/g) || [];
+  sheetFaces[sheet] = faces.join(' ');
+  yes(sheet + ' names six font files, one Cinzel and five Spectral', faces.length === 6);
+  faces.forEach(function (u) {
+    const name = u.slice(5, -1);
+    let head = null;
+    try { head = fs.readFileSync(path.join(PUBLIC, name)).slice(0, 4).toString('latin1'); } catch (e) { }
+    yes(sheet + ': ' + name + ' is in public/ itself, where Deploy-Docs sends from, and is a woff2', head === 'wOF2');
+  });
+  yes(sheet + ' names nothing on another site', !/url\(\s*['"]?(https?:)?\/\//i.test(text || ''));
 });
-yes('fonts.css names nothing on another site', !/url\(\s*['"]?(https?:)?\/\//i.test(fontsCss || ''));
+yes('and the two name the same files', sheetFaces['home.css'] === sheetFaces['hub.css']);
+// The six font files, for the scratch copy and the served check below.
+const faces = sheetFaces['home.css'] ? sheetFaces['home.css'].split(' ') : [];
 
 // The search entry 247 is done on, plus the font host itself.
-[['home.html', home], ['index.html', hub]].forEach(function (pair) {
+[['home.html', home, 'home.css'], ['index.html', hub, 'hub.css']].forEach(function (pair) {
   const name = pair[0], t = pair[1];
   yes(name + ' is there', t.length > 1000);
   yes(name + ' says nothing of cdnjs, fonts.googleapis, fonts.gstatic or integrity=',
@@ -110,7 +119,7 @@ yes('fonts.css names nothing on another site', !/url\(\s*['"]?(https?:)?\/\//i.t
   yes(name + ' loads no stylesheet or preconnect from another site',
       !/<link[^>]*\shref\s*=\s*["']?(https?:)?\/\/[^>]*>/i.test(t.replace(/<link[^>]*rel="icon"[^>]*>/gi, '')) &&
       !/rel\s*=\s*["']?preconnect/i.test(t));
-  yes(name + ' takes its fonts from /fonts.css', /<link rel="stylesheet" href="\/fonts\.css">/.test(t));
+  yes(name + ' takes its fonts from its one stylesheet, /' + pair[2], new RegExp('<link rel="stylesheet" href="/' + pair[2].replace('.', '\\.') + '">').test(t));
 });
 yes('the front page needs no markdown library, because the server renders',
     !/\bmarked\b/.test(home));
@@ -362,7 +371,7 @@ function copy(rel) {
   fs.copyFileSync(path.join(APP, rel), to);
 }
 siteFiles.copy(work);
-['home.html', 'home.js', 'index.html', MARKED, 'fonts.css'].forEach(function (f) { copy(path.join('public', f)); });
+['home.html', 'home.js', 'index.html', MARKED, 'home.css'].forEach(function (f) { copy(path.join('public', f)); });
 faces.forEach(function (u) { copy(path.join('public', u.slice(5, -1))); });
 fs.readdirSync(path.join(APP, 'data', 'site')).forEach(function (f) { copy(path.join('data', 'site', f)); });
 copy(path.join('data', 'help.md'));
@@ -578,8 +587,10 @@ const siteLog = function () { return read(path.join(work, 'site.log')) || ''; };
 
   const js = await get(port, '/' + MARKED);
   yes('/' + MARKED + ' is served as script, cached', js.status === 200 && /javascript/.test(js.type) && /max-age/.test(js.cache));
-  const css = await get(port, '/fonts.css');
-  yes('/fonts.css is served as a stylesheet, cached', css.status === 200 && /text\/css/.test(css.type) && /max-age/.test(css.cache));
+  const css = await get(port, '/home.css');
+  yes('/home.css is served as a stylesheet, cached', css.status === 200 && /text\/css/.test(css.type) && /max-age/.test(css.cache));
+  const gone = await get(port, '/fonts.css');
+  yes('/fonts.css is gone: the faces are in home.css (#4334)', gone.status === 404);
   const woff = await get(port, faces.length ? faces[0].slice(4, -1) : '/cinzel.woff2');
   yes('a font file is served as font/woff2, cached', woff.status === 200 && /font\/woff2/.test(woff.type) && /max-age/.test(woff.cache));
 
@@ -613,7 +624,7 @@ const siteLog = function () { return read(path.join(work, 'site.log')) || ''; };
   }
   const moved = [
     ['//', '/'], ['///', '/'], ['///x', '/x'], ['//rules', '/rules'], ['//rules?a=b', '/rules?a=b'],
-    ['//fonts.css', '/fonts.css'], ['/feed//version.json', '/feed/version.json'],
+    ['//home.css', '/home.css'], ['/feed//version.json', '/feed/version.json'],
     ['/feed/assets//' + SHA, '/feed/assets/' + SHA], ['//config.json', '/config.json'],
     ['//..//config.json', '/config.json'], ['/' + BS + 'example.com', '/example.com'], ['/' + BS + BS, '/']
   ];
@@ -629,13 +640,13 @@ const siteLog = function () { return read(path.join(work, 'site.log')) || ''; };
 
   // Where each one lands, and the addresses that were already right.
   const lands = [
-    ['/', 200], ['/rules', 200], ['/rules//', 200], ['/fonts.css', 200], ['/x', 404],
+    ['/', 200], ['/rules', 200], ['/rules//', 200], ['/home.css', 200], ['/x', 404],
     ['/feed/version.json', 200], ['/feed/assets/' + SHA, 200],
     ['/config.json', 404], ['/example.com', 404], ['/data/board.json', 404], ['/server.js', 404],
     ['/site.log', 404], ['/feed/assets/' + SHA.toUpperCase(), 404], ['/feed/assets/' + SHA + '0', 404],
     ['/feed/assets/..%2Fversion%2F00000001.json', 404], ['/feed/assets/%2E%2E%2F..%2Fconfig.json', 404],
     ['/feed/assets/' + SHA.slice(0, 60) + '%2F..', 404], ['/..%2Fconfig.json', 404], ['/%2E%2E/config.json', 404],
-    ['/%2Fexample.com', 404], ['/%00', 404], ['/rules%00', 404], ['/fonts.css%00', 404],
+    ['/%2Fexample.com', 404], ['/%00', 404], ['/rules%00', 404], ['/home.css%00', 404],
     ['/%5C', 404], ['/%5Cconfig.json', 404], ['/%', 400], ['//%', 400], ['/%2F', 200]
   ];
   for (const l of lands) {
