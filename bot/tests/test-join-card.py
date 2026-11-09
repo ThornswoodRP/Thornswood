@@ -305,7 +305,7 @@ yes('I1 the code Install-Bot sends is a fixed list, and the record is not '
     'on it (got %r)' % (listed,),
     shape and listed == ['bot.py', '_pyguard.py', 'trust.py', 'card.py']
     + [n + '.py' for n in harness_bot.parts()]
-    + ['staff-channel.txt', 'dev-channel.txt', 'requirements.txt', 'factions.json']
+    + ['staff-channel.txt', 'dev-channel.txt', 'news-channel.txt', 'requirements.txt', 'factions.json']
     and len(harness_bot.parts()) > 0
     and 'joins.json' not in (listed or []))
 
