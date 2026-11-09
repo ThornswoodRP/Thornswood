@@ -27,15 +27,18 @@ from bot_notices import _github_time
 # dev-channel.txt, and a main release in #news, by the id in news-channel.txt
 # (by id and never by name: there are two channels called news). One post a
 # tag, however many environments it reached, written down in news-said.json.
-# A release whose notes say nothing people would notice (merge-release.yml's
-# NOTHING_TO_TELL line) and one deployed over a day ago are written down
+# Every release is posted (Patrick, 9 Nov: "still make an announcement"), so
+# the numbers in the channel never jump. One whose notes are empty, or the line
+# Releases before 9 Nov carried when every change said none, is posted as
+# merge-release.yml's QUIET_NOTE. One deployed over a day ago is written down
 # without a post. With no news-said.json yet, what is there already is
 # written down unposted: a first start must not announce old releases again.
 NEWS_DIR = os.environ.get('THORNSWOOD_NEWS_DIR', r'C:\Thornswood-Deploys\for-bot')
 NEWS_SAID = os.path.join(DATA_DIR, 'news-said.json')
 NEWS_EVERY = max(30, _int_env('NEWS_EVERY', 60))
 NEWS_MAX_AGE = 24 * 3600
-NEWS_NOTHING = re.compile(r'^\s*nothing people would notice\b', re.I)
+NEWS_QUIET = 'Various bug fixes and improvements'
+NEWS_WAS_NOTHING = re.compile(r'^\s*nothing people would notice\b', re.I)
 NEWS_KEEP = 200
 
 
@@ -85,8 +88,8 @@ def news_docs(folder=None):
 
 def news_plan(docs, state, now):
     """(channel, doc, how) for each release not written down yet, oldest
-       deployment first, each tag once. how is 'post', 'nothing' (its notes
-       say nothing people would notice) or 'old' (deployed over a day ago)."""
+       deployment first, each tag once. how is 'post' or 'old' (deployed
+       over a day ago)."""
     said = state.get('said') or {}
     out, seen = [], set()
     for doc in sorted(docs, key=lambda d: str(d.get('deployedUtc') or '')):
@@ -95,11 +98,8 @@ def news_plan(docs, state, now):
         if tag in (said.get(channel) or {}) or (channel, tag) in seen:
             continue
         seen.add((channel, tag))
-        body = strip_footer(str(doc.get('body') or '')).strip()
         at = _github_time(doc.get('deployedUtc'))
-        if not body or NEWS_NOTHING.match(body):
-            how = 'nothing'
-        elif at is not None and now - at > NEWS_MAX_AGE:
+        if at is not None and now - at > NEWS_MAX_AGE:
             how = 'old'
         else:
             how = 'post'
@@ -119,6 +119,8 @@ def news_post_parts(channel, doc):
     if len(title) > 250:
         title = title[:247] + '...'
     body = strip_footer(str(doc.get('body') or '')).strip()
+    if not body or NEWS_WAS_NOTHING.match(body):
+        body = NEWS_QUIET
     if len(body) > 4000:
         cut = body[:4000].rsplit('\n', 1)[0]
         body = (cut if cut else body[:4000]).rstrip() + '\n...'

@@ -53,10 +53,13 @@ namespace Thornswood
         const int NewsStatusReads = 6;
 
         /// <summary>
-        /// The body merge-release.yml writes when every change in the Release
-        /// says none (its NOTHING_TO_TELL), the same test the bot makes.
+        /// The note of a Release whose every change said none, merge-release.yml's
+        /// QUIET_NOTE, which the bot posts too: every release is news (Patrick,
+        /// 9 Nov), so the versions in the tab never jump. An empty body and the
+        /// line Releases before 9 Nov carried instead read as this.
         /// </summary>
-        static readonly Regex NothingToTell = new Regex(@"^\s*nothing people would notice\b", RegexOptions.IgnoreCase);
+        internal const string QuietNote = "Various bug fixes and improvements";
+        static readonly Regex WasNothing = new Regex(@"^\s*nothing people would notice\b", RegexOptions.IgnoreCase);
 
         static readonly Regex BuildTag = new Regex(@"^build-(\d{8})\.(\d{1,9})$");
         static readonly Regex NumberTag = new Regex(@"^build-1\.3\.(\d{1,5})$");
@@ -147,11 +150,10 @@ namespace Thornswood
         /// <summary>
         /// The notes of the build Releases at or before on, newest first, each
         /// marked dev when it is after main (main null: main has none yet).
-        /// A Release counts when it is published, its tag is a build tag and
+        /// Every one is news, a quiet one as QuietNote (NoteOf). A Release counts when it is published, its tag is a build tag and
         /// its title is the one merge-release.yml gives a Release with notes,
         /// "Release " and the tag; the gamemode-only builds from before
-        /// #5313 carried no notes and are left out by that title. A body
-        /// that says nothing people would notice is no note.
+        /// #5313 carried no notes and are left out by that title.
         /// </summary>
         internal static NewsItem[] NewsOf(List<GitHubRelease> releases, string on, string main)
         {
@@ -181,14 +183,14 @@ namespace Thornswood
         /// One Release's body as a note, in the shape Collect-ReleaseNotes.ps1
         /// joins it: the first line is the title, each "- " line after it is
         /// one line of what changed (later pull requests' headlines among
-        /// them), and any other line is the note's text. Null for a body with
-        /// nothing in it or nothing people would notice. The date is when
+        /// them), and any other line is the note's text. A body with nothing in
+        /// it, or the old nothing-to-tell line, is QuietNote. The date is when
         /// the Release was published, in this machine's time.
         /// </summary>
         internal static NewsItem NoteOf(string body, DateTimeOffset? published)
         {
             string text = body ?? "";
-            if (text.Trim().Length == 0 || NothingToTell.IsMatch(text)) return null;
+            if (text.Trim().Length == 0 || WasNothing.IsMatch(text)) text = QuietNote;
             var n = new NewsItem();
             var details = new List<string>();
             var lines = new List<string>();

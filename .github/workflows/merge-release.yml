@@ -67,8 +67,10 @@
 # THE NOTES. The Release's body is the note people read: the Release note
 # lines of the pull requests merged since the Release before, joined and held
 # to Note-Rules (Collect-ReleaseNotes.ps1). When every one of them says none,
-# the body is the single line in NOTHING_TO_TELL below, which the news steps
-# read as nothing to announce. A merged pull request with no Release note line
+# the body is the single line in QUIET_NOTE below, and the news announces it
+# like any other: every release is announced (Patrick, 9 Nov: "just put like
+# various bug fixes and improvements and still make an announcement"), so
+# the version numbers people see never jump. A merged pull request with no Release note line
 # stops the run before anything is built: a published Release never changes,
 # so its body cannot be put right later. Write the line into that pull
 # request's body and run this again by hand (workflow_dispatch on main).
@@ -178,7 +180,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NOTHING_TO_TELL: 'Nothing people would notice: every change in this release says none.'
+  QUIET_NOTE: 'Various bug fixes and improvements'
   # Velopack's command line, at a version published on 29 Sep 2026.
   VPK_VERSION: '1.2.161'
 
@@ -261,7 +263,7 @@ jobs:
           if ($env:SINCE) { $a['Since'] = $env:SINCE }
           & ./scripts/release/Collect-ReleaseNotes.ps1 @a
           $rc = $LASTEXITCODE
-          if ($rc -eq 3) { [IO.File]::WriteAllText($file, $env:NOTHING_TO_TELL + "`n"); $rc = 0 }
+          if ($rc -eq 3) { [IO.File]::WriteAllText($file, $env:QUIET_NOTE + "`n"); $rc = 0 }
           if ($rc -ne 0) { Write-Host "::error::the notes could not be written (Collect-ReleaseNotes.ps1 exit $rc); the lines above say why, and nothing was built"; exit 1 }
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("file=" + $file)
           # Exit 3 is an answer, not a failure, but GitHub's pwsh step ends

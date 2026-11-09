@@ -466,7 +466,7 @@ try {
         $newestStep -match 'if \(\$LASTEXITCODE -ne 0\) \{ Write-Host "::error::[^"]*"; exit 1 \}' -and
         $wf -match '(?m)^\s+actions: write\s*$' -and $wf -match '(?m)^  workflow_dispatch:\s*$')
     $notes = $wf.IndexOf('Collect-ReleaseNotes.ps1'); $build = $wf.IndexOf('Build-Launcher.ps1 -Root')
-    Yes 'the notes are written before anything is built, and "none" from every pull request is the one line' ($notes -gt 0 -and $build -gt $notes -and $wf.Contains('if ($rc -eq 3)') -and $wf.Contains("NOTHING_TO_TELL: 'Nothing people would notice: every change in this release says none.'"))
+    Yes 'the notes are written before anything is built, and "none" from every pull request is the one line' ($notes -gt 0 -and $build -gt $notes -and $wf.Contains('if ($rc -eq 3)') -and $wf.Contains("QUIET_NOTE: 'Various bug fixes and improvements'"))
     # The notes step itself, run the way GitHub runs a pwsh step: its text
     # between "$ErrorActionPreference = 'stop'" and "exit $LASTEXITCODE",
     # by pwsh -command, over a stand-in Collect-ReleaseNotes.ps1 that answers
@@ -488,7 +488,7 @@ try {
     }
     Yes 'the notes step''s script is found in merge-release.yml' ($step.Count -gt 3 -and ($step -join "`n").Contains('Collect-ReleaseNotes.ps1'))
     $pwsh = (Get-Process -Id $PID).Path
-    $stepEnv = 'RUNNER_TEMP', 'GITHUB_OUTPUT', 'GITHUB_SHA', 'GITHUB_REPOSITORY', 'SINCE', 'NOTHING_TO_TELL'
+    $stepEnv = 'RUNNER_TEMP', 'GITHUB_OUTPUT', 'GITHUB_SHA', 'GITHUB_REPOSITORY', 'SINCE', 'QUIET_NOTE'
     $before = @{}; foreach ($v in $stepEnv) { $before[$v] = [Environment]::GetEnvironmentVariable($v) }
     foreach ($case in @(@{ Code = 0; Ok = $true; Says = 'a note' }, @{ Code = 3; Ok = $true; Says = 'nothing to tell' }, @{ Code = 2; Ok = $false; Says = 'a pull request with no line' }, @{ Code = 1; Ok = $false; Says = 'GitHub unread' })) {
         $w = Join-Path $tmp ('notes-step-' + $case.Code)
@@ -498,14 +498,14 @@ try {
         $file = Join-Path $w 'step.ps1'
         Put $file ("`$ErrorActionPreference = 'stop'`n" + ($step -join "`n") + "`nif ((Test-Path -LiteralPath variable:\LASTEXITCODE)) { exit `$LASTEXITCODE }`n")
         $env:RUNNER_TEMP = $rt; $env:GITHUB_OUTPUT = $out; $env:GITHUB_SHA = $commit; $env:GITHUB_REPOSITORY = 'ThornswoodRP/Thornswood'; $env:SINCE = ''
-        $env:NOTHING_TO_TELL = 'Nothing people would notice: every change in this release says none.'
+        $env:QUIET_NOTE = 'Various bug fixes and improvements'
         Push-Location $w
         try { $null = & $pwsh -NoProfile -command ". '$file'" 2>&1; $code = $LASTEXITCODE } finally { Pop-Location }
         $said = [IO.File]::ReadAllText($out)
         $notesFile = Join-Path $rt 'notes.md'
         if ($case.Ok) {
             $body = if (Test-Path -LiteralPath $notesFile) { [IO.File]::ReadAllText($notesFile) } else { '' }
-            $want = if ($case.Code -eq 3) { $env:NOTHING_TO_TELL } else { 'a note' }
+            $want = if ($case.Code -eq 3) { $env:QUIET_NOTE } else { 'a note' }
             Yes ("  the step goes on after $($case.Says) (exit $($case.Code)), with the notes file named (step exit $code)") ($code -eq 0 -and $said.Contains('file=' + $notesFile) -and $body.StartsWith($want))
         } else {
             Yes ("  the step stops on $($case.Says) (exit $($case.Code)) and names no notes file (step exit $code)") ($code -ne 0 -and -not $said.Contains('file='))

@@ -205,10 +205,12 @@ function Run {
     Yes ('  the date is when it was published, in this machine''s time, as the tab shows dates: ' + $n.date) ($n.date -eq $want -and $n.DateText -eq $want)
     Yes '  and it is no dev note by itself' ($n.channel -eq '')
     Yes 'a body that is only a "- " headline still has a title' (([string]$mNote.Invoke($null, @('- Only a bullet', $null)).title) -eq 'Only a bullet')
-    Yes 'merge-release.yml''s "Nothing people would notice" body is no note' ($null -eq $mNote.Invoke($null, @("Nothing people would notice: every change in this release says none.`n", [Nullable[DateTimeOffset]]$at)))
-    Yes 'an empty body is no note' ($null -eq $mNote.Invoke($null, @("  `r`n ", [Nullable[DateTimeOffset]]$at)) -and $null -eq $mNote.Invoke($null, @($null, $null)))
+    # Every release is news (Patrick, 9 Nov), a quiet one as merge-release.yml's QUIET_NOTE.
+    Yes 'merge-release.yml''s quiet note is a note, titled with it' (([string]$mNote.Invoke($null, @("Various bug fixes and improvements`n", [Nullable[DateTimeOffset]]$at)).title) -eq 'Various bug fixes and improvements')
+    Yes '  and so is a Release from before 9 Nov that said nothing people would notice' (([string]$mNote.Invoke($null, @("Nothing people would notice: every change in this release says none.`n", [Nullable[DateTimeOffset]]$at)).title) -eq 'Various bug fixes and improvements')
+    Yes '  and an empty body' (([string]$mNote.Invoke($null, @("  `r`n ", [Nullable[DateTimeOffset]]$at)).title) -eq 'Various bug fixes and improvements' -and ([string]$mNote.Invoke($null, @($null, $null)).title) -eq 'Various bug fixes and improvements')
     $mr = Get-Content -LiteralPath (Join-Path $Here '.github/workflows/merge-release.yml') -Raw
-    Yes '  and that is the line merge-release.yml writes' ($mr -match "NOTHING_TO_TELL: 'Nothing people would notice: every change in this release says none\.'")
+    Yes '  and that is the line merge-release.yml writes' ($mr -match "QUIET_NOTE: 'Various bug fixes and improvements'")
     Yes '  and merge-release.yml titles a Release with notes "Release <tag>"' ($mr -match '--title "Release \$\(\$env:TAG\)"')
 
     # ---- 2. build tags ---------------------------------------------------------------
@@ -256,8 +258,8 @@ function Run {
         $srv.Answer("$base/deployments/800/statuses", '200 OK', (State 'success'))
 
         $items = @($mRead.Invoke($null, @($api, $true)))
-        Yes ('a dev launcher shows the Releases at or before Dev''s newest success, newest first, DEV on what Main has not reached: ' + (Titles $items)) ((Titles $items) -eq 'Assigned loot on bodies*|Downloads page names the publisher|Study at the College')
-        Yes '  so a Release still being deployed, one not deployed, a draft, a gamemode-only build, a Ship''s files, the agent and a nothing to tell are left out' ($items.Count -eq 3)
+        Yes ('a dev launcher shows the Releases at or before Dev''s newest success, newest first, DEV on what Main has not reached: ' + (Titles $items)) ((Titles $items) -eq 'Assigned loot on bodies*|Downloads page names the publisher|Various bug fixes and improvements|Study at the College')
+        Yes '  so a Release still being deployed, one not deployed, a draft, a gamemode-only build, a Ship''s files and the agent are left out, and a nothing to tell is the quiet note (Patrick, 9 Nov)' ($items.Count -eq 4)
         Yes '  each note carries its lines of what changed' (@($items[0].details).Count -eq 1 -and $items[0].details[0] -eq 'A body keeps what it carried')
         $asked = @($srv.Asked())
         $statuses = @($asked | Where-Object { $_ -match '/statuses' })
@@ -271,7 +273,7 @@ function Run {
         $srv.Answer("$base/deployments?environment=Main", '200 OK', ('[' + (Dep 800 '{"release":"build-20261101.9"}') + ']'))
         $srv.Answer("$base/deployments/800/statuses", '200 OK', (State 'success'))
         $items = @($mRead.Invoke($null, @($api, $false)))
-        Yes ('a main launcher shows the Releases at or before Main''s, with no DEV marks: ' + (Titles $items)) ((Titles $items) -eq 'Downloads page names the publisher|Study at the College')
+        Yes ('a main launcher shows the Releases at or before Main''s, with no DEV marks: ' + (Titles $items)) ((Titles $items) -eq 'Downloads page names the publisher|Various bug fixes and improvements|Study at the College')
         Yes '  and asks Main''s Deployments only once' (@($srv.Asked() | Where-Object { $_ -match 'environment=' }).Count -eq 1)
 
         $srv.Clear()
@@ -280,7 +282,7 @@ function Run {
         $srv.Answer("$base/deployments/908/statuses", '200 OK', (State 'success'))
         $srv.Answer("$base/deployments?environment=Main", '200 OK', ('[' + (Dep 801 '{}') + ']'))
         $items = @($mRead.Invoke($null, @($api, $true)))
-        Yes ('before main has run a build Release, every dev note is marked DEV: ' + (Titles $items)) ((Titles $items) -eq 'Assigned loot on bodies*|Downloads page names the publisher*|Study at the College*')
+        Yes ('before main has run a build Release, every dev note is marked DEV: ' + (Titles $items)) ((Titles $items) -eq 'Assigned loot on bodies*|Downloads page names the publisher*|Various bug fixes and improvements*|Study at the College*')
         $items = @($mRead.Invoke($null, @($api, $false)))
         Yes '  and a main launcher shows nothing' ($items.Count -eq 0)
         Yes '  without asking for the Releases' (@($srv.Asked() | Where-Object { $_ -match '/releases' }).Count -eq 1)
