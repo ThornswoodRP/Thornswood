@@ -242,7 +242,9 @@ function finish() {
   yes('/health: the two seated hold voice places, on three sockets of theirs, and the one waiting holds none',
       h.people === 2 && h.peers === 4 && h.most === 3, JSON.stringify({ people: h.people, peers: h.peers, most: h.most }));
   send(w, { t: 'chat', text: '/line' });
-  await until(() => lastRoster(a) && names(lastRoster(a)) === '101,102');
+  // Each socket gets its own roster message: a's arriving says nothing of b's,
+  // which a CI run (PR 5612, 9 Nov) read as empty a moment before it came.
+  await until(() => names(lastRoster(a)) === '101,102' && names(lastRoster(b)) === '101,102');
   yes('the seated are on each other\'s roster', names(lastRoster(a)) === '101,102' && names(lastRoster(b)) === '101,102',
       names(lastRoster(a)) + ' / ' + names(lastRoster(b)));
 
