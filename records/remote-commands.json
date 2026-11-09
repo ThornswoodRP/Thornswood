@@ -1106,10 +1106,10 @@
                       "script":  "scripts/deploy/Install-RunnerEgress.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "Remote",
-                      "anchor":  "Remote @\"",
-                      "does":  "stops and unregisters the way out\u0027s task",
+                      "anchor":  "$out = @(Remote @\"",
+                      "does":  "stops and unregisters the way out\u0027s task, stops its program, deletes its folder, and reads each back with its port",
                       "class":  "admin",
-                      "reason":  "unregisters a task; never a gate word"
+                      "reason":  "unregisters a task and deletes a folder; the gate runs it as Remove-RunnerEgress (#5577)"
                   },
                   {
                       "script":  "scripts/deploy/Install-RunnerEgress.ps1",

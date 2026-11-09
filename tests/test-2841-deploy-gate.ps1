@@ -172,6 +172,9 @@ Yes 'Install-Runner runs from the gate with a number, -Status, -Lock or -Network
     (Words 'Install-Runner -Number 2 -Status') -ne 'REFUSED' -and (Words 'Install-Runner -Remove') -eq 'REFUSED' -and (Words 'Install-Runner -OffBox') -eq 'REFUSED' -and
     (Words 'Install-Runner -Repo x/y') -eq 'REFUSED' -and (Words 'Install-Runner -RunnerName x') -eq 'REFUSED' -and (Words 'Install-Runner -Root C:/x') -eq 'REFUSED' -and
     (Words 'Install-Runner -Number 100') -eq 'REFUSED' -and (Words 'Install-Runner -AllowHost x') -eq 'REFUSED')
+Yes '  the runners'' way out comes off only as Remove-RunnerEgress, with nothing beside it (#5577)' (
+    (Words 'Remove-RunnerEgress') -eq '-Remove|-NoPause' -and (Words 'Remove-RunnerEgress -Status') -eq 'REFUSED' -and
+    (Words 'Remove-RunnerEgress -Root C:/x') -eq 'REFUSED' -and (Words 'Install-RunnerEgress -Remove') -eq 'REFUSED')
 $rk = Text 'scripts/vps/Renew-BoxKey.ps1'
 Yes '  Renew-BoxKey keeps the old line until the secret holds the new key, and puts the file back on any stop before that' (
     $rk.IndexOf('[IO.File]::WriteAllLines($KeysFile, [string[]](@($have) + $newLine)') -gt 0 -and

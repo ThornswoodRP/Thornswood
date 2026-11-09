@@ -11,8 +11,9 @@
        list names GitHub's runner hosts by name, the token host among them;
     2. RunnerEgress.ps1 reads that record, and Ask-Egress says nothing
        answered when no proxy listens;
-    3. the gate runs Install-RunnerEgress and its -Status, and nothing else
-       of it (its -Remove is not a gate word);
+    3. the gate runs Install-RunnerEgress and its -Status, and its -Remove
+       only as Remove-RunnerEgress (#5577); -Remove stops while a runner record still sends a runner
+       through it and reads back the task, program, folder and port;
     4. no runner record sends a runner through it, and Install-Runner.ps1
        has no part that does.
   Asks GitHub nothing and changes nothing on the box. A few seconds.
@@ -47,6 +48,13 @@ Yes 'Ask-Egress says nothing answered when no proxy listens' ((Ask-Egress $free 
 $verbs = Get-Content -LiteralPath (Join-Path $Repo 'scripts/vps/gate/verbs.json') -Raw | ConvertFrom-Json
 $v = $verbs.verbs.'Install-RunnerEgress'
 Yes 'the gate runs Install-RunnerEgress with -Status beside it and nothing else' ($v.script -eq 'scripts/deploy/Install-RunnerEgress.ps1' -and (@($v.params.PSObject.Properties.Name) -join ',') -eq 'Status')
+$r = $verbs.verbs.'Remove-RunnerEgress'
+Yes '  and its -Remove only as Remove-RunnerEgress, which takes nothing beside it (#5577)' ($r.script -eq $v.script -and (@($r.fixed) -join ' ') -eq '-Remove -NoPause' -and @($r.params.PSObject.Properties).Count -eq 0)
+$ie = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/deploy/Install-RunnerEgress.ps1'))
+$rm = $ie.Substring($ie.IndexOf('if ($Remove) {'))
+$rm = $rm.Substring(0, $rm.IndexOf('# ----'))
+Yes '  and -Remove stops before it sends anything while a runner record still uses it' ($rm -match 'still send a runner through it\. Nothing was sent' -and $rm.IndexOf('egress })') -lt $rm.IndexOf('Remote @'))
+Yes '  and takes off the task, the program and the folder, then reads each back with the port' ($rm -match 'Unregister-ScheduledTask' -and $rm -match 'Stop-Process' -and $rm -match "Remove-Item -LiteralPath '\`$Root' -Recurse" -and $rm -match 'NOT REGISTERED' -and $rm -match 'nothing listens on' -and $rm -match "Where-Object \{ \`$_ -match 'STILL' \}")
 
 # ---- 4. no runner goes through it --------------------------------------------------
 $sent = @(Get-ChildItem -LiteralPath (Join-Path $Repo 'records') -Filter '*-runner.json' -File | Where-Object { (Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json).egress })
