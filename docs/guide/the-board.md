@@ -121,6 +121,20 @@ How to use it:
   and the Ship names it as trouble. To see what a main Ship
   would close, without closing anything:
   `.\scripts\release\Close-ShippedIssues.ps1 -Commit origin/main -Check`.
+- A box step closes on its own output, never on a merge (#5611, after the
+  audit of 9 Nov 2026 found box steps nobody saw run on seven closed
+  issues, live voice among them). An issue whose Done when is a step on the
+  box (a gate verb, an install, a run "on the box") carries the label
+  `box step`: `.github\workflows\box-step.yml` puts it on when the Done
+  when names one, and anybody may put it on by hand. It closes only once a
+  comment whose first line starts `Box step output:` holds what the step
+  printed: the gate run or the Deployment's log, and its ENDED line. A merge
+  is not that output, and neither is "done on main", so its pull request
+  says `Refs #N`, and an issue closed as done without the comment is opened
+  again by the same workflow, which also sweeps every day for a close it
+  missed. A step file under `deploy\after` writes the comment by itself
+  when its step ends 0, and the issue it names is held the same way. A main
+  Ship's `Close-ShippedIssues.ps1` leaves such an issue open and names it.
 
 ## How an issue and a comment are written
 

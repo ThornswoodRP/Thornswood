@@ -67,7 +67,11 @@ function fakeGitHub() {
     yes('  in the plain shape: the check, where and from which issue, and a Done when line', /\n\nOn dev since the deploy of aaaaaaaaaaaa, from #2484\. Step 2484-gates#2 of deploy\/after\.\n\nDone when: Neither gate shows a lock prompt\.$/.test(made.body));
     said = await A.act(Object.assign({ after: after, gh: g.api }, base));
     yes('  a second run files no second one: ' + said.join('; '), g.made.length === 1 && /already #9000/.test(said[0]));
-    yes('  a step that ran is no issue and no comment', g.said.length === 0);
+    const out = ((g.comments[2484] || [])[0] || {}).body || '';
+    yes('  a step that ran is no issue, and its output is said on its own issue once (#5611)', g.made.length === 1 && g.said.join() === '2484' &&
+        out.indexOf('Box step output: `Reset-Npcs-Dev` ran after the deploy to dev and ended 0 (Deployment 77, Step 2484-gates#1 of deploy/after.)') === 0 &&
+        out.indexOf('The log: http://box.test:7788/deploy-77.log') >= 0 && !/Generated|Claude|\n---/.test(out));
+    yes('  in the shape scripts/ops/Box-Step.js reads as a step\'s output', require('../scripts/ops/Box-Step.js').hasOutput([{ body: out }]));
 
     // ---- 2. a failed step, said on its issue once for each Deployment --------
     g = fakeGitHub();
@@ -95,8 +99,8 @@ function fakeGitHub() {
     threw = '';
     try { await A.act(Object.assign({}, base, { after: Object.assign({}, after, { commit: 'b'.repeat(40) }), gh: fakeGitHub().api })); } catch (e) { threw = e.message; }
     yes('  and so does one for another commit', /for commit b+, not a+/.test(threw));
-    said = await A.act(Object.assign({}, base, { after: { format: 1, deployment: '77', commit: COMMIT, steps: [{ id: '2484-gates#1', state: 'success' }] }, gh: fakeGitHub().api }));
-    yes('a Deployment whose steps all ran says it has nothing for people', /^nothing for people: 1 step/.test(said[0]));
+    said = await A.act(Object.assign({}, base, { after: { format: 1, deployment: '77', commit: COMMIT, steps: [{ id: '2484-gates#1', state: 'done-before' }] }, gh: fakeGitHub().api }));
+    yes('a Deployment whose steps all ran before says it has nothing for people', /^nothing for people: 1 step/.test(said[0]));
     const long = A.issueFor('x-y#1', { issue: 1, step: { inGame: 'word '.repeat(40).trim(), doneWhen: 'It does.' } }, base);
     yes('a long check\'s title is cut at a word, under 100 characters', long.title.length < 100 && /word\.\.\.$/.test(long.title));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }

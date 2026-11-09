@@ -17,6 +17,6 @@ body:
     id: done
     attributes:
       label: Done when
-      description: One line somebody can check to know it is finished.
+      description: One line somebody can check to know it is finished. When it is a step on the box, the issue closes on that step's output, never on the merge (docs/guide/the-board.md).
     validations:
       required: true

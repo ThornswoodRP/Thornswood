@@ -1,0 +1,59 @@
+# An issue whose Done when is a step on the box closes on that step's own
+# output, never on the merge before it (#5611).
+#
+# WHY. On 9 Nov 2026 a box step a merged pull request needed (#5181's
+# Install-DeployAgent -Main) turned out never to have run, and main's
+# releases sat unapplied for a week; the audit on #5611 found seven more
+# closed issues whose box step nobody saw run, live voice among them (#5610).
+# They were closed by "Fixes #N" at the merge, or in bulk as "done on main",
+# and both check the code, not the box.
+#
+# WHAT HAPPENS. scripts/ops/Box-Step.js says it in full:
+#   - an issue opened or edited whose Done when names a step on the box gets
+#     the label "box step";
+#   - an issue with that label closed as done, with no comment whose first
+#     line starts "Box step output:", is opened again with a comment saying
+#     why; a step under deploy/after writes that comment itself when it runs
+#     (scripts/release/After-Deploy.js);
+#   - each day the same for every labelled issue closed in the last two
+#     days, for a close no event reached.
+# docs/guide/the-board.md, "Box steps", is the rule.
+#
+# The run's own token, issues write only. No secret, and nothing reaches the
+# box. Every action is named by a full length commit SHA with its tag in the
+# comment, for the reason build.yml gives.
+name: Box step
+on:
+  issues:
+    types: [opened, edited, closed]
+  schedule:
+    - cron: '17 13 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: box-step-${{ github.event.issue.number || 'sweep' }}
+  cancel-in-progress: false
+jobs:
+  hold:
+    name: Hold box steps to their output
+    if: ${{ !github.event.issue.pull_request }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/ops/Box-Step.js
+            scripts/vps/gate/verbs.json
+            deploy/after/
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Label, or open again, or sweep
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/ops/Box-Step.js

@@ -267,6 +267,7 @@ $closed = New-Object System.Collections.Generic.List[string]
 $notCarried = New-Object System.Collections.Generic.List[string]
 $noTask = New-Object System.Collections.Generic.List[string]
 $trouble = New-Object System.Collections.Generic.List[string]
+$waitBox = New-Object System.Collections.Generic.List[string]
 
 foreach ($card in $done) {
     $n = [int]$card.number
@@ -362,6 +363,20 @@ foreach ($card in $done) {
         }
         continue
     }
+    # A box step closes on the step's own output, never on the release that
+    # carries its merge (#5611, scripts/ops/Box-Step.js): box-step.yml would
+    # open it again, and the next Ship close it again.
+    $boxStep = $false
+    try {
+        $issue = Invoke-GitHub 'GET' "repos/$GitHubRepo/issues/$n" $null
+        $labels = if ($issue -and $issue.PSObject.Properties['labels']) { @($issue.labels) } else { @() }
+        $boxStep = @($labels | Where-Object { $_ -and $_.PSObject.Properties['name'] -and [string]$_.name -eq 'box step' }).Count -gt 0
+    }
+    catch { Say "  #${n}: $($_.Exception.Message)" 'Red'; $trouble.Add("#$n"); continue }
+    if ($boxStep -and -not @($comments | Where-Object { ([string]$_.body).TrimStart().StartsWith('Box step output:') }).Count) {
+        Say ("  #{0}: stays open, its box step has no output on it yet" -f $n) 'DarkGray'
+        $waitBox.Add("#$n"); continue
+    }
     if ($Check) {
         Say ("  #{0}: would close, pull request #{1}'s merge {2} is in this release{3}" -f $n, $pr, $merge, $(if ($none) { ', with no test task, as its Fixed by line says' } elseif ($own) { ', with the test task written on it after the merge' } else { '' })) 'Green'
         $closed.Add("#$n"); continue
@@ -387,6 +402,7 @@ if (-not $closed.Count) { Say $(if ($Dev) { '  No Dev test task in Done is carri
 Line $verb $closed 'Green'
 Line $(if ($Dev) { 'Not written, not carried or for main' } else { 'Stay open, their merge is not in this release' }) $notCarried 'DarkGray'
 Line 'Stay open, in Done with no test task from a merge to close them with' $noTask 'DarkGray'
+Line 'Stay open, their box step has no output on them yet' $waitBox 'DarkGray'
 if ($trouble.Count) {
     Line 'Stopped, the lines above say why' $trouble 'Red'
     Say ("  .\scripts\release\Close-ShippedIssues.ps1 -Commit {0}{1}   runs it again; it does only what is still to do" -f $shipped, $(if ($Dev) { ' -Dev -Build ' + $Build } else { '' })) 'Yellow'
