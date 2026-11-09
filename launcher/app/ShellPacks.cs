@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -106,6 +107,9 @@ namespace Thornswood
             var b = new Button();
             bool busy = packBusy.Contains(p.id);
             b.Content = busy ? "Working..." : (installed ? "Remove" : "Install");
+            // The button says only its verb; a screen reader says which pack
+            // it acts on as well (#4329).
+            AutomationProperties.SetName(b, (busy ? "Working on " : (installed ? "Remove " : "Install ")) + p.Title);
             b.Theme = Look(installed ? "Ghost" : "Solid");
             b.IsEnabled = !busy;
             b.VerticalAlignment = VerticalAlignment.Center;
