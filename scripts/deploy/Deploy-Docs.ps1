@@ -849,7 +849,10 @@ if (`$own) {
       @('$boxWin\Thornswood-Server-Dev', '(OI)(NP)R'),
       @('$boxWin\Thornswood-Voice\chat', '(OI)(NP)R'),
       @('$boxWin\Thornswood-Voice-Dev\chat', '(OI)(NP)R'),
-      @('$boxWin\Thornswood-Deploys\current', '(OI)(NP)R'))) {
+      @('$boxWin\Thornswood-Deploys\current', '(OI)(NP)R'),
+      # The site's GitHub token, which the admin service writes (#5608,
+      # Install-AdminService.ps1 locks the folder with this same read).
+      @('$boxWin\Thornswood-Admin\for-site', '(OI)(NP)R'))) {
     if (-not (Test-Path -LiteralPath `$g[0])) { 'not here, nothing granted: ' + `$g[0]; continue }
     `$said = & icacls `$g[0] /grant ('*' + `$own + ':' + `$g[1]) 2>&1
     if (`$LASTEXITCODE -eq 0) { 'granted NT TASK\$Task ' + `$g[1] + ' on ' + `$g[0] }

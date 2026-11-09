@@ -18,7 +18,8 @@ const { andList, cfg, forMode, notAcceptedYet } = require('./config');
 const { BLURB, BOARDS, DOCS, escAttr, fillCreditsCommits, fillLoreLine,
   fillPage, LEVEL, MD_PAGES, pageHtml, pageMarkdown, PUBLIC_EDGE_SECONDS,
   PUBLIC_PAGES, readLines, roadmapBoard } = require('./pages');
-const { feedFile, feedSettings, feedView, nativePublished, nativeTag, newestSetup, releaseCopy, setupChannel } = require('./feed');
+const { assetLocation, feedFile, feedSettings, feedView, nativePublished, nativeTag, newestSetup, releaseAsset, releaseCopy,
+  releaseList, setupChannel } = require('./feed');
 const { creditsFacts, findPageVersion, PAGES, pageSha256, PUBLIC_ORIGIN,
   publicAssetBody, publicAssetVersion, publicDiscovery, publicPageBody,
   singlePageHeading } = require('./public');
@@ -238,7 +239,8 @@ async function handle(req, res) {
       'text/plain; charset=utf-8');
   }
 
-  if (req.method === 'GET' && (/^\/api\/(?:public|gallery|releases|roadmap)$/.test(route) || /^\/api\/page\/[a-z-]+$/.test(route))) {
+  if (req.method === 'GET' && (/^\/api\/(?:public|gallery|releases|roadmap|launcher\/releases)$/.test(route) ||
+      /^\/api\/page\/[a-z-]+$/.test(route) || /^\/release\//.test(route))) {
     const retry = publicApiWait(req, Date.now());
     if (retry) return send(res, 429, JSON.stringify({error:'Too many requests. Try again shortly.'}),
       'application/json; charset=utf-8', {'Retry-After':String(retry)});
@@ -1104,7 +1106,10 @@ async function handle(req, res) {
   // and reading it up front would hold all of that per person downloading.
   const dl = p.match(/^\/file\/([A-Za-z0-9._ -]+)$/);
   if (dl && req.method === 'GET') {
-    // The setup programs, from their GitHub Releases (newestSetup, #4824).
+    // The setup programs, from their GitHub Releases (newestSetup, #4824),
+    // sent on to where GitHub keeps the file through the API's asset route
+    // (assetLocation, #5608), never github.com's download address, which
+    // GitHub stopped answering for anybody not signed in on 9 Nov 2026.
     // Every answer under /file/ is no-store (#5449). Cloudflare caches an
     // .exe or .zip by its name whatever the site says, and turns no-cache
     // into four hours in the browser: on 2 Nov the old installer was still
@@ -1114,7 +1119,9 @@ async function handle(req, res) {
     if (ch) {
       const setup = newestSetup(ch);
       if (!setup) return send(res, 404, 'the installer is not published yet', 'text/plain');
-      res.writeHead(302, { location: setup.url, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+      const at = await assetLocation(setup.id);
+      if (!at.url) return send(res, 503, 'GitHub could not say where the installer is just now (' + at.why + '). Try again in a minute.', 'text/plain', { 'Cache-Control': 'no-store' });
+      res.writeHead(302, { location: at.url, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
       return res.end();
     }
     const file = path.join(FILES, dl[1]);
@@ -1262,11 +1269,14 @@ async function handle(req, res) {
       return send(res, 404, 'no such file', 'text/plain');
     }
     const st = fs.statSync(file);
-    // The Release's copy of these bytes, once GitHub holds it publicly
-    // (release copies, #3686). no-cache: the answer moves when it appears.
+    // The Release's copy of these bytes, once GitHub holds it (release
+    // copies, #3686), at the address on GitHub's storage the API's asset
+    // route gives (#5608). no-store: that address is good for minutes. When
+    // GitHub cannot say where it is just now, the bytes are sent from here.
     const copy = releaseCopy(feedAsset[1], feedAsset[2], st.size);
-    if (copy) {
-      res.writeHead(302, { location: copy, 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' });
+    const at = copy ? await assetLocation(copy) : null;
+    if (at && at.url) {
+      res.writeHead(302, { location: at.url, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
       return res.end();
     }
     /* Same Range resume as /file/: packs are tens of megabytes and a drop
@@ -1286,6 +1296,28 @@ async function handle(req, res) {
     }));
     if (head) return res.end();
     return fs.createReadStream(file).pipe(res);
+  }
+  // ------------------------------------------------------ release files
+  // The launcher reads the Releases and fetches every file of one through
+  // the site, so it asks GitHub nothing itself (#5608, feed.js THE RELEASE
+  // ROUTE). The list is JSON in GitHub's own shape; a file is a 302 to
+  // where GitHub keeps it, good for minutes, so neither is kept by a cache.
+  if (route === '/api/launcher/releases' && req.method === 'GET') {
+    const list = await releaseList();
+    if (list === null) return send(res, 503, JSON.stringify({ error: 'GitHub has not said which Releases there are yet. Try again in a minute.' }),
+      'application/json; charset=utf-8', { 'Cache-Control': 'no-store' });
+    return send(res, 200, list, 'application/json; charset=utf-8', { 'Cache-Control': 'no-store' });
+  }
+  const relFile = p.match(/^\/release\/([A-Za-z0-9._-]{1,100})\/([A-Za-z0-9._-]{1,200})$/);
+  if (relFile && req.method === 'GET') {
+    const at = await releaseAsset(relFile[1], relFile[2]);
+    if (at.url) {
+      res.writeHead(302, { location: at.url, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+      return res.end();
+    }
+    if (at.missing) return send(res, 404, 'no such file on a published Release', 'text/plain', { 'Cache-Control': 'no-store' });
+    return send(res, 503, 'GitHub could not say where that file is just now (' + at.why + '). Try again in a minute.', 'text/plain',
+      { 'Cache-Control': 'no-store' });
   }
   // --------------------------------------------------------------- uploads
   /*

@@ -9,8 +9,9 @@
 // Its functions, given before it loads any other module, so a module that
 // needs this one back finds them (a function is there from the top of its
 // file).
-module.exports = { askReleaseCopies, feedFile, feedReleaseTag, feedSettings,
-  feedMove, feedMoveVersion, feedView, nativePublished, nativeTag, newestSetup, readJsonQuiet, releaseCopy, setupChannel };
+module.exports = { askReleaseCopies, assetLocation, feedFile, feedReleaseTag, feedSettings,
+  feedMove, feedMoveVersion, feedView, nativePublished, nativeTag, newestSetup, readJsonQuiet, releaseAsset, releaseCopy,
+  releaseList, setupChannel };
 
 const https  = require('https');
 const fs     = require('fs');
@@ -176,38 +177,99 @@ function readJsonQuiet(file) {
    addresses in their feeds. What moves is where the bytes come from.
    release-files.yml puts every file a release names on a GitHub Release, on
    the release's own tag (release/main/<id>, release/dev/<id>), each named by
-   its sha256. Here, once GitHub says publicly that the Release of the feed's
-   current release holds a file, under that name, with that sha256 as its own
-   digest and with this site's size, the asset route answers 302 to the
-   Release's copy instead of sending the bytes. Every launcher since before
-   25 Sep follows a redirect and allows github.com and its download hosts
-   (Updater.cs AllowedHosts), and still checks the sha256 of what it gets.
+   its sha256. Here, once GitHub says that the Release of the feed's current
+   release holds a file, under that name, with that sha256 as its own digest
+   and with this site's size, the asset route answers 302 to where GitHub
+   keeps those bytes (assetLocation, below) instead of sending them. Every
+   launcher since before 25 Sep follows a redirect, and still checks the
+   sha256 of what it gets.
 
-   Only what GitHub answers without a token counts, so while the repository
-   is private, or the Release is still a draft being filled, the answer is
-   404 and the site sends the bytes itself, as it always has; the site's copy
-   is also what any release the Release does not hold is served from. A
+   A Release that is still a draft being filled is not used, and the site's
+   copy is what any release the Release does not hold is served from, and
+   what is sent whenever GitHub cannot say where its copy is just now. A
    Release once seen is kept: release-files.yml publishes it only after every
    file is on it, and never replaces a file of a published one. One that is
-   not there yet is asked about again RELEASE_LOOK_MS later, never sooner,
-   which keeps the site inside GitHub's sixty unsigned calls an hour. The
-   lookup never holds a download: the request that starts it is served from
-   here. site/tests/test-release-copies.js drives this block, and the setup
-   programs below it. */
+   not there yet is asked about again RELEASE_LOOK_MS later, never sooner.
+   The lookup never holds a download: the request that starts it is served
+   from here. site/tests/test-release-copies.js drives this block, and the
+   setup programs and the Release route below it.
+
+   THE API'S ASSET ROUTE, SIGNED IN (#5608, Patrick's B on 9 Nov 2026). On
+   9 Nov GitHub answered every anonymous request to github.com with 504 for
+   hours, its Release downloads included, while api.github.com kept
+   answering. Every address this site hands out for a file GitHub holds was a
+   github.com download address, so new installs, launcher updates and old
+   launchers' syncs all stopped although nothing of ours was down. Now no
+   address this site gives out is on github.com. The site asks the API for
+   the asset by its id, with Accept: application/octet-stream, and GitHub
+   answers 302 to a short lived address on its storage
+   (release-assets.githubusercontent.com), which the site answers in turn
+   (assetLocation). The site asks signed in, with the read only token the box
+   admin service makes for it (siteToken): five thousand calls an hour, where
+   anonymous asking allows sixty. A box without the token asks without one,
+   and says so once in its log. */
 const RELEASE_REPO = 'ThornswoodRP/Thornswood';
-const RELEASE_DOWNLOAD = 'https://github.com/' + RELEASE_REPO + '/releases/download/';
 const RELEASE_LOOK_MS = 10 * 60 * 1000;
 const RELEASE_TAG_RE = /^release\/(main|dev)\/\d{8}-\d{4,6}(-dev)?$/;
-const releaseCopies = {};   // tag -> { files: { sha: { url, size } }, seen } once found; { at, busy } while not
+const releaseCopies = {};   // tag -> { files: { sha: { id, size } }, seen } once found; { at, busy } while not
 const releaseTagOf = {};    // feed generation file -> the release tag it names, or ''
-function releaseGitHub(apiPath) {
+/* The site's GitHub token (#5608): an installation token of the box admin
+   App with Contents read on this repository alone, which
+   scripts/vps/admin/admin.js makes every half hour, for the hour GitHub gives
+   it, into a folder only the site's own task besides SYSTEM, Administrators
+   and that service may read (Install-AdminService.ps1). Read at each call,
+   so a new one is used the moment it is written. Sent to api.github.com
+   only: a copy of the site a harness starts points GITHUB_API elsewhere and
+   never sends it. */
+const SITE_TOKEN = process.env.THORNSWOOD_SITE_GITHUB_TOKEN || 'C:\\Thornswood-Admin\\for-site\\github-token.json';
+let tokenSaid = '';
+let githubSigned = false;   // whether the last call to GitHub went signed in
+function tokenLog(line, bad) {
+  if (line === tokenSaid) return;
+  tokenSaid = line;
+  (bad ? console.error : console.log)('[thornswood-docs] GitHub token: ' + line);
+}
+function siteToken() {
+  if (GITHUB_API.hostname !== 'api.github.com') return '';
+  if (!fs.existsSync(SITE_TOKEN)) {
+    tokenLog('there is none at ' + SITE_TOKEN + ' (Install-AdminService.ps1 makes it), so GitHub is asked without one, sixty calls an hour', true);
+    return '';
+  }
+  let doc;
+  try { doc = JSON.parse(fs.readFileSync(SITE_TOKEN, 'utf8')); }
+  catch (e) {
+    tokenLog(SITE_TOKEN + ' did not read (' + e.message + '), so GitHub is asked without one', true);
+    return '';
+  }
+  const token = doc && typeof doc.token === 'string' ? doc.token : '';
+  const left = Date.parse(String((doc && doc.expires_at) || '')) - Date.now();
+  if (!/^[A-Za-z0-9_]{20,255}$/.test(token) || !(left > 2 * 60 * 1000)) {
+    tokenLog(SITE_TOKEN + ' holds no token with more than two minutes left, so GitHub is asked without one; the admin service writes a new one every half hour', true);
+    return '';
+  }
+  tokenLog('signed in, from ' + SITE_TOKEN, false);
+  return token;
+}
+/* One call to GitHub's API about this repository. JSON unless asset is set:
+   then it asks for the asset's bytes and hands back where GitHub sends them,
+   { status: 302, location }, without following it. */
+function releaseGitHub(apiPath, asset) {
   return new Promise((resolve) => {
     let settled = false;
     const settle = (v) => { if (!settled) { settled = true; clearTimeout(timer); resolve(v); } };
+    const token = siteToken();
+    githubSigned = !!token;
+    const headers = { 'user-agent': 'thornswood-site', accept: asset ? 'application/octet-stream' : 'application/vnd.github+json',
+      'x-github-api-version': '2022-11-28' };
+    if (token) headers.authorization = 'Bearer ' + token;
     const req = (GITHUB_API.protocol === 'http:' ? require('http') : https).get({
-      hostname: GITHUB_API.hostname, port: GITHUB_API.port || undefined, path: '/repos/' + RELEASE_REPO + apiPath,
-      headers: { 'user-agent': 'thornswood-site', accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' }
+      hostname: GITHUB_API.hostname, port: GITHUB_API.port || undefined, path: '/repos/' + RELEASE_REPO + apiPath, headers
     }, (res) => {
+      if (asset) {
+        res.resume();
+        if (res.statusCode === 302) return settle({ status: 302, location: String(res.headers.location || '') });
+        return settle({ status: res.statusCode, why: 'GitHub answered ' + res.statusCode });
+      }
       let out = '';
       res.setEncoding('utf8');
       res.on('data', (d) => { out += d; });
@@ -222,8 +284,8 @@ function releaseGitHub(apiPath) {
     req.on('error', (e) => settle({ status: 0, why: 'could not reach GitHub: ' + e.message }));
   });
 }
-// The files of one published Release, from GitHub without a token. Only an
-// asset whose name is the sha256 GitHub itself measured on it counts.
+// The files of one published Release, by their asset ids. Only an asset
+// whose name is the sha256 GitHub itself measured on it counts.
 async function lookReleaseCopies(tag) {
   // The newest Releases rather than /releases/tags/<tag>, which a tag with
   // slashes in it does not suit; a feed's current release is always among
@@ -238,11 +300,10 @@ async function lookReleaseCopies(tag) {
     if (got.status !== 200 || !Array.isArray(got.body)) return { found: false, why: got.why || 'the asset list did not read' };
     for (const a of got.body) {
       if (!a || a.state !== 'uploaded' || typeof a.name !== 'string') continue;
-      const url = String(a.browser_download_url || '');
-      if (!url.startsWith(RELEASE_DOWNLOAD) || !url.endsWith('/' + a.name) || /[\s"'<>]/.test(url)) continue;
+      if (!Number.isInteger(a.id) || a.id <= 0) continue;
       const m = /^sha256:([0-9a-f]{64})$/.exec(String(a.digest || ''));
       if (!m || !Number.isInteger(a.size)) continue;
-      if (a.name === m[1]) files[m[1]] = { url, size: a.size };
+      if (a.name === m[1]) files[m[1]] = { id: a.id, size: a.size };
     }
     if (got.body.length < 100) break;
   }
@@ -277,14 +338,40 @@ function feedReleaseTag(channel) {
   }
   return releaseTagOf[file];
 }
-// Where a feed asset of this size can be fetched instead of here, or ''.
+// The asset id of the Release's copy of a feed asset of this size, which
+// assetLocation turns into where GitHub keeps it, or 0 when there is none.
 function releaseCopy(channel, sha, size) {
   const tag = feedReleaseTag(channel);
-  if (!tag) return '';
+  if (!tag) return 0;
   askReleaseCopies(tag);
   const c = releaseCopies[tag];
   const f = c && c.files && c.files[sha];
-  return f && f.size === size ? f.url : '';
+  return f && f.size === size ? f.id : 0;
+}
+/* WHERE GITHUB KEEPS AN ASSET (#5608): the address on its storage the API's
+   asset route answers 302 to, for the asset with this id, as { url }, or
+   { why } when GitHub could not say. Only an https address on GitHub's two
+   storage hosts is taken, the ones every launcher since before 25 Sep lists
+   as where its downloads come from (Updater.cs AllowedHosts). GitHub signs the address for a
+   few minutes, so one is kept ASSET_KEEP_MS and handed to everybody asking
+   for that asset meanwhile: a launcher's sync asks for many files one after
+   another, and an update's are asked by every launcher at once. */
+const ASSET_KEEP_MS = 60 * 1000;
+const assetPlaces = {};     // asset id -> { url, at }
+function storageAddress(u) {
+  let x;
+  try { x = new URL(u); } catch (e) { return false; }
+  return x.protocol === 'https:' && !x.username && !x.password && !x.port && /^(objects|release-assets)\.githubusercontent\.com$/i.test(x.hostname);
+}
+async function assetLocation(id) {
+  if (!Number.isInteger(id) || id <= 0) return { why: 'no asset id' };
+  const had = assetPlaces[id];
+  if (had && Date.now() - had.at < ASSET_KEEP_MS) return { url: had.url };
+  const got = await releaseGitHub('/releases/assets/' + id, true);
+  if (got.status !== 302) return { why: got.why || ('GitHub answered ' + got.status) };
+  if (!storageAddress(got.location)) return { why: 'GitHub sent the asset somewhere other than its storage' };
+  assetPlaces[id] = { url: got.location, at: Date.now() };
+  return { url: got.location };
 }
 /* THE SETUP PROGRAMS (#4824). The download is Velopack's setup program, which
    merge-release.yml makes and signs with the launcher's package inside it.
@@ -293,14 +380,15 @@ function releaseCopy(channel, sha, size) {
    every build Release <tag> that made a package (build-YYYYMMDD.N). Each
    channel's is the one on the newest published Release of its kind, under
    that name, with GitHub's own sha256 digest and a whole size beside it, and
-   /file/<name> answers 302 to it. Until GitHub has said so there is no setup
+   /file/<name> answers 302 to where GitHub keeps it (assetLocation, #5608).
+   Until GitHub has said so there is no setup
    program to offer: the Downloads page says the installer is not published
    yet and /file/<name> answers 404. The site's own downloads folder never
    serves either name (downloadServed): the old installer Publish-Installer put
    there went with that pipeline.
 
-   The same list as the release copies, asked the same way: without a token,
-   again RELEASE_LOOK_MS after the last answer and never sooner, without
+   The same list as the release copies, asked the same way: again
+   RELEASE_LOOK_MS after the last answer and never sooner, without
    holding the request that started it. A look that fails keeps what the last
    one found. The list is walked a hundred Releases a page, because a main
    Release is made only on an approval and can be older than the newest thirty
@@ -327,10 +415,9 @@ async function lookSetups() {
         if (!k.tag.test(r.tag_name)) continue;
         const a = r.assets.find((x) => x && x.name === k.name && x.state === 'uploaded');
         if (!a) continue;
-        const url = String(a.browser_download_url || '');
         const m = /^sha256:([0-9a-f]{64})$/.exec(String(a.digest || ''));
-        if (url !== RELEASE_DOWNLOAD + r.tag_name + '/' + k.name || !m || !Number.isInteger(a.size) || a.size <= 0) continue;
-        out[ch] = { name: k.name, url, size: a.size, sha256: m[1], tag: r.tag_name, at: Date.parse(r.published_at || '') || 0,
+        if (!Number.isInteger(a.id) || a.id <= 0 || !m || !Number.isInteger(a.size) || a.size <= 0) continue;
+        out[ch] = { name: k.name, id: a.id, size: a.size, sha256: m[1], tag: r.tag_name, at: Date.parse(r.published_at || '') || 0,
                     move: setupMove(r, k.move) };
       }
     }
@@ -339,14 +426,16 @@ async function lookSetups() {
   return { found: true, main: out.main, dev: out.dev };
 }
 // The move program on the same Release as a setup program (feedMove), as
-// { name, url, size, sha256 }, or null when that Release has none.
+// { name, id, url, size, sha256 }, or null when that Release has none. Its url is
+// this site's Release route (#5608), which the old launcher allows and
+// follows on to GitHub's storage.
 function setupMove(r, name) {
   const a = r.assets.find((x) => x && x.name === name && x.state === 'uploaded');
   if (!a) return null;
-  const url = String(a.browser_download_url || '');
   const m = /^sha256:([0-9a-f]{64})$/.exec(String(a.digest || ''));
-  if (url !== RELEASE_DOWNLOAD + r.tag_name + '/' + name || !m || !Number.isInteger(a.size) || a.size <= 0) return null;
-  return { name, url, size: a.size, sha256: m[1] };
+  if (!Number.isInteger(a.id) || a.id <= 0 || !m || !Number.isInteger(a.size) || a.size <= 0) return null;
+  if (!RELEASE_ROUTE_TAG.test(r.tag_name)) return null;
+  return { name, id: a.id, url: SITE_ORIGIN + releaseRoute(r.tag_name, name), size: a.size, sha256: m[1] };
 }
 function askSetups() {
   if (setups.busy || (setups.at && Date.now() - setups.at < RELEASE_LOOK_MS)) return;
@@ -360,7 +449,7 @@ function askSetups() {
     }
     for (const ch of Object.keys(SETUP_KINDS)) {
       const was = setups[ch], now = v[ch];
-      if (now && (!was || was.url !== now.url)) console.log('[thornswood-docs] setup programs: ' + ch + ' is ' + now.name + ' on ' + now.tag);
+      if (now && (!was || was.id !== now.id)) console.log('[thornswood-docs] setup programs: ' + ch + ' is ' + now.name + ' on ' + now.tag);
       setups[ch] = now;
     }
   }, (e) => {
@@ -377,10 +466,141 @@ function setupChannel(name) {
   return '';
 }
 // The newest setup program of a channel, 'main' or 'dev', as GitHub last said
-// it, or null: { name, url, size, sha256, tag, at }.
+// it, or null: { name, id, size, sha256, tag, at, move }.
 function newestSetup(channel) {
   askSetups();
   return setups[channel] || null;
+}
+/* THE RELEASE ROUTE (#5608). The launcher holds no token, and asked without
+   one GitHub allows sixty calls an hour from an address, which a household
+   of launchers sharing one would spend on a single update. So the launcher
+   asks GitHub nothing: it reads the list of Releases from this site
+   (/api/launcher/releases, releaseList) and fetches each file of a Release
+   from /release/<tag>/<name> here, which answers 302 to where GitHub keeps
+   it (releaseAsset, then assetLocation). Its Velopack feed and packages, the
+   signed release record and its lists (VeloUpdate.cs, VeloRecord.cs), and an
+   old launcher's move program (feedMove) all go this way. Only a tag of
+   letters, digits, dots, hyphens and underscores has a route, which every
+   build and main Release has.
+
+   Which asset a name is comes from what GitHub already said: the list of the
+   newest hundred Releases (releaseList) and the setup programs' Releases
+   (newestSetup). Only a build Release older than both, the record of a main
+   release promoted from far behind dev, is asked for by its tag, kept
+   RELEASE_KEEP_MS whatever GitHub answered. Any other tag is a 404 without
+   asking GitHub, so nobody can spend the site's calls on names. */
+const SITE_ORIGIN = 'https://thornswood.net';   // public.js PUBLIC_ORIGIN; feed.js loads first
+const RELEASE_ROUTE_TAG = /^[A-Za-z0-9._-]{1,100}$/;
+const RELEASE_ROUTE_NAME = /^[A-Za-z0-9._-]{1,200}$/;
+const RELEASE_BUILD_TAG = /^(?:main-)?build-1\.3\.\d{1,5}$/;
+const RELEASE_KEEP_MS = 10 * 60 * 1000;
+const releaseFiles = {};    // tag -> { files: { name: id } or null when GitHub says there is no such Release, at }
+function releaseRoute(tag, name) {
+  return '/release/' + tag + '/' + name;
+}
+// The asset id of a file of a published Release, by its tag, or 0.
+function knownAsset(tag, name) {
+  const held = releaseListHeld.files[tag];
+  if (held && Object.prototype.hasOwnProperty.call(held, name)) return held[name];
+  for (const ch of Object.keys(SETUP_KINDS)) {
+    const st = setups[ch];
+    if (!st || st.tag !== tag) continue;
+    if (st.name === name) return st.id;
+    if (st.move && st.move.name === name) return st.move.id;
+  }
+  const looked = releaseFiles[tag];
+  if (looked && looked.files && Object.prototype.hasOwnProperty.call(looked.files, name)) return looked.files[name];
+  return 0;
+}
+// Where a file of a published Release is: { url }, { missing: true } when
+// GitHub says the Release or the file is not there, or { why } when GitHub
+// could not be asked.
+async function releaseAsset(tag, name) {
+  if (!RELEASE_ROUTE_TAG.test(String(tag)) || !RELEASE_ROUTE_NAME.test(String(name))) return { missing: true };
+  if (releaseListHeld.body === null) await askReleaseList();
+  askSetups();
+  let id = knownAsset(tag, name);
+  if (!id && RELEASE_BUILD_TAG.test(tag) && !releaseListHeld.files[tag]) {
+    const had = releaseFiles[tag];
+    if (!had || Date.now() - had.at >= RELEASE_KEEP_MS) {
+      const got = await releaseGitHub('/releases/tags/' + encodeURIComponent(tag));
+      if (got.status === 200 && got.body && typeof got.body === 'object') {
+        const r = got.body;
+        releaseFiles[tag] = { files: r.tag_name === tag && !r.draft && Array.isArray(r.assets) ? assetIds(r.assets) : null, at: Date.now() };
+      } else if (got.status === 404) {
+        releaseFiles[tag] = { files: null, at: Date.now() };
+      } else {
+        return { why: got.why || 'the Release did not read' };
+      }
+      id = knownAsset(tag, name);
+    }
+  }
+  if (!id) return { missing: true };
+  return assetLocation(id);
+}
+// name -> asset id, of the files GitHub has finished taking.
+function assetIds(assets) {
+  const files = {};
+  for (const a of assets) {
+    if (a && a.state === 'uploaded' && typeof a.name === 'string' && RELEASE_ROUTE_NAME.test(a.name) &&
+        Number.isInteger(a.id) && a.id > 0) files[a.name] = a.id;
+  }
+  return files;
+}
+/* The Releases as the launcher reads them (/api/launcher/releases): the
+   newest hundred, published, each with its tag, when it was published and
+   its files, each file's address this site's Release route. GitHub's own
+   shape, so Velopack's GithubSource reads it as it is (VeloUpdate.cs
+   ChannelSource). Asked again at most every LIST_SIGNED_MS while the site
+   holds its token, and every RELEASE_LOOK_MS without one, so a new Release
+   reaches launchers within a minute and never spends the anonymous sixty.
+   Until the first answer the caller waits for it; after that the list held
+   is answered and a new one asked for behind it. A look that fails keeps the
+   list the last one found. null when GitHub has not answered yet. */
+const LIST_SIGNED_MS = 60 * 1000;
+const releaseListHeld = { body: null, files: {}, at: 0, busy: null };
+function listFromGitHub(list) {
+  const out = [], files = {};
+  for (const r of list) {
+    if (!r || r.draft || typeof r.tag_name !== 'string' || !RELEASE_ROUTE_TAG.test(r.tag_name) || !Array.isArray(r.assets)) continue;
+    const ids = assetIds(r.assets);
+    files[r.tag_name] = ids;
+    const assets = [];
+    for (const a of r.assets) {
+      if (!a || !Object.prototype.hasOwnProperty.call(ids, a.name) || ids[a.name] !== a.id) continue;
+      const at = releaseRoute(r.tag_name, a.name);
+      assets.push({ name: a.name, size: Number.isInteger(a.size) ? a.size : 0, url: at, browser_download_url: at });
+    }
+    out.push({ name: typeof r.name === 'string' ? r.name : r.tag_name, tag_name: r.tag_name, prerelease: !!r.prerelease,
+               published_at: r.published_at || null, assets });
+  }
+  return { body: JSON.stringify(out), files };
+}
+function askReleaseList() {
+  if (releaseListHeld.busy) return releaseListHeld.busy;
+  const every = githubSigned ? LIST_SIGNED_MS : RELEASE_LOOK_MS;
+  if (releaseListHeld.at && Date.now() - releaseListHeld.at < every) return Promise.resolve();
+  releaseListHeld.busy = releaseGitHub('/releases?per_page=100&page=1').then((got) => {
+    releaseListHeld.busy = null;
+    releaseListHeld.at = Date.now();
+    if (got.status === 200 && Array.isArray(got.body)) {
+      const made = listFromGitHub(got.body);
+      releaseListHeld.body = made.body;
+      releaseListHeld.files = made.files;
+    } else {
+      console.error('[thornswood-docs] the Release list for launchers: ' + (got.why || 'did not read'));
+    }
+  }, (e) => {
+    releaseListHeld.busy = null;
+    releaseListHeld.at = Date.now();
+    console.error('[thornswood-docs] the Release list for launchers: ' + (e && e.message));
+  });
+  return releaseListHeld.busy;
+}
+async function releaseList() {
+  const asking = askReleaseList();
+  if (releaseListHeld.body === null) await asking;
+  return releaseListHeld.body;
 }
 /* THE LAUNCHERS A CHANNEL LETS IN, SINCE VELOPACK (#4825). The launcher goes
    out only through Velopack: merge-release.yml packs it as version 1.3.<n>

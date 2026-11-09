@@ -1239,6 +1239,31 @@ function start(stateDir, ghPort, more) {
       botSvc.kill();
       gh.botGranted = true;
     }
+
+    // #5608, Patrick's B of 9 Nov 2026: the site's GitHub token, Contents read
+    // on Thornswood alone, into the folder only the site's own task may read.
+    console.log('the site\'s token');
+    const forSite = path.join(botRoot, 'for-site');
+    yes('with no for-site folder no contents token is asked for, and the log says why',
+      /site token: no .*for-site, which Install-AdminService\.ps1 makes/.test(botSvc.log()) &&
+      !gh.calls.some(c => /access_tokens$/.test(c.path) && JSON.stringify(c.body.permissions) === '{"contents":"read"}'));
+    fs.mkdirSync(forSite);
+    gh.calls = [];
+    const siteSvc = await start(botState, ghPort, { THORNSWOOD_ADMIN_BOT_EVERY: '1' });
+    try {
+      const file = path.join(forSite, 'github-token.json');
+      yes('the token is made and written into for-site', await waitFor(() => fs.existsSync(file), 5000));
+      const doc = JSON.parse(fs.readFileSync(file, 'utf8'));
+      yes('  contents read on Thornswood alone', doc.token === gh.readToken && doc.repository === 'ThornswoodRP/Thornswood' &&
+        JSON.stringify(doc.permissions) === '{"contents":"read"}');
+      const asked = gh.calls.filter(c => /access_tokens$/.test(c.path) && JSON.stringify(c.body.permissions) === '{"contents":"read"}');
+      yes('  asked of GitHub with only that', asked.length > 0 && asked.every(c => JSON.stringify(c.body) === '{"repositories":["Thornswood"],"permissions":{"contents":"read"}}'));
+      yes('  beside the bot\'s, which is still made', await waitFor(() => /bot token: made for/.test(siteSvc.log()), 5000));
+      yes('  and the log says it once and never holds the token',
+        (siteSvc.log().match(/site token: made for ThornswoodRP\/Thornswood contents/g) || []).length === 1 && !siteSvc.log().includes(gh.readToken));
+    } finally {
+      siteSvc.kill();
+    }
   } catch (e) {
     yes('the run went through without throwing: ' + e.stack, false);
   } finally {

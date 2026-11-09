@@ -19,8 +19,9 @@
 //     before 15 Sep 2026 left off; at most twelve; a lone detail still a
 //     list; no file lists; the collection linked at its revision (#4115);
 //   - the news file is read from the site's own copy when it is those bytes;
-//   - else from the Release copy, checked by size and sha256, through GitHub's
-//     redirect only to GitHub's hosts; a wrong one writes nothing;
+//   - else from the Release copy, checked by size and sha256, at the address
+//     on GitHub's storage the API's asset route gives (#5608), following
+//     redirects only to GitHub's storage hosts; a wrong one writes nothing;
 //   - while the Release does not hold it the old page stays;
 //   - the same feed is not read twice, and a new one is;
 //   - nothing else writes news.json: Publish-News.ps1 is gone and Ship and
@@ -76,12 +77,14 @@ function load(opts) {
     releaseCopies: opts.copies || {},
     asked: [],
     askReleaseCopies: (t) => env.asked.push(t),
+    // Where GitHub keeps an asset, by its id (feed.js assetLocation).
+    assetLocation: async (id) => (opts.places || {})[id] ? { url: opts.places[id] } : { why: 'GitHub did not answer inside ten seconds' },
     putJson: (p, o) => { fs.writeFileSync(p, JSON.stringify(o, null, 2)); return true; },
     log: []
   };
   const quiet = { log: (m) => env.log.push(m), error: (m) => env.log.push(m) };
   const make = new Function('env', 'console',
-    'const { ROOT, NEWS, path, fs, crypto, https, feedFile, readJsonQuiet, feedReleaseTag, releaseCopies, askReleaseCopies, putJson } = env;\n' +
+    'const { ROOT, NEWS, path, fs, crypto, https, feedFile, readJsonQuiet, feedReleaseTag, releaseCopies, askReleaseCopies, assetLocation, putJson } = env;\n' +
     block + '\nreturn { publicNews, refreshNews, newsDay, NEWS_KEEP };');
   env.api = make(env, quiet);
   env.setFeed = (doc, n) => {
@@ -166,27 +169,28 @@ async function main() {
 
   // ---- 3. the Release's copy ---------------------------------------------
   const TAG = 'release/main/20261101-101056';
-  const DL = 'https://github.com/ThornswoodRP/Thornswood/releases/download/' + TAG + '/' + S;
   const CDN = 'https://release-assets.githubusercontent.com/github-production-release-asset/1/x?sig=y';
+  const places = { 77: CDN };
   calls = [];
-  t = load({ calls, tag: TAG, copies: {},
-    answer: (u) => u === DL ? { status: 302, location: CDN } : u === CDN ? { status: 200, body: file } : null });
+  t = load({ calls, tag: TAG, copies: {}, places,
+    answer: (u) => u === CDN ? { status: 200, body: file } : null });
   t.setFeed(Object.assign({}, doc, { newsFile: { sha256: S, count: notes.length } }), 1);
   fs.writeFileSync(t.NEWS, JSON.stringify({ launcher: 'old', news: [{ title: 'The last release' }] }));
   await t.api.refreshNews();
   yes('while the Release does not hold the news file, the page stays as it was and the Release is asked about',
       t.page().launcher === 'old' && t.asked[0] === TAG && calls.length === 0);
-  t.releaseCopies[TAG] = { files: { [S]: { url: DL, size: file.length } } };
+  t.releaseCopies[TAG] = { files: { [S]: { id: 77, size: file.length } } };
   await t.api.refreshNews();
-  yes('once it does, the file is fetched through GitHub\'s redirect and the page written', t.page().launcher === '2026.1101.1609' &&
-      calls.length === 2 && calls[0] === DL && calls[1] === CDN);
+  yes('once it does, the file is fetched from where GitHub keeps it, by its asset id, and the page written',
+      t.page().launcher === '2026.1101.1609' && calls.length === 1 && calls[0] === CDN);
 
-  for (const [what, answer, size] of [
-    ['bytes that are not its sha256', (u) => u === DL ? { status: 200, body: Buffer.from('[]') } : null, 2],
-    ['another size than the Release says', (u) => u === DL ? { status: 200, body: file } : null, file.length - 1],
-    ['a redirect off GitHub\'s hosts', (u) => u === DL ? { status: 302, location: 'https://evil.example/news' } : null, file.length]]) {
+  for (const [what, answer, size, at] of [
+    ['bytes that are not its sha256', (u) => u === CDN ? { status: 200, body: Buffer.from('[]') } : null, 2, places],
+    ['another size than the Release says', (u) => u === CDN ? { status: 200, body: file } : null, file.length - 1, places],
+    ['a redirect off GitHub\'s hosts', (u) => u === CDN ? { status: 302, location: 'https://evil.example/news' } : null, file.length, places],
+    ['no address from GitHub\'s API', () => null, file.length, {}]]) {
     calls = [];
-    t = load({ calls, tag: TAG, copies: { [TAG]: { files: { [S]: { url: DL, size } } } }, answer });
+    t = load({ calls, tag: TAG, copies: { [TAG]: { files: { [S]: { id: 77, size } } } }, answer, places: at });
     t.setFeed(Object.assign({}, doc, { newsFile: { sha256: S } }), 1);
     await t.api.refreshNews();
     yes('a Release copy with ' + what + ' writes nothing, and says why', t.page() === null &&

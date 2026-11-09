@@ -173,6 +173,8 @@ const PLAIN = 'box admin: not here';
 // gives the bot's own account read of, and how often a new one is made.
 const FOR_BOT = process.env.THORNSWOOD_ADMIN_FOR_BOT || path.join(path.dirname(STATE), 'for-bot');
 const BOT_EVERY = Math.max(1, Number(process.env.THORNSWOOD_ADMIN_BOT_EVERY) || 1800);
+// The site's (#5608): the same, into the folder the site's own task reads.
+const FOR_SITE = process.env.THORNSWOOD_ADMIN_FOR_SITE || path.join(path.dirname(STATE), 'for-site');
 
 // Where the records are, and where the runners and the workflow that asks
 // are (#4013).
@@ -1141,43 +1143,70 @@ async function installationRepos(token) {
 // so a box whose install has not made it is left as it was.
 const BOT_PERMISSIONS = { issues: 'write' };
 const BOT_FILE = 'github-token.json';
-let botSaid = '';
 
-function botLog(line) {
-  if (line !== botSaid) log('bot token: ' + line);
-  botSaid = line;
+/* THE SITE'S TOKEN (#5608, Patrick's B of 9 Nov 2026). On 9 Nov GitHub
+   answered every anonymous request to github.com with 504 for hours, its
+   Release downloads included, while its API kept answering. The site now
+   sends every download on through the API's asset route, one call per file,
+   and the Release list the launchers read is one call a minute; asked
+   without a token GitHub allows sixty an hour. So the site asks with one
+   made here like the bot's: Contents read on Thornswood alone, which the
+   App already holds, every BOT_EVERY seconds for the hour GitHub gives it,
+   into FOR_SITE, which only SYSTEM, Administrators, this task and the site's
+   own task may read (Install-AdminService.ps1). site\lib\feed.js reads it at
+   each call. */
+const SITE_PERMISSIONS = { contents: 'read' };
+
+// What each token is for: its folder, its permissions and what the log and
+// a refusal call it.
+const TOKENS = {
+  bot: { dir: () => FOR_BOT, permissions: BOT_PERMISSIONS, what: 'issues', grant: 'Issues write', said: '' },
+  site: { dir: () => FOR_SITE, permissions: SITE_PERMISSIONS, what: 'contents', grant: 'Contents read', said: '' }
+};
+
+function tokenLog(kind, line) {
+  const t = TOKENS[kind];
+  if (line !== t.said) log(kind + ' token: ' + line);
+  t.said = line;
 }
 
-// One new token into FOR_BOT, or the reason there is none. Written whole
-// beside the old one and renamed over it, so the bot never reads half a file.
-// The token is never logged. Returns the line it logged.
-async function botToken(now) {
-  if (!fs.existsSync(FOR_BOT)) { botLog('no ' + FOR_BOT + ', which Install-AdminService.ps1 makes, so none is made'); return botSaid; }
+// One new token of this kind into its folder, or the reason there is none.
+// Written whole beside the old one and renamed over it, so the reader never
+// reads half a file. The token is never logged. Returns the line it logged.
+async function appToken(kind, now) {
+  const t = TOKENS[kind];
+  const dir = t.dir();
+  if (!fs.existsSync(dir)) { tokenLog(kind, 'no ' + dir + ', which Install-AdminService.ps1 makes, so none is made'); return t.said; }
   const held = readApp();
-  if (!held) { botLog('no App held yet, so none is made'); return botSaid; }
+  if (!held) { tokenLog(kind, 'no App held yet, so none is made'); return t.said; }
   try {
     const where = await installation(held, now);
     const jwt = appJwt(held.app.id, held.pem, now);
     const tok = await call('POST', API + '/app/installations/' + where.id + '/access_tokens', { Authorization: 'Bearer ' + jwt },
-      { repositories: [REPO.split('/')[1]], permissions: BOT_PERMISSIONS });
+      { repositories: [REPO.split('/')[1]], permissions: t.permissions });
     if (tok.status !== 201 || !tok.body || !tok.body.token) {
-      throw new Error('GitHub gave the App no issues token for ' + REPO + ' (' + said(tok) + '). It takes Issues write only once it is added on ' +
+      throw new Error('GitHub gave the App no ' + t.what + ' token for ' + REPO + ' (' + said(tok) + '). It takes ' + t.grant + ' only once it is added on ' +
         WEB + '/settings/apps/' + (held.app.slug || '<the App>') + '/permissions and accepted on the installation');
     }
-    const doc = { token: tok.body.token, expires_at: String(tok.body.expires_at || ''), repository: REPO, permissions: BOT_PERMISSIONS, made: new Date(now * 1000).toISOString() };
-    const file = path.join(FOR_BOT, BOT_FILE);
+    const doc = { token: tok.body.token, expires_at: String(tok.body.expires_at || ''), repository: REPO, permissions: t.permissions, made: new Date(now * 1000).toISOString() };
+    const file = path.join(dir, BOT_FILE);
     const part = file + '.part';
     fs.writeFileSync(part, JSON.stringify(doc) + '\n');
     fs.renameSync(part, file);
-    botLog('made for ' + REPO + ' issues, written to ' + file + ', every ' + BOT_EVERY + ' seconds');
+    tokenLog(kind, 'made for ' + REPO + ' ' + t.what + ', written to ' + file + ', every ' + BOT_EVERY + ' seconds');
   } catch (e) {
-    botLog(e.message);
+    tokenLog(kind, e.message);
   }
-  return botSaid;
+  return t.said;
 }
+function botToken(now) { return appToken('bot', now); }
+function siteToken(now) { return appToken('site', now); }
 
 function keepBotToken() {
-  const once = () => botToken(Math.floor(Date.now() / 1000)).catch(e => botLog(e.message));
+  const once = () => {
+    const now = Math.floor(Date.now() / 1000);
+    for (const kind of Object.keys(TOKENS)) appToken(kind, now).catch(e => tokenLog(kind, e.message));
+  };
   once();
   const t = setInterval(once, BOT_EVERY * 1000);
   if (t.unref) t.unref();
@@ -1374,5 +1403,5 @@ function serve() {
   return server;
 }
 
-module.exports = { said, driftBody, CHANGING_ASKS, DRIFT_TITLE, MACHINE_ACTORS, verifyOidc, appJwt, call, botToken, BOT_PERMISSIONS, planCollaborators, planLabels, planLeftovers, checkRecords, checkAbout, planAbout, runnerNumber, checkRulesets, checkSettings, planRulesets, rulesetBody, says, manifest, RULES, ASKS, REPO, RUNNERS_REPO, SETTINGS_REPOS, SCANNING_KEYS, MERGE_KEYS, METHOD_KEYS, FREE_PRIVATE_REPOS, SETTINGS_PERMISSIONS, SETTINGS_EXTRA, serve };
+module.exports = { said, driftBody, CHANGING_ASKS, DRIFT_TITLE, MACHINE_ACTORS, verifyOidc, appJwt, call, botToken, BOT_PERMISSIONS, siteToken, SITE_PERMISSIONS, planCollaborators, planLabels, planLeftovers, checkRecords, checkAbout, planAbout, runnerNumber, checkRulesets, checkSettings, planRulesets, rulesetBody, says, manifest, RULES, ASKS, REPO, RUNNERS_REPO, SETTINGS_REPOS, SCANNING_KEYS, MERGE_KEYS, METHOD_KEYS, FREE_PRIVATE_REPOS, SETTINGS_PERMISSIONS, SETTINGS_EXTRA, serve };
 if (require.main === module) serve();

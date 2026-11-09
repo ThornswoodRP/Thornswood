@@ -84,15 +84,22 @@ const kindsAt = src.indexOf('const SETUP_KINDS = {');
 yes('the site names the setup programs in SETUP_KINDS', kindsAt >= 0);
 const SETUP_KINDS = eval('(' + src.slice(src.indexOf('{', kindsAt), block(kindsAt)) + ')');
 eval(grab('function setupChannel('));
-const MAIN_SETUP = { name: 'Thornswood-Setup.exe', size: 123456789, sha256: 'c'.repeat(64), tag: 'main-build-20261101.3',
-  at: 1761998400000, url: 'https://github.com/ThornswoodRP/Thornswood/releases/download/main-build-20261101.3/Thornswood-Setup.exe' };
+// Where GitHub keeps each asset, as the API's asset route says it
+// (assetLocation, #5608); an id it could not say is a why.
+const STORE = 'https://release-assets.githubusercontent.com/github-production-release-asset/1365246621/';
+const MAIN_SETUP = { name: 'Thornswood-Setup.exe', id: 501, size: 123456789, sha256: 'c'.repeat(64), tag: 'main-build-20261101.3',
+  at: 1761998400000 };
 const setupsNow = { main: MAIN_SETUP, dev: null };
 function newestSetup(ch) { return setupsNow[ch] || null; }
+const githubDown = new Set();
+async function assetLocation(id) {
+  return githubDown.has(id) ? { why: 'GitHub did not answer inside ten seconds' } : { url: STORE + id + '?sig=x' };
+}
 
 const fileSrc = route('const dl = p.match(', "if (dl && req.method === 'GET')");
 yes('the /file/ route is where this expects it', !!fileSrc);
 yes('and asks downloadServed before it serves anything', /downloadServed\(dl\[1\], meta\)/.test(fileSrc));
-const fileRoute = eval('(function (p, req, res, head) {\n' + fileSrc + '\n})');
+const fileRoute = eval('(async function (p, req, res, head) {\n' + fileSrc + '\n})');
 
 const lf = grab('function listFiles(');
 yes('listFiles is in server.js', !!lf);
@@ -124,12 +131,12 @@ const meta = {
 };
 fs.writeFileSync(path.join(FILES, 'files.json'), JSON.stringify(meta));
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = decodeURIComponent(url.pathname);
   const head = req.method === 'HEAD';
   if (head) req.method = 'GET';
-  try { fileRoute(p, req, res, head); }
+  try { await fileRoute(p, req, res, head); }
   catch (e) {
     if (!res.headersSent) { res.writeHead(500); res.end(String(e && e.message)); }
     return;
@@ -170,17 +177,21 @@ async function main() {
 
   // ---- the installer comes from its Release (#4824) -----------------------
   const e = await ask('GET', at('Thornswood-Setup.exe'));
-  yes('the installer answers 302 to main\'s Release copy', e.code === 302 && e.h.location === MAIN_SETUP.url);
+  yes('the installer answers 302 to where GitHub keeps main\'s, from the API\'s asset route', e.code === 302 && e.h.location === STORE + '501?sig=x');
   yes('  and not one byte of the old exe in the folder goes out', !e.body.toString().includes('old installer'));
   // Cloudflare turns no-cache on an .exe into four hours in the browser and
   // keeps only no-store (#5449), so a new release's link is what people get.
   yes('  and no cache may keep the redirect', e.h['cache-control'] === 'no-store');
   const devNone = await ask('GET', at('Thornswood-Dev-Setup.exe'));
   yes('dev\'s answers 404 while no build Release carries one', devNone.code === 404);
-  setupsNow.dev = { name: 'Thornswood-Dev-Setup.exe', size: 5, sha256: 'd'.repeat(64), tag: 'build-20261101.5', at: 1,
-    url: 'https://github.com/ThornswoodRP/Thornswood/releases/download/build-20261101.5/Thornswood-Dev-Setup.exe' };
+  setupsNow.dev = { name: 'Thornswood-Dev-Setup.exe', id: 502, size: 5, sha256: 'd'.repeat(64), tag: 'build-20261101.5', at: 1 };
   const dev = await ask('GET', at('Thornswood-Dev-Setup.exe'));
-  yes('  and 302 to the newest build Release\'s once there is one', dev.code === 302 && dev.h.location === setupsNow.dev.url);
+  yes('  and 302 to the newest build Release\'s once there is one', dev.code === 302 && dev.h.location === STORE + '502?sig=x');
+  githubDown.add(502);
+  const devDown = await ask('GET', at('Thornswood-Dev-Setup.exe'));
+  yes('  and 503, saying so, while GitHub cannot say where it is', devDown.code === 503 && /ten seconds/.test(devDown.body.toString()) &&
+      devDown.h['cache-control'] === 'no-store');
+  githubDown.delete(502);
   setupsNow.main = null;
   const mainNone = await ask('GET', at('Thornswood-Setup.exe'));
   yes('with no Release main-<tag> yet the installer answers 404, never the old exe in the folder',

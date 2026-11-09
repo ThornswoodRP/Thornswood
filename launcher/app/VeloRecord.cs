@@ -30,8 +30,12 @@ namespace Thornswood
     /// published from a Release of its own once Patrick approves it (#5181),
     /// and is held to the record the merge release signed.
     ///
-    /// Fetched from github.com's download addresses, never the API, so the
-    /// check spends none of the sixty anonymous API requests an hour.
+    /// Fetched through the site's Release route (Velo.ReleaseFile, #5608),
+    /// which sends each file on to where GitHub keeps it, so the check asks
+    /// GitHub nothing itself and spends none of the sixty anonymous API
+    /// requests an hour. Until 9 Nov 2026 it was github.com's download
+    /// address, which GitHub stopped answering for anybody not signed in that
+    /// day, and every update was refused for want of its record.
     /// </summary>
     static class VeloRecord
     {
@@ -118,7 +122,7 @@ namespace Thornswood
 
         static string Download(string tag, string name)
         {
-            return Velo.RepoUrl + "/releases/download/" + Uri.EscapeDataString(tag) + "/" + Uri.EscapeDataString(name);
+            return Velo.ReleaseFile(tag, name);
         }
 
         // Through Http.cs, the launcher's one HttpClient, with the feed's ten
@@ -140,7 +144,7 @@ namespace Thornswood
                 using (HttpResponseMessage r = Http.Send(req, 10000))
                 {
                     if (!r.IsSuccessStatusCode)
-                        throw new Exception("GitHub answered HTTP " + (int)r.StatusCode + " for " + name + " of " + tag + ".");
+                        throw new Exception("The site, or GitHub behind it, answered HTTP " + (int)r.StatusCode + " for " + name + " of " + tag + ".");
                     return Http.Body(r, Http.DefaultReadMs);
                 }
             }
