@@ -75,6 +75,13 @@ nav.top a:hover{color:var(--page)}
 .mobile-cta{display:none}
 .hero-motion{margin-top:14px;min-height:44px;background:var(--night);color:var(--gold);
   border:1px solid var(--gold);padding:8px 12px;cursor:pointer;font:13px/1.4 var(--sans)}
+/* The motion button keeps its box from the first paint (#4333). It goes out
+   with the hidden attribute, which the browser's own stylesheet makes
+   display:none, so it took no room until home.js cleared it after load, and
+   on a phone the hero then grew by the button's height and pushed the page
+   down. Hidden, it is now only unseen: the same box, no paint, no focus and
+   nothing for a screen reader, and clearing hidden changes nothing but that. */
+.hero-motion[hidden]{display:inline-block;visibility:hidden}
 .breadcrumbs{padding-top:24px;font:14px/1.6 var(--sans);color:var(--quiet)}
 .breadcrumbs ol{display:flex;flex-wrap:wrap;gap:12px;list-style:none;margin:0;padding:0}
 .breadcrumbs li+li::before{content:'/';margin-right:12px}
