@@ -115,7 +115,9 @@ function Invoke-Pull($s, [string[]]$more = @()) {
     $code = $LASTEXITCODE
     Remove-Item Env:\THORNSWOOD_SCRATCH_ROOT -ErrorAction SilentlyContinue
     $log = Join-Path $s.Fakes 'calls.log'
-    $calls = if (Test-Path -LiteralPath $log) { @(Get-Content -LiteralPath $log) } else { @() }
+    # @() around the whole if: an if hands back its one line as a string, and
+    # [0] of a string is its first letter.
+    $calls = @(if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log })
     return [pscustomobject]@{ Code = $code; Out = $out; Calls = $calls }
 }
 function Said([string]$pull, [string]$head) { "main's builders read, from pull request $pull at $head`: game/content/Thornswood-Content.esp`n" }
