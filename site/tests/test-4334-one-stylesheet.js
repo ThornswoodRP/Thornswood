@@ -56,12 +56,14 @@ yes('found the pages: ' + pages.map((p) => p.name).join(', '),
     pages.some((p) => p.name === 'public/home.html') && pages.some((p) => p.name === 'public/index.html') &&
     pages.some((p) => /^lib\/passes\.js/.test(p.name)));
 
-// The text with every <!-- ... --> taken out, by walking it rather than one
-// regex pass: a pass of /<!--[\s\S]*?-->/ can join the halves of two
-// comments, or leave an unclosed one, into a new <!-- (CodeQL, incomplete
-// multi-character sanitization). An unclosed comment runs to the end, as a
-// browser reads it, so nothing after it is counted.
-function withoutComments(text) {
+// The text with every <!-- ... --> taken out, until none is left. One pass,
+// of a regex or of a walk, is not enough: in <!<!---->-- taking out the
+// inner comment joins <! and -- into a new <!--
+// (CodeQL, incomplete multi-character sanitization). So it walks the text
+// again until a walk changes nothing; then no <!-- is left, or that walk
+// would have taken it out. An unclosed comment runs to the end, as a browser
+// reads it, so nothing after it is counted.
+function withoutCommentsOnce(text) {
   let out = '', at = 0;
   for (;;) {
     const open = text.indexOf('<!--', at);
@@ -72,6 +74,19 @@ function withoutComments(text) {
     at = close + 3;
   }
 }
+function withoutComments(text) {
+  let before;
+  do { before = text; text = withoutCommentsOnce(text); } while (text !== before);
+  return text;
+}
+// The cases a single pass gets wrong, held here so the helper cannot go
+// back to one pass without this harness saying so.
+yes('the comment strip leaves no <!-- from <!<!---->-- (one pass leaves one)',
+    withoutComments('<!<!---->--').indexOf('<!--') < 0 &&
+    withoutCommentsOnce('<!<!---->--') === '<!--');
+yes('nor from an unclosed comment, and keeps the text around a closed one',
+    withoutComments('a<!-- b -->c<!-- d') === 'ac' &&
+    blocking('<!-- <link rel="stylesheet" href="/x.css"> --><link rel="stylesheet" href="/y.css">').join() === '/y.css');
 // A stylesheet link blocks the first draw unless its media keeps it from
 // applying (print, or not all) or it is disabled.
 function blocking(html) {
