@@ -23,9 +23,9 @@ Transport NPCs display their function: nine Coach Drivers, sixteen Ferry
 Operators and two Ship Captains. Their original source names remain in the
 catalogue for reference; server-owned display titles are applied during
 admission and persist for current and later arrivals. Routes, identities and
-population counts stay unchanged. The six-trade guild roster will similarly
-display Smith, Woodworker, Tailor, Enchanter, Cook and Alchemist with its role
-tables; that roster change is a separate prerequisite and is not active here.
+population counts stay unchanged. The sixty guild traders display their
+trade the same way: in each hold one Smith, Woodworker, Tailor, Enchanter,
+Cook and Alchemist, the roster's role and the role table they trade by.
 This includes named pets and dungeon bosses whose records lack the Unique flag.
 
 An actor stays in its habitat and home region. Wolves do not roam a city
