@@ -574,6 +574,10 @@ issue where the card did.
   verb scripts unless it is Patrick's, and a Bot's pull request without
   Bramble's review at its head.** (dec_IL6elJT7TwyCVC_wzMIveA) 2 Nov 2026,
   [#5572](https://github.com/ThornswoodRP/Thornswood/issues/5572#issuecomment-6728773352).
+- **Main's ruleset gains one code scanning rule for CodeQL, so a new alert at
+  high or above holds a pull request in the queue.**
+  (dec_Gm-N3eXHFtatOecKTnaYSw) 9 Nov 2026,
+  [#5638](https://github.com/ThornswoodRP/Thornswood/issues/5638#issuecomment-6751597191).
 
 ### Languages and code
 
