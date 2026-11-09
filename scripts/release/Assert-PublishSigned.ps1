@@ -1,9 +1,8 @@
 <#
   Assert-PublishSigned.ps1
 
-  Helpers for the publish sign gate. Dot-source this from Ship.ps1 (and
-  Test-ReleaseFiles.ps1, which runs the same gate on a release draft). Do
-  not call it as a standalone entry: it only defines functions.
+  Helpers for the publish sign gate. Dot-source this from Ship.ps1. Do not
+  call it as a standalone entry: it only defines functions.
 
   WHY. Since 27 September launchers from ExpectedSigner on refuse an update
   that is not signed by that certificate (CONTRIBUTING, issue #390). A local

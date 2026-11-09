@@ -374,80 +374,11 @@ try {
     $so = [IO.File]::ReadAllText((Join-Path $rel 'Sign-OnGitHub.ps1'))
     Yes 'Sign-OnGitHub.ps1 is ASCII' (-not ($so.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
 
-    # ---- 5b. the launcher from GitHub (#3312) ------------------------------------------
-    Write-Host ''; Write-Host 'the launcher from GitHub'
-    $now = (Get-Date).ToUniversalTime()
-    $script:lcalls = New-Object System.Collections.ArrayList
-    $script:lstate = @{ TagRun = 'success'; TagStatus = 'completed'; Runs = $true; Status = 'completed'; Conclusion = 'success'; Old = $false }
-    $lgh = {
-        [void]$script:lcalls.Add(@($args))
-        if ($args[0] -eq 'workflow') { return '' }
-        if ($args[0] -eq 'run' -and $args[1] -eq 'list') {
-            $w = $args[[array]::IndexOf($args, '-w') + 1]
-            $when = $now.AddSeconds(5).ToString('yyyy-MM-ddTHH:mm:ssZ')
-            if ($script:lstate.Old) { $when = $now.AddHours(-2).ToString('yyyy-MM-ddTHH:mm:ssZ') }
-            if ($w -eq 'release-tag.yml') {
-                return ('[{"databaseId":7,"displayTitle":"tag v1.2.6.7","headBranch":"main","status":"' + $script:lstate.TagStatus + '","conclusion":"' + $script:lstate.TagRun + '","url":"https://github.com/x/runs/7","createdAt":"' + $when + '"}]')
-            }
-            if (-not $script:lstate.Runs) { return '[]' }
-            # Main's run for the tag (#3930), an older tag's on main, and a
-            # newer manual run on the tag's own ref, which signs nothing.
-            return ('[{"databaseId":9,"displayTitle":"Release launcher v1.2.6.7","headBranch":"main","status":"' + $script:lstate.Status + '","conclusion":"' + $script:lstate.Conclusion + '","url":"https://github.com/x/runs/9","createdAt":"' + $when + '"},' +
-                    '{"databaseId":8,"displayTitle":"Release launcher v1.2.6.6","headBranch":"main","status":"completed","conclusion":"success","url":"x","createdAt":"' + $when + '"},' +
-                    '{"databaseId":10,"displayTitle":"Release launcher v1.2.6.7","headBranch":"v1.2.6.7","status":"completed","conclusion":"success","url":"https://github.com/x/runs/10","createdAt":"' + $when + '"}]')
-        }
-        throw "gh was asked something unexpected: $($args -join ' ')"
-    }
-    $sha40 = 'c' * 40
-    function AskNow { $script:lcalls.Clear(); return (Invoke-ReleaseLauncherOnGitHub -Repo 'ThornswoodRP/Thornswood' -Tag 'v1.2.6.7' -Commit $sha40 -Gh $lgh -WaitSeconds 1 -Poll 0) }
-    $why = AskNow
-    Yes ("a green release.yml run on the tag: '' ('{0}')" -f $why) ($why -eq '')
-    $d = @($script:lcalls | Where-Object { $_[0] -eq 'workflow' })
-    Yes '  it asks release-tag.yml on main for that tag and commit' ($d.Count -eq 1 -and @($d[0]) -contains 'release-tag.yml' -and @($d[0]) -contains 'main' -and @($d[0]) -contains 'tag=v1.2.6.7' -and @($d[0]) -contains ('commit=' + $sha40))
-    $script:lstate.Conclusion = 'failure'
-    $why = AskNow
-    Yes 'a red release.yml run: refused, with the run' ($why -match 'ended failure' -and $why -match 'runs/9')
-    Yes '  and a green run on the tag''s own ref, which signs nothing, is not taken instead (#3930)' ($why -notmatch 'runs/10')
-    $script:lstate.Conclusion = 'success'; $script:lstate.Runs = $false; $script:lstate.TagRun = 'failure'
-    $why = AskNow
-    Yes 'a red release-tag.yml run (a tag on another commit): refused, with that run' ($why -match 'release-tag\.yml ended failure' -and $why -match 'runs/7')
-    $script:lstate.TagRun = 'success'
-    $why = AskNow
-    Yes 'no release.yml run on the tag: refused when the wait is up' ($why -match 'no release\.yml run on main started for v1\.2\.6\.7')
-    $script:lstate.Runs = $true; $script:lstate.Old = $true
-    $why = AskNow
-    Yes '  and a run from before the ask is not taken for it' ($why -match 'no release\.yml run on main started')
-    $script:lstate.Old = $false; $script:lstate.Status = 'in_progress'
-    $why = AskNow
-    Yes 'a run still going when the wait is up: refused' ($why -match 'still in_progress')
-    $script:lstate.Status = 'completed'
-    Yes 'a tag that is not v<a.b.c[.d]> is refused before anything is asked' ((Invoke-ReleaseLauncherOnGitHub -Repo 'r' -Tag 'main' -Commit $sha40 -Gh $lgh) -match 'not a launcher release tag')
-
-    # Get-SignedFileRefusal: on the box off Windows, with a stand-in box.
-    $exeFile = Join-Path $Scratch 'Thornswood.exe'
-    Put $exeFile 'MZ not really a launcher'
-    $script:fboxSaid = @('SIGNED ACCEPTED')
-    $script:fboxScript = ''
-    $fbox = { param($t) $script:fboxScript = $t; return $script:fboxSaid }
-    $why = Get-SignedFileRefusal $exeFile 'Thornswood' $repo $fbox
-    Yes ("a box that accepts the file: '' ('{0}')" -f $why) ($why -eq '')
-    Yes '  the box is sent the file, Signature.cs and Get-PublishSignRefusal' ($script:fboxScript.Contains([Convert]::ToBase64String([IO.File]::ReadAllBytes($exeFile))) -and $script:fboxScript.Contains('Get-PublishSignRefusal -Path $f') -and $script:fboxScript.Contains('Signature.cs'))
-    Yes '  as ASCII' (-not ($script:fboxScript.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
-    Yes '  and its folder goes whatever happens' ($script:fboxScript -match 'finally \{ Remove-Item -LiteralPath \$d -Recurse')
-    $script:fboxSaid = @('SIGNED REFUSED Thornswood.exe is not Authenticode Valid (status NotSigned).')
-    Yes 'a box that refuses: refused, with its reason' ((Get-SignedFileRefusal $exeFile 'Thornswood' $repo $fbox) -match 'NotSigned')
-    $script:fboxSaid = @('nothing useful')
-    Yes 'a box that does not say: refused' ((Get-SignedFileRefusal $exeFile 'Thornswood' $repo $fbox) -match 'did not say')
-    # The text runs as the box's runner hands it over, with no script root.
-    $runText = Join-Path $runDir 'checkfile.ps1'
-    [IO.File]::WriteAllText($runText, (New-SignedFileCheckScript $exeFile 'Thornswood' $repo), (New-Object Text.UTF8Encoding($false)))
-    $runner = '$b = [scriptblock]::Create([IO.File]::ReadAllText(''' + $runText.Replace("'", "''") + ''', [Text.Encoding]::UTF8)); . $b'
-    $hadTemp = $env:TEMP
-    $env:TEMP = $runDir
-    try { $ran = @(& $exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($runner))) 2>&1 | ForEach-Object { [string]$_ }) }
-    finally { $env:TEMP = $hadTemp }
-    $ranSaid = @($ran | Where-Object { $_ -match '^SIGNED ' })
-    Yes ("the box's text for a file, run with no script root, says one SIGNED line ('{0}')" -f ($ranSaid -join ' | ')) ($ranSaid.Count -eq 1 -and ($ranSaid -join '') -match '^SIGNED REFUSED Thornswood\.exe ')
+    # ---- 5b. no launcher from GitHub any more (#5385) --------------------------------
+    Write-Host ''; Write-Host 'no launcher from GitHub'
+    Yes 'Sign-OnGitHub.ps1 asks for no launcher: release-tag.yml and release.yml are gone with Velopack' (
+        $so -notmatch '(?m)^function (Invoke-ReleaseLauncherOnGitHub|Find-ReleaseRun|Get-SignedFileRefusal|Invoke-SignedCheckOnBox|New-SignedFileCheckScript)\b' -and
+        -not $so.Contains("'release-tag.yml'") -and -not $so.Contains("'release.yml'"))
 
     # ---- 6. where it sits -------------------------------------------------------------
     Write-Host ''; Write-Host 'where it sits'

@@ -46,7 +46,7 @@
 #
 # WHY THE ACTIONS ARE PINNED. Every action is named by a full length commit
 # SHA, with the tag it was on in a comment at the end of the line, the same as
-# release.yml has been since it was written. A tag is a moving pointer its owner
+# every release workflow here. A tag is a moving pointer its owner
 # can repoint at any commit, and these steps run on the VPS, beside the live
 # server: a repointed tag would be somebody else's code on that box without a
 # line changing here. The comment is what a person reads; the SHA is what runs.
@@ -968,8 +968,8 @@ jobs:
           Write-Host ('TESTED-TREE {0} commit {1} pull request {2} head {3}' -f $tree, $env:GITHUB_SHA, $env:PR_NUMBER, $env:PR_HEAD)
 
       # No other artifact from this build (#2163, 19 Oct). It used to keep the exe
-      # for 7 days, and nothing read it: Ship takes the launcher from
-      # release.yml's draft, and no script or test downloads a build's
+      # for 7 days, and nothing read it: a launcher goes out only in
+      # merge-release.yml's package, and no script or test downloads a build's
       # artifacts. Measured 19 Oct: 488 copies, 1.30 GB of this account's 2 GB
       # of Actions storage, which Patrick's billing page read at 1.8 GB. The
       # pdb was never kept either (#1356 / #462): it carries absolute

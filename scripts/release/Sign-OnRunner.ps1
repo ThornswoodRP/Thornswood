@@ -9,8 +9,8 @@
 
       pwsh -File scripts/release/Sign-OnRunner.ps1 -Path <file> [-Path <file> ...]
 
-  HOW IT SIGNS. The way release.yml signs the launcher (its header, HOW IT
-  SIGNS, #2163 section 8): Microsoft's signing client at the version and
+  HOW IT SIGNS. The way the launcher was first signed on a runner (#2163
+  section 8): Microsoft's signing client at the version and
   sha256 Setup-ShipMachine.ps1 pins, lifted out of it by the parser so the pin
   lives in one place; signing.json from the tracked template; a federated
   (OIDC) token GitHub mints for this job in the "release" environment, kept in

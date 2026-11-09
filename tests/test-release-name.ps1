@@ -15,7 +15,7 @@
   Publish-Update.ps1 and the real Feed-Store.ps1:
 
     1. the tag names: release/main/<id> and release/dev/<id>, distinct, valid
-       git refs, and never v<...>, which would start release.yml's launcher build
+       git refs, and never v<...>, the old launchers' tags (#5385)
     2. Get-ReleaseDisagreements: a feed whose names agree has none, and each
        way they can disagree is caught (launcher, packs, baseline, commit, tag)
     3. the real Publish-Update.ps1 in a child PowerShell, publishing for real
@@ -113,11 +113,8 @@ try {
         $ok = RunGit $Scratch check-ref-format ('refs/tags/' + $tg)
         Yes "  $tg is a valid git tag name" ($ok.Code -eq 0)
     }
-    $yml = [IO.File]::ReadAllText((Join-Path $repo '.github\workflows\release.yml'))
-    $trig = [regex]::Match($yml, "(?s)tags:\s*\r?\n\s*-\s*'([^']+)'")
-    Yes ("release.yml builds a launcher on tags '" + $trig.Groups[1].Value + "'") ($trig.Success)
-    $glob = $trig.Groups[1].Value
-    Yes '  and no release tag matches it, so a Ship never starts a launcher build' (-not ($m -like $glob) -and -not ($d -like $glob))
+    Yes 'no release tag is a v<...> tag, the old launchers'' tags' (-not ($m -like 'v*') -and -not ($d -like 'v*'))
+    Yes '  and no workflow builds on a tag push any more (#5385)' (-not (Test-Path -LiteralPath (Join-Path $repo '.github\workflows\release.yml')))
 
     # ---- 1a. the team's clock, whatever the machine's (31 Oct) -----------------------
     # A GitHub runner keeps UTC and One and the box keep Mountain time, so a

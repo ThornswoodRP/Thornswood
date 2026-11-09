@@ -54,12 +54,12 @@
   IN A GITHUB JOB (#3412). A job that holds the signing identity (the
   "release" environment, id-token: write) signs with Artifact Signing through
   a federated token, no secret. A caller can name its own token file in
-  AZURE_FEDERATED_TOKEN_FILE, as release.yml does right before its one call.
+  AZURE_FEDERATED_TOKEN_FILE right before its one call.
   When none is named and GitHub gave the job a way to ask for one, this asks
   for it itself, right before each file: the token lasts minutes, and a job
   can build or fetch for longer than that before it gets here. The token is written to a file under RUNNER_TEMP
   for that one signtool call and removed with it. AZURE_CLIENT_ID and
-  AZURE_TENANT_ID come from the job, as release.yml sets them.
+  AZURE_TENANT_ID come from the job, as merge-release.yml sets them.
 
 .PARAMETER Path
   One or more files to sign. Missing files are reported and skipped rather than
@@ -181,7 +181,7 @@ function New-GitHubSigningToken {
     if ($env:AZURE_FEDERATED_TOKEN_FILE) { return '' }
     if (-not $env:ACTIONS_ID_TOKEN_REQUEST_URL -or -not $env:ACTIONS_ID_TOKEN_REQUEST_TOKEN) { return '' }
     if (-not $env:AZURE_CLIENT_ID -or -not $env:AZURE_TENANT_ID) {
-        throw 'this GitHub job may ask for a signing token, but AZURE_CLIENT_ID and AZURE_TENANT_ID are not set (release.yml sets them from the repository variables)'
+        throw 'this GitHub job may ask for a signing token, but AZURE_CLIENT_ID and AZURE_TENANT_ID are not set (merge-release.yml sets them from the repository variables)'
     }
     $answer = Invoke-RestMethod -Uri ($env:ACTIONS_ID_TOKEN_REQUEST_URL + '&audience=api://AzureADTokenExchange') -Headers @{ Authorization = ('bearer ' + $env:ACTIONS_ID_TOKEN_REQUEST_TOKEN) } -ErrorAction Stop
     if (-not $answer -or -not $answer.value) { throw 'GitHub answered the request for a signing token with no token' }

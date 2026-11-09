@@ -1,26 +1,24 @@
 # Signed releases and artifact provenance (issue #2163)
 
-Status: DESIGN AND PILOT, switched over on 22 Oct 2026 (#3312), and the box
-job ended with the flip to public (#4013, Patrick's A of 27 Oct 2026).
-release.yml builds and signs the launcher on GitHub's hosted Windows runner.
-From #3312 until the repository went public, when GitHub refused the job
-(no minutes) or it failed, the VPS job built and signed it on runner 3. A
-public repository has GitHub's runners free with no minute limit and no box
-runner registered to it, so that job went rather than moving to the private
-ops repository (section 7, "#4013"). A second GitHub runner checks the
-signed draft, and for a release from the feed the engine fork checks the
-launcher again on GitHub's runner before it signs the release (section 7,
-"#3312"). Ship, the feed and every checksum check stay as they are. Since
-#4824 the launcher is also the setup program, so there is no separate
-installer to sign or publish. Patrick's answers are in
-section 8, "Decisions", and none is pending. Section 9 sets doing nothing
-beside the change (Patrick, 15 Oct, #2168 A).
+Status: in use. Since Velopack (#4825) every launcher is built and signed
+in `merge-release.yml`, on GitHub's runner through the `release`
+environment and its federated identity (`Sign-OnRunner.ps1`, no secret
+stored), packed with every file checked against its signed record, and goes
+out only on that workflow's Releases and `promote-main.yml`'s (#5181).
+`release.yml`, `release-tag.yml`, `Set-Ref.ps1 -PublishLauncher` and
+`-RetagLauncher`, `Invoke-ReleaseLauncherOnGitHub`, `Test-ReleaseFiles.ps1`
+and `Resolve-ReleaseTag.ps1`, the path that built a launcher for a `v<version>`
+tag onto a draft, were removed on 9 Nov 2026 (#5385). Sections 1 to 9 below
+are the design and its history as they were written, and where they name
+those files they describe that earlier path. The catalog of a release from
+the feed is still signed on the engine fork's runner (`Sign-OnGitHub.ps1`).
+Patrick's answers are in section 8, "Decisions", and none is pending.
 
 This does not claim reproducible builds. The Framework 4 csc that built the
 launcher until 15 Oct stamped a build time and a fresh MVID into every build.
 Since #498 (#2550) every launcher is built by MSBuild. With
 `-p:Deterministic=true` two rebuilds on One were byte-identical (#498), but
-neither the project files nor release.yml set it, and nobody has measured
+neither the project files nor the release workflows set it, and nobody has measured
 runner against local. Provenance here means "this signed file came from this commit,
 this runner and these records", recorded and signed, not "anyone can rebuild
 the same bytes".

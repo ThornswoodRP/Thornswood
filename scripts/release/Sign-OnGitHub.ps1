@@ -30,20 +30,16 @@
   holds it to the sha256 release.json lists and runs the launcher's own
   check on it, in a job of its own with no Azure token, so a launcher is
   checked by a job that cannot sign before the release that names it is
-  signed (it was written for release.yml's VPS fallback, gone since #4013). Then it makes the catalog over
+  signed. Then it makes the catalog over
   release.json the way New-ReleaseManifestFiles does, signs it with the
   ThornswoodRelease profile, reads it back, and keeps it as the artifact
   release-cat-<request> for a day. Nothing secret goes either way.
 
-  THE LAUNCHER ITSELF (#3312). A release from the feed that carries a new
-  launcher cannot build or sign it where it runs. Invoke-ReleaseLauncherOnGitHub
-  asks this repository's release-tag.yml to tag main's commit v<number> and
-  start main's release.yml for it, which builds and signs it on GitHub's
-  runner (the box's fallback ended with the flip to public, #4013), and waits
-  for that run. Only a run of main's own workflow signs (#3930), so the run
-  waited for is one on main whose title names the tag.
-  Get-SignedFileRefusal then holds what it built to the launcher's own check
-  here on Windows, or on the box anywhere else, the way the catalog is held.
+  THE LAUNCHER ITSELF is not built or signed here any more. Since Velopack a
+  launcher goes out only on the Releases merge-release.yml and
+  promote-main.yml make (#4825), so Invoke-ReleaseLauncherOnGitHub, which
+  asked release-tag.yml and release.yml for one, went with them (#5385), and
+  so did the box check of a single signed file it used.
 
   WHAT IS HELD when it comes back, before the publish goes on: the catalog
   holds release.json as it is here (Test-FileCatalog) and passes
@@ -76,7 +72,7 @@ function Invoke-SignOnGitHubGh([string[]]$GhArgs) {
 }
 
 # The signing client pin, lifted out of Setup-ShipMachine.ps1 by the parser so
-# it lives in one place (release.yml reads it the same way).
+# it lives in one place (Sign-OnRunner.ps1 reads it the same way).
 function Get-SignOnGitHubClientPin([string]$RepoDir) {
     $src = [IO.File]::ReadAllText((Join-Path $RepoDir 'scripts\release\Setup-ShipMachine.ps1'))
     $t = $null; $e = $null
@@ -262,133 +258,4 @@ function New-SignedCatalogCheckScript([string]$Json, [string]$Catalog, [string]$
         '} catch { ''CATALOG REFUSED the box could not run the check: '' + $_.Exception.Message }'
         'finally { Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue }'
     ) -join "`r`n"
-}
-
-# '' when $Path passes the publish gate (Get-PublishSignRefusal: Authenticode
-# Valid, the Subject naming ExpectedSigner, and launcher\app\Signature.cs, the
-# launcher's own check), else why. Here on Windows; on the box anywhere else,
-# which holds no signing setup, the way Get-SignedCatalogRefusal holds a
-# catalog (-Box stands in for it).
-function Get-SignedFileRefusal([string]$Path, [string]$ExpectedSigner, [string]$RepoDir, [scriptblock]$Box) {
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return "there is no file at $Path to check" }
-    $onWindows = ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT)
-    if ($onWindows -and -not $Box) { return (Get-PublishSignRefusal -Path $Path -ExpectedSigner $ExpectedSigner) }
-    return (Invoke-SignedCheckOnBox (New-SignedFileCheckScript $Path $ExpectedSigner $RepoDir) (Split-Path -Leaf $Path) $Box)
-}
-
-# Runs a script New-SignedFileCheckScript made on the box (-Box stands in for
-# it) and reads its one line back: '' when the box accepted $leaf, else why.
-function Invoke-SignedCheckOnBox([string]$script, [string]$leaf, [scriptblock]$Box) {
-    $lines = @()
-    try {
-        if ($Box) { $lines = @(& $Box $script) }
-        else {
-            $vps = Join-Path $PSScriptRoot '..\vps'
-            . (Join-Path $vps 'Send-Script.ps1')
-            $target = (Get-ThornswoodVpsUser) + '@' + (Get-ThornswoodVpsAddress)
-            $lines = @(Invoke-ThornswoodRemote -Target $target -SshArgs @('-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes') -Script $script)
-        }
-    } catch { return ('the box could not check ' + $leaf + ': ' + $_.Exception.Message) }
-    $said = @($lines | ForEach-Object { [string]$_ } | Where-Object { $_ -match '^SIGNED ' })
-    if ($said.Count -ne 1) {
-        return ('the box did not say whether ' + $leaf + ' passes (it answered: ' + ((@($lines | ForEach-Object { [string]$_ }) | Select-Object -Last 3) -join ' | ') + ')')
-    }
-    if ($said[0] -eq 'SIGNED ACCEPTED') { Write-Host ('  the box, which holds no signing setup, accepts ' + $leaf + ' with the launcher''s own check') -ForegroundColor DarkGray; return '' }
-    return ($said[0] -replace '^SIGNED REFUSED ', '')
-}
-
-# The script the box runs for one file: the file and Signature.cs as base64
-# (Send-Script.ps1 sends a long script by scp), the check from
-# Assert-PublishSigned.ps1 as it is here, and one line back, SIGNED ACCEPTED
-# or SIGNED REFUSED <why>. Its folder goes whatever happens.
-function New-SignedFileCheckScript([string]$Path, [string]$ExpectedSigner, [string]$RepoDir) {
-    $b64 = { param($p) [Convert]::ToBase64String([IO.File]::ReadAllBytes($p)) }
-    $assert = [IO.File]::ReadAllText((Join-Path $RepoDir 'scripts\release\Assert-PublishSigned.ps1'))
-    $q = { param($s) "'" + ([string]$s).Replace("'", "''") + "'" }
-    $leaf = [IO.Path]::GetFileName($Path)
-    if ($leaf -notmatch '^[A-Za-z0-9._-]+$') { $leaf = 'file.bin' }
-    $file = @(('    $f = Join-Path $d ' + (& $q $leaf)),
-              ('    [IO.File]::WriteAllBytes($f, [Convert]::FromBase64String(' + (& $q (& $b64 $Path)) + '))'))
-    return @(
-        '$ErrorActionPreference = ''Stop'''
-        '$d = Join-Path $env:TEMP (''thornswood-signed-'' + [Guid]::NewGuid().ToString(''N''))'
-        'New-Item -ItemType Directory -Force -Path $d | Out-Null'
-        'try {'
-        $file
-        ('    [IO.File]::WriteAllBytes((Join-Path $d ''Signature.cs''), [Convert]::FromBase64String(' + (& $q (& $b64 (Join-Path $RepoDir 'launcher\app\Signature.cs'))) + '))')
-        $assert
-        '    $AssertPublishSignedCs = Join-Path $d ''Signature.cs'''
-        ('    $why = Get-PublishSignRefusal -Path $f -ExpectedSigner ' + (& $q $ExpectedSigner))
-        '    if ($why) { ''SIGNED REFUSED '' + $why } else { ''SIGNED ACCEPTED'' }'
-        '} catch { ''SIGNED REFUSED the box could not run the check: '' + $_.Exception.Message }'
-        'finally { Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue }'
-    ) -join "`r`n"
-}
-
-# Asks $Repo's release-tag.yml to tag $Commit (on main) as $Tag and start
-# main's release.yml for it, then waits for that release.yml run, the one on
-# main titled "Release launcher <tag>" (release.yml's run-name, #3930): GitHub's runner
-# builds and signs the launcher, and a second GitHub runner checks the signed
-# draft (#4013). '' once that run is
-# green, else why. The draft it made is then read the way a main Ship reads
-# one (Ship.ps1, Get-ReleaseLauncher). -WaitSeconds bounds the whole wait.
-function Invoke-ReleaseLauncherOnGitHub {
-    param(
-        [Parameter(Mandatory = $true)][string]$Repo,
-        [Parameter(Mandatory = $true)][string]$Tag,
-        [Parameter(Mandatory = $true)][string]$Commit,
-        [scriptblock]$Gh = { Invoke-SignOnGitHubGh $args },
-        [int]$WaitSeconds = 3600,
-        [int]$Poll = 20
-    )
-    if ($Tag -notmatch '^v\d+\.\d+\.\d+(\.\d+)?$') { return "$Tag is not a launcher release tag" }
-    if ($Commit -notmatch '^[0-9a-f]{40}$') { return "$Commit is not a full commit SHA" }
-    $asked = (Get-Date).ToUniversalTime().AddSeconds(-30)
-    $ask = @('workflow', 'run', 'release-tag.yml', '-R', $Repo, '--ref', 'main', '-f', ('tag=' + $Tag), '-f', ('commit=' + $Commit))
-    try { [void](& $Gh @ask) }
-    catch { return ('release-tag.yml could not be started: ' + $_.Exception.Message) }
-    Write-Host ("  asked {0} to tag {1} as {2} and build and sign the launcher on it" -f $Repo, $Commit.Substring(0, 12), $Tag) -ForegroundColor DarkGray
-
-    $until = (Get-Date).AddSeconds($WaitSeconds)
-    $tagRun = $null
-    $run = $null
-    while ($true) {
-        try {
-            if ($null -eq $run) {
-                $tagRun = Find-ReleaseRun $Gh $Repo 'release-tag.yml' $asked { param($r) [string]$r.displayTitle -ceq ('tag ' + $Tag) }
-                if ($null -ne $tagRun -and [string]$tagRun.status -eq 'completed' -and [string]$tagRun.conclusion -ne 'success') {
-                    return ("release-tag.yml ended " + [string]$tagRun.conclusion + " for $Tag, so nothing was built: " + [string]$tagRun.url)
-                }
-            }
-            $run = Find-ReleaseRun $Gh $Repo 'release.yml' $asked { param($r) [string]$r.headBranch -ceq 'main' -and [string]$r.displayTitle -ceq ('Release launcher ' + $Tag) }
-        } catch { return ('the release runs could not be read: ' + $_.Exception.Message) }
-        if ($null -ne $run -and [string]$run.status -eq 'completed') { break }
-        if ((Get-Date) -gt $until) {
-            if ($null -eq $run) { return "no release.yml run on main started for $Tag in $WaitSeconds seconds" }
-            return ("main's release.yml run for $Tag is still " + [string]$run.status + " after $WaitSeconds seconds: " + [string]$run.url)
-        }
-        Start-Sleep -Seconds $Poll
-    }
-    if ([string]$run.conclusion -ne 'success') {
-        return ("main's release.yml run for $Tag ended " + [string]$run.conclusion + ', so there is no checked, signed launcher: ' + [string]$run.url)
-    }
-    Write-Host ("  built, signed and checked on GitHub: " + [string]$run.url) -ForegroundColor DarkGray
-    return ''
-}
-
-# The newest workflow_dispatch run of $Workflow on $Repo, made since $Since,
-# that $Match takes, or $null while there is none.
-function Find-ReleaseRun([scriptblock]$Gh, [string]$Repo, [string]$Workflow, [datetime]$Since, [scriptblock]$Match) {
-    $list = @('run', 'list', '-R', $Repo, '-w', $Workflow, '-e', 'workflow_dispatch', '-L', '30',
-              '--json', 'databaseId,displayTitle,headBranch,status,conclusion,url,createdAt')
-    $text = & $Gh @list
-    $best = $null
-    foreach ($r in @(($text | ConvertFrom-Json) | ForEach-Object { $_ })) {
-        # PowerShell 7 reads the time as a DateTime already; 5.1 leaves text.
-        if ($r.createdAt -is [datetime]) { $made = ([datetime]$r.createdAt).ToUniversalTime() }
-        else { $made = ([datetimeoffset]::Parse([string]$r.createdAt, [Globalization.CultureInfo]::InvariantCulture)).UtcDateTime }
-        if ($made -lt $Since -or -not (& $Match $r)) { continue }
-        if ($null -eq $best -or [long]$r.databaseId -gt [long]$best.databaseId) { $best = $r }
-    }
-    return $best
 }

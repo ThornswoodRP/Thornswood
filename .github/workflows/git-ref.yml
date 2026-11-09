@@ -1,8 +1,10 @@
 # Makes a release tag, or deletes a branch or a tag, for a session whose git
 # cannot write refs: a cloud Claude thread (#3107, #3314). It also deletes a
-# release draft and publishes a signed launcher draft, which the same proxy
-# refuses (#4177, measured 31 Oct 2026: 403 "Creating, editing, or deleting
-# releases is not permitted for this session type").
+# release draft, which the same proxy refuses (#4177, measured 31 Oct 2026:
+# 403 "Creating, editing, or deleting releases is not permitted for this
+# session type"). Publishing the old launcher drafts went with release.yml
+# (#5385): a launcher goes out only on merge-release.yml's and
+# promote-main.yml's Releases.
 #
 # WHY. A cloud session reaches GitHub through the cloud environment's proxy,
 # which refuses every ref write before GitHub sees it (measured 22 Oct 2026:
@@ -17,8 +19,6 @@
 #   pwsh scripts/ops/Set-Ref.ps1 -DeleteBranch claude/<what> -Commit <sha>
 #   pwsh scripts/ops/Set-Ref.ps1 -DeleteTag <tag> -Commit <sha>
 #   pwsh scripts/ops/Set-Ref.ps1 -DeleteDraft <release id>
-#   pwsh scripts/ops/Set-Ref.ps1 -PublishLauncher v<version>
-#   pwsh scripts/ops/Set-Ref.ps1 -RetagLauncher v<version>
 #
 # which starts this on main with what to do, waits for the run, and prints
 # the answer this run left as an annotation titled Set-Ref. Ship.ps1 does
@@ -27,9 +27,7 @@
 # refuses: only release/dev and release/main tags, on a commit main has; a
 # branch only at the commit given, never the default branch, never one an
 # open pull request comes from or is built onto; a tag only at the commit
-# given and with no release on it; only a draft; a launcher draft only when
-# Test-ReleaseFiles.ps1 -RequireSigned passes its files on this runner, as
-# release.yml's verify job checks them.
+# given and with no release on it; only a draft.
 #
 # WHAT IT RUNS. Main's Set-Ref.ps1 under pwsh with no profile. The inputs
 # reach it through the environment, never pasted into the script. The run's
@@ -41,7 +39,7 @@
 # Every action here is named by a full length commit SHA with its tag in the
 # comment, for the reason build.yml gives.
 name: Tag or branch
-run-name: ${{ inputs.tag && format('Tag {0}', inputs.tag) || inputs.delete_branch && format('Delete branch {0}', inputs.delete_branch) || inputs.delete_tag && format('Delete tag {0}', inputs.delete_tag) || inputs.delete_draft && format('Delete draft {0}', inputs.delete_draft) || inputs.publish_launcher && format('Publish launcher {0}', inputs.publish_launcher) || format('Put launcher draft {0} back on its tag', inputs.retag_launcher) }} by ${{ github.actor }}
+run-name: ${{ inputs.tag && format('Tag {0}', inputs.tag) || inputs.delete_branch && format('Delete branch {0}', inputs.delete_branch) || inputs.delete_tag && format('Delete tag {0}', inputs.delete_tag) || format('Delete draft {0}', inputs.delete_draft) }} by ${{ github.actor }}
 on:
   workflow_dispatch:
     inputs:
@@ -57,14 +55,8 @@ on:
       delete_draft:
         description: 'Or the id of the release draft to delete'
         required: false
-      publish_launcher:
-        description: 'Or the v<version> tag whose launcher draft to publish'
-        required: false
-      retag_launcher:
-        description: 'Or the v<version> tag whose launcher draft GitHub took off it, to put back'
-        required: false
       commit:
-        description: 'The commit the tag goes on, or the commit the branch or tag has to be at (not for a draft or a launcher)'
+        description: 'The commit the tag goes on, or the commit the branch or tag has to be at (not for a draft)'
         required: false
       message:
         description: 'The tag message'
@@ -81,8 +73,7 @@ jobs:
     # runs with this job's token.
     if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
-    # Six calls at most, or a launcher's three files and their check. Past
-    # this it is stuck, not slow.
+    # Six calls at most. Past this it is stuck, not slow.
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -97,8 +88,6 @@ jobs:
           REF_DELETE_BRANCH: ${{ inputs.delete_branch }}
           REF_DELETE_TAG: ${{ inputs.delete_tag }}
           REF_DELETE_DRAFT: ${{ inputs.delete_draft }}
-          REF_PUBLISH_LAUNCHER: ${{ inputs.publish_launcher }}
-          REF_RETAG_LAUNCHER: ${{ inputs.retag_launcher }}
           REF_COMMIT: ${{ inputs.commit }}
           REF_MESSAGE: ${{ inputs.message }}
           REF_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}

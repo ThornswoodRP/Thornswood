@@ -37,28 +37,16 @@
          first page of releases), stays (#4177);
        - a draft is one DELETE, DRAFT-DELETED; one gone is DRAFT-GONE; a
          published release is refused;
-       - a launcher draft has its SHA256SUMS fetched, then every file it
-         names (Thornswood.exe and the native libraries beside it, #4823),
-         all checked by Test-ReleaseFiles.ps1 -RequireSigned, then is
-         published as not the latest, a four part version as a prerelease,
-         PUBLISHED; one already published is ALREADY-PUBLISHED; a failed
-         check, a missing SHA256SUMS or file it names, a SHA256SUMS that does
-         not name Thornswood.exe, two releases on the tag, a draft built from
-         another commit than the tag names, a draft not named for the
-         launcher and a tag that is not v<version> each leave it a draft.
-       - a launcher draft GitHub took off its tag (untagged-<hex>) is one
-         PATCH naming tag_name and target_commitish together, then read
-         back, RETAGGED; a tag that already has its release is
-         ALREADY-ON-TAG; a draft holding another commit, two such drafts,
-         a tag not on GitHub and an edit that does not take each stop.
+       - nothing publishes a launcher draft or puts one back on its tag any
+         more (#5385): the old inputs do nothing but stop the run.
     3. Set-Ref.ps1 in a session, against a stand-in for gh: it starts
        git-ref.yml on main with the inputs on gh's standard input, reads the
        runner's annotation and says what it did, exit 0; a stopped runner is
        1; a run not ended in time is 2 with the -Run line; and a name it would
        refuse is refused before anything is started. -Fork starts the fork's
-       thornswood-git-ref.yml instead, for a branch only. -DeleteTag,
-       -DeleteDraft, -PublishLauncher and -RetagLauncher send their one
-       input each.
+       thornswood-git-ref.yml instead, for a branch only. -DeleteTag
+       and -DeleteDraft send their one input each, and -PublishLauncher and
+       -RetagLauncher are no parameters of it.
     4. Add-ReleaseTag in a cloud session (CLAUDE_CODE_REMOTE true): it hands
        the tag, the commit and the release's own message to the checkout's
        Set-Ref.ps1 and tags nothing in the checkout; a refusal says what to
@@ -121,7 +109,7 @@ $next = [regex]::Match($code, '(?ms)- name: Start release-files\.yml for the rel
 $nextRun = [regex]::Match($next, '(?ms)run: \|\n(.*)$').Groups[1].Value
 Yes 'then it starts release-files.yml, for a tag only' ($next -match "(?m)^\s+if: \$\{\{ inputs\.tag != '' \}\}$" -and $nextRun -match 'actions/workflows/release-files\.yml/dispatches')
 Yes '  only for a release tag, read from the environment, nothing pasted into its script' ($nextRun -match '\$env:REF_TAG -notmatch' -and $nextRun -notmatch '\$\{\{')
-foreach ($k in 'REF_TAG: ${{ inputs.tag }}', 'REF_DELETE_BRANCH: ${{ inputs.delete_branch }}', 'REF_DELETE_TAG: ${{ inputs.delete_tag }}', 'REF_DELETE_DRAFT: ${{ inputs.delete_draft }}', 'REF_PUBLISH_LAUNCHER: ${{ inputs.publish_launcher }}', 'REF_RETAG_LAUNCHER: ${{ inputs.retag_launcher }}', 'REF_COMMIT: ${{ inputs.commit }}', 'REF_MESSAGE: ${{ inputs.message }}', 'GH_TOKEN: ${{ github.token }}') {
+foreach ($k in 'REF_TAG: ${{ inputs.tag }}', 'REF_DELETE_BRANCH: ${{ inputs.delete_branch }}', 'REF_DELETE_TAG: ${{ inputs.delete_tag }}', 'REF_DELETE_DRAFT: ${{ inputs.delete_draft }}', 'REF_COMMIT: ${{ inputs.commit }}', 'REF_MESSAGE: ${{ inputs.message }}', 'GH_TOKEN: ${{ github.token }}') {
     Yes "  $($k.Split(':')[0]) reaches it through the environment" ($step.Contains($k))
 }
 
@@ -323,122 +311,12 @@ Yes 'a draft already gone: DRAFT-GONE, exit 0' ($r.Code -eq 0 -and $r.Out -match
 $r = OnGitHub @{ REF_DELETE_DRAFT = '12x'; REF_COMMIT = '' } $drafts
 Yes 'an id that is not a number: refused, nothing asked' ($r.Code -eq 1 -and $r.Calls.Count -eq 0)
 
-# A launcher draft, with a stand-in Test-ReleaseFiles.ps1 beside a copy of
-# Set-Ref.ps1, which writes down what it was given and exits as the case says.
-$Tree = Join-Path ([IO.Path]::GetTempPath()) ('ts-3107-tree-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
-New-Item -ItemType Directory -Force -Path (Join-Path $Tree 'scripts/ops'), (Join-Path $Tree 'scripts/release') | Out-Null
-Copy-Item -LiteralPath $setRef -Destination (Join-Path $Tree 'scripts/ops/Set-Ref.ps1')
-[IO.File]::WriteAllText((Join-Path $Tree 'scripts/release/Test-ReleaseFiles.ps1'), @'
-param([string]$Dir, [switch]$RequireSigned)
-[IO.File]::WriteAllText($env:TS_TRF, (ConvertTo-Json -Compress @{ Signed = [bool]$RequireSigned; Files = @(Get-ChildItem -LiteralPath $Dir | ForEach-Object { $_.Name + '=' + [IO.File]::ReadAllText($_.FullName) } | Sort-Object) }))
-exit [int]$env:TS_TRF_RC
-'@)
-$global:TSscript = Join-Path $Tree 'scripts/ops/Set-Ref.ps1'
-$env:TS_TRF = Join-Path $Tree 'trf.json'
-$env:TS_TRF_RC = '0'
-# A launcher draft as release.yml makes it since #4823: the exe, a native
-# library beside it, and SHA256SUMS naming both.
-$sumsBoth = ('a' * 64) + "  Thornswood.exe`n" + ('b' * 64) + "  libSkiaSharp.dll`n"
-function Launcher([string]$v, $more = @{}) {
-    $r = [ordered]@{ id = 429409837; tag_name = $v; name = "Launcher $v"; draft = $true; target_commitish = $main
-        assets = @(@{ id = 11; name = 'Thornswood.exe' }, @{ id = 12; name = 'libSkiaSharp.dll' }, @{ id = 13; name = 'SHA256SUMS'; body = $sumsBoth }) }
-    foreach ($k in $more.Keys) { $r[$k] = $more[$k] }
-    return @{ releases = @([pscustomobject]$r); refs = @{ "tags/$v" = @{ type = 'tag'; sha = $tagObj } }; tagObjects = @{ $tagObj = $main } }
-}
-try {
-    $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.11'; REF_COMMIT = '' } (Launcher 'v1.2.11')
-    $w = @(Writes $r)
-    $trf = if (Test-Path -LiteralPath $env:TS_TRF) { [IO.File]::ReadAllText($env:TS_TRF) | ConvertFrom-Json } else { $null }
-    Yes ("a launcher draft whose files pass: exit 0, PUBLISHED ($($r.Code))") ($r.Code -eq 0 -and $r.Out -match "Set-Ref::PUBLISHED v1\.2\.11 $main")
-    $files = @(if ($trf) { @($trf.Files) })
-    Yes '  SHA256SUMS and each file it names fetched by id and checked with -RequireSigned, each under its own name' (
-        $trf -and $trf.Signed -and $files.Count -eq 3 -and $files -contains 'Thornswood.exe=asset 11' -and
-        $files -contains 'libSkiaSharp.dll=asset 12' -and $files -contains ('SHA256SUMS=' + $sumsBoth))
-    Yes '  then one PATCH: published, not the latest, not a prerelease' ($w.Count -eq 1 -and $w[0].Method -eq 'PATCH' -and $w[0].Path -eq 'releases/429409837' -and
-        $w[0].Body.draft -eq $false -and $w[0].Body.make_latest -eq 'false' -and $w[0].Body.prerelease -eq $false)
-    Yes '  and the files it fetched are gone again' (@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Filter 'set-ref-*' -Directory -ErrorAction SilentlyContinue).Count -eq 0)
-    $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.9.3'; REF_COMMIT = '' } (Launcher 'v1.2.9.3')
-    Yes 'a four part version, a dev launcher: published as a prerelease' ($r.Code -eq 0 -and @(Writes $r)[0].Body.prerelease -eq $true)
-    $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.11'; REF_COMMIT = '' } (Launcher 'v1.2.11' @{ draft = $false })
-    Yes 'one already published: ALREADY-PUBLISHED, exit 0, nothing fetched or changed' ($r.Code -eq 0 -and $r.Out -match 'Set-Ref::ALREADY-PUBLISHED' -and @(Writes $r).Count -eq 0 -and
-        @($r.Calls | Where-Object { $_.Path -like 'releases/assets/*' }).Count -eq 0)
-    $env:TS_TRF_RC = '1'
-    $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.11'; REF_COMMIT = '' } (Launcher 'v1.2.11')
-    Yes 'files that fail the check: it stays a draft, exit 1' ($r.Code -eq 1 -and $r.Out -match 'stays a draft' -and @(Writes $r).Count -eq 0)
-    $env:TS_TRF_RC = '0'
-    $l = Launcher 'v1.2.11'; $l.assetCode = 404
-    $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.11'; REF_COMMIT = '' } $l
-    Yes 'a file GitHub does not hand over: it stays a draft' ($r.Code -eq 1 -and @(Writes $r).Count -eq 0)
-    $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.11'; REF_COMMIT = '' } (Launcher 'v1.2.11' @{ assets = @(@{ id = 11; name = 'Thornswood.exe' }, @{ id = 12; name = 'libSkiaSharp.dll' }) })
-    Yes 'a draft without SHA256SUMS: it stays a draft, nothing fetched' ($r.Code -eq 1 -and @($r.Calls | Where-Object { $_.Path -like 'releases/assets/*' }).Count -eq 0 -and @(Writes $r).Count -eq 0)
-    $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.11'; REF_COMMIT = '' } (Launcher 'v1.2.11' @{ assets = @(@{ id = 11; name = 'Thornswood.exe' }, @{ id = 13; name = 'SHA256SUMS'; body = $sumsBoth }) })
-    Yes 'a draft without a library its SHA256SUMS names: it stays a draft' ($r.Code -eq 1 -and $r.Out -match 'exactly one libSkiaSharp\.dll' -and @(Writes $r).Count -eq 0)
-    $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.11'; REF_COMMIT = '' } (Launcher 'v1.2.11' @{ assets = @(@{ id = 12; name = 'libSkiaSharp.dll' }, @{ id = 13; name = 'SHA256SUMS'; body = (('b' * 64) + "  libSkiaSharp.dll`n") }) })
-    Yes 'a SHA256SUMS that does not name Thornswood.exe: it stays a draft, the library not fetched' ($r.Code -eq 1 -and $r.Out -match 'does not name Thornswood\.exe' -and
-        @($r.Calls | Where-Object { $_.Path -like 'releases/assets/*' }).Count -eq 1 -and @(Writes $r).Count -eq 0)
-    $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.11'; REF_COMMIT = '' } (Launcher 'v1.2.11' @{ target_commitish = $other })
-    Yes 'a draft built from another commit than the tag names: it stays a draft' ($r.Code -eq 1 -and $r.Out -match 'tag moved' -and @(Writes $r).Count -eq 0)
-    $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.11'; REF_COMMIT = '' } (Launcher 'v1.2.11' @{ name = 'Thornswood main release' })
-    Yes 'a draft not named for the launcher: it stays a draft' ($r.Code -eq 1 -and @(Writes $r).Count -eq 0)
-    $l = Launcher 'v1.1.96'; $l.releases = @($l.releases) + @([pscustomobject]@{ id = 397526903; tag_name = 'v1.1.96'; name = 'Launcher v1.1.96'; draft = $true; target_commitish = $main; assets = @() })
-    $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.1.96'; REF_COMMIT = '' } $l
-    Yes 'two releases on the tag: neither is chosen, exit 1' ($r.Code -eq 1 -and $r.Out -match '2 releases' -and @(Writes $r).Count -eq 0)
-    $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.11'; REF_COMMIT = '' } @{}
-    Yes 'no release on the tag: exit 1' ($r.Code -eq 1 -and @(Writes $r).Count -eq 0)
-    foreach ($bad in 'release/main/20261030-133616', 'v1.2', 'frida-sources-16.0.19', 'v1.2.11-x') {
-        $r = OnGitHub @{ REF_PUBLISH_LAUNCHER = $bad; REF_COMMIT = '' } @{}
-        Yes "  $bad is not a launcher tag: refused, nothing asked" ($r.Code -eq 1 -and $r.Calls.Count -eq 0)
-    }
-
-    # A launcher draft GitHub took off its tag (31 Oct 2026: an edit that did
-    # not name tag_name left v1.2.13's draft untagged-<hex>).
-    function Lost($more = @{}) {
-        $l = Launcher 'v1.2.13' (@{ id = 429911727; tag_name = 'untagged-2683386397d5fe053ff3' } + $more)
-        $l.refs = @{ 'tags/v1.2.13' = @{ type = 'commit'; sha = $main } }
-        $l.releases = @($l.releases) + @([pscustomobject]@{ id = 429888873; tag_name = 'v1.2.12'; name = 'Launcher v1.2.12'; draft = $true; target_commitish = $other; assets = @() })
-        return $l
-    }
-    $l = Lost
-    $r = OnGitHub @{ REF_RETAG_LAUNCHER = 'v1.2.13'; REF_COMMIT = '' } $l
-    $w = @(Writes $r)
-    Yes ("a launcher draft GitHub took off its tag: exit 0, RETAGGED ($($r.Code))") ($r.Code -eq 0 -and $r.Out -match "Set-Ref::RETAGGED v1\.2\.13 $main")
-    Yes '  one PATCH of that draft, naming the tag and the commit together, and nothing else' (
-        $w.Count -eq 1 -and $w[0].Method -eq 'PATCH' -and $w[0].Path -eq 'releases/429911727' -and $w[0].Body.tag_name -eq 'v1.2.13' -and $w[0].Body.target_commitish -eq $main -and
-        @($w[0].Body.PSObject.Properties).Count -eq 2)
-    Yes '  then the draft is read back' (@($r.Calls | Where-Object { $_.Method -eq 'GET' -and $_.Path -eq 'releases/429911727' }).Count -eq 1)
-    Yes '  and its files are not fetched' (@($r.Calls | Where-Object { $_.Path -like 'releases/assets/*' }).Count -eq 0)
-    $r = OnGitHub @{ REF_RETAG_LAUNCHER = 'v1.2.13'; REF_COMMIT = '' } $l
-    Yes 'run again, the tag has its release: ALREADY-ON-TAG, exit 0, nothing changed' ($r.Code -eq 0 -and $r.Out -match 'Set-Ref::ALREADY-ON-TAG v1\.2\.13' -and @(Writes $r).Count -eq 0)
-    $l = Lost; $l.patchIgnored = $true
-    $r = OnGitHub @{ REF_RETAG_LAUNCHER = 'v1.2.13'; REF_COMMIT = '' } $l
-    Yes 'an edit GitHub did not keep: exit 1, it says what the draft reads back as' ($r.Code -eq 1 -and $r.Out -match 'reads back as untagged-')
-    $r = OnGitHub @{ REF_RETAG_LAUNCHER = 'v1.2.13'; REF_COMMIT = '' } (Lost @{ target_commitish = $other })
-    Yes 'a draft holding another commit than the tag names: it stays as it is' ($r.Code -eq 1 -and $r.Out -match 'not that tag''s build' -and @(Writes $r).Count -eq 0)
-    $r = OnGitHub @{ REF_RETAG_LAUNCHER = 'v1.2.13'; REF_COMMIT = '' } (Lost @{ draft = $false })
-    Yes 'a published release is not one this puts back' ($r.Code -eq 1 -and $r.Out -match '0 drafts' -and @(Writes $r).Count -eq 0)
-    $r = OnGitHub @{ REF_RETAG_LAUNCHER = 'v1.2.13'; REF_COMMIT = '' } (Lost @{ name = 'Thornswood main release' })
-    Yes 'a draft not named for the launcher: it stays as it is' ($r.Code -eq 1 -and @(Writes $r).Count -eq 0)
-    $l = Lost; $l.releases = @($l.releases) + @([pscustomobject]@{ id = 5; tag_name = 'untagged-ffff'; name = 'Launcher v1.2.13'; draft = $true; target_commitish = $main; assets = @() })
-    $r = OnGitHub @{ REF_RETAG_LAUNCHER = 'v1.2.13'; REF_COMMIT = '' } $l
-    Yes 'two such drafts: neither is chosen, it says which' ($r.Code -eq 1 -and $r.Out -match '429911727, 5' -and @(Writes $r).Count -eq 0)
-    $l = Lost; $l.releases = @($l.releases) + @([pscustomobject]@{ id = 6; tag_name = 'v1.2.13'; name = 'Launcher v1.2.13'; draft = $true; target_commitish = $main; assets = @() }, [pscustomobject]@{ id = 7; tag_name = 'v1.2.13'; name = 'x'; draft = $true; target_commitish = $main; assets = @() })
-    $r = OnGitHub @{ REF_RETAG_LAUNCHER = 'v1.2.13'; REF_COMMIT = '' } $l
-    Yes 'a tag that already has two releases: nothing changed, exit 1' ($r.Code -eq 1 -and $r.Out -match '2 releases' -and @(Writes $r).Count -eq 0)
-    $l = Lost; $l.refs = @{}
-    $r = OnGitHub @{ REF_RETAG_LAUNCHER = 'v1.2.13'; REF_COMMIT = '' } $l
-    Yes 'a tag not on GitHub: nothing changed, exit 1' ($r.Code -eq 1 -and $r.Out -match 'not on GitHub' -and @(Writes $r).Count -eq 0)
-    foreach ($bad in 'release/main/20261030-133616', 'v1.2', 'untagged-2683386397d5fe053ff3') {
-        $r = OnGitHub @{ REF_RETAG_LAUNCHER = $bad; REF_COMMIT = '' } @{}
-        Yes "  $bad is not a launcher tag: refused, nothing asked" ($r.Code -eq 1 -and $r.Calls.Count -eq 0)
-    }
-    $r = OnGitHub @{ REF_RETAG_LAUNCHER = 'v1.2.13'; REF_PUBLISH_LAUNCHER = 'v1.2.13'; REF_COMMIT = '' } (Lost)
-    Yes 'asked to put back and publish at once: refused, nothing asked' ($r.Code -eq 1 -and $r.Calls.Count -eq 0)
-} finally {
-    $global:TSscript = $setRef
-    Remove-Item Env:TS_TRF, Env:TS_TRF_RC -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $Tree -Recurse -Force -ErrorAction SilentlyContinue
-}
-Remove-Item Function:\Invoke-WebRequest
+# Launchers go out only on merge-release.yml's and promote-main.yml's
+# Releases since Velopack (#4825), so publishing and retagging the old
+# launcher drafts went with release.yml (#5385).
+Yes 'git-ref.yml takes no launcher to publish or put back' ($code -notmatch 'publish_launcher|retag_launcher|REF_PUBLISH_LAUNCHER|REF_RETAG_LAUNCHER')
+$r = OnGitHub @{ REF_PUBLISH_LAUNCHER = 'v1.2.11'; REF_RETAG_LAUNCHER = 'v1.2.13'; REF_COMMIT = '' } @{}
+Yes 'the old launcher inputs reach nothing: the run is given nothing to do, nothing asked' ($r.Code -eq 1 -and $r.Out -match 'given nothing to do' -and $r.Calls.Count -eq 0)
 
 # ---- 3. the session half -----------------------------------------------------
 Write-Host ''; Write-Host 'the session half'
@@ -501,16 +379,8 @@ Yes '-DeleteTag: delete_tag and the commit in the inputs, and nothing else, exit
     $s.Code -eq 0 -and $s.Body.inputs.delete_tag -eq 'v1.1.47' -and $s.Body.inputs.commit -eq $main -and @($s.Body.inputs.PSObject.Properties).Count -eq 2 -and $s.Out -match 'is deleted on GitHub')
 $s = Session @{ DeleteDraft = 397526903 } $done @((Note 'notice' 'DRAFT-DELETED 397526903 v1.1.96'))
 Yes '-DeleteDraft: delete_draft alone in the inputs, exit 0' ($s.Code -eq 0 -and $s.Body.inputs.delete_draft -eq '397526903' -and @($s.Body.inputs.PSObject.Properties).Count -eq 1 -and $s.Out -match 'v1\.1\.96 draft, is deleted')
-$s = Session @{ PublishLauncher = 'v1.2.11' } $done @((Note 'notice' "PUBLISHED v1.2.11 $main"))
-Yes '-PublishLauncher: publish_launcher alone in the inputs, exit 0' ($s.Code -eq 0 -and $s.Body.inputs.publish_launcher -eq 'v1.2.11' -and @($s.Body.inputs.PSObject.Properties).Count -eq 1 -and $s.Out -match 'checked as signed')
-$s = Session @{ PublishLauncher = 'release/main/20261030-133616' } $done @()
-Yes '  a tag that is not v<version> is refused before anything is started' ($s.Code -eq 1 -and $s.Calls.Count -eq 0)
-$s = Session @{ RetagLauncher = 'v1.2.13' } $done @((Note 'notice' "RETAGGED v1.2.13 $main"))
-Yes '-RetagLauncher: retag_launcher alone in the inputs, exit 0' ($s.Code -eq 0 -and $s.Body.inputs.retag_launcher -eq 'v1.2.13' -and @($s.Body.inputs.PSObject.Properties).Count -eq 1 -and $s.Out -match 'back on its tag')
-$s = Session @{ RetagLauncher = 'v1.2.13' } $done @((Note 'notice' "ALREADY-ON-TAG v1.2.13 $main"))
-Yes '  and says when the tag already had its release' ($s.Code -eq 0 -and $s.Out -match 'already had its release')
-$s = Session @{ RetagLauncher = 'untagged-2683386397d5fe053ff3' } $done @()
-Yes '  a name that is not v<version> is refused before anything is started' ($s.Code -eq 1 -and $s.Calls.Count -eq 0)
+$sp = (Get-Command $setRef).Parameters
+Yes '-PublishLauncher and -RetagLauncher are no parameters any more' (-not $sp.ContainsKey('PublishLauncher') -and -not $sp.ContainsKey('RetagLauncher'))
 $s = Session @{ DeleteTag = 'a b'; Commit = $main } $done @()
 Yes '  and so is a tag name it would not delete' ($s.Code -eq 1 -and $s.Calls.Count -eq 0)
 Remove-Item Function:\gh

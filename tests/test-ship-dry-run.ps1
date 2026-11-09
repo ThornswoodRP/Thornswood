@@ -447,10 +447,8 @@ if (-not $NoPush) {
     # (id 21), a native library beside it (id 22, the launcher is a folder
     # since #4823) and SHA256SUMS (id 23), and each asset with its
     # bytes. It computes the hashes itself, so the download always verifies and
-    # the test proves the path runs, not that a particular byte matches. Since
-    # #2841 Ship first asks for the green release.yml runs of the tag, whose
-    # artifact it would take; the stand-in has none, as for a tag built before
-    # then, so the draft is read as before. Every other gh call still only logs.
+    # the test proves the path runs, not that a particular byte matches. Every
+    # other gh call still only logs.
     $ghDl = Join-Path $bin 'gh-download.ps1'
     [IO.File]::WriteAllText($ghDl, @'
 $utf8 = New-Object Text.UTF8Encoding($false)
