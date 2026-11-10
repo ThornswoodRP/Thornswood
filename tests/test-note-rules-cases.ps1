@@ -39,6 +39,7 @@ function Same($a, $b) { (@($a) -join "`n") -ceq (@($b) -join "`n") -and @($a).Co
 function Short([string]$t) { $one = ($t -replace "`r?`n", ' / ').Trim(); if ($one.Length -gt 50) { $one.Substring(0, 47) + '...' } else { $one } }
 
 . (Join-Path $Repo 'scripts/release/Note-Rules.ps1')
+. (Join-Path $PSScriptRoot 'ReleaseNotes-Copy.ps1')   # the two projects, built from a copy (#5740)
 $cases = Get-Content -Raw -LiteralPath (Join-Path $Repo 'tests/fixtures/note-rules-cases.json') | ConvertFrom-Json
 
 Yes 'the fixture holds enough cases' (@($cases.notes).Count -ge 50 -and @($cases.bodies).Count -ge 10 -and @($cases.joins).Count -ge 3)
@@ -72,15 +73,28 @@ foreach ($c in @($cases.joins)) {
 $dotnet = Get-Command dotnet -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $dotnet) { Write-Host 'SKIP  dotnet test on tools/ReleaseNotes.Tests: the .NET SDK is not on this machine (the Release note rules workflow runs it)' }
 else {
-    $tests = Join-Path $Repo 'tools/ReleaseNotes.Tests'
-    $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'; $env:DOTNET_NOLOGO = '1'
-    $r = & $dotnet.Source restore $tests --locked-mode 2>&1
-    if ($LASTEXITCODE -ne 0) { Yes 'dotnet restore on tools/ReleaseNotes.Tests from the locked packages' $false; $r | Select-Object -Last 10 | ForEach-Object { Write-Host "      $_" } }
-    else {
-        $t = & $dotnet.Source test $tests --no-restore 2>&1
-        Yes 'dotnet test on tools/ReleaseNotes.Tests' ($LASTEXITCODE -eq 0)
-        if ($LASTEXITCODE -ne 0) { $t | Select-Object -Last 20 | ForEach-Object { Write-Host "      $_" } }
-    }
+    # From a copy of the two projects and the fixture in its own temp folder
+    # (#5740). Restored and tested in the checkout, their obj folders were
+    # the checkout's, and tests\test-pr-release-note.ps1, which builds
+    # tools\ReleaseNotes in a share beside this one, restored the same
+    # tools\ReleaseNotes\obj while this read it: "Assets file ...
+    # project.assets.json not found" on Linux share 1 for #5715.
+    $before = Get-NotesTreeState $Repo
+    $copy = Join-Path ([IO.Path]::GetTempPath()) ('note-cases-' + [guid]::NewGuid().ToString('N'))
+    try {
+        Copy-NotesProjects $Repo $copy
+        $tests = Join-Path $copy 'tools/ReleaseNotes.Tests'
+        $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'; $env:DOTNET_NOLOGO = '1'
+        $r = & $dotnet.Source restore $tests --locked-mode 2>&1
+        if ($LASTEXITCODE -ne 0) { Yes 'dotnet restore on tools/ReleaseNotes.Tests from the locked packages' $false; $r | Select-Object -Last 10 | ForEach-Object { Write-Host "      $_" } }
+        else {
+            $t = & $dotnet.Source test $tests --no-restore 2>&1
+            Yes 'dotnet test on tools/ReleaseNotes.Tests' ($LASTEXITCODE -eq 0)
+            if ($LASTEXITCODE -ne 0) { $t | Select-Object -Last 20 | ForEach-Object { Write-Host "      $_" } }
+        }
+    } finally { Remove-Item -LiteralPath $copy -Recurse -Force -ErrorAction SilentlyContinue }
+    $after = Get-NotesTreeState $Repo
+    Yes ('the checkout''s tools/ReleaseNotes and tools/ReleaseNotes.Tests are as this found them, so a harness beside it reads them whole (' + (Compare-NotesTreeState $before $after) + ')') ($before -ceq $after)
 }
 
 Write-Host ""
