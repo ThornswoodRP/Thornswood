@@ -95,7 +95,7 @@ namespace Thornswood
                     }
                 }
             }
-            catch (Exception ex) { why = ex.GetType().Name + ": " + ex.Message; Swallow.Note("Online.AskPort", ex); }
+            catch (Exception ex) { why = ex.GetType().Name + ": " + ex.Message; }
             SayWhenItChanges(resourcePort, url, why);
             return got;
         }
