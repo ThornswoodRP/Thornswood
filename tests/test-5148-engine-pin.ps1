@@ -109,14 +109,19 @@ try {
 # ---- 3. the step, over stand-in answers --------------------------------------
 $H = '1111111111111111111111111111111111111111'
 $P = '2222222222222222222222222222222222222222'
-function New-World { return @{ head = $H; prs = @(); files = @{}; branchPin = $null; forkRuns = @(); arts = @{}; engineRuns = @(); compare = @{} } }
+function New-World { return @{ head = $H; prs = @(); files = @{}; branchPin = $null; pinBehind = 0; pinCheck = $null; pinMergeable = $null; forkRuns = @(); arts = @{}; engineRuns = @(); compare = @{} } }
+$PinHead = '6666666666666666666666666666666666666666'
 function Get-Answer($w) {
     return {
         param([string]$path)
+        if ($path -eq 'repos/ThornswoodRP/Thornswood/branches/engine-pin%2Fnext') { return [pscustomobject]@{ commit = [pscustomobject]@{ sha = $PinHead } } }
+        if ($path -eq "repos/ThornswoodRP/Thornswood/commits/$PinHead/check-runs?check_name=Build%20check%20result") { return [pscustomobject]@{ check_runs = @($w.pinCheck | Where-Object { $_ }) } }
+        if ($path -match '^repos/ThornswoodRP/Thornswood/pulls/(\d+)$') { return [pscustomobject]@{ number = [int]$Matches[1]; mergeable = $w.pinMergeable } }
         if ($path -like 'repos/ThornswoodRP/skymp/branches/*') { return [pscustomobject]@{ commit = [pscustomobject]@{ sha = $w.head } } }
         if ($path -like 'repos/ThornswoodRP/Thornswood/pulls?state=open*') { return , @($w.prs) }
         if ($path -match '^repos/ThornswoodRP/Thornswood/pulls/(\d+)/files') { return , @($w.files[[int]$Matches[1]]) }
         if ($path -like 'repos/ThornswoodRP/Thornswood/contents/engine/skymp*') { if ($w.branchPin) { return [pscustomobject]@{ sha = $w.branchPin } } ; throw 'Not Found (HTTP 404)' }
+        if ($path -eq 'repos/ThornswoodRP/Thornswood/compare/main...engine-pin/next') { if ($w.branchPin) { return [pscustomobject]@{ behind_by = $w.pinBehind } } ; throw 'Not Found (HTTP 404)' }
         if ($path -like 'repos/ThornswoodRP/skymp/actions/workflows/*') { return [pscustomobject]@{ workflow_runs = @($w.forkRuns) } }
         if ($path -match '^repos/ThornswoodRP/skymp/actions/runs/(\d+)/artifacts') { return [pscustomobject]@{ artifacts = @($w.arts[[long]$Matches[1]]) } }
         if ($path -like 'repos/ThornswoodRP/Thornswood/actions/workflows/engine.yml/runs*') { return [pscustomobject]@{ workflow_runs = @($w.engineRuns) } }
@@ -149,6 +154,38 @@ Yes 'ready: engine-pin/next pins the head, with no pull request open' ($s.Step -
 $w.prs = @([pscustomobject]@{ number = 42; html_url = 'u'; head = [pscustomobject]@{ ref = $EnginePinBranch } })
 $s = Step $w
 Yes '  and with its pull request open, which is not a reason to stand aside' ($s.Step -eq 'ready' -and $s.Pr -eq 42)
+# #4523: a pin branch made before main moved is made again only when that
+# matters. On 10 Nov 2026 the pin of 3ac482a6 sat red on an old main whose
+# failures #5719 had fixed, and every look called it ready. Behind main
+# alone is no reason: main moves on every merge.
+function Check-Run([long]$id, [string]$status, $conclusion) { return [pscustomobject]@{ id = $id; name = 'Build check result'; status = $status; conclusion = $conclusion } }
+function New-Behind {
+    $w = New-World
+    $w.branchPin = $H; $w.pinBehind = 3
+    $w.prs = @([pscustomobject]@{ number = 42; html_url = 'u'; head = [pscustomobject]@{ ref = $EnginePinBranch } })
+    $w.forkRuns = @($green); $w.arts[[long]7] = $art
+    $w.engineRuns = @([pscustomobject]@{ id = 95; status = 'completed'; conclusion = 'success'; display_title = "Engine build of $H"; html_url = 'u' })
+    return $w
+}
+$w = New-Behind; $w.pinCheck = Check-Run 300 'completed' 'success'
+$s = Step $w
+Yes '  behind main and green stays ready (#4523)' ($s.Step -eq 'ready' -and $s.Pr -eq 42)
+$w = New-Behind; $w.pinCheck = Check-Run 301 'queued' $null
+Yes '  behind main with its check queued stays ready' ((Step $w).Step -eq 'ready')
+$w = New-Behind; $w.pinCheck = Check-Run 302 'in_progress' $null
+Yes '  behind main with its check running stays ready' ((Step $w).Step -eq 'ready')
+$w = New-Behind
+Yes '  behind main with no check yet stays ready' ((Step $w).Step -eq 'ready')
+$w = New-Behind; $w.pinCheck = @((Check-Run 303 'completed' 'failure'), (Check-Run 304 'completed' 'success'))
+Yes '  the newest run of the check is the one read: a green re-run after a red stays ready' ((Step $w).Step -eq 'ready')
+$w = New-Behind; $w.pinCheck = Check-Run 305 'completed' 'failure'
+$s = Step $w
+Yes '  behind main and red goes to pin from the same record, and says why' ($s.Step -eq 'pin' -and $s.Run -eq 95 -and $s.Pr -eq 42 -and $s.Why -match 'behind main and its Build check result at 666666666666 ended failure')
+$w = New-Behind; $w.pinCheck = Check-Run 306 'completed' 'success'; $w.pinMergeable = $false
+$s = Step $w
+Yes '  behind main and conflicting goes to pin, and says why' ($s.Step -eq 'pin' -and $s.Why -match 'conflicts with main')
+$w = New-Behind; $w.pinCheck = Check-Run 307 'completed' 'failure'; $w.pinBehind = 0
+Yes '  red but not behind main stays ready: a remake would change nothing' ((Step $w).Step -eq 'ready')
 
 $w = New-World
 $w.forkRuns = @([pscustomobject]@{ id = 8; status = 'in_progress'; conclusion = $null; head_sha = $H; head_branch = 'thornswood/engine-changes'; event = 'push'; html_url = 'https://example/8'; repository = [pscustomobject]@{ id = 1375283516; full_name = 'ThornswoodRP/skymp' }; head_repository = [pscustomobject]@{ id = 1375283516; full_name = 'ThornswoodRP/skymp' } })
@@ -183,6 +220,11 @@ Yes '  pin: and once engine.yml recorded it, it is the commit pinned' ($s.Step -
 $w.branchPin = $E
 $s = Step $w
 Yes '  ready: engine-pin/next pinning it already is nothing more to do until the head is built' ($s.Step -eq 'ready' -and $s.Head -eq $E -and $s.Why -match 'still building')
+$w = New-Building
+$w.branchPin = $E; $w.pinBehind = 2; $w.pinCheck = Check-Run 308 'completed' 'failure'
+$w.engineRuns = @([pscustomobject]@{ id = 96; status = 'completed'; conclusion = 'success'; display_title = "Engine build of $E"; html_url = 'u' })
+$s = Step $w
+Yes '  behind main and red while the head builds: made again, and both reasons are said (#4523)' ($s.Step -eq 'pin' -and $s.Head -eq $E -and $s.Why -match 'behind main' -and $s.Why -match 'still building')
 $w = New-Building
 $w.compare["$E...$H"] = 'diverged'
 $s = Step $w
