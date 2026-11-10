@@ -366,8 +366,25 @@ if ($Of -gt 1 -or [string]$env:GATE_PLAN) {
     if ($null -ne $picked) { $run = $picked; $whole = $false }
 }
 
+# WHICH POWERSHELL AND .NET THIS SHARE RAN ON (#5752). On 10 Nov 2026 a
+# Linux share's pwsh aborted (exit 134) on an assembly name garbled in
+# memory, in a share that passed on main minutes before, on the same image.
+# Which pwsh and .NET each ran was only in the job log, which no Bot can
+# read. So every share says them in a notice, which the run's annotations
+# carry: PowerShell, .NET, the OS, and on GitHub's runner the image
+# (ImageOS and ImageVersion, which the image sets).
+function Get-RunnerSaid([string]$where) {
+    $image = ''
+    if ($env:ImageOS -or $env:ImageVersion) { $image = ', image ' + ([string]$env:ImageOS + ' ' + [string]$env:ImageVersion).Trim() }
+    $line = ('{0} ran on PowerShell {1}, {2}, {3}{4}' -f $where, $PSVersionTable.PSVersion,
+        [System.Runtime.InteropServices.RuntimeInformation]::FrameworkDescription,
+        [System.Runtime.InteropServices.RuntimeInformation]::OSDescription.Trim(), $image)
+    return '::notice title=Gate runner::' + $line.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+}
+
 $code = 0
 $title = $(if ($Of -gt 1) { 'Gate harnesses, share {0} of {1}' -f $Shard, $Of } else { 'Gate harnesses' })
+Write-Host (Get-RunnerSaid ($(if ($Platform -eq 'Linux') { 'Linux ' } else { '' }) + $title))
 if ($run.Count) {
     $with = @{ Only = ($run -join ' '); Throttle = $Throttle; Share = $share; BudgetSeconds = $BudgetSeconds }
     if ($StartLog) { $with.StartLog = $StartLog }
