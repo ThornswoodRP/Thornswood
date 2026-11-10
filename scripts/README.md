@@ -90,6 +90,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [dev/Check-Balance.ps1](dev/Check-Balance.ps1) | Reads the five generated tables and says whether the ladders line up. |
 | [dev/Check-Change.ps1](dev/Check-Change.ps1) | Runs, before a push, the gate harnesses this branch's change can reach, from main's nightly map, in a cloud container or on a PC (#5183). |
 | [dev/Check-Outside.ps1](dev/Check-Outside.ps1) | Walks the path a first install takes through the things this project does not run itself, and says which of them is broken or has moved. |
+| [dev/Check-PackageNotices.ps1](dev/Check-PackageNotices.ps1) | Fails when a NuGet package Dependabot watches is named at another version in THIRD-PARTY.md, the credits page or installer\licences than its project gives it. |
 | [dev/Check-Parse.ps1](dev/Check-Parse.ps1) | Says whether every PowerShell script and every game script parses (#5291). |
 | [dev/Check-Push.ps1](dev/Check-Push.ps1) | The pre-push hook's checks (#5291): every script parses and the writing rules hold, in the commit being pushed, before it leaves the machine. |
 | [dev/Check-Secrets.ps1](dev/Check-Secrets.ps1) | Read only. Looks for anything that must never leave a machine: in the files this repository tracks, in a pack or another zip, or in a built program. |

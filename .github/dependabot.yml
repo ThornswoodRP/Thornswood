@@ -1,6 +1,6 @@
 # What this repository depends on, watched rather than remembered.
 #
-# THREE ECOSYSTEMS, because three manifests exist here, and the engine
+# FOUR ECOSYSTEMS, because four manifests exist here, and the engine
 # submodule is watched another way (below).
 #
 # github-actions: every workflow pins actions by full length commit SHA (see
@@ -53,6 +53,24 @@
 # Concentus, SharpSRTP and BouncyCastle for voice. Moving one means rewriting
 # its section of THIRD-PARTY.md, the credits page and its text in
 # installer/licences in the same pull request.
+#
+# nuget (#4161, Patrick's A on the NuGet card, 9 Nov 2026): one grouped
+# entry a week for the launcher and the deploy agent. Its directories are
+# every project that has to move with them:
+#   - launcher/app, the launcher;
+#   - launcher/tests/window-starts, which starts the launcher's window on
+#     the launcher's own Avalonia version;
+#   - scripts/release/ShipRoot, which carries the launcher's Velopack and
+#     ProtectedData, at the launcher's versions (tests\test-2019-ship-roots.ps1);
+#   - tools/DeployAgent, the deploy agent on the box;
+#   - tools/DeployAgent.Tests, whose lock file pins the agent's package and
+#     is restored in locked mode (deploy-agent.yml); its own test libraries
+#     are ignored, since they are not the launcher's or the agent's.
+# tests\voice-launcher reads its versions out of the launcher's project, so
+# it moves with no line of its own. A bump is held on the pull request gate
+# by scripts\dev\Check-PackageNotices.ps1 (tests\test-4161-package-notices.ps1)
+# until THIRD-PARTY.md, the credits page and installer/licences name the new
+# versions; that update is a Bot's commit on the bump's own pull request.
 #
 # Weekly rather than daily: this is a small team, and a pull request a day
 # from a robot is a pull request nobody reads.
@@ -131,6 +149,30 @@ updates:
         patterns: ["*"]
     commit-message:
       prefix: "study"
+    labels:
+      - "area: Launcher"
+    rebase-strategy: disabled
+
+  - package-ecosystem: nuget
+    directories:
+      - /launcher/app
+      - /launcher/tests/window-starts
+      - /scripts/release/ShipRoot
+      - /tools/DeployAgent
+      - /tools/DeployAgent.Tests
+    schedule:
+      interval: weekly
+    groups:
+      launcher-and-tools:
+        patterns: ["*"]
+    ignore:
+      # DeployAgent.Tests is here for its lock file only, which pins the
+      # agent's own package; its test libraries are not the launcher's.
+      - dependency-name: "Microsoft.NET.Test.Sdk"
+      - dependency-name: "xunit"
+      - dependency-name: "xunit.runner.visualstudio"
+    commit-message:
+      prefix: "launcher"
     labels:
       - "area: Launcher"
     rebase-strategy: disabled
