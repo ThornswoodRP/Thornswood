@@ -109,7 +109,7 @@ try {
 # ---- 3. the step, over stand-in answers --------------------------------------
 $H = '1111111111111111111111111111111111111111'
 $P = '2222222222222222222222222222222222222222'
-function New-World { return @{ head = $H; prs = @(); files = @{}; branchPin = $null; forkRuns = @(); arts = @{}; engineRuns = @(); compare = @{} } }
+function New-World { return @{ head = $H; prs = @(); files = @{}; branchPin = $null; pinBehind = 0; forkRuns = @(); arts = @{}; engineRuns = @(); compare = @{} } }
 function Get-Answer($w) {
     return {
         param([string]$path)
@@ -117,6 +117,7 @@ function Get-Answer($w) {
         if ($path -like 'repos/ThornswoodRP/Thornswood/pulls?state=open*') { return , @($w.prs) }
         if ($path -match '^repos/ThornswoodRP/Thornswood/pulls/(\d+)/files') { return , @($w.files[[int]$Matches[1]]) }
         if ($path -like 'repos/ThornswoodRP/Thornswood/contents/engine/skymp*') { if ($w.branchPin) { return [pscustomobject]@{ sha = $w.branchPin } } ; throw 'Not Found (HTTP 404)' }
+        if ($path -eq 'repos/ThornswoodRP/Thornswood/compare/main...engine-pin/next') { if ($w.branchPin) { return [pscustomobject]@{ behind_by = $w.pinBehind } } ; throw 'Not Found (HTTP 404)' }
         if ($path -like 'repos/ThornswoodRP/skymp/actions/workflows/*') { return [pscustomobject]@{ workflow_runs = @($w.forkRuns) } }
         if ($path -match '^repos/ThornswoodRP/skymp/actions/runs/(\d+)/artifacts') { return [pscustomobject]@{ artifacts = @($w.arts[[long]$Matches[1]]) } }
         if ($path -like 'repos/ThornswoodRP/Thornswood/actions/workflows/engine.yml/runs*') { return [pscustomobject]@{ workflow_runs = @($w.engineRuns) } }
@@ -149,6 +150,14 @@ Yes 'ready: engine-pin/next pins the head, with no pull request open' ($s.Step -
 $w.prs = @([pscustomobject]@{ number = 42; html_url = 'u'; head = [pscustomobject]@{ ref = $EnginePinBranch } })
 $s = Step $w
 Yes '  and with its pull request open, which is not a reason to stand aside' ($s.Step -eq 'ready' -and $s.Pr -eq 42)
+# #4523: a pin branch made before main moved is not ready. On 10 Nov 2026
+# the pin of 3ac482a6 sat red on an old main whose failures #5719 had fixed,
+# and every look called it ready, so nothing made it again.
+$w.pinBehind = 3
+$w.forkRuns = @($green); $w.arts[[long]7] = $art
+$w.engineRuns = @([pscustomobject]@{ id = 95; status = 'completed'; conclusion = 'success'; display_title = "Engine build of $H"; html_url = 'u' })
+$s = Step $w
+Yes '  behind main it is made again on main''s head, from the same record, and says why (#4523)' ($s.Step -eq 'pin' -and $s.Run -eq 95 -and $s.Pr -eq 42 -and $s.Why -match 'behind main')
 
 $w = New-World
 $w.forkRuns = @([pscustomobject]@{ id = 8; status = 'in_progress'; conclusion = $null; head_sha = $H; head_branch = 'thornswood/engine-changes'; event = 'push'; html_url = 'https://example/8'; repository = [pscustomobject]@{ id = 1375283516; full_name = 'ThornswoodRP/skymp' }; head_repository = [pscustomobject]@{ id = 1375283516; full_name = 'ThornswoodRP/skymp' } })

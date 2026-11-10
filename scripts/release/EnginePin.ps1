@@ -185,8 +185,8 @@ function Get-EnginePinValue($Object, [string]$Name) {
 # and the commit main pins ($Pin). One of:
 #   pinned     main pins the fork's head: nothing to do
 #   aside      another open pull request moves engine/skymp: it goes first
-#   ready      engine-pin/next already pins the head (Pr says whether a pull
-#              request is open from it)
+#   ready      engine-pin/next already pins the head and is not behind main
+#              (Pr says whether a pull request is open from it)
 #   building   the fork is still building the head, and no earlier head
 #              since the pin is built either
 #   no-build   the fork has no build of the head to record, or it ended red
@@ -255,6 +255,20 @@ function Get-EnginePinStep([string]$Pin, [scriptblock]$Get) {
     $r.Pr = if ($ours) { [int]$ours.number } else { $null }
     $at = $null
     try { $at = & $Get ("repos/{0}/contents/engine/skymp?ref={1}" -f $EnginePinThornswood, [uri]::EscapeDataString($EnginePinBranch)) } catch { $at = $null }
+    # A pin is ready only on main as it is now (Thornswood #4523). make builds
+    # engine-pin/next on main's head of that moment, and nothing made it
+    # again after, so a pin made before a fix to main kept that failure on
+    # its pull request: on 10 Nov 2026 the pin of 3ac482a6 was made on
+    # 252f47b at 6:01 AM UTC, #5719 fixed test-3196 and test-4161 on Windows
+    # at 6:27, and the pin sat red on both with every look saying ready. A
+    # branch behind main is made again on main's head from the same record.
+    if ($at) {
+        $cmp = & $Get ("repos/{0}/compare/main...{1}" -f $EnginePinThornswood, $EnginePinBranch)
+        if ([int](Get-EnginePinValue $cmp 'behind_by') -gt 0) {
+            $also = (" {0} is {1} commit(s) behind main, so it is made again on main's head." -f $EnginePinBranch, [int]$cmp.behind_by)
+            $at = $null
+        }
+    }
     if ($at -and ([string](Get-EnginePinValue $at 'sha')).ToLowerInvariant() -eq $head) {
         return (Done 'ready' ("$EnginePinBranch already pins $($head.Substring(0, 12))" + $(if ($ours) { ", in pull request #$($ours.number)" } else { ', and no pull request is open from it' })))
     }
