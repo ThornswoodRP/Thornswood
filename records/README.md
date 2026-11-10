@@ -1,7 +1,10 @@
 # Records
 
-What a release is checked against, kept apart from the scripts that write and
-read it (issue #440, phase 8):
+What a release, the build, the box and GitHub are checked against, kept apart
+from the scripts that write and read it (issue #440, phase 8). Every file and
+folder here is named below, under the heading it belongs to.
+
+## Builds, the game and the content tools
 
 - `client-build.json`: the six SkyMP client files built from the fork, by
   hash, and the fork commit they came from. `scripts\release\New-ClientBuildRecord.ps1`
@@ -146,27 +149,71 @@ read it (issue #440, phase 8):
   Written by hand from that measurement, again when the load order changes.
 - `signing\`: the code signing setup, with its own README. On since
   27 September: Ship refuses a launcher that is not signed (Developer-Guide.md).
+- `papyrus-scripts.json`: the script pack `scripts\mods\New-ScriptPack.py`
+  made from a game PC's Data folder, by bytes and sha256, with how many
+  scripts each archive gave it (#3105). `scripts\mods\Send-GameArchives.ps1`
+  sends the pack to the box only when it is these bytes, and
+  `scripts\mods\OnBox.ps1` links it into each run, where
+  `scripts\dev\Audit-PapyrusEvents.py` and the crime table read it in place
+  of the archives the box does not hold. Made again when the collection
+  adds, removes or changes an archive or a loose script.
 
-## Provenance notes
+## Licences and sources
 
-Each of these says how one engine build was made when it was not a plain
-build of the pinned commit: which files were built again, which kept the
-bytes of an earlier build and why that is the same source, and what was run
-to check it. They are evidence for the records above at the commit each
-names. No script reads them. `THIRD-PARTY.md` and
-`site\data\site\credits.md` point at the one behind the current pin.
+- `client-licences.json`: the libraries whose code is in each native client
+  file, read from its program database by the fork's build, the fork's own
+  folders under a notice of their own, and the npm packages in
+  skymp5-client.js, each with its licence text in `client-licences\<name>.txt`
+  (#3099, #3751). `scripts\release\New-ClientLicenceRecord.ps1` writes it
+  when the pin moves.
+- `client-licences\`: those licence texts, one file per library.
+- `front-licences\`: the licence texts of the npm packages in the front's
+  build.js, one file per package, named by `front-build.json`'s `packages`
+  above.
+- `frida-sources.json`: the source of what is inside frida-gum.lib, which
+  SkyrimPlatformImpl.dll links (#3287). The LGPL parts go out under the GPL
+  with that file, so one permanent Release of this repository holds each part
+  as an archive of its commit (Patrick's answer C, 26 Oct 2026); this names
+  each archive by commit, sha256 and bytes.
+  `scripts\release\Publish-FridaSources.ps1` makes the Release from it and
+  checks it, and `tests\test-3287-frida-sources.ps1` holds it to the notice
+  and `THIRD-PARTY.md`. No script writes this one: it is changed by hand in
+  a pull request.
+- `asset-provenance.json`: the asset provenance register (issue #2177). Every
+  picture, video, sound, font, mesh, texture, interface file and plugin
+  Thornswood hands to people or shows them: where it came from, who made it,
+  its licence or permission, the credit it asks for, who approved it and
+  when, where it is published and its sha256, or which of those is not
+  recorded and who can answer. Files that ship from the game folder but are
+  not in the repository are in it by name, and gallery uploads and the
+  collection's mods are dispositioned. Operator only: nothing that builds a
+  pack, the installer, the launcher or the site reads it. A permission itself
+  is never written in it; an entry says where it is kept. No script writes
+  it: it is changed by hand in the pull request that adds or changes an
+  asset, and `tests\test-asset-provenance.js` fails on a tracked asset with
+  no entry or a changed hash.
 
-- `client-provenance-4952dbb6.md`, `client-provenance-e0135f5a.md`,
-  `client-provenance-df1a6c39.md` and `client-provenance-d6c99400.md`: the
-  six client files at those fork commits (30 September to 2 October).
-- `creation-clothes-provenance.md`: the client and SkyrimPlatformImpl.dll
-  built for the starting clothes in character creation (fork commit
-  bd1d80e2, 3 October).
-- `runner-isolation.json`: what a runner account on the VPS must not reach (production paths, groups), the crash dump folder it may only write, the age limit for files left in its temp folder, and differences agreed as intentional. `scripts\vps\Check-RunnerIsolation.ps1` compares the runners against it (issue #2161).
-- `remote-commands.json`: every call under `scripts\` that reaches the VPS (ssh, scp, Invoke-ThornswoodRemote and its wrappers, Remote.ps1), what it sends, and the class it needs: a gate verb, admin, or transport. Read from the code; the ops repo's `DEPLOY-IDENTITIES.md` section 2a is its summary. `tests\test-remote-command-map.ps1` fails when a remote call has no row or a row has no call (issue #2182). A row names its call by script, function, command and an anchor, a line of text from the call (or just above it), never by its place in the file, so a call put in elsewhere moves no row (#2498).
-- `prod-parity.json`: what the VPS should look like (which ports listen where and as which program, each task's account and triggers, the services' accounts, which live files must match which repository file, the TLS margin, environment variables that must not be set) and the differences agreed as intentional, each with its reason. `scripts\vps\Check-ProdParity.ps1` compares the box against it; no secret belongs in it (issue #2165).
-- `cloudflare-pages.json`: the Cloudflare Pages project that serves the site's plain pages from Cloudflare at its pages.dev address (#5190): built by Cloudflare from this repository with `scripts\deploy\Export-Pages.js`, no custom domain (thornswood.net stays the box's). `tests\test-5190-pages-export.js` holds it to the script.
-- `cloudflare-cache-rules.json`: the cache rule on the thornswood.net zone that lets Cloudflare's free plan keep the site's public pages, and only those (#5190). The site marks each public page with `Cloudflare-CDN-Cache-Control` and nothing else; the rule caches only what is marked. `tests\test-5190-cloudflare-cache.js` holds its paths to `PUBLIC_PAGES` in `site\server.js`.
+## The collection
+
+- `collection.json`: the collection as it should be (issue #5189): each
+  Nexus file it installs with the plugins that file puts in Data, every
+  plugin in the collection's order with its load-after rule and what its
+  header says, and the plugins the servers load that a change takes out. A
+  mod change is a pull request to this file (`docs\COLLECTION-CHANGES.md`).
+  `scripts\release\Check-CollectionRecord.ps1` holds it to the load order,
+  `collection-permissions.json` and the servers' order with no key, and
+  `tests\test-5189-collection-record.ps1` runs it in the gate. Its merge runs
+  `.github\workflows\collection-record.yml`, which drafts the revision it
+  describes, holds the draft to it and publishes it
+  (`Publish-CollectionRecord.ps1`). Made from a laid out revision by
+  `New-CollectionRecord.ps1`, and its `revision` moves with the records
+  that follow a publish.
+- `collection-plugins.json`: every plugin the published revision installs,
+  by name, size and sha256, and the revision it is.
+  `scripts\mods\New-CollectionPluginRecord.ps1` writes it from the
+  revision's plugins, in the pull request that moves the records to a new
+  revision. The content table builders and `game\data\last-plugin.json` are
+  held to it, and `docs\COLLECTION-REVISIONS.md` names its revision.
 - `collection-permissions.json`: what each mod in the Nexus collection says
   on its own page's Permissions and credits about being put in a collection,
   one entry per Nexus mod of the revision `collection-plugins.json` is, with
@@ -191,27 +238,106 @@ names. No script reads them. `THIRD-PARTY.md` and
   running server loads, and only while the two name the same revision.
   Changed by hand in the pull request that moves the records to a new
   revision.
-- `collection.json`: the collection as it should be (issue #5189): each
-  Nexus file it installs with the plugins that file puts in Data, every
-  plugin in the collection's order with its load-after rule and what its
-  header says, and the plugins the servers load that a change takes out. A
-  mod change is a pull request to this file (`docs\COLLECTION-CHANGES.md`).
-  `scripts\release\Check-CollectionRecord.ps1` holds it to the load order,
-  `collection-permissions.json` and the servers' order with no key, and
-  `tests\test-5189-collection-record.ps1` runs it in the gate. Its merge runs
-  `.github\workflows\collection-record.yml`, which drafts the revision it
-  describes, holds the draft to it and publishes it
-  (`Publish-CollectionRecord.ps1`). Made from a laid out revision by
-  `New-CollectionRecord.ps1`, and its `revision` moves with the records
-  that follow a publish.
-- `asset-provenance.json`: the asset provenance register (issue #2177). Every picture, video, sound, font, mesh, texture, interface file and plugin Thornswood hands to people or shows them: where it came from, who made it, its licence or permission, the credit it asks for, who approved it and when, where it is published and its sha256, or which of those is not recorded and who can answer. Files that ship from the game folder but are not in the repository are in it by name, and gallery uploads and the collection's mods are dispositioned. Operator only: nothing that builds a pack, the installer, the launcher or the site reads it. A permission itself is never written in it; an entry says where it is kept. No script writes it: it is changed by hand in the pull request that adds or changes an asset, and `tests	est-asset-provenance.js` fails on a tracked asset with no entry or a changed hash.
+
+## The box, GitHub and Cloudflare
+
+What each of these should be, read against the real thing by the script
+named. Names only: no secret or token is in any of them.
+
+- `runner-isolation.json`: what a runner account on the VPS must not reach
+  (production paths, groups), the crash dump folder it may only write, the
+  age limit for files left in its temp folder, and differences agreed as
+  intentional. `scripts\vps\Check-RunnerIsolation.ps1` compares the runners
+  against it (issue #2161).
+- `build-runners.json`: which box runners carry the label the heavy jobs ask
+  for (main's build fallback, the trace, the engine fallback, the nightly
+  checks and the named harnesses), so no more of them run at once than the
+  box can hold (#2994). `scripts\deploy\Set-BuildRunners.ps1` makes GitHub's
+  runner labels match it, and Install-Runner.ps1 registers a listed runner
+  with the label.
+- `pr-build-runners.json`: which runners take the pull request build's
+  fallback, on the box and on One (#4010, #3860). Every box runner listed
+  here is also in `build-runners.json`, so the box's cap still holds
+  (`tests\test-2994-build-runners.ps1`).
+- `remote-commands.json`: every call under `scripts\` that reaches the VPS
+  (ssh, scp, Invoke-ThornswoodRemote and its wrappers, Remote.ps1), what it
+  sends, and the class it needs: a gate verb, admin, or transport. Read from
+  the code; the ops repo's `DEPLOY-IDENTITIES.md` section 2a is its summary.
+  `tests\test-remote-command-map.ps1` fails when a remote call has no row or
+  a row has no call (issue #2182). A row names its call by script, function,
+  command and an anchor, a line of text from the call (or just above it),
+  never by its place in the file, so a call put in elsewhere moves no row
+  (#2498).
+- `prod-parity.json`: what the VPS should look like (which ports listen
+  where and as which program, each task's account and triggers, the
+  services' accounts, which live files must match which repository file, the
+  TLS margin, environment variables that must not be set) and the
+  differences agreed as intentional, each with its reason.
+  `scripts\vps\Check-ProdParity.ps1` compares the box against it (issue
+  #2165).
+- `github-apps.json`: what each GitHub App that works on Thornswood's
+  repositories may do, permission by permission and event by event, each
+  with its reason. Every night `scripts\dev\Check-AppPermissions.js` reads
+  each App from GitHub and names any difference. Only Patrick changes an
+  App's permissions; the change is a pull request to this file first.
+- `github-repo-settings.json`: the rulesets, vulnerability reporting,
+  immutable releases, secret scanning, auto-merge and merge methods of this
+  repository, the engine fork and the ops repository (#3683, #3691). After a
+  merge, `scripts\deploy\Set-BuildRunners.ps1 -RepoSettings` has the box's
+  admin service make GitHub match it.
+- `github-settings.json`: this repository's Actions settings, environments,
+  and the names of its secrets and variables (#3534).
+  `scripts\deploy\Check-GitHubSettings.ps1` reads GitHub and names every
+  difference; a change is a pull request to this file and the change on
+  GitHub together.
+- `repo-about.json`: what GitHub shows in this repository's About box: the
+  line under its name, the website and the topics (Patrick's A, 26 Oct 2026,
+  #3682). After a merge, `scripts\deploy\Set-RepoAbout.ps1` has the box's
+  admin service make GitHub match it.
+- `cloudflare-pages.json`: the Cloudflare Pages project that serves the
+  site's plain pages from Cloudflare at its pages.dev address (#5190): built
+  by Cloudflare from this repository with `scripts\deploy\Export-Pages.js`,
+  no custom domain (thornswood.net stays the box's).
+  `tests\test-5190-pages-export.js` holds it to the script.
+- `cloudflare-cache-rules.json`: the cache rule on the thornswood.net zone
+  that lets Cloudflare's free plan keep the site's public pages, and only
+  those (#5190). The site marks each public page with
+  `Cloudflare-CDN-Cache-Control` and nothing else; the rule caches only what
+  is marked. `tests\test-5190-cloudflare-cache.js` holds its paths to
+  `PUBLIC_PAGES` in `site\server.js`.
 - `cloudflare-tunnel.json`: the Cloudflare Tunnel the site reaches
   Cloudflare through (#5334): the account, the zone, the tunnel's name, the
   cloudflared release by SHA-256, the tunnel's routes to Caddy on
   127.0.0.1:443 and the two DNS names with the box's address.
   `scripts\deploy\Install-Tunnel.ps1` reads it and makes Cloudflare and the
-  box match it; nothing writes it, and no token is in it. A new cloudflared
-  is its version, URL and SHA-256 changed together, from the release page.
+  box match it; nothing writes it. A new cloudflared is its version, URL and
+  SHA-256 changed together, from the release page.
+
+## Provenance notes
+
+Each of these says how one engine build was made when it was not a plain
+build of the pinned commit: which files were built again, which kept the
+bytes of an earlier build and why that is the same source, and what was run
+to check it. They are evidence for the records above at the commit each
+names, and each file is named by a hash of its own, not by that commit. No
+script reads them.
+
+No provenance note names the fork commit the records pin today (the
+`forkCommit` of `client-build.json`), so none backs
+the current pin, and `THIRD-PARTY.md` and `site\data\site\credits.md` point
+at none. A new note is written only for a build that is not a plain build of
+its commit.
+
+- `client-provenance-e84a91f1.md` (fork commit 4952dbb6),
+  `client-provenance-663686af.md` (e0135f5a),
+  `client-provenance-6725fc77.md` (df1a6c39) and
+  `client-provenance-df2ae1f1.md` (d6c99400): the six client files at those
+  fork commits (30 September to 2 October). The d6c99400 note sends you to
+  the df1a6c39 one by that commit's name; it is
+  `client-provenance-6725fc77.md`.
+- `creation-clothes-provenance.md`: the client and SkyrimPlatformImpl.dll
+  built for the starting clothes in character creation (fork commit
+  bd1d80e2, 3 October).
 - `merchant-runtime-provenance.md`: the server module built for merchant
   settlement, and why the six client files kept their e6534129 bytes (fork
   commit a247ef27, 4 October).
@@ -221,5 +347,9 @@ names. No script reads them. `THIRD-PARTY.md` and
 nothing read it, the engine has been pinned to other commits since, and it
 named folders on the machine that built it. It is in the history at 9e4ba70.
 
-Change a record only by running the script that writes it, in the same pull
-request as the build or the fork commit it describes.
+A record a script writes is changed only by running that script, in the same
+pull request as the build, the fork commit or the measurement it describes.
+One no script writes is changed by hand in a pull request, as its entry
+says. `tests\test-4377-records-readme.js` fails on a file or folder here
+that this readme does not name, on a name here that is not a file, and on a
+control character in it.
