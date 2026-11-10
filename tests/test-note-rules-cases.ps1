@@ -70,6 +70,18 @@ foreach ($c in @($cases.joins)) {
     Yes ("join {0} of {1} bodies gives the same note" -f $i, $items.Count) ([string](Join-PrReleaseNotes $items) -ceq [string]$c.note)
 }
 
+# The copy the dotnet parts build from holds what a build in the checkout
+# reads (#5740): every source at any depth, and any global.json, nuget.config
+# or Directory.Build file above the projects. Checked on every machine,
+# with or without the SDK.
+$probe = Join-Path ([IO.Path]::GetTempPath()) ('note-copy-' + [guid]::NewGuid().ToString('N'))
+try {
+    Copy-NotesProjects $Repo $probe
+    $want = Get-NotesInputs $Repo; $got = Get-NotesInputs $probe
+    Yes ('the copy holds every file a build of the two projects reads, and nothing of obj or bin (' + @($want -split "`n").Count + ' files)') ($want -and $want -ceq $got)
+    if ($want -cne $got) { Write-Host ('      the checkout: ' + ($want -replace "`n", ', ')); Write-Host ('      the copy: ' + ($got -replace "`n", ', ')) }
+} finally { Remove-Item -LiteralPath $probe -Recurse -Force -ErrorAction SilentlyContinue }
+
 $dotnet = Get-Command dotnet -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $dotnet) { Write-Host 'SKIP  dotnet test on tools/ReleaseNotes.Tests: the .NET SDK is not on this machine (the Release note rules workflow runs it)' }
 else {
