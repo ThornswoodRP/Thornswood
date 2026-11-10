@@ -228,7 +228,7 @@ function fillPage(html, body) {
 // ==== end thornswood page render ====
 
 /* The addresses that are a markdown page. The same list as PAGES in
-   home.html, and tools/test-site-render.js checks that the two agree. */
+   home.html, and site/tests/test-site-render.js checks that the two agree. */
 const MD_PAGES = ['/world', '/rules', '/join', '/credits', '/classes',
                   '/known', '/help', '/privacy', '/terms', '/cookies'];
 const MARKED = 'marked-12.0.2.min.js';

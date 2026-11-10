@@ -24,7 +24,7 @@
      this folder now (the woff2 files, whose faces home.css names), and the
      written pages are rendered by server.js before they are sent, so
      this page loads nothing from anywhere but this site. Keep it that
-     way: tools/test-site-render.js fails on any address from another
+     way: site/tests/test-site-render.js fails on any address from another
      site in a src, a url(), a stylesheet link or a preconnect here.
 
      If anything like it comes back, it comes back with the privacy
@@ -35,7 +35,7 @@
      Cloudflare, which carries every request to the site anyway, writes
      its beacon into the page on the way out. It sets no cookie and keeps
      nothing on the visitor's machine, so there is nothing for a consent
-     gate to ask about; the content rules in server.js (CSP_HEADER) let
+     gate to ask about; the content rules in site/lib/http.js (CSP_HEADER) let
      it through and the privacy page names it. -->
 <title>Thornswood</title>
 <meta name="description" content="A Skyrim roleplay server set fifty years after the civil war. The world still has people in it.">
@@ -43,7 +43,7 @@
      these every address unfurled with the same generic home text, so a link to
      the rules and a link to the roadmap read identically in a channel. The
      server writes each page's own words into them before it sends the page,
-     from its one list (BLURB in server.js, #3138). -->
+     from its one list (BLURB in site/lib/pages.js, #3138). -->
 <meta property="og:site_name" content="Thornswood">
 <meta property="og:type" content="website">
 <meta property="og:title" id="ogTitle" content="Thornswood">
@@ -135,7 +135,7 @@
     Both files are the whole painting, not the launcher's strip.
     banner.mp4 is the 24 second v4 loop at 1600x900 and banner.jpg is its
     own first frame. Until 20 September they were copies of
-    tools/launcher-header.mp4 and .jpg, which are 1536 by 300: a band cut
+    launcher/launcher-header.mp4 and .jpg, which are 1536 by 300: a band cut
     out of the middle of this same painting for a title bar 135 pixels
     high. Covering an 84vh hero with that band meant stretching 300 rows to
     about 780 and throwing away the sky, the lake and the foreground, so the
