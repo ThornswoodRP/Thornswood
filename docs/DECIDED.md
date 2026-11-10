@@ -805,6 +805,9 @@ issue where the card did.
   still waits for Patrick's approval on its Main Deployment.**
   (dec_uo8pYszN29ELpg9kkw1V7w) 8 Nov 2026,
   [#4825](https://github.com/ThornswoodRP/Thornswood/issues/4825#issuecomment-6730901662).
+- **The workers' App may read the engine fork's Dependabot alerts, and
+  nothing more.** (dec_uWk5Bz9O8YsALZe30W_4UQ) 9 Nov 2026,
+  [#5015](https://github.com/ThornswoodRP/Thornswood/issues/5015#issuecomment-6758872577).
 
 ### Turned down
 
