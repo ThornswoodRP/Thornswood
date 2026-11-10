@@ -829,6 +829,10 @@ issue where the card did.
 - **The workers' App may read the engine fork's Dependabot alerts, and
   nothing more.** (dec_uWk5Bz9O8YsALZe30W_4UQ) 9 Nov 2026,
   [#5015](https://github.com/ThornswoodRP/Thornswood/issues/5015#issuecomment-6758872577).
+- **The Oracle VM's Hermes agent gets its own key on the box, by one run of
+  Grant-BoxKey -Name oracle-hermes.** (dec_8IRMk9Pf55b91lg4a-_b3Q) 10 Nov
+  2026,
+  [#5746](https://github.com/ThornswoodRP/Thornswood/issues/5746#issuecomment-6771996368).
 
 ### Turned down
 
