@@ -128,9 +128,14 @@ Yes ('  it ignores only DeployAgent.Tests'' own test libraries ({0})' -f ($ignor
 # or the next bump splits it from the launcher (a project naming its version
 # through a property read from the launcher's, like tests\voice-launcher,
 # moves by itself). The study prototypes never build with the launcher.
+# The projects are the ones git tracks, the ones Dependabot reads: a walk of
+# the folder also read the projects other harnesses build under out/, and
+# passed or failed by which of them ran first in the share (#5720).
 $moved = @($refs | ForEach-Object { $_.Name } | Select-Object -Unique)
 $left = @()
-foreach ($p in @(Get-ChildItem -LiteralPath $repo -Recurse -Filter '*.csproj' -File | Where-Object { $_.FullName -notmatch '[\\/](engine|docs[\\/]studies|node_modules|bin|obj)[\\/]' })) {
+$tracked = @(& git -C $repo ls-files -- '*.csproj')
+if ($LASTEXITCODE -ne 0 -or -not $tracked.Count) { throw "git ls-files named no project in $repo (exit $LASTEXITCODE)" }
+foreach ($p in @($tracked | Where-Object { $_ -notmatch '^(engine|docs/studies)/' } | ForEach-Object { Get-Item -LiteralPath (Join-Path $repo $_) })) {
     $rel = '/' + (Split-Path -Parent $p.FullName.Substring($repo.TrimEnd('\', '/').Length + 1)).Replace('\', '/')
     if ($dirs -contains $rel) { continue }
     $x = [xml][IO.File]::ReadAllText($p.FullName)
