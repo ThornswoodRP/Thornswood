@@ -227,6 +227,18 @@ function New-Server([hashtable]$send, [string[]]$marks = @(), [string]$engineSay
   $null = New-Item -ItemType Directory -Path (Join-Path $root 'gamemode-tables') -Force
   foreach ($k in $oldTables.Keys) { [IO.File]::WriteAllText((Join-Path (Join-Path $root 'gamemode-tables') $k), $oldTables[$k]) }
   if ($running) { [IO.File]::WriteAllText((Join-Path $root '.stub-udp'), '7787') }
+  # The running files went in at an earlier deploy, as on the box, where a
+  # run's files reach the stage by scp, written as they arrive (#5673). Left
+  # with the time they were written here, the running gamemode.js and the
+  # staged one were written milliseconds apart, and a file's write time comes
+  # from a clock that moves in steps (about 15.6 ms on Windows, a scheduler
+  # tick on Linux), so the two often had the same time. A run that sends the
+  # same gamemode.js with new tables then put in a file the stand-in could not
+  # tell from the one it had loaded, same bytes and same time, so it never
+  # loaded the new tables, and the case waited out its 30 seconds and put
+  # them back.
+  $before = (Get-Date).ToUniversalTime().AddHours(-1)
+  foreach ($f in @(Get-ChildItem -LiteralPath $root -File -Force -Recurse)) { $f.LastWriteTimeUtc = $before }
   foreach ($m in $marks) { [IO.File]::WriteAllText((Join-Path $root $m), '') }
   $stamp = '20261022-' + (100000 + $script:case)
   $stage = Join-Path $root ('.stage-' + $stamp)
@@ -393,6 +405,10 @@ try {
   $srv = New-Server ([ordered]@{ 'gamemode.js' = $oldGm; 'thornswood-build.json' = '{"commit":"tables"}'; 'gamemode-tables/KEPT.json' = $oldTables['KEPT.json']; 'gamemode-tables/NEW_ONE.json' = "{`n`"n`":2`n}`n" })
   $oldTree = Get-ThornswoodTablesTree (Join-Path $srv.Root 'gamemode-tables')
   $newTree = Get-ThornswoodTablesTree (Join-Path $srv.Stage 'gamemode-tables')
+  $runAt = (Get-Item -LiteralPath (Join-Path $srv.Root 'gamemode.js')).LastWriteTimeUtc
+  $stagedAt = (Get-Item -LiteralPath (Join-Path $srv.Stage 'gamemode.js')).LastWriteTimeUtc
+  Yes ('a tables-only run sends the same gamemode.js, written after the running one, as scp writes it on the box (' + $runAt.ToString('o') + ', ' + $stagedAt.ToString('o') + ')') (
+    (Read-At $srv 'gamemode.js') -eq [IO.File]::ReadAllText((Join-Path $srv.Stage 'gamemode.js')) -and $stagedAt -gt $runAt)
   $out = Invoke-Reload $srv 30
   Yes 'a run that changes only the tables reloads: RELOAD OK' ($out -contains 'RELOAD OK')
   Yes '  it waited for the server to say it loaded the new tree' (@($out | Where-Object { $_ -like "*gamemode tables are git tree $newTree*" }).Count -eq 1 -and @($out | Where-Object { $_ -like "PASS: *with tables git tree $newTree*" }).Count -eq 1)
