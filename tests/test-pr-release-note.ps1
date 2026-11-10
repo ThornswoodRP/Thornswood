@@ -32,6 +32,7 @@ function Yes([string]$what, [bool]$cond) {
 }
 
 . (Join-Path $Repo 'scripts/release/Note-Rules.ps1')
+. (Join-Path $PSScriptRoot 'ReleaseNotes-Copy.ps1')   # thornswood-notes, built from a copy (#5740)
 $pwsh = (Get-Process -Id $PID).Path
 $temp = Join-Path ([IO.Path]::GetTempPath()) ("pr-note-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $temp | Out-Null
@@ -85,8 +86,15 @@ try {
     else {
         $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'; $env:DOTNET_NOLOGO = '1'
         $built = Join-Path $temp 'notes'
-        $null = & $dotnet.Source build (Join-Path $Repo 'tools/ReleaseNotes') -c Release -o $built --verbosity quiet 2>&1
+        # From a copy in its own temp folder (#5740): built in the checkout, it
+        # wrote tools\ReleaseNotes\obj while tests\test-note-rules-cases.ps1,
+        # beside it in the gate, read the same folder.
+        $before = Get-NotesTreeState $Repo
+        Copy-NotesProjects $Repo (Join-Path $temp 'src')
+        $null = & $dotnet.Source build (Join-Path $temp 'src/tools/ReleaseNotes') -c Release -o $built --verbosity quiet 2>&1
         Yes 'thornswood-notes builds' ($LASTEXITCODE -eq 0)
+        $after = Get-NotesTreeState $Repo
+        Yes ('  from a copy: the checkout''s tools/ReleaseNotes is as this found it, so a harness beside it reads it whole (' + (Compare-NotesTreeState $before $after) + ')') ($before -ceq $after)
         function Run-Check([string]$body, [string]$author = '') {
             $f = Join-Path $temp 'body.md'
             [IO.File]::WriteAllText($f, $body)
