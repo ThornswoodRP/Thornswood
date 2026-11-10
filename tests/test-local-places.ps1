@@ -37,6 +37,7 @@
 param([string]$Tools)
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Windows.ps1')   # $OnWindows (#2957)
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $Here = Split-Path -Parent $Here
@@ -118,9 +119,8 @@ try {
     $bin = Join-Path $T 'bin'
     New-Item -ItemType Directory -Force -Path $bin | Out-Null
     $calls = Join-Path $T 'ssh-calls.txt'
-    $onWindows = [IO.Path]::DirectorySeparatorChar -eq '\'
     foreach ($n in 'ssh', 'scp') {
-        if ($onWindows) {
+        if ($OnWindows) {
             [IO.File]::WriteAllText((Join-Path $bin ($n + '.cmd')), ("@echo off`r`necho {0} %*>>`"{1}`"`r`nexit /b 255`r`n" -f $n, $calls), (New-Object Text.ASCIIEncoding))
         } else {
             $f = Join-Path $bin $n
