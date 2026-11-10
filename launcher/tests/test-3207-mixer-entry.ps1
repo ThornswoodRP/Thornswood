@@ -57,11 +57,16 @@ function Done {
 
 $theme = Join-Path $repo 'game\ui\thornswood-theme.mp3'
 Yes 'the theme is in the repository (game\ui\thornswood-theme.mp3)' (Test-Path -LiteralPath $theme)
-# The decoder is the NLayer package now (#4823), the version THIRD-PARTY.md
-# records, and no copy of it is left in launcher\lib for anything to load.
+# The decoder is the NLayer package now (#4823), at the version the project
+# names and THIRD-PARTY.md records, and no copy of it is left in launcher\lib
+# for anything to load. The version is read, not written here, so a bump
+# needs the notices brought up and nothing in this harness (#5703).
 $proj = [xml][IO.File]::ReadAllText([IO.Path]::Combine($repo, 'launcher', 'app', 'Thornswood.csproj'))
 $nlayer = @($proj.SelectNodes('//ItemGroup/PackageReference') | Where-Object { $_.Include -eq 'NLayer' })
-Yes 'Thornswood.csproj takes NLayer from its package, version 3.0.0' ($nlayer.Count -eq 1 -and $nlayer[0].Version -eq '3.0.0')
+$nlayerVersion = $(if ($nlayer.Count -eq 1) { [string]$nlayer[0].Version } else { '' })
+$notices = [IO.File]::ReadAllText((Join-Path $repo 'THIRD-PARTY.md'))
+Yes "Thornswood.csproj takes NLayer from its package, version $nlayerVersion, the version THIRD-PARTY.md records" ($nlayerVersion -match '^\d+(\.\d+)+$' -and
+    $notices.Contains('`NLayer` ' + $nlayerVersion + ','))
 Yes '  and launcher\lib keeps no NLayer.dll of its own' (-not (Test-Path -LiteralPath ([IO.Path]::Combine($repo, 'launcher', 'lib', 'nlayer', 'NLayer.dll'))) -and
     @($proj.SelectNodes('//Reference') | Where-Object { $_.Include -match 'NLayer' }).Count -eq 0)
 Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
@@ -96,8 +101,9 @@ namespace Thornswood
             else if (m.StartsWith("Menu music:", StringComparison.Ordinal) && m.IndexOf("mixer entry", StringComparison.Ordinal) < 0) Failed.Set();
         }
 
-        /// <summary>The decoder the build put beside this library, from the NLayer package.</summary>
+        /// <summary>The decoder the build put beside this library, from the NLayer package: its name and the file it loaded from.</summary>
         public static string Decoder() { return typeof(NLayer.MpegFile).Assembly.FullName; }
+        public static string DecoderFile() { return typeof(NLayer.MpegFile).Assembly.Location; }
 
         public static void Play(string track, string name)
         {
@@ -204,8 +210,14 @@ Yes 'MenuMusic.cs compiles with the .NET SDK the launcher builds with, NLayer fr
 if (-not $asm) { Done }
 $P = $asm.GetType('Thornswood.Probe3207')
 $decoder = $P::Decoder()
-Write-Host ('      decoder: ' + $decoder)
-Yes '  and the decoder it loads is NLayer 3.0.0' ($decoder -match '^NLayer, Version=3\.0\.0')
+$decoderFile = [string]$P::DecoderFile()
+Write-Host ('      decoder: ' + $decoder + ', from ' + $decoderFile)
+# The bytes THIRD-PARTY.md records for NLayer.dll, so the decoder this loads is
+# the package's file at the version the notices name, whatever that version is.
+$decoderSha = $(if ($decoderFile -and (Test-Path -LiteralPath $decoderFile)) { (Get-FileHash -LiteralPath $decoderFile -Algorithm SHA256).Hash.ToLowerInvariant() } else { '' })
+Yes "  and the decoder it loads is NLayer.dll from the build's own folder, the bytes THIRD-PARTY.md records ($decoderSha)" ($decoder -match '^NLayer, Version=' -and
+    $decoderSha -and (Split-Path -Parent $decoderFile) -eq (Split-Path -Parent $asm.Location) -and
+    $notices -match ('\| `NLayer\.dll` \|[^\n]*`' + $decoderSha + '`'))
 
 if (-not $OnWindows) {
     Write-Host 'SKIP  1 to 5, the theme played and the mixer asked: waveOut and Core Audio are Windows'

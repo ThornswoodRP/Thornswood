@@ -82,31 +82,44 @@ function Edit-Copy([string]$t, [string]$rel, [string]$from, [string]$to) {
 
 $t = New-Copy
 try {
+    # The planted bumps start from the versions the projects give today, read
+    # here, so a real bump of SharpSRTP or Avalonia leaves this harness as it
+    # is (#5703). The next version is the last part plus one.
+    function Get-Ref([string]$name) { @($refs | Where-Object { $_.Name -eq $name -and $_.Project -eq 'launcher/app/Thornswood.csproj' })[0].Version }
+    function Get-Next([string]$v) { $p = $v.Split('.'); $p[-1] = [string]([int]$p[-1] + 1); $p -join '.' }
+    $srtp = Get-Ref 'SharpSRTP'
+    $srtpNext = Get-Next $srtp
+    $srtpRx = [regex]::Escape($srtp)
+    $srtpNextRx = [regex]::Escape($srtpNext)
+    $ava = Get-Ref 'Avalonia'
+    $avaNext = Get-Next $ava
+    Yes ('  the launcher''s SharpSRTP ({0}) and Avalonia ({1}) are read to plant from' -f $srtp, $ava) ($srtp -match '^\d+(\.\d+)+$' -and $ava -match '^\d+(\.\d+)+$')
+
     # ---- 2. a bump with the notices left behind, then brought up ---------------
-    Edit-Copy $t 'launcher/app/Thornswood.csproj' '<PackageReference Include="SharpSRTP" Version="0.5.8" />' '<PackageReference Include="SharpSRTP" Version="0.5.9" />'
+    Edit-Copy $t 'launcher/app/Thornswood.csproj' ('<PackageReference Include="SharpSRTP" Version="' + $srtp + '" />') ('<PackageReference Include="SharpSRTP" Version="' + $srtpNext + '" />')
     $bumped = @(Find-PackageNoticeFaults $t)
     Yes ('a SharpSRTP bump in the project alone is red ({0} fault(s))' -f $bumped.Count) ($bumped.Count -gt 0)
-    Yes '  naming THIRD-PARTY.md''s old version' (@($bumped | Where-Object { $_ -match '^FAULT THIRD-PARTY\.md names SharpSRTP 0\.5\.8, but the project is at 0\.5\.9' }).Count -eq 1)
-    Yes '  and that THIRD-PARTY.md does not name the new one' (@($bumped | Where-Object { $_ -match 'does not name SharpSRTP 0\.5\.9' }).Count -eq 1)
-    Yes '  and the credits page''s' (@($bumped | Where-Object { $_ -match '^FAULT site/data/site/credits\.md names SharpSRTP 0\.5\.8' }).Count -eq 1)
-    Yes '  and installer\licences''' (@($bumped | Where-Object { $_ -match '^FAULT installer/licences/README\.txt names SharpSRTP 0\.5\.8' }).Count -eq 1)
+    Yes '  naming THIRD-PARTY.md''s old version' (@($bumped | Where-Object { $_ -match ('^FAULT THIRD-PARTY\.md names SharpSRTP ' + $srtpRx + ', but the project is at ' + $srtpNextRx) }).Count -eq 1)
+    Yes '  and that THIRD-PARTY.md does not name the new one' (@($bumped | Where-Object { $_ -match ('does not name SharpSRTP ' + $srtpNextRx) }).Count -eq 1)
+    Yes '  and the credits page''s' (@($bumped | Where-Object { $_ -match ('^FAULT site/data/site/credits\.md names SharpSRTP ' + $srtpRx) }).Count -eq 1)
+    Yes '  and installer\licences''' (@($bumped | Where-Object { $_ -match ('^FAULT installer/licences/README\.txt names SharpSRTP ' + $srtpRx) }).Count -eq 1)
     Yes '  and nothing about any other package' (@($bumped | Where-Object { $_ -notmatch 'SharpSRTP' }).Count -eq 0)
     $p = Join-Path $t 'installer/licences/README.txt'
-    [IO.File]::WriteAllText($p, [IO.File]::ReadAllText($p).Replace('SharpSRTP 0.5.8', 'SharpSRTP 0.5.9'))
+    [IO.File]::WriteAllText($p, [IO.File]::ReadAllText($p).Replace('SharpSRTP ' + $srtp, 'SharpSRTP ' + $srtpNext))
     $p = Join-Path $t 'site/data/site/credits.md'
-    [IO.File]::WriteAllText($p, [IO.File]::ReadAllText($p).Replace('SharpSRTP 0.5.8', 'SharpSRTP 0.5.9'))
+    [IO.File]::WriteAllText($p, [IO.File]::ReadAllText($p).Replace('SharpSRTP ' + $srtp, 'SharpSRTP ' + $srtpNext))
     $part = @(Find-PackageNoticeFaults $t)
     Yes ('  with the credits and installer\licences brought up but not THIRD-PARTY.md, still red ({0})' -f $part.Count) ($part.Count -eq 2 -and @($part | Where-Object { $_ -notmatch '^FAULT THIRD-PARTY\.md' }).Count -eq 0)
-    Edit-Copy $t 'THIRD-PARTY.md' '| SharpSRTP | 0.5.8 |' '| SharpSRTP | 0.5.9 |'
+    Edit-Copy $t 'THIRD-PARTY.md' ('| SharpSRTP | ' + $srtp + ' |') ('| SharpSRTP | ' + $srtpNext + ' |')
     $p = Join-Path $t 'THIRD-PARTY.md'
-    [IO.File]::WriteAllText($p, [IO.File]::ReadAllText($p).Replace('SharpSRTP 0.5.8', 'SharpSRTP 0.5.9'))
+    [IO.File]::WriteAllText($p, [IO.File]::ReadAllText($p).Replace('SharpSRTP ' + $srtp, 'SharpSRTP ' + $srtpNext))
     $up = @(Find-PackageNoticeFaults $t)
     Yes ('  and with all three brought up, green' + $(if ($up.Count) { ': ' + ($up -join ' | ') } else { '' })) ($up.Count -eq 0)
 
     # ---- 3. one version for the projects that move together --------------------
-    Edit-Copy $t 'launcher/app/Thornswood.csproj' '<PackageReference Include="Avalonia" Version="12.1.4" />' '<PackageReference Include="Avalonia" Version="12.1.5" />'
+    Edit-Copy $t 'launcher/app/Thornswood.csproj' ('<PackageReference Include="Avalonia" Version="' + $ava + '" />') ('<PackageReference Include="Avalonia" Version="' + $avaNext + '" />')
     $split = @(Find-PackageNoticeFaults $t)
-    Yes 'Avalonia moved in the launcher and not in the window harness is red, one version for all' (@($split | Where-Object { $_ -match '^FAULT Avalonia is at .*launcher/app/Thornswood\.csproj 12\.1\.5.*launcher/tests/window-starts/WindowStarts\.csproj 12\.1\.4' }).Count -eq 1)
+    Yes 'Avalonia moved in the launcher and not in the window harness is red, one version for all' (@($split | Where-Object { $_ -match ('^FAULT Avalonia is at .*launcher/app/Thornswood\.csproj ' + [regex]::Escape($avaNext) + '.*launcher/tests/window-starts/WindowStarts\.csproj ' + [regex]::Escape($ava)) }).Count -eq 1)
 } finally {
     Remove-Item -LiteralPath $t -Recurse -Force -ErrorAction SilentlyContinue
 }
