@@ -808,6 +808,14 @@ Yes '  writes only the Administrator key file and that one token, and puts both 
     $gbkCode.Contains('if ($changed -and -not $done) {') -and $gbkCode.Contains('[IO.File]::WriteAllBytes($KeysFile, $before)'))
 Yes '  refuses a key the box holds under another name, here or in the deploy account''s file' ($gbkCode.Contains('Select-Holding $have $blob | Where-Object { $mine -notcontains $_ }') -and $gbkCode.Contains('Select-Holding $deploy $blob'))
 Yes '  and never runs while a Grant-BoxAccess put back is armed' ($gbkCode.Contains('Get-ScheduledTask -TaskName $PutBack'))
+# Gate run 20261110-181821-a3732f (10 Nov 2026): the read back of the one
+# line it wrote stopped, since a function hands one line back as a string
+# and [0] of that is its first letter. Every use keeps the lines a list.
+$oneLine = Get-KeyLine $bare 'oracle-hermes'
+$named = @(Select-Named @('ssh-ed25519 AAAA thornswood-one', $oneLine) 'oracle-hermes')
+Yes '  one line of its name reads back whole, as a list of one' ($named.Count -eq 1 -and $named[0] -ceq $oneLine)
+Yes '  and every use of Select-Named or Select-Holding keeps its lines in @( )' (
+    @([regex]::Matches($gbkCode, '(?<!@\()Select-(Named|Holding) \$')).Count -eq 0 -and @([regex]::Matches($gbkCode, '@\(Select-(Named|Holding) \$')).Count -eq 4)
 foreach ($case in @(@('desk', "is a way in this never touches"), @('nobody-here', 'main carries no scripts/vps/box-keys/nobody-here.json'), @('Bad Name', 'one lower case word'))) {
     $o = & pwsh -NoProfile -File (Join-Path $Repo 'scripts/vps/Grant-BoxKey.ps1') -Name $case[0] -NoPause 2>&1 | Out-String
     Yes "  Grant-BoxKey -Name $($case[0]) stops and changes nothing" ($LASTEXITCODE -eq 1 -and $o.Contains($case[1]) -and $o -match 'Nothing was changed')
