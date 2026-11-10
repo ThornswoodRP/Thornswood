@@ -591,7 +591,7 @@ namespace Thornswood
                         }
                     });
                 }
-                catch { checkingInPlay = false; }
+                catch (Exception ex) { checkingInPlay = false; Swallow.Note("Shell.CheckUpdatesInPlay, handing the answer back to the window", ex); }
             });
         }
 

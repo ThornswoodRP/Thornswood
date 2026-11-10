@@ -5,7 +5,9 @@
 #
 # THE RULE. A catch counts when the body between its braces is empty or holds
 # nothing but whitespace, whether the braces sit on one line or on lines of
-# their own. A catch naming an exception, catch (IOException), counts the same
+# their own. In the launcher a catch whose body has code counts too when
+# that code neither uses the exception nor throws (since #4350, below).
+# A catch naming an exception, catch (IOException), counts the same
 # as a bare one. A body holding only a comment does NOT count: a comment inside
 # the braces is somebody saying on purpose why nothing is done, which is the
 # deliberate swallow entry 239 says to leave alone. A comment beside the
@@ -136,6 +138,67 @@
 # Swap.Restore / Hold.Release / Keep.Unpark is still log-only; stop-
 # swallowing remains later work. No silent-catch file lines remain in this
 # baseline.
+#
+# THE LAUNCHER'S RULE, since #4350 (9 Nov). The count above reached 0 and
+# still about 170 launcher catches ran code, wrote no line and carried on
+# with a default, among them the manifest check before Play and the
+# headcount: catch { return null; } has a body, so the empty-body rule
+# passed it. A launcher catch now counts unless its body uses the exception
+# it caught (Swallow.Note("Where", ex), or anything else that reads ex),
+# hands it on with throw, or holds a comment saying why nothing more is done.
+# A catch with no variable, or one whose variable only a when (...) filter
+# reads, has nothing in its body to say what failed, so it counts. Comments
+# and strings are read as what they are, so the word catch or a brace inside
+# either is never counted, and "... {ex.Message}" in an interpolated string
+# is a use. The scripts, the site, voice and the bot keep the empty-body rule
+# below.
+#
+# Measured on main at 24e14339: 182 by this rule, in 43 files. #4350 gave a
+# reason to the nine on the paths a person waits on: the manifest fetch and
+# the headcount (Http.GetOrNull hands its callers why, and Verify.Manifest
+# and Online.AskPort write it), the in play update check's hand back to the
+# window, and the install and removal paths in Updater.cs. 173 are left,
+# below. Each is later work on its own path; converting one lowers its line.
+AutoJoin.cs 3
+Chars.cs 10
+Checks.cs 22
+ClientRuntime.cs 1
+CrashDump.cs 1
+DevBuild.cs 2
+Discord.cs 13
+Display.cs 3
+Door.cs 1
+Downgrade.cs 7
+Gallery.cs 2
+GeneratedBuild.cs 1
+Hold.cs 2
+Icons.cs 3
+InstallPlace.cs 2
+InstallSteps.cs 1
+InstallWindow.cs 3
+Junction.cs 1
+Keep.cs 5
+LastPlugin.cs 7
+Mics.cs 1
+OwnGame.cs 22
+OwnGameClean.cs 2
+OwnGameKinds.cs 2
+Presence.cs 2
+Roster.cs 3
+Shell.cs 6
+ShellChars.cs 2
+SkyMp.cs 3
+Stall.cs 1
+Steam.cs 1
+SteamUpdates.cs 5
+Swap.cs 1
+Sync.cs 3
+ThornIni.cs 2
+Uninstall.cs 14
+Updater.cs 1
+Verify.cs 4
+Voice.cs 7
+VoiceIce.cs 1
 #
 # THE SCRIPTS, since #2711 (18 Oct). Check-Swallow.ps1 counts the PowerShell
 # under scripts\ and installer\ as well, keyed by the path from the

@@ -39,5 +39,28 @@ namespace Thornswood
                 // nowhere left to say it failed.
             }
         }
+
+        /// <summary>
+        /// One line in launcher.log for a failure that has a reason and no
+        /// exception (#4350): a server that answered 404, a manifest with no
+        /// mods in it. The same file, stamp and promise as Note: it touches no
+        /// control and never throws.
+        /// </summary>
+        public static void Say(string where, string why)
+        {
+            try
+            {
+                string log = Paths.LogFile;
+                if (string.IsNullOrEmpty(log)) return;
+                File.AppendAllText(log,
+                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  In " + where + ": " +
+                    (string.IsNullOrEmpty(why) ? "no reason given" : why) + Environment.NewLine);
+            }
+            catch
+            {
+                // The log is the only place this could have gone, so there is
+                // nowhere left to say it failed.
+            }
+        }
     }
 }

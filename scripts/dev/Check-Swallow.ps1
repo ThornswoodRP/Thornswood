@@ -57,6 +57,12 @@
   catch counts when its body holds nothing but whitespace, on one line or
   across several, and a body holding only a comment does not count.
 
+  THE LAUNCHER, since #4350 (9 Nov): a launcher catch counts as well when
+  its body runs code that neither uses the exception it caught nor throws,
+  and holds no comment. The empty-body rule had brought the launcher to 0
+  while about 170 of its catches did exactly that, catch { return null; }
+  around the manifest check before Play among them, and wrote nothing.
+
   WHEN IT FAILS. Put Swallow.Note("Class.Method", ex) in the new catch
   (launcher\app\Swallow.cs), which writes one line to launcher.log, touches no
   control and never throws. In a script, let the error stop the script, or
@@ -116,10 +122,9 @@ foreach ($d in (@($ScriptDirs) + @($JsDirs) + @($PyDirs))) {
 # The rule as a pattern. \s takes new lines as well as spaces, so a catch whose
 # braces sit on lines of their own counts the same as one written on one line.
 # A comment inside the braces is not whitespace, so it stops the match, which
-# is the rule's one exception. The optional brackets take catch (IOException)
-# and catch (Exception ex) alike. PowerShell names the type in square
+# is the rule's one exception. PowerShell names the type in square
 # brackets, one or more, comma separated: catch [System.IO.IOException].
-$Silent = [regex]'\bcatch\s*(\([^)]*\))?\s*\{\s*\}'
+# The launcher's C# has a rule of its own, Find-SilentCs below (#4350).
 $SilentPs = [regex]'\bcatch\s*(\[[^\]\r\n]*\]\s*(,\s*\[[^\]\r\n]*\]\s*)*)?\{\s*\}'
 # JavaScript (#2736): the C# shape, kept off a promise's .catch by the look
 # behind, and a promise's .catch handed an arrow or a function with nothing
@@ -131,6 +136,87 @@ $SilentJs = [regex]('(?<![.\w$])catch\s*(\([^)]*\))?\s*\{\s*\}' +
 # Python (#2736): the except line, its indent, and what follows its colon.
 $PyExcept = [regex]'^(?<ind>[ \t]*)except\b(?<head>[^#\r\n]*?):(?<rest>.*)$'
 $NewLine = [regex]'\n'
+
+# The launcher's C# (#4350). An empty body was the only shape counted, so a
+# catch that ran code, wrote no line and carried on with a default passed:
+# catch { return null; } was as silent as an empty body and the rule could not
+# see it. Now a launcher catch counts unless its body uses the exception it
+# caught (logs it, returns it, tests it), hands it on with throw, or holds a
+# comment saying why nothing more is done. An exception filter, when (...),
+# is not a use: it only picks which failures the body then drops, and
+# Http.GetOrNull's catch, whose filter named five kinds and whose body
+# returned null, is how the headcount failed with nothing said.
+#
+# Comments and strings are masked before anything is matched, so a brace or
+# the word catch inside a string or a comment is never read as code. A
+# comment is masked with a mark of its own, which is how a body holding one
+# is told apart; an interpolated string keeps what its holes hold, so
+# $"... {ex.Message}" is a use. Lengths and new lines are kept, so a match's
+# line number in the masked text is its line in the file.
+$CsMask = [regex]('//[^\n]*' +
+  '|/\*[\s\S]*?\*/' +
+  '|(?:\$@|@\$)"(?:[^"{]|""|\{\{|\{[^{}"]*(?:"[^"]*"[^{}"]*)*\})*"' +
+  '|\$"(?:[^"\\{\n]|\\.|\{\{|\{[^{}"]*(?:"(?:[^"\\\n]|\\.)*"[^{}"]*)*\})*"' +
+  '|@"(?:[^"]|"")*"' +
+  '|"(?:[^"\\\n]|\\.)*"' +
+  '|''(?:[^''\\\n]|\\.)+''')
+$CommentMark = [string][char]1
+$Hole = [regex]'\{\{|\}\}|\{(?<h>[^{}"]*(?:"[^"]*"[^{}"]*)*)\}|[^\n]'
+$CsHead = [regex]'\bcatch\b\s*(?:\((?<in>[^()]*)\)\s*)?(?:(?<when>when)\s*\()?'
+function Blank([string]$s, [string]$with) { return [regex]::Replace($s, '[^\n]', $with) }
+function Mask-Cs([string]$text) {
+  return $CsMask.Replace($text, {
+    param($m)
+    $v = $m.Value
+    if ($v.StartsWith('/')) { return (Blank $v $CommentMark) }
+    if ($v.StartsWith('$') -or $v.StartsWith('@$')) {
+      # An interpolated string: the words go, what its holes hold stays.
+      $lead = $v.IndexOf('"') + 1
+      $inner = $v.Substring($lead, $v.Length - $lead - 1)
+      $kept = $Hole.Replace($inner, {
+        param($h)
+        if ($h.Groups['h'].Success) { return ' ' + [regex]::Replace($h.Groups['h'].Value, '"[^"]*"', { param($q) Blank $q.Value ' ' }) + ' ' }
+        return (Blank $h.Value ' ')
+      })
+      return (' ' * $lead) + $kept + ' '
+    }
+    return (Blank $v ' ')
+  })
+}
+# A launcher catch that neither uses its exception nor says why, by line.
+function Find-SilentCs([string]$full) {
+  $code = Mask-Cs ([IO.File]::ReadAllText($full))
+  $at = New-Object 'System.Collections.Generic.List[int]'
+  foreach ($m in $CsHead.Matches($code)) {
+    $i = $m.Index + $m.Length
+    $var = ''
+    if ($m.Groups['in'].Success) {
+      $parts = @(-split $m.Groups['in'].Value.Trim())
+      if ($parts.Count -ge 2) { $var = $parts[-1] }
+    }
+    if ($m.Groups['when'].Success) {
+      # Walked past, so the body after it is the one read.
+      $depth = 1
+      while ($i -lt $code.Length -and $depth -gt 0) {
+        if ($code[$i] -eq '(') { $depth++ } elseif ($code[$i] -eq ')') { $depth-- }
+        $i++
+      }
+      while ($i -lt $code.Length -and [char]::IsWhiteSpace($code[$i])) { $i++ }
+    }
+    # Not a catch clause (the word in an identifier's place): nothing to read.
+    if ($i -ge $code.Length -or $code[$i] -ne '{') { continue }
+    $open = $i; $depth = 0
+    for (; $i -lt $code.Length; $i++) {
+      if ($code[$i] -eq '{') { $depth++ } elseif ($code[$i] -eq '}') { $depth--; if ($depth -eq 0) { break } }
+    }
+    $body = $code.Substring($open + 1, [Math]::Max(0, $i - $open - 1))
+    if ($body.Contains($CommentMark)) { continue }
+    if ($body -match '\bthrow\b') { continue }
+    if ($var -and ($body -match ('\b' + [regex]::Escape($var) + '\b'))) { continue }
+    $at.Add(1 + $NewLine.Matches($code.Substring(0, $m.Index)).Count)
+  }
+  return , $at
+}
 
 # Key to the line numbers of its silent catches: every .cs file by its name,
 # every script by its path from -Root.
@@ -203,7 +289,7 @@ function Skip-Source($f, [string]$dir) {
   return $false
 }
 foreach ($f in @(Get-ChildItem -LiteralPath $AppDir -Filter '*.cs' -File | Sort-Object Name)) {
-  $found[$f.Name] = (Find-Silent $f.FullName $Silent)
+  $found[$f.Name] = (Find-SilentCs $f.FullName)
   $paths[$f.Name] = $f.FullName
 }
 foreach ($d in @($ScriptDirs)) {
