@@ -414,6 +414,14 @@
         "Which": "^(desk|notices)$"
       }
     },
+    "Grant-BoxKey": {
+      "script": "scripts/vps/Grant-BoxKey.ps1",
+      "timeoutMinutes": 5,
+      "fixed": ["-NoPause"],
+      "params": {
+        "Name": "^[a-z0-9][a-z0-9-]{0,31}$"
+      }
+    },
     "Install-Runner": {
       "script": "scripts/deploy/Install-Runner.ps1",
       "timeoutMinutes": 45,
