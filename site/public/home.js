@@ -144,7 +144,7 @@ function show(html) {
   page.hidden = false;
   document.getElementById('pagebody').innerHTML = html;
   // The server wrote this page's own title from its one list of them (BLURB
-  // in server.js, #3138). A page that list does not name keeps the bare name,
+  // in site/lib/pages.js, #3138). A page that list does not name keeps the bare name,
   // and takes its heading instead.
   var h1 = document.querySelector('#pagebody h1');
   if (document.title === 'Thornswood' && h1 && h1.textContent) document.title = h1.textContent + ' \u00b7 Thornswood';

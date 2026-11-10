@@ -94,7 +94,7 @@ function readDeploys(dir) {
    folder is C:\Thornswood-Voice-Dev (voice\README.md, vps-dev-instance.ps1).
    Measured 23 September: Get-Logs -Dev read that folder's voice.log and it
    says "listening on 127.0.0.1:7789", which is the dev port.
-   tools\test-session-chat.js checks both defaults against those scripts. */
+   tests\test-session-chat.js checks both defaults against those scripts. */
 const CHAT_DIRS = {
   main: process.env.THORNSWOOD_CHAT_DIR || 'C:\\Thornswood-Voice\\chat',
   dev:  process.env.THORNSWOOD_DEV_CHAT_DIR || 'C:\\Thornswood-Voice-Dev\\chat'
