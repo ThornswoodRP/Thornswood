@@ -211,7 +211,7 @@ leaves the queue and is public at `/shot`, and `/up` closes behind it.
 | `/api/gallery/pending` | GET | staff (`access.dev`), by the hub cookie or a launcher ticket | none | `200 {pending:[...]}`, each with `copies` (the widths sent); `403` otherwise |
 | `/api/gallery/approve` | POST | staff | `{name, by?, copies?}` | `200 {ok,approved,copies}`; upserts the name onto `gallery.json`, removes it from the queue, idempotent; only the copies named in `copies`, the ones the card showed, go into the item's `srcset`; `400` with no name |
 | `/api/gallery/approved` | DELETE | staff | `{name}`; a `deleteFile` is no longer read | `200 {ok,removed,removedApproved,removedPending,fileDeleted}`; takes the name off `gallery.json` and off the pending queue, which is how staff turn down a waiting picture (there is no Reject); clears reports on that name; deletes the file, unless the picture had an open report, when it is kept unshown for `GALLERY_HOLD_DAYS` (#2352); `400` with no name |
-| `/api/gallery/report` | POST | signed-in play member, or launcher ticket | `{name, why?}` | `200 {ok,id}`; writes to `gallery-reports.json`; does not take the shot down; `404` if the name is not approved |
+| `/api/gallery/report` | POST | signed-in play member, or launcher ticket | `{name, why?}` | `200 {ok,id}`; writes to `gallery-reports.json`; does not take the shot down; `404` if the name is not approved; a repeat from the same account on the same picture updates its first row and keeps its id; `429` with `Retry-After` past the report limit (five an hour, twenty a day, per account) |
 | `/api/gallery/reports` | GET | staff | none | `200 {reports:[...]}` |
 | `/api/gallery/report/dismiss` | POST | staff | `{id}` | `200 {ok,removed}` |
 
