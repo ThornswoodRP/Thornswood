@@ -1,31 +1,31 @@
 {
-  "recordedUtc": "2026-11-02T04:36:22Z",
-  "builtUtc": "2026-11-02T04:31:22Z",
+  "recordedUtc": "2026-11-10T14:19:03Z",
+  "builtUtc": "2026-11-10T14:02:05Z",
   "fork": "https://github.com/ThornswoodRP/skymp",
   "forkBranch": "thornswood/engine-changes",
-  "forkCommit": "ec8e20f9",
+  "forkCommit": "2921bc88",
   "upstreamBase": "2849e676",
-  "thornswoodPatchBlocks": 50,
+  "thornswoodPatchBlocks": 51,
   "files": {
     "Data\\SKSE\\Plugins\\MpClientPlugin.dll": {
-      "sha256": "a224589cebc5ace8825d6d8a098800d9cb184d57b3ff89e97ed8d14b0ec774b4",
-      "bytes": 1489408
+      "sha256": "7e4a339b94942e0e61b16a5b49e3e554e803ccb6c0bbba3fd2fd1b646e629b02",
+      "bytes": 1493504
     },
     "Data\\SKSE\\Plugins\\SkyrimPlatform.dll": {
-      "sha256": "3e26c16704ea69150849368885b32143d709d534ac91bb887c157f6d535a09e4",
+      "sha256": "53b932393908edc55d484cf16a18c6efb3793af5605998bc6d8119ac62b789bc",
       "bytes": 150016
     },
     "Data\\Platform\\Distribution\\RuntimeDependencies\\SkyrimPlatformImpl.dll": {
-      "sha256": "f2279493b639eed40d63ab4255adfb3ec104bb02828190c1a24257e7f2140e55",
-      "bytes": 13521408
+      "sha256": "f55fc2ae204375b84de5ee605389202138bdfdccf2258a646dac6dee6d1ef1ac",
+      "bytes": 13530112
     },
     "Data\\Platform\\Distribution\\RuntimeDependencies\\SkyrimPlatformCEF.exe.hidden": {
-      "sha256": "4b1268a069200c9183219a5847913305a829c1b92555a5b08db769f870142c66",
+      "sha256": "7ca30d28be250f3de68233b1707a30d0f197cc3e676dd646f8793394d73cc709",
       "bytes": 431616
     },
     "Data\\Platform\\Plugins\\skymp5-client.js": {
-      "sha256": "d63fa374863c039d8da2ef835508027ac70ee6def10fa5d750c771124fa1e765",
-      "bytes": 1664909
+      "sha256": "cbe12762628a5db9d9cef6f115df601fdde6e6887fe49f2b7bf6d4d244ea9dff",
+      "bytes": 1682914
     },
     "Data\\Scripts\\TESModPlatform.pex": {
       "sha256": "fc02e76eb66788204908b7adda93aebcd447661ad7589c01ca2dc08e3d863137",
