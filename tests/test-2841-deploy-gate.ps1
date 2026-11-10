@@ -772,6 +772,47 @@ Yes 'Update-Gate is a verb that takes nothing' ((Words 'Update-Gate') -eq '' -an
 Yes '  with the host keys held to the checkout''s pins, in a known_hosts of the run''s own' ($br.Contains('Get-ThornswoodVpsCommitted') -and $br.Contains("UserKnownHostsFile=`$knownHosts") -and $br.Contains("'-F', 'none'"))
 Yes '  and prints none of the verb''s output into the run''s log' ($br -notmatch 'Write-Host \$Matches\[1\]' -and $br.Contains("[IO.File]::AppendAllText(`$out, `$Matches[1]"))
 
+# ---- 10. a key main carries (Grant-BoxKey) -------------------------------------
+# Patrick's B on q-oracle-box-access (10 Nov 2026): his own Hermes's key, made
+# on the VM, goes on the box from main through the gate, with no step on One.
+Yes 'Grant-BoxKey takes a name and nothing else: never a key, a digest or a file' ((Words 'Grant-BoxKey -Name oracle-hermes') -eq '-NoPause|-Name|oracle-hermes' -and
+    (Words 'Grant-BoxKey -Name oracle-hermes -PublicKey x') -eq 'REFUSED' -and (Words 'Grant-BoxKey -Name Oracle') -eq 'REFUSED' -and (Words 'Grant-BoxKey') -eq '-NoPause')
+Invoke-Expression (Import-Functions 'scripts/vps/Grant-BoxKey.ps1' @('Get-KeyLine', 'Select-Named', 'Select-Holding', 'Read-KeyRecord'))
+Yes '  its line is the very line Grant-BoxAccess makes for a plain key' ((Get-KeyLine $bare 'oracle-hermes') -ceq (Get-BoxKeyLine $bare 'oracle-hermes' $false))
+$kdir = Join-Path ([IO.Path]::GetTempPath()) ('box-keys-' + [Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $kdir | Out-Null
+function Try-Record($obj) {
+    $f = Join-Path $kdir 'k.json'; [IO.File]::WriteAllText($f, ($obj | ConvertTo-Json))
+    try { [void](Read-KeyRecord $f 'oracle-hermes'); return 'OK' } catch { return $_.Exception.Message }
+}
+$goodPub = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI' + ('B' * 43)
+$good = @{ name = 'oracle-hermes'; public = $goodPub; token_sha256 = ('f' * 64) }
+Yes '  main''s record is taken in its one form' ((Try-Record $good) -eq 'OK')
+Yes '  and refused for another name, a private key, a comment or a digest that is not one' (
+    (Try-Record @{ name = 'one'; public = $goodPub; token_sha256 = ('f' * 64) }) -ne 'OK' -and
+    (Try-Record @{ name = 'oracle-hermes'; public = ('-----BEGIN ' + 'OPENSSH PRIVATE KEY-----'); token_sha256 = ('f' * 64) }) -ne 'OK' -and
+    (Try-Record @{ name = 'oracle-hermes'; public = ($goodPub + ' thornswood-x'); token_sha256 = ('f' * 64) }) -ne 'OK' -and
+    (Try-Record @{ name = 'oracle-hermes'; public = $goodPub; token_sha256 = ('x' * 43) }) -ne 'OK')
+Remove-Item -LiteralPath $kdir -Recurse -Force
+foreach ($kf in @(Get-ChildItem -LiteralPath (Join-Path $Repo 'scripts/vps/box-keys') -Filter '*.json' -File -ErrorAction SilentlyContinue)) {
+    $ok = $true; try { [void](Read-KeyRecord $kf.FullName $kf.BaseName) } catch { $ok = $false }
+    Yes "box-keys/$($kf.Name) is a record Grant-BoxKey takes, for its own name" $ok
+}
+$gbk = Text 'scripts/vps/Grant-BoxKey.ps1'
+$gbkCode = ($gbk -replace '(?s)<#.*?#>', '')
+Yes '  it reads the key from main''s checkout, never from the caller' ($gbkCode.Contains("`$recordPath = Join-Path (Join-Path `$Here 'box-keys') (`$Name + '.json')") -and
+    @((Text 'scripts/vps/Grant-BoxKey.ps1') | Select-String -Pattern '\[string\]\$PublicKey|\[string\]\$Token' -AllMatches).Count -eq 0)
+Yes '  never touches One''s, the cloud''s or a workflow''s way in' ($gbkCode.Contains("`$Reserved = @('one', 'cloud', 'desk', 'claude')") -and $gbkCode.Contains('if ($Reserved -ccontains $Name)'))
+Yes '  writes only the Administrator key file and that one token, and puts both back when it does not finish' (
+    @([regex]::Matches($gbkCode, 'WriteAll\w*\(')).Count -eq 4 -and @([regex]::Matches($gbkCode, 'WriteAll\w*\((\$KeysFile|\$TokenFile)')).Count -eq 4 -and
+    $gbkCode.Contains('if ($changed -and -not $done) {') -and $gbkCode.Contains('[IO.File]::WriteAllBytes($KeysFile, $before)'))
+Yes '  refuses a key the box holds under another name, here or in the deploy account''s file' ($gbkCode.Contains('Select-Holding $have $blob | Where-Object { $mine -notcontains $_ }') -and $gbkCode.Contains('Select-Holding $deploy $blob'))
+Yes '  and never runs while a Grant-BoxAccess put back is armed' ($gbkCode.Contains('Get-ScheduledTask -TaskName $PutBack'))
+foreach ($case in @(@('desk', "is a way in this never touches"), @('nobody-here', 'main carries no scripts/vps/box-keys/nobody-here.json'), @('Bad Name', 'one lower case word'))) {
+    $o = & pwsh -NoProfile -File (Join-Path $Repo 'scripts/vps/Grant-BoxKey.ps1') -Name $case[0] -NoPause 2>&1 | Out-String
+    Yes "  Grant-BoxKey -Name $($case[0]) stops and changes nothing" ($LASTEXITCODE -eq 1 -and $o.Contains($case[1]) -and $o -match 'Nothing was changed')
+}
+
 Write-Host ''
 Write-Host "$script:pass passed, $script:fail failed"
 if ($script:fail) { exit 1 }
