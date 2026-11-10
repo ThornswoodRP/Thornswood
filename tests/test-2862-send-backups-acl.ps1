@@ -18,6 +18,9 @@
       ([IO.DirectoryInfo] or [IO.FileInfo]), which is what the method takes;
     - Send-Backups.ps1 locks its folder that way, and -Install says the drop
       key after the lock and before it asks the VM anything;
+    - -Install turns on the Task Scheduler's Operational log before it
+      registers the task, since the task starts on the nightly's "task
+      completed" event there and Windows Server ships that log off;
     - the same call, run for real on a scratch folder, leaves SYSTEM and the
       Administrators alone on it.
   Windows only: the last check prints SKIP elsewhere. Under ten seconds.
@@ -81,6 +84,17 @@ $drop = $send.IndexOf("Say ('The drop key, for Thornswood-Hermes deploy/keys/box
 $scan = $send.IndexOf('& $scan -t ed25519 $VmHost')
 Yes 'Send-Backups -Install says the drop key after the lock and before it reads the VM''s host key' (
     $lock -ge 0 -and $drop -gt $lock -and $scan -gt $drop)
+# The task is started by the nightly's "task completed" event, which Windows
+# writes only while the Task Scheduler's Operational log is on; Windows Server
+# ships it off, and on the box the send had never run (10 Nov 2026).
+$on = $send.IndexOf('$l.IsEnabled = $true')
+$save = $send.IndexOf('$l.SaveChanges()')
+$reg = $send.IndexOf('Register-ScheduledTask -TaskName $TaskName')
+Yes 'Send-Backups -Install turns on the Task Scheduler''s Operational log, and checks it, before it registers the task' (
+    $on -ge 0 -and $save -gt $on -and $send.IndexOf('(Get-WinEvent -ListLog $TaskLog).IsEnabled') -gt $save -and $reg -gt $save)
+Yes 'the task''s trigger and -Status ask the log one query, in that log' (
+    $send.Contains('$q = $Ended') -and $send.Contains('Get-WinEvent -FilterXml ([xml]$Ended)') -and
+    $send.Contains("`$TaskLog = 'Microsoft-Windows-TaskScheduler/Operational'"))
 
 # ---- the call, for real -----------------------------------------------------------
 if (-not $OnWindows) {

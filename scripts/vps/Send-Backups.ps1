@@ -25,7 +25,9 @@
   WHEN. The task "Thornswood Send Backups" starts when the nightly backup's
   task ends (the Task Scheduler's own "task completed" event for
   \Thornswood Backup), so it sends tonight's straight after it is made, with
-  no clock between them.
+  no clock between them. Windows writes that event only while the Task
+  Scheduler's Operational log is on, which Windows Server ships off, so
+  -Install turns it on.
 
   WHAT STAFF SEE. After each file the VM took, its name goes into
   C:\Thornswood-Watch\offbox.txt, which the watchdog's "copy of the backups
@@ -87,7 +89,7 @@ if ($Status) {
   # task had never run, though the nightly ended with 0 at 1:18 AM.
   try {
     $l = Get-WinEvent -ListLog $TaskLog -ErrorAction Stop
-    Say ('task log   ' + $(if ($l.IsEnabled) { 'on' } else { 'OFF, so no "task completed" event is written and nothing starts this task' }) + ', ' + $l.RecordCount + ' events')
+    Say ('task log   ' + $(if ($l.IsEnabled) { 'on, ' + [int64]$l.RecordCount + ' events' } else { 'OFF, so no "task completed" event is written and nothing starts this task (-Install turns it on)' }))
   } catch { Say ('task log   could not be read: ' + $_.Exception.Message) }
   $ends = @(Get-WinEvent -FilterXml ([xml]$Ended) -MaxEvents 3 -ErrorAction SilentlyContinue)
   Say ('ends seen  ' + $ends.Count + ' of ' + $BackupTask + $(if ($ends.Count) { ', newest ' + $ends[0].TimeCreated }))
@@ -133,7 +135,16 @@ if ($Install) {
   Copy-Item -LiteralPath (Join-Path $Here 'Send-Backups.ps1') -Destination (Join-Path $Box 'Send-Backups.ps1') -Force
   Copy-Item -LiteralPath (Join-Path $Here 'Restore-Backup.ps1') -Destination (Join-Path $Box 'Restore-Backup.ps1') -Force
   # Started by the nightly's own end: Task Scheduler writes event 102 ("task
-  # completed") in its Operational log when \Thornswood Backup finishes.
+  # completed") in its Operational log when \Thornswood Backup finishes, but
+  # only while that log is on, and Windows Server ships it off (the task
+  # history). Off on the box on 10 Nov 2026, so the send had never started.
+  $l = Get-WinEvent -ListLog $TaskLog
+  if (-not $l.IsEnabled) {
+    $l.IsEnabled = $true
+    $l.SaveChanges()
+    if (-not (Get-WinEvent -ListLog $TaskLog).IsEnabled) { Die "$TaskLog would not turn on, so nothing would start the send. The task was not registered." }
+    Note "  turned on $TaskLog, where Windows writes the nightly's end"
+  }
   $q = $Ended
   $class = Get-CimClass -ClassName MSFT_TaskEventTrigger -Namespace Root/Microsoft/Windows/TaskScheduler
   $trigger = New-CimInstance -CimClass $class -ClientOnly
