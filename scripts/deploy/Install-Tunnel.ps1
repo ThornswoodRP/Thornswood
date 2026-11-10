@@ -253,8 +253,11 @@ if ($ThroughGate) {
     if ($o.Ok) {
         $txt = Join-Path $dir 'output.txt'
         if (Test-Path -LiteralPath $txt) { Get-Content -LiteralPath $txt | ForEach-Object { Say "  $_" } }
-    } else { Say ('  the run left no output from the box (' + $o.Why + ')') 'Yellow' }
-    if ($a.State -eq 'answer' -and $a.Text -match '^ENDED 0 ') { Say ('  ' + $a.Text) 'Green'; exit 0 }
+    } else { Say ('  the run''s output from the box could not be read (' + $o.Why + ')') 'Red' }
+    # Never 0 when what the box said was not read (#3399).
+    $code = Get-ThornswoodRunExit $a ([bool]$o.Ok)
+    if ($code -eq 0 -and $a.Text -match '^ENDED 0 ') { Say ('  ' + $a.Text) 'Green'; exit 0 }
+    if ($code -gt 0 -and $a.State -eq 'answer' -and $a.Text -match '^ENDED 0 ') { Die ('the run ended 0, but what the box said was not read, so whether the tunnel is in cannot be told here: ' + $s.Url) }
     Die ('the run ended ' + $a.State + ': ' + $a.Text + ' ' + $s.Url)
 }
 

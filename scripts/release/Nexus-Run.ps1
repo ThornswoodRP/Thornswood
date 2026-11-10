@@ -315,30 +315,25 @@ if ($a.State -eq 'waiting' -or $a.State -eq 'unread') { Die ("run $Run has no an
 
 $keyPath = Join-Path $scratch "$Run.key"
 $dir = Join-Path $scratch "$Run"
+$read = $false
 if (Test-Path -LiteralPath $keyPath) {
     $o = Open-ThornswoodSealedRun -Repo $GitHubRepo -Run $Run -Artifact 'nexus-run-sealed' -File 'nexus-run.sealed' -KeyPath $keyPath -Into $dir
     if ($o.Ok) {
+        $read = $true
         $txt = Join-Path $dir 'output.txt'
         if (Test-Path -LiteralPath $txt) { Get-Content -LiteralPath $txt | ForEach-Object { Write-Host $_ } }
         $files = @(Get-ChildItem -LiteralPath (Join-Path $dir 'files') -Recurse -File -ErrorAction SilentlyContinue)
         if ($files.Count) { Say ''; Say "  $($files.Count) file(s) in $(Join-Path $dir 'files')" 'Green' }
     } else {
-        Say ('  the run left no sealed output (' + $o.Why + ')') 'Yellow'
+        Say ('  the run''s sealed output could not be read (' + $o.Why + ')') 'Red'
     }
 } else {
-    Say "  this machine has no key for run $Run ($keyPath), so only its end can be read here" 'Yellow'
+    Say "  this machine has no key for run $Run ($keyPath), so its sealed output cannot be read here" 'Red'
 }
 
-switch ($a.State) {
-    'answer' {
-        Say ''; Say ('  ' + $a.Text) 'Green'
-        if ($a.Text -match '^ENDED (-?[0-9]+)') { exit [int]$Matches[1] }
-        exit 0
-    }
-    'stopped' {
-        Say ''; Say ('  ' + $a.Text) 'Red'
-        if ($a.Text -match '^ENDED (-?[0-9]+)') { exit [Math]::Max(1, [int]$Matches[1]) }
-        exit 1
-    }
-    default { Die ("run $Run ended with no answer: " + $a.Text + ' ' + $a.Url) }
-}
+# Header, exit code: the script's own, and never 0 when its answer was not read.
+$code = Get-ThornswoodRunExit $a $read
+if ($code -lt 0) { Die ("run $Run ended with no answer: " + $a.Text + ' ' + $a.Url) }
+Say ''; Say ('  ' + $a.Text) $(if ($code -eq 0) { 'Green' } else { 'Red' })
+if (-not $read) { Say "  what the script printed was not read, so this ends $code" 'Red' }
+exit $code

@@ -181,3 +181,22 @@ function Open-ThornswoodSealedRun {
     Remove-Item -LiteralPath $zip, $dl -Recurse -Force -ErrorAction SilentlyContinue
     return @{ Ok = $true; Why = '' }
 }
+
+# The session's exit code once a run has ended (#3399). $Answer is what
+# Read-ThornswoodRunAnswer returned; $Read says whether the run's sealed
+# output was opened here. The verb's own code when the output was read; when
+# it was not, never 0, since what the verb did then cannot be known here (on
+# 30 Oct Box-Run ping and Nexus-Run Set-NexusKey ended 0 with their answers
+# never read, runs 41116819564 and 41116954793). -1 when the run ended with
+# no answer at all, which the caller stops on with the run's link.
+function Get-ThornswoodRunExit($Answer, [bool]$Read) {
+    $n = $null
+    if ([string]$Answer.Text -match '^ENDED (-?[0-9]+)') { $n = [int]$Matches[1] }
+    switch ([string]$Answer.State) {
+        'answer'  { $code = $(if ($null -ne $n) { $n } else { 0 }) }
+        'stopped' { $code = $(if ($null -ne $n) { [Math]::Max(1, $n) } else { 1 }) }
+        default   { return -1 }
+    }
+    if (-not $Read -and $code -eq 0) { return 1 }
+    return $code
+}
