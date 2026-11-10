@@ -288,6 +288,13 @@ COUNCIL = discord.Permissions(
 # it is added to, and gives Playtester to an accepted playtest application.
 SUPPORT = discord.Permissions(manage_threads=True, manage_roles=True)
 NONE  = discord.Permissions.none()
+# The everyday set @everyone holds server wide. The build gives @everyone any
+# of these it is missing and takes nothing else away (keep_everyone). Every
+# read and public channel leans on it: their overwrites only take posting
+# away, so View Channels has to come from here. The live server went without
+# View Channels (the audit of 10 Nov 2026), and somebody who joined saw
+# neither Start Here nor Applications, nor the Member button in #start-here,
+# while a Member saw only Information, the one gate that names Member.
 PLAIN = discord.Permissions(
     view_channel=True, send_messages=True, read_message_history=True,
     embed_links=True, attach_files=True, add_reactions=True,
@@ -542,6 +549,8 @@ FACTION_STAFF = COUNCIL_ROLES + ('Gamemaster', 'Trial Gamemaster', 'Loremaster')
 #        read         everybody reads, the council posts
 #        membersread  Member, Playtester and staff read, the council posts
 #        open         Playtester and staff talk, invisible to everybody else
+#        memberstalk  everybody reads, Member, Playtester and staff talk and use
+#                     commands (#welcome-travelers, #dishboard: Patrick, 10 Nov)
 #        testersread  Playtester and staff read, the council posts
 #        pathfind     the same people as open; the Playtesters category's own
 #        hold         a hold's hall: its Citizen, Jarl and officers, and HOLD_STAFF
@@ -640,8 +649,10 @@ PLAN = [
         topic="Start here.", post=True),
    dict(kind='text',  name='start-here',  key='START',    mode='read',
         topic="How to actually get in and play.", post=True),
-   dict(kind='text',  name='say-hello',   key='HELLO',    mode='public',
-        topic='New here? Say hi and tell us a little about yourself. Slowmode is on.'),
+   # Where the Disboard listing is bumped. It was #say-hello until Patrick
+   # renamed it on 10 Nov 2026: everybody sees it, Members bump.
+   dict(kind='text',  name='dishboard',   key='BUMP',     mode='memberstalk',
+        topic='Dishboard bumps.', was=(('Start Here', 'say-hello'),)),
  ]),
  # Help and reports, for anybody, under Start Here where a newcomer looks
  # (#3317, q-3317-ticket-split, A). Support answers help, Moderation reports.
@@ -696,7 +707,9 @@ PLAN = [
    # Where the join cards go, and what the server's system channel points at.
    # JOIN gives the bot Attach Files here as well (JOIN_BOT_NEEDS, #2341).
    # The bot finds it by this name (JOIN_CHANNEL), so it keeps it.
-   dict(kind='text',  name='welcome-travelers', key='JOIN', mode='open',
+   # Everybody reads it, so the Disboard invite, which lands here, lands
+   # somewhere a newcomer can see; only Members and up talk (Patrick, 10 Nov).
+   dict(kind='text',  name='welcome-travelers', key='JOIN', mode='memberstalk',
         topic='A card for everybody who joins, posted by the bot. Say hello in '
               '<#GENERAL>.',
         was=(('Thornswood', 'welcome-travelers'),)),
@@ -1290,6 +1303,8 @@ def mode_audience(mode, hold=None, space=None, faction=None):
         return ('Member',) + tester, (), COUNCIL_ROLES
     if mode in ('open', 'pathfind'):
         return (), tester, ()
+    if mode == 'memberstalk':
+        return (), ('Member',) + tester, ()
     if mode == 'testersread':
         return tester, (), COUNCIL_ROLES
     if mode in ('hold', 'holdread', 'holdcourt', 'holdguard'):
@@ -1366,7 +1381,20 @@ def overwrites(guild, mode, roles, hold=None, needs=BOT_NEEDS, extra=None,
         return {}
     readers, talkers, posters = mode_audience(mode, hold, space, faction)
     readers = tuple(readers) + tuple(read_extra or ())
-    out = {ev: read_only if mode == 'read' else deny_all}
+    if mode == 'memberstalk':
+        # @everyone reads and cannot post or run a command (a /bump is one);
+        # the roles that talk get the commands back.
+        talk = discord.PermissionOverwrite(view_channel=True,
+                                           send_messages=True,
+                                           read_message_history=True,
+                                           use_application_commands=True)
+        out = {ev: discord.PermissionOverwrite(send_messages=False,
+                                               add_reactions=True,
+                                               create_public_threads=False,
+                                               send_messages_in_threads=False,
+                                               use_application_commands=False)}
+    else:
+        out = {ev: read_only if mode == 'read' else deny_all}
     for names, ow in ((readers, reader), (talkers, talk), (posters, poster)):
         for n in names:
             r = _named(guild, roles, n)
@@ -1585,6 +1613,26 @@ async def keep_role(role, hoist, perms):
         failed.append('%s (%s)' % (what, refused(e)))
 
 
+async def keep_everyone(guild):
+    """Give @everyone what it is missing of PLAIN, server wide, and leave
+       the rest of what it holds as it is."""
+    ev = guild.default_role
+    have = ev.permissions
+    _, missing = perm_diff(have, PLAIN)
+    if not missing:
+        return
+    what = '@everyone gets %s server wide' % ', '.join(missing)
+    if CHECK:
+        say('would change', what)
+        return
+    try:
+        await ev.edit(permissions=discord.Permissions(have.value | PLAIN.value),
+                      reason='Thornswood setup, the everyday set @everyone holds')
+        say('role', what)
+    except discord.HTTPException as e:
+        failed.append('%s (%s)' % (what, refused(e)))
+
+
 # Roles renamed in place (#3317): a plan role that is missing is looked for
 # under these names and renamed, so everybody holding it keeps it and the
 # server never has two. Lead GM is how the lead gamemaster role was spelled
@@ -1653,6 +1701,7 @@ async def ensure_roles(guild):
                           'the role list than the roles it makes)')
     if ONLY:
         return out
+    await keep_everyone(guild)
     # The whole list in one request, the one Discord's own client sends when a
     # role is dragged (#3317). It was one role.edit(position=) a role, each
     # worked out by discord.py from the cache of before the last, which the
@@ -2740,8 +2789,9 @@ def _audience_words(mode, hold=None, space=None, read_extra=(), extra=(), factio
     readers = tuple(readers) + tuple(read_extra or ())
     talkers = tuple(talkers) + tuple(extra or ())
     see = readers + talkers + posters
-    if mode == 'read':
-        return 'everybody', _names_words(talkers + posters), _names_words(posters)
+    if mode in ('read', 'memberstalk'):
+        return ('everybody', _names_words(talkers + posters),
+                _names_words(posters) if posters else '')
     return (_names_words(see), _names_words(talkers + posters) if talkers or posters else 'nobody',
             _names_words(posters) if posters else '')
 
@@ -2816,7 +2866,8 @@ def layout():
     w('')
     w('| Mode | Sees | Talks | Posts |')
     w('|---|---|---|---|')
-    for mode in ('public', 'read', 'membersread', 'open', 'pathfind', 'testersread',
+    for mode in ('public', 'read', 'membersread', 'memberstalk', 'open', 'pathfind',
+                 'testersread',
                  'staff', 'staffread', 'council'):
         r, t, p = _audience_words(mode)
         w('| %s | %s | %s | %s |' % (mode, r, t, p or '-'))
@@ -2919,6 +2970,10 @@ async def audit(guild):
 
     print('\n  @everyone', flush=True)
     line('server wide: ' + (', '.join(perm_names(guild.default_role.permissions)) or 'nothing'))
+    _, missing = perm_diff(guild.default_role.permissions, PLAIN)
+    if missing:
+        off('@everyone is missing %s server wide, which every read and public '
+            'channel leans on; a build gives it back' % ', '.join(missing))
     on = await onboarding_on(guild)
     if on is True:
         off("Discord's Onboarding is on; " + ONBOARDING_WHY + '. A build switches it off')

@@ -20,7 +20,7 @@
   it and runs this. Run --check first, every time.
 
   THE APPLICATION GATE. Since 23 and 24 September somebody who joins sees
-  #welcome, #rules, #start-here, #say-hello and the Applications category, and
+  #welcome, #rules, #start-here, #dishboard and the Applications category, and
   nothing else until staff give them Member (Build-Discord.py, THE GATE). The
   game itself opens on a separate role given when an application is accepted
   (site\\server.js access.play, Playtester). So by default this hands out no

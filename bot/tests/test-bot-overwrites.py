@@ -79,7 +79,7 @@ ATTACH_FILES = 1 << 15
 
 # Every mode that shuts @everyone out of one of the three. Only public does
 # not, and a public channel needs nothing for the bot.
-RESTRICTED = ('read', 'open', 'membersread', 'testersread', 'hold', 'holdread',
+RESTRICTED = ('read', 'memberstalk', 'open', 'membersread', 'testersread', 'hold', 'holdread',
               'holdcourt', 'holdguard', 'staff', 'staffread', 'council',
               'pathfind', 'space', 'spaceread', 'spacerules', 'faction',
               'factionread', 'factionlead', 'factionseats')
@@ -692,8 +692,8 @@ try:
         not before_bot[by_name['choose-your-hold']])
     yes('  and out of #news, where the release webhook and -Posts write',
         not before_bot[by_name['news']])
-    yes('  but not out of #say-hello, which is open to everybody',
-        before_bot[by_name['say-hello']])
+    yes('  but not out of the Start Here category, which is open to everybody',
+        before_bot[by_name['Start Here']])
     # Every ticket desk (#3317, q-3317-ticket-split, A), by its key in PLAN.
     tickets = [by_name[s['name']] for _c, specs in B.PLAN for s in specs
                if s.get('key') in B.TICKET_KEYS]
@@ -731,9 +731,9 @@ try:
             [c for c in everything if getattr(c, 'mode', None) in RESTRICTED],
             key=id))
     yes('the staff #news made by hand is one of them', news in wrote)
-    yes('no channel open to everybody was touched: not #say-hello, not the '
+    yes('no channel open to everybody was touched: not the Start Here or the '
         'Applications category, not the one made by hand behind the gate',
-        not [c for c in wrote if before_bot[c]] and by_name['say-hello'] not in wrote
+        not [c for c in wrote if before_bot[c]] and by_name['Start Here'] not in wrote
         and by_name['Applications'] not in wrote and loose not in wrote)
 
     for c in everything:
