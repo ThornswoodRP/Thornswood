@@ -31,6 +31,7 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'Windows.ps1')
 $runner = Join-Path (Join-Path (Join-Path $repo 'scripts') 'dev') 'Nightly-Harnesses.ps1'
 
 $script:pass = 0
@@ -65,7 +66,7 @@ if ($null -ne $fn) {
 }
 
 # ---- B. the runner writes it -------------------------------------------------------------
-$canRun = $IsWindows -or (Test-Path -LiteralPath '/proc/stat')
+$canRun = $OnWindows -or (Test-Path -LiteralPath '/proc/stat')
 if (-not $canRun) {
     Write-Host 'NOT RUN  B. the runner end to end: this machine has neither Windows nor /proc/stat, which the runner reads the processor from'
 } else {
@@ -85,7 +86,7 @@ if (-not $canRun) {
         Put (Join-Path $a 'tests/test-1-two.ps1') ("Write-Host 'PASS  the first thing'`nWrite-Host 'FAIL  the door opens for the holder'`n" +
             "Write-Host 'PASS  the second thing'`nWrite-Host 'FAIL  the key is kept'`nexit 1`n")
         Put (Join-Path $a 'tests/test-2-pass.ps1') ("Write-Host 'PASS  all good'`nexit 0`n")
-        $said = (@(& pwsh -NoProfile -NonInteractive -File $runner -Root $a -OutDir (Join-Path $work 'out') 2>&1 | ForEach-Object { "$_" }) -join "`n")
+        $said = (@(& (Get-BoxPowerShell) -NoProfile -NonInteractive -File $runner -Root $a -OutDir (Join-Path $work 'out') 2>&1 | ForEach-Object { "$_" }) -join "`n")
         $code = $LASTEXITCODE
         $got = Annotation $said 'test-1-two.ps1'
         Yes ("B. the share with a failure is red (exit $code)") ($code -eq 1)
