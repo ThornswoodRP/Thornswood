@@ -118,7 +118,10 @@ fs.readFileSync = function (p, ...rest) {
   const out = readFile.call(fs, p, ...rest);
   if (loads > 0 && (p === gm || typeof p === 'number') && has('.stub-replace-mid-read')) {
     fs.unlinkSync(path.join(root, '.stub-replace-mid-read'));
-    fs.renameSync(path.join(root, '.stub-next.js'), gm);
+    // What the rename threw goes where the case reads it: load() returns on
+    // any throw, and saying nothing hid why the case failed on Windows.
+    try { fs.renameSync(path.join(root, '.stub-next.js'), gm); }
+    catch (e) { fs.writeFileSync(path.join(root, '.stub-replace-error'), String(e.code) + ': ' + e.message); throw e; }
   }
   return out;
 };
@@ -293,7 +296,9 @@ try {
   $until = (Get-Date).AddSeconds(10)
   while ((Get-Date) -lt $until -and -not (Logs $srv).Contains("git blob $nextBlob")) { Start-Sleep -Milliseconds 100 }
   $said = @((Logs $srv) -split "`n" | Where-Object { $_ -match 'gamemode\.js is git blob ([0-9a-f]{40})' } | ForEach-Object { [regex]::Match($_, 'git blob ([0-9a-f]{40})').Groups[1].Value })
-  Yes ('a gamemode.js replaced while the stand-in reads it is loaded as what it read: the old once at the start, then the new (' + ($said -join ', ') + ')') (
+  $replaceError = Join-Path $srv.Root '.stub-replace-error'
+  $why = $(if (Test-Path -LiteralPath $replaceError) { '; the stand-in''s replace threw ' + [IO.File]::ReadAllText($replaceError) } else { '' })
+  Yes ('a gamemode.js replaced while the stand-in reads it is loaded as what it read: the old once at the start, then the new (' + ($said -join ', ') + $why + ')') (
     -not (Test-Path -LiteralPath (Join-Path $srv.Root '.stub-replace-mid-read')) -and ($said -join ',') -eq ($runBlob + ',' + $nextBlob))
   Stop-Server $srv
 
