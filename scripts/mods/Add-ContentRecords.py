@@ -1237,6 +1237,21 @@ ALEMBIC_BOUNDS = (-15, -13, 0, 20, 10, 23)
 RUNE_KNIFE_MODEL = 'Clutter\\Ruins\\RuinsScalpel01.nif'
 RUNE_KNIFE_BOUNDS = (-14, -2, 0, 14, 2, 1)
 
+# THE INSTRUMENTS (#4509). Patrick, 9 November 2026, option A: the flute, lute
+# and drum people own are Skyrim's own clutter ones, which cannot be equipped,
+# not PlayFluteLuteDrum.esp's weapons, whose equip and playing are record
+# scripts our client never runs. Nothing in the load order made Skyrim's
+# three, so the Woodwright carves them here at the woodworking bench, the way
+# the ladle is. PlayFluteLuteDrum.esp's own recipes, which turned these into
+# the weapons, are hidden by Thornswood-Last.esp: that plugin loads after this
+# one, so an override here would lose. Form ids follow the ladle's.
+FLUTE = 0x000DABA7        # Skyrim's Flute (MISC)
+LUTE = 0x000DABAB         # Skyrim's Lute (MISC)
+DRUM = 0x000DABA9         # Skyrim's Drum (MISC)
+RECIPE_FLUTE = 0x501B008
+RECIPE_LUTE = 0x501B009
+RECIPE_DRUM = 0x501B00A
+
 # THE STATIONS.
 #
 # The charcoal kiln (charburner.md) is Skyrim's smelter marker furniture
@@ -1632,6 +1647,12 @@ def thornswood_records(passage, clam, passages):
         cobj(RECIPE_RUNE_KNIFE, 'ThornswoodRecipeToolRuneKnife', [(IRON_INGOT, 1), (LEATHER_STRIPS, 1)],
              RUNE_KNIFE, FORGE_KEYWORD),
         cobj(RECIPE_LADLE, 'ThornswoodRecipeToolLadle', [(FIREWOOD, 1)], LADLE, WOODWORKING_KEYWORD),
+        # Skyrim's own instruments (#4509), THE INSTRUMENTS above.
+        cobj(RECIPE_FLUTE, 'ThornswoodRecipeInstrumentFlute', [(FIREWOOD, 1)], FLUTE, WOODWORKING_KEYWORD),
+        cobj(RECIPE_LUTE, 'ThornswoodRecipeInstrumentLute', [(FIREWOOD, 2), (LEATHER_STRIPS, 2)],
+             LUTE, WOODWORKING_KEYWORD),
+        cobj(RECIPE_DRUM, 'ThornswoodRecipeInstrumentDrum', [(FIREWOOD, 2), (LEATHER, 1), (LEATHER_STRIPS, 1)],
+             DRUM, WOODWORKING_KEYWORD),
     ]
 
     def catch(fid, edid, name, produce):
