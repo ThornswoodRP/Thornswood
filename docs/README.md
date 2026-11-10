@@ -23,6 +23,7 @@ and the long form of each, are in the Developer Guide's pages under
 | [studies/in-game-ui](studies/in-game-ui/README.md) | The options for voice, chat, emotes and the in-game UI without a browser (#3208): today's voice measured by room size, a box forwarder measured, each option's pros and cons, and the recommendations Patrick picks from. |
 | [studies/launcher-stack](studies/launcher-stack/README.md) | The options for a more modern launcher and installer (#3209): every stack measured with the same prototype window, each option's pros and cons, and what Patrick picked. |
 | [AFFECTED-HARNESSES.md](AFFECTED-HARNESSES.md) | Running only the gate harnesses a pull request can affect (#3114): the Linux study, the read map, the rules, and the trace of the gate on the VPS. |
+| [WORKFLOWS.md](WORKFLOWS.md) | Every GitHub workflow here: what starts it, what it does and what it writes (#4184). |
 | [DEPLOY-AGENT.md](DEPLOY-AGENT.md) | The box deploy agent (#5180): deploying a signed Release by its tag through the gate and rolling back, how a merge reaches the dev server by itself, what it holds, how it updates itself and how it is installed. |
 | [SIGNED-RELEASES.md](SIGNED-RELEASES.md) | The signed release design (#2163): what gets signed and how, custody, rotation, revocation, the rollout that keeps every checksum, and the test-only pilot. |
 | [CLEAN-INSTALL-RUN.md](CLEAN-INSTALL-RUN.md) | The checklist for a stranger's first install, and what each step should show. |
