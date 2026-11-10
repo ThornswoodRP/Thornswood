@@ -16,6 +16,11 @@
 # as the file's header does; without it Dependabot used its own newer Python
 # and pulled in audioop-lts, which has no 3.12 wheel (#5242).
 #
+# pip, again: .github\ruff-requirements.txt pins the linter Tree checks runs,
+# with its hashes. It had no entry, so a new ruff was never offered (#4161),
+# and tests\test-3683-security-setup.js now fails a pip manifest whose folder
+# has none, as it does a package.json.
+#
 # npm: only the Electron prototype of the launcher stack study (#3209,
 # docs/studies/launcher-stack/prototypes/electron). It never ships; it is
 # built by hand on a Windows machine to measure Electron against the other
@@ -102,6 +107,19 @@ updates:
         patterns: ["*"]
     labels:
       - "area: Discord"
+    rebase-strategy: disabled
+
+  - package-ecosystem: pip
+    directory: /.github
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci"
+    groups:
+      linter:
+        patterns: ["*"]
+    labels:
+      - "area: GitHub & CI"
     rebase-strategy: disabled
 
   - package-ecosystem: npm
