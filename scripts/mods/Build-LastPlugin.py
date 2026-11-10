@@ -1677,6 +1677,11 @@ def build(data_dir):
     # 9. The recipes freed of Skyrim's perks (#4826).
     perk_recipes, perk_stats = perk_entries(plugins, win, canon, blocked, perks_off)
 
+    # 11. The recipes the policy hides (#4509): PlayFluteLuteDrum.esp's three
+    # that turn Skyrim's instruments into its weapons. That plugin loads after
+    # Thornswood-Content.esp, so only a copy here can keep them off a bench.
+    hidden = hidden_entries(policy, plugins, win, canon, blocked)
+
     # 6. Nothing is copied out of a plugin the policy never copies from
     # (notCopiedFrom, above) but what it carries; anything else it would
     # contribute stops the build, and so does a carried record not needed.
@@ -1794,16 +1799,18 @@ def build(data_dir):
             pairs = set_properties(copy_record(src, e, rn, strings, what), row, what)
             out['qust'].append((rn.one(src, e.fid, what), e.flags & ~COMPRESSED,
                                 pack_subrecords(pairs), e))
-        # A recipe re-costed, moved and freed of its perks is one record
-        # carrying all three.
+        # A recipe re-costed, moved, freed of its perks and hidden is one
+        # record carrying all four.
         cobjs = collections.OrderedDict()
         for e, row in recipes:
-            cobjs.setdefault((e.pi, e.fid), [e, None, None, False])[1] = row
+            cobjs.setdefault((e.pi, e.fid), [e, None, None, False, False])[1] = row
         for e, kw, row in moves:
-            cobjs.setdefault((e.pi, e.fid), [e, None, None, False])[2] = kw
+            cobjs.setdefault((e.pi, e.fid), [e, None, None, False, False])[2] = kw
         for e in perk_recipes:
-            cobjs.setdefault((e.pi, e.fid), [e, None, None, False])[3] = True
-        for e, cost, kw, perks in cobjs.values():
+            cobjs.setdefault((e.pi, e.fid), [e, None, None, False, False])[3] = True
+        for e, row in hidden:
+            cobjs.setdefault((e.pi, e.fid), [e, None, None, False, False])[4] = True
+        for e, cost, kw, perks, hide in cobjs.values():
             src = plugins[e.pi]
             what = '%s COBJ 0x%08X' % (src.name, e.fid)
             pairs = copy_record(src, e, rn, strings, what)
@@ -1813,6 +1820,8 @@ def build(data_dir):
                 pairs = rebench(pairs, struct.pack('<I', rn.gid(kw)), what)
             if perks:
                 pairs = without_perks(pairs, what)
+            if hide:
+                pairs = hide_recipe(pairs, what)
             out['cobj'].append((rn.one(src, e.fid, what), e.flags & ~COMPRESSED,
                                 pack_subrecords(pairs), e))
         return out
@@ -2225,6 +2234,46 @@ def stop_quest(pairs, what):
             out.append((b'CTDA', NEVER_TRUE))
     if not done or nexts != 1:
         raise SystemExit('STOP. %s does not have one DNAM and one NEXT. Nothing was written.' % what)
+    return out
+
+
+def hide_recipe(pairs, what):
+    """The recipe with NEVER_TRUE among its conditions, so no bench lists it
+    (#4509): after its last condition and the strings that follow that, or
+    before its output (CNAM) when it has none, as Thornswood-Content.esp's
+    never_listed puts it. Every other subrecord stays as it was. A recipe
+    that already carries it is refused, so a copy never holds it twice."""
+    if any(t == b'CTDA' and b == NEVER_TRUE for t, b in pairs):
+        raise SystemExit('STOP. %s already carries the condition that is never true. Nothing was written.' % what)
+    at = max([i + 1 for i, (t, _) in enumerate(pairs) if t in (b'CTDA', b'CIS1', b'CIS2')] or
+             [i for i, (t, _) in enumerate(pairs) if t == b'CNAM'] or [len(pairs)])
+    return pairs[:at] + [(b'CTDA', NEVER_TRUE)] + pairs[at:]
+
+
+def hidden_entries(policy, plugins, win, canon, blocked):
+    """(winning entry, row) for every recipe the policy hides (recipesHidden,
+    #4509), each checked to be the record the policy names: one a plugin
+    has, not deleted, with the policy's editor id, and not won by a plugin
+    the policy never copies from."""
+    out = []
+    for row in (policy.get('recipesHidden') or {}).get('recipes', []):
+        e = win.get((b'COBJ', ref_key(row['recipe'])))
+        if e is None:
+            raise SystemExit('STOP. the policy hides %s %s and no plugin has it. Nothing was written.'
+                             % (row['recipe'], row['edid']))
+        src = plugins[e.pi]
+        if e.flags & DELETED:
+            raise SystemExit('STOP. the policy hides %s %s, which %s has deleted. Nothing was written.'
+                             % (row['recipe'], row['edid'], src.name))
+        if src.name.lower() in blocked:
+            raise SystemExit('STOP. the policy hides %s %s, which %s wins, and the policy never copies from '
+                             'that plugin (notCopiedFrom). Nothing was written.'
+                             % (row['recipe'], row['edid'], src.name))
+        edid = dict(subrecords(src.data(e))).get(b'EDID', b'').rstrip(b'\x00').decode('latin1')
+        if edid != row['edid']:
+            raise SystemExit('STOP. %s in %s is %s, not the recipe the policy hides (%s). Nothing was written.'
+                             % (row['recipe'], src.name, edid or 'unnamed', row['edid']))
+        out.append((e, row))
     return out
 
 

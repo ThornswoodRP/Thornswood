@@ -1243,8 +1243,10 @@ RUNE_KNIFE_BOUNDS = (-14, -2, 0, 14, 2, 1)
 # scripts our client never runs. Nothing in the load order made Skyrim's
 # three, so the Woodwright carves them here at the woodworking bench, the way
 # the ladle is. PlayFluteLuteDrum.esp's own recipes, which turned these into
-# the weapons, are hidden by Thornswood-Last.esp: that plugin loads after this
-# one, so an override here would lose. Form ids follow the ladle's.
+# the weapons, are hidden by Thornswood-Last.esp (recipesHidden in
+# game/data/last-plugin-policy.json), not here: that plugin loads after this
+# one, so an override here would lose. Neither plugin carries any of this until
+# the content rebuild #4509 waits on. Form ids follow the ladle's.
 FLUTE = 0x000DABA7        # Skyrim's Flute (MISC)
 LUTE = 0x000DABAB         # Skyrim's Lute (MISC)
 DRUM = 0x000DABA9         # Skyrim's Drum (MISC)
