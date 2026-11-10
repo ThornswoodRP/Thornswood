@@ -478,7 +478,16 @@ async function handle(req, res) {
       first: was.first || Date.now(), seen: Date.now(),
       roles: st.roles
     });
-    putJson(LINKED, linked);
+    // A sign-in whose record will not save is not signed in (#4379): it used
+    // to go on with nothing written, so somebody was let in with no record
+    // of who they are to trace a ban to.
+    if (!putJson(LINKED, linked)) {
+      console.error('[thornswood-docs] sign-in ' + JSON.stringify({ event: 'linked-write-failed' }));
+      return send(res, 500, plainPage('The site could not sign you in', [
+        'The site could not save your sign in.',
+        'Try again in a minute.'
+      ]), TYPES['.html']);
+    }
 
     /* Only twa (#2166). The member cookie tw is the password door's, and
        the privacy page calls it the fallback for a site with no Discord
@@ -1420,7 +1429,12 @@ async function handle(req, res) {
         note: (url.searchParams.get('note') || '').slice(0, 300),
         at:   Date.now()
       };
-      putJson(UPMETA, meta);
+      // The file is kept either way; a note that will not save is said, not
+      // answered ok (#4379), so the sender knows it arrived unlisted.
+      if (!putJson(UPMETA, meta)) {
+        return sendJson(res, 500, { ok: false, name, fileKept: true,
+          error: 'The file arrived, but the site could not note it on the uploads list. Try again in a minute.' });
+      }
       sendJson(res, 200, { ok: true, name });
     });
   }
@@ -1437,7 +1451,12 @@ async function handle(req, res) {
                                               error: 'The file could not be deleted (' + gone.code + '). It is still on the site.' });
     const meta = jsonFile(UPMETA, {});
     delete meta[rm[1]];
-    putJson(UPMETA, meta);
+    // Said, not answered ok (#4379). Asking again finishes it: a file that is
+    // already gone is no failure to deleteUpload.
+    if (!putJson(UPMETA, meta)) {
+      return sendJson(res, 500, { ok: false, name: rm[1], fileDeleted: true,
+        error: 'The file was deleted, but the site could not take it off the uploads list. Try again in a minute.' });
+    }
     return sendJson(res, 200, { ok: true });
   }
 
@@ -1649,10 +1668,25 @@ async function handle(req, res) {
       if (srcset) item.srcset = srcset;
       gallery.push(item);
     }
-    putJson(GALLERY, gallery);
+    /* The gallery first, and the queue only once the gallery has it (#4379).
+       Neither write was looked at, so a gallery that would not save still
+       took the picture off the queue: it was on neither list, and staff were
+       told it was accepted. Now a gallery that will not save leaves it
+       waiting, and a queue that will not save leaves it on both, where a
+       second Accept (a name already on the gallery is left there) finishes
+       it. Either is said, not answered ok. */
+    if (!putJson(GALLERY, gallery)) {
+      console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'gallery-write-failed' }));
+      return sendJson(res, 500, { ok: false, name: name, approved: false,
+        error: 'The site could not put that on the gallery, so it is still waiting. Try again in a minute.' });
+    }
 
     const left = pending.filter((x) => String(x.name) !== name);
-    if (left.length !== pending.length) putJson(GPENDING, left);
+    if (left.length !== pending.length && !putJson(GPENDING, left)) {
+      console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'pending-write-failed' }));
+      return sendJson(res, 500, { ok: false, name: name, approved: true,
+        error: 'It is on the gallery, but the site could not take it off the queue. Accept it again in a minute.' });
+    }
     return sendJson(res, 200, { ok: true, name: name, approved: true, copies: srcsetWidths(srcset) });
   }
 
@@ -1692,22 +1726,32 @@ async function handle(req, res) {
     const name = String(o.name || '');
     if (!name) return sendJson(res, 400, { error: 'no name' });
 
+    /* Each list is saved before the next is touched, and one that will not
+       save is said, not answered ok (#4379). Asking again finishes it: a list
+       that no longer has the name is left alone. The file is not touched
+       until all three are saved, so a gallery that would not save is never
+       left showing a picture whose file is gone. */
+    const notSaved = (file) => {
+      console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'remove-write-failed', file: file }));
+      return sendJson(res, 500, { ok: false, name: name,
+        error: 'The site could not save ' + file + ', so it is not all removed yet. Try again in a minute.' });
+    };
     const gallery = jsonFile(GALLERY, []);
     const leftGal = gallery.filter((x) => String(x.name) !== name);
     const removedGal = gallery.length - leftGal.length;
-    if (removedGal) putJson(GALLERY, leftGal);
+    if (removedGal && !putJson(GALLERY, leftGal)) return notSaved('the gallery');
 
     const pending = jsonFile(GPENDING, []);
     const leftPend = pending.filter((x) => String(x.name) !== name);
     const removedPend = pending.length - leftPend.length;
-    if (removedPend) putJson(GPENDING, leftPend);
+    if (removedPend && !putJson(GPENDING, leftPend)) return notSaved('the queue');
 
     // Drop open reports against this name too, so the reports list does not
     // keep asking about a picture that is already gone.
     const reports = jsonFile(GREPORTS, []);
     const kept = reports.filter((r) => String(r.name) !== name);
     const itsReports = reports.filter((r) => String(r.name) === name);
-    if (kept.length !== reports.length) putJson(GREPORTS, kept);
+    if (kept.length !== reports.length && !putJson(GREPORTS, kept)) return notSaved('the reports');
 
     /*
       The file (#2352, option C). Deleted, unless the submission had an open
@@ -1796,8 +1840,12 @@ async function handle(req, res) {
     if (discordId) entry.discordId = discordId;
     reports.push(entry);
     // Keep the newest 500 so a flood cannot grow the file forever, and none
-    // past GREPORTS_DAYS (#2353).
-    putJson(GREPORTS, freshGalleryReports(reports, Date.now()).slice(-500));
+    // past GREPORTS_DAYS (#2353). A report that will not save is said, not
+    // answered ok (#4379), so the person who sent it knows to send it again.
+    if (!putJson(GREPORTS, freshGalleryReports(reports, Date.now()).slice(-500))) {
+      console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'report-write-failed' }));
+      return sendJson(res, 500, { ok: false, error: 'The site could not save that report. Try again in a minute.' });
+    }
     return sendJson(res, 200, { ok: true, id: id });
   }
 
@@ -1816,7 +1864,12 @@ async function handle(req, res) {
     if (!id) return sendJson(res, 400, { error: 'no id' });
     const reports = jsonFile(GREPORTS, []);
     const left = reports.filter((r) => String(r.id) !== id);
-    putJson(GREPORTS, left);
+    // Said, not answered ok (#4379): the report would come back on the next
+    // load of the list.
+    if (!putJson(GREPORTS, left)) {
+      console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'report-write-failed' }));
+      return sendJson(res, 500, { ok: false, id: id, error: 'The site could not save that, so the report is still listed. Try again in a minute.' });
+    }
     return sendJson(res, 200, { ok: true, id: id, removed: reports.length - left.length });
   }
 
@@ -2342,7 +2395,8 @@ async function handle(req, res) {
       n++;
     }
     store.at = Date.now();
-    putJson(ROSTER, store);
+    // Said, not answered ok (#4379), the economy's way below.
+    if (!putJson(ROSTER, store)) return sendJson(res, 500, { error: 'could not save' });
     return sendJson(res, 200, { ok: true, merged: n, total: Object.keys(store.who).length });
   }
 
