@@ -18,3 +18,6 @@
 /scripts/release/Ship.ps1            @EvilPatrick06 @WiccanDjinn
 /scripts/release/Ship-Rules.ps1      @EvilPatrick06 @WiccanDjinn
 /.github/                  @EvilPatrick06
+
+# The keys the deploy gate's Grant-BoxKey puts on the box (#5726).
+/scripts/vps/box-keys/      @EvilPatrick06
