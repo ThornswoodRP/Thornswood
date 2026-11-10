@@ -26,8 +26,8 @@
   into two scratch repositories under a temp folder, one whose .git is a
   folder (the repository itself) and one whose .git is a file (a worktree),
   and run there: Fetch-Backups -PruneOnly and -Schedule, Backup-Server and
-  Clean-Everything -Backups. ssh and scp are stand-ins on PATH that only note
-  they were called, the address given is 127.0.0.1, and the scheduled task
+  Clean-Everything -Backups. ssh and scp are stand-ins first on PATH (a .cmd
+  on Windows, a shell script elsewhere) that only note they were called, the address given is 127.0.0.1, and the scheduled task
   cmdlets are stand-ins that note what they were given, with LOCALAPPDATA
   pointed into the temp folder, so nothing reaches the VPS, the task
   scheduler or this machine's own data. Nothing outside the temp folder is
@@ -111,14 +111,31 @@ $savedVpsLocal = $env:THORNSWOOD_VPS_LOCAL
 try {
     New-Item -ItemType Directory -Force -Path $T | Out-Null
 
-    # ssh and scp that only say they were called.
+    # ssh and scp that only say they were called, first on PATH. Off Windows
+    # nothing runs a .cmd, so there they are shell scripts with the same
+    # words; a .cmd alone left the runner's own ssh first on Linux, and every
+    # "nothing was sent" below was true whatever the scripts did (#5713).
     $bin = Join-Path $T 'bin'
     New-Item -ItemType Directory -Force -Path $bin | Out-Null
     $calls = Join-Path $T 'ssh-calls.txt'
+    $onWindows = [IO.Path]::DirectorySeparatorChar -eq '\'
     foreach ($n in 'ssh', 'scp') {
-        [IO.File]::WriteAllText((Join-Path $bin ($n + '.cmd')), ("@echo off`r`necho {0} %*>>`"{1}`"`r`nexit /b 255`r`n" -f $n, $calls))
+        if ($onWindows) {
+            [IO.File]::WriteAllText((Join-Path $bin ($n + '.cmd')), ("@echo off`r`necho {0} %*>>`"{1}`"`r`nexit /b 255`r`n" -f $n, $calls), (New-Object Text.ASCIIEncoding))
+        } else {
+            $f = Join-Path $bin $n
+            [IO.File]::WriteAllText($f, ("#!/bin/sh`necho ""{0} `$*"" >> '{1}'`nexit 255`n" -f $n, $calls), (New-Object Text.ASCIIEncoding))
+            & chmod 755 $f
+        }
     }
     $env:PATH = $bin + [IO.Path]::PathSeparator + $env:PATH
+    foreach ($n in 'ssh', 'scp') {
+        $found = @(Get-Command $n -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1)
+        Yes ("$n on PATH is the stand-in, not this machine's own (" + $(if ($found.Count) { $found[0].Source } else { 'none' }) + ')') ($found.Count -eq 1 -and (Same (Split-Path -Parent $found[0].Source) $bin))
+    }
+    & ssh stand-in-check 2>&1 | Out-Null
+    Yes '  and a call to it is noted' ((Test-Path -LiteralPath $calls) -and ([IO.File]::ReadAllText($calls) -match 'ssh stand-in-check'))
+    Remove-Item -LiteralPath $calls -Force -ErrorAction SilentlyContinue
     # Never the real box, whatever a script falls back to.
     $env:THORNSWOOD_VPS_LOCAL = Join-Path $T 'no-vps.json'
 
@@ -217,6 +234,20 @@ try {
     Yes ("in a worktree, Backup-Server with no -Out stops (exit $($r.Code))") ($r.Code -ne 0 -and $r.Out -match 'git worktree' -and $r.Out -match '-Out')
     Yes '  before anything was sent' (-not (SshCalled))
     Yes '  and makes no local\backups in it' (-not (Test-Path -LiteralPath $wtBackups))
+
+    # That check has to be able to fail: a copy of Backup-Server that calls
+    # ssh before it looks at the worktree is caught by it, on every system.
+    $planted = Join-Path $T 'planted-wt'
+    New-Scratch $planted $true
+    $plantedScript = Join-Path $planted 'scripts\vps\Backup-Server.ps1'
+    $tokens = $null; $errors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($plantedScript, [ref]$tokens, [ref]$errors)
+    $text = [IO.File]::ReadAllText($plantedScript)
+    $at = $ast.ParamBlock.Extent.EndOffset
+    [IO.File]::WriteAllText($plantedScript, $text.Substring(0, $at) + "`n& ssh planted-early 2>&1 | Out-Null`n" + $text.Substring($at))
+    $r = Run $plantedScript @('-Vps', '127.0.0.1', '-User', 'nobody', '-NoPause')
+    Yes ('a copy of Backup-Server that calls ssh first is caught by "before anything was sent" (exit ' + $r.Code + ')') ((SshCalled) -and ([IO.File]::ReadAllText($calls) -match 'ssh planted-early'))
+    Remove-Item -LiteralPath $calls -Force -ErrorAction SilentlyContinue
 
     # In the repository it aims at local\backups (the stand-in ssh then fails).
     $r = Run (Join-Path $main 'scripts\vps\Backup-Server.ps1') @('-Vps', '127.0.0.1', '-User', 'nobody', '-NoPause')
