@@ -583,6 +583,10 @@ issue where the card did.
   high or above holds a pull request in the queue.**
   (dec_Gm-N3eXHFtatOecKTnaYSw) 9 Nov 2026,
   [#5638](https://github.com/ThornswoodRP/Thornswood/issues/5638#issuecomment-6751597191).
+- **#5665 stays on main though it merged without a card: a box or Nexus run
+  whose answer was never read no longer ends 0.**
+  (dec_GPtrPA_9atgZaXlwDBqVHA) 9 Nov 2026,
+  [#3399](https://github.com/ThornswoodRP/Thornswood/issues/3399#issuecomment-6758734435).
 
 ### Languages and code
 
