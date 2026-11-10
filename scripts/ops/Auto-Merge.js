@@ -21,8 +21,10 @@
 //
 // Two are left off (Patrick's yes on Bramble's card, 2 Nov 2026, "Add the two
 // skips"). One that changes what runs on the live box, unless it is
-// Patrick's: a workflow, the deploy gate, a verb list or a script a verb runs
-// (BOX_DIRS, VERB_LISTS and the scripts main's two verb lists name). And a
+// Patrick's: a workflow, the deploy gate, a verb list, a script a verb runs
+// or a file a verb reads from main to decide what it does on the box, such as
+// the keys Grant-BoxKey puts there (BOX_DIRS, VERB_LISTS, and the scripts and
+// 'reads' main's two verb lists name; #5726). And a
 // Bot's (BOT_BRANCH) without Bramble's approving review at its head commit:
 // Bramble reviews the Bots' work and turns auto-merge on for it itself.
 //
@@ -48,7 +50,8 @@ const HANDS_OFF = ['WiccanDjinn', 'Jhinswife'];
 const NOT_ITS_OWN = /queue.?cleared|roll.?back|time.?out|timed out|branch.?protection|unreachable/i;
 
 // What runs on the live box: every workflow, the deploy gate, the two verb
-// lists, and each script a verb of theirs runs (verbScripts reads them).
+// lists, each script a verb of theirs runs and each file or folder a verb
+// says it reads (verbScripts reads both).
 const BOX_DIRS = ['.github/workflows/', 'scripts/vps/gate/'];
 const VERB_LISTS = ['scripts/vps/gate/verbs.json', 'scripts/release/nexus-verbs.json'];
 const PATRICK = 'EvilPatrick06';
@@ -58,21 +61,27 @@ const OUTSIDE_LABEL = 'outside work';
 const BOT_BRANCH = /^(bramble|rift|sprocket|echo|magpie|wisp)\/[0-9]+-[a-z0-9][a-z0-9-]{0,60}$/;
 const BRAMBLE = /^thornswood-bramble(\[bot\])?$/;
 
-// The scripts main's verb lists name, read from the checkout.
+// The scripts main's verb lists name, and what each verb says it reads from
+// main ('reads': a file, or a folder ending in /), read from the checkout.
 function verbScripts(root) {
   const fs = require('fs');
   const path = require('path');
   const out = [];
   for (const f of VERB_LISTS) {
     const verbs = JSON.parse(fs.readFileSync(path.join(root, f), 'utf8')).verbs || {};
-    for (const k of Object.keys(verbs)) { if (verbs[k].script) out.push(verbs[k].script); }
+    for (const k of Object.keys(verbs)) {
+      if (verbs[k].script) out.push(verbs[k].script);
+      for (const r of verbs[k].reads || []) { if (typeof r === 'string' && r) out.push(r); }
+    }
   }
   return out;
 }
 
-// The files it changes that run on the box.
+// The files it changes that run on the box, or that a verb acts on there.
+// An entry of scripts that ends in / is a folder: every file under it counts.
 function boxFiles(paths, scripts) {
-  return paths.filter((p) => BOX_DIRS.some((d) => p.indexOf(d) === 0) || VERB_LISTS.indexOf(p) >= 0 || scripts.indexOf(p) >= 0);
+  const under = (p, d) => d.slice(-1) === '/' ? p.indexOf(d) === 0 : p === d;
+  return paths.filter((p) => BOX_DIRS.some((d) => p.indexOf(d) === 0) || VERB_LISTS.indexOf(p) >= 0 || scripts.some((s) => under(p, s)));
 }
 
 const QUERY = `query($owner: String!, $name: String!, $after: String) {
