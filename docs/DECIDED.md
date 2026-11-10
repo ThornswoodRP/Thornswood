@@ -594,6 +594,10 @@ issue where the card did.
 - **The bot's split into modules (#5393) may merge at acc8ce8.**
   (dec_PYrv5xUa2LixUT43Bwl_Zg) 2 Nov 2026,
   [#5357](https://github.com/ThornswoodRP/Thornswood/issues/5357#issuecomment-6586544129).
+- **Dependabot offers the launcher's and tools' C# package updates, and each
+  one merges only once THIRD-PARTY.md, the credits and the installer's
+  licences match it.** (dec_1c-oDa1wHth7h91Ni66Xfg) 9 Nov 2026,
+  [#4161](https://github.com/ThornswoodRP/Thornswood/issues/4161#issuecomment-6758895889).
 - **The site stays without outside packages, split into modules**
   (q-p06-site-modules). 31 Oct 2026,
   [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
