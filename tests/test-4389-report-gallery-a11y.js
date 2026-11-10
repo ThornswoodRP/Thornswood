@@ -139,9 +139,20 @@ async function runPage(pathname, answers) {
 // The tag of the element with this id in a piece of markup, or ''.
 const tagOf = (html, id) => (new RegExp('<[a-z]+\\b[^>]*\\bid="' + id + '"[^>]*>', 'i').exec(html) || [''])[0];
 const describedBy = (tag) => ((/\baria-describedby="([^"]*)"/.exec(tag) || [])[1] || '').split(/\s+/).filter(Boolean);
+// The words of a piece of markup, its tags left out. Read a character at a
+// time, not with a replace, so nothing is half taken out of it.
+function textOf(html) {
+  let out = '', inTag = false;
+  for (const ch of html) {
+    if (ch === '<') inTag = true;
+    else if (ch === '>') inTag = false;
+    else if (!inTag) out += ch;
+  }
+  return out.trim();
+}
 const wordsOf = (html, id) => {
   const m = new RegExp('<([a-z]+)\\b[^>]*\\bid="' + id + '"[^>]*>([\\s\\S]*?)</\\1>', 'i').exec(html);
-  return m ? m[2].replace(/<[^>]*>/g, '').trim() : '';
+  return m ? textOf(m[2]) : '';
 };
 function described(html, fieldId) {
   const ids = describedBy(tagOf(html, fieldId));
@@ -161,7 +172,7 @@ function heads(html) {
   const out = [];
   const re = /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi;
   let m;
-  while ((m = re.exec(html)) !== null) out.push({ n: Number(m[1]), text: m[2].replace(/<[^>]*>/g, '').trim() });
+  while ((m = re.exec(html)) !== null) out.push({ n: Number(m[1]), text: textOf(m[2]) });
   return out;
 }
 function skips(list) {
