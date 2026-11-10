@@ -290,6 +290,10 @@ link, and the old line goes.
   Setup-Discord.ps1 (no posts, no pruning), and GM Rules v1.0 is pinned in
   #gm-rules. 22 Oct 2026,
   [#2519](https://github.com/EvilPatrick06/Thornswood/issues/2519#issuecomment-6335268547).
+- **#5680's Discord change reaches the live server by one Setup-Discord
+  build on the box, then its audit.** (dec_AI3xaYcXj92oD1D47l-3HQ) 9 Nov
+  2026,
+  [#5679](https://github.com/ThornswoodRP/Thornswood/issues/5679#issuecomment-6759369249).
 - **Djinn's one-line crash log (fork #89) rides the next engine pin.** 22
   Oct 2026,
   [#2025](https://github.com/EvilPatrick06/Thornswood/issues/2025#issuecomment-6335269045).
