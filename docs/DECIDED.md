@@ -595,6 +595,10 @@ issue where the card did.
   setup-dotnet 6.1.0 and codeql-action 4.39.3 bump in eight workflow
   files.** (dec_o8Az6nut5J7lUo99oiexkQ) 9 Nov 2026,
   [#5723](https://github.com/ThornswoodRP/Thornswood/issues/5723#issuecomment-6760570918).
+- **#5759 merges at 2197790: Install-Bot.ps1's help names every file the bot
+  install sends, a comments-only change to a verb script.**
+  (dec_qGeySfOKTKUJjIlq29Z3Uw) 10 Nov 2026,
+  [#4391](https://github.com/ThornswoodRP/Thornswood/issues/4391#issuecomment-6775486356).
 
 ### Languages and code
 
