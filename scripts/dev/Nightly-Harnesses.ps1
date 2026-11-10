@@ -448,6 +448,36 @@ function Start-One($t) {
     [pscustomobject]@{ T = $t; P = $p; Job = $job; Mark = $mark; Sw = $sw; Out = $o; Err = $e; Ended = $p.WaitForExitAsync() }
 }
 
+# What a failed harness's annotation carries after "harness failed (exit n)"
+# (#5660): its own FAIL lines, or when it printed none, its last lines. The
+# annotation is what the checks page and the API's annotations show; the
+# job log, where the harness's whole output is, is too big for a Bot to
+# read (Ops #266), so a failure named there without its FAIL lines could be
+# understood only by someone who opened the log. At most FAIL_LINES lines
+# of at most FAIL_LINE_CHARS each, and a line saying how many more there
+# were, so one harness that fails a thousand checks cannot fill the run's
+# annotations. Each line is its own line of the message: a workflow
+# command's message takes %0A for a new line, and % itself as %25.
+$FAIL_LINES = 10
+$FAIL_LINE_CHARS = 300
+function Get-FailSaid([string]$printed) {
+    $lines = @($printed -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $fails = @($lines | Where-Object { $_ -match '^FAIL\b' })
+    $head = 'its FAIL lines'
+    if (-not $fails.Count) {
+        $fails = @($lines | Select-Object -Last $FAIL_LINES)
+        $head = 'no FAIL line; its last lines'
+        if (-not $fails.Count) { return ': it printed nothing' }
+    }
+    $more = $fails.Count - $FAIL_LINES
+    $show = @($fails | Select-Object -First $FAIL_LINES | ForEach-Object {
+        if ($_.Length -gt $FAIL_LINE_CHARS) { $_.Substring(0, $FAIL_LINE_CHARS) + '...' } else { $_ }
+    })
+    if ($more -gt 0) { $show += ('and {0} more FAIL line(s), in the job log' -f $more) }
+    $text = ': ' + $head + "`n" + ($show -join "`n")
+    return $text.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+}
+
 function Finish-One($r, [bool]$timedOut) {
     $t = $r.T; $p = $r.P
     $left = @()
@@ -503,7 +533,7 @@ function Finish-One($r, [bool]$timedOut) {
     Write-StartLog ([ordered]@{ name = $t.Name; end = [DateTime]::UtcNow.ToString('o'); code = $code; secs = $secs; skipped = $skipped; skips = @($skips); passes = $passes })
     $path = $t.File.FullName
     if ($timedOut) { Write-Host ("::error file={0}::harness timed out after {1}s and was killed" -f $path, $t.Clock) }
-    elseif ($code -ne 0) { Write-Host ("::error file={0}::harness failed (exit {1})" -f $path, $code) }
+    elseif ($code -ne 0) { Write-Host ("::error file={0}::harness failed (exit {1}){2}" -f $path, $code, (Get-FailSaid $printed)) }
     if ($left.Count) { Write-Host ("::warning file={0}::harness left {1} process(es) running when it ended, now killed: {2}" -f $path, $left.Count, ($left -join ', ')) }
     [pscustomobject]@{ Name = $t.Name; Path = $path; Code = $code; TimedOut = $timedOut; Secs = $secs; Cpu = $cpu; Procs = $procs; Said = $printed; Clock = $t.Clock }
 }
