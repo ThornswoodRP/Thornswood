@@ -13,14 +13,26 @@
                                      address, puts it in bot.env.json and
                                      restarts the bot; nothing else is sent
 
+  WHAT IT SENDS, every file, packed into the bot's artifact below
+  (New-ThornswoodArtifact -Paths) and copied out of it: bot.py; the
+  bot_*.py modules bot.py imports (Bot-Code.ps1 reads them from its import
+  lines); _pyguard.py, the Python version check bot.py imports first, and
+  trust.py, the roots the bot trusts, two helpers the bot cannot start
+  without; card.py and its artwork, assets\join-card.png; the channel ids,
+  staff-channel.txt, dev-channel.txt and news-channel.txt; requirements.txt;
+  factions.json; and BotService.cs, the service's program, which only a
+  full run puts in service. bot\README.md names the same files, and
+  tests\test-4391-bot-install-files.ps1 holds this list, that one and the
+  artifact's together (issue #4391).
+
   What it does:
 
     1. Checks Python is on the VPS. If it is missing, downloads one pinned
        python.org 3.12 installer, checks its SHA-256, and installs it only
        when the file matches. A mismatch stops the run.
-    2. Stages bot.py, card.py and the card artwork beside the running
-       bot and checks them there, before anything is stopped (issue #446,
-       FILES below).
+    2. Stages the files under WHAT IT SENDS beside the running bot and
+       checks them there, before anything is stopped (issue #446, the files
+       part below).
     3. Installs discord.py and Pillow into py-libs beside the staged code,
        which the swap puts back with the code.
     4. Asks for the bot token at a prompt, never on a command line, and puts
@@ -93,9 +105,9 @@ param(
   # silently stopped tickets reaching the site inbox until Deploy-Docs was run
   # again. The key is kept unless you ask for a new one.
   [switch]$RotateKey,
-  # Just the code. Sends bot.py, card.py, the artwork and the live smoke's
-  # export, restarts, and leaves Python, the libraries, the token and the
-  # service alone.
+  # Just the code. Sends the files under WHAT IT SENDS but BotService.cs,
+  # restarts, and leaves Python, the libraries, the token and the service
+  # alone.
   # This is what a change to bot.py wants, and it never asks for anything,
   # so it runs unattended.
   [switch]$CodeOnly,

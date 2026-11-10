@@ -605,9 +605,18 @@ So before merging a bump, install the new pins and run `bot\tests\test-*.py` on
 them, the way [Setting up a machine](../docs/guide/set-up-a-machine.md#setting-up-a-machine)
 installs them (#1401).
 
-What goes up with it: `bot.py` and its modules, `card.py`, the channel ids, the card artwork,
-`requirements.txt`, and `factions.json`, the named factions the Faction
-Leader form reads from beside itself. A file the bot reads and this list does
+What goes up with it, every file, as `Install-Bot.ps1` packs them into the
+bot's artifact (the WHAT IT SENDS paragraph at the top of that script names
+the same, and `tests\test-4391-bot-install-files.ps1` holds the three
+together): `bot.py`; the `bot_*.py` modules `bot.py` imports
+(`scripts\deploy\Bot-Code.ps1` reads them from its import lines);
+`_pyguard.py`, the Python version check `bot.py` imports first, and
+`trust.py`, the roots the bot trusts, two helpers the bot cannot start
+without; `card.py` and its artwork, `assets\join-card.png`; the channel ids,
+`staff-channel.txt`, `dev-channel.txt` and `news-channel.txt`;
+`requirements.txt`; `factions.json`, the named factions the Faction Leader
+form reads from beside itself; and `BotService.cs`, the service's program,
+which a full run puts in `service`. A file the bot reads and this list does
 not name is a file that is only ever on main, never on the box.
 
 Nothing else stays in the bot's folder (#1184). It holds what that list sends
