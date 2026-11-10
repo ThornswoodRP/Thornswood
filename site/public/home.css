@@ -392,6 +392,10 @@ blockquote.chron cite{display:block;margin-top:14px;font:400 12px/1 var(--sans);
   letter-spacing:0;font:400 15px/1.6 var(--serif);color:var(--page)}
 .form .check input{width:16px;height:16px;accent-color:var(--gold)}
 .said{font:400 15px/1.6 var(--serif);color:var(--gold)}
+/* The result line is on the page, empty, before anything is said (#4389),
+   so it is in the accessibility tree when its words arrive. Empty, it takes
+   no room; it is never display:none, which would take it out again. */
+.said:empty{margin:0}
 
 .gallery{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
   margin-top:44px;width:100%;justify-items:stretch}
@@ -457,7 +461,10 @@ blockquote.chron cite{display:block;margin-top:14px;font:400 12px/1 var(--sans);
   border-radius:2px;font:15px/1.6 var(--serif);
   -webkit-appearance:none;appearance:none;color-scheme:dark;
   transition:border-color .12s,background .12s,box-shadow .12s}
-.gal-box .form input[type=text]::placeholder{color:var(--faint);opacity:1}
+/* --quiet, not --faint (#4389): the field is --iron, and --faint on it is
+   4.12 to 1, under the 4.5 small text needs. --quiet is 5.86 to 1 there
+   and more on the --night it turns on hover and focus. */
+.gal-box .form input[type=text]::placeholder{color:var(--quiet);opacity:1}
 .gal-box .form input[type=text]:hover{border-color:var(--edge2);background:var(--night)}
 .gal-box .form input[type=text]:focus{outline:none;border-color:var(--gold);
   background:var(--night);box-shadow:0 0 0 1px rgba(201,162,75,.28)}

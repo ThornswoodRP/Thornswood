@@ -137,7 +137,8 @@ yes('By and Note inputs use charcoal iron night theme',
     /\.gal-box \.form input\[type=text\]\{[^}]*background:var\(--iron\)/.test(home) &&
     /\.gal-box \.form input\[type=text\]\{[^}]*color-scheme:dark/.test(home) &&
     /\.gal-box \.form input\[type=text\]:focus\{[^}]*border-color:var\(--gold\)/.test(home) &&
-    /::placeholder\{[^}]*color:var\(--faint\)/.test(home) &&
+    // --quiet since #4389: --faint was 4.12 to 1 on the --iron field.
+    /::placeholder\{[^}]*color:var\(--quiet\)/.test(home) &&
     /placeholder="a name for the caption"/.test(home) &&
     /placeholder="a short note for staff"/.test(home));
 yes('form gap keeps By Note off the drop zone and Send it',
