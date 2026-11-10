@@ -591,6 +591,10 @@ issue where the card did.
   whose answer was never read no longer ends 0.**
   (dec_GPtrPA_9atgZaXlwDBqVHA) 9 Nov 2026,
   [#3399](https://github.com/ThornswoodRP/Thornswood/issues/3399#issuecomment-6758734435).
+- **#5687 stays on main though it merged without a card: Dependabot's
+  setup-dotnet 6.1.0 and codeql-action 4.39.3 bump in eight workflow
+  files.** (dec_o8Az6nut5J7lUo99oiexkQ) 9 Nov 2026,
+  [#5723](https://github.com/ThornswoodRP/Thornswood/issues/5723#issuecomment-6760570918).
 
 ### Languages and code
 
