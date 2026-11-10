@@ -106,7 +106,10 @@ if ($gu) {
         if (Test-Path -LiteralPath $dk) { $deploy = @([IO.File]::ReadAllLines($dk) | Where-Object { $_.Trim() }) }
     }
 }
-$mine = Select-Named $have $Name
+# Each kept in @(): a function hands back one line as a string, not a list
+# of one, and [0] of a string is its first letter (gate run
+# 20261110-181821-a3732f stopped on that at its read back).
+$mine = @(Select-Named $have $Name)
 $elsewhere = @(@(Select-Holding $have $blob | Where-Object { $mine -notcontains $_ }) + @(Select-Holding $deploy $blob))
 if ($elsewhere.Count) { Die 'that key is already on the box under another name, and a key is never on the box twice with different rules. Nothing was changed.' }
 $newLine = Get-KeyLine $bare $Name
@@ -138,7 +141,7 @@ try {
     # Read back: every other line as it was, and this name's as main has it.
     $now = @([IO.File]::ReadAllLines($KeysFile) | Where-Object { $_.Trim() })
     if ((@($now | Where-Object { $_ -cne $newLine }) -join "`n") -cne ($others -join "`n")) { Die "$KeysFile does not read back with every other line as it was. It is put back as it was." }
-    $nowMine = Select-Named $now $Name
+    $nowMine = @(Select-Named $now $Name)
     if ($nowMine.Count -ne 1 -or $nowMine[0] -cne $newLine) { Die "$KeysFile does not read back with main's line alone for thornswood-$Name. It is put back as it was." }
     if (([IO.File]::ReadAllText($TokenFile)).Trim() -cne $digest) { Die "the token file for $Name does not read back as written. It is put back as it was." }
     $done = $true
