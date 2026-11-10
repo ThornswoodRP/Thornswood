@@ -22,6 +22,11 @@
     3. A run that names nothing exits 0 and one that names something exits 1,
        with the lines the step used to print.
     4. nightly.yml runs the script and the inline step is gone.
+    5. The engine fork (#4142): a run whose strays are only in
+       ThornswoodRP/skymp, a pull request nine days old and a branch with no
+       pull request, names both as the fork's, and leaves out a young pull
+       request, a branch with its pull request, and the fork's long-lived
+       main and thornswood/engine-changes.
   Never connects to anything.
 #>
 [CmdletBinding()]
@@ -47,6 +52,8 @@ function Done {
 
 $script:Branches = @()
 $script:Pulls = @()
+$script:ForkBranches = @()
+$script:ForkPulls = @()
 $script:Asked = New-Object System.Collections.ArrayList
 $now = [DateTime]::UtcNow
 
@@ -56,17 +63,19 @@ $now = [DateTime]::UtcNow
 function Invoke-RestMethod {
     param([string]$Method = 'GET', $Headers, [string]$Uri, $Body, [string]$ContentType)
     [void]$script:Asked.Add($Uri)
-    $m = [regex]::Match($Uri, '/repos/[^/]+/[^/]+/(branches|pulls)(\?.*)?$')
+    $m = [regex]::Match($Uri, '/repos/([^/]+/[^/]+)/(branches|pulls)(\?.*)?$')
     if (-not $m.Success) { throw ('the stand-in does not answer ' + $Uri) }
     $q = @{}
-    foreach ($kv in ($m.Groups[2].Value.TrimStart('?') -split '&')) {
+    foreach ($kv in ($m.Groups[3].Value.TrimStart('?') -split '&')) {
         if (-not $kv) { continue }
         $p = $kv -split '=', 2
         $q[$p[0]] = $p[1]
     }
     $per = if ($q.ContainsKey('per_page')) { [int]$q['per_page'] } else { 30 }
     $page = if ($q.ContainsKey('page')) { [int]$q['page'] } else { 1 }
-    $list = if ($m.Groups[1].Value -eq 'branches') { $script:Branches } else { $script:Pulls }
+    # The fork answers from its own lists (#4142); every other repository from these.
+    $fork = $m.Groups[1].Value -eq 'ThornswoodRP/skymp'
+    $list = if ($m.Groups[2].Value -eq 'branches') { if ($fork) { $script:ForkBranches } else { $script:Branches } } else { if ($fork) { $script:ForkPulls } else { $script:Pulls } }
     $from = ($page - 1) * $per
     $slice = @()
     if ($from -lt $list.Count) { $slice = @($list[$from..([Math]::Min($list.Count, $from + $per) - 1)]) }
@@ -137,15 +146,25 @@ Yes 'one held only in its title is still old' (@($found.OldPulls | ForEach-Objec
 # The script run as the nightly runs it, in a process of its own, over a
 # stand-in that answers one page of the branches named here and no pulls.
 $probe = @'
-param([string]$ScriptPath, [string]$Names)
+param([string]$ScriptPath, [string]$Names, [string]$ForkNames = '', [string]$ForkPullList = '')
 $ErrorActionPreference = 'Stop'
 # Global, not script: the stand-in is called from inside Nightly-Stray.ps1,
 # whose own script scope is the one $script: would read there.
-$global:StrayBranches = @($Names -split ',' | ForEach-Object { [pscustomobject]@{ name = $_ } })
+$global:StrayBranches = @($Names -split ',' | Where-Object { $_ } | ForEach-Object { [pscustomobject]@{ name = $_ } })
+$global:ForkBranches = @($ForkNames -split ',' | Where-Object { $_ } | ForEach-Object { [pscustomobject]@{ name = $_ } })
+# A fork pull request as number:branch:days old. The parameters are named
+# apart from the globals: under -File the probe's own scope is the global
+# one, and a [string] parameter of the same name would turn the list into text.
+$global:ForkPulls = @($ForkPullList -split ',' | Where-Object { $_ } | ForEach-Object {
+    $f = $_ -split ':'
+    [pscustomobject]@{ number = [int]$f[0]; title = ('engine work on ' + $f[1]); created_at = [DateTime]::UtcNow.AddDays(-[int]$f[2]).ToString('o'); head = [pscustomobject]@{ ref = $f[1] } } })
 function Invoke-RestMethod {
     param([string]$Method = 'GET', $Headers, [string]$Uri)
     $list = @()
-    if ($Uri -match '/branches' -and $Uri -match 'page=1$') { $list = $global:StrayBranches }
+    $fork = $Uri -match '/repos/ThornswoodRP/skymp/'
+    # @() around each: an if that yields an empty list yields $null, which @($list) would hand on as one item.
+    if ($Uri -match '/branches' -and $Uri -match 'page=1$') { $list = @(if ($fork) { $global:ForkBranches } else { $global:StrayBranches }) }
+    if ($Uri -match '/pulls' -and $Uri -match 'page=1$' -and $fork) { $list = @($global:ForkPulls) }
     Write-Output -NoEnumerate @($list)
 }
 $env:REPO = 'x/y'; $env:GH_TOKEN = 'not-a-real-token'
@@ -163,6 +182,20 @@ try {
     $code1 = $LASTEXITCODE
     Yes ('a run that names a branch exits 1 (exit {0})' -f $code1) ($code1 -eq 1)
     Yes '  with the lines the step always printed' ($out -match '::error::branch old/thing has no open pull request' -and $out -match '0 old pull request\(s\), 1 stray branch\(es\)')
+
+    # ---- 5. the engine fork (#4142) ------------------------------------------
+    # Nothing stray here, and in the fork: a pull request open nine days, one
+    # open a day, a branch with no pull request, and its two long-lived
+    # branches. The run must read the fork and name both strays there.
+    $out = & $ps -NoProfile -File $probeFile -ScriptPath $scriptPath -Names 'main' -ForkNames 'main,thornswood/engine-changes,fix/equip-drop,lane/old-spawn,lane/new' -ForkPullList '152:fix/equip-drop:9,160:lane/new:1' 2>&1 | Out-String
+    $code5 = $LASTEXITCODE
+    Yes ('a run with strays only in the fork exits 1 (exit {0})' -f $code5) ($code5 -eq 1)
+    Yes '  it names the fork''s pull request open nine days, as the fork''s' ($out -match '::error::pull request ThornswoodRP/skymp#152 has been open since')
+    Yes '  and the fork''s branch with no pull request, as the fork''s' ($out -match '::error::branch of ThornswoodRP/skymp lane/old-spawn has no open pull request')
+    Yes '  and nothing else: not the one a day old, nor a branch with its pull request, nor the long-lived two' (
+        $out -notmatch 'skymp#160' -and $out -notmatch 'skymp (fix/equip-drop|lane/new|main|thornswood/engine-changes) has no' -and
+        $out -match '1 old pull request\(s\), 1 stray branch\(es\)')
+    Yes '  and says it read the fork' ($out -match 'ThornswoodRP/skymp: read 3 branch\(es\) other than main and thornswood/engine-changes and 2 open pull request\(s\)')
 } finally {
     Remove-Item -LiteralPath $probeFile -Force -ErrorAction SilentlyContinue
 }
