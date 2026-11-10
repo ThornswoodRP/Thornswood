@@ -64,15 +64,17 @@ namespace Thornswood
         {
             var got = new Count();
             got.Max = fallbackMax;
+            string url = "";
+            string why = null;
             try
             {
                 if (cfg != null && !string.IsNullOrEmpty(cfg.ServerAddress) && resourcePort > 0)
                 {
-                    string url = "http://" + cfg.ServerAddress + ":" + resourcePort + "/online.json";
+                    url = "http://" + cfg.ServerAddress + ":" + resourcePort + "/online.json";
                     // A server that is up but has not written the file yet
                     // should not hold the page for thirty seconds: the answer
                     // has 2.5 seconds to start (Http).
-                    byte[] raw = Http.GetOrNull(url, 2500, Http.DefaultReadMs);
+                    byte[] raw = Http.GetOrNull(url, 2500, Http.DefaultReadMs, out why);
                     if (raw != null)
                     {
                         int at = 0;
@@ -84,6 +86,7 @@ namespace Thornswood
                             got.Known = true;
                             got.Now = int.Parse(m.Groups[1].Value);
                         }
+                        else why = "its online.json has no count in it";
                         // The most the server holds at once, in its own
                         // words (#481), over the feed's copy of it.
                         var mx = System.Text.RegularExpressions.Regex.Match(text, "\"max\"\\s*:\\s*(\\d+)");
@@ -92,8 +95,36 @@ namespace Thornswood
                     }
                 }
             }
-            catch (Exception ex) { Swallow.Note("Online.AskPort", ex); }
+            catch (Exception ex) { why = ex.GetType().Name + ": " + ex.Message; Swallow.Note("Online.AskPort", ex); }
+            SayWhenItChanges(resourcePort, url, why);
             return got;
+        }
+
+        // What the last ask of each port came back with: null when it read.
+        static readonly System.Collections.Generic.Dictionary<int, string> lastWhy = new System.Collections.Generic.Dictionary<int, string>();
+
+        /// <summary>
+        /// The headcount's reason in launcher.log (#4350). It went to nothing,
+        /// so "room for 30" on a server that was down, refusing or answering
+        /// 404 looked the same as one that had not said yet. Asked every ten
+        /// seconds and on every dropdown, so a line goes in when the answer
+        /// changes (it fails, it fails another way, it reads again) and not on
+        /// every ask while it stays the same.
+        /// </summary>
+        static void SayWhenItChanges(int port, string url, string why)
+        {
+            string was;
+            lock (lastWhy)
+            {
+                if (!lastWhy.TryGetValue(port, out was)) was = null;
+                if (string.Equals(was, why, StringComparison.Ordinal)) return;
+                lastWhy[port] = why;
+            }
+            if (why != null)
+                Swallow.Say("Online.AskPort", "how many are awake could not be read from " + url + ": " + why +
+                    ". The Play page shows the seats alone until it reads. Said again when that changes.");
+            else if (was != null)
+                Swallow.Say("Online.AskPort", "how many are awake reads again from " + url + ".");
         }
 
         /// <summary>What to put on the Play page. Empty when there is nothing worth saying.</summary>

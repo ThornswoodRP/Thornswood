@@ -662,7 +662,7 @@ namespace Thornswood
                     if (string.Equals(Path.GetFileName(f), leaf, StringComparison.OrdinalIgnoreCase)) continue;
                     string[] all;
                     try { all = File.ReadAllLines(f); }
-                    catch { continue; }
+                    catch (Exception ex) { Swallow.Note("Updater.ClaimedElsewhere, reading " + f, ex); continue; }
                     foreach (string raw in all)
                     {
                         string line = raw.Trim();
@@ -693,7 +693,7 @@ namespace Thornswood
                 if (string.IsNullOrEmpty(src)) return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 return OwnGame.DeployedIn(src);
             }
-            catch { return new HashSet<string>(StringComparer.OrdinalIgnoreCase); }
+            catch (Exception ex) { Swallow.Note("Updater.DeployedNow", ex); return new HashSet<string>(StringComparer.OrdinalIgnoreCase); }
         }
 
         /// <summary>
@@ -896,7 +896,7 @@ namespace Thornswood
                                 // passes the test, and Delete is what resolves
                                 // it, outside the game.
                                 try { target = Path.GetFullPath(Path.Combine(Paths.Game, rel)); }
-                                catch { continue; }
+                                catch (Exception ex) { Swallow.Note("Updater.Install, resolving " + rel, ex); continue; }
                                 if (!PathFence.Inside(target, Paths.Game)) continue;
                                 try { if (File.Exists(target)) { File.Delete(target); log("removed " + line); } } catch (Exception ex) { Swallow.Note("Updater.Install, delete", ex); }
                                 removed.Add(rel);
@@ -1092,7 +1092,7 @@ namespace Thornswood
                             break;
                         }
                     }
-                    catch { continue; }
+                    catch (Exception ex) { Swallow.Note("Updater.Requeue, reading " + list, ex); continue; }
                     if (headed) continue;
                     Unapply(id);
                     try { File.Delete(list); } catch (Exception ex) { Swallow.Note("Updater.Requeue, delete", ex); }
@@ -1170,7 +1170,7 @@ namespace Thornswood
 
                 string full;
                 try { full = Path.GetFullPath(Path.Combine(fence, rel)); }
-                catch { continue; }
+                catch (Exception ex) { Swallow.Note("Updater.RemovePack, resolving " + rel, ex); continue; }
                 if (!PathFence.Inside(full, fence)) continue;
 
                 try
@@ -1190,7 +1190,7 @@ namespace Thornswood
                     if (PathFence.Inside(full, Paths.Game))
                         removed.Add(full.Substring(Paths.Game.TrimEnd('\\', '/').Length).TrimStart('\\', '/'));
                 }
-                catch { stuck++; }
+                catch (Exception ex) { stuck++; Swallow.Note("Updater.RemovePack, removing " + full, ex); }
             }
 
             // Folders the pack brought with it and nothing else is using.

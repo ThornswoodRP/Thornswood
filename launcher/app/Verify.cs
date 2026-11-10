@@ -542,12 +542,26 @@ namespace Thornswood
                 return manifestCache;
             if (manifestFailedFrom == url && (DateTime.UtcNow - manifestFailedAt).TotalSeconds < 60)
                 return null;
-            byte[] raw = Get(url, 4000);
-            if (raw == null) { manifestFailedFrom = url; manifestFailedAt = DateTime.UtcNow; return null; }
+            // Each way this comes back empty says why in launcher.log
+            // (#4350). It said nothing, so a Play refused for "the server's
+            // list could not be read" left no line to say whether the server
+            // was down, answered 404 or sent a list that did not parse.
+            string why;
+            byte[] raw = Http.GetOrNull(url, 4000, 4000, out why);
+            if (raw == null)
+            {
+                manifestFailedFrom = url; manifestFailedAt = DateTime.UtcNow;
+                Swallow.Say("Verify.Manifest", "the server's mod list could not be read from " + url + ": " + why);
+                return null;
+            }
             try
             {
                 ServerManifest doc = JsonSerializer.Deserialize(raw, ServerManifestJson.Default.ServerManifest);
-                if (doc == null || doc.mods == null || doc.mods.Length == 0) return null;
+                if (doc == null || doc.mods == null || doc.mods.Length == 0)
+                {
+                    Swallow.Say("Verify.Manifest", "the server's mod list at " + url + " names no mods (" + raw.Length + " bytes)");
+                    return null;
+                }
                 var served = new HashSet<string>(doc.served ?? new string[0], StringComparer.OrdinalIgnoreCase);
                 ServerMod[] light = doc.light ?? new ServerMod[0];
                 // Full and light alike (#2627): Thornswood-Last.esp is ours and
@@ -563,7 +577,12 @@ namespace Thornswood
                 manifestFailedFrom = "";
                 return doc.mods;
             }
-            catch { manifestFailedFrom = url; manifestFailedAt = DateTime.UtcNow; return null; }
+            catch (Exception ex)
+            {
+                manifestFailedFrom = url; manifestFailedAt = DateTime.UtcNow;
+                Swallow.Note("Verify.Manifest, reading the server's mod list from " + url, ex);
+                return null;
+            }
         }
 
         /// <summary>Every plugin whose size or crc32 is not the server's, as blocking issues that carry what Fix needs.</summary>
@@ -1085,12 +1104,6 @@ namespace Thornswood
             while ((n = s.Read(buf, 0, buf.Length)) > 0)
                 for (int i = 0; i < n; i++) crc = crcTable[(crc ^ buf[i]) & 0xFF] ^ (crc >> 8);
             return (int)(crc ^ 0xFFFFFFFFu);
-        }
-
-        // ms for the answer to start and ms for each read of it (Http).
-        static byte[] Get(string url, int ms)
-        {
-            return Http.GetOrNull(url, ms, ms);
         }
 
         /// <summary>
