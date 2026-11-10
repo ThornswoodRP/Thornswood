@@ -59,6 +59,11 @@ $Cfg = Join-Path $Box 'vm.json'
 $Sent = Join-Path $Box 'sent.txt'
 $Log = Join-Path $Box 'send.log'
 $Name = '^thornswood-\d{8}-\d{6}\.zip\.enc$'
+# The event that starts the send: Task Scheduler's 102 ("task completed") for
+# the nightly, in its Operational log. -Install subscribes the task to it and
+# -Status asks the log the same question, so both read one query.
+$TaskLog = 'Microsoft-Windows-TaskScheduler/Operational'
+$Ended = "<QueryList><Query Id='0' Path='$TaskLog'><Select Path='$TaskLog'>*[System[(EventID=102)]] and *[EventData[Data[@Name='TaskName']='\$BackupTask']]</Select></Query></QueryList>"
 function Say($m) { Write-Host $m }
 function Note($m) {
   Say $m
@@ -78,6 +83,14 @@ if ($Status) {
   $t = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
   if ($t) { $i = Get-ScheduledTaskInfo -TaskName $TaskName; Say ('task       ' + $t.State + ', last ran ' + $i.LastRunTime + ' result ' + $i.LastTaskResult) }
   else { Say 'task       NOT REGISTERED' }
+  # Whether Windows writes the event the task waits for: on 10 Nov 2026 the
+  # task had never run, though the nightly ended with 0 at 1:18 AM.
+  try {
+    $l = Get-WinEvent -ListLog $TaskLog -ErrorAction Stop
+    Say ('task log   ' + $(if ($l.IsEnabled) { 'on' } else { 'OFF, so no "task completed" event is written and nothing starts this task' }) + ', ' + $l.RecordCount + ' events')
+  } catch { Say ('task log   could not be read: ' + $_.Exception.Message) }
+  $ends = @(Get-WinEvent -FilterXml ([xml]$Ended) -MaxEvents 3 -ErrorAction SilentlyContinue)
+  Say ('ends seen  ' + $ends.Count + ' of ' + $BackupTask + $(if ($ends.Count) { ', newest ' + $ends[0].TimeCreated }))
   $s = @(Get-Content -LiteralPath $Sent -ErrorAction SilentlyContinue | Where-Object { $_ })
   Say ('sent       ' + $s.Count + $(if ($s.Count) { ', newest ' + $s[-1] }))
   if (Test-Path -LiteralPath $Log) { Say '--- send.log, last 10 ---'; Get-Content -LiteralPath $Log -Tail 10 | ForEach-Object { Say $_ } }
@@ -121,7 +134,7 @@ if ($Install) {
   Copy-Item -LiteralPath (Join-Path $Here 'Restore-Backup.ps1') -Destination (Join-Path $Box 'Restore-Backup.ps1') -Force
   # Started by the nightly's own end: Task Scheduler writes event 102 ("task
   # completed") in its Operational log when \Thornswood Backup finishes.
-  $q = "<QueryList><Query Id='0' Path='Microsoft-Windows-TaskScheduler/Operational'><Select Path='Microsoft-Windows-TaskScheduler/Operational'>*[System[(EventID=102)]] and *[EventData[Data[@Name='TaskName']='\$BackupTask']]</Select></Query></QueryList>"
+  $q = $Ended
   $class = Get-CimClass -ClassName MSFT_TaskEventTrigger -Namespace Root/Microsoft/Windows/TaskScheduler
   $trigger = New-CimInstance -CimClass $class -ClientOnly
   $trigger.Subscription = $q
