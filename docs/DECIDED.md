@@ -380,6 +380,11 @@ link, and the old line goes.
 - **Switching characters in game works any time out of combat, after a 10 s
   wait in place.** 22 Oct 2026,
   [#3128](https://github.com/EvilPatrick06/Thornswood/issues/3128#issuecomment-6335276791).
+- **The instruments people own are Skyrim's own Flute, Lute and Drum, which
+  the Woodwright makes and the emotes ask for, not the weapon versions whose
+  equip needs scripts that never run here.** (dec_r21vliheEhG_HfJkLecbEA)
+  9 Nov 2026,
+  [#4509](https://github.com/ThornswoodRP/Thornswood/issues/4509#issuecomment-6758696252).
 
 ## The site
 
