@@ -8,13 +8,15 @@
   Whether the plugin rules the Nexus collection carries hold a clean install
   to a plugin list's order. Entry 274 on the To Do List.
 
-  WHY IT EXISTS. Revisions 2 to 4 of the collection carried no plugin rules at
-  all, so a first-time person installed, got whatever order LOOT picked,
-  pressed Play and was refused. Revision 5, on 22 September, carries 51 "load
-  after" rules, one chain over the 52 full plugins from Water for ENB.esm to
-  Playable Rieklings.esp. LOOT treats those as hard constraints, so a sort can
-  put other plugins between them but cannot swap two of them, and that day a
-  Sort Now put all 52 in exactly the server's order.
+  WHY IT EXISTS. Revisions 2 to 4 of the old ombo2a collection carried no
+  plugin rules at all, so a first-time person installed, got whatever order
+  LOOT picked, pressed Play and was refused. ombo2a's revision 5, on
+  22 September, carried 51 "load after" rules, one chain over the 52 full
+  plugins from Water for ENB.esm to Playable Rieklings.esp. LOOT treats those
+  as hard constraints, so a sort can put other plugins between them but cannot
+  swap two of them, and that day a Sort Now put all 52 in exactly the server's
+  order. The collection is 7essxf now (docs\COLLECTION-REVISIONS.md says which
+  revision), and its rules are read the same way.
 
   What the chain cannot do is look after itself. The entry says it plainly: "A
   PLUGIN ADDED LATER IS NOT PINNED UNTIL SOMEBODY GIVES IT A RULE. ... Forget
@@ -43,7 +45,7 @@
   "before" rules are read. A collection that ordered plugins by LOOT groups
   instead would be reported as floating: a false alarm, never a quiet pass.
 
-  MEASURED 24 SEPTEMBER on Patrick's machine, against revision 5. The list the
+  MEASURED 24 SEPTEMBER on Patrick's machine, against ombo2a's revision 5. The list the
   dev server runs (the 23 September 22:46 dev pack's profile\plugins.txt,
   byte for byte the same as %LOCALAPPDATA%\Skyrim Special Edition\plugins.txt)
   passes: 94 enabled, 52 full, all 52 named, 51 pairs held. The reference copy

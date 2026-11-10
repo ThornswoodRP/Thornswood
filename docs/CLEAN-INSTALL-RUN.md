@@ -507,9 +507,10 @@ right or wrong. To Do entries are named by title, because their numbers move.
   missing, and the launcher should put them back by itself
   (`HealClientBackground` in `launcher\app\Shell.cs`). Row 42 records whether it
   did and how long it took.
-- **The load order matches the server (row 49).** This is the proof owed by "The
-  Nexus collection carries the plugin order from revision 5, and what is left is
-  proving a clean install matches the server".
+- **The load order matches the server (row 49).** The Nexus collection, 7essxf,
+  carries the plugin order in its "load after" rules
+  (`scripts\mods\Check-CollectionRules.ps1` reads them), and this row is the
+  proof that a clean install lands in the server's order.
 - **An old README in the scratch folder (row 25).** The installer unpacks into
   `C:\Thornswood-setup` with a READ ME FIRST.txt that still describes the old
   multiplayer mod's installer and says no Nexus account or Vortex is needed. The launcher

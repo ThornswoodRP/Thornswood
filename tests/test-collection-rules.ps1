@@ -6,8 +6,9 @@
   Check-CollectionRules.ps1, which reads the plugin rules the Nexus collection
   carries against a plugin list. Entry 274 on the To Do List.
 
-  WHY. Revision 5 of the collection pins the 52 full plugins in one chain of
-  "load after" rules, and LOOT will not swap two of them. The entry's trap is
+  WHY. Revision 5 of the old ombo2a collection pinned the 52 full plugins in
+  one chain of "load after" rules, and LOOT will not swap two of them. 7essxf,
+  the collection now, carries its own rules, read the same way. The entry's trap is
   what happens next: "A PLUGIN ADDED LATER IS NOT PINNED UNTIL SOMEBODY GIVES
   IT A RULE. ... Forget that and the new plugin floats, which is the same load
   order mismatch this entry exists to stop, arriving one revision later with
@@ -206,7 +207,7 @@ try {
     $data = Join-Path $root 'Data'
     $null = New-Item -ItemType Directory -Force -Path $data
 
-    # The real names, a slice of revision 5's chain.
+    # The real names, a slice of the chain ombo2a's revision 5 carried.
     Plugin $data 'Water for ENB.esm' 0x1
     Plugin $data 'Embers XD.esm' 0x1
     Plugin $data 'RaceCompatibility.esm' 0x1
@@ -225,9 +226,9 @@ try {
     Plugin $data 'Gamma.esp' 0
     Plugin $data 'LightMid.esp' 0x200
 
-    # Revision 5's shape: one chain, lsfx after two plugins as the real one
-    # is, and one rule naming a base master, which the game puts first
-    # whatever any list says and no plugin list enables.
+    # The shape of ombo2a's revision 5: one chain, lsfx after two plugins as
+    # the real one is, and one rule naming a base master, which the game puts
+    # first whatever any list says and no plugin list enables.
     $chain = @(
         @{ name = 'water for enb.esm'; after = @('skyrim.esm') },
         @{ name = 'embers xd.esm'; after = @('water for enb.esm') },
@@ -291,7 +292,8 @@ try {
     $withoutMid = Join-Path $root 'lists\without-mid.txt'
     PluginList $withoutMid @('*Alpha.esp', '*Beta.esp')
 
-    # "before" rules, which Vortex's format allows though revision 5 has none.
+    # "before" rules, which Vortex's format allows though ombo2a's revision 5
+    # had none.
     $beforeCol = Join-Path $root 'col-before\collection.json'
     Collection $beforeCol @( @{ name = 'alpha.esp'; before = @('beta.esp') } )
     $ab = Join-Path $root 'lists\ab.txt'
@@ -301,10 +303,12 @@ try {
 
     # A machine: Vortex's staging folder with two revisions of ours and a
     # newer one of somebody else's, and a Thornswood root with the reference.
+    # The folder names are Vortex's old shape, collection_<slug>_<revision>_<when>;
+    # the times are made up, on the day 7essxf's revisions 4 and 5 came out.
     $appData = Join-Path $root 'AppData'
     $mods = Join-Path $appData 'Vortex\skyrimse\mods'
-    Collection (Join-Path $mods 'collection_7essxf_4_2026-09-20T10-00-00Z\collection.json') $null
-    Collection (Join-Path $mods 'collection_7essxf_5_2026-09-22T22-26-11Z\collection.json') $chain
+    Collection (Join-Path $mods 'collection_7essxf_4_2026-10-21T10-00-00Z\collection.json') $null
+    Collection (Join-Path $mods 'collection_7essxf_5_2026-10-21T12-00-00Z\collection.json') $chain
     Collection (Join-Path $mods 'collection_other1_9_2026-09-23T10-00-00Z\collection.json') $null
     $machine = Join-Path $root 'Thornswood'
     PluginList (Join-Path $machine 'Profile\Default\plugins.txt') $server
@@ -480,7 +484,7 @@ try {
         $r = Run @('-Root', $machine)
         Yes 'with no config.json, the launcher''s own collection is read, its newest revision (exit 0)' ($r.Code -eq 0)
         Yes 'and it says revision 5' (Has $r.Out 'revision 5,')
-        Yes 'from revision 5''s folder, not revision 4''s' (Has $r.Out 'collection_7essxf_5_2026-09-22T22-26-11Z')
+        Yes 'from revision 5''s folder, not revision 4''s' (Has $r.Out 'collection_7essxf_5_2026-10-21T12-00-00Z')
         Yes 'and the reference under Profile\Default is the list it checked' (Has $r.Out (Join-Path $machine 'Profile\Default\plugins.txt'))
 
         $r = Run @('-Root', $machineOther)
