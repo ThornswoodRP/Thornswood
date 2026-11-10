@@ -11,8 +11,9 @@
   collection and the folder-name reader could no longer find a number.
 
   WHAT HAPPENED ON 22 SEPTEMBER. Get-CollectionNewest only knew ONE shape, the
-  transition text "newestVersion","from":"3","to":"4". The moment revision 5
-  was installed there was no transition left, the regex matched nothing, and
+  transition text "newestVersion","from":"3","to":"4". The moment the old
+  ombo2a collection's revision 5 was installed there was no transition left,
+  the regex matched nothing, and
   the function answered 0. Behind is false when either number is unknown, so
   the gate that had been added the day before to stop a stale collection
   reaching the server passed without checking anything. The fix then was a

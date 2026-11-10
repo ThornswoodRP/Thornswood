@@ -122,9 +122,10 @@ namespace Thornswood
         ///
         /// WHERE THE NUMBER COMES FROM, and why this was rewritten on
         /// 27 September. The first version read the revision out of the name
-        /// Vortex gave the mod folder:
+        /// Vortex gave the mod folder, here the old ombo2a collection's
+        /// revision 2:
         ///
-        ///     %APPDATA%\Vortex\skyrimse\mods\collection_7essxf_2_2026-09-15T21-08-00Z
+        ///     %APPDATA%\Vortex\skyrimse\mods\collection_ombo2a_2_2026-09-15T21-08-00Z
         ///                                               slug  ^ revision
         ///
         /// Current Vortex does not name the folder that way any more. It names
