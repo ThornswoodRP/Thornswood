@@ -50,6 +50,11 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'Windows.ps1')
+# The runner reads the processor from Windows or from /proc/stat, so where
+# neither is there it cannot run, and parts 1 to 7, which run it, say NOT
+# RUN rather than fail one after another as if it were broken (#5737).
+$runnerRuns = $OnWindows -or (Test-Path -LiteralPath '/proc/stat')
 $runner = Join-Path $repo 'scripts\dev\Nightly-Harnesses.ps1'
 $merge = Join-Path $repo 'scripts\dev\Merge-HarnessReports.ps1'
 
@@ -66,14 +71,34 @@ function Put([string]$path, [string]$text) {
     $null = [IO.Directory]::CreateDirectory((Split-Path -Parent $path))
     [IO.File]::WriteAllText($path, $text, $utf8)
 }
+# A runner that ends with anything but 0 (all passed) or 1 (something
+# failed) did not end as a runner ends: it was killed, or its runtime gave up
+# (134 is SIGABRT). The case it was run for fails then for that reason, and
+# only its own lines would say why, but they are in the job log, which is too
+# big for a Bot to read (#5737). So the run's own last lines are said as
+# FAIL lines, which the gate's annotation carries (#5660): first any that
+# name an abort or an unhandled exception, then the end of what it printed.
+function Say-Ended([string]$what, [int]$code, [string]$said) {
+    if ($code -eq 0 -or $code -eq 1) { return }
+    Yes ($what + ' ended as a runner never does, with exit ' + $code + '; what it said last follows') $false
+    $lines = @($said -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $why = @($lines | Where-Object { $_ -match 'Unhandled exception|Fatal error|Abort|Exception|Segmentation|core dumped' } | Select-Object -First 4)
+    $last = @($lines | Select-Object -Last (8 - $why.Count))
+    foreach ($l in @($why + @($last | Where-Object { $why -notcontains $_ }))) { Write-Host ('FAIL    ' + $what + ' said: ' + $l) }
+    if (-not $lines.Count) { Write-Host ('FAIL    ' + $what + ' said nothing') }
+}
 function Run([string]$root, [string[]]$more) {
     $out = Join-Path $work ('out-' + [Guid]::NewGuid().ToString('N'))
-    $said = @(& pwsh -NoProfile -NonInteractive -File $runner -Root $root -OutDir $out @more 2>&1 | ForEach-Object { "$_" })
-    return @{ Code = $LASTEXITCODE; Said = ($said -join "`n") }
+    $said = @(& (Get-BoxPowerShell) -NoProfile -NonInteractive -File $runner -Root $root -OutDir $out @more 2>&1 | ForEach-Object { "$_" })
+    $code = $LASTEXITCODE
+    Say-Ended ('the runner (' + ($more -join ' ') + ')') $code ($said -join "`n")
+    return @{ Code = $code; Said = ($said -join "`n") }
 }
 function Merge([string[]]$more) {
-    $said = @(& pwsh -NoProfile -NonInteractive -File $merge @more 2>&1 | ForEach-Object { "$_" })
-    return @{ Code = $LASTEXITCODE; Said = ($said -join "`n") }
+    $said = @(& (Get-BoxPowerShell) -NoProfile -NonInteractive -File $merge @more 2>&1 | ForEach-Object { "$_" })
+    $code = $LASTEXITCODE
+    Say-Ended ('the merge (' + ($more -join ' ') + ')') $code ($said -join "`n")
+    return @{ Code = $code; Said = ($said -join "`n") }
 }
 function Load([string]$file) {
     $d = New-Object System.Xml.XmlDocument
@@ -96,6 +121,9 @@ function Cases($suite) {
 try {
     # ---- 1 to 3. one share, every kind of harness ---------------------------------
     $a = Join-Path $work 'kinds'
+    if (-not $runnerRuns) {
+        Write-Host 'NOT RUN  1 to 7. the runner and the merge, end to end: this machine has neither Windows nor /proc/stat, which the runner reads the processor from'
+    } else {
     $odd = 'quotes "x" and ''y'', <tags> & a | bar'
     Put (Join-Path $a 'tests\test-1-mixed.js') ("console.log('PASS  one thing');`n" +
         "console.log('  FAIL indented, with no two spaces');`n" +
@@ -194,6 +222,23 @@ try {
     Yes "   a second run adds its own section after the first, a share's own title by default (exit $($r.Code))" ($r.Code -eq 0 -and $md -match '(?m)^## Harnesses, share 1 of 1\s*$' -and $md.IndexOf('## Gate harnesses, share 2 of 5') -lt $md.IndexOf('## Harnesses, share 1 of 1'))
     $rg = [IO.File]::ReadAllText((Join-Path $repo 'scripts\dev\Run-Gate.ps1'))
     Yes '7. Run-Gate.ps1 hands -Summary on, titled "Gate harnesses, share n of m"' ($rg -match "\`$with\.Summary = \`$Summary" -and $rg -match [regex]::Escape("'Gate harnesses, share {0} of {1}' -f `$Shard, `$Of"))
+    }
+
+    # ---- 9. a runner that ends as no runner does says why (#5737) ---------------
+    # Say-Ended with what an abort prints; its FAIL lines taken, and the count
+    # it adds to put back, so only the checks below count here.
+    $failWas = $script:fail
+    $aborted = "PASS  one`nreading the record`nUnhandled exception. System.InvalidOperationException: the handle is gone`n   at Somewhere()`nAborted (core dumped)"
+    $said9 = @(Say-Ended 'the runner (-Summary page.md)' 134 $aborted 6>&1 | ForEach-Object { "$_" })
+    $added = $script:fail - $failWas
+    $script:fail = $failWas
+    Yes ('9. a runner that ends with 134 is a failure that says so (' + ($said9 -join ' / ') + ')') ($added -eq 1 -and $said9[0] -eq 'FAIL  the runner (-Summary page.md) ended as a runner never does, with exit 134; what it said last follows')
+    Yes '   naming the abort and the unhandled exception first, then its last lines' (
+        $said9[1] -eq 'FAIL    the runner (-Summary page.md) said: Unhandled exception. System.InvalidOperationException: the handle is gone' -and
+        $said9[2] -eq 'FAIL    the runner (-Summary page.md) said: Aborted (core dumped)' -and ($said9 -join "`n").Contains('said: reading the record'))
+    $said9 = @(Say-Ended 'the runner' 1 'FAIL  x' 6>&1)
+    $said9 += @(Say-Ended 'the runner' 0 '' 6>&1)
+    Yes '   and one that ends 0 or 1 says nothing more' ($said9.Count -eq 0 -and $script:fail -eq $failWas)
 
     # ---- 8. the workflows -------------------------------------------------------
     $wf = Join-Path $repo '.github\workflows'
