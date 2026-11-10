@@ -29,6 +29,9 @@
       keeping only the newest two .prev folders
     - the same gamemode with a new stamp swaps the stamp and waits for nothing
     - a load that crosses a roll of server.log is still read
+    - the stand-in reads gamemode.js's bytes and write time from one open
+      file, as the engine loads it, so a replace landing between two reads
+      is never logged as a load of the old blob (#5405)
     - it does not reload, and touches nothing, for a run that sends a plugin,
       changes a setting, meets an engine that cannot say how a load went, a
       server that is not running, or a gamemode loaded from somewhere else
@@ -106,6 +109,19 @@ const gm = path.join(root, 'gamemode.js'), log = path.join(root, 'server.log');
 const has = (m) => fs.existsSync(path.join(root, m));
 function say(l) { fs.appendFileSync(log, '[' + new Date().toISOString() + '] ' + l + '\n'); }
 let last = null, loads = 0, failed = false;
+// .stub-replace-mid-read (#5405): once the server has started, the next read
+// of gamemode.js's bytes is followed at once by .stub-next.js renamed over
+// it, so a deploy's replace lands between the read and the look at the file,
+// as it did in run 41533074640.
+const readFile = fs.readFileSync;
+fs.readFileSync = function (p, ...rest) {
+  const out = readFile.call(fs, p, ...rest);
+  if (loads > 0 && (p === gm || typeof p === 'number') && has('.stub-replace-mid-read')) {
+    fs.unlinkSync(path.join(root, '.stub-replace-mid-read'));
+    fs.renameSync(path.join(root, '.stub-next.js'), gm);
+  }
+  return out;
+};
 // The tables folder as the gamemode names it (game/gamemode.js, tableFolder).
 function tables() {
   const dir = path.join(root, 'gamemode-tables');
@@ -121,8 +137,15 @@ function tables() {
   return { tree: crypto.createHash('sha1').update('tree ' + body.length + '\0').update(body).digest('hex'), count: parts.length, broken: broken };
 }
 function load() {
-  let b, st;
-  try { b = fs.readFileSync(gm); st = fs.statSync(gm); } catch (e) { return; }
+  // The bytes and the write time from one open file (#5405). Read by path
+  // twice, a replace between the two paired the old bytes with the new
+  // file's time: a load of the old blob logged just after the new file went
+  // in, which the deploy rightly took for the server loading the wrong one.
+  // The engine's own reload reads the file once, and the gamemode names the
+  // blob from the bytes it loaded, so it never logs such a pair.
+  let fd, b, st;
+  try { fd = fs.openSync(gm, 'r'); } catch (e) { return; }
+  try { b = fs.readFileSync(fd); st = fs.fstatSync(fd); } catch (e) { return; } finally { fs.closeSync(fd); }
   const t = b.toString('latin1') + '@' + st.mtimeMs;
   if (t === last) return;
   if (loads > 0 && (has('.stub-deaf') || (failed && has('.stub-deaf-after-fail')))) return;
@@ -258,7 +281,24 @@ try {
   Yes '  without waiting for a load that cannot come' (@($out | Where-Object { $_ -like '*already runs git blob*' }).Count -eq 1 -and @($out | Where-Object { $_ -like '*waiting up to*' }).Count -eq 0)
   Stop-Server $srv
 
+  # ---- a replace between the stand-in's read and its look (#5405) -------------
+  # The stand-in is held to the engine: a gamemode.js replaced while it reads
+  # is loaded as the bytes it read, never as old bytes with the new file's time.
+  $srv = New-Server @{ 'gamemode.js' = $newGm }
+  $next = Join-Path $srv.Root '.stub-next.js'
+  [IO.File]::WriteAllText($next, $newGm)
+  $nextBlob = Get-ThornswoodGamemodeBlob $next
+  $runBlob = Get-ThornswoodGamemodeBlob (Join-Path $srv.Root 'gamemode.js')
+  [IO.File]::WriteAllText((Join-Path $srv.Root '.stub-replace-mid-read'), '')
+  $until = (Get-Date).AddSeconds(10)
+  while ((Get-Date) -lt $until -and -not (Logs $srv).Contains("git blob $nextBlob")) { Start-Sleep -Milliseconds 100 }
+  $said = @((Logs $srv) -split "`n" | Where-Object { $_ -match 'gamemode\.js is git blob ([0-9a-f]{40})' } | ForEach-Object { [regex]::Match($_, 'git blob ([0-9a-f]{40})').Groups[1].Value })
+  Yes ('a gamemode.js replaced while the stand-in reads it is loaded as what it read: the old once at the start, then the new (' + ($said -join ', ') + ')') (
+    -not (Test-Path -LiteralPath (Join-Path $srv.Root '.stub-replace-mid-read')) -and ($said -join ',') -eq ($runBlob + ',' + $nextBlob))
+  Stop-Server $srv
+
   # ---- a roll of server.log in the middle of the load ---------------------------
+
   $srv = New-Server @{ 'gamemode.js' = $newGm; 'thornswood-build.json' = '{"commit":"new"}' } @('.stub-roll')
   $rolledAtStart = @(Get-ChildItem -LiteralPath $srv.Root -File -Force | Where-Object { $_.Name -match '^server\.log\.\d+$' }).Count
   $out = Invoke-Reload $srv
