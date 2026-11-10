@@ -165,6 +165,15 @@ try {
 
     $onl = [IO.File]::ReadAllText((Join-Path $AppDir 'Online.cs'))
     Yes 'Online.AskPort takes the reason and says it' ($onl -match 'GetOrNull\(url, 2500, Http\.DefaultReadMs, out why\)' -and $onl -match 'SayWhenItChanges\(resourcePort, url, why\)' -and $onl -match 'Swallow\.Say\("Online\.AskPort"')
+    # AskPort runs every ten seconds. Its catch hands the reason to
+    # SayWhenItChanges, which writes once per change; a Swallow.Note there
+    # would write a line on every ask while the same exception repeats.
+    $at = $onl.IndexOf('static Count AskPort(')
+    $end = if ($at -ge 0) { $onl.IndexOf('SayWhenItChanges(resourcePort', $at) } else { -1 }
+    $ask = if ($at -ge 0 -and $end -gt $at) { $onl.Substring($at, $end - $at) } else { '' }
+    $catch = [regex]::Match($ask, 'catch\s*\(Exception ex\)\s*\{[^}]*\}')
+    Yes 'AskPort''s catch keeps the reason for SayWhenItChanges and writes no line of its own' (
+        $catch.Success -and $catch.Value -match 'why = ex\.GetType\(\)\.Name' -and $catch.Value -notmatch 'Swallow\.')
 
     $sw = [IO.File]::ReadAllText((Join-Path $AppDir 'Swallow.cs'))
     Yes 'Swallow.Say writes to the log and never throws' ($sw -match 'public static void Say\(string where, string why\)' -and $sw -match 'File\.AppendAllText')
