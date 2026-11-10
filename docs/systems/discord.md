@@ -190,6 +190,7 @@ tidies there. A staff space mode is said for the space it names.
 | public | everybody | everybody | everybody |
 | read | everybody | the council | the council |
 | membersread | everybody on staff, Member, Playtester | the council | the council |
+| memberstalk | everybody | everybody on staff, Member, Playtester | - |
 | open | everybody on staff, Playtester | everybody on staff, Playtester | - |
 | pathfind | everybody on staff, Playtester | everybody on staff, Playtester | - |
 | testersread | everybody on staff, Playtester | the council | the council |
@@ -216,7 +217,7 @@ Category mode: public.
 | #rules | text | read | everybody | the council | posts: the council; written by the build from content.py RULES, with its Changelog thread; topic: Seven rules. Read them. |
 | #welcome | text | read | everybody | the council | posts: the council; written by the build from content.py WELCOME, with its Changelog thread; topic: Start here. |
 | #start-here | text | read | everybody | the council | posts: the council; written by the build from content.py START, with its Changelog thread; topic: How to actually get in and play. |
-| #say-hello | text | public | everybody | everybody | posts: everybody; topic: New here? Say hi and tell us a little about yourself. Slowmode is on. |
+| #dishboard | text | memberstalk | everybody | everybody on staff, Member, Playtester | was #say-hello in Start Here; topic: Dishboard bumps. |
 
 ### Tickets
 
@@ -263,7 +264,7 @@ Category mode: open. It was Thornswood.
 
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
-| #welcome-travelers | text | open | everybody on staff, Playtester | everybody on staff, Playtester | was #welcome-travelers in Thornswood; topic: A card for everybody who joins, posted by the bot. Say hello in #general-chat. |
+| #welcome-travelers | text | memberstalk | everybody | everybody on staff, Member, Playtester | was #welcome-travelers in Thornswood; topic: A card for everybody who joins, posted by the bot. Say hello in #general-chat. |
 | #general-chat | text | open | everybody on staff, Playtester | everybody on staff, Playtester | was #general-chat in Thornswood; topic: Out of character chat for everyone. Talk Thornswood, Skyrim, or whatever's on your mind, and keep it friendly. Bug reports go in #test-findings, screenshots and clips go in #media. |
 | #media | text | open | everybody on staff, Playtester | everybody on staff, Playtester | was #media in Thornswood; topic: Screenshots and clips. Talk about one in a thread under it. |
 | #server-progression-and-economy | text | open | everybody on staff, Playtester | everybody on staff, Playtester | was #server-progression-and-economy in Thornswood; topic: How the server grows and how its economy works: what you have seen, and what you would change. Ideas go in #suggestions. |
