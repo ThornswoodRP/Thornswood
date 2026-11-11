@@ -505,12 +505,16 @@
   */
   let HELP_KEY = iniNumber(ini, 'HelpKey', 65);          // F7
   /*
-    Three keys the help panel names that are read by the voice and emote
+    Five keys the help panel names that are read by the voice and emote
     plugins and not used here: the help says the key as this machine has it.
+    The stop key gets somebody out of an idle they are stuck in, and the
+    voice lock keeps the microphone open (#4548).
   */
   let TALK_KEY = iniNumber(ini, 'PushToTalk', 47);       // V
   let VOICE_MODE_KEY = iniNumber(ini, 'VoiceModeKey', 48); // B
   let WHEEL_KEY = iniNumber(ini, 'WheelKey', 34);        // G
+  let STOP_KEY = iniNumber(ini, 'StopKey', 49);          // N
+  let VOICE_LOCK_KEY = iniNumber(ini, 'VoiceLockKey', 24); // O
   /* What the prompt calls them. Read off the scan code so a rebind in the ini
      changes the letter on the screen as well as the key that works. */
   function keyName(code) {
@@ -583,6 +587,8 @@
     TALK_KEY = iniNumber(ini, 'PushToTalk', SETTINGS_KEYS.PushToTalk);
     VOICE_MODE_KEY = iniNumber(ini, 'VoiceModeKey', SETTINGS_KEYS.VoiceModeKey);
     WHEEL_KEY = iniNumber(ini, 'WheelKey', SETTINGS_KEYS.WheelKey);
+    STOP_KEY = iniNumber(ini, 'StopKey', SETTINGS_KEYS.StopKey);
+    VOICE_LOCK_KEY = iniNumber(ini, 'VoiceLockKey', SETTINGS_KEYS.VoiceLockKey);
     PARTY_NAME = keyName(PARTY_KEY);
     FRIEND_NAME = keyName(FRIEND_KEY);
     TRADE_NAME = keyName(TRADE_KEY);
@@ -10891,7 +10897,8 @@
       skills: keyName(SKILLS_KEY), party: PARTY_NAME, journal: keyName(JOURNAL_KEY),
       friend: FRIEND_NAME, trade: TRADE_NAME, mute: MUTE_NAME, mold: MOLD_NAME,
       lock: LOCK_NAME, maneuver: MANEUVER_NAME, talk: keyName(TALK_KEY),
-      voiceMode: keyName(VOICE_MODE_KEY), wheel: keyName(WHEEL_KEY), activate: deliverName()
+      voiceMode: keyName(VOICE_MODE_KEY), wheel: keyName(WHEEL_KEY), activate: deliverName(),
+      stop: keyName(STOP_KEY), voiceLock: keyName(VOICE_LOCK_KEY)
     };
   }
 

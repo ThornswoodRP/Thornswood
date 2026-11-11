@@ -160,6 +160,11 @@ attempt('B', function () {
       /const OVERLAYS = \[[\s\S]*?'thornswood-help\.js'[\s\S]*?\];/.test(front));
   yes('B1 and the cap can close it by name', /help: 'thornswoodHelp'/.test(between(front, 'const CAP_CLOSES = {', '};') || ''));
   yes('B2 the help key goes to helpKeyPressed', /if \(e\.code === HELP_KEY\) \{ helpKeyPressed\(\); return; \}/.test(front));
+  yes('B2 the plugin reads StopKey and VoiceLockKey as the emote and voice plugins do, N and O, and again on a change (#4548)',
+      /let STOP_KEY = iniNumber\(ini, 'StopKey', 49\);/.test(front) &&
+      /let VOICE_LOCK_KEY = iniNumber\(ini, 'VoiceLockKey', 24\);/.test(front) &&
+      /\n    STOP_KEY = iniNumber\(ini, 'StopKey', SETTINGS_KEYS\.StopKey\);/.test(front) &&
+      /\n    VOICE_LOCK_KEY = iniNumber\(ini, 'VoiceLockKey', SETTINGS_KEYS\.VoiceLockKey\);/.test(front));
   yes('B2 the page\'s opened and closed move the help claim, and ready hands it the keys',
       /if \(what === 'help:opened'\) \{ T\.claimFocus\('help', true\); return; \}/.test(front) &&
       /if \(what === 'help:closed'\) \{ T\.claimFocus\('help', false\); return; \}/.test(front) &&
@@ -181,6 +186,7 @@ attempt('B', function () {
       'const HELP_NAME = keyName(HELP_KEY), PARTY_NAME = keyName(iniNumber(ini, "PartyKey", 25)),' +
       ' FRIEND_NAME = keyName(21), TRADE_NAME = keyName(35), MUTE_NAME = keyName(38), MOLD_NAME = keyName(22),' +
       ' LOCK_NAME = keyName(45), MANEUVER_NAME = keyName(10);\n' +
+      'const STOP_KEY = iniNumber(ini, "StopKey", 49), VOICE_LOCK_KEY = iniNumber(ini, "VoiceLockKey", 24);\n' +
       'function deliverName() { return "E"; }\n';
     const api = new Function('T', 'claims', 'say', 'busyMenuOpen',
       pieces.join('\n') + consts + 'return { press: helpKeyPressed, keys: helpKeys };')(
@@ -203,12 +209,14 @@ attempt('B', function () {
         k.party === 'P' && k.journal === 'J' && k.friend === 'Y' && k.trade === 'H' && k.mute === 'L' &&
         k.mold === 'U' && k.lock === 'X' && k.maneuver === '9' && k.talk === 'V' && k.voiceMode === 'B' &&
         k.wheel === 'G' && k.activate === 'E');
+    yes('B4 and the stop key and the voice lock, N and O (#4548)', !!k && k.stop === 'N' && k.voiceLock === 'O');
   }
   {
-    const w = rig('HelpKey = 67\nSkillsKey = 16\n');
+    const w = rig('HelpKey = 67\nSkillsKey = 16\nStopKey = 44\nVoiceLockKey = 50\n');
     w.api.press();
     const k = w.api.keys();
     yes('B5 a rebind in Thornswood.ini is the name the page is given (F9, Q)', k.help === 'F9' && k.skills === 'Q');
+    yes('B5 the stop key and the voice lock too (Z, M)', k.stop === 'Z' && k.voiceLock === 'M');
   }
   {
     const w = rig('');
@@ -335,6 +343,10 @@ attempt('C', function () {
       /Office page on K/.test(texts.land) && /\/stuck/.test(texts.help) && /maneuvers open on 9/.test(texts.work));
   allText = Object.keys(texts).map(function (t) { return texts[t]; }).join(' ');
   yes('C3 and the one shown is marked', root.querySelector('#ts-help-nav').html.indexOf('data-topic="help" class="go"') !== -1);
+  yes('C3 Talking names the voice lock as a fresh install has it, O (#4548)',
+      /\bO locks the microphone open\b/.test(texts.talking));
+  yes('C3 Living names the stop key as a fresh install has it, N (#4548)',
+      /\bN stands you up out of an idle\b/.test(texts.living));
 
   const named = (allText.match(/(^|[\s(])\/[a-z]+\b/g) || []).map(function (w) { return w.trim().replace(/^\(/, ''); })
     .filter(function (w, i, all) { return all.indexOf(w) === i; });
@@ -364,6 +376,16 @@ attempt('C', function () {
       /Office page on Q\./.test(body()) && /a line names Z:/.test(body()) && !/ on K\b/.test(body()));
   yes('C7 and the foot names the help key as bound',
       root.querySelector('#ts-help-foot').textContent === 'Escape or F9 closes this.');
+  help.setKeys({ stop: 'Z', voiceLock: 'M' });
+  help.open('talking');
+  const talkMoved = body();
+  help.open('living');
+  const livingMoved = body();
+  yes('C7 a moved stop key and voice lock are what Living and Talking say (Z, M)',
+      /\bM locks the microphone open\b/.test(talkMoved) && !/\bO locks\b/.test(talkMoved) &&
+      /\bZ stands you up out of an idle\b/.test(livingMoved) && !/\bN stands\b/.test(livingMoved));
+  help.close();
+  help.open('land');
   key(h, 'F7');
   yes('C7 F7 is no longer it', help.isOpen());
   key(h, 'F9');
