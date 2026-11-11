@@ -23,6 +23,7 @@ from bot_github import KNOWN_REPO, github_token_kind
 from bot_roadmap import watch_known_issues
 from bot_notices import watch_staff_notices
 from bot_news import watch_release_news
+from bot_restarts import watch_restarts
 from bot_watchdog import watch_services
 from bot_problems import ensure_problem_panel, watch_problems
 from bot_moderation import watch_moderation
@@ -176,6 +177,7 @@ async def on_ready():
         asyncio.create_task(watch_known_issues())
         asyncio.create_task(watch_staff_notices())
         asyncio.create_task(watch_release_news())
+        asyncio.create_task(watch_restarts())
         asyncio.create_task(watch_join_numbers())
         asyncio.create_task(watch_closed_tickets())
         asyncio.create_task(watch_lines())

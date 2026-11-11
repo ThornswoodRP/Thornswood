@@ -311,7 +311,7 @@ public sealed class Server(EnvConfig env, HttpClient http)
     ///    back the same way, and the old server started and asked again.
     /// files are the Release's gamemode part (gamemode.js, its stamp and, from
     /// #5191, gamemode-tables.zip, whose folder is swapped with the files).</summary>
-    public async Task<Outcome> ApplyServerBuild(string zip, byte[] record, IReadOnlyDictionary<string, string> files, string who, Action<string> log, CancellationToken ct)
+    public async Task<Outcome> ApplyServerBuild(string zip, byte[] record, IReadOnlyDictionary<string, string> files, string who, Action<string> log, CancellationToken ct, string about = "an update")
     {
         foreach (var n in ReloadFiles)
             if (!files.ContainsKey(n)) return new Outcome("failure", "the Release's gamemode part has no " + n);
@@ -378,6 +378,30 @@ public sealed class Server(EnvConfig env, HttpClient http)
         try { turn = Turn.Take(env.Turn, who, TimeSpan.FromSeconds(env.TurnSeconds), log); }
         catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException) { TryDelete(stage); return new Outcome("failure", "not applied: " + e.Message); }
         using var _ = turn;
+
+        // Said before it happens (#5784): in Discord through the bot and in
+        // the game by a notice countdown, then the wait, then the stop. On 11
+        // Nov the live server was swapped at 11:12 AM with neither.
+        var noticeId = $"{Which}-{stamp}";
+        var downAt = Now().ToUniversalTime() + TimeSpan.FromSeconds(env.AnnounceSeconds);
+        var unsaid = await Announce(noticeId, downAt, about, log, ct);
+        if (unsaid != "")
+        {
+            TryDelete(stage);
+            return new Outcome("failure", "not applied: the restart could not be announced: " + Trim(unsaid));
+        }
+        Outcome swapped;
+        try { swapped = await SwapUnderHold(); }
+        catch (OperationCanceledException)
+        {
+            RestartNotice.Write(env.Store, Which, noticeId, RestartNotice.Down, downAt, about, log);
+            throw;
+        }
+        RestartNotice.Write(env.Store, Which, noticeId, swapped.State == "error" ? RestartNotice.Down : RestartNotice.Back, downAt, about, log);
+        return swapped;
+
+        async Task<Outcome> SwapUnderHold()
+        {
         Hold.Set(env.Watch, env.Task, $"the deploy agent is swapping in server build {rec.Short} at {Root}", who, 30, log);
         try
         {
@@ -483,6 +507,49 @@ public sealed class Server(EnvConfig env, HttpClient http)
             return new Outcome("error", Trim(why) + $"; putting the old build back did not take either: what it replaced is in {prevName}, and dev needs Publish-Server -PutBack", Prev: prevName);
         }
         finally { Hold.Clear(env.Watch, env.Task, log); }
+        }
+    }
+
+    /// <summary>Waits out the lead a restart is announced with. A test makes it instant.</summary>
+    public Func<TimeSpan, CancellationToken, Task> Wait { get; set; } = (t, c) => Task.Delay(t, c);
+
+    /// <summary>Says a restart is coming at downAt (#5784): the notice the
+    /// bot posts in Discord (RestartNotice) and a notice countdown in the
+    /// game (restart.json, which the gamemode reads, Request-Restart.ps1's
+    /// mode notice: nobody is put out, the world freezes for a few seconds),
+    /// then waits until downAt. "" when both were said and the wait ran out;
+    /// otherwise why not, with nothing stopped and the notice called off.</summary>
+    async Task<string> Announce(string id, DateTime downAt, string why, Action<string> log, CancellationToken ct)
+    {
+        var ahead = downAt - Now().ToUniversalTime();
+        if (ahead < TimeSpan.Zero) ahead = TimeSpan.Zero;
+        var no = RestartNotice.Write(env.Store, Which, id, RestartNotice.Coming, downAt, why, log);
+        if (no != "") return "Discord was not told: " + no;
+        var rq = Path.Combine(DataDir(), "restart.json");
+        try
+        {
+            var body = JsonSerializer.SerializeToUtf8Bytes(new Dictionary<string, object>
+            {
+                ["seconds"] = (int)Math.Round(ahead.TotalSeconds),
+                ["mode"] = "notice",
+                ["why"] = why,
+            });
+            Files.WriteWhole(rq, body);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            RestartNotice.Write(env.Store, Which, id, RestartNotice.Off, downAt, why, log);
+            return $"the game was not told: {rq} could not be written ({e.Message})";
+        }
+        log($"the restart is announced for {downAt:HH:mm:ss} UTC, in Discord and in the game; waiting {(int)ahead.TotalSeconds} seconds before the stop");
+        try { await Wait(ahead, ct); }
+        catch (OperationCanceledException)
+        {
+            try { Files.WriteWhole(rq, Encoding.UTF8.GetBytes("{\"cancel\":true}")); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            RestartNotice.Write(env.Store, Which, id, RestartNotice.Off, downAt, why, log);
+            throw;
+        }
+        return "";
     }
 
     /// <summary>Stops whatever holds this server's UDP port and waits for it
