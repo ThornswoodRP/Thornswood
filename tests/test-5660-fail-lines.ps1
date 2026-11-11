@@ -22,7 +22,9 @@
        exception." lines go in after the FAIL lines, and no stack line;
     7. a dying line said twice goes in once, a PASS line that only quotes
        one stays out, and past 5 a count of how many more;
-    8. with no FAIL line the last lines already hold it, said once.
+    8. with no FAIL line the last lines already hold it, said once;
+    9. a header alone, as .NET 10's fail fast prints "Process terminated.",
+       takes the message on the line after it, never a stack line.
   B. The runner against stand-in harnesses in a scratch repository: the
      ::error line it writes for a failing harness carries its FAIL lines,
      a harness that passed gets none, and a harness whose child pwsh dies
@@ -86,6 +88,11 @@ if ($null -ne $fn) {
     $eight = Get-FailSaid "reading the record`nSegmentation fault`n"
     Yes ('8. with no FAIL line the last lines already hold it, so it is not said twice (' + $eight + ')') ($eight -eq ': no FAIL line; its last lines%0Areading the record%0ASegmentation fault')
     Yes ('   and case 1, with nothing dying, is as it was') ((Get-FailSaid $l) -eq $one -and $one -notmatch 'dying')
+    # .NET 10's fail fast prints its header alone and the message on the next
+    # line (#5785's Linux share 3 of 4): the message goes with the header.
+    $nine = Get-FailSaid "Process terminated.`nplanted for 5752`n   at System.Environment.FailFast(System.String)`nUnhandled exception.`n   at Thornswood.Main()`nFAIL  the child gave nothing back (exit 134)`n"
+    Yes ('9. a header alone takes the line after it, never a stack line (' + $nine + ')') ($nine -eq (
+        ': its FAIL lines%0AFAIL  the child gave nothing back (exit 134)%0Aand what it printed of a process dying%0AProcess terminated. planted for 5752%0AUnhandled exception.'))
 }
 
 # ---- B. the runner writes it -------------------------------------------------------------

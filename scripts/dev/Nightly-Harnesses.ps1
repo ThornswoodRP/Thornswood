@@ -485,7 +485,17 @@ function Get-FailSaid([string]$printed) {
     $shown = @($fails | Select-Object -First $FAIL_LINES)
     $show = @($shown | ForEach-Object { & $cut $_ })
     if ($more -gt 0) { $show += ('and {0} more FAIL line(s), in the job log' -f $more) }
-    $deaths = @($lines | Where-Object { $_ -cmatch $DEATH_SAYS -and $shown -cnotcontains $_ } | Select-Object -Unique)
+    # A header that ends at its full stop (.NET 10 prints "Process
+    # terminated." and the fail fast's message on the next line, measured on
+    # #5785's Linux share) takes that next line with it, unless it is a line
+    # of the stack or a harness's own.
+    $deaths = [System.Collections.Generic.List[string]]::new()
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $d = $lines[$i]
+        if ($d -cnotmatch $DEATH_SAYS -or $shown -ccontains $d) { continue }
+        if ($d -cmatch '^(Unhandled exception|Process terminated|Fatal error)\.$' -and $i + 1 -lt $lines.Count -and $lines[$i + 1] -cnotmatch '^(at |FAIL\b|PASS\b|SKIP\b|NOT RUN\b)') { $d += ' ' + $lines[$i + 1] }
+        if (-not $deaths.Contains($d)) { $deaths.Add($d) }
+    }
     if ($deaths.Count) {
         $show += 'and what it printed of a process dying'
         $show += @($deaths | Select-Object -First $DEATH_LINES | ForEach-Object { & $cut $_ })
