@@ -33,7 +33,7 @@ function yes(what, ok) {
 }
 
 const text = fs.readFileSync(PAGE, 'utf8');
-const head = text.split(/\r?\n## /)[0];
+const head = text.split(/\r?\n## /)[0].replace(/\s+/g, ' ');
 
 yes('R the opening says it is a record of #648, 27 September 2026, not how things are now',
     /record/i.test(head) && /#648/.test(head) && /27 September 2026/.test(head) && /not how/i.test(head));
