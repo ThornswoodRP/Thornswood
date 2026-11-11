@@ -460,6 +460,17 @@ function Start-One($t) {
 # command's message takes %0A for a new line, and % itself as %25.
 $FAIL_LINES = 10
 $FAIL_LINE_CHARS = 300
+# A child process that dies prints how, and then the harness prints a FAIL
+# line about what it did not get (#5752): exit 139 on Linux share 2 of
+# 4 for #5781, where the FAIL lines alone said only that a child was gone.
+# So up to DEATH_LINES of the lines the runtime or the OS write as a
+# process dies go in after the FAIL lines: .NET's "Unhandled exception.",
+# "Process terminated." (a fail fast), "Fatal error." and "Stack
+# overflow.", and a shell's "Segmentation fault" and "Aborted", with
+# "(core dumped)" or without. Only what the harness printed: a child's
+# output that the harness kept to itself is not here to carry.
+$DEATH_LINES = 5
+$DEATH_SAYS = '^(Unhandled exception\.|Process terminated\.|Fatal error\.|Stack overflow\.|Aborted\b)|Segmentation fault|\(core dumped\)'
 function Get-FailSaid([string]$printed) {
     $lines = @($printed -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
     $fails = @($lines | Where-Object { $_ -match '^FAIL\b' })
@@ -470,10 +481,16 @@ function Get-FailSaid([string]$printed) {
         if (-not $fails.Count) { return ': it printed nothing' }
     }
     $more = $fails.Count - $FAIL_LINES
-    $show = @($fails | Select-Object -First $FAIL_LINES | ForEach-Object {
-        if ($_.Length -gt $FAIL_LINE_CHARS) { $_.Substring(0, $FAIL_LINE_CHARS) + '...' } else { $_ }
-    })
+    $cut = { param($s) if ($s.Length -gt $FAIL_LINE_CHARS) { $s.Substring(0, $FAIL_LINE_CHARS) + '...' } else { $s } }
+    $shown = @($fails | Select-Object -First $FAIL_LINES)
+    $show = @($shown | ForEach-Object { & $cut $_ })
     if ($more -gt 0) { $show += ('and {0} more FAIL line(s), in the job log' -f $more) }
+    $deaths = @($lines | Where-Object { $_ -cmatch $DEATH_SAYS -and $shown -cnotcontains $_ } | Select-Object -Unique)
+    if ($deaths.Count) {
+        $show += 'and what it printed of a process dying'
+        $show += @($deaths | Select-Object -First $DEATH_LINES | ForEach-Object { & $cut $_ })
+        if ($deaths.Count -gt $DEATH_LINES) { $show += ('and {0} more such line(s), in the job log' -f ($deaths.Count - $DEATH_LINES)) }
+    }
     $text = ': ' + $head + "`n" + ($show -join "`n")
     return $text.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
 }
