@@ -379,9 +379,12 @@ namespace Thornswood
                 map[f.Key] = b.Length + ":" + sha;
             }
             Updater.Blob fetch = delegate(string sha, long bytes, string dest, Action<long> onBytes) { File.WriteAllBytes(dest, blobs[sha]); };
+            // The record's own sha256 names this release alone, so a scene
+            // that plants another release's record is not taken for it.
             var r = new RecordRef();
             r.id = id;
-            r.sha256 = new string('a', 64);
+            using (var h = SHA256.Create())
+                r.sha256 = BitConverter.ToString(h.ComputeHash(Encoding.UTF8.GetBytes(id + "\n" + string.Join("\n", map.Keys) + "\n" + string.Join("\n", map.Values)))).Replace("-", "").ToLowerInvariant();
             var any = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic;
             var plan = (Updater.SyncPlan)typeof(Updater).GetMethod("PlanSync", any).Invoke(null, new object[] { r, map, fetch, say });
             Updater.WriteSync(s.Cfg, plan, say);
@@ -814,7 +817,12 @@ namespace Thornswood
             Yes(n + "synced by an older launcher: and does not ask again until the list is here", !OwnGame.NeedsRefresh(s.Cfg));
 
             // The check against the release keeps its list (Sync.cs).
-            File.WriteAllText(Path.Combine(Paths.ProfileDir, "release-files.txt"), "release " + sha + " 20260929-0000\r\n" + shipped + "\r\n");
+            // The release's files as the update before kept them, and this one.
+            var listed = new List<string> { "release " + sha + " 20260929-0000" };
+            string keptList = Path.Combine(Paths.ProfileDir, "release-files.txt");
+            if (File.Exists(keptList)) { string[] was = File.ReadAllLines(keptList); for (int i = 1; i < was.Length; i++) if (was[i].Trim().Length > 0) listed.Add(was[i]); }
+            listed.Add(shipped);
+            File.WriteAllLines(keptList, listed.ToArray());
             Yes(n + "with the release's list kept, the folder asks to refresh", Updater.ReleaseFilesKnown() && OwnGame.NeedsRefresh(s.Cfg));
             string sorted = null;
             try { sorted = OwnGame.Refresh(s.Cfg, null); } catch (Exception ex) { Console.WriteLine("      Refresh said: " + ex.Message); }
