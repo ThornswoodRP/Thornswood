@@ -103,6 +103,18 @@ function request(url, options) {
     }).then(function (r) { clearTimeout(timer); resolve(r); }, function (e) { clearTimeout(timer); reject(e); });
   });
 }
+/* The site's public data, asked for once a page load (#4393). The part of
+   this script every page runs reads it for the status line, the news and the
+   front page's pictures, and the gallery reads it for its pictures; each
+   asked on its own, so the gallery asked twice on every load, and each ask
+   counted against the visitor's request limit. Both now take this one
+   answer. Back from another page (pageshow) is a new look at who is in the
+   world, so that one asks afresh. */
+var publicAsked = null;
+function publicData() {
+  if (!publicAsked) publicAsked = request('/api/public?galleryLimit=24', { credentials: 'same-origin' });
+  return publicAsked;
+}
 // Reduce large still pictures before uploading. Animated GIFs stay intact.
 function preparePicture(file) {
   if (file.size > 25 * 1024 * 1024) return Promise.reject(new Error('Pictures must be 25 MB or smaller.'));
@@ -337,7 +349,7 @@ if (AGE_PATHS[here] && !ageOk()) {
     .then(function (r) { return r.json(); })
     .catch(function () { return {}; })
     .then(function (w) { galWho = w || {}; if (galData) drawGallery(); });
-  request('/api/public?galleryLimit=24').then(function (r) { return r.json(); }).then(function (d) {
+  publicData().then(function (r) { return r.json(); }).then(function (d) {
     galData = d || {};
     drawGallery();
   }).catch(function () { show('<h1>From the world</h1><p>Could not load it.</p>'); });
@@ -959,7 +971,7 @@ window.addEventListener('pageshow', function (e) {
 
 /* The three live things on the front page, all of them honest about being
    empty rather than filled with something invented. */
-request('/api/public?galleryLimit=24', { credentials:'same-origin' })
+publicData()
   .then(function(r){ return r.json(); })
   .then(function(d){
     /* Both Patreon links are written into the markup, so they work before
