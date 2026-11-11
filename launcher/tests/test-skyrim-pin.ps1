@@ -121,7 +121,7 @@ $downStub = "using System;`r`nusing System.IO;`r`nnamespace Thornswood`r`n{`r`n 
 
 # Config.Load and Save need Secrets and Swallow, which come along, and its
 # serializer LooseString; Paths is a stand-in with the one field Swallow
-# reads, left null so nothing is written.
+# reads, null until P5 points it at the scratch folder.
 $looseSrc = Read-Text (Join-Path $app 'LooseString.cs')
 $secretsSrc = Read-Text (Join-Path $app 'Secrets.cs')
 $swallowSrc = Read-Text (Join-Path $app 'Swallow.cs')
@@ -230,17 +230,29 @@ try {
 
     # ---- P5: what is taken survives a restart -----------------------------------
     # Through Config.Save and Config.Load, as the launcher writes and reads it.
+    # Both catch what goes wrong and say it only in launcher.log (Swallow), so
+    # the stand-in Paths gets one in the scratch folder, and a P5 line that
+    # fails carries what the log said (#5768): without it a Save or a Load
+    # that threw read only as a pin that was not kept.
+    $logFile = Join-Path $scratch 'launcher.log'
+    $asm.GetType('Thornswood.Paths').GetField('LogFile').SetValue($null, $logFile)
+    function Said {
+        if (-not (Test-Path -LiteralPath $logFile)) { return '' }
+        $first = @([IO.File]::ReadAllLines($logFile) | Where-Object { $_ -match '\S' } | Select-Object -First 1)
+        if ($first.Count -eq 0) { return '' }
+        return ' (launcher.log: ' + ($first[0] -replace '\s+', ' ') + ')'
+    }
     $cfgFile = Join-Path $scratch 'config.json'
     $cfg.Save($cfgFile)
     $back = $CfgT.GetMethod('Load').Invoke($null, [object[]]@([string]$cfgFile))
-    Yes 'P5 config.json keeps the pin' ($back.ExpectedExeBytes -eq 40000001 -and $back.NewerExeBytes -eq 41000002 -and $back.SkyrimDepots.Length -eq 3)
+    Yes ('P5 config.json keeps the pin' + (Said)) ($back.ExpectedExeBytes -eq 40000001 -and $back.NewerExeBytes -eq 41000002 -and $back.SkyrimDepots.Length -eq 3)
     Yes 'P5 and the lines after a restart are the feed''s' (Same @(Down 'Commands' @($back)) $lines)
     # A port other than the default, so a file that did not load (Load then
     # hands back a new Config) cannot pass for one that did.
     $oldFile = Join-Path $scratch 'config-before-the-pin.json'
     [IO.File]::WriteAllText($oldFile, '{"ExpectedExeBytes":37157144,"ServerPort":"7778"}')
     $oldCfg = $CfgT.GetMethod('Load').Invoke($null, [object[]]@([string]$oldFile))
-    Yes 'P5 a config.json from before the pin loads' ($oldCfg.ServerPort -eq '7778')
+    Yes ('P5 a config.json from before the pin loads' + (Said)) ($oldCfg.ServerPort -eq '7778')
     Yes 'P5 and lands on the fallback' ($oldCfg.NewerExeBytes -eq 0 -and $null -eq $oldCfg.SkyrimDepots -and (Same @(Down 'Commands' @($oldCfg)) $fallback))
     Yes 'P5 and names a 1.7.104 exe as before' ((Down 'Describe' @($oldCfg, (Exe 37910440))) -eq '1.7.104, the server runs 1.6.1170')
 
