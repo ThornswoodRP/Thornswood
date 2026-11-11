@@ -52,14 +52,14 @@ namespace Thornswood
             int mine = SkyMp.ResourcePortFor(cfg);
             // Main resources are on 3000; Dev is game-port+1 (7788 when Dev is 7787).
             int other = mine == 3000 ? 7788 : 3000;
-            // No fallback number: cfg.MaxOnline is this build's own feed's,
+            // No fallback number: cfg.MaxOnline is this build's own server's,
             // and main and dev seat differently since 12 Oct (30 and 5), so
             // the other server's number is only ever the one it announces.
             return AskPort(cfg, other, 0);
         }
 
-        // fallbackMax is the feed's copy of this server's seats, shown until
-        // the server says its own.
+        // fallbackMax is config.json's copy of this server's seats, shown
+        // until the server says its own.
         static Count AskPort(Config cfg, int resourcePort, int fallbackMax)
         {
             var got = new Count();

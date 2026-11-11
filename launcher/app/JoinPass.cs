@@ -26,7 +26,7 @@ namespace Thornswood
     /// status line once. The pass itself never goes in a log.
     ///
     /// Only for joining the game: updating needs none, so a launcher of any age
-    /// can still reach the feed and update itself.
+    /// can still reach GitHub and update itself (#5608).
     /// </summary>
     static class JoinPass
     {

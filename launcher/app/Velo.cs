@@ -34,39 +34,12 @@ namespace Thornswood
         public const string RepoUrl = "https://github.com/" + Repo;
 
         /// <summary>
-        /// WHERE THE RELEASES ARE READ FROM (#5608, Patrick's B of 9 Nov 2026).
-        /// On 9 Nov GitHub answered every anonymous request to github.com with
-        /// 504 for hours, its Release downloads included, while its API kept
-        /// answering, and asked without a token the API allows sixty calls an
-        /// hour from one address. So the launcher asks GitHub nothing itself:
-        /// the site, which asks the API signed in, lists the Releases
-        /// (ReleaseList) and sends each file of one on to where GitHub keeps
-        /// it (ReleaseFile, site\lib\feed.js THE RELEASE ROUTE). What arrives
-        /// is held to the signed record and Velopack's sha256 as before.
+        /// WHERE THE RELEASES ARE READ FROM (#5608): GitHub's API, by the
+        /// launcher itself (GitHub.cs), never thornswood.net. Patrick, 11 Nov
+        /// 2026: the site or the box being down may stop Play, never an
+        /// update. What arrives is held to the signed record and Velopack's
+        /// sha256 as before.
         /// </summary>
-        public const string Site = "https://thornswood.net";
-        public const string ReleaseList = Site + "/api/launcher/releases";
-
-        /// <summary>The site's address for the file <paramref name="name"/> of the Release <paramref name="tag"/>.</summary>
-        public static string ReleaseFile(string tag, string name)
-        {
-            return Site + "/release/" + Uri.EscapeDataString(tag) + "/" + Uri.EscapeDataString(name);
-        }
-
-        /// <summary>
-        /// A file address the site's Release list gave, made whole against the
-        /// site: only the site's own Release route is taken, so nothing in the
-        /// list can send the launcher anywhere else. Throws for anything else.
-        /// </summary>
-        public static string SiteReleaseFile(string said)
-        {
-            Uri u;
-            if (string.IsNullOrEmpty(said) || !Uri.TryCreate(new Uri(Site + "/"), said, out u) ||
-                u.Scheme != Uri.UriSchemeHttps || !string.Equals(u.Host, new Uri(Site).Host, StringComparison.OrdinalIgnoreCase) ||
-                !u.IsDefaultPort || u.UserInfo.Length > 0 || !u.AbsolutePath.StartsWith("/release/", StringComparison.Ordinal))
-                throw new ArgumentException("The site's list of Releases named " + (said ?? "nothing") + ", which is not the site's own Release route.");
-            return u.AbsoluteUri;
-        }
 
         // The arguments this launcher was started with, handed back to it when
         // Velopack restarts it after an update.
@@ -137,8 +110,8 @@ namespace Thornswood
 
         /// <summary>
         /// The Velopack channel this install reads: "dev" for the dev server's
-        /// launcher, "main" for the live one. The same answer the update feed
-        /// goes by (Updater.FeedUrl): config.json's Channel or UpdateBranch.
+        /// launcher, "main" for the live one: config.json's Channel or
+        /// UpdateBranch.
         ///
         /// Every merge release that makes a package packs it for both
         /// channels, from the same files, and lists both in its one signed

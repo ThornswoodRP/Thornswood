@@ -30,12 +30,10 @@ namespace Thornswood
     /// published from a Release of its own once Patrick approves it (#5181),
     /// and is held to the record the merge release signed.
     ///
-    /// Fetched through the site's Release route (Velo.ReleaseFile, #5608),
-    /// which sends each file on to where GitHub keeps it, so the check asks
-    /// GitHub nothing itself and spends none of the sixty anonymous API
-    /// requests an hour. Until 9 Nov 2026 it was github.com's download
-    /// address, which GitHub stopped answering for anybody not signed in that
-    /// day, and every update was refused for want of its record.
+    /// Read from the Release on GitHub itself (GitHub.File, #5608), and kept
+    /// on disk once read, since a published Release never changes: the
+    /// launcher on the Release it already has asks GitHub nothing for its
+    /// record at the next start. Every read is held to the signature again.
     /// </summary>
     static class VeloRecord
     {
@@ -122,34 +120,9 @@ namespace Thornswood
             return "build-1.3." + v.Patch;
         }
 
-        static string Download(string tag, string name)
-        {
-            return Velo.ReleaseFile(tag, name);
-        }
-
-        // Through Http.cs, the launcher's one HttpClient, with the feed's ten
-        // seconds for the answer to start and Http's own wait for each read;
-        // these are files of a few kilobytes. The packages themselves go
-        // through Velopack's own downloader.
         static byte[] Fetch(string tag, string name)
         {
-            return FetchUrl(tag, name, tag);
-        }
-
-        // From the Release <paramref name="on"/>, for the record of <paramref name="tag"/>.
-        static byte[] FetchUrl(string on, string name, string tag)
-        {
-            string url = Download(on, name);
-            using (var req = new HttpRequestMessage(HttpMethod.Get, url))
-            {
-                req.Headers.TryAddWithoutValidation("User-Agent", "ThornswoodLauncher/" + Updater.Version);
-                using (HttpResponseMessage r = Http.Send(req, 10000))
-                {
-                    if (!r.IsSuccessStatusCode)
-                        throw new Exception("The site, or GitHub behind it, answered HTTP " + (int)r.StatusCode + " for " + name + " of " + tag + ".");
-                    return Http.Body(r, Http.DefaultReadMs);
-                }
-            }
+            return GitHub.File(tag, name);
         }
 
         public static string Sha256(byte[] b)
@@ -284,7 +257,7 @@ namespace Thornswood
             string name = "setup-files." + channel + ".json";
             PartFile f = m.File(PartOf(channel), name);
             if (f == null) throw new Exception("The release record of " + m.Tag + " lists no " + name + ", so the files beside the game files in the package cannot be held to a list.");
-            byte[] raw = channel == "main" ? FetchUrl(MainRelease(m.Tag), name, m.Tag) : Fetch(m.Tag, name);
+            byte[] raw = Fetch(channel == "main" ? MainRelease(m.Tag) : m.Tag, name);
             if (!string.Equals(Sha256(raw), f.Sha256, StringComparison.OrdinalIgnoreCase))
                 throw new Exception(name + " of " + m.Tag + " is not the one its signed release record lists.");
             GameList list = JsonSerializer.Deserialize(raw, VeloJson.Default.GameList);
@@ -311,11 +284,10 @@ namespace Thornswood
     /// <summary>
     /// The JSON the Velopack update reads, compiled when the launcher builds
     /// (no reflection, so it works in the native build): the release record,
-    /// the game and setup lists, and GitHub's list of Releases (VeloUpdate.cs).
+    /// the game and setup lists.
     /// </summary>
     [JsonSerializable(typeof(VeloRecord.Manifest))]
     [JsonSerializable(typeof(VeloRecord.GameList))]
-    [JsonSerializable(typeof(List<GithubRelease>))]
     internal partial class VeloJson : JsonSerializerContext
     {
     }

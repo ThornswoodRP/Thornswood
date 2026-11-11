@@ -65,12 +65,10 @@ namespace Thornswood
         /// this launcher (LastLauncherCheck says which). Throws when the
         /// Releases could not be read, which is not the same as no update.
         ///
-        /// One request to the site for the list of Releases and one small
-        /// download per Release that carries this channel's feed, each through
-        /// the site's Release route (ChannelSource, #5608): nothing is asked of
-        /// GitHub by this launcher, so no address's sixty anonymous calls an
-        /// hour are spent. The caller still does not ask on every feed check
-        /// (ShellUpdate.cs, LauncherCheckDue).
+        /// Asked of GitHub itself (GitHub.cs, #5608): one read of the list of
+        /// Releases, shared for a minute with every other reader, and the
+        /// channel's feed of each Release it reads, downloaded once and kept.
+        /// Nothing is asked of thornswood.net.
         /// </summary>
         public static LauncherUpdate CheckLauncher(Config cfg)
         {
@@ -86,7 +84,11 @@ namespace Thornswood
             // (ChannelSource, THE CHANNEL'S RELEASE), so a lower number than
             // this one's is taken too: Velopack alone takes only a higher one.
             opts.AllowVersionDowngrade = true;
-            var mgr = new CheckedUpdates(new ChannelSource(channel, 11), opts);
+            // Each delta is held to the signed record of its own Release, two
+            // of GitHub's calls the first time (VeloRecord.Get), so a climb is
+            // kept to MaxDeltas; further behind, the full package is one call.
+            opts.MaximumDeltasBeforeFallback = MaxDeltas;
+            var mgr = new CheckedUpdates(new ChannelSource(channel, MaxDeltas + 1), opts);
             UpdateInfo info = mgr.CheckForUpdatesAsync().GetAwaiter().GetResult();
             // The collection revision the channel's servers run is the one in
             // the signed record of the Release the channel is on: the one this
@@ -276,88 +278,111 @@ namespace Thornswood
         }
 
         /// <summary>
+        /// How many deltas Velopack may climb by before it takes the full
+        /// package instead. Velopack's own default is ten; each delta costs a
+        /// download and its Release's record, from GitHub's sixty calls an
+        /// hour (GitHub.cs), so a launcher further behind takes one package.
+        /// </summary>
+        internal const int MaxDeltas = 4;
+
+        /// <summary>
         /// The Releases of this repository that carry the channel's feed,
-        /// newest first.
+        /// newest first, read from GitHub by the launcher itself (GitHub.cs,
+        /// #5608), and the feed of each.
         ///
-        /// Velopack's own GitHub source reads only the ten newest Releases.
-        /// Here every merge to main that changes something makes a Release,
-        /// and only those that changed the launcher or the game files carry a
-        /// package (merge-release.yml), so ten in a row without one, a day of
-        /// gamemode merges, would hide the newest launcher from everybody
-        /// behind it. This reads a hundred in the same one request and keeps
-        /// the ones with the channel's feed: the newest, and the ten before
-        /// it that Velopack may take deltas from (MaximumDeltasBeforeFallback).
+        /// Velopack's own GitHub source reads only the ten newest Releases,
+        /// and every merge to main that changes something makes a Release
+        /// while only those that changed the launcher or the game files carry
+        /// a package (merge-release.yml), so ten in a row without one would
+        /// hide the newest launcher. This reads the list a hundred a page and
+        /// keeps the ones with the channel's feed: the newest, and the ones
+        /// before it Velopack may take deltas from (MaxDeltas).
         ///
         /// THE CHANNEL'S RELEASE (the plan: "which release a channel gets
         /// comes from its Dev or Main Deployment"). Velopack on its own takes
         /// the highest version anywhere in the feed, and only when it is
         /// higher than the running one. So a Release published after one with
-        /// a higher number, a promotion of an older build to main or the move
-        /// from the 2026.x numbers back to 1.2.x (Patrick, 8 Nov 2026), would
-        /// never reach anybody. Here the feed is cut to the newest Release's
-        /// full package and what is numbered at or below it (ChannelRelease),
-        /// and CheckLauncher lets Velopack take a lower number than the
-        /// running one, so every install goes to the release its channel is
-        /// on, up or down, with every check in this file's header all the same.
+        /// a higher number, a promotion of an older build to main, would never
+        /// reach anybody. Here the feed is cut to the newest Release's full
+        /// package and what is numbered at or below it (ChannelRelease), and
+        /// CheckLauncher lets Velopack take a lower number than the running
+        /// one, so every install goes to the release its channel is on, up or
+        /// down, with every check in this file's header all the same.
         ///
-        /// READ THROUGH THE SITE (#5608, Patrick's B of 9 Nov 2026). The list
-        /// is the site's (Velo.ReleaseList), in GitHub's own shape, with each
-        /// file's address the site's Release route, and every file Velopack
-        /// fetches, the feeds and the packages, goes there (GetAssetUrlFromName),
-        /// which sends it on to where GitHub keeps it. Velopack's own source,
-        /// with no token, used github.com's download addresses, which GitHub
-        /// stopped answering for anybody not signed in on 9 Nov 2026, and its
-        /// list cost one of an address's sixty anonymous API calls an hour.
+        /// Each Release's feed is downloaded once and kept (GitHub.File), and
+        /// every package Velopack fetches comes from its API address with
+        /// Accept: application/octet-stream (GetAssetUrlFromName), which
+        /// GitHub answers with a redirect to its storage.
         /// </summary>
         sealed class ChannelSource : GithubSource
         {
             readonly string feedName;
             readonly int take;
-
-            public override async Task<VelopackAssetFeed> GetReleaseFeed(Velopack.Logging.IVelopackLogger logger, string appId, string channel, Guid? stagingId = null, VelopackAsset latestLocalRelease = null)
-            {
-                VelopackAssetFeed all = await base.GetReleaseFeed(logger, appId, channel, stagingId, latestLocalRelease).ConfigureAwait(false);
-                return new VelopackAssetFeed
-                {
-                    Assets = ChannelRelease(all.Assets, a => a is GitBaseAsset g && g.Release != null ? g.Release.PublishedAt : null)
-                };
-            }
+            // The Release each of Velopack's GithubRelease stands for, so a
+            // file's API address comes from what GitHub said.
+            readonly Dictionary<GithubRelease, GitHub.Release> from = new Dictionary<GithubRelease, GitHub.Release>();
 
             /// <param name="take">How many of the Releases with the channel's
-            /// feed to read: 11 for an update, the newest and the ten Velopack
-            /// may take deltas from; 1 for what the channel is on
-            /// (MainVersion.cs), which is the newest Release's own package.</param>
+            /// feed to read: MaxDeltas + 1 for an update, the newest and the
+            /// ones Velopack may take deltas from; 1 for what the channel is
+            /// on (MainVersion.cs), which is the newest Release's own package.</param>
             public ChannelSource(string channel, int take) : base(Velo.RepoUrl, null, true, null)
             {
                 feedName = "releases." + channel + ".json";
                 this.take = take;
             }
 
-            protected override async Task<GithubRelease[]> GetReleases(bool includePrereleases)
+            public override Task<VelopackAssetFeed> GetReleaseFeed(Velopack.Logging.IVelopackLogger logger, string appId, string channel, Guid? stagingId = null, VelopackAsset latestLocalRelease = null)
             {
-                string json = await Downloader.DownloadString(Velo.ReleaseList, GetRequestHeaders("application/json"), 30.0).ConfigureAwait(false);
-                List<GithubRelease> all = JsonSerializer.Deserialize(json, VeloJson.Default.ListGithubRelease);
-                if (all == null) return new GithubRelease[0];
-                return all
-                    .Where(r => r != null && (includePrereleases || !r.Prerelease) && r.Assets != null &&
-                                r.Assets.Any(a => a != null && string.Equals(a.Name, feedName, StringComparison.OrdinalIgnoreCase)))
-                    .OrderByDescending(r => r.PublishedAt)
-                    .Take(take)
-                    .ToArray();
+                var entries = new List<VelopackAsset>();
+                foreach (GithubRelease r in GetReleases(Prerelease).GetAwaiter().GetResult())
+                {
+                    GitHub.Release g = from[r];
+                    string text = System.Text.Encoding.UTF8.GetString(GitHub.File(g.TagName, feedName)).TrimStart('\uFEFF');
+                    VelopackAssetFeed feed = VelopackAssetFeed.FromJson(text);
+                    if (feed == null || feed.Assets == null) continue;
+                    foreach (VelopackAsset f in feed.Assets) entries.Add(new GitBaseAsset(f, r));
+                }
+                return Task.FromResult(new VelopackAssetFeed
+                {
+                    Assets = ChannelRelease(entries.ToArray(), a => a is GitBaseAsset g && g.Release != null ? g.Release.PublishedAt : null)
+                });
+            }
+
+            protected override Task<GithubRelease[]> GetReleases(bool includePrereleases)
+            {
+                Func<GitHub.Release, bool> carries = r => (includePrereleases || !r.Prerelease) && r.File(feedName) != null;
+                var picked = new List<GithubRelease>();
+                foreach (GitHub.Release r in GitHub.Releases(carries, take).Where(carries).Take(take))
+                {
+                    var v = new GithubRelease
+                    {
+                        Name = r.TagName,
+                        Prerelease = r.Prerelease,
+                        PublishedAt = r.PublishedAt.Value.UtcDateTime,
+                        Assets = r.Assets.Where(a => a != null && a.Uploaded)
+                                         .Select(a => new GithubReleaseAsset { Name = a.Name, Url = a.Url })
+                                         .ToArray()
+                    };
+                    from[v] = r;
+                    picked.Add(v);
+                }
+                return Task.FromResult(picked.ToArray());
             }
 
             /// <summary>
-            /// Where a file of <paramref name="release"/> is fetched from: the
-            /// address the site's list gave it, which has to be the site's own
-            /// Release route (Velo.SiteReleaseFile).
+            /// Where a file of <paramref name="release"/> is fetched from: its
+            /// API address, which has to be one of this repository's Release
+            /// files (GitHub.AssetUrl).
             /// </summary>
             protected override string GetAssetUrlFromName(GithubRelease release, string assetName)
             {
-                GithubReleaseAsset asset = release == null || release.Assets == null ? null :
-                    release.Assets.FirstOrDefault(a => a != null && string.Equals(a.Name, assetName, StringComparison.OrdinalIgnoreCase));
-                if (asset == null)
-                    throw new ArgumentException("The Release " + (release == null ? "" : release.Name) + " has no " + assetName + ".");
-                return Velo.SiteReleaseFile(asset.BrowserDownloadUrl);
+                GitHub.Release g;
+                if (release == null || !from.TryGetValue(release, out g))
+                    throw new ArgumentException("The Release " + (release == null ? "" : release.Name) + " was not read from GitHub's list.");
+                GitHub.Asset a = g.File(assetName);
+                if (a == null) throw new ArgumentException("The Release " + g.TagName + " has no " + assetName + ".");
+                return GitHub.AssetUrl(a);
             }
         }
     }

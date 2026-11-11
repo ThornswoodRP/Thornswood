@@ -13,8 +13,8 @@ namespace Thornswood
     /// update channel carry both the launcher and the game payload, so for a
     /// launcher Velopack installed, on dev and on main (Velo.GameFromPackage),
     /// each launcher update's package is also where Thornswood's game files
-    /// come from, and the feed's release record and packs are not offered
-    /// (Sync.cs, Pending).
+    /// come from. The release record and the packs the old update feed named
+    /// went with it (#5608).
     ///
     /// They go in the way a release record's files do, through Sync.cs's own
     /// compare and write (PlanSync, WriteSync), so everything that keeps track
@@ -39,10 +39,10 @@ namespace Thornswood
     {
         static readonly string[] GoldenFiles = { "plugins.txt", "loadorder.txt" };
 
-        /// <summary>True when a repair can put Thornswood's own files back: from the installed package, or from the feed's record.</summary>
-        public static bool CanResync(Config cfg, VersionDoc v)
+        /// <summary>True when a repair can put Thornswood's own files back: from the installed package, which a launcher Velopack did not install has none of.</summary>
+        public static bool CanResync(Config cfg)
         {
-            return Velo.GameFromPackage(cfg) || (v != null && v.record != null);
+            return Velo.GameFromPackage(cfg);
         }
 
         /// <summary>
@@ -57,7 +57,7 @@ namespace Thornswood
                 throw new Exception("The launcher update was not downloaded and checked, so no game file is taken from it.");
             var src = PackageSource.FromPackage(u.Package, u.Game, u.Setup);
             SyncPlan plan;
-            try { plan = PlanSync(PackageRecord(u.Record), null, PackageMap(u.Game, u.Setup), src.Fetch, true, log); }
+            try { plan = PlanSync(PackageRecord(u.Record), PackageMap(u.Game, u.Setup), src.Fetch, log); }
             finally { src.Close(); }
             plan.Close = src.Close;
             return plan;
@@ -80,7 +80,7 @@ namespace Thornswood
             VeloRecord.GameList game = VeloRecord.Game(m);
             VeloRecord.GameList setup = VeloRecord.Setup(m, Velo.ChannelFor(cfg));
             var src = PackageSource.FromFolder(at.AppContentDir, game, setup);
-            SyncPlan plan = PlanSync(PackageRecord(m), null, PackageMap(game, setup), src.Fetch, true, log);
+            SyncPlan plan = PlanSync(PackageRecord(m), PackageMap(game, setup), src.Fetch, log);
             plan.Close = src.Close;
             WriteSync(cfg, plan, log);
             return true;
@@ -88,8 +88,7 @@ namespace Thornswood
 
         /// <summary>
         /// Thornswood's own plugins as the installed package ships them, for
-        /// Fix (Verify.Fix), the way ReleaseCopy gives them from the feed's
-        /// record: a plugin's bytes, checked against the installed version's
+        /// Fix (Verify.Fix, through ReleaseCopy): a plugin's bytes, checked against the installed version's
         /// signed game-files.json, or null when the package does not ship it.
         /// </summary>
         static Func<string, byte[]> PackageCopy(Config cfg)

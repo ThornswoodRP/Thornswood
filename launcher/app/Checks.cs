@@ -239,7 +239,7 @@ namespace Thornswood
         /// Nexus keeps every published revision on a page of its own, and
         /// Vortex installs the one on the page it is opened from.
         ///
-        /// No revision known (0, the feed not read yet) or an address that is
+        /// No revision known (0, the release record not read yet) or an address that is
         /// not a collection's: the address as it is, the only page there is.
         /// </summary>
         public static string CollectionRevisionUrl(Config cfg, int revision)
@@ -806,8 +806,8 @@ namespace Thornswood
         /// sent them round the loop it came from.
         ///
         /// The launcher puts it back itself now. See ClientRuntime.Heal, which
-        /// takes the recorded files out of the kept copies or out of a pack on
-        /// the feed. This row only has to say what is true while that happens.
+        /// takes the recorded files out of the kept copies or out of the
+        /// installed launcher's package. This row only has to say what is true while that happens.
         /// </remarks>
         public static string ClientDetail()
         {

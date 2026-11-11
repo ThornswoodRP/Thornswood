@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
@@ -208,15 +207,15 @@ namespace Thornswood
         ///
         /// ONE: Profile\Keep. Keep already holds skymp5-client.js and its five
         /// neighbours for any file one of this build's updates wrote, which is
-        /// the cheapest and quietest source and needs no network at all.
+        /// the cheapest and quietest source.
         ///
-        /// TWO: the packs on the feed. Every pack carries all six, so the
-        /// newest one that has a given file is a correct copy of it. This takes
-        /// the file out of the zip and puts it in place WITHOUT going through
-        /// Updater.Install, deliberately: Install writes applied.txt and a file
-        /// list, and a pack recorded as applied a second time puts its own
-        /// files out of reach of its own Remove. Nothing about which packs are
-        /// applied changes here. This is a repair, not an update.
+        /// TWO: the installed launcher's own package (#5608). The launcher and
+        /// the client go out in one Velopack package, so the folder Velopack
+        /// unpacked this launcher into holds the six files of the very build
+        /// recorded in it, under Game. Each is checked against the record
+        /// before it is used. Until #5608 this step and a third fetched them
+        /// from the old update feed, its client runtime asset and its packs,
+        /// which went with the feed. Nothing here touches the network.
         ///
         /// Returns how many files it put back.
         /// </summary>
@@ -264,137 +263,50 @@ namespace Thornswood
             }
             if (want.Count == 0) { log("The client runtime is back to the recorded build."); return done; }
 
-            // TWO: the client runtime asset, which is the address rather than
-            // the search. One download, all six files, named by fork commit.
-            VersionDoc v = null;
-            try { v = Updater.Check(cfg); }
-            catch (Exception ex) { log("  could not ask the update feed: " + ex.Message); return done; }
-            if (v == null)
+            // TWO: the installed package's own copies.
+            string from = null;
+            Velopack.Locators.IVelopackLocator at = Velo.Locator;
+            if (Velo.Installed && at != null && !string.IsNullOrEmpty(at.AppContentDir))
+                from = Path.Combine(at.AppContentDir, "Game");
+            if (from == null)
             {
-                log("  the update feed could not be reached, so the rest could not be fetched.");
+                log("  this launcher was not installed by Thornswood's setup, so it has no package to take the rest from. Reinstall it from thornswood.net.");
                 return done;
             }
-
-            if (v.clientRuntime != null && !string.IsNullOrEmpty(v.clientRuntime.url))
+            for (int i = want.Count - 1; i >= 0; i--)
             {
-                string zip = null;
+                string rel = want[i];
+                string src = Path.Combine(from, rel);
                 try
                 {
-                    log("  fetching the client runtime" +
-                        (string.IsNullOrEmpty(v.clientRuntime.forkCommit)
-                            ? "" : " " + v.clientRuntime.forkCommit) + "...");
-                    zip = Updater.Fetch(cfg, v.clientRuntime.url, v.clientRuntime.sha256, log);
-                    done += TakeFrom(zip, want, "the client runtime", log);
-                }
-                catch (Exception ex) { log("  the client runtime download failed: " + ex.Message); }
-                finally { if (zip != null) { try { File.Delete(zip); } catch (Exception ex) { Swallow.Note("ClientRuntime.Heal, deleting temp zip", ex); } } }
-            }
-            if (want.Count == 0) { log("The client runtime is back to the recorded build."); return done; }
-
-            // THREE: the packs, for a launcher newer than the feed, or a feed
-            // written before the asset above existed.
-            try
-            {
-                if (v.packs == null || v.packs.Length == 0)
-                {
-                    log("  nothing else on the feed carries them.");
-                    return done;
-                }
-                /*
-                  Newest last in the feed, so walk it backwards: the most
-                  recent pack holding a file is the one to take it from.
-
-                  AND NOT ALL THE WAY BACK. A pack only carries what CHANGED,
-                  and the feed listed 218 of them on 22 September going back to
-                  10 September. Walking the lot would download two hundred zips
-                  to look inside them, which is worse than saying plainly that
-                  it could not be found. The client runtime changes rarely, so
-                  if it is not in the last few dozen packs it is not coming
-                  from a pack at all and something else is wrong.
-                */
-                int looked = 0;
-                for (int pi = v.packs.Length - 1; pi >= 0 && want.Count > 0; pi--)
-                {
-                    if (looked >= 40)
-                    {
-                        log("  looked in the last 40 updates and did not find " + want.Count +
-                            " of them. Say so in the Discord with this text.");
-                        break;
-                    }
-                    Pack p = v.packs[pi];
-                    if (p == null || string.IsNullOrEmpty(p.url)) continue;
-                    looked++;
-                    string zip = null;
-                    try
-                    {
-                        log("  looking in " + p.Title + "...");
-                        zip = Updater.Fetch(cfg, p.url, p.sha256, log);
-                        done += TakeFrom(zip, want, p.Title, log);
-                    }
-                    catch (Exception ex) { log("  " + p.Title + ": " + ex.Message); }
-                    finally { if (zip != null) { try { File.Delete(zip); } catch (Exception ex) { Swallow.Note("ClientRuntime.Heal, deleting temp zip", ex); } } }
-                }
-            }
-            catch (Exception ex) { log("  could not ask the update feed: " + ex.Message); }
-
-            if (want.Count == 0) log("The client runtime is back to the recorded build.");
-            else log("Could not put back " + want.Count + " of them. Say so in the Discord with this text.");
-            return done;
-        }
-
-        /// <summary>
-        /// Take whatever of `want` this zip carries, verify each one, and
-        /// remove the ones that landed from the list.
-        ///
-        /// Shared by the client runtime asset and the pack walk, because the
-        /// two differ only in where the zip came from. Every file is hashed
-        /// AFTER it is written: a download whose checksum was right can still
-        /// hold the wrong build of a file, and a Client row that went green on
-        /// somebody else's build is worse than one that stayed red.
-        /// </summary>
-        static int TakeFrom(string zip, List<string> want, string where, Action<string> log)
-        {
-            int took = 0;
-            using (ZipArchive ar = ZipFile.OpenRead(zip))
-            {
-                for (int i = want.Count - 1; i >= 0; i--)
-                {
-                    string rel = want[i];
-                    ZipArchiveEntry en = Find(ar, rel);
-                    if (en == null) continue;
+                    if (!File.Exists(src) || !Matches(rel, Sha256Of(src))) continue;
                     string dest = Full(rel);
-                    try
-                    {
-                        string dir = Path.GetDirectoryName(dest);
-                        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-                        // In a game folder made of hard links, writing over a
-                        // linked file rewrites Vortex's copy in the Steam
-                        // install with it. Updater.Install breaks the link
-                        // first for exactly this and so does this.
-                        if (File.Exists(dest)) { try { OwnGame.Unshare(dest); } catch (Exception ex) { Swallow.Note("ClientRuntime.TakeFrom, Unshare " + dest, ex); } }
-                        en.ExtractToFile(dest, true);
-                    }
-                    catch (Exception ex)
-                    {
-                        log("  " + Path.GetFileName(rel) + " could not be written: " + ex.Message);
-                        continue;
-                    }
+                    string dir = Path.GetDirectoryName(dest);
+                    if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                    // In a game folder made of hard links, writing over a
+                    // linked file rewrites Vortex's copy in the Steam install
+                    // with it, so the link is broken first.
+                    if (File.Exists(dest)) { try { OwnGame.Unshare(dest); } catch (Exception ex) { Swallow.Note("ClientRuntime.Heal, Unshare " + dest, ex); } }
+                    File.Copy(src, dest, true);
                     if (!Matches(rel, Sha256Of(dest)))
                     {
-                        log("  " + Path.GetFileName(rel) + " came out of " + where +
-                            " and is not the recorded build; leaving it.");
+                        log("  " + Path.GetFileName(rel) + " was copied from the installed package and is not the recorded build; leaving it.");
                         continue;
                     }
                     // Pack synchronization skips runtime files. Refresh the
-                    // retained script only after checking the extracted bytes,
-                    // or Keep.Restore can roll this repair back before Play.
+                    // retained copy only after checking the bytes written, or
+                    // Keep.Restore can roll this repair back before Play.
                     Keep.Remember(new[] { rel });
-                    log("  " + Path.GetFileName(rel) + " restored from " + where + ".");
+                    log("  " + Path.GetFileName(rel) + " restored from the installed launcher's package.");
                     want.RemoveAt(i);
-                    took++;
+                    done++;
                 }
+                catch (Exception ex) { log("  " + Path.GetFileName(rel) + ": " + ex.Message); }
             }
-            return took;
+
+            if (want.Count == 0) log("The client runtime is back to the recorded build.");
+            else log("Could not put back " + want.Count + " of them: the installed package does not have the recorded build. Reinstall the launcher from thornswood.net, and say so in the Discord with this text.");
+            return done;
         }
 
         static bool Matches(string rel, string sha)
@@ -404,42 +316,6 @@ namespace Thornswood
                 if (e.Rel.Equals(rel, StringComparison.OrdinalIgnoreCase))
                     return sha.Equals(e.Sha, StringComparison.OrdinalIgnoreCase);
             return false;
-        }
-
-        /// <summary>
-        /// The entry for a path inside a pack.
-        ///
-        /// A PACK PUTS EVERY GAME FILE UNDER "game/", and the first version of
-        /// this looked for a bare "Data/...". It found nothing in a pack that
-        /// was carrying all six, which is the quietest possible failure: the
-        /// launcher downloads the right zip, looks inside, and says the file is
-        /// not there. Caught by opening pack-20260922-2202.zip and reading the
-        /// entry names instead of trusting what they ought to be.
-        ///
-        /// Updater.Install is the other half of this convention: "game\" is
-        /// stripped and the rest lands under Paths.Game, "profile\" goes to the
-        /// golden profile. Change the two together.
-        ///
-        /// The bare form is still accepted, because a zip that carries a plain
-        /// Data path is a correct copy of the file whatever else is true of it,
-        /// and refusing it would be refusing the thing we came for. Slashes
-        /// either way: a zip written on Windows can hold either.
-        /// </summary>
-        static ZipArchiveEntry Find(ZipArchive ar, string rel)
-        {
-            string bare = rel.Replace('\\', '/');
-            string prefixed = "game/" + bare;
-            foreach (ZipArchiveEntry en in ar.Entries)
-            {
-                string n = en.FullName.Replace('\\', '/');
-                if (n.Equals(prefixed, StringComparison.OrdinalIgnoreCase)) return en;
-            }
-            foreach (ZipArchiveEntry en in ar.Entries)
-            {
-                string n = en.FullName.Replace('\\', '/');
-                if (n.Equals(bare, StringComparison.OrdinalIgnoreCase)) return en;
-            }
-            return null;
         }
     }
 }

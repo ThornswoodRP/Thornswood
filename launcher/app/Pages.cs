@@ -21,7 +21,7 @@ namespace Thornswood
     static partial class Shell
     {
         static TextBlock txtDiagNote, txtDiagHolds, txtThemeNote;
-        static StackPanel diagReadings, diagCollection, diagAddons;
+        static StackPanel diagReadings, diagCollection;
         static Button btnDiagBundle, btnDiagOpen;
 
         // The last server test: its round trip in ms, -1 when nothing
@@ -36,7 +36,6 @@ namespace Thornswood
             txtDiagNote = win.TxtDiagNote; txtDiagHolds = win.TxtDiagHolds; txtThemeNote = win.TxtThemeNote;
             diagReadings = win.DiagReadings;
             diagCollection = win.DiagCollection;
-            diagAddons = win.DiagAddons;
             btnDiagBundle = win.BtnDiagBundle; btnDiagOpen = win.BtnDiagOpen;
         }
 
@@ -89,9 +88,6 @@ namespace Thornswood
                 // section.
                 diagCollection.Children.Add(CollectionStatusCard());
             }
-
-            // The optional packs, under the collection card (#1170).
-            DrawAddons();
 
             DrawReadings();
             // Voice is asked again whenever the page opens, the way its card
