@@ -128,6 +128,8 @@ var SIGNIN_WORDS = {
   failed: 'Discord could not sign you in just then. Give it a minute and try again.'
 };
 (function signinSaid() {
+  // Most loads carry nothing after the ?, and then there is nothing to read.
+  if (!location.search) return;
   var word = new URLSearchParams(location.search).get('discord');
   if (word === null) return;
   history.replaceState(null, '', location.pathname + location.hash);
