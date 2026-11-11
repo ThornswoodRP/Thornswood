@@ -1,5 +1,13 @@
 # The update feed
 
+**Retired from the launcher by #5608 (11 Nov 2026).** The launcher reads none
+of this any more: it takes its channel's release, game files included,
+straight from GitHub's Releases through Velopack, held to the signed release
+record (launcher\app\ARCHITECTURE.md, Updater and Velo). The feed stays on the
+site only for launchers from before that, until the site side of #5608
+(#5783) takes it down with the scripts that write it. What follows is the
+feed as it was, for that site side; the launcher names in it are history.
+
 Every Thornswood launcher decides what to download from one file:
 `version.json`. It is served from **thornswood.net** (`/feed/version.json`
 live, `/feed-dev/version.json` for dev), and since #907 from nowhere else:
@@ -623,9 +631,8 @@ for byte, as before.
 
 Projected from the 19 Oct main feed with the note's title, version.json is
 about 650 bytes. `launcher\tests\test-1050-feed-split.js` holds the site to this, and
-`launcher\tests\test-1050-feed-split.ps1` the launcher, `Join-FeedSettings`, and (with
-`-OldSrc`) every older launcher reading the split version.json as a feed that
-is behind and offers only the launcher update.
+`launcher\tests\test-1050-feed-split.ps1` held the launcher's reader to it
+until the launcher stopped reading the feed (#5608).
 
 It reaches launchers with the site deployed and the first launcher at 1.2.6
 or above on a channel: Publish-Update writes minLauncher as the launcher it
@@ -761,24 +768,25 @@ Now it is one command, and it goes the same way as every other update:
   with its sha256 on the feed. A launcher that took every release applies it
   and lands on the older files; one several releases behind applies those and
   then this, and lands on the same files; a fresh install seeded with every
-  pack id applies only this. `tests\test-feed-rollback.ps1` proves all three
-  with the launcher's own `Updater` compiled, back, further back and forward.
+  pack id applies only this. `tests\test-feed-rollback.ps1` proved all three
+  with the launcher's own `Updater` compiled until #5608 took the feed out of
+  the launcher.
 - **Launchers that sync to the record** (#1050) follow the new record rather
   than the pack: it names what the release asked for installed, lists what the
   later releases added under `:gone:`, and says `:record:files` once every file
   it names is in the channel's folder on the site (the rollback sends any that
   are not, from what it staged or from the folder of either record). When one
   cannot be had it goes out without `:record:files` and those launchers take
-  the pack like the rest. `tests\test-record-sync.ps1` proves both kinds land
-  on the same files, back and forward.
+  the pack like the rest. `tests\test-record-sync.ps1` proved both kinds land
+  on the same files until #5608.
 - **Once the packs are gone** (the feed's `minLauncher` syncs to the record,
   "When the packs can go"), a rollback is the record alone: no pack goes on
   the feed, the plugin list is the `:golden:` entries of the record it goes
   back to, and the list in the store names no `lastPack`. A record whose files
   cannot all be had is refused with nothing sent, because no launcher would
   have anything to take. The zip is still built from what was staged, for
-  Check-Secrets, and not sent. `tests\test-record-sync.ps1` goes back and
-  forward that way too.
+  Check-Secrets, and not sent. `tests\test-record-sync.ps1` went back and
+  forward that way too until #5608.
 - **Where the list is.** `releases.json` in the channel's store beside the
   feed since #1050 (it was `releases` in version.json), received and sent
   with the feed in one step.

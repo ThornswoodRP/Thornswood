@@ -134,20 +134,14 @@ try {
         $r.Code -eq 1 -and $r.Out -match ('Verify\.cs has ' + ($was + 1) + ' silent catches and the baseline allows ' + $was))
 
     # ---- 3. the three paths say why -----------------------------------------
-    # None of the nine catches on them is counted: Http.cs and ShellUpdate.cs
-    # have none, and Updater.cs's one is Parts, which reads a version string.
+    # None of the catches on them is counted: Http.cs, ShellUpdate.cs and,
+    # since #5608, Updater.cs have none.
     $r = Run-Check $AppDir $none
     Yes 'Http.cs has no catch that drops its reason' ($r.Out -notmatch 'NEW\s+Http\.cs')
     Yes 'ShellUpdate.cs has none' ($r.Out -notmatch 'NEW\s+ShellUpdate\.cs')
     Yes 'Online.cs has none' ($r.Out -notmatch 'NEW\s+Online\.cs')
-    $upd = [IO.File]::ReadAllLines((Join-Path $AppDir 'Updater.cs'))
-    $m = [regex]::Match($r.Out, 'NEW\s+Updater\.cs has (\d+) .*lines ([\d, ]+)\.')
-    $inParts = $false
-    if ($m.Success -and $m.Groups[1].Value -eq '1') {
-        $at = [int]$m.Groups[2].Value
-        for ($j = $at - 1; $j -ge 0; $j--) { if ($upd[$j] -match '^\s{8}\S.*\(') { $inParts = ($upd[$j] -match '\bstatic int\[\] Parts\(string v\)'); break } }
-    }
-    Yes 'Updater.cs has one left, in Parts, off the install and removal paths' $inParts
+    # Parts, the one Updater.cs kept, went with the update feed (#5608).
+    Yes 'Updater.cs has none' ($r.Out -notmatch 'NEW\s+Updater\.cs')
 
     $http = [IO.File]::ReadAllText((Join-Path $AppDir 'Http.cs'))
     Yes 'Http.GetOrNull hands back why' ($http -match 'public static byte\[\] GetOrNull\(string url, int waitMs, int readMs, out string why\)')

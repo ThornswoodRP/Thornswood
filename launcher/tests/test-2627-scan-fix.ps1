@@ -57,10 +57,10 @@
   the project builds (the .NET 10 SDK, Launcher-Csc.ps1), with a stand-in for
   the list of Skyrim's own files. It builds everywhere and runs on Windows:
   the scan and Fix read Windows paths and Windows' Skyrim folders. The
-  server, and the site the release's files are on, are a plain HTTP listener
-  on this machine's loopback address, in the driver; the release is read
-  through Updater.ReleaseCopyAt, past the https check ReleaseCopy makes,
-  which launcher\tests\test-1180-own-plugins.js holds by its text. Paths, Steam and the Windows folders all point into a scratch
+  server is a plain HTTP listener on this machine's loopback address, in the
+  driver; the installed package's copy of our plugins (Updater.ReleaseCopy,
+  held by its text in launcher\tests\test-1180-own-plugins.js) is a stand-in
+  that hands back the release's files. Paths, Steam and the Windows folders all point into a scratch
   folder; nothing outside it is written. Steam is never started and no
   shortcut is touched: the driver hands Fix's steps only the issues it means.
 #>
@@ -100,6 +100,16 @@ $upd = Src (Join-Path $App 'ShellUpdate.cs')
 $xaml = Src (Join-Path $App 'MainWindow.axaml')
 $upkeep = Src (Join-Path $App 'Upkeep.cs')
 $checks = Src (Join-Path $App 'Checks.cs')
+$pkg = Src (Join-Path $App 'SyncPackage.cs')
+
+# The release is asked only for a plugin of ours by its bare name (the name
+# comes from the game server's manifest), out of the installed package's
+# Data folder, held to its signed list (#3386, #5608).
+$copy = [regex]::Match($pkg, '(?s)static Func<string, byte\[\]> PackageCopy\(Config cfg\)(.*?)\n        \}\n').Groups[1].Value
+Yes 'the release reader hands over no file but a plugin in Data, whatever name it is asked for' (
+    $copy.Contains("plugin.IndexOfAny(new[] { '\\', '/', ':' }) >= 0") -and $copy.Contains('\.(esp|esm|esl)$') -and
+    $copy.Contains('files.TryGetValue("Data/" + plugin, out want)'))
+Yes 'and only the bytes its signed list names' ($copy.Contains('b.LongLength != want.Size') -and $copy.Contains('VeloRecord.Sha256(b), want.Sha256'))
 
 Yes 'the Scan button asks everything, and the Fix button is RunFix' (
     $shell.Contains('btnScan.Click += delegate { RunScan(true); };') -and $shell.Contains('btnFix.Click += delegate { RunFix(); };'))
@@ -108,11 +118,11 @@ Yes 'Fix refuses while the own folder is being prepared, so it never writes into
     $runFix -match 'if \(ownGameBusy\) \{ Log\(' -and $runFix.IndexOf('if (ownGameBusy)') -lt $runFix.IndexOf('fixing = true;'))
 Yes 'and while the Downgrade or an update is going in' ($runFix -match 'if \(Downgrade\.Busy\)' -and $runFix -match 'if \(playBar\.Active\)')
 Yes 'Fix scans first, then brings the folder up to date from Vortex before anything else, carrying on either way' (
-    $runFix -match 'Upkeep\.Look\(cfg, true, null, out feed\)' -and
-    $runFix -match 'Has\(rest, IssueKind\.Behind\) &&\s*StartOwnGame\(false, true, delegate \{ FixRest\(known, afterUpdate, afterVortex\); \}, delegate \{ FixRest\(known, afterUpdate, afterVortex\); \}\)')
-$fixRest = [regex]::Match($sf, '(?s)static void FixRest\(VersionDoc feed, bool afterUpdate, bool afterVortex\)(.*?)\n        \}\n').Groups[1].Value
+    $runFix -match 'rest = Upkeep\.Look\(cfg, true\);' -and
+    $runFix -match 'Has\(rest, IssueKind\.Behind\) &&\s*StartOwnGame\(false, true, delegate \{ FixRest\(afterUpdate, afterVortex\); \}, delegate \{ FixRest\(afterUpdate, afterVortex\); \}\)')
+$fixRest = [regex]::Match($sf, '(?s)static void FixRest\(bool afterUpdate, bool afterVortex\)(.*?)\n        \}\n').Groups[1].Value
 $disk = $fixRest.IndexOf('Upkeep.FixOnDisk(')
-$rescan = $fixRest.IndexOf('List<Issue> plugins = Rescan(feed);')
+$rescan = $fixRest.IndexOf('List<Issue> plugins = Rescan();')
 $report = $fixRest.IndexOf('Report(plugins);')
 $update = $fixRest.IndexOf('RunUpdate(delegate')
 $down = $fixRest.LastIndexOf('RunDowngrade();')
@@ -128,8 +138,9 @@ Yes 'and says only what is still wrong, with what will put it right, after it' (
 Yes 'the Fix button is on exactly when there is something Fix can do' ($sf.Contains('btnFix.IsEnabled = canFix > 0 && !fixing;'))
 Yes 'a log line that blocks Play keeps the words the site reads' ($sf.Contains('(i.Blocking ? "blocks Play: " : "worth knowing: ")'))
 Yes 'the bring-up-to-date tells Fix when it fails, so Fix carries on' ($own -match 'else if \(fail != null && failed != null\) failed\(\);')
-Yes 'and the update tells Fix when it is done, or failed, so Fix scans again' (
-    $upd.Contains('if (after != null) after(true);') -and $upd.Contains('if (after != null) after(false);'))
+# Since #5608 every update is the launcher's package: one that went in closes
+# the launcher, and the new one's first start runs Fix (below).
+Yes 'and an update that failed tells Fix, so Fix scans again' ($upd.Contains('if (after != null) after(false);'))
 
 # #3201: one press of Install now does the whole update. Both buttons are one
 # handler, the automatic update is the same press, the update is followed by
@@ -146,16 +157,16 @@ Yes 'the automatic update is the same press' ($upd -match '(?s)static void Updat
 Yes 'UpdateNow is the update, then Fix after it' ($upd -match 'static void UpdateNow\(\)\s*\{\s*RunUpdate\(FixAfterUpdate\);\s*\}')
 Yes 'Fix after an update forgets the update only when it went in, and runs Fix whole' (
     $sf -match '(?s)static void FixAfterUpdate\(bool wentIn\)\s*\{\s*if \(wentIn\) Upkeep\.Forget\(IssueKind\.Update\);\s*RunFix\(true\);\s*\}')
-Yes 'after an update, Fix never takes that same update a second time, whether it went in or failed' (
-    $fixRest -match 'afterUpdate && updateTried != null &&\s*updateTried\.IsSupersetOf\(UpdateParts\(pendingPacks, feed, selfUpdateOffered\)\)' -and
-    $fixRest.IndexOf('updateTried.IsSupersetOf') -lt $fixRest.IndexOf('RunUpdate(delegate'))
-Yes 'and the update records what it tried both ways' (([regex]::Matches($upd, 'updateTried = UpdateParts\(packs, doc, withLauncher\);')).Count -eq 2)
+Yes 'after an update that failed, Fix never takes that same update a second time' (
+    $fixRest -match 'waiting && afterUpdate && updateTried == pendingLauncher\.Version' -and
+    $fixRest.IndexOf('updateTried == pendingLauncher.Version') -lt $fixRest.IndexOf('RunUpdate(delegate'))
+Yes 'and the update records what it tried when it failed' ($upd.Contains('updateTried = launcherUpdate.Version;'))
 Yes 'a folder being prepared holds Fix after an update until it is ready, and its finish runs it' (
     $runFix -match 'if \(ownGameBusy && afterUpdate\) \{ fixWhenFolderReady = true;' -and
     $own -match '(?s)if \(fixWhenFolderReady\)\s*\{\s*fixWhenFolderReady = false;\s*(if \(fixWhenFolderReadyAfterVortex\) \{ fixWhenFolderReadyAfterVortex = false; RunFix\(false, true\); \}\s*else )?RunFix\(true\);')
 Yes 'the first start of a new launcher runs that Fix, after the icon pass, in a folder of its own' (
     $shell -match '(?s)if \(Velo\.Restarted\)\s*ThreadPool\.QueueUserWorkItem\(delegate\s*\{.*?moved = Icons\.Ensure\(true\);.*?if \(!Paths\.Collection\)\s*try \{ Dispatcher\.UIThread\.Post\(\(Action\)delegate \{ RunFix\(true\); \}\);')
-Yes 'Fix writes into the game folder with the folder to itself (OwnGame.Alone)' ($upkeep -match '(?s)OwnGame\.Alone\(delegate\s*\{.*?Verify\.Fix\(cfg, say, Updater\.ReleaseCopy\(cfg, v\)\).*?\}, delegate')
+Yes 'Fix writes into the game folder with the folder to itself (OwnGame.Alone)' ($upkeep -match '(?s)OwnGame\.Alone\(delegate\s*\{.*?Verify\.Fix\(cfg, say, Updater\.ReleaseCopy\(cfg\)\).*?\}, delegate')
 Yes 'a game whose path cannot be read counts as ours only while our own file of that name runs (#2856)' (
     $checks -match '\(at == null && !OwnImageRunning\(n\)\)\) skip = true;')
 Yes 'Diagnostics keeps the icon refresh, which Scan cannot see' ($xaml -match 'x:Name="BtnIcons"')
@@ -337,29 +348,20 @@ namespace Thornswood
             using (var h = SHA256.Create()) return BitConverter.ToString(h.ComputeHash(b)).Replace("-", "").ToLowerInvariant();
         }
 
-        const string Assets = "/feed/assets/";
-
         /// <summary>
-        /// A release on the stand-in site, as Publish-Update leaves one: each
-        /// file under its sha256, and the record of them under its own. Fix
-        /// reads it the way ReleaseCopy does, past the https check alone.
+        /// The installed package's copy of our plugins, as Updater.ReleaseCopy
+        /// hands it to Fix: a plugin's bytes, or null when the package does
+        /// not ship it. Since #5608 the copy is the installed package's, checked
+        /// against its signed list (launcher\tests\test-1180-own-plugins.js
+        /// holds that by its text), so here it is the files themselves.
         /// </summary>
         static Func<string, byte[]> Release(int port, Dictionary<string, byte[]> files)
         {
-            var rec = new StringBuilder("{\":record:files\":\"1\"");
-            lock (served)
-                foreach (var f in files)
-                {
-                    served[Assets + Sha(f.Value)] = f.Value;
-                    rec.Append(",\"").Append(f.Key.Replace("\\", "\\\\")).Append("\":\"").Append(f.Value.Length).Append(":").Append(Sha(f.Value)).Append("\"");
-                }
-            rec.Append("}");
-            byte[] recBytes = Encoding.UTF8.GetBytes(rec.ToString());
-            var r = new RecordRef();
-            r.sha256 = Sha(recBytes);
-            r.id = "test";
-            lock (served) served[Assets + r.sha256] = recBytes;
-            return Updater.ReleaseCopyAt("http://127.0.0.1:" + port + Assets, r);
+            return delegate(string plugin)
+            {
+                byte[] b;
+                return files.TryGetValue("Data\\" + plugin, out b) ? b : null;
+            };
         }
 
         static bool AskedForPluginFiles()
@@ -487,8 +489,8 @@ namespace Thornswood
             byte[] gotContent = File.Exists(Path.Combine(data, "Thornswood-Content.esp")) ? File.ReadAllBytes(Path.Combine(data, "Thornswood-Content.esp")) : null;
             byte[] gotLast = File.Exists(Path.Combine(data, "Thornswood-Last.esp")) ? File.ReadAllBytes(Path.Combine(data, "Thornswood-Last.esp")) : null;
             Yes("Fix puts in the release's content plugin, the server's", gotContent != null && Convert.ToBase64String(gotContent) == Convert.ToBase64String(content));
-            Yes("and Thornswood-Last.esp, from the release by its sha256",
-                gotLast != null && Convert.ToBase64String(gotLast) == Convert.ToBase64String(last) && asked.Contains(Assets + Sha(last)));
+            Yes("and Thornswood-Last.esp, from the release",
+                gotLast != null && Convert.ToBase64String(gotLast) == Convert.ToBase64String(last));
             Yes("and asks the game server for no plugin file (#3386)", !AskedForPluginFiles());
             Yes("and switches Thornswood-Last.esp on in the server's place, last in the list", live != null &&
                 live.IndexOf("*Thornswood-Content.esp\r\n*Thornswood-Last.esp", StringComparison.Ordinal) >= 0);
@@ -521,26 +523,23 @@ namespace Thornswood
             Yes("then the light order is still found, and what will put it right is the next update",
                 stillOrder != null && stillOrder.WhatWill.IndexOf("does not have the copy the server runs yet", StringComparison.Ordinal) >= 0 && Clean(stillOrder.WhatWill));
 
-            // No feed, and a release that does not ship the plugin: nothing
-            // is written, and nothing is asked of the game server either.
+            // No package to take a copy from, and a release that does not
+            // ship the plugin: nothing is written, and nothing is asked of the
+            // game server either.
             said.Clear();
             Verify.Fix(cfg, Into(said), null);
             bool noFeed = false;
-            foreach (string m in said) if (m.IndexOf("Thornswood-Last.esp: the update feed could not be read", StringComparison.Ordinal) >= 0) noFeed = true;
-            Yes("with no feed to read, Fix puts in nothing and says so", noFeed && !File.Exists(Path.Combine(data, "Thornswood-Last.esp")));
+            foreach (string m in said) if (m.IndexOf("Thornswood-Last.esp: this launcher was not installed by Thornswood's setup", StringComparison.Ordinal) >= 0) noFeed = true;
+            Yes("with no package to take a copy from, Fix puts in nothing and says so", noFeed && !File.Exists(Path.Combine(data, "Thornswood-Last.esp")));
             var without = new Dictionary<string, byte[]>(releaseFiles);
             without.Remove("Data\\Thornswood-Last.esp");
             said.Clear();
             Verify.Fix(cfg, Into(said), Release(port, without));
             bool notShipped = false;
-            foreach (string m in said) if (m.IndexOf("Thornswood-Last.esp: the release the update feed names does not ship it", StringComparison.Ordinal) >= 0) notShipped = true;
+            foreach (string m in said) if (m.IndexOf("Thornswood-Last.esp: the installed release does not ship it", StringComparison.Ordinal) >= 0) notShipped = true;
             Yes("with a release that does not ship it, the same", notShipped && !File.Exists(Path.Combine(data, "Thornswood-Last.esp")));
             Yes("and the game server was never asked for a plugin file", !AskedForPluginFiles());
 
-            // The release is asked only for a plugin of ours by its bare
-            // name: the name comes from the game server's manifest.
-            Yes("the release reader hands over no file but a plugin in Data, whatever name it is asked for",
-                release("Scripts\\MpClientPlugin.pex") == null && release("..\\Data\\Thornswood-Last.esp") == null && release("x.esp") == null);
         }
 
         // ---- 2: the server names a plugin that is not ours -----------------
@@ -672,21 +671,15 @@ namespace Thornswood
             Put(Path.Combine(Paths.WinMyGames + ".st-backup", "Saves\\mine.ess"), "MY SAVE");
             Put(Paths.StateFile, "{}");
 
-            // The feed's launcherVersion is not the launcher's update any more
-            // (#4825): a feed naming a newer one, with no launcher waiting on
-            // the Velopack channel, is no update.
-            var feed = new VersionDoc();
-            feed.launcherVersion = "999.0.0";
-            feed.launcherUrl = "https://thornswood.net/feed/assets/0";
+            // No launcher waiting on the Velopack channel is no update.
             Upkeep.LauncherWaiting = null;
-            VersionDoc read;
-            Yes("a newer launcherVersion on the feed alone is no update",
-                Find(Upkeep.Look(cfg, true, feed, out read), IssueKind.Update, null) == null);
+            Yes("no launcher waiting is no update",
+                Find(Upkeep.Look(cfg, true), IssueKind.Update, null) == null);
 
             // A newer launcher waiting on the Velopack channel, as the shell's
             // launcher check found it.
             Upkeep.LauncherWaiting = "999.0.0";
-            List<Issue> look = Upkeep.Look(cfg, true, feed, out read);
+            List<Issue> look = Upkeep.Look(cfg, true);
             Issue build = Find(look, IssueKind.BuildFiles, null);
             Issue folders = Find(look, IssueKind.WindowsFolders, null);
             Issue lost = Find(look, IssueKind.Lost, null);
@@ -701,7 +694,6 @@ namespace Thornswood
                 skyrim.Text.IndexOf("Downgrade", StringComparison.Ordinal) >= 0);
             Yes("and the newer launcher on its channel, which Fix takes last", update != null && update.Fixable && update.Blocking &&
                 update.Text.IndexOf("999.0.0", StringComparison.Ordinal) >= 0 && update.Text.IndexOf("last", StringComparison.Ordinal) >= 0);
-            Yes("the feed it went by is the one it was handed, not asked again", read == feed);
             bool words = true;
             foreach (Issue i in look) if (!Clean(i.Text) || !Clean(i.WhatWill ?? "")) words = false;
             Yes("every line is in the house words, and every one says what will put it right", words && AllSay(look));
@@ -718,7 +710,7 @@ namespace Thornswood
             }
             var said = new List<string>();
             var mine = new List<Issue> { build, folders, lost };
-            Upkeep.FixOnDisk(cfg, mine, feed, Into(said));
+            Upkeep.FixOnDisk(cfg, mine, Into(said));
             Yes("Fix puts the kept page back", Text(Path.Combine(data, "Platform\\UI\\index.html")) == "OUR PAGE");
             Yes("writes Thornswood.ini from the template", File.Exists(ThornIni.File_));
             Yes("puts the shipped settings file back", File.Exists(Path.Combine(Paths.MyGames, "Skyrim.ini")));
@@ -729,7 +721,7 @@ namespace Thornswood
             foreach (string m in said) if (!Clean(m)) saidWords = false;
             Yes("and says what it did, in the house words (" + said.Count + " lines)", saidWords);
 
-            List<Issue> again = Upkeep.Look(cfg, true, feed, out read);
+            List<Issue> again = Upkeep.Look(cfg, true);
             Yes("the scan after finds none of those four again",
                 Find(again, IssueKind.BuildFiles, null) == null && Find(again, IssueKind.WindowsFolders, null) == null && Find(again, IssueKind.Lost, null) == null);
             Yes("and still says what Fix does next: the Downgrade and the update",

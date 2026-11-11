@@ -471,19 +471,22 @@ SIX.forEach(function (d) {
   const shell = read('launcher/app/Shell.cs') || '';
   const install = label(ui, 'BtnServerDev');
   const make = label(ui, 'BtnOwnGameMake');
-  yes('the setup paragraph names the entry that installs the dev build as the launcher labels it, "' +
+  yes('the setup paragraph names the entry that switches to the dev channel as the launcher labels it, "' +
       install + '"', namesLabel(para, install));
-  yes('and the one that makes its game folder, "' + make + '"', !!make && para.indexOf('"' + make + '"') >= 0);
+  yes('and the folder a dev Ship builds from, recorded with Setup-ShipMachine and made by Update-ShipRoot',
+      /Setup-ShipMachine\.ps1 -Channel dev -Root <folder>/.test(para) && /Update-ShipRoot\.ps1/.test(para));
   // Which entry that is, measured rather than taken from the paragraph. The
   // label above is only worth checking while this is the control that does it.
   yes('that entry is in the dropdown the paragraph sends a reader to, under the server button',
       /<Popup x:Name="ServerPickPopup"[^>]*[\s\S]*?#BtnServerPick\b/.test(ui) &&
       ui.indexOf('x:Name="BtnServerPick"') < ui.indexOf('x:Name="BtnServerDev"') &&
       /Play page/.test(para) && /dropdown/.test(para));
-  yes('and pressing it is what installs the dev build (Shell.cs, SwitchToDev)',
+  // Since #5608 (Patrick's answer B) it switches the one install's channel;
+  // it no longer copies a second launcher beside it.
+  yes('and pressing it is what switches to the dev channel (Shell.cs, SwitchToDev)',
       /btnServerDev\s*=\s*win\.BtnServerDev\b/.test(shell) &&
       /btnServerDev\.Click\s*\+=[\s\S]{0,160}?SwitchToDev\(\)/.test(shell) &&
-      /static void SwitchToDev\(\)[\s\S]*?DevBuild\.Install\(/.test(shell));
+      /static void SwitchToDev\(\)[\s\S]*?SwitchChannel\("dev"\)/.test(shell));
 
   const ship = read('scripts/release/Ship.ps1') || '';
   yes('Ship.ps1 refuses the dev channel without the dev build, as the paragraph says',

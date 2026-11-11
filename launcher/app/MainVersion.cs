@@ -48,6 +48,18 @@ namespace Thornswood
         /// </summary>
         static string MainVersionOf(VelopackAsset[] assets)
         {
+            VelopackAsset top = NewestFull(assets);
+            if (top == null) throw new Exception("main's newest Release carries no launcher package");
+            return top.Version.ToString();
+        }
+
+        /// <summary>
+        /// The highest full package in a feed ChannelSource cut, which is the
+        /// newest Release's own (ChannelRelease), or null when there is none.
+        /// Also what a new ship root takes (SyncPackage.cs, SeedFromChannel).
+        /// </summary>
+        internal static VelopackAsset NewestFull(VelopackAsset[] assets)
+        {
             VelopackAsset top = null;
             if (assets != null)
             {
@@ -57,8 +69,7 @@ namespace Thornswood
                     if (top == null || a.Version > top.Version) top = a;
                 }
             }
-            if (top == null) throw new Exception("main's newest Release carries no launcher package");
-            return top.Version.ToString();
+            return top;
         }
     }
 }

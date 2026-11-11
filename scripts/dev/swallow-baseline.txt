@@ -164,7 +164,6 @@ Chars.cs 10
 Checks.cs 22
 ClientRuntime.cs 1
 CrashDump.cs 1
-DevBuild.cs 2
 Discord.cs 13
 Display.cs 3
 Door.cs 1
@@ -195,7 +194,6 @@ Swap.cs 1
 Sync.cs 3
 ThornIni.cs 2
 Uninstall.cs 14
-Updater.cs 1
 Verify.cs 4
 Voice.cs 7
 VoiceIce.cs 1

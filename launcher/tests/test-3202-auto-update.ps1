@@ -18,20 +18,19 @@
     1. The default. Config.AutoUpdate is on unless config.json holds an
        explicit false, so a fresh install and an older config.json with no
        key both have it on, and config.example.json says true.
-    2. Every update check's answer is followed by UpdateBySelf, and Scan's
-       and Fix's own readings of the feed are not (Scan only looks; Fix
-       takes the update itself, last).
+    2. Every update check's answer is followed by UpdateBySelf, and Scan
+       and Fix are not (Scan only looks; Fix takes the update itself, last).
     3. UpdateBySelf takes the update with one press of Install now
        (UpdateNow) when the setting is on and an update is waiting. It
-       leaves it while the launcher's own game runs (the in-play clock
-       closes the game and the check after the close comes back here),
+       leaves it while the launcher's own game runs (the check after the
+       game closes comes back here; since #5608 nothing closes it),
        while an update is going in, and while a Skyrim the launcher did not
        start is open, and it never takes the update RunUpdate tried last a
        second time by itself.
     4. installWhenSeen is gone: with the setting on every check takes the
        update, so the flag had nothing left to say.
     5. RunUpdate runs one update at a time, and clears that when the update
-       has gone in or failed.
+       failed; one that went in closes the launcher.
     6. The setting says what it does, and that the check always runs.
 #>
 [CmdletBinding()]
@@ -70,7 +69,7 @@ Yes 'config.example.json has it on' ($example -match '"AutoUpdate":\s*true')
 
 # ---- 2: who asks ------------------------------------------------------------------
 $check = Body $upd 'static void CheckUpdatesBackground(bool loud)'
-Yes 'every update check''s answer is followed by UpdateBySelf' ($check.Contains('OnVersionDoc(v, loud); UpdateBySelf();'))
+Yes 'every update check''s answer is followed by UpdateBySelf' ($check -match 'LauncherAnswer\(asked, launcher, launcherNote, launcherWhy, loud\);\s*UpdateBySelf\(\);')
 Yes 'and nothing else calls it: not Scan''s or Fix''s reading of the feed' (([regex]::Matches(($upd + $shell + $sf), 'UpdateBySelf\(\);')).Count -eq 1)
 
 # ---- 3: what it does --------------------------------------------------------------
@@ -78,18 +77,20 @@ $self = Body $upd 'static void UpdateBySelf()'
 Yes 'UpdateBySelf exists' ($self.Length -gt 0)
 function Before([string]$a, [string]$b) { $i = $self.IndexOf($a); $j = $self.IndexOf($b); ($i -ge 0) -and ($j -ge 0) -and ($i -lt $j) }
 Yes 'it does nothing with the setting off' (Before 'if (!cfg.AutoUpdate) return;' 'UpdateNow();')
-Yes 'or with nothing waiting' (Before 'if (!updatePending || (pendingPacks.Count == 0 && !selfUpdateOffered)) return;' 'UpdateNow();')
+Yes 'or with nothing waiting' (Before 'if (!updatePending || pendingLauncher == null) return;' 'UpdateNow();')
 Yes 'it leaves the update to the in-play clock while the game runs' (Before 'if (playing) return;' 'UpdateNow();')
 Yes 'and to the update already going in' (Before 'if (updating) return;' 'UpdateNow();')
 Yes 'it never closes a Skyrim the launcher did not start' (Before 'if (Checks.GameRunning())' 'UpdateNow();')
-Yes 'it never takes the update tried last a second time' (Before 'updateTried.IsSupersetOf(UpdateParts(pendingPacks, pendingDoc, selfUpdateOffered))' 'UpdateNow();')
+Yes 'it never takes the update tried last a second time' (Before 'if (updateTried != null && updateTried == pendingLauncher.Version)' 'UpdateNow();')
 Yes 'and otherwise it is one press of Install now' ($self -match 'Log\("Installing it now, because automatic updates are on \(Settings, Updates\)\."\);\s*UpdateNow\(\);\s*$')
 
 # ---- 4: installWhenSeen is gone -------------------------------------------------------
 Yes 'installWhenSeen is gone from the launcher' (-not ($upd + $shell + $sf).Contains('installWhenSeen'))
-$ovd = Body $upd 'static void OnVersionDoc(VersionDoc v, bool loud)'
-Yes 'OnVersionDoc only paints the answer and starts no update itself' ($ovd.Length -gt 0 -and -not ($ovd -match 'RunUpdate\(|UpdateNow\('))
-Yes 'the game closing for an update still checks again' ($shell -match '(?s)closedForUpdate = false;.*?CheckUpdatesBackground\(true\)')
+$ovd = (Body $upd 'static void LauncherAnswer(bool asked, Updater.LauncherUpdate launcher, string note, string why, bool loud)') + (Body $upd 'static void ShowUpdate(bool sayUpToDate)')
+Yes 'LauncherAnswer and ShowUpdate only paint the answer and start no update themselves' ($ovd.Length -gt 0 -and -not ($ovd -match 'RunUpdate\(|UpdateNow\('))
+# Since #5608 nothing closes the game for an update: the check waits for the
+# game to close and runs then.
+Yes 'the game closing runs an update check' ($shell -match '(?s)Discord\.SessionEnd\(.*?CheckUpdatesBackground\(false\)' -and $shell -notmatch 'closedForUpdate')
 
 # ---- 5: one update at a time --------------------------------------------------------
 $run = Body $upd 'static void RunUpdate(Action<bool> after)'
@@ -97,7 +98,9 @@ $guard = $run.IndexOf('if (updating) {')
 $set = $run.IndexOf('updating = true;')
 Yes 'RunUpdate refuses a second update while one is going in' ($guard -ge 0 -and $guard -lt $set)
 Yes 'and marks one only once the game is out of the way' ($run.IndexOf('if (!ClearStuckGame(true)) return;') -lt $set)
-Yes 'and clears it both when the update went in and when it failed' (([regex]::Matches($run, 'updating = false;')).Count -eq 2)
+# An update that went in closes the launcher for Velopack to start the new
+# one (#4825), so only the failure has a launcher left to clear it in.
+Yes 'and clears it when the update failed; one that went in closes the launcher' (([regex]::Matches($run, 'updating = false;')).Count -eq 1 -and $run -match 'win\.Close\(\);')
 
 # ---- 6: the words -------------------------------------------------------------------
 Yes 'the setting says it installs, not that it checks' ($xaml.Contains('<CheckBox x:Name="ChkAutoUpdate" Content="Install updates by themselves"/>') -and -not $xaml.Contains('Check for updates when the launcher opens'))

@@ -207,10 +207,12 @@ const psFiles = ['tests'].concat(beside).reduce((all, dir) => all.concat(
 const psText = {};
 for (const f of psFiles) { psText[f] = read(path.join(REPO_DIR, f)).replace(/^\uFEFF/, ''); }
 const psSites = psFiles.filter((f) => /THORNSWOOD_DOCS_PORT/.test(psText[f]));
-const FIVE = ['tests/test-deployed-build.ps1', 'tests/test-feed-store.ps1', 'tests/test-record-sync.ps1', 'tests/test-release-baseline.ps1',
-  'tests/test-scrub-feed.ps1', 'site/tests/test-site-assets.ps1'];
+// test-record-sync.ps1 and test-scrub-feed.ps1 went with the launcher's
+// update feed (#5608).
+const FIVE = ['tests/test-deployed-build.ps1', 'tests/test-feed-store.ps1', 'tests/test-release-baseline.ps1',
+  'site/tests/test-site-assets.ps1'];
 console.log('\nthe PowerShell harnesses that start the site (' + psSites.length + '):');
-yes('they are the five #1755 found, and test-deployed-build.ps1', psSites.length === FIVE.length && FIVE.every((f) => psSites.indexOf(f) >= 0));
+yes('they are the three #1755 found that are left, and test-deployed-build.ps1', psSites.length === FIVE.length && FIVE.every((f) => psSites.indexOf(f) >= 0));
 // The function, from its line to the brace that closes it at the margin.
 function psLift(src) {
   const m = /^function Wait-OwnLine\([\s\S]*?\n\}\n/m.exec(src);
@@ -232,10 +234,6 @@ yes('they all carry the same Wait-OwnLine', psSites.every((f) => psWaits[f] && p
   yes('test-site-assets.ps1: the GitHub stand-in says its own line, and is waited on',
       /\.listen\(port, '127\.0\.0\.1', \(\) => console\.log\('\[github\] listening on 127\.0\.0\.1:' \+ port\)\)/.test(sa) &&
       /Wait-OwnLine \$ghProc \$script:errOf\[\$ghProc\.Id\] '\[github\]' \$ghPort/.test(sa));
-  const rs = psText['tests/test-record-sync.ps1'] || '';
-  yes('test-record-sync.ps1: the game server stand-in says its own line, and is waited on',
-      /console\.log\('\[game\] listening on 127\.0\.0\.1:\$gamePort'\)/.test(rs) &&
-      /Wait-OwnLine \$gp \$gpErr '\[game\]' \$gamePort/.test(rs));
 }
 
 // ------------------------------------- the game port the site checks (#1816)
@@ -261,10 +259,10 @@ function portOne(src, v, ps) {
 }
 const gameSites = sites.filter((f) => /\bgameCheckPort\b/.test(text[f]))
   .concat(psSites.filter((f) => /\bgameCheckPort\b/.test(psText[f])));
-const SEVEN = ['site/tests/test-site-assets.ps1', 'tests/test-feed-store.ps1', 'tests/test-record-sync.ps1',
-  'tests/test-release-baseline.ps1', 'tests/test-scrub-feed.ps1', 'site/tests/test-report-limits.js', 'site/tests/test-for-bot-folder.js'];
+const SEVEN = ['site/tests/test-site-assets.ps1', 'tests/test-feed-store.ps1',
+  'tests/test-release-baseline.ps1', 'site/tests/test-report-limits.js', 'site/tests/test-for-bot-folder.js'];
 console.log('\nthe game port each site harness gives its site (' + gameSites.length + '):');
-yes('they include the seven #1816 found', SEVEN.every((f) => gameSites.indexOf(f) >= 0));
+yes('they include the seven #1816 found, but the two that went with the update feed (#5608)', SEVEN.every((f) => gameSites.indexOf(f) >= 0));
 // The check itself, on the lines this issue took out.
 yes('it would have caught $dead from a listener let go, and DEAD from freePort()',
     !portOne('$l.Start(); $dead = $l.LocalEndpoint.Port; $l.Stop()\n', '$dead', true) &&

@@ -371,6 +371,15 @@ namespace Thornswood
             }
 
             /// <summary>
+            /// The tag of the Release a file of the feed this source read
+            /// came from, or null for one it did not read.
+            /// </summary>
+            public string ReleaseOf(VelopackAsset a)
+            {
+                return a is GitBaseAsset g && g.Release != null ? g.Release.Name : null;
+            }
+
+            /// <summary>
             /// Where a file of <paramref name="release"/> is fetched from: its
             /// API address, which has to be one of this repository's Release
             /// files (GitHub.AssetUrl).

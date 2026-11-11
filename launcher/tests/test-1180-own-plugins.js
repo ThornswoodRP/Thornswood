@@ -11,9 +11,10 @@
 // #3386. The bytes no longer come from the server at all: its resources port
 // is plain http, and the size and crc32 that vouched for them came over the
 // same port. The server serves no plugin file now, and Fix takes ours from
-// the release the update feed names, over https, by the sha256 its record
-// gives them (Updater.ReleaseCopy). launcher\tests\test-2627-scan-fix.ps1 runs
-// that reader with Fix.
+// the launcher's installed package, checked against the sha256 its signed
+// game-files.json gives them (Updater.ReleaseCopy; since #5608 no update
+// feed on the site is read). launcher\tests\test-2627-scan-fix.ps1 runs
+// Fix with a reader of its own.
 //
 // The gamemode's server manifest block is run here against a pretend disk.
 // The launcher cannot be compiled here, so its half is held by its text.
@@ -226,12 +227,13 @@ if (block) {
     .filter(function (f) { return /\/plugins\/"|\/plugins\/" \+/.test(read("launcher", "app", f)); });
   yes("no launcher file fetches from /plugins/" + (others.length ? " (" + others.join(", ") + ")" : ""), others.length === 0);
   const upkeep = read("launcher", "app", "Upkeep.cs");
-  yes("Fix is handed the release the feed names, read over https by Updater.ReleaseCopy",
-      /Verify\.Fix\(cfg, say, Updater\.ReleaseCopy\(cfg, v\)\)/.test(upkeep));
-  const sync = read("launcher", "app", "Sync.cs");
-  const copy = slice(sync, "public static Func<string, byte[]> ReleaseCopy(Config cfg, VersionDoc v)", "\n        }\n");
-  yes("ReleaseCopy checks the record's address (https, a host on the list) before it reads a byte",
-      !!copy && copy.indexOf("CheckUrl(r.url);") >= 0 && copy.indexOf("CheckUrl(r.url);") < copy.indexOf("ReleaseCopyAt("));
+  yes("Fix is handed the installed package's copy, through Updater.ReleaseCopy",
+      /Verify\.Fix\(cfg, say, Updater\.ReleaseCopy\(cfg\)\)/.test(upkeep));
+  const pkg = read("launcher", "app", "SyncPackage.cs");
+  const copy = slice(pkg, "static Func<string, byte[]> PackageCopy(Config cfg)", "\n        }\n");
+  yes("the copy is checked against the signed list's size and sha256 before it is handed over",
+      !!copy && /b\.LongLength != want\.Size \|\| !string\.Equals\(VeloRecord\.Sha256\(b\), want\.Sha256/.test(copy) &&
+      copy.indexOf("VeloRecord.Sha256(b)") < copy.indexOf("return b;"));
 
   const bytes = slice(verify, "public static List<Issue> Bytes(Config cfg)", "\n        }\n");
   yes("Scan carries served on each issue and names Vortex for another author's plugin",

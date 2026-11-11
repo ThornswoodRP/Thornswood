@@ -12,8 +12,8 @@
       Play page: DrawStatus reads it fresh, but only a page change, a scan,
       a feed answer or Steam starting or stopping runs DrawStatus;
     - the mod updates that waited on the collection were never asked for
-      again: OnVersionDoc returns early while ModsMissing, with none
-      pending, and only Scan handed a feed answer back to it.
+      again: the answer's drawing returned early while ModsMissing, with
+      none pending, and only Scan handed an answer back to it.
 
   This holds the fix to the source:
     - the two second tick, when no game is up, runs WatchVortex;
@@ -27,7 +27,8 @@
     - VortexChanged draws again only when that moved, and when the card
       came down shuts Play on CHECKING and asks the feed again on a pool
       thread, through CheckUpdatesBackground, which hands the answer to
-      OnVersionDoc and then UpdateBySelf;
+      LauncherAnswer and then UpdateBySelf (since #5608 the answer is
+      GitHub's, about the launcher's package, and ShowUpdate draws it);
     - the page lists ShellVortexWatch.cs with the Shell.
 
   Read only. It reads source files and nothing else.
@@ -131,11 +132,11 @@ yes('the log says what Vortex has now',
 
 // ------------------------------------------------------------ the feed answer
 const check = code(body(update, 'static void CheckUpdatesBackground(bool loud)'));
-yes('CheckUpdatesBackground hands its answer to OnVersionDoc and then UpdateBySelf, so automatic updates go in',
-    /OnVersionDoc\(v, loud\); UpdateBySelf\(\);/.test(check));
-const onDoc = code(body(update, 'static void OnVersionDoc(VersionDoc v, bool loud)'));
+yes('CheckUpdatesBackground hands its answer to LauncherAnswer and then UpdateBySelf, so automatic updates go in',
+    /LauncherAnswer\(asked, launcher, launcherNote, launcherWhy, loud\);\s*UpdateBySelf\(\);/.test(check));
+const onDoc = code(body(update, 'static void ShowUpdate(bool sayUpToDate)'));
 const held = body(onDoc.slice(onDoc.indexOf('if (ModsMissing())')), 'if (ModsMissing())');
-yes('OnVersionDoc still holds the mod updates while the collection card is up, which is why it is asked again',
+yes('ShowUpdate still puts the collection card up while the mods are missing and no launcher waits, which is why it is asked again',
     held.indexOf('updatePending = false;') >= 0 && held.indexOf('ShowCollectionBar();') >= 0);
 
 // ------------------------------------------------------------ the page

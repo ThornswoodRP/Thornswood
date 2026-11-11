@@ -181,19 +181,6 @@ namespace Thornswood
             SwapIn(next, path);
         }
 
-        /// <summary>The same, for a record kept byte for byte (the settings cache).</summary>
-        internal static void WriteRecord(string path, byte[] bytes)
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(path));
-            string next = path + ".new";
-            using (var fs = new FileStream(next, FileMode.Create, FileAccess.Write, FileShare.None))
-            {
-                fs.Write(bytes, 0, bytes.Length);
-                fs.Flush(true);
-            }
-            SwapIn(next, path);
-        }
-
         /// <summary>Renames next over path in one call, replacing it.</summary>
         static void SwapIn(string next, string path)
         {

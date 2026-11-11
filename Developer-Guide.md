@@ -132,7 +132,7 @@ Each page is one task. A first day reads them in this order; a later day opens t
   - [G. Main Build](docs/guide/tools.md#g-main-build)
     - [Learn more about Main Build](docs/guide/tools.md#learn-more-about-main-build)
   - [H. Dev Build](docs/guide/tools.md#h-dev-build)
-    - [Install it from the main launcher](docs/guide/tools.md#install-it-from-the-main-launcher)
+    - [Switch to it from the launcher](docs/guide/tools.md#switch-to-it-from-the-launcher)
     - [The Play page](docs/guide/tools.md#the-play-page)
     - [Learn more about Dev Build](docs/guide/tools.md#learn-more-about-dev-build)
   - [I. Bot](docs/guide/tools.md#i-bot)

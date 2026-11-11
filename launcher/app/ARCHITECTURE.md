@@ -9,8 +9,8 @@ long-form documents used to point at as if it were this page.
 ## Which install this describes
 
 Thornswood's own game folder, the settled design since 18 Sep. The game runs
-from `<Root>\Game` (`C:\Thornswood\Game` on the main build,
-`C:\Thornswood-DevBuild\Game` on the dev build), which OwnGame made from what
+from `<Root>\Game` (`C:\Thornswood\Game`, on the main and dev channels
+alike since #5608), which OwnGame made from what
 Vortex deployed into the Steam copy: big files as hard links, anything another
 program rewrites in place as copies. It takes three kinds of file and nothing
 else (#1232): Skyrim's own, by the pinned build's list, Vortex's, by Vortex's
@@ -107,7 +107,7 @@ has been drawn, and `StateChanged`. So:
   the start), ShellUninstall.cs (the launcher as Windows' Uninstall button
   opens it), ShellProgress.cs (the Play button as a progress bar),
   ShellScanFix.cs (Scan and Fix on Diagnostics), ShellUpdate.cs,
-  ShellChars.cs, ShellPlay.cs, ShellNews.cs, ShellPacks.cs,
+  ShellChars.cs, ShellPlay.cs, ShellNews.cs, ShellCollection.cs,
   ShellVortexWatch.cs, Waiting.cs and Stall.cs.
 
 Message boxes are Windows' own, through Ask.cs (MessageBoxW): Avalonia has
@@ -140,12 +140,12 @@ unless it says a pool thread.
 | 14 | `Shell.cs:436 AutoJoin.Ensure` | Makes `Game\Data\Platform\Plugins\skymp5-client-settings.txt` when there is none (`AutoJoin.cs:52 Ensure()`). |
 | 15 | `Shell.cs:445 Checks.GameRunning` | A game still running from before the launcher was restarted is taken over: `Shell.cs:455 Hold.Take` holds our files again and nothing is pulled apart under it. Otherwise `Shell.cs:460 Swap.Restore` takes off any redirect a crash left and `Shell.cs:461 Keep.TakeNote` deletes a stale session note. |
 | 16 | `Shell.cs:463 Leaks.Clean` | Deletes the one sign in file a 16 Sep installer shipped, matched by hash, and, in Thornswood's own folder only, each mod menu setting, window layout and note of the machine that ships that the dev records of 28 and 29 Sep handed out, while it is still the bytes they handed out (#1252). A pool thread runs `OwnGame.CleanSteamCopy`, which once the folder is made takes Thornswood's files out of the Steam copy, once, and removes a leftover `Profile\Payload`. Then `Shell.cs:472 ThornIni.Ensure` writes `Game\Data\SKSE\Plugins\Thornswood.ini` from the template if it is missing. Before the folder exists and when no downgrade is needed (`SteamUpdates.LooksAtStart`), `Shell.cs:474 HoldSteamUpdatesOnStart` logs Steam's Updates setting for the Steam copy of Skyrim and sets it when it does not hold the version (see SteamUpdates below). |
-| 17 | `Shell.cs:476 Keep.Unpark` | Puts back plugins a crashed session left parked. Then `Shell.cs:480 Keep.Seed` fills `Profile\Keep` from pack records for files it has no copy of yet. |
+| 17 | `Shell.cs:476 Keep.Unpark` | Puts back plugins a crashed session left parked. Then `Shell.cs:480 Keep.Seed` fills `Profile\Keep` from the records of the files Thornswood wrote for files it has no copy of yet. |
 | 18 | `Shell.cs:489 Display.MatchScreen` | Unless Lock resolution is ticked: the game's resolution follows the screen. |
 | 19 | `Shell.cs:502 Icons.Ensure` | Pool thread. The shortcut icon follows the exe. `Shell.cs:519 ClearLeftovers` (pool) ends a windowless Skyrim over three minutes old. `Shell.cs:533 Uninstall.DropScratch` (pool) deletes the installer's leftover `Thornswood-setup` folder. |
 | 20 | `Shell.cs:550 RunScan` | `Verify.Run` against the server's manifest and Upkeep's quick checks (#2627), then the Scan and Fix card. Then DrawStatus fills the checklist (on Diagnostics since #607), the Play summary and the button (see "The gate" below). |
 | 21 | `Shell.cs:557 HealClientBackground` | Pool thread, only when the six client runtime files are not the recorded build: `ClientRuntime.cs:223 Heal()` fetches them. Then `Shell.cs:558 AutoDisplayOnce` marks `config.json` so it never runs again and, on an install that has never played, matches the game's resolution to the screen; `Shell.cs:559 StartPing` asks whether the server is up, and `Shell.cs:560 StartGallery` fills Play's spotlight. |
-| 22 | `Shell.cs:563 CheckUpdatesBackground` | Pool thread: the update check (see Updater in section 2). Always: config.json cannot switch it off, and Play stays shut until it answers (#937). Then `Shell.cs:564 StartFeedWatch`. |
+| 22 | `Shell.cs:563 CheckUpdatesBackground` | Pool thread: the launcher check, which asks GitHub for this channel's newest Release (see Updater in section 2). Always: config.json cannot switch it off, and Play shows CHECKING until GitHub's first answer (#937); a check GitHub does not answer frees Play, since only a found update holds it (#5608). Then `Shell.cs:564 StartLauncherPoll` asks again every half hour while the game is not running. |
 | 23 | `Shell.cs:569 Voice.Start` | Voice comes up with the launcher, in its own code on threads of its own, with no window and nothing to prepare (see Voice in section 2). Then `Shell.cs:574 StartMenuMusic` is queued until the window is idle on screen. |
 | 24 | `Shell.cs:582 win.ContentRendered` | Once the window has drawn its first frame (MainWindow.axaml.cs), `Shell.cs:584 LogStartTime` writes one line to `Profile\launcher.log`, `Launcher start: the window was on screen <s> s after the launcher started, <s> s of it the mod check, on launcher <version>.`, timed from the process's own start and the Stopwatch around RunScan (#3534); the weekly review totals them with `scripts\vps\Read-LauncherStarts.ps1`. When `Shell.cs:585 Velo.Restarted` says Velopack started this launcher straight after putting an update to it in, a pool thread brings the shortcut icons up to date (`Shell.cs:589 Icons.Ensure`) and then, in Thornswood's own folder, Fix runs as it does after any update (`Shell.cs:595 RunFix`, #3201), so the update that restarted the launcher ends the way Install now does. Every other start skips that. Last, `Shell.cs:599 Ask.Owner` gives message boxes the window. |
 | 25 | `Shell.cs:603 WindowFit.Keep` | The window inside the screen's work area at any display scale (#463), then `Shell.cs:604 CentreOnMainScreen`. |
@@ -183,7 +183,7 @@ The HTTP requests of the launcher's own go through one shared client
 `Shell.cs:2515 timer.Tick` runs every two seconds for the life of the window,
 except in a window opened to uninstall, which stops it before it ticks.
 Every fifteenth tick it pings the server. While a game is running it reads the
-character choice every tick and checks for updates every fifteenth. The tick
+character choice every tick; no update is looked for until it ends. The tick
 that finds the game gone runs the whole close sequence (section 3, "When the
 game closes").
 
@@ -193,17 +193,17 @@ One paragraph per class, naming the files it writes. Profile is
 `<Root>\Profile`; Game is `<Root>\Game`.
 
 **Shell** (Shell.cs, Pages.cs, ShellOwnGame.cs, ShellSteamUpdates.cs,
-ShellUninstall.cs, ShellProgress.cs, ShellNews.cs, ShellPacks.cs, ShellScanFix.cs, ShellVortexWatch.cs, Waiting.cs, Stall.cs). The window and every flag that
-decides the Play button: `playing`, `updatePending`, `updateAnswered`, `checkFailed`,
-`collectionBarUp`, `ownGameBusy`, `doorCheckOut`, `feedNotice` (the last
-answer FeedNotice gave), and `chosenId`, the character picked at the game's
-menu this session. Writes `Profile\launcher.log` through Log and
+ShellUninstall.cs, ShellProgress.cs, ShellNews.cs, ShellCollection.cs, ShellScanFix.cs, ShellVortexWatch.cs, Waiting.cs, Stall.cs). The window and every flag that
+decides the Play button: `playing`, `updatePending`, `updateAnswered`,
+`collectionBarUp`, `ownGameBusy`, `doorCheckOut`, and `chosenId`, the
+character picked at the game's menu this session. Writes `Profile\launcher.log` through Log and
 `Profile\played.flag` at each Play.
 While the collection card or the not-confirmed note is up, the two second
 tick lists Vortex's state.v2 files and the plugin list (ShellVortexWatch.cs,
 #5136); when they change it reads the revision again off the UI thread,
-draws the card again, and asks the feed again once the card comes down, so
-an update finished in Vortex is picked up with nothing pressed.
+draws the card again, and asks GitHub for the channel's launcher again once
+the card comes down, so an update finished in Vortex is picked up with
+nothing pressed.
 
 **Paths** (Paths.cs). Every path the launcher uses, worked out once in
 `Paths.cs:71 Init()` from where the exe is. `Collection` says which shape the
@@ -224,106 +224,105 @@ and writes their new hash beside the others' stored ones (#2616, Patrick,
 16 Oct 2026). Nothing changed asks nothing.
 
 **Config** (Config.cs). `<Root>\config.json`, read by `Config.cs:356 Load()`
-and written by Save, which encrypts the update token with Windows' DPAPI and
-locks the file to this Windows account. The server address, port, collection
-link, voice port and update repository in it are facts about the server, not
-settings: `ShellUpdate.cs:262 OnVersionDoc()` overwrites them from version.json on
-every update check. So is the Skyrim build pin (the exe size the checks look
-for and the depots the Downgrade button asks Steam for), taken through
-`Downgrade.AdoptPin()` when the feed carries it; the numbers compiled into
-Downgrade.cs are the fallback until it does.
+and written by Save, which locks the file to this Windows account. The
+channel (`Channel`, main or dev, which `DevBuild.Switch` sets from the
+Server card's Main/Dev switch) and the person's own settings are in it. The
+facts about the server are compiled in since #5608, when the update feed
+that used to move them went: the collection link (`Config.Collection`), the
+site, and the Skyrim build pin (`Config.PinnedExeBytes` and the depots
+between the pin's markers in Downgrade.cs). A new collection or pin goes out
+as a new launcher.
 
-**Updater** (Updater.cs, Sync.cs, UpdateStages.cs, VeloUpdate.cs). The update
-feed, the packs, and asking for the launcher's own replacement.
-`Updater.cs:281 Check()` reads version.json from the site feed
-on thornswood.net, asking with the ETag of the copy it keeps in
-`Profile\feed-cache.txt` so an unchanged feed answers 304, and falls back to
-the releases repository on GitHub. `Updater.cs:844 ApplyPack()` downloads a pack and
-`Updater.cs:863 Install()` unpacks it: `game\...` entries into Game (hard link
-names dropped first), `profile\...` entries into `Profile\Default`, the list of
-what it wrote into `Profile\Packs\<pack id>.files`, the id into
-`Profile\applied.txt`, and every Data\Platform file it wrote into Keep.
-Since #1050, when the feed names a release record whose files are on the site
-(`:record:files`), `Pending()` offers that release as one update instead of
-its packs, and `ApplyPack()` hands it to `SyncRecord()` in Sync.cs: the record
-is read, every file of ours is compared with it by size and sha256, only the
-ones that differ are fetched from beside the record (resumed with a Range
-request, each checked against its sha256) into `Profile\Sync`, then put in
-place, the plugin list settled, what the record says is gone taken out, and
-the release written into `Profile\release.txt` (docs\FEED.md, "Syncing to the
-release record"). Once every launcher the feed lets in syncs, the feed's
-`packs` is empty (docs\FEED.md, "When the packs can go"), and the update card
-shows the note the record's pointer carries (`baseline.notes`, read by
-`RecordRef.FromFeed` in Config.cs) rather than the last pack's.
-ReleaseNews.cs is the News tab's half (#5187): the notes come from GitHub
-Releases, not the feed. On the update check's own thread
-(`ShellUpdate.cs CheckUpdatesBackground`), `FillNews()` asks GitHub's API,
-without a token, for the newest successful Deployment to this channel's
-environment (Dev or Main) that names a build Release (`payload.release`), and
-for the newest hundred Releases. Each published `Release build-<day>.<n>` at or
-before that one is a note: the first line of its body the title, each `- `
-line one line of what changed, the time it was published the date. On a dev
-launcher a note main's Deployment has not reached is marked DEV. The answer is
-kept for fifteen minutes (`NewsEvery`), because GitHub allows sixty anonymous
-requests an hour; a read that fails keeps the notes before and says why in
-launcher.log. A feed's `news` and `newsFile` are a Ship's and are not read.
-FeedSettings.cs reads the feed when the site answers it in two (#1050,
-docs\FEED.md "version.json in two"): `Updater.ReadFeed`, called by
-`Conditional` and `ReadCache`, reads version.json with every asset at the
-feed's own `assets/` folder plus its sha256 (`AssetsOf`,
-`VersionDoc.ParseFeed`), and when it names `settings`, the rest of the feed,
-fetches that once by its sha256, checks it, keeps it in
-`Profile\feed-settings.json`, and joins the two (`VersionDoc.Join`).
-On a dev build the News tab's header says what main is on from main's
-newest Release (#2434, #5385): each time the tab is shown,
-`ShellNews.cs ReadMainVersion` asks `MainVersion.cs MainLauncherVersion()` on a
-pool thread, which reads the newest Release carrying `releases.main.json`
-through the update check's own `ChannelSource`, and puts the version of its
-package into the header line. The header names this build by
-`Updater.Version`. While main has not answered, or could not be read, it names
-only this build: the feed's `launcherVersion` and `mainVersion` stopped moving
-with Velopack (#4825). The DEV marks on the notes come from main's
-Deployment (ReleaseNews.cs, above).
-The launcher itself is not in the feed any more: it updates through Velopack
-(Velo, below), and VeloUpdate.cs is the same Updater class's half for it.
-`VeloUpdate.cs:75 CheckLauncher()` asks this install's channel for a newer
-launcher, `VeloUpdate.cs:116 FetchLauncher()` downloads the package into
-Velopack's own folder and checks it, and `VeloUpdate.cs:184 ApplyLauncher()`
-leaves it to go in once the launcher has closed. The list of Releases and
-every file of one, the signed record's included, come through the site
-(`Velo.ReleaseList`, `Velo.ReleaseFile`, #5608), which asks GitHub's API
-signed in and sends each file on to where GitHub keeps it, so the launcher
-asks GitHub nothing itself. `Version` at the top of
-Updater.cs is the launcher's version, read from the exe: the build passes it
-as `-p:Version` (`scripts\release\LauncherVersion.ps1` works it out, #5179),
-in a merge release it is the Velopack package's version, and a bare build is
-`0.0.0`. In the launcher,
-`ShellUpdate.cs:139 CheckUpdatesBackground()` asks, `OnVersionDoc` decides,
-`ShellUpdate.cs:675 RunUpdate()` installs, in two halves (UpdateStages.cs,
-#2210): `FetchUpdate` downloads the release's files into `Profile\Sync`, the
-packs and the new launcher's package and writes nothing into Game or the
+**Updater** (Updater.cs, Sync.cs, SyncPackage.cs, UpdateStages.cs,
+VeloUpdate.cs, GitHub.cs, ReleaseNews.cs, MainVersion.cs). Every update, held
+on GitHub (#5608, Patrick, 11 Nov 2026: the site or the VPS being down may
+stop Play but never an update). There is one install and one kind of update:
+the launcher's Velopack package for this install's channel, which carries the
+game files too. The old update feed on the site (version.json, its packs and
+release records, docs\FEED.md) is not read by the launcher any more.
+
+GitHub.cs is the only door to GitHub, without a token (the repository is
+public): the Release list, a Release by its tag, a file of one kept on disk
+by its tag and name, a package downloaded and checked against its sha256, and
+the News tab's Deployments. GitHub allows sixty calls an hour from one
+address without a token; one read of the list serves every reader for a
+minute, a file once read is kept, and when GitHub says the hour's calls are
+spent nothing more is asked until the time it gives for the reset, and every
+caller is told that time.
+
+`VeloUpdate.cs:75 CheckLauncher()` asks this install's channel for its
+release: `ChannelSource` reads the newest Releases that carry
+`releases.<channel>.json` (the newest and the `MaxDeltas` before it, for
+deltas) and hands Velopack the newest Release's package, up or down
+(`ChannelRelease`, `AllowVersionDowngrade`), so a promotion of an older build
+reaches the channel too. The collection revision the channel's servers run is
+read from that Release's signed record at the same time
+(`ServerCollectionRevision`, #5767). `VeloUpdate.cs:116 FetchLauncher()`
+downloads the package into Velopack's own folder and checks it (Velo,
+below), and `VeloUpdate.cs:184 ApplyLauncher()` leaves it to go in once the
+launcher has closed. `Version` at the top of Updater.cs is the launcher's
+version, read from the exe: the build passes it as `-p:Version`
+(`scripts\release\LauncherVersion.ps1` works it out, #5179), in a merge
+release it is the Velopack package's version, and a bare build is `0.0.0`.
+
+The game files come out of that same package (SyncPackage.cs, #4825), through
+Sync.cs's compare and write: `PlanSync` reads the package's signed
+game-files.json, compares every file of ours with it by size and sha256 and
+takes only the ones that differ out of the package into `Profile\Sync`;
+`WriteSync` puts them in place, settles the plugin list the package carries
+(`profile\plugins.txt` and `loadorder.txt`), takes out what game-files.json
+says is gone (and forgets it in Keep), and writes the release into
+`Profile\release.txt` and its file list into `Profile\release-files.txt`. A
+repair (`Updater.Resync`) runs the same compare against the installed
+package's own folder; Fix's plugins come from it as well
+(`Updater.ReleaseCopy`). A launcher Velopack did not install has no package
+and does not update itself.
+
+In the launcher, `ShellUpdate.cs:139 CheckUpdatesBackground()` asks, at the
+start, every half hour while the game is not running
+(`StartLauncherPoll`), after the game closes, from Check now and once Vortex
+finishes the collection; `LauncherAnswer` keeps what it found and
+`ShowUpdate` draws the card above Play. `ShellUpdate.cs:675 RunUpdate()`
+installs, in two halves (UpdateStages.cs, #2210): `FetchUpdate` downloads and
+checks the package and plans its game files, writing nothing into Game or the
 records a refresh reads, so it runs while the game folder is being prepared;
-`WriteUpdate` then puts them in under `OwnGame.Alone`, after any refresh
+`WriteUpdate` then puts the files in under `OwnGame.Alone`, after any refresh
 under way, and checks again any file a refresh changed in between; the new
 launcher goes in last, when the window has closed (`ApplyLauncher`, then
-`Velo.ExitApply` at the end of Main). Install now, on the card above Play and in
-Settings, and the automatic update, go
-through `ShellUpdate.cs UpdateNow` (#3201): the update, then Fix's whole
-path on the folder the update left (`ShellScanFix.cs FixAfterUpdate`), which
-scans everything again, puts right what the scan finds and never takes the
-update it just tried a second time. A new launcher's first start runs the
-same Fix (row 24 of the startup order). The automatic update is
-`ShellUpdate.cs UpdateBySelf` (#3202), run after every update check's
-answer when `Config.AutoUpdate` is on (the default; only an explicit false
-in `config.json` turns it off): the start's check, the feed watch, Check
-now, the retry after a failed check and the check after the game closed
-for an update. It leaves the update to the in-play clock while a game the
-launcher started runs, to the card while a Skyrim it did not start is open,
-and never takes the update `RunUpdate` tried last a second time by itself.
-`RunUpdate` runs one update at a time (`updating`). `ShellUpdate.cs:213 CheckFailed()` keeps
-Play shut and asks again every thirty seconds when the source does not answer.
-Every document that was read also goes to `ShellUpdate.cs:242 ShowNotice()`, which
-asks FeedNotice what the bar above Play says and whether Play is held.
+`Velo.ExitApply` at the end of Main). Install now, on the card above Play and
+in Settings, and the automatic update, go through `ShellUpdate.cs UpdateNow`
+(#3201): the update, then Fix's whole path on the folder the update left
+(`ShellScanFix.cs FixAfterUpdate`), which scans everything again, puts right
+what the scan finds and never takes the update it just tried a second time.
+A new launcher's first start runs the same Fix (row 24 of the startup
+order). The automatic update is `ShellUpdate.cs UpdateBySelf` (#3202), run
+after every check's answer when `Config.AutoUpdate` is on (the default; only
+an explicit false in `config.json` turns it off). It leaves the update to the
+check after the game closes while a game the launcher started runs, to the
+card while a Skyrim it did not start is open, and never takes the update
+`RunUpdate` tried last a second time by itself. `RunUpdate` runs one update
+at a time (`updating`). A check GitHub does not answer leaves Play open and
+is asked again ten minutes later; only an update found and not yet taken
+holds Play (UPDATE FIRST), and the site's join pass refuses a launcher older
+than the channel's.
+
+ReleaseNews.cs is the News tab's half (#5187). On the update check's own
+thread, `FillNews()` asks GitHub, through GitHub.cs, for the newest
+successful Deployment to this channel's environment (Dev or Main) that names
+a build Release (`payload.release`), and reads the Release list the update
+check reads. Each published `Release build-<day>.<n>` at or before that one is
+a note: the first line of its body the title, each `- ` line one line of what
+changed, the time it was published the date. On a dev launcher a note main's
+Deployment has not reached is marked DEV. The answer is kept for the update
+check's half hour (`NewsEvery`), and a Deployment that succeeded is not asked
+again; a read that fails keeps the notes before and says why in
+launcher.log. On a dev build the News tab's header says what main is on from
+main's newest Release (#2434, #5385): each time the tab is shown,
+`ShellNews.cs ReadMainVersion` asks `MainVersion.cs MainLauncherVersion()` on
+a pool thread, which reads the newest Release carrying `releases.main.json`
+through the update check's own `ChannelSource`, and puts the version of its
+package into the header line. The header names this build by
+`Updater.Version`.
 
 **PlayProgress and PlayBar** (Progress.cs, painted by ShellProgress.cs).
 The Play button as a progress bar (#1145). RunUpdate, the client repair and
@@ -377,32 +376,14 @@ runs the same class before a Ship publishes, and
 `tests\test-signer-check.ps1` compiles it on its own and points it at signed,
 unsigned, self-signed and changed files.
 
-**ReleaseManifest** (ReleaseManifest.cs, FeedManifest.cs). Whether the
-release's signed manifest vouches for every asset the feed names (#2163,
-phase C of docs\SIGNED-RELEASES.md). The feed's "signedManifest" is read
-apart (`ManifestRef.FromFeed` in Config.cs). On an update check that brings
-a different manifest or different assets, `Updater.ManifestLine` fetches
-release.json and its catalog like any asset (a listed host, stored under
-their sha256, bytes that hash to it). `ReleaseManifest.Refusal` then checks
-the catalog with Signature.Refusal, finds release.json's sha256 among the
-catalog's digests (wintrust's CryptCATEnumerateMember), and checks that
-release.json lists every asset. The launcher, the client runtime, each pack
-and the release record are those assets. Phase C only writes the answer to
-launcher.log, from CheckUpdatesBackground in ShellUpdate.cs; nothing is
-refused on it yet. `launcher\tests\test-2163-manifest-check.ps1` compiles the two
-files on their own and checks them against a catalog ThornswoodRelease
-signed.
-
-**FeedNotice** (FeedNotice.cs). What the feed says to everybody. Three
-optional fields in version.json, set by hand in the releases repository:
-`message` (a bar above Play, never a hold on its own), `maintenance` (holds
-Play) and `minLauncher` (holds Play in a launcher older than it; since #937
-Publish-Update writes it on every publish as the launcher the feed offers, and
-the site refuses a join pass below it).
-`FeedNotice.cs:45 From()` turns a document into the bar's words and, when
-Play is held, the reason and the button's words. It owns no files and holds
-nothing on a check that did not answer; a value it cannot read leaves Play
-open.
+**ReleaseManifest** (ReleaseManifest.cs). The catalog half of the signed
+release record (#2163, docs\SIGNED-RELEASES.md): `CatalogDigests` lists the
+sha256 digests a catalog signed with ThornswoodRelease holds (wintrust's
+CryptCATEnumerateMember). `VeloRecord.Get` checks the catalog with
+`Signature.Refusal` and finds release.json's sha256 among those digests
+before it believes anything release.json says. Owns no files.
+`launcher\tests\test-2163-manifest-check.ps1` checks it against a catalog
+ThornswoodRelease signed.
 
 **Keep** (Keep.cs). Thornswood's own files under `Game\Data\Platform`, kept
 pristine in `Profile\Keep` and put back before every Play by
@@ -447,12 +428,12 @@ the shipped reference `Profile\Default\plugins.txt`, the live list
 `Profile\LocalAppData\plugins.txt`, the server's manifest over HTTP on its
 resources port (3000 for the main server, 7788 for dev), and the size and
 CRC of each plugin. Only the Fix button writes: the reference list into the
-live one, Thornswood's own plugins put in from the release the update feed
-names when their bytes differ from the server's or they are missing, over
-https and by the sha256 the release record gives them, and only when that
-copy is the one the server's manifest describes (`Updater.ReleaseCopy`,
-#3386; the old one kept in `Profile\Replaced`; no other author's plugin,
-#1180),
+live one, Thornswood's own plugins put in from the installed launcher's
+package when their bytes differ from the server's or they are missing, each
+held to the sha256 the package's signed game-files.json gives it, and only
+when that copy is the one the server's manifest describes
+(`Updater.ReleaseCopy`, #3386, #5608; the old one kept in
+`Profile\Replaced`; no other author's plugin, #1180),
 one of ours the server's order names switched on in its place
 (`PutInServerOrder`), and other servers' files moved into
 `Profile\Isolated`. With no folder of its own yet (`Paths.Collection`) Run
@@ -463,7 +444,8 @@ do anything about it, and what will put it right when Fix cannot.
 
 **Upkeep** (Upkeep.cs, with ShellScanFix.cs for Scan and Fix on
 Diagnostics, #2627). Everything Scan finds wrong that is not the plugin list:
-an update waiting on the feed, the feed holding Play, Thornswood's own folder
+a newer launcher waiting on the channel, the check GitHub did not answer,
+Thornswood's own folder
 behind Vortex or refused, files the folder lost (`OwnGameLost.cs`), this
 build's own files changed or missing (Keep's kept files, `Thornswood.ini`,
 the shipped settings files), Windows' Skyrim folders left pointed at
@@ -796,24 +778,25 @@ and `Profile\MusicBrowser`, the folder the menu music's old browser left);
 Uninstall removes those even when it keeps the saves and settings, and its
 farewell names any it could not.
 
-**DevBuild** (DevBuild.cs). The second launcher in `<Root>-DevBuild`, made
-from the main one's files with the channel set to dev and the dev ports (game
-7787, voice 7789). Its program is copied from the folder the running exe is
-in (Velopack's `current\`), the `.exe` and `.dll` files only, into
-`<Root>-DevBuild\Launcher`. It is installed and opened from the Server card on the main
-build's Play page (`Shell.cs DrawServerPick()`, `SwitchToDev()`), which checks
-the person's Discord roles before it offers the install (#605); `MainRoot` and
-`MainExe` are the way back the dev build's own Server card opens the main
-launcher. It has its own Profile, and makes its own `Game` folder the same way
-from its own Settings, under Maintenance.
+**DevBuild** (DevBuild.cs). The dev build is a channel of the one install
+(#5608, Patrick's answer B on 11 Nov 2026). The Server card's Main/Dev switch
+(`Shell.cs DrawServerPick()`, `SwitchChannel()`) checks the person's Discord
+roles before it offers Dev (#605), and `DevBuild.Switch` sets the channel and
+the ports that go with it (game 7787, voice 7789) and saves config.json; the
+update check then takes that channel's package from GitHub, the launcher and
+the game files it carries, up or down, and restarts into it. The same
+`Profile` and `Game` serve both. Until #5608 the dev build was a second copy
+in `<Root>-DevBuild`, which read the dev update feed; `IsOldCopy` tells such
+a copy, which has no update source now, and `RemoveSelf` and `Remove` take it
+away.
 
 **Smaller pieces.** Stats.cs (`Profile\stats.txt`), Leaks.cs (the shipped sign
 in file, and what the 28 and 29 Sep dev records handed out), Icons.cs (the shortcut icon), Stall.cs and Waiting.cs
 (section 1), Ask.cs (Windows' own message boxes, section 1), Http.cs (the one
 HttpClient the launcher's own requests go through, with the wait for an
 answer to start and the wait for each read that HttpWebRequest and WebClient
-had before .NET 10), LooseString.cs (a number or true where the feed's JSON
-has a string reads as its text, as .NET Framework's serializer read it,
+had before .NET 10), LooseString.cs (a number or true where a document's
+JSON has a string reads as its text, as .NET Framework's serializer read it,
 instead of refusing the whole document), Keys.cs (the few Thornswood keys the
 Play page and the voice line name, read out of `Thornswood.ini`), Diag.cs (`Profile\Reports`), Files.cs (the logs and the newest crash
 for the support report), Secrets.cs (DPAPI and locking a file to this account), Junction.cs
@@ -876,18 +859,18 @@ it. Then it sets
 `Shell.cs:2899 btnPlay.IsEnabled`, which turns the button on only when no row
 counts against Play, none of
 `playing`, `updatePending`, `collectionBarUp` or `ownGameBusy` is set, no work
-is showing on the button (`playBar.Active`, see PlayProgress in section 2), and the
-feed does not hold Play (`feedNotice.Hold`, see FeedNotice in section 2). The
+is showing on the button (`playBar.Active`, see PlayProgress in section 2). The
 button's words say which one is holding it: while work shows, what it is doing
 and how far it has got (UPDATING 41%, 310 OF 740 MB), otherwise PREPARING THE GAME FOLDER,
 INSTALL THE MODS FIRST, UPDATE THE MODS FIRST, WAITING FOR THE SERVER (this
 copy's collection revision is ahead of the server's, so nothing needs
-installing, #4115), CHECKING..., UPDATE FIRST, NO ANSWER FROM THE UPDATE
-SOURCE, CLOSED FOR MAINTENANCE or UPDATE THE LAUNCHER (the feed's hold, with
-the bar above Play saying why), DOWNGRADE FIRST, or in the shared shape MAKE
-THORNSWOOD'S OWN FOLDER. `updatePending` starts true and only an answer from
-the update source clears it, except in a launcher with no update source
-configured at all, which is a developer's own build and never a tester's.
+installing, #4115), CHECKING... (before GitHub's first answer), UPDATE FIRST
+(a newer launcher found and not yet taken), DOWNGRADE FIRST, or in the shared
+shape MAKE THORNSWOOD'S OWN FOLDER. `updatePending` starts true and only the
+launcher check clears it: an answer with nothing newer, or a check GitHub did
+not answer, since the site or GitHub being down never holds Play on its own
+(#5608); a launcher Velopack did not install has nothing to check and is
+cleared at once.
 
 ### Pressing it
 
@@ -902,7 +885,7 @@ configured at all, which is a developer's own build and never a tester's.
 | 6 | `ShellChars.cs:90 Checks.GameRunning` | A Skyrim started by hand goes straight to Play with nothing under Data touched, because a write to the client settings reloads every plugin in a running game. | |
 | 7 | `ShellChars.cs:101 Chars.Prepare` | Under Waiting. `Chars.cs:895 Prepare()`, below in its own table. It throws when the client settings or the character list cannot be written, and Play stops. | see below |
 | 8 | `ShellChars.cs:114 Chars.KnownIds` | Every profile id this install could pick, then `ShellChars.cs:120 CheckIn` for each on a pool thread, posting each one to `/api/play/join` so the server's allowed list has it before the person picks. A failure is a log line; the game still starts. | |
-| 9 | `ShellChars.cs:127 Play` | Into `ShellPlay.cs:143 Play()`. Its first lines check `updatePending`, `collectionBarUp`, `ownGameBusy`, `OwnGameRefreshIfDue` and the feed's hold again, because the button is not the only way in. | |
+| 9 | `ShellChars.cs:127 Play` | Into `ShellPlay.cs:143 Play()`. Its first lines check `updatePending`, `collectionBarUp`, `ownGameBusy` and `OwnGameRefreshIfDue` again, because the button is not the only way in. | |
 | 9b | `ShellPlay.cs:158 OwnGameRefreshIfDue` | Same as step 3b, for the ways in that are not the button. | |
 | 10 | `ShellPlay.cs:161 Paths.Loader` | `Game\skse64_loader.exe` has to exist, and `ShellPlay.cs:162 Paths.MpClient` (`Game\Data\SKSE\Plugins\MpClientPlugin.dll`). | |
 | 11 | `ShellPlay.cs:167 ClearStuckGame` | A Skyrim with no window is closed; one on screen is asked about. Then, under Waiting, `ShellPlay.cs:179 OwnGame.CheckShared`: every archive the folder shares with the Steam copy still has the bytes on record (the change time is read, and the bytes only when it moved). One that changed stops Play and brings up the Downgrade card. | `Profile\OwnGame\shared.txt` and `changed.txt`, when anything moved |
@@ -986,9 +969,9 @@ one. The pass's own key goes beside it in `thornswood-pass-key.txt`, named by
 the pass's mac, for the client to prove the pass on its own connection when
 the game server challenges the login (#1320). Nothing in this loop writes the client settings: a write to that
 file reloads every plugin in the running game.
-`Shell.cs:2546 CheckUpdatesInPlay` looks for a release every thirty seconds
-and, four and a half minutes after first seeing one, closes the game so it can
-be installed, landing on the server's own five minute warning.
+No update is looked for while the game runs (`StartLauncherPoll` skips a
+session): the check after the game closes finds one, and the site's join pass
+refuses a launcher older than the channel's at the next Play.
 
 ### When the game closes
 
@@ -1024,5 +1007,5 @@ machines work in them.
 | `launcher\app\Checks.cs` | The rows that gate Play, and finding and closing the game. | A new requirement for Play is a new row here. |
 | `launcher\app\Keep.cs` | Our Data\Platform files put back and other plugins parked. | Anything new the plugins ship under Data\Platform, and how the main and dev builds share a game. |
 | `launcher\app\Hold.cs` | The read-only hold while the game runs. | It holds exactly what Keep keeps, so they change together. |
-| `launcher\app\Updater.cs` | The feed, the packs and `Version`; the launcher's own update through Velopack is the same class, in VeloUpdate.cs. | Nothing in the source carries the launcher's number: `Version` is read from the exe, which the build numbers (`-p:Version`, #5179). |
-| `scripts\release\Publish-Update.ps1` | Diffs the build, packs what belongs by Ship-Rules.ps1, uploads, writes version.json. | Ship runs it on whichever machine ships: main from Patrick's, dev from either. |
+| `launcher\app\Updater.cs` | `Version` and what every update shares; the update itself, the launcher's Velopack package from GitHub with the game files in it, is the same class, in VeloUpdate.cs, SyncPackage.cs and Sync.cs. | Nothing in the source carries the launcher's number: `Version` is read from the exe, which the build numbers (`-p:Version`, #5179). |
+| `scripts\release\Publish-Update.ps1` | Diffs the build, packs what belongs by Ship-Rules.ps1, uploads, writes the site's version.json, which only launchers from before #5608 read; it goes with #5783. | Ship runs it on whichever machine ships: main from Patrick's, dev from either. |

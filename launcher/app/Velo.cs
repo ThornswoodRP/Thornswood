@@ -136,20 +136,13 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// THE LINE BETWEEN THE PACKAGE AND THE FEED FOR THE GAME FILES (#4825).
+        /// WHERE THE GAME FILES COME FROM (#4825, #5608).
         /// True when Thornswood's game files come from the Velopack package of
-        /// each launcher update (Updater, SyncPackage.cs), and the feed's
-        /// release record and packs are not this install's (Sync.cs, Pending).
-        ///
-        /// Every launcher Velopack installed, on both channels. The plan has one
-        /// update channel carry both the launcher and the game payload. Until
-        /// 8 Nov 2026 this was dev only, because main had no package until
-        /// Patrick approved one (#5181); main-build-20261108.1 was the first,
-        /// and while main stayed on the feed, its game files stayed at the
-        /// feed's last record (release/main/20261102-121621) whatever main's
-        /// packages carried. A launcher Velopack did not install (a build into
-        /// a test root) has no package, and stays on the feed until the feed's
-        /// game path retires.
+        /// each launcher update (Updater, SyncPackage.cs): every launcher
+        /// Velopack installed, on both channels, since one update channel
+        /// carries both the launcher and the game files. A launcher Velopack
+        /// did not install (a build into a test root) has no package and takes
+        /// no update; the update feed it once fell back to went with #5608.
         /// </summary>
         public static bool GameFromPackage(Config cfg)
         {

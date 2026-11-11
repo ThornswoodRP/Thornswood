@@ -90,7 +90,11 @@ yes('there are scripts to read them against, ' + scripts.length + ' of them', sc
 // what follows it.
 const CITE = /^((?:[\w.-]+[\\/])*)([\w.-]+\.(?:ps1|cs|js|py|md)|Caddyfile):([\s\S]+)$/i;
 const LINES = /^\s*\d[\d\s,-]*$/;
-const WIDE = ['docs/FEED.md', 'docs/GAMEMODE.md', 'docs/GLOSSARY.md',
+// FEED.md left WIDE with #5608: the launcher reads no feed any more, so its
+// citations of launcher code are the record of what the launcher did, as
+// docs\archive is. Its .ps1 citations, the scripts that still write the feed
+// until #5783 takes it down, are checked as every page's are.
+const WIDE = ['docs/GAMEMODE.md', 'docs/GLOSSARY.md',
   'docs/VIRUSTOTAL-FALSE-POSITIVE.md', 'docs/systems/commands.md'];
 function isScript(file) { return /\.ps1$/i.test(file); }
 

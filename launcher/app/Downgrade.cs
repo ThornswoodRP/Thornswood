@@ -231,10 +231,10 @@ namespace Thornswood
             return PinDepots;
         }
 
-        /// <summary>The newer build's exe size, the pin's.</summary>
+        /// <summary>The newer build's exe size: the pin's, unless a harness set another on the config.</summary>
         static long Newer(Config cfg)
         {
-            return NewerExeBytes;
+            return cfg != null && cfg.NewerExeBytes > 0 ? cfg.NewerExeBytes : NewerExeBytes;
         }
 
         static string Command(string[] depot)

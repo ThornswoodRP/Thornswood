@@ -29,15 +29,14 @@ namespace Thornswood
           this empty and an installer built against a collection is a build
           nobody can play.
 
-          It comes down with the update check like the server address does, so
-          it can be set once and everybody has it.
+          Compiled in below (Collection): until #5608 the update feed on the
+          site moved it, and with the feed gone a new collection goes out as
+          a new launcher.
         */
         [JsonInclude] public string CollectionUrl = Collection;
 
-        // The one we ship with. The update check overwrites it, but a
-        // launcher that has never reached the site still has to be able to
-        // send somebody to the collection, because that is exactly the
-        // state somebody installing for the first time is in.
+        // The one we ship with, and the one a config.json without a link is
+        // given, so somebody installing for the first time is sent to it.
         public const string Collection =
             "https://www.nexusmods.com/games/skyrimspecialedition/collections/7essxf";
 
@@ -134,7 +133,12 @@ namespace Thornswood
         /// </summary>
         public const long PinnedExeBytes = 37157144;
 
-        [JsonIgnore] public long ExpectedExeBytes { get { return PinnedExeBytes; } }
+        // The sizes the checks compare SkyrimSE.exe with: the pin's, and 0
+        // for the newer build's is Downgrade.NewerExeBytes. Never read from
+        // or written to config.json; only a harness changes them, to stand a
+        // small file in for the exe.
+        [JsonIgnore] public long ExpectedExeBytes = PinnedExeBytes;
+        [JsonIgnore] public long NewerExeBytes;
 
         // "dev" here, or in Channel, makes this install the dev channel's
         // (Velo.ChannelFor). The token, the repository and the feed address
@@ -156,11 +160,14 @@ namespace Thornswood
 
         /*
           Which build this install follows. Empty is the main build, the one
-          everybody plays on. "dev" is the second launcher, installed beside
-          the main one from its Settings page, that reads version.json off
-          the dev branch and joins the dev server. New work lands there
-          first and gets broken there, so the main build stays playable
-          while it is being tested.
+          everybody plays on. "dev" is the dev channel of the same install
+          (#5608, Patrick's answer B on 11 Nov 2026): the Server card's Main
+          and Dev switch sets it (DevBuild.Switch), and the launcher then
+          takes that channel's package from GitHub, game files included, and
+          joins the dev server. New work lands there first and gets broken
+          there, so the main build stays playable while it is being tested.
+          A dev copy in its own folder from before that is an old copy
+          (DevBuild.IsOldCopy).
         */
         [JsonInclude] public string Channel = "";
 

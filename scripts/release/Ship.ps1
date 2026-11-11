@@ -353,7 +353,7 @@ if (-not $PSBoundParameters.ContainsKey('Root') -and -not $FromFeed) {
 function Get-DevRootRefusal([string]$Root, [bool]$RootGiven, [string]$Recorded) {
     if ($RootGiven -or $Recorded) { return '' }
     if (Test-Path -LiteralPath (Join-Path $Root 'Launcher') -PathType Container) { return '' }
-    return "No dev build at $Root. Install it from the main launcher's Settings page (The dev build) first, or record the folder this machine builds dev from: .\scripts\release\Setup-ShipMachine.ps1 -Channel dev -Root <folder>."
+    return "No dev build at $Root. Record the folder this machine builds dev from (the launcher installs no second copy for dev since #5608): .\scripts\release\Setup-ShipMachine.ps1 -Channel dev -Root <folder>."
 }
 if ($Dev) {
     $rootGiven = $PSBoundParameters.ContainsKey('Root') -or $FromFeed

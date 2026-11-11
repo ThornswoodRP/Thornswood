@@ -35,9 +35,11 @@
               200 with a feed in them (a launcherUrl and the release record
               the launcher syncs from, baseline.id), and the launcher each one
               names answers its first byte. Since #1050 a feed carries no
-              packs on purpose, so packs are not asked for. Every launcher
-              reads these to update, and a new install starts from them. The
-              addresses are Updater.cs's own.
+              packs on purpose, so packs are not asked for. Launchers from
+              before #5608 read these to update; a launcher since reads
+              GitHub's Releases instead, and the feeds come off the site,
+              and off this list, with #5783. The site is Config.cs's
+              SiteUrl, and the feeds are /feed and /feed-dev on it.
     cert      the certificate a visitor gets on thornswood.net has more than
               14 days left. Since #2995 that is Cloudflare's own, which
               Cloudflare renews itself; Caddy's on the box can no longer be
@@ -190,15 +192,16 @@ function Read-Settings([string]$repo, [string]$saved) {
     NexusGame = ''; NexusSlug = ''
     CertDays = 14; DomainDays = 30; Minutes = $(if ($Minutes) { $Minutes } else { 5 })
   }
-  $updater = Join-Path $repo 'launcher/app/Updater.cs'
-  if ($repo -and (Test-Path -LiteralPath $updater)) {
-    $u = Get-Content -LiteralPath $updater -Raw
-    $main = [regex]::Match($u, 'MainFeed\s*=\s*"([^"]+)"').Groups[1].Value
-    $dev  = [regex]::Match($u, 'DevFeed\s*=\s*"([^"]+)"').Groups[1].Value
-    $s.Feeds = @(@{ Name = 'feed'; Say = 'The live update feed'; Url = $main }, @{ Name = 'feed-dev'; Say = 'The dev update feed'; Url = $dev })
-    $s.SiteHost = ([uri]$main).Host
+  $config = Join-Path $repo 'launcher/app/Config.cs'
+  if ($repo -and (Test-Path -LiteralPath $config)) {
+    $cfg = Get-Content -LiteralPath $config -Raw
+    # The site the launcher names (Config.cs's SiteUrl). The launcher stopped
+    # reading the update feeds with #5608; they stay on the site for older
+    # launchers until #5783, so they are watched until then.
+    $site = [regex]::Match($cfg, 'public string SiteUrl\s*=\s*"(https://[^"/]+)"').Groups[1].Value
+    $s.SiteHost = ([uri]$site).Host
     $s.Site = 'https://' + $s.SiteHost + '/'
-    $cfg = Get-Content -LiteralPath (Join-Path $repo 'launcher/app/Config.cs') -Raw
+    $s.Feeds = @(@{ Name = 'feed'; Say = 'The live update feed'; Url = $s.Site + 'feed/version.json' }, @{ Name = 'feed-dev'; Say = 'The dev update feed'; Url = $s.Site + 'feed-dev/version.json' })
     $m = [regex]::Match($cfg, 'nexusmods\.com/games/([A-Za-z0-9]+)/collections/([A-Za-z0-9]+)')
     $s.NexusGame = $m.Groups[1].Value; $s.NexusSlug = $m.Groups[2].Value
     # Through Vps.ps1, so this machine's own VPS file and THORNSWOOD_VPS count
@@ -223,7 +226,7 @@ function Read-Settings([string]$repo, [string]$saved) {
     $s.FrontRanges = @($j.FrontRanges | Where-Object { $_ } | ForEach-Object { '' + $_ })
     return $s
   }
-  throw 'Neither the repository (launcher/app/Updater.cs) nor watch-outside.json is beside this script, so there is nothing to say what to ask.'
+  throw 'Neither the repository (launcher/app/Config.cs) nor watch-outside.json is beside this script, so there is nothing to say what to ask.'
 }
 
 # -------------------------------------------------- asking the internet ---

@@ -67,16 +67,27 @@ namespace Thornswood
         /// </summary>
         public static string Switch(Config cfg, string channel)
         {
+            bool dev = Set(cfg, channel);
+            cfg.Save(Paths.CfgFile);
+            return dev
+                ? "This install is on the dev channel now and joins the dev server. Asking GitHub for the dev launcher; it goes in and the launcher restarts into it."
+                : "This install is on the main channel now and joins the live server. Asking GitHub for the main launcher; it goes in and the launcher restarts into it.";
+        }
+
+        /// <summary>
+        /// The channel and its server's ports in <paramref name="cfg"/>,
+        /// unsaved: what Switch saves, and what a new dev ship root's
+        /// config.json is written with (scripts\release\ShipRoot). True for dev.
+        /// </summary>
+        public static bool Set(Config cfg, string channel)
+        {
             bool dev = string.Equals(channel, "dev", StringComparison.OrdinalIgnoreCase);
             cfg.Channel = dev ? "dev" : "";
             cfg.UpdateBranch = dev ? "dev" : "main";
             cfg.ServerPort = dev ? DevPort : MainPort;
             cfg.VoicePort = dev ? DevVoicePort : MainVoicePort;
             cfg.VoiceUrl = dev ? DevVoiceUrl(cfg.VoiceUrl) : MainVoiceUrl(cfg.VoiceUrl);
-            cfg.Save(Paths.CfgFile);
-            return dev
-                ? "This install is on the dev channel now and joins the dev server. Asking GitHub for the dev launcher; it goes in and the launcher restarts into it."
-                : "This install is on the main channel now and joins the live server. Asking GitHub for the main launcher; it goes in and the launcher restarts into it.";
+            return dev;
         }
 
         /// <summary>

@@ -1,29 +1,14 @@
 using System;
 using System.IO;
-using System.IO.Compression;
 
 namespace Thornswood
 {
     // Environment only. The two classes under test are compiled unmodified.
     static class Paths { public static string Game, ProfileDir, PacksDir, Isolated; }
     class Config { }
-    class Pack { public string url = "", sha256 = ""; public string Title { get { return "fixture"; } } }
-    class RuntimeAsset { public string url = "", sha256 = "", forkCommit = ""; }
-    class VersionDoc { public RuntimeAsset clientRuntime; public Pack[] packs = new Pack[0]; }
-    static class Updater
-    {
-        public static string Zip;
-        public static VersionDoc Check(Config cfg)
-        {
-            return new VersionDoc { clientRuntime = new RuntimeAsset { url = "fixture" } };
-        }
-        public static string Fetch(Config cfg, string url, string sha, Action<string> log)
-        {
-            string copy = Zip + ".download";
-            File.Copy(Zip, copy, true);
-            return copy;
-        }
-    }
+    // The installed launcher's package folder, where Heal takes the six
+    // client files from since the update feed went (#5608).
+    static class Updater { public static string InstalledGame; }
     static class OwnGame { public static void Unshare(string path) { } }
     static class Swallow { public static void Note(string where, Exception error) { throw new Exception(where, error); } }
 
@@ -59,11 +44,8 @@ namespace Thornswood
         static string Read(string path) { return File.Exists(path) ? File.ReadAllText(path) : null; }
         static void Asset(string text)
         {
-            Updater.Zip = Path.Combine(Paths.ProfileDir, "fixture.zip");
-            Directory.CreateDirectory(Paths.ProfileDir);
-            using (var zip = ZipFile.Open(Updater.Zip, ZipArchiveMode.Create))
-            using (var writer = new StreamWriter(zip.CreateEntry("game/" + Rel.Replace('\\', '/')).Open(), new System.Text.UTF8Encoding(false)))
-                writer.Write(text);
+            Updater.InstalledGame = Path.Combine(Paths.ProfileDir, "package", "Game");
+            Put(Path.Combine(Updater.InstalledGame, Rel), text);
         }
         public static int Main(string[] args)
         {
@@ -80,7 +62,7 @@ namespace Thornswood
             Keep.Restore();
             Check("equal stale copies still require runtime repair", !ClientRuntime.Good());
             Asset(Good);
-            Check("runtime asset repair reports the restored file", ClientRuntime.Heal(new Config(), null) == 1);
+            Check("runtime repair from the installed package reports the restored file", ClientRuntime.Heal(new Config(), null) == 1);
             Check("runtime repair installs recorded bytes", Read(live) == Good);
             Check("runtime repair refreshes retained bytes", Read(kept) == Good);
             Keep.Restore();
@@ -99,7 +81,7 @@ namespace Thornswood
 
             Fresh("previous client", "previous client", false);
             Asset("unrecorded client");
-            Check("wrong asset cannot count as a successful repair", ClientRuntime.Heal(new Config(), null) == 0);
+            Check("a package copy that is not the recorded build cannot count as a successful repair", ClientRuntime.Heal(new Config(), null) == 0);
             Check("wrong asset is not adopted into retention", Read(kept) == "previous client" && !ClientRuntime.Good());
             Keep.Restore();
             Check("stale retention cannot overwrite a rejected asset either", Read(live) == "unrecorded client");

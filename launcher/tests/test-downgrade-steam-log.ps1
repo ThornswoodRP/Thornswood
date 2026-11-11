@@ -111,7 +111,7 @@ $wanted = [ordered]@{
     'Reason'           = 'static string Reason(string line)'
     'ByHand'           = 'static string ByHand(string cmd)'
     'DownloadedExe'    = 'static string DownloadedExe(string content)'
-    'FallbackDepots'   = 'static readonly string[][] FallbackDepots ='
+    'PinDepots'   = 'static readonly string[][] PinDepots ='
 }
 $lifted = [ordered]@{}
 foreach ($k in $wanted.Keys) {
@@ -161,7 +161,7 @@ namespace Probe
         const int AppId = 489830;
 __LIFTED__
         // What Run sets from PinnedDepots; a feed with no pin leaves the fallback (#471).
-        static string[][] Depots = FallbackDepots;
+        static string[][] Depots = PinDepots;
         public static object NewLog(string steam) { return new SteamLog(steam); }
         public static string Since(object l) { return ((SteamLog)l).Since(); }
         public static string Tail(object l, int n) { return ((SteamLog)l).Tail(n); }

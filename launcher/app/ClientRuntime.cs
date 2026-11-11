@@ -264,10 +264,7 @@ namespace Thornswood
             if (want.Count == 0) { log("The client runtime is back to the recorded build."); return done; }
 
             // TWO: the installed package's own copies.
-            string from = null;
-            Velopack.Locators.IVelopackLocator at = Velo.Locator;
-            if (Velo.Installed && at != null && !string.IsNullOrEmpty(at.AppContentDir))
-                from = Path.Combine(at.AppContentDir, "Game");
+            string from = Updater.InstalledGame;
             if (from == null)
             {
                 log("  this launcher was not installed by Thornswood's setup, so it has no package to take the rest from. Reinstall it from thornswood.net.");

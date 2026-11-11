@@ -14,7 +14,7 @@
     - release.txt and release-files.txt (launcher\app\Sync.cs) and the news
       cache (launcher\app\FeedNews.cs, gone since #5187) deleted the old
       file and then moved the new one in. The feed's settings cache
-      (launcher\app\FeedSettings.cs) is written the same way they are now.
+      (launcher\app\FeedSettings.cs) went with the feed (#5608).
 
   Measured 16 Oct on One, a writer swapping a 17 KB file in a loop and killed
   with TerminateProcess 150 times: File.Replace left it missing 6 times (and
@@ -25,7 +25,7 @@
   WHAT IT HOLDS THEM TO.
     1. None of the four replaces a file in two steps any more, and each goes
        through the one rename: SteamUpdates through its own (it is compiled
-       alone, in test-steam-updates.ps1), Sync and FeedSettings through
+       alone, in test-steam-updates.ps1), Sync through
        OwnGame.WriteRecord, the feed store through Move-FeedStoreInto, whose
        type is its own (Thornswood.FeedSwap, a rename with POSIX semantics
        since #2727, tests\test-2727-feed-swap-readers.ps1), so it never
@@ -34,8 +34,8 @@
     2. SteamUpdates.cs compiled with the .NET SDK the launcher builds with:
        its write replaces a manifest, and killed 40 times while it swaps a
        manifest in a loop, the manifest is whole every time.
-    3. OwnGame.WriteRecord's byte form (the settings cache), lifted and compiled:
-       the same bytes, and whole after 40 kills.
+    3. OwnGame.WriteRecord (release.txt and every record of the folder),
+       lifted and compiled: the same lines, and whole after 40 kills.
        The compile runs everywhere; the runs rename through kernel32's
        MoveFileEx, so they run on Windows only and say SKIP elsewhere.
     4. The feed store under PowerShell 7, which is what the VPS runs it with
@@ -73,7 +73,6 @@ function Text([string]$p) { return ([IO.File]::ReadAllText($p) -replace "`r`n", 
 # ---- 1: the four places ---------------------------------------------------------
 $steam = Text (Join-Path $App 'SteamUpdates.cs')
 $sync = Text (Join-Path $App 'Sync.cs')
-$settings = Text (Join-Path $App 'FeedSettings.cs')
 $store = Text (Join-Path $Repo 'scripts\release\Feed-Store.ps1')
 $gen = Text (Join-Path $App 'GeneratedBuild.cs')
 
@@ -91,7 +90,6 @@ $ws = Body $sync 'static void WriteSyncState(SyncState s)'
 $wr = Body $sync 'static void WriteReleaseFiles(RecordRef r, ICollection<string> rels)'
 Yes 'Sync: release.txt goes through OwnGame.WriteRecord, no delete and move' ($ws -match 'OwnGame\.WriteRecord\(SyncStateFile, lines\);' -and $ws -notmatch 'File\.(Delete|Move)\(')
 Yes 'Sync: release-files.txt the same' ($wr -match 'OwnGame\.WriteRecord\(ReleaseFilesFile, lines\);' -and $wr -notmatch 'File\.(Delete|Move)\(')
-Yes 'FeedSettings: the settings cache goes through OwnGame.WriteRecord, no delete and move' ($settings -match 'OwnGame\.WriteRecord\(cache, raw\);' -and $settings -notmatch 'File\.(Delete|Move)\(')
 
 $body = [regex]::Match($store, "(?s)\`$script:FeedStoreBody = @'\n(.*?)\n'@")
 $swap = [regex]::Match($store, "(?s)\`$script:FeedStoreSwap = @'\n(.*?)\n'@")
@@ -112,7 +110,7 @@ try {
     # ---- 2 and 3: the launcher's two, compiled ---------------------------------
     $og = Text (Join-Path $App 'OwnGame.cs')
     $m = [regex]::Match($og, '(?s)\n(        (?:internal )?static void WriteRecord\(string path, IEnumerable<string> lines\)\n        \{\n.*?\n        \}\n.*?private static partial bool MoveFileEx\([^)]*\);\n)')
-    Yes 'OwnGame.WriteRecord and its byte form are in OwnGame.cs' ($m.Success -and $m.Groups[1].Value -match 'internal static void WriteRecord\(string path, byte\[\] bytes\)')
+    Yes 'OwnGame.WriteRecord and its rename are in OwnGame.cs' ($m.Success -and $m.Groups[1].Value -match 'static void SwapIn\(string next, string path\)')
     if (-not $m.Success) { Done }
     $driver = @'
 using System;
@@ -131,21 +129,24 @@ __WRITERECORD__
     static class WholeRecordTest
     {
         static byte[] Make(char c, int n) { var b = new byte[n]; for (int i = 0; i < n; i++) b[i] = (byte)(i % 64 == 63 ? '\n' : c); return b; }
+        static string[] Lines(char c, int count) { var l = new string[count]; for (int i = 0; i < count; i++) l[i] = new string(c, 62); return l; }
         static int Main(string[] args)
         {
             string mode = args[0], path = args[1];
             int n = int.Parse(args[2]);
             byte[] a = Make('a', n), b = Make('b', n + 7);
+            string[] la = Lines('a', n / 64), lb = Lines('b', n / 64 + 1);
             if (mode == "seed") { File.WriteAllBytes(path, a); return 0; }
+            if (mode == "seedrecord") { OwnGame.WriteRecord(path, la); return 0; }
             if (mode == "steamonce") { string t = path + ".tmp"; SteamUpdates.WriteWhole(t, b); SteamUpdates.SwapIn(t, path); return 0; }
-            if (mode == "recordonce") { OwnGame.WriteRecord(path, b); return 0; }
+            if (mode == "recordonce") { OwnGame.WriteRecord(path, lb); return 0; }
             Console.WriteLine("ready");
             Console.Out.Flush();
             for (int k = 0; ; k++)
             {
                 byte[] w = k % 2 == 0 ? b : a;
                 if (mode == "steam") { string t = path + ".tmp"; SteamUpdates.WriteWhole(t, w); SteamUpdates.SwapIn(t, path); }
-                else OwnGame.WriteRecord(path, w);
+                else OwnGame.WriteRecord(path, k % 2 == 0 ? lb : la);
             }
         }
     }
@@ -175,13 +176,17 @@ __WRITERECORD__
         $code = Run @('steamonce', $man, $N)
         Yes 'SteamUpdates replaces a manifest with the new bytes, and leaves nothing beside it' ($code -eq 0 -and (Len $man) -eq ($N + 7) -and
             @(Get-ChildItem -LiteralPath (Split-Path $man) -Force).Count -eq 1)
-        $rec = Join-Path $work 'Profile\feed-settings.json'
+        $rec = Join-Path $work 'Profile\release.txt'
         $code = Run @('recordonce', $rec, 37427)
-        Yes 'WriteRecord''s byte form makes the folder and the record, and leaves no .new' ($code -eq 0 -and (Len $rec) -eq 37434 -and -not (Test-Path -LiteralPath ($rec + '.new')))
+        $recB = Len $rec
+        Yes 'WriteRecord makes the folder and the record, and leaves no .new' ($code -eq 0 -and $recB -eq ([Math]::Floor(37427 / 64) + 1) * 64 -and -not (Test-Path -LiteralPath ($rec + '.new')))
+        $null = Run @('seedrecord', $rec, 37427)
+        $recA = Len $rec
 
-        function KillTest([string]$mode, [string]$path, [int]$size, [int]$kills) {
+        function KillTest([string]$mode, [string]$path, [int]$size, [int]$kills, [string]$seed = 'seed', [long[]]$ok = @()) {
+            if ($ok.Count -eq 0) { $ok = @($size, ($size + 7)) }
             $null = New-Item -ItemType Directory -Force -Path (Split-Path $path)
-            $null = Run @('seed', $path, $size)
+            $null = Run @($seed, $path, $size)
             $whole = 0; $bad = @()
             $rand = New-Object Random 2591
             for ($i = 0; $i -lt $kills; $i++) {
@@ -193,14 +198,14 @@ __WRITERECORD__
                 Start-Sleep -Milliseconds ($rand.Next(15, 160))
                 $p.Kill(); $p.WaitForExit(); $p.Dispose()
                 $l = Len $path
-                if ($l -eq $size -or $l -eq ($size + 7)) { $whole++ } else { $bad += $(if ($l -lt 0) { 'missing' } else { "$l bytes" }); $null = Run @('seed', $path, $size) }
+                if ($ok -contains $l) { $whole++ } else { $bad += $(if ($l -lt 0) { 'missing' } else { "$l bytes" }); $null = Run @($seed, $path, $size) }
             }
             return [pscustomobject]@{ Whole = $whole; Bad = $bad }
         }
         $r = KillTest 'steam' (Join-Path $work 'killed-steam\appmanifest_489830.acf') $N 40
         Yes ('killed 40 times while SteamUpdates swaps the manifest in: whole every time ({0} of 40{1})' -f $r.Whole, $(if ($r.Bad) { '; ' + ($r.Bad -join ', ') })) ($r.Whole -eq 40)
-        $r = KillTest 'record' (Join-Path $work 'killed-settings\feed-settings.json') 37427 40
-        Yes ('killed 40 times while WriteRecord swaps the settings cache in: whole every time ({0} of 40{1})' -f $r.Whole, $(if ($r.Bad) { '; ' + ($r.Bad -join ', ') })) ($r.Whole -eq 40)
+        $r = KillTest 'record' (Join-Path $work 'killed-record\release.txt') 37427 40 'seedrecord' @($recA, $recB)
+        Yes ('killed 40 times while WriteRecord swaps a record in: whole every time ({0} of 40{1})' -f $r.Whole, $(if ($r.Bad) { '; ' + ($r.Bad -join ', ') })) ($r.Whole -eq 40)
     }
 
     # ---- 4: the feed store, in PowerShell 7 as the VPS runs it (#5356) ------------
