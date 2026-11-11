@@ -30,7 +30,7 @@
   StopAndMove.ps1's does: Swap.ps1 puts it in front of both swap blocks
   (Deploy-Server, Deploy-DevGamemode, Deploy-Docs, Install-Voice,
   Install-Bot), and Restart-Server, Reset-Character, Deploy-Docs,
-  Install-Bridge, Install-Voice, Install-Gate, Install-AdminService,
+  Install-Bridge, Install-Tunnel, Install-Voice, Install-Gate, Install-AdminService,
   Bot-Service (through Install-Bot), Setup-Domain, Wipe-Saves and Go send it
   with their own stops. Install-ThornswoodServer.ps1 runs on the box and
   carries a copy between marker lines; the test fails when the copy differs.

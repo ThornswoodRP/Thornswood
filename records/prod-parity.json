@@ -195,6 +195,14 @@
       "why": "scripts/deploy/Install-Bridge.ps1, the box's end of ssh, LOCAL SERVICE, Limited, with a SID of its own (#2891, #2578)"
     },
     {
+      "name": "Thornswood Tunnel",
+      "user": "LOCAL SERVICE",
+      "triggers": [
+        "Event"
+      ],
+      "why": "scripts/deploy/Install-Tunnel.ps1, cloudflared, which carries the site, both feeds and the ssh bridge (#5334), LOCAL SERVICE, Limited, with a SID of its own, started when the box's network connects (NetworkProfile event 10000), not at boot (#5779)"
+    },
+    {
       "name": "Thornswood Gate",
       "user": "SYSTEM",
       "triggers": [

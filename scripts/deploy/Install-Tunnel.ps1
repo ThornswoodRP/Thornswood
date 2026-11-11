@@ -76,12 +76,31 @@
        checks its SHA-256 before it is used;
     5. registers the task as LOCAL SERVICE, Limited, with a SID of its own
        (ServiceAccount.ps1, #2578), the way Caddy and the bridge run, and
-       starts it;
+       starts it. The task starts cloudflared when the box's network
+       connects (NetworkProfile event 10000), not at boot: at boot it ran
+       before the box could resolve a name, and cloudflared stops for good
+       when its first lookup of Cloudflare's edge fails (#5779). While it
+       has cloudflared stopped it holds it (ServerHold.ps1, #5155), so the
+       watchdog does not start a half-installed tunnel, and every way out
+       takes the hold away;
     6. waits for cloudflared's /ready on 127.0.0.1:20241, which answers 200
        only while it holds a connection to Cloudflare, and asks Cloudflare
-       whether the tunnel is healthy.
-  When nothing differs and it is ready, nothing is stopped. DNS is not
-  touched, so until -Switch nobody's request goes through the tunnel.
+       whether the tunnel is healthy. When it does not connect in -Wait
+       seconds cloudflared is left running and the run says so; the
+       watchdog (Watch-Services.ps1) restarts it when it is still not
+       connected two runs later.
+  When nothing differs and it is ready, nothing is stopped. When only what
+  starts the task differs, that is changed in place and the running
+  cloudflared is not touched, so it goes ahead while the names are on the
+  tunnel. DNS is not touched, so until -Switch nobody's request goes
+  through the tunnel.
+
+  THE WATCHDOG. Watch-Services.ps1 checks the tunnel every five minutes like
+  every other box task (#5779): it starts the task when the metrics port is
+  shut, and ends and starts it when /ready is not 200 on two runs in a row,
+  three times an hour at most, and tells #staff-updates. -Remove takes the
+  task away, so after it the watchdog says the tunnel is down and that
+  Windows would not start its task.
 
   -SWITCH moves the two names. Each must be one proxied A record at the
   box's address, or already the tunnel's CNAME; anything else stops it with
@@ -264,6 +283,8 @@ if ($ThroughGate) {
 $ssh = @('-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes')
 . (Join-Path $Here '..\vps\Send-Script.ps1')
 . (Join-Path $Here 'ServiceAccount.ps1')
+# The hold the install writes while it has cloudflared stopped (#5155, #5779).
+. (Join-Path $Here '..\vps\ServerHold.ps1')
 if (-not $User) { $User = Get-ThornswoodVpsUser }
 if (-not $Vps) { $Vps = Get-ThornswoodVpsAddress }
 $target = "$User@$Vps"
@@ -312,6 +333,46 @@ function Get-Metric([string]`$Name) {
     return `$sum
 }
 function Get-State { if (Test-Path -LiteralPath `$stateFile) { return ([IO.File]::ReadAllText(`$stateFile)).Trim() } else { return 'back' } }
+# What starts cloudflared (#5779): the box's network connecting, not the boot.
+# Windows writes event 10000 in the NetworkProfile Operational log when a
+# network connects, at each boot once the adapter is up and on each reconnect.
+# On 11 Nov 2026 the boot trigger started cloudflared three seconds into a
+# Windows Update restart, before the box could resolve a name; its lookups of
+# Cloudflare's edge timed out and it stopped with code 1, for good. Started
+# by this event, it runs once the network it needs is there. A start while
+# it runs is dropped (MultipleInstances IgnoreNew), so a reconnect leaves a
+# running cloudflared alone. Send-Backups.ps1 starts its task the same way.
+`$netLog = 'Microsoft-Windows-NetworkProfile/Operational'
+`$netQuery = '<QueryList><Query Id="0" Path="' + `$netLog + '"><Select Path="' + `$netLog + '">*[System[EventID=10000]]</Select></Query></QueryList>'
+function New-NetworkTrigger {
+    `$c = Get-CimClass -ClassName MSFT_TaskEventTrigger -Namespace Root/Microsoft/Windows/TaskScheduler
+    `$t = New-CimInstance -CimClass `$c -ClientOnly
+    `$t.Subscription = `$netQuery
+    `$t.Enabled = `$true
+    return `$t
+}
+function Test-NetworkTrigger(`$Task) {
+    `$tr = @(`$Task.Triggers)
+    return (`$tr.Count -eq 1 -and [string]`$tr[0].Subscription -match [regex]::Escape(`$netLog) -and [string]`$tr[0].Subscription -match 'EventID=10000')
+}
+# The event is only written while that log is on. Windows turns it on by
+# itself, but the task history log was off on this box (Send-Backups.ps1,
+# 10 Nov 2026), so it is turned on here when it is not, and read back. '' or
+# what was done, in words; throws when it will not turn on, before anything
+# is stopped.
+function Enable-NetworkLog {
+    `$l = Get-WinEvent -ListLog `$netLog -ErrorAction Stop
+    if (`$l.IsEnabled) { return '' }
+    `$l.IsEnabled = `$true
+    `$l.SaveChanges()
+    if (-not (Get-WinEvent -ListLog `$netLog -ErrorAction Stop).IsEnabled) { throw (`$netLog + ' would not turn on, so nothing would start cloudflared after a restart; nothing was changed') }
+    return ('turned on ' + `$netLog + ', where Windows writes that the network connected')
+}
+# The task's settings, one place for a new task and one changed in place.
+# Priority 4, normal, not Task Scheduler's default of 7 (#1968).
+function New-TunnelSettings {
+    return (New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -Priority 4)
+}
 # Nothing from C:\: only SYSTEM, Administrators and whoever runs this; the
 # task's own SID is added once it is registered.
 function Lock-TunnelFolder([string]`$dir) {
@@ -377,6 +438,7 @@ if ($Status) {
 
 `$t = Get-ScheduledTask -TaskName `$task -EA SilentlyContinue
 if (`$t) { `$i = Get-ScheduledTaskInfo -TaskName `$task; 'task         ' + `$t.State + ' as ' + `$t.Principal.UserId + ', last ran ' + `$i.LastRunTime + ' result ' + `$i.LastTaskResult } else { 'task         NOT REGISTERED' }
+if (`$t) { 'starts       ' + `$(if (Test-NetworkTrigger `$t) { 'when the network connects (' + `$netLog + ', event 10000)' } else { 'NOT on the network connecting: ' + (@(`$t.Triggers | ForEach-Object { ([string]`$_.CimClass.CimClassName) -replace '^MSFT_Task|Trigger`$', '' }) -join ', ') + '. A plain install changes it in place' }) }
 if (Test-Path -LiteralPath `$exe) {
     `$h = (Get-FileHash -LiteralPath `$exe -Algorithm SHA256).Hash.ToLowerInvariant()
     'cloudflared  ' + `$(if (`$h -eq `$rec.cloudflared.sha256) { `$rec.cloudflared.version + ', the recorded build' } else { 'NOT the recorded build (' + `$h + ')' })
@@ -528,10 +590,11 @@ finally { `$cfToken = `$null }
 # ---------------------------------------------------------------- install --
 Head 'Installing the tunnel'
 $asSystemInt = [int][bool]$AsSystem
-$install = $common + $opened + $cfApi + "`r`n" + (Get-ThornswoodServiceAccountScript) + @"
+$install = $common + $opened + $cfApi + "`r`n" + (Get-ThornswoodServiceAccountScript) + (Get-ThornswoodHoldScript -Script 'Install-Tunnel.ps1') + @"
 
 `$AsSystem = [bool]$asSystemInt
 `$wait = $Wait
+`$held = `$false
 try {
     # 1. The tunnel.
     `$t = Find-Tunnel
@@ -581,8 +644,18 @@ try {
     `$have = Get-ScheduledTask -TaskName `$task -EA SilentlyContinue
     `$ready = Get-Plain (`$metrics + '/ready') 5
     `$sameTask = (`$have -and ([string]@(`$have.Actions)[0].Arguments).Contains(`$arg) -and ([bool](`$have.Principal.UserId -match 'SYSTEM') -eq `$AsSystem))
+    `$netSaid = Enable-NetworkLog
+    if (`$netSaid) { `$netSaid }
     if (-not `$tokenNew -and -not `$exeNew -and `$sameTask -and `$ready.Code -eq 200) {
-        'the task runs this build with this token and is connected, so nothing was restarted'
+        if (Test-NetworkTrigger `$have) { 'the task runs this build with this token and is connected, so nothing was restarted'; 'TUNNEL OK'; exit 0 }
+        # Only what starts it differs (#5779): changed in place, so the
+        # cloudflared that is running and carrying the names is not touched,
+        # and this goes ahead while the names are on the tunnel.
+        `$have.Triggers = @(New-NetworkTrigger)
+        `$have.Settings = New-TunnelSettings
+        `$have | Set-ScheduledTask -ErrorAction Stop | Out-Null
+        if (-not (Test-NetworkTrigger (Get-ScheduledTask -TaskName `$task -ErrorAction Stop))) { 'the task''s trigger did not read back as the network one'; 'TUNNEL REFUSED'; exit 1 }
+        'the task now starts cloudflared when the box''s network connects, not at boot; the running cloudflared was not restarted'
         'TUNNEL OK'; exit 0
     }
     if ((Get-State) -eq 'switched') {
@@ -594,6 +667,11 @@ try {
         `$cannot = @(Test-ThornswoodServiceCannotReach (@(Get-ThornswoodServiceNeverReach -Own `$root -Box (Split-Path -Parent `$root)) + `$root))
         if (`$cannot.Count) { 'LOCAL SERVICE could read what no service may, so cloudflared is not put on it:'; `$cannot; 'Lock those (scripts\vps\Lock-VpsFolders.ps1), or pass -AsSystem. Nothing was started.'; 'TUNNEL REFUSED'; exit 1 }
     }
+    # Held while it is stopped (#5155), so the watchdog does not start a
+    # half-installed tunnel (#5779); the finally below takes the hold away
+    # on every way out.
+    Set-ThornswoodHold -Target `$task -Why 'installing cloudflared' -By `$HoldBy
+    `$held = `$true
     Stop-ScheduledTask -TaskName `$task -EA SilentlyContinue
     Get-Process cloudflared -EA SilentlyContinue | Where-Object { `$_.Path -eq `$exe } | ForEach-Object { `$_ | Stop-Process -Force; `$_.WaitForExit(15000) | Out-Null }
     if (`$exeNew) { Move-Item -LiteralPath (Join-Path `$stage 'cloudflared.exe') -Destination `$exe -Force; Remove-Item -LiteralPath `$stage -Recurse -Force -EA SilentlyContinue }
@@ -604,10 +682,8 @@ try {
 
     function Register([bool]`$system) {
         `$action = New-ScheduledTaskAction -Execute `$exe -Argument `$arg -WorkingDirectory `$root
-        # Priority 4, normal, not Task Scheduler's default of 7 (#1968).
-        `$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -Priority 4
         if (Get-ScheduledTask -TaskName `$task -EA SilentlyContinue) { Unregister-ScheduledTask -TaskName `$task -Confirm:`$false }
-        Register-ScheduledTask -TaskName `$task -Action `$action -Trigger (New-ScheduledTaskTrigger -AtStartup) -Settings `$settings -Principal (New-ThornswoodServicePrincipal -AsSystem:`$system) | Out-Null
+        Register-ScheduledTask -TaskName `$task -Action `$action -Trigger (New-NetworkTrigger) -Settings (New-TunnelSettings) -Principal (New-ThornswoodServicePrincipal -AsSystem:`$system) | Out-Null
     }
     Register `$AsSystem
     if (-not `$AsSystem) {
@@ -632,8 +708,10 @@ try {
     if ((Get-Plain (`$metrics + '/ready') 3).Code -ne 200) {
         'cloudflared did not connect within ' + `$wait + ' seconds. cloudflared.log says:'
         if (Test-Path -LiteralPath `$log) { Get-Content -LiteralPath `$log -Tail 15 } else { 'nothing was written' }
-        Stop-ScheduledTask -TaskName `$task -EA SilentlyContinue
-        'the task is stopped; DNS was never moved, so the site is as it was'
+        # Left running: cloudflared keeps trying by itself, and from here the
+        # watchdog judges it like any run (#5779), restarting it and telling
+        # #staff-updates when it is still not connected two runs from now.
+        'cloudflared is left running and the watchdog watches it from here; DNS was never moved, so the site is as it was'
         'TUNNEL NOT READY'; exit 1
     }
     'cloudflared is connected: ' + (Get-Metric 'cloudflared_tunnel_ha_connections') + ' connection(s)'
@@ -641,7 +719,10 @@ try {
     'Cloudflare says the tunnel is ' + `$health
     'TUNNEL OK'; exit 0
 } catch { 'STOPPED: ' + `$_.Exception.Message; 'TUNNEL REFUSED'; exit 1 }
-finally { `$cfToken = `$null; `$runToken = `$null }
+finally {
+    `$cfToken = `$null; `$runToken = `$null
+    if (`$held) { Clear-ThornswoodHold -Target `$task }
+}
 "@
 $out = @(Remote $install | ForEach-Object { Say "  $_"; "$_".Trim() })
 $sealed = $null

@@ -37,7 +37,9 @@
   saying it is back comes once it has answered on two runs in a row, so a
   service that flaps is one outage and two messages, not two every five
   minutes. A thing that answers on its port but fails its health check is
-  told about after two runs in a row, and is never restarted for it.
+  told about after two runs in a row, and is never restarted for it. The
+  tunnel's /ready is the one check of that kind that is restarted for, and
+  the list below says why.
 
   The messages go into alerts.jsonl beside watch.log, one JSON line each (id,
   at, service, kind, text), and the same sentence goes into watch.log. The
@@ -92,7 +94,18 @@
               into the box over ssh once port 22 takes no outside address
               (#2891). Down, it locks everybody out but the VNC console, so
               it is restarted like the rest
-    disk      free space on C:, which every one of the above shares. Under
+    tunnel    cloudflared, the task Thornswood Tunnel (#5779). Since #5334 it
+              carries thornswood.net, both update feeds and the ssh bridge,
+              so down it is the site and every way in over ssh at once. Its
+              metrics port, 20241 on loopback (records\cloudflare-tunnel.json),
+              answering is the process alive, and http://127.0.0.1:20241/ready
+              answering 200 is it holding a connection to Cloudflare. Its
+              metrics answer while it holds none, which is the outage itself,
+              so a /ready that is not 200 is down and restarted too, after two
+              runs in a row, so a reconnect cloudflared is making by itself
+              is let finish. On 11 Nov 2026 a Windows Update restart left it
+              stopped and nothing on the box started it for 7.5 hours
+    disk     free space on C:, which every one of the above shares. Under
               twenty percent it writes DISK LOW, under ten DISK CRITICAL,
               once when the line is crossed and once when it comes back. It
               restarts nothing for it, because a restart frees nothing.
@@ -495,6 +508,48 @@ function HealthProblem($url) {
   }
 }
 
+# '' when the address answers 200 within ten seconds, else why not. Stricter
+# than HealthProblem: cloudflared's /ready answers 503 while it holds no
+# connection to Cloudflare, and that is the tunnel down (#5779).
+function ReadyProblem($url) {
+  try {
+    $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
+    if ([int]$r.StatusCode -eq 200) { return '' }
+    return ('answered HTTP ' + [int]$r.StatusCode + ', not 200')
+  } catch {
+    $code = 0
+    try { $code = [int]$_.Exception.Response.StatusCode } catch { }
+    if ($code -gt 0) { return ('answered HTTP ' + $code + ', so it holds no connection to Cloudflare') }
+    $st = ''
+    try { $st = '' + $_.Exception.Status } catch { }
+    if ($st -eq 'Timeout') { return 'did not answer within ten seconds' }
+    return 'could not be reached'
+  }
+}
+
+# Ends a task whose program is running but not working, so the start after it
+# is a new run. Task Scheduler drops a start while a run is going
+# (MultipleInstances IgnoreNew), and the program a task starts through the
+# owner launcher (ServiceAccount.ps1) is its child, which ending the task may
+# leave running. So the task is ended and the process that holds its port is
+# stopped and waited for, as Install-Tunnel.ps1 does before it starts the
+# task. What it did, in words, for watch.log.
+function EndTask($task, $port) {
+  $ids = @(Get-NetTCPConnection -LocalPort $port -State Listen -EA SilentlyContinue | ForEach-Object { [int]$_.OwningProcess } | Select-Object -Unique)
+  $null = & schtasks /end /tn $task 2>&1
+  $said = 'ended ' + $task
+  foreach ($id in $ids) {
+    $p = Get-Process -Id $id -EA SilentlyContinue
+    if (-not $p) { continue }
+    try {
+      $p | Stop-Process -Force -EA Stop
+      if ($p.WaitForExit(15000)) { $said += ', stopped ' + $p.ProcessName + ' (' + $id + ')' }
+      else { $said += ', ' + $p.ProcessName + ' (' + $id + ') had not exited 15 seconds after it was stopped' }
+    } catch { $said += ', could not stop ' + $p.ProcessName + ' (' + $id + '): ' + $_.Exception.Message }
+  }
+  return $said
+}
+
 # '' when every service matching the name is running, else why not. Where
 # the name matches several, the build runners, it says which are not.
 #
@@ -841,7 +896,10 @@ $checks = @(
   @{ Name = 'dev voice'; Task = 'Thornswood Dev Voice';  Port = 7789; Say = 'Dev voice'; Health = 'http://127.0.0.1:7789/health' },
   # The way in over ssh (#2891). A plain request answers 404 on purpose, so
   # the port answering is the whole check.
-  @{ Name = 'bridge';    Task = 'Thornswood Bridge';     Port = 7790; Say = 'The ssh bridge, the way into the box' }
+  @{ Name = 'bridge';    Task = 'Thornswood Bridge';     Port = 7790; Say = 'The ssh bridge, the way into the box' },
+  # What carries the site, both feeds and the bridge since #5334 (#5779).
+  # Ready, unlike Health, is restarted for: the header says why.
+  @{ Name = 'tunnel';    Task = 'Thornswood Tunnel';     Port = 20241; Say = 'The Cloudflare tunnel, which carries the website, both update feeds and the ssh bridge'; Ready = 'http://127.0.0.1:20241/ready' }
 )
 
 # Told about and never restarted. The runner's service name is the one
@@ -871,6 +929,14 @@ function IsUp($c) {
   return (Answers $c.Port)
 }
 
+# Up and, where it has a Ready address, answering 200 there: what a restart
+# has to give back before it counts as back.
+function Working($c) {
+  if (-not (IsUp $c)) { return $false }
+  if ($c.ContainsKey('Ready')) { return (-not (ReadyProblem $c.Ready)) }
+  return $true
+}
+
 # A check's verdict once the watchdog has acted on it. $h is the hold that
 # ran out this run, or $null: then the one message is the hold's, saying what
 # the start did, and a start that worked is not an outage (#5155).
@@ -896,8 +962,10 @@ foreach ($c in $checks) {
   }
   if ($held) { Remove-Item -LiteralPath $held.File -Force -EA SilentlyContinue }
 
-  # What is wrong with it in words, when it is down.
+  # What is wrong with it in words, when it is down. $alive is its program
+  # running while it does not work, which is ended before it is started.
   $why = DownWords $c
+  $alive = $false
   if (IsUp $c) {
     if ($held) { TellHold $c $held (HoldWords 'running'); $held = $null }
     $sick = ''
@@ -908,9 +976,24 @@ foreach ($c in $checks) {
     $hung = ''
     if ($c.ContainsKey('Beat')) { $hung = BotSilent $c.Beat }
     if ($sick) { Observe $told $c $true $true ('It answers on port ' + $c.Port + ', but ' + $c.Health + ' ' + $sick) 'soft'; continue }
-    if (-not $hung) { Observe $told $c $false $false '' ''; continue }
-    if (-not $c.ContainsKey('Svc')) { Observe $told $c $true $false $hung 'soft'; continue }
-    $why = $hung
+    # Answering on its port and not ready is down (#5779): the tunnel's
+    # metrics answer while it holds no connection to Cloudflare. The first
+    # run of it is only noted, as a health check's is, so a reconnect
+    # cloudflared is making by itself is let finish; the second in a row
+    # (or any run of an outage already told) ends it and starts it again.
+    $cut = ''
+    if ($c.ContainsKey('Ready')) { $cut = ReadyProblem $c.Ready }
+    if ($cut) {
+      $why = 'It answers on port ' + $c.Port + ', but ' + $c.Ready + ' ' + $cut
+      $missed = 0
+      if ($told.ContainsKey($c.Name)) { $missed = [int]$told[$c.Name].Misses }
+      if ($missed + 1 -lt $healthMisses) { Observe $told $c $true $true $why 'soft'; continue }
+      $alive = $true
+    } else {
+      if (-not $hung) { Observe $told $c $false $false '' ''; continue }
+      if (-not $c.ContainsKey('Svc')) { Observe $told $c $true $false $hung 'soft'; continue }
+      $why = $hung
+    }
   }
 
   $already = 0
@@ -942,7 +1025,8 @@ foreach ($c in $checks) {
     $ended = ''
     if (-not $held) { $ended = HowItEnded $c.Task }
     if ($ended) { $why = $why + ', and ' + $ended }
-    Note ($c.Name + ' is not answering' + $(if ($ended) { ': ' + $ended } else { '' }) + '. Starting ' + $c.Task)
+    if ($alive) { Note ($c.Name + ' is running and not working (' + $why + '). ' + (EndTask $c.Task $c.Port) + '. Starting ' + $c.Task) }
+    else { Note ($c.Name + ' is not answering' + $(if ($ended) { ': ' + $ended } else { '' }) + '. Starting ' + $c.Task) }
     $null = & schtasks /run /tn $c.Task 2>&1
     $rc = $LASTEXITCODE
     if ($rc -ne 0) {
@@ -955,7 +1039,7 @@ foreach ($c in $checks) {
   # Caddy's first start after a gap waits on its certificate, so it is given
   # longer before the watcher decides it did not come back.
   Start-Sleep -Seconds $(if ($c.ContainsKey('Url')) { 45 } else { 25 })
-  if (IsUp $c) {
+  if (Working $c) {
     Note ($c.Name + ' is back')
     Verdict $c $held $why 'back'
   }
@@ -1315,6 +1399,12 @@ if (Test-Path `$hb) {
 'dev game  ' + `$(if (Answers 7788) { 'up' } else { 'DOWN' })
 'dev voice ' + `$(if (Answers 7789) { 'up' } else { 'DOWN' })
 'bridge    ' + `$(if (Answers 7790) { 'up' } else { 'DOWN' })
+# cloudflared (#5779): its metrics port, then /ready, which is 200 only while
+# it holds a connection to Cloudflare. [Net.WebRequest] throws on anything
+# else, on Windows PowerShell 5.1 as well.
+`$ready = `$false
+try { `$r = [Net.WebRequest]::Create('http://127.0.0.1:20241/ready'); `$r.Timeout = 5000; `$a = `$r.GetResponse(); `$ready = ([int]`$a.StatusCode -eq 200); `$a.Close() } catch { `$ready = `$false }
+'tunnel    ' + `$(if (-not (Answers 20241)) { 'DOWN' } elseif (`$ready) { 'up' } else { 'NOT CONNECTED to Cloudflare (/ready is not 200)' })
 # Free space right now, and LOW or CRITICAL when the watcher's last run found
 # it under a line. The twenty and the ten are kept in the watcher only, so
 # this reads its verdict from disk.txt rather than holding a second copy.
@@ -1360,7 +1450,7 @@ Get-ThornswoodHolds
 foreach ($l in $out) {
   $c = 'Gray'
   if ("$l" -match '^held ') { $c = 'Yellow' }
-  if ("$l" -match 'DOWN|NOT installed|LOW$|CRITICAL$|OFF DISCORD|Stopped$|NOT #staff-updates|WOULD NOT SAY|NO say-staff') { $c = 'Red' }
+  if ("$l" -match 'DOWN|NOT CONNECTED|NOT installed|LOW$|CRITICAL$|OFF DISCORD|Stopped$|NOT #staff-updates|WOULD NOT SAY|NO say-staff') { $c = 'Red' }
   if ("$l" -match '\bup$|installed$|Running$') { $c = 'Green' }
   Say "  $l" $c
 }
