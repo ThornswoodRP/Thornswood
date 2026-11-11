@@ -2167,11 +2167,11 @@
                   {
                       "script":  "scripts/vps/Request-Restart.ps1",
                       "scope":  "\u003ctop\u003e",
-                      "via":  "ssh",
-                      "anchor":  "$out = Invoke-ThornswoodNative { \u0026 ssh @ssh \"$User@$Vps\" \"pwsh -NoProfile -EncodedCommand $enc\" } 2\u003e\u00261",
-                      "does":  "drops a restart request json into the server data folder",
+                      "via":  "Invoke-ThornswoodRemote",
+                      "anchor":  "$out = @(Invoke-ThornswoodRemote -Target \"$User@$Vps\" -SshArgs $ssh -Script $remote 2\u003e\u00261)",
+                      "does":  "drops a restart request json into the server data folder, and the restart notice the Discord bot posts into C:\\Thornswood-Deploys\\for-bot (#5784)",
                       "class":  "stage",
-                      "reason":  "file write in a Thornswood folder; the gamemode reads it, warns, and deletes it"
+                      "reason":  "file writes in Thornswood folders; the gamemode reads the request, warns, and deletes it, and the bot reads the notice"
                   },
                   {
                       "script":  "scripts/vps/Restart-Server.ps1",

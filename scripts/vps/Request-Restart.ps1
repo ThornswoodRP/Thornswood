@@ -36,6 +36,16 @@
     update   a pack has been published, so everyone has to quit to the
              launcher to pick it up. Ends with a kick.
     restart  the server itself is going down for longer. Ends with a kick.
+
+  DISCORD (#5784). notice and restart stop the server, so they are said in
+  Discord too, before the countdown starts in the game: the box writes the
+  restart notice (RestartNotice.ps1) that the bot posts in #updates, or the
+  dev updates channel for the dev server's data folder, with the time it
+  goes down. When it cannot be written nothing is dropped in the game either
+  and this exits 1, which Deploy-Server and Deploy-DevGamemode read as a
+  warning that did not go out. -Cancel calls the notice off. update is a
+  launcher update with the server staying up, so it says nothing there.
+  Until 11 Nov 2026 no restart was ever said in Discord.
 #>
 [CmdletBinding()]
 param(
@@ -61,6 +71,10 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $ErrorActionPreference = 'Stop'   # before any file loads, so one that is missing stops here (#3006)
 . (Join-Path $Here 'Vps.ps1')
+. (Join-Path $Here 'RestartNotice.ps1')
+# The notice's function makes the script long, so it goes the one way a long
+# script reaches the box whole (Send-Script.ps1, #1070).
+. (Join-Path $Here 'Send-Script.ps1')
 if (-not $User) { $User = Get-ThornswoodVpsUser }
 if (-not $Vps) { $Vps = Get-ThornswoodVpsAddress }
 $ssh = @('-o','BatchMode=yes','-o','StrictHostKeyChecking=yes')
@@ -102,18 +116,34 @@ if ($Cancel) {
 
 # Written through a base64 hop so quoting survives ssh, cmd and PowerShell.
 $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($body))
-$remote = @"
+# Discord first (#5784): the server folder is the data folder's parent.
+$notice = ''
+if ($Cancel) { $notice = 'off' }
+elseif ($Mode -ne 'update') { $notice = 'coming' }
+$whyB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Why))
+$remote = $ThornswoodRestartNoticeText + @"
 `$ErrorActionPreference = 'Stop'
+if ('$notice') {
+  `$said = Set-ThornswoodRestartNotice -Root (Split-Path -Parent ('$Data'.Replace('/', '\').TrimEnd('\'))) -State '$notice' -Minutes $Minutes -Why ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('$whyB64')))
+  `$said
+  if ('$notice' -eq 'coming' -and `$said -like 'NOTICE FAILED*') { return }
+}
 if (-not (Test-Path '$Data')) { New-Item -ItemType Directory -Path '$Data' -Force | Out-Null }
 [IO.File]::WriteAllBytes((Join-Path '$Data' 'restart.json'),
                          [Convert]::FromBase64String('$b64'))
 'dropped'
 "@
-$enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($remote))
-
-$out = Invoke-ThornswoodNative { & ssh @ssh "$User@$Vps" "pwsh -NoProfile -EncodedCommand $enc" } 2>&1
+$eap = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+try { $out = @(Invoke-ThornswoodRemote -Target "$User@$Vps" -SshArgs $ssh -Script $remote 2>&1) }
+finally { $ErrorActionPreference = $eap }
 if ($LASTEXITCODE -ne 0) {
   Write-Host "  could not reach the server to announce it: $out" -ForegroundColor Yellow
+  exit 1
+}
+foreach ($l in @($out | Where-Object { "$_" -like 'NOTICE *' })) { Write-Host "  discord: $l" -ForegroundColor DarkGray }
+if (@($out | Where-Object { "$_".Trim() -eq 'dropped' }).Count -eq 0) {
+  Write-Host "  DISCORD COULD NOT BE TOLD, so nothing was dropped in the game either: $out" -ForegroundColor Yellow
   exit 1
 }
 

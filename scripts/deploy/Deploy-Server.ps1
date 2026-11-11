@@ -3,7 +3,11 @@
 
   Sends the built server up to the VPS and restarts it.
 
-  Warns first, but does not evict anybody.
+  Warns first, but does not evict anybody. The warning is said in Discord
+  too (#5784, Request-Restart.ps1): the bot posts it in #updates with the
+  time the server goes down, and the swap says when it is back. It is given
+  and waited out even when nobody is on, so somebody about to join is told.
+  -Now tells nobody, in the game or in Discord.
 
   Stopping and starting the server reads from a chair as a freeze and then
   everything carrying on, because the client holds its session across it. So
@@ -428,17 +432,21 @@ function Warn-LiveRoom {
     return
   }
 
-  if ($on -le 0) {
-    if ($room.Up -eq $false) {
-      Write-Host '  the live server is not listening, so nobody is on it'
-    } else {
-      Write-Host '  nobody is online, going straight down'
-    }
+  if ($room.Up -eq $false) {
+    Write-Host '  the live server is not listening, so nobody is on it and there is no restart to say'
     return
   }
 
-  Write-Host ("  $on online$who, $Mode, giving them $Minutes " +
-              $(if ($Minutes -eq 1) { 'minute' } else { 'minutes' }))
+  # Said in Discord as well as in the game, and waited out, whoever is on
+  # (#5784): somebody about to join reads #updates, not the game. Until 11
+  # Nov 2026 an empty room went straight down and Discord heard nothing.
+  if ($on -le 0) {
+    Write-Host ("  nobody is online; saying it in Discord, then $Minutes " +
+                $(if ($Minutes -eq 1) { 'minute' } else { 'minutes' }) + ' before the stop')
+  } else {
+    Write-Host ("  $on online$who, $Mode, giving them $Minutes " +
+                $(if ($Minutes -eq 1) { 'minute' } else { 'minutes' }))
+  }
   $ask = Join-Path $Here '..\vps\Request-Restart.ps1'
   if (-not (Test-Path -LiteralPath $ask)) {
     Write-Host ''
@@ -498,7 +506,9 @@ function Warn-LiveRoom {
     while ((Get-Date) -lt $deadline) {
       Start-Sleep -Seconds 15
       $left = OnlineNow
-      if ($left -le 0) { Write-Host '  room is clear'; break }
+      # Early only once the people who were on have gone: an empty room from
+      # the start waits out the time Discord was given.
+      if ($left -le 0 -and $on -gt 0) { Write-Host '  room is clear'; break }
       $mins = [Math]::Max(0, [int]([Math]::Round(($deadline - (Get-Date)).TotalMinutes)))
       Write-Host "  $left still on, $mins min left"
     }
