@@ -88,7 +88,7 @@ else {
         $r = & $dotnet.Source restore $tests --locked-mode 2>&1
         if ($LASTEXITCODE -ne 0) { Yes 'dotnet restore on tools/ReleaseNotes.Tests from the locked packages' $false; $r | Select-Object -Last 10 | ForEach-Object { Write-Host "      $_" } }
         else {
-            $t = & $dotnet.Source test $tests --no-restore 2>&1
+            $t = & $dotnet.Source test $tests --no-restore --disable-build-servers 2>&1
             Yes 'dotnet test on tools/ReleaseNotes.Tests' ($LASTEXITCODE -eq 0)
             if ($LASTEXITCODE -ne 0) { $t | Select-Object -Last 20 | ForEach-Object { Write-Host "      $_" } }
         }
