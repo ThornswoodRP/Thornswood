@@ -409,6 +409,11 @@ link, and the old line goes.
 - **Every site page and the roadmap get a full rewrite**, not only fixes. 22
   Oct 2026,
   [#3138](https://github.com/EvilPatrick06/Thornswood/issues/3138#issuecomment-6335269668).
+- **Signing out of the site ends that sign-in everywhere, and the privacy
+  page says the site keeps the sign-out time for 30 days, as #5800 at
+  de5d8a7 put it.** (dec_XuhmDTtASmgVepVFfF_6ow, dec_tHNyH0-Ed1tGiDcdeADQBg)
+  11 Nov 2026,
+  [#4405](https://github.com/ThornswoodRP/Thornswood/issues/4405#issuecomment-6810088357).
 
 ## How work moves
 
