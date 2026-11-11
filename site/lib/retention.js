@@ -22,6 +22,7 @@ const { trimInbox } = require('./limits');
 const { GPENDING, GREPORTS, pruneRemovedUploads, UPMETA } = require('./uploads');
 const { BANS, bansNow, MODLOG, NOTES, PK } = require('./staff');
 const { sweepSignIns } = require('./signins');
+const { sweepSignOuts } = require('./auth');
 const { pruneSessionLogs, retentionSay, sessionKey, sessionRows, slogFile,
   SLOGS, sweepSessions } = require('./sessions');
 
@@ -407,7 +408,7 @@ function retentionSweep() {
   return { sessions, keptChat, sessionLogs: pruneSessionLogs(),
            trouble: sweepTrouble(now), pending: expirePending(now),
            removedUploads: pruneRemovedUploads(now),
-           signIns: sweepSignIns(now), inbox: sweepInbox(now),
+           signIns: sweepSignIns(now), signOuts: sweepSignOuts(now), inbox: sweepInbox(now),
            staff: sweepStaffRecords(now), moderationLog: sweepModLog(now),
            galleryReports: sweepGalleryReports(now),
            restoreCopies: sweepRestoreCopies(now) };

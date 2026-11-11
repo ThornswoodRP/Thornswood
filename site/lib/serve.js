@@ -40,7 +40,7 @@ const { deleteUpload, GALLERY, GALLERY_ALLOW, GALLERY_CAP, GALLERY_HOLD_DAYS,
 const { accountBanned, accountOf, activeBans, banMinutes, banUntilText,
   characterBar, dropBan, findDead, heldBroken, modLog, PK, pkActive,
   pkProfiles, putBan, putNote, putPk, recordKey, staffRecords, undoPk } = require('./staff');
-const { ADMIN, ADMIN_DAYS, allowed, COOKIE, cookies, discordReady,
+const { ADMIN, ADMIN_DAYS, allowed, COOKIE, cookies, discordReady, endSignIn,
   discordUnasked, gallerySender, galleryStaff, memberToken,
   personReportRefusal, PLAY_ANSWER_MS, PLAY_BODY_MS, sameSecret, sign,
   standCache, standingCached, standingLate, standingsForDoor, SUBMIT_DOORS,
@@ -298,12 +298,19 @@ async function handle(req, res) {
   }
 
   if (p === '/api/logout' && req.method === 'POST') {
+    const clear = { 'Set-Cookie': [
+      COOKIE + '=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
+      ADMIN  + '=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax'
+    ] };
+    // The sign in itself ends here, not only this browser's cookie (#4405,
+    // endSignIn in auth.js), so a copy of the cookie is refused after this.
+    if (!endSignIn(req)) {
+      return send(res, 500, JSON.stringify({ ok: false, error:
+        'This browser is signed out, but the site could not record the sign out, so a copy of this sign in may still work. Tell staff.' }),
+        'application/json; charset=utf-8', clear);
+    }
     return send(res, 200, JSON.stringify({ ok: true }),
-      'application/json; charset=utf-8',
-      { 'Set-Cookie': [
-          COOKIE + '=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
-          ADMIN  + '=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax'
-        ] });
+      'application/json; charset=utf-8', clear);
   }
 
   // --------------------------------------------------------- discord login
