@@ -58,7 +58,12 @@ if ($null -ne $fn) {
 }
 
 $text = [IO.File]::ReadAllText($gate)
-$atPickExit = $text.IndexOf("Set-StepOutput 'whole' `$(if (`$whole) { 'true' } else { 'false' })`n    exit 0")
+# The pick's exit, found whatever the checkout's line ends are: a Windows
+# checkout holds Run-Gate.ps1 with CRLF.
+$pickExitAt = { param([string]$t) $m = [regex]::Match($t, [regex]::Escape("Set-StepOutput 'whole' `$(if (`$whole) { 'true' } else { 'false' })") + '\r?\n\s*exit 0'); if ($m.Success) { $m.Index } else { -1 } }
+$atPickExit = & $pickExitAt $text
+$lf = $text -replace "`r`n", "`n"
+Yes '4. the pick''s exit is found with LF and with CRLF line ends alike' ((& $pickExitAt $lf) -gt 0 -and (& $pickExitAt ($lf -replace "`n", "`r`n")) -gt 0)
 $atSaid = $text.IndexOf('Write-Host (Get-RunnerSaid')
 $atRun = $text.IndexOf("& (Join-Path `$Here 'Nightly-Harnesses.ps1') @with")
 Yes ('4. Run-Gate.ps1 says it for every share, after the pick and before any harness (' + $atPickExit + ' < ' + $atSaid + ' < ' + $atRun + ')') ($atPickExit -gt 0 -and $atSaid -gt $atPickExit -and $atRun -gt $atSaid)
