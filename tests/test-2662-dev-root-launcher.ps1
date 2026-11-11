@@ -122,8 +122,8 @@ try {
     New-Item -ItemType Directory -Force -Path $rule | Out-Null
     $why = Get-DevRootRefusal $rule $false ''
     Yes 'the install rule''s folder with no Launcher folder is refused' ($why -match ('^No dev build at ' + [regex]::Escape($rule) + '\.'))
-    Yes '  naming the main launcher''s dev build and recording a folder, both right for it' (
-        $why -match 'Settings page \(The dev build\)' -and $why -match 'Setup-ShipMachine\.ps1 -Channel dev -Root <folder>')
+    Yes '  saying to record the folder this machine builds dev from, since the launcher makes no second copy (#5608)' (
+        $why -match 'no second copy for dev since #5608' -and $why -match 'Setup-ShipMachine\.ps1 -Channel dev -Root <folder>')
     Put (Join-Path $rule 'Launcher') 'a file, not a folder'
     Yes '  a file named Launcher is not the folder' ([bool](Get-DevRootRefusal $rule $false ''))
     Remove-Item -LiteralPath (Join-Path $rule 'Launcher') -Force

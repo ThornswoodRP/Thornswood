@@ -36,7 +36,7 @@ function feedGeneration(n) { return String(n).padStart(8, '0') + '.json'; }
    store keeps every generation whole, and every script, backup and page reads
    it whole. What /feed[-dev]/version.json answers is feedView's: once the
    feed's minLauncher is at or above FEED_SPLIT_LAUNCHER, the first launcher
-   that reads it this way (launcher\app\FeedSettings.cs), version.json holds
+   that reads it this way (FeedSettings.cs, out of the launcher since #5608), version.json holds
    only what the update check needs, FEED_TOP, and names everything else as
    one more asset, "settings": { sha256 }, the rest of the feed as one line
    of JSON, answered at /feed[-dev]/assets/<sha256> from here. And every asset
