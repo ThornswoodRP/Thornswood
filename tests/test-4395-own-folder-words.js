@@ -34,7 +34,14 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
-const read = (...p) => { try { return fs.readFileSync(path.join(ROOT, ...p), 'utf8').split('\r\n').join('\n'); } catch (e) { return ''; } };
+// A file that is not there fails by name rather than reading as empty text,
+// so a moved page is a FAIL line here, not a quiet pass on nothing.
+const read = (...p) => {
+  const f = path.join(ROOT, ...p);
+  const there = fs.existsSync(f);
+  yes('reads ' + path.join(...p), there);
+  return there ? fs.readFileSync(f, 'utf8').split('\r\n').join('\n') : '';
+};
 
 let pass = 0, fail = 0;
 function yes(what, cond) {
