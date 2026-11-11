@@ -91,7 +91,7 @@ try {
         # beside it in the gate, read the same folder.
         $before = Get-NotesTreeState $Repo
         Copy-NotesProjects $Repo (Join-Path $temp 'src')
-        $null = & $dotnet.Source build (Join-Path $temp 'src/tools/ReleaseNotes') -c Release -o $built --verbosity quiet 2>&1
+        $null = & $dotnet.Source build (Join-Path $temp 'src/tools/ReleaseNotes') -c Release -o $built --verbosity quiet --disable-build-servers 2>&1
         Yes 'thornswood-notes builds' ($LASTEXITCODE -eq 0)
         $after = Get-NotesTreeState $Repo
         Yes ('  from a copy: the checkout''s tools/ReleaseNotes is as this found it, so a harness beside it reads it whole (' + (Compare-NotesTreeState $before $after) + ')') ($before -ceq $after)
@@ -142,6 +142,28 @@ try {
     Yes 'Collect ends 2 and names a merged pull request with no line' ($r.Code -eq 2 -and $r.Out -match '#7 Old change' -and -not $r.Note)
     $r = Run-Collect @(@{ number = 1; title = 'a'; body = $b3; author = 'x' })
     Yes 'Collect ends 3 when every change says none' ($r.Code -eq 3 -and $r.Out -match 'NONE')
+
+    # ---- the builds leave nothing running (#5753) ----------------------------------
+    # A dotnet build, test, run, publish or pack with the build servers on
+    # leaves VBCSCompiler (and MSBuild's node) running after it, which the
+    # gate's runner then kills and names as left behind. So every one of them
+    # in the two release note harnesses takes --disable-build-servers, as
+    # tests\Launcher-Csc.ps1 does. Read from the harnesses' own code, so it
+    # holds where there is no SDK too.
+    function Get-ServerBuilds([string]$path) {
+        $ast = [Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$null)
+        foreach ($c in $ast.FindAll({ param($n) $n -is [Management.Automation.Language.CommandAst] }, $true)) {
+            $e = $c.CommandElements
+            if ($e.Count -lt 2 -or $e[0].Extent.Text -notmatch '^\$dotnet(\.Source)?$') { continue }
+            if ($e[1].Extent.Text -notmatch '^(build|test|run|publish|pack)$') { continue }
+            [pscustomobject]@{ Line = $c.Extent.StartLineNumber; Off = -not @($e | Where-Object { $_.Extent.Text -eq '--disable-build-servers' }).Count }
+        }
+    }
+    foreach ($h in 'test-pr-release-note.ps1', 'test-note-rules-cases.ps1') {
+        $calls = @(Get-ServerBuilds (Join-Path $PSScriptRoot $h))
+        $on = @($calls | Where-Object { $_.Off })
+        Yes ("$h builds with the build servers off, so it leaves nothing running (" + $calls.Count + ' build(s)' + $(if ($on.Count) { ', servers on at line ' + (@($on | ForEach-Object { $_.Line }) -join ', ') } else { '' }) + ')') ($calls.Count -ge 1 -and -not $on.Count)
+    }
 
     # ---- the template, the workflow and the guide say the same line -------------
     # A Windows checkout holds the template with CRLF, and .NET's $ stops only
