@@ -14,6 +14,13 @@
   reads from a chair as the world freezing and then everything carrying on.
   Check first, then decide, rather than finding out afterwards.
 
+  The game and dev servers' restart is said in Discord first (#5784): with
+  nobody on, Request-Restart.ps1 says it (#updates for the live server, the
+  dev updates channel for dev) a minute ahead and this waits the minute out,
+  and once the server is started again the notice says it is back. -Now
+  says nothing ahead; a restart Request-Restart -ThenRestart counted down
+  was said by it, and is said to be back here.
+
 .PARAMETER Service
   Which one. game, dev, docs, voice or bot.
 
@@ -46,6 +53,8 @@ $ErrorActionPreference = 'Stop'   # before any file loads, so one that is missin
 . (Join-Path $Here 'Send-Script.ps1')
 # The hold the restart writes while the service is stopped (#5155).
 . (Join-Path $Here 'ServerHold.ps1')
+# The restart said in Discord (#5784).
+. (Join-Path $Here 'RestartNotice.ps1')
 if (-not $User) { $User = Get-ThornswoodVpsUser }
 if (-not $Vps) { $Vps = Get-ThornswoodVpsAddress }
 $ssh = @('-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes')
@@ -104,6 +113,18 @@ if (-not $Now -and $it.Port -gt 0) {
   elseif ($n -eq 0) { Say '  nobody is online' 'Green' }
 }
 
+# ------------------------------------------------------------- said first ---
+# A game server's restart is said in Discord a minute ahead and the minute
+# waited out (#5784). Nobody is on, or this stopped above.
+if (-not $Now -and $it.Port -gt 0) {
+  Head 'Saying it in Discord'
+  & (Join-Path $Here 'Request-Restart.ps1') -Minutes 1 -Mode notice -Why 'a restart' -Vps $Vps -User $User `
+    -Data ($it.Root.Replace('\', '/') + '/data') -RestartFollows
+  if ($LASTEXITCODE -ne 0) { Die 'Discord could not be told, so nothing was restarted. Run this again, or pass -Now to restart without saying so.' }
+  Say '  said; waiting the minute out' 'Green'
+  Start-Sleep -Seconds 75
+}
+
 # ------------------------------------------------------------- the bounce ---
 Head 'Restarting'
 if ($it.Svc) {
@@ -120,7 +141,7 @@ Start-Sleep -Seconds 12
   $out | ForEach-Object { Say "  $_" }
   if ("$out" -match 'NO SUCH SERVICE') { Die "There is no service called $($it.Svc) on the VPS. Install-Bot.ps1 puts it there." }
 } else {
-  $out = Remote @"
+  $out = Remote ($ThornswoodRestartNoticeText + @"
 $(Get-ThornswoodHoldScript -Script 'Restart-Server.ps1')
 # Held from the stop to the start (#5155, ServerHold.ps1), so the watchdog leaves it.
 Set-ThornswoodHold -Target '$($it.Task)' -Why 'restarting it' -By `$HoldBy
@@ -128,10 +149,24 @@ Stop-ScheduledTask -TaskName '$($it.Task)' -EA SilentlyContinue
 Start-Sleep -Seconds 4
 Start-ScheduledTask -TaskName '$($it.Task)' -EA SilentlyContinue
 Clear-ThornswoodHold -Target '$($it.Task)'
+# A restart said to be coming in Discord is said to be over (#5784): back
+# once the resources port takes a connection, the swap's own sign, within the
+# 170 seconds every swap gives a started server (ServerReadyWait.ps1);
+# otherwise down, which the watchdog then takes up.
+if ($($it.Port) -gt 0) {
+  `$until = (Get-Date).AddSeconds(170)
+  `$up = `$false
+  while (-not `$up -and (Get-Date) -lt `$until) {
+    `$c = New-Object Net.Sockets.TcpClient
+    try { `$c.Connect('127.0.0.1', $($it.Port)); `$up = `$true } catch { Start-Sleep -Seconds 2 } finally { `$c.Dispose() }
+  }
+  if (`$up) { Set-ThornswoodRestartNotice -Root '$($it.Root)' -State back }
+  else { Set-ThornswoodRestartNotice -Root '$($it.Root)' -State down }
+}
 Start-Sleep -Seconds 12
 `$t = Get-ScheduledTask -TaskName '$($it.Task)' -EA SilentlyContinue
 if (`$t) { 'state ' + `$t.State } else { 'NO SUCH TASK: $($it.Task)' }
-"@
+"@)
   $out | ForEach-Object { Say "  $_" }
   if ("$out" -match 'NO SUCH TASK') { Die "There is no scheduled task called $($it.Task) on the VPS." }
 }

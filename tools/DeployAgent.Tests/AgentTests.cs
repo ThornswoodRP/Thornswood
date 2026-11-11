@@ -835,6 +835,161 @@ public sealed partial class AgentTests : IDisposable
         Assert.Throws<ConfigException>(() => Config.Load(p));
     }
 
+    // ---- the box's own restart for Windows updates (#5784) -------------------
+
+    /// <summary>Reboot_AC as schtasks /query /xml gave it on 11 Nov 2026,
+    /// cut to what decides when it runs.</summary>
+    static string RebootXml(string start = "2026-11-11T04:20:57-07:00", bool taskOn = true, bool triggerOn = true) => $"""
+        <?xml version="1.0" encoding="UTF-16"?>
+        <Task version="1.6" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+          <Triggers>
+            <TimeTrigger>
+              <StartBoundary>{start}</StartBoundary>
+              <Enabled>{(triggerOn ? "true" : "false")}</Enabled>
+            </TimeTrigger>
+          </Triggers>
+          <Settings>
+            <Enabled>{(taskOn ? "true" : "false")}</Enabled>
+            <WakeToRun>true</WakeToRun>
+          </Settings>
+        </Task>
+        """;
+
+    [Fact]
+    public void TheWindowsRestartIsReadFromReboot_ACsTimeTrigger()
+    {
+        Assert.Equal(new DateTime(2026, 11, 11, 11, 20, 57, DateTimeKind.Utc), WindowsRestart.RebootTime(RebootXml()));
+        Assert.Null(WindowsRestart.RebootTime(RebootXml(taskOn: false)));
+        Assert.Null(WindowsRestart.RebootTime(RebootXml(triggerOn: false)));
+        Assert.Null(WindowsRestart.RebootTime(RebootXml(start: "")));
+    }
+
+    /// <summary>A watcher over MakeMain's server at a time of the test's own.</summary>
+    (WindowsRestart w, FakeServer s, Config cfg) Watcher(DateTime now, DateTime? planned, DateTime boot)
+    {
+        var (_, _, s, cfg) = MakeMain();
+        var w = new WindowsRestart(new Dictionary<string, Server> { ["main"] = made! }, l => { lock (said) said.Add(l); })
+        {
+            Planned = _ => Task.FromResult(planned),
+            UtcNow = () => now,
+            BootUtc = () => boot,
+        };
+        return (w, s, cfg);
+    }
+
+    static readonly DateTime At = new(2026, 11, 11, 11, 20, 57, DateTimeKind.Utc);
+
+    [Fact]
+    public async Task AWindowsRestartIsSaidAheadInDiscordAndTheGameThenBackOnceTheServerAnswers()
+    {
+        // 11 Nov 2026: Reboot_AC was set at 4:05:57 AM for 4:20:57 AM, and
+        // the box restarted then with nobody told.
+        var now = At - TimeSpan.FromMinutes(15);
+        DateTime? planned = At;
+        var boot = At - TimeSpan.FromDays(3);
+        var (w, s, cfg) = Watcher(now, planned, boot);
+        w.UtcNow = () => now;
+        w.BootUtc = () => boot;
+        await w.Pass(default);
+        var n = Notice(cfg, "main");
+        Assert.Equal((RestartNotice.Coming, "windows-main-20261111-112057", "2026-11-11T11:20:57Z", "yes"),
+            ((string?)n["state"], (string?)n["id"], (string?)n["downUtc"], (string?)n["logOut"]));
+        var rq = Path.Combine(s.Root, "data", "restart.json");
+        var game = JsonNode.Parse(File.ReadAllText(rq))!.AsObject();
+        Assert.Equal(("restart", 900, WindowsRestart.Why), ((string?)game["mode"], (int)game["seconds"]!, (string?)game["why"]));
+
+        // Said once: the game's countdown is not dropped again.
+        File.Delete(rq);
+        now += TimeSpan.FromMinutes(1);
+        await w.Pass(default);
+        Assert.False(File.Exists(rq));
+
+        // The box restarts at its time; the server is not up yet.
+        boot = At + TimeSpan.FromSeconds(97);
+        now = At + TimeSpan.FromMinutes(3);
+        s.Healthy = false;
+        await w.Pass(default);
+        Assert.Equal(RestartNotice.Coming, (string?)Notice(cfg, "main")["state"]);
+        s.Healthy = true;
+        await w.Pass(default);
+        n = Notice(cfg, "main");
+        Assert.Equal((RestartNotice.Back, "windows-main-20261111-112057"), ((string?)n["state"], (string?)n["id"]));
+        await w.Pass(default);
+        Assert.Equal(RestartNotice.Back, (string?)Notice(cfg, "main")["state"]);
+    }
+
+    [Fact]
+    public async Task AServerThatDoesNotAnswerAfterTheWindowsRestartIsSaidDown()
+    {
+        var now = At - TimeSpan.FromMinutes(15);
+        var boot = At - TimeSpan.FromDays(3);
+        var (w, s, cfg) = Watcher(now, At, boot);
+        w.UtcNow = () => now;
+        w.BootUtc = () => boot;
+        await w.Pass(default);
+        boot = At + TimeSpan.FromMinutes(2);
+        s.Healthy = false;
+        now = boot + WindowsRestart.DownAfter - TimeSpan.FromMinutes(1);
+        await w.Pass(default);
+        Assert.Equal(RestartNotice.Coming, (string?)Notice(cfg, "main")["state"]);
+        now = boot + WindowsRestart.DownAfter;
+        await w.Pass(default);
+        Assert.Equal(RestartNotice.Down, (string?)Notice(cfg, "main")["state"]);
+    }
+
+    [Fact]
+    public async Task AWindowsRestartMovedDroppedOrThatNeverCameIsSaidOff()
+    {
+        var now = At - TimeSpan.FromMinutes(15);
+        DateTime? planned = At;
+        var boot = At - TimeSpan.FromDays(3);
+        var (w, _, cfg) = Watcher(now, planned, boot);
+        w.UtcNow = () => now;
+        w.Planned = _ => Task.FromResult(planned);
+
+        // Moved to the next night: off, and not said again a day early.
+        await w.Pass(default);
+        planned = At + TimeSpan.FromDays(1);
+        await w.Pass(default);
+        var n = Notice(cfg, "main");
+        Assert.Equal((RestartNotice.Off, "windows-main-20261111-112057"), ((string?)n["state"], (string?)n["id"]));
+
+        // Moved ten minutes on: the old one off, the new one said.
+        planned = At;
+        await w.Pass(default);
+        planned = At + TimeSpan.FromMinutes(10);
+        await w.Pass(default);
+        n = Notice(cfg, "main");
+        Assert.Equal((RestartNotice.Coming, "windows-main-20261111-113057"), ((string?)n["state"], (string?)n["id"]));
+
+        // Its time goes by and the box never restarts: off once it is plainly not coming.
+        planned = null;
+        now = At + TimeSpan.FromMinutes(12);
+        await w.Pass(default);
+        Assert.Equal(RestartNotice.Coming, (string?)Notice(cfg, "main")["state"]);
+        now = At + TimeSpan.FromMinutes(10) + WindowsRestart.NeverCame;
+        await w.Pass(default);
+        Assert.Equal(RestartNotice.Off, (string?)Notice(cfg, "main")["state"]);
+    }
+
+    [Fact]
+    public async Task AWindowsRestartWaitsForARestartAlreadyComingAndIsNotSaidADayEarly()
+    {
+        var now = At - TimeSpan.FromMinutes(15);
+        var (w, s, cfg) = Watcher(now, At + TimeSpan.FromHours(20), At - TimeSpan.FromDays(3));
+        await w.Pass(default);
+        Assert.False(File.Exists(RestartNotice.FileFor(cfg.Environments["main"].Store, "main")));
+
+        w.Planned = _ => Task.FromResult<DateTime?>(At);
+        RestartNotice.Write(cfg.Environments["main"].Store, "main", "main-20261111-110000", RestartNotice.Coming, now + TimeSpan.FromMinutes(5), "an update", _ => { });
+        await w.Pass(default);
+        Assert.Equal("main-20261111-110000", (string?)Notice(cfg, "main")["id"]);
+        Assert.False(File.Exists(Path.Combine(s.Root, "data", "restart.json")));
+        RestartNotice.Write(cfg.Environments["main"].Store, "main", "main-20261111-110000", RestartNotice.Back, now + TimeSpan.FromMinutes(5), "an update", _ => { });
+        await w.Pass(default);
+        Assert.Equal(("windows-main-20261111-112057", RestartNotice.Coming), ((string?)Notice(cfg, "main")["id"], (string?)Notice(cfg, "main")["state"]));
+    }
+
     [Fact]
     public async Task TheSameServerBuildIsNotFetchedAndOnlyTheGamemodeReloads()
     {

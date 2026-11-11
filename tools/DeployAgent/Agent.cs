@@ -312,6 +312,7 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
         var envs = cfg.Environments.Keys.OrderBy(k => k, StringComparer.Ordinal).ToList();
         var turns = envs.ToDictionary(e => e, _ => new SemaphoreSlim(1, 1));
         var loops = envs.Select(e => Loop(e, turns[e], stop.Token)).Append(UpdateLoop(turns.Values.ToList(), stop.Token)).ToList();
+        if (servers.Count > 0) loops.Add(WindowsRestartLoop(stop.Token));
         try
         {
             // The first to end is the update loop with a newer agent in place
@@ -343,6 +344,27 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
                 if (s != said) { said = s; log(s); }
             }
             finally { turn.Release(); }
+            try { await Task.Delay(TimeSpan.FromSeconds(cfg.PollSeconds), ct); } catch (OperationCanceledException) { return; }
+        }
+    }
+
+    /// <summary>Says the box's own restarts for Windows updates ahead
+    /// (WindowsRestart, #5784), each pollSeconds. It takes no environment's
+    /// turn: it writes only the restart notice and the game's countdown,
+    /// never a server's files, and leaves a restart already coming alone.</summary>
+    async Task WindowsRestartLoop(CancellationToken ct)
+    {
+        var watch = new WindowsRestart(servers, log);
+        string said = "";
+        while (!ct.IsCancellationRequested)
+        {
+            try { await watch.Pass(ct); said = ""; }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                var s = "windows restart: " + e.Message;
+                if (s != said) { said = s; log(s); }
+            }
             try { await Task.Delay(TimeSpan.FromSeconds(cfg.PollSeconds), ct); } catch (OperationCanceledException) { return; }
         }
     }

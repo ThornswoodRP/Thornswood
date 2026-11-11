@@ -432,9 +432,10 @@ function Held { $false }
 
     # ---- nobody on ------------------------------------------------------------------
     Drive "$dev|$devDat|ONLINE 0"
-    Yes 'nobody on: no warning is asked for' (@(Asked).Count -eq 0)
-    Yes 'and there is no wait' ($script:slept -eq 0)
-    Yes 'and it says so' (Said 'nobody is on the dev server')
+    # Still said in Discord through Request-Restart, and waited out (#5784).
+    Yes 'nobody on: the warning is still asked for, for Discord' (@(Asked).Count -eq 1)
+    Yes 'and its time is waited out' ($script:slept -gt 0)
+    Yes 'and it says so' (Said 'nobody is on the dev server; saying it in Discord')
     Yes 'and carries on to the stop' ($script:threw -eq '')
 
     # ---- a server that is not running ------------------------------------------------

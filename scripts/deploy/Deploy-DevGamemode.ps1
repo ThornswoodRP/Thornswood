@@ -124,9 +124,10 @@
 
   So it now reads online.json on the dev box before anything is stopped and
   says how many are on, and who: the gamemode keeps their names in
-  online-names.json in the private folder, not the served one. Nobody on
-  means straight down, as before. Anybody on means
-  the same warning Ship.ps1 and Deploy-Server.ps1 give: Request-Restart.ps1
+  online-names.json in the private folder, not the served one. Whoever is
+  on, nobody included, gets
+  the same warning Ship.ps1 and Deploy-Server.ps1 give, said in the dev
+  updates channel as well since #5784: Request-Restart.ps1
   drops restart.json into the dev server's data folder, the dev gamemode
   announces it in chat and on screen, and this waits out the countdown before
   the stop, leaving early if the room empties. -Mode notice is the default,
@@ -853,22 +854,26 @@ function Warn-DevRoom {
     throw 'could not read who is on the dev server, so it was left running'
   }
 
-  if ($room.Online -eq 0) {
-    if ($room.Up -eq $false) {
-      Write-Host ('  the dev server is not running, nothing is on UDP {0}, so nobody is on it' -f $room.Port)
-      if ($room.Stale -gt 0) {
-        Write-Host ('  online.json still says {0}, left over from before it stopped' -f $room.Stale) -ForegroundColor DarkGray
-      }
-      return
+  if ($room.Online -eq 0 -and $room.Up -eq $false) {
+    Write-Host ('  the dev server is not running, nothing is on UDP {0}, so nobody is on it' -f $room.Port)
+    if ($room.Stale -gt 0) {
+      Write-Host ('  online.json still says {0}, left over from before it stopped' -f $room.Stale) -ForegroundColor DarkGray
     }
-    Write-Host '  nobody is on the dev server, going straight down'
     return
   }
 
   $unit = 'minutes'
   if ($Minutes -eq 1) { $unit = 'minute' }
-  Write-Host ('  {0}{4} on the dev server. Warning them in the game: {1}, {2} {3}.' -f
-              $room.Online, $Mode, $Minutes, $unit, $who) -ForegroundColor Yellow
+  # Said in the dev updates channel as well as in the game, and waited out,
+  # whoever is on (#5784): until 11 Nov 2026 an empty room went straight
+  # down and Discord heard nothing.
+  $wasOn = $room.Online
+  if ($wasOn -eq 0) {
+    Write-Host ('  nobody is on the dev server; saying it in Discord, then {0} {1} before the stop.' -f $Minutes, $unit)
+  } else {
+    Write-Host ('  {0}{4} on the dev server. Warning them in the game: {1}, {2} {3}.' -f
+                $room.Online, $Mode, $Minutes, $unit, $who) -ForegroundColor Yellow
+  }
 
   $ask = Join-Path $Here '..\vps\Request-Restart.ps1'
   $code = 1
@@ -907,7 +912,7 @@ function Warn-DevRoom {
     if ($rest -le 0) { break }
     Start-Sleep -Seconds ([int][Math]::Ceiling([Math]::Min(15, $rest)))
     $left = (Get-DevRoom).Online
-    if ($left -eq 0) { Write-Host '  the room is empty, going now'; return }
+    if ($left -eq 0 -and $wasOn -gt 0) { Write-Host '  the room is empty, going now'; return }
     if ($left -gt 0) {
       Write-Host ('  {0} still on, {1} seconds to go' -f $left,
                   [int][Math]::Max(0, ($deadline - (Get-Date)).TotalSeconds))

@@ -164,14 +164,18 @@ function Start-Sleep {
 
 Invoke-Expression $blockDriven
 
-# 1) nobody online, no -Now
+# 1) nobody online, no -Now: still said (in Discord, by Request-Restart, #5784) and waited out
 $script:remoteLines = @('DATA C:/Thornswood-Server/data', 'UP yes', 'ONLINE 0')
 $script:exitCode = $null
 $script:clearedStage = $false
+$script:fakeNow = [datetime]'2026-11-11T12:00:00'
+$script:sleeps = 0
 $Now = $false
 $out = @(& { Warn-LiveRoom } 6>&1 | ForEach-Object { "$_" })
-Yes 'nobody online goes straight down without asking' (
-    ($out -join "`n") -match 'nobody is online' -and -not (Test-Path (Join-Path $tempVpsDir 'asked.txt')))
+Yes 'nobody online is still said, through Request-Restart, and waited out (#5784)' (
+    ($out -join "`n") -match 'nobody is online; saying it in Discord' -and (Test-Path (Join-Path $tempVpsDir 'asked.txt')) -and
+    $script:sleeps -gt 0 -and (($out -join "`n") -match 'notice given'))
+Remove-Item (Join-Path $tempVpsDir 'asked.txt') -Force -ErrorAction SilentlyContinue
 
 # 2) not listening
 $script:remoteLines = @('DATA C:/Thornswood-Server/data', 'UP no', 'ONLINE 0')
