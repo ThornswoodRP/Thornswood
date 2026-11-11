@@ -304,11 +304,9 @@ namespace Thornswood
                 StartPing();
             }
 
-            // Which collection revision this release agrees with. Not a
-            // setting and never written to config.json: it is a fact about the
-            // server that belongs to the feed it came from, and a stale copy
-            // outliving its release is exactly the failure this replaced.
-            Updater.FeedCollectionRevision = v.collectionRevision;
+            // The collection revision is not read from here: it comes with the
+            // Release the channel runs (Updater.ServerCollectionRevision,
+            // CheckLauncher, #5767), not from a feed only a Ship writes.
 
             // Quietly, and without a line in the log. Nobody set these and
             // nobody needs telling they changed.

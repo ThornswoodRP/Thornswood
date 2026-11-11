@@ -19,7 +19,7 @@ const { FILES } = require('./base');
 const { cfg } = require('./config');
 const { escAttr } = require('./pages');
 const { jsonFile } = require('./store');
-const { newestSetup } = require('./feed');
+const { newestSetup, serverRevision } = require('./feed');
 const { NEWS } = require('./news');
 const { publicJson } = require('./limits');
 
@@ -137,14 +137,18 @@ function ageGateBody() {
 // page and the API cannot say two different things.
 function downloadsFacts() {
   const feed = publicJson(NEWS, { news: [] });
+  // The revision the link opens, the one the server was built against
+  // (#4115): from the signed record of the Release main runs (#5767), not the
+  // feed, which only a Ship writes. The feed still names the collection.
+  const revision = serverRevision('main');
+  const base = String(feed.collection || '').replace(/\/revisions\/\d+$/, '');
   return {
     // The one switch (#428).
     open: cfg.open === true,
     invite: cfg.discord.invite || '',
     launcher: feed.launcher || '',
-    collection: feed.collection || '',
-    // The revision that link opens, the one the server was built against (#4115).
-    collectionRevision: Number(feed.collectionRevision) > 0 ? Number(feed.collectionRevision) : 0,
+    collection: base && revision > 0 ? base + '/revisions/' + revision : base,
+    collectionRevision: revision,
     files: listFiles()
   };
 }

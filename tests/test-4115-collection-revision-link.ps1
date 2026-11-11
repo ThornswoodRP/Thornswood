@@ -72,7 +72,7 @@ $urlMethod = Method $checks 'public static string CollectionRevisionUrl(Config c
 Yes 'Checks.CollectionRevisionUrl exists' ($urlMethod.Length -gt 0)
 Yes 'it builds the revision page from the slug' ($urlMethod.Contains('"/revisions/" + revision') -and $urlMethod.Contains('CollectionSlug(cfg)'))
 $link = Method $shell 'static string CollectionLink()'
-Yes 'Shell.CollectionLink opens the feed''s revision' ($link.Contains('Checks.CollectionRevisionUrl(cfg, Updater.FeedCollectionRevision)'))
+Yes 'Shell.CollectionLink opens the server''s revision' ($link.Contains('Checks.CollectionRevisionUrl(cfg, Updater.ServerCollectionRevision)'))
 Yes 'nothing opens the bare collection address any more' (-not ([regex]::IsMatch($all, 'ProcessStartInfo\(cfg\.CollectionUrl\)')))
 # Since #5200 each button is OpenCollection, which opens Vortex at the same
 # revision where Vortex answers Nexus links, and CollectionLink otherwise
@@ -151,7 +151,10 @@ $bare = News 'bare' ([ordered]@{ launcherVersion = '9.9.9'; collectionUrl = $c; 
 Yes 'with no revision in the feed it links the collection as it is, revision 0' ($null -ne $bare -and [string]$bare.collection -eq $c -and [int]$bare.collectionRevision -eq 0)
 Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 $server = Get-SiteSource (Join-Path $repo 'site')
-Yes 'the site''s public answer carries the revision' ($server.Contains('collectionRevision: Number(feed.collectionRevision) > 0 ? Number(feed.collectionRevision) : 0,'))
+# Since #5767 the number is the one in the signed manifest of the Release main
+# runs (feed.js serverRevision), and the link opens that revision.
+Yes 'the site''s public answer carries the revision main''s Release names' ($server.Contains("const revision = serverRevision('main');") -and
+    $server.Contains("collection: base && revision > 0 ? base + '/revisions/' + revision : base,") -and $server.Contains('collectionRevision: revision,'))
 # The Downloads page is written by the site since #4330 (site\lib\downloads.js).
 $homeJs = [IO.File]::ReadAllText((Join-Path $repo 'site\lib\downloads.js'))
 Yes 'the Downloads button names the revision and says not to take a newer one' ($homeJs.Contains("'Open revision ' + esc(String(d.collectionRevision))") -and $homeJs.Contains('Nexus may show first.'))

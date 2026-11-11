@@ -2978,7 +2978,7 @@ namespace Thornswood
             else if (collectionBarUp && !playing && CollectionProblem(collectionRevision) == "ahead")
             {
                 btnPlay.Content = "WAITING FOR THE SERVER";
-                ToolTip.SetTip(btnPlay, "The server was built against collection revision " + Updater.FeedCollectionRevision +
+                ToolTip.SetTip(btnPlay, "The server was built against collection revision " + Updater.ServerCollectionRevision +
                                   " and this copy is on " + collectionRevision + ". Nothing needs installing. " +
                                   "Play opens once the server is rebuilt on your revision.");
             }
@@ -4654,7 +4654,7 @@ namespace Thornswood
                 // behind means update, ahead means the server has not caught
                 // up with you yet and Play will refuse you on the load order.
                 int mine = revision < 0 ? Checks.CollectionRevision(cfg) : revision;
-                int wants = Updater.FeedCollectionRevision;
+                int wants = Updater.ServerCollectionRevision;
                 if (mine > 0 && wants > 0)
                 {
                     if (mine < wants) return "stale";
@@ -4705,7 +4705,7 @@ namespace Thornswood
             if (stale)
             {
                 int mine = revision;
-                int wants = Updater.FeedCollectionRevision;
+                int wants = Updater.ServerCollectionRevision;
                 txtUpdateTitle.Text = "Your mods need updating";
                 txtUpdateNote.Text =
                     "The server was built against collection revision " + wants + " and this copy is on " + mine +
@@ -4721,7 +4721,7 @@ namespace Thornswood
                 // the server; Play will still refuse them, on the load order,
                 // and without this that reads as their fault.
                 int mine = revision;
-                int wants = Updater.FeedCollectionRevision;
+                int wants = Updater.ServerCollectionRevision;
                 txtUpdateTitle.Text = "The server has not caught up with you";
                 txtUpdateNote.Text =
                     "You are on collection revision " + mine + " and the server was built " +
@@ -4760,7 +4760,7 @@ namespace Thornswood
         /// </summary>
         static string CollectionLink()
         {
-            return Checks.CollectionRevisionUrl(cfg, Updater.FeedCollectionRevision);
+            return Checks.CollectionRevisionUrl(cfg, Updater.ServerCollectionRevision);
         }
 
         /// <summary>
@@ -4804,12 +4804,12 @@ namespace Thornswood
                     else LogOnly("Vortex does not answer Nexus links on this machine, so the launcher does not know where it is; open it yourself.");
                     return;
                 }
-                string nxm = Checks.CollectionNxmUrl(cfg, Updater.FeedCollectionRevision);
+                string nxm = Checks.CollectionNxmUrl(cfg, Updater.ServerCollectionRevision);
                 string page = CollectionLink();
                 bool vortex = nxm.Length > 0 && Checks.NxmStartsVortex(command);
                 if (vortex)
                 {
-                    Log("Opening revision " + Updater.FeedCollectionRevision + " of the collection in Vortex. Install it there; the launcher scans and fixes by itself when Vortex is done.");
+                    Log("Opening revision " + Updater.ServerCollectionRevision + " of the collection in Vortex. Install it there; the launcher scans and fixes by itself when Vortex is done.");
                     Process.Start(new ProcessStartInfo(nxm) { UseShellExecute = true });
                     return;
                 }
@@ -4827,7 +4827,7 @@ namespace Thornswood
         /// </summary>
         static string UpdateInVortexLine(int mine)
         {
-            int wants = Updater.FeedCollectionRevision;
+            int wants = Updater.ServerCollectionRevision;
             if (wants > mine)
                 return "Vortex has revision " + mine + " of the Thornswood collection. In Vortex, open Collections and press Update " +
                        "on it, which puts revision " + wants + " in its place. Installing revision " + wants +
@@ -4844,7 +4844,7 @@ namespace Thornswood
         static string CollectionButtonText(int revision = -1)
         {
             int mine = revision < 0 ? Checks.CollectionRevision(cfg) : revision;
-            int wants = Updater.FeedCollectionRevision;
+            int wants = Updater.ServerCollectionRevision;
             if (mine > 0) return wants > mine ? "Update in Vortex" : "Open Vortex";
             return wants > 0 ? "Open revision " + wants : "Open the collection";
         }
@@ -4860,7 +4860,7 @@ namespace Thornswood
             int mine = 0;
             try { mine = Checks.CollectionRevision(cfg); }
             catch (Exception ex) { Swallow.Note("Shell.CollectionWait", ex); }
-            int wants = Updater.FeedCollectionRevision;
+            int wants = Updater.ServerCollectionRevision;
             string problem = CollectionProblem(mine);
             if (problem == "stale")
                 return new[] { "The collection here is on revision " + mine + " and the server's is " + wants + ".",

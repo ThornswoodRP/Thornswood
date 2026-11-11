@@ -55,6 +55,8 @@ namespace Thornswood
             [JsonPropertyName("tag")] public string Tag { get; set; }
             [JsonPropertyName("version")] public string Version { get; set; }
             [JsonPropertyName("launcherVersion")] public string LauncherVersion { get; set; }
+            /// <summary>The collection revision the Release's servers run (#5767); 0 in a record from before it.</summary>
+            [JsonPropertyName("collectionRevision")] public int CollectionRevision { get; set; }
             [JsonPropertyName("parts")] public Dictionary<string, PartFile[]> Parts { get; set; }
 
             /// <summary>The file of <paramref name="part"/> called <paramref name="name"/>, or null.</summary>

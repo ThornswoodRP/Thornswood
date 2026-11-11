@@ -161,7 +161,7 @@ namespace Thornswood
             if (!barWasUp || collectionBarUp)
             {
                 if (barWasUp && revision > 0)
-                    LogOnly("Vortex now has collection revision " + revision + " installed; the server's is " + Updater.FeedCollectionRevision + ".");
+                    LogOnly("Vortex now has collection revision " + revision + " installed; the server's is " + Updater.ServerCollectionRevision + ".");
                 return;
             }
             Log("Vortex now has collection revision " + revision + " installed, the one the server was built against. Checking for the updates that waited on it, then scanning and fixing.");

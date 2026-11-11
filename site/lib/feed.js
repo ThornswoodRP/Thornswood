@@ -11,7 +11,7 @@
 // file).
 module.exports = { askReleaseCopies, assetLocation, feedFile, feedReleaseTag, feedSettings,
   feedMove, feedMoveVersion, feedView, nativePublished, nativeTag, newestSetup, readJsonQuiet, releaseAsset, releaseCopy,
-  releaseList, setupChannel };
+  releaseList, serverRevision, setupChannel };
 
 const https  = require('https');
 const fs     = require('fs');
@@ -669,6 +669,54 @@ async function nativePublished(channel, said) {
   nativeSeen[key] = ok ? { ok: true } : { at: Date.now() };
   if (ok) console.log('[thornswood-docs] launcher ' + said + ' is published on ' + channel + ' (' + tag + ')');
   return ok ? 'yes' : 'no';
+}
+/* THE SERVERS' COLLECTION REVISION (#5767). The revision a channel's servers
+   run is the one in the signed manifest of the Release that channel is on
+   (New-SignedManifest.ps1 writes collectionRevision from the commit's
+   records/collection-plugins.json): main's promoted build, by the tag of
+   main's setup program (main-build-1.3.<n> is build-1.3.<n>), and dev's newest
+   build. Until 11 Nov the Downloads page took it from the feed, which only a
+   Ship writes, and releases stopped going through a Ship: revision 8 sat
+   behind 7 from 8 to 11 Nov. A manifest never changes, so each is read once;
+   0 until it has been, or for a record from before the field. The page reads
+   only the number; launchers hold the record to its signature (VeloRecord.cs). */
+const revisionOf = {};   // build tag -> the collectionRevision its manifest names
+const revisionBusy = {};
+function serverRevision(channel) {
+  const st = newestSetup(channel);
+  if (!st || typeof st.tag !== 'string') return 0;
+  const tag = st.tag.replace(/^main-/, '');
+  if (Object.prototype.hasOwnProperty.call(revisionOf, tag)) return revisionOf[tag];
+  if (!revisionBusy[tag]) {
+    revisionBusy[tag] = true;
+    readManifestRevision(tag).then((n) => {
+      revisionOf[tag] = n;
+      console.log('[thornswood-docs] ' + channel + ' runs ' + tag + ', collection revision ' + n);
+    }, (e) => {
+      console.error('[thornswood-docs] the collection revision of ' + tag + ': ' + (e && e.message));
+    }).then(() => { revisionBusy[tag] = false; });
+  }
+  return 0;
+}
+async function readManifestRevision(tag) {
+  const where = await releaseAsset(tag, 'manifest.json');
+  if (!where.url) throw new Error(where.missing ? 'it has no manifest.json' : (where.why || 'its manifest.json could not be found'));
+  const text = await new Promise((resolve, reject) => {
+    const req = https.get(where.url, { headers: { 'user-agent': 'thornswood-site' } }, (res) => {
+      if (res.statusCode !== 200) { res.resume(); reject(new Error('GitHub\'s storage answered ' + res.statusCode)); return; }
+      let out = '';
+      res.setEncoding('utf8');
+      res.on('data', (d) => { out += d; if (out.length > 1048576) req.destroy(new Error('manifest.json is over 1 MB')); });
+      res.on('end', () => resolve(out));
+      res.on('error', reject);
+    });
+    req.setTimeout(10000, () => req.destroy(new Error('GitHub\'s storage did not answer inside ten seconds')));
+    req.on('error', reject);
+  });
+  const doc = JSON.parse(text);
+  if (!doc || doc.tag !== tag) throw new Error('its manifest.json names another Release');
+  const n = Number(doc.collectionRevision);
+  return Number.isInteger(n) && n > 0 ? n : 0;
 }
 /* ---- end release copies ---- */
 
