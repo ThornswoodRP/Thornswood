@@ -317,7 +317,7 @@ function pageChecks() {
   yes('home.js has the gallery page', !!gal);
   yes('the gallery does not wait on who is asking before drawing the pictures (#1096)',
       !/Promise\.all\(/.test(gal) &&
-      /request\('\/api\/public\?galleryLimit=24'\)[\s\S]{0,200}galData = d[\s\S]{0,40}drawGallery\(\)/.test(gal) &&
+      /publicData\(\)[\s\S]{0,200}galData = d[\s\S]{0,40}drawGallery\(\)/.test(gal) &&
       /galWho = w[^;]*;\s*if \(galData\) drawGallery\(\)/.test(gal));
   yes('  and says it is checking until the site says who it is',
       /if \(waiting\)[\s\S]{0,120}Checking who you are\./.test(gal));

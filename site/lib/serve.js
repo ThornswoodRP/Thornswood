@@ -642,7 +642,7 @@ async function handle(req, res) {
     // no-cache for the same reason as the public pages: the same answer for
     // everybody, and a no-store answer to the page's own fetch kept the page
     // out of the back and forward cache as well (#3218).
-    return send(res, 200, JSON.stringify({
+    const answer = JSON.stringify({
       // The one switch (#428), for the pages and the Discord bot.
       open: dl.open,
       invite: dl.invite,
@@ -661,7 +661,21 @@ async function handle(req, res) {
       news: (feed.news || []).slice(0, 6).map((n) => ({ date:n.date, title:n.title })),
       // The hints and lore lines (#3147): the Discord bot's status lines.
       lines: readLines()
-    }), 'application/json; charset=utf-8', { 'Cache-Control': 'no-cache' });
+    });
+    /* An ETag, the hash of the answer (#4393). no-cache has the browser ask
+       every time, and with no tag to ask with, every ask came back whole.
+       Asked with the tag of an answer that has not changed, it is a 304
+       with no body. The tag is weak or in a list when a proxy that
+       compresses has had it (Cloudflare marks it W/), and it is still this
+       answer, so both match. */
+    const tag = '"' + crypto.createHash('sha256').update(answer).digest('hex').slice(0, 16) + '"';
+    const asked = String(req.headers['if-none-match'] || '').split(',')
+      .map((t) => t.trim().replace(/^W\//, ''));
+    if (asked.indexOf(tag) >= 0) {
+      res.writeHead(304, { 'etag': tag, 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' });
+      return res.end();
+    }
+    return send(res, 200, answer, 'application/json; charset=utf-8', { 'Cache-Control': 'no-cache', 'ETag': tag });
   }
 
   // The Downloads page's body, for a browser whose age statement is only in
