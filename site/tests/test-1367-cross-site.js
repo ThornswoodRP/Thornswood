@@ -292,6 +292,11 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
     r = await request(port, 'POST', '/api/logout', { cookie: admin, origin: OWN });
     yes('sign out from the hub clears both cookies', r.status === 200 &&
         (r.headers['set-cookie'] || []).filter((c) => /^(tw|twa)=; /.test(c)).length === 2);
+    // Signing out ends that sign in on the site too (#4405), so the checks
+    // below, which need staff signed in, sign in again. A pause first, so the
+    // new sign in is made after the sign out rather than in the same moment.
+    await new Promise((ok) => setTimeout(ok, 5));
+    const again = cookieFor(A.secret, ADMIN_D, 'Aela');
 
     // ------------------------------------------ what is not a browser goes on --
     console.log('\nwhat is not a browser, no cookie and no Origin:');
@@ -314,14 +319,14 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
       '/api/upload', '/api/gallery/approve', '/api/gallery/approved', '/api/report', '/api/logout', '/api/login'];
     let changed = [];
     for (const g of GETS) {
-      const rr = await request(port, 'GET', g + '?id=' + BJORN_D + '&why=x', { cookie: admin, origin: 'https://evil.example' });
+      const rr = await request(port, 'GET', g + '?id=' + BJORN_D + '&why=x', { cookie: again, origin: 'https://evil.example' });
       if ((rr.status === 200 && rr.j.ok) || rr.headers['set-cookie']) changed.push(g + ' ' + rr.status);
     }
     yes('a GET to any write route, signed in, from another site, does nothing' + (changed.length ? ' (' + changed.join(', ') + ')' : ''),
         changed.length === 0 && snap() === mid);
-    r = await request(port, 'GET', '/api/all', { cookie: admin, origin: 'https://evil.example' });
+    r = await request(port, 'GET', '/api/all', { cookie: again, origin: 'https://evil.example' });
     yes('a GET is not held to where it came from (reads are the browser\'s same origin rule to guard)', r.status === 200 && !!r.j.me);
-    r = await request(port, 'HEAD', '/api/hello', { cookie: admin, origin: 'https://evil.example' });
+    r = await request(port, 'HEAD', '/api/hello', { cookie: again, origin: 'https://evil.example' });
     yes('a HEAD is a GET (' + r.status + ')', r.status === 200);
     a.srv.kill(); a = null;
 
