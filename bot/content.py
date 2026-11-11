@@ -588,6 +588,7 @@ CHANGES = {
         ('2026-10-22', 'The help, known issues, roadmap and credits lines are links you can click, and the playtest application is in its own channel now.', 'a290f9d3bc8f'),
         ('2026-10-26', 'The known issues link now says what that page is: what is broken right now that we know about. What works that way on purpose is on the help page.', 'ce6ac2b915a6'),
         ('2026-10-26', 'Only the line breaks of the Vortex profile sentence moved; no words changed.', '938f8250a962'),
+        ('2026-11-11', 'What happens to your own Skyrim now names the install window\'s box, Give Thornswood a Skyrim folder of its own, which starts unticked. Ticked, nothing of Thornswood\'s goes into your Steam copy and the launcher builds its own game folder; left unticked, Thornswood\'s files go into your Steam copy until it does.', '575fb40b672c'),
     ],
     'START': [
         ('2026-10-22', 'The changelog starts here; earlier changes are in the repository history. Logs and crash files now go in #test-findings, since #logs-and-crashes is gone.', '8a49f1c3335b'),
@@ -598,6 +599,7 @@ CHANGES = {
         ('2026-10-27', "For Thornswood's own plugin, Fix downloads the latest release's copy, no longer the server's.", '1592da4dfb29'),
         ('2026-10-30', 'Step 3: the collection link on the Downloads page, the card above Play and the Diagnostics page opens the revision the server was built against. Install that one, not a newer one Nexus may show first, which keeps Play shut until the server catches up.', 'aa62cb6eaf57'),
         ('2026-11-08', 'Step 3: when the server moves to a newer revision, update the collection inside Vortex with Update on the Thornswood collection. Installing the new revision from Nexus adds a second collection beside the first.', 'b2e4eaf2c8a6'),
+        ('2026-11-11', 'What you need: the install window\'s box, Give Thornswood a Skyrim folder of its own, starts unticked. Ticked, nothing of Thornswood\'s goes into your Steam copy and the launcher builds its own game folder; left unticked, Thornswood\'s files go into your Steam copy until it does.', 'a01199d0b18b'),
     ],
     'NEWS': [
         ('2026-10-22', 'The changelog starts here; earlier changes are in the repository history.', '90be4dab837f'),
@@ -608,6 +610,7 @@ CHANGES = {
         ('2026-10-26', 'NPCs carry on with nobody near now, so the answers about NPCs standing still and the same bandit acting differently are gone. Only a few mod menus still reset, and the known issues page lists only what is actually broken.', 'a2dbef6430b1'),
         ('2026-10-26', 'Only a comma and some line breaks moved; no answer changed.', '91bab9b34c87'),
         ('2026-10-26', 'Mod settings menus that forget their settings are a bug being fixed, not how it is meant to work. The fast travel answer no longer points at a list on the help page, which is gone.', 'b1263b3db33e'),
+        ('2026-11-11', 'Will this mess up the Skyrim I already play: the answer now names the install window\'s box, Give Thornswood a Skyrim folder of its own, which starts unticked, and says what ticked and unticked do to your Steam copy.', 'ceba1c64fe18'),
     ],
     'GAMERULES': [
         ('2026-10-22', 'The changelog starts here; earlier changes are in the repository history.', '037bba896ff5'),

@@ -387,7 +387,7 @@ tester confused by a list that no longer matches.
 | Row | Text | In |
 | --- | --- | --- |
 | 3 | `Anniversary Edition is not required` | `site\data\site\join.md` |
-| 3 | `Thornswood leaves the Skyrim you already have alone: you can update it, verify it and mod it as you like.` | `site\data\site\join.md` |
+| 3 | `Thornswood writes nothing of its own into the Skyrim you already have on Steam, so that copy stays yours to play and mod however you like` | `site\data\site\join.md` |
 | 17 | `This puts Thornswood's own content on your PC.` | `launcher\app\InstallWindow.cs` |
 | 17 | `that copy is left as it is, for you to play and mod however you like.` | `launcher\app\InstallWindow.cs` |
 | 17 | `C:\Thornswood` | `launcher\app\InstallPlace.cs` |
@@ -462,9 +462,12 @@ right or wrong. To Do entries are named by title, because their numbers move.
   it as it is. Either way Steam still updates the game when it is started from
   Steam. Owned by "Nothing stops Steam putting Skyrim back on the wrong build".
 - **"It does not make a second copy of the game" (rows 3 and 17).** Fixed on
-  25 September: the setup window, the join page, the help page, READ ME FIRST
-  and the home page now say the launcher builds `C:\Thornswood\Game`, most of
-  it as hard links, and leaves your own Skyrim alone.
+  25 September, and again in November: the join, help and Downloads pages
+  and the installer's read me now name the install window's box, "Give
+  Thornswood a Skyrim folder of its own", say it starts unticked, and say that
+  ticked the launcher builds `Game` in the install folder, most of it as hard
+  links, while left unticked Thornswood's own files go into the Steam copy
+  until the launcher builds it.
 - **Other servers, on a machine that has none (rows 23 and 38).** A log line on
   the first start and the own folder question both say Thornswood is sharing one Skyrim
   with other servers. On a clean machine there are none, and a stranger reads

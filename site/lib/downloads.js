@@ -291,9 +291,12 @@ function downloadsBody(d) {
          '<div class="step"><div><h3>Take the installer</h3>' +
            '<p>One file. Download it and run it. The mods are not in it. It puts in ' +
            'the launcher with Thornswood&rsquo;s own content and opens it, and the ' +
-           'launcher asks where to install, puts in the script extender and ' +
-           'builds a game folder of its own from the Skyrim you already have, with ' +
-           'most of it as hard links, and leaves your own Skyrim alone. The SkyMP files in it are free software, and the credits page ' +
+           'launcher asks where to install and puts in the script extender. One box ' +
+           'there, Give Thornswood a Skyrim folder of its own, starts unticked. Ticked, ' +
+           'Thornswood writes nothing of its own into your Steam copy, and once Vortex has deployed the ' +
+           'launcher builds a game folder of its own from it, mostly as hard links. Left ' +
+           'unticked, Thornswood&rsquo;s own files go into your Steam copy and the ' +
+           'launcher asks before it builds the folder. The SkyMP files in it are free software, and the credits page ' +
            // Beside the download button because that is where the files are
            // handed over. Entry 170 on the To Do List: the source had to be
            // reachable "from the download page". It says where the source is
