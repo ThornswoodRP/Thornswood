@@ -95,6 +95,8 @@ Yes 'Send-Backups -Install turns on the Task Scheduler''s Operational log, and c
 Yes 'the task''s trigger and -Status ask the log one query, in that log' (
     $send.Contains('$q = $Ended') -and $send.Contains('Get-WinEvent -FilterXml ([xml]$Ended)') -and
     $send.Contains("`$TaskLog = 'Microsoft-Windows-TaskScheduler/Operational'"))
+Yes '-Status says what Windows wrote about the send task''s own runs, from that log' (
+    $send.Contains("[@Name='TaskName']='\`$TaskName'") -and $send.Contains('Get-WinEvent -FilterXml ([xml]$own)'))
 
 # ---- the call, for real -----------------------------------------------------------
 if (-not $OnWindows) {
