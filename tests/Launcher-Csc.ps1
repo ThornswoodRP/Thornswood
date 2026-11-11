@@ -327,46 +327,61 @@ function Invoke-LauncherExe {
     & $LauncherDotnet $Path @Arguments
 }
 
-# What finds a package a loaded build asks for: its own folder. .NET looks
-# beside PowerShell, not beside the build, so the folders are named to it.
-# A plain class written out here, not launcher code (#2821).
-if (-not ('ThornswoodHarness.BuildFolders' -as [type])) {
+# Where a loaded build's packages come from: its own folder, first. Each
+# build is loaded into an AssemblyLoadContext of its own, which takes a dll
+# from the build's folder before anything else and leaves the rest (the .NET
+# runtime) to the default context. PowerShell carries copies of some of the
+# launcher's packages for itself, System.Security.Cryptography.ProtectedData
+# among them, and in its own context a build that asked for a newer one
+# than PowerShell's was refused: "Could not load file or assembly
+# 'System.Security.Cryptography.ProtectedData, Version=11.0.0.0'" (#5768,
+# Config.Save in test-skyrim-pin.ps1 under ProtectedData 11.0.0). The
+# launcher itself runs as its own process with its own copies, so the
+# harnesses load it the way it runs. A plain class written out here, not
+# launcher code (#2821).
+if (-not ('ThornswoodHarness.BuildContext' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Runtime.Loader;
 
 namespace ThornswoodHarness
 {
-    public static class BuildFolders
+    public sealed class BuildContext : AssemblyLoadContext
     {
-        static readonly List<string> folders = new List<string>();
-        static bool hooked;
+        static readonly Dictionary<string, BuildContext> byFolder = new Dictionary<string, BuildContext>(StringComparer.Ordinal);
+        readonly string folder;
 
-        public static void Add(string folder)
+        BuildContext(string folder) : base("launcher build " + Path.GetFileName(folder)) { this.folder = folder; }
+
+        /// <summary>The build's dll, loaded in the context of its folder, one context a folder.</summary>
+        public static Assembly LoadBuild(string dll)
         {
-            lock (folders)
+            string folder = Path.GetDirectoryName(Path.GetFullPath(dll));
+            BuildContext c;
+            lock (byFolder)
             {
-                if (!folders.Contains(folder)) folders.Add(folder);
-                if (hooked) return;
-                hooked = true;
-                AppDomain.CurrentDomain.AssemblyResolve += Find;
+                if (!byFolder.TryGetValue(folder, out c)) { c = new BuildContext(folder); byFolder.Add(folder, c); }
             }
+            return c.LoadFromAssemblyPath(Path.GetFullPath(dll));
         }
 
-        static Assembly Find(object sender, ResolveEventArgs e)
+        protected override Assembly Load(AssemblyName name)
         {
-            string file = new AssemblyName(e.Name).Name + ".dll";
-            lock (folders)
+            string p = Path.Combine(folder, name.Name + ".dll");
+            return File.Exists(p) ? LoadFromAssemblyPath(p) : null;
+        }
+
+        protected override IntPtr LoadUnmanagedDll(string name)
+        {
+            foreach (string f in new[] { name, name + ".dll", "lib" + name + ".so", "lib" + name + ".dylib", name + ".so" })
             {
-                foreach (string f in folders)
-                {
-                    string p = Path.Combine(f, file);
-                    if (File.Exists(p)) return Assembly.LoadFrom(p);
-                }
+                string p = Path.Combine(folder, f);
+                if (File.Exists(p)) return LoadUnmanagedDllFromPath(p);
             }
-            return null;
+            return IntPtr.Zero;
         }
     }
 }
@@ -380,12 +395,10 @@ function Add-LauncherType {
         [switch]$Launcher
     )
     $dll = Build-LauncherCode -Source $Source -File $File -Launcher:$Launcher
-    [ThornswoodHarness.BuildFolders]::Add((Split-Path -Parent $dll))
-    [Reflection.Assembly]::LoadFrom($dll)
+    [ThornswoodHarness.BuildContext]::LoadBuild($dll)
 }
 
 function Add-LauncherAssembly {
     $dll = Build-LauncherProject
-    [ThornswoodHarness.BuildFolders]::Add((Split-Path -Parent $dll))
-    [Reflection.Assembly]::LoadFrom($dll)
+    [ThornswoodHarness.BuildContext]::LoadBuild($dll)
 }

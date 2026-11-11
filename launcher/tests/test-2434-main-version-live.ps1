@@ -82,7 +82,10 @@ function Run {
     $P.GetField('LogFile').SetValue($null, $logFile)
 
     # ---- 1. main's number out of main's feed ------------------------------------------
-    $velo = [Reflection.Assembly]::LoadFrom((Join-Path (Split-Path -Parent $asm.Location) 'Velopack.dll'))
+    # Velopack from the build's own context, the copy the launcher code in
+    # $asm was bound to (Launcher-Csc.ps1, BuildContext), so its types are
+    # the ones the launcher's methods take.
+    $velo = [Runtime.Loader.AssemblyLoadContext]::GetLoadContext($asm).LoadFromAssemblyName([Reflection.AssemblyName]'Velopack')
     $tAsset = $velo.GetType('Velopack.VelopackAsset')
     $tKind = $velo.GetType('Velopack.VelopackAssetType')
     $tSem = $velo.GetType('Velopack.SemanticVersion')
