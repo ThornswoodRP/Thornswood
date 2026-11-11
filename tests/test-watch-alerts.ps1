@@ -12,13 +12,15 @@
   So most of what this checks is the count: one message per outage, one per
   recovery, through a service that stays down, one that comes back, one that
   flaps, one that is hung, the bot being down, the bot being up but silent,
-  and a webhook that fails.
+  a webhook that fails, and the Cloudflare tunnel stopped or not connected
+  (#5779).
 
   HOW. The watcher is a single quoted here-string inside Watch-Services.ps1,
   written out on the VPS as watch.ps1. This lifts it out through the AST and
   runs the real thing, top to bottom, once per five minute step on a fake
   clock, in a scratch folder. Only what touches the world is replaced: the
-  port, site, health, bot, backup, off-box copy, runner and disk probes, schtasks,
+  port, site, health, ready, bot, backup, off-box copy, runner and disk probes,
+  ending a task (EndTask), schtasks,
   Restart-Service (the bot's service, #465), the sleep, the clock and the
   webhook post. A fake bot plays the part of
   watch_services in bot.py between runs: it posts whatever is in the outbox
@@ -99,7 +101,7 @@ Yes '-SetWebhook sends the address on standard input, never on the command line'
 
 # The watcher as it runs, without the probes that touch the world. The fakes
 # below stand in for those, and $root is a scratch folder.
-$fake = @('Answers', 'SiteAnswers', 'BotAlive', 'BotProcs', 'HealthProblem', 'HowItEnded', 'ServiceProblem', 'BackupProblem', 'OffBoxProblem', 'CertProblem', 'PostWebhook', 'DiskNow')
+$fake = @('Answers', 'SiteAnswers', 'BotAlive', 'BotProcs', 'HealthProblem', 'ReadyProblem', 'EndTask', 'HowItEnded', 'ServiceProblem', 'BackupProblem', 'OffBoxProblem', 'CertProblem', 'PostWebhook', 'DiskNow')
 $body = @()
 foreach ($s in $inner.EndBlock.Statements) {
     if ($s -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $fake -contains $s.Name) { continue }
@@ -118,8 +120,8 @@ New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 
 # Built, never written whole: this file is scanned for webhook addresses.
 $script:goodHook = 'https://discord.com/api/' + 'webhooks/12345/' + 'harness-not-a-real-token'
-$ports = @{ 3001 = 'website'; 3000 = 'game'; 7778 = 'voice'; 7788 = 'dev game'; 7789 = 'dev voice'; 7790 = 'bridge' }
-$tasks = @{ 'Thornswood Web' = 'caddy'; 'Thornswood Docs' = 'website'; 'Thornswood Server' = 'game'; 'Thornswood Voice' = 'voice'; 'Thornswood Dev Server' = 'dev game'; 'Thornswood Dev Voice' = 'dev voice'; 'Thornswood Bridge' = 'bridge' }
+$ports = @{ 3001 = 'website'; 3000 = 'game'; 7778 = 'voice'; 7788 = 'dev game'; 7789 = 'dev voice'; 7790 = 'bridge'; 20241 = 'tunnel' }
+$tasks = @{ 'Thornswood Web' = 'caddy'; 'Thornswood Docs' = 'website'; 'Thornswood Server' = 'game'; 'Thornswood Voice' = 'voice'; 'Thornswood Dev Server' = 'dev game'; 'Thornswood Dev Voice' = 'dev voice'; 'Thornswood Bridge' = 'bridge'; 'Thornswood Tunnel' = 'tunnel' }
 
 function Box([string]$name, [switch]$NoHook, [string]$Hook) {
     $script:boxRoot = Join-Path $tmp $name
@@ -128,8 +130,8 @@ function Box([string]$name, [switch]$NoHook, [string]$Hook) {
     elseif (-not $NoHook) { Set-Content -LiteralPath (Join-Path $script:boxRoot 'alerts-webhook.txt') -Value $script:goodHook -Encoding ASCII }
     $script:clock = New-Object DateTime (2026, 9, 28, 12, 0, 0, [DateTimeKind]::Local)
     $script:world = @{}
-    foreach ($n in @('caddy', 'website', 'game', 'voice', 'bot', 'dev game', 'dev voice', 'bridge')) {
-        $script:world[$n] = @{ Up = $true; Restart = 'up'; Health = ''; Ended = '' }
+    foreach ($n in @('caddy', 'website', 'game', 'voice', 'bot', 'dev game', 'dev voice', 'bridge', 'tunnel')) {
+        $script:world[$n] = @{ Up = $true; Restart = 'up'; Health = ''; Ready = ''; Ended = '' }
     }
     $script:backupWhy = ''
     $script:offboxWhy = ''
@@ -151,7 +153,8 @@ function schtasks {
     $w = $null
     if ($tasks.ContainsKey($name)) { $w = $script:world[$tasks[$name]] }
     if (-not $w -or $w.Restart -eq 'refuse') { $global:LASTEXITCODE = 1; return 'ERROR: no such task' }
-    if ($w.Restart -eq 'up') { $w.Up = $true }
+    # A start that works gives back a program that answers and is ready.
+    if ($w.Restart -eq 'up') { $w.Up = $true; $w.Ready = '' }
     $global:LASTEXITCODE = 0
     return 'SUCCESS'
 }
@@ -177,6 +180,13 @@ function HealthProblem($url) {
     foreach ($k in $ports.Keys) { if ($url -match (':' + $k + '/')) { return $script:world[$ports[$k]].Health } }
     return ''
 }
+# cloudflared's /ready (#5779): '' while it holds a connection, else why not.
+function ReadyProblem($url) {
+    foreach ($k in $ports.Keys) { if ($url -match (':' + $k + '/')) { return $script:world[$ports[$k]].Ready } }
+    return ''
+}
+# Ending a task whose program runs but does not work: only written down here.
+function EndTask($task, $port) { $script:runs += ('end ' + $task); return ('ended ' + $task) }
 function HowItEnded($task) { if ($tasks.ContainsKey($task)) { return $script:world[$tasks[$task]].Ended }; return '' }
 function ServiceProblem($name) { return $script:runnerWhy }
 function BackupProblem($task, $folder, $hours) { return $script:backupWhy }
@@ -390,6 +400,52 @@ try {
     $script:world['voice'].Health = ''
     Step 5
     Yes 'one slow answer between good ones says nothing at all' ($script:said.Count -eq 0)
+
+    # -- the tunnel (#5779) -----------------------------------------------------
+    # 11 Nov 2026: a Windows Update restart, cloudflared's first lookups timed
+    # out, it stopped with code 1, and nothing on the box started it again.
+    $say = 'The Cloudflare tunnel, which carries the website, both update feeds and the ssh bridge'
+    Box 'tunnel-down'
+    $t = $script:world['tunnel']
+    $t.Up = $false; $t.Restart = 'up'; $t.Ended = 'its last run ended with code 1 (0x00000001)'
+    Step 1
+    Yes 'cloudflared stopped after a boot is started by the next run' ((@($script:runs | Where-Object { $_ -eq 'Thornswood Tunnel' })).Count -eq 1 -and @($script:runs | Where-Object { $_ -like 'end *' }).Count -eq 0)
+    Yes '  and staff are told once what died, how it ended, and that the restart worked' (
+        (Said ('^\*\*' + [regex]::Escape($say) + ' is down\.\*\* It is not answering on port 20241, and its last run ended with code 1 \(0x00000001\)\. First noticed <t:\d+:f>\. The watchdog restarted it and it answered again\.')) -eq 1 -and $script:said.Count -eq 1)
+    $t.Ended = ''
+    Step 2
+    Yes '  and that it is back, once' ((Said ([regex]::Escape($say) + ' is back')) -eq 1 -and $script:said.Count -eq 2)
+
+    # Its metrics answer while it holds no connection to Cloudflare, and
+    # that is the outage: two runs of it, then it is ended and started.
+    Box 'tunnel-not-ready'
+    $t = $script:world['tunnel']
+    $t.Ready = 'answered HTTP 503, so it holds no connection to Cloudflare'; $t.Restart = 'up'
+    Step 1
+    Yes 'one run with the tunnel not ready says nothing and restarts nothing, so a reconnect of its own can finish' ($script:said.Count -eq 0 -and $script:runs.Count -eq 0)
+    Step 1
+    Yes '  the second in a row ends the task, then starts it' (($script:runs -join '|') -eq 'end Thornswood Tunnel|Thornswood Tunnel')
+    Yes '  and tells staff once, naming /ready' (
+        (Said ('^\*\*' + [regex]::Escape($say) + ' is down\.\*\* It answers on port 20241, but http://127\.0\.0\.1:20241/ready answered HTTP 503, so it holds no connection to Cloudflare\. First noticed <t:\d+:f>\. The watchdog restarted it and it answered again\.')) -eq 1 -and $script:said.Count -eq 1)
+    Yes '  and watch.log says it was running and was ended before the start' ((LogLines 'tunnel is running and not working \(It answers on port 20241, .*\)\. ended Thornswood Tunnel\. Starting Thornswood Tunnel') -eq 1)
+    Step 2
+    Yes '  and back is said once' ((Said ([regex]::Escape($say) + ' is back')) -eq 1 -and $script:said.Count -eq 2)
+
+    Box 'tunnel-blip'
+    $script:world['tunnel'].Ready = 'answered HTTP 503, so it holds no connection to Cloudflare'
+    Step 1
+    $script:world['tunnel'].Ready = ''
+    Step 6
+    Yes 'the tunnel not ready for one run between good ones restarts nothing and says nothing' ($script:said.Count -eq 0 -and $script:runs.Count -eq 0)
+
+    Box 'tunnel-stuck'
+    $t = $script:world['tunnel']
+    $t.Ready = 'answered HTTP 503, so it holds no connection to Cloudflare'; $t.Restart = 'down'
+    Step 2
+    Yes 'a tunnel a restart does not bring back is told once, saying so' ((Said ([regex]::Escape($say) + ' is down\.\*\* .*The watchdog restarted it and it is still not answering')) -eq 1 -and $script:said.Count -eq 1)
+    Step 12
+    Yes '  and is ended and started three times an hour at most, then left for a person' (
+        @($script:runs | Where-Object { $_ -eq 'Thornswood Tunnel' }).Count -eq 3 -and @($script:runs | Where-Object { $_ -eq 'end Thornswood Tunnel' }).Count -eq 3 -and $script:said.Count -eq 1 -and (LogLines 'tunnel is still down after 3 restarts') -ge 1)
 
     # -- the bot is the thing that is down -------------------------------------
     Box 'bot-down'
@@ -659,6 +715,16 @@ try {
     Yes '  without saying it was stopped by request, which is what the hold''s own stop left' ((Said 'stopped on purpose \(0x') -eq 0)
     Step 12
     Yes '  and restarted under the three an hour after that, the hold''s start not counted' ((Restarted 'Thornswood Server') -eq 4)
+
+    # Install-Tunnel.ps1 holds the tunnel while it has cloudflared stopped (#5779).
+    Box 'held-tunnel'
+    $null = Hold 'Thornswood Tunnel'
+    $script:world['tunnel'].Up = $false; $script:world['tunnel'].Restart = 'up'
+    Step 5
+    Yes 'a held tunnel is not started while its hold runs' ((Restarted 'Thornswood Tunnel') -eq 0 -and $script:said.Count -eq 0)
+    Clear-ThornswoodHold -Target 'Thornswood Tunnel' -Root $script:boxRoot | Out-Null
+    Step 1
+    Yes '  and once the install takes the hold away, a tunnel still down is started' ((Restarted 'Thornswood Tunnel') -eq 1)
 
     # Two hours at most, whatever the file says.
     Box 'held-most'

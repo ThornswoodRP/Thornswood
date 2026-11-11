@@ -149,7 +149,7 @@ try {
     # ---- 4. every stop on purpose holds -----------------------------------------
     # Each line that stops a watched server: its task, the bot's service, or
     # Caddy, by any of the ways a script here stops one.
-    $watched = 'Thornswood Server|Thornswood Dev Server|Thornswood Voice|Thornswood Dev Voice|Thornswood Docs|Thornswood Web|Thornswood Bridge|ThornswoodBot|Thornswood Gate|Thornswood Admin'
+    $watched = 'Thornswood Server|Thornswood Dev Server|Thornswood Voice|Thornswood Dev Voice|Thornswood Docs|Thornswood Web|Thornswood Bridge|Thornswood Tunnel|ThornswoodBot|Thornswood Gate|Thornswood Admin'
     $stopRx = 'Stop-ScheduledTask|schtasks[^\n]*/end|Stop-Service|Restart-Service|Stop-ThornswoodBotService|StopIt$|StopOurs$|StopServer \$Root'
     # Where a stop is not a stop on purpose of a running server, and why.
     $notHolds = @{
@@ -162,7 +162,6 @@ try {
         'scripts/vps/vps-openssh.ps1'         = 'sshd, which the watchdog does not watch'
         'scripts/vps/BotService.cs'           = 'the bot''s own service program'
         'scripts/vps/Remote.ps1'              = 'runs what it is given; its help names a Windows service as an example'
-        'scripts/deploy/Install-Tunnel.ps1'   = 'stops only cloudflared''s own task, Thornswood Tunnel, which the watchdog does not watch; it refuses that stop while the site is on the tunnel (#5334)'
         'scripts/deploy/Install-DeployAgent.ps1' = 'stops only the deploy agent''s own service, which the watchdog does not watch; it names the site''s task and the bot''s service only to see whether they are set up (the agent holds them itself when it swaps, App.cs)'
     }
     $files = @(Get-ChildItem -LiteralPath (P 'scripts') -Recurse -File -Include '*.ps1' | ForEach-Object { $_.FullName })
@@ -186,7 +185,7 @@ try {
         if (-not (Test-Path -LiteralPath (Join-Path $repo $k))) { continue }
         Yes "$k is let off on purpose: $($notHolds[$k])" ($true)
     }
-    foreach ($must in 'scripts/deploy/Swap.ps1', 'scripts/deploy/Deploy-Docs.ps1', 'scripts/deploy/Install-Bridge.ps1', 'scripts/deploy/Install-Voice.ps1',
+    foreach ($must in 'scripts/deploy/Swap.ps1', 'scripts/deploy/Deploy-Docs.ps1', 'scripts/deploy/Install-Bridge.ps1', 'scripts/deploy/Install-Tunnel.ps1', 'scripts/deploy/Install-Voice.ps1',
                       'scripts/deploy/Install-Gate.ps1', 'scripts/deploy/Install-AdminService.ps1', 'scripts/deploy/Install-ThornswoodServer.ps1',
                       'scripts/vps/Restart-Server.ps1', 'scripts/ops/Reset-Character.ps1', 'scripts/vps/Bot-Service.ps1') {
         Yes "$must is among the stops this finds" ($stoppers -contains $must)
@@ -224,7 +223,7 @@ try {
     Yes '  and names each server by the task or service the watchdog checks' (
         $hs -match "game = 'Thornswood Server'" -and $hs -match "dev = 'Thornswood Dev Server'" -and $hs -match "bot = 'ThornswoodBot'" -and $hs -match "caddy = 'Thornswood Web'")
     $wt = Text $watchPath
-    foreach ($n in 'Thornswood Server', 'Thornswood Dev Server', 'Thornswood Voice', 'Thornswood Dev Voice', 'Thornswood Docs', 'Thornswood Web', 'Thornswood Bridge', 'ThornswoodBot') {
+    foreach ($n in 'Thornswood Server', 'Thornswood Dev Server', 'Thornswood Voice', 'Thornswood Dev Voice', 'Thornswood Docs', 'Thornswood Web', 'Thornswood Bridge', 'Thornswood Tunnel', 'ThornswoodBot') {
         Yes "  and $n is one the watchdog checks by that name" ($wt -match ("(Task|Svc) = '" + [regex]::Escape($n) + "'"))
     }
     # ---- from the cloud, through the gate ----------------------------------------
@@ -239,7 +238,7 @@ try {
     $set = [regex]::Match($hs, "ValidateSet\(([^)]*)\)").Groups[1].Value
     $names = @([regex]::Matches($set, "'([a-z]+)'") | ForEach-Object { $_.Groups[1].Value })
     Yes ('the gate has a Hold-Server verb whose servers are exactly Hold-Server''s (' + ($names -join ', ') + ')') (
-        $hv -and $hv.script -eq 'scripts/vps/Hold-Server.ps1' -and @($hv.fixed) -contains '-NoPause' -and $names.Count -eq 10 -and
+        $hv -and $hv.script -eq 'scripts/vps/Hold-Server.ps1' -and @($hv.fixed) -contains '-NoPause' -and $names.Count -eq 11 -and
         $hv.params.Service -eq ('^(' + ($names -join '|') + ')$') -and $hv.params.Why -eq 'text' -and
         $hv.params.Clear -eq 'switch' -and $hv.params.List -eq 'switch' -and $hv.params.Minutes -eq '^[0-9]{1,3}$')
     $wsText = Text $watchPath

@@ -26,8 +26,12 @@
        tunnel is made once, with the record's routes, and read back; the
        tunnel's token is written to token.txt; the recorded cloudflared is
        checked by SHA-256 and one that does not match is refused; the task
-       runs cloudflared with --token-file, never --token; a second run with
-       nothing changed restarts nothing.
+       runs cloudflared with --token-file, never --token, and starts it when
+       the box's network connects, not at boot (#5779); the install holds
+       the tunnel while it has it stopped and takes the hold away on every
+       way out; a second run with nothing changed restarts nothing; a task
+       started at boot is changed in place, with nothing restarted, even
+       while the names are on the tunnel.
     4. -Switch and -Back: the two A records become proxied CNAMEs at the
        tunnel only once cloudflared carries requests to both names, and are
        put back when it does not; -Back makes them proxied A records at the
@@ -89,7 +93,9 @@ $noMark = New-Object Text.UTF8Encoding($false)
 # there. cloudflared's answers and the site's (Get-Plain) are always the
 # stand-in's, so the real one is renamed out of the way.
 function Fit([string]$t) {
-    $t = $t.Replace('C:\Thornswood-Seal', $sealDir).Replace('C:\Thornswood-Tunnel', $tunnelDir)
+    # The watchdog's folder too, where the install's hold goes (#5779): on the
+    # box's own runner the real one is there, and a harness never holds it.
+    $t = $t.Replace('C:\Thornswood-Seal', $sealDir).Replace('C:\Thornswood-Tunnel', $tunnelDir).Replace('C:\Thornswood-Watch', $watchDir)
     $t = $t.Replace('function Get-Plain(', 'function Get-Plain-Real(')
     if (-not $OnWindows) {
         $t = $t.Replace('function Lock-ThornswoodSealFolder(', 'function Lock-ThornswoodSealFolder-OnWindows(')
@@ -186,7 +192,18 @@ function New-ScheduledTaskAction { param($Execute, $Argument, $WorkingDirectory)
 function New-ScheduledTaskSettingsSet { [pscustomobject]@{} }
 function New-ScheduledTaskTrigger { [pscustomobject]@{} }
 function New-ScheduledTaskPrincipal { param($UserId) [pscustomobject]@{ UserId = $UserId } }
-function Register-ScheduledTask { param($TaskName, $Action, $Trigger, $Settings, $Principal) [IO.File]::WriteAllText($env:TW_TASK, (ConvertTo-Json -Depth 5 -InputObject ([pscustomobject]@{ Actions = @($Action); Principal = $Principal; State = 'Ready' }))); [IO.File]::AppendAllText($env:TW_ASKED, "REGISTER`n") }
+function Register-ScheduledTask { param($TaskName, $Action, $Trigger, $Settings, $Principal) [IO.File]::WriteAllText($env:TW_TASK, (ConvertTo-Json -Depth 5 -InputObject ([pscustomobject]@{ Actions = @($Action); Principal = $Principal; Triggers = @($Trigger); Settings = $Settings; State = 'Ready' }))); [IO.File]::AppendAllText($env:TW_ASKED, "REGISTER`n") }
+function Set-ScheduledTask { param([Parameter(ValueFromPipeline = $true)]$InputObject) process { [IO.File]::WriteAllText($env:TW_TASK, (ConvertTo-Json -Depth 5 -InputObject $InputObject)); [IO.File]::AppendAllText($env:TW_ASKED, "SET`n") } }
+# The event trigger (#5779), and the NetworkProfile log it reads, on or off
+# as TW_NETLOG says; turning it on is said in asked.txt.
+function Get-CimClass { param($ClassName, $Namespace) [pscustomobject]@{ CimClassName = $ClassName } }
+function New-CimInstance { param($CimClass, [switch]$ClientOnly) [pscustomobject]@{ Subscription = ''; Enabled = $false } }
+function Get-WinEvent {
+    param($ListLog, $ErrorAction)
+    $o = [pscustomobject]@{ LogName = $ListLog; IsEnabled = ($env:TW_NETLOG -eq '1') }
+    $o | Add-Member -MemberType ScriptMethod -Name SaveChanges -Value { if ($this.IsEnabled) { $env:TW_NETLOG = '1'; [IO.File]::AppendAllText($env:TW_ASKED, 'LOG ON ' + $this.LogName + "`n") } }
+    $o
+}
 function Get-ScheduledTask { param($TaskName) Read-Task }
 function Get-ScheduledTaskInfo { [pscustomobject]@{ LastRunTime = 'then'; LastTaskResult = 0 } }
 function Unregister-ScheduledTask { param($TaskName) Remove-Item -LiteralPath $env:TW_TASK -Force -ErrorAction SilentlyContinue }
@@ -232,6 +249,8 @@ try {
     # ---- 2. the workflow's half ----------------------------------------------
     $sealDir = Join-Path $work 'seal'
     $tunnelDir = Join-Path $work 'tunnel'
+    $watchDir = Join-Path $work 'watch'
+    New-Item -ItemType Directory -Force -Path $watchDir | Out-Null
     $keyScript = "`$ErrorActionPreference = 'Stop'`r`n" + (Get-ThornswoodSealLockFunction) + "`r`n" + (Get-ThornswoodSealKeyBlock)
     $pub = (@(Run-Box (Fit $keyScript)) | Where-Object { $_ -like 'SEAL KEY *' } | Select-Object -Last 1)
     Yes 'the box''s seal key is made in scratch' ([bool]$pub)
@@ -285,6 +304,7 @@ try {
     $env:TW_RUN = $runToken
     $env:TW_WANT = $apiToken
     $env:TW_READY = '200'
+    $env:TW_NETLOG = '1'
     $env:TW_HEALTH = 'healthy'
     $env:TW_CARRY = '1'
     [IO.File]::WriteAllText($env:TW_COUNT, '0')
@@ -390,10 +410,35 @@ try {
     $arg = [string]@($task.Actions)[0].Arguments
     Yes '  and the task runs it with --token-file and no token on its command line' ($arg -match '--token-file "' -and $arg -notmatch '--token ' -and -not $arg.Contains($runToken) -and $arg -match '--no-autoupdate' -and $arg -match '--metrics 127\.0\.0\.1:20241')
     Yes '  and DNS is not touched' (@($cf.dns | Where-Object { $_.type -eq 'CNAME' }).Count -eq 0 -and (Asked) -notmatch 'PATCH')
+    $trig = @($task.Triggers)
+    Yes '  and the task starts it when the box''s network connects, not at boot (#5779)' (
+        $trig.Count -eq 1 -and [string]$trig[0].Subscription -match 'Path="Microsoft-Windows-NetworkProfile/Operational"' -and [string]$trig[0].Subscription -match 'EventID=10000' -and $trig[0].Enabled)
+    Yes '  and holds the tunnel while it has it stopped, and takes the hold away after' (
+        $all -match 'held      Thornswood Tunnel until .* installing cloudflared' -and $all -match 'released  Thornswood Tunnel' -and
+        @(Get-ChildItem -LiteralPath (Join-Path $watchDir 'holds') -File -ErrorAction SilentlyContinue).Count -eq 0)
 
     [IO.File]::WriteAllText($env:TW_ASKED, '')
     $all = Tunnel
-    Yes 'a second run with nothing changed restarts nothing and makes no second tunnel' ($all -match 'nothing was restarted' -and $all -match 'TUNNEL OK' -and (Asked) -notmatch 'STOP|START|REGISTER|DOWNLOAD' -and (Cf).made -eq 1)
+    Yes 'a second run with nothing changed restarts nothing and makes no second tunnel' ($all -match 'nothing was restarted' -and $all -match 'TUNNEL OK' -and (Asked) -notmatch 'STOP|START|REGISTER|SET|DOWNLOAD' -and (Cf).made -eq 1)
+    Yes '  and holds nothing, since it stops nothing' ($all -notmatch 'held      |released  ')
+
+    # A task from before #5779, started at boot: only its trigger changes,
+    # in place, and the cloudflared that runs is not touched.
+    function Boot-Task { $tk = [IO.File]::ReadAllText($env:TW_TASK) | ConvertFrom-Json; $tk.Triggers = @([pscustomobject]@{ Enabled = $true }); [IO.File]::WriteAllText($env:TW_TASK, (ConvertTo-Json -Depth 5 -InputObject $tk)) }
+    Boot-Task
+    [IO.File]::WriteAllText($env:TW_ASKED, '')
+    $all = Tunnel
+    $trig = @(([IO.File]::ReadAllText($env:TW_TASK) | ConvertFrom-Json).Triggers)
+    Yes 'a task started at boot is changed in place to start on the network connecting' (
+        $all -match 'starts cloudflared when the box''s network connects' -and $all -match 'TUNNEL OK' -and (Asked) -match 'SET' -and
+        $trig.Count -eq 1 -and [string]$trig[0].Subscription -match 'EventID=10000')
+    Yes '  without stopping, starting or registering anything' ((Asked) -notmatch 'STOP|START|REGISTER|DOWNLOAD' -and $all -notmatch 'held      ')
+
+    $env:TW_NETLOG = '0'
+    [IO.File]::WriteAllText($env:TW_ASKED, '')
+    $all = Tunnel
+    Yes 'the NetworkProfile log off is turned on, since the trigger reads it' ($all -match 'turned on Microsoft-Windows-NetworkProfile/Operational' -and (Asked) -match 'LOG ON Microsoft-Windows-NetworkProfile/Operational' -and $all -match 'TUNNEL OK')
+    $env:TW_NETLOG = '1'
 
     Remove-Item -LiteralPath (Join-Path $tunnelDir 'cloudflared.exe') -Force
     $env:TW_EXE = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('something else'))
@@ -403,7 +448,8 @@ try {
 
     $env:TW_READY = '503'
     $all = Tunnel
-    Yes 'a cloudflared that does not connect is stopped, and the run says so' ($all -match 'did not connect within' -and $all -match 'TUNNEL NOT READY' -and $all -match 'STOP\.')
+    Yes 'a cloudflared that does not connect is left to the watchdog, and the run says so' ($all -match 'did not connect within' -and $all -match 'TUNNEL NOT READY' -and $all -match 'STOP\.' -and $all -match 'left running and the watchdog watches it')
+    Yes '  and its hold is taken away, so the watchdog judges it from the next run' ($all -match 'released  Thornswood Tunnel' -and @(Get-ChildItem -LiteralPath (Join-Path $watchDir 'holds') -File -ErrorAction SilentlyContinue).Count -eq 0)
     $env:TW_READY = '200'
     $all = Tunnel
     Yes '  and a run once it connects is OK again' ($all -match 'TUNNEL OK')
@@ -430,6 +476,10 @@ try {
     Yes '  and leaves the box''s own DNS-only name alone' (@($cf.dns | Where-Object { $_.name -eq $boxName -and $_.type -eq 'A' -and -not $_.proxied }).Count -eq 1)
     $all = Tunnel 'Switch'
     Yes '  and a second -Switch says it is already done' ($all -match 'is already on the tunnel' -and $all -match 'DNS ALREADY')
+    Boot-Task
+    [IO.File]::WriteAllText($env:TW_ASKED, '')
+    $all = Tunnel
+    Yes 'changing what starts the task goes ahead while the names are on the tunnel, since nothing restarts' ($all -match 'TUNNEL OK' -and (Asked) -match 'SET' -and (Asked) -notmatch 'STOP|START|REGISTER')
 
     Remove-Item -LiteralPath $tf -Force
     $all = Tunnel
@@ -459,6 +509,7 @@ try {
     $asks = @($handed | Where-Object { $_ -match 'dispatches' }).Count
     $all = Tunnel 'Status'
     Yes '-Status reads without asking for the API token, and says only whether the token is there' ($all -match 'token +(there \(never shown\)|NOT THERE)' -and $all -match 'ready +yes' -and @($handed | Where-Object { $_ -match 'dispatches' }).Count -eq $asks)
+    Yes '  and what starts the task' ($all -match 'starts +when the network connects \(Microsoft-Windows-NetworkProfile/Operational, event 10000\)')
 
     # ---- 5. the gate's halves --------------------------------------------------
     # What the gate runs on the box: -SealKey prints the public half only, and

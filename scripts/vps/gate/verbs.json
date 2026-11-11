@@ -155,7 +155,7 @@
       "timeoutMinutes": 5,
       "fixed": ["-NoPause"],
       "params": {
-        "Service": "^(game|dev|voice|devvoice|site|caddy|bridge|bot|gate|admin)$",
+        "Service": "^(game|dev|voice|devvoice|site|caddy|bridge|tunnel|bot|gate|admin)$",
         "Why": "text",
         "Minutes": "^[0-9]{1,3}$",
         "Clear": "switch",

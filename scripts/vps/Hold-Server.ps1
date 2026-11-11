@@ -36,6 +36,7 @@
     site       the website's app         Thornswood Docs
     caddy      Caddy, the website's 443  Thornswood Web
     bridge     the ssh bridge            Thornswood Bridge
+    tunnel     the Cloudflare tunnel     Thornswood Tunnel
     bot        the Discord bot           ThornswoodBot (its service)
     gate       the deploy gate           Thornswood Gate
     admin      the admin service         Thornswood Admin
@@ -45,7 +46,7 @@
 #>
 [CmdletBinding()]
 param(
-  [ValidateSet('game', 'dev', 'voice', 'devvoice', 'site', 'caddy', 'bridge', 'bot', 'gate', 'admin')]
+  [ValidateSet('game', 'dev', 'voice', 'devvoice', 'site', 'caddy', 'bridge', 'tunnel', 'bot', 'gate', 'admin')]
   [string]$Service = '',
   [string]$Why = '',
   [int]$Minutes = 30,
@@ -75,11 +76,11 @@ function Die($m) {
 $targets = [ordered]@{
   game = 'Thornswood Server'; dev = 'Thornswood Dev Server'
   voice = 'Thornswood Voice'; devvoice = 'Thornswood Dev Voice'
-  site = 'Thornswood Docs'; caddy = 'Thornswood Web'; bridge = 'Thornswood Bridge'
+  site = 'Thornswood Docs'; caddy = 'Thornswood Web'; bridge = 'Thornswood Bridge'; tunnel = 'Thornswood Tunnel'
   bot = 'ThornswoodBot'; gate = 'Thornswood Gate'; admin = 'Thornswood Admin'
 }
 
-if (-not $List -and -not $Service) { Die 'Say which server with -Service (game, dev, voice, devvoice, site, caddy, bridge, bot, gate or admin), or -List to see the holds. Nothing was sent.' }
+if (-not $List -and -not $Service) { Die 'Say which server with -Service (game, dev, voice, devvoice, site, caddy, bridge, tunnel, bot, gate or admin), or -List to see the holds. Nothing was sent.' }
 if (-not $List -and -not $Clear -and -not "$Why".Trim()) { Die 'Say why with -Why, in a few words staff will read if the hold runs out. Nothing was sent.' }
 if ($Minutes -lt 1 -or $Minutes -gt $ThornswoodHoldMost) { Die "-Minutes is 1 to $ThornswoodHoldMost. Nothing was sent." }
 
