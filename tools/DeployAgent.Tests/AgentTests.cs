@@ -393,6 +393,10 @@ public sealed partial class AgentTests : IDisposable
     readonly List<string> temp = new();
     readonly List<IDisposable> owned = new();
     readonly List<string> said = new();
+    /// <summary>Each lead a restart was announced with (#5784), waited instantly.</summary>
+    readonly List<TimeSpan> waits = new();
+    /// <summary>The Server the last Make or MakeMain built.</summary>
+    Server? made;
 
     string Temp()
     {
@@ -490,9 +494,11 @@ public sealed partial class AgentTests : IDisposable
         var cfg = new Config { Repo = "O/R", Api = FakeGitHub.Api, Home = home, Environments = { ["dev"] = env } };
         env.Watch = Temp();
         env.StartSeconds = 2;
-        var server = new Server(env, http) { Tick = TimeSpan.FromMilliseconds(5), Control = new FakeControl(s) };
+        Directory.CreateDirectory(Path.Combine(env.Store, News.Folder));
+        var server = new Server(env, http) { Tick = TimeSpan.FromMilliseconds(5), Control = new FakeControl(s), Wait = (t, _) => { lock (waits) waits.Add(t); return Task.CompletedTask; } };
         var gh2 = new GitHub(FakeGitHub.Api, "O/R", new StaticToken("t"), http);
         var a = new Agent(cfg, gh2, v ?? new FakeVerifier(), new() { ["dev"] = server }, "1.0.0", "", l => { lock (said) said.Add(l); }) { Host = "box" };
+        made = server;
         return (a, gh, s, server, cfg);
     }
 
@@ -516,9 +522,11 @@ public sealed partial class AgentTests : IDisposable
         env.Watch = Temp();
         env.StartSeconds = 2;
         var cfg = new Config { Repo = "O/R", Api = FakeGitHub.Api, Home = home, Environments = { ["main"] = env } };
-        var server = new Server(env, http) { Tick = TimeSpan.FromMilliseconds(5), Control = new FakeControl(s) };
+        Directory.CreateDirectory(Path.Combine(env.Store, News.Folder));
+        var server = new Server(env, http) { Tick = TimeSpan.FromMilliseconds(5), Control = new FakeControl(s), Wait = (t, _) => { lock (waits) waits.Add(t); return Task.CompletedTask; } };
         var gh2 = new GitHub(FakeGitHub.Api, "O/R", new StaticToken("t"), http);
         var a = new Agent(cfg, gh2, new FakeVerifier(), new() { ["main"] = server }, "1.0.0", "", l => { lock (said) said.Add(l); }) { Host = "box" };
+        made = server;
         return (a, gh, s, cfg);
     }
 
@@ -723,6 +731,108 @@ public sealed partial class AgentTests : IDisposable
         Assert.Contains("the hold on Thornswood Dev Server is taken away", log);
         Assert.Empty(Directory.GetFiles(Path.Combine(cfg.Environments["dev"].Watch, "holds")));
         Assert.Contains("server-", string.Join(",", gh.Downloaded));
+    }
+
+    // ---- a restart is said before it happens (#5784) -------------------------
+
+    /// <summary>restart-&lt;env&gt;.json as the bot reads it.</summary>
+    static JsonObject Notice(Config cfg, string env) =>
+        JsonNode.Parse(File.ReadAllText(RestartNotice.FileFor(cfg.Environments[env].Store, env)))!.AsObject();
+
+    [Fact]
+    public async Task AMainServerBuildSwapIsAnnouncedInDiscordAndTheGameBeforeTheStop()
+    {
+        // 11 Nov 2026: build-1.3.20 swapped the live server build at 11:12 AM
+        // and nothing was said, in Discord or in the game.
+        var (a, gh, s, cfg) = MakeMain();
+        var (oldFiles, oldRec) = Build(ForkA);
+        Install(s, oldFiles, oldRec);
+        var (newFiles, newRec) = Build(ForkB);
+        PinRelease(gh, "build-30", "// gamemode for B\n", newFiles, newRec);
+        var srv = made!;
+        string? stateAtWait = null;
+        JsonObject? gameAtWait = null;
+        var runningAtWait = false;
+        srv.Wait = (t, _) =>
+        {
+            waits.Add(t);
+            stateAtWait = (string?)Notice(cfg, "main")["state"];
+            gameAtWait = JsonNode.Parse(File.ReadAllText(Path.Combine(s.Root, "data", "restart.json")))!.AsObject();
+            runningAtWait = s.Running;
+            return Task.CompletedTask;
+        };
+        var id = Promoted(gh, "build-30", 58);
+        await a.Pass("main", default);
+        HasStates(gh, s, id, "in_progress,success");
+        Assert.Equal(RestartNotice.Coming, stateAtWait);
+        Assert.True(runningAtWait, "the server was stopped before the restart was announced");
+        Assert.Equal("notice", (string?)gameAtWait!["mode"]);
+        Assert.InRange((int)gameAtWait["seconds"]!, 295, 300);
+        Assert.InRange(Assert.Single(waits).TotalSeconds, 295, 300);
+        var n = Notice(cfg, "main");
+        Assert.Equal((RestartNotice.Back, "main"), ((string?)n["state"], (string?)n["environment"]));
+        Assert.StartsWith("main-", (string?)n["id"]);
+        Assert.Matches(@"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$", (string?)n["downUtc"]);
+        Assert.True(s.Running);
+    }
+
+    [Fact]
+    public async Task AServerBuildSwapThatCannotBeAnnouncedIsRefusedBeforeAnythingStops()
+    {
+        var (a, gh, s, _, cfg) = Make();
+        Directory.Delete(Path.Combine(cfg.Environments["dev"].Store, News.Folder));
+        var (oldFiles, oldRec) = Build(ForkA);
+        Install(s, oldFiles, oldRec);
+        var (newFiles, newRec) = Build(ForkB);
+        PinRelease(gh, "build-31", "// gamemode for B\n", newFiles, newRec);
+        var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-31\"}");
+        await a.Pass("dev", default);
+        HasStates(gh, s, id, "in_progress,failure");
+        Assert.Contains("could not be announced", (string)gh.Last(id)!["description"]!);
+        Assert.True(s.Running);
+        Assert.Equal(oldRec, File.ReadAllBytes(Path.Combine(s.Root, "server-build.json")));
+        Assert.Empty(waits);
+        Assert.Empty(Directory.GetDirectories(s.Root, ".agent-stage-*"));
+    }
+
+    [Fact]
+    public async Task ASwapThatPutsTheOldBuildBackSaysTheServerIsBack()
+    {
+        var (a, gh, s, _, cfg) = Make();
+        var (oldFiles, oldRec) = Build(ForkA);
+        Install(s, oldFiles, oldRec);
+        var (newFiles, newRec) = Build(ForkB, engineExtra: "WONTSTART");
+        PinRelease(gh, "build-32", "// gamemode for B\n", newFiles, newRec);
+        var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-32\"}");
+        await a.Pass("dev", default);
+        HasStates(gh, s, id, "in_progress,failure");
+        Assert.Equal(RestartNotice.Back, (string?)Notice(cfg, "dev")["state"]);
+        Assert.InRange(Assert.Single(waits).TotalSeconds, 55, 60);
+    }
+
+    [Fact]
+    public async Task AGamemodeReloadIsNotARestartAndSaysNothing()
+    {
+        var (a, gh, s, _, cfg) = Make();
+        GamemodeRelease(gh, "build-33", "// new gamemode\n");
+        var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-33\"}");
+        await a.Pass("dev", default);
+        HasStates(gh, s, id, "in_progress,success");
+        Assert.False(File.Exists(RestartNotice.FileFor(cfg.Environments["dev"].Store, "dev")));
+        Assert.Empty(waits);
+    }
+
+    [Fact]
+    public void TheLeadARestartIsAnnouncedWithCannotBeWrittenAway()
+    {
+        var p = Path.Combine(Temp(), "agent.json");
+        File.WriteAllText(p, "{\"repo\":\"O/R\",\"environments\":{\"dev\":{},\"main\":{}}}");
+        var c = Config.Load(p);
+        Assert.Equal((60, 300), (c.Environments["dev"].AnnounceSeconds, c.Environments["main"].AnnounceSeconds));
+        File.WriteAllText(p, "{\"repo\":\"O/R\",\"environments\":{\"main\":{\"announceSeconds\":600}}}");
+        Assert.Equal(600, Config.Load(p).Environments["main"].AnnounceSeconds);
+        File.WriteAllText(p, "{\"repo\":\"O/R\",\"environments\":{\"main\":{\"announceSeconds\":0}}}");
+        Assert.Throws<ConfigException>(() => Config.Load(p));
     }
 
     [Fact]

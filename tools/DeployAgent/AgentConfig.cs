@@ -52,6 +52,7 @@ public sealed class Config
         // ServerReadyWait.ps1: the slower of the measured starts (dev, 113 s)
         // and half again, the wait every swap gives a started server (#1938).
         StartSeconds = 170,
+        AnnounceSeconds = 60,
     };
 
     /// <summary>The site (#5190): one app on the box, run by the scheduled task
@@ -150,6 +151,8 @@ public sealed class Config
         Task = "Thornswood Server",
         Watch = @"C:\Thornswood-Watch",
         StartSeconds = 170,
+        // Five minutes, Request-Restart.ps1's own default countdown (#5784).
+        AnnounceSeconds = 300,
         Approved = true,
     };
 
@@ -230,6 +233,8 @@ public sealed class Config
                 if (v.WaitSeconds < 10) throw new ConfigException($"environment {name}: voice waitSeconds must be 10 or more");
             }
             if (e.LoadSeconds < 10 || e.TurnSeconds < 10 || e.StartSeconds < 10) throw new ConfigException($"environment {name}: loadSeconds, turnSeconds and startSeconds must be 10 or more");
+            // A restart is said before it happens (#5784), so the notice is never written away.
+            if (e.AnnounceSeconds < 60) throw new ConfigException($"environment {name}: announceSeconds must be 60 or more, so a restart is said in Discord and in the game before the server stops");
             if (e.BotPassRoot != "")
             {
                 if (!(Path.IsPathRooted(e.BotPassRoot) || e.BotPassRoot.Contains(@":\"))) throw new ConfigException($"environment {name}: botPassRoot \"{e.BotPassRoot}\" is not a full path");
@@ -320,6 +325,12 @@ public sealed class EnvConfig
     /// <summary>How long a started server has to answer on both its ports
     /// before a swap puts the old build back.</summary>
     public int StartSeconds { get; set; } = 170;
+    /// <summary>How long before a server build swap stops the server the
+    /// restart is announced (#5784): in Discord through the bot
+    /// (RestartNotice) and in the game by a notice countdown (restart.json).
+    /// 300 for main, 60 for dev; agent.json may lengthen it, never take it
+    /// under 60.</summary>
+    public int AnnounceSeconds { get; set; } = 60;
 
     /// <summary>Lays agent.json's fields for this environment over it. voice
     /// is the voice service a "voice" entry starts from (DefaultVoiceFor).</summary>
@@ -343,6 +354,7 @@ public sealed class EnvConfig
         Task = S("task", Task);
         Watch = S("watch", Watch);
         StartSeconds = I("startSeconds", StartSeconds);
+        AnnounceSeconds = I("announceSeconds", AnnounceSeconds);
         Service = S("service", Service);
         WaitSeconds = I("waitSeconds", WaitSeconds);
         LogDir = S("logDir", LogDir);

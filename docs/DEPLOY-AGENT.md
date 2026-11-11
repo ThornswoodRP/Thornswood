@@ -38,6 +38,7 @@ build** (the engine).
 | Site, Discord bot | Applied by the agent (#5190, #5187): a merge that changes either makes a Deployment to **Site** or **Discord bot** with the Release's `site.zip` or `discord.zip`, and the agent swaps it in the way Deploy-Docs and Install-Bot -CodeOnly do. See "The site, the Discord bot and voice" below. |
 | Voice | Applied with its server's Deployment: dev voice with dev's (#5187), live voice with main's (#5610). Voice has no Deployment of its own, because the gamemode pushes positions to it, so a promotion puts on live the voice dev ran with that Release. |
 | Release news | After a Deployment goes in, the agent leaves its Release's notes for the bot, which posts them once (#5187). See "Release news" below. |
+| Restart notices | Before a server build swap stops a server, the agent leaves a notice the bot posts in #updates (dev's in the dev updates channel), counts down in the game, and waits five minutes on main, one on dev (#5784). See "Restart notices" below. |
 | Launcher and game files | Not the agent's job: they reach people through the launcher's feed and a Ship. Since #5179 every Release carries them as well (the signed launcher, the game files and the Velopack packages of both), attested, for the launcher's move to Velopack; the agent logs them as left alone. |
 | Bot pass before each dev Deployment | Once `Install-DeployAgent` has set up its task, every Deployment waits on a bot pass on a throwaway copy of dev with the new gamemode (#5196, below). A FAIL fails the Deployment and dev keeps what it runs. A deploy by tag (the gate's `Deploy-Release`, a rollback) does not wait on one. |
 | Steps after a deploy | Run by the agent (#5186), once each, after a Deployment of the Release carrying them succeeds: a pull request's file under `deploy/after/` names gate verbs to run and checks for a person in the game, instead of a run note. See "Steps after a deploy" below. merge-release.yml puts them in every Release as the part `after`. |
@@ -211,22 +212,32 @@ the build and the gamemode in together, the way Swap.ps1 swaps a server:
 2. The server folders' turn (#3247), and a hold on the task `Thornswood Dev
    Server` in `C:\Thornswood-Watch\holds` (#5155, the file ServerHold.ps1
    writes), so neither the nightly backup nor the watchdog steps in.
-3. The stop: the process holding dev's own UDP port and nothing else, waited
+3. The restart is said before it happens (#5784): the agent leaves
+   `C:\Thornswood-Deploys\for-bot\restart-<environment>.json` ("coming",
+   the time the server goes down and why), which the bot posts, and drops a
+   notice countdown into the game (`restart.json`, mode `notice`: nobody is
+   put out). Then it waits out the lead, `announceSeconds` in agent.json: 300
+   for main, 60 for dev, never under 60. When either cannot be said the swap
+   is refused and nothing has stopped. On 11 Nov 2026 build-1.3.20 swapped
+   the live server at 11:12 AM with neither.
+4. The stop: the process holding the server's own UDP port and nothing else, waited
    for until it has exited, and a `restart.json` it never read removed.
-4. One rename per file. What each replaces goes to `.prev-<stamp>`, and so
+5. One rename per file. What each replaces goes to `.prev-<stamp>`, and so
    does any fork file the new record does not list, so the folder holds one
    build. The `gamemode-tables` folder, when the Release carries it, goes
-   aside and in whole, and step 5 waits for its tree id as well.
-5. The start, then both ports from the box (UDP, and the resources port
+   aside and in whole, and step 6 waits for its tree id as well.
+6. The start, then both ports from the box (UDP, and the resources port
    taking a connection) within 170 seconds (ServerReadyWait.ps1's wait),
    then `server.log` saying the new gamemode's git blob loaded, then the
    health address.
-6. If any of that fails: the stop again, the new files out, the old ones in,
+7. If any of that fails: the stop again, the new files out, the old ones in,
    the old server started and asked the same way. The Deployment says
    **failure** and that the previous server build is back and answering. If
    even that does not take it says **error**, keeps `.prev-<stamp>`, and dev
    needs `Publish-Server -PutBack`.
-7. The hold is taken away on every way out.
+8. The hold is taken away on every way out, and the notice is moved on to
+   "back" (the server answers, on the new build or the old one put back) or
+   "down" (it does not), which the bot posts as well.
 
 Anybody on dev is dropped for the minute or two of the restart, as with
 Publish-Server. Deploying an older tag by the gate verb swaps its server
@@ -402,6 +413,22 @@ in the dev updates channel, a main release in #news, each by its id. A release
 whose notes start "Nothing people would notice" (merge-release.yml's line for
 a merge whose pull requests say none), and one deployed over a day ago, are
 written down without a post. A rollback by tag is not news and leaves none.
+
+## Restart notices
+
+A server build swap stops the server, so it is said first (#5784, step 3 of
+"A new server build"). The bot (`watch_restarts` in `bot/bot_restarts.py`)
+reads `restart-<environment>.json` from the same folder every 15 seconds and
+posts each restart once ahead: the live server's in #updates, the channel
+whose Updates Pings role promises a ping for restarts, with that role's
+mention; dev's in the dev updates channel. The time is Discord's own
+timestamp, so each reader sees it in their clock. When the notice moves on
+to "back", "down" or "off" (called off before the stop), that is posted
+once too. A "coming" whose time is over 15 minutes gone, and an end whose
+"coming" never went out, are written down without a post. #updates is found
+as the Information category's `updates` channel, the place
+`bot/Build-Discord.py` gives it, or by `UPDATES_CHANNEL_ID`; the bot's log
+names the id it found. A gamemode reload is not a restart and says nothing.
 
 ## Why "Dev"
 

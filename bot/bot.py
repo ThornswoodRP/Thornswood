@@ -157,6 +157,7 @@ import bot_forums  # noqa: E402,F401
 import bot_roadmap  # noqa: E402,F401
 import bot_notices  # noqa: E402,F401
 import bot_news  # noqa: E402,F401
+import bot_restarts  # noqa: E402,F401
 import bot_watchdog  # noqa: E402,F401
 import bot_problems  # noqa: E402,F401
 import bot_moderation  # noqa: E402,F401
