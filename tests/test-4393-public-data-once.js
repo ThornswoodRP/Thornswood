@@ -173,18 +173,21 @@ function get(port, where, headers) {
     const first = await get(port, WHERE);
     const tag = first.headers.etag;
     yes('B1 /api/public answers 200 with an ETag (' + first.status + ', ' + tag + ')', first.status === 200 && !!tag && /^"[^"]+"$/.test(tag));
-    const again = await get(port, WHERE, { 'if-none-match': tag });
+    // With no tag at all the rest still runs, asked with one that cannot match,
+    // so each says what it saw rather than the harness stopping at B1.
+    const held = tag || '"no-tag-given"';
+    const again = await get(port, WHERE, { 'if-none-match': held });
     yes('B2 asked again with that tag, unchanged: 304 with no body (' + again.status + ', ' + again.body.length + ' bytes)',
       again.status === 304 && again.body.length === 0);
-    yes('B3 and the 304 carries the same tag and stays no-cache', again.headers.etag === tag && again.headers['cache-control'] === 'no-cache');
-    const weak = await get(port, WHERE, { 'if-none-match': 'W/' + tag });
+    yes('B3 and the 304 carries the same tag and stays no-cache', !!tag && again.headers.etag === tag && again.headers['cache-control'] === 'no-cache');
+    const weak = await get(port, WHERE, { 'if-none-match': 'W/' + held });
     yes('B4 a weak copy of the tag, as a proxy that compresses sends it, is 304 too (' + weak.status + ')', weak.status === 304 && weak.body.length === 0);
-    const listed = await get(port, WHERE, { 'if-none-match': '"other", ' + tag });
+    const listed = await get(port, WHERE, { 'if-none-match': '"other", ' + held });
     yes('B5 so is the tag in a list (' + listed.status + ')', listed.status === 304);
     const other = await get(port, WHERE, { 'if-none-match': '"not-this-one"' });
     yes('B6 another tag gets the whole answer (' + other.status + ')', other.status === 200 && other.body.equals(first.body));
     fs.unlinkSync(path.join(dir, 'data', 'site', 'lines.md'));
-    const changed = await get(port, WHERE, { 'if-none-match': tag });
+    const changed = await get(port, WHERE, { 'if-none-match': held });
     yes('B7 once the answer changes, the old tag gets the whole new answer and a new tag (' + changed.status + ')',
       changed.status === 200 && !changed.body.equals(first.body) && !!changed.headers.etag && changed.headers.etag !== tag);
   } finally {
