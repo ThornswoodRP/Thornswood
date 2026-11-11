@@ -68,15 +68,16 @@ for (const [name, t] of TEXTS) {
   console.log('\n' + name);
   yes('1 names the box: "' + LABEL + '"', LABEL.length > 0 && t.indexOf(LABEL) >= 0);
   yes('2 says it starts unticked', /starts unticked|unticked, which is the default|unticked by default/i.test(t));
-  yes('3 says ticked, nothing is written into the Steam copy', /nothing is written into (?:your|the) Steam copy/i.test(t));
+  yes('3 says ticked, Thornswood writes nothing of its own into the Steam copy',
+    /(?:writes nothing of its own|nothing is written) into (?:your Steam copy|the Steam copy|the Skyrim you already have on Steam)/i.test(t));
   yes('4 says left unticked, Thornswood\'s own files go into the Steam copy',
     /unticked[^.]*?(?:files|they) go into (?:your|the) Steam copy/i.test(t));
   yes('5 says the launcher builds the folder', /the launcher (?:builds|makes) (?:it|the folder|a game folder|Thornswood)/i.test(t));
   yes('  and never that the installer or the setup does',
     !/(?:installer|setup|install)\s+(?:builds|makes)\s+(?:a|the|its|Thornswood)/i.test(t));
   yes('6 names no fixed C:\\Thornswood\\Game', t.indexOf('C:\\Thornswood\\Game') < 0);
-  const alone = t.split(/(?<=[.!?])\s+/).filter((s) => /\balone\b/.test(s) && /Skyrim/.test(s) && !/\bticked\b/.test(s));
-  yes('7 says your Skyrim is left alone only with the box ticked' + (alone.length ? ' (not: "' + alone[0].slice(0, 120) + '")' : ''),
+  const alone = t.split(/(?<=[.!?])\s+/).filter((s) => ((/\balone\b/.test(s) && /Skyrim/.test(s)) || /runs from its own game folder/i.test(s)) && !/\bticked\b/.test(s));
+  yes('7 says your Skyrim is left alone, or that Thornswood runs from its own folder, only with the box ticked' + (alone.length ? ' (not: "' + alone[0].slice(0, 120) + '")' : ''),
     alone.length === 0);
 }
 

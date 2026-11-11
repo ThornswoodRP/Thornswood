@@ -81,10 +81,13 @@ from the registry, then every path in `config\libraryfolders.vdf`, then the
 first library holding `steamapps\common\Skyrim Special Edition\SkyrimSE.exe`).
 `C:\Thornswood` is only the fallback when there is no Steam copy to find.
 
-That is not a preference. Thornswood runs from its own game folder, built out
-of the Steam copy mostly as hard links, and a hard link cannot cross a drive,
-so an install on another drive is one the launcher refuses to play from
-(`OwnGame.WhyNot`). The drive Skyrim is on is marked on its button, the line
+That is not a preference. With the own folder box ticked (below), Thornswood
+runs from a game folder the launcher builds out of the Steam copy mostly as
+hard links, and a hard link cannot cross a drive, so an install on another
+drive is one the launcher refuses to play from (`OwnGame.WhyNot`). Left
+unticked, the launcher asks to build that folder before Play
+(`OwnGameRequired`), and the same rule holds. The drive Skyrim is on is marked on its button,
+the line
 under the buttons says what a different drive costs, and pressing Install on a
 different drive asks once more before anything is written. It asks and does not
 refuse: whether the launcher may fall back to copies instead is the team's call
@@ -97,9 +100,9 @@ well". Under the drive card is a card with the words of the launcher's
 Settings, Maintenance panel, a tick box, "Give Thornswood a Skyrim folder of
 its own", and Choose Vortex's folder.
 
-The install does not make the folder. The launcher does (`OwnGame.Make`), out
+The install does not make the folder. The launcher builds it (`OwnGame.Make`), out
 of what Vortex has deployed, and nothing is deployed while the install window
-is up. So the tick answers the launcher's own question in advance: it goes into
+is up. The box starts unticked. So the tick answers the launcher's own question in advance: it goes into
 `config.json` as `MakeOwnGame`, and the launcher then makes the folder without
 asking once Vortex has deployed. Ticked, Thornswood's own files go into
 `Profile\Payload` and nothing is written into the Steam copy (#1226); left
