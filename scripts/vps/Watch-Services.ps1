@@ -517,13 +517,11 @@ function ReadyProblem($url) {
     if ([int]$r.StatusCode -eq 200) { return '' }
     return ('answered HTTP ' + [int]$r.StatusCode + ', not 200')
   } catch {
-    $code = 0
-    try { $code = [int]$_.Exception.Response.StatusCode } catch { }
-    if ($code -gt 0) { return ('answered HTTP ' + $code + ', so it holds no connection to Cloudflare') }
-    $st = ''
-    try { $st = '' + $_.Exception.Status } catch { }
-    if ($st -eq 'Timeout') { return 'did not answer within ten seconds' }
-    return 'could not be reached'
+    # An answer that is not 2xx comes back as the error's Response.
+    $e = $_.Exception
+    if ($e.PSObject.Properties['Response'] -and $e.Response) { return ('answered HTTP ' + [int]$e.Response.StatusCode + ', so it holds no connection to Cloudflare') }
+    if ($e.PSObject.Properties['Status'] -and ('' + $e.Status) -eq 'Timeout') { return 'did not answer within ten seconds' }
+    return ('could not be reached (' + $e.Message + ')')
   }
 }
 
