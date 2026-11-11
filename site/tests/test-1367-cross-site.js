@@ -180,8 +180,8 @@ function request(port, method, where, headers, body) {
     r.end();
   });
 }
-function cookieFor(secret, id, name) {
-  const at = String(Date.now());
+function cookieFor(secret, id, name, made) {
+  const at = String(made === undefined ? Date.now() : made);
   const sig = crypto.createHmac('sha256', secret).update(id + '|' + name + '|' + at).digest('hex').slice(0, 32);
   return 'twa=' + encodeURIComponent(id + '|' + name + '|' + at + '|' + sig);
 }
@@ -293,10 +293,10 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
     yes('sign out from the hub clears both cookies', r.status === 200 &&
         (r.headers['set-cookie'] || []).filter((c) => /^(tw|twa)=; /.test(c)).length === 2);
     // Signing out ends that sign in on the site too (#4405), so the checks
-    // below, which need staff signed in, sign in again. A pause first, so the
-    // new sign in is made after the sign out rather than in the same moment.
-    await new Promise((ok) => setTimeout(ok, 5));
-    const again = cookieFor(A.secret, ADMIN_D, 'Aela');
+    // below, which need staff signed in, sign in again. The new cookie is
+    // made one millisecond after the sign out had answered, so it is later
+    // than the time the site kept for the sign out, whatever the clock does.
+    const again = cookieFor(A.secret, ADMIN_D, 'Aela', Date.now() + 1);
 
     // ------------------------------------------ what is not a browser goes on --
     console.log('\nwhat is not a browser, no cookie and no Origin:');

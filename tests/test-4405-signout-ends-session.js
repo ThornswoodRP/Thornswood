@@ -61,8 +61,8 @@ fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({
 
 const sign = (v) => crypto.createHmac('sha256', SECRET).update(String(v)).digest('hex').slice(0, 32);
 // The cookie the site's Discord sign in sets: id|name|made|signature.
-function signIn(id, name) {
-  const at = String(Date.now());
+function signIn(id, name, made) {
+  const at = String(made === undefined ? Date.now() : made);
   return 'twa=' + encodeURIComponent(id + '|' + name + '|' + at + '|' + sign(id + '|' + name + '|' + at));
 }
 
@@ -145,8 +145,9 @@ function stop(s) {
 
     // 3, 4 and 5
     yes('3 a copy of the cookie made before the sign out is refused after it', !(await reachesHub(copy)));
-    await wait(5);
-    const fresh = signIn(AELA, 'Aela');
+    // Made one millisecond after the sign out had answered, so it is later
+    // than the time the site kept for the sign out, whatever the clock does.
+    const fresh = signIn(AELA, 'Aela', Date.now() + 1);
     yes('4 a fresh sign in by the same account still works', await reachesHub(fresh));
     yes('5 another account\'s sign in, made before the sign out, is untouched', await reachesHub(bjorn));
 
