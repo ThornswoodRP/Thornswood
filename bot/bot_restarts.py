@@ -112,6 +112,13 @@ def restart_text(doc, what, ping=''):
     server = 'The server' if live else 'The dev server'
     why = str(doc.get('why') or '').strip() or 'an update'
     down = int(_github_time(doc.get('downUtc')))
+    if what == 'coming' and str(doc.get('logOut') or '').lower() == 'yes':
+        # The whole machine restarts (the deploy agent's WindowsRestart.cs):
+        # everybody on it is put out for a few minutes.
+        text = ('%s goes down for %s at <t:%d:t> (<t:%d:R>), for a few '
+                'minutes while the machine it runs on restarts. If you are on '
+                'it, log out somewhere safe before then.' % (server, why, down, down))
+        return (ping + ' ' + text) if ping else text
     if what == 'coming':
         text = ('%s restarts for %s at <t:%d:t> (<t:%d:R>). If you are on it, '
                 'the world freezes for a moment and carries on: you do not '

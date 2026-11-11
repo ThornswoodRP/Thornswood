@@ -11,7 +11,9 @@ It holds:
     that does not read or is not a notice is left out;
   - a "coming" is posted once, ahead, with the time it goes down as Discord's
     own timestamp; the live server's in #updates with the Updates Pings
-    role's mention, a dev one in the dev updates channel with none;
+    role's mention, a dev one in the dev updates channel with none; one whose
+    notice says logOut (the machine restarts for Windows updates) tells
+    people to log out;
   - "back", "down" and "off" are posted once each, after a "coming" was;
   - a "coming" long past, and an end whose "coming" never went out, are
     written down without a post;
@@ -118,6 +120,14 @@ yes('the server back is posted once, without a ping', done == [('main-1', 'end')
     and w.posts[-1][3] == 'The server is back up after the restart.')
 run(state, w, [notice('main', 'main-1', 'back')])
 yes('  and not again', len(w.posts) == 2)
+
+# ---- the machine restarts for Windows updates -------------------------------
+box = notice('main', 'windows-main-1', why='Windows updates')
+box['logOut'] = 'yes'
+text = bot.restart_text(box, 'coming', ping='@pings')
+yes('a restart of the whole machine tells people to log out, not that the world only freezes',
+    text.startswith('@pings ') and 'for Windows updates' in text and 'log out somewhere safe' in text
+    and 'do not need to log out' not in text and ('<t:%d:R>' % (NOW + 300)) in text)
 
 # ---- dev, down and off -----------------------------------------------------
 state, w = {}, World()

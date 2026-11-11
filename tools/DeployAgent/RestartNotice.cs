@@ -31,8 +31,11 @@ public static class RestartNotice
 
     public static string FileFor(string store, string env) => Path.Combine(store, News.Folder, $"restart-{env}.json");
 
-    /// <summary>Writes the notice whole. "" when it was written, otherwise why not.</summary>
-    public static string Write(string store, string env, string id, string state, DateTime downUtc, string why, Action<string> log)
+    /// <summary>Writes the notice whole. "" when it was written, otherwise why
+    /// not. logOut says the restart puts people out of the game (the whole
+    /// machine restarts), so the bot tells them to log out rather than that
+    /// the world only freezes.</summary>
+    public static string Write(string store, string env, string id, string state, DateTime downUtc, string why, Action<string> log, bool logOut = false)
     {
         var dir = Path.Combine(store, News.Folder);
         if (store == "" || !Directory.Exists(dir))
@@ -50,6 +53,7 @@ public static class RestartNotice
             ["why"] = why,
             ["writtenUtc"] = Records.UtcNow(),
         };
+        if (logOut) doc["logOut"] = "yes";
         var file = FileFor(store, env);
         try
         {
@@ -64,4 +68,22 @@ public static class RestartNotice
             return no;
         }
     }
+
+    /// <summary>The notice as it stands for this environment, or null when
+    /// there is none or it does not read as one.</summary>
+    public static Said? Read(string store, string env)
+    {
+        try
+        {
+            using var d = JsonDocument.Parse(File.ReadAllBytes(FileFor(store, env)));
+            var r = d.RootElement;
+            string S(string n) => r.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
+            if (S("id") == "" || !DateTime.TryParseExact(S("downUtc"), "yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var down)) return null;
+            return new Said(S("id"), S("state"), down, S("why"));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { return null; }
+    }
+
+    public sealed record Said(string Id, string State, DateTime DownUtc, string Why);
 }

@@ -38,7 +38,7 @@ build** (the engine).
 | Site, Discord bot | Applied by the agent (#5190, #5187): a merge that changes either makes a Deployment to **Site** or **Discord bot** with the Release's `site.zip` or `discord.zip`, and the agent swaps it in the way Deploy-Docs and Install-Bot -CodeOnly do. See "The site, the Discord bot and voice" below. |
 | Voice | Applied with its server's Deployment: dev voice with dev's (#5187), live voice with main's (#5610). Voice has no Deployment of its own, because the gamemode pushes positions to it, so a promotion puts on live the voice dev ran with that Release. |
 | Release news | After a Deployment goes in, the agent leaves its Release's notes for the bot, which posts them once (#5187). See "Release news" below. |
-| Restart notices | Before a server build swap stops a server, the agent leaves a notice the bot posts in #updates (dev's in the dev updates channel), counts down in the game, and waits five minutes on main, one on dev (#5784). See "Restart notices" below. |
+| Restart notices | Before a server build swap stops a server, the agent leaves a notice the bot posts in #updates (dev's in the dev updates channel), counts down in the game, and waits five minutes on main, one on dev (#5784). It says the box's own restart for Windows updates ahead the same way. See "Restart notices" below. |
 | Launcher and game files | Not the agent's job: they reach people through the launcher's feed and a Ship. Since #5179 every Release carries them as well (the signed launcher, the game files and the Velopack packages of both), attested, for the launcher's move to Velopack; the agent logs them as left alone. |
 | Bot pass before each dev Deployment | Once `Install-DeployAgent` has set up its task, every Deployment waits on a bot pass on a throwaway copy of dev with the new gamemode (#5196, below). A FAIL fails the Deployment and dev keeps what it runs. A deploy by tag (the gate's `Deploy-Release`, a rollback) does not wait on one. |
 | Steps after a deploy | Run by the agent (#5186), once each, after a Deployment of the Release carrying them succeeds: a pull request's file under `deploy/after/` names gate verbs to run and checks for a person in the game, instead of a run note. See "Steps after a deploy" below. merge-release.yml puts them in every Release as the part `after`. |
@@ -429,6 +429,25 @@ once too. A "coming" whose time is over 15 minutes gone, and an end whose
 as the Information category's `updates` channel, the place
 `bot/Build-Discord.py` gives it, or by `UPDATES_CHANNEL_ID`; the bot's log
 names the id it found. A gamemode reload is not a restart and says nothing.
+
+The scripts that stop a game server by hand leave the same notice
+(`scripts/vps/RestartNotice.ps1`): Request-Restart, and so Deploy-Server and
+Deploy-DevGamemode, Swap.ps1's swap block and Restart-Server.
+
+**The box's own restart for Windows updates.** Windows installs updates at
+4 AM and restarts the box 15 minutes after an install that needs it
+(`scripts/vps/vps-harden.ps1`). On 11 Nov 2026 it did so at 4:20:57 AM and
+nobody was told. The time is in the time trigger of the scheduled task
+`\Microsoft\Windows\UpdateOrchestrator\Reboot_AC`, which Windows set at
+4:05:57 AM that morning (Task Scheduler event 140). The service reads that
+trigger every `pollSeconds` (`WindowsRestart.cs`). Once a restart set there is
+within 30 minutes, each game server gets a "coming" notice marked `logOut`,
+so the bot tells people to log out somewhere safe, and a running server gets
+the game's restart countdown. After the box starts again the service says
+"back" once a server answers its health address, or "down" when it has not
+within 15 minutes. A restart Windows moves or drops, or one whose time goes
+by with the box still up, is said "off". A restart already coming for a
+server (a swap or a hand restart) is said first, and the Windows one after it.
 
 ## Why "Dev"
 
