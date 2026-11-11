@@ -41,6 +41,7 @@ The JSON files Thornswood's release, deploy, game, site, bot and voice trust, wh
 | `bans.json`, `pk.json` | site | site (and what it hands the game server at join) | **Critical**: authorization | **held**: a file that is there and will not read, or is not a table, shuts the door and the join pass (bans #2186, pk #2180), is never written over, and `/api/ready` answers 503 naming it |
 | `linked.json`, `sessions.json`, `signins.json` | site | site, bot | High: identity and sign-in | **held** (#2180): never written over while it will not read; a broken `linked.json` also shuts the door and the join pass, since the site cannot tell who holds which character. The site logs NOT READY at start, `/api/ready` answers 503 naming each file, and Deploy-Docs asks it after every site deploy |
 | `rules-accepted.json` | site | site, bot | Medium: sign-in | none |
+| `signouts.json` | site | site | High: a sign out (#4405) | its own: a time per keyed account, never written over while it will not read, and while broken every staff sign in reads as signed out (`site/lib/auth.js`) |
 | `notes.json`, `inbox.json`, `open-tickets.json`, `trouble.json` | site | site | Medium: concurrent edits (#2188) | none |
 | `gallery.json`, `gallery-pending.json`, `gallery-reports.json`, `uploads.json`, `files.json` | site | site | Medium | none |
 | `news.json`, `page-versions.json` | the site (news.json from the main feed, #5187), Set-DevNews | site | Low | named on a bad read (#2119) |

@@ -2,7 +2,7 @@
 
 What Thornswood keeps about you, why, and how to have it deleted.
 
-Last changed: 1 November 2026.
+Last changed: 11 November 2026.
 
 Thornswood is a free fan project run by a small team in their own time. It is
 not a company. This page is written plainly rather than legally, and it is
@@ -217,6 +217,11 @@ until 24 September 2026, and both are served from here now.
   front door takes the address from Cloudflare only when the connection
   really comes from Cloudflare. That is enforced by the site rather than
   promised: old rows go whenever the log is written or read.
+- **When you last signed out of the site** is kept for 30 days, so a copy
+  of a sign-in made before then is refused. It is the time alone, filed
+  under a scrambled form of your Discord id that only this site can make,
+  and the site checks every hour and drops any older than 30 days, which is
+  as long as a sign-in lasts anyway.
 
 - **The game server's log** records the address each connection to the game
   came from, beside the Discord account it signed in as. It keeps nothing
