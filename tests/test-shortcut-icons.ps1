@@ -87,7 +87,7 @@ namespace Thornswood
     $asm = $null
     # Built, then loaded: Add-LauncherType takes no resources, and Icons reads
     # its art from its own assembly's. It uses no package, so nothing else loads.
-    try { $asm = [ThornswoodHarness.BuildContext]::LoadBuild((Build-LauncherCode -Source $stub -File $iconsCs, (Join-Path (Split-Path -Parent $iconsCs) 'InstallShortcut.cs') -Resource @{ 'app.ico' = $appIco; 'app-dev.ico' = $devIco })) }
+    try { $asm = [Reflection.Assembly]::LoadFrom((Build-LauncherCode -Source $stub -File $iconsCs, (Join-Path (Split-Path -Parent $iconsCs) 'InstallShortcut.cs') -Resource @{ 'app.ico' = $appIco; 'app-dev.ico' = $devIco })) }
     catch { ($_.Exception.Message -split "`n") | Select-Object -First 20 | ForEach-Object { Write-Host "  $_" } }
     Yes 'Icons.cs compiles with the .NET SDK the launcher builds with' ($null -ne $asm)
     if (-not $asm) { Done }
