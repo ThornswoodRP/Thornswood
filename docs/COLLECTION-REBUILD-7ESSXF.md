@@ -1,4 +1,38 @@
-# Rebuilding onto the 7essxf collection
+# Rebuilding onto the 7essxf collection (a record, 27 September 2026)
+
+This page is a record of one pull request, #648, merged on 27 September 2026,
+which moved Thornswood from the old Nexus collection `ombo2a` onto `7essxf`.
+It says what that change did and what the repository held that day. It is not
+how things are now: the collection's revisions since, and how a new one goes
+from Nexus to a release, are in [COLLECTION-REVISIONS.md](COLLECTION-REVISIONS.md).
+
+## What is different on main since
+
+Read the sections below with these in mind. Each corrects something the
+record says about its own day.
+
+- Two things Thornswood ships or builds now depend on the collection, where
+  the record says nothing does:
+  - `Thornswood-Last.esp`, built against the collection's load order. It
+    copies records out of the collection's plugins, so no repository or
+    release holds it: each machine makes it from its recipe,
+    `game/data/last-plugin.recipe`, and its own copies of those plugins
+    (#2791, LICENSING.md point 3). `game/content/Thornswood-Content.esp` is
+    still the only plugin file in the repository.
+  - 122 outfit meshes built in BodySlide from collection mods (Common
+    Clothes' travel clothes, More Craftable Equipment's executioner), which
+    ship as Thornswood's until Thornswood builds them itself (#1259). They
+    are listed in `scripts/release/built-until-1259.txt`.
+- `Fix-QuickLoot.ps1`, `Enable-MCM.ps1` and `Add-McmShortcut.ps1` are retired
+  (#1179): each stops with a message and installs nothing. There is nothing
+  left to check before running them.
+- The launcher's `Firewall.cs` is no longer in the tree (#911). What the
+  record says about NirnLab UI Platform holds for `launcher/app/OwnGame.cs`
+  only.
+
+The rest of this page is the record as it was written.
+
+## The record
 
 The old Nexus collection `ombo2a` is replaced by the rebuilt Nexus Vortex
 collection, slug `7essxf`, at
@@ -77,7 +111,7 @@ is already collection-driven and self-correcting.
   value shipped in the collection does not survive a session. The class exists
   for exactly that reason and stays.
 - The `OwnGame` foreign and skip rules (`launcher/app/OwnGame.cs`) and
-  `Firewall.cs` treatment of NirnLab UI Platform are unchanged. NirnLab is a
+  `Firewall.cs` (no longer in the tree) treatment of NirnLab UI Platform are unchanged. NirnLab is a
   standing question for the owners and this PR does not settle it.
 
 ## Ship-PC operator scripts to review against 7essxf (not changed here)
@@ -90,7 +124,7 @@ checked against the live 7essxf collection before being run or retired. They are
 left in place here because whether each is still needed depends on how 7essxf
 bakes MCM Helper's flags and rules, which cannot be read from a cloud runner:
 
-- `Fix-QuickLoot.ps1` inserts `MCMHelper.esp` into the server list after
+- `Fix-QuickLoot.ps1` (retired since, #1179) inserts `MCMHelper.esp` into the server list after
   `SkyUI_SE.esp`, which is `MCMHelper.esp`'s own master and so the earliest
   place the entry is legal: the server's reader refuses a plugin whose masters
   are absent. The default anchor was `SunHelmDiseases.esp` until the SunHelm
@@ -99,10 +133,10 @@ bakes MCM Helper's flags and rules, which cannot be read from a cloud runner:
   a message naming what to run first. Its premise ("MCMHelper.esp is not ESL
   flagged, so it takes a real index") is the pre-light state; confirm against
   7essxf.
-- `Enable-MCM.ps1` clears `SkyUI_SE.esp`'s light flag so `MCMHelper.esp` can take
+- `Enable-MCM.ps1` (retired since, #1179) clears `SkyUI_SE.esp`'s light flag so `MCMHelper.esp` can take
   a normal index server side. Confirm whether 7essxf already carries MCM Helper
   in its load-order rules before running.
-- `Add-McmShortcut.ps1` installs MCM Shortcut NG (Nexus 169548) by hand. This mod
+- `Add-McmShortcut.ps1` (retired since, #1179) installs MCM Shortcut NG (Nexus 169548) by hand. This mod
   is not in the 7essxf checklist, so unlike the two above it is not obviously
   superseded; leave it until the owners decide whether MCM Shortcut belongs in
   the collection.
