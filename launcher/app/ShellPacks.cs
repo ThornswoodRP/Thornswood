@@ -149,7 +149,7 @@ namespace Thornswood
             int have = 0;
             try { have = Checks.CollectionRevision(cfg); }
             catch (Exception ex) { Swallow.Note("Shell.CollectionStatusCard", ex); }
-            int wants = Updater.FeedCollectionRevision;
+            int wants = Updater.ServerCollectionRevision;
             if (have <= 0)
                 return CollectionCard("Your mods: not confirmed",
                     "The launcher could not read which revision of the Thornswood collection " +

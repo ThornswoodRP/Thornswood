@@ -88,6 +88,16 @@ namespace Thornswood
             opts.AllowVersionDowngrade = true;
             var mgr = new CheckedUpdates(new ChannelSource(channel, 11), opts);
             UpdateInfo info = mgr.CheckForUpdatesAsync().GetAwaiter().GetResult();
+            // The collection revision the channel's servers run is the one in
+            // the signed record of the Release the channel is on: the one this
+            // launcher is going to, or the one it is (#5767). Held to its
+            // signature like every record; read once per Release (VeloRecord).
+            SemanticVersion on = info != null ? info.TargetFullRelease.Version : Velo.Locator?.CurrentlyInstalledVersion;
+            if (on != null)
+            {
+                string recordSaid;
+                ServerCollectionRevision = VeloRecord.Get(on, out recordSaid).CollectionRevision;
+            }
             if (info == null)
             {
                 LastLauncherCheck = "The launcher is the one the " + channel + " channel is on.";

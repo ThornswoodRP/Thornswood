@@ -34,15 +34,22 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// The collection revision the last feed named, or 0 when it named
-        /// none. Set by OnVersionDoc as the document arrives, so anything that
-        /// asks after that is asking about the release that is actually live.
+        /// The collection revision of the Release this install's channel runs,
+        /// from that Release's signed record (VeloRecord.Manifest
+        /// CollectionRevision, which New-SignedManifest.ps1 writes from
+        /// records\collection-plugins.json), or 0 until it has been read. Set
+        /// by CheckLauncher on every launcher check (#5767).
+        ///
+        /// It was the feed's collectionRevision until 11 Nov, which only a Ship
+        /// writes. Releases stopped going through a Ship, so revision 8 sat
+        /// behind 7 from 8 to 11 Nov and a launcher on 8 was told the server
+        /// had not caught up with it.
         ///
         /// Held here rather than in Config because it is not a setting: it is
         /// a fact about the server, and writing it into config.json would mean
         /// a stale copy outliving the release it came from.
         /// </summary>
-        public static int FeedCollectionRevision;
+        public static int ServerCollectionRevision;
 
         /// <summary>
         /// The address the last check actually read version.json from, so

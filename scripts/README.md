@@ -258,6 +258,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [release/Release-Baseline.ps1](release/Release-Baseline.ps1) | What a release is diffed against, and the record each release publishes of what it left installed (#441). |
 | [release/Release-Manifest.ps1](release/Release-Manifest.ps1) | The signed release manifest, phase B of docs\SIGNED-RELEASES.md (#2163). |
 | [release/Release-Name.ps1](release/Release-Name.ps1) | One name for each release, recorded in the feed and the store, and a git tag on the commit it was built from (#444). |
+| [release/ReleaseRevision.ps1](release/ReleaseRevision.ps1) | The collection revision a channel's servers run: the one in the signed manifest of the Release that channel is on (#5767). |
 | [release/Repair-Manifest.ps1](release/Repair-Manifest.ps1) | Takes packs with no download url back out of version.json and sends the fix. |
 | [release/RepoPlugins.ps1](release/RepoPlugins.ps1) | The plugins this repository builds and ships itself, in one list (#2486). |
 | [release/Rollback-Feed.ps1](release/Rollback-Feed.ps1) | Puts a channel's feed back to an earlier release, so every launcher on that channel moves its game files back to what that release installed, with no hand editing of version.json (#442). |
