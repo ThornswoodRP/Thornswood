@@ -3,33 +3,32 @@
 //
 //     node tests\test-5187-site-news.js
 //
-// #5187: the site writes its own News page. It read data/news.json, which
-// Publish-News.ps1 sent over ssh at the end of a main Ship, so a Ship stopped
-// before that step left the page a release behind and nothing else could put
-// it right. Now the site reads the main feed it serves and the news file that
-// feed names (its own copy, or the release's GitHub Release copy when it does
-// not hold one), cleans it for strangers and writes news.json itself.
+// #5187, #5801: the site writes its own News page. Until 11 Nov 2026 it read
+// the main feed's news file, which only a Ship writes, and releases stopped
+// going through a Ship on 2 Nov, so the page stayed on that day's Ship while
+// main moved on. Now the page is the notes of the build Releases at or before
+// the one main runs (the Release of main's setup program), read the way the
+// launcher's News tab reads them (launcher\app\ReleaseNews.cs).
 //
-// The "news from the Release" block is lifted out of site/server.js by its
-// markers and run against a temp folder standing in for the site's root,
-// with GitHub's download answered here. Checks:
-//   - the cleaning Publish-News did, kept: no bare "Server updated", no load
-//     order count, no "gamemode was rebuilt", no box address, no launcher
-//     version or download size, no paths; near repeats once, the newest;
-//     before 15 Sep 2026 left off; at most twelve; a lone detail still a
-//     list; no file lists; the collection linked at its revision (#4115);
-//   - the news file is read from the site's own copy when it is those bytes;
-//   - else from the Release copy, checked by size and sha256, at the address
-//     on GitHub's storage the API's asset route gives (#5608), following
-//     redirects only to GitHub's storage hosts; a wrong one writes nothing;
-//   - while the Release does not hold it the old page stays;
-//   - the same feed is not read twice, and a new one is;
+// The "news from the Release" block is lifted out of the site by its markers
+// and run against a temp folder standing in for the site's data, with the
+// Release list and main's setup program given here. Checks:
+//   - a Release's body is a note as NoteOf reads it: first line the title,
+//     "- " lines the details, other lines the text; empty or the old
+//     nothing line is the quiet note;
+//   - only published "Release <tag>" build Releases at or before main's go,
+//     newest first by build number, date tags before 1.3.x, at most twelve;
+//   - the launcher number is main's: main-build-1.3.20 is 1.3.20, and a date
+//     tag reads as its date number;
+//   - the date is Patrick's clock;
+//   - the collection still comes from the feed at its revision (#4115);
+//   - nothing is written before GitHub has answered; a new main writes a new
+//     page, and the same one is not written again;
+//   - the block reads no feed news file and asks GitHub nothing of its own;
 //   - nothing else writes news.json: Publish-News.ps1 is gone and Ship and
 //     Clear-News name it no more.
 // Writes only under its own temp folder.
 const fs = require('fs'), path = require('path'), os = require('os');
-const crypto = require('crypto');
-const { PassThrough } = require('stream');
 const siteFiles = require('./site-files');
 const REPO = path.join(__dirname, '..');
 const server = siteFiles.source();
@@ -39,168 +38,131 @@ function yes(what, cond) {
   console.log((cond ? 'PASS  ' : 'FAIL  ') + what);
   if (cond) pass++; else fail++;
 }
-const sha = (b) => crypto.createHash('sha256').update(b).digest('hex');
 
 const from = server.indexOf('/* ---- news from the Release (#5187) ----');
 const to = server.indexOf('/* ---- end news from the Release ---- */');
-yes('the news block is in server.js, between its markers', from >= 0 && to > from);
+yes('the news block is in the site, between its markers', from >= 0 && to > from);
 if (from < 0 || to <= from) { console.log('\n' + pass + ' passed, ' + fail + ' failed'); process.exit(1); }
 const block = server.slice(from, to);
 
-// GitHub, as the test says it answers: url -> { status, location?, body? }.
-function fakeHttps(answer, calls) {
-  return {
-    get(u, opts, cb) {
-      const url = String(u);
-      calls.push(url);
-      const a = answer(url) || { status: 404 };
-      const res = new PassThrough();
-      res.statusCode = a.status; res.headers = a.location ? { location: a.location } : {};
-      const req = { on() { return req; }, destroy() { res.destroy(); } };
-      setImmediate(() => { cb(res); res.end(a.body || Buffer.alloc(0)); });
-      return req;
-    }
-  };
-}
-
 function load(opts) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-5187-news-'));
-  fs.mkdirSync(path.join(root, 'feed', 'assets'), { recursive: true });
-  fs.mkdirSync(path.join(root, 'data'), { recursive: true });
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-5801-news-'));
   const env = {
-    ROOT: root, NEWS: path.join(root, 'data', 'news.json'), path, fs, crypto,
-    https: fakeHttps(opts.answer || (() => null), opts.calls || []),
-    feed: null,
-    feedFile: () => env.feed,
-    readJsonQuiet: (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return null; } },
-    feedReleaseTag: () => opts.tag || '',
-    releaseCopies: opts.copies || {},
-    asked: [],
-    askReleaseCopies: (t) => env.asked.push(t),
-    // Where GitHub keeps an asset, by its id (feed.js assetLocation).
-    assetLocation: async (id) => (opts.places || {})[id] ? { url: opts.places[id] } : { why: 'GitHub did not answer inside ten seconds' },
-    putJson: (p, o) => { fs.writeFileSync(p, JSON.stringify(o, null, 2)); return true; },
-    log: []
+    NEWS: path.join(root, 'news.json'),
+    setup: opts.setup || null,
+    releases: opts.releases || null,
+    feed: opts.feed || null,
+    newestSetup: (ch) => { env.askedSetup.push(ch); return env.setup; },
+    releaseNotes: async () => env.releases,
+    feedFile: () => (env.feed ? 'feed.json' : null),
+    readJsonQuiet: () => env.feed,
+    putJson: (p, o) => { env.writes++; fs.writeFileSync(p, JSON.stringify(o, null, 2)); return true; },
+    askedSetup: [], writes: 0, log: []
   };
   const quiet = { log: (m) => env.log.push(m), error: (m) => env.log.push(m) };
   const make = new Function('env', 'console',
-    'const { ROOT, NEWS, path, fs, crypto, https, feedFile, readJsonQuiet, feedReleaseTag, releaseCopies, askReleaseCopies, assetLocation, putJson } = env;\n' +
-    block + '\nreturn { publicNews, refreshNews, newsDay, NEWS_KEEP };');
+    'const { NEWS, newestSetup, releaseNotes, feedFile, readJsonQuiet, putJson } = env;\n' +
+    block + '\nreturn { publicNews, refreshNews, noteOf, newsOf, newsKey, newsVersion, newsDate, NEWS_KEEP, NEWS_QUIET };');
   env.api = make(env, quiet);
-  env.setFeed = (doc, n) => {
-    const f = path.join(root, 'feed', 'version', String(n || 1).padStart(8, '0') + '.json');
-    fs.mkdirSync(path.dirname(f), { recursive: true });
-    fs.writeFileSync(f, JSON.stringify(doc));
-    env.feed = f;
-  };
   env.page = () => { try { return JSON.parse(fs.readFileSync(env.NEWS, 'utf8')); } catch (e) { return null; } };
   return env;
 }
+const rel = (tag, body, at, name) => ({ tag, name: name === undefined ? 'Release ' + tag : name, body, published_at: at });
 
 async function main() {
-  // ---- 1. the cleaning --------------------------------------------------
-  const notes = [
-    { date: '11-1-2026 10:11 AM', title: 'Server updated', body: 'The server at 203.0.113.7 was reinstalled and is answering.',
-      details: ['Load order: 60 plugins server side'] },
-    { date: '11-1-2026 9:00 AM', title: 'Your gear and your spells stay on across a relog',
-      body: 'The server at 203.0.113.7 was reinstalled and is answering.',
-      details: ['The gamemode was rebuilt: starting kits live in it', 'Load order: 60 plugins server side',
-                'Nothing to download for this one. It is on the server, so it is already live.'],
-      files: ['Data/SKSE/Plugins/x.ini'] },
-    { date: '10-31-2026 8:00 PM', title: 'Your gear and spells stay on across a relog', details: ['An older copy.'] },
-    { date: '10-30-2026 1:00 PM', title: 'The mod list has a new revision',
-      body: 'Before you press Play, update the Thornswood collection in Vortex.',
-      details: ['Launcher 1.1.80', '1 file to download, 0.0 MB', 'Launcher rebuilt: Updater.cs',
-                'Data\\SKSE\\Plugins\\x.ini changed', 'The load order moved, so start a new character'] },
-    { date: '23 Sep 2026', title: 'Doors you own open for you again', details: 'Your key works on your own door.' },
-    { date: 'someday', title: 'A note with an odd date' },
-    { date: '9-14-2026 1:00 PM', title: 'Development history before the cutoff' },
-    { date: '9-20-2026', title: 'wip' }
-  ];
+  // ---- 1. one Release as a note -----------------------------------------
   let t = load({});
-  const doc = { launcherVersion: '2026.1101.1609', collectionUrl: 'https://www.nexusmods.com/games/skyrimspecialedition/collections/7essxf',
-                collectionRevision: 6, news: [] };
-  const page = t.api.publicNews(doc, notes, new Date('2026-11-01T21:00:00Z'));
-  const titles = page.news.map((n) => n.title);
-  const lines = [].concat(...page.news.map((n) => n.details));
-  const words = JSON.stringify(page);
-  yes('a bare Server updated and a "wip" do not reach the page', !titles.includes('Server updated') && !titles.includes('wip'));
-  yes('the named server release does, with the line people want', titles[0] === 'Your gear and your spells stay on across a relog' &&
-      page.news[0].details.length === 1 && /Nothing to download/.test(page.news[0].details[0]));
-  yes('and its body is empty rather than a note to whoever ran it', page.news[0].body === '');
-  yes('a near repeat of a release is shown once, the newest', !titles.includes('Your gear and spells stay on across a relog'));
-  yes('no load order count, no "gamemode was rebuilt", no launcher version, size, build note or path',
-      !lines.some((l) => /^\s*Load order\s*:|gamemode was rebuilt|^Launcher \d|files? to download|Launcher rebuilt|[\\/]SKSE[\\/]/i.test(l)));
-  yes('no address of any server is on the page', !/\b\d{1,3}(\.\d{1,3}){3}\b/.test(words));
-  yes('a line for the reader that names the load order still goes out', lines.includes('The load order moved, so start a new character'));
-  yes('a body written for people still goes out', page.news.some((n) => n.body === 'Before you press Play, update the Thornswood collection in Vortex.'));
-  const doors = page.news.find((n) => n.title === 'Doors you own open for you again');
-  yes('a lone detail is a list of one', doors && Array.isArray(doors.details) && doors.details.length === 1);
-  yes('a note with an odd date is kept, one before 15 Sep 2026 is not', titles.includes('A note with an odd date') &&
-      !titles.includes('Development history before the cutoff'));
-  yes('no file list goes', !page.news.some((n) => 'files' in n));
-  yes('the launcher, and the collection at the revision the server was built against (#4115)',
-      page.launcher === '2026.1101.1609' && page.collectionRevision === 6 &&
-      page.collection === 'https://www.nexusmods.com/games/skyrimspecialedition/collections/7essxf/revisions/6');
-  const many = Array.from({ length: 20 }, (_, i) => ({ date: '10-' + (i + 1) + '-2026', title: 'Note ' + i + ' ' + 'apple pear plum fig lime kiwi date yuzu sloe quince lemon melon grape olive peach cherry mango guava papaya'.split(' ')[i] }));
-  yes('at most twelve', t.api.publicNews({ news: many }, [], new Date()).news.length === t.api.NEWS_KEEP && t.api.NEWS_KEEP === 12);
-  yes('"news" in the feed comes first and a note in both is shown once', (() => {
-    const p = t.api.publicNews({ news: [notes[3]] }, [notes[3], notes[4]], new Date());
-    return p.news.length === 2 && p.news[0].title === notes[3].title; })());
-  yes('a month-first date, an ISO date and "23 Sep 2026" all read', t.api.newsDay('11-1-2026 10:11 AM') === Date.UTC(2026, 10, 1) &&
-      t.api.newsDay('2026-09-15') === Date.UTC(2026, 8, 15) && t.api.newsDay('23 Sep 2026') === Date.UTC(2026, 8, 23));
+  const n = t.api.noteOf('Restarts are announced on Discord\n- Before the server restarts, #updates says when.\nAnd one plain line.\r\n- A second change.\n',
+    '2026-11-11T21:20:11Z');
+  yes('the first line is the title, "- " lines the details, any other line the text',
+      n.title === 'Restarts are announced on Discord' && n.details.length === 2 && n.details[1] === 'A second change.' &&
+      n.body === 'And one plain line.');
+  yes('the date is Patrick\'s clock, month first, 12 hour', n.date === '11-11-2026 2:20 PM');
+  yes('a morning time reads AM', t.api.newsDate('2026-11-11T11:46:09Z') === '11-11-2026 4:46 AM');
+  yes('an empty body is the quiet note', t.api.noteOf('', null).title === t.api.NEWS_QUIET && t.api.noteOf('', null).date === '');
+  yes('the old nothing line is the quiet note', t.api.noteOf('Nothing people would notice in this one.', null).title === t.api.NEWS_QUIET);
+  yes('the quiet note is merge-release.yml\'s', t.api.NEWS_QUIET === 'Various bug fixes and improvements' &&
+      fs.readFileSync(path.join(REPO, 'launcher', 'app', 'ReleaseNews.cs'), 'utf8').includes('QuietNote = "Various bug fixes and improvements"'));
 
-  // ---- 2. the site's own copy of the news file ---------------------------
-  const file = Buffer.from(JSON.stringify(notes));
-  const S = sha(file);
-  let calls = [];
-  t = load({ calls, tag: 'release/main/20261101-101056' });
-  fs.writeFileSync(path.join(t.ROOT, 'feed', 'assets', S), file);
-  t.setFeed(Object.assign({}, doc, { newsFile: { sha256: S, count: notes.length } }), 1);
-  await t.api.refreshNews();
-  yes('with the site holding the news file, the page is written from it and GitHub is not asked',
-      t.page() && t.page().news[0].title === 'Your gear and your spells stay on across a relog' && calls.length === 0 && t.asked.length === 0);
-  fs.unlinkSync(t.NEWS);
-  await t.api.refreshNews();
-  yes('the same feed is not read again', t.page() === null);
-  t.setFeed(Object.assign({}, doc, { launcherVersion: '2026.1101.1700', newsFile: { sha256: S, count: notes.length } }), 2);
-  await t.api.refreshNews();
-  yes('a new feed is', t.page() && t.page().launcher === '2026.1101.1700');
+  // ---- 2. which Releases go ---------------------------------------------
+  const list = [
+    rel('main-build-1.3.20', 'Main\'s launcher and game files from build-1.3.20.', '2026-11-11T18:12:16Z', 'Main build-1.3.20'),
+    rel('agent-v1.0.131', 'The box deploy agent.', '2026-11-11T21:44:52Z', 'Deploy agent 1.0.131'),
+    rel('build-1.3.26', 'Clearer install guide on the site', '2026-11-11T22:34:46Z'),
+    rel('build-1.3.21', '', '2026-11-11T06:24:59Z'),
+    rel('build-1.3.20', 'The launcher knows which collection revision the server runs\n- From the Release.', '2026-11-11T04:46:09Z'),
+    rel('build-1.3.9', 'Front page stays still', '2026-11-09T15:36:19Z'),
+    rel('build-1.3.10', 'Ten', '2026-11-09T16:00:00Z'),
+    rel('build-1.3.8', 'A gamemode only build', '2026-11-09T13:00:00Z', 'Gamemode build-1.3.8'),
+    rel('build-20261108.2', 'Sharper eyes', '2026-11-08T19:16:00Z'),
+    rel('build-20261102.7', 'The character choice', '2026-11-02T17:11:00Z'),
+    rel('release/main/20261031-144725', 'The files of a main release.', '2026-10-31T14:47:25Z', 'Thornswood main release 20261031-144725')
+  ];
+  let news = t.api.newsOf(list, 'build-1.3.20');
+  yes('only build Releases at or before main\'s, newest first by number (1.3.10 after 1.3.9), date tags last',
+      JSON.stringify(news.map((x) => x.title)) === JSON.stringify(['The launcher knows which collection revision the server runs', 'Ten',
+        'Front page stays still', 'Sharper eyes', 'The character choice']));
+  yes('a newer dev build is not on main\'s page', !news.some((x) => /Clearer install guide/.test(x.title)) &&
+      !news.some((x) => x.title === t.api.NEWS_QUIET));
+  yes('a Release not titled "Release <tag>" is left out (gamemode builds, main\'s, the agent\'s, the old release copies)',
+      !news.some((x) => /gamemode|Main's|agent|files of/i.test(x.title)));
+  news = t.api.newsOf(list, 'build-1.3.26');
+  yes('a quiet Release is on the page as the quiet note: every release is news', news[0].title === 'Clearer install guide on the site' &&
+      news[1].title === t.api.NEWS_QUIET);
+  const many = Array.from({ length: 20 }, (_, i) => rel('build-1.3.' + i, 'Note ' + i, '2026-11-10T00:00:00Z'));
+  news = t.api.newsOf(many, 'build-1.3.19');
+  yes('at most twelve, the newest', t.api.NEWS_KEEP === 12 && news.length === 12 && news[0].title === 'Note 19' && news[11].title === 'Note 8');
+  yes('a tag that is no build tag gives no notes', t.api.newsOf(list, 'v2026.1102.716').length === 0);
+  yes('a build number and a date number sort the way the Releases were made',
+      t.api.newsKey('build-1.3.0') > t.api.newsKey('build-20261108.9') && t.api.newsKey('build-1.3.10') > t.api.newsKey('build-1.3.9') &&
+      t.api.newsKey('build-20261108.2') > t.api.newsKey('build-20261102.7') && t.api.newsKey('main-build-1.3.2') === -1n);
+  yes('the launcher number is the build\'s', t.api.newsVersion('build-1.3.20') === '1.3.20' && t.api.newsVersion('build-20261108.2') === '2026.1108.2');
 
-  // ---- 3. the Release's copy ---------------------------------------------
-  const TAG = 'release/main/20261101-101056';
-  const CDN = 'https://release-assets.githubusercontent.com/github-production-release-asset/1/x?sig=y';
-  const places = { 77: CDN };
-  calls = [];
-  t = load({ calls, tag: TAG, copies: {}, places,
-    answer: (u) => u === CDN ? { status: 200, body: file } : null });
-  t.setFeed(Object.assign({}, doc, { newsFile: { sha256: S, count: notes.length } }), 1);
-  fs.writeFileSync(t.NEWS, JSON.stringify({ launcher: 'old', news: [{ title: 'The last release' }] }));
-  await t.api.refreshNews();
-  yes('while the Release does not hold the news file, the page stays as it was and the Release is asked about',
-      t.page().launcher === 'old' && t.asked[0] === TAG && calls.length === 0);
-  t.releaseCopies[TAG] = { files: { [S]: { id: 77, size: file.length } } };
-  await t.api.refreshNews();
-  yes('once it does, the file is fetched from where GitHub keeps it, by its asset id, and the page written',
-      t.page().launcher === '2026.1101.1609' && calls.length === 1 && calls[0] === CDN);
+  // ---- 3. the page ------------------------------------------------------
+  const feed = { launcherVersion: '2026.1102.716', collectionUrl: 'https://www.nexusmods.com/games/skyrimspecialedition/collections/7essxf',
+                 collectionRevision: 8, news: [{ date: '11-2-2026 12:16 PM', title: 'From the feed' }],
+                 newsFile: { sha256: 'a'.repeat(64) } };
+  const page = t.api.publicNews(list, 'main-build-1.3.20', feed, new Date('2026-11-11T23:00:00Z'));
+  yes('main\'s launcher, not the feed\'s', page.launcher === '1.3.20');
+  yes('no note from the feed', !page.news.some((x) => x.title === 'From the feed') && page.news.length === 5);
+  yes('the collection from the feed at its revision (#4115)', page.collectionRevision === 8 &&
+      page.collection === 'https://www.nexusmods.com/games/skyrimspecialedition/collections/7essxf/revisions/8');
+  const bare = t.api.publicNews(list, 'main-build-1.3.20', null, new Date());
+  yes('with no feed the notes and the launcher are still there, and no collection', bare.news.length === 5 && bare.launcher === '1.3.20' &&
+      bare.collection === '' && bare.collectionRevision === 0);
 
-  for (const [what, answer, size, at] of [
-    ['bytes that are not its sha256', (u) => u === CDN ? { status: 200, body: Buffer.from('[]') } : null, 2, places],
-    ['another size than the Release says', (u) => u === CDN ? { status: 200, body: file } : null, file.length - 1, places],
-    ['a redirect off GitHub\'s hosts', (u) => u === CDN ? { status: 302, location: 'https://evil.example/news' } : null, file.length, places],
-    ['no address from GitHub\'s API', () => null, file.length, {}]]) {
-    calls = [];
-    t = load({ calls, tag: TAG, copies: { [TAG]: { files: { [S]: { id: 77, size } } } }, answer, places: at });
-    t.setFeed(Object.assign({}, doc, { newsFile: { sha256: S } }), 1);
-    await t.api.refreshNews();
-    yes('a Release copy with ' + what + ' writes nothing, and says why', t.page() === null &&
-        t.log.some((l) => /news: release\/main/.test(l)) && !calls.some((u) => new URL(u).host === 'evil.example'));
-  }
+  // ---- 4. writing it ----------------------------------------------------
+  t = load({ releases: list, feed });
+  fs.writeFileSync(t.NEWS, JSON.stringify({ launcher: 'old', news: [{ title: 'The last page' }] }));
+  await t.api.refreshNews();
+  yes('before GitHub has said what main runs, the page stays as it was', t.page().launcher === 'old' && t.askedSetup[0] === 'main');
+  t.setup = { tag: 'main-build-1.3.20' };
+  t.releases = null;
+  await t.api.refreshNews();
+  yes('before the Release list has been read, the page stays as it was', t.page().launcher === 'old');
+  t.releases = list;
+  await t.api.refreshNews();
+  yes('once both have, the page is written from main\'s Release', t.page().launcher === '1.3.20' &&
+      t.page().news[0].title === 'The launcher knows which collection revision the server runs' && t.writes === 1);
+  await t.api.refreshNews();
+  yes('the same page is not written again', t.writes === 1);
+  t.setup = { tag: 'main-build-1.3.26' };
+  await t.api.refreshNews();
+  yes('a new main is', t.writes === 2 && t.page().launcher === '1.3.26' && t.page().news[0].title === 'Clearer install guide on the site');
+  t.releases = [rel('build-1.3.26', 'Clearer install guide on the site\n- Edited on GitHub.', '2026-11-11T22:34:46Z')].concat(list.slice(3));
+  await t.api.refreshNews();
+  yes('and so is a note edited on its Release', t.writes === 3 && t.page().news[0].details[0] === 'Edited on GitHub.');
+
+  yes('the block reads no feed news file and asks GitHub nothing of its own',
+      !/newsFile|askReleaseCopies|assetLocation|https\.get|releaseGitHub/.test(block.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')));
   const site = siteFiles.source();
-  yes('the site asks for its news every minute and once it starts', /setInterval\(refreshNews, NEWS_LOOK_MS\)/.test(site) &&
+  yes('the site makes its page every minute and once it starts', /setInterval\(refreshNews, NEWS_LOOK_MS\)/.test(site) &&
       /setImmediate\(refreshNews\)/.test(site) && /const NEWS_LOOK_MS = 60 \* 1000;/.test(site));
+  yes('the Release list keeps each Release\'s title, note and time for it (feed.js releaseNotes)',
+      /notes\.push\(\{ tag: r\.tag_name, name: [^\n]*body: [^\n]*\n\s*published_at: r\.published_at/.test(site) &&
+      /async function releaseNotes\(\)/.test(site));
 
-  // ---- 4. nothing else writes it -----------------------------------------
+  // ---- 5. nothing else writes it -----------------------------------------
   yes('Publish-News.ps1 is gone', !fs.existsSync(path.join(REPO, 'scripts', 'ops', 'Publish-News.ps1')));
   for (const f of ['scripts/release/Ship.ps1', 'scripts/release/Clear-News.ps1', 'scripts/release/Publish-PostShip.ps1']) {
     const text = fs.readFileSync(path.join(REPO, f), 'utf8');

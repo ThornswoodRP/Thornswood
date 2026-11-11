@@ -9,9 +9,10 @@
 
     - Clear-News.ps1 -Check names every note and sends nothing.
     - On main, whose notes are a news file (minLauncher 1.2.4 on), the feed
-      names an empty file afterwards, which the site writes its News page
-      from by itself (#5187, tests/test-5187-site-news.js), and the record of #news posts loses its lines while the
-      releases it says were announced stay.
+      names an empty file afterwards, and the record of #news posts loses
+      its lines while the releases it says were announced stay. The site's
+      News page reads the build Releases, not the feed (#5801,
+      tests/test-5187-site-news.js), so no page is sent.
     - On dev, whose notes are in "news" (minLauncher before 1.2.4), "news"
       is empty afterwards and no news page is written.
     - A second run finds nothing.
@@ -72,7 +73,7 @@ try {
     Yes 'main clears' ($LASTEXITCODE -eq 0)
     Yes 'the main feed names a news file with no notes, and "news" is empty' ($after.newsFile.count -eq 0 -and @($after.news).Count -eq 0 -and $after.newsFile.sha256 -ne $sha)
     Yes 'and that file is on the site' ((Test-Path (Join-Path $site "feed\assets\$($after.newsFile.sha256)")) -and @(Get-FeedNewsList $after $site).Count -eq 0)
-    Yes 'no News page is sent: the site writes it from the feed itself (#5187)' (-not (Test-Path (Join-Path $site 'data\news.json')) -and $out -match 'site writes its News page')
+    Yes 'no News page is sent: the site reads the build Releases, not the feed (#5801)' (-not (Test-Path (Join-Path $site 'data\news.json')) -and $out -match 'News page reads the build Releases')
     $rec = [IO.File]::ReadAllText((Join-Path $site 'feed\announced.json')) | ConvertFrom-Json
     Yes 'the record loses its post lines and keeps the release it says was announced' (-not $rec.PSObject.Properties['posts-main'] -and $rec.version -eq '1.2.5' -and $rec.title -eq 'Merchants and quests')
 
