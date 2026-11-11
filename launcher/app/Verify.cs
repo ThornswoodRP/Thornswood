@@ -94,7 +94,7 @@ namespace Thornswood
         public const string Personal = "your-mods";
         public const string OwnFolder = "own-folder";
         public const string Update = "update";
-        public const string Feed = "feed";
+        public const string UpdateCheck = "update-check";
         public const string Behind = "behind-vortex";
         public const string VortexInto = "vortex-into-thornswood";
         public const string Lost = "lost-vortex";
@@ -1115,9 +1115,9 @@ namespace Thornswood
         /// everywhere and Vortex has nothing to report. The old bytes are kept
         /// whole under Profile\Replaced first.
         ///
-        /// The bytes come from the release the update feed names, over https,
-        /// by the sha256 its record gives them (Updater.ReleaseCopy), and
-        /// from nowhere else. Until #3386 they came from the server's
+        /// The bytes come from the installed launcher's package, checked
+        /// against the sha256 its signed list gives them (Updater.ReleaseCopy,
+        /// SyncPackage.cs), and from nowhere else. Until #3386 they came from the server's
         /// resources port over plain http and were checked against the size
         /// and crc32 in that same server's manifest, so anybody on the path
         /// could hand over a plugin of their own with numbers to match. The
@@ -1140,19 +1140,19 @@ namespace Thornswood
             string dest = Path.Combine(Paths.Game, "Data", i.Plugin);
             if (release == null)
             {
-                say(i.Plugin + ": the update feed could not be read, so there is no release copy to put in and nothing was changed.");
+                say(i.Plugin + ": this launcher was not installed by Thornswood's setup, so it has no package to take a release copy from, and nothing was changed.");
                 return false;
             }
             byte[] bytes;
             try { bytes = release(i.Plugin); }
             catch (Exception ex)
             {
-                say(i.Plugin + ": the release's copy could not be fetched (" + ex.Message.TrimEnd('.') + "), so nothing was changed.");
+                say(i.Plugin + ": the release's copy could not be read (" + ex.Message.TrimEnd('.') + "), so nothing was changed.");
                 return false;
             }
             if (bytes == null)
             {
-                say(i.Plugin + ": the release the update feed names does not ship it, so nothing was changed.");
+                say(i.Plugin + ": the installed release does not ship it, so nothing was changed.");
                 return false;
             }
             int crc;
@@ -1266,10 +1266,10 @@ namespace Thornswood
         /// </summary>
         public static bool OwnFolderNext;
 
-        /// <param name="release">Thornswood's own plugins from the release
-        /// the update feed names (Updater.ReleaseCopy, #3386), the only
-        /// place Fix takes a plugin's bytes from. Null when the feed could not
-        /// be read, and then none is put in.</param>
+        /// <param name="release">Thornswood's own plugins from the installed
+        /// launcher's package (Updater.ReleaseCopy, #3386), the only place Fix
+        /// takes a plugin's bytes from. Null when Velopack did not install
+        /// this launcher, and then none is put in.</param>
         public static int Fix(Config cfg, Action<string> say, Func<string, byte[]> release)
         {
             if (say == null) say = delegate(string m) { };

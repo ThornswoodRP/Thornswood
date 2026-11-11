@@ -239,28 +239,36 @@ pwsh scripts/vps/Box-Run.ps1 -Line 'Deploy-Release -Environment site -Tag <tag>'
 
 ## G. Main Build
 
-The main build is the live launcher. People who join use this install. A main Ship publishes the live feed that this launcher reads. The steps to publish are [Release to main](release-to-main.md).
+The main build is the live channel. People who join use it. The launcher takes the main channel's release straight from GitHub: the newest Release that carries `releases.main.json`, which a main release publishes (#5608). The steps to publish are [Release to main](release-to-main.md).
 
-The install folder is `<drive>:\Thornswood` on most machines. The launcher exe sits under that tree. Profile, config, and packs sit beside it. The map of ports and folders is [The pieces](the-system.md#the-pieces). The Play page, with Main and Dev in the server list, is pictured in [H. Dev Build](#h-dev-build).
+The install folder is `<drive>:\Thornswood` on most machines. The launcher exe sits under that tree. Profile and config sit beside it. The map of ports and folders is [The pieces](the-system.md#the-pieces). The Play page, with Main and Dev in the server list, is pictured in [H. Dev Build](#h-dev-build).
 
 ### Learn more about Main Build
 
-- The live feed: https://thornswood.net/feed/version.json
-- The feed, in detail: [docs/FEED.md](../FEED.md)
+- The Releases the launcher reads: https://github.com/ThornswoodRP/Thornswood/releases
+- How the launcher reads them: [launcher/app/ARCHITECTURE.md](../../launcher/app/ARCHITECTURE.md), Updater and Velo
 
 ## H. Dev Build
 
-The dev build is a second launcher beside the main install, at `<drive>:\Thornswood-DevBuild`. Its config says the channel is dev. The game port is 7787 and voice is 7789. Staff roles use it. Every change is tried here before a main release.
+The dev build is the dev channel of the same install, not a second launcher (#5608, Patrick's answer B on 11 Nov 2026). On it the config says the channel is dev, the game port is 7787 and voice is 7789, and the launcher takes the dev channel's release from GitHub, game files included. Staff roles use it. Every change is tried here before a main release.
 
-### Install it from the main launcher
+### Switch to it from the launcher
 
-In the main launcher, on the Play page, open the Server dropdown and choose Dev. It checks your Discord roles, then puts the dev build beside the main install. Open it once and let it make its own game folder. Settings, Maintenance has "Make it".
+In the launcher, on the Play page, open the Server dropdown and choose Dev. It checks your Discord roles, then puts the install on the dev channel, takes the dev launcher from GitHub and restarts into it. Main in the same dropdown goes back the same way. A dev copy at `<drive>:\Thornswood-DevBuild` made by an older launcher reads no updates any more: remove it from its own Settings and switch the main install instead.
+
+A machine that ships builds the dev release from a release folder of its own, recorded once:
+
+```powershell
+.\scripts\release\Setup-ShipMachine.ps1 -Channel dev -Root <folder>
+```
+
+`Update-ShipRoot.ps1` makes that folder on the first Ship, with Thornswood's own files from the dev channel's package on GitHub (#2019). Then:
 
 ```powershell
 .\scripts\release\Check-ShipReady.ps1 -Channel dev
 ```
 
-That says whether the dev build and its game folder are in place, and ships nothing. Ship refuses `-Channel dev` without the dev build, unless the folder was named with `-Root` or recorded with Setup-ShipMachine.ps1 (#2662). The publish steps are [section 3](release-to-dev.md).
+That says whether the release folder and its game folder are in place, and ships nothing. Ship refuses `-Channel dev` with no folder named with `-Root` or recorded with Setup-ShipMachine.ps1 and no older dev copy to build from (#2662). The publish steps are [section 3](release-to-dev.md).
 
 ### The Play page
 
@@ -270,8 +278,8 @@ On the Play page, the server list is at the lower right, under the Play button. 
 
 ### Learn more about Dev Build
 
-- The dev feed: https://thornswood.net/feed-dev/version.json
-- The same feed notes: [docs/FEED.md](../FEED.md)
+- The Releases the launcher reads: https://github.com/ThornswoodRP/Thornswood/releases
+- The dev channel's newest release is the newest Release carrying `releases.dev.json`
 
 ## I. Bot
 

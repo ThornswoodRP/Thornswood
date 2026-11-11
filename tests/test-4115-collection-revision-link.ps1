@@ -62,7 +62,7 @@ function Method([string]$text, [string]$signature) {
 
 $checks = Src 'Checks.cs'
 $shell = Src 'Shell.cs'
-$packs = Src 'ShellPacks.cs'
+$packs = Src 'ShellCollection.cs'
 $play = Src 'ShellPlay.cs'
 $update = Src 'ShellUpdate.cs'
 $all = $shell + $packs + $play + $update
@@ -102,7 +102,7 @@ $installAt = $draw.IndexOf('"INSTALL THE MODS FIRST"')
 Yes 'Play has its own label for ahead, ahead of the install label' ($aheadAt -gt 0 -and $installAt -gt $aheadAt -and $draw.Contains('btnPlay.Content = "WAITING FOR THE SERVER";'))
 Yes 'its tooltip says nothing needs installing' ($draw.Substring([Math]::Max(0, $aheadAt), 700).Contains('Nothing needs installing.'))
 Yes 'a copy behind reads UPDATE THE MODS FIRST' ($draw.Contains('== "stale" ? "UPDATE THE MODS FIRST" : "INSTALL THE MODS FIRST"'))
-Yes 'Play is still enabled by the same test' ($draw.Contains('btnPlay.IsEnabled = all && !playing && !updatePending && !collectionBarUp && !ownGameBusy && !working && feedNotice.Hold == null;'))
+Yes 'Play is still enabled by the same test, less the old feed''s hold (#5608)' ($draw.Contains('btnPlay.IsEnabled = all && !playing && !updatePending && !collectionBarUp && !ownGameBusy && !working;'))
 $status = Method $packs 'static Control CollectionStatusCard()'
 Yes 'the Diagnostics ahead card has no button' ($status.Contains('installing; Play opens once the server is rebuilt on your revision.", false);'))
 Yes 'CollectionCard leaves the button out when asked' ((Method $packs 'static Control CollectionCard(string title, string body, bool button = true)').Contains('if (button)'))
@@ -111,7 +111,10 @@ Yes 'CollectionCard leaves the button out when asked' ((Method $packs 'static Co
 $wait = Method $shell 'static string[] CollectionWait()'
 Yes 'CollectionWait names behind, ahead and not installed' ($wait.Contains('problem == "stale"') -and $wait.Contains('problem == "ahead"') -and $wait.Contains('"The collection is not installed yet."'))
 Yes 'the update log no longer says not installed for every case' (-not $update.Contains('Log("The collection is not installed yet'))
-Yes 'all three update log lines ask CollectionWait' (([regex]::Matches($update, '= CollectionWait\(\);')).Count -eq 3)
+# Since #5608 no update waits on the collection: the one update is the
+# launcher's package, which carries the game files and goes ahead, as the
+# launcher alone did before.
+Yes 'no update waits on the collection, so no update log line asks CollectionWait' (-not $update.Contains('CollectionWait'))
 Yes 'Play''s own refusal asks it too' ($play.Contains('if (collectionBarUp) { Log(CollectionHeldLine()); return; }') -and (Method $shell 'static string CollectionHeldLine()').Contains('CollectionWait()[0]') -and -not $play.Contains('Log("The collection is not installed yet. Open it'))
 
 # ---- what the guide tells people before they install ------------------------

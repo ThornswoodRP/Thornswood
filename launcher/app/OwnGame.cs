@@ -162,8 +162,7 @@ namespace Thornswood
         ///
         /// Internal, and the one way the launcher writes a record it keeps
         /// in its Profile (#2591): Updater's release.txt and
-        /// release-files.txt (Sync.cs) and the settings cache (FeedSettings.cs) go
-        /// through it too. They deleted the old file and then moved the new
+        /// release-files.txt (Sync.cs) go through it too. They deleted the old file and then moved the new
         /// one in; killed 150 times, that left the record missing 30 times.
         /// </summary>
         internal static void WriteRecord(string path, IEnumerable<string> lines)
@@ -178,19 +177,6 @@ namespace Thornswood
                     w.Flush();
                     fs.Flush(true);
                 }
-            }
-            SwapIn(next, path);
-        }
-
-        /// <summary>The same, for a record kept byte for byte (the settings cache).</summary>
-        internal static void WriteRecord(string path, byte[] bytes)
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(path));
-            string next = path + ".new";
-            using (var fs = new FileStream(next, FileMode.Create, FileAccess.Write, FileShare.None))
-            {
-                fs.Write(bytes, 0, bytes.Length);
-                fs.Flush(true);
             }
             SwapIn(next, path);
         }

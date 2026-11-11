@@ -4,10 +4,11 @@
 #
 # The feed store's version.json, published.json and releases.json held to
 # RecordShape.ps1's feed contracts (#2180, slice 5), and Check-Records -Feed
-# enforcing them. version.json is held to launcher\app\Config.cs VersionDoc:
-# its serializer drops the whole document on one value of the wrong type,
-# which shuts Play on every launcher. tests\fixtures\feed-2180 is a committed
-# sample that passes; each break below is that sample with one thing wrong.
+# enforcing them. version.json was held to the launcher's VersionDoc until
+# #5608, when the launcher stopped reading the feed; launchers from before
+# that still read it until the site side of #5608 (#5783) takes it down.
+# tests\fixtures\feed-2180 is a committed sample that passes; each break
+# below is that sample with one thing wrong.
 # Offline.
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
@@ -74,14 +75,8 @@ try {
     Remove-Item -LiteralPath $fx -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# ---- the contract names every VersionDoc member, so a new one is not missed
-$cfg = [IO.File]::ReadAllText((Join-Path $repo 'launcher\app\Config.cs'))
-$m = [regex]::Match($cfg, '(?s)public class VersionDoc\s*\{(.*?)\n    \}')
-$members = @([regex]::Matches($m.Groups[1].Value, '\[DataMember\] public [\w\[\]]+ (\w+)') | ForEach-Object { $_.Groups[1].Value })
-$rsText = [IO.File]::ReadAllText((Join-Path $repo 'scripts\release\RecordShape.ps1'))
-$missing = @($members | Where-Object { -not $rsText.Contains("'" + $_ + "'") })
-Yes ('every VersionDoc member ({0}) is held by the feed-version contract' -f $members.Count) ($members.Count -ge 20 -and $missing.Count -eq 0)
-foreach ($x in $missing) { Write-Host "        not held: $x" }
+# The contract was held to every member of the launcher's VersionDoc until
+# #5608, when the launcher stopped reading the feed and VersionDoc went.
 
 Write-Host ''
 Write-Host "$pass passed, $fail failed"

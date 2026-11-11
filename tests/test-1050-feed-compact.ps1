@@ -21,18 +21,10 @@
       indentation, that reads back to the same feed, and keeps a release note
       with a line break, quotes, a backslash and letters outside ASCII
     - the release record New-ReleaseRecord makes carries no uiAssets
-    - the launcher, built from launcher\app\Thornswood.csproj the way the
-      build builds it (tests\Launcher-Csc.ps1, Add-LauncherAssembly) and
-      loaded into this PowerShell, which runs on .NET 10 as the launcher
-      does, reads that file with VersionDoc.Parse: every field it binds, and
-      the record pointer and its note (the news file is the site's: the
-      launcher reads its News from the Releases, #5187)
-
-  It runs on every machine with the .NET 10 SDK (#4823). Until then the
-  launcher half ran under Windows PowerShell 5.1 on the .NET Framework, and
-  took -Src, the sources of an older launcher; those compile only with the
-  .NET Framework compiler, which the launcher no longer builds with. Nothing
-  is sent anywhere; everything it writes is in its own temp folder.
+  The launcher read the file with VersionDoc.Parse until #5608, when it
+  stopped reading the update feed: it updates from GitHub's Releases. The
+  feed itself goes with the site side of #5608 (#5783). Nothing is sent
+  anywhere; everything it writes is in its own temp folder.
 #>
 [CmdletBinding()]
 param()
@@ -61,47 +53,6 @@ function Done {
 $Note = "Keys and deeds that name their house`n- A key looks like a key, ""not a mold"", in C:\Thornswood`n- Caf" + [char]0x00E9 + " owner" + [char]0x2019 + "s sign"
 $NoteSha = ('97b1f3f31cc50e80c735c50ab80f7ac91086cfe4aa10e604d8ee41ed50c83362')
 $NewsSha = ('0326733ddbbd921d59a0506d00cdf313cfb422de3263b9958133a37e09984b63')
-
-# ============================================================================
-# The launcher half: build the launcher and parse the feed.
-# ============================================================================
-function Test-LauncherReads([string]$feedPath) {
-    Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
-    if (-not (Test-Path -LiteralPath $LauncherDotnet)) { return }
-    $asm = $null
-    try { $asm = Add-LauncherAssembly }
-    catch {
-        Yes 'the launcher project builds' $false
-        foreach ($l in @(($_.Exception.Message -split "`r?`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20)) { Write-Host "      $l" }
-        return
-    }
-    Yes 'the launcher project builds' ($null -ne $asm)
-    if ($null -eq $asm) { return }
-    $V = $asm.GetType('Thornswood.VersionDoc')
-    $mParse = $V.GetMethod('Parse', [Reflection.BindingFlags]'Static, Public')
-    $raw = [IO.File]::ReadAllBytes($feedPath)
-    $v = $null
-    try { $v = $mParse.Invoke($null, @(, $raw)) } catch { $e = $_.Exception; while ($e.InnerException) { $e = $e.InnerException }; Write-Host ("      " + $e.Message) }
-    Yes 'VersionDoc.Parse reads the compact feed' ($null -ne $v)
-    if ($null -eq $v) { return }
-    Yes '  launcherVersion, minLauncher, launcherUrl and launcherSha256' (
-        $v.launcherVersion -eq '1.2.4' -and $v.minLauncher -eq '1.2.4' -and
-        $v.launcherUrl -eq ('https://thornswood.net/feed/assets/' + ('e' * 64)) -and $v.launcherSha256 -eq ('e' * 64))
-    Yes '  serverAddress, serverPort, voicePort, voiceUrl, updateFeedUrl, siteUrl' (
-        $v.serverAddress -eq '203.0.113.7' -and $v.serverPort -eq '7777' -and $v.voicePort -eq '7778' -and
-        $v.voiceUrl -eq 'https://thornswood.net/voice' -and $v.updateFeedUrl -eq 'https://thornswood.net/feed/version.json' -and
-        $v.siteUrl -eq 'https://thornswood.net')
-    Yes '  maxOnline and collectionRevision as numbers, the exe sizes as the feed writes them' (
-        $v.maxOnline -eq 25 -and $v.collectionRevision -eq 2 -and $v.expectedExeBytes -eq '37157144' -and $v.newerExeBytes -eq '37910440')
-    Yes '  clientRuntime, with its sha256 and size' (
-        $null -ne $v.clientRuntime -and $v.clientRuntime.sha256 -eq ('a' * 64) -and $v.clientRuntime.bytes -eq 6598716 -and $v.clientRuntime.forkCommit -eq 'cdd84651')
-    Yes '  the three depots of the Skyrim pin' (@($v.depots).Count -eq 3 -and $v.depots[0].id -eq '489831' -and $v.depots[2].manifest -eq '1914580699073641964')
-    Yes '  no packs and no news in the feed itself' (@($v.packs).Count -eq 0 -and @($v.news).Count -eq 0)
-    Yes '  the record pointer, read apart (RecordRef.FromFeed)' (
-        $null -ne $v.record -and $v.record.id -eq '20261012-115531' -and $v.record.sha256 -eq $NoteSha -and
-        $v.record.url -eq ('https://thornswood.net/feed/assets/' + $NoteSha))
-    Yes '  and its note, line break, quotes, backslash and accents as written' ($null -ne $v.record -and $v.record.notes -ceq $Note)
-}
 
 # ============================================================================
 # The PowerShell 7 half: every writer, the file it writes, the release record.
@@ -233,9 +184,6 @@ try {
     try { Write-FeedVersionFile (Join-Path $T 'none.json') $null } catch { $threw = $_.Exception.Message }
     Yes 'no feed is refused, with nothing written' ($threw -match 'no feed' -and -not (Test-Path -LiteralPath (Join-Path $T 'none.json')))
 
-    Write-Host ''
-    Write-Host 'the launcher reads it'
-    Test-LauncherReads $vf
 } finally {
     Remove-Item -LiteralPath $T -Recurse -Force -ErrorAction SilentlyContinue
 }

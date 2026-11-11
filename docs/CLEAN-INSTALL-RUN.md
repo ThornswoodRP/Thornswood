@@ -426,8 +426,6 @@ tester confused by a list that no longer matches.
 | 42 | `The client runtime is back to the recorded build.` | `launcher\app\ClientRuntime.cs` |
 | 43 | `UPDATE FIRST` | `launcher\app\Shell.cs` |
 | 44 | `Give your character a name that belongs in Skyrim` | `launcher\app\MainWindow.axaml` |
-| 44 | `Closed for maintenance` | `launcher\app\FeedNotice.cs` |
-| 44 | `This launcher is too old to play` | `launcher\app\FeedNotice.cs` |
 | 45 | `PLAY` | `launcher\app\Shell.cs` |
 | 48 | `This build is byte for byte what the server expects.` | `scripts\release\Check-Build.ps1` |
 | 49 | `you have every plugin the server wants` | `scripts\mods\Check-Manifest.ps1` |
@@ -497,10 +495,12 @@ right or wrong. To Do entries are named by title, because their numbers move.
   stranger cannot download from. Owned by "The installer is a snapshot of your
   game folder with your home folder path baked into the script, and it is
   stale by design".
-- **Play held by the feed (rows 44 and 45).** The update feed can now put a
-  bar above Play and hold Play for maintenance or for a launcher too old to
-  play. If row 45 never reaches PLAY because of it, copy the bar word for word
-  and stop there.
+- **Play held for an update (rows 43 to 45).** The launcher asks GitHub for
+  its channel's release and holds Play only while that answer is not in or
+  an update it found is waiting (CHECKING..., UPDATE FIRST); GitHub not
+  answering leaves Play open, and the site's join pass turns away a launcher
+  its channel is not on (#5608). If row 45 never reaches PLAY, copy the
+  button and the bar above it word for word and stop there.
 - **The client runtime is left out of the own folder on purpose (row 42).** The
   own folder never takes the six client files from the Steam copy (`Skip` in
   `launcher\app\OwnGame.cs`), so right after the restart the Client row should read

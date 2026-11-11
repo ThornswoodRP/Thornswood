@@ -722,6 +722,18 @@ issue where the card did.
 - **Which release a channel gets comes from its Dev or Main Deployment**
   (q-p13-channel-from-deployment). 31 Oct 2026,
   [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **Updates are held on GitHub, not on the site or the VPS.** The launcher
+  asks GitHub's API itself for the Release list, the signed release record
+  and the packages; the site or the VPS being down may stop Play but never
+  an update. The old update feed is taken out of the launcher, with nothing
+  kept for launchers that missed the change: they reinstall. This replaces
+  the choice of 9 Nov that sent every file through the site. 11 Nov 2026,
+  [#5608](https://github.com/ThornswoodRP/Thornswood/issues/5608).
+- **The dev build is a channel of the one install:** the Server card's
+  Main/Dev switch sets the channel, and the launcher takes that channel's
+  package from GitHub through Velopack, game files included; no second copy
+  of the launcher is made for dev (q-dev-build-no-feed, answer B). 11 Nov
+  2026, [#5608](https://github.com/ThornswoodRP/Thornswood/issues/5608).
 
 ### The site, the bot and voice
 

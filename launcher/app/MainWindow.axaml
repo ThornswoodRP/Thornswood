@@ -829,21 +829,6 @@
               </Grid>
             </Border>
 
-            <!-- What the update feed says to everybody (To Do List entry 262): its
-                 message, and the reason when it holds Play for maintenance or for
-                 a launcher too old to play. A row of its own, so it can stand
-                 under an update card without covering it; UpdateBar and
-                 DowngradeBar share row 2 because DrawStatus keeps the downgrade
-                 card down while an update card is up.
-                 Filled in by ShowNotice in Shell.cs. -->
-            <Border x:Name="NoticeBar" Grid.Row="3" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Accent}"
-                    BorderThickness="1" CornerRadius="2" Padding="20,16" Margin="36,0,36,16" IsVisible="False">
-              <StackPanel>
-                <TextBlock x:Name="TxtNoticeTitle" Theme="{StaticResource H2}"/>
-                <TextBlock x:Name="TxtNoticeNote" Theme="{StaticResource Small}" Margin="0,2,0,0" TextWrapping="Wrap"/>
-              </StackPanel>
-            </Border>
-
             <!-- Same columns as the Gallery | gap | Ready row above: PLAY under Gallery,
                  server chip under the Ready column. Recheck is gone; Diagnostics owns that path. -->
             <Grid Grid.Row="4" Margin="36,4,36,28">
@@ -964,12 +949,6 @@
                      before Bring it up to date from Vortex. Built in C# so a
                      missing named control cannot take the page with it. -->
                 <StackPanel x:Name="DiagCollection" Margin="0,8,0,0"/>
-
-                <!-- The optional packs (#1170), under the collection line. Their
-                     Add-ons tab is on the Mods page, which #599 took off the
-                     rail. Built in C# like the collection line, and empty until
-                     the update feed lists a pack. -->
-                <StackPanel x:Name="DiagAddons"/>
 
                 <!-- Bring it up to date from Vortex, Repair and Restore Windows
                      folders were buttons here until 17 Oct (#2627): Scan finds

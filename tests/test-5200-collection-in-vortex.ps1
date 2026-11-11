@@ -27,8 +27,8 @@
       Vortex itself (Checks.VortexExe) and says to press Update there, the
       button says Update in Vortex, and the cards say the same;
     - when the card comes down because Vortex finished, VortexChanged asks
-      for Scan and Fix after the feed's answer, and the answer runs them
-      after OnVersionDoc and UpdateBySelf, once, and not beside an update
+      for Scan and Fix after the update check's answer, which runs them
+      after LauncherAnswer and UpdateBySelf, once, and not beside an update
       UpdateBySelf started (whose own end runs Fix);
     - that Fix leaves a waiting update on the card, where UpdateBySelf left
       it, unmarked as tried, and waits for a folder being prepared the way
@@ -65,7 +65,7 @@ function Method([string]$text, [string]$signature) {
 
 $checks = Src 'Checks.cs'
 $shell = Src 'Shell.cs'
-$packs = Src 'ShellPacks.cs'
+$packs = Src 'ShellCollection.cs'
 $play = Src 'ShellPlay.cs'
 $update = Src 'ShellUpdate.cs'
 $watch = Src 'ShellVortexWatch.cs'
@@ -124,7 +124,7 @@ $asks = $changed.IndexOf('fixAfterVortex = true;')
 $feed = $changed.IndexOf('CheckUpdatesBackground(false)')
 Yes 'when the card came down, VortexChanged asks for Scan and Fix before it asks the feed' ($down -ge 0 -and $asks -gt $down -and $feed -gt $asks)
 $bg = Code (Method $update 'static void CheckUpdatesBackground(bool loud)')
-Yes 'the feed''s answer runs them after OnVersionDoc and UpdateBySelf' ($bg.Contains('OnVersionDoc(v, loud); UpdateBySelf(); FixAfterVortex();'))
+Yes 'the update check''s answer runs them after LauncherAnswer and UpdateBySelf' ($bg -match '(?s)LauncherAnswer\(asked, launcher, launcherNote, launcherWhy, loud\);\s*UpdateBySelf\(\);\s*FixAfterVortex\(\);')
 $after = Code (Method $watch 'static void FixAfterVortex()')
 Yes 'once, and only when asked' ($after -match '(?s)if \(!fixAfterVortex\) return;\s*fixAfterVortex = false;')
 Yes 'not beside an update UpdateBySelf started, whose end runs Fix (FixAfterUpdate)' ($after.IndexOf('if (updating) return;') -gt $after.IndexOf('fixAfterVortex = false;') -and
@@ -135,7 +135,7 @@ Yes 'that Fix waits for a folder being prepared, as Fix after an update does' ($
     $runFix.IndexOf('if (ownGameBusy && afterVortex)') -lt $runFix.IndexOf('if (ownGameBusy) {') -and
     $own.Contains('if (fixWhenFolderReadyAfterVortex) { fixWhenFolderReadyAfterVortex = false; RunFix(false, true); }'))
 Yes 'and its log says it is the scan after Vortex' ($runFix.Contains('"Vortex is done. Scanning everything, and putting right what the scan finds."') -and $runFix.Contains('"The scan after Vortex found nothing wrong."'))
-$rest = Code (Method $sf 'static void FixRest(VersionDoc feed, bool afterUpdate, bool afterVortex)')
+$rest = Code (Method $sf 'static void FixRest(bool afterUpdate, bool afterVortex)')
 $left = $rest.IndexOf('bool leftOnCard = waiting && afterVortex;')
 Yes 'it leaves a waiting update on the card, where UpdateBySelf left it, before Fix would take one' ($left -gt 0 -and $left -lt $rest.IndexOf('RunUpdate(delegate') -and
     $rest -match '(?s)if \(leftOnCard\)\s*\{\s*Log\("The update is on the card above Play\. Install now takes it\."\);\s*\}\s*else if \(waiting && afterUpdate')

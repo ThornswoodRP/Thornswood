@@ -51,9 +51,9 @@ $ErrorActionPreference = 'Stop'
 
 # ---- the settings, read from this repository ---------------------------------
 $S = Read-Settings $Root ''
-Yes 'the live feed is Updater.cs''s MainFeed' ((@($S.Feeds | Where-Object { $_.Name -eq 'feed' })[0].Url) -eq 'https://thornswood.net/feed/version.json')
-Yes 'the dev feed is Updater.cs''s DevFeed' ((@($S.Feeds | Where-Object { $_.Name -eq 'feed-dev' })[0].Url) -eq 'https://thornswood.net/feed-dev/version.json')
-Yes 'the site is the feed''s host' ($S.Site -eq 'https://thornswood.net/' -and $S.SiteHost -eq 'thornswood.net')
+Yes 'the live feed is /feed/version.json on the site Config.cs names' ((@($S.Feeds | Where-Object { $_.Name -eq 'feed' })[0].Url) -eq 'https://thornswood.net/feed/version.json')
+Yes 'the dev feed is /feed-dev/version.json on it' ((@($S.Feeds | Where-Object { $_.Name -eq 'feed-dev' })[0].Url) -eq 'https://thornswood.net/feed-dev/version.json')
+Yes 'the site is Config.cs''s SiteUrl' ($S.Site -eq 'https://thornswood.net/' -and $S.SiteHost -eq 'thornswood.net')
 Yes 'the collection comes from Config.cs' ($S.NexusSlug -and $S.NexusGame)
 $ipLike = $null
 Yes 'the game''s name comes from scripts\vps\vps.json, a name and not the box''s address (#3690)' ($S.GameHost -and -not [Net.IPAddress]::TryParse($S.GameHost, [ref]$ipLike))

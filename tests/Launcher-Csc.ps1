@@ -51,7 +51,7 @@
   Add-LauncherAssembly: the launcher itself, built from
   launcher\app\Thornswood.csproj as it is (dotnet build -c Release), loaded
   into this PowerShell and returned, for a harness that calls Updater, Paths
-  or VersionDoc by reflection. The build is named by a hash of every file
+  or PathFence by reflection. The build is named by a hash of every file
   under launcher\app and every resource the project embeds, so it is made
   once for each state of the launcher. Build-LauncherProject is the same
   build without the load, and returns the path of Thornswood.dll.
@@ -70,8 +70,8 @@
   assembly. The packages built beside it load from its folder when its code
   first asks for them.
 
-      $asm = Add-LauncherType -File (Join-Path $App 'FeedNotice.cs') -Source $standIn
-      $T = $asm.GetType('Thornswood.FeedNotice')
+      $asm = Add-LauncherType -File (Join-Path $App 'Signature.cs') -Source $standIn
+      $T = $asm.GetType('Thornswood.Signature')
 
   WHERE THE BUILDS GO. Under out\harness\ in the repository, which git
   ignores, in a folder named by a hash of the project and every source, so

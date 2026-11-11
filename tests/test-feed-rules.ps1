@@ -176,7 +176,7 @@ function Run-Append($doc, $chunks, [bool]$Dev, [bool]$Gone = $false) {
     function Say($m, $c = 'Gray') { $script:said += [string]$m }
     function Die($m) { throw ('DIE ' + $m) }
     $Notes = 'test notes'
-    # What the packs gone block decided (#1050); tests\test-record-sync.ps1 drives that block.
+    # What the packs gone block decided (#1050).
     $packsGone = $Gone
     if (-not $block) { return 'no block' }
     try { Invoke-Expression $block; return 'ok' }

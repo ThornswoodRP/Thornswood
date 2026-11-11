@@ -8,8 +8,8 @@ namespace Thornswood
     /// <summary>
     /// Everything Scan finds wrong with this install that is not the plugin
     /// list, and what Fix does about each (#2627). Verify holds the plugin
-    /// list against the server; this holds the rest: an update waiting on the
-    /// feed, Thornswood's own folder behind Vortex or missing files, this
+    /// list against the server; this holds the rest: a launcher update waiting
+    /// on GitHub, Thornswood's own folder behind Vortex or missing files, this
     /// build's own files changed, Windows' Skyrim folders left pointed at
     /// Thornswood, the shortcut icon, the client runtime, Steam, and the
     /// Skyrim build.
@@ -21,8 +21,8 @@ namespace Thornswood
     /// predicate". Until then each of these had a button of its own on
     /// Diagnostics, or none, and Scan looked at none of them.
     ///
-    /// Look reads and writes nothing in the game folder (the update check
-    /// keeps its own cache of the feed, as every update check does). Fix's
+    /// Look reads and writes nothing in the game folder, and asks nothing of
+    /// GitHub: the update check's own answer is what it goes by. Fix's
     /// steps are FixOnDisk here, for everything that writes files, and the
     /// rest, which asks something or restarts the launcher, is the shell's
     /// (ShellScanFix.cs). Nothing here is a retry or a wait: each step runs
@@ -39,12 +39,16 @@ namespace Thornswood
         /// The launcher waiting on this install's Velopack channel, by its
         /// number, or null when there is none (#4825). Set by the shell from
         /// the launcher check's own answer (LauncherAnswer in ShellUpdate.cs),
-        /// which lands before the feed's answer that FeedSays is given, so the
-        /// card and the update card above Play go by the same launcher check.
-        /// The feed's launcherVersion and launcherUrl are not read for this:
-        /// they named the launcher's own self update, which Velopack replaced.
+        /// so the card and the update card above Play go by the same check.
         /// </summary>
         public static volatile string LauncherWaiting;
+
+        /// <summary>
+        /// Why the last launcher check could not be made (GitHub did not
+        /// answer, or this address had spent its hour's requests), or null
+        /// when it answered (#5608). Set by the shell with LauncherWaiting.
+        /// </summary>
+        public static volatile string LauncherUnknown;
 
         /// <summary>
         /// Takes one kind off LastIssues once the shell has put it right some
@@ -62,25 +66,21 @@ namespace Thornswood
 
         /// <summary>
         /// Everything this class can find. <paramref name="pressed"/> is true
-        /// when somebody pressed Scan or Fix: the update feed is asked, the
-        /// game folder's record is walked for lost files, and the shortcuts
-        /// are read. At startup and before Play the quick checks run alone,
-        /// because the update check, the icon pass and the folder's own
-        /// refresh run then anyway. <paramref name="known"/> is a feed already
-        /// read, which is used instead of asking again (Fix's scan after its
-        /// work); <paramref name="feed"/> is the feed this look went by, or
-        /// null. Runs on a pool thread; never throws.
+        /// when somebody pressed Scan or Fix: the game folder's record is
+        /// walked for lost files, and the shortcuts are read. At startup and
+        /// before Play the quick checks run alone, because the icon pass and
+        /// the folder's own refresh run then anyway. Runs on a pool thread;
+        /// never throws.
         /// </summary>
-        public static List<Issue> Look(Config cfg, bool pressed, VersionDoc known, out VersionDoc feed)
+        public static List<Issue> Look(Config cfg, bool pressed)
         {
             var l = new List<Issue>();
-            VersionDoc v = known;
-            try { Feed(cfg, pressed, ref v, l); } catch (Exception ex) { Swallow.Note("Upkeep.Look, the update feed", ex); }
+            try { Update(l); } catch (Exception ex) { Swallow.Note("Upkeep.Look, the launcher update", ex); }
             bool behind = false;
             if (OwnGame.Active)
             {
                 try { behind = Folder(cfg, l); } catch (Exception ex) { Swallow.Note("Upkeep.Look, the own folder", ex); }
-                try { LostFiles(cfg, pressed, behind, v, l); } catch (Exception ex) { Swallow.Note("Upkeep.Look, lost files", ex); }
+                try { LostFiles(cfg, pressed, behind, l); } catch (Exception ex) { Swallow.Note("Upkeep.Look, lost files", ex); }
             }
             if (!Paths.Collection)
             {
@@ -103,64 +103,43 @@ namespace Thornswood
             try { SteamUp(l); } catch (Exception ex) { Swallow.Note("Upkeep.Look, Steam", ex); }
             try { GameBuild(cfg, l); } catch (Exception ex) { Swallow.Note("Upkeep.Look, the Skyrim build", ex); }
             LastIssues = l;
-            feed = v;
             return l;
         }
 
         /// <summary>
-        /// The update check's own answer, into what the card shows, so the
-        /// Fix button knows about an update waiting without Scan being pressed:
-        /// the start, the feed watch and Check now all land here through
-        /// Shell.OnVersionDoc. Replaces the update and feed lines of the last
-        /// look and keeps the rest.
+        /// The launcher check's own answer, into what the card shows, so the
+        /// Fix button knows about an update waiting without Scan being
+        /// pressed: the start, the half hourly check and Check now all land
+        /// here through Shell.LauncherAnswer. Replaces the update lines of the
+        /// last look and keeps the rest.
         /// </summary>
-        public static void FeedSays(VersionDoc v)
+        public static void UpdateSays()
         {
-            if (v == null) return;
             var l = new List<Issue>();
-            VersionDoc known = v;
-            try { Feed(null, false, ref known, l); } catch (Exception ex) { Swallow.Note("Upkeep.FeedSays", ex); return; }
+            try { Update(l); } catch (Exception ex) { Swallow.Note("Upkeep.UpdateSays", ex); return; }
             List<Issue> was = LastIssues;
             if (was != null)
-                foreach (Issue i in was) if (i.Kind != IssueKind.Update && i.Kind != IssueKind.Feed) l.Add(i);
+                foreach (Issue i in was) if (i.Kind != IssueKind.Update && i.Kind != IssueKind.UpdateCheck) l.Add(i);
             LastIssues = l;
         }
 
         // ------------------------------------------------------------ checks
 
-        /// <summary>A newer launcher or release on the feed, or a feed that holds Play or did not answer.</summary>
-        static void Feed(Config cfg, bool pressed, ref VersionDoc v, List<Issue> l)
+        /// <summary>A newer launcher on this install's channel, or a launcher check that could not be made.</summary>
+        static void Update(List<Issue> l)
         {
-            if (v == null && pressed)
-            {
-                string why = null;
-                try
-                {
-                    v = Updater.Check(cfg);
-                    if (v == null) why = "it had nothing to say";
-                }
-                catch (Exception ex) { why = ex.Message.TrimEnd('.'); }
-                if (why != null)
-                {
-                    l.Add(Issue.Of(IssueKind.Feed, "The update feed did not answer (" + why + "), so it is not known whether this build is current.", null,
-                        "Fix cannot take an update it cannot see. See whether thornswood.net opens in your browser: if it does not, the site is down and it is not your end; if it does, send the launcher log to the Discord.", true));
-                    return;
-                }
-            }
-            if (v == null) return;
             string launcher = LauncherWaiting;
-            bool newLauncher = !string.IsNullOrEmpty(launcher);
-            List<Pack> packs = Updater.Pending(cfg, v);
-            var parts = new List<string>();
-            if (newLauncher) parts.Add("launcher " + launcher + ", and this one is " + Updater.Version);
-            if (packs.Count > 0) parts.Add(packs.Count + (packs.Count == 1 ? " mod update" : " mod updates"));
-            if (parts.Count > 0)
-                l.Add(Issue.Of(IssueKind.Update, "An update is waiting on the update feed: " + string.Join("; ", parts.ToArray()) + ".",
-                    "Fix takes it last, after everything else" + (newLauncher ? ", and the launcher restarts into the new one." : "."),
-                    "Install now, on the card above Play, takes it too. Mod updates wait until the Thornswood collection is installed in Vortex, and when the update itself failed, its line in the log says why.", true));
-            FeedNotice notice = FeedNotice.From(v, Updater.Version, Velo.Installed);
-            if (notice.Hold != null && !newLauncher)
-                l.Add(Issue.Of(IssueKind.Feed, notice.Hold, null, "Nothing on this machine changes that: the update feed holds Play for everybody until staff lift it.", true));
+            if (!string.IsNullOrEmpty(launcher))
+            {
+                l.Add(Issue.Of(IssueKind.Update, "An update is waiting: launcher " + launcher + ", and this one is " + Updater.Version + ".",
+                    "Fix takes it last, after everything else, and the launcher restarts into the new one.",
+                    "Install now, on the card above Play, takes it too. When the update itself failed, its line in the log says why.", true));
+                return;
+            }
+            string why = LauncherUnknown;
+            if (!string.IsNullOrEmpty(why))
+                l.Add(Issue.Of(IssueKind.UpdateCheck, "GitHub did not answer the update check (" + why.TrimEnd('.') + "), so it is not known whether this launcher is current.", null,
+                    "Updates come from GitHub, and the launcher asks again by itself. Play is not held for it.", false));
         }
 
         /// <summary>
@@ -202,7 +181,7 @@ namespace Thornswood
         /// of those two files is missing; otherwise it is three megabytes read
         /// for nothing at every start.
         /// </summary>
-        static void LostFiles(Config cfg, bool pressed, bool behind, VersionDoc v, List<Issue> l)
+        static void LostFiles(Config cfg, bool pressed, bool behind, List<Issue> l)
         {
             string loader = Paths.Loader;
             string skse = Path.Combine(Paths.Game, "skse64_1_6_1170.dll");
@@ -228,11 +207,11 @@ namespace Thornswood
                 foreach (Issue i in l) if (i.Kind == IssueKind.Update) waiting = true;
                 if (waiting)
                     l.Add(Issue.Of(IssueKind.OursLost, what, "The update Fix takes puts them back.", "Install now, on the card above Play, puts them back.", true));
-                else if (Updater.CanResync(cfg, v))
-                    l.Add(Issue.Of(IssueKind.OursLost, what, "Fix checks every file of this release and fetches the ones that are missing or changed.",
-                        "The release's files could not be fetched; its line in the log says why. Press Fix again when thornswood.net answers.", true));
+                else if (Updater.CanResync(cfg))
+                    l.Add(Issue.Of(IssueKind.OursLost, what, "Fix checks every file of this release against the installed launcher's package and puts back the ones that are missing or changed.",
+                        "The package's files could not be read; its line in the log says why.", true));
                 else
-                    l.Add(Issue.Of(IssueKind.OursLost, what, null, "The update feed names no release to fetch them from, so the next update puts them back.", true));
+                    l.Add(Issue.Of(IssueKind.OursLost, what, null, "This launcher was not installed by Thornswood's setup, so it has no package to put them back from. Reinstall it from thornswood.net.", true));
             }
             if (skseGone && !Has(lost.Vortex, "skse64_loader.exe") && !Has(lost.Vortex, "skse64_1_6_1170.dll"))
                 l.Add(Issue.Of(IssueKind.ScriptExtender, "The script extender is not in Thornswood's own folder (" + (!File.Exists(loader) ? "skse64_loader.exe" : "skse64_1_6_1170.dll") +
@@ -329,8 +308,8 @@ namespace Thornswood
         {
             if (ClientRuntime.Recorded().Count == 0 || ClientRuntime.Good()) return;
             l.Add(Issue.Of(IssueKind.Client, "The multiplayer client is not this build's: " + Checks.ClientDetail() + ".",
-                "Fix puts the recorded files back, from the kept copies or the update feed.",
-                "The update feed had no copy to give: press Scan when thornswood.net opens, and send the launcher log to the Discord if it says this again.", true));
+                "Fix puts the recorded files back, from the kept copies or the installed launcher's package.",
+                "Neither had the recorded build: reinstall the launcher from thornswood.net, and send the launcher log to the Discord if it says this again.", true));
         }
 
         /// <summary>Steam, which the game checks ownership through.</summary>
@@ -365,7 +344,7 @@ namespace Thornswood
         /// bring-up-to-date and the update are the shell's, because they ask
         /// something or restart the launcher.
         /// </summary>
-        public static void FixOnDisk(Config cfg, List<Issue> found, VersionDoc v, Action<string> say)
+        public static void FixOnDisk(Config cfg, List<Issue> found, Action<string> say)
         {
             if (say == null) say = delegate(string m) { };
             var kinds = new HashSet<string>(StringComparer.Ordinal);
@@ -405,18 +384,18 @@ namespace Thornswood
                 }
                 if (kinds.Contains(IssueKind.Plugins) || kinds.Contains(IssueKind.Personal) || kinds.Contains(IssueKind.OwnFolder))
                 {
-                    try { Verify.Fix(cfg, say, Updater.ReleaseCopy(cfg, v)); }
+                    try { Verify.Fix(cfg, say, Updater.ReleaseCopy(cfg)); }
                     catch (Exception ex) { Swallow.Note("Upkeep.FixOnDisk, the plugin list", ex); say("The plugin list could not be put right (" + ex.Message.TrimEnd('.') + ")."); }
                 }
                 // Thornswood's own files, from the release this install is
                 // on, when no update is waiting to bring them anyway.
-                if (kinds.Contains(IssueKind.OursLost) && !kinds.Contains(IssueKind.Update) && Updater.CanResync(cfg, v))
+                if (kinds.Contains(IssueKind.OursLost) && !kinds.Contains(IssueKind.Update) && Updater.CanResync(cfg))
                 {
                     try
                     {
-                        if (!Updater.Resync(cfg, v, say)) say("The update feed's release does not have its files on the site one by one, so the missing files come with the next update.");
+                        if (!Updater.Resync(cfg, say)) say("This launcher has no installed package to put Thornswood's own files back from.");
                     }
-                    catch (Exception ex) { Swallow.Note("Upkeep.FixOnDisk, the release's files", ex); say("Thornswood's own files could not be fetched (" + ex.Message.TrimEnd('.') + ")."); }
+                    catch (Exception ex) { Swallow.Note("Upkeep.FixOnDisk, the release's files", ex); say("Thornswood's own files could not be put back (" + ex.Message.TrimEnd('.') + ")."); }
                 }
             }, delegate { say("An update or a bring-up-to-date is writing into the game folder. Fix goes on as soon as that is done."); });
 

@@ -170,13 +170,10 @@ async function main() {
   const dv = await ask('GET', '/feed-dev/watch');
   yes('GET /feed-dev/watch with no tag is 200', dv.code === 200);
 
-  // Launcher side must exist and name the tip.
-  const updater = fs.readFileSync(path.join(__dirname, '..', '..', 'launcher', 'app', 'Updater.cs'), 'utf8');
-  yes('Updater has WatchUrl', /WatchUrl\(Config/.test(updater));
-  yes('Updater has WaitForFeedChange', /WaitForFeedChange\(Config/.test(updater));
+  // The launcher no longer keeps the tip open: it reads its updates from
+  // GitHub (#5608), and the site's tip goes with the feed (#5783).
   const shellUp = fs.readFileSync(path.join(__dirname, '..', '..', 'launcher', 'app', 'ShellUpdate.cs'), 'utf8');
-  yes('ShellUpdate starts the tip', /StartFeedWatch\(/.test(shellUp));
-  yes('ShellUpdate stops the tip', /StopFeedWatch\(/.test(shellUp));
+  yes('the launcher keeps no tip open (#5608)', !/StartFeedWatch\(|WaitForFeedChange/.test(shellUp));
 
   server.close();
   try { fs.rmSync(ROOT, { recursive: true, force: true }); } catch (e) { }

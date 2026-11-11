@@ -6,25 +6,27 @@ using System.Text;
 namespace Thornswood
 {
     /// <summary>
-    /// The dev build: a second copy of the launcher in its own folder beside
-    /// this one, following the dev branch of the releases repo and joining
-    /// the dev server. New work lands there first and gets broken there, so
-    /// the build everybody plays on stays playable while it is being tested.
+    /// THE DEV BUILD IS A CHANNEL OF THE ONE INSTALL (#5608, Patrick's
+    /// answer B on 11 Nov 2026). The Server card's Main and Dev switch sets
+    /// which Velopack channel this install reads (Velo.ChannelFor) and the
+    /// ports that go with it, and the update check takes that channel's
+    /// package from GitHub, the launcher and the game files it carries, and
+    /// restarts into it. Characters are the server's, so nothing is copied:
+    /// the dev server is its own world.
     ///
-    /// Made from the Server card on the Play page of the main build, out of the
-    /// main build's own files: the launcher's program is copied, the config is copied with the
-    /// channel, branch and ports changed, and the profile records that say
-    /// which packs are already applied are copied so the
-    /// dev launcher does not try to re-apply a year of updates on its first
-    /// start. Characters are not copied: the dev server is its own world.
-    ///
-    /// Each build makes its own Game folder (OwnGame). The Game folder is not
-    /// copied here; the new build offers to make one at first start.
+    /// Until #5608 the dev build was a second copy of the launcher in a folder
+    /// of its own beside Root (Root-DevBuild), made from the Server card, that
+    /// read the dev update feed. A copy Velopack did not install has no
+    /// update source once the feed is gone, so the copy is no longer made. One
+    /// made before can still remove itself from its own Settings (RemoveSelf),
+    /// and the main launcher's uninstall names its folder (Root).
     /// </summary>
     static class DevBuild
     {
         public const string DevPort = "7787";
         public const string DevVoicePort = "7789";
+        public const string MainPort = "7777";
+        public const string MainVoicePort = "7778";
 
         /// <summary>
         /// The dev voice service's address behind Caddy, from the main one.
@@ -45,7 +47,53 @@ namespace Thornswood
             return u + "-dev";
         }
 
-        /// <summary>Beside the main install: C:\Thornswood becomes C:\Thornswood-DevBuild.</summary>
+        /// <summary>
+        /// The main voice address from a dev one: the reverse of DevVoiceUrl.
+        /// Empty stays empty, and Config.VoiceBase gives the right one.
+        /// </summary>
+        public static string MainVoiceUrl(string devUrl)
+        {
+            string u = devUrl == null ? "" : devUrl.Trim();
+            while (u.EndsWith("/")) { u = u.Substring(0, u.Length - 1); }
+            if (u.EndsWith("-dev", StringComparison.OrdinalIgnoreCase)) u = u.Substring(0, u.Length - 4);
+            return u;
+        }
+
+        /// <summary>
+        /// Puts this install on <paramref name="channel"/> ("dev" or "main"):
+        /// the channel the update check reads, and the game and voice ports
+        /// of that channel's server, saved to config.json. The caller asks the
+        /// channel for its package afterwards. Returns the log line.
+        /// </summary>
+        public static string Switch(Config cfg, string channel)
+        {
+            bool dev = Set(cfg, channel);
+            cfg.Save(Paths.CfgFile);
+            return dev
+                ? "This install is on the dev channel now and joins the dev server. Asking GitHub for the dev launcher; it goes in and the launcher restarts into it."
+                : "This install is on the main channel now and joins the live server. Asking GitHub for the main launcher; it goes in and the launcher restarts into it.";
+        }
+
+        /// <summary>
+        /// The channel and its server's ports in <paramref name="cfg"/>,
+        /// unsaved: what Switch saves, and what a new dev ship root's
+        /// config.json is written with (scripts\release\ShipRoot). True for dev.
+        /// </summary>
+        public static bool Set(Config cfg, string channel)
+        {
+            bool dev = string.Equals(channel, "dev", StringComparison.OrdinalIgnoreCase);
+            cfg.Channel = dev ? "dev" : "";
+            cfg.UpdateBranch = dev ? "dev" : "main";
+            cfg.ServerPort = dev ? DevPort : MainPort;
+            cfg.VoicePort = dev ? DevVoicePort : MainVoicePort;
+            cfg.VoiceUrl = dev ? DevVoiceUrl(cfg.VoiceUrl) : MainVoiceUrl(cfg.VoiceUrl);
+            return dev;
+        }
+
+        /// <summary>
+        /// A dev build copied beside Root before #5608: Root-DevBuild. It
+        /// reads no update source now, and is only named or removed.
+        /// </summary>
         public static string Root
         {
             get { return Paths.Root.TrimEnd('\\') + "-DevBuild"; }
@@ -56,103 +104,10 @@ namespace Thornswood
             get { return Path.Combine(Root, "Launcher\\Thornswood.exe"); }
         }
 
-        public static bool Installed
+        /// <summary>True when this launcher is such a copy: on the dev channel and not installed by Velopack.</summary>
+        public static bool IsOldCopy(Config cfg)
         {
-            get { try { return File.Exists(Exe); } catch { return false; } }
-        }
-
-        /// <summary>
-        /// The main build beside a dev build: C:\Thornswood-DevBuild becomes
-        /// C:\Thornswood. Used by the server selector on the dev build to hand
-        /// the person back to the main server. On the main build this is Root.
-        /// </summary>
-        public static string MainRoot
-        {
-            get
-            {
-                string r = Paths.Root.TrimEnd('\\');
-                if (r.EndsWith("-DevBuild", StringComparison.OrdinalIgnoreCase))
-                    return r.Substring(0, r.Length - "-DevBuild".Length);
-                return r;
-            }
-        }
-
-        public static string MainExe
-        {
-            get { return Path.Combine(MainRoot, "Launcher\\Thornswood.exe"); }
-        }
-
-        public static bool MainInstalled
-        {
-            get { try { return File.Exists(MainExe); } catch { return false; } }
-        }
-
-        /// <summary>Copies this install into the dev folder and opens it. Returns the log line.</summary>
-        public static string Install(Config main)
-        {
-            if (main.IsDev) return "This is the dev build already.";
-            string root = Root;
-            Directory.CreateDirectory(Path.Combine(root, "Launcher"));
-            Directory.CreateDirectory(Path.Combine(root, "Profile"));
-
-            // The program: the running exe and the native libraries beside it,
-            // from the folder this exe runs in. Under Velopack that is its
-            // current folder in %LocalAppData%\Thornswood, not Root\Launcher,
-            // which a Velopack install does not have. That folder also holds
-            // what the package carries for the install (config.json, SOURCE
-            // CODE.txt, the licence texts, Game), so only the .exe and .dll
-            // files are copied, the program as Build-Launcher.ps1 counts it.
-            string exeDir = Path.GetDirectoryName(Environment.ProcessPath);
-            int copied = 0;
-            foreach (string f in Directory.GetFiles(exeDir))
-            {
-                string ext = Path.GetExtension(f);
-                if (!ext.Equals(".exe", StringComparison.OrdinalIgnoreCase) && !ext.Equals(".dll", StringComparison.OrdinalIgnoreCase)) continue;
-                File.Copy(f, Path.Combine(root, "Launcher", Path.GetFileName(f)), true);
-                copied++;
-            }
-
-            // Profile facts worth carrying over: the golden plugin list, which
-            // packs are in, what they wrote, and the kept copies of our own
-            // Data\Platform files. Not the log, not the characters, not the
-            // stats. The Game folder is not copied; OwnGame makes one later.
-            CopyDir(Paths.Golden, Path.Combine(root, "Profile\\Default"));
-            CopyDir(Paths.PacksDir, Path.Combine(root, "Profile\\Packs"));
-            CopyDir(Keep.Dir, Path.Combine(root, "Profile\\Keep"));
-            // Not installed-into-game.txt: that is the list the uninstaller
-            // deletes from the game folder, and the dev build's uninstall
-            // removes only itself (RemoveSelf).
-            // developer.flag is not copied: nothing writes it since 25 September
-            // (Publish-Update stopped; Keep still reads one if present).
-            foreach (string n in new[] { "applied.txt", "discord.txt", "discord-name.txt" })
-            {
-                string src = Path.Combine(Paths.ProfileDir, n);
-                if (File.Exists(src)) File.Copy(src, Path.Combine(root, "Profile", n), true);
-            }
-
-            // The config, with the five things that make it the dev build.
-            Config dev = Config.Load(Paths.CfgFile);
-            dev.Channel = "dev";
-            dev.UpdateBranch = "dev";
-            dev.UpdateFeedUrl = "https://thornswood.net/feed-dev/version.json";
-            dev.ServerPort = DevPort;
-            dev.VoicePort = DevVoicePort;
-            dev.VoiceUrl = DevVoiceUrl(dev.VoiceUrl);
-            dev.Save(Path.Combine(root, "config.json"));
-
-            try
-            {
-                var psi = new ProcessStartInfo(Exe);
-                psi.WorkingDirectory = Path.Combine(root, "Launcher");
-                psi.UseShellExecute = true;
-                Process.Start(psi);
-            }
-            catch (Exception ex)
-            {
-                return "The dev build is installed at " + root + " but did not open: " + ex.Message;
-            }
-            return "Installed the dev build at " + root + " (" + copied + " launcher files) and opened it. " +
-                   "It follows the dev branch and joins the dev server from here; it makes its own Start menu entry, Thornswood Dev.";
+            return cfg != null && cfg.IsDev && !Velo.Installed;
         }
 
         /// <summary>Closes a running dev launcher and deletes its folder. Returns the log line.</summary>
@@ -224,20 +179,6 @@ namespace Thornswood
             psi.UseShellExecute = true;
             Process.Start(psi);
             return "Removing the dev build. This launcher closes now and " + root + " goes with it. The main build and the game are not touched.";
-        }
-
-        static void CopyDir(string from, string to)
-        {
-            try
-            {
-                if (!Directory.Exists(from)) return;
-                Directory.CreateDirectory(to);
-                foreach (string f in Directory.GetFiles(from))
-                    File.Copy(f, Path.Combine(to, Path.GetFileName(f)), true);
-                foreach (string d in Directory.GetDirectories(from))
-                    CopyDir(d, Path.Combine(to, Path.GetFileName(d)));
-            }
-            catch (Exception ex) { Swallow.Note("DevBuild.CopyDir", ex); }
         }
     }
 }

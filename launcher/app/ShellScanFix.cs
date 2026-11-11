@@ -18,8 +18,8 @@ namespace Thornswood
     /// was not in the build's list, and logged "Fix put 3 things right" with
     /// the blocker still there. It reported a count of what it did, never
     /// whether the problems were gone, and Scan looked at the plugin list
-    /// alone while the update waiting on the feed, which carried the plugin,
-    /// sat behind a button of its own.
+    /// alone while the update waiting, which carried the plugin, sat behind
+    /// a button of its own.
     ///
     /// The order Fix works in: the folder brought up to date from Vortex
     /// first, because everything after it is judged on that folder; then what
@@ -41,42 +41,37 @@ namespace Thornswood
 
         static string FixKey(Issue i) { return i.Kind + "|" + i.Problem; }
 
-        /// <summary>The quick scan: at startup and when Play is refused. No feed, no record walk, no shortcuts.</summary>
+        /// <summary>The quick scan: at startup and when Play is refused. No record walk, no shortcuts.</summary>
         static void RunScan() { RunScan(false); }
 
         /// <summary>
         /// The Scan button, and Fix's own scans: <paramref name="pressed"/>
-        /// also asks the update feed, walks the game folder's record for lost
-        /// files and reads the shortcuts (Upkeep.Look).
+        /// also walks the game folder's record for lost files and reads the
+        /// shortcuts (Upkeep.Look). The update lines are the update check's
+        /// own answer, the same one the card above Play goes by, so the two
+        /// cannot disagree about whether an update is waiting.
         /// </summary>
         static void RunScan(bool pressed)
         {
             if (fixing) return;
             List<Issue> plugins = null;
-            VersionDoc feed = null;
             Waiting(delegate
             {
                 plugins = Verify.Run(cfg);
-                Upkeep.Look(cfg, pressed, null, out feed);
+                Upkeep.Look(cfg, pressed);
             });
-            if (pressed)
-            {
-                triedByFix.Clear();
-                // The update card above Play goes by the same answer, so the
-                // two cannot disagree about whether an update is waiting.
-                if (feed != null) OnVersionDoc(feed, false);
-            }
+            if (pressed) triedByFix.Clear();
             ShowVerify(plugins, true);
         }
 
         /// <summary>
-        /// An update check's answer onto the card (Upkeep.FeedSays), and the
+        /// An update check's answer onto the card (Upkeep.UpdateSays), and the
         /// card painted again from what it already knows, unless Fix is under
         /// way, whose own scans paint it.
         /// </summary>
-        static void FeedOnCard(VersionDoc v)
+        static void UpdateOnCard()
         {
-            Upkeep.FeedSays(v);
+            Upkeep.UpdateSays();
             if (!fixing && Verify.LastIssues != null && txtVerifyTitle != null) ShowVerify(Verify.LastIssues, false);
         }
 
@@ -325,13 +320,12 @@ namespace Thornswood
                 : afterVortex ? "Vortex is done. Scanning everything, and putting right what the scan finds."
                 : "Fix: scanning everything first.");
             List<Issue> plugins = null, rest = null;
-            VersionDoc feed = null;
             try
             {
                 Waiting(delegate
                 {
                     plugins = Verify.Run(cfg);
-                    rest = Upkeep.Look(cfg, true, null, out feed);
+                    rest = Upkeep.Look(cfg, true);
                 });
             }
             catch (Exception ex)
@@ -354,20 +348,19 @@ namespace Thornswood
             // The folder first: the plugins, the lost files and this build's
             // own files are judged on the folder as Vortex has it now. Fix
             // carries on whether it succeeds or not, and the scan after says.
-            VersionDoc known = feed;
             if (Has(rest, IssueKind.Behind) &&
-                StartOwnGame(false, true, delegate { FixRest(known, afterUpdate, afterVortex); }, delegate { FixRest(known, afterUpdate, afterVortex); }))
+                StartOwnGame(false, true, delegate { FixRest(afterUpdate, afterVortex); }, delegate { FixRest(afterUpdate, afterVortex); }))
                 return;
-            FixRest(known, afterUpdate, afterVortex);
+            FixRest(afterUpdate, afterVortex);
         }
 
         /// <summary>
         /// Fix after the folder: what writes files, a scan, the report, and
-        /// then what asks or restarts. <paramref name="feed"/> is the update
-        /// feed Fix's first scan read, so the update is judged on one answer.
+        /// then what asks or restarts. The update is judged on the update
+        /// check's last answer (pendingLauncher), as the card above Play is.
         /// <paramref name="afterUpdate"/> and <paramref name="afterVortex"/> are RunFix's.
         /// </summary>
-        static void FixRest(VersionDoc feed, bool afterUpdate, bool afterVortex)
+        static void FixRest(bool afterUpdate, bool afterVortex)
         {
             var said = new List<string>();
             Action<string> say = delegate(string m) { lock (said) said.Add(m); };
@@ -376,17 +369,16 @@ namespace Thornswood
             {
                 Waiting(delegate
                 {
-                    VersionDoc f;
                     found = new List<Issue>(Verify.Run(cfg));
-                    found.AddRange(Upkeep.Look(cfg, true, feed, out f));
-                    Upkeep.FixOnDisk(cfg, found, feed, say);
+                    found.AddRange(Upkeep.Look(cfg, true));
+                    Upkeep.FixOnDisk(cfg, found, say);
                 });
             }
             catch (Exception ex) { say("Fix stopped part way (" + ex.Message.TrimEnd('.') + ")."); }
             foreach (string m in said) Log(m);
 
             // Scan again: this is the answer, not what Fix did.
-            List<Issue> plugins = Rescan(feed);
+            List<Issue> plugins = Rescan();
 
             // The shortcuts still not right after Ensure: Windows' own pictures,
             // which only an Explorer restart clears. Asked first, because the
@@ -403,7 +395,7 @@ namespace Thornswood
                     try { Waiting(delegate { repaired = Icons.Repair(); }); }
                     catch (Exception ex) { repaired = "Could not refresh the icon (" + ex.Message.TrimEnd('.') + ")."; }
                     Log(repaired);
-                    plugins = Rescan(feed);
+                    plugins = Rescan();
                 }
             }
 
@@ -430,10 +422,9 @@ namespace Thornswood
             // done (RunDowngrade), and cannot be made before.
             if (Paths.Collection && Has(Upkeep.LastIssues, IssueKind.Skyrim)) { RunDowngrade(); return; }
             if (Verify.OwnFolderNext) { AskOwnGame(false); return; }
-            if (Has(Upkeep.LastIssues, IssueKind.Update) && feed != null)
+            if (Has(Upkeep.LastIssues, IssueKind.Update))
             {
-                OnVersionDoc(feed, false);
-                bool waiting = updatePending && (pendingPacks.Count > 0 || selfUpdateOffered);
+                bool waiting = pendingLauncher != null;
                 // UpdateBySelf decided about the update a moment ago and left
                 // it on the card (FixAfterVortex): automatic updates are off,
                 // or a game is open. Fix after Vortex is not a press of Fix
@@ -444,35 +435,24 @@ namespace Thornswood
                 {
                     Log("The update is on the card above Play. Install now takes it.");
                 }
-                // Straight after an update, only a newer one on the feed is
-                // taken: a Ship that published again while the first was
-                // going in. The one that was just tried is never taken a
-                // second time, whether it went in or failed, because doing
-                // the same thing again is not a fix for why it did not hold.
-                else if (waiting && afterUpdate && updateTried != null &&
-                    updateTried.IsSupersetOf(UpdateParts(pendingPacks, feed, selfUpdateOffered)))
+                // Straight after an update that failed, only a newer one is
+                // taken. The one that was just tried is never taken a second
+                // time, because doing the same thing again is not a fix for
+                // why it did not go in.
+                else if (waiting && afterUpdate && updateTried == pendingLauncher.Version)
                 {
-                    Log(updateTriedWentIn
-                        ? "The update that just went in is still on the feed as waiting, so Fix does not take it a second time. Send the launcher log to the Discord: this one needs looking at."
-                        : "The update did not go in, so Fix does not take it again. The update's own line in the log says why; Install now takes it once that is put right.");
+                    Log("The update did not go in, so Fix does not take it again. The update's own line in the log says why; Install now takes it once that is put right.");
                 }
                 else if (waiting)
                 {
                     Log((afterUpdate && updateTried != null ? "A newer update went out while that one was going in. Fix is taking it now, last." : "Fix is taking the update now, last.") +
-                        (selfUpdateOffered ? " The launcher restarts into the new one when it is in." : ""));
+                        " The launcher restarts into the new one when it is in.");
                     RunUpdate(delegate(bool wentIn)
                     {
-                        Upkeep.Forget(IssueKind.Update);
                         RunScan(true);
                         if (Has(Upkeep.LastIssues, IssueKind.Skyrim)) RunDowngrade();
                     });
                     return;
-                }
-                else
-                {
-                    // The mod updates wait for the collection (OnVersionDoc), so
-                    // Fix has tried the update and the card says why it waits.
-                    Log("The update waits until the collection is installed, as the card above Play says.");
                 }
                 if (Upkeep.LastIssues != null && !leftOnCard)
                     foreach (Issue i in Upkeep.LastIssues) if (i.Kind == IssueKind.Update) triedByFix.Add(FixKey(i));
@@ -481,17 +461,16 @@ namespace Thornswood
             if (Has(Upkeep.LastIssues, IssueKind.Skyrim)) RunDowngrade();
         }
 
-        /// <summary>Verify and Upkeep again, with the feed Fix already read. Returns Verify's list; Upkeep's is Upkeep.LastIssues.</summary>
-        static List<Issue> Rescan(VersionDoc feed)
+        /// <summary>Verify and Upkeep again. Returns Verify's list; Upkeep's is Upkeep.LastIssues.</summary>
+        static List<Issue> Rescan()
         {
             List<Issue> plugins = null;
             try
             {
                 Waiting(delegate
                 {
-                    VersionDoc f;
                     plugins = Verify.Run(cfg);
-                    Upkeep.Look(cfg, true, feed, out f);
+                    Upkeep.Look(cfg, true);
                 });
             }
             catch (Exception ex) { Log("Fix could not scan again afterwards (" + ex.Message.TrimEnd('.') + "). Press Scan."); }

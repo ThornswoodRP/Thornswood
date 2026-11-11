@@ -23,7 +23,7 @@
        #4824) puts the payload in Profile\Payload and writes
        nothing into the Steam copy and no installed-into-game list; the
        launcher's first start (Leaks, Thornswood.ini, Keep, the client
-       settings, the checks, a pack, Fix's plugin restore,
+       settings, the checks, an update's files, Fix's plugin restore,
        Scan) writes into Payload and never into the Steam copy; Steam's Updates
        setting is looked at; Make builds Root\Game with the game, Vortex's files
        and everything from Payload, and removes Payload; after the restart the
@@ -357,42 +357,46 @@ namespace Thornswood
             }
         }
 
-        static string PackZip(Scene s, string id)
+        // An update's game files, the way the launcher's package puts them in
+        // since #5608: a release record's entries through Sync.cs's own
+        // compare and write (PlanSync, WriteSync), each file's bytes handed
+        // over by its sha256 as the package hands them. A later release
+        // carries every file an earlier one did, so each scene's releases
+        // add up; the reference plugin list (:golden:) is only in the release
+        // that carries it.
+        static readonly Dictionary<string, Dictionary<string, string>> Released = new Dictionary<string, Dictionary<string, string>>();
+
+        static void SyncRelease(Scene s, string id, Dictionary<string, string> files, Action<string> say)
         {
-            string zip = Path.Combine(s.Dir, id + ".zip");
-            if (File.Exists(zip)) File.Delete(zip);
-            using (ZipArchive z = ZipFile.Open(zip, ZipArchiveMode.Create))
+            var blobs = new Dictionary<string, byte[]>();
+            var map = new Dictionary<string, string>();
+            foreach (KeyValuePair<string, string> f in files)
             {
-                foreach (string[] e in new string[][] {
-                    new string[] { "game/Data/Platform/Plugins/thornswood-" + id + ".js", "PACK-JS " + id },
-                    new string[] { "game/Data/textures/thornswood/" + id + ".dds", "PACK-DDS " + id } })
-                {
-                    ZipArchiveEntry en = z.CreateEntry(e[0]);
-                    using (var w = new StreamWriter(en.Open(), new UTF8Encoding(false))) w.Write(e[1]);
-                }
+                byte[] b = new UTF8Encoding(false).GetBytes(f.Value);
+                string sha;
+                using (var h = SHA256.Create()) sha = BitConverter.ToString(h.ComputeHash(b)).Replace("-", "").ToLowerInvariant();
+                blobs[sha] = b;
+                map[f.Key] = b.Length + ":" + sha;
             }
-            return zip;
+            Updater.Blob fetch = delegate(string sha, long bytes, string dest, Action<long> onBytes) { File.WriteAllBytes(dest, blobs[sha]); };
+            // The record's own sha256 names this release alone, so a scene
+            // that plants another release's record is not taken for it.
+            var r = new RecordRef();
+            r.id = id;
+            using (var h = SHA256.Create())
+                r.sha256 = BitConverter.ToString(h.ComputeHash(Encoding.UTF8.GetBytes(id + "\n" + string.Join("\n", map.Keys) + "\n" + string.Join("\n", map.Values)))).Replace("-", "").ToLowerInvariant();
+            var any = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic;
+            var plan = (Updater.SyncPlan)typeof(Updater).GetMethod("PlanSync", any).Invoke(null, new object[] { r, map, fetch, say });
+            Updater.WriteSync(s.Cfg, plan, say);
         }
 
-
-        // A pack whose only payload is the reference plugin list (#1234).
-        static string ListZip(Scene s)
+        static void PackRelease(Scene s, string id, Action<string> say)
         {
-            string zip = Path.Combine(s.Dir, "list-pack.zip");
-            if (File.Exists(zip)) File.Delete(zip);
-            using (ZipArchive z = ZipFile.Open(zip, ZipArchiveMode.Create))
-            {
-                string[][] entries = {
-                    new string[] { "profile/plugins.txt", "*FromPack.esp\r\n" },
-                    new string[] { "profile/loadorder.txt", "FromPack.esp\r\n" },
-                };
-                for (int i = 0; i < entries.Length; i++)
-                {
-                    ZipArchiveEntry en = z.CreateEntry(entries[i][0]);
-                    using (var w = new StreamWriter(en.Open(), new UTF8Encoding(false))) w.Write(entries[i][1]);
-                }
-            }
-            return zip;
+            Dictionary<string, string> all;
+            if (!Released.TryGetValue(s.Dir, out all)) Released[s.Dir] = all = new Dictionary<string, string>();
+            all["Data/Platform/Plugins/thornswood-" + id + ".js"] = "PACK-JS " + id;
+            all["Data/textures/thornswood/" + id + ".dds"] = "PACK-DDS " + id;
+            SyncRelease(s, id, all, say);
         }
 
         // Before the own folder exists, the list must land in Profile and
@@ -405,10 +409,11 @@ namespace Thornswood
             Put(winO, "SteamOwn.esp\r\n");
             string winPBefore = File.ReadAllText(winP);
             string winOBefore = File.ReadAllText(winO);
-            var p = new Pack();
-            p.id = "listpack";
-            Updater.Install(ListZip(s), p, delegate(string m) { Say(s, m); });
-            Yes(n + "a pack's plugin list does not write Windows' plugins.txt", File.ReadAllText(winP) == winPBefore);
+            var list = new Dictionary<string, string>();
+            list[":golden:plugins.txt"] = "*FromPack.esp\r\n";
+            list[":golden:loadorder.txt"] = "FromPack.esp\r\n";
+            SyncRelease(s, "listpack", list, delegate(string m) { Say(s, m); });
+            Yes(n + "an update's plugin list does not write Windows' plugins.txt", File.ReadAllText(winP) == winPBefore);
             Yes(n + "and does not write Windows' loadorder.txt", File.ReadAllText(winO) == winOBefore);
             Yes(n + "the order is in Profile\\Default", File.ReadAllText(Path.Combine(Paths.Golden, "plugins.txt")).IndexOf("FromPack.esp", StringComparison.Ordinal) >= 0);
             Yes(n + "and in Profile\\LocalAppData, where it waits for the folder",
@@ -443,12 +448,7 @@ namespace Thornswood
             Keep.Unpark();
             Keep.Seed();
             AutoJoin.Ensure(say);
-            if (pack != null)
-            {
-                var p = new Pack();
-                p.id = pack;
-                Updater.Install(PackZip(s, pack), p, say);
-            }
+            if (pack != null) PackRelease(s, pack, say);
             OwnGame.RestoreMissingPlugins(s.Cfg, say);
             Verify.Run(null);
             Checks.All(s.Cfg);
@@ -817,7 +817,12 @@ namespace Thornswood
             Yes(n + "synced by an older launcher: and does not ask again until the list is here", !OwnGame.NeedsRefresh(s.Cfg));
 
             // The check against the release keeps its list (Sync.cs).
-            File.WriteAllText(Path.Combine(Paths.ProfileDir, "release-files.txt"), "release " + sha + " 20260929-0000\r\n" + shipped + "\r\n");
+            // The release's files as the update before kept them, and this one.
+            var listed = new List<string> { "release " + sha + " 20260929-0000" };
+            string keptList = Path.Combine(Paths.ProfileDir, "release-files.txt");
+            if (File.Exists(keptList)) { string[] was = File.ReadAllLines(keptList); for (int i = 1; i < was.Length; i++) if (was[i].Trim().Length > 0) listed.Add(was[i]); }
+            listed.Add(shipped);
+            File.WriteAllLines(keptList, listed.ToArray());
             Yes(n + "with the release's list kept, the folder asks to refresh", Updater.ReleaseFilesKnown() && OwnGame.NeedsRefresh(s.Cfg));
             string sorted = null;
             try { sorted = OwnGame.Refresh(s.Cfg, null); } catch (Exception ex) { Console.WriteLine("      Refresh said: " + ex.Message); }
@@ -969,9 +974,12 @@ Yes 'Paths.Init points Game at Payload when the folder was chosen and not made' 
 $ownSrc = [IO.File]::ReadAllText((Join-Path $App 'OwnGame.cs'))
 Yes 'a folder is not made while an install an older launcher synced has not kept its release''s file list (#1232)' ($ownSrc -match '(?s)if \(!made\)\s*\{.*?if \(!OursKnown\(\)\)\s*return "Thornswood is checking this install against its release first')
 $syncSrc = [IO.File]::ReadAllText((Join-Path $App 'Sync.cs'))
-Yes 'a sync keeps the release''s file list before it says it is on that release, and an install without the list is checked once more (#1232)' (
+# Since #5608 every sync is of a launcher package, and every one keeps the
+# list; an install whose list is not the one of the release it says it is on
+# is not taken at its word.
+Yes 'a sync keeps the release''s file list before it says it is on that release, and an install without the list is not taken at its word (#1232)' (
     ($syncSrc -match '(?s)WriteReleaseFiles\(r, listed\);\s*(SyncState )?state = ReadSyncState\(\);\s*state\.Synced = r\.sha256;') -and
-    ($syncSrc -match 'if \(\(s\.Synced == r\.sha256 && ReleaseFilesSha\(\) == r\.sha256\) \|\| s\.PacksOnly == r\.sha256\) return null;'))
+    ($syncSrc -match 'return s\.Synced\.Length == 0 \|\| ReleaseFilesSha\(\) == s\.Synced;'))
 $steps = [IO.File]::ReadAllText((Join-Path $App 'InstallSteps.cs'))
 Yes 'the install writes the installed-into-game list only when the Steam copy is used' ($steps -match 'void RecordIntoGame\(List<string> files\)\s*\{\s*if \(ownFirst \|\| madeOwn \|\| files\.Count == 0\) return;')
 

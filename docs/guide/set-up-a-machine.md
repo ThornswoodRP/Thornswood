@@ -168,19 +168,23 @@ The second line prints the discord.py version `bot\requirements.txt` pins when
 the first worked. The nightly does the same into a venv of its own on the VPS,
 because the live bot runs on that box's Python.
 
-Every change goes to the dev channel first, and the dev channel needs the dev
-build on this machine too: in the main launcher, on the Play page, the Server
-dropdown, Dev. It checks your Discord roles first, then puts it
-at `<drive>:\Thornswood-DevBuild`, beside the main install. Then open it once and let it make its own game folder,
-`<Root>-DevBuild\Game`: it offers at startup, and its own Settings, Maintenance
-has "Make it". Ship refuses `-Channel dev` without the dev build, and with the
-dev build but without that folder it builds the dev release out of the Steam
-copy instead. That refusal is for `<drive>:\Thornswood-DevBuild` only, the folder
-Ship finds for itself: a folder you name with `-Root`, or record once with
-`.\scripts\release\Setup-ShipMachine.ps1 -Channel dev -Root <folder>`, is a release
-folder `Update-ShipRoot.ps1` makes with no `Launcher` folder, and the Ship's own
-launcher step makes one there (#2662). `.\scripts\release\Check-ShipReady.ps1 -Channel dev` says whether both are
-in place, without shipping anything.
+Every change goes to the dev channel first. To play on it, switch the launcher:
+on the Play page, the Server dropdown, "Dev". It checks your Discord roles,
+then puts the install on the dev channel and takes the dev launcher from
+GitHub; there is no second launcher for dev since #5608. To ship it, this
+machine builds the dev release from a release folder of its own, recorded once
+with `.\scripts\release\Setup-ShipMachine.ps1 -Channel dev -Root <folder>`:
+`Update-ShipRoot.ps1` makes it on the first Ship, with Thornswood's own files
+from the dev channel's package on GitHub and its own game folder from what
+Vortex deployed, and the Ship's own launcher step makes its `Launcher` folder
+(#2019). With no folder named with `-Root` or recorded, Ship falls back to a
+dev copy an older launcher made at `<drive>:\Thornswood-DevBuild`, and with
+that copy but no game folder in it, it builds the dev release out of the Steam
+copy instead. Ship refuses `-Channel dev` when there is not even that copy:
+the refusal is for `<drive>:\Thornswood-DevBuild` only, the folder Ship finds
+for itself, never for one named or recorded (#2662).
+`.\scripts\release\Check-ShipReady.ps1 -Channel dev` says whether both are in
+place, without shipping anything.
 
 Then in `Thornswood-Repo`:
 
@@ -284,7 +288,7 @@ by hand, and no secret is written into the repository.
 | Signing: Microsoft's signing client | `records\signing\client`, ignored by git | The same script fetches `Microsoft.ArtifactSigning.Client` 1.0.128 from nuget.org and refuses it unless its sha256 is the pinned one, which is the package One has |
 | Signing: the Azure sign in | `az login` on One, as Patrick | `az login` on the new machine, as the person who ships from it, with an account of their own in the signing tenant that holds the Certificate Profile Signer role on the ThornswoodSigning account's profile ThornswoodRelease (Patrick, 4 Oct; #1740). Patrick makes the account and gives the role once: [Your own signing sign in](#your-own-signing-sign-in). The script asks the signing service with that sign in and checks the profile answers with the identity the launcher pins |
 | The client runtime `records\client-build.json` names | only in the dev game folder, `C:\Thornswood-DevBuild\Game`. The build copies in `Downloads\Thornswood-ClientBuild-<commit>` are older builds, and the shared clone's `engine\skymp\build` does not match the record | Setup-ShipMachine records CI's build of the pin as the machine's engine build (`-EngineBuild ci`, which it does by itself on a machine with no engine build), and `Get-EngineArtifact.ps1` fetches the public fork's build of the pin, `thornswood-engine-<fork commit>` from ThornswoodRP/skymp (#3540), and holds every file to both records. A build made on the machine is not the recorded bytes (engine\README.md, "A Ship machine takes CI's build") |
-| The game folder the Ship packs, `<root>-DevBuild\Game` | built by the dev launcher from what Vortex deployed | Skyrim Special Edition on Steam, Vortex with a profile named Thornswood and the Thornswood collection installed and deployed, the launcher from thornswood.net, then the dev build and its own game folder (Setting up a machine, above). A person does this; it needs a Nexus account, not Patrick's |
+| The game folder the Ship packs, `<dev release folder>\Game` | made by `Update-ShipRoot.ps1` from what Vortex deployed | Skyrim Special Edition on Steam, Vortex with a profile named Thornswood and the Thornswood collection installed and deployed, then the dev release folder recorded (Setting up a machine, above). A person does this; it needs a Nexus account, not Patrick's |
 | The collection itself | Nexus collection `7essxf`, curated from Patrick's Nexus account in his Vortex | Any machine installs it. Only publishing a new revision needs his account (`docs\OWNERSHIP.md` in the private ops repo) |
 | Backups | the originals on the VPS, `C:\Thornswood-Backup`; the copy off the box goes to the Oracle VM and on to Google Drive (`Send-Backups.ps1`, #2862), not to One; the passphrase on the VPS and in Patrick's keeping | Not needed to Ship. `pwsh scripts/vps/Box-Run.ps1 -Line 'Send-Backups -Status'` says what went off the box |
 
@@ -393,7 +397,7 @@ checks the tools a Ship calls (git, gh, PowerShell 7, node, ssh, the .NET
 Framework compiler, signtool, az, the .NET 8 runtime), fetches the signing
 client, writes `records\signing\signing.json`, checks the Azure sign in, fetches the
 recorded client, and then runs `.\scripts\release\Check-ShipReady.ps1 -Channel dev`
-for everything else Ship asks: the dev build, its game folder, the Vortex
+for everything else Ship asks: the dev release folder, its game folder, the Vortex
 profile, the VPS and the feed store. Each gap prints the command that closes
 it and says when it is Patrick's. It never turns signing off, never edits a
 `records\signing\signing.json` that is there, and never ships. The sign in is

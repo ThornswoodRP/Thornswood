@@ -33,16 +33,17 @@
       nothing and does not ask for the Releases
     - an error from GitHub throws, so FillNews keeps the notes it had; too
       many Deployments in a row without a success throws too
-    - FillNews hands back the notes it holds while the last read is newer
-      than fifteen minutes, without asking GitHub
-    - the feed's "news" and "newsFile" are no longer read, FeedNews.cs is gone,
-      and the update check fills the news before the window reads it
+    - FillNews keeps the notes it holds while the last read is newer than
+      the update check's half hour, without asking GitHub
+    - every call goes through GitHub.cs, inside the update check's own sixty
+      an hour (#5608); no feed is read, FeedNews.cs is gone, and the update
+      check fills the news before the window is told
 
   HOW. Builds launcher\app\Thornswood.csproj as it is, with the .NET 10 SDK
   the launcher builds with (Add-LauncherAssembly, tests\Launcher-Csc.ps1,
   #4823), loads it into this PowerShell, which runs on .NET 10 as the
   launcher does, and calls Updater.ReadReleaseNews, NoteOf and BuildKey by
-  reflection with the stand-in's address. Nothing leaves 127.0.0.1.
+  reflection, with GitHub.Api pointed at the stand-in. Nothing leaves 127.0.0.1.
 #>
 [CmdletBinding()]
 param()
@@ -178,7 +179,7 @@ function Run {
 
     $U = $asm.GetType('Thornswood.Updater')
     $C = $asm.GetType('Thornswood.Config')
-    $V = $asm.GetType('Thornswood.VersionDoc')
+    $G = $asm.GetType('Thornswood.GitHub')
     $NewsType = $asm.GetType('Thornswood.NewsItem')
     $P = $asm.GetType('Thornswood.Paths')
     $flags = [Reflection.BindingFlags]'Static, Public, NonPublic'
@@ -187,7 +188,14 @@ function Run {
     $mKey = $U.GetMethod('BuildKey', $flags)
     $mFill = $U.GetMethod('FillNews', $flags)
     Yes 'Updater.ReadReleaseNews, NoteOf, BuildKey and FillNews are in the build' ($null -ne $mRead -and $null -ne $mNote -and $null -ne $mKey -and $null -ne $mFill)
-    if ($null -eq $mRead -or $null -eq $mNote -or $null -eq $mKey) { return }
+    if ($null -eq $mRead -or $null -eq $mNote -or $null -eq $mKey -or $null -eq $G) { return }
+    # GitHub.cs asks every call of the update check and the tab (#5608): it
+    # is pointed at the stand-in, and forgets what it read between cases.
+    $apiField = $G.GetField('Api', $flags)
+    $realApi = [string]$apiField.GetValue($null)
+    $mForget = $G.GetMethod('Forget', $flags)
+    $succeeded = $U.GetField('deploySucceeded', $flags).GetValue($null)
+    function Fresh { $srv.Clear(); [void]$mForget.Invoke($null, @()); $succeeded.Clear() }
 
     $profile = Join-Path $tmp 'Profile'
     $null = New-Item -ItemType Directory -Force -Path $profile
@@ -225,6 +233,8 @@ function Run {
     $srv.Start()
     try {
         $api = "http://127.0.0.1:$($srv.Port)/repos/ThornswoodRP/Thornswood"
+        $apiField.SetValue($null, $api)
+        Fresh
         $base = "/repos/ThornswoodRP/Thornswood"
         $releases = '[' + ((@(
             (Rel 'build-20261101.12' 'Release build-20261101.12' 'Not deployed anywhere yet'),
@@ -257,58 +267,58 @@ function Run {
         )) -join ',') + ']'))
         $srv.Answer("$base/deployments/800/statuses", '200 OK', (State 'success'))
 
-        $items = @($mRead.Invoke($null, @($api, $true)))
+        $items = @($mRead.Invoke($null, @($true)))
         Yes ('a dev launcher shows the Releases at or before Dev''s newest success, newest first, DEV on what Main has not reached: ' + (Titles $items)) ((Titles $items) -eq 'Assigned loot on bodies*|Downloads page names the publisher|Various bug fixes and improvements|Study at the College')
         Yes '  so a Release still being deployed, one not deployed, a draft, a gamemode-only build, a Ship''s files and the agent are left out, and a nothing to tell is the quiet note (Patrick, 9 Nov)' ($items.Count -eq 4)
         Yes '  each note carries its lines of what changed' (@($items[0].details).Count -eq 1 -and $items[0].details[0] -eq 'A body keeps what it carried')
         $asked = @($srv.Asked())
         $statuses = @($asked | Where-Object { $_ -match '/statuses' })
         Yes ('  the statuses asked are only those of Deployments that name a build Release, newest first, up to the first success: ' + ($statuses -join ' ')) (($statuses -join ' ') -eq "$base/deployments/911/statuses?per_page=1 $base/deployments/908/statuses?per_page=1 $base/deployments/800/statuses?per_page=1")
-        Yes '  Dev and Main''s Deployments, then one list of the newest hundred Releases' ((@($asked | Where-Object { $_ -notmatch '/statuses' }) -join ' ') -eq "$base/deployments?environment=Dev&per_page=20 $base/deployments?environment=Main&per_page=20 $base/releases?per_page=100")
+        Yes '  Dev and Main''s Deployments, then one list of the newest hundred Releases' ((@($asked | Where-Object { $_ -notmatch '/statuses' }) -join ' ') -eq "$base/deployments?environment=Dev&per_page=20 $base/deployments?environment=Main&per_page=20 $base/releases?per_page=100&page=1")
         $heads = @($srv.Headers())
         Yes '  every request asks for GitHub''s JSON with the launcher''s name and no token' (@($heads | Where-Object { $_ -match '(?im)^Accept: application/vnd\.github\+json' -and $_ -match '(?im)^User-Agent: ThornswoodLauncher/' -and $_ -notmatch '(?im)^Authorization:' }).Count -eq $heads.Count -and $heads.Count -eq 6)
 
-        $srv.Clear()
+        Fresh
         $srv.Answer("$base/releases", '200 OK', $releases)
         $srv.Answer("$base/deployments?environment=Main", '200 OK', ('[' + (Dep 800 '{"release":"build-20261101.9"}') + ']'))
         $srv.Answer("$base/deployments/800/statuses", '200 OK', (State 'success'))
-        $items = @($mRead.Invoke($null, @($api, $false)))
+        $items = @($mRead.Invoke($null, @($false)))
         Yes ('a main launcher shows the Releases at or before Main''s, with no DEV marks: ' + (Titles $items)) ((Titles $items) -eq 'Downloads page names the publisher|Various bug fixes and improvements|Study at the College')
         Yes '  and asks Main''s Deployments only once' (@($srv.Asked() | Where-Object { $_ -match 'environment=' }).Count -eq 1)
 
-        $srv.Clear()
+        Fresh
         $srv.Answer("$base/releases", '200 OK', $releases)
         $srv.Answer("$base/deployments?environment=Dev", '200 OK', ('[' + (Dep 908 '{"release":"build-20261101.10"}') + ']'))
         $srv.Answer("$base/deployments/908/statuses", '200 OK', (State 'success'))
         $srv.Answer("$base/deployments?environment=Main", '200 OK', ('[' + (Dep 801 '{}') + ']'))
-        $items = @($mRead.Invoke($null, @($api, $true)))
+        $items = @($mRead.Invoke($null, @($true)))
         Yes ('before main has run a build Release, every dev note is marked DEV: ' + (Titles $items)) ((Titles $items) -eq 'Assigned loot on bodies*|Downloads page names the publisher*|Various bug fixes and improvements*|Study at the College*')
-        $items = @($mRead.Invoke($null, @($api, $false)))
+        $items = @($mRead.Invoke($null, @($false)))
         Yes '  and a main launcher shows nothing' ($items.Count -eq 0)
         Yes '  without asking for the Releases' (@($srv.Asked() | Where-Object { $_ -match '/releases' }).Count -eq 1)
 
         # ---- 4. failures throw, so FillNews keeps what it had --------------------------
-        $srv.Clear()
+        Fresh
         $srv.Answer("$base/deployments?environment=Main", '200 OK', ('[' + (Dep 800 '{"release":"build-20261101.9"}') + ']'))
         $srv.Answer("$base/deployments/800/statuses", '200 OK', (State 'success'))
         $srv.Answer("$base/releases", '403 rate limit exceeded', '{"message":"API rate limit exceeded"}')
         $why = ''
-        try { [void]$mRead.Invoke($null, @($api, $false)) } catch { $why = [string]$_.Exception.InnerException.Message }
+        try { [void]$mRead.Invoke($null, @($false)) } catch { $why = [string]$_.Exception.InnerException.Message }
         Yes ('an error from GitHub throws with its status: ' + $why) ($why -match '403')
-        $srv.Clear()
+        Fresh
         $many = @(); $id = 700
         foreach ($i in 1..7) { $many += (Dep ($id + $i) ('{"release":"build-20261101.' + $i + '"}')); $srv.Answer("$base/deployments/$($id + $i)/statuses", '200 OK', (State 'failure')) }
         $srv.Answer("$base/deployments?environment=Main", '200 OK', ('[' + ($many -join ',') + ']'))
         $why = ''
-        try { [void]$mRead.Invoke($null, @($api, $false)) } catch { $why = [string]$_.Exception.InnerException.Message }
+        try { [void]$mRead.Invoke($null, @($false)) } catch { $why = [string]$_.Exception.InnerException.Message }
         Yes ('seven Deployments in a row without a success throw rather than show nothing: ' + $why) ($why -match 'ended in success')
         Yes ('  after asking six statuses, not seven') (@($srv.Asked() | Where-Object { $_ -match '/statuses' }).Count -eq 6)
-        $srv.Clear()
+        Fresh
         $srv.Answer("$base/deployments?environment=Main", '200 OK', '[]')
-        Yes 'a channel with no Deployments shows nothing' (@($mRead.Invoke($null, @($api, $false))).Count -eq 0)
-    } finally { $srv.Stop() }
+        Yes 'a channel with no Deployments shows nothing' (@($mRead.Invoke($null, @($false))).Count -eq 0)
+    } finally { $srv.Stop(); $apiField.SetValue($null, $realApi); [void]$mForget.Invoke($null, @()) }
 
-    # ---- 5. FillNews keeps a read for fifteen minutes --------------------------------
+    # ---- 5. FillNews keeps a read for the update check's half hour -------------------
     $held = [Array]::CreateInstance($NewsType, 1)
     $one = [Activator]::CreateInstance($NewsType); $one.title = 'Held from the last read'
     $held[0] = $one
@@ -317,22 +327,19 @@ function Run {
     $U.GetField('newsAsked', $flags).SetValue($null, [DateTime]::UtcNow)
     $cfg = [Activator]::CreateInstance($C)
     $cfg.Channel = 'dev'
-    $doc = [Activator]::CreateInstance($V)
-    [void]$mFill.Invoke($null, @($cfg, $doc))
-    Yes 'FillNews hands back the notes of a read newer than fifteen minutes, without asking GitHub' ((Titles $doc.news) -eq 'Held from the last read')
-    Yes '  and fifteen minutes is the wait' ($U.GetField('NewsEvery', $flags).GetValue($null) -eq [TimeSpan]::FromMinutes(15))
+    [void]$mFill.Invoke($null, @($cfg))
+    Yes 'FillNews keeps the notes of a read newer than half an hour, without asking GitHub' ((Titles ($U.GetProperty('News', $flags).GetValue($null))) -eq 'Held from the last read')
+    Yes '  and half an hour, the update check''s own, is the wait' ($U.GetField('NewsEvery', $flags).GetValue($null) -eq [TimeSpan]::FromMinutes(30))
     $rn = Get-Content -LiteralPath (Join-Path $Src 'ReleaseNews.cs') -Raw
-    Yes 'FillNews marks the time before it reads, so a failed read is not asked again on every check' ($rn -match '(?s)if \(ask\) newsAsked = DateTime\.UtcNow;.*?ReadReleaseNews\(ReleasesApi, dev\)')
-    Yes '  and a read that throws leaves the notes it held, with a line in launcher.log' ($rn -match '(?s)catch \(Exception ex\) \{ Swallow\.Note\("Updater\.FillNews, the Releases on GitHub", ex\); \}\s*\}\s*lock \(newsLock\) \{ v\.news = newsHeld \?\? new NewsItem\[0\]; \}')
-    Yes '  and it asks GitHub''s API for the Thornswood repository' ([string]$U.GetField('ReleasesApi', $flags).GetValue($null) -eq 'https://api.github.com/repos/ThornswoodRP/Thornswood')
+    Yes 'FillNews marks the time before it reads, so a failed read is not asked again on every check' ($rn -match '(?s)if \(ask\) newsAsked = DateTime\.UtcNow;.*?ReadReleaseNews\(dev\)')
+    Yes '  and a read that throws leaves the notes it held, with a line in launcher.log' ($rn -match '(?s)NewsItem\[\] read = ReadReleaseNews\(dev\);\s*lock \(newsLock\) \{ if \(newsChannel == channel\) newsHeld = read; \}\s*\}\s*catch \(Exception ex\) \{ Swallow\.Note\("Updater\.FillNews, the Releases on GitHub", ex\); \}')
+    Yes '  and it asks GitHub''s API for the Thornswood repository, through GitHub.cs' ($realApi -eq 'https://api.github.com/repos/ThornswoodRP/Thornswood' -and $rn -match 'GitHub\.Json\(' -and $rn -match 'GitHub\.Releases\(' -and $rn -notmatch 'HttpClient|api\.github\.com')
 
-    # ---- 6. the feed's news is not read --------------------------------------------
-    $feed = [Text.Encoding]::UTF8.GetBytes('{"launcherVersion":"1.2.4","packs":[],"news":[{"date":"11-1-2026 2:22 PM","title":"A Ship''s note","body":"","channel":"dev"}],"newsFile":{"url":"https://thornswood.net/feed-dev/assets/' + ('a' * 64) + '","sha256":"' + ('a' * 64) + '","count":1}}')
-    $parsed = $V.GetMethod('Parse', $flags).Invoke($null, @(, [byte[]]$feed))
-    Yes 'a feed''s "news" and "newsFile" are not read: the tab is the Releases''' ($null -ne $parsed -and @($parsed.news).Count -eq 0 -and $null -eq $V.GetField('newsRef'))
+    # ---- 6. no feed is read ---------------------------------------------------------
+    Yes 'the launcher reads no update feed, so no feed''s news either: VersionDoc is gone (#5608)' ($null -eq $asm.GetType('Thornswood.VersionDoc'))
     Yes 'FeedNews.cs, the feed''s news file reader, is gone' (-not (Test-Path -LiteralPath (Join-Path $Src 'FeedNews.cs')))
     $su = Get-Content -LiteralPath (Join-Path $Src 'ShellUpdate.cs') -Raw
-    Yes 'the update check fills the news on its own thread before the window reads the document' ($su -match '(?s)VersionDoc v = Updater\.Check\(cfg\);.*?Updater\.FillNews\(cfg, v\);(\s*//[^\n]*)*\s*Dispatcher\.UIThread\.Post\(delegate \{ OnVersionDoc\(v, loud\);')
+    Yes 'the update check fills the news on its own thread before the window is told' ($su -match '(?s)launcher = Updater\.CheckLauncher\(cfg\);.*?Updater\.FillNews\(cfg\);.*?Dispatcher\.UIThread\.Post\(delegate')
     $sn = Get-Content -LiteralPath (Join-Path $Src 'ShellNews.cs') -Raw
     Yes 'the tab no longer has a files list, which no Release carries' ($sn -notmatch 'n\.files' -and $null -eq $NewsType.GetField('files'))
     Yes 'an empty tab says where the notes come from, not the update feed' ($sn -notmatch 'writes to the update feed' -and $sn -match 'once the dev server runs it' -and $sn -match 'once the live server runs it')

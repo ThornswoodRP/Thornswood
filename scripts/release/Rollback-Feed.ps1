@@ -62,7 +62,9 @@
   which replaces nothing if another Ship or feed edit went out meanwhile.
 
   -SiteDir <folder> stands in for C:\Thornswood-Docs and nothing connects
-  anywhere; tests\test-feed-rollback.ps1 drives it that way.
+  anywhere; tests\test-feed-rollback.ps1 drove it that way until it went
+  with the launcher's feed reader (#5608); this script goes with the feed
+  (#5783).
 #>
 [CmdletBinding()]
 param(

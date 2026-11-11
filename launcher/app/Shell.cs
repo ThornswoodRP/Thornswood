@@ -49,44 +49,28 @@ namespace Thornswood
         // launcher is built.
         static MainWindow win;
         static Config cfg;
-        static VersionDoc pendingDoc;
         static bool playing;
         // An update waiting means this build no longer matches what the
         // server expects. Playing anyway is how someone gets turned away at
         // the door, or worse, gets in with a different mod list.
         /*
-          Play starts blocked, not allowed.
-
-          This was a plain false, which meant the launcher opened with Play
-          live and only took it away once a background check had come back and
-          said there was something waiting. Anybody quick enough got into the
-          game on an old build in the gap, and the same gap opened whenever the
-          check failed or the version document could not be read: no answer,
-          no block, straight in. That is how somebody ends up playing a release
-          behind and reporting bugs that were fixed hours ago.
-
-          So the question is no longer "has an update been found" but "has
-          anything told us it is safe to play yet", and the answer starts as no.
-          updateAnswered is what turns CHECKING into either PLAY or UPDATE
-          FIRST.
-
+          Play starts blocked, not allowed, and reads CHECKING until the
+          launcher's channel on GitHub has answered once (updateAnswered).
           Decided by Patrick on 20 September: nobody plays on a build that is
-          not known to be current, on main or on dev. A check that cannot reach
-          the source used to say so and let the game start, on the argument
-          that a launcher that bricks itself when GitHub hiccups is worse than
-          one a release behind. It is the other way round for a playtest: a
-          release behind reports bugs fixed hours ago and desyncs everybody,
-          so the button stays shut with the reason on it and the check runs
-          again every thirty seconds until the source answers. Automatic
-          updates being off no longer skips the check either; it only means
-          the pack waits for the Install button instead of going in on its own.
-          The one case that still frees Play without an answer is a launcher
-          with no update source configured at all, which is a developer's own
-          build and never a tester's.
+          not known to be current. An answer with a newer launcher keeps Play
+          shut (UPDATE FIRST) until it is in.
+
+          Patrick, 11 Nov 2026 (#5608): "the updates should not be held on
+          thornswood.net or the VPS but on GitHub, this should block play but
+          not updates". The update check asks GitHub alone. A check GitHub
+          does not answer no longer holds Play: the site is what holds Play,
+          and it lets in only the launchers its channel names (the join pass),
+          so a launcher behind is turned away there, and one that is current
+          is not kept out because GitHub had a bad minute. The old update
+          feed's hold and its word above Play went with the feed.
         */
         static bool updatePending = true;
         static bool updateAnswered;
-        static bool checkFailed;
         static DateTime playStartedAt;
         // When the last session's game closed, for PlayPressedBy (#2215).
         static DateTime gameClosedAt;
@@ -102,16 +86,6 @@ namespace Thornswood
         // come up yet.
         static bool leftButtonDown;
 
-        // An update published while the game runs. The check that runs every
-        // thirty seconds during play notices it; four and a half minutes after it is first
-        // seen the game is closed so the launcher can install it, which is
-        // what the server's own five minute warning has been counting down
-        // to. The server's kick by itself did nothing: the client reconnects
-        // in three seconds and carries on running files the rest of the room
-        // has moved past, which is what happened to everybody on 1.1.40.
-        static DateTime updateSeenAt = DateTime.MinValue;
-        static bool closedForUpdate = false;
-        static int inPlayTicks = 0;
         static DispatcherTimer timer;
 
         // The character bar (charBar, charRow, txtCharNote, charPickerOpen)
@@ -183,12 +157,6 @@ namespace Thornswood
         static TextBlock txtDowngradeNote, txtDowngradeTitle;
         static Button btnDowngrade;
         static ProgressBar prgDowngrade;
-        // The feed's word to everybody and whether it holds Play (entry 262).
-        // Empty until a document has actually been read, so nothing here can
-        // hold Play on a check that failed. See FeedNotice.cs.
-        static Border noticeBar;
-        static TextBlock txtNoticeTitle, txtNoticeNote;
-        static FeedNotice feedNotice = new FeedNotice();
         static Grid titleBar;
         static Button buttonDiscord;
         static TextBlock labelDiscord;
@@ -591,9 +559,9 @@ namespace Thornswood
             StartPing();
             StartGallery();
             // Always: config.json cannot switch the check off (#937), and Play
-            // stays shut until it has answered (Updater.FeedUrl).
+            // reads CHECKING until GitHub has answered or could not be asked.
             ThreadPool.QueueUserWorkItem(delegate { CheckUpdatesBackground(false); });
-            StartFeedWatch();
+            StartLauncherPoll();
 
             // Voice comes up with the launcher, not with the game. It needs no
             // window, and its lines come to the status line on the window's
@@ -725,7 +693,7 @@ namespace Thornswood
             if (installing != null) installing.Close();
             Dispatcher.UIThread.MainLoop(closed.Token);
 
-            StopFeedWatch(); Voice.Stop(); try { Presence.Stop(); } catch (Exception ex) { Swallow.Note("Shell.Run, dispose", ex); } try { Hold.Release(); } catch (Exception ex) { Swallow.Note("Shell.Run, dispose", ex); }
+            StopLauncherPoll(); Voice.Stop(); try { Presence.Stop(); } catch (Exception ex) { Swallow.Note("Shell.Run, dispose", ex); } try { Hold.Release(); } catch (Exception ex) { Swallow.Note("Shell.Run, dispose", ex); }
         }
 
         /// <summary>
@@ -802,7 +770,6 @@ namespace Thornswood
             downgradeBar = win.DowngradeBar; txtDowngradeNote = win.TxtDowngradeNote; btnDowngrade = win.BtnDowngrade;
             prgDowngrade = win.PrgDowngrade;
             txtDowngradeTitle = win.TxtDowngradeTitle;
-            noticeBar = win.NoticeBar; txtNoticeTitle = win.TxtNoticeTitle; txtNoticeNote = win.TxtNoticeNote;
 
             btnPlay = win.BtnPlay; btnCopy = win.BtnCopy;
             btnUpdate = win.BtnUpdate; btnMin = win.BtnMin; btnMax = win.BtnMax;
@@ -2396,10 +2363,12 @@ namespace Thornswood
                 cfg.Save(Paths.CfgFile);
             };
 
-            // The dev build's uninstall is its own removal, never the main
-            // uninstaller: that one deletes Thornswood's files out of the
-            // shared game folder, which would take the main build down too.
-            if (cfg.IsDev)
+            // A dev build copied beside Root before #5608 removes itself,
+            // never with the main uninstaller: that one deletes Thornswood's
+            // files out of the shared game folder, which would take the main
+            // build down too. An install on the dev channel is the one
+            // install, and uninstalls like any other.
+            if (DevBuild.IsOldCopy(cfg))
             {
                 btnUninstall.Content = "Remove the dev build";
                 if (chkDeleteMods != null) chkDeleteMods.IsVisible = false;
@@ -2588,26 +2557,12 @@ namespace Thornswood
                     // Who was picked at the game's menu, every tick. One file
                     // read, and nothing when the file says what it said last.
                     PollChoice();
-                    // Every fifteenth two second tick, so every thirty
-                    // seconds: a pack is seen within half a minute of going
-                    // out, and the close below lands on the server's own
-                    // countdown rather than minutes after it.
-                    if (++inPlayTicks >= 15) { inPlayTicks = 0; CheckUpdatesInPlay(); }
                     return;
                 }
                 playing = false;
-                inPlayTicks = 0;
                 MusicDecide();
                 headerVideoDecide();
                 GalleryDecide();
-                // An update was seen during the session and they quit before
-                // the five minutes were up. The clock goes, the fact does not:
-                // it is fetched now, the same as it would have been had the
-                // launcher closed the game itself. Otherwise quitting early was
-                // a way to stay on a build the rest of the room had moved past,
-                // with nothing on screen to say so.
-                if (updateSeenAt != DateTime.MinValue) closedForUpdate = true;
-                updateSeenAt = DateTime.MinValue;
                 try { Presence.Stop(); } catch (Exception ex) { Swallow.Note("Shell.Wire, dispose", ex); }
                 try { Hold.Release(); } catch (Exception ex) { Swallow.Note("Shell.Wire, dispose", ex); }
                 Keep.TakeNote();
@@ -2618,16 +2573,14 @@ namespace Thornswood
                 }
                 Stats.StoppedPlaying(playStartedAt);
                 // The other end of the session for the site's log: how long it
-                // ran, who was played, and why it stopped. closedForUpdate is
-                // read here because it is cleared further down this same tick.
-                // Off this thread and wrapped: the game has already closed and
+                // ran, who was played, and why it stopped (a quit: the launcher
+                // closes no game for an update since #5608). Off this thread and wrapped: the game has already closed and
                 // nothing here is worth a wait on a network.
                 double ranFor = (DateTime.Now - playStartedAt).TotalMinutes;
                 int playedAs = chosenId;
-                bool endedForUpdate = closedForUpdate;
                 ThreadPool.QueueUserWorkItem(delegate
                 {
-                    try { Discord.SessionEnd(playedAs, ranFor, endedForUpdate ? "update" : "quit"); } catch (Exception ex) { Swallow.Note("Shell.Wire, dispose", ex); }
+                    try { Discord.SessionEnd(playedAs, ranFor, "quit"); } catch (Exception ex) { Swallow.Note("Shell.Wire, dispose", ex); }
                     // Then the logs, on the same thread so they go after the
                     // row they attach to exists. This is the only moment they
                     // can be collected: the game truncates its own logs under
@@ -2707,31 +2660,16 @@ namespace Thornswood
                     catch (Exception ex) { Swallow.Note("Shell.Wire", ex); }
                 });
 
-                // Shut Play before the window comes back, not after. Nothing
-                // in the in-play check sets updatePending, so the status drawn
-                // here said PLAY while the pack the game was just closed for
-                // was still being fetched, and a press in that gap started
-                // Skyrim on half a pack. updateAnswered goes back to false so
-                // the button reads CHECKING, and so Unblock can free Play again
-                // if the check never reaches the source.
-                if (closedForUpdate)
-                {
-                    updatePending = true;
-                    updateAnswered = false;
-                }
-
                 DrawStatus();
                 win.WindowState = WindowState.Normal;
                 win.Activate();
 
-                if (closedForUpdate)
-                {
-                    closedForUpdate = false;
-                    // With automatic updates on, the check's answer takes it
-                    // (UpdateBySelf, #3202), as it takes any update it finds.
-                    Log("Fetching the update the game was closed for...");
-                    ThreadPool.QueueUserWorkItem(delegate { CheckUpdatesBackground(true); });
-                }
+                // A launcher update found while the game ran waited for it
+                // (the half hourly check skips a session). The check's answer
+                // takes it now when automatic updates are on (UpdateBySelf,
+                // #3202), as it takes any update it finds; LauncherCheckDue
+                // keeps it from asking GitHub again so soon after the last.
+                ThreadPool.QueueUserWorkItem(delegate { CheckUpdatesBackground(false); });
             };
             timer.Start();
         }
@@ -2945,7 +2883,7 @@ namespace Thornswood
             }
 
             bool working = playBar.Active;
-            btnPlay.IsEnabled = all && !playing && !updatePending && !collectionBarUp && !ownGameBusy && !working && feedNotice.Hold == null;
+            btnPlay.IsEnabled = all && !playing && !updatePending && !collectionBarUp && !ownGameBusy && !working;
             if (!working) HidePlayFill();
             // Only worth offering while there is something to quit, and it is
             // the one control on this page that stays live during a session.
@@ -2989,23 +2927,10 @@ namespace Thornswood
             }
             else if (updatePending && !playing)
             {
-                btnPlay.Content = checkFailed ? "NO ANSWER FROM THE UPDATE SOURCE"
-                                : updateAnswered ? "UPDATE FIRST" : "CHECKING...";
-                ToolTip.SetTip(btnPlay, checkFailed
-                    ? "The update source did not answer, so it is not known whether this build is current. Play stays shut until it answers; the check runs again every 30 seconds."
-                    : updateAnswered
+                btnPlay.Content = updateAnswered ? "UPDATE FIRST" : "CHECKING...";
+                ToolTip.SetTip(btnPlay, updateAnswered
                     ? "There is an update waiting. Install it and Play comes back."
-                    : "Checking for updates before letting anybody in. A moment.");
-            }
-            // The feed holds Play (entry 262). Below the three above because
-            // each of those is something to do or already under way, and the
-            // bar above Play says why it is held either way. Above the two
-            // below because they label a button that stays live, and this one
-            // is not.
-            else if (feedNotice.Hold != null && !playing)
-            {
-                btnPlay.Content = feedNotice.Button;
-                ToolTip.SetTip(btnPlay, feedNotice.Hold);
+                    : "Asking GitHub for updates before letting anybody in. A moment.");
             }
             else if (wrongBuild && !playing && !collectionBarUp)
             {
@@ -3112,8 +3037,8 @@ namespace Thornswood
         /// The one line summary of the checklist that sits on the Play page
         /// (#607). Updated in place: it does not flash or re-say itself when the
         /// words have not changed. The button's own words say why Play is held
-        /// for anything that is not a failing row (an update, a downgrade, the
-        /// feed), so this stays about the checks themselves.
+        /// for anything that is not a failing row (an update, a downgrade), so
+        /// this stays about the checks themselves.
         ///
         /// A failing pass names the problem in a few words, the first failing
         /// row's Check.Problem in the order Diagnostics lists them, and how many
@@ -4092,8 +4017,8 @@ namespace Thornswood
                 // certificate and listens only on the VPS's own loopback, so the
                 // raw port no longer answers from outside, and the knock said
                 // nobody would hear anybody while voice was working. VoiceBase is
-                // the feed's voiceUrl, or host and port on a config that has
-                // none, which asks the same place the knock did.
+                // config.json's voiceUrl, or the built-in address on a config
+                // that has none.
                 string where = c.VoiceBase();
                 bool up = false;
                 try
@@ -4214,18 +4139,19 @@ namespace Thornswood
             if (serverPickPopup != null) serverPickPopup.IsOpen = false;
         }
 
+        /// <summary>
+        /// Dev on the Server card: this install goes over to the dev channel,
+        /// once the site says this account's Discord roles allow it, and the
+        /// update check takes the dev package from GitHub (DevBuild.Switch,
+        /// #5608, Patrick's answer B).
+        /// </summary>
         static void SwitchToDev()
         {
             if (cfg.IsDev) return;
-
-            if (DevBuild.Installed)
+            if (!Velo.Installed)
             {
-                try
-                {
-                    Process.Start(new ProcessStartInfo(DevBuild.Exe) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(DevBuild.Exe) });
-                    Log("Opened the dev build.");
-                }
-                catch (Exception ex) { Log("Could not open the dev build: " + ex.Message); }
+                Ask.Tell("This launcher was not installed by Thornswood's setup, so it cannot switch channels. Install Thornswood from thornswood.net and switch from there.",
+                    "Thornswood", Ask.Icon.Info);
                 return;
             }
 
@@ -4234,7 +4160,7 @@ namespace Thornswood
             if (!Discord.Linked)
             {
                 Ask.Tell(
-                    "Connect Discord in the sidebar first. The launcher checks your Discord roles before it installs the dev build.",
+                    "Connect Discord in the sidebar first. The launcher checks your Discord roles before it switches to the dev build.",
                     "Thornswood", Ask.Icon.Info);
                 return;
             }
@@ -4257,9 +4183,6 @@ namespace Thornswood
                 {
                     try
                     {
-                        // Discord.Join has already written dev-allowed.txt when the
-                        // answer carried the flag, so DrawServerPick in the finally
-                        // reflects the fresh answer either way.
                         if (st.Why == "offline" || st.Why == "could not ask Discord")
                         {
                             Ask.Tell(
@@ -4283,12 +4206,11 @@ namespace Thornswood
                         }
 
                         bool r = Ask.YesNo(
-                            "Your roles allow the dev build. Install it?\n\nIt copies this launcher into " + DevBuild.Root +
-                            " and opens it. It follows the dev branch and joins the dev server; this build is not touched.",
+                            "Your roles allow the dev build. Switch to it?\n\nThis install goes over to the dev channel: the launcher and its game files come from dev's newest release on GitHub, " +
+                            "and it joins the dev server. The Server card switches it back to Main the same way.",
                             "Thornswood", Ask.Icon.Question);
                         if (!r) return;
-                        try { Log(DevBuild.Install(cfg)); }
-                        catch (Exception ex) { Log("Could not install the dev build: " + ex.Message); }
+                        SwitchChannel("dev");
                     }
                     finally
                     {
@@ -4299,29 +4221,45 @@ namespace Thornswood
             });
         }
 
-        /// <summary>
-        /// Switch back to the main server from the dev build: open the main
-        /// launcher beside this one. Never installs or touches the main build,
-        /// only opens what is already there.
-        /// </summary>
+        /// <summary>Main on the Server card: this install goes back to the main channel.</summary>
         static void SwitchToMain()
         {
             if (!cfg.IsDev) return;
-            if (DevBuild.MainInstalled)
-            {
-                try
-                {
-                    Process.Start(new ProcessStartInfo(DevBuild.MainExe) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(DevBuild.MainExe) });
-                    Log("Opened the main build.");
-                }
-                catch (Exception ex) { Log("Could not open the main build: " + ex.Message); }
-            }
-            else
+            if (DevBuild.IsOldCopy(cfg))
             {
                 Ask.Tell(
-                    "The main build is not at " + DevBuild.MainRoot + ". Install it again from thornswood.net.",
-                    "Thornswood", Ask.Icon.Warning);
+                    "This dev build is a copy made before the dev build became a channel, and it no longer updates. Remove it from Settings, then switch to Dev from the main launcher's Server card.",
+                    "Thornswood", Ask.Icon.Info);
+                return;
             }
+            bool r = Ask.YesNo(
+                "Switch back to the main build?\n\nThis install goes over to the main channel: the launcher and its game files come from main's newest release on GitHub, and it joins the live server.",
+                "Thornswood", Ask.Icon.Question);
+            if (!r) return;
+            SwitchChannel("main");
+        }
+
+        /// <summary>
+        /// The switch itself (DevBuild.Switch), then the check of the new
+        /// channel at once: its launcher goes in with Install now or by itself
+        /// (UpdateBySelf), and the launcher restarts as that build.
+        /// </summary>
+        static void SwitchChannel(string channel)
+        {
+            if (playing) { Log("Quit the game first."); return; }
+            try { Log(DevBuild.Switch(cfg, channel)); }
+            catch (Exception ex) { Log("Could not switch to " + channel + ": " + ex.Message); return; }
+            // What the old channel offered is not this one's.
+            pendingLauncher = null;
+            updateTried = null;
+            Upkeep.LauncherWaiting = null;
+            updatePending = true;
+            updateAnswered = false;
+            DrawServerPick();
+            DrawStatus();
+            StartPing();
+            CheckVoice();
+            ThreadPool.QueueUserWorkItem(delegate { CheckUpdatesBackground(true); });
         }
 
         static void DoUninstall()
@@ -4422,8 +4360,9 @@ namespace Thornswood
             }
             catch (Exception ex) { Swallow.Note("Shell.DoUninstall", ex); }
 
-            // The dev build is a second install in a folder of its own, beside
-            // this one, with its own launcher and its own game folder. Nothing
+            // A dev build copied before #5608 is a second install in a folder
+            // of its own, beside this one, with its own launcher and its own
+            // game folder. Nothing
             // here removes it and nothing here can: every path this uninstall
             // deletes has to sit under Root, and that fence is the reason a
             // wrong entry in a list can never become rmdir pointed at somebody's
@@ -4648,8 +4587,9 @@ namespace Thornswood
                 // publishes. Nothing on screen said a word.
                 //
                 // Vortex names the collection's own mod folder with the
-                // revision, so there is a number to compare, and the feed
-                // carries the revision the SERVER was built against. Behind
+                // revision, so there is a number to compare, and the signed
+                // release record of the channel's Release carries the revision
+                // the SERVER was built against (#5767). Behind
                 // and ahead are different problems and get different words:
                 // behind means update, ahead means the server has not caught
                 // up with you yet and Play will refuse you on the load order.

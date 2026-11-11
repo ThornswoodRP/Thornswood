@@ -28,8 +28,8 @@
     - the main and dev channels are apart
 
   --emit writes what the site would answer for one whole feed, version.json
-  and settings.json beside it, for launcher\tests\test-1050-feed-split.ps1, which reads
-  them with the launcher and with Join-FeedSettings.
+  and settings.json beside it, for reading with Join-FeedSettings. The
+  launcher's reader of the split feed went with the feed (#5608).
 */
 const fs = require('fs');
 const path = require('path');

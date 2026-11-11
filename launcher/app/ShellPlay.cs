@@ -149,14 +149,13 @@ namespace Thornswood
                 // greying out btnPlay does nothing for those, so the three
                 // things the button is disabled for are checked again on the
                 // way in. The
-                // one that bites is updatePending: the game closes for an
-                // update, the pack is being fetched, and a press in that gap
-                // starts Skyrim on a half extracted build.
+                // one that bites is updatePending: an update is waiting or
+                // going in, and a press in that gap starts Skyrim on a build
+                // the server no longer lets in, or half written.
                 if (updatePending) { Log("An update is going in. Play comes back when it is done."); return; }
                 if (collectionBarUp) { Log(CollectionHeldLine()); return; }
                 if (ownGameBusy) { Log("Thornswood's own Skyrim folder is being prepared. Play comes back when it is done."); return; }
                 if (OwnGameRefreshIfDue()) return;
-                if (feedNotice.Hold != null) { Log(feedNotice.Hold); return; }
 
                 if (!File.Exists(Paths.Loader)) { Log("skse64_loader.exe is missing from this build."); return; }
                 if (!File.Exists(Paths.MpClient)) { Log("MpClientPlugin.dll is missing, so this build has no multiplayer in it."); return; }
@@ -397,16 +396,15 @@ namespace Thornswood
                 // mod file, to everybody. Nothing here has to know about it.
                 psi.UseShellExecute = true;
                 Process.Start(psi);
-                // Which pack this game runs on, in the line everybody pastes.
-                // Play is shut while a pack waits, but a feed that cannot be
-                // reached frees it (Unblock), so "on the right update" was a
-                // question until now and this makes it a line in the log.
-                string onPack = "no pack";
+                // Which release's game files this game runs on, in the line
+                // everybody pastes: the release the install last synced to
+                // (Updater.SyncedRelease), so "on the right update" is a line
+                // in the log and not a question.
+                string onPack = "no release synced";
                 try
                 {
-                    var ids = new List<string>(Updater.Applied());
-                    ids.Sort(StringComparer.Ordinal);
-                    if (ids.Count > 0) onPack = "pack " + ids[ids.Count - 1];
+                    string on = Updater.SyncedRelease();
+                    if (on.Length > 0) onPack = "game files of " + on;
                 }
                 catch (Exception ex) { Swallow.Note("Shell.Play", ex); }
                 // The display mode rides along because Skyrim itself is known to

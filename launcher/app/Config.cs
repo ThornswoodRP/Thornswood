@@ -29,15 +29,14 @@ namespace Thornswood
           this empty and an installer built against a collection is a build
           nobody can play.
 
-          It comes down with the update check like the server address does, so
-          it can be set once and everybody has it.
+          Compiled in below (Collection): until #5608 the update feed on the
+          site moved it, and with the feed gone a new collection goes out as
+          a new launcher.
         */
         [JsonInclude] public string CollectionUrl = Collection;
 
-        // The one we ship with. The update check overwrites it, but a
-        // launcher that has never reached the site still has to be able to
-        // send somebody to the collection, because that is exactly the
-        // state somebody installing for the first time is in.
+        // The one we ship with, and the one a config.json without a link is
+        // given, so somebody installing for the first time is sent to it.
         public const string Collection =
             "https://www.nexusmods.com/games/skyrimspecialedition/collections/7essxf";
 
@@ -51,8 +50,8 @@ namespace Thornswood
         [JsonInclude] public string VoicePort = "7778";
 
         /// <summary>
-        /// Where the voice service is, as the feed gives it:
-        /// https://thornswood.net/voice, or /voice-dev on the dev build.
+        /// Where the voice service is: https://thornswood.net/voice, or
+        /// /voice-dev on the dev build.
         /// </summary>
         /// <remarks>
         /// Everything voice does goes through Caddy on 443: one door with a
@@ -70,8 +69,7 @@ namespace Thornswood
 
         /// <summary>
         /// The voice service behind Caddy, for a config whose VoiceUrl is
-        /// empty or not https: a new install before its first update check,
-        /// or a feed that sends voiceUrl empty. The dev build adds -dev, the
+        /// empty or not https. The dev build adds -dev, the
         /// same as DevBuild.DevVoiceUrl, written out here because several
         /// harnesses compile this file without DevBuild.cs.
         /// </summary>
@@ -117,44 +115,36 @@ namespace Thornswood
             get { return VoiceAutoSetting != false; }
             set { VoiceAutoSetting = value; }
         }
-        // How many the server seats, the M of "N of M awake", as this build's
-        // feed last gave it (maxOnline), for when the server does not announce
-        // itself. 0 until the feed says: main and dev seat differently since
-        // 12 Oct (30 and 5, records\most-online.json), so no number built in
-        // here is right for both, and 0 shows "N awake" with no "of".
+        // How many the server seats, the M of "N of M awake", for when the
+        // server does not announce itself: what the update feed last gave a
+        // config.json before the feed went (#5608), and 0 otherwise. Main and
+        // dev seat differently since 12 Oct (30 and 5,
+        // records\most-online.json), so no number built in here is right for
+        // both, and 0 shows "N awake" with no "of".
         [JsonInclude] public int MaxOnline = 0;
 
-        [JsonInclude] public long ExpectedExeBytes = 37157144;
+        /// <summary>
+        /// SkyrimSE.exe's size at the build Thornswood is pinned to (#471),
+        /// records\skyrim-pin.json's expectedExeBytes, compiled in with the
+        /// rest of the pin (Downgrade.cs). Not kept in config.json: the update
+        /// feed used to move it there, and with the feed gone (#5608) a copy
+        /// in the file would only ever be a stale one. A new pin goes out as
+        /// a new launcher.
+        /// </summary>
+        public const long PinnedExeBytes = 37157144;
 
-        // The rest of the Skyrim pin, as the update feed last gave it (#471,
-        // Downgrade.AdoptPin). 0 and null mean the feed has not said, and
-        // Downgrade uses what it was built with.
-        [JsonInclude] public long NewerExeBytes;
-        [JsonInclude] public PinDepot[] SkyrimDepots = null;
+        // The sizes the checks compare SkyrimSE.exe with: the pin's, and 0
+        // for the newer build's is Downgrade.NewerExeBytes. Never read from
+        // or written to config.json; only a harness changes them, to stand a
+        // small file in for the exe.
+        [JsonIgnore] public long ExpectedExeBytes = PinnedExeBytes;
+        [JsonIgnore] public long NewerExeBytes;
 
-        // Set these to turn on updates. Leave blank and the launcher never
-        // talks to the network beyond a ping.
-        // UpdateToken is a problem worth naming rather than leaving implicit.
-        // It is written into config.json in plaintext and that file ships to
-        // every machine that installs the build, so it is only ever as private
-        // as the least careful person holding it, and revoking it breaks
-        // updates for all of them at once. A read-only fine-grained PAT limits
-        // the damage without fixing the shape. The real fix is a release
-        // channel that needs no credential, at which point this field goes.
-        // UpdateRepo and UpdateToken are read by nothing since #907, when the
-        // GitHub fallback went with Thornswood-Releases; they stay declared so
-        // a config.json that carries them still loads and saves unchanged.
-        [JsonInclude] public string UpdateRepo = "";    // "owner/name"
-        [JsonInclude] public string UpdateToken = "";   // read-only fine-grained PAT
+        // "dev" here, or in Channel, makes this install the dev channel's
+        // (Velo.ChannelFor). The token, the repository and the feed address
+        // that sat beside it went with the update feed (#5608): updates come
+        // from this repository's Releases on GitHub, which need no credential.
         [JsonInclude] public string UpdateBranch = "main";
-
-        // Direct https URL for version.json on the site feed (#649), the only
-        // place updates are read from since #907. Defaults in AfterLoad:
-        // main -> https://thornswood.net/feed/version.json ; Channel or
-        // UpdateBranch "dev" -> https://thornswood.net/feed-dev/version.json.
-        // The feed can announce a move by shipping updateFeedUrl under the old
-        // URL first.
-        [JsonInclude] public string UpdateFeedUrl = "";
 
         [JsonInclude] public string Theme = "Forge";
 
@@ -170,11 +160,14 @@ namespace Thornswood
 
         /*
           Which build this install follows. Empty is the main build, the one
-          everybody plays on. "dev" is the second launcher, installed beside
-          the main one from its Settings page, that reads version.json off
-          the dev branch and joins the dev server. New work lands there
-          first and gets broken there, so the main build stays playable
-          while it is being tested.
+          everybody plays on. "dev" is the dev channel of the same install
+          (#5608, Patrick's answer B on 11 Nov 2026): the Server card's Main
+          and Dev switch sets it (DevBuild.Switch), and the launcher then
+          takes that channel's package from GitHub, game files included, and
+          joins the dev server. New work lands there first and gets broken
+          there, so the main build stays playable while it is being tested.
+          A dev copy in its own folder from before that is an old copy
+          (DevBuild.IsOldCopy).
         */
         [JsonInclude] public string Channel = "";
 
@@ -328,23 +321,7 @@ namespace Thornswood
             VoiceUrl = VoiceUrl.Trim();
             while (VoiceUrl.EndsWith("/")) { VoiceUrl = VoiceUrl.Substring(0, VoiceUrl.Length - 1); }
 
-            if (ExpectedExeBytes <= 0) ExpectedExeBytes = 37157144;
-            // UpdateRepo used to default to Thornswood-Releases, the GitHub
-            // fallback. That repository is gone (#907), so nothing fills it in.
-            if (UpdateRepo == null) UpdateRepo = "";
-            if (UpdateToken == null) UpdateToken = "";
             if (string.IsNullOrEmpty(UpdateBranch)) UpdateBranch = "main";
-            // The site feed (#649), and since #907 the only one: a blank one
-            // used to mean a launcher that could never update itself and never
-            // said why, so there is always a right answer here.
-            if (string.IsNullOrEmpty(UpdateFeedUrl))
-            {
-                bool feedDev = string.Equals(Channel, "dev", StringComparison.OrdinalIgnoreCase)
-                            || string.Equals(UpdateBranch, "dev", StringComparison.OrdinalIgnoreCase);
-                UpdateFeedUrl = feedDev
-                    ? "https://thornswood.net/feed-dev/version.json"
-                    : "https://thornswood.net/feed/version.json";
-            }
             if (string.IsNullOrEmpty(Theme)) Theme = "Forge";
             if (Channel == null) Channel = "";
             if (string.IsNullOrEmpty(DiscordAppId)) DiscordAppId = "1549251507361292418";
@@ -365,17 +342,7 @@ namespace Thornswood
                     byte[] raw = File.ReadAllBytes(path);
                     int skip = (raw.Length >= 3 && raw[0] == 0xEF && raw[1] == 0xBB && raw[2] == 0xBF) ? 3 : 0;
                     var c = JsonSerializer.Deserialize(new ReadOnlySpan<byte>(raw, skip, raw.Length - skip), ConfigJson.Default.Config);
-                    if (c != null)
-                    {
-                        // On the disk these two are DPAPI blobs. Everywhere
-                        // else in the launcher they are ordinary strings, so
-                        // they get turned back here and nowhere else.
-                        // Anything written before this existed is plain text
-                        // and comes back through unchanged, then gets
-                        // encrypted by the next Save.
-                        c.UpdateToken    = Secrets.Unprotect(c.UpdateToken);
-                        return c;
-                    }
+                    if (c != null) return c;
                 }
             }
             catch (Exception ex) { Swallow.Note("Config.Load, reading " + path, ex); }
@@ -384,10 +351,8 @@ namespace Thornswood
 
         public void Save(string path)
         {
-            string tk = UpdateToken;
             try
             {
-                UpdateToken = Secrets.Protect(tk);
                 File.WriteAllBytes(path, JsonSerializer.SerializeToUtf8Bytes(this, ConfigJson.Writer.Config));
                 Secrets.LockDown(path);
             }
@@ -395,52 +360,12 @@ namespace Thornswood
             // that failed now says so in launcher.log. It used to be the
             // tester saying the Save button did nothing, and nothing else.
             catch (Exception ex) { Swallow.Note("Config.Save, writing " + path, ex); }
-            finally
-            {
-                UpdateToken = tk;
-            }
-        }
-    }
-
-    public class Pack
-    {
-        [JsonInclude] public string id = "";
-        [JsonInclude] public string url = "";
-        [JsonInclude] public string sha256 = "";
-        [JsonInclude] public string notes = "";
-
-        // Only the optional packs use these two. A required update pack is
-        // applied without anybody being asked, so it has nothing to show and
-        // no download size worth warning about. An optional one sits on a page
-        // with a button next to it and needs both.
-        [JsonInclude] public string name = "";
-        [JsonInclude] public long bytes;
-
-        [JsonIgnore]
-        public string Title { get { return string.IsNullOrEmpty(name) ? id : name; } }
-
-        // Set only on the entry Updater.Pending makes for a whole release the
-        // install syncs to (Sync.cs, #1050), never read from the feed: the
-        // record, and the feed it came in, whose packs it stands in for.
-        public RecordRef Record;
-        public VersionDoc Doc;
-
-        [JsonIgnore]
-        public string Size
-        {
-            get
-            {
-                if (bytes <= 0) return "";
-                if (bytes >= 1073741824L) return (bytes / 1073741824.0).ToString("0.0") + " GB";
-                if (bytes >= 1048576L) return (bytes / 1048576.0).ToString("0") + " MB";
-                return (bytes / 1024.0).ToString("0") + " KB";
-            }
         }
     }
 
     /// <summary>
     /// One note on the News tab: one build Release's notes (ReleaseNews.cs,
-    /// #5187). Filled by the launcher from GitHub, never read from the feed.
+    /// #5187). Filled by the launcher from GitHub.
     /// </summary>
     public class NewsItem
     {
@@ -471,7 +396,7 @@ namespace Thornswood
         ///
         /// The publisher writes this field, and what it writes has changed:
         /// entries from before carry a bare "17 Sep 2026" with no time at all.
-        /// Rewriting the feed to match would be rewriting history for the sake
+        /// Rewriting the old notes to match would be rewriting history for the sake
         /// of a format, so the reading end converts instead, exactly as the
         /// site does with the stamp under its download button.
         ///
@@ -503,251 +428,14 @@ namespace Thornswood
     }
 
     /// <summary>
-    /// Where to get the SkyMP client runtime, as one download.
-    ///
-    /// The six files in client-build.json are the only ones a person cannot
-    /// get from anywhere else: they are built from the fork, and the folder
-    /// build refuses to take them from the Steam copy. A pack carries only
-    /// what CHANGED and they change a few times a month, so before this
-    /// existed the launcher had to walk back through the update feed hoping to
-    /// find a release where they had moved. Published by Publish-Update when
-    /// the recorded build is not already on the feed, and named by fork
-    /// commit so an unchanged build is never uploaded twice.
-    /// </summary>
-    public class ClientRuntimeRef
-    {
-        [JsonInclude] public string url = "";
-        [JsonInclude] public string sha256 = "";
-        [JsonInclude] public long bytes;
-        [JsonInclude] public string forkCommit = "";
-    }
-
-    /// <summary>
-    /// One of the depots the Downgrade button asks Steam for, with the manifest
-    /// that is the pinned build of it. Strings, because a manifest id can be
-    /// larger than a long.
-    /// </summary>
-    public class PinDepot
-    {
-        [JsonInclude] public string id = "";
-        [JsonInclude] public string manifest = "";
-    }
-
-    public class VersionDoc
-    {
-        [JsonInclude] public string launcherVersion = "";
-        [JsonInclude] public string launcherUrl = "";
-        [JsonInclude] public string launcherSha256 = "";
-        [JsonInclude] public string serverAddress = "";
-        [JsonInclude] public string collectionUrl = "";
-
-        /// <summary>The client runtime download. Null on a feed written before
-        /// this existed, which is why every use of it is guarded.</summary>
-        [JsonInclude] public ClientRuntimeRef clientRuntime = null;
-
-        /// <summary>
-        /// Which revision of the collection the SERVER was built against.
-        ///
-        /// Written by Publish-Update from the shipping machine's own Vortex
-        /// install, because that is the deployment the server's load order and
-        /// the reference plugin list were both derived from. So this is not an
-        /// opinion about which revision is newest on Nexus; it is a statement
-        /// of which one this release agrees with.
-        ///
-        /// The launcher compares it with its own installed revision and says
-        /// behind or ahead. Before 22 September there was no number at all: it
-        /// guessed from whether one named file existed, and that file was not
-        /// even in the collection, so Patrick sat two revisions behind his own
-        /// collection with nothing on screen saying so.
-        ///
-        /// 0 from an older feed, which means say nothing rather than guess.
-        /// </summary>
-        [JsonInclude] public int collectionRevision;
-
-        [JsonInclude] public string serverPort = "";
-        [JsonInclude] public int maxOnline;
-
-        // The Skyrim build the release is pinned to (#471): the exe size the
-        // checks look for, the size of the newer build Steam hands out, and
-        // the depot manifests the Downgrade button asks for. Written by
-        // Publish-Update from records\skyrim-pin.json. Null on a feed written
-        // before these existed, which leaves the launcher on what it was built
-        // with; a launcher older than these ignores them. The sizes are
-        // strings for the reason maintenance is below: a long given null or a
-        // quoted number throws, and a throw is the whole document unread.
-        // Downgrade.AdoptPin reads them as numbers.
-        [JsonInclude] public string expectedExeBytes;
-        [JsonInclude] public string newerExeBytes;
-        [JsonInclude] public PinDepot[] depots = null;
-
-        // Where updates come from, and where voice lives. These used to be
-        // boxes on the Settings page, which was wrong twice over: they are not
-        // choices anybody makes, and a launcher old enough to have the wrong
-        // one is exactly the launcher that cannot be told. Shipping them in the
-        // update means a rename or a moved port reaches every copy by itself.
-        //
-        // updateRepo named the GitHub repository of the fallback. It is read by
-        // nothing since #907 and kept only so an older feed still parses.
-        [JsonInclude] public string updateRepo = "";
-
-        // Where version.json itself lives, a direct https URL on the site.
-        // Publish the new URL under the old feed first, then move (#649).
-        // Null/empty on older feeds means keep whatever the launcher already
-        // has (including the AfterLoad default).
-        [JsonInclude] public string updateFeedUrl = "";
-        [JsonInclude] public string voicePort = "";
-
-        /// <summary>
-        /// Where voice lives, when that is not the server address and a port.
-        /// </summary>
-        /// <remarks>
-        /// NULL BY DEFAULT, and that is the whole point of it. Every other
-        /// field here is picked up only when it arrives non-empty, which can
-        /// set a value and can never clear one. That is fine for an address
-        /// that only ever changes to another address.
-        ///
-        /// This one has to be clearable. Pointing everybody at Caddy and then
-        /// finding a fault in it has to be undoable in one release, and the way
-        /// back is an empty value reaching every machine. Null means the feed
-        /// did not mention it; empty means the feed said to clear it. Those are
-        /// different answers and the reader below tells them apart.
-        /// </remarks>
-        [JsonInclude] public string voiceUrl = null;
-        [JsonInclude] public string discordAppId = "";
-        [JsonInclude] public string siteUrl = "";
-        [JsonInclude] public string presenceImage = "";
-
-        [JsonInclude] public string message = "";
-
-        // Entry 262: hold Play for maintenance, or below a launcher version.
-        // Set by hand in the releases repo and read by FeedNotice, which says
-        // what each one does.
-        //
-        // maintenance is a string although it means yes or no. Measured on 24
-        // September with this serializer on the .NET Framework: a bool field
-        // given "yes" or null throws, and a throw here is not one field lost,
-        // it is the whole document unread. Every launcher then says there was
-        // no answer from the update source and shuts Play, which would turn a
-        // typo in a switch meant for one afternoon into a lockout for
-        // everybody. As a string, true, "true", 1, null and "yes" all read
-        // without a word, and FeedNotice.On decides what counts as on.
-        //
-        // Both are null on a feed written before this existed: the serializer
-        // does not run field initialisers, which the same measurement showed
-        // for message too.
-        [JsonInclude] public string maintenance;
-        [JsonInclude] public string minLauncher;
-
-        [JsonInclude] public Pack[] packs = new Pack[0];
-
-        // Packs nobody has to have. These are never applied on their own: they
-        // sit on the Mods page with an Install button, and they are safe only
-        // because the publisher refuses to build one that contains a plugin.
-        // The server compares plugin lists and nothing else, so a pack of
-        // textures and meshes cannot put anybody out of step with it.
-        [JsonInclude] public Pack[] optional = new Pack[0];
-        // What the main build was on when this feed was written. Only a dev
-        // feed carries it, and it is the other half of the answer to the
-        // question the News tab could not answer before: this build is on
-        // one number, main is on another, and these notes in between are the
-        // difference. Which is also the list of what wants testing before a
-        // dev release becomes a main one.
-        [JsonInclude] public string mainVersion = "";
-        /// <summary>
-        /// The News tab's notes, from the build Releases this channel's
-        /// Deployment reached (ReleaseNews.cs, #5187). Not read from the feed:
-        /// a "news" or "newsFile" there is a Ship's, which no Deployment
-        /// writes, so Updater.FillNews fills this after every check.
-        /// </summary>
-        [JsonIgnore] public NewsItem[] news = new NewsItem[0];
-
-        /// <summary>
-        /// The record of the release the feed is on, its "baseline" (#1011),
-        /// which the launcher syncs the install to (#1050). Not a DataMember:
-        /// Parse reads it apart, so a "baseline" of any unexpected shape costs
-        /// that one field and never the whole feed. Null when there is none.
-        /// </summary>
-        public RecordRef record;
-
-        /// <summary>
-        /// The signed release manifest, "signedManifest" (#2163, FeedManifest.cs).
-        /// Read apart like the record. Null when there is none.
-        /// </summary>
-        public ManifestRef manifestRef;
-
-        /// <summary>
-        /// The rest of the feed as a file of its own, "settings" (#1050,
-        /// FeedSettings.cs). Null when the feed carries every field itself.
-        /// </summary>
-        public SettingsRef settingsRef;
-
-        public static VersionDoc Parse(byte[] raw)
-        {
-            return ParseFeed(raw, null);
-        }
-
-        /// <summary>
-        /// The feed, with every asset it names by sha256 alone given the
-        /// address it has beside every other asset (#1050): assets is the
-        /// feed's own folder plus "assets/" (Updater.AssetsOf). Null for a
-        /// reader that has no feed address, which then has only the assets
-        /// whose address the feed spells out.
-        /// </summary>
-        public static VersionDoc ParseFeed(byte[] raw, string assets)
-        {
-            // A UTF-8 byte order mark is not JSON. The serializer stops on it and
-            // reports an unexpected character, which would break the update
-            // check for everyone at once, and with it their route to a fix.
-            int at = 0;
-            if (raw.Length >= 3 && raw[0] == 0xEF && raw[1] == 0xBB && raw[2] == 0xBF) at = 3;
-            VersionDoc doc = JsonSerializer.Deserialize(new ReadOnlySpan<byte>(raw, at, raw.Length - at), ConfigJson.Default.VersionDoc);
-            if (doc != null)
-            {
-                doc.record = RecordRef.FromFeed(raw, at, assets);
-                doc.manifestRef = ManifestRef.FromFeed(raw, at, assets);
-                doc.settingsRef = SettingsRef.FromFeed(raw, at);
-                if (doc.clientRuntime != null)
-                    doc.clientRuntime.url = RecordRef.AssetUrl(doc.clientRuntime.url, (doc.clientRuntime.sha256 ?? "").ToLowerInvariant(), assets);
-            }
-            return doc;
-        }
-
-        /// <summary>
-        /// The feed whose update fields are top's and every other field rest's:
-        /// version.json and the settings file it names (#1050). The packs stay
-        /// in version.json, as an empty list, for every launcher from before
-        /// the split.
-        /// </summary>
-        public static VersionDoc Join(VersionDoc top, VersionDoc rest)
-        {
-            rest.launcherVersion = top.launcherVersion;
-            rest.launcherUrl = top.launcherUrl;
-            rest.launcherSha256 = top.launcherSha256;
-            rest.minLauncher = top.minLauncher;
-            rest.packs = top.packs;
-            rest.record = top.record;
-            rest.settingsRef = top.settingsRef;
-            return rest;
-        }
-    }
-
-    /// <summary>
-    /// The feed's "signedManifest" (#2163): { url, sha256, catalogUrl,
-    /// catalogSha256 }, release.json and the catalog ThornswoodRelease signed
-    /// over it, each stored under its own sha256 beside every other asset.
-    /// Read apart from the serializer, so a signedManifest of any other shape
-    /// costs the manifest check and never the feed.
-    /// </summary>
-    /// <summary>
-    /// config.json and the feed for System.Text.Json, with the code that
-    /// reads and writes them made at build time, which the native build
-    /// needs (#4823). Members are the fields marked JsonInclude, under the
-    /// same names the old serializer used, so the files on disk and the feed
-    /// keep their shape. Strings read loosely, as LooseString says why.
+    /// config.json for System.Text.Json, with the code that reads and writes
+    /// it made at build time, which the native build needs (#4823). Members
+    /// are the fields marked JsonInclude, under the same names the old
+    /// serializer used, so the file on disk keeps its shape. Strings read
+    /// loosely, as LooseString says why.
     /// </summary>
     [JsonSourceGenerationOptions(Converters = new[] { typeof(LooseString) })]
     [JsonSerializable(typeof(Config))]
-    [JsonSerializable(typeof(VersionDoc))]
     partial class ConfigJson : JsonSerializerContext
     {
         /// <summary>
@@ -762,145 +450,14 @@ namespace Thornswood
         });
     }
 
-    public class ManifestRef
-    {
-        public string url = "";
-        public string sha256 = "";
-        public string catalogUrl = "";
-        public string catalogSha256 = "";
-
-        /// <summary>The feed's "signedManifest", or null when it names none
-        /// this launcher can use. Never throws.</summary>
-        public static ManifestRef FromFeed(byte[] raw, int at, string assets)
-        {
-            try
-            {
-                var root = Json.Parse(Encoding.UTF8.GetString(raw, at, raw.Length - at)) as Dictionary<string, object>;
-                if (root == null) return null;
-                object b;
-                if (!root.TryGetValue("signedManifest", out b)) return null;
-                var o = b as Dictionary<string, object>;
-                if (o == null) return null;
-                var r = new ManifestRef();
-                r.sha256 = Json.Str(o, "sha256").ToLowerInvariant();
-                r.url = RecordRef.AssetUrl(Json.Str(o, "url"), r.sha256, assets);
-                r.catalogSha256 = Json.Str(o, "catalogSha256").ToLowerInvariant();
-                r.catalogUrl = RecordRef.AssetUrl(Json.Str(o, "catalogUrl"), r.catalogSha256, assets);
-                if (!RecordRef.IsSha(r.sha256) || r.url.Length == 0) return null;
-                if (!RecordRef.IsSha(r.catalogSha256) || r.catalogUrl.Length == 0) return null;
-                return r;
-            }
-            catch (Exception)
-            {
-                // A feed whose "signedManifest" cannot be read has none: the
-                // check says so in the log, and the rest of the feed stands.
-                return null;
-            }
-        }
-    }
-
     /// <summary>
-    /// The feed's "settings" (#1050): { sha256 }, every field of the feed that
-    /// is not about the update itself, as one asset stored under its own
-    /// sha256 beside every other one. Its address is never taken from the
-    /// feed: it is the feed's own assets folder plus the sha256, so it is on
-    /// the host the feed came from (FeedSettings.cs). Unlike the record, a
-    /// "settings" this launcher cannot use is not read as none,
-    /// because the server, voice and Skyrim pin are in it: FromFeed gives one
-    /// with an empty sha256, and the update check says the feed is unreadable.
-    /// </summary>
-    public class SettingsRef
-    {
-        public string sha256 = "";
-
-        /// <summary>The feed's "settings", or null when it names none. Never
-        /// throws.</summary>
-        public static SettingsRef FromFeed(byte[] raw, int at)
-        {
-            var r = new SettingsRef();
-            try
-            {
-                var root = Json.Parse(Encoding.UTF8.GetString(raw, at, raw.Length - at)) as Dictionary<string, object>;
-                if (root == null) return null;
-                object b;
-                if (!root.TryGetValue("settings", out b)) return null;
-                var o = b as Dictionary<string, object>;
-                if (o == null) return r;
-                string sha = Json.Str(o, "sha256").ToLowerInvariant();
-                if (RecordRef.IsSha(sha)) r.sha256 = sha;
-                return r;
-            }
-            catch (Exception)
-            {
-                // The serializer has read this same text already, so this is
-                // a feed that parsed and a "settings" that did not: unusable.
-                return r;
-            }
-        }
-    }
-
-    /// <summary>
-    /// The record of a release the feed names as "baseline" (#1011): what that
-    /// release left installed, every file of ours as "&lt;bytes&gt;:&lt;sha256&gt;",
-    /// itself an asset on the site named by its sha256.
-    ///
-    /// Not a DataMember on VersionDoc on purpose. A value of the wrong JSON
-    /// type makes the serializer throw, and a throw there is the whole feed
-    /// unread and Play shut on every launcher. So VersionDoc.Parse reads this
-    /// one field on its own, with Json below, and a feed whose "baseline" is
-    /// anything unexpected simply has no record: the launcher takes the packs.
+    /// The release the game files were last synced to (Sync.cs, SyncPackage.cs):
+    /// the merge release's tag, and the sha256 of its signed game-files.json.
     /// </summary>
     public class RecordRef
     {
         public string id = "";
         public string sha256 = "";
-        public string url = "";
-        // The release note, title first, written beside the record since the
-        // packs left the feed (#1050), because the update card used to read it
-        // off the last pack. "" on a feed that does not say.
-        public string notes = "";
-
-        /// <summary>The "baseline" of a feed, or null when it names none or
-        /// names one this launcher cannot use. Never throws.</summary>
-        public static RecordRef FromFeed(byte[] raw, int at, string assets)
-        {
-            try
-            {
-                var root = Json.Parse(Encoding.UTF8.GetString(raw, at, raw.Length - at)) as Dictionary<string, object>;
-                if (root == null) return null;
-                object b;
-                if (!root.TryGetValue("baseline", out b)) return null;
-                var o = b as Dictionary<string, object>;
-                if (o == null) return null;
-                var r = new RecordRef();
-                r.id = Json.Str(o, "id");
-                r.sha256 = Json.Str(o, "sha256").ToLowerInvariant();
-                r.url = RecordRef.AssetUrl(Json.Str(o, "url"), r.sha256, assets);
-                r.notes = Json.Str(o, "notes").Trim();
-                if (!IsSha(r.sha256) || r.url.Length == 0) return null;
-                if (r.id.Length == 0) r.id = r.sha256.Substring(0, 12);
-                return r;
-            }
-            catch (Exception)
-            {
-                // A feed whose "baseline" cannot be read has no record: the
-                // launcher takes the packs, and the rest of the feed stands.
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// An asset's address: the one the feed spells out, or, when it gives
-        /// only the sha256 (#1050), the feed's assets folder plus it, which is
-        /// where Publish-Update puts every asset. "" when neither is had.
-        /// </summary>
-        public static string AssetUrl(string given, string sha, string assets)
-        {
-            string u = given == null ? "" : given.Trim();
-            if (u.Length > 0) return u;
-            if (string.IsNullOrEmpty(assets) || !IsSha(sha)) return "";
-            return assets + sha;
-        }
 
         /// <summary>64 lowercase hex characters.</summary>
         public static bool IsSha(string s)
@@ -913,9 +470,8 @@ namespace Thornswood
     }
 
     /// <summary>
-    /// A small JSON reader, for the two things the launcher reads that must
-    /// never stop the feed being read: the feed's "baseline" and the release
-    /// record itself (an object of a few thousand strings). Objects come back
+    /// A small JSON reader, for what must be read field by field so one odd
+    /// field never costs the rest. Objects come back
     /// as Dictionary&lt;string, object&gt;, arrays as List&lt;object&gt;, strings as
     /// string, numbers as their text, true and false as bool, null as null.
     /// Throws on anything that is not JSON.
