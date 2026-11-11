@@ -175,6 +175,9 @@ function start() {
     el('shell').style.display = 'grid';
     chrome();
     go(keyFor(location.pathname), false, true);
+    // A sign in that did not finish, said on the page if the hub opened
+    // signed in anyway (#4406, SIGNIN_SAID below).
+    if (SIGNIN_SAID && el('said')) el('said').textContent = SIGNIN_SAID;
   }).catch(function () { el('gate').style.display = 'grid'; });
 }
 
@@ -2403,16 +2406,28 @@ function drawInbox() {
   if (f) SFIND.q = String(f).slice(0, 80);
 })();
 
-// Discord sends people back here with a word about how it went.
-(function () {
-  var q = new URLSearchParams(location.search).get('discord');
-  if (!q) return;
+/* A Discord sign in that did not finish comes back to the page it began on
+   with ?discord= and one of three words (#4406, the callback in
+   site\lib\serve.js). This used to wait 400 ms and write into the page's
+   saved line, which a signed out person never sees behind the gate, and no
+   failure came back to the hub at all: the callback sent every one to the
+   front page. Now the line is said where the person is: on the gate's
+   error line, read at once, and on the page's saved line if the hub opens
+   signed in. Only these three words are shown, and as text. home.js says
+   the same three lines, and tests\test-4406-signin-failure-line.js holds
+   the two equal. */
+var SIGNIN_WORDS = {
+  cancelled: 'You cancelled the Discord sign in, so you are still signed out. Sign in again whenever you are ready.',
+  expired: 'That Discord sign in ran out of time before it finished. Sign in again to carry on.',
+  failed: 'Discord could not sign you in just then. Give it a minute and try again.'
+};
+var SIGNIN_SAID = (function () {
+  var word = new URLSearchParams(location.search).get('discord');
+  if (word === null) return '';
   history.replaceState({}, '', location.pathname);
-  setTimeout(function () {
-    var s = el('said');
-    if (s) s.textContent = q === 'cancelled' ? 'Discord sign in cancelled' : 'Discord sign in failed';
-  }, 400);
+  return Object.prototype.hasOwnProperty.call(SIGNIN_WORDS, word) ? SIGNIN_WORDS[word] : '';
 })();
+if (SIGNIN_SAID) el('err').textContent = SIGNIN_SAID;
 
 api('/api/hello').then(function (r) {
   return r.json().then(function (d) { return { ok:r.ok, d:d }; });

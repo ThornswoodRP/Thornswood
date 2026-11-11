@@ -404,6 +404,18 @@ async function handle(req, res) {
       attempt = (bits[3] || '').replace(/[^0-9a-f]/g, '').slice(0, 32);
       began = Number(bits[4]) || 0;
     }
+    // Two slashes is another host to a browser (//2130706433), so back has to
+    // start with exactly one.
+    if (!/^\/(?!\/)[A-Za-z0-9/_-]*$/.test(back)) back = '/';
+    /* Where a sign in that did not finish sends the browser (#4406): back to
+       the page it began on, with a word that page reads and says as a line.
+       These used to go to the front page whatever back said, with a word
+       nothing there read, so the person lost their page and was told
+       nothing. back comes from the signed state alone and is a plain path of
+       this site (just above), so this is never another host. A launcher's
+       sign in (a port) names no page of the site, so it keeps the front
+       page. */
+    const unfinished = (why) => ({ Location: (port ? '/' : back) + '?discord=' + why });
     // Refused here, before Discord is asked anything: a state with no attempt
     // in it, one this browser did not start, one already used, or one older
     // than ten minutes. A signature alone used to be enough, and it is the
@@ -414,17 +426,14 @@ async function handle(req, res) {
     if (attempt.length !== 32 || attemptsSpent.has(attempt) ||
         !(age > -60000 && age < ATTEMPT_MS) ||
         !sameSecret(cookies(req)[ATTEMPT + attempt.slice(0, 8)] || '', attempt)) {
-      return send(res, 302, '', 'text/plain', { Location: '/?discord=expired' });
+      return send(res, 302, '', 'text/plain', unfinished('expired'));
     }
     // Spent whatever happens next, and the cookie cleared on every answer
     // below. The one that sets cookies of its own carries this in its list.
     attemptsSpent.set(attempt, now);
     const spent = attemptCookie(req, attempt, '', 0);
     res.setHeader('Set-Cookie', spent);
-    // Two slashes is another host to a browser (//2130706433), so back has to
-    // start with exactly one.
-    if (!/^\/(?!\/)[A-Za-z0-9/_-]*$/.test(back)) back = '/';
-    if (!code) return send(res, 302, '', 'text/plain', { Location: '/?discord=cancelled' });
+    if (!code) return send(res, 302, '', 'text/plain', unfinished('cancelled'));
 
     let me;
     try {
@@ -446,10 +455,10 @@ async function handle(req, res) {
           'Try again.'
         ]), TYPES['.html']);
       }
-      return send(res, 302, '', 'text/plain', { Location: '/?discord=failed' });
+      return send(res, 302, '', 'text/plain', unfinished('failed'));
     }
     if (!me || !me.id) {
-      return send(res, 302, '', 'text/plain', { Location: '/?discord=failed' });
+      return send(res, 302, '', 'text/plain', unfinished('failed'));
     }
     const st = await standing(me.id);
     standCache.delete(String(me.id));

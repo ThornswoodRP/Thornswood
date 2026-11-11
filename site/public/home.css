@@ -197,6 +197,12 @@ nav.top a:hover{color:var(--page)}
 .notice b{color:var(--gold-hot);font-weight:600}
 .notice a{margin-left:8px;white-space:nowrap}
 @media(max-width:560px){ .notice{font-size:13.5px} }
+/* What a Discord sign in that did not finish says, on the page it began on
+   (#4406). The line is in the page from the start, empty, so a screen
+   reader hears it when home.js fills it; empty, it takes no room. */
+.signin-said{margin-top:14px;padding:12px 16px;border-left:3px solid var(--gold);
+  background:rgba(201,162,75,.08);font:400 15px/1.5 var(--sans)}
+.signin-said:empty{margin-top:0;padding:0;border:0}
 
 /* ----------------------------------------------------------------- hero -- */
 /*
