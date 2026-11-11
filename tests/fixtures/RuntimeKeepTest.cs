@@ -82,9 +82,12 @@ namespace Thornswood
             Fresh("previous client", "previous client", false);
             Asset("unrecorded client");
             Check("a package copy that is not the recorded build cannot count as a successful repair", ClientRuntime.Heal(new Config(), null) == 0);
+            // Since #5608 the package's copy is checked before it is written,
+            // so a copy that is not the recorded build never reaches the game.
             Check("wrong asset is not adopted into retention", Read(kept) == "previous client" && !ClientRuntime.Good());
+            Check("and a package copy that is not the recorded build is never written into the game", Read(live) == "previous client");
             Keep.Restore();
-            Check("stale retention cannot overwrite a rejected asset either", Read(live) == "unrecorded client");
+            Check("stale retention still leaves the live file as it was after a refused repair", Read(live) == "previous client" && !ClientRuntime.Good());
 
             Fresh(null, null, false);
             string ui = "Data\\Platform\\UI\\index.html";
