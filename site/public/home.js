@@ -115,27 +115,6 @@ function publicData() {
   if (!publicAsked) publicAsked = request('/api/public?galleryLimit=24', { credentials: 'same-origin' });
   return publicAsked;
 }
-/* A Discord sign in that did not finish comes back to the page it began on
-   with ?discord= and one of three words (#4406, the callback in
-   site\lib\serve.js). The line goes in #signinSaid, which is in the page
-   from the start, and the word comes out of the address so a reload or a
-   shared link does not say it again. Only these three words are shown, and
-   as text, never as markup. hub.js says the same three lines on its gate,
-   and tests\test-4406-signin-failure-line.js holds the two equal. */
-var SIGNIN_WORDS = {
-  cancelled: 'You cancelled the Discord sign in, so you are still signed out. Sign in again whenever you are ready.',
-  expired: 'That Discord sign in ran out of time before it finished. Sign in again to carry on.',
-  failed: 'Discord could not sign you in just then. Give it a minute and try again.'
-};
-(function signinSaid() {
-  // Most loads carry nothing after the ?, and then there is nothing to read.
-  if (!location.search) return;
-  var word = new URLSearchParams(location.search).get('discord');
-  if (word === null) return;
-  history.replaceState(null, '', location.pathname + location.hash);
-  var line = document.getElementById('signinSaid');
-  if (line && Object.prototype.hasOwnProperty.call(SIGNIN_WORDS, word)) line.textContent = SIGNIN_WORDS[word];
-})();
 // Reduce large still pictures before uploading. Animated GIFs stay intact.
 function preparePicture(file) {
   if (file.size > 25 * 1024 * 1024) return Promise.reject(new Error('Pictures must be 25 MB or smaller.'));
@@ -1148,3 +1127,28 @@ publicData()
 
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+/* A Discord sign in that did not finish comes back to the page it began on
+   with ?discord= and one of three words (#4406, the callback in
+   site\lib\serve.js). The line goes in #signinSaid, which is in the page
+   from the start, and the word comes out of the address so a reload or a
+   shared link does not say it again. Only these three words are shown, and
+   as text, never as markup. hub.js says the same three lines on its gate,
+   and tests\test-4406-signin-failure-line.js holds the two equal. It is
+   here with the code that runs as the page loads, not among the helpers
+   above show(), which site\tests\test-site-front-resilience.js lifts and
+   runs on their own. */
+var SIGNIN_WORDS = {
+  cancelled: 'You cancelled the Discord sign in, so you are still signed out. Sign in again whenever you are ready.',
+  expired: 'That Discord sign in ran out of time before it finished. Sign in again to carry on.',
+  failed: 'Discord could not sign you in just then. Give it a minute and try again.'
+};
+(function signinSaid() {
+  // Most loads carry nothing after the ?, and then there is nothing to read.
+  if (!location.search) return;
+  var word = new URLSearchParams(location.search).get('discord');
+  if (word === null) return;
+  history.replaceState(null, '', location.pathname + location.hash);
+  var line = document.getElementById('signinSaid');
+  if (line && Object.prototype.hasOwnProperty.call(SIGNIN_WORDS, word)) line.textContent = SIGNIN_WORDS[word];
+})();
