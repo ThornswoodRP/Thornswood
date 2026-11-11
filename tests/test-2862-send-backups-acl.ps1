@@ -95,6 +95,12 @@ Yes 'Send-Backups -Install turns on the Task Scheduler''s Operational log, and c
 Yes 'the task''s trigger and -Status ask the log one query, in that log' (
     $send.Contains('$q = $Ended') -and $send.Contains('Get-WinEvent -FilterXml ([xml]$Ended)') -and
     $send.Contains("`$TaskLog = 'Microsoft-Windows-TaskScheduler/Operational'"))
+# The task runs with nobody at it. Restore-Backup.ps1 waits for Enter at its
+# end unless it is given -NoPause, and on 11 Nov 2026 the send's first check
+# waited there until Windows ended the task two hours later.
+$calls = @([regex]::Matches(($send -replace '(?s)<#.*?#>', ''), '& pwsh [^\r\n]*') | ForEach-Object { $_.Value })
+Yes ('every pwsh the send starts is told nobody is there: -NonInteractive, and -NoPause for Restore-Backup' + $(if (-not $calls.Count) { ' (none found)' })) (
+    $calls.Count -ge 1 -and @($calls | Where-Object { $_ -notmatch ' -NonInteractive ' -or ($_ -match '\$restore' -and $_ -notmatch ' -NoPause( |$)') }).Count -eq 0)
 Yes '-Status says what Windows wrote about the send task''s own runs, from that log' (
     $send.Contains("[@Name='TaskName']='\`$TaskName'") -and $send.Contains('Get-WinEvent -FilterXml ([xml]$own)'))
 
