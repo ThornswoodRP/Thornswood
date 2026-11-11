@@ -412,6 +412,7 @@ blockquote.chron cite{display:block;margin-top:14px;font:400 12px/1 var(--sans);
 .shot img,.shot video{width:100%;height:100%;object-fit:cover}
 .shot-card{display:flex;flex-direction:column;gap:8px}
 .shot-card .shot-actions{display:flex;flex-wrap:wrap;gap:8px}
+.shot-card .shot-actions .said{flex:1 1 100%;margin:0}
 /* Gallery submit box: same dark gold panel language as the rest of the site,
    not a separate olive slab. Staff queue lives on the hub only. */
 .gal-box{margin-top:28px;padding:26px 28px;border:1px solid var(--edge);
