@@ -179,7 +179,11 @@ $todo = @(Get-ChildItem -LiteralPath $Root -File | Where-Object { $_.Name -match
 if (-not $todo.Count) { Note '  nothing new to send'; exit 0 }
 $failed = 0
 foreach ($f in $todo) {
-  $check = & pwsh -NoProfile -ExecutionPolicy Bypass -File $restore -Backup $f.FullName -KeyFile $keyFile -CheckOnly 2>&1
+  # -NoPause: Restore-Backup waits for Enter at its end without it, and the
+  # task has nobody to press it. On 11 Nov 2026 the first check sat there
+  # until the task's two hours ran out and Windows ended it (event 329),
+  # with nothing sent. -NonInteractive makes any other prompt an error.
+  $check = & pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $restore -Backup $f.FullName -KeyFile $keyFile -CheckOnly -NoPause 2>&1
   if ($LASTEXITCODE -ne 0) { Note ("  NOT SENT $($f.Name): it does not open with the passphrase. " + ("$check" -replace '\s+', ' ')); $failed++; continue }
   $sha = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
   $mark = Join-Path $Box ($f.Name + '.done')
