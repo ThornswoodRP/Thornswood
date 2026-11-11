@@ -93,6 +93,15 @@ if ($Status) {
   } catch { Say ('task log   could not be read: ' + $_.Exception.Message) }
   $ends = @(Get-WinEvent -FilterXml ([xml]$Ended) -MaxEvents 3 -ErrorAction SilentlyContinue)
   Say ('ends seen  ' + $ends.Count + ' of ' + $BackupTask + $(if ($ends.Count) { ', newest ' + $ends[0].TimeCreated }))
+  # What Windows wrote about this task's own runs (started, action started
+  # and ended with its code, terminated): on 11 Nov 2026 it was started at
+  # 1:18 AM and ended "terminated" (267014) with nothing in send.log.
+  $own = "<QueryList><Query Id='0' Path='$TaskLog'><Select Path='$TaskLog'>*[EventData[Data[@Name='TaskName']='\$TaskName']]</Select></Query></QueryList>"
+  $runs = @(Get-WinEvent -FilterXml ([xml]$own) -MaxEvents 12 -ErrorAction SilentlyContinue)
+  if ($runs.Count) {
+    Say ('--- what Windows wrote about ' + $TaskName + ', newest first ---')
+    foreach ($e in $runs) { Say ($e.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss') + '  ' + $e.Id + '  ' + (($e.Message -split "`r?`n")[0])) }
+  }
   $s = @(Get-Content -LiteralPath $Sent -ErrorAction SilentlyContinue | Where-Object { $_ })
   Say ('sent       ' + $s.Count + $(if ($s.Count) { ', newest ' + $s[-1] }))
   if (Test-Path -LiteralPath $Log) { Say '--- send.log, last 10 ---'; Get-Content -LiteralPath $Log -Tail 10 | ForEach-Object { Say $_ } }
