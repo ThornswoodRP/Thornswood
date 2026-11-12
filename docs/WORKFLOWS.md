@@ -61,7 +61,7 @@ whose only result is its own status and log.
 | --- | --- | --- | --- |
 | [nightly.yml](../.github/workflows/nightly.yml) | `schedule` (09:00 UTC), `workflow_dispatch` | Nightly checks: secrets, parsing, writing rules, every harness in shares, the launcher's publish, stray pull requests and branches, issues not written plain. | The nightly issue, opened, added to and closed; its harness reports as artifacts. |
 | [scorecard.yml](../.github/workflows/scorecard.yml) | `schedule` (Monday 10:00 UTC), `workflow_dispatch` | OpenSSF Scorecard's checks of how the repository is kept. | Code scanning alerts on the Security tab. |
-| [watch-outside.yml](../.github/workflows/watch-outside.yml) | `schedule` (every five minutes), `workflow_dispatch` | Watch outside: thornswood.net and what is around it, from outside the box (`scripts/vps/Watch-Outside.ps1`). | Messages in #staff-updates; its state in the Actions cache. |
+| [watch-outside.yml](../.github/workflows/watch-outside.yml) | `workflow_dispatch` (each run starts the next), `schedule` (only to start that chain again when it breaks) | Watch outside: thornswood.net and what is around it, from outside the box (`scripts/vps/Watch-Outside.ps1`). One run checks every five minutes by its own clock for 55 minutes, because GitHub's schedule does not keep an interval (#4170). | Messages in #staff-updates, and one when it was not checking for more than 15 minutes; its state in the Actions cache. |
 
 ## Started by hand or by another workflow
 

@@ -1,7 +1,23 @@
-# Watches thornswood.net and the things around it from outside the VPS,
-# every five minutes, and tells #staff-updates when one breaks and when it is
-# fixed (scripts/vps/Watch-Outside.ps1, whose header says what each check
-# asks and why).
+# Watches thornswood.net and the things around it from outside the VPS, and
+# tells #staff-updates when one breaks and when it is fixed
+# (scripts/vps/Watch-Outside.ps1, whose header says what each check asks and
+# why).
+#
+# THE CLOCK IS KEPT HERE, NOT BY THE SCHEDULE (#4170). GitHub's schedule
+# trigger does not keep an interval: asked for every five minutes, it started
+# this a median 11 minutes apart (once 110) in October, and from 2 to 12 Nov
+# 2026 3 to 5 times a day, 6 to 8 hours apart. So one run checks every 5
+# minutes by its own clock for 55 minutes (Watch-Outside.ps1 -For 55; the
+# runners' App token minted at its start lasts an hour), keeps what it
+# remembers, and starts the next run with workflow_dispatch, which GitHub
+# starts for the run's own token. The concurrency group holds that next run
+# until this one ends, so one watches at a time. The schedule below only
+# starts the chain again when it breaks (a failed run, GitHub losing a
+# dispatch), and the first check after more than 15 minutes without one
+# tells staff the watcher was not checking, with both times. On this public
+# repository GitHub's hosted runners cost nothing (docs/DECIDED.md, No paid
+# Actions usage, is about the private ones); the price is one of the
+# organisation's concurrent jobs, always taken.
 #
 # FOLDED IN FROM ITS OWN REPOSITORY (#3690). Until 31 Oct it ran from a
 # public repository of its own, because a public repository's Actions
@@ -52,6 +68,8 @@ permissions:
   # The deploys check: whether the box deploy agent has marked the newest
   # Deployment of each environment it applies (Watch-Outside.ps1, deploys).
   deployments: read
+  # Starting the next run of this workflow when this one ends (#4170).
+  actions: write
 
 # One at a time, so two runs never judge the same state at once.
 concurrency:
@@ -63,7 +81,8 @@ jobs:
     if: ${{ vars.WATCH_OUTSIDE == 'here' }}
     environment: watch
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    # 55 minutes of checks, and the steps around them.
+    timeout-minutes: 62
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -105,7 +124,7 @@ jobs:
           WATCH_WEBHOOK: ${{ secrets.STAFF_WEBHOOK }}
           WATCH_RUNNER_TOKEN: ${{ steps.app.outputs.token }}
           WATCH_DEPLOY_TOKEN: ${{ github.token }}
-        run: ./scripts/vps/Watch-Outside.ps1 -Run -Folder state -Minutes 5
+        run: ./scripts/vps/Watch-Outside.ps1 -Run -Folder state -Minutes 5 -For 55
 
       - name: Keep what it remembers
         if: ${{ !inputs.test }}
@@ -113,3 +132,12 @@ jobs:
         with:
           path: state
           key: watch-outside-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # The next run, which the concurrency group holds until this one ends.
+      # Even after a failed watch, so one bad hour does not stop the watching;
+      # never after a test post, and never when somebody cancelled the run.
+      - name: Start the next run
+        if: ${{ !cancelled() && !inputs.test }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run watch-outside.yml --ref main --repo "$GITHUB_REPOSITORY"

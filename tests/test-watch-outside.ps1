@@ -299,7 +299,7 @@ try {
   Yes 'the message says why, in words' ($down -match 'did not answer within 20 seconds')
   Yes 'an address at the start of the reason keeps its small letters' ($down -cmatch '\*\* https://thornswood\.net/ did not')
   Yes 'the message says when, in each reader''s own clock' ($down -match '<t:\d+:f>')
-  Yes 'the message says where it was checked from' ($down -match 'Checked from outside the VPS, on GitHub''s servers, about every 5 minutes')
+  Yes 'the message says where it was checked from, and how long before it the check before it was (#4170)' ($down -match 'Checked from outside the VPS, on GitHub''s servers\. The check before this one was about 5 minutes earlier\.' -and $down -notmatch 'about every')
   $null = Pass-Once; $null = Pass-Once; $null = Pass-Once
   Yes 'still down three runs later: still one message' ((Posted '*is down*') -eq 1)
   $script:site = 200
@@ -491,9 +491,10 @@ try {
   $null = Pass-Once; $null = Pass-Once
   Clear-Posted
 
-  # Every row in the outbox has the VPS outbox's shape.
+  # Every row in the outbox has the VPS outbox's shape; a gap in the checking
+  # is its own kind (#4170).
   $rows = @(Get-Content -LiteralPath $P.Alerts | ForEach-Object { ConvertFrom-Json $_ })
-  $shape = @($rows | Where-Object { $_.id -like 'outside-*' -and $_.at -gt 0 -and $_.service -like 'outside *' -and @('down', 'back') -contains $_.kind -and $_.text })
+  $shape = @($rows | Where-Object { $_.id -like 'outside-*' -and $_.at -gt 0 -and $_.service -like 'outside *' -and @('down', 'back', 'gap') -contains $_.kind -and $_.text })
   Yes ('every outbox row has id, at, service, kind and text, ' + $rows.Count + ' rows') ($rows.Count -gt 0 -and $shape.Count -eq $rows.Count)
 
   # ---- no webhook at all ----------------------------------------------------------

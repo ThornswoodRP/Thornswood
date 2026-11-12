@@ -93,6 +93,10 @@ try {
   function Wait-Until([datetime]$t) { $script:waits++; if ($t -gt $script:clock) { $script:clock = $t } }
   $env:WATCH_WEBHOOK = 'https://discord.com/api/webhooks/123456/FAKEHOOK_abc'
   function Posted([string]$like) { return @($script:posted | Where-Object { $_ -like $like }).Count }
+  # The next pass $m minutes after the last one started (a pass takes 70
+  # seconds of the clock above), or after the last one tried, offline.
+  $script:lastTry = $script:clock
+  function Next([int]$m) { $script:clock = $script:lastTry.AddMinutes($m); $script:lastTry = $script:clock; $null = Invoke-WatchFor $S $P 5 6>$null }
 
   # ---- 2. the loop ---------------------------------------------------------------
   $have = [bool](Get-Command Invoke-WatchFor -EA SilentlyContinue)
@@ -108,36 +112,29 @@ try {
     Yes '   and a healthy run tells nobody anything' ($script:posted.Count -eq 0)
 
     # ---- 3. a gap is told -------------------------------------------------------
-    $script:clock = $script:clock.AddMinutes(5); $script:passes.Clear()
-    $null = Invoke-WatchFor $S $P 5 6>$null
-    Yes '3. the next run, 5 minutes on, tells nothing' ($script:posted.Count -eq 0)
-    $script:clock = $script:clock.AddMinutes(437)
-    $null = Invoke-WatchFor $S $P 5 6>$null
+    $script:lastTry = $start; $script:passes.Clear()
+    Next 55
+    Yes '3. the next run, 5 minutes after the last pass, tells nothing' ($script:posted.Count -eq 0)
+    Next 437
     Yes ('   a pass 7 hours and more after the one before tells once that the watcher was not checking (' + $script:posted.Count + ')') ((Posted '*outside watcher was not checking*') -eq 1)
     $g = @($script:posted | Where-Object { $_ -like '*was not checking*' })[0]
     Yes '   with both times, in each reader''s clock, and how long' ($g -and ([regex]::Matches($g, '<t:\d+:f>')).Count -eq 2 -and $g -match 'about 7\.\d hours')
-    $script:clock = $script:clock.AddMinutes(5)
-    $null = Invoke-WatchFor $S $P 5 6>$null
+    Next 5
     Yes '   and not again on the pass after' ((Posted '*was not checking*') -eq 1)
-    $script:clock = $script:clock.AddMinutes(16)
-    $null = Invoke-WatchFor $S $P 5 6>$null
+    Next 16
     Yes '   16 minutes is more than 15, and told' ((Posted '*was not checking*') -eq 2)
-    $script:clock = $script:clock.AddMinutes(15)
-    $null = Invoke-WatchFor $S $P 5 6>$null
+    Next 15
     Yes '   15 minutes is not' ((Posted '*was not checking*') -eq 2)
     $script:online = $false
-    $script:clock = $script:clock.AddMinutes(5); $null = Invoke-WatchFor $S $P 5 6>$null
-    $script:clock = $script:clock.AddMinutes(5); $null = Invoke-WatchFor $S $P 5 6>$null
-    $script:clock = $script:clock.AddMinutes(5); $null = Invoke-WatchFor $S $P 5 6>$null
+    Next 5; Next 5; Next 5
     $script:online = $true
-    $script:clock = $script:clock.AddMinutes(5); $null = Invoke-WatchFor $S $P 5 6>$null
+    Next 5
     Yes '   a runner offline for 20 minutes checked nothing, so that is a gap too' ((Posted '*was not checking*') -eq 3)
 
     # ---- 4. the words ------------------------------------------------------------
     $script:posted.Clear()
     $script:siteBad = $true
-    $script:clock = $script:clock.AddMinutes(5); $null = Invoke-WatchFor $S $P 5 6>$null
-    $script:clock = $script:clock.AddMinutes(5); $null = Invoke-WatchFor $S $P 5 6>$null
+    Next 5; Next 5
     $down = @($script:posted | Where-Object { $_ -like '*is down*' })[0]
     Yes '4. the site down on two passes: one message' ((Posted '*is down*') -eq 1)
     Yes '   saying how long before it the check before it was, measured' ($down -match 'The check before this one was about 5 minutes earlier')
