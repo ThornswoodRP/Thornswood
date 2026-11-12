@@ -110,7 +110,7 @@ if (Test-Path -LiteralPath $dr) {
 $dc = P @('scripts', 'oneoff', 'Remove-DeadConditions.py')
 if (Test-Path -LiteralPath $dc) {
     $py = [IO.File]::ReadAllText($dc)
-    $m = [regex]::Match($py, '^\s*(?:"""[\s\S]*?""")\s*(\S[^\r\n]*)')
+    $m = [regex]::Match($py, '^\s*(?:"""[\s\S]*?""")(?:\s*#[^\r\n]*)*\s*(\S[^\r\n]*)')
     Yes 'Remove-DeadConditions.py raises SystemExit as its first statement after its docstring' ($m.Success -and $m.Groups[1].Value.StartsWith('raise SystemExit('))
     Yes '  saying it is retired' ($py -match 'raise SystemExit\([^)]*retired' -and $py -match '#4811')
 } else { Yes 'Remove-DeadConditions.py raises SystemExit as its first statement after its docstring' $false }
