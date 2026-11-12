@@ -21,9 +21,10 @@ Patrick's Grok Bot lanes (Anvil, Herald, Waystone, Wyrd, Smeagle and Codex)
 only audit now (Patrick, 30 Oct): they look over the work and file what
 they find as plain issues, unclaimed, in Todo. They claim no issue, open no
 pull request and run nothing. Every rule in this
-file binds them the same as a person. Their own notes are in an Obsidian
-vault on the shipping machine; nothing there is a rule, and what is true now
-is `ops\status.md` in the private ops repo.
+file binds them the same as a person. They work only on Grok Bot's own cloud
+computer and file through its GitHub connector; nothing of theirs runs on the
+shipping machine, and they are given no way into it (Patrick, 12 Nov 2026,
+#5933). What is true now is `ops\status.md` in the private ops repo.
 
 Six Hermes Bots take over the work from the Claude threads (Patrick, 30 Oct):
 Bramble picks, claims, merges and runs every release step, and Rift, Sprocket,
