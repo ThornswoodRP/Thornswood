@@ -18959,6 +18959,12 @@ log('gamemode loaded:',
   function isFormId(n) {
     return Number.isSafeInteger(n) && n > 0xff000000 && n <= 0xffffffff;
   }
+  // Whether the world holds a form at this id now. The engine answers a
+  // property of a form it does not hold by throwing ("Form with id ... doesn't
+  // exist", WorldState::GetFormAt), and that is the answer read here.
+  function formHeld(n) {
+    try { mp.get(n, 'profileId'); return true; } catch (e) { return false; }
+  }
 
   // The list, read once a load, field by field. A profile that is not a whole
   // number above 0, an actor that is not a runtime form id (isFormId), or a
@@ -19006,6 +19012,27 @@ log('gamemode loaded:',
         actor: function (n) { n = Number(n) || 0; return isFormId(n) && has(A, n); }
       }
     };
+    /*
+      A REUSED ID IS SOMEBODY NEW (#5036). The engine hands a new form the
+      lowest runtime id no loaded form holds (WorldState::GenerateFormId), so
+      once a character's change form is gone its id goes to the next new
+      character made. Once 'saves' is done, the characters this list names
+      have no change form, and the engine started without them; a form that
+      holds one of their ids now is somebody made since, not them. Without
+      this a part still waiting at a later start (one whose write did not
+      take, or whose block never asked) would let go of that new character's
+      holdings by the id alone. The list stops naming that id, in the file
+      too, so no later start can match it either.
+    */
+    if (has(st.done, 'saves')) {
+      var taken = st.actors.filter(formHeld);
+      if (taken.length) {
+        taken.forEach(function (n) { delete A[n]; });
+        st.actors = st.actors.filter(function (n) { return has(A, n); });
+        rlog(taken.length + ' character id(s) on the list belong to somebody made since, so the list no longer names them');
+        mark();
+      }
+    }
     rlog('a list of ' + st.profiles.length + ' profile(s) and ' + st.actors.length +
          ' character(s) to let go, at server start');
     return st;
