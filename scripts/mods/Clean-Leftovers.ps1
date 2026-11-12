@@ -1,27 +1,50 @@
 <#
   Clean-Leftovers.ps1
 
-  The other half of Audit-Leftovers.ps1. That one measures and never touches
-  anything; this one removes what it found.
+  Removes the leftovers Thornswood's own tools leave on this machine, in the
+  folders Thornswood owns, and lists, without touching, backup and temp files
+  in the game's Data folder.
 
   Shows you the list and deletes nothing:
 
       .\Clean-Leftovers.ps1
 
-  Actually removes it:
+  Actually removes Thornswood's own leftovers:
 
       .\Clean-Leftovers.ps1 -Go
 
-  Why this is a script and not a list of paths in a chat window: the small ones
-  are the whole point. A 13 GB zip gets noticed and dealt with once. Three .pex
-  files at 800 bytes each, a 61 KB client log, a .bak next to a plugin, a
-  versionlib nobody loads any more, all sitting in a Data folder that gets
-  zipped into an installer four people download, are what actually accumulates,
-  precisely because each one on its own never looks worth a command. Run this
-  whenever, it is fast when there is nothing to do.
+  WHAT IT REMOVES, AND WHAT WRITES EACH ONE (#4808). Only a file a Thornswood
+  tool writes, in a folder Thornswood owns, named here with what writes it:
 
-  Close the game first. Files the game has open will not delete, and the script
-  will say so rather than pretending otherwise.
+    <install>\Launcher\Thornswood.exe.old
+    <install>-DevBuild\Launcher\Thornswood.exe.old
+        The launcher from before Velopack keeps its old exe under this name
+        when its swap script puts an update in place, and launcher\move
+        clears it when it starts. One is left when that never ran. The
+        install is Where.ps1 Install, and -DevBuild beside it is where the
+        main launcher's Settings page installs the dev build.
+
+  Measured on main 12 November: no other Thornswood tool that runs on a
+  person's machine leaves a file ending .bak, .old, .tmp, .temp, .orig,
+  .backup or ~ behind. The gamemode, the bot, the site and the deploy agent
+  write their .tmp and .bak files on the box. The launcher's Steam manifest
+  .tmp is written whole and swapped in, in Steam's own folder. Enable-MCM.ps1,
+  which kept SkyUI_SE.esp.bak in Data, is retired and refuses to run (#1179).
+
+  WHAT IT ONLY LISTS. <install>\Game\Data and the dev build's: Vortex deploys
+  the collection there, so a .bak in it may be a collection file Vortex put
+  there, and deleting it would leave Vortex's deployment wrong. Each one is
+  listed, so you can decide, and nothing there is ever removed.
+
+  WHAT IT NEVER LOOKS AT. Until #4808 this walked the whole Downloads folder,
+  the engine clone, C:\SkyrimRP, two other launchers' AppData folders and
+  Skyrim Platform's temp folder too, and -Go deleted every file there with
+  one of those endings: other programs' files, other clones, files Vortex
+  deployed. None of those folders is Thornswood's, and nothing in them is a
+  file Thornswood leaves, so none is read.
+
+  Close the launcher first. A file something has open will not delete: the
+  run names each one and exits 1.
 #>
 [CmdletBinding()]
 param(
@@ -30,125 +53,76 @@ param(
     [switch]$NoPause
 )
 
-$ErrorActionPreference = 'Continue'
+$ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
 function Head($m) { Write-Host ''; Write-Host $m -ForegroundColor Cyan; Write-Host ('-' * $m.Length) -ForegroundColor DarkGray }
-function MB($b) { '{0,9:n2} MB' -f ($b / 1MB) }
+function Done([int]$code) {
+    Write-Host ''
+    if (-not $NoPause) { [void](Read-Host 'Enter to close') }
+    exit $code
+}
 
-# The same folders the audit walks.
-$roots = @(
-    (& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install)
-    (& (Join-Path $PSScriptRoot '..\release\Where.ps1') Engine)
-    'C:\SkyrimRP'
-    (Join-Path $env:USERPROFILE 'Downloads')
-    (Join-Path $env:USERPROFILE 'AppData\Roaming\skyrim-rp-launcher')
-    (Join-Path $env:USERPROFILE 'AppData\Roaming\com.bstar.skymp-launcher')
-    (Join-Path $env:LOCALAPPDATA 'Temp\Skyrim Platform')
-)
+$where = Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Where.ps1'
+$installs = @((& $where Install), (& $where InstallDev))
 
-# Backups, previous copies and scratch.
+# Thornswood's own leftovers, by name, in the folders Thornswood owns.
+$own = @(foreach ($i in $installs) { Join-Path (Join-Path $i 'Launcher') 'Thornswood.exe.old' })
+
+# Backups, previous copies and scratch: what is listed in Data.
 $cruftRx = '(?i)(\.bak$|\.old$|\.tmp$|\.temp$|\.orig$|\.backup$|~$)'
 
-<#
-  Paths that match the pattern above and must survive anyway.
+Head 'Thornswood''s own leftovers'
+$found = @($own | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
+if ($found.Count) { foreach ($f in $found) { Say "  $f" } }
+else { Say '  none' 'Green' }
 
-  The saves and ini folders are excluded outright rather than filtered. There
-  is nothing in them worth this script's attention and a mistake there costs
-  somebody their character.
-
-  The Steam copy is not walked at all: that folder is where the vanilla game
-  comes from and the installer fingerprints three files in it, and a .bak in
-  a vanilla Data folder might be somebody's only copy of something.
-#>
-$keepRx = @(
-    '(?i)\\My Games\\Skyrim Special Edition\\'
-    '(?i)\\OneDrive\\'
-    # The repo's own working tree. Its .orig and .bak files belong to vcpkg and
-    # node_modules, which own their contents and repair them on their terms.
-    # The fork was C:\Thornswood-Dev\skymp until 25 September and is the
-    # engine\skymp submodule of this repository after it (scripts\release\Where.ps1).
-    '(?i)\\(Thornswood-Dev|engine)\\skymp\\(vcpkg|.*node_modules)\\'
-) -join '|'
-
-Head 'Looking'
-
-$hits = New-Object System.Collections.Generic.List[object]
-
-foreach ($root in $roots) {
-    if (-not (Test-Path -LiteralPath $root)) {
-        Say ("  not here: $root") 'DarkGray'
-        continue
-    }
-    Say "  $root" 'DarkGray'
-
-    $files = @(Get-ChildItem -LiteralPath $root -Recurse -File -Force -EA SilentlyContinue)
-    foreach ($f in $files) {
-        if ($f.FullName -match $keepRx) { continue }
-
-        if ($f.Name -match $cruftRx) {
-            $hits.Add([pscustomobject]@{ Path = $f.FullName; Bytes = $f.Length; Kind = 'file'; Why = 'backup or temp' })
-        }
-    }
+Head 'Left alone in Game\Data, where Vortex deploys the collection'
+$unread = @()
+$listed = 0
+foreach ($i in $installs) {
+    $data = Join-Path (Join-Path $i 'Game') 'Data'
+    if (-not (Test-Path -LiteralPath $data -PathType Container)) { continue }
+    $readErrors = $null
+    $files = @(Get-ChildItem -LiteralPath $data -Recurse -File -Force -ErrorAction SilentlyContinue -ErrorVariable readErrors |
+        Where-Object { $_.Name -match $cruftRx })
+    foreach ($e in @($readErrors)) { $unread += [pscustomobject]@{ Path = [string]$e.TargetObject; Error = $e.Exception.Message } }
+    foreach ($f in $files) { Say ('  ' + $f.FullName) 'DarkGray'; $listed++ }
 }
+if (-not $listed -and -not $unread.Count) { Say '  none' 'Green' }
+elseif ($listed) { Say '  These are not removed: one may be a collection file, and only Vortex or you can say.' 'Yellow' }
 
-if ($hits.Count -eq 0) {
-    Write-Host ''
-    Say 'Nothing to clean. The pattern came back empty.' 'Green'
-    if (-not $NoPause) { [void](Read-Host 'Enter to close') }
-    exit 0
-}
-
-# ------------------------------------------------------------------ show ----
-$total = ($hits | Measure-Object -Property Bytes -Sum).Sum
-
-Head ('Found {0} things, {1}' -f $hits.Count, (MB $total).Trim())
-foreach ($h in ($hits | Sort-Object -Property Bytes -Descending)) {
-    $tag = if ($h.Kind -eq 'folder') { 'DIR ' } else { '    ' }
-    Say ('  {0} {1}  {2}' -f (MB $h.Bytes), $tag, $h.Path) 'DarkGray'
+if ($unread.Count) {
+    Head 'Could not be read, so the list above is not whole'
+    foreach ($u in $unread) { Say ('  ' + $u.Path) 'Red'; Say ('      ' + $u.Error) 'DarkGray' }
 }
 
 if (-not $Go) {
     Write-Host ''
-    Say 'Nothing was removed. That was the list.' 'Yellow'
-    Say 'To actually remove it:  .\Clean-Leftovers.ps1 -Go' 'Yellow'
-    if (-not $NoPause) { [void](Read-Host 'Enter to close') }
-    exit 0
+    if ($found.Count) { Say 'Nothing was removed. To remove Thornswood''s own leftovers:  .\Clean-Leftovers.ps1 -Go' 'Yellow' }
+    if ($unread.Count) { Done 1 }
+    Done 0
 }
 
-# ----------------------------------------------------------------- remove ----
 Head 'Removing'
-
-$gone = 0
-$freed = 0
 $stuck = @()
-
-foreach ($h in $hits) {
+foreach ($f in $found) {
     try {
-        Remove-Item -LiteralPath $h.Path -Recurse -Force -ErrorAction Stop
-        $gone++
-        $freed += $h.Bytes
+        Remove-Item -LiteralPath $f -Force
+        Say "  removed $f" 'Green'
     } catch {
-        $stuck += [pscustomobject]@{ Path = $h.Path; Error = $_.Exception.Message }
+        $stuck += [pscustomobject]@{ Path = $f; Error = $_.Exception.Message }
     }
 }
-
-Write-Host ''
-Say ('Removed {0} of {1}, {2} back.' -f $gone, $hits.Count, (MB $freed).Trim()) 'Green'
+if (-not $found.Count) { Say '  nothing to remove' 'Green' }
 
 if ($stuck.Count) {
     Write-Host ''
-    Say ('{0} would not go. Almost always something still has them open:' -f $stuck.Count) 'Yellow'
-    foreach ($s in $stuck) {
-        Say ('  ' + $s.Path) 'DarkGray'
-        Say ('      ' + $s.Error) 'DarkGray'
-    }
-    Say 'Close the game, the launcher and Vortex, then run it again.' 'Yellow'
+    Say ('STOP. {0} of Thornswood''s own leftovers would not delete:' -f $stuck.Count) 'Red'
+    foreach ($s in $stuck) { Say ('  ' + $s.Path) 'Red'; Say ('      ' + $s.Error) 'DarkGray' }
+    Say '  Something has it open, most often the launcher. Close it, then run this again.' 'Yellow'
+    Done 1
 }
-
-Write-Host ''
-Say ('If anything came out of ' + $roots[0] + '\Game\Data, ship a build so the') 'Gray'
-Say 'installer stops carrying it:  .\Ship.ps1 -Package' 'Gray'
-Write-Host ''
-if (-not $NoPause) { [void](Read-Host 'Enter to close') }
+if ($unread.Count) { Done 1 }
+Done 0
