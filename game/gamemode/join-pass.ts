@@ -119,7 +119,8 @@
 
   // On globalThis, so a hot reload keeps who has shown a pass.
   // passes: profile -> { at, x, v, d, i, id, s }, the pass on hand, s the session it proved (0: none yet);
-  // online: profile -> { joined, judged, actorId, sid, conn }; used: pass id -> { s, x } (#1320).
+  // online: profile -> { joined, judged, refusing, actorId, sid, conn }; used: pass id -> { s, x } (#1320).
+  // judged: decided, and a refusal has landed; refusing: a kick is set and has not answered yet (#4526).
   if (!g.__thornswoodPassSeen) { g.__thornswoodPassSeen = { passes: {}, online: {}, said: {} }; }
   var seen = g.__thornswoodPassSeen;
   if (!seen.used) { seen.used = {}; }
@@ -349,17 +350,34 @@
   // After the sentence, so it is on screen before the connection goes. Their
   // game is told the session ends (#1157), so it closes its side and does not
   // connect again by itself; the kick is for a game that does not.
-  function refuseLater(profileId, actorId, sentence) {
+  //
+  // e is the session being refused. It is marked judged only once the kick
+  // has landed (#4526): until then it is refusing, which keeps the sweep from
+  // setting a second kick inside the 5 seconds. A kick that finds no
+  // connection or throws clears refusing, so the session is still unjudged
+  // and the next sweep refuses it again, instead of leaving it in the world.
+  // A session that has gone or started again in the meantime is a new record,
+  // and this one is left alone.
+  function refuseLater(profileId, e, sentence) {
     var line = g.__thornswoodSayLine;
     if (typeof line === 'function') { line(profileId, { end: sentence }); }
+    e.refusing = true;
     setTimeout(function () {
+      var why = '';
       var userId = -1;
-      try { userId = mp.getUserByActor(actorId); } catch (e) { userId = -1; }
+      try { userId = mp.getUserByActor(e.actorId); } catch (err) { userId = -1; why = String(err); }
       if (userId === undefined || userId === null || userId < 0) {
-        console.log('[thornswood] could not find the connection of profile ' + profileId + ', so they stayed');
+        why = 'could not find the connection of profile ' + profileId + (why ? ' (' + why + ')' : '');
+      } else {
+        try { mp.kick(userId); } catch (err) { why = 'could not end profile ' + profileId + ': ' + err; }
+      }
+      if (seen.online[profileId] !== e) { return; }
+      e.refusing = false;
+      if (why) {
+        console.log('[thornswood] ' + why + ', so they are refused again at the next sweep');
         return;
       }
-      try { mp.kick(userId); } catch (e) { console.log('[thornswood] could not end profile ' + profileId + ': ' + e); }
+      e.judged = true;
     }, 5000);
   }
 
@@ -379,7 +397,7 @@
       if (!e) { e = begin(pid, conn, now); }
       if (!e.conn && conn) { e.conn = conn; }
       e.actorId = online[i].actorId;
-      if (e.judged) { continue; }
+      if (e.judged || e.refusing) { continue; }
       var had = seen.passes[pid];
       if (had && had.s === e.sid) {
         e.twin = inWorld(pid, had.d);
@@ -388,10 +406,9 @@
       }
       // A second game from an account already in the world (#2887).
       if (e.twin) {
-        e.judged = true;
         tell(pid, ACCOUNT_SENTENCE);
         console.log('[thornswood] refusing profile ' + pid + ': its Discord account is already in the world as profile ' + e.twin);
-        refuseLater(pid, e.actorId, ACCOUNT_SENTENCE);
+        refuseLater(pid, e, ACCOUNT_SENTENCE);
         continue;
       }
       // Held until then (#410): said once, after long enough that a pass on
@@ -401,13 +418,12 @@
         tell(pid, WAITING);
       }
       if (now - e.joined < GRACE_MS) { continue; }
-      e.judged = true;
       judged.push(pid);
       var why = passKey(now) ? 'no valid join pass in ' + Math.round((now - e.joined) / 1000) + 's online'
                              : 'this server has no join pass key in door.json';
       tell(pid, SENTENCE);
       console.log('[thornswood] refusing profile ' + pid + ': ' + why);
-      refuseLater(pid, e.actorId, SENTENCE);
+      refuseLater(pid, e, SENTENCE);
     }
     // Gone: the next session under that number needs a pass of its own.
     for (var k in seen.online) {
