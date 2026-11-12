@@ -31,7 +31,10 @@
     - two full plugins next to each other that no chain of rules keeps in that
       order, so LOOT is free to swap them.
     - a full plugin a rule names that the list does not enable, which means
-      the collection and the list disagree about what is in the order.
+      the collection and the list disagree about what is in the order. One
+      the collection installs switched off on purpose (records\collection.json,
+      enabled false) and that is in Data is allowed, and named as allowed
+      (#4728).
     - a rule that goes round in a circle with the order the game itself
       sets (every master first, each plugin after its own masters), light
       plugins included. LOOT can never keep it and says "cyclic interaction"
@@ -85,6 +88,7 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 . (Join-Path $Here 'LoadOrder.ps1')
 . (Join-Path $Here 'PluginRuleLoops.ps1')
+. (Join-Path $Here '..\dev\OwnPlugins.ps1')   # $OwnPluginsMadeInData
 
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
 function Stop-Check([string]$m) {
@@ -213,6 +217,17 @@ foreach ($r in $rules) {
 }
 
 # ------------------------------------------------------------------ the list --
+# The plugins the collection installs switched off on purpose, as the record
+# of the collection writes them (records\collection.json, enabled false). They
+# are in Data, and the launcher switches on the ones the servers load, so a
+# rule may name one and a list may leave one off (#4728).
+$offOnPurpose = [Collections.Generic.Dictionary[string, string]]::new([StringComparer]::OrdinalIgnoreCase)
+$recordPath = Join-Path $Here '..\..\records\collection.json'
+if (Test-Path -LiteralPath $recordPath -PathType Leaf) {
+  try { $record = [IO.File]::ReadAllText($recordPath) | ConvertFrom-Json } catch { Stop-Check ("$recordPath is not JSON: " + $_.Exception.Message) }
+  foreach ($p in @($record.plugins)) { if ($null -ne $p -and $p.enabled -eq $false) { $offOnPurpose[[string]$p.name] = [string]$p.name } }
+}
+
 if (-not (Test-Path -LiteralPath $List -PathType Leaf)) { Stop-Check "no plugin list at $List. Pass the one to check with -List." }
 if (-not (Test-Path -LiteralPath $Data -PathType Container)) {
   Stop-Check "no Data folder at $Data. Light plugins cannot be told from full ones without their headers. Pass the game's Data folder with -Data."
@@ -224,6 +239,9 @@ $present = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalI
 $full = New-Object Collections.Generic.List[string]
 $absent = New-Object Collections.Generic.List[string]
 $lightCount = 0
+# Made on each machine from its recipe and always loaded last
+# (OwnPlugins.ps1): no collection installs it, so no rule can name it.
+$madeHere = New-Object Collections.Generic.List[string]
 foreach ($m in $script:LoadOrderMasters) { [void]$present.Add($m) }
 for ($i = 0; $i -lt $file.Lines.Count; $i++) {
   $n = Get-LoadOrderEnabledName $file.Lines[$i]
@@ -232,12 +250,22 @@ for ($i = 0; $i -lt $file.Lines.Count; $i++) {
   $lineOf[$n] = $i + 1
   [void]$present.Add($n)
   if (Test-LoadOrderMaster $n) { continue }
+  if (@($script:OwnPluginsMadeInData) -icontains $n) { [void]$madeHere.Add($n); continue }
   $path = Join-Path $Data $n
   if ($n -notmatch '\.esl$' -and -not [IO.File]::Exists($path)) { [void]$absent.Add($n) }
   if (Test-LoadOrderLight $path) { $lightCount++; continue }
   [void]$full.Add($n)
 }
 if ($lineOf.Count -eq 0) { Stop-Check "$List enables nothing." }
+
+# A plugin file in Data, found by name in any case: a rule names it in lower
+# case, as Vortex writes them, and a file system that keeps case (Linux) does
+# not find it by that name (#2989). $null when Data has none.
+function Find-DataPlugin([string]$n) {
+  $path = Join-Path $Data $n
+  if ([IO.File]::Exists($path)) { return $path }
+  return (@([IO.Directory]::EnumerateFiles($Data)) | Where-Object { [IO.Path]::GetFileName($_) -ieq $n } | Select-Object -First 1)
+}
 
 $pos = [Collections.Generic.Dictionary[string, int]]::new([StringComparer]::OrdinalIgnoreCase)
 for ($i = 0; $i -lt $full.Count; $i++) { $pos[$full[$i]] = $i }
@@ -257,6 +285,9 @@ Say ("              {0}" -f $List) 'DarkGray'
 Say ("  data        {0}" -f $Data) 'DarkGray'
 if ($absent.Count) {
   Say ("  note        {0} enabled plugin(s) are not in the Data folder and are counted as full: {1}" -f $absent.Count, ($absent -join ', ')) 'Yellow'
+}
+if ($madeHere.Count) {
+  Say ("  note        {0} is made on each machine from its recipe and loads last, so no rule names it: left out" -f ($madeHere -join ', ')) 'DarkGray'
 }
 Write-Host ''
 
@@ -340,21 +371,26 @@ if ($edges.Count -eq 0) {
   }
   Verdict ("every pair of full plugins next to each other is held in that order ({0} pairs)" -f $pairs) $out.ToArray()
 
-  # Four: a full plugin a rule names that the list does not enable. A rule
-  # names it in lower case, as Vortex writes them; Windows finds the file in
-  # any case, and a file system that keeps case (Linux) does not, so the file
-  # is looked for by name there (#2989).
+  # Four: a full plugin a rule names that the list does not enable. One the
+  # collection installs switched off on purpose (records\collection.json,
+  # enabled false) and that is in Data is allowed, and named as allowed, so a
+  # pass says what it passed over (#4728); any other is a disagreement about
+  # what is in the order.
   $out = New-Object Collections.Generic.List[string]
+  $allowedOff = New-Object Collections.Generic.List[string]
   foreach ($n in @($named | Sort-Object)) {
     if ($present.Contains($n)) { continue }
-    $path = Join-Path $Data $n
-    if (-not [IO.File]::Exists($path)) {
-      $path = @(@([IO.Directory]::EnumerateFiles($Data)) | Where-Object { [IO.Path]::GetFileName($_) -ieq $n }) + @($path) | Select-Object -First 1
-    }
+    $path = Find-DataPlugin $n
+    if (-not $path) { $path = Join-Path $Data $n }
     if (Test-LoadOrderLight $path) { continue }
+    if ($offOnPurpose.ContainsKey($n) -and [IO.File]::Exists($path)) {
+      [void]$allowedOff.Add($offOnPurpose[$n] + ': allowed off. The collection installs it switched off on purpose (records\collection.json, enabled false) and it is in Data. Its rules hold nothing on this list, so no other plugin may hang on it alone.')
+      continue
+    }
     [void]$out.Add($n + ': a rule names it and the list does not enable it.')
   }
-  Verdict 'every full plugin a rule names is enabled in the list' $out.ToArray()
+  Verdict 'every full plugin a rule names is enabled in the list, or installed switched off on purpose' $out.ToArray()
+  foreach ($l in $allowedOff) { Say ("          " + $l) 'DarkGray' }
 
   # Five: a rule that goes round in a circle with the order the game sets,
   # every master first and each plugin after its own masters. Light plugins
