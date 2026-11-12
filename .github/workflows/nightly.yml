@@ -55,7 +55,7 @@ jobs:
       # works out the launcher's number from when its sources last changed
       # (scripts\release\LauncherVersion.ps1, #5179), which a shallow checkout
       # cannot say.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           filter: blob:none
@@ -347,7 +347,7 @@ jobs:
       # scripts on this checkout, and they work out the launcher's number
       # from when its sources last changed (scripts\release\LauncherVersion.ps1,
       # #5179), which a shallow checkout cannot say.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           filter: blob:none
@@ -394,7 +394,7 @@ jobs:
         # report job names this share as having left no report and is red,
         # so the failure is said where the report is read.
         continue-on-error: true
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: harness-report-${{ matrix.shard }}
           path: ${{ runner.temp }}/harness-report/share.xml
@@ -413,7 +413,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           sparse-checkout: scripts/dev/Merge-HarnessReports.ps1
           sparse-checkout-cone-mode: false
@@ -430,7 +430,7 @@ jobs:
           exit $LASTEXITCODE
       - name: Keep the merged report with the run
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: harness-report
           path: ${{ runner.temp }}/harness-report.xml
@@ -449,7 +449,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Run the bot harnesses
         shell: pwsh
@@ -524,7 +524,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Put a failure on the board
         if: ${{ needs.nightly.result != 'success' || needs.harnesses.result != 'success' || needs.harness-report.result != 'success' || needs.bot.result != 'success' }}

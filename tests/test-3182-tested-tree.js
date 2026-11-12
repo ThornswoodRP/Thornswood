@@ -369,8 +369,8 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
   // ---- 3. why the tree is enough ---------------------------------------------
   const checkout = steps.find(st => /^      - uses: actions\/checkout@/.test(st)) || '';
   const treeCheckout = treeSteps[0] || '';
-  yes('the checks check out one commit, with no history on either build, in both jobs', /^      - uses: actions\/checkout@[0-9a-f]{40} # v\d+\n/.test(checkout + '\n') && !/^\s+with:/m.test(checkout) &&
-      /^      - uses: actions\/checkout@[0-9a-f]{40} # v\d+\n/.test(treeCheckout + '\n') && !/^\s+with:/m.test(treeCheckout));
+  yes('the checks check out one commit, with no history on either build, in both jobs', /^      - uses: actions\/checkout@[0-9a-f]{40} # v\d+(\.\d+)*\n/.test(checkout + '\n') && !/^\s+with:/m.test(checkout) &&
+      /^      - uses: actions\/checkout@[0-9a-f]{40} # v\d+(\.\d+)*\n/.test(treeCheckout + '\n') && !/^\s+with:/m.test(treeCheckout));
   // The lint step is the one step that reads the event and fetches the
   // base (#3185): it reports warnings and cannot fail a build, and it is the
   // last step of the Tree checks job (#5292), so no check runs after its

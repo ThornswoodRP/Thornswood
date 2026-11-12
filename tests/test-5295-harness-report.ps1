@@ -261,7 +261,7 @@ try {
         $k, $runs, $art, $job, $name, $expect = $pair
         $y = [IO.File]::ReadAllText((Join-Path $wf $k))
         Yes "8. $k's shares each write a report" ($y -match ('(?m)^\s+\.\\scripts\\dev\\' + $runs + '\.ps1 -Shard .* -Report \(Join-Path \$env:RUNNER_TEMP ''' + $art + '\\share\.xml''\)\s*$'))
-        Yes "   and keep it for the run as $art-<share>, a day" ($y -match ('(?s)uses: actions/upload-artifact@[0-9a-f]{40} # v\d+\s+with:\s+name: ' + $art + '-\$\{\{ matrix\.shard \}\}\s+path: \$\{\{ runner\.temp \}\}/' + $art + '/share\.xml.*?retention-days: 1\b'))
+        Yes "   and keep it for the run as $art-<share>, a day" ($y -match ('(?s)uses: actions/upload-artifact@[0-9a-f]{40} # v\d+(?:\.\d+)*\s+with:\s+name: ' + $art + '-\$\{\{ matrix\.shard \}\}\s+path: \$\{\{ runner\.temp \}\}/' + $art + '/share\.xml.*?retention-days: 1\b'))
         $jb = [regex]::Match($y, '(?s)(?m)^  ' + [regex]::Escape($job) + ':\s*$(.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\z)').Groups[1].Value
         Yes "   the job ""$name"" downloads them all and merges them onto the run's page" ($jb -match ('name: ' + [regex]::Escape($name)) -and $jb -match ('pattern: ' + [regex]::Escape($art) + '-\*') -and $jb -match 'Merge-HarnessReports\.ps1 -Path \$in -Expect ' -and $jb -match [regex]::Escape($expect))
         # In the builds, whenever either the Windows or the Linux shares (#5293) ran.
