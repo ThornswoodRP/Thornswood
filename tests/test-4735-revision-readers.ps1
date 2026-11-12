@@ -41,7 +41,9 @@ param()
 $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
-$Repo = Split-Path -Parent $Here
+# The tests are in tests\, the repository is one folder up.
+$Here = Split-Path -Parent $Here
+$Repo = $Here
 . (Join-Path (Join-Path (Join-Path $Repo 'scripts') 'mods') 'LoadOrder.ps1')
 
 $script:pass = 0; $script:fail = 0
@@ -74,7 +76,7 @@ try {
     }
     $specPath = Join-Path $T 'cases.json'
     [IO.File]::WriteAllText($specPath, (ConvertTo-Json -InputObject $spec -Depth 6), (New-Object Text.UTF8Encoding($false)))
-    & python (Join-Path (Join-Path $Here 'fixtures') 'vortex-state-rows.py') $cases $specPath
+    & python (Join-Path (Join-Path (Join-Path $Here 'tests') 'fixtures') 'vortex-state-rows.py') $cases $specPath
     if ($LASTEXITCODE) { throw 'tests\fixtures\vortex-state-rows.py could not write the cases' }
     $table = Join-Path (Join-Path (Join-Path (Join-Path $cases 'unreadable') 'Vortex') 'state.v2') '000001.ldb'
     $bytes = [IO.File]::ReadAllBytes($table); $bytes[0] = $bytes[0] -bxor 1

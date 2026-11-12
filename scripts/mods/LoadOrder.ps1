@@ -91,8 +91,14 @@ function Get-VortexStateDir {
   is called, so it answers for both eras. It is read the same way
   Get-CollectionNewest reads state.v2, through the read-only LevelDB reader
   (#1582, #1902), which opens no database handle and takes no lock. The old
-  folder-name parse stays as a fallback for a machine that only has the legacy
-  folders and no readable state.
+  folder-name parse stays for a machine that has the legacy folders and no
+  Vortex database at all (no CURRENT in state.v2).
+
+  A DATABASE THAT IS THERE AND DOES NOT READ STOPS (#4735). Vortex open and
+  mid-write, or a table whose checksum does not match, used to read as 0 here
+  and then as the legacy folder's number, so Ship and Publish-Update were
+  handed a revision nobody had read. Now it throws a sentence naming
+  state.v2, and the caller says it.
 #>
 function Get-CollectionRevision([string]$Slug) {
     if (-not $Slug) { return 0 }
@@ -102,7 +108,9 @@ function Get-CollectionRevision([string]$Slug) {
 }
 
 <#
-  Installed revision from Vortex's current compressed LevelDB metadata, or 0.
+  Installed revision from Vortex's current compressed LevelDB metadata, or 0
+  when there is no database or it names no installed revision of the slug.
+  Throws when the database is there and does not read (#4735).
   The shared C# reader honors CURRENT, sequences, tombstones and CRCs, matching
   collectionSlug and revisionNumber to one installed mod. Locally authored
   vortex_collection_* mods may link through newestFileId to a cached matching
@@ -110,12 +118,29 @@ function Get-CollectionRevision([string]$Slug) {
 #>
 function Get-CollectionRevisionFromState([string]$Slug) {
     if (-not $Slug) { return 0 }
+    $st = Get-VortexDatabaseDir
+    if (-not $st) { return 0 }
+    return [int](Read-VortexCollectionState $st { [Thornswood.VortexProfileState]::CollectionRevision($st, $Slug) })
+}
+
+# state.v2 when it holds a LevelDB database (its CURRENT file), or ''. A
+# folder with no database has nothing to read, which is not the same answer
+# as a database that does not read.
+function Get-VortexDatabaseDir {
     $st = Get-VortexStateDir
-    if (-not (Test-Path -LiteralPath $st)) { return 0 }
-    try {
-        Import-VortexStateReader
-        return [Thornswood.VortexProfileState]::CollectionRevision($st, $Slug)
-    } catch { return 0 }
+    if (Test-Path -LiteralPath (Join-Path $st 'CURRENT') -PathType Leaf) { return $st }
+    return ''
+}
+
+# One read of state.v2 through the shared reader. A database that does not
+# read throws a sentence that names it and says what to do; it never comes
+# back as 0 or as a number from somewhere else (#4735).
+function Read-VortexCollectionState([string]$St, [scriptblock]$Read) {
+    Import-VortexStateReader
+    try { return (& $Read) }
+    catch {
+        throw ("Vortex's state.v2 at {0} did not read ({1}). Close Vortex so it finishes writing its state, then run this again." -f $St, $_.Exception.Message)
+    }
 }
 
 function Import-VortexStateReader {
@@ -149,7 +174,8 @@ function Get-CollectionRevisionFromFolder([string]$Slug) {
 
 <#
   The mod ids Vortex has recorded against a collection slug, from state.v2.
-  Empty when state cannot be read or names no collection with that slug. Used
+  Empty when there is no Vortex database or it names no collection with that
+  slug; throws when the database is there and does not read (#4735). Used
   to find the collection's mod folder now that the folder is named for the mod
   id rather than the slug (see Get-CollectionInstalledFolder).
 
@@ -164,12 +190,10 @@ function Get-CollectionRevisionFromFolder([string]$Slug) {
 function Get-CollectionModIds([string]$Slug) {
     $none = [string[]]@()
     if (-not $Slug) { return , $none }
-    $st = Get-VortexStateDir
-    if (-not (Test-Path -LiteralPath $st)) { return , $none }
-    try {
-        Import-VortexStateReader
-        return , [string[]][Thornswood.VortexProfileState]::CollectionModIds($st, $Slug)
-    } catch { return , $none }
+    $st = Get-VortexDatabaseDir
+    if (-not $st) { return , $none }
+    $ids = Read-VortexCollectionState $st { , [string[]][Thornswood.VortexProfileState]::CollectionModIds($st, $Slug) }
+    return , [string[]]@($ids | Where-Object { $_ })
 }
 
 <#
@@ -178,10 +202,15 @@ function Get-CollectionModIds([string]$Slug) {
   the folder is no longer named for the slug, so this maps slug to mod id
   through state (new naming) and falls back to the collection_<slug>_<rev>_*
   folder (legacy). The newest revision wins in both cases.
+
+  The staging folder is the one Vortex says it uses (Get-VortexStagingDir),
+  not always %APPDATA%\Vortex\skyrimse\mods: a folder moved in Vortex's
+  settings read as "not installed" here, and Check-CollectionRules said SKIP
+  on a machine that had the collection (#4735).
 #>
-function Get-CollectionInstalledFolder([string]$Slug) {
+function Get-CollectionInstalledFolder([string]$Slug, [string]$Root) {
     if (-not $Slug) { return $null }
-    $dir = Join-Path (Get-VortexDir) 'skyrimse\mods'
+    $dir = Get-VortexStagingDir $Root
     if (-not (Test-Path -LiteralPath $dir)) { return $null }
 
     # New naming: folder is the mod id from state. Prefer a folder the JSON can
@@ -210,6 +239,42 @@ function Get-CollectionInstalledFolder([string]$Slug) {
         if ($r -gt $bestRev) { $bestRev = $r; $best = $d }
     }
     return $best
+}
+
+<#
+  The folder Vortex stages Skyrim SE's mods in, as Vortex itself records it.
+
+  Vortex's default is %APPDATA%\Vortex\skyrimse\mods, and its settings can
+  move it to another drive. Every deployment it makes writes
+  Data\vortex.deployment.json into the game folder it deploys into, with the
+  stagingPath it deployed from. The launcher install's
+  Profile\OwnGame\made.txt names that game folder (its source= line), the
+  same chain Generated.cs follows to Vortex's files. So with an install root
+  whose made.txt names a source, the staging folder is that record's
+  stagingPath, and a record that is not there or does not read stops with a
+  sentence rather than falling back to the default (#4735). With no root, or
+  an install not made from a Vortex game folder, there is no record to read
+  and the default is the folder Vortex uses.
+#>
+function Get-VortexStagingDir([string]$Root) {
+    $default = Join-Path (Join-Path (Get-VortexDir) 'skyrimse') 'mods'
+    if (-not $Root) { return $default }
+    $made = Join-Path (Join-Path (Join-Path $Root 'Profile') 'OwnGame') 'made.txt'
+    if (-not (Test-Path -LiteralPath $made -PathType Leaf)) { return $default }
+    $source = ''
+    foreach ($line in [IO.File]::ReadAllLines($made)) {
+        if ($line -match '^source=(.+)$') { $source = $Matches[1].Trim() }
+    }
+    if (-not $source) { return $default }
+    $record = Join-Path (Join-Path $source 'Data') 'vortex.deployment.json'
+    if (-not (Test-Path -LiteralPath $record -PathType Leaf)) {
+        throw ("{0} says this install was made from {1}, but {2}, Vortex's record of the folder it stages mods in, is not there. Let Vortex deploy, then run this again." -f $made, $source, $record)
+    }
+    $staging = ''
+    try { $staging = [string](ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($record)) $record).stagingPath }
+    catch { throw ("{0}, Vortex's record of the folder it stages mods in, does not read: {1}" -f $record, $_.Exception.Message) }
+    if (-not $staging) { throw ("{0}, Vortex's record of the folder it stages mods in, names no stagingPath." -f $record) }
+    return $staging
 }
 
 <#
@@ -381,37 +446,59 @@ function Get-CollectionJsonPath([string]$Folder) {
   the collection's own mod is the number, read from current state; another
   mod's newestVersion is that mod's version, not a revision.
 
-  0 when nothing can be read, which Get-CollectionState reports as not Known.
+  0 when there is no Vortex database. A database that is there and does not
+  read throws (#4735). This is what Vortex knows, not what is published:
+  Get-CollectionState asks Nexus for that.
 #>
 function Get-CollectionNewest([string]$Slug) {
     if (-not $Slug) { return 0 }
-    $st = Get-VortexStateDir
-    if (-not (Test-Path -LiteralPath $st)) { return 0 }
-    try {
-        Import-VortexStateReader
-        return [Thornswood.VortexProfileState]::CollectionNewest($st, $Slug)
-    } catch { return 0 }
+    $st = Get-VortexDatabaseDir
+    if (-not $st) { return 0 }
+    return [int](Read-VortexCollectionState $st { [Thornswood.VortexProfileState]::CollectionNewest($st, $Slug) })
 }
 
 <#
-  Is this machine's collection behind what Vortex knows is out there?
+  Is this machine's collection behind the newest revision published on Nexus?
 
   Returns a small object rather than a bool, because every caller wants to
   say the two numbers and a bool cannot. Behind is $false when either number
-  is unknown: silence beats a guess in both directions. Newest is asked for
-  this collection's slug so a second collection on the same machine cannot
-  make Known false or Behind true by accident.
+  is unknown: silence beats a guess in both directions. Known is $false then,
+  and Why says which number could not be read and why, so a caller can stop
+  and say it rather than "unreadable".
+
+  NEWEST IS NEXUS'S (#4735). It used to be the newest revision Vortex itself
+  had heard of, so a machine whose Vortex had not checked since revision 4
+  passed Deploy-Gamemode's behind check while Nexus was on 5. It is now the
+  newest published revision as Nexus says it, the record Publish-Update and
+  Ship already compare against (scripts\release\NexusPublished.ps1, #4068).
+  A caller that has already asked passes it as -Published. Nexus is only
+  asked when a revision is installed here, since with none there is nothing
+  to compare. VortexNewest is still given, for a caller that wants to say
+  Vortex has not seen the update yet.
 #>
-function Get-CollectionState([string]$Url) {
+function Get-CollectionState([string]$Url, [int]$Published = 0) {
     $slug = Get-CollectionSlug $Url
-    $have = Get-CollectionRevision $slug
-    $newest = Get-CollectionNewest $slug
+    $have = 0; $vortexNewest = 0; $newest = 0; $why = ''
+    try {
+        $have = Get-CollectionRevision $slug
+        $vortexNewest = Get-CollectionNewest $slug
+    } catch { $have = 0; $vortexNewest = 0; $why = $_.Exception.Message }
+    if (-not $why -and $have -le 0) { $why = "Vortex on this machine has no revision of collection '$slug' installed." }
+    if (-not $why) {
+        if ($Published -gt 0) { $newest = $Published }
+        else {
+            try { $newest = [int](& (Join-Path $PSScriptRoot '..\release\NexusPublished.ps1') -Slug $slug) }
+            catch { $newest = 0; $why = 'Nexus did not say the newest published revision: ' + $_.Exception.Message }
+        }
+    }
     return [pscustomobject]@{
-        Slug     = $slug
-        Have     = $have
-        Newest   = $newest
-        Behind   = ($have -gt 0 -and $newest -gt 0 -and $have -lt $newest)
-        Known    = ($have -gt 0 -and $newest -gt 0)
+        Slug         = $slug
+        Have         = $have
+        Newest       = $newest
+        VortexNewest = $vortexNewest
+        Behind       = ($have -gt 0 -and $newest -gt 0 -and $have -lt $newest)
+        Known        = ($have -gt 0 -and $newest -gt 0)
+        Why          = $why
     }
 }
 

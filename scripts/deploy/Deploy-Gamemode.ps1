@@ -454,7 +454,7 @@ else {
     if ($cs.Known) {
         if ($cs.Behind -and -not $IgnoreRevision) {
             Write-Host ''
-            Write-Host ("  STOP. This machine has collection revision {0} and Vortex says {1} is out." -f $cs.Have, $cs.Newest) -ForegroundColor Red
+            Write-Host ("  STOP. This machine has collection revision {0} and Nexus has {1} published." -f $cs.Have, $cs.Newest) -ForegroundColor Red
             Write-Host '  The server''s load order is derived from what Vortex has deployed here, so' -ForegroundColor Red
             Write-Host '  deploying now builds the server against a collection two steps behind the' -ForegroundColor Red
             Write-Host '  one everybody else installs. They get a mod set the server has never seen' -ForegroundColor Red
@@ -464,7 +464,7 @@ else {
             Write-Host '  -IgnoreRevision if you mean to deploy from the old one anyway.' -ForegroundColor DarkGray
             throw ("collection revision {0} installed, {1} available" -f $cs.Have, $cs.Newest)
         }
-        Write-Host ("  collection revision {0}{1}" -f $cs.Have, $(if ($cs.Behind) { " (BEHIND $($cs.Newest), carrying on because -IgnoreRevision)" } else { ', which is the newest Vortex knows of' })) -ForegroundColor $(if ($cs.Behind) { 'Yellow' } else { 'Green' })
+        Write-Host ("  collection revision {0}{1}" -f $cs.Have, $(if ($cs.Behind) { " (BEHIND $($cs.Newest), carrying on because -IgnoreRevision)" } else { ', which is the newest published on Nexus' })) -ForegroundColor $(if ($cs.Behind) { 'Yellow' } else { 'Green' })
     }
     elseif (-not $IgnoreRevision) {
         #
@@ -486,20 +486,21 @@ else {
         # refuses a binary it cannot hash. -IgnoreRevision is the way past it.
         Write-Host ''
         Write-Host '  STOP. The collection revision could not be read, so it was not checked.' -ForegroundColor Red
-        Write-Host ("  installed here: {0}    newest Vortex knows of: {1}" -f `
+        Write-Host ("  installed here: {0}    newest published on Nexus: {1}" -f `
             $(if ($cs.Have -gt 0) { $cs.Have } else { 'unreadable' }), `
             $(if ($cs.Newest -gt 0) { $cs.Newest } else { 'unreadable' })) -ForegroundColor Red
+        if ($cs.Why) { Write-Host ("  why: {0}" -f $cs.Why) -ForegroundColor Red }
         if ($cfgWhy) { Write-Host ("  no collection to read it for: {0}" -f $cfgWhy) -ForegroundColor Red }
         Write-Host '  The server''s load order is derived from what Vortex has deployed here.' -ForegroundColor Red
         Write-Host '  Deploying without knowing the revision is how the server was built against' -ForegroundColor Red
         Write-Host '  a two revision old collection for days with nothing saying so.' -ForegroundColor Red
         Write-Host ''
-        Write-Host '  Close Vortex and run this again: it holds its own state open while running.' -ForegroundColor Yellow
+        Write-Host '  Read the line above, put that right, and run this again.' -ForegroundColor Yellow
         Write-Host '  -IgnoreRevision if you mean to deploy without the check.' -ForegroundColor DarkGray
         throw 'the collection revision could not be read, so it was not checked'
     }
     else {
-        Write-Host ("  collection revision NOT checked: it could not be read{0}, carrying on because -IgnoreRevision" -f $(if ($cfgWhy) { " ($cfgWhy)" } else { '' })) -ForegroundColor Yellow
+        Write-Host ("  collection revision NOT checked: it could not be read{0}, carrying on because -IgnoreRevision" -f $(if ($cfgWhy) { " ($cfgWhy)" } elseif ($cs.Why) { " ($($cs.Why))" } else { '' })) -ForegroundColor Yellow
     }
 }
 

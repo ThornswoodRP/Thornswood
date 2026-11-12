@@ -166,7 +166,7 @@ try {
     $t = New-Tree 'current' ($stub.Replace('HAVE', '4').Replace('NEWEST', '4'))
     $r = Invoke-Copy $t
     Yes 'current: the run goes on and says so' (
-        $r.Code -eq 0 -and $r.Text -match 'collection revision 4, which is the newest Vortex knows of')
+        $r.Code -eq 0 -and $r.Text -match 'collection revision 4, which is the newest published on Nexus')
     Yes '  and says nothing about a missing file' ($r.Text -notmatch 'NOT checked')
 }
 finally {
