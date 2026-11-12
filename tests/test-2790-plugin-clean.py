@@ -265,24 +265,27 @@ class PluginClean(unittest.TestCase):
         self.assertEqual(code, 0, text)
         self.assertIn('1 clean, 0 not clean', text)
 
-    def test_the_content_writer_drops_a_cell_a_move_left_empty(self):
-        # A station moved out of its cell leaves the cell's temporary group
-        # empty (a plain remove from its list). The cell record went with it
-        # only from #2790 on; before, the empty group held it up, identical
-        # to Bethesda's.
+    def test_the_content_writer_holds_a_cell_only_with_what_it_places(self):
+        # The plugin is written from nothing (#5191), so a cell is in it only
+        # because a placement is put in it: its record, then its children
+        # group holding the placement, in the block and sub-block it belongs
+        # to. No group is left without the record it belongs to (#2790).
         stamp = b'\x00' * 4
-        def cell_rec(fid):
-            return WRITER.Rec(b'CELL', 0, fid, b'\x00' * 8, b'')
-        def ref(fid):
-            return WRITER.Rec(b'REFR', 0, fid, b'\x00' * 8, b'')
-        left = WRITER.new_group(struct.pack('<I', 0x8ED5), 6, stamp,
-                                [WRITER.new_group(struct.pack('<I', 0x8ED5), 9, stamp, [])])
-        held = WRITER.new_group(struct.pack('<I', 0x8EB5), 6, stamp,
-                                [WRITER.new_group(struct.pack('<I', 0x8EB5), 9, stamp, [ref(0x05015506)])])
-        dropped = set()
-        out = WRITER.drop_bare_parents([cell_rec(0x8ED5), left, cell_rec(0x8EB5), held], dropped)
-        self.assertEqual(dropped, {0x8ED5})
-        self.assertEqual([getattr(k, 'fid', None) for k in out], [0x8EB5, None])
+        def rec(tag, fid):
+            return WRITER.Rec(tag, 0, fid, b'\x00' * 8, b'')
+        tree = [WRITER.Grup(b'CELL' + b'\x00' * 8 + stamp, [])]
+        ctx = ((2, struct.pack('<i', 5)), (3, struct.pack('<i', 5)), False)
+        WRITER.put_cell(tree, rec(b'CELL', 0x8EB5), ctx, None, stamp)
+        WRITER.put_placement(tree, rec(b'REFR', 0x05015506), 0x8EB5, stamp)
+        self.assertEqual(WRITER.orphan_groups(tree), [])
+        cells = [k for k in WRITER.every_record(tree) if k.tag == b'CELL']
+        self.assertEqual([k.fid for k in cells], [0x8EB5])
+        kids, i = WRITER.find_cell(tree, 0x8EB5)
+        children = kids[i + 1]
+        self.assertEqual((WRITER.group_type(children), WRITER.group_id(children)), (6, 0x8EB5))
+        temp = children.kids[0]
+        self.assertEqual(WRITER.group_type(temp), 9)
+        self.assertEqual([k.fid for k in temp.kids], [0x05015506])
 
     def test_the_plugins_in_game_content_pass_the_build_check(self):
         out = io.StringIO()
