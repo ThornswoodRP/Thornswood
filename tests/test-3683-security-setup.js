@@ -14,7 +14,8 @@
        Security, so until the flip each run is skipped rather than red. It
        runs pull request code, so it must never ask for a self-hosted runner,
        which is the VPS (#3685). A schedule trigger carries no repository in
-       its event, so the gate would read nothing there; it has none.
+       its event, so the gate would read nothing there; it has none. It
+       reads with the security-extended suite (Patrick, 12 Nov 2026).
     B. The issue chooser's "A security hole" link opens SECURITY.md, never
        GitHub's advisory form, which a private repository cannot use (#3650).
     C. SECURITY.md gives the three routes security.txt and it share (the
@@ -74,13 +75,14 @@ function codeqlFaults(text) {
   const langs = ((/language:\s*\[([^\]]*)\]/.exec(t) || [])[1] || '').split(',').map((s) => s.trim()).filter(Boolean);
   for (const l of LANGS) { if (langs.indexOf(l) < 0) { bad.push('does not read ' + l); } }
   if (!/build-mode: none/.test(t)) { bad.push('builds before it reads'); }
+  if (!/^\s*queries: security-extended\s*$/m.test(t)) { bad.push('does not read with the security-extended suite'); }
   return bad;
 }
 const WF = '.github/workflows/codeql.yml';
 const cq = fs.existsSync(path.join(ROOT, WF)) ? read(WF) : '';
 yes('A  ' + WF + ' is there', !!cq);
 const cqBad = codeqlFaults(cq);
-yes('A  it reads ' + LANGS.join(', ') + ' from source, on GitHub\'s runners, only while public' +
+yes('A  it reads ' + LANGS.join(', ') + ' from source with security-extended, on GitHub\'s runners, only while public' +
     (cqBad.length ? ' (' + cqBad.join('; ') + ')' : ''), !!cq && cqBad.length === 0);
 yes('A  and the reader fails a scheduled one on the VPS with no gate',
     codeqlFaults('on:\n  schedule:\n    - cron: x\njobs:\n  a:\n    runs-on: [self-hosted, Windows, thornswood-vps]\n').length >= 4);
