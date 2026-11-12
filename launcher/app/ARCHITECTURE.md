@@ -743,8 +743,9 @@ install folder, rewritten at every start.
 
 **Uninstall** (Uninstall.cs). Removing the install. Swap.Restore always runs
 first, because deleting Profile with the junctions live would follow them
-into the person's real Skyrim folders. It only ever deletes under Root, and
-the last part runs from a script in the temp folder after the launcher exits.
+into the person's real Skyrim folders. What it removes, and what an install
+leaves on the PC that it does not, is one list: installer\README.md, What an install leaves on the PC (#4431).
+The last part runs from a script in the temp folder after the launcher exits.
 Uninstall under Windows' Installed apps runs the exe with `-uninstall`, and
 the launcher opens on Settings without starting up to play (startup step 10,
 ShellUninstall.cs).
