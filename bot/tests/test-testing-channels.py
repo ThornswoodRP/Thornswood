@@ -42,6 +42,9 @@ This holds:
      and the Claude Code line under a comment is never in a post. Nothing is posted twice, not after a restart and
      not after a crash between a post and its save; a post Discord refused
      is tried again. A Server: Dev line from before that day changes nothing.
+  9. A post in #test-tasks or #dev-test-tasks whose issue GitHub deleted
+     comes down (#5197): the deleted issue is in no list, so #test-tasks reads
+     each post's issue it did not list, and #dev-test-tasks asks once an hour.
 
 The real bot module is imported. Discord and GitHub are stand-ins that
 count what is asked of them. Never connects to anything.
@@ -1582,6 +1585,50 @@ yes('a long dev post that never reached the file is taken up again by its '
     and len(th92.more) == n_more and n_more >= 1
     and snap['dev']['92']['more'] == [m.id for m in th92.more]
     and snap['dev']['92']['thread_id'] == th92.id)
+
+# #5197: a post whose issue GitHub deleted comes down. A deleted issue is in
+# no list GitHub gives, so only a read of the issue itself finds it gone.
+# On 12 Nov six #dev-test-tasks posts still stood for issues deleted weeks
+# before.
+ISSUES.pop(92, None)
+DELETED.add(92)
+ds['dev_swept'] = HOUR[0] + ':59:59Z'
+asked_before = len(ASKED)
+run(bot.dev_tasks_once(df, ds, gh, me_id=me.id, now=HOUR[0] + ':59:59Z'))
+yes('within the hour after the last look, the dev pass asks nothing about '
+    'posts it did not read',
+    '92' in ds['dev'] and not [u for u in ASKED[asked_before:]
+                               if u.split('?')[0].endswith('/issues/92')])
+ds['dev_swept'] = '2026-10-01T00:00:00Z'
+_p, _e, gone = run(bot.dev_tasks_once(df, ds, gh, me_id=me.id))
+yes('an hour on, a dev post whose issue was deleted is taken down and '
+    'forgotten',
+    gone == [92] and '92' not in ds['dev']
+    and 'Long and crashed' not in [th.name for th in df.threads])
+yes('and the posts whose issues are still there stay',
+    len(ds['dev']) > 0 and all(int(k) not in DELETED for k in ds['dev']))
+DELETED.discard(92)
+
+COMMENTS[93] = [{'body': 'Test task: Ride the deleted ferry\nServer: Main\n'
+                 '1. Board it.\nWhat should happen: you arrive.',
+                 'created_at': tick()}]
+TIMELINE[93] = []
+issue(93, 'A fix whose issue goes', ['Main Findings'], state='closed',
+      reason='completed', closed_at=tick())
+_fm = bot.fix_in_main
+bot.fix_in_main = lambda *a, **k: True
+bot.bot_forums.fix_in_main = bot.fix_in_main
+run(bot.test_tasks_once(tf, ds, gh, me_id=me.id))
+up = '93' in ds.get('tasks', {})
+ISSUES.pop(93, None)
+DELETED.add(93)
+_p, _e, gone = run(bot.test_tasks_once(tf, ds, gh, me_id=me.id))
+bot.fix_in_main = _fm
+bot.bot_forums.fix_in_main = _fm
+yes('a #test-tasks post whose issue was deleted is taken down and forgotten',
+    up and gone == [93] and '93' not in ds['tasks']
+    and 'Ride the deleted ferry' not in [th.name for th in tf.threads])
+DELETED.discard(93)
 
 one_line = 'x' * 4500
 parts = bot.dev_chunks(one_line)

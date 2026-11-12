@@ -328,6 +328,25 @@ def github_issue(number, get=None):
     return get('%s/repos/%s/issues/%d' % (GITHUB_API, KNOWN_REPO, int(number)))
 
 
+def issue_deleted(number, get=None):
+    """True when GitHub has no issue #number any more: it was deleted (410)
+       or is not there (404). False when it reads. Any other failure raises,
+       so a pass that cannot read changes nothing.
+
+       A deleted issue is in no list GitHub gives, closed or changed, so a
+       post kept from one is never read again by the passes that walk those
+       lists. Six #dev-test-tasks posts stood for issues deleted weeks before
+       (12 Nov 2026, #5197): known-issues.json still named #385, #410,
+       #1267, #2907, #3022 and #3080, and GitHub answered 410 for each."""
+    try:
+        github_issue(number, get)
+    except urllib.error.HTTPError as e:
+        if e.code in (404, 410):
+            return True
+        raise
+    return False
+
+
 def finding_gone(number, get=None):
     """Why issue number is no longer an open finding, read from the issue
        itself, or None when it still is one: open, in KNOWN_REPO, carrying
