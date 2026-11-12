@@ -4363,7 +4363,7 @@
     spit markers, kind "craft" in fires.json. They count for the warmth and
     never for the catch: using one seats you on it, which read as standing
     in the coals, and the Whiterun forge gave a bad burn within seconds of
-    sitting down at it. tests/test-temp.js fails if these marks and the
+    sitting down at it. game/tests/test-temp.js fails if these marks and the
     table's kinds drift apart, so a rebuild cannot quietly undo it.
   */
   const FIRE_BASES = [
@@ -7540,7 +7540,7 @@
 
     Both callers run under guard(), so a call the game refuses reaches the
     guard's log rather than being swallowed here. Self contained, with sp
-    handed in, so tests/test-1383-limbs-brews.js can run it over a fake sp.
+    handed in, so game/tests/test-1383-limbs-brews.js can run it over a fake sp.
   */
   const brokenLimbs = (function (sp) {
     const TELL_EVERY_MS = 30000;
@@ -8629,7 +8629,7 @@
     what people do).
 
     THE DRIVERS ARE KNOWN BY THEIR BASE, the same rows as the carriages block
-    in the gamemode (tests/test-1394-fares.js holds the two lists together).
+    in the gamemode (game/tests/test-1394-fares.js holds the two lists together).
     A base from a plugin is asked for by its file and its own id, because a
     runtime id carries the plugin's place in the load order. Kept as numbers,
     never as forms: a form does not outlive its frame (see THE IDS, RESOLVED
@@ -10582,7 +10582,7 @@
     this file's own write for the game's. A perk not held puts the game's
     own value back. Each change is one line in the log.
 
-    The block between the markers is lifted out by tests/test-1385-perks.js,
+    The block between the markers is lifted out by game/tests/test-1385-perks.js,
     which drives it against a fake skyrimPlatform.
   */
   // >>> machine perks: begin >>>

@@ -100,7 +100,7 @@ In file order, top to bottom. Search for a name to find it; the sections have no
 | Needs | See "Needs". |
 | Social | Friends, parties, mutes, journals, the panel, `thornswoodNear`. |
 | Trade | Two people, two offers, both confirm: `begin`, `gold`, `confirm`, `swap`. |
-| Mod settings | Issue #488, added 28 September. The 176 GLOB records of five classic mod menus (`MOD_GLOBALS`), kept per profile in `private\mod-settings.json` from the plugin's `/modset` lines and put back at login through `thornswoodModSettings` and its updateOwner script. `tests\test-mod-settings.js`. |
+| Mod settings | Issue #488, added 28 September. The 176 GLOB records of five classic mod menus (`MOD_GLOBALS`), kept per profile in `private\mod-settings.json` from the plugin's `/modset` lines and put back at login through `thornswoodModSettings` and its updateOwner script. `game\tests\test-mod-settings.js`. |
 
 ## Startup and settings
 
@@ -454,9 +454,12 @@ whether the live server runs the file in this repository, by hash.
 
 ## Tests that read it
 
-The build check runs every `tests\test-*.js` and `tests\test-*.ps1` harness
-that `tests\gate-excluded.txt` does not name (`scripts\dev\Gate-Harnesses.ps1`).
-These read `gamemode.js`, most by running one block against a stubbed `mp`.
+The build check runs every `test-*.js` and `test-*.ps1` harness in `tests\`
+and in each product's own tests folder that `tests\gate-excluded.txt` does
+not name (`scripts\dev\Gate-Harnesses.ps1`). The ones that read only the
+game are beside it in `game\tests\`; the ones that read the game and another
+product as well, the launcher or the site, are in `tests\`. These read
+`gamemode.js`, most by running one block against a stubbed `mp`.
 
 | Area | Tests |
 |---|---|

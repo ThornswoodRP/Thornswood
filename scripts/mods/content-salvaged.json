@@ -112,7 +112,7 @@
    "usedBy": [
     "game/data/recipes.json",
     "game/gamemode.js",
-    "tests/test-2337-kiln-menu.js"
+    "game/tests/test-2337-kiln-menu.js"
    ],
    "dataSha256": [
     "10cec9933b954488067fe3ca1487dd400996af09642eb7af8f6e96077ec89d37"
@@ -140,9 +140,9 @@
    "why": "the notice board, which the server stands in every town (#2516)",
    "usedBy": [
     "game/gamemode.js",
-    "tests/test-2516-server-boards.js",
-    "tests/test-516-woodworking-benches.js",
-    "tests/test-boards.js"
+    "game/tests/test-2516-server-boards.js",
+    "game/tests/test-516-woodworking-benches.js",
+    "game/tests/test-boards.js"
    ],
    "dataSha256": [
     "d8edc874b8504bec9bbbaa2f01b320068b445d7a168705d0f582aa0c51aa674e",
@@ -387,8 +387,8 @@
     "game/data/stations.json",
     "game/gamemode.js",
     "scripts/dev/Build-RecipeTable.ps1",
-    "tests/test-1377-season.js",
-    "tests/test-1378-shared-gather.js"
+    "game/tests/test-1377-season.js",
+    "game/tests/test-1378-shared-gather.js"
    ],
    "dataSha256": [
     "07c04d0a664ceb54b756cf0d2c72607a7ee376ca5aab14b644d5c0c1c5a06387"
@@ -403,7 +403,7 @@
    "usedBy": [
     "game/data/stations.json",
     "game/gamemode.js",
-    "tests/test-2337-kiln-menu.js"
+    "game/tests/test-2337-kiln-menu.js"
    ],
    "dataSha256": [
     "bddadde164418867ae2bc6f6a62d99f1d10ef01bcd39cac2ae7614d8553d6219"
@@ -460,7 +460,7 @@
     "game/data/merchant-role-tables.json",
     "game/data/recipes.json",
     "game/gamemode.js",
-    "tests/test-2337-kiln-menu.js"
+    "game/tests/test-2337-kiln-menu.js"
    ],
    "dataSha256": [
     "7dd83ee465280881ba1056b919091515b917e5a2db3f9ed9704089bb59f51bcc"
@@ -479,7 +479,7 @@
     "game/data/merchant-role-tables.json",
     "game/data/recipes.json",
     "game/gamemode.js",
-    "tests/test-2337-kiln-menu.js"
+    "game/tests/test-2337-kiln-menu.js"
    ],
    "dataSha256": [
     "1fce356f1df77b7afff93fc2d744e64803438d68b6f623ba3b8393fbf7b852ab",
@@ -499,7 +499,7 @@
     "game/data/merchant-role-tables.json",
     "game/data/recipes.json",
     "game/gamemode.js",
-    "tests/test-2337-kiln-menu.js"
+    "game/tests/test-2337-kiln-menu.js"
    ],
    "dataSha256": [
     "540a32d0929072beeac81ccc3e0eb171e8128a9565a1e613b865ffde4e3402a3",
@@ -519,7 +519,7 @@
     "game/data/merchant-role-tables.json",
     "game/data/recipes.json",
     "game/gamemode.js",
-    "tests/test-2337-kiln-menu.js"
+    "game/tests/test-2337-kiln-menu.js"
    ],
    "dataSha256": [
     "e4a63c1c6bf49b2e89a2704a7cd41d8b6174ee91d1d4076898c6d2b1e465252e",

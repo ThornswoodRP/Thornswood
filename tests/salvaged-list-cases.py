@@ -1,5 +1,5 @@
 """
-salvaged-list-cases.py, run by tests\\test-4354-salvaged-list.js
+salvaged-list-cases.py, run by game\\tests\\test-4354-salvaged-list.js
 
 Issue #4354. scripts\\mods\\content-salvaged.json says what became of every
 record salvaged from another server's plugin (#2553). Since #2553 the only

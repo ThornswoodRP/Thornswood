@@ -120,7 +120,7 @@ There is one JSON file per traced commit. It is 207 KB, or 23 KB gzipped:
     "test-1383-injury.js": {
       "seconds": 1.1,
       "reads": [".", "game/data/food.json", "game/gamemode.js", "game/plugins/thornswood-front.js",
-                "package.json", "tests", "tests/package.json", "tests/test-1383-injury.js"],
+                "package.json", "tests", "tests/package.json", "game/tests/test-1383-injury.js"],
       "lists": []
     },
     "test-2183-availability.ps1": { "always": "can run another way on Windows: tests/Windows.ps1:4 cmd.exe", "seconds": 14.9 }

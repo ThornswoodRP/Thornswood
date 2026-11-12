@@ -521,7 +521,7 @@
                      materials: [ [ name, recipes, class, rank, bench, [ from ],
                                     [ where ], more places ] ] } }
 
-    Run the script after any of those change; tests/test-3165-profession-guides.js
+    Run the script after any of those change; game/tests/test-3165-profession-guides.js
     runs it with --check and fails while this block is stale.
   */
   // ==== PROFESSION_GUIDES ====

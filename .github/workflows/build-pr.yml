@@ -435,12 +435,12 @@ jobs:
           # 15 October (decision C) its two short forms with it. One read of
           # every tracked file, text, plugins and binary, so it runs here.
           if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-            Write-Host '::error file=tests/test-other-server-name-gone.js::no node on this runner, so the other server''s name was not checked'
+            Write-Host '::error file=game/tests/test-other-server-name-gone.js::no node on this runner, so the other server''s name was not checked'
             exit 1
           }
-          node tests/test-other-server-name-gone.js
+          node game/tests/test-other-server-name-gone.js
           if ($LASTEXITCODE -ne 0) {
-            Write-Host '::error file=tests/test-other-server-name-gone.js::the other server or one of its short forms is named again; the lines above say where'
+            Write-Host '::error file=game/tests/test-other-server-name-gone.js::the other server or one of its short forms is named again; the lines above say where'
             exit 1
           }
 

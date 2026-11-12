@@ -44,7 +44,7 @@ The hunting list reads no plugin: it is every retained animal from
 `game/data/npc-population.json` with what `game/data/hunts.json` gives for its
 body. A population rebuild writes it, and so does
 `python scripts/dev/Build-ResourceLocations.py --hunting-only` after a hunt
-table rebuild. `tests/test-1874-hunting-spots.js` fails the build when it is not
+table rebuild. `game/tests/test-1874-hunting-spots.js` fails the build when it is not
 what those two tables say.
 
 Loading advances one candidate every 10 ms. Native record and navigation indexes
@@ -172,7 +172,7 @@ and the NPC SERVER STARTUP block, read from the file that is loading, and of
 the catalogue the merchant roles made. Any difference takes the full load and
 server.log says "Shared NPC runtime starts over" with the reason; a carried
 load says "Shared NPC runtime carried on from the previous gamemode load"
-with its counts. `tests/test-3296-npc-handover.js` holds all of it. A
+with its counts. `game/tests/test-3296-npc-handover.js` holds all of it. A
 server restart still loads the cast from the saved world, as above.
 
 Fixed cave and dungeon tiers scale maximum health and outgoing weapon or spell

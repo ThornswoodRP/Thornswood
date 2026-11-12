@@ -137,7 +137,7 @@ yes('the shipped plugin no longer contains the execution block or its placement'
 
 // The header's description (#400, Patrick, 12 Oct: B, and the other server is
 // mentioned nowhere). Its name is built from code points so this file does not
-// carry it; tests\test-other-server-name-gone.js reads every tracked file.
+// carry it; game\tests\test-other-server-name-gone.js reads every tracked file.
 const OTHER_NAME = String.fromCharCode(107, 101, 105, 122, 97, 97, 108);
 function headerSubs(head) {
   const out = [];

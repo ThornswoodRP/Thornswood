@@ -198,7 +198,7 @@
     1920 by 1080 draws it as is, 2560 by 1440 at 1.333, 3440 by 1440 at
     1.333, 3840 by 2160 at 2. Never below 1, where max-width and max-height
     already keep it on a smaller screen, and never above 2.4.
-    tests/test-journal-scale.js holds it at those sizes.
+    game/tests/test-journal-scale.js holds it at those sizes.
   */
   var BASE_W = 1920, BASE_H = 1080, MAX_SCALE = 2.4;
 

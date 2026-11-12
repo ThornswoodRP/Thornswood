@@ -29,7 +29,7 @@ twice. The "not sorted yet" lines are minutes together, which is why they
 come onto the gate a few at a time.
 
 The voice service's own harnesses are beside it in `voice\tests\`, and the
-bot's Python ones in `bot\`, because they are run from there.
+bot's Python ones in `bot\tests\`, because they are run from there.
 
 ## Beside their product
 
@@ -41,10 +41,18 @@ about the whole repository (the gate, the words, the secrets, the scripts'
 paths), the shared helpers (`Windows.ps1`, `Launcher-Csc.ps1`,
 `launcher-csc.js`, `fork-git.js` and the rest) and `fixtures\`, and every
 harness whose product has not moved yet. Moved on 1 Nov 2026: the launcher's
-(`launcher\tests\`), voice's (`voice\tests\`), the setup program's
-(`installer\tests\`) and the site's (`site\tests\`). Its harnesses are no part of the launcher:
-`LauncherVersion.ps1` and Ship's launcher fingerprint leave that folder out,
-so a change to one gives no launcher a new number.
+(`launcher\tests\`), voice's (`voice\tests\`) and the site's
+(`site\tests\`). Moved on 12 Nov 2026: the game's (`game\tests\`), every
+harness that reads only the game: the gamemode and its parts, the game's
+plugins, data and pages, and the builders in `scripts\dev` and
+`scripts\mods` that make its tables. A harness that reads two products, the
+game and the launcher say, stays here, because it checks how they fit
+together.
+
+A product's harnesses are no part of it. `LauncherVersion.ps1` and Ship's
+launcher fingerprint leave `launcher\tests` out, so a change to one gives no
+launcher a new number, and the merge release leaves `launcher\tests` and
+`game\tests` out, so a change to a check starts no release.
 
 The gate and the nightly find both kinds through one list,
 `scripts\dev\Harness-Files.ps1`. A harness here goes by its file name, as
@@ -86,7 +94,7 @@ A new harness does the same; copying the top of an existing one is the easy way.
 From the repository folder:
 
 ```
-node tests\test-farming.js
+node game\tests\test-farming.js
 pwsh -NoProfile -File tests\test-ship-rules.ps1
 ```
 

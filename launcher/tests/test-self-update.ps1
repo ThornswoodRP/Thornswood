@@ -1,8 +1,8 @@
 <#
   test-self-update.ps1
 
-      pwsh -NoProfile -File .\tests\test-self-update.ps1
-      pwsh -NoProfile -File .\tests\test-self-update.ps1 -Signed <a signed Thornswood.exe>
+      pwsh -NoProfile -File .\launcher\tests\test-self-update.ps1
+      pwsh -NoProfile -File .\launcher\tests\test-self-update.ps1 -Signed <a signed Thornswood.exe>
 
   The launcher's own update is applied only once every file in it was
   checked, and a refusal applies nothing.

@@ -32,7 +32,7 @@
   L  #2976. The load order is read in one place: the three helpers say the
      same of a plugins.txt holding switched off lines (the masters, then each
      '*' line, once), and no builder reads plugins.txt's lines itself.
-     tests/test-1712-builders-skip-off.js runs the builders on such a list.
+     game/tests/test-1712-builders-skip-off.js runs the builders on such a list.
   O  #3105. A table says which load order it was read from by its count and
      a hash of its names (the three helpers' load order name, the same in
      each), never the plugin list's path: a box run reads a list in a new
@@ -113,7 +113,7 @@ if (!ps) {
 
 // ---------------------------------------------------------------- F
 // A plugin in the shape Build-FoodTable.js reads: TES4 with its masters,
-// then one ALCH group (the same layout as tests/test-food-table.js).
+// then one ALCH group (the same layout as game/tests/test-food-table.js).
 function zs(s) { return Buffer.concat([Buffer.from(s, 'latin1'), Buffer.alloc(1)]); }
 function sub(tag, data) { const h = Buffer.alloc(6); h.write(tag, 0, 'ascii'); h.writeUInt16LE(data.length, 4); return Buffer.concat([h, data]); }
 function record(type, formId, flags, data) {
@@ -343,7 +343,7 @@ if (!listed3105 || !refused3105) {
 }
 
 // ---------------------------------------------------------------- N
-const naming = ['tests/test-2468-last-plugin.js', 'tests/test-2551-building-holds.js', 'tests/test-516-woodworking-benches.js',
+const naming = ['tests/test-2468-last-plugin.js', 'tests/test-2551-building-holds.js', 'game/tests/test-516-woodworking-benches.js',
   'tests/test-asset-provenance.js', 'docs/systems/station-placement.md', 'docs/guide/make-a-change.md'];
 const silent = naming.filter((f) => read(f).indexOf('Rebuild-ContentTables.ps1') < 0);
 yes('N1 the harnesses that hold a table to the plugin\'s bytes, and the docs, name the script' + (silent.length ? ' (not: ' + silent.join(', ') + ')' : ''),

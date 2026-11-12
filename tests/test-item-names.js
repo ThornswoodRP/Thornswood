@@ -207,7 +207,7 @@ const box = {
   guard: function (n, f) { return f; },
   setInterval: function () { return 1; }, clearInterval: function () { },
   log: function () { },
-  // Alice holds her hammer (#3162); tests/test-3162-bench-tools.js asks the refusal.
+  // Alice holds her hammer (#3162); game/tests/test-3162-bench-tools.js asks the refusal.
   toolGate: function () { return null; }, wearTool: function () { return null; },
   __thornswoodCharacter: {
     stateOf: function (actorId) { return { prof: actorId === ALICE.a ? 'smith' : 'cook' }; },

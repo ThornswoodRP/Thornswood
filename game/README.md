@@ -55,8 +55,9 @@ scripts that build and ship it:
 
 `.\scripts\release\Go.ps1 -SkipServer` copies the plugins, the overlays, the menu
 and our menu files into the game folder, which is how a change here reaches your own game.
-Every harness in `tests\` that checks the gamemode reads `gamemode.js` from
-here.
+Every harness that checks the gamemode reads `gamemode.js` from here. The
+ones that read only the game are beside it in `game\tests\`, and the ones
+that read the game and another product are in `tests\`.
 
 ## Where it runs
 

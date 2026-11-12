@@ -101,7 +101,7 @@ jobs:
           # server sends and can load. The build on every pull request has no
           # fork, so this is where the record is read against the fork at the
           # pin: fetched shallow, read from git's objects at that commit by
-          # tests\test-papyrus-event-list.js, and taken out again, the way the
+          # game\tests\test-papyrus-event-list.js, and taken out again, the way the
           # secret scan above does it. A pin that moved over fork work which
           # leaves the list alone passes; one that changed the list fails
           # here, naming what changed and the command that writes the record
@@ -111,7 +111,7 @@ jobs:
           $fetched = ($LASTEXITCODE -eq 0)
           if (-not $fetched) { Write-Host '::error file=.gitmodules::engine/skymp could not be fetched at its pin, so the event list was not checked' }
           $env:THORNSWOOD_FORK_REQUIRED = '1'
-          node tests\test-papyrus-event-list.js
+          node game\tests\test-papyrus-event-list.js
           $code = $LASTEXITCODE
           git -c core.longpaths=true submodule deinit -q -f engine/skymp
           if ($code -ne 0) { Write-Host '::error file=records/papyrus-events.json::the record is not the fork''s event list at the pin; the lines above say what changed. node scripts\dev\PapyrusEventList.js --write writes it again' }

@@ -1145,7 +1145,7 @@
       (#1764). Until this, the whole time away was settled toward that place,
       so somebody who logged out at 45 in the snow at night came back six
       hours later at 10, freezing, with the cold band on both clocks and the
-      chill's hour already counting (tests\test-3154-login-restore.js). They
+      chill's hour already counting (game\tests\test-3154-login-restore.js). They
       come back at the temperature they left with, and it moves from there
       toward wherever they stand now, from their game's first /place.
     */

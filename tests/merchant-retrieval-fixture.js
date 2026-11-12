@@ -1,8 +1,8 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const {createRequire}=require('node:module');
-const file=path.join(__dirname,'test-1621-quest-state.js'),fixture=fs.readFileSync(file,'utf8');
-const realm={require:createRequire(file),__dirname,console:{log(){}},Buffer};
+const file=path.join(__dirname,'..','game','tests','test-1621-quest-state.js'),fixture=fs.readFileSync(file,'utf8');
+const realm={require:createRequire(file),__dirname:path.dirname(file),console:{log(){}},Buffer};
 vm.runInNewContext(fixture.slice(0,fixture.indexOf('let w = boot();'))+';this.h={boot,form,have,fault,clock,reset(){forms={};},clone(){forms=JSON.parse(JSON.stringify(forms));}};',realm);
 const h=realm.h,data=require('../game/data/merchant-retrievals.json'),roster=require('../game/data/merchant-roster.json').merchants;
 function setup() {

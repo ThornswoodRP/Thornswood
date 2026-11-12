@@ -14,7 +14,7 @@
 //
 // WHAT THE SERVER HANDS OUT and WHO MAKES OR GATHERS AN ITEM are both read
 // from game/data/item-sources.json, the one table of where every item comes
-// from (#3145, scripts/dev/Build-ItemSources.js, which tests/test-3145-item-sources.js
+// from (#3145, scripts/dev/Build-ItemSources.js, which game/tests/test-3145-item-sources.js
 // holds current). Nothing here reads the recipe, class or loot tables for
 // sources a second time.
 //   Handed out: a found source (the dungeon and body loot: GOODS, TOMES,
@@ -37,7 +37,7 @@
 // grow stale. Named uniques and quest items go in its exempt list with why.
 //
 // Read only apart from docs/systems/lists/who-makes-it.md with --write.
-// tests/test-3132-makers.js runs it on every pull request.
+// game/tests/test-3132-makers.js runs it on every pull request.
 'use strict';
 const fs = require('fs');
 const path = require('path');
