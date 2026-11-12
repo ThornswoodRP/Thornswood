@@ -38,15 +38,24 @@ of the block, trimmed, is the steps, and its first line is the Server line.
 The three patterns below are written in that workflow too, and
 bot/tests/test-5199-pr-tasks.py fails when the two stop matching.
 
-    python bot/pr_tasks.py              the pull request PR_NUMBER names, or the
-                                        open one whose head is HEAD_REF, read from
-                                        GitHub; with neither, the body in PR_BODY
+    python bot/pr_tasks.py              a pull_request run's first attempt: the
+                                        body its event carries, in PR_EVENT_BODY;
+                                        else the pull request PR_NUMBER names, or
+                                        the open one whose head is HEAD_REF, read
+                                        from GitHub; with neither, the body in
+                                        PR_BODY
     python bot/pr_tasks.py --file x.md  the body in a file
 
-The body is read from GitHub when it can be, not from the event, so a run
-started by hand on a branch (engine-pin.yml starts one on its pin branch,
-whose pull request its own token opened and which no event reached) reads
-the body the pull request has now. It prints a line per block, PASS or FAIL
+A pull_request run checks the body its own event carries (#5900): the
+workflow's concurrency group cancels it when a newer event on the pull
+request arrives, so that is the body as it is now, and reading it back from
+GitHub only added a read that could fail. When GitHub answered that read
+with a 503, the check failed the pull request, and as the newest run on the
+head it stood over an earlier run that had passed. A re-run, the merge queue
+and a run started by hand read the body from GitHub, since their event
+carries none or an old one (engine-pin.yml starts one on its pin branch,
+whose pull request its own token opened and which no event reached), and
+each fails closed when it cannot. It prints a line per block, PASS or FAIL
 with each rule broken, and exits 1 when any rule is broken. GITHUB_TOKEN and
 GITHUB_REPOSITORY, when both are set, let it read the pull request and each
 issue it names; without them the issues are said and skipped. It never
@@ -208,6 +217,22 @@ def pr_body(repo, token, number=None, head_ref=None):
     return str(got[0].get('body') or ''), 'pull request %s' % got[0].get('number')
 
 
+def from_event():
+    """Whether this run checks the body its pull_request event carries
+       (PR_EVENT_BODY) rather than reading it from GitHub (#5900). Only a
+       pull_request run's first attempt: the workflow's concurrency group
+       cancels it when a newer event on the pull request arrives, so its
+       event's body is the body as it is now. A re-run keeps its first
+       attempt's event, which an edit since may have left behind, and the
+       merge queue and a run by hand carry no body; each of those reads it
+       from GitHub, and fails closed when it cannot."""
+    if os.environ.get('GITHUB_EVENT_NAME', '').strip() != 'pull_request':
+        return False
+    if 'PR_EVENT_BODY' not in os.environ:
+        return False
+    return (os.environ.get('GITHUB_RUN_ATTEMPT', '').strip() or '1') == '1'
+
+
 def main(argv):
     token = os.environ.get('GITHUB_TOKEN', '').strip()
     repo = os.environ.get('GITHUB_REPOSITORY', '').strip()
@@ -216,6 +241,12 @@ def main(argv):
     if '--file' in argv:
         with open(argv[argv.index('--file') + 1], encoding='utf-8-sig') as f:
             body = f.read()
+    elif from_event():
+        # The body this run was started for (#5900). Read back from GitHub,
+        # a GitHub error on that read was this required check failing the
+        # pull request, as the newest run on its head, over one that passed.
+        body = os.environ.get('PR_EVENT_BODY', '')
+        print('reading the body the pull_request event carries, of pull request %s' % (number or '?'))
     elif token and repo and (number or head_ref):
         try:
             body, what = pr_body(repo, token, number, head_ref)
