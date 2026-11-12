@@ -49,7 +49,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-if (-not $IsWindows -and $PSVersionTable.PSEdition -eq 'Core') { throw 'Run-RealClient.ps1 drives the real game, so it runs on Windows only.' }
+if (-not $IsWindows) { throw 'Run-RealClient.ps1 drives the real game, so it runs on Windows only.' }
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 if (-not $Root) { $Root = & (Join-Path $repoRoot 'scripts\release\Where.ps1') InstallDev }
