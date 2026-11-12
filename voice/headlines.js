@@ -100,10 +100,29 @@ function floatLine(raw) {
   };
 }
 
+/* AN EMOTE IS ONE OF THE WHEEL'S NAMES, AND NOTHING ELSE (#4466).
+   emoteHead took any text and cut it to 80, so a socket could put whatever it
+   liked over its head as an "emote", past every rule typed words keep to.
+   The wheel (game\plugins\thornswood-emotes.js, EMOTES) sends only the name
+   on its list, as written there, so these are the only names that come from
+   it. A name added to the wheel is added here in the same change:
+   voice\tests\test-4466-emote-limit.js holds the two lists to each other. */
+const EMOTE_NAMES = [
+  'Ache', 'Agitated', 'Applaud', 'Arms crossed', 'At ease', 'Attention',
+  'Bar drink', 'Blessing', 'Bow', 'Cheer', 'Chop wood', 'Clean blade',
+  'Come here', 'Crouch warm', 'Dance', 'Drink', 'Drink potion', 'Drum', 'Eat',
+  'Examine', 'Flute', 'Get attention', 'Give', 'Grave bow', 'Hard clap', 'Hoe',
+  'Horn', 'Jig', 'Kneel', 'Laugh', 'Lean', 'Ledger', 'Long clap', 'Look far',
+  'Lute', 'Nervous', 'Oath', 'Ovation', 'Pick up', 'Point', 'Point farther',
+  'Point yonder', 'Pray', 'Read', 'Read book', 'Reel', 'Salute', 'Sing', 'Sit',
+  'Slow clap', 'Study', 'Surrender', 'Sweep', 'Take', 'Warm arms', 'Warm close',
+  'Warm hands', 'Wave', 'Wipe brow', 'Write'
+];
+const EMOTE_SET = new Set(EMOTE_NAMES);
+
 function emoteHead(name) {
-  const s = String(name || '').replace(/\s+/g, ' ').trim();
-  if (!s) return '';
-  return cut(s, FLOAT_CHARS);
+  const s = typeof name === 'string' ? name : '';
+  return EMOTE_SET.has(s) ? s : '';
 }
 
 /* What a caption says above a head: one line, cut to the same 80 as a
@@ -158,6 +177,7 @@ module.exports = {
   floatLine: floatLine,
   headOf: headOf,
   emoteHead: emoteHead,
+  EMOTE_NAMES: EMOTE_NAMES,
   sameCellWithin: sameCellWithin,
   markMetres: markMetres,
   markVisible: markVisible,

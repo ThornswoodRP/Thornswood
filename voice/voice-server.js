@@ -867,7 +867,11 @@ function relayCaption(me, raw, now) {
  * that changes when chat goes local, and a limit written into it would go
  * with it.
  *
- * SAID LINES ONLY. The handler asks after the slash branch, never before.
+ * SAID LINES AND EMOTES, NOT COMMANDS. What reaches other people asks: a
+ * typed line, a /me, /do, /w, /s or /ooc, and an emote from the wheel, all
+ * from the one bucket (#4466: an emote asked nothing and was a free-text
+ * line over the head as often as a socket liked). A command is asked after
+ * the slash branch, never before.
  * The plugins report gameplay down this same socket as slash lines: /chopped
  * on every fall of the axe, /place as somebody walks about, /burn, the
  * journal, the party and the trade window. A limit ahead of that branch
@@ -2969,6 +2973,9 @@ server.on('upgrade', (req, socket, head) => {
         }
         return;
       }
+      // The same limit as a typed line, and the same bucket (#4466): an emote
+      // is a line over the head and in the log as much as a said one is.
+      if (!chatAllow(me, myId, Date.now())) return;
       chatWrite('emote', myId, me, name);
       const actor = actorOf(me && me.profileId);
       const line = {
@@ -3062,15 +3069,13 @@ server.on('upgrade', (req, socket, head) => {
       // placeatme, disable, mp) and coc is not one of them, so a coc moves you
       // in your own game and the server puts you straight back.
       if (text.charAt(0) === '/') {
-        // What the chat log keeps of it: the pass masked, and a waiting
-        // menu's repeated "/line" and the front plugin's own reports not at
-        // all (commandLogText). Asked before lineMark below, which is what
-        // moves the waiting mark it reads.
         const press = msg.press === true;
-        const logged = commandLogText(me, text, press);
-        if (logged) chatWrite('command', myId, me, logged, press ? 'press' : '');
         // Full: the newest is refused and its sender told, and everything
-        // already taken stays. See the note over COMMAND_CAP.
+        // already taken stays. See the note over COMMAND_CAP. A refused one
+        // is not in the chat log (#4466): it was never run, and a socket
+        // sending into a full queue wrote a log line for every one; the
+        // service log says the queue is full, at most once in
+        // COMMAND_REFUSED_EVERY_MS.
         if (commands.length >= COMMAND_CAP) {
           const now = Date.now();
           if (now - refusedAt >= COMMAND_REFUSED_EVERY_MS) {
@@ -3085,6 +3090,12 @@ server.on('upgrade', (req, socket, head) => {
           }
           return;
         }
+        // What the chat log keeps of it: the pass masked, and a waiting
+        // menu's repeated "/line" and the front plugin's own reports not at
+        // all (commandLogText). Asked before lineMark below, which is what
+        // moves the waiting mark it reads.
+        const logged = commandLogText(me, text, press);
+        if (logged) chatWrite('command', myId, me, logged, press ? 'press' : '');
         lineMark(me, text);
         commands.push({
           id: COMMANDS_BOOT + ':' + (nextCommand++),

@@ -193,6 +193,8 @@ function logged() {
     yes('every one of them is taken as itself (' + taken.length + ' of ' + names.length + ')', taken.length === names.length,
         names.filter((n) => taken.indexOf(n) < 0).join(', '));
     yes('and a name not on it is not', heads2.emoteHead('Moonwalk') === '' && heads2.emoteHead(FREE) === '');
+    const theirs = (heads2.EMOTE_NAMES || []).slice().sort().join('|');
+    yes('the service names no emote the wheel does not have', theirs === names.slice().sort().join('|'));
   } catch (e) {
     yes('the harness ran to the end: ' + (e && e.stack || e), false, srvLog);
   } finally {
