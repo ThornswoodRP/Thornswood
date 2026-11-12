@@ -1,0 +1,70 @@
+# TEMPORARY: measures a cached .NET SDK and NuGet folder against the
+# download, for the "Speed up pull request checks" work. Removed before the
+# pull request.
+name: Cache trial
+on:
+  push:
+    branches: [claude/project-thread-u8k198]
+    paths: ['.github/workflows/zz-cache-trial.yml']
+permissions:
+  contents: read
+jobs:
+  baseline:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore the launcher's packages
+        shell: pwsh
+        run: |
+          $sw = [Diagnostics.Stopwatch]::StartNew()
+          dotnet restore launcher\app\Thornswood.csproj -r win-x64 -p:PublishAot=true --nologo -v minimal
+          Write-Host ("restore took {0:N1} s" -f $sw.Elapsed.TotalSeconds)
+          Write-Host (Get-PSDrive C, D | Format-Table | Out-String)
+  cached:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Where
+        shell: pwsh
+        run: |
+          "DOTNET_INSTALL_DIR=$env:RUNNER_TEMP\dotnet" >> $env:GITHUB_ENV
+          "NUGET_PACKAGES=$env:RUNNER_TEMP\nuget" >> $env:GITHUB_ENV
+      - id: sdk
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}\dotnet
+          key: trial-sdk-${{ github.run_id }}
+          restore-keys: trial-sdk-
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+      - id: nuget
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}\nuget
+          key: trial-nuget-${{ github.run_id }}
+          restore-keys: trial-nuget-
+      - name: Restore the launcher's packages
+        shell: pwsh
+        run: |
+          $sw = [Diagnostics.Stopwatch]::StartNew()
+          dotnet restore launcher\app\Thornswood.csproj -r win-x64 -p:PublishAot=true --nologo -v minimal
+          Write-Host ("restore took {0:N1} s" -f $sw.Elapsed.TotalSeconds)
+          dotnet --list-sdks
+          foreach ($d in "$env:RUNNER_TEMP\dotnet", "$env:RUNNER_TEMP\nuget") {
+            $f = @(Get-ChildItem -LiteralPath $d -Recurse -File)
+            Write-Host ("{0}: {1} files, {2:N0} MB" -f $d, $f.Count, (($f | Measure-Object Length -Sum).Sum / 1MB))
+          }
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.sdk.outputs.cache-matched-key == ''
+        with:
+          path: ${{ runner.temp }}\dotnet
+          key: trial-sdk-${{ github.run_id }}
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.nuget.outputs.cache-matched-key == ''
+        with:
+          path: ${{ runner.temp }}\nuget
+          key: trial-nuget-${{ github.run_id }}
