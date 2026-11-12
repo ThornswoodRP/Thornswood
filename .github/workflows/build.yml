@@ -7,22 +7,26 @@
 # branch would stop Ship.ps1; a green one means it is worth a person's time
 # to read. It builds only; nothing is published.
 #
-# Everything was one job on purpose. Branch protection named ONE required
-# check, "Launcher builds", and a second job would not have been covered by
-# it, so a new job would have been a check that blocks nothing. Since #3683
-# main's ruleset requires "Build check result" instead, a job of
-# build-pr.yml's own that passes only when every job it needs passed, so
-# the gate's shares (the job "gate", 31 Oct 2026) are covered by it as well.
-# Everything else stays steps of "Launcher builds", and a failed step names
-# itself in the summary just as a failed job would.
+# Everything was one job on purpose once: branch protection named a single
+# required check, "Launcher builds", and a second job would not have been
+# covered by it. Since #3683 main's ruleset requires three checks instead,
+# for everybody and with no bypass (records\github-repo-settings.json):
+# "Build check result", a job of build-pr.yml's own that passes only when
+# every job it needs passed, so the gate's shares are covered by it as well;
+# "Test tasks in the pull request" (test-tasks.yml); and "Release note"
+# (pr-body.yml). Everything else stays steps of "Launcher builds" and
+# "Tree checks", and a failed step names itself in the summary just as a
+# failed job would.
 #
 # The harnesses were all written to be run by hand and none of them had ever
 # run here: 236 checks across twelve files, sitting in the repo going stale.
 #
-# WHERE IT RUNS NOW (#4983): GitHub's hosted Windows runner, and nothing
-# else. The repository went public on 30 Oct 2026, so hosted minutes are
-# free here, and no runner of the box is registered to it any more (#4013),
-# so the VPS fallback below in the history went. The history:
+# WHERE IT RUNS NOW (#4983): GitHub's hosted runners, Windows for
+# "Launcher builds" and the gate's Windows shares, Linux for "Tree checks"
+# and the Linux shares, and nothing else. The repository went public on
+# 30 Oct 2026, so hosted minutes are free here, and no runner of the box is
+# registered to it any more (#4013), so the VPS fallback below in the
+# history went. The history:
 #
 # WHERE IT RAN. On the VPS, from 25 September: GitHub's own runners were
 # blocked on billing and every run failed in seconds, and Patrick chose a
@@ -47,33 +51,31 @@
 # WHY THE ACTIONS ARE PINNED. Every action is named by a full length commit
 # SHA, with the tag it was on in a comment at the end of the line, the same as
 # every release workflow here. A tag is a moving pointer its owner
-# can repoint at any commit, and these steps run on the VPS, beside the live
-# server: a repointed tag would be somebody else's code on that box without a
-# line changing here. The comment is what a person reads; the SHA is what runs.
+# can repoint at any commit, and a repointed tag would be somebody else's
+# code running with this workflow's token without a line changing here. The
+# comment is what a person reads; the SHA is what runs.
 # To move one, look the tag up and replace both:
 #   gh api repos/actions/checkout/git/matching-refs/tags/v7
 #
-# FAST, SINCE 25 SEPTEMBER: every pull request and every push to main gets
-# the checks that take seconds (secrets, every script and file parses, the
-# writing rules, the silent catch
-# count) and the launcher build, about two
-# minutes on the VPS. The ~380 test harnesses in tests/ took over five minutes there
-# on their own, so they run every night instead, in nightly.yml, with the
-# rest of the security, file, GitHub and code checks (Patrick: "let's do
-# #1 and setup a nightly schedule"). A nightly failure opens an issue.
-# A harness earns a step here by being that fast and that cheap to be wrong
-# about: tests\test-ownership.js was the first (#752; it went to the private
-# ops repository with its page in #3693), and six more joined on 28 September
-# (issue #875), under a minute between them, after all six had sat red on
-# main with this build green.
+# WHICH JOB RUNS THE TESTS. The checks that take seconds (secrets, every
+# script and file parses, the writing rules, the silent catch count) are the
+# job "Tree checks", and the launcher build is "Launcher builds". Every gate
+# harness (every test-*.js and test-*.ps1 in tests\ or a product's own tests
+# folder that tests\gate-excluded.txt does not name) runs in the gate's
+# shares, "Gate harnesses (n of 5)" on Windows and "Gate harnesses on Linux
+# (n of 4)" (#3009, #3114, #5293). On a pull request "Pick the gate
+# harnesses" chooses the harnesses its change can reach (#5183); in the
+# merge queue and on main it is the whole gate. nightly.yml runs every
+# harness again each night, the ones the gate leaves out included, with the
+# rest of the security, file, GitHub and code checks; a nightly failure
+# opens an issue. Until 31 Oct the harnesses ran only at night, because on
+# the VPS they took over five minutes.
 #
-# ON AGAIN, ON THE VPS, 25 SEPTEMBER. It was off for part of that day while
-# no runner existed. Then Patrick: "I want it set so they can commit+merge
-# as long as the checks on the VPS go through so they don't need me".
-# Then: "we don't need the required check/reviewer at all anymore for
-# anyone as long as we give verbal agreement and the VPS check goes
-# through". So nothing is required in GitHub's settings; the team merges
-# once this is green and it has been said in #staff-updates.
+# MERGING. A pull request merges itself: auto-merge.yml puts it on
+# auto-merge, and GitHub's merge queue squash-merges it once the three
+# checks main's ruleset requires pass again on its merge onto the newest
+# main (#5182). A merge gets no line in the staff channel; that rule is in
+# docs\guide\how-work-moves.md and nowhere else.
 name: Build check
 on:
   push:
@@ -152,8 +154,8 @@ jobs:
   # processor for the same harnesses). Patrick's mark is under ten minutes
   # for a pull request's checks, and over twenty means something is wrong.
   # The runners are free on a public repository; each share costs about a
-  # minute to start. The check main's ruleset requires, "Build check
-  # result", needs this job and the launcher job both
+  # minute to start. Of the checks main's ruleset requires, "Build check
+  # result" needs this job and the launcher job both
   # (scripts\dev\Build-PrWorkflow.js).
   #
   # THE PICK (#5183). One job first, on Linux, picks what the shares run and
