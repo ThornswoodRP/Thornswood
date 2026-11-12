@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-  Takes every published note off a channel: the launcher's News tab, the
-  record of the channel's Discord posts.
+  Takes every published note off a channel: the old launchers' News tab and
+  the record of the channel's Discord posts.
 
 .DESCRIPTION
   Issue #3336. Patrick, 22 Oct 2026: "remove all the posts/messages so we can today start
