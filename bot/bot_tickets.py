@@ -647,8 +647,9 @@ class TicketModal(discord.ui.Modal):
                 try:
                     # Private, not invitable: only people the bot adds can
                     # read it. Roles with Manage Threads on this channel
-                    # (Lead Gamemaster and Trial Gamemaster, per the note
-                    # on is_staff) can still open a private thread. That
+                    # (the council, Gamemaster, Trial Gamemaster, Moderator
+                    # and Support, by their sets in Build-Discord.py) can
+                    # still open a private thread. That
                     # is Discord's permission, not something this bot sets.
                     opened = await ch.create_thread(
                         name=title,
@@ -857,8 +858,10 @@ def is_staff(who):
     Nothing else makes somebody staff here, a channel permission included.
     This used to let in anybody the channel trusted with threads as well, and
     Lead Gamemaster and Trial Gamemaster carry Manage Threads on every channel
-    (GM in Build-Discord.py) while neither is a staff role, so both could
-    close any ticket and skip the ticket limits without one (#1342).
+    (their sets in Build-Discord.py), so a Trial Gamemaster, which is not a
+    staff role, could close any ticket and skip the ticket limits (#1342). A
+    Lead Gamemaster is staff by STAFF_ROLES since #3317, not by the
+    permission.
 
     Content Creator is not staff. That role is added to creator application
     threads through EXTRA_STAFF and nowhere else. It does not close tickets,
