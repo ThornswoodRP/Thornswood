@@ -2055,6 +2055,18 @@ function readBody(req, res, limit, then) {
     let doc;
     try { doc = JSON.parse(body); }
     catch (e) { res.writeHead(400).end('bad json'); return; }
+    /*
+      ONLY AN OBJECT REACHES A ROUTE (#4462). null is valid JSON, and the
+      first property a route read off it (doc.profileId on /token, doc.text on
+      /say) threw here, in the end handler, outside any catch, so one POST of
+      null stopped the whole service, voice and chat with it. Every body this
+      service takes is an object, so anything else is refused here, once, for
+      every route that reads one.
+    */
+    if (doc === null || typeof doc !== 'object' || Array.isArray(doc)) {
+      res.writeHead(400, { 'content-type': 'text/plain' }).end('the body is not a JSON object');
+      return;
+    }
     then(doc);
   });
 }
@@ -2352,46 +2364,33 @@ const server = http.createServer((req, res) => {
       res.writeHead(403).end('no');
       return;
     }
-    let body = '';
-    let tooBig = false;
-    // Answered rather than dropped; see readBody for why.
-    req.on('data', (d) => {
-      if (tooBig) { return; }
-      body += d;
-      if (body.length > 200000) {
-        tooBig = true;
-        res.writeHead(413, { 'content-type': 'text/plain' }).end('too big');   // see readBody
-        req.destroy();
+    // Read by readBody like every other body here, so null, a number or a list
+    // is refused there and nothing below runs inside a catch that would call
+    // any fault in it bad json (#4462).
+    readBody(req, res, 200000, (doc) => {
+      const now = Date.now();
+      const seen = new Set();
+      for (const row of (Array.isArray(doc.who) ? doc.who : [])) {
+        if (row === null || typeof row !== 'object') continue;
+        const pid = Number(row.profileId);
+        if (!pid) continue;
+        seen.add(pid);
+        positions.set(pid, {
+          pos: row.pos, angleZ: Number(row.angleZ) || 0,
+          cell: String(row.cell || ''), name: String(row.name || ''),
+          actor: Number(row.actor) || 0,
+          // Kept here and never sent on: it only decides who is told about
+          // whom. See WHO IS TOLD ABOUT WHOM.
+          party: String(row.party || ''), at: now
+        });
       }
-    });
-    req.on('end', () => {
-      try {
-        const doc = JSON.parse(body);
-        const now = Date.now();
-        const seen = new Set();
-        for (const row of (doc.who || [])) {
-          const pid = Number(row.profileId);
-          if (!pid) continue;
-          seen.add(pid);
-          positions.set(pid, {
-            pos: row.pos, angleZ: Number(row.angleZ) || 0,
-            cell: String(row.cell || ''), name: String(row.name || ''),
-            actor: Number(row.actor) || 0,
-            // Kept here and never sent on: it only decides who is told about
-            // whom. See WHO IS TOLD ABOUT WHOM.
-            party: String(row.party || ''), at: now
-          });
-        }
-        for (const pid of Array.from(positions.keys())) if (!seen.has(pid)) positions.delete(pid);
-        // Who is in the world is who holds a voice place (#3570).
-        placeVoices();
-        // doc.requirePass, the game server's join pass switch (#410), is not
-        // read here any more: it refused unproven joins while it was on, and
-        // since #1303 every unproven join is refused whatever it says.
-        res.writeHead(204).end();
-      } catch (e) {
-        res.writeHead(400).end('bad json');
-      }
+      for (const pid of Array.from(positions.keys())) if (!seen.has(pid)) positions.delete(pid);
+      // Who is in the world is who holds a voice place (#3570).
+      placeVoices();
+      // doc.requirePass, the game server's join pass switch (#410), is not
+      // read here any more: it refused unproven joins while it was on, and
+      // since #1303 every unproven join is refused whatever it says.
+      res.writeHead(204).end();
     });
     return;
   }
@@ -2493,7 +2492,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && route === '/commands/ack') {
     if (!isLoopback(req)) { res.writeHead(403).end('no'); return; }
     readBody(req, res, 20000, (doc) => {
-      const ids = new Set((doc && Array.isArray(doc.ids) ? doc.ids : []).map(String));
+      const ids = new Set((Array.isArray(doc.ids) ? doc.ids : []).map(String));
       let removed = 0;
       for (let i = commands.length - 1; i >= 0; i--) {
         if (ids.has(commands[i].id)) { commands.splice(i, 1); removed++; }
@@ -2508,7 +2507,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && route === '/silenced') {
     if (!isLoopback(req)) { res.writeHead(403).end('no'); return; }
     readBody(req, res, 20000, (doc) => {
-      const list = (doc && doc.profiles && typeof doc.profiles === 'object') ? doc.profiles : {};
+      const list = (doc.profiles && typeof doc.profiles === 'object') ? doc.profiles : {};
       const now = Date.now();
       const before = new Set(silenced.keys());
       silenced.clear();
@@ -2534,7 +2533,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && route === '/textmute') {
     if (!isLoopback(req)) { res.writeHead(403).end('no'); return; }
     readBody(req, res, 200000, (doc) => {
-      const by = (doc && doc.by && typeof doc.by === 'object') ? doc.by : {};
+      const by = (doc.by && typeof doc.by === 'object') ? doc.by : {};
       textOff.clear();
       for (const k of Object.keys(by)) {
         const listener = Number(k) || 0;
