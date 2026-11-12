@@ -420,11 +420,11 @@ foreach (`$n in @($movesLit)) {
 if (`$failed) { 'RELEASENOTE|' + `$r + ': no release list, because the move did not finish' }
 else {
   `$cf = Join-Path `$r 'world-before-$stamp\changeForms'
-  `$files = @()
-  if (Test-Path -LiteralPath `$cf) {
-    `$files = @(Get-ChildItem -LiteralPath `$cf -Filter *.json -File | Where-Object { `$_.BaseName -match '^[0-9]+`$' } | ForEach-Object { `$_.FullName })
-  }
-  `$found = Get-ThornswoodCharacterIds `$files
+  # The characters by the one rule (#5168): a runtime form's hex name and a
+  # profileId above 0, so 1f.json is named as 12.json is.
+  `$chars = Get-ThornswoodCharacterForms `$cf
+  `$chars.notes
+  `$found = Get-ThornswoodCharacterIds `$chars.files
   `$found.notes
   # The lists set aside are carried: the requests, and what a server took and
   # had not finished (deleted-characters.taken.json, #4920), or was taking.

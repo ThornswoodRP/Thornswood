@@ -188,9 +188,10 @@ function face(name) {
 // The character with this profile id in the world folder, or null. It is
 // read as character.js reads every world (the restore rehearsal and the
 // nightly count read the same way, #5287): the engine names a form's file by
-// its id in hex (FormDesc::ToString with %x, FileDatabase), so a character
-// made on the server is ff000800.json, never digits alone. Reading digits
-// only is how the first pass to reach saved failed (#5379).
+// its local id in hex with no plugin (FormDesc::ToString with %x,
+// FileDatabase): 0xff000800 is 800.json and 0xff00080a is 80a.json, so
+// reading digits alone misses characters. It is how the first pass to reach
+// saved failed (#5379).
 function formOf(root, settings, profileId) {
   let all = [];
   try { all = characters(root, settings); } catch (e) { return null; }
