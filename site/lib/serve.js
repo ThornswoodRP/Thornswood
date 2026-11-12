@@ -61,7 +61,7 @@ const { copyKeptChat, dropKeptChat, freshGalleryReports, isObjectLike,
 const { applyTrouble, noteTrouble, readTrouble, TROUBLE_RULES } = require('./trouble');
 const { chatSlice, DEPLOYS_DIR, readDeploys, serverLogSlice, sessionRow } = require('./serverlogs');
 const { changeOffice, departed, officesForDoor, standing } = require('./members');
-const { feedLaunchers, getWithToken, makePass, makeTicket, notAllowedPage,
+const { errorPage, feedLaunchers, getWithToken, makePass, makeTicket, notAllowedPage,
   notFoundPage, PASS_MS, passLoginKey, plainPage, readTicket, versionCompare,
   versionParts, wantsHtml } = require('./passes');
 
@@ -117,11 +117,29 @@ function failed(req, res, e) {
     // Half an answer is already on the wire and cannot be taken back. Cutting
     // the connection is the only honest end to it.
     if (res.headersSent) { res.destroy(); return; }
+    // A browser gets the site's page with a way back (#4435); anything else
+    // the plain line it always had.
+    if (wantsHtml(req)) { send(res, bad ? 400 : 500, errorPage(bad ? 400 : 500), TYPES['.html']); return; }
     res.writeHead(bad ? 400 : 500, { 'content-type': 'text/plain; charset=utf-8' });
     res.end(bad ? 'bad request' : 'server error');
   } catch (e2) {
     // The socket went away while we were answering. Nothing left to tell.
   }
+}
+
+/*
+  EVERY ERROR A BROWSER CAN REACH, ONE WAY (#4435). A browser asking (its
+  Accept names text/html, wantsHtml) is shown errorPage, the same page an
+  unknown address gets, with the same status. Anybody else, the launcher, a
+  script, curl, an <img> or a fetch, gets exactly the plain line the route
+  always answered, so nothing that reads them changes. lines says what
+  happened in a browser's words when the route knows more than its status.
+  The launcher's own routes (the feed, its watch and its assets) do not come
+  here: only the launcher reads them.
+*/
+function errorAnswer(req, res, status, plain, headers, lines) {
+  if (wantsHtml(req)) return send(res, status, errorPage(status, lines), TYPES['.html'], headers);
+  return send(res, status, plain, 'text/plain', headers);
 }
 
 /*
@@ -326,7 +344,8 @@ async function handle(req, res) {
   // --------------------------------------------------------- discord login
   // An invite link that never goes stale in six places at once.
   if (route === '/discord' && req.method === 'GET') {
-    if (!cfg.discord.invite) return send(res, 404, 'No invite link set yet.', 'text/plain');
+    if (!cfg.discord.invite) return errorAnswer(req, res, 404, 'No invite link set yet.', undefined,
+      ['The site has no Discord invite link to send you to right now.', 'Ask somebody already in the Discord for one.']);
     return send(res, 302, '', 'text/plain', { Location: cfg.discord.invite });
   }
 
@@ -375,12 +394,13 @@ async function handle(req, res) {
       return send(res, 200, fs.readFileSync(file), 'text/plain; charset=utf-8',
         { 'Cache-Control': 'no-store' });
     }
-    return send(res, 404, 'no such file', 'text/plain');
+    return errorAnswer(req, res, 404, 'no such file');
   }
 
   if (p === '/auth/discord' && req.method === 'GET') {
     if (!cfg.discord.clientId) {
-      return send(res, 500, 'Discord login is not set up on this server yet.', 'text/plain');
+      return errorAnswer(req, res, 500, 'Discord login is not set up on this server yet.', undefined,
+        ['Signing in with Discord is not set up on this copy of the site.']);
     }
     // back is where the browser lands afterwards; port is the launcher waiting
     // on the loopback address for its ticket. Both are signed into the state so
@@ -642,7 +662,7 @@ async function handle(req, res) {
       }
       return send(res, 200, html, TYPES['.html'],
         { 'Cache-Control': 'no-cache', 'Cloudflare-CDN-Cache-Control': 'max-age=' + PUBLIC_EDGE_SECONDS });
-    } catch (e) { return send(res, 500, 'no home.html', 'text/plain'); }
+    } catch (e) { return errorAnswer(req, res, 500, 'no home.html'); }
   }
 
   // Two addresses people type, or paste out of an old message. Both mean the
@@ -1098,7 +1118,8 @@ async function handle(req, res) {
       : wide === null ? path.join(UP, String(item.name))
       : srcsetWidths(item.srcset).indexOf(Number(wide)) >= 0 ? smallCopy(item.name, Number(wide)) : '';
     if (!file || !file.startsWith(UP + path.sep) || !fs.existsSync(file)) {
-      return send(res, 404, 'no such picture', 'text/plain');
+      return errorAnswer(req, res, 404, 'no such picture', undefined,
+        ['That picture is not on the gallery.', 'It may have been taken off it. The gallery shows every picture that is.']);
     }
     const st = fs.statSync(file);
     const shotKind = {
@@ -1121,10 +1142,10 @@ async function handle(req, res) {
   if (req.method === 'GET' &&
       (p === '/index.html' || Object.prototype.hasOwnProperty.call(PAGES, route))) {
     try { return send(res, 200, fs.readFileSync(path.join(PUBLIC, 'index.html')), TYPES['.html']); }
-    catch (e) { return send(res, 500, 'no index.html', 'text/plain'); }
+    catch (e) { return errorAnswer(req, res, 500, 'no index.html'); }
   }
   if (req.method === 'GET' && /^\/[A-Za-z0-9._-]+$/.test(p)) {
-    if (/\.map$/i.test(p)) return send(res, 404, 'not here', 'text/plain');
+    if (/\.map$/i.test(p)) return errorAnswer(req, res, 404, 'not here');
     const file = path.join(PUBLIC, p.slice(1));
     if (file.startsWith(PUBLIC + path.sep) && fs.existsSync(file)) {
       const type = TYPES[path.extname(file).toLowerCase()] || 'text/plain';
@@ -1195,9 +1216,13 @@ async function handle(req, res) {
     const ch = setupChannel(dl[1]);
     if (ch) {
       const setup = newestSetup(ch);
-      if (!setup) return send(res, 404, 'the installer is not published yet', 'text/plain');
+      if (!setup) return errorAnswer(req, res, 404, 'the installer is not published yet', undefined,
+        ['The installer is not on the site right now.', 'The Downloads page says when there is one to take.']);
       const at = await assetLocation(setup.id);
-      if (!at.url) return send(res, 503, 'GitHub could not say where the installer is just now (' + at.why + '). Try again in a minute.', 'text/plain', { 'Cache-Control': 'no-store' });
+      if (!at.url) {
+        const said = 'GitHub could not say where the installer is just now (' + at.why + '). Try again in a minute.';
+        return errorAnswer(req, res, 503, said, { 'Cache-Control': 'no-store' }, [said]);
+      }
       res.writeHead(302, { location: at.url, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
       return res.end();
     }
@@ -1206,7 +1231,8 @@ async function handle(req, res) {
     const meta = jsonFile(path.join(FILES, 'files.json'), {});
     if (!file.startsWith(FILES + path.sep) || !downloadServed(dl[1], meta) ||
         !fs.existsSync(file) || !fs.statSync(file).isFile()) {
-      return send(res, 404, 'no such file', 'text/plain');
+      return errorAnswer(req, res, 404, 'no such file', undefined,
+        ['There is no download at that address.', 'The Downloads page has what there is to take now.']);
     }
     const st = fs.statSync(file);
     /* Resumable, because a dropped connection should carry on. Accept-Ranges
@@ -1392,9 +1418,10 @@ async function handle(req, res) {
       res.writeHead(302, { location: at.url, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
       return res.end();
     }
-    if (at.missing) return send(res, 404, 'no such file on a published Release', 'text/plain', { 'Cache-Control': 'no-store' });
-    return send(res, 503, 'GitHub could not say where that file is just now (' + at.why + '). Try again in a minute.', 'text/plain',
-      { 'Cache-Control': 'no-store' });
+    if (at.missing) return errorAnswer(req, res, 404, 'no such file on a published Release', { 'Cache-Control': 'no-store' },
+      ['There is no download at that address.', 'The Downloads page has what there is to take now.']);
+    const said = 'GitHub could not say where that file is just now (' + at.why + '). Try again in a minute.';
+    return errorAnswer(req, res, 503, said, { 'Cache-Control': 'no-store' }, [said]);
   }
   // --------------------------------------------------------------- uploads
   /*
@@ -1426,10 +1453,9 @@ async function handle(req, res) {
       const waiting = staffAsking &&
         jsonFile(GPENDING, []).some((x) => String(x.name) === up[1]);
       const gs = waiting ? await galleryStaff(url, w) : null;
-      if (!gs) return send(res, 401, 'sign in first', 'text/plain');
+      if (!gs) return errorAnswer(req, res, 401, 'sign in first');
       if (!gs.ok) {
-        return send(res, gs.code,
-                    String((gs.body && gs.body.error) || 'staff only'), 'text/plain');
+        return errorAnswer(req, res, gs.code, String((gs.body && gs.body.error) || 'staff only'));
       }
     }
     // ?w= is a waiting picture's smaller copy (#3218), for the staff card.
@@ -1437,14 +1463,14 @@ async function handle(req, res) {
     const file = wide === null ? path.join(UP, up[1])
       : SMALL_WIDTHS.indexOf(Number(wide)) >= 0 ? smallCopy(up[1], Number(wide)) : '';
     if (!file || !file.startsWith(UP + path.sep) || !fs.existsSync(file)) {
-      return send(res, 404, 'no such file', 'text/plain');
+      return errorAnswer(req, res, 404, 'no such file');
     }
     /* A gallery submission that staff removed is not served to anybody
        (#2352), whether its file is still on disk because staff chose to keep
        it, because its delete failed, or because the launcher's buttons never
        ask to delete it. The removal marks it on uploads.json (removedUpload). */
     if (uploadRemoved(up[1])) {
-      return send(res, 404, 'removed from the gallery', 'text/plain');
+      return errorAnswer(req, res, 404, 'removed from the gallery', undefined, ['That picture was taken off the gallery.']);
     }
     const st = fs.statSync(file);
     const kind = KIND[path.extname(file).toLowerCase()];
@@ -3331,7 +3357,6 @@ async function handle(req, res) {
   }
 
   // The site's own look for a person, the same four characters for anything
-  // that did not ask for HTML. See notFoundPage above.
-  if (wantsHtml(req)) { return send(res, 404, notFoundPage(), TYPES['.html']); }
-  send(res, 404, 'not here', 'text/plain');
+  // that did not ask for HTML, by the one path every error takes (#4435).
+  return errorAnswer(req, res, 404, 'not here');
 }

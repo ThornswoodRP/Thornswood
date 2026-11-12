@@ -155,8 +155,8 @@ async function main() {
       setupAt >= 0 && setupAt < fileBody.indexOf('path.join(FILES, dl[1])') &&
       /const ch = setupChannel\(dl\[1\]\);\s*if \(ch\) \{/.test(fileBody));
   yes('  302 to where GitHub keeps it, from the API\'s asset route, or 404 while there is none, and never a byte from the site',
-      /if \(!setup\) return send\(res, 404, /.test(fileBody.slice(setupAt)) &&
-      /const at = await assetLocation\(setup\.id\);\s*if \(!at\.url\) return send\(res, 503, /.test(fileBody.slice(setupAt)) &&
+      /if \(!setup\) return errorAnswer\(req, res, 404, /.test(fileBody.slice(setupAt)) &&
+      /const at = await assetLocation\(setup\.id\);\s*if \(!at\.url\) \{[^}]*return errorAnswer\(req, res, 503, /.test(fileBody.slice(setupAt)) &&
       /res\.writeHead\(302, \{ location: at\.url/.test(fileBody.slice(setupAt)));
   yes('no address the site gives out is a github.com download any more', server.indexOf('/releases/download/') < 0);
 
@@ -343,7 +343,7 @@ async function main() {
       listRoute >= 0 && /const list = await releaseList\(\);\s*if \(list === null\) return send\(res, 503,/.test(server.slice(listRoute, relRoute)));
   yes('/release/<tag>/<name> answers 302 to where GitHub keeps it, 404 for no such file, 503 when GitHub could not say',
       /const at = await releaseAsset\(relFile\[1\], relFile\[2\]\);/.test(relBody) && /location: at\.url, 'cache-control': 'no-store'/.test(relBody) &&
-      /if \(at\.missing\) return send\(res, 404,/.test(relBody) && /send\(res, 503,/.test(relBody));
+      /if \(at\.missing\) return errorAnswer\(req, res, 404,/.test(relBody) && /errorAnswer\(req, res, 503,/.test(relBody));
   yes('  both held to the public API\'s rate per address', /launcher\\\/releases\)\$\/\.test\(route\)/.test(server) && /\/\^\\\/release\\\/\/\.test\(route\)/.test(server));
 
   // The Downloads list offers main's from its Release and never the old
