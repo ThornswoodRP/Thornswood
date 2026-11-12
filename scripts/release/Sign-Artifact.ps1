@@ -12,10 +12,12 @@
   pull request build keep working exactly as they do today. A build that cannot
   sign is not a failed build.
 
-  Why signing matters here is written out in installer\setup\Bootstrap.cs: SmartScreen
+  Why signing matters here: SmartScreen
   builds reputation per file hash, and this project ships a new hash every
   release, so an unsigned installer starts from zero reputation every single
   time and warns forever. Signing moves the reputation to the certificate.
+  docs\SIGNED-RELEASES.md is the whole picture: what is signed, where, and
+  how each part is checked.
 
   Two shapes of signing.json are understood.
 
