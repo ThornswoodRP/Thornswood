@@ -200,7 +200,7 @@ $Moves = @('world', 'private\characters.json', 'private\property.json', 'private
            'private\last-left.json', 'private\take-limit.json', 'private\trade-cargo.json', 'private\market-stalls.json',
            'private\trade-carts.json',
            'private\dungeon-rewards-ledger.json', 'private\dungeon-rewards-ledger.initialized',
-           'private\deleted-characters.json')
+           'private\deleted-characters.json', 'private\deleted-characters.taken.json', 'private\deleted-characters.taking.json')
 # The release parts (game\gamemode.js PARTS) whose registers are all in
 # $Moves, so a fresh start has nothing of anybody's in them: the new release
 # list marks them done and only 'merchants', the ledger a wipe keeps, waits.
@@ -426,7 +426,9 @@ else {
   }
   `$found = Get-ThornswoodCharacterIds `$files
   `$found.notes
-  Write-ThornswoodReleaseList -Root `$r -Actors `$found.ids -Carry (Join-Path `$r 'private\deleted-characters-before-$stamp.json') -Done @($wipeDoneLit)
+  # The lists set aside are carried: the requests, and what a server took and
+  # had not finished (deleted-characters.taken.json, #4920), or was taking.
+  Write-ThornswoodReleaseList -Root `$r -Actors `$found.ids -Carry @((Join-Path `$r 'private\deleted-characters-before-$stamp.json'), (Join-Path `$r 'private\deleted-characters.taken-before-$stamp.json'), (Join-Path `$r 'private\deleted-characters.taking-before-$stamp.json')) -Done @($wipeDoneLit)
 }
 }
 "@

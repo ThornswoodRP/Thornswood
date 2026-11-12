@@ -330,7 +330,10 @@ function rollNow(log, now, o) {
   (mod-settings.json), their take counts (take-limit.json) and when they last
   left (last-left.json). The gamemode's blocks let go of the registers as they
   load, after this (game\gamemode.js, the release block). A part done is marked
-  with the time in the list; the one that finds every part done deletes it.
+  with the time in the taken list, deleted-characters.taken.json, which only
+  this and the gamemode write (thornswoodTakeReleaseList, #4920); the one that
+  finds every part done deletes it. deleted-characters.json itself, the
+  requests, is only ever taken, never written.
   RELEASE_PARTS is the gamemode's PARTS, and tests\test-2758-start-deletions.js
   holds the two to the same list.
 
@@ -355,6 +358,88 @@ function rollNow(log, now, o) {
   leaves the request where it is, for the next start, and is said. Each line
   here says counts and never a name, a Discord id, a profile id or a form id.
 */
+// -- the release list, taken (#4920), begin --
+/*
+  THE LIST IS TAKEN, NEVER WRITTEN OVER (#4920). private\deleted-characters.json
+  is the requests: Delete-Person.ps1 and Release-List.ps1 merge a new one in
+  whenever they run, while the game server runs too. A server that wrote back
+  the copy it had read, or deleted the file once that copy was done, put
+  back or threw away a request merged in since, and nobody was told.
+
+  So the server never writes that file. It takes it, with a rename, the one
+  step no other write can come between: deleted-characters.json becomes
+  deleted-characters.taking.json, which goes into deleted-characters.taken.json,
+  the server's own, and is deleted. Only the server writes .taken (server-log.js
+  before the engine starts, then the gamemode as it loads, never at once), and
+  its marks and its deleting are there. A request merged in after the take
+  lands in a new deleted-characters.json and is taken at the next start; one
+  merged in before it is in what was taken.
+
+  Taking it in: every id of both, and a part done only where it is done on
+  both, so a part that ran for the ids already taken runs again for the new
+  ones (running again for an id already let go finds nothing). A .taking left
+  by a stop between the rename and the merge goes in first, and a new list is
+  never renamed onto it.
+
+  Answers { list, file, left }: list is what is taken (null for none) and
+  file is .taken; left, when set, is a request file that could not be taken
+  and is left where it is, for a person: { bad, file } for one that is not a
+  list (bad is what it held, null when it would not parse), or { error, file }.
+  A .taken that is not a list answers { bad, file } or { error, file } and no
+  list, so nothing is let go. Server-Log.js carries this same text, and
+  tests\test-4920-taken-list.js holds the two the same.
+*/
+function thornswoodTakeReleaseList(fs, path, priv, valid) {
+  var LIST = path.join(priv, 'deleted-characters.json');
+  var TAKING = path.join(priv, 'deleted-characters.taking.json');
+  var TAKEN = path.join(priv, 'deleted-characters.taken.json');
+  function why(e) { return (e && (e.code || e.message)) || String(e); }
+  function load(p) {
+    var text;
+    try { text = fs.readFileSync(p, 'utf8'); }
+    catch (e) {
+      if (e && e.code === 'ENOENT') { return { none: true }; }
+      return { error: why(e), file: p };
+    }
+    var v = null;
+    try { v = JSON.parse(String(text).replace(/^\uFEFF/, '')); } catch (e) { v = null; }
+    return valid(v) ? { list: v } : { bad: v, file: p };
+  }
+  function ids(a, b) {
+    var seen = {}, out = [];
+    (a || []).concat(b || []).forEach(function (n) { if (!seen[n]) { seen[n] = true; out.push(n); } });
+    return out.sort(function (x, y) { return x - y; });
+  }
+  var left = null;
+  var taking = load(TAKING);
+  if (taking.none) {
+    var asked = load(LIST);
+    if (asked.list) {
+      try { fs.renameSync(LIST, TAKING); taking = load(TAKING); }
+      catch (e) { if (!(e && e.code === 'ENOENT')) { left = { error: why(e), file: LIST }; } }
+    } else if (!asked.none) { left = asked; }
+  }
+  if (!taking.none && !taking.list) { left = taking; taking = { none: true }; }
+  var taken = load(TAKEN);
+  if (!taken.none && !taken.list) { return taken; }
+  if (!taking.list) { return { list: taken.list || null, file: TAKEN, left: left }; }
+  var was = taken.list || { profiles: [], actors: [], done: taking.list.done || {} };
+  var a = was.done || {}, b = taking.list.done || {}, done = {};
+  Object.keys(a).forEach(function (k) {
+    if (Object.prototype.hasOwnProperty.call(b, k)) { done[k] = Math.max(a[k], b[k]); }
+  });
+  var list = { profiles: ids(was.profiles, taking.list.profiles), actors: ids(was.actors, taking.list.actors), done: done };
+  try {
+    fs.writeFileSync(TAKEN + '.tmp', JSON.stringify(list));
+    fs.renameSync(TAKEN + '.tmp', TAKEN);
+  } catch (e) {
+    return { error: why(e), file: TAKEN };
+  }
+  try { fs.unlinkSync(TAKING); }
+  catch (e) { left = { error: why(e), file: TAKING }; }
+  return { list: list, file: TAKEN, left: left };
+}
+// -- the release list, taken (#4920), end --
 const RELEASE_PARTS = ['saves', 'farms', 'property', 'embassy', 'dungeon', 'cargo', 'stalls', 'carts', 'books', 'merchants'];
 
 function startDeletions(dir, now) {
@@ -402,11 +487,20 @@ function startDeletions(dir, now) {
   const settings = readJson(path.join(dir, 'server-settings.json'));
   if (isObj(settings)) {
     const priv = path.join(dir, settings.privDir ? String(settings.privDir) : 'private');
-    const listFile = path.join(priv, 'deleted-characters.json');
-    const list = readJson(listFile);
-    const ok = isObj(list) && ids(list.profiles) && (list.actors === undefined || (Array.isArray(list.actors) && list.actors.every(isFormId))) &&
-      (list.done === undefined || (isObj(list.done) && Object.keys(list.done).every((k) => Number.isSafeInteger(list.done[k]) && list.done[k] > 0)));
-    if (list === null || (list !== undefined && !ok)) {
+    const validList = (l) => isObj(l) && ids(l.profiles) && (l.actors === undefined || (Array.isArray(l.actors) && l.actors.every(isFormId))) &&
+      (l.done === undefined || (isObj(l.done) && Object.keys(l.done).every((k) => Number.isSafeInteger(l.done[k]) && l.done[k] > 0)));
+    // Taken, never written over (thornswoodTakeReleaseList, above, #4920).
+    const got = thornswoodTakeReleaseList(fs, path, priv, validList);
+    if (got.left) {
+      say(path.basename(got.left.file) + (got.left.error
+        ? ' could not be taken (' + got.left.error + '), so the requests in it wait for the next start'
+        : ' is not a list of deleted characters, so ' + (got.list ? 'the requests in it were not taken,' : 'nothing was removed') + ' and it is left as it is'));
+    }
+    const listFile = got.file;
+    const list = got.error || got.bad !== undefined ? null : (got.list || undefined);
+    if (got.error) {
+      say(path.basename(listFile) + ' could not be read or written (' + got.error + '), so nothing was removed');
+    } else if (list === null) {
       say(path.basename(listFile) + ' is not a list of deleted characters, so nothing was removed and it is left as it is');
     } else if (list !== undefined && !(isObj(list.done) && has(list.done, 'saves'))) {
       const P = new Set(list.profiles);

@@ -395,6 +395,15 @@ try {
     Yes 'a dry run now shows each service that still has the request waiting' (
         $c -eq 0 -and (Said 'waiting\s+the site has a request for them it takes at its next start') -and (Said 'waiting\s+the live game server has a request') -and
         (Said 'waiting\s+the dev game server has a request') -and (Said 'waiting\s+live voice has a request') -and (Said 'waiting\s+dev voice has a request') -and (Said 'waiting\s+the bot has a request'))
+    # A list the live server has taken is still a request waiting there, and is
+    # no register left naming them (#4920). Put back as it was after.
+    $req = Join-Path $Live 'private\deleted-characters.json'
+    $took = Join-Path $Live 'private\deleted-characters.taken.json'
+    Move-Item -LiteralPath $req -Destination $took
+    $c = Run (@('-DiscordId', $ME) + $roots)
+    Yes '  and a list the server has taken is still waiting there, and is never counted as left' (
+        $c -eq 0 -and (Said 'waiting\s+the live game server has a request') -and -not (Said 'deleted-characters\.taken\.json'))
+    Move-Item -LiteralPath $took -Destination $req
 
     # ---- each service starts, the way it starts on the box
     $node = (Get-Command node).Source
@@ -503,8 +512,10 @@ new Function('fs', 'path', 'putJson', 'DATA', 'UP', 'LINKED', 'RULES_OK', 'ATTEM
             if ($before["$rel\private\$f"] -ne (Get-FileHash (Join-Path $PV $f)).Hash) { $same = $false; Write-Host "        changed: $tag private\$f" }
         }
         Yes "$tag`: every game register, the staff log and the door log are as they were (the game server lets go, not this)" $same
-        $list = J (Join-Path $PV 'deleted-characters.json')
-        Yes "$tag`: the list stays for the gamemode's registers, with the saves marked done" ($list.done.saves -gt 0 -and @($list.done.PSObject.Properties).Count -eq 1)
+        # The server took the request into its own list and keeps its marks there (#4920).
+        $list = J (Join-Path $PV 'deleted-characters.taken.json')
+        Yes "$tag`: the list stays for the gamemode's registers, taken, with the saves marked done" (
+            -not (Test-Path (Join-Path $PV 'deleted-characters.json')) -and $list.done.saves -gt 0 -and @($list.done.PSObject.Properties).Count -eq 1)
     }
     $old = Join-Path $Box 'Thornswood-Server.prev-20260930-000000'
     Yes 'an old copy with no private folder loses their discarded change form' (-not (Test-Path (Join-Path $old 'world-before-1\changeForms\_discarded-1\ff000a08.json')))

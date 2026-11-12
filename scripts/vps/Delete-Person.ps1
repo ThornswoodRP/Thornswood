@@ -473,7 +473,11 @@ function requestFile(w) {
 }
 function requestFiles() {
   const ws = ['site'].concat(a.servers.map((s) => 'server:' + s.tag), a.voices.map((v) => 'voice:' + v.tag), ['bot']);
-  return ws.map((w) => [w, requestFile(w)]);
+  const out = ws.map((w) => [w, requestFile(w)]);
+  // A game server's taken list as well: requests it has taken and not finished
+  // letting go of (#4920, thornswoodTakeReleaseList in Server-Log.js).
+  for (const s of a.servers) out.push(['server:' + s.tag, path.join(s.root, 'private', 'deleted-characters.taken.json')]);
+  return out;
 }
 // A request already there, to say it still waits; one that will not parse
 // is said by the run that would merge into it.
@@ -876,6 +880,9 @@ for (const person of people) {
       const LIST = 'deleted-characters.json';
       const RELEASED = /^(property|law|beds|farm-claims|embassy|books|dungeon-rewards-ledger|trade-cargo|market-stalls|trade-carts|merchant-ledger)\.json$/i;
       handled.add(path.join(priv, LIST).toLowerCase());
+      // The server's own taken list and one half taken (#4920): requests, not registers.
+      handled.add(path.join(priv, 'deleted-characters.taken.json').toLowerCase());
+      handled.add(path.join(priv, 'deleted-characters.taking.json').toLowerCase());
       let theirs = 0;
       if (P.size) {
         for (const dir of [priv, data]) {
@@ -996,7 +1003,7 @@ for (const person of people) {
     const named = w.indexOf('server:') === 0
       ? (Array.isArray(v.profiles) && r.profiles.length && r.profiles.every((n) => v.profiles.indexOf(n) >= 0))
       : (Array.isArray(v.people) && v.people.some((x) => isObj(x) && String(x.discordId) === id));
-    if (named) r.waiting.push(w);
+    if (named && r.waiting.indexOf(w) < 0) r.waiting.push(w);
   }
   results.push(r);
 }

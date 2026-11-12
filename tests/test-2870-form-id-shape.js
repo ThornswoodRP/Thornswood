@@ -140,7 +140,9 @@ try {
       vm.runInContext(release, box, { filename: 'gamemode.js (release)' });
       box.__thornswoodRelease('property', (who) => { seen = who; return { saved: true, counts: {} }; });
     } finally { process.chdir(was); }
-    return { seen: seen, logged: logged, after: fs.readFileSync(path.join(dir, 'private', 'deleted-characters.json'), 'utf8') };
+    // The request file as it is after the start: there when it was not taken (#4920).
+    const listAfter = path.join(dir, 'private', 'deleted-characters.json');
+    return { seen: seen, logged: logged, after: fs.existsSync(listAfter) ? fs.readFileSync(listAfter, 'utf8') : null };
   }
   const oldList = JSON.stringify({ profiles: [P1], actors: [2561] });
   const h1 = helper(oldList);

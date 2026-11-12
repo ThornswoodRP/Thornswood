@@ -87,9 +87,12 @@ function start(name, list, held, odd) {
       return { saved: true, counts: {} };
     });
   } finally { process.chdir(home); }
+  // The server's own list after the start: deleted-characters.taken.json,
+  // where it takes the requests and keeps its marks (#4920).
+  const taken = path.join(dir, 'private', 'deleted-characters.taken.json');
   let after = null;
-  try { after = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { after = null; }
-  return { seen: seen, log: lines.join('\n'), after: after, rewritten: fs.existsSync(file) && fs.readFileSync(file, 'utf8') !== before };
+  try { after = JSON.parse(fs.readFileSync(taken, 'utf8')); } catch (e) { after = null; }
+  return { seen: seen, log: lines.join('\n'), after: after, rewritten: fs.existsSync(taken) && fs.readFileSync(taken, 'utf8') !== before };
 }
 
 try {
