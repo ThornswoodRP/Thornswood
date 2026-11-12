@@ -307,7 +307,7 @@ namespace Thornswood
         static void Client(List<Issue> l)
         {
             if (ClientRuntime.Recorded().Count == 0 || ClientRuntime.Good()) return;
-            l.Add(Issue.Of(IssueKind.Client, "The multiplayer client is not this build's: " + Checks.ClientDetail() + ".",
+            l.Add(Issue.Of(IssueKind.Client, "The multiplayer client does not match this build: " + Checks.ClientDetail() + ".",
                 "Fix puts the recorded files back, from the kept copies or the installed launcher's package.",
                 "Neither had the recorded build: reinstall the launcher from thornswood.net, and send the launcher log to the Discord if it says this again.", true));
         }

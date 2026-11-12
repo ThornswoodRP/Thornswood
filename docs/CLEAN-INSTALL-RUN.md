@@ -422,7 +422,7 @@ tester confused by a list that no longer matches.
 | 39 | `Making Thornswood's own Skyrim folder from what Vortex has deployed. Play comes back when it is done.` | `launcher\app\ShellOwnGame.cs` |
 | 40 | `Thornswood's own Skyrim folder is ready at` | `launcher\app\OwnGame.cs` |
 | 40 | `Restarting the launcher so it runs from the new folder.` | `launcher\app\ShellOwnGame.cs` |
-| 42 | `is missing, the launcher will fetch it` | `launcher\app\Checks.cs` |
+| 42 | `files are` | `launcher\app\Checks.cs` |
 | 42 | `The client runtime is back to the recorded build.` | `launcher\app\ClientRuntime.cs` |
 | 43 | `UPDATE FIRST` | `launcher\app\Shell.cs` |
 | 44 | `Give your character a name that belongs in Skyrim` | `launcher\app\MainWindow.axaml` |

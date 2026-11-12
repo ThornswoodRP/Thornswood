@@ -111,6 +111,15 @@ yes('the Client row reads its words only when it fails, so the files are not rea
 const clientProblem = lift(checksCs, 'static string ClientProblem()');
 yes('ClientProblem tells missing files from files of another build',
     !!clientProblem && clientProblem.includes('"Client files missing"') && clientProblem.includes('"Client files not this build\'s"'));
+// Patrick's screenshot, 12 Nov 2026: "5 client files is not this build's,
+// the launcher will replace it". The detail says what is wrong, in plain
+// grammar, and leaves what puts it right to the line that carries it.
+const clientDetail = lift(checksCs, 'public static string ClientDetail()');
+yes('ClientDetail counts the files as plural and against the recorded six',
+    !!clientDetail && clientDetail.includes('" of its " + ClientRuntime.Recorded().Count + " files are " + state'));
+yes('  and one file as singular', !!clientDetail && clientDetail.includes('" is " + state'));
+yes('  and promises no repair it may not make',
+    !!clientDetail && !/will (replace|fetch) it/.test(clientDetail));
 const modsRow = lift(checksCs, 'static Check ModsRow(');
 yes('the Mods row says how many are missing, or that the mods are not installed',
     !!modsRow && modsRow.includes('" mods missing"') && modsRow.includes('"1 mod missing"') && modsRow.includes('"Mods not installed"'));
