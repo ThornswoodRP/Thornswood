@@ -868,6 +868,10 @@ issue where the card did.
   Grant-BoxKey -Name oracle-hermes.** (dec_8IRMk9Pf55b91lg4a-_b3Q) 10 Nov
   2026,
   [#5746](https://github.com/ThornswoodRP/Thornswood/issues/5746#issuecomment-6771996368).
+- **Each action pin's comment names the full release its commit is, and the
+  nightly checks every pin is the commit its tag names; #5843 merges at
+  04b9084.** (dec_ZkY5kVW6bjbs6_1M2AqY1g) 12 Nov 2026,
+  [#4165](https://github.com/ThornswoodRP/Thornswood/issues/4165#issuecomment-6830718714).
 
 ### Turned down
 
