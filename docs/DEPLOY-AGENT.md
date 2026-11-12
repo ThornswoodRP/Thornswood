@@ -297,7 +297,10 @@ a copy of dev that nobody plays on:
    answered, puts the deed in its pack and the claim in the copy's
    `private\property.json`), **keys** (the master key came with the deed,
    and Lock at the door's inside half is answered, written to the register
-   and turns the door's offer to Unlock), **saved**
+   and turns the door's offer to Unlock), **stations** (Alvor's forge in
+   Riverwood is shut to the bot with no trade, and says why over the relay;
+   once it picks Smith, Platewright and is handed a hammer, the forge
+   opens), **saved**
    (the world on disk holds the character by name), **restart**
    (the copy is stopped and started again and loads again), **loads
    back** (a second bot logs in as the same profile and gets the same
@@ -305,7 +308,8 @@ a copy of dev that nobody plays on:
    stables' door still offers it Unlock, so the claim and its lock came
    back with the restart). A FAIL at new, face,
    home or saved ends with what the gamemode's creation said about the bot,
-   one at claim, keys or kept with the property block's last lines,
+   one at claim, keys or kept with the property block's last lines, one
+   at stations with the character block's,
    and one at relay with what the gamemode said of the pass and the voice
    service's last lines (its log is `run\voice\bot-pass-voice.log`).
 5. Every line goes in the Deployment's log. All PASS and the gamemode goes

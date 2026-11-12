@@ -45,6 +45,12 @@
 //              opens the door's other half and presses Lock (/lock): the
 //              gamemode answers, the register says locked, and the line at
 //              the door offers Unlock;
+//   stations   the bot presses E on Alvor's forge in Riverwood with no trade
+//              yet: the gamemode refuses it, says why over the relay, and
+//              the bench does not open. It picks Smith, Platewright, over
+//              the relay as the K panel does, is handed a hammer, presses
+//              the forge again and the bench opens (an OpenContainer for
+//              it, the engine's word that the press went through);
 //   saved      the world on disk holds the character with that name;
 //   restart    the server is stopped and started again and loads again;
 //   loads back a second bot logs in as the same profile and is sent the same
@@ -92,6 +98,9 @@ const CHARGEN_PROPERTY = 'thornswoodChargen';
 // The property block's lines (plog), which a FAIL from the claim on carries.
 const PROPERTY = '[property] ';
 const PROPERTY_STEPS = ['claim', 'keys', 'kept'];
+// The character block's lines (clog), which say whether a pick was taken,
+// and which a FAIL at stations carries.
+const PICKS = '[thornswood character] ';
 // What a door says to the person who opened it (property.ts doorLine,
 // DOOR_LINE_PROPERTY, visible by its owner): x is what the lock key does
 // there, claim, lock or unlock, and n the building.
@@ -107,6 +116,17 @@ const TELEPORT = 20;
 // gamemode must still give both doors to that building, or the pass says
 // so instead of pressing a door that is no longer its.
 const STABLES = { building: '165a0:Skyrim.esm', cell: 0x165a0, outside: 0x1a81e, inside: 0x16729 };
+// A forge (CraftingBlackSmithForge, carrying CraftingSmithingForge) that
+// stands in Tamriel, where the start spot is: Alvor's in Riverwood
+// (game/data/woodworking-benches.json, riverwood, forge). The engine takes a
+// press on anything in the bot's own worldspace (CheckInteractionAbility).
+const FORGE = 0xd6987;
+const OPEN_CONTAINER = 21;
+// crafting.ts NO_PROFESSION_AT_A_BENCH, the bench gate's word to somebody
+// with no trade, and the line a pick of the smith's trade hands the hammer
+// with (the three starting tools).
+const NO_TRADE = 'You have not chosen a profession yet';
+const HAMMER = 'You are handed a hammer';
 
 function stageFrom(dump) {
   try { const v = JSON.parse(dump); return v && typeof v.stage === 'string' ? v.stage : ''; } catch (e) { return ''; }
@@ -306,7 +326,8 @@ async function pass(opts) {
   // the reason and nobody has to fetch the server's log off the box.
   // The same for a claim, from the property block's lines.
   const said = (step) => {
-    const which = CHARGEN_STEPS.includes(step) ? [CHARGEN, 'creating it'] : PROPERTY_STEPS.includes(step) ? [PROPERTY, 'the stables'] : null;
+    const which = CHARGEN_STEPS.includes(step) ? [CHARGEN, 'creating it'] : PROPERTY_STEPS.includes(step) ? [PROPERTY, 'the stables']
+      : step === 'stations' ? [PICKS, 'the trade it picked'] : null;
     if (!which) { return ''; }
     const c = server.lines.filter((l) => l.indexOf(which[0]) >= 0).slice(-3).map((l) => l.trim().slice(0, 300));
     return c.length ? '. The gamemode said: ' + c.join(' | ') : '. The gamemode said nothing about ' + which[1];
@@ -514,6 +535,28 @@ async function pass(opts) {
       say('keys', true, 'the master key came with the deed; Lock at the inside door was answered (' + answer.slice(0, 80) +
         '), the register says locked and the door now offers Unlock');
     } catch (e) { say('keys', false, e.message + told(heardAt)); return result(); }
+
+    // A station: shut to somebody with no trade, open once they have one.
+    heardAt = relay.heard.length;
+    const opened = (from) => first.inbox.slice(from).some((x) => x.message && x.message.t === OPEN_CONTAINER && Number(x.message.target) === FORGE);
+    try {
+      let at = first.inbox.length;
+      log('the bot presses E on the forge, ' + FORGE.toString(16) + ', with no trade');
+      first.send({ t: ACTIVATE, data: { caster: 0x14, target: FORGE, isSecondActivation: false } }, true);
+      const refused = await relay.until(() => relay.said(heardAt).find((t) => t.indexOf(NO_TRADE) === 0), stepMs,
+        'the forge\'s refusal over the relay to somebody with no trade');
+      first.pump();
+      if (opened(at)) { throw new Error('the forge opened for somebody with no trade, though the gamemode said: ' + refused); }
+      heardAt = relay.heard.length;
+      log('the bot picks Smith, Platewright');
+      relay.say('/pick profession smith platewright');
+      await relay.until(() => relay.said(heardAt).find((t) => t.indexOf(HAMMER) === 0), stepMs, 'the hammer a new smith is handed');
+      at = first.inbox.length;
+      log('the bot presses E on the forge again, a smith');
+      first.send({ t: ACTIVATE, data: { caster: 0x14, target: FORGE, isSecondActivation: false } }, true);
+      await first.until(() => opened(at), stepMs, 'the forge opening for a smith with a hammer');
+      say('stations', true, 'the forge was shut to it with no trade (' + refused.slice(0, 80) + '), and opened once it was a smith with a hammer');
+    } catch (e) { say('stations', false, e.message + told(heardAt)); return result(); }
     relay.close();
 
     let form = null;
@@ -621,4 +664,4 @@ if (require.main === module) {
 }
 
 module.exports = { stageIn, stageOf, pass, gitBlob, face, formOf, nameIn, ServerRun, doorKey, HOME,
-                   STABLES, doorLineOf, packNames, claimOn, stablesIn };
+                   STABLES, FORGE, doorLineOf, packNames, claimOn, stablesIn };

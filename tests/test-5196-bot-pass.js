@@ -30,7 +30,9 @@
 // and the deed and master key in the pack (SetInventory); /lock locks it
 // there and the door offers Unlock; and after the restart the register is
 // still on disk, so the door offers Unlock again. Everything about the
-// stables was first run against the whole of gamemode.js on
+// stables, and at the forge after them (shut to somebody with no trade, a
+// hammer for Smith, open to a smith), was first run against the whole of
+// gamemode.js on
 // tests/stand-in-server.js: the same door ids, lines and register.
 //
 // Then the same with each part broken, one at a time, and the pass has to
@@ -47,6 +49,8 @@
 //    taken; no deed, or no claim in the register; no master key with the
 //    deed; the lock not in the register; the claim gone after the restart;
 //    tables that no longer give both doors to the stables;
+//  - the forge opens for somebody with no trade; Smith is not taken; the
+//    forge stays shut to a smith with a hammer;
 //  - nothing is written to the world;
 //  - after the restart the character comes back somewhere else, or nameless.
 //
@@ -201,6 +205,13 @@ function standIn(root, break_) {
       cur.line();
       return;
     }
+    if (parts[0] === '/pick' && parts[1] === 'profession') {
+      const took = break_ !== 'no hammer' && parts[2] === 'smith' && parts[3] === 'platewright';
+      if (took && cur) { cur.trade(); }
+      await ask(vport, 'POST', '/say', { profileId: pid, text: took ? 'You are handed a hammer. Keep it in your pack: the work needs it there.'
+        : 'No: there is no such profession.' });
+      return;
+    }
     if (parts[0] === '/needs') {
       await ask(vport, 'POST', '/say', { profileId: pid, text: break_ === 'no needs' ? 'That is not running on this server.'
         : 'Hunger 100% (full), Thirst 100% (quenched), Rest 100% (rested), Temp comfortable 50. The Body page on K says what sets each one.' });
@@ -251,6 +262,9 @@ function standIn(root, break_) {
       let at = SPAWN.slice();
       // The door last pressed, which /claim and /lock read back.
       let door = 0;
+      // The trade, which the forge's gate reads (the-benches.ts benchGate).
+      let smith = false;
+      let me = 0;
       const line = () => {
         const c = held();
         const x = !c ? (break_ === 'no line' ? '' : 'claim') : (c.locked ? 'unlock' : 'lock');
@@ -259,6 +273,7 @@ function standIn(root, break_) {
       };
       state.current = {
         atDoor: () => door !== 0,
+        trade: () => { smith = true; },
         push: (m) => out.push({ type: 'message', message: m }),
         line,
         stage: () => stage,
@@ -281,6 +296,7 @@ function standIn(root, break_) {
             const c = JSON.parse(m.contentJsonDump);
             if (c.customPacketType !== 'loginWithSkympIo') { return; }
             const pid = c.gameData.profileId;
+            me = pid;
             let form = null;
             try { form = JSON.parse(fs.readFileSync(formFile, 'utf8')); } catch (e) { form = null; }
             if (form && form.profileId === pid) {
@@ -318,6 +334,13 @@ function standIn(root, break_) {
               out.push({ type: 'message', message: { t: 20, idx: actor.idx, pos: [0, 0, 0], rot: [0, 0, 0], teleportSeq: 1,
                 worldOrCell: door === 0x1a81e ? 0x165a0 : 0x3c } });
             }
+            return;
+          }
+          // E on the forge: the bench gate, then the bench.
+          if (m.t === 6 && actor && m.data && m.data.target === 0xd6987) {
+            // 'open to all': the gate says no, and the bench opens anyway.
+            if (!smith) { ask(vport, 'POST', '/say', { profileId: me, text: 'You have not chosen a profession yet, so there is nothing you can make here. Press K and choose one.' }); }
+            if ((smith || break_ === 'open to all') && break_ !== 'stays shut') { out.push({ type: 'message', message: { t: 21, target: 0xd6987 } }); }
             return;
           }
           if (m.t === 4 && actor && open && m.idx === actor.idx) {
@@ -369,11 +392,11 @@ function failedAt(r, step) {
   // ------------------------------------------------------------------ whole
   const good = await run('good');
   yes('a good server passes the whole pass', good.r.ok === true);
-  yes('every step is a line: loads, login, relay, new, face, home, needs, claim, keys, saved, restart, loads back, kept',
-    good.r.lines.map((l) => l.step).join(',') === 'loads,login,relay,new,face,home,needs,claim,keys,saved,restart,loads back,kept');
+  yes('every step is a line: loads, login, relay, new, face, home, needs, claim, keys, stations, saved, restart, loads back, kept',
+    good.r.lines.map((l) => l.step).join(',') === 'loads,login,relay,new,face,home,needs,claim,keys,stations,saved,restart,loads back,kept');
   if (!good.r.ok) { console.log(JSON.stringify(good.r.lines, null, 1)); }
-  yes('the relay carried the join pass, the home pick, /needs, /claim and /lock to the gamemode, in that order',
-    good.s.state.commands.join(',') === '/joinpass,/pick,/needs,/claim,/lock');
+  yes('the relay carried the join pass, the home pick, /needs, /claim, /lock and the trade to the gamemode, in that order',
+    good.s.state.commands.join(',') === '/joinpass,/pick,/needs,/claim,/lock,/pick');
   yes('  and the claim and the lock are in the register the copy keeps on disk',
     JSON.stringify(botPass.claimOn(good.root, {}, '165a0:Skyrim.esm')) === JSON.stringify({ by: good.r.profileId, name: 'Bot', locked: true }));
   yes('  and the claim line says what the gamemode said, and the kept line that the lock came back',
@@ -403,7 +426,8 @@ function failedAt(r, step) {
   // last line of bot-pass.log names the wait a pass that never ends is in.
   const order = ['loading the engine', 'the server started; it has 2 s', 'PASS  loads', 'a bot connects to port 7801',
     'PASS  login', 'the bot sends a face', 'PASS  face', 'the bot presses E on the stables\' outside door', 'the bot presses Claim',
-    'PASS  claim', 'the bot presses E on the stables\' inside door', 'the bot presses Lock', 'PASS  keys', 'waiting for the world on disk', 'PASS  saved',
+    'PASS  claim', 'the bot presses E on the stables\' inside door', 'the bot presses Lock', 'PASS  keys', 'the bot presses E on the forge, d6987, with no trade',
+    'the bot picks Smith, Platewright', 'the bot presses E on the forge again', 'PASS  stations', 'waiting for the world on disk', 'PASS  saved',
     'the server is stopped', 'the server started again', 'PASS  restart', 'a second bot connects', 'PASS  loads back', 'PASS  kept', 'the pass ends'];
   const at = order.map((o) => good.said.findIndex((l) => l.startsWith(o)));
   yes('the pass says each step as it starts, in order, before its PASS line', at.every((x, i) => x >= 0 && (i === 0 || x > at[i - 1])));
@@ -496,6 +520,16 @@ function failedAt(r, step) {
       /no longer give door 16729:Skyrim\.esm to 165a0:Skyrim\.esm/.test(botPass.stablesIn(root).why || ''));
     yes('  and the stables are named from the tables when they do', botPass.stablesIn(await folder('tablesok')).name === 'Whiterun Stables');
   }
+
+  // ------------------------------------------------------- the forge
+  const opentoall = await run('opentoall', 'open to all');
+  yes('the forge opens for somebody with no trade: FAIL on stations, with what the gamemode said',
+    failedAt(opentoall.r, 'stations') && /opened for somebody with no trade, though the gamemode said: You have not chosen/.test(opentoall.r.lines.find((l) => !l.ok).detail));
+  const nohammer = await run('nohammer', 'no hammer');
+  yes('Smith not taken or no hammer handed: FAIL on stations, with what came back over the relay',
+    failedAt(nohammer.r, 'stations') && /the hammer a new smith is handed.*Over the relay it was told: No: there is no such profession/.test(nohammer.r.lines.find((l) => !l.ok).detail));
+  const shutforge = await run('shutforge', 'stays shut');
+  yes('the forge stays shut to a smith: FAIL on stations', failedAt(shutforge.r, 'stations') && /the forge opening for a smith/.test(shutforge.r.lines.find((l) => !l.ok).detail));
 
   yes('a failed pass still stops its server', [other, held, nocreate, returning, stays, unsaved, moved, nameless].every((x) => x.s.state.up === false));
 
