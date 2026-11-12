@@ -297,7 +297,7 @@ try {
             @{ t = 'Launcher says Steam is running when it is not'; want = 'area: Launcher' },
             @{ t = 'Turn on DNSSEC for thornswood.net'; want = 'area: triage' },
             @{ t = 'Organize the crafting tables into better categories'; want = 'area: In-game' },
-            @{ t = 'Courier parcels at an inn'; want = 'area: triage' },
+            @{ t = 'Make evenings at the inn feel quieter'; want = 'area: triage' },
             @{ t = 'The bot cannot post the join card'; want = 'area: Discord' })
         foreach ($k in $cases) {
             $r = Run-Flow $f @{ 'GET /labels/area%3A%20triage' = @{ name = 'area: triage' } } @{ EVENT = 'issues'; ISSUE = '900'; TITLE = $k.t }

@@ -65,7 +65,8 @@ How to use it:
   marks an issue whose title did not say which part it is:
   `.github\workflows\area-label.yml` gives a new issue with no `area:` label
   the one its title names, or this one, and a person swaps it for the right
-  area. `weekly-review` marks what the weekly project review found,
+  area. Every `area:` label is in "Area labels", below, and no other is
+  used. `weekly-review` marks what the weekly project review found,
   `Suggestion` an idea somebody asked for, and `bug` something broken;
   nothing reads these three, they are for people sorting the board.
   `claimed: <name>` marks who is on an issue ("What this is" says how the
@@ -135,6 +136,45 @@ How to use it:
   missed. A step file under `deploy\after` writes the comment by itself
   when its step ends 0, and the issue it names is held the same way. A main
   Ship's `Close-ShippedIssues.ps1` leaves such an issue open and names it.
+
+### Area labels
+
+One label for each part of the project, each with what it covers, and the
+same words are each label's description on GitHub. An issue may carry more
+than one. `.github\workflows\area-label.yml` puts on the one area a new
+issue's title names, from a table of words for each of these and no other,
+and `tests\test-4144-area-labels.ps1` holds that table to this list and to
+real titles (#4144). A new area is a row here and a line in that table, in
+one pull request, and the label itself made with this description.
+
+| Label | What it covers |
+|---|---|
+| `area: Accessibility` | Using any part with a keyboard, a screen reader, high contrast or larger text. |
+| `area: Client` | The game client: in-game panels, the front and emote plugins, crashes in the game. |
+| `area: Content` | Our plugins, the records in them and the content tables built from them. |
+| `area: Discord` | The Discord bot, its posts, tickets, cards and commands, and the server's layout. |
+| `area: Docs` | Docs, guides and READMEs, and help text that says how things work. |
+| `area: Engine` | The SkyMP engine fork: its builds, the pin, and what only the engine can change. |
+| `area: Gamemode` | The gamemode on the server: quests, trade, guilds, saves, joining and its rules. |
+| `area: GitHub & CI` | Workflows, checks, the gate's harness runs, runners and GitHub's settings. |
+| `area: In-game` | Things to do in the world: crafting, recipes, benches, professions, couriers. |
+| `area: Launcher` | The launcher and the setup window: installing, playing, updating, uninstalling. |
+| `area: Legal` | Licences, permissions, privacy and the terms. |
+| `area: Load order` | The plugin load order, light plugins and the checks that hold them. |
+| `area: Moderation` | Staff tools: bans, silences, freezes and reports. |
+| `area: Mods` | The Nexus collection, the mods in it and their settings, and Vortex. |
+| `area: Operations` | The box and its services: deploys, backups, restores, the watchdog, outages. |
+| `area: Packaging` | Building and packing what ships: the installer, zips and VirusTotal. |
+| `area: Performance` | Something slow or heavy: load times, frame cost, page weight. |
+| `area: Release` | Releases and Ships: the feeds, tags, manifests, rollback and scrub. |
+| `area: Security` | Secrets, tokens, sign-ins and anything that could let someone in. |
+| `area: Server` | The game server process: its load, its ticks and its sessions. |
+| `area: Testing` | Tests and harnesses that check the code, and flaky ones. |
+| `area: Tools` | Scripts and tools people run by hand. |
+| `area: Voice` | Voice and typed chat, captions and emotes, and the voice service. |
+| `area: Website` | The public site and the staff hub. |
+| `area: World` | The world and its people: NPCs, travel, weather, guards, property. |
+| `area: triage` | No area yet: the title did not say which part of the project. A person picks one. |
 
 ## How an issue and a comment are written
 
