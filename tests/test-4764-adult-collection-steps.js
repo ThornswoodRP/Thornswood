@@ -56,8 +56,8 @@ const dl = read('site/lib/downloads.js') || '';
 function dlStep() {
   const at = dl.indexOf('<h3>Install the collection in Vortex</h3>');
   if (at < 0) return '';
-  const rest = dl.slice(at);
-  const end = rest.indexOf('<div class="step">', 10);
+  const rest = dl.slice(dl.lastIndexOf('\n', at) + 1);
+  const end = rest.indexOf('<div class="step">', rest.indexOf('<h3>') + 1);
   const body = (end < 0 ? rest : rest.slice(0, end)).split('\n')
     .filter(function (l) { return !/^\s*\/\//.test(l); }).join('\n');
   return (body.match(/'((?:[^'\\]|\\.)*)'/g) || [])

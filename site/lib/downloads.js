@@ -312,6 +312,14 @@ function downloadsBody(d) {
            'reinstall. Vortex keeps them in a profile of their own, so switching ' +
            'back to your usual profile and running Purge Mods leaves you where you ' +
            'started.</p>' +
+           // The two stops a new free Nexus account meets before Vortex can
+           // start (#4764). The counts are records\collection.json's, held
+           // there by tests\test-4764-adult-collection-steps.js.
+           '<p>Some of the collection&rsquo;s mods are marked adult, so first turn on ' +
+           'adult content in your Nexus Mods settings, or Nexus shows the collection ' +
+           'as hidden. On a free account Vortex opens each file&rsquo;s page on Nexus ' +
+           'and you press Slow download there, once for each file: 120 files, from ' +
+           '111 mods. A Premium account downloads them without the presses.</p>' +
            // The step said install the collection and never said where. The
            // address comes from version.json by way of the news feed, so there
            // is one copy of it and it cannot go stale here.
