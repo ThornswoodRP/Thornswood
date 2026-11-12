@@ -254,6 +254,8 @@ sp.on('tick', function () {
       return;
     }
     case 'end':
+      write({ t: 'step', i: at, do: 'end', ok: true, ms: 0, note: '' });
+      passed++;
       end(true);
       return;
     default:
