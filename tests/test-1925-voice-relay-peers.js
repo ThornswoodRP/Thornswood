@@ -616,18 +616,23 @@ async function partTwo() {
 
 // ----------------------------------------------------------------- part 3 --
 const plain = [];
-function socketAs(pid, join) {
+/* held: everything after the welcome is kept until s.release(), the way
+   page.hold() keeps a page's, so a test can have this socket read its
+   messages after another socket has read its own (#5860). */
+function socketAs(pid, join, held) {
   return new Promise((ok, bad) => {
     const ws = new WebSocket('ws://127.0.0.1:' + PORT + '/', ['thornswood', tokenFor(pid)]);
     plain.push(ws);
-    const s = { ws: ws, got: [], peer: 0, send: (m) => ws.send(JSON.stringify(m)) };
+    const s = { ws: ws, got: [], peer: 0, send: (m) => ws.send(JSON.stringify(m)), held: held ? [] : null };
+    s.release = () => { const q = s.held || []; s.held = null; q.forEach((m) => s.got.push(m)); };
     ws.onopen = () => s.send(Object.assign({ t: 'join', profileId: pid }, join));
     ws.onmessage = (ev) => {
       let m = null;
       try { m = JSON.parse(ev.data); } catch (e) { }
       if (!m) return;
+      if (m.t === 'welcome') { s.got.push(m); s.peer = m.peer; ok(s); return; }
+      if (s.held) { s.held.push(m); return; }
       s.got.push(m);
-      if (m.t === 'welcome') { s.peer = m.peer; ok(s); }
     };
     ws.onerror = () => bad(new Error('no socket for ' + pid));
   });
@@ -659,13 +664,17 @@ async function partThree() {
   yes('and the mark holds: turning it back on does nothing',
       !!last && last.peers.find((p) => p.peer === Y.peer).voice === false);
   const r1 = rosters();
-  const Z = await socketAs(804, { name: 'later' });
+  // Z reads what it is sent only after O has read the roster naming Z: two
+  // sockets, each read on its own, so this is one order the gate can give
+  // (#5860), made the order every run.
+  const Z = await socketAs(804, { name: 'later' }, true);
   await until(() => !!naming(Z.peer));
   yes('a socket that joins after still sees both marked on its own roster', (() => {
     const r = Z.got.find((m) => m.t === 'peers');
     return !!r && r.peers.find((p) => p.peer === X.peer).voice === false &&
            r.peers.find((p) => p.peer === Y.peer).voice === false && !('voice' in r.peers.find((p) => p.peer === O.peer));
   })());
+  Z.release();
   // One roster names the newcomer. Rosters now name only who is in reach
   // and come with a newcomer's first view (#5516), so the mode Y said above,
   // which rides the next roster, can come in one of its own just before.
