@@ -2,8 +2,10 @@
 //
 // Issue #986: the access comment and the bot README still told people that
 // Member is handed out on join, or that Discord has a default-role setting.
-// Staff give Member after an application is accepted. Playtester (access.play)
-// is what opens the game. Discord has no default-role setting.
+// Playtester (access.play) is what opens the game. Discord has no
+// default-role setting. Since #3317 the plan gives Member from a button in
+// #start-here, which the bot does not make yet, so the README says that
+// (#4413); the site's access comment is held as it was.
 // Reads the files. No server.
 
 const fs = require('fs');
@@ -38,8 +40,11 @@ yes('item 3 says the bot cannot hand Member out on join',
     item.indexOf('**Hand Member out on join.** It cannot.') >= 0);
 yes('item 3 says Discord has no default-role setting',
     item.indexOf('Discord has no default-role\n   setting') >= 0);
-yes('item 3 says staff give Member after an application is accepted',
-    item.indexOf('Staff give Member after an application is accepted.') >= 0);
+yes('item 3 says the plan gives Member from the #start-here button, by hand until the bot makes it (#4413)',
+    item.indexOf('The plan gives Member from a button in `#start-here`') >= 0 &&
+    item.indexOf('until the bot makes it, Member is given by\n   hand.') >= 0);
+yes('item 3 no longer says staff give Member after an application (#4413)',
+    item.indexOf('Staff give Member after an application is accepted.') < 0);
 yes('item 3 says Playtester (access.play) opens the game',
     item.indexOf('Playtester\n   (access.play) is what opens the game.') >= 0);
 yes('item 3 no longer names a default role option',
