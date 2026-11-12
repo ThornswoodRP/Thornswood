@@ -241,7 +241,7 @@ function drawLink() {
       'another login: it means one list decides who is allowed in, and that ' +
       'list is the Discord server everybody is already in.\n\n' +
       '## How it works\n\n' +
-      '1. Open the launcher and press **Connect Discord** on the main page.\n' +
+      '1. Open the launcher and press **Connect Discord** at the bottom of the left sidebar, above Settings.\n' +
       '2. Your browser opens, you say yes, and it closes itself.\n' +
       '3. The launcher remembers. You do not do this again.\n\n' +
       'From then on every time you press Play, the launcher checks with the ' +

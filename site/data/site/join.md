@@ -101,8 +101,9 @@ Play.
 
 ## 4. Connect your Discord in the launcher
 
-Open Thornswood from the desktop shortcut and press **Connect Discord** on the
-Play page. Your browser opens, you say yes, and it closes itself.
+Open Thornswood from the desktop shortcut and press **Connect Discord** at the
+bottom of the left sidebar, above Settings. Your browser opens, you say yes,
+and it closes itself.
 
 You never do this again.
 
