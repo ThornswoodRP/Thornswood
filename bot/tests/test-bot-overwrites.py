@@ -79,7 +79,7 @@ ATTACH_FILES = 1 << 15
 
 # Every mode that shuts @everyone out of one of the three. Only public does
 # not, and a public channel needs nothing for the bot.
-RESTRICTED = ('read', 'memberstalk', 'open', 'membersread', 'testersread', 'hold', 'holdread',
+RESTRICTED = ('read', 'staffbump', 'open', 'membersread', 'testersread', 'hold', 'holdread',
               'holdcourt', 'holdguard', 'staff', 'staffread', 'council',
               'pathfind', 'space', 'spaceread', 'spacerules', 'faction',
               'factionread', 'factionlead', 'factionseats')
@@ -697,10 +697,11 @@ try:
     # Every ticket desk (#3317, q-3317-ticket-split, A), by its key in PLAN.
     tickets = [by_name[s['name']] for _c, specs in B.PLAN for s in specs
                if s.get('key') in B.TICKET_KEYS]
-    yes('  and in each of the %d ticket channels it could open a ticket thread '
-        'but not write in it, even with the running set on its role' % len(tickets),
-        len(tickets) == 5
-        and not any(resolve(g, me, t).send_messages_in_threads for t in tickets))
+    # Each was read, which denied @everyone threads, until #5841 put them
+    # behind Member (membersread), which denies @everyone the channel.
+    yes('  and out of each of the %d ticket channels, behind Member, even with the '
+        'running set on its role' % len(tickets),
+        len(tickets) == 5 and not any(before_bot[t] for t in tickets))
 
     said = run(g, True)
     yes('-Check writes nothing to any channel',
@@ -731,10 +732,10 @@ try:
             [c for c in everything if getattr(c, 'mode', None) in RESTRICTED],
             key=id))
     yes('the staff #news made by hand is one of them', news in wrote)
-    yes('no channel open to everybody was touched: not the Start Here or the '
-        'Applications category, not the one made by hand behind the gate',
+    yes('no channel open to everybody was touched: not the Start Here category, '
+        'not the one made by hand behind the gate',
         not [c for c in wrote if before_bot[c]] and by_name['Start Here'] not in wrote
-        and by_name['Applications'] not in wrote and loose not in wrote)
+        and loose not in wrote)
 
     for c in everything:
         if not gets_in(resolve(g, me, c)):

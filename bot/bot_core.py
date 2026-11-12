@@ -307,7 +307,9 @@ WATCH_READ_EVERY = _int_env('WATCH_READ_EVERY', 60)
 if not TOKEN:
     raise SystemExit('No DISCORD_TOKEN. Install-Bot.ps1 sets it.')
 
-intents = discord.Intents(guilds=True, members=True)
+# guild_reactions: a reaction to the rules in #rules gives Member
+# (bot_rules_gate.py, #5841).
+intents = discord.Intents(guilds=True, members=True, guild_reactions=True)
 
 
 class Thornswood(TrustedClient):

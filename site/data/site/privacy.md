@@ -2,7 +2,7 @@
 
 What Thornswood keeps about you, why, and how to have it deleted.
 
-Last changed: 11 November 2026.
+Last changed: 12 November 2026.
 
 Thornswood is a free fan project run by a small team in their own time. It is
 not a company. This page is written plainly rather than legally, and it is
@@ -37,6 +37,12 @@ private ticket only you and staff can read, and on the site for staff. Your
 answer to whether you accept the rules is also kept on the site against your
 Discord id, with the time you gave it, so there is a record that you agreed to
 them.
+
+**Your reaction to the rules.** Reacting to the rules in the Discord says you
+are eighteen or over and accept them, and gives you the Member role. The
+reaction stays on the message in Discord, and the bot keeps it on the site the
+same way as your answer above, with a line for staff; taking the reaction off
+is kept the same way.
 
 **When you played.** Each session records who, when it started and when it
 ended, so an alpha has a record of what was tested and by whom instead of
@@ -268,7 +274,7 @@ until 24 September 2026, and both are served from here now.
   name in Discord, and a ticket whose private thread cannot be opened goes
   into that log whole instead. Each of those goes 365 days after it was
   written. The bot checks every hour.
-- **Your answer to the rules** is kept for as long as your account is here,
+- **Your answer to the rules**, or your reaction to them, is kept for as long as your account is here,
   because it is the record that you agreed to them, and goes with the rest
   of your account when you ask for that to be deleted.
 - **Reports and calls for help** (/helpme, /report, the report page and a

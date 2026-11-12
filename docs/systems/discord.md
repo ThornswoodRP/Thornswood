@@ -190,7 +190,7 @@ tidies there. A staff space mode is said for the space it names.
 | public | everybody | everybody | everybody |
 | read | everybody | the council | the council |
 | membersread | everybody on staff, Member, Playtester | the council | the council |
-| memberstalk | everybody | everybody on staff, Member, Playtester | - |
+| staffbump | everybody on staff, Member, Playtester | everybody on staff | - |
 | open | everybody on staff, Playtester | everybody on staff, Playtester | - |
 | pathfind | everybody on staff, Playtester | everybody on staff, Playtester | - |
 | testersread | everybody on staff, Playtester | the council | the council |
@@ -215,18 +215,18 @@ Category mode: public.
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
 | #rules | text | read | everybody | the council | posts: the council; written by the build from content.py RULES, with its Changelog thread; topic: Seven rules. Read them. |
-| #welcome | text | read | everybody | the council | posts: the council; written by the build from content.py WELCOME, with its Changelog thread; topic: Start here. |
-| #start-here | text | read | everybody | the council | posts: the council; written by the build from content.py START, with its Changelog thread; topic: How to actually get in and play. |
-| #disboard | text | memberstalk | everybody | everybody on staff, Member, Playtester | was #dishboard in Start Here; was #say-hello in Start Here; topic: Disboard bumps. |
+| #welcome | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; written by the build from content.py WELCOME, with its Changelog thread; topic: Start here. |
+| #start-here | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; written by the build from content.py START, with its Changelog thread; topic: How to actually get in and play. |
+| #disboard | text | staffbump | everybody on staff, Member, Playtester | everybody on staff | was #dishboard in Start Here; was #say-hello in Start Here; topic: Disboard bumps. |
 
 ### Tickets
 
-Category mode: public.
+Category mode: membersread.
 
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
-| #get-help | text | read | everybody | the council | posts: the council; topic: It will not install, start or connect. Open a ticket below. |
-| #report-someone | text | read | everybody | the council | posts: the council; topic: Something happened and it should not have. Only you and staff see it. |
+| #get-help | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; topic: It will not install, start or connect. Open a ticket below. |
+| #report-someone | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; topic: Something happened and it should not have. Only you and staff see it. |
 
 ### Information
 
@@ -240,23 +240,23 @@ Category mode: membersread.
 
 ### Roleplay Guide
 
-Category mode: testersread.
+Category mode: membersread.
 
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
-| #game-rules | text | testersread | everybody on staff, Playtester | the council | posts: the council; written by the build from content.py GAMERULES, with its Changelog thread; was #game-rules in Thornswood; was #game-rules in In Character; topic: How roleplay works here. Nine rules, and what we let slide. |
-| #lore | text | testersread | everybody on staff, Playtester | the council | posts: the council; written by the build from content.py LORE, with its Changelog thread; was #lore in In Character; topic: 4E 252. What happened and who you can be. |
-| #factions | text | testersread | everybody on staff, Playtester | the council | posts: the council; written by the build from content.py FACTIONS, with its Changelog thread; topic: The sixteen factions of 4E 252: who they are, where they keep, who leads them. |
+| #game-rules | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; written by the build from content.py GAMERULES, with its Changelog thread; was #game-rules in Thornswood; was #game-rules in In Character; topic: How roleplay works here. Nine rules, and what we let slide. |
+| #lore | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; written by the build from content.py LORE, with its Changelog thread; was #lore in In Character; topic: 4E 252. What happened and who you can be. |
+| #factions | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; written by the build from content.py FACTIONS, with its Changelog thread; topic: The sixteen factions of 4E 252: who they are, where they keep, who leads them. |
 
 ### Applications
 
-Category mode: public.
+Category mode: membersread.
 
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
-| #apply-to-playtest | text | read | everybody | the council | posts: the council; topic: How you get into the world. Pick the application below. |
-| #apply-for-a-seat | text | read | everybody | the council | posts: the council; topic: Jarl and Faction Leader, answered in character. Only open seats are listed. |
-| #apply-for-staff | text | read | everybody | the council | posts: the council; topic: Gamemaster, Loremaster, Moderator, Dev and Content Creator. |
+| #apply-to-playtest | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; topic: How you get into the world. Pick the application below. |
+| #apply-for-a-seat | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; topic: Jarl and Faction Leader, answered in character. Only open seats are listed. |
+| #apply-for-staff | text | membersread | everybody on staff, Member, Playtester | the council | posts: the council; topic: Gamemaster, Loremaster, Moderator, Dev and Content Creator. |
 
 ### Out of Character
 
@@ -264,7 +264,7 @@ Category mode: open. It was Thornswood.
 
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
-| #welcome-travelers | text | memberstalk | everybody | everybody on staff, Member, Playtester | was #welcome-travelers in Thornswood; topic: A card for everybody who joins, posted by the bot. Say hello in #general-chat. |
+| #welcome-travelers | text | read | everybody | the council | posts: the council; was #welcome-travelers in Thornswood; topic: A card for everybody who joins, posted by the bot. React to the rules in #rules for the Member role. |
 | #general-chat | text | open | everybody on staff, Playtester | everybody on staff, Playtester | was #general-chat in Thornswood; topic: Out of character chat for everyone. Talk Thornswood, Skyrim, or whatever's on your mind, and keep it friendly. Bug reports go in #test-findings, screenshots and clips go in #media. |
 | #media | text | open | everybody on staff, Playtester | everybody on staff, Playtester | was #media in Thornswood; topic: Screenshots and clips. Talk about one in a thread under it. |
 | #server-progression-and-economy | text | open | everybody on staff, Playtester | everybody on staff, Playtester | was #server-progression-and-economy in Thornswood; topic: How the server grows and how its economy works: what you have seen, and what you would change. Ideas go in #suggestions. |

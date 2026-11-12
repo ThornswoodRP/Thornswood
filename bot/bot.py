@@ -153,6 +153,7 @@ import bot_staff_channel  # noqa: E402,F401
 import bot_reports  # noqa: E402,F401
 import bot_tickets  # noqa: E402,F401
 import bot_ticket_panels  # noqa: E402,F401
+import bot_rules_gate  # noqa: E402,F401
 import bot_offices  # noqa: E402,F401
 import bot_factions  # noqa: E402,F401
 import bot_testing  # noqa: E402,F401

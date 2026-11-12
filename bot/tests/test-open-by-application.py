@@ -320,8 +320,10 @@ yes('#welcome says to read the rules before applying in #apply-to-playtest',
     content.WELCOME.find('<#RULES>') < content.WELCOME.find('<#PLAYTEST>'))
 yes('#welcome no longer says people are let in slowly',
     'letting people in slowly' not in content.WELCOME and 'Not open to everyone' not in content.WELCOME)
-yes('#rules says applying is accepting them, and that the answer is kept',
-    'Applying means accepting them' in content.RULES and 'kept against your Discord account' in content.RULES)
+yes('#rules says reacting is accepting them, that the reaction is kept, and that '
+    'the application asks again (#5841)',
+    'React here for the Member' in content.RULES and 'kept as the record' in content.RULES
+    and 'asks again' in content.RULES)
 yes('#faq answers why you cannot get in with the application, not a closed playtest',
     'open by application' in content.FAQ and 'Apply to be an alpha playtester' in content.FAQ)
 yes('#faq no longer says letting people in slowly', 'slowly' not in content.FAQ)
@@ -423,8 +425,8 @@ try:
     yes('open posts: content.py sees the switch', opened.OPEN is True)
     yes('open posts: #welcome says anyone here can play, with no application',
         'anyone here can play' in opened.WELCOME and 'Apply to be an alpha playtester' not in opened.WELCOME)
-    yes('open posts: #rules says being here is accepting them',
-        'Being here and in the world means accepting these rules' in opened.RULES
+    yes('open posts: #rules says reacting is accepting them, with no application',
+        'React here for the Member' in opened.RULES
         and 'application' not in opened.RULES)
     yes('open posts: #faq has no application in it', 'Apply to be an alpha playtester' not in opened.FAQ)
     yes('open posts: #start-here is the open join page, with no alpha step',
