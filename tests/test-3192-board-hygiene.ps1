@@ -172,8 +172,12 @@ function Run-Flow($f, [hashtable]$table, [hashtable]$envs) {
         foreach ($k in $keep.Keys) { [Environment]::SetEnvironmentVariable($k, $keep[$k]) }
     }
     $made = @()
-    if (Test-Path -LiteralPath $calls) { $made = @(Get-Content -LiteralPath $calls | Where-Object { $_ -and $_ -notmatch '^GET ' }) }
-    return [pscustomobject]@{ Code = $code; Out = $out; Writes = $made }
+    $asked = @()
+    if (Test-Path -LiteralPath $calls) {
+        $asked = @(Get-Content -LiteralPath $calls | Where-Object { $_ })
+        $made = @($asked | Where-Object { $_ -notmatch '^GET ' })
+    }
+    return [pscustomobject]@{ Code = $code; Out = $out; Writes = $made; Asked = $asked }
 }
 function Ago([double]$days) { return [DateTime]::UtcNow.AddDays(-$days).ToString('yyyy-MM-ddTHH:mm:ssZ') }
 
@@ -242,10 +246,16 @@ try {
         Yes '  it runs on a push to main and by hand, and on nothing else' ($f.On -match '(?m)^\s+push:\s*$' -and $f.On -match 'branches:\s*\[\s*main\s*\]' -and $f.On -match '(?m)^\s+workflow_dispatch:' -and @([regex]::Matches($f.On, '(?m)^  [a-z_]+:')).Count -eq 2)
         Yes '  with no environment and no secret since #5185 (board.yml moves the card), the commits and the merges started by hand through the environment' ($f.Text -notmatch '(?m)^\s+environment:' -and $f.Text -notmatch 'secrets\.' -and $f.Text -match [regex]::Escape('COMMITS: ${{ toJSON(github.event.commits.*.id) }}') -and $f.Text -match [regex]::Escape('MERGES: ${{ inputs.merges }}'))
         $body = "## What changed`n`nThe forge lists only what you can make. Refs #613, Refs #700.`n`nTest task for #613: Forge lists only what you can make`nServer: Main`n`n1. Open a forge.`n2. Look.`n`nWhat should happen: nothing a smith makes.`n`nTest task for #614: Closed one`n1. x`nTest task for #615: A pull request`n1. y`n`n## Checked`n`nharness`n`n" + [char]0xD83E + [char]0xDD16 + ' Generated with Claude Code'
+        # Each commit's message names its pull request (#4135); the stand-in
+        # answers nothing for commits/<sha>/pulls, the lookup that failed.
+        $A = '0123456789abcdef0123456789abcdef01234567'; $B = 'b' * 40; $C = 'fedcba9876543210fedcba9876543210fedcba98'
+        $E = 'abcdef0123456789abcdef0123456789abcdef01'; $D = 'd' * 40; $G = '9' * 40
         $table = @{
-            'GET /commits/aaa/pulls' = @(@{ number = 3300; merged_at = (Ago 0); base = @{ ref = 'main' }; merge_commit_sha = '0123456789abcdef'; body = $body })
-            'GET /commits/bbb/pulls' = @(@{ number = 3300; merged_at = (Ago 0); base = @{ ref = 'main' }; merge_commit_sha = '0123456789abcdef'; body = $body })
-            'GET /commits/ccc/pulls' = @(@{ number = 3301; merged_at = (Ago 0); base = @{ ref = 'main' }; merge_commit_sha = 'fedcba9876543210'; body = "Refs #613 only, no test task." })
+            'GET /commits/aaa' = @{ sha = $A; commit = @{ message = "Forge lists only what you can make (#3300)`n`n* the forge`n" } }
+            'GET /commits/bbb' = @{ sha = $B; commit = @{ message = "Merge pull request #3300 from someone/forge`n`nnot this pull request's merge`n" } }
+            'GET /commits/ccc' = @{ sha = $C; commit = @{ message = "A note on the forge (#3301)" } }
+            'GET /pulls/3300' = @{ number = 3300; merged_at = (Ago 0); base = @{ ref = 'main' }; merge_commit_sha = $A; body = $body }
+            'GET /pulls/3301' = @{ number = 3301; merged_at = (Ago 0); base = @{ ref = 'main' }; merge_commit_sha = $C; body = "Refs #613 only, no test task." }
             'GET /issues/613' = @{ number = 613; state = 'open' }
             'GET /issues/614' = @{ number = 614; state = 'closed' }
             'GET /issues/615' = @{ number = 615; state = 'open'; pull_request = @{ url = 'x' } }
@@ -253,25 +263,28 @@ try {
         $r = Run-Flow $f $table @{ BOARD_TOKEN = 'board-token'; COMMITS = '["aaa","bbb","ccc"]' }
         $w = $r.Writes
         Yes ("the run passes (exit {0})" -f $r.Code) ($r.Code -eq 0)
+        Yes '  it reads the pull request each message names, and never asks commits/<sha>/pulls (#4135)' (
+            @($r.Asked | Where-Object { $_ -match '^GET /commits/[^/ ]+/pulls' }).Count -eq 0 -and @($r.Asked | Where-Object { $_ -like 'GET /pulls/3300 *' }).Count -ge 1)
         Yes '  #613 gets no label: its card follows the merged test task by itself (#5185)' (@($w | Where-Object { $_ -like 'POST /issues/613/labels *' }).Count -eq 0)
         $c = @($w | Where-Object { $_ -like 'POST /issues/613/comments *' })
         Yes '  and one comment, with the run''s token, holding the test task in a fenced block' ($c.Count -eq 1 -and $c[0] -match 'Bearer run-token' -and $c[0] -match '```\\nTest task: Forge lists only what you can make\\nServer: Main' -and $c[0] -match 'What should happen: nothing a smith makes\.\\n```')
         Yes '  the comment says the issue stays open until a main Ship, not the merge (#2796)' ($c.Count -eq 1 -and $c[0] -match 'stays open' -and $c[0] -match 'The main Ship that carries it closes this issue' -and $c[0] -match 'Close-ShippedIssues\.ps1' -and $c[0] -notmatch 'When it is on main')
         Yes '  the block stops at the next test task, a heading and the footer' ($c.Count -eq 1 -and $c[0] -notmatch 'Closed one' -and $c[0] -notmatch 'harness' -and $c[0] -notmatch 'Generated')
-        Yes '  two commits of one pull request move it once' ($c.Count -eq 1)
+        Yes '  two commits naming one pull request move it once, the one that is not its merge said and passed over' (
+            $c.Count -eq 1 -and $r.Out -match ('bbb names #3300, but its merge is ' + $A + ', not ' + $B))
         Yes '  a closed issue and a pull request number are passed over, said' (@($w | Where-Object { $_ -match '/issues/61[45]/' }).Count -eq 0 -and $r.Out -match '#614, which is closed' -and $r.Out -match '#615, which is a pull request')
         Yes '  Refs with no test task moves nothing' ($r.Out -match '#3301: no test task')
         Yes '  #700, named only by Refs, is not touched' (@($w | Where-Object { $_ -match '/issues/700/' }).Count -eq 0)
 
         $dev = "Refs #616.`n`nTest task for #616: A forged number is refused`nServer: Dev`nBuild: dev release 20261022-070758-dev`n1. Edit the number.`nWhat should happen: refused."
-        $r = Run-Flow $f @{ 'GET /commits/eee/pulls' = @(@{ number = 3302; merged_at = (Ago 0); base = @{ ref = 'main' }; merge_commit_sha = 'abcdef0123456789'; body = $dev }); 'GET /issues/616' = @{ number = 616; state = 'open' } } @{ BOARD_TOKEN = 'board-token'; COMMITS = '["eee"]' }
+        $r = Run-Flow $f @{ 'GET /commits/eee' = @{ sha = $E; commit = @{ message = "Merge pull request #3302 from magpie/dev-forge`n`nA forged number is refused" } }; 'GET /pulls/3302' = @{ number = 3302; merged_at = (Ago 0); base = @{ ref = 'main' }; merge_commit_sha = $E; body = $dev }; 'GET /issues/616' = @{ number = 616; state = 'open' } } @{ BOARD_TOKEN = 'board-token'; COMMITS = '["eee"]' }
         $c = @($r.Writes | Where-Object { $_ -like 'POST /issues/616/comments *' })
         Yes '  a Dev test task''s comment says the dev Ship that carries it writes it, and that the main Ship closes the issue (#5199)' ($c.Count -eq 1 -and $c[0] -match 'The dev Ship that carries it writes it on this issue with its Build: line naming that release' -and $c[0] -match 'dev-test-tasks' -and $c[0] -match 'Close-ShippedIssues\.ps1 -Dev' -and $c[0] -match 'The main Ship that carries it closes this issue, and writes this on it if nobody has' -and $c[0] -match 'Server: Dev\\nBuild: dev release')
 
         # A merge the push run missed (#1626, #3273), started by hand.
         $seen = @{ user = @{ login = 'github-actions[bot]' }; body = 'Pull request #3300 merged (0123456789ab), so this is in Done and stays open: ...' }
         $other = @{ user = @{ login = 'EvilPatrick06' }; body = 'Pull request #3300 merged (0123456789ab), moved by hand' }
-        $byHand = $table + @{ 'GET /commits/aaaaaaa/pulls' = $table['GET /commits/aaa/pulls']; 'GET /commits/ccccccc/pulls' = $table['GET /commits/ccc/pulls'] }
+        $byHand = $table + @{ 'GET /commits/aaaaaaa' = $table['GET /commits/aaa']; 'GET /commits/ccccccc' = $table['GET /commits/ccc'] }
         $r = Run-Flow $f ($byHand + @{ 'GET /issues/613/comments?per_page=100&page=1' = @($other) }) @{ BOARD_TOKEN = 'board-token'; COMMITS = '[]'; MERGES = ' aaaaaaa  ccccccc ' }
         $c = @($r.Writes | Where-Object { $_ -like 'POST /issues/613/comments *' })
         Yes ("started by hand with merges, it moves what those merges finish, like the push would have (exit {0})" -f $r.Code) ($r.Code -eq 0 -and $c.Count -eq 1 -and $c[0] -match 'Pull request #3300 merged \(0123456789ab\)' -and @($r.Writes | Where-Object { $_ -like 'POST /issues/613/labels *' }).Count -eq 0)
@@ -281,8 +294,10 @@ try {
         $r = Run-Flow $f $table @{ BOARD_TOKEN = 'board-token'; COMMITS = '[]'; MERGES = 'aaaaaaa main;rm' }
         Yes ("  anything in merges that is not a commit fails the run before a call (exit {0})" -f $r.Code) ($r.Code -ne 0 -and $r.Writes.Count -eq 0 -and $r.Out -match 'is not a commit')
 
-        $r = Run-Flow $f @{ 'GET /commits/ddd/pulls' = @() } @{ BOARD_TOKEN = ''; COMMITS = '["ddd"]' }
-        Yes ("a push with no merged pull request behind it does nothing and passes (exit {0})" -f $r.Code) ($r.Code -eq 0 -and $r.Writes.Count -eq 0)
+        $r = Run-Flow $f @{ 'GET /commits/ddd' = @{ sha = $D; commit = @{ message = 'A commit pushed straight to main' } } } @{ BOARD_TOKEN = ''; COMMITS = '["ddd"]' }
+        Yes ("a push with no merged pull request behind it does nothing and passes, saying so (exit {0})" -f $r.Code) ($r.Code -eq 0 -and $r.Writes.Count -eq 0 -and $r.Out -match 'ddd: its message names no pull request')
+        $r = Run-Flow $f @{ 'GET /commits/ggg' = @{ sha = $G; commit = @{ message = 'A note on the forge (#700)' } }; '404' = @('GET /pulls/700') } @{ BOARD_TOKEN = ''; COMMITS = '["ggg"]' }
+        Yes ("  a message naming an issue, which is no pull request, is said and passed over (exit {0})" -f $r.Code) ($r.Code -eq 0 -and $r.Writes.Count -eq 0 -and $r.Out -match 'ggg names #700, which is no pull request')
         Yes ("  and the workflow names no board token at all (#5185)") ($f.Text -notmatch 'BOARD_TOKEN')
     }
 
