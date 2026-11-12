@@ -208,7 +208,7 @@ jobs:
     steps:
       # The whole history: the launcher's number is the time its sources last
       # changed on main (LauncherVersion.ps1), which a shallow clone cannot say.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
