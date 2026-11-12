@@ -615,7 +615,7 @@ namespace Thornswood
             try { note = WriteFarewell(keepSaves, deleteMods); }
             catch (Exception ex) { Swallow.Note("Uninstall.Finish, farewell", ex); }
 
-            string text = Script(targets, Process.GetCurrentProcess().Id, note);
+            string text = Script(targets, Process.GetCurrentProcess().Id, note, AppUninstaller());
             if (text == null)
             {
                 try { if (note != null) File.Delete(note); } catch (Exception ex) { Swallow.Note("Uninstall.Finish, clearing the unused farewell", ex); }
@@ -635,12 +635,36 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// The handover script's text: wait for process waitFor to exit, delete
-        /// the targets that are under Root, then run the farewell note, when
-        /// there is one. Null when Root cannot be fenced, and then nothing is
-        /// deleted at all.
+        /// Velopack's Update.exe for this install, or null for a launcher
+        /// Velopack did not install (a build into a test root).
+        ///
+        /// Velopack's setup puts the launcher itself in a folder of its own,
+        /// %LocalAppData%\Thornswood, with Desktop and Start menu shortcuts and
+        /// an entry of its own in Installed apps (Velo.cs). Nothing here took
+        /// any of that away: the uninstall removed Root and its own Installed
+        /// apps entry, and on One on 12 Nov 2026 the setup run afterwards said
+        /// Thornswood was already installed, with the whole 1.3.20 install
+        /// still in that folder. Velopack's own uninstall is what removes all
+        /// three, and the handover script runs it once this launcher has gone.
         /// </summary>
-        public static string Script(string[] targets, int waitFor, string note)
+        static string AppUninstaller()
+        {
+            try
+            {
+                if (!Velo.Installed) return null;
+                string exe = Velo.Locator.UpdateExePath;
+                return string.IsNullOrEmpty(exe) ? null : exe;
+            }
+            catch (Exception ex) { Swallow.Note("Uninstall.AppUninstaller", ex); return null; }
+        }
+
+        /// <summary>
+        /// The handover script's text: wait for process waitFor to exit, delete
+        /// the targets that are under Root, run Velopack's own uninstall when
+        /// updateExe names it, then run the farewell note, when there is one.
+        /// Null when Root cannot be fenced, and then nothing is deleted at all.
+        /// </summary>
+        public static string Script(string[] targets, int waitFor, string note, string updateExe = null)
         {
             var sb = new StringBuilder();
             sb.AppendLine("@echo off");
@@ -693,6 +717,14 @@ namespace Thornswood
             // point, and an install that really did remove everything no longer
             // leaves an empty Thornswood behind.
             sb.AppendLine("rmdir \"" + Paths.Root + "\" 2>nul");
+
+            // Then the launcher itself: Velopack's uninstall takes its folder,
+            // its shortcuts and its Installed apps entry (AppUninstaller). Run
+            // and waited for here, after this launcher has exited, because it
+            // deletes the folder this launcher runs from. --silent, because
+            // the farewell below is what says the uninstall is done.
+            if (!string.IsNullOrEmpty(updateExe))
+                sb.AppendLine("if exist \"" + updateExe + "\" call \"" + updateExe + "\" --uninstall --silent");
 
             // Last, say what survived and why.
             if (note != null)

@@ -37,6 +37,18 @@
        "not Thornswood's". A folder nobody set out to remove still is.
     4. Run: OursInRoot names what the farewell can find in the install folder:
        Profile and config.json when the saves go, neither when they stay.
+    5. The launcher itself. Velopack's setup puts it in a folder of its own
+       (%LocalAppData%\Thornswood) with shortcuts and its own Installed apps
+       entry, and on One the same day the setup afterwards said Thornswood was
+       already installed: the uninstall never ran Velopack's uninstall.
+       Finish now hands the handover script Velopack's Update.exe, and the
+       script, run by cmd with a stand in that writes down how it was called,
+       runs it with --uninstall --silent once the install folder has gone and
+       before the farewell; with none, it runs nothing of the kind.
+    6. The dev build copied beside Root before one install carried both
+       channels removed itself after a guessed three seconds (ping -n 4), held
+       files or not. Its script waits for the launcher's own process to end,
+       the way the uninstall's does.
 
   HOW. The whole launcher and a driver are built into one program the way the
   project builds (the .NET 10 SDK, tests\Launcher-Csc.ps1) and run on a
@@ -88,6 +100,12 @@ Yes 'the playback closes the track and says so before it touches the sound devic
 Yes 'DeleteTree goes on past a folder it could not remove' ($uninstallSrc -match 'else \{ try \{ DeleteTree\(sub\); \} catch \(Exception ex\) \{ Swallow\.Note\(')
 Yes 'the farewell gives what Targets set out to remove a reason of its own' ($uninstallSrc -match 'foreach \(string name in OursInRoot\(keepSaves, deleteMods\)\)')
 Yes 'the theme the launcher plays is in the repository' (Test-Path -LiteralPath $theme)
+Yes 'Finish hands the script Velopack''s Update.exe (AppUninstaller)' ($uninstallSrc -match 'Script\(targets, Process\.GetCurrentProcess\(\)\.Id, note, AppUninstaller\(\)\)' -and $uninstallSrc -match '(?s)static string AppUninstaller\(\).*?Velo\.Installed.*?Velo\.Locator\.UpdateExePath')
+$shellSrc = Read 'launcher\app\Shell.cs'
+Yes 'the uninstall''s first question names the launcher''s own folder among what goes' ($shellSrc -match 'goes\.AppendLine\("    " \+ Velo\.Locator\.RootAppDir')
+$devSrc = Read 'launcher\app\DevBuild.cs'
+$self = [regex]::Match($devSrc, '(?s)public static string RemoveSelf\(\)(.*?)Process\.Start\(psi\);')
+Yes 'the old dev copy''s removal waits on its own process, not a guessed time' ($self.Success -and -not $self.Groups[1].Value.Contains('ping 127.0.0.1') -and $self.Groups[1].Value.Contains('Process.GetCurrentProcess().Id') -and $self.Groups[1].Value.Contains('goto wait'))
 
 # ---- 2, 3 and 4: the launcher, built and run -----------------------------------
 Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
@@ -136,6 +154,7 @@ namespace Thornswood
 
             Music(Path.Combine(t, "music", "Thornswood"), theme);
             InRoot(Path.Combine(t, "names", "Thornswood"));
+            Scripts(Path.Combine(t, "script", "Thornswood"), windows);
             if (windows) Held(Path.Combine(t, "held", "Thornswood"));
 
             Console.WriteLine("driver: done, " + fails + " failed");
@@ -208,6 +227,36 @@ namespace Thornswood
             Yes("and nothing that is not directly in the install folder", !gone.Exists(delegate(string n) { return n.Contains("\\") || n.Contains("/"); }));
             var kept = new List<string>(Uninstall.OursInRoot(true, false));
             Yes("with the saves kept, neither Profile nor config.json", !kept.Contains("Profile") && !kept.Contains("config.json") && kept.Contains("Launcher"));
+        }
+
+        // ---- 5: the launcher itself goes by Velopack's own uninstall --------
+        static void Scripts(string root, bool windows)
+        {
+            Install(root);
+            string upd = Path.Combine(Path.GetDirectoryName(root), "app", "Update.cmd");
+            string said = Path.Combine(Path.GetDirectoryName(root), "app", "called.txt");
+            // A stand in for Update.exe: writes down its arguments, and whether
+            // the install folder was still there when it ran.
+            Put(upd, "@echo off\r\n(echo %*& if exist \"" + root + "\" (echo root still there) else (echo root gone)) > \"" + said + "\"\r\n");
+            string[] targets = Uninstall.Targets(false, false);
+            string with = Uninstall.Script(targets, 1, null, upd) ?? "";
+            string without = Uninstall.Script(targets, 1, null) ?? "";
+            Yes("given Update.exe, the script runs it with --uninstall --silent", with.Contains("call \"" + upd + "\" --uninstall --silent"));
+            Yes("after the install folder and before the farewell", with.IndexOf("--uninstall") > with.IndexOf("rmdir \"" + Paths.Root + "\""));
+            Yes("given none, it runs no uninstall of the kind", !without.Contains("--uninstall"));
+            if (!windows) return;
+
+            var done = Process.Start(new ProcessStartInfo("cmd.exe", "/c exit 0") { CreateNoWindow = true, UseShellExecute = false });
+            done.WaitForExit();
+            string text = Uninstall.Script(targets, done.Id, null, upd);
+            string script = Path.Combine(Path.GetDirectoryName(root), "handover.cmd");
+            File.WriteAllText(script, text, new UTF8Encoding(false));
+            var run = Process.Start(new ProcessStartInfo("cmd.exe", "/c \"" + script + "\"") { CreateNoWindow = true, UseShellExecute = false });
+            bool ended = run.WaitForExit(120000);
+            if (!ended) { try { run.Kill(); } catch (Exception ex) { Console.WriteLine("      could not stop the script: " + ex.Message); } }
+            string got = File.Exists(said) ? File.ReadAllText(said) : "";
+            Yes("run by cmd, the script ran the stand in with --uninstall --silent", ended && got.Contains("--uninstall --silent"));
+            Yes("and only once the install folder had gone", got.Contains("root gone"));
         }
 
         // ---- 3: one held file stops only itself -------------------------------
