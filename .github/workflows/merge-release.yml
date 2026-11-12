@@ -554,9 +554,12 @@ jobs:
           NOTES: ${{ steps.notes.outputs.file }}
         run: |
           . .\scripts\release\MergeRelease.ps1
+          # Each command's own reason goes into its ::error annotation, not
+          # only into the job log (#5765, scripts\release\Invoke-Said.ps1).
+          . .\scripts\release\Invoke-Said.ps1
           $tools = Join-Path $env:RUNNER_TEMP 'vpk'
-          dotnet tool install vpk --version $env:VPK_VERSION --tool-path $tools
-          if ($LASTEXITCODE -ne 0) { Write-Host "::error::vpk $($env:VPK_VERSION) could not be installed"; exit 1 }
+          Invoke-Said "installing vpk $($env:VPK_VERSION)" { dotnet tool install vpk --version $env:VPK_VERSION --tool-path $tools }
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           $vpk = Join-Path $tools 'vpk.exe'
           $game = Join-Path $env:RUNNER_TEMP 'velopack-game'
           Expand-Archive -LiteralPath $env:GAME_ZIP -DestinationPath $game
@@ -571,8 +574,8 @@ jobs:
           # site names it in that channel's old feed (site\lib\feed.js,
           # feedMove).
           $moveOut = Join-Path $env:RUNNER_TEMP 'move'
-          dotnet build launcher\move\Move.csproj -c Release -p:Version=$env:VERSION -p:OutDir="$moveOut\"
-          if ($LASTEXITCODE -ne 0) { Write-Host '::error::the move program did not build'; exit 1 }
+          Invoke-Said 'building the move program' { dotnet build launcher\move\Move.csproj -c Release -p:Version=$env:VERSION -p:OutDir="$moveOut\" }
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           $moveExe = Join-Path $moveOut 'Thornswood.exe'
           ./scripts/release/Sign-OnRunner.ps1 -Path $moveExe
           if ($LASTEXITCODE -ne 0) { exit 1 }
@@ -611,8 +614,8 @@ jobs:
                           Sort-Object { $_.published_at } -Descending)
               $was = $(if ($before.Count) { Get-VelopackFullOf -Release $before[0] -Channel dev } else { $null })
               if ($was -and [version]$was.Version -lt [version]$env:VERSION) {
-                gh release download ([string]$before[0].tag_name) --repo $env:GITHUB_REPOSITORY -p $was.Name -p 'releases.dev.json' -D $out
-                if ($LASTEXITCODE -ne 0) { Write-Host "::error::the full package of $($before[0].tag_name) could not be taken for a delta"; exit 1 }
+                Invoke-Said "taking the full package of $($before[0].tag_name) for a delta" { gh release download ([string]$before[0].tag_name) --repo $env:GITHUB_REPOSITORY -p $was.Name -p 'releases.dev.json' -D $out }
+                if ($LASTEXITCODE -ne 0) { exit 1 }
                 $delta = 'BestSpeed'
                 Write-Host "dev: a delta from $($before[0].tag_name), $($was.Version)"
               } elseif ($was) { Write-Host "dev: $($before[0].tag_name) is $($was.Version), not below $($env:VERSION), so a full package and no delta" }
@@ -621,10 +624,12 @@ jobs:
             # packTitle is the name Windows shows in Apps and on the
             # shortcuts, packAuthors the publisher beside it, and the icon is
             # Setup.exe's and the installed app's.
-            & $vpk pack --packId Thornswood --packVersion $env:VERSION --packDir $pack --mainExe Thornswood.exe --packTitle Thornswood --packAuthors Thornswood `
-              --icon $icon --channel $ch --outputDir $out --skipVeloAppCheck --delta $delta --releaseNotes $env:NOTES `
-              --signTemplate $sign --signExclude '[\\/]Game[\\/]' --signParallel 1
-            if ($LASTEXITCODE -ne 0) { Write-Host "::error::vpk pack for $ch failed; the lines above say why"; exit 1 }
+            Invoke-Said "vpk pack for $ch" {
+              & $vpk pack --packId Thornswood --packVersion $env:VERSION --packDir $pack --mainExe Thornswood.exe --packTitle Thornswood --packAuthors Thornswood `
+                --icon $icon --channel $ch --outputDir $out --skipVeloAppCheck --delta $delta --releaseNotes $env:NOTES `
+                --signTemplate $sign --signExclude '[\\/]Game[\\/]' --signParallel 1
+            }
+            if ($LASTEXITCODE -ne 0) { exit 1 }
             # This version's packages and the channel's feed files; a full
             # package of the release before, which vpk took for the delta,
             # stays on that Release.
