@@ -32,9 +32,7 @@
   HOW. git ls-files, and every tracked text file read for a path to one of
   the old copies, and every script, harness and workflow read for a path it
   builds into tools\. docs\archive and scripts\oneoff are history and keep the
-  paths they were written with. Sync-LoadOrder.py is asked for its default
-  settings file, because until phase 9 it looked two folders up from
-  scripts\mods and fell back to the old C:\Thornswood-Dev folder.
+  paths they were written with.
 
   Read only.
 #>
@@ -173,21 +171,6 @@ foreach ($h in $homes) {
 $out = [string](& (Join-Path $Repo 'scripts\release\Where.ps1') Out)
 Yes ('Where.ps1 Out is the out folder in the repository (' + $out + ')') (
     [IO.Path]::GetFullPath($out) -eq [IO.Path]::GetFullPath((Join-Path $Repo 'out')))
-
-# ---- 5. Sync-LoadOrder.py finds the fork in the repository ------------------
-$py = Get-Command python -ErrorAction SilentlyContinue
-if (-not $py) { $py = Get-Command python3 -ErrorAction SilentlyContinue }
-if ($py) {
-    $sync = Join-Path $Repo 'scripts\mods\Sync-LoadOrder.py'
-    $pycode = "import importlib.util,sys; s=importlib.util.spec_from_file_location('s', sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); print(m.default_settings())"
-    $said = [string](& $py.Source -c $pycode $sync)
-    $want = [IO.Path]::Combine($Repo, 'engine', 'skymp', 'build', 'dist', 'server', 'server-settings.json')
-    Yes ('Sync-LoadOrder.py''s default settings are in the repository''s engine build (' + $said.Trim() + ')') (
-        [IO.Path]::GetFullPath($said.Trim()) -eq [IO.Path]::GetFullPath($want))
-}
-else {
-    Write-Host 'SKIP  no python here to ask Sync-LoadOrder.py'
-}
 
 Write-Host ''
 Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail)

@@ -234,7 +234,6 @@ scripts\dev\Check-Outside.ps1 6
 scripts\dev\Close-Launcher.ps1 8
 scripts\dev\Start-Thornswood.ps1 3
 scripts\dev\Watch-Foreground.ps1 1
-scripts\mods\Align-LoadOrder.ps1 1
 scripts\mods\Check-CollectionRules.ps1 1
 scripts\mods\Check-Manifest.ps1 1
 scripts\mods\Fix-Icons.ps1 1

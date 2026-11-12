@@ -247,6 +247,24 @@ if (-not (Test-Path -LiteralPath $lo) -and -not $IgnoreRevision) {
     throw "$lo is missing, so the collection revision was not checked. Nothing was written."
 }
 
+# A PLUGIN LIST UNDER A VORTEX PROFILE IS THE THORNSWOOD PROFILE'S (#557,
+# #4688). Another profile's list builds the server against a mod set nobody
+# installs from the collection, and every person who does is refused at the
+# door. The retired sync script refused one (#4688); the refusal is here,
+# asked before anything is written, by the rule Ship asks
+# (Assert-VortexProfile in LoadOrder.ps1).
+if ($Plugins -match '(?i)[\\/]Vortex[\\/].*[\\/]profiles[\\/]') {
+    if (-not (Test-Path -LiteralPath $lo)) { throw "$Plugins is under a Vortex profile, and $lo, which says which profile is the Thornswood one, is not here. Nothing was written." }
+    . $lo
+    $twProfile = [IO.Path]::GetFullPath((Assert-VortexProfile 'Thornswood')).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    if (-not [IO.Path]::GetFullPath($Plugins).StartsWith($twProfile, [StringComparison]::OrdinalIgnoreCase)) {
+        Write-Host ''
+        Write-Host "  STOP. $Plugins is another Vortex profile's list. This reads only the Vortex profile named Thornswood, at $twProfile." -ForegroundColor Red
+        Write-Host '  Nothing was written.' -ForegroundColor Red
+        throw "Deploy-Gamemode reads only the Vortex profile named Thornswood (at $twProfile). Refusing $Plugins. Nothing was written."
+    }
+}
+
 # Whether the engine this build is loads light plugins (#1715), read before
 # anything is written, from the record of the server build that goes out
 # with this gamemode. A record that is missing or does not read stops here.
@@ -367,6 +385,25 @@ $wanted = if ($MinimalLoadOrder) {
     $fromFile = Get-Content -LiteralPath $Plugins |
                 Where-Object { $_ -match '^\*' } |
                 ForEach-Object { $_.TrimStart('*').Trim() }
+    # A plugin the list switches on twice, in any case (#4688). Which place
+    # it takes is not known, and the launcher refuses such a list too
+    # (LoadOrder.Reorder), so the server's order is not built from it either.
+    # Until #4688 the duplicate was folded away without a word for an engine
+    # that loads light plugins, and written twice for one that does not.
+    $firstSpelling = @{}
+    $twice = New-Object Collections.Generic.List[string]
+    foreach ($n in @($fromFile)) {
+        $k = ([string]$n).ToLowerInvariant()
+        if (-not $firstSpelling.ContainsKey($k)) { $firstSpelling[$k] = [string]$n; continue }
+        if (-not $twice.Contains($firstSpelling[$k])) { [void]$twice.Add($firstSpelling[$k]) }
+    }
+    if ($twice.Count) {
+        Write-Host ''
+        Write-Host ("  STOP. {0} switches on {1} more than once." -f (Split-Path -Leaf $Plugins), ($twice -join ', ')) -ForegroundColor Red
+        Write-Host '  Which place such a plugin takes is not known, and the launcher refuses the list too.' -ForegroundColor Red
+        Write-Host '  Take the extra line out, then run this again.' -ForegroundColor Red
+        throw ("{0} switches on {1} more than once" -f $Plugins, ($twice -join ', '))
+    }
     # plugins.txt omits the always-on masters; the server needs them spelled out
     $implicit = 'Skyrim.esm','Update.esm','Dawnguard.esm','HearthFires.esm','Dragonborn.esm'
     @($implicit | Where-Object { $fromFile -notcontains $_ }) + $fromFile
@@ -682,6 +719,34 @@ if ($loadsLight) {
 
 # And last after the server's own order was followed, whatever it held.
 if ($lastHeld) { $keep = @($keep | Where-Object { $_ -ine $lastName }) + $lastName }
+
+# EVERY MASTER IS IN THE ORDER (#4688). The server's reader will not load a
+# plugin whose master it does not have, and the game will not start with
+# one either. A master the list does not switch on, or that Data does not
+# have, stops here with both named, rather than in the server's log after
+# the order is out. The retired sync script named these; nothing here did. A
+# plugin that masters a light one an engine without light plugins leaves
+# out was pruned above, with it. Thornswood-Last.esp is held to the order
+# it was built against above instead, and -OrderOnly is the order it is
+# about to be built against, so its own masters are not asked here.
+$inOrder = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+foreach ($k in $keep) { [void]$inOrder.Add($k) }
+$noMaster = New-Object Collections.Generic.List[string]
+foreach ($k in $keep) {
+    if (-not $info[$k] -or ($lastHeld -and $k -ieq $lastName)) { continue }
+    foreach ($m in @($info[$k].Masters)) {
+        if ($m -and -not $inOrder.Contains($m)) { [void]$noMaster.Add("$k needs $m, which this order does not hold") }
+    }
+}
+if ($noMaster.Count) {
+    Write-Host ''
+    Write-Host ("  STOP. {0} plugin(s) name a master the order does not hold:" -f $noMaster.Count) -ForegroundColor Red
+    foreach ($n in $noMaster) { Write-Host "    $n" -ForegroundColor Red }
+    Write-Host '  The server will not load such a plugin, and the game will not start with it.' -ForegroundColor Red
+    Write-Host '  Switch the master on, or the plugin off, then run this again.' -ForegroundColor Red
+    throw 'a plugin in the load order names a master the order does not hold'
+}
+
 $paths = @($keep | ForEach-Object {
     (Join-Path $Data $_) -replace '\\', '/'
 })

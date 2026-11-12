@@ -31,7 +31,7 @@ Patrick's split, and how this PR fits it:
 ## Load-order and plugin fixtures: baked on the ship PC, not in this repo
 
 There are no checked-in client or server plugin lists to update. The server's
-list is written by `scripts/mods/Sync-LoadOrder.ps1` into the engine build tree
+list is written by `scripts/deploy/Deploy-Gamemode.ps1` into the engine build tree
 (`Where.ps1 ServerSettings`, `build\dist\server\server-settings.json`), and the
 reference `plugins.txt` lives under the ship PC's `Profile`. Both are derived
 from Vortex's deployment of the installed collection, which does not exist on a
@@ -122,7 +122,9 @@ feed; the dev Ship is separate.
 .\scripts\ops\Set-Collection.ps1 -Url "https://www.nexusmods.com/games/skyrimspecialedition/collections/7essxf"
 
 # 2. Re-bake the server load order from the installed collection's plugin list.
-.\scripts\mods\Sync-LoadOrder.ps1
+#    It keeps the order the server already runs and puts new plugins on the
+#    end; it stops, saying which, on one that cannot go there.
+.\scripts\deploy\Deploy-Gamemode.ps1 -Vortex
 
 # 3. Confirm the collection's plugin rules hold the reference list's order.
 .\scripts\mods\Check-CollectionRules.ps1

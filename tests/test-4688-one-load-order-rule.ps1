@@ -18,9 +18,10 @@
        docs\archive, scripts\oneoff and the two scripts #1179 retired, which
        refuse to run before they reach the name.
     2. Every script that writes a loadOrder into a server-settings file
-       either builds it (Deploy-Gamemode.ps1) or carries an order that was
-       built, its paths pointed at another folder. A script that writes one
-       and is not named below is a new copy of the rule.
+       (under scripts\ and tools\) either builds it (Deploy-Gamemode.ps1)
+       or carries an order that was built, its paths pointed at another
+       folder. A script that writes one and is not named below is a new
+       copy of the rule.
     3. Deploy-Gamemode.ps1 -OrderOnly, a copy run in a scratch tree laid out
        like the repository, holds the checks the copies had:
          - a plugin the list switches on twice is refused, by name
@@ -156,12 +157,13 @@ try {
         'scripts/vps/Restore-Server.ps1'           = 'a restored order, its paths pointed at its own folder'
         'scripts/vps/vps-dev-instance.ps1'         = 'the live order, its paths pointed at the dev folder'
         'scripts/mods/Fix-QuickLoot.ps1'           = 'retired by #1179, refuses to run'
+        'tools/DeployAgent/BotPass.cs'             = 'the order on the box, each plugin pointed at its cached copy'
     }
     $writeRx = [regex]'(?i)(NotePropertyName\s+loadOrder\b|\.loadOrder\s*=(?!=)|\[\s*[''"]loadOrder[''"]\s*\]\s*=(?!=))'
     $found = [ordered]@{}
     foreach ($f in $all) {
-        if ($f -notmatch '^scripts/' -or $f -match '^scripts/oneoff/') { continue }
-        if ($f -notmatch '\.(ps1|psm1|py|js)$') { continue }
+        if ($f -notmatch '^(scripts|tools)/' -or $f -match '^scripts/oneoff/' -or $f -match '^tools/[^/]*Tests/') { continue }
+        if ($f -notmatch '\.(ps1|psm1|py|js|cs)$') { continue }
         $full = Join-Path $Repo $f
         if (-not (Test-Path -LiteralPath $full)) { continue }
         $i = 0

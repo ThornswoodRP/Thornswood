@@ -31,8 +31,8 @@ which carries the bench, owner, half and rank of all 3,439 owned rows and the
 bench of all 1,679 unowned ones. Then the FURN and ACTI records of every plugin
 in the load order, for the keywords those benches are named by. It is Python
 rather than PowerShell because Build-RecipeTable takes five minutes to walk this
-load order and this takes a few seconds, and because Build-Backdrop.py,
-Sync-LoadOrder.py and Audit-ArmorSlots.py are already here.
+load order and this takes a few seconds, and because Build-Backdrop.py and
+Audit-ArmorSlots.py are already here.
 
 WHAT IT WRITES, between markers, the way the recipe table is written:
 

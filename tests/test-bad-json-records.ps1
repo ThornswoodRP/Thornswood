@@ -154,11 +154,6 @@ foreach ($n in 'RecordShape.ps1', 'Read-JsonFile.ps1', 'RepoPlugins.ps1', 'Colle
     W (Join-Path $lr 'config.json') '{"ServerAddress": "x", '
     Yes 'LoadOrder Get-LoadOrderManifestUrl: a cut-off config.json is named' ((Says { Get-LoadOrderManifestUrl $lr }) -like ((Join-Path $lr 'config.json') + ' is not valid JSON: *'))
 
-    $al = Join-Path $T 'al'; W (Join-Path $al 'plugins.txt') ''; [void][IO.Directory]::CreateDirectory((Join-Path $al 'Data'))
-    W (Join-Path $al 'server-settings.json') ''
-    $r = Child @((Join-Path $Repo 'scripts\mods\Align-LoadOrder.ps1'), '-Data', (Join-Path $al 'Data'), '-Plugins', (Join-Path $al 'plugins.txt'), '-Settings', (Join-Path $al 'server-settings.json'))
-    Yes 'Align-LoadOrder: an empty server-settings.json is named' (Named $r (Join-Path $al 'server-settings.json') 'empty')
-
     $sm = [Management.Automation.Language.Parser]::ParseFile((Join-Path $Repo 'scripts\release\Setup-ShipMachine.ps1'), [ref]$null, [ref]$null)
     $gcm = $sm.Find({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-ClientMatch' }, $true)
     . ([scriptblock]::Create($gcm.Extent.Text))
