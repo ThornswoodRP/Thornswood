@@ -52,6 +52,11 @@ function exercise(apply, name) {
   yes(name + ': somebody new in range is added', !!table[5]);
   yes(name + ': somebody in gone is dropped', !table[4]);
   yes(name + ': and their own row is still there', !!table[1]);
+  // #5358: a row already held comes with only the fields that changed, and
+  // what it leaves out keeps what the table had.
+  apply(table, { t: 'moved', at: 2, who: { 3: { pos: [220, 0, 0] } }, gone: [] });
+  yes(name + ': a row with only a new position is merged: the walker is at 220 and keeps their facing, cell and name',
+      table[3].pos[0] === 220 && table[3].angleZ === 5 && table[3].cell === 'c' && table[3].name === 'walker');
 }
 
 // Since #1409 each moved branch also reads the silence marks off the rows that
@@ -70,7 +75,8 @@ yes('the game overlay sends moved to the helper, and the party strip reads the s
     /^ applyMoved\(lastWho, m\);/.test(overlayMoved) && /place\(\);/.test(overlayMoved) &&
     /return; $/.test(overlayMoved) && !/lastWho = /.test(overlayMoved) &&
     /who: function \(\) \{ return lastWho; \}/.test(overlay));
-yes('and reads the silence marks off the rows that moved', /noteRows\(m\.who \|\| \{\}\);/.test(overlayMoved));
+yes('and reads the silence marks off the rows that moved, as merged into its table',
+    /noteRows\(m\.who \|\| \{\}, lastWho\);/.test(overlayMoved));
 
 /*
   The launcher's voice, with four others talking, each a tone of their own.
@@ -129,6 +135,14 @@ async function launcher() {
     lv = await heard();
     yes('the launcher\'s voice: and its own row is still there to measure from (' + lv[2].toFixed(3) + ' once 2000 units off)',
         lv[2] < SILENT && lv[3] > HEARD);
+
+    // #5358: a row already held comes with only the fields that changed. A
+    // position alone keeps the cell the place had: replaced, it would have
+    // no cell, another cell from mine, and be silent.
+    await r.say(0, { t: 'moved', at: 3, who: { 2: { pos: [20, 0, 0] } } });
+    lv = await heard();
+    yes('the launcher\'s voice: a row with only a new position keeps its cell, and is heard back beside me (' + lv[2].toFixed(3) + ')',
+        lv[2] > HEARD);
     for (let i = 0; i < 5; i++) {
       const sw = r.at(i).swallowed();
       if (sw) { yes(r.at(i).name + '\'s session swallowed nothing:\n' + sw, false); }

@@ -204,10 +204,14 @@
     if (!pid) return;
     if (on) { hushed[pid] = true; } else { delete hushed[pid]; }
   }
-  function noteRows(who) {
+  /* The silence on each row a tick named, read from table when given: a
+     moved row carries only the fields that changed (#5358), so whether
+     somebody is silenced is in the row as merged, not in what was sent. */
+  function noteRows(who, table) {
+    var from = table || who;
     for (var k in who) {
       if (!Object.prototype.hasOwnProperty.call(who, k)) continue;
-      noteHush(k, !!(who[k] && who[k].hush));
+      noteHush(k, !!(from[k] && from[k].hush));
     }
   }
   function selfHushed() {
@@ -813,7 +817,7 @@
         return;
       }
       if (m.t === 'pos') { lastWho = m.who || {}; noteRows(lastWho); place(); publishMarks(); applyMic(); return; }
-      if (m.t === 'moved') { applyMoved(lastWho, m); noteRows(m.who || {}); place(); publishMarks(); applyMic(); return; }
+      if (m.t === 'moved') { applyMoved(lastWho, m); noteRows(m.who || {}, lastWho); place(); publishMarks(); applyMic(); return; }
       if (m.t === 'vmode') {
         var rec = conns.get(Number(m.from));
         if (rec) {
@@ -1068,13 +1072,20 @@
   // the front's widget, and it handles /roll. Nothing about chat is left here.
 
   // ---------------------------------------------------------- placement -----
-  /* A 'moved' tick on top of the table the last 'pos' gave: the rows that
-     changed replace theirs, and the ids in gone are nobody this person can
-     hear any more. */
+  /* A 'moved' tick on top of the table the last 'pos' gave: each row is
+     merged into the one held, since a row already held comes with only the
+     fields that changed (#5358; a row new to this person comes whole), and
+     the ids in gone are nobody this person can hear any more. A copy is
+     made, never the held row changed in place, since the chat's kept view
+     may hold the same object. */
   function applyMoved(table, m) {
     var who = m.who || {};
     for (var k in who) {
-      if (Object.prototype.hasOwnProperty.call(who, k)) { table[k] = who[k]; }
+      if (!Object.prototype.hasOwnProperty.call(who, k)) { continue; }
+      var was = table[k], row = {}, f;
+      if (was) { for (f in was) { if (Object.prototype.hasOwnProperty.call(was, f)) { row[f] = was[f]; } } }
+      for (f in who[k]) { if (Object.prototype.hasOwnProperty.call(who[k], f)) { row[f] = who[k][f]; } }
+      table[k] = row;
     }
     var gone = m.gone || [];
     for (var i = 0; i < gone.length; i++) { delete table[gone[i]]; }
