@@ -1958,6 +1958,9 @@ public sealed partial class AgentTests : IDisposable
         File.WriteAllText(Path.Combine(s.Root, "data", "thornswood-deploy.json"), "{}");
         Directory.CreateDirectory(Path.Combine(s.Root, "private"));
         File.WriteAllText(Path.Combine(s.Root, "private", "door.json"), "{\"passKey\":\"SECRET-DOOR\"}");
+        File.WriteAllText(Path.Combine(s.Root, "private", "property.json"), "{\"claims\":{}}");
+        File.WriteAllText(Path.Combine(s.Root, "private", "merchant-ledger.json"), "{\"version\":1,\"entries\":{}}");
+        File.WriteAllText(Path.Combine(s.Root, "private", "merchant-ledger.initialized"), "1");
         Directory.CreateDirectory(Path.Combine(s.Root, "world", "changeForms"));
         File.WriteAllText(Path.Combine(s.Root, "world", "changeForms", "1.json"), "{\"profileId\":5}");
         BotPass? made = null;
@@ -1996,13 +1999,16 @@ public sealed partial class AgentTests : IDisposable
         Assert.Contains("bot pass: 7 of 7 passed", s.Read(Path.Combine("data", $"deploy-{id}.log")));
 
         // The copy: the new gamemode and the engine, the bot, dev's data
-        // without its game files, nothing private, no world.
+        // without its game files, of dev's private folder only the merchant
+        // ledger and its mark, no world.
         Assert.NotNull(copyTree);
         Assert.Equal(string.Join("\n", new[] {
             "bot/Bot-Pass.js", "bot/bot.js", "bot/character.js", "pass.txt",
             "server/data/scripts/ActiveMagicEffect.pex", "server/dist_back/skymp5-server.js",
-            "server/gamemode.js", "server/scam_native.node", "server/server-settings.json", "server/thornswood-build.json",
+            "server/gamemode.js", "server/private/merchant-ledger.initialized", "server/private/merchant-ledger.json",
+            "server/scam_native.node", "server/server-settings.json", "server/thornswood-build.json",
         }.Order(StringComparer.Ordinal)), copyTree);
+        Assert.Contains("the copy has dev's merchant ledger and its mark", s.Read(Path.Combine("data", $"deploy-{id}.log")));
         Assert.Equal("// new gamemode\n", File.ReadAllText(Path.Combine(bp.ServerDir, "gamemode.js")));
 
         // Its settings: its own ports, offline, no hold, no secrets, game files by full path.
@@ -2309,6 +2315,26 @@ public sealed partial class AgentTests : IDisposable
         Assert.NotNull(copied);
         Assert.Equal(inRelease ? "DATA.json={},FOODS.json=[\"new\"]" : "FOODS.json=[\"dev\"]",
             string.Join(",", copied!.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => kv.Key + "=" + kv.Value)));
+    }
+
+    [Fact]
+    public void WithNoLedgerOnDevTheCopyHasNoneAndSaysSo()
+    {
+        // Dev with no merchant ledger runs no NPCs, and neither does the copy:
+        // nothing is made up for it.
+        var (_, _, s, bp) = MakeWithPass(_ => null);
+        File.Delete(Path.Combine(s.Root, "private", "merchant-ledger.initialized"));
+        var files = new Dictionary<string, string>();
+        var dir = Temp();
+        foreach (var (n, b) in BotPart.Concat(new Dictionary<string, byte[]> { ["gamemode.js"] = B("// g"), ["thornswood-build.json"] = B("{}") }))
+        {
+            files[n] = Path.Combine(dir, n);
+            File.WriteAllBytes(files[n], b);
+        }
+        var said = new List<string>();
+        Assert.Equal("", bp.Prepare(files, BotPart.Keys, said.Add));
+        Assert.Contains(said, l => l.Contains("dev has 1 of the merchant ledger's 2 files") && l.Contains("NPC runtime does not start"));
+        Assert.Equal(new[] { "merchant-ledger.json" }, Directory.GetFiles(Path.Combine(bp.ServerDir, "private")).Select(Path.GetFileName));
     }
 
     [Fact]
