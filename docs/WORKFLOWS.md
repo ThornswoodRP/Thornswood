@@ -53,6 +53,7 @@ whose only result is its own status and log.
 | [drop-claims.yml](../.github/workflows/drop-claims.yml) | `issues` (closed) | Takes every `claimed:` label off a closed issue. | Labels. |
 | [expire-claims.yml](../.github/workflows/expire-claims.yml) | `schedule` (10:15 UTC), `workflow_dispatch` | Takes a claim off an issue with nothing on it for three days, saying why first. | Issue comments and labels. |
 | [after-deploy.yml](../.github/workflows/after-deploy.yml) | `deployment_status` | After deploy: files each in-game check a deploy step lists, and says each failed step on its issue (`scripts/release/After-Deploy.js`). | Issues labelled `check: in game`, issue comments. |
+| [close-shipped.yml](../.github/workflows/close-shipped.yml) | `deployment_status` | Close shipped issues: once the box runs a Main Deployment, closes each issue in Done whose merge it carries, with its test task; once it runs a Dev one, writes the Dev test tasks it carries (`scripts/release/Close-ShippedIssues.ps1`). | Issue comments, closed issues; a board-read run. |
 | [collection-revision.yml](../.github/workflows/collection-revision.yml) | `schedule` (hourly at :20), `workflow_dispatch` | Holds Nexus's newest collection revision, the record and both feeds to one, and keeps the rebuild issue open while they part. | One issue, opened and closed. |
 
 ## On a schedule
