@@ -37,7 +37,8 @@ let cfg = {
   /*
     Patrick, 28 Sep: "we are in alpha so the world is open by application".
     Anyone can download it; getting in is an application in the Discord.
-    Staff give Member after an application is accepted. Discord has no
+    The bot gives Member when somebody reacts to the rules in #rules (#5841),
+    and an accepted application gives Playtester. Discord has no
     default-role setting, so joining does not hand Member out. Playtester
     (access.play) is what opens the game, and Member is not on that list.
     The application, and the age and rules questions it asks (#428), is the
@@ -250,9 +251,9 @@ for (const n of ['trouble.json', 'inbox.json', 'moderation.log']) {
    grants Member and records 18+ and rules, after Patrick ends the alpha.
 
    playRoles is the play list with Member added when the world is open to
-   everybody. Staff give Member after an application is accepted. Discord
-   has no default-role setting. Playtester (access.play) is what opens the
-   game while the switch is off. With the switch off the list is left
+   everybody. The bot gives Member when somebody reacts to the rules in
+   #rules (#5841). Discord has no default-role setting. Playtester
+   (access.play) is what opens the game while the switch is off. With the switch off the list is left
    exactly as it was.
 
    forMode is how the written pages follow the same switch. A page marks its

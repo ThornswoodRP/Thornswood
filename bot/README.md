@@ -16,12 +16,29 @@ The sidebar reads in the order somebody meets it (#3317, Patrick, 22 Oct,
 page card q-3317-discord-order, A): Start Here, Tickets, Information,
 Roleplay Guide, Applications, Out of Character, In Character, a category per
 faction, a category per hold, Playtesters, Staff, and the staff spaces.
-Somebody who joins sees Start Here, Tickets and Applications, and nothing
-else (THE GATE in the builder). Member adds Information, read only; the
-plan gives it from a button in `#start-here` once they answer the rules and
-age questions, and the bot does not make that button yet (#5841), so today it is
-given by hand. Playtester, given when a playtest application is accepted,
-opens everything else that is not staff.
+Somebody who joins sees `#rules` and `#welcome-travelers`, talks in
+neither, and sees nothing else (THE GATE in the builder; Patrick, 12 Nov
+2026). Reacting with ✅ to the bot's message in `#rules`, the one that starts
+**React here for the Member role**, gives Member (`bot_rules_gate.py`,
+#5841), and the reaction is the record that they are 18 or over and accept
+the rules. Member reads the rest of Start Here, Tickets, Information, the
+Roleplay Guide and Applications, and applies there. Playtester, given when a
+playtest application is approved, opens everything else that is not staff.
+
+### Member, from the rules reaction
+
+The bot posts its message in `#rules` and reacts to it itself, so there is
+something to press. Adding the reaction gives Member and taking it off takes
+Member off; each goes to the site's record of who accepted the rules against
+the Discord id, with a line in the staff inbox. A reaction added or taken off
+while the bot was down reaches no event, so every start reads who has
+reacted and sets Member to match: given to everybody who reacted, taken from
+everybody else who holds it, apart from Playtesters and staff, whose own
+roles open more. The message is apart from the rules' own words, so a
+`-Posts` run that writes those again leaves it and its reactions alone.
+`RULES_CHANNEL` and `MEMBER_ROLE` in `bot.env.json` name the channel and the
+role when they are not `rules` and `Member`. The bot's role has to sit above
+Member and hold Manage Roles; the log says so when it does not.
 
 ### Tickets and Applications
 
@@ -424,7 +441,7 @@ two different servers stitched together.
 | *Hold* Court, Steward of *hold*, Guard of *hold* | The offices that hold's Jarl gives (#2551): an officer at its drop box; its Steward; its Guards. Three for each of the nine holds and Raven Rock, never hoisted, so they never show as a group of their own. In the game one character of the account holds each |
 | *Faction*, *Faction* Officer | A faction's members and its Officers, which its Leader gives and takes |
 | Business Owner | Owns a business book in the game. Support gives it |
-| Member | Answered the rules and age questions. Sees Start Here, Applications and Information |
+| Member | Reacted to the rules in `#rules`, which the bot gives it for. Reads Start Here, Tickets, Information, the Roleplay Guide and Applications |
 | Banned | What the site keys a ban off. No permissions, not hoisted |
 | News Pings, Updates Pings | Made by the bot, never here. They are in the builder's list for their place in the order and nothing else |
 
@@ -518,10 +535,9 @@ holds Manage Roles, to give Playtester, and Manage Threads. The rest hold
 nothing of their own; `docs/systems/discord.md` lists each set in full.
 
 Give the people testing with you **Playtester**. That role is access.play,
-and it is what opens the game. **Member** comes before it: the plan gives it
-from the button in `#start-here` once the rules and age questions are
-answered, and until the bot makes that button it is given by hand. Discord
-has no default-role setting. Then the person picks a hold.
+and it is what opens the game. **Member** comes before it: the bot gives it
+when somebody reacts to the rules in `#rules`, so nobody gives it by hand.
+Then the person picks a hold.
 
 ## The three things the bot cannot do
 
@@ -533,12 +549,10 @@ has no default-role setting. Then the person picks a hold.
 2. **Point the rules screen at the rules.** Community, then Safety Setup. That
    is what makes people accept the rules before they can type.
 
-3. **Hand Member out on join.** It cannot. Discord has no default-role
-   setting, so there is nothing to turn on under Server Settings, Roles.
-   The plan gives Member from a button in `#start-here` once the rules and
-   age questions are answered; until the bot makes it, Member is given by
-   hand. Playtester
-   (access.play) is what opens the game.
+3. **Hand Member out on join.** It cannot, and it does not need to. Discord
+   has no default-role setting; the bot gives Member when somebody reacts
+   to the rules in `#rules`. Playtester (access.play) is what opens the
+   game.
 
 ## Changing the words later
 
@@ -571,7 +585,7 @@ lines that run it. The bot itself is in the modules `bot.py` imports, one area
 each, all beside it in `bot\` (#5357): `bot_base.py` (where its files are and
 the roots it trusts, loaded first), `bot_core.py` (its settings, its client,
 the log and what every part uses), then joins, holds, the staff channel,
-reports, tickets, hold offices, factions, the testing channels, the GitHub
+reports, tickets, the Member reaction in `#rules`, hold offices, factions, the testing channels, the GitHub
 reads, the forums' post text, rules and passes, the site's lists, staff
 notices, release news, the watchdog, Report a problem, staff in the world,
 the heartbeat, the uptime ping, `on_ready`, the by-hand jobs and deletion
@@ -843,13 +857,13 @@ channel up by name on the server, so `-Check` names both and sends nothing
 until the script is caught up. That is its own change and its own issue on the
 board. And a whole `Setup-Discord.ps1` build switches Onboarding off again
 (`ONBOARDING_WHY` in `Build-Discord.py`), because the plan gates the server
-with the Member button in `#start-here` instead and Discord refuses that gate
+with the rules reaction in `#rules` instead and Discord refuses that gate
 on two channels while Onboarding is on.
 - **Which hold does your character call home?** Only with `-GrantMember`. Pick
   one, members must answer. Each hold gives Member and its own Citizen role,
   which opens that hold's channel; Not decided yet gives Member only. Off by
-  default, because Member comes from the rules and age questions in
-  `#start-here` (the gate in `Build-Discord.py`), and a hold is picked in
+  default, because Member comes from the rules reaction in `#rules`
+  (`bot_rules_gate.py`), and a hold is picked in
   `#choose-your-hold` after that.
 - **Rules and age.** `-Rules` and `-Age` each add one required question, off
   by default until it is decided that they belong here (entry 181).

@@ -1,31 +1,36 @@
 """
 test-everyone-sees-the-gate.py
 
-Somebody who has just joined sees Start Here, Tickets, Applications,
-#welcome-travelers and #disboard, talks in none of them, and a Member talks
-and bumps in the last two.
+Somebody who has just joined sees #rules and #welcome-travelers and talks in
+neither. Reacting to the rules gives Member (bot_rules_gate.py, #5841), and
+Member reads the welcome, about, ticket and application channels. Playtester
+opens the rest.
 
 Measured on the live server on 10 Nov 2026 (Setup-Discord -OnBox -Audit):
 @everyone held no View Channels server wide. Every read channel's overwrite
 only takes posting away, so it leaned on @everyone for View Channels, and
-somebody with no role saw none of Start Here, Tickets or Applications, so
-never the Member button in #start-here either. A Member saw only
-Information, the one gate that names Member. Patrick, the same evening: new
-people see only #news and #updates; #welcome-travelers and #disboard are for
-everybody to read and only Members to talk in.
+somebody with no role saw nothing of the gate. Patrick's order of 12 Nov
+2026 (page cards q-discord-hand-given-member and q-discord-readback, A):
+somebody new sees only #rules and #welcome-travelers; reacting to the rules
+gives Member; Member lets them apply and read the welcome and about
+channels, #game-rules, #lore and #factions included; nobody talks in
+#welcome-travelers; #disboard is read only for everybody but staff, who
+bump.
 
 So this checks:
 
   1. The problem, measured: with @everyone as the audit read it, a newcomer
-     sees none of the gate.
+     sees neither #rules nor #welcome-travelers.
   2. keep_everyone gives @everyone what it is missing of PLAIN, keeps what it
      holds beyond it, changes nothing under -Check, and asks nothing when
      nothing is missing. The audit names what is missing.
   3. After it, by the plan's own modes: a newcomer sees and cannot post in
-     Start Here, Tickets, Applications, #welcome-travelers and #disboard,
-     cannot run a command in the last two, and still sees nothing behind
-     Member or Playtester. A Member and a Playtester talk and run commands in
-     #welcome-travelers and #disboard. #disboard is #say-hello renamed.
+     #rules and #welcome-travelers and sees nothing else of the gate; a
+     Member sees and cannot post in the welcome, about, ticket and
+     application channels and #disboard, and still not #general-chat; nobody
+     but the bot posts in #welcome-travelers; in #disboard a Member and a
+     Playtester run no command and staff talk and run commands. #disboard is
+     #say-hello renamed.
 
 Build-Discord.py is imported for real under another name, so its __main__
 block never runs. Every guild, role and channel is a stand-in. A member's
@@ -141,6 +146,7 @@ guild = types.SimpleNamespace(default_role=everyone, me=None,
 newcomer = Member([])
 member = Member([roles['Member']])
 tester = Member([roles['Playtester']])
+support = Member([roles['Support']])
 
 # Every planned text place, with the overwrites its mode gives.
 places = {}
@@ -151,19 +157,18 @@ for catname, specs in B.PLAN:
             continue
         places['#' + s['name']] = B.spec_overwrites(guild, s, roles)
 
-GATE = ['Start Here', 'Tickets', 'Applications', '#rules', '#welcome',
-        '#start-here', '#get-help', '#report-someone', '#apply-to-playtest',
-        '#welcome-travelers', '#disboard']
-MEMBERS_TALK = ['#welcome-travelers', '#disboard']
-BEHIND = ['#news', '#updates', '#faq', '#general-chat', '#media', '#lore']
+GATE = ['Start Here', '#rules', '#welcome-travelers']
+MEMBERS_READ = ['Tickets', 'Applications', 'Information', 'Roleplay Guide',
+                '#welcome', '#start-here', '#get-help', '#report-someone',
+                '#apply-to-playtest', '#apply-for-a-seat', '#apply-for-staff',
+                '#news', '#updates', '#faq', '#game-rules', '#lore',
+                '#factions', '#disboard']
+BEHIND = ['#general-chat', '#media', '#choose-your-hold', '#suggestions']
 
 # ------------------------------------------------------ 1. the problem --
-yes('as the audit read it, a newcomer sees none of Start Here, Tickets, '
-    'Applications or the read channels in them',
+yes('as the audit read it, a newcomer sees neither #rules nor #welcome-travelers',
     not any(resolve(everyone, newcomer, places[p]).view_channel
-            for p in GATE if p not in MEMBERS_TALK))
-yes('  and a Member sees #news, the one gate that names Member',
-    resolve(everyone, member, places['#news']).view_channel)
+            for p in ('#rules', '#welcome-travelers')))
 
 # -------------------------------------------------- 2. keep_everyone --
 B.CHECK = True
@@ -198,21 +203,51 @@ for p in GATE:
         continue
     yes('a newcomer sees %s and cannot post in it' % p,
         got.view_channel and got.read_message_history and not got.send_messages)
-for p in MEMBERS_TALK:
-    yes('  and cannot run a command in %s (a /bump is one)' % p,
-        not resolve(everyone, newcomer, places[p]).use_application_commands)
-    for who, m in (('a Member', member), ('a Playtester', tester)):
-        got = resolve(everyone, m, places[p])
-        yes('%s talks and runs commands in %s' % (who, p),
-            got.view_channel and got.send_messages and got.use_application_commands)
-for p in BEHIND:
-    yes('a newcomer still does not see %s' % p,
+    yes('  and can react there (the rules reaction is how Member is given)',
+        got.add_reactions)
+for p in MEMBERS_READ:
+    yes('a newcomer does not see %s' % p,
         not resolve(everyone, newcomer, places[p]).view_channel)
-yes('a Member sees #news and #faq',
-    resolve(everyone, member, places['#news']).view_channel
-    and resolve(everyone, member, places['#faq']).view_channel)
-yes('a Member still does not see #general-chat, which is Playtester\'s',
-    not resolve(everyone, member, places['#general-chat']).view_channel)
+    got = resolve(everyone, member, places[p])
+    if not p.startswith('#'):
+        yes('  and a Member sees the %s category' % p, got.view_channel)
+        continue
+    yes('  and a Member sees it, reads it back and cannot post in it',
+        got.view_channel and got.read_message_history and not got.send_messages)
+for who, m in (('a Member', member), ('a Playtester', tester), ('staff', support)):
+    got = resolve(everyone, m, places['#welcome-travelers'])
+    yes('%s reads #welcome-travelers and does not talk or run a command there' % who,
+        got.view_channel and not got.send_messages and not got.use_application_commands)
+for who, m in (('a Member', member), ('a Playtester', tester)):
+    got = resolve(everyone, m, places['#disboard'])
+    yes('%s reads #disboard, does not post and runs no command there (a /bump is one)' % who,
+        got.view_channel and not got.send_messages and not got.use_application_commands)
+for who, m in (('staff (Support)', support),
+               ('staff who are a Member and a Playtester as well',
+                Member([roles['Member'], roles['Playtester'], roles['Moderator']]))):
+    got = resolve(everyone, m, places['#disboard'])
+    yes('%s talk and run commands in #disboard, so staff bump' % who,
+        got.view_channel and got.send_messages and got.use_application_commands)
+# #5935: a ticket is a private thread off its desk, and a thread takes its
+# permissions from the channel. The person who opened it and the staff the
+# bot adds write in it; nobody opens a thread of their own there.
+DESKS = ['#' + s['name'] for _c, specs in B.PLAN for s in specs
+         if s.get('key') in B.TICKET_KEYS]
+yes('the five ticket desks are found', len(DESKS) == 5)
+for p in DESKS:
+    for who, m in (('a Member', member), ('a Playtester', tester),
+                   ('Support', support), ('a Moderator', Member([roles['Moderator']]))):
+        got = resolve(everyone, m, places[p])
+        yes('%s writes in a ticket thread off %s, posts nothing in it and opens no '
+            'thread there (#5935)' % (who, p),
+            got.send_messages_in_threads and not got.send_messages
+            and not got.create_private_threads and not got.create_public_threads)
+yes('a channel that is not a desk still takes thread writing away from its readers',
+    not resolve(everyone, member, places['#news']).send_messages_in_threads)
+for p in BEHIND:
+    yes('a Member still does not see %s, which is Playtester\'s' % p,
+        not resolve(everyone, member, places[p]).view_channel)
+    yes('  and a Playtester does', resolve(everyone, tester, places[p]).view_channel)
 
 hello = [s for _c, specs in B.PLAN for s in specs if s['name'] == 'disboard']
 yes('#disboard is #say-hello renamed in Start Here, so its id and history go '
