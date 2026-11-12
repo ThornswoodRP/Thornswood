@@ -31,7 +31,9 @@
 // there and the door offers Unlock; and after the restart the register is
 // still on disk, so the door offers Unlock again. Everything about the
 // stables, at the forge after them (shut to somebody with no trade, a
-// hammer for Smith, open to a smith), and in Falkreath Jail (the Guard of
+// hammer for Smith, open to a smith), at Valga Vinicia in Dead Man's Drink
+// (her trade opens to somebody beside her, "Trading with Cook in Falkreath.
+// Purse 250.", and not from across the room), and in Falkreath Jail (the Guard of
 // Falkreath role in allowed.json, /office hold, the barracks and jail doors,
 // the cell's line and its lock in private/law.json, kept over a restart),
 // was first run against the whole of gamemode.js on
@@ -53,6 +55,9 @@
 //    tables that no longer give both doors to the stables;
 //  - the forge opens for somebody with no trade; Smith is not taken; the
 //    forge stays shut to a smith with a hammer;
+//  - the copy has no merchant ledger; the engine sends no trader in Dead
+//    Man's Drink; the step up beside her does not land, so she is out of
+//    reach;
 //  - the guard's office is not taken; the door down into the jail does not
 //    take the bot through; the cell door offers its guard nothing; a turn of
 //    the cell not in the law register; the office, or the cell as the guard
@@ -117,6 +122,10 @@ async function folder(name, settings) {
   // And Falkreath Jail's (Build-JailTable.py): its cell door, shipped locked.
   fs.writeFileSync(path.join(root, 'gamemode-tables', 'JAIL_DOOR.json'), JSON.stringify({ 'ef434:Skyrim.esm': 'falkreath', 'ef3a1:Skyrim.esm': 'falkreath' }));
   fs.writeFileSync(path.join(root, 'gamemode-tables', 'JAIL_SHUT.json'), JSON.stringify({ 'ef434:Skyrim.esm': 1 }));
+  // Dev's merchant ledger and its mark, which the agent copies in (BotPass.cs).
+  fs.mkdirSync(path.join(root, 'private'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'private', 'merchant-ledger.json'), '{"version":1}');
+  fs.writeFileSync(path.join(root, 'private', 'merchant-ledger.initialized'), '1');
   fs.writeFileSync(path.join(root, 'server-settings.json'), JSON.stringify(Object.assign({
     port: 7801, password: 'pw-' + name, thornswoodRequirePass: false, databaseName: 'world',
     thornswoodVoicePort: await freePort(), thornswoodServer: 'dev'
@@ -153,7 +162,7 @@ function passOk(raw, key, profileId, server) {
 
 // The stand-in. break_ names the one thing it gets wrong.
 function standIn(root, break_) {
-  const state = { up: false, runs: 0, moved: false, commands: [], current: null, firstPress: -1 };
+  const state = { up: false, runs: 0, moved: false, commands: [], current: null, firstPress: -1, moves: [] };
   // The property block's register and its door memory (property.ts save, here()).
   const register = path.join(root, 'private', 'property.json');
   const STABLES = '165a0:Skyrim.esm';
@@ -307,6 +316,11 @@ function standIn(root, break_) {
       let at = SPAWN.slice();
       // The door last pressed, which /claim and /lock read back.
       let door = 0;
+      // Where the engine holds the bot in the inn, as its moves land, and
+      // the newest teleport's number, which a move has to echo.
+      let innAt = null;
+      let seq = 0;
+      const VALGA = [-348.8, -99.9, 0];
       // The trade, which the forge's gate reads (the-benches.ts benchGate).
       let smith = false;
       let me = 0;
@@ -390,6 +404,36 @@ function standIn(root, break_) {
             }
             return;
           }
+          // The inn: its door in, with Valga sent (an actor of a plugin, its
+          // id above 2^32); a move that echoes the teleport; E on her, a
+          // trade within 400 units; its door out.
+          if (m.t === 6 && actor && m.data && m.data.target === 0x17762) {
+            door = m.data.target;
+            seq = 7;
+            // The inn's door, across the room from her.
+            innAt = [-1200, 300, 0];
+            if (break_ !== 'no trader') {
+              out.push({ type: 'message', message: { t: 33, idx: 9, isMe: false, refrId: 0x3a198 + 0x100000000, baseId: 0x13655,
+                transform: { pos: VALGA.slice(), rot: [0, 0, 98], worldOrCell: 0x3a184 } } });
+            }
+            out.push({ type: 'message', message: { t: 20, idx: actor.idx, pos: innAt.slice(), rot: [0, 0, 0], teleportSeq: seq, worldOrCell: 0x3a184 } });
+            return;
+          }
+          if (m.t === 2 && actor && m.idx === actor.idx && innAt && m.data && m.data.teleportSeq === seq && m.data.worldOrCell === 0x3a184) {
+            state.moves.push(m.data);
+            if (break_ !== 'no step') { innAt = m.data.pos.slice(); }
+            return;
+          }
+          if (m.t === 6 && actor && m.data && m.data.target === 0x3a198) {
+            const near = innAt && Math.hypot(innAt[0] - VALGA[0], innAt[1] - VALGA[1], innAt[2] - VALGA[2]) <= 400;
+            ask(vport, 'POST', '/say', { profileId: me, text: near ? 'Trading with Cook in Falkreath. Purse 250.' : 'You are not close enough to trade.' });
+            return;
+          }
+          if (m.t === 6 && actor && m.data && m.data.target === 0x3a196) {
+            innAt = null;
+            out.push({ type: 'message', message: { t: 20, idx: actor.idx, pos: [0, 0, 0], rot: [0, 0, 0], teleportSeq: ++seq, worldOrCell: 0x3c } });
+            return;
+          }
           // E on a door of Falkreath Barracks or its jail: through it, to
           // where its other half stands (doors.json, to); E on the cell
           // door opens it where it stands, with the line at it.
@@ -458,8 +502,9 @@ function failedAt(r, step) {
   // ------------------------------------------------------------------ whole
   const good = await run('good');
   yes('a good server passes the whole pass', good.r.ok === true);
-  yes('every step is a line: loads, login, relay, new, face, home, needs, claim, keys, stations, jail, saved, restart, loads back, kept',
-    good.r.lines.map((l) => l.step).join(',') === 'loads,login,relay,new,face,home,needs,claim,keys,stations,jail,saved,restart,loads back,kept');
+  yes('every step is a line: loads, login, relay, new, face, home, needs, claim, keys, stations, merchants, jail, saved, restart, loads back, kept',
+    good.r.lines.map((l) => l.step).join(',') === 'loads,login,relay,new,face,home,needs,claim,keys,stations,merchants,jail,saved,restart,loads back,kept');
+  yes('  and the merchants line says what the trader said', /Trading with Cook in Falkreath\. Purse 250\./.test((good.r.lines.find((l) => l.step === 'merchants') || {}).detail || ''));
   if (!good.r.ok) { console.log(JSON.stringify(good.r.lines, null, 1)); }
   yes('the relay carried the join pass, the home pick, /needs, /claim, /lock, the trade, the office and the cell\'s three turns, in that order',
     good.s.state.commands.join(',') === '/joinpass,/pick,/needs,/claim,/lock,/pick,/office,/unlock,/lock,/unlock');
@@ -501,6 +546,8 @@ function failedAt(r, step) {
     'PASS  login', 'the bot sends a face', 'PASS  face', 'the bot presses E on the stables\' outside door', 'the bot presses Claim',
     'PASS  claim', 'the bot presses E on the stables\' inside door', 'the bot presses Lock', 'PASS  keys', 'the bot presses E on the forge, d6987, with no trade',
     'the bot picks Smith, Platewright', 'the bot presses E on the forge again', 'PASS  stations',
+    'the bot presses E on the door of Dead Man\'s Drink, 17762', 'the bot steps up beside the trader, at -249,-100,0',
+    'the bot presses E on the trader, 3a198', 'the bot presses E on the inn\'s door out, 3a196', 'PASS  merchants',
     'the bot takes the office its role gives, Guard of Falkreath', 'the bot presses E on the barracks\' outside door, ef443',
     'the bot presses E on the door down into the jail, ef3a1', 'the bot presses E on the cell door, ef434', 'the bot presses unlock at the cell',
     'the bot presses lock at the cell', 'PASS  jail', 'waiting for the world on disk', 'PASS  saved',
@@ -610,6 +657,26 @@ function failedAt(r, step) {
     failedAt(nohammer.r, 'stations') && /the hammer a new smith is handed.*Over the relay it was told: No: there is no such profession/.test(nohammer.r.lines.find((l) => !l.ok).detail));
   const shutforge = await run('shutforge', 'stays shut');
   yes('the forge stays shut to a smith: FAIL on stations', failedAt(shutforge.r, 'stations') && /the forge opening for a smith/.test(shutforge.r.lines.find((l) => !l.ok).detail));
+
+  // ------------------------------------------------------- the trader
+  {
+    const root = await folder('noledger');
+    fs.rmSync(path.join(root, 'private', 'merchant-ledger.initialized'));
+    const s = standIn(root, null);
+    const r = await botPass.pass({ root, spawn: s.spawn, addon: s.addon, loadMs: 2000, stepMs: 4000, log: () => {}, voiceFrom: VOICE });
+    yes('a copy with no merchant ledger mark: FAIL on merchants, naming the file and who copies it, before any door is pressed',
+      failedAt(r, 'merchants') && /no merchant-ledger\.initialized in its private folder, so the NPC runtime does not start; the deploy agent copies them/.test(r.lines.find((l) => !l.ok).detail) &&
+      !s.sent.some((m) => m.t === 20 && m.worldOrCell === 0x3a184));
+  }
+  const notrader = await run('notrader', 'no trader');
+  yes('the engine sends no trader in the inn: FAIL on merchants, naming her',
+    failedAt(notrader.r, 'merchants') && /had no Valga Vinicia, the trader in Dead Man's Drink, sent to it by the engine/.test(notrader.r.lines.find((l) => !l.ok).detail));
+  const nostep = await run('nostep', 'no step');
+  yes('the move beside her does not land: FAIL on merchants, with what the trader said',
+    failedAt(nostep.r, 'merchants') && /pressing E beside her was answered: You are not close enough to trade\./.test(nostep.r.lines.find((l) => !l.ok).detail));
+  yes('  and the move echoed the inn door\'s teleport, in the inn, 100 units from her',
+    good.s.state.moves.length === 1 && good.s.state.moves[0].teleportSeq === 7 && good.s.state.moves[0].worldOrCell === 0x3a184 &&
+    Math.round(Math.hypot(good.s.state.moves[0].pos[0] + 348.8, good.s.state.moves[0].pos[1] + 99.9)) === 100);
 
   // ------------------------------------------------------- the jail
   const nooffice = await run('nooffice', 'no office');

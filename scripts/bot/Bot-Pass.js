@@ -51,6 +51,14 @@
 //              the relay as the K panel does, is handed a hammer, presses
 //              the forge again and the bench opens (an OpenContainer for
 //              it, the engine's word that the press went through);
+//   merchants  the bot goes into Dead Man's Drink in Falkreath, whose cook,
+//              Valga Vinicia, is a guild trader the NPC runtime keeps
+//              (game/data/npc-population.json). The engine sends it her; it
+//              steps up beside her and presses E on her, and the gamemode
+//              opens her trade and says so over the relay ("Trading with
+//              ... Purse ..."): the runtime started on the copy's merchant
+//              ledger (dev's, copied by the agent), loaded her, and her
+//              purse answers. It goes back out the inn's door;
 //   jail       the bot is a Guard of Falkreath (the role the site would read
 //              from Discord is written into the copy's own allowed.json,
 //              since its door has no site) and takes the office over the
@@ -113,6 +121,9 @@ const CHARGEN_PROPERTY = 'thornswoodChargen';
 // The property block's lines (plog), which a FAIL from the claim on carries.
 const PROPERTY = '[property] ';
 const PROPERTY_STEPS = ['claim', 'keys', 'jail', 'kept'];
+// The server's lines about its NPCs and traders, which a FAIL at merchants
+// carries (the same filter Load-Test.js reads the load copy's log with).
+const MERCHANT = /npc|merchant|trader/i;
 // The character block's lines (clog), which say whether a pick was taken,
 // and which a FAIL at stations carries.
 const PICKS = '[thornswood character] ';
@@ -142,6 +153,21 @@ const OPEN_CONTAINER = 21;
 // with (the three starting tools).
 const NO_TRADE = 'You have not chosen a profession yet';
 const HAMMER = 'You are handed a hammer';
+// Dead Man's Drink in Falkreath and its cook, Valga Vinicia, a guild trader
+// the NPC runtime keeps (npc-population.json, keep, trader; merchant-roster
+// .json): the inn's door in Tamriel, its other half inside, and her
+// reference. The engine sends an actor of a plugin with its id above 2^32
+// (PartOne.cpp, longFormId), and takes a press on her by her own id. A
+// trader opens to somebody within 400 units of her (the trade block's
+// REACH), so the bot steps up to 100 from where the engine last put her.
+const INN = { outside: 0x17762, inside: 0x3a196, cell: 0x3a184, trader: 0x3a198, near: 100 };
+const UPDATE_MOVEMENT = 2;
+const CREATE_ACTOR = 33;
+const TRADING = /^Trading with .+ in Falkreath\. Purse \d+\./;
+// The files the trade block will not start without
+// (npc-merchant-purses.ts, requireMerchantEvidence), which the agent copies
+// from dev into the copy's private folder (BotPass.cs, Ledger).
+const LEDGER = ['merchant-ledger.json', 'merchant-ledger.initialized'];
 // Falkreath Jail (game/data/jails.json), reached through Falkreath Barracks:
 // the barracks' outside door stands in Tamriel, its door down leads into the
 // jail, and the jail's one cell door is shipped locked (JAIL_SHUT). Each
@@ -405,6 +431,10 @@ async function pass(opts) {
     const which = CHARGEN_STEPS.includes(step) ? [CHARGEN, 'creating it'] : PROPERTY_STEPS.includes(step) ? [PROPERTY, 'the stables']
       : step === 'stations' ? [PICKS, 'the trade it picked'] : null;
     if (which && step === 'jail') { which[1] = 'the guard and the cell'; }
+    if (step === 'merchants') {
+      const c = server.lines.filter((l) => MERCHANT.test(l)).slice(-3).map((l) => l.trim().slice(0, 300));
+      return c.length ? '. The gamemode said: ' + c.join(' | ') : '. The gamemode said nothing about its NPCs or traders';
+    }
     if (!which) { return ''; }
     const c = server.lines.filter((l) => l.indexOf(which[0]) >= 0).slice(-3).map((l) => l.trim().slice(0, 300));
     return c.length ? '. The gamemode said: ' + c.join(' | ') : '. The gamemode said nothing about ' + which[1];
@@ -454,8 +484,9 @@ async function pass(opts) {
     const at = bot.inbox.length;
     log('the bot presses E on ' + what + ', ' + door.toString(16));
     bot.send({ t: ACTIVATE, data: { caster: 0x14, target: door, isSecondActivation: false } }, true);
-    await bot.until(() => bot.inbox.slice(at).some((x) => x.message && x.message.t === TELEPORT && x.message.idx === idx &&
-      Number(x.message.worldOrCell) === to), stepMs, what + ' opening and taking it through (to ' + to.toString(16) + ')');
+    const tp = await bot.until(() => { const x = bot.inbox.slice(at).find((y) => y.message && y.message.t === TELEPORT && y.message.idx === idx &&
+      Number(y.message.worldOrCell) === to); return x ? x.message : null; }, stepMs, what + ' opening and taking it through (to ' + to.toString(16) + ')');
+    return tp;
   };
   // E on the cell door, which opens where it stands: the line it writes.
   const atCell = async (bot, idx) => {
@@ -655,6 +686,46 @@ async function pass(opts) {
       say('stations', true, 'the forge was shut to it with no trade (' + refused.slice(0, 80) + '), and opened once it was a smith with a hammer');
     } catch (e) { say('stations', false, e.message + told(heardAt)); return result(); }
 
+    // A guild trader: the runtime up on dev's ledger, the trader sent, her
+    // trade open to somebody beside her.
+    heardAt = relay.heard.length;
+    try {
+      const priv = path.join(root, String(settings.privDir || 'private'));
+      const missing = LEDGER.filter((n) => !fs.existsSync(path.join(priv, n)));
+      if (missing.length) {
+        throw new Error('the copy has no ' + missing.join(' or ') + ' in its private folder, so the NPC runtime does not start; ' +
+                        'the deploy agent copies them from dev (an agent older than that copy, or a dev with none)');
+      }
+      const from = first.inbox.length;
+      const tp = await through(first, me.idx, INN.outside, INN.cell, 'the door of Dead Man\'s Drink');
+      // Where the engine last put her: her createActor, then her moves.
+      const her = await first.until(() => {
+        let idx = -1, pos = null;
+        for (let i = from; i < first.inbox.length; i++) {
+          const m = first.inbox[i].message;
+          if (!m) { continue; }
+          if (m.t === CREATE_ACTOR && Number(m.refrId) === INN.trader + 0x100000000 && m.transform && Array.isArray(m.transform.pos)) {
+            idx = m.idx; pos = m.transform.pos.map(Number);
+          } else if (m.t === UPDATE_MOVEMENT && m.idx === idx && m.data && Array.isArray(m.data.pos)) {
+            pos = m.data.pos.map(Number);
+          }
+        }
+        return pos ? { idx, pos } : null;
+      }, stepMs, 'Valga Vinicia, the trader in Dead Man\'s Drink, sent to it by the engine');
+      const at = [her.pos[0] + INN.near, her.pos[1], her.pos[2]];
+      log('the bot steps up beside the trader, at ' + at.map((x) => Math.round(x)).join(','));
+      first.send({ t: UPDATE_MOVEMENT, idx: me.idx, data: { worldOrCell: INN.cell, pos: at, rot: [0, 0, 270], direction: 0,
+        healthPercentage: 1, speed: 0, runMode: 'Standing', isInJumpState: false, isSneaking: false, isBlocking: false,
+        isWeapDrawn: false, isDead: false, teleportSeq: Number(tp.teleportSeq) || 0 } }, true);
+      log('the bot presses E on the trader, ' + INN.trader.toString(16));
+      first.send({ t: ACTIVATE, data: { caster: 0x14, target: INN.trader, isSecondActivation: false } }, true);
+      const open = await relay.until(() => relay.said(heardAt).find((t) => TRADING.test(t) || t === 'You are not close enough to trade.' ||
+        t === 'That is not a guild trader.'), stepMs, 'an answer from the trader over the relay');
+      if (!TRADING.test(open)) { throw new Error('pressing E beside her was answered: ' + open); }
+      await through(first, me.idx, INN.inside, 0x3c, 'the inn\'s door out');
+      say('merchants', true, 'the engine sent it the trader in Dead Man\'s Drink and her trade opened beside her: ' + open.slice(0, 100));
+    } catch (e) { say('merchants', false, e.message + told(heardAt)); return result(); }
+
     // The jail: the guard's office taken, a cell door's lock turned both ways.
     const jail = jailIn(root);
     if (jail.why) { say('jail', false, jail.why); return result(); }
@@ -806,4 +877,4 @@ if (require.main === module) {
 }
 
 module.exports = { stageIn, stageOf, pass, gitBlob, face, formOf, nameIn, ServerRun, doorKey, HOME,
-                   STABLES, FORGE, JAIL, doorLineOf, packNames, claimOn, stablesIn, jailIn, cellOn, guardRole };
+                   STABLES, FORGE, JAIL, INN, doorLineOf, packNames, claimOn, stablesIn, jailIn, cellOn, guardRole };
