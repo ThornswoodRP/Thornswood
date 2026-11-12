@@ -45,6 +45,17 @@
        script, run by cmd with a stand in that writes down how it was called,
        runs it with --uninstall --silent once the install folder has gone and
        before the farewell; with none, it runs nothing of the kind.
+    7. One entry in Installed apps (#5932). Velopack's setup writes an entry
+       of its own beside the one Register.Ensure writes, and its button
+       removed only the launcher's folder. Ensure marks Velopack's entry
+       SystemComponent, which Windows does not list, and only when it is this
+       install's (its UninstallString runs this install's Update.exe): run on
+       Windows against scratch keys. Velopack's uninstall run some other way
+       reaches Uninstall.FromVelopack through its hook, which puts the Skyrim
+       folders back and removes everything (Begin, then the handover script
+       without a second Velopack uninstall); Thornswood's own uninstall
+       deletes the record of Root before it runs Update.exe, so the hook
+       then finds nothing to do.
     6. The dev build copied beside Root before one install carried both
        channels removed itself after a guessed three seconds (ping -n 4), held
        files or not. Its script waits for the launcher's own process to end,
@@ -100,9 +111,17 @@ Yes 'the playback closes the track and says so before it touches the sound devic
 Yes 'DeleteTree goes on past a folder it could not remove' ($uninstallSrc -match 'else \{ try \{ DeleteTree\(sub\); \} catch \(Exception ex\) \{ Swallow\.Note\(')
 Yes 'the farewell gives what Targets set out to remove a reason of its own' ($uninstallSrc -match 'foreach \(string name in OursInRoot\(keepSaves, deleteMods\)\)')
 Yes 'the theme the launcher plays is in the repository' (Test-Path -LiteralPath $theme)
-Yes 'Finish hands the script Velopack''s Update.exe (AppUninstaller)' ($uninstallSrc -match 'Script\(targets, Process\.GetCurrentProcess\(\)\.Id, note, AppUninstaller\(\)\)' -and $uninstallSrc -match '(?s)static string AppUninstaller\(\).*?Velo\.Installed.*?Velo\.Locator\.UpdateExePath')
+Yes 'Finish hands the script Velopack''s Update.exe (AppUninstaller)' ($uninstallSrc -match '(?s)Script\(targets, Process\.GetCurrentProcess\(\)\.Id, note,\s*appToo \? AppUninstaller\(\) : null, InstallPlace\.RecordFile\)' -and $uninstallSrc -match 'bool deleteMods, bool appToo = true\)' -and $uninstallSrc -match '(?s)static string AppUninstaller\(\).*?Velo\.Installed.*?Velo\.Locator\.UpdateExePath')
 $shellSrc = Read 'launcher\app\Shell.cs'
 Yes 'the uninstall''s first question names the launcher''s own folder among what goes' ($shellSrc -match 'goes\.AppendLine\("    " \+ Velo\.Locator\.RootAppDir')
+$veloSrc = Read 'launcher\app\Velo.cs'
+$registerSrc = Read 'launcher\app\Register.cs'
+Yes 'Velopack''s uninstall hook runs Uninstall.FromVelopack' ($veloSrc -match '\.OnBeforeUninstallFastCallback\(delegate \{ Uninstall\.FromVelopack\(\); \}\)')
+$from = [regex]::Match($uninstallSrc, '(?s)public static void FromVelopack\(\)\s*\{(.*?)\n        \}')
+$f = $from.Groups[1].Value
+Yes 'FromVelopack finds Root from the install''s record and stops when WhyNot says it is not one' ($from.Success -and $f.Contains('InstallPlace.Recorded()') -and $f -match 'if \(why != null\) \{[^}]*return; \}')
+Yes 'and removes everything the way the uninstall does, without a second Velopack uninstall' ($f.Contains('Begin(cfg, false, true,') -and $f.Contains('Finish(rest, false, true, false);') -and $f.IndexOf('Begin(') -gt $f.IndexOf('WhyNot()'))
+Yes 'Register.Ensure hides Velopack''s own entry' ($registerSrc -match '(?s)catch \(Exception ex\) \{ Swallow\.Note\("Register\.Ensure", ex\); \}\s*HideVelopackEntry\(\);' -and $registerSrc -match 'HideEntry\(Registry\.CurrentUser, Root \+ "\\\\" \+ l\.AppId, l\.UpdateExePath\)')
 $devSrc = Read 'launcher\app\DevBuild.cs'
 $self = [regex]::Match($devSrc, '(?s)public static string RemoveSelf\(\)(.*?)Process\.Start\(psi\);')
 Yes 'the old dev copy''s removal waits on its own process, not a guessed time' ($self.Success -and -not $self.Groups[1].Value.Contains('ping 127.0.0.1') -and $self.Groups[1].Value.Contains('Process.GetCurrentProcess().Id') -and $self.Groups[1].Value.Contains('goto wait'))
@@ -244,11 +263,16 @@ namespace Thornswood
             Yes("given Update.exe, the script runs it with --uninstall --silent", with.Contains("call \"" + upd + "\" --uninstall --silent"));
             Yes("after the install folder and before the farewell", with.IndexOf("--uninstall") > with.IndexOf("rmdir \"" + Paths.Root + "\""));
             Yes("given none, it runs no uninstall of the kind", !without.Contains("--uninstall"));
+            string record = Path.Combine(Path.GetDirectoryName(root), "app", "install-root.txt");
+            Put(record, root);
+            string withRecord = Uninstall.Script(targets, 1, null, upd, record) ?? "";
+            int del = withRecord.IndexOf("del /f /q \"" + record + "\"");
+            Yes("the record of the install folder is deleted before Update.exe runs, so its hook finds nothing", del > 0 && del < withRecord.IndexOf("--uninstall"));
             if (!windows) return;
 
             var done = Process.Start(new ProcessStartInfo("cmd.exe", "/c exit 0") { CreateNoWindow = true, UseShellExecute = false });
             done.WaitForExit();
-            string text = Uninstall.Script(targets, done.Id, null, upd);
+            string text = Uninstall.Script(targets, done.Id, null, upd, record);
             string script = Path.Combine(Path.GetDirectoryName(root), "handover.cmd");
             File.WriteAllText(script, text, new UTF8Encoding(false));
             var run = Process.Start(new ProcessStartInfo("cmd.exe", "/c \"" + script + "\"") { CreateNoWindow = true, UseShellExecute = false });
@@ -257,6 +281,27 @@ namespace Thornswood
             string got = File.Exists(said) ? File.ReadAllText(said) : "";
             Yes("run by cmd, the script ran the stand in with --uninstall --silent", ended && got.Contains("--uninstall --silent"));
             Yes("and only once the install folder had gone", got.Contains("root gone"));
+            Yes("and the record of it was gone too", !File.Exists(record));
+
+            // ---- 7: Velopack's entry hidden, only when it is this install's
+            string scratch = "Software\\Thornswood-test-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+            try
+            {
+                string mine = "\"C:\\Users\\x\\AppData\\Local\\Thornswood\\Update.exe\"";
+                using (var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(scratch + "\\Thornswood"))
+                    k.SetValue("UninstallString", mine + " --uninstall");
+                using (var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(scratch + "\\Other"))
+                    k.SetValue("UninstallString", "\"C:\\Other\\Update.exe\" --uninstall");
+                bool hid = Register.HideEntry(Microsoft.Win32.Registry.CurrentUser, scratch + "\\Thornswood", mine.Trim('"'));
+                object sc;
+                using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(scratch + "\\Thornswood")) sc = k.GetValue("SystemComponent");
+                Yes("Velopack's entry for this install is marked SystemComponent, which Installed apps does not list", hid && sc is int && (int)sc == 1);
+                bool other = Register.HideEntry(Microsoft.Win32.Registry.CurrentUser, scratch + "\\Other", mine.Trim('"'));
+                using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(scratch + "\\Other")) sc = k.GetValue("SystemComponent");
+                Yes("an entry whose uninstall is not this install's Update.exe is left alone", !other && sc == null);
+                Yes("and no entry there is nothing to do", !Register.HideEntry(Microsoft.Win32.Registry.CurrentUser, scratch + "\\None", mine.Trim('"')));
+            }
+            finally { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(scratch, false); }
         }
 
         // ---- 3: one held file stops only itself -------------------------------

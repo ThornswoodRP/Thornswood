@@ -64,6 +64,10 @@ namespace Thornswood
                 .SetArgs(startArgs)
                 .SetAutoApplyOnStartup(false)
                 .OnRestarted(delegate { Restarted = true; })
+                // Velopack's own uninstall run some other way than through
+                // Thornswood's (Register.HideVelopackEntry, #5932): the rest
+                // of Thornswood goes with it.
+                .OnBeforeUninstallFastCallback(delegate { Uninstall.FromVelopack(); })
                 .Run();
         }
 

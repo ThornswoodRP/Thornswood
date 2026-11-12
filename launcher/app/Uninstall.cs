@@ -607,7 +607,7 @@ namespace Thornswood
         /// its own folder can go, so this waits on the process id rather than
         /// guessing at a delay.
         /// </summary>
-        public static void Finish(string[] targets, bool keepSaves, bool deleteMods)
+        public static void Finish(string[] targets, bool keepSaves, bool deleteMods, bool appToo = true)
         {
             // Said after the deletes in the script, so it reports what is
             // actually there rather than what was expected to be.
@@ -615,7 +615,8 @@ namespace Thornswood
             try { note = WriteFarewell(keepSaves, deleteMods); }
             catch (Exception ex) { Swallow.Note("Uninstall.Finish, farewell", ex); }
 
-            string text = Script(targets, Process.GetCurrentProcess().Id, note, AppUninstaller());
+            string text = Script(targets, Process.GetCurrentProcess().Id, note,
+                                 appToo ? AppUninstaller() : null, InstallPlace.RecordFile);
             if (text == null)
             {
                 try { if (note != null) File.Delete(note); } catch (Exception ex) { Swallow.Note("Uninstall.Finish, clearing the unused farewell", ex); }
@@ -632,6 +633,43 @@ namespace Thornswood
             psi.UseShellExecute = false;
             psi.WorkingDirectory = Path.GetTempPath();
             Process.Start(psi);
+        }
+
+        /// <summary>
+        /// Velopack's own uninstall, when it runs without Thornswood's: its
+        /// hook (Velo.Start), in a process that must show nothing and be gone
+        /// within 30 seconds. Its entry in Installed apps is hidden
+        /// (Register.HideVelopackEntry), but Update.exe --uninstall can still
+        /// be run by hand or by a package manager, and on its own it removed
+        /// only the launcher's folder: Root stayed, and Windows' Skyrim folders
+        /// stayed pointed into it with nothing left that knew how to put them
+        /// back (#5932).
+        ///
+        /// So it does what Thornswood's uninstall does with nobody to ask:
+        /// everything goes, the Skyrim folders are put back first, and a
+        /// failure there stops it with nothing removed (Begin throws). The
+        /// deleting is the handover script's, after this process has exited,
+        /// so it is not held to Velopack's 30 seconds; Velopack is already
+        /// removing its own folder, so the script does not run it again.
+        ///
+        /// Thornswood's own uninstall deletes the record of Root before it runs
+        /// Update.exe (Script), so when it is what started Velopack's, this
+        /// finds no install and does nothing.
+        /// </summary>
+        public static void FromVelopack()
+        {
+            try
+            {
+                string root = InstallPlace.Recorded();
+                if (string.IsNullOrEmpty(root)) return;
+                Paths.Init(root);
+                string why = WhyNot();
+                if (why != null) { Swallow.Say("Uninstall.FromVelopack", why); return; }
+                Config cfg = Config.Load(Paths.CfgFile);
+                string[] rest = Begin(cfg, false, true, delegate(string m) { Swallow.Say("Uninstall.FromVelopack", m); });
+                Finish(rest, false, true, false);
+            }
+            catch (Exception ex) { Swallow.Note("Uninstall.FromVelopack, stopped", ex); }
         }
 
         /// <summary>
@@ -664,7 +702,7 @@ namespace Thornswood
         /// updateExe names it, then run the farewell note, when there is one.
         /// Null when Root cannot be fenced, and then nothing is deleted at all.
         /// </summary>
-        public static string Script(string[] targets, int waitFor, string note, string updateExe = null)
+        public static string Script(string[] targets, int waitFor, string note, string updateExe = null, string rootRecord = null)
         {
             var sb = new StringBuilder();
             sb.AppendLine("@echo off");
@@ -723,8 +761,16 @@ namespace Thornswood
             // and waited for here, after this launcher has exited, because it
             // deletes the folder this launcher runs from. --silent, because
             // the farewell below is what says the uninstall is done.
+            //
+            // The record of where Root is goes first. Velopack's uninstall
+            // runs this launcher's FromVelopack, and with no record that finds
+            // no install to remove: a kept Profile stays kept.
             if (!string.IsNullOrEmpty(updateExe))
+            {
+                if (!string.IsNullOrEmpty(rootRecord))
+                    sb.AppendLine("del /f /q \"" + rootRecord + "\" 2>nul");
                 sb.AppendLine("if exist \"" + updateExe + "\" call \"" + updateExe + "\" --uninstall --silent");
+            }
 
             // Last, say what survived and why.
             if (note != null)
