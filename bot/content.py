@@ -600,6 +600,7 @@ CHANGES = {
         ('2026-10-30', 'Step 3: the collection link on the Downloads page, the card above Play and the Diagnostics page opens the revision the server was built against. Install that one, not a newer one Nexus may show first, which keeps Play shut until the server catches up.', 'aa62cb6eaf57'),
         ('2026-11-08', 'Step 3: when the server moves to a newer revision, update the collection inside Vortex with Update on the Thornswood collection. Installing the new revision from Nexus adds a second collection beside the first.', 'b2e4eaf2c8a6'),
         ('2026-11-11', 'What you need: the install window\'s box, Give Thornswood a Skyrim folder of its own, starts unticked. Ticked, nothing of Thornswood\'s goes into your Steam copy and the launcher builds its own game folder; left unticked, Thornswood\'s files go into your Steam copy until it does.', 'a01199d0b18b'),
+        ('2026-11-11', 'Step 4: Connect Discord is at the bottom of the launcher\'s left sidebar, above Settings, not on the Play page as an earlier line here said.', 'c83d73acfb09'),
     ],
     'NEWS': [
         ('2026-10-22', 'The changelog starts here; earlier changes are in the repository history.', '90be4dab837f'),

@@ -47,8 +47,9 @@ Skyrim the way it was.
    built against. Install that revision, not a newer one Nexus may show first.
    Not optional: without it you have a launcher and no mods, and the server
    turns you away when you press Play.
-4. Press **Connect Discord** on the launcher's Play page. Your browser opens,
-   you say yes, and it closes itself. You never do this again.
+4. Press **Connect Discord** at the bottom of the launcher's left sidebar,
+   above Settings. Your browser opens, you say yes, and it closes itself. You
+   never do this again.
 <!-- alpha -->
    It works once your application has been accepted; before that it says
    your account has not been accepted into the alpha yet, and applying is the

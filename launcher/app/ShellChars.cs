@@ -63,7 +63,7 @@ namespace Thornswood
                         // wrong thirty seconds later, because somebody is
                         // usually giving them the role while they read it.
                         Door.Forget();
-                        Door.Explain(st, delegate { ShowPage(PagePlay); });
+                        Door.Explain(st, null);
                     },
                     // Cleared before the start, because this goes straight back
                     // into StartPlay and the whole launch runs inside that call.
