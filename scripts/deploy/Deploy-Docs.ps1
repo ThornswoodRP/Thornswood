@@ -34,9 +34,12 @@
     .\Deploy-Docs.ps1 -PutBack puts the app the last deploy replaced back,
                                checked the same way, and sends nothing
     .\Deploy-Docs.ps1 -Password
-                               asks for a new member password without
-                               showing it, and sets it. Never type the
-                               password on the command line.
+                               sets a new member password, read from the
+                               password file on the box (DocsPasswordFile.ps1,
+                               #2116), so nobody types it. Only a box with no
+                               such file asks for it here, without showing
+                               it. Never type the password on the command
+                               line.
     .\Deploy-Docs.ps1 -RunAs SYSTEM
                                the way back, and the only way the site runs
                                as SYSTEM (#2613). Without -RunAs the site
@@ -73,9 +76,14 @@
   put back. The documents and the public pages under data are content, not the
   app, and go up as they always did.
 
-  The password crosses the wire in clear, because this is plain HTTP on an IP.
-  Do not reuse one that matters. That improves the day a real domain and a
-  certificate go on it.
+  THE SITE IS REACHED THROUGH THE WEB FRONT, ON HTTPS. People open
+  https://thornswood.net, where Caddy (Setup-Domain.ps1) holds the
+  certificate and passes each request to the site on loopback port $Port.
+  The site listens on loopback unless the box sets THORNSWOOD_DOCS_EXPOSE=1
+  (#2185), and this takes the firewall rule for $Port away unless it does,
+  so $Port is shut from outside and the member password and every sign in
+  cross the wire only inside HTTPS. The password itself comes from the
+  password file on the box (-Password, above), never from a command line.
 #>
 [CmdletBinding()]
 param(
@@ -1159,4 +1167,6 @@ else {
 }
 
 Write-Host ''
-Write-Host "  http://${Vps}:$Port" -ForegroundColor Green
+# The public address, through the web front (header): $Port answers on
+# loopback only, behind it, and its firewall rule is taken away above.
+Write-Host "  https://thornswood.net, through the web front; the site answers on loopback port $Port behind it" -ForegroundColor Green
