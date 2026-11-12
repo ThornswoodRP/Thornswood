@@ -56,8 +56,13 @@ unset, though Install-Voice.ps1 sets it on for live and dev: every typed
 line goes to everybody; `on` keeps a line to the same cell
 and 4000 units, a number sets the units, and /me, /do, /w and /s work),
 `THORNSWOOD_CHAT_BURST` and `THORNSWOOD_CHAT_REFILL_MS` (5 and 1500 when
-unset: how many said lines one connection gets out at once, and how often it
-earns another; slash lines are never counted), `THORNSWOOD_TOKEN_PER_MINUTE`
+unset: how many lines one connection gets out at once, and how often it
+earns another. What counts is everything that reaches other people: a typed
+line, a /me, /do, /w, /s or /ooc, and an emote from the wheel, all from one
+limit (#4466). Other slash lines, the commands and the game's own reports,
+are never counted. An emote is only a name on the wheel's list (`EMOTE_NAMES`
+in `headlines.js`), and a command refused because the queue is full is not
+written to the chat log), `THORNSWOOD_TOKEN_PER_MINUTE`
 and `THORNSWOOD_SOCKETS_PER_MINUTE` (20 and 60 when unset: how many token
 requests and sockets one address gets a minute before it is answered 429;
 behind Caddy the address is the last `X-Forwarded-For` hop, and this machine
