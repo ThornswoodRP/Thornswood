@@ -432,7 +432,11 @@ if (AGE_PATHS[here] && !ageOk()) {
           card += '<div class="shot-actions">' +
             '<button class="btn ghost" type="button" data-galreport="' + esc(g.name) +
             '" aria-label="Report picture ' + ((start || 0) + k + 1) + ', ' + description +
-            '">Report</button></div>';
+            '">Report</button>' +
+            // What became of a report that did not go (#4407): on the card
+            // from the start and empty, as rSaid is, so it is read out when
+            // the words go in.
+            '<p class="said" data-galsaid role="status" aria-live="polite"></p></div>';
         }
         card += '</div>';
         return card;
@@ -670,20 +674,29 @@ if (AGE_PATHS[here] && !ageOk()) {
       b.addEventListener('click', function () {
         var why = window.prompt('Why are you reporting this picture?', '');
         if (why === null) return;
+        /* What happened goes in the line beside the button, never an alert
+           (#4407). The site's own sentence when it says one; the page's
+           when the answer is not one it can read or never came. */
+        var line = b.parentNode.querySelector('[data-galsaid]');
+        function told(words) { b.disabled = false; if (line) line.textContent = words; }
         b.disabled = true;
+        if (line) line.textContent = '';
         request('/api/gallery/report', {
           method: 'POST', credentials: 'same-origin',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ name: b.getAttribute('data-galreport'), why: why })
-        }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        }).then(function (r) {
+            return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; },
+                                 function () { return { ok: false, j: {} }; });
+          })
           .then(function (x) {
             if (x.ok) {
               b.textContent = 'Reported';
               b.setAttribute('aria-label', (b.getAttribute('aria-label') || 'Report').replace(/^Report\b/, 'Reported'));
             }
-            else { b.disabled = false; window.alert((x.j && x.j.error) || 'Could not report it.'); }
+            else told(x.j.error || 'The site could not take that report just now, so it was not sent. Try again in a minute.');
           })
-          .catch(function () { b.disabled = false; window.alert('Could not report it.'); });
+          .catch(function () { told('The site did not answer, so that report may not have gone. Try again in a minute.'); });
       });
     });
     }

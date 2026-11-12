@@ -146,6 +146,16 @@ process.on('uncaughtException', (e) => {
   process.exit(1);
 });
 
+/*
+  What a visitor is told when a report or a gallery report does not go
+  (#4407). The report page, the gallery's Report button and the launcher show
+  the error of the answer as it comes, so every refusal on those routes is a
+  sentence that says what happened and what to do, never a short code.
+*/
+const REPORT_UNREAD = 'The site could not read that report, so nothing was sent. Reload the page and send it again.';
+const REPORT_UNSAVED = 'The site could not save that report, so it was not sent. Try again in a minute, ' +
+  'and if it keeps happening, tell staff in the Discord.';
+
 async function handle(req, res) {
   // Apply before parsing the address, so streamed and malformed responses
   // carry the same policy as ordinary pages. The nonce is this answer's own
@@ -722,13 +732,16 @@ async function handle(req, res) {
     if (early) return refuse(early);
     let o;
     try { o = JSON.parse(await body(req, 20000)); }
-    catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
+    catch (e) {
+      passBodyFailure(e);
+      return sendJson(res, 400, { error: REPORT_UNREAD });
+    }
     // The form's hidden field. A person never sees it, so anything in it was
     // put there by a script filling in every box it found. Answered as if it
     // worked, so the script has nothing to learn from, and nothing is kept.
     if (o && String(o.homepage || '').trim()) return sendJson(res, 200, { ok: true });
     const title = String(o.title || '').trim().slice(0, 200);
-    if (!title) return sendJson(res, 400, { error: 'say what happened in the first box' });
+    if (!title) return sendJson(res, 400, { error: 'Nothing was sent: say what happened in the first box, then send it again.' });
     // Turnstile's pass (#3216), asked before the limit is read again below,
     // because it waits on Cloudflare and nothing may wait between that read
     // and reportTaken. A refused pass is not counted against the sender.
@@ -760,7 +773,7 @@ async function handle(req, res) {
       const no = personReportRefusal(w);
       if (no) return sendJson(res, no.code, { error: no.error });
       const about = String(o.about || '').trim().slice(0, 60);
-      if (!about) return sendJson(res, 400, { error: 'say who it is about in the Who box' });
+      if (!about) return sendJson(res, 400, { error: 'Nothing was sent: say who it is about in the Who box, then send it again.' });
       const acct = 'acct:' + w.id;
       const mine = reportRefusal(acct, Date.now(), 'your account');
       if (mine) return refuse(mine);
@@ -778,7 +791,7 @@ async function handle(req, res) {
       from: person ? 'the public page, signed in' : 'the public page'
     }, person ? { about: person.about, discordId: String(w.id) } : {}));
     if (!putJson(INBOX, trimInbox(list))) {
-      return sendJson(res, 500, { error: 'could not save' });
+      return sendJson(res, 500, { error: REPORT_UNSAVED });
     }
     reportTaken(sender, Date.now());
     if (person) reportTaken(person.acct, Date.now());
@@ -1849,19 +1862,28 @@ async function handle(req, res) {
   // launcher with the same ticket /api/gallery/submit takes. The report sits
   // in gallery-reports.json for staff; it does not take the shot down.
   if (p === '/api/gallery/report' && req.method === 'POST') {
-    const who = await gallerySender(url, w, 'Sign in, or send a valid launcher ticket.');
+    const who = await gallerySender(url, w, 'Sign in with Discord to report a picture, so staff know who sent it. ' +
+      'In the launcher, connect Discord again and report it once more.');
     if (!who.ok) return sendJson(res, who.code, who.body);
     const from = who.from, discordId = who.discordId;
 
-    let o = {};
-    try { o = JSON.parse(await body(req, 8192)) || {}; } catch (e) { passBodyFailure(e); }
+    let o;
+    try { o = JSON.parse(await body(req, 8192)) || {}; }
+    catch (e) {
+      passBodyFailure(e);
+      return sendJson(res, 400, { ok: false, error: REPORT_UNREAD });
+    }
     const name = String(o.name || '');
-    if (!name) return sendJson(res, 400, { error: 'no name' });
+    if (!name) {
+      return sendJson(res, 400, { ok: false, error: 'That report did not say which picture it is about, so nothing ' +
+        'was sent. Reload the page and press Report on the picture again.' });
+    }
     const why = String(o.why || '').slice(0, 500);
 
     const gallery = jsonFile(GALLERY, []);
     if (!gallery.find((g) => String(g.name) === name)) {
-      return sendJson(res, 404, { error: 'not on the gallery' });
+      return sendJson(res, 404, { ok: false, error: 'That picture is not on the gallery any more, so there is ' +
+        'nothing to report. Reload the page to see what is up now.' });
     }
 
     const reports = jsonFile(GREPORTS, []);
@@ -1874,7 +1896,7 @@ async function handle(req, res) {
     // answered ok (#4379), so the person who sent it knows to send it again.
     if (!putJson(GREPORTS, freshGalleryReports(reports, Date.now()).slice(-500))) {
       console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'report-write-failed' }));
-      return sendJson(res, 500, { ok: false, error: 'The site could not save that report. Try again in a minute.' });
+      return sendJson(res, 500, { ok: false, error: REPORT_UNSAVED });
     }
     return sendJson(res, 200, { ok: true, id: id });
   }
