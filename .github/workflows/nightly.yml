@@ -312,6 +312,21 @@ jobs:
           node scripts/dev/Check-AppPermissions.js
           exit $LASTEXITCODE
 
+      - name: Each action pin is the commit its tag names
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # #4165: every uses: is a full commit SHA with its release tag in a
+          # comment (tests\test-action-pins.ps1, on every pull request), and
+          # only GitHub can say whether that tag names that commit. The tag
+          # is read from the action's own repository, an annotated one
+          # followed to its commit; a pin whose tag names another commit, or
+          # a tag that is not there, is named with every line that carries
+          # it. tests\test-4165-pin-tags.ps1 runs it against a stand-in GitHub.
+          .\scripts\dev\Check-ActionPins.ps1 -Run
+
   harnesses:
     # The test harnesses, in shares (#2357). One job for each entry under
     # shard, each on a runner of its own with 45 minutes of its own; another
