@@ -122,6 +122,9 @@ namespace Thornswood
         static Button btnGalleryChoose, btnGallerySend, btnGalleryRefresh,
                       btnGalleryReportSend, btnGalleryReportCancel;
         static TextBox boxGalleryBy, boxGalleryNote, boxGalleryWhy;
+        // Each chosen picture's own description, by its path (#4575): the
+        // picture's alt text on the site, typed in its row on the Gallery page.
+        static readonly Dictionary<string, string> galleryAlts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         static TextBlock txtGalleryChosen, txtGalleryPageSaid, txtGalleryDropLead,
                          txtGalleryApprovedEmpty;
         static Control galleryPageReportRow;
@@ -1968,6 +1971,21 @@ namespace Thornswood
                     meta.Children.Add(size);
                 }
                 catch (Exception ex) { Swallow.Note("Shell.PaintGalleryChosen size", ex); }
+                // Its own description (#4575): the picture's alt text on the
+                // site, which staff read at Accept. Kept by path, so a row
+                // drawn again keeps what was typed.
+                var alt = new TextBox();
+                alt.Theme = Look("Field");
+                alt.Margin = new Thickness(0, 6, 0, 0);
+                alt.Padding = new Thickness(10, 6, 10, 6);
+                alt.MaxLength = GalleryAlt.Most;
+                alt.PlaceholderText = "What the picture shows, in a few words";
+                AutomationProperties.SetName(alt, "Description of " + Path.GetFileName(path) + ", required");
+                string had;
+                alt.Text = galleryAlts.TryGetValue(path, out had) ? had : "";
+                string altFor = path;
+                alt.TextChanged += delegate { galleryAlts[altFor] = alt.Text ?? ""; };
+                meta.Children.Add(alt);
                 Grid.SetColumn(meta, 1);
                 grid.Children.Add(meta);
 
@@ -2039,6 +2057,20 @@ namespace Thornswood
                 return;
             }
             string[] paths = galleryChosenPaths.ToArray();
+            // Every picture its own description, before anything goes (#4575).
+            // The first one without says which picture and why.
+            string[] alts = new string[paths.Length];
+            for (int i = 0; i < paths.Length; i++)
+            {
+                string typed, why;
+                galleryAlts.TryGetValue(paths[i], out typed);
+                alts[i] = GalleryAlt.Clean(typed, out why);
+                if (alts[i] == null)
+                {
+                    SayGallery(Path.GetFileName(paths[i]) + ": " + why);
+                    return;
+                }
+            }
             string by = boxGalleryBy == null ? "" : boxGalleryBy.Text;
             string note = boxGalleryNote == null ? "" : boxGalleryNote.Text;
             if (btnGallerySend != null) btnGallerySend.IsEnabled = false;
@@ -2054,7 +2086,7 @@ namespace Thornswood
                 for (int i = 0; i < paths.Length; i++)
                 {
                     string copyBad;
-                    string bad = Gallery.Submit(paths[i], by, note, out copyBad);
+                    string bad = Gallery.Submit(paths[i], by, note, alts[i], out copyBad);
                     if (bad.Length == 0) ok++;
                     else if (firstBad.Length == 0) firstBad = bad;
                     if (copyBad.Length > 0 && firstCopy.Length == 0) firstCopy = copyBad;
@@ -2066,6 +2098,7 @@ namespace Thornswood
                     if (ok == paths.Length)
                     {
                         galleryChosenPaths.Clear();
+                        galleryAlts.Clear();
                         PaintGalleryChosen();
                         if (boxGalleryNote != null) boxGalleryNote.Text = "";
                         SayGallery((ok == 1
@@ -2076,6 +2109,7 @@ namespace Thornswood
                     else if (ok > 0)
                     {
                         galleryChosenPaths.Clear();
+                        galleryAlts.Clear();
                         PaintGalleryChosen();
                         SayGallery("Sent " + ok + " of " + paths.Length + ". " + firstBad + copyNote);
                         BuildGalleryPage();

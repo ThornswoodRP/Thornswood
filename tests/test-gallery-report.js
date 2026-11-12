@@ -129,7 +129,7 @@ yes('Report posts to /api/gallery/report with ticket',
     /"\/api\/gallery\/report\?ticket="/.test(report) &&
     /Uri\.EscapeDataString\(Discord\.Ticket\)/.test(report));
 
-const submit = body(GALLERY, 'public static string Submit(string path, string by, string note, out string copies)');
+const submit = body(GALLERY, 'public static string Submit(string path, string by, string note, string alt, out string copies)');
 yes('Gallery.Submit is there', submit.length > 0);
 yes('Submit posts to /api/gallery/submit with ticket',
     /"\/api\/gallery\/submit\?ticket="/.test(submit));
