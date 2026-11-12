@@ -141,6 +141,14 @@ namespace Thornswood
         ///
         /// A junction found here has the link removed and its target left
         /// alone, which is what deleting a shortcut should mean.
+        ///
+        /// One thing that will not go stops only itself and the folders it is
+        /// in. Everything beside it still goes, and the throw from the top
+        /// folder, which cannot be removed with it there, comes at the end.
+        /// A folder that could not be removed used to throw straight out of
+        /// the walk: on 12 Nov 2026 one held file in Profile\Music, the first
+        /// folder in Profile, left the rest of Profile on the PC untouched,
+        /// the Discord sign-in among it.
         /// </summary>
         static void DeleteTree(string dir)
         {
@@ -151,7 +159,7 @@ namespace Thornswood
                 catch { link = true; }   // unreadable is treated as do not enter
 
                 if (link) { try { Directory.Delete(sub, false); } catch (Exception ex) { Swallow.Note("Uninstall.DeleteTree, delete dir", ex); } }
-                else DeleteTree(sub);
+                else { try { DeleteTree(sub); } catch (Exception ex) { Swallow.Note("Uninstall.DeleteTree, " + sub, ex); } }
             }
             foreach (string f in Directory.GetFiles(dir))
             {
@@ -385,6 +393,12 @@ namespace Thornswood
             // nothing to put back. Both calls are safe whether or not the game
             // ever ran, and neither throws.
             Hold.Release();
+            // The menu theme plays from Profile\Music, and a file this process
+            // has open is one Windows will not delete. On One on 12 Nov 2026
+            // that one file stopped all of Profile going, the Discord sign-in
+            // and the log with it. End returns once the track is let go, and
+            // nothing plays it again before the launcher closes.
+            MenuMusic.End();
             int back = Keep.Unpark();
             if (back > 0)
                 say(back + (back == 1 ? " plugin" : " plugins") + " from another server or build put back.");
@@ -724,6 +738,14 @@ namespace Thornswood
                 ps.AppendLine("$why['Profile'] = 'your characters, saves and settings, and the launcher''s record of what it installed. You chose to keep them.'");
                 ps.AppendLine("$why['config.json'] = 'your settings. You chose to keep them.'");
             }
+            // Whatever this uninstall set out to remove from the install folder
+            // and is still there is Thornswood's and failed to go. It is said
+            // so: on 12 Nov 2026 Profile could not be deleted and this called
+            // it "not Thornswood's", which was wrong about the launcher's own
+            // folder. Anything named nowhere is still not ours.
+            foreach (string name in OursInRoot(keepSaves, deleteMods))
+                ps.AppendLine("if (-not $why.ContainsKey(" + PsQuote(name) + ")) { $why[" + PsQuote(name) +
+                              "] = 'Thornswood''s own. It should have gone, but could not be removed.' }");
             ps.AppendLine();
 
             // What the script was told to take out of a kept Profile and could
@@ -753,6 +775,33 @@ namespace Thornswood
             string note = Path.Combine(Path.GetTempPath(), "thornswood-farewell.ps1");
             File.WriteAllText(note, ps.ToString(), new UTF8Encoding(false));
             return note;
+        }
+
+        /// <summary>
+        /// The names, in the install folder itself, of what Targets removes:
+        /// the entries the farewell can find there afterwards. A target deeper
+        /// down (what LocalKeep.NotSaves takes out of a kept Profile) is not
+        /// one of them; the farewell names those by path.
+        /// </summary>
+        public static string[] OursInRoot(bool keepSaves, bool deleteMods)
+        {
+            var names = new System.Collections.Generic.List<string>();
+            string root;
+            try { root = Path.GetFullPath(Paths.Root).TrimEnd('\\', '/'); }
+            catch (Exception ex) { Swallow.Note("Uninstall.OursInRoot, root", ex); return names.ToArray(); }
+            foreach (string t in Targets(keepSaves, deleteMods))
+            {
+                if (string.IsNullOrEmpty(t)) continue;
+                try
+                {
+                    string full = Path.GetFullPath(t).TrimEnd('\\', '/');
+                    if (!string.Equals(Path.GetDirectoryName(full), root, StringComparison.OrdinalIgnoreCase)) continue;
+                    string name = Path.GetFileName(full);
+                    if (name.Length > 0 && !names.Contains(name)) names.Add(name);
+                }
+                catch (Exception ex) { Swallow.Note("Uninstall.OursInRoot, " + t, ex); }
+            }
+            return names.ToArray();
         }
 
         /// <summary>A path as a PowerShell single quoted string.</summary>
