@@ -332,13 +332,13 @@ namespace Thornswood
             Yes("Profile's other folders went with it", Gone(Path.Combine(p, "MyGames")) && Gone(Path.Combine(p, "OwnGame")));
             // The one other thing in Profile afterwards is the log, written
             // again after it was deleted, because Profile is still there: the
-            // line that says which folder would not go, which is how the
-            // fault on One was found. (The line naming the held file itself
-            // went into the old log, before the walk reached and deleted it.)
+            // line that says Profile would not go, which is how the fault on
+            // One was found. (The lines naming the held file and Music went
+            // into the old log, before the walk reached and deleted it.)
             string log = File.Exists(Paths.LogFile) ? File.ReadAllText(Paths.LogFile) : "";
-            bool why = !log.Contains("a line\r\n") && log.Contains("Swallowed in Uninstall.") && log.Contains(Path.Combine(p, "Music"));
+            bool why = !log.Contains("a line\r\n") && log.Contains("Swallowed in Uninstall.RemoveNow, " + p);
             if (!why) Console.WriteLine("      the log: " + log.Replace("\r\n", " | "));
-            Yes("Profile\\launcher.log was deleted and now holds only why Profile\\Music stayed", why);
+            Yes("Profile\\launcher.log was deleted and now holds only why Profile stayed", why);
             var left = new List<string>(Directory.GetFileSystemEntries(p));
             left.Remove(Paths.LogFile);
             Yes("beside it only the held file stayed, and the folders it is in", File.Exists(track) && left.Count == 1);
