@@ -9,52 +9,55 @@ import asyncio
 import discord
 
 from bot_core import _state_read, _state_write, log
-from bot_testing import FINDINGS_NAME, KNOWN_STATE, _utc_stamp, task_tag_of
+from bot_testing import KNOWN_STATE, _utc_stamp, task_tag_of
 from bot_github import (DEV_FORM, KNOWN_FORM, KNOWN_MARK, TASK_FORM, TASK_MARK,
     TASK_TAG, finding_gone, github_changed_since, github_closed_since,
     github_comments, github_issue, github_open_findings, github_timeline,
-    issue_tags_found, merged_fix)
+    merged_fix)
 from bot_task_text import (_all_marked, _marked, dev_chunks, dev_render,
-    dev_task_of, fix_refs, issue_tags, known_body, known_title, last_task,
-    main_task_of, strip_footer, test_task_of)
+    dev_task_of, fix_refs, issue_tags, main_task_of, strip_footer,
+    test_task_of)
 from bot_post_rules import (fix_in_main, post_problems, refuse,
     task_server_line)
 
 
 def known_of(issue, comments):
-    """(title, body, tags) for the #known-issues post: the last "Known
-       issue:" comment, or the issue's title and a plain line until somebody
-       writes one."""
+    """(title, body, tags) for the #known-issues post, from the issue's last
+       "Known issue:" comment, or None when nobody has written one.
+
+       Until 12 Nov an issue with no such comment was posted anyway, under
+       its own title cut to 45 characters and one fixed line ("Known on
+       Main. The team is working on it..."), so every post nobody wrote had
+       a title stopped mid-sentence and said nothing of the problem (Patrick,
+       12 Nov: "the title is supposed to be a summary and the details in the
+       actual post"). The bot never makes up a post's words now: with no
+       comment the post is refused (NO_KNOWN_COMMENT), and the issue is told
+       what to write."""
     got = _marked(issue, comments, KNOWN_MARK)
-    if got:
-        return got[0], strip_footer(got[1]) or known_body(issue), issue_tags(issue, got[2])
-    return known_title(issue), known_body(issue), issue_tags(issue)
+    if not got:
+        return None
+    return got[0], strip_footer(got[1]), issue_tags(issue, got[2])
 
 
 def _sig(title, body, tags):
     return '%s\n%s\n%s' % (title, body, ','.join(sorted(tags)))
 
 
-def default_task_body(issue):
-    """The body for a fixed finding nobody wrote a test task for. Its issue
-       closed when the fix reached main, so that is where to check it."""
-    return ('This was fixed and the fix is on main. Check it on main, and say '
-            'in #%s if it still happens.' % FINDINGS_NAME)
-
-
 def task_post_of(issue, comments, dev_since=None):
     """(title, body, tags) for an issue's #test-tasks post, from its Main
-       test task, or None when it gets none: not a finding and nobody wrote a
-       test task, or its only test tasks say Server: Dev, which are
-       #dev-test-tasks'."""
+       test task, or None when it gets none: nobody wrote a Main test task,
+       or its only test tasks say Server: Dev, which are #dev-test-tasks'.
+
+       A fixed finding with no test task gets no post. Until 12 Nov it got
+       one made up from its title cut to 45 characters and "This was fixed
+       and the fix is on main. Check it on main", which told a tester
+       neither what to try nor what should happen (Patrick, 12 Nov). The
+       test task is written with the fix (docs/guide/the-board.md), or the
+       pull request says nobody would notice it."""
     task = main_task_of(issue, comments, dev_since)
-    if task is not None:
-        return task[0], strip_footer(task[1]) or 'Check this on main.', [TASK_TAG]
-    if last_task(issue, comments, dev_since) is not None:
+    if task is None:
         return None
-    if issue_tags_found(issue):
-        return known_title(issue), default_task_body(issue), [TASK_TAG]
-    return None
+    return task[0], strip_footer(task[1]), [TASK_TAG]
 
 
 async def _forum_thread(forum, tid):
@@ -262,7 +265,7 @@ async def known_issues_once(forum, state, get=None, save=None, me_id=None, say=N
         if not have and read.get(key) == mark:
             continue                # read at this update time: no post
         comments = await loop.run_in_executor(None, github_comments, num, get)
-        if _all_marked(issue, comments, TASK_MARK, room=None):
+        if _all_marked(issue, comments, TASK_MARK):
             why[key] = 'it has a "Test task:" comment'
             unposted(key, mark)
             continue                # it has a test task: being checked, not known
@@ -270,11 +273,15 @@ async def known_issues_once(forum, state, get=None, save=None, me_id=None, say=N
             why[key] = 'done-on-merge wrote its merged fix on it'
             unposted(key, mark)
             continue                # fixed, waiting on main: not a known issue
-        title, body, tags = known_of(issue, comments)
+        post = known_of(issue, comments)
+        title, body, tags = post or ('', '', issue_tags(issue))
         taken = [v.get('sig', '').split('\n')[0] for k, v in rec.items() if k != key]
+        # With no "Known issue:" comment there are no words to post, so
+        # nothing goes up whether the rules are checked or not: the bot never
+        # writes a post's words itself (known_of).
         if refuse(state, 'known', num, post_problems(
-                'known', title, body, issue=issue,
-                has_task=False, taken_titles=taken), say):
+                'known', title, body, issue=issue, written=post is not None,
+                has_task=False, taken_titles=taken), say) or post is None:
             if have:
                 listed.add(num)     # the post already up stays as it was
             why[key] = 'its post breaks a rule'
@@ -359,7 +366,7 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
         # The rules check before a #test-tasks post goes up or is edited.
         task = main_task_of(issue, comments, dev_since)
         if task is None:
-            return False    # the bot's own line for a fixed finding
+            return False    # no post is made of it (task_post_of)
         timeline = await loop.run_in_executor(None, github_timeline, num, get)
         refs = await loop.run_in_executor(None, fix_refs, timeline, get)
         inmain = await loop.run_in_executor(None, fix_in_main, *refs, get)
