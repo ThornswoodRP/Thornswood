@@ -562,6 +562,10 @@ issue where the card did.
   [#5295](https://github.com/ThornswoodRP/Thornswood/issues/5295).
 - **A pre-push hook runs the parse and writing checks** (q-p04-prepush-hook).
   31 Oct 2026, [#5183](https://github.com/ThornswoodRP/Thornswood/issues/5183).
+- **A failed build or nightly lists each failed test with its FAIL lines and
+  the command to run it alone, and the nightly's failure comment carries the
+  list; #5916 merges at 5eeb648.** (dec_qqIWL_kv80OutqEpjCgqQA) 12 Nov 2026,
+  [#4178](https://github.com/ThornswoodRP/Thornswood/issues/4178#issuecomment-6832130439).
 
 ### Merging
 
