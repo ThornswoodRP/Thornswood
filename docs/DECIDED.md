@@ -694,8 +694,8 @@ issue where the card did.
   [#5190](https://github.com/ThornswoodRP/Thornswood/issues/5190).
 - **#5818 merges at e5ad493: Deploy-Docs.ps1's help and last line describe
   the site on HTTPS through Caddy and the password file on the box, a
-  comments-only change to a verb script.** (dec_C6uL8pcXgJjF2jM8Hhdw3g) 11
-  Nov 2026,
+  comments-only change to a verb script.** (dec_C6uL8pcXgJjF2jM8Hhdw3g,
+  dec_sKbe3p1XaijMRMPIJyYvAg) 11 Nov 2026,
   [#4408](https://github.com/ThornswoodRP/Thornswood/issues/4408#issuecomment-6814981414).
 
 ### Collections and mods
