@@ -166,7 +166,7 @@
     { "name": "Apocalypse - Magic of Skyrim.esp", "master": false, "light": false, "masters": ["Skyrim.esm", "Update.esm", "Dragonborn.esm"], "after": ["Triumvirate - Mage Archetypes.esp"] },
     { "name": "RaceMenu.esp", "master": false, "light": true, "masters": ["Skyrim.esm"], "after": ["Apocalypse - Magic of Skyrim.esp"] },
     { "name": "RaceMenuPlugin.esp", "master": false, "light": true, "masters": ["Skyrim.esm"], "after": ["RaceMenu.esp"] },
-    { "name": "CommonClothes.esp", "master": false, "light": false, "masters": ["Skyrim.esm", "Update.esm", "Dawnguard.esm"], "after": ["RaceMenuMorphsCBBE.esp"] },
+    { "name": "CommonClothes.esp", "master": false, "light": false, "masters": ["Skyrim.esm", "Update.esm", "Dawnguard.esm"], "after": ["RaceMenuPlugin.esp", "RaceMenuMorphsCBBE.esp"] },
     { "name": "Cloaks&Capes.esp", "master": false, "light": false, "masters": ["Skyrim.esm", "Update.esm", "Dawnguard.esm"], "after": ["CommonClothes.esp"] },
     { "name": "XPMSE.esp", "master": false, "light": true, "masters": ["Skyrim.esm"], "after": ["Cloaks&Capes.esp"] },
     { "name": "UIExtensions.esp", "master": false, "light": false, "masters": [], "after": ["XPMSE.esp"] },
@@ -226,8 +226,8 @@
     { "name": "Playable Rieklings.esp", "master": false, "light": false, "masters": ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "Dragonborn.esm", "RaceCompatibility.esm"], "after": ["Water for ENB (Shades of Skyrim).esp"] },
     { "name": "KS_Hairdo's_Lite_NoNPCs.esp", "master": false, "light": false, "masters": ["Skyrim.esm", "Update.esm", "Dragonborn.esm", "Dawnguard.esm"], "after": ["Playable Rieklings.esp"] },
     { "name": "Improved Eyes Skyrim.esp", "master": false, "light": false, "masters": ["Skyrim.esm"], "after": ["KS_Hairdo's_Lite_NoNPCs.esp", "RaceMenuMorphsCBBE.esp"] },
-    { "name": "CBBE.esp", "enabled": false, "master": false, "light": false, "masters": ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "Dragonborn.esm"], "after": [] },
-    { "name": "RaceMenuMorphsCBBE.esp", "enabled": false, "master": false, "light": false, "masters": ["Skyrim.esm"], "after": ["RaceMenuPlugin.esp"] }
+    { "name": "CBBE.esp", "enabled": false, "master": false, "light": false, "masters": ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "Dragonborn.esm"], "after": ["RaceMenu.esp"] },
+    { "name": "RaceMenuMorphsCBBE.esp", "enabled": false, "master": false, "light": false, "masters": ["Skyrim.esm"], "after": ["RaceMenuPlugin.esp", "CBBE.esp"] }
   ],
   "dropped": []
 }
