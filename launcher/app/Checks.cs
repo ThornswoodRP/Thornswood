@@ -822,12 +822,13 @@ namespace Thornswood
                     List<string> wrong = ClientRuntime.Wrong(out missing);
                     int bad = missing.Count + wrong.Count;
                     if (bad == 0) return "client bundle";
-                    string what = (bad == 1)
-                        ? Path.GetFileName(missing.Count > 0 ? missing[0] : wrong[0])
-                        : bad + " client files";
-                    return (missing.Count > 0 && wrong.Count == 0)
-                        ? what + " is missing, the launcher will fetch it"
-                        : what + " is not this build's, the launcher will replace it";
+                    // What is wrong, and nothing more: the line that carries
+                    // this says what puts it right (Upkeep's Fix line, the
+                    // repair at the start), since that depends on whether
+                    // the installed package has the files (#5608).
+                    string state = wrong.Count == 0 ? "missing" : missing.Count == 0 ? "not this build's" : "missing or not this build's";
+                    if (bad == 1) return Path.GetFileName(missing.Count > 0 ? missing[0] : wrong[0]) + " is " + state;
+                    return bad + " of its " + ClientRuntime.Recorded().Count + " files are " + state;
                 }
 
                 // No record embedded. That is a build fault rather than
