@@ -157,7 +157,7 @@
     fontofmagic:       { name: 'Font of Magic', skill: 'efficiency', every: DAY, seconds: 15, costOff: 100,
                          say: 'Once a day, 15 seconds where a spell costs nothing. Press Use beside it on the K panel to start it.' },
     tireless:          { name: 'Tireless', skill: 'endurance',
-                         say: 'Running and swinging cost half stamina.' },
+                         say: 'A sprint, a power attack and a shield bash cost half stamina.' },
     secondwind:        { name: 'Second Wind', skill: 'vigor', every: 5 * MINUTE,
                          say: 'When stamina hits 0 it fills, once every 5 minutes.' },
     windwalker:        { name: 'Windwalker', skill: 'agility',

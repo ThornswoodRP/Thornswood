@@ -736,7 +736,7 @@ yes('the log says it once a cast', logged('Leyline Attunement') === 1);
   yes('the point that fills Resilience names Unshakeable as the page says it, and no longer says it is not in the game',
     K.spendLine(filled(['resilience']), 'resilience') === 'Resilience is full. Unshakeable: Nothing staggers you while you block.');
   yes('so do Endurance and Agility: Tireless and the whole of Windwalker are in, on the person\'s own machine',
-    K.spendLine(filled(['endurance']), 'endurance') === 'Endurance is full. Tireless: Running and swinging cost half stamina.' &&
+    K.spendLine(filled(['endurance']), 'endurance') === 'Endurance is full. Tireless: A sprint, a power attack and a shield bash cost half stamina.' &&
     K.spendLine(filled(['agility']), 'agility') === 'Agility is full. Windwalker: +4 speed, and a fall deals no damage.');
   yes('the point that fills Potency names Overcharge as the page says it, and no longer says any of it is not in the game',
     K.spendLine(filled(['potency']), 'potency') === 'Potency is full. Overcharge: One spell in five deals double, or holds twice as long.' &&
@@ -1023,11 +1023,21 @@ for (const field of ['life','runtime']) {
   }
   yes('the K panel says the four are in, and the whole of Overcharge',
     panel.indexOf("perk: 'Unshakeable: nothing staggers you while you block.' }") !== -1 &&
-    panel.indexOf("perk: 'Tireless: running and swinging cost half stamina.' }") !== -1 &&
+    panel.indexOf("perk: 'Tireless: a sprint, a power attack and a shield bash cost half stamina.' }") !== -1 &&
     panel.indexOf("perk: 'Windwalker: +4 speed, and a fall deals no damage.' }") !== -1 &&
     panel.indexOf("perk: 'Pack Mule: being overloaded does not slow you.' }") !== -1 &&
     panel.indexOf("perk: 'Overcharge: one spell in five deals double, or holds twice as long.' }") !== -1 &&
     !/not in the game/.test(panel.slice(panel.indexOf("key: 'potency'"), panel.indexOf("key: 'ward'"))));
+  {
+    // #4482: Tireless is said one way in /spend, on the K panel and on the page. Running and a plain swing cost
+    // nothing in this game; what Tireless halves is a sprint, a power attack and a shield bash.
+    const say = K.PERKS.tireless.say;
+    yes('Tireless says the same in /spend, on the K panel and in the page\'s Endurance row: a sprint, a power attack and a shield bash',
+      say === 'A sprint, a power attack and a shield bash cost half stamina.' &&
+      panel.indexOf("perk: 'Tireless: " + say.charAt(0).toLowerCase() + say.slice(1) + "' }") !== -1 &&
+      page.indexOf('| Endurance | +10 stamina | Tireless. ' + say.replace(/\.$/, '') + ' |') !== -1 &&
+      !/running and swinging/i.test(page + panel));
+  }
   const where = {};
   page.split('\n').forEach(function (line) {
     const c = line.split('|').slice(1, -1).map(function (x) { return x.trim(); });
