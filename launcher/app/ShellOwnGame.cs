@@ -155,8 +155,8 @@ namespace Thornswood
                         catch (Exception ex) { Swallow.Note("ShellOwnGame.OwnGameAtStart, refused BeginInvoke", ex); }
                     }
                     else if (active) refresh = OwnGame.NeedsRefresh(c);
-                    // A yes given in the setup window (MakeOwnGame) is newer
-                    // than a no left in the profile by an earlier install.
+                    // MakeOwnGame, ticked or left unanswered, is newer than
+                    // a no left in the profile by an earlier install.
                     else if (collection && (!OwnGame.Declined || c.MakeOwnGame))
                     {
                         string src = OwnGame.DeploysInto(c);
@@ -348,12 +348,15 @@ namespace Thornswood
                 return;
             }
 
-            // Already answered in the setup window (issue #906): its card
-            // carries this panel's words and a tick box, and a tick is the
-            // same yes as the one below, given before the launcher was open.
+            // Already answered (issue #906): the setup window's card carries
+            // this panel's words and a tick box, and a tick is the same yes
+            // as the one below, given before the launcher was open. The box
+            // starts ticked and an install with no answer in config.json
+            // counts as ticked (Config.MakeOwnGame, Patrick, 12 Nov), so the
+            // question below is only for somebody who unticked it.
             if (cfg.MakeOwnGame)
             {
-                Log("Making Thornswood's own Skyrim folder, as chosen when Thornswood was installed. " +
+                Log("Making Thornswood's own Skyrim folder, which every install has unless its box was unticked. " +
                     "It is made from what Vortex has deployed in " + src + ".");
                 StartOwnGame(true, true);
                 return;
@@ -592,7 +595,7 @@ namespace Thornswood
                     answer is kept until Vortex deploys again, so Play and Make
                     it, which ask it again when pressed, find it ready.
                 */
-                state = "Off. Checking what Vortex has deployed in " + from + ".";
+                state = "Not made yet. Checking what Vortex has deployed in " + from + ".";
                 Config askCfg = cfg;
                 string askInto = into, askFrom = from, askChosen = chosen;
                 System.Threading.ThreadPool.QueueUserWorkItem(delegate
@@ -601,8 +604,8 @@ namespace Thornswood
                     try { why = OwnGame.WhyNot(askCfg, askInto); }
                     catch (Exception ex) { why = "Thornswood could not read what Vortex has deployed: " + ex.Message; }
                     string text = (why == null
-                        ? "Off. Vortex has the Thornswood collection deployed in " + askFrom + ", so it can be made now."
-                        : "Off. " + why) + askChosen;
+                        ? "Not made yet. Vortex has the Thornswood collection deployed in " + askFrom + ", so it can be made now."
+                        : "Not made yet. " + why) + askChosen;
                     try
                     {
                         Dispatcher.UIThread.Post(delegate

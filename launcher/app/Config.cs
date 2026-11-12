@@ -257,13 +257,24 @@ namespace Thornswood
         // has been moved to a folder of its own so the Steam copy can stay clean.
         [JsonInclude] public string VortexGame = "";
 
-        // Thornswood's own Skyrim folder was asked for when Thornswood was
-        // installed: the setup window's tick box, written here by
-        // Setup-Thornswood.ps1 -MakeOwnGame (issue #906). True, the launcher
-        // makes the folder without asking the moment it can (AskOwnGame in
-        // ShellOwnGame.cs). False or absent, which is every install before
-        // that and every install left unticked, it asks first as it always has.
-        [JsonInclude] public bool MakeOwnGame;
+        // Whether the launcher makes Thornswood's own Skyrim folder without
+        // asking, the moment it can (AskOwnGame in ShellOwnGame.cs). The setup
+        // window's tick box, "Give Thornswood a Skyrim folder of its own",
+        // writes it (InstallSteps.OwnFolderCard, issue #906). The box starts
+        // ticked and an absent key counts as ticked (Patrick, 12 Nov: the own
+        // folder is the default for everyone), because Thornswood only plays
+        // from that folder (OwnGameRequired) and a question whose no leaves
+        // Play shut is not a real choice. Only an explicit false, the box
+        // unticked, has the launcher ask first. Nullable for the same reason
+        // as StopServerSetting below: the serializer skips field initialisers.
+        [JsonInclude, JsonPropertyName("MakeOwnGame")] public bool? MakeOwnGameSetting = true;
+
+        [JsonIgnore]
+        public bool MakeOwnGame
+        {
+            get { return MakeOwnGameSetting != false; }
+            set { MakeOwnGameSetting = value; }
+        }
 
         // Which in game browser the last Play left SkyrimPlatform.ini naming,
         // "nirnlab" or "tilted", so the Settings page can say it after a

@@ -7,20 +7,23 @@
   #4395. The Downloads, join and help pages said Thornswood leaves the Skyrim
   you already have alone and builds a game folder of its own, at a fixed
   C:\Thornswood\Game. What the setup window does is different. Its box "Give
-  Thornswood a Skyrim folder of its own" starts unticked
-  (launcher\app\InstallWindow.cs, Box). Ticked, nothing is written into the
-  Steam copy and the launcher builds the folder by itself once Vortex has
-  deployed. Left unticked, Thornswood's own files go into the Steam copy and
-  the launcher asks before it builds the folder, and Play asks for it too.
+  Thornswood a Skyrim folder of its own" starts ticked since 12 Nov (Patrick:
+  the own folder is the default for everyone; launcher\app\InstallWindow.cs,
+  chkOwn). Ticked, nothing is written into the Steam copy and the launcher
+  builds the folder by itself once Vortex has deployed. Unticked, Thornswood's
+  own files go into the Steam copy and the launcher asks before it builds the
+  folder, and Play asks for it too.
   The folder is Game in the install folder, which the setup window puts on
   Skyrim's own drive, not on C: (launcher\app\InstallPlace.cs).
   installer\README.md said both things at once.
 
-  This reads the setup window for the box's words and its default, then
-  holds the three pages and the installer's read me to them. Each must:
+  This reads the setup window for the box's words and its default, holds
+  the window's own words to that default (#5798: its opening text and the
+  line under the box, which once said "Off for now"), then holds the three
+  pages and the installer's read me to them. Each must:
 
     1. name the box in the setup window's own words;
-    2. say it starts unticked;
+    2. say it starts ticked, and never that it starts unticked;
     3. say what ticking it does: nothing is written into the Steam copy;
     4. say what leaving it does: Thornswood's own files go into the Steam copy;
     5. say the launcher builds the folder, and never that the installer does;
@@ -54,9 +57,22 @@ const win = read('launcher', 'app', 'InstallWindow.cs');
 const box = /chkOwn = Box\("([^"]+)"/.exec(win);
 const LABEL = box ? box[1] : '';
 yes('the setup window has the own folder box ("' + LABEL + '")', LABEL.length > 0);
-const boxFn = /CheckBox Box\(string words, Thickness margin\)[\s\S]*?\n        \}/.exec(win);
-yes('and it starts unticked: Box sets IsChecked = false, and nothing sets chkOwn ticked',
-  !!boxFn && /IsChecked = false/.test(boxFn[0]) && !/chkOwn\.IsChecked = true/.test(win));
+const boxAt = win.indexOf('chkOwn = Box(');
+const wired = win.indexOf('chkOwn.IsCheckedChanged', boxAt);
+yes('and it starts ticked: chkOwn.IsChecked = true straight after the box is made, before anything listens to it',
+  boxAt >= 0 && wired > boxAt && /chkOwn\.IsChecked = true;/.test(win.slice(boxAt, wired)));
+yes('and nothing unticks it before Install', !/chkOwn\.IsChecked = (?:false|null)/.test(win));
+
+/* ---- the window's own words ---------------------------------------------- */
+const place = read('launcher', 'app', 'InstallPlace.cs');
+yes('the line under the box no longer says the folder is off for now', !/Off for now/i.test(place));
+const body = /txtBody = new TextBlock[\s\S]*?\n            \};/.exec(win);
+const bodyText = body ? body[0].replace(/"\s*\+\s*"/g, '') : '';
+yes('the window\'s opening text is there', bodyText.length > 0);
+yes('  it says the own folder box starts ticked', /left ticked, as it starts/.test(bodyText));
+yes('  it says what unticked does to the Steam copy', /Unticked, Thornswood's own content goes into that copy/.test(bodyText));
+yes('  and not the old line about turning the folder on in the launcher (#5798)',
+  bodyText.indexOf('until you turn the folder on in the launcher') < 0 && bodyText.indexOf('Thornswood runs from its own game folder.') < 0);
 
 /* ---- the texts ------------------------------------------------------------- */
 // The Downloads page is written by site\lib\downloads.js out of joined string
@@ -74,7 +90,8 @@ const TEXTS = [
 for (const [name, t] of TEXTS) {
   console.log('\n' + name);
   yes('1 names the box: "' + LABEL + '"', LABEL.length > 0 && t.indexOf(LABEL) >= 0);
-  yes('2 says it starts unticked', /starts unticked|unticked, which is the default|unticked by default/i.test(t));
+  yes('2 says it starts ticked', /starts ticked|ticked, which is the default|ticked by default/i.test(t));
+  yes('  and never that it starts unticked', !/starts unticked|unticked, which is the default|unticked by default/i.test(t));
   yes('3 says ticked, Thornswood writes nothing of its own into the Steam copy',
     /(?:writes nothing of its own|nothing is written) into (?:your Steam copy|the Steam copy|the Skyrim you already have on Steam)/i.test(t));
   yes('4 says left unticked, Thornswood\'s own files go into the Steam copy',

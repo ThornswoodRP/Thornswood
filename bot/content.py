@@ -589,6 +589,7 @@ CHANGES = {
         ('2026-10-26', 'The known issues link now says what that page is: what is broken right now that we know about. What works that way on purpose is on the help page.', 'ce6ac2b915a6'),
         ('2026-10-26', 'Only the line breaks of the Vortex profile sentence moved; no words changed.', '938f8250a962'),
         ('2026-11-11', 'What happens to your own Skyrim now names the install window\'s box, Give Thornswood a Skyrim folder of its own, which starts unticked. Ticked, nothing of Thornswood\'s goes into your Steam copy and the launcher builds its own game folder; left unticked, Thornswood\'s files go into your Steam copy until it does.', '575fb40b672c'),
+        ('2026-11-12', "What happens to your own Skyrim: the install window's box, Give Thornswood a Skyrim folder of its own, now starts ticked, so by default nothing of Thornswood's goes into your Steam copy and the launcher builds its own game folder without asking.", '5daa00d1a1f9'),
     ],
     'START': [
         ('2026-10-22', 'The changelog starts here; earlier changes are in the repository history. Logs and crash files now go in #test-findings, since #logs-and-crashes is gone.', '8a49f1c3335b'),
@@ -601,6 +602,7 @@ CHANGES = {
         ('2026-11-08', 'Step 3: when the server moves to a newer revision, update the collection inside Vortex with Update on the Thornswood collection. Installing the new revision from Nexus adds a second collection beside the first.', 'b2e4eaf2c8a6'),
         ('2026-11-11', 'What you need: the install window\'s box, Give Thornswood a Skyrim folder of its own, starts unticked. Ticked, nothing of Thornswood\'s goes into your Steam copy and the launcher builds its own game folder; left unticked, Thornswood\'s files go into your Steam copy until it does.', 'a01199d0b18b'),
         ('2026-11-11', 'Step 4: Connect Discord is at the bottom of the launcher\'s left sidebar, above Settings, not on the Play page as an earlier line here said.', 'c83d73acfb09'),
+        ('2026-11-12', "What you need: the install window's box, Give Thornswood a Skyrim folder of its own, now starts ticked, so by default nothing of Thornswood's goes into your Steam copy and the launcher builds its own game folder without asking; unticked, Thornswood's files go into your Steam copy until it does.", '461c6ab34d74'),
     ],
     'NEWS': [
         ('2026-10-22', 'The changelog starts here; earlier changes are in the repository history.', '90be4dab837f'),
@@ -612,6 +614,7 @@ CHANGES = {
         ('2026-10-26', 'Only a comma and some line breaks moved; no answer changed.', '91bab9b34c87'),
         ('2026-10-26', 'Mod settings menus that forget their settings are a bug being fixed, not how it is meant to work. The fast travel answer no longer points at a list on the help page, which is gone.', 'b1263b3db33e'),
         ('2026-11-11', 'Will this mess up the Skyrim I already play: the answer now names the install window\'s box, Give Thornswood a Skyrim folder of its own, which starts unticked, and says what ticked and unticked do to your Steam copy.', 'ceba1c64fe18'),
+        ('2026-11-12', "Will this mess up the Skyrim I already play: the install window's box for a Skyrim folder of Thornswood's own now starts ticked, and the answer says so.", '720a44a19722'),
     ],
     'GAMERULES': [
         ('2026-10-22', 'The changelog starts here; earlier changes are in the repository history.', '037bba896ff5'),
