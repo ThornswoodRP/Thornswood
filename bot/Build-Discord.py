@@ -2724,6 +2724,59 @@ async def keep_onboarding_off(guild):
         failed.append("could not switch Discord's Onboarding off (%s)" % refused(e))
 
 
+# ONBOARDING'S DEFAULT CHANNELS. Onboarding keeps its list of default channels
+# while it is off, and Discord refuses to shut @everyone out of any channel on
+# that list: the build of 12 Nov 2026 left #start-here and #disboard open with
+# "400 Onboarding channels must be readable by everyone", with Onboarding off.
+# So before a channel is gated, the build takes every channel the plan shuts
+# @everyone out of off that list, and leaves the rest of the list and every
+# other Onboarding setting as they are.
+def everyone_reads(mode):
+    """Whether a mode lets @everyone read."""
+    return mode in ('public', 'read')
+
+
+def onboarding_shut(guild, ob):
+    """The default channels of Onboarding that the plan shuts @everyone out
+       of, as (id, name). A channel the plan does not name is left alone."""
+    modes = {}
+    for _cat, specs in PLAN:
+        for spec in specs:
+            if spec['kind'] != 'voice':
+                modes.setdefault(spec['name'], spec.get('mode', 'open'))
+    out = []
+    for cid in sorted(getattr(ob, 'default_channel_ids', None) or ()):
+        ch = guild.get_channel(cid)
+        name = getattr(ch, 'name', None)
+        if name in modes and not everyone_reads(modes[name]):
+            out.append((cid, name))
+    return out
+
+
+async def keep_onboarding_channels(guild):
+    try:
+        ob = await guild.onboarding()
+    except discord.HTTPException as e:
+        failed.append("could not read Discord's Onboarding (%s)" % refused(e))
+        return
+    shut = onboarding_shut(guild, ob)
+    if not shut:
+        return
+    what = ("#%s off Discord's Onboarding default channels, which the plan shuts "
+            "@everyone out of" % ', #'.join(n for _i, n in shut))
+    if CHECK:
+        say('would', 'take ' + what)
+        return
+    gone = set(i for i, _n in shut)
+    keep = [discord.Object(id=i) for i in sorted(ob.default_channel_ids) if i not in gone]
+    try:
+        await guild.edit_onboarding(default_channels=keep,
+                                    reason='Thornswood setup, the plan gates these channels')
+        say('onboarding', 'took ' + what)
+    except discord.HTTPException as e:
+        failed.append('could not take ' + what + ' (%s)' % refused(e))
+
+
 # --------------------------------------------------------------- layout --
 # THE LAYOUT, WRITTEN OUT (#3317, Patrick, 22 Oct: "we also need to document
 # the discord layout somewhere ... so that we dont accidentally drift using
@@ -3019,6 +3072,13 @@ async def audit(guild):
         off("Discord's Onboarding is on; " + ONBOARDING_WHY + '. A build switches it off')
     elif on is not False:
         off("Discord's Onboarding could not be read (%s)" % on)
+    try:
+        for _i, name in onboarding_shut(guild, await guild.onboarding()):
+            off("#%s is a default channel of Discord's Onboarding, so Discord refuses "
+                "to shut @everyone out of it as the plan does; a build takes it off "
+                "that list" % name)
+    except discord.HTTPException as e:
+        off("Discord's Onboarding default channels could not be read (%s)" % refused(e))
 
     print('\n  Roles against the plan', flush=True)
     for name, _, _, want in ROLES:
@@ -3363,6 +3423,7 @@ async def on_ready():
         # only said there.
         if not ONLY:
             await keep_onboarding_off(guild)
+            await keep_onboarding_channels(guild)
         elif await onboarding_on(guild) is True:
             say('note', "Discord's Onboarding is on, and a whole build switches it off")
 
