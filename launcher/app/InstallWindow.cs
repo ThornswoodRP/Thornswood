@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -120,9 +121,14 @@ namespace Thornswood
                 Avalonia.Platform.IPlatformHandle h = TryGetPlatformHandle();
                 if (h != null) Ask.Owner = h.Handle;
                 KeepOnScreen();
+                // Focus on the first control, so the keyboard and a screen
+                // reader start somewhere and not on nothing (#4459).
+                btnPick.Focus(NavigationMethod.Tab);
             };
             Closing += OnClosing;
             Closed += delegate { done.TrySetResult(null); };
+            // Enter and Esc, before the control with focus sees them (#4459).
+            AddHandler(KeyDownEvent, OnKeys, RoutingStrategies.Tunnel);
         }
 
         IBrush B(string name)
@@ -511,6 +517,33 @@ namespace Thornswood
             e.Cancel = true;
         }
 
+        // ---------------------------------------------------------------- keys
+        //
+        // Issue #4459. Enter and Esc work the window the way Windows' own
+        // dialogs do. Esc is Not now, or Close once an install has stopped,
+        // and does nothing while Close is off. Enter is Install, once every
+        // box is ticked, unless focus is on another button: that button does
+        // its own thing on Enter, as it always has. A tick box is not such a
+        // button: Space ticks it, and Enter on it is Install, not a tick.
+
+        void OnKeys(object sender, KeyEventArgs e)
+        {
+            if (e.KeyModifiers != KeyModifiers.None) return;
+            if (e.Key == Key.Escape)
+            {
+                if (!btnClose.IsEnabled) return;
+                e.Handled = true;
+                Close();
+            }
+            else if (e.Key == Key.Enter)
+            {
+                if (FocusManager?.GetFocusedElement() is Button b && !(b is Avalonia.Controls.Primitives.ToggleButton)) return;
+                if (!btnGo.IsEnabled) return;
+                e.Handled = true;
+                Start();
+            }
+        }
+
         // ---------------------------------------------------------------- Install
 
         void Start()
@@ -559,6 +592,9 @@ namespace Thornswood
             bar.IsVisible = true;
             bar.IsIndeterminate = true;
             txtBody.Text = "Installing. What it is doing shows below, and Thornswood opens by itself when it is done.";
+            // Install, which had focus, is off now: focus goes to what the
+            // install says, so it is never left on nothing (#4459).
+            txtLog.Focus(NavigationMethod.Tab);
 
             var t = new Thread(() => Work(choice, acceptedAt)) { IsBackground = true, Name = "Install" };
             t.Start();
@@ -637,6 +673,8 @@ namespace Thornswood
                 txtStat.Text = "";
                 btnClose.IsEnabled = true;
                 btnClose.Content = "Close";
+                // Straight to Close, right under why it stopped (#4459).
+                btnClose.Focus(NavigationMethod.Tab);
             });
         }
 
