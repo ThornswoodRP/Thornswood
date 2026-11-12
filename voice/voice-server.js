@@ -3069,7 +3069,6 @@ server.on('upgrade', (req, socket, head) => {
       // placeatme, disable, mp) and coc is not one of them, so a coc moves you
       // in your own game and the server puts you straight back.
       if (text.charAt(0) === '/') {
-        const press = msg.press === true;
         // Full: the newest is refused and its sender told, and everything
         // already taken stays. See the note over COMMAND_CAP. A refused one
         // is not in the chat log (#4466): it was never run, and a socket
@@ -3094,6 +3093,7 @@ server.on('upgrade', (req, socket, head) => {
         // menu's repeated "/line" and the front plugin's own reports not at
         // all (commandLogText). Asked before lineMark below, which is what
         // moves the waiting mark it reads.
+        const press = msg.press === true;
         const logged = commandLogText(me, text, press);
         if (logged) chatWrite('command', myId, me, logged, press ? 'press' : '');
         lineMark(me, text);
