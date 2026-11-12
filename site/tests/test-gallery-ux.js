@@ -174,7 +174,7 @@ yes('hub Gallery keeps staff Accept + Delete intro',
     /Staff Accept waiting shots and Delete pending or live ones/.test(hub));
 
 yes('hub Gallery loads one staff grid of pending + live',
-    /function loadGalleryStaff\(\)/.test(hub) &&
+    /function loadGalleryStaff\(after\)/.test(hub) &&
     /\/api\/gallery\/pending/.test(hub) &&
     /\/api\/public/.test(hub) &&
     /method:'DELETE'/.test(hub) &&
