@@ -184,7 +184,8 @@ ok('answer 5: a haul pays the company\'s haul fee, apart from the board\'s job f
   assert.ok(post, 'postHaul');
   assert.ok(post.indexOf('JOB_FEE') < 0, 'posting a haul never reads the job fee');
   assert.ok(/var fee = co\.haulFee\(\);\s*\n\s*var cost = fee \+ pay;/.test(post));
-  assert.ok(/notices\[hold\]\.push\(co\.stampHaul\(\{/.test(post), 'the haul carries the cut it was posted under');
+  assert.ok(/var made = co\.stampHaul\(\{/.test(post) && /notices\[hold\]\.push\(made\);/.test(propFn('landHaul') || ''),
+    'the haul carries the cut it was posted under, stamped when it is asked for and put up as stamped once the pack is saved (#4901)');
   assert.ok(/not loaded on this server, so no haul is posted/.test(post), 'no terms, no haul, never a guessed fee');
   assert.equal(JOB_FEE, 30, 'the board job fee is its own 30');
   assert.ok(/var fee = isJob \? JOB_FEE : NOTICE_FEE;/.test(prop), 'a job still pays the job fee');

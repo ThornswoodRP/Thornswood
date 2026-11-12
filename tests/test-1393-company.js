@@ -115,6 +115,7 @@ const JOB_FEE = num(/var JOB_FEE = (\d+);/);
 // The haul cut and the sale cuts are the company's terms now (#512, #2695), read
 // by the company terms block, which every sandbox here is handed.
 const COMPANY = require('./fixtures/company-block').companyApi(gm);
+const PACK_FIRST = require('./fixtures/pack-first');
 const HAUL_FROM = COMPANY.terms().haulCutFrom;
 const SALE_FROM = COMPANY.terms().saleCutFrom;
 yes('the job fee is 30, and the company\'s tenth and the sale\'s cuts both start at 10 gold',
@@ -180,6 +181,8 @@ function world() {
       }
     }
   };
+  // A post takes out of the pack through packFirst, with receipts (#4901).
+  PACK_FIRST.receipts(w.mp);
   return w;
 }
 
@@ -236,6 +239,8 @@ function boot(reg, w, opts) {
      'evict', 'boxCmd', 'rentCmd', 'bedCmd'].map(function (n) { return 'function ' + n + '() { return true; }'; }).join('\n')
   ];
   NAMES.forEach(function (n) { body.push(lifted[n]); });
+  // A post takes out of the pack through packFirst (#4901): tests/fixtures/pack-first.js.
+  body.push(PACK_FIRST.pieces(prop));
   body.push('return { boards: boards, funds: function () { return funds; }, notices: function () { return notices; }, ' +
             'command: command, boardPanel: boardPanel, boardsView: boardsView, ' +
             'deposit: deposit, withdraw: withdraw, mayWithdraw: mayWithdraw, ' +

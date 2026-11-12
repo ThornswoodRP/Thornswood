@@ -137,7 +137,8 @@ const logged = [];
 function makeBlock() {
   const box = {
     console: { log: function () { logged.push(Array.prototype.join.call(arguments, ' ')); } },
-    require: require, mp: makeMp(), Date: FakeDate,
+    // Gold and goods leave the pack through packFirst, with receipts (#4901).
+    require: require, mp: require('./fixtures/pack-first').receipts(makeMp()), Date: FakeDate,
     BUILDING_BY_DOOR: {}, BUILDING_NAME: {}, WAY_OUT: {}, BENCH_BY_BASE: {},
     // The two name tables the gamemode's top level has; one name is enough here.
     ITEM_NAMES: { 'iron sword': ['Iron Sword', '12eb7:Skyrim.esm'] },

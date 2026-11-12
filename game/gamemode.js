@@ -21948,7 +21948,7 @@ module.exports = {
       storeWrite(registerPath(),
         JSON.stringify({ claims: claims, arrears: arrears,
                         funds: funds, notices: notices, boards: boards, steps: steps,
-                        masters: masterCut, dropbox: dropbox, word: wordBook }, null, 1), registerRead);
+                        masters: masterCut, dropbox: dropbox, word: wordBook, debits: debits }, null, 1), registerRead);
       return true;
     } catch (e) {
       plog('could not write the register:', e);
@@ -21960,6 +21960,8 @@ module.exports = {
   var arrears = loadArrears();
   var masterCut = loadMasterCut();
   var wordBook = loadWord();
+  // Read with the rest, before anything can save, so no write leaves them out (#4901).
+  var debits = loadDebits();
 
   /*
     RENT STILL OWED BY SOMEBODY WHO NO LONGER HOLDS THE PLACE (#3893), from
@@ -25071,7 +25073,20 @@ module.exports = {
   function boxPutGold(hold, actorId, profileId, amount) {
     var n = Math.floor(Number(amount));
     if (!(n > 0) || String(n) !== String(amount).trim()) { return 'Say how much gold, as a whole number.'; }
-    if (!takeGold(actorId, n)) { return 'You do not have ' + n + ' gold in one purse.'; }
+    // Into the register only once the pack's take is saved (#4901): landBoxGold.
+    var r = packs.begin(actorId, goldCut(n, 'You do not have ' + n + ' gold in one purse.'), 'box-gold',
+                        { hold: hold, n: n, who: characterName(actorId) });
+    if (r.why) { return r.why; }
+    return r.line || ('The ' + n + ' gold goes in the box once your pack is saved, in a moment.');
+  }
+
+  /* Gold in, once its take out of the pack is saved (#4901). Answers the line for whoever put it in. */
+  function landBoxGold(row, landed) {
+    var hold = row.data.hold, n = row.data.n, who = row.data.who;
+    var profileId = row.human.profileId;
+    if (!landed) {
+      return 'Your pack was not saved with the ' + n + ' gold out of it, so it is still in your pack and not in the box.';
+    }
     var owed = rentOwedBy(profileId);
     var left = n;
     var rent = [];
@@ -25092,7 +25107,6 @@ module.exports = {
                                : { building: owed[i].building, amount: take });
     }
     var d = dropboxOf(hold);
-    var who = characterName(actorId);
     var item = { n: d.next++, by: profileId, name: who, kind: 'gold', baseId: GOLD_ID, count: n,
                  what: 'Gold', at: Date.now() };
     if (rent.length) { item.rent = rent; }
@@ -25100,7 +25114,6 @@ module.exports = {
     var paid = n - left;
     boxLog(hold, { act: 'in', n: item.n, who: profileId, whoName: who, by: profileId, byName: who,
                    what: 'Gold', count: n, note: paid ? paid + ' of it rent' : '' });
-    save();
     plog(who, '(profile ' + profileId + ') put', n, 'gold in', hold + '\'s drop box', paid ? '(' + paid + ' of it rent)' : '');
     return 'You put ' + n + ' gold in the box.' + (paid ? ' ' + paid + ' of it pays your rent.' : '');
   }
@@ -25123,20 +25136,40 @@ module.exports = {
     if (e.worn || e.wornLeft) { return 'Take it off first.'; }
     var n = Math.floor(Number(count));
     if (!(n > 0) || n > (Number(e.count) || 0)) { return 'You do not have that many.'; }
-    var kept = JSON.parse(JSON.stringify(e));
-    delete kept.count; delete kept.worn; delete kept.wornLeft;
-    e.count = (Number(e.count) || 0) - n;
-    if (e.count <= 0) { entries.splice(at, 1); }
-    try { mp.set(actorId, 'inventory', { entries: entries }); } catch (e2) { return 'Your pack could not be written.'; }
-    var d = dropboxOf(hold);
-    var who = characterName(actorId);
+    // Into the register only once the pack's take is saved (#4901): landBoxLeft.
+    var r = packs.begin(actorId, function (list) {
+      var it = list[at];
+      if (!it || Number(it.baseId) === GOLD_ID || it.worn || it.wornLeft || n > (Number(it.count) || 0)) {
+        return 'Your pack changed. Nothing was put in the box.';
+      }
+      var kept = JSON.parse(JSON.stringify(it));
+      delete kept.worn; delete kept.wornLeft;
+      kept.count = n;
+      it.count = (Number(it.count) || 0) - n;
+      if (it.count <= 0) { list.splice(at, 1); }
+      return { entries: list, taken: [kept] };
+    }, 'box-left', { hold: hold, to: to, who: characterName(actorId) });
+    if (r.why) { return r.why; }
+    return r.line || 'It goes in the box for ' + to + ' once your pack is saved, in a moment.';
+  }
+
+  /* Something left for somebody, once its take out of the pack is saved (#4901). */
+  function landBoxLeft(row, landed) {
+    var hold = row.data.hold, to = row.data.to, who = row.data.who;
+    var profileId = row.human.profileId;
+    var kept = JSON.parse(JSON.stringify(row.taken[0] || {}));
+    var n = Number(kept.count) || 0;
+    delete kept.count;
     var what = itemName(kept);
+    if (!landed) {
+      return 'Your pack was not saved with ' + what + ' out of it, so it is still in your pack and not in the box.';
+    }
+    var d = dropboxOf(hold);
     var item = { n: d.next++, by: profileId, name: who, kind: 'left', baseId: Number(kept.baseId),
                  count: n, what: what, entry: kept, forName: to, at: Date.now() };
     d.items.push(item);
     boxLog(hold, { act: 'in', n: item.n, who: profileId, whoName: who, by: profileId, byName: who,
                    what: what, count: n, forName: to });
-    save();
     plog(who, '(profile ' + profileId + ') left', n, what, 'for', to, 'in', hold + '\'s drop box');
     return 'You left ' + (n > 1 ? n + ' ' : '') + what + ' in the box for ' + to + '.';
   }
@@ -27332,6 +27365,187 @@ module.exports = {
     return false;
   }
 
+  // -- pack first (#4901), begin --
+  /*
+    A THING TAKEN OUT OF A PACK INTO A REGISTER, IN THAT ORDER (#4901). The
+    same text is in the property and furniture blocks, and
+    tests/test-4901-pack-first.js holds the copies to it, since each block
+    is lifted and run alone.
+
+    A plain inventory write is saved with the character later, and a
+    register file is written at once. So a server that stopped between the
+    two came back with the gold or the piece in the pack as it was saved and
+    in the register too, and it could be taken out a second time. The
+    merchant settlement orders it with the engine's receipts, and so does
+    this:
+      1. the take is written down first, in the register, as a debit that
+         holds nothing yet: nothing is in a box, on a board or on a floor;
+      2. the pack is written with compareAndSetInventory, which stamps the
+         write with a receipt, the character's next sequence;
+      3. only once getSavedInventoryReceipt says the pack is saved at or
+         past that sequence does the debit land: what it was for goes into
+         the register and the debit comes off it, in the same write.
+    A restart before 3 reads the pack as it was saved. Saved without the
+    take, the pack still holds the thing and its receipt is older than the
+    debit, so the debit lets go: the thing is in the pack and only there.
+    Saved with it, the debit lands, once, because landing and letting go
+    each take the debit off in the one write that does them. Nothing is
+    handed back and nothing is undone. A take waits, as a merchant trade or
+    a quest does, until the pack's last receipt is saved, so the receipts
+    of one character never pass each other.
+
+    packFirst(mp, book, keep, landers, tell): book() is the register's list
+    of debits, keep() writes the register and answers whether it did,
+    landers[kind](row, landed) puts a landed debit into the register or says
+    why one let go and answers the line for its person, and tell(profile,
+    line, error) says a line to a person or an error to the log.
+    begin(actorId, cut, kind, data): cut(entries) answers { entries, taken }
+    or a refusal. Answers { why } when nothing was taken, otherwise { line }
+    once it landed or let go already, or { line: '' } while it waits.
+    settle() lands or lets go of every debit whose pack says which.
+  */
+  function packFirst(mp, book, keep, landers, tell) {
+    function sequenceOf(receipt, who) {
+      var doc = JSON.parse(receipt);
+      if (doc === null) { return 0; }
+      if (!doc || doc.actor !== who.desc || doc.profile !== who.profileId ||
+          !Number.isSafeInteger(doc.sequence) || doc.sequence < 1) {
+        throw new Error('the pack receipt ' + receipt + ' is not this character\'s');
+      }
+      return doc.sequence;
+    }
+    function ready() {
+      return !!mp && ['compareAndSetInventory', 'getInventoryReceipt', 'getSavedInventoryReceipt',
+        'getNpcAIState', 'getDescFromId', 'getIdFromDesc', 'get'].every(function (k) { return typeof mp[k] === 'function'; });
+    }
+    function person(actorId) {
+      var ai = mp.getNpcAIState(actorId);
+      var desc = mp.getDescFromId(actorId);
+      if (!ai || ai.isHuman !== true || !(Number(ai.profileId) > 0) || typeof desc !== 'string' || !desc) { return null; }
+      return { desc: desc, profileId: Number(ai.profileId) };
+    }
+    function wellFormed(row) {
+      return !!row && typeof row.kind === 'string' && typeof landers[row.kind] === 'function' &&
+        !!row.human && typeof row.human.desc === 'string' && Number(row.human.profileId) > 0 &&
+        Number.isSafeInteger(row.sequence) && row.sequence > 0 && Array.isArray(row.taken);
+    }
+    /* One debit landed or let go once its pack's receipts say which: the line for its person, or '' while it waits. */
+    function settleOne(row) {
+      if (!wellFormed(row)) { return ''; }
+      var id = mp.getIdFromDesc(row.human.desc) >>> 0;
+      if (!id) { return ''; }
+      var who = person(id);
+      if (!who || who.desc !== row.human.desc || who.profileId !== row.human.profileId) { return ''; }
+      var saved = sequenceOf(mp.getSavedInventoryReceipt(id), who);
+      var live = sequenceOf(mp.getInventoryReceipt(id), who);
+      var landed;
+      if (saved >= row.sequence) { landed = true; }
+      else if (live < row.sequence) { landed = false; }
+      else { return ''; }
+      var rows = book();
+      var at = rows.indexOf(row);
+      if (at < 0) { return ''; }
+      rows.splice(at, 1);
+      var line = landers[row.kind](row, landed);
+      keep();
+      return line;
+    }
+    function begin(actorId, cut, kind, data) {
+      if (!ready()) { return { why: 'That is not running on this server. Nothing was taken.' }; }
+      var who, receipt, before;
+      try {
+        who = person(actorId);
+        if (!who) { return { why: 'Only a person in the world can do that. Nothing was taken.' }; }
+        receipt = mp.getInventoryReceipt(actorId);
+        if (mp.getSavedInventoryReceipt(actorId) !== receipt) {
+          return { why: 'Your pack is still being saved after your last change. Try again in a moment. Nothing was taken.' };
+        }
+        var inv = mp.get(actorId, 'inventory');
+        before = JSON.parse(JSON.stringify((inv && inv.entries) || []));
+      } catch (e) {
+        tell(0, '', e);
+        return { why: 'Your pack could not be read. Nothing was taken.' };
+      }
+      var sequence = sequenceOf(receipt, who) + 1;
+      var out = cut(JSON.parse(JSON.stringify(before)));
+      if (typeof out === 'string') { return { why: out }; }
+      var row = { kind: kind, data: data, human: who, sequence: sequence, taken: out.taken, at: Date.now() };
+      var rows = book();
+      rows.push(row);
+      if (!keep()) {
+        rows.splice(rows.indexOf(row), 1);
+        return { why: 'The server could not write that down. Nothing was taken.' };
+      }
+      try {
+        mp.compareAndSetInventory(actorId, { entries: before }, receipt, { entries: out.entries }, sequence, who.profileId);
+      } catch (e2) {
+        // The receipts read next say whether the pack was written; the debit waits or lets go by them.
+        tell(0, '', e2);
+      }
+      try { return { line: settleOne(row) }; }
+      catch (e3) {
+        tell(0, '', e3);
+        return { line: '' };
+      }
+    }
+    function settle() {
+      var rows = book().slice();
+      for (var i = 0; i < rows.length; i++) {
+        var line = '';
+        try { line = settleOne(rows[i]); }
+        catch (e) { tell(0, '', e); }
+        if (line) { tell(rows[i].human.profileId, line); }
+      }
+    }
+    return { begin: begin, settle: settle, ready: ready };
+  }
+  // -- pack first (#4901), end --
+
+  /* A whole count of gold out of one stack, the way takeGold takes it: { entries, taken } or the refusal. */
+  function goldCut(amount, refusal) {
+    return function (entries) {
+      for (var i = 0; i < entries.length; i++) {
+        var e = entries[i];
+        if (e && e.baseId === GOLD_ID && (Number(e.count) || 0) >= amount) {
+          e.count -= amount;
+          if (e.count <= 0) { entries.splice(i, 1); }
+          return { entries: entries, taken: [{ baseId: GOLD_ID, count: amount }] };
+        }
+      }
+      return refusal;
+    };
+  }
+
+  /* The debits the register holds: takes armed and not yet landed or let go (#4901). */
+  function loadDebits() {
+    var raw = registerRead.doc;
+    var list = (raw && Array.isArray(raw.debits)) ? raw.debits : [];
+    if (list.length) { plog('read', list.length, 'take(s) out of a pack waiting on its save'); }
+    return list;
+  }
+
+  /* A line to a person in the world, from a debit that landed or let go without them asking. */
+  function tellPerson(pid, line, err) {
+    if (err) { plog('a take out of a pack:', err); return; }
+    var to = onlineActorOf(Number(pid));
+    if (!to || !line) { return; }
+    try { notify(to, line); } catch (e) { plog('could not show', Number(to).toString(16), 'a line:', e); }
+    try { say(to, line); } catch (e2) { plog('could not say a line to', Number(to).toString(16) + ':', e2); }
+    refreshPanel(to);
+  }
+
+  var packs = packFirst(mp, function () { return debits; }, save, {
+    'box-gold': landBoxGold,
+    'box-left': landBoxLeft,
+    'post': landPost,
+    'letter': landLetter,
+    'haul': landHaul
+  }, tellPerson);
+
+  if (g.__thornswoodPackTimer) { try { clearInterval(g.__thornswoodPackTimer); } catch (e) { plog('the old pack timer would not stop:', e); } }
+  g.__thornswoodPackTimer = setInterval(
+    (typeof guard === 'function') ? guard('packTick', packs.settle) : packs.settle, 1000);
+
   /*
     THE LEDGER PAYING OUT, and only a letter's held courier pay, #1374.
 
@@ -27486,11 +27700,12 @@ module.exports = {
     }
     var fee = isJob ? JOB_FEE : NOTICE_FEE;
     var cost = fee + reward;
-    if (!Number.isSafeInteger(cost) || !takeGold(actorId, cost)) {
-      toProfile(profileId, isJob
-        ? 'That costs ' + cost + ' gold, ' + fee + ' for the board and the ' + reward +
-          ' reward, and you do not have it. Nothing was taken.'
-        : 'That costs ' + fee + ' gold and you do not have it.');
+    var short = isJob
+      ? 'That costs ' + cost + ' gold, ' + fee + ' for the board and the ' + reward +
+        ' reward, and you do not have it. Nothing was taken.'
+      : 'That costs ' + fee + ' gold and you do not have it.';
+    if (!Number.isSafeInteger(cost)) {
+      toProfile(profileId, short);
       return true;
     }
     var who = 'somebody';
@@ -27498,24 +27713,38 @@ module.exports = {
       var ap = mp.get(actorId, 'appearance');
       if (ap && ap.name) { who = String(ap.name); }
     } catch (e) { }
-
-    if (!notices[hold]) { notices[hold] = []; }
     var made = { by: profileId, name: who, title: words.title, text: words.body, at: Date.now(),
                  job: !!isJob, taken: 0 };
     // The reward is held on the ledger in pay, the way a letter's 15 and a
     // haul's pay are (noticeHolds), until the poster says it is done.
     if (isJob) { made.pay = reward; }
+    // On the board only once the pack's take is saved (#4901): landPost.
+    var r = packs.begin(actorId, goldCut(cost, short),
+      'post', { hold: hold, made: made, cost: cost, fee: fee, reward: reward });
+    toProfile(profileId, r.why || r.line ||
+      ('Your ' + (isJob ? 'job' : 'notice') + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
+    if (r.line) { refreshPanel(actorId); }
+    return true;
+  }
+
+  /* A notice or a job onto its board, once its fee is saved out of the pack (#4901). */
+  function landPost(row, landed) {
+    var hold = row.data.hold, made = row.data.made, cost = row.data.cost, fee = row.data.fee, reward = row.data.reward;
+    var isJob = !!made.job;
+    if (!landed) {
+      return 'Your pack was not saved with the ' + cost + ' gold out of it, so it is still yours and the ' +
+             (isJob ? 'job' : 'notice') + ' is not on the board.';
+    }
+    made.at = Date.now();
+    if (!notices[hold]) { notices[hold] = []; }
     notices[hold].push(made);
     funds[hold] = (Number(funds[hold]) || 0) + cost;
-    save();
-    plog(who, isJob ? 'posted a job in' : 'posted a notice in', hold, 'for', cost, 'gold:', words.title);
-    toProfile(profileId, isJob
+    plog(made.name, isJob ? 'posted a job in' : 'posted a notice in', hold, 'for', cost, 'gold:', made.title);
+    return isJob
       ? 'Your job is on the board in ' + hold + '. That cost ' + cost + ' gold: ' + fee +
         ' for the board, and the ' + reward + ' reward, held until you say the job is done. ' +
         'Then it goes to whoever took it.'
-      : 'Your notice is on the board in ' + hold + '. That cost ' + fee + ' gold.');
-    refreshPanel(actorId);
-    return true;
+      : 'Your notice is on the board in ' + hold + '. That cost ' + fee + ' gold.';
   }
 
   /*
@@ -28065,26 +28294,37 @@ module.exports = {
       return true;
     }
     var cost = LETTER_FEE + LETTER_PAY;
-    if (!takeGold(actorId, cost)) {
-      toProfile(profileId, 'A letter costs ' + cost + ' gold and you do not have it.');
-      return true;
-    }
     var who = 'somebody';
     try {
       var ap = mp.get(actorId, 'appearance');
       if (ap && ap.name) { who = String(ap.name); }
     } catch (e) { }
-    if (!notices[hold]) { notices[hold] = []; }
-    notices[hold].push({ by: profileId, name: who, text: words, at: Date.now(),
-                         job: true, letter: true, to: to, pay: LETTER_PAY, taken: 0 });
-    funds[hold] = (Number(funds[hold]) || 0) + cost;
-    save();
-    plog(who, 'posted a letter for', to, 'in', hold, 'for', cost, 'gold');
-    toProfile(profileId, 'Your letter for ' + to + ' is on the board in ' + hold + '. That cost ' + cost +
-              ' gold: ' + LETTER_FEE + ' for the board, and ' + LETTER_PAY +
-              ' held for whoever carries it.');
-    refreshPanel(actorId);
+    var made = { by: profileId, name: who, text: words, at: Date.now(),
+                 job: true, letter: true, to: to, pay: LETTER_PAY, taken: 0 };
+    // On the board only once the pack's take is saved (#4901): landLetter.
+    var r = packs.begin(actorId, goldCut(cost, 'A letter costs ' + cost + ' gold and you do not have it.'),
+                        'letter', { hold: hold, made: made, cost: cost });
+    toProfile(profileId, r.why || r.line ||
+      ('Your letter for ' + to + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
+    if (r.line) { refreshPanel(actorId); }
     return true;
+  }
+
+  /* A letter onto its board, once its cost is saved out of the pack (#4901). The words stay out of the log. */
+  function landLetter(row, landed) {
+    var hold = row.data.hold, made = row.data.made, cost = row.data.cost;
+    if (!landed) {
+      return 'Your pack was not saved with the ' + cost + ' gold out of it, so it is still yours and the letter for ' +
+             made.to + ' is not on the board.';
+    }
+    made.at = Date.now();
+    if (!notices[hold]) { notices[hold] = []; }
+    notices[hold].push(made);
+    funds[hold] = (Number(funds[hold]) || 0) + cost;
+    plog(made.name, 'posted a letter for', made.to, 'in', hold, 'for', cost, 'gold');
+    return 'Your letter for ' + made.to + ' is on the board in ' + hold + '. That cost ' + cost +
+           ' gold: ' + LETTER_FEE + ' for the board, and ' + LETTER_PAY +
+           ' held for whoever carries it.';
   }
 
   /*
@@ -28352,9 +28592,10 @@ module.exports = {
     }
     var fee = co.haulFee();
     var cost = fee + pay;
-    if (!Number.isSafeInteger(cost) || !takeGold(actorId, cost)) {
-      toProfile(profileId, 'That costs ' + cost + ' gold, ' + fee + ' for the board and the ' + pay +
-                ' pay, and you do not have it. Nothing was taken.');
+    var short = 'That costs ' + cost + ' gold, ' + fee + ' for the board and the ' + pay +
+                ' pay, and you do not have it. Nothing was taken.';
+    if (!Number.isSafeInteger(cost)) {
+      toProfile(profileId, short);
       return true;
     }
     var who = 'somebody';
@@ -28362,23 +28603,40 @@ module.exports = {
       var ap = mp.get(actorId, 'appearance');
       if (ap && ap.name) { who = String(ap.name); }
     } catch (e) { }
-    if (!notices[hold]) { notices[hold] = []; }
     // The haul carries the cut it was posted under, so a change of terms never re-prices it.
-    notices[hold].push(co.stampHaul({ by: profileId, name: who, text: text, at: Date.now(),
-                                      job: true, haul: true, dest: dest, pay: pay, taken: 0 }));
-    // deposit saves the notice with the coin, so the two cannot part.
-    if (!deposit(hold, cost, 'a haul to ' + dest + ': the ' + fee + ' fee, and ' + pay + ' pay held')) {
-      notices[hold].pop();
-      payOut(actorId, cost);
-      toProfile(profileId, 'That did not work. Nothing was taken.');
-      return true;
-    }
-    plog(who, 'posted a haul in', hold, 'to', dest, 'for', pay, 'gold and the', fee, 'fee');
-    toProfile(profileId, 'Your haul to ' + dest + ' is on the board in ' + hold + ', number ' +
-              notices[hold].length + '. That cost ' + cost + ' gold: ' + fee + ' for the board, and the ' +
-              pay + ' pay, held until it is confirmed at ' + dest + '.');
-    refreshPanel(actorId);
+    var made = co.stampHaul({ by: profileId, name: who, text: text, at: Date.now(),
+                              job: true, haul: true, dest: dest, pay: pay, taken: 0 });
+    // On the board only once the pack's take is saved (#4901): landHaul.
+    var r = packs.begin(actorId, goldCut(cost, short), 'haul',
+                        { hold: hold, made: made, cost: cost, fee: fee, pay: pay, dest: dest });
+    toProfile(profileId, r.why || r.line ||
+      ('Your haul to ' + dest + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
+    if (r.line) { refreshPanel(actorId); }
     return true;
+  }
+
+  /*
+    A haul onto its board, once its cost is saved out of the pack (#4901).
+    The coin is counted on the hold's ledger in the same write as the notice
+    (the debit's landing), so the two cannot part, and nothing is ever handed
+    back: the pack's take is saved before any of it is counted.
+  */
+  function landHaul(row, landed) {
+    var hold = row.data.hold, made = row.data.made, cost = row.data.cost;
+    var fee = row.data.fee, pay = row.data.pay, dest = row.data.dest;
+    if (!landed) {
+      return 'Your pack was not saved with the ' + cost + ' gold out of it, so it is still yours and the haul to ' +
+             dest + ' is not on the board.';
+    }
+    made.at = Date.now();
+    if (!notices[hold]) { notices[hold] = []; }
+    notices[hold].push(made);
+    funds[hold] = (Number(funds[hold]) || 0) + cost;
+    plog(cost, 'gold onto', hold + '\'s ledger:', 'a haul to ' + dest + ': the ' + fee + ' fee, and ' + pay + ' pay held');
+    plog(made.name, 'posted a haul in', hold, 'to', dest, 'for', pay, 'gold and the', fee, 'fee');
+    return 'Your haul to ' + dest + ' is on the board in ' + hold + ', number ' +
+           notices[hold].length + '. That cost ' + cost + ' gold: ' + fee + ' for the board, and the ' +
+           pay + ' pay, held until it is confirmed at ' + dest + '.';
   }
 
   function confirmHaul(parts, actorId, profileId, toProfile) {
@@ -29824,7 +30082,7 @@ module.exports = {
     JAIL_KEY: JAIL_KEY,
     dropboxCmd: dropboxCmd, boxView: boxView, boxFare: boxFare, boxShipped: boxShipped, boxOfficer: boxOfficer, boxKeep: boxKeep,
     dropbox: function () { return dropbox; },
-    deposit: deposit, takeGold: takeGold, LEDGER_HOLDS: LEDGER_HOLDS,
+    deposit: deposit, takeGold: takeGold, settlePacks: packs.settle, LEDGER_HOLDS: LEDGER_HOLDS,
     withdraw: withdraw, mayWithdraw: mayWithdraw, heldOn: heldOn,
     haulTenth: haulTenth, haulTick: haulTick, saleCuts: saleCuts, inCompany: inCompany,
     holdStanding: holdStanding,
@@ -49760,6 +50018,8 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     (doc.pieces || []).forEach(function (r) { if (r && r.key) { rows[r.key] = r; } });
     var book = api.readRegister() || {};
     var pieces = (book && typeof book.pieces === 'object' && book.pieces) ? book.pieces : {};
+    // Pieces taken out of a pack and not yet set down, waiting on the pack's save (#4901).
+    var debits = (book && Array.isArray(book.debits)) ? book.debits : [];
     // In memory only: a piece in somebody's hands, by actor, { ref, until }.
     var carrying = {};
 
@@ -49773,8 +50033,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     function carryMs() { return num(limits.carryMs, 60000); }
     function turnStep() { return num(limits.turnStep, 45); }
 
+    /* Answers whether the register was written. */
     function save() {
-      api.writeRegister({ pieces: pieces });
+      return api.writeRegister({ pieces: pieces, debits: debits }) !== false;
     }
 
     function piecesIn(building) {
@@ -49783,6 +50044,11 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
         if (own(pieces, k) && pieces[k] && pieces[k].building === building) { out.push(pieces[k]); }
       }
       return out;
+    }
+
+    /* Pieces for that building still waiting on a pack's save, which the cap counts too. */
+    function waitingIn(building) {
+      return debits.filter(function (d) { return d && d.data && d.data.building === building; }).length;
     }
 
     /* The building the person stands in, when it is one the property block knows. */
@@ -49839,7 +50105,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       var c = may ? carryOf(actorId) : null;
       return {
         b: building, n: building ? api.nameOf(building) : '', may: may,
-        p: may ? piecesIn(building).map(function (x) { return hex(x.ref); }) : [],
+        p: may ? piecesIn(building).filter(function (x) { return !!x.ref; }).map(function (x) { return hex(x.ref); }) : [],
         c: c ? hex(c.ref) : '', left: c ? Math.max(0, c.until - api.now()) : 0
       };
     }
@@ -49880,7 +50146,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       if (!row || !typeOn(row.type)) { return 'That is not furniture that can be set down.'; }
       if (!(api.count(actorId, row.itemDesc) > 0)) { return 'You carry no ' + row.name + '.'; }
       var cap = capOf(building);
-      if (piecesIn(building).length >= cap) {
+      if (piecesIn(building).length + waitingIn(building) >= cap) {
         return api.nameOf(building) + ' already has ' + cap + ' pieces set down, which is all it takes.';
       }
       var bad = api.baseRefusal(row);
@@ -49888,25 +50154,58 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       var pos = inFront(actorId);
       if (!pos) { return 'Could not tell where you stand. Try again.'; }
       var angle = wrap(num(api.angleOf(actorId)[2], 0) + 180);
-      if (!api.take(actorId, row.itemDesc)) { return 'Could not take the ' + row.name + ' out of your pack.'; }
+      // Set down only once the pack's take is saved (#4901): landPiece.
+      var r = packs.begin(actorId, function (entries) { return api.cutOne(entries, row.itemDesc) || ('You carry no ' + row.name + '.'); },
+                          'piece', { key: row.key, building: building, angle: angle,
+                                     pos: pos.map(function (v) { return Math.round(v * 10) / 10; }), by: api.who(actorId) });
+      if (r.why) { return r.why; }
+      return r.line && r.line !== PIECE_DOWN ? r.line : '';
+    }
+
+    var PIECE_DOWN = 'It is set down.';
+
+    /*
+      A piece set down, once its item is saved out of the pack (#4901). Its
+      place was fixed when it was asked for. One that cannot be stood just
+      now stays in the register, the way standAll keeps one with nothing to
+      stand next to, and is stood at the next start: the item is out of the
+      pack for good, so the piece is never dropped.
+    */
+    function landPiece(d, landed) {
+      var w = d.data;
+      var row = own(rows, w.key) ? rows[w.key] : null;
+      var name = row ? row.name : w.key;
+      if (!landed) {
+        return 'Your pack was not saved with the ' + name + ' out of it, so it is still in your pack and was not set down.';
+      }
+      var p = { ref: 0, key: w.key, base: row ? row.base : w.base, building: w.building, pos: w.pos, angle: w.angle };
+      if (!p.base) {
+        api.log('furniture:', w.key, 'is not in the catalog any more; it waits in the register for staff');
+        pieces['w' + d.sequence + '-' + d.human.desc] = p;
+        return 'The ' + name + ' could not be set down. Staff can stand it.';
+      }
       var id = 0;
       try {
-        id = api.place(row.base);
-        stand(id, row.base, actorId, pos, angle);
+        var person = api.actorOf(d.human.desc);
+        var anchor = (person && api.cellOf(person) === w.building) ? person : api.anchorIn(w.building);
+        if (!anchor) { throw new Error('nothing to stand it next to in ' + w.building); }
+        id = api.place(p.base);
+        stand(id, p.base, anchor, p.pos, p.angle);
       } catch (e) {
-        api.log('furniture: could not set down', row.key, 'in', building + ':', e);
-        if (id) { try { api.remove(id); } catch (e2) { } }
-        api.give(actorId, row.itemDesc);
-        return 'The ' + row.name + ' could not be set down. It is back in your pack.';
+        api.log('furniture: could not set down', w.key, 'in', w.building + '; it is stood at the next start:', e);
+        if (id) { try { api.remove(id); } catch (e2) { api.log('furniture: and could not take', hex(id), 'up again:', e2); } }
+        pieces['w' + d.sequence + '-' + d.human.desc] = p;
+        return 'The ' + name + ' could not be set down just now. It is kept, and stands there when the server next starts.';
       }
-      pieces[hex(id)] = { ref: id, key: row.key, base: row.base, building: building,
-                          pos: pos.map(function (v) { return Math.round(v * 10) / 10; }), angle: angle };
-      save();
-      api.log('furniture:', api.who(actorId), 'set down a', row.name, hex(id), 'in', api.nameOf(building),
-              '(' + building + ') at', pieces[hex(id)].pos.join(','), 'turned', angle);
-      lookAll(building);
-      return '';
+      p.ref = id;
+      pieces[hex(id)] = p;
+      api.log('furniture:', w.by, 'set down a', name, hex(id), 'in', api.nameOf(w.building),
+              '(' + w.building + ') at', p.pos.join(','), 'turned', p.angle);
+      lookAll(w.building);
+      return PIECE_DOWN;
     }
+
+    var packs = api.packFirst(function () { return debits; }, save, { piece: landPiece });
 
     /* The piece under their crosshair, when they may touch it: { piece } or { why }. */
     function reachable(actorId, refHex) {
@@ -50064,6 +50363,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     return {
       command: command, look: look, lineFor: lineFor, view: view, place: place, move: move,
       down: down, turn: turn, pick: pick, standAll: standAll, refusal: refusal, capOf: capOf,
+      settle: packs.settle,
       pieces: function () { return pieces; }, carrying: function () { return carrying; }
     };
   }
@@ -50267,15 +50567,185 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     try { mp.set(actorId, 'inventory', { entries: entries }); return true; } catch (e) { return false; }
   }
 
+  // -- pack first (#4901), begin --
+  /*
+    A THING TAKEN OUT OF A PACK INTO A REGISTER, IN THAT ORDER (#4901). The
+    same text is in the property and furniture blocks, and
+    tests/test-4901-pack-first.js holds the copies to it, since each block
+    is lifted and run alone.
+
+    A plain inventory write is saved with the character later, and a
+    register file is written at once. So a server that stopped between the
+    two came back with the gold or the piece in the pack as it was saved and
+    in the register too, and it could be taken out a second time. The
+    merchant settlement orders it with the engine's receipts, and so does
+    this:
+      1. the take is written down first, in the register, as a debit that
+         holds nothing yet: nothing is in a box, on a board or on a floor;
+      2. the pack is written with compareAndSetInventory, which stamps the
+         write with a receipt, the character's next sequence;
+      3. only once getSavedInventoryReceipt says the pack is saved at or
+         past that sequence does the debit land: what it was for goes into
+         the register and the debit comes off it, in the same write.
+    A restart before 3 reads the pack as it was saved. Saved without the
+    take, the pack still holds the thing and its receipt is older than the
+    debit, so the debit lets go: the thing is in the pack and only there.
+    Saved with it, the debit lands, once, because landing and letting go
+    each take the debit off in the one write that does them. Nothing is
+    handed back and nothing is undone. A take waits, as a merchant trade or
+    a quest does, until the pack's last receipt is saved, so the receipts
+    of one character never pass each other.
+
+    packFirst(mp, book, keep, landers, tell): book() is the register's list
+    of debits, keep() writes the register and answers whether it did,
+    landers[kind](row, landed) puts a landed debit into the register or says
+    why one let go and answers the line for its person, and tell(profile,
+    line, error) says a line to a person or an error to the log.
+    begin(actorId, cut, kind, data): cut(entries) answers { entries, taken }
+    or a refusal. Answers { why } when nothing was taken, otherwise { line }
+    once it landed or let go already, or { line: '' } while it waits.
+    settle() lands or lets go of every debit whose pack says which.
+  */
+  function packFirst(mp, book, keep, landers, tell) {
+    function sequenceOf(receipt, who) {
+      var doc = JSON.parse(receipt);
+      if (doc === null) { return 0; }
+      if (!doc || doc.actor !== who.desc || doc.profile !== who.profileId ||
+          !Number.isSafeInteger(doc.sequence) || doc.sequence < 1) {
+        throw new Error('the pack receipt ' + receipt + ' is not this character\'s');
+      }
+      return doc.sequence;
+    }
+    function ready() {
+      return !!mp && ['compareAndSetInventory', 'getInventoryReceipt', 'getSavedInventoryReceipt',
+        'getNpcAIState', 'getDescFromId', 'getIdFromDesc', 'get'].every(function (k) { return typeof mp[k] === 'function'; });
+    }
+    function person(actorId) {
+      var ai = mp.getNpcAIState(actorId);
+      var desc = mp.getDescFromId(actorId);
+      if (!ai || ai.isHuman !== true || !(Number(ai.profileId) > 0) || typeof desc !== 'string' || !desc) { return null; }
+      return { desc: desc, profileId: Number(ai.profileId) };
+    }
+    function wellFormed(row) {
+      return !!row && typeof row.kind === 'string' && typeof landers[row.kind] === 'function' &&
+        !!row.human && typeof row.human.desc === 'string' && Number(row.human.profileId) > 0 &&
+        Number.isSafeInteger(row.sequence) && row.sequence > 0 && Array.isArray(row.taken);
+    }
+    /* One debit landed or let go once its pack's receipts say which: the line for its person, or '' while it waits. */
+    function settleOne(row) {
+      if (!wellFormed(row)) { return ''; }
+      var id = mp.getIdFromDesc(row.human.desc) >>> 0;
+      if (!id) { return ''; }
+      var who = person(id);
+      if (!who || who.desc !== row.human.desc || who.profileId !== row.human.profileId) { return ''; }
+      var saved = sequenceOf(mp.getSavedInventoryReceipt(id), who);
+      var live = sequenceOf(mp.getInventoryReceipt(id), who);
+      var landed;
+      if (saved >= row.sequence) { landed = true; }
+      else if (live < row.sequence) { landed = false; }
+      else { return ''; }
+      var rows = book();
+      var at = rows.indexOf(row);
+      if (at < 0) { return ''; }
+      rows.splice(at, 1);
+      var line = landers[row.kind](row, landed);
+      keep();
+      return line;
+    }
+    function begin(actorId, cut, kind, data) {
+      if (!ready()) { return { why: 'That is not running on this server. Nothing was taken.' }; }
+      var who, receipt, before;
+      try {
+        who = person(actorId);
+        if (!who) { return { why: 'Only a person in the world can do that. Nothing was taken.' }; }
+        receipt = mp.getInventoryReceipt(actorId);
+        if (mp.getSavedInventoryReceipt(actorId) !== receipt) {
+          return { why: 'Your pack is still being saved after your last change. Try again in a moment. Nothing was taken.' };
+        }
+        var inv = mp.get(actorId, 'inventory');
+        before = JSON.parse(JSON.stringify((inv && inv.entries) || []));
+      } catch (e) {
+        tell(0, '', e);
+        return { why: 'Your pack could not be read. Nothing was taken.' };
+      }
+      var sequence = sequenceOf(receipt, who) + 1;
+      var out = cut(JSON.parse(JSON.stringify(before)));
+      if (typeof out === 'string') { return { why: out }; }
+      var row = { kind: kind, data: data, human: who, sequence: sequence, taken: out.taken, at: Date.now() };
+      var rows = book();
+      rows.push(row);
+      if (!keep()) {
+        rows.splice(rows.indexOf(row), 1);
+        return { why: 'The server could not write that down. Nothing was taken.' };
+      }
+      try {
+        mp.compareAndSetInventory(actorId, { entries: before }, receipt, { entries: out.entries }, sequence, who.profileId);
+      } catch (e2) {
+        // The receipts read next say whether the pack was written; the debit waits or lets go by them.
+        tell(0, '', e2);
+      }
+      try { return { line: settleOne(row) }; }
+      catch (e3) {
+        tell(0, '', e3);
+        return { line: '' };
+      }
+    }
+    function settle() {
+      var rows = book().slice();
+      for (var i = 0; i < rows.length; i++) {
+        var line = '';
+        try { line = settleOne(rows[i]); }
+        catch (e) { tell(0, '', e); }
+        if (line) { tell(rows[i].human.profileId, line); }
+      }
+    }
+    return { begin: begin, settle: settle, ready: ready };
+  }
+  // -- pack first (#4901), end --
+
+  /* One furniture item out of a list of pack entries, for packFirst: { entries, taken }, or null when none is there. */
+  function cutOne(entries, itemDesc) {
+    var baseId = idOf(itemDesc) >>> 0;
+    if (!baseId) { return null; }
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (!e || (e.baseId >>> 0) !== baseId || !(Number(e.count) > 0)) { continue; }
+      e.count = Number(e.count) - 1;
+      if (e.count <= 0) { entries.splice(i, 1); }
+      return { entries: entries, taken: [{ baseId: baseId, count: 1 }] };
+    }
+    return null;
+  }
+
+  /* A line to a person in the world, from a piece that landed or let go after they asked. */
+  function tellPerson(pid, line, err) {
+    if (err) { plog('furniture: a take out of a pack:', err); return; }
+    if (!line) { return; }
+    var online = [];
+    try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { online = []; }
+    for (var i = 0; i < online.length; i++) {
+      var pidHere = 0;
+      try { pidHere = Number(mp.get(online[i], 'profileId')) || 0; } catch (e2) { pidHere = 0; }
+      if (pidHere !== Number(pid)) { continue; }
+      if (typeof notify === 'function') {
+        try { notify(online[i], line); } catch (e3) { plog('furniture: could not show', hex(online[i]), 'a line:', e3); }
+      }
+      return;
+    }
+  }
+
   g.__thornswoodFurniture = create({
     catalog: doc,
     now: function () { return Date.now(); },
     log: plog,
     readRegister: function () { return furnitureRead.doc; },
     writeRegister: function (book) {
-      try { storeWrite(registerPath(), JSON.stringify(book, null, 1), furnitureRead); }
-      catch (e) { plog('furniture: could not write', registerPath() + ':', e); }
+      try { storeWrite(registerPath(), JSON.stringify(book, null, 1), furnitureRead); return true; }
+      catch (e) { plog('furniture: could not write', registerPath() + ':', e); return false; }
     },
+    packFirst: function (book, keep, landers) { return packFirst(mp, book, keep, landers, tellPerson); },
+    cutOne: cutOne,
+    actorOf: function (desc) { try { return mp.getIdFromDesc(desc) >>> 0; } catch (e) { return 0; } },
     cellOf: cellOf,
     posOf: function (id) { try { return mp.get(id, 'pos') || null; } catch (e) { return null; } },
     angleOf: function (id) { try { return mp.get(id, 'angle') || null; } catch (e) { return null; } },
@@ -50381,6 +50851,13 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   });
 
   try { g.__thornswoodFurniture.standAll(); } catch (e) { plog('furniture: standing the pieces failed:', e); }
+
+  // A piece is set down once its item is saved out of the pack (#4901): see packFirst.
+  if (g.__thornswoodFurniturePackTimer) {
+    try { clearInterval(g.__thornswoodFurniturePackTimer); } catch (e) { plog('furniture: the old pack timer would not stop:', e); }
+  }
+  g.__thornswoodFurniturePackTimer = setInterval(
+    (typeof guard === 'function') ? guard('furniturePackTick', g.__thornswoodFurniture.settle) : g.__thornswoodFurniture.settle, 1000);
 })();
 // ==== end thornswood furniture ====
 

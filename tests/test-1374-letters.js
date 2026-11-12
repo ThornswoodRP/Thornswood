@@ -76,6 +76,7 @@ yes('the board seeding is in the property block', seeding !== null);
 const holds = prop ? slice(prop, '  var LEDGER_HOLDS = [', '];') : null;
 // The company's cut of a haul is its terms now (#512, #2695), read by the company terms block.
 const COMPANY = require('./fixtures/company-block').companyApi(gm);
+const PACK_FIRST = require('./fixtures/pack-first');
 yes('the ten ledgers are in the property block, and the company\'s terms are in the gamemode', holds !== null && !!COMPANY);
 
 // The real chargen town table, which is where nine of the boards come from.
@@ -116,7 +117,7 @@ function world() {
     gold: function (p) {
       return people[p.actor].pack.reduce(function (s, e) { return s + (e.baseId === GOLD ? e.count : 0); }, 0);
     },
-    mp: {
+    mp: PACK_FIRST.receipts({
       get: function (id, key) {
         const p = people[id];
         if (!p) { return undefined; }
@@ -130,7 +131,7 @@ function world() {
       set: function (id, key, v) {
         if (key === 'inventory') { people[id].pack = JSON.parse(JSON.stringify(v.entries)); }
       }
-    }
+    })
   };
 }
 
@@ -181,6 +182,8 @@ function boot(reg, w, opts) {
      'standBoard'].map(function (n) { return 'function ' + n + '() { return true; }'; }).join('\n')
   ];
   NAMES.forEach(function (n) { body.push(lifted[n]); });
+  // A post takes out of the pack through packFirst (#4901): tests/fixtures/pack-first.js.
+  body.push(PACK_FIRST.pieces(prop));
   body.push('return { boards: boards, funds: function () { return funds; }, ' +
             'notices: function () { return notices; }, command: command, boardPanel: boardPanel, ' +
             'boardsView: boardsView, ' +
