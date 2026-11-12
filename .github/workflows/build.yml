@@ -264,6 +264,33 @@ jobs:
           python-version: '3.12'
       # The harnesses compile and run launcher code with the .NET 10 SDK
       # (tests\Launcher-Csc.ps1, #4823), pinned as the launcher's publish is.
+      # .NET AND NUGET ON THE WORK DRIVE, THE SDK FROM MAIN'S CACHE (12 Nov
+      # 2026). On GitHub's Windows runner, writing to C: is slow and D:, where
+      # the checkout and RUNNER_TEMP are, is not. setup-dotnet put the SDK in
+      # C:\Program Files\dotnet and NuGet its packages under the profile on
+      # C:, and one run timed both drives side by side on the same image:
+      # the SDK's 300 MB zip took 21.3 s to unpack on C: and 8.3 s on D:,
+      # and the launcher's restore 17.4 s and 4.7 s. So both go under
+      # RUNNER_TEMP. The SDK as unpacked there comes from the cache
+      # dotnet-cache.yml saves on main (244 MB): 5 s to restore, after which
+      # setup-dotnet finds that version installed and downloads nothing.
+      # Only main saves it; a pull request's cache could be read by that pull
+      # request alone, and a cache this job saved could hold what a pull
+      # request put there. When the cache holds an older SDK than the newest
+      # 10.0, or none, setup-dotnet downloads the newest as before.
+      # NuGet's packages are not cached: 803 MB took 11 s to restore and saved
+      # 3.6 s of restore on D:.
+      - name: Put .NET and NuGet's packages on the work drive
+        shell: pwsh
+        run: |
+          "DOTNET_INSTALL_DIR=$env:RUNNER_TEMP\dotnet" >> $env:GITHUB_ENV
+          "NUGET_PACKAGES=$env:RUNNER_TEMP\nuget" >> $env:GITHUB_ENV
+      - name: Take the .NET SDK from main's cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}\dotnet
+          key: dotnet-${{ runner.os }}-sdk
+          restore-keys: dotnet-${{ runner.os }}-sdk
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: '10.0.x'
@@ -877,6 +904,21 @@ jobs:
         if: env.REACHES != 'false'
         with:
           python-version: '3.12'
+      # On the work drive, the SDK from main's cache, as in the gate's
+      # Windows shares (the job "gate" says why).
+      - name: Put .NET and NuGet's packages on the work drive
+        if: env.REACHES != 'false'
+        shell: pwsh
+        run: |
+          "DOTNET_INSTALL_DIR=$env:RUNNER_TEMP\dotnet" >> $env:GITHUB_ENV
+          "NUGET_PACKAGES=$env:RUNNER_TEMP\nuget" >> $env:GITHUB_ENV
+      - name: Take the .NET SDK from main's cache
+        if: env.REACHES != 'false'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}\dotnet
+          key: dotnet-${{ runner.os }}-sdk
+          restore-keys: dotnet-${{ runner.os }}-sdk
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         if: env.REACHES != 'false'
         with:

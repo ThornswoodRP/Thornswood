@@ -137,8 +137,8 @@
 
 .PARAMETER Only
   Harness names to run in place of a share, split by spaces or commas
-  (test-x.ps1, test-y.js, voice/test-z.js). Every one must be a harness
-  here, or nothing runs and the exit is 2.
+  (test-x.ps1, test-y.js, voice/test-z.js), started in the order given.
+  Every one must be a harness here, or nothing runs and the exit is 2.
 
 .PARAMETER Throttle
   The most harnesses at once, 1 to 16. 1, one at a time, unless asked.
@@ -622,8 +622,11 @@ if ($Only.Trim()) {
     $known = @{}; foreach ($t in $every) { $known[$t.Name] = $true }
     $unknown = @($asked | Where-Object { -not $known.ContainsKey($_) })
     if ($unknown.Count) { Write-Host ("::error::no such harness here, so nothing was run: " + ($unknown -join ', ')); exit 2 }
-    $want = @{}; foreach ($n in $asked) { $want[$n] = $true }
-    $mine = @($every | Where-Object { $want.ContainsKey($_.Name) })
+    # In the order asked (12 Nov 2026): Run-Gate.ps1 hands a share's names
+    # longest first, so the longest start first and the share ends with
+    # short ones beside each other, not with one long one alone.
+    $byName = @{}; foreach ($t in $every) { $byName[$t.Name] = $t }
+    $mine = @(foreach ($n in $asked) { $byName[$n] })
     $names = $(if ($mine.Count -le 20) { ': ' + (@($mine | ForEach-Object { $_.Name }) -join ', ') } else { '' })
     Write-Host ("the {0} harness(es) asked for, of the {1}, {2} s to run them in{3}" -f $mine.Count, $every.Count, $BudgetSeconds, $names)
 } else {
@@ -631,9 +634,9 @@ if ($Only.Trim()) {
     Write-Host ("share {0} of {1}: {2} of the {3} harnesses, {4} s to run them in" -f $Shard, $Of, $mine.Count, $every.Count, $BudgetSeconds)
 }
 
-# The order they start in: those that share nothing first, in name order, as
-# many at once as -Throttle; then each one whose header says RUNS ALONE, with
-# nothing else of this run beside it.
+# The order they start in: those that share nothing first, in name order
+# (with -Only, in the order asked), as many at once as -Throttle; then each
+# one whose header says RUNS ALONE, with nothing else of this run beside it.
 $order = @(foreach ($t in $mine) {
     $head = Head-Of $t.File.FullName
     $clock = Clock-Of $head; $longer = $false
