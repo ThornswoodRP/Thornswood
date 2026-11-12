@@ -331,7 +331,7 @@ if (!listed3105 || !refused3105) {
 } else {
   yes('C12 #3105: every builder that takes a plugin list is given the load order npc-population.json records (' + recordedOrder.length + '), not a profile\'s',
       listed3105.status === 0 && listed3105.stdout.indexOf(js.loadOrderName(recordedOrder)) >= 0 &&
-      steps.filter((s) => s.plugins).every((s) => new RegExp(s.plugins.replace(/[-]/g, '\\-') + ' \\S*thornswood-loadorder-[0-9a-f]{12}[\\\\/]plugins\\.txt').test(listed3105.stdout)));
+      steps.filter((s) => s.plugins).every((s) => new RegExp(s.plugins.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&') + ' \\S*thornswood-loadorder-[0-9a-f]{12}[\\\\/]plugins\\.txt').test(listed3105.stdout)));
   // PowerShell prints a throw in its error view: colour codes, a "|" gutter,
   // and on Windows the message folded at the console's width, between words or
   // inside one. The sentence is read with those and every space taken out.
