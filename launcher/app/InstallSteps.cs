@@ -83,6 +83,10 @@ namespace Thornswood
     /// loses that name first, so the write does not go through to the other
     /// name.
     ///
+    /// A Profile\Payload an earlier install left is taken out before anything
+    /// is copied, whatever this run's shape, so only this build's files wait
+    /// there for the folder (#4180, DropOldPayload).
+    ///
     /// Bethesda's own files are never renamed or deleted.
     ///
     /// WHAT THE SCRIPT DID THAT THIS DOES NOT, and why. The script had a
@@ -340,6 +344,7 @@ namespace Thornswood
             // ------------------------------------------------- the files
             Head("Installing the mods");
             Say("  Several thousand files, a few minutes.");
+            DropOldPayload();
             List<string> files = PayloadFiles(payload);
             RecordIntoGame(files);
             if (madeOwn) RemoveSharedNames(payload, files, gameDir);
@@ -374,6 +379,46 @@ namespace Thornswood
                 list.Add(Path.GetRelativePath(payload, f));
             list.Sort(StringComparer.OrdinalIgnoreCase);
             return list;
+        }
+
+        // ---- Profile\Payload holds this build's files and nothing else -----
+        //
+        // With Thornswood's own folder chosen and not made, its own files wait
+        // in Profile\Payload, and the launcher's Make takes every file in it
+        // into the folder as Thornswood's own (OwnGame.WithPayload). Its being
+        // there at all is what tells the launcher the folder was chosen
+        // (Paths.OwnFirst). A Root an earlier install used keeps its Profile
+        // when Velopack's own uninstall takes the launcher off (#5820), so an
+        // install can find an older Payload here. Copying over it kept every
+        // file the newer build no longer has, for Make to take into the game,
+        // and with the folder not chosen this time the launcher still ran from
+        // the old Payload (#4180). So it goes before anything is copied,
+        // whatever this run's shape, and only this build's files go back in.
+        //
+        // A link inside it is removed as a link: nothing it points at is
+        // touched, because the walk skips reparse points and Directory.Delete
+        // does not follow them.
+        void DropOldPayload()
+        {
+            string dir = Path.Combine(ProfileDir, "Payload");
+            if (!Directory.Exists(dir)) return;
+            try
+            {
+                var opts = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = false };
+                foreach (string f in Directory.EnumerateFileSystemEntries(dir, "*", opts))
+                {
+                    FileAttributes at = File.GetAttributes(f);
+                    if ((at & FileAttributes.ReadOnly) != 0) File.SetAttributes(f, at & ~FileAttributes.ReadOnly);
+                }
+                Directory.Delete(dir, true);
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+            {
+                throw Die("Could not take the older " + dir + " out of the way (" + e.Message + "). " +
+                          "Close Skyrim, Vortex and the launcher, then run this again.");
+            }
+            Say("  An older " + dir + " was here from an earlier install and was taken out,");
+            Say("  so no file an older build had is left in it.");
         }
 
         // ---- a record of what we put in somebody else's game ----------------
