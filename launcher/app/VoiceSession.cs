@@ -725,8 +725,11 @@ namespace Thornswood
             }
         }
 
-        /* The rows of a 'pos' or 'moved' tick: each replaces its own, and the
-           staff silence it carries is noted. */
+        /* The rows of a 'pos' or 'moved' tick, and the staff silence each
+           carries is noted. A 'pos' row is whole. A 'moved' row for somebody
+           already held carries only the fields that changed (#5358; a field
+           that went away comes as 0), so it is merged into the place held:
+           a field it leaves out keeps what that place had. */
         void ApplyRows(JsonElement m)
         {
             JsonElement who;
@@ -734,18 +737,24 @@ namespace Thornswood
             foreach (JsonProperty row in who.EnumerateObject())
             {
                 JsonElement v = row.Value;
+                if (v.ValueKind != JsonValueKind.Object) continue;
+                Place was;
                 var p = new Place();
-                JsonElement pos;
-                if (v.ValueKind == JsonValueKind.Object && v.TryGetProperty("pos", out pos) &&
-                    pos.ValueKind == JsonValueKind.Array && pos.GetArrayLength() >= 3)
+                if (places.TryGetValue(row.Name, out was))
                 {
-                    p.HasPos = true;
-                    p.X = Coord(pos[0]); p.Y = Coord(pos[1]); p.Z = Coord(pos[2]);
+                    p.HasPos = was.HasPos; p.X = was.X; p.Y = was.Y; p.Z = was.Z;
+                    p.AngleZ = was.AngleZ; p.Cell = was.Cell; p.Hush = was.Hush;
                 }
-                p.AngleZ = Num(v, "angleZ");
-                JsonElement cell;
-                p.Cell = v.ValueKind == JsonValueKind.Object && v.TryGetProperty("cell", out cell) ? cell.GetRawText() : "";
-                p.Hush = Truthy(v, "hush");
+                JsonElement pos;
+                if (v.TryGetProperty("pos", out pos))
+                {
+                    p.HasPos = pos.ValueKind == JsonValueKind.Array && pos.GetArrayLength() >= 3;
+                    if (p.HasPos) { p.X = Coord(pos[0]); p.Y = Coord(pos[1]); p.Z = Coord(pos[2]); }
+                }
+                JsonElement f;
+                if (v.TryGetProperty("angleZ", out f)) p.AngleZ = Num(v, "angleZ");
+                if (v.TryGetProperty("cell", out f)) p.Cell = f.GetRawText();
+                if (v.TryGetProperty("hush", out f)) p.Hush = Truthy(v, "hush");
                 places[row.Name] = p;
                 long pid;
                 if (long.TryParse(row.Name, NumberStyles.Integer, CultureInfo.InvariantCulture, out pid)) NoteHush(pid, p.Hush);

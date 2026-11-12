@@ -178,9 +178,15 @@
       // The service sends a connection its whole view before any change to
       // it, so there is always one here to apply this to.
       if (!heldView) return;
+      // A row already held comes with only the fields that changed, so it
+      // is merged into a copy of the one held (#5358).
       var rows = msg.who || {};
       for (var r in rows) {
-        if (Object.prototype.hasOwnProperty.call(rows, r)) { heldView[r] = rows[r]; }
+        if (!Object.prototype.hasOwnProperty.call(rows, r)) { continue; }
+        var was = heldView[r], row = {}, f;
+        if (was) { for (f in was) { if (Object.prototype.hasOwnProperty.call(was, f)) { row[f] = was[f]; } } }
+        for (f in rows[r]) { if (Object.prototype.hasOwnProperty.call(rows[r], f)) { row[f] = rows[r][f]; } }
+        heldView[r] = row;
       }
       var gone = msg.gone || [];
       for (var g = 0; g < gone.length; g++) { delete heldView[gone[g]]; }
