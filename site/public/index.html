@@ -48,6 +48,11 @@
     <a class="backout" href="/">&larr; the public site</a>
     <div id="tabs"></div>
     <div class="sep" id="whoami"></div>
+    <!-- What a staff action did, said aloud (#4421). Here in the page's frame,
+         so no action redraws it: a line inside the redrawn area is thrown
+         away, or drawn again with its words already in it, before a screen
+         reader reads it. -->
+    <p class="said" id="hubsaid" role="status" aria-live="polite"></p>
   </nav>
   <main><div class="wrap" id="page"></div></main>
 </div>

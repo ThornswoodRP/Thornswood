@@ -165,7 +165,7 @@ function fnSource(src, name) {
 }
 // Whichever of these the hub has: the inbox page, its buttons and how they
 // save, the test marks' save, and the page editor.
-const LIFTED = ['each', 'drawInbox', 'saveInbox', 'inboxAct', 'saveResult', 'drawEdit']
+const LIFTED = ['each', 'drawInbox', 'saveInbox', 'inboxAct', 'inboxName', 'saveResult', 'drawEdit']
   .map((n) => fnSource(HUB, n)).filter(Boolean).join('\n');
 yes('the hub has its inbox page, the test marks\' save and the page editor',
     ['drawInbox', 'saveResult', 'drawEdit'].every((n) => fnSource(HUB, n)));
@@ -222,6 +222,10 @@ async function openHub(site, who) {
     tally: () => {},
     remember: () => '',
     saidNow: (t) => { said.push(String(t)); },
+    // Where focus goes and what is said aloud after an inbox button are
+    // test-4421-hub-focus-and-words.js's to check; here they do nothing.
+    inboxFocus: () => {},
+    announce: () => {},
     confirm: () => true,
     alert: () => {},
     api: (p, opts) => {

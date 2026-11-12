@@ -505,6 +505,10 @@ function wireLinked() {
                      'played again from a free slot on its account. The PK stays on its record.')) return;
       }
       if (act === 'note' && !bodyOf.text.trim()) return;
+      /* Who it was done to, for the words said once it is done (#4421). */
+      var acct = S.linked.filter(function (u) { return String(u && u.id) === id; })[0];
+      var who = pid ? (this.getAttribute('data-name') || charName(pid, S.records) || 'profile ' + pid)
+                    : ((acct && (acct.name || acct.handle)) || 'Discord ' + id);
       // The site's own sentence when it has one: Undo PK says why it did not.
       // taken is set once the site has done it, so a refresh that fails after
       // that says the lists are old rather than that nothing happened.
@@ -519,7 +523,14 @@ function wireLinked() {
             return refresh();
           });
         })
-        .then(function () { drawLinked(); })
+        .then(function () {
+          // Drawn again, so focus goes back to the same button, or another on
+          // the same account or character when that one is gone (#4421).
+          drawLinked();
+          linkedFocus(act, id, pid);
+          announce({ note: 'Note added for ', ban: 'Banned ', unban: 'Ban lifted for ', pk: 'PK done for ',
+                     unpk: 'PK undone for ' }[act] + who + '.');
+        })
         .catch(function (e) {
           if (taken) {
             alert('That was done, but the lists could not be fetched again (' +
@@ -531,6 +542,21 @@ function wireLinked() {
         });
     };
   }
+}
+
+/* The button this action was pressed on, drawn again: the same act on the
+   same account or character, or failing that any button for it, or the
+   page's heading (#4421). */
+function linkedFocus(act, id, pid) {
+  var page = el('page');
+  if (!page) return;
+  var bs = Array.prototype.slice.call(page.querySelectorAll('button[data-act]'));
+  var mine = bs.filter(function (b) {
+    return b.getAttribute('data-id') === id && (b.getAttribute('data-pid') || '') === pid;
+  });
+  var hit = mine.filter(function (b) { return b.getAttribute('data-act') === act; })[0] || mine[0] ||
+            page.querySelector('h1');
+  if (hit) hit.focus();
 }
 
 /* ------------------------------------------------------- play sessions -- */
@@ -1593,6 +1619,15 @@ function saidNow(t) {
   s.textContent = t;
   if (t === 'saved') setTimeout(function () { if (el('said') === s) s.textContent = ''; }, 1600);
 }
+/* Says what an action did in the hub's one live region (#4421), #hubsaid in
+   index.html, which no redraw replaces. Emptied first, so the same words
+   twice are read twice. */
+function announce(t) {
+  var s = el('hubsaid');
+  if (!s) return;
+  s.textContent = '';
+  s.textContent = String(t || '');
+}
 
 /* ------------------------------------------------------------- economy -- */
 /*
@@ -2108,7 +2143,38 @@ function drawUploads() {
    here, from the picture on the card, by copies.js. On a live picture they
    go out at once. */
 var GAL_STILL = /\.(png|jpe?g|webp)$/i;
-function loadGalleryStaff() {
+/* The pictures in the grid, in the order they are drawn, by name. */
+function galNames(box) {
+  var out = [];
+  Array.prototype.forEach.call(box.querySelectorAll('[data-galok],[data-galdel]'), function (b) {
+    var n = b.getAttribute('data-galok') || b.getAttribute('data-galdel');
+    if (n && out.indexOf(n) < 0) out.push(n);
+  });
+  return out;
+}
+/* What runs once the grid is drawn again after an action on one picture
+   (#4421): focus goes to that picture's first button, or to the picture now
+   in its place, or to the page's heading when the grid is empty, and the
+   words are said. Without it the redraw threw the pressed button away and
+   focus fell to the top of the page. */
+function galAfter(name, words) {
+  var box = el('galgrid');
+  var at = box ? galNames(box).indexOf(name) : -1;
+  return function (grid) {
+    var names = galNames(grid);
+    var pick = names.indexOf(name) >= 0 ? name : names[Math.min(Math.max(at, 0), names.length - 1)];
+    var hit = null;
+    Array.prototype.forEach.call(grid.querySelectorAll('button'), function (b) {
+      if (hit || !pick) return;
+      if (b.getAttribute('data-galcopy') === pick || b.getAttribute('data-galok') === pick ||
+          b.getAttribute('data-galdel') === pick) hit = b;
+    });
+    if (!hit) hit = el('page') && el('page').querySelector('h1');
+    if (hit) hit.focus();
+    announce(words());
+  };
+}
+function loadGalleryStaff(after) {
   var box = el('galgrid');
   if (!box) return;
   // Either read failing is said in the grid. It used to read a refused answer
@@ -2167,6 +2233,8 @@ function loadGalleryStaff() {
     box.innerHTML = out;
     each(box, '[data-galok]', function (b) {
       b.onclick = function () {
+        var name = b.dataset.galok, words = 'Not accepted: ' + name + '.';
+        var after = galAfter(name, function () { return words; });
         b.disabled = true; b.textContent = 'accepting';
         api('/api/gallery/approve', { method:'POST', headers:{ 'content-type':'application/json' },
             body: JSON.stringify({ name: b.dataset.galok,
@@ -2174,15 +2242,18 @@ function loadGalleryStaff() {
           .then(function (r) { return r.json().catch(function () { return { ok: r.ok }; }); })
           .then(function (a) {
             if (!a || !a.ok) alert((a && a.error) || 'The site could not accept that picture.');
-            loadGalleryStaff();
+            else words = 'Accepted ' + name + '. It is on the gallery now.';
+            loadGalleryStaff(after);
           }, function () {
             alert('The site did not answer, so that picture was not accepted.');
-            loadGalleryStaff();
+            loadGalleryStaff(after);
           });
       };
     });
     each(box, '[data-galcopy]', function (b) {
       b.onclick = function () {
+        var name = b.dataset.galcopy, words = 'No smaller copies were made of ' + name + '.';
+        var after = galAfter(name, function () { return words; });
         b.disabled = true; b.textContent = 'making copies';
         api(b.dataset.galfrom).then(function (r) {
           if (!r.ok) throw new Error('the site answered ' + r.status + ' for the picture');
@@ -2192,16 +2263,19 @@ function loadGalleryStaff() {
         }).then(function (done) {
           if (done.bad) alert(done.bad + '.');
           else if (!done.made.length) alert('That picture is narrow enough that it needs no smaller copy.');
-          loadGalleryStaff();
+          else words = 'Smaller copies made of ' + name + '.';
+          loadGalleryStaff(after);
         }, function (e) {
           alert('The picture could not be read to make its copies (' + ((e && e.message) || 'no answer') + ').');
-          loadGalleryStaff();
+          loadGalleryStaff(after);
         });
       };
     });
     each(box, '[data-galdel]', function (b) {
       b.onclick = function () {
         var pendingOne = b.getAttribute('data-galpend') === '1';
+        var name = b.dataset.galdel, words = 'Not deleted: ' + name + '.';
+        var after = galAfter(name, function () { return words; });
         // One question (#2352, option C): removing deletes the file. The site
         // keeps a picture somebody reported, out of sight, for 30 days so
         // staff can look into the report, then deletes it.
@@ -2216,19 +2290,22 @@ function loadGalleryStaff() {
           .then(function (r) { return r.json().catch(function () { return { ok: r.ok }; }); })
           .then(function (a) {
             if (!a || !a.ok) alert((a && a.error) || 'The site could not finish removing that picture.');
-            loadGalleryStaff();
+            else words = 'Deleted ' + name + '.';
+            loadGalleryStaff(after);
           }, function () {
             alert('The site did not answer, so that picture was not removed.');
-            loadGalleryStaff();
+            loadGalleryStaff(after);
           });
       };
     });
+    if (after) after(box);
   }).catch(function (e) {
     box = el('galgrid');
     if (!box) return;
     box.innerHTML = '<div class="section-label">Gallery</div>' +
       '<div class="empty">The gallery could not be read (' +
       esc((e && e.message) || 'no answer from the site') + '). Reload the page to see it.</div>';
+    if (after) after(box);
   });
 }
 
@@ -2296,6 +2373,17 @@ function drawReport() {
    deletion request had taken out. The site applies this one change to the
    inbox as it is now and answers with that inbox, which is drawn. */
 function inboxAct(id, act) {
+  /* Focus goes back to this row once the inbox is drawn again, or to the row
+     that took its place, and the result is said (#4421). The row is only
+     changed from the site's answer, so a save that did not land draws it as
+     it was. */
+  var was = S.inbox.filter(function (x) { return x.id === id; })[0];
+  var at = S.inbox.indexOf(was);
+  var name = was ? inboxName(was) : 'that report';
+  var unsaved = function (why) {
+    draw(); saidNow('did not save'); inboxFocus(id, at);
+    announce('Not saved: ' + name + '. ' + why);
+  };
   saidNow('saving');
   api('/api/inbox', {
     method:'PUT', headers:{'Content-Type':'application/json'},
@@ -2303,10 +2391,31 @@ function inboxAct(id, act) {
   }).then(function (r) {
     return r.json().catch(function () { return {}; }).then(function (j) {
       if (j && Array.isArray(j.inbox)) S.inbox = j.inbox;
-      saidNow(r.ok ? 'saved' : ((j && j.message) || 'did not save'));
-      draw();
+      if (!r.ok) return unsaved((j && j.message) || 'The site did not take it, so the report is as it was.');
+      draw(); saidNow('saved'); inboxFocus(id, at);
+      announce({ dismiss: 'Marked not doing this', reopen: 'Put back as new', delete: 'Deleted' }[act] + ': ' + name + '.');
     });
-  }).catch(function () { saidNow('did not save'); });
+  }).catch(function () { unsaved('The site did not answer, so the report is as it was.'); });
+}
+/* A report as its buttons and the Delete question name it. */
+function inboxName(n) {
+  return (n.about ? 'about ' + n.about + ', ' : '') + (n.title || 'a report with no title');
+}
+/* A button on the row with this id, or failing that on the row now at the
+   same place in the list, or the page's heading when the inbox is empty. */
+function inboxFocus(id, at) {
+  var page = el('page');
+  if (!page) return;
+  var bs = Array.prototype.slice.call(page.querySelectorAll('button'));
+  var on = function (want) {
+    return bs.filter(function (b) {
+      return b.getAttribute('data-dismiss') === want || b.getAttribute('data-reopen') === want ||
+             b.getAttribute('data-forget') === want;
+    })[0];
+  };
+  var next = S.inbox[Math.min(Math.max(at, 0), S.inbox.length - 1)];
+  var hit = on(id) || (next && on(next.id)) || page.querySelector('h1');
+  if (hit) hit.focus();
 }
 
 function drawInbox() {
@@ -2329,14 +2438,16 @@ function drawInbox() {
           new Date(n.at).toLocaleString() +
           (n.state !== 'new' ? '  &middot;  ' + esc(n.state) : '') + '</div>' +
         (n.state === 'new' ? '<div class="acts">' +
-          '<button class="btn small" data-dismiss="' + n.id + '">Not doing this</button>' +
+          '<button class="btn small" data-dismiss="' + n.id + '" aria-label="Not doing this: ' + esc(inboxName(n)) + '">Not doing this</button>' +
         '</div>' : '<div class="acts">' +
-          '<button class="btn small" data-reopen="' + n.id + '">Put it back</button>' +
-          '<button class="btn small" data-forget="' + n.id + '">Delete</button></div>') +
+          '<button class="btn small" data-reopen="' + n.id + '" aria-label="Put it back: ' + esc(inboxName(n)) + '">Put it back</button>' +
+          '<button class="btn small" data-forget="' + n.id + '" aria-label="Delete: ' + esc(inboxName(n)) + '">Delete</button></div>') +
       '</div></div>';
   });
   el('page').innerHTML = out;
 
+  /* Each button names the report it acts on (#4421): a list of buttons that
+     all say Delete tells a screen reader nothing about which. */
   each(el('page'), '[data-dismiss]', function (b) {
     b.onclick = function () { inboxAct(b.dataset.dismiss, 'dismiss'); };
   });
@@ -2345,7 +2456,8 @@ function drawInbox() {
   });
   each(el('page'), '[data-forget]', function (b) {
     b.onclick = function () {
-      if (!confirm('Delete this for good?')) return;
+      var n = S.inbox.filter(function (x) { return x.id === b.dataset.forget; })[0];
+      if (!confirm('Delete "' + (n ? inboxName(n) : 'this report') + '" for good? It cannot be brought back.')) return;
       inboxAct(b.dataset.forget, 'delete');
     };
   });
