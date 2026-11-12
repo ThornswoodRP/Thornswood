@@ -95,10 +95,13 @@ if ($Status) {
     $EAP = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
     $kg = Get-Command ssh-keygen -ErrorAction SilentlyContinue
     if ($kg) {
-      $half = ((& $kg.Source -y -f $Key 2>&1) -join ' ').Trim()
+      # -P '': ssh-keygen asks for a passphrase when a key has one, and
+      # nobody is there to answer (gate run 315 on 12 Nov 2026 waited out
+      # its 30 minutes on that ask).
+      $half = ((& $kg.Source -y -P '' -f $Key 2>&1) -join ' ').Trim()
       $pub = if (Test-Path -LiteralPath ($Key + '.pub')) { ((Get-Content -LiteralPath ($Key + '.pub') -Raw).Trim() -split '\s+')[0..1] -join ' ' } else { '' }
       $mine = ($half -split '\s+')[0..1] -join ' '
-      Say ('key pair   ' + $(if ($half -notmatch '^ssh-') { 'the private key does not load: ' + $half } elseif ($mine -eq $pub) { 'the private key matches its .pub' } else { 'the private key is ' + $mine + ', NOT its .pub' }))
+      Say ('key pair   ' + $(if ($half -notmatch '^ssh-') { 'the private key does not load without a passphrase, so the task cannot sign with it (-Install takes the old one off): ' + $half } elseif ($mine -eq $pub) { 'the private key matches its .pub' } else { 'the private key is ' + $mine + ', NOT its .pub' }))
     }
     $ka = Get-Acl -LiteralPath $Key
     Say ('key owner  ' + $ka.Owner + $(if ($ka.AreAccessRulesProtected) { ', nothing inherited' } else { ', rules inherited' }))
@@ -159,10 +162,25 @@ if ($Install) {
   }
   [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo](Get-Item -LiteralPath $Box -Force), $acl)
   Note "  $Box is SYSTEM's and the Administrators' only"
+  # No passphrase: the task has nobody to type one. PowerShell 7 hands
+  # ssh-keygen the text it is given, so -N '' is an empty passphrase; the
+  # -N '""' this used to say became the two quote marks themselves. The
+  # key made on 1 Nov 2026 was locked with them, so ssh in BatchMode could
+  # offer its public half but never sign with it, and on 11 Nov the VM
+  # refused every file ("Permission denied (publickey)").
   if (-not (Test-Path -LiteralPath $Key)) {
-    & $keygen -q -t ed25519 -N '""' -C 'thornswood-box-drops-backups' -f $Key
+    & $keygen -q -t ed25519 -N '' -C 'thornswood-box-drops-backups' -f $Key
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $Key)) { Die 'ssh-keygen could not make the key.' }
     Note '  made the drop key'
+  }
+  & $keygen -y -P '' -f $Key 2>&1 | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    # The same key with the quote marks taken off, so the VM's entry for it
+    # still holds and nothing changes there.
+    & $keygen -p -q -P '""' -N '' -f $Key 2>&1 | Out-Null
+    & $keygen -y -P '' -f $Key 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { Die "$Key needs a passphrase that is not the old two quote marks, so the task cannot use it. Nothing else was changed." }
+    Note '  took the passphrase (two quote marks) off the drop key; it is the same key'
   }
   # Said before anything that needs the VM, so the key can go into
   # Thornswood-Hermes even while the VM does not answer this box yet.
