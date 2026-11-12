@@ -334,6 +334,7 @@ class Thornswood(TrustedClient):
         from bot_heartbeat import heartbeat
         from bot_uptime import uptime_ping
         from bot_holds import HoldPanel
+        from bot_member_gate import MemberGatePanel
         from bot_offices import OfficePanel
         from bot_factions import FactionPanel
         from bot_problems import ProblemPanel
@@ -353,6 +354,7 @@ class Thornswood(TrustedClient):
                 self.add_view(TicketPanel(desk))
         self.add_view(TicketTools())          # and so does Close on every old ticket
         self.add_view(HoldPanel())            # and the hold and ping buttons
+        self.add_view(MemberGatePanel())      # and Get Member in #start-here (#5841)
         self.add_view(OfficePanel())          # and a Jarl's office buttons (#2551)
         self.add_view(FactionPanel())         # and a faction Leader's member buttons (#3317)
         self.add_view(ProblemPanel())         # and Report a problem in #test-findings (#3155)

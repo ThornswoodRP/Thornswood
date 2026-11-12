@@ -149,6 +149,7 @@ if __name__ == '__main__':
 import bot_core  # noqa: E402,F401
 import bot_joins  # noqa: E402,F401
 import bot_holds  # noqa: E402,F401
+import bot_member_gate  # noqa: E402,F401
 import bot_staff_channel  # noqa: E402,F401
 import bot_reports  # noqa: E402,F401
 import bot_tickets  # noqa: E402,F401

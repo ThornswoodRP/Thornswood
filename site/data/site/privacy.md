@@ -2,7 +2,7 @@
 
 What Thornswood keeps about you, why, and how to have it deleted.
 
-Last changed: 11 November 2026.
+Last changed: 12 November 2026.
 
 Thornswood is a free fan project run by a small team in their own time. It is
 not a company. This page is written plainly rather than legally, and it is
@@ -34,9 +34,11 @@ addresses.
 
 **Your application.** Applying in the Discord keeps what you wrote in a
 private ticket only you and staff can read, and on the site for staff. Your
-answer to whether you accept the rules is also kept on the site against your
-Discord id, with the time you gave it, so there is a record that you agreed to
-them.
+answer to whether you accept the rules, in an application or by the Member
+button in #start-here, is also kept on the site against your Discord id, with
+the time you gave it, so there is a record that you agreed to them. Taking
+Member that way also puts a line in the staff inbox with your Discord name
+and id.
 
 **When you played.** Each session records who, when it started and when it
 ended, so an alpha has a record of what was tested and by whom instead of

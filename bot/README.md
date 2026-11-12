@@ -17,11 +17,12 @@ page card q-3317-discord-order, A): Start Here, Tickets, Information,
 Roleplay Guide, Applications, Out of Character, In Character, a category per
 faction, a category per hold, Playtesters, Staff, and the staff spaces.
 Somebody who joins sees Start Here, Tickets and Applications, and nothing
-else (THE GATE in the builder). Member adds Information, read only; the
-plan gives it from a button in `#start-here` once they answer the rules and
-age questions, and the bot does not make that button yet (#5841), so today it is
-given by hand. Playtester, given when a playtest application is accepted,
-opens everything else that is not staff.
+else (THE GATE in the builder). Member adds Information, read only. The
+Get Member button in `#start-here` (`bot_member_gate.py`, #5841) asks two yes
+or no questions, 18 or over and the rules accepted, and two yeses give Member;
+the rules answer goes to the site's record of who accepted them, and a line
+goes in the staff inbox. Playtester, given when a playtest application is
+accepted, opens everything else that is not staff.
 
 ### Tickets and Applications
 

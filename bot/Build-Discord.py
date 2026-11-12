@@ -2166,6 +2166,10 @@ def doc_post_of_mine(message, me_id):
        run after the first took the changelog out of sight (#3336)."""
     if getattr(getattr(message, 'author', None), 'id', None) != me_id:
         return False
+    # A message with buttons is one of bot.py's panels, the Member button in
+    # #start-here among them (#5841), never words this wrote.
+    if getattr(message, 'components', None):
+        return False
     kind = getattr(message, 'type', None)
     return kind in (discord.MessageType.default, discord.MessageType.reply,
                     discord.MessageType.pins_add)
@@ -3016,9 +3020,9 @@ async def audit(guild):
         if r is not None:
             line('%s: %d member(s)' % (n, len(r.members)))
     # Who holds the two gate roles, by name (Patrick, 12 Nov: some people hold
-    # Member who should not). Nothing in the bot gives Member yet (#5841), so
-    # every Member was given by hand or by the onboarding of September, and
-    # the names are the only way to check them. The audit's output is sealed
+    # Member who should not). Until the Get Member button (#5841) every Member
+    # was given by hand or by the onboarding of September, and the names are
+    # the only way to check them. The audit's output is sealed
     # to the session that asked for it (Box-Run.ps1).
     staff_held = set(staff_names)
     for n in ('Playtester', 'Member'):
