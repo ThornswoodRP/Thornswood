@@ -55,10 +55,15 @@
   said SKIP for every run. Now every script on the box runs in PowerShell 7,
   the same pwsh that runs the harness, so box code runs in the harness's own
   shell everywhere and a harness skips only for what Windows itself has. The
-  last harnesses that started Windows PowerShell (the deploy gate's rules and
-  pipe, Deploy-Docs's question to the box, Install-Launcher.ps1) start
-  PowerShell 7 since 12 Nov, as their scripts run, so the helper that found
-  powershell.exe, Get-WindowsPowerShell, went with them.
+  harnesses that ran box and release code in Windows PowerShell (the deploy
+  gate's rules and pipe, Deploy-Docs's question to the box,
+  Install-Launcher.ps1) start PowerShell 7 since 12 Nov, as their scripts run.
+
+  WHY GET-WINDOWSPOWERSHELL STAYS. A person's PC is not the box: it has
+  Windows PowerShell 5.1 and maybe no PowerShell 7, so what the launcher
+  leaves for Windows to run (the uninstall's farewell, Uninstall.cs) runs in
+  powershell.exe, and its harness runs it there too. Only a launcher harness
+  asks for it; tests\test-2957-windows-one-way.ps1 fails on any other.
 #>
 $OnWindows = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
 function Get-WindowsPath([string]$Relative) {
@@ -66,6 +71,11 @@ function Get-WindowsPath([string]$Relative) {
     # The Windows folder from .NET, not from the environment, which a child
     # can be started without.
     Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::Windows)) $Relative
+}
+function Get-WindowsPowerShell {
+    $p = Get-WindowsPath 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    if (-not (Test-Path -LiteralPath $p)) { throw ('Windows PowerShell 5.1 is not at ' + $p + ', where Windows keeps it, so nothing that needs it can be checked here.') }
+    $p
 }
 function Get-BoxPowerShell {
     # The running pwsh itself, from .NET, so it is the same build on every OS
