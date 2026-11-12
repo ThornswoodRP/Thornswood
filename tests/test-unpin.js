@@ -70,6 +70,9 @@ yes('Add-NoticeBoards.ps1 is gone from scripts\\mods',
 
 // ------------------------------------------------------------ the pieces
 const PIECES = {
+  // The one read and write path of the block's files (#4529).
+  storeRead: 'function storeRead(file, what) {',
+  storeWrite: 'function storeWrite(file, text, read) {',
   loadPart: 'function loadPart(key, fallback) {',
   save: 'function save() {',
   takeGold: 'function takeGold(actorId, amount) {',
@@ -150,6 +153,8 @@ function engine(startGold) {
 /* One boot of the server's board, over a register in `dir`. */
 function boot(dir, eng) {
   const body = [
+    // The register as the block reads it once at its start (#4529).
+    'var registerRead = storeRead(registerPath(), \'property register\');',
     'var claims = {};',
     // The master key counter save() writes beside the claims (#2254).
     'var masterCut = 0;',
