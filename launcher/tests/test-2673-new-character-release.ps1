@@ -213,6 +213,9 @@ const a = gm.indexOf('// ==== thornswood release of deleted characters ===='), b
 const dir = process.argv[3];
 const logged = [];
 const box = { require: require, console: { log: (s) => logged.push(s) }, log: (s) => logged.push(s) };
+// The world the release asks whether a listed id is held now: the thrown-away
+// characters are gone, said in the engine's own words (WorldState::GetFormAt, #5036).
+box.mp = { get: (id) => { throw new Error('Form with id 0x' + (Number(id) >>> 0).toString(16) + " doesn't exist"); } };
 box.globalThis = box;
 vm.createContext(box);
 const was = process.cwd(); process.chdir(dir);

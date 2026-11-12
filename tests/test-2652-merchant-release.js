@@ -144,6 +144,10 @@ function open(dir, opt) {
   const logged = [], mirror = new Map(opt.copies || []);
   const box = { require: require, Buffer: Buffer, console: { log: function () { logged.push(Array.prototype.join.call(arguments, ' ')); } },
                 log: function () { logged.push(Array.prototype.join.call(arguments, ' ')); } };
+  // The world the release block asks whether a listed id is held now: the
+  // listed characters' forms are gone, which the engine says in its own words
+  // (WorldState::GetFormAt, #5036).
+  box.mp = { get: function (id) { throw new Error('Form with id 0x' + (Number(id) >>> 0).toString(16) + " doesn't exist"); } };
   box.globalThis = box;
   vm.createContext(box);
   vm.runInContext(purseSrc, box, { filename: 'gamemode.js (purses)' });

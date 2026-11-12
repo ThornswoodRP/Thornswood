@@ -24,6 +24,11 @@
     C  saves not done yet (the characters still in the world): the ids are
        left alone, they are still the characters the list was made for
     D  the log says a count, never an id
+    E  the engine throws something else for a form it holds: that is no
+       answer, so nothing is let go this start and the list stays as it was
+    F  a form held as another kind ("is not ... (actually it is ...)") is
+       held, and its id is dropped
+    G  a doesn't-exist error naming another id is no answer for this one
 
   Nothing leaves this machine. The scratch folder goes at the end.
 */
@@ -55,7 +60,7 @@ const home = process.cwd();
 
 // One server start: the list as given, the world holding the forms in held,
 // then the merchants' part asks, as the NPC startup does.
-function start(name, list, held) {
+function start(name, list, held, odd) {
   const dir = path.join(scratch, name);
   fs.mkdirSync(path.join(dir, 'private'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'server-settings.json'), JSON.stringify({ privDir: 'private' }));
@@ -65,6 +70,7 @@ function start(name, list, held) {
   const lines = [];
   const mp = {
     get: function (id, key) {
+      if (odd && odd[id]) { throw new Error(odd[id]); }
       if (held.indexOf(id) < 0) { throw new Error('Form with id 0x' + (id >>> 0).toString(16) + " doesn't exist"); }
       return key === 'profileId' ? 7001 : undefined;
     }
@@ -112,6 +118,28 @@ try {
   yes('D1 the log says how many, never an id',
       /1 character id\(s\) on the list belong to somebody made since/.test(s1.log) &&
       !/ff000a0|4278192641|4278192642|5001/.test(s1.log + s2.log + s3.log));
+
+  // E: the engine throws something other than its doesn't-exist answer for
+  // a form it holds at A1. That is no answer, so the id is never taken for
+  // nobody's: nothing is let go this start and the list stays as it was.
+  const listE = { profiles: [5001], actors: [A1, A2], done: { saves: NOW - 1000, farms: NOW - 1000 } };
+  const s4 = start('e', listE, [A1], { [A1]: 'the engine could not answer' });
+  yes('E1 another error for a held form lets nothing go: the waiting part is not run', s4.seen === null);
+  yes('E2 and the list is left as it was', !s4.rewritten && !!s4.after &&
+      JSON.stringify(s4.after.actors) === JSON.stringify([A1, A2]) && !s4.after.done.merchants);
+  yes('E3 and the log says so, without the error\'s words or an id',
+      /could not say whether an id on the list is held now, so nothing was let go/.test(s4.log) &&
+      !/engine could not answer|ff000a0|4278192641/.test(s4.log));
+
+  // F: a form held at A1 that is not an object reference: the engine says
+  // so ("is not ... (actually it is ...)"), which is an answer: it is held.
+  const s5 = start('f', listE, [A1], { [A1]: 'Form with id 0xff000a01 is not ObjectReference (actually it is Form)' });
+  yes('F1 a form held as another kind is held: its id is not let go of', !!s5.seen && s5.seen.a1 === false && s5.seen.a2 === true);
+  yes('F2 and the list no longer names it', !!s5.after && s5.after.actors.indexOf(A1) < 0);
+
+  // G: the doesn't-exist answer for another id is not this one's.
+  const s6 = start('g', listE, [A1], { [A1]: "Form with id 0xff000a02 doesn't exist" });
+  yes('G1 a doesn\'t-exist error naming another id is no answer for this one', s6.seen === null);
 } finally {
   fs.rmSync(scratch, { recursive: true, force: true });
 }

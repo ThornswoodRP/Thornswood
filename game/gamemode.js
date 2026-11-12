@@ -18959,11 +18959,26 @@ log('gamemode loaded:',
   function isFormId(n) {
     return Number.isSafeInteger(n) && n > 0xff000000 && n <= 0xffffffff;
   }
-  // Whether the world holds a form at this id now. The engine answers a
-  // property of a form it does not hold by throwing ("Form with id ... doesn't
-  // exist", WorldState::GetFormAt), and that is the answer read here.
+  /*
+    Whether the world holds a form at this id now, from the engine's own
+    answer (#5036). mp.get reaches WorldState::GetFormAt, which throws
+    exactly "Form with id 0x<id> doesn't exist" for an id it does not hold,
+    and "Form with id 0x<id> is not <type> (actually it is <type>)" for one
+    it holds as another kind of form; ScampServer::Get passes either on
+    word for word. Those two are answers. Any other throw is not one: it is
+    thrown on, so the list is not read this start rather than an id being
+    taken for nobody's.
+  */
   function formHeld(n) {
-    try { mp.get(n, 'profileId'); return true; } catch (e) { return false; }
+    var gone = "Form with id 0x" + n.toString(16) + " doesn't exist";
+    var other = 'Form with id 0x' + n.toString(16) + ' is not ';
+    try { mp.get(n, 'profileId'); return true; }
+    catch (e) {
+      var said = String((e && e.message) || e);
+      if (said === gone) { return false; }
+      if (said.indexOf(other) === 0) { return true; }
+      throw e;
+    }
   }
 
   // The list, read once a load, field by field. A profile that is not a whole
@@ -19025,7 +19040,14 @@ log('gamemode loaded:',
       too, so no later start can match it either.
     */
     if (has(st.done, 'saves')) {
-      var taken = st.actors.filter(formHeld);
+      var taken;
+      try { taken = st.actors.filter(formHeld); }
+      catch (e) {
+        // Said without the error's words, which carry the id.
+        rlog('the world could not say whether an id on the list is held now, so nothing was let go and the list is left as it is');
+        st = null;
+        return st;
+      }
       if (taken.length) {
         taken.forEach(function (n) { delete A[n]; });
         st.actors = st.actors.filter(function (n) { return has(A, n); });

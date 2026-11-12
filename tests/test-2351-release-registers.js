@@ -317,7 +317,9 @@ function start(dir, opt) {
     makeProperty: function () { },
     get: function (id, key) {
       if (id === 0 && key === 'onlinePlayers') { return []; }
-      throw new Error('no reference ' + id);
+      // The engine's own words for a form it does not hold
+      // (WorldState::GetFormAt), which the release reads as not held (#5036).
+      throw new Error('Form with id 0x' + (Number(id) >>> 0).toString(16) + " doesn't exist");
     },
     set: function () { },
     getDescFromId: function (id) { return Number(id).toString(16) + ':Skyrim.esm'; },
