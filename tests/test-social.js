@@ -430,6 +430,43 @@ if (social && trade) {
     w3.gone(P);
     yes('it still only appears while the person who wrote it is here',
         w3.soc.sharedWithMe(Q).length === 0);
+
+    /*
+      REMOVING A FRIEND ENDS EVERY SHARE WITH THEM (#4519). A share is a flag
+      on your journal or page, and removing a friend used to take them off
+      the list and leave every flag, so they kept reading the journal, pages
+      written after the removal too. The flags go in the same write.
+    */
+    const w4 = world();
+    const M = w4.person(0xff000001, 'Bjorn', 101, 'town:X.esm', [0, 0, 0]);
+    const N = w4.person(0xff000002, 'Sera', 102, 'town:X.esm', [100, 0, 0]);
+    const O = w4.person(0xff000003, 'Thora', 103, 'town:X.esm', [200, 0, 0]);
+    w4.soc.addFriend(M, N);
+    w4.soc.addFriend(M, O);
+    const whole = w4.soc.newJournal(M, 'Shared whole').journal;
+    w4.soc.writePage(M, whole.id, '', 'Before', 'written while friends');
+    const some = w4.soc.newJournal(M, 'One page shared').journal;
+    w4.soc.writePage(M, some.id, '', 'Open', 'this page only');
+    const somePage = w4.soc.findJournal(w4.soc.stateOf(M), some.id).pages[0];
+    w4.soc.share(M, whole.id, '', 102);
+    w4.soc.share(M, some.id, somePage.id, 102);
+    w4.soc.share(M, whole.id, '', 103);
+    yes('U0 before: a journal and a page are shared with the friend',
+        w4.soc.sharedWithMe(N).length === 2);
+    w4.soc.dropFriend(M, 102);
+    w4.soc.writePage(M, whole.id, '', 'After', 'written once they were gone');
+    yes('U1 once removed, the former friend reads none of it, a page written after included',
+        w4.soc.sharedWithMe(N).length === 0);
+    const kept = w4.soc.stateOf(M);
+    const wholeNow = w4.soc.findJournal(kept, whole.id), someNow = w4.soc.findJournal(kept, some.id);
+    yes('U2 and the flags are gone from the journal and the page',
+        !wholeNow.shared[102] && !(someNow.pages[0].shared || {})[102]);
+    yes('U3 a share with another friend stays',
+        !!wholeNow.shared[103] && w4.soc.sharedWithMe(O).length === 1 &&
+        w4.soc.sharedWithMe(O)[0].pages.length === 2);
+    w4.soc.addFriend(M, N);
+    yes('U4 a friend added again starts with nothing shared',
+        w4.soc.sharedWithMe(N).length === 0);
   }
 
   // ---------------------------------------------------------------- trading
