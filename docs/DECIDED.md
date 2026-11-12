@@ -676,6 +676,10 @@ issue where the card did.
   [#5220](https://github.com/ThornswoodRP/Thornswood/issues/5220).
 - **A Linux build of the server** (q-p08-linux-server). 31 Oct 2026,
   [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **The engine artifact prune workflow goes: the engine build has made no
+  artifacts to prune since #3399; #5872 merges at 38bbf8e.**
+  (dec_7YmB3uSHTL_U5OWeWXNHRA) 12 Nov 2026,
+  [#4153](https://github.com/ThornswoodRP/Thornswood/issues/4153#issuecomment-6830772787).
 
 ### Deploys and servers
 
