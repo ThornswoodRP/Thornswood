@@ -2056,10 +2056,14 @@ $BENCH_OWNER = [ordered]@{
 # every bench the trade works at; Only narrows one of them to the families of
 # work done there (a Smith at the tanning rack tans, and makes no armour there).
 #
-# Only rows somebody can make are moved: a row that fires and is not cut. A
-# row nobody makes opens no bench, and a cut row put back for an event is moved
-# on the build that puts it back. A row the server never sees (a temper at the
-# sharpening wheel or the armour table) opens no bench either.
+# Every row that fires is moved, cut or not (#5037). The crafting menu lists
+# every recipe whose BNAM is one of the bench's keywords, whatever the server
+# would answer, so a cut row left at the bench its mod put it at is listed
+# there: 32 cut bows, arrows and fishing poles stayed on the forge's list until
+# this. A cut row is still refused at its new bench (craftAnswer), and it is
+# already where it belongs the day it is put back for an event. A row the
+# server never sees (a temper at the sharpening wheel or the armour table)
+# is not moved.
 #
 # The rows nobody owns are not moved: a row nobody owns is made by whoever the
 # bench opens for, which is Patrick's answer on 22 October (A on the report
@@ -5400,8 +5404,8 @@ if (-not (Test-Path -LiteralPath $CUT_FILE)) {
 
 # --------------------------------------------------- the rows that move -
 #
-# See $TRADE_BENCHES. After the cut file, because only a row somebody can make
-# is moved, and after every rank and count, so a move changes no ladder.
+# See $TRADE_BENCHES. After the cut file, so a cut row is moved with the rest
+# (#5037), and after every rank and count, so a move changes no ladder.
 
 Write-Host ''
 Write-Host 'the rows at a bench their trade does not work at' -ForegroundColor Cyan
@@ -5426,7 +5430,6 @@ $movedCount = @{}
 foreach ($desc in $owned.Keys) {
     $r = $owned[$desc]
     if (-not $r.Fires) { continue }
-    if ($r.PSObject.Properties['Book'] -and $r.Book -eq 'cut') { continue }
     if (-not $TRADE_BENCHES.Contains($r.Owner)) {
         Bad ("{0} ({1}) is owned by {2}, which names no benches in TRADE_BENCHES" -f $r.Edid, $desc, $r.Owner)
         continue
@@ -5448,7 +5451,7 @@ foreach ($desc in $owned.Keys) {
     $movedCount[$mk] = $movedCount[$mk] + 1
 }
 if ($movedCount.Count -eq 0) {
-    Ok 'every row somebody can make is at a bench its trade works at'
+    Ok 'every row the server is asked about is at a bench its trade works at'
 } else {
     foreach ($mk in ($movedCount.Keys | Sort-Object)) { Ok ("{0,4} moved: {1}" -f $movedCount[$mk], $mk) }
 }
