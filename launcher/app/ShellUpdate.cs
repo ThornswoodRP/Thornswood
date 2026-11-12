@@ -243,6 +243,11 @@ namespace Thornswood
             if (!cfg.AutoUpdate) return;
             if (!updatePending || pendingLauncher == null) return;
             if (playing) return;
+            // The first setup's Fix is running in a folder just made, and
+            // takes the update itself at its end, as its one restart
+            // (FirstSetupRestart). Taken here it would close the launcher
+            // while Pandora or BodySlide build.
+            if (restartAfterFirstFix) return;
             // One update at a time. The one going in is followed by Fix,
             // which takes a newer one last (FixRest).
             if (updating) return;

@@ -375,15 +375,17 @@ namespace Thornswood
         /// install leaves to do waits on the folder: Thornswood-Last.esp and
         /// the other files made from the game, the plugin list in the
         /// server's order, and the animation and body files. All of it is
-        /// Fix's, and the start after the make is the first one that can run
-        /// it. That restart is the launcher's own (Shell.RestartLauncher), not
+        /// Fix's. The make's finish runs that Fix in the same run and takes
+        /// this note as it starts (ShellOwnGame, FolderWork), so the setup
+        /// restarts once, at the end. The note is for a launcher that closes
+        /// before then: an update going in, or the launcher shut by hand. A
+        /// restart of the launcher's own (Shell.RestartLauncher) is not
         /// Velopack's, so Velo.Restarted does not say it happened; this file
-        /// does, and it survives a restart that did not come back, so the
-        /// next start the person makes runs it instead.
+        /// does, and the next start the person makes runs Fix for it.
         /// </summary>
         static string FixAfterMakeFile { get { return Path.Combine(Dir, "fix-after-make.txt"); } }
 
-        /// <summary>Written by the make's finish, just before the launcher restarts into the new folder.</summary>
+        /// <summary>Written by the make's finish, once Paths name the new folder and before its Fix runs.</summary>
         public static void NoteFixAfterMake()
         {
             try { WriteRecord(FixAfterMakeFile, new string[] { DateTime.Now.ToString("o") }); } catch (Exception ex) { Swallow.Note("OwnGame.NoteFixAfterMake, write", ex); }
