@@ -119,9 +119,12 @@ for (const line of page.split(/\r?\n/)) {
   rows.push({ section, cells, files, line });
 }
 const named = (r, f) => r.files.some((x) => x === f || x.split('/').pop() === f || x.split('\\').pop() === f);
-const rowOf = (f) => rows.find((r) => named(r, f));
-const says = (cell, who) => new RegExp('\\b' + who + '\\b').test(cell || '');
 const STATE = /Site, bot and voice state/;
+// A site or bot store is looked for in the site, bot and voice table first:
+// another table can name a different file of the same name (the launcher's
+// own config.json is in the built and deployed table).
+const rowOf = (f) => rows.find((r) => STATE.test(r.section) && named(r, f)) || rows.find((r) => named(r, f));
+const says = (cell, who) => new RegExp('\\b' + who + '\\b').test(cell || '');
 
 console.log('\nP. the page against them:');
 const missing = [], wrongWriter = [], wrongReaders = [];
