@@ -83,6 +83,10 @@ namespace Thornswood
     /// loses that name first, so the write does not go through to the other
     /// name.
     ///
+    /// A Profile\Payload an earlier install left is taken out before anything
+    /// is copied, whatever this run's shape, so only this build's files wait
+    /// there for the folder (#4180, DropOldPayload).
+    ///
     /// Bethesda's own files are never renamed or deleted.
     ///
     /// WHAT THE SCRIPT DID THAT THIS DOES NOT, and why. The script had a
@@ -340,6 +344,7 @@ namespace Thornswood
             // ------------------------------------------------- the files
             Head("Installing the mods");
             Say("  Several thousand files, a few minutes.");
+            DropOldPayload();
             List<string> files = PayloadFiles(payload);
             RecordIntoGame(files);
             if (madeOwn) RemoveSharedNames(payload, files, gameDir);
@@ -374,6 +379,69 @@ namespace Thornswood
                 list.Add(Path.GetRelativePath(payload, f));
             list.Sort(StringComparer.OrdinalIgnoreCase);
             return list;
+        }
+
+        // ---- Profile\Payload holds this build's files and nothing else -----
+        //
+        // With Thornswood's own folder chosen and not made, its own files wait
+        // in Profile\Payload, and the launcher's Make takes every file in it
+        // into the folder as Thornswood's own (OwnGame.WithPayload). Its being
+        // there at all is what tells the launcher the folder was chosen
+        // (Paths.OwnFirst). A Root an earlier install used keeps its Profile
+        // when Velopack's own uninstall takes the launcher off (#5820), so an
+        // install can find an older Payload here. Copying over it kept every
+        // file the newer build no longer has, for Make to take into the game,
+        // and with the folder not chosen this time the launcher still ran from
+        // the old Payload (#4180). So it goes before anything is copied,
+        // whatever this run's shape, and only this build's files go back in.
+        //
+        // A link inside it is removed as a link and nothing it points at is
+        // touched (RemoveTree). Directory.Delete(dir, true) is not used: on
+        // Windows it asks DeleteVolumeMountPoint about every junction it meets,
+        // and a junction that is not a volume's answers "The parameter is
+        // incorrect", which stopped the whole removal.
+        void DropOldPayload()
+        {
+            string dir = Path.Combine(ProfileDir, "Payload");
+            if (!Directory.Exists(dir)) return;
+            try
+            {
+                RemoveTree(dir);
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+            {
+                throw Die("Could not take the older " + dir + " out of the way (" + e.Message + "). " +
+                          "Close Skyrim, Vortex and the launcher, then run this again.");
+            }
+            Say("  An older " + dir + " was here from an earlier install and was taken out,");
+            Say("  so no file an older build had is left in it.");
+        }
+
+        /// <summary>
+        /// Removes a folder and everything in it. A link (a junction or a
+        /// symbolic link, to a file or a folder) loses only its own name; what
+        /// it points at is never opened. A read-only file or folder loses that
+        /// attribute first, as RemoveSharedNames does before a delete.
+        /// </summary>
+        static void RemoveTree(string dir)
+        {
+            FileAttributes self = File.GetAttributes(dir);
+            if ((self & FileAttributes.ReparsePoint) == 0)
+            {
+                foreach (string p in Directory.EnumerateFileSystemEntries(dir))
+                {
+                    FileAttributes at = File.GetAttributes(p);
+                    if ((at & FileAttributes.Directory) != 0 && (at & FileAttributes.ReparsePoint) == 0) { RemoveTree(p); continue; }
+                    if ((at & FileAttributes.ReadOnly) != 0) File.SetAttributes(p, at & ~FileAttributes.ReadOnly);
+                    // A link to a folder is a directory entry on Windows and a
+                    // file name everywhere else; either way only the name goes.
+                    if ((at & FileAttributes.Directory) != 0 && OperatingSystem.IsWindows()) Directory.Delete(p);
+                    else File.Delete(p);
+                }
+            }
+            if ((self & FileAttributes.ReadOnly) != 0) File.SetAttributes(dir, self & ~FileAttributes.ReadOnly);
+            if ((self & FileAttributes.ReparsePoint) != 0 && !OperatingSystem.IsWindows()) File.Delete(dir);
+            else Directory.Delete(dir);
         }
 
         // ---- a record of what we put in somebody else's game ----------------
