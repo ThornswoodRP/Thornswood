@@ -1361,10 +1361,11 @@ def mode_audience(mode, hold=None, space=None, faction=None):
 
 
 def overwrites(guild, mode, roles, hold=None, needs=BOT_NEEDS, extra=None,
-               space=None, read_extra=None, faction=None):
+               space=None, read_extra=None, faction=None, tickets=False):
     """Every overwrite a category or channel of this mode gets: @everyone
        shut out (or read only), each role the mode names, extra_roles talking
-       and read_extra reading on that one channel, and the bot."""
+       and read_extra reading on that one channel, and the bot. tickets is a
+       channel bot.py opens ticket threads in (TICKET_KEYS)."""
     ev = guild.default_role
     deny_all  = discord.PermissionOverwrite(view_channel=False)
     # No command either: a command's answer is a post, and nobody but the
@@ -1393,6 +1394,21 @@ def overwrites(guild, mode, roles, hold=None, needs=BOT_NEEDS, extra=None,
         return {}
     readers, talkers, posters = mode_audience(mode, hold, space, faction)
     readers = tuple(readers) + tuple(read_extra or ())
+    if tickets:
+        # A ticket is a private thread the bot opens off this channel and adds
+        # the person and staff to, and a thread takes its permissions from the
+        # channel. The readers' Send Messages in Threads denied left nobody
+        # without Administrator able to answer in one: not the person who
+        # opened it, not Support or the Moderators (#5935, the audit of
+        # 12 Nov 2026 showing the live channels as the plan). The threads are
+        # private and not invitable, so a reader writes only in the ones the
+        # bot added them to, and opens none of their own.
+        reader = discord.PermissionOverwrite(view_channel=True,
+                                             read_message_history=True,
+                                             send_messages=False,
+                                             create_public_threads=False,
+                                             create_private_threads=False,
+                                             send_messages_in_threads=True)
     if mode == 'staffbump':
         # The readers run no command (a /bump is one); staff talk and get
         # the commands back.
@@ -1421,7 +1437,8 @@ def spec_overwrites(guild, spec, roles):
     """overwrites() for one line of PLAN."""
     return overwrites(guild, spec.get('mode', 'open'), roles, spec.get('hold'),
                       bot_needs(spec), spec.get('extra_roles'),
-                      spec.get('space'), spec.get('read_extra'), spec.get('faction'))
+                      spec.get('space'), spec.get('read_extra'), spec.get('faction'),
+                      tickets=spec.get('key') in TICKET_KEYS)
 
 
 def hold_roles(hold):

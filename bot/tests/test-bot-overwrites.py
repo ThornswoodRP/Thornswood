@@ -372,7 +372,8 @@ def live_server():
                          ow=B.overwrites(bare, s.get('mode', 'open'), roles,
                                          s.get('hold'), space=s.get('space'),
                                          read_extra=s.get('read_extra'),
-                                         faction=s.get('faction')))
+                                         faction=s.get('faction'),
+                                         tickets=s.get('key') in B.TICKET_KEYS))
             ch.mode = s.get('mode', 'open')
             g.channels.append(ch)
             if cat is not None:

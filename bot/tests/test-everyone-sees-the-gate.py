@@ -228,6 +228,22 @@ for who, m in (('staff (Support)', support),
     got = resolve(everyone, m, places['#disboard'])
     yes('%s talk and run commands in #disboard, so staff bump' % who,
         got.view_channel and got.send_messages and got.use_application_commands)
+# #5935: a ticket is a private thread off its desk, and a thread takes its
+# permissions from the channel. The person who opened it and the staff the
+# bot adds write in it; nobody opens a thread of their own there.
+DESKS = ['#' + s['name'] for _c, specs in B.PLAN for s in specs
+         if s.get('key') in B.TICKET_KEYS]
+yes('the five ticket desks are found', len(DESKS) == 5)
+for p in DESKS:
+    for who, m in (('a Member', member), ('a Playtester', tester),
+                   ('Support', support), ('a Moderator', Member([roles['Moderator']]))):
+        got = resolve(everyone, m, places[p])
+        yes('%s writes in a ticket thread off %s, posts nothing in it and opens no '
+            'thread there (#5935)' % (who, p),
+            got.send_messages_in_threads and not got.send_messages
+            and not got.create_private_threads and not got.create_public_threads)
+yes('a channel that is not a desk still takes thread writing away from its readers',
+    not resolve(everyone, member, places['#news']).send_messages_in_threads)
 for p in BEHIND:
     yes('a Member still does not see %s, which is Playtester\'s' % p,
         not resolve(everyone, member, places[p]).view_channel)
