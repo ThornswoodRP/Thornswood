@@ -9,6 +9,9 @@ desc='0017000:THORNSWOOD-CONTENT.ESP';assert.equal(policy.blocked(1000),true,'ca
 for(const ordinary of ['17007:Thornswood-Content.esp','17000:Other.esp','f:Skyrim.esm','abc:Some Mod.esl']) {
  desc=ordinary;assert.equal(policy.blocked(1000),false,ordinary);
 }
+// A form made while the server runs, a brewed potion or a mixed poison, is
+// named by its bare id (FormDesc::ToString with no file) and is no token (#4915).
+for(const runtime of ['801','17000','ff000801']){desc=runtime;assert.equal(policy.blocked(1000),false,'runtime form '+runtime);}
 for(const bad of ['',null,undefined,'not a native descriptor']){desc=bad;assert.equal(policy.blocked(1000),true,'unproven native identity');}
 desc='f:Skyrim.esm';broken=true;assert.equal(policy.blocked(1000),true);broken=false;assert.equal(policy.blocked(1000),false);
 for(const id of [0,-1,NaN,Infinity,1.5,'1000'])assert.equal(policy.blocked(id),true,'invalid native item ID');
