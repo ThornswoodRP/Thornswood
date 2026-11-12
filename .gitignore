@@ -102,6 +102,26 @@ voice/owners.json
 voice/owners.json.tmp
 voice/chat/
 
+# What the site writes beside itself when it runs from a checkout, as
+# site\README.md has you run it (#4454): every store under site\data (the
+# inbox and trouble for the bot, linked accounts, sign-ins, sessions and
+# their logs, bans, kills, notes, the gallery and its queue and reports, the
+# roster, news, results, rule answers, deletion requests), the .bak a page
+# save keeps and the temp half of a write, site\uploads (the pictures and
+# their list), and site\files (the downloads folder, put there by hand on the
+# box). Names, Discord ids, addresses and pictures, and some other
+# run's. Everything under site\data is ignored except the pages, which are
+# tracked and edited here: help.md, tests.md and site\data\site. On the box
+# the same files live under C:\Thornswood-Docs, which is not a checkout, and
+# a release carries only server.js, lib, public and data\site there
+# (scripts\release\App-Part.ps1), so nothing here changes what the box keeps.
+/site/data/*
+!/site/data/help.md
+!/site/data/tests.md
+!/site/data/site/
+/site/uploads/
+/site/files/
+
 # Build output, in the repository folder since 25 September rather than in
 # C:\Thornswood-Dev (scripts\release\Where.ps1): the packs, the launcher and the
 # installer under out\dist, the server payload and thornswood-server.zip.
