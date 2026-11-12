@@ -1,6 +1,6 @@
 # TEMPORARY: measures a cached .NET SDK and NuGet folder against the
 # download, for the "Speed up pull request checks" work. Removed before the
-# pull request.
+# pull request. Run 2.
 name: Cache trial
 on:
   push:
