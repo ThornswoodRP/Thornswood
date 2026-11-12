@@ -2,12 +2,15 @@
 # change build.yml and run  node scripts/dev/Build-PrWorkflow.js
 #
 # Every pull request runs the same checks as build.yml, on GitHub's hosted
-# windows-latest runner (#1306, #4983), and again on the merge queue's
+# runners, Windows and Linux (#1306, #4983), and again on the merge queue's
 # merge of it onto the newest main (#5182). No secrets, no live folders: every
 # scratch path is under RUNNER_TEMP. The job keeps the name "Launcher builds",
 # and the gate runs beside it in shares, "Gate harnesses (n of 5)", after
 # the job "Pick the gate harnesses" says what each runs, and the harnesses
 # that need nothing from Windows in "Gate harnesses on Linux (n of 4)".
+# Main's ruleset requires three checks: "Build check result", the last job
+# here, "Test tasks in the pull request" and "Release note"
+# (records\github-repo-settings.json). build.yml's header says the rest.
 name: Build check (pull requests)
 on:
   pull_request:
@@ -39,8 +42,8 @@ jobs:
   # processor for the same harnesses). Patrick's mark is under ten minutes
   # for a pull request's checks, and over twenty means something is wrong.
   # The runners are free on a public repository; each share costs about a
-  # minute to start. The check main's ruleset requires, "Build check
-  # result", needs this job and the launcher job both
+  # minute to start. Of the checks main's ruleset requires, "Build check
+  # result" needs this job and the launcher job both
   # (scripts\dev\Build-PrWorkflow.js).
   #
   # THE PICK (#5183). One job first, on Linux, picks what the shares run and
@@ -864,8 +867,8 @@ jobs:
       # public, where GitHub bills no Actions storage, and gate-map.yml has
       # kept its map as an artifact here since.
 
-  # The one check main's ruleset requires (#3683): passes only when the
-  # build and every share of the gate above succeeded. Written by
+  # One of the three checks main's ruleset requires (#3683): passes only
+  # when the build and every share of the gate above succeeded. Written by
   # Build-PrWorkflow.js, which says why.
   result:
     name: Build check result

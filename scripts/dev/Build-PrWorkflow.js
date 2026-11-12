@@ -91,8 +91,9 @@ function build(src) {
   body = body.replace(launcherWaits, "    needs: pick\n    if: ${{ !cancelled() }}\n    runs-on: ${{ needs.pick.outputs.launcher == 'false' && 'ubuntu-24.04-arm' || 'windows-latest' }}\n");
   if (/needs\.tested|needs: \[?tested|^  tested:/m.test(code(body))) { fail('the pull request build still names the tested job'); }
   /*
-    THE ONE CHECK MAIN'S PROTECTION REQUIRES (#3683, Patrick's A on
-    q-3683-required-check, 27 Oct 2026). Main's ruleset names "Build check
+    ONE OF THE THREE CHECKS MAIN'S RULESET REQUIRES (#3683, Patrick's A on
+    q-3683-required-check, 27 Oct 2026; the other two are test-tasks.yml's
+    and pr-body.yml's). Main's ruleset names "Build check
     result", not "Launcher builds", because GitHub counts a skipped required
     check as passed. While the box built there were two builds and either
     could be skipped; since #4983 there is one, and this passes only when it
@@ -118,8 +119,8 @@ function build(src) {
   if (/\n  result:\n/.test(body)) { fail('build.yml already has a job named result'); }
   body = body.replace(/\n*$/, '\n') + [
     '',
-    '  # The one check main\'s ruleset requires (#3683): passes only when the',
-    '  # build and every share of the gate above succeeded. Written by',
+    '  # One of the three checks main\'s ruleset requires (#3683): passes only',
+    '  # when the build and every share of the gate above succeeded. Written by',
     '  # Build-PrWorkflow.js, which says why.',
     '  result:',
     '    name: Build check result',
@@ -166,12 +167,15 @@ function build(src) {
     '# change build.yml and run  node scripts/dev/Build-PrWorkflow.js\n' +
     '#\n' +
     '# Every pull request runs the same checks as build.yml, on GitHub\'s hosted\n' +
-    '# windows-latest runner (#1306, #4983), and again on the merge queue\'s\n' +
+    '# runners, Windows and Linux (#1306, #4983), and again on the merge queue\'s\n' +
     '# merge of it onto the newest main (#5182). No secrets, no live folders: every\n' +
     '# scratch path is under RUNNER_TEMP. The job keeps the name "Launcher builds",\n' +
     '# and the gate runs beside it in shares, "Gate harnesses (n of 5)", after\n' +
     '# the job "Pick the gate harnesses" says what each runs, and the harnesses\n' +
-    '# that need nothing from Windows in "Gate harnesses on Linux (n of 4)".\n';
+    '# that need nothing from Windows in "Gate harnesses on Linux (n of 4)".\n' +
+    '# Main\'s ruleset requires three checks: "Build check result", the last job\n' +
+    '# here, "Test tasks in the pull request" and "Release note"\n' +
+    '# (records\\github-repo-settings.json). build.yml\'s header says the rest.\n';
 
   return head + body;
 }

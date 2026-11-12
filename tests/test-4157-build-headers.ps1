@@ -67,7 +67,14 @@ $required = @(@($main.rules | Where-Object { $_.type -eq 'required_status_checks
 Yes ("1. main's ruleset requires checks ({0})" -f ($required -join ', ')) ($required.Count -gt 0)
 foreach ($c in $required) {
     Yes ("   build.yml's header names '{0}'" -f $c) ($buildHead.Contains($c))
+    Yes ("   build-pr.yml's header names '{0}'" -f $c) ($prHead.Contains($c))
     Yes ("   the guide names '{0}'" -f $c) ($guide.Contains($c))
+}
+Yes "   build-pr.yml's header says Windows and Linux, not one Windows runner" ($prHead -match 'Windows and Linux' -and $prHead -notmatch 'windows-latest runner')
+$theOne = @("The one check main's ruleset requires", "The check main's ruleset requires", "THE ONE CHECK MAIN'S PROTECTION REQUIRES")
+foreach ($f in @(@('build.yml', $build), @('build-pr.yml', $pr), @('Build-PrWorkflow.js', (Text 'scripts/dev/Build-PrWorkflow.js')))) {
+    $hit = @($theOne | Where-Object { (Flat $f[1]).Contains($_) })
+    Yes ("   {0} never calls Build check result the one required check" -f $f[0]) ($hit.Count -eq 0)
 }
 $nothing = @('nothing is required in GitHub', 'Nothing in GitHub''s settings is required', 'there is no required check', 'named ONE required check')
 foreach ($p in $nothing) {
