@@ -151,9 +151,10 @@
     ONE WAY A STORE'S FILE IS READ AND WRITTEN (#4529). The same text is in
     the season, farming, property and furniture blocks, and
     tests/test-4529-store-saves.js holds the copies to it, since each block
-    is lifted and run alone. The property register, law.json, beds.json,
-    benches.json, season.json, the farm claims and the furniture register
-    were each written straight over the old file, and each loader read a
+    is lifted and run alone. Seven stores (the property register and its
+    jail, bed and bench books, the season, the farm claims and the
+    furniture register) were each written straight over the old file, and
+    each loader read a
     file that would not parse as empty and said nothing. writeFileSync
     empties a file before it writes it, so a server stopped partway left it
     half written; the next start read nothing from it, and the next save
