@@ -45,6 +45,21 @@
   bot\tests\, installer\tests\, plan line 42) and any test-* file still
   beside the code, for the same reason tests\ is not read.
 
+  THE GAME AND THE TOOLS TOO, since #4132. Until then nothing read game\,
+  tools\ or launcher\move\, and in one week 101 empty catches landed there
+  unseen, two of them dropping real work: the stall keeper's 14-day lapse
+  clock write, and the character switch's dead and in-combat checks, which
+  let a switch through in combat when the call threw. Now the JavaScript and
+  TypeScript under game\ are read by the JavaScript rule, a .ts as much as a
+  .js, and the C# under tools\ (the deploy agent, the release notes tool)
+  and launcher\move\ by the empty-body rule, keyed by the path from the
+  repository root. Not read: game\gamemode.js, which Build-Gamemode.js joins
+  from game\gamemode\*.ts, so its catches are counted in the parts it is
+  made from; and a .NET test project or build output (a folder ending in
+  .Tests, bin or obj), for the same reason tests\ is not read. Their numbers
+  on main when #4132 landed went into the baseline as their allowance, so
+  they can only go down.
+
   WHY. Entry 239 on the To Do List. Measured on 24 Sep: 386 of the 618 catch
   clauses in launcher\app\*.cs had nothing between their braces, so a failure in
   any of them left no line anywhere. A tester says the Save button did
@@ -91,12 +106,17 @@ param(
   # Folders whose .ps1 and .psm1 files are counted, every level down. Default:
   # scripts\ and installer\. A script is keyed by its path from -Root.
   [string[]]$ScriptDirs,
-  # Folders whose .js, .mjs and .cjs files are counted, every level down
-  # (#2736). Default: site\ and voice\. Keyed by the path from -Root.
+  # Folders whose .js, .mjs, .cjs and .ts files are counted, every level
+  # down (#2736, #4132). Default: site\, voice\ and game\. Keyed by the path
+  # from -Root.
   [string[]]$JsDirs,
   # Folders whose .py files are counted, every level down (#2736). Default:
   # bot\. Keyed by the path from -Root.
   [string[]]$PyDirs,
+  # Folders of C# outside launcher\app whose .cs files are counted by the
+  # empty-body rule, every level down (#4132). Default: tools\ and
+  # launcher\move\. Keyed by the path from -Root.
+  [string[]]$CsDirs,
   [string]$Root,
   [switch]$List
 )
@@ -109,13 +129,18 @@ $Root = [IO.Path]::GetFullPath($Root).TrimEnd([IO.Path]::DirectorySeparatorChar)
 if (-not $AppDir)   { $AppDir   = Join-Path $Root 'launcher\app' }
 if (-not $Baseline) { $Baseline = Join-Path $Here 'swallow-baseline.txt' }
 if (-not $PSBoundParameters.ContainsKey('ScriptDirs')) { $ScriptDirs = @((Join-Path $Root 'scripts'), (Join-Path $Root 'installer')) }
-if (-not $PSBoundParameters.ContainsKey('JsDirs')) { $JsDirs = @((Join-Path $Root 'site'), (Join-Path $Root 'voice')) }
+if (-not $PSBoundParameters.ContainsKey('JsDirs')) { $JsDirs = @((Join-Path $Root 'site'), (Join-Path $Root 'voice'), (Join-Path $Root 'game')) }
 if (-not $PSBoundParameters.ContainsKey('PyDirs')) { $PyDirs = @((Join-Path $Root 'bot')) }
+if (-not $PSBoundParameters.ContainsKey('CsDirs')) { $CsDirs = @((Join-Path $Root 'tools'), (Join-Path $Root 'launcher\move')) }
+# Files made from others, never written by hand, keyed like the rest: their
+# catches are their sources' and are counted there. gamemode.js is joined
+# from game\gamemode\*.ts by scripts\dev\Build-Gamemode.js (#4132).
+$Built = @('game\gamemode.js')
 
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
 
 if (-not (Test-Path -LiteralPath $AppDir)) { Say "  no app folder at $AppDir" 'Red'; exit 1 }
-foreach ($d in (@($ScriptDirs) + @($JsDirs) + @($PyDirs))) {
+foreach ($d in (@($ScriptDirs) + @($JsDirs) + @($PyDirs) + @($CsDirs))) {
   if (-not (Test-Path -LiteralPath $d -PathType Container)) { Say "  no source folder at $d" 'Red'; exit 1 }
 }
 
@@ -135,6 +160,10 @@ $SilentJs = [regex]('(?<![.\w$])catch\s*(\([^)]*\))?\s*\{\s*\}' +
   '|\.catch\(\s*(?:async\s+)?function\b[\w$\s]*\([^)]*\)\s*\{\s*\}\s*\)')
 # Python (#2736): the except line, its indent, and what follows its colon.
 $PyExcept = [regex]'^(?<ind>[ \t]*)except\b(?<head>[^#\r\n]*?):(?<rest>.*)$'
+# C# outside the launcher (#4132): the empty-body rule, a catch with or
+# without its type in round brackets and nothing but whitespace between its
+# braces. The launcher's own stricter rule (#4350) is Find-SilentCs below.
+$SilentCsEmpty = [regex]'(?<![.\w$])catch\s*(\([^)]*\))?\s*\{\s*\}'
 $NewLine = [regex]'\n'
 
 # The launcher's C# (#4350). An empty body was the only shape counted, so a
@@ -303,10 +332,24 @@ foreach ($d in @($ScriptDirs)) {
 }
 foreach ($d in @($JsDirs)) {
   $full = [IO.Path]::GetFullPath($d)
-  foreach ($f in @(Get-ChildItem -LiteralPath $full -Recurse -File | Where-Object { $_.Extension -in '.js', '.mjs', '.cjs' } | Sort-Object FullName)) {
+  foreach ($f in @(Get-ChildItem -LiteralPath $full -Recurse -File | Where-Object { $_.Extension -in '.js', '.mjs', '.cjs', '.ts' } | Sort-Object FullName)) {
     if (Skip-Source $f $full) { continue }
     $key = Key-Of $f
+    if ($Built -contains $key) { continue }
     $found[$key] = (Find-Silent $f.FullName $SilentJs)
+    $paths[$key] = $f.FullName
+  }
+}
+foreach ($d in @($CsDirs)) {
+  $full = [IO.Path]::GetFullPath($d)
+  foreach ($f in @(Get-ChildItem -LiteralPath $full -Recurse -File -Filter '*.cs' | Sort-Object FullName)) {
+    if (Skip-Source $f $full) { continue }
+    # C# build output, and a .NET test project beside its project, as
+    # tools\DeployAgent.Tests\, for the same reason tests\ is not read.
+    $below = '\' + $f.FullName.Substring($full.TrimEnd($Sep).Length + 1).Replace($Sep, '\')
+    if ($below -match '\\(bin|obj|[^\\]+\.Tests)\\') { continue }
+    $key = Key-Of $f
+    $found[$key] = (Find-Silent $f.FullName $SilentCsEmpty)
     $paths[$key] = $f.FullName
   }
 }
@@ -345,7 +388,7 @@ foreach ($l in @(Get-Content -LiteralPath $Baseline)) {
 }
 
 Write-Host ''
-Write-Host '  THORNSWOOD  -  silent catches in the launcher, the scripts, the site, voice and the bot' -ForegroundColor White
+Write-Host '  THORNSWOOD  -  silent catches in the launcher, the scripts, the site, voice, the bot, the game and the tools' -ForegroundColor White
 
 $rose = 0; $fell = 0; $total = 0; $cap = 0
 foreach ($v in $allowed.Values) { $cap += $v }

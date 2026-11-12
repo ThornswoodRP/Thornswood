@@ -81,13 +81,16 @@ if (-not ((Test-Path -LiteralPath $Checker) -and (Test-Path -LiteralPath $Baseli
 # -Scripts, -Js, -Py and -Root pass on to it when given; without them it reads
 # the real scripts\ and installer\ (#2711) and the real site\, voice\ and bot\
 # (#2736), which is what section 1 wants and the copies below do not.
-function Run-Check([string]$app, [string]$base, [switch]$List, [string[]]$Scripts, [string[]]$Js, [string[]]$Py, [string]$Root) {
+function Run-Check([string]$app, [string]$base, [switch]$List, [string[]]$Scripts, [string[]]$Js, [string[]]$Py, [string[]]$Cs, [string]$Root) {
     $global:LASTEXITCODE = 0
     $a = @{ AppDir = $app; Baseline = $base }
     if ($List) { $a.List = $true }
     if ($null -ne $Scripts) { $a.ScriptDirs = $Scripts }
     if ($null -ne $Js) { $a.JsDirs = $Js }
     if ($null -ne $Py) { $a.PyDirs = $Py }
+    # A caller that names its own folders names its whole tree, so the C#
+    # outside the launcher (#4132) is read only when it names that too.
+    if ($null -ne $Cs) { $a.CsDirs = $Cs } elseif ($null -ne $Js) { $a.CsDirs = @() }
     if ($Root) { $a.Root = $Root }
     $out = & $Checker @a 6>&1 | Out-String
     return @{ Code = $LASTEXITCODE; Out = $out }

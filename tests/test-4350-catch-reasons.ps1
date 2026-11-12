@@ -43,9 +43,9 @@ function Yes([string]$what, [bool]$cond) {
 function Run-Check([string]$app, [string]$base, [switch]$List, [switch]$All) {
     $global:LASTEXITCODE = 0
     $a = @{ AppDir = $app; Baseline = $base }
-    # The whole tree reads the scripts, site, voice and bot as well, since
-    # the real baseline holds their lines too.
-    if (-not $All) { $a.ScriptDirs = @(); $a.JsDirs = @(); $a.PyDirs = @() }
+    # The whole tree reads the scripts, site, voice, bot, game and the tools'
+    # C# as well, since the real baseline holds their lines too.
+    if (-not $All) { $a.ScriptDirs = @(); $a.JsDirs = @(); $a.PyDirs = @(); $a.CsDirs = @() }
     if ($List) { $a.List = $true }
     $out = & $Checker @a 6>&1 | Out-String
     return @{ Code = $LASTEXITCODE; Out = $out }
