@@ -666,15 +666,18 @@ async function partThree() {
   const r1 = rosters();
   // Z reads what it is sent only after O has read the roster naming Z: two
   // sockets, each read on its own, so this is one order the gate can give
-  // (#5860), made the order every run.
+  // (#5860), made the order every run. The service writes both in one loop,
+  // but O having read its copy says nothing about whether Z has read its
+  // own, so Z's is checked once Z has it.
   const Z = await socketAs(804, { name: 'later' }, true);
   await until(() => !!naming(Z.peer));
+  Z.release();
+  await until(() => Z.got.some((m) => m.t === 'peers'));
   yes('a socket that joins after still sees both marked on its own roster', (() => {
     const r = Z.got.find((m) => m.t === 'peers');
     return !!r && r.peers.find((p) => p.peer === X.peer).voice === false &&
            r.peers.find((p) => p.peer === Y.peer).voice === false && !('voice' in r.peers.find((p) => p.peer === O.peer));
   })());
-  Z.release();
   // One roster names the newcomer. Rosters now name only who is in reach
   // and come with a newcomer's first view (#5516), so the mode Y said above,
   // which rides the next roster, can come in one of its own just before.
