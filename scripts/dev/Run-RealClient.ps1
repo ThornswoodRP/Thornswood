@@ -1,7 +1,7 @@
 <#
   Run-RealClient.ps1
 
-      pwsh scripts\dev\Run-RealClient.ps1 [-Root C:\Thornswood-DevBuild] [-Steps tests\real-client\dev-release.json] [-InstallPlugin] [-Publish]
+      pwsh scripts\dev\Run-RealClient.ps1 [-Root <install>] [-Steps tests\real-client\dev-release.json] [-InstallPlugin] [-Publish]
 
   Starts the real launcher and the real game on this PC, presses Play the way
   a person does, and walks the game through a list of steps with the test
@@ -35,7 +35,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Root = 'C:\Thornswood-DevBuild',
+    # The dev install, which Where.ps1 InstallDev finds, unless named.
+    [string]$Root = '',
     [string]$Steps = '',
     [string]$Out = '',
     [int]$Minutes = 20,
@@ -51,6 +52,7 @@ $ErrorActionPreference = 'Stop'
 if (-not $IsWindows -and $PSVersionTable.PSEdition -eq 'Core') { throw 'Run-RealClient.ps1 drives the real game, so it runs on Windows only.' }
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+if (-not $Root) { $Root = & (Join-Path $repoRoot 'scripts\release\Where.ps1') InstallDev }
 if (-not $Steps) { $Steps = Join-Path $repoRoot 'tests\real-client\dev-release.json' }
 $runId = (Get-Date).ToString('yyyyMMdd-HHmmss')
 if (-not $Out) { $Out = Join-Path $repoRoot ('temp\real-client\' + $runId) }

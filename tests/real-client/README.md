@@ -25,7 +25,7 @@ pwsh scripts\dev\Run-RealClient.ps1
 It writes `temp\real-client\<run>\`: `summary.md`, `run.log`, the plugin's
 `results.jsonl`, the launcher's log for the run and a `.png` for each
 screenshot. `-Root` names another install (the default is
-`C:\Thornswood-DevBuild`), `-Steps` another list, `-InstallPlugin` copies
+the dev install, as `scripts\release\Where.ps1 InstallDev` finds it), `-Steps` another list, `-InstallPlugin` copies
 this repository's plugin into a build released before it, and `-Publish` puts
 the run on the GitHub Release of the newest Dev Deployment and a line on that
 Deployment. It ends 0 only when every step passed.
