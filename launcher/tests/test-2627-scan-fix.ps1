@@ -113,7 +113,7 @@ Yes 'and only the bytes its signed list names' ($copy.Contains('b.LongLength != 
 
 Yes 'the Scan button asks everything, and the Fix button is RunFix' (
     $shell.Contains('btnScan.Click += delegate { RunScan(true); };') -and $shell.Contains('btnFix.Click += delegate { RunFix(); };'))
-$runFix = [regex]::Match($sf, '(?s)static void RunFix\(bool afterUpdate, bool afterVortex = false\)(.*?)\n        \}\n').Groups[1].Value
+$runFix = [regex]::Match($sf, '(?s)static void RunFix\(bool afterUpdate, bool afterVortex = false, bool afterMake = false\)(.*?)\n        \}\n').Groups[1].Value
 Yes 'Fix refuses while the own folder is being prepared, so it never writes into a folder that is being made (#2403)' (
     $runFix -match 'if \(ownGameBusy\) \{ Log\(' -and $runFix.IndexOf('if (ownGameBusy)') -lt $runFix.IndexOf('fixing = true;'))
 Yes 'and while the Downgrade or an update is going in' ($runFix -match 'if \(Downgrade\.Busy\)' -and $runFix -match 'if \(playBar\.Active\)')
@@ -163,7 +163,7 @@ Yes 'after an update that failed, Fix never takes that same update a second time
 Yes 'and the update records what it tried when it failed' ($upd.Contains('updateTried = launcherUpdate.Version;'))
 Yes 'a folder being prepared holds Fix after an update until it is ready, and its finish runs it' (
     $runFix -match 'if \(ownGameBusy && afterUpdate\) \{ fixWhenFolderReady = true;' -and
-    $own -match '(?s)if \(fixWhenFolderReady\)\s*\{\s*fixWhenFolderReady = false;\s*(if \(fixWhenFolderReadyAfterVortex\) \{ fixWhenFolderReadyAfterVortex = false; RunFix\(false, true\); \}\s*else )?RunFix\(true\);')
+    $own -match '(?s)if \(fixWhenFolderReady\)\s*\{\s*fixWhenFolderReady = false;\s*(if \(fixWhenFolderReadyAfterVortex\) \{ fixWhenFolderReadyAfterVortex = false; RunFix\(false, true\); \}\s*else )?(if \(fixWhenFolderReadyAfterMake\) \{ fixWhenFolderReadyAfterMake = false; RunFix\(false, false, true\); \}\s*else )?RunFix\(true\);')
 Yes 'the first start of a new launcher runs that Fix, after the icon pass, in a folder of its own' (
     $shell -match '(?s)if \(Velo\.Restarted\)\s*ThreadPool\.QueueUserWorkItem\(delegate\s*\{.*?moved = Icons\.Ensure\(true\);.*?if \(!Paths\.Collection\)\s*try \{ Dispatcher\.UIThread\.Post\(\(Action\)delegate \{ RunFix\(true\); \}\);')
 Yes 'Fix writes into the game folder with the folder to itself (OwnGame.Alone)' ($upkeep -match '(?s)OwnGame\.Alone\(delegate\s*\{.*?Verify\.Fix\(cfg, say, Updater\.ReleaseCopy\(cfg\)\).*?\}, delegate')

@@ -140,8 +140,12 @@ namespace Thornswood
 
             ThreadPool.QueueUserWorkItem(delegate
             {
-                bool refresh = false, offer = false;
+                bool refresh = false, offer = false, fixAfterMake = false;
                 string refused = null;
+                // The first start in a folder just made runs Fix (#5937):
+                // what the install leaves to do all waits on the folder, and
+                // this is the first start that has it.
+                if (active) fixAfterMake = OwnGame.TakeFixAfterMake();
                 try
                 {
                     // Vortex deploying into a Thornswood folder is refused
@@ -170,13 +174,22 @@ namespace Thornswood
                     }
                 }
                 catch (Exception ex) { Swallow.Note("ShellOwnGame.OwnGameAtStart, NeedsRefresh or offer", ex); }
-                if (!refresh && !offer) return;
+                if (!refresh && !offer && !fixAfterMake) return;
                 try
                 {
                     Dispatcher.UIThread.Post(delegate
                     {
-                        if (refresh) StartOwnGame(false, false);
-                        else AskOwnGame(true);
+                        // Fix after the bring-up-to-date when Vortex deployed
+                        // again in between, whether that succeeds or not, as a
+                        // pressed Fix carries on after it; straight away
+                        // otherwise.
+                        Action fix = fixAfterMake ? (Action)delegate { RunFix(false, false, true); } : null;
+                        if (refresh)
+                        {
+                            if (!StartOwnGame(false, false, fix, fix) && fix != null) fix();
+                        }
+                        else if (offer) AskOwnGame(true);
+                        else fix();
                     });
                 }
                 catch (Exception ex) { Swallow.Note("ShellOwnGame.OwnGameAtStart, BeginInvoke", ex); }
@@ -472,6 +485,10 @@ namespace Thornswood
             {
                 try { Paths.Init(Paths.Root); }
                 catch (Exception ex) { Swallow.Note("ShellOwnGame.StartOwnGame, pointing Paths at the new folder", ex); }
+                // The first start in the new folder runs Fix (#5937), and this
+                // note is how it knows, even if the restart below never comes
+                // back and the person opens the launcher themselves.
+                OwnGame.NoteFixAfterMake();
             }
 
             // The same load-order step Fix runs. SettleSettings on a full
@@ -558,6 +575,7 @@ namespace Thornswood
                     {
                         fixWhenFolderReady = false;
                         if (fixWhenFolderReadyAfterVortex) { fixWhenFolderReadyAfterVortex = false; RunFix(false, true); }
+                        else if (fixWhenFolderReadyAfterMake) { fixWhenFolderReadyAfterMake = false; RunFix(false, false, true); }
                         else RunFix(true);
                     }
                 });
