@@ -39,7 +39,7 @@ $gate = @(& pwsh -NoProfile -File (Join-Path $Repo 'scripts/dev/Gate-Harnesses.p
 Yes ("the gate list reads ({0} harnesses)" -f $gate.Count) ($LASTEXITCODE -eq 0 -and $gate.Count -gt 0)
 
 $reason = @{}
-foreach ($line in [IO.File]::ReadAllLines((Join-Path $Here 'gate-excluded.txt'))) {
+foreach ($line in [IO.File]::ReadAllLines((Join-Path $Repo 'tests/gate-excluded.txt'))) {
     $m = [regex]::Match($line.Trim(), '^(\S+)\s+(.+)$')
     if ($m.Success -and -not $line.Trim().StartsWith('#')) { $reason[$m.Groups[1].Value] = $m.Groups[2].Value }
 }
