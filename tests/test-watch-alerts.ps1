@@ -101,7 +101,7 @@ Yes '-SetWebhook sends the address on standard input, never on the command line'
 
 # The watcher as it runs, without the probes that touch the world. The fakes
 # below stand in for those, and $root is a scratch folder.
-$fake = @('Answers', 'SiteAnswers', 'BotAlive', 'BotProcs', 'HealthProblem', 'ReadyProblem', 'EndTask', 'HowItEnded', 'ServiceProblem', 'BackupProblem', 'OffBoxProblem', 'CertProblem', 'PostWebhook', 'DiskNow')
+$fake = @('Answers', 'SiteAnswers', 'BotAlive', 'BotProcs', 'HealthProblem', 'ReadyProblem', 'HeldProblem', 'EndTask', 'HowItEnded', 'ServiceProblem', 'BackupProblem', 'OffBoxProblem', 'CertProblem', 'PostWebhook', 'DiskNow')
 $body = @()
 foreach ($s in $inner.EndBlock.Statements) {
     if ($s -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $fake -contains $s.Name) { continue }
@@ -185,6 +185,9 @@ function ReadyProblem($url) {
     foreach ($k in $ports.Keys) { if ($url -match (':' + $k + '/')) { return $script:world[$ports[$k]].Ready } }
     return ''
 }
+# The website's readiness (#4448): every file it holds reads, here.
+# test-4448-site-ready.ps1 asks a stand-in site for the real thing.
+function HeldProblem($url) { return '' }
 # Ending a task whose program runs but does not work: only written down here.
 function EndTask($task, $port) { $script:runs += ('end ' + $task); return ('ended ' + $task) }
 function HowItEnded($task) { if ($tasks.ContainsKey($task)) { return $script:world[$tasks[$task]].Ended }; return '' }

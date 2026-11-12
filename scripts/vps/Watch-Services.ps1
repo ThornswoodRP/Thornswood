@@ -125,6 +125,16 @@
     runner    every build runner's Windows service is running: the first,
               thornswood-vps, and the numbered ones Install-Runner.ps1
               -Number puts beside it (4 October)
+    site files  the website's readiness, not only its liveness (#4448):
+              http://127.0.0.1:3001/api/ready answers 503 naming each file
+              the site holds that will not read (bans.json, pk.json,
+              linked.json, sessions.json, signins.json). Its health check
+              above asks /api/public, which answers 200 whatever those say,
+              so a broken bans.json, pk.json or linked.json shut the door
+              to play with nobody told. Told once when it fails, naming the
+              file, and once when it reads again. Never restarted for: a
+              restart does not mend a file. A site that cannot be asked at
+              all is the website check's to tell, and changes nothing here
     cert      the certificate Caddy holds for thornswood.net is accepted
               and has more than 14 days left. Caddy renews it about 30 days
               before the end, so under 14 is a renewal failing for two weeks.
@@ -525,6 +535,53 @@ function ReadyProblem($url) {
   }
 }
 
+# The website's readiness (#4448): '' while its app reads every file it
+# holds, bans.json, pk.json, linked.json, sessions.json and signins.json,
+# else which will not and what that shuts. Its /api/ready answers 503 naming
+# each (site\lib\staff.js heldBroken, #2180). The website's health check
+# asks /api/public, which answers 200 whatever those files say, so a
+# bans.json that will not parse shut the door to play and nobody was told.
+# $null when /api/ready cannot be asked at all: whether the site answers is
+# the website check's to tell, and it says nothing either way of the files.
+# Any answer but 503 is ready, as an app from before /api/ready would be.
+function HeldProblem($url) {
+  $code = 0
+  $text = ''
+  $res = $null
+  try {
+    $q = [Net.HttpWebRequest]::Create($url)
+    $q.Timeout = 10000
+    $q.ReadWriteTimeout = 10000
+    try { $res = $q.GetResponse() } catch {
+      # A 503 comes back as the WebException's Response, under whatever
+      # PowerShell wraps it in.
+      $e = $_.Exception
+      while ($e -and -not ($e -is [Net.WebException])) { $e = $e.InnerException }
+      if ($e) { $res = $e.Response }
+    }
+    if (-not $res) { return $null }
+    $code = [int]$res.StatusCode
+    $text = (New-Object IO.StreamReader($res.GetResponseStream(), [Text.Encoding]::UTF8)).ReadToEnd()
+  } catch { return $null }
+  finally { if ($res) { $res.Close() } }
+  if ($code -ne 503) { return '' }
+  $j = $null
+  try { $j = $text | ConvertFrom-Json } catch { $j = $null }
+  $files = @()
+  $play = $false
+  if ($j -and $j.PSObject.Properties['broken']) {
+    foreach ($b in @($j.broken)) {
+      if (-not "$($b.file)".Trim()) { continue }
+      $files += ("$($b.file)".Trim() + ', which ' + "$($b.why)".Trim())
+      if ($b.play -eq $true) { $play = $true }
+    }
+  }
+  if ($files.Count -eq 0) { return ('The site answered HTTP 503 at ' + $url + ' and did not say which file') }
+  $why = 'The site cannot use ' + ($files -join ', and ') + ' (' + $url + ' answered HTTP 503)'
+  if ($play) { $why += ', so nobody is let in to play until it is repaired: who is banned, who is dead for good or who holds which character is not known' }
+  return $why
+}
+
 # Ends a task whose program is running but not working, so the start after it
 # is a new run. Task Scheduler drops a start while a run is going
 # (MultipleInstances IgnoreNew), and the program a task starts through the
@@ -908,6 +965,11 @@ $tellOnly = @(
   @{ Name = 'offbox'; Say = 'The copy of the backups off the VPS'; Fails = 'is out of date'; Recovers = 'is up to date again'; OffBox = (Join-Path $root 'offbox.txt'); Hours = 26
      Fix = 'The Thornswood Send Backups task sends each nightly to the Oracle VM when the backup task ends (#2862). Its record says why it did not: the gate verb Send-Backups -Status. Until then a VPS lost is everything since that copy lost too.' },
   @{ Name = 'runner'; Say = 'The build runner (Launcher builds on thornswood-vps and every numbered one)'; Service = 'actions.runner.*.thornswood-vps*' },
+  # The website's readiness (#4448): the files it holds read. A restart
+  # does not mend a file, and the site writes nothing over one it cannot
+  # read, so this is told and never restarted for.
+  @{ Name = 'site files'; Say = 'The files the website holds'; Fails = 'will not read'; Recovers = 'read again'; Held = 'http://127.0.0.1:3001/api/ready'
+     Fix = 'A restart does not mend a file, so the watchdog leaves the website running, and the site writes nothing over a file it cannot read. Repair the file by hand on the box, from the backup in C:\Thornswood-Backup; the site reads it again at its next request.' },
   # Caddy's own certificate (#2995), which only this box can reach now.
   @{ Name = 'cert'; Say = 'The certificate Caddy holds for thornswood.net'; Fails = 'needs a look'; Recovers = 'is fine again'; Cert = 'https://thornswood.net/'; Days = 14
      Fix = 'Caddy renews it by itself about 30 days before the end, so a renewal has been failing: read Caddy''s log in C:\Thornswood-Caddy. Cloudflare reaches it over port 443 for the renewal, so Set-WebFirewall.ps1 -Check says whether 443 still takes Cloudflare.' }
@@ -1058,6 +1120,14 @@ if ($fresh.Count -gt 0) { Add-Content -LiteralPath $hist -Value $fresh }
 
 foreach ($c in $tellOnly) {
   $why = ''
+  if ($c.ContainsKey('Held')) {
+    # Its own words, already a sentence. A site that cannot be asked leaves
+    # this as it was: neither down nor back.
+    $why = HeldProblem $c.Held
+    if ($null -eq $why) { continue }
+    if ($why) { Observe $told $c $true $false $why 'nobody' } else { Observe $told $c $false $false '' '' }
+    continue
+  }
   if ($c.ContainsKey('Backup')) { $why = BackupProblem $c.Backup $c.Folder $c.Hours }
   elseif ($c.ContainsKey('OffBox')) { $why = OffBoxProblem $c.OffBox $c.Hours }
   elseif ($c.ContainsKey('Cert')) { $why = CertProblem $c.Cert $c.Days }
