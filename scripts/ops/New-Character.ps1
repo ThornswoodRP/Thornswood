@@ -29,6 +29,7 @@
   the list goes in that server's folder; a list already there that is not one
   stops this before anything is thrown away.
 #>
+#Requires -Version 7
 [CmdletBinding(SupportsShouldProcess)]
 param(
     [string]$World = (& (Join-Path $PSScriptRoot '..\release\Where.ps1') ChangeForms),

@@ -236,6 +236,7 @@
   build, if the first rung of the gatherer's ladder or the farmer's is empty,
   or if the game folder changed underneath it.
 #>
+#Requires -Version 7
 param(
     [string] $Data       = ((& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install) + '\Game\Data'),
     [string] $PluginList = ((& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install) + '\Profile\OwnGame\plugins.txt'),

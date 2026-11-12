@@ -56,6 +56,7 @@
   people. Issue #594.
 
 #>
+#Requires -Version 7
 param(
     [string]$Gamemode,
     [string]$Dist     = (& (Join-Path $PSScriptRoot '..\release\Where.ps1') ServerDist),

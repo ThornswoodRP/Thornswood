@@ -60,6 +60,7 @@
 .EXAMPLE
   .\scripts\release\New-ClientLicenceRecord.ps1 -Licences engine\skymp\build\licences -Clone engine\skymp
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)][string]$Licences,

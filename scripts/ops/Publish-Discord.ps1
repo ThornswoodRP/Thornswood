@@ -78,6 +78,7 @@
   feed (until #5801; Publish-News.ps1 before #5187); tests\test-public-news.ps1
   holds the list.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
   # The dev build's release, into the dev updates channel. See the note above.

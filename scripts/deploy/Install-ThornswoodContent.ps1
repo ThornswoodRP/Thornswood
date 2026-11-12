@@ -20,6 +20,7 @@
   has after it, read from that list. Nothing about the plugin is typed in
   here, so this cannot fall behind it.
 #>
+#Requires -Version 7
 param(
     [string]$Esp,
     [string]$Data     = ((& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install) + '\Game\Data'),

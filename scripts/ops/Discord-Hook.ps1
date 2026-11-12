@@ -30,6 +30,7 @@
   A copy in bot\dev-webhook.txt or bot\news-webhook.txt on this machine is
   still read when the VPS cannot be reached, so a machine set up the old way keeps posting.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][ValidateSet('dev', 'news')][string]$Name,

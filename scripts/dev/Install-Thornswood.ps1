@@ -19,6 +19,7 @@
   Step names for -Only and -Skip:
       content  client  body  gamemode  check  launcher
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [string]$Root   = (& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install),

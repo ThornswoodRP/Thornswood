@@ -23,6 +23,7 @@
   out on its own schedule, so editing them underneath a running server just gets
   the edit overwritten.
 #>
+#Requires -Version 7
 [CmdletBinding(SupportsShouldProcess)]
 param(
     [string]$World = (& (Join-Path $PSScriptRoot '..\release\Where.ps1') ChangeForms),

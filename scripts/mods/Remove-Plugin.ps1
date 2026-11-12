@@ -23,6 +23,7 @@
   Doing this to the last plugin in the list moves nothing and is free. Doing it
   to slot 6 of 61 moves 55.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
   [string]$Plugin,

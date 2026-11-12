@@ -27,6 +27,7 @@
   Download both files from the mod page, the main plugin and the optional
   "Default INI and JSON", and leave them in Downloads.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [string]$Root      = (& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install),

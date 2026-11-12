@@ -54,6 +54,7 @@
   -Check hashes what is here and asks the box what it holds, and sends
   nothing.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     # The game's Data folder on this machine.

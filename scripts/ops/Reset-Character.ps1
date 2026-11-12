@@ -46,6 +46,7 @@
   ceiling (ServerReadyWait.ps1), and this machine then tries that resources
   port once from outside (Test-ThornswoodFromOutside, Vps.ps1).
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [string]$VpsHost  = '',

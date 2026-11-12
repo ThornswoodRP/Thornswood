@@ -15,6 +15,7 @@
   that can be made optional are the ones with no plugin at all: loose textures
   and meshes, sounds, ENB. This finds those and puts a number on them.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [string]$Root = (& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install),

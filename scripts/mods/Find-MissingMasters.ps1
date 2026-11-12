@@ -8,6 +8,7 @@
   Only the first 8 KB of each file is read. MAST fields always live in the TES4
   record, which is the first record in the file.
 #>
+#Requires -Version 7
 param(
     [string]$Data = ((& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install) + '\Game\Data'),
     [string]$Plugins = ((& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install) + '\Profile\Default\plugins.txt'),

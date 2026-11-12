@@ -62,6 +62,7 @@
   deliberate engine change (engine\README.md). It sends nothing anywhere and
   never touches the game folder; Sync-Client.ps1 copies the files in.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [switch]$Check,

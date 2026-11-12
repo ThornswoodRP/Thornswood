@@ -67,6 +67,7 @@
   .\scripts\mods\Check-CoveredBodies.ps1 -Game C:\Thornswood-DevBuild\Game
   The same for the dev build's folder.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [string]$Game = ((& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install) + '\Game'),

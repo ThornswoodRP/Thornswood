@@ -49,6 +49,7 @@
   value to rank it by, if the game folder changed under it, or if any other
   check below fails. Nothing is written unless every check passed.
 #>
+#Requires -Version 7
 param(
     # The build's Data folder. Read only.
     [string]   $Data       = ((& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install) + '\Game\Data'),

@@ -19,6 +19,7 @@
   feed sent, which every older launcher already takes, so none of those is
   offered a launcher it cannot start.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [string]$Root,

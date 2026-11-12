@@ -27,6 +27,7 @@
      never exposed a microphone, and it moved out for the same reason.
 #>
 
+#Requires -Version 7
 [CmdletBinding()]
 param(
   # Under the launcher install, which Where.ps1 Install finds (C:\Thornswood

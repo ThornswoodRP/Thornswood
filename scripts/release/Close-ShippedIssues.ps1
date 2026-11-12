@@ -116,6 +116,7 @@
   Exit codes: 0 when every issue the release carries is closed (or would be,
   with -Check), and 1 when something stopped, with the line before saying why.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Commit,

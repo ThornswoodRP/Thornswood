@@ -20,6 +20,7 @@
   that does not is how five people end up in single player wondering what they
   broke. -Force skips that.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Address,
