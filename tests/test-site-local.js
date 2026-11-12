@@ -143,8 +143,17 @@ yes('site config template uses .example (same suffix as root config.example.json
     read('site/config.example.json') !== null && read('site/config.sample.json') === null);
 
 // ------------------------------------------------------------ the README --
-yes('the README tells a copy to take config.example.json as its config.json',
-    readme.indexOf('Copy `config.example.json` into the copy as `config.json`') >= 0);
+yes('the README tells a run to take config.example.json as its config.json',
+    readme.indexOf('Copy `config.example.json` in as `config.json`') >= 0);
+// It runs from the checkout as well as a copy, and git ignores what it writes
+// there (#4454); test-4454-site-stores-ignored.js holds that.
+yes('the README says git ignores what a run from the checkout writes',
+    readme.indexOf('Run it from this folder in the checkout, or from a') >= 0 &&
+    readme.indexOf('so a run from the') >= 0 && readme.indexOf('which git\ntracks') < 0);
+// The listen address it gives is the one lib/base.js uses (#2185).
+yes('the README says an unset run listens on 127.0.0.1:3001, not every address',
+    readme.indexOf('Left unset it listens on 127.0.0.1:3001') >= 0 &&
+    readme.indexOf('Left unset it listens on every address') < 0);
 const runPort = (/THORNSWOOD_DOCS_PORT = '(\d+)'; \$env:THORNSWOOD_DOCS_LOCAL = '1'; node server\.js/.exec(readme) || [])[1];
 yes('the README has the one line local run, on loopback, port ' + runPort, !!runPort);
 const curl = readme.split('\n').filter(function (l) { return /^curl\.exe /.test(l); })[0] || '';

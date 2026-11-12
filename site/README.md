@@ -73,11 +73,16 @@ write the hub makes from another site and from this one.
 It needs Node 22.19 or later, or 24.5 or later, and nothing else: it sets its
 trusted roots with two calls older Nodes lack, and on one of those it stops at
 once with a line naming the Node it needs and the one it found
-(`lib\node-version.js`). Run it from a copy of this folder rather than
-from the checkout, because it writes beside itself: `config.json` with a fresh
-cookie secret, `site.log`, the `files\` and `uploads\` folders, and anything
-typed into a board or a page in the browser goes into `data\`, which git
-tracks. Copy `config.example.json` into the copy as `config.json` first. It is
+(`lib\node-version.js`). Run it from this folder in the checkout, or from a
+copy of it. It writes beside itself either way: `config.json` with a fresh
+cookie secret, `site.log`, the `files\` and `uploads\` folders, and every
+store under `data\`: reports and tickets, sign ins and linked accounts, the
+gallery, its queue and the pictures sent to it, and anything typed into a
+page in the browser. Git ignores all of it except the pages it tracks,
+`data\help.md`, `data\tests.md` and `data\site\` (#4454), so a run from the
+checkout leaves `git status` clean unless one of those pages is edited in the
+browser, and nothing anybody sent it can be committed by mistake.
+Copy `config.example.json` in as `config.json` first. It is
 every setting the site reads, holding what it runs on when there is no
 `config.json` at all: an empty member password, the roles, and every Discord
 setting, the bot's key and the cookie secret empty. Empty Discord settings are
@@ -85,14 +90,17 @@ what keep a copy on your machine from asking Discord anything. The empty
 password is not a password: the first start writes a random one and prints it
 once. A
 `config.json` already in this folder is that machine's own, and git ignores it;
-leave it where it is rather than copying it. From the copy:
+leave it where it is rather than copying it. From this folder, or the copy:
 
 ```
 $env:THORNSWOOD_DOCS_PORT = '3101'; $env:THORNSWOOD_DOCS_LOCAL = '1'; node server.js
 ```
 
-then open http://127.0.0.1:3101. Left unset it listens on every address on
-3001. Without a `config.json` it runs on the defaults written in `lib\config.js`,
+then open http://127.0.0.1:3101. Left unset it listens on 127.0.0.1:3001, this
+machine only (#2185). Only `THORNSWOOD_DOCS_EXPOSE=1` opens it on every
+address, as plain HTTP, with a warning at every start, and
+`THORNSWOOD_DOCS_LOCAL=1` keeps it on 127.0.0.1 even then (`lib\base.js`).
+Without a `config.json` it runs on the defaults written in `lib\config.js`,
 makes a random member password, prints it once, and keeps it in the
 `config.json` it writes. A later start does not print it again. Discord sign
 in and the role checks are off, since there is no client id or bot token. The game status and
