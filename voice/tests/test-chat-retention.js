@@ -69,7 +69,7 @@ function listening(srv, port) {
       THORNSWOOD_VOICE_PORT: String(port),
       THORNSWOOD_SITE: 'http://127.0.0.1:9',
       THORNSWOOD_CHAT_DIR: CHAT_DIR,
-      THORNSWOOD_CHAT_DAYS: '30',
+      THORNSWOOD_CHAT_DAYS: '365',
     }),
   });
   let log = '';
