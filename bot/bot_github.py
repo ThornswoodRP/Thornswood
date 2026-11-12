@@ -83,6 +83,11 @@ GITHUB_API = os.environ.get('GITHUB_API', 'https://api.github.com').rstrip('/')
 TASK_MARK = re.compile(r'^\s*test task\s*:\s*(.*)$', re.I)
 KNOWN_MARK = re.compile(r'^\s*known issue\s*:\s*(.*)$', re.I)
 TASK_SERVER = re.compile(r'^\s*server\s*:\s*(dev|main)\s*$', re.I)
+# A check of a test task that was made and passed, by the real game run on
+# One or by hand (#5197): "Checked: passed" as a comment's first line, newer
+# than the test task, takes that test task's post down. "Checked: failed"
+# leaves it up; what failed is a finding of its own.
+CHECK_MARK = re.compile(r'^\s*checked\s*:\s*passed\b', re.I)
 # The one tag a test task from the board carries: testers test on main.
 TASK_TAG = 'Main'
 # The form of the posts each record was made with. 2: test tasks tagged Main

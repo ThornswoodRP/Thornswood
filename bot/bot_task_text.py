@@ -7,7 +7,8 @@ Part of the bot: bot.py loads it (#5357).
 import re
 
 from bot_testing import DEV_TAG, TASK_BODY_ROOM, TASK_TAGS, TASK_TITLE_ROOM
-from bot_github import TASK_MARK, TASK_SERVER, _labels, is_known_repo
+from bot_github import (CHECK_MARK, TASK_MARK, TASK_SERVER, _labels,
+    is_known_repo)
 
 
 def issue_tags(issue, server=None):
@@ -132,6 +133,19 @@ def last_task(issue, comments, dev_since=None):
     """The last "Test task:" comment (task_list's tuple), Dev or Main, or None."""
     got = task_list(issue, comments, dev_since)
     return got[-1] if got else None
+
+
+def checked_since(comments, since):
+    """Whether a comment whose first line is "Checked: passed" was written
+       after since (a test task's created_at): its check was made and
+       passed, so its post comes down (#5197). An older one checked an older
+       test task, and a newer test task asks again."""
+    for c in comments or []:
+        text = CLAUDE_FOOTER.sub('', str(c.get('body') or '').replace('\r\n', '\n')).strip()
+        first = text.split('\n')[0] if text else ''
+        if CHECK_MARK.match(first) and str(c.get('created_at') or '') > str(since or ''):
+            return True
+    return False
 
 
 def main_task_of(issue, comments, dev_since=None):

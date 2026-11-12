@@ -16,7 +16,7 @@ from bot_github import (DEV_FORM, KNOWN_FORM, KNOWN_MARK, TASK_FORM, TASK_MARK,
     TASK_TAG, finding_gone, github_changed_since, github_closed_since,
     github_comments, github_issue, github_open_findings, github_timeline,
     issue_deleted, issue_tags_found, merged_fix)
-from bot_task_text import (_all_marked, _marked, dev_chunks, dev_render,
+from bot_task_text import (_all_marked, _marked, checked_since, dev_chunks, dev_render,
     dev_task_of, fix_refs, issue_tags, known_body, known_title, last_task,
     main_task_of, strip_footer, test_task_of)
 from bot_post_rules import (fix_in_main, post_problems, refuse,
@@ -61,10 +61,12 @@ def task_post_of(issue, comments, dev_since=None):
        #dev-test-tasks'."""
     task = main_task_of(issue, comments, dev_since)
     if task is not None:
+        if checked_since(comments, task[3]):
+            return None     # checked and passed: nothing left for testers
         return task[0], strip_footer(task[1]) or 'Check this on main.', [TASK_TAG]
     if last_task(issue, comments, dev_since) is not None:
         return None
-    if issue_tags_found(issue):
+    if issue_tags_found(issue) and not checked_since(comments, ''):
         return known_title(issue), default_task_body(issue), [TASK_TAG]
     return None
 
@@ -611,6 +613,8 @@ async def dev_tasks_once(forum, state, get=None, save=None, me_id=None, now=None
             continue            # read at this update time on an earlier pass
         comments = await loop.run_in_executor(None, github_comments, num, get)
         task = dev_task_of(issue, comments, since)
+        if task is not None and checked_since(comments, task[3]):
+            task = None         # checked and passed: the post comes down
         post = None
         if task is not None:
             taken = [v.get('sig', '').split('\n')[0] for k, v in rec.items() if k != key]
