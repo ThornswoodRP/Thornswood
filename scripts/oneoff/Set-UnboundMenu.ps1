@@ -19,8 +19,8 @@
   SKSE\Plugins\SkyrimUnbound\Presets, and the menu goes back to one page for
   everyone else.
 
-      .\scripts\mods\Set-UnboundMenu.ps1 -Full      every page, for authoring presets
-      .\scripts\mods\Set-UnboundMenu.ps1 -Locked    Starting Location only, for shipping
+      .\scripts\oneoff\Set-UnboundMenu.ps1 -Full      every page, for authoring presets
+      .\scripts\oneoff\Set-UnboundMenu.ps1 -Locked    Starting Location only, for shipping
 #>
 #Requires -Version 7
 [CmdletBinding()]
@@ -78,7 +78,7 @@ Write-Host ''
 if ($Full) {
     Say '  Build the class in game, then use Unbound''s own save-preset to write it out.' 'Gray'
     Say '  Do NOT ship while it is like this, or everyone gets the full menu.' 'Yellow'
-    Say '  When you are done:  .\scripts\mods\Set-UnboundMenu.ps1 -Locked' 'Gray'
+    Say '  When you are done:  .\scripts\oneoff\Set-UnboundMenu.ps1 -Locked' 'Gray'
 } else {
     Say '  Safe to ship.' 'Gray'
 }

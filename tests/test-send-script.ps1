@@ -479,7 +479,7 @@ $named = @(
     'scripts\deploy\Deploy-DevGamemode.ps1', 'scripts\deploy\Deploy-Docs.ps1', 'scripts\deploy\Deploy-Server.ps1',
     'scripts\deploy\Install-Bot.ps1', 'scripts\deploy\Remirror-Site-Feed.ps1', 'scripts\deploy\Rotate-ServerPassword.ps1',
     'scripts\deploy\Set-DiscordLogin.ps1', 'scripts\deploy\Setup-Domain.ps1', 'scripts\mods\Check-Manifest.ps1',
-    'scripts\mods\Clean-Everything.ps1', 'scripts\ops\Set-Door.ps1', 'scripts\ops\Wipe-Saves.ps1',
+    'scripts\dev\Clean-Everything.ps1', 'scripts\ops\Set-Door.ps1', 'scripts\ops\Wipe-Saves.ps1',
     'scripts\vps\Backup-Server.ps1', 'scripts\vps\Check-Load.ps1',
     'scripts\vps\Watch-Load.ps1', 'scripts\vps\Watch-Services.ps1',
     'scripts\deploy\Install-Runner.ps1', 'scripts\deploy\Install-Voice.ps1', 'scripts\vps\Check-Site.ps1'

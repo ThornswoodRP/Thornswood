@@ -1454,7 +1454,7 @@
                       "reason":  "reads files, settings, logs or status only"
                   },
                   {
-                      "script":  "scripts/mods/Clean-Everything.ps1",
+                      "script":  "scripts/dev/Clean-Everything.ps1",
                       "scope":  "Remote",
                       "via":  "Invoke-ThornswoodRemote",
                       "anchor":  "return Invoke-ThornswoodRemote -Target \"$User@$Vps\" -SshArgs $ssh -Script $script",
@@ -1463,7 +1463,7 @@
                       "reason":  "carries what its caller hands it; each caller is mapped"
                   },
                   {
-                      "script":  "scripts/mods/Clean-Everything.ps1",
+                      "script":  "scripts/dev/Clean-Everything.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "Remote",
                       "anchor":  "foreach (`$d in @(\u0027C:\\Thornswood-Docs\\public\\downloads\u0027, \u0027C:\\Windows\\Temp\u0027)) {",
@@ -1472,7 +1472,7 @@
                       "reason":  "reads files, settings, logs or status only"
                   },
                   {
-                      "script":  "scripts/mods/Clean-Everything.ps1",
+                      "script":  "scripts/dev/Clean-Everything.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "Remote",
                       "anchor":  "foreach (`$n in @(\u0027world\u0027, \u0027private\\characters.json\u0027, \u0027data\\online.json\u0027)) {",
@@ -1481,7 +1481,7 @@
                       "reason":  "reads files, settings, logs or status only"
                   },
                   {
-                      "script":  "scripts/mods/Clean-Everything.ps1",
+                      "script":  "scripts/dev/Clean-Everything.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "Remote",
                       "anchor":  "[void](Remote \"Remove-Item -LiteralPath \u0027$($f.Path)\u0027 -Recurse -Force -EA SilentlyContinue\")",

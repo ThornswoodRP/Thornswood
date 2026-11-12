@@ -38,9 +38,9 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 # The tests are in tests\, the scripts in scripts\<area> since issue #440.
 $Repo = Split-Path -Parent $Here
-$Bodies = Join-Path $Repo 'scripts\mods\Add-Bodies.ps1'
+$Bodies = Join-Path $Repo 'scripts\oneoff\Add-Bodies.ps1'
 $RunAll = Join-Path $Repo 'scripts\oneoff\Run-Everything.ps1'
-$Index = Join-Path $Repo 'scripts\README.md'
+$Index = Join-Path $Repo 'scripts\oneoff\README.md'
 
 $script:pass = 0
 $script:fail = 0
@@ -160,8 +160,9 @@ $callers = @(Get-ChildItem -LiteralPath (Join-Path $Repo 'scripts') -Recurse -Fi
              } | ForEach-Object { $_.Name })
 Yes ('no other script under scripts runs it' + $(if ($callers.Count) { ': ' + ($callers -join ', ') } else { '' })) ($callers.Count -eq 0)
 
-$row = @([IO.File]::ReadAllText($Index, $Utf8) -split "\r?\n" | Where-Object { $_.StartsWith('| [mods/Add-Bodies.ps1]') })
-Yes 'scripts\README.md lists it as RETIRED' ($row.Count -eq 1 -and $row[0] -match '\| RETIRED\. DO NOT RUN\.')
+# The one-off folder's own index since #4740 moved it out of scripts\mods.
+$row = @([IO.File]::ReadAllText($Index, $Utf8) -split "\r?\n" | Where-Object { $_.StartsWith('| `Add-Bodies.ps1`') })
+Yes 'scripts\oneoff\README.md lists it as refusing to run' ($row.Count -eq 1 -and $row[0] -match 'refuses to run' -and $row[0] -match '#405')
 
 # ======================================================== this machine
 
