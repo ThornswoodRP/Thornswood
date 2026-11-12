@@ -160,7 +160,7 @@ function rig(settings, keep) {
   r.tick = function (ms) { r.now += (ms || 2000); r.interval(); };
   r.join = function (pid) { r.online.push({ actorId: ACTOR + pid, profileId: pid }); };
   r.leave = function (pid) { r.online = r.online.filter(function (o) { return o.profileId !== pid; }); };
-  r.pass = function (pid) { box.__thornswoodPassSeen.passes[pid] = { at: r.now, x: r.now + 600000, v: '1.1.102', d: '1' + pid }; };
+  r.pass = function (pid, account) { box.__thornswoodPassSeen.passes[pid] = { at: r.now, x: r.now + 600000, v: '1.1.102', d: account || '1' + pid }; };
   r.want = function (pid) { return r.api().want(pid, r.now, r.api().liveHow()); };
   r.quit = function (pid) { return r.api().leave(pid, r.api().liveHow()); };
   r.gone = function (pid) { return r.api().gone(pid, r.now, r.api().liveHow()); };
@@ -307,8 +307,13 @@ r.tick(2 * 60000); r.tick();
 yes('after a restart the ordinary backstop applies again', /profile 1428 lost their place: nothing from their menu/.test(r.log()));
 
 // ---- a place handed to another of the same game's characters
+// The holder and the one it hands to are characters of one Discord account,
+// each with its own pass (#4527); test-4527-line-hand.js has the refusals.
 r = rig(SEATS); r.tick();
 r.fill(1500, 25);
+r.pass(1526, 'acct-a'); r.pass(1597, 'acct-a'); r.pass(1596, 'acct-a');
+r.pass(1527, 'acct-b'); r.pass(1599, 'acct-b');
+r.pass(1528, 'acct-c'); r.pass(1598, 'acct-c');
 r.want(1526); r.tick(1000); r.want(1527); r.tick(1000); r.want(1528); r.tick();
 yes('the holder hands its place to another character', r.hand(1527, 1599) === 'handing' &&
     /line: profile 1527 hands its place in line to profile 1599/.test(r.log()));

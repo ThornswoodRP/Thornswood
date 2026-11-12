@@ -15063,7 +15063,10 @@ log('gamemode loaded:',
   seat at once and puts the person at the end of the line. Their menu then
   shows the character choice, and any of their characters can take the place:
   the menu says "/line hand <profile>" under the one that holds it, and that
-  profile's first "/line" within HAND_MS takes it over.
+  profile's first "/line" within HAND_MS takes it over. Only another character
+  of the same Discord account takes it, read off both join passes, and only
+  with its own pass on hand; a held staff seat goes only to a staff role
+  (#4527). Anybody else asking is an ordinary ask, at the end of the line.
 
   AT THE DOOR. Everybody in the world when this starts keeps their seat, so a
   hot reload never ends a session. After that an arrival is seated when a
@@ -15096,8 +15099,8 @@ log('gamemode loaded:',
 
   // On globalThis, so a hot reload keeps who holds a seat and the line.
   // seated: profile -> when; waiting: staff profile -> since; refused: profile -> when;
-  // line: [{ p, since, seen, said, saidAt, back?, handTo?, handAt?, closed?, idle? }] in order;
-  // held: profile -> { at, staff, handTo?, handAt? }; out: profile -> when moved out for being idle.
+  // line: [{ p, since, seen, said, saidAt, back?, handTo?, handAt?, handAcct?, closed?, idle? }] in order;
+  // held: profile -> { at, staff, handTo?, handAt?, handAcct? }; out: profile -> when moved out for being idle.
   if (!g.__thornswoodSeatState) {
     g.__thornswoodSeatState = { seated: {}, waiting: {}, refused: {}, primed: false };
   }
@@ -15129,6 +15132,11 @@ log('gamemode loaded:',
   function lineIndex(pid) {
     for (var i = 0; i < state.line.length; i++) { if (state.line[i].p === pid) { return i; } }
     return -1;
+  }
+
+  /* The account how.accountOf reads off a profile's pass, or '' (none, or it threw). */
+  function accountFrom(how, pid, now) {
+    try { return how.accountOf ? String(how.accountOf(pid, now) || '') : ''; } catch (e) { return ''; }
   }
 
   /*
@@ -15205,7 +15213,7 @@ log('gamemode loaded:',
           how.log('[thornswood] line: profile ' + e.handTo + ' never asked for the place profile ' + e.p +
                   ' handed it, so profile ' + e.p + ' keeps it');
         }
-        delete e.handTo; delete e.handAt; delete e.closed;
+        delete e.handTo; delete e.handAt; delete e.handAcct; delete e.closed;
       }
       if (!lost && e.back && now > e.back) {
         lost = 'the relay restarted and their menu did not ask again within ' + Math.round(RELAY_BACK_MS / 1000) + 's';
@@ -15345,9 +15353,30 @@ log('gamemode loaded:',
     }
     var at = lineIndex(pid);
     if (at >= 0) { state.line[at].seen = now; delete state.line[at].back; return 'waiting'; }
-    // A place or a held seat another of this game's characters handed to this one (#1142).
+    // A place or a held seat another of this game's characters handed to this
+    // one (#1142): only to the same account, with a pass on hand, and a staff
+    // seat only to a staff role (#4527). takes() says why not, or ''.
+    var hasOne = false;
+    try { hasOne = !!how.hasPass(pid, now); } catch (e) { hasOne = false; }
+    var mine = accountFrom(how, pid, now);
+    var noPassYet = false;
+    function takes(from, entry, staffSeat) {
+      if (!hasOne || !mine) { noPassYet = true; return 'it has no join pass on hand'; }
+      if (mine !== entry.handAcct) { return 'it is not a character of the same Discord account'; }
+      if (staffSeat) {
+        var staff = false;
+        try { staff = !!how.holdsStaffRole(pid); } catch (e) { staff = false; }
+        if (!staff) { return 'it is a staff seat and profile ' + pid + ' holds no staff role'; }
+      }
+      return '';
+    }
     for (var hh in state.held) {
       if (own(state.held, hh) && state.held[hh].handTo === pid && now - state.held[hh].handAt <= HAND_MS) {
+        var notSeat = takes(Number(hh), state.held[hh], !!state.held[hh].staff);
+        if (notSeat) {
+          how.log('[thornswood] seats: profile ' + pid + ' may not take the seat profile ' + hh + ' handed it: ' + notSeat);
+          continue;
+        }
         state.held[pid] = { at: state.held[hh].at, staff: state.held[hh].staff };
         delete state.held[hh];
         how.log('[thornswood] seats: profile ' + pid + ' takes the seat held for profile ' + hh + ', which handed it over');
@@ -15358,15 +15387,21 @@ log('gamemode loaded:',
     for (var hl = 0; hl < state.line.length; hl++) {
       var he = state.line[hl];
       if (he.handTo === pid && now - he.handAt <= HAND_MS) {
+        var notPlace = takes(he.p, he, false);
+        if (notPlace) {
+          how.log('[thornswood] line: profile ' + pid + ' may not take the place profile ' + he.p + ' handed it: ' + notPlace);
+          continue;
+        }
         how.log('[thornswood] line: profile ' + pid + ' takes the place profile ' + he.p + ' handed it, ' +
                 (hl + 1) + ' of ' + state.line.length);
         he.p = pid; he.seen = now; he.said = 0; he.saidAt = 0;
-        delete he.handTo; delete he.handAt; delete he.closed; delete he.back;
+        delete he.handTo; delete he.handAt; delete he.handAcct; delete he.closed; delete he.back;
         return 'handed';
       }
     }
-    var hasOne = false;
-    try { hasOne = !!how.hasPass(pid, now); } catch (e) { hasOne = false; }
+    // A place handed to it waits for its pass, which the launcher sends at once:
+    // it is not put at the end of the line meanwhile.
+    if (noPassYet) { how.line(pid, { pass: true }); return 'no pass'; }
     if (how.requirePass && !hasOne) { how.line(pid, { pass: true }); return 'no pass'; }
     state.line.push({ p: pid, since: now, seen: now, said: 0, saidAt: 0 });
     how.log('[thornswood] line: profile ' + pid + ' is waiting at the menu, ' + state.line.length + ' in line');
@@ -15417,7 +15452,10 @@ log('gamemode loaded:',
     of its characters (after being moved out for being idle, the choice
     offers any of them). The connection that holds the place says so before
     it becomes the other character's, so only the holder can give it away,
-    and the other takes it with its first "/line" within HAND_MS.
+    and the other takes it with its first "/line" within HAND_MS. The holder's
+    Discord account is read off its join pass now, so want() can hold the
+    other to the same account (#4527); a holder with no pass on hand cannot
+    hand anything, since nothing says whose it is.
   */
   function hand(pid, to, now, how) {
     pid = Number(pid) || 0;
@@ -15426,10 +15464,17 @@ log('gamemode loaded:',
     var at = lineIndex(pid);
     var what = at >= 0 ? state.line[at] : state.held[pid];
     if (!what) { return 'nothing'; }
+    var acct = accountFrom(how, pid, now);
+    if (!acct) {
+      how.log('[thornswood] line: profile ' + pid + ' asked to hand its ' + (at >= 0 ? 'place in line' : 'held seat') +
+              ' to profile ' + to + ', but has no join pass on hand to say whose it is, so it keeps it');
+      return 'no pass';
+    }
     what.handTo = to;
     what.handAt = now;
+    what.handAcct = acct;
     how.log('[thornswood] line: profile ' + pid + ' hands its ' + (at >= 0 ? 'place in line' : 'held seat') +
-            ' to profile ' + to + ', another character of the same game');
+            ' to profile ' + to + ', for another character of the same account');
     return 'handing';
   }
 
@@ -15492,6 +15537,12 @@ log('gamemode loaded:',
     var p = seen && seen.passes ? seen.passes[pid] : null;
     return !!(p && Number(p.x) > now);
   }
+  /* The Discord account a profile's unexpired pass was signed for, or ''. */
+  function accountOf(pid, now) {
+    var seen = g.__thornswoodPassSeen;
+    var p = seen && seen.passes ? seen.passes[pid] : null;
+    return (p && Number(p.x) > now && p.d) ? String(p.d) : '';
+  }
 
   function liveHow() {
     var s = settings();
@@ -15506,7 +15557,7 @@ log('gamemode loaded:',
     return {
       cap: capOf(s), staffSeats: staffSeatsOf(s), requirePass: requirePass,
       relayOk: !poll || !poll.failAt || poll.okAt >= poll.failAt,
-      holdsStaffRole: holdsStaffRole, hasPass: hasPass,
+      holdsStaffRole: holdsStaffRole, hasPass: hasPass, accountOf: accountOf,
       tell: function (p, text) { if (say) { say(p, text); } },
       // The chat commands block posts it to the menu page (__thornswoodSayLine).
       line: function (p, what) { var f = g.__thornswoodSayLine; if (typeof f === 'function') { f(p, what); } },
