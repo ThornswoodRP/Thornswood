@@ -283,6 +283,7 @@
         "read": "2026-10-27",
         "by": "Local Desk on One (#3649)",
         "collections": "allowed",
+        "grant": "you may do as you wish",
         "terms": {
           "Author's notes (summary)": "\"you may do as you wish\""
         },
@@ -704,6 +705,9 @@
         "read": "2026-10-27",
         "by": "Local Desk on One (#3649)",
         "collections": "allowed",
+        "licence": {
+          "name": "CC BY-NC-SA"
+        },
         "terms": {
           "Author's notes (summary)": "Released under CC BY-NC-SA: the material may be copied and redistributed in any medium or format, and remixed, with credit, a link to the licence, and changes marked, under the same licence. No commercial use, and no legal or technical restrictions such as Patreon-only downloads. Donation Points on derived works are allowed."
         },
@@ -1408,6 +1412,9 @@
         "read": "2026-10-27",
         "by": "Local Desk on One (#3649)",
         "collections": "allowed",
+        "licence": {
+          "name": "MIT"
+        },
         "terms": {
           "Author's notes (summary)": "MIT License."
         },
@@ -1658,6 +1665,9 @@
         "read": "2026-10-27",
         "by": "Local Desk on One (#3649)",
         "collections": "allowed",
+        "licence": {
+          "name": "CC BY-NC-SA 4.0"
+        },
         "terms": {
           "Author's notes (summary)": "Licensed CC BY-NC-SA 4.0. Donation Points on files using its assets are still allowed. Credit all contributors of any assets used."
         },
@@ -1715,7 +1725,7 @@
       "reading": {
         "read": "2026-10-27",
         "by": "Local Desk on One (#3649)",
-        "collections": "allowed",
+        "collections": "not stated",
         "terms": {
           "Author's notes (summary)": "The main body mesh and the underwear meshes are licensed CC-BY-SA-4.0. The mod may be uploaded to Bethesda.net for PlayStation and Xbox without changing its name. Refits and original armour or clothing on the HIMBO body are allowed with credit, as long as they are free and not behind a paywall. People wanting to make HIMBO derivatives as a new body replacer are invited to message the author."
         },
@@ -1808,6 +1818,9 @@
         "read": "2026-10-27",
         "by": "Local Desk on One (#3649)",
         "collections": "allowed",
+        "licence": {
+          "name": "MIT"
+        },
         "terms": {
           "Author's notes (summary)": "MIT License."
         },
@@ -1987,6 +2000,9 @@
         "read": "2026-10-27",
         "by": "Local Desk on One (#3649)",
         "collections": "allowed",
+        "licence": {
+          "name": "MIT"
+        },
         "terms": {
           "Author's notes (summary)": "Source code on GitHub, under the MIT License."
         },
@@ -2010,6 +2026,9 @@
         "read": "2026-10-27",
         "by": "Local Desk on One (#3649)",
         "collections": "allowed",
+        "licence": {
+          "name": "GPL-3.0 (from version 3.0)"
+        },
         "terms": {
           "Author's notes (summary)": "From version 3.0 all assets are under GPL3 (MIT before, switching at commit 5a5cb88). The description is the author's own work and needs explicit permission to reuse. Notes on how Donation Points are shared between the authors."
         },
@@ -2037,7 +2056,7 @@
       "reading": {
         "read": "2026-10-27",
         "by": "Local Desk on One (#3649)",
-        "collections": "allowed",
+        "collections": "not stated",
         "terms": {
           "Other user's assets": "All the assets in this file belong to the author, or are from free-to-use modder's resources",
           "Upload permission": "You are not allowed to upload this file to other sites under any circumstances",
@@ -2068,6 +2087,9 @@
         "read": "2026-10-27",
         "by": "Local Desk on One (#3649)",
         "collections": "allowed",
+        "licence": {
+          "name": "GPL-3.0"
+        },
         "terms": {
           "Author's notes (summary)": "Licensed under GPL3; permissions follow that licence."
         },
@@ -2251,6 +2273,9 @@
         "read": "2026-10-27",
         "by": "Local Desk on One (#3649)",
         "collections": "allowed",
+        "licence": {
+          "name": "GPL-3.0-or-later, with a Modding Exception and the GPL-3.0 Linking Exception"
+        },
         "terms": {
           "Author's notes (summary)": "Licensed GPL-3.0-or-later with a Modding Exception and the GPL-3.0 Linking Exception (with Corresponding Source), the modded code being Skyrim and the modding libraries SKSE and Windows. Originally based on code under MIT."
         },
@@ -2308,6 +2333,9 @@
         "read": "2026-10-27",
         "by": "Local Desk on One (#3649)",
         "collections": "allowed",
+        "licence": {
+          "name": "MIT"
+        },
         "terms": {
           "Author's notes (summary)": "Source code on GitHub, under the MIT License."
         },
@@ -2331,6 +2359,9 @@
         "read": "2026-10-27",
         "by": "Local Desk on One (#3649)",
         "collections": "allowed",
+        "licence": {
+          "name": "MIT"
+        },
         "terms": {
           "Author's notes (summary)": "Source code on GitHub, under the MIT License. SkyUI source and interface files may be used in other mods only as a trivial part of SkyUI; other requests go to the SkyUI authors, whose terms are linked."
         },
@@ -2469,6 +2500,9 @@
         "read": "2026-10-27",
         "by": "Local Desk on One (#3649)",
         "collections": "allowed",
+        "licence": {
+          "name": "MIT"
+        },
         "terms": {
           "Author's notes (summary)": "Source code on GitHub, under the MIT License."
         },
@@ -2867,6 +2901,9 @@
         "read": "2026-10-27",
         "by": "Local Desk on One (#3649)",
         "collections": "allowed",
+        "licence": {
+          "name": "GPL-3.0-or-later"
+        },
         "terms": {
           "Author's notes (summary)": "Released under GPL-3.0-or-later; derivative works must provide full source under the same licence."
         },
@@ -2919,7 +2956,13 @@
       "reading": {
         "read": "2026-10-27",
         "by": "Local Desk on One (#3649)",
-        "collections": "not stated",
+        "collections": "allowed",
+        "licence": {
+          "name": "GPL-3.0",
+          "at": "the LICENSE file in the QTR-Modding/SKSE-Menu-Framework-3 repository on GitHub, the page's only instruction",
+          "read": "2026-10-30",
+          "by": "the audit that filed #4190"
+        },
         "terms": {
           "Author's notes (summary)": "Points to the LICENSE file in the QTR-Modding/SKSE-Menu-Framework-3 repository on GitHub, without naming the licence."
         },
@@ -3007,6 +3050,9 @@
         "read": "2026-10-27",
         "by": "Local Desk on One (#3649)",
         "collections": "allowed",
+        "licence": {
+          "name": "GPL-3.0"
+        },
         "terms": {
           "Author's notes (summary)": "Licensed GPLv3, copyright the Pandora Behaviour Engine contributors, with the source on GitHub."
         },
@@ -3198,6 +3244,9 @@
         "read": "2026-10-27",
         "by": "Local Desk on One (#3649)",
         "collections": "allowed",
+        "licence": {
+          "name": "GPL-3.0-or-later (from version 3.0.1)"
+        },
         "terms": {
           "Author's notes (summary)": "Versions before 3.0.1 are Apache-2.0 or MIT; from 3.0.1 GPL-3.0-or-later, with the licence files linked on GitHub."
         },
