@@ -231,9 +231,34 @@ class Clock extends Date {
   static now() { return clockAt === null ? Date.now() : clockAt; }
 }
 
+// THE TIMER CLOCK. guard() and counted() time a handler with process.hrtime.
+// For the minute line's own checks below, a handler "takes 5 ms" by moving
+// this clock 5 ms (hrAt, in ms), not by spinning for 5 ms of wall time: on
+// a machine busy with other harnesses a spin of 5 ms was timed at more, and
+// slowOne read over 70 ms for 10 runs (the gate runs four at once). Off those
+// checks (hrAt null) the gamemode gets the real hrtime.
+let hrAt = null;
+function fakeHrtime(prev) {
+  if (hrAt === null) { return prev ? process.hrtime(prev) : process.hrtime(); }
+  const ns = BigInt(Math.round(hrAt * 1e6));
+  const now = [Number(ns / 1000000000n), Number(ns % 1000000000n)];
+  if (!prev) { return now; }
+  let ds = now[0] - prev[0], dn = now[1] - prev[1];
+  if (dn < 0) { ds--; dn += 1e9; }
+  return [ds, dn];
+}
+fakeHrtime.bigint = function () { return hrAt === null ? process.hrtime.bigint() : BigInt(Math.round(hrAt * 1e6)); };
+const sandboxProcess = new Proxy(process, {
+  get: function (t, k) {
+    if (k === 'hrtime') { return fakeHrtime; }
+    const v = t[k];
+    return typeof v === 'function' ? v.bind(t) : v;
+  }
+});
+
 const quiet = { log: function () { }, error: function () { }, warn: function () { }, info: function () { } };
 const sandbox = {
-  mp: mp, require: fakeRequire, console: QUIET ? quiet : console, process: process, Buffer: Buffer,
+  mp: mp, require: fakeRequire, console: QUIET ? quiet : console, process: sandboxProcess, Buffer: Buffer,
   setInterval: fakeSetInterval, clearInterval: fakeClearInterval,
   setTimeout: function () { return { unref: function () { } }; }, clearTimeout: function () { },
   setImmediate: function () { }, Date: Clock, URL: URL, TextEncoder: TextEncoder, TextDecoder: TextDecoder
@@ -504,8 +529,11 @@ if (beat) {
   const logFile = path.join(scratch, 'thornswood.log');
   let before = '';
   try { before = fs.readFileSync(logFile, 'utf8'); } catch (e) { before = ''; }
-  // A handler that takes 5 ms, run ten times through guard(), shows as 50 ms.
-  const slow = vm.runInContext("guard('slowOne', function () { var t = Date.now(); while (Date.now() - t < 5) { } })", sandbox);
+  // A handler that takes 5 ms on the timer clock, run ten times through
+  // guard(), shows as 50 ms.
+  hrAt = 0;
+  sandbox.__tickSpend = function (ms) { hrAt += ms; };
+  const slow = vm.runInContext("guard('slowOne', function () { __tickSpend(5); })", sandbox);
   for (let i = 0; i < 10; i++) { slow(); }
   beat.beat();
   let after = '';
@@ -515,8 +543,8 @@ if (beat) {
   yes('it says how many are on and the process\'s share of a core', /\d+ on, process \d+(\.\d)?% of one core/.test(line));
   yes('and how late the event loop ran', /loop late p50 [\d.]+ms p99 [\d.]+ms worst \d+ms/.test(line));
   const m = /slowOne (\d+)ms\/10 worst ([\d.]+)ms/.exec(line);
-  yes('and the costliest handlers: slowOne took about 50 ms over 10 runs, worst about 5',
-      !!m && Number(m[1]) >= 48 && Number(m[1]) <= 70 && Number(m[2]) >= 4.9);
+  yes('and the costliest handlers: slowOne took 50 ms over 10 runs, worst 5',
+      !!m && Number(m[1]) === 50 && Number(m[2]) === 5);
   const handler = vm.runInContext("guard('answers', function (a) { return a * 2; })", sandbox);
   yes('guard still hands back what the handler returns', handler(21) === 42);
   const thrower = vm.runInContext("guard('throws', function () { throw new Error('x'); })", sandbox);
@@ -527,7 +555,7 @@ if (beat) {
 
   // #385, 20 Oct: the shared NPC runtime's own timers are counted too, under
   // "npc <task>", through the timers the startup hands it.
-  const npcStep = vm.runInContext("counted('npc backgroundTick', function (a) { var t = Date.now(); while (Date.now() - t < 5) { } return a + 1; })", sandbox);
+  const npcStep = vm.runInContext("counted('npc backgroundTick', function (a) { __tickSpend(5); return a + 1; })", sandbox);
   let gave = 0;
   for (let i = 0; i < 4; i++) { gave = npcStep(i); }
   const npcThrows = vm.runInContext("counted('npc throws', function () { throw new Error('y'); })", sandbox);
@@ -541,12 +569,13 @@ if (beat) {
   const line2 = after2.slice(before2.length).split('\n').filter(function (l) { return / server: /.test(l); })[0] || '';
   console.log('  ' + line2.replace(/^\S+ \S+ /, ''));
   const n = /npc backgroundTick (\d+)ms\/4 worst ([\d.]+)ms/.exec(line2);
-  yes('an NPC runtime step shows on the minute line: about 20 ms over 4 runs, worst about 5 (a 5 ms wait on a millisecond clock is 4 to 5)',
-      !!n && Number(n[1]) >= 16 && Number(n[1]) <= 40 && Number(n[2]) >= 4);
+  yes('an NPC runtime step shows on the minute line: 20 ms over 4 runs, worst 5',
+      !!n && Number(n[1]) === 20 && Number(n[2]) === 5);
   yes('and counts in the gamemode share, not the engine\'s', /gamemode (\d+\.\d)%/.test(line2) &&
       Number(/gamemode (\d+\.\d)%/.exec(line2)[1]) > 0);
   yes('a counted step still hands back what it returned', gave === 4);
   yes('and hands on what it throws, as the runtime\'s own timer did', handedOn);
+  hrAt = null;   // the real timer clock again, for the busy check below
   const startup = fs.readFileSync(SRC, 'utf8');
   yes('the NPC startup hands the runtime counted timers',
       /startSharedNpcServerRuntime\(\s*mp, \{setTimeout:\(fn,delay\)=>setTimeout\(counted\('npc '\+\(fn\.npcRuntimeTask\|\|'task'\),fn\),delay\), clearTimeout\}/.test(startup));
