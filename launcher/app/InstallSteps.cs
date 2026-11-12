@@ -339,7 +339,6 @@ namespace Thornswood
 
             // ------------------------------------------------- the files
             Head("Installing the mods");
-            Say("  Several thousand files, a few minutes.");
             List<string> files = PayloadFiles(payload);
             RecordIntoGame(files);
             if (madeOwn) RemoveSharedNames(payload, files, gameDir);
@@ -432,6 +431,10 @@ namespace Thornswood
         {
             long total = 0;
             foreach (string rel in files) total += new FileInfo(Path.Combine(payload, rel)).Length;
+            // What is about to be copied, counted in the package itself, so it
+            // is always this build's and never a figure typed in for an older
+            // one (#4538).
+            Say(string.Format(CultureInfo.InvariantCulture, "  {0:n0} files, {1:n1} MB", files.Count, total / 1048576.0));
             long done = 0;
             var clock = Stopwatch.StartNew();
             Directory.CreateDirectory(to);
