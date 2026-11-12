@@ -130,7 +130,7 @@ Yes 'once, and only when asked' ($after -match '(?s)if \(!fixAfterVortex\) retur
 Yes 'not beside an update UpdateBySelf started, whose end runs Fix (FixAfterUpdate)' ($after.IndexOf('if (updating) return;') -gt $after.IndexOf('fixAfterVortex = false;') -and
     $after.IndexOf('if (updating) return;') -lt $after.IndexOf('RunFix(false, true);') -and
     $update -match 'static void UpdateNow\(\)\s*\{\s*RunUpdate\(FixAfterUpdate\);\s*\}')
-$runFix = Code (Method $sf 'static void RunFix(bool afterUpdate, bool afterVortex = false)')
+$runFix = Code (Method $sf 'static void RunFix(bool afterUpdate, bool afterVortex = false, bool afterMake = false)')
 Yes 'that Fix waits for a folder being prepared, as Fix after an update does' ($runFix.Contains('if (ownGameBusy && afterVortex) { fixWhenFolderReady = true; fixWhenFolderReadyAfterVortex = true;') -and
     $runFix.IndexOf('if (ownGameBusy && afterVortex)') -lt $runFix.IndexOf('if (ownGameBusy) {') -and
     $own.Contains('if (fixWhenFolderReadyAfterVortex) { fixWhenFolderReadyAfterVortex = false; RunFix(false, true); }'))

@@ -802,7 +802,10 @@ namespace Thornswood
             if (choice.MakeOwnGame)
             {
                 Say("Once Vortex has deployed it, the launcher makes Thornswood's own");
-                Say("Skyrim folder by itself and restarts.");
+                Say("Skyrim folder by itself and restarts, then makes the rest from");
+                Say("your game: Thornswood-Last.esp, the plugin order, and the");
+                Say("animation and body files, which Pandora and BodySlide build in");
+                Say("their own windows. Nothing needs a press of Fix.");
             }
             if (ownFirst || madeOwn) Say("Nothing was written into your Steam copy of Skyrim.");
             if (madeOwn) Say("Thornswood's own folder was updated in place.");
