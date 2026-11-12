@@ -6,14 +6,15 @@
   The deploy gate (#2841): the restricted, non-admin account whose key runs
   one dispatcher with only the named Deploy, Install and Get-Logs verbs, held
   only in the "desk" GitHub environment. This holds:
-    1. Every file of it parses, and the files the box runs under Windows
-       PowerShell 5.1 are plain ASCII (5.1 reads a file with no byte order
-       mark as the system code page).
+    1. Every file of it parses, and the files the box runs are plain ASCII
+       (Windows PowerShell 5.1, which ran them until #5356, read a file with
+       no byte order mark as the system code page).
     2. The rules (scripts\vps\gate\GateRules.ps1): lines the gate takes give
        exactly the words the broker starts the script with, and every line
        that names another verb, a parameter outside the verb's list, a value
        outside its rule or a character a shell or PowerShell would read is
-       refused whole. Under Windows PowerShell 5.1 too, when there is one.
+       refused whole, in a PowerShell 7 of their own too, as the broker runs
+       them (#5356).
     3. verbs.json against the scripts: each verb's script is there, takes
        every parameter the gate lets through and every fixed word, and no
        verb lets a caller name a host, a user, a folder, a file or a task.
@@ -342,13 +343,12 @@ $threw = $false; try { [void](Join-ThornswoodGateArgs @('C:\x\')) } catch { $thr
 Yes '  and a folder path that ends in a backslash' $threw
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if (-not $OnWindows) {
-    Write-Host 'SKIP  the rules under Windows PowerShell 5.1, which the box runs them with: this is not Windows'
-} else {
-    $ps51 = Get-WindowsPowerShell
-    $probe = Join-Path ([IO.Path]::GetTempPath()) ('tw-2841-' + [Guid]::NewGuid().ToString('N').Substring(0, 8) + '.ps1')
-    try {
-        [IO.File]::WriteAllText($probe, @"
+# In a shell of their own, the PowerShell 7 the broker runs them in (#5356),
+# so what the rules answer leans on nothing this harness loaded.
+$boxPs = Get-BoxPowerShell
+$probe = Join-Path ([IO.Path]::GetTempPath()) ('tw-2841-' + [Guid]::NewGuid().ToString('N').Substring(0, 8) + '.ps1')
+try {
+    [IO.File]::WriteAllText($probe, @"
 . '$((Join-Path $Repo 'scripts\vps\gate\GateRules.ps1').Replace("'", "''"))'
 `$v = Read-ThornswoodGateVerbs '$((Join-Path $Repo 'scripts\vps\gate\verbs.json').Replace("'", "''"))'
 foreach (`$l in 'Deploy-DevGamemode -Restart -Why "a gamemode update"', 'Install-Bot', 'Deploy-DevGamemode -Vps x', 'Deploy-DevGamemode -Why `$(x)', 'ping') {
@@ -356,12 +356,11 @@ foreach (`$l in 'Deploy-DevGamemode -Restart -Why "a gamemode update"', 'Install
   if (`$r.Ok) { 'OK ' + (`$r.Args -join '|') } else { 'NO' }
 }
 "@)
-        $said = @(& $ps51 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $probe 2>&1 | ForEach-Object { "$_" })
-        Yes 'under Windows PowerShell 5.1 the rules give the same words and refusals' (
-            ($said -join ';') -eq 'OK -Restart|-Why|a gamemode update;OK -CodeOnly|-NoPause;NO;NO;OK ')
-        if (($said -join ';') -ne 'OK -Restart|-Why|a gamemode update;OK -CodeOnly|-NoPause;NO;NO;OK ') { $said | Write-Host }
-    } finally { Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue }
-}
+    $said = @(& $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $probe 2>&1 | ForEach-Object { "$_" })
+    Yes 'in a PowerShell 7 of their own, as the broker runs them, the rules give the same words and refusals' (
+        ($said -join ';') -eq 'OK -Restart|-Why|a gamemode update;OK -CodeOnly|-NoPause;NO;NO;OK ')
+    if (($said -join ';') -ne 'OK -Restart|-Why|a gamemode update;OK -CodeOnly|-NoPause;NO;NO;OK ') { $said | Write-Host }
+} finally { Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue }
 
 # ---- 3. verbs.json against the scripts ---------------------------------------
 $never = @('Vps', 'VpsHost', 'User', 'VpsUser', 'Root', 'Task', 'TaskName', 'Data', 'Dist', 'Out', 'PasswordFile', 'Path', 'Script', 'Command', 'Site', 'Gamemode', 'ServerBuild', 'Note', 'DropPlugins', 'AsSystem', 'RunAs', 'Remove', 'RotateKey', 'Password')
@@ -419,11 +418,11 @@ Yes '  and allows SYSTEM and the deploy account alone' (
 $pipeBlock = [regex]::Match($broker, "(?s)\`$GatePipeCode = @'.*?\nfunction New-GatePipe.*?\n\}\r?\n").Value
 Yes '  and the pipe is made in one block a harness can run' ($pipeBlock.Length -gt 0)
 if (-not $OnWindows) {
-    Write-Host 'SKIP  the pipe under Windows PowerShell 5.1, which the broker runs under: this is not Windows'
+    Write-Host 'SKIP  the pipe itself: a named pipe with an access list of Windows accounts is something only Windows has'
 } else {
-    # Under 5.1, as the broker runs it: the pipe made for this account, a
-    # line through it, its access list read back, and its name refused to a
-    # second maker while the first holds it.
+    # In PowerShell 7, as the broker runs it (#5356): the pipe made for this
+    # account, a line through it, its access list read back, and its name
+    # refused to a second maker while the first holds it.
     $pipeProbe = Join-Path ([IO.Path]::GetTempPath()) ('tw-2841-pipe-' + [Guid]::NewGuid().ToString('N').Substring(0, 8) + '.ps1')
     $pipeRun = @'
 $name = 'tw-2841-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
@@ -438,7 +437,8 @@ try {
     $w.AutoFlush = $true
     $w.WriteLine('LINE x')
     'GOT ' + (New-Object IO.StreamReader($server)).ReadLine()
-    $rules = @($server.GetAccessControl().GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]))
+    # An extension method in .NET, which PowerShell 7 calls by its class.
+    $rules = @([IO.Pipes.PipesAclExtensions]::GetAccessControl($server).GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]))
     'DENY ' + @($rules | Where-Object { $_.AccessControlType -eq 'Deny' }).Count
     'ALLOW ' + ((@($rules | ForEach-Object { $_.IdentityReference.Value }) | Sort-Object -Unique) -join ',')
     $second = $null
@@ -449,10 +449,10 @@ try {
     try {
         $head = "`$ErrorActionPreference = 'Stop'`r`n`$Cfg = @{ deploySid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value }`r`n"
         [IO.File]::WriteAllText($pipeProbe, $head + $pipeBlock + $pipeRun)
-        $said = @(& (Get-WindowsPowerShell) -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $pipeProbe 2>&1 | ForEach-Object { "$_" })
+        $said = @(& $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $pipeProbe 2>&1 | ForEach-Object { "$_" })
         $me = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
         $want = @('GOT LINE x', 'DENY 0', ('ALLOW ' + ((@('S-1-5-18', $me) | Sort-Object -Unique) -join ',')), 'SECOND REFUSED')
-        Yes 'under Windows PowerShell 5.1 the pipe takes its account''s line, denies nothing, allows SYSTEM and that account, and holds its name' (($said -join ';') -eq ($want -join ';'))
+        Yes 'in PowerShell 7, as the broker runs it, the pipe takes its account''s line, denies nothing, allows SYSTEM and that account, and holds its name' (($said -join ';') -eq ($want -join ';'))
         if (($said -join ';') -ne ($want -join ';')) { $said | Write-Host }
     } finally { Remove-Item -LiteralPath $pipeProbe -Force -ErrorAction SilentlyContinue }
 }
@@ -583,8 +583,8 @@ try {
 catch { $env:ProgramData = $oldPd; Yes ('the host key block runs: ' + $_.Exception.Message) $false }
 finally { Remove-Item -LiteralPath $keysDir -Recurse -Force -ErrorAction SilentlyContinue }
 
-# The broker runs under Windows PowerShell 5.1 too: every short program whose
-# stderr it reads goes through Invoke-Short, which holds 'Continue' for itself.
+# Every short program whose stderr the broker reads goes through Invoke-Short,
+# which holds 'Continue' for itself, so a line on stderr never stops it.
 $bk = Text 'scripts/vps/gate/GateBroker.ps1'
 $shortFn = [regex]::Match($bk, '(?s)function Invoke-Short.*?\n\}').Value
 Yes 'the broker''s short programs run with stderr unable to stop it' ($shortFn -match "ErrorActionPreference = 'Continue'" -and @([regex]::Matches($bk, '2>&1')).Count -eq 1 -and $bk -notmatch '2>\$null')

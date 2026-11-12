@@ -5,7 +5,7 @@
 
       . (Join-Path $PSScriptRoot 'Windows.ps1')
 
-  It sets one variable and three functions, and nothing else:
+  It sets one variable and two functions, and nothing else:
 
     $OnWindows             $true on Windows, under pwsh or under Windows
                            PowerShell 5.1, and $false anywhere else.
@@ -16,13 +16,6 @@
                            box runs its scripts in since #5356. It works on
                            every OS, so a harness that runs box code in a child
                            shell runs it here too, on Linux as on Windows.
-    Get-WindowsPowerShell  Windows PowerShell 5.1's powershell.exe. Nothing on
-                           the box starts it since #5356; it is kept only for
-                           the launcher harnesses still on it (among them
-                           tests\test-signer-check.ps1) until the launcher's
-                           pull request lands. It throws when
-                           that file is not where Windows keeps it, and it
-                           throws off Windows.
 
   A harness that runs a box script in a child shell asks for that shell:
 
@@ -61,7 +54,11 @@
   PowerShell 5.1, so the harnesses ran box code in it too, and off Windows they
   said SKIP for every run. Now every script on the box runs in PowerShell 7,
   the same pwsh that runs the harness, so box code runs in the harness's own
-  shell everywhere and a harness skips only for what Windows itself has.
+  shell everywhere and a harness skips only for what Windows itself has. The
+  last harnesses that started Windows PowerShell (the deploy gate's rules and
+  pipe, Deploy-Docs's question to the box, Install-Launcher.ps1) start
+  PowerShell 7 since 12 Nov, as their scripts run, so the helper that found
+  powershell.exe, Get-WindowsPowerShell, went with them.
 #>
 $OnWindows = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
 function Get-WindowsPath([string]$Relative) {
@@ -74,9 +71,4 @@ function Get-BoxPowerShell {
     # The running pwsh itself, from .NET, so it is the same build on every OS
     # and never one found on PATH.
     [Environment]::ProcessPath
-}
-function Get-WindowsPowerShell {
-    $p = Get-WindowsPath 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    if (-not (Test-Path -LiteralPath $p)) { throw ('Windows PowerShell 5.1 is not at ' + $p + ', where Windows keeps it, so nothing that needs it can be checked here.') }
-    $p
 }

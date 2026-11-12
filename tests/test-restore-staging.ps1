@@ -39,7 +39,8 @@ function Yes([string]$what, [bool]$cond) {
     else { $script:fail++; Write-Host "FAIL  $what" }
 }
 
-$shell = if ($PSVersionTable.PSEdition -eq 'Core') { (Get-Process -Id $PID).Path } else { Join-Path $PSHOME 'powershell.exe' }
+. (Join-Path $PSScriptRoot 'Windows.ps1')
+$shell = Get-BoxPowerShell   # the PowerShell 7 every script runs in (#5356)
 if (-not $Scratch) { $Scratch = Join-Path ([IO.Path]::GetTempPath()) ('tw-restore-stage-' + [Guid]::NewGuid().ToString('N')) }
 $null = New-Item -ItemType Directory -Force -Path $Scratch
 Add-Type -AssemblyName System.IO.Compression
