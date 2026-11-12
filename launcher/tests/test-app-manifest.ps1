@@ -220,7 +220,7 @@ elseif (-not $Exe -and $Root) {
         # win-x64 without it embeds the same stamped manifest in the exe.
         Write-Host "      publishing for win-x64 into $Root (without Native AOT, which links on Windows only)"
         $sep = [IO.Path]::DirectorySeparatorChar
-        $said = & $LauncherDotnet publish $projPath -nologo -v:q '-clp:NoSummary;ErrorsOnly' -c Release -r win-x64 --self-contained true `
+        $said = & $LauncherDotnet publish $projPath -nologo -v:q '-clp:NoSummary;ErrorsOnly' --disable-build-servers -c Release -r win-x64 --self-contained true `
             '-p:PublishAot=false' ('-p:Version=' + $want[0]) -o (Join-Path $Root 'Launcher') `
             ('-p:BaseIntermediateOutputPath=' + (Join-Path $Root 'obj') + $sep) ('-p:BaseOutputPath=' + (Join-Path $Root 'bin') + $sep) 2>&1 | Out-String
         Yes 'dotnet publish built the launcher for win-x64' ($LASTEXITCODE -eq 0)
