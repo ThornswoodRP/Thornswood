@@ -117,7 +117,7 @@ yes('every count of hold roles in the readme is the plan\'s ' + HOLD_ROLES,
 
 /* ---- S: who is staff to the bot ----------------------------------------- */
 console.log('\nS, who is staff to the bot:');
-const said = /`STAFF_ROLES`[^()]*\(([^)]*?) by default\)/.exec(README);
+const said = /`STAFF_ROLES`[^()]*\(([^)]*?)\s+by\s+default\)/.exec(README);
 const readmeStaff = said ? said[1].replace(/\s+/g, ' ').split(/, | and /).map((s) => s.trim()).filter(Boolean) : [];
 yes('the readme gives STAFF_ROLES\'s default as the bot\'s',
   readmeStaff.length === STAFF_DEFAULT.length && STAFF_DEFAULT.every((r) => readmeStaff.indexOf(r) >= 0),
