@@ -69,9 +69,28 @@ for(const mode of ['before','refuse']) {
 f=fixture();f.mode('after');
 assert.equal(f.transfer.commit(10,f.record(),next,[{item:'f:Skyrim.esm',count:25}]).ok,true,'live receipt establishes a committed write despite notification error');
 assert.equal(f.calls(),1);assert.equal(f.inventory().entries[0].count,65);
+// A records-only save that throws after the engine wrote it (#4524): the
+// record read back is the new one, so it counts as saved, and quests stay on
+// for everyone. Before, this one case switched the service off server-wide.
 f=fixture();f.mode('after');
-assert.equal(f.transfer.commit(10,f.record(),{...next,open:{ebony:{drawn:1,gem:undefined}}},[]).uncertain,true,
-  'unchanged inventory receipts cannot acknowledge metadata after an exception');
+const written={...next,open:{ebony:{drawn:1,gem:undefined}}};
+{
+  const r=f.transfer.commit(10,f.record(),written,[]);
+  assert.equal(r.ok,true,'a records-only save found already written counts as saved');
+  assert.notEqual(r.uncertain,true);
+  assert.deepEqual(f.record(),JSON.parse(JSON.stringify(written)));
+  assert.equal(f.transfer.available(),true,'one written save does not switch quests off for everyone');
+  f.mode('');
+  assert.equal(f.transfer.commit(10,f.record(),next,[]).ok,true,'the next quest step for anybody still saves');
+}
+// The second outcome: it threw before writing, so the record read back is the
+// old one: refused, and the service stays on.
+f=fixture();f.mode('before');
+{
+  const old=f.record(),r=f.transfer.commit(10,old,next,[]);
+  assert.equal(r.ok,false);assert.equal(r.why,'unwritten');assert.notEqual(r.uncertain,true);
+  assert.deepEqual(f.record(),old);assert.equal(f.transfer.available(),true);
+}
 f=fixture();f.mode('unknown');
 assert.equal(f.transfer.commit(10,f.record(),next,[]).ok,false);assert.equal(f.transfer.available(),false);
 f.mode('');assert.equal(f.transfer.commit(10,f.record(),next,[]).ok,false);assert.equal(f.calls(),1);
