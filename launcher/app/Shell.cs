@@ -176,7 +176,7 @@ namespace Thornswood
         {
             // Velopack first (#4825): when it runs the exe about an install, an
             // update or an uninstall, this answers and the process ends here.
-            Velo.Start(args);
+            Velo.Start(args, Uninstall.FromVelopack);
 
             // PerMonitorV2 is in the application manifest (#463), and Avalonia
             // rescales on WM_DPICHANGED by itself; WindowFit keeps the window

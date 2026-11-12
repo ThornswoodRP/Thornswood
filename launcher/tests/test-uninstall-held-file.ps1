@@ -116,7 +116,7 @@ $shellSrc = Read 'launcher\app\Shell.cs'
 Yes 'the uninstall''s first question names the launcher''s own folder among what goes' ($shellSrc -match 'goes\.AppendLine\("    " \+ Velo\.Locator\.RootAppDir')
 $veloSrc = Read 'launcher\app\Velo.cs'
 $registerSrc = Read 'launcher\app\Register.cs'
-Yes 'Velopack''s uninstall hook runs Uninstall.FromVelopack' ($veloSrc -match '\.OnBeforeUninstallFastCallback\(delegate \{ Uninstall\.FromVelopack\(\); \}\)')
+Yes 'Velopack''s uninstall hook runs what Shell.Main hands it, Uninstall.FromVelopack' ($veloSrc -match '\.OnBeforeUninstallFastCallback\(delegate \{ if \(uninstalling != null\) uninstalling\(\); \}\)' -and $shellSrc.Contains('Velo.Start(args, Uninstall.FromVelopack);'))
 $from = [regex]::Match($uninstallSrc, '(?s)public static void FromVelopack\(\)\s*\{(.*?)\n        \}')
 $f = $from.Groups[1].Value
 Yes 'FromVelopack finds Root from the install''s record and stops when WhyNot says it is not one' ($from.Success -and $f.Contains('InstallPlace.Recorded()') -and $f -match 'if \(why != null\) \{[^}]*return; \}')

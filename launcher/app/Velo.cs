@@ -57,7 +57,12 @@ namespace Thornswood
         /// VeloUpdate.cs have passed it. Left off, the next update check finds
         /// it on disk and checks it like any other.
         /// </summary>
-        public static void Start(string[] args)
+        /// <param name="uninstalling">
+        /// What runs when Velopack's own uninstall runs without Thornswood's
+        /// (Uninstall.FromVelopack, #5932). Handed in by Shell.Main rather
+        /// than named here, so this file still builds alone in ShipRoot.
+        /// </param>
+        public static void Start(string[] args, Action uninstalling)
         {
             startArgs = args ?? new string[0];
             VelopackApp.Build()
@@ -67,7 +72,7 @@ namespace Thornswood
                 // Velopack's own uninstall run some other way than through
                 // Thornswood's (Register.HideVelopackEntry, #5932): the rest
                 // of Thornswood goes with it.
-                .OnBeforeUninstallFastCallback(delegate { Uninstall.FromVelopack(); })
+                .OnBeforeUninstallFastCallback(delegate { if (uninstalling != null) uninstalling(); })
                 .Run();
         }
 
