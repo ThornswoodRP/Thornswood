@@ -46197,13 +46197,30 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     }
     restart.why = why || 'an update';
     restart.mode = (mode === 'restart' || mode === 'notice') ? mode : 'update';
-    broadcast(opening(Math.round(seconds / 60)));
+    broadcast(opening(seconds));
   }
 
-  function opening(mins) {
-    var when = mins >= 1
-      ? mins + (mins === 1 ? ' minute' : ' minutes')
-      : 'under a minute';
+  /*
+    THE OPENING NEVER NAMES MORE TIME THAN IS LEFT (#4541). It used to say
+    Math.round(seconds / 60) minutes, and requests come in part minutes, so
+    30 seconds opened with "1 minute", 90 with "2 minutes" and 150 with "3
+    minutes", and people were put out sooner than they were told. Now it
+    says the whole minutes and then the seconds over, each rounded down, so a
+    whole number of minutes reads as it always did and nothing is promised
+    that is not there.
+  */
+  function timeLeft(seconds) {
+    var total = Math.max(0, Math.floor(seconds));
+    if (total < 1) { return 'under a second'; }
+    var mins = Math.floor(total / 60), secs = total % 60;
+    var m = mins + (mins === 1 ? ' minute' : ' minutes');
+    var s = secs + (secs === 1 ? ' second' : ' seconds');
+    if (!mins) { return s; }
+    return secs ? m + ' and ' + s : m;
+  }
+
+  function opening(seconds) {
+    var when = timeLeft(seconds);
     /*
       Three modes, and only two of them end with anybody put out.
 
