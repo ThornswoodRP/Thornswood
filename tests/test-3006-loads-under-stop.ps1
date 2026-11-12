@@ -198,8 +198,10 @@ try {
 }
 
 # ---- every script here ---------------------------------------------------------------
-Write-Host ''; Write-Host 'Every script in scripts\, tests\ and installer\'
-$files = @(foreach ($d in 'scripts', 'tests', 'installer') {
+Write-Host ''; Write-Host 'Every script in scripts\, tests\, installer\ and each product''s tests folder'
+# And every product's own tests folder (game\tests, launcher\tests, #5341).
+$beside = @(Get-ChildItem -LiteralPath $Repo -Directory | Where-Object { $_.Name -notin @('tests', 'node_modules', 'worktrees', 'temp', 'local') -and (Test-Path -LiteralPath (Join-Path $_.FullName 'tests') -PathType Container) } | ForEach-Object { Join-Path $_.Name 'tests' })
+$files = @(foreach ($d in @('scripts', 'tests', 'installer') + $beside) {
     $dir = Join-Path $Repo $d
     if (Test-Path -LiteralPath $dir) {
         Get-ChildItem -LiteralPath $dir -Recurse -File -Filter '*.ps1' | Where-Object { $_.FullName -notmatch '[\\/]node_modules[\\/]' }

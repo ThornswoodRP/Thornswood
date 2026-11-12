@@ -7,8 +7,9 @@
   server (tests/stand-in-server.js) in the engine's message order.
 
   A scenario says which systems it covers with header lines of its own,
-  "Scenario: systems/<page>.md". This reads every tests/test-scenario-*.js,
-  and for each system the guide links (a page directly under docs/systems):
+  "Scenario: systems/<page>.md". This reads every test-scenario-*.js in
+  game/tests (and any still in tests), and for each system the guide links
+  (a page directly under docs/systems):
 
     covered     a scenario names it, requires the stand-in, and is on the
                 gate (not in tests/gate-excluded.txt);
@@ -94,17 +95,25 @@ const excluded = new Set(read('tests/gate-excluded.txt').split('\n')
   .filter(function (l) { return l && l[0] !== '#'; })
   .map(function (l) { return l.split(/\s+/)[0]; }));
 const covered = {};
-const files = fs.readdirSync(path.join(REPO, 'tests')).filter(function (f) { return /^test-scenario-[a-z0-9-]+\.js$/.test(f); }).sort();
+// The scenarios are the game's, beside it in game/tests (#5341), and one in
+// tests/ still counts. Each goes by its name on the gate: its file name in
+// tests/, its path beside the game.
+function scenarios(dir, prefix) {
+  if (!fs.existsSync(path.join(REPO, dir))) { return []; }
+  return fs.readdirSync(path.join(REPO, dir)).filter(function (f) { return /^test-scenario-[a-z0-9-]+\.js$/.test(f); })
+    .map(function (f) { return prefix + f; });
+}
+const files = scenarios('tests', '').concat(scenarios(path.join('game', 'tests'), 'game/tests/')).sort();
 yes('there are scenario harnesses (' + files.length + ')', files.length > 0);
 files.forEach(function (f) {
-  const text = read('tests/' + f);
+  const text = read(f.indexOf('/') >= 0 ? f : 'tests/' + f);
   const head = (text.match(/^'use strict';\s*\/\*([\s\S]*?)\*\//) || [, ''])[1];
   const names = [];
   const re = /^\s*Scenario: systems\/([a-z0-9-]+\.md)\s*$/gm;
   let s;
   while ((s = re.exec(head))) { names.push(s[1]); }
   yes(f + ' names what it covers in its header (' + names.join(', ') + ')', names.length > 0);
-  yes(f + ' runs over the stand-in server', /require\('\.\/stand-in-server\.js'\)/.test(text));
+  yes(f + ' runs over the stand-in server', /require\('(\.\/|\.\.\/\.\.\/tests\/)stand-in-server\.js'\)/.test(text));
   yes(f + ' is on the gate', !excluded.has(f));
   names.forEach(function (n) {
     yes(f + ' names a page that is there: systems/' + n, fs.existsSync(path.join(REPO, 'docs', 'systems', n)));
