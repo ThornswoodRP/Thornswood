@@ -1,0 +1,9 @@
+{
+  "issue": 4607,
+  "environment": "dev",
+  "steps": [
+    { "inGame": "On dev, staff break a test character's leg with /hurt and the name, then break leg. The character then holds sprint.", "doneWhen": "They cannot sprint, a sprint already running stops, and Your broken leg will not take a sprint. shows once." },
+    { "inGame": "On dev, staff break a test character's arm with /hurt and the name, then break arm. Somebody hits them while they block, before and after staff clear it with /hurt and the name, then clear.", "doneWhen": "A blocked hit costs about twice the stamina while the arm is broken." },
+    { "inGame": "On dev, a character with a broken leg from staff presses the shrine inside each of the six temples: Whiterun, Solitude, Windhelm, Markarth, Riften and Raven Rock.", "doneWhen": "Each temple's shrine says The temple sees to the break. Any temple where nothing is said is named on this check." }
+  ]
+}
