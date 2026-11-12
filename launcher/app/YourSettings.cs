@@ -206,7 +206,7 @@ namespace Thornswood
             var o = new JsonObject();
             o["Theme"] = c.Theme ?? "";
             var colors = new JsonArray();
-            if (c.CustomColors != null) foreach (string s in c.CustomColors) colors.Add(s ?? "");
+            if (c.CustomColors != null) foreach (string s in c.CustomColors) colors.Add((JsonNode)JsonValue.Create(s ?? ""));
             o["CustomColors"] = colors;
             o["CustomLight"] = c.CustomLight;
             o["MusicOff"] = c.MusicOff;
