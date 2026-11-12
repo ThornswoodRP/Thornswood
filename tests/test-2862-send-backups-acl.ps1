@@ -21,6 +21,10 @@
     - -Status checks the drop key against its .pub, says its lock, and logs
       in with the send's own options and an empty batch, saying what sftp
       said (the VM refused the key on 11 Nov 2026 and logged no reason);
+    - the drop key is made with no passphrase (-N '', not -N '""', which
+      PowerShell 7 hands over as two quote marks), every read of it says
+      -P '' so nothing waits for a passphrase, and -Install takes the old
+      quote marks off the key it already made;
     - -Install turns on the Task Scheduler's Operational log before it
       registers the task, since the task starts on the nightly's "task
       completed" event there and Windows Server ships that log off;
@@ -111,8 +115,18 @@ Yes '-Status says what Windows wrote about the send task''s own runs, from that 
 # said, with an empty batch that sends nothing.
 Yes '-Status checks the key pair and its lock, and logs in with the send''s own options and an empty batch' (
     $send.Contains('& $sftp -b $batch @Login ') -and $send.Contains('-v -b $empty @Login ') -and
-    $send.Contains("[IO.File]::WriteAllText(`$empty, '')") -and $send.Contains('-y -f $Key') -and $send.Contains('Get-Acl -LiteralPath $Key') -and
+    $send.Contains("[IO.File]::WriteAllText(`$empty, '')") -and $send.Contains("-y -P '' -f `$Key") -and $send.Contains('Get-Acl -LiteralPath $Key') -and
     ([regex]::Matches($send, '-o IdentitiesOnly|''IdentitiesOnly=yes''')).Count -eq 1)
+# PowerShell 7 hands a native program the text it is given: -N '""' locked
+# the drop key with two quote marks, the task could not sign with it, and the
+# VM refused every file on 11 Nov 2026. No script passes '""' to ssh-keygen,
+# and every ssh-keygen -y says its passphrase, so none waits for one.
+$quoted = @(Get-ChildItem -LiteralPath (Join-Path $Repo 'scripts') -Recurse -File -Include *.ps1, *.psm1 | Where-Object {
+    (Get-Content -LiteralPath $_.FullName -Raw) -match 'keygen[^\r\n]*-N ''""''' })
+Yes ('no script makes a key with -N ''""'' (two quote marks as its passphrase)' + $(if ($quoted.Count) { ': ' + ($quoted.Name -join ', ') })) (
+    $quoted.Count -eq 0 -and $send.Contains("-t ed25519 -N '' -C 'thornswood-box-drops-backups'"))
+Yes 'Send-Backups reads the drop key with -P '''' so it never waits for a passphrase, and -Install takes the old quote marks off the same key' (
+    $send.Contains("-y -P '' -f `$Key") -and -not ($send -match '-y -f \$Key') -and $send.Contains("-p -q -P '`"`"' -N '' -f `$Key"))
 
 # ---- the call, for real -----------------------------------------------------------
 if (-not $OnWindows) {
