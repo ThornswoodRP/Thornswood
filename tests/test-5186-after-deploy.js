@@ -108,7 +108,7 @@ function fakeGitHub() {
   // ---- 4. the workflows ----------------------------------------------------------
   const wf = fs.readFileSync(path.join(REPO, '.github', 'workflows', 'after-deploy.yml'), 'utf8').replace(/\r\n/g, '\n');
   yes('after-deploy.yml runs on a Deployment\'s status, for a success with a log only', /\non:\n  deployment_status:\n/.test(wf) &&
-      wf.indexOf("if: ${{ github.event.deployment_status.state == 'success' && github.event.deployment_status.log_url != '' }}") >= 0);
+      wf.indexOf("if: ${{ github.event.deployment_status.state == 'success' && github.event.deployment_status.log_url != '' && ") >= 0);
   // #5961: GitHub makes a Deployment for every job that names an
   // environment (board.yml's board, engine-pin.yml's engine-pin), and its
   // success status has a log URL, the job's run. Only a Deployment to Dev or
