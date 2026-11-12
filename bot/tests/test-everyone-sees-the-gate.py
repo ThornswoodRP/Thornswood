@@ -2,7 +2,7 @@
 test-everyone-sees-the-gate.py
 
 Somebody who has just joined sees Start Here, Tickets, Applications,
-#welcome-travelers and #dishboard, talks in none of them, and a Member talks
+#welcome-travelers and #disboard, talks in none of them, and a Member talks
 and bumps in the last two.
 
 Measured on the live server on 10 Nov 2026 (Setup-Discord -OnBox -Audit):
@@ -11,7 +11,7 @@ only takes posting away, so it leaned on @everyone for View Channels, and
 somebody with no role saw none of Start Here, Tickets or Applications, so
 never the Member button in #start-here either. A Member saw only
 Information, the one gate that names Member. Patrick, the same evening: new
-people see only #news and #updates; #welcome-travelers and #dishboard are for
+people see only #news and #updates; #welcome-travelers and #disboard are for
 everybody to read and only Members to talk in.
 
 So this checks:
@@ -22,10 +22,10 @@ So this checks:
      holds beyond it, changes nothing under -Check, and asks nothing when
      nothing is missing. The audit names what is missing.
   3. After it, by the plan's own modes: a newcomer sees and cannot post in
-     Start Here, Tickets, Applications, #welcome-travelers and #dishboard,
+     Start Here, Tickets, Applications, #welcome-travelers and #disboard,
      cannot run a command in the last two, and still sees nothing behind
      Member or Playtester. A Member and a Playtester talk and run commands in
-     #welcome-travelers and #dishboard. #dishboard is #say-hello renamed.
+     #welcome-travelers and #disboard. #disboard is #say-hello renamed.
 
 Build-Discord.py is imported for real under another name, so its __main__
 block never runs. Every guild, role and channel is a stand-in. A member's
@@ -153,8 +153,8 @@ for catname, specs in B.PLAN:
 
 GATE = ['Start Here', 'Tickets', 'Applications', '#rules', '#welcome',
         '#start-here', '#get-help', '#report-someone', '#apply-to-playtest',
-        '#welcome-travelers', '#dishboard']
-MEMBERS_TALK = ['#welcome-travelers', '#dishboard']
+        '#welcome-travelers', '#disboard']
+MEMBERS_TALK = ['#welcome-travelers', '#disboard']
 BEHIND = ['#news', '#updates', '#faq', '#general-chat', '#media', '#lore']
 
 # ------------------------------------------------------ 1. the problem --
@@ -214,9 +214,10 @@ yes('a Member sees #news and #faq',
 yes('a Member still does not see #general-chat, which is Playtester\'s',
     not resolve(everyone, member, places['#general-chat']).view_channel)
 
-hello = [s for _c, specs in B.PLAN for s in specs if s['name'] == 'dishboard']
-yes('#dishboard is #say-hello renamed in Start Here, so its id and history go '
-    'with it', len(hello) == 1 and ('Start Here', 'say-hello') in hello[0].get('was', ()))
+hello = [s for _c, specs in B.PLAN for s in specs if s['name'] == 'disboard']
+yes('#disboard is #say-hello renamed in Start Here, so its id and history go '
+    'with it', len(hello) == 1 and ('Start Here', 'say-hello') in hello[0].get('was', ())
+    and ('Start Here', 'dishboard') in hello[0].get('was', ()))
 yes('there is no #say-hello in the plan beside it',
     not [s for _c, specs in B.PLAN for s in specs if s['name'] == 'say-hello'])
 

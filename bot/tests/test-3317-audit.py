@@ -229,8 +229,13 @@ n, out = run(g)
 yes('a doc channel with no Changelog thread is a difference (#3336)',
     n == 1 and 'DIFFERS  #rules, it has no Changelog thread; -Posts makes it' in out)
 yes('who holds a staff rank is said', 'Lead Gamemaster: Djinn' in out)
-yes('a non-staff role is said as a count, not names', 'Playtester: 1 member(s)' in out
-    and 'A tester' not in out)
+# Patrick, 12 Nov 2026: some people hold Member who should not. Nothing gives
+# Member but a hand yet (#5841), so the audit names who holds the two gate
+# roles; only somebody holding the bot's token, or the session Box-Run.ps1
+# seals the output to, reads it.
+yes('a gate role is said as a count and by name', 'Playtester: 1 member(s)' in out
+    and 'Playtester, by name: A tester' in out)
+yes('  and Banned only as a count', 'Banned, by name' not in out)
 
 # --------------------------------------------------------------- a double --
 g, named = build()
