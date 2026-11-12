@@ -24,6 +24,12 @@
 
 'use strict';
 
+/* THE LOWEST NODE (#4365). Asked before anything else, because the first
+   module loaded below sets the site's roots with calls an older Node does
+   not have, and died there with a TypeError that named no version. */
+const tooOld = require('./lib/node-version').nodeVerdict(process.versions.node, require('tls'));
+if (tooOld) { console.error(tooOld); process.exit(1); }
+
 /* node server.js --strip-metadata <folder> (#3648): takes what each picture
    and recording in the folder says about where and when it was made out of
    it, as stripMedia does to every upload, says what it did, and stops. The
