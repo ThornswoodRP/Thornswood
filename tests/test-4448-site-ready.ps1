@@ -48,9 +48,8 @@ $probe.Start(); $port = ([Net.IPEndPoint]$probe.LocalEndpoint).Port; $probe.Stop
 $listener = New-Object Net.HttpListener
 $listener.Prefixes.Add("http://127.0.0.1:$port/")
 $listener.Start()
-$site = [hashtable]::Synchronized(@{ Code = 200; Body = '{"ok":true,"broken":[]}'; Drop = $false; Asked = [Collections.ArrayList]::Synchronized((New-Object Collections.ArrayList)) })
-$serve = [powershell]::Create()
-$null = $serve.AddScript({
+$site = [hashtable]::Synchronized(@{ Code = 200; Body = '{"ok":true,"broken":[]}'; Asked = [Collections.ArrayList]::Synchronized((New-Object Collections.ArrayList)) })
+$answer = {
     param($l, $site)
     while ($l.IsListening) {
         try { $ctx = $l.GetContext() } catch { break }
@@ -58,10 +57,7 @@ $null = $serve.AddScript({
         [void]$site.Asked.Add($path)
         $code = 404; $body = '{}'
         if ($path -eq '/api/public') { $code = 200; $body = '{"open":true}' }
-        elseif ($path -eq '/api/ready') {
-            if ($site.Drop) { try { $ctx.Response.Abort() } catch { }; continue }
-            $code = $site.Code; $body = $site.Body
-        }
+        elseif ($path -eq '/api/ready') { $code = $site.Code; $body = $site.Body }
         try {
             $b = [Text.Encoding]::UTF8.GetBytes($body)
             $ctx.Response.StatusCode = $code
@@ -71,10 +67,24 @@ $null = $serve.AddScript({
             $ctx.Response.Close()
         } catch { }
     }
-}).AddArgument($listener).AddArgument($site)
-$serving = $serve.BeginInvoke()
+}
+# The stand-in up, answering on its port.
+function SiteUp() {
+    $listener.Start()
+    $script:serve = [powershell]::Create()
+    $null = $script:serve.AddScript($answer).AddArgument($listener).AddArgument($site)
+    $script:serving = $script:serve.BeginInvoke()
+}
+# The stand-in gone, its port refusing, as a site whose process stopped. Not
+# a listener that aborts a request: measured on Linux, HttpListener's
+# Response.Abort() before anything is written sends HTTP 200, empty.
+function SiteGone() {
+    $listener.Stop()
+    try { $script:serve.EndInvoke($script:serving) } catch { }
+    $script:serve.Dispose()
+}
+SiteUp
 function Ready([int]$code, $broken) {
-    $site.Drop = $false
     $site.Code = $code
     if ($broken -is [string]) { $site.Body = $broken }
     else { $site.Body = (ConvertTo-Json @{ ok = ($code -eq 200); broken = @($broken) } -Compress -Depth 4) }
@@ -145,6 +155,8 @@ function Outbox() {
     return @(Get-Content -LiteralPath $f -Encoding UTF8 | Where-Object { $_ } | ForEach-Object { ConvertFrom-Json $_ })
 }
 function Show() { foreach ($a in (Outbox)) { Write-Host ('      ' + $a.service + ' ' + $a.kind + ': ' + $a.text) } }
+# What the readiness check said: every message but the website check's own.
+function Mine() { return @(Outbox | Where-Object { $_.service -ne 'website' }) }
 
 $bans = @{ file = 'bans.json'; why = 'will not parse'; play = $true }
 $sess = @{ file = 'sessions.json'; why = 'is not a list'; play = $false }
@@ -172,20 +184,29 @@ try {
     Yes '   and restart nothing' ($script:runs.Count -eq 0)
 
     # -- 4: the site cannot be asked -------------------------------------------
-    $site.Drop = $true
+    SiteGone
+    $refused = $false
+    try { $r = [Net.HttpWebRequest]::Create("http://127.0.0.1:$port/api/ready").GetResponse(); $r.Close() } catch {
+        $e = $_.Exception
+        while ($e -and -not ($e -is [Net.WebException])) { $e = $e.InnerException }
+        $refused = ($e -and -not $e.Response)
+    }
+    Yes '4. the stand-in, stopped, answers nothing at all' $refused
     Step 3
-    Yes ('4. a site that does not answer /api/ready is not said to be back (' + @(Outbox).Count + ')') (@(Outbox).Count -eq 1)
+    Yes ('   a site that does not answer /api/ready is not said to be back (' + @(Mine).Count + ')') (@(Mine).Count -eq 1)
+    Yes '   the website check tells that instead' (@(Outbox | Where-Object { $_.service -eq 'website' -and $_.kind -eq 'down' }).Count -eq 1)
     Yes '   and nothing is ended for it here' ($script:runs.Count -eq 0)
+    SiteUp
 
     # -- 5: mended ---------------------------------------------------------------
     Ready 200 @()
     Step 3
-    $o = @(Outbox)
+    $o = @(Mine)
     Yes ('5. once it reads again, one more message, and only one (' + $o.Count + ')') ($o.Count -eq 2)
     Yes '   and it says it is back' ($o.Count -eq 2 -and $o[1].kind -eq 'back' -and $o[1].service -eq $o[0].service)
     Step 5
-    Yes '   and then nothing' (@(Outbox).Count -eq 2)
-    if (@(Outbox).Count -ne 2) { Show }
+    Yes '   and then nothing' (@(Mine).Count -eq 2)
+    if (@(Mine).Count -ne 2) { Show }
 
     # -- 6: a file play does not rest on; a 503 that names nothing ---------------
     Box 'sessions'
@@ -207,9 +228,8 @@ try {
     Step 20
     Yes '   a site that reads everything says nothing in twenty runs' (@(Outbox).Count -eq 0 -and $script:runs.Count -eq 0)
 } finally {
-    $listener.Stop(); $listener.Close()
-    try { $serve.EndInvoke($serving) } catch { }
-    $serve.Dispose()
+    if ($listener.IsListening) { SiteGone }
+    $listener.Close()
     Remove-Item -LiteralPath $tmp -Recurse -Force -EA SilentlyContinue
 }
 
