@@ -115,7 +115,7 @@ _GETTING_IN_ALPHA = """\
 Anyone can download it. Getting into the world is an application, and it's
 short.
 
-1. Read <#RULES>. The application asks if you accept them.
+1. Read <#RULES> and react to them, which gives you the Member role.
 2. In <#PLAYTEST>, pick **Apply to be an alpha playtester**.
    It asks if you're 18 or over, if you accept the rules, and a few lines
    about who you want to play. Somebody reads it and gets back to you.
@@ -135,7 +135,7 @@ _GETTING_IN_OPEN = """\
 
 Anyone can download it and anyone here can play.
 
-1. Read <#RULES>. Being here and in the world means accepting them.
+1. Read <#RULES> and react to them, which gives you the Member role.
 2. Follow <#START>. It's **https://thornswood.net/join** word for word, read
    out of the same file, so the two can't disagree."""
 
@@ -160,14 +160,21 @@ It lives on the site, so it can't go stale in here.
 Say hello in <#GENERAL>.
 """
 
-_ACCEPTING_ALPHA = """\
-**Accepting them.** The application in <#PLAYTEST> asks whether you accept
-these rules and the ones at **https://thornswood.net/rules**, and your answer is
-kept against your Discord account. Applying means accepting them."""
+# The bot's own message in this channel, which starts "React here for the
+# Member role" (bot_rules_gate.py, #5841). It is a message apart from these
+# words, so it is named by what it says rather than where it sits: a -Posts
+# run writes these again below it.
+_REACT = """\
+**Accepting them.** Thornswood is eighteen and over. React with \N{WHITE HEAVY CHECK MARK} on
+the bot's message in this channel that starts **React here for the Member
+role** to say you are eighteen or over and you accept these rules and the ones
+at **https://thornswood.net/rules**. That gives you the Member role, and your
+reaction is kept as the record that you accepted them."""
 
-_ACCEPTING_OPEN = """\
-**Accepting them.** Being here and in the world means accepting these rules and
-the ones at **https://thornswood.net/rules**."""
+_ACCEPTING_ALPHA = _REACT + """ The application in
+<#PLAYTEST> asks again."""
+
+_ACCEPTING_OPEN = _REACT
 
 RULES = """\
 # Rules
@@ -582,6 +589,7 @@ CHANGES = {
     'RULES': [
         ('2026-10-22', 'The changelog starts here; earlier changes are in the repository history. Bugs now go in #test-findings, since #bugs is gone.', '8c8eaaa1c0c2'),
         ('2026-10-22', 'The application that asks whether you accept these is in its own channel now.', 'a61e1b4d9c57'),
+        ('2026-11-12', "Accepting the rules is reacting to the bot's message in this channel, which says you are eighteen or over and gives you the Member role. Your reaction is the record.", '8974c96fdf00'),
     ],
     'WELCOME': [
         ('2026-10-22', 'The changelog starts here; earlier changes are in the repository history.', '4a290d7afd52'),
@@ -589,7 +597,8 @@ CHANGES = {
         ('2026-10-26', 'The known issues link now says what that page is: what is broken right now that we know about. What works that way on purpose is on the help page.', 'ce6ac2b915a6'),
         ('2026-10-26', 'Only the line breaks of the Vortex profile sentence moved; no words changed.', '938f8250a962'),
         ('2026-11-11', 'What happens to your own Skyrim now names the install window\'s box, Give Thornswood a Skyrim folder of its own, which starts unticked. Ticked, nothing of Thornswood\'s goes into your Steam copy and the launcher builds its own game folder; left unticked, Thornswood\'s files go into your Steam copy until it does.', '575fb40b672c'),
-        ('2026-11-12', "What happens to your own Skyrim: the install window's box, Give Thornswood a Skyrim folder of its own, now starts ticked, so by default nothing of Thornswood's goes into your Steam copy and the launcher builds its own game folder without asking.", '5daa00d1a1f9'),
+        ('2026-11-12', 'The first step to getting in is reacting to the rules, which gives you the Member role.', '336327ab9a7a'),
+        ('2026-11-12', "What happens to your own Skyrim: the install window's box, Give Thornswood a Skyrim folder of its own, now starts ticked, so by default nothing of Thornswood's goes into your Steam copy and the launcher builds its own game folder without asking.", 'f303cd7c00ca'),
     ],
     'START': [
         ('2026-10-22', 'The changelog starts here; earlier changes are in the repository history. Logs and crash files now go in #test-findings, since #logs-and-crashes is gone.', '8a49f1c3335b'),
