@@ -18,6 +18,9 @@
       ([IO.DirectoryInfo] or [IO.FileInfo]), which is what the method takes;
     - Send-Backups.ps1 locks its folder that way, and -Install says the drop
       key after the lock and before it asks the VM anything;
+    - -Status checks the drop key against its .pub, says its lock, and logs
+      in with the send's own options and an empty batch, saying what sftp
+      said (the VM refused the key on 11 Nov 2026 and logged no reason);
     - -Install turns on the Task Scheduler's Operational log before it
       registers the task, since the task starts on the nightly's "task
       completed" event there and Windows Server ships that log off;
@@ -103,6 +106,13 @@ Yes ('every pwsh the send starts is told nobody is there: -NonInteractive, and -
     $calls.Count -ge 1 -and @($calls | Where-Object { $_ -notmatch ' -NonInteractive ' -or ($_ -match '\$restore' -and $_ -notmatch ' -NoPause( |$)') }).Count -eq 0)
 Yes '-Status says what Windows wrote about the send task''s own runs, from that log' (
     $send.Contains("[@Name='TaskName']='\`$TaskName'") -and $send.Contains('Get-WinEvent -FilterXml ([xml]$own)'))
+# On 11 Nov 2026 the VM refused the box's key with nothing in its own log
+# to say why, so -Status logs in the way the send does and says what sftp
+# said, with an empty batch that sends nothing.
+Yes '-Status checks the key pair and its lock, and logs in with the send''s own options and an empty batch' (
+    $send.Contains('& $sftp -b $batch @Login ') -and $send.Contains('-v -b $empty @Login ') -and
+    $send.Contains("[IO.File]::WriteAllText(`$empty, '')") -and $send.Contains('-y -f $Key') -and $send.Contains('Get-Acl -LiteralPath $Key') -and
+    ([regex]::Matches($send, '-o IdentitiesOnly|''IdentitiesOnly=yes''')).Count -eq 1)
 
 # ---- the call, for real -----------------------------------------------------------
 if (-not $OnWindows) {
