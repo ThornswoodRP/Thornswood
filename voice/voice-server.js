@@ -378,7 +378,35 @@ function sweepSilenced(now) {
  * pluginReport below).
  */
 const CHAT_DIR = process.env.THORNSWOOD_CHAT_DIR || path.join(HERE, 'chat');
-const CHAT_DAYS = Number(process.env.THORNSWOOD_CHAT_DAYS || 365);
+
+/* HOW MANY DAYS CHAT IS KEPT, AND NEVER FEWER THAN 365 (#4410).
+
+   This was Number(process.env.THORNSWOOD_CHAT_DAYS || 365), used as it came.
+   Number() turns a word into NaN and a blank into 0, and the prune below
+   deletes every day older than now less this many days, so a value that was
+   not a number, blank, 0 or negative put the cutoff at or past now and the
+   prune at start deleted every day of chat, today's included, with nothing
+   to say why. The privacy page promises 365 days, and staff copy a kept
+   session's chat out of these days inside that time, so a value below 365
+   lost chat early too.
+
+   Now only a whole number of 365 or more is taken, written as digits and
+   nothing else. Anything else keeps 365 and says so in the log once, the
+   value and the days in use, and /health carries the days in use
+   (chatRetention.days). Unset is 365 with nothing said. */
+const CHAT_DAYS_MIN = 365;
+function chatDaysOf(v) {
+  if (v === undefined || v === '') return { days: CHAT_DAYS_MIN, said: '' };
+  const s = String(v).trim();
+  const n = /^\d+$/.test(s) ? Number(s) : NaN;
+  if (Number.isSafeInteger(n) && n >= CHAT_DAYS_MIN) return { days: n, said: '' };
+  return { days: CHAT_DAYS_MIN,
+           said: '[voice] THORNSWOOD_CHAT_DAYS is ' + JSON.stringify(String(v)) + ', which is not a whole number of ' +
+                 CHAT_DAYS_MIN + ' or more, so chat is kept ' + CHAT_DAYS_MIN + ' days' };
+}
+const CHAT_DAYS_READ = chatDaysOf(process.env.THORNSWOOD_CHAT_DAYS);
+const CHAT_DAYS = CHAT_DAYS_READ.days;
+if (CHAT_DAYS_READ.said) console.log(CHAT_DAYS_READ.said);
 
 /* Local time, because every other stamp on this box is local and an evening's
    argument that straddles midnight UTC should not straddle two files. */
@@ -2645,7 +2673,7 @@ const server = http.createServer((req, res) => {
                             skippedRosters: skippedRosters,
                             closedBacklogged: closedBacklogged,
                             closedSilent: closedSilent,
-                            chatRetention: { overdueDays: chatOverdue, pruneError: chatPruneError },
+                            chatRetention: { overdueDays: chatOverdue, pruneError: chatPruneError, days: CHAT_DAYS },
                             // Last: /health's fields only ever go on the end (voice/tests/test-turn-key.js).
                             captions: { on: CAPTIONS, sent: captionCounts.sent, dropped: captionCounts.dropped,
                                         tailMs: CAPTION_TAIL_MS, burst: CAPTION_BURST, refillMs: CAPTION_REFILL_MS,
