@@ -56907,10 +56907,25 @@ module.exports = {
     return null;
   }
 
+  /*
+    REMOVING A FRIEND ENDS EVERY SHARE WITH THEM (#4519). A share is a flag
+    on your journal (journal.shared) or on one page (page.shared), and
+    sharedWithMe reads the flags as they are. So the flags go in the same
+    write as the friend: they read nothing of yours from then on, a page
+    you write later included, and a friend added again starts with nothing
+    shared.
+  */
   function dropFriend(actorId, pid) {
     var s = stateOf(actorId);
     if (!s.friends[pid]) { return false; }
     delete s.friends[pid];
+    for (var i = 0; i < s.journals.length; i++) {
+      var book = s.journals[i];
+      if (book.shared) { delete book.shared[pid]; }
+      for (var p = 0; p < book.pages.length; p++) {
+        if (book.pages[p].shared) { delete book.pages[p].shared[pid]; }
+      }
+    }
     write(actorId, s);
     return true;
   }
