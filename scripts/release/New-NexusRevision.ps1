@@ -53,7 +53,10 @@
       below says;
     - for each entry it reads the new file from Nexus (the file id has to be
       a live version of that mod) and takes the md5 and size from the archive
-      that was uploaded, as Vortex does from the archive it downloaded;
+      that was uploaded, as Vortex does from the archive it downloaded, once
+      that archive is held to the file Nexus serves as the file id, downloaded
+      through its download-link: an archive made again from the same files is
+      not the one uploaded, and is refused with both sizes and md5s (#4980);
     - nexus-collection.js writes the new collection.json the way Vortex does
       and the collection_data with Vortex's own mapping, ported line for line;
     - the new archive is checked to hold the same files and folders as the
@@ -218,7 +221,9 @@
   Each mod's new file id, the number Send-NexusFile.ps1 printed.
 
 .PARAMETER Archive
-  Each mod's archive, the one that was uploaded as that file id.
+  Each mod's archive, the one that was uploaded as that file id. It has to be
+  the file Nexus serves as that file id, byte for byte: download it from
+  Nexus rather than making it again (#4980).
 
 .PARAMETER DropPatch
   Patches of the moved mods to drop, each as <mod>:<path in the mod>, as
@@ -579,6 +584,19 @@ function Invoke-FomodAnswers([string]$Arc, [string]$M, $Choices, [string]$From) 
   return [pscustomobject]@{ Plugins = $found; Choices = $recorded }
 }
 
+# The file Nexus serves as file id $Fid, downloaded through its download-link
+# (Get-NexusFileArchive, as -SetLight downloads), held to the archive given
+# for it (#4980). The entry pins that archive's md5 and size, so they have to
+# be the file every download of $Fid gets: a zip made again from the same
+# plugin is not byte for byte the one uploaded, and an entry pinning it
+# matches no download. The download is deleted once it is compared.
+function Assert-ServedArchive([string]$M, [string]$Fid, [string]$Arc, $Facts) {
+  $got = Step { Get-NexusFileArchive $Game $Fid (Join-Path $scratch 'served') }
+  [IO.File]::Delete($got.Path)
+  if ($got.Size -ne $Facts.Size -or $got.Md5Hex -ne $Facts.Md5Hex) { Die ('The archive given for mod ' + $M + ', ' + $Arc + ', is ' + $Facts.Size + ' bytes, md5 ' + $Facts.Md5Hex + ', and Nexus serves file id ' + $Fid + ' as ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex + '. An archive made again from the same files is not the one uploaded: download file id ' + $Fid + ' from Nexus and give that.') }
+  Say ('    the archive is the file Nexus serves as file id ' + $Fid) 'DarkGray'
+}
+
 # ------------------------------------------------------- refused up front ---
 if (-not $Mod.Count -and -not $Add -and -not $Answers -and -not $Rule -and -not $Remove.Count -and -not $SetLight.Count -and -not $ClearLight.Count) { Die 'Say which mods move to a new file with -Mod, -FileId and -Archive, which are added with -Add, which kept files get new installer answers with -Answers, which are taken out with -Remove, which plugins get a new rule with -Rule, which plugins get or lose the light flag with -SetLight and -ClearLight, or publish a draft with -Publish, or discard one with -Discard.' }
 $Mod = @($Mod | ForEach-Object { ([string]$_).Split(',') } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -727,6 +745,7 @@ for ($i = 0; $i -lt $Mod.Count; $i++) {
   $facts = Step { Get-NexusArchiveFacts $Archive[$i] }
   Say ('  mod ' + $m + ' (' + (Get-NexusField $info 'name') + '): file id ' + $fid + ', "' + (Get-NexusField $v 'name') + '" ' + (Get-NexusField $v 'version') + ', ' + $cat)
   Say ('    ' + $facts.Name + ', ' + $facts.Size.ToString('N0') + ' bytes, md5 ' + $facts.Md5Hex) 'DarkGray'
+  Assert-ServedArchive $m $fid $Archive[$i] $facts
   # Its name on Nexus, which a mod rule names it by (PATCHES AND MOD RULES).
   $v1 = Step { Invoke-NexusApi 'GET' ('/v1/games/' + $Game + '/mods/' + $m + '/files/' + $fid + '.json') '' ('Reading file ' + $fid + '''s name') }
   $onNexus = [string](Get-NexusField $v1 'file_name')
@@ -813,6 +832,7 @@ foreach ($a in $adds) {
   $facts = Step { $it = Get-Item -LiteralPath $arc; [pscustomobject]@{ Name = $it.Name; Size = [long]$it.Length; Md5Hex = (Get-FileHash -LiteralPath $it.FullName -Algorithm MD5).Hash.ToLowerInvariant() } }
   Say ('  mod ' + $m + ' (' + $modName + ' by ' + $author + ', ' + $category + '): file id ' + $fid + ', "' + $fileName + '" ' + (Get-NexusField $v 'version') + ', ' + $cat)
   Say ('    ' + $facts.Name + ', ' + $facts.Size.ToString('N0') + ' bytes, md5 ' + $facts.Md5Hex + ', ' + @($found).Count + ' plugin(s) by ' + $installer) 'DarkGray'
+  Assert-ServedArchive $m $fid $arc $facts
   $plugins = @(@($a.plugins) | Where-Object { $_ } | ForEach-Object { [ordered]@{ name = [string]$_.name; after = @(@($_.after) | ForEach-Object { [string]$_ }) } })
   $sw = [ordered]@{ add = $true; modId = $m; fileId = $fid; version = [string](Get-NexusField $v 'version'); md5 = $facts.Md5Hex; fileSize = $facts.Size;
     logicalFilename = $fileName; name = $entryName; author = $author; category = $category; plugins = $plugins }
@@ -881,10 +901,7 @@ if ($lights.Count) {
     $fid = [string]$row.FileId
     if (-not $unpacked.ContainsKey($fid)) {
       $dir = Join-Path $staged $fid
-      $dl = Get-NexusField (Step { Invoke-NexusApi 'GET' ('/v3/games/' + $Game + '/mod-file-versions/' + $fid + '/download-link') '' ('Asking for the download of ' + $e.name) }) 'data'
-      $url = [string](Get-NexusField (@(Get-NexusField $dl 'links') | Select-Object -First 1) 'url')
-      if (-not $url) { Die ('Nexus gave no download address for ' + $e.name + ', file ' + $fid + '.') }
-      $got = Step { Receive-NexusPresigned $url $dir ('Downloading ' + $e.name) ($fid + '.archive') }
+      $got = Step { Get-NexusFileArchive $Game $fid $staged }
       if ($got.Size -ne [long]$e.source.fileSize -or $got.Md5Hex -ne [string]$e.source.md5) { Die ('The download of ' + $e.name + ' is ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex + ', and revision ' + $BaseRevision + ' says ' + $e.source.fileSize + ' bytes, md5 ' + $e.source.md5 + '.') }
       $x = Join-Path $dir 'unpacked'
       $r = Invoke-Tool $sz @('x', '-y', ('-o' + $x), $got.Path, '-ir!*.esp', '-ir!*.esm')

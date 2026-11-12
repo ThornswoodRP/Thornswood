@@ -40,7 +40,9 @@
        entry with hashes is refused; a moved entry's patch stays when the new
        archive holds the same file, goes when it is dropped and is refused
        otherwise, and a mod rule that names it is given the new archive's md5,
-       file name and version (#2793); -WhatIf builds the
+       file name and version (#2793); each -Mod and -Add archive is held to
+       the file Nexus serves as its file id, and one that is not it is
+       refused with both sizes and md5s (#4980); -WhatIf builds the
        archive and writes nothing; the real run uploads an archive with the
        same files as the published one and only the swapped entry changed,
        as a draft; a second draft, a base that is not the latest and a
@@ -611,6 +613,23 @@ $n0 = Count
 $r = Run 'New-NexusRevision.ps1' @('-From', $baseArchive, '-Mod', '192762', '-FileId', '812346', '-Archive', $newFileArchive, '-WhatIf')
 $built = Join-Path $T 'scratch\nexus-revision-7essxf\out\collection_3.7z'
 YesR '-WhatIf builds collection_3.7z with the same files as revision 2 and writes nothing' ($r.Code -eq 0 -and $r.Out -match 'source\.fileId: 809366 -> 812346' -and $r.Out -match 'the same 5 files and folders as revision 2' -and (Test-Path -LiteralPath $built) -and @(Writes @(Since $n0)).Count -eq 0) $r
+# Issue #4980: the md5 and size an entry pins are the file Nexus serves as
+# that file id. Each -Archive is held to that file, downloaded through its
+# download-link, and one that is not it (a zip rebuilt from the same plugin
+# is not byte for byte the one uploaded) is refused with both sizes and md5s.
+$got = @(Since $n0)
+YesR '  it downloads file 812346 through its download-link with the key, the CDN getting none, and finds the -Archive is that file' (@($got | Where-Object { $_.path -eq '/v3/games/skyrimspecialedition/mod-file-versions/812346/download-link' -and $_.key -eq 'right' }).Count -eq 1 -and @($got | Where-Object { $_.path -eq '/cdn/file/812346' -and $_.key -eq 'none' }).Count -eq 1 -and $r.Out -match 'is the file Nexus serves as file id 812346') $r
+$rebuilt = Join-Path $T 'Thornswood Client Runtime-1.0.1-rebuilt.7z'
+[IO.File]::WriteAllBytes($rebuilt, [byte[]]($bytes + [byte[]](1, 2, 3)))
+$rbMd5 = (Get-FileHash -LiteralPath $rebuilt -Algorithm MD5).Hash.ToLowerInvariant()
+$n0 = Count
+$r = Run 'New-NexusRevision.ps1' @('-From', $baseArchive, '-Mod', '192762', '-FileId', '812346', '-Archive', $rebuilt, '-WhatIf')
+YesR 'an -Archive of another size than the file Nexus serves is refused, saying both sizes and both md5s, and nothing is written' ($r.Code -eq 1 -and $r.Out -match ('is 300003 bytes, md5 ' + $rbMd5) -and $r.Out -match ('Nexus serves file id 812346 as 300000 bytes, md5 ' + $md5) -and $r.Out -notmatch 'which makes revision' -and @(Writes @(Since $n0)).Count -eq 0) $r
+$same = [byte[]]$bytes.Clone(); $same[0] = $same[0] -bxor 0xFF
+[IO.File]::WriteAllBytes($rebuilt, $same)
+$rbMd5 = (Get-FileHash -LiteralPath $rebuilt -Algorithm MD5).Hash.ToLowerInvariant()
+$r = Run 'New-NexusRevision.ps1' @('-From', $baseArchive, '-Mod', '192762', '-FileId', '812346', '-Archive', $rebuilt, '-WhatIf')
+YesR 'one of the same size with other bytes is refused too, by its md5' ($r.Code -eq 1 -and $r.Out -match ('is 300000 bytes, md5 ' + $rbMd5) -and $r.Out -match ('Nexus serves file id 812346 as 300000 bytes, md5 ' + $md5)) $r
 $n0 = Count
 $r = Run 'New-NexusRevision.ps1' @('-From', $baseArchive, '-Remove', '1111', '-WhatIf')
 YesR '-Remove -WhatIf builds the revision without the mod, with the same files, and writes nothing' ($r.Code -eq 0 -and $r.Out -match 'A Hashed Mod, removed: file 2222' -and $r.Out -match 'the same 5 files and folders as revision 2' -and @(Writes @(Since $n0)).Count -eq 0) $r
@@ -687,6 +706,8 @@ foreach ($k in 'plain', 'fomod') {
 function AddFile([string]$arc, [string]$plugin) {
     $p = if ($plugin) { '[{"name":' + (ConvertTo-Json $plugin) + ',"after":["Dragonborn.esm"]}]' } else { '[]' }
     Put $addJson ('[{"modId":1932,"fileId":8662,"archive":' + (ConvertTo-Json $arc) + ',"plugins":' + $p + '}]')
+    # Nexus serves that archive as file 8662, so the -Add is held to it (#4980).
+    Control @{ serve = @{ '8662' = @{ path = $arc; name = (Split-Path -Leaf $arc) } } }
 }
 AddFile $hairArc $hair
 $n0 = Count
@@ -698,6 +719,13 @@ $x4 = Join-Path $T 'unpacked4'
 & $sz x -y ('-o' + $x4) $built4 | Out-Null
 & $node.Source -e "const fs=require('fs');const b=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const e=b.mods.find(m=>m.source.fileId===8662);process.exit(e&&e.source.md5===process.argv[2]&&e.source.fileSize===Number(process.argv[3])&&e.author==='Brataccas'&&/^[0-9A-Za-z_-]{10}$/.test(e.source.tag)&&b.plugins.some(p=>p.name===process.argv[4]&&p.enabled)?0:1)" (Join-Path $x4 'collection.json') ((Get-FileHash -LiteralPath $hairArc -Algorithm MD5).Hash.ToLowerInvariant()) ((Get-Item -LiteralPath $hairArc).Length) $hair
 Yes 'its entry has the archive''s md5 and size, a new tag, and the plugin switched on' ($LASTEXITCODE -eq 0)
+# Issue #4980: an -Add archive is held to the file Nexus serves as its file id.
+Control @{ serve = @{ '8662' = @{ path = (Join-Path $T 'fomod.7z'); name = 'fomod.7z' } } }
+$fomodSize = (Get-Item -LiteralPath (Join-Path $T 'fomod.7z')).Length
+$n0 = Count
+$r = Run 'New-NexusRevision.ps1' @('-Add', $addJson, '-WhatIf')
+YesR 'an -Add archive that is not the file Nexus serves as its file id is refused, saying both sizes, and nothing is written' ($r.Code -eq 1 -and $r.Out -match ('is ' + (Get-Item -LiteralPath $hairArc).Length + ' bytes, md5 ' + (Get-FileHash -LiteralPath $hairArc -Algorithm MD5).Hash.ToLowerInvariant()) -and $r.Out -match ('Nexus serves file id 8662 as ' + $fomodSize + ' bytes') -and @(Writes @(Since $n0)).Count -eq 0) $r
+Control @{ serve = @{ '8662' = @{ path = $hairArc; name = (Split-Path -Leaf $hairArc) } } }
 # #4603: the plugins installed off the list come from the record, and only
 # when it follows the revision this starts from; a draft is not that.
 Put $addJson ('[{"modId":1932,"fileId":8662,"archive":' + (ConvertTo-Json $hairArc) + ',"plugins":[{"name":' + (ConvertTo-Json $hair) + ',"after":["RaceMenuMorphsCBBE.esp"]}]}]')
@@ -740,6 +768,7 @@ $dgChoice = '{"type":"fomod","options":[{"name":"Options","groups":[{"name":"Add
 function AddEyes([string[]]$plugins, [string]$choices) {
     $p = '[' + ((@($plugins) | ForEach-Object { '{"name":"' + $_ + '","after":["Dragonborn.esm"]}' }) -join ',') + ']'
     Put $addJson ('[{"modId":1932,"fileId":8662,"archive":' + (ConvertTo-Json $eyesArc) + ',"plugins":' + $p + $(if ($choices) { ',"choices":' + $choices } else { '' }) + '}]')
+    Control @{ serve = @{ '8662' = @{ path = $eyesArc; name = (Split-Path -Leaf $eyesArc) } } }
 }
 AddEyes @('Eyes.esp', 'EyesDG.esp') $dgChoice
 $r = Run 'New-NexusRevision.ps1' @('-Add', $addJson, '-WhatIf')
@@ -826,6 +855,7 @@ $given = '{"type":"fomod","options":[{"name":"Options","groups":[{"name":"Choose
 $vortexForm = '{"type":"fomod","options":[{"name":"Options","groups":[{"name":"Choose Version","choices":[{"name":"Complete","idx":0}]}]},{"name":"Complete","groups":[{"name":"Choose Version","choices":[{"name":"Complete - Full","idx":0}]}]},{"name":"Human","groups":[{"name":"Choose Version","choices":[]}]},{"name":"Add-Ons","groups":[{"name":"Dawnguard Eyes","choices":[{"name":"Dawnguard","idx":0}]},{"name":"Werewolf Eyes","choices":[]}]}]}'
 $eyes2Plugins = '[{"name":"Eyes.esp","after":["Dragonborn.esm"]},{"name":"EyesDG.esp","after":["Dragonborn.esm"]},{"name":"EyesFull.esp","after":["Dragonborn.esm"]}]'
 Put $addJson ('[{"modId":1932,"fileId":8662,"archive":' + (ConvertTo-Json $eyes2Arc) + ',"plugins":' + $eyes2Plugins + ',"choices":' + $given + '}]')
+Control @{ serve = @{ '8662' = @{ path = $eyes2Arc; name = (Split-Path -Leaf $eyes2Arc) } } }
 $r = Run 'New-NexusRevision.ps1' @('-Add', $addJson, '-WhatIf')
 YesR 'a FOMOD archive added with only the answers picked is drafted' ($r.Code -eq 0 -and $r.Out -match '3 plugin\(s\) by FOMOD, with the choices given' -and $r.Out -match 'its answers as Vortex records them: 4 step\(s\), 5 group\(s\)') $r
 $x4v = Join-Path $T 'unpacked4v'
