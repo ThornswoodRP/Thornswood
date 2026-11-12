@@ -124,7 +124,6 @@ test-chat-fade.js  not sorted yet, runs in the nightly (#2513)
 test-chat-overlay-cost.js  not sorted yet, runs in the nightly (#2513)
 test-chat-range-install.ps1  not sorted yet, runs in the nightly (#2513)
 test-chat-refusals.js  not sorted yet, runs in the nightly (#2513)
-test-check-manifest-remote.ps1  not sorted yet, runs in the nightly (#2513)
 test-check-outside.ps1  not sorted yet, runs in the nightly (#2513)
 test-check-secrets.ps1  not sorted yet, runs in the nightly (#2513)
 test-check-words.ps1  own step in build.yml, "Check the writing rules"

@@ -22,6 +22,11 @@
   turned away with a load order error that says nothing useful. Before building
   a Nexus collection, the list in here is the thing that has to be matched, and
   a stale copy on a client is not evidence of anything.
+
+  Exit 0 when the server's list and yours match position by position. Exit 1
+  when they do not, when a copy of the manifest cannot be read, when there is
+  no plugins.txt to compare, or when the server, the dev server or its
+  manifest cannot be found (#4760).
 #>
 [CmdletBinding()]
 param(
@@ -150,9 +155,14 @@ foreach (`$f in (Get-ChildItem -LiteralPath `$data -Recurse -Filter 'manifest.js
 
 $lines = @($out | ForEach-Object { "$_" })
 $serverOrder = @()
+# Each finding below adds one, and any at all is exit 1 at the end (#4760).
+$bad = 0
 foreach ($l in $lines) {
   if ($l -match '^\s*LO (.+)$') { $serverOrder += $Matches[1].Trim() }
-  else { Say "  $l" }
+  else {
+    Say "  $l"
+    if ($l -match '  UNREADABLE: ') { $bad++ }
+  }
 }
 
 if ($serverOrder.Count -eq 0) {
@@ -168,6 +178,7 @@ $plug = Join-Path $Client 'Profile\LocalAppData\plugins.txt'
 Head 'Against the load order you play with'
 if (-not (Test-Path -LiteralPath $plug)) {
   Say "  No plugins.txt at $plug" 'Yellow'
+  $bad++
 } else {
   $enabled = @()
   foreach ($l in (Get-Content -LiteralPath $plug)) {
@@ -226,6 +237,7 @@ if (-not (Test-Path -LiteralPath $plug)) {
 
   Write-Host ''
   $firstBad = Get-LoadOrderFirstMismatch $mineFull $serverOrder
+  if ($missing.Count -or $extra.Count -or $firstBad -ge 0) { $bad++ }
   if ($firstBad -lt 0) {
     Say '  POSITION BY POSITION: identical.' 'Green'
   } elseif ($firstBad -ge $serverOrder.Count -or $firstBad -ge $mineFull.Count) {
@@ -276,3 +288,7 @@ if ($Full) {
 
 Write-Host ''
 if (-not $NoPause) { [void](Read-Host 'Enter to close') }
+# What it found is the exit code (#4760). Until then a list that parted
+# company with the server's was printed in red and the run still exited 0.
+if ($bad) { exit 1 }
+exit 0
