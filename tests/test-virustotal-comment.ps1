@@ -162,19 +162,29 @@ Yes 'the key is scrubbed out of anything printed that came from outside' (
 
 # ---- 4. what the comment says ---------------------------------------------
 # The vendors read this. It has to name the program, the site and the state of
-# the signing, in the same words as the version resource in Bootstrap.cs.
+# the signing, and say what the program does now. Until #4539 it described the
+# setup program #4824 retired: one that downloaded a payload from the site and
+# started the Setup.bat inside it. Today's download is Velopack's setup
+# program, which carries its package inside it and starts the launcher, and
+# there is no Setup.bat (tests\test-4824-install.py holds it gone). So the
+# comment is the description in docs\VIRUSTOTAL-FALSE-POSITIVE.md's
+# checklist, the one every vendor form gets, word for word.
 $iText = $src.IndexOf('function Get-DefaultText')
 Yes 'there is a default comment' ($iText -gt 0)
+$said = ''
 if ($iText -gt 0) {
     $text = $src.Substring($iText, [Math]::Min(2000, $src.Length - $iText))
-    Yes 'it names Thornswood Setup, as the version resource does' ($text -match 'Thornswood Setup')
-    Yes 'and the company, Thornswood' ($text -match 'Company Thornswood')
+    $said = ((@([regex]::Matches($text.Substring(0, $text.IndexOf("`n}") + 1), "'((?:[^']|'')*)'") | ForEach-Object { $_.Groups[1].Value.Replace("''", "'") })) -join ' ')
+    Yes 'it names the product, Thornswood Setup' ($text -match 'Thornswood Setup')
     Yes 'it names thornswood.net' ($text -match 'thornswood\.net')
-    Yes 'it says this is the first-run installer' ($text -match '(?i)first-run installer')
-    Yes 'it says it asks before closing a running Skyrim' ($text -match '(?i)asks first')
     Yes 'and that it is signed, as every published build is since 27 September' (
         $text -match '(?i)Authenticode signed' -and $text -notmatch '(?i)not (Authenticode |code )?signed')
+    Yes 'it does not say setup starts a Setup.bat, which is gone since #4824' ($said -notmatch '(?i)Setup\.bat|Install\.bat')
+    Yes 'nor that it downloads a payload and unpacks it, which the setup before Velopack did' (
+        $said -notmatch '(?i)\bdownloads\b|\bpayload\b|\bunpacks\b')
+    Yes 'it says it is a Velopack setup program that starts the launcher' ($said -match 'Velopack setup program' -and $said -match '(?i)starts the\s+launcher')
 }
+Yes 'the script does not send readers to installer\setup\Bootstrap.cs, gone since #4824' (-not ($src -match '(?i)installer[\\/]setup[\\/]Bootstrap\.cs'))
 Yes 'the script has no em dash in it' (-not $src.Contains([string][char]0x2014))
 
 # ---- 5. the page and the index it belongs to ------------------------------
@@ -184,6 +194,23 @@ if (Test-Path -LiteralPath $page) {
     $doc = [IO.File]::ReadAllText($page, $Utf8)
     Yes 'and it names this script as the way the comment gets posted' (
         $doc.Contains('Add-VirusTotalComment.ps1'))
+    # The description every vendor form gets, from the checklist's indented
+    # block: the comment says the same, so a reviewer reading either reads
+    # one program.
+    $m = [regex]::Match($doc, '(?ms)^    (Thornswood Setup, the installer for Thornswood.*?published on the Thornswood GitHub Releases\.)')
+    $facts = if ($m.Success) { ($m.Groups[1].Value -replace '\s+', ' ').Trim() } else { '' }
+    Yes 'the page''s checklist has the description the vendors are sent' ($facts.Length -gt 0)
+    Yes 'and the default comment says it, word for word' ($facts.Length -gt 0 -and (($said -replace '\s+', ' ').Trim()).StartsWith($facts))
+}
+
+# ---- 6. what else describes setup ------------------------------------------
+# A comment in the launcher's uninstall still said the installer runs
+# Setup.bat, as if it still did. That folder is the one the setup before #4824
+# left behind, and the uninstall still looks for it on machines that ran it.
+$un = Join-Path $repoRoot 'launcher\app\Uninstall.cs'
+if (Test-Path -LiteralPath $un) {
+    $unText = [IO.File]::ReadAllText($un, $Utf8) -replace '(?m)^\s*///\s?', ''
+    Yes 'Uninstall.cs does not say the installer runs Setup.bat today' (-not ($unText -match '(?i)\bruns\s+Setup\.bat'))
 }
 # scripts\README.md is generated from the scripts, so a new one that is not in
 # it fails test-script-index.ps1 on the nightly run. Caught here beside the
