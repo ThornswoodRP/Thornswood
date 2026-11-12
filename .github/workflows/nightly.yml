@@ -8,7 +8,8 @@
 #   code      all ~380 test harnesses in tests/, plus the bot and voice harnesses, and
 #             the launcher's native publish
 #   GitHub    pull requests open more than two days and branches other than
-#             main, which CONTRIBUTING.md says are merged or closed; issues
+#             main, which are merged or closed (docs/guide/how-work-moves.md,
+#             "Dev first, notes, and open branches"); issues
 #             and comments of the last day not written plain (#3692)
 #
 # Every action here is named by a full length commit SHA with its tag in the
@@ -152,7 +153,7 @@ jobs:
         if: ${{ !cancelled() }}
         shell: pwsh
         run: |
-          # The Words section of CONTRIBUTING.md, over the files people read: no em
+          # The writing rules (docs/guide/rules.md, "Words"), over the files people read: no em
           # dashes, never the word player, and the owner is Patrick. Written
           # down since the start and never checked, and on 24 September eleven
           # hits had gone out in those files. Each hit is marked on its line.

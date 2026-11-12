@@ -938,7 +938,7 @@ if ($FromFeed -and $revMoveFrom) {
 
 # ------------------------------------------------------------ publish sign gate
 # The release manifest is signed (Publish-Update.ps1, Release-Manifest.ps1), so
-# only a machine that can sign it may Ship, dev included. Ship sends no launcher
+# only a machine that can sign it may Ship, dev included (docs/guide/how-work-moves.md, "Signing, the build check, and the six shared files"). Ship sends no launcher
 # (#4825): the launcher goes out signed through Velopack, from
 # .github\workflows\merge-release.yml and promote-main.yml, and nothing here
 # builds, signs or checks one. Assert-PublishSigned.ps1 is dot-sourced at the
