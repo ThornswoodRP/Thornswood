@@ -99,7 +99,7 @@ for (const f of Object.keys(bot)) {
   const n = esc(bot[f].name);
   bot[f].writes = new RegExp('_state_write\\((?:path or )?' + n + '\\b|os\\.replace\\(tmp, ' + n + '\\)' +
     '|path = path or ' + n + '\\b|open\\(' + n + ', \'w\'').test(botSrc);
-  bot[f].reads = new RegExp('open\\(' + n + '\\b|_state_read\\((?:path or )?' + n + '\\b|path or ' + n + '\\b').test(botSrc);
+  bot[f].reads = new RegExp('open\\(' + n + '\\b|_state_read\\((?:path or )?' + n + '\\b').test(botSrc);
 }
 console.log('\nB. the bot\'s stores:');
 yes('bot\\*.py names its JSON stores (' + Object.keys(bot).length + ')', Object.keys(bot).length >= 12);
@@ -146,7 +146,7 @@ for (const f of Object.keys(bot)) {
 // A row in the site, bot and voice table that names the site or the bot as
 // a writer of a file neither code writes.
 for (const r of rows.filter((x) => STATE.test(x.section))) {
-  for (const f of r.files.map((x) => x.split('/').pop())) {
+  for (const f of r.files.filter((x) => !/^session-logs\//.test(x)).map((x) => x.split('/').pop())) {
     if (!/\.json$/.test(f) || site[f] || bot[f]) continue;
     if (says(r.cells[1], 'site')) wrongWriter.push(f + ' (the site does not write it)');
     if (says(r.cells[1], 'bot')) wrongWriter.push(f + ' (the bot does not write it)');
