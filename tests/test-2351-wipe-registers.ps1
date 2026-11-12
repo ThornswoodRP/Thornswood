@@ -63,7 +63,8 @@ if ($assign.Count -eq 1) { $Moves = @(& ([scriptblock]::Create($assign[0].Right.
 foreach ($n in 'world', 'private\characters.json', 'private\property.json', 'private\farm-claims.json',
                'private\law.json', 'private\beds.json', 'private\embassy.json', 'private\books.json',
                'private\last-left.json', 'private\take-limit.json', 'private\trade-cargo.json', 'private\market-stalls.json', 'private\trade-carts.json',
-               'private\dungeon-rewards-ledger.json', 'private\dungeon-rewards-ledger.initialized', 'private\deleted-characters.json') {
+               'private\dungeon-rewards-ledger.json', 'private\dungeon-rewards-ledger.initialized', 'private\deleted-characters.json',
+               'private\deleted-characters.taken.json', 'private\deleted-characters.taking.json') {
     Yes "  it moves $n" ($Moves -contains $n)
 }
 Yes '  and leaves the mod menu choices and the merchant ledger' (-not ($Moves -contains 'private\mod-settings.json') -and -not ($Moves -contains 'private\merchant-ledger.json'))

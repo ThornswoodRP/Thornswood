@@ -417,8 +417,9 @@ try {
   yes('R6 in the order the blocks load', ['farms', 'property', 'embassy', 'dungeon', 'cargo', 'stalls', 'carts', 'books', 'merchants'].every(function (p, i) {
     return new RegExp('^release: ' + p + ': ').test(L[i + 1]);
   }));
-  yes('R7 and then the list is gone', /every part is done, and the list is gone/.test(L[10]) &&
-      !fs.existsSync(path.join(dir, 'private', 'deleted-characters.json')));
+  yes('R7 and then the list is gone, taken and all (#4920)', /every part is done, and the list is gone/.test(L[10]) &&
+      !fs.existsSync(path.join(dir, 'private', 'deleted-characters.json')) &&
+      !fs.existsSync(path.join(dir, 'private', 'deleted-characters.taken.json')));
 
   // ---- F
   const farm = j(dir, 'farm-claims.json');
@@ -571,7 +572,8 @@ try {
   registers(dir2);
   fs.writeFileSync(path.join(dir2, 'private', 'embassy.json'), 'not a roll file');
   const w1 = start(dir2);
-  const list1 = j(dir2, 'deleted-characters.json');
+  // The server keeps its marks in the list it took (#4920).
+  const list1 = j(dir2, 'deleted-characters.taken.json');
   yes('W1 a roll file that cannot be read keeps the embassy\'s part waiting, said in the log',
       w1.logged.some(function (l) { return l === 'release: embassy could not write what it let go, so its part waits for the next start'; }) &&
       w1.logged.some(function (l) { return l === 'release: embassy did not let go at this start, so the list waits for the next one'; }));
@@ -587,7 +589,8 @@ try {
   const W = w2.logged.filter(function (l) { return /^release: /.test(l); });
   yes('W3 at the next start only the embassy runs, and then the list is gone',
       W.length === 3 && /^release: embassy: embassy 1, remnant 1$/.test(W[1]) && /the list is gone/.test(W[2]) &&
-      !fs.existsSync(path.join(dir2, 'private', 'deleted-characters.json')));
+      !fs.existsSync(path.join(dir2, 'private', 'deleted-characters.json')) &&
+      !fs.existsSync(path.join(dir2, 'private', 'deleted-characters.taken.json')));
   yes('W4 a part done once never runs again: the claim made since stays', !!j(dir2, 'property.json').claims['b9:Skyrim.esm']);
 
   // ============================================================ W: not a list
@@ -635,7 +638,7 @@ try {
   registers(dir4);
   fs.writeFileSync(path.join(dir4, 'private', 'deleted-characters.json'), JSON.stringify({ profiles: [P1, P2], actors: [A1, A2] }));
   const s1 = start(dir4);
-  const list4 = j(dir4, 'deleted-characters.json');
+  const list4 = j(dir4, 'deleted-characters.taken.json');
   yes('S1 with the saves not taken, every register part is done and the list stays',
       JSON.stringify(Object.keys(list4.done).sort()) === JSON.stringify(['books', 'cargo', 'carts', 'dungeon', 'embassy', 'farms', 'merchants', 'property', 'stalls']));
   yes('S2 and the log says the saves wait for the next start',
@@ -664,7 +667,8 @@ try {
   yes('C1 the list of characters only is read and every part runs (' + c.lines.length + ' lines)',
       /a list of 0 profile\(s\) and 2 character\(s\) to let go, at server start/.test(c.lines[0] || '') &&
       /every part is done, and the list is gone/.test(c.lines[c.lines.length - 1] || '') &&
-      !fs.existsSync(path.join(c.dir, 'private', 'deleted-characters.json')));
+      !fs.existsSync(path.join(c.dir, 'private', 'deleted-characters.json')) &&
+      !fs.existsSync(path.join(c.dir, 'private', 'deleted-characters.taken.json')));
   yes('C2 only the rolls, the merchant ledger, the trade ships\' and carts\' manifests, the stall book and the drop box are written (' + c.changed.join(', ') + ')',
       JSON.stringify(c.changed) === JSON.stringify(['embassy.json', 'market-stalls.json', 'merchant-ledger.json', 'property.json', 'trade-cargo.json', 'trade-carts.json']));
   // A stall is kept by the character who claimed it (#3160): it ends, and its
@@ -710,7 +714,8 @@ try {
     done: { saves: NOW, farms: NOW, property: NOW, embassy: NOW, dungeon: NOW, cargo: NOW, stalls: NOW, carts: NOW, books: NOW } });
   yes('X1 only the merchants\' part runs, and then the list is gone (' + x.lines.join(' / ') + ')',
       x.lines.length === 3 && /^release: merchants: /.test(x.lines[1]) && /the list is gone/.test(x.lines[2]) &&
-      !fs.existsSync(path.join(x.dir, 'private', 'deleted-characters.json')));
+      !fs.existsSync(path.join(x.dir, 'private', 'deleted-characters.json')) &&
+      !fs.existsSync(path.join(x.dir, 'private', 'deleted-characters.taken.json')));
   yes('X2 only the merchant ledger is written (' + x.changed.join(', ') + ')', JSON.stringify(x.changed) === JSON.stringify(['merchant-ledger.json']));
   const xm9 = j(x.dir, 'merchant-ledger.json').entries['9:Skyrim.esm'];
   yes('X3 the wiped character\'s supply wait and waiting trade go; another character\'s stays',

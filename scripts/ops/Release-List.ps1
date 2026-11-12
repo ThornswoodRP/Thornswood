@@ -145,7 +145,7 @@ function Get-ThornswoodCharacterIds($Files) {
   return @{ ids = @($ids | Sort-Object -Unique); notes = $notes }
 }
 function Write-ThornswoodReleaseList {
-  param([string]$Root, $Actors = @(), [string]$Carry = '', [string[]]$Done = @())
+  param([string]$Root, $Actors = @(), [string[]]$Carry = @(), [string[]]$Done = @())
   $file = Get-ThornswoodReleaseListPath $Root
   if (-not $file) { 'RELEASEBAD|' + (Join-Path $Root 'server-settings.json') + ' will not parse, so the server''s private folder is not known and no list was written'; return }
   $now = Read-ThornswoodReleaseList $file
@@ -153,9 +153,11 @@ function Write-ThornswoodReleaseList {
   if (-not $now.ok) { 'RELEASEBAD|' + $file + ' is not a list of deleted characters, so no list was written and it is left as it is'; return }
   $P = @($now.profiles)
   $A = @($now.actors) + @($Actors)
-  if ($Carry) {
-    $old = Read-ThornswoodReleaseList $Carry
-    if (-not $old.ok) { 'RELEASENOTE|' + $Carry + ' is not a list of deleted characters, so nothing was carried from it; it is left as it is' }
+  # Each list set aside is carried (Wipe-Saves.ps1): the requests and, since
+  # #4920, the list the server took and had not finished. One not there is none.
+  foreach ($c in @($Carry | Where-Object { $_ })) {
+    $old = Read-ThornswoodReleaseList $c
+    if (-not $old.ok) { 'RELEASENOTE|' + $c + ' is not a list of deleted characters, so nothing was carried from it; it is left as it is' }
     elseif (-not $old.missing) { $P += @($old.profiles); $A += @($old.actors) }
   }
   $P = @($P | Where-Object { $null -ne $_ } | ForEach-Object { [long]$_ } | Where-Object { $_ -gt 0 } | Sort-Object -Unique)

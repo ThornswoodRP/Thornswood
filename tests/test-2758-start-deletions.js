@@ -106,8 +106,11 @@ try {
       !J(path.join(PV, 'mod-settings.json')).who[P1] && !!J(path.join(PV, 'mod-settings.json')).who[PY] &&
       !J(path.join(PV, 'take-limit.json')).counts[P1 + '|1a2b3'] && !!J(path.join(PV, 'take-limit.json')).counts[PY + '|1a2b3'] &&
       J(path.join(PV, 'last-left.json'))[P1] === undefined && J(path.join(PV, 'last-left.json'))[PY] === 2);
-  const l1 = J(path.join(PV, 'deleted-characters.json'));
-  yes('  the list stays for the gamemode, with saves marked done', l1.done && l1.done.saves > 0 && Object.keys(l1.done).length === 1 &&
+  // The server takes the request and keeps its marks in its own list (#4920).
+  const TK = path.join(PV, 'deleted-characters.taken.json');
+  const l1 = J(TK);
+  yes('  the list stays for the gamemode, taken, with saves marked done', !fs.existsSync(path.join(PV, 'deleted-characters.json')) &&
+      l1.done && l1.done.saves > 0 && Object.keys(l1.done).length === 1 &&
       JSON.stringify(l1.profiles) === JSON.stringify([P1]));
   yes('  and server.log says it with counts, never an id',
       /deletions: saves: characters 2, cards 1, mod menu choices 1, take counts 1, last-left times 1; the gamemode lets go of the registers as it loads/.test(g1.log) &&
@@ -118,14 +121,14 @@ try {
   game({ profiles: [P1], actors: [], done: Object.fromEntries(SL.RELEASE_PARTS.filter((p) => p !== 'saves').map((p) => [p, 1])) });
   const g3 = start(G);
   yes('a list with every other part done is deleted once the saves go',
-      !fs.existsSync(path.join(PV, 'deleted-characters.json')) && /every part is done, and the list is gone/.test(g3.log));
+      !fs.existsSync(path.join(PV, 'deleted-characters.json')) && !fs.existsSync(TK) && /every part is done, and the list is gone/.test(g3.log));
 
   game({ profiles: [P1], actors: [] });
   const entry = (pid, n) => ({ file: n + '.json', json: JSON.stringify({ formDesc: n, profileId: pid }, null, 2) });
   put(path.join(CF, '.pending-batch'), { version: 1, batch: [entry(P1, 'ff000a01')], checksum: 'x' });
   const g4 = start(G);
   yes('an unfinished save holding one of theirs leaves the part waiting, said',
-      J(path.join(PV, 'deleted-characters.json')).done === undefined &&
+      Object.keys(J(TK).done || {}).length === 0 &&
       /holds one of their characters, or could not be read; the server replays it as it starts/.test(g4.log) &&
       /the part waits for the next start/.test(g4.log));
   yes('  and the rest of theirs still goes now', !J(path.join(PV, 'characters.json')).who[P1] && !fs.existsSync(path.join(CF, 'ff000a09.json')));
@@ -133,7 +136,7 @@ try {
   game({ profiles: [P1], actors: [] });
   put(path.join(CF, '.pending-batch'), { version: 1, batch: [entry(PY, 'ff000a02')], checksum: 'x' });
   start(G);
-  yes('one that holds nobody of theirs does not hold the part back', J(path.join(PV, 'deleted-characters.json')).done.saves > 0);
+  yes('one that holds nobody of theirs does not hold the part back', J(TK).done.saves > 0);
 
   game('{"profiles":[5001,"x"]}');
   const g5 = start(G);

@@ -316,6 +316,20 @@ try {
         (Test-Path -LiteralPath (Join-Path $w1 'private\merchant-ledger.json')) -and (Test-Path -LiteralPath (Join-Path $w1 'private\mod-settings.json')))
     $lists.wipe = [IO.File]::ReadAllText($file)
 
+    # A list the server took and had not finished (#4920) is set aside and
+    # carried too, so a wipe drops nobody it was still letting go of.
+    $wt = Server 'wipe-taken' '{}'
+    Registers $wt
+    $taken = '{"profiles":[7002],"actors":[' + $A9 + '],"done":{"saves":1,"farms":1}}'
+    Put (Join-Path $wt 'private\deleted-characters.taken.json') $taken
+    $x = RunBox (FillMove $wt)
+    $l = ListOf (Join-Path $wt 'private\deleted-characters.json')
+    Yes ('W6b a list the server took is set aside and its ids carried, nothing marked done for it but the wipe''s (' + (Ids $l.profiles) + ' / ' + (Ids $l.actors) + ')') (
+        @($x.out | Where-Object { $_ -like 'FAILED*' }).Count -eq 0 -and $l -and (Ids $l.profiles) -eq '7002' -and (Ids $l.actors) -eq "$A1,$A2,$A9" -and
+        -not (Test-Path -LiteralPath (Join-Path $wt 'private\deleted-characters.taken.json')) -and
+        [IO.File]::ReadAllText((Join-Path $wt "private\deleted-characters.taken-before-$stamp.json")) -eq $taken -and
+        -not ($l.done.PSObject.Properties.Name -contains 'saves'))
+
     $w2 = Join-Path $T 'wipe-nobody'
     Put (Join-Path $w2 'server-settings.json') '{}'
     Put (Join-Path $w2 'world\changeForms\13164_JKs Whiterun.esp.json') '{}'

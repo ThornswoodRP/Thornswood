@@ -342,7 +342,7 @@ try {
     f1.box.__thornswoodRelease('merchants', f1.purses.release);
     yes('F1 a save that fails writes nothing', fs.readFileSync(fileOf(dir2), 'utf8') === keep);
     yes('F2 the part waits, said in the log', f1.logged.some(function (l) { return /release: merchants stopped: .*its part waits for the next start/.test(l); }) &&
-        !('merchants' in JSON.parse(fs.readFileSync(path.join(dir2, 'private', 'deleted-characters.json'), 'utf8')).done));
+        !('merchants' in JSON.parse(fs.readFileSync(path.join(dir2, 'private', 'deleted-characters.taken.json'), 'utf8')).done));
     let revoked = false;
     try { f1.purses.read(9); } catch (e) { revoked = /unavailable/.test(String(e.message)); }
     yes('F3 and the service is revoked, as after a failed commit', revoked);
@@ -354,7 +354,8 @@ try {
     yes('F4 the next start lets go, and then the list is gone',
         L.some(function (l) { return l === 'release: merchants: merchants 3, supply 2, trades 3'; }) &&
         L.some(function (l) { return /every part is done, and the list is gone/.test(l); }) &&
-        !fs.existsSync(path.join(dir2, 'private', 'deleted-characters.json')));
+        !fs.existsSync(path.join(dir2, 'private', 'deleted-characters.json')) &&
+        !fs.existsSync(path.join(dir2, 'private', 'deleted-characters.taken.json')));
     const all = f1.logged.concat(f2.logged).join('\n');
     yes('L1 the log is counts, never a profile id, a form id or a label of theirs',
         [P1, A1, A2].every(function (n) { return !new RegExp('\\b(' + n + '|' + hex(n) + ')\\b', 'i').test(all); }) && !/iron ore|wheat/.test(all));
