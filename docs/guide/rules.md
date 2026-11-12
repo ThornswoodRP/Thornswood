@@ -38,10 +38,10 @@ the game, which becomes an issue labelled `check: in game`. The agent runs
 each step once and says how it went on the Deployment, so nobody keeps or
 runs a note. When no gate verb does what is needed, the same pull request
 adds one to `scripts\vps\gate\verbs.json` and lists it in that verb's
-`afterDeploy`. No new run note goes in the private ops repo's
-`ops\claude-queue\`; Bramble runs the notes already there and takes them
-away as they are (since 1 Nov the Claude Desk neither runs those notes nor
-merges). A step only a person can take outside the game (a click in Vortex's
+`afterDeploy`. The private ops repo's run note folder is gone (12 Nov): the
+last notes became step files here, or went to the issue that owns what was
+left of them. Work that recurs or waits on a date is an issue, not a note. A
+step only a person can take outside the game (a click in Vortex's
 own window) is a card on Patrick's report page, never a note, and a main or
 live run still waits for Patrick's word. Bot branches carry the Bot's name
 (`wisp/3150-what-it-is`). On the shipping machine `C:\Thornswood-Repo` is
