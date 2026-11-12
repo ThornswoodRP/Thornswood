@@ -815,6 +815,10 @@ issue where the card did.
 - **The docs folder is pruned:** every page is linked from docs/README.md or
   moved out to an archive (q-p18-prune-docs). 31 Oct 2026,
   [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **A line that cites a rule names the guide page and section that holds it,
+  not CONTRIBUTING.md, nightly.yml's comments included; #5901 merges at
+  e63a886.** (dec_zklJw_Lq1NsQrYCacyF7aA) 12 Nov 2026,
+  [#4171](https://github.com/ThornswoodRP/Thornswood/issues/4171#issuecomment-6830659116).
 
 ### Runners
 
