@@ -118,22 +118,21 @@ Yes ("it holds workflows to read ({0}: {1})" -f $files.Count, (($files | ForEach
 # The ones that exist today. Named rather than counted, so a renamed or
 # deleted workflow says so here instead of this harness reading two files and
 # reporting that everything is fine.
-foreach ($want in 'build.yml', 'nightly.yml', 'merge-release.yml', 'drop-claims.yml', 'board.yml', 'duplicate-check.yml', 'board-read.yml', 'expire-claims.yml', 'done-on-merge.yml', 'area-label.yml', 'git-ref.yml', 'engine-prune.yml') {
+foreach ($want in 'build.yml', 'nightly.yml', 'merge-release.yml', 'drop-claims.yml', 'board.yml', 'duplicate-check.yml', 'board-read.yml', 'expire-claims.yml', 'done-on-merge.yml', 'area-label.yml', 'git-ref.yml') {
     Yes "$want is one of them" (@($files | Where-Object { $_.Name -eq $want }).Count -eq 1)
 }
 # drop-claims.yml (#1863) runs no action on purpose: it checks out nothing and
 # makes its label calls from its own script, so there is nothing in it to pin.
 # tests\test-1863-drop-claims.ps1 holds it to that. So are expire-claims.yml,
 # done-on-merge.yml and area-label.yml (#3192), held by
-# tests\test-3192-board-hygiene.ps1. engine-prune.yml (#3410) is too, held by
-# tests\test-3410-artifact-room.ps1. clone-report.yml (#3534) checks nothing
+# tests\test-3192-board-hygiene.ps1. clone-report.yml (#3534) checks nothing
 # out and only prints the report it is given, held by
 # tests\test-3534-clone-report.ps1, and pr-events.yml (#5185) only prints
 # which pull request changed, with no token, held by
 # tests\test-5185-board-sync.js. board-read.yml runs one action since #5185,
 # the board App's token. promote-main.yml (#5181) runs one since #4825, the
 # checkout, for MergeRelease.ps1, which finds main's launcher package.
-$noActions = @('drop-claims.yml', 'expire-claims.yml', 'done-on-merge.yml', 'area-label.yml', 'engine-prune.yml', 'clone-report.yml', 'pr-events.yml', 'engine-pin-aside.yml')
+$noActions = @('drop-claims.yml', 'expire-claims.yml', 'done-on-merge.yml', 'area-label.yml', 'clone-report.yml', 'pr-events.yml', 'engine-pin-aside.yml')
 
 $all = @()
 foreach ($f in $files) {
