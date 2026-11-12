@@ -97,7 +97,7 @@ before: the report has to exist first. Everything below needs the same three
 facts, so write them once and paste them into each form.
 
     Thornswood Setup, the installer for Thornswood, a private modded
-    Skyrim multiplayer server at https://thornswood.net
+    Skyrim multiplayer server at https://thornswood.net.
     It is a Velopack setup program: it installs the Thornswood launcher
     and its game files from the package inside it, then starts the
     launcher. It is Authenticode signed through Azure Artifact Signing,

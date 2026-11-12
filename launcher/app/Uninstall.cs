@@ -67,18 +67,19 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// The scratch folder the setup program unpacks into, which nothing
-        /// has ever deleted.
+        /// The scratch folder the setup program before #4824 unpacked into,
+        /// which nothing ever deleted.
         ///
-        /// The installer makes Thornswood-setup at the root of whichever drive
-        /// the install is going to, unzips the whole payload into it, and runs
-        /// Setup.bat out of it. Setup moves the mods from there into the game,
-        /// so the big part empties, but the folder, the scripts and a copy of
-        /// the launcher stay behind for good. It is not under Root, so the
-        /// fence in Finish correctly refuses to touch it, and it has been
-        /// sitting on every machine that has ever run this. That is most of
-        /// the difference somebody sees when they uninstall and the disk does
-        /// not go back to where it was.
+        /// That installer made Thornswood-setup at the root of whichever drive
+        /// the install was going to, unzipped the whole payload into it, and
+        /// ran Setup.bat out of it. Setup moved the mods from there into the
+        /// game, so the big part emptied, but the folder, the scripts and a
+        /// copy of the launcher stayed behind for good. Velopack's setup and
+        /// the launcher's own install make no such folder, and Setup.bat is
+        /// gone, but machines that ran the old one still have it. It is not
+        /// under Root, so the fence in Finish correctly refuses to touch it.
+        /// That is most of the difference somebody sees when they uninstall
+        /// and the disk does not go back to where it was.
         ///
         /// Found by looking rather than remembered, because an install can be
         /// moved and the scratch stays on the drive it was made on.

@@ -49,9 +49,10 @@
   that does not match is reported rather than obeyed.
 
 .PARAMETER Text
-  Different comment text. The default names Thornswood Setup, the company, what
-  the program does and that it is Authenticode signed, which is what the
-  vendors read.
+  Different comment text. The default is the description
+  docs\VIRUSTOTAL-FALSE-POSITIVE.md's checklist sends every vendor: the
+  program, the site, what Velopack's setup does and that it is Authenticode
+  signed.
 
 .PARAMETER Api
   The VirusTotal API v3 root. Only a test points this anywhere else, at an
@@ -109,22 +110,23 @@ function Stop-Here([string]$line) {
 # and buries "Connection refused" inside it. The innermost one is the answer.
 function Get-Why($err) { return (Clean $err.Exception.GetBaseException().Message) }
 
-# What the vendors read. It says the same things the version resource in
-# installer\setup\Bootstrap.cs:35-39 says, in the same words, so a person
-# reading the report and a person reading the file's properties see one
-# program and not two.
+# What the vendors read: the description every vendor form gets in
+# docs\VIRUSTOTAL-FALSE-POSITIVE.md's checklist, word for word, so a reviewer
+# reading the report and one reading a form see one program and not two
+# (tests\test-virustotal-comment.ps1 holds the two to each other). Since #4824
+# the download is Velopack's setup program, which carries its package inside
+# it and starts the launcher; the program before it downloaded a payload and
+# started a Setup.bat, and both are gone.
 function Get-DefaultText() {
     return @(
-        'Thornswood Setup, the first-run installer for Thornswood, a private modded Skyrim',
-        'multiplayer server. Company Thornswood, product Thornswood Setup, published only at',
-        'https://thornswood.net under Downloads.',
-        'It downloads the Thornswood payload from thornswood.net, checks it against the SHA-256',
-        'the site publishes beside the download, unpacks it and starts the Setup.bat inside it.',
-        'It closes a running Skyrim before it installs, and since 27 September it asks first and',
-        'stops if the answer is no.',
-        'Nothing in it is packed or obfuscated: the high entropy is the icon and the logo in .rsrc.',
-        'It is Authenticode signed through Azure Artifact Signing, a new publisher with little',
-        'reputation yet. Please take another look.'
+        'Thornswood Setup, the installer for Thornswood, a private modded',
+        'Skyrim multiplayer server at https://thornswood.net.',
+        'It is a Velopack setup program: it installs the Thornswood launcher',
+        'and its game files from the package inside it, then starts the',
+        'launcher. It is Authenticode signed through Azure Artifact Signing,',
+        'and published on the Thornswood GitHub Releases.',
+        'It is a new signed publisher with little reputation yet.',
+        'Please take another look.'
     ) -join ' '
 }
 
