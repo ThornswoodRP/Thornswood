@@ -2801,12 +2801,21 @@ async def keep_onboarding_channels(guild):
     if CHECK:
         say('would', 'take ' + what)
         return
+    # Onboarding's list keeps the id of a channel deleted since, and Discord
+    # refuses the whole edit over one ("400 Invalid Form Body In
+    # default_channel_ids: Unknown channel", the live build of 12 Nov, 4:03
+    # PM). So the list sent back holds only channels the server still has.
     gone = set(i for i, _n in shut)
-    keep = [discord.Object(id=i) for i in sorted(ob.default_channel_ids) if i not in gone]
+    stale = [i for i in sorted(ob.default_channel_ids)
+             if i not in gone and guild.get_channel(i) is None]
+    keep = [discord.Object(id=i) for i in sorted(ob.default_channel_ids)
+            if i not in gone and i not in stale]
     try:
         await guild.edit_onboarding(default_channels=keep,
                                     reason='Thornswood setup, the plan gates these channels')
         say('onboarding', 'took ' + what)
+        if stale:
+            say('onboarding', 'and %d deleted channel(s) it still listed' % len(stale))
     except discord.HTTPException as e:
         failed.append('could not take ' + what + ' (%s)' % refused(e))
 
@@ -3109,10 +3118,15 @@ async def audit(guild):
     elif on is not False:
         off("Discord's Onboarding could not be read (%s)" % on)
     try:
-        for _i, name in onboarding_shut(guild, await guild.onboarding()):
+        ob = await guild.onboarding()
+        for _i, name in onboarding_shut(guild, ob):
             off("#%s is a default channel of Discord's Onboarding, so Discord refuses "
                 "to shut @everyone out of it as the plan does; a build takes it off "
                 "that list" % name)
+        for cid in sorted(getattr(ob, 'default_channel_ids', None) or ()):
+            if guild.get_channel(cid) is None:
+                off("Discord's Onboarding still lists channel %d, which the server no "
+                    "longer has; a build leaves it off the list it sends back" % cid)
     except discord.HTTPException as e:
         off("Discord's Onboarding default channels could not be read (%s)" % refused(e))
 
