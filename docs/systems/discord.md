@@ -217,7 +217,7 @@ Category mode: public.
 | #rules | text | read | everybody | the council | posts: the council; written by the build from content.py RULES, with its Changelog thread; topic: Seven rules. Read them. |
 | #welcome | text | read | everybody | the council | posts: the council; written by the build from content.py WELCOME, with its Changelog thread; topic: Start here. |
 | #start-here | text | read | everybody | the council | posts: the council; written by the build from content.py START, with its Changelog thread; topic: How to actually get in and play. |
-| #dishboard | text | memberstalk | everybody | everybody on staff, Member, Playtester | was #say-hello in Start Here; topic: Dishboard bumps. |
+| #disboard | text | memberstalk | everybody | everybody on staff, Member, Playtester | was #dishboard in Start Here; was #say-hello in Start Here; topic: Disboard bumps. |
 
 ### Tickets
 

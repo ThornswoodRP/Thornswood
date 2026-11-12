@@ -550,7 +550,7 @@ FACTION_STAFF = COUNCIL_ROLES + ('Gamemaster', 'Trial Gamemaster', 'Loremaster')
 #        membersread  Member, Playtester and staff read, the council posts
 #        open         Playtester and staff talk, invisible to everybody else
 #        memberstalk  everybody reads, Member, Playtester and staff talk and use
-#                     commands (#welcome-travelers, #dishboard: Patrick, 10 Nov)
+#                     commands (#welcome-travelers, #disboard: Patrick, 10 Nov)
 #        testersread  Playtester and staff read, the council posts
 #        pathfind     the same people as open; the Playtesters category's own
 #        hold         a hold's hall: its Citizen, Jarl and officers, and HOLD_STAFF
@@ -650,9 +650,11 @@ PLAN = [
    dict(kind='text',  name='start-here',  key='START',    mode='read',
         topic="How to actually get in and play.", post=True),
    # Where the Disboard listing is bumped. It was #say-hello until Patrick
-   # renamed it on 10 Nov 2026: everybody sees it, Members bump.
-   dict(kind='text',  name='dishboard',   key='BUMP',     mode='memberstalk',
-        topic='Dishboard bumps.', was=(('Start Here', 'say-hello'),)),
+   # renamed it #dishboard on 10 Nov 2026, and #disboard by 12 Nov (the audit
+   # of 12 Nov found it so): everybody sees it, Members bump.
+   dict(kind='text',  name='disboard',    key='BUMP',     mode='memberstalk',
+        topic='Disboard bumps.',
+        was=(('Start Here', 'dishboard'), ('Start Here', 'say-hello'))),
  ]),
  # Help and reports, for anybody, under Start Here where a newcomer looks
  # (#3317, q-3317-ticket-split, A). Support answers help, Moderation reports.
@@ -3013,6 +3015,29 @@ async def audit(guild):
         r = have.get(n)
         if r is not None:
             line('%s: %d member(s)' % (n, len(r.members)))
+    # Who holds the two gate roles, by name (Patrick, 12 Nov: some people hold
+    # Member who should not). Nothing in the bot gives Member yet (#5841), so
+    # every Member was given by hand or by the onboarding of September, and
+    # the names are the only way to check them. The audit's output is sealed
+    # to the session that asked for it (Box-Run.ps1).
+    staff_held = set(staff_names)
+    for n in ('Playtester', 'Member'):
+        r = have.get(n)
+        if r is None:
+            continue
+        line('%s, by name: %s' % (n, ', '.join(sorted(_who(m) for m in r.members)) or 'nobody'))
+    member, tester = have.get('Member'), have.get('Playtester')
+    if member is not None:
+        only = [m for m in member.members
+                if (tester is None or tester not in m.roles)
+                and not any(x.name in staff_held for x in m.roles)]
+        line('Member and neither Playtester nor staff, so Start Here and '
+             'Information only: %d (%s)'
+             % (len(only), ', '.join(sorted(_who(m) for m in only)) or 'nobody'))
+    nobody = [m for m in guild.members
+              if not getattr(m, 'bot', False)
+              and not [x for x in m.roles if x != guild.default_role]]
+    line('no role at all, so Start Here only: %d' % len(nobody))
     for m, cat, held in doubles(guild.members):
         off('%s holds %s, two ranks of %s' % (_who(m), ' and '.join(held), cat))
     for m, staff, seats in seat_clashes(guild.members):
