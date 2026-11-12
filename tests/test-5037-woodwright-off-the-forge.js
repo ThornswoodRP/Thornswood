@@ -55,7 +55,8 @@ for (const desc of Object.keys(rows)) {
   if (!kind) { continue; }
   found[kind]++;
   if (row.benchName === FORGE) {
-    atForge.push(kind + ': ' + row.name + ' (' + desc + ', ' + row.editorId + (row.book ? ', ' + row.book : '') + ')');
+    atForge.push(kind + ': ' + row.name + ' (' + desc + ', ' + row.editorId + (row.book ? ', ' + row.book : '') +
+      (row.fires === false ? ', never asked of the server' : '') + ')');
   }
 }
 
@@ -76,6 +77,15 @@ for (const desc of Object.keys(rows)) {
 }
 yes('every one moved off the forge carries movedFrom for the last plugin (' + unsaid + ' do not)', unsaid === 0);
 
+// The source: the move loop in Build-RecipeTable.ps1 moves a cut row with the
+// rest. The table half above holds once recipes.json is rebuilt from the game
+// (scripts/mods/Rebuild-ContentTables.ps1); this half holds on the script.
+const ps = fs.readFileSync(path.join(ROOT, 'scripts', 'dev', 'Build-RecipeTable.ps1'), 'utf8');
+const loopAt = ps.indexOf('\n$movedCount = @{}');
+const loopEnd = loopAt < 0 ? -1 : ps.indexOf('\nif ($movedCount.Count -eq 0)', loopAt);
+const loop = (loopAt >= 0 && loopEnd > loopAt) ? ps.slice(loopAt, loopEnd) : '';
+yes('Build-RecipeTable.ps1 has its move loop', loop.indexOf('MovedFromName') >= 0);
+yes('the move loop does not pass over a cut row', !!loop && !/Book\s+-eq\s+'cut'/.test(loop));
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
