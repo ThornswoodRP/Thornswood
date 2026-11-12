@@ -25,8 +25,9 @@ It reads joins.json and never writes it, as it never wrote anything before:
 it put numbers on cards and kept no record of them. The bot writes the record
 on every join, and a second process writing the whole file while the bot runs
 could put back a copy from before a number the bot has just given out.
-The record is the one beside this file, so run it in the bot's folder on the
-VPS; anywhere else there is none and every number is the old rule.
+The record is the one in the bot's data folder (bot_base.py), so run it in the
+bot's folder on the VPS; anywhere else there is none and every number is the
+old rule.
 """
 import asyncio
 import os

@@ -14,7 +14,7 @@ The real bot module is imported and the real on_member_join is run, with a
 stand-in server whose member count is set by hand, a stand-in welcome channel
 that keeps what is sent to it, and card.render swapped for something that
 writes down the number it was asked to draw. The record is pointed at a
-temporary folder so this cannot touch one beside the code.
+temporary folder so this cannot touch one in the bot's data folder.
 
 The background half runs the real card.render and the real make-join-card.py.
 

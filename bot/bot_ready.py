@@ -126,8 +126,8 @@ async def register_commands():
     WHY IT IS BEHIND A STAMP. This was three writes to Discord per reconnect,
     doing nothing new every time, and a sync is one of the calls Discord rate
     limits hardest. A reconnect is not a new set of commands; a deploy is. So
-    the names that were registered are written down beside the code, and this
-    runs when that list differs, when a server appears that is not in it, or
+    the names that were registered are written down in the data folder, and
+    this runs when that list differs, when a server appears that is not in it, or
     when FORCE_COMMAND_SYNC says to. A rate limited sync used to write a
     traceback on an evening that was already going badly.
     """

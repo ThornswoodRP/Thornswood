@@ -22,7 +22,7 @@ guilds, channels, roles and people, and the thread creation always raises.
 The site push is replaced by a counter. One scenario loads Build-Discord.py
 too, without running it, to build #tickets from the PLAN's own roles and
 overwrites. The one open ticket file is pointed at a scratch folder, so the
-real one beside bot.py is never read or written.
+real one in the bot's data folder is never read or written.
 
 Read only. Never connects to anything.
 """

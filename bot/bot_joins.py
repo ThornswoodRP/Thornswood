@@ -18,7 +18,7 @@ from bot_base import DATA_DIR
 from bot_core import WELCOME, _int_env, by_name, client, log
 
 
-# Which arrival each person was, on disk beside the code.
+# Which arrival each person was, on disk in the bot's data folder.
 #
 # Patrick, 24 September, with a screenshot of #welcome-travelers: "#28 twice".
 # Daggerio came up the road at 19:41 and VENUS at 22:45, and both cards said

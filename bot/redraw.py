@@ -22,8 +22,9 @@ cards came to say "The 28th to walk in".
 
 It reads joins.json and never writes it. Redrawing swaps a picture on a card
 that is already up; it gives nobody a number, so it has nothing to record.
-The record is the one beside this file, so run it in the bot's folder on the
-VPS; anywhere else there is none and every number is the old rule.
+The record is the one in the bot's data folder (bot_base.py), so run it in the
+bot's folder on the VPS; anywhere else there is none and every number is the
+old rule.
 """
 import asyncio
 import os
