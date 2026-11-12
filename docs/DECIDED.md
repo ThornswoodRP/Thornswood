@@ -604,6 +604,10 @@ issue where the card did.
   install sends, a comments-only change to a verb script.**
   (dec_qGeySfOKTKUJjIlq29Z3Uw) 10 Nov 2026,
   [#4391](https://github.com/ThornswoodRP/Thornswood/issues/4391#issuecomment-6775486356).
+- **#5824 merges at e110909: done-on-merge finds a merged commit's pull
+  request from its own message, held to that commit, not GitHub's
+  commit lookup.** (dec_hEDMbH9Ygp_hp6NKG6qGJw) 11 Nov 2026,
+  [#4135](https://github.com/ThornswoodRP/Thornswood/issues/4135#issuecomment-6814947207).
 
 ### Languages and code
 
