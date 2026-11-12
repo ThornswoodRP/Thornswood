@@ -107,7 +107,9 @@ try {
     Yes "1. PinMode says what it wrote: $said" ($null -ne $said -and $said.Contains('borderless'))
     Yes "1. Fullscreen=false is a live line" ((Live $after 'Fullscreen') -eq 'false')
     Yes "1. Borderless=true is a live line" ((Live $after 'Borderless') -eq 'true')
-    Yes "1. no commented copy of either is left to read as a second setting" (-not ($after -match '(?m)^\s*#\s*(Fullscreen|Borderless)\s*='))
+    # [ \t], not \s: \s also takes a line break, so "#" alone on the line
+    # above a live Fullscreen=false read as a commented copy.
+    Yes "1. no commented copy of either is left to read as a second setting" (-not ($after -match '(?m)^[ \t]*#[ \t]*(Fullscreen|Borderless)[ \t]*='))
     Yes "1. the resolution is untouched" ((Live $after 'Resolution') -eq '3440x1440')
     Yes "1. Mode is still borderless" ($Api::Mode() -eq 'Borderless')
 
