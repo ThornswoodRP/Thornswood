@@ -1212,6 +1212,15 @@
                   },
                   {
                       "script":  "scripts/deploy/Install-Voice.ps1",
+                      "scope":  "Assert-VoiceJoin",
+                      "via":  "Remote",
+                      "anchor":  "$join = Read-VoiceJoin @(Remote (Get-VoiceJoinCheck $Port)",
+                      "does":  "asks the voice service's /token on loopback with a ticket nobody holds, to see a join reaches its site (#4467)",
+                      "class":  "read-status",
+                      "reason":  "one request to the service; nothing is minted, written or changed"
+                  },
+                  {
+                      "script":  "scripts/deploy/Install-Voice.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "Remote",
                       "anchor":  "$swapOut = @(Remote (@($vars, $voiceTools, $remote, $serviceSwapBlock) -join \"`r`n\") | ForEach-Object { Say \"  $_\"; \"$_\".Trim() })",

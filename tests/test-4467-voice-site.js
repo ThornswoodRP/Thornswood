@@ -102,7 +102,23 @@ async function startVoice(site) {
   return { srv: srv, port: port };
 }
 // The install's join check, run here as the box runs it, and read as the install reads it.
-const joinCheck = (port) => ps('Read-VoiceJoin @(& ([scriptblock]::Create((Get-VoiceJoinCheck ' + port + '))))');
+// Not through ps(): spawnSync would hold this process's event loop, where the
+// stand-in site in C answers, so the service's ask could never be answered.
+function joinCheck(port) {
+  return new Promise((ok) => {
+    const call = 'Read-VoiceJoin @(& ([scriptblock]::Create((Get-VoiceJoinCheck ' + port + '))))';
+    const kid = spawn('pwsh', ['-NoProfile', '-NonInteractive', '-Command',
+      '$ErrorActionPreference = "Stop"; . ' + lit(HELPER) + '; ' + call + ' | ConvertTo-Json -Compress']);
+    let out = '', err = '';
+    kid.stdout.on('data', (d) => { out += d; });
+    kid.stderr.on('data', (d) => { err += d; });
+    kid.on('error', (e) => ok({ ok: false, value: null, said: e.message }));
+    kid.on('close', () => {
+      try { ok({ ok: true, value: JSON.parse(out.trim() || 'null') }); }
+      catch (e) { ok({ ok: false, value: null, said: out + '\n' + err }); }
+    });
+  });
+}
 function stop(srv) {
   return new Promise((ok) => {
     if (!srv || srv.exitCode !== null || srv.signalCode !== null) { ok(); return; }
@@ -130,7 +146,7 @@ function stop(srv) {
     // -------------------------------------------------------------- B --
     console.log('\nB. a service with no site lets nobody join, and the check says so:');
     voice = await startVoice('');
-    let r = joinCheck(voice.port);
+    let r = await joinCheck(voice.port);
     yes('the join check says a join does not get through, naming the 503 (' + (r.value && r.value.Said) + ')',
         r.ok && r.value && r.value.Ok === false && /503/.test(String(r.value.Said)), r.said);
     await stop(voice.srv); voice = null;
@@ -149,7 +165,7 @@ function stop(srv) {
     });
     await new Promise((ok) => site.listen(0, '127.0.0.1', ok));
     voice = await startVoice('http://127.0.0.1:' + site.address().port);
-    r = joinCheck(voice.port);
+    r = await joinCheck(voice.port);
     yes('the join check says a join reaches the site (' + (r.value && r.value.Said) + ')',
         r.ok && r.value && r.value.Ok === true, r.said);
     yes('  and the site was asked', asked >= 1);
