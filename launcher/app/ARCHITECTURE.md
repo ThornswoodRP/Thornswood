@@ -805,7 +805,11 @@ Skyrim), Online.cs (the headcount the server publishes), Slots.cs (the one
 rule for moving a character's slot), Art.cs (the art inside the exe, and the
 moving strip behind the title, `launcher-header.webp`, an animated WebP that
 `HeaderFrames` decodes a frame at a time with SkiaSharp),
-Themes.cs (every colour; the install window is drawn in its Forge too, #2851), Gallery.cs (the pictures the site shows from the world, read
+Themes.cs (every colour; the install window is drawn in its Forge too, #2851,
+or in Contrast, the person's own colours, when Windows has a contrast theme
+on, #4409), SystemLook.cs (what Windows asks of a window's look: its contrast
+theme, that theme's colours and its text size, read once for the install
+window, #4409), Gallery.cs (the pictures the site shows from the world, read
 from `/api/public` for Play's rotating spotlight and the Gallery page; the
 Gallery page uploads via `/api/gallery/submit` and then sends the picture's
 800 and 1600 pixel JPEG copies to `/api/gallery/copy` (#3218), reports via
