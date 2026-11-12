@@ -257,7 +257,7 @@ def unreachable(gate, events, seen):
 # let them through by failing, which proved nothing, and every case after the
 # first would have been refused as too soon the day that check stopped
 # failing. The file of open tickets goes in a temporary folder so this never
-# touches the one beside the code.
+# touches the bot's own, in its data folder.
 TMP = tempfile.mkdtemp(prefix='thornswood-ticket-')
 bot.OPEN_TICKETS = os.path.join(TMP, 'open-tickets.json')
 ALL_LINES = []

@@ -17,7 +17,7 @@ edit to the ticket panel.
 The real bot module is imported and the real coroutine is run. Only the things
 that touch Discord are replaced: the guild list, the command tree's three
 calls, and the stamp file, which is pointed at a temporary folder so this
-cannot touch the one beside the code.
+cannot touch the bot's own, in its data folder.
 
 Read only. Never connects to anything.
 """

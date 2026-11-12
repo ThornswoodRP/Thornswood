@@ -34,7 +34,7 @@ What it does:
            The channels get there once, by hand, with
            python bot.py --setup-channels [--apply] (the testing channels
            section below)
-  Heartbeat writes heartbeat.json beside this file every minute, so the
+  Heartbeat writes heartbeat.json in its data folder every minute, so the
            watchdog can tell a bot that is running from one that is on
            Discord (issue #449)
   Uptime   pings an outside monitor every minute while it is on Discord, so
@@ -99,8 +99,9 @@ Everything it needs is in env:
   KNOWN_ISSUES_EVERY  seconds between GitHub reads, default 300, never under 60
   PUBLIC_LISTS_FILE   where the site's known issues and roadmap are written,
                       default the site's data/from-bot/lists.json on the VPS
-  HEARTBEAT_FILE   where the heartbeat goes, default heartbeat.json beside this
-                   file, which is where the watchdog reads it
+  HEARTBEAT_FILE   where the heartbeat goes, default heartbeat.json in the
+                   bot's data folder (bot_base.py), which is where the
+                   watchdog reads it
   HEARTBEAT_EVERY  seconds between heartbeats, default 60
   PING_URL         the outside monitor's ping address. A secret, set only by
                    Install-Bot.ps1 -SetPing and never written to the log. Not

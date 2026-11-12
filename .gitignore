@@ -37,12 +37,14 @@ __pycache__/
 # to commit the whole working tree, which is the other reason this stays out.
 bot/announced.json
 
-# Which ticket each person has open, written by the bot beside itself on the
-# VPS. It is a list of the Discord ids of everybody waiting on staff, so it
+# Which ticket each person has open. On the VPS the bot writes it in its data
+# folder (bot/data/, ignored below); here for a run from a checkout with no
+# data folder, where the bot keeps its records in bot/ itself. It is a list of
+# the Discord ids of everybody waiting on staff, so it
 # stays out of the repo if the bot is ever run from a checkout.
 bot/open-tickets.json
 
-# Which arrival each person was, written by the bot beside itself on the VPS so
+# Which arrival each person was, kept by the bot so
 # the number on a join card only ever goes up. A list of Discord ids like the
 # one above, and a copy here would be some other run's numbers. The .tmp is the
 # half of a write that has not been swapped in yet.
