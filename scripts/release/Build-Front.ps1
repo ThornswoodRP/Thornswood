@@ -50,6 +50,7 @@
   pwsh scripts/release/Build-Front.ps1 -Fork ../skymp -Record
   After a pin move: builds from another clone of the fork and records the build.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     # A clone of the fork that has the commit. engine\skymp unless given

@@ -37,6 +37,7 @@
   pwsh -NoProfile -File .\scripts\mods\Check-FromGame.ps1
   Exit 0 when every one comes out byte for byte, 1 when one does not.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
   [string] $Data = ((& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install) + '\Game\Data'),

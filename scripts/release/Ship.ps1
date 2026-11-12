@@ -227,6 +227,7 @@
   start. Until then a main Ship took -Package to rebuild the old installer
   and refused to go out past one that was behind.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true, Position = 0)][string]$Notes,

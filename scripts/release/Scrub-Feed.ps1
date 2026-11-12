@@ -101,6 +101,7 @@
   anywhere; tests\test-scrub-feed.ps1 drove it that way until it went with
   the launcher's feed reader (#5608); this script goes with the feed (#5783).
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     # main or dev. No default: which feed is scrubbed is always said.

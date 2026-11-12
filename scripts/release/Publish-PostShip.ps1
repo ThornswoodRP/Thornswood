@@ -86,6 +86,7 @@
   the release over it: a release that is out on the feed, in #news and on the
   server is out.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [ValidateSet('main', 'dev')][string]$Channel = 'main',

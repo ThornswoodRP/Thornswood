@@ -46,6 +46,7 @@
   .\scripts\release\Sync-Client.ps1
   Copies the recorded build in. Go.ps1 runs this.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
   [string]$Dist = (& (Join-Path $PSScriptRoot 'Where.ps1') ClientDist),

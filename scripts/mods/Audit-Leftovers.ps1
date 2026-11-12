@@ -18,6 +18,7 @@
   Nothing here is destructive, so it is safe to run while the game is open and
   safe to run twice.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     # In the repository's local folder, ignored by git, rather than inside the

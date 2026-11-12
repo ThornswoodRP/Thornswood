@@ -22,6 +22,7 @@
       .\scripts\mods\Set-UnboundMenu.ps1 -Full      every page, for authoring presets
       .\scripts\mods\Set-UnboundMenu.ps1 -Locked    Starting Location only, for shipping
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [string]$Root = (& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install),

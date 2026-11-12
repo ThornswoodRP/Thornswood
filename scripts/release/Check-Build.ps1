@@ -25,6 +25,7 @@
 
   Reads only.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
   [string]$Data = ((& (Join-Path $PSScriptRoot 'Where.ps1') Install) + '\Game\Data'),

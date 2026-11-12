@@ -33,6 +33,7 @@
   The original is kept beside it. Nothing here is one way.
 #>
 
+#Requires -Version 7
 [CmdletBinding()]
 param(
   [string] $Game = (& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install),

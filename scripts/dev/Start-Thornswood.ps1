@@ -25,6 +25,7 @@
 
   mklink /J makes junctions, which do NOT need administrator. Only symlinks do.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [string]$Root = (& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install),

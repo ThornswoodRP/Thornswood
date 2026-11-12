@@ -17,6 +17,7 @@
   The female body is left alone. It is a CBBE build with no slot and no missing
   part, and replacing it would undo work that is not broken.
 #>
+#Requires -Version 7
 [CmdletBinding(SupportsShouldProcess)]
 param(
     [string]$Data = ((& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install) + '\Game\Data'),

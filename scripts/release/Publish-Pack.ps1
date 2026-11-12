@@ -35,6 +35,7 @@
   of whatever another machine has just published, and the send refuses a feed
   that changed up there in between rather than writing over it.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [string]$Only,
