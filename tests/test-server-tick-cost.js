@@ -17,9 +17,9 @@
 // It prints one row per timer: how often it runs, milliseconds per run, the
 // share of one core that comes to, and engine reads a second. Then it checks
 // the voice feed, the one timer that runs five times a second:
-//   - it reads each person's appearance at most once a second, not on every
-//     200 ms pass (it read it twice a pass, ten times a second a person);
-//   - it reads each person's profile id once a pass, not twice;
+//   - it reads each person's appearance and profile id once a second, not on
+//     every 200 ms pass (it read the appearance twice a pass, ten times a
+//     second a person, before #385, and both once a pass before #5431);
 //   - what it sends the voice service is unchanged: the same rows, the same
 //     fields, the same values, name and party included, and a new name is
 //     picked up within a second.
@@ -217,12 +217,26 @@ function fakeRequire(name) {
   return require(name);
 }
 
+// THE CLOCK (#5431). A timer is measured as it runs on the server: each run
+// is its own interval later than the one before, so whatever a timer does
+// once a second, or once a minute, counts as often as it really happens and
+// no more. Off the measurement (clockAt null) the gamemode reads the real
+// clock, which the minute line's checks below need. Frozen, two passes see
+// the same time, so the NPC comparison compares the NPCs and nothing else
+// (needsTick read 141 one run and 140 the next as its bands moved with the
+// real clock between the two passes).
+let clockAt = null;
+class Clock extends Date {
+  constructor(...a) { if (a.length) { super(...a); } else { super(clockAt === null ? Date.now() : clockAt); } }
+  static now() { return clockAt === null ? Date.now() : clockAt; }
+}
+
 const quiet = { log: function () { }, error: function () { }, warn: function () { }, info: function () { } };
 const sandbox = {
   mp: mp, require: fakeRequire, console: QUIET ? quiet : console, process: process, Buffer: Buffer,
   setInterval: fakeSetInterval, clearInterval: fakeClearInterval,
   setTimeout: function () { return { unref: function () { } }; }, clearTimeout: function () { },
-  setImmediate: function () { }, Date: Date, URL: URL, TextEncoder: TextEncoder, TextDecoder: TextDecoder
+  setImmediate: function () { }, Date: Clock, URL: URL, TextEncoder: TextEncoder, TextDecoder: TextDecoder
 };
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
@@ -251,9 +265,9 @@ function nameOf(row) {
 }
 
 // ------------------------------------------------------------------- measure
-function time(fn, runs) {
+function time(fn, runs, every) {
   const t0 = process.hrtime.bigint();
-  for (let i = 0; i < runs; i++) { try { fn(); } catch (e) { } }
+  for (let i = 0; i < runs; i++) { clockAt += every; try { fn(); } catch (e) { } }
   return Number(process.hrtime.bigint() - t0) / 1e6;
 }
 
@@ -261,12 +275,13 @@ const live = intervals.filter(function (r) { return !r.cleared && r.ms > 0; });
 yes('the gamemode starts its timers (' + live.length + ' found)', live.length >= 10);
 
 const table = [];
+clockAt = Date.now();
 live.forEach(function (row) {
-  for (let w = 0; w < 5; w++) { try { row.fn(); } catch (e) { } }   // warm
+  for (let w = 0; w < 5; w++) { clockAt += row.ms; try { row.fn(); } catch (e) { } }   // warm
   for (const k in reads) { delete reads[k]; }
   const runs = Math.max(20, Math.min(400, Math.round(20000 / row.ms)));
   counting = true;
-  const ms = time(row.fn, runs);
+  const ms = time(row.fn, runs, row.ms);
   counting = false;
   let got = 0, wrote = 0;
   for (const k in reads) { if (/^set:/.test(k)) { wrote += reads[k]; } else { got += reads[k]; } }
@@ -315,6 +330,13 @@ console.log('');
 // origin/main 2d9a64e, 6,000 NPCs: PEOPLE=5 234/s, PEOPLE=20 887/s,
 // PEOPLE=50 2193/s (about 43.5 a person plus 16). The bound is 45 a person
 // plus 20, so one more read a person on the voice feed's 200 ms pass fails it.
+// Issue #5431, 12 Nov 2026: this harness had not loaded the gamemode since
+// #5280, and main had grown to 1106 with 20 people: the P panel's cart check
+// read every near person's profile id again (228 a pass), the bleed asked
+// everybody whether they were dead before whether they bled, and the voice
+// feed read who everybody is five times a second. Fixed, and measured on the
+// clock above (timers that act once a second or a minute now count as often
+// as they do on the server): PEOPLE=5 224/s, 20 844/s, 50 2084/s.
 const workSec = totalReads + totalSets, workBound = 45 * PEOPLE + 20;
 console.log('  (share of a core is wall time, shown only: ' + total.toFixed(2) + '%)');
 yes('the whole of the gamemode\'s timers make at most ' + workBound + ' engine reads and sets a second with ' +
@@ -447,9 +469,34 @@ if (feed) {
   const q = pass1();
   const moved = q.body && q.body.who && q.body.who[1];
   yes('the position is read fresh on every pass', !!moved && JSON.stringify(moved.pos) === '[9,8,7]');
+
+  // #5431: who somebody is (profile id and name) is read once a second a
+  // person, not on every 200 ms pass; the appearance is a whole document.
+  // Five passes on the clock are one second.
+  const second = { appearance: 0, profileId: 0 };
+  for (let i = 0; i < 5; i++) {
+    clockAt += 200;
+    const r = pass1().reads;
+    second.appearance += r.appearance || 0; second.profileId += r.profileId || 0;
+  }
+  yes('the voice feed reads each appearance and profile id once a second (' + second.appearance + ' and ' +
+      second.profileId + ' in five passes for ' + PEOPLE + ')',
+      second.appearance === PEOPLE && second.profileId === PEOPLE);
+  const d1 = JSON.parse(want.appearanceDump); d1.name = 'Renamed';
+  want.appearanceDump = JSON.stringify(d1);
+  let renamedBy = -1;
+  for (let i = 1; i <= 5 && renamedBy < 0; i++) {
+    clockAt += 200;
+    const b2 = pass1().body;
+    const row1 = b2 && b2.who && b2.who.filter(function (w) { return w.actor === ids[1]; })[0];
+    if (row1 && row1.name === 'Renamed') { renamedBy = i; }
+  }
+  yes('and a new name is sent within a second (pass ' + renamedBy + ' of 5)', renamedBy >= 1 && renamedBy <= 5);
 }
 
 // ------------------------------------------------------------ the minute line
+// The real clock again: the checks below wait on it.
+clockAt = null;
 const beat = sandbox.__thornswoodServerBeat;
 yes('the server\'s minute line is running', !!beat && typeof beat.beat === 'function');
 if (beat) {
