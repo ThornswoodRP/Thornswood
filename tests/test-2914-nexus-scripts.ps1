@@ -167,7 +167,8 @@ function Perm([hashtable]$say) {
         $head = '{"modId":' + $id + ',"name":"Mod ' + $id + '","author":"Someone","files":[{"fileId":1,"name":"f","version":"1"}],"plugins":[],"page":"https://www.nexusmods.com/skyrimspecialedition/mods/' + $id + '?tab=description"'
         if ($v -eq 'ours') { $head + ',"ours":true,"reading":null}' }
         elseif ($null -eq $v) { $head + ',"reading":null}' }
-        else { $head + ',"reading":{"read":"2026-10-27","by":"the test","collections":"' + $v + '","terms":{"Author''s instructions":"x"}}}' }
+        # An allowed reading names what allows it (#4190): here an open licence.
+        else { $head + ',"reading":{"read":"2026-10-27","by":"the test","collections":"' + $v + '"' + $(if ($v -eq 'allowed') { ',"licence":{"name":"MIT"}' } else { '' }) + ',"terms":{"Author''s instructions":"x"}}}' }
     }
     Put $script:perm ('{"version":1,"collection":"7essxf","revision":2,"mods":[' + (@($rows) -join ',') + ']}')
 }
