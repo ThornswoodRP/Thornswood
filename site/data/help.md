@@ -55,6 +55,12 @@ Skyrim the way it was.
    your account has not been accepted into the alpha yet, and applying is the
    fix.
 <!-- /alpha -->
+5. Press **Play**. The first time, the launcher builds Thornswood's animation
+   and body files on your computer, with the collection's Pandora and
+   BodySlide, before the game starts. Its status line reads **Building
+   Thornswood's animation and body files** while it works, and it takes a few
+   minutes. Leave it be: it has not stuck. It builds them again after the
+   collection changes, and an ordinary Play goes straight to the game.
 
 ## When the mods need updating
 
@@ -245,6 +251,16 @@ using it to get out of a fight or to travel can mean a warning or a ban.
    enough to start with.
 3. If you have a screenshot or a crash log, drag it into your ticket in the
    Discord, or say in the report that you have one. Where the logs are is below.
+
+If the first Play's build stops, a box about Thornswood's animation and body
+files comes up and the game does not start. That happens when the files
+cannot be built, or when a body comes out uncovered. The box says why, and the
+launcher log on the Diagnostics page has each step it took. Put right what the
+box names, for example a mod to deploy in Vortex, or Skyrim to close first.
+Then open **Diagnostics**, press **Scan** and then **Fix**, which builds the
+files again, and press Play. If it stops again, press **Build the report** on
+Diagnostics and drag the zip into a ticket in the Discord, or
+[report it](/report).
 
 A launcher last opened before 26 September says it cannot read the update
 source, or never offers an update. Updates are asked for at thornswood.net now

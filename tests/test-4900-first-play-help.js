@@ -56,7 +56,8 @@ function section(t, head) {
   const at = t.indexOf('\n## ' + head + '\n');
   if (at < 0) return null;
   const next = t.indexOf('\n## ', at + 4 + head.length);
-  return t.slice(at, next < 0 ? t.length : next);
+  // The words under the heading, not the heading itself.
+  return t.slice(at + 5 + head.length, next < 0 ? t.length : next);
 }
 const has = (text, words) => text.toLowerCase().indexOf(words.toLowerCase()) >= 0;
 
@@ -88,14 +89,14 @@ const fixBuilds = upkeep.indexOf('Fix builds them now') >= 0;
 yes('Scan\'s card says Fix builds them too', fixBuilds);
 
 // ------------------------------------------------------------------- pages --
-function holds(name, text) {
-  const f = flat(text || '');
+function builds(name, f) {
   yes(name + ' quotes the status line\'s opening words, "' + opening + '"', !!opening && f.indexOf(opening) >= 0);
   yes(name + ' says it takes ' + wait, !!wait && has(f, 'takes ' + wait));
-  yes(name + ' says it happens on the first Play', /first (time you press )?Play|first Play/i.test(f));
+  yes(name + ' says it happens on the first Play', /first (time you press )?Play|first Play|first time[^.]*builds/i.test(f));
+}
+function stops(name, f) {
   yes(name + ' says the game does not start when it stops', /game does not start/i.test(f));
   yes(name + ' sends people where the box does, ' + where, !!where && has(f, where));
-  return f;
 }
 
 console.log('\nHelp (site/data/help.md):');
@@ -103,10 +104,10 @@ const help = read('site/data/help.md') || '';
 const install = section(help, 'Installing it the first time');
 const wrong = section(help, 'When something goes wrong');
 yes('Help has Installing it the first time and When something goes wrong', !!install && !!wrong);
-const fi = flat(install || '');
-yes('Installing it the first time quotes the status line\'s opening words', !!opening && fi.indexOf(opening) >= 0);
-yes('  and says it takes ' + wait, !!wait && has(fi, 'takes ' + wait));
-const fw = holds('When something goes wrong', wrong);
+builds('Installing it the first time', flat(install || ''));
+const fw = flat(wrong || '');
+stops('When something goes wrong', fw);
+yes('  and names the stop as the first Play\'s build', /first Play/.test(fw) && has(fw, 'animation and body files'));
 yes('  and says to put right what the box names', /what the box (names|says)/i.test(fw));
 if (fixBuilds) yes('  and that Fix on Diagnostics builds them again', /Scan[^.]*Fix[^.]*build/i.test(fw));
 yes('  and how to send it to staff if it stops again', /Build the report/.test(fw) && /\(\/report\)|ticket/.test(fw));
@@ -115,7 +116,9 @@ console.log('\nThe join guide (site/data/site/join.md):');
 const join = read('site/data/site/join.md') || '';
 const step = section(join, '5. Press Play');
 yes('the join guide has 5. Press Play', !!step);
-const fs5 = holds('5. Press Play', step);
+const fs5 = flat(step || '');
+builds('5. Press Play', fs5);
+stops('5. Press Play', fs5);
 yes('  and points at Help for what to do', /\]\(\/help\)/.test(fs5));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
