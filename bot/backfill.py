@@ -19,7 +19,9 @@ greeting then failed. Somebody it has no number for, which is everybody who
 arrived while the bot had nowhere to greet, gets the old rule, their place in
 the join order among the members still here, and the line for them says so,
 and says when that number is one the record already gave somebody else. A
-record that is there and cannot be read stops the run.
+record that is there and cannot be read stops the run, and so does a channel
+whose history cannot be read, since the cards in it could not be counted
+(#4227). Anything that fails makes the script end 1.
 
 It reads joins.json and never writes it, as it never wrote anything before:
 it put numbers on cards and kept no record of them. The bot writes the record
@@ -57,10 +59,28 @@ def say(*a):
     print('[backfill]', *a, flush=True)
 
 
+# Every failure the run met, as one line each. Any at all and the script ends
+# 1, so whatever runs it sees the run failed (#4227); it used to end 0 after
+# anything, since on_ready catches what work() raises.
+FAILED = []
+
+
+def fail(line):
+    FAILED.append(line)
+    say(line)
+
+
+def exit_code():
+    return 1 if FAILED else 0
+
+
 async def done_ids(guild, names):
-    """User ids that already have a card, and when the newest card was posted."""
+    """User ids that already have a card, when the newest card was posted, and
+       the channels whose history could not be read. Cards in one of those are
+       not counted, so the ids are only the whole answer when it is empty."""
     ids = set()
     newest = None
+    unread = []
     for n in names:
         ch = discord.utils.get(guild.text_channels, name=n)
         if ch is None:
@@ -76,8 +96,9 @@ async def done_ids(guild, names):
                 if newest is None or m.created_at > newest:
                     newest = m.created_at
         except Exception:
+            unread.append(n)
             say('could not read #%s:\n%s' % (n, traceback.format_exc()))
-    return ids, newest
+    return ids, newest, unread
 
 
 @client.event
@@ -85,7 +106,7 @@ async def on_ready():
     try:
         await work()
     except Exception:
-        say('failed:\n' + traceback.format_exc())
+        fail('failed:\n' + traceback.format_exc())
     finally:
         await client.close()
 
@@ -95,7 +116,7 @@ async def work():
     say('server: %s, %d members' % (guild.name, guild.member_count))
     ch = discord.utils.get(guild.text_channels, name=WELCOME)
     if ch is None:
-        say('no text channel called #%s' % WELCOME)
+        fail('no text channel called #%s' % WELCOME)
         return
 
     members = [m async for m in guild.fetch_members(limit=None)]
@@ -103,15 +124,24 @@ async def work():
     members.sort(key=lambda m: m.joined_at)
     say('%d members with a join date' % len(members))
 
-    have, newest = await done_ids(guild, [WELCOME, 'general-chat', 'general'])
+    have, newest, unread = await done_ids(guild, [WELCOME, 'general-chat', 'general'])
+    if unread:
+        # Who has a card is only known from every channel cards are in. With
+        # one unread, the people whose cards are there look owed one, and
+        # --go would post each of them a second, mention and all (#4227).
+        fail('could not read %s, so nothing is posted: a card there would not '
+             'be counted, and its person would be posted a second one. Give the '
+             'bot Read Message History there and run it again.'
+             % ', '.join('#' + n for n in unread))
+        return
     say('%d people already have a card; newest card %s' % (len(have), newest.isoformat(timespec='minutes') if newest else 'none found'))
 
     try:
         given = bot_joins.joins_given(guild)
     except Exception:
-        say('could not read %s, so nothing is posted: every number would be '
-            'a guess that can repeat one on it.\n%s'
-            % (bot_joins.JOINS, traceback.format_exc()))
+        fail('could not read %s, so nothing is posted: every number would be '
+             'a guess that can repeat one on it.\n%s'
+             % (bot_joins.JOINS, traceback.format_exc()))
         return
     if os.path.exists(bot_joins.JOINS):
         say('%d numbers in %s' % (len(given), bot_joins.JOINS))
@@ -152,7 +182,7 @@ async def work():
             data = await avatar.read()
             png = await asyncio.get_running_loop().run_in_executor(None, card.render, name, data, number, None, m.name)
         except Exception:
-            say('card failed for %s:\n%s' % (m, traceback.format_exc()))
+            fail('card failed for %s:\n%s' % (m, traceback.format_exc()))
         line = '%s came up the road.' % m.mention
         try:
             if png is not None:
@@ -161,12 +191,13 @@ async def work():
                 await ch.send(line)
             say('posted #%d %s%s' % (number, m, why))
         except Exception:
-            say('posting failed for %s:\n%s' % (m, traceback.format_exc()))
+            fail('posting failed for %s:\n%s' % (m, traceback.format_exc()))
         await asyncio.sleep(1.5)
 
 
 # Under a main guard, as bot.py is, so test-join-scripts.py can import this
 # and run work() against a stand-in server. `python backfill.py` runs it as
-# before.
+# before, and ends 1 when anything in the run failed.
 if __name__ == '__main__':
     client.run(TOKEN, log_handler=None)
+    raise SystemExit(exit_code())
