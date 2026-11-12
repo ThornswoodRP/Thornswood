@@ -24,7 +24,14 @@
 // it takes a join pass signed with the key in the copy's private/door.json
 // for this server, ends creation on "/pick town whiterun" (thornswoodChargen
 // at stage done over the game connection, the welcome over the relay), and
-// answers "/needs" with the needs line.
+// answers "/needs" with the needs line. Then the stables: E on their door
+// writes the line at the door (Claim while nobody holds them) and sends the
+// bot through it; /claim puts the claim in the copy's private/property.json
+// and the deed and master key in the pack (SetInventory); /lock locks it
+// there and the door offers Unlock; and after the restart the register is
+// still on disk, so the door offers Unlock again. Everything about the
+// stables was first run against the whole of gamemode.js on
+// tests/stand-in-server.js: the same door ids, lines and register.
 //
 // Then the same with each part broken, one at a time, and the pass has to
 // FAIL on that step and name it:
@@ -36,6 +43,10 @@
 //  - the server holds logins for a join pass (not a bot pass copy);
 //  - the character is not new; creation is not opened for it; the gamemode
 //    takes it for a returning one; creation does not move on after a face;
+//  - the stables' door offers no Claim, or does not open; /claim is not
+//    taken; no deed, or no claim in the register; no master key with the
+//    deed; the lock not in the register; the claim gone after the restart;
+//    tables that no longer give both doors to the stables;
 //  - nothing is written to the world;
 //  - after the restart the character comes back somewhere else, or nameless.
 //
@@ -85,6 +96,11 @@ async function folder(name, settings) {
   const root = path.join(TMP, name, 'server');
   fs.mkdirSync(path.join(root, 'world', 'changeForms'), { recursive: true });
   fs.writeFileSync(path.join(root, 'gamemode.js'), '// the gamemode under test ' + name + '\n');
+  // The tables beside the gamemode (#5191) that name the stables' doors.
+  fs.mkdirSync(path.join(root, 'gamemode-tables'));
+  fs.writeFileSync(path.join(root, 'gamemode-tables', 'BUILDING_BY_DOOR.json'), JSON.stringify(
+    { '1a81e:Skyrim.esm': '165a0:Skyrim.esm', '16729:Skyrim.esm': '165a0:Skyrim.esm', 'd58de:Skyrim.esm': '165a0:Skyrim.esm' }));
+  fs.writeFileSync(path.join(root, 'gamemode-tables', 'BUILDING_NAME.json'), JSON.stringify({ '165a0:Skyrim.esm': 'Whiterun Stables' }));
   fs.writeFileSync(path.join(root, 'server-settings.json'), JSON.stringify(Object.assign({
     port: 7801, password: 'pw-' + name, thornswoodRequirePass: false, databaseName: 'world',
     thornswoodVoicePort: await freePort(), thornswoodServer: 'dev'
@@ -121,7 +137,12 @@ function passOk(raw, key, profileId, server) {
 
 // The stand-in. break_ names the one thing it gets wrong.
 function standIn(root, break_) {
-  const state = { up: false, runs: 0, moved: false, commands: [], current: null };
+  const state = { up: false, runs: 0, moved: false, commands: [], current: null, firstPress: -1 };
+  // The property block's register and its door memory (property.ts save, here()).
+  const register = path.join(root, 'private', 'property.json');
+  const STABLES = '165a0:Skyrim.esm';
+  function held() { try { return JSON.parse(fs.readFileSync(register, 'utf8')).claims[STABLES] || null; } catch (e) { return null; } }
+  function hold(c) { fs.mkdirSync(path.dirname(register), { recursive: true }); fs.writeFileSync(register, JSON.stringify({ claims: { [STABLES]: c } })); }
   const settings0 = JSON.parse(fs.readFileSync(path.join(root, 'server-settings.json'), 'utf8'));
   const vport = settings0.thornswoodVoicePort;
   // The gamemode's end of the relay: collect, acknowledge, run, answer.
@@ -159,6 +180,27 @@ function standIn(root, break_) {
       await ask(vport, 'POST', '/say', { profileId: pid, text: 'Welcome to Whiterun Hold, Safe Travels.' });
       return;
     }
+    if (parts[0] === '/claim') {
+      if (break_ === 'no claim' || !cur || !cur.atDoor()) {
+        await ask(vport, 'POST', '/say', { profileId: pid, text: 'Open the door of the building you mean first. That is how the server knows which one it is.' });
+        return;
+      }
+      if (break_ !== 'no register') { hold({ by: pid, name: 'Bot', locked: false }); }
+      const pack = [{ baseId: 0xf, count: 40 }];
+      if (break_ !== 'no deed') { pack.push({ baseId: 0x2015493, count: 1, name: 'Deed to Whiterun Stables, Whiterun' }); }
+      if (break_ !== 'no master') { pack.push({ baseId: 0x20154e0, count: 1, name: 'Master key to Whiterun Stables, no. 1' }); }
+      cur.push({ t: 28, inventory: { entries: pack } });
+      await ask(vport, 'POST', '/say', { profileId: pid, text: 'You claim Whiterun Stables. The deed is in your pack.' });
+      return;
+    }
+    if (parts[0] === '/lock') {
+      const c = held();
+      if (!c || !cur || !cur.atDoor()) { await ask(vport, 'POST', '/say', { profileId: pid, text: 'Open the door of the building you mean first.' }); return; }
+      if (break_ !== 'lock unsaved') { c.locked = true; hold(c); }
+      await ask(vport, 'POST', '/say', { profileId: pid, text: 'You lock Whiterun Stables. Whiterun Stables is locked for everyone now.' });
+      cur.line();
+      return;
+    }
     if (parts[0] === '/needs') {
       await ask(vport, 'POST', '/say', { profileId: pid, text: break_ === 'no needs' ? 'That is not running on this server.'
         : 'Hunger 100% (full), Thirst 100% (quenched), Rest 100% (rested), Temp comfortable 50. The Body page on K says what sets each one.' });
@@ -179,6 +221,7 @@ function standIn(root, break_) {
     child.stderr = new EventEmitter();
     state.runs++;
     child0 = child;
+    if (state.runs === 2 && break_ === 'forgets') { fs.rmSync(register, { force: true }); }
     const poller = setInterval(() => { poll(); }, 50);
     child.kill = () => { clearInterval(poller); setTimeout(() => { state.up = false; child.emit('exit', null, 'SIGTERM'); }, 5); };
     setTimeout(() => {
@@ -206,7 +249,18 @@ function standIn(root, break_) {
       else { out.push({ type: 'connectionAccepted' }); }
       // Where the character stands now: arriving moves it to the town.
       let at = SPAWN.slice();
+      // The door last pressed, which /claim and /lock read back.
+      let door = 0;
+      const line = () => {
+        const c = held();
+        const x = !c ? (break_ === 'no line' ? '' : 'claim') : (c.locked ? 'unlock' : 'lock');
+        out.push({ type: 'message', message: { t: 7, idx: actor.idx, refrId: 0xff000801, propName: 'thornswoodDoorLine',
+          dataDump: JSON.stringify({ at: Date.now(), x, n: x ? 'Whiterun Stables' : '', d: x ? ['16729', '1a81e', 'd58de'] : [], left: 60000 }) } });
+      };
       state.current = {
+        atDoor: () => door !== 0,
+        push: (m) => out.push({ type: 'message', message: m }),
+        line,
         stage: () => stage,
         arrive() {
           stage = 'done';
@@ -255,6 +309,17 @@ function standIn(root, break_) {
           // The engine takes one face per race menu, stores it and closes
           // the menu itself; the gamemode moves creation on when the face
           // lands in it. No race menu message is sent either way.
+          // E on a stables door: the line at it, then through it.
+          if (m.t === 6 && actor && m.data && m.data.caster === 0x14 && (m.data.target === 0x1a81e || m.data.target === 0x16729)) {
+            if (state.firstPress < 0) { state.firstPress = sent.length; }
+            door = m.data.target;
+            line();
+            if (break_ !== 'shut') {
+              out.push({ type: 'message', message: { t: 20, idx: actor.idx, pos: [0, 0, 0], rot: [0, 0, 0], teleportSeq: 1,
+                worldOrCell: door === 0x1a81e ? 0x165a0 : 0x3c } });
+            }
+            return;
+          }
           if (m.t === 4 && actor && open && m.idx === actor.idx) {
             open = false;
             if (break_ !== 'not saved') {
@@ -304,11 +369,16 @@ function failedAt(r, step) {
   // ------------------------------------------------------------------ whole
   const good = await run('good');
   yes('a good server passes the whole pass', good.r.ok === true);
-  yes('every step is a line: loads, login, relay, new, face, home, needs, saved, restart, loads back',
-    good.r.lines.map((l) => l.step).join(',') === 'loads,login,relay,new,face,home,needs,saved,restart,loads back');
+  yes('every step is a line: loads, login, relay, new, face, home, needs, claim, keys, saved, restart, loads back, kept',
+    good.r.lines.map((l) => l.step).join(',') === 'loads,login,relay,new,face,home,needs,claim,keys,saved,restart,loads back,kept');
   if (!good.r.ok) { console.log(JSON.stringify(good.r.lines, null, 1)); }
-  yes('the relay carried the join pass, the home pick and /needs to the gamemode, in that order',
-    good.s.state.commands.join(',') === '/joinpass,/pick,/needs');
+  yes('the relay carried the join pass, the home pick, /needs, /claim and /lock to the gamemode, in that order',
+    good.s.state.commands.join(',') === '/joinpass,/pick,/needs,/claim,/lock');
+  yes('  and the claim and the lock are in the register the copy keeps on disk',
+    JSON.stringify(botPass.claimOn(good.root, {}, '165a0:Skyrim.esm')) === JSON.stringify({ by: good.r.profileId, name: 'Bot', locked: true }));
+  yes('  and the claim line says what the gamemode said, and the kept line that the lock came back',
+    /You claim Whiterun Stables/.test((good.r.lines.find((l) => l.step === 'claim') || {}).detail || '') &&
+    /claim and its lock came back/.test((good.r.lines.find((l) => l.step === 'kept') || {}).detail || ''));
   yes('  and the home line says what the gamemode said back over it',
     /Welcome to Whiterun Hold/.test((good.r.lines.find((l) => l.step === 'home') || {}).detail || ''));
   yes('the voice service ran from its own folder beside the copy, with its log there',
@@ -316,7 +386,7 @@ function failedAt(r, step) {
   yes('  and it is stopped at the end, with its site', !(await voiceUp(good.root)));
   yes('the copy\'s join pass key is its own, in its private folder',
     /^[0-9a-f]{64}$/.test(JSON.parse(fs.readFileSync(path.join(good.root, 'private', 'door.json'), 'utf8')).passKey));
-  yes('the character came back where the home put it', good.r.ok && /came back where it was saved/.test(good.r.lines[good.r.lines.length - 1].detail));
+  yes('the character came back where the home put it', good.r.ok && /came back where it was saved/.test((good.r.lines.find((l) => l.step === 'loads back') || {}).detail || ''));
   yes('the server was started twice (once, then after the restart)', good.s.state.runs === 2);
   yes('the server is stopped at the end', good.s.state.up === false);
   yes('the result names the gamemode\'s git blob', good.r.blob === botPass.gitBlob(path.join(good.root, 'gamemode.js')));
@@ -332,8 +402,9 @@ function failedAt(r, step) {
   // The pass says each step as it starts, before it waits on it, so the
   // last line of bot-pass.log names the wait a pass that never ends is in.
   const order = ['loading the engine', 'the server started; it has 2 s', 'PASS  loads', 'a bot connects to port 7801',
-    'PASS  login', 'the bot sends a face', 'PASS  face', 'waiting for the world on disk', 'PASS  saved',
-    'the server is stopped', 'the server started again', 'PASS  restart', 'a second bot connects', 'PASS  loads back', 'the pass ends'];
+    'PASS  login', 'the bot sends a face', 'PASS  face', 'the bot presses E on the stables\' outside door', 'the bot presses Claim',
+    'PASS  claim', 'the bot presses E on the stables\' inside door', 'the bot presses Lock', 'PASS  keys', 'waiting for the world on disk', 'PASS  saved',
+    'the server is stopped', 'the server started again', 'PASS  restart', 'a second bot connects', 'PASS  loads back', 'PASS  kept', 'the pass ends'];
   const at = order.map((o) => good.said.findIndex((l) => l.startsWith(o)));
   yes('the pass says each step as it starts, in order, before its PASS line', at.every((x, i) => x >= 0 && (i === 0 || x > at[i - 1])));
   {
@@ -394,13 +465,45 @@ function failedAt(r, step) {
   yes('back somewhere else: FAIL on loads back, with both places', failedAt(moved.r, 'loads back') && /stands at/.test(moved.r.lines.find((l) => !l.ok).detail));
   const nameless = await run('nameless', 'nameless');
   yes('back with no name: FAIL on loads back', failedAt(nameless.r, 'loads back') && /its name is/.test(nameless.r.lines.find((l) => !l.ok).detail));
+  // ------------------------------------------------------- the stables
+  const noline = await run('noline', 'no line');
+  yes('the door offers no Claim to a building nobody holds: FAIL on claim, with what it offered',
+    failedAt(noline.r, 'claim') && /offers "" at "", not claim at Whiterun Stables/.test(noline.r.lines.find((l) => !l.ok).detail));
+  const shut = await run('shut', 'shut');
+  yes('the door does not open and take the bot through: FAIL on claim, saying so',
+    failedAt(shut.r, 'claim') && /the door opening and taking it through/.test(shut.r.lines.find((l) => !l.ok).detail));
+  const noclaim = await run('noclaim', 'no claim');
+  yes('/claim is not taken: FAIL on claim, with what came back over the relay',
+    failedAt(noclaim.r, 'claim') && /Over the relay it was told: Open the door/.test(noclaim.r.lines.find((l) => !l.ok).detail));
+  yes('  and a FAIL there says the gamemode said nothing about the stables when it did not',
+    /The gamemode said nothing about the stables/.test(noclaim.r.lines.find((l) => !l.ok).detail));
+  yes('no deed in the pack: FAIL on claim', failedAt((await run('nodeed', 'no deed')).r, 'claim'));
+  const noreg = await run('noreg', 'no register');
+  yes('the claim not in the register on disk: FAIL on claim, naming the file',
+    failedAt(noreg.r, 'claim') && /property\.json/.test(noreg.r.lines.find((l) => !l.ok).detail));
+  const nomaster = await run('nomaster', 'no master');
+  yes('no master key with the deed: FAIL on keys, with what the pack holds',
+    failedAt(nomaster.r, 'keys') && /no master key came with the deed: its pack holds \["Deed to Whiterun Stables, Whiterun"\]/.test(nomaster.r.lines.find((l) => !l.ok).detail));
+  const unlocked = await run('unlocked', 'lock unsaved');
+  yes('the lock not in the register: FAIL on keys', failedAt(unlocked.r, 'keys') && /register saying the stables are locked/.test(unlocked.r.lines.find((l) => !l.ok).detail));
+  const forgets = await run('forgets', 'forgets');
+  yes('the claim gone after the restart: FAIL on kept, with what the door offers',
+    failedAt(forgets.r, 'kept') && /offers "claim", not unlock/.test(forgets.r.lines.find((l) => !l.ok).detail));
+  {
+    const root = await folder('movedtables');
+    fs.writeFileSync(path.join(root, 'gamemode-tables', 'BUILDING_BY_DOOR.json'), JSON.stringify({ '1a81e:Skyrim.esm': '165a0:Skyrim.esm' }));
+    yes('tables that no longer give both doors to the stables are named, not pressed',
+      /no longer give door 16729:Skyrim\.esm to 165a0:Skyrim\.esm/.test(botPass.stablesIn(root).why || ''));
+    yes('  and the stables are named from the tables when they do', botPass.stablesIn(await folder('tablesok')).name === 'Whiterun Stables');
+  }
+
   yes('a failed pass still stops its server', [other, held, nocreate, returning, stays, unsaved, moved, nameless].every((x) => x.s.state.up === false));
 
   // ------------------- what the first two passes on the box waited for
   // Neither comes from the engine and gamemode: no inventory message after
   // the first packet, and no race menu close after a face.
-  yes('the good pass got no inventory message and no race menu message, and did not need one',
-    good.r.ok && !good.s.sent.some((m) => m.t === 28 || m.t === 29));
+  yes('the good pass got no inventory message and no race menu message before the stables, and did not need one',
+    good.r.ok && good.s.state.firstPress > 0 && !good.s.sent.slice(0, good.s.state.firstPress).some((m) => m.t === 28 || m.t === 29));
 
   // ---------------------------------------- the world folder is the engine's
   const w = await folder('worldname', { databaseName: 'saves' });
