@@ -110,7 +110,6 @@ function Die($m) { Write-Host ''; Write-Host "STOP. $m" -ForegroundColor Red; Wr
 . (Join-Path $Here 'Feed-Store.ps1')
 . (Join-Path $Here 'Release-Baseline.ps1')
 . (Join-Path $Here 'Feed-Rules.ps1')
-. (Join-Path $Here 'Note-Rules.ps1')
 . (Join-Path $Here 'Source-Notice.ps1')
 . (Join-Path $Here 'Ship-Rules.ps1')
 . (Join-Path $Here 'Release-Name.ps1')
@@ -557,10 +556,12 @@ if (-not $Notes) {
               "- Everything the updates after it changed in the game folder is put back the way it was, and files they added are taken out.`n" +
               '- The launcher stays as it is.')
 }
+# Held to the rules a Ship's notes are held to, tools\ReleaseNotes\NoteRules.cs,
+# which pwsh compiles here (#5354): the shape (a title of three words or more,
+# a "- " line) and the words.
+Add-Type -Path (Join-Path $Here '../../tools/ReleaseNotes/NoteRules.cs')
 $noteLines = @($Notes -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-$problems = @(Get-NoteProblems $Notes)
-if (@($noteLines[0] -split '\s+' | Where-Object { $_ }).Count -lt 3) { $problems += 'the title needs at least three words' }
-if (-not @($noteLines | Select-Object -Skip 1 | Where-Object { $_ -match '^[-*]\s*\S' }).Count) { $problems += 'the note needs at least one "- " line saying what a person will notice' }
+$problems = @([Thornswood.ReleaseNotes.NoteRules]::AllProblems($Notes))
 if ($problems.Count) {
     foreach ($p in $problems) { Say "  $p" 'Red' }
     Die 'The note would go to the launcher, the site and Discord as it is. Rewrite it; nothing was sent.'

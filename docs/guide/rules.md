@@ -82,8 +82,8 @@ A line that has to say it anyway (this section naming the word it bans, a
 document quoting a note as it went out) goes in
 `scripts\dev\Check-Words.allow.txt` with its reason; an allowance that no
 longer matches anything is itself a hit. Release notes are not files, so
-`scripts\release\Note-Rules.ps1` checks them when Ship or Rollback-Feed runs,
-before anything is built. The same build step runs `tests\test-check-words.ps1`
+the release note rules, `tools\ReleaseNotes\NoteRules.cs`, check them when
+Ship or Rollback-Feed runs, before anything is built. The same build step runs `tests\test-check-words.ps1`
 and `tests\test-note-rules.ps1`, which plant a break of every rule and fail
 if either check lets one through. Secrets are checked by
 `scripts\dev\Check-Secrets.ps1` in the same build. It reads the files of

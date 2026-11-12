@@ -14,7 +14,7 @@
   own parameters the way PowerShell would, with
   StaticParameterBinder. Nothing is run and nothing connects to anything.
 
-  Runs under PowerShell 7 and Windows PowerShell 5.1.
+  Runs under PowerShell 7.
 #>
 [CmdletBinding()]
 param()
@@ -28,7 +28,7 @@ $here = $PSScriptRoot
 if (-not $here) { $here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $repo = Split-Path -Parent $here
 $script = Join-Path $repo 'scripts\deploy\Deploy-DevGamemode.ps1'
-. (Join-Path $repo 'scripts\release\Note-Rules.ps1')
+Add-Type -Path (Join-Path $repo 'tools/ReleaseNotes/NoteRules.cs')   # the release note rules (#5354)
 
 $script:pass = 0
 $script:fail = 0
@@ -106,7 +106,7 @@ if ($start -ge 0) {
     Yes '  and binds nothing but -Note' ($r.Bound.Count -eq 1)
     if ($r.Bound.ContainsKey('Note')) {
         $n = $r.Bound['Note']
-        $problems = @(Get-NoteShapeProblems $n) + @(Get-NoteProblems $n)
+        $problems = @([Thornswood.ReleaseNotes.NoteRules]::AllProblems($n))
         Yes '  and the note it shows is one the script itself accepts, title and a "- " line' ($problems.Count -eq 0 -and $n -match "`n- ")
     }
 }

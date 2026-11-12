@@ -136,7 +136,7 @@ The short form of the rules. The same decisions, with the dates they were made, 
   for them, then one "- " line for each thing they will notice, saying what
   it does and what to do if anything. Ship refuses a title under three words
   or notes with no "- " line. Since 27 Sep it also refuses notes that say
-  what only we would understand (scripts\release\Note-Rules.ps1): the word
+  what only we would understand (tools\ReleaseNotes\NoteRules.cs): the word
   the Words section bans, an em dash, an issue or pull request number, "PR", a code file or
   a setting name (WEBVIEW2_LIKE_THIS), a name out of the code (PutInServerOrder,
   camelCase), our own words for how we work (demoting, worktree, squash, CI),

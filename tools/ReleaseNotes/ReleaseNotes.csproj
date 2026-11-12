@@ -1,17 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
-    The release note rules (scripts/release/Note-Rules.ps1, #5179), in C# on
-    .NET 10: the plan's rev 64 ports the release tools to C# one step at a
-    time. This is the first step: the rules, and the pull request body check
-    that .github/workflows/pr-body.yml runs, which scripts/dev/Check-PrBody.ps1
-    was. Program.cs says what the command takes, and NoteRules.cs what the
-    rules refuse.
+    The release note rules (#5179), in C# on .NET 10: the plan's rev 64
+    ports the release tools to C# one step at a time. The rules, and the pull
+    request body check that .github/workflows/pr-body.yml runs, which
+    scripts/dev/Check-PrBody.ps1 was. Program.cs says what the command takes,
+    and NoteRules.cs what the rules refuse. The release scripts compile
+    NoteRules.cs into PowerShell with Add-Type (#5354), which knows no
+    implicit usings, so they are off here too and each file names its own.
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
+    <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>thornswood-notes</AssemblyName>
     <RootNamespace>Thornswood.ReleaseNotes</RootNamespace>
     <InvariantGlobalization>true</InvariantGlobalization>

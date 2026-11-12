@@ -1,3 +1,6 @@
+using System;
+using System.IO;
+
 namespace Thornswood.ReleaseNotes;
 
 /// <summary>thornswood-notes. Exit codes: 0 the note is right, 1 it is not (each

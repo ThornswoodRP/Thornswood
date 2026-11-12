@@ -1,15 +1,40 @@
+// The release note rules, the only copy (#5179, #5354). Two things build
+// this file: tools/ReleaseNotes (thornswood-notes, the "Release note" check
+// on every pull request), and PowerShell 7 itself, which compiles it with
+//
+//     Add-Type -Path <repo>/tools/ReleaseNotes/NoteRules.cs
+//
+// in Ship.ps1, Rollback-Feed.ps1, Deploy-DevGamemode.ps1,
+// Collect-ReleaseNotes.ps1 and EnginePin.ps1. Those run where there is no
+// .NET SDK (the box runs Ship), and pwsh carries its own C# compiler, so
+// they read these rules and not a second copy. That is why the file names
+// every namespace it uses and says #nullable itself: Add-Type has neither
+// the project's implicit usings nor its Nullable setting.
+// tests/test-note-rules.ps1 loads it the way the scripts do.
+#nullable enable
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace Thornswood.ReleaseNotes;
 
 /// <summary>
 /// What release notes may say, and the release note a pull request carries
-/// (#5179). The same rules as scripts/release/Note-Rules.ps1, whose header
-/// says why each one exists; tests/fixtures/note-rules-cases.json holds both
-/// to the same answer for every case, until the scripts that still
-/// dot-source the PowerShell copy (Ship.ps1, Rollback-Feed.ps1,
-/// Deploy-DevGamemode.ps1, Collect-ReleaseNotes.ps1, EnginePin.ps1) move here
-/// or retire.
+/// (#5179).
+///
+/// WHY IT EXISTS. Release notes are read by customers in three places: the
+/// launcher's News tab, the site's News page and Discord. Ship checked only
+/// that there was a title and a detail line (25 September), so on 26 and 27
+/// September these went out anyway: "This is what players actually got from
+/// demoting 1.1.92.1 through 1.1.95.4", "Place no longer throws walked is not
+/// defined (fireWalked / PR #239)", "Server load order is kept after Fix
+/// PutInServerOrder", "Autoplay uses WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
+/// instead of EnvironmentOptions that faulted CreateAsync on One", "Bar covers
+/// whole run; every stop says why.#617 #618", and "Launcher 1.1.101" twice in
+/// one list. A version in the title says nothing to the person reading it, and
+/// a four-part dev number reads as a server address, which the News page check
+/// (tests/test-public-news.ps1) refuses.
 ///
 /// In the title, the body and every detail line it refuses: the word player
 /// or players; an em dash; an issue or pull request number, "PR", "pull
@@ -20,8 +45,9 @@ namespace Thornswood.ReleaseNotes;
 /// number anywhere; and the same line twice. Each problem is one line saying
 /// what and where.
 ///
-/// The PowerShell rules use -match, which ignores case, except where they say
-/// -cmatch; every pattern here keeps that, so the two answer alike.
+/// The patterns came from PowerShell's -match, which ignores case, except
+/// where it was -cmatch (CI, camelCase, joined capitalised words); each keeps
+/// that, so the answers in tests/fixtures/note-rules-cases.json stand.
 /// </summary>
 public static class NoteRules
 {
