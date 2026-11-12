@@ -293,8 +293,8 @@ NONE  = discord.Permissions.none()
 # read and public channel leans on it: their overwrites only take posting
 # away, so View Channels has to come from here. The live server went without
 # View Channels (the audit of 10 Nov 2026), and somebody who joined saw
-# neither Start Here nor Applications, nor the Member button in #start-here,
-# while a Member saw only Information, the one gate that names Member.
+# neither Start Here nor Applications, while a Member saw only Information,
+# the one gate that named Member then.
 PLAIN = discord.Permissions(
     view_channel=True, send_messages=True, read_message_history=True,
     embed_links=True, attach_files=True, add_reactions=True,
@@ -2664,9 +2664,10 @@ async def give(guild):
     return len(failed)
 
 
-# DISCORD'S ONBOARDING STAYS OFF (#3317). Patrick picked the Member button in
-# #start-here over Discord's onboarding (q-3317-member-gate, A): two yes or no
-# questions, 18 or over and the rules accepted, and the bot gives Member. With
+# DISCORD'S ONBOARDING STAYS OFF (#3317). Patrick picked the bot giving
+# Member over Discord's onboarding (q-3317-member-gate, A), and since 12 Nov
+# 2026 it is for a reaction to the rules in #rules, which says 18 or over and
+# the rules accepted (q-discord-readback, A; bot_rules_gate.py). With
 # onboarding on, Discord refuses to shut @everyone out of the last channels it
 # can post in, and the live build of 22 Oct left #tickets-and-applications and
 # #updates open with "400 Onboarding requires at least one channel where
@@ -2674,8 +2675,8 @@ async def give(guild):
 # before it gates a channel, and the audit says when it is on.
 # Build-Onboarding.py refuses to switch it back on under the gate by its own
 # check of the channels @everyone can post in.
-ONBOARDING_WHY = ('the plan gives Member by the button in #start-here '
-                  '(q-3317-member-gate, A), and while it is on Discord refuses '
+ONBOARDING_WHY = ('the bot gives Member for a reaction to the rules in #rules '
+                  '(q-discord-readback, A), and while it is on Discord refuses '
                   'to shut @everyone out of its last channels')
 
 
