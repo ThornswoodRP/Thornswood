@@ -319,7 +319,6 @@ namespace Thornswood
                 Put(f, "ours");
                 others.Add(f);
             }
-            others.Add(Paths.LogFile);
 
             string[] later;
             using (new FileStream(track, FileMode.Open, FileAccess.Read, FileShare.Read))
@@ -331,7 +330,16 @@ namespace Thornswood
             foreach (string f in others) if (!Gone(f)) { rest = false; Console.WriteLine("      still there: " + f); }
             Yes("with one file in Profile held open, everything else in Profile went", rest);
             Yes("Profile's other folders went with it", Gone(Path.Combine(p, "MyGames")) && Gone(Path.Combine(p, "OwnGame")));
-            Yes("only the held file stayed, and the folders it is in", File.Exists(track) && Directory.GetFileSystemEntries(p).Length == 1);
+            // The one other thing in Profile afterwards is the log, written
+            // again after it was deleted, because Profile is still there: the
+            // lines that say what would not go and why, which is how the
+            // fault on One was found.
+            string log = File.Exists(Paths.LogFile) ? File.ReadAllText(Paths.LogFile) : "";
+            Yes("Profile\\launcher.log was deleted and now holds only why the held file stayed",
+                !log.Contains("a line\r\n") && log.Contains("Swallowed in Uninstall.DeleteTree") && log.Contains(track));
+            var left = new List<string>(Directory.GetFileSystemEntries(p));
+            left.Remove(Paths.LogFile);
+            Yes("beside it only the held file stayed, and the folders it is in", File.Exists(track) && left.Count == 1);
             Yes("config.json and the launcher's folder went", Gone(Paths.CfgFile) && Gone(Paths.LauncherDir));
 
             Put(Path.Combine(root, "notes-of-mine.txt"), "mine");
