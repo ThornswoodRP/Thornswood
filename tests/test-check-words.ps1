@@ -1,7 +1,7 @@
 <#
   test-check-words.ps1
 
-  The writing rules in CONTRIBUTING.md are checked, and the check itself works.
+  The writing rules (docs/guide/rules.md, "Words") are checked, and the check itself works.
 
   WHY THIS EXISTS. Entry 237 on the To Do List, issue #460: "The repo's own
   writing rules are written down and nothing enforces them." MEASURED 24

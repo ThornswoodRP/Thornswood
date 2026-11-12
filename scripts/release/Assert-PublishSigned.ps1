@@ -5,7 +5,7 @@
   call it as a standalone entry: it only defines functions.
 
   WHY. Since 27 September launchers from ExpectedSigner on refuse an update
-  that is not signed by that certificate (CONTRIBUTING, issue #390). A local
+  that is not signed by that certificate (issue #390; docs/guide/how-work-moves.md, "Signing, the build check, and the six shared files"). A local
   build may still leave a binary unsigned: Sign-Artifact.ps1 prints "not
   signing" and exits 0 when records\signing\signing.json is missing or
   disabled. That soft skip must not reach the feed. Ship refuses instead.
@@ -81,7 +81,7 @@ function Get-SigningConfigRefusal {
 
     if (-not (Test-Path -LiteralPath $ConfigPath)) {
         return ('There is no records\signing\signing.json on this machine. Only a signing machine may Ship, ' +
-                'dev included (CONTRIBUTING). Nothing was published.')
+                'dev included (docs/guide/how-work-moves.md, "Signing, the build check, and the six shared files"). Nothing was published.')
     }
 
     $cfg = $null
@@ -95,7 +95,7 @@ function Get-SigningConfigRefusal {
     $on = Get-SigningConfigValue $cfg 'enabled'
     if ($null -ne $on -and -not $on) {
         return ('records\signing\signing.json has "enabled": false. Only a signing machine may Ship, ' +
-                'dev included (CONTRIBUTING). Nothing was published.')
+                'dev included (docs/guide/how-work-moves.md, "Signing, the build check, and the six shared files"). Nothing was published.')
     }
 
     $m = [string](Get-SigningConfigValue $cfg 'metadata')
