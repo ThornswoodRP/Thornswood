@@ -159,6 +159,13 @@ if ($serverOrder.Count -eq 0) {
   Write-Host ''
   Say '  The server has not written a manifest. It writes one at startup, so it' 'Yellow'
   Say '  either has not been started since the last deploy, or it failed early.' 'Yellow'
+  # What to do next (#4803), the same step docs\IT-IS-DOWN.md in the ops
+  # repository gives: the server says why in its log, and nothing tries again.
+  Say '  Its log says why, on the line that starts' 'Yellow'
+  Say '  "[thornswood] the load order manifest was NOT published". Put that cause' 'Yellow'
+  Say '  right, then restart it. Restart-Server.ps1 refuses while people are in' 'Yellow'
+  Say '  the world unless it is given -Now:' 'Yellow'
+  Say ("    .\scripts\vps\Restart-Server.ps1 -Service {0}" -f $(if ($Dev) { 'dev' } else { 'game' })) 'Yellow'
   if (-not $NoPause) { [void](Read-Host 'Enter to close') }
   exit 1
 }
@@ -209,6 +216,29 @@ if (-not (Test-Path -LiteralPath $plug)) {
   if ($missing.Count) {
     Say ("  {0} the server wants that you DO NOT have:" -f $missing.Count) 'Red'
     $missing | ForEach-Object { Say "    $_" 'Red' }
+    # What to do next (#4803). On the live server, Fix: it takes Thornswood's
+    # own plugins from the latest release (#3386) and copies back a collection
+    # plugin Vortex has deployed or staged (OwnGame.RestoreMissingPlugins).
+    # Vortex alone has another author's plugin it holds no copy of. On the dev
+    # server never Fix, for the reason the order's dev advice below gives.
+    Write-Host ''
+    if ($Dev) {
+      Say '  The DEV server follows the build. If the build should have these, a' 'Yellow'
+      Say '  collection plugin comes from Vortex: open Vortex' 'Yellow'
+      Say '  with the Thornswood profile active, install or update the Thornswood' 'Yellow'
+      Say '  collection, and press Deploy.' 'Yellow'
+      Say '  One of Thornswood''s own comes with the next dev release. If the build' 'Yellow'
+      Say '  should not have them, bring the dev server up to it (Patrick runs it):' 'Yellow'
+      Say '    .\scripts\deploy\Deploy-DevGamemode.ps1 -LoadOrder' 'Yellow'
+    } else {
+      Say '  Press Fix in the launcher, then Scan. Fix takes Thornswood''s own plugins from the latest release' 'Yellow'
+      Say '  and copies back a collection plugin Vortex has deployed or staged.' 'Yellow'
+      Say '  A collection plugin Vortex has no copy of comes only from Vortex: open Vortex' 'Yellow'
+      Say '  with the Thornswood profile active, install the Thornswood collection if it' 'Yellow'
+      Say '  is not, and press Deploy. Then press Scan in the launcher and run this again.' 'Yellow'
+      Say '  If Fix says the release does not have the copy the server runs, the next' 'Yellow'
+      Say '  update brings it: take it when it is waiting.' 'Yellow'
+    }
   } else {
     Say '  you have every plugin the server wants' 'Green'
   }
@@ -220,6 +250,21 @@ if (-not (Test-Path -LiteralPath $plug)) {
     Say '  Each of these takes a place in your order that it does not take in' 'DarkGray'
     Say '  the server''s, so everything after it sits one place off. The first' 'DarkGray'
     Say '  mismatched position below says where that starts.' 'DarkGray'
+    # What to do next (#4803). Fix switches off a plugin this build's own list
+    # does not enable (Verify's "not part of this build"); one the list does
+    # enable is a build and a server of two releases, which Fix cannot settle.
+    Write-Host ''
+    if ($Dev) {
+      Say '  The DEV server follows the build: bring it up to the build (Patrick runs it):' 'Yellow'
+      Say '    .\scripts\deploy\Deploy-DevGamemode.ps1 -LoadOrder' 'Yellow'
+    } else {
+      Say '  One you switched on yourself, which this build''s plugin list does not' 'Yellow'
+      Say '  enable: press Fix in the launcher. Fix switches it off from that list.' 'Yellow'
+      Say '  One this build''s list does enable means this build and the server are of' 'Yellow'
+      Say '  two releases: take the update when one is waiting. When none is, put this' 'Yellow'
+      Say '  output on the board as an issue. Do not redeploy the server to make this' 'Yellow'
+      Say '  match: the world keys every saved form on its position in that list.' 'Yellow'
+    }
   } else {
     Say '  you have nothing the server does not list' 'Green'
   }
@@ -260,12 +305,32 @@ if (-not (Test-Path -LiteralPath $plug)) {
       Say '    .\scripts\deploy\Deploy-DevGamemode.ps1 -LoadOrder' 'Yellow'
     } else {
       Say '  This machine follows the server, not the other way round. Press Fix' 'Yellow'
-      Say '  in the launcher: it puts the server''s order into this build''s plugin' 'Yellow'
-      Say '  list and downloads nothing.' 'Yellow'
+      Say '  in the launcher, then Scan.' 'Yellow'
+      Say '  Fix puts the server''s order into this build''s plugin list. Plugins named' 'Yellow'
+      Say '  above as missing come first, the way that step says.' 'Yellow'
       Say '  Do not redeploy the server to make this match. The world keys every' 'Yellow'
       Say '  saved form on its position in that list, so moving it re-keys them.' 'Yellow'
     }
   }
+}
+
+# What to do next for the two results that stand in for the comparison or
+# put it in doubt (#4803), said once the comparison has printed.
+if (-not (Test-Path -LiteralPath $plug)) {
+  Write-Host ''
+  Say '  Thornswood-Setup.exe lays this build''s plugin list down there when it' 'Yellow'
+  Say '  installs. If that is not the Thornswood install, give -Client the folder' 'Yellow'
+  Say '  it is in. If it is, its setup did not finish: run Thornswood-Setup.exe' 'Yellow'
+  Say '  again, the one from the Downloads page.' 'Yellow'
+}
+if (@($lines | Where-Object { $_ -match '  UNREADABLE: ' }).Count) {
+  Write-Host ''
+  Say '  A copy of the manifest above is UNREADABLE, so what a client is handed may' 'Yellow'
+  Say '  not be the list compared here. The server writes both copies at startup.' 'Yellow'
+  Say '  Its log says whether that failed, on the line that starts' 'Yellow'
+  Say '  "[thornswood] the load order manifest was NOT published". Put that right,' 'Yellow'
+  Say '  then restart it so it writes both again:' 'Yellow'
+  Say ("    .\scripts\vps\Restart-Server.ps1 -Service {0}" -f $(if ($Dev) { 'dev' } else { 'game' })) 'Yellow'
 }
 
 if ($Full) {
