@@ -101,6 +101,30 @@ async function main() {
   const robots=await ask(port,'/robots.txt');
   assert(robots.body.includes('Sitemap: https://thornswood.net/sitemap.xml'),'robots sitemap');
   assert(robots.body.includes('Disallow: /hub'),'private page crawl exclusions');
+  /*
+    The member hub pages, held to robots.txt (#4472). They are the PAGES
+    table in site/lib/public.js, which is what serve.js answers with the hub
+    (public/index.html), and /index.html, which it answers with the same
+    file. robots.txt was a hand list nothing checked: it missed /sessions,
+    /economy and /index.html and kept six pages that were gone. So every
+    member page must be under a Disallow line and carry noindex, and every
+    Disallow line naming a page (no trailing slash) must be one of them, so
+    adding or dropping a member page without its line turns this red.
+  */
+  const pubSrc=fs.readFileSync(path.join(app,'lib','public.js'),'utf8');
+  const table=(pubSrc.match(/const PAGES = \{([\s\S]*?)\};/)||[])[1]||'';
+  const member=['/index.html'].concat([...table.matchAll(/'(\/[^']*)'\s*:/g)].map(m=>m[1]));
+  assert(member.length>=7 && member.includes('/hub'),'the member pages are read from PAGES: '+member.join(' '));
+  const disallow=robots.body.split(/\r?\n/).map(l=>(l.match(/^Disallow:\s*(\S+)/)||[])[1]).filter(Boolean);
+  for(const page of member){
+    assert(disallow.some(d=>page.startsWith(d)),'robots.txt keeps crawlers off the member page '+page);
+    const r=await ask(port,page,{accept:'text/html'});
+    assert.equal(r.status,200,'the member page '+page+' is served');
+    assert(r.body.includes('<meta name="robots" content="noindex">'),'the member page '+page+' says noindex');
+  }
+  for(const d of disallow.filter(x=>!x.endsWith('/'))){
+    assert(member.includes(d),'robots.txt names '+d+', which is no member page the site serves');
+  }
   const llms=await ask(port,'/llms.txt'); assert.equal(llms.status,200); assert(llms.body.includes('https://thornswood.net/rules'));
   const gone=await ask(port,'/this-page-does-not-exist',{accept:'text/html'});
   assert.equal(gone.status,404); assert(gone.body.includes('name="robots" content="noindex"'));
