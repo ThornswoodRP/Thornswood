@@ -8,8 +8,6 @@
   Vortex staging folder, a game folder, a user profile or a clone. A -Path
   where -LiteralPath belongs reads nothing at such a path, silently (the
   Setup-Thornswood.ps1 break Anvil found). Covered here:
-    - Align-LoadOrder.ps1 reading Data, plugins.txt and server-settings.json
-      there, and -Fix writing plugins.txt there
     - Get-CollectionExportArchive and Get-CollectionJsonPath on a staging folder
       there
     - LoadOrder.ps1's Import-VortexStateReader compiling the shared reader from
@@ -31,29 +29,11 @@ function Child([string]$cmd) {
 }
 function Q([string]$s) { return "'" + $s.Replace("'", "''") + "'" }
 function Lines([string]$path, [string[]]$lines) { [IO.File]::WriteAllLines($path, $lines, (New-Object Text.UTF8Encoding($false))) }
-function Header([string]$path) {
-    $b = [byte[]]::new(24); [Text.Encoding]::ASCII.GetBytes('TES4').CopyTo($b, 0)
-    [IO.File]::WriteAllBytes($path, $b)
-}
 
 $T = Join-Path ([IO.Path]::GetTempPath()) ('ts-odd-' + [Guid]::NewGuid().ToString('N').Substring(0, 8) + '\[Thornswood] A & B')
 try {
     [void][IO.Directory]::CreateDirectory($T)
     Yes 'the scratch folder has [ ], & and a space in its name' ([IO.Directory]::Exists($T) -and $T -match '\[' -and $T -match '&')
-
-    # ---- Align-LoadOrder.ps1 ----------------------------------------------------
-    $data = Join-Path $T 'Game [1]\Data'; $prof = Join-Path $T 'Profile [1]'
-    [void][IO.Directory]::CreateDirectory($data); [void][IO.Directory]::CreateDirectory($prof)
-    foreach ($m in 'Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm', 'A.esp', 'Extra.esp') { Header (Join-Path $data $m) }
-    $plugins = Join-Path $prof 'plugins.txt'
-    Lines $plugins @('*A.esp', '*Extra.esp')
-    $settings = Join-Path $T 'server-settings [dev].json'
-    [IO.File]::WriteAllText($settings, '{"loadOrder":["Skyrim.esm","Update.esm","Dawnguard.esm","HearthFires.esm","Dragonborn.esm","A.esp"]}')
-    $align = Join-Path $Repo 'scripts\mods\Align-LoadOrder.ps1'
-    $r = Child ("& " + (Q $align) + " -Data " + (Q $data) + " -Plugins " + (Q $plugins) + " -Settings " + (Q $settings) + " -AlsoFix @()")
-    Yes 'Align-LoadOrder reads Data, plugins.txt and the settings in such a folder' ($r.Out -match 'game will index : 7 plugins' -and $r.Out -match 'server lists\s+: 6 plugins' -and $r.Out -match 'Extra\.esp')
-    $r = Child ("& " + (Q $align) + " -Data " + (Q $data) + " -Plugins " + (Q $plugins) + " -Settings " + (Q $settings) + " -AlsoFix @() -Fix")
-    Yes '  and -Fix writes the plugins.txt there' ((([IO.File]::ReadAllLines($plugins)) -join '|') -eq '*A.esp|Extra.esp')
 
     # ---- the collection's export archive ----------------------------------------
     Add-Type -AssemblyName System.IO.Compression.FileSystem

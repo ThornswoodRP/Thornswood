@@ -5,9 +5,8 @@
 
   This replaces the sequence you have been typing by hand: the content plugin,
   the SkyMP client (the recorded build only, through Sync-Client.ps1), the
-  creation menus, the body fix, the
-  load order alignment, the gamemode, the preflight check and the launcher
-  build. Each step names the files it must leave behind, and a step that exits
+  creation menus, the body fix, the gamemode, the preflight check and the
+  launcher build. Each step names the files it must leave behind, and a step that exits
   cleanly without leaving them is treated as a failure, because those are the
   ones that reach five people before anybody notices.
 
@@ -18,7 +17,7 @@
       .\Install-Thornswood.ps1 -Only launcher,gamemode
 
   Step names for -Only and -Skip:
-      content  client  body  loadorder  gamemode  check  launcher
+      content  client  body  gamemode  check  launcher
 #>
 [CmdletBinding()]
 param(
@@ -120,13 +119,12 @@ $steps = @(
     # hand move wrote into Game\Data (and Vortex staging where those files
     # are hard links). Pass -SkipBody is kept so old shortcuts still parse.
 
-    @{
-        Key = 'loadorder'; Name = 'Load order alignment'
-        Script = '..\mods\Align-LoadOrder.ps1'
-        Args = @{ Fix = $true }
-        Wants = @()
-        Why = 'form ids are resolved by plugin index, so the two lists have to agree'
-    },
+    # Load order alignment was a step here until #4688 retired its script:
+    # it checked the plugin list by a rule of its own and, with -Fix,
+    # switched off on this machine a plugin new to the collection before the
+    # gamemode step below rebuilt the server's order to take it. The order
+    # is Deploy-Gamemode.ps1's alone, and the launcher puts each machine's
+    # list into it on Play.
     @{
         Key = 'gamemode'; Name = 'Gamemode'
         Script = '..\deploy\Deploy-Gamemode.ps1'

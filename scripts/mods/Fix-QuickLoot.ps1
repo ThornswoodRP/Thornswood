@@ -94,7 +94,7 @@ if ($already) {
   if ($at -lt 0) {
     throw ("$After is not in the server load order ($($lo.Count) entries), so there is nowhere " +
            "safe to put MCMHelper.esp. Run Enable-MCM.ps1 to clear SkyUI_SE.esp's light flag and " +
-           "Sync-LoadOrder.ps1 to rebuild the list, then run this again. Pass -After <plugin> only " +
+           "Deploy-Gamemode.ps1 to rebuild the list, then run this again. Pass -After <plugin> only " +
            "if you know MCMHelper.esp's master sits at or before it.")
   }
 
@@ -145,12 +145,7 @@ if (Test-Path -LiteralPath $off) {
 
 # ----------------------------------------------------------------- check ---
 Head 'Checking both sides line up'
-$align = Join-Path $Here 'Align-LoadOrder.ps1'
-if (Test-Path -LiteralPath $align) {
-  & $align -Plugins (Join-Path $Game 'Profile\LocalAppData\Plugins.txt') -Settings $Settings
-} else {
-  Bad 'Align-LoadOrder.ps1 is missing, cannot verify'
-}
+Note 'Deploy-Gamemode.ps1 builds the server list and the launcher puts each list into its order (#4688).'
 
 Head 'Now'
 Note 'The server has to be republished before you launch, or the two lists disagree'
