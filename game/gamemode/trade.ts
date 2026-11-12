@@ -526,24 +526,40 @@
       with one pile gone, and giveItems in the outer file already learned that
       lesson for the starting kit.
     */
-    var movedOk = true;
-    for (i = 0; i < sides.length && movedOk; i++) {
-      var side = sides[i];
-      var pairs = [];
-      for (j = 0; j < side.items.length; j++) {
-        pairs.push([side.items[j].id, side.items[j].c, side.items[j].x]);
-      }
-      if (side.gold > 0) { pairs.push([GOLD, side.gold]); }
-      if (!pairs.length) { continue; }
-      if (!moveById(side.from, side.to, pairs)) { movedOk = false; }
-    }
-    if (!movedOk) {
+    /*
+      A TRADE IS TWO PACKS, NOT FOUR (#4520). Each side's pile used to move
+      in its own moveById, one after the other, so a refusal or a throw on the
+      second side came after the first side's pile had already moved, and the
+      trade still said nothing was taken. Now moveById works out both new
+      packs at once, each person's things out and the other's in, checks
+      everything that can refuse on them (a quest item, what is held, a
+      stack's limit), and only then writes them: one write per person, with
+      nothing to refuse left.
+    */
+    var pairsA = [], pairsB = [];
+    for (j = 0; j < t.offerA.length; j++) { pairsA.push([t.offerA[j].id, t.offerA[j].c, t.offerA[j].x]); }
+    for (j = 0; j < t.offerB.length; j++) { pairsB.push([t.offerB[j].id, t.offerB[j].c, t.offerB[j].x]); }
+    if (t.goldA > 0) { pairsA.push([GOLD, t.goldA]); }
+    if (t.goldB > 0) { pairsB.push([GOLD, t.goldB]); }
+    var moved = moveById(t.a, t.b, pairsA, pairsB);
+    if (moved === false) {
       unconfirm(t); push(t);
-      return 'Something went wrong moving it. Nothing was taken.';
+      return refusal || 'Something went wrong moving it. Nothing was taken.';
     }
 
     var whatA = describe(t.offerA, t.goldA);
     var whatB = describe(t.offerB, t.goldB);
+    if (moved !== true) {
+      // Only one pack took its write (moveById, below): said as it is, and
+      // the trade is over, so nothing is moved a second time.
+      var got = moved === t.a ? t.a : t.b, not = other(t, got);
+      var line = 'The trade went only half through: ' + nameOf(got) + '\'s pack was written and ' +
+                 nameOf(not) + '\'s was not. Tell staff, it is in the server log.';
+      try { say(t.a, line); say(t.b, line); } catch (e3) { }
+      tlog('HALF A TRADE:', nameOf(got), 'was written and', nameOf(not), 'was not, trading', whatA, 'for', whatB);
+      close(t, '');
+      return line;
+    }
     try {
       say(t.a, 'Traded. You gave ' + whatA + ' and got ' + whatB + '.');
       say(t.b, 'Traded. You gave ' + whatB + ' and got ' + whatA + '.');
@@ -588,8 +604,18 @@
     var cuts = pr.saleCuts(price);
     if (!cuts) { return refuse('The company\'s terms are not loaded on this server. Say so in the dev channel.'); }
     var cost = cuts.price - cuts.worker;
-    if (!saleById(seller, worker, things, cuts.seller, cost)) {
-      return refuse('Something went wrong moving it. Nothing was taken.');
+    var sold = saleById(seller, worker, things, cuts.seller, cost);
+    if (sold === false) {
+      return refuse(refusal || 'Something went wrong moving it. Nothing was taken.');
+    }
+    if (sold !== true) {
+      // One pack took its write and the other did not (saleById, below).
+      var half = 'The sale went only half through: ' + nameOf(sold) + '\'s pack was written and ' +
+                 nameOf(other(t, sold)) + '\'s was not. Tell staff, it is in the server log.';
+      try { say(seller, half); say(worker, half); } catch (e3) { }
+      tlog('HALF A SALE:', nameOf(sold), 'was written and', nameOf(other(t, sold)), 'was not');
+      close(t, '');
+      return half;
     }
     var what = describe(things, 0);
     var me = nameOf(worker), them = nameOf(seller);
@@ -648,6 +674,7 @@
     10% that leaves the server.
   */
   function saleById(sellerActor, workerActor, things, share, cost) {
+    refusal = '';
     if(things.some(function(row){return questItemBlocked(row.id);}))return false;
     var GOLD = (g.__thornswoodSpoils && g.__thornswoodSpoils.GOLD) || 0x0000000F;
     var sellerInv, workerInv;
@@ -669,11 +696,53 @@
       }
     }
     if (!landed) { gone.push({ baseId: GOLD, count: share }); }
+    if (!whole(gone) || !whole(paid)) { refusal = FULL; return false; }
     try {
       mp.set(sellerActor, 'inventory', { entries: gone });
       mp.set(workerActor, 'inventory', { entries: paid });
-    } catch (e2) { return false; }
+    } catch (e2) { return whatLanded(sellerActor, gone, workerActor, paid); }
     return true;
+  }
+
+  /*
+    WHAT A PACK WRITE CAN STILL THROW (#4520), measured in the fork.
+    InventoryBinding::Set finds the form (read by the same id in this same
+    turn, so it is there), turns the entries into an Inventory, sets it on
+    the change form, queues its save and sends it to its owner. Turning
+    them into an Inventory refuses nothing the checks above let through: a
+    count past a stack's limit is not refused there but cut short (wrapped
+    to 32 bits), which is why whole() refuses it first. What is left to
+    throw comes after the change form is set (the save queue, the send), so
+    the pack was written even though the call threw. Neither the gamemode
+    nor the engine can make two people's writes one: the fork has no
+    two-actor inventory transaction. So after a throw both packs are read
+    and the answer is what landed: true when both did, false when neither
+    did, and otherwise the actor whose pack was written. Nothing is undone
+    or written again.
+  */
+  var FULL = 'One of you cannot carry that many of one thing: a stack holds at most 4294967295. Nothing was taken.';
+  var refusal = '';
+  function whole(entries) {
+    for (var i = 0; i < entries.length; i++) {
+      var c = entries[i].count;
+      if (!(c === Math.floor(c) && c >= 1 && c <= 4294967295)) { return false; }
+    }
+    return true;
+  }
+  function holds(actorId, entries) {
+    var now;
+    try { now = (mp.get(actorId, 'inventory') || { entries: [] }).entries || []; } catch (e) { return false; }
+    if (now.length !== entries.length) { return false; }
+    for (var i = 0; i < entries.length; i++) {
+      if (!sameStack(now[i], entries[i]) || (now[i].count || 1) !== (entries[i].count || 1)) { return false; }
+    }
+    return true;
+  }
+  function whatLanded(firstActor, first, secondActor, second) {
+    var a = holds(firstActor, first), b = holds(secondActor, second);
+    if (a && b) { return true; }
+    if (!a && !b) { return false; }
+    return a ? firstActor : secondActor;
   }
 
   function describe(items, goldN) {
@@ -738,25 +807,43 @@
   }
 
   /*
-    Move [baseId, count] pairs from one pack to another, or nothing at all,
-    each piece with everything it carries (above). A pair with a piece,
-    [baseId, count, piece], moves only that piece: the one the trade put up
-    (#1718). Gold is a pair without one.
+    Move [baseId, count] pairs from one pack to another, and back pairs the
+    other way, or nothing at all, each piece with everything it carries
+    (above). A pair with a piece, [baseId, count, piece], moves only that
+    piece: the one the trade put up (#1718). Gold is a pair without one.
+    Both new packs are worked out and checked before either is written
+    (#4520): one write per person, after nothing is left that can refuse.
+    True when both landed, false when neither did, or the actor whose pack
+    alone was written (whatLanded, above).
   */
-  function moveById(fromActor, toActor, pairs) {
-    if(pairs.some(function(pair){return questItemBlocked(pair[0]);}))return false;
+  function moveById(fromActor, toActor, pairs, back) {
+    back = back || [];
+    refusal = '';
+    if(pairs.concat(back).some(function(pair){return questItemBlocked(pair[0]);}))return false;
     var fromInv, toInv;
     try {
       fromInv = mp.get(fromActor, 'inventory') || { entries: [] };
       toInv = mp.get(toActor, 'inventory') || { entries: [] };
     } catch (e) { return false; }
-    var out = (fromInv.entries || []).slice();
-    var into = (toInv.entries || []).slice();
+    var there = pileOut((fromInv.entries || []).slice(), pairs);
+    var here = pileOut((toInv.entries || []).slice(), back);
+    if (!there || !here) { return false; }
+    var k;
+    for (k = 0; k < there.moving.length; k++) { land(here.keep, there.moving[k]); }
+    for (k = 0; k < here.moving.length; k++) { land(there.keep, here.moving[k]); }
+    if (!whole(there.keep) || !whole(here.keep)) { refusal = FULL; return false; }
+    try {
+      mp.set(fromActor, 'inventory', { entries: there.keep });
+      mp.set(toActor, 'inventory', { entries: here.keep });
+    } catch (e2) { return whatLanded(fromActor, there.keep, toActor, here.keep); }
+    return true;
+  }
 
-    var i, k;
+  /* A pack's entries less the pairs: what stays, and the pieces taken, or null when they are not all there. */
+  function pileOut(out, pairs) {
+    var i, k, moving = [];
     for (i = 0; i < pairs.length; i++) {
       var baseId = pairs[i][0], left = pairs[i][1], piece = pairs[i][2];
-      var moving = [];
       for (k = 0; k < out.length && left > 0; k++) {
         if (!out[k] || out[k].baseId !== baseId) { continue; }
         if (piece && pieceOf(out[k]) !== piece) { continue; }
@@ -766,18 +853,13 @@
         out[k] = withCount(out[k], had - take, false);
         left -= take;
       }
-      if (left > 0) { return false; }
-      for (k = 0; k < moving.length; k++) { land(into, moving[k]); }
+      if (left > 0) { return null; }
     }
     var keep = [];
     for (i = 0; i < out.length; i++) {
       if (out[i] && (out[i].count || 0) > 0) { keep.push(out[i]); }
     }
-    try {
-      mp.set(fromActor, 'inventory', { entries: keep });
-      mp.set(toActor, 'inventory', { entries: into });
-    } catch (e2) { return false; }
-    return true;
+    return { keep: keep, moving: moving };
   }
 
   function cancel(actorId) {
