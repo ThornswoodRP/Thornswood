@@ -395,22 +395,18 @@ namespace Thornswood
         // the old Payload (#4180). So it goes before anything is copied,
         // whatever this run's shape, and only this build's files go back in.
         //
-        // A link inside it is removed as a link: nothing it points at is
-        // touched, because the walk skips reparse points and Directory.Delete
-        // does not follow them.
+        // A link inside it is removed as a link and nothing it points at is
+        // touched (RemoveTree). Directory.Delete(dir, true) is not used: on
+        // Windows it asks DeleteVolumeMountPoint about every junction it meets,
+        // and a junction that is not a volume's answers "The parameter is
+        // incorrect", which stopped the whole removal.
         void DropOldPayload()
         {
             string dir = Path.Combine(ProfileDir, "Payload");
             if (!Directory.Exists(dir)) return;
             try
             {
-                var opts = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = false };
-                foreach (string f in Directory.EnumerateFileSystemEntries(dir, "*", opts))
-                {
-                    FileAttributes at = File.GetAttributes(f);
-                    if ((at & FileAttributes.ReadOnly) != 0) File.SetAttributes(f, at & ~FileAttributes.ReadOnly);
-                }
-                Directory.Delete(dir, true);
+                RemoveTree(dir);
             }
             catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
             {
@@ -419,6 +415,33 @@ namespace Thornswood
             }
             Say("  An older " + dir + " was here from an earlier install and was taken out,");
             Say("  so no file an older build had is left in it.");
+        }
+
+        /// <summary>
+        /// Removes a folder and everything in it. A link (a junction or a
+        /// symbolic link, to a file or a folder) loses only its own name; what
+        /// it points at is never opened. A read-only file or folder loses that
+        /// attribute first, as RemoveSharedNames does before a delete.
+        /// </summary>
+        static void RemoveTree(string dir)
+        {
+            FileAttributes self = File.GetAttributes(dir);
+            if ((self & FileAttributes.ReparsePoint) == 0)
+            {
+                foreach (string p in Directory.EnumerateFileSystemEntries(dir))
+                {
+                    FileAttributes at = File.GetAttributes(p);
+                    if ((at & FileAttributes.Directory) != 0 && (at & FileAttributes.ReparsePoint) == 0) { RemoveTree(p); continue; }
+                    if ((at & FileAttributes.ReadOnly) != 0) File.SetAttributes(p, at & ~FileAttributes.ReadOnly);
+                    // A link to a folder is a directory entry on Windows and a
+                    // file name everywhere else; either way only the name goes.
+                    if ((at & FileAttributes.Directory) != 0 && OperatingSystem.IsWindows()) Directory.Delete(p);
+                    else File.Delete(p);
+                }
+            }
+            if ((self & FileAttributes.ReadOnly) != 0) File.SetAttributes(dir, self & ~FileAttributes.ReadOnly);
+            if ((self & FileAttributes.ReparsePoint) != 0 && !OperatingSystem.IsWindows()) File.Delete(dir);
+            else Directory.Delete(dir);
         }
 
         // ---- a record of what we put in somebody else's game ----------------
