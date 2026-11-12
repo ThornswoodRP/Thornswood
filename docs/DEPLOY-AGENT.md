@@ -300,15 +300,24 @@ a copy of dev that nobody plays on:
    and turns the door's offer to Unlock), **stations** (Alvor's forge in
    Riverwood is shut to the bot with no trade, and says why over the relay;
    once it picks Smith, Platewright and is handed a hammer, the forge
-   opens), **saved**
+   opens), **jail** (the bot is a Guard of Falkreath: the copy's door has
+   no site, so the pass writes the role into the copy's own
+   `private\allowed.json` the way the site's answer lands, and the bot
+   takes the office over the relay as the Office page does; it goes through
+   Falkreath Barracks down into the jail, the cell door offers it the
+   cell's lock, and Unlock, Lock and Unlock again are each answered,
+   written to `private\law.json` and followed by the line at the door),
+   **saved**
    (the world on disk holds the character by name), **restart**
    (the copy is stopped and started again and loads again), **loads
    back** (a second bot logs in as the same profile and gets the same
-   character, where it was saved, with no race menu) and **kept** (the
-   stables' door still offers it Unlock, so the claim and its lock came
-   back with the restart). A FAIL at new, face,
+   character, where it was saved, with no race menu) and **kept** (still
+   in the jail, the cell door offers it Lock, so the office and the cell as
+   the guard left it came back rather than as the game ships it; it walks
+   out of the barracks and the stables' door still offers it Unlock, so the
+   claim and its lock came back with the restart). A FAIL at new, face,
    home or saved ends with what the gamemode's creation said about the bot,
-   one at claim, keys or kept with the property block's last lines, one
+   one at claim, keys, jail or kept with the property block's last lines, one
    at stations with the character block's,
    and one at relay with what the gamemode said of the pass and the voice
    service's last lines (its log is `run\voice\bot-pass-voice.log`).

@@ -30,9 +30,11 @@
 // and the deed and master key in the pack (SetInventory); /lock locks it
 // there and the door offers Unlock; and after the restart the register is
 // still on disk, so the door offers Unlock again. Everything about the
-// stables, and at the forge after them (shut to somebody with no trade, a
-// hammer for Smith, open to a smith), was first run against the whole of
-// gamemode.js on
+// stables, at the forge after them (shut to somebody with no trade, a
+// hammer for Smith, open to a smith), and in Falkreath Jail (the Guard of
+// Falkreath role in allowed.json, /office hold, the barracks and jail doors,
+// the cell's line and its lock in private/law.json, kept over a restart),
+// was first run against the whole of gamemode.js on
 // tests/stand-in-server.js: the same door ids, lines and register.
 //
 // Then the same with each part broken, one at a time, and the pass has to
@@ -51,6 +53,11 @@
 //    tables that no longer give both doors to the stables;
 //  - the forge opens for somebody with no trade; Smith is not taken; the
 //    forge stays shut to a smith with a hammer;
+//  - the guard's office is not taken; the door down into the jail does not
+//    take the bot through; the cell door offers its guard nothing; a turn of
+//    the cell not in the law register; the office, or the cell as the guard
+//    left it, gone after the restart; tables that no longer give the cell
+//    or the way in to Falkreath Jail;
 //  - nothing is written to the world;
 //  - after the restart the character comes back somewhere else, or nameless.
 //
@@ -103,8 +110,13 @@ async function folder(name, settings) {
   // The tables beside the gamemode (#5191) that name the stables' doors.
   fs.mkdirSync(path.join(root, 'gamemode-tables'));
   fs.writeFileSync(path.join(root, 'gamemode-tables', 'BUILDING_BY_DOOR.json'), JSON.stringify(
-    { '1a81e:Skyrim.esm': '165a0:Skyrim.esm', '16729:Skyrim.esm': '165a0:Skyrim.esm', 'd58de:Skyrim.esm': '165a0:Skyrim.esm' }));
+    { '1a81e:Skyrim.esm': '165a0:Skyrim.esm', '16729:Skyrim.esm': '165a0:Skyrim.esm', 'd58de:Skyrim.esm': '165a0:Skyrim.esm',
+      'ef443:Skyrim.esm': 'ef325:Skyrim.esm', 'ef3a2:Skyrim.esm': 'ef325:Skyrim.esm', 'ef43a:Skyrim.esm': 'ef325:Skyrim.esm',
+      'ef3a1:Skyrim.esm': 'ef324:Skyrim.esm', 'ef434:Skyrim.esm': 'ef324:Skyrim.esm' }));
   fs.writeFileSync(path.join(root, 'gamemode-tables', 'BUILDING_NAME.json'), JSON.stringify({ '165a0:Skyrim.esm': 'Whiterun Stables' }));
+  // And Falkreath Jail's (Build-JailTable.py): its cell door, shipped locked.
+  fs.writeFileSync(path.join(root, 'gamemode-tables', 'JAIL_DOOR.json'), JSON.stringify({ 'ef434:Skyrim.esm': 'falkreath', 'ef3a1:Skyrim.esm': 'falkreath' }));
+  fs.writeFileSync(path.join(root, 'gamemode-tables', 'JAIL_SHUT.json'), JSON.stringify({ 'ef434:Skyrim.esm': 1 }));
   fs.writeFileSync(path.join(root, 'server-settings.json'), JSON.stringify(Object.assign({
     port: 7801, password: 'pw-' + name, thornswoodRequirePass: false, databaseName: 'world',
     thornswoodVoicePort: await freePort(), thornswoodServer: 'dev'
@@ -147,6 +159,19 @@ function standIn(root, break_) {
   const STABLES = '165a0:Skyrim.esm';
   function held() { try { return JSON.parse(fs.readFileSync(register, 'utf8')).claims[STABLES] || null; } catch (e) { return null; } }
   function hold(c) { fs.mkdirSync(path.dirname(register), { recursive: true }); fs.writeFileSync(register, JSON.stringify({ claims: { [STABLES]: c } })); }
+  // The law register (property.ts saveLaw) and the roles the door read
+  // (allowed.json, door.ts load): a guard holds the role and has taken the
+  // office; a cell is as a guard left it, or as the game ships it (locked).
+  const lawFile = path.join(root, 'private', 'law.json');
+  const CELL = 'ef434:Skyrim.esm';
+  function law() { try { return JSON.parse(fs.readFileSync(lawFile, 'utf8')); } catch (e) { return { cells: {}, held: {} }; } }
+  function setLaw(l) { fs.writeFileSync(lawFile, JSON.stringify(l)); }
+  function roleOf(pid) {
+    try { const o = JSON.parse(fs.readFileSync(path.join(root, 'private', 'allowed.json'), 'utf8')).offices[pid]; return !!(o && o.guard.indexOf('falkreath') !== -1); }
+    catch (e) { return false; }
+  }
+  function isGuard(pid) { const h = law().held['guard:falkreath']; return roleOf(pid) && !!(h && h['p:' + pid] && h['p:' + pid].pid === pid); }
+  function cellLocked() { const c = law().cells; return Object.prototype.hasOwnProperty.call(c, CELL) ? c[CELL] === true : true; }
   const settings0 = JSON.parse(fs.readFileSync(path.join(root, 'server-settings.json'), 'utf8'));
   const vport = settings0.thornswoodVoicePort;
   // The gamemode's end of the relay: collect, acknowledge, run, answer.
@@ -197,6 +222,24 @@ function standIn(root, break_) {
       await ask(vport, 'POST', '/say', { profileId: pid, text: 'You claim Whiterun Stables. The deed is in your pack.' });
       return;
     }
+    if ((parts[0] === '/lock' || parts[0] === '/unlock') && parts[1] === 'ef434') {
+      const on = parts[0] === '/lock';
+      if (!cur || !cur.atCell() || !isGuard(pid)) { await ask(vport, 'POST', '/say', { profileId: pid, text: 'A cell is a guard\'s to lock.' }); return; }
+      if (break_ !== 'cell unsaved') { const l = law(); l.cells[CELL] = on; setLaw(l); }
+      await ask(vport, 'POST', '/say', { profileId: pid, text: on ? 'You lock the cell. Only a guard of this hold opens it now; anybody else has to pick the lock.'
+        : 'You unlock the cell. It opens for anybody now.' });
+      cur.cellLine();
+      return;
+    }
+    if (parts[0] === '/office' && parts[1] === 'hold') {
+      if (break_ === 'no office' || !roleOf(pid) || parts[2] !== 'guard' || parts[3] !== 'falkreath') {
+        await ask(vport, 'POST', '/say', { profileId: pid, text: 'Your account does not hold the Guard of Falkreath role in Discord.' });
+        return;
+      }
+      const l = law(); l.held['guard:falkreath'] = { ['p:' + pid]: { pid, name: 'Bot' } }; setLaw(l);
+      await ask(vport, 'POST', '/say', { profileId: pid, text: 'This character holds Guard of Falkreath now. The cells of Falkreath Jail are yours to lock.' });
+      return;
+    }
     if (parts[0] === '/lock') {
       const c = held();
       if (!c || !cur || !cur.atDoor()) { await ask(vport, 'POST', '/say', { profileId: pid, text: 'Open the door of the building you mean first.' }); return; }
@@ -233,6 +276,8 @@ function standIn(root, break_) {
     state.runs++;
     child0 = child;
     if (state.runs === 2 && break_ === 'forgets') { fs.rmSync(register, { force: true }); }
+    if (state.runs === 2 && break_ === 'jail forgets') { fs.rmSync(lawFile, { force: true }); }
+    if (state.runs === 2 && break_ === 'cell forgets') { const l = law(); l.cells = {}; setLaw(l); }
     const poller = setInterval(() => { poll(); }, 50);
     child.kill = () => { clearInterval(poller); setTimeout(() => { state.up = false; child.emit('exit', null, 'SIGTERM'); }, 5); };
     setTimeout(() => {
@@ -271,8 +316,17 @@ function standIn(root, break_) {
         out.push({ type: 'message', message: { t: 7, idx: actor.idx, refrId: 0xff000801, propName: 'thornswoodDoorLine',
           dataDump: JSON.stringify({ at: Date.now(), x, n: x ? 'Whiterun Stables' : '', d: x ? ['16729', '1a81e', 'd58de'] : [], left: 60000 }) } });
       };
+      // The line at the cell door (property.ts doorLine): its lock, to a
+      // guard of the hold, and nothing to anybody else.
+      const cellLine = () => {
+        const x = isGuard(me) && break_ !== 'no cell line' ? (cellLocked() ? 'unlock' : 'lock') : '';
+        out.push({ type: 'message', message: { t: 7, idx: actor.idx, refrId: 0xff000801, propName: 'thornswoodDoorLine',
+          dataDump: JSON.stringify({ at: Date.now(), x, n: x ? 'the cell' : '', d: x ? ['ef434'] : [], left: 60000 }) } });
+      };
       state.current = {
         atDoor: () => door !== 0,
+        atCell: () => door === 0xef434,
+        cellLine,
         trade: () => { smith = true; },
         push: (m) => out.push({ type: 'message', message: m }),
         line,
@@ -336,6 +390,18 @@ function standIn(root, break_) {
             }
             return;
           }
+          // E on a door of Falkreath Barracks or its jail: through it, to
+          // where its other half stands (doors.json, to); E on the cell
+          // door opens it where it stands, with the line at it.
+          const JAIL_TO = { 0xef443: 0xef325, 0xef3a1: 0xef324, 0xef43a: 0xef325, 0xef3a2: 0x3c };
+          if (m.t === 6 && actor && m.data && m.data.caster === 0x14 && (JAIL_TO[m.data.target] || m.data.target === 0xef434)) {
+            door = m.data.target;
+            if (door === 0xef434) { cellLine(); return; }
+            if (!(break_ === 'barred' && door === 0xef3a1)) {
+              out.push({ type: 'message', message: { t: 20, idx: actor.idx, pos: [0, 0, 0], rot: [0, 0, 0], teleportSeq: 1, worldOrCell: JAIL_TO[door] } });
+            }
+            return;
+          }
           // E on the forge: the bench gate, then the bench.
           if (m.t === 6 && actor && m.data && m.data.target === 0xd6987) {
             // 'open to all': the gate says no, and the bench opens anyway.
@@ -392,11 +458,18 @@ function failedAt(r, step) {
   // ------------------------------------------------------------------ whole
   const good = await run('good');
   yes('a good server passes the whole pass', good.r.ok === true);
-  yes('every step is a line: loads, login, relay, new, face, home, needs, claim, keys, stations, saved, restart, loads back, kept',
-    good.r.lines.map((l) => l.step).join(',') === 'loads,login,relay,new,face,home,needs,claim,keys,stations,saved,restart,loads back,kept');
+  yes('every step is a line: loads, login, relay, new, face, home, needs, claim, keys, stations, jail, saved, restart, loads back, kept',
+    good.r.lines.map((l) => l.step).join(',') === 'loads,login,relay,new,face,home,needs,claim,keys,stations,jail,saved,restart,loads back,kept');
   if (!good.r.ok) { console.log(JSON.stringify(good.r.lines, null, 1)); }
-  yes('the relay carried the join pass, the home pick, /needs, /claim, /lock and the trade to the gamemode, in that order',
-    good.s.state.commands.join(',') === '/joinpass,/pick,/needs,/claim,/lock,/pick');
+  yes('the relay carried the join pass, the home pick, /needs, /claim, /lock, the trade, the office and the cell\'s three turns, in that order',
+    good.s.state.commands.join(',') === '/joinpass,/pick,/needs,/claim,/lock,/pick,/office,/unlock,/lock,/unlock');
+  yes('  and the copy\'s allowed.json gives the bot\'s profile alone the Guard of Falkreath role, the door watching only',
+    (() => { const a = JSON.parse(fs.readFileSync(path.join(good.root, 'private', 'allowed.json'), 'utf8'));
+      return a.enforce === false && JSON.stringify(a.profiles) === JSON.stringify([good.r.profileId]) &&
+        JSON.stringify(a.offices) === JSON.stringify({ [good.r.profileId]: { guard: ['falkreath'] } }); })());
+  yes('  and the law register holds the cell as the guard left it, unlocked', botPass.cellOn(good.root, {}) === false);
+  yes('  and the kept line says the office and the cell came back with the claim',
+    /cell door still offers its guard Lock.*the office, the cell as it was left, the claim and its lock came back/.test((good.r.lines.find((l) => l.step === 'kept') || {}).detail || ''));
   yes('  and the claim and the lock are in the register the copy keeps on disk',
     JSON.stringify(botPass.claimOn(good.root, {}, '165a0:Skyrim.esm')) === JSON.stringify({ by: good.r.profileId, name: 'Bot', locked: true }));
   yes('  and the claim line says what the gamemode said, and the kept line that the lock came back',
@@ -427,9 +500,16 @@ function failedAt(r, step) {
   const order = ['loading the engine', 'the server started; it has 2 s', 'PASS  loads', 'a bot connects to port 7801',
     'PASS  login', 'the bot sends a face', 'PASS  face', 'the bot presses E on the stables\' outside door', 'the bot presses Claim',
     'PASS  claim', 'the bot presses E on the stables\' inside door', 'the bot presses Lock', 'PASS  keys', 'the bot presses E on the forge, d6987, with no trade',
-    'the bot picks Smith, Platewright', 'the bot presses E on the forge again', 'PASS  stations', 'waiting for the world on disk', 'PASS  saved',
-    'the server is stopped', 'the server started again', 'PASS  restart', 'a second bot connects', 'PASS  loads back', 'PASS  kept', 'the pass ends'];
-  const at = order.map((o) => good.said.findIndex((l) => l.startsWith(o)));
+    'the bot picks Smith, Platewright', 'the bot presses E on the forge again', 'PASS  stations',
+    'the bot takes the office its role gives, Guard of Falkreath', 'the bot presses E on the barracks\' outside door, ef443',
+    'the bot presses E on the door down into the jail, ef3a1', 'the bot presses E on the cell door, ef434', 'the bot presses unlock at the cell',
+    'the bot presses lock at the cell', 'PASS  jail', 'waiting for the world on disk', 'PASS  saved',
+    'the server is stopped', 'the server started again', 'PASS  restart', 'a second bot connects', 'PASS  loads back',
+    'the bot presses E on the cell door, ef434', 'the bot presses E on the door up out of the jail, ef43a', 'the bot presses E on the barracks\' door out, ef3a2',
+    'PASS  kept', 'the pass ends'];
+  // Each looked for after the one before it: a door pressed twice is two lines.
+  let from = 0;
+  const at = order.map((o) => { const i = good.said.findIndex((l, j) => j >= from && l.startsWith(o)); from = i + 1; return i; });
   yes('the pass says each step as it starts, in order, before its PASS line', at.every((x, i) => x >= 0 && (i === 0 || x > at[i - 1])));
   {
     const cp = require('child_process');
@@ -530,6 +610,37 @@ function failedAt(r, step) {
     failedAt(nohammer.r, 'stations') && /the hammer a new smith is handed.*Over the relay it was told: No: there is no such profession/.test(nohammer.r.lines.find((l) => !l.ok).detail));
   const shutforge = await run('shutforge', 'stays shut');
   yes('the forge stays shut to a smith: FAIL on stations', failedAt(shutforge.r, 'stations') && /the forge opening for a smith/.test(shutforge.r.lines.find((l) => !l.ok).detail));
+
+  // ------------------------------------------------------- the jail
+  const nooffice = await run('nooffice', 'no office');
+  yes('the guard\'s office not taken: FAIL on jail, with what came back over the relay',
+    failedAt(nooffice.r, 'jail') && /an answer to \/office hold.*Over the relay it was told: Your account does not hold the Guard of Falkreath role/.test(nooffice.r.lines.find((l) => !l.ok).detail));
+  const barred = await run('barred', 'barred');
+  yes('the door down into the jail does not take the bot through: FAIL on jail, naming the door',
+    failedAt(barred.r, 'jail') && /the door down into the jail opening and taking it through \(to ef324\)/.test(barred.r.lines.find((l) => !l.ok).detail));
+  const nocell = await run('nocell', 'no cell line');
+  yes('the cell door offers its guard nothing: FAIL on jail, with what it offered',
+    failedAt(nocell.r, 'jail') && /offers "" at "", not unlock at the cell/.test(nocell.r.lines.find((l) => !l.ok).detail));
+  const cellunsaved = await run('cellunsaved', 'cell unsaved');
+  yes('the cell\'s lock not in the law register: FAIL on jail, saying so',
+    failedAt(cellunsaved.r, 'jail') && /law register saying the cell is unlocked/.test(cellunsaved.r.lines.find((l) => !l.ok).detail));
+  const jailforgets = await run('jailforgets', 'jail forgets');
+  yes('the office gone after the restart: FAIL on kept, saying the office was lost',
+    failedAt(jailforgets.r, 'kept') && /offers "", not lock, so the guard's office was lost/.test(jailforgets.r.lines.find((l) => !l.ok).detail));
+  const cellforgets = await run('cellforgets', 'cell forgets');
+  yes('the cell back as the game ships it after the restart: FAIL on kept, saying the guard\'s turn was lost',
+    failedAt(cellforgets.r, 'kept') && /as the game ships it and the guard's turn of it was lost/.test(cellforgets.r.lines.find((l) => !l.ok).detail));
+  {
+    const root = await folder('movedjail');
+    fs.writeFileSync(path.join(root, 'gamemode-tables', 'JAIL_SHUT.json'), JSON.stringify({}));
+    yes('tables where the cell is no longer shipped locked are named, not pressed',
+      /no longer give cell door ef434:Skyrim\.esm to falkreath's jail, shipped locked/.test(botPass.jailIn(root).why || ''));
+    const root2 = await folder('movedjail2');
+    fs.writeFileSync(path.join(root2, 'gamemode-tables', 'BUILDING_BY_DOOR.json'), JSON.stringify({}));
+    yes('  and tables where the way in no longer leads there are named too',
+      /no longer give ef443:Skyrim\.esm to ef325:Skyrim\.esm.*way into Falkreath Jail/.test(botPass.jailIn(root2).why || ''));
+    yes('  and the jail is taken when the tables still say it', !botPass.jailIn(await folder('jailok')).why);
+  }
 
   yes('a failed pass still stops its server', [other, held, nocreate, returning, stays, unsaved, moved, nameless].every((x) => x.s.state.up === false));
 

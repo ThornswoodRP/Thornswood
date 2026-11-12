@@ -51,12 +51,27 @@
 //              the relay as the K panel does, is handed a hammer, presses
 //              the forge again and the bench opens (an OpenContainer for
 //              it, the engine's word that the press went through);
+//   jail       the bot is a Guard of Falkreath (the role the site would read
+//              from Discord is written into the copy's own allowed.json,
+//              since its door has no site) and takes the office over the
+//              relay as the Office page does (/office hold). It goes through
+//              Falkreath Barracks down into the jail, presses E on a cell
+//              door, and the line there offers it the cell's lock. It
+//              unlocks the cell, locks it and unlocks it again (/unlock,
+//              /lock, as the lock key sends them): each is answered, the law
+//              register on disk (private/law.json) says so, and the line
+//              follows. It leaves the cell unlocked, which is not how the
+//              game ships it, so the restart has something to keep;
 //   saved      the world on disk holds the character with that name;
 //   restart    the server is stopped and started again and loads again;
 //   loads back a second bot logs in as the same profile and is sent the same
 //              character: its name, where it stood, and no race menu;
-//   kept       it opens the stables' door again and the line there offers
-//              Unlock: the claim and its lock came back with the restart.
+//   kept       it is still in the jail, still the guard, and the cell door
+//              offers it Lock: the office and the cell as the guard left it
+//              came back, not as the game ships it.
+//              It walks up and out of the barracks, opens the stables' door
+//              again and the line there offers Unlock: the claim and its
+//              lock came back with the restart.
 // The server's own output goes to bot-pass-server.log beside it, and the
 // last lines of it into the result, so a FAIL says what the server said. The
 // voice service's goes to bot-pass-voice.log in its folder.
@@ -97,7 +112,7 @@ const CHARGEN_PROPERTY = 'thornswoodChargen';
 
 // The property block's lines (plog), which a FAIL from the claim on carries.
 const PROPERTY = '[property] ';
-const PROPERTY_STEPS = ['claim', 'keys', 'kept'];
+const PROPERTY_STEPS = ['claim', 'keys', 'jail', 'kept'];
 // The character block's lines (clog), which say whether a pick was taken,
 // and which a FAIL at stations carries.
 const PICKS = '[thornswood character] ';
@@ -127,6 +142,14 @@ const OPEN_CONTAINER = 21;
 // with (the three starting tools).
 const NO_TRADE = 'You have not chosen a profession yet';
 const HAMMER = 'You are handed a hammer';
+// Falkreath Jail (game/data/jails.json), reached through Falkreath Barracks:
+// the barracks' outside door stands in Tamriel, its door down leads into the
+// jail, and the jail's one cell door is shipped locked (JAIL_SHUT). Each
+// door's 'to' in game/data/doors.json is the other half it comes out at.
+// The pass's character is a Guard of Falkreath, by the role written into
+// the copy's allowed.json (guardRole).
+const JAIL = { hold: 'falkreath', role: 'Guard of Falkreath', barracks: 0xef325, jail: 0xef324,
+               outside: 0xef443, out: 0xef3a2, down: 0xef3a1, up: 0xef43a, cell: 0xef434 };
 
 function stageFrom(dump) {
   try { const v = JSON.parse(dump); return v && typeof v.stage === 'string' ? v.stage : ''; } catch (e) { return ''; }
@@ -185,6 +208,43 @@ function stablesIn(root) {
                   ', so the pass\'s door for a claim has to be picked again' };
   }
   return { name: String(names[STABLES.building] || STABLES.building) };
+}
+
+// What the copy's own tables say of Falkreath Jail: {} when its cell door
+// is still that hold's, still shipped locked, and the doors the pass walks
+// through still lead into and out of the jail; else { why }.
+function jailIn(root) {
+  const dir = path.join(root, 'gamemode-tables');
+  let jailDoor = null, shut = null, byDoor = null;
+  try {
+    jailDoor = readJson(path.join(dir, 'JAIL_DOOR.json'));
+    shut = readJson(path.join(dir, 'JAIL_SHUT.json'));
+    byDoor = readJson(path.join(dir, 'BUILDING_BY_DOOR.json'));
+  } catch (e) { return { why: 'the copy\'s gamemode-tables has no readable JAIL_DOOR.json, JAIL_SHUT.json and BUILDING_BY_DOOR.json (' + e.message + ')' }; }
+  const desc = (id) => id.toString(16) + ':Skyrim.esm';
+  const cell = desc(JAIL.cell);
+  const shutHas = Array.isArray(shut) ? shut.indexOf(cell) !== -1 : Object.prototype.hasOwnProperty.call(shut || {}, cell);
+  if (jailDoor[cell] !== JAIL.hold || !shutHas) {
+    return { why: 'the copy\'s tables no longer give cell door ' + cell + ' to ' + JAIL.hold + '\'s jail, shipped locked, ' +
+                  'so the pass\'s cell has to be picked again' };
+  }
+  const wrong = [[JAIL.outside, JAIL.barracks], [JAIL.out, JAIL.barracks], [JAIL.up, JAIL.barracks], [JAIL.down, JAIL.jail]]
+    .filter(([d, b]) => byDoor[desc(d)] !== desc(b));
+  if (wrong.length) {
+    return { why: 'the copy\'s tables no longer give ' + wrong.map(([d, b]) => desc(d) + ' to ' + desc(b)).join(' and ') +
+                  ', so the pass\'s way into Falkreath Jail has to be picked again' };
+  }
+  return {};
+}
+
+// The law register's word on the cell (private/law.json, the property
+// block's saveLaw): true locked, false unlocked, undefined when no guard has
+// turned it.
+function cellOn(root, settings) {
+  try {
+    const doc = readJson(path.join(root, String(settings.privDir || 'private'), 'law.json'));
+    return doc && doc.cells ? doc.cells[JAIL.cell.toString(16) + ':Skyrim.esm'] : undefined;
+  } catch (e) { return undefined; }
 }
 
 function readJson(file) {
@@ -311,6 +371,21 @@ function doorKey(root, settings) {
   return key;
 }
 
+// The roles the door reads, in the copy's own private folder. On dev the door
+// fetches them from the site, which reads them from Discord, and writes them
+// to allowed.json (door.ts, the refresh); the copy's door.json names no site,
+// so nothing fetches and this file is the whole of what it reads. Written the
+// way the site's answer lands: this profile alone, with the Guard of
+// Falkreath role, and the door watching only (enforce false), as on dev.
+function guardRole(root, settings, profileId) {
+  const dir = path.join(root, String(settings.privDir || 'private'));
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'allowed.json'), JSON.stringify({
+    enforce: false, profiles: [profileId], offices: { [profileId]: { guard: [JAIL.hold] } },
+    note: 'Written by the bot pass (scripts/bot/Bot-Pass.js) in its throwaway copy.'
+  }));
+}
+
 // The pass. opts: { root, id, loadMs, stepMs, spawn, addon, profileId, log,
 // voiceFrom (the voice files, the bot's own folder when unset), voiceDir
 // (where the voice copy runs, <root>/../voice when unset) }.
@@ -328,6 +403,7 @@ async function pass(opts) {
   const said = (step) => {
     const which = CHARGEN_STEPS.includes(step) ? [CHARGEN, 'creating it'] : PROPERTY_STEPS.includes(step) ? [PROPERTY, 'the stables']
       : step === 'stations' ? [PICKS, 'the trade it picked'] : null;
+    if (which && step === 'jail') { which[1] = 'the guard and the cell'; }
     if (!which) { return ''; }
     const c = server.lines.filter((l) => l.indexOf(which[0]) >= 0).slice(-3).map((l) => l.trim().slice(0, 300));
     return c.length ? '. The gamemode said: ' + c.join(' | ') : '. The gamemode said nothing about ' + which[1];
@@ -371,6 +447,25 @@ async function pass(opts) {
       Number(x.message.worldOrCell) === to), stepMs, 'the door opening and taking it through (to ' + to.toString(16) + ')');
     return line;
   };
+  // E on a door that only takes the bot through it: the same press, waiting
+  // for the engine to send it through and not for a line.
+  const through = async (bot, idx, door, to, what) => {
+    const at = bot.inbox.length;
+    log('the bot presses E on ' + what + ', ' + door.toString(16));
+    bot.send({ t: ACTIVATE, data: { caster: 0x14, target: door, isSecondActivation: false } }, true);
+    await bot.until(() => bot.inbox.slice(at).some((x) => x.message && x.message.t === TELEPORT && x.message.idx === idx &&
+      Number(x.message.worldOrCell) === to), stepMs, what + ' opening and taking it through (to ' + to.toString(16) + ')');
+  };
+  // E on the cell door, which opens where it stands: the line it writes.
+  const atCell = async (bot, idx) => {
+    const at = bot.inbox.length;
+    log('the bot presses E on the cell door, ' + JAIL.cell.toString(16));
+    bot.send({ t: ACTIVATE, data: { caster: 0x14, target: JAIL.cell, isSecondActivation: false } }, true);
+    return bot.until(() => {
+      for (let i = bot.inbox.length - 1; i >= at; i--) { const l = bot.inbox[i].message && doorLineOf(bot.inbox[i].message, idx); if (l) { return l; } }
+      return null;
+    }, stepMs, 'the line at the cell door after pressing it');
+  };
   try {
     if (!(port > 0)) { say('loads', false, 'server-settings.json names no port'); return result(); }
     if (settings.thornswoodRequirePass !== false) {
@@ -380,6 +475,7 @@ async function pass(opts) {
     log('loading the engine\'s addon, scam_native.node');
     const addon = opts.addon || loadAddon(root);
     const key = doorKey(root, settings);
+    guardRole(root, settings, profileId);
 
     // The voice service first, as on the box: the gamemode pushes positions
     // to it and collects commands from it from the moment it loads.
@@ -557,6 +653,40 @@ async function pass(opts) {
       await first.until(() => opened(at), stepMs, 'the forge opening for a smith with a hammer');
       say('stations', true, 'the forge was shut to it with no trade (' + refused.slice(0, 80) + '), and opened once it was a smith with a hammer');
     } catch (e) { say('stations', false, e.message + told(heardAt)); return result(); }
+
+    // The jail: the guard's office taken, a cell door's lock turned both ways.
+    const jail = jailIn(root);
+    if (jail.why) { say('jail', false, jail.why); return result(); }
+    heardAt = relay.heard.length;
+    try {
+      log('the bot takes the office its role gives, ' + JAIL.role);
+      relay.say('/office hold guard ' + JAIL.hold);
+      const held = await relay.until(() => relay.said(heardAt).find((t) => t.indexOf('This character holds ' + JAIL.role + ' now') === 0),
+        stepMs, 'an answer to /office hold over the relay');
+      await through(first, me.idx, JAIL.outside, JAIL.barracks, 'the barracks\' outside door');
+      await through(first, me.idx, JAIL.down, JAIL.jail, 'the door down into the jail');
+      const line = await atCell(first, me.idx);
+      if (line.x !== 'unlock' || line.n !== 'the cell') {
+        throw new Error('the line at the cell door offers ' + JSON.stringify(line.x) + ' at ' + JSON.stringify(line.n) +
+                        ', not unlock at the cell, to a guard of the hold');
+      }
+      const turn = async (word, answer, on, x) => {
+        const from = relay.heard.length;
+        const lineAt = first.inbox.length;
+        log('the bot presses ' + word.slice(1) + ' at the cell');
+        relay.say(word + ' ' + JAIL.cell.toString(16));
+        const a = await relay.until(() => relay.said(from).find((t) => t.indexOf(answer) === 0), stepMs, 'an answer to ' + word + ' over the relay');
+        await first.until(() => cellOn(root, settings) === on, stepMs, 'the law register saying the cell is ' + (on ? 'locked' : 'unlocked'));
+        await first.until(() => first.inbox.slice(lineAt).some((m) => { const l = m.message && doorLineOf(m.message, me.idx); return l && l.x === x; }),
+          stepMs, 'the line at the cell door offering ' + x);
+        return a;
+      };
+      await turn('/unlock', 'You unlock the cell.', false, 'lock');
+      const locked = await turn('/lock', 'You lock the cell.', true, 'unlock');
+      await turn('/unlock', 'You unlock the cell.', false, 'lock');
+      say('jail', true, 'it holds ' + JAIL.role + ' (' + held.slice(0, 60) + '), went down into Falkreath Jail, and the cell door ' +
+        'unlocked, locked (' + locked.slice(0, 60) + ') and unlocked again for it, the law register and the line at the door following each');
+    } catch (e) { say('jail', false, e.message + told(heardAt)); return result(); }
     relay.close();
 
     let form = null;
@@ -603,13 +733,24 @@ async function pass(opts) {
       }
     } catch (e) { say('loads back', false, e.message); return result(); }
 
-    // The claim and its lock, read back by the gamemode at its start: the
-    // stables' door offers the one who holds them Unlock.
+    // What the gamemode read back at its start: the office and the locked
+    // cell (law.json), where it was left, then the claim and its lock
+    // (property.json), up and out at the stables.
     try {
-      const line = await press(second, second.character.idx, STABLES.outside, STABLES.cell, 'the stables\' outside door');
+      const idx = second.character.idx;
+      const cell = await atCell(second, idx);
+      if (cell.x !== 'lock') {
+        throw new Error('after the restart the line at the cell door offers ' + JSON.stringify(cell.x) + ', not lock, so ' +
+                        (cell.x === 'unlock' ? 'the cell is as the game ships it and the guard\'s turn of it was lost'
+                          : 'the guard\'s office was lost'));
+      }
+      await through(second, idx, JAIL.up, JAIL.barracks, 'the door up out of the jail');
+      await through(second, idx, JAIL.out, 0x3c, 'the barracks\' door out');
+      const line = await press(second, idx, STABLES.outside, STABLES.cell, 'the stables\' outside door');
       say('kept', line.x === 'unlock', line.x === 'unlock'
-        ? 'after the restart the door still offers Unlock at ' + line.n + ': the claim and its lock came back'
-        : 'after the restart the line at the door offers ' + JSON.stringify(line.x) + ', not unlock, so the claim or its lock was lost');
+        ? 'after the restart the cell door still offers its guard Lock, and the stables\' door still offers Unlock at ' + line.n +
+          ': the office, the cell as it was left, the claim and its lock came back'
+        : 'after the restart the line at the stables\' door offers ' + JSON.stringify(line.x) + ', not unlock, so the claim or its lock was lost');
     } catch (e) { say('kept', false, e.message); }
     return result();
   } catch (e) {
@@ -664,4 +805,4 @@ if (require.main === module) {
 }
 
 module.exports = { stageIn, stageOf, pass, gitBlob, face, formOf, nameIn, ServerRun, doorKey, HOME,
-                   STABLES, FORGE, doorLineOf, packNames, claimOn, stablesIn };
+                   STABLES, FORGE, JAIL, doorLineOf, packNames, claimOn, stablesIn, jailIn, cellOn, guardRole };
