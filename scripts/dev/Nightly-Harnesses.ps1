@@ -344,14 +344,26 @@ function Get-Marked($mark) {
 function Get-RunProcesses($mark) {
     foreach ($q in @(Get-Marked $mark)) {
         $d = '/proc/' + $q.Id
-        $state = ''; $wchan = ''; $cmd = ''
+        $state = ''; $wchan = ''; $wchanWhy = ''; $cmd = ''
         try { $st = [IO.File]::ReadAllText($d + '/stat'); $state = ($st.Substring($st.LastIndexOf(')') + 2) -split ' ')[0] }
         catch { $state = '(ended)' }
-        try { $wchan = [IO.File]::ReadAllText($d + '/wchan').Trim() } catch { <# not readable here; the state still says whether it sleeps #> }
+        try { $wchan = [IO.File]::ReadAllText($d + '/wchan').Trim() } catch { $wchanWhy = $_.Exception.Message.Trim() }
         try { $cmd = ([IO.File]::ReadAllText($d + '/cmdline') -replace "`0", ' ').Trim() } catch { <# it ended after its name was read; the name and id still say who it was #> }
         if ($cmd.Length -gt 200) { $cmd = $cmd.Substring(0, 200) + '...' }
-        '{0} {1} {2}{3} ({4})' -f $q.Id, $q.Name, $state, $(if ($wchan -and $wchan -ne '0') { ' in ' + $wchan } else { '' }), $cmd
+        '{0} {1} {2} {3} ({4})' -f $q.Id, $q.Name, $state, (Get-WchanSaid $state $wchan $wchanWhy), $cmd
     }
+}
+
+# Where a process waits, as /proc/<pid>/wchan says it (#5733). The kernel
+# writes the name of the call a sleeping process waits in, and 0 when it has
+# none to give: the process is on a processor (state R), or the kernel will
+# not name it to this reader. Each case is said in words, so the line always
+# has the field, and a wchan that could not be read says why.
+function Get-WchanSaid([string]$state, [string]$wchan, [string]$why) {
+    if ($why) { return ('wchan not read: ' + $why) }
+    if ($wchan -and $wchan -ne '0') { return ('in ' + $wchan) }
+    if ($state -eq 'R') { return 'running, in no kernel call' }
+    return 'in a kernel call /proc does not name (wchan 0)'
 }
 
 # The machine's processor, busy, as a share of all its cores between two

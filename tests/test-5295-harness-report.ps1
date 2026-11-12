@@ -119,6 +119,21 @@ function Cases($suite) {
 }
 
 try {
+    # ---- 2. where a process waits, said for every wchan /proc gives (#5733) -------
+    # Get-WchanSaid, taken out of the runner as it is written, so it is held on
+    # every OS, not only where a harness hangs on Linux.
+    $ast = [Management.Automation.Language.Parser]::ParseFile($runner, [ref]$null, [ref]$null)
+    $fn = $ast.Find({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-WchanSaid' }, $true)
+    Yes '2. the runner says where a process waits with Get-WchanSaid' ($null -ne $fn)
+    if ($null -ne $fn) {
+        . ([scriptblock]::Create($fn.Extent.Text))
+        Yes '   a named kernel call is named' ((Get-WchanSaid 'S' 'ep_poll' '') -eq 'in ep_poll')
+        Yes '   wchan 0 on a running process says it is running' ((Get-WchanSaid 'R' '0' '') -eq 'running, in no kernel call')
+        Yes '   wchan 0 on a sleeping one says /proc does not name the call' ((Get-WchanSaid 'S' '0' '') -eq 'in a kernel call /proc does not name (wchan 0)')
+        Yes '   an empty wchan says the same' ((Get-WchanSaid 'D' '' '') -eq 'in a kernel call /proc does not name (wchan 0)')
+        Yes '   a wchan that could not be read says why' ((Get-WchanSaid 'S' '' 'Access to the path is denied.') -eq 'wchan not read: Access to the path is denied.')
+    }
+
     # ---- 1 to 3. one share, every kind of harness ---------------------------------
     $a = Join-Path $work 'kinds'
     if (-not $runnerRuns) {
@@ -159,7 +174,7 @@ try {
         Yes ('2. one killed at its clock says so (' + ($hc -join ' / ') + ')') ($hc.Count -eq 2 -and $hc[1] -eq 'FAIL the harness timed out after 3 s and was killed')
         if ($IsLinux) {
             $w = [regex]::Match($r.Said, '(?m)^::warning file=[^:]*test-4-hang\.js::at its clock its processes were: (.*)$')
-            Yes ('   and on Linux names what each of its processes was doing when it was killed (' + $w.Groups[1].Value.Trim() + ')') ($w.Success -and $w.Groups[1].Value -match '^\d+ \S+ [A-Z] in \S+ \(\S*node\S* .*test-4-hang\.js\)')
+            Yes ('   and on Linux names what each of its processes was doing when it was killed (' + $w.Groups[1].Value.Trim() + ')') ($w.Success -and $w.Groups[1].Value -match '^\d+ \S+ [A-Z] (in \S+|running, in no kernel call|in a kernel call /proc does not name \(wchan 0\)|wchan not read: [^(]+) \(\S*node\S* .*test-4-hang\.js\)')
         } else { Write-Host 'SKIP  what a hung harness was doing is read from /proc, on Linux' }
         $lc = @(Cases (Suite $doc 'test-5-late.js'))
         Yes ('2. one not run, out of time, is a failing case (' + ($lc -join ' / ') + ')') (($lc -join '') -eq 'FAIL the harness was not run, out of time')
