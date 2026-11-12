@@ -54,6 +54,15 @@ was let in, so staff can see why somebody could not get in.
 what you have built and claimed, and the ranks you have earned. That is the
 character, and without it there is nothing to log back into.
 
+**Your list of characters and your settings.** Which characters are yours,
+the slot each sits in on the launcher's menu, when each was last played and
+for how long, and the settings you chose: your keys, field of view, chat and
+needs bars, the emote wheel, what you saved in each mod's own menu, and the
+launcher's own choices such as its theme and music. They are kept against
+your Discord id, so a reinstall or another PC finds them again when you
+connect Discord. Your microphone's name, your screen and your graphics
+settings belong to the PC and are not sent.
+
 **What you say in chat.** Kept so that a report of something that happened has
 something behind it other than one person's word. If you would not want staff
 to read it, do not type it.
@@ -246,6 +255,9 @@ until 24 September 2026, and both are served from here now.
   the same way. Both numbers come from the code rather than a promise on this page; if
   they change, this line changes with them.
 
+- **Your list of characters and your settings** are kept until you ask for
+  them to be deleted. Each time the launcher sends your settings, they replace
+  the copy kept before.
 - **Your character** is kept until you ask for it to be deleted, or until a
   wipe, which is announced first. A wipe, a character reset or putting a
   backup back leaves the characters it replaced set aside on the server for
@@ -327,16 +339,17 @@ it leaves your PC except as this page says above.
   sign-in itself is locked so only your Windows account can read it, and your
   Discord name and picture are kept beside it in plain files, for the Discord
   card at the top of the launcher. They are kept until you uninstall.
-- **Your characters, saves and settings**, and the launcher's record of what
-  it installed, kept until you uninstall.
+- **The launcher's record of what it installed**, kept until you uninstall.
 
-**Uninstalling** from the launcher's Settings page removes all of it. With
-"Keep this build's saves and settings" ticked, as it is unless you untick it,
-only your characters, saves and settings and the launcher's record of what it
-installed stay. The log, the Discord sign-in, name and picture, the support
-reports and the browser data go either way, and if one of them cannot be
-removed, the launcher's last message names it so you can delete it yourself.
-Deleting the install folder yourself removes everything as well.
+Your characters and settings are not among them: the site keeps them with
+your Discord account (above). The launcher puts your settings in place each
+time you press Play and sends them back when the game closes.
+
+**Uninstalling** from the launcher's Settings page removes all of it. If you
+keep Thornswood's copy of the game, the record of that copy stays beside it
+so a reinstall can reuse it, and if anything else cannot be removed, the
+launcher's last message names it so you can delete it yourself. Deleting the
+install folder yourself removes everything as well.
 
 ## Deleting it
 
@@ -355,7 +368,8 @@ A request covers what Thornswood keeps, not your PC: what the launcher keeps
 there is yours, and uninstalling removes it (above).
 
 What deletion means here: your Discord link, your session records and the
-logs your launcher sent with them, your chat, your character, your answer to the rules, the applications and calls for
+logs your launcher sent with them, your chat, your character, your list of
+characters and your settings, your answer to the rules, the applications and calls for
 help you sent through the site, your gallery pictures and your join number.
 A ticket in the Discord, and the bot's lines about it in the staff ticket
 log, are not deleted by a request: each stays until its 365 days above are

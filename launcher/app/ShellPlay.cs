@@ -286,6 +286,27 @@ namespace Thornswood
                 // has to be told a name, and the name cannot ship with the
                 // build because everybody owns a different microphone, so it
                 // is read off this machine and written into this machine's ini.
+                // The person's settings first, from their Discord account
+                // (#5939): the keys, the in-game panel, the emote wheel and the
+                // mod menus are written over the files the game reads, then a
+                // PC with none gets the template, then this PC's microphone.
+                // The site not handing them over stops Play: a game started
+                // on this PC's old settings would send them back over the
+                // account's when it closes.
+                string putSettings = null, settingsWhy = null;
+                Waiting(delegate
+                {
+                    try { putSettings = YourSettings.PutInPlace(); }
+                    catch (Exception ex) { settingsWhy = ex.Message; }
+                });
+                if (settingsWhy != null)
+                {
+                    string stop = settingsWhy.TrimEnd('.') + ". Your settings are kept with your Discord account, so the game was not started without them.";
+                    Log(stop);
+                    Ask.Tell(stop, "Thornswood", Ask.Icon.Warning);
+                    return;
+                }
+                if (putSettings != null) Log(putSettings);
                 try { string ini = ThornIni.Ensure(); if (ini != null) Log(ini); } catch (Exception ex) { Swallow.Note("Shell.Play", ex); }
                 try
                 {

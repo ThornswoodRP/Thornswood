@@ -275,21 +275,24 @@ yes('docs/systems/creation.md says how changing character works', /## Changing c
 
 // =============================================================== the launcher
 const poll = lift(shellChars, 'static void PollChoice()') || '';
-yes('a forget while the game runs writes the menu\'s list again',
-    /Chars\.Forget\(g\)[\s\S]*ThreadPool\.QueueUserWorkItem\(delegate \{ Chars\.Relist\(cfg\); \}\);/.test(poll));
+yes('a forget while the game runs tells the site and writes the menu\'s list again, off the window\'s thread',
+    /ThreadPool\.QueueUserWorkItem\(delegate\s*\{[\s\S]*Chars\.Forget\(forget\);[\s\S]*Chars\.Relist\(cfg\);\s*\}\);/.test(poll));
 yes('a pick checks in the spare it minted, since no Play comes before the next menu',
     /spareWas = Chars\.SpareId\(\);[\s\S]*Chars\.Chose\(id\);[\s\S]*spareNow = Chars\.SpareId\(\);/.test(poll) &&
     /if \(CheckIn\(id\) && spareNow > 0 && spareNow != spareWas\) CheckIn\(spareNow\);/.test(poll));
 yes('and then writes the menu\'s list again', /CheckIn\(spareNow\);\s*Chars\.Relist\(cfg\);/.test(poll));
 yes('the character left gets the time played since its pick, before the new one is written down',
-    /if \(chosenId > 0\)\s*\{\s*try \{ Chars\.AddPlaytime\(chosenId, DateTime\.Now - PlayCountedFrom\(\)\); \}/.test(poll) &&
-    poll.indexOf('AddPlaytime') < poll.indexOf('chosenId = id;'));
+    /TimeSpan beforeRan = DateTime\.Now - PlayCountedFrom\(\);/.test(poll) &&
+    poll.indexOf('beforeRan = ') < poll.indexOf('chosenId = id;') &&
+    /Chars\.AddPlaytime\(before, beforeRan\);/.test(poll) &&
+    poll.indexOf('AddPlaytime(before') < poll.indexOf('Chars.Chose(id)'));
 yes('and the last one played gets its own at close, not the whole session',
-    /Chars\.AddPlaytime\(chosenId, DateTime\.Now - PlayCountedFrom\(\)\)/.test(shellCs) &&
+    /TimeSpan counted = DateTime\.Now - PlayCountedFrom\(\);/.test(shellCs) &&
+    /Chars\.AddPlaytime\(playedAs, counted\);/.test(shellCs) &&
     /return choseAt > playStartedAt \? choseAt : playStartedAt;/.test(shellChars));
 const relist = lift(charsCs, 'public static void Relist(Config cfg)') || '';
 yes('Relist writes the json only, never the page\'s script the front deletes after a pick',
-    /WriteList\(CharactersJson\(rows, LastPlayedId\(rows\), sp != null \? sp\.Id : 0, slots\)\)/.test(relist) &&
+    /WriteList\(CharactersJson\(rows, LastPlayedId\(rows\), SpareId\(\), Slots\(\)\)\)/.test(relist) &&
     !/thornswood-characters\.js/.test(relist) && !/Save\(/.test(relist));
 yes('and refreshes the roster first, off the window\'s thread', /Roster\.Refresh\(cfg\)/.test(relist));
 const writeChars = lift(charsCs, 'static void WriteCharacters(Config cfg, List<Row> rows, int last, int spare, int slots)') || '';
@@ -298,8 +301,9 @@ yes('Play\'s list and Relist\'s are the same text', /string listed = CharactersJ
 const json = lift(charsCs, 'static string CharactersJson(List<Row> rows, int last, int spare, int slots)') || '';
 yes('a character staff killed since the last Play is marked dead from the roster',
     /isDead = isDead \|\| Roster\.Dead\(r\.Id\);/.test(json));
-const save = lift(charsCs, 'static void Save(List<Row> rows)') || '';
-yes('the rows file is written whole, so Relist never reads half of it',
-    /File\.WriteAllText\(next, sb\.ToString\(\)\);/.test(save) && /File\.Replace\(next, ProfileFile, null\)/.test(save));
+// The list is the site's since #5938: Relist takes a copy of the last answer
+// under its lock, so it never reads one half replaced.
+yes('Relist reads a whole copy of the site\'s last answer, never a file of rows',
+    /lock \(heldGate\) \{ return new List<Row>\(held\); \}/.test(charsCs) && !/static void Save\(/.test(charsCs));
 
 done();

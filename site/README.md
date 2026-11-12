@@ -24,6 +24,8 @@ else does.
 | `/api/play/join` | POST | the launcher, before every launch (`launcher\app\Discord.cs`) |
 | `/api/play/start`, `/api/play/end`, `/api/play/logs` | POST | the launcher, as a session starts, as it ends, and with the logs after (`launcher\app\Discord.cs`) |
 | `/api/play/roster` | POST | the launcher, for the names on the character cards (`launcher\app\Roster.cs`) |
+| `/api/play/characters` | POST | the launcher, at every Play and after a character is picked, deleted or played: the account's list of characters, their slots and the spare New character uses, kept in `linked.json` (#5938, `launcher\app\Chars.cs`) |
+| `/api/play/settings` | POST | the launcher, as it starts, before every launch, when the game closes and when its own settings change: the account's settings files, kept in `settings.json` (#5939, `launcher\app\YourSettings.cs`) |
 | `/api/play/pass` | POST | the launcher, when a character is picked at the game's menu and every minute while the game runs: a join pass the game server checks, or a plain no (#937, `launcher\app\Discord.cs`, which `launcher\app\JoinPass.cs` calls) |
 | `/auth/discord` | GET | the launcher's link button, through the browser; Discord sends the browser back to `/auth/discord/callback` (`launcher\app\Discord.cs`) |
 | `/api/allowed`, `/dev/api/allowed` | GET | each game server's door, every five minutes, with the bot's key; the dev server's `door.json` names the site with `/dev` on the end (`game\gamemode.js`) |

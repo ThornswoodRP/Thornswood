@@ -267,11 +267,17 @@ namespace Thornswood
                 foreach (int g in gone)
                 {
                     if (!forgotten.Add(g)) continue;
-                    try { Chars.Forget(g); Log("forgot character " + g + " at the menu"); }
-                    catch (Exception ex) { Log("Could not forget character " + g + ": " + ex.Message); }
-                    // The menu can come back in this same session now
-                    // (Change character, #3128), and its list is the file.
-                    ThreadPool.QueueUserWorkItem(delegate { Chars.Relist(cfg); });
+                    int forget = g;
+                    // On the site, which keeps the list (#5938), so off the
+                    // window's thread. The menu can come back in this same
+                    // session now (Change character, #3128), and its list is
+                    // the file Relist writes from the site's answer.
+                    ThreadPool.QueueUserWorkItem(delegate
+                    {
+                        try { Chars.Forget(forget); PresenceLog("forgot character " + forget + " at the menu"); }
+                        catch (Exception ex) { PresenceLog("Could not forget character " + forget + ": " + ex.Message); }
+                        Chars.Relist(cfg);
+                    });
                 }
             }
 
@@ -284,22 +290,27 @@ namespace Thornswood
             if (id <= 0 || id == chosenId) return;
             // Change character (#3128): the one played until now gets its
             // own time, and the count starts again for this one.
-            if (chosenId > 0)
-            {
-                try { Chars.AddPlaytime(chosenId, DateTime.Now - PlayCountedFrom()); } catch (Exception ex) { Swallow.Note("Shell.PollChoice, playtime", ex); }
-                choseAt = DateTime.Now;
-            }
+            int before = chosenId;
+            TimeSpan beforeRan = DateTime.Now - PlayCountedFrom();
+            if (chosenId > 0) choseAt = DateTime.Now;
             chosenId = id;
             JoinPass.For(id, PresenceLog);
-            int spareWas = 0;
-            try { spareWas = Chars.SpareId(); } catch (Exception ex) { Swallow.Note("Shell.PollChoice, spare", ex); }
-            try { Chars.Chose(id); }
-            catch (Exception ex) { Log("Could not write that choice down: " + ex.Message); }
-            int spareNow = 0;
-            try { spareNow = Chars.SpareId(); } catch (Exception ex) { Swallow.Note("Shell.PollChoice, spare", ex); }
             Log("chose character " + id);
+            // The list is the site's (#5938), so the pick and the time are
+            // told to it off the window's thread, in that order.
             ThreadPool.QueueUserWorkItem(delegate
             {
+                // Change character (#3128): the one played until now gets its
+                // own time, and the count starts again for this one.
+                if (before > 0)
+                {
+                    try { Chars.AddPlaytime(before, beforeRan); }
+                    catch (Exception ex) { PresenceLog("Could not add the play time of character " + before + ": " + ex.Message); }
+                }
+                int spareWas = Chars.SpareId();
+                try { Chars.Chose(id); }
+                catch (Exception ex) { PresenceLog("Could not write that choice down: " + ex.Message); }
+                int spareNow = Chars.SpareId();
                 try { Voice.Reconfigure(id); } catch (Exception ex) { Swallow.Note("Shell.PollChoice, voice", ex); }
                 // A New character pick minted the next spare, which the site
                 // has never heard of. Play checks every id in before the menu

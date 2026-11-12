@@ -262,8 +262,8 @@ namespace Thornswood
         /// The Discord id inside the ticket this copy holds, or "" when it is
         /// not linked or the ticket cannot be read.
         ///
-        /// Which account the launcher is acting for, so the character list
-        /// can tell when that changes (Chars.EnsureSpare). Not a check of the
+        /// Which account the launcher is acting for, for the picture's
+        /// address (AvatarUrl). Not a check of the
         /// ticket: the site checks the signature on every call, and nothing
         /// here is let in or kept out on this.
         /// </summary>
@@ -295,9 +295,8 @@ namespace Thornswood
         /// <summary>
         /// Every file this account leaves in folder: the sign-in ticket, the
         /// name and picture kept beside it, the site's last staff answer and
-        /// the door's last yes or no. Forget deletes them, and so does an
-        /// uninstall that keeps the saves and settings (LocalKeep.NotSaves,
-        /// #3679), so the two cannot name different files.
+        /// the door's last yes or no. Forget deletes them, and an uninstall
+        /// removes them with the rest of Profile (#3679).
         /// </summary>
         public static string[] AccountFiles(string folder)
         {

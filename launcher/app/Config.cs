@@ -359,8 +359,19 @@ namespace Thornswood
             // Still no throw, so every caller behaves as it did, but a Save
             // that failed now says so in launcher.log. It used to be the
             // tester saying the Save button did nothing, and nothing else.
-            catch (Exception ex) { Swallow.Note("Config.Save, writing " + path, ex); }
+            catch (Exception ex) { Swallow.Note("Config.Save, writing " + path, ex); return; }
+            // The person's own choices in it go to their Discord account
+            // (#5939): the launcher hangs YourSettings.Noted here as it
+            // starts. A hook rather than a call, so the tools and harnesses
+            // that build Config.cs without the rest of the launcher still do.
+            Action<Config> saved = Saved;
+            if (saved == null) return;
+            try { saved(this); }
+            catch (Exception ex) { Swallow.Note("Config.Save, sending the person's choices", ex); }
         }
+
+        /// <summary>Told after each Save that wrote the file.</summary>
+        public static Action<Config> Saved;
     }
 
     /// <summary>

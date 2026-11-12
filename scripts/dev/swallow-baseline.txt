@@ -160,7 +160,7 @@
 # window, and the install and removal paths in Updater.cs. 173 are left,
 # below. Each is later work on its own path; converting one lowers its line.
 AutoJoin.cs 3
-Chars.cs 10
+Chars.cs 7
 Checks.cs 22
 ClientRuntime.cs 1
 CrashDump.cs 1

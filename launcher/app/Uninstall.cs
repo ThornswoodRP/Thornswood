@@ -372,7 +372,7 @@ namespace Thornswood
         /// what is left for the handover script, or an empty array if nothing
         /// is.
         /// </summary>
-        public static string[] Begin(Config cfg, bool keepSaves, bool deleteMods, Action<string> say)
+        public static string[] Begin(Config cfg, bool deleteMods, Action<string> say)
         {
             say("Closing the game...");
             Kill();
@@ -452,7 +452,25 @@ namespace Thornswood
                 if (gone > 0) say(gone.ToString("n0") + " files removed from your Skyrim on Steam.");
             }
 
-            return Targets(keepSaves, deleteMods);
+            return Targets(deleteMods);
+        }
+
+        /// <summary>
+        /// Everything in Profile except what a kept game copy needs: its
+        /// record (OwnGame) and an own folder not made yet (Payload).
+        /// </summary>
+        static string[] ProfileButGame()
+        {
+            var l = new System.Collections.Generic.List<string>();
+            if (!Directory.Exists(Paths.ProfileDir)) return l.ToArray();
+            foreach (string e in Directory.GetFileSystemEntries(Paths.ProfileDir))
+            {
+                string n = Path.GetFileName(e);
+                if (n.Equals("OwnGame", StringComparison.OrdinalIgnoreCase) ||
+                    n.Equals("Payload", StringComparison.OrdinalIgnoreCase)) continue;
+                l.Add(e);
+            }
+            return l.ToArray();
         }
 
         /// <summary>
@@ -461,7 +479,7 @@ namespace Thornswood
         /// running by the time this is asked. Deletes nothing itself, so
         /// launcher\tests\test-3679-local-keep.ps1 runs it against a scratch install.
         /// </summary>
-        public static string[] Targets(bool keepSaves, bool deleteMods)
+        public static string[] Targets(bool deleteMods)
         {
             var leave = new System.Collections.Generic.List<string>();
 
@@ -477,21 +495,21 @@ namespace Thornswood
             if (deleteMods && (!Paths.Collection || Paths.OwnFirst)) leave.Add(Paths.Game);
 
             leave.Add(Paths.Personal);
-            if (!keepSaves)
-            {
-                leave.Add(Paths.ProfileDir);
-                leave.Add(Paths.CfgFile);
-            }
-            else
-            {
-                // The box keeps saves and settings, and Profile holds more
-                // than those: the log, the Discord sign-in with the name and
-                // picture beside it, the support zips and the music's old
-                // browser folder. Keeping all of Profile kept them on the PC
-                // under a box that named none of them (#3679). They go here,
-                // and the farewell names any that are still there.
-                leave.AddRange(LocalKeep.NotSaves());
-            }
+            // Profile and config.json go whole. There was a box, "Keep this
+            // build's saves and settings", that kept them for a reinstall,
+            // because the character list and every setting lived only here.
+            // They are kept with the Discord account on the site now
+            // (#5938, #5939), and a SkyMP character was never a save on
+            // this PC, so nothing in Profile is the person's to keep.
+            //
+            // Except, when the game copy stays, the record that says what it
+            // is: Paths.Init knows Root\Game as Thornswood's own folder only
+            // by Profile\OwnGame\files.txt beside it, and an own folder not
+            // made yet waits in Profile\Payload. Without them a reinstall
+            // would not reuse the copy it was kept for.
+            if (deleteMods) leave.Add(Paths.ProfileDir);
+            else leave.AddRange(ProfileButGame());
+            leave.Add(Paths.CfgFile);
             // The rest of what setup and updating left in the install folder.
             //
             // Finish already tries to remove the install folder itself when
@@ -593,12 +611,12 @@ namespace Thornswood
         /// its own folder can go, so this waits on the process id rather than
         /// guessing at a delay.
         /// </summary>
-        public static void Finish(string[] targets, bool keepSaves, bool deleteMods)
+        public static void Finish(string[] targets, bool deleteMods)
         {
             // Said after the deletes in the script, so it reports what is
             // actually there rather than what was expected to be.
             string note = null;
-            try { note = WriteFarewell(keepSaves, deleteMods); }
+            try { note = WriteFarewell(deleteMods); }
             catch (Exception ex) { Swallow.Note("Uninstall.Finish, farewell", ex); }
 
             string text = Script(targets, Process.GetCurrentProcess().Id, note);
@@ -703,7 +721,7 @@ namespace Thornswood
         /// at all: a person whose uninstall left nothing behind does not need a
         /// box telling them so.
         /// </summary>
-        public static string WriteFarewell(bool keepSaves, bool deleteMods)
+        public static string WriteFarewell(bool deleteMods)
         {
             var ps = new StringBuilder();
             ps.AppendLine("$ErrorActionPreference = 'SilentlyContinue'");
@@ -718,22 +736,20 @@ namespace Thornswood
             ps.AppendLine("$why = @{}");
             ps.AppendLine("$why['_quarantine'] = 'files taken out of your game and set aside, another server''s among them. Not ours to delete.'");
             if (!deleteMods)
-                ps.AppendLine("$why['Game'] = 'Thornswood''s copy of the game. You chose to keep it, so a reinstall can reuse it.'");
-            if (keepSaves)
             {
-                ps.AppendLine("$why['Profile'] = 'your characters, saves and settings, and the launcher''s record of what it installed. You chose to keep them.'");
-                ps.AppendLine("$why['config.json'] = 'your settings. You chose to keep them.'");
+                ps.AppendLine("$why['Game'] = 'Thornswood''s copy of the game. You chose to keep it, so a reinstall can reuse it.'");
+                ps.AppendLine("$why['Profile'] = 'the record of Thornswood''s copy of the game, kept with it so a reinstall knows it.'");
             }
             ps.AppendLine();
 
-            // What the script was told to take out of a kept Profile and could
-            // not (a browser still closing, a file held open). Named one by one,
-            // because "your saves and settings" would be wrong about each of
-            // them (#3679).
+            // What the script was told to take out of Profile beside a kept
+            // game copy and could not (a browser still closing, a file held
+            // open). Named one by one, because "the record of Thornswood's
+            // copy of the game" would be wrong about each of them (#3679).
             ps.AppendLine("$stuck = @()");
-            if (keepSaves)
+            if (!deleteMods)
             {
-                foreach (string p in LocalKeep.NotSaves())
+                foreach (string p in ProfileButGame())
                     ps.AppendLine("if (Test-Path -LiteralPath " + PsQuote(p) + ") { $stuck += '  ' + " + PsQuote(p) + " }");
             }
             ps.AppendLine();
@@ -746,7 +762,7 @@ namespace Thornswood
             ps.AppendLine();
 
             ps.AppendLine("$msg = \"Thornswood is uninstalled.`r`n`r`nThis was left at\" + \"`r`n`r`n    \" + $root + \"`r`n`r`n\" + ($lines -join \"`r`n\") + \"`r`n`r`nDelete that folder yourself once you are done with them.\"");
-            ps.AppendLine("if ($stuck) { $msg += \"`r`n`r`nThese are not saves or settings and should have gone, but could not be removed. Delete them yourself:`r`n`r`n\" + ($stuck -join \"`r`n\") }");
+            ps.AppendLine("if ($stuck) { $msg += \"`r`n`r`nThese are not the record of the game copy and should have gone, but could not be removed. Delete them yourself:`r`n`r`n\" + ($stuck -join \"`r`n\") }");
             ps.AppendLine("Add-Type -AssemblyName System.Windows.Forms");
             ps.AppendLine("[void][System.Windows.Forms.MessageBox]::Show($msg, 'Thornswood', 'OK', 'Information')");
 

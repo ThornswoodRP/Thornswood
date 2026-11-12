@@ -68,6 +68,8 @@ const { rereadTrouble } = require('./lib/trouble');
 require('./lib/serverlogs');
 require('./lib/members');
 require('./lib/passes');
+require('./lib/characters');
+require('./lib/your-settings');
 const { failed, handle } = require('./lib/serve');
 const { applyDeletionRequests } = require('./lib/deletion');
 

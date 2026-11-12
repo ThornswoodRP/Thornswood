@@ -7,8 +7,7 @@ using System.Text;
 namespace Thornswood
 {
     /// <summary>
-    /// How long the launcher keeps its own records on this PC, and which of
-    /// them an uninstall takes even when the saves and settings stay (#3679).
+    /// How long the launcher keeps its own records on this PC (#3679).
     ///
     /// Measured on one install on 26 Oct: launcher.log was 478,059 bytes,
     /// going back to the day the install was made, because every writer only
@@ -23,11 +22,9 @@ namespace Thornswood
     /// start, straight after Paths.Init and inside the install's mutex, so
     /// nothing else in this launcher is writing the log while it is cut.
     ///
-    /// Uninstall's "Keep this build's saves and settings" kept the whole
-    /// Profile folder, so the log, the Discord sign-in, name and picture, and
-    /// the browser folders voice and the music ran in stayed on the PC under a
-    /// box that named none of them. NotSaves lists what goes whatever the box
-    /// says.
+    /// Uninstall removes all of it: what the person keeps (their characters
+    /// and settings) is on the site under their Discord account since #5938
+    /// and #5939, so there is no box to keep Profile any more.
     /// </summary>
     static class LocalKeep
     {
@@ -141,38 +138,6 @@ namespace Thornswood
                 gone++;
             }
             return gone;
-        }
-
-        /// <summary>NotSaves in the words the uninstall page and its dialog use.</summary>
-        public const string NotSavesInWords =
-            "the launcher's log, your Discord sign-in, name and picture, the support reports, and the voice browser's data";
-
-        /// <summary>
-        /// What is in Profile that is not a save or a setting: the launcher's
-        /// log, the support zips, the Discord sign-in with the name and picture
-        /// kept beside it, and the folders of the browsers voice and the menu
-        /// music once ran in. An uninstall removes these even when it keeps the
-        /// saves and settings, and the farewell names any that could not be
-        /// removed.
-        /// </summary>
-        public static string[] NotSaves()
-        {
-            var all = new List<string>();
-            all.Add(Paths.LogFile);
-            all.Add(Diag.ReportDir);
-            all.AddRange(Discord.AccountFiles(Paths.ProfileDir));
-            // Voice ran in a WebView2 until #4823 made it native, and that
-            // browser's cache and storage are in Profile\VoiceBrowser, which
-            // nothing reads now. The privacy page and the box under "Keep this
-            // build's saves and settings" promise an uninstall removes that
-            // browser's data, so it goes too.
-            all.Add(Path.Combine(Paths.ProfileDir, "VoiceBrowser"));
-            // The menu music ran in a WebView2 of its own until #3207 moved it
-            // to NLayer, and that browser's cache and storage were left in
-            // Profile\MusicBrowser, which nothing reads now. It is the
-            // launcher's own folder and not a save or a setting, so it goes too.
-            all.Add(Path.Combine(Paths.ProfileDir, "MusicBrowser"));
-            return all.ToArray();
         }
     }
 }
