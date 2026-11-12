@@ -24,7 +24,7 @@ const { creditsFacts, findPageVersion, PAGES, pageSha256, PUBLIC_ORIGIN,
   publicAssetBody, publicAssetVersion, publicDiscovery, publicPageBody,
   singlePageHeading } = require('./public');
 const { gameStatus, mostOnlineFallback, seatsFull, worldFull } = require('./game');
-const { INBOX, jsonFile, noteRules, putJson, readDoc,
+const { docVersion, INBOX, jsonFile, noteRules, putJson, readDoc,
   readLists, RESULTS, RULES_OK, writeDoc } = require('./store');
 const { NEWS } = require('./news');
 const { galleryPage, loginBackoff, loginBackoffBump, loginKey, loginNote,
@@ -2941,13 +2941,16 @@ async function handle(req, res) {
     if (!w.member && !w.dev) return sendJson(res, 401, { error: 'sign in first' });
 
     if (p === '/api/all' && req.method === 'GET') {
-      const docs = {};
-      for (const n of Object.keys(DOCS))   if (allowed(n, w)) docs[n]   = readDoc(n);
+      const docs = {}, docWas = {};
+      for (const n of Object.keys(DOCS))   if (allowed(n, w)) { docs[n] = readDoc(n); docWas[n] = docVersion(docs[n]); }
       return sendJson(res, 200, {
         me: w,
         titles: Object.assign({}, DOCS),
         level: LEVEL,
         docs,
+        // Which copy of each page was sent, for the editor to send back with
+        // a save (#4418).
+        docWas,
         // Member and admin material, held back from staff who are neither.
         // They are here for the Gallery page, which reads none of these: the
         // queue and the live list are their own doors.
@@ -2978,11 +2981,28 @@ async function handle(req, res) {
       // A hub door, not a staff one: the gate above now lets staff in as far
       // as the pages LEVEL marks 'staff', and this writes the test marks.
       if (!w.member) return sendJson(res, 403, { error: 'hub members only' });
-      let obj;
-      try { obj = JSON.parse(await body(req)); }
+      /* One test's mark, put into the marks as they are now (#4418). The hub
+         used to send every mark the page had loaded, and that copy was
+         written over the file, so a mark somebody else made after the page
+         opened was wiped by the next one. */
+      let o;
+      try { o = JSON.parse(await body(req, 8192)); }
       catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
-      if (!putJson(RESULTS, obj)) return sendJson(res, 500, { error: 'could not save' });
-      return sendJson(res, 200, { ok: true });
+      const id = o && typeof o.id === 'string' ? o.id : '';
+      if (!/^[a-z0-9][a-z0-9-]{0,119}$/.test(id)) return sendJson(res, 400, { error: 'a mark names its test' });
+      if (['', 'pass', 'fail', 'skip'].indexOf(o.status) < 0) return sendJson(res, 400, { error: 'a mark is pass, fail, skip or none' });
+      // A marks file that is there and will not read is never written over:
+      // the write would be this one mark and every other one gone.
+      let marks = {};
+      try { marks = JSON.parse(fs.readFileSync(RESULTS, 'utf8')); }
+      catch (e) { if (e.code !== 'ENOENT') return sendJson(res, 500, { error: 'the test marks will not read, so nothing was saved' }); }
+      if (!marks || typeof marks !== 'object' || Array.isArray(marks)) {
+        return sendJson(res, 500, { error: 'the test marks will not read, so nothing was saved' });
+      }
+      marks[id] = { status: o.status, notes: String(o.notes == null ? '' : o.notes).slice(0, 1000),
+                    by: String(o.by == null ? '' : o.by).slice(0, 60), at: Date.now() };
+      if (!putJson(RESULTS, marks)) return sendJson(res, 500, { error: 'could not save' });
+      return sendJson(res, 200, { ok: true, results: marks });
     }
 
     /*
@@ -3109,8 +3129,21 @@ async function handle(req, res) {
 
     const md = p.match(/^\/api\/doc\/([a-z]+)$/);
     if (md && req.method === 'PUT') {
-      if (!writeDoc(md[1], await body(req))) return sendJson(res, 400, { error: 'no such doc' });
-      return sendJson(res, 200, { ok: true });
+      /* Only over the copy the editor opened (#4418). The hub sends back
+         which copy that was, as /api/all gave it; a save made from a copy
+         somebody has saved over since is refused with what is there now,
+         rather than written over their work. A save that names no copy is
+         refused the same way. */
+      const text = await body(req);
+      const now = readDoc(md[1]);
+      if (now === null) return sendJson(res, 400, { error: 'no such doc' });
+      const was = docVersion(now);
+      if (String(req.headers['x-thornswood-doc-was'] || '') !== was) {
+        return sendJson(res, 409, { ok: false, error: 'changed', was, text: now,
+          message: 'Somebody saved this page after you opened it, so yours was not saved.' });
+      }
+      if (!writeDoc(md[1], text)) return sendJson(res, 500, { error: 'could not save' });
+      return sendJson(res, 200, { ok: true, was: docVersion(text) });
     }
 
     /* The hub's board save (a PUT per board, #2188) was here. It went
@@ -3265,15 +3298,33 @@ async function handle(req, res) {
     }
 
     if (p === '/api/inbox' && req.method === 'PUT') {
-      let obj;
-      try { obj = JSON.parse(await body(req)); }
+      /* One button on one row, applied to the inbox as it is now (#4418).
+         The hub used to send back the whole list it loaded when it opened,
+         and that was written over the file: every report sent since was
+         deleted, and a row a deletion request had taken out came back. Now
+         it names the row and what was pressed; a row no longer there (aged
+         out, deleted, or taken by a deletion request) is said, never made
+         again. The answer carries the inbox as it now is. */
+      let o;
+      try { o = JSON.parse(await body(req, 4096)); }
       catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
-      // The whole list, back from the hub, through the same keeping time as
-      // every other write (#2353), so a list the hub read before a row aged
-      // out cannot write that row back.
-      if (!Array.isArray(obj)) return sendJson(res, 400, { error: 'the inbox is a list' });
-      if (!putJson(INBOX, trimInbox(obj, Date.now()))) return sendJson(res, 500, { error: 'could not save' });
-      return sendJson(res, 200, { ok: true });
+      const id = o && typeof o.id === 'string' ? o.id : '';
+      const act = o && o.act;
+      if (!id || ['dismiss', 'reopen', 'delete'].indexOf(act) < 0) {
+        return sendJson(res, 400, { error: 'an inbox change names a row and dismiss, reopen or delete' });
+      }
+      // Through the same keeping time as every other write (#2353), so a row
+      // past it is not written back.
+      const list = trimInbox(jsonFile(INBOX, []), Date.now());
+      const at = list.findIndex((x) => x && x.id === id);
+      if (at < 0) {
+        return sendJson(res, 404, { error: 'gone', inbox: list,
+          message: 'That one is no longer in the inbox. It was deleted, aged out, or taken out by a deletion request.' });
+      }
+      if (act === 'delete') list.splice(at, 1);
+      else list[at].state = act === 'dismiss' ? 'not doing this' : 'new';
+      if (!putJson(INBOX, trimInbox(list, Date.now()))) return sendJson(res, 500, { error: 'could not save' });
+      return sendJson(res, 200, { ok: true, inbox: trimInbox(list, Date.now()) });
     }
 
     return sendJson(res, 404, { error: 'no such endpoint' });
