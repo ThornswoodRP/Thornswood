@@ -23,10 +23,10 @@ they find as plain issues, unclaimed, in Todo. They claim no issue, open no
 pull request and run nothing. Every rule in this
 file binds them the same as a person. They work on Grok Bot's own cloud
 computer and file through its GitHub connector. When its included usage runs
-out, Patrick's rule of 8 Nov 2026 lets them do read-only work on the shipping
-machine through the Grok Bot app, 11 PM to 6 AM, in their own checkouts under
-the temp and worktrees folder (#5933). What is true now is `ops\status.md` in
-the private ops repo.
+out, they do read-only work, 11 PM to 6 AM, on the Hermes VM through the Grok
+Bot app there, as an account of their own that reaches nothing of the Bots'
+(Patrick, 12 Nov 2026, #5933). They never use the shipping
+machine. What is true now is `ops\status.md` in the private ops repo.
 
 Six Hermes Bots take over the work from the Claude threads (Patrick, 30 Oct):
 Bramble picks, claims, merges and runs every release step, and Rift, Sprocket,
