@@ -19,17 +19,17 @@
 // This reads the plugin with its own reader, not the tool's, and proves:
 //   1. the committed plugin has no editor id, script or string carrying the
 //      other server's short names, compressed records included;
-//   2. the tool, run over a copy of the committed plugin, writes nothing;
-//   3. on a copy with the Execution Block's base put back, the tool refuses
-//      it as a salvaged record and writes nothing;
+//   2. the tool (which writes the plugin from its sources since #5191; its
+//      refused() is asked, loaded as a module) refuses nothing in the
+//      committed plugin, and with no game it writes nothing;
+//   3. with the Execution Block's base put back, the tool refuses it as a
+//      salvaged record;
 //   5. the header's description is Thornswood's own and the other server's
 //      full name is nowhere in the committed plugin (Patrick, 12 Oct, B), and
-//      on a copy whose description still names it, the tool writes
-//      Thornswood's and changes nothing else;
-//   6. on a copy with a short name planted in an editor id, or the longer one
-//      in a model path, the tool writes nothing and says where it is.
+//      the tool sees it in a header whose description still names it;
+//   6. with a short name planted in an editor id, or the longer one in a
+//      model path, the tool refuses it and says where it is.
 //
-// The copies are written to a temporary folder (TEST_TMP if set) and removed.
 // Nothing in the repo is written.
 const fs = require('fs');
 const os = require('os');
@@ -229,43 +229,57 @@ yes('the Solitude cell 0x37EE9 it was placed in is not in the committed plugin (
 
 // ------------------------------------------------------- 2. the tool run --
 function python(args) {
-  for (const exe of ['python', 'py']) {
+  for (const exe of ['python', 'py', 'python3']) {
     const r = spawnSync(exe, args, { encoding: 'utf8' });
     if (!r.error) { return r; }
+  }
+  return null;
+}
+// The tool writes the plugin from nothing (#5191), so what it refuses is
+// asked of its own refused() and other_server_in_header(), loaded as a
+// module, over a plugin given on stdin: the lines that would stop it.
+const ASK = [
+  'import importlib.util, json, struct, sys',
+  'spec = importlib.util.spec_from_file_location("acr", sys.argv[1])',
+  'm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)',
+  'raw = sys.stdin.buffer.read()',
+  'hs = struct.unpack_from("<I", raw, 4)[0]',
+  'recs = list(m.every_record(m.parse(raw, 24 + hs, len(raw))))',
+  'print(json.dumps({"refused": m.refused(recs, m.read_register(list(m.PLUGIN_MASTERS))),',
+  '                  "header": m.other_server_in_header(raw[:24 + hs])}))',
+].join('\n');
+function ask(buf) {
+  for (const exe of ['python', 'py', 'python3']) {
+    const r = spawnSync(exe, ['-c', ASK, TOOL], { input: buf, encoding: 'utf8', maxBuffer: 1 << 26 });
+    if (!r.error) { return r.status === 0 ? JSON.parse(r.stdout) : (console.log(r.stdout + r.stderr), null); }
   }
   return null;
 }
 const tmpRoot = process.env.TEST_TMP || os.tmpdir();
 fs.mkdirSync(tmpRoot, { recursive: true });
 const dir = fs.mkdtempSync(path.join(tmpRoot, 'ts-content-names-'));
-const copy = path.join(dir, 'Thornswood-Content.esp');
-const noGame = path.join(dir, 'no-game');
-fs.mkdirSync(noGame);
-fs.writeFileSync(copy, shipped);
 try {
-  const check = python([TOOL, '--data', dir, '--masters', noGame, '--check']);
-  yes('python is on this machine', check !== null);
-  if (check) {
-    yes('--check on the committed plugin exits 0', check.status === 0);
-    if (check.status !== 0) { console.log(check.stdout + check.stderr); }
-    const run = python([TOOL, '--data', dir, '--masters', noGame]);
-    yes('a run over the committed plugin exits 0', run.status === 0);
-    yes('and writes nothing: the plugin is what the tool writes', /Nothing was written/.test(run.stdout) &&
-        fs.readFileSync(copy).equals(shipped));
+  const plain = ask(shipped);
+  yes('python is on this machine and the tool answers', plain !== null);
+  if (plain) {
+    yes('the tool refuses nothing in the committed plugin', plain.refused.length === 0 && !plain.header);
+    if (plain.refused.length) { console.log(plain.refused.join('\n')); }
+    const out = path.join(dir, 'Thornswood-Content.esp');
+    const stop = python([TOOL, '--masters', path.join(dir, 'no-game'), '--out', out]);
+    yes('with no game to copy from, the tool stops and writes nothing', !!stop && stop.status === 1 && !fs.existsSync(out));
 
     // ------------------------------------ 3. the block put back ----------
-    // The block is a salvaged record (#2553). Put back, the tool refuses the
-    // plugin and writes nothing, whether or not it had anything else to do.
-    fs.writeFileSync(copy, fixture);
-    const back = python([TOOL, '--data', dir, '--masters', noGame]);
-    yes('with the Execution Block put back the tool exits 1', back.status === 1);
-    yes('and says it is a salvaged record', /FURN 0x5DF7B34 ThornswoodExecutionerChoppingBlock is a salvaged record/.test(back.stdout));
-    yes('and writes nothing', fs.readFileSync(copy).equals(fixture));
+    // The block is a salvaged record (#2553). Among what the tool would write,
+    // it stops the tool.
+    const back = ask(fixture);
+    yes('with the Execution Block put back the tool refuses it as a salvaged record',
+        !!back && back.refused.some(l => /^FURN 0x5DF7B34 ThornswoodExecutionerChoppingBlock is a salvaged record$/.test(l)));
 
     // ------------------------------------------- 5. the header's description --
     // The committed plugin as it was before 15 October: the description named
-    // the server the records were salvaged from. The tool writes Thornswood's
-    // own and touches nothing else.
+    // the server the records were salvaged from. The tool writes the
+    // description from its records (#2993), and a header that names the
+    // other server stops it.
     const oldText = 'Crafting and gathering content salvaged from ' +
       OTHER_NAME.charAt(0).toUpperCase() + OTHER_NAME.slice(1) +
       ' Online. Stations, salt, ore, charcoal kilns, the skill manuals and their recipes.';
@@ -273,32 +287,15 @@ try {
     const was = readPlugin(named);
     yes('a copy whose description names the other server could be made',
         description(was.head) === oldText && was.ends && everyByte(was).indexOf(OTHER_NAME) >= 0);
-    fs.writeFileSync(copy, named);
-    const h = python([TOOL, '--data', dir]);
-    yes('the tool exits 0 on it', h.status === 0);
-    if (h.status !== 0) { console.log(h.stdout + h.stderr); }
-    yes('and says the description changes', /its description becomes: Thornswood's crafting/.test(h.stdout));
-    const ha = readPlugin(fs.readFileSync(copy));
-    yes('the result reads to its last byte', ha.ends);
-    yes('its description is Thornswood\'s, the same as the committed plugin\'s',
-        description(ha.head) === committedDescription);
-    yes('the other server\'s name is nowhere in it', everyByte(ha).indexOf(OTHER_NAME) < 0);
-    const rest = x => headerSubs(x).filter(s => s.tag !== 'SNAM').map(s => s.tag + s.body.toString('hex')).join('|');
-    yes('every other subrecord of the header is as it was, masters and record count included',
-        rest(ha.head) === rest(was.head) && ha.head.subarray(8, 24).equals(was.head.subarray(8, 24)));
-    yes('every record is byte for byte what it was (' + was.records.length + ')',
-        ha.records.length === was.records.length && ha.records.every((r, i) => r.bytes.equals(was.records[i].bytes)));
-    yes('the result is the committed plugin exactly', fs.readFileSync(copy).equals(shipped));
-    const h2 = python([TOOL, '--data', dir]);
-    yes('a second run changes nothing', h2.status === 0 && fs.readFileSync(copy).equals(shipped));
+    const h = ask(named);
+    yes('the tool sees the other server in that header', !!h && h.header === true);
 
     // ------------------------------------------- 6. a short name planted --
-    // The old description makes the tool write; a short name planted in a
-    // record it does not touch has to stop it. Planted in place, the same
-    // length, so every size in the file stays right.
-    const toolText = fs.readFileSync(TOOL, 'latin1');
+    // A short name planted in a record has to stop the tool, which says
+    // where it is. Planted in place, the same length, so every size in the
+    // file stays right.
     function plantIn(tagWanted, choose, word) {
-      const buf = withDescription(shipped, oldText);
+      const buf = Buffer.from(shipped);
       const p = readPlugin(buf);
       for (const r of p.records) {
         if (r.flags & COMPRESSED) { continue; }
@@ -318,23 +315,19 @@ try {
       return null;
     }
     const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
-    // Records the tool names are left alone, so the plant is in one it does
-    // not touch.
-    const leftAlone = (r) => toolText.indexOf(edid(r)) < 0 && toolText.indexOf(r.fid.toString(16).toUpperCase()) < 0;
     const plants = [
-      ['EDID', (t, r) => /^Thornswood/.test(t) && leftAlone(r), cap(SHORT3), 'an editor id'],
-      ['MODL', (t, r) => !!edid(r) && leftAlone(r), SHORT6, 'a model path'],
+      ['EDID', (t) => /^Thornswood/.test(t), cap(SHORT3), 'an editor id'],
+      ['MODL', (t, r) => !!edid(r), SHORT6, 'a model path'],
     ];
     for (const [tag, choose, word, kind] of plants) {
       const planted = plantIn(tag, choose, word);
       yes('a copy with a short name planted in ' + kind + ' could be made' + (planted ? ' (' + planted.what + ', ' + planted.was + ')' : ''),
           !!planted && readPlugin(planted.buf).ends);
       if (!planted) { continue; }
-      fs.writeFileSync(copy, planted.buf);
-      const s6 = python([TOOL, '--data', dir]);
-      yes('  the tool exits 1 on it', s6.status === 1);
-      yes('  and says which record still carries it', s6.stdout.indexOf(planted.what + ' still carries') >= 0);
-      yes('  and writes nothing', fs.readFileSync(copy).equals(planted.buf));
+      const s6 = ask(planted.buf);
+      yes('  the tool refuses it and says which record carries it',
+          !!s6 && s6.refused.length > 0 && s6.refused.every(l => l.indexOf(planted.what + ' ') === 0) &&
+          s6.refused.some(l => l.indexOf('carries the other server\'s name') >= 0));
     }
   }
 } finally {
