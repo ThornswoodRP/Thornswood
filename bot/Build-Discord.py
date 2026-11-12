@@ -381,6 +381,15 @@ ROLES = [
     ('Support',              0xC9B46A, True,  SUPPORT),
 ]
 
+# THE BOTS (Patrick, 12 Nov 2026: "add a role called Clanker and make it be
+# one that stands out and include Paetreon, Thornswood, Jukebox, and
+# Dishboard"). Every bot in the server holds it, these four and any added
+# later (give_bots_clanker), so they show in one group of their own in the
+# member list, under staff and above everybody else. A bright colour no other
+# role uses, and no permissions: each bot's own role is what lets it work.
+CLANKER = 'Clanker'
+ROLES.append((CLANKER, 0x00E5FF, True, NONE))
+
 # In world. One Jarl per hold, and a hold for everybody else to belong to.
 # The Jarls are shown in their own group, the seats of the world; a Citizen
 # role keeps its colour and shows under Playtester (#3317, page card
@@ -526,8 +535,8 @@ ROLES.append(('Updates Pings', 0x8D9682, False, NONE))
 # ROLES THIS NEVER MAKES, only puts in order.
 #
 # Discord makes Server Booster itself the first time somebody boosts, Patreon
-# makes its own when the shop is connected in its settings, and bot.py makes
-# the two ping roles the hold panel's buttons hand out. Creating any of them
+# makes its own when the shop is connected in its settings, and the bot makes
+# the two ping roles its buttons in #welcome hand out (bot_pings.py). Creating any of them
 # here would leave a second role of the same name that nothing hands out, and
 # whichever of the two Discord shows is a coin toss. Nor are their
 # permissions changed: the build leaves those to whatever made them. Their
@@ -1761,7 +1770,27 @@ async def ensure_roles(guild):
                     failed.append('Discord took the role order but put %s' % wrong)
             except discord.HTTPException as e:
                 failed.append('the roles were not put in order (%s)' % refused(e))
+    await give_bots_clanker(guild, out.get(CLANKER))
     return out
+
+
+async def give_bots_clanker(guild, role):
+    """Clanker to every bot in the server that has not got it, this one
+       included, and to nobody else. It is never taken from anybody."""
+    if role is None:
+        return
+    for m in getattr(guild, 'members', None) or []:
+        if not getattr(m, 'bot', False) or role in getattr(m, 'roles', []):
+            continue
+        what = 'role %s for the bot %s' % (CLANKER, m.name)
+        if CHECK:
+            say('would give', what)
+            continue
+        try:
+            await m.add_roles(role, reason='Thornswood setup: every bot holds Clanker')
+            say('gave', what)
+        except discord.HTTPException as e:
+            failed.append('%s (%s)' % (what, refused(e)))
 
 
 def order_after(order, roles):
@@ -2202,6 +2231,11 @@ def doc_post_of_mine(message, me_id):
     # (bot_rules_gate.py, #5841): the reactions on it are the record that
     # they accepted the rules, so it is never deleted with the rules' words.
     if (getattr(message, 'content', '') or '').startswith(RULES_GATE_FIRST_LINE):
+        return False
+    # A message with buttons is one of the bot's panels (the ping buttons in
+    # #welcome, bot_pings.py), which the bot keeps itself. post() never sends
+    # buttons, so none of its words are taken for one.
+    if getattr(message, 'components', None):
         return False
     kind = getattr(message, 'type', None)
     return kind in (discord.MessageType.default, discord.MessageType.reply,
@@ -2767,12 +2801,21 @@ async def keep_onboarding_channels(guild):
     if CHECK:
         say('would', 'take ' + what)
         return
+    # Onboarding's list keeps the id of a channel deleted since, and Discord
+    # refuses the whole edit over one ("400 Invalid Form Body In
+    # default_channel_ids: Unknown channel", the live build of 12 Nov, 4:03
+    # PM). So the list sent back holds only channels the server still has.
     gone = set(i for i, _n in shut)
-    keep = [discord.Object(id=i) for i in sorted(ob.default_channel_ids) if i not in gone]
+    stale = [i for i in sorted(ob.default_channel_ids)
+             if i not in gone and guild.get_channel(i) is None]
+    keep = [discord.Object(id=i) for i in sorted(ob.default_channel_ids)
+            if i not in gone and i not in stale]
     try:
         await guild.edit_onboarding(default_channels=keep,
                                     reason='Thornswood setup, the plan gates these channels')
         say('onboarding', 'took ' + what)
+        if stale:
+            say('onboarding', 'and %d deleted channel(s) it still listed' % len(stale))
     except discord.HTTPException as e:
         failed.append('could not take ' + what + ' (%s)' % refused(e))
 
@@ -2810,9 +2853,11 @@ ROLE_DOES = {
     'Content Creator': 'Thornswood\'s own social media and content, not '
                        'community creators.',
     'Support': 'Answers help tickets and playtest applications, and gives Playtester.',
+    'Clanker': 'Every bot in the server: Thornswood, Patreon, Jockie Music, '
+               'DISBOARD and any added later. A build gives it.',
     'Playtester': 'Plays the main build. Opens the Discord past Information.',
-    'Member': 'Joined and answered the rules and age questions. Sees Start '
-              'Here, Applications and Information.',
+    'Member': 'Reacted to the rules in #rules, which says 18 or over and the '
+              'rules accepted. Sees Start Here, Applications and Information.',
     'Banned': 'Takes the site and the game away (site/server.js, access.banned).',
     'Thalmor Boot-Licker': 'A Patreon tier; Patreon gives and takes it.',
     'Talos Worshiper': 'A Patreon tier; Patreon gives and takes it.',
@@ -2866,7 +2911,7 @@ def _made_by(name):
     if name == 'Patreon':
         return 'Patreon'
     if name in ('News Pings', 'Updates Pings'):
-        return 'bot.py'
+        return 'the bot (bot_pings.py)'
     return 'the build'
 
 
@@ -3073,10 +3118,15 @@ async def audit(guild):
     elif on is not False:
         off("Discord's Onboarding could not be read (%s)" % on)
     try:
-        for _i, name in onboarding_shut(guild, await guild.onboarding()):
+        ob = await guild.onboarding()
+        for _i, name in onboarding_shut(guild, ob):
             off("#%s is a default channel of Discord's Onboarding, so Discord refuses "
                 "to shut @everyone out of it as the plan does; a build takes it off "
                 "that list" % name)
+        for cid in sorted(getattr(ob, 'default_channel_ids', None) or ()):
+            if guild.get_channel(cid) is None:
+                off("Discord's Onboarding still lists channel %d, which the server no "
+                    "longer has; a build leaves it off the list it sends back" % cid)
     except discord.HTTPException as e:
         off("Discord's Onboarding default channels could not be read (%s)" % refused(e))
 

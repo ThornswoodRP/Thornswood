@@ -128,6 +128,26 @@ yes('2 and says what it took', '#start-here' in said and '#disboard' in said
 quiet(B.keep_onboarding_channels(g))
 yes('3 a second run asks Discord for nothing', len(g.edits) == 1)
 
+# The live build of 12 Nov, 4:03 PM: Onboarding still listed a channel
+# deleted since, and Discord refused the whole edit, "Unknown channel".
+d = Guild(NAMES, LIVE)
+d.ob.default_channel_ids.add(999)
+real_edit = d.edit_onboarding
+
+
+async def strict(**kw):
+    if any(c.id not in d.channels for c in kw.get('default_channels', [])):
+        raise discord.HTTPException(types.SimpleNamespace(status=400, reason='Bad'),
+                                    'Unknown channel')
+    await real_edit(**kw)
+d.edit_onboarding = strict
+B.failed = []
+said = quiet(B.keep_onboarding_channels(d))
+yes('2 a deleted channel still on the list is left off what is sent back, so Discord '
+    'takes the edit', not B.failed and len(d.edits) == 1
+    and sorted(c.id for c in d.edits[0]['default_channels']) == [100, 103, 104]
+    and 'deleted' in said)
+
 r = Guild(NAMES, LIVE, refuse=True)
 B.failed = []
 quiet(B.keep_onboarding_channels(r))
@@ -142,8 +162,9 @@ yes('4 a whole build does it before it gates any channel',
     build.index('await keep_onboarding_channels(guild)')
     < build.index('for catname, specs in plan_for(ONLY):'))
 audit = src[src.index('async def audit('):]
-yes('4 the audit says when a default channel is one the plan gates',
-    'onboarding_shut(guild, await guild.onboarding())' in audit)
+yes('4 the audit says when a default channel is one the plan gates, and names a '
+    'deleted one still on the list',
+    'onboarding_shut(guild, ob)' in audit and 'which the server no' in audit)
 
 print('')
 print('%d passed, %d failed' % (len(PASS), len(FAIL)))

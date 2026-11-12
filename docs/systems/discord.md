@@ -52,6 +52,7 @@ Holders of Moderator also talk in the Gamemasters space.
 | Moderator | #6FA05A | yes | moderator set | the build | Moderates the Discord only. No staff powers in the game. |
 | Content Creator | #D2603F | yes | nothing of its own | the build | Thornswood's own social media and content, not community creators. |
 | Support | #C9B46A | yes | support set | the build | Answers help tickets and playtest applications, and gives Playtester. |
+| Clanker | #00E5FF | yes | nothing of its own | the build | Every bot in the server: Thornswood, Patreon, Jockie Music, DISBOARD and any added later. A build gives it. |
 | Jarl of Whiterun | #E0C56A | yes | nothing of its own | the build | The seat of Whiterun. Applied for on its own application. |
 | Jarl of Solitude | #E0C56A | yes | nothing of its own | the build | The seat of Solitude. Applied for on its own application. |
 | Jarl of Windhelm | #E0C56A | yes | nothing of its own | the build | The seat of Windhelm. Applied for on its own application. |
@@ -157,10 +158,10 @@ Holders of Moderator also talk in the Gamemasters space.
 | Blades Officer | #A08560 | no | nothing of its own | the build | An Officer of Blades: posts its announcements and sits in its leadership. Its Leader gives and takes it, to a member. |
 | Volkihar Clan Officer | #A08560 | no | nothing of its own | the build | An Officer of Volkihar Clan: posts its announcements and sits in its leadership. Its Leader gives and takes it, to a member. |
 | Business Owner | #A08C6A | no | nothing of its own | the build | Owns a business book in the game. Support gives it. |
-| Member | #8D9682 | no | nothing of its own | the build | Joined and answered the rules and age questions. Sees Start Here, Applications and Information. |
+| Member | #8D9682 | no | nothing of its own | the build | Reacted to the rules in #rules, which says 18 or over and the rules accepted. Sees Start Here, Applications and Information. |
 | Banned | #4A4A4A | no | nothing of its own | the build | Takes the site and the game away (site/server.js, access.banned). |
-| News Pings | #8D9682 | no | left to what makes it | bot.py |  |
-| Updates Pings | #8D9682 | no | left to what makes it | bot.py |  |
+| News Pings | #8D9682 | no | left to what makes it | the bot (bot_pings.py) |  |
+| Updates Pings | #8D9682 | no | left to what makes it | the bot (bot_pings.py) |  |
 
 @everyone keeps what the server gives it; the build does not change it,
 and the audit prints it. Every other role opens exactly the channels
