@@ -70,7 +70,10 @@ write the hub makes from another site and from this one.
 
 ## On your machine
 
-It needs node and nothing else. Run it from a copy of this folder rather than
+It needs Node 22.19 or later, or 24.5 or later, and nothing else: it sets its
+trusted roots with two calls older Nodes lack, and on one of those it stops at
+once with a line naming the Node it needs and the one it found
+(`lib\node-version.js`). Run it from a copy of this folder rather than
 from the checkout, because it writes beside itself: `config.json` with a fresh
 cookie secret, `site.log`, the `files\` and `uploads\` folders, and anything
 typed into a board or a page in the browser goes into `data\`, which git

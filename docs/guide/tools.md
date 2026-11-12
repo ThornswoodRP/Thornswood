@@ -304,7 +304,7 @@ The bot's avatar is uploaded by hand in the Discord developer portal. No script 
 
 ## J. Node
 
-Node runs the website, the voice service, and the JavaScript tests. The install in [Install the tools](set-up-a-machine.md#install-the-tools) is the one this repository uses.
+Node runs the website, the voice service, and the JavaScript tests. The install in [Install the tools](set-up-a-machine.md#install-the-tools) is the one this repository uses. The website needs Node 22.19 or later, or 24.5 or later; no Node 23 runs it. On an older Node it stops at start with one line naming the Node it needs and the one it found.
 
 ### See the version and run a test
 
