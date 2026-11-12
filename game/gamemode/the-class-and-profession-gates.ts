@@ -66,8 +66,9 @@ function creditWork(actorId, key, n) {
     the plot, the river and the hunt all call it, and anything added later
     gets the same treatment for nothing.
 
-    Guarded and silent. A needs block that is not loaded yet, or a hot reload
-    mid-tick, must not stop somebody's work being counted.
+    Guarded, and said in the log. A needs block that is not loaded yet, or a
+    hot reload mid-tick, must not stop somebody's work being counted, and a
+    rest cost that could not be charged is written down rather than lost.
   */
   try {
     const needs = globalThis.__thornswoodNeeds;
@@ -79,13 +80,13 @@ function creditWork(actorId, key, n) {
         swing before that says nothing, which is the same rule the seam and
         the chopping block already follow.
       */
-      const tiredLine = needs.worked(actorId);
+      const tiredLine = needs.worked(actorId, key);
       if (tiredLine) {
         try { notify(actorId, tiredLine); } catch (e) { }
         try { say(actorId, tiredLine); } catch (e) { }
       }
     }
-  } catch (e) { }
+  } catch (e) { log('could not charge rest for', key, 'work by', actorId.toString(16) + ':', e); }
 
   /*
     And work done with your party standing next to you counts for more.
