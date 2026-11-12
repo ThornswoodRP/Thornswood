@@ -146,6 +146,68 @@
     return require('path').join(privDir, 'property.json');
   }
 
+  // -- store: read and write (#4529), begin --
+  /*
+    ONE WAY A STORE'S FILE IS READ AND WRITTEN (#4529). The same text is in
+    the season, farming, property and furniture blocks, and
+    tests/test-4529-store-saves.js holds the copies to it, since each block
+    is lifted and run alone. The property register, law.json, beds.json,
+    benches.json, season.json, the farm claims and the furniture register
+    were each written straight over the old file, and each loader read a
+    file that would not parse as empty and said nothing. writeFileSync
+    empties a file before it writes it, so a server stopped partway left it
+    half written; the next start read nothing from it, and the next save
+    wrote that nothing over everything it held.
+
+    storeRead(file, what) is { doc } for a file that reads, { doc: null }
+    for one that is not there, and { doc: null, bad } for one that is there
+    and does not read: that one is said in the log with the file and why,
+    and is never written over.
+
+    storeWrite(file, text, read) writes text to <file>.tmp and renames it
+    over the file, so a stop partway leaves the old file whole. When read
+    says the file did not read, it is first renamed aside as
+    <file>.unreadable-<time>, and that is said, so what it held is kept for
+    staff to put right. A failure throws, for the caller to say.
+  */
+  function storeRead(file, what) {
+    var fs = require('fs');
+    var text, doc, why = '';
+    try { text = fs.readFileSync(file, 'utf8'); }
+    catch (e) {
+      if (e && e.code === 'ENOENT') { return { doc: null, bad: '' }; }
+      why = 'it could not be opened (' + ((e && e.code) || e) + ')';
+    }
+    if (!why) {
+      try { doc = JSON.parse(String(text).replace(/^\uFEFF/, '')); }
+      catch (e2) { why = 'it does not parse (' + ((e2 && e2.message) || e2) + ')'; }
+    }
+    if (!why && (!doc || typeof doc !== 'object')) { why = 'it holds no ' + what; }
+    if (!why) { return { doc: doc, bad: '' }; }
+    console.log('[thornswood] ' + file + ' could not be read: ' + why + '. This start holds no ' + what +
+                ' from it, and it is never written over: the first save sets it aside as ' + file + '.unreadable-<time>');
+    return { doc: null, bad: why };
+  }
+  function storeWrite(file, text, read) {
+    var fs = require('fs');
+    fs.mkdirSync(require('path').dirname(file), { recursive: true });
+    if (read && read.bad) {
+      if (fs.existsSync(file)) {
+        var aside = file + '.unreadable-' + Date.now();
+        fs.renameSync(file, aside);
+        console.log('[thornswood] ' + file + ' did not read at this start (' + read.bad + '), so it is kept as ' +
+                    aside + ' and a new one is written');
+      }
+      read.bad = '';
+    }
+    fs.writeFileSync(file + '.tmp', text);
+    fs.renameSync(file + '.tmp', file);
+  }
+  // -- store: read and write (#4529), end --
+
+  // The register as it was read at this start (#4529); every part of it is rebuilt from this.
+  var registerRead = storeRead(registerPath(), 'property register');
+
   /*
     The register off disk, rebuilt field by field rather than trusted whole.
 
@@ -157,9 +219,8 @@
   */
   function load() {
     var out = {};
-    var raw = null;
-    try { raw = JSON.parse(require('fs').readFileSync(registerPath(), 'utf8')); }
-    catch (e) { return out; }
+    var raw = registerRead.doc;
+    if (!raw) { return out; }
     var held = (raw && typeof raw === 'object' && raw.claims &&
                 typeof raw.claims === 'object') ? raw.claims : {};
     var kept = 0, dropped = 0;
@@ -233,11 +294,10 @@
   function save() {
     try {
       var dir = require('path').dirname(registerPath());
-      try { require('fs').mkdirSync(dir, { recursive: true }); } catch (e) { }
-      require('fs').writeFileSync(registerPath(),
+      storeWrite(registerPath(),
         JSON.stringify({ claims: claims, arrears: arrears,
                         funds: funds, notices: notices, boards: boards, steps: steps,
-                        masters: masterCut, dropbox: dropbox, word: wordBook }, null, 1));
+                        masters: masterCut, dropbox: dropbox, word: wordBook }, null, 1), registerRead);
       return true;
     } catch (e) {
       plog('could not write the register:', e);
@@ -269,8 +329,8 @@
   */
   function loadArrears() {
     var out = {};
-    var raw = null;
-    try { raw = JSON.parse(require('fs').readFileSync(registerPath(), 'utf8')); } catch (e) { return out; }
+    var raw = registerRead.doc;
+    if (!raw) { return out; }
     var src = (raw && raw.arrears && typeof raw.arrears === 'object') ? raw.arrears : {};
     var kept = 0, dropped = 0;
     for (var b in src) {
@@ -343,8 +403,8 @@
   */
   function loadWord() {
     var out = { list: [] };
-    var raw = null;
-    try { raw = JSON.parse(require('fs').readFileSync(registerPath(), 'utf8')); } catch (e) { return out; }
+    var raw = registerRead.doc;
+    if (!raw) { return out; }
     var src = (raw && raw.word && typeof raw.word === 'object' &&
                Object.prototype.toString.call(raw.word.list) === '[object Array]') ? raw.word.list : [];
     var dropped = 0;
@@ -392,10 +452,8 @@
   */
   function loadMasterCut() {
     var top = 0;
-    try {
-      var raw = JSON.parse(require('fs').readFileSync(registerPath(), 'utf8'));
-      top = Number(raw && raw.masters) || 0;
-    } catch (e) { top = 0; }
+    var raw = registerRead.doc;
+    top = Number(raw && raw.masters) || 0;
     for (var b in claims) {
       if (!Object.prototype.hasOwnProperty.call(claims, b)) { continue; }
       var m = claims[b] && claims[b].master;
@@ -412,8 +470,8 @@
   */
   var steps = (function () {
     var out = {};
-    var raw = null;
-    try { raw = JSON.parse(require('fs').readFileSync(registerPath(), 'utf8')); } catch (e) { return out; }
+    var raw = registerRead.doc;
+    if (!raw) { return out; }
     var st = (raw && raw.steps && typeof raw.steps === 'object') ? raw.steps : {};
     for (var k in st) {
       if (Object.prototype.hasOwnProperty.call(st, k) && k !== '__proto__' && Number(st[k]) > 0) {
@@ -663,9 +721,8 @@
   */
   function loadLaw() {
     var out = { cells: {}, held: {} };
-    var raw = null;
-    try { raw = JSON.parse(require('fs').readFileSync(lawPath(), 'utf8')); }
-    catch (e) { return out; }
+    var raw = lawRead.doc;
+    if (!raw) { return out; }
     var dropped = 0;
     var cs = (raw && raw.cells && typeof raw.cells === 'object') ? raw.cells : {};
     for (var d in cs) {
@@ -704,9 +761,7 @@
 
   function saveLaw() {
     try {
-      var fs = require('fs');
-      try { fs.mkdirSync(require('path').dirname(lawPath()), { recursive: true }); } catch (e) { }
-      fs.writeFileSync(lawPath(), JSON.stringify({ cells: law.cells, held: law.held }, null, 1));
+      storeWrite(lawPath(), JSON.stringify({ cells: law.cells, held: law.held }, null, 1), lawRead);
       return true;
     } catch (e) {
       plog('law: could not write the register:', e);
@@ -714,6 +769,7 @@
     }
   }
 
+  var lawRead = storeRead(lawPath(), 'jail cell or held office');
   var law = loadLaw();
 
   /** A guard of exactly this hold, by the "Guard of <Hold>" role (#2551). */
@@ -3035,13 +3091,9 @@
   var LETTER_REACH = 700;
 
   function loadPart(key, fallback) {
-    try {
-      var o = JSON.parse(require('fs').readFileSync(registerPath(), 'utf8'));
-      var v = o && o[key];
-      return (v && typeof v === 'object') ? v : fallback;
-    } catch (e) {
-      return fallback;
-    }
+    var o = registerRead.doc;
+    var v = o && o[key];
+    return (v && typeof v === 'object') ? v : fallback;
   }
 
   /** The hold whose notice board this character is standing at, or ''. */
@@ -4127,9 +4179,7 @@
      a holder, a time and a name, and kept takings are gold. */
   function loadBedBook() {
     var out = { guests: {}, takings: {} };
-    var raw = null;
-    try { raw = JSON.parse(require('fs').readFileSync(bedBookPath(), 'utf8')); }
-    catch (e) { return out; }
+    var raw = bedRead.doc;
     if (!raw || typeof raw !== 'object') { return out; }
     var now = Date.now();
     function add(b, who, by, at, name) {
@@ -4181,10 +4231,7 @@
 
   function saveBedBook() {
     try {
-      var fs = require('fs');
-      var file = bedBookPath();
-      try { fs.mkdirSync(require('path').dirname(file), { recursive: true }); } catch (e) { }
-      fs.writeFileSync(file, JSON.stringify({ guests: bedBook.guests, takings: bedBook.takings }, null, 1));
+      storeWrite(bedBookPath(), JSON.stringify({ guests: bedBook.guests, takings: bedBook.takings }, null, 1), bedRead);
       return true;
     } catch (e) {
       plog('could not write the bed book:', e);
@@ -4192,6 +4239,7 @@
     }
   }
 
+  var bedRead = storeRead(bedBookPath(), 'inn guest or kept takings');
   var bedBook = loadBedBook();
 
   // ------------------------------------------------------------ the beds --
@@ -5493,8 +5541,7 @@
 
   function loadBenchRefs() {
     var out = {};
-    var raw = null;
-    try { raw = JSON.parse(require('fs').readFileSync(benchBookPath(), 'utf8')); } catch (e) { return out; }
+    var raw = benchRead.doc;
     if (!raw || typeof raw !== 'object') { return out; }
     for (var site in WOODWORKING_BENCHES) {
       if (!Object.prototype.hasOwnProperty.call(WOODWORKING_BENCHES, site)) { continue; }
@@ -5506,14 +5553,13 @@
 
   function saveBenchRefs() {
     try {
-      var dir = require('path').dirname(benchBookPath());
-      try { require('fs').mkdirSync(dir, { recursive: true }); } catch (e) { }
-      require('fs').writeFileSync(benchBookPath(), JSON.stringify(benchRefs, null, 1));
+      storeWrite(benchBookPath(), JSON.stringify(benchRefs, null, 1), benchRead);
     } catch (e) {
       plog('benches: could not write', benchBookPath() + ':', e);
     }
   }
 
+  var benchRead = storeRead(benchBookPath(), 'bench');
   var benchRefs = loadBenchRefs();
 
   /* Stand this site's bench where WOODWORKING_BENCHES says. Answers whether it stands. */

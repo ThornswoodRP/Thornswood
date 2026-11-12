@@ -619,6 +619,68 @@
     return require('path').join(privDir, 'farm-claims.json');
   }
 
+  // -- store: read and write (#4529), begin --
+  /*
+    ONE WAY A STORE'S FILE IS READ AND WRITTEN (#4529). The same text is in
+    the season, farming, property and furniture blocks, and
+    tests/test-4529-store-saves.js holds the copies to it, since each block
+    is lifted and run alone. The property register, law.json, beds.json,
+    benches.json, season.json, the farm claims and the furniture register
+    were each written straight over the old file, and each loader read a
+    file that would not parse as empty and said nothing. writeFileSync
+    empties a file before it writes it, so a server stopped partway left it
+    half written; the next start read nothing from it, and the next save
+    wrote that nothing over everything it held.
+
+    storeRead(file, what) is { doc } for a file that reads, { doc: null }
+    for one that is not there, and { doc: null, bad } for one that is there
+    and does not read: that one is said in the log with the file and why,
+    and is never written over.
+
+    storeWrite(file, text, read) writes text to <file>.tmp and renames it
+    over the file, so a stop partway leaves the old file whole. When read
+    says the file did not read, it is first renamed aside as
+    <file>.unreadable-<time>, and that is said, so what it held is kept for
+    staff to put right. A failure throws, for the caller to say.
+  */
+  function storeRead(file, what) {
+    var fs = require('fs');
+    var text, doc, why = '';
+    try { text = fs.readFileSync(file, 'utf8'); }
+    catch (e) {
+      if (e && e.code === 'ENOENT') { return { doc: null, bad: '' }; }
+      why = 'it could not be opened (' + ((e && e.code) || e) + ')';
+    }
+    if (!why) {
+      try { doc = JSON.parse(String(text).replace(/^\uFEFF/, '')); }
+      catch (e2) { why = 'it does not parse (' + ((e2 && e2.message) || e2) + ')'; }
+    }
+    if (!why && (!doc || typeof doc !== 'object')) { why = 'it holds no ' + what; }
+    if (!why) { return { doc: doc, bad: '' }; }
+    console.log('[thornswood] ' + file + ' could not be read: ' + why + '. This start holds no ' + what +
+                ' from it, and it is never written over: the first save sets it aside as ' + file + '.unreadable-<time>');
+    return { doc: null, bad: why };
+  }
+  function storeWrite(file, text, read) {
+    var fs = require('fs');
+    fs.mkdirSync(require('path').dirname(file), { recursive: true });
+    if (read && read.bad) {
+      if (fs.existsSync(file)) {
+        var aside = file + '.unreadable-' + Date.now();
+        fs.renameSync(file, aside);
+        console.log('[thornswood] ' + file + ' did not read at this start (' + read.bad + '), so it is kept as ' +
+                    aside + ' and a new one is written');
+      }
+      read.bad = '';
+    }
+    fs.writeFileSync(file + '.tmp', text);
+    fs.renameSync(file + '.tmp', file);
+  }
+  // -- store: read and write (#4529), end --
+
+  // The claims file as it was read at this start (#4529).
+  var claimsRead = storeRead(claimsPath(), 'farm claim');
+
   /*
     The record off disk, rebuilt field by field rather than trusted whole.
 
@@ -648,8 +710,8 @@
   */
   function loadClaims() {
     var out = {};
-    var raw = null;
-    try { raw = JSON.parse(require('fs').readFileSync(claimsPath(), 'utf8')); } catch (e) { return out; }
+    var raw = claimsRead.doc;
+    if (!raw) { return out; }
     var held = (raw && typeof raw === 'object' && raw.claims && typeof raw.claims === 'object')
       ? raw.claims : {};
     var kept = 0, old = 0;
@@ -682,8 +744,8 @@
   */
   function loadSeeded() {
     var out = {};
-    var raw = null;
-    try { raw = JSON.parse(require('fs').readFileSync(claimsPath(), 'utf8')); } catch (e) { return out; }
+    var raw = claimsRead.doc;
+    if (!raw) { return out; }
     var was = (raw && typeof raw === 'object' && raw.seeded && typeof raw.seeded === 'object')
       ? raw.seeded : {};
     for (var k in was) {
@@ -705,9 +767,7 @@
 
   function saveClaims() {
     try {
-      require('fs').mkdirSync(require('path').dirname(claimsPath()), { recursive: true });
-      require('fs').writeFileSync(claimsPath(),
-                                  JSON.stringify({ at: Date.now(), claims: claims, seeded: seeded }));
+      storeWrite(claimsPath(), JSON.stringify({ at: Date.now(), claims: claims, seeded: seeded }), claimsRead);
       return true;
     } catch (e) {
       flog('could not write the claims file, so these claims last until the next restart:', e);
