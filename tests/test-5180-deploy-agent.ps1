@@ -290,9 +290,30 @@ $h = @{}; $want = ''
     else {
         $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'; $env:DOTNET_NOLOGO = '1'
         $tests = Join-Path $Repo 'tools\DeployAgent.Tests'
-        $rs = & dotnet restore $tests --locked-mode 2>&1
-        Yes 'dotnet restore from the locked packages' ($LASTEXITCODE -eq 0)
-        if ($LASTEXITCODE -ne 0) { $rs | Select-Object -Last 10 | ForEach-Object { Write-Host "  $_" } }
+        $rs = @(& dotnet restore $tests --locked-mode 2>&1 | ForEach-Object { "$_" })
+        $restored = $LASTEXITCODE -eq 0
+        # When it refuses, dotnet's own error lines go in the FAIL lines
+        # (#5925): a gate annotation carries a harness's FAIL lines and
+        # nothing else it printed (Nightly-Harnesses.ps1 Get-FailSaid,
+        # #5660), and the job log below them is too big for a Bot to read
+        # (Ops #266). The first is on the check's own line, each other one
+        # on a line of its own, at most ten; the last lines stand in when
+        # dotnet printed no error line. Error lines are what
+        # scripts\release\Invoke-Said.ps1 calls one.
+        $why = @()
+        if (-not $restored) {
+            . (Join-Path $Repo 'scripts\release\Invoke-Said.ps1')
+            $said = @($rs | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+            $why = @($said | Where-Object { $_ -match $SAID_ERROR -and $_ -notmatch '^Restore failed in ' })
+            if (-not $why.Count) { $why = @($said | Select-Object -Last 3) }
+            if (-not $why.Count) { $why = @('it printed nothing') }
+            $why = @($why | Select-Object -First 10 | ForEach-Object { if ($_.Length -gt 300) { $_.Substring(0, 300) + '...' } else { $_ } })
+        }
+        Yes ('dotnet restore from the locked packages' + $(if ($why.Count) { ': ' + $why[0] } else { '' })) $restored
+        if (-not $restored) {
+            foreach ($w in @($why | Select-Object -Skip 1)) { Write-Host ('FAIL    dotnet restore said: ' + $w) }
+            $rs | Select-Object -Last 10 | ForEach-Object { Write-Host "  $_" }
+        }
         else {
             $t = & dotnet test $tests --no-restore 2>&1
             Yes 'dotnet test on tools/DeployAgent.Tests' ($LASTEXITCODE -eq 0)
