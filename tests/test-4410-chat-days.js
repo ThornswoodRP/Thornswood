@@ -75,7 +75,7 @@ function listening(srv, port) {
     let out = '';
     const said = (d) => { out += d; const m = /\[voice\] listening on \S+:(\d+)/.exec(out); if (m && Number(m[1]) === port) { end(null); } };
     const more = (d) => { out += d; };
-    const gone = (code) => end(new Error('the voice service stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
+    const gone = (code) => end(new Error((/EADDRINUSE/.test(out) ? 'something else already holds port ' + port + ', so ' : '') + 'the voice service stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
     const late = setTimeout(() => end(new Error('the voice service did not say it was listening on ' + port + ' within fifteen seconds. It printed:\n' + out)), 15000);
     function end(err) {
       clearTimeout(late);
