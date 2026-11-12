@@ -163,7 +163,7 @@ function keptChatRules() {
   const sessionRows = () => rowsNow;
   const retentionSay = (what, o) => said.push(what + ' ' + JSON.stringify(o));
   const CHAT_DIRS = { main: CHAT, dev: path.join(dir, 'chat-dev') };
-  const src = ['sessionKey', 'slogFile', 'slogTrim', 'putSessionLogs', 'chatSlice', 'isObjectLike', 'sessionWindow',
+  const src = ['sessionKey', 'slogFile', 'writeSlogSet', 'slogTrim', 'putSessionLogs', 'chatSlice', 'isObjectLike', 'sessionWindow',
     'readSlogSet', 'keptChatCurrent', 'copyKeptChat', 'dropKeptChat', 'copyKeptChats'].map((n) => grab(site, n));
   const namesAt = site.indexOf('const SLOG_NAMES = [');
   const names = site.slice(namesAt, site.indexOf('];', namesAt) + 2);
