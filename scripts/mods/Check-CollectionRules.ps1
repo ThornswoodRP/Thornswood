@@ -117,13 +117,20 @@ if (-not $Collection) {
   try { $url = [string](Get-Content -LiteralPath (Join-Path $Root 'config.json') -Raw | ConvertFrom-Json).CollectionUrl } catch { }
   if (-not $url) { $url = 'https://www.nexusmods.com/games/skyrimspecialedition/collections/7essxf' }
   $slug = Get-CollectionSlug $url
-  $revision = Get-CollectionRevision $slug
-  # The folder is no longer named for the collection: current Vortex writes
-  # vortex_collection_<opaque id>_, with no slug in it, so a
-  # collection_<slug>_<rev>_* search finds nothing. Get-CollectionInstalledFolder
-  # maps the slug to its mod folder through state and falls back to the legacy
-  # name; $null means the collection is not installed here.
-  $dir = Get-CollectionInstalledFolder $slug
+  # A Vortex database that does not read, or a moved staging folder whose
+  # record cannot be read, stops with the reason: SKIP would say the
+  # collection is not installed when nobody could tell (#4735).
+  $dir = $null
+  try {
+    $revision = Get-CollectionRevision $slug
+    # The folder is no longer named for the collection: current Vortex writes
+    # vortex_collection_<opaque id>_, with no slug in it, so a
+    # collection_<slug>_<rev>_* search finds nothing. Get-CollectionInstalledFolder
+    # maps the slug to its mod folder through state and falls back to the legacy
+    # name, in the staging folder Vortex records for the game this install was
+    # made from; $null means the collection is not installed here.
+    $dir = Get-CollectionInstalledFolder $slug $Root
+  } catch { Stop-Check $_.Exception.Message }
   if (-not $dir) {
     Say "  SKIP  Vortex on this machine has no revision of collection '$slug' installed, so there are no rules to check." 'DarkGray'
     Write-Host ''
