@@ -59468,8 +59468,9 @@ module.exports = {
   Each one goes three places at once:
 
     - to every member of staff who is in the world right now, as a private
-      line in their chat, EXCEPT the person being reported, so a report about
-      a moderator is never read first by that moderator;
+      line in their chat, EXCEPT anybody the name in a report could mean
+      (whoAbout's could, #4922), so a report about a moderator is never read
+      first by that moderator, however the name was typed;
     - to the site, on a keyed route (/api/report/game, or /dev/api/report/game
       for the dev server, because the dev door.json names the site with /dev
       on the end), which writes it into the inbox the admins read;
@@ -59628,9 +59629,26 @@ module.exports = {
     that the line starts with wins; then a first name that only one person in
     the world has; and failing both, the first word, kept as typed, because a
     person who has already logged off can still be reported.
+
+    could is everybody in the world the name could mean (#4922), whichever
+    one is picked or none: anybody a word of whose name starts with the first
+    word typed, its edges' punctuation left off. That is a full name, a first
+    name two people share, a surname and a short form, so a report is never
+    told to the person it is about because the name was shared or not typed
+    whole. A name that could mean nobody here leaves nobody out.
   */
+  function couldBe(words, people) {
+    var first = String(words[0] || '').toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+    if (!first) { return []; }
+    return people.filter(function (p) {
+      return String(p.name || '').toLowerCase().split(/[\s-]+/).some(function (w) {
+        return w.replace(/^[^\p{L}\p{N}]+/u, '').indexOf(first) === 0;
+      });
+    });
+  }
   function whoAbout(words, people) {
     var line = words.join(' ').toLowerCase();
+    var could = couldBe(words, people);
     var best = null, bestName = '';
     for (var i = 0; i < people.length; i++) {
       var n = String(people[i].name || '').toLowerCase().trim();
@@ -59642,16 +59660,17 @@ module.exports = {
     }
     if (best) {
       var used = bestName.split(/\s+/).length;
-      return { name: best.name, person: best, rest: words.slice(used).join(' ').trim() };
+      if (could.indexOf(best) < 0) { could.push(best); }
+      return { name: best.name, person: best, could: could, rest: words.slice(used).join(' ').trim() };
     }
     var first = String(words[0] || '').toLowerCase();
     var same = people.filter(function (p) {
       return String(p.name || '').toLowerCase().trim().split(/\s+/)[0] === first;
     });
     if (first && same.length === 1) {
-      return { name: same[0].name, person: same[0], rest: words.slice(1).join(' ').trim() };
+      return { name: same[0].name, person: same[0], could: could, rest: words.slice(1).join(' ').trim() };
     }
-    return { name: String(words[0] || '').slice(0, LIMIT.name), person: null,
+    return { name: String(words[0] || '').slice(0, LIMIT.name), person: null, could: could,
              rest: words.slice(1).join(' ').trim() };
   }
 
@@ -59763,10 +59782,11 @@ module.exports = {
       cell = String(mp.get(actorId, 'worldOrCellDesc') || '');
     } catch (e) { }
 
-    // Staff in the world, told now. Never the person reported, and never the
-    // one asking, who is told separately below. Never for a problem, which
-    // is for the developers and the board, not for whoever is on shift.
-    var told = 0;
+    // Staff in the world, told now. Never anybody the report's name could
+    // mean (about.could, #4922), and never the one asking, who is told
+    // separately below. Never for a problem, which is for the developers and
+    // the board, not for whoever is on shift.
+    var told = 0, keptOut = 0;
     if (kind !== 'problem') {
       var line = kind === 'help'
         ? '[staff] ' + mine + ' asks for help at ' + (cell || 'somewhere unknown') +
@@ -59776,10 +59796,10 @@ module.exports = {
       for (var i = 0; i < people.length; i++) {
         var p = people[i];
         if (p.profileId === profileId) { continue; }
-        if (about && about.person && p.profileId === about.person.profileId) { continue; }
         var staff = false;
         try { staff = !!isStaff(p.profileId); } catch (e) { staff = false; }
         if (!staff) { continue; }
+        if (about && about.could.some(function (c) { return c.profileId === p.profileId; })) { keptOut++; continue; }
         toProfile(p.profileId, line);
         told++;
       }
@@ -59811,10 +59831,12 @@ module.exports = {
             '#test-findings in the Discord and it will reach the developers.');
         return;
       }
+      // Staff kept out because the name could be theirs are still in the world,
+      // so the reply never says nobody from staff is (#4922).
       var inWorld = told
         ? (told === 1 ? 'A member of staff in the world has it now'
                       : told + ' members of staff in the world have it now')
-        : 'Nobody from staff is in the world right now';
+        : (keptOut ? 'No member of staff in the world was told' : 'Nobody from staff is in the world right now');
       var what = kind === 'help' ? 'Your call for help' : 'Your report';
       if (ok) {
         toProfile(profileId, what + ' reached staff. ' + inWorld +
@@ -59825,15 +59847,16 @@ module.exports = {
                   '. It could not reach the staff channel in the Discord, so if nobody comes to ' +
                   'you, open a ticket there.');
       } else {
-        toProfile(profileId, what + ' did not reach anybody: nobody from staff is in the world ' +
-                  'and the site could not be reached. Open a ticket in the Discord (' +
+        toProfile(profileId, what + ' did not reach anybody: ' +
+                  (keptOut ? 'no member of staff in the world was told' : 'nobody from staff is in the world') +
+                  ' and the site could not be reached. Open a ticket in the Discord (' +
                   (kind === 'help' ? 'I need help' : 'Report somebody') + ') and it will.');
       }
     });
   }
 
   g.__thornswoodAskStaff = {
-    ask: ask, whoAbout: whoAbout, refusal: refusal, taken: taken, seen: seen,
+    ask: ask, whoAbout: whoAbout, couldBe: couldBe, refusal: refusal, taken: taken, seen: seen,
     LIMIT: LIMIT, toSite: toSite, door: door
   };
   slog('ready: /helpme and /report reach staff in the world and the staff channel');
