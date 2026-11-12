@@ -1,9 +1,11 @@
 <#
   Install-Voice.ps1
 
-  Puts the proximity voice service on the VPS beside the game server and opens
-  the one port it needs. Run it from this machine; it does the remote half
-  over ssh.
+  Puts the proximity voice service on the VPS beside the game server. Run it
+  from this machine; it does the remote half over ssh. Its port is opened in
+  the firewall only with -Bind 0.0.0.0. On the default loopback bind Caddy
+  carries it on /voice and /voice-dev, and the install takes that firewall
+  rule away.
 
   How the thing works, in three lines:
     the gamemode pushes everyone's position to the voice service five times a
@@ -33,8 +35,11 @@
 #>
 [CmdletBinding()]
 param(
-  # The site the voice server asks about character creation choices. Empty
-  # turns that check off, which is how this behaved before it existed.
+  # The site the voice service asks, on every voice and chat join, whether
+  # the Discord ticket it was sent owns the profile it wants a token for
+  # (/token, #1303, #1315). It becomes THORNSWOOD_SITE on the service's
+  # command line. There is no join without it, so an empty one, or one that
+  # is not https, is refused before anything is sent (VoiceSite.ps1, #4467).
   [string]$Site = 'https://thornswood.net',
     [string]$VpsHost  = '',
     [string]$VpsUser  = '',
@@ -83,6 +88,19 @@ param(
 $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
+# The site every join asks (#4467): refused here, before ssh is looked for or
+# anything is built or sent, when no join could get through with it.
+. (Join-Path $Here 'VoiceSite.ps1')
+if (-not $Remove) {
+    $siteProblem = Get-VoiceSiteProblem $Site
+    if ($siteProblem) {
+        Write-Host ''; Write-Host ("STOP. -Site: $siteProblem Nothing was sent.") -ForegroundColor Red
+        if (-not $NoPause) { [void](Read-Host 'Enter to exit') }
+        exit 1
+    }
+    # The service puts /api/play/owns straight after it.
+    $Site = $Site.Trim().TrimEnd('/')
+}
 . (Join-Path $Here '..\vps\Vps.ps1')
 . (Join-Path $Here '..\vps\Send-Script.ps1')
 if (-not $VpsUser) { $VpsUser = Get-ThornswoodVpsUser }
@@ -271,6 +289,20 @@ function Remote($script) {
     # Send-Script.ps1 (issue #1070): a long script goes by scp and its run takes
     # it off the box before it runs, and the far side's exit code comes back.
     return Invoke-ThornswoodRemote -Target $target -SshArgs $ssh -Script $script
+}
+
+<#
+  Stops the run unless a join gets through on the service just started
+  (#4467): its /token asked on the box, over loopback, with a ticket nobody
+  holds (VoiceSite.ps1). /health answers whether or not the service can ask
+  its site, so it cannot say this.
+#>
+function Assert-VoiceJoin {
+    $join = Read-VoiceJoin @(Remote (Get-VoiceJoinCheck $Port) | ForEach-Object { "$_".Trim() })
+    if (-not $join.Ok) {
+        Die ("voice is in and answering, but nobody can join it: " + $join.Said + '. .\scripts\deploy\Install-Voice.ps1 -PutBack puts the last one back.')
+    }
+    Say ('A join gets through: ' + $join.Said + '.') 'Green'
 }
 
 $rootFar   = $Root -replace '\\', '/'
@@ -785,6 +817,8 @@ if ($TaskOnly) {
     $taskOut = @(Remote (@($vars, $ThornswoodStopAndMoveText, $voiceTools, $remote, $taskOnlyBlock) -join "`r`n") | ForEach-Object { Say "  $_"; "$_".Trim() })
     if ($taskOut -notcontains 'TASK OK') { Die 'voice was not restarted under a new task. The lines above say what is running.' }
     Say 'registered again, and voice answers under the new task' 'Green'
+    # The new task carries this -Site, so it is held to a join as an install is (#4467).
+    Assert-VoiceJoin
     if (-not $NoPause) { [void](Read-Host 'Enter to close') }
     exit 0
 }
@@ -854,21 +888,18 @@ if ($Bind -eq '127.0.0.1') {
     # Through the site /health says only ok (#3806): the build, bind and auth
     # go to a caller on the box, and the build was read there above.
     if (-not $reachable) {
-        $via = ''
-        if ($Site) { $via = $Site.TrimEnd('/') + $(if ($Port -eq 7778) { '/voice' } else { '/voice-dev' }) }
-        if ($via) {
-            try {
-                $h = Invoke-RestMethod ($via + '/health') -TimeoutSec 10
-                if ($h -and $h.PSObject.Properties['ok'] -and $h.ok -eq $true) {
-                    Say "Reached it through $via, which says ok." 'Green'
-                } else {
-                    Say "Something answered at $via/health, but not voice's ok, so the site is not carrying voice there." 'Red'
-                    Say '  Check the Caddyfile has the handle_path block for this port.' 'DarkGray'
-                }
-            } catch {
-                Say "But $via/health did not answer either, so nothing is carrying it." 'Red'
+        $via = $Site + $(if ($Port -eq 7778) { '/voice' } else { '/voice-dev' })
+        try {
+            $h = Invoke-RestMethod ($via + '/health') -TimeoutSec 10
+            if ($h -and $h.PSObject.Properties['ok'] -and $h.ok -eq $true) {
+                Say "Reached it through $via, which says ok." 'Green'
+            } else {
+                Say "Something answered at $via/health, but not voice's ok, so the site is not carrying voice there." 'Red'
                 Say '  Check the Caddyfile has the handle_path block for this port.' 'DarkGray'
             }
+        } catch {
+            Say "But $via/health did not answer either, so nothing is carrying it." 'Red'
+            Say '  Check the Caddyfile has the handle_path block for this port.' 'DarkGray'
         }
     }
 } elseif ($reachable) {
@@ -892,5 +923,16 @@ else {
     Save-SwapPreviousRecord $target $ssh $Root $prevName
     $null = Set-ThornswoodArtifactCurrent -Artifact $artifact -Target $target -SshArgs $ssh -Root $Root
 }
+
+<#
+  A JOIN GETS THROUGH, OR THE INSTALL HAS FAILED (#4467). /health answering
+  says the service is up; it says nothing about whether anybody can get in,
+  and a service whose site it cannot ask refuses every join while /health
+  says ok. So /token is asked on the box with a ticket nobody holds, and the
+  site's refusal coming back is a join reaching the site (VoiceSite.ps1).
+  Asked after the record above, so a stop here leaves the box's record
+  matching what is running.
+#>
+Assert-VoiceJoin
 Write-Host ''
 if (-not $NoPause) { [void](Read-Host 'Enter to close') }

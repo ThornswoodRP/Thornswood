@@ -19,15 +19,16 @@
     A  scripts\deploy\VoiceSite.ps1's Get-VoiceSiteProblem refuses an empty
        site, a blank one, one that is not https, and one carrying anything
        a cmd.exe line would run, and takes https://thornswood.net;
-    B  its Test-VoiceJoin, asked of a service with no site, says a join does
-       not get through and why (503);
-    C  and asked of a service whose site answers a ticket it does not take,
+    B  its join check (Get-VoiceJoinCheck, the text the install runs on the
+       box, read by Read-VoiceJoin), run against a service with no site,
+       says a join does not get through and why (503);
+    C  and against a service whose site answers a ticket it does not take,
        says a join reaches the site (403 ticket), which is what a working
        box answers a ticket nobody holds;
     D  Install-Voice.ps1 asks the first before it reaches for ssh or builds
-       anything, asks the second after the swap and stops when it fails,
-       and its words say what the site is for and that the port is opened
-       only on an outside bind.
+       anything, runs the second on the box after the swap and after
+       -TaskOnly and stops when it fails, and its words say what the site is
+       for and that the port is opened only on an outside bind.
 
   Nothing leaves the machine. The temp folder is removed at the end.
 */
@@ -98,8 +99,10 @@ async function startVoice(site) {
                                           THORNSWOOD_SITE: site, THORNSWOOD_CHAT_DIR: path.join(dir, 'chat') })
   });
   await listening(srv, port);
-  return { srv: srv, base: 'http://127.0.0.1:' + port };
+  return { srv: srv, port: port };
 }
+// The install's join check, run here as the box runs it, and read as the install reads it.
+const joinCheck = (port) => ps('Read-VoiceJoin @(& ([scriptblock]::Create((Get-VoiceJoinCheck ' + port + '))))');
 function stop(srv) {
   return new Promise((ok) => {
     if (!srv || srv.exitCode !== null || srv.signalCode !== null) { ok(); return; }
@@ -127,8 +130,8 @@ function stop(srv) {
     // -------------------------------------------------------------- B --
     console.log('\nB. a service with no site lets nobody join, and the check says so:');
     voice = await startVoice('');
-    let r = ps('Test-VoiceJoin ' + lit(voice.base));
-    yes('Test-VoiceJoin says a join does not get through, naming the 503 (' + (r.value && r.value.Said) + ')',
+    let r = joinCheck(voice.port);
+    yes('the join check says a join does not get through, naming the 503 (' + (r.value && r.value.Said) + ')',
         r.ok && r.value && r.value.Ok === false && /503/.test(String(r.value.Said)), r.said);
     await stop(voice.srv); voice = null;
 
@@ -146,8 +149,8 @@ function stop(srv) {
     });
     await new Promise((ok) => site.listen(0, '127.0.0.1', ok));
     voice = await startVoice('http://127.0.0.1:' + site.address().port);
-    r = ps('Test-VoiceJoin ' + lit(voice.base));
-    yes('Test-VoiceJoin says a join reaches the site (' + (r.value && r.value.Said) + ')',
+    r = joinCheck(voice.port);
+    yes('the join check says a join reaches the site (' + (r.value && r.value.Said) + ')',
         r.ok && r.value && r.value.Ok === true, r.said);
     yes('  and the site was asked', asked >= 1);
 
@@ -160,10 +163,17 @@ function stop(srv) {
     yes('it asks Get-VoiceSiteProblem before it looks for ssh and before it builds anything',
         askSite > 0 && askSite < at("foreach ($t in 'ssh', 'scp')") && askSite < at('New-ThornswoodArtifact'));
     const checking = at("Head 'Checking from here'");
-    const join = at('Test-VoiceJoin ');
-    yes('it asks Test-VoiceJoin after the swap, in the checks', checking > 0 && join > checking);
-    yes('  and stops (Die) when a join does not get through',
-        join > 0 && /if \(-not \$join\.Ok\) \{\s*Die /.test(iv.slice(join, join + 600)));
+    const fn = at('function Assert-VoiceJoin');
+    const fnBody = fn > 0 ? iv.slice(fn, iv.indexOf('\n}', fn)) : '';
+    yes('Assert-VoiceJoin runs the join check on the box and reads it',
+        /Read-VoiceJoin @\(Remote \(Get-VoiceJoinCheck \$Port\)/.test(fnBody));
+    yes('  and stops (Die) when a join does not get through', /if \(-not \$join\.Ok\) \{\s*Die /.test(fnBody));
+    const recorded = at("# The service's files are in place");
+    yes('it is asked after the swap and its record, in the checks',
+        checking > 0 && recorded > checking && iv.indexOf('\nAssert-VoiceJoin', recorded) > recorded);
+    const taskOnly = at('if ($TaskOnly) {');
+    yes('  and after -TaskOnly, whose new task carries -Site too',
+        taskOnly > 0 && /\n\s+Assert-VoiceJoin\s*\n/.test(iv.slice(taskOnly, iv.indexOf('exit 0', taskOnly))));
     yes('its words no longer say the site is asked about character creation choices, or that empty turns a check off',
         !/character creation choices/.test(iv) && !/Empty\s+#?\s*turns that\s+#?\s*check off/.test(iv));
     yes('its header no longer says it opens the one port it needs',
