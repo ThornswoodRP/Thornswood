@@ -674,10 +674,6 @@ issue where the card did.
   token GitHub allows, scoped to that one repository (q-p08-fork-wakes; Patrick
   said yes against the recommendation). 31 Oct 2026,
   [#5220](https://github.com/ThornswoodRP/Thornswood/issues/5220).
-- **skymp #150 stays merged as ecf364c, though it merged before its card was
-  answered: no fork pull request job can write the package cache, and main's
-  pin to it stays.** (dec_rl16hXSUNdnhshnk6h1xVg) 12 Nov 2026,
-  [#2760](https://github.com/ThornswoodRP/Thornswood/issues/2760#issuecomment-6831039890).
 - **A Linux build of the server** (q-p08-linux-server). 31 Oct 2026,
   [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
 
