@@ -112,11 +112,19 @@
   own kind). Install-NexusRevision.ps1 -CollectionArchive reads the new
   rules against the plugins' headers and stops on a loop.
 
-  TAKING A MOD OUT (#3649). -Remove names mods, by their numbers, that the
-  revision no longer carries: the entry goes, and so do the plugins its file
-  hashes put at the top of Data, off the plugin list. An entry with no
-  hashes, with patches, or that a mod rule or plugin rule names is refused
+  TAKING A MOD OUT (#3649, #4191). -Remove names mods, by their numbers, that
+  the revision no longer carries: the entry goes, and so do the plugins its
+  file hashes put at the top of Data, off the plugin list, unless another
+  entry's hashes bring the same plugin, which then stays. An entry with no
+  hashes, with patches, that a mod rule or plugin rule names, or whose plugin
+  is a master of one the revision still installs is refused
   (nexus-collection.js says why); those revisions are made in Vortex on One.
+  A mod rule may name the mod by its file name on Nexus alone, so that name
+  is read from the v1 file record, as a moved file's is. collection.json
+  says nothing of masters, so each plugin's come from -CollectionRecord when
+  it follows the published revision this starts from; when it does not, a
+  mod whose plugins come off while others stay is refused, because nothing
+  says they are not needed.
   Why: until 27 October a mod could only leave the collection in Vortex on
   One, and Atlas Map Markers SE had to leave (Patrick, 27 October).
 
@@ -279,6 +287,11 @@
   The record of what each mod's page allows, records\collection-permissions.json
   unless said otherwise.
 
+.PARAMETER CollectionRecord
+  The record of the collection, records\collection.json unless said
+  otherwise: the plugins it installs off its list, and each plugin's masters
+  for -Remove, when it follows the revision this starts from.
+
 .PARAMETER WaitSeconds
   How long to wait for Nexus to process the upload. 600 unless said otherwise.
 
@@ -309,6 +322,7 @@ param(
   [int]$Publish = 0,
   [int]$Discard = 0,
   [string]$Permissions,
+  [string]$CollectionRecord,
   [int]$WaitSeconds = 600,
   [switch]$WhatIf,
   [switch]$NoPause
@@ -334,6 +348,7 @@ function Die($m) {
 }
 function Step([scriptblock]$b) { try { return (& $b) } catch { Die $_.Exception.Message } }
 if (-not $Permissions) { $Permissions = Join-Path $Here '..\..\records\collection-permissions.json' }
+if (-not $CollectionRecord) { $CollectionRecord = Join-Path $Here '..\..\records\collection.json' }
 
 # A program run with its output kept apart from its errors, the same in
 # Windows PowerShell 5.1 (where a redirected error line would stop the
@@ -597,6 +612,16 @@ function Assert-ServedArchive([string]$M, [string]$Fid, [string]$Arc, $Facts) {
   Say ('    the archive is the file Nexus serves as file id ' + $Fid) 'DarkGray'
 }
 
+# A file's name on Nexus without its extension, from the v1 file record, the
+# one place Nexus gives it: a mod rule may name a file by it alone, for a
+# moved file (PATCHES AND MOD RULES) and one taken out (TAKING A MOD OUT).
+function Get-NexusFileExpression([string]$M, [string]$Fid) {
+  $v1 = Step { Invoke-NexusApi 'GET' ('/v1/games/' + $Game + '/mods/' + $M + '/files/' + $Fid + '.json') '' ('Reading file ' + $Fid + '''s name') }
+  $onNexus = [string](Get-NexusField $v1 'file_name')
+  if (-not $onNexus) { Die ('Nexus gave file ' + $Fid + ' of mod ' + $M + ' with no file name.') }
+  return [IO.Path]::GetFileNameWithoutExtension($onNexus)
+}
+
 # ------------------------------------------------------- refused up front ---
 if (-not $Mod.Count -and -not $Add -and -not $Answers -and -not $Rule -and -not $Remove.Count -and -not $SetLight.Count -and -not $ClearLight.Count) { Die 'Say which mods move to a new file with -Mod, -FileId and -Archive, which are added with -Add, which kept files get new installer answers with -Answers, which are taken out with -Remove, which plugins get a new rule with -Rule, which plugins get or lose the light flag with -SetLight and -ClearLight, or publish a draft with -Publish, or discard one with -Discard.' }
 $Mod = @($Mod | ForEach-Object { ([string]$_).Split(',') } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -747,11 +772,8 @@ for ($i = 0; $i -lt $Mod.Count; $i++) {
   Say ('    ' + $facts.Name + ', ' + $facts.Size.ToString('N0') + ' bytes, md5 ' + $facts.Md5Hex) 'DarkGray'
   Assert-ServedArchive $m $fid $Archive[$i] $facts
   # Its name on Nexus, which a mod rule names it by (PATCHES AND MOD RULES).
-  $v1 = Step { Invoke-NexusApi 'GET' ('/v1/games/' + $Game + '/mods/' + $m + '/files/' + $fid + '.json') '' ('Reading file ' + $fid + '''s name') }
-  $onNexus = [string](Get-NexusField $v1 'file_name')
-  if (-not $onNexus) { Die ('Nexus gave file ' + $fid + ' of mod ' + $m + ' with no file name.') }
   $swap = [ordered]@{ modId = $m; fileId = $fid; version = [string](Get-NexusField $v 'version'); md5 = $facts.Md5Hex; fileSize = $facts.Size; logicalFilename = [string](Get-NexusField $v 'name')
-    fileExpression = [IO.Path]::GetFileNameWithoutExtension($onNexus) }
+    fileExpression = (Get-NexusFileExpression $m $fid) }
   # Each file the entry patches, as the new archive holds it.
   $entry = @($baseCol.mods | Where-Object { $_.source -and [string]$_.source.modId -eq $m }) | Select-Object -First 1
   $patched = if ($entry -and $entry.PSObject.Properties['patches'] -and $entry.patches) { @($entry.patches.PSObject.Properties | ForEach-Object { $_.Name }) } else { @() }
@@ -858,7 +880,18 @@ foreach ($a in $answerSet) {
   $swaps.Add([ordered]@{ answers = $true; modId = $m; fileId = $fid; choices = $fa.Choices })
 }
 
-foreach ($m in $Remove) { $swaps.Add([ordered]@{ remove = $true; modId = $m }) }
+# Each mod taken out, with its file name on Nexus (TAKING A MOD OUT). An entry
+# that is not there once is left to nexus-collection.js to refuse, by name.
+if ($Remove.Count) { Head 'The mods taken out' }
+foreach ($m in $Remove) {
+  $rm = [ordered]@{ remove = $true; modId = $m }
+  $hits = @($baseCol.mods | Where-Object { $_.source -and [string]$_.source.type -eq 'nexus' -and [string]$_.source.modId -eq $m })
+  if ($hits.Count -eq 1) {
+    $rm.fileExpression = Get-NexusFileExpression $m ([string]$hits[0].source.fileId)
+    Say ('  mod ' + $m + ' (' + $hits[0].name + '): file ' + $hits[0].source.fileId + ', "' + $rm.fileExpression + '" on Nexus')
+  }
+  $swaps.Add($rm)
+}
 
 # ------------------------------------------------------- the light flags ---
 # LIGHT FLAGS above: each plugin found by the layout, its archive downloaded
@@ -963,19 +996,28 @@ foreach ($d in $dropped) {
 # OFF THE LIST). collection.json does not say which those are; the record
 # does, as its "enabled": false plugins, when it follows the revision this
 # starts from (#4603: Improved Eyes Skyrim.esp loads after
-# RaceMenuMorphsCBBE.esp, which revision 6 installs off its list).
-if ($adds.Count -or $rules.Count) {
-  $recordFile = Join-Path $Here '..\..\records\collection.json'
+# RaceMenuMorphsCBBE.esp, which revision 6 installs off its list). The same
+# record gives each plugin's masters, from its header, which -Remove needs
+# and collection.json does not say (TAKING A MOD OUT, #4191).
+if ($adds.Count -or $rules.Count -or $Remove.Count) {
+  $recordFile = $CollectionRecord
   $unlisted = @()
+  $masters = $null
   if (Test-Path -LiteralPath $recordFile) {
     $rec = Step { ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($recordFile)) $recordFile }
     if ([string]$rec.collection -eq $Slug -and [int]$rec.revision -eq $start -and $startStatus -eq 'published') {
       $unlisted = @(@($rec.plugins) | Where-Object { $_ -and $_.enabled -eq $false } | ForEach-Object { [string]$_.name })
       if ($unlisted.Count) { Say ('  installed off the list, by the record: ' + ($unlisted -join ', ')) 'DarkGray' }
+      if ($Remove.Count) {
+        $masters = [ordered]@{}
+        foreach ($p in @($rec.plugins | Where-Object { $_ -and $_.name })) { $masters[[string]$p.name] = [string[]]@(@($p.masters) | Where-Object { $_ } | ForEach-Object { [string]$_ }) }
+        Say ('  the plugins'' masters, by the record: ' + $masters.Count + ' plugin' + $(if ($masters.Count -ne 1) { 's' } else { '' })) 'DarkGray'
+      }
     }
-    else { Say ('  the record follows revision ' + $rec.revision + ' of ' + $rec.collection + ', not this one, so no plugin installed off the list is known') 'DarkGray' }
+    else { Say ('  the record follows revision ' + $rec.revision + ' of ' + $rec.collection + ', not this one, so no plugin installed off the list is known' + $(if ($Remove.Count) { ', and no plugin''s masters' } else { '' })) 'DarkGray' }
   }
   if ($unlisted.Count) { $swaps.Add([ordered]@{ unlisted = [string[]]$unlisted }) }
+  if ($null -ne $masters) { $swaps.Add([ordered]@{ masters = $masters }) }
 }
 $swapsJson = Join-Path $scratch 'swaps.json'
 $payloadJson = Join-Path $scratch 'payload.json'
