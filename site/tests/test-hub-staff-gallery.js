@@ -340,11 +340,11 @@ const asJson = { 'content-type': 'application/json' };
 
     // The doors under the hub gate that are not staff doors stay where they were.
     r = await ask('PUT', '/api/results', { cookie: cookieFor(LORE_ID, 'Lore'), 'content-type': 'application/json' },
-                  JSON.stringify({ 'test 1': { status: 'pass' } }));
+                  JSON.stringify({ id: 'test-1', status: 'pass' }));
     yes('a Loremaster cannot write the test marks (' + r.status + ')',
         r.status === 403 && r.json && r.json.error === 'hub members only');
     r = await ask('PUT', '/api/results', { cookie: cookieFor(OWNER_ID, 'Owner'), 'content-type': 'application/json' },
-                  JSON.stringify({ 'test 1': { status: 'pass' } }));
+                  JSON.stringify({ id: 'test-1', status: 'pass' }));
     yes('an Owner still can (' + r.status + ')', r.status === 200);
     r = await ask('POST', '/api/upload?name=x.log', { cookie: cookieFor(LORE_ID, 'Lore') }, 'hello');
     yes('the uploads door is still a member door (' + r.status + ')',

@@ -277,10 +277,12 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
     yes('a ban from the hub, Origin this site, lands', r.status === 200 && r.j.ok === true && !!read(A.dir, 'data/bans.json', {})[BJORN_D]);
     r = await request(port, 'POST', '/api/staff/pk', Object.assign({ cookie: admin, origin: OWN.toUpperCase().replace('HTTP', 'http') }, json), { id: BJORN_D, profileId: 2002, why: 'from the hub' });
     yes('a PK from the hub lands, the host in any case', r.status === 200 && r.j.ok === true && !!read(A.dir, 'data/pk.json', {})['2002']);
-    r = await request(port, 'PUT', '/api/doc/tests', { cookie: admin, origin: OWN }, 'written from the hub');
+    // With the copy it was made from (#4418), as the hub's editor sends it.
+    const keptWas = crypto.createHash('sha256').update('kept\n', 'utf8').digest('hex');
+    r = await request(port, 'PUT', '/api/doc/tests', { cookie: admin, origin: OWN, 'x-thornswood-doc-was': keptWas }, 'written from the hub');
     yes('a page written from the hub lands', r.status === 200 && text(A.dir, 'data/tests.md') === 'written from the hub');
-    r = await request(port, 'PUT', '/api/results', Object.assign({ cookie: admin, referer: OWN + '/hub' }, json), { marked: true });
-    yes('an old browser that sends only Referer, this site\'s page, still writes', r.status === 200 && read(A.dir, 'data/results.json', {}).marked === true);
+    r = await request(port, 'PUT', '/api/results', Object.assign({ cookie: admin, referer: OWN + '/hub' }, json), { id: 'marked', status: 'pass' });
+    yes('an old browser that sends only Referer, this site\'s page, still writes', r.status === 200 && (read(A.dir, 'data/results.json', {}).marked || {}).status === 'pass');
     r = await request(port, 'DELETE', '/api/upload/kept.txt', { cookie: admin, origin: OWN });
     yes('a delete from the hub lands', r.status === 200 && !fs.existsSync(path.join(A.dir, 'uploads', 'kept.txt')));
     r = await request(port, 'POST', '/api/staff/note', Object.assign({ cookie: admin, origin: 'https://127.0.0.1:' + port,
@@ -342,8 +344,8 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
     const member = String(r.headers['set-cookie'][0]).split(';')[0];
     r = await request(b.port, 'PUT', '/api/results', { 'content-type': 'application/json', cookie: member, origin: 'https://evil.example' }, { forged: 1 });
     yes('the member cookie from another site cannot write the test marks', refused(r) && read(B.dir, 'data/results.json', null) === null);
-    r = await request(b.port, 'PUT', '/api/results', { 'content-type': 'application/json', cookie: member, origin: BOWN }, { marked: 1 });
-    yes('from the hub it can', r.status === 200 && read(B.dir, 'data/results.json', {}).marked === 1);
+    r = await request(b.port, 'PUT', '/api/results', { 'content-type': 'application/json', cookie: member, origin: BOWN }, { id: 'marked', status: 'fail' });
+    yes('from the hub it can', r.status === 200 && (read(B.dir, 'data/results.json', {}).marked || {}).status === 'fail');
   } catch (e) {
     yes('the harness ran to the end: ' + (e && e.stack || e), false);
   } finally {

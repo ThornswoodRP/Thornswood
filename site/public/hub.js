@@ -16,7 +16,7 @@
 /* ---------------------------------------------------------------- state -- */
 var S = {
   me:{member:false,admin:false,dev:false,name:''}, titles:{}, level:{},
-  docs:{}, results:{}, files:[], uploads:[], inbox:[], linked:[],
+  docs:{}, docWas:{}, results:{}, files:[], uploads:[], inbox:[], linked:[],
   sessions:[], records:{bans:{}, notes:{}, pk:{}, names:{}},
   news:{news:[]}, invite:'', at:'home', editing:false, discord:false
 };
@@ -164,7 +164,7 @@ function start() {
   }).then(function (d) {
     S.me = d.me || S.me;
     S.titles = d.titles; S.level = d.level || {};
-    S.docs = d.docs || {};
+    S.docs = d.docs || {}; S.docWas = d.docWas || {};
     S.results = d.results || {}; S.files = d.files || [];
     S.uploads = d.uploads || []; S.inbox = d.inbox || [];
     S.linked = d.linked || []; S.invite = d.invite || '';
@@ -190,7 +190,7 @@ function refresh() {
     if (!r.ok) throw new Error('the site answered ' + r.status);
     return r.json();
   }).then(function (d) {
-    S.docs = d.docs || {};
+    S.docs = d.docs || {}; S.docWas = d.docWas || {};
     S.results = d.results || {}; S.files = d.files || [];
     S.uploads = d.uploads || []; S.inbox = d.inbox || [];
     S.linked = d.linked || []; S.sessions = d.sessions || [];
@@ -1919,11 +1919,24 @@ function drawEdit() {
   el('ta').value = S.docs[S.at] || '';
   el('cancel').onclick = function () { S.editing = false; draw(); };
   el('save').onclick = function () {
-    var text = el('ta').value;
+    var text = el('ta').value, at = S.at;
     saidNow('saving');
-    api('/api/doc/' + S.at, { method:'PUT', body:text }).then(function (r) {
-      if (!r.ok) throw 0;
-      S.docs[S.at] = text; S.editing = false; draw(); saidNow('saved');
+    /* With the copy this editor opened (#4418): a save over a copy somebody
+       has saved since is refused, and this page is sent what is there now.
+       What was typed stays in the box; Cancel shows theirs, and Save again
+       puts this over it, knowingly. */
+    api('/api/doc/' + at, { method:'PUT', headers:{ 'X-Thornswood-Doc-Was': S.docWas[at] || '' }, body:text }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (r.status === 409 && j && typeof j.text === 'string') {
+          S.docs[at] = j.text; S.docWas[at] = j.was || '';
+          saidNow((j.message || 'This page changed since you opened it, so yours was not saved.') +
+            ' What you wrote is still here. Cancel shows theirs; Save again puts yours over it.');
+          return;
+        }
+        if (!r.ok) throw 0;
+        S.docs[at] = text; S.docWas[at] = j.was || '';
+        S.editing = false; draw(); saidNow('saved');
+      });
     }).catch(function () { saidNow('did not save'); });
   };
 }
@@ -1999,10 +2012,14 @@ function dressTests() {
 function saveResult(id, rec, bar) {
   rec.at = Date.now();
   S.results[id] = rec;
+  /* This one test's mark and nothing else (#4418): sending every mark the
+     page loaded wrote over marks other people made since. The answer is the
+     marks as they now are, so theirs show here too. */
   api('/api/results', {
     method:'PUT', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(S.results)
-  }).then(function () {
+    body: JSON.stringify({ id: id, status: rec.status || '', notes: rec.notes || '', by: rec.by || '' })
+  }).then(function (r) {
+    if (r && !r.ok) { saidNow('did not save'); return; }
     if (bar) {
       each(bar, '.mark', function (b) {
         b.className = 'mark' + (rec.status === b.dataset.v ? ' on' : '');
@@ -2011,7 +2028,12 @@ function saveResult(id, rec, bar) {
       bar.querySelector('.when').textContent = new Date(rec.at).toLocaleDateString();
     }
     tally();
-  });
+    if (r && r.json) {
+      return r.json().then(function (j) {
+        if (j && j.results && typeof j.results === 'object') { S.results = j.results; tally(); }
+      });
+    }
+  }).catch(function () { saidNow('did not save'); });
 }
 
 function tally() {
@@ -2269,13 +2291,22 @@ function drawReport() {
 }
 
 /* --------------------------------------------------------------- inbox -- */
-function saveInbox() {
+/* One button on one row (#4418). The page used to send back the whole list it
+   loaded, which deleted every report sent since and brought back rows a
+   deletion request had taken out. The site applies this one change to the
+   inbox as it is now and answers with that inbox, which is drawn. */
+function inboxAct(id, act) {
   saidNow('saving');
   api('/api/inbox', {
     method:'PUT', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(S.inbox)
-  }).then(function (r) { saidNow(r.ok ? 'saved' : 'did not save'); })
-    .catch(function () { saidNow('did not save'); });
+    body: JSON.stringify({ id: id, act: act })
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (j && Array.isArray(j.inbox)) S.inbox = j.inbox;
+      saidNow(r.ok ? 'saved' : ((j && j.message) || 'did not save'));
+      draw();
+    });
+  }).catch(function () { saidNow('did not save'); });
 }
 
 function drawInbox() {
@@ -2306,27 +2337,16 @@ function drawInbox() {
   });
   el('page').innerHTML = out;
 
-  var find = function (id) {
-    return S.inbox.filter(function (x) { return x.id === id; })[0];
-  };
-
   each(el('page'), '[data-dismiss]', function (b) {
-    b.onclick = function () {
-      var item = find(b.dataset.dismiss);
-      if (item) { item.state = 'not doing this'; saveInbox(); draw(); }
-    };
+    b.onclick = function () { inboxAct(b.dataset.dismiss, 'dismiss'); };
   });
   each(el('page'), '[data-reopen]', function (b) {
-    b.onclick = function () {
-      var item = find(b.dataset.reopen);
-      if (item) { item.state = 'new'; saveInbox(); draw(); }
-    };
+    b.onclick = function () { inboxAct(b.dataset.reopen, 'reopen'); };
   });
   each(el('page'), '[data-forget]', function (b) {
     b.onclick = function () {
       if (!confirm('Delete this for good?')) return;
-      S.inbox = S.inbox.filter(function (x) { return x.id !== b.dataset.forget; });
-      saveInbox(); draw();
+      inboxAct(b.dataset.forget, 'delete');
     };
   });
 }
