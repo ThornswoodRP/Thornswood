@@ -812,7 +812,9 @@ Gallery page uploads via `/api/gallery/submit` and then sends the picture's
 `/api/gallery/report`, and for staff Approves (naming the copies the card
 showed beside the picture), Rejects and takes an approved shot down over the
 same Discord ticket, with a clear message when an older
-site still answers those doors 403 without why), MediaStrip.cs (what a
+site still answers those doors 403 without why), GalleryAlt.cs (the short
+description each picture is sent with, the site's alt text, 1 to 200
+characters, #4575), MediaStrip.cs (what a
 picture or recording says about where and when it was made, Exif and GPS
 among it, taken out before the Gallery page sends it, by the site's rules,
 #3648), Swallow.cs

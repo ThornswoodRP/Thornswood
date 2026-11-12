@@ -331,7 +331,8 @@ namespace Thornswood
         /// <summary>
         /// Blocking. Call it off the UI thread. Sends one screenshot into the
         /// site's gallery queue over /api/gallery/submit. The body IS the file;
-        /// the ticket, offered name, byline and note ride in the query, matching
+        /// the ticket, offered name, byline, note and description (alt, #4575)
+        /// ride in the query, matching
         /// the site's receiveUpload path. What the file says about where and
         /// when it was made (Exif, XMP, GPS and the like) is taken out first,
         /// by MediaStrip, so it never leaves this machine (#3648).
@@ -344,9 +345,14 @@ namespace Thornswood
         /// went or none was needed, and a sentence when one did not; the
         /// picture is in either way.
         /// </summary>
-        public static string Submit(string path, string by, string note, out string copies)
+        public static string Submit(string path, string by, string note, string alt, out string copies)
         {
             copies = "";
+            // The description first (#4575): a picture without one is not read
+            // or sent, and the site refuses one without it in any case.
+            string why;
+            string described = GalleryAlt.Clean(alt, out why);
+            if (described == null) return why;
             if (path == null || path.Trim().Length == 0)
                 return "Choose a picture to send first.";
             if (!Discord.Linked)
@@ -401,7 +407,8 @@ namespace Thornswood
                          Uri.EscapeDataString(Discord.Ticket) +
                          "&name=" + Uri.EscapeDataString(offered) +
                          "&by=" + Uri.EscapeDataString(who) +
-                         "&note=" + Uri.EscapeDataString(remark);
+                         "&note=" + Uri.EscapeDataString(remark) +
+                         "&alt=" + Uri.EscapeDataString(described);
 
             string reply = "";
             int code;
