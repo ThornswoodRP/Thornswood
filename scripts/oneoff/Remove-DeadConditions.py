@@ -1,6 +1,13 @@
 """
 Remove-DeadConditions.py
 
+RETIRED. DO NOT RUN (#4811). It did its one job in September, before
+Remove-DeadRecords.ps1 took the rank manuals out. On 12 November no record in
+Thornswood-Content.esp matched its default prefixes (372 records read, none
+compressed), nothing called it, and its --data default was its own folder,
+where there is no plugin. It refuses to run, and the rest of the file is kept
+for the history of how those conditions went.
+
 Takes conditions out of Thornswood-Content.esp that test for a record which is
 about to be deleted, so that Remove-DeadRecords.ps1 can then delete it.
 
@@ -46,12 +53,17 @@ THIS IS A SHIPPED FILE, so its size changing means a release and every client
 downloading it again.
 
 Usage:
-    python scripts/mods/Remove-DeadConditions.py --check
-    python scripts/mods/Remove-DeadConditions.py
+    python scripts/oneoff/Remove-DeadConditions.py --check
+    python scripts/oneoff/Remove-DeadConditions.py
 
 Exit code 1 if the parse does not round trip, if the result does not verify, or
 if a condition it was asked to remove sits in a compressed record.
 """
+
+# The refusal comes before anything else, so no part of it can run by
+# accident (#4811, as #1179 retired the others in scripts/oneoff).
+raise SystemExit('STOP. Remove-DeadConditions.py is retired and changes nothing (#4811). '
+                 'No record in Thornswood-Content.esp matches its prefixes any more.')
 
 import argparse
 import os
