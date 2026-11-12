@@ -171,7 +171,7 @@ yes('#updates is the Information category\'s, as Build-Discord.py plans it',
     "('Information', [" in open(os.path.join(HERE, 'Build-Discord.py'), encoding='utf-8').read()
     and "name='updates'" in open(os.path.join(HERE, 'Build-Discord.py'), encoding='utf-8').read()
     and bot.UPDATES_CATEGORY == 'information' and bot.UPDATES_NAME == 'updates')
-yes('the ping role is the one the hold panel hands out', ('updates', bot.UPDATES_PING_ROLE, 'Updates pings') in bot.PINGS)
+yes('the ping role is the one the button in #welcome hands out', ('updates', bot.UPDATES_PING_ROLE, 'Updates pings') in bot.PINGS)
 
 print()
 print('%d failed' % len(FAIL) if FAIL else 'all passed')

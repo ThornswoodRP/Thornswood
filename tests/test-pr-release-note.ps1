@@ -143,6 +143,21 @@ try {
     $r = Run-Collect @(@{ number = 1; title = 'a'; body = $b3; author = 'x' })
     Yes 'Collect ends 3 when every change says none' ($r.Code -eq 3 -and $r.Out -match 'NONE')
 
+    # Main Server changes (Patrick, 12 Nov 2026): a pull request that changed
+    # only the Discord bot or the site goes live on the merge, so its note is
+    # posted in #news by the bot and kept out of the build's.
+    $r = Run-Collect @(@{ number = 1; title = 'a'; body = $b1; author = 'x'; files = @('launcher/app/Forge.cs') },
+                       @{ number = 5; title = 'Discord'; body = $b2; author = 'x'; files = @('bot/bot_rules_gate.py', 'site/data/site/privacy.md', 'docs/systems/discord.md', 'tests/test-x.js') })
+    Yes 'a pull request that changed only the bot and the site is left out of the build note, and said to be a Main Server change' ($r.Code -eq 0 -and $r.Note -match '^The forge shows the price' -and $r.Note -notmatch 'Hunters' -and $r.Out -match 'main server.*#5 Discord')
+    $r = Run-Collect @(@{ number = 5; title = 'Discord'; body = $b2; author = 'x'; files = @('bot/bot.py') })
+    Yes 'Collect ends 3 when every change is a Main Server change, so the build gets the quiet note' ($r.Code -eq 3)
+    $r = Run-Collect @(@{ number = 6; title = 'Both'; body = $b2; author = 'x'; files = @('bot/bot.py', 'game/gamemode/forge.ts') })
+    Yes 'one that changed the bot and the game is in the build note' ($r.Code -eq 0 -and $r.Note -match 'Hunters')
+    $r = Run-Collect @(@{ number = 7; title = 'Docs'; body = $b2; author = 'x'; files = @('docs/guide/x.md', 'tests/test-y.ps1') })
+    Yes 'one that changed only docs and tests is in the build note, since it changed nothing live' ($r.Code -eq 0 -and $r.Note -match 'Hunters')
+    $ms = Get-Content -LiteralPath (Join-Path $Repo 'scripts/release/main-server-paths.json') -Raw | ConvertFrom-Json
+    Yes 'the live paths are the bot and the site' ((@($ms.live) -join ',') -eq 'bot/,site/')
+
     # ---- the builds leave nothing running (#5753) ----------------------------------
     # A dotnet build, test, run, publish or pack with the build servers on
     # leaves VBCSCompiler (and MSBuild's node) running after it, which the

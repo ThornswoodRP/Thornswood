@@ -20,7 +20,7 @@ from bot_notices import _github_time
 # the deploy agent swapped in build-1.3.20's server build at 11:12 AM, and
 # nothing that restarts a game server said so in #updates, the channel whose
 # topic is "Restarts and outages" and whose Updates Pings role promises a
-# ping for them (bot_holds.py).
+# ping for them (bot_pings.py).
 #
 # Now whatever stops a game server for a planned restart first leaves a notice
 # in the folder the release news uses (NEWS_DIR), restart-<environment>.json:
