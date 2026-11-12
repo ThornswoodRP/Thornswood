@@ -319,7 +319,7 @@ function downloadsBody(d) {
            'adult content in your Nexus Mods settings, or Nexus shows the collection ' +
            'as hidden. On a free account Vortex opens each file&rsquo;s page on Nexus ' +
            'and you press Slow download there, once for each file: 120 files, from ' +
-           '111 mods. A Premium account downloads them without the presses.</p>' +
+           '111 mods. A Premium account downloads them without pressing anything.</p>' +
            // The step said install the collection and never said where. The
            // address comes from version.json by way of the news feed, so there
            // is one copy of it and it cannot go stale here.
