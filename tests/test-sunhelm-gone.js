@@ -240,7 +240,7 @@ yes('Known Issues names none of the mods that left', KNOWN.length > 0 &&
     GONE.every(function (g) { return !g.re.test(KNOWN); }));
 
 // ------------------------------------------------------- Add-CartTravel.ps1
-const CART = read(['scripts', 'mods', 'Add-CartTravel.ps1']);
+const CART = read(['scripts', 'oneoff', 'Add-CartTravel.ps1']);
 const says = [];
 CART.split('\n').forEach(function (line) {
   const m = /^\s*Say\s+'((?:[^']|'')*)'/.exec(line) || /^\s*Say\s+"([^"]*)"/.exec(line);
@@ -272,7 +272,7 @@ yes('and the fast travel line says the SkyMP client turns it off',
   Add-TempleRespawn.ps1 is checked to refuse before it reaches any of the
   install.
 */
-const QUICKLOOT = read(['scripts', 'mods', 'Fix-QuickLoot.ps1']);
+const QUICKLOOT = read(['scripts', 'oneoff', 'Fix-QuickLoot.ps1']);
 const anchor = /\[string\]\s*\$After\s*=\s*'([^']+)'/.exec(QUICKLOOT);
 yes('Fix-QuickLoot.ps1 has a default plugin to insert behind', anchor !== null);
 const anchorName = anchor ? anchor[1] : '';
@@ -280,7 +280,7 @@ yes('and it is not a mod that has left, it is ' + anchorName, goneIn(anchorName)
 
 // The chain at the top of Enable-MCM.ps1 is where the masters are written
 // down: "MCMHelper.esp   NOT light, masters SkyUI_SE.esp".
-const ENABLE_MCM = read(['scripts', 'mods', 'Enable-MCM.ps1']);
+const ENABLE_MCM = read(['scripts', 'oneoff', 'Enable-MCM.ps1']);
 const master = /MCMHelper\.esp\b[^\n]*masters\s+(\S+\.es[pml])/i.exec(ENABLE_MCM);
 yes('Enable-MCM.ps1 says what MCMHelper.esp masters', master !== null);
 yes('and the anchor is that master, so the entry lands where the server can read it',

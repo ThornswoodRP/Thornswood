@@ -15,8 +15,8 @@
 
   WHAT THIS HOLDS:
     1. The copies are gone, and no tracked file names them, outside
-       docs\archive, scripts\oneoff and the two scripts #1179 retired, which
-       refuse to run before they reach the name.
+       docs\archive and scripts\oneoff, where the two scripts #1179 retired
+       sit and refuse to run before they reach the name.
     2. Every script that writes a loadOrder into a server-settings file
        (under scripts\ and tools\) either builds it (Deploy-Gamemode.ps1)
        or carries an order that was built, its paths pointed at another
@@ -119,8 +119,8 @@ try {
     # The names, built so that this file's own text does not match.
     $nameRx = [regex]('(?i)\b(' + ((@('Sync', 'Align') | ForEach-Object { $_ + '-Load' + 'Order' }) + @('Show-Esl' + 'Cascade') -join '|') + ')\b')
     # Retired by #1179: each stops on its first line, before the name, and is
-    # kept for the history of how it was installed.
-    $retired = @('scripts/mods/Enable-MCM.ps1', 'scripts/mods/Fix-QuickLoot.ps1')
+    # kept for the history of how it was installed, in scripts\oneoff (#4740).
+    $retired = @('scripts/oneoff/Enable-MCM.ps1', 'scripts/oneoff/Fix-QuickLoot.ps1')
     foreach ($f in $retired) {
         $full = Join-Path $Repo $f
         if (-not (Test-Path -LiteralPath $full)) { continue }
@@ -156,7 +156,6 @@ try {
         'scripts/release/Export-ServerPayload.ps1' = 'the built order, its paths pointed at the box'
         'scripts/vps/Restore-Server.ps1'           = 'a restored order, its paths pointed at its own folder'
         'scripts/vps/vps-dev-instance.ps1'         = 'the live order, its paths pointed at the dev folder'
-        'scripts/mods/Fix-QuickLoot.ps1'           = 'retired by #1179, refuses to run'
         'tools/DeployAgent/BotPass.cs'             = 'the order on the box, each plugin pointed at its cached copy'
     }
     $writeRx = [regex]'(?i)(NotePropertyName\s+loadOrder\b|\.loadOrder\s*=(?!=)|\[\s*[''"]loadOrder[''"]\s*\]\s*=(?!=))'

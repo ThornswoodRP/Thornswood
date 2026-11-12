@@ -18,7 +18,7 @@
   once this is in, character creation runs itself: face, then location, then
   class.
 
-      .\scripts\mods\Add-McmShortcut.ps1
+      .\scripts\oneoff\Add-McmShortcut.ps1
 
   Options:
       -Notes "..."     what the News page says about this release

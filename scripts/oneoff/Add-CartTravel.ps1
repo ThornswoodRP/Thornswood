@@ -16,7 +16,7 @@
   instead. One position change, which is exactly what multiplayer already
   handles for ordinary fast travel.
 
-      .\scripts\mods\Add-CartTravel.ps1
+      .\scripts\oneoff\Add-CartTravel.ps1
 
   Options:
       -Notes "..."     what the News page says about this release

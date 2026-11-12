@@ -18,7 +18,7 @@
   the build rather than being left to each person's MCM, and the optional
   MCM menu is deliberately not installed.
 
-      .\scripts\mods\Add-Accuracy.ps1
+      .\scripts\oneoff\Add-Accuracy.ps1
 
   Options:
       -Notes "..."     what the News page says about this release
