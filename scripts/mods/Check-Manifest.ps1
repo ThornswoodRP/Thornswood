@@ -56,8 +56,9 @@ $ssh = @('-o','BatchMode=yes','-o','StrictHostKeyChecking=yes')
 # company at slot 6, server Water for ENB.esm against Expressive Facegen
 # Morphs.esl, two lines after saying you had every plugin the server wants. It
 # then advised redeploying a server that was already correct, which is worse
-# than having no check at all. The server drops light plugins on purpose:
-# Game.getModCount gives them no index, so they hold no place in the order.
+# than having no check at all. Light plugins hold no place in the full order:
+# Game.getModCount gives them no index. A server that loads them lists them
+# apart, and they are compared with that light list (#4128).
 . (Join-Path $PSScriptRoot 'LoadOrder.ps1')
 
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
@@ -142,7 +143,18 @@ foreach (`$f in (Get-ChildItem -LiteralPath `$data -Recurse -Filter 'manifest.js
     `$k = @(`$m.mods).Count
     'FILE ' + `$f.FullName
     '  loadOrder ' + `$n + '   mods ' + `$k + '   written ' + `$f.LastWriteTime
-    if (-not `$seen) { foreach (`$p in `$m.loadOrder) { 'LO ' + `$p }; `$seen = `$true }
+    if (-not `$seen) {
+      foreach (`$p in `$m.loadOrder) { 'LO ' + `$p }
+      # The client walks mods against its full plugins and, when the manifest
+      # has one, light against its light plugins (#4128, #1715): each list is
+      # handed back for its own comparison.
+      foreach (`$x in @(`$m.mods)) { if ("`$(`$x.filename)" -match '\.(esp|esm|esl)`$') { 'FULL ' + `$x.filename } }
+      if (`$m.PSObject.Properties['light']) {
+        'HASLIGHT'
+        foreach (`$x in @(`$m.light)) { if ("`$(`$x.filename)" -match '\.(esp|esm|esl)`$') { 'LIGHT ' + `$x.filename } }
+      }
+      `$seen = `$true
+    }
     else { '  same list as above, not counted twice' }
   } catch { 'FILE ' + `$f.FullName + '  UNREADABLE: ' + `$_.Exception.Message }
 }
@@ -150,8 +162,14 @@ foreach (`$f in (Get-ChildItem -LiteralPath `$data -Recurse -Filter 'manifest.js
 
 $lines = @($out | ForEach-Object { "$_" })
 $serverOrder = @()
+$serverFull = @()
+$serverLight = @()
+$serverHasLight = $false
 foreach ($l in $lines) {
   if ($l -match '^\s*LO (.+)$') { $serverOrder += $Matches[1].Trim() }
+  elseif ($l -match '^\s*FULL (.+)$') { $serverFull += $Matches[1].Trim() }
+  elseif ($l -match '^\s*LIGHT (.+)$') { $serverLight += $Matches[1].Trim() }
+  elseif ($l -match '^\s*HASLIGHT\s*$') { $serverHasLight = $true }
   else { Say "  $l" }
 }
 
@@ -184,7 +202,8 @@ if (-not (Test-Path -LiteralPath $plug)) {
 
   # The game's own order: the five masters, then every plugin Skyrim.ccc
   # names that is in Data in that file's order, then the enabled lines. Light
-  # plugins are skipped throughout, because the server gives them no index.
+  # plugins take no place in it, because the game gives them no index; they
+  # are compared below with the server's light list, when it has one.
   # The Skyrim.ccc half is not decoration: on 19 September two Creation Club
   # masters the list never mentions put every plugin after Dragonborn.esm two
   # places off, and any check that reads plugins.txt alone passes that.
@@ -204,14 +223,32 @@ if (-not (Test-Path -LiteralPath $plug)) {
   # around it would nest that array inside another.
   $mineFull = Get-LoadOrderGame $enabled $isLightOrMissing $ccc $exists
   $dropped  = ($enabled.Count + 5) - $mineFull.Count
+  # Light plugins (#4128). A server that loads them writes them in a light
+  # list of their own, and its whole order (LO) is the full plugins then the
+  # light ones, so comparing that with the full plugins alone told a correct
+  # client it lacked every light plugin, Thornswood-Last.esp among them. The
+  # client's own check walks mods against its full plugins and the light list
+  # against its light ones, so this does the same: the game's light order,
+  # by the one rule in LoadOrder.ps1, against the manifest's light list. A
+  # manifest with no light list is a server that loads none, and then the
+  # client's light plugins are compared with nothing, as its check does.
+  $isLight   = { param($n) Test-LoadOrderLight (Join-Path $data $n) }
+  $mineLight = [string[]]@()
+  if ($serverHasLight) { $mineLight = Get-LoadOrderLight $enabled $isLight $ccc $exists }
 
-  Say ("  server wants  {0} plugins" -f $serverOrder.Count)
-  Say ("  you have      {0} that take a place in the order (five Bethesda masters included)" -f $mineFull.Count)
-  Say ("  {0} enabled lines carry no index and are left out of both lists, because they are light" -f $dropped) 'DarkGray'
+  if ($serverHasLight) {
+    Say ("  server wants  {0} plugins and {1} light plugins" -f $serverFull.Count, $serverLight.Count)
+    Say ("  you have      {0} that take a place in the order (five Bethesda masters included), and {1} light plugins" -f $mineFull.Count, $mineLight.Count)
+    Say '  each list is compared with its own: full with full, light with light' 'DarkGray'
+  } else {
+    Say ("  server wants  {0} plugins" -f $serverFull.Count)
+    Say ("  you have      {0} that take a place in the order (five Bethesda masters included)" -f $mineFull.Count)
+    Say ("  {0} enabled lines are light or not in Data, and this server's manifest has no light list, so it loads none: they are left out" -f $dropped) 'DarkGray'
+  }
   Write-Host ''
 
-  $extra   = @($mineFull | Where-Object { $serverOrder -notcontains $_ })
-  $missing = @($serverOrder | Where-Object { $mineFull -notcontains $_ })
+  $extra   = @($mineFull | Where-Object { $serverFull -notcontains $_ }) + @($mineLight | Where-Object { $serverLight -notcontains $_ })
+  $missing = @($serverFull | Where-Object { $mineFull -notcontains $_ }) + @($serverLight | Where-Object { $mineLight -notcontains $_ })
 
   if ($missing.Count) {
     Say ("  {0} the server wants that you DO NOT have:" -f $missing.Count) 'Red'
@@ -270,15 +307,15 @@ if (-not (Test-Path -LiteralPath $plug)) {
   }
 
   Write-Host ''
-  $firstBad = Get-LoadOrderFirstMismatch $mineFull $serverOrder
+  $firstBad = Get-LoadOrderFirstMismatch $mineFull $serverFull
   if ($firstBad -lt 0) {
     Say '  POSITION BY POSITION: identical.' 'Green'
-  } elseif ($firstBad -ge $serverOrder.Count -or $firstBad -ge $mineFull.Count) {
+  } elseif ($firstBad -ge $serverFull.Count -or $firstBad -ge $mineFull.Count) {
     Say ("  POSITION BY POSITION: the first {0} match, then one list runs out." -f $firstBad) 'Yellow'
     Say '  The shorter list is missing plugins the other has. They are named above.' 'Yellow'
   } else {
     Say ("  POSITION BY POSITION: they part company at slot {0}." -f ($firstBad + 1)) 'Red'
-    Say ("    server: " + $serverOrder[$firstBad]) 'Red'
+    Say ("    server: " + $serverFull[$firstBad]) 'Red'
     Say ("    you:    " + $mineFull[$firstBad]) 'Red'
     Write-Host ''
     # Not advice to redeploy. Until 17 September this ended by telling you to
@@ -310,6 +347,36 @@ if (-not (Test-Path -LiteralPath $plug)) {
       Say '  above as missing come first, the way that step says.' 'Yellow'
       Say '  Do not redeploy the server to make this match. The world keys every' 'Yellow'
       Say '  saved form on its position in that list, so moving it re-keys them.' 'Yellow'
+    }
+  }
+
+  # The light plugins in light order, against the server's light list
+  # (#4128). Only when the manifest has one: a server with none loads none.
+  if ($serverHasLight) {
+    Write-Host ''
+    $firstLight = Get-LoadOrderFirstMismatch $mineLight $serverLight
+    if ($firstLight -lt 0) {
+      Say '  LIGHT PLUGINS, IN ORDER: identical.' 'Green'
+    } elseif ($firstLight -ge $serverLight.Count -or $firstLight -ge $mineLight.Count) {
+      Say ("  LIGHT PLUGINS, IN ORDER: the first {0} match, then one list runs out." -f $firstLight) 'Yellow'
+      Say '  The shorter list is missing light plugins the other has. They are named above.' 'Yellow'
+    } else {
+      Say ("  LIGHT PLUGINS, IN ORDER: they part company at light slot {0}." -f ($firstLight + 1)) 'Red'
+      Say ("    server: " + $serverLight[$firstLight]) 'Red'
+      Say ("    you:    " + $mineLight[$firstLight]) 'Red'
+      Write-Host ''
+      # The manifest's whole order is the one the launcher puts a plugin list
+      # into when there is a light list (game\gamemode\server-manifest.ts), so
+      # Fix settles light order the way it settles the full one.
+      if ($Dev) {
+        Say '  The DEV server follows the build. Do NOT press Fix in the dev launcher.' 'Red'
+        Say '  Bring the dev server up to the build instead (Patrick runs it):' 'Yellow'
+        Say '    .\scripts\deploy\Deploy-DevGamemode.ps1 -LoadOrder' 'Yellow'
+      } else {
+        Say '  Press Fix in the launcher, then Scan. Fix puts the server''s whole order,' 'Yellow'
+        Say '  light plugins included, into this build''s plugin list.' 'Yellow'
+        Say '  Do not redeploy the server to make this match.' 'Yellow'
+      }
     }
   }
 }
