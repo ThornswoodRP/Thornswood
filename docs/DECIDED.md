@@ -655,6 +655,10 @@ issue where the card did.
 - **The launcher's and the site's News read GitHub Releases**
   (q-p09-news-from-releases). 31 Oct 2026,
   [#5179](https://github.com/ThornswoodRP/Thornswood/issues/5179).
+- **#5828 merges at 85d605a: the release's Velopack step runs its commands
+  through Invoke-Said.ps1, so a failed pack's annotation says vpk's own
+  reason.** (dec_11xIN1w7VZsqEOSBnRGoeQ) 11 Nov 2026,
+  [#5765](https://github.com/ThornswoodRP/Thornswood/issues/5765#issuecomment-6815102943).
 
 ### The engine
 
