@@ -23,6 +23,9 @@
 //      written: the message says whose pack was written, never "Nothing was
 //      taken", and the trade is closed
 //   E  an ordinary trade still moves both piles, in one write per person
+//   F  half a trade, and telling the first person throws: the second is
+//      still told, and the server log names who was not, with the error
+//   G  the same for half a sale to a worker
 //
 // Read only.
 const REPO_DIR = require('path').join(__dirname, '..');
@@ -126,14 +129,22 @@ function tradeWorld(company) {
     }
   };
   const said = [];
+  const logged = [];
+  // sayThrows[id]: say throws for this person, as http.request does on a
+  // port that is not a whole number (ERR_SOCKET_BAD_PORT).
+  const sayThrows = {};
   new Function(
     'globalThis', 'mp', 'console', 'setInterval', 'clearInterval', 'guard', 'say', 'notify',
     require('./fixtures/ordinary-quest-items') + TRADE)(
-    g, mp, { log: function () { } }, function () { return 1; }, function () { },
-    function (n, f) { return f; }, function (id, line) { said.push([id, line]); }, function () { });
+    g, mp, { log: function (s) { logged.push(String(s)); } }, function () { return 1; }, function () { },
+    function (n, f) { return f; },
+    function (id, line) {
+      if (sayThrows[id]) { throw new RangeError('Port should be >= 0 and < 65536. Received type number (7778.5).'); }
+      said.push([id, line]);
+    }, function () { });
   const tr = g.__thornswoodTrade;
   return {
-    trade: tr, store: store, writes: writes, said: said, throwAfter: throwAfter,
+    trade: tr, store: store, writes: writes, said: said, throwAfter: throwAfter, logged: logged, sayThrows: sayThrows,
     person: function (id, pack, pid, name) {
       store[id] = { worldOrCellDesc: 'town:X.esm', pos: [0, 0, 0], profileId: pid || 0, name: name,
                     inventory: asEngineKeeps({ entries: pack }) };
@@ -245,6 +256,45 @@ attempt('E: both piles move, one write per person', function () {
       w.count(A, GOLD) === 55 && w.count(A, LEEK) === 2 && w.count(A, SWORD) === 0 &&
       w.count(B, SWORD) === 1 && w.count(B, LEEK) === 1 && w.count(B, GOLD) === 0);
   yes('E3 one write each, two in all', w.writes.length === 2 && w.writes[0] === A && w.writes[1] === B);
+});
+
+// --------------- F. telling the first person throws: the second is told --
+attempt('F: half a trade, and say throws for the first person', function () {
+  const w = tradeWorld();
+  w.person(A, [{ baseId: SWORD, count: 1 }], 0, 'Aldis');
+  w.person(B, [{ baseId: GOLD, count: 50 }], 0, 'Sera');
+  w.trade.begin(A, B);
+  w.trade.add(A, '#' + w.line(A, 'Iron Sword').p, 1);
+  w.trade.gold(B, 50);
+  w.trade.confirm(A);
+  w.throwAfter[A] = true;
+  w.sayThrows[A] = true;
+  const r = w.trade.confirm(B);
+  yes('F1 the second person is still told', w.said.some(function (s) { return s[0] === B && s[1] === r; }));
+  yes('F2 the server log names who was not told, the line, and the error',
+      w.logged.some(function (l) {
+        return /NOT TOLD: Aldis was not told "The trade went only half through/.test(l) && /Received type number \(7778\.5\)/.test(l);
+      }));
+  yes('F3 and the half trade itself is still logged', w.logged.some(function (l) { return /HALF A TRADE: Aldis was written and Sera was not/.test(l); }));
+});
+
+// --------------- G. the same for half a sale to a worker --
+attempt('G: half a sale, and say throws for the seller', function () {
+  const w = tradeWorld([7]);
+  w.person(A, [{ baseId: GOLD, count: 100 }], 7, 'Brenna');
+  w.person(B, [{ baseId: LEEK, count: 1 }], 8, 'Thora');
+  w.trade.begin(A, B);
+  w.trade.sale(A);
+  w.trade.add(B, '#' + w.line(B, 'Leek').p, 1);
+  w.trade.gold(A, 50);
+  w.trade.confirm(A);
+  w.throwAfter[B] = true;
+  w.sayThrows[B] = true;
+  const r = w.trade.confirm(B);
+  yes('G1 it is half a sale, said as it is: "' + r + '"', /^The sale went only half through: Thora's pack was written and Brenna's was not\./.test(r));
+  yes('G2 the worker is still told', w.said.some(function (s) { return s[0] === A && s[1] === r; }));
+  yes('G3 the server log names the seller as not told, with the error',
+      w.logged.some(function (l) { return /NOT TOLD: Thora was not told "The sale went only half through/.test(l) && /7778\.5/.test(l); }));
 });
 
 done();
