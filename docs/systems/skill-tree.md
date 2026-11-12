@@ -21,7 +21,7 @@ five in one sub-skill are refused.
 | Potency | +5 spell power, in the schools you hold | Overcharge. One spell in five deals double, or holds twice as long |
 | Ward | +5 magic resistance | Spellbreaker. 20% of the magicka in a spell that hits you is added to yours |
 | Efficiency | -3 spell cost, in the schools you hold | Font of Magic. Once a day, 15 seconds where a spell costs nothing |
-| Endurance | +10 stamina | Tireless. Running and swinging cost half stamina |
+| Endurance | +10 stamina | Tireless. A sprint, a power attack and a shield bash cost half stamina |
 | Vigor | +10% stamina recovery | Second Wind. When stamina hits 0 it fills, once every 5 minutes |
 | Agility | +2 speed | Windwalker. +4 speed, and a fall deals no damage |
 | Burden | +15 carry weight | Pack Mule. Being overloaded does not slow you |
