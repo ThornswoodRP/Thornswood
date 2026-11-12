@@ -70,7 +70,7 @@ let ROWS = [];
 function sessionRows() { return ROWS; }
 
 eval([
-  grab('slogFile'), grab('slogTrim'), grab('putSessionLogs'),
+  grab('slogFile'), grab('writeSlogSet'), grab('slogTrim'), grab('putSessionLogs'),
   grab('retentionSay'), grab('pruneSessionLogs'), grab('serverLogGenerations'), grab('serverLogSlice')
 ].join('\n'));
 
@@ -123,7 +123,8 @@ function age(key, days) {
   const f = slogFile(key);
   const o = JSON.parse(fs.readFileSync(f, 'utf8'));
   o.at = Date.now() - days * 86400000;
-  fs.writeFileSync(f, JSON.stringify(o));
+  // As a set saved then is on disk: its file time is its "at" (#4432).
+  writeSlogSet(f, o);
 }
 putSessionLogs('old11111old11111', '333', { 'launcher.log': 'old\n' });
 putSessionLogs('keep1111keep1111', '333', { 'launcher.log': 'evidence\n' });
@@ -165,8 +166,8 @@ yes('the line names the file and the error, never what it holds',
 yes('and the prune answers how many went and which would not, rather than nothing',
     !!pruned && pruned.deleted === 1 && pruned.failed.length === 1 && pruned.failed[0].file === 'stuck111stuck111.json');
 fs.rmSync(STUCK, { recursive: true, force: true });
-yes('pruning cannot throw into the session end that calls it, so the call is no longer wrapped',
-    /\n    if \(ending\) pruneSessionLogs\(\);\r?\n/.test(src) && !/catch \(e\) \{ \}\s*\}\s*$/.test(grab('pruneSessionLogs')));
+yes('pruning is the hourly sweep\'s, never the end of a session, which used to wait on it (#4432), and it is not wrapped',
+    !/if \(ending\) pruneSessionLogs\(\);/.test(src) && !/catch \(e\) \{ \}\s*\}\s*$/.test(grab('pruneSessionLogs')));
 
 // ---- the server log slice --------------------------------------------------
 fs.writeFileSync(SERVER_LOGS.main,
@@ -684,7 +685,7 @@ yes('a second note for the same session is not added twice', again.length === 1)
     const notAFolder = path.join(TMP, 'not-a-folder');
     fs.writeFileSync(notAFolder, 'a file where the session-logs folder should be');
     const putInto = new Function('fs', 'path', 'crypto', 'SLOGS', 'SLOG_ONE', 'SLOG_ALL', 'SLOG_NAMES',
-      grab('slogFile') + '\n' + grab('slogTrim') + '\n' + grab('putSessionLogs') + '\nreturn putSessionLogs;')(
+      grab('slogFile') + '\n' + grab('writeSlogSet') + '\n' + grab('slogTrim') + '\n' + grab('putSessionLogs') + '\nreturn putSessionLogs;')(
       fs, path, crypto, notAFolder, SLOG_ONE, SLOG_ALL, SLOG_NAMES);
     const got = putInto('fail2736fail2736', '111', { 'launcher.log': 'a crash worth keeping\n' });
     yes('a set the folder will not take answers failed, not nothing', got === 'failed');

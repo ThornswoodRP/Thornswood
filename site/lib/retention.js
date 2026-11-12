@@ -24,7 +24,7 @@ const { BANS, bansNow, MODLOG, NOTES, PK } = require('./staff');
 const { sweepSignIns } = require('./signins');
 const { sweepSignOuts } = require('./auth');
 const { pruneSessionLogs, retentionSay, sessionKey, sessionRows, slogFile,
-  SLOGS, sweepSessions } = require('./sessions');
+  SLOGS, sweepSessions, writeSlogSet } = require('./sessions');
 
 // ==== thornswood keeping times ====
 //
@@ -313,7 +313,7 @@ function copyKeptChat(row, now) {
   set.chat = chat;
   try {
     if (!fs.existsSync(SLOGS)) fs.mkdirSync(SLOGS, { recursive: true });
-    fs.writeFileSync(slogFile(key), JSON.stringify(set));
+    writeSlogSet(slogFile(key), set);
     return 'copied';
   } catch (e) {
     retentionSay('kept-chat', { event: 'copy-failed', session: key, code: (e && e.code) || 'unknown' });
@@ -327,7 +327,7 @@ function dropKeptChat(key) {
   if (!had.set || !had.set.chat) return 'none';
   try {
     if (had.set.chatOnly) fs.unlinkSync(slogFile(key));
-    else { delete had.set.chat; fs.writeFileSync(slogFile(key), JSON.stringify(had.set)); }
+    else { delete had.set.chat; writeSlogSet(slogFile(key), had.set); }
     return 'dropped';
   } catch (e) {
     retentionSay('kept-chat', { event: 'drop-failed', session: key, code: (e && e.code) || 'unknown' });

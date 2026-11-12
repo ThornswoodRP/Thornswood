@@ -54,7 +54,7 @@ const { cleanEconomy, ECONOMY, ECONOMY_KEEP_DAYS, economyNow, ROSTER,
   ROSTER_HELD_FRESH_MS, slotsFor } = require('./roster');
 const { ATTEMPTS, freshSignIns, noteSignIn } = require('./signins');
 const { crashedRow, findSession, lookedAtFor, markLooked, openSessionOf,
-  pruneSessionLogs, putSessionLogs, putSessions, retentionSay, sessionKey,
+  putSessionLogs, putSessions, retentionSay, sessionKey,
   sessionRows, SLOG_ALL, slogFile } = require('./sessions');
 const { copyKeptChat, dropKeptChat, freshGalleryReports, isObjectLike,
   sessionWindow, stalePending } = require('./retention');
@@ -2253,8 +2253,8 @@ async function handle(req, res) {
       }
     }
     if (!putSessions(rows)) return sendJson(res, 500, { ok: false, why: 'could not save' });
-    // pruneSessionLogs says its own failures and never throws (#2354).
-    if (ending) pruneSessionLogs();
+    // The log sets are aged by the hourly sweep (retentionSweep), never here:
+    // the end of a session used to wait while every set was read (#4432).
     return sendJson(res, 200, { ok: true });
   }
 

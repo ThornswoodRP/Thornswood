@@ -83,9 +83,12 @@ const rows = [
 ];
 fs.writeFileSync(SESSIONS, JSON.stringify(rows, null, 2));
 function logSet(key, who, at) {
-  fs.writeFileSync(path.join(SLOGS, key + '.json'), JSON.stringify({
+  const f = path.join(SLOGS, key + '.json');
+  fs.writeFileSync(f, JSON.stringify({
     session: key, who: who, at: at, bytes: 5, sha256: {}, logs: { 'launcher.log': 'hello' }
   }));
+  // As the site leaves a set it saved: its file time is its "at" (#4432).
+  fs.utimesSync(f, new Date(at), new Date(at));
 }
 logSet('old0000000000001', '501', NOW - 400 * DAY);
 logSet('kept000000000002', '502', NOW - 400 * DAY);
