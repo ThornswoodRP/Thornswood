@@ -100,11 +100,13 @@ const rows = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } cat
     }, null, 2));
 
     // Two rows, then the file stops where a crash part way through a write
-    // would have left it.
+    // would have left it. Sent a minute ago, so the inbox's keeping time
+    // (trimInbox) keeps them.
     const INBOX = path.join(FOR_BOT, 'inbox.json');
+    const sent = Date.now() - 60000;
     const whole = JSON.stringify([
-      { id: 'iold1', kind: 'ticket', title: 'an application from before', at: 1, state: 'new' },
-      { id: 'iold2', kind: 'report', title: 'a report from before', at: 2, state: 'new' }
+      { id: 'iold1', kind: 'ticket', title: 'an application from before', at: sent, state: 'new' },
+      { id: 'iold2', kind: 'report', title: 'a report from before', at: sent + 1000, state: 'new' }
     ], null, 2);
     const cut = whole.slice(0, whole.length - 40);
     fs.writeFileSync(INBOX, cut);
