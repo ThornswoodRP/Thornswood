@@ -200,9 +200,9 @@ tools show beside the plugin. Until 12 October it still said the content was
 salvaged from the other server, by that server's full name, and was out of
 date besides. Patrick's answer B on #400: the description says what the plugin
 is for Thornswood, the salvaged records stay, and the other server's name is
-mentioned nowhere. So this writes the description into the header, changing
-only that subrecord and the header's size, and refuses to write a file whose
-header or any record still carries the other server's full name.
+mentioned nowhere. So this writes Thornswood's description into the header it
+builds, and refuses to write a file whose header or any record still carries
+the other server's full name.
 
 Since #2993 the description is built from the records the written plugin
 holds. Until then it was one sentence typed into this script, and nothing held
