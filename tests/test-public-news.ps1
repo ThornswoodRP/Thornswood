@@ -14,12 +14,12 @@
   were "The gamemode was rebuilt: starting kits, creation and arrival points
   live in it" and "Load order: 60 plugins server side". They reached the site.
 
-  The site writes its News page itself since #5187 (site/server.js, "news
-  from the Release"); tests\test-5187-site-news.js drives its cleaning over
-  feeds in those shapes. This reads Publish-Server.ps1 and checks those lines
-  are no longer written at all, and that Publish-Discord strips every kind of
-  line the site's page strips, because its comment says they are the same
-  list.
+  The site's News page reads the build Releases main has reached since #5801
+  (site/lib/news.js, "news from the Release"), notes written for people and
+  held to Note-Rules.ps1, so no feed line reaches it any more
+  (tests\test-5187-site-news.js). This reads Publish-Server.ps1 and checks
+  those lines are no longer written at all, and that Publish-Discord, which
+  still posts from a feed, strips every kind of them.
 
   -Repo runs it against another copy of the scripts.
 
@@ -61,22 +61,18 @@ $toBody = @($assigns | Where-Object { $_.Left.Extent.Text -eq '$body' })
 Yes 'Publish-Server sets a body' ($toBody.Count -ge 1)
 Yes 'no body it sets carries the VPS address or says it was reinstalled' (-not ($toBody | Where-Object { $_.Right.Extent.Text -match '(?i)VpsHost|reinstalled and is answering' }))
 
-# ---- Publish-Discord strips what the site's News page strips -----------------
+# ---- Publish-Discord strips them -------------------------------------------
 $t = $null; $e = $null
 $a = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $Repo 'scripts\ops\Publish-Discord.ps1'), [ref]$t, [ref]$e)
 # Publish-Discord keeps its list in Get-ThornswoodDiscordNoise.
 $fn = $a.Find({ param($x) $x -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $x.Name -eq 'Get-ThornswoodDiscordNoise' }, $true)
 $discordNoise = @(if ($fn) { $fn.Body.FindAll({ param($x) $x -is [System.Management.Automation.Language.StringConstantExpressionAst] }, $true) | ForEach-Object { $_.Value } })
-# The site's list, NEWS_NOISE in server.js, one /pattern/i each.
-# The site is server.js over its modules in site\lib since #5357.
-. (Join-Path $PSScriptRoot 'SiteFiles.ps1')
-$server = Get-SiteSource (Join-Path $Repo 'site')
-$m = [regex]::Match($server, '(?s)const NEWS_NOISE = \[(.*?)\];')
-$newsNoise = @(if ($m.Success) { [regex]::Matches($m.Groups[1].Value, '/((?:\\/|[^/])+)/i') | ForEach-Object { $_.Groups[1].Value -replace '(?<!\\)\\/', '/' } })
-Yes ("the site's News page strips {0} kinds of line, the load order and the gamemode among them" -f $newsNoise.Count) (($newsNoise -contains '^\s*Load order\s*:') -and ($newsNoise -contains '^\s*The gamemode was rebuilt\b'))
-$missing = @($newsNoise | Where-Object { $discordNoise -notcontains $_ })
+# Every kind of line the site's page stripped while it read the feed.
+$feedNoise = @('^\s*Launcher rebuilt\s*:', '^\s*Launcher \d+\.\d+', 'files? to download', '[\\/](SKSE|Data|tools)[\\/]',
+               '^\s*Load order\s*:', '^\s*The gamemode was rebuilt\b')
+$missing = @($feedNoise | Where-Object { $discordNoise -notcontains $_ })
 foreach ($x in $missing) { Write-Host ('      Publish-Discord does not strip: ' + $x) }
-Yes 'Publish-Discord strips every one of them too, as its comment says' ($missing.Count -eq 0)
+Yes ("Publish-Discord strips all {0} kinds of line, the load order and the gamemode among them" -f $feedNoise.Count) ($missing.Count -eq 0)
 
 Write-Host ''
 Write-Host "$script:pass passed, $script:fail failed"

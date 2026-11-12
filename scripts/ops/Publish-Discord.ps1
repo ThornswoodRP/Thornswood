@@ -61,9 +61,8 @@
   the live one, and it posts through
   bot\dev-webhook.txt, which Set-DevNews.ps1 writes and which points
   at the dev updates channel. Nothing about a dev release reaches #news, the
-  website or the main launcher: the site's News page reads the main feed only
-  (#5187), and a dev publish only ever writes the dev feed, which only the dev
-  launcher reads.
+  website or the main launcher: the site's News page reads the build Releases
+  main has reached (#5801), and a dev publish only ever writes the dev feed.
 
   Two things this used to get wrong, both visible in the channel:
 
@@ -74,10 +73,10 @@
 
   And it posted the detail lines raw. The launcher's feed is a developer's
   changelog, so the first bullet under a release title was "Launcher 1.0.197",
-  which the embed already says in its footer. The site's News page strips
-  those (NEWS_NOISE in site/server.js, #5187; Publish-News.ps1 did before it).
-  The same list is stripped here; tests\test-public-news.ps1 holds the two
-  lists together.
+  which the embed already says in its footer. Those lines are stripped here
+  (Get-ThornswoodDiscordNoise), as the site's News page did while it read the
+  feed (until #5801; Publish-News.ps1 before #5187); tests\test-public-news.ps1
+  holds the list.
 #>
 [CmdletBinding()]
 param(

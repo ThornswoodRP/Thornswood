@@ -44,7 +44,7 @@ The JSON files Thornswood's release, deploy, game, site, bot and voice trust, wh
 | `signouts.json` | site | site | High: a sign out (#4405) | its own: a time per keyed account, never written over while it will not read, and while broken every staff sign in reads as signed out (`site/lib/auth.js`) |
 | `notes.json`, `inbox.json`, `open-tickets.json`, `trouble.json` | site | site | Medium: concurrent edits (#2188) | none |
 | `gallery.json`, `gallery-pending.json`, `gallery-reports.json`, `uploads.json`, `files.json` | site | site | Medium | none |
-| `news.json`, `page-versions.json` | the site (news.json from the main feed, #5187), Set-DevNews | site | Low | named on a bad read (#2119) |
+| `news.json`, `page-versions.json` | the site (news.json from the build Releases main has reached, #5801), Set-DevNews | site | Low | named on a bad read (#2119) |
 | `online.json`, `roster.json`, `heartbeat.json` | game server, gamemode | site, launcher, Deploy-Server (on the box) | Medium | none |
 | `joins.json`, `commands-synced.json`, `bot.env.json` | bot, Install-Bot | bot | Medium; `bot.env.json` holds a secret and is never in the repository | none |
 | `thornswood-deploy.json` | Install-Bot, Install-Voice, Deploy-Server, Deploy-DevGamemode, Publish-Server (Artifact.ps1) | site, game servers, Publish-Server -PutBack | Low | a put-back holds it to the gamemode it came back with (#459) |

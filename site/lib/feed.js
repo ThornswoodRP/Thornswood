@@ -11,7 +11,7 @@
 // file).
 module.exports = { askReleaseCopies, assetLocation, feedFile, feedReleaseTag, feedSettings,
   feedMove, feedMoveVersion, feedView, nativePublished, nativeTag, newestSetup, readJsonQuiet, releaseAsset, releaseCopy,
-  releaseList, serverRevision, setupChannel };
+  releaseList, releaseNotes, serverRevision, setupChannel };
 
 const https  = require('https');
 const fs     = require('fs');
@@ -558,11 +558,15 @@ function assetIds(assets) {
    is answered and a new one asked for behind it. A look that fails keeps the
    list the last one found. null when GitHub has not answered yet. */
 const LIST_SIGNED_MS = 60 * 1000;
-const releaseListHeld = { body: null, files: {}, at: 0, busy: null };
+const releaseListHeld = { body: null, files: {}, notes: null, at: 0, busy: null };
 function listFromGitHub(list) {
-  const out = [], files = {};
+  const out = [], files = {}, notes = [];
   for (const r of list) {
     if (!r || r.draft || typeof r.tag_name !== 'string' || !RELEASE_ROUTE_TAG.test(r.tag_name) || !Array.isArray(r.assets)) continue;
+    // What the News page reads of it (news.js): its title, its note and when
+    // it went out.
+    notes.push({ tag: r.tag_name, name: typeof r.name === 'string' ? r.name : '', body: typeof r.body === 'string' ? r.body : '',
+                 published_at: r.published_at || null });
     const ids = assetIds(r.assets);
     files[r.tag_name] = ids;
     const assets = [];
@@ -574,7 +578,7 @@ function listFromGitHub(list) {
     out.push({ name: typeof r.name === 'string' ? r.name : r.tag_name, tag_name: r.tag_name, prerelease: !!r.prerelease,
                published_at: r.published_at || null, assets });
   }
-  return { body: JSON.stringify(out), files };
+  return { body: JSON.stringify(out), files, notes };
 }
 function askReleaseList() {
   if (releaseListHeld.busy) return releaseListHeld.busy;
@@ -587,6 +591,7 @@ function askReleaseList() {
       const made = listFromGitHub(got.body);
       releaseListHeld.body = made.body;
       releaseListHeld.files = made.files;
+      releaseListHeld.notes = made.notes;
     } else {
       console.error('[thornswood-docs] the Release list for launchers: ' + (got.why || 'did not read'));
     }
@@ -601,6 +606,15 @@ async function releaseList() {
   const asking = askReleaseList();
   if (releaseListHeld.body === null) await asking;
   return releaseListHeld.body;
+}
+// The same newest hundred published Releases as the News page reads them
+// (news.js): [{ tag, name, body, published_at }], newest first as GitHub
+// lists them, or null when GitHub has not answered yet. One list, one call,
+// for the launchers and the page.
+async function releaseNotes() {
+  const asking = askReleaseList();
+  if (releaseListHeld.notes === null) await asking;
+  return releaseListHeld.notes;
 }
 /* THE LAUNCHERS A CHANNEL LETS IN, SINCE VELOPACK (#4825). The launcher goes
    out only through Velopack: merge-release.yml packs it as version 1.3.<n>

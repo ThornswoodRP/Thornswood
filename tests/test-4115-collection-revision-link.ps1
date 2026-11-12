@@ -124,8 +124,9 @@ $joinFirst = [IO.File]::ReadAllText((Join-Path $repo 'site\data\site\join.md')) 
 Yes 'the join guide says to install the revision the launcher opens, not a newer one' ($joinFirst.Contains('opens the revision of the collection the server was built against') -and $joinFirst.Contains('not a newer one Nexus may show first'))
 
 # ---- the site ---------------------------------------------------------------
-# The site writes its News page from the feed (#5187): its publicNews, lifted
-# out of server.js by its markers, run over two small feeds with node.
+# The site still takes the collection's address for its News page from the
+# feed (#5187, #5801): its feedCollection, lifted out of the site by its
+# markers, run over two small feeds with node.
 $env:THORNSWOOD_HARNESS = '1'
 $tmp = if ($Scratch) { $Scratch } else { Join-Path ([IO.Path]::GetTempPath()) ('thornswood-4115-' + [guid]::NewGuid().ToString('N')) }
 New-Item -ItemType Directory -Path $tmp -Force | Out-Null
@@ -137,8 +138,8 @@ $siteSource = Join-Path $tmp 'site-source.js'
 const fs = require('fs');
 const s = fs.readFileSync(process.argv[2], 'utf8');
 const block = s.slice(s.indexOf('/* ---- news from the Release (#5187) ----'), s.indexOf('/* ---- end news from the Release ---- */'));
-const api = new Function(block + '\nreturn { publicNews };')();
-console.log(JSON.stringify(api.publicNews(JSON.parse(fs.readFileSync(process.argv[3], 'utf8')), [], new Date())));
+const api = new Function(block + '\nreturn { feedCollection };')();
+console.log(JSON.stringify(api.feedCollection(JSON.parse(fs.readFileSync(process.argv[3], 'utf8')))));
 '@)
 function News([string]$name, $feed) {
     $f = Join-Path $tmp ($name + '.json')

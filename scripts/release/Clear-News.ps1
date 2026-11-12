@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-  Takes every published note off a channel: the launcher's News tab, the
-  site's News page for main, and the record of the channel's Discord posts.
+  Takes every published note off a channel: the old launchers' News tab and
+  the record of the channel's Discord posts.
 
 .DESCRIPTION
   Issue #3336. Patrick, 22 Oct 2026: "remove all the posts/messages so we can today start
@@ -16,11 +16,10 @@
   again. The native launcher's News tab is the GitHub Releases' notes
   (launcher\app\ReleaseNews.cs), which this does not touch.
 
-  For main the site's News page follows by itself: the site writes it from the
-  main feed within a minute of a new one (#5187, site/server.js "news from the
-  Release"), so it shows no notes once this has sent the feed. The
-  hand-written history that used to go under every release is gone from the
-  repository, so nothing puts the old notes back on the site.
+  The site's News page is the build Releases' notes too, the ones main has
+  reached (#5801, site/lib/news.js "news from the Release"), so this does not
+  touch it either. The hand-written history that used to go under every
+  release is gone from the repository.
 
   The channel's announced.json keeps the lines of every Discord post
   (#3320, "posts-main" or "posts-dev") so a new note cannot say one again.
@@ -137,9 +136,9 @@ try {
     Finish 1
 }
 
-# The site's News page follows the main feed just sent by itself, within a
-# minute (#5187): nothing to send.
+# The site's News page reads the build Releases, not this feed (#5801):
+# nothing to send.
 if ($Channel -eq 'main' -and -not $Check) {
-    Say '  the site writes its News page from this feed within a minute' 'Green'
+    Say '  the site''s News page reads the build Releases on GitHub, not this feed: nothing sent to it' 'Green'
 }
 Finish 0
