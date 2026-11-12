@@ -29,7 +29,7 @@
 
   The token is the workflow's own GITHUB_TOKEN (pull-requests: read, contents:
   read). The fork is public, so that token reads its pull requests and
-  branches too, as engine-prune.yml reads its branch. Nothing here prints it.
+  branches too. Nothing here prints it.
 
   tests\test-nightly-stray.ps1 runs this against a stand-in GitHub.
 #>
