@@ -164,8 +164,9 @@ function fnSource(src, name) {
   return src.slice(at + 1, i + 1);
 }
 // Whichever of these the hub has: the inbox page, its buttons and how they
-// save, the test marks' save, and the page editor.
-const LIFTED = ['each', 'drawInbox', 'saveInbox', 'inboxAct', 'inboxName', 'saveResult', 'drawEdit']
+// save, the test marks' save, and the page editor, with the shared readers
+// those saves use to say why the site refused (#4187).
+const LIFTED = ['each', 'siteSaid', 'whyWords', 'notSaved', 'drawInbox', 'saveInbox', 'inboxAct', 'inboxName', 'saveResult', 'drawEdit']
   .map((n) => fnSource(HUB, n)).filter(Boolean).join('\n');
 yes('the hub has its inbox page, the test marks\' save and the page editor',
     ['drawInbox', 'saveResult', 'drawEdit'].every((n) => fnSource(HUB, n)));
