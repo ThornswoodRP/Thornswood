@@ -206,6 +206,9 @@ const WORDS = ['/ooc', '/o',
                // which the P panel's Name buttons send and which was missing
                // here, so it ran before the character was in the world (#1628).
                '/friend', '/party', '/mute', '/hidename', '/trade', '/journal', '/book', '/merchant',
+               // Contracts between people (#4561): K's Contracts section
+               // sends them. Never typed, so not in PLAYER_WORDS.
+               '/contract',
                // The trade ships' panel, at a dock crate or on the Office page
                // for staff (#2700). Never typed, so not in PLAYER_WORDS.
                '/ship',

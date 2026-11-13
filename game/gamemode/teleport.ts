@@ -1228,6 +1228,17 @@
       return true;
     }
 
+    // K's Contracts section sends these, never typed (#4561): the contracts block.
+    if (word === '/contract') {
+      var contractsApi = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodContracts;
+      if (!contractsApi) { toProfile(profileId, 'That is not running on this server.'); return true; }
+      if (!actorId) { toProfile(profileId, 'You are not in the world yet.'); return true; }
+      var contractAnswer = contractsApi.command({ actorId: actorId, profileId: profileId, parts: parts,
+                                                 text: String(cmd.text || ''), toProfile: toProfile });
+      if (contractAnswer) { toProfile(profileId, contractAnswer); }
+      return true;
+    }
+
     if (word === '/friend' || word === '/party' || word === '/mute' ||
         word === '/hidename' || word === '/trade' || word === '/journal' ||
         word === '/yes' || word === '/no') {

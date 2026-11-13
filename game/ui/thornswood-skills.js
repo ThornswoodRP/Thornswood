@@ -437,6 +437,15 @@
       rows: []
     },
     /*
+      Contracts (#4561). The contracts themselves are the server's, under
+      mine.contracts; this is the title and the sentence over the page.
+    */
+    contracts: {
+      title: 'Contracts',
+      lead: 'A contract is between two people, in your own words: a supply deal, a guard or an escort hired. Both of you sign it, and it is kept. Nothing is moved or held by it, you keep the terms. Only the two of you, and staff, can read it.',
+      rows: []
+    },
+    /*
       The Alchemy journal (#3142). What was eaten and brewed is the server's,
       under mine.alchemy; this is the title and the sentence over the page.
     */
@@ -634,6 +643,7 @@
   var endArmed = null;     // an End pressed once, waiting for the second press: { key, at }
   var apprSent = null;     // an End sent and not yet answered: { key, name, at }
   var dyeTarget = null;    // who the look prompt's K opened Hair dye on: { id, name } (#2675)
+  var contractWith = null; // who the look prompt's K opened Contracts on: { id, name } (#4561)
 
   // ------------------------------------------------------------------ css --
   /*
@@ -1226,6 +1236,21 @@
       return d && typeof d.id === 'string' && /^[a-z0-9-]+$/.test(d.id);
     }) : [];
   }
+  /*
+    Contracts (#4561): the server's, under mine.contracts, or null with none.
+    Only this person's own, and every signed one for staff (all).
+  */
+  function contractsView() {
+    var got = mine && mine.contracts;
+    if (!got || typeof got !== 'object' || Array.isArray(got)) return null;
+    return got;
+  }
+  function contractList(field) {
+    var v = contractsView();
+    return (v && Array.isArray(v[field])) ? v[field].filter(function (c) {
+      return c && Number(c.n) > 0 && typeof c.terms === 'string';
+    }) : [];
+  }
   /* Masters and apprentices (#1634): the server's, under mine.apprentice, or null with no profession. */
   function apprView() {
     var got = mine && mine.apprentice;
@@ -1596,6 +1621,8 @@
     if (section === 'body') return 0;
     // The Alchemy journal is what is true, and nothing on it is sent.
     if (section === 'alchemy') return 0;
+    // Contracts are read and pressed with the mouse, and typed into (#4561).
+    if (section === 'contracts') return 0;
     return rows().length + (laterOffered(section) ? 1 : 0);
   }
   /* Another section: the top row, and the status line back to the hint. */
@@ -1681,6 +1708,8 @@
     if (!creating() && (apprView() || candidate)) sections.push('apprentice');
     // Hair dye (#2675): only while you carry one or one is steeping.
     if (!creating() && dyeView()) sections.push('hairdye');
+    // Contracts (#4561): once there is one, or the look prompt's K opened it on somebody.
+    if (!creating() && (contractsView() || contractWith)) sections.push('contracts');
     if (propertyRows().length) sections.push('property');
     // First steps (#3166), first in the list while a new character has them.
     if (!creating() && startView()) {
@@ -1795,6 +1824,11 @@
       if (hdV && hdV.steeping && !hdN) return { t: 'steeping', c: '' };
       return { t: hdN + (hdN === 1 ? ' dye' : ' dyes'), c: 'set' };
     }
+    if (sec === 'contracts') {
+      var ctW = contractList('waiting').length, ctS = contractList('signed').length;
+      if (ctW) return { t: ctW + ' to sign', c: 'need' };
+      return { t: ctS + ' signed', c: ctS ? 'set' : '' };
+    }
     if (sec === 'alchemy') {
       var alE = alchemyList('eaten').length, alR = alchemyList('recipes').length;
       if (alR) return { t: alR + (alR === 1 ? ' mix' : ' mixes') + ', ' + alE + ' eaten', c: 'set' };
@@ -1908,6 +1942,7 @@
     else if (section === 'office') drawOffice();
     else if (section === 'body') drawNeeds();
     else if (section === 'alchemy') drawAlchemy();
+    else if (section === 'contracts') drawContracts();
     else if (section === 'review') drawReview();
     else drawTree();
   }
@@ -3533,7 +3568,8 @@
     // the tree's own sending, so neither carries a Confirm.
     var showConfirm = cr ? section === 'review'
       : (section !== 'start' && section !== 'tree' && section !== 'recipes' && section !== 'guides' && section !== 'property' && section !== 'office' &&
-         section !== 'apprentice' && section !== 'hairdye' && section !== 'body' && section !== 'alchemy' && section !== 'college');
+         section !== 'apprentice' && section !== 'hairdye' && section !== 'body' && section !== 'alchemy' && section !== 'college' &&
+         section !== 'contracts');
     var shut = closeWord();
     var key = JSON.stringify([line, statusKind, can, label, showConfirm, cr, shut, keyName]);
     if (key === footKey) return;
@@ -3592,6 +3628,7 @@
     if (section === 'office') return 'Each button is checked again by the server, and it answers in the chat.';
     if (section === 'body') return 'As the server counted it when K opened. Read again asks it now.';
     if (section === 'alchemy') return 'What your character knows, as K opened. Nothing here is picked or sent.';
+    if (section === 'contracts') return 'Each button is checked again by the server, and it answers in the chat.';
     if (section === 'staff') {
       if (staffWaiting()) return 'Sent. The server is checking.';
       if (markedStaffDescs().length) return 'Unlock sends the staff spells you marked, one staff spell point each.';
@@ -3793,6 +3830,91 @@
     });
     if (wrap.children.length) elBody.appendChild(wrap);
     if (!dyes.length) elBody.appendChild(el('div', 'desc', 'You carry no dye right now.'));
+  }
+  /*
+    CONTRACTS (#4561). Write sends '/contract offer <id> :: <terms>' to the
+    person the look prompt's K opened it on, and the writer signs it as it
+    goes; Sign, Refuse and Take it back send '/contract sign|refuse|withdraw
+    <n>'. Nobody is told to type any of it (Patrick, 4 Oct: buttons). The
+    terms go as one line, their line breaks as \n, because the chat socket
+    carries one line at a time (the journal's pages do the same). The server
+    asks every rule again: reach, who it is written to, the length.
+  */
+  function contractCard(c, act) {
+    var card = el('div', 'card');
+    card.appendChild(el('div', 'name', String(c.from || 'Somebody') + ' and ' + String(c.to || 'somebody')));
+    var when = function (t) { try { return new Date(Number(t)).toLocaleDateString(); } catch (e) { return ''; } };
+    card.appendChild(el('div', 'desc', 'Written and signed by ' + String(c.from || 'somebody') +
+      (c.at ? ' on ' + when(c.at) : '') +
+      (c.signedAt ? '. Signed by ' + String(c.to || 'somebody') + ' on ' + when(c.signedAt) + '.' : '. Not signed by ' + String(c.to || 'them') + ' yet.')));
+    var terms = el('div', 'desc', String(c.terms));
+    terms.style.whiteSpace = 'pre-wrap';
+    card.appendChild(terms);
+    if (act) card.appendChild(act);
+    return card;
+  }
+  function contractButtons(list) {
+    var line = el('div', 'guest');
+    list.forEach(function (b) {
+      var go = el('span', 'act', b.label);
+      go.onclick = function (ev) { ev.stopPropagation(); dyePress(b.line, b.done); };
+      line.appendChild(go);
+    });
+    return line;
+  }
+  function drawContracts() {
+    var v = contractsView() || {};
+    var chars = Number(v.chars) || 1000;
+    if (contractWith) {
+      var who = contractWith;
+      var write = el('div', 'card');
+      write.appendChild(el('div', 'name', 'A contract with ' + who.name));
+      write.appendChild(el('div', 'desc', 'Write the terms in your own words. You sign it as you give it to them, and they sign or refuse it on their own K.'));
+      var box = document.createElement('textarea');
+      box.maxLength = chars;
+      box.rows = 6;
+      box.style.width = '100%';
+      box.style.boxSizing = 'border-box';
+      write.appendChild(box);
+      var send = el('div', 'guest');
+      var go = el('span', 'act', 'Sign and give to ' + who.name);
+      go.onclick = function (ev) {
+        ev.stopPropagation();
+        var raw = String(box.value || '');
+        if (!raw.trim()) { status = 'Write the terms first.'; statusKind = 'no'; draw(); return; }
+        if (raw.length > chars) { status = 'That contract is ' + raw.length + ' characters long and one holds ' + chars + '.'; statusKind = 'no'; draw(); return; }
+        contractWith = null;
+        dyePress('/contract offer ' + who.id + ' :: ' + raw.split('\n').join('\\n'), 'Given to ' + who.name + '. It is kept once they sign it too.');
+      };
+      send.appendChild(go);
+      write.appendChild(send);
+      elBody.appendChild(write);
+    }
+    var wrap = el('div', 'cards');
+    contractList('waiting').forEach(function (c) {
+      wrap.appendChild(contractCard(c, contractButtons([
+        { label: 'Sign', line: '/contract sign ' + Number(c.n), done: 'Signed. The server answers in the chat.' },
+        { label: 'Refuse', line: '/contract refuse ' + Number(c.n), done: 'Refused. The server answers in the chat.' }
+      ])));
+    });
+    contractList('sent').forEach(function (c) {
+      wrap.appendChild(contractCard(c, contractButtons([
+        { label: 'Take it back', line: '/contract withdraw ' + Number(c.n), done: 'Taken back. The server answers in the chat.' }
+      ])));
+    });
+    contractList('signed').forEach(function (c) { wrap.appendChild(contractCard(c)); });
+    if (wrap.children.length) elBody.appendChild(wrap);
+    // Staff read every signed contract (decided 22 Oct): the server sends all only to staff.
+    var all = contractList('all');
+    if (contractsView() && Array.isArray(contractsView().all)) {
+      elBody.appendChild(el('div', 'desc', all.length ? 'Every other signed contract, for staff:' : 'No other signed contracts, for staff.'));
+      var allWrap = el('div', 'cards');
+      all.forEach(function (c) { allWrap.appendChild(contractCard(c)); });
+      if (allWrap.children.length) elBody.appendChild(allWrap);
+    }
+    if (!contractWith && !wrap.children.length) {
+      elBody.appendChild(el('div', 'desc', 'No contracts yet. Look at somebody and press ' + (keyName || 'K') + ' to write one with them.'));
+    }
   }
   function takeOnPress(half) {
     if (!candidate) return;
@@ -4177,8 +4299,9 @@
   function onKey(e) {
     if (root.className === 'gone') return;
     // A number being typed into the Office page's rent (#1638) is the box's,
-    // Enter and the arrows included. Escape still closes.
-    if (e.target && e.target.tagName === 'INPUT' && e.key !== 'Escape') return;
+    // Enter and the arrows included. Escape still closes. And the terms of a
+    // contract (#4561), K among them: a contract may say "keep".
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') && e.key !== 'Escape') return;
     var n = countRows();
     if (e.key === 'Escape') { closeByHand(); e.preventDefault(); return; }
     /*
@@ -4276,6 +4399,7 @@
       quitArmed = 0;   // a panel put down with Close Skyrim armed comes back unarmed
       candidate = null;   // the person the look prompt opened it on is that moment's, not the next
       dyeTarget = null;   // and the same for Hair dye's (#2675)
+      contractWith = null; // and for Contracts' (#4561)
       endArmed = null;
       guideAt = '';       // the guides open on your own profession again next time (#3165)
       tell('closed');
@@ -4326,6 +4450,22 @@
       if (!/^[0-9a-f]+$/i.test(id)) return;
       dyeTarget = { id: id, name: String(who.name || 'Somebody') };
       goTo('hairdye');
+      if (root.className === 'gone') api.open(); else draw();
+    },
+    /*
+      The look prompt's K on somebody with no Take on and no dye to offer
+      (#4561): the front hands over the form id under the crosshair and the
+      name, and the panel opens on Contracts with a box to write one with
+      them, and anything they wrote you waiting to be signed. Never while
+      creating.
+    */
+    contractWith: function (who) {
+      if (creating() || !who || typeof who !== 'object') return;
+      var id = String(who.id || '');
+      if (!/^[0-9a-f]+$/i.test(id)) return;
+      contractWith = { id: id, name: String(who.name || 'Somebody') };
+      endArmed = null;
+      goTo('contracts');
       if (root.className === 'gone') api.open(); else draw();
     },
     /*
