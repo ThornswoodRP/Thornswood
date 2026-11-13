@@ -59,8 +59,9 @@ const head = PAGE.slice(0, PAGE.indexOf('</head>'));
 yes('C1 marked is not loaded in the head', head.indexOf(MARKED) < 0);
 const tag = '<script src="/' + MARKED + '"></script>';
 const m = PAGE.indexOf(tag), h = PAGE.indexOf('<script src="/hub.js"></script>'), g = PAGE.indexOf('id="gate"');
+const named = PAGE.split(MARKED).length - 1;
 yes('C2 marked loads once, as a plain script, after the sign-in box and before hub.js',
-  m > 0 && PAGE.indexOf(MARKED, m + 1) < 0 && g > 0 && g < m && h > m, 'marked at ' + m + ', gate at ' + g + ', hub.js at ' + h);
+  m > 0 && named === 1 && g > 0 && g < m && h > m, 'marked named ' + named + ' time(s), its tag at ' + m + ', gate at ' + g + ', hub.js at ' + h);
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
