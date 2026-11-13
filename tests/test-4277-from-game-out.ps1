@@ -47,11 +47,19 @@ try {
     Yes '  and so is a path that climbs back to it' ($r.Code -eq 1 -and $r.Out -match $stop)
     $r = Run (Join-Path $repo 'scripts') 'from-game-out'
     Yes 'a relative -Out the session''s location puts in the repository is refused, though the process folder is outside' ($r.Code -eq 1 -and $r.Out -match $stop -and -not (Test-Path -LiteralPath (Join-Path $T 'from-game-out')))
+    # A junction on Windows, which needs no privilege; a symbolic link elsewhere.
     $link = Join-Path $T 'into-repo'
-    New-Item -ItemType SymbolicLink -Path $link -Target (Join-Path $repo 'local') -Force | Out-Null
+    New-Item -ItemType $(if ($IsWindows) { 'Junction' } else { 'SymbolicLink' }) -Path $link -Target (Join-Path $repo 'scripts') -Force | Out-Null
     $r = Run $T (Join-Path $link 'from-game')
     Yes 'a link outside the repository that points into it is refused' ($r.Code -eq 1 -and $r.Out -match $stop)
     if ($r.Out -notmatch $stop) { Write-Host $r.Out }
+    if (-not $IsWindows) {
+        # local is not in git, so on a fresh checkout this link points at nothing yet.
+        $dangling = Join-Path $T 'into-local'
+        New-Item -ItemType SymbolicLink -Path $dangling -Target (Join-Path $repo 'local-not-there') -Force | Out-Null
+        $r = Run $T (Join-Path $dangling 'from-game')
+        Yes '  and so is one that points at a folder of it not made yet' ($r.Code -eq 1 -and $r.Out -match $stop)
+    }
     $r = Run $T (Join-Path $T 'look')
     Yes 'a folder outside the repository is let through to the build' ($r.Out -notmatch $stop)
 }
