@@ -34,6 +34,8 @@
 param([string]$GameRoot = 'C:\Thornswood')
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Windows.ps1')
+$Shell = Get-BoxPowerShell
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 # The tests are in tests\, the scripts in scripts\<area> since issue #440.
@@ -173,7 +175,7 @@ Yes 'scripts\README.md lists it as RETIRED' ($row.Count -eq 1 -and $row[0] -matc
 $live = $(if (Test-Path -LiteralPath $GameRoot) { Join-Path $GameRoot 'Game\Data\meshes\actors\character\character assets\femalebody_1.nif' } else { '' })
 if ($live -and (Test-Path -LiteralPath $live)) {
     $check = Join-Path $Repo 'scripts\mods\Check-CoveredBodies.ps1'
-    $out = & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File $check `
+    $out = & $Shell -NoProfile -ExecutionPolicy Bypass -File $check `
                -Game (Join-Path $GameRoot 'Game') 2>&1 | Out-String
     $code = $LASTEXITCODE
     $line = @($out -split "\r?\n" | Where-Object { $_ -match '^\s+\S+\s+femalebody_1\.nif' } | ForEach-Object { $_.Trim() }) -join ''
@@ -183,6 +185,10 @@ if ($live -and (Test-Path -LiteralPath $live)) {
     # else the check itself breaking (#4233).
     $why = switch ($code) { 0 { 'covered' } 2 { 'nude' } 1 { 'not read' } default { 'the check broke, exit ' + $code } }
     Yes ('the female body in the game folder is the covered one: ' + $why + ' (' + $line + ')') ($code -eq 0)
+} elseif (Test-Path -LiteralPath $GameRoot) {
+    Yes ('femalebody_1.nif is present in the game folder at ' + $GameRoot) $false
+} elseif ($PSBoundParameters.ContainsKey('GameRoot')) {
+    Yes ('the requested game folder exists at ' + $GameRoot) $false
 } else {
     Skip ('no game folder at ' + $GameRoot)
 }

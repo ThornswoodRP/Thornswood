@@ -86,7 +86,7 @@ try {
     $l = Third (Join-Path $T 'no-vortex') $profile
     Yes '   a files.txt that gives the collection no runtime file fails' (Any $l '^FAIL\s+.*files\.txt here gives the collection no file under Data\\Platform\\Distribution')
     Yes '   and does not skip it' (-not (Any $l '^SKIP\s+files\.txt here gives the collection no file'))
-    Yes '   while a machine with no Vortex at all still says so as a SKIP' (Any $l '^SKIP\s+.*no-vortex')
+    Yes '   an explicitly requested Vortex folder that is absent fails too' (Any $l '^FAIL\s+.*no-vortex')
     $env:THORNSWOOD_VORTEX_MODS = $savedEnv['THORNSWOOD_VORTEX_MODS']
     $env:THORNSWOOD_PROFILE = $savedEnv['THORNSWOOD_PROFILE']
 
@@ -95,7 +95,7 @@ try {
     # Nothing listens on these ports here: live on 9 asks 10, dev on 11 asks 12.
     $vps = Join-Path $T 'vps.json'
     [IO.File]::WriteAllText($vps, '{"address": "127.0.0.1", "livePort": 9, "devPort": 11}')
-    $out = & $Shell -NoProfile -NonInteractive -File $rev2 -VpsPath $vps -Scratch (Dir (Join-Path $T 'rev2')) 2>&1 | Out-String
+    $out = & $Shell -NoProfile -NonInteractive -File $rev2 -SourcesOnly -VpsPath $vps -Scratch (Dir (Join-Path $T 'rev2')) 2>&1 | Out-String
     $code = $LASTEXITCODE
     $l = Lines $out
     Yes ('3. test-collection-revision-2 fails when the servers do not answer (exit ' + $code + ')') ($code -ne 0)
@@ -106,6 +106,31 @@ try {
     $out = & $Shell -NoProfile -NonInteractive -File $rev2 -VpsPath $vps -Offline -Scratch (Join-Path $T 'rev2') 2>&1 | Out-String
     $l = Lines $out
     Yes '   -Offline leaves the servers out, saying so' ((Any $l '^SKIP\s+the servers: -Offline') -and -not (Any $l '^FAIL\s+.*(live|dev) server'))
+    Yes '   the fixture-only run passes its own page and plugin cases' ($LASTEXITCODE -eq 0)
+
+    $settings = Join-Path $T 'settings.json'
+    $record = Join-Path $T 'record.json'
+    [IO.File]::WriteAllText($record, '{"lightPlugins":true}')
+    $repo = Split-Path -Parent $PSScriptRoot
+    $order = @([IO.File]::ReadAllLines((Join-Path $repo 'docs/COLLECTION-REVISION-2.md')) | ForEach-Object {
+        if ($_ -match '^\|\s*\d+\s*\|\s*([^|]+?)\s*\|') { $Matches[1] }
+    })
+    $plugins = foreach ($name in $order) {
+        $p = Join-Path (Dir (Join-Path $T 'plugins')) $name
+        $b = New-Object byte[] 24
+        [Text.Encoding]::ASCII.GetBytes('TES4').CopyTo($b, 0)
+        [IO.File]::WriteAllBytes($p, $b)
+        $p
+    }
+    [IO.File]::WriteAllText($settings, (@{loadOrder=@($plugins)} | ConvertTo-Json -Depth 4))
+    $out = & $Shell -NoProfile -NonInteractive -File $rev2 -SourcesOnly -Offline -SettingsPath $settings -ServerRecordPath $record -Scratch (Join-Path $T 'rev2') 2>&1 | Out-String
+    Yes '   built settings fixtures run the real full-plugin comparison' ($LASTEXITCODE -eq 0 -and (Any (Lines $out) '^PASS\s+the page.s order is the built server settings.s order'))
+    [IO.File]::WriteAllText($settings, '{"loadOrder":[]}')
+    $out = & $Shell -NoProfile -NonInteractive -File $rev2 -SourcesOnly -Offline -SettingsPath $settings -ServerRecordPath $record -Scratch (Join-Path $T 'rev2') 2>&1 | Out-String
+    Yes '   settings with no load order fail rather than skip' ($LASTEXITCODE -ne 0 -and (Any (Lines $out) '^FAIL\s+the built server settings.*no load order'))
+    [IO.File]::WriteAllText($settings, 'not JSON')
+    $out = & $Shell -NoProfile -NonInteractive -File $rev2 -SourcesOnly -Offline -SettingsPath $settings -ServerRecordPath $record -Scratch (Join-Path $T 'rev2') 2>&1 | Out-String
+    Yes '   unreadable settings fail with their path' ($LASTEXITCODE -ne 0 -and (Any (Lines $out) '^FAIL\s+the built server settings.*settings.json.*read'))
 
     # ---- 4. test-skyui-menus: the dev game folder ----------------------------------
     $env:THORNSWOOD_INSTALL = Join-Path $T 'inst'

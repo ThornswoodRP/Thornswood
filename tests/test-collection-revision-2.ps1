@@ -19,8 +19,10 @@
     - the built server settings on the shipping machine
       (Where.ps1 ServerSettings), which Deploy-DevGamemode.ps1 sends, by
       their full plugins: the table counts no light plugin (#2577).
-  A source that is not there says SKIP. One that is there and disagrees with
-  the table is a FAIL naming the first position where they part.
+  A requested source that is missing, unreadable or disagrees with the table
+  is a FAIL. -VpsPath, -SettingsPath and -ServerRecordPath select fixtures;
+  without -Offline both manifests must read. Built settings are optional only
+  when Where.ps1 names no file on this machine and none was requested.
 
   It also checks the page against itself (every rule it adds ties a plugin to
   the one right before it in the table, every rule it removes contradicts the
@@ -33,7 +35,10 @@ param(
     [string]$DocPath,
     [string]$CheckPath,
     [string]$VpsPath,
+    [string]$SettingsPath,
+    [string]$ServerRecordPath,
     [switch]$Offline,
+    [switch]$SourcesOnly,
     # Where the fixtures are built. Default: the system temp folder.
     [string]$Scratch
 )
@@ -41,6 +46,8 @@ param(
 $env:THORNSWOOD_HARNESS = '1'
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Windows.ps1')
+$shell = Get-BoxPowerShell
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 # The tests are in tests\, the repository is one folder up.
@@ -272,12 +279,13 @@ if ($Offline) {
             $req.ReadWriteTimeout = 8000
             $res = $req.GetResponse()
             try { $sr = New-Object IO.StreamReader($res.GetResponseStream()); $json = $sr.ReadToEnd(); $sr.Close() } finally { $res.Close() }
-        } catch { $json = $null }
-        $names = @()
-        if ($json) { try { $names = @((($json | ConvertFrom-Json).mods) | ForEach-Object { [string]$_.filename } | Where-Object { $_ }) } catch { $names = @() } }
-        if ($names.Count -eq 0) { Skip "the $w server's manifest ($url) did not answer"; continue }
-        $sources++
-        Compare-Order "the $w server" ([string[]]$names)
+            $names = @((($json | ConvertFrom-Json -ErrorAction Stop).mods) | ForEach-Object { [string]$_.filename } | Where-Object { $_ })
+            if ($names.Count -eq 0) { throw 'the manifest names no full plugins' }
+            $sources++
+            Compare-Order "the $w server" ([string[]]$names)
+        } catch {
+            Yes "the $w server's manifest ($url) reads: $($_.Exception.Message)" $false
+        }
     }
 }
 # The page's table is the full plugins (step 6: light plugins are not counted,
@@ -290,32 +298,33 @@ if ($Offline) {
 # the whole loadOrder was compared, and it parted at _ResourcePack.esl, the
 # Skyrim.ccc plugin the game loads straight after the masters).
 . (Join-Path $Repo 'scripts\deploy\ServerOrder.ps1')
-$serverRecord = Join-Path $Repo 'records\server-build.json'
+$serverRecord = if ($ServerRecordPath) { $ServerRecordPath } else { Join-Path $Repo 'records\server-build.json' }
 function Get-FullPlugins([string[]]$loadOrder, [string]$record) {
     $isLight = Get-ThornswoodLightTest $loadOrder $record
     return ,[string[]]@($loadOrder | ForEach-Object { @(([string]$_) -split '[\\/]')[-1] } |
                         Where-Object { $_ -and -not (($null -ne $isLight) -and (& $isLight $_)) })
 }
 
-$settings = ''
-try { $settings = & (Join-Path $Repo 'scripts\release\Where.ps1') ServerSettings } catch { $settings = '' }
+$settings = if ($SettingsPath) { $SettingsPath } else { & (Join-Path $Repo 'scripts\release\Where.ps1') ServerSettings }
 if ($settings -and (Test-Path -LiteralPath $settings)) {
-    $lo = [string[]]@(((Get-Content -LiteralPath $settings -Raw | ConvertFrom-Json).loadOrder) | Where-Object { $_ })
-    if ($lo.Count) {
-        # A listed plugin whose header cannot be read here (the game folder the
-        # settings were built from is gone) leaves nothing to compare, and the
-        # reason is printed.
-        $full = $null
-        try { $full = Get-FullPlugins $lo $serverRecord } catch { Skip "the built server settings at ${settings}: $($_.Exception.Message)" }
-        if ($null -ne $full) {
-            Write-Host ("NOTE  the built server settings list {0} plugins, {1} of them full; the page is the full ones" -f $lo.Count, $full.Count)
-            $sources++; Compare-Order 'the built server settings' $full
-        }
+    try {
+        $lo = [string[]]@(((Get-Content -LiteralPath $settings -Raw | ConvertFrom-Json -ErrorAction Stop).loadOrder) | Where-Object { $_ })
+        if (-not $lo.Count) { throw 'the settings name no load order' }
+        $full = Get-FullPlugins $lo $serverRecord
+        Write-Host ("NOTE  the built server settings list {0} plugins, {1} of them full; the page is the full ones" -f $lo.Count, $full.Count)
+        $sources++; Compare-Order 'the built server settings' $full
+    } catch {
+        Yes "the built server settings at ${settings} read: $($_.Exception.Message)" $false
     }
-    else { Skip "the built server settings at $settings name no load order" }
+} elseif ($SettingsPath) {
+    Yes "the built server settings at $settings exist" $false
 } else {
     Skip 'the built server settings: not on this machine'
 }
+
+# Source-only cases exercise this boundary without rebuilding the separate
+# Check-CleanInstall fixtures for every missing or malformed source.
+if ($SourcesOnly) { Finish }
 
 # The full plugins of a settings loadOrder, on made up plugin files, so the
 # comparison above can never pass a full plugin out of place.
@@ -351,7 +360,8 @@ try {
 finally {
     Remove-Item -LiteralPath $fx -Recurse -Force -EA SilentlyContinue
 }
-if ($sources -eq 0) { Skip 'nothing to compare the page''s order with here; the nightly run on the VPS reads the servers' }
+# Each requested source reports its own failure above. -Offline is an
+# explicit fixture-only run, not evidence that either server was checked.
 
 # ------------------------------------ the server side follows the collection --
 # #690: nothing the repository ships or deploys names Elysium Estate's old
@@ -379,7 +389,7 @@ Yes ('no other launcher source names ElysiumEstateSSE' + $(if ($oldNamed) { ' ('
 
 # ------------------------------------------------ Check-CleanInstall itself --
 $root = Join-Path $Scratch ('thornswood-cleaninstall-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
-$shell = (Get-Process -Id $PID).Path
+# $shell is the shared PowerShell 7 selected above.
 
 # A plugin file with a TES4 header: flags 0x1 a master, 0x200 the ESL flag
 # that makes it light. $pad makes two files of one size with other bytes.
