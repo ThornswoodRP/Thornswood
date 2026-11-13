@@ -14,6 +14,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
+using Avalonia.Styling;
 using Avalonia.Threading;
 
 namespace Thornswood
@@ -72,6 +73,17 @@ namespace Thornswood
         string vortexGame = "";
         readonly string steamRoot, skyrimPath, skyrimDrive;
 
+        // What Windows asks of the window's look (#4409), and the frame the
+        // window's own scroll viewer holds.
+        readonly SystemLook look;
+        ScrollViewer whole;
+        Border frame;
+
+        // The most the middle asks for, at 100%, when the window measures how
+        // tall it wants to be: a few lines of the text. Below that the window
+        // scrolls as a whole rather than squeezing the middle further.
+        const double MiddleAtLeast = 120;
+
         // Once the steps are moving files, stopping half way leaves half of
         // them moved. Nothing in them waits for ever: their one question,
         // Skyrim still running, comes to this window, so they end by
@@ -81,8 +93,18 @@ namespace Thornswood
         StreamWriter logFile;
         readonly object logLock = new object();
 
-        public InstallWindow()
+        public InstallWindow() : this(SystemLook.Read()) { }
+
+        /// <summary>
+        /// The window as Windows asks for it to look (#4409): in the person's
+        /// contrast theme when one is on, and with every text size at its
+        /// size here times their Windows text size. A test hands in a planted
+        /// look; the launcher reads this PC's.
+        /// </summary>
+        public InstallWindow(SystemLook look)
         {
+            if (look == null) throw new ArgumentNullException(nameof(look));
+            this.look = look;
             Title = Title_;
             Width = 700;
             Height = 800;
@@ -91,13 +113,23 @@ namespace Thornswood
             CanResize = true;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             FontFamily = new FontFamily("Segoe UI");
+            FontSize = S(14);
 
             // Every colour is the launcher's, by its name in Themes.cs (Ink,
             // Faint, Bad and the rest), never a literal: the window is drawn
             // in Forge from there (#2851), so the first window a new tester
             // sees reaches the launcher's 4.5 to 1 text and cannot fall
-            // behind it.
-            Themes.Apply(this, "Forge");
+            // behind it. With a Windows contrast theme on, the same names are
+            // the person's own colours instead (Themes.Contrast, #4409), and
+            // the parts Fluent draws follow the theme's light or dark.
+            if (look.HighContrast)
+            {
+                Theme contrast = Themes.Contrast(look.Colours);
+                Themes.Apply(this, contrast);
+                RequestedThemeVariant = contrast.Light ? ThemeVariant.Light : ThemeVariant.Dark;
+            }
+            else
+                Themes.Apply(this, "Forge");
 
             steamRoot = Steam.Path_();
             skyrimPath = Steam.SkyrimPath();
@@ -106,6 +138,9 @@ namespace Thornswood
 
             Content = Build();
             Background = B("Bg");
+            // What Avalonia draws under the window when it cannot see through
+            // it: the same ground, so no other colour is ever behind it (#4409).
+            TransparencyBackgroundFallback = Background;
 
             BuildDrives();
             SetRoot(installRoot);
@@ -127,6 +162,8 @@ namespace Thornswood
             };
             Closing += OnClosing;
             Closed += delegate { done.TrySetResult(null); };
+            // What takes focus is scrolled into sight (#4409).
+            GotFocus += (s, e) => { if (e.Source is Control c) ShowFocused(c); };
             // Enter and Esc, before the control with focus sees them (#4459).
             AddHandler(KeyDownEvent, OnKeys, RoutingStrategies.Tunnel);
         }
@@ -138,6 +175,65 @@ namespace Thornswood
             throw new InvalidOperationException("Themes.Apply left no colour named " + name + ".");
         }
 
+        /// <summary>A text size at 100%, at the person's Windows text size.</summary>
+        double S(double size)
+        {
+            return size * look.TextScale;
+        }
+
+        /// <summary>
+        /// Whatever takes focus, as the window opens or from the keyboard, is
+        /// scrolled into sight: in the middle's own scroll viewer, then in the
+        /// window's. Each scroll viewer only brings its own content into view,
+        /// so a control in the middle of a window that scrolls as a whole
+        /// needs both (#4409, #4459).
+        /// </summary>
+        void ShowFocused(Control c)
+        {
+            if (!c.IsEffectivelyVisible) return;
+            UpdateLayout();
+            c.BringIntoView();
+            UpdateLayout();
+            Matrix? to = c.TransformToVisual(frame);
+            if (to.HasValue) frame.BringIntoView(new Rect(c.Bounds.Size).TransformToAABB(to.Value));
+        }
+
+        /// <summary>
+        /// Inside the window's scroll viewer the frame is measured with no
+        /// height limit, so the middle's own scroll viewer would ask for all
+        /// of its text and the window would always scroll as a whole. This
+        /// asks for no more than Most: the window fills its height as it
+        /// always has and only the middle scrolls, until the head, the foot
+        /// and Most no longer fit, and then the window scrolls (#4409).
+        ///
+        /// A scroll viewer has to be measured with the height it is then
+        /// given, or it works out its scrolling for a height it never has and
+        /// its text runs out of it unscrollable. That height is only known
+        /// once this is arranged, so the child is measured again with it
+        /// there, just before it is arranged in it, and measured with it from
+        /// then on. What this asks for does not depend on it, so the window
+        /// around it does not move.
+        /// </summary>
+        sealed class AtMost : Decorator
+        {
+            public double Most;
+            double given = double.NaN;
+
+            protected override Size MeasureOverride(Size availableSize)
+            {
+                double h = Math.Min(availableSize.Height, double.IsNaN(given) ? Most : given);
+                Size s = base.MeasureOverride(new Size(availableSize.Width, h));
+                return new Size(s.Width, Math.Min(s.Height, Most));
+            }
+
+            protected override Size ArrangeOverride(Size finalSize)
+            {
+                given = finalSize.Height;
+                Child?.Measure(finalSize);
+                return base.ArrangeOverride(finalSize);
+            }
+        }
+
         // ---------------------------------------------------------------- layout
 
         Control Build()
@@ -146,12 +242,14 @@ namespace Thornswood
 
             // The head: the emblem, Setup, Thornswood and the accent rule.
             var head = new Border { Background = B("Panel"), BorderBrush = B("Line"), BorderThickness = new Thickness(0, 0, 0, 1) };
-            var headRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(36, 24, 36, 22) };
+            // A wrap panel, so when the name is too wide beside the emblem, at
+            // a large text size in a narrow window, it goes under it (#4409).
+            var headRow = new WrapPanel { Margin = new Thickness(36, 24, 36, 22) };
             Bitmap logo = Emblem();
             if (logo != null) headRow.Children.Add(new Image { Source = logo, Width = 78, Height = 78, Margin = new Thickness(0, 0, 22, 0), VerticalAlignment = VerticalAlignment.Center });
             var names = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            names.Children.Add(new TextBlock { Text = "Setup", Foreground = B("Faint"), FontSize = 13, FontFamily = new FontFamily("Constantia, Georgia"), Margin = new Thickness(1, 0, 0, 4) });
-            names.Children.Add(new TextBlock { Text = "Thornswood", Foreground = B("Ink"), FontSize = 30, FontFamily = new FontFamily("Constantia, Georgia") });
+            names.Children.Add(new TextBlock { Text = "Setup", Foreground = B("Faint"), FontSize = S(13), FontFamily = new FontFamily("Constantia, Georgia"), Margin = new Thickness(1, 0, 0, 4) });
+            names.Children.Add(new TextBlock { Text = "Thornswood", Foreground = B("Ink"), FontSize = S(30), FontFamily = new FontFamily("Constantia, Georgia"), TextWrapping = TextWrapping.Wrap });
             names.Children.Add(new Border { Height = 2, Width = 42, Background = B("Accent"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(2, 12, 0, 0) });
             headRow.Children.Add(names);
             head.Child = headRow;
@@ -167,7 +265,7 @@ namespace Thornswood
 
             txtBody = new TextBlock
             {
-                Foreground = B("Muted"), FontSize = 13, LineHeight = 21, TextWrapping = TextWrapping.Wrap,
+                Foreground = B("Muted"), FontSize = S(13), LineHeight = S(21), TextWrapping = TextWrapping.Wrap,
                 Text = "This puts Thornswood's own content on your PC. With the box for Thornswood's own Skyrim folder below left ticked, as it starts, it does not install into the Skyrim you already have on Steam, and that copy is left as it is, for you to play and mod however you like. Unticked, Thornswood's own content goes into that copy until the launcher makes the folder, and then the launcher takes it back out.\n\n" +
                        "Thornswood only plays from its own game folder. The launcher builds it out of your Steam copy and what Vortex has deployed there, most of it as hard links that take no extra space, and copies of the few files other programs rewrite. Hard links only work inside one drive, so Thornswood goes on the same drive as Skyrim.\n\n" +
                        "The mods themselves come from a collection on Nexus. Vortex installs them into a profile of their own, so switching back to your usual profile and running Purge Mods leaves your Skyrim where you started. The launcher has the link and walks you through it.\n\n" +
@@ -181,7 +279,9 @@ namespace Thornswood
             var rootHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
             var rootNames = new StackPanel();
             rootNames.Children.Add(Caption("Install to"));
-            txtRoot = new TextBlock { Foreground = B("Ink"), FontSize = 14, FontFamily = new FontFamily("Cascadia Mono, Consolas"), TextTrimming = TextTrimming.CharacterEllipsis };
+            // The folder wraps rather than trailing off in dots, so at a large
+            // Windows text size the whole of it is still there to read (#4409).
+            txtRoot = new TextBlock { Foreground = B("Ink"), FontSize = S(14), FontFamily = new FontFamily("Cascadia Mono, Consolas"), TextWrapping = TextWrapping.Wrap };
             rootNames.Children.Add(txtRoot);
             rootHead.Children.Add(rootNames);
             btnPick = SmallButton("Another folder");
@@ -207,7 +307,7 @@ namespace Thornswood
             ownStack.Children.Add(Caption("Thornswood's own Skyrim folder"));
             ownStack.Children.Add(new TextBlock
             {
-                Foreground = B("Muted"), FontSize = 11.5, LineHeight = 18, TextWrapping = TextWrapping.Wrap,
+                Foreground = B("Muted"), FontSize = S(11.5), LineHeight = S(18), TextWrapping = TextWrapping.Wrap,
                 Text = "Runs Thornswood from a Skyrim folder of its own, made from what Vortex has deployed while the Thornswood profile is on. Any other Vortex profile can then use the Steam copy without reaching Thornswood, and switching profiles in Vortex no longer takes Thornswood's mods away. The big files are links to Vortex's copies, so the collection is not on the disk twice. When Vortex deploys a newer Thornswood collection, the launcher brings it in by itself the next time it starts.",
             });
             chkOwn = Box("Give Thornswood a Skyrim folder of its own", new Thickness(0, 12, 0, 0));
@@ -215,17 +315,20 @@ namespace Thornswood
             chkOwn.IsCheckedChanged += delegate { SayOwnGame(); };
             ownStack.Children.Add(chkOwn);
             txtOwn = Small(new Thickness(0, 8, 0, 0));
-            txtOwn.LineHeight = 18;
+            txtOwn.LineHeight = S(18);
             ownStack.Children.Add(txtOwn);
             var hint = Small(new Thickness(0, 12, 0, 0));
-            hint.LineHeight = 18;
+            hint.LineHeight = S(18);
             hint.Text = "The launcher finds the folder Vortex deploys into when it is in a Steam library. If it is somewhere else, choose it here: in Vortex, Mods, Open, Open Game Folder shows which one. Only the files Vortex lists in it are used, and the game itself always comes from the Steam copy.";
             ownStack.Children.Add(hint);
-            var vortexRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 9, 0, 0) };
+            // A wrap panel, so at a large text size the second button goes
+            // under the first rather than off the side of the card (#4409).
+            var vortexRow = new WrapPanel { Margin = new Thickness(0, 9, 0, 0) };
             btnVortexPick = SmallButton("Choose Vortex's folder");
-            btnVortexPick.Margin = new Thickness(0, 0, 8, 0);
+            btnVortexPick.Margin = new Thickness(0, 0, 8, 6);
             btnVortexPick.Click += async delegate { await PickVortexFolder(); };
             btnVortexForget = SmallButton("Forget the chosen folder");
+            btnVortexForget.Margin = new Thickness(0, 0, 0, 6);
             btnVortexForget.IsVisible = false;
             btnVortexForget.Click += delegate { vortexGame = ""; SayOwnGame(); };
             vortexRow.Children.Add(btnVortexPick);
@@ -239,18 +342,21 @@ namespace Thornswood
             txtLog = new TextBox
             {
                 Margin = new Thickness(0, 16, 0, 0), Height = 330, IsVisible = false, IsReadOnly = true,
-                TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 11.5,
+                TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = S(11.5),
                 Padding = new Thickness(10, 8), Background = B("Deep"), Foreground = B("Muted"), BorderBrush = B("Line"), BorderThickness = new Thickness(1),
             };
             body.Children.Add(txtLog);
 
             scroll.Content = body;
-            middle.Children.Add(scroll);
+            middle.Children.Add(new AtMost { Most = S(MiddleAtLeast), Child = scroll });
 
             var statStack = new StackPanel { VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 4) };
-            bar = new ProgressBar { Height = 5, Minimum = 0, Maximum = 1000, Foreground = B("Accent"), Background = B("Deep"), Margin = new Thickness(0, 20, 0, 0), IsVisible = false };
+            // The bar has an edge in Line, so its empty track shows in a
+            // contrast theme too, where Deep is the window's own colour, and
+            // grows with the text (#4409).
+            bar = new ProgressBar { Height = S(7), MinHeight = S(7), Minimum = 0, Maximum = 1000, Foreground = B("Accent"), Background = B("Deep"), BorderBrush = B("Line"), BorderThickness = new Thickness(1), Margin = new Thickness(0, 20, 0, 0), IsVisible = false };
             statStack.Children.Add(bar);
-            txtStat = new TextBlock { Foreground = B("Faint"), FontSize = 11.5, FontFamily = new FontFamily("Cascadia Mono, Consolas"), Margin = new Thickness(0, 11, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
+            txtStat = new TextBlock { Foreground = B("Faint"), FontSize = S(11.5), FontFamily = new FontFamily("Cascadia Mono, Consolas"), Margin = new Thickness(0, 11, 0, 0), TextWrapping = TextWrapping.Wrap };
             statStack.Children.Add(txtStat);
             Grid.SetRow(statStack, 1);
             middle.Children.Add(statStack);
@@ -262,9 +368,13 @@ namespace Thornswood
             // the browser, so what a person reads is the current text and
             // never a copy in here that goes stale. The link sits beside its
             // box, not inside it, so opening the page does not tick it.
+            //
+            // The buttons sit under the boxes, not beside them: beside, at a
+            // large Windows text size, they left the boxes a column a word
+            // or two wide (#4409).
             var foot = new Border { Background = B("Panel"), BorderBrush = B("Line"), BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(36, 18) };
-            var footGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-            var boxes = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 24, 0) };
+            var footStack = new StackPanel();
+            var boxes = new StackPanel();
             chkAge = Box(InstallAgreements.AgeWords, new Thickness(0));
             chkAge.IsCheckedChanged += delegate { Gate(); };
             boxes.Children.Add(chkAge);
@@ -278,37 +388,43 @@ namespace Thornswood
                 agree[i].VerticalAlignment = VerticalAlignment.Center;
                 agree[i].IsCheckedChanged += delegate { Gate(); };
                 row.Children.Add(agree[i]);
-                var link = new HyperlinkButton { Content = linkWords[i], Foreground = B("Accent"), FontSize = 12.5, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+                var link = new HyperlinkButton { Content = linkWords[i], Foreground = B("Accent"), FontSize = S(12.5), Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
                 ToolTip.SetTip(link, "Opens thornswood.net/" + page + " in your browser");
                 link.Click += delegate { OpenPage(InstallAgreements.Site + "/" + page); };
                 row.Children.Add(link);
                 boxes.Children.Add(row);
             }
-            footGrid.Children.Add(boxes);
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom };
-            btnClose = new Button { Content = "Not now", Background = B("Card"), BorderBrush = B("Line"), Foreground = B("Ink"), Margin = new Thickness(0, 0, 10, 0), Padding = new Thickness(26, 11), FontSize = 13 };
+            footStack.Children.Add(boxes);
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
+            btnClose = new Button { Content = "Not now", Background = B("Card"), BorderBrush = B("Line"), Foreground = B("Ink"), Margin = new Thickness(0, 0, 10, 0), Padding = new Thickness(26, 11), FontSize = S(13) };
             btnClose.Click += delegate { Close(); };
-            btnGo = new Button { Content = "Install", IsEnabled = false, Background = B("Accent"), BorderBrush = B("Accent"), Foreground = B("AccentInk"), FontWeight = FontWeight.SemiBold, Padding = new Thickness(26, 11), FontSize = 13 };
+            btnGo = new Button { Content = "Install", IsEnabled = false, Background = B("Accent"), BorderBrush = B("Accent"), Foreground = B("AccentInk"), FontWeight = FontWeight.SemiBold, Padding = new Thickness(26, 11), FontSize = S(13) };
             btnGo.Click += delegate { Start(); };
             buttons.Children.Add(btnClose);
             buttons.Children.Add(btnGo);
-            Grid.SetColumn(buttons, 1);
-            footGrid.Children.Add(buttons);
-            foot.Child = footGrid;
+            footStack.Children.Add(buttons);
+            foot.Child = footStack;
             Grid.SetRow(foot, 2);
             outer.Children.Add(foot);
 
-            return new Border { BorderBrush = B("Line"), BorderThickness = new Thickness(1), Child = outer };
+            frame = new Border { BorderBrush = B("Line"), BorderThickness = new Thickness(1), Child = outer };
+            whole = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+                Content = frame,
+            };
+            return whole;
         }
 
         TextBlock Caption(string text)
         {
-            return new TextBlock { Text = text, Foreground = B("Faint"), FontSize = 12, FontFamily = new FontFamily("Constantia, Georgia"), Margin = new Thickness(0, 0, 0, 6) };
+            return new TextBlock { Text = text, Foreground = B("Faint"), FontSize = S(12), FontFamily = new FontFamily("Constantia, Georgia"), Margin = new Thickness(0, 0, 0, 6) };
         }
 
         TextBlock Small(Thickness margin)
         {
-            return new TextBlock { Foreground = B("Faint"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = margin };
+            return new TextBlock { Foreground = B("Faint"), FontSize = S(11.5), TextWrapping = TextWrapping.Wrap, Margin = margin };
         }
 
         Border Card(Control child, Thickness margin)
@@ -318,7 +434,7 @@ namespace Thornswood
 
         Button SmallButton(string text)
         {
-            return new Button { Content = text, Padding = new Thickness(16, 7), FontSize = 12, Background = B("Deep"), BorderBrush = B("Line"), Foreground = B("Ink") };
+            return new Button { Content = text, Padding = new Thickness(16, 7), FontSize = S(12), Background = B("Deep"), BorderBrush = B("Line"), Foreground = B("Ink") };
         }
 
         CheckBox Box(string words, Thickness margin)
@@ -326,7 +442,7 @@ namespace Thornswood
             return new CheckBox
             {
                 Margin = margin, Foreground = B("Ink"), IsChecked = false,
-                Content = new TextBlock { Text = words, Foreground = B("Ink"), FontSize = 12.5, LineHeight = 18, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4, 0, 0, 0) },
+                Content = new TextBlock { Text = words, Foreground = B("Ink"), FontSize = S(12.5), LineHeight = S(18), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4, 0, 0, 0) },
             };
         }
 
@@ -366,13 +482,13 @@ namespace Thornswood
                 catch (IOException) { continue; }
 
                 var sp = new StackPanel();
-                sp.Children.Add(new TextBlock { Text = d.Name.TrimEnd('\\'), FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 14, Foreground = B("Ink") });
-                sp.Children.Add(new TextBlock { Text = InstallPlace.Gb(free) + " free", FontSize = 11, Foreground = B("Muted"), Margin = new Thickness(0, 3, 0, 0) });
+                sp.Children.Add(new TextBlock { Text = d.Name.TrimEnd('\\'), FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = S(14), Foreground = B("Ink") });
+                sp.Children.Add(new TextBlock { Text = InstallPlace.Gb(free) + " free", FontSize = S(11), Foreground = B("Muted"), Margin = new Thickness(0, 3, 0, 0) });
                 // The one drive this install can work on gets said so on the
                 // button itself, not only in the line underneath, because the
                 // buttons are what a person reads before pressing one.
                 if (InstallPlace.SameDrive(d.Name, skyrimDrive))
-                    sp.Children.Add(new TextBlock { Text = "Skyrim is here", FontSize = 11, Foreground = B("Accent"), Margin = new Thickness(0, 2, 0, 0) });
+                    sp.Children.Add(new TextBlock { Text = "Skyrim is here", FontSize = S(11), Foreground = B("Accent"), Margin = new Thickness(0, 2, 0, 0) });
 
                 string name = d.Name;
                 var b = new Button
