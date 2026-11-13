@@ -108,13 +108,11 @@ $dirty = Invoke-BuildGit @('status', '--porcelain', '--untracked-files=no')
 if ($dirty.Code -ne 0 -or $dirty.Out.Count) { Stop-Build ('this checkout has uncommitted changes, so its commit is not what would be built: ' + ($dirty.Out | Select-Object -First 3) -join ' ') }
 
 # THE KEY. The server, then every input file's mode, blob id and path in the
-# commit, in git's order, one a line.
+# commit, in ordinal order, one a line (Get-ThornswoodContentKey).
 $content = Get-ThornswoodContentPaths -Repo $repo -Tool 'scripts/mods/Add-ContentRecords.py'
-$tree = Invoke-BuildGit (@('ls-tree', '-r', '--full-tree', $commit, '--') + $content.Paths)
-if ($tree.Code -ne 0) { Stop-Build ('the inputs could not be listed: ' + ($tree.Out -join ' ')) }
-$keyText = "server $Server`n" + (($tree.Out | Sort-Object -CaseSensitive) -join "`n") + "`n"
-$key = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($keyText))).ToLowerInvariant()
-Write-Host ("inputs: $($tree.Out.Count) files at $commit, against the $Server server's plugins; key $key")
+try { $k = Get-ThornswoodContentKey -Repo $repo -Commit $commit -Server $Server -Paths $content.Paths } catch { Stop-Build $_.Exception.Message }
+$key = $k.Key
+Write-Host ("inputs: $($k.Files) files at $commit, against the $Server server's plugins; key $key")
 
 $home_ = Join-Path $Cache $Server
 New-Item -ItemType Directory -Force -Path $home_ | Out-Null
