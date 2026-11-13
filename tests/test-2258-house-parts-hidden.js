@@ -12,14 +12,15 @@
 
   This reads the committed plugin with its own reader and proves the four
   overrides, that HearthFires.esm is the master their ids name, and that the
-  recipe table still refuses all four. Then it gives the tool
-  (scripts/mods/Add-ContentRecords.py, loaded as a module) a copy with the
-  condition taken off again and checks the tool's run puts it back byte for
-  byte, that a second run writes nothing, and that a copy with the overrides
-  gone and no game to copy them from stops with nothing written. On a machine
-  with the game (C:\Thornswood\Game\Data, or THORNSWOOD_DATA) it also rebuilds
-  the four from HearthFires.esm and gets the committed plugin back.
-  Copies go to a temp folder (TEST_TMP).
+  recipe table still refuses all four. Then it gives the tool's own step
+  (never_listed() in scripts/mods/Add-ContentRecords.py, loaded as a module)
+  each override with the condition taken off, as a plain copy of the master
+  would be, and checks it puts the condition back byte for byte, once. The
+  tool builds the whole plugin from its sources (#5191), so with no game to
+  copy the four from it stops and writes nothing. On a machine with the game
+  (C:\Thornswood\Game\Data, or THORNSWOOD_DATA) it builds the plugin and the
+  four are the committed overrides. Its output goes to a temp folder
+  (TEST_TMP).
 */
 const fs = require('fs');
 const os = require('os');
@@ -133,56 +134,50 @@ function python(args) {
 const tmpRoot = process.env.TEST_TMP || os.tmpdir();
 fs.mkdirSync(tmpRoot, { recursive: true });
 const dir = fs.mkdtempSync(path.join(tmpRoot, 'ts-2258-'));
-const copy = path.join(dir, 'Thornswood-Content.esp');
+const out = path.join(dir, 'Thornswood-Content.esp');
 const empty = path.join(dir, 'no-game');
 fs.mkdirSync(empty);
 const fids = PARTS.map((p) => p.fid);
-function prep(mode) {
-  return python(['-c', [
-    'import importlib.util, struct, sys',
-    'spec = importlib.util.spec_from_file_location("acr", sys.argv[1])',
-    'm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)',
-    'raw = open(sys.argv[2], "rb").read()',
-    'hs = struct.unpack_from("<I", raw, 4)[0]',
-    'tree = m.parse(raw, 24 + hs, len(raw))',
-    'fids = set([' + fids.join(', ') + '])',
-    'if sys.argv[4] == "bare":',
-    '    for x in m.every_record(tree):',
-    '        if x.fid in fids:',
-    '            x.data = m.pack_subrecords([(t, b) for t, b in m.subrecords(x.data) if t != b"CTDA"])',
-    'else:',
-    '    tree = m.take_out(tree, fids)',
-    'open(sys.argv[3], "wb").write(raw[:24 + hs] + b"".join(k.bytes() for k in tree))'
-  ].join('\n'), TOOL, ESP, copy, mode]);
-}
+// The tool's own step: each committed override with its condition taken off,
+// as a plain copy of the master would be, and never_listed() run over it.
+const driver = [
+  'import importlib.util, struct, sys',
+  'spec = importlib.util.spec_from_file_location("acr", sys.argv[1])',
+  'm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)',
+  'raw = open(sys.argv[2], "rb").read()',
+  'hs = struct.unpack_from("<I", raw, 4)[0]',
+  'have = dict((x.fid, x) for x in m.every_record(m.parse(raw, 24 + hs, len(raw))))',
+  'fids = [' + fids.join(', ') + ']',
+  'for f in fids:',
+  '    r = have[f]',
+  '    bare = m.Rec(r.tag, r.flags, r.fid, r.extra, m.pack_subrecords([(t, b) for t, b in m.subrecords(r.data) if t != b"CTDA"]))',
+  '    first = bare.data != r.data and m.never_listed(bare)',
+  '    second = m.never_listed(bare)',
+  '    print("%X %s %s %s" % (f, "added" if first else "none", "again" if second else "once", "same" if bare.bytes() == r.bytes() else "differs"))',
+].join('\n');
 try {
-  const bare = prep('bare');
-  yes('T0 python is on this machine and the tool loads as a module', !!bare && bare.status === 0);
-  if (bare && bare.status === 0) {
-    const old = records(fs.readFileSync(copy));
-    yes('T1 the copy has the four overrides with no condition, as a plain copy of the master would be', fids.every((f) => old[f] && all(old[f], 'CTDA').length === 0));
-    const run = python([TOOL, '--data', dir, '--masters', empty]);
-    yes('T2 the tool runs over it with no game to read', !!run && run.status === 0);
-    if (run && run.status !== 0) { console.log(run.stdout + run.stderr); }
-    yes('T3 and says 4 edited, nothing added or taken out', !!run && /0 added, 4 edited, 0 taken out/.test(run.stdout));
-    yes('T4 and its result is the committed plugin byte for byte', fs.readFileSync(copy).equals(esp));
-    const again = python([TOOL, '--data', dir, '--masters', empty]);
-    yes('T5 a second run writes nothing', !!again && again.status === 0 && /Nothing was written/.test(again.stdout) && fs.readFileSync(copy).equals(esp));
+  const run = python(['-c', driver, TOOL, ESP]);
+  yes('T0 python is on this machine and the tool loads as a module', !!run && run.status === 0);
+  if (run && run.status !== 0) { console.log(run.stdout + run.stderr); }
+  const lines = run && run.status === 0 ? run.stdout.trim().split(/\r?\n/) : [];
+  for (const part of PARTS) {
+    const l = lines.find((x) => x.split(' ')[0] === part.fid.toString(16).toUpperCase()) || '';
+    yes('T1 ' + part.name + ': never_listed() puts the condition on a bare copy of the master\'s recipe, once, and gets the committed override byte for byte', l.endsWith(' added once same'));
   }
-  const gone = prep('gone');
-  if (gone && gone.status === 0) {
-    const before = fs.readFileSync(copy);
-    const stop = python([TOOL, '--data', dir, '--masters', empty]);
-    yes('T6 with the overrides gone and no HearthFires.esm to copy from, the tool stops', !!stop && stop.status !== 0 && /HearthFires\.esm is not in/.test(stop.stdout + stop.stderr));
-    yes('T7   and writes nothing', fs.readFileSync(copy).equals(before));
-    const data = process.env.THORNSWOOD_DATA || 'C:\\Thornswood\\Game\\Data';
-    if (fs.existsSync(path.join(data, 'HearthFires.esm'))) {
-      const fresh = python([TOOL, '--data', dir, '--masters', data]);
-      yes('T8 with the game there, the tool copies the four in from HearthFires.esm', !!fresh && fresh.status === 0 && /4 added, 0 edited, 0 taken out/.test(fresh.stdout));
-      yes('T9   and gets the committed plugin back byte for byte', fs.readFileSync(copy).equals(esp));
-    } else {
-      console.log('SKIP  T8 and T9: no HearthFires.esm at ' + data + ' (a machine with the game runs them)');
+  const stop = python([TOOL, '--masters', empty, '--out', out]);
+  yes('T2 with no game to copy the four from, the tool stops', !!stop && stop.status !== 0 && /HearthFires\.esm/.test(stop.stdout + stop.stderr) && /Nothing was written/.test(stop.stdout));
+  yes('T3   and writes nothing', !fs.existsSync(out));
+  const data = process.env.THORNSWOOD_DATA || 'C:\\Thornswood\\Game\\Data';
+  if (fs.existsSync(path.join(data, 'HearthFires.esm'))) {
+    const fresh = python([TOOL, '--masters', data, '--out', out]);
+    yes('T4 with the game there, the tool builds the plugin', !!fresh && fresh.status === 0 && fs.existsSync(out));
+    if (fresh && fresh.status === 0) {
+      const built = records(fs.readFileSync(out));
+      yes('T5   and the four it copies from HearthFires.esm are the committed overrides',
+          fids.every((f) => built[f] && Buffer.concat(built[f].subs.map((x) => x.b)).equals(Buffer.concat(r[f].subs.map((x) => x.b)))));
     }
+  } else {
+    console.log('SKIP  T4 and T5: no HearthFires.esm at ' + data + ' (a machine with the game runs them)');
   }
 } finally {
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }

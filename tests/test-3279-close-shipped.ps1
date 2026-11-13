@@ -48,7 +48,13 @@
        and the issues beside it are still closed;
    11. with -Dev and a dev release's name (#5199), a carried Dev block with
        no Dev test task after its merge is written with its Build: line
-       naming that release, a Main one waits, and nothing is closed.
+       naming that release, a Main one waits, and nothing is closed;
+   12. something runs it once main and dev run a release (#5530): main has
+       gone out through promote-main.yml since 3 Nov 2026, not a Ship, so
+       .github\workflows\close-shipped.yml runs it when the box marks a
+       Deployment to Main a success (closing) or to Dev (-Dev, its Release as
+       -Build), from a checkout with main's whole history, with issues and
+       actions write for the closes and the board read, and on nothing else.
 
   It never reaches GitHub. Files under its own temp folder only.
 #>
@@ -338,5 +344,22 @@ try {
 finally {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+# ---- 12: what runs it now main and dev have no Ship (#5530) ----------------
+$wfPath = Join-Path $Repo '.github\workflows\close-shipped.yml'
+Yes '12 .github\workflows\close-shipped.yml is there' (Test-Path -LiteralPath $wfPath)
+$wf = if (Test-Path -LiteralPath $wfPath) { [IO.File]::ReadAllText($wfPath) -replace "`r`n", "`n" } else { '' }
+$on = [regex]::Match($wf, '(?ms)^on:\n(.*?)\n\S')
+Yes '12 it starts on a Deployment status and on nothing else' ($on.Success -and ($on.Groups[1].Value.Trim() -eq 'deployment_status:'))
+$if = [regex]::Match($wf, '(?ms)^    if: >-\n(.*?)\n    runs-on:')
+$cond = if ($if.Success) { $if.Groups[1].Value } else { '' }
+Yes '12 only on a success the box deploy agent wrote, with its log beside it' ($cond -match "deployment_status\.state == 'success'" -and $cond -match "deployment_status\.log_url != ''")
+Yes '12 only for Main and Dev, never Site or Discord bot' ($cond -match "environment == 'Main'" -and $cond -match "environment == 'Dev'" -and $cond -notmatch 'Site|Discord')
+Yes '12 from main''s whole history, so git can say what the commit carries' ($wf -match '(?m)^\s+ref: main$' -and $wf -match '(?m)^\s+fetch-depth: 0$')
+Yes '12 with issues write for the closes and actions write for the board read' ($wf -match '(?m)^\s+issues: write$' -and $wf -match '(?m)^\s+actions: write$')
+Yes '12 Main closes what the Deployment''s commit carries' ($wf -match "-eq 'Main'\) \{\n\s+& \`$close -Commit \`$env:COMMIT -GitHubRepo \`$env:GITHUB_REPOSITORY -NoPause\n")
+Yes '12 Dev writes its Dev test tasks, the Release''s tag as -Build' ($wf -match '& \$close -Commit \$env:COMMIT -GitHubRepo \$env:GITHUB_REPOSITORY -Dev -Build \$tag -NoPause')
+Yes '12 the commit is the Deployment''s own sha, and its exit is the job''s' ($wf -match 'COMMIT: \$\{\{ github\.event\.deployment\.sha \}\}' -and $wf -match 'exit \$LASTEXITCODE')
+Yes '12 docs\WORKFLOWS.md lists it' (([IO.File]::ReadAllText((Join-Path $Repo 'docs\WORKFLOWS.md'))) -match '\[close-shipped\.yml\]')
 
 Done

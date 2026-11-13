@@ -105,28 +105,70 @@ async def _forum_post(forum, title, body, tags, me_id=None):
     return getattr(made, 'thread', made)
 
 
+def _refusal(what, forum, th, e):
+    """The log line for a change Discord refused, in Discord's own words:
+       its status, message and code (#4228). Until then each pass caught the
+       refusal and said nothing, so a post kept its old title, tags and text
+       and nobody could see why."""
+    return ('#%s: Discord refused to %s the post "%s" (%s): %s %s (code %s)'
+            % (getattr(forum, 'name', '?'), what, getattr(th, 'name', '?'),
+               getattr(th, 'id', '?'), getattr(e, 'status', '?'),
+               getattr(e, 'text', '') or str(e), getattr(e, 'code', '?')))
+
+
 async def _forum_drop(forum, tid):
     th = await _forum_thread(forum, tid)
     if th is not None:
-        await th.delete()
+        try:
+            await th.delete()
+        except discord.HTTPException as e:
+            log(_refusal('remove', forum, th, e))
+            raise
 
 
-async def _forum_edit(forum, tid, title, body, tags):
+async def _forum_edit(forum, tid, title, body, tags, then=None):
     """Brings an existing post to this title, body and tags. False when the
-       post is gone (deleted by hand), so the caller can make it again."""
+       post is gone (deleted by hand), so the caller can make it again.
+
+       Discord archives a post after a few quiet days and refuses every
+       change to an archived one (400, code 50083), so an archived post is
+       unarchived first and archived again after, as it was (#4228). then,
+       when given, is awaited with the thread while it is still open: a dev
+       post's follow-up messages are in the same thread. A refusal is logged
+       with Discord's words and raised, so the pass keeps its record."""
     th = await _forum_thread(forum, tid)
     if th is None:
         return False
     applied = [x for x in (task_tag_of(forum, n) for n in tags) if x is not None]
-    await th.edit(name=title, applied_tags=applied)
-    msg = getattr(th, 'starter_message', None)
-    if msg is None:
-        try:
-            msg = await th.fetch_message(th.id)
-        except discord.NotFound:
-            msg = None
-    if msg is not None:
-        await msg.edit(content=body, allowed_mentions=discord.AllowedMentions.none())
+    was_archived = bool(getattr(th, 'archived', False))
+    opened = False
+    step = 'unarchive'
+    try:
+        if was_archived:
+            await th.edit(archived=False)
+            opened = True
+        step = 'edit'
+        await th.edit(name=title, applied_tags=applied)
+        msg = getattr(th, 'starter_message', None)
+        if msg is None:
+            try:
+                msg = await th.fetch_message(th.id)
+            except discord.NotFound:
+                msg = None
+        if msg is not None:
+            await msg.edit(content=body, allowed_mentions=discord.AllowedMentions.none())
+        if then is not None:
+            await then(th)
+    except discord.HTTPException as e:
+        log(_refusal(step, forum, th, e))
+        raise
+    finally:
+        if opened:
+            try:
+                await th.edit(archived=True)
+            except discord.HTTPException as e:
+                log(_refusal('archive again', forum, th, e))
+                raise
     return True
 
 
@@ -186,8 +228,13 @@ async def _dev_post(forum, title, chunks, tags, me_id=None):
         more = []
     else:
         th = found
-        await _forum_edit(forum, th.id, title, chunks[0], tags)
-        more = await _thread_more(th, me_id)
+        got = []
+
+        async def follow(t):
+            # While the post is open: an archived one refuses every message.
+            got.append(await _sync_more(t, chunks[1:], await _thread_more(t, me_id)))
+        await _forum_edit(forum, th.id, title, chunks[0], tags, then=follow)
+        return th, got[0]
     return th, await _sync_more(th, chunks[1:], more)
 
 
@@ -563,10 +610,15 @@ async def dev_tasks_once(forum, state, get=None, save=None, me_id=None, now=None
                 sig = _sig(title, body, tags)
                 chunks = dev_chunks(body)
                 if have and have.get('sig') != sig:
-                    if await _forum_edit(forum, have['thread_id'], title, chunks[0], tags):
-                        th = await _forum_thread(forum, have['thread_id'])
-                        have['more'] = await _sync_more(th, chunks[1:],
-                                                        have.get('more') or [])
+                    got = []
+
+                    async def follow(t, was=have.get('more') or [], rest=chunks[1:]):
+                        # While the post is open: an archived one refuses
+                        # every message (#4228).
+                        got.append(await _sync_more(t, rest, was))
+                    if await _forum_edit(forum, have['thread_id'], title, chunks[0], tags,
+                                         then=follow):
+                        have['more'] = got[0]
                         edited.append(num)
                     else:
                         rec.pop(key, None)     # deleted by hand: made again

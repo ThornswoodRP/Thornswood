@@ -343,6 +343,7 @@ yes('  the old numbering, 1 to N, asks for a position at or above the bot\'s and
     'as on 22 Oct', max(old.values()) >= 110 and refused)
 
 # ---- N2 to N4 a build on that server ---------------------------------------
+LIVE_NAMES = set(Guild(LIVE).top_down())
 g = Guild(LIVE)
 jockie_at = g.top_down().index('Jockie Music')
 out = build(g)
@@ -355,8 +356,12 @@ yes('N3 every plan role is now in the plan\'s order', in_plan_order(g))
 td = g.top_down()
 yes('  Patreon, which its own bot manages, sits under Server Booster as the plan has it',
     td.index('Patreon') == td.index('Server Booster') + 1)
-yes('  Jockie Music, which the plan does not name, keeps its place, %d from the top' % jockie_at,
-    td.index('Jockie Music') == jockie_at)
+# A plan role the stand-in has not got yet (Clanker, 12 Nov 2026) is made
+# and goes in above it, so it moves down by one for each of those.
+new_above = sum(1 for n in td[:td.index('Jockie Music')] if n not in LIVE_NAMES)
+yes('  Jockie Music, which the plan does not name, keeps its place, %d from the top '
+    'among the roles there before' % jockie_at,
+    td.index('Jockie Music') - new_above == jockie_at)
 yes('  the bot\'s own role is not in the request and is still the top',
     'Thornswood' not in req[0] and td[0] == 'Thornswood')
 yes('N4 the build read Discord\'s answer back and found nothing out of place',
@@ -390,7 +395,7 @@ g.me.top_role.position = 40
 before = [(r.name, r.position) for r in g.roles]
 build(g)
 yes('N6 roles that cannot fit under the bot even sharing are not asked for',
-    asked(g) == [] and [(r.name, r.position) for r in g.roles] == before)
+    asked(g) == [] and [(r.name, r.position) for r in g.roles][:len(before)] == before)
 yes('  and the run says why', any('do not fit in the 39 positions' in f for f in B.failed))
 
 # role_positions on its own: shares only as many positions as it must.

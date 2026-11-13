@@ -1,0 +1,7 @@
+{
+  "issue": 4827,
+  "environment": "dev",
+  "steps": [
+    { "inGame": "On dev, pick a flower or a plant, then wait for it to grow back, or have staff reset it, while standing near it with somebody else close by.", "doneWhen": "It shows unpicked again without blinking out and back, and nobody nearby is handed what it gives." }
+  ]
+}

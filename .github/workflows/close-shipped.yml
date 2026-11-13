@@ -1,0 +1,101 @@
+# Closes the issues a main release carries, and writes the Dev test tasks a
+# dev release carries, once the box has put that release on its server
+# (#5530).
+#
+# WHY. A fix people would notice merges with "Test task for #N" in its pull
+# request, and done-on-merge.yml writes that test task on #N and leaves it
+# open in Done until the fix is on the server testers play (#2796).
+# scripts/release/Close-ShippedIssues.ps1 does the close: it reads the board,
+# and for each open issue in Done whose merge the release carries, writes the
+# test task on it and closes it, so the bot posts the test task (#3279). With
+# -Dev it writes the Dev test tasks a dev release carries instead, closing
+# nothing (#5199). Until this workflow only Ship.ps1 and Ship-OnBox.ps1 ran it.
+# Since 3 Nov 2026 main has gone out through promote-main.yml and dev through
+# merge-release.yml, neither of which calls it, so from the 8 Nov promotions
+# on, issues whose fixes were on main stayed open in Done with their test
+# tasks never posted (#5464, #5465, #5473, #5475, #5477, #5524 and more).
+#
+# WHEN. The box deploy agent marks a Deployment to Dev or Main a success once
+# its server runs the Release (docs/DEPLOY-AGENT.md). That status, the one with
+# the agent's log beside it, starts this:
+#   - Main (promote-main.yml, after Patrick approves): the release's commit
+#     is what testers play now, so every issue in Done whose merge it carries
+#     is closed with its test task.
+#   - Dev (merge-release.yml): each Dev test task it carries is written with
+#     a "Build: dev release <tag>" line, for #dev-test-tasks; nothing closes.
+# The Deployment's sha is the commit its Release was built from, and its
+# payload names the Release. GitHub's own status on the Deployment it lists
+# for promote-main's waiting job has no log, and starts nothing here.
+# Site and Discord bot Deployments close nothing: a site fix's issue closes
+# with the next main release, which carries its merge too, never before.
+#
+# THE BOARD. Close-ShippedIssues.ps1 reads it through scripts/ops/Read-Board.ps1,
+# which starts board-read.yml on main and reads board.json back out of its log
+# (that workflow's header says why), so this needs actions write to start that
+# run and read it, and no board token of its own.
+#
+# THE CHECKOUT. Main's whole history, without file contents, plus scripts/:
+# the script asks git whether the Release's commit carries each merge, and a
+# shallow checkout cannot say. A rerun closes only what is still open.
+#
+# The run's own token. Every action is named by a full length commit SHA with
+# its tag in the comment, for the reason build.yml gives.
+name: Close shipped issues
+run-name: Close what ${{ github.event.deployment.environment }} runs now
+
+on:
+  deployment_status:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: close-shipped-${{ github.event.deployment.environment }}
+  cancel-in-progress: false
+
+jobs:
+  close:
+    name: Close the issues it carries, or write its Dev test tasks
+    if: >-
+      ${{ github.event.deployment_status.state == 'success' &&
+          github.event.deployment_status.log_url != '' &&
+          (github.event.deployment.environment == 'Main' || github.event.deployment.environment == 'Dev') }}
+    runs-on: ubuntu-latest
+    # The board read is most of it (Read-Board.ps1 waits up to 15 minutes).
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+          sparse-checkout: |
+            scripts
+
+      - name: Close or write what the Release carries
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT: ${{ github.event.deployment.sha }}
+          DEPLOY_ENVIRONMENT: ${{ github.event.deployment.environment }}
+        run: |
+          # The Release's tag, from the Deployment's payload in the event
+          # file, never pasted into this script's text.
+          $event = Get-Content -Raw -LiteralPath $env:GITHUB_EVENT_PATH | ConvertFrom-Json
+          $payload = $event.deployment.payload
+          if ($payload -is [string]) { try { $payload = $payload | ConvertFrom-Json } catch { $payload = $null } }
+          $tag = if ($payload -and $payload.PSObject.Properties['release']) { [string]$payload.release } else { '' }
+          if ($env:COMMIT -notmatch '^[0-9a-f]{40}$') { Write-Host "::error::the Deployment names $($env:COMMIT), not a commit"; exit 1 }
+          if ($tag -notmatch '^build-[0-9][0-9A-Za-z._-]*$') { Write-Host "::error::the Deployment names no build Release ($tag)"; exit 1 }
+          $close = './scripts/release/Close-ShippedIssues.ps1'
+          if ($env:DEPLOY_ENVIRONMENT -eq 'Main') {
+            & $close -Commit $env:COMMIT -GitHubRepo $env:GITHUB_REPOSITORY -NoPause
+          } else {
+            & $close -Commit $env:COMMIT -GitHubRepo $env:GITHUB_REPOSITORY -Dev -Build $tag -NoPause
+          }
+          exit $LASTEXITCODE

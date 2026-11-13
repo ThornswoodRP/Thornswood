@@ -140,8 +140,12 @@ namespace Thornswood
 
             ThreadPool.QueueUserWorkItem(delegate
             {
-                bool refresh = false, offer = false;
+                bool refresh = false, offer = false, fixAfterMake = false;
                 string refused = null;
+                // The first start in a folder just made runs Fix (#5937):
+                // what the install leaves to do all waits on the folder, and
+                // this is the first start that has it.
+                if (active) fixAfterMake = OwnGame.TakeFixAfterMake();
                 try
                 {
                     // Vortex deploying into a Thornswood folder is refused
@@ -155,8 +159,8 @@ namespace Thornswood
                         catch (Exception ex) { Swallow.Note("ShellOwnGame.OwnGameAtStart, refused BeginInvoke", ex); }
                     }
                     else if (active) refresh = OwnGame.NeedsRefresh(c);
-                    // A yes given in the setup window (MakeOwnGame) is newer
-                    // than a no left in the profile by an earlier install.
+                    // MakeOwnGame, ticked or left unanswered, is newer than
+                    // a no left in the profile by an earlier install.
                     else if (collection && (!OwnGame.Declined || c.MakeOwnGame))
                     {
                         string src = OwnGame.DeploysInto(c);
@@ -170,13 +174,22 @@ namespace Thornswood
                     }
                 }
                 catch (Exception ex) { Swallow.Note("ShellOwnGame.OwnGameAtStart, NeedsRefresh or offer", ex); }
-                if (!refresh && !offer) return;
+                if (!refresh && !offer && !fixAfterMake) return;
                 try
                 {
                     Dispatcher.UIThread.Post(delegate
                     {
-                        if (refresh) StartOwnGame(false, false);
-                        else AskOwnGame(true);
+                        // Fix after the bring-up-to-date when Vortex deployed
+                        // again in between, whether that succeeds or not, as a
+                        // pressed Fix carries on after it; straight away
+                        // otherwise.
+                        Action fix = fixAfterMake ? (Action)delegate { RunFix(false, false, true); } : null;
+                        if (refresh)
+                        {
+                            if (!StartOwnGame(false, false, fix, fix) && fix != null) fix();
+                        }
+                        else if (offer) AskOwnGame(true);
+                        else fix();
                     });
                 }
                 catch (Exception ex) { Swallow.Note("ShellOwnGame.OwnGameAtStart, BeginInvoke", ex); }
@@ -348,12 +361,15 @@ namespace Thornswood
                 return;
             }
 
-            // Already answered in the setup window (issue #906): its card
-            // carries this panel's words and a tick box, and a tick is the
-            // same yes as the one below, given before the launcher was open.
+            // Already answered (issue #906): the setup window's card carries
+            // this panel's words and a tick box, and a tick is the same yes
+            // as the one below, given before the launcher was open. The box
+            // starts ticked and an install with no answer in config.json
+            // counts as ticked (Config.MakeOwnGame, Patrick, 12 Nov), so the
+            // question below is only for somebody who unticked it.
             if (cfg.MakeOwnGame)
             {
-                Log("Making Thornswood's own Skyrim folder, as chosen when Thornswood was installed. " +
+                Log("Making Thornswood's own Skyrim folder, which every install has unless its box was unticked. " +
                     "It is made from what Vortex has deployed in " + src + ".");
                 StartOwnGame(true, true);
                 return;
@@ -469,6 +485,10 @@ namespace Thornswood
             {
                 try { Paths.Init(Paths.Root); }
                 catch (Exception ex) { Swallow.Note("ShellOwnGame.StartOwnGame, pointing Paths at the new folder", ex); }
+                // The first start in the new folder runs Fix (#5937), and this
+                // note is how it knows, even if the restart below never comes
+                // back and the person opens the launcher themselves.
+                OwnGame.NoteFixAfterMake();
             }
 
             // The same load-order step Fix runs. SettleSettings on a full
@@ -555,6 +575,7 @@ namespace Thornswood
                     {
                         fixWhenFolderReady = false;
                         if (fixWhenFolderReadyAfterVortex) { fixWhenFolderReadyAfterVortex = false; RunFix(false, true); }
+                        else if (fixWhenFolderReadyAfterMake) { fixWhenFolderReadyAfterMake = false; RunFix(false, false, true); }
                         else RunFix(true);
                     }
                 });
@@ -592,7 +613,7 @@ namespace Thornswood
                     answer is kept until Vortex deploys again, so Play and Make
                     it, which ask it again when pressed, find it ready.
                 */
-                state = "Off. Checking what Vortex has deployed in " + from + ".";
+                state = "Not made yet. Checking what Vortex has deployed in " + from + ".";
                 Config askCfg = cfg;
                 string askInto = into, askFrom = from, askChosen = chosen;
                 System.Threading.ThreadPool.QueueUserWorkItem(delegate
@@ -601,8 +622,8 @@ namespace Thornswood
                     try { why = OwnGame.WhyNot(askCfg, askInto); }
                     catch (Exception ex) { why = "Thornswood could not read what Vortex has deployed: " + ex.Message; }
                     string text = (why == null
-                        ? "Off. Vortex has the Thornswood collection deployed in " + askFrom + ", so it can be made now."
-                        : "Off. " + why) + askChosen;
+                        ? "Not made yet. Vortex has the Thornswood collection deployed in " + askFrom + ", so it can be made now."
+                        : "Not made yet. " + why) + askChosen;
                     try
                     {
                         Dispatcher.UIThread.Post(delegate

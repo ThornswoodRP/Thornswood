@@ -14,6 +14,15 @@
 # Deployment's own commit: the agent's file only says which step had which
 # result, so nothing read off the box's web port is written into an issue.
 #
+# Only a Deployment to Dev or Main (#5961). GitHub also makes a Deployment
+# for every job that names an environment, board.yml's board and
+# engine-pin.yml's engine-pin among them, and its success status carries
+# that job's run as the log URL. Each of those started this job on a hosted
+# runner to check out, set up node and say no step names the environment:
+# 62 such jobs between 12:50 and 2:03 PM on 12 Nov, beside one Deployment to
+# Dev, while the merge queue's build of #5916 waited for runners until its
+# 30 minutes ran out. A job its if skips takes no runner.
+#
 # The run's own token, issues write only. No secret, and nothing reaches the
 # box. Every action is named by a full length commit SHA with its tag in the
 # comment, for the reason build.yml gives.
@@ -29,7 +38,7 @@ concurrency:
 jobs:
   say:
     name: Say what the steps after the deploy left for people
-    if: ${{ github.event.deployment_status.state == 'success' && github.event.deployment_status.log_url != '' }}
+    if: ${{ github.event.deployment_status.state == 'success' && github.event.deployment_status.log_url != '' && (github.event.deployment.environment == 'Dev' || github.event.deployment.environment == 'Main') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

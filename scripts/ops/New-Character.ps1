@@ -49,10 +49,14 @@ if (Get-Process -Name node -ErrorAction SilentlyContinue) {
     Write-Host 'A node process is running. If that is the Thornswood server, stop it first or this will be undone.' -ForegroundColor Yellow
 }
 
-# Characters' change forms are the numerically named ones. Everything else is a world
-# object keyed by form id and plugin, like 13164_JKs Whiterun.esp.json.
-$characters = Get-ChildItem -LiteralPath $World -Filter '*.json' |
-           Where-Object { $_.BaseName -match '^\d+$' }
+# The characters' change forms, by the one rule (#5168, Release-List.ps1): a
+# runtime form's id in lowercase hex and no plugin, 0.json or 1f.json, with a
+# profileId above 0 and not deleted. Everything else is the world: a form
+# keyed by id and plugin, like 13164_JKs Whiterun.esp.json, or one of the
+# world's own runtime forms, profileId -1.
+$chars = Get-ThornswoodCharacterForms $World 'it is left where it is'
+foreach ($n in $chars.notes) { Write-Host ('  ' + ("$n" -split '\|', 2)[1]) -ForegroundColor Yellow }
+$characters = @($chars.files | ForEach-Object { Get-Item -LiteralPath $_ })
 
 if (-not $characters) {
     Write-Host 'No character change forms. The next connect already builds a fresh character.' -ForegroundColor Green

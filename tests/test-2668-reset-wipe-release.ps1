@@ -28,11 +28,15 @@
        acts only on profiles and that no server on this machine runs; a list
        there that is not one, or a server-settings.json that will not parse,
        stops the reset with nothing moved; a change form that will not parse
-       is named
+       is named and left where it is; a character whose id has a letter
+       (1f.json, #5168) is thrown away and named, and the world's own
+       runtime forms (profileId -1) and a deleted slot stay
     W  a wipe: the list names every character in the world it set aside,
        carries the ids of the list it set aside (which stays as it was), is
        marked done for every part but the merchants' and, while it carries a
-       deleted profile, the saves; nobody to name writes nothing; a list set
+       deleted profile, the saves; a character whose id has a letter is
+       named and a runtime form of the world's is not; nobody to name writes
+       nothing; a list set
        aside that is not one is said and not carried; a server whose move
        did not finish gets no list
     B  the reset's stop and start (#2871): the box opens the server on the
@@ -182,6 +186,7 @@ $boxPs = Get-BoxPowerShell
 
 $T = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-2668-' + [Guid]::NewGuid().ToString('N'))
 $A1 = 4278192641; $A2 = 4278192642; $A9 = 4278192649     # ff000a01, ff000a02, ff000a09
+$A1f = 4278190111                                          # ff00001f, a character in 1f.json (#5168)
 function Put([string]$path, [string]$body) {
     [void][IO.Directory]::CreateDirectory((Split-Path -Parent $path))
     [IO.File]::WriteAllText($path, $body)
@@ -277,9 +282,28 @@ try {
     Put (Join-Path $r6 'world\changeForms\3.json') '{"formDesc":"ff000a0'
     $x = RunBox $resetBody @('-Root', $r6)
     $l = ListOf (Join-Path $r6 'private\deleted-characters.json')
-    Yes ('R12 a change form that will not parse is named, and the others are still listed (' + ($x.out -join ' / ') + ')') (
-        $x.code -eq 0 -and @($x.out | Where-Object { $_ -like '*3.json will not parse, so its character, if it is one, is not on the release list' }).Count -eq 1 -and
-        $l -and (Ids $l.actors) -eq "$A1,$A2")
+    Yes ('R12 a change form that will not parse is named and left where it is, and the others are still listed (' + ($x.out -join ' / ') + ')') (
+        $x.code -eq 0 -and @($x.out | Where-Object { $_ -like '*3.json will not parse, so whether it is a character is not known; a reset leaves it where it is' }).Count -eq 1 -and
+        (Test-Path -LiteralPath (Join-Path $r6 'world\changeForms\3.json')) -and $l -and (Ids $l.actors) -eq "$A1,$A2")
+
+    # #5168: the engine names a runtime form's file by its local id in hex
+    # (FormDesc::ToString, %x), so a character whose id has a letter is 1f.json,
+    # and the world's own runtime forms (an NPC the server made, profileId -1)
+    # sit beside the characters with names of digits and letters alike.
+    $r7 = Server 'reset-hex' '{}'
+    Put (Join-Path $r7 'world\changeForms\1f.json') ('{"formDesc":"1f","profileId":5004}')
+    Put (Join-Path $r7 'world\changeForms\b.json') ('{"formDesc":"b","profileId":-1}')
+    Put (Join-Path $r7 'world\changeForms\10.json') ('{"formDesc":"10","profileId":-1}')
+    Put (Join-Path $r7 'world\changeForms\c.json') ('{"formDesc":"c","profileId":-1,"isDeleted":true}')
+    $x = RunBox $resetBody @('-Root', $r7)
+    $l = ListOf (Join-Path $r7 'private\deleted-characters.json')
+    $left = @(Get-ChildItem -LiteralPath (Join-Path $r7 'world\changeForms') -Filter '*.json' -File | ForEach-Object { $_.Name } | Sort-Object)
+    $binned = @(Get-ChildItem -LiteralPath (Join-Path $r7 'world\changeForms') -Directory -Filter '_discarded-*' | ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -File } | ForEach-Object { $_.Name } | Sort-Object)
+    Yes ('R13 a character whose id has a letter is thrown away with the others (' + ($binned -join ',') + ')') (
+        $x.code -eq 0 -and ($binned -join ',') -eq '0.json,1.json,1f.json,2.json')
+    Yes ('R14 and is on the release list by its form id, 0xff00001f (' + (Ids $l.actors) + ')') ($l -and (Ids $l.actors) -eq "$A1f,$A1,$A2")
+    Yes ('R15 the world''s own runtime forms, digits or letters, and a deleted slot stay where they are (' + ($left -join ',') + ')') (
+        ($left -join ',') -eq '10.json,13164_JKs Whiterun.esp.json,b.json,c.json')
 
     # ---- W: a wipe -----------------------------------------------------------------
     $stamp = '20261017-2100'
@@ -329,6 +353,17 @@ try {
         -not (Test-Path -LiteralPath (Join-Path $wt 'private\deleted-characters.taken.json')) -and
         [IO.File]::ReadAllText((Join-Path $wt "private\deleted-characters.taken-before-$stamp.json")) -eq $taken -and
         -not ($l.done.PSObject.Properties.Name -contains 'saves'))
+
+    # #5168: a wiped character whose id has a letter is named too, and the
+    # world's own runtime forms are not.
+    $wh = Server 'wipe-hex' '{}'
+    Registers $wh
+    Put (Join-Path $wh 'world\changeForms\1f.json') ('{"formDesc":"1f","profileId":5004}')
+    Put (Join-Path $wh 'world\changeForms\10.json') ('{"formDesc":"10","profileId":-1}')
+    $x = RunBox (FillMove $wh)
+    $l = ListOf (Join-Path $wh 'private\deleted-characters.json')
+    Yes ('W6c a wiped character whose id has a letter is on the list, and the world''s own runtime form is not (' + (Ids $l.actors) + ')') (
+        @($x.out | Where-Object { $_ -like 'FAILED*' }).Count -eq 0 -and $l -and (Ids $l.actors) -eq "$A1f,$A1,$A2")
 
     $w2 = Join-Path $T 'wipe-nobody'
     Put (Join-Path $w2 'server-settings.json') '{}'

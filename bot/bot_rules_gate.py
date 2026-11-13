@@ -21,10 +21,15 @@ Member off, and each is sent to the site's record of who accepted the rules
 against the Discord id (#428), which also puts a line in the staff inbox. A
 reaction added or taken off while the bot was not running reaches no event,
 so when the bot starts it reads who has reacted and sets Member to match:
-given to everybody who reacted, taken from everybody else, apart from
-Playtesters and staff, whose own roles open more than Member does. That is
-how the Members given by hand before this, who never answered anything (the
-audit of 12 Nov named 15), come off and get it back by reacting.
+given to everybody who reacted, taken from everybody else. That is how the
+Members given by hand before this, who never answered anything (the audit of
+12 Nov named 15), come off and get it back by reacting.
+
+STAFF AND PLAYTESTERS TOO (Patrick, 12 Nov 2026, 3:32 PM, after he took his
+own reaction off and kept Member: "yeah staff loose it to but only that role,
+they keep their other roles Obviosuly so it doesnt really change anything for
+them"). Member follows the reaction for everybody; only Member is touched, so
+a Playtester's or staff member's own roles still open what they open.
 
 Only Member is ever given or taken here.
 """
@@ -70,8 +75,9 @@ def member_role(guild):
 
 
 def keeps_more(who):
-    """Playtester or staff: their own roles open more than Member, so the
-       gate never takes Member from them."""
+    """Playtester or staff: their own roles open more than Member (the ping
+       buttons let them in without it, bot_pings.py). The gate takes Member
+       from them like anybody else."""
     return (_who_hits(who, TESTER_IDS, TESTER_NAMES)
             or _who_hits(who, EVERY_STAFF_IDS, EVERY_STAFF_NAMES)
             or _who_hits(who, STAFF_IDS, STAFF_NAMES))
@@ -95,10 +101,6 @@ SAID = {
                 'Took Member', 'Reacted to the rules, so Member was given.'),
     'unreacted': ('Took their reaction to the rules off',
                   'Gave up Member', 'Took their reaction to the rules off, so Member came off.'),
-    'kept': ('Took their reaction to the rules off',
-             'Took the rules reaction off',
-             'Took their reaction to the rules off. Member stays, because '
-             'Playtester or a staff role opens more than it does.'),
     'never': ('Had Member without a reaction to the rules',
               'Member taken off',
               'Had Member without a reaction to the rules in #rules, so Member came '
@@ -163,11 +165,7 @@ async def unreacted(payload):
     who = guild and guild.get_member(payload.user_id)
     if guild is None or who is None or getattr(who, 'bot', False):
         return
-    # The record says they no longer accept the rules either way. A
-    # Playtester or staff member keeps Member: their own roles open more.
-    if keeps_more(who):
-        await record(who, 'kept')
-        return
+    # Staff and Playtesters too: only Member comes off (Patrick, 12 Nov).
     if await set_member(guild, who, False, 'Took their reaction to the rules off'):
         log('took Member from %s, who took their reaction to the rules off' % who.id)
     await record(who, 'unreacted')
@@ -209,8 +207,8 @@ async def _reactors(msg):
 
 
 async def match_members(guild, reactors):
-    """Member to everybody who reacted and from everybody else who is not a
-       Playtester or staff. The counts go in the log."""
+    """Member to everybody who reacted and from everybody else, staff and
+       Playtesters included. The counts go in the log."""
     role = member_role(guild)
     if role is None:
         return 0, 0
@@ -222,7 +220,7 @@ async def match_members(guild, reactors):
             if await set_member(guild, who, True, 'Reacted to the rules in #rules'):
                 given += 1
                 await record(who, 'reacted')
-        elif role in who.roles and not keeps_more(who):
+        elif role in who.roles:
             if await set_member(guild, who, False,
                                 'Has not reacted to the rules in #rules'):
                 taken += 1

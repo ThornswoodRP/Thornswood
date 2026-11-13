@@ -122,7 +122,7 @@ v = cart(BRYNJA, 'drive cart-1 riften');
 const road = cart1().sailing;
 yes('B4 Brynja drives it off to Riften, its road\'s 30 minutes the least it takes (' + v.note + ')',
     !!road && road.driver.profile === 1000 && road.arriveAt - road.at === 30 * MIN && /Riften stables/.test(v.note));
-yes('B4 and she shows as driving, for Raid cart on P', w.box().__thornswoodTradeCarts.driving(BRYNJA) === true);
+yes('B4 and she shows as driving, for Raid cart on P', w.box().__thornswoodTradeCarts.driving(BRYNJA, 1000) === true);
 
 // ------------------------------------------------------------ C. the raid --
 w.moveTo(BRYNJA, TAMRIEL, [90000, -50000, 0]);
@@ -160,7 +160,7 @@ yes('D1 the server restarts', r.loaded);
 ALL.forEach(w.arrive);
 w.run(30000);
 yes('D1 the cart is still on the road, with her driving and the 7 left',
-    !!cart1().sailing && cart1().sailing.driver.profile === 1000 && onCart() === 7 && w.box().__thornswoodTradeCarts.driving(BRYNJA) === true);
+    !!cart1().sailing && cart1().sailing.driver.profile === 1000 && onCart() === 7 && w.box().__thornswoodTradeCarts.driving(BRYNJA, 1000) === true);
 
 // --------------------------------------------------- E. in at Riften --
 w.moveTo(BRYNJA, TAMRIEL, near(RIFTEN_AT, 60));
@@ -175,7 +175,7 @@ w.run(30 * MIN);
 w.activate(RCRATE, BRYNJA);
 v = cart(BRYNJA, 'pullin cart-1');
 yes('E2 once the road is done she pulls it in (' + v.note + ')', cart1().sailing === null && cart1().port === 'riften' &&
-    w.box().__thornswoodTradeCarts.driving(BRYNJA) === false);
+    w.box().__thornswoodTradeCarts.driving(BRYNJA, 1000) === false);
 w.moveTo(ONUND, TAMRIEL, near(RIFTEN_AT, 90));
 w.activate(RCRATE, ONUND);
 v = cart(ONUND, 'collect cart-1 1 7');

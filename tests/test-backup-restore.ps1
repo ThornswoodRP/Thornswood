@@ -21,7 +21,7 @@
     - retention keeps seven daily and leaves a file put there by hand alone
     - Restore-Backup.ps1 -CheckOnly opens it, refuses a wrong passphrase,
       calls a backup with nothing under game/world a failure, and fails a
-      world whose numbered change forms have no profile id above 0 that is
+      world whose runtime change forms have no profile id above 0 that is
       not deleted (#1047)
     - Restore-Server.ps1 puts a character back byte for byte into a folder
       whose load order pointed at another server's plugins, points it at its
@@ -116,8 +116,9 @@ function Settings([string]$root, [string]$pluginRoot, [int]$port) {
 # private and data. Characters are shaped as the real world has them (seen in
 # the first rehearsal, 28 September): slots named 0.json, 1.json, ... with the
 # profile id inside, and a deleted character's slot left behind with
-# profileId -1 and isDeleted true. $who is in slot 0, another person in slot 4,
-# and slots 1 to 3 are deleted, so a world holds two characters.
+# profileId -1 and isDeleted true. Slots are named in hex (FormDesc::ToString,
+# %x), so $who is in slot 0, another person in slot a (10, a letter in its
+# name, #5168), and slots 1 to 3 are deleted: a world holds two characters.
 $otherWho = '2000001'
 function Server([string]$root, [int]$port, [string]$who, [int]$worldFiles, [int]$fileBytes, [switch]$DeadOnly) {
     Plugins $root $plugins
@@ -136,7 +137,7 @@ function Server([string]$root, [int]$port, [string]$who, [int]$worldFiles, [int]
     } else {
         Put (Join-Path $forms '0.json') ('{"profileId":' + $who + ',"isDeleted":false,"marker":"' + [Guid]::NewGuid().ToString('N') + '","inv":"' + (Noise 900) + '"}')
         foreach ($i in 1..3) { Put (Join-Path $forms "$i.json") $gone }
-        Put (Join-Path $forms '4.json') ('{"profileId":' + $otherWho + ',"isDeleted":false,"isDisabled":true,"x":"' + (Noise 600) + '"}')
+        Put (Join-Path $forms 'a.json') ('{"profileId":' + $otherWho + ',"isDeleted":false,"isDisabled":true,"x":"' + (Noise 600) + '"}')
     }
     foreach ($i in 1..$worldFiles) { Put (Join-Path $forms ("ff{0:x6}.json" -f $i)) ('{"ref":' + $i + ',"x":"' + (Noise $fileBytes) + '"}') }
 }
@@ -377,8 +378,8 @@ try {
     $code = if ($deadZip.Count) { Run $Restore @('-Backup', $deadZip[0].FullName, '-Root', $deadBack, '-NoPause') } else { 0 }
     Yes 'a backup whose world holds only deleted characters is refused' ($code -ne 0 -and (Said 'holds no characters'))
     $code = if ($deadZip.Count) { Run $Unpack @('-Backup', $deadZip[0].FullName, '-CheckOnly', '-NoPause') } else { 0 }
-    Yes '-CheckOnly fails a backup whose numbered change forms are only deleted characters' (
-        $code -ne 0 -and (Said 'numbered change form') -and (Said 'profile id above 0'))
+    Yes '-CheckOnly fails a backup whose runtime change forms are only deleted characters' (
+        $code -ne 0 -and (Said 'runtime change form') -and (Said 'profile id above 0'))
 
     $node = Get-Command node -EA SilentlyContinue
     if ($node) {

@@ -21,9 +21,12 @@ Patrick's Grok Bot lanes (Anvil, Herald, Waystone, Wyrd, Smeagle and Codex)
 only audit now (Patrick, 30 Oct): they look over the work and file what
 they find as plain issues, unclaimed, in Todo. They claim no issue, open no
 pull request and run nothing. Every rule in this
-file binds them the same as a person. Their own notes are in an Obsidian
-vault on the shipping machine; nothing there is a rule, and what is true now
-is `ops\status.md` in the private ops repo.
+file binds them the same as a person. They work on Grok Bot's own cloud
+computer and file through its GitHub connector. When its included usage runs
+out, Patrick's rule of 8 Nov 2026 lets them do read-only work on the shipping
+machine through the Grok Bot app, 11 PM to 6 AM, in their own checkouts under
+the temp and worktrees folder (#5933). What is true now is `ops\status.md` in
+the private ops repo.
 
 Six Hermes Bots take over the work from the Claude threads (Patrick, 30 Oct):
 Bramble picks, claims, merges and runs every release step, and Rift, Sprocket,
@@ -38,10 +41,10 @@ the game, which becomes an issue labelled `check: in game`. The agent runs
 each step once and says how it went on the Deployment, so nobody keeps or
 runs a note. When no gate verb does what is needed, the same pull request
 adds one to `scripts\vps\gate\verbs.json` and lists it in that verb's
-`afterDeploy`. No new run note goes in the private ops repo's
-`ops\claude-queue\`; Bramble runs the notes already there and takes them
-away as they are (since 1 Nov the Claude Desk neither runs those notes nor
-merges). A step only a person can take outside the game (a click in Vortex's
+`afterDeploy`. The private ops repo's run note folder is gone (12 Nov): the
+last notes became step files here, or went to the issue that owns what was
+left of them. Work that recurs or waits on a date is an issue, not a note. A
+step only a person can take outside the game (a click in Vortex's
 own window) is a card on Patrick's report page, never a note, and a main or
 live run still waits for Patrick's word. Bot branches carry the Bot's name
 (`wisp/3150-what-it-is`). On the shipping machine `C:\Thornswood-Repo` is
