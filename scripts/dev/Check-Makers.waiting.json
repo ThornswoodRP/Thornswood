@@ -4,661 +4,661 @@
     {
       "desc": "f:Skyrim.esm",
       "name": "Gold",
-      "issue": "#3115",
+      "issue": "#4625",
       "why": "a forge recipe (the Eyepatch) still asks for a gold coin, which no recipe may"
     },
     {
       "desc": "2e500:Skyrim.esm",
       "name": "Black Soul Gem",
-      "issue": "#3520",
+      "issue": "#4673",
       "why": "Patrick, 26 Oct, A: the Wardweaver makes soul gems, a size up by rank."
     },
     {
       "desc": "34cdd:Skyrim.esm",
       "name": "bone meal",
-      "issue": "#3523",
+      "issue": "#4675",
       "why": "Patrick, 26 Oct, A: bone meal ground by a Hunter at the grain mill, dwarven oil drawn by a Smith at the smelter."
     },
     {
       "desc": "2e4e6:Skyrim.esm",
       "name": "common soul gem",
-      "issue": "#3520",
+      "issue": "#4673",
       "why": "Patrick, 26 Oct, A: the Wardweaver makes soul gems, a size up by rank."
     },
     {
       "desc": "63b47:Skyrim.esm",
       "name": "diamond",
-      "issue": "#3521",
+      "issue": "#4674",
       "why": "Patrick, 26 Oct, A: from the master Miner's gem geodes; no garnet or diamond vein exists yet."
     },
     {
       "desc": "f11c0:Skyrim.esm",
       "name": "Dwarven Oil",
-      "issue": "#3523",
+      "issue": "#4675",
       "why": "Patrick, 26 Oct, A: bone meal ground by a Hunter at the grain mill, dwarven oil drawn by a Smith at the smelter."
     },
     {
       "desc": "6851f:Skyrim.esm",
       "name": "flawless diamond",
-      "issue": "#3521",
+      "issue": "#4674",
       "why": "Patrick, 26 Oct, A: from the master Miner's gem geodes; no garnet or diamond vein exists yet."
     },
     {
       "desc": "68521:Skyrim.esm",
       "name": "flawless garnet",
-      "issue": "#3521",
+      "issue": "#4674",
       "why": "Patrick, 26 Oct, A: from the master Miner's gem geodes; no garnet or diamond vein exists yet."
     },
     {
       "desc": "63b45:Skyrim.esm",
       "name": "garnet",
-      "issue": "#3521",
+      "issue": "#4674",
       "why": "Patrick, 26 Oct, A: from the master Miner's gem geodes; no garnet or diamond vein exists yet."
     },
     {
       "desc": "2e4fc:Skyrim.esm",
       "name": "grand soul gem",
-      "issue": "#3520",
+      "issue": "#4673",
       "why": "Patrick, 26 Oct, A: the Wardweaver makes soul gems, a size up by rank."
     },
     {
       "desc": "2e4f4:Skyrim.esm",
       "name": "greater soul gem",
-      "issue": "#3520",
+      "issue": "#4673",
       "why": "Patrick, 26 Oct, A: the Wardweaver makes soul gems, a size up by rank."
     },
     {
       "desc": "2e4e4:Skyrim.esm",
       "name": "lesser soul gem",
-      "issue": "#3520",
+      "issue": "#4673",
       "why": "Patrick, 26 Oct, A: the Wardweaver makes soul gems, a size up by rank."
     },
     {
       "desc": "dd647:Skyrim.esm",
       "name": "Spell Tome: Bane of the Undead",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a270d:Skyrim.esm",
       "name": "Spell Tome: Blizzard",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26ed:Skyrim.esm",
       "name": "Spell Tome: Bound Battleaxe",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26f1:Skyrim.esm",
       "name": "Spell Tome: Bound Bow",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "9e2a9:Skyrim.esm",
       "name": "Spell Tome: Bound Sword",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a271b:Skyrim.esm",
       "name": "Spell Tome: Call To Arms",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2711:Skyrim.esm",
       "name": "Spell Tome: Calm",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "9e2a7:Skyrim.esm",
       "name": "Spell Tome: Candlelight",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2708:Skyrim.esm",
       "name": "Spell Tome: Chain Lightning",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "ff7d1:Skyrim.esm",
       "name": "Spell Tome: Clairvoyance",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "9e2ab:Skyrim.esm",
       "name": "Spell Tome: Conjure Familiar",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26ec:Skyrim.esm",
       "name": "Spell Tome: Conjure Flame Atronach",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26ef:Skyrim.esm",
       "name": "Spell Tome: Conjure Frost Atronach",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26f0:Skyrim.esm",
       "name": "Spell Tome: Conjure Storm Atronach",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "9e2ad:Skyrim.esm",
       "name": "Spell Tome: Courage",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26f9:Skyrim.esm",
       "name": "Spell Tome: Dead Thrall",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26e7:Skyrim.esm",
       "name": "Spell Tome: Detect Life",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26ea:Skyrim.esm",
       "name": "Spell Tome: Detect Undead",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "d2b4e:Skyrim.esm",
       "name": "Spell Tome: Dragonhide",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26f7:Skyrim.esm",
       "name": "Spell Tome: Dread Zombie",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26e9:Skyrim.esm",
       "name": "Spell Tome: Ebonyflesh",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26f8:Skyrim.esm",
       "name": "Spell Tome: Expel Daedra",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a271d:Skyrim.esm",
       "name": "Spell Tome: Fast Healing",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2712:Skyrim.esm",
       "name": "Spell Tome: Fear",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2700:Skyrim.esm",
       "name": "Spell Tome: Fire Rune",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a270c:Skyrim.esm",
       "name": "Spell Tome: Fire Storm",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2706:Skyrim.esm",
       "name": "Spell Tome: Fireball",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26fd:Skyrim.esm",
       "name": "Spell Tome: Firebolt",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2703:Skyrim.esm",
       "name": "Spell Tome: Flame Cloak",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26fa:Skyrim.esm",
       "name": "Spell Tome: Flame Thrall",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "9cd51:Skyrim.esm",
       "name": "Spell Tome: Flames",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2714:Skyrim.esm",
       "name": "Spell Tome: Frenzy",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2704:Skyrim.esm",
       "name": "Spell Tome: Frost Cloak",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2701:Skyrim.esm",
       "name": "Spell Tome: Frost Rune",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26fb:Skyrim.esm",
       "name": "Spell Tome: Frost Thrall",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "9cd52:Skyrim.esm",
       "name": "Spell Tome: Frostbite",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "9e2ac:Skyrim.esm",
       "name": "Spell Tome: Fury",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "dd643:Skyrim.esm",
       "name": "Spell Tome: Grand Healing",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "fde7b:Skyrim.esm",
       "name": "Spell Tome: Guardian Circle",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a271a:Skyrim.esm",
       "name": "Spell Tome: Harmony",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2727:Skyrim.esm",
       "name": "Spell Tome: Heal Other",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "9e2af:Skyrim.esm",
       "name": "Spell Tome: Healing",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a271e:Skyrim.esm",
       "name": "Spell Tome: Healing Hands",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a271c:Skyrim.esm",
       "name": "Spell Tome: Hysteria",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26fe:Skyrim.esm",
       "name": "Spell Tome: Ice Spike",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2707:Skyrim.esm",
       "name": "Spell Tome: Ice Storm",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2715:Skyrim.esm",
       "name": "Spell Tome: Invisibility",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26e4:Skyrim.esm",
       "name": "Spell Tome: Ironflesh",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "9e2ae:Skyrim.esm",
       "name": "Spell Tome: Lesser Ward",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26ff:Skyrim.esm",
       "name": "Spell Tome: Lightning Bolt",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2705:Skyrim.esm",
       "name": "Spell Tome: Lightning Cloak",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2702:Skyrim.esm",
       "name": "Spell Tome: Lightning Rune",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a270e:Skyrim.esm",
       "name": "Spell Tome: Lightning Storm",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26e2:Skyrim.esm",
       "name": "Spell Tome: Magelight",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "dd646:Skyrim.esm",
       "name": "Spell Tome: Mass Paralysis",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2719:Skyrim.esm",
       "name": "Spell Tome: Mayhem",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a270f:Skyrim.esm",
       "name": "Spell Tome: Muffle",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "9e2a8:Skyrim.esm",
       "name": "Spell Tome: Oakflesh",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2717:Skyrim.esm",
       "name": "Spell Tome: Pacify",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26e8:Skyrim.esm",
       "name": "Spell Tome: Paralyze",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2713:Skyrim.esm",
       "name": "Spell Tome: Rally",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26eb:Skyrim.esm",
       "name": "Spell Tome: Reanimate Corpse",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2718:Skyrim.esm",
       "name": "Spell Tome: Rout",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "9cd54:Skyrim.esm",
       "name": "Spell Tome: Soul Trap",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "9cd53:Skyrim.esm",
       "name": "Spell Tome: Sparks",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2720:Skyrim.esm",
       "name": "Spell Tome: Steadfast Ward",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26e3:Skyrim.esm",
       "name": "Spell Tome: Stoneflesh",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26fc:Skyrim.esm",
       "name": "Spell Tome: Storm Thrall",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26e5:Skyrim.esm",
       "name": "Spell Tome: Telekinesis",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2729:Skyrim.esm",
       "name": "Spell Tome: Turn Greater Undead",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a271f:Skyrim.esm",
       "name": "Spell Tome: Turn Lesser Undead",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2721:Skyrim.esm",
       "name": "Spell Tome: Turn Undead",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a2709:Skyrim.esm",
       "name": "Spell Tome: Wall of Flames",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a270a:Skyrim.esm",
       "name": "Spell Tome: Wall of Frost",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a270b:Skyrim.esm",
       "name": "Spell Tome: Wall of Storms",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "a26e6:Skyrim.esm",
       "name": "Spell Tome: Waterbreathing",
-      "issue": "#3519",
+      "issue": "#4672",
       "why": "Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk."
     },
     {
       "desc": "daba9:Skyrim.esm",
       "name": "Drum",
-      "issue": "#3461",
+      "issue": "#4644",
       "why": "Woodwright work with no recipe yet"
     },
     {
       "desc": "daba7:Skyrim.esm",
       "name": "Flute",
-      "issue": "#3461",
+      "issue": "#4644",
       "why": "Woodwright work with no recipe yet"
     },
     {
       "desc": "13985:Skyrim.esm",
       "name": "hunting bow",
-      "issue": "#3461",
+      "issue": "#4644",
       "why": "Woodwright work with no recipe yet"
     },
     {
       "desc": "3b562:Skyrim.esm",
       "name": "long bow",
-      "issue": "#3461",
+      "issue": "#4644",
       "why": "Woodwright work with no recipe yet"
     },
     {
       "desc": "dabab:Skyrim.esm",
       "name": "Lute",
-      "issue": "#3461",
+      "issue": "#4644",
       "why": "Woodwright work with no recipe yet"
     },
     {
       "desc": "7e647:Skyrim.esm",
       "name": "Unenchanted Conjuration Staff",
-      "issue": "#3461",
+      "issue": "#4644",
       "why": "Woodwright work with no recipe yet"
     },
     {
       "desc": "be11f:Skyrim.esm",
       "name": "Unenchanted Destruction Staff",
-      "issue": "#3461",
+      "issue": "#4644",
       "why": "Woodwright work with no recipe yet"
     },
     {
       "desc": "51b0c:Skyrim.esm",
       "name": "Unenchanted Restoration Staff",
-      "issue": "#3461",
+      "issue": "#4644",
       "why": "Woodwright work with no recipe yet"
     },
     {
       "desc": "a:Skyrim.esm",
       "name": "lockpick",
-      "issue": "#3462",
+      "issue": "#4646",
       "why": "Smith work with no recipe yet"
     },
     {
       "desc": "34cd6:Skyrim.esm",
       "name": "Linen Wrap",
-      "issue": "#3463",
+      "issue": "#4647",
       "why": "Tailor work with no recipe yet"
     },
     {
       "desc": "34c5e:Skyrim.esm",
       "name": "ale",
-      "issue": "#3464",
+      "issue": "#4648",
       "why": "Cook work with no recipe yet"
     },
     {
       "desc": "65c98:Skyrim.esm",
       "name": "bread",
-      "issue": "#3464",
+      "issue": "#4648",
       "why": "Cook work with no recipe yet"
     },
     {
       "desc": "64b32:Skyrim.esm",
       "name": "eidar cheese wedge",
-      "issue": "#3464",
+      "issue": "#4648",
       "why": "Cook work with no recipe yet"
     },
     {
       "desc": "64b34:Skyrim.esm",
       "name": "Eidar Cheese Wheel",
-      "issue": "#3464",
+      "issue": "#4648",
       "why": "Cook work with no recipe yet"
     },
     {
       "desc": "64b31:Skyrim.esm",
       "name": "goat cheese wedge",
-      "issue": "#3464",
+      "issue": "#4648",
       "why": "Cook work with no recipe yet"
     },
     {
       "desc": "10394d:Skyrim.esm",
       "name": "Honey",
-      "issue": "#3464",
+      "issue": "#4648",
       "why": "Cook work with no recipe yet"
     },
     {
       "desc": "669a3:Skyrim.esm",
       "name": "Mammoth Cheese Bowl",
-      "issue": "#3464",
+      "issue": "#4648",
       "why": "Cook work with no recipe yet"
     },
     {
       "desc": "64b35:Skyrim.esm",
       "name": "Sliced Goat Cheese Wheel",
-      "issue": "#3464",
+      "issue": "#4648",
       "why": "Cook work with no recipe yet"
     },
     {
       "desc": "3133c:Skyrim.esm",
       "name": "White Wine",
-      "issue": "#3464",
+      "issue": "#4648",
       "why": "Cook work with no recipe yet"
     },
     {
       "desc": "3bd14:Dragonborn.esm",
       "name": "Boar Meat",
-      "issue": "#3465",
+      "issue": "#4649",
       "why": "an animal part no hunt gives yet"
     },
     {
       "desc": "6bc0b:Skyrim.esm",
       "name": "Small Antlers",
-      "issue": "#3465",
+      "issue": "#4649",
       "why": "an animal part no hunt gives yet"
     },
     {
       "desc": "9151b:Skyrim.esm",
       "name": "Spider Egg",
-      "issue": "#3465",
+      "issue": "#4649",
       "why": "an animal part no hunt gives yet"
     },
     {

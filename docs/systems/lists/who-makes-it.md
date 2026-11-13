@@ -19,118 +19,118 @@ What the world hands out and who makes it both come from [Where every item comes
 | Ancient Nord Greatsword | Dungeon exclusive | 0 | exempt | The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #3524. |
 | Ancient Nord Sword | Dungeon exclusive | 0 | exempt | The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #3524. |
 | Ancient Nord War Axe | Dungeon exclusive | 0 | exempt | The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #3524. |
-| Gold | Asked for by a recipe | 1 | #3115 | a forge recipe (the Eyepatch) still asks for a gold coin, which no recipe may |
-| Drum | Asked for by a recipe | 1 | #3461 | Woodwright work with no recipe yet |
-| Flute | Asked for by a recipe | 1 | #3461 | Woodwright work with no recipe yet |
-| Lute | Asked for by a recipe | 1 | #3461 | Woodwright work with no recipe yet |
-| Unenchanted Conjuration Staff | Asked for by a recipe | 1 | #3461 | Woodwright work with no recipe yet |
-| Unenchanted Destruction Staff | Asked for by a recipe | 10 | #3461 | Woodwright work with no recipe yet |
-| Unenchanted Restoration Staff | Asked for by a recipe | 2 | #3461 | Woodwright work with no recipe yet |
-| Hunting Bow | Dungeon and body loot | 0 | #3461 | Woodwright work with no recipe yet |
-| Long Bow | Dungeon and body loot | 0 | #3461 | Woodwright work with no recipe yet |
-| Lockpick | Dungeon and body loot | 0 | #3462 | Smith work with no recipe yet |
-| Linen Wrap | Asked for by a recipe | 46 | #3463 | Tailor work with no recipe yet |
-| Eidar Cheese Wheel | Asked for by a recipe | 1 | #3464 | Cook work with no recipe yet |
-| Honey | Asked for by a recipe | 1 | #3464 | Cook work with no recipe yet |
-| Mammoth Cheese Bowl | Asked for by a recipe | 1 | #3464 | Cook work with no recipe yet |
-| Sliced Goat Cheese Wheel | Asked for by a recipe | 1 | #3464 | Cook work with no recipe yet |
-| White Wine | Asked for by a recipe | 3 | #3464 | Cook work with no recipe yet |
-| Ale | Dungeon and body loot | 0 | #3464 | Cook work with no recipe yet |
-| Bread | Dungeon and body loot | 0 | #3464 | Cook work with no recipe yet |
-| Eidar Cheese Wedge | Dungeon and body loot | 0 | #3464 | Cook work with no recipe yet |
-| Goat Cheese Wedge | Dungeon and body loot | 0 | #3464 | Cook work with no recipe yet |
-| Boar Meat | Asked for by a recipe | 2 | #3465 | an animal part no hunt gives yet |
-| Small Antlers | Asked for by a recipe | 1 | #3465 | an animal part no hunt gives yet |
-| Spider Egg | Asked for by a recipe | 4 | #3465 | an animal part no hunt gives yet |
-| Spell Tome: Bane of the Undead | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Blizzard | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Bound Battleaxe | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Bound Bow | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Bound Sword | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Call To Arms | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Calm | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Candlelight | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Chain Lightning | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Clairvoyance | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Conjure Familiar | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Conjure Flame Atronach | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Conjure Frost Atronach | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Conjure Storm Atronach | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Courage | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Dead Thrall | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Detect Life | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Detect Undead | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Dragonhide | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Dread Zombie | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Ebonyflesh | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Expel Daedra | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Fast Healing | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Fear | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Fire Rune | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Fire Storm | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Fireball | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Firebolt | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Flame Cloak | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Flame Thrall | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Flames | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Frenzy | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Frost Cloak | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Frost Rune | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Frost Thrall | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Frostbite | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Fury | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Grand Healing | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Harmony | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Heal Other | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Healing | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Healing Hands | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Hysteria | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Ice Spike | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Ice Storm | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Invisibility | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Ironflesh | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Lesser Ward | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Lightning Bolt | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Lightning Cloak | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Lightning Rune | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Lightning Storm | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Magelight | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Mara's Embrace | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Mass Paralysis | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Mayhem | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Muffle | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Oakflesh | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Pacify | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Paralyze | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Rally | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Reanimate Corpse | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Rout | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Soul Trap | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Sparks | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Steadfast Ward | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Stoneflesh | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Storm Thrall | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Telekinesis | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Turn Greater Undead | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Turn Lesser Undead | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Turn Undead | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Wall of Flames | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Wall of Frost | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Wall of Storms | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Spell Tome: Waterbreathing | Dungeon and body loot, tomes | 0 | #3519 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
-| Common Soul Gem | Dungeon and body loot, Asked for by a recipe | 7 | #3520 | Patrick, 26 Oct, A: the Wardweaver makes soul gems, a size up by rank. |
-| Grand Soul Gem | Dungeon and body loot | 0 | #3520 | Patrick, 26 Oct, A: the Wardweaver makes soul gems, a size up by rank. |
-| Greater Soul Gem | Dungeon and body loot | 0 | #3520 | Patrick, 26 Oct, A: the Wardweaver makes soul gems, a size up by rank. |
-| Lesser Soul Gem | Dungeon and body loot | 0 | #3520 | Patrick, 26 Oct, A: the Wardweaver makes soul gems, a size up by rank. |
-| Black Soul Gem | Dungeon exclusive | 0 | #3520 | Patrick, 26 Oct, A: the Wardweaver makes soul gems, a size up by rank. |
-| Diamond | Dungeon and body loot | 0 | #3521 | Patrick, 26 Oct, A: from the master Miner's gem geodes; no garnet or diamond vein exists yet. |
-| Flawless Diamond | Dungeon and body loot | 0 | #3521 | Patrick, 26 Oct, A: from the master Miner's gem geodes; no garnet or diamond vein exists yet. |
-| Flawless Garnet | Dungeon and body loot | 0 | #3521 | Patrick, 26 Oct, A: from the master Miner's gem geodes; no garnet or diamond vein exists yet. |
-| Garnet | Dungeon and body loot | 0 | #3521 | Patrick, 26 Oct, A: from the master Miner's gem geodes; no garnet or diamond vein exists yet. |
-| Dwarven Oil | Asked for by a recipe | 1 | #3523 | Patrick, 26 Oct, A: bone meal ground by a Hunter at the grain mill, dwarven oil drawn by a Smith at the smelter. |
-| Bone Meal | Dungeon and body loot, Asked for by a recipe | 8 | #3523 | Patrick, 26 Oct, A: bone meal ground by a Hunter at the grain mill, dwarven oil drawn by a Smith at the smelter. |
+| Gold | Asked for by a recipe | 1 | #4625 | a forge recipe (the Eyepatch) still asks for a gold coin, which no recipe may |
+| Drum | Asked for by a recipe | 1 | #4644 | Woodwright work with no recipe yet |
+| Flute | Asked for by a recipe | 1 | #4644 | Woodwright work with no recipe yet |
+| Lute | Asked for by a recipe | 1 | #4644 | Woodwright work with no recipe yet |
+| Unenchanted Conjuration Staff | Asked for by a recipe | 1 | #4644 | Woodwright work with no recipe yet |
+| Unenchanted Destruction Staff | Asked for by a recipe | 10 | #4644 | Woodwright work with no recipe yet |
+| Unenchanted Restoration Staff | Asked for by a recipe | 2 | #4644 | Woodwright work with no recipe yet |
+| Hunting Bow | Dungeon and body loot | 0 | #4644 | Woodwright work with no recipe yet |
+| Long Bow | Dungeon and body loot | 0 | #4644 | Woodwright work with no recipe yet |
+| Lockpick | Dungeon and body loot | 0 | #4646 | Smith work with no recipe yet |
+| Linen Wrap | Asked for by a recipe | 46 | #4647 | Tailor work with no recipe yet |
+| Eidar Cheese Wheel | Asked for by a recipe | 1 | #4648 | Cook work with no recipe yet |
+| Honey | Asked for by a recipe | 1 | #4648 | Cook work with no recipe yet |
+| Mammoth Cheese Bowl | Asked for by a recipe | 1 | #4648 | Cook work with no recipe yet |
+| Sliced Goat Cheese Wheel | Asked for by a recipe | 1 | #4648 | Cook work with no recipe yet |
+| White Wine | Asked for by a recipe | 3 | #4648 | Cook work with no recipe yet |
+| Ale | Dungeon and body loot | 0 | #4648 | Cook work with no recipe yet |
+| Bread | Dungeon and body loot | 0 | #4648 | Cook work with no recipe yet |
+| Eidar Cheese Wedge | Dungeon and body loot | 0 | #4648 | Cook work with no recipe yet |
+| Goat Cheese Wedge | Dungeon and body loot | 0 | #4648 | Cook work with no recipe yet |
+| Boar Meat | Asked for by a recipe | 2 | #4649 | an animal part no hunt gives yet |
+| Small Antlers | Asked for by a recipe | 1 | #4649 | an animal part no hunt gives yet |
+| Spider Egg | Asked for by a recipe | 4 | #4649 | an animal part no hunt gives yet |
 | Werewolf Pelt | Asked for by a recipe | 1 | #4649 | an animal part no hunt gives yet; Werewolf's Bane, from Cheddar's Mashups in collection revision 5, asks for it |
 | Empty Wine Bottle | Filled into a bottle of water | 0 | #4652 | water is carried in it (NEEDS.waterItems), and nothing hands one out. |
+| Spell Tome: Bane of the Undead | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Blizzard | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Bound Battleaxe | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Bound Bow | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Bound Sword | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Call To Arms | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Calm | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Candlelight | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Chain Lightning | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Clairvoyance | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Conjure Familiar | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Conjure Flame Atronach | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Conjure Frost Atronach | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Conjure Storm Atronach | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Courage | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Dead Thrall | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Detect Life | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Detect Undead | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Dragonhide | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Dread Zombie | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Ebonyflesh | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Expel Daedra | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Fast Healing | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Fear | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Fire Rune | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Fire Storm | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Fireball | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Firebolt | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Flame Cloak | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Flame Thrall | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Flames | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Frenzy | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Frost Cloak | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Frost Rune | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Frost Thrall | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Frostbite | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Fury | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Grand Healing | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Harmony | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Heal Other | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Healing | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Healing Hands | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Hysteria | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Ice Spike | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Ice Storm | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Invisibility | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Ironflesh | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Lesser Ward | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Lightning Bolt | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Lightning Cloak | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Lightning Rune | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Lightning Storm | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Magelight | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Mara's Embrace | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Mass Paralysis | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Mayhem | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Muffle | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Oakflesh | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Pacify | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Paralyze | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Rally | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Reanimate Corpse | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Rout | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Soul Trap | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Sparks | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Steadfast Ward | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Stoneflesh | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Storm Thrall | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Telekinesis | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Turn Greater Undead | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Turn Lesser Undead | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Turn Undead | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Wall of Flames | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Wall of Frost | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Wall of Storms | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Spell Tome: Waterbreathing | Dungeon and body loot, tomes | 0 | #4672 | Patrick, 26 Oct, A: a Mage writes tomes of their own school at the writing desk. |
+| Common Soul Gem | Dungeon and body loot, Asked for by a recipe | 7 | #4673 | Patrick, 26 Oct, A: the Wardweaver makes soul gems, a size up by rank. |
+| Grand Soul Gem | Dungeon and body loot | 0 | #4673 | Patrick, 26 Oct, A: the Wardweaver makes soul gems, a size up by rank. |
+| Greater Soul Gem | Dungeon and body loot | 0 | #4673 | Patrick, 26 Oct, A: the Wardweaver makes soul gems, a size up by rank. |
+| Lesser Soul Gem | Dungeon and body loot | 0 | #4673 | Patrick, 26 Oct, A: the Wardweaver makes soul gems, a size up by rank. |
+| Black Soul Gem | Dungeon exclusive | 0 | #4673 | Patrick, 26 Oct, A: the Wardweaver makes soul gems, a size up by rank. |
+| Diamond | Dungeon and body loot | 0 | #4674 | Patrick, 26 Oct, A: from the master Miner's gem geodes; no garnet or diamond vein exists yet. |
+| Flawless Diamond | Dungeon and body loot | 0 | #4674 | Patrick, 26 Oct, A: from the master Miner's gem geodes; no garnet or diamond vein exists yet. |
+| Flawless Garnet | Dungeon and body loot | 0 | #4674 | Patrick, 26 Oct, A: from the master Miner's gem geodes; no garnet or diamond vein exists yet. |
+| Garnet | Dungeon and body loot | 0 | #4674 | Patrick, 26 Oct, A: from the master Miner's gem geodes; no garnet or diamond vein exists yet. |
+| Dwarven Oil | Asked for by a recipe | 1 | #4675 | Patrick, 26 Oct, A: bone meal ground by a Hunter at the grain mill, dwarven oil drawn by a Smith at the smelter. |
+| Bone Meal | Dungeon and body loot, Asked for by a recipe | 8 | #4675 | Patrick, 26 Oct, A: bone meal ground by a Hunter at the grain mill, dwarven oil drawn by a Smith at the smelter. |
 
 ## What each trade makes or gathers
 
