@@ -223,7 +223,8 @@ async function build(o) {
 // package.json), its gamemode.js and gamemode-tables, its Papyrus scripts and its
 // merchant ledger (copied), the plugins its loadOrder names (by their
 // full paths, not copied), whether the engine keeps NPCs alive (npcEnabled,
-// npcSettings) and the gameplay switches below. Nothing else of its settings
+// npcSettings) and which NPCs it lets in (npcAllowCrimeFaction,
+// npcAllowEssential), and the gameplay switches below. Nothing else of its settings
 // is taken, so the copy has no site, no Discord, no ports and no keys of the
 // server's: its own port, its own voice service on 127.0.0.1, its own world
 // folder, and a pass key made here. Its world starts empty, as the runner's.
@@ -291,6 +292,16 @@ function fromInstalled(o) {
     maxPlayers: seats,
     npcEnabled: theirs.npcEnabled === true,
     npcSettings: theirs.npcSettings && typeof theirs.npcSettings === 'object' ? theirs.npcSettings : {},
+    // The engine's two gates on who is loaded (WorldState.cpp
+    // AttachEspmRecord): off, it refuses everyone in a hold's crime faction
+    // and every essential, protected or unique actor, which is every guard
+    // and nearly every named trader. Dev and live have both on
+    // (Deploy-DevGamemode.ps1, Deploy-Gamemode.ps1). Without them the box's
+    // load copy refused the Frozen Hearth's traders ("Skipping actor
+    // 0x200b4a3 because it's in faction 0x2816f") and the crowd there was
+    // sent no NPC at all (#5563).
+    npcAllowCrimeFaction: theirs.npcAllowCrimeFaction === true,
+    npcAllowEssential: theirs.npcAllowEssential === true,
     startPoints: shape === 'crowd' ? [TRADERS_ROOM] : startPoints(shape),
     thornswoodServer: 'dev',
     thornswoodRequirePass: true,
@@ -319,7 +330,8 @@ function fromInstalled(o) {
   for (const name of LEDGER) { fs.copyFileSync(path.join(theirPrivate, name), path.join(out, 'private', name)); }
   const engine = sha256(path.join(out, 'scam_native.node'));
   console.log('the load server is in ' + out + ': from ' + from + ', scam_native.node ' + engine + ', ' + shape + ', ' + seats +
-    ' seats, ' + order.length + ' plugins, engine NPCs ' + (settings.npcEnabled ? 'on' : 'off') + (kept.length ? ', ' + kept.join(' ') : ''));
+    ' seats, ' + order.length + ' plugins, engine NPCs ' + (settings.npcEnabled ? 'on' : 'off') +
+    ' (guards and townsfolk ' + (settings.npcAllowCrimeFaction ? 'in' : 'out') + ', named people ' + (settings.npcAllowEssential ? 'in' : 'out') + ')' + (kept.length ? ', ' + kept.join(' ') : ''));
   return { out, engine, settings };
 }
 

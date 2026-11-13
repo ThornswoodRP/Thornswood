@@ -253,7 +253,7 @@ async function boxChecks() {
     fs.writeFileSync(path.join(inst, 'private', 'merchant-ledger.initialized'), '1');
     fs.writeFileSync(path.join(inst, 'private', 'door.json'), '{"passKey":"theirs"}');
     const theirs = { port: 7787, dataDir: 'data', loadOrder: ['Skyrim.esm', 'JKs Skyrim.esp'], npcEnabled: true, npcSettings: { x: 1 },
-      thornswoodNear: 3500, thornswoodHurtCare: true, thornswoodSite: 'https://example.invalid', discordWebhook: 'https://example.invalid/hook',
+      npcAllowCrimeFaction: true, npcAllowEssential: true, thornswoodNear: 3500, thornswoodHurtCare: true, thornswoodSite: 'https://example.invalid', discordWebhook: 'https://example.invalid/hook',
       thornswoodLoadOrderRefuse: 'https://not-a-switch', password: 'theirs' };
     fs.writeFileSync(path.join(inst, 'server-settings.json'), JSON.stringify(theirs));
     const out = path.join(tmp, 'copy');
@@ -271,6 +271,8 @@ async function boxChecks() {
     yes('its crowd stands in the Frozen Hearth, among four kept traders, not at the engine\'s start point outside Whiterun',
       st.startPoints.length === 1 && st.startPoints[0].worldOrCell === '0x13814' && st.startPoints[0].pos.join(',') === '1890,160,0');
     yes('it keeps the server\'s NPC switch and its plain gameplay switches', st.npcEnabled === true && st.npcSettings.x === 1 && st.thornswoodNear === 3500 && st.thornswoodHurtCare === true);
+    yes('  and lets in the NPCs the server lets in, guards, townsfolk and named traders among them (#5563)',
+      st.npcAllowCrimeFaction === true && st.npcAllowEssential === true);
     yes('and nothing else of its settings: no site, no webhook, no password, no switch that holds an address',
       st.thornswoodSite === undefined && st.discordWebhook === undefined && st.password === undefined && st.thornswoodLoadOrderRefuse === undefined);
     yes('its own ports, seats, a dev name, the pass held, and a pass key of its own', st.port === 7797 && st.thornswoodVoicePort === 7799 && st.maxPlayers === 50 &&
