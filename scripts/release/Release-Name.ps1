@@ -99,8 +99,27 @@ function New-ReleaseId($doc, [switch]$Dev, [datetime]$Now = (Get-TeamNow)) {
     $taken = Get-FeedTakenIds $doc
     $suffix = if ($Dev) { '-dev' } else { '' }
     $t = $Now
+    # NEVER BEFORE THE NEWEST THE FEED NAMES (#4950). The id is Mountain time
+    # with no zone, and on the first Sunday of November Mountain clocks run
+    # 1:00 to 1:59 AM twice: a release at 1:10 AM standard time, forty
+    # minutes after one at 1:50 AM summer time, was named before it, and the
+    # store's list of releases, which sorts by the time in the id
+    # (Get-StoreReleases), put the older one first. So a new id starts no
+    # earlier than a second after the newest id the feed already names, in
+    # either shape (yyyyMMdd-HHmm before #1057), and the ids keep the order the
+    # releases went out in. A clock ahead of the feed, which is every other
+    # day, names the release by its own time as before.
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    foreach ($x in $taken) {
+        $m = [regex]::Match([string]$x, '^(\d{8}-\d{4})(\d{2})?(?:$|-)')
+        if (-not $m.Success) { continue }
+        $at = [datetime]::MinValue
+        $text = $m.Groups[1].Value + $(if ($m.Groups[2].Success) { $m.Groups[2].Value } else { '00' })
+        if (-not [datetime]::TryParseExact($text, 'yyyyMMdd-HHmmss', $inv, 'None', [ref]$at)) { continue }
+        if ($at -ge $t) { $t = $at.AddSeconds(1) }
+    }
     for ($i = 0; $i -lt 3600; $i++) {
-        $id = $t.ToString('yyyyMMdd-HHmmss', [Globalization.CultureInfo]::InvariantCulture) + $suffix
+        $id = $t.ToString('yyyyMMdd-HHmmss', $inv) + $suffix
         $clash = $taken.Contains($id)
         if (-not $clash) { foreach ($x in $taken) { if ($x.StartsWith($id + '-', [StringComparison]::OrdinalIgnoreCase)) { $clash = $true; break } } }
         if (-not $clash) { return $id }
