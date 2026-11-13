@@ -158,3 +158,49 @@ Downgrade button's to fix.
 The script's other shape, a copy of the whole base game for a payload built
 with every mod in it, is not ported: no package carries that shape now, and
 the launcher's own folder and its Downgrade card do that job.
+
+## What an install leaves on the PC
+
+Everything the setup and the launcher's first start write, where it goes,
+which step writes it and what takes it away again (#4431). The install
+folder is the one picked in the install window, `<Skyrim's drive>\Thornswood`
+unless another was chosen. Uninstall here means the launcher's own, from
+Settings or from its entry in Windows' Installed apps.
+
+| What | Where | Which step writes it | What removes it |
+|---|---|---|---|
+| The launcher, Velopack's `Update.exe` and the package it came from | `%LocalAppData%\Thornswood` (`current\`, `packages\`) | Velopack's Setup.exe, and Velopack again at each update | Velopack's own uninstall. Not the launcher's Uninstall, which never deletes outside the install folder (#5820) |
+| Which folder is the install folder | `%LocalAppData%\Thornswood\install-root.txt` | `InstallPlace.Record`, once Install has finished, or at the first start after an older launcher handed over (`InstallPlace.TakeHandover`) | Velopack's own uninstall, with its folder. Not the launcher's Uninstall (#5820) |
+| An older launcher's handover | `%LocalAppData%\Thornswood-moved-from.txt` | The last update of an older launcher, from before Velopack (`launcher\move`) | The first start, which reads it and deletes it (`InstallPlace.TakeHandover`) |
+| Desktop and Start menu shortcuts | `Thornswood.lnk` on the Desktop and in `Start Menu\Programs` | Velopack's Setup.exe makes its own. At every start `Icons.Ensure` points every shortcut that runs the launcher at the current icon, renames one with an old name (`Icons.Rename`) and makes one where the Desktop or the Start menu has none (`Icons.Make`) | The launcher's Uninstall (`Icons.Drop`): every shortcut on the Desktop, the shared Desktop, the Start menu, the pinned taskbar and in the install folder whose target is the running launcher. Velopack's own uninstall takes the ones it made |
+| The shortcuts' icon | `icon-<hash>.ico` in the install folder's `Launcher` folder, only when there is one (an install from before Velopack), and `Profile\icons.stamp` | `Icons.IconFile` and `Icons.Remember`, at every start | The launcher's Uninstall, with `Launcher` and with Profile |
+| Thornswood in Windows' Installed apps | `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\Thornswood-<hash of the install folder>` | `Register.Ensure`, at every start | The launcher's Uninstall (`Register.Forget`). Not Velopack's own uninstall (#5820) |
+| The install folder and its `Profile` folder | The install folder | `InstallWindow.Work`, before anything is installed, and `InstallSteps.Run` | The launcher's Uninstall, last, and only once it is empty: anything still in it keeps it, and the farewell names each thing and why |
+| The setup's log | `Profile\setup-log.txt` | `InstallWindow.Work` | The launcher's Uninstall, with Profile |
+| What was accepted before Install | `Profile\accepted.json` | `InstallAgreements.Record` | The launcher's Uninstall, with Profile |
+| Thornswood's own game files | Into the Steam copy of Skyrim when Thornswood's own folder is not ticked; into `Profile\Payload` when it is; into the install folder's `Game` when the launcher has already made that folder | `InstallSteps.CopyPayload` | In the Steam copy: the launcher's Uninstall when it is told to remove the mods, by the list below, leaving every file Vortex deploys; and making Thornswood's own folder later takes them out of the Steam copy too (`OwnGame.CleanSteamCopy`). `Profile\Payload` and `Game`: the launcher's Uninstall when it is told to remove the mods |
+| The list of what went into the Steam copy | `Profile\installed-into-game.txt` | `InstallSteps.RecordIntoGame` | The launcher's Uninstall, with Profile, after it has used the list |
+| Skyrim's settings and the saves folder for Thornswood | `Profile\Default`, `Profile\MyGames` with `Saves` in it, and `Profile\LocalAppData`, filled from the package's `profile` folder when it has one | `InstallSteps.Settings` | The launcher's Uninstall, with Profile, unless it is told to keep saves and settings |
+| The updates already in this build | `Profile\applied.txt` | `InstallSteps.Settings` | The launcher's Uninstall, with Profile, unless it is told to keep saves and settings |
+| Where the SkyMP source is, and the licence texts | In the install folder: `SOURCE CODE.txt`, `GPL-3.0.txt`, `AGPL-3.0.txt`, `Concentus-LICENSE.txt`, `SharpSRTP-LICENSE.txt`, `BouncyCastle-LICENSE.txt`, `dotnet-LICENSE.txt`, `dotnet-THIRD-PARTY-NOTICES.txt`, `Avalonia-LICENSE.txt`, `MicroCom-LICENSE.txt`, `Tmds.DBus-LICENSE.txt`, `SkiaSharp-LICENSE.txt`, `SkiaSharp-THIRD-PARTY-NOTICES.txt`, `ANGLE-LICENSE.txt`, `Velopack-LICENSE.txt`, `Velopack-Rust-crates.txt`, `NLayer-LICENSE.txt`, `Chromium-HRTF-LICENSE.txt`, `IRCAM-Listen-HRTF.txt`, and the `licences` folder | `InstallSteps.Settings` | The launcher's Uninstall, always (`Uninstall.Targets`) |
+| Thornswood's settings | `config.json` in the install folder, kept to this Windows account | `InstallSteps.MergeConfig`, through `InstallSteps.WriteJson` | The launcher's Uninstall, unless it is told to keep saves and settings |
+| A shortcut in the install folder | `Thornswood.lnk` in the install folder | `InstallSteps.Shortcut` | The launcher's Uninstall (`Icons.Drop`) |
+| An old Game folder moved aside | `Game-old-<date>` in the install folder | `InstallSteps.Run`, when it finds a `Game` folder the launcher did not make | Nothing yet: the uninstall leaves it and its farewell calls it not Thornswood's (#5821). The setup's log says to delete it by hand |
+| The old setup program's scratch folder | `Thornswood-setup` at the root of a drive, or in the temp folder | The setup program from before #4824, which is gone; no current setup makes it | The launcher, at every start and in its Uninstall (`Uninstall.DropScratch`) |
+
+The install writes nothing into Windows' own Skyrim folders
+(`Documents\My Games\Skyrim Special Edition` and
+`%LocalAppData%\Skyrim Special Edition`): it only reads the plugin list
+Vortex keeps there. What the launcher writes once it is in use, when it
+plays, updates and fixes, is in `launcher\app\ARCHITECTURE.md`, its startup
+and Play tables.
+
+The two uninstalls do not know about each other today: the launcher's never
+deletes outside the install folder, and Velopack's runs none of the
+launcher's (#5820).
+
+`tests\test-4431-install-leaves.js` reads every write in the setup and first
+start code (`InstallWindow.cs`, `InstallSteps.cs`, `InstallPlace.cs`,
+`InstallAgreements.cs`, `InstallShortcut.cs`, `InstallSkyrim.cs`,
+`Register.cs` and `Icons.cs`) and fails when this table does not name the
+method that writes or a name its path is built from.
