@@ -23,6 +23,7 @@ public sealed partial class AgentTests
     {
         var gh = new FakeGitHub();
         var http = new HttpClient(gh);
+        owned.Add(http);
         var home = Temp();
         var env = Config.DefaultContent();
         env.Root = Temp();

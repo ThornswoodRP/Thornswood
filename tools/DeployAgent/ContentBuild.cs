@@ -113,7 +113,9 @@ public sealed class ContentBuild(EnvConfig env, GitHub writer, IGate gate, strin
             if (ct.IsCancellationRequested) throw;
             return new Outcome("error", $"built {key[..12]}, not put up: " + e.Message);
         }
-        finally { try { Directory.Delete(work, true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { } }
+        // What was put up stands whatever becomes of the work folder; a
+        // folder left behind is said in the log.
+        finally { try { Directory.Delete(work, true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { logf($"the work folder {work} was not removed: {e.Message}"); } }
         var moved = key == asked ? "" : $"; main had moved on, so its inputs are not the {asked[..12]} asked for";
         return new Outcome("success", $"built {key[..12]} from {Short(commit)}" + moved);
     }
@@ -136,7 +138,7 @@ public sealed class ContentBuild(EnvConfig env, GitHub writer, IGate gate, strin
         foreach (var f in fs.EnumerateObject())
         {
             var name = f.Name;
-            if (name == "" || name.StartsWith('/') || name.Contains('\\') || name.Contains(':') || name.Split('/').Any(w => w is "" or "." or ".."))
+            if (name == "" || name.StartsWith('/') || name.Contains('\\') || name.Contains(':') || name.Split('/').Any(w => w is "" or "." or "..") || Path.IsPathRooted(name))
                 return (null, $"names a file \"{name}\" outside the repository");
             var want = f.Value.ValueKind == JsonValueKind.String ? f.Value.GetString()! : "";
             var p = Path.Combine(dir, "files", name.Replace('/', Path.DirectorySeparatorChar));
