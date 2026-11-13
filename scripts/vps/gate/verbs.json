@@ -339,6 +339,15 @@
         "Stations": "switch"
       }
     },
+    "Build-Content": {
+      "script": "scripts/mods/Build-ContentOnBox.ps1",
+      "timeoutMinutes": 45,
+      "fixed": [],
+      "out": "-Out",
+      "params": {
+        "Server": "^(dev|main)$"
+      }
+    },
     "Ship-Dev": {
       "script": "scripts/release/Ship-OnBox.ps1",
       "timeoutMinutes": 45,

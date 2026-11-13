@@ -254,6 +254,12 @@ Yes '  each step is committed, new files and all, before the next is sent' (
 Yes '  and a step that fails stops the run before the chain' (([regex]::Matches($rebuild, 'if \(\$LASTEXITCODE -ne 0\) \{ Write-Host "STOP\. (Build-StationSites|Add-ContentRecords)\.py ended')).Count -eq 2)
 Yes '  it runs the chain by Run-OnBox.ps1, its words quoted so none is read as a parameter' ($rebuild.Contains("'scripts/mods/Rebuild-ContentTables.ps1' '-Data' '{data}' '-PluginsTxt' '{plugins}' -Server `$Server -Out `$Out"))
 Yes '  and Run-OnBox.ps1 copies what came back into -Out as well as the checkout' ((Text 'scripts/mods/Run-OnBox.ps1').Contains('foreach ($into in @($repo, $Out | Where-Object { $_ }))'))
+# The content build (#5191, stage 3): main's plugin and tables built on the
+# box against a server's plugins, and kept by their inputs.
+Yes 'Build-Content takes -Server dev or main, and names its out parameter' ((Words 'Build-Content') -eq '' -and (Words 'Build-Content -Server main') -eq '-Server|main' -and
+    (Words 'Build-Content -Server live') -eq 'REFUSED' -and (Test-ThornswoodGateRequest -Line 'Build-Content' -Verbs $verbs).Out -eq '-Out')
+Yes '  and cannot name a pull request, a cache, a runner or a build' ((Words 'Build-Content -Pull 4835') -eq 'REFUSED' -and (Words 'Build-Content -Cache C:/x') -eq 'REFUSED' -and
+    (Words 'Build-Content -Runner x') -eq 'REFUSED' -and (Words "Build-Content -Build $sha") -eq 'REFUSED')
 # The Ship verbs (Patrick's A, 30 Oct 2026: the box admin App mints the
 # token a Ship from the feed signs with, and the whole Ship runs on the box).
 Yes 'Ship-Dev is a dev Ship from the feed, its note as a title and detail lines' ((Words 'Ship-Dev -Title "Market stalls take your prices" -Detail "Claim a stall"') -eq '-Channel|dev|-Title|Market stalls take your prices|-Detail|Claim a stall' -and

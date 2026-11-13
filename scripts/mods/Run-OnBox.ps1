@@ -110,6 +110,7 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 . (Join-Path $Here '..\deploy\Artifact.ps1')
 . (Join-Path $Here 'OnBox.ps1')
+. (Join-Path $Here 'ContentPaths.ps1')
 if (-not $VpsUser) { $VpsUser = Get-ThornswoodVpsUser }
 if (-not $VpsHost) { $VpsHost = Get-ThornswoodVpsAddress }
 $repo = (Resolve-Path -LiteralPath (Join-Path $Here '..\..')).ProviderPath
@@ -131,63 +132,11 @@ foreach ($a in $Arguments) {
 }
 
 $serverRoot = $(if ($Server -eq 'main') { 'C:\Thornswood-Server' } else { 'C:\Thornswood-Server-Dev' })
-$paths = @('scripts/mods', 'scripts/dev', 'game/content', 'game/data', 'records', 'layout.json')
-# And whatever else a builder of the content chain reads, uses or writes
-# (scripts\mods\content-tables.json). Until #2962 the artifact held only the
-# folders above, so every builder that writes its table into game\gamemode.js
-# (the building holds, the woodworking benches, the doors and five more)
-# stopped on the box with "No such file" for gamemode.js, and the one that
-# reads docs\systems\cut-items.json would have too. Every builder since
-# #3100, not only the Python ones, because the whole chain runs here. Until
-# #3425 the list named only the tables, so the K panel's book that
-# Build-SpellTable.ps1 reads (game\ui) and the game scripts
-# Build-MerchantGamemode.js embeds never went up, and the run stopped at the
-# spell table; their uses name them now.
-$chainFiles = [IO.File]::ReadAllText((Join-Path $Here 'content-tables.json')) | ConvertFrom-Json
-foreach ($s in @($chainFiles.steps)) {
-    foreach ($p in @(@($s.reads) + @($s.readsBack) + @($s.uses) + @($s.writes) | Where-Object { $_ })) {
-        $p = [string]$p
-        if (-not @($paths | Where-Object { $p -eq $_ -or $p.StartsWith($_ + '/') }).Count) { $paths += $p }
-    }
-}
-# What comes back: game\, records\ and docs\systems\, and every file a
-# step writes outside them, so a table a builder writes is never left on
-# the box (#3425).
-$watch = @('game', 'records', 'docs/systems')
-foreach ($p in @($chainFiles.steps | ForEach-Object { @($_.writes) } | Where-Object { $_ })) {
-    $p = [string]$p
-    if (-not @($watch | Where-Object { $p -eq $_ -or $p.StartsWith($_ + '/') }).Count) { $watch += $p }
-}
-# And every script a builder, or this run's own tool, loads from beside it
-# outside the folders above, and what that one loads in turn: a .ps1's
-# . (Join-Path $PSScriptRoot '<path>') and a .js's require('./<path>').
-# Build-RecipeTable.ps1 loads scripts\deploy\ServerOrder.ps1, which loads
-# scripts\release\Read-JsonFile.ps1. A game script a step uses is read the
-# same way: game\merchant-commissions.js requires
-# .\merchant-commission-state.js beside it.
-$load = New-Object 'Collections.Generic.Queue[string]'
-foreach ($t in @(@($chainFiles.steps | ForEach-Object { [string]$_.tool }) + @($chainFiles.steps | ForEach-Object { @($_.uses) } | Where-Object { $_ -like '*.js' -or $_ -like '*.ps1' }) + $tool)) { $load.Enqueue([string]$t) }
-$seen = @{}
-while ($load.Count) {
-    $t = $load.Dequeue()
-    if ($seen.ContainsKey($t)) { continue }
-    $seen[$t] = $true
-    $full = Join-Path $repo $t
-    if (-not (Test-Path -LiteralPath $full)) { continue }
-    $text = [IO.File]::ReadAllText($full)
-    $found = @([regex]::Matches($text, "\.\s+\(Join-Path\s+\`$PSScriptRoot\s+'([^']+)'\)") + [regex]::Matches($text, "require\(\s*['""](\.\.?/[^'""]+)['""]\s*\)"))
-    foreach ($m in $found) {
-        $parts = New-Object 'Collections.Generic.List[string]'
-        foreach ($w in @(($t.Substring(0, $t.LastIndexOf('/')) + '/' + $m.Groups[1].Value.Replace('\', '/')).Split('/'))) {
-            if ($w -eq '..') { if ($parts.Count) { $parts.RemoveAt($parts.Count - 1) } } elseif ($w -and $w -ne '.') { $parts.Add($w) }
-        }
-        $p = $parts -join '/'
-        if ($t -like '*.js' -and -not [IO.Path]::GetExtension($p)) { $p += '.js' }
-        if ($p -notmatch '^(scripts|game)/' -or -not (Test-Path -LiteralPath (Join-Path $repo $p) -PathType Leaf)) { continue }
-        if (-not @($paths | Where-Object { $p -eq $_ -or $p.StartsWith($_ + '/') }).Count) { $paths += $p }
-        $load.Enqueue($p)
-    }
-}
+# What goes up and what may come back: ContentPaths.ps1 says which, for
+# this tool and every builder of scripts\mods\content-tables.json.
+$content = Get-ThornswoodContentPaths -Repo $repo -Tool $tool
+$paths = $content.Paths
+$watch = $content.Watch
 $artifact = New-ThornswoodArtifact -Component tools -RepoDir $repo -Paths $paths
 Say ('artifact ' + (Format-ThornswoodArtifact $artifact)) 'DarkGray'
 
