@@ -69,7 +69,9 @@ namespace Thornswood
             Yes("the crossing record is whole in the current file", File.ReadAllText(Paths.LogFile).Contains("roll-one") && new FileInfo(Paths.LogFile).Length <= cap);
             File.WriteAllText(Paths.LogFile, new string('b', cap), new UTF8Encoding(false));
             Swallow.Say("cap", "roll-two");
-            Yes("the second roll replaces the one older file", File.Exists(older) && File.ReadAllText(older).StartsWith("bbb") && Directory.GetFiles(dir, "launcher.log.*").Length == 1);
+            string[] generations = Directory.GetFiles(dir).Where(file => !string.Equals(file, Paths.LogFile, StringComparison.OrdinalIgnoreCase)).ToArray();
+            Console.WriteLine("retained files: " + string.Join(", ", Directory.GetFiles(dir).Select(Path.GetFileName)));
+            Yes("the second roll replaces the one older file", File.Exists(older) && File.ReadAllText(older).StartsWith("bbb") && generations.Length == 1 && generations[0] == older);
             Yes("both files are bounded", new FileInfo(Paths.LogFile).Length <= cap && File.Exists(older) && new FileInfo(older).Length <= cap);
             File.Delete(Paths.LogFile);
             File.Delete(older);
