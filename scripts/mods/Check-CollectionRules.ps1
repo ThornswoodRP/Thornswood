@@ -4,9 +4,14 @@
       .\scripts\mods\Check-CollectionRules.ps1
       .\scripts\mods\Check-CollectionRules.ps1 -List "$env:LOCALAPPDATA\Skyrim Special Edition\plugins.txt"
       .\scripts\mods\Check-CollectionRules.ps1 -Collection <collection.json or its folder> -List <plugins.txt> -Data <Data folder>
+      .\scripts\mods\Check-CollectionRules.ps1 -Root <a Thornswood install>
 
   Whether the plugin rules the Nexus collection carries hold a clean install
   to a plugin list's order. Entry 274 on the To Do List.
+
+  -Root is the Thornswood install the defaults are under (Where.ps1 Install
+  when it is not given): -List is its Profile\Default\plugins.txt, -Data its
+  Game\Data, and the collection's address is read from its config.json.
 
   WHY IT EXISTS. Revisions 2 to 4 of the old ombo2a collection carried no
   plugin rules at all, so a first-time person installed, got whatever order
@@ -23,7 +28,7 @@
   that and the new plugin floats, which is the same load order mismatch this
   entry exists to stop, arriving one revision later with nobody connecting
   the two." Nothing read the rules against a list, so nothing would have said
-  so. This does. It says NO, and exits 1, for any of five things:
+  so. This does. It says NOT HELD, and exits 1, for any of five things:
 
     - a full plugin the list enables that no rule names. It floats. The next
       upload needs a rule loading it after the full plugin above it.
