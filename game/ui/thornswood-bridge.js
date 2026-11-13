@@ -322,7 +322,7 @@
   // took no letter (#1917). So nothing here names a panel now. Every page
   // that draws one hangs it on window as thornswoodSomething with an isOpen,
   // and each of those is asked, so a panel added later is asked too.
-  // tests/test-1917-panel-keys.js holds every page that listens for a key or
+  // game/tests/test-1917-panel-keys.js holds every page that listens for a key or
   // has a box to that, and presses the keys with this file in the page. The
   // emote wheel and the ask prompt have no isOpen and are found by their id.
   function overlayWantsKeys() {

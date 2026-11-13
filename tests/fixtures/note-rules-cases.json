@@ -1,5 +1,5 @@
 {
-  "what": "Every case the release note rules are held to, with the answer scripts/release/Note-Rules.ps1 gives (#5179). tools/ReleaseNotes.Tests holds the C# rules to the same answers and tests/test-note-rules-cases.ps1 the PowerShell ones, so the two cannot disagree while both are in use. The notes are crafted to break each rule, and the published release notes and pull request notes of 1 Nov 2026.",
+  "what": "Every case the release note rules are held to, with its answer (#5179). tools/ReleaseNotes.Tests holds tools/ReleaseNotes/NoteRules.cs to them, the one copy of the rules: thornswood-notes builds it, and the release scripts load it into PowerShell (#5354). The answers are the ones the PowerShell copy gave while there were two. The notes are crafted to break each rule, and the published release notes and pull request notes of 1 Nov 2026.",
   "notes": [
     {
       "note": "Hunters can skin rabbits again\n- Skinning a rabbit gives its pelt and meat.",

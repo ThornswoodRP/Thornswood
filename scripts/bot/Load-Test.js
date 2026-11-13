@@ -111,11 +111,11 @@ function startVoice(root, port, site, sampler, sampleFile, log) {
 }
 
 // The server process's private bytes and working set, from outside it, in
-// bytes: Windows only (Get-Process); elsewhere null, and the working set the
-// sampler reads stands alone.
+// bytes: Windows only (Get-Process, in the pwsh 7 every script runs in,
+// #5356); elsewhere null, and the working set the sampler reads stands alone.
 function processMemory(pid) {
   if (process.platform !== 'win32' || !pid) { return null; }
-  const out = childProcess.execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+  const out = childProcess.execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command',
     '$p = Get-Process -Id ' + Number(pid) + '; "$($p.PrivateMemorySize64) $($p.WorkingSet64) $($p.PeakWorkingSet64)"'],
   { encoding: 'utf8', windowsHide: true, timeout: 30000 });
   const n = String(out).trim().split(/\s+/).map(Number);

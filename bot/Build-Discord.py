@@ -381,6 +381,15 @@ ROLES = [
     ('Support',              0xC9B46A, True,  SUPPORT),
 ]
 
+# THE BOTS (Patrick, 12 Nov 2026: "add a role called Clanker and make it be
+# one that stands out and include Paetreon, Thornswood, Jukebox, and
+# Dishboard"). Every bot in the server holds it, these four and any added
+# later (give_bots_clanker), so they show in one group of their own in the
+# member list, under staff and above everybody else. A bright colour no other
+# role uses, and no permissions: each bot's own role is what lets it work.
+CLANKER = 'Clanker'
+ROLES.append((CLANKER, 0x00E5FF, True, NONE))
+
 # In world. One Jarl per hold, and a hold for everybody else to belong to.
 # The Jarls are shown in their own group, the seats of the world; a Citizen
 # role keeps its colour and shows under Playtester (#3317, page card
@@ -526,8 +535,8 @@ ROLES.append(('Updates Pings', 0x8D9682, False, NONE))
 # ROLES THIS NEVER MAKES, only puts in order.
 #
 # Discord makes Server Booster itself the first time somebody boosts, Patreon
-# makes its own when the shop is connected in its settings, and bot.py makes
-# the two ping roles the hold panel's buttons hand out. Creating any of them
+# makes its own when the shop is connected in its settings, and the bot makes
+# the two ping roles its buttons in #welcome hand out (bot_pings.py). Creating any of them
 # here would leave a second role of the same name that nothing hands out, and
 # whichever of the two Discord shows is a coin toss. Nor are their
 # permissions changed: the build leaves those to whatever made them. Their
@@ -1761,7 +1770,27 @@ async def ensure_roles(guild):
                     failed.append('Discord took the role order but put %s' % wrong)
             except discord.HTTPException as e:
                 failed.append('the roles were not put in order (%s)' % refused(e))
+    await give_bots_clanker(guild, out.get(CLANKER))
     return out
+
+
+async def give_bots_clanker(guild, role):
+    """Clanker to every bot in the server that has not got it, this one
+       included, and to nobody else. It is never taken from anybody."""
+    if role is None:
+        return
+    for m in getattr(guild, 'members', None) or []:
+        if not getattr(m, 'bot', False) or role in getattr(m, 'roles', []):
+            continue
+        what = 'role %s for the bot %s' % (CLANKER, m.name)
+        if CHECK:
+            say('would give', what)
+            continue
+        try:
+            await m.add_roles(role, reason='Thornswood setup: every bot holds Clanker')
+            say('gave', what)
+        except discord.HTTPException as e:
+            failed.append('%s (%s)' % (what, refused(e)))
 
 
 def order_after(order, roles):
@@ -2202,6 +2231,11 @@ def doc_post_of_mine(message, me_id):
     # (bot_rules_gate.py, #5841): the reactions on it are the record that
     # they accepted the rules, so it is never deleted with the rules' words.
     if (getattr(message, 'content', '') or '').startswith(RULES_GATE_FIRST_LINE):
+        return False
+    # A message with buttons is one of the bot's panels (the ping buttons in
+    # #welcome, bot_pings.py), which the bot keeps itself. post() never sends
+    # buttons, so none of its words are taken for one.
+    if getattr(message, 'components', None):
         return False
     kind = getattr(message, 'type', None)
     return kind in (discord.MessageType.default, discord.MessageType.reply,
@@ -2724,6 +2758,176 @@ async def keep_onboarding_off(guild):
         failed.append("could not switch Discord's Onboarding off (%s)" % refused(e))
 
 
+# ONBOARDING'S DEFAULT CHANNELS. Onboarding keeps its list of default channels
+# while it is off, and Discord refuses to shut @everyone out of any channel on
+# that list: the build of 12 Nov 2026 left #start-here and #disboard open with
+# "400 Onboarding channels must be readable by everyone", with Onboarding off.
+# So before a channel is gated, the build takes every channel the plan shuts
+# @everyone out of off that list, and leaves the rest of the list and every
+# other Onboarding setting as they are.
+def everyone_reads(mode):
+    """Whether a mode lets @everyone read."""
+    return mode in ('public', 'read')
+
+
+def plan_modes():
+    """{channel name: its mode} for every text channel of the plan."""
+    modes = {}
+    for _cat, specs in PLAN:
+        for spec in specs:
+            if spec['kind'] != 'voice':
+                modes.setdefault(spec['name'], spec.get('mode', 'open'))
+    return modes
+
+
+def onboarding_shut(guild, ob):
+    """The default channels of Onboarding that the plan shuts @everyone out
+       of, as (id, name). A channel the plan does not name is left alone."""
+    modes = plan_modes()
+    out = []
+    for cid in sorted(getattr(ob, 'default_channel_ids', None) or ()):
+        ch = guild.get_channel(cid)
+        name = getattr(ch, 'name', None)
+        if name in modes and not everyone_reads(modes[name]):
+            out.append((cid, name))
+    return out
+
+
+async def keep_onboarding_channels(guild):
+    try:
+        ob = await guild.onboarding()
+    except discord.HTTPException as e:
+        failed.append("could not read Discord's Onboarding (%s)" % refused(e))
+        return
+    shut = onboarding_shut(guild, ob)
+    if not shut:
+        return
+    what = ("#%s off Discord's Onboarding default channels, which the plan shuts "
+            "@everyone out of" % ', #'.join(n for _i, n in shut))
+    if CHECK:
+        say('would', 'take ' + what)
+        return
+    # Onboarding's list keeps the id of a channel deleted since, and Discord
+    # refuses the whole edit over one ("400 Invalid Form Body In
+    # default_channel_ids: Unknown channel", the live build of 12 Nov, 4:03
+    # PM). So the list sent back holds only channels the server still has.
+    gone = set(i for i, _n in shut)
+    stale = [i for i in sorted(ob.default_channel_ids)
+             if i not in gone and guild.get_channel(i) is None]
+    keep = [discord.Object(id=i) for i in sorted(ob.default_channel_ids)
+            if i not in gone and i not in stale]
+    try:
+        await guild.edit_onboarding(default_channels=keep,
+                                    reason='Thornswood setup, the plan gates these channels')
+        say('onboarding', 'took ' + what)
+        if stale:
+            say('onboarding', 'and %d deleted channel(s) it still listed' % len(stale))
+    except discord.HTTPException as e:
+        failed.append('could not take ' + what + ' (%s)' % refused(e))
+
+
+def welcome_shut(guild, ws):
+    """The channels of Discord's Welcome Screen that the plan shuts @everyone
+       out of, as (id, name). The live build of 13 Nov, 5:20 PM (main
+       54e22c0) took #start-here and #disboard off Onboarding's default
+       channels, and Discord still refused to gate them, "400 Onboarding
+       channels must be readable by everyone": Discord holds every channel
+       somebody new is pointed to to that rule, and the Welcome Screen of a
+       Community server points to channels too."""
+    modes = plan_modes()
+    out = []
+    for wc in getattr(ws, 'welcome_channels', None) or []:
+        ch = getattr(wc, 'channel', None)
+        cid = getattr(ch, 'id', None)
+        name = getattr(guild.get_channel(cid), 'name', None) if cid else None
+        if name in modes and not everyone_reads(modes[name]):
+            out.append((cid, name))
+    return out
+
+
+async def read_server_guide(guild):
+    """Discord's Server Guide for the server, as Discord sends it."""
+    from discord.http import Route
+    return await client.http.request(
+        Route('GET', '/guilds/{guild_id}/new-member-welcome', guild_id=guild.id))
+
+
+def guide_shut(guild, guide):
+    """The names of the channels the plan gates that Discord's Server Guide
+       names anywhere in it (its actions and its resource channels)."""
+    modes = plan_modes()
+    ids = set()
+
+    def walk(x):
+        if isinstance(x, dict):
+            for k, v in x.items():
+                if k == 'channel_id' and v:
+                    ids.add(int(v))
+                else:
+                    walk(v)
+        elif isinstance(x, list):
+            for v in x:
+                walk(v)
+    walk(guide)
+    out = set()
+    for cid in ids:
+        name = getattr(guild.get_channel(cid), 'name', None)
+        if name in modes and not everyone_reads(modes[name]):
+            out.add(name)
+    return out
+
+
+def prompt_shut(guild, ob):
+    """The answers of Onboarding's questions that point to a channel the plan
+       shuts @everyone out of, as 'question: answer: #channel'. The audit says
+       them; the build does not rewrite Onboarding's questions."""
+    modes = plan_modes()
+    out = []
+    for prompt in getattr(ob, 'prompts', None) or []:
+        for opt in getattr(prompt, 'options', None) or []:
+            for cid in sorted(getattr(opt, 'channel_ids', None) or ()):
+                name = getattr(guild.get_channel(cid), 'name', None)
+                if name in modes and not everyone_reads(modes[name]):
+                    out.append('%s: %s: #%s' % (getattr(prompt, 'title', '?'),
+                                                getattr(opt, 'title', '?'), name))
+    return out
+
+
+async def keep_welcome_screen(guild):
+    """Takes the channels the plan gates off the Welcome Screen, before any
+       channel is gated, and leaves its words, its other channels and whether
+       it is on as they are. A server with no Welcome Screen is left alone."""
+    try:
+        ws = await guild.welcome_screen()
+    except discord.HTTPException as e:
+        if getattr(e, 'status', None) in (403, 404):
+            return
+        failed.append("could not read Discord's Welcome Screen (%s)" % refused(e))
+        return
+    shut = welcome_shut(guild, ws)
+    if not shut:
+        return
+    what = ("#%s off Discord's Welcome Screen, which the plan shuts @everyone out of"
+            % ', #'.join(n for _i, n in shut))
+    if CHECK:
+        say('would', 'take ' + what)
+        return
+    gone = set(i for i, _n in shut)
+    keep = []
+    for wc in ws.welcome_channels:
+        cid = getattr(getattr(wc, 'channel', None), 'id', None)
+        if cid in gone or guild.get_channel(cid) is None:
+            continue
+        keep.append(discord.WelcomeChannel(channel=wc.channel, description=wc.description,
+                                           emoji=wc.emoji))
+    try:
+        await guild.edit_welcome_screen(welcome_channels=keep,
+                                        reason='Thornswood setup, the plan gates these channels')
+        say('welcome', 'took ' + what)
+    except discord.HTTPException as e:
+        failed.append('could not take ' + what + ' (%s)' % refused(e))
+
+
 # --------------------------------------------------------------- layout --
 # THE LAYOUT, WRITTEN OUT (#3317, Patrick, 22 Oct: "we also need to document
 # the discord layout somewhere ... so that we dont accidentally drift using
@@ -2757,9 +2961,11 @@ ROLE_DOES = {
     'Content Creator': 'Thornswood\'s own social media and content, not '
                        'community creators.',
     'Support': 'Answers help tickets and playtest applications, and gives Playtester.',
+    'Clanker': 'Every bot in the server: Thornswood, Patreon, Jockie Music, '
+               'DISBOARD and any added later. A build gives it.',
     'Playtester': 'Plays the main build. Opens the Discord past Information.',
-    'Member': 'Joined and answered the rules and age questions. Sees Start '
-              'Here, Applications and Information.',
+    'Member': 'Reacted to the rules in #rules, which says 18 or over and the '
+              'rules accepted. Sees Start Here, Applications and Information.',
     'Banned': 'Takes the site and the game away (site/server.js, access.banned).',
     'Thalmor Boot-Licker': 'A Patreon tier; Patreon gives and takes it.',
     'Talos Worshiper': 'A Patreon tier; Patreon gives and takes it.',
@@ -2813,7 +3019,7 @@ def _made_by(name):
     if name == 'Patreon':
         return 'Patreon'
     if name in ('News Pings', 'Updates Pings'):
-        return 'bot.py'
+        return 'the bot (bot_pings.py)'
     return 'the build'
 
 
@@ -3019,6 +3225,38 @@ async def audit(guild):
         off("Discord's Onboarding is on; " + ONBOARDING_WHY + '. A build switches it off')
     elif on is not False:
         off("Discord's Onboarding could not be read (%s)" % on)
+    try:
+        ob = await guild.onboarding()
+        for _i, name in onboarding_shut(guild, ob):
+            off("#%s is a default channel of Discord's Onboarding, so Discord refuses "
+                "to shut @everyone out of it as the plan does; a build takes it off "
+                "that list" % name)
+        for cid in sorted(getattr(ob, 'default_channel_ids', None) or ()):
+            if guild.get_channel(cid) is None:
+                off("Discord's Onboarding still lists channel %d, which the server no "
+                    "longer has; a build leaves it off the list it sends back" % cid)
+        for where in prompt_shut(guild, ob):
+            off("an Onboarding answer points to a channel the plan gates, which "
+                "Discord then refuses to gate: %s" % where)
+    except discord.HTTPException as e:
+        off("Discord's Onboarding default channels could not be read (%s)" % refused(e))
+    # The Server Guide (Server Settings, Onboarding, Server Guide) points
+    # people at channels as well, and discord.py has no call for it, so it
+    # is read here, read only, to see whether it names a gated channel.
+    try:
+        for name in sorted(guide_shut(guild, await read_server_guide(guild))):
+            off("#%s is in Discord's Server Guide, so Discord refuses to shut "
+                "@everyone out of it as the plan does" % name)
+    except discord.HTTPException as e:
+        if getattr(e, 'status', None) not in (403, 404):
+            off("Discord's Server Guide could not be read (%s)" % refused(e))
+    try:
+        for _i, name in welcome_shut(guild, await guild.welcome_screen()):
+            off("#%s is on Discord's Welcome Screen, so Discord refuses to shut "
+                "@everyone out of it as the plan does; a build takes it off" % name)
+    except discord.HTTPException as e:
+        if getattr(e, 'status', None) not in (403, 404):
+            off("Discord's Welcome Screen could not be read (%s)" % refused(e))
 
     print('\n  Roles against the plan', flush=True)
     for name, _, _, want in ROLES:
@@ -3363,6 +3601,8 @@ async def on_ready():
         # only said there.
         if not ONLY:
             await keep_onboarding_off(guild)
+            await keep_onboarding_channels(guild)
+            await keep_welcome_screen(guild)
         elif await onboarding_on(guild) is True:
             say('note', "Discord's Onboarding is on, and a whole build switches it off")
 

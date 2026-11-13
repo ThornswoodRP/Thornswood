@@ -288,6 +288,14 @@ and known issues are what is on the board whose fix has not landed yet
   (`--apply` to delete) finds and removes duplicates in all three forums.
 - To take a test task back, edit its comment so its first line no longer
   starts with `Test task:`; the bot takes its post down.
+- **A test task that was checked and passed comes down** (#5197). The real
+  game run on One (`tests\real-client\README.md`), or anybody who made the
+  check, writes a comment on the issue whose first line is
+  `Checked: passed`, with what was run and on which build under it. The bot
+  takes that test task's post down in either forum. A failed check is
+  `Checked: failed` with what was seen, and its post stays up; what failed
+  goes on the board as a finding. A newer test task posts again. A post
+  whose issue was deleted comes down too.
 
 ## What is not a reason to skip an issue
 

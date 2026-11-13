@@ -5,6 +5,8 @@ board.
 Part of the bot: bot.py loads it (#5357).
 """
 import asyncio
+import datetime
+import urllib.error
 
 import discord
 
@@ -13,12 +15,22 @@ from bot_testing import KNOWN_STATE, _utc_stamp, task_tag_of
 from bot_github import (DEV_FORM, KNOWN_FORM, KNOWN_MARK, TASK_FORM, TASK_MARK,
     TASK_TAG, finding_gone, github_changed_since, github_closed_since,
     github_comments, github_issue, github_open_findings, github_timeline,
-    merged_fix)
-from bot_task_text import (_all_marked, _marked, dev_chunks, dev_render,
+    issue_deleted, merged_fix)
+from bot_task_text import (_all_marked, _marked, checked_since, dev_chunks, dev_render,
     dev_task_of, fix_refs, issue_tags, main_task_of, strip_footer,
     test_task_of)
 from bot_post_rules import (fix_in_main, post_problems, refuse,
     task_server_line)
+
+
+# How often #dev-test-tasks asks whether each post's issue is still there.
+DEV_SWEEP_HOURS = 1
+
+
+def _hours_before(stamp, hours):
+    """The UTC stamp hours before stamp, in the same form."""
+    t = datetime.datetime.strptime(stamp, '%Y-%m-%dT%H:%M:%SZ')
+    return (t - datetime.timedelta(hours=hours)).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 def known_of(issue, comments):
@@ -57,6 +69,8 @@ def task_post_of(issue, comments, dev_since=None):
     task = main_task_of(issue, comments, dev_since)
     if task is None:
         return None
+    if checked_since(comments, task[3]):
+        return None     # checked and passed: nothing left for testers
     return task[0], strip_footer(task[1]), [TASK_TAG]
 
 
@@ -108,28 +122,70 @@ async def _forum_post(forum, title, body, tags, me_id=None):
     return getattr(made, 'thread', made)
 
 
+def _refusal(what, forum, th, e):
+    """The log line for a change Discord refused, in Discord's own words:
+       its status, message and code (#4228). Until then each pass caught the
+       refusal and said nothing, so a post kept its old title, tags and text
+       and nobody could see why."""
+    return ('#%s: Discord refused to %s the post "%s" (%s): %s %s (code %s)'
+            % (getattr(forum, 'name', '?'), what, getattr(th, 'name', '?'),
+               getattr(th, 'id', '?'), getattr(e, 'status', '?'),
+               getattr(e, 'text', '') or str(e), getattr(e, 'code', '?')))
+
+
 async def _forum_drop(forum, tid):
     th = await _forum_thread(forum, tid)
     if th is not None:
-        await th.delete()
+        try:
+            await th.delete()
+        except discord.HTTPException as e:
+            log(_refusal('remove', forum, th, e))
+            raise
 
 
-async def _forum_edit(forum, tid, title, body, tags):
+async def _forum_edit(forum, tid, title, body, tags, then=None):
     """Brings an existing post to this title, body and tags. False when the
-       post is gone (deleted by hand), so the caller can make it again."""
+       post is gone (deleted by hand), so the caller can make it again.
+
+       Discord archives a post after a few quiet days and refuses every
+       change to an archived one (400, code 50083), so an archived post is
+       unarchived first and archived again after, as it was (#4228). then,
+       when given, is awaited with the thread while it is still open: a dev
+       post's follow-up messages are in the same thread. A refusal is logged
+       with Discord's words and raised, so the pass keeps its record."""
     th = await _forum_thread(forum, tid)
     if th is None:
         return False
     applied = [x for x in (task_tag_of(forum, n) for n in tags) if x is not None]
-    await th.edit(name=title, applied_tags=applied)
-    msg = getattr(th, 'starter_message', None)
-    if msg is None:
-        try:
-            msg = await th.fetch_message(th.id)
-        except discord.NotFound:
-            msg = None
-    if msg is not None:
-        await msg.edit(content=body, allowed_mentions=discord.AllowedMentions.none())
+    was_archived = bool(getattr(th, 'archived', False))
+    opened = False
+    step = 'unarchive'
+    try:
+        if was_archived:
+            await th.edit(archived=False)
+            opened = True
+        step = 'edit'
+        await th.edit(name=title, applied_tags=applied)
+        msg = getattr(th, 'starter_message', None)
+        if msg is None:
+            try:
+                msg = await th.fetch_message(th.id)
+            except discord.NotFound:
+                msg = None
+        if msg is not None:
+            await msg.edit(content=body, allowed_mentions=discord.AllowedMentions.none())
+        if then is not None:
+            await then(th)
+    except discord.HTTPException as e:
+        log(_refusal(step, forum, th, e))
+        raise
+    finally:
+        if opened:
+            try:
+                await th.edit(archived=True)
+            except discord.HTTPException as e:
+                log(_refusal('archive again', forum, th, e))
+                raise
     return True
 
 
@@ -189,8 +245,13 @@ async def _dev_post(forum, title, chunks, tags, me_id=None):
         more = []
     else:
         th = found
-        await _forum_edit(forum, th.id, title, chunks[0], tags)
-        more = await _thread_more(th, me_id)
+        got = []
+
+        async def follow(t):
+            # While the post is open: an archived one refuses every message.
+            got.append(await _sync_more(t, chunks[1:], await _thread_more(t, me_id)))
+        await _forum_edit(forum, th.id, title, chunks[0], tags, then=follow)
+        return th, got[0]
     return th, await _sync_more(th, chunks[1:], more)
 
 
@@ -463,8 +524,20 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
             continue
         try:
             issue = await loop.run_in_executor(None, github_issue, int(key), get)
-        except Exception:
+        except urllib.error.HTTPError as e:
+            if e.code not in (404, 410):
+                continue        # not read this pass: the post stays as it is
+            # Deleted: it is in no list any more, so only this read finds it.
+            try:
+                await _forum_drop(forum, have['thread_id'])
+            except discord.HTTPException:
+                continue
+            rec.pop(key, None)
+            state['_dirty'] = True
+            removed.append(int(key))
             continue
+        except Exception:
+            continue            # not read this pass: the post stays as it is
         if str(issue.get('state')) == 'open':
             try:
                 await _forum_drop(forum, have['thread_id'])
@@ -547,6 +620,8 @@ async def dev_tasks_once(forum, state, get=None, save=None, me_id=None, now=None
             continue            # read at this update time on an earlier pass
         comments = await loop.run_in_executor(None, github_comments, num, get)
         task = dev_task_of(issue, comments, since)
+        if task is not None and checked_since(comments, task[3]):
+            task = None         # checked and passed: the post comes down
         post = None
         if task is not None:
             taken = [v.get('sig', '').split('\n')[0] for k, v in rec.items() if k != key]
@@ -570,10 +645,15 @@ async def dev_tasks_once(forum, state, get=None, save=None, me_id=None, now=None
                 sig = _sig(title, body, tags)
                 chunks = dev_chunks(body)
                 if have and have.get('sig') != sig:
-                    if await _forum_edit(forum, have['thread_id'], title, chunks[0], tags):
-                        th = await _forum_thread(forum, have['thread_id'])
-                        have['more'] = await _sync_more(th, chunks[1:],
-                                                        have.get('more') or [])
+                    got = []
+
+                    async def follow(t, was=have.get('more') or [], rest=chunks[1:]):
+                        # While the post is open: an archived one refuses
+                        # every message (#4228).
+                        got.append(await _sync_more(t, rest, was))
+                    if await _forum_edit(forum, have['thread_id'], title, chunks[0], tags,
+                                         then=follow):
+                        have['more'] = got[0]
                         edited.append(num)
                     else:
                         rec.pop(key, None)     # deleted by hand: made again
@@ -592,6 +672,29 @@ async def dev_tasks_once(forum, state, get=None, save=None, me_id=None, now=None
             refused.append(upd)
             continue
         read[key] = upd
+        state['_dirty'] = True
+    # A deleted issue is in no changed list, so its post would stay for good
+    # (#5197: six did). Once an hour every post whose issue this pass did not
+    # read asks GitHub whether its issue is still there.
+    stamp = now or _utc_stamp()
+    if (state.get('dev_swept') or '') <= _hours_before(stamp, DEV_SWEEP_HOURS):
+        for key, have in list(rec.items()):
+            if int(key) in changed:
+                continue
+            try:
+                gone = await loop.run_in_executor(None, issue_deleted, int(key), get)
+            except Exception:
+                continue        # not read this hour: asked again next hour
+            if not gone:
+                continue
+            try:
+                await _forum_drop(forum, have['thread_id'])
+            except discord.HTTPException:
+                continue
+            rec.pop(key, None)
+            read.pop(key, None)
+            removed.append(int(key))
+        state['dev_swept'] = stamp
         state['_dirty'] = True
     # GitHub's since is inclusive, so the next pass starts at the newest
     # update read, or at the oldest one Discord refused, to try it again.

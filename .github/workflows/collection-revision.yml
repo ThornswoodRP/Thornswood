@@ -49,6 +49,7 @@ jobs:
         with:
           fetch-depth: 0
           filter: blob:none
+          persist-credentials: false
       - name: Read the four revisions and keep the rebuild issue
         shell: pwsh
         env:

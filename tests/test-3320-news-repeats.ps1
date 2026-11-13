@@ -84,7 +84,7 @@ try {
 
     # ---- the scripts run the check where nothing has been sent
     $ship = [IO.File]::ReadAllText((Join-Path $repo 'scripts\release\Ship.ps1'))
-    Yes 'Ship.ps1 checks for repeats after the note rules and before anything is built' ($ship.IndexOf('Get-NoteRepeats $Notes') -gt $ship.IndexOf('Get-NoteProblems $Notes') -and $ship.IndexOf('Get-NoteRepeats $Notes') -lt $ship.IndexOf("Check-Words.ps1'"))
+    Yes 'Ship.ps1 checks for repeats after the note rules and before anything is built' ($ship.IndexOf('Get-NoteRepeats $Notes') -gt $ship.IndexOf('[Thornswood.ReleaseNotes.NoteRules]::Problems($Notes)') -and $ship.IndexOf('Get-NoteRepeats $Notes') -lt $ship.IndexOf("Check-Words.ps1'"))
     Yes 'and stops when the channel cannot be read' ($ship -match 'could not be read, so these notes cannot be checked for repeats')
     $dg = [IO.File]::ReadAllText((Join-Path $repo 'scripts\deploy\Deploy-DevGamemode.ps1'))
     Yes 'Deploy-DevGamemode.ps1 checks the note against the dev channel before anything is sent' ($dg.IndexOf('Get-NoteRepeats $Note') -gt 0 -and $dg.IndexOf('Get-NoteRepeats $Note') -lt $dg.IndexOf('$Gamemode = Join-Path'))

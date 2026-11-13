@@ -501,4 +501,4 @@ old holder. The limits are `game/data/property-word.json`: per kind
 there keeps the default and is logged. The words wait in the register,
 `private/property.json`, under `word`, so a restart keeps them and a
 wipe moves them aside. A word that has gone out is kept only while the
-limits count it. `tests\test-2680-holder-word.js` drives all of it.
+limits count it. `game\tests\test-2680-holder-word.js` drives all of it.

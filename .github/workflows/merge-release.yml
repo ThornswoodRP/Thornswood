@@ -66,7 +66,7 @@
 #
 # THE NOTES. The Release's body is the note people read: the Release note
 # lines of the pull requests merged since the Release before, joined and held
-# to Note-Rules (Collect-ReleaseNotes.ps1). When every one of them says none,
+# to the release note rules (Collect-ReleaseNotes.ps1). When every one of them says none,
 # the body is the single line in QUIET_NOTE below, and the news announces it
 # like any other: every release is announced (Patrick, 9 Nov: "just put like
 # various bug fixes and improvements and still make an announcement"), so
@@ -121,6 +121,9 @@ on:
     branches: [main]
     paths:
       - 'game/**'
+      # Nor the game's harnesses in game/tests: a change to a check is no
+      # new release.
+      - '!game/tests/**'
       - 'launcher/**'
       # Not its harnesses (plan line 42): a change to a check is no new
       # launcher, as LauncherVersion.ps1 says.
@@ -211,6 +214,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Name the release and read the one before
         id: names

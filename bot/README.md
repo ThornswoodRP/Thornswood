@@ -104,6 +104,14 @@ Steward and Guards (#2551). Each hold then has a category of its own:
 `#<hold>-announcements`, the hold's hall, `#<hold>-court`, `#<hold>-guard`
 and a `<Hold> Court` voice room. A hold's Citizen role opens its category.
 
+### The ping buttons
+
+`#welcome` has the bot's two ping buttons (`bot_pings.py`, moved there from
+under the holds on 12 Nov 2026), so every Member can press them. News Pings
+is pinged when the bot posts a change to the live server in `#news`, and
+Updates Pings when it warns of a live game server restart in `#updates`.
+Pressing one again takes the role off.
+
 ### The factions
 
 Each of the sixteen factions in `factions.json` has a category of its own
@@ -436,6 +444,7 @@ two different servers stitched together.
 | Moderator | Moderates the Discord only |
 | Content Creator | Thornswood's own social media and content |
 | Support | Answers help tickets and playtest applications, and gives Playtester |
+| Clanker | Every bot in the server, shown in a group of its own under staff. A build gives it to each bot, those added later too |
 | Jarl of *hold* | Holds that hold. Ten of them, one each: the nine holds and Raven Rock |
 | *Faction* Leader | Leads that faction, one for each of the sixteen |
 | Server Booster | Boosted the server. Discord's own role, never made here |
@@ -448,7 +457,7 @@ two different servers stitched together.
 | Business Owner | Owns a business book in the game. Support gives it |
 | Member | Reacted to the rules in `#rules`, which the bot gives it for. Reads Start Here, Tickets, Information, the Roleplay Guide and Applications |
 | Banned | What the site keys a ban off. No permissions, not hoisted |
-| News Pings, Updates Pings | Made by the bot, never here. They are in the builder's list for their place in the order and nothing else |
+| News Pings, Updates Pings | Made by the bot, never here, and handed out by its buttons in `#welcome`. They are in the builder's list for their place in the order and nothing else |
 
 The council is Owner, Co-Owner and the six leads. It talks and posts in
 every read only channel and sees every staff space. "Everybody on staff" in

@@ -9,8 +9,13 @@
   inventory and the same face straight back. This is the only thing that
   actually gives you a new one.
 
-  The change forms named with a bare number are the ones belonging to people.
-  Everything else in that folder describes the world and is left alone. Nothing
+  A character is a change form named with a runtime form's id in lowercase
+  hex and no plugin (0.json, 1f.json: the engine's FormDesc::ToString) whose
+  profileId is above 0 and which is not deleted (#5168, Release-List.ps1).
+  Until 12 Nov 2026 this took the forms named with digits alone, which left
+  every character whose id has a letter in place and threw away the world's
+  own runtime forms with a digit name. Everything that is not a character
+  describes the world and is left alone. Nothing
   is deleted: what is thrown away goes into a _discarded folder beside it,
   which the game server's server-log.js deletes 30 days later (#3620).
 
@@ -90,12 +95,17 @@ if (-not (Read-ThornswoodReleaseList $list).ok) {
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $bin = Join-Path $forms ('_discarded-' + $stamp)
 $moved = @()
-foreach ($f in (Get-ChildItem -LiteralPath $forms -Filter *.json -File)) {
-    if ($f.BaseName -notmatch '^[0-9]+$') { continue }
+# The characters, by the one rule (#5168, Release-List.ps1): a runtime form's
+# hex name and a profileId above 0, so 1f.json goes as 12.json does and the
+# world's own runtime forms stay.
+$chars = Get-ThornswoodCharacterForms $forms 'a reset leaves it where it is'
+foreach ($n in $chars.notes) { Write-Host ("$n" -split '\|', 2)[1] }
+foreach ($p in $chars.files) {
     if (-not (Test-Path -LiteralPath $bin)) { New-Item -ItemType Directory -Path $bin -Force | Out-Null }
-    $to = Join-Path $bin $f.Name
-    try { Move-Item -LiteralPath $f.FullName -Destination $to -Force -ErrorAction Stop; $moved += $to }
-    catch { Write-Host ("could not move {0}: {1}" -f $f.Name, $_.Exception.Message) }
+    $name = Split-Path -Leaf $p
+    $to = Join-Path $bin $name
+    try { Move-Item -LiteralPath $p -Destination $to -Force -ErrorAction Stop; $moved += $to }
+    catch { Write-Host ("could not move {0}: {1}" -f $name, $_.Exception.Message) }
 }
 if ($moved.Count -eq 0) { Write-Host 'there was no character on the server to throw away'; exit 0 }
 Write-Host ("thrown away: {0} change form(s), kept at {1}" -f $moved.Count, $bin)

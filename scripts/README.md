@@ -119,6 +119,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [dev/OwnPlugins.ps1](dev/OwnPlugins.ps1) | Where a builder reads a plugin of the load order from (#2923). |
 | [dev/Report-Clone.ps1](dev/Report-Clone.ps1) | Says what One's clone holds that only One can see: every worktree, with its branch, whether it has changes nobody committed and when it last changed; every stash; every local branch, with whether GitHub still has it and how far behind main it is; the folders in temp\ and worktrees\ that no worktree owns. |
 | [dev/Run-Gate.ps1](dev/Run-Gate.ps1) | Runs the gate harnesses for build.yml's gate: picks and splits them for its shares, on a pull request only those its change can reach, and runs a share's part (#3114, #5183). |
+| [dev/Run-RealClient.ps1](dev/Run-RealClient.ps1) | Starts the real launcher and the real game on this PC, presses Play the way a person does, and walks the game through a list of steps with the test plugin, game\plugins\thornswood-test.js (#5197). |
 | [dev/Start-Thornswood.ps1](dev/Start-Thornswood.ps1) | Launches the game the way the launcher's Play() does, without the launcher. |
 | [dev/Trace-Gate-Box.ps1](dev/Trace-Gate-Box.ps1) | The part of a gate trace that runs as an administrator: an ETW session that sees every file each gate harness opens, and the reading of it into one list of paths a harness (#3114). |
 | [dev/Trace-Gate-Here.ps1](dev/Trace-Gate-Here.ps1) | Runs one step of a gate trace on this machine, as its administrator: the same scripts\dev\Trace-Gate-Box.ps1 the box ran, with no ssh (#5183). |
@@ -129,6 +130,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [mods/Add-McmShortcut.ps1](mods/Add-McmShortcut.ps1) | RETIRED. DO NOT RUN. Issue #1179: hand-installed MCM Shortcut NG, then Ships. |
 | [mods/Audit-Leftovers.ps1](mods/Audit-Leftovers.ps1) | Measures. Deletes nothing, moves nothing, renames nothing. |
 | [mods/Audit-Mods.ps1](mods/Audit-Mods.ps1) | Measures the build and says which parts carry a plugin and which are pure assets, because only the second kind can ever be optional. |
+| [mods/Build-ContentOnBox.ps1](mods/Build-ContentOnBox.ps1) | The deploy gate's Build-Content verb (#5191, stage 3): the content plugin and every table read out of the load order, built on the box from main as the gate reads it, and kept there by what they were built from, so a build whose inputs did not change is taken from the last one and not built again. |
 | [mods/Build-Generated.ps1](mods/Build-Generated.ps1) | Builds Thornswood's animation and body files (the behavior files, with Pandora Behaviour Engine+, and BodySlide's body meshes) in a Thornswood game folder, by hand, with the launcher's own code. Never writes into the Steam copy. |
 | [mods/Check-CleanInstall.ps1](mods/Check-CleanInstall.ps1) | After installing the Nexus collection into a clean Vortex profile: does the plugin list that install wrote give the game the load order the server checks, with the server's files? |
 | [mods/Check-CollectionRules.ps1](mods/Check-CollectionRules.ps1) | Whether the plugin rules the Nexus collection carries hold a clean install to a plugin list's order. |
@@ -139,6 +141,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [mods/Check-Plugins.ps1](mods/Check-Plugins.ps1) | What is enabled that should not be, and what is missing that should be there. |
 | [mods/Clean-Everything.ps1](mods/Clean-Everything.ps1) | Finds the old installers, build leftovers, temp files, stale backups and old GitHub release assets across this machine, the server and the source repository, adds up what they are costing, and prints it. |
 | [mods/Clean-Leftovers.ps1](mods/Clean-Leftovers.ps1) | The other half of Audit-Leftovers.ps1. That one measures and never touches anything; this one removes what it found. |
+| [mods/ContentPaths.ps1](mods/ContentPaths.ps1) | What a content build on the box reads and what it writes, worked out from scripts\mods\content-tables.json and the builders themselves (#5191). |
 | [mods/Enable-MCM.ps1](mods/Enable-MCM.ps1) | RETIRED. DO NOT RUN. Issue #1179: patched SkyUI_SE.esp's light flag by hand. |
 | [mods/Find-MissingMasters.ps1](mods/Find-MissingMasters.ps1) | Reads the TES4 header of every plugin in Data and reports any master that is no longer present. |
 | [mods/Fix-Icons.ps1](mods/Fix-Icons.ps1) | Windows keeps the picture it once drew for a shortcut in a cache, and goes on showing it long after the icon inside the exe changed. |
@@ -152,7 +155,6 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [mods/Rebuild-ContentTables.ps1](mods/Rebuild-ContentTables.ps1) | Rebuilds every table that is read out of the plugins of the load order, in the order they read each other, after a change to one of Thornswood's own plugins in game\content, and says what changed. |
 | [mods/Rebuild-OnBox.ps1](mods/Rebuild-OnBox.ps1) | The deploy gate's Rebuild-ContentTables verb (#2841): the whole content chain, scripts\mods\Rebuild-ContentTables.ps1, run by Run-OnBox.ps1 against a server's plugins on the box, from main as main is when the gate reads it. |
 | [mods/Rebuild-PullTables.ps1](mods/Rebuild-PullTables.ps1) | Rebuilds the content tables for a pull request on the box and commits them back to its branch, in one run, from any session gh is signed in on, a cloud thread included (#4322). |
-| [mods/Remove-DeadRecords.ps1](mods/Remove-DeadRecords.ps1) | Deletes records from Thornswood-Content.esp that nothing uses any more, and refuses to delete one that anything still points at. |
 | [mods/Remove-Plugin.ps1](mods/Remove-Plugin.ps1) | RETIRED. DO NOT RUN. Issue #1179: took one plugin out of the build by hand. |
 | [mods/Run-OnBox.ps1](mods/Run-OnBox.ps1) | Runs one of the repository's content tools on the VPS box, against the game plugins a game server there already holds, and brings back what the tool wrote into the repository's game\, records\ and docs\systems\ folders. |
 | [mods/Send-GameArchives.ps1](mods/Send-GameArchives.ps1) | Puts Skyrim's own archives that the content tools read on the VPS box, in C:\Thornswood-GameData, each checked against records\skyrim-files.json on this machine before it goes and on the box after it lands, and the loose string tables records\game-strings.json names, held to that record the same way. |
@@ -240,7 +242,6 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [release/NexusModPlan.ps1](release/NexusModPlan.ps1) | What Vortex would install from one mod archive, worked out the way Install-NexusRevision.ps1 lays a whole revision out (NexusLayout.cs), for a mod the collection does not carry yet (#5189). |
 | [release/NexusPublished.ps1](release/NexusPublished.ps1) | The newest published revision of a Nexus collection, as Nexus says it now (#4068). |
 | [release/Note-Repeats.ps1](release/Note-Repeats.ps1) | Whether a note tells a channel something it has already been told (#3320). |
-| [release/Note-Rules.ps1](release/Note-Rules.ps1) | What release notes may say. Ship.ps1 dot-sources this and refuses notes that break it, before anything is built. tests\test-note-rules.ps1 drives the same function, so the rule and its test cannot disagree. |
 | [release/Open-EnginePinPr.ps1](release/Open-EnginePinPr.ps1) | Opens the engine pin pull request from engine-pin/next, or brings the open one's title and body up to the branch's head commit. |
 | [release/Publish-CollectionRecord.ps1](release/Publish-CollectionRecord.ps1) | Makes the collection on Nexus what records\collection.json says, once a change to that record is merged (#5189). |
 | [release/Publish-FridaSources.ps1](release/Publish-FridaSources.ps1) | The source of what is inside frida-gum.lib, on one permanent Release of this repository (#3287, Patrick's answer C of 26 Oct 2026). |

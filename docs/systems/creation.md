@@ -123,7 +123,7 @@ relog, a reload and a restart find them where they were. The Cook is
 answered from the E press the game already sends for anybody under the
 crosshair, within 400 of the Cook in the same cell, whether or not trading
 is open; the board from the board's own press; the work from the count every
-piece of work goes through. `tests\test-3166-first-steps.js` walks a new
+piece of work goes through. `game\tests\test-3166-first-steps.js` walks a new
 character through all of it on the whole gamemode.
 
 Somebody still choosing who puts the panel down gets it back on its

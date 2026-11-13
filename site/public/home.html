@@ -365,7 +365,9 @@
     <h2>What has happened here so far</h2>
     <p class="lede">Every picture here was taken by somebody playing.
       The gallery is open to anyone.</p>
-    <div class="gal-show" id="galleryShow" aria-live="polite"></div>
+    <!-- Not a live region (#4127): it was aria-live, so every turn read the
+         next caption aloud wherever a screen reader was. -->
+    <div class="gal-show" id="galleryShow"></div>
     <div class="gal-dots" id="galleryDots" hidden></div>
     <p class="gal-more"><a href="/gallery">See the gallery &rarr;</a></p>
   </div>

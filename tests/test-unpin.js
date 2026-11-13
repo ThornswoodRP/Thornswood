@@ -163,7 +163,7 @@ function boot(dir, eng) {
     // Rent still owed by somebody who no longer holds the place (#3893), written with them.
     'var arrears = {};',
     // Nobody guards this board, keeps it or is its Jarl; a guard's take down
-    // (#502) is tests/test-502-guard-board.js, the offices (#2551)
+    // (#502) is game/tests/test-502-guard-board.js, the offices (#2551)
     // tests/test-2551-hold-offices.js.
     'function isGuard() { return false; }',
     'function isJarlOf() { return false; }',

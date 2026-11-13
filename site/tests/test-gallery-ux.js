@@ -44,7 +44,10 @@ yes('landing build starts a rotating slideshow',
     /function startFlip\(\)/.test(home));
 yes('slideshow respects reduced motion',
     /prefers-reduced-motion: reduce/.test(home) &&
-    /if \(reduce \|\| paused \|\| shots\.length < 2\) return/.test(home));
+    // held(): the pointer, focus, the pause button or a press's 8 seconds
+    // (#4127), each its own, where one shared paused flag let a press's
+    // timer start it under the pointer.
+    /if \(reduce \|\| held\(\) \|\| shots\.length < 2\) return/.test(home));
 yes('slideshow has themed prev next arrows',
     /gal-nav gal-prev/.test(home) && /gal-nav gal-next/.test(home) &&
     /\.gal-show \.gal-nav\{[^}]*border:1px solid var\(--gold\)/.test(home) &&

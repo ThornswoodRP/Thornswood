@@ -124,7 +124,9 @@
   with a one-time state and an hour to live, and prints the address
   https://thornswood.net/github-app/setup?state=<state>. That page sends the
   App's manifest to GitHub (name, no webhook, private, administration write
-  and contents read on the repositories it is installed on, and since #3534
+  and contents write on the repositories it is installed on (read until
+  #5191, whose content builds the deploy agent puts on draft Releases with
+  a token of its own; every other token asks contents read), and since #3534
   read of the names of its secrets, variables and environments, never their
   values, Environments write for an environment's secret, which only
   ops-access.js keys asks for (Renew-BoxKey.ps1), Issues write for the
@@ -1233,7 +1235,7 @@ function manifest() {
     hook_attributes: { url: 'https://thornswood.net/github-app/hook', active: false },
     redirect_url: 'https://thornswood.net/github-app/setup/done',
     public: false,
-    default_permissions: { administration: 'write', contents: 'read', secrets: 'read', actions_variables: 'read', environments: 'write', actions: 'write', issues: 'write', deployments: 'write' },
+    default_permissions: { administration: 'write', contents: 'write', secrets: 'read', actions_variables: 'read', environments: 'write', actions: 'write', issues: 'write', deployments: 'write' },
     default_events: [],
   };
 }

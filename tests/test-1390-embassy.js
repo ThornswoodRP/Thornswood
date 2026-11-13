@@ -7,7 +7,7 @@
 // admin writes. /embassy and /remnant are staff commands only, and the person
 // a change is about is told in their own chat. Only those two rolls make the
 // embassy and remnant rows; a public forge makes none of them. A character in
-// Thalmor gear reads Thalmor. The patrols are their own block (tests/test-1390-thalmor-patrols.js), so this block
+// Thalmor gear reads Thalmor. The patrols are their own block (game/tests/test-1390-thalmor-patrols.js), so this block
 // stands up no actor.
 //
 // Read only.

@@ -36,7 +36,7 @@
   carriage and ferry workers, read out of the plugins by
   scripts/dev/Build-NpcPopulation.py. Each row below is one of those, with its
   reference, base, world, spot and hold copied across, and
-  tests/test-1394-fares.js fails when the two drift apart. You land on the
+  game/tests/test-1394-fares.js fails when the two drift apart. You land on the
   driver's own spot at the other end, the way MoveTo onto an actor lands.
   Which water a ferryman works is the mod's: KmodFerryRoute1 to 4 in
   cast.json, which the mod's own page calls the North Coast, Lake Honrich,

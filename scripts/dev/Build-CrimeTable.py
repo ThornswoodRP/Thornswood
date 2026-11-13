@@ -60,7 +60,7 @@ game\\plugins\\thornswood-front.js, the form ids the plugin flags.
 
 Read only apart from those two files. --check writes nothing, and with --json
 writes the same reading to another file, which is how
-tests\\test-502-no-bounty.js reads the load order on a machine that has one.
+game\\tests\\test-502-no-bounty.js reads the load order on a machine that has one.
 
 Usage:
     python scripts/dev/Build-CrimeTable.py --check

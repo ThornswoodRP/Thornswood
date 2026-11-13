@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
+using Avalonia.Threading;
 
 namespace Thornswood
 {
@@ -278,6 +280,60 @@ namespace Thornswood
         static bool fixWhenFolderReadyAfterVortex;
 
         /// <summary>
+        /// With fixWhenFolderReady: the Fix waiting for the folder is the one
+        /// the first start in a newly made folder runs (#5937).
+        /// </summary>
+        static bool fixWhenFolderReadyAfterMake;
+
+        /// <summary>
+        /// Set when Thornswood's own folder has just been made in this run:
+        /// the first setup's Fix runs in it straight away, and its end is the
+        /// setup's one restart (FirstSetupRestart), into a newer launcher when
+        /// there is one. Until then no update goes in by itself (UpdateBySelf),
+        /// so none closes the launcher while Pandora or BodySlide are building.
+        /// </summary>
+        static bool restartAfterFirstFix;
+
+        /// <summary>
+        /// The end of the first setup (Patrick, 12 Nov): ask GitHub for the
+        /// newest launcher now, so the answer is not left to a check that
+        /// lands after the restart and restarts it a second time. A newer one
+        /// goes in, and Velopack's start of it is the one restart; otherwise
+        /// the launcher restarts once into its own folder. With automatic
+        /// updates off, or the waiting update the one that just failed, it
+        /// restarts without it and the card says it is there.
+        /// </summary>
+        static void FirstSetupRestart()
+        {
+            if (!restartAfterFirstFix) return;
+            restartAfterFirstFix = false;
+            Log("The first setup is done. Checking for a newer launcher before the one restart.");
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                Updater.LauncherUpdate launcher = null;
+                string why = null;
+                bool asked = false;
+                try { launcher = Updater.CheckLauncher(cfg); asked = true; }
+                catch (Exception ex) { why = ex.Message; }
+                string note = Updater.LastLauncherCheck;
+                Dispatcher.UIThread.Post(delegate
+                {
+                    LauncherAnswer(asked, launcher, note, why, false);
+                    bool take = pendingLauncher != null && cfg.AutoUpdate && !playing
+                        && updateTried != pendingLauncher.Version;
+                    if (take)
+                    {
+                        Log("Taking launcher " + pendingLauncher.Version + " now; the launcher restarts once, into it.");
+                        RunUpdate(delegate(bool wentIn) { RestartLauncher(); });
+                        return;
+                    }
+                    Log("Restarting the launcher once, so it runs from the new folder.");
+                    RestartLauncher();
+                });
+            });
+        }
+
+        /// <summary>
         /// Install now's second half (#3201): the update has gone in, or
         /// failed, and Fix's whole path runs on the folder as it left it.
         /// </summary>
@@ -289,7 +345,8 @@ namespace Thornswood
 
         /// <param name="afterUpdate">True when an update has just gone in or failed (Install now, the automatic update, the first start of a new launcher): the log says so, and FixRest never takes that same update a second time (#3201).</param>
         /// <param name="afterVortex">True when Vortex has just finished the collection revision the card opened (FixAfterVortex, #5200): the log says so, and FixRest leaves a waiting update on the card, where UpdateBySelf already decided about it.</param>
-        static void RunFix(bool afterUpdate, bool afterVortex = false)
+        /// <param name="afterMake">True on the first start in Thornswood's own folder after it was made (OwnGameAtStart, #5937): the log says so, and Fix runs as a press of it would, so the install's last steps (Thornswood-Last.esp, the plugin order, the animation and body files) need no press.</param>
+        static void RunFix(bool afterUpdate, bool afterVortex = false, bool afterMake = false)
         {
             if (fixing) return;
             // Nothing is written into a folder while it is being made or
@@ -297,6 +354,7 @@ namespace Thornswood
             // while its own folder was being made and wrote into the Steam
             // copy (#2403). After an update, the folder's finish runs it.
             if (ownGameBusy && afterUpdate) { fixWhenFolderReady = true; Log("Thornswood's own Skyrim folder is being prepared. The scan after the update runs, and puts right what it finds, as soon as the folder is ready."); return; }
+            if (ownGameBusy && afterMake) { fixWhenFolderReady = true; fixWhenFolderReadyAfterMake = true; Log("Thornswood's own Skyrim folder is being brought up to date. The scan after making it runs, and puts right what it finds, as soon as that is done."); return; }
             if (ownGameBusy && afterVortex) { fixWhenFolderReady = true; fixWhenFolderReadyAfterVortex = true; Log("Thornswood's own Skyrim folder is being prepared. The scan after Vortex runs, and puts right what it finds, as soon as the folder is ready."); return; }
             if (ownGameBusy) { Log("Thornswood's own Skyrim folder is being prepared. Press Fix when it is done: nothing is put right in a folder while it is being made."); return; }
             if (Downgrade.Busy) { Log("The Downgrade is running. Press Fix when it is done."); return; }
@@ -318,6 +376,7 @@ namespace Thornswood
             Verify.OwnFolderNext = false;
             Log(afterUpdate ? "The update is done. Scanning everything again, and putting right what the scan finds."
                 : afterVortex ? "Vortex is done. Scanning everything, and putting right what the scan finds."
+                : afterMake ? "Thornswood's own Skyrim folder is made. Scanning everything, and putting right what the scan finds: the files made from your game, the plugin order, and the animation and body files, which Pandora and BodySlide build in their own windows."
                 : "Fix: scanning everything first.");
             List<Issue> plugins = null, rest = null;
             try
@@ -340,8 +399,10 @@ namespace Thornswood
                 fixing = false;
                 Log(afterUpdate ? "The scan after the update found nothing wrong."
                     : afterVortex ? "The scan after Vortex found nothing wrong."
+                    : afterMake ? "The scan after making the folder found nothing wrong."
                     : "Fix found nothing to put right.");
                 ShowVerify(plugins, false);
+                FirstSetupRestart();
                 return;
             }
 
@@ -415,6 +476,16 @@ namespace Thornswood
             }
             fixing = false;
             Report(plugins);
+
+            // The first setup ends in its one restart (FirstSetupRestart),
+            // which takes a newer launcher itself. Skyrim on another build
+            // is the one thing left before it: the Downgrade restarts into
+            // what it makes.
+            if (restartAfterFirstFix)
+            {
+                if (!Has(Upkeep.LastIssues, IssueKind.Skyrim)) { FirstSetupRestart(); return; }
+                restartAfterFirstFix = false;
+            }
 
             // Last, what asks something or restarts the launcher. With no
             // folder of its own and Skyrim on another build, the Downgrade

@@ -210,7 +210,7 @@ const box = {
   guard: function (n, f) { return f; },
   setInterval: function () { return 1; }, clearInterval: function () { },
   log: function () { },
-  // Alice holds her hammer (#3162); tests/test-3162-bench-tools.js asks the refusal.
+  // Alice holds her hammer (#3162); game/tests/test-3162-bench-tools.js asks the refusal.
   toolGate: function () { return null; }, wearTool: function () { return null; },
   __thornswoodCharacter: {
     stateOf: function (actorId) { return { prof: actorId === ALICE.a ? 'smith' : 'cook' }; },
@@ -460,7 +460,7 @@ function keys(p) { return pack(p).filter(function (e) { return e.baseId === idOf
     function text(n) { return [n.textContent].concat(n.kids.map(text)).join(' '); }
     const body = node('div');
     // The rows are on the panel view, mine.property, where writeState puts
-    // them (#1717); tests/test-1717-property-page.js runs that whole road.
+    // them (#1717); game/tests/test-1717-property-page.js runs that whole road.
     const mine = { property: [
       { name: 'Honeyside', mine: true, locked: false, keyed: false, b: HOME, sleep: [],
         rent: { amount: 50, every: 7, owed: 50 } },

@@ -1778,20 +1778,46 @@ function viewsOf(snap) {
 
   A quiet socket is no longer sent something five times a second, which is
   why the pages keep their own ping (SILENT_AFTER, above).
+
+  AND ONLY THE FIELDS THAT CHANGED (#5358). In a crowd everybody can hear
+  everybody, so each person must be told where each other person is: that
+  part grows with the square of the crowd and is what voice needs. But a
+  walker's row went out whole each tick, name, cell, actor id and mode with
+  the new position, and only the position and the facing had moved. At 100
+  people at one spot that was 6.6 MB a second against the game server's 4.75
+  (the load test, run 41355151372). So a row a peer already holds is sent as
+  the fields that differ from it; a field that went away is sent as 0, which
+  only the staff silence (hush) ever does. A row new to a peer is sent whole.
+  Every client merges a moved row's fields into the one it holds
+  (thornswood-voice.js applyMoved, thornswood-chat.js keep, VoiceSession.cs
+  ApplyRows), and voice/tests/test-moved.js counts the bytes.
 */
 setInterval(() => {
   sweepSilenced(Date.now());
   if (peers.size === 0) return;
   const snap = snapshot();
   const viewOf = viewsOf(snap);
-  const text = {};
-  const rowText = (pid) => text[pid] || (text[pid] = JSON.stringify(snap[pid]));
+  // Each row once a tick: its whole text, to see whether it changed at all,
+  // and each field's text, to see which did.
+  const rows = {};
+  const rowOf = (pid) => {
+    if (rows[pid]) return rows[pid];
+    const fields = {};
+    for (const k of Object.keys(snap[pid])) fields[k] = JSON.stringify(snap[pid][k]);
+    return (rows[pid] = { text: JSON.stringify(snap[pid]), fields: fields });
+  };
+  const changed = (was, now, row) => {
+    const out = {};
+    for (const k of Object.keys(now.fields)) if (was.fields[k] !== now.fields[k]) out[k] = row[k];
+    for (const k of Object.keys(was.fields)) if (!(k in now.fields)) out[k] = 0;
+    return out;
+  };
   const at = Date.now();
   let heardChanged = false;
   for (const [, p] of peers) {
     const view = viewOf(p.profileId);
     const now = new Map();
-    for (const pid of Object.keys(view)) now.set(pid, rowText(pid));
+    for (const pid of Object.keys(view)) now.set(pid, rowOf(pid));
     // Who this connection's roster and signalling are held to (#5516).
     const heard = new Set(now.keys());
     if (!p.heard || p.heard.size !== heard.size || Array.from(heard).some((pid) => !p.heard.has(pid))) heardChanged = true;
@@ -1802,8 +1828,10 @@ setInterval(() => {
     } else {
       const moved = {};
       let any = false;
-      for (const [pid, t] of now) {
-        if (p.sent.get(pid) !== t) { moved[pid] = view[pid]; any = true; }
+      for (const [pid, r] of now) {
+        const was = p.sent.get(pid);
+        if (!was) { moved[pid] = view[pid]; any = true; }
+        else if (was.text !== r.text) { moved[pid] = changed(was, r, view[pid]); any = true; }
       }
       const gone = [];
       for (const pid of p.sent.keys()) if (!now.has(pid)) gone.push(Number(pid));

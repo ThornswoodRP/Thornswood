@@ -29,6 +29,7 @@
 $env:THORNSWOOD_HARNESS = '1'
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Windows.ps1')   # Get-BoxPowerShell
 
 $here = $PSScriptRoot
 if (-not $here) { $here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
@@ -172,7 +173,7 @@ try {
     }
     [IO.File]::WriteAllText((Join-Path $devFeed 'version.json'),
         ($named | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding($false)))
-    $shell = if ($PSVersionTable.PSEdition -eq 'Core') { 'pwsh' } else { 'powershell' }
+    $shell = Get-BoxPowerShell   # the PowerShell 7 every script runs in (#5356)
     $said = & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $mirror `
         -Dev -Check -SiteDir $site -FeedDir $devFeed -AssetDir $devAssets -MainStore $store `
         -Vps '127.0.0.1' -User 'thornswood-no-such-user' 2>&1
@@ -223,7 +224,7 @@ try {
     # 127.0.0.1 with a user nobody has: BatchMode means it gives up at once
     # rather than asking for a password. -Check is what turns "the site did not
     # answer" into a line on screen.
-    $shell = if ($PSVersionTable.PSEdition -eq 'Core') { 'pwsh' } else { 'powershell' }
+    $shell = Get-BoxPowerShell   # the PowerShell 7 every script runs in (#5356)
     $said = & $shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $mirror `
         -Check -FeedDir $feedDir -AssetDir $assets -Vps '127.0.0.1' -User 'thornswood-no-such-user' 2>&1
     $code = $LASTEXITCODE

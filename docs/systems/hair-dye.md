@@ -79,12 +79,12 @@ less of the same things.
 ## Where this is
 
 - The list and the colour sums: `game/hair-dye.js`, checked by
-  `tests/test-2675-hair-dye.js`.
+  `game/tests/test-2675-hair-dye.js`.
 - The steep, the offer and the one write: the hair dye block of
   `game/gamemode.js`, which carries the list and the sums between its
   `HAIR_DYES` markers. After changing either file, run
   `node scripts/dev/Build-HairDyeGamemode.js`;
-  `tests/test-2675-hair-dye-wiring.js` fails until the two match.
+  `game/tests/test-2675-hair-dye-wiring.js` fails until the two match.
 - The Hair dye page of K: `game/ui/thornswood-skills.js`. Dye hair under Near
   you and the offer's words: `game/ui/thornswood-party.js`. The look prompt's
   "Dye their hair": `game/plugins/thornswood-front.js`.

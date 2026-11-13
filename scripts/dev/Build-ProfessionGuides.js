@@ -38,7 +38,7 @@
   own rank and count on it come from the panel the server already sends.
 
   The sentences around these facts are the page's own (GUIDE_TEXT in
-  thornswood-skills.js). tests/test-3165-profession-guides.js holds the two
+  thornswood-skills.js). game/tests/test-3165-profession-guides.js holds the two
   together and runs --check.
 */
 const fs = require('node:fs');

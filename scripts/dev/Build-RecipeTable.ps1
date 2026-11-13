@@ -1624,7 +1624,7 @@ $COLLAPSED_SMELT_EDITOR_IDS = [ordered]@{
 }
 
 # THE DWARVEN SCRAP SMELT THAT STAYS (#613, #1400). It stays in the unowned map,
-# because #613 kept it out of the owned bucket and tests\test-613-dwarven-ingot-collapse.js
+# because #613 kept it out of the owned bucket and game\tests\test-613-dwarven-ingot-collapse.js
 # holds it there, and the gamemode gates it by hand in KEPT_SMELT as novice
 # Platewright work. Its reason says so instead of the smelter's "open to
 # everybody", which #1400 wrote into recipes.json by hand and a rebuild would
@@ -2005,7 +2005,7 @@ foreach ($nameEntry in $RECIPE_NAMES.owner.PSObject.Properties) {
 # spell gate already says. These are the thirteen the Bladebinder page
 # keeps; the other 147 and the Aetherial Staff are cut and stay where input
 # cost puts them. The rank is the spell's in the college book, the mage
-# school pages and STAFF_SPELLS, and tests\test-1622-recipe-generator.js
+# school pages and STAFF_SPELLS, and game\tests\test-1622-recipe-generator.js
 # holds each line to it. A Bladebinder below master buys the stones from a
 # master miner, which HALVES_WITH_AN_UNSTANDABLE_RUNG says for this half.
 # The kept smelt and tan rows named in RECIPE_OWNER (#1391, #1400): novice

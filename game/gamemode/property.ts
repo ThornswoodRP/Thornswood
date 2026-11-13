@@ -150,7 +150,7 @@
   /*
     ONE WAY A STORE'S FILE IS READ AND WRITTEN (#4529). The same text is in
     the season, farming, property and furniture blocks, and
-    tests/test-4529-store-saves.js holds the copies to it, since each block
+    game/tests/test-4529-store-saves.js holds the copies to it, since each block
     is lifted and run alone. Seven stores (the property register and its
     jail, bed and bench books, the season, the farm claims and the
     furniture register) were each written straight over the old file, and
@@ -924,7 +924,7 @@
     walks out, or a guard lets them out, or /helpme reaches staff.
 
     No timer, release by the hold's guards, lockpicking and the temple on
-    death are what the cells and the respawn already do; tests/test-502-jail-rules.js
+    death are what the cells and the respawn already do; game/tests/test-502-jail-rules.js
     holds each of them.
   */
 
@@ -1848,7 +1848,7 @@
     front of an old one would hand the old one's number, and so its keys, to
     the new one. So a number is never moved: a building that joins a clash
     gets the next number of its group, and one that leaves the table has its
-    row taken out. tests/test-3899-key-labels.js fails the build whenever
+    row taken out. game/tests/test-3899-key-labels.js fails the build whenever
     two buildings that can be held come out with the same label, and names
     them.
   */
@@ -5519,7 +5519,7 @@
     town's navmesh, on ground flat to a few units, and touch no furniture,
     container, door, the place somebody stands at any other bench, or any
     smaller static. game\data\woodworking-benches.json says what it measured
-    at each spot. tests\test-516-woodworking-benches.js holds this block to
+    at each spot. game\tests\test-516-woodworking-benches.js holds this block to
     that file and, on a machine with the game, the file to the plugins.
 
     The forge is the anchor because the server loads it (a FURN), and

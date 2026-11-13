@@ -176,7 +176,7 @@ namespace Thornswood
         {
             // Velopack first (#4825): when it runs the exe about an install, an
             // update or an uninstall, this answers and the process ends here.
-            Velo.Start(args);
+            Velo.Start(args, Uninstall.FromVelopack);
 
             // PerMonitorV2 is in the application manifest (#463), and Avalonia
             // rescales on WM_DPICHANGED by itself; WindowFit keeps the window
@@ -4368,6 +4368,15 @@ namespace Thornswood
             }
 
             goes.AppendLine("    " + Paths.LauncherDir);
+            // The launcher itself, where Velopack's setup put it: its folder,
+            // shortcuts and Installed apps entry go by Velopack's own
+            // uninstall, once this launcher has closed (Uninstall.Finish).
+            try
+            {
+                if (Velo.Installed)
+                    goes.AppendLine("    " + Velo.Locator.RootAppDir + "   (the launcher itself, its shortcuts and its entry in Installed apps)");
+            }
+            catch (Exception ex) { Swallow.Note("Shell.DoUninstall, the launcher's own folder", ex); }
             goes.AppendLine("    " + Paths.Personal);
             if (!keep)
             {

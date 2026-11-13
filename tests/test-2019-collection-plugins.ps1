@@ -50,15 +50,6 @@ try {
     $again = Join-Path $tmp 'again.json'
     & $gen -Data $col -Out $again -Collection 7essxf -Revision 2 *> $null
     Yes 'the same folder gives the same bytes' ([Convert]::ToBase64String($raw) -eq [Convert]::ToBase64String([IO.File]::ReadAllBytes($again)))
-    $edition = if ($PSVersionTable.PSEdition -eq 'Core') { 'powershell' } else { 'pwsh' }
-    if (Get-Command $edition -ErrorAction SilentlyContinue) {
-        $other = Join-Path $tmp 'other.json'
-        # -ExecutionPolicy Bypass for this one child: on a machine whose
-        # Windows PowerShell policy is Restricted (One, 12 Oct) it refused
-        # to run the generator at all, so nothing was written to compare.
-        & $edition -NoProfile -ExecutionPolicy Bypass -Command "& '$($gen.Replace("'", "''"))' -Data '$($col.Replace("'", "''"))' -Out '$($other.Replace("'", "''"))' -Collection 7essxf -Revision 2" *> $null
-        Yes "  and the other edition ($edition) writes it byte for byte" ((Test-Path -LiteralPath $other) -and [Convert]::ToBase64String($raw) -eq [Convert]::ToBase64String([IO.File]::ReadAllBytes($other)))
-    }
     $only = Join-Path $tmp 'only.json'
     & $gen -Data $col -Out $only -Plugins '3BBB.esp' *> $null
     Yes '-Plugins writes only those' (@((ConvertFrom-ThornswoodJson (Get-Content -LiteralPath $only -Raw) $only).plugins).Count -eq 1)

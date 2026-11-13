@@ -71,20 +71,38 @@
   if (globalThis.__thornswoodVoiceFeed) {
     try { clearInterval(globalThis.__thornswoodVoiceFeed); } catch (e) { }
   }
+  /*
+    Who each actor is: their profile id and the name off their appearance.
+    Where they stand moves every pass, so it is read every pass; who they are
+    does not, and the appearance is a whole document the engine parses and
+    hands back on every read. So it is read once a second a person, which is
+    as soon as the voice pages need a new name, not five times (#5431: with
+    20 people on it was 160 engine reads a second for nothing, and put the
+    timers over their budget). A row is dropped once its actor is off line,
+    so nobody who comes back gets an old name.
+  */
+  var WHO_EVERY_MS = 1000;
+  var whoIs = {};   // actor id -> { pid, name, at }
+
   globalThis.__thornswoodVoiceFeed = setInterval(guard('voiceFeed', function () {
     var who = [];
     try {
       var online = mp.get(0, 'onlinePlayers') || [];
+      var now = Date.now();
+      var still = {};
       for (var i = 0; i < online.length; i++) {
         var id = online[i];
+        still[id] = true;
         try {
           var pos = mp.get(id, 'pos');
           if (!pos) continue;
           var angle = mp.get(id, 'angle') || [0, 0, 0];
-          // Each read once: five times a second for everybody on, an
-          // appearance read twice was ten parses a person a second (#385).
-          var pid = mp.get(id, 'profileId');
-          var look = mp.get(id, 'appearance');
+          var known = whoIs[id];
+          if (!known || now - known.at >= WHO_EVERY_MS || now < known.at) {
+            var look = mp.get(id, 'appearance');
+            known = whoIs[id] = { pid: mp.get(id, 'profileId'), name: String(look && look.name || ''), at: now };
+          }
+          var pid = known.pid;
           who.push({
             profileId: pid,
             actor: id,
@@ -94,10 +112,13 @@
             // side of a loading door do not, which is exactly the line voice
             // should stop at.
             cell: String(mp.get(id, 'worldOrCellDesc') || ''),
-            name: String(look && look.name || ''),
+            name: known.name,
             party: partyFor(pid)
           });
         } catch (e) { }
+      }
+      for (var gone in whoIs) {
+        if (Object.prototype.hasOwnProperty.call(whoIs, gone) && !still[gone]) { delete whoIs[gone]; }
       }
     } catch (e) { return; }
 

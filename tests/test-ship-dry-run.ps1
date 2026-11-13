@@ -266,7 +266,7 @@ try {
     Copy-Item -LiteralPath $ShipPath -Destination (Join-Path $repo 'scripts\release\Ship.ps1') -Force
     # The real files Ship dot-sources, beside it, so it runs as it does for real.
     $realRel = Split-Path -Parent $ShipPath
-    foreach ($n in 'Ship-Rules.ps1', 'ShippedBytes.ps1', 'Assert-PublishSigned.ps1', 'Feed-Store.ps1', 'Feed-Json.ps1', 'Release-Name.ps1', 'Note-Rules.ps1', 'Where.ps1', 'Get-ScratchDir.ps1', 'Read-JsonFile.ps1', 'RecordShape.ps1', 'RepoPlugins.ps1', 'CollectionRevision.ps1', 'Note-Repeats.ps1', 'Feed-News.ps1', 'Release-Baseline.ps1', 'Feed-Rules.ps1', 'LauncherVersion.ps1') {
+    foreach ($n in 'Ship-Rules.ps1', 'ShippedBytes.ps1', 'Assert-PublishSigned.ps1', 'Feed-Store.ps1', 'Feed-Json.ps1', 'Release-Name.ps1', 'Where.ps1', 'Get-ScratchDir.ps1', 'Read-JsonFile.ps1', 'RecordShape.ps1', 'RepoPlugins.ps1', 'CollectionRevision.ps1', 'Note-Repeats.ps1', 'Feed-News.ps1', 'Release-Baseline.ps1', 'Feed-Rules.ps1', 'LauncherVersion.ps1') {
         Copy-Item -LiteralPath (Join-Path $realRel $n) -Destination (Join-Path $repo ('scripts\release\' + $n)) -Force
     }
     Copy-Item -LiteralPath (Join-Path $realRel '..\..\layout.json') -Destination (Join-Path $repo 'layout.json') -Force
@@ -281,14 +281,15 @@ try {
     New-Item -ItemType Directory -Force -Path (Join-Path $repo 'scripts\deploy') | Out-Null
     $freshCopy = Join-Path $repo 'scripts\deploy\Fresh-Checkout.ps1'
     Copy-Item -LiteralPath (Join-Path $realRel '..\deploy\Fresh-Checkout.ps1') -Destination $freshCopy -Force
-    # What Ship.ps1 dot-sources, which a stand-in cannot write down because it
-    # is not called, only read. The two rule files are the real ones: they
-    # only define functions, and the notes below are held to Note-Rules the
-    # way a real Ship holds them.
+    # What Ship.ps1 reads, which a stand-in cannot write down because it is
+    # not called, only read. The rules are the real ones: Ship-Rules.ps1 only
+    # defines functions, and the notes below are held to the release note
+    # rules (tools\ReleaseNotes\NoteRules.cs, #5354) the way a real Ship
+    # holds them.
     $realRelease = Split-Path -Parent (Resolve-Path -LiteralPath $ShipPath).Path
-    foreach ($f in 'Ship-Rules.ps1', 'Note-Rules.ps1') {
-        Copy-Item -LiteralPath (Join-Path $realRelease $f) -Destination (Join-Path $repo 'scripts\release') -Force
-    }
+    Copy-Item -LiteralPath (Join-Path $realRelease 'Ship-Rules.ps1') -Destination (Join-Path $repo 'scripts\release') -Force
+    New-Item -ItemType Directory -Force -Path (Join-Path $repo 'tools\ReleaseNotes') | Out-Null
+    Copy-Item -LiteralPath (Join-Path $realRelease '..\..\tools\ReleaseNotes\NoteRules.cs') -Destination (Join-Path $repo 'tools\ReleaseNotes\NoteRules.cs') -Force
     # The publish sign gate (#826) and the load order check (#557) read this
     # machine's signing setup, its signed exe and Vortex, none of which a
     # temp folder has. Their stand-ins pass, so what is measured here is

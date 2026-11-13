@@ -281,7 +281,8 @@ async function join(pid) {
     // wire is every position message as { at, bytes }, at being the tick
     // that sent it by the service's clock, so a stretch of ticks can be
     // counted however late its messages arrive.
-    const me = { pid: pid, ws: ws, table: null, bytes: 0, msgs: 0, moved: 0, firstAt: 0, at: 0, wire: [], pongs: [] };
+    const me = { pid: pid, ws: ws, table: null, bytes: 0, msgs: 0, moved: 0, firstAt: 0, at: 0, wire: [], pongs: [],
+                 wholeRows: 0, fieldRows: 0, rowsHeld: 0, rowsOnlyMoved: 0 };
     sockets.push(ws);
     const late = setTimeout(() => reject(new Error('no welcome for ' + pid)), 20000);
     ws.onopen = () => { ws.send(JSON.stringify({ t: 'join', profileId: pid, name: 'Person ' + pid })); };
@@ -297,8 +298,25 @@ async function join(pid) {
         me.bytes += frameBytes(text); me.msgs++; me.wire.push({ at: m.at, bytes: frameBytes(text) });
       }
       if (m.t === 'moved' && me.table) {
-        for (const k of Object.keys(m.who || {})) { me.table[k] = m.who[k]; }
+        // As every client does (#5358): a row already held comes with only
+        // the fields that changed, and is merged into the one held.
+        // wholeRows is what this message would have been with each row sent
+        // whole, as until #5358, for the bill below.
+        const whole = {};
+        for (const k of Object.keys(m.who || {})) {
+          const was = me.table[k];
+          if (was) {
+            me.rowsHeld++;
+            const f = Object.keys(m.who[k]);
+            if (f.every((x) => x === 'pos' || x === 'angleZ')) { me.rowsOnlyMoved++; }
+          }
+          me.table[k] = Object.assign({}, was || {}, m.who[k]);
+          if (me.table[k].hush === 0) { delete me.table[k].hush; }
+          whole[k] = me.table[k];
+        }
         for (const id of (m.gone || [])) { delete me.table[id]; }
+        me.fieldRows += frameBytes(text);
+        me.wholeRows += frameBytes(JSON.stringify({ t: 'moved', at: m.at, who: whole, gone: m.gone || [] }));
         me.at = m.at; me.bytes += frameBytes(text); me.msgs++; me.moved++; me.wire.push({ at: m.at, bytes: frameBytes(text) });
       }
       heard();
@@ -408,6 +426,17 @@ async function ticks(n) {
   const walkBefore = wholeTick(joined);
   yes('people who can hear a walker are told they moved',
       joined.filter((j) => j.moved > 0).length > walkers.length);
+  // #5358: a walker's row, already held, comes as its position and facing.
+  const held = joined.reduce((n, j) => n + j.rowsHeld, 0);
+  const onlyMoved = joined.reduce((n, j) => n + j.rowsOnlyMoved, 0);
+  const fieldBytes = joined.reduce((n, j) => n + j.fieldRows, 0);
+  const wholeBytes = joined.reduce((n, j) => n + j.wholeRows, 0);
+  console.log('      moved rows already held: ' + held + ', of them only position and facing: ' + onlyMoved);
+  console.log('      moved messages: ' + fieldBytes + ' bytes with the fields that changed, ' + wholeBytes + ' with each row whole');
+  yes('a row already held comes as only the fields that changed: a walker\'s as its position and facing',
+      held > 0 && onlyMoved === held);
+  yes('which is under half the bytes of sending each row whole (' + fieldBytes + ' of ' + wholeBytes + ')',
+      fieldBytes > 0 && fieldBytes * 2 < wholeBytes);
   // Two ticks more, so the last feed with anybody walking has been sent on.
   await ticks(2);
   await settleAll(joined);

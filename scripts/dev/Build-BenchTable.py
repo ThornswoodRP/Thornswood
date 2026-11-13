@@ -157,7 +157,7 @@ MENU_STATIONS = {
 # halves, and the sentence the gate says instead of opening it. It stays in
 # BENCH_BY_BASE, because recipelessCraft and TWO_HANDS still name it. The
 # sentence is the gamemode's temper refusal, word for word, and
-# tests/test-1384-shut-benches.js holds the two equal. Taking a bench out of
+# game/tests/test-1384-shut-benches.js holds the two equal. Taking a bench out of
 # here, with the cut list, is how a temper comes back for an event.
 SHUT_SAYS = ('Tempering is not done here. A piece is mended with a repair kit: '
              'with one in your pack, your inventory names the key that mends a piece.')
