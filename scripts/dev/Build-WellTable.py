@@ -151,17 +151,13 @@ def main():
     # Two passes, as the door table: the bases first, then the placements.
     bases, seen, placed = {}, {}, {}
     for name in order:
-        pl = dt.Plugin(own_plugins.plugin_path(args.data, name), name)
-        if pl.ok:
-            walk(pl, bases, seen, {})
+        walk(dt.Plugin(own_plugins.plugin_path(args.data, name), name), bases, seen, {})
     lost = sorted(set(WELLS) - set(seen))
     if lost:
         print('STOP. well base(s) not in the load order: %s' % ', '.join(lost))
         return 1
     for name in order:
-        pl = dt.Plugin(own_plugins.plugin_path(args.data, name), name)
-        if pl.ok:
-            walk(pl, bases, {}, placed)
+        walk(dt.Plugin(own_plugins.plugin_path(args.data, name), name), bases, {}, placed)
 
     rows = []
     for d in sorted(placed):
@@ -194,4 +190,9 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except own_plugins.Unreadable as exc:
+        # Every plugin is read before anything is written.
+        print('STOP. %s. Nothing was written.' % exc)
+        sys.exit(1)
