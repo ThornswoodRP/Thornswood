@@ -920,6 +920,29 @@ if (AGE_PATHS[here] && !ageOk()) {
   });
 }
 
+// ==== thornswood lore pick ====
+/* The lore line under The World, picked again in the browser (#5978). The
+   site picks one each time it serves a page (#3147), but Cloudflare keeps the
+   public pages for five minutes (#5190), so everybody got the same line until
+   the copy ran out. /api/public hands out every line, so the pick is made
+   here, once a page load; the server's pick stays for a page whose script
+   never runs. The quote is under the fold, so the swap is not seen. */
+function pickLoreLine(lore, pick) {
+  var q = document.getElementById('loreLine');
+  var list = Array.isArray(lore) ? lore : [];
+  if (!q || !list.length) return;
+  var one = list[Math.min(list.length - 1, Math.floor(pick * list.length))];
+  if (!one || !one.text) return;
+  q.textContent = String(one.text);
+  if (one.from) {
+    var c = document.createElement('cite');
+    c.textContent = String(one.from);
+    q.appendChild(c);
+  }
+  q.hidden = false;
+}
+// ==== end thornswood lore pick ====
+
 /* The line under the title and the figure beside it: whether the world is
    up and who is in it, from /api/public. */
 function paintStatus(d) {
@@ -1015,6 +1038,7 @@ publicData()
     }
 
     paintStatus(d);
+    pickLoreLine(d.lines && d.lines.lore, Math.random());
 
     var rel = document.getElementById('releases');
     if (!rel) return;

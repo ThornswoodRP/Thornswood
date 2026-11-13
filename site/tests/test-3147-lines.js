@@ -18,7 +18,8 @@
 //      their markers, read the file and fill home.html's one empty quote.
 //      home.html keeps no lore line of its own. A copy of the site, started
 //      on a spare port, shows a line from the file on the front page and
-//      hands every line out in /api/public.
+//      hands every line out in /api/public. home.js picks again from those
+//      lines on each load, since Cloudflare keeps a page five minutes (#5978).
 //   3. The bot. bot.py keeps none of the lines, starts watch_lines when it
 //      comes up, and reads /api/public's lines. With the Python the bot runs
 //      on (tests\bot-python.js), status_lines turns what the site hands out
@@ -127,6 +128,37 @@ yes('a line is put in as text, not HTML',
     '<blockquote class="chron" id="loreLine">&lt;b&gt;&amp;&lt;/b&gt;<cite>x&quot;y</cite></blockquote>');
 yes('the site fills it on the pages it serves', /html = fillLoreLine\(html, readLines\(\)\.lore, Math\.random\(\)\);/.test(src));
 yes('and hands every line out in /api/public', /lines: readLines\(\)/.test(src));
+
+// The browser picks again (#5978): Cloudflare keeps a public page for five
+// minutes, so the server's pick alone showed everybody one line until then.
+const homeJs = read('site/public/home.js') || '';
+const pickCut = /\/\/ ==== thornswood lore pick ====([\s\S]*?)\/\/ ==== end thornswood lore pick ====/.exec(homeJs);
+yes('home.js has the lore pick between its markers', !!pickCut);
+function fakeQuote() {
+  const q = { hidden: true, textContent: '', kids: [],
+              appendChild(c) { this.kids.push(c); } };
+  const doc = { getElementById: (id) => (id === 'loreLine' ? q : null),
+                createElement: () => ({ textContent: '' }) };
+  return { q, doc };
+}
+const pickLore = (doc) => pickCut
+  ? new Function('document', pickCut[1] + '\nreturn pickLoreLine;')(doc)
+  : () => {};
+{
+  const { q, doc } = fakeQuote();
+  pickLore(doc)(parsed.lore, 0.9999);
+  yes('pickLoreLine shows the picked line with its source, as text',
+      q.hidden === false && q.textContent === last.text &&
+      q.kids.length === 1 && q.kids[0].textContent === last.from);
+}
+{
+  const { q, doc } = fakeQuote();
+  pickLore(doc)([], 0.5);
+  pickLore(doc)(undefined, 0.5);
+  yes('no lines handed out: the server\'s pick is left as it is', q.hidden === true && q.textContent === '');
+}
+yes('home.js picks from /api/public\'s lines on every load',
+    /pickLoreLine\(d\.lines && d\.lines\.lore, Math\.random\(\)\);/.test(homeJs));
 
 // ------------------------------------------------------------- the bot --
 const bot = require('../../tests/bot-files').source().replace(/\r\n/g, '\n');
