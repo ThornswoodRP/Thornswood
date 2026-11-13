@@ -84,6 +84,10 @@ const files = {
       file_name: 'Thornswood Content 192001 1.2 2026-09-26T22-15Z EwgfAezil.zip' }] },
   'file-hair': { id: 'file-hair', name: 'KS Hairdos Lite SE NoNPCs', mod: '1932', versions: [
     { id: 'ver-8662', game_scoped_id: '8662', name: 'KS Hairdos Lite SE NoNPCs', version: '1.3', category: 'optional', uploaded_at: '2016-11-17T08:37:45Z', is_primary: false, position: '1' }] },
+  // The test collection's hashed mod, which -Remove takes out: only its v1
+  // file record is read, for its file name on Nexus (#4191).
+  'file-hashed': { id: 'file-hashed', name: 'Hashed', mod: '1111', versions: [
+    { id: 'ver-2222', game_scoped_id: '2222', name: 'Hashed', version: '2.0', category: 'main', uploaded_at: '2026-01-01T00:00:00Z', is_primary: true, position: '1' }] },
 };
 let nextFileId = 812345;
 const collection = { id: 515846, slug: '7essxf', name: 'Thornswood', latest: 2, draft: null,
