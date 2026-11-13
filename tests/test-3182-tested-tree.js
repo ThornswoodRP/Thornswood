@@ -398,7 +398,8 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
     'scripts/dev/Launcher-Reach.ps1': 'the pick\'s path rule (#5292): the event chooses only whether the launcher job builds, and a pull request build that built nothing keeps no note, so main builds',
     'tests/test-5292-path-rule.ps1': 'sets those names for Launcher-Reach.ps1 in scratch processes, to hold what it says on each event',
     'tests/test-5179-merge-release.ps1': 'sets GITHUB_SHA for merge-release.yml\'s notes step, run in a scratch process over a stand-in; merge-release.yml runs on main after a merge and is no check of a build (#5179)',
-    'scripts/ops/Box-Step.js': 'box-step.yml\'s issue event: which issue was opened, edited or closed (#5611); it runs on issues and a schedule, never in a check of a build'
+    'scripts/ops/Box-Step.js': 'box-step.yml\'s issue event: which issue was opened, edited or closed (#5611); it runs on issues and a schedule, never in a check of a build',
+    'tests/pr-read-cases.py': 'sets GITHUB_EVENT_NAME and GITHUB_RUN_ATTEMPT for bot/pr_tasks.py in its own process, over a stand-in GitHub, to hold where test-tasks.yml reads the body from on each event (#5900); test-tasks.yml is no check of a build'
   };
   const ENVREAD = /\b(GITHUB_(EVENT_NAME|EVENT_PATH|REF|REF_NAME|REF_TYPE|SHA|HEAD_REF|BASE_REF|RUN_ID|RUN_NUMBER|ACTOR))\b/;
   const found = [];
