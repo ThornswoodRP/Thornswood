@@ -151,7 +151,7 @@ apart, and a token signed in the harness then can read as minted before the
 service started, which it refuses (#1867).
 `node voice\tests\test-auth.js` and the rest.
 
-## Chat files and quiet connections
+### Chat files and quiet connections
 
 | Setting | Default | What it controls |
 | --- | --- | --- |
@@ -165,7 +165,7 @@ hourly sweep. The service's local `/health` gives the days in use in
 `chatRetention.days`. The folder and keeping time apply to chat logs, not
 audio: audio is never recorded here.
 
-## Relay settings
+### Relay settings
 
 A TURN relay, for the pairs of people who cannot reach each other directly,
 is `THORNSWOOD_TURN_URL`. Its key is `THORNSWOOD_TURN_SECRET` or, so it stays
