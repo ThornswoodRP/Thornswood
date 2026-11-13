@@ -1015,7 +1015,7 @@ async function handle(req, res) {
     let o;
     try { o = JSON.parse(await body(req, 40000)); }
     catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
-    if (!sameSecret(String(o.key || ''), String(cfg.botKey))) {
+    if (!sameSecret(o.key, String(cfg.botKey))) {
       return sendJson(res, 401, { error: 'no' });
     }
     const title = String(o.title || '').trim().slice(0, 200);
@@ -2414,7 +2414,7 @@ async function handle(req, res) {
     if (!cfg.botKey) return sendJson(res, 404, { error: 'not set up' });
     let o = {};
     try { o = JSON.parse(await body(req, 4 * 1024 * 1024)) || {}; } catch (e) { passBodyFailure(e); }
-    if (!sameSecret(String(o.key || ''), String(cfg.botKey))) return sendJson(res, 401, { error: 'no' });
+    if (!sameSecret(o.key, String(cfg.botKey))) return sendJson(res, 401, { error: 'no' });
     const who = (o.who && typeof o.who === 'object') ? o.who : {};
     const store = jsonFile(ROSTER, { who: {} });
     if (!store.who || typeof store.who !== 'object') store.who = {};
@@ -2493,7 +2493,7 @@ async function handle(req, res) {
     if (!cfg.botKey) return sendJson(res, 404, { error: 'not set up' });
     let o = {};
     try { o = JSON.parse(await body(req, 4 * 1024 * 1024)) || {}; } catch (e) { passBodyFailure(e); }
-    if (!sameSecret(String(o.key || ''), String(cfg.botKey))) return sendJson(res, 401, { error: 'no' });
+    if (!sameSecret(o.key, String(cfg.botKey))) return sendJson(res, 401, { error: 'no' });
     const srv = (String(o.server || '') === 'dev' || route.indexOf('/dev/') === 0) ? 'dev' : 'main';
     const now = Date.now();
     const kept = cleanEconomy(Object.assign({}, o, { at: now }), now);
