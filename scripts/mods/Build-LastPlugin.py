@@ -301,9 +301,12 @@ Usage:
     python scripts/mods/Build-LastPlugin.py --verify
     python scripts/mods/Build-LastPlugin.py --data C:\\Thornswood\\Game\\Data
 
---check builds it in memory and says whether the committed recipe and manifest
-are what it builds (the recipe names the plugin's size and sha256, so it pins
-the plugin too). --verify makes the plugin from the committed recipe out of
+--check builds it in memory and says whether the committed recipe is what it
+builds, byte for byte (the recipe names the plugin's size and sha256, so it
+pins the plugin too), whether game/data/last-plugin.json says what it builds
+(compared by what it says, not as bytes), and whether the gamemode's
+HELD_BY_SERVER and RECIPES_MOVED_IN_GAME tables are what it builds; it exits
+1 when any of them is not. --verify makes the plugin from the committed recipe out of
 --data, reads the load order with it at its end and checks, record by record,
 that no cut actor and no floor item is left able to show and no cut quest is
 left able to start, and lists the gate, door and arrival talk with what stops

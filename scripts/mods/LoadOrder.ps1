@@ -2,8 +2,11 @@
   LoadOrder.ps1
 
   The load order as the game counts it, and how to put a plugin list into the
-  server's order. Dot-sourced by Publish-Update.ps1, so the reference plugin
-  list that goes into a pack ships in the order the server actually runs.
+  server's order. Dot-sourced by Check-CleanInstall.ps1, Check-CollectionRules.ps1
+  and Check-Manifest.ps1 in scripts\mods, and by Check-ShipReady.ps1,
+  Publish-Update.ps1, Scrub-Feed.ps1 and Ship.ps1 in scripts\release; for
+  Publish-Update.ps1, so the reference plugin list that goes into a pack ships
+  in the order the server actually runs.
 
   The same rule as launcher\app\LoadOrder.cs in the launcher, function for
   function, and the two are held to identical output by a test. Change one,

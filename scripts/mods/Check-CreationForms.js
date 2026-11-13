@@ -4,6 +4,9 @@
 //     node scripts\mods\Check-CreationForms.js --data <a Data folder> --plugins <its plugins.txt>
 //     node scripts\mods\Check-CreationForms.js --write records\update-creation-club.json
 //
+// With no --plugins it reads C:\Thornswood\Profile\LocalAppData\plugins.txt,
+// whatever --data is.
+//
 // Does anything in the load order, or anything the gamemode hands out, need
 // Creation Club content that plain Special Edition does not load? Exit 0 when
 // nothing does, 1 when something does, and 0 with a SKIP on a machine with no

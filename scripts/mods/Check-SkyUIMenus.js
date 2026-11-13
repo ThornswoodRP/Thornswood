@@ -5,6 +5,9 @@
 //     node scripts\mods\Check-SkyUIMenus.js ... --gone "Data\Scripts\a.pex;Data\Interface\b.swf" --quiet
 //     node scripts\mods\Check-SkyUIMenus.js --holding <archive.bsa> ...
 //
+// With no --plugins it reads Profile\OwnGame\plugins.txt of the install --data
+// is in (two folders up from Data).
+//
 // Says whether SkyUI's menu files carry the version SkyUI's own script expects,
 // and exits 2 when one does not. Ship.ps1 runs it before a release.
 //
