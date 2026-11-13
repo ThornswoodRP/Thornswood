@@ -212,7 +212,7 @@ const gate = {};
 Object.keys(ids).forEach(function (e) {
   const k = ids[e];
   if (BLOCK && BLOCK[k]) { gate[e] = BLOCK[k]; return; }
-  const m = new RegExp("RECIPES_BY_ID\\['" + k.replace(/[.]/g, "\\.") + "'\\] = (\\{[^\\n]*\\});").exec(gm);
+  const m = new RegExp("RECIPES_BY_ID\\['" + k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "'\\] = (\\{[^\\n]*\\});").exec(gm);
   if (m) { try { gate[e] = new Function("return " + m[1])(); } catch (err) { gate[e] = null; } }
 });
 yes("the gate asks the Woodwright for each at the rank RECIPE_RANK names", Object.keys(ids).every(function (e) {
@@ -256,7 +256,7 @@ const injury = read("docs/systems/injury.md");
 const TREAT = { "Bandage": "ThornswoodRecipeBandage", "Splint": "ThornswoodRecipeSplint",
                 "Poultice": "ThornswoodRecipePoultice", "Physicker's Remedy": "ThornswoodRecipeRemedy" };
 Object.keys(TREAT).forEach(function (name) {
-  const m = new RegExp("^\\| " + name.replace(/[.']/g, "\\$&") + " \\| [^|]+ \\| [^|]+ \\| (\\w+), (\\w+), (novice|advanced|expert|master) \\|$", "m").exec(injury);
+  const m = new RegExp("^\\| " + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + " \\| [^|]+ \\| [^|]+ \\| (\\w+), (\\w+), (novice|advanced|expert|master) \\|$", "m").exec(injury);
   const r = rowOf(TREAT[name]);
   yes(name + " is " + (m ? m[1] + "/" + m[2] + " " + m[3] : "?") + " as the injury page says, in recipes.json and in the block",
     !!m && !!r && r.row.owner === m[1] && r.row.half === m[2] && r.row.rank === m[3] && r.row.fires === true &&
