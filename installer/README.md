@@ -55,6 +55,46 @@ machine. A launcher that finds its install folder recorded never shows the
 install window again; a stopped install records nothing, so the next start
 asks again.
 
+## The installer's tests
+
+Every test that reads, builds or runs the install's own files
+(`launcher\app\Install*.cs`) or this read me, what it holds, and which
+workflow runs it (#4186). A `.js` or `.ps1` is on the pull request gate
+unless `tests\gate-excluded.txt` names it, and the nightly runs every one; on
+a pull request the gate runs the ones its change can reach, and on main all of
+them. A `.py` runs only where a workflow names it. `tests\test-4186-installer-tests.js`
+reads those files and fails when this table leaves a test out, names one that
+is gone, or says another workflow than they give.
+
+| Test | What it holds | Runs on |
+|---|---|---|
+| `launcher/tests/test-2771-text-contrast.js` | The install window takes every colour from the Forge theme before it builds a control, and the lines InstallPlace.cs colours meet the contrast the launcher is held to | Pull request and nightly |
+| `launcher/tests/test-downgrade-copy-order.js` | A Skyrim on the wrong build is not a failed install: InstallSteps counts it as next and sends the person to the launcher's Downgrade button | Nightly only |
+| `launcher/tests/test-move.ps1` | The new launcher takes an older launcher's handover (InstallPlace.TakeHandover) only on its first start after Velopack's setup, before the install window would ask | Pull request and nightly |
+| `launcher/tests/test-own-folder-first.ps1` | Runs the real InstallSteps on a pretend Steam copy and package: with the own folder chosen nothing is written into the Steam copy and the files wait in `Profile\Payload`; not chosen, they go into the Steam copy with their list | Pull request and nightly |
+| `launcher/tests/test-prior-acceptance.ps1` | The terms, privacy policy and rules are asked again of an install made before they were recorded, with the pages and words InstallAgreements.cs and the install window use | Pull request and nightly |
+| `launcher/tests/test-skyrim-pin.ps1` | The install reads the size of the server's SkyrimSE.exe from `records\skyrim-files.json`, the record the launcher's checks use, and keeps no copy | Pull request and nightly |
+| `test-4186-installer-tests.js` | This table: every installer test is in it, and each row's workflow is the one the gate's list and the workflows give | Pull request and nightly |
+| `test-4395-own-folder-words.js` | The own folder card in the install window, InstallPlace.cs and this read me say the same about where Thornswood's files go, ticked and unticked | Pull request and nightly |
+| `test-4824-install.py` | Builds the install steps with the .NET SDK and runs them against stand-in folders in every shape, and holds the window and the agreements to their rules. Run it by hand for now: no workflow runs it (#5840) | No workflow |
+| `test-component-readmes.js` | This read me matches what is here: only `licences\` and this file in `installer\`, the join guide named, and the folder InstallPlace.cs falls back to | Pull request and nightly |
+| `test-repo-docs.js` | This read me says what a person reads before installing is the join guide on the site, and `READ ME FIRST.txt` stays gone | Nightly only |
+| `test-shortcut-icons.ps1` | Builds Icons.cs with InstallShortcut.cs: the shortcuts' icon file is named after the exe's own art and kept, so the desktop and Start menu shortcuts keep their icons | Pull request and nightly |
+| `test-source-notice.ps1` | The source notice the install hands over: `SOURCE CODE.txt`, and the GPL and AGPL texts byte for byte from `licences\`, as InstallSteps.cs copies them | Nightly only |
+| `test-source-offer.ps1` | InstallSteps.cs copies `SOURCE CODE.txt` and the GPL, AGPL and voice library texts and replaces `licences\` whole, and Build-SetupFiles.ps1 packs the names InstallSteps.LicenceFiles lists | Nightly only |
+| `test-third-party.js` | InstallSteps.LicenceFiles names every text in `licences\` and nothing else, Build-SetupFiles.ps1 packs them, and Uninstall.cs removes them | Pull request and nightly |
+| `test-voice-hrtf.js` | The voice's two HRTF licence texts are in `licences\` and on InstallSteps.LicenceFiles | Pull request and nightly |
+
+### Named here, not installer tests
+
+These name an install file or this read me without testing the install.
+
+- `test-3003-one-install-rule.ps1`: names InstallPlace.cs in its header, to say a new install's folder is the launcher's choice and no script's.
+- `test-4115-collection-revision-link.ps1`: names this read me in a comment.
+- `test-4329-accessible-names.ps1`: names InstallWindow.cs to leave it out of what it reads.
+- `test-check-words.ps1`: writes a stand-in `installer/README.md` in its own scratch folder and never reads this one.
+
+
 ## Why the install is in the launcher
 
 One program and one install path. Velopack's Setup.exe has nothing to run but
