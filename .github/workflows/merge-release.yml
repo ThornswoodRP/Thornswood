@@ -169,19 +169,26 @@ on:
 permissions:
   contents: read
 
-# THE NEWEST MERGE. The newest merge is the one released (#5398). GitHub
-# refuses the run's own token any tag on a commit whose workflow files
-# differ from main's (it asks for workflows: write, which that token can
-# never hold), so a merge main
-# has moved past with a workflow change can never be tagged. A newer merge
-# cancels the run of the one before it, and its Release carries every part
-# and the notes of every pull request since the Release before, so nothing
-# a superseded merge changed is left out. A merge this workflow does not run
-# for cancels nothing, so a run that main moved past that way starts a run of
-# main's newest merge itself (Is this still main's newest merge).
+# ONE AT A TIME, NEVER CANCELLED (#6008). A run that has started runs to
+# its end; a newer merge waits, and GitHub keeps only the newest one waiting,
+# so the merge released next is the newest. Until 13 Nov a newer merge
+# cancelled the run in progress (#5398). A release takes about 10 minutes, and
+# once the org had 60 runners merges landed about every 5, so all 22 runs
+# from 22:00 UTC on 12 Nov to 00:42 UTC on 13 Nov were cancelled and dev got
+# no build for two and a half hours.
+#
+# WHICH MERGE IS TAGGED. GitHub refuses the run's own token any tag on a
+# commit whose workflow files differ from main's (it asks for workflows:
+# write, which that token can never hold; probe runs on #5398). So a merge
+# main has moved past is released when its workflow files are still main's,
+# and its Release carries every part and the notes of every pull request
+# since the Release before; the run waiting for main's newest merge releases
+# the rest after it. When they differ, nothing is released here and a run of
+# main's newest merge is started, which carries this one's changes (Is this
+# a merge that can still be tagged).
 concurrency:
   group: merge-release
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   QUIET_NOTE: 'Various bug fixes and improvements'
@@ -206,7 +213,8 @@ jobs:
       # Main's launcher package, kept on GitHub Packages (MAIN'S PACKAGE).
       packages: write
       # To start a run of main's newest merge when main moved on during
-      # this one (Is this still main's newest merge).
+      # this one with other workflow files (Is this a merge that can still
+      # be tagged).
       actions: write
     steps:
       # The whole history: the launcher's number is the time its sources last
@@ -719,16 +727,17 @@ jobs:
         with:
           subject-path: ${{ steps.files.outputs.held_subjects }}
 
-      # Main may have moved on while this was built. A newer merge that this
-      # workflow runs for would have cancelled this run (concurrency, above),
-      # so getting here past main means the merges after it touched none of
-      # the paths above and start no run of their own. Until 2 Nov this step
-      # said a newer run would release the change anyway, and none did: the
-      # site fix #5451 (ed6dfc99) was built, then dropped, because a voice
-      # harness and a docs page merged during its build. So it asks for a
-      # run of main's newest merge now, which carries this one's changes,
-      # and that run is the one released (#5398, Patrick's A).
-      - name: Is this still main's newest merge
+      # Main may have moved on while this was built. A merge whose workflow
+      # files are still main's is tagged and released as it is (the header,
+      # WHICH MERGE IS TAGGED): the merges after it that this workflow runs
+      # for are waiting for this run and are released next, and those it
+      # does not run for change nothing it ships. A merge whose workflow files
+      # main has changed cannot be tagged, so it asks for a run of main's
+      # newest merge, which carries this one's changes. Until 2 Nov nothing
+      # asked, and the site fix #5451 (ed6dfc99) was built and then dropped
+      # because a voice harness and a docs page merged during its build
+      # (#5398).
+      - name: Is this a merge that can still be tagged
         id: newest
         if: ${{ steps.changed.outputs.release == 'yes' }}
         shell: pwsh
@@ -738,10 +747,20 @@ jobs:
           $head = gh api "repos/$($env:GITHUB_REPOSITORY)/commits/main" --jq .sha
           if ($LASTEXITCODE -ne 0 -or -not $head) { Write-Host '::error::GitHub did not say what main is'; exit 1 }
           if ([string]$head -eq $env:GITHUB_SHA) { Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'release=yes'; exit 0 }
+          # The files that differ between this merge and main. GitHub lists at
+          # most 300, so a list that long is taken as "workflows may differ".
+          $files = @(gh api "repos/$($env:GITHUB_REPOSITORY)/compare/$($env:GITHUB_SHA)...$head" --jq '.files[].filename')
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::GitHub did not say what changed between this merge and main ($head)"; exit 1 }
+          $flows = @($files | Where-Object { $_ -like '.github/workflows/*' })
+          if ($files.Count -lt 300 -and -not $flows.Count) {
+            Write-Host "main is $head now, past this merge, with the same workflow files, so this merge is released and main's newest merge comes after it"
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'release=yes'
+            exit 0
+          }
           gh workflow run merge-release.yml --repo $env:GITHUB_REPOSITORY --ref main
-          if ($LASTEXITCODE -ne 0) { Write-Host "::error::main is $head now, past this merge, and the run that releases it could not be started"; exit 1 }
-          Write-Host "main is $head now, past this merge; a run of main's newest merge was started, and it releases this one's changes"
-          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Main moved on to $head while this was built, so a run of main's newest merge was started to release these changes; nothing was released here."
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::main is $head now, past this merge with other workflow files, and the run that releases it could not be started"; exit 1 }
+          Write-Host ("main is $head now, past this merge, and its workflow files differ (" + ($(if ($flows.Count) { $flows -join ', ' } else { 'over 300 files differ' })) + "), so this merge cannot be tagged; a run of main's newest merge was started, and it releases this one's changes")
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Main moved on to $head with other workflow files while this was built, so a run of main's newest merge was started to release these changes; nothing was released here."
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'release=no'
 
       - name: Publish the Release

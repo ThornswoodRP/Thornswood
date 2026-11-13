@@ -466,22 +466,28 @@ try {
     Yes ('  and for the scripts it runs that decide what is built' + $(if ($self) { ': not ' + ($self -join ', ') } else { '' })) (-not $self)
     Yes '  and for a new step after a deploy, carried as the part after with the gate''s verbs (#5186)' ($wf -match "(?m)^\s+- 'deploy/after/\*\.json'\s*$" -and
         $wf.Contains("Get-ChildItem -LiteralPath 'deploy\after' -Filter '*.json'") -and $wf.Contains("'after=' + (Resolve-Path 'scripts\vps\gate\verbs.json').Path"))
-    Yes '  in the release environment, on main only, one run at a time, a newer merge cancelling the run before (#5398)' ($wf -match '(?m)^\s+environment: release\s*$' -and $wf.Contains("if: `${{ github.ref == 'refs/heads/main' }}") -and $wf -match '(?m)^\s+group: merge-release\s*$' -and $wf -match '(?m)^\s+cancel-in-progress: true\s*$')
+    # A run in progress is never cancelled (#6008): with merges landing every
+    # 5 minutes and a release taking 10, cancelling meant no release at all
+    # (22 runs cancelled in a row on 12 Nov). GitHub keeps the newest waiting.
+    Yes '  in the release environment, on main only, one run at a time, a newer merge waiting for the run in progress (#6008)' ($wf -match '(?m)^\s+environment: release\s*$' -and $wf.Contains("if: `${{ github.ref == 'refs/heads/main' }}") -and $wf -match '(?m)^\s+group: merge-release\s*$' -and $wf -match '(?m)^\s+cancel-in-progress: false\s*$')
     # GitHub refuses the run's token a tag on a commit whose workflow files
     # differ from main's (probe runs 41375894899 and 41376016183, #5398), so
-    # only main's newest merge is published; the newer run carries the rest.
-    $newestAt = $wf.IndexOf('- name: Is this still main''s newest merge'); $publishAt = $wf.IndexOf('- name: Publish the Release')
+    # a merge main has moved past is published only when its workflow files
+    # are still main's; otherwise the run of main's newest merge carries it.
+    $newestAt = $wf.IndexOf('- name: Is this a merge that can still be tagged'); $publishAt = $wf.IndexOf('- name: Publish the Release')
     # Five steps wait on it: the Release, main's held package and its tag
     # (kept and made only for a Release that is out), and the two
     # Deployments.
-    Yes 'a merge main has moved past publishes nothing and keeps no main package' ($newestAt -gt 0 -and $publishAt -gt $newestAt -and
+    $newestStep = if ($newestAt -gt 0 -and $publishAt -gt $newestAt) { $wf.Substring($newestAt, $publishAt - $newestAt) } else { '' }
+    Yes 'main''s newest merge is published' ($newestAt -gt 0 -and $publishAt -gt $newestAt -and
         $wf.Contains('gh api "repos/$($env:GITHUB_REPOSITORY)/commits/main" --jq .sha') -and $wf.Contains("if ([string]`$head -eq `$env:GITHUB_SHA) { Add-Content -LiteralPath `$env:GITHUB_OUTPUT -Value 'release=yes'; exit 0 }") -and
         ([regex]::Matches($wf, [regex]::Escape("if: `${{ steps.newest.outputs.release == 'yes'"))).Count -eq 5)
+    Yes '  and so is a merge main moved past, only when no workflow file differs between it and main, and fewer than 300 files do' ($newestStep.Contains('compare/$($env:GITHUB_SHA)...$head') -and
+        $newestStep.Contains("Where-Object { `$_ -like '.github/workflows/*' }") -and $newestStep.Contains('if ($files.Count -lt 300 -and -not $flows.Count) {'))
     # A merge outside the paths above starts no run, so it cancels nothing and
     # releases nothing: the site fix #5451 was built and dropped that way on
     # 2 Nov. The run main moved past starts one of main's newest merge, and
     # fails when it cannot, rather than leave the change unreleased.
-    $newestStep = if ($newestAt -gt 0) { $wf.Substring($newestAt, $publishAt - $newestAt) } else { '' }
     Yes '  and starts a run of main''s newest merge, which releases its changes, or fails' ($newestStep.Contains('gh workflow run merge-release.yml --repo $env:GITHUB_REPOSITORY --ref main') -and
         $newestStep -match 'if \(\$LASTEXITCODE -ne 0\) \{ Write-Host "::error::[^"]*"; exit 1 \}' -and
         $wf -match '(?m)^\s+actions: write\s*$' -and $wf -match '(?m)^  workflow_dispatch:\s*$')
