@@ -378,7 +378,7 @@ attempt('Write a letter', function () {
   const longest = ('/letter "' + 'x'.repeat(60) + '" ' + 'y'.repeat(300)).length;
   const cap = Number((/const COMMAND_CHARS = (\d+);/.exec(voice) || [])[1]);
   yes('B4 the longest line the form can send fits what the chat socket carries for a command (' + cap + ')',
-      /String\(msg\.text == null \? '' : msg\.text\)\.slice\(0, COMMAND_CHARS\)/.test(voice) && longest <= 400 && cap >= 400);
+      /pageText\(msg\.text\)\.slice\(0, COMMAND_CHARS\)/.test(voice) && longest <= 400 && cap >= 400);
   // Run the branch: what it sends for a name with quotes and spaces in it.
   if (branch) {
     const sent = [];

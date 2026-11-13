@@ -207,7 +207,7 @@ async function plainComesBack(me, words) {
 
     // ------------------------------------------------------------------ E --
     console.log('\nE. a fault in handling one message costs one socket:');
-    const src = fs.readFileSync(VOICE, 'utf8');
+    const src = fs.readFileSync(VOICE, 'utf8').replace(/\r\n/g, '\n');
     const feed = (/\n  feed\(chunk\) \{[\s\S]*?\n  \}\n/.exec(src) || [''])[0];
     const hand = (/try \{\s*this\.onmessage\(msg\);?\s*\} catch \((\w+)\) \{([\s\S]*?)\n\s*\}/.exec(feed)) || null;
     yes('Sock.feed hands each message to onmessage inside a try', !!hand, feed.slice(-600));
