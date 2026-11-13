@@ -757,6 +757,10 @@ issue where the card did.
   which carries only three load-after rules that hold the servers' order.**
   (dec__Ek_LSW4kO5MEGG2lIOIWg) 12 Nov 2026,
   [#4728](https://github.com/ThornswoodRP/Thornswood/issues/4728#issuecomment-6830945384).
+- **#6007 stays merged as 4b86964, though it merged before its card was
+  answered: a moved or added collection entry is checked against the rest of
+  the revision.** (dec_BtxAK7ZxWgqHFvPaheYEFQ) 12 Nov 2026,
+  [#4200](https://github.com/ThornswoodRP/Thornswood/issues/4200#issuecomment-6840852921).
 
 ### The launcher and updates
 
