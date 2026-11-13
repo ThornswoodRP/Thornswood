@@ -291,12 +291,21 @@ a copy of dev that nobody plays on:
    the face), **face** (a face is sent and creation moves on to choosing a
    home), **home** (a home picked over the relay, as the K panel picks one,
    ends creation, and the welcome comes back over the relay), **needs**
-   (`/needs` over the relay is answered with the needs line), **saved**
+   (`/needs` over the relay is answered with the needs line), **claim**
+   (the bot presses E on Whiterun Stables' door near the start spot, the
+   door offers Claim and takes it inside, and Claim over the relay is
+   answered, puts the deed in its pack and the claim in the copy's
+   `private\property.json`), **keys** (the master key came with the deed,
+   and Lock at the door's inside half is answered, written to the register
+   and turns the door's offer to Unlock), **saved**
    (the world on disk holds the character by name), **restart**
-   (the copy is stopped and started again and loads again) and **loads
+   (the copy is stopped and started again and loads again), **loads
    back** (a second bot logs in as the same profile and gets the same
-   character, where it was saved, with no race menu). A FAIL at new, face,
+   character, where it was saved, with no race menu) and **kept** (the
+   stables' door still offers it Unlock, so the claim and its lock came
+   back with the restart). A FAIL at new, face,
    home or saved ends with what the gamemode's creation said about the bot,
+   one at claim, keys or kept with the property block's last lines,
    and one at relay with what the gamemode said of the pass and the voice
    service's last lines (its log is `run\voice\bot-pass-voice.log`).
 5. Every line goes in the Deployment's log. All PASS and the gamemode goes

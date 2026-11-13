@@ -12,16 +12,18 @@
 // This proves:
 //
 //   1. the committed plugin's description is the one the tool builds from its
-//      records (the tool's --check has nothing to write), it fits the 512
+//      records, it fits the 512
 //      bytes the format gives it, and it names no skill manual;
 //   2. every record of the committed plugin is named by a row, and every row
 //      with words that names a record puts its words in the description;
 //   3. a row whose records have all left drops out of the description by
 //      itself, and a kind of record no row names comes back unnamed;
-//   4. the tool, given a copy of the plugin with a kind of record no row
-//      names, stops, says which record, and writes nothing.
+//   4. the header the tool writes (#5191: it writes the whole plugin from
+//      its sources) is the committed header byte for byte, given its
+//      records; and with no game to copy from, the tool writes nothing.
 //
-// Copies go to a temporary folder (TEST_TMP if set) and are removed.
+// The tool's output goes to a temporary folder (TEST_TMP if set) and is
+// removed.
 
 const fs = require('fs');
 const os = require('os');
@@ -144,39 +146,34 @@ if (answer) {
       manual.unnamed.length === 1 && manual.unnamed[0] === 'BOOK ThornswoodSkillManualAlchemy');
 }
 
-// ------------------------------------------------------- 4. the tool, run --
-function withRecord(tag, fid, subs) {
-  const body = Buffer.concat(subs.map(([t, s]) => {
-    const v = Buffer.from(s + '\0', 'latin1');
-    const h = Buffer.alloc(6); h.write(t, 0, 'latin1'); h.writeUInt16LE(v.length, 4);
-    return Buffer.concat([h, v]);
-  }));
-  const rh = Buffer.alloc(24);
-  rh.write(tag, 0, 'latin1'); rh.writeUInt32LE(body.length, 4); rh.writeUInt32LE(fid >>> 0, 12); rh.writeUInt16LE(44, 20);
-  const gh = Buffer.alloc(24);
-  gh.write('GRUP', 0, 'latin1'); gh.writeUInt32LE(24 + 24 + body.length, 4); gh.write(tag, 8, 'latin1');
-  return Buffer.concat([shipped, gh, rh, body]);
-}
-const tmpRoot = process.env.TEST_TMP || os.tmpdir();
-fs.mkdirSync(tmpRoot, { recursive: true });
-const dir = fs.mkdtempSync(path.join(tmpRoot, 'ts-2993-'));
+// ------------------------------------------- 4. the header the tool writes --
+// The tool writes the plugin from nothing (#5191): its header is the
+// description description_of builds, around the plugin's count, author and
+// masters. Given the committed records' description and count, it has to be
+// the committed header byte for byte.
+const HEAD = [
+  'import importlib.util, struct, sys',
+  'spec = importlib.util.spec_from_file_location("acr", sys.argv[1])',
+  'acr = importlib.util.module_from_spec(spec); spec.loader.exec_module(acr)',
+  'raw = open(sys.argv[2], "rb").read()',
+  'hs = struct.unpack_from("<I", raw, 4)[0]',
+  'count = struct.unpack_from("<i", raw, 24 + 6 + 4)[0]',
+  'keys = [r.tag.decode() + " " + r.editor_id() for r in acr.every_record(acr.parse(raw, 24 + hs, len(raw)))]',
+  'text, unnamed = acr.description_of(keys)',
+  'print("same" if acr.header(text, count) == raw[:24 + hs] and not unnamed else "differs")',
+].join('\n');
+const head = python(['-I', '-c', HEAD, TOOL, ESP]);
+if (head && head.status !== 0) { console.log(head.stdout + head.stderr); }
+yes('4 the header the tool writes around that description is the committed header, byte for byte',
+    !!head && head.status === 0 && head.stdout.trim() === 'same');
+const noGame = fs.mkdtempSync(path.join(process.env.TEST_TMP || os.tmpdir(), 'ts-2993-'));
 try {
-  const noGame = path.join(dir, 'no-game');
-  fs.mkdirSync(noGame);
-  const copy = path.join(dir, 'Thornswood-Content.esp');
-  const check = python([TOOL, '--data', path.dirname(ESP), '--masters', noGame, '--check']);
-  yes('4 the tool\'s --check on the committed plugin leaves the description as it is',
-      !!check && check.status === 0 && /its description already reads as this tool writes it/.test(check.stdout));
-  const planted = withRecord('ACTI', 0x050150F0, [['EDID', 'ThornswoodActivatorSkillManual'], ['FULL', 'Skill Manual']]);
-  fs.writeFileSync(copy, planted);
-  const stop = python([TOOL, '--data', dir, '--masters', noGame]);
-  yes('4 a copy with a kind of record no row names: the tool stops',
-      !!stop && stop.status === 1 && /STOP\. 1 record\(s\) the plugin would hold are named by no row of CONTENTS/.test(stop.stdout));
-  yes('4 and says which record', !!stop && /^  ACTI ThornswoodActivatorSkillManual\r?$/m.test(stop.stdout));
-  if (stop && stop.status !== 1) { console.log(stop.stdout + stop.stderr); }
-  yes('4 and writes nothing', fs.readFileSync(copy).equals(planted));
+  const out = path.join(noGame, 'Thornswood-Content.esp');
+  const stop = python([TOOL, '--masters', noGame, '--out', out]);
+  yes('4 with no game to copy from, the tool stops and writes nothing',
+      !!stop && stop.status === 1 && /Nothing was written/.test(stop.stdout) && !fs.existsSync(out));
 } finally {
-  try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
+  try { fs.rmSync(noGame, { recursive: true, force: true }); } catch (e) { }
 }
 
 console.log('');

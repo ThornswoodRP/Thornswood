@@ -290,7 +290,7 @@ $h = @{}; $want = ''
     else {
         $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'; $env:DOTNET_NOLOGO = '1'
         $tests = Join-Path $Repo 'tools\DeployAgent.Tests'
-        $rs = @(& dotnet restore $tests --locked-mode 2>&1 | ForEach-Object { "$_" })
+        $rs = @(& dotnet restore $tests --locked-mode --disable-build-servers 2>&1 | ForEach-Object { "$_" })
         $restored = $LASTEXITCODE -eq 0
         # When it refuses, dotnet's own error lines go in the FAIL lines
         # (#5925): a gate annotation carries a harness's FAIL lines and
@@ -315,7 +315,7 @@ $h = @{}; $want = ''
             $rs | Select-Object -Last 10 | ForEach-Object { Write-Host "  $_" }
         }
         else {
-            $t = & dotnet test $tests --no-restore 2>&1
+            $t = & dotnet test $tests --no-restore --disable-build-servers 2>&1
             Yes 'dotnet test on tools/DeployAgent.Tests' ($LASTEXITCODE -eq 0)
             if ($LASTEXITCODE -ne 0) { $t | Select-Object -Last 30 | ForEach-Object { Write-Host "  $_" } }
         }

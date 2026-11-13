@@ -1,6 +1,15 @@
 <#
   Remove-DeadRecords.ps1
 
+  RETIRED. DO NOT RUN (#4811). It did its one job in September: the sixteen
+  Writs of the old trade system, and with Remove-DeadConditions.py the rank
+  manuals. On 12 November no record in Thornswood-Content.esp matched its
+  default prefix (372 records read, none compressed), nothing called it, and
+  its proof that nothing points at a record read the content plugin alone,
+  though the gamemode keys records by form id and other plugins master this
+  one. It refuses to run, and the rest of the file is kept for the history
+  of how those records went.
+
   Deletes records from Thornswood-Content.esp that nothing uses any more, and
   refuses to delete one that anything still points at.
 
@@ -53,8 +62,8 @@
   downloading it again.
 
   Usage:
-    .\scripts\mods\Remove-DeadRecords.ps1 -Check
-    .\scripts\mods\Remove-DeadRecords.ps1
+    .\scripts\oneoff\Remove-DeadRecords.ps1 -Check
+    .\scripts\oneoff\Remove-DeadRecords.ps1
 
   Exit code 1 if anything points at a candidate, if the parse does not round
   trip, or if the result does not verify.
@@ -69,6 +78,12 @@ param(
     [switch]$Check,
     [switch]$NoPause
 )
+
+# The refusal comes before anything else, so no part of it can run by
+# accident (#4811, as #1179 retired the others in scripts\oneoff).
+throw ('STOP. Remove-DeadRecords.ps1 is retired and changes nothing (#4811). No record in ' +
+       'Thornswood-Content.esp matches its prefixes any more, and its proof that nothing points ' +
+       'at a record read the content plugin alone.')
 
 $ErrorActionPreference = 'Stop'
 

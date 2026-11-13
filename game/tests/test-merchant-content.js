@@ -82,6 +82,7 @@ from pathlib import Path
 spec=importlib.util.spec_from_file_location('quest_content_writer','scripts/mods/Add-ContentRecords.py')
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 good=json.loads(Path('game/data/quest-content.json').read_text(encoding='utf-8'))
+real_load=json.load
 cases=[]
 bad=copy.deepcopy(good);bad['items'].pop();cases.append(bad)
 bad=copy.deepcopy(good);bad['items'][0]['ref']=bad['items'][1]['ref'];cases.append(bad)
@@ -97,15 +98,14 @@ for bad in cases:
  try:m.quest_content()
  except ValueError:pass
  else:raise AssertionError('invalid content declaration accepted')
-m.quest_identity(None,'ThornswoodQuestSatchel')
-record=m.own_record(b'MISC',0x5017000,[(b'EDID',m.zstr('OtherThing'))])
-try:m.quest_identity(record,'ThornswoodQuestSatchel')
-except ValueError:pass
-else:raise AssertionError('an existing record ID was overwritten')
-record=m.own_record(b'REFR',0x5017200,[(b'NAME',b'\0'*4)])
-try:m.quest_identity(record,'ThornswoodQuestSiteLongfin1')
-except ValueError:pass
-else:raise AssertionError('an existing unlabelled placement ID was overwritten')
+# The plugin is written from nothing (#5191): a quest record's form id or
+# editor id taken by another record the tool writes stops the build.
+m.json.load=real_load
+made=m.thornswood_records(m.clam01(),[])
+assert len({r.fid for r in made})==len(made),'two records share a form id'
+assert len({r.editor_id() for r in made})==len(made),'two records share an editor id'
+quest={r.fid for r in m.quest_records()}
+assert quest and quest<={r.fid for r in made},'the quest records are among those the tool writes'
 `;
 const result=spawnSync('python',['-c',code],{cwd:root,encoding:'utf8'});assert.equal(result.status,0,result.stdout+result.stderr);
 console.log('PASS seven inert retrieval tokens, eight distinct longfin markers, dedicated non-skill ledger and exact placement union');

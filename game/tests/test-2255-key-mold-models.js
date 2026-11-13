@@ -11,13 +11,10 @@
   (the Thieves Guild silver mold). The charcoal's MODT goes with its mesh.
 
   This reads the committed plugin with its own reader and proves the two
-  records, then gives the tool a copy whose key and mold are put back on the
-  charcoal mesh (by the tool's own set_model, loaded as a module) and checks
-  the tool's run turns that copy into the committed file byte for byte, and
-  that a second run writes nothing. Copies go to a temp folder (TEST_TMP).
+  records, then loads the tool as a module and checks the two it writes from
+  its own numbers (#5191) are the committed records byte for byte.
 */
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const zlib = require('zlib');
 const { spawnSync } = require('child_process');
@@ -80,37 +77,25 @@ function python(args) {
   }
   return null;
 }
-const tmpRoot = process.env.TEST_TMP || os.tmpdir();
-fs.mkdirSync(tmpRoot, { recursive: true });
-const dir = fs.mkdtempSync(path.join(tmpRoot, 'ts-2255-'));
-const copy = path.join(dir, 'Thornswood-Content.esp');
-try {
-  const revert = python(['-c', [
-    'import importlib.util, struct, sys',
-    'spec = importlib.util.spec_from_file_location("acr", sys.argv[1])',
-    'm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)',
-    'raw = open(sys.argv[2], "rb").read()',
-    'hs = struct.unpack_from("<I", raw, 4)[0]',
-    'tree = m.parse(raw, 24 + hs, len(raw))',
-    'recs = dict((x.fid, x) for x in m.every_record(tree))',
-    'for fid in (0x5015494, 0x5015495): m.set_model(recs[fid], "Clutter\\\\Quest\\\\TG06CharcoalStick.nif")',
-    'open(sys.argv[3], "wb").write(raw[:24 + hs] + b"".join(k.bytes() for k in tree))'
-  ].join('\n'), TOOL, ESP, copy]);
-  yes('T0 python is on this machine and the tool loads as a module', !!revert && revert.status === 0);
-  if (revert && revert.status === 0) {
-    const old = records(fs.readFileSync(copy));
-    yes('T1 the copy is back on the charcoal stick, as the shipped plugin was', /TG06CharcoalStick/.test(z(old[KEY].subs.MODL)) && /TG06CharcoalStick/.test(z(old[MOLD].subs.MODL)));
-    const run = python([TOOL, '--data', dir]);
-    yes('T2 the tool runs over it', !!run && run.status === 0);
-    if (run && run.status !== 0) { console.log(run.stdout + run.stderr); }
-    yes('T3 and says 2 edited, nothing added or taken out', !!run && /0 added, 2 edited, 0 taken out/.test(run.stdout));
-    yes('T4 and its result is the committed plugin byte for byte', fs.readFileSync(copy).equals(esp));
-    const again = python([TOOL, '--data', dir]);
-    yes('T5 a second run writes nothing', !!again && again.status === 0 && /Nothing was written/.test(again.stdout) && fs.readFileSync(copy).equals(esp));
-  }
-} finally {
-  try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
-}
+// The tool writes the key and the mold from its own numbers (#5191):
+// thornswood_records(), loaded as a module, given the clam it keeps and no
+// scrap, has to make the committed two byte for byte.
+const run = python(['-c', [
+  'import importlib.util, struct, sys',
+  'spec = importlib.util.spec_from_file_location("acr", sys.argv[1])',
+  'm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)',
+  'raw = open(sys.argv[2], "rb").read()',
+  'hs = struct.unpack_from("<I", raw, 4)[0]',
+  'have = dict((x.fid, x) for x in m.every_record(m.parse(raw, 24 + hs, len(raw))))',
+  'made = dict((x.fid, x) for x in m.thornswood_records(m.clam01(), []))',
+  'for f in (0x5015494, 0x5015495):',
+  '    print("%X %s" % (f, "same" if f in made and made[f].bytes() == have[f].bytes() else "differs"))',
+].join('\n'), TOOL, ESP]);
+yes('T0 python is on this machine and the tool loads as a module', !!run && run.status === 0);
+if (run && run.status !== 0) { console.log(run.stdout + run.stderr); }
+const said = run && run.status === 0 ? run.stdout : '';
+yes('T1 the tool writes the key the committed plugin carries, byte for byte', /5015494 same/.test(said));
+yes('T2 the tool writes the mold the committed plugin carries, byte for byte', /5015495 same/.test(said));
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

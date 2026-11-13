@@ -1,13 +1,43 @@
 """
 Add-ContentRecords.py
 
-Writes Thornswood-Content.esp's records: every record of Thornswood's own from
-the numbers in this script, the overrides of Bethesda's records it carries, and
-the cells and worldspaces its placements stand in from Bethesda's own records,
-and the placements of Thornswood's kilns, salt quarries, hives and labs from
-game\\data\\station-sites.json. Since #2553 nothing in it is the salvaged
-plugin's (see THE SALVAGED RECORDS, REMADE, and WHERE THE STATIONS STAND,
-below).
+Writes Thornswood-Content.esp, the whole file, from its sources: every record
+of Thornswood's own from the numbers in this script, the overrides of
+Bethesda's records it carries, the cells and worldspaces its placements stand
+in from Bethesda's own records, and the placements of Thornswood's kilns, salt
+quarries, hives and labs from game\\data\\station-sites.json. Since #2553
+nothing in it is the salvaged plugin's (see THE SALVAGED RECORDS, REMADE, and
+WHERE THE STATIONS STAND, below).
+
+BUILT FROM ITS SOURCES, NOT EDITED IN PLACE (#5191)
+
+Until #5191 this read the committed plugin, kept every record it did not
+write, edited the ones it did where they stood and wrote the file back, so
+every content pull request changed the same binary file and two of them
+could never merge side by side. Patrick picked B on #5191 (1 Nov 2026):
+nothing generated is committed, and what needs the game's data is built
+where the game is. So this reads no plugin of Thornswood's: it starts from
+nothing and writes the header, every record and every group, and the same
+sources and the same game give the same file, byte for byte.
+
+It needs the game. Its overrides and its cells and worldspaces are copies of
+the winning masters' own records, its fine dishes wear their dishes' looks
+(one of them Gourmet.esp's), and the cells' names come from the masters'
+string tables. The copy of the five masters GitHub's runners can download
+(gitlab.com/pospelov/se-data, THIRD-PARTY.md) is an older release of the game
+than Thornswood plays, and measured on 12 November 2026 it gives other bytes
+for the Tamriel and Solstheim worldspaces and the fine Ash Yam soup, and has
+no string tables at all. So it is built on the box, from the game's files
+there, or on a PC with the game.
+
+The six records that were only ever in the committed file are written here
+now: the welcome letter and the ten passage books and the deed from their
+own numbers (THE BOOKS' OWN NUMBERS), and the five Dwarven scrap overrides
+of #613, which Collapse-DwarvenIngots.py wrote into the file once, copied
+from Skyrim.esm (THE DWARVEN SCRAP RECIPES). The groups go in GROUP_ORDER
+and the records in the order this writes them; the cells' blocks are sorted,
+and the eight bytes at the end of each group header that the game does not
+read are written as nothing.
 
 THE SALVAGED RECORDS, REMADE (#2553)
 
@@ -47,9 +77,8 @@ measures each spot over the whole load order into game\\data\\station-sites.json
 (docs\\systems\\station-placement.md says the rule for each kind); this writes
 one placement for each row, its base, its point and its turn and nothing
 else, in the cell the row names, under the form id the row gives. A cell or
-worldspace a placement needs and the plugin does not carry yet is copied from
-the winning master's own record, which needs --masters the first time; the
-builder has already refused any spot whose cell a mod changes, so the copy
+worldspace a placement stands in is copied from the winning master's own
+record (--masters); the builder has already refused any spot whose cell a mod changes, so the copy
 changes nothing in the game. The placements' form ids start at 0x05015500,
 which no version of this plugin ever used, so no change form a save holds for
 an old placement can land on a new one.
@@ -171,9 +200,9 @@ tools show beside the plugin. Until 12 October it still said the content was
 salvaged from the other server, by that server's full name, and was out of
 date besides. Patrick's answer B on #400: the description says what the plugin
 is for Thornswood, the salvaged records stay, and the other server's name is
-mentioned nowhere. So this writes the description into the header, changing
-only that subrecord and the header's size, and refuses to write a file whose
-header or any record still carries the other server's full name.
+mentioned nowhere. So this writes Thornswood's description into the header it
+builds, and refuses to write a file whose header or any record still carries
+the other server's full name.
 
 Since #2993 the description is built from the records the written plugin
 holds. Until then it was one sentence typed into this script, and nothing held
@@ -192,22 +221,18 @@ stops and writes nothing.
 
 WHAT IT PROVES BEFORE IT WRITES
 
-The same discipline as Remove-DeadRecords.ps1 and Remove-DeadConditions.py,
-whose parser this shares. It serialises the file back
-byte for byte before it edits anything. Afterwards it checks that every record
-that was there is still there, apart from the ones it was asked to take out, in
-the same order, with the same form id, type and flags; that the ones taken out
-are gone; that every record it was not asked to touch has the bytes it started with;
-that the new records parse back to exactly what was built; that no form id it
-allocates is already taken; that the header's record count matches what is
-actually in the file; that neither the other server's full name nor either of
-its short forms is in the header or in any record's editor id, attached script
-or text, and its full name and longer short form in no record's bytes at all,
-compressed records included; and that the header changed in its description
-and its record count and nowhere else.
+It reads the file it built back with the parser Remove-DeadRecords.ps1 and
+Remove-DeadConditions.py share, and checks that every record reads back as
+it was built; that no form id and no editor id is written twice; that the
+header's record count matches what is actually in the file; that the
+placements are the station table's, each in its cell; that no record is a
+salvaged one or a retired one; and that neither the other server's full name
+nor either of its short forms is in the header or in any record's editor id,
+attached script or text, and its full name and longer short form in no
+record's bytes at all, compressed records included.
 
-It will not touch a compressed record, and it refuses to add a record whose
-editor id is already in the file, because two records with one name is the kind
+It copies no compressed record from a master, and it refuses to write two
+records under one editor id, because two records with one name is the kind
 of thing that is found months later.
 
 THE THREE REPAIR KITS (issue #1384)
@@ -312,14 +337,13 @@ fork), turns the craft down on its own account too if a client ever asks.
 Nothing else on the records changes: the same inputs, output, bench and count,
 so the override is the record Bethesda wrote plus one line.
 
-The first time, the records are read out of HearthFires.esm in the game's Data
-folder (--masters), and their form ids are written in this plugin's numbering
+The records are read out of HearthFires.esm in the game's Data folder
+(--masters), and their form ids are written in this plugin's numbering
 (HearthFires.esm is its master 03 and its own records are 02 in its own file).
-Once they are in this plugin, a later run edits them where they are and needs
-no game. No later plugin in the load order overrides them (read 11 October
+No later plugin in the load order overrides them (read 11 October
 across the main install's load order), so this override is the one that wins.
 
-The other way, the one Collapse-DwarvenIngots.py took for #613, is to drop the
+The other way, the one the Dwarven scrap recipes take (#613), is to drop the
 BNAM so no bench lists the recipe. The condition is used here because it keeps
 the bench on the record, which is what recipes.json and the gamemode read as
 the recipe's bench, and because the server then refuses it too.
@@ -377,24 +401,28 @@ included, and Thornswood ships no Papyrus script of its own. Nothing in the
 repository named them but Check-Chargen.ps1, which asked for them and their
 button counts as if creation needed them.
 
-They stayed because this tool keeps every record it does not write, and
-nothing took them out when the flow moved. So RETIRED names them, and a run
-takes out any of them the plugin still carries, after checking each is the
-MESG of that editor id. Nothing keeps a change form for a message box, so no
+They stayed because this tool kept every record it did not write, and
+nothing took them out when the flow moved. RETIRED names them, and since
+#5191, when the plugin is built from nothing, the tool stops if anything it
+writes is one of them again, by form id or editor id. Nothing keeps a change form for a message box, so no
 save or server state names their form ids.
 
 
-Usage (both default to game\\content\\Thornswood-Content.esp in this repo):
-    python scripts/mods/Add-ContentRecords.py --check
-    python scripts/mods/Add-ContentRecords.py
-    python scripts/mods/Add-ContentRecords.py --masters C:\\Thornswood\\Game\\Data
+Usage (--out defaults to game\\content\\Thornswood-Content.esp in this repo,
+--masters to C:\\Thornswood\\Game\\Data):
+    python scripts/mods/Add-ContentRecords.py --masters <the game's Data folder>
+    python scripts/mods/Add-ContentRecords.py --masters <Data> --out <file>
+    python scripts/mods/Add-ContentRecords.py --masters <Data> --check
 
-Exit code 1 if the parse does not round trip, if the result does not verify, or
-if anything it was asked to add is already there.
+--check builds the plugin and says whether the file at --out is it, byte for
+byte, and if not, which records and groups differ. It writes nothing.
+
+Exit code 1 if a master or a dish's plugin is missing, if what it builds does
+not verify, or, with --check, if the file at --out is not what it builds.
 """
 
 import argparse
-import copy
+import hashlib
 import json
 import math
 import os
@@ -496,7 +524,7 @@ def description_of(keys):
 
 # Thornswood's own records that nothing shows or names any more, by object id
 # in this plugin's own numbering, type and editor id (THE CREATION MENUS, TAKEN
-# OUT, above). A run takes out any of them the plugin carries.
+# OUT, above). Nothing this writes may be one of them again.
 RETIRED = (
     (0xE80050, b'MESG', 'ThornswoodTradeMenu1'),
     (0xE80051, b'MESG', 'ThornswoodTradeMenu2'),
@@ -520,8 +548,8 @@ RECIPE_SHOVEL = 0x5015492
 # the pack without a record per building. There are 852 claimable buildings and
 # this is one record rather than 852.
 #
-# It is cloned from a passage book, which is a BOOK this plugin already ships and
-# already reads as a plain document rather than a spell tome or a skill book.
+# It is a note like the passage books (note(), below), which reads as a plain
+# document rather than a spell tome or a skill book.
 DEED = 0x5015493
 
 # A KEY AND A KEY MOLD, AND WHY BOTH ARE MISC RATHER THAN KEYM.
@@ -762,7 +790,7 @@ GOLD = 0x0000000F
 NEVER_TRUE = struct.pack('<B3sfHHIIIIi', 4 << 5, b'\x00\x00\x00', 0.0, 47, 0,
                          GOLD, 0, 0, 0, -1)
 
-# Where the masters are read from, the first time a master record is copied in.
+# Where the masters, their string tables and the dishes' plugins are read from.
 MASTERS_DIR = 'C:\\Thornswood\\Game\\Data'
 
 # The subrecords a COBJ carries, and which hold form ids. A record copied in
@@ -788,44 +816,102 @@ DEED_WORDS = (
 # is read (gamemode.js mp.onReadBook), so the old last line, "Read this and you
 # go. The other passages will burn.", is gone with the quips. The books stay
 # because their form ids key CHARGEN.towns in gamemode.js
-# (Remove-DeadRecords.ps1). Each is written over where it stands, FULL and all
-# else kept; only its DESC is this.
+# (Remove-DeadRecords.ps1). Each row: its form id, editor id, title and line.
 def passage_words(title, line):
     return ('<p align="center"><font size="30">%s</font></p><br><br>%s' % (title, line))
 
 
-PASSAGE_WORDS = {
-    'ThornswoodPassageWhiterun': passage_words(
-        'Passage to Whiterun',
-        'Whiterun, in the middle of Skyrim. The roads out of it go four ways.'),
-    'ThornswoodPassageRiften': passage_words(
-        'Passage to Riften',
-        'Riften, in the Rift. Fishing, the meadery, and the canal through the middle of the town.'),
-    'ThornswoodPassageSolitude': passage_words(
-        'Passage to Solitude',
-        'Solitude, in Haafingar. Ships, trade, the court, and the one Imperial embassy in Skyrim.'),
-    'ThornswoodPassageWindhelm': passage_words(
-        'Passage to Windhelm',
-        'Windhelm, in Eastmarch. Stone, snow and the docks, and the High King\'s seat.'),
-    'ThornswoodPassageMarkarth': passage_words(
-        'Passage to Markarth',
-        'Markarth, in the Reach. Silver mines under the city, and the Forsworn in the hills above it.'),
-    'ThornswoodPassageFalkreath': passage_words(
-        'Passage to Falkreath',
-        'Falkreath, in the pines. Its graveyard is bigger than the town.'),
-    'ThornswoodPassageMorthal': passage_words(
-        'Passage to Morthal',
-        'Morthal, in the swamps of Hjaalmarch. A few houses and the Jarl\'s hall.'),
-    'ThornswoodPassageDawnstar': passage_words(
-        'Passage to Dawnstar',
-        'Dawnstar, on the north coast. Ice, the mines, and a harbour that freezes.'),
-    'ThornswoodPassageWinterhold': passage_words(
-        'Passage to Winterhold',
-        'Winterhold, what is left of it after the Collapse. The College stands above it.'),
-    'ThornswoodPassageRavenrock': passage_words(
-        'Passage to Raven Rock',
-        'Raven Rock, across the water on Solstheim. The ash still falls there.'),
-}
+PASSAGES = (
+    (0x5E80030, 'ThornswoodPassageWhiterun', 'Passage to Whiterun',
+     'Whiterun, in the middle of Skyrim. The roads out of it go four ways.'),
+    (0x5E80031, 'ThornswoodPassageRiften', 'Passage to Riften',
+     'Riften, in the Rift. Fishing, the meadery, and the canal through the middle of the town.'),
+    (0x5E80032, 'ThornswoodPassageSolitude', 'Passage to Solitude',
+     'Solitude, in Haafingar. Ships, trade, the court, and the one Imperial embassy in Skyrim.'),
+    (0x5E80033, 'ThornswoodPassageWindhelm', 'Passage to Windhelm',
+     'Windhelm, in Eastmarch. Stone, snow and the docks, and the High King\'s seat.'),
+    (0x5E80034, 'ThornswoodPassageMarkarth', 'Passage to Markarth',
+     'Markarth, in the Reach. Silver mines under the city, and the Forsworn in the hills above it.'),
+    (0x5E80035, 'ThornswoodPassageFalkreath', 'Passage to Falkreath',
+     'Falkreath, in the pines. Its graveyard is bigger than the town.'),
+    (0x5E80036, 'ThornswoodPassageMorthal', 'Passage to Morthal',
+     'Morthal, in the swamps of Hjaalmarch. A few houses and the Jarl\'s hall.'),
+    (0x5E80037, 'ThornswoodPassageDawnstar', 'Passage to Dawnstar',
+     'Dawnstar, on the north coast. Ice, the mines, and a harbour that freezes.'),
+    (0x5E80038, 'ThornswoodPassageWinterhold', 'Passage to Winterhold',
+     'Winterhold, what is left of it after the Collapse. The College stands above it.'),
+    (0x5E80039, 'ThornswoodPassageRavenrock', 'Passage to Raven Rock',
+     'Raven Rock, across the water on Solstheim. The ash still falls there.'),
+)
+
+# THE BOOKS' OWN NUMBERS (#5191). The passages and the deed are notes, and the
+# welcome letter is a book: the meshes, their texture hashes (MODT, as the
+# meshes give them), the pick up sound and the inventory art below are the ones
+# these books have carried since they were made, and every book is worth
+# nothing, weighs nothing and teaches nothing. Until #5191 the tool read them
+# out of the committed plugin and wrote over their words; it writes the whole
+# plugin from its sources now, so they are written here.
+VENDOR_ITEM_BOOK = 0x000937A2        # VendorItemBook, the keyword Skyrim's books carry
+NOTE_MODEL = 'Clutter\\Books\\Note02.nif'
+NOTE_MODT = bytes.fromhex('020000000200000000000000c5d74c9464647300b5139f09ad43553b64647300b5139f09')
+NOTE_PICK_UP = 0x000C7A54            # the note's pick up sound
+NOTE_ART = 0x0001541B                # the note's inventory art
+BOOK_DATA = struct.pack('<BBHiIf', 0, 0, 0, -1, 0, 0.0)  # no flags, a book, teaches nothing, 0 gold, 0 weight
+WELCOME = 0x5E80000
+WELCOME_MODEL = 'Clutter\\Books\\BasicBook06.nif'
+WELCOME_MODT = bytes.fromhex('020000000400000000000000332e656964647300b5139f095e0c94bf64647300b5139f09'
+                             'cd6472c964647300b5139f09f4c8a2a364647300b5139f09')
+WELCOME_BOUNDS = (-9, -11, -1, 9, 11, 2)
+WELCOME_ART = 0x00080A4A
+WELCOME_WORDS = (
+    '<p align="center"><font size="34">Before You Go</font></p><br><br>[pagebreak]<br><br>'
+    'You are somewhere that is not anywhere, and you will not be here long.<br><br>'
+    'Two things remain. In your pack are sixteen writs. Read one, or pick from the menu that comes up on '
+    'its own, and whichever you choose is the trade you begin with. The gear comes with it.<br><br>'
+    'Then ten passages take the writs\' place. Read one of those and you wake in that town\'s inn, with a '
+    'bed and a road and no further ceremony.<br><br>'
+    'You can only choose one of each. Take your time over both.<br><br>[pagebreak]<br><br>'
+    'A word on the trades. None of them locks anything: a miner may learn smithing and a mage may swing '
+    'an axe. The writ decides what you own on the first morning, not what you are.<br><br>'
+    'A word on the towns. Death returns you to the nearest temple, not to the one you choose here, so '
+    'choose for the neighbours rather than for safety.<br><br>'
+    'That is everything. Go on.')
+
+
+def note(fid, edid, name, words):
+    """A note: a passage or the deed."""
+    return own_record(b'BOOK', fid, [
+        (b'EDID', zstr(edid)), (b'OBND', bounds((0, 0, 0, 0, 0, 0))), (b'FULL', zstr(name)),
+        (b'MODL', zstr(NOTE_MODEL)), (b'MODT', NOTE_MODT), (b'DESC', zstr(words)),
+        (b'YNAM', struct.pack('<I', NOTE_PICK_UP))] + keywords((VENDOR_ITEM_BOOK,)) + [
+        (b'DATA', BOOK_DATA), (b'INAM', struct.pack('<I', NOTE_ART))])
+
+
+def welcome_book():
+    return own_record(b'BOOK', WELCOME, [
+        (b'EDID', zstr('ThornswoodWelcome')), (b'OBND', bounds(WELCOME_BOUNDS)),
+        (b'FULL', zstr('Before You Go')), (b'MODL', zstr(WELCOME_MODEL)), (b'MODT', WELCOME_MODT),
+        (b'DESC', zstr(WELCOME_WORDS))] + keywords((VENDOR_ITEM_BOOK,)) + [
+        (b'DATA', BOOK_DATA), (b'INAM', struct.pack('<I', WELCOME_ART))])
+
+
+# THE DWARVEN SCRAP RECIPES (#613). Six Skyrim.esm smelter recipes make
+# Dwarven Metal Ingot. One stays as Skyrim ships it,
+# RecipeIngotDwarvenScrapPlateMetalLarge (0x10DD28); the other five are
+# overridden here as Skyrim.esm writes them without their bench keyword (BNAM),
+# so no bench lists them, and Build-RecipeTable.ps1 refuses them
+# ($COLLAPSED_SMELT_EDITOR_IDS). Until #5191 Collapse-DwarvenIngots.py wrote
+# them into the committed plugin once and this tool carried them; they are
+# copied from Skyrim.esm on every build now.
+DWARVEN_SCRAP_HIDDEN = (
+    (0x0010FBD9, 'RecipeIngotDwarvenScrapPlateMetalSmall'),
+    (0x0010DD2D, 'RecipeIngotDwarvenScrapLarge03'),
+    (0x0010DD2C, 'RecipeIngotDwarvenScrapLarge02'),
+    (0x0010DD2B, 'RecipeIngotDwarvenScrapLarge'),
+    (0x0010DD2A, 'RecipeIngotDwarvenScrapBent'),
+)
+DWARVEN_SCRAP_MASTER = 'Skyrim.esm'
+
 
 # What the recipes are made of and what they make. Every one of these was read
 # out of a record already in this file or out of TOOLS in gamemode.js, never
@@ -975,9 +1061,8 @@ FEASTS = (
 # A fine dish wears its plain dish's look, read from the plugin that made the
 # dish (its bounds, mesh, mesh textures, sounds, worth and weight), is named
 # "Fine " and the plain dish's name from game\data\recipes.json, and carries
-# VendorItemFood. The burnt meal wears Skyrim.esm's Cooked Beef. A record this
-# plugin already holds is kept as it is; one it does not is made from the
-# masters, which needs --masters the game's Data folder that first time.
+# VendorItemFood. The burnt meal wears Skyrim.esm's Cooked Beef. Every one is
+# made from the masters and the dishes' plugins on every build (--masters).
 FOOD_GROUPS_TABLE = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..',
                                                   'game', 'data', 'food-groups.json'))
 RECIPE_TABLE = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..',
@@ -1506,6 +1591,21 @@ def quality_record(fid, edid, name, look, effect):
     return own_record(b'ALCH', fid, pairs)
 
 
+def quality_records(masters_dir, plugin_masters, problems):
+    """The burnt meal and every fine dish (#2906), in the table's order, each
+    wearing its dish's look out of masters_dir. A dish that cannot be made is
+    added to problems and left out."""
+    out = []
+    for fid, edid, name, dish, effect in quality_wanted(plugin_masters, PLUGIN):
+        # A festival feast's fine record wears the feast's own look (#3152),
+        # which is this plugin's and needs no master.
+        feast = next((row for row in FEASTS if '%x:%s' % (row[0] & 0xFFFFFF, PLUGIN) == dish), None)
+        look = feast_look(*feast[6:]) if feast else dish_look(masters_dir, dish, plugin_masters, problems)
+        if look is not None:
+            out.append(quality_record(fid, edid, name, look, effect))
+    return out
+
+
 def feast_look(model, box, weight):
     """A festival feast's look (#3152), as [(tag, bytes)] the way dish_look
     answers one, so its fine record wears the same."""
@@ -1543,12 +1643,26 @@ def seasonal_records():
     return out
 
 
-def thornswood_records(passage, clam, passages):
+# Clam01 from Skyrim.esm, uncompressed, PFIG present, which the catches are
+# made from (#1379). Kept here so this script does not need the master open.
+CLAM01 = bytes.fromhex(
+    '464c4f52bd00000000000000805f08002f301e002c000b00454449440700436c616d303100'
+    '4f424e440c00eeffe8fffeff12001800210046554c4c04001fdc00004d4f444c1200506c61'
+    '6e74735c436c616d30312e6e6966004d4f44543c00020000000400000000000000aa2dbb27'
+    '64647300f64c4bb969221e8664647300f64c4bb9b807509764647300262c333bd373171f64'
+    '647300f64c4bb9504e414d040000000000524e414d0400dc070100464e414d020000005046'
+    '4947040003ba0e00534e414d04002605100050465043040064646464')
+
+
+def clam01():
+    return Rec(b'FLOR', 0, 0x85F80, CLAM01[16:24], CLAM01[24:])
+
+
+def thornswood_records(clam, scrap):
     """Every record this tool writes from its own numbers, in the order it
-    writes new ones. passage is the Whiterun passage book, Thornswood's own
-    since 13 September, which the deed is made from; clam is Skyrim's Clam01,
-    which the catches are made from; passages is the ten passage books by
-    editor id, each written over with its PASSAGE_WORDS."""
+    writes them. clam is Skyrim's Clam01, which the catches are made from;
+    scrap is the five Dwarven scrap overrides (DWARVEN_SCRAP_HIDDEN), copied
+    from Skyrim.esm, which stand among them in the recipes' group."""
     out = [
         kywd(KILN_KEYWORD, 'ThornswoodCraftingCharcoalKiln'),
         kywd(ALCHEMY_KEYWORD, 'ThornswoodCraftingAlchemy'),
@@ -1596,12 +1710,11 @@ def thornswood_records(passage, clam, passages):
         cobj(RECIPE_HANDLE, 'ThornswoodRecipeToolHandle', [(FIREWOOD, 1)], HANDLE, KILN_KEYWORD),
         cobj(RECIPE_SHOVEL, 'ThornswoodRecipeToolShovel', [(IRON_INGOT, 1), (HANDLE, 1)],
              SHOVEL, FORGE_KEYWORD),
-        clone(passage, DEED, 'ThornswoodBookDeed', sets={
-            b'FULL': zstr('Deed'), b'DESC': zstr(DEED_WORDS)}),
+        welcome_book(),
     ] + [
-        clone(passages[name], passages[name].fid, name, sets={b'DESC': zstr(PASSAGE_WORDS[name])})
-        for name in PASSAGE_WORDS
+        note(fid, edid, title, passage_words(title, line)) for fid, edid, title, line in PASSAGES
     ] + [
+        note(DEED, 'ThornswoodBookDeed', 'Deed', DEED_WORDS),
         misc(KEY, 'ThornswoodMiscKey', 'Key', KEY_MODEL, KEY_BOUNDS, 0, 0.0),
         misc(MOLD, 'ThornswoodMiscKeyMold', 'Key Mold', MOLD_MODEL, MOLD_BOUNDS, 25, 1.0),
         cobj(RECIPE_MOLD, 'ThornswoodRecipeKeyMold', [(IRON_INGOT, 1)], MOLD, FORGE_KEYWORD),
@@ -1622,6 +1735,7 @@ def thornswood_records(passage, clam, passages):
              POLE_MASTER, WOODWORKING_KEYWORD),
         cobj(RECIPE_TRAP, 'ThornswoodRecipeFishTrap',
              [(FIREWOOD, 3), (LEATHER_STRIPS, 2), (IRON_INGOT, 1)], FISH_TRAP, WOODWORKING_KEYWORD),
+    ] + list(scrap) + [
         # The bench trades' tools (#3162), THE BENCH TRADES' TOOLS above.
         misc(SHEARS, 'ThornswoodMiscToolShears', 'Shears', SHEARS_MODEL, SHEARS_BOUNDS, 3, 0.5),
         misc(ALEMBIC, 'ThornswoodMiscToolAlembic', 'Alembic', ALEMBIC_MODEL, ALEMBIC_BOUNDS, 0, 2.0),
@@ -1750,43 +1864,6 @@ def local_fid(desc, plugin_masters, plugin_name):
     if owner.lower() == plugin_name.lower():
         return (len(names) << 24) | int(obj, 16)
     return (names.index(owner.lower()) << 24) | int(obj, 16)
-
-
-def drop_bare_parents(kids, dropped):
-    """kids without a group that holds nothing, and without a CELL or WRLD
-    record whose children group is gone. A cell record with no placements of
-    this plugin's under it is an override of Bethesda's cell that changes
-    nothing Thornswood needs. The form id of each record dropped is added to
-    dropped.
-
-    THE GROUPS GO FIRST, AND AN EMPTY ONE GOES HOWEVER IT GOT EMPTY (#2790).
-    A placement the station table moves is taken out of its old cell with a
-    plain remove from its list, which leaves that cell's temporary group with
-    nothing in it. Until 21 October this judged the cell before its groups
-    and kept any group that arrived empty, so the empty group held the cell
-    record up: CELL 0x8ED5, DawnstarWesternMineExterior, copied for the
-    Dawnstar kiln and salt quarry in #2629 and left when the station table
-    put them in Dawnstar03Exterior, sat in the plugin identical to
-    HearthFires.esm's, holding an empty group (Check-PluginClean.py, run
-    against the dev server's masters)."""
-    pruned = []
-    for k in kids:
-        if isinstance(k, Grup):
-            k.kids = drop_bare_parents(k.kids, dropped)
-            if not k.kids:
-                continue
-        pruned.append(k)
-    out = []
-    for i, k in enumerate(pruned):
-        if not isinstance(k, Grup) and k.tag in (b'CELL', b'WRLD'):
-            nxt = pruned[i + 1] if i + 1 < len(pruned) else None
-            want = 6 if k.tag == b'CELL' else 1
-            if not (isinstance(nxt, Grup) and struct.unpack_from('<I', nxt.label, 0)[0] == k.fid
-                    and struct.unpack_from('<i', nxt.label, 4)[0] == want):
-                dropped.add(k.fid)
-                continue
-        out.append(k)
-    return out
 
 
 def orphan_groups(kids, prev=None):
@@ -1928,11 +2005,6 @@ def quest_records():
     return records
 
 
-def quest_identity(have, edid):
-    if have is not None and have.editor_id() != edid:
-        raise ValueError('A dedicated quest form ID belongs to another record: ' + edid)
-
-
 def placement(fid, base, pos, angle, edid=None):
     """A placed station: its base and where it stands, turned angle degrees."""
     x, y, z = pos
@@ -1957,10 +2029,6 @@ def placements_in(kids, cell=None):
         elif k.tag == b'REFR':
             out.append((k, kids, cell))
     return out
-
-
-def placed_ids(tree):
-    return set(r.fid for r, _, _ in placements_in(tree))
 
 
 def find_cell(kids, fid):
@@ -2029,9 +2097,7 @@ def insert_pair(kids, rec, tag):
 
 
 def put_world(tree, rec, stamp):
-    top = next((k for k in tree if isinstance(k, Grup) and k.label[:4] == b'WRLD'), None)
-    if top is None:
-        top = ensure_top_group(tree, b'WRLD')
+    top = next(k for k in tree if isinstance(k, Grup) and k.label[:4] == b'WRLD')
     insert_pair(top.kids, rec, b'WRLD')
 
 
@@ -2041,9 +2107,7 @@ def put_cell(tree, rec, ctx, world, stamp):
         kids, i = find_world(tree, world)
         parent = children_of(kids, i, 1, stamp).kids
     else:
-        top = next((k for k in tree if isinstance(k, Grup) and k.label[:4] == b'CELL'), None)
-        if top is None:
-            top = ensure_top_group(tree, b'CELL')
+        top = next(k for k in tree if isinstance(k, Grup) and k.label[:4] == b'CELL')
         parent = top.kids
     block = sub_group(parent, blabel, bgt, stamp)
     sub = sub_group(block.kids, slabel, sgt, stamp)
@@ -2179,24 +2243,6 @@ def clone(src, fid, editor_id, sets=None, after=None, drop=None):
     return Rec(src.tag, src.flags, fid, src.extra, pack_subrecords(out))
 
 
-def set_model(rec, model):
-    """The record's MODL set to model and the old mesh's MODT/MODS dropped.
-    True when that changed anything, so a second run is not an edit."""
-    pairs = subrecords(rec.data)
-    want = zstr(model)
-    out = []
-    for t, b in pairs:
-        if t in (b'MODT', b'MODS'):
-            continue
-        out.append((t, want) if t == b'MODL' else (t, b))
-    if not any(t == b'MODL' for t, _ in pairs):
-        raise SystemExit('0x%07X has no MODL to set' % rec.fid)
-    if out == pairs:
-        return False
-    rec.data = pack_subrecords(out)
-    return True
-
-
 def set_bnam(rec, keyword):
     """The recipe's BNAM set to keyword. True when that changed anything."""
     pairs = subrecords(rec.data)
@@ -2210,38 +2256,9 @@ def set_bnam(rec, keyword):
     return True
 
 
-def ensure_top_group(tree, tag):
-    """The top GRUP for tag, made if this plugin has never had one."""
-    for k in tree:
-        if isinstance(k, Grup) and k.label[:4] == tag:
-            return k
-    sample = next(k for k in tree if isinstance(k, Grup))
-    stamp = sample.label[12:16] if len(sample.label) >= 16 else b'\x00' * 4
-    g = Grup(tag + b'\x00' * 8 + stamp, [])
-    tree.append(g)
-    return g
-
-
 def plain(rec):
     """A record's subrecord bytes, inflated when it is compressed."""
     return zlib.decompress(rec.data[4:]) if rec.compressed else rec.data
-
-
-def take_out(kids, fids):
-    """kids without the records whose ids are in fids. A group that held
-    records and is left with none goes as well; one that was empty already
-    stays, so nothing else in the file moves."""
-    out = []
-    for k in kids:
-        if isinstance(k, Grup):
-            had = len(k.kids)
-            k.kids = take_out(k.kids, fids)
-            if had and not k.kids:
-                continue
-        elif k.fid in fids:
-            continue
-        out.append(k)
-    return out
 
 
 def is_text(body):
@@ -2281,28 +2298,6 @@ def other_server_in_header(head):
     be seen at once and not months later."""
     low = bytes(head).lower()
     return any(n in low for n in (OTHER_SERVER_NAME, OTHER_SERVER_SHORT, OTHER_SERVER_LONGER))
-
-
-def described(head, description):
-    """The header with description as its SNAM, its size field set to match,
-    and whether that changed anything. A header with no SNAM gains one after
-    CNAM, where the Creation Kit writes it."""
-    pairs = subrecords(bytes(head[24:]))
-    want = description + b'\x00'
-    out, put = [], False
-    for tag, body in pairs:
-        if tag == b'SNAM':
-            out.append((tag, want))
-            put = True
-        else:
-            out.append((tag, body))
-    if not put:
-        at = next((i + 1 for i, (t, _) in enumerate(out) if t == b'CNAM'), 1)
-        out.insert(at, (b'SNAM', want))
-    body = pack_subrecords(out)
-    new = bytearray(head[:24]) + body
-    struct.pack_into('<I', new, 4, len(body))
-    return new, bytes(new) != bytes(head)
 
 
 def masters_of(buf):
@@ -2407,115 +2402,177 @@ def never_listed(rec):
     return True
 
 
-def main():
-    here = os.path.dirname(os.path.abspath(__file__))
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--data', default=os.path.normpath(
-        os.path.join(here, '..', '..', 'game', 'content')))
-    ap.add_argument('--plugin', default='Thornswood-Content.esp')
-    ap.add_argument('--check', action='store_true', help='say what would happen, write nothing')
-    ap.add_argument('--masters', default=MASTERS_DIR,
-                    help="the game's Data folder, read when a master's record is first copied in")
-    args = ap.parse_args()
+# THE PLUGIN, FROM NOTHING (#5191). The header and the order the groups come
+# in. Each top group holds one record type, and they stand in the order the
+# plugin has had them in since its groups were first written, so the same
+# records make the same file; a record of a type with no place here stops the
+# tool until one is given. HEDR's version is the one Skyrim Special Edition's
+# plugins carry, and its next object id is the number the plugin has always
+# said; this tool gives every record its form id itself and asks the Creation
+# Kit for none.
+PLUGIN = 'Thornswood-Content.esp'
+PLUGIN_MASTERS = ('Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm')
+PLUGIN_AUTHOR = 'Thornswood'
+HEDR_VERSION = 1.71
+NEXT_OBJECT_ID = 0x00E80054
+GROUP_ORDER = (b'KYWD', b'ACTI', b'BOOK', b'MISC', b'FLOR', b'FURN', b'COBJ', b'CELL', b'WRLD',
+               b'MGEF', b'ALCH', b'IMAD')
+# A group header ends in eight bytes the game does not read: a date and
+# version control numbers in the Creation Kit's files. This writes them as
+# nothing; GROUP_STAMP is the last four, which new_group() takes.
+GROUP_STAMP = b'\x00' * 4
+OUT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..',
+                                    'game', 'content', PLUGIN))
 
-    path = os.path.join(args.data, args.plugin)
-    raw = open(path, 'rb').read()
-    print('The file')
-    print('  %s' % path)
-    print('  %s bytes' % format(len(raw), ','))
 
-    header_size = struct.unpack_from('<I', raw, 4)[0]
-    head = bytearray(raw[:24 + header_size])
-    tree = parse(raw, 24 + header_size, len(raw))
+def retired_among(records, own_index):
+    """The records among these that RETIRED says nothing writes again (#2962),
+    by their form id in this plugin's numbering or by their editor id."""
+    fids = set((own_index << 24) | obj for obj, _, _ in RETIRED)
+    edids = set(edid for _, _, edid in RETIRED)
+    return [r for r in records if r.fid in fids or r.editor_id() in edids]
 
-    print('')
-    print('Can the parser reproduce the file it was given')
-    if bytes(head) + b''.join(k.bytes() for k in tree) != raw:
-        print('STOP. the parse does not round trip. Nothing was written.')
-        return 1
-    print('  ok    parsed and written back byte for byte, %s bytes' % format(len(raw), ','))
 
-    records = list(every_record(tree))
-    by_edid = {}
-    for r in records:
-        e = r.editor_id()
-        if e:
-            by_edid[e] = r
-    taken = set(r.fid for r in records)
-    before = {r.fid: r.data for r in records}
-
-    # THE SALVAGED REGISTER (#2553): every record that came with the salvaged
-    # plugin, what became of it, and the hash of every version of it the
-    # repository has held. What goes, goes; what is left is checked against it.
-    register = json.load(open(SALVAGED_REGISTER, encoding='utf-8'))
-    plugin_masters = masters_of(raw)
-    salvaged_hashes = {}
-    dropping, bethesdas, remade, same_by_design = set(), set(), set(), set()
-    # A Bethesda's cell or worldspace whose winning master's own bytes the
-    # register hashed: the record may be those bytes even where the salvaged
-    # copy was too (List-SalvagedRecords.py, bethesdaSha256).
-    bethesda_hash = {}
-    gone_before = set()
-    for row in register['records']:
-        fid = local_fid(row['formId'], plugin_masters, args.plugin)
+def read_register(plugin_masters):
+    """THE SALVAGED REGISTER (#2553), scripts\\mods\\content-salvaged.json: the
+    hash of every version of every record that came with the salvaged plugin,
+    by hash; the records remade the same by design; Bethesda's own hash of a
+    record that is Bethesda's; what left before #2553; and what is remade. A
+    row it keeps any other way is a ValueError."""
+    rows = json.load(open(SALVAGED_REGISTER, encoding='utf-8'))['records']
+    reg = {'salvaged': {}, 'same_by_design': set(), 'bethesda': {}, 'gone_before': set(), 'remade': set()}
+    for row in rows:
+        fid = local_fid(row['formId'], plugin_masters, PLUGIN)
         for h in row['dataSha256']:
-            salvaged_hashes.setdefault(h, set()).add(fid)
+            reg['salvaged'].setdefault(h, set()).add(fid)
         d = row['disposition']
         if d == 'gone before #2553':
-            gone_before.add(fid)
+            reg['gone_before'].add(fid)
         elif d not in ('dropped', "Bethesda's", 'remade'):
-            # Since Patrick's A of 16 October nothing salvaged waits on
-            # anything: the 57 placements are the other server's spots and go.
-            print('')
-            print('STOP. the register keeps %s 0x%07X as "%s". Run scripts\\mods\\List-SalvagedRecords.py. '
-                  'Nothing was written.' % (row['type'], fid, d))
-            return 1
-        elif d == 'dropped':
-            dropping.add(fid)
-        elif d == "Bethesda's":
-            bethesdas.add(fid)
-            if row.get('bethesdaSha256'):
-                bethesda_hash[fid] = row['bethesdaSha256']
+            raise ValueError('the register keeps %s 0x%07X as "%s"' % (row['type'], fid, d))
+        elif d == "Bethesda's" and row.get('bethesdaSha256'):
+            reg['bethesda'][fid] = row['bethesdaSha256']
         elif d == 'remade':
-            remade.add(fid)
+            reg['remade'].add(fid)
             if row.get('sameByDesign'):
-                same_by_design.add(fid)
-    by_fid = {}
+                reg['same_by_design'].add(fid)
+    return reg
+
+
+def refused(records, reg):
+    """What stops the plugin from being written, record by record: a salvaged
+    record (#2553), but the four kiln recipes and the pickaxe and the axe,
+    every field of which the rulebook states (the register's sameByDesign
+    says which line), and nothing the register says left before #2553; and
+    any record carrying the other server's name or a short form of it (#400)."""
+    out = []
     for r in records:
-        by_fid[r.fid] = r
+        h = body_hash(plain(r))
+        if r.fid in reg['gone_before'] or (h in reg['salvaged'] and r.fid not in reg['same_by_design']
+                                           and reg['bethesda'].get(r.fid) != h):
+            out.append('%s 0x%07X %s is a salvaged record' % (r.tag.decode(), r.fid, r.editor_id()))
+    for r in records:
+        for w in other_server_names(r):
+            out.append('%s 0x%07X carries the other server\'s name: %s' % (r.tag.decode(), r.fid, w))
+    return out
 
-    removing = set()
 
-    # THE RECORDS THIS TOOL WRITES FROM ITS OWN NUMBERS (#2553). Each one that
-    # is already in the plugin is written over where it stands; one that is
-    # not is added. A name the plugin already gives another record stops it:
-    # two records under one name is the kind of thing found months later.
-    passage = by_edid.get('ThornswoodPassageWhiterun')
-    if passage is None or passage.compressed or passage.tag != b'BOOK':
+def header(description, count):
+    """The plugin's header: its record count, the author, the description and
+    the five masters."""
+    pairs = [(b'HEDR', struct.pack('<fiI', HEDR_VERSION, count, NEXT_OBJECT_ID)),
+             (b'CNAM', zstr(PLUGIN_AUTHOR)), (b'SNAM', description + b'\x00')]
+    for m in PLUGIN_MASTERS:
+        pairs += [(b'MAST', zstr(m)), (b'DATA', b'\x00' * 8)]
+    body = pack_subrecords(pairs)
+    return b'TES4' + struct.pack('<III', len(body), 0, 0) + FORM_TAIL + body
+
+
+def differences(want, have):
+    """Lines saying how the plugin built (want) differs from the file at
+    --out (have), record by record, then group by group."""
+    def index(buf):
+        hs = struct.unpack_from('<I', buf, 4)[0]
+        tree = parse(buf, 24 + hs, len(buf))
+        groups = []
+
+        def walk(kids, depth):
+            for k in kids:
+                if isinstance(k, Grup):
+                    groups.append((depth, k.label))
+                    walk(k.kids, depth + 1)
+        walk(tree, 0)
+        return buf[:24 + hs], dict((r.fid, r) for r in every_record(tree)), groups
+    wh, wr, wg = index(want)
+    hh, hr, hg = index(have)
+    out = []
+    if wh != hh:
+        out.append('the header')
+    for f in sorted(set(wr) | set(hr)):
+        a, b = wr.get(f), hr.get(f)
+        if b is None:
+            out.append('%s 0x%07X %s is not in the file' % (a.tag.decode(), f, a.editor_id()))
+        elif a is None:
+            out.append('%s 0x%07X %s is in the file and not built' % (b.tag.decode(), f, b.editor_id()))
+        elif (a.tag, a.flags, a.extra, a.data) != (b.tag, b.flags, b.extra, b.data):
+            out.append('%s 0x%07X %s differs' % (a.tag.decode(), f, a.editor_id()))
+    if [(d, lb[:8]) for d, lb in wg] != [(d, lb[:8]) for d, lb in hg]:
+        out.append('the groups stand in another order')
+    elif wg != hg:
+        out.append('%d group header(s) differ in their last eight bytes, which the game does not read'
+                   % sum(1 for x, y in zip(wg, hg) if x != y))
+    if not out and want != have:
+        out.append('the records stand in another order')
+    return out
+
+
+def main():
+    ap = argparse.ArgumentParser(description='Writes Thornswood-Content.esp from its sources.')
+    ap.add_argument('--out', default=OUT, help='where the plugin is written (default: game\\content in this repo)')
+    ap.add_argument('--masters', default=MASTERS_DIR,
+                    help="the game's Data folder: the five masters, and their string tables loose or in its archives")
+    ap.add_argument('--check', action='store_true',
+                    help='build it and say whether the file at --out is what it builds; write nothing')
+    args = ap.parse_args()
+
+    print('Thornswood-Content.esp, from its sources (#5191)')
+    print('  the masters from %s' % args.masters)
+    missing = [m for m in PLUGIN_MASTERS if not os.path.isfile(os.path.join(args.masters, m))]
+    if missing:
         print('')
-        print('STOP. BOOK ThornswoodPassageWhiterun, which the deed is made from, is not here. '
-              'Nothing was written.')
+        print('STOP. %s %s not in %s. The plugin copies records out of the five masters, so it is built '
+              'where the game is: the box, or a PC with the game. Give --masters the game\'s Data folder. '
+              'Nothing was written.' % (', '.join(missing), 'is' if len(missing) == 1 else 'are', args.masters))
         return 1
-    # Clam01 from Skyrim.esm, uncompressed, PFIG present, which the catches are
-    # made from (#1379). Kept here so this script does not need the master open.
-    clam_raw = bytes.fromhex(
-        '464c4f52bd00000000000000805f08002f301e002c000b00454449440700436c616d303100'
-        '4f424e440c00eeffe8fffeff12001800210046554c4c04001fdc00004d4f444c1200506c61'
-        '6e74735c436c616d30312e6e6966004d4f44543c00020000000400000000000000aa2dbb27'
-        '64647300f64c4bb969221e8664647300f64c4bb9b807509764647300262c333bd373171f64'
-        '647300f64c4bb9504e414d040000000000524e414d0400dc070100464e414d020000005046'
-        '4947040003ba0e00534e414d04002605100050465043040064646464')
-    clam = Rec(b'FLOR', 0, 0x85F80, clam_raw[16:24], clam_raw[24:])
-    passages = {}
-    for name in PASSAGE_WORDS:
-        book = by_edid.get(name)
-        if book is None or book.compressed or book.tag != b'BOOK':
+    plugin_masters = list(PLUGIN_MASTERS)
+
+    # THE SALVAGED REGISTER (#2553). See read_register().
+    try:
+        register = read_register(plugin_masters)
+    except ValueError as e:
+        print('')
+        print('STOP. %s. Run scripts\\mods\\List-SalvagedRecords.py. Nothing was written.' % e)
+        return 1
+    remade = register['remade']
+
+    # THE RECORDS THIS TOOL WRITES FROM ITS OWN NUMBERS (#2553), with the
+    # five Dwarven scrap overrides among them (#613).
+    clam = clam01()
+    scrap = []
+    for fid, edid in DWARVEN_SCRAP_HIDDEN:
+        r = from_master(args.masters, DWARVEN_SCRAP_MASTER, fid, plugin_masters)
+        if r.editor_id() != edid:
             print('')
-            print('STOP. BOOK %s, whose words this writes, is not here as an uncompressed book. '
-                  'Nothing was written.' % name)
+            print('STOP. %s 0x%06X is %s, not %s. Nothing was written.'
+                  % (DWARVEN_SCRAP_MASTER, fid & 0xFFFFFF, r.editor_id(), edid))
             return 1
-        passages[name] = book
-    own = thornswood_records(passage, clam, passages)
+        pairs = subrecords(r.data)
+        if not any(t == b'BNAM' for t, _ in pairs):
+            print('')
+            print('STOP. %s %s has no bench keyword to leave out. Nothing was written.' % (DWARVEN_SCRAP_MASTER, edid))
+            return 1
+        scrap.append(Rec(r.tag, r.flags, r.fid, r.extra, pack_subrecords([(t, b) for t, b in pairs if t != b'BNAM'])))
+    own = thornswood_records(clam, scrap)
     own += seasonal_records()
     if len({r.fid for r in own}) != len(own):
         raise ValueError('Two authored records share a form ID')
@@ -2525,120 +2582,44 @@ def main():
         print('STOP. the register says 0x%07X is remade and this tool does not write it. '
               'Nothing was written.' % unmade[0])
         return 1
-    built, rewritten = [], []
-    for r in own:
-        name = r.editor_id()
-        other = by_edid.get(name)
-        if other is not None and other.fid != r.fid:
-            print('')
-            print('STOP. %s is already in this plugin as 0x%07X and this writes it as 0x%07X. '
-                  'Nothing was written.' % (name, other.fid, r.fid))
-            return 1
-        have = by_fid.get(r.fid)
-        if have is None:
-            built.append(r)
-            continue
-        if have.tag != r.tag or have.compressed:
-            print('')
-            print('STOP. 0x%07X is a %s here and this writes a %s. Nothing was written.'
-                  % (r.fid, have.tag.decode(), r.tag.decode()))
-            return 1
-        if 0x5017000 <= r.fid <= 0x5017100:
-            quest_identity(have, name)
-        if (have.data, have.flags, have.extra) != (r.data, r.flags, r.extra):
-            rewritten.append((have, r))
 
-    # The Hearthfire house parts (#2258), overrides of a master's records. One
-    # already in this plugin is edited where it is; one that is not is copied
-    # in from HearthFires.esm. See the top.
-    house_new, house_have = [], []
+    # The Hearthfire house parts (#2258), overrides of a master's records
+    # copied from HearthFires.esm with the condition that is never true. See
+    # the top.
+    house = []
     for fid, edid in HOUSE_PARTS:
-        have = next((r for r in records if r.fid == fid and r.tag == b'COBJ'), None)
-        if have is not None:
-            if have.compressed or have.editor_id() != edid:
-                print('')
-                print('STOP. COBJ 0x%08X in this plugin is not %s as it should be. '
-                      'Nothing was written.' % (fid, edid))
-                return 1
-            house_have.append(have)
-            continue
-        if fid in taken:
-            print('')
-            print('STOP. 0x%08X is already taken by something that is not a recipe. '
-                  'Nothing was written.' % fid)
-            return 1
-        made_here = from_master(args.masters, HOUSE_PARTS_MASTER, fid, plugin_masters)
-        if made_here.editor_id() != edid:
+        r = from_master(args.masters, HOUSE_PARTS_MASTER, fid, plugin_masters)
+        if r.editor_id() != edid:
             print('')
             print('STOP. %s 0x%06X is %s, not %s. Nothing was written.'
-                  % (HOUSE_PARTS_MASTER, fid & 0xFFFFFF, made_here.editor_id(), edid))
+                  % (HOUSE_PARTS_MASTER, fid & 0xFFFFFF, r.editor_id(), edid))
             return 1
-        never_listed(made_here)
-        house_new.append(made_here)
-    house_bare = [r for r in house_have
-                  if not any(t == b'CTDA' and b == NEVER_TRUE for t, b in subrecords(r.data))]
+        never_listed(r)
+        house.append(r)
 
     # Master recipe overrides onto the woodworking bench (#516).
-    wood_new, wood_have = [], []
+    wood = []
     for fid, edid, master in WOODWORKER_MASTER_RECIPES:
-        have = next((r for r in records if r.fid == fid and r.tag == b'COBJ'), None)
-        if have is not None:
-            if have.compressed or have.editor_id() != edid:
-                print('')
-                print('STOP. COBJ 0x%08X in this plugin is not %s as it should be. '
-                      'Nothing was written.' % (fid, edid))
-                return 1
-            wood_have.append(have)
-            continue
-        if fid in taken:
-            print('')
-            print('STOP. 0x%08X is already taken by something that is not a recipe. '
-                  'Nothing was written.' % fid)
-            return 1
-        made_here = from_master(args.masters, master, fid, plugin_masters)
-        if made_here.editor_id() != edid:
+        r = from_master(args.masters, master, fid, plugin_masters)
+        if r.editor_id() != edid:
             print('')
             print('STOP. %s 0x%06X is %s, not %s. Nothing was written.'
-                  % (master, fid & 0xFFFFFF, made_here.editor_id(), edid))
+                  % (master, fid & 0xFFFFFF, r.editor_id(), edid))
             return 1
-        set_bnam(made_here, WOODWORKING_KEYWORD)
-        wood_new.append(made_here)
-    wood_bare = [r for r in wood_have
-                 if not any(t == b'BNAM' and struct.unpack_from('<I', b, 0)[0] == WOODWORKING_KEYWORD
-                            for t, b in subrecords(r.data))]
-    # COOKING QUALITY (#2906): the burnt meal and a fine record of every dish.
-    # One already here is kept; one that is not is made from the masters, and
-    # every dish that cannot be is listed before anything stops.
-    quality_new, quality_have, problems = [], [], []
+        set_bnam(r, WOODWORKING_KEYWORD)
+        wood.append(r)
+
+    # COOKING QUALITY (#2906): the burnt meal and a fine record of every dish,
+    # each wearing its dish's look from the masters, and every dish that cannot
+    # be made listed before anything stops.
+    problems = []
     try:
-        quality = quality_wanted(plugin_masters, args.plugin)
+        quality_made = quality_records(args.masters, plugin_masters, problems)
     except (KeyError, ValueError) as e:
         print('')
         print('STOP. game\\data\\food-groups.json has no quality block this can read (%s). '
               'Nothing was written.' % e)
         return 1
-    for fid, edid, name, dish, effect in quality:
-        have = by_fid.get(fid)
-        if have is not None:
-            if have.tag != b'ALCH' or have.compressed or have.editor_id() != edid:
-                print('')
-                print('STOP. 0x%07X in this plugin is not ALCH %s as it should be. Nothing was written.'
-                      % (fid, edid))
-                return 1
-            quality_have.append(have)
-            continue
-        other = by_edid.get(edid)
-        if other is not None:
-            print('')
-            print('STOP. %s is already in this plugin as 0x%07X and this writes it as 0x%07X. '
-                  'Nothing was written.' % (edid, other.fid, fid))
-            return 1
-        # A festival feast's fine record wears the feast's own look (#3152),
-        # which is this plugin's and needs no master.
-        feast = next((row for row in FEASTS if '%x:%s' % (row[0] & 0xFFFFFF, args.plugin) == dish), None)
-        look = feast_look(*feast[6:]) if feast else dish_look(args.masters, dish, plugin_masters, problems)
-        if look is not None:
-            quality_new.append(quality_record(fid, edid, name, look, effect))
     if problems:
         print('')
         print('STOP. %d of the cooking quality records cannot be made from %s:' % (len(problems), args.masters))
@@ -2646,66 +2627,50 @@ def main():
             print('  %s' % line)
         print('Nothing was written.')
         return 1
-    built += house_new + wood_new + quality_new
 
-    # WHAT THE REGISTER SAYS GOES (#2553): the placements and switched-off
-    # Skyrim objects nothing of Thornswood's asks for, the cells and worlds left
-    # holding nothing, and the one base record nothing names.
-    going = set(f for f in dropping if f in by_fid)
-    removing |= going
-
-    # WHAT IS RETIRED GOES (#2962): the creation menus nothing shows.
-    retiring = set()
-    for obj, tag, edid in RETIRED:
-        fid = (len(plugin_masters) << 24) | obj
-        r = by_fid.get(fid)
-        if r is None:
-            continue
-        if r.tag != tag or r.editor_id() != edid:
+    records = own + house + wood + quality_made
+    by_edid = {}
+    for r in records:
+        other = by_edid.get(r.editor_id())
+        if other is not None:
             print('')
-            print('STOP. 0x%07X is %s %s, not the retired %s %s. Nothing was written.'
-                  % (fid, r.tag.decode(), r.editor_id(), tag.decode(), edid))
+            print('STOP. %s is written as 0x%07X and as 0x%07X. Nothing was written.'
+                  % (r.editor_id(), other.fid, r.fid))
             return 1
-        retiring.add(fid)
-    removing |= retiring
+        by_edid[r.editor_id()] = r
+    if len({r.fid for r in records}) != len(records):
+        print('')
+        print('STOP. two records share a form id. Nothing was written.')
+        return 1
 
-    # The cell and world records that stay hold the stations' placements.
-    # Each is written from the winning master's own record, Bethesda's, never
-    # the salvaged copy. That needs the masters; without them a record that is
-    # already Bethesda's is left as it is, and one that is still the salvaged
-    # copy stops the tool below.
-    world_keep = [r for r in records if r.tag in (b'CELL', b'WRLD') and r.fid not in removing
-                  and (r.fid >> 24) < len(plugin_masters)]
-    world_new = bethesdas_world_records(args.masters, plugin_masters,
-                                        [(r.tag, r.fid) for r in world_keep]) if world_keep else {}
-    world_from = {}
-    if world_new is not None:
-        for r in world_keep:
-            flags, data, src, ctx = world_new[(r.tag, r.fid)]
-            world_from[r.fid] = src
-            if (r.data, r.flags, r.extra) != (data, flags, FORM_TAIL):
-                rewritten.append((r, Rec(r.tag, flags, r.fid, FORM_TAIL, data)))
+    # WHAT IS RETIRED STAYS OUT (#2962): the creation menus nothing shows.
+    own_index = len(plugin_masters)
+    back = retired_among(records, own_index)
+    if back:
+        print('')
+        for r in back:
+            print('STOP. %s %s 0x%07X is retired (#2962) and something writes it again.'
+                  % (r.tag.decode(), r.editor_id(), r.fid))
+        print('Nothing was written.')
+        return 1
 
     # WHERE THE STATIONS STAND (#2553, Patrick's A of 16 October): every
-    # placement game\data\station-sites.json measures, and nothing else. A
-    # placement already where the table puts it stays; one the table moved is
-    # written over, or taken out of its old cell and put in its new one; a
-    # cell or worldspace a placement needs that the plugin does not carry is
-    # copied from the winning master's own record.
+    # placement game\data\station-sites.json and the quest sites measure, and
+    # nothing else, each in the cell the row names, and every cell and
+    # worldspace they stand in copied from its winning master's own record.
     sites = json.load(open(STATION_SITES, encoding='utf-8'))
     want, want_cell, want_world = {}, {}, {}
-    own_index = len(plugin_masters)
     quest_doc = quest_content()
     quest_sites = quest_doc['sites']
     authored_sites = dict(sites['sites'])
     if set(authored_sites) & set(quest_sites):
         raise ValueError('A quest and a station share a site name')
     authored_sites.update(quest_sites)
-    record_ids = {r.fid for r in own}
+    record_ids = {r.fid for r in records}
     for name, row in sorted(authored_sites.items()):
-        fid = local_fid(row['ref'], plugin_masters, args.plugin)
-        base = local_fid(row['base'], plugin_masters, args.plugin)
-        cell = local_fid(row['cell'], plugin_masters, args.plugin)
+        fid = local_fid(row['ref'], plugin_masters, PLUGIN)
+        base = local_fid(row['base'], plugin_masters, PLUGIN)
+        cell = local_fid(row['cell'], plugin_masters, PLUGIN)
         allowed_bases = {CATCH_LONGFIN, 0x5017100} if name in quest_sites else STATION_BASES
         if (base not in allowed_bases or (fid >> 24) != own_index or (cell >> 24) >= own_index or
                 fid in want or fid in record_ids):
@@ -2713,178 +2678,78 @@ def main():
             print('STOP. the station table\'s %s is not a placement of a station in this plugin, in a cell of '
                   'its masters, under a form id of its own. Nothing was written.' % name)
             return 1
-        if fid in taken and fid not in placed_ids(tree):
-            print('')
-            print('STOP. the station table gives %s 0x%07X, which this plugin uses for something else. '
-                  'Nothing was written.' % (name, fid))
-            return 1
         edid = 'ThornswoodQuestSite' + name.title() if name in quest_sites else None
-        if edid:
-            quest_identity(by_fid.get(fid), edid)
         want[fid] = placement(fid, base, row['pos'], row['angle'], edid)
         want_cell[fid] = cell
-        want_world[fid] = None if row['interior'] else local_fid(row['space'], plugin_masters, args.plugin)
+        want_world[fid] = None if row['interior'] else local_fid(row['space'], plugin_masters, PLUGIN)
     # A shifted sea marker must remain in its declared exterior grid. Verify
     # against Bethesda's CELL data, rather than assuming its anchor's cell.
-    exterior = {(b'CELL', local_fid(r['cell'], plugin_masters, args.plugin))
+    exterior = {(b'CELL', local_fid(r['cell'], plugin_masters, PLUGIN))
                 for r in quest_sites.values() if not r['interior']}
     exterior.add((b'WRLD', 0x3C))
     quest_cells = bethesdas_world_records(args.masters, plugin_masters, sorted(exterior))
-    if quest_cells is not None:
-        for name, row in quest_sites.items():
-            if row['interior']:
-                continue
-            cell = local_fid(row['cell'], plugin_masters, args.plugin)
-            data = dict(subrecords(quest_cells[(b'CELL', cell)][1]))
-            if b'XCLC' not in data or len(data[b'XCLC']) < 8:
-                raise ValueError('Quest sea marker has no native CELL grid: ' + name)
-            grid = struct.unpack_from('<ii', data[b'XCLC'])
-            if grid != tuple(math.floor(n / 4096) for n in row['pos'][:2]):
-                raise ValueError('Quest sea marker crosses its declared CELL: ' + name)
-            water = data.get(b'XCLW', b'')
-            flags = data.get(b'DATA', b'')
-            world = dict(subrecords(quest_cells[(b'WRLD', 0x3C)][1]))
-            if len(water) != 4 or not flags or not flags[0] & 2 or len(world.get(b'DNAM', b'')) != 8:
-                raise ValueError('Quest sea marker has no verified native water: ' + name)
-            level = struct.unpack('<f', water)[0]
-            if level > 3e38:
-                level = struct.unpack('<2f', world[b'DNAM'])[1]
-            if level != quest_doc['seaWater']['height']:
-                raise ValueError('Native sea water changed; remeasure quest markers: ' + name)
-    stays, moved, to_place = set(), set(), []
-    for r, parent, cell in placements_in(tree):
-        if r.fid in removing:
+    for name, row in quest_sites.items():
+        if row['interior']:
             continue
-        if r.fid not in want:
-            print('')
-            print('STOP. REFR 0x%07X is a placement neither the station table nor the register knows. '
-                  'Nothing was written.' % r.fid)
-            return 1
-        if cell != want_cell[r.fid]:
-            moved.add(r.fid)
-            continue
-        stays.add(r.fid)
-        if (r.data, r.flags, r.extra) != (want[r.fid].data, want[r.fid].flags, want[r.fid].extra):
-            rewritten.append((r, want[r.fid]))
-    to_place = [want[f] for f in sorted(want) if f not in stays]
+        cell = local_fid(row['cell'], plugin_masters, PLUGIN)
+        data = dict(subrecords(quest_cells[(b'CELL', cell)][1]))
+        if b'XCLC' not in data or len(data[b'XCLC']) < 8:
+            raise ValueError('Quest sea marker has no native CELL grid: ' + name)
+        grid = struct.unpack_from('<ii', data[b'XCLC'])
+        if grid != tuple(math.floor(n / 4096) for n in row['pos'][:2]):
+            raise ValueError('Quest sea marker crosses its declared CELL: ' + name)
+        water = data.get(b'XCLW', b'')
+        flags = data.get(b'DATA', b'')
+        world = dict(subrecords(quest_cells[(b'WRLD', 0x3C)][1]))
+        if len(water) != 4 or not flags or not flags[0] & 2 or len(world.get(b'DNAM', b'')) != 8:
+            raise ValueError('Quest sea marker has no verified native water: ' + name)
+        level = struct.unpack('<f', water)[0]
+        if level > 3e38:
+            level = struct.unpack('<2f', world[b'DNAM'])[1]
+        if level != quest_doc['seaWater']['height']:
+            raise ValueError('Native sea water changed; remeasure quest markers: ' + name)
     need = set()
-    for r in to_place:
-        cell = want_cell[r.fid]
-        if cell in removing or find_cell(tree, cell) is None:
-            if cell in removing:
-                print('')
-                print('STOP. the register says cell 0x%08X goes, and the station table places 0x%07X in it. '
-                      'Run scripts\\mods\\List-SalvagedRecords.py. Nothing was written.' % (cell, r.fid))
-                return 1
-            need.add((b'CELL', cell))
-        w = want_world[r.fid]
-        if w is not None and find_world(tree, w) is None:
-            need.add((b'WRLD', w))
-    copies = {}
-    if need:
-        copies = bethesdas_world_records(args.masters, plugin_masters, sorted(need))
-        if copies is None:
-            print('')
-            print('STOP. %d cell or worldspace record(s) the stations need are not in this plugin, and the '
-                  'masters are not in %s. Give --masters the game\'s Data folder. Nothing was written.'
-                  % (len(need), args.masters))
-            return 1
+    for f in want:
+        need.add((b'CELL', want_cell[f]))
+        if want_world[f] is not None:
+            need.add((b'WRLD', want_world[f]))
+    copies = bethesdas_world_records(args.masters, plugin_masters, sorted(need))
 
-    # A salvaged record that is not going and not written over is refused
-    # here, before anything else: put back by hand, or by an old copy, it
-    # would otherwise ride along with a run that has nothing else to do.
-    replacing = set(o.fid for o, n in rewritten)
+    # THE FILE. The top groups in their order, each record in the order this
+    # writes them; then the worlds, the cells in their blocks and the
+    # placements in their cells, each in its sorted place.
+    tags = []
     for r in records:
-        if r.fid in removing or r.fid in replacing:
-            continue
-        # One the register says left before #2553 (the skill manuals, the
-        # Execution Block and its placement) is refused by its form id too,
-        # however it was edited since.
-        h = body_hash(plain(r))
-        salvaged_bytes = h in salvaged_hashes and r.fid not in same_by_design and bethesda_hash.get(r.fid) != h
-        if r.fid in gone_before or salvaged_bytes:
+        if r.tag not in GROUP_ORDER:
             print('')
-            print('STOP. %s 0x%07X %s is a salvaged record (#2553), by its %s, and the register '
-                  'keeps no such record. Nothing was written.'
-                  % (r.tag.decode(), r.fid, r.editor_id(), 'bytes' if salvaged_bytes else 'form id'))
+            print('STOP. %s %s is a %s, and GROUP_ORDER gives that type no place in the plugin. Give it one. '
+                  'Nothing was written.' % (r.tag.decode(), r.editor_id(), r.tag.decode()))
             return 1
+        if r.tag not in tags:
+            tags.append(r.tag)
+    if copies:
+        tags += [t for t in (b'CELL', b'WRLD') if t not in tags]
+    tree = [Grup(t + b'\x00' * 8 + GROUP_STAMP, []) for t in GROUP_ORDER if t in tags]
+    for r in records:
+        next(g for g in tree if g.label[:4] == r.tag).kids.append(r)
+    for (tag, fid), (flags, data, src, ctx) in sorted(copies.items(), key=lambda x: (x[0][0] != b'WRLD', x[0][1])):
+        rec = Rec(tag, flags, fid, FORM_TAIL, data)
+        if tag == b'WRLD':
+            put_world(tree, rec, GROUP_STAMP)
+        else:
+            w = next(want_world[f] for f in want if want_cell[f] == fid)
+            put_cell(tree, rec, ctx, w, GROUP_STAMP)
+    for f in sorted(want):
+        put_placement(tree, want[f], want_cell[f], GROUP_STAMP)
 
-    print('')
-    print('What this tool writes from its own numbers (#2553)')
-    for r in own:
-        state = ('added' if r in built else
-                 'rewritten' if any(n is r for _, n in rewritten) else 'as it is')
-        print('  %s 0x%07X %-40s %s' % (r.tag.decode(), r.fid, r.editor_id(), state))
-    for r in house_new:
-        print("  COBJ 0x%08X %-30s HearthFires.esm's, never listed: GetItemCount(gold) < 0"
-              % (r.fid, r.editor_id()))
-    for r in wood_new:
-        print('  COBJ 0x%08X %-30s %s override, BNAM -> woodworking bench'
-              % (r.fid, r.editor_id(), next(m for f, e, m in WOODWORKER_MASTER_RECIPES if f == r.fid)))
-    print('')
-    print('Cooking quality (#2906, game\\data\\food-groups.json quality)')
-    print('  %d already here, %d made now from the masters' % (len(quality_have), len(quality_new)))
-    for r in quality_new:
-        print('  ALCH 0x%08X %s' % (r.fid, r.editor_id()))
-    if house_bare or wood_bare:
-        print('')
-        print('What changes')
-    for r in house_bare:
-        print('  COBJ 0x%08X %-30s gains the condition that is never true' % (r.fid, r.editor_id()))
-    for r in wood_bare:
-        print('  COBJ 0x%08X %-30s BNAM -> woodworking bench' % (r.fid, r.editor_id()))
-    print('')
-    print('Cells and worlds')
-    if world_new is None:
-        print('  the masters are not in %s, so the %d that stay are left as they are'
-              % (args.masters, len(world_keep)))
-    else:
-        changed = sum(1 for o, n in rewritten if o.tag in (b'CELL', b'WRLD'))
-        print('  %d stay, each written from its winning master, %d of them changed now'
-              % (len(world_keep), changed))
-    if removing:
-        print('')
-        print('What comes out')
-    if going:
-        kinds = {}
-        for f in going:
-            kinds[by_fid[f].tag.decode()] = kinds.get(by_fid[f].tag.decode(), 0) + 1
-        print('  salvaged, nothing of Thornswood\'s asks for them (#2553): %s'
-              % ', '.join('%d %s' % (n, t) for t, n in sorted(kinds.items())))
-    for f in sorted(retiring):
-        print('  retired, nothing shows or names it (#2962): %s 0x%07X %s'
-              % (by_fid[f].tag.decode(), f, by_fid[f].editor_id()))
-    print('')
-    print('Where the stations stand (#2553, game\\data\\station-sites.json)')
-    kinds = {}
-    for r in want.values():
-        b = struct.unpack_from('<I', dict(subrecords(r.data))[b'NAME'])[0]
-        kinds[b] = kinds.get(b, 0) + 1
-    print('  %s' % ', '.join('%d %s' % (kinds.get(b, 0), n) for b, n in sorted(STATION_NAMES.items())))
-    print('  %d already where the table puts them, %d moved to another cell, %d placed now, %d cell and '
-          'worldspace record(s) copied from the masters for them'
-          % (len(stays), len(moved), len(to_place) - len(moved), len(copies)))
-    # A cell or world the plugin carries with none of its records under it,
-    # as the file stands; one a move empties is found when the move is made.
-    going_bare = set()
-    drop_bare_parents(copy.deepcopy(tree), going_bare)
-    going_bare &= set(before)
-    if going_bare:
-        print('  %d cell or world record(s) hold none of this plugin\'s records and go: %s'
-              % (len(going_bare), ', '.join('0x%07X' % f for f in sorted(going_bare))))
-
-    # The description names what the written plugin will hold (#2993): what
-    # stays, what is added, and the cells and worlds copied in for stations.
-    holds = ([r for r in records if r.fid not in removing] + built + to_place)
-    # A record carrying the other server's name is that, not a new kind of
-    # record for the description to name, so it is said first. The written
-    # file is read for it again below.
+    # The description names what the plugin holds (#2993): its records, and
+    # the cells and worlds copied in for the stations.
+    holds = records + [want[f] for f in sorted(want)]
     left = [(r, w) for r in holds for w in other_server_names(r)]
     if left:
         print('')
         for r, w in left:
-            print('STOP. %s 0x%07X still carries the other server\'s name: %s'
-                  % (r.tag.decode(), r.fid, w))
+            print('STOP. %s 0x%07X carries the other server\'s name: %s' % (r.tag.decode(), r.fid, w))
         print('Nothing was written.')
         return 1
     keys = ['%s %s' % (r.tag.decode(), r.editor_id()) for r in holds]
@@ -2903,221 +2768,96 @@ def main():
               '(#2993). Shorten the words in CONTENTS. Nothing was written.'
               % (len(description) + 1, DESCRIPTION_MOST))
         return 1
-    new_head, head_changed = described(head, description)
-    print('')
-    print('The header')
-    if head_changed:
-        print('  its description becomes: %s' % description.decode('ascii'))
-    else:
-        print('  its description already reads as this tool writes it')
-
-    if args.check:
-        print('')
-        print('  --check, so nothing was written.')
-        return 0
-
-    edited = set()
-    for old, new in rewritten:
-        old.data, old.flags, old.extra = new.data, new.flags, new.extra
-        edited.add(old.fid)
-    world_rewritten = set(o.fid for o, n in rewritten if o.tag in (b'CELL', b'WRLD'))
-    # A house part already overridden here keeps or gains the condition (#2258).
-    for r in house_have:
-        if never_listed(r):
-            edited.add(r.fid)
-    # Woodworking bench overrides (#516).
-    for r in wood_have:
-        if set_bnam(r, WOODWORKING_KEYWORD):
-            edited.add(r.fid)
-    if not built and not edited and not removing and not head_changed and not to_place and not going_bare:
-        print('')
-        print('  Everything this writes is already in the plugin as it writes it. Nothing was written.')
-        return 0
-    old_head = bytes(head)
-    head = new_head
-    # The stations go in before anything comes out, so a cell that loses the
-    # other server's placement and gains Thornswood's keeps its record.
-    for f in moved:
-        for r, parent, cell in placements_in(tree):
-            if r.fid == f:
-                parent.remove(r)
-                break
-    stamp = next(k for k in tree if isinstance(k, Grup)).label[12:16]
-    built_world = []
-    for (tag, fid), (flags, data, src, ctx) in sorted(copies.items(), key=lambda x: (x[0][0] != b'WRLD', x[0][1])):
-        rec = Rec(tag, flags, fid, FORM_TAIL, data)
-        built_world.append(rec)
-        if tag == b'WRLD':
-            put_world(tree, rec, stamp)
-        else:
-            w = next(want_world[f] for f in want if want_cell[f] == fid)
-            put_cell(tree, rec, ctx, w, stamp)
-    for r in to_place:
-        put_placement(tree, r, want_cell[r.fid], stamp)
-    built_world += to_place
-    tree = take_out(tree, removing)
-    bare = set()
-    tree = drop_bare_parents(tree, bare)
-    # A record this adds goes where it belongs in the order this tool writes
-    # its records in, not at the end of its group: a house part copied back in
-    # from HearthFires.esm lands before the woodworking overrides, where it
-    # was, so the same records always make the same file.
-    order = ([r.fid for r in own] + [f for f, _ in HOUSE_PARTS] +
-             [f for f, _, _ in WOODWORKER_MASTER_RECIPES] + [q[0] for q in quality])
-    rank = dict((f, i) for i, f in enumerate(order))
-    for r in built:
-        group = ensure_top_group(tree, r.tag)
-        at = next((i for i, k in enumerate(group.kids)
-                   if isinstance(k, Rec) and rank.get(k.fid, -1) > rank.get(r.fid, len(order))),
-                  len(group.kids))
-        group.kids.insert(at, r)
-    built += built_world
-    added = set(r.fid for r in built)
-    kept_ids = set(r.fid for r in every_record(tree)) - added
-    # A placement the table moved to another cell is in the file again, added.
-    # A cell or world left holding none of this plugin's records goes with
-    # its last placement (drop_bare_parents).
-    gone_unasked = sorted(f for f in before
-                          if f not in kept_ids and f not in removing and f not in moved and f not in bare)
-    if gone_unasked:
-        print('')
-        print('STOP. 0x%07X went with nothing left under it, and the register does not say it goes. '
-              'Nothing was written.' % gone_unasked[0])
-        return 1
-    kept = [r for r in records if r.fid in kept_ids]
-
-    # The header's record count, which sits in HEDR after the version float.
-    #
-    # IT IS SET TO THE TRUE COUNT RATHER THAN ADDED TO, because the number in
-    # the file is wrong and has been for as long as this repo has had the file.
-    # Measured 21 September across three copies: before the conditions edit,
-    # before the manual trim, and after, the header said 408 every time, while
-    # the file actually held 392, 392 and 376. So neither the editor id rename
-    # of 21 September nor Remove-DeadRecords.ps1 has ever touched it,
-    # and the plugin has been shipping and working at 408 against 392, which is
-    # the evidence that the engine does not read it. Adding three to a wrong
-    # number would keep it wrong; this writes what is actually there.
-    hedr = head.find(b'HEDR')
-    if hedr < 0:
-        print('STOP. no HEDR in the header. Nothing was written.')
-        return 1
-    claimed = struct.unpack_from('<i', head, hedr + 6 + 4)[0]
-    struct.pack_into('<i', head, hedr + 6 + 4, len(kept) + len(built))
-    if claimed != len(records):
-        print('')
-        print('The header record count was wrong before this ran')
-        print('  it said %d and the file held %d. Setting it to %d.'
-              % (claimed, len(records), len(kept) + len(built)))
-
-    out = bytes(head) + b''.join(k.bytes() for k in tree)
+    count = len(holds) + len(copies)
+    head = header(description, count)
+    out = head + b''.join(k.bytes() for k in tree)
 
     print('')
-    print('Does the result verify')
-    after_records = list(every_record(parse(out, len(head), len(out))))
-    if len({r.fid for r in after_records}) != len(after_records):
-        raise ValueError('The authored plugin contains duplicate form IDs; nothing was written')
-    # The header: the other server's name and short forms nowhere in it, and
-    # nothing changed but the description and the record count.
-    out_head = out[:len(head)]
-    if other_server_in_header(out_head):
-        print('  STOP. the header still carries the other server\'s name or a short form of it. '
-              'Nothing was written.')
-        return 1
-    def header_rest(h):
-        return [(t, b) for t, b in subrecords(h[24:]) if t not in (b'SNAM', b'HEDR')]
-    if header_rest(out_head) != header_rest(old_head) or out_head[8:24] != old_head[8:24]:
-        print('  STOP. the header changed in more than its description and record count. '
-              'Nothing was written.')
-        return 1
-    if struct.unpack_from('<I', out_head, 4)[0] != len(out_head) - 24:
-        print('  STOP. the header\'s size field does not match the header. Nothing was written.')
-        return 1
-    if len(after_records) != len(kept) + len(built):
-        print('  STOP. %d records in, %d out, expected %d. Nothing was written.'
-              % (len(records), len(after_records), len(kept) + len(built)))
-        return 1
-    back = [r for r in after_records if r.fid in removing]
-    if back:
-        print('  STOP. 0x%07X was to come out and is still there. Nothing was written.'
-              % back[0].fid)
-        return 1
-    seen = [r for r in after_records if r.fid not in added]
-    for was_r, now in zip(kept, seen):
-        if (was_r.fid != now.fid or was_r.tag != now.tag or
-                (was_r.flags != now.flags and now.fid not in world_rewritten)):
-            print('  STOP. 0x%07X changed identity. Nothing was written.' % was_r.fid)
-            return 1
-        if now.fid not in edited and now.data != before[was_r.fid]:
-            print('  STOP. 0x%07X was not on the list and its bytes changed. '
-                  'Nothing was written.' % now.fid)
-            return 1
-    made = dict((r.fid, r) for r in after_records if r.fid in added)
-    for b in built:
-        if made[b.fid].data != b.data:
-            print('  STOP. 0x%07X did not come back as it was built. Nothing was written.'
-                  % b.fid)
-            return 1
-    now_by_fid = dict((r.fid, r) for r in after_records)
-    for r in own:
-        if now_by_fid[r.fid].data != r.data:
-            print('  STOP. 0x%07X is not what this tool writes for it. Nothing was written.' % r.fid)
-            return 1
+    print('What it holds')
+    print('  %d records this tool writes from its own numbers, %d of them Thornswood\'s' %
+          (len(own), len([r for r in own if (r.fid >> 24) == own_index])))
+    print('  %d house part recipes of HearthFires.esm, never listed (#2258)' % len(house))
+    print('  %d recipes of the masters moved to the woodworking bench (#516)' % len(wood))
+    print('  %d Dwarven scrap recipes of Skyrim.esm on no bench (#613)' % len(scrap))
+    print('  %d cooking quality records (#2906)' % len(quality_made))
+    kinds = {}
+    for r in want.values():
+        b = struct.unpack_from('<I', dict(subrecords(r.data))[b'NAME'])[0]
+        kinds[b] = kinds.get(b, 0) + 1
+    print('  %d placements: %s' % (len(want), ', '.join('%d %s' % (kinds.get(b, 0), n)
+                                                         for b, n in sorted(STATION_NAMES.items()))))
+    print('  %d cell and worldspace records they stand in, each its winning master\'s' % len(copies))
+    print('  the header\'s description: %s' % description.decode('ascii'))
+
+    print('')
+    print('Does it read back')
+    after = list(every_record(parse(out, len(head), len(out))))
+    problems = []
+    if len({r.fid for r in after}) != len(after):
+        problems.append('two records share a form id')
+    if len(after) != count:
+        problems.append('%d records read back, and %d were built' % (len(after), count))
+    if struct.unpack_from('<I', out, 4)[0] != len(head) - 24:
+        problems.append('the header\'s size field does not match the header')
+    if other_server_in_header(head):
+        problems.append('the header carries the other server\'s name or a short form of it')
+    now = dict((r.fid, r) for r in after)
+    for r in records:
+        got = now.get(r.fid)
+        if got is None or (got.tag, got.flags, got.extra, got.data) != (r.tag, r.flags, r.extra, r.data):
+            problems.append('%s 0x%07X does not read back as it was built' % (r.tag.decode(), r.fid))
     if orphan_groups(tree):
-        print('  STOP. a cell or world group is left without its record. Nothing was written.')
-        return 1
+        problems.append('a cell or world group is left without its record')
     # THE PLACEMENTS ARE THE STATION TABLE'S, each in its cell, and no other.
     there = dict((r.fid, (r, cell)) for r, parent, cell in placements_in(tree))
     if sorted(there) != sorted(want) or any(there[f][0].data != want[f].data or there[f][1] != want_cell[f]
                                             for f in want):
-        print("  STOP. the placements are not the station table's, each in its cell. Nothing was written.")
-        return 1
-    # NOTHING SALVAGED IS LEFT (#2553), but the four kiln recipes and the
-    # pickaxe and the axe, every field of which the rulebook states (the
-    # register's sameByDesign says which line).
-    left_salvaged = []
-    for r in after_records:
-        h = body_hash(plain(r))
-        if h in salvaged_hashes and r.fid not in same_by_design and bethesda_hash.get(r.fid) != h:
-            left_salvaged.append(r)
-    if left_salvaged:
-        for r in left_salvaged:
-            print('  STOP. %s 0x%07X %s is still a salvaged record, byte for byte.'
-                  % (r.tag.decode(), r.fid, r.editor_id()))
+        problems.append("the placements are not the station table's, each in its cell")
+    # NOTHING SALVAGED (#2553), but the four kiln recipes and the pickaxe and
+    # the axe, every field of which the rulebook states (the register's
+    # sameByDesign says which line), and nothing the register says left
+    # before #2553.
+    problems += refused(after, register)
+    if problems:
+        for line in problems:
+            print('  STOP. %s.' % line)
         print('  Nothing was written.')
         return 1
-    left = [(r, w) for r in after_records for w in other_server_names(r)]
-    if left:
-        for r, w in left:
-            print('  STOP. %s 0x%07X still carries the other server\'s name: %s'
-                  % (r.tag.decode(), r.fid, w))
-        print('  Nothing was written.')
-        return 1
-    count = struct.unpack_from('<i', out, hedr + 6 + 4)[0]
-    if count != len(after_records):
-        print('  STOP. the header says %d records and there are %d. Nothing was written.'
-              % (count, len(after_records)))
-        return 1
-    print('  ok    %d records in, %d out, same order, same ids'
-          % (len(records), len(after_records)))
-    print('  ok    %d added, %d edited, %d taken out, every other byte untouched'
-          % (len(built), len(edited), len(removing)))
-    if bare & set(before):
-        print('  ok    %d cell or world record(s) left holding none of this plugin\'s records went: %s'
-              % (len(bare & set(before)), ', '.join('0x%07X' % f for f in sorted(bare & set(before)))))
-    print('  ok    every record this tool writes is what it writes')
+    print('  ok    %d records, every form id once, the header says %d' % (len(after), count))
+    print('  ok    every record reads back as it was built')
     print("  ok    the %d placements are the station table's, each in its cell" % len(want))
-    print('  ok    no salvaged record is left')
-    print('  ok    the header record count reads %d, which is what is in the file' % count)
-    print('  ok    no record carries the other server\'s name or its short forms, '
-          'compressed ones included')
-    print('  ok    the header carries Thornswood\'s description and not that name, '
-          'and nothing else in it moved')
+    print('  ok    no salvaged record, nothing retired, and no record or header carries the other server\'s name')
+    sha = hashlib.sha256(out).hexdigest()
+    print('  %s bytes, sha256 %s' % (format(len(out), ','), sha))
 
-    open(path, 'wb').write(out)
+    have = open(args.out, 'rb').read() if os.path.isfile(args.out) else None
+    if args.check:
+        print('')
+        if have is None:
+            print('  --check: there is no %s to hold it to. Nothing was written.' % args.out)
+            return 1
+        if have == out:
+            print('  --check: %s is what this builds, byte for byte. Nothing was written.' % args.out)
+            return 0
+        print('  --check: %s is not what this builds:' % args.out)
+        for line in differences(out, have):
+            print('    %s' % line)
+        print('  Nothing was written.')
+        return 1
+    if have == out:
+        print('')
+        print('  %s is already what this builds. Nothing was written.' % args.out)
+        return 0
+    os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+    with open(args.out + '.part', 'wb') as f:
+        f.write(out)
+    os.replace(args.out + '.part', args.out)
     print('')
-    print('  %s bytes -> %s bytes' % (format(len(raw), ','), format(len(out), ',')))
-    print('  THIS IS A SHIPPED FILE. Its size changed, so this needs a release and')
-    print('  every client will download it again.')
+    print('  written to %s' % args.out)
+    if have is not None:
+        print('  it differs from what was there:')
+        for line in differences(out, have):
+            print('    %s' % line)
     return 0
 
 

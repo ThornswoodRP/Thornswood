@@ -76,7 +76,16 @@ HIDE_EDIDS.forEach(function (edid) {
 });
 yes('Content.esp does not override the keeper EDID', esp.indexOf(Buffer.from(KEEP_EDID + '\0')) < 0);
 
-yes('collapse script is in the tree', fs.existsSync(path.join(ROOT, 'scripts', 'mods', 'Collapse-DwarvenIngots.py')));
+// Since #5191 the content tool copies the five from Skyrim.esm on every build,
+// without BNAM, and the one-time collapse script is gone.
+yes('Add-ContentRecords.py writes the five, by id and editor id, without BNAM', (function () {
+  const src = fs.readFileSync(path.join(ROOT, 'scripts', 'mods', 'Add-ContentRecords.py'), 'utf8');
+  const m = /DWARVEN_SCRAP_HIDDEN = \(([\s\S]*?)\n\)/.exec(src);
+  return !!m && HIDE.every(function (id, i) {
+    return m[1].indexOf("(0x00" + id.split(':')[0].toUpperCase() + ", '" + HIDE_EDIDS[i] + "')") >= 0;
+  }) && /DWARVEN_SCRAP_MASTER = 'Skyrim\.esm'/.test(src) && /scrap\.append\(Rec\(r\.tag, r\.flags, r\.fid, r\.extra, pack_subrecords\(\[\(t, b\) for t, b in pairs if t != b'BNAM'\]\)\)\)/.test(src);
+})());
+yes('the one-time collapse script is gone', !fs.existsSync(path.join(ROOT, 'scripts', 'mods', 'Collapse-DwarvenIngots.py')));
 yes('Build-RecipeTable names the collapsed editor ids', (function () {
   const src = fs.readFileSync(path.join(ROOT, 'scripts', 'dev', 'Build-RecipeTable.ps1'), 'utf8');
   return src.indexOf('COLLAPSED_SMELT_EDITOR_IDS') >= 0 &&

@@ -1,0 +1,139 @@
+{
+  "about": "The run after each dev release (#5197): Play from the launcher, the choice page, the world, the journal, the inventory and the game's menu, with a screenshot of each. tests/real-client/README.md says how a step is written.",
+  "steps": [
+    {
+      "do": "page",
+      "why": "the choice page is up and ours",
+      "js": "!!window.thornswoodSelect && !!document.getElementById('ts-select')",
+      "timeout": 300000
+    },
+    {
+      "do": "shot",
+      "name": "choice-page"
+    },
+    {
+      "do": "page",
+      "why": "past the scroll the way a person goes: the sealed scroll, then Continue",
+      "timeout": 60000,
+      "js": "(function(){var i=document.querySelector('#ts-select .intro');if(!i||getComputedStyle(i).display==='none')return 'no scroll';var o=i.querySelector('.open');if(o&&Number(getComputedStyle(o).opacity)>0.9){i.querySelector('.go').click();return 'continued';}var c=i.querySelector('.closed');if(c)c.click();return '';})()"
+    },
+    {
+      "do": "page",
+      "why": "the slots are drawn",
+      "js": "(function(){var i=document.querySelector('#ts-select .intro');if(i&&getComputedStyle(i).display!=='none')return '';return document.querySelectorAll('#ts-select .list > *').length;})()",
+      "timeout": 30000
+    },
+    {
+      "do": "shot",
+      "name": "slots"
+    },
+    {
+      "do": "page",
+      "why": "Play on the slot the page has picked, until the page says it is joining",
+      "timeout": 120000,
+      "js": "(function(){var t=document.querySelector('#ts-select .status');var w=t?t.textContent:'';if(/seat|Joining|creation hall|loading|line/i.test(w))return w;window.thornswoodSelect.play();return '';})()"
+    },
+    {
+      "do": "wait",
+      "for": "world",
+      "why": "in the world, no loading screen",
+      "timeout": 300000
+    },
+    {
+      "do": "shot",
+      "name": "in-world"
+    },
+    {
+      "do": "key",
+      "code": 36,
+      "why": "J, our journal"
+    },
+    {
+      "do": "wait",
+      "for": "message",
+      "match": [
+        "thornswood-front",
+        "journal:opened"
+      ],
+      "timeout": 15000
+    },
+    {
+      "do": "shot",
+      "name": "journal-open"
+    },
+    {
+      "do": "key",
+      "code": 36,
+      "why": "J again closes it"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "Journal Menu",
+      "open": false,
+      "timeout": 10000,
+      "why": "the game's own journal stays shut"
+    },
+    {
+      "do": "key",
+      "code": 23,
+      "why": "I, the inventory"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "InventoryMenu",
+      "open": true,
+      "timeout": 15000
+    },
+    {
+      "do": "shot",
+      "name": "inventory"
+    },
+    {
+      "do": "key",
+      "code": 23
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "InventoryMenu",
+      "open": false,
+      "timeout": 15000
+    },
+    {
+      "do": "key",
+      "code": 15,
+      "why": "Tab, the game's menu"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "TweenMenu",
+      "open": true,
+      "timeout": 15000
+    },
+    {
+      "do": "shot",
+      "name": "tween-menu"
+    },
+    {
+      "do": "key",
+      "code": 15
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "TweenMenu",
+      "open": false,
+      "timeout": 15000
+    },
+    {
+      "do": "shot",
+      "name": "back-in-world"
+    },
+    {
+      "do": "end"
+    }
+  ]
+}

@@ -20,8 +20,8 @@
 //   3. the placements are exactly game/data/station-sites.json's, Thornswood's
 //      own spots for the kiln, the salt quarry, the hive and the lab (Patrick,
 //      A on #2553), each at its point and turn in its cell;
-//   4. the tool, run over a copy with no game to read, writes nothing: every
-//      record it writes is already what it writes;
+//   4. every record the tool writes from its own numbers is the committed
+//      record byte for byte, and with no game to copy from it writes nothing;
 //   5. where the repository's history is here (not a shallow clone), the
 //      register's sources are those commits' plugins, byte for byte, and its
 //      salvaged set and hashes are what they give.
@@ -277,17 +277,32 @@ const tmpRoot = process.env.TEST_TMP || os.tmpdir();
 fs.mkdirSync(tmpRoot, { recursive: true });
 const dir = fs.mkdtempSync(path.join(tmpRoot, 'ts-2553-'));
 try {
-  fs.writeFileSync(path.join(dir, 'Thornswood-Content.esp'), shipped);
+  // The tool writes the plugin from nothing (#5191); the records it writes
+  // from its own numbers have to be the committed ones, so what 1 to 3 prove
+  // of the committed plugin is true of what the tool writes.
+  const run = python(['-c', [
+    'import importlib.util, struct, sys',
+    'spec = importlib.util.spec_from_file_location("acr", sys.argv[1])',
+    'm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)',
+    'raw = open(sys.argv[2], "rb").read()',
+    'hs = struct.unpack_from("<I", raw, 4)[0]',
+    'have = dict((x.fid, x.bytes()) for x in m.every_record(m.parse(raw, 24 + hs, len(raw))))',
+    'made = m.thornswood_records(m.clam01(), []) + m.seasonal_records()',
+    'off = [r for r in made if have.get(r.fid) != r.bytes()]',
+    'print("%d made, %d not the committed record%s" % (len(made), len(off), "".join(" 0x%07X" % r.fid for r in off)))',
+  ].join('\n'), TOOL, ESP]);
+  yes('4 python is on this machine and the tool loads as a module', !!run && run.status === 0);
+  if (run && run.status !== 0) { console.log(run.stdout + run.stderr); }
+  if (run && run.status === 0) {
+    yes('4 every record the tool writes from its own numbers is the committed record byte for byte: ' + run.stdout.trim(),
+        / 0 not the committed record$/.test(run.stdout.trim()) && !/^0 made/.test(run.stdout));
+  }
   const noGame = path.join(dir, 'no-game');
   fs.mkdirSync(noGame);
-  const run = python([TOOL, '--data', dir, '--masters', noGame]);
-  yes('4 python is on this machine', run !== null);
-  if (run) {
-    yes('4 the tool, with no game to read, finds every record it writes already written and writes nothing',
-        run.status === 0 && /Nothing was written/.test(run.stdout) &&
-        fs.readFileSync(path.join(dir, 'Thornswood-Content.esp')).equals(shipped));
-    if (run.status !== 0) { console.log(run.stdout + run.stderr); }
-  }
+  const out = path.join(dir, 'Thornswood-Content.esp');
+  const stop = python([TOOL, '--masters', noGame, '--out', out]);
+  yes('4 with no game to copy from, the tool stops and writes nothing',
+      !!stop && stop.status !== 0 && /Nothing was written/.test(stop.stdout) && !fs.existsSync(out));
 
   // ------------------------------------------- 5. the history, if here ---
   const git = (args, enc) => spawnSync('git', ['-C', ROOT].concat(args), { encoding: enc || 'utf8', maxBuffer: 1 << 28 });

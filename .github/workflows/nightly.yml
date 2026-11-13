@@ -29,6 +29,13 @@
 # is safe), the rest of the checks in a job beside them, and the board is
 # told in a last job that waits for all of them and runs whether they passed
 # or failed, though not when somebody cancels the run.
+#
+# THE TOKEN (#4162). Every job reads the repository and nothing more, and
+# each checkout keeps no credentials in .git/config, so no harness can read
+# a token there. "nightly" also reads issues and pull requests (the stray
+# and plain-writing checks); only "board" writes an issue. Until #4162
+# issues: write was given to all five, so the jobs that run every harness
+# and the bot's tests held a token that could write issues.
 name: Nightly checks
 on:
   schedule:
@@ -36,8 +43,6 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-  issues: write
-  pull-requests: read
 concurrency:
   group: nightly
   cancel-in-progress: false
@@ -51,6 +56,12 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
     timeout-minutes: 45
+    # Nightly-Stray.ps1 reads pull requests and branches, and
+    # Nightly-PlainIssues.ps1 reads issues and comments; neither writes.
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
     steps:
       # Every commit and tree, no old file contents: "Build the launcher"
       # works out the launcher's number from when its sources last changed
@@ -60,6 +71,7 @@ jobs:
         with:
           fetch-depth: 0
           filter: blob:none
+          persist-credentials: false
       # The .NET 10 SDK publishes the launcher (#4823), pinned for the reason
       # build.yml gives.
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
@@ -352,6 +364,7 @@ jobs:
         with:
           fetch-depth: 0
           filter: blob:none
+          persist-credentials: false
 
       - name: Install the eslint the lint harness copies
         if: ${{ !cancelled() }}
@@ -418,6 +431,7 @@ jobs:
         with:
           sparse-checkout: scripts/dev/Merge-HarnessReports.ps1
           sparse-checkout-cone-mode: false
+          persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: harness-report-*
@@ -451,6 +465,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Run the bot harnesses
         shell: pwsh
@@ -524,8 +540,14 @@ jobs:
     if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
     runs-on: windows-latest
     timeout-minutes: 10
+    # The one job that writes an issue (Nightly-Issue.ps1, #4162).
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Put a failure on the board
         if: ${{ needs.nightly.result != 'success' || needs.harnesses.result != 'success' || needs.harness-report.result != 'success' || needs.bot.result != 'success' }}

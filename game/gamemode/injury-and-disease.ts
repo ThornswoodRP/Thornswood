@@ -703,11 +703,14 @@
     try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { return; }
     for (var i = 0; i < online.length; i++) {
       var who = online[i];
+      // The wounds first: most people are not bleeding, and asking everybody
+      // whether they are dead before that was a second engine read a person
+      // every second for nothing (#5431).
+      var rate = bleedRate(read(who));
+      if (!rate) { continue; }
       var dead = false;
       try { dead = !!mp.get(who, 'isDead'); } catch (e) { continue; }
       if (dead) { continue; }
-      var rate = bleedRate(read(who));
-      if (!rate) { continue; }
       try {
         mp.callPapyrusFunction('method', 'Actor', 'DamageActorValue',
           { type: 'form', desc: mp.getDescFromId(who) }, ['Health', rate]);

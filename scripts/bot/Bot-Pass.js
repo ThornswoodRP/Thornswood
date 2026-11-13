@@ -34,10 +34,23 @@
 //              does, and the gamemode ends creation (thornswoodChargen at
 //              stage done) and welcomes it there, a line back over the relay;
 //   needs      /needs over the relay is answered with the needs line;
+//   claim      the bot opens the door of Whiterun Stables, a building nobody
+//              holds, near the town's start spot. The gamemode writes it the
+//              line at the door (Claim) and the door takes it inside; it
+//              presses Claim, which sends /claim over the relay as the lock
+//              key does, and the gamemode answers it, puts the deed in its
+//              pack and the claim in its register on disk (private/
+//              property.json);
+//   keys       the master key came with the deed, and from inside the bot
+//              opens the door's other half and presses Lock (/lock): the
+//              gamemode answers, the register says locked, and the line at
+//              the door offers Unlock;
 //   saved      the world on disk holds the character with that name;
 //   restart    the server is stopped and started again and loads again;
 //   loads back a second bot logs in as the same profile and is sent the same
-//              character: its name, where it stood, and no race menu.
+//              character: its name, where it stood, and no race menu;
+//   kept       it opens the stables' door again and the line there offers
+//              Unlock: the claim and its lock came back with the restart.
 // The server's own output goes to bot-pass-server.log beside it, and the
 // last lines of it into the result, so a FAIL says what the server said. The
 // voice service's goes to bot-pass-voice.log in its folder.
@@ -76,6 +89,25 @@ const NORD = 0x13746;
 // properties, and after that as an UpdateProperty of its own.
 const CHARGEN_PROPERTY = 'thornswoodChargen';
 
+// The property block's lines (plog), which a FAIL from the claim on carries.
+const PROPERTY = '[property] ';
+const PROPERTY_STEPS = ['claim', 'keys', 'kept'];
+// What a door says to the person who opened it (property.ts doorLine,
+// DOOR_LINE_PROPERTY, visible by its owner): x is what the lock key does
+// there, claim, lock or unlock, and n the building.
+const DOOR_LINE = 'thornswoodDoorLine';
+// The engine's Activate message, a press of E (ActivateMessage.h): 0x14 is
+// the bot's own character, as the game sends it.
+const ACTIVATE = 6;
+const TELEPORT = 20;
+// Whiterun Stables, the building nearest Whiterun's start spot, which a new
+// character is sent to (chargen.json, start, Tamriel 4,-3). Its outside
+// door stands in Tamriel and its other half inside the stables, each the
+// other's way through (game/data/doors.json, to). The tables beside the
+// gamemode must still give both doors to that building, or the pass says
+// so instead of pressing a door that is no longer its.
+const STABLES = { building: '165a0:Skyrim.esm', cell: 0x165a0, outside: 0x1a81e, inside: 0x16729 };
+
 function stageFrom(dump) {
   try { const v = JSON.parse(dump); return v && typeof v.stage === 'string' ? v.stage : ''; } catch (e) { return ''; }
 }
@@ -88,6 +120,51 @@ function stageIn(actor) {
 // The creation stage an UpdateProperty for this character carries, or ''.
 function stageOf(m, idx) {
   return m.t === MSG.UpdateProperty && m.idx === idx && m.propName === CHARGEN_PROPERTY ? stageFrom(m.dataDump) : '';
+}
+
+// The line at a door an UpdateProperty for this character carries, or null.
+function doorLineOf(m, idx) {
+  if (!(m.t === MSG.UpdateProperty && m.idx === idx && m.propName === DOOR_LINE)) { return null; }
+  try { const v = JSON.parse(m.dataDump); return v && typeof v === 'object' ? v : null; } catch (e) { return null; }
+}
+
+// The names on the entries of the newest pack the bot was sent (SetInventory,
+// whole each time) after inbox index from, or null when none came.
+function packNames(bot, from) {
+  for (let i = bot.inbox.length - 1; i >= from; i--) {
+    const m = bot.inbox[i].message;
+    if (m && m.t === MSG.SetInventory) {
+      const entries = (m.inventory && Array.isArray(m.inventory.entries)) ? m.inventory.entries : [];
+      return entries.filter((e) => e && typeof e.name === 'string' && Number(e.count) > 0).map((e) => e.name);
+    }
+  }
+  return null;
+}
+
+// The register's claim on a building (private/property.json, the property
+// block's save), or null.
+function claimOn(root, settings, building) {
+  try {
+    const doc = readJson(path.join(root, String(settings.privDir || 'private'), 'property.json'));
+    const c = doc && doc.claims ? doc.claims[building] : null;
+    return c && typeof c === 'object' ? c : null;
+  } catch (e) { return null; }
+}
+
+// What the copy's own tables (gamemode-tables, #5191) call the stables:
+// { name } when both its doors are the building's, else { why }.
+function stablesIn(root) {
+  const dir = path.join(root, 'gamemode-tables');
+  let byDoor = null, names = null;
+  try { byDoor = readJson(path.join(dir, 'BUILDING_BY_DOOR.json')); names = readJson(path.join(dir, 'BUILDING_NAME.json')); }
+  catch (e) { return { why: 'the copy\'s gamemode-tables has no readable BUILDING_BY_DOOR.json and BUILDING_NAME.json (' + e.message + ')' }; }
+  const desc = (id) => id.toString(16) + ':Skyrim.esm';
+  const wrong = [STABLES.outside, STABLES.inside].filter((id) => byDoor[desc(id)] !== STABLES.building);
+  if (wrong.length) {
+    return { why: 'the copy\'s tables no longer give door ' + wrong.map(desc).join(' and ') + ' to ' + STABLES.building +
+                  ', so the pass\'s door for a claim has to be picked again' };
+  }
+  return { name: String(names[STABLES.building] || STABLES.building) };
 }
 
 function readJson(file) {
@@ -111,9 +188,10 @@ function face(name) {
 // The character with this profile id in the world folder, or null. It is
 // read as character.js reads every world (the restore rehearsal and the
 // nightly count read the same way, #5287): the engine names a form's file by
-// its id in hex (FormDesc::ToString with %x, FileDatabase), so a character
-// made on the server is ff000800.json, never digits alone. Reading digits
-// only is how the first pass to reach saved failed (#5379).
+// its local id in hex with no plugin (FormDesc::ToString with %x,
+// FileDatabase): 0xff000800 is 800.json and 0xff00080a is 80a.json, so
+// reading digits alone misses characters. It is how the first pass to reach
+// saved failed (#5379).
 function formOf(root, settings, profileId) {
   let all = [];
   try { all = characters(root, settings); } catch (e) { return null; }
@@ -227,10 +305,12 @@ async function pass(opts) {
   // A FAIL from the character on says what the gamemode's creation said
   // about it (the copy has nobody else on it), so the Deployment's log holds
   // the reason and nobody has to fetch the server's log off the box.
+  // The same for a claim, from the property block's lines.
   const said = (step) => {
-    if (!CHARGEN_STEPS.includes(step)) { return ''; }
-    const c = server.lines.filter((l) => l.indexOf(CHARGEN) >= 0).slice(-3).map((l) => l.trim().slice(0, 300));
-    return c.length ? '. The gamemode said: ' + c.join(' | ') : '. The gamemode said nothing about creating it';
+    const which = CHARGEN_STEPS.includes(step) ? [CHARGEN, 'creating it'] : PROPERTY_STEPS.includes(step) ? [PROPERTY, 'the stables'] : null;
+    if (!which) { return ''; }
+    const c = server.lines.filter((l) => l.indexOf(which[0]) >= 0).slice(-3).map((l) => l.trim().slice(0, 300));
+    return c.length ? '. The gamemode said: ' + c.join(' | ') : '. The gamemode said nothing about ' + which[1];
   };
   const say = (step, ok, detail) => {
     if (!ok) { detail += said(step); }
@@ -254,6 +334,23 @@ async function pass(opts) {
   let why = '';
   // A FAIL on the relay says what the voice service said last.
   const voiceSaid = () => voice.tail.length ? '. The voice service said: ' + voice.tail.slice(-3).map((l) => l.trim().slice(0, 300)).join(' | ') : '';
+  // E on a door, as the game sends it: the gamemode writes the line at the
+  // door on the character (onActivate, touched) and, when it lets the press
+  // through, the engine opens the door and sends the character through it
+  // (MpObjectReference::ProcessActivateNormal, a TeleportMessage). Returns
+  // the line once both have come.
+  const press = async (bot, idx, door, to, what) => {
+    const at = bot.inbox.length;
+    log('the bot presses E on ' + what + ', ' + door.toString(16));
+    bot.send({ t: ACTIVATE, data: { caster: 0x14, target: door, isSecondActivation: false } }, true);
+    const line = await bot.until(() => {
+      for (let i = bot.inbox.length - 1; i >= at; i--) { const l = bot.inbox[i].message && doorLineOf(bot.inbox[i].message, idx); if (l) { return l; } }
+      return null;
+    }, stepMs, 'line at ' + what + ' after pressing it');
+    await bot.until(() => bot.inbox.slice(at).some((x) => x.message && x.message.t === TELEPORT && x.message.idx === idx &&
+      Number(x.message.worldOrCell) === to), stepMs, 'the door opening and taking it through (to ' + to.toString(16) + ')');
+    return line;
+  };
   try {
     if (!(port > 0)) { say('loads', false, 'server-settings.json names no port'); return result(); }
     if (settings.thornswoodRequirePass !== false) {
@@ -370,6 +467,54 @@ async function pass(opts) {
       say('needs', false, e.message + (back.length ? '. Over the relay it was told: ' + back.slice(-2).join(' | ').slice(0, 300) : ''));
       return result();
     }
+
+    // The stables: a door pressed, the line it offers, and Claim.
+    const stables = stablesIn(root);
+    if (stables.why) { say('claim', false, stables.why); return result(); }
+    const told = (from) => {
+      const back = relay.said(from);
+      return back.length ? '. Over the relay it was told: ' + back.slice(-2).join(' | ').slice(0, 300) : '';
+    };
+    heardAt = relay.heard.length;
+    let packAt = first.inbox.length;
+    try {
+      const line = await press(first, me.idx, STABLES.outside, STABLES.cell, 'the stables\' outside door');
+      if (line.x !== 'claim' || line.n !== stables.name) {
+        throw new Error('the line at the door offers ' + JSON.stringify(line.x) + ' at ' + JSON.stringify(line.n) + ', not claim at ' + stables.name);
+      }
+      log('the bot presses Claim');
+      relay.say('/claim ' + STABLES.outside.toString(16));
+      const answer = await relay.until(() => relay.said(heardAt).find((t) => t.indexOf('You claim ' + stables.name + '.') === 0),
+        stepMs, 'an answer to /claim over the relay');
+      const deed = 'Deed to ' + stables.name;
+      await first.until(() => (packNames(first, packAt) || []).some((n) => n.indexOf(deed) === 0), stepMs, 'the deed in its pack');
+      const c = await first.until(() => { const x = claimOn(root, settings, STABLES.building); return x && x.by === profileId ? x : null; },
+        stepMs, 'its claim in the register, ' + path.join(String(settings.privDir || 'private'), 'property.json'));
+      say('claim', true, 'the door offered Claim at ' + stables.name + ', and the gamemode said: ' + answer.slice(0, 120) +
+        ' The deed is in its pack and the register holds the claim' + (c.locked ? ', locked' : ', open'));
+    } catch (e) { say('claim', false, e.message + told(heardAt)); return result(); }
+
+    heardAt = relay.heard.length;
+    try {
+      const master = 'Master key to ' + stables.name + ', no. ';
+      if (!(packNames(first, packAt) || []).some((n) => n.indexOf(master) === 0)) {
+        throw new Error('no master key came with the deed: its pack holds ' + JSON.stringify(packNames(first, packAt) || []));
+      }
+      packAt = first.inbox.length;
+      const line = await press(first, me.idx, STABLES.inside, 0x3c, 'the stables\' inside door');
+      if (line.x !== 'lock') { throw new Error('the line at the inside door offers ' + JSON.stringify(line.x) + ', not lock, to the one who holds it'); }
+      const lineAt = first.inbox.length;
+      log('the bot presses Lock');
+      relay.say('/lock ' + STABLES.inside.toString(16));
+      const answer = await relay.until(() => relay.said(heardAt).find((t) => t.indexOf('You lock ' + stables.name + '.') === 0),
+        stepMs, 'an answer to /lock over the relay');
+      await first.until(() => { const x = claimOn(root, settings, STABLES.building); return x && x.locked === true; },
+        stepMs, 'the register saying the stables are locked');
+      await first.until(() => first.inbox.slice(lineAt).some((x) => { const l = x.message && doorLineOf(x.message, me.idx); return l && l.x === 'unlock'; }),
+        stepMs, 'the line at the door offering Unlock');
+      say('keys', true, 'the master key came with the deed; Lock at the inside door was answered (' + answer.slice(0, 80) +
+        '), the register says locked and the door now offers Unlock');
+    } catch (e) { say('keys', false, e.message + told(heardAt)); return result(); }
     relay.close();
 
     let form = null;
@@ -411,8 +556,19 @@ async function pass(opts) {
       if (!got || got.name !== name) { wrong.push('its name is ' + JSON.stringify(got ? got.name : undefined) + ', not ' + name); }
       if (!near) { wrong.push('it stands at ' + JSON.stringify(pos) + ', and the world saved ' + JSON.stringify(want)); }
       if (p.isRaceMenuOpen === true) { wrong.push('the race menu is open again'); }
-      say('loads back', wrong.length === 0, wrong.length ? wrong.join('; ') : name + ' came back where it was saved, with no race menu');
-    } catch (e) { say('loads back', false, e.message); }
+      if (!say('loads back', wrong.length === 0, wrong.length ? wrong.join('; ') : name + ' came back where it was saved, with no race menu')) {
+        return result();
+      }
+    } catch (e) { say('loads back', false, e.message); return result(); }
+
+    // The claim and its lock, read back by the gamemode at its start: the
+    // stables' door offers the one who holds them Unlock.
+    try {
+      const line = await press(second, second.character.idx, STABLES.outside, STABLES.cell, 'the stables\' outside door');
+      say('kept', line.x === 'unlock', line.x === 'unlock'
+        ? 'after the restart the door still offers Unlock at ' + line.n + ': the claim and its lock came back'
+        : 'after the restart the line at the door offers ' + JSON.stringify(line.x) + ', not unlock, so the claim or its lock was lost');
+    } catch (e) { say('kept', false, e.message); }
     return result();
   } catch (e) {
     say('pass', false, 'the pass itself failed: ' + (e && e.stack || e));
@@ -465,4 +621,5 @@ if (require.main === module) {
   main().then((code) => process.exit(code), (e) => { console.log('BOT PASS FAILED: ' + (e && e.stack || e)); process.exit(1); });
 }
 
-module.exports = { stageIn, stageOf, pass, gitBlob, face, formOf, nameIn, ServerRun, doorKey, HOME };
+module.exports = { stageIn, stageOf, pass, gitBlob, face, formOf, nameIn, ServerRun, doorKey, HOME,
+                   STABLES, doorLineOf, packNames, claimOn, stablesIn };

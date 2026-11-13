@@ -17,9 +17,9 @@
 // It prints one row per timer: how often it runs, milliseconds per run, the
 // share of one core that comes to, and engine reads a second. Then it checks
 // the voice feed, the one timer that runs five times a second:
-//   - it reads each person's appearance at most once a second, not on every
-//     200 ms pass (it read it twice a pass, ten times a second a person);
-//   - it reads each person's profile id once a pass, not twice;
+//   - it reads each person's appearance and profile id once a second, not on
+//     every 200 ms pass (it read the appearance twice a pass, ten times a
+//     second a person, before #385, and both once a pass before #5431);
 //   - what it sends the voice service is unchanged: the same rows, the same
 //     fields, the same values, name and party included, and a new name is
 //     picked up within a second.
@@ -217,12 +217,51 @@ function fakeRequire(name) {
   return require(name);
 }
 
+// THE CLOCK (#5431). A timer is measured as it runs on the server: each run
+// is its own interval later than the one before, so whatever a timer does
+// once a second, or once a minute, counts as often as it really happens and
+// no more. Off the measurement (clockAt null) the gamemode reads the real
+// clock, which the minute line's checks below need. Frozen, two passes see
+// the same time, so the NPC comparison compares the NPCs and nothing else
+// (needsTick read 141 one run and 140 the next as its bands moved with the
+// real clock between the two passes).
+let clockAt = null;
+class Clock extends Date {
+  constructor(...a) { if (a.length) { super(...a); } else { super(clockAt === null ? Date.now() : clockAt); } }
+  static now() { return clockAt === null ? Date.now() : clockAt; }
+}
+
+// THE TIMER CLOCK. guard() and counted() time a handler with process.hrtime.
+// For the minute line's own checks below, a handler "takes 5 ms" by moving
+// this clock 5 ms (hrAt, in ms), not by spinning for 5 ms of wall time: on
+// a machine busy with other harnesses a spin of 5 ms was timed at more, and
+// slowOne read over 70 ms for 10 runs (the gate runs four at once). Off those
+// checks (hrAt null) the gamemode gets the real hrtime.
+let hrAt = null;
+function fakeHrtime(prev) {
+  if (hrAt === null) { return prev ? process.hrtime(prev) : process.hrtime(); }
+  const ns = BigInt(Math.round(hrAt * 1e6));
+  const now = [Number(ns / 1000000000n), Number(ns % 1000000000n)];
+  if (!prev) { return now; }
+  let ds = now[0] - prev[0], dn = now[1] - prev[1];
+  if (dn < 0) { ds--; dn += 1e9; }
+  return [ds, dn];
+}
+fakeHrtime.bigint = function () { return hrAt === null ? process.hrtime.bigint() : BigInt(Math.round(hrAt * 1e6)); };
+const sandboxProcess = new Proxy(process, {
+  get: function (t, k) {
+    if (k === 'hrtime') { return fakeHrtime; }
+    const v = t[k];
+    return typeof v === 'function' ? v.bind(t) : v;
+  }
+});
+
 const quiet = { log: function () { }, error: function () { }, warn: function () { }, info: function () { } };
 const sandbox = {
-  mp: mp, require: fakeRequire, console: QUIET ? quiet : console, process: process, Buffer: Buffer,
+  mp: mp, require: fakeRequire, console: QUIET ? quiet : console, process: sandboxProcess, Buffer: Buffer,
   setInterval: fakeSetInterval, clearInterval: fakeClearInterval,
   setTimeout: function () { return { unref: function () { } }; }, clearTimeout: function () { },
-  setImmediate: function () { }, Date: Date, URL: URL, TextEncoder: TextEncoder, TextDecoder: TextDecoder
+  setImmediate: function () { }, Date: Clock, URL: URL, TextEncoder: TextEncoder, TextDecoder: TextDecoder
 };
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
@@ -251,9 +290,9 @@ function nameOf(row) {
 }
 
 // ------------------------------------------------------------------- measure
-function time(fn, runs) {
+function time(fn, runs, every) {
   const t0 = process.hrtime.bigint();
-  for (let i = 0; i < runs; i++) { try { fn(); } catch (e) { } }
+  for (let i = 0; i < runs; i++) { clockAt += every; try { fn(); } catch (e) { } }
   return Number(process.hrtime.bigint() - t0) / 1e6;
 }
 
@@ -261,12 +300,13 @@ const live = intervals.filter(function (r) { return !r.cleared && r.ms > 0; });
 yes('the gamemode starts its timers (' + live.length + ' found)', live.length >= 10);
 
 const table = [];
+clockAt = Date.now();
 live.forEach(function (row) {
-  for (let w = 0; w < 5; w++) { try { row.fn(); } catch (e) { } }   // warm
+  for (let w = 0; w < 5; w++) { clockAt += row.ms; try { row.fn(); } catch (e) { } }   // warm
   for (const k in reads) { delete reads[k]; }
   const runs = Math.max(20, Math.min(400, Math.round(20000 / row.ms)));
   counting = true;
-  const ms = time(row.fn, runs);
+  const ms = time(row.fn, runs, row.ms);
   counting = false;
   let got = 0, wrote = 0;
   for (const k in reads) { if (/^set:/.test(k)) { wrote += reads[k]; } else { got += reads[k]; } }
@@ -315,6 +355,13 @@ console.log('');
 // origin/main 2d9a64e, 6,000 NPCs: PEOPLE=5 234/s, PEOPLE=20 887/s,
 // PEOPLE=50 2193/s (about 43.5 a person plus 16). The bound is 45 a person
 // plus 20, so one more read a person on the voice feed's 200 ms pass fails it.
+// Issue #5431, 12 Nov 2026: this harness had not loaded the gamemode since
+// #5280, and main had grown to 1106 with 20 people: the P panel's cart check
+// read every near person's profile id again (228 a pass), the bleed asked
+// everybody whether they were dead before whether they bled, and the voice
+// feed read who everybody is five times a second. Fixed, and measured on the
+// clock above (timers that act once a second or a minute now count as often
+// as they do on the server): PEOPLE=5 224/s, 20 844/s, 50 2084/s.
 const workSec = totalReads + totalSets, workBound = 45 * PEOPLE + 20;
 console.log('  (share of a core is wall time, shown only: ' + total.toFixed(2) + '%)');
 yes('the whole of the gamemode\'s timers make at most ' + workBound + ' engine reads and sets a second with ' +
@@ -447,9 +494,34 @@ if (feed) {
   const q = pass1();
   const moved = q.body && q.body.who && q.body.who[1];
   yes('the position is read fresh on every pass', !!moved && JSON.stringify(moved.pos) === '[9,8,7]');
+
+  // #5431: who somebody is (profile id and name) is read once a second a
+  // person, not on every 200 ms pass; the appearance is a whole document.
+  // Five passes on the clock are one second.
+  const second = { appearance: 0, profileId: 0 };
+  for (let i = 0; i < 5; i++) {
+    clockAt += 200;
+    const r = pass1().reads;
+    second.appearance += r.appearance || 0; second.profileId += r.profileId || 0;
+  }
+  yes('the voice feed reads each appearance and profile id once a second (' + second.appearance + ' and ' +
+      second.profileId + ' in five passes for ' + PEOPLE + ')',
+      second.appearance === PEOPLE && second.profileId === PEOPLE);
+  const d1 = JSON.parse(want.appearanceDump); d1.name = 'Renamed';
+  want.appearanceDump = JSON.stringify(d1);
+  let renamedBy = -1;
+  for (let i = 1; i <= 5 && renamedBy < 0; i++) {
+    clockAt += 200;
+    const b2 = pass1().body;
+    const row1 = b2 && b2.who && b2.who.filter(function (w) { return w.actor === ids[1]; })[0];
+    if (row1 && row1.name === 'Renamed') { renamedBy = i; }
+  }
+  yes('and a new name is sent within a second (pass ' + renamedBy + ' of 5)', renamedBy >= 1 && renamedBy <= 5);
 }
 
 // ------------------------------------------------------------ the minute line
+// The real clock again: the checks below wait on it.
+clockAt = null;
 const beat = sandbox.__thornswoodServerBeat;
 yes('the server\'s minute line is running', !!beat && typeof beat.beat === 'function');
 if (beat) {
@@ -457,8 +529,11 @@ if (beat) {
   const logFile = path.join(scratch, 'thornswood.log');
   let before = '';
   try { before = fs.readFileSync(logFile, 'utf8'); } catch (e) { before = ''; }
-  // A handler that takes 5 ms, run ten times through guard(), shows as 50 ms.
-  const slow = vm.runInContext("guard('slowOne', function () { var t = Date.now(); while (Date.now() - t < 5) { } })", sandbox);
+  // A handler that takes 5 ms on the timer clock, run ten times through
+  // guard(), shows as 50 ms.
+  hrAt = 0;
+  sandbox.__tickSpend = function (ms) { hrAt += ms; };
+  const slow = vm.runInContext("guard('slowOne', function () { __tickSpend(5); })", sandbox);
   for (let i = 0; i < 10; i++) { slow(); }
   beat.beat();
   let after = '';
@@ -468,8 +543,8 @@ if (beat) {
   yes('it says how many are on and the process\'s share of a core', /\d+ on, process \d+(\.\d)?% of one core/.test(line));
   yes('and how late the event loop ran', /loop late p50 [\d.]+ms p99 [\d.]+ms worst \d+ms/.test(line));
   const m = /slowOne (\d+)ms\/10 worst ([\d.]+)ms/.exec(line);
-  yes('and the costliest handlers: slowOne took about 50 ms over 10 runs, worst about 5',
-      !!m && Number(m[1]) >= 48 && Number(m[1]) <= 70 && Number(m[2]) >= 4.9);
+  yes('and the costliest handlers: slowOne took 50 ms over 10 runs, worst 5',
+      !!m && Number(m[1]) === 50 && Number(m[2]) === 5);
   const handler = vm.runInContext("guard('answers', function (a) { return a * 2; })", sandbox);
   yes('guard still hands back what the handler returns', handler(21) === 42);
   const thrower = vm.runInContext("guard('throws', function () { throw new Error('x'); })", sandbox);
@@ -480,7 +555,7 @@ if (beat) {
 
   // #385, 20 Oct: the shared NPC runtime's own timers are counted too, under
   // "npc <task>", through the timers the startup hands it.
-  const npcStep = vm.runInContext("counted('npc backgroundTick', function (a) { var t = Date.now(); while (Date.now() - t < 5) { } return a + 1; })", sandbox);
+  const npcStep = vm.runInContext("counted('npc backgroundTick', function (a) { __tickSpend(5); return a + 1; })", sandbox);
   let gave = 0;
   for (let i = 0; i < 4; i++) { gave = npcStep(i); }
   const npcThrows = vm.runInContext("counted('npc throws', function () { throw new Error('y'); })", sandbox);
@@ -494,12 +569,13 @@ if (beat) {
   const line2 = after2.slice(before2.length).split('\n').filter(function (l) { return / server: /.test(l); })[0] || '';
   console.log('  ' + line2.replace(/^\S+ \S+ /, ''));
   const n = /npc backgroundTick (\d+)ms\/4 worst ([\d.]+)ms/.exec(line2);
-  yes('an NPC runtime step shows on the minute line: about 20 ms over 4 runs, worst about 5 (a 5 ms wait on a millisecond clock is 4 to 5)',
-      !!n && Number(n[1]) >= 16 && Number(n[1]) <= 40 && Number(n[2]) >= 4);
+  yes('an NPC runtime step shows on the minute line: 20 ms over 4 runs, worst 5',
+      !!n && Number(n[1]) === 20 && Number(n[2]) === 5);
   yes('and counts in the gamemode share, not the engine\'s', /gamemode (\d+\.\d)%/.test(line2) &&
       Number(/gamemode (\d+\.\d)%/.exec(line2)[1]) > 0);
   yes('a counted step still hands back what it returned', gave === 4);
   yes('and hands on what it throws, as the runtime\'s own timer did', handedOn);
+  hrAt = null;   // the real timer clock again, for the busy check below
   const startup = fs.readFileSync(SRC, 'utf8');
   yes('the NPC startup hands the runtime counted timers',
       /startSharedNpcServerRuntime\(\s*mp, \{setTimeout:\(fn,delay\)=>setTimeout\(counted\('npc '\+\(fn\.npcRuntimeTask\|\|'task'\),fn\),delay\), clearTimeout\}/.test(startup));

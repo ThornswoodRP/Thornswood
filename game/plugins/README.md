@@ -12,7 +12,9 @@ the page from `game\ui` once, mounts the overlays into it and does most of
 the client's own work. `thornswood-emotes.js` is the game side of the emote
 wheel, `thornswood-voice.js` the game side of proximity voice (who you are,
 where to call, push to talk), and `thornswood-mark.js` writes down the spot
-you stand on for `Mark-Spot.ps1`. Every one of them
+you stand on for `Mark-Spot.ps1`, and `thornswood-test.js` walks the game
+through a list of steps for `Run-RealClient.ps1` on a dev's PC and does
+nothing anywhere else (`tests\real-client\README.md`). Every one of them
 idles unless the client settings point at our server and the launcher has left
 a fresh session note, `Data\Platform\thornswood-session.txt`.
 

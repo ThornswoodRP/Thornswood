@@ -49,6 +49,12 @@ namespace Thornswood
         public static int Opened, Closed;
 
         /// <summary>
+        /// Set by End: the music is over for the rest of this launcher's life,
+        /// and Decide never makes another playback.
+        /// </summary>
+        static volatile bool ended;
+
+        /// <summary>
         /// Remembers the track, the volume and what the mixer calls this
         /// build. The playback itself is made the first time Decide asks for the
         /// music, not here: a launcher that starts while the game runs, or
@@ -89,10 +95,34 @@ namespace Thornswood
         /// </summary>
         public static void Decide(bool play, double volume)
         {
+            if (ended) return;
             wantPlay = play;
             wantVol = Clamp(volume);
             if (play && playback == null) { Open(); return; }
             if (playback != null) playback.Set(wantPlay, wantVol);
+        }
+
+        /// <summary>
+        /// Stops the theme for good and returns once its thread has let go of
+        /// the track. For the uninstall, which deletes Profile, where the track
+        /// is played from: on One on 12 Nov 2026 the theme was still playing
+        /// Profile\Music\thornswood-theme.mp3 when the uninstall came to it,
+        /// Windows refused to delete a file this process had open, and Profile
+        /// was left behind whole. Close alone is not enough for that, because
+        /// it does not wait for the thread, and the window going to the
+        /// background afterwards would make a new playback through Decide.
+        ///
+        /// The wait is on the playback's own thread, which lets go of the track
+        /// before it touches the sound device on its way out (Playback.Run), so
+        /// a slow sound driver does not hold this up. Safe to call any time, as
+        /// often as wanted, with or without a playback.
+        /// </summary>
+        public static void End()
+        {
+            ended = true;
+            var p = playback;
+            Close();
+            if (p != null) p.WaitReleased();
         }
 
         static void Open()
@@ -142,7 +172,9 @@ namespace Thornswood
             readonly string path, name, icon;
             readonly AutoResetEvent done = new AutoResetEvent(false);
             readonly AutoResetEvent wake = new AutoResetEvent(false);
-            volatile bool play, stop;
+            // Set once the thread has closed the track, or never had it.
+            readonly ManualResetEvent released = new ManualResetEvent(false);
+            volatile bool play, stop, begun;
             double vol;
 
             public Playback(string path, string name, string icon)
@@ -172,6 +204,16 @@ namespace Thornswood
                 t.Name = "Menu music";
                 t.SetApartmentState(ApartmentState.MTA);
                 t.Start();
+                begun = true;
+            }
+
+            /// <summary>
+            /// Returns once the thread has closed the track file. A playback
+            /// whose thread never started never opened it.
+            /// </summary>
+            public void WaitReleased()
+            {
+                if (begun) released.WaitOne();
             }
 
             void Run()
@@ -253,6 +295,10 @@ namespace Thornswood
                 }
                 finally
                 {
+                    // The track first, before the sound device: End waits for
+                    // this, and closing a file never waits on a driver.
+                    if (file != null) { try { file.Dispose(); } catch (Exception ex) { Swallow.Note("MenuMusic.Playback, dispose", ex); } }
+                    released.Set();
                     if (dev != IntPtr.Zero)
                     {
                         // Reset hands every queued buffer back, so each can be
@@ -267,9 +313,8 @@ namespace Thornswood
                         if (heads[i] != IntPtr.Zero) Marshal.FreeHGlobal(heads[i]);
                         if (datas[i] != IntPtr.Zero) Marshal.FreeHGlobal(datas[i]);
                     }
-                    // The two events are left to the collector: the shell may
+                    // The events are left to the collector: the shell may
                     // still Set wake on a playback whose thread has ended.
-                    if (file != null) { try { file.Dispose(); } catch (Exception ex) { Swallow.Note("MenuMusic.Playback, dispose", ex); } }
                 }
             }
 

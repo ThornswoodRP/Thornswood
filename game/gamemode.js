@@ -11685,20 +11685,38 @@ log('gamemode loaded:',
   if (globalThis.__thornswoodVoiceFeed) {
     try { clearInterval(globalThis.__thornswoodVoiceFeed); } catch (e) { }
   }
+  /*
+    Who each actor is: their profile id and the name off their appearance.
+    Where they stand moves every pass, so it is read every pass; who they are
+    does not, and the appearance is a whole document the engine parses and
+    hands back on every read. So it is read once a second a person, which is
+    as soon as the voice pages need a new name, not five times (#5431: with
+    20 people on it was 160 engine reads a second for nothing, and put the
+    timers over their budget). A row is dropped once its actor is off line,
+    so nobody who comes back gets an old name.
+  */
+  var WHO_EVERY_MS = 1000;
+  var whoIs = {};   // actor id -> { pid, name, at }
+
   globalThis.__thornswoodVoiceFeed = setInterval(guard('voiceFeed', function () {
     var who = [];
     try {
       var online = mp.get(0, 'onlinePlayers') || [];
+      var now = Date.now();
+      var still = {};
       for (var i = 0; i < online.length; i++) {
         var id = online[i];
+        still[id] = true;
         try {
           var pos = mp.get(id, 'pos');
           if (!pos) continue;
           var angle = mp.get(id, 'angle') || [0, 0, 0];
-          // Each read once: five times a second for everybody on, an
-          // appearance read twice was ten parses a person a second (#385).
-          var pid = mp.get(id, 'profileId');
-          var look = mp.get(id, 'appearance');
+          var known = whoIs[id];
+          if (!known || now - known.at >= WHO_EVERY_MS || now < known.at) {
+            var look = mp.get(id, 'appearance');
+            known = whoIs[id] = { pid: mp.get(id, 'profileId'), name: String(look && look.name || ''), at: now };
+          }
+          var pid = known.pid;
           who.push({
             profileId: pid,
             actor: id,
@@ -11708,10 +11726,13 @@ log('gamemode loaded:',
             // side of a loading door do not, which is exactly the line voice
             // should stop at.
             cell: String(mp.get(id, 'worldOrCellDesc') || ''),
-            name: String(look && look.name || ''),
+            name: known.name,
             party: partyFor(pid)
           });
         } catch (e) { }
+      }
+      for (var gone in whoIs) {
+        if (Object.prototype.hasOwnProperty.call(whoIs, gone) && !still[gone]) { delete whoIs[gone]; }
       }
     } catch (e) { return; }
 
@@ -35652,7 +35673,11 @@ return module.exports;
       routes: function () { return copy(reg.routes); },
       aboard: function (id) { return reg.ships.aboard(reg.state, id); },
       // Whether this character is driving a cart, for Raid cart under Near you on P.
-      driving: function (actorId) { return !!TRADE_CARTS.cartOfDriver(reg.state, H.partyOf(actorId)); },
+      // The P panel asks it for every pair near each other each pass, with the
+      // profile id the near list holds, so it reads nothing of the engine (#5431).
+      driving: function (actorId, profileId) {
+        return !!TRADE_CARTS.cartOfDriver(reg.state, { actor: Number(actorId) >>> 0, profile: Number(profileId) || 0 });
+      },
       open: act('open'), load: act('load'), depart: act('depart'), pullIn: act('pullIn'),
       begin: act('begin'), finish: act('finish'), undo: act('undo'),
       activated: activated, command: command
@@ -55621,11 +55646,14 @@ module.exports = {
     try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { return; }
     for (var i = 0; i < online.length; i++) {
       var who = online[i];
+      // The wounds first: most people are not bleeding, and asking everybody
+      // whether they are dead before that was a second engine read a person
+      // every second for nothing (#5431).
+      var rate = bleedRate(read(who));
+      if (!rate) { continue; }
       var dead = false;
       try { dead = !!mp.get(who, 'isDead'); } catch (e) { continue; }
       if (dead) { continue; }
-      var rate = bleedRate(read(who));
-      if (!rate) { continue; }
       try {
         mp.callPapyrusFunction('method', 'Actor', 'DamageActorValue',
           { type: 'form', desc: mp.getDescFromId(who) }, ['Health', rate]);
@@ -57853,7 +57881,10 @@ module.exports = {
     */
     var near = [];
     var nearNow = null;
-    // Who is driving a trade cart, for Raid cart beside them (#3158).
+    // Who is driving a trade cart, for Raid cart beside them (#3158). Asked
+    // with the profile id the near list already carries: asked by actor alone
+    // it read the profile again for every pair, 228 of this tick's 248 profile
+    // reads with 20 people together (#5431).
     var cartsNear = g.__thornswoodTradeCarts;
     try { nearNow = mp.get(actorId, NEAR_PROPERTY); } catch (e) { nearNow = null; }
     var nearW = (nearNow && nearNow.w) || {};
@@ -57870,7 +57901,7 @@ module.exports = {
         textOff: !!(s.textOff && s.textOff[np]),
         nameOff: !!(s.namesOff && s.namesOff[np]),
         cart: (function () {
-          try { return !!(cartsNear && cartsNear.driving && cartsNear.driving(parseInt(hex, 16))); } catch (eCart) { return false; }
+          try { return !!(cartsNear && cartsNear.driving && cartsNear.driving(parseInt(hex, 16), np)); } catch (eCart) { return false; }
         })()
       });
     }
@@ -62002,7 +62033,33 @@ function createNpcMerchantPurses(api,data,storage) {
       Number.isInteger(state.purse) && state.purse>=0 && state.purse<=2147483647 &&
       Array.isArray(state.stock) && state.stock.every(row=>row && Number.isInteger(row.baseId) &&
         row.baseId>0 && row.baseId<=0xffffffff && row.baseId!==15 &&
-      Number.isInteger(row.count) && row.count>0 && row.count<=2147483647);
+      Number.isInteger(row.count) && row.count>0 && row.count<=2147483647) &&
+      booksRead(state.commissions);
+  }
+  // Commission books (#4941). Every writer of them is
+  // merchant-commission-state.js: empty() makes both books, and read(),
+  // which reserve, cancel and finish return through, refuses a book missing
+  // or a key that does not read. So a record with commissions but one book,
+  // or a key that is not JSON [owner, job] with the owner JSON [form id,
+  // plugin, profile], is never written by the game: it is damage. It is
+  // refused here, where the ledger loads and every commit is checked, so the
+  // let-go below and the trades only ever meet books that read. The promise
+  // rows themselves are still read() at trade time, with its own refusal.
+  function bookObject(book) {
+    return !!book && typeof book==='object' && !Array.isArray(book);
+  }
+  function keyReads(name) {
+    let pair=null,who=null;
+    try {
+      pair=JSON.parse(name);
+      who=Array.isArray(pair) && pair.length===2 && typeof pair[0]==='string' && typeof pair[1]==='string' ? JSON.parse(pair[0]) : null;
+    } catch(error) {return false;}
+    return Array.isArray(who) && who.length===3 && Number.isSafeInteger(who[0]) && typeof who[1]==='string' && Number.isSafeInteger(who[2]);
+  }
+  function booksRead(commissions) {
+    if(commissions===undefined) return true;
+    return bookObject(commissions) && ['held','cool'].every(book=>Object.prototype.hasOwnProperty.call(commissions,book) &&
+      bookObject(commissions[book]) && Object.keys(commissions[book]).every(keyReads));
   }
   // Version 2 from #2870: supply waits and commission owners name a runtime
   // character by its runtime form id. A version 1 ledger keyed them by
@@ -62017,8 +62074,11 @@ function createNpcMerchantPurses(api,data,storage) {
   const references=new Map(Array.from(catalogue.values()).map(identity=>[identity.reference,identity]));
   if(Object.keys(ledger.entries).length!==references.size) throw new Error('Saved merchant ledger manifest cannot be verified');
   for(const reference of Object.keys(ledger.entries)) {
-    if(!references.has(reference) || (ledger.entries[reference]!==null && !valid(ledger.entries[reference],references.get(reference))))
-      throw new Error('Saved merchant ledger entry cannot be verified');
+    const saved=ledger.entries[reference];
+    if(!references.has(reference) || (saved!==null && !valid(saved,references.get(reference))))
+      throw new Error(saved && typeof saved==='object' && !booksRead(saved.commissions) ?
+        'Saved merchant ledger entry '+reference+' cannot be verified: its commission books do not read' :
+        'Saved merchant ledger entry cannot be verified');
   }
   if(retirement && data.merchantRoster.worldMode==='existing' &&
       Array.from(references.values()).some(identity=>identity.active && ledger.entries[identity.reference]===null))

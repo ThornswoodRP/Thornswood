@@ -1086,7 +1086,10 @@
     */
     var near = [];
     var nearNow = null;
-    // Who is driving a trade cart, for Raid cart beside them (#3158).
+    // Who is driving a trade cart, for Raid cart beside them (#3158). Asked
+    // with the profile id the near list already carries: asked by actor alone
+    // it read the profile again for every pair, 228 of this tick's 248 profile
+    // reads with 20 people together (#5431).
     var cartsNear = g.__thornswoodTradeCarts;
     try { nearNow = mp.get(actorId, NEAR_PROPERTY); } catch (e) { nearNow = null; }
     var nearW = (nearNow && nearNow.w) || {};
@@ -1103,7 +1106,7 @@
         textOff: !!(s.textOff && s.textOff[np]),
         nameOff: !!(s.namesOff && s.namesOff[np]),
         cart: (function () {
-          try { return !!(cartsNear && cartsNear.driving && cartsNear.driving(parseInt(hex, 16))); } catch (eCart) { return false; }
+          try { return !!(cartsNear && cartsNear.driving && cartsNear.driving(parseInt(hex, 16), np)); } catch (eCart) { return false; }
         })()
       });
     }

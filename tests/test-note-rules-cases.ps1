@@ -85,7 +85,7 @@ else {
         Copy-NotesProjects $Repo $copy
         $tests = Join-Path $copy 'tools/ReleaseNotes.Tests'
         $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'; $env:DOTNET_NOLOGO = '1'
-        $r = & $dotnet.Source restore $tests --locked-mode 2>&1
+        $r = & $dotnet.Source restore $tests --locked-mode --disable-build-servers 2>&1
         if ($LASTEXITCODE -ne 0) { Yes 'dotnet restore on tools/ReleaseNotes.Tests from the locked packages' $false; $r | Select-Object -Last 10 | ForEach-Object { Write-Host "      $_" } }
         else {
             $t = & $dotnet.Source test $tests --no-restore --disable-build-servers 2>&1
