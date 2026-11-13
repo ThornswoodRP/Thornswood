@@ -178,8 +178,8 @@ _NOTE_LINE = re.compile(r'^\s*(\*\*)?Release note:(\*\*)?\s*(.*?)\s*$')
 
 def pr_release_note(body):
     """(headline, [details]) of a pull request body's Release note line, as
-       Note-Rules.ps1's Get-PrReleaseNote reads it, or None for none or no
-       line."""
+       PrNote.Read in tools/ReleaseNotes/NoteRules.cs reads it, or None for
+       none or no line."""
     text = re.sub(r'(?s)<!--.*?-->', '', str(body or ''))
     lines = re.split(r'\r?\n', text)
     for i, line in enumerate(lines):

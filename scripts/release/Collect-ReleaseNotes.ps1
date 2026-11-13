@@ -10,8 +10,8 @@
   WHAT IT DOES. Since defaults to the newest release/dev/* tag. It asks GitHub
   for the commits between Since and Until on main, takes each squash merge's
   pull request number from the "(#N)" its subject ends with, reads that pull
-  request's body, and joins the notes in merge order with Join-PrReleaseNotes
-  (Note-Rules.ps1). The joined note is checked with the same rules Ship.ps1
+  request's body, and joins the notes in merge order with PrNote.Join
+  (tools\ReleaseNotes\NoteRules.cs). The joined note is checked with the same rules Ship.ps1
   holds a note to before it is printed or written to OutFile.
 
   WHAT IT SAYS. Exit 0: the note is printed (and written to OutFile), ready
@@ -44,7 +44,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
-. (Join-Path $Here 'Note-Rules.ps1')
+# The release note rules, tools\ReleaseNotes\NoteRules.cs, which pwsh compiles
+# here (#5354): the one copy, which the Release note check builds too.
+Add-Type -Path (Join-Path $Here '../../tools/ReleaseNotes/NoteRules.cs')
 $MainServer = Get-Content -LiteralPath (Join-Path $Here 'main-server-paths.json') -Raw | ConvertFrom-Json
 
 # A Main Server change: every file under live or neutral, one at least under live.
@@ -99,16 +101,16 @@ try {
 }
 
 $missing = @()
-$items = @()
+$bodies = @()
 foreach ($p in $pulls) {
-    $n = Get-PrReleaseNote ([string]$p.body)
+    $n = [Thornswood.ReleaseNotes.PrNote]::Read([string]$p.body)
     $label = "#$($p.number) $($p.title)"
     if ($p.author -eq 'dependabot[bot]') { Write-Host "  none (Dependabot): $label"; continue }
     if (-not $n.Found) { $missing += $label; continue }
     if ($n.None) { Write-Host "  none: $label"; continue }
     if (Test-MainServerChange $p.files) { Write-Host "  main server, posted in #news by the bot: $label"; continue }
     Write-Host "  note: $label"
-    $items += [pscustomobject]@{ Number = $p.number; Body = [string]$p.body }
+    $bodies += [string]$p.body
 }
 
 if ($missing.Count) {
@@ -117,10 +119,10 @@ if ($missing.Count) {
     exit 2
 }
 
-$note = Join-PrReleaseNotes $items
+$note = [Thornswood.ReleaseNotes.PrNote]::Join([string[]]$bodies)
 if (-not $note) { Write-Host 'NONE  every change since says none or is a Main Server change: nothing in the build people would notice.'; exit 3 }
 
-$problems = @(Get-NoteShapeProblems $note) + @(Get-NoteProblems $note)
+$problems = @([Thornswood.ReleaseNotes.NoteRules]::AllProblems($note))
 if ($problems.Count) {
     foreach ($p in $problems) { Write-Host "STOP  the joined note: $p" }
     exit 1

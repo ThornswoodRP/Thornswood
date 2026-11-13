@@ -814,7 +814,8 @@ Now it is one command, and it goes the same way as every other update:
   Ship after #442 on each channel and holds the newest thirty. A release that
   named no record (every one before #441, and a `-NoUpload` run) is not one.
 - **Safety.** `-DryRun` builds the pack and sends nothing. The pack is checked
-  by `Check-Secrets.ps1` like a Ship's, the note by `Note-Rules.ps1`, and the
+  by `Check-Secrets.ps1` like a Ship's, the note by the release note rules
+  (`tools/ReleaseNotes/NoteRules.cs`), and the
   pack and its record are on the site before `version.json` names them. The
   feed and the baseline go back through `Feed-Store.ps1` in one send, which
   replaces nothing if another Ship or feed edit went out meanwhile.

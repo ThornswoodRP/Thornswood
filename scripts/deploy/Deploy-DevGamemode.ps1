@@ -353,8 +353,10 @@ if (-not $PutBack -and -not $ShipFollows) {
     Write-Host '      - The door no longer needs a second try before it opens."' -ForegroundColor DarkGray
     exit 1
   }
-  . (Join-Path $Here '..\release\Note-Rules.ps1')
-  $noteProblems = @(Get-NoteShapeProblems $Note) + @(Get-NoteProblems $Note)
+  # The release note rules, tools\ReleaseNotes\NoteRules.cs, which pwsh
+  # compiles here (#5354): the one copy, the one a Ship's notes are held to.
+  Add-Type -Path (Join-Path $Here '../../tools/ReleaseNotes/NoteRules.cs')
+  $noteProblems = @([Thornswood.ReleaseNotes.NoteRules]::AllProblems($Note))
   if ($noteProblems.Count) {
     Write-Host ''
     Write-Host '  STOP. These notes are for the people who play, and they say things only' -ForegroundColor Red

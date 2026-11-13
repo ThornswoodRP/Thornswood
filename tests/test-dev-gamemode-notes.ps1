@@ -2,7 +2,7 @@
 $env:THORNSWOOD_HARNESS = '1'
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
-. (Join-Path $repo 'scripts\release\Note-Rules.ps1')
+Add-Type -Path (Join-Path $repo 'tools/ReleaseNotes/NoteRules.cs')   # the release note rules (#5354)
 $source = [IO.File]::ReadAllText((Join-Path $repo 'scripts\deploy\Deploy-DevGamemode.ps1'))
 $assignment = [regex]::Match($source, '(?m)^\s*\$noteProblems\s*=.*$').Value.Trim()
 if (-not $assignment) { throw 'Missing production note validation' }

@@ -540,7 +540,7 @@ jobs:
           #
           # Issue #460: then the two harnesses that prove the checks catch what
           # they should, this one and the release note check Ship runs
-          # (scripts\release\Note-Rules.ps1), by planting a break of every rule.
+          # (tools\ReleaseNotes\NoteRules.cs), by planting a break of every rule.
           # A few seconds between them. They ran only at night before, and a
           # name in a component README sat red there for a day (#1034).
           ./scripts/dev/Check-Words.ps1

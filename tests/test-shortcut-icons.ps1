@@ -236,7 +236,7 @@ namespace Thornswood
 
     # ---- 2. Install-Launcher.ps1 names the file after the exe's art -------------
     if (-not $OnWindows) {
-        Write-Host 'SKIP  2, Install-Launcher.ps1 on a scratch root: it runs in Windows PowerShell and the shortcut it makes is read through WScript.Shell, which only Windows has'
+        Write-Host 'SKIP  2, Install-Launcher.ps1 on a scratch root: the shortcut it makes is a Windows shortcut, written and read through WScript.Shell, which only Windows has'
         Done
     }
     $stage = Join-Path $work 'stage'
@@ -260,7 +260,8 @@ namespace Thornswood
     Copy-Item -LiteralPath $devIco -Destination (Join-Path $stage 'app.ico')
     Copy-Item -LiteralPath $appIco -Destination (Join-Path $stage 'app-dev.ico')
     $sroot = Join-Path $work 'scratchroot'
-    $ps = Get-WindowsPowerShell
+    # The PowerShell 7 Ship.ps1 and Install-Thornswood.ps1 run it in (#5356).
+    $ps = Get-BoxPowerShell
     $inst = Join-Path $Repo 'scripts\release\Install-Launcher.ps1'
     $sLauncher = Join-Path $sroot 'Launcher'
     New-Item -ItemType Directory -Force -Path $sLauncher | Out-Null

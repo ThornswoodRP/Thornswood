@@ -4,8 +4,8 @@
       pwsh -NoProfile -File .\tests\test-note-rules.ps1
 
   Release notes that say things only the team would understand are refused
-  before anything is built (scripts\release\Note-Rules.ps1, called by
-  Ship.ps1), and "The load order moved, so start a new character" only goes out
+  before anything is built (tools\ReleaseNotes\NoteRules.cs, which Ship.ps1
+  and the other release scripts compile into PowerShell), and "The load order moved, so start a new character" only goes out
   when the plugins that are on, or their order, really changed
   (Get-ActiveOrderKey in Publish-Update.ps1).
 
@@ -14,6 +14,14 @@
   shipping machine, one listed "Launcher 1.1.101" twice, and three releases in
   two days told testers the load order moved. The bad lines below are the real
   ones from the main and dev feeds.
+
+  THE ONE COPY (#5354). The rules are C#, and the release scripts load them
+  with Add-Type, which compiles the file with the C# compiler pwsh carries:
+  the box that runs a Ship has no .NET SDK. So this loads the file the same
+  way, which also proves it still compiles there (no implicit usings, no
+  project settings), and checks that each script loads it and that the
+  PowerShell copy, Note-Rules.ps1, stays gone. Every other case is in
+  tools\ReleaseNotes.Tests, against tests\fixtures\note-rules-cases.json.
 
   Read only apart from its own temp folder.
 #>
@@ -34,9 +42,17 @@ function Yes([string]$what, [bool]$cond) {
     else { $script:fail++; Write-Host "FAIL  $what" }
 }
 
-. (Join-Path $Scripts 'Note-Rules.ps1')
-function Bad([string]$notes) { return @(Get-NoteProblems $notes).Count -gt 0 }
-function BadShape([string]$notes) { return @(Get-NoteShapeProblems $notes).Count -gt 0 }
+$repoRoot = Split-Path -Parent (Split-Path -Parent $Scripts)
+$rulesFile = Join-Path $repoRoot 'tools/ReleaseNotes/NoteRules.cs'
+$loaded = $true
+try { Add-Type -Path $rulesFile } catch { $loaded = $false; Write-Host ("      " + $_.Exception.Message) }
+Yes 'pwsh compiles tools/ReleaseNotes/NoteRules.cs with Add-Type, as the release scripts do' $loaded
+if (-not $loaded) { Write-Host ''; Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail); exit 1 }
+$again = $true
+try { Add-Type -Path $rulesFile } catch { $again = $false }
+Yes 'and loading it a second time in one session is fine (Ship-OnBox runs Ship in its own session)' $again
+function Bad([string]$notes) { return @([Thornswood.ReleaseNotes.NoteRules]::Problems($notes)).Count -gt 0 }
+function BadShape([string]$notes) { return @([Thornswood.ReleaseNotes.NoteRules]::ShapeProblems($notes)).Count -gt 0 }
 
 # ---- the real lines that went out ----------------------------------------------
 Yes 'a title alone is refused by shape' (BadShape "Only a title here")
@@ -57,7 +73,7 @@ Yes 'a version in the title is refused' (Bad "Launcher 1.1.96 host feed and DIY 
 Yes 'a four-part dev number is refused anywhere' (Bad "The dev fixes reach everyone`n- Dev builds 1.1.92.1 to 1.1.95.4")
 Yes 'a three-part launcher version in a detail line is allowed' (-not (Bad "The dev fixes reach everyone`n- Launcher 1.1.101 is the one to have"))
 Yes 'the SkyUI map.swf error people see is allowed' (-not (Bad "The SkyUI error box is gone`n- The SkyUI error box about map.swf on the way in is gone."))
-$p = @(Get-NoteProblems "Menu music plays again in the launcher`n- Autoplay uses WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS instead")
+$p = @([Thornswood.ReleaseNotes.NoteRules]::Problems("Menu music plays again in the launcher`n- Autoplay uses WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS instead"))
 Yes 'each problem says where it is and what it is' ($p.Count -ge 1 -and $p[0] -match '^line 2 ' -and $p[0] -match 'WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS')
 
 # ---- notes that are fine -------------------------------------------------------
@@ -71,15 +87,32 @@ $good = @(
 $i = 0
 foreach ($g in $good) {
     $i++
-    $pr = @(Get-NoteProblems $g)
+    $pr = @([Thornswood.ReleaseNotes.NoteRules]::Problems($g))
     Yes ("good notes $i pass" + $(if ($pr.Count) { ' (' + ($pr -join '; ') + ')' } else { '' })) ($pr.Count -eq 0)
 }
 
 # ---- Ship calls it before anything is built -------------------------------------
 $ship = [IO.File]::ReadAllText((Join-Path $Scripts 'Ship.ps1'))
-$call = $ship.IndexOf('Get-NoteProblems $Notes')
-Yes 'Ship.ps1 asks Note-Rules about the notes' ($call -ge 0)
-Yes 'and before it does any git or build work' ($call -ge 0 -and $call -lt $ship.IndexOf("Head 'Git'"))
+$call = $ship.IndexOf('[Thornswood.ReleaseNotes.NoteRules]::Problems($Notes)')
+$shape = $ship.IndexOf('[Thornswood.ReleaseNotes.NoteRules]::ShapeProblems($Notes)')
+Yes 'Ship.ps1 asks the rules about the notes, their shape and their words' ($call -ge 0 -and $shape -ge 0)
+Yes 'and before it does any git or build work' ($call -ge 0 -and $shape -ge 0 -and $call -lt $ship.IndexOf("Head 'Git'") -and $shape -lt $ship.IndexOf("Head 'Git'"))
+
+# ---- every script that checks a note reads the one copy (#5354) ---------------------
+Yes 'the PowerShell copy of the rules, Note-Rules.ps1, is gone' (-not (Test-Path -LiteralPath (Join-Path $Scripts 'Note-Rules.ps1')))
+foreach ($rel in 'scripts/release/Ship.ps1', 'scripts/release/Rollback-Feed.ps1', 'scripts/deploy/Deploy-DevGamemode.ps1',
+                 'scripts/release/Collect-ReleaseNotes.ps1', 'scripts/release/EnginePin.ps1') {
+    $text = [IO.File]::ReadAllText((Join-Path $repoRoot $rel))
+    $loads = $text -match "Add-Type -Path \(Join-Path \$[A-Za-z]+ '(\.\./\.\./)?tools/ReleaseNotes/NoteRules\.cs'\)"
+    $asks = $text -match '\[Thornswood\.ReleaseNotes\.(NoteRules|PrNote)\]::'
+    Yes ("$rel loads tools/ReleaseNotes/NoteRules.cs and asks it") ($loads -and $asks)
+    Yes ("  and reads no Note-Rules.ps1 and calls none of its functions") ($text -notmatch 'Note-Rules\.ps1' -and $text -notmatch '\b(Get-NoteShapeProblems|Get-NoteProblems|Get-PrReleaseNote|Get-PrReleaseNoteProblems|Join-PrReleaseNotes)\b')
+}
+$readers = @(Get-ChildItem -LiteralPath $repoRoot -Recurse -File -Include '*.ps1', '*.psm1', '*.yml' -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -notmatch '[\\/](node_modules|engine|worktrees|temp|\.git)[\\/]' -and $_.Name -ne 'test-note-rules.ps1' } |
+    Where-Object { [IO.File]::ReadAllText($_.FullName) -match "Note-Rules\.ps1'\)|Note-Rules\.ps1`"\)|scripts/release/Note-Rules\.ps1\s*$" } |
+    ForEach-Object { $_.FullName.Substring($repoRoot.Length + 1) })
+Yes ('no script or workflow loads Note-Rules.ps1' + $(if ($readers.Count) { ' (' + ($readers -join ', ') + ')' } else { '' })) ($readers.Count -eq 0)
 
 # ---- the load order line only for a real order change ----------------------------
 $pu = Join-Path $Scripts 'Publish-Update.ps1'

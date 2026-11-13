@@ -139,10 +139,12 @@ $cmd = Get-WindowsPath 'System32\cmd.exe'
 
 Off Windows it says SKIP for that part and checks the rest, or, when the
 whole harness is about Windows, prints one `NOT RUN` line saying why and
-exits 0. `Get-WindowsPowerShell` is kept only for the launcher harnesses,
-whose scripts run on people's own PCs, until the launcher's pull request
-lands; nothing on the box starts Windows PowerShell 5.1. A harness that
-loads `tests\Launcher-Csc.ps1` has `$OnWindows` from it too.
+exits 0. Every script runs in PowerShell 7 (#5356), so a harness that
+runs one in a child shell asks `Get-BoxPowerShell`. `Get-WindowsPowerShell`
+is only for what the launcher leaves a person's PC to run in Windows
+PowerShell 5.1 (the uninstall's farewell), and only a launcher harness asks
+for it. A harness that loads `tests\Launcher-Csc.ps1` has
+`$OnWindows` from it too.
 
 Before issue #2957 each harness found these itself, by joining onto
 `$env:SystemRoot` or asking `Get-Command` for powershell.exe, and copied the
