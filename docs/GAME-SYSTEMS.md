@@ -279,6 +279,10 @@ it is rare.
 notice, 30 for a job. A letter costs the board fee plus 15 for the
 courier, paid by the sender. The newest ten show.
 
+[Contracts](systems/contracts.md). Two people write their own terms and
+both sign. The signed contract is kept, and only the two of them and staff
+can read it. Nothing moves with it: people keep the terms.
+
 [Merchant's Guild](systems/merchants-guild.md). The merchant NPCs of a hold.
 People cannot join it. Traders start with 250 and buy and
 sell at the average of the price lists submitted there. It does not

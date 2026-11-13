@@ -484,9 +484,9 @@ person(BRYN, 'Bryn', 209, 'smith', 'edgewright');
       !/iniNumber\(ini, 'Apprentice/.test(front));
   const dp = between(front, '  function drawPrompt(row) {', '\n  }\n');
   let drawn = [];
-  const draw = dp && new Function('T', 'FRIEND_NAME', 'TRADE_NAME', 'MUTE_NAME', 'PARTY_NAME', 'SLEEP_NAME', 'APPRENTICE_NAME', 'LOOK_CSS',
+  const draw = dp && new Function('T', 'FRIEND_NAME', 'TRADE_NAME', 'MUTE_NAME', 'PARTY_NAME', 'SLEEP_NAME', 'APPRENTICE_NAME', 'CONTRACT_NAME', 'LOOK_CSS',
     'var lookingSig = "";\n' + dp + '\n  }\nreturn drawPrompt;')(
-    { js: function (s) { drawn.push(s); return true; } }, 'Y', 'H', 'L', 'P', 'U', 'K', '');
+    { js: function (s) { drawn.push(s); return true; } }, 'Y', 'H', 'L', 'P', 'U', 'K', 'K', '');
   yes('E2: drawPrompt is in the front plugin and runs', typeof draw === 'function');
   if (draw) {
     draw({ n: 'Lina', f: 0, m: 0, y: 0, s: 0 });
@@ -520,8 +520,8 @@ person(BRYN, 'Bryn', 209, 'smith', 'edgewright');
         press({ lookingAt: hex(LINA), near: near, open: true }) === false &&
         press({ lookingAt: hex(LINA), near: near, busy: true }) === false && calls.length === 0);
     yes('E3: and the key handler asks it before K opens or shuts the panel',
-        // The hair dye's K (#2675) may come between: it is asked after this one.
-        /if \(e\.code === APPRENTICE_KEY && apprenticePress\(\)\) \{ return; \}\n(?:    \/\/[^\n]*\n    if \(e\.code === HAIR_DYE_KEY && hairDyePress\(\)\) \{ return; \}\n)?    if \(e\.code === SKILLS_KEY\) \{/.test(front));
+        // The hair dye's K (#2675) and the contract's (#4561) may come between: each is asked after this one.
+        /if \(e\.code === APPRENTICE_KEY && apprenticePress\(\)\) \{ return; \}\n(?:    \/\/[^\n]*\n    if \(e\.code === HAIR_DYE_KEY && hairDyePress\(\)\) \{ return; \}\n)?(?:    \/\/[^\n]*\n    if \(e\.code === CONTRACT_KEY && contractPress\(\)\) \{ return; \}\n)?    if \(e\.code === SKILLS_KEY\) \{/.test(front));
   }
   // The row on Settings in the game (#3126), where the Controls page's was.
   const settingsPage = read('game', 'ui', 'thornswood-settings.js');
