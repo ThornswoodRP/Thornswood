@@ -32,18 +32,20 @@ function sign(v) {
 }
 
 /*
-  Whether a secret somebody gave is the one we hold, in the same time
-  whatever they gave (#4223). Both are hashed first, so the compare is of
-  two digests of one length: timingSafeEqual throws on lengths that differ,
-  and it did, for any wrong key or password with a character outside ASCII.
-  Nothing is padded or cut, so trailing spaces and what comes after the
-  96th character count, and only a string is a secret: a JSON body's ["pw"]
-  or 1234 is not "pw" or "1234".
+  Whether a secret somebody gave is the one we hold (#4223). The bytes are
+  compared whole: a different length is a different secret, and said
+  before timingSafeEqual, which throws on lengths that differ, and did, for
+  any wrong key or password with a character outside ASCII. Same lengths
+  are compared in the same time wherever they differ. Nothing is padded or
+  cut, so trailing spaces and what comes after the 96th character count,
+  and only a string is a secret: a JSON body's ["pw"] or 1234 is not "pw"
+  or "1234".
 */
 function sameSecret(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
-  const x = crypto.createHash('sha256').update(a, 'utf8').digest();
-  const y = crypto.createHash('sha256').update(b, 'utf8').digest();
+  const x = Buffer.from(a, 'utf8');
+  const y = Buffer.from(b, 'utf8');
+  if (x.length !== y.length) return false;
   return crypto.timingSafeEqual(x, y);
 }
 
