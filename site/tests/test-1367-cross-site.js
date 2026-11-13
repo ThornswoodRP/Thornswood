@@ -309,7 +309,6 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
     if (!Number.isFinite(endedAt) || endedAt <= 0) throw new Error('the site did not record the sign out');
     const madeAgain = endedAt + 1;
     console.log('      replacement sign in at ' + madeAgain + ', site ended sign in at ' + endedAt);
-    yes('replacement sign in is later than the site recorded sign out', madeAgain > endedAt);
     const again = cookieFor(A.secret, ADMIN_D, 'Aela', madeAgain);
     r = await request(port, 'HEAD', '/api/hello', { cookie: admin, origin: 'https://evil.example' });
     yes('the ended sign in is still refused (' + r.status + ')', r.status === 401);
