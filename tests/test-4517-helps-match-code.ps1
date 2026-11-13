@@ -28,7 +28,10 @@ function Yes([string]$what, [bool]$cond, [string]$why = '') {
     if ($cond) { $script:pass++; Write-Host "PASS  $what" }
     else { $script:fail++; Write-Host "FAIL  $what" -ForegroundColor Red; if ($why) { Write-Host "      $why" } }
 }
-function Text([string]$rel) { return [IO.File]::ReadAllText((Join-Path $repo $rel)) }
+# A file as text with LF line ends: a Windows checkout holds these scripts
+# CRLF (.gitattributes pins only the generated tables), and what a help says
+# is the same either way.
+function Text([string]$rel) { return [IO.File]::ReadAllText((Join-Path $repo $rel)).Replace("`r`n", "`n") }
 # A PowerShell script's help: its first <# #> block.
 function PsHelp([string]$rel) { return [regex]::Match((Text $rel), '(?s)<#(.*?)#>').Groups[1].Value }
 # A node script's help: the // lines it starts with.
