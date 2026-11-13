@@ -12,7 +12,8 @@
 //
 // What this holds, by the launcher's source:
 //   1. the make's finish leaves a note in the profile, after Paths point at
-//      the new folder and before the restart;
+//      the new folder and before Fix runs in it (the note is for a launcher
+//      that closes before that Fix; test-5937-one-restart.js holds the rest);
 //   2. the first start in the folder takes that note (reading it deletes it,
 //      so Fix runs once for it and never at every start) and runs Fix whole,
 //      after a bring-up-to-date from Vortex when one is due, whether that
@@ -58,9 +59,9 @@ function code(src) { return src.split('\n').filter(l => !/^\s*\/\//.test(l)).joi
 const work = code(body(own, 'static void FolderWork('));
 const init = work.indexOf('Paths.Init(Paths.Root);');
 const note = work.indexOf('OwnGame.NoteFixAfterMake();');
-const restart = work.indexOf('RestartLauncher();');
-yes('the make leaves the note once Paths name the new folder, before the restart',
-  init > 0 && note > init && restart > note);
+const firstFix = work.indexOf('RunFix(false, false, true);');
+yes('the make leaves the note once Paths name the new folder, before Fix runs in it',
+  init > 0 && note > init && firstFix > note);
 yes('only when the make succeeded', /if \(make && fail == null\)\s*\{[^}]*Paths\.Init\(Paths\.Root\);[\s\S]*?OwnGame\.NoteFixAfterMake\(\);/.test(work));
 yes('the note lives in the profile beside the folder\'s other records',
   /static string FixAfterMakeFile \{ get \{ return Path\.Combine\(Dir, "fix-after-make\.txt"\); \} \}/.test(og));

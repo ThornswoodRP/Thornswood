@@ -37,8 +37,10 @@ button has been through all three.
 3. The launcher makes Thornswood's own game folder, `C:\Thornswood\Game`, out
    of what Vortex deployed: the big files as hard links, so the collection is
    not on the disk twice, and copies of everything that gets rewritten in
-   place. Then it restarts into that folder (`launcher\app\OwnGame.cs`,
-   `launcher\app\ShellOwnGame.cs`). This is the settled design in the ops repo's CLAUDE.md, and
+   place. Then it runs Scan and Fix in that folder, takes a newer launcher if
+   there is one, and restarts once, into that folder (`launcher\app\OwnGame.cs`,
+   `launcher\app\ShellOwnGame.cs`, `FirstSetupRestart` in
+   `launcher\app\ShellScanFix.cs`, #5937). This is the settled design in the ops repo's CLAUDE.md, and
    the launcher will not start the game out of the shared Steam copy at all.
 
 The To Do entry that asked for this list named the Steam copy with Vortex as the
@@ -231,7 +233,7 @@ took.
 | 37 | Go back to the launcher. Write down the words on the Play button and any question it asks, and press the button if it asks nothing. | | | |
 | 38 | With the setup window's box for a Skyrim folder of its own left ticked, as it starts, the launcher makes the folder without a question. Copy the log line that starts "Making Thornswood's own Skyrim folder" word for word, then the percentages the log shows, and how long it took. If a question comes up instead, copy it word for word and answer yes. | | | |
 | 39 | Write down any Windows prompt while the folder is made. There should be none: the launcher no longer asks for administrator for a firewall rule. | | | |
-| 40 | Write down the restart, and copy the log line that starts "Thornswood's own Skyrim folder is ready at" (M5). | | | |
+| 40 | Write down the restart, and copy the log line that starts "Thornswood's own Skyrim folder is ready at" (M5). There should be one restart, after Fix has run (#5937). | | | |
 | 41 | Measure whether the Address Library is in the own folder and Start On Save is not (M4 again). | | | |
 | 42 | Write down the Client row on the Play page, and any log lines about putting the client runtime back (M5). | | | |
 
@@ -311,7 +313,7 @@ foreach ($d in 'C:\Program Files (x86)\Steam\steamapps\common\Skyrim Special Edi
 matching lines from the launcher's log, each with its time.
 
 ```powershell
-Select-String -Path C:\Thornswood\Profile\launcher.log -Pattern 'own Skyrim folder|Restarting the launcher|client runtime' | ForEach-Object { $_.Line }
+Select-String -Path C:\Thornswood\Profile\launcher.log -Pattern 'own Skyrim folder|first setup|Restarting the launcher|client runtime' | ForEach-Object { $_.Line }
 ```
 
 **M6, the size of C:\Thornswood.** A hard linked file counts at its full size
@@ -420,7 +422,8 @@ tester confused by a list that no longer matches.
 | 38 | `Making Thornswood's own Skyrim folder:` | `launcher\app\OwnGame.cs` |
 | 39 | `Making Thornswood's own Skyrim folder from what Vortex has deployed. Play comes back when it is done.` | `launcher\app\ShellOwnGame.cs` |
 | 40 | `Thornswood's own Skyrim folder is ready at` | `launcher\app\OwnGame.cs` |
-| 40 | `Restarting the launcher so it runs from the new folder.` | `launcher\app\ShellOwnGame.cs` |
+| 40 | `The first setup is done. Checking for a newer launcher before the one restart.` | `launcher\app\ShellScanFix.cs` |
+| 40 | `Restarting the launcher once, so it runs from the new folder.` | `launcher\app\ShellScanFix.cs` |
 | 42 | `files are` | `launcher\app\Checks.cs` |
 | 42 | `The client runtime is back to the recorded build.` | `launcher\app\ClientRuntime.cs` |
 | 43 | `UPDATE FIRST` | `launcher\app\Shell.cs` |
