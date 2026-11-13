@@ -306,7 +306,11 @@ a copy of dev that nobody plays on:
    and turns the door's offer to Unlock), **stations** (Alvor's forge in
    Riverwood is shut to the bot with no trade, and says why over the relay;
    once it picks Smith, Platewright and is handed a hammer, the forge
-   opens), **jail** (the bot is a Guard of Falkreath: the copy's door has
+   opens), **merchants** (the bot goes into Dead Man's Drink in Falkreath,
+   the engine sends it Valga Vinicia, a guild trader the NPC runtime keeps,
+   and pressing E beside her opens her trade, said over the relay; this
+   needs the merchant ledger the agent copies in, and a FAIL carries the
+   server's lines about its NPCs and traders), **jail** (the bot is a Guard of Falkreath: the copy's door has
    no site, so the pass writes the role into the copy's own
    `private\allowed.json` the way the site's answer lands, and the bot
    takes the office over the relay as the Office page does; it goes through
