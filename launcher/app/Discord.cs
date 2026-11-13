@@ -1202,13 +1202,7 @@ namespace Thornswood
         /// </summary>
         static void Note(string line)
         {
-            try
-            {
-                Directory.CreateDirectory(Folder);
-                File.AppendAllText(Path.Combine(Folder, "launcher.log"),
-                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + line + Environment.NewLine);
-            }
-            catch (Exception ex) { Swallow.Note("Discord.Note", ex); }
+            LauncherLog.Line(line);
         }
 
         public static int PostJson(string url, string json, out string reply)

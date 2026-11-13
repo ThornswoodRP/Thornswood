@@ -166,8 +166,16 @@ network or a large file runs on a pool thread and comes back with
 `Dispatcher.UIThread.Post`. `Log` (`Shell.cs:1075 Log()`) writes a control as
 well as `Profile\launcher.log`, so it throws off the window's thread; code on
 a pool thread logs through `PresenceLog`, `SafeLog` or `LogOnly`. A caught
-exception that nothing acts on goes to `Swallow.cs:26 Note()`, one line in
-`launcher.log` from any thread and never a throw. `Waiting.cs:53 OffThread()`
+exception that nothing acts on goes to `Swallow.cs:26 Note()`, one record in
+`launcher.log` from any thread. Every log caller uses `LauncherLog`, defined
+beside `Swallow` in Swallow.cs. One gate covers appends, rollover, age pruning
+and the report's snapshot. Each UTF-8 file is capped at 4 MiB; crossing that
+limit moves the current file to `launcher.log.1`, replacing the previous older
+file. An unusually large record spans bounded files without splitting UTF-8
+code points. An old unbounded log keeps only its newest 4 MiB on its first
+roll. Both files also follow LocalKeep's 30-day rule. A genuine I/O refusal
+propagates instead of silently discarding a record; there is no log retry.
+`Waiting.cs:53 OffThread()`
 runs one piece of work on a pool thread, with the controls off and the wait
 cursor up, for its caller to await: the window's own loop carries on while
 it runs, and the caller comes back on the window's thread when it is done.

@@ -254,7 +254,7 @@ namespace Thornswood
                 Grab(work, "SSEDisplayTweaks.log", Path.Combine(Paths.LiveMyGames, "SKSE\\SSEDisplayTweaks.log"));
                 Grab(work, "plugins.txt", Path.Combine(Paths.Live, "plugins.txt"));
                 Grab(work, "plugins-expected.txt", Path.Combine(Paths.Golden, "plugins.txt"), "plugins-expected.txt");
-                Grab(work, "launcher.log", Paths.LogFile);
+                LauncherLog.Holding(delegate { Grab(work, "launcher.log", Paths.LogFile); return 0; });
                 Grab(work, "SkyrimPrefs.ini", Path.Combine(Paths.LiveMyGames, "SkyrimPrefs.ini"));
 
                 Entry crash = Files.NewestCrash();
