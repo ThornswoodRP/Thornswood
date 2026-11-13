@@ -5,14 +5,21 @@ const hash=value=>crypto.createHash('sha256').update(JSON.stringify(value)).dige
 // The pin covers what was measured, not the Content plugin's bytes: those are
 // checked against the file itself below, so a change to Content (a header, a
 // record elsewhere in it) is a rebuild of the manifest, not a new pin (#2993).
+// Nor the load order it was measured in (#5191): the manifest names that
+// order, held to the catalogue's below, and each source's place in it, held
+// to the catalogue's name there. So a new collection revision that moves no
+// source is a rebuild on the box, and one that moves a source is a new pin.
 const measured=doc=>{
- const m=JSON.parse(JSON.stringify(doc));m.contentSha256='';
- for(const row of m.sources||[])if(row.provenance&&row.provenance.plugin==='Thornswood-Content.esp')row.provenance.pluginSha256='';
+ const m=JSON.parse(JSON.stringify(doc));m.contentSha256='';m.loadOrderSha256='';
+ for(const row of m.sources||[])if(row.provenance&&typeof row.provenance==='object'){
+  if(row.provenance.plugin==='Thornswood-Content.esp')row.provenance.pluginSha256='';
+  row.provenance.fileIndex=null;
+ }
  return m;
 };
 function validateRetrievalSources(doc,population,content,roster) {
  const fail=()=>{throw new Error('Invalid retrieval source evidence');};
- if(!doc||hash(measured(doc))!=='5ddeb23ee41f9c9ef767d8ba8643452625175f596bfe2f93c3163b76655b87c7'||
+ if(!doc||hash(measured(doc))!=='073dcea22f0774ceec6acdd4d1e4208593e88586d8a046821d85eb474b50ea52'||
    !population||loadOrderSha256(population)!==doc.loadOrderSha256||
    !Buffer.isBuffer(content)||crypto.createHash('sha256').update(content).digest('hex')!==doc.contentSha256||
    !roster||!Array.isArray(roster.merchants))fail();

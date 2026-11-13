@@ -75,7 +75,7 @@
     "writes": ["game/data/merchant-role-tables.json"] },
   { "tool": "scripts/dev/Build-MerchantRetrievalSources.py", "data": "--data", "plugins": null,
     "reads": ["game/data/npc-population.json", "game/data/merchant-roster.json"],
-    "writes": ["game/data/merchant-retrievals.json", "tests/fixtures/merchant-retrieval-records.json"] },
+    "writes": ["game/data/merchant-retrievals.json", "tests/fixtures/merchant-retrieval-records.json", "game/data/merchant-scarce-geodes.json", "game/data/merchant-scarce-harvest.json"] },
   { "tool": "scripts/dev/Build-MerchantGamemode.js", "data": null, "plugins": null,
     "reads": ["game/data/merchant-role-tables.json", "game/data/merchant-retrievals.json", "game/data/recipes.json", "game/data/harvests.json", "game/data/ores.json", "game/data/npc-population.json", "game/gamemode-tables/SPELL_IDS.json"],
     "uses": ["game/kill-contracts.js", "game/merchant-commission-state.js", "game/merchant-commissions.js", "game/merchant-ledger-native.js", "game/merchant-role-stage.js",

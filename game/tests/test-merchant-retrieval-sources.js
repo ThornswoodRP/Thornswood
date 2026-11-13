@@ -16,6 +16,10 @@ for(const key of ['reference','base','world','position','item','merchant','desti
  const rebuilt=copy(population);rebuilt.loadOrder.find(r=>r.name==='Thornswood-Last.esp').sha256='0'.repeat(64);
  assert.equal(validateRetrievalSources(doc,rebuilt,content,roster).sources.length,7,'a rebuilt Last.esp keeps the evidence');
  const moved=copy(population);moved.loadOrder.reverse();assert.throws(()=>validateRetrievalSources(doc,moved,content,roster),/retrieval/i,'a reordered load order is a new measurement');
+ const grown=copy(population);grown.loadOrder.splice(grown.loadOrder.length-1,0,{name:'New Revision.esp',sha256:'1'.repeat(64)});
+ const {loadOrderSha256}=require('../../scripts/dev/MerchantLoadOrderPin.js');
+ assert.throws(()=>validateRetrievalSources(doc,grown,content,roster),/retrieval/i,'evidence from the order before a move is refused');
+ assert.equal(validateRetrievalSources({...copy(doc),loadOrderSha256:loadOrderSha256(grown)},grown,content,roster).sources.length,7,'measured again in a moved order that moves no source, it holds (#5191)');
  const bytes=Buffer.from(content);bytes[bytes.length-1]^=1;assert.throws(()=>validateRetrievalSources(doc,population,bytes,roster),/retrieval/i);
  const changed=copy(roster);changed.merchants.find(r=>r.reference===doc.sources[0].merchant).role='Cook';
  assert.throws(()=>validateRetrievalSources(doc,population,content,changed),/retrieval/i,'appointed role cannot drift');
