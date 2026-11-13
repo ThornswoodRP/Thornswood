@@ -299,16 +299,20 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
     r = await request(port, 'POST', '/api/logout', { cookie: admin, origin: OWN });
     yes('sign out from the hub clears both cookies', r.status === 200 &&
         (r.headers['set-cookie'] || []).filter((c) => /^(tw|twa)=; /.test(c)).length === 2);
-    // Signing out ends that sign in on the site too (#4405), so the checks
-    // below, which need staff signed in, sign in again. The new cookie is
-    // made one millisecond after the sign out had answered, so it is later
-    // than the time the site kept for the sign out, whatever the clock does.
-    const madeAgain = Date.now() + 1;
+    // Signing out ends that sign in on the site too (#4405). The checks
+    // below need a new sign in, strictly after the site's recorded sign out.
+    // Date.now() + 1 in this process did not establish that order (#5834):
+    // another process can report a later clock value. Read the site record
+    // instead, with no sleep, retry or change to authentication.
     const signOutKey = crypto.createHmac('sha256', A.secret).update('signout|' + ADMIN_D).digest('hex').slice(0, 32);
     const endedAt = Number(read(A.dir, 'data/signouts.json', {})[signOutKey]);
+    if (!Number.isFinite(endedAt) || endedAt <= 0) throw new Error('the site did not record the sign out');
+    const madeAgain = endedAt + 1;
     console.log('      replacement sign in at ' + madeAgain + ', site ended sign in at ' + endedAt);
     yes('replacement sign in is later than the site recorded sign out', madeAgain > endedAt);
     const again = cookieFor(A.secret, ADMIN_D, 'Aela', madeAgain);
+    r = await request(port, 'HEAD', '/api/hello', { cookie: admin, origin: 'https://evil.example' });
+    yes('the ended sign in is still refused (' + r.status + ')', r.status === 401);
 
     // ------------------------------------------ what is not a browser goes on --
     console.log('\nwhat is not a browser, no cookie and no Origin:');
