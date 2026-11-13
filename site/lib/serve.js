@@ -2984,9 +2984,10 @@ async function handle(req, res) {
     let o = {};
     try { o = JSON.parse(await body(req, 8192, PLAY_BODY_MS)) || {}; } catch (e) { passBodyFailure(e); }
     const t = readTicket(o.ticket);
-    if (!t) return sendJson(res, 401, { ok: false, why: 'link', message:
+    const d = t ? chars.accountKey(t.d) : '';
+    if (!d) return sendJson(res, 401, { ok: false, why: 'link', message:
       'This copy is not linked to a Discord account yet.' });
-    const st = await within(standingCached(t.d), by - Date.now(), () => standingLate(t.d));
+    const st = await within(standingCached(d), by - Date.now(), () => standingLate(d));
     if (st.lookupFailed && !st.admin) return sendJson(res, 503, discordUnasked());
     if (st.banned) return sendJson(res, 403, { ok: false, why: 'banned', message: accountBanned(st) });
     if (!st.play) return sendJson(res, 403, { ok: false, why: 'role', message: notAcceptedYet() });
@@ -2995,24 +2996,24 @@ async function handle(req, res) {
     const op = String(o.op || '');
     const linked = jsonFile(LINKED, {});
     let refused = null;
-    if (op === 'chose') refused = chars.choose(linked, t.d, o.profileId, now);
-    else if (op === 'played') refused = chars.played(linked, t.d, o.profileId, o.seconds, now);
-    else if (op === 'forget') refused = chars.forget(linked, t.d, o.profileId);
+    if (op === 'chose') refused = chars.choose(linked, d, o.profileId, now);
+    else if (op === 'played') refused = chars.played(linked, d, o.profileId, o.seconds, now);
+    else if (op === 'forget') refused = chars.forget(linked, d, o.profileId);
     else if (op !== '') return sendJson(res, 400, { ok: false, why: 'op', message: 'The site does not know that request.' });
 
     const pkRows = jsonFile(PK, {}) || {};
     const slots = slotsFor(st);
-    const said = chars.settle(linked, t.d, {
+    const said = chars.settle(linked, d, {
       slots,
       pk: (pid) => { const bar = characterBar(pid, now); return !!(bar && bar.pk); },
       revived: (pid) => !!pkRows[String(pid)] && !pkActive(pkRows[String(pid)])
     });
     if (!putJson(LINKED, linked)) {
-      console.error('[thornswood-docs] characters for Discord ' + t.d + ' not recorded: linked.json was not written');
+      console.error('[thornswood-docs] a list of characters was not recorded: linked.json was not written');
       return sendJson(res, 503, { ok: false, why: 'not recorded', message:
         'The site could not record your characters just now. Try again later, and tell staff if it keeps happening.' });
     }
-    const out = chars.answer(linked, t.d, slots);
+    const out = chars.answer(linked, d, slots);
     out.said = said;
     if (refused) { out.ok = false; out.why = 'refused'; out.message = refused; }
     return sendJson(res, 200, out);
@@ -3030,24 +3031,25 @@ async function handle(req, res) {
     let o = {};
     try { o = JSON.parse(await body(req, 1536 * 1024)) || {}; } catch (e) { passBodyFailure(e); }
     const t = readTicket(o.ticket);
-    if (!t) return sendJson(res, 401, { ok: false, why: 'link', message:
+    const d = t ? chars.accountKey(t.d) : '';
+    if (!d) return sendJson(res, 401, { ok: false, why: 'link', message:
       'This copy is not linked to a Discord account yet.' });
-    const st = await standingCached(t.d);
+    const st = await standingCached(d);
     if (st.banned) return sendJson(res, 403, { ok: false, why: 'banned', message: accountBanned(st) });
     const all = jsonFile(SETTINGS, {}) || {};
-    const have = all[String(t.d)] || {};
+    const have = all[d] || {};
     if (String(o.op || '') === 'get') {
       return sendJson(res, 200, { ok: true, at: Number(have.at) || 0, files: have.files || {} });
     }
     if (String(o.op || '') !== 'put') return sendJson(res, 400, { ok: false, why: 'op', message: 'The site does not know that request.' });
     const next = yourSettings.merge(have, o.files);
     if (next.why) return sendJson(res, 400, { ok: false, why: 'refused', message: 'Your settings were not kept: ' + next.why + '.' });
-    all[String(t.d)] = { at: Date.now(), files: next.files };
+    all[d] = { at: Date.now(), files: next.files };
     if (!putJson(SETTINGS, all)) {
-      console.error('[thornswood-docs] settings for Discord ' + t.d + ' not recorded: settings.json was not written');
+      console.error('[thornswood-docs] settings were not kept: settings.json was not written');
       return sendJson(res, 503, { ok: false, why: 'not recorded', message: 'The site could not keep your settings just now.' });
     }
-    return sendJson(res, 200, { ok: true, at: all[String(t.d)].at, files: Object.keys(next.files).length });
+    return sendJson(res, 200, { ok: true, at: all[d].at, files: Object.keys(next.files).length });
   }
 
   // ------------------------------------------------------------------- api

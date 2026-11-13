@@ -55,21 +55,23 @@ function nameOk(n) { return typeof n === 'string' && !n.includes('..') && NAMES.
 */
 function merge(have, sent) {
   if (!sent || typeof sent !== 'object' || Array.isArray(sent)) return { why: 'no files were sent' };
-  const files = Object.assign({}, (have && have.files && typeof have.files === 'object') ? have.files : {});
+  // A Map, so no name sent can reach a property every object has; the
+  // object handed back is made from it with Object.fromEntries, which only
+  // ever makes own properties.
+  const files = new Map(Object.entries((have && have.files && typeof have.files === 'object') ? have.files : {}));
   for (const n of Object.keys(sent)) {
     if (!nameOk(n)) return { why: n.slice(0, 100) + ' is not a setting the site keeps' };
     const v = sent[n];
-    if (v === null) { delete files[n]; continue; }
+    if (v === null) { files.delete(n); continue; }
     if (typeof v !== 'string') return { why: n + ' is not text' };
     if (Buffer.byteLength(v, 'utf8') > FILE_MOST) return { why: n + ' is larger than ' + (FILE_MOST / 1024) + ' KB' };
-    files[n] = v;
+    files.set(n, v);
   }
-  const names = Object.keys(files);
-  if (names.length > FILES_MOST) return { why: 'more than ' + FILES_MOST + ' files' };
+  if (files.size > FILES_MOST) return { why: 'more than ' + FILES_MOST + ' files' };
   let all = 0;
-  for (const n of names) all += Buffer.byteLength(files[n], 'utf8');
+  for (const v of files.values()) all += Buffer.byteLength(String(v), 'utf8');
   if (all > ALL_MOST) return { why: 'more than ' + (ALL_MOST / 1024) + ' KB of settings' };
-  return { files };
+  return { files: Object.fromEntries(files) };
 }
 
 module.exports = { merge, nameOk, SETTINGS };

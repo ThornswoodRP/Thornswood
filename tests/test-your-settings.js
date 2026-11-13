@@ -58,6 +58,11 @@ yes('nor anything that is not text', !ys.nameOk(null) && !ys.nameOk(7));
   for (let i = 0; i < 17; i++) big['mcm/b' + i + '.ini'] = 'x'.repeat(63 * 1024);
   yes('more than 1 MB in all is refused', !!ys.merge(null, big).why);
   yes('nothing sent is refused', !!ys.merge(null, null).why && !!ys.merge(null, []).why);
+  const sent = JSON.parse('{"__proto__": "x"}');
+  yes('a name like __proto__ is refused and touches no object', !!ys.merge(null, sent).why && ({}).x === undefined);
+  const kept = ys.merge({ files: { 'launcher.json': '{}' } }, { 'game/Thornswood.ini': 'a=1' });
+  yes('what merge hands back is a plain object of own names', Object.getPrototypeOf(kept.files) === Object.prototype &&
+      Object.keys(kept.files).sort().join(',') === 'game/Thornswood.ini,launcher.json');
 }
 
 // ---- the route ----------------------------------------------------------------
@@ -91,7 +96,7 @@ async function ask(files, ticket, req, standing, writes) {
     accountBanned: function () { return 'banned'; },
     jsonFile: function (f, d) { return f in files ? clone(files[f]) : d; },
     putJson: function (f, v) { if (writes === false) return false; files[f] = clone(v); return true; },
-    yourSettings: ys, SETTINGS: ys.SETTINGS,
+    yourSettings: ys, SETTINGS: ys.SETTINGS, chars: require('../site/lib/characters'),
     sendJson: function (r, c, o) { sent = { code: c, obj: o }; return sent; }
   };
   const names = Object.keys(env);
@@ -103,28 +108,31 @@ async function ask(files, ticket, req, standing, writes) {
   if (route) {
     const files = {};
     const S = ys.SETTINGS;
-    const none = await ask(files, 'D1', { op: 'get' });
+    const none = await ask(files, '201', { op: 'get' });
     yes('an account with nothing kept gets no files', none.code === 200 && none.obj.ok && Object.keys(none.obj.files).length === 0);
-    const put = await ask(files, 'D1', { op: 'put', files: { 'game/Thornswood.ini': '[Keys]\nChat=T' } });
+    const put = await ask(files, '201', { op: 'put', files: { 'game/Thornswood.ini': '[Keys]\nChat=T' } });
     yes('sending a file keeps it', put.code === 200 && put.obj.ok && put.obj.files === 1);
-    yes('under the Discord id in settings.json', files[S] && files[S].D1 &&
-        files[S].D1.files['game/Thornswood.ini'] === '[Keys]\nChat=T' && files[S].D1.at > 0);
+    yes('under the Discord id in settings.json', files[S] && files[S]['201'] &&
+        files[S]['201'].files['game/Thornswood.ini'] === '[Keys]\nChat=T' && files[S]['201'].at > 0);
     // Another PC: nothing local, the same Discord account.
-    const elsewhere = await ask(files, 'D1', { op: 'get' });
+    const elsewhere = await ask(files, '201', { op: 'get' });
     yes('the same account on another PC gets it back', elsewhere.obj.files['game/Thornswood.ini'] === '[Keys]\nChat=T');
-    const other = await ask(files, 'D2', { op: 'get' });
+    const other = await ask(files, '202', { op: 'get' });
     yes('another account does not', Object.keys(other.obj.files).length === 0);
-    const refused = await ask(files, 'D1', { op: 'put', files: { 'game/SkyrimPrefs.ini': 'x' } });
+    const refused = await ask(files, '201', { op: 'put', files: { 'game/SkyrimPrefs.ini': 'x' } });
     yes('a name the site does not keep is a 400, and says why', refused.code === 400 && /not a setting/.test(refused.obj.message));
-    yes('and what was kept is still kept', files[S].D1.files['game/Thornswood.ini'] === '[Keys]\nChat=T' &&
-        !('game/SkyrimPrefs.ini' in files[S].D1.files));
-    const odd = await ask(files, 'D1', { op: 'wipe' });
+    yes('and what was kept is still kept', files[S]['201'].files['game/Thornswood.ini'] === '[Keys]\nChat=T' &&
+        !('game/SkyrimPrefs.ini' in files[S]['201'].files));
+    const odd = await ask(files, '201', { op: 'wipe' });
     yes('an op the site does not know is a 400', odd.code === 400);
     const noTicket = await ask(files, '', { op: 'get' });
     yes('no ticket is a 401', noTicket.code === 401);
-    const banned = await ask(files, 'D1', { op: 'get' }, { banned: true });
+    const notAnId = await ask(files, '__proto__', { op: 'put', files: { 'launcher.json': '{}' } });
+    yes('a ticket whose id is not a Discord id is a 401, and nothing is written', notAnId.code === 401 &&
+        Object.keys(files[S]).join(',') === '201' && ({}).at === undefined);
+    const banned = await ask(files, '201', { op: 'get' }, { banned: true });
     yes('a banned account is refused', banned.code === 403);
-    const unwritten = await ask(files, 'D1', { op: 'put', files: { 'launcher.json': '{}' } }, null, false);
+    const unwritten = await ask(files, '201', { op: 'put', files: { 'launcher.json': '{}' } }, null, false);
     yes('a settings.json the site could not write is a 503, not an ok', unwritten.code === 503 && unwritten.obj.ok === false);
   }
 

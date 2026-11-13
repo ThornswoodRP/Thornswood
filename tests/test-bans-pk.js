@@ -876,17 +876,17 @@ async function adminRoleOnly() {
     // forgotten, and brings one an admin revived back. The launcher draws
     // what it is told; test-play-characters.js runs the site's half whole.
     const chars = require('../site/lib/characters');
-    const L = { A: { id: 'A', profiles: [11, 12], spare: 99, chars: [{ id: 11, slot: 1 }, { id: 12, slot: 2 }] } };
-    const said = chars.settle(L, 'A', { slots: 2, pk: (id) => id === 12, revived: () => false });
+    const L = { '101': { id: '101', profiles: [11, 12], spare: 99, chars: [{ id: 11, slot: 1 }, { id: 12, slot: 2 }] } };
+    const said = chars.settle(L, '101', { slots: 2, pk: (id) => id === 12, revived: () => false });
     yes('the site moves a dead character out of its slot to the dead slot, and Chars knows that slot',
-        L.A.chars.find((c) => c.id === 12).slot === chars.DEAD && chars.DEAD === -1 &&
+        L['101'].chars.find((c) => c.id === 12).slot === chars.DEAD && chars.DEAD === -1 &&
         /const int DeadSlot = -1;/.test(charsCs) && said.length === 1);
     const prep = lift(charsCs, 'public static string Prepare(Config cfg)') || '';
     yes('before the id played last is chosen: Prepare asks the site for the list after the roster',
         prep.indexOf('Roster.Refresh(cfg)') > 0 && prep.indexOf('Ask("", 0, 0, out fetched)') > prep.indexOf('Roster.Refresh(cfg)') &&
         prep.indexOf('Ask("", 0, 0, out fetched)') < prep.indexOf('LastPlayedId(rows)'));
-    yes('a dead character is never picked', chars.choose(L, 'A', 12, 1) !== null);
-    yes('and can be forgotten with the bin', chars.forget(L, 'A', 12) === null && L.A.retired.indexOf(12) >= 0);
+    yes('a dead character is never picked', chars.choose(L, '101', 12, 1) !== null);
+    yes('and can be forgotten with the bin', chars.forget(L, '101', 12) === null && L['101'].retired.indexOf(12) >= 0);
     const write = lift(charsCs, 'static string CharactersJson(List<Row> rows, int last, int spare, int slots)') || '';
     yes('the menu list carries the dead with "pk":true in slot 0, and a banned character with "banned":true',
         /all\.AddRange\(DeadRows\(rows\)\)/.test(write) && /,\\"pk\\":true/.test(write) &&
@@ -896,14 +896,14 @@ async function adminRoleOnly() {
     yes('Roster.cs reads the site\'s revived list, and Revived is false for an id still dead',
         /ReadIds\(text, "revived"\)/.test(rosterCs) &&
         /return revived\.Contains\(profileId\) && !dead\.Contains\(profileId\);/.test(rosterCs));
-    const R = { A: { id: 'A', profiles: [11, 12, 13], spare: 99,
+    const R = { '101': { id: '101', profiles: [11, 12, 13], spare: 99,
                      chars: [{ id: 11, slot: 1 }, { id: 12, slot: -1 }, { id: 13, slot: -1 }] } };
-    const none = chars.settle(R, 'A', { slots: 2, pk: () => false, revived: () => false });
+    const none = chars.settle(R, '101', { slots: 2, pk: () => false, revived: () => false });
     yes('the site moves nobody back when nobody was revived',
-        none.length === 0 && R.A.chars.find((c) => c.id === 12).slot === -1);
-    const back = chars.settle(R, 'A', { slots: 2, pk: () => false, revived: (id) => id === 12 });
+        none.length === 0 && R['101'].chars.find((c) => c.id === 12).slot === -1);
+    const back = chars.settle(R, '101', { slots: 2, pk: () => false, revived: (id) => id === 12 });
     yes('and puts the one an admin revived into the lowest free slot, and leaves the other dead',
-        R.A.chars.find((c) => c.id === 12).slot === 2 && R.A.chars.find((c) => c.id === 13).slot === -1 &&
+        R['101'].chars.find((c) => c.id === 12).slot === 2 && R['101'].chars.find((c) => c.id === 13).slot === -1 &&
         back.some((l) => l === 'An admin undid the PK of a character, so it can be played again: character 12 to slot 2.'));
 
     // ------------------------------------------------ 7. an admin undoes a PK --

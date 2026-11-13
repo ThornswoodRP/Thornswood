@@ -51,9 +51,20 @@ const OTHER_IDS = 8;
 
 function num(n) { const v = Number(n); return isFinite(v) && v > 0 && Math.floor(v) === v ? v : 0; }
 
+/*
+  A Discord id as the key of its row, or '' when it is not one. A Discord id
+  is digits and nothing else, so a key that is not cannot reach linked.json,
+  and no key can name a property every object has (__proto__ and the rest).
+*/
+function accountKey(d) {
+  const key = String(d == null ? '' : d);
+  return /^[0-9]{1,25}$/.test(key) ? key : '';
+}
+
 /* The account's row, with its three fields made whole. */
 function rowOf(linked, d) {
-  const key = String(d);
+  const key = accountKey(d);
+  if (!key) throw new Error('not a Discord id');
   if (!linked[key] || typeof linked[key] !== 'object') linked[key] = { id: key };
   const row = linked[key];
   row.chars = (Array.isArray(row.chars) ? row.chars : [])
@@ -238,4 +249,4 @@ function answer(linked, d, slots) {
            chars: live.concat(dead).map((c) => ({ id: c.id, slot: c.slot, played: c.played, seconds: c.seconds })) };
 }
 
-module.exports = { answer, choose, DEAD, forget, keepProfiles, mintId, played, rowOf, settle, tidySlots };
+module.exports = { accountKey, answer, choose, DEAD, forget, keepProfiles, mintId, played, rowOf, settle, tidySlots };
