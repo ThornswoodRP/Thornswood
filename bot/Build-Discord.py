@@ -2828,7 +2828,7 @@ async def keep_onboarding_channels(guild):
 
 def welcome_shut(guild, ws):
     """The channels of Discord's Welcome Screen that the plan shuts @everyone
-       out of, as (id, name). The live build of 13 Nov, 5:20 PM (main
+       out of, as (id, name). The live build of 12 Nov, 5:20 PM (main
        54e22c0) took #start-here and #disboard off Onboarding's default
        channels, and Discord still refused to gate them, "400 Onboarding
        channels must be readable by everyone": Discord holds every channel
@@ -2850,6 +2850,73 @@ async def read_server_guide(guild):
     from discord.http import Route
     return await client.http.request(
         Route('GET', '/guilds/{guild_id}/new-member-welcome', guild_id=guild.id))
+
+
+async def write_server_guide(guild, guide, reason):
+    """Sends the Server Guide back, the way Discord's own client saves it."""
+    from discord.http import Route
+    return await client.http.request(
+        Route('PUT', '/guilds/{guild_id}/new-member-welcome', guild_id=guild.id),
+        json=guide, reason=reason)
+
+
+# The two lists of the Server Guide that point somebody new at a channel: its
+# new member actions ("Bump the server") and its resource channels.
+GUIDE_LISTS = ('new_member_actions', 'resource_channels')
+
+
+async def keep_server_guide(guild):
+    """Takes the channels the plan gates off Discord's Server Guide, and any
+       channel the server no longer has, before any channel is gated.
+
+       The audit of 12 Nov, 5:55 PM Mountain (main 5a47af5) found #start-here
+       and #disboard in the Server Guide, once they were off Onboarding's
+       default channels and the Welcome Screen held neither, and Discord
+       refused to gate them while they were there: "400 Onboarding channels
+       must be readable by everyone". Everything else in the guide, its
+       welcome message, its other entries and whether it is on, goes back as
+       Discord sent it."""
+    try:
+        guide = await read_server_guide(guild)
+    except discord.HTTPException as e:
+        if getattr(e, 'status', None) in (403, 404):
+            return
+        failed.append("could not read Discord's Server Guide (%s)" % refused(e))
+        return
+    if not isinstance(guide, dict):
+        return
+    modes = plan_modes()
+    drop = {}
+    for key in GUIDE_LISTS:
+        for entry in guide.get(key) or []:
+            try:
+                cid = int((entry or {}).get('channel_id') or 0)
+            except (TypeError, ValueError):
+                continue
+            ch = guild.get_channel(cid)
+            name = getattr(ch, 'name', None)
+            if ch is None:
+                drop[cid] = 'a deleted channel'
+            elif name in modes and not everyone_reads(modes[name]):
+                drop[cid] = '#' + name
+    if not drop:
+        return
+    what = ("%s off Discord's Server Guide, which the plan shuts @everyone out of"
+            % ', '.join(sorted(set(drop.values()))))
+    if CHECK:
+        say('would', 'take ' + what)
+        return
+    sent = dict(guide)
+    for key in GUIDE_LISTS:
+        if key in guide:
+            sent[key] = [e for e in guide.get(key) or []
+                         if int((e or {}).get('channel_id') or 0) not in drop]
+    try:
+        await write_server_guide(guild, sent,
+                                 'Thornswood setup, the plan gates these channels')
+        say('guide', 'took ' + what)
+    except discord.HTTPException as e:
+        failed.append('could not take ' + what + ' (%s)' % refused(e))
 
 
 def guide_shut(guild, guide):
@@ -3246,7 +3313,7 @@ async def audit(guild):
     try:
         for name in sorted(guide_shut(guild, await read_server_guide(guild))):
             off("#%s is in Discord's Server Guide, so Discord refuses to shut "
-                "@everyone out of it as the plan does" % name)
+                "@everyone out of it as the plan does; a build takes it off" % name)
     except discord.HTTPException as e:
         if getattr(e, 'status', None) not in (403, 404):
             off("Discord's Server Guide could not be read (%s)" % refused(e))
@@ -3603,6 +3670,7 @@ async def on_ready():
             await keep_onboarding_off(guild)
             await keep_onboarding_channels(guild)
             await keep_welcome_screen(guild)
+            await keep_server_guide(guild)
         elif await onboarding_on(guild) is True:
             say('note', "Discord's Onboarding is on, and a whole build switches it off")
 
