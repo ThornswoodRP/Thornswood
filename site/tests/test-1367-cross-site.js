@@ -117,6 +117,11 @@ function scratch(name, discord) {
     [ADMIN_D]: { id: ADMIN_D, name: 'Aela', profiles: [1001] },
     [BJORN_D]: { id: BJORN_D, name: 'Bjorn', profiles: [2002] }
   }));
+  // Make the site's clock one second ahead of this process. A replacement
+  // sign in must follow the site's recorded sign out, not a guess from the
+  // harness clock. This makes that ordering error repeat on every OS.
+  fs.writeFileSync(path.join(dir, 'clock.cjs'),
+    'const now = Date.now; Date.now = () => now() + 1000;\n');
   return { dir, secret, password };
 }
 function freePort() {
@@ -153,7 +158,7 @@ function listening(srv, port) {
 }
 async function start(s) {
   const port = await freePort();
-  const srv = spawn(process.execPath, [path.join(s.dir, 'server.js')], {
+  const srv = spawn(process.execPath, ['--require', path.join(s.dir, 'clock.cjs'), path.join(s.dir, 'server.js')], {
     cwd: s.dir, stdio: ['ignore', 'pipe', 'pipe'],
     env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
   });
@@ -294,11 +299,19 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
     r = await request(port, 'POST', '/api/logout', { cookie: admin, origin: OWN });
     yes('sign out from the hub clears both cookies', r.status === 200 &&
         (r.headers['set-cookie'] || []).filter((c) => /^(tw|twa)=; /.test(c)).length === 2);
-    // Signing out ends that sign in on the site too (#4405), so the checks
-    // below, which need staff signed in, sign in again. The new cookie is
-    // made one millisecond after the sign out had answered, so it is later
-    // than the time the site kept for the sign out, whatever the clock does.
-    const again = cookieFor(A.secret, ADMIN_D, 'Aela', Date.now() + 1);
+    // Signing out ends that sign in on the site too (#4405). The checks
+    // below need a new sign in, strictly after the site's recorded sign out.
+    // Date.now() + 1 in this process did not establish that order (#5834):
+    // another process can report a later clock value. Read the site record
+    // instead, with no sleep, retry or change to authentication.
+    const signOutKey = crypto.createHmac('sha256', A.secret).update('signout|' + ADMIN_D).digest('hex').slice(0, 32);
+    const endedAt = Number(read(A.dir, 'data/signouts.json', {})[signOutKey]);
+    if (!Number.isFinite(endedAt) || endedAt <= 0) throw new Error('the site did not record the sign out');
+    const madeAgain = endedAt + 1;
+    console.log('      replacement sign in at ' + madeAgain + ', site ended sign in at ' + endedAt);
+    const again = cookieFor(A.secret, ADMIN_D, 'Aela', madeAgain);
+    r = await request(port, 'HEAD', '/api/hello', { cookie: admin, origin: 'https://evil.example' });
+    yes('the ended sign in is still refused (' + r.status + ')', r.status === 401);
 
     // ------------------------------------------ what is not a browser goes on --
     console.log('\nwhat is not a browser, no cookie and no Origin:');
