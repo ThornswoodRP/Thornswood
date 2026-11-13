@@ -389,7 +389,10 @@ namespace Thornswood
         static readonly List<string> logged = new List<string>();
         public static void Said(string m) { lock (logged) logged.Add(m); }
         static void Log(string m) { Said(m); }
-        static Task OffThread(Action work) { return Task.Run(work); }
+        // The folder check is held until Main lets it go, so each pass hands
+        // back at its await and Main reads the mark at that exact point.
+        static readonly ManualResetEventSlim release = new ManualResetEventSlim(false);
+        static Task OffThread(Action work) { return Task.Run(delegate { release.Wait(); work(); }); }
         static void FaultToWindow(Task done) { Said("FAULT " + done.Exception.InnerException.Message); }
         static int refreshes;
         static Action refreshed;
@@ -416,10 +419,17 @@ __METHODS__
         static int Main()
         {
             TimeSpan Long = TimeSpan.FromSeconds(30);
-            OwnGameRefreshIfDue().Wait(Long);
+            Task first = OwnGameRefreshIfDue();
+            release.Set();
+            first.Wait(Long);
+            release.Reset();
             Yes("4. a folder that is due starts its bring-up-to-date, once", refreshes == 1 && refreshed != null);
             if (refreshed == null) { Console.WriteLine(pass + " passed, " + fail + " failed"); return 1; }
+            // The bring-up-to-date is done: PlayAfterRefresh starts the second
+            // pass, which hands back at its folder check, still held.
             refreshed();
+            Yes("4. while the second pass waits on its folder check, the mark is still up", ownGameRefreshedForPlay);
+            release.Set();
             bool ended = secondDone.Wait(Long);
             Yes("4. once it is done, StartPlay runs again", ended && passes == 1);
             Yes("4. and a folder still due then is said, not brought up to date a second time (" + refreshes + " times)",
