@@ -53,13 +53,15 @@ yes('the longest page line (' + worst.length + ') fits a command on the chat soc
     worst.length <= commandChars);
 
 // The real cut in the chat handler.
-const cutLines = /(const long = String\(msg\.text == null \? '' : msg\.text\)\.slice\(0, COMMAND_CHARS\);\s*const text = [^\n]+)/.exec(voice);
-yes('the chat handler\'s cut is found', !!cutLines);
-if (cutLines) {
+const cutLines = /(const long = pageText\(msg\.text\)\.slice\(0, COMMAND_CHARS\);\s*const text = [^\n]+)/.exec(voice);
+// The cut reads the line through pageText (#4206), so it runs with the real one.
+const pageTextFn = (/function pageText\(v\) \{[\s\S]*?\r?\n\}/.exec(voice) || [''])[0];
+yes('the chat handler\'s cut is found', !!cutLines && !!pageTextFn);
+if (cutLines && pageTextFn) {
   const run = function (line) {
     const box = { msg: { text: line }, COMMAND_CHARS: commandChars, SAID_CHARS: 400,
                   headlines: { floatLine: function (l) { return /^\/(me|do|w|s|ooc)\b/.test(l); } }, out: null };
-    vm.runInNewContext(cutLines[1] + '\nout = text;', box);
+    vm.runInNewContext(pageTextFn + '\n' + cutLines[1] + '\nout = text;', box);
     return box.out;
   };
   yes('that longest page line goes through the socket whole', run(worst) === worst);
