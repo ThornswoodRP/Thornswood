@@ -40,7 +40,10 @@
        entry with hashes is refused; a moved entry's patch stays when the new
        archive holds the same file, goes when it is dropped and is refused
        otherwise, and a mod rule that names it is given the new archive's md5,
-       file name and version (#2793); each -Mod and -Add archive is held to
+       file name and version (#2793), while a rule naming another mod that
+       only shares its file name stays, a swap onto a file id another entry
+       installs is refused, and so is one add naming a plugin twice in
+       names that differ only in case (#4200); each -Mod and -Add archive is held to
        the file Nexus serves as its file id, and one that is not it is
        refused with both sizes and md5s (#4980); -WhatIf builds the
        archive and writes nothing; the real run uploads an archive with the

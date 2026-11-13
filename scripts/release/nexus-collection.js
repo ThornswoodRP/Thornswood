@@ -279,6 +279,10 @@ function applySwaps(collection, swaps) {
       stop(e.name + ' carries ' + carried.join(' and ') + ' worked out from the archive it has now, which would not fit the new one. A new file for it is a revision made in Vortex on One.');
     }
     if (String(e.source.fileId) === String(sw.fileId)) stop(e.name + ' is already file ' + sw.fileId + ' in this revision.');
+    // Two entries on one file would install it twice and leave the other
+    // entry's mod in a state Vortex never made (#4200); -Add refuses the same.
+    const other = collection.mods.find(m => m !== e && m.source && m.source.type === 'nexus' && String(m.source.fileId) === String(sw.fileId));
+    if (other) stop('Nexus file ' + sw.fileId + ' is already in this revision, as ' + other.name + ', so ' + e.name + ' cannot move onto it.');
     const set = (obj, key, val, label) => {
       const was = obj[key];
       if (String(was) === String(val)) return;
@@ -332,6 +336,20 @@ function coerce(v) {
   return m ? [m[1], m[2] || '0', m[3] || '0'].map(Number).join('.') : null;
 }
 
+// Whether one side of a mod rule names this entry (#4200): by the most
+// exact thing the side gives, as Vortex matches a reference. A side with an
+// md5 names the archive with that md5 and no other, whatever its file name;
+// without one, a tag names the entry Vortex gave it; only a side with
+// neither is matched by its file name. Before, any one of them was enough,
+// so a rule naming another mod by its md5 that shared the file name "Main
+// File" was moved with the swapped entry.
+function sideNames(side, entry) {
+  const s = entry.source;
+  if (side.fileMD5 !== undefined) return !!s.md5 && side.fileMD5 === s.md5;
+  if (side.tag !== undefined) return !!s.tag && side.tag === s.tag;
+  return !!s.logicalFilename && side.logicalFileName === s.logicalFilename;
+}
+
 function moveRules(collection, e, sw, lines) {
   const s = e.source;
   const oldVersion = coerce(e.version);
@@ -339,7 +357,7 @@ function moveRules(collection, e, sw, lines) {
   (collection.modRules || []).forEach((r, i) => {
     for (const sideName of ['source', 'reference']) {
       const side = r[sideName];
-      if (!side || !named({ source: side }, e)) continue;
+      if (!side || !sideNames(side, e)) continue;
       const label = 'modRules[' + i + '].' + sideName + '.';
       const put = (key, val) => {
         if (String(side[key]) === String(val)) return;
@@ -384,10 +402,16 @@ function applyAdd(collection, add, lines) {
   const known = new Set(collection.plugins.map(p => String(p.name).toLowerCase()));
   for (const m of ['skyrim.esm', 'update.esm', 'dawnguard.esm', 'hearthfires.esm', 'dragonborn.esm']) known.add(m);
   for (const u of unlistedOf(collection)) known.add(u);
+  // The list and this mod's own plugins so far, lower case: Windows and the
+  // game read a plugin's name in any case, so two that differ only in case
+  // are one file in Data (#4200).
+  const own = new Set();
   for (const p of plugins) {
     if (!p || !p.name || !/\.es[mpl]$/i.test(p.name)) stop('A plugin of ' + add.name + ' has no plugin name (.esm, .esp or .esl).');
     const low = String(p.name).toLowerCase();
     if (collection.plugins.some(q => String(q.name).toLowerCase() === low)) stop('The plugin list already names ' + p.name + ', so ' + add.name + ' would put a second one in Data.');
+    if (own.has(low)) stop(add.name + ' names ' + low + ' twice, in names that differ only in case, and Data holds one file by that name.');
+    own.add(low);
     const after = Array.isArray(p.after) ? p.after : [];
     if (!after.length) stop(p.name + ' says nothing to load after, so Vortex and LOOT would place it where they liked.');
     for (const a of after) if (!known.has(String(a).toLowerCase())) stop(p.name + ' is to load after ' + a + ', which the plugin list does not name and the revision does not install off its list.');
