@@ -83,10 +83,10 @@ yes('a newer launcher goes in when automatic updates are on and it is not the on
 yes('one that fails still restarts once', /RunUpdate\(delegate\(bool wentIn\) \{ RestartLauncher\(\); \}\);/.test(fsr));
 yes('otherwise the launcher restarts once', (fsr.match(/RestartLauncher\(\);/g) || []).length === 2);
 
-const runFix = code(body(sf, 'static void RunFix(bool afterUpdate'));
+const runFix = code(body(sf, 'static async Task RunFixAsync(bool afterUpdate'));
 const nothing = runFix.slice(runFix.indexOf('if (AllIssues(plugins).Count == 0)'));
 yes('a Fix that finds nothing ends in the one restart', /ShowVerify\(plugins, false\);\s*FirstSetupRestart\(\);\s*return;/.test(nothing));
-const rest = code(body(sf, 'static void FixRest('));
+const rest = code(body(sf, 'static async Task FixRest('));
 const report = rest.indexOf('Report(plugins);');
 const first = rest.indexOf('FirstSetupRestart();');
 const asks = rest.indexOf('if (Paths.Collection && Has(Upkeep.LastIssues, IssueKind.Skyrim))');

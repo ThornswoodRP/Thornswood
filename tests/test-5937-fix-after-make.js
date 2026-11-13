@@ -81,7 +81,7 @@ yes('after a bring-up-to-date that is due, whether it succeeds or not',
 yes('and straight away when none is', /else if \(offer\) AskOwnGame\(true\);\s*else fix\(\);/.test(start));
 
 // 3. Fix itself
-const runFix = code(body(sf, 'static void RunFix(bool afterUpdate, bool afterVortex = false, bool afterMake = false)'));
+const runFix = code(body(sf, 'static async Task RunFixAsync(bool afterUpdate, bool afterVortex, bool afterMake)'));
 yes('Fix knows it is the one after a make', runFix.length > 0);
 yes('it waits for a folder being prepared and the folder\'s finish runs it',
   runFix.indexOf('if (ownGameBusy && afterMake) { fixWhenFolderReady = true; fixWhenFolderReadyAfterMake = true;') >= 0 &&
@@ -90,8 +90,8 @@ yes('it waits for a folder being prepared and the folder\'s finish runs it',
 yes('the log says what it is doing and that Pandora and BodySlide show their own windows',
   /afterMake \? "Thornswood's own Skyrim folder is made\. Scanning everything[^"]*Pandora and BodySlide build in their own windows\."/.test(runFix));
 yes('the rest is the Fix a press runs: the folder first, then FixRest',
-  /StartOwnGame\(false, true, delegate \{ FixRest\(afterUpdate, afterVortex\); \}, delegate \{ FixRest\(afterUpdate, afterVortex\); \}\)/.test(runFix) &&
-  /FixRest\(afterUpdate, afterVortex\);\s*\}$/.test(runFix.trim()));
+  /StartOwnGame\(false, true, delegate \{ Begin\(FixRest\(afterUpdate, afterVortex\)\); \}, delegate \{ Begin\(FixRest\(afterUpdate, afterVortex\)\); \}\)/.test(runFix) &&
+  /await FixRest\(afterUpdate, afterVortex\);\s*\}$/.test(runFix.trim()));
 const disk = code(body(upkeep, 'public static void FixOnDisk('));
 yes('and Fix writes the made files, builds the animation and body files and puts the plugin list in the server\'s order',
   disk.indexOf('MadeFromGame.Ensure()') > 0 && disk.indexOf('GeneratedHere.Ensure(say)') > 0 && disk.indexOf('Verify.Fix(cfg, say, Updater.ReleaseCopy(cfg))') > 0);

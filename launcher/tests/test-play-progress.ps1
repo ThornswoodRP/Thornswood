@@ -382,7 +382,7 @@ Yes 'Sync: packs after a record without its files are planned as downloads' ($sy
 $su = Read-Text (Join-Path $AppDir 'ShellUpdate.cs')
 # Since #2627 RunUpdate(after) does the work; Fix and, since #3201, Install
 # now call it with what to do once the update is in or has failed.
-$run = Body $su 'static void RunUpdate(Action<bool> after)'
+$run = Body $su 'static async Task RunUpdateAsync(Action<bool> after)'
 Yes 'RunUpdate opens the button with one download per pack' ($run -match 'PlayProgress\.Begin\("Updating", downloads\)')
 $stages = Read-Text (Join-Path $AppDir 'UpdateStages.cs')
 # Since the launcher updates through Velopack (#4825), its download is

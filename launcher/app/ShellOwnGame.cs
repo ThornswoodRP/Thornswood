@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
@@ -213,14 +214,17 @@ namespace Thornswood
         /// and says why. StartPlay rather than Play(), because Play() is also
         /// reached from paths that have not been through Discord.
         ///
-        /// ownGameBusy is read again after the wait. NeedsRefresh runs under
-        /// Waiting, which keeps the window's messages moving, and the
-        /// bring-up-to-date OwnGameAtStart queues when the window is first
-        /// shown can start inside that wait. Read only before it, a Play
-        /// pressed in that first second went on into the game while the
-        /// folder under it was being rewritten.
+        /// ownGameBusy is read again after the wait. NeedsRefresh runs off the
+        /// window's thread (OffThread), and while it does the window's own
+        /// loop carries on, so the bring-up-to-date OwnGameAtStart queues when
+        /// the window is first shown can start inside that wait. Read only
+        /// before it, a Play pressed in that first second went on into the
+        /// game while the folder under it was being rewritten.
+        ///
+        /// The second StartPlay is awaited inside ownGameRefreshedForPlay, so
+        /// the flag is still up when that pass asks NeedsRefresh again.
         /// </summary>
-        static bool OwnGameRefreshIfDue()
+        static async Task<bool> OwnGameRefreshIfDue()
         {
             if (!OwnGame.Active) return false;
             if (playing || Checks.GameRunning()) return false;
@@ -232,7 +236,7 @@ namespace Thornswood
             bool due = false;
             try
             {
-                Waiting(delegate { due = OwnGame.NeedsRefresh(cfg); });
+                await OffThread(delegate { due = OwnGame.NeedsRefresh(cfg); });
             }
             catch (Exception ex)
             {
@@ -257,13 +261,16 @@ namespace Thornswood
                     "Press Scan, then Fix, on Diagnostics, and send the launcher log if it keeps saying this.");
                 return true;
             }
-            StartOwnGame(false, true, delegate
-            {
-                ownGameRefreshedForPlay = true;
-                try { StartPlay(); }
-                finally { ownGameRefreshedForPlay = false; }
-            });
+            StartOwnGame(false, true, delegate { Begin(PlayAfterRefresh()); });
             return true;
+        }
+
+        /// <summary>StartPlay again once the bring-up-to-date for this press is done, with ownGameRefreshedForPlay up until that pass has ended.</summary>
+        static async Task PlayAfterRefresh()
+        {
+            ownGameRefreshedForPlay = true;
+            try { await StartPlayAsync(); }
+            finally { ownGameRefreshedForPlay = false; }
         }
 
         /// <summary>

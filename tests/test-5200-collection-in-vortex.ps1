@@ -130,12 +130,12 @@ Yes 'once, and only when asked' ($after -match '(?s)if \(!fixAfterVortex\) retur
 Yes 'not beside an update UpdateBySelf started, whose end runs Fix (FixAfterUpdate)' ($after.IndexOf('if (updating) return;') -gt $after.IndexOf('fixAfterVortex = false;') -and
     $after.IndexOf('if (updating) return;') -lt $after.IndexOf('RunFix(false, true);') -and
     $update -match 'static void UpdateNow\(\)\s*\{\s*RunUpdate\(FixAfterUpdate\);\s*\}')
-$runFix = Code (Method $sf 'static void RunFix(bool afterUpdate, bool afterVortex = false, bool afterMake = false)')
+$runFix = Code (Method $sf 'static async Task RunFixAsync(bool afterUpdate, bool afterVortex, bool afterMake)')
 Yes 'that Fix waits for a folder being prepared, as Fix after an update does' ($runFix.Contains('if (ownGameBusy && afterVortex) { fixWhenFolderReady = true; fixWhenFolderReadyAfterVortex = true;') -and
     $runFix.IndexOf('if (ownGameBusy && afterVortex)') -lt $runFix.IndexOf('if (ownGameBusy) {') -and
     $own.Contains('if (fixWhenFolderReadyAfterVortex) { fixWhenFolderReadyAfterVortex = false; RunFix(false, true); }'))
 Yes 'and its log says it is the scan after Vortex' ($runFix.Contains('"Vortex is done. Scanning everything, and putting right what the scan finds."') -and $runFix.Contains('"The scan after Vortex found nothing wrong."'))
-$rest = Code (Method $sf 'static void FixRest(bool afterUpdate, bool afterVortex)')
+$rest = Code (Method $sf 'static async Task FixRest(bool afterUpdate, bool afterVortex)')
 $left = $rest.IndexOf('bool leftOnCard = waiting && afterVortex;')
 Yes 'it leaves a waiting update on the card, where UpdateBySelf left it, before Fix would take one' ($left -gt 0 -and $left -lt $rest.IndexOf('RunUpdate(delegate') -and
     $rest -match '(?s)if \(leftOnCard\)\s*\{\s*Log\("The update is on the card above Play\. Install now takes it\."\);\s*\}\s*else if \(waiting && afterUpdate')

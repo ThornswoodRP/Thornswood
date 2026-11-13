@@ -11,7 +11,8 @@ namespace Thornswood
     /// On 16 Sep Windows closed this launcher three times for not responding
     /// (15:13, 16:27 and 19:06, event 1002 in the Application log), each time
     /// while the game was running. Closing a stuck Skyrim was one wait on the
-    /// window's thread and goes through Waiting now. Whatever else held it
+    /// window's thread; it runs off it now and is awaited (OffThread, #4582).
+    /// Whatever else held it
     /// during those sessions left nothing in launcher.log, because the thing
     /// that writes the log was the thing that was stuck.
     /// </summary>
