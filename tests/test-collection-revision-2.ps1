@@ -32,6 +32,7 @@
 param(
     [string]$DocPath,
     [string]$CheckPath,
+    [string]$VpsPath,
     [switch]$Offline,
     # Where the fixtures are built. Default: the system temp folder.
     [string]$Scratch
@@ -258,7 +259,7 @@ $sources = 0
 if ($Offline) {
     Skip 'the servers: -Offline'
 } else {
-    $vpsPath = Join-Path $Repo 'scripts\vps\vps.json'
+    $vpsPath = if ($VpsPath) { $VpsPath } else { Join-Path $Repo 'scripts\vps\vps.json' }
     $cfg = Get-Content -LiteralPath $vpsPath -Raw | ConvertFrom-Json
     foreach ($w in @('live', 'dev')) {
         $gamePort = if ($w -eq 'live') { [int]$cfg.livePort } else { [int]$cfg.devPort }
