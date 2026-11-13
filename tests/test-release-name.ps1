@@ -130,61 +130,36 @@ try {
     Yes '  a note Publish-Update or Rollback-Feed writes is dated by it, not by the machine' (
         $pu -match "date\s+=\s+\(Get-TeamNow\)\.ToString\('M-d-yyyy h:mm tt'" -and $rb -match "date = \(Get-TeamNow\)\.ToString\('M-d-yyyy h:mm tt'" -and
         $pu -notmatch "date\s+=\s+\(Get-Date\)" -and $rb -notmatch "date = \(Get-Date\)")
-    Yes '  and a release id is minted on it unless a time is given' ((Get-Command New-ReleaseId).ScriptBlock.Ast.Body.ParamBlock -eq $null -and
-        ((Get-Command New-ReleaseId).ScriptBlock.Ast.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Now' }).DefaultValue.Extent.Text -eq '(Get-TeamNow)')
+    Yes '  and a release id is minted on the UTC clock unless a time is given, with its Z (#4950)' ((Get-Command New-ReleaseId).ScriptBlock.Ast.Body.ParamBlock -eq $null -and
+        ((Get-Command New-ReleaseId).ScriptBlock.Ast.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'UtcNow' }).DefaultValue.Extent.Text -eq '[datetime]::UtcNow')
 
     # ---- 1b. a new id is never one the feed has (#1057) ------------------------------
     Write-Host ''; Write-Host 'a new release id'
-    $at = [datetime]::new(2026, 9, 28, 23, 48, 12)
-    Yes 'it is the second, yyyyMMdd-HHmmss' ((New-ReleaseId $null -Now $at) -eq '20260928-234812')
-    Yes '  with -dev on dev' ((New-ReleaseId $null -Dev -Now $at) -eq '20260928-234812-dev')
-    $f = [pscustomobject]@{ packs = @([pscustomobject]@{ id = '20260928-234812' }) }
-    Yes 'the id of a pack already on the feed moves on to the next second' ((New-ReleaseId $f -Now $at) -eq '20260928-234813')
-    $f = [pscustomobject]@{ packs = @([pscustomobject]@{ id = '20260928-234812' }, [pscustomobject]@{ id = '20260928-234812-2' }, [pscustomobject]@{ id = '20260928-234813' }) }
-    Yes '  past every one taken, parts included' ((New-ReleaseId $f -Now $at) -eq '20260928-234814')
-    $f = [pscustomobject]@{ packs = @([pscustomobject]@{ id = '20260928-234812-dev-2' }) }
-    Yes '  a part alone is enough to move it (<id>-2)' ((New-ReleaseId $f -Dev -Now $at) -eq '20260928-234813-dev')
-    $f = [pscustomobject]@{ packs = @(); releases = @([pscustomobject]@{ id = '20260928-234812' }); release = [pscustomobject]@{ id = '20260928-234813' }; baseline = [pscustomobject]@{ id = '20260928-234814' } }
-    Yes '  and so is a release the feed names in releases, release or baseline' ((New-ReleaseId $f -Now $at) -eq '20260928-234815')
-    $f = [pscustomobject]@{ packs = @([pscustomobject]@{ id = '20260928-2348' }) }
-    Yes 'a minute id from before #1057 is not the new one of that minute' ((New-ReleaseId $f -Now $at) -eq '20260928-234812')
-    # Every installed launcher compares pack ids for equality (applied.txt) and
-    # a record by its sha256; the one place it sorts ids is a log line, which
-    # has to put the newer release last across the change of shape.
-    $old = '20260928-2348'; $new = New-ReleaseId $null -Now $at
-    Yes ('  and sorts before it, ordinal, as the launcher''s log line sorts them') ([string]::CompareOrdinal($old, $new) -lt 0 -and
-        [string]::CompareOrdinal('20260928-2349', $new) -gt 0 -and [string]::CompareOrdinal($old + '-dev', $new + '-dev') -lt 0)
-    Yes '  and Ship reads the time out of both the same way (the first 13 characters)' ($new.Substring(0, 13) -eq $old)
+    $at = [datetime]::new(2026, 9, 28, 23, 48, 12, [DateTimeKind]::Utc)
+    Yes 'it is the second, yyyyMMdd-HHmmssZ' ((New-ReleaseId $null -UtcNow $at) -eq '20260928-234812Z')
+    Yes '  with -dev on dev' ((New-ReleaseId $null -Dev -UtcNow $at) -eq '20260928-234812Z-dev')
+    $f = [pscustomobject]@{ packs = @([pscustomobject]@{ id = '20260928-234812Z' }) }
+    Yes 'the id of a pack already on the feed moves on to the next second' ((New-ReleaseId $f -UtcNow $at) -eq '20260928-234813Z')
+    $f = [pscustomobject]@{ packs = @([pscustomobject]@{ id = '20260928-234812Z' }, [pscustomobject]@{ id = '20260928-234812Z-2' }, [pscustomobject]@{ id = '20260928-234813Z' }) }
+    Yes '  past every one taken, parts included' ((New-ReleaseId $f -UtcNow $at) -eq '20260928-234814Z')
+    $f = [pscustomobject]@{ packs = @([pscustomobject]@{ id = '20260928-234812Z-dev-2' }) }
+    Yes '  a part alone is enough to move it (<id>-2)' ((New-ReleaseId $f -Dev -UtcNow $at) -eq '20260928-234813Z-dev')
+    $f = [pscustomobject]@{ packs = @(); releases = @([pscustomobject]@{ id = '20260928-234812Z' }); release = [pscustomobject]@{ id = '20260928-234813Z' }; baseline = [pscustomobject]@{ id = '20260928-234814Z' } }
+    Yes '  and so is a release the feed names in releases, release or baseline' ((New-ReleaseId $f -UtcNow $at) -eq '20260928-234815Z')
+    $f = [pscustomobject]@{ packs = @([pscustomobject]@{ id = '20260928-2348' }, [pscustomobject]@{ id = '20260928-234812' }) }
+    Yes 'an old Mountain id with the same digits is not the new one' ((New-ReleaseId $f -UtcNow $at) -eq '20260928-234812Z')
+    # Across the change of shape the newer release still sorts last as text:
+    # UTC is ahead of Mountain time, so a new id's digits are larger than any
+    # id made before it (test-4950-release-id-instant.ps1 holds the rest).
+    $old = '20260928-174812'; $new = New-ReleaseId $null -UtcNow $at
+    Yes ('  and an old id from the same instant sorts before it, ordinal') ([string]::CompareOrdinal($old, $new) -lt 0 -and
+        [string]::CompareOrdinal($old + '-dev', $new + '-dev') -lt 0 -and (Get-ReleaseIdUtc $old) -eq (Get-ReleaseIdUtc $new))
     $up = [IO.File]::ReadAllText((Join-Path $repo 'launcher\app\Updater.cs'))
     Yes 'the launcher skips a pack only when applied.txt has that exact id' ($up -match '!done\.Contains\(p\.id\)\) list\.Add\(p\)')
     foreach ($s in 'Publish-Update.ps1', 'Rollback-Feed.ps1') {
         $src = [IO.File]::ReadAllText((Join-Path $repo ('scripts\release\' + $s)))
         Yes "$s mints through New-ReleaseId and mints no id from the minute" ($src -match 'New-ReleaseId \$\w+ -Dev:\$Dev' -and $src -notmatch "Get-Date -Format 'yyyyMMdd-HHmm'")
     }
-
-    # ---- 1c. a new id sorts after every release the feed has (#4950) -----------------
-    # Ids are Mountain time with no zone, and on 1 Nov Mountain clocks run
-    # 1:00 to 1:59 AM twice. A release at 1:50 AM summer time was named
-    # 20261101-015000; one at 1:10 AM standard time, forty minutes later, was
-    # named 20261101-011000 and sorted before it, so the store's list of
-    # releases (Get-StoreReleases, by the time in the id) put the older first,
-    # and a rollback or Ship's tag check read it as the newest.
-    Write-Host ''; Write-Host 'a new id sorts after the feed''s'
-    $first = Get-TeamNow ([datetime]::new(2026, 11, 1, 7, 50, 0, [DateTimeKind]::Utc))
-    $again = Get-TeamNow ([datetime]::new(2026, 11, 1, 8, 10, 0, [DateTimeKind]::Utc))
-    Yes ('1:50 AM summer time and 1:10 AM standard time, forty minutes apart, read back as {0} and {1}' -f
-        $first.ToString('HH:mm'), $again.ToString('HH:mm')) ($first.ToString('HH:mm') -eq '01:50' -and $again.ToString('HH:mm') -eq '01:10')
-    $one = New-ReleaseId $null -Now $first
-    $f = [pscustomobject]@{ packs = @([pscustomobject]@{ id = $one }); release = [pscustomobject]@{ id = $one }; baseline = [pscustomobject]@{ id = $one } }
-    $two = New-ReleaseId $f -Now $again
-    Yes ("  the second release's id ($two) sorts after the first's ($one)") ([string]::CompareOrdinal($two, $one) -gt 0)
-    $fd = [pscustomobject]@{ packs = @([pscustomobject]@{ id = ($one + '-dev') }) }
-    $twoDev = New-ReleaseId $fd -Dev -Now $again
-    Yes ("  and on dev ($twoDev after $one-dev)") ([string]::CompareOrdinal($twoDev, $one + '-dev') -gt 0)
-    $fo = [pscustomobject]@{ release = [pscustomobject]@{ id = '20261101-0150' } }
-    Yes '  and after a minute id from before #1057' ([string]::CompareOrdinal((New-ReleaseId $fo -Now $again), '20261101-0150') -gt 0)
-    $fs = [pscustomobject]@{ release = [pscustomobject]@{ id = '20261101-015000' } }
-    Yes '  a clock that is ahead of the feed still names the release by its own time' ((New-ReleaseId $fs -Now ([datetime]::new(2026, 11, 1, 2, 30, 5))) -eq '20261101-023005')
 
     # ---- 2. do the names agree ---------------------------------------------------------
     Write-Host ''; Write-Host 'do the names agree'
@@ -342,7 +317,7 @@ try {
 
         # a. A release, sent for real into the stand-in site and store.
         $r = Publish @('-Notes', "'Test release`n- one line'")
-        YesR ("a release goes out (exit {0}) and the publisher says which one ({1})" -f $r.Code, $r.Published) ($r.Code -eq 0 -and $r.Published -match '^\d{8}-\d{6}$') $r
+        YesR ("a release goes out (exit {0}) and the publisher says which one ({1})" -f $r.Code, $r.Published) ($r.Code -eq 0 -and $r.Published -match '^\d{8}-\d{6}Z$') $r
         $id = $r.Published
         $feed = Read-Json (SiteFeed)
         $rec = Get-ReleaseRecord $feed
@@ -406,7 +381,7 @@ try {
         Put (Join-Path $inst 'Game\Data\Platform\UI\thornswood-ours.esp') 'the plugin, changed for a second release'
         $r = Publish @('-Notes', "'Test release`n- a second one'")
         YesR ("a second release goes out under an id of its own ({0} after {1}, exit {2})" -f $r.Published, $id, $r.Code) (
-            $r.Code -eq 0 -and $r.Published -match '^\d{8}-\d{6}$' -and $r.Published -ne $id) $r
+            $r.Code -eq 0 -and $r.Published -match '^\d{8}-\d{6}Z$' -and $r.Published -ne $id) $r
         $ids = @((Read-Json (SiteFeed)).packs | ForEach-Object { [string]$_.id })
         Yes ("  the feed lists both, no id twice ({0})" -f ($ids -join ', ')) ($ids -contains $id -and $ids -contains $r.Published -and
             @($ids | Select-Object -Unique).Count -eq $ids.Count)

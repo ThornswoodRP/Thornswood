@@ -51,14 +51,25 @@
 # yyyyMMdd-HHmm, so two publishes inside one minute both got the same name: a
 # launcher that took the first wrote that id into applied.txt and skipped the
 # second as already applied, and the store, "releases" and the release tag named
-# two releases the same. Now it is the second, yyyyMMdd-HHmmss (-dev on dev),
-# and if the feed already names that id, or a part of it (<id>-2), it moves on
-# a second at a time to the next free one.
+# two releases the same. Now it is the second, and if the feed already names
+# that id, or a part of it (<id>-2), it moves on a second at a time to the
+# next free one.
 #
-# Every installed launcher still updates across it: a launcher compares pack
-# ids only for equality (applied.txt) and a release record by its sha256, never
-# by the shape of the id. Everything that reads the time out of an id takes
-# its first 13 characters, yyyyMMdd-HHmm, and both shapes start that way.
+# AN ID NAMES ITS INSTANT (#4950): yyyyMMdd-HHmmssZ, the UTC time with a Z,
+# -dev on dev. Until 13 Nov it was yyyyMMdd-HHmmss in Mountain time with no
+# zone, and on the first Sunday of November Mountain clocks run 1:00 to 1:59
+# AM twice: a release at 1:10 AM standard time, forty minutes after one at
+# 1:50 AM summer time, was named before it, and the store's list of releases,
+# sorted by the time in the id (Get-StoreReleases), put the older first. The
+# ids from before keep their names and are read as the Mountain time they were
+# made on (Get-ReleaseIdUtc). No tag or feed id from before falls in a repeated
+# hour (measured 13 Nov: the 1 Nov tags are 20261101-140731-dev and
+# 20261101-142152-dev), so each reads as one instant. Across the change they
+# also sort as text: UTC is always ahead of Mountain time, so a new id's digits
+# are larger than those of any id made before it.
+#
+# No installed launcher reads a release id since #5796. Everything that reads
+# the time out of one does it through Get-ReleaseIdUtc.
 # Publish-Update and Rollback-Feed both mint through this.
 function Get-FeedTakenIds($doc) {
     $t = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
@@ -76,10 +87,10 @@ function Get-FeedTakenIds($doc) {
 }
 
 # The team's clock: Mountain time, Patrick's, whatever the clock of the
-# machine that ships. A release id and the date on its note are read as one
-# clock, with no zone written on either (Find-DevNoteRelease in Dev-News.ps1
-# puts a note in its release's span by them, and the News tab shows the date as
-# it is). Until 31 Oct both took the shipping machine's own clock: One and the
+# machine that ships. The date on a release's note is written on it, with no
+# zone (Find-DevNoteRelease in Dev-News.ps1 puts a note in its release's span
+# on this clock, and the News tab shows the date as it is); release ids were
+# too until #4950. Until 31 Oct both took the shipping machine's own clock: One and the
 # box keep Mountain time, a GitHub runner keeps UTC, so a note shipped from a
 # runner read six hours late. Measured on the dev feed that day: "The collection
 # link opens the server's revision" (release 20261030-115318-dev, tagged
@@ -89,35 +100,38 @@ function Get-FeedTakenIds($doc) {
 # 6:05 PM for a Ship tagged at 12:12 PM Mountain. Mountain Standard Time is
 # Windows' name for the zone and follows its summer time; America/Denver is
 # the same zone's name everywhere else.
-function Get-TeamNow([datetime]$UtcNow = [datetime]::UtcNow) {
+function Get-TeamZone {
     $onWindows = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
-    $zone = [TimeZoneInfo]::FindSystemTimeZoneById($(if ($onWindows) { 'Mountain Standard Time' } else { 'America/Denver' }))
-    return [TimeZoneInfo]::ConvertTimeFromUtc([datetime]::SpecifyKind($UtcNow, [DateTimeKind]::Utc), $zone)
+    return [TimeZoneInfo]::FindSystemTimeZoneById($(if ($onWindows) { 'Mountain Standard Time' } else { 'America/Denver' }))
 }
 
-function New-ReleaseId($doc, [switch]$Dev, [datetime]$Now = (Get-TeamNow)) {
+function Get-TeamNow([datetime]$UtcNow = [datetime]::UtcNow) {
+    return [TimeZoneInfo]::ConvertTimeFromUtc([datetime]::SpecifyKind($UtcNow, [DateTimeKind]::Utc), (Get-TeamZone))
+}
+
+# The instant a release id names, as a UTC time, or $null for an id of no
+# release shape. yyyyMMdd-HHmmssZ is UTC; yyyyMMdd-HHmmss and yyyyMMdd-HHmm,
+# the ids from before #4950 and #1057, are Mountain time. -dev and a part
+# (-2) after it are read past.
+function Get-ReleaseIdUtc([string]$Id) {
+    $m = [regex]::Match([string]$Id, '^(\d{8}-\d{4})(?:(\d{2})(Z)?)?(?:$|-)')
+    if (-not $m.Success) { return $null }
+    $text = $m.Groups[1].Value + $(if ($m.Groups[2].Success) { $m.Groups[2].Value } else { '00' })
+    $at = [datetime]::MinValue
+    if (-not [datetime]::TryParseExact($text, 'yyyyMMdd-HHmmss', [Globalization.CultureInfo]::InvariantCulture, 'None', [ref]$at)) { return $null }
+    if ($m.Groups[3].Success) { return [datetime]::SpecifyKind($at, [DateTimeKind]::Utc) }
+    $zone = Get-TeamZone
+    # A Mountain time that never happened (the hour skipped in March) names
+    # no instant. None of the ids from before is one.
+    if ($zone.IsInvalidTime($at)) { return $null }
+    return [TimeZoneInfo]::ConvertTimeToUtc([datetime]::SpecifyKind($at, [DateTimeKind]::Unspecified), $zone)
+}
+
+function New-ReleaseId($doc, [switch]$Dev, [datetime]$UtcNow = [datetime]::UtcNow) {
     $taken = Get-FeedTakenIds $doc
-    $suffix = if ($Dev) { '-dev' } else { '' }
-    $t = $Now
-    # NEVER BEFORE THE NEWEST THE FEED NAMES (#4950). The id is Mountain time
-    # with no zone, and on the first Sunday of November Mountain clocks run
-    # 1:00 to 1:59 AM twice: a release at 1:10 AM standard time, forty
-    # minutes after one at 1:50 AM summer time, was named before it, and the
-    # store's list of releases, which sorts by the time in the id
-    # (Get-StoreReleases), put the older one first. So a new id starts no
-    # earlier than a second after the newest id the feed already names, in
-    # either shape (yyyyMMdd-HHmm before #1057), and the ids keep the order the
-    # releases went out in. A clock ahead of the feed, which is every other
-    # day, names the release by its own time as before.
+    $suffix = if ($Dev) { 'Z-dev' } else { 'Z' }
     $inv = [Globalization.CultureInfo]::InvariantCulture
-    foreach ($x in $taken) {
-        $m = [regex]::Match([string]$x, '^(\d{8}-\d{4})(\d{2})?(?:$|-)')
-        if (-not $m.Success) { continue }
-        $at = [datetime]::MinValue
-        $text = $m.Groups[1].Value + $(if ($m.Groups[2].Success) { $m.Groups[2].Value } else { '00' })
-        if (-not [datetime]::TryParseExact($text, 'yyyyMMdd-HHmmss', $inv, 'None', [ref]$at)) { continue }
-        if ($at -ge $t) { $t = $at.AddSeconds(1) }
-    }
+    $t = if ($UtcNow.Kind -eq [DateTimeKind]::Local) { $UtcNow.ToUniversalTime() } else { $UtcNow }
     for ($i = 0; $i -lt 3600; $i++) {
         $id = $t.ToString('yyyyMMdd-HHmmss', $inv) + $suffix
         $clash = $taken.Contains($id)
@@ -125,7 +139,7 @@ function New-ReleaseId($doc, [switch]$Dev, [datetime]$Now = (Get-TeamNow)) {
         if (-not $clash) { return $id }
         $t = $t.AddSeconds(1)
     }
-    throw "Every release id for the hour from $($Now.ToString('HH:mm:ss')) is already on the feed, so none was made."
+    throw "Every release id for the hour from $($t.AddSeconds(-3600).ToString('HH:mm:ss', $inv)) UTC is already on the feed, so none was made."
 }
 # ==== end thornswood release id ====
 
