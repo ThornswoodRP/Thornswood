@@ -60,9 +60,10 @@ link, and the old line goes.
 - **A blizzard or heavy storm makes travel 15% slower** and adds cold or
   wet; the right gear protects. 22 Oct 2026,
   [#3176](https://github.com/EvilPatrick06/Thornswood/issues/3176#issuecomment-6335270816).
-- **Letters and parcels are picked up at any inn in the recipient's hold.**
-  22 Oct 2026,
-  [#3175](https://github.com/EvilPatrick06/Thornswood/issues/3175#issuecomment-6335271035).
+- **Letters and parcels are left and collected at the drop box by a notice
+  board in the recipient's hold, not at an inn.**
+  (dec_SaZmBq9bZT4O_xP-wHpqbg) 12 Nov 2026,
+  [#4560](https://github.com/ThornswoodRP/Thornswood/issues/4560#issuecomment-6842189471).
 - **House and shop upkeep is due weekly**, in goods or labour. 22 Oct 2026,
   [#3170](https://github.com/EvilPatrick06/Thornswood/issues/3170#issuecomment-6335271623).
 - **Missed upkeep never takes the claim away;** it brings a penalty, the way
