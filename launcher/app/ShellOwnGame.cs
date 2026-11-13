@@ -501,7 +501,7 @@ namespace Thornswood
 
             // The same load-order step Fix runs. SettleSettings on a full
             // Refresh used to lay Golden's plugins.txt over Live, which put
-            // Thornswood-Content.esp out of the server's order (Gavin: Mod
+            // Thornswood-Content.esp out of the server's order (Patrick: Mod
             // list red at position 21 after "already matches"), so
             // PutInServerOrder (the same write Scan and Fix uses) keeps Mod
             // list green. Light flags are not written here or anywhere: the
