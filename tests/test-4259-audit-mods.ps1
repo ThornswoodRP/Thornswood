@@ -20,6 +20,8 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'Windows.ps1')
+$ps = Get-BoxPowerShell
 $script = Join-Path $repo 'scripts\mods\Audit-Mods.ps1'
 $script:pass = 0; $script:fail = 0
 function Yes([string]$what, [bool]$cond) {
@@ -36,7 +38,7 @@ function Run([string]$root) {
     # A copy of the script and what it dot-sources, in a scratch repository
     # layout, so its report (local\mod-audit.json beside the scripts folder)
     # is written in the scratch folder and never in this checkout.
-    $o = & pwsh -NoProfile -File $script:copy -Root $root -NoPause 2>&1 | Out-String
+    $o = & $ps -NoProfile -File $script:copy -Root $root -NoPause 2>&1 | Out-String
     return [pscustomobject]@{ Code = $LASTEXITCODE; Out = $o }
 }
 try {
@@ -70,7 +72,7 @@ try {
     Yes 'the summary says how much loose has to stay' ($r.Out -match 'loose files the game itself needs')
     Yes 'the summary no longer calls the whole loose total optional' ($r.Out -notmatch 'ALL of this can be optional')
 
-    if (-not $IsWindows) {
+    if (-not $OnWindows) {
         $script:locked = Join-Path $T 'build\Game\Data\textures\locked'
         New-Item -ItemType Directory -Force -Path $script:locked | Out-Null
         Put 'build\Game\Data\textures\locked\x.dds' 10
