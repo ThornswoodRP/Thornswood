@@ -207,8 +207,10 @@ function Get-CollectionRecordHeaders($R) {
 # switches on every plugin in it (Verify.cs, the golden plugins.txt).
 # Revision 6 is so: its own list leaves out CBBE.esp and
 # RaceMenuMorphsCBBE.esp, which the servers load, and CommonClothes.esp's
-# rule names the second. So a rule may name such a plugin, and its rules are
-# links in a chain like any other; it has no place in the list to break.
+# rule names the second. So a rule may name such a plugin. On the
+# collection's own list its rules hold nothing, since that list does not
+# load it, so no plugin may hang on it alone there (#4728); on the servers'
+# order it is a plugin like any other (Get-CollectionRecordServerOrderProblems).
 function Get-CollectionRecordOrderProblems($R) {
     $out = New-Object Collections.Generic.List[string]
     $enabled = @(@($R.plugins) | Where-Object { $_.enabled -ne $false })
@@ -254,7 +256,13 @@ function Get-CollectionRecordOrderProblems($R) {
     foreach ($l in @(Get-PluginRuleLoops $rules.ToArray() (Get-CollectionRecordHeaders $R))) {
         $out.Add('a rule goes round with the order the game sets, which LOOT reports as a cyclic interaction on every install: ' + $l.Loop + ' (' + ($l.Why -join '; ') + ')')
     }
-    # Two full plugins next to each other with no chain of rules between.
+    # Two full plugins next to each other with no chain of rules between. The
+    # chain may pass through a light plugin, but not through one switched off:
+    # the collection's own list does not load it, so its rules hold nothing
+    # there. CommonClothes.esp, whose only rule named RaceMenuMorphsCBBE.esp,
+    # was held by nothing on that list and this said yes to it (#4728).
+    $offKey = @{}
+    foreach ($o in $off) { $offKey[$o.ToLowerInvariant()] = $true }
     $full = @($enabled | Where-Object { -not $_.light })
     for ($i = 0; $i + 1 -lt $full.Count; $i++) {
         $a = ([string]$full[$i].name).ToLowerInvariant()
@@ -268,12 +276,84 @@ function Get-CollectionRecordOrderProblems($R) {
             if (-not $next.ContainsKey($x)) { continue }
             foreach ($y in $next[$x]) {
                 if ($y -eq $b) { $hit = $true; break }
-                if ($seen.ContainsKey($y)) { continue }
+                if ($seen.ContainsKey($y) -or $offKey.ContainsKey($y)) { continue }
                 $seen[$y] = $true
                 $q.Enqueue($y)
             }
         }
         if (-not $hit) { $out.Add("no rule keeps $($full[$i + 1].name) after $($full[$i].name), the full plugin above it, so LOOT may swap them: give $($full[$i + 1].name) ""after"": [""$($full[$i].name)""]") }
+    }
+    return $out.ToArray()
+}
+
+# The order the servers load, held by the record's rules as
+# Check-CollectionRules.ps1 holds a list (#4728). The servers load plugins
+# the record switches off, and the launcher switches those on, so on that
+# order a full plugin switched off is in the list like any other: a rule has
+# to name it, and a chain of rules through plugins that order loads has to
+# keep each full plugin under the one above it. CBBE.esp, which the servers
+# load and no rule named, floated there while the record check said yes.
+# $Order is the servers' load order; the plugins the record switches on that
+# it does not load yet go on the end, as Deploy-Gamemode.ps1 -Vortex puts
+# them before the order is checked.
+function Get-CollectionRecordServerOrderProblems($R, [string[]]$Order) {
+    $out = New-Object Collections.Generic.List[string]
+    $byKey = @{}
+    foreach ($p in @($R.plugins)) { $byKey[([string]$p.name).ToLowerInvariant()] = $p }
+    $list = New-Object Collections.Generic.List[string]
+    $loads = @{}
+    foreach ($n in @($Order)) { $k = ([string]$n).ToLowerInvariant(); if (-not $loads.ContainsKey($k)) { $loads[$k] = $true; $list.Add([string]$n) } }
+    foreach ($p in @($R.plugins)) {
+        $k = ([string]$p.name).ToLowerInvariant()
+        if ($p.enabled -ne $false -and -not $loads.ContainsKey($k)) { $loads[$k] = $true; $list.Add([string]$p.name) }
+    }
+    # In the order the game loads them: every master before every plugin that
+    # is not one, each kind in the order above, as Get-CollectionRecordServerFull
+    # gives it, so a new master goes on the end of the masters.
+    $isMaster = { param($n) $k = $n.ToLowerInvariant(); if ($byKey.ContainsKey($k)) { [bool]$byKey[$k].master } else { $n -match '\.(esm|esl)$' } }
+    $list = @(@($list | Where-Object { & $isMaster $_ }) + @($list | Where-Object { -not (& $isMaster $_) }))
+    $next = @{}
+    $named = @{}
+    foreach ($p in @($R.plugins)) {
+        $k = ([string]$p.name).ToLowerInvariant()
+        foreach ($a in @($p.after)) {
+            if (-not $a) { continue }
+            $ak = ([string]$a).ToLowerInvariant()
+            $named[$k] = $true; $named[$ak] = $true
+            if (-not $next.ContainsKey($ak)) { $next[$ak] = New-Object Collections.Generic.List[string] }
+            $next[$ak].Add($k)
+        }
+    }
+    # The record's full plugins in that order. The base masters load first
+    # whatever any list says, and a plugin the record does not install (the
+    # game's own, Thornswood-Last.esp) is no rule's to hold.
+    $full = @($list | Where-Object {
+            $k = $_.ToLowerInvariant()
+            $byKey.ContainsKey($k) -and -not $byKey[$k].light -and -not (Test-CollectionName $script:CollectionBaseMasters $_)
+        })
+    $held = New-Object Collections.Generic.List[string]
+    for ($i = 0; $i -lt $full.Count; $i++) {
+        if ($named.ContainsKey($full[$i].ToLowerInvariant())) { $held.Add($full[$i]); continue }
+        $out.Add("the servers load $($full[$i]) and no rule names it, so LOOT may put it anywhere" + $(if ($i -gt 0) { ": give it ""after"": [""$($full[$i - 1])""]" } else { '' }))
+    }
+    for ($i = 0; $i + 1 -lt $held.Count; $i++) {
+        $a = $held[$i].ToLowerInvariant()
+        $b = $held[$i + 1].ToLowerInvariant()
+        $seen = @{ $a = $true }
+        $q = New-Object Collections.Generic.Queue[string]
+        $q.Enqueue($a)
+        $hit = $false
+        while ($q.Count -and -not $hit) {
+            $x = $q.Dequeue()
+            if (-not $next.ContainsKey($x)) { continue }
+            foreach ($y in $next[$x]) {
+                if ($y -eq $b) { $hit = $true; break }
+                if ($seen.ContainsKey($y) -or -not $loads.ContainsKey($y)) { continue }
+                $seen[$y] = $true
+                $q.Enqueue($y)
+            }
+        }
+        if (-not $hit) { $out.Add("on the servers' order no rule keeps $($held[$i + 1]) after $($held[$i]), the full plugin above it, so LOOT may swap them: give $($held[$i + 1]) ""after"": [""$($held[$i])""]") }
     }
     return $out.ToArray()
 }
@@ -324,6 +404,7 @@ function Get-CollectionRecordProblems($R, $Ctx) {
         $dropped = @{}
         foreach ($d in @($R.dropped)) { if ($d) { $dropped[([string]$d.name).ToLowerInvariant()] = $d } }
         $order = @(@($Ctx.Last.loadOrder) | ForEach-Object { [string]$_ })
+        foreach ($s in (Get-CollectionRecordServerOrderProblems $R $order)) { $out.Add($s) }
         # A plugin the servers load that the record takes out has every form
         # of its own gone from the world (#2320), so it is named, with why.
         $goes = @{}
