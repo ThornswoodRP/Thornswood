@@ -88,8 +88,8 @@ let cfg = copyOf(DEFAULTS);
    writing the whole of cfg back, so turning open on wrote Member into the
    play list for good, turning it off again left Members able to play, and a
    written "open": "true" came back as false. onDisk is the file as it was
-   read, or the defaults above when there was none, and keep() writes that
-   with only the keys made added. */
+   read (or, with none, the completed defaults, set further down), and keep()
+   writes that with only the keys made added. */
 let onDisk = null;
 /* The byte order mark matters. Windows PowerShell puts one on the front of
    anything it writes with -Encoding UTF8, JSON.parse refuses a string that
@@ -111,7 +111,6 @@ try {
 } catch (e) {
   if (fs.existsSync(CFGFILE)) cfgBroken = e;
 }
-if (!onDisk) onDisk = copyOf(DEFAULTS);
 /* Saves the keys made into config.json as onDisk holds it, and nothing else
    of cfg. onDisk takes them only once the file has them, so a key that could
    not be kept is not written later by the next one. Throws as writeFileSync
@@ -162,6 +161,11 @@ if (!Array.isArray(cfg.access.slots3)) {
   cfg.access.slots3 = ['Thalmor Boot-Licker', 'Talos Worshiper', 'Milk Drinker', 'Gamemaster'];
 }
 cfg.admins  = Array.isArray(cfg.admins) ? cfg.admins.map(String) : [];
+/* With no config.json, the file a first start writes is the defaults as the
+   lines above complete them: every access list filled and open false, so
+   Member is not on the play list. That is what config.example.json documents.
+   Nothing here was read from a file, so nothing read is changed by it. */
+if (!onDisk) onDisk = copyOf(cfg);
 
 // A list of role names for a sentence: "Owner, Dev and Gamemaster" rather than
 // "Owner and Dev and Gamemaster", so the dev-role refusal reads plainly once
