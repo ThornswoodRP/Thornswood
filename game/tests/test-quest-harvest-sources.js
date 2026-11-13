@@ -61,6 +61,13 @@ const bad=copy(population);bad.loadOrder[0].sha256='bad';
 assert.throws(()=>validateScarceHarvest(doc,bad),/source evidence/);
 {const rebuilt=copy(population);rebuilt.loadOrder.find(r=>r.name==='Thornswood-Last.esp').sha256='0'.repeat(64);
  assert.equal(validateScarceHarvest(doc,rebuilt).sources.length,doc.sources.length,'a rebuilt own plugin keeps the evidence (#613)');}
+{const grown=copy(population);grown.loadOrder.splice(grown.loadOrder.length-1,0,{name:'New Revision.esp',sha256:'1'.repeat(64)});
+ const {loadOrderSha256}=require('../../scripts/dev/MerchantLoadOrderPin.js');
+ assert.throws(()=>validateScarceHarvest(doc,grown),/source evidence/,'evidence from the order before a move is refused');
+ const again={...copy(doc),loadOrderSha256:loadOrderSha256(grown)};
+ assert.equal(validateScarceHarvest(again,grown).sources.length,doc.sources.length,'measured again in a moved order that moves no source, it holds (#5191)');
+ const shifted=copy(again);shifted.sources[0].position[0]+=1;
+ assert.throws(()=>validateScarceHarvest(shifted,grown),/source evidence/,'a source a move shifted is a new pin');}
 
 // Exercise the generated production exports, rather than replacing them with
 // the controllable adapters used by the harvesting transaction fixture.

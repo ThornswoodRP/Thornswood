@@ -1,6 +1,7 @@
-"""Measure the seven retrieval placements in the complete, pinned load order.
+"""Measure the seven retrieval placements, and the scarce geode and harvest
+sources, in the complete, pinned load order.
 
-Reads game files on One; writes only source evidence in this checkout. No
+Reads the game's plugins (on One, or a box run's data folder); writes only source evidence in this checkout. No
 server operation or generated placement is performed here.
 """
 from pathlib import Path
@@ -29,6 +30,33 @@ TERMS = [
     ('case', 'ea73b:Skyrim.esm', 'Whiterun', 'Tailor', 50, 8),
     ('dispatch', '547e8:Skyrim.esm', 'Whiterun', 'Cook', 60, 12),
     ('seal', '53ff6:Skyrim.esm', 'Whiterun', 'Alchemist', 70, 14),
+]
+
+# The scarce sources the merchant quests send people to (#5191): the Blackreach
+# geodes and crimson nirnroot. What each quest asks for is written here; where
+# each source stands (its base, its world and its position) is measured in the
+# same load order as the retrievals, so a move of the order measures them again
+# and their documents name the order they were measured in. Until 13 Nov 2026
+# they were measured once by hand and pinned to that order, so the box's first
+# build of collection revision 8, which only added a plugin of eyes, stopped
+# here: nothing could measure them again.
+SCARCE = [
+    ('game/data/merchant-scarce-geodes.json', 'geode', 'Blackreach geodes', '2e4e2:Skyrim.esm', 'SLGM', 'novice', 30, [
+      '10fc57:Skyrim.esm',
+      '10eb24:Skyrim.esm',
+      '10e994:Skyrim.esm',
+      '10e955:Skyrim.esm',
+      '10e8bb:Skyrim.esm',
+      '10fc4c:Skyrim.esm']),
+    ('game/data/merchant-scarce-harvest.json', 'crimson', 'Blackreach', 'b701a:Skyrim.esm', 'INGR', 'novice', 10, [
+      'f3b51:Skyrim.esm',
+      'f3b54:Skyrim.esm',
+      'f3b5d:Skyrim.esm',
+      '10ffac:Skyrim.esm',
+      '10ffaf:Skyrim.esm',
+      '10ffb0:Skyrim.esm',
+      'f3b56:Skyrim.esm',
+      '10ffa9:Skyrim.esm']),
 ]
 
 def digest(value):
@@ -91,6 +119,22 @@ def winning_refs(plugin, index, sha, wanted, winners):
             at = limit
     walk(24 + plugin.header, len(buf))
 
+def measure_scarce(refs, off, order):
+    """Each SCARCE document, measured from the winning REFR rows (refs) in the
+    load order whose pinned digest is order; off says whether a reference is
+    switched off at the start. Stops on a source that is gone or off."""
+    out = []
+    for target, quest, label, item, item_type, rank, minutes, wanted in SCARCE:
+        found = []
+        for ref in wanted:
+            row = refs.get(ref)
+            if not row or row.get('deleted') or off(ref) or not row.get('pos') or not row.get('base'):
+                raise ValueError('Scarce source absent or disabled: ' + ref)
+            found.append({'reference': ref, 'base': row['base'], 'world': row.get('world') or row['cell'],
+                'position': list(row['pos']), 'item': item, 'itemType': item_type, 'rank': rank, 'returnMinutes': minutes})
+        out.append((target, {'version': 1, 'quest': quest, 'label': label, 'loadOrderSha256': order, 'sources': found}))
+    return out
+
 def build(data):
     population = json.loads((ROOT / 'game/data/npc-population.json').read_text(encoding='utf-8'))
     roster = json.loads((ROOT / 'game/data/merchant-roster.json').read_text(encoding='utf-8'))['merchants']
@@ -133,17 +177,18 @@ def build(data):
             'role': role, 'hold': hold, 'destinationHold': destination['bookHold'],
             'gold': gold, 'hours': hours, 'provenance': proof})
     content = (ROOT / 'game/content/Thornswood-Content.esp').read_bytes()
-    return {'version': 1, 'loadOrderSha256': digest(pinned_order(population['loadOrder'])),
-        'contentSha256': hashlib.sha256(content).hexdigest(), 'sources': rows}, fixtures
+    order = digest(pinned_order(population['loadOrder']))
+    return {'version': 1, 'loadOrderSha256': order,
+        'contentSha256': hashlib.sha256(content).hexdigest(), 'sources': rows}, fixtures, measure_scarce(tables[b'REFR'], cast.off, order)
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--data', type=Path, default=Path('C:/Thornswood/Game/Data'))
     ap.add_argument('--check', action='store_true')
     args = ap.parse_args()
-    doc, fixtures = build(args.data)
+    doc, fixtures, scarce = build(args.data)
     for target, value in [('game/data/merchant-retrievals.json', doc),
-                          ('tests/fixtures/merchant-retrieval-records.json', fixtures)]:
+                          ('tests/fixtures/merchant-retrieval-records.json', fixtures)] + scarce:
         text = json.dumps(value, indent=2, ensure_ascii=False) + '\n'
         path = ROOT / target
         if args.check:
@@ -154,7 +199,8 @@ def main():
             # LF on every machine, as .gitattributes stores it (#3029).
             with path.open('w', encoding='utf-8', newline='\n') as output:
                 output.write(text)
-    print('PASS seven retrieval sources measured in the complete pinned load order; manifest sha256=' + digest(doc))
+    print('PASS seven retrieval sources and ' + str(sum(len(d['sources']) for _, d in scarce)) +
+          ' scarce sources measured in the complete pinned load order; manifest sha256=' + digest(doc))
 
 if __name__ == '__main__':
     main()
