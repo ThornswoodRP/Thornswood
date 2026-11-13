@@ -411,7 +411,7 @@ function needsRig() {
 
   yes('D2 K has a Body section in the world, never while creating, with no Confirm',
       /if \(!creating\(\) && bodyView\(\)\) sections\.push\('body'\);/.test(skills) &&
-      /section !== 'apprentice' && (?:section !== 'hairdye' && )?section !== 'body'(?: && section !== 'alchemy')?(?: && section !== 'college')?\);/.test(skills) &&
+      /section !== 'apprentice' && (?:section !== 'hairdye' && )?section !== 'body'(?: && section !== 'alchemy')?(?: && section !== 'college')?(?: && section !== 'contracts')?\);/.test(skills) &&
       /if \(section === 'body'\) return 0;/.test(skills));
 
   const parts = ['function bodyView() {', 'function bodyWorries(v) {', 'function tempWord(t) {', 'function drawNeeds() {']

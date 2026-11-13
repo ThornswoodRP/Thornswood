@@ -177,7 +177,7 @@
   function offer(a) {
     var soc = social();
     var want = String(a.parts[2] || '').trim();
-    if (!want || want === '::') { return 'Look at the person the contract is with before you open J.'; }
+    if (!want || want === '::') { return 'Look at the person the contract is with, then press K.'; }
     var terms = termsOf(a.text);
     if (!terms) { return 'Write the terms of the contract. Nothing was sent.'; }
     if (terms.length > TERMS_CHARS) {

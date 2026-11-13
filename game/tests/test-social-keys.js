@@ -146,6 +146,10 @@ function rig(opts) {
     // K on a person while you carry a hair dye (#2675), asked after it; nobody
     // is looked at here. test-2675-hair-dye-wiring.js has what it does.
     'function hairDyePress() { return false; }\n' +
+    // K on anybody else writes a contract with them (#4561), asked after the
+    // two above; nobody is looked at here. test-4561-contracts.js has what
+    // it does.
+    'function contractPress() { return false; }\n' +
     'function commandKeyPressed() { }\n' +
     // The / and P watchers on the game's own menus are test-our-key-menus.js's.
     'const OFF_MENU = { openedBy: function () { return ""; }, shutFor: function () { }, keyDown: function () { } };\n' +

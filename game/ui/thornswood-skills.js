@@ -3568,8 +3568,7 @@
     // the tree's own sending, so neither carries a Confirm.
     var showConfirm = cr ? section === 'review'
       : (section !== 'start' && section !== 'tree' && section !== 'recipes' && section !== 'guides' && section !== 'property' && section !== 'office' &&
-         section !== 'apprentice' && section !== 'hairdye' && section !== 'body' && section !== 'alchemy' && section !== 'college' &&
-         section !== 'contracts');
+         section !== 'apprentice' && section !== 'hairdye' && section !== 'body' && section !== 'alchemy' && section !== 'college' && section !== 'contracts');
     var shut = closeWord();
     var key = JSON.stringify([line, statusKind, can, label, showConfirm, cr, shut, keyName]);
     if (key === footKey) return;
