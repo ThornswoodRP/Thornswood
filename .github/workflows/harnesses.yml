@@ -52,7 +52,8 @@ jobs:
       # scripts on this checkout, and they work out the launcher's number
       # from when its sources last changed (scripts\release\LauncherVersion.ps1,
       # #5179), which a shallow checkout cannot say.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           filter: blob:none
