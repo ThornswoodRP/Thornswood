@@ -16,6 +16,7 @@ using System.Threading;
 namespace Thornswood
 {
     static class Paths { public static string LogFile; }
+    static class Diag { public static string ReportDir; }
     public static class LogWriterTest
     {
         static int failed;
@@ -93,6 +94,14 @@ namespace Thornswood
             LauncherLog.Text("multiline\nstack detail\n");
             Swallow.Note("mixed", new InvalidOperationException("the reason"));
             Yes("raw multiline and exception records share the writer", File.ReadAllText(Paths.LogFile).StartsWith("multiline\nstack detail\n") && File.ReadAllText(Paths.LogFile).Contains("the reason"));
+            DateTime now = DateTime.Now;
+            string oldLine = now.AddDays(-31).ToString("yyyy-MM-dd HH:mm:ss") + "  old\n";
+            string keptLine = now.ToString("yyyy-MM-dd HH:mm:ss") + "  kept\n";
+            File.WriteAllText(Paths.LogFile, oldLine + keptLine);
+            File.WriteAllText(older, oldLine);
+            Diag.ReportDir = Path.Combine(dir, "Reports");
+            LocalKeep.Tidy(now);
+            Yes("age pruning covers both generations and retains recent records", !File.Exists(older) && File.ReadAllText(Paths.LogFile).StartsWith(keptLine));
             Console.WriteLine(failed + " failed");
             return failed == 0 ? 0 : 1;
         }
@@ -101,7 +110,7 @@ namespace Thornswood
 '@
 $work = Join-Path ([IO.Path]::GetTempPath()) ('tw-log-4630-' + [Guid]::NewGuid().ToString('N'))
 try {
-    $exe = Build-LauncherCode -File (Join-Path $app 'Swallow.cs') -Source $driver -Exe -Main 'Thornswood.LogWriterTest'
+    $exe = Build-LauncherCode -File (Join-Path $app 'Swallow.cs'), (Join-Path $app 'LocalKeep.cs') -Source $driver -Exe -Main 'Thornswood.LogWriterTest'
     Invoke-LauncherExe $exe $work | ForEach-Object { Write-Host $_ }
     $result = $LASTEXITCODE
 } finally {
