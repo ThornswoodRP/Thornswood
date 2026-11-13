@@ -155,13 +155,84 @@ yes('3 a refusal is said as a failure, naming the channels',
     len(B.failed) == 1 and '#start-here' in B.failed[0])
 B.failed = []
 
+# ------------------------------------------------------------------ 5 --
+# The live build of 13 Nov, 5:20 PM: with both off the default list, Discord
+# still refused to gate #start-here and #disboard. The Welcome Screen and
+# Onboarding's answers point people at channels too.
+
+
+class Screen(object):
+    def __init__(self, guild, names):
+        self.welcome_channels = [discord.WelcomeChannel(
+            channel=types.SimpleNamespace(id=cid), description='about ' + n, emoji=None)
+            for cid, n in ((dict((c.name, c.id) for c in guild.channels.values())[n], n)
+                           for n in names)]
+        self.description = 'Hello'
+        self.enabled = True
+
+
+w = Guild(NAMES, ['rules'])
+w.screen = Screen(w, ['rules', 'start-here', 'disboard', 'welcome-travelers'])
+w.screen_edits = []
+
+
+async def _screen():
+    return w.screen
+
+
+async def _edit_screen(**kw):
+    w.screen_edits.append(kw)
+w.welcome_screen = _screen
+w.edit_welcome_screen = _edit_screen
+yes('5 the Welcome Screen channels the plan gates are named: #start-here and #disboard',
+    [n for _i, n in B.welcome_shut(w, w.screen)] == ['start-here', 'disboard'])
+B.CHECK = True
+B.failed = []
+said = quiet(B.keep_welcome_screen(w))
+B.CHECK = False
+yes('5 -Check says it would take them off the Welcome Screen and changes nothing',
+    'would' in said and '#start-here' in said and not w.screen_edits)
+said = quiet(B.keep_welcome_screen(w))
+sent = w.screen_edits[0] if w.screen_edits else {}
+yes('5 a build takes them off in one edit, keeping the others with their words',
+    len(w.screen_edits) == 1
+    and [c.channel.id for c in sent.get('welcome_channels', [])] == [100, 103]
+    and [c.description for c in sent['welcome_channels']] == ['about rules',
+                                                              'about welcome-travelers']
+    and 'description' not in sent and 'enabled' not in sent and not B.failed)
+
+
+async def _no_screen():
+    raise discord.HTTPException(types.SimpleNamespace(status=404, reason='Not Found'), 'none')
+n = Guild(NAMES, ['rules'])
+n.welcome_screen = _no_screen
+B.failed = []
+quiet(B.keep_welcome_screen(n))
+yes('5 a server with no Welcome Screen is left alone, and that is no failure', not B.failed)
+
+ob = types.SimpleNamespace(prompts=[types.SimpleNamespace(title='Why are you here', options=[
+    types.SimpleNamespace(title='To chat', channel_ids={101}),
+    types.SimpleNamespace(title='To read', channel_ids={100})])])
+guide = {'enabled': True, 'new_member_actions': [{'channel_id': '102', 'title': 'Bump'}],
+         'resource_channels': [{'channel_id': '100', 'title': 'Rules'}]}
+yes('5 the Server Guide channels the plan gates are named, wherever in it they are',
+    B.guide_shut(w, guide) == {'disboard'})
+yes('5 an Onboarding answer that points to a gated channel is named',
+    B.prompt_shut(w, ob) == ['Why are you here: To chat: #start-here'])
+
 # ------------------------------------------------------------------ 4 --
 src = open(os.path.join(HERE, 'Build-Discord.py'), encoding='utf-8').read()
 build = src[src.index('found = {}\n        posts = []'):]
-yes('4 a whole build does it before it gates any channel',
+yes('4 a whole build does it, and the Welcome Screen, before it gates any channel',
     build.index('await keep_onboarding_channels(guild)')
+    < build.index('for catname, specs in plan_for(ONLY):')
+    and build.index('await keep_welcome_screen(guild)')
     < build.index('for catname, specs in plan_for(ONLY):'))
 audit = src[src.index('async def audit('):]
+yes('4 the audit names a gated channel on the Welcome Screen and in an Onboarding answer',
+    'welcome_shut(guild, await guild.welcome_screen())' in audit
+    and 'prompt_shut(guild, ob)' in audit
+    and 'guide_shut(guild, await read_server_guide(guild))' in audit)
 yes('4 the audit says when a default channel is one the plan gates, and names a '
     'deleted one still on the list',
     'onboarding_shut(guild, ob)' in audit and 'which the server no' in audit)

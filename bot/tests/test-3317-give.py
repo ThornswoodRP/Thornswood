@@ -79,6 +79,12 @@ spec = importlib.util.spec_from_file_location(
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 
+
+async def _no_guide(guild):
+    # The Server Guide as Discord sends it, here naming no channel.
+    return {}
+B.read_server_guide = _no_guide
+
 yes('G1 and it is Build-Discord.py\'s TICKET_STAFF, the whole council first',
     bot_default.split(',') == list(B.TICKET_STAFF)
     and list(B.TICKET_STAFF[:len(B.COUNCIL_ROLES)]) == list(B.COUNCIL_ROLES))
@@ -128,6 +134,10 @@ class Guild(object):
             Member(16, 'twin2', [], nick='Twin'),
         ]
         self.onboarding_enabled = onboarding
+
+    async def welcome_screen(self):
+        # A Welcome Screen with no channels on it (#start-here, 13 Nov).
+        return types.SimpleNamespace(welcome_channels=[], description='', enabled=False)
 
     async def onboarding(self):
         return types.SimpleNamespace(enabled=self.onboarding_enabled)
