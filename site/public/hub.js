@@ -1905,7 +1905,7 @@ function card(k, lead) {
 function drawHome() {
   var out =
     '<div class="hero">' +
-      '<img src="/logo.png" alt="Thornswood">' +
+      '<img src="/logo-84.webp" alt="Thornswood" width="74" height="74">' +
       '<div><h1 tabindex="-1">Hub</h1>' +
       '<div class="sub">Gallery, sessions, linked accounts, the report inbox and the hold economy. ' +
       'The public site is at <a href="/">thornswood.net</a>.</div></div>' +

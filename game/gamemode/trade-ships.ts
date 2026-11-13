@@ -4,7 +4,7 @@
 
   The manifest is game\trade-cargo.js, bundled just below so the one file the
   server loads carries it (scripts\dev\Build-TradeCargoGamemode.js writes the
-  bundle; tests\test-511-trade-cargo.js fails when it is stale). This block is
+  bundle; game\tests\test-511-trade-cargo.js fails when it is stale). This block is
   the server's side of it: the register on disk, the release of deleted
   characters, the line the load says and, with the switch on, the dock, the
   staff panel and the clock (#2700, game\trade-ship-dock.js, bundled below

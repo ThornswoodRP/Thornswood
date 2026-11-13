@@ -7,8 +7,8 @@
 #
 # This lifts that question out of Deploy-Docs and runs it with
 # Invoke-ThornswoodRemote standing in for ssh (the script it would send runs
-# in Windows PowerShell 5.1 when this machine has it, as on the box, and in
-# this shell otherwise), against a planted agent.json in a scratch folder:
+# in a PowerShell 7 of its own, as on the box since #5356), against a planted
+# agent.json in a scratch folder:
 #   - no agent.json, or one that does not name the site: the app goes as
 #     before;
 #   - one that names the site: the app and the public pages are not sent;
@@ -39,11 +39,9 @@ if ($start -lt 0 -or $end -le $start) { Write-Host ''; Write-Host ("{0} passed, 
 $lines = $text.Substring($start, $end - $start)
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
-if ($OnWindows) { $shell = Get-WindowsPowerShell }
-else {
-    $shell = (Get-Process -Id $PID).Path
-    Write-Host 'NOTE  the far side runs in this shell, not in Windows PowerShell 5.1 as on the box: this is not Windows'
-}
+# The far side runs in the PowerShell 7 the box runs its scripts in (#5356),
+# in a shell of its own, on every OS.
+$shell = Get-BoxPowerShell
 
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('ts-5190-docs-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $scratch | Out-Null

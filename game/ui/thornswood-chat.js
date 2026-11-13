@@ -178,9 +178,15 @@
       // The service sends a connection its whole view before any change to
       // it, so there is always one here to apply this to.
       if (!heldView) return;
+      // A row already held comes with only the fields that changed, so it
+      // is merged into a copy of the one held (#5358).
       var rows = msg.who || {};
       for (var r in rows) {
-        if (Object.prototype.hasOwnProperty.call(rows, r)) { heldView[r] = rows[r]; }
+        if (!Object.prototype.hasOwnProperty.call(rows, r)) { continue; }
+        var was = heldView[r], row = {}, f;
+        if (was) { for (f in was) { if (Object.prototype.hasOwnProperty.call(was, f)) { row[f] = was[f]; } } }
+        for (f in rows[r]) { if (Object.prototype.hasOwnProperty.call(rows[r], f)) { row[f] = rows[r][f]; } }
+        heldView[r] = row;
       }
       var gone = msg.gone || [];
       for (var g = 0; g < gone.length; g++) { delete heldView[gone[g]]; }
@@ -450,7 +456,7 @@
     // Somewhere in the second half of that, so a service restart does not
     // bring every page in the world back in the same instant. Where in it
     // comes from the profile id rather than from chance: no Math.random in
-    // this file, which tests/test-dice.js holds it to because the dice are
+    // this file, which game/tests/test-dice.js holds it to because the dice are
     // the server's.
     var cap = Math.min(30000, 1000 * Math.pow(2, Math.min(tries, 5)));
     var spread = ((Math.abs(ME) % 1009) + tries * 389) % 1009 / 1009;
@@ -582,7 +588,7 @@
                                says mulitple trimes he wasnt connected yet".
 
     A line that is not typed is pressed whatever the notice does, and only the
-    chat box can send a line as typed. tests/test-2732-press-mark.js holds
+    chat box can send a line as typed. game/tests/test-2732-press-mark.js holds
     every caller to one of the three.
   */
   function send(text, press, notice) {

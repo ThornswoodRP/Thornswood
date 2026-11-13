@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
+using Avalonia.Threading;
 
 namespace Thornswood
 {
@@ -284,6 +286,54 @@ namespace Thornswood
         static bool fixWhenFolderReadyAfterMake;
 
         /// <summary>
+        /// Set when Thornswood's own folder has just been made in this run:
+        /// the first setup's Fix runs in it straight away, and its end is the
+        /// setup's one restart (FirstSetupRestart), into a newer launcher when
+        /// there is one. Until then no update goes in by itself (UpdateBySelf),
+        /// so none closes the launcher while Pandora or BodySlide are building.
+        /// </summary>
+        static bool restartAfterFirstFix;
+
+        /// <summary>
+        /// The end of the first setup (Patrick, 12 Nov): ask GitHub for the
+        /// newest launcher now, so the answer is not left to a check that
+        /// lands after the restart and restarts it a second time. A newer one
+        /// goes in, and Velopack's start of it is the one restart; otherwise
+        /// the launcher restarts once into its own folder. With automatic
+        /// updates off, or the waiting update the one that just failed, it
+        /// restarts without it and the card says it is there.
+        /// </summary>
+        static void FirstSetupRestart()
+        {
+            if (!restartAfterFirstFix) return;
+            restartAfterFirstFix = false;
+            Log("The first setup is done. Checking for a newer launcher before the one restart.");
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                Updater.LauncherUpdate launcher = null;
+                string why = null;
+                bool asked = false;
+                try { launcher = Updater.CheckLauncher(cfg); asked = true; }
+                catch (Exception ex) { why = ex.Message; }
+                string note = Updater.LastLauncherCheck;
+                Dispatcher.UIThread.Post(delegate
+                {
+                    LauncherAnswer(asked, launcher, note, why, false);
+                    bool take = pendingLauncher != null && cfg.AutoUpdate && !playing
+                        && updateTried != pendingLauncher.Version;
+                    if (take)
+                    {
+                        Log("Taking launcher " + pendingLauncher.Version + " now; the launcher restarts once, into it.");
+                        RunUpdate(delegate(bool wentIn) { RestartLauncher(); });
+                        return;
+                    }
+                    Log("Restarting the launcher once, so it runs from the new folder.");
+                    RestartLauncher();
+                });
+            });
+        }
+
+        /// <summary>
         /// Install now's second half (#3201): the update has gone in, or
         /// failed, and Fix's whole path runs on the folder as it left it.
         /// </summary>
@@ -352,6 +402,7 @@ namespace Thornswood
                     : afterMake ? "The scan after making the folder found nothing wrong."
                     : "Fix found nothing to put right.");
                 ShowVerify(plugins, false);
+                FirstSetupRestart();
                 return;
             }
 
@@ -425,6 +476,16 @@ namespace Thornswood
             }
             fixing = false;
             Report(plugins);
+
+            // The first setup ends in its one restart (FirstSetupRestart),
+            // which takes a newer launcher itself. Skyrim on another build
+            // is the one thing left before it: the Downgrade restarts into
+            // what it makes.
+            if (restartAfterFirstFix)
+            {
+                if (!Has(Upkeep.LastIssues, IssueKind.Skyrim)) { FirstSetupRestart(); return; }
+                restartAfterFirstFix = false;
+            }
 
             // Last, what asks something or restarts the launcher. With no
             // folder of its own and Skyrim on another build, the Downgrade

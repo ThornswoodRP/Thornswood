@@ -25,7 +25,8 @@ function Yes([string]$what, [bool]$cond) {
     else { $script:fail++; Write-Host "FAIL  $what" -ForegroundColor Red }
 }
 
-. (Join-Path $Repo 'scripts\release\Note-Rules.ps1')
+Add-Type -Path (Join-Path $Repo 'tools/ReleaseNotes/NoteRules.cs')   # the release note rules (#5354)
+function Shape([string]$n) { @([Thornswood.ReleaseNotes.NoteRules]::ShapeProblems($n)) }
 
 $goodNote = @'
 The door answers on the first knock
@@ -33,10 +34,10 @@ The door answers on the first knock
 '@.Trim()
 
 Yes 'a good gamemode note passes shape and word rules' (
-    (Get-NoteShapeProblems $goodNote).Count -eq 0 -and (Get-NoteProblems $goodNote).Count -eq 0)
-Yes 'a title alone is refused' ((Get-NoteShapeProblems "Only a title here").Count -gt 0)
-Yes 'a note with no detail line is refused' ((Get-NoteShapeProblems "A title with three words`nno dash line").Count -gt 0)
-Yes 'an empty note is refused' ((Get-NoteShapeProblems '').Count -gt 0)
+    @([Thornswood.ReleaseNotes.NoteRules]::AllProblems($goodNote)).Count -eq 0)
+Yes 'a title alone is refused' ((Shape "Only a title here").Count -gt 0)
+Yes 'a note with no detail line is refused' ((Shape "A title with three words`nno dash line").Count -gt 0)
+Yes 'an empty note is refused' ((Shape '').Count -gt 0)
 
 $deploy = Join-Path $Repo 'scripts\deploy\Deploy-DevGamemode.ps1'
 $src = [IO.File]::ReadAllText($deploy)
@@ -45,7 +46,7 @@ $params = @{}
 foreach ($p in $ast.ParamBlock.Parameters) { $params[$p.Name.VariablePath.UserPath] = $p }
 
 Yes 'Deploy-DevGamemode.ps1 takes -Note' ($params.ContainsKey('Note'))
-Yes 'Deploy-DevGamemode.ps1 loads Note-Rules.ps1' ($src -match "Note-Rules\.ps1")
+Yes 'Deploy-DevGamemode.ps1 loads the release note rules' ($src -match "tools/ReleaseNotes/NoteRules\.cs" -and $src -match '\[Thornswood\.ReleaseNotes\.NoteRules\]::AllProblems\(\$Note\)')
 Yes 'Deploy-DevGamemode.ps1 refuses an empty note before the box is touched' (
     $src -match 'if \(-not \$Note\.Trim\(\)\)' -and
     $src.IndexOf('if (-not $Note.Trim())') -lt $src.IndexOf('New-ThornswoodArtifact'))

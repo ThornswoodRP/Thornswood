@@ -19,7 +19,7 @@
 //   F  the words: out of the list named to everybody and /help, out of the
 //      pages, and the pages say how studying is reached with no /study
 //
-// The traps from the issue: tests/test-1388-apprentice.js slices the same
+// The traps from the issue: game/tests/test-1388-apprentice.js slices the same
 // functions, and the server keeps answering the line the buttons send.
 //
 // Read only.

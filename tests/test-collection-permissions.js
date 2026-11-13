@@ -84,7 +84,9 @@ function mod(id, reading, ours) {
   return m;
 }
 function read(collections) { return { read: '2026-10-27', by: 'the test', collections: collections, terms: { "Author's instructions": 'x' } }; }
-const planted = { version: 1, collection: '7essxf', revision: 5, mods: [mod(10, read('allowed')), mod(20, read('not stated')), mod(30, read('not allowed')), mod(40, null), mod(50, null, true)] };
+// An allowed reading carries what allows it (#4190): here an open licence.
+const allowedRead = Object.assign(read('allowed'), { licence: { name: 'MIT' } });
+const planted = { version: 1, collection: '7essxf', revision: 5, mods: [mod(10, allowedRead), mod(20, read('not stated')), mod(30, read('not allowed')), mod(40, null), mod(50, null, true)] };
 yes('a planted record has the shape the check takes', cp.shapeProblems(planted).length === 0, cp.shapeProblems(planted).join('; '));
 const r = cp.refusals(planted, [10, 20, 30, 40, 50, 60]);
 yes('the check refuses the mod whose page does not allow it in a collection', r.some(x => x.modId === 30 && /does not allow it in a collection/.test(x.why)));
@@ -97,6 +99,32 @@ yes('a reading with a mail address in it is a shape problem', bad(c => { c.mods[
 yes('a reading with no date is a shape problem', bad(c => { delete c.mods[0].reading.read; }).length > 0);
 yes('a page that is not the mod\'s own is a shape problem', bad(c => { c.mods[0].page = 'https://www.nexusmods.com/skyrimspecialedition/mods/99?tab=description'; }).length > 0);
 yes('a mod of ours with a reading is a shape problem', bad(c => { c.mods[4].reading = read('allowed'); }).length > 0);
+
+// 4b. What makes a reading (#4190). SKSE Menu Framework's page points to
+// its licence file, GPL-3.0, without naming it, and was read "not stated",
+// while Crash Logger's page, saying the same of its own, was read
+// "allowed": nothing wrote down what makes a reading allowed. The rule is in
+// records\README.md and collection-permissions.js ruled(), and the record's
+// own shape holds every reading to it.
+yes('collection-permissions.js says what each reading comes to by one rule (ruled)', typeof cp.ruled === 'function');
+if (typeof cp.ruled === 'function') {
+  const off = record.mods.filter(m => m.reading && cp.ruled(m.reading) !== m.reading.collections);
+  yes('every reading in the record is what the rule gives', off.length === 0,
+    off.slice(0, 6).map(m => m.modId + ' ' + m.name + ' reads "' + m.reading.collections + '", the rule gives "' + cp.ruled(m.reading) + '"').join('; '));
+}
+const smf = record.mods.find(m => m.modId === 120352);
+yes('SKSE Menu Framework reads allowed, through the GPL-3.0 licence file its page points to, with who read that file',
+  !!smf && smf.reading && smf.reading.collections === 'allowed' && smf.reading.licence && /GPL-3\.0/.test(smf.reading.licence.name) &&
+  !!smf.reading.licence.at && !!smf.reading.licence.read && !!smf.reading.licence.by);
+yes('a reading marked allowed with nothing that allows it is a shape problem', bad(c => { delete c.mods[0].reading.licence; }).length > 0);
+yes('a reading marked not stated whose page allows uploads elsewhere is a shape problem',
+  bad(c => { c.mods[1].reading.terms['Upload permission'] = 'You can upload this file to other sites but you must credit me as the creator of the file'; }).length > 0);
+yes('  and marked allowed on that line it is not', bad(c => { c.mods[1].reading.collections = 'allowed'; c.mods[1].reading.terms['Upload permission'] = 'You can upload this file to other sites but you must credit me as the creator of the file'; }).length === 0);
+yes('a licence the page only links, with nobody named as reading the file, is a shape problem', bad(c => { c.mods[0].reading.licence.at = 'the LICENSE file the page links'; }).length > 0);
+yes('a grant that is not in the page\'s words is a shape problem', bad(c => { delete c.mods[0].reading.licence; c.mods[0].reading.grant = 'do anything'; }).length > 0);
+yes('a line against collections stays the reader\'s not allowed, whatever else the page says', bad(c => { c.mods[2].reading.licence = { name: 'MIT' }; }).length === 0);
+const readme = fs.readFileSync(path.join(ROOT, 'records', 'README.md'), 'utf8');
+yes('records/README.md says what makes a reading allowed', /What makes a reading `allowed`/.test(readme));
 
 // 5. update
 const collection = { mods: [

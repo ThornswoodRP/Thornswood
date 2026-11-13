@@ -3,7 +3,7 @@
 
       pwsh -NoProfile -File .\tests\test-ship-check-words.ps1
 
-  Ship checks the release notes (Note-Rules.ps1) and, since issue #1081, the
+  Ship checks the release notes (tools\ReleaseNotes\NoteRules.cs) and, since issue #1081, the
   files people read (scripts\dev\Check-Words.ps1) before it builds. A dev Ship
   may be run from any branch, including one whose pull request build never ran
   or went red, so a hit has to stop a dry run too.
@@ -57,10 +57,13 @@ $dist = Join-Path $T 'dist'
 $plant = 'HARNESS1081 the player must not ship'
 try {
     New-Item -ItemType Directory -Force -Path (Join-Path $tree 'scripts\release'), (Join-Path $tree 'scripts\dev'), (Join-Path $tree 'records'), $play, $dist | Out-Null
-    foreach ($n in 'Ship.ps1', 'Ship-Rules.ps1', 'ShippedBytes.ps1', 'Assert-PublishSigned.ps1', 'Feed-Store.ps1', 'Feed-Json.ps1', 'Release-Name.ps1', 'Note-Rules.ps1', 'Where.ps1', 'Read-JsonFile.ps1', 'RecordShape.ps1', 'RepoPlugins.ps1', 'CollectionRevision.ps1', 'Note-Repeats.ps1', 'Feed-News.ps1', 'Release-Baseline.ps1', 'Feed-Rules.ps1', 'LauncherVersion.ps1') {
+    foreach ($n in 'Ship.ps1', 'Ship-Rules.ps1', 'ShippedBytes.ps1', 'Assert-PublishSigned.ps1', 'Feed-Store.ps1', 'Feed-Json.ps1', 'Release-Name.ps1', 'Where.ps1', 'Read-JsonFile.ps1', 'RecordShape.ps1', 'RepoPlugins.ps1', 'CollectionRevision.ps1', 'Note-Repeats.ps1', 'Feed-News.ps1', 'Release-Baseline.ps1', 'Feed-Rules.ps1', 'LauncherVersion.ps1') {
         Copy-Item -LiteralPath (Join-Path $Repo ('scripts\release\' + $n)) -Destination (Join-Path $tree ('scripts\release\' + $n)) -Force
     }
     Copy-Item -LiteralPath $wordsReal -Destination (Join-Path $tree 'scripts\dev\Check-Words.ps1') -Force
+    # The release note rules Ship compiles (#5354).
+    New-Item -ItemType Directory -Force -Path (Join-Path $tree 'tools\ReleaseNotes') | Out-Null
+    Copy-Item -LiteralPath (Join-Path $Repo 'tools\ReleaseNotes\NoteRules.cs') -Destination (Join-Path $tree 'tools\ReleaseNotes\NoteRules.cs') -Force
     Copy-Item -LiteralPath (Join-Path $Repo 'layout.json') -Destination (Join-Path $tree 'layout.json') -Force
     Copy-Item -LiteralPath (Join-Path $Repo 'records\ui-gone.json') -Destination (Join-Path $tree 'records\ui-gone.json') -Force
     [IO.File]::WriteAllText((Join-Path $tree 'README.md'), ($plant + "`r`n"))

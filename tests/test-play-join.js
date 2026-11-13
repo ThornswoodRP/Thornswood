@@ -398,9 +398,9 @@ const PID = 1893288986;
     Discord link it to account B.
 
     Door.Check goes first, with the id the settings file holds, which is
-    the one A played last. Then Chars.Prepare runs, and it retires the spare
-    A holds and mints a fresh one under B before anything else is checked
-    in (test-spare-owner.ps1 runs that against the real Chars.cs). So what
+    the one A played last. Then the site hands B its own list, with a spare
+    minted under B, before anything else is checked in
+    (test-play-characters.js runs that against the site's own module). So what
     StartPlay checks in is A's two characters and B's own spare. Every one
     of those has to be a yes, or B never reaches the menu. B picks New
     character, which is B's spare; PollChoice checks it in again, Chars.Chose

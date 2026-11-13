@@ -192,6 +192,10 @@ class Guild(object):
             bulk_channel_update=self._positions))
 
 
+    async def welcome_screen(self):
+        # A Welcome Screen with no channels on it (#start-here, 13 Nov).
+        return types.SimpleNamespace(welcome_channels=[], description='', enabled=False)
+
     async def onboarding(self):
         return types.SimpleNamespace(enabled=getattr(self, 'onboarding_enabled', False))
 

@@ -98,23 +98,17 @@ Yes 'an argument with a double quote in it is refused' ($r.Code -ne 0 -and $r.Te
 # ---- 1b. the artifact carries what the chain's builders touch -----------
 # Until #2962 it held scripts, game\content, game\data, records and
 # layout.json only, so a builder that writes into game\gamemode.js stopped on
-# the box. Until #3100 it carried only what the Python builders touch. The
-# lines that make $paths are lifted out of Run-OnBox.ps1 by the parser and
-# run here with its $Here, for the whole chain's tool.
-$ast = [Management.Automation.Language.Parser]::ParseFile($runOnBox, [ref]$null, [ref]$null)
-$top = @($ast.EndBlock.Statements)
-$from = @($top | Where-Object { $_.Extent.Text -like '$paths = @(*' })
-$upTo = @($top | Where-Object { $_.Extent.Text -like 'while ($load.Count)*' })
-Yes 'Run-OnBox.ps1 makes $paths once and adds the chain''s files and what its builders load to it once' ($from.Count -eq 1 -and $upTo.Count -eq 1)
-$Here = Join-Path $Repo 'scripts\mods'
-$tool = 'scripts/mods/Rebuild-ContentTables.ps1'
-$paths = $null
-foreach ($st in $top) {
-    if ($st.Extent.StartOffset -lt $from[0].Extent.StartOffset -or $st.Extent.StartOffset -gt $upTo[0].Extent.StartOffset) { continue }
-    . ([scriptblock]::Create($st.Extent.Text))
-}
-$Here = $PSScriptRoot
-if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
+# the box. Until #3100 it carried only what the Python builders touch.
+# Since #5191 the list is ContentPaths.ps1's, which Build-ContentOnBox.ps1
+# reads too, run here for the whole chain's tool.
+$runText = [IO.File]::ReadAllText($runOnBox)
+Yes 'Run-OnBox.ps1 takes what goes up and what comes back from ContentPaths.ps1' (
+    $runText.Contains(". (Join-Path `$Here 'ContentPaths.ps1')") -and $runText.Contains('$content = Get-ThornswoodContentPaths -Repo $repo -Tool $tool') -and
+    $runText.Contains('$paths = $content.Paths') -and $runText.Contains('$watch = $content.Watch'))
+. (Join-Path $Repo 'scripts\mods\ContentPaths.ps1')
+$content = Get-ThornswoodContentPaths -Repo $Repo -Tool 'scripts/mods/Rebuild-ContentTables.ps1'
+$paths = $content.Paths
+$watch = $content.Watch
 $chain = Get-Content -LiteralPath (Join-Path $Repo 'scripts\mods\content-tables.json') -Raw | ConvertFrom-Json
 $need = @($chain.steps | ForEach-Object { @($_.reads) + @($_.readsBack) + @($_.uses) + @($_.writes) } | Where-Object { $_ } | Sort-Object -Unique)
 $left = @($need | Where-Object { $n = [string]$_; -not @($paths | Where-Object { $n -eq $_ -or $n.StartsWith($_ + '/') }).Count })

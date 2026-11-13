@@ -17,7 +17,9 @@
     1. a harness in tests\ that names launcher\app or installer\setup and
        hands Add-Type C# that is not a plain string written in the harness
        itself (a variable, a sum, a string with $ in it, or -Path): that is
-       code lifted out of the launcher, compiled the wrong way;
+       code lifted out of the launcher, compiled the wrong way. The one
+       -Path that is not is tools\ReleaseNotes\NoteRules.cs, the release
+       note rules, which every release script loads with Add-Type (#5354);
     2. a harness in tests\ that makes a CSharpCodeProvider or calls
        CompileAssemblyFromSource or CompileAssemblyFromFile.
   A stand-in the harness writes out in full (a local server, a probe of a
@@ -71,7 +73,12 @@ function Get-WrongCompile([string]$path) {
             }
         }
         foreach ($p in 'Path', 'LiteralPath') {
-            if ($bound.BoundParameters.ContainsKey($p)) { $hits.Add($at + 'Add-Type -' + $p + ' ' + $bound.BoundParameters[$p].Value.Extent.Text) }
+            if (-not $bound.BoundParameters.ContainsKey($p)) { continue }
+            $file = $bound.BoundParameters[$p].Value.Extent.Text
+            # The release note rules are not launcher code, and Add-Type is how
+            # every release script loads them (#5354), so a harness loads them so too.
+            if ($file -match '(?i)tools[\\/]ReleaseNotes[\\/]NoteRules\.cs') { continue }
+            $hits.Add($at + 'Add-Type -' + $p + ' ' + $file)
         }
     }
     foreach ($n in $ast.FindAll({ param($n) $n -is [Management.Automation.Language.StringConstantExpressionAst] -or
@@ -120,6 +127,7 @@ try {
         'lifted methods added to a plain head' = @(($app + "Add-Type -TypeDefinition (@'`r`npublic static class T {`r`n'@ + `$start + '}')"), 1)
         'lifted methods inside a string with $ in it' = @(($app + "Add-Type -TypeDefinition @`"`r`npublic static class T { `$lifted }`r`n`"@"), 1)
         'the files themselves, by -Path' = @("Add-Type -Path (Join-Path `$root 'installer\setup\Bootstrap.cs')", 1)
+        'the release note rules, by -Path, in a harness that names launcher\app' = @("`$f = 'launcher/app/Forge.cs'`r`nAdd-Type -Path (Join-Path `$Repo 'tools/ReleaseNotes/NoteRules.cs')", 0)
         'a CSharpCodeProvider' = @(($app + '$provider = New-Object Microsoft.CSharp.CSharpCodeProvider' + "`r`n" + '$built = $provider.CompileAssemblyFromSource($cp, $src)'), 2)
         'a CSharpCodeProvider by its type' = @(($app + '$provider = [Microsoft.CSharp.CSharpCodeProvider]::new()'), 1)
         'a stand-in server written out in full' = @(($app + "Add-Type -TypeDefinition @'`r`npublic static class Server { public static int Port; }`r`n'@"), 0)

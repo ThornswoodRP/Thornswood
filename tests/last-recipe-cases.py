@@ -2,7 +2,7 @@
 
     python tests/last-recipe-cases.py
 
-tests/test-2791-last-recipe.js runs it on the build check.
+game/tests/test-2791-last-recipe.js runs it on the build check.
 
 Thornswood-Last.esp goes out as a recipe that each machine builds the plugin
 from, out of its own plugins, so none of the records it copies are handed on

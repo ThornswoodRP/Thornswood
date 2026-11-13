@@ -397,16 +397,20 @@ Write-Host '  SHIP' -ForegroundColor White
 # as those. A title of at least three words that is not a placeholder, and
 # at least one "- " line saying what somebody will notice. Checked before
 # anything is built, so nothing is half done when it stops.
-$noteLines = @($Notes -split "`r?`n")
-$noteTitle = (@($noteLines | Where-Object { $_.Trim() }) + @(''))[0].Trim()
-$noteBullets = @($noteLines | Where-Object { $_ -match '^\s*-\s*\S' -and ($_ -replace '^\s*-\s*', '').Trim().Length -ge 12 })
-$placeholder = $noteTitle -match '^[\W_]*$' -or $noteTitle -match '^(test|testing|wip|update|updates|fix|fixes|changes|stuff|dev|build|misc)\W*$'
-if ($placeholder -or @($noteTitle -split '\s+' | Where-Object { $_ }).Count -lt 3 -or $noteBullets.Count -lt 1) {
+#
+# The rules are tools\ReleaseNotes\NoteRules.cs, the one copy, which pwsh
+# compiles here (#5354): thornswood-notes builds the same file for the
+# Release note check on every pull request, and the box that runs a Ship has
+# no .NET SDK. NoteRules.cs says why each rule exists: on 26 and 27 September
+# notes went out saying players, naming PR #239, env variables, code names
+# and the shipping machine, and one list said "Launcher 1.1.101" twice.
+Add-Type -Path (Join-Path $RepoDir 'tools/ReleaseNotes/NoteRules.cs')
+$shapeProblems = @([Thornswood.ReleaseNotes.NoteRules]::ShapeProblems($Notes))
+if ($shapeProblems.Count) {
     Write-Host ''
     Say '  STOP. These notes are what people read in the launcher, on the site and' 'Red'
     Say '  in Discord, and they need a real title and details. Nothing was built.' 'Red'
-    if ($placeholder -or @($noteTitle -split '\s+' | Where-Object { $_ }).Count -lt 3) { Say "  The title '$noteTitle' is too short to say what changed." 'Yellow' }
-    if ($noteBullets.Count -lt 1) { Say '  There is no detail line: at least one line starting with "- ".' 'Yellow' }
+    foreach ($p in $shapeProblems) { Say "  $p" 'Yellow' }
     Write-Host ''
     Say '  The shape, written from the side of the person playing:' 'DarkGray'
     Say '      .\scripts\release\Ship.ps1 -Channel dev "The scroll''s Continue gives you the full three minutes' 'DarkGray'
@@ -415,11 +419,8 @@ if ($placeholder -or @($noteTitle -split '\s+' | Where-Object { $_ }).Count -lt 
     exit 1
 }
 
-# And what the words may be. Note-Rules.ps1 says why: on 26 and 27 September
-# notes went out saying players, naming PR #239, env variables, code names and
-# the shipping machine, and one list said "Launcher 1.1.101" twice.
-. (Join-Path $PSScriptRoot 'Note-Rules.ps1')
-$noteProblems = @(Get-NoteProblems $Notes)
+# And what the words may be.
+$noteProblems = @([Thornswood.ReleaseNotes.NoteRules]::Problems($Notes))
 if ($noteProblems.Count) {
     Write-Host ''
     Say '  STOP. These notes are for the people who play, and they say things only' 'Red'
@@ -449,7 +450,7 @@ if ($repeats.Count) {
 }
 Write-Host "  $Notes" -ForegroundColor DarkGray
 
-# The words in the files people read, not only the notes. Note-Rules above
+# The words in the files people read, not only the notes. NoteRules above
 # reads the release notes. Check-Words reads the launcher window,
 # and every other page a Ship sends out (issue #1081). A dev Ship may be run
 # from any branch, including one whose pull request build never ran or went

@@ -23,10 +23,10 @@ they find as plain issues, unclaimed, in Todo. They claim no issue, open no
 pull request and run nothing. Every rule in this
 file binds them the same as a person. They work on Grok Bot's own cloud
 computer and file through its GitHub connector. When its included usage runs
-out, Patrick's rule of 8 Nov 2026 lets them do read-only work on the shipping
-machine through the Grok Bot app, 11 PM to 6 AM, in their own checkouts under
-the temp and worktrees folder (#5933). What is true now is `ops\status.md` in
-the private ops repo.
+out, they do read-only work, 11 PM to 6 AM, on the Hermes VM through the Grok
+Bot app there, as an account of their own that reaches nothing of the Bots'
+(Patrick, 12 Nov 2026, #5933). They never use the shipping
+machine. What is true now is `ops\status.md` in the private ops repo.
 
 Six Hermes Bots take over the work from the Claude threads (Patrick, 30 Oct):
 Bramble picks, claims, merges and runs every release step, and Rift, Sprocket,
@@ -85,8 +85,8 @@ A line that has to say it anyway (this section naming the word it bans, a
 document quoting a note as it went out) goes in
 `scripts\dev\Check-Words.allow.txt` with its reason; an allowance that no
 longer matches anything is itself a hit. Release notes are not files, so
-`scripts\release\Note-Rules.ps1` checks them when Ship or Rollback-Feed runs,
-before anything is built. The same build step runs `tests\test-check-words.ps1`
+the release note rules, `tools\ReleaseNotes\NoteRules.cs`, check them when
+Ship or Rollback-Feed runs, before anything is built. The same build step runs `tests\test-check-words.ps1`
 and `tests\test-note-rules.ps1`, which plant a break of every rule and fail
 if either check lets one through. Secrets are checked by
 `scripts\dev\Check-Secrets.ps1` in the same build. It reads the files of
@@ -99,7 +99,7 @@ Two names are in no tracked file at all, code, tests, records, data,
 comes back: the multiplayer mod this build replaced (#497,
 `tests\test-old-name-gone.js`), and the SkyMP server `Thornswood-Content.esp`
 was salvaged from (#400, Patrick, 12 Oct: "no records may keep it";
-`tests\test-other-server-name-gone.js`), along with that server's two short
+`game\tests\test-other-server-name-gone.js`), along with that server's two short
 forms, the prefix its editor ids, scripts and folders carried (Patrick,
 15 Oct, decision C). Say "the other server" in prose and OtherServer in a
 file, folder or code name. A check that has to find that server's leftovers

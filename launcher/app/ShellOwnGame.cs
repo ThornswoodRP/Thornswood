@@ -485,9 +485,10 @@ namespace Thornswood
             {
                 try { Paths.Init(Paths.Root); }
                 catch (Exception ex) { Swallow.Note("ShellOwnGame.StartOwnGame, pointing Paths at the new folder", ex); }
-                // The first start in the new folder runs Fix (#5937), and this
-                // note is how it knows, even if the restart below never comes
-                // back and the person opens the launcher themselves.
+                // Fix runs in the new folder straight after this (#5937, the
+                // finish below), and this note runs it on the next start
+                // instead when the launcher closes first: an update going in,
+                // or the launcher shut by hand.
                 OwnGame.NoteFixAfterMake();
             }
 
@@ -551,8 +552,25 @@ namespace Thornswood
                         Log(said);
                         if (make)
                         {
-                            Log("Restarting the launcher so it runs from the new folder.");
-                            RestartLauncher();
+                            // One restart for the whole first setup (Patrick,
+                            // 12 Nov: "do the scan and fix, the own game
+                            // folder, and all the body slider and pandora
+                            // stuff and update to the latest version ... and
+                            // than restart just once"). Paths already name
+                            // the new folder (FolderWork), so Fix runs here,
+                            // in it, and FirstSetupRestart takes a newer
+                            // launcher or restarts once at its end. An update
+                            // already going in restarts the launcher itself
+                            // once the folder is let go, and the note runs
+                            // Fix on the start after it instead.
+                            if (updating)
+                            {
+                                Log("The update going in restarts the launcher into the new folder, and Fix runs there.");
+                                return;
+                            }
+                            OwnGame.TakeFixAfterMake();
+                            restartAfterFirstFix = true;
+                            RunFix(false, false, true);
                             return;
                         }
                         // LastIssues was refreshed on the pool thread after

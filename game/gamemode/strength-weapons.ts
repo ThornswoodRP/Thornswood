@@ -51,7 +51,7 @@
   Only an actor with a character record is gated. An NPC has no Might.
 
   The K panel (game/ui/thornswood-skills.js, the Might row) shows the same
-  two thresholds; tests/test-2262-strength-weapons.js holds the two equal.
+  two thresholds; game/tests/test-2262-strength-weapons.js holds the two equal.
 */
 (function () {
   'use strict';

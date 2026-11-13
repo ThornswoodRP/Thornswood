@@ -411,6 +411,10 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
     }
   };
   walk('tests'); walk('scripts');
+  // And every product's own harnesses, beside its code (#5341).
+  for (const e of fs.readdirSync(REPO, { withFileTypes: true })) {
+    if (e.isDirectory() && e.name !== 'tests' && e.name !== 'node_modules' && fs.existsSync(path.join(REPO, e.name, 'tests'))) { walk(e.name + '/tests'); }
+  }
   const loose = found.filter(f => !ALLOWED[f]);
   yes('no harness or script reads the event or ref but those named here (' + (loose.join(', ') || 'none') + ')', loose.length === 0);
   for (const f of Object.keys(ALLOWED)) { yes('  ' + f + ' is still one (' + ALLOWED[f] + ')', found.indexOf(f) >= 0); }

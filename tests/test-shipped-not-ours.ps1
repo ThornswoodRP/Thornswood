@@ -17,7 +17,7 @@
   record had ever listed one as gone. records\shipped-not-ours.json names
   165 of them with their bytes, and Publish-Update puts each in every record.
   The 166th is the haybale, whose path names the other server, which no
-  tracked file may (#400, tests\test-other-server-name-gone.js): the
+  tracked file may (#400, game\tests\test-other-server-name-gone.js): the
   launcher's Leaks.cs takes it out of Thornswood's own folder by its shape
   and bytes instead.
 

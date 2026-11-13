@@ -623,7 +623,7 @@
   /*
     ONE WAY A STORE'S FILE IS READ AND WRITTEN (#4529). The same text is in
     the season, farming, property and furniture blocks, and
-    tests/test-4529-store-saves.js holds the copies to it, since each block
+    game/tests/test-4529-store-saves.js holds the copies to it, since each block
     is lifted and run alone. Seven stores (the property register and its
     jail, bed and bench books, the season, the farm claims and the
     furniture register) were each written straight over the old file, and

@@ -262,9 +262,14 @@ a copy of dev that nobody plays on:
    Release carries none, #5191), and dev's data folder without its plugins and
    archives. Those are read where the bot pass keeps them,
    `C:\Thornswood-BotPass\plugins`, copied from dev's only when one
-   changes, by their full paths. Dev's world, its `private` folder (the
-   door and the join pass key), its logs and deploy records never go in. The
-   world starts empty.
+   changes, by their full paths. Of dev's `private` folder only the
+   merchant ledger and its first-start mark go in (`merchant-ledger.json`
+   and `merchant-ledger.initialized`, copies), so the gamemode's NPC
+   runtime starts as it does on dev; without them it stands up no NPC
+   ("Saved merchant ledger or initialization evidence is missing", as the
+   load copy found, #5557). Dev's world, the rest of its `private` folder
+   (the door, the join pass key and the registers), its logs and deploy
+   records never go in. The world starts empty.
 2. The copy's settings are dev's with what reaches outside taken out
    (`discordAuth`, `metricsAuth`, `masterKey`, `additionalServerSettings`):
    no master server, offline login, no join pass hold, a password of its

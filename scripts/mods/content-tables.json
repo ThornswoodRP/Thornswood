@@ -94,6 +94,7 @@
   "scripts/dev/Build-StationSites.py":"Comes before the content plugin, not after it: it measures where the plugin's stations stand, and scripts/mods/Add-ContentRecords.py writes them into the plugin from its table. docs/systems/station-placement.md says how a site changes.",
   "scripts/dev/Audit-PapyrusEvents.py": "An audit: it says which scripts in the load order register for which events and writes no table a server or another builder reads.",
   "scripts/mods/Audit-ModMenus.js": "An audit: it says where each mod settings menu keeps its values and writes no table a server or another builder reads.",
-  "scripts/mods/Audit-Mods.ps1": "An audit of the game folder's own install (its archives, folders and plugin list), which is what it is about. It reads no plugin's records."
+  "scripts/mods/Audit-Mods.ps1": "An audit of the game folder's own install (its archives, folders and plugin list), which is what it is about. It reads no plugin's records.",
+  "scripts/mods/Build-ContentOnBox.ps1": "Runs this whole chain itself, on the box (#5191, the gate's Build-Content verb): the plugin by Add-ContentRecords.py, then every step here by Run-OnBox.ps1, and keeps what they wrote by its inputs. It writes no table of its own."
  }
 }

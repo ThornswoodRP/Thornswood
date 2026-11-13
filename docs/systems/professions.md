@@ -278,7 +278,7 @@ The facts are read out of `game\data\recipes.json`,
 gamemode's bench table, maneuvers and tuning by
 `scripts\dev\Build-ProfessionGuides.js`, which writes them into
 `game\ui\thornswood-skills.js`. Run it after any of those change;
-`tests\test-3165-profession-guides.js` fails while the page is behind.
+`game\tests\test-3165-profession-guides.js` fails while the page is behind.
 
 ## Everything has a maker
 
