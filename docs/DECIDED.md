@@ -753,6 +753,11 @@ issue where the card did.
 - **FOMOD mods are installed without Vortex**, by writing the installer choices
   the way Vortex does (q-p12-fomod-no-vortex). 31 Oct 2026,
   [#5189](https://github.com/ThornswoodRP/Thornswood/issues/5189).
+- **#5992 stays merged as it is, though it merged before its card was
+  answered: a mod's permission reads allowed only on a licence covering its
+  own files, an upload line letting files go to other sites, or a grant in
+  the page's own words.** (dec_YcdrGnAFdisVFWy7n67GqA) 12 Nov 2026,
+  [#4190](https://github.com/ThornswoodRP/Thornswood/issues/4190#issuecomment-6841005244).
 - **#5896 merges at 3e55c69 and its merge publishes collection revision 9,
   which carries only three load-after rules that hold the servers' order.**
   (dec__Ek_LSW4kO5MEGG2lIOIWg) 12 Nov 2026,
