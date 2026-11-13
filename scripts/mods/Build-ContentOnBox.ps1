@@ -17,19 +17,35 @@
   order (C:\Thornswood-GameData and each server's plugins, Run-OnBox.ps1).
 
   WHAT IT BUILDS. scripts\mods\Add-ContentRecords.py writes the plugin from
-  its sources with the server's plugins as its masters, then
+  its sources with the load order's plugins as its masters, then
   scripts\mods\Rebuild-ContentTables.ps1 runs the whole chain of
   content-tables.json over that plugin: every table, last-plugin.recipe and
-  last-plugin.json among them. Both run by Run-OnBox.ps1, as
-  Rebuild-OnBox.ps1 runs them, in a run folder of their own; this checkout,
-  which the gate throws away after the run, takes what each wrote.
+  last-plugin.json among them. Each runs by Run-OnBox.ps1 -Collection, in a
+  run folder of its own; this checkout, which the gate throws away after the
+  run, takes what each wrote.
+
+  WHAT IT IS BUILT FROM. The commit's record, never what a server runs
+  (13 Nov 2026): the collection's plugins from the box's store of the
+  revision records\collection-plugins.json names (CollectionStore.ps1, which
+  fetches them through Nexus-Run when the store is not whole), over the
+  server's plugins folder for what no collection installs, and the load order
+  the commit records moved to that revision (ContentPaths.ps1,
+  Get-ThornswoodContentOrder). The first build on the box, 12 Nov, read the
+  dev server's folder and order, which are revision 7's, so it stopped at
+  Build-BuildingHolds.py naming revision 8's Improved Eyes Skyrim.esp: no
+  machine but One's Vortex game could move the recorded order (#5648). When
+  the order moves, the catalogue is built from it first, as content-tables.json's
+  notInChain says it is when the collection's order moves:
+  scripts\dev\Build-NpcPopulation.py, then scripts\dev\Build-ResourceLocations.py
+  (game\data\resource-locations.json; the docs' CSV lists it also writes are
+  not brought back). The chain then reads that order.
 
   WHAT A BUILD IS KEPT BY. Its inputs: the server it was built against and
   every file Run-OnBox.ps1 sends for the chain (ContentPaths.ps1), by the
   git blob id each has in the commit, so the key is the same wherever the
-  commit is read. The game data a build reads is the load order the commit
-  records (records\collection-plugins.json is among the inputs; the dev and
-  main servers are put on it by Deploy-DevGamemode -LoadOrder -FromRecord).
+  commit is read. The game data a build reads is the record's
+  (records\collection-plugins.json, with each plugin's sha256, is among the
+  inputs), so the same inputs read the same plugins.
 
   WHERE. C:\Thornswood-ContentBuilds\<server>\<key>: files\ holds the plugin
   and every file the chain writes at its repository path, and build.json
@@ -60,7 +76,11 @@ param(
 
     # The script each tool is run by. A test gives a stand-in; on the box it
     # is Run-OnBox.ps1.
-    [string]$Runner = ''
+    [string]$Runner = '',
+
+    # The store of the collection's plugins at the record's revision. A test
+    # gives a folder of its own; on the box it is CollectionStore.ps1's.
+    [string]$Store = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -133,21 +153,41 @@ if ($built) {
         if ($c.Code -eq 0) { $c = Invoke-BuildGit @('-c', 'user.name=Thornswood Gate', '-c', 'user.email=gate@thornswood.invalid', 'commit', '--quiet', '--allow-empty', '-m', "what $Tool wrote") }
         if ($c.Code -ne 0) { Stop-Build ("what $Tool wrote could not be committed in the checkout: " + ($c.Out -join ' ') + ' Nothing was kept.') }
     }
+    # The record's plugins (the header says why) and the order it moves to.
+    try {
+        $order = Get-ThornswoodContentOrder -Repo $repo
+        if (-not $Store) {
+            . (Join-Path $Here '..\deploy\CollectionStore.ps1')
+            $Store = (Get-ThornswoodCollectionStore -RecordPath (Join-Path $repo 'records\collection-plugins.json') -Fetch { param($w, $h) Invoke-ThornswoodCollectionFetch -Work $w -Head $h -Repo $repo } -Say { param($m) Write-Host $m }).Dir
+        }
+    } catch { Stop-Build ('the record''s plugins are not on the box: ' + $_.Exception.Message + ' Nothing was built.') }
+    Write-Host ("the load order: collection $($order.Slug) revision $($order.Revision), $($order.Names.Count) plugins" +
+        $(if ($order.Moved) { ', moved from the ' + $order.Recorded.Count + ' the catalogue records' + $(if ($order.Added.Count) { ', adding ' + ($order.Added -join ', ') } else { '' }) + $(if ($order.Dropped.Count) { ', taking out ' + ($order.Dropped -join ', ') } else { '' }) } else { ', as the catalogue records it' }) +
+        "; the collection's plugins from $Store")
     # Quoted, so each goes to the runner as one of the tool's words and never
     # as a parameter of its own.
-    & $Runner 'scripts/mods/Add-ContentRecords.py' '--masters' '{data}' -Server $Server
-    if ($LASTEXITCODE -ne 0) { Stop-Build "Add-ContentRecords.py ended with exit $LASTEXITCODE. The chain did not run and nothing was kept." }
-    Save-Step 'Add-ContentRecords.py'
-    & $Runner 'scripts/mods/Rebuild-ContentTables.ps1' '-Data' '{data}' '-PluginsTxt' '{plugins}' -Server $Server
-    if ($LASTEXITCODE -ne 0) { Stop-Build "Rebuild-ContentTables.ps1 ended with exit $LASTEXITCODE. Nothing was kept." }
-    Save-Step 'Rebuild-ContentTables.ps1'
+    function Invoke-Step([string]$Tool, [string[]]$Words, [string]$Then) {
+        & $Runner $Tool @Words -Server $Server -Collection $Store
+        if ($LASTEXITCODE -ne 0) { Stop-Build ("$(Split-Path -Leaf $Tool) ended with exit $LASTEXITCODE. $Then") }
+        Save-Step (Split-Path -Leaf $Tool)
+    }
+    Invoke-Step 'scripts/mods/Add-ContentRecords.py' @('--masters', '{data}') 'The chain did not run and nothing was kept.'
+    $moves = @()
+    if ($order.Moved) {
+        # The catalogue first, in the order it moves to; the chain holds its
+        # plugin list to the catalogue's order (Rebuild-ContentTables.ps1).
+        Invoke-Step 'scripts/dev/Build-NpcPopulation.py' @('--settings', '{settings}') 'The order did not move, the chain did not run and nothing was kept.'
+        Invoke-Step 'scripts/dev/Build-ResourceLocations.py' @('--settings', '{settings}', '--strings-dir', '{data}') 'The chain did not run and nothing was kept.'
+        $moves = @('game/data/npc-population.json', 'game/data/resource-locations.json')
+    }
+    Invoke-Step 'scripts/mods/Rebuild-ContentTables.ps1' @('-Data', '{data}', '-PluginsTxt', '{plugins}') 'Nothing was kept.'
 
     # The build: the plugin and every file the chain writes, a folder it
     # writes taken whole.
     $part = $done + '.part'
     if (Test-Path -LiteralPath $part) { Remove-Item -LiteralPath $part -Recurse -Force }
     $files = [ordered]@{}
-    foreach ($w in @($Plugin) + @($content.Writes)) {
+    foreach ($w in @($Plugin) + @($moves) + @($content.Writes)) {
         $full = Join-Path $repo $w
         $each = @()
         if (Test-Path -LiteralPath $full -PathType Leaf) { $each = @($w) }
@@ -165,8 +205,9 @@ if ($built) {
     }
     $record = [ordered]@{
         issue  = 5191
-        what   = 'A content build on the box (scripts/mods/Build-ContentOnBox.ps1): the content plugin and every file the chain of scripts/mods/content-tables.json writes, built from the commit against the server''s plugins.'
+        what   = 'A content build on the box (scripts/mods/Build-ContentOnBox.ps1): the content plugin and every file the chain of scripts/mods/content-tables.json writes, built from the commit against the collection''s plugins at the record''s revision, in the load order the commit records.'
         server = $Server
+        collection = [ordered]@{ slug = $order.Slug; revision = $order.Revision; plugins = $order.Names.Count; moved = [bool]$order.Moved }
         key    = $key
         commit = $commit
         built  = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')

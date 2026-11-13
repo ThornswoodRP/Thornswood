@@ -24,6 +24,16 @@
      checkout with an uncommitted change is refused before anything runs.
   6. The key is held to what ContentPaths.ps1 lists: a file outside the
      inputs (a harness) changes no key.
+  7. Every tool runs from the commit's record: the runner is given the
+     collection's store (-Collection), never the server's plugins alone.
+  8. A record whose revision adds a plugin the catalogue's order does not
+     load moves the order first: the catalogue's two builders run between
+     the plugin's tool and the chain, with the moved order as their
+     settings, and the build keeps what they wrote. The order is moved by
+     ContentPaths.ps1's rule: the new plugin on the end of its kind, a
+     master on the end of the masters, a dropped plugin taken out only for
+     its revision, Thornswood-Last.esp last.
+  9. Records of two revisions stop the build before any tool runs.
 #>
 $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
@@ -61,13 +71,16 @@ function TGit([string[]]$w) {
 # would into the checkout, from the commit's own source file.
 $runner = Join-Path $root 'runner.ps1'
 [IO.File]::WriteAllText($runner, @'
-param([Parameter(Position = 0)][string]$Script, [Parameter(Position = 1, ValueFromRemainingArguments = $true)][string[]]$Arguments, [string]$Server)
+param([Parameter(Position = 0)][string]$Script, [Parameter(Position = 1, ValueFromRemainingArguments = $true)][string[]]$Arguments, [string]$Server, [string]$Collection)
 $co = $env:TS5191_CHECKOUT
 Add-Content -LiteralPath $env:TS5191_CALLS -Value ("$Server $Script " + ($Arguments -join ' '))
+Add-Content -LiteralPath ($env:TS5191_CALLS + '.store') -Value $Collection
 if ($env:TS5191_FAIL -and $Script -like "*$($env:TS5191_FAIL)*") { exit 3 }
 $src = [IO.File]::ReadAllText((Join-Path $co 'game/data/source.json'))
 function W($rel, $text) { $p = Join-Path $co $rel; New-Item -ItemType Directory -Force -Path (Split-Path -Parent $p) | Out-Null; [IO.File]::WriteAllText($p, $text) }
 if ($Script -eq 'scripts/mods/Add-ContentRecords.py') { W 'game/content/Thornswood-Content.esp' ("plugin for $Server from $src") }
+elseif ($Script -eq 'scripts/dev/Build-NpcPopulation.py') { W 'game/data/npc-population.json' $env:TS5191_MOVED }
+elseif ($Script -eq 'scripts/dev/Build-ResourceLocations.py') { W 'game/data/resource-locations.json' 'resources in the moved order' }
 elseif ($Script -eq 'scripts/mods/Rebuild-ContentTables.ps1') {
     $plugin = [IO.File]::ReadAllText((Join-Path $co 'game/content/Thornswood-Content.esp'))
     W 'game/data/x.json' ("table of $plugin")
@@ -92,6 +105,14 @@ try {
     Put 'game/gamemode-tables/X.json' 'as committed'
     Put 'docs/systems/lists/a.md' 'as committed'
     Put 'records/r.json' '{}'
+    # The records of a revision whose order the catalogue already loads.
+    $catalogue = '{"loadOrder":[' + ((@('Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm', 'A.esm', 'B.esp', 'Thornswood-Content.esp', 'Thornswood-Last.esp') | ForEach-Object { '{"name":"' + $_ + '","sha256":"0"}' }) -join ',') + ']}'
+    Put 'game/data/npc-population.json' $catalogue
+    Put 'game/data/resource-locations.json' 'resources as committed'
+    Put 'records/collection.json' '{"collection":"abc","revision":3,"plugins":[{"name":"A.esm","master":true},{"name":"B.esp","master":false},{"name":"Off.esp","master":false,"enabled":false}]}'
+    Put 'records/collection-plugins.json' '{"collection":"abc","revision":3,"plugins":[]}'
+    $store = Join-Path $root 'store'
+    New-Item -ItemType Directory -Force -Path $store | Out-Null
     Put 'layout.json' '{}'
     Put 'tests/test-x.js' '// a harness, not an input'
     TGit @('init', '-q') | Out-Null
@@ -104,11 +125,12 @@ try {
     $build = Join-Path $co 'scripts/mods/Build-ContentOnBox.ps1'
 
     function Run([string]$Server = 'dev', [int]$Keep = 8) {
-        if (Test-Path -LiteralPath $calls) { Remove-Item -LiteralPath $calls }
+        foreach ($f in @($calls, ($calls + '.store'))) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f } }
         if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Recurse -Force }
-        $o = @(& pwsh -NoProfile -File $build -Server $Server -Out $out -Cache $cache -Keep $Keep -Runner $runner 2>&1 | ForEach-Object { "$_" })
+        $o = @(& pwsh -NoProfile -File $build -Server $Server -Out $out -Cache $cache -Keep $Keep -Runner $runner -Store $store 2>&1 | ForEach-Object { "$_" })
         $code = $LASTEXITCODE
         $asked = $(if (Test-Path -LiteralPath $calls) { @(Get-Content -LiteralPath $calls) } else { @() })
+        $script:stores = $(if (Test-Path -LiteralPath ($calls + '.store')) { @(Get-Content -LiteralPath ($calls + '.store')) } else { @() })
         $key = @($o | Where-Object { $_ -match '^(BUILT|REUSED) ([0-9a-f]{64})$' } | ForEach-Object { $Matches[2] }) | Select-Object -First 1
         return [pscustomobject]@{ Code = $code; Text = ($o -join "`n"); Lines = $o; Calls = $asked; Key = $key }
     }
@@ -119,7 +141,7 @@ try {
     $r1 = Run
     if ($r1.Code -ne 0) { Write-Host $r1.Text }
     Yes '1 a first build ends 0 and says BUILT with its key, and the commit it is from' ($r1.Code -eq 0 -and $r1.Key -and ($r1.Lines -contains "FROM $base"))
-    Yes '1 it runs the plugin''s tool with the server''s plugins as its masters, then the chain' (
+    Yes '1 it runs the plugin''s tool with the load order''s plugins as its masters, then the chain' (
         $r1.Calls.Count -eq 2 -and $r1.Calls[0] -eq 'dev scripts/mods/Add-ContentRecords.py --masters {data}' -and
         $r1.Calls[1] -eq 'dev scripts/mods/Rebuild-ContentTables.ps1 -Data {data} -PluginsTxt {plugins}')
     $kept = Join-Path (Join-Path $cache 'dev') $r1.Key
@@ -136,6 +158,8 @@ try {
     Yes '1 -Out gets every file of the build and build.json as content-build.json' (
         -not @($want | Where-Object { -not (Test-Path -LiteralPath (Join-Path $out $_)) }).Count -and
         (Sha (Join-Path $out 'content-build.json')) -eq (Sha (Join-Path $kept 'build.json')))
+    Yes '7 every tool is given the collection''s store' ($script:stores.Count -eq 2 -and -not @($script:stores | Where-Object { $_ -ne $store }).Count)
+    Yes '7 an order the catalogue already loads is not moved: no catalogue builder runs, and the line says so' ($r1.Text -match 'collection abc revision 3, 9 plugins, as the catalogue records it' -and $names -notcontains 'game/data/resource-locations.json')
     Yes '1 no .part folder is left' (-not @(Get-ChildItem -LiteralPath (Join-Path $cache 'dev') -Directory | Where-Object { $_.Name -like '*.part' }).Count)
 
     # ---- 2. the same commit again ------------------------------------------
@@ -190,6 +214,47 @@ try {
     Put 'game/data/source.json' '{"v":"not committed"}'
     $r5b = Run
     Yes '5 a checkout with an uncommitted change is refused before any tool runs' ($r5b.Code -ne 0 -and $r5b.Text -match 'uncommitted' -and $r5b.Calls.Count -eq 0)
+
+    # ---- 8. a revision that adds plugins ------------------------------------
+    Fresh $v2
+    Put 'records/collection.json' '{"collection":"abc","revision":4,"plugins":[{"name":"A.esm","master":true},{"name":"New.esp","master":false,"after":["B.esp"]},{"name":"B.esp","master":false},{"name":"M.esp","master":true},{"name":"Off.esp","master":false,"enabled":false}]}'
+    Put 'records/collection-plugins.json' '{"collection":"abc","revision":4,"plugins":[]}'
+    $env:TS5191_MOVED = 'the moved catalogue'
+    TGit @('-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-q', '-am', 'revision 4') | Out-Null
+    $rev4 = (TGit @('rev-parse', 'HEAD')) -join ''
+    $r8 = Run
+    if ($r8.Code -ne 0) { Write-Host $r8.Text }
+    Yes '8 a revision that adds plugins moves the order: the catalogue''s builders run between the plugin''s tool and the chain' (
+        $r8.Code -eq 0 -and $r8.Calls.Count -eq 4 -and $r8.Calls[0] -like 'dev scripts/mods/Add-ContentRecords.py *' -and
+        $r8.Calls[1] -eq 'dev scripts/dev/Build-NpcPopulation.py --settings {settings}' -and
+        $r8.Calls[2] -eq 'dev scripts/dev/Build-ResourceLocations.py --settings {settings} --strings-dir {data}' -and
+        $r8.Calls[3] -like 'dev scripts/mods/Rebuild-ContentTables.ps1 *')
+    Yes '8   and says what it adds' ($r8.Text -match 'revision 4, 11 plugins, moved from the 9 the catalogue records, adding M\.esp, New\.esp')
+    $k8 = [IO.File]::ReadAllText((Join-Path (Join-Path (Join-Path $cache 'dev') $r8.Key) 'build.json')) | ConvertFrom-Json
+    Yes '8   and keeps what the catalogue''s builders wrote' (
+        [IO.File]::ReadAllText((Join-Path $out 'game/data/npc-population.json')) -eq 'the moved catalogue' -and
+        [IO.File]::ReadAllText((Join-Path $out 'game/data/resource-locations.json')) -eq 'resources in the moved order' -and
+        $k8.collection.revision -eq 4 -and $k8.collection.moved -eq $true)
+
+    # The rule itself, on the records alone.
+    Fresh $rev4
+    . (Join-Path $co 'scripts/mods/ContentPaths.ps1')
+    $o8 = Get-ThornswoodContentOrder -Repo $co
+    Yes ('8 a new master goes on the end of the masters and a new plugin on the end, Thornswood-Last.esp last: ' + ($o8.Names -join ', ')) (
+        ($o8.Names -join ',') -eq 'Skyrim.esm,Update.esm,Dawnguard.esm,HearthFires.esm,Dragonborn.esm,A.esm,M.esp,B.esp,Thornswood-Content.esp,New.esp,Thornswood-Last.esp')
+    Yes '8 a plugin the record switches off is not added' ($o8.Names -notcontains 'Off.esp')
+    Put 'records/collection-dropped.json' '{"collection":"abc","revision":3,"dropped":[{"name":"B.esp"}]}'
+    Yes '8 collection-dropped.json for another revision takes nothing out' ((Get-ThornswoodContentOrder -Repo $co).Names -contains 'B.esp')
+    Put 'records/collection-dropped.json' '{"collection":"abc","revision":4,"dropped":[{"name":"B.esp"}]}'
+    $d8 = Get-ThornswoodContentOrder -Repo $co
+    Yes '8 collection-dropped.json for this revision takes its plugin out' ($d8.Names -notcontains 'B.esp' -and ($d8.Dropped -join ',') -eq 'B.esp')
+    Fresh $rev4
+
+    # ---- 9. records of two revisions ---------------------------------------
+    Put 'records/collection-plugins.json' '{"collection":"abc","revision":5,"plugins":[]}'
+    TGit @('-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-q', '-am', 'half a revision') | Out-Null
+    $r9 = Run
+    Yes '9 records of two revisions stop the build before any tool runs' ($r9.Code -ne 0 -and $r9.Text -match 'they move together' -and $r9.Calls.Count -eq 0 -and -not $r9.Key)
 } finally {
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
 }
