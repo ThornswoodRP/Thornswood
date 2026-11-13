@@ -51,6 +51,15 @@
 // Logger "allowed". "allowed" and "not stated" both pass the check, so the
 // rule says what the record means and lets nothing new through.
 //
+// ENTRIES THAT ARE NOT NEXUS MODS (#4278). A collection may carry a file
+// packed into its own archive (a bundle), or one from a link, a download page
+// or by hand (direct, browse, manual). Until 12 November 2026 check and update
+// read only nexus entries, so those went out held to nothing while
+// New-NexusRevision said every mod was allowed. The record's others list
+// carries each by Vortex's source type and the entry's name, with ours or a
+// reading held to the same rule as a mod's, and check refuses one it does not
+// have, has not read, or reads as not allowed.
+//
 // UPDATE rewrites the record's list of mods from a collection.json, for a new
 // revision: each mod keeps its reading, a mod the collection no longer
 // carries goes, and a new one comes in with no reading, so CHECK refuses it
@@ -66,6 +75,9 @@ const path = require('path');
 
 const RECORD = path.join(__dirname, '..', '..', 'records', 'collection-permissions.json');
 const COLLECTIONS = ['allowed', 'not stated', 'not allowed'];
+// Vortex's source types other than nexus, which the record's others list
+// carries by type and name (#4278).
+const OTHER_TYPES = ['bundle', 'direct', 'browse', 'manual'];
 // Nexus's two Upload permission lines that let the files go to other sites.
 const UPLOAD_ALLOWED = /^You (can|are allowed to) upload this file to other sites\b/;
 
@@ -110,8 +122,33 @@ function shapeProblems(record) {
     }
     if (m.ours !== undefined) out.push(who + ': ours is only ever true');
     if (m.reading === null) continue;
-    const r = m.reading;
-    if (!r || typeof r !== 'object') { out.push(who + ': reading is neither null nor a reading'); continue; }
+    readingProblems(m.reading, who, out);
+  }
+  if (record.others !== undefined) {
+    if (!Array.isArray(record.others) || !record.others.length) out.push('others is not a list of entries');
+    else {
+      const keys = new Set();
+      for (const o of record.others) {
+        const who = 'entry ' + (o && o.type) + ' "' + (o && o.name) + '"';
+        if (!o || OTHER_TYPES.indexOf(o.type) < 0) { out.push(who + ': type is not one of ' + OTHER_TYPES.join(', ')); continue; }
+        if (typeof o.name !== 'string' || !o.name) { out.push(who + ': no name'); continue; }
+        const k = o.type + '\n' + o.name;
+        if (keys.has(k)) out.push(who + ': listed twice');
+        keys.add(k);
+        if (o.ours === true) { if (o.reading !== null) out.push(who + ': one of ours carries a reading'); continue; }
+        if (o.ours !== undefined) out.push(who + ': ours is only ever true');
+        if (o.reading === null) continue;
+        readingProblems(o.reading, who, out);
+      }
+    }
+  }
+  return out;
+}
+
+// What is wrong with one reading, a mod's or an entry's, onto out.
+function readingProblems(r, who, out) {
+  {
+    if (!r || typeof r !== 'object') { out.push(who + ': reading is neither null nor a reading'); return; }
     if (typeof r.read !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(r.read)) out.push(who + ': reading has no date read');
     if (typeof r.by !== 'string' || !r.by) out.push(who + ': reading says nobody read it');
     if (COLLECTIONS.indexOf(r.collections) < 0) out.push(who + ': collections is "' + r.collections + '", not one of ' + COLLECTIONS.join(', '));
@@ -136,7 +173,6 @@ function shapeProblems(record) {
       out.push(who + ': reads "' + r.collections + '", and the rule (records/README.md, What makes a reading) gives "' + ruled(r) + '"');
     }
   }
-  return out;
 }
 
 // Every mod in modIds the collection may not carry, with why.
@@ -155,6 +191,28 @@ function refusals(record, modIds) {
 
 function collectionModIds(collection) {
   return (collection.mods || []).filter(e => e.source && e.source.type === 'nexus').map(e => Number(e.source.modId));
+}
+
+// The collection's entries that are not Nexus mods, as { type, name }.
+function otherEntries(collection) {
+  return (collection.mods || []).filter(e => !e.source || e.source.type !== 'nexus')
+    .map(e => ({ type: e.source && e.source.type ? String(e.source.type) : 'no source', name: String(e.name || '') }));
+}
+
+// Every entry of the collection that is not a Nexus mod and that the
+// record's others list does not let through, with why (#4278).
+function otherRefusals(record, collection) {
+  const by = new Map((record.others || []).map(o => [o.type + '\n' + o.name, o]));
+  const out = [];
+  for (const e of otherEntries(collection)) {
+    const o = by.get(e.type + '\n' + e.name);
+    const say = why => out.push({ modId: e.type, name: e.name, why: why });
+    if (!o) { say('not a Nexus mod, and the record has nothing on it: read where it comes from and add it to others'); continue; }
+    if (o.ours === true) continue;
+    if (o.reading === null) { say('not a Nexus mod, and nobody has read where it comes from'); continue; }
+    if (o.reading.collections === 'not allowed') say('its terms, read ' + o.reading.read + ', do not allow it in a collection');
+  }
+  return out;
 }
 
 // The record with its list of mods taken from a collection.json.
@@ -187,7 +245,22 @@ function updated(record, collection, revision) {
     m.reading = was ? was.reading : null;
     mods.push(m);
   }
-  return Object.assign({}, record, { revision: revision, mods: mods });
+  // Each entry that is not a Nexus mod keeps its reading, a new one comes in
+  // unread, and one the collection no longer carries goes (#4278).
+  const oldOthers = new Map((record.others || []).map(o => [o.type + '\n' + o.name, o]));
+  const others = [];
+  for (const e of otherEntries(collection)) {
+    const k = e.type + '\n' + e.name;
+    if (others.some(o => o.type + '\n' + o.name === k)) continue;
+    const was = oldOthers.get(k);
+    const o = { type: e.type, name: e.name };
+    if (was && was.ours === true) o.ours = true;
+    o.reading = was ? was.reading : null;
+    others.push(o);
+  }
+  const next = Object.assign({}, record, { revision: revision, mods: mods });
+  if (others.length) next.others = others; else delete next.others;
+  return next;
 }
 
 // The record's text: two-space JSON, one mod per block, LF, so the same
@@ -196,7 +269,7 @@ function text(record) {
   return JSON.stringify(record, null, 2) + '\n';
 }
 
-module.exports = { RECORD, COLLECTIONS, readRecord, ruled, shapeProblems, refusals, collectionModIds, updated, text };
+module.exports = { RECORD, COLLECTIONS, OTHER_TYPES, readRecord, ruled, shapeProblems, refusals, otherRefusals, collectionModIds, otherEntries, updated, text };
 
 if (require.main === module) {
   const a = process.argv.slice(2);
@@ -209,12 +282,17 @@ if (require.main === module) {
   const shape = shapeProblems(record);
   if (shape.length) die(recordFile + ' is not a permission record this reads: ' + shape.join('; '));
   if (pos[0] === 'check') {
-    let ids;
+    let ids, others = [];
     if (opt('--mods') !== undefined) ids = String(opt('--mods')).split(',').filter(Boolean).map(Number);
-    else if (pos[1]) ids = collectionModIds(JSON.parse(fs.readFileSync(pos[1], 'utf8').replace(/^\uFEFF/, '')));
+    else if (pos[1]) {
+      const col = JSON.parse(fs.readFileSync(pos[1], 'utf8').replace(/^\uFEFF/, ''));
+      ids = collectionModIds(col);
+      others = otherRefusals(record, col);
+      if (!ids.length && otherEntries(col).length) ids = null;
+    }
     else die('check takes a collection.json or --mods');
-    if (!ids.length || ids.some(n => !Number.isInteger(n) || n < 1)) die('no mod numbers to check');
-    const r = refusals(record, ids);
+    if (ids !== null && (!ids.length || ids.some(n => !Number.isInteger(n) || n < 1))) die('no mod numbers to check');
+    const r = (ids ? refusals(record, ids) : []).concat(others);
     for (const x of r) console.log(x.modId + '\t' + (x.name || '') + '\t' + x.why);
     process.exit(r.length ? 1 : 0);
   }
