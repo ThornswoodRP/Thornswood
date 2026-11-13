@@ -57,38 +57,53 @@ yes('and posting to a board is in it', postBlock !== null && wordsBlock !== null
 const ALICE = 101;
 
 if (postBlock !== null && wordsBlock !== null) {
-  /** Drive post with a pack, at Whiterun's board. */
+  /*
+    Drive post with a pack, at Whiterun's board. Since #4901 a post takes its
+    gold out of the pack through packFirst, the way the merchant and quest
+    moves do, and lands on the board once the pack is saved: the real pieces
+    come from tests/fixtures/pack-first.js, over a pretend engine whose save
+    keeps up with every write. took is the gold that left the pack, and broke
+    is a pack with no gold in it.
+  */
+  const PACK_FIRST = require('./fixtures/pack-first');
+  const GOLD = 0x0000000F;
+  const PURSE = 1000;
   function posting(opts) {
     const told = [];
+    const drawn = [];
     const notices = opts.notices || {};
     const funds = { whiterun: 0 };
-    const took = { n: 0 };
-    const fn = new Function(
-      'parts', 'actorId', 'profileId', 'toProfile', 'isJob',
-      'notices', 'funds', 'takeGold', 'save', 'plog', 'mp',
-      'NOTICE_FEE', 'JOB_FEE', 'POST_TITLE_CHARS', 'POST_BODY_CHARS', 'Number', 'boardHere', 'refreshPanel',
-      wordsBlock + '\n' + postBlock + '\nreturn post;');
-    const call = fn(
-      null, null, null, null, null,
-      notices, funds,
-      function (id, amount) {
-        if (opts.broke) { return false; }
-        took.n += amount;
-        return true;
+    const store = { inventory: { entries: opts.broke ? [] : [{ baseId: GOLD, count: PURSE }] } };
+    const mp = PACK_FIRST.receipts({
+      get: function (id, key) {
+        if (key === 'inventory') { return store.inventory; }
+        if (key === 'profileId') { return ALICE; }
+        return { name: 'Alice' };
       },
+      set: function (id, key, value) { if (key === 'inventory') { store.inventory = value; } }
+    });
+    const fn = new Function(
+      'notices', 'funds', 'save', 'plog', 'mp',
+      'NOTICE_FEE', 'JOB_FEE', 'POST_TITLE_CHARS', 'POST_BODY_CHARS', 'boardHere', 'refreshPanel', 'GOLD_ID',
+      wordsBlock + '\n' + postBlock + '\n' + PACK_FIRST.pieces(prop) + '\nreturn post;');
+    const call = fn(
+      notices, funds,
       function () { }, function () { },
-      { get: function () { return { name: 'Alice' }; } },
-      20, 30, 60, 600, Number,
+      mp,
+      20, 30, 60, 600,
       // Standing at Whiterun's board unless the test says otherwise. The
       // board is what makes /notice a board rather than a command.
       function () { return opts.noBoard ? null : 'whiterun'; },
       // Every board word ends by drawing the panel again (#1374);
       // test-unpin.js drives the real one.
-      function (actorId) { drawn.push(actorId); });
-    const drawn = [];
+      function (actorId) { drawn.push(actorId); },
+      GOLD);
     call(opts.parts, 0xff000058, ALICE,
          function (pid, m) { told.push(m); }, !!opts.isJob);
-    return { told: told, notices: notices, funds: funds, took: took.n, drawn: drawn };
+    const left = (store.inventory.entries || []).filter(function (e) { return e.baseId === GOLD; })
+      .reduce(function (s, e) { return s + (Number(e.count) || 0); }, 0);
+    const took = (opts.broke ? 0 : PURSE) - left;
+    return { told: told, notices: notices, funds: funds, took: took, drawn: drawn };
   }
 
   // S6: a notice costs twenty and lands on the board.
