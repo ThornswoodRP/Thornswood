@@ -29,7 +29,8 @@
 #>
 $ErrorActionPreference = 'Stop'
 $Repo = Split-Path -Parent $PSScriptRoot
-$Shell = (Get-Process -Id $PID).Path
+. (Join-Path $PSScriptRoot 'Windows.ps1')
+$Shell = Get-BoxPowerShell
 $script:pass = 0; $script:fail = 0
 function Yes([string]$what, [bool]$cond) {
     if ($cond) { $script:pass++; Write-Host "PASS  $what" } else { $script:fail++; Write-Host "FAIL  $what" }
@@ -83,7 +84,7 @@ try {
     Yes '  and lists the launcher''s Thornswood.exe.old in both installs' ($r.Out.Contains($locked) -and $r.Out.Contains($dev))
 
     # 2. -Go, with one of Thornswood's own leftovers that cannot be deleted.
-    if ($IsWindows) { $hold = [IO.File]::Open($locked, 'Open', 'Read', 'None') }
+    if ($OnWindows) { $hold = [IO.File]::Open($locked, 'Open', 'Read', 'None') }
     else { [IO.File]::SetUnixFileMode($lockedDir, [IO.UnixFileMode]'UserRead,UserExecute') }
     $r = Run @('-Go', '-NoPause')
     Yes '-Go removes Thornswood''s own leftover in the dev build''s install' (-not (Test-Path -LiteralPath $dev))
@@ -95,7 +96,7 @@ try {
     Yes '  and the run exits non-zero' ($r.Code -ne 0)
     Yes '  naming it' ($r.Out.Contains($locked))
     if ($hold) { $hold.Dispose(); $hold = $null }
-    if (-not $IsWindows) { [IO.File]::SetUnixFileMode($lockedDir, [IO.UnixFileMode]'UserRead,UserWrite,UserExecute') }
+    if (-not $OnWindows) { [IO.File]::SetUnixFileMode($lockedDir, [IO.UnixFileMode]'UserRead,UserWrite,UserExecute') }
 
     # 3. -Go again once it can be deleted.
     $r = Run @('-Go', '-NoPause')
@@ -104,7 +105,7 @@ try {
 }
 finally {
     if ($hold) { $hold.Dispose() }
-    if (-not $IsWindows -and $lockedDir -and (Test-Path -LiteralPath $lockedDir)) { [IO.File]::SetUnixFileMode($lockedDir, [IO.UnixFileMode]'UserRead,UserWrite,UserExecute') }
+    if (-not $OnWindows -and $lockedDir -and (Test-Path -LiteralPath $lockedDir)) { [IO.File]::SetUnixFileMode($lockedDir, [IO.UnixFileMode]'UserRead,UserWrite,UserExecute') }
     foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k]) }
     if (Test-Path -LiteralPath $T) { Remove-Item -LiteralPath $T -Recurse -Force }
 }
