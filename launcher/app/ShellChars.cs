@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia.Threading;
 
 namespace Thornswood
@@ -33,9 +34,11 @@ namespace Thornswood
         /// <summary>
         /// Play, from the button. Door.Check first, exactly as StartAs did,
         /// then Chars.Prepare, then a check in with the site for every id this
-        /// install could pick, then Play().
+        /// install could pick, then Play(). Starts StartPlayAsync (Begin).
         /// </summary>
-        static void StartPlay()
+        static void StartPlay() { Begin(StartPlayAsync()); }
+
+        static async Task StartPlayAsync()
         {
             // Before anything else, including Discord: a shared Skyrim is not
             // an install this supports any more. OwnGameRequired says why and
@@ -43,7 +46,7 @@ namespace Thornswood
             if (!OwnGameRequired()) return;
             // The same bring-up-to-date Fix runs on Diagnostics. Play
             // used to walk past a folder that NeededRefresh and launch it.
-            if (OwnGameRefreshIfDue()) return;
+            if (await OwnGameRefreshIfDue()) return;
 
             // Discord decides who gets in, and it is asked here rather than
             // inside Play() because Play() is also the path a game already
@@ -87,7 +90,7 @@ namespace Thornswood
             // every plugin in the running game. So a running game goes the
             // way a running game always went, through Play() and its own
             // checks, and nothing under Data is touched first.
-            if (Checks.GameRunning()) { Play(); return; }
+            if (Checks.GameRunning()) { await PlayAsync(); return; }
 
             // The save folder, the client settings, the menu's character list
             // and voice. Off the window's thread under the wait cursor, because
@@ -98,7 +101,7 @@ namespace Thornswood
             string saveNote = null;
             try
             {
-                Waiting(delegate { saveNote = Chars.Prepare(cfg); });
+                await OffThread(delegate { saveNote = Chars.Prepare(cfg); });
             }
             catch (Exception ex) { Log(ex.Message); return; }
             if (saveNote != null) Log(saveNote);
@@ -124,7 +127,7 @@ namespace Thornswood
             // The last session's join pass is not this one's (#937).
             JoinPass.Forget();
             Log("Starting. You pick your character at the game's main menu.");
-            Play();
+            await PlayAsync();
         }
 
         /// <summary>

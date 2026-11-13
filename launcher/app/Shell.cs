@@ -2445,20 +2445,7 @@ namespace Thornswood
                     "Thornswood", Ask.Icon.Warning);
                 if (!r) return;
 
-                Log("Closing Skyrim...");
-                int n;
-                string still = CloseGameWaiting(out n);
-                if (still.Length > 0)
-                {
-                    Log("Skyrim would not close. " + still);
-                    Ask.Tell("Skyrim would not close.\n\n" + still, "Thornswood", Ask.Icon.Warning);
-                    DrawStatus();
-                    return;
-                }
-                Log(n > 0 ? "Closed Skyrim." : "Skyrim was already gone.");
-                // The two second tick does the rest: puts the Windows folders
-                // back, records the session and turns Play on again.
-                DrawStatus();
+                Begin(QuitGameNow());
             };
             chkCrashSnapshots.Click += delegate
             {

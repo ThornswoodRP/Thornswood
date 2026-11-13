@@ -4,18 +4,20 @@
       pwsh -NoProfile -File .\launcher\tests\test-play-stuck-game.ps1
 
   The Play path's guards that no harness ran: ClearStuckGame,
-  CloseGameWaiting, ClearLeftovers and EnsureServer in launcher\app\Shell.cs and ShellPlay.cs.
+  CloseGameAway, ClearLeftovers and EnsureServer in launcher\app\Shell.cs and ShellPlay.cs.
 
   Each method is lifted out of the real Shell.cs (the brace-matched body, the
   way test-play-progress.ps1 reads its wiring) and built the way the project
   builds, with the .NET 10 SDK (tests\Launcher-Csc.ps1, #4823, on any machine
   that has it), beside stand-ins for Checks, SkyMp, Ask (the launcher's
-  message boxes), Waiting and Log. The
+  message boxes), OffThread and Log. The
   stand-ins script every answer the real ones can give, so this fails if a
   guard starts closing somebody's other Skyrim, closes a visible game without
   asking, carries on when the game would not close, kills a session that is
   still loading, or lets the game start against a local server that never came
-  up. Then the order of the steps in Play is read from the file: the busy
+  up, or holds its caller while the game closes or the server starts (#4582:
+  the caller awaits, and gets its task back while the work runs). Then the
+  order of the steps in Play is read from the file: the busy
   guards, ClearStuckGame, Verify, EnsureServer, Keep/Hold, and only then
   Process.Start.
 
@@ -59,11 +61,11 @@ $shellPath = Join-Path $AppDir 'Shell.cs'
 Yes 'Shell.cs is in the launcher source' (Test-Path -LiteralPath $shellPath)
 if (-not (Test-Path -LiteralPath $shellPath)) { Done }
 # Since #500 the Play session (Play, EnsureServer, ClearStuckGame,
-# CloseGameWaiting) is in ShellPlay.cs; ClearLeftovers stays in Shell.cs.
+# CloseGameAway) is in ShellPlay.cs; ClearLeftovers stays in Shell.cs.
 $shell = [IO.File]::ReadAllText($shellPath, [Text.Encoding]::UTF8) + "`n" + [IO.File]::ReadAllText((Join-Path $AppDir 'ShellPlay.cs'), [Text.Encoding]::UTF8)
 
-$sigs = @('static bool ClearStuckGame(bool askIfVisible)', 'static string CloseGameWaiting(out int closed)',
-          'static string ClearLeftovers()', 'static bool EnsureServer()')
+$sigs = @('static async Task<bool> ClearStuckGame(bool askIfVisible)', 'static async Task<(int closed, string still)> CloseGameAway()',
+          'static string ClearLeftovers()', 'static async Task<bool> EnsureServer()')
 $bodies = @()
 foreach ($sig in $sigs) {
     $b = Body $shell $sig
@@ -78,6 +80,7 @@ if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 $driver = @'
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 namespace Thornswood
 {
     class Config { }
@@ -122,8 +125,19 @@ namespace Thornswood
         static List<string> logged = new List<string>();
         static void Log(string m) { logged.Add(m); }
         static void SafeLog(string m) { logged.Add(m); }
-        static void Waiting(Action a) { waits++; stallSeenInside = stallDoing; a(); }
+        // OffThread as the window's thread sees it: the work runs at once, or,
+        // with gate set, once the gate opens, and the caller is handed a task
+        // that is not done until then.
+        static TaskCompletionSource<bool> gate;
+        static Task OffThread(Action a)
+        {
+            waits++; stallSeenInside = stallDoing;
+            if (gate == null) { a(); return Task.CompletedTask; }
+            return gate.Task.ContinueWith(delegate { a(); }, TaskContinuationOptions.ExecuteSynchronously);
+        }
         static bool JustStarted(int seconds) { return young; }
+        static bool ClearStuckGameNow(bool askIfVisible) { return ClearStuckGame(askIfVisible).GetAwaiter().GetResult(); }
+        static bool EnsureServerNow() { return EnsureServer().GetAwaiter().GetResult(); }
 
 __METHODS__
 
@@ -139,7 +153,7 @@ __METHODS__
             Checks.Closes = 0; Checks.CloseCalls = 0; Checks.Stuck = "";
             SkyMp.IsUp = SkyMp.Local = SkyMp.Throw = false; SkyMp.StartSays = null; SkyMp.Starts = 0;
             Ask.Answer = false; Ask.Asked.Clear();
-            logged.Clear(); young = false; waits = 0; stallSeenInside = null; stallDoing = null;
+            logged.Clear(); young = false; waits = 0; stallSeenInside = null; stallDoing = null; gate = null;
         }
         static bool LoggedHas(string s) { foreach (string l in logged) if (l.Contains(s)) return true; return false; }
 
@@ -147,35 +161,42 @@ __METHODS__
         {
             // ---- ClearStuckGame -------------------------------------------
             Reset();
-            Yes("nothing running: Play goes on, nothing asked or closed", ClearStuckGame(true) && Ask.Asked.Count == 0 && Checks.CloseCalls == 0);
+            Yes("nothing running: Play goes on, nothing asked or closed", ClearStuckGameNow(true) && Ask.Asked.Count == 0 && Checks.CloseCalls == 0);
 
             Reset(); Checks.Other = true;
-            Yes("another folder's Skyrim, asked and refused: stop, it is not closed", !ClearStuckGame(true) && Ask.Asked.Count == 1 && Checks.CloseCalls == 0);
+            Yes("another folder's Skyrim, asked and refused: stop, it is not closed", !ClearStuckGameNow(true) && Ask.Asked.Count == 1 && Checks.CloseCalls == 0);
             Reset(); Checks.Other = true; Ask.Answer = true;
-            Yes("another folder's Skyrim, asked and accepted: go on, still not closed", ClearStuckGame(true) && Checks.CloseCalls == 0);
+            Yes("another folder's Skyrim, asked and accepted: go on, still not closed", ClearStuckGameNow(true) && Checks.CloseCalls == 0);
             Reset(); Checks.Other = true;
-            Yes("another folder's Skyrim with no asking: go on, never closed", ClearStuckGame(false) && Ask.Asked.Count == 0 && Checks.CloseCalls == 0);
+            Yes("another folder's Skyrim with no asking: go on, never closed", ClearStuckGameNow(false) && Ask.Asked.Count == 0 && Checks.CloseCalls == 0);
 
             Reset(); Checks.Running = true; Checks.Visible = true;
-            Yes("our game on screen, refused: stop and close nothing", !ClearStuckGame(true) && Checks.CloseCalls == 0 && LoggedHas("Left the game"));
+            Yes("our game on screen, refused: stop and close nothing", !ClearStuckGameNow(true) && Checks.CloseCalls == 0 && LoggedHas("Left the game"));
             Reset(); Checks.Running = true; Checks.Visible = true;
-            Yes("our game on screen with no asking: never closed silently", !ClearStuckGame(false) && Checks.CloseCalls == 0 && Ask.Asked.Count == 0);
+            Yes("our game on screen with no asking: never closed silently", !ClearStuckGameNow(false) && Checks.CloseCalls == 0 && Ask.Asked.Count == 0);
             Reset(); Checks.Running = true; Checks.Visible = true; Ask.Answer = true; Checks.Closes = 2;
-            Yes("our game on screen, accepted: closed and Play goes on", ClearStuckGame(true) && Checks.CloseCalls == 1 && LoggedHas("Closed 2 Skyrim processes"));
+            Yes("our game on screen, accepted: closed and Play goes on", ClearStuckGameNow(true) && Checks.CloseCalls == 1 && LoggedHas("Closed 2 Skyrim processes"));
 
             Reset(); Checks.Running = true; Checks.Closes = 1;
-            Yes("windowless leftover: closed without asking", ClearStuckGame(true) && Ask.Asked.Count == 0 && LoggedHas("Closed 1 Skyrim process that"));
+            Yes("windowless leftover: closed without asking", ClearStuckGameNow(true) && Ask.Asked.Count == 0 && LoggedHas("Closed 1 Skyrim process that"));
             Reset(); Checks.Running = true; Checks.Stuck = "Still running: SkyrimSE.exe (process 9).";
-            Yes("leftover that will not close: stop, and say what is still running", !ClearStuckGame(true) && Ask.Asked.Count == 1 && Ask.Asked[0].Contains("SkyrimSE.exe"));
+            Yes("leftover that will not close: stop, and say what is still running", !ClearStuckGameNow(true) && Ask.Asked.Count == 1 && Ask.Asked[0].Contains("SkyrimSE.exe"));
             Reset(); Checks.Running = true; Checks.Stuck = "Still running: x.";
-            Yes("leftover that will not close, no asking: stop with no box", !ClearStuckGame(false) && Ask.Asked.Count == 0);
+            Yes("leftover that will not close, no asking: stop with no box", !ClearStuckGameNow(false) && Ask.Asked.Count == 0);
 
-            // ---- CloseGameWaiting -----------------------------------------
-            Reset(); Checks.Closes = 3; Checks.Stuck = null; int n;
-            string still = CloseGameWaiting(out n);
-            Yes("CloseGameWaiting closes inside Waiting with the stall label set", waits == 1 && stallSeenInside == "closing Skyrim");
-            Yes("CloseGameWaiting clears the stall label and counts what closed", stallDoing == null && n == 3);
-            Yes("a null StuckReport comes back as empty, not null", still == "");
+            // #4582: the close is awaited, so the caller is not held while it runs.
+            Reset(); Checks.Running = true; Checks.Closes = 1; gate = new TaskCompletionSource<bool>();
+            Task<bool> closing = ClearStuckGame(true);
+            Yes("while Skyrim closes, ClearStuckGame hands its caller back a task that is not done", !closing.IsCompleted && Checks.CloseCalls == 0);
+            gate.SetResult(true);
+            Yes("and once it has closed, Play goes on", closing.GetAwaiter().GetResult() && Checks.CloseCalls == 1 && LoggedHas("Closed 1 Skyrim process that"));
+
+            // ---- CloseGameAway --------------------------------------------
+            Reset(); Checks.Closes = 3; Checks.Stuck = null;
+            var gone = CloseGameAway().GetAwaiter().GetResult();
+            Yes("CloseGameAway closes inside OffThread with the stall label set", waits == 1 && stallSeenInside == "closing Skyrim");
+            Yes("CloseGameAway clears the stall label and counts what closed", stallDoing == null && gone.closed == 3);
+            Yes("a null StuckReport comes back as empty, not null", gone.still == "");
 
             // ---- ClearLeftovers -------------------------------------------
             Reset();
@@ -193,17 +214,24 @@ __METHODS__
 
             // ---- EnsureServer ---------------------------------------------
             Reset(); SkyMp.IsUp = true;
-            Yes("server answering: go, nothing started or asked", EnsureServer() && SkyMp.Starts == 0 && Ask.Asked.Count == 0);
+            Yes("server answering: go, nothing started or asked", EnsureServerNow() && SkyMp.Starts == 0 && Ask.Asked.Count == 0);
             Reset();
-            Yes("remote server silent, refused: do not start", !EnsureServer() && Ask.Asked.Count == 1 && SkyMp.Starts == 0);
+            Yes("remote server silent, refused: do not start", !EnsureServerNow() && Ask.Asked.Count == 1 && SkyMp.Starts == 0);
             Reset(); Ask.Answer = true;
-            Yes("remote server silent, accepted: start anyway, never start a server", EnsureServer() && SkyMp.Starts == 0);
+            Yes("remote server silent, accepted: start anyway, never start a server", EnsureServerNow() && SkyMp.Starts == 0);
             Reset(); SkyMp.Local = true;
-            Yes("local server down and comes up: started inside Waiting, go", EnsureServer() && SkyMp.Starts == 1 && waits == 1 && LoggedHas("The server is up."));
+            Yes("local server down and comes up: started inside OffThread, go", EnsureServerNow() && SkyMp.Starts == 1 && waits == 1 && LoggedHas("The server is up."));
             Reset(); SkyMp.Local = true; SkyMp.StartSays = "Node is missing.";
-            Yes("local server will not start: stop and show why", !EnsureServer() && Ask.Asked.Count == 1 && Ask.Asked[0] == "Node is missing.");
+            Yes("local server will not start: stop and show why", !EnsureServerNow() && Ask.Asked.Count == 1 && Ask.Asked[0] == "Node is missing.");
             Reset(); SkyMp.Throw = true;
-            Yes("a check that throws is logged and lets Play go on (as written)", EnsureServer() && LoggedHas("Could not check the server: boom"));
+            Yes("a check that throws is logged and lets Play go on (as written)", EnsureServerNow() && LoggedHas("Could not check the server: boom"));
+
+            // #4582: starting the local server is awaited, up to forty eight seconds of it.
+            Reset(); SkyMp.Local = true; gate = new TaskCompletionSource<bool>();
+            Task<bool> starting = EnsureServer();
+            Yes("while the local server starts, EnsureServer hands its caller back a task that is not done", !starting.IsCompleted && SkyMp.Starts == 0);
+            gate.SetResult(true);
+            Yes("and once it answers, the game may start", starting.GetAwaiter().GetResult() && SkyMp.Starts == 1);
 
             Console.WriteLine();
             Console.WriteLine(pass + " passed, " + fail + " failed");
@@ -227,8 +255,8 @@ foreach ($l in $lines) {
 Yes 'the driver exits 0' ($code -eq 0)
 
 # ---- 2. the order of Play's steps, read from the file ----------------------
-$play = Body $shell 'static void Play()'
-Yes 'Play() is in ShellPlay.cs' ($play.Length -gt 0)
+$play = Body $shell 'static async Task PlayAsync()'
+Yes 'Play is in ShellPlay.cs, awaited (PlayAsync)' ($play.Length -gt 0)
 $steps = @('if (updatePending)', 'if (collectionBarUp)', 'if (ownGameBusy)', 'File.Exists(Paths.Loader)',
            'ClearStuckGame(true)', 'Verify.Run(cfg)', 'EnsureServer()', 'Keep.Restore()', 'Hold.Take(', 'Swap.Apply()', 'Process.Start(psi)')
 $prev = -1; $prevName = 'the top'
@@ -237,9 +265,9 @@ foreach ($st in $steps) {
     Yes "Play has $st after $prevName" ($i -gt $prev)
     if ($i -ge 0) { $prev = $i; $prevName = $st }
 }
-Yes 'a refused ClearStuckGame returns before the game starts' ($play.Contains('if (!ClearStuckGame(true)) return;'))
-Yes 'a refused EnsureServer returns before the game starts' ($play.Contains('if (!EnsureServer()) return;'))
+Yes 'a refused ClearStuckGame returns before the game starts' ($play.Contains('if (!await ClearStuckGame(true)) return;'))
+Yes 'a refused EnsureServer returns before the game starts' ($play.Contains('if (!await EnsureServer()) return;'))
 $upd = [IO.File]::ReadAllText((Join-Path $AppDir 'ShellUpdate.cs'), [Text.Encoding]::UTF8)
-Yes 'the update path also stops on a refused ClearStuckGame' ($upd.Contains('if (!ClearStuckGame(true)) return;'))
+Yes 'the update path also stops on a refused ClearStuckGame' ($upd.Contains('if (!await ClearStuckGame(true)) return;'))
 
 Done

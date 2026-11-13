@@ -112,8 +112,8 @@ $poll = Lift $chars 'static void PollChoice()'
 Yes 'PollChoice renews the pass on every tick, before it looks for a new choice' (
     $poll -match 'JoinPass\.Tick\(PresenceLog\);[\s\S]*if \(id <= 0 \|\| id == chosenId\) return;')
 Yes 'and fetches one at once for a character just picked' ($poll -match 'chosenId = id;\s*JoinPass\.For\(id, PresenceLog\);')
-$start = Lift $chars 'static void StartPlay()'
-Yes 'Play forgets the last session''s pass before the game starts' ($start -match 'JoinPass\.Forget\(\);[\s\S]*Play\(\);\s*\}$')
+$start = Lift $chars 'static async Task StartPlayAsync()'
+Yes 'Play forgets the last session''s pass before the game starts' ($start -match 'JoinPass\.Forget\(\);[\s\S]*await PlayAsync\(\);\s*\}$')
 
 Write-Host ''
 Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail)

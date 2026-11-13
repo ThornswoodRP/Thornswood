@@ -236,7 +236,7 @@ Yes 'and reads every body in the folder, refusing a nude one, before it writes t
     $build.IndexOf('CoveredBodies.Check(game, true, Say)') -lt $build.IndexOf('GeneratedRecord.Write(recordPath'))
 Yes 'Play builds them before the game starts, and a refusal stops Play' (
     $play -match 'GeneratedHere\.Ensure\(SafeLog\)' -and $play -match '(?s)if \(notBuilt != null\)\s*\{.{0,200}Not launching\..{0,300}return;' -and
-    $play.IndexOf('GeneratedHere.Ensure(SafeLog)') -lt $play.IndexOf('if (!EnsureServer()) return;'))
+    $play.IndexOf('GeneratedHere.Ensure(SafeLog)') -lt $play.IndexOf('if (!await EnsureServer()) return;'))
 Yes 'the launcher builds only in Thornswood''s own folder' ($here -match '(?s)public static string Ensure\(Action<string> say\)\s*\{\s*if \(!OwnGame\.Active\) return null;')
 
 $text = [IO.File]::ReadAllText($Ship)

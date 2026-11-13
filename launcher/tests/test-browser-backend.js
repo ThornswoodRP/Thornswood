@@ -169,7 +169,7 @@ yes('config.json has a BrowserBackend field, so the answer survives a restart',
   /\[JsonInclude\] public string BrowserBackend = "";/.test(config));
 
 const shellChars = read('launcher/app/ShellChars.cs');
-const startPlay = body(shellChars, 'static void StartPlay()');
+const startPlay = body(shellChars, 'static async Task StartPlayAsync()');
 yes('StartPlay records the backend right after Chars.Prepare',
   /Chars\.Prepare\(cfg\)[\s\S]{0,300}RecordBrowserBackend\(\);/.test(startPlay));
 const record = body(shellChars, 'static void RecordBrowserBackend()');

@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia.Threading;
 
 namespace Thornswood
@@ -328,7 +329,10 @@ namespace Thornswood
         static string updateTried = null;
 
         /// <param name="after">Run on the window's thread when the update failed without restarting the launcher, or null. Install now runs Fix after it (#3201).</param>
-        static void RunUpdate(Action<bool> after)
+        static void RunUpdate(Action<bool> after) { Begin(RunUpdateAsync(after)); }
+
+        /// <summary>The update, awaited: RunUpdate's <c>after</c>.</summary>
+        static async Task RunUpdateAsync(Action<bool> after)
         {
             if (playing) { Log("Quit the game first."); return; }
             // One at a time (#3202): an automatic update and a press of
@@ -338,7 +342,7 @@ namespace Thornswood
             if (launcherUpdate == null) { Log("There is no update waiting."); return; }
             // An update writes into the build. A game still holding files open
             // down there turns that into a half written install.
-            if (!ClearStuckGame(true)) return;
+            if (!await ClearStuckGame(true)) return;
             updating = true;
             btnUpdate.IsEnabled = false;
             btnInstallNow.IsEnabled = false;

@@ -113,16 +113,18 @@ Yes 'and only the bytes its signed list names' ($copy.Contains('b.LongLength != 
 
 Yes 'the Scan button asks everything, and the Fix button is RunFix' (
     $shell.Contains('btnScan.Click += delegate { RunScan(true); };') -and $shell.Contains('btnFix.Click += delegate { RunFix(); };'))
-$runFix = [regex]::Match($sf, '(?s)static void RunFix\(bool afterUpdate, bool afterVortex = false, bool afterMake = false\)(.*?)\n        \}\n').Groups[1].Value
+$runFix = [regex]::Match($sf, '(?s)static async Task RunFixAsync\(bool afterUpdate, bool afterVortex, bool afterMake\)(.*?)\n        \}\n').Groups[1].Value
+Yes 'the Fix button and every other way in start the awaited Fix (#4582)' (
+    $sf.Contains('static void RunFix(bool afterUpdate, bool afterVortex = false, bool afterMake = false) { Begin(RunFixAsync(afterUpdate, afterVortex, afterMake)); }'))
 Yes 'Fix refuses while the own folder is being prepared, so it never writes into a folder that is being made (#2403)' (
     $runFix -match 'if \(ownGameBusy\) \{ Log\(' -and $runFix.IndexOf('if (ownGameBusy)') -lt $runFix.IndexOf('fixing = true;'))
 Yes 'and while the Downgrade or an update is going in' ($runFix -match 'if \(Downgrade\.Busy\)' -and $runFix -match 'if \(playBar\.Active\)')
 Yes 'Fix scans first, then brings the folder up to date from Vortex before anything else, carrying on either way' (
     $runFix -match 'rest = Upkeep\.Look\(cfg, true\);' -and
-    $runFix -match 'Has\(rest, IssueKind\.Behind\) &&\s*StartOwnGame\(false, true, delegate \{ FixRest\(afterUpdate, afterVortex\); \}, delegate \{ FixRest\(afterUpdate, afterVortex\); \}\)')
-$fixRest = [regex]::Match($sf, '(?s)static void FixRest\(bool afterUpdate, bool afterVortex\)(.*?)\n        \}\n').Groups[1].Value
+    $runFix -match 'Has\(rest, IssueKind\.Behind\) &&\s*StartOwnGame\(false, true, delegate \{ Begin\(FixRest\(afterUpdate, afterVortex\)\); \}, delegate \{ Begin\(FixRest\(afterUpdate, afterVortex\)\); \}\)')
+$fixRest = [regex]::Match($sf, '(?s)static async Task FixRest\(bool afterUpdate, bool afterVortex\)(.*?)\n        \}\n').Groups[1].Value
 $disk = $fixRest.IndexOf('Upkeep.FixOnDisk(')
-$rescan = $fixRest.IndexOf('List<Issue> plugins = Rescan();')
+$rescan = $fixRest.IndexOf('List<Issue> plugins = await Rescan();')
 $report = $fixRest.IndexOf('Report(plugins);')
 $update = $fixRest.IndexOf('RunUpdate(delegate')
 $down = $fixRest.LastIndexOf('RunDowngrade();')

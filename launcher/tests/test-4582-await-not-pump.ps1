@@ -34,6 +34,12 @@
          e. one that faults later reaches the window's fault handler.
     3. A copy of OffThread that blocks on the work (Task.Run(work).Wait())
        is built too and must fail 2a, so these checks have teeth.
+    4. OwnGameRefreshIfDue and PlayAfterRefresh, lifted from
+       ShellOwnGame.cs: after a bring-up-to-date, StartPlay runs again with
+       ownGameRefreshedForPlay up until that pass has ended, so a folder
+       still due is said once and not brought up to date again. A copy that
+       starts the second pass without awaiting it must bring the folder up
+       to date twice.
 
   Read only apart from the builds under out\harness, which git ignores.
 #>
@@ -339,6 +345,119 @@ if (@($bodies | Where-Object { $_.Length -eq 0 }).Count -eq 0) {
     $lines = Run-Lifted @($blocking, $bodies[1]) '3. a copy of OffThread that blocks on the work'
     Yes '3. and it fails 2a: its caller gets nothing back until the work is done' (
         @($lines | Where-Object { $_ -like 'FAIL  2a. with the window up, the caller has its task back*' }).Count -eq 1)
+}
+
+# ---- 4. the second pass after a bring-up-to-date, awaited ----------------------
+# OwnGameRefreshIfDue starts the bring-up-to-date and, when it is done,
+# StartPlay again inside ownGameRefreshedForPlay (PlayAfterRefresh), so a
+# folder still due straight after is said once and not refreshed again. With
+# the folder check awaited, that second StartPlay hands back at its first
+# await; the mark has to stay up until it has ended, or the launcher goes
+# round bringing the folder up to date for ever.
+$ownPath = Join-Path $AppDir 'ShellOwnGame.cs'
+$own = [IO.File]::ReadAllText($ownPath, [Text.Encoding]::UTF8)
+$ownSigs = @('static async Task<bool> OwnGameRefreshIfDue()', 'static async Task PlayAfterRefresh()')
+$ownBodies = @()
+foreach ($sig in $ownSigs) {
+    $b = Body $own $sig
+    Yes "4. ShellOwnGame.cs has $sig" ($b.Length -gt 0)
+    $ownBodies += $b
+}
+
+$again = @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Thornswood
+{
+    class Config { }
+    static class OwnGame
+    {
+        public static bool Active = true;
+        public static int Asked;
+        public static bool NeedsRefresh(Config c) { Interlocked.Increment(ref Asked); return true; }
+    }
+    static class Checks { public static bool GameRunning() { return false; } }
+    static class Swallow { public static void Note(string where, Exception e) { Shell.Said("NOTE " + where + ": " + e.Message); } }
+    static partial class Shell
+    {
+        static Config cfg = new Config();
+        static bool playing, ownGameBusy, ownGameRefreshedForPlay;
+        static readonly List<string> logged = new List<string>();
+        public static void Said(string m) { lock (logged) logged.Add(m); }
+        static void Log(string m) { Said(m); }
+        static Task OffThread(Action work) { return Task.Run(work); }
+        static void FaultToWindow(Task done) { Said("FAULT " + done.Exception.InnerException.Message); }
+        static int refreshes;
+        static Action refreshed;
+        static void StartOwnGame(bool make, bool loud, Action then) { refreshes++; refreshed = then; }
+        static int passes;
+        static readonly ManualResetEventSlim secondDone = new ManualResetEventSlim(false);
+        static async Task StartPlayAsync()
+        {
+            passes++;
+            await OwnGameRefreshIfDue();
+            secondDone.Set();
+        }
+
+__METHODS__
+
+        static int pass, fail;
+        static void Yes(string what, bool ok)
+        {
+            if (ok) { pass++; Console.WriteLine("PASS  " + what); }
+            else { fail++; Console.WriteLine("FAIL  " + what); }
+        }
+        static bool LoggedHas(string s) { lock (logged) foreach (string l in logged) if (l.Contains(s)) return true; return false; }
+
+        static int Main()
+        {
+            TimeSpan Long = TimeSpan.FromSeconds(30);
+            OwnGameRefreshIfDue().Wait(Long);
+            Yes("4. a folder that is due starts its bring-up-to-date, once", refreshes == 1 && refreshed != null);
+            if (refreshed == null) { Console.WriteLine(pass + " passed, " + fail + " failed"); return 1; }
+            refreshed();
+            bool ended = secondDone.Wait(Long);
+            Yes("4. once it is done, StartPlay runs again", ended && passes == 1);
+            Yes("4. and a folder still due then is said, not brought up to date a second time (" + refreshes + " times)",
+                refreshes == 1 && LoggedHas("still does not match"));
+            bool down = SpinWait.SpinUntil(delegate { return !ownGameRefreshedForPlay; }, Long);
+            Yes("4. the mark is let go once that pass has ended", down);
+            Yes("4. and nothing faulted on the way", !LoggedHas("FAULT ") && !LoggedHas("NOTE "));
+            Console.WriteLine();
+            Console.WriteLine(pass + " passed, " + fail + " failed");
+            return fail == 0 ? 0 : 1;
+        }
+    }
+}
+'@
+
+function Run-Again([string[]]$methods, [string]$label) {
+    $src = $again.Replace('__METHODS__', ($methods -join "`r`n`r`n"))
+    $built = $null
+    try { $built = Build-LauncherCode -Source $src -Exe }
+    catch { ($_.Exception.Message -split "`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
+    Yes "$label builds the way the project builds" ($null -ne $built)
+    if (-not $built) { return $null }
+    return @(Invoke-LauncherExe $built | ForEach-Object { "$_" })
+}
+
+if (@($ownBodies | Where-Object { $_.Length -eq 0 }).Count -eq 0 -and $bodies[1].Length -gt 0) {
+    $lines = Run-Again @($ownBodies[0], $ownBodies[1], $bodies[1]) '4. OwnGameRefreshIfDue, PlayAfterRefresh and Begin, lifted,'
+    foreach ($l in @($lines)) {
+        if ($l -like 'PASS  *') { $script:pass++; Write-Host $l }
+        elseif ($l -like 'FAIL  *') { $script:fail++; Write-Host $l }
+    }
+    # Teeth: the second pass started and not awaited, as a plain call was
+    # before #4582, lets the mark go at its first await.
+    $unawaited = $ownBodies[1].Replace('try { await StartPlayAsync(); }', 'try { Begin(StartPlayAsync()); }')
+    Yes '4. the copy that does not await the second pass differs from the shipped one' ($unawaited -ne $ownBodies[1])
+    $lines = Run-Again @($ownBodies[0], $unawaited, $bodies[1]) '4. a PlayAfterRefresh that does not await StartPlay'
+    Yes '4. and it brings the folder up to date a second time' (
+        @($lines | Where-Object { $_ -like 'FAIL  4. and a folder still due then is said*' }).Count -eq 1)
 }
 
 Done

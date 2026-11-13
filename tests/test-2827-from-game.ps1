@@ -358,7 +358,7 @@ sys.exit(1 if bad else 0)
     $ErrorActionPreference = $old
     Yes 'no file at their game\ours paths is in the repository' ($LASTEXITCODE -eq 0 -and $tracked.Count -eq 0)
     $play = Src (Join-Path $App 'ShellPlay.cs')
-    Yes 'Play makes what is missing or changed before the game starts' ($play -match 'MadeFromGame\.Ensure\(\)' -and $play.IndexOf('MadeFromGame.Ensure()') -lt $play.IndexOf('if (!EnsureServer()) return;'))
+    Yes 'Play makes what is missing or changed before the game starts' ($play -match 'MadeFromGame\.Ensure\(\)' -and $play.IndexOf('MadeFromGame.Ensure()') -lt $play.IndexOf('if (!await EnsureServer()) return;'))
     $upkeep = Src (Join-Path $App 'Upkeep.cs')
     Yes 'Scan says when they are missing or changed, and Fix makes them' ($upkeep -match '\bMade\(l\);' -and $upkeep -match 'IssueKind\.MadeFromGame\)\)\s*\{?\s*[^\n]*MadeFromGame\.Ensure\(\)')
     $own = Src (Join-Path $App 'OwnGame.cs')
