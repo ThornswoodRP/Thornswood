@@ -269,6 +269,16 @@ Say "  backup  $Backup" 'DarkGray'
 Say "  into    $Root  ($Which, from $tag in the backup)" 'DarkGray'
 if ($Rehearse) { Say '  as a rehearsal: free ports, no door, no join pass hold (#1046)' 'DarkGray' }
 
+# A command line must name the resolved root as a whole path, not just the
+# prefix of a sibling (live and dev share that prefix). Accept either slash
+# and quoted working folders, but never a suffix buried in another path.
+function Test-RestoreProcessRoot([string]$line, [string]$root) {
+  $r = $root.Replace('/', '\').TrimEnd('\')
+  if (-not $r -or -not $line) { return $false }
+  $pattern = '(?:^|[\s"''])' + [regex]::Escape($r) + '(?=[\\\s"'']|$)'
+  return [regex]::IsMatch($line.Replace('/', '\'), $pattern, [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+}
+
 # ------------------------------------------------------------ not running ---
 Head 'Is its server running'
 $settingsPath = Join-Path $Root 'server-settings.json'
@@ -277,11 +287,11 @@ $settingsPath = Join-Path $Root 'server-settings.json'
 # line does), and that is not a server.
 $running = @()
 try {
-  $running = @(Get-CimInstance Win32_Process -EA SilentlyContinue |
+  $running = @(Get-CimInstance Win32_Process -EA Stop |
                Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and
-                              $_.CommandLine.IndexOf($Root, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
+                              (Test-RestoreProcessRoot $_.CommandLine $Root) -and
                               ($_.Name -eq 'node.exe' -or $_.CommandLine -match 'skymp5-server') })
-} catch { $running = @() }
+} catch { Die ('Could not check whether this folder has a running server: ' + $_.Exception.Message) }
 if ($running.Count) {
   Die ("The server in this folder is running (pid {0}, {1}). Stop it first: it writes world while it runs." -f
        $running[0].ProcessId, $running[0].Name)
@@ -300,7 +310,7 @@ if ($heldPort -and (Get-Command Get-NetUDPEndpoint -EA SilentlyContinue)) {
     $up = $null
     if ($p) { $up = Get-CimInstance Win32_Process -Filter ("ProcessId = " + [int]$p.ParentProcessId) -EA SilentlyContinue }
     $lines = @($p, $up) | Where-Object { $_ -and $_.CommandLine } | ForEach-Object { $_.CommandLine }
-    if (@($lines | Where-Object { $_.IndexOf($Root, [StringComparison]::OrdinalIgnoreCase) -ge 0 }).Count) {
+    if (@($lines | Where-Object { Test-RestoreProcessRoot $_ $Root }).Count) {
       Die "UDP $heldPort is held by this folder's server (pid $($ep.OwningProcess)). Stop it first: it writes world while it runs."
     }
     Say "  UDP $heldPort is held by another server (pid $($ep.OwningProcess)); give this folder its own port before starting it" 'Yellow'
