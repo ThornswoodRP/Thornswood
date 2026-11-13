@@ -154,7 +154,8 @@ function box(extra) {
   yes('C6 the session hold and the crash mark name why',
     (KEEP.match(/notSaved\(a\.status, a\.j\)/g) || []).length === 2 && (KEEP.match(/notSaved\(0\)/g) || []).length === 2);
   const INBOX = slice('function inboxAct(', 'function inboxName(');
-  yes('C7 the inbox names why', /whyWords\(r\.status, j\)/.test(INBOX) && /notSaved\(/.test(INBOX));
+  yes('C7 the inbox names why', /if \(!r\.ok\) return unsaved\(r\.status, j\);/.test(INBOX) &&
+    /whyWords\(status, j\)/.test(INBOX) && /notSaved\(status, j\)/.test(INBOX) && /unsaved\(0\)/.test(INBOX));
 
   // ---- D: the report form ---------------------------------------------
   const REPORT = slice("api('/api/report'", '/* --------------------------------------------------------------- inbox -- */');
