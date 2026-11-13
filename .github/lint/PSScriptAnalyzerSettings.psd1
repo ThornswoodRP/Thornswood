@@ -1,9 +1,14 @@
 # PSScriptAnalyzer settings for the build check's step "Lint (warnings only)",
 # issue #1343. Errors and warnings, no informational rules. The step reports
 # counts and never fails the build.
-# PSAvoidUsingConvertToSecureStringWithPlainText: the 4 hits (Setup-Discord.ps1:137,
-# Discord-Hook.ps1:78, test-prove-secret.ps1:98, test-secret-channel.ps1:212) wrap
-# values already plain in memory or test fixtures, kept off the command line per #1069.
+# PSAvoidUsingConvertToSecureStringWithPlainText: each hit wraps a value already
+# plain in memory, or a test's own fixture, so it stays off the command line
+# (#1069). The files it would hit, one place each (the harness for #4188
+# holds this list to the tree, by file, since line numbers move with every edit):
+#   scripts/deploy/Setup-Discord.ps1
+#   scripts/ops/Discord-Hook.ps1
+#   tests/test-prove-secret.ps1
+#   tests/test-secret-channel.ps1
 @{
     Severity     = @('Error', 'Warning')
     ExcludeRules = @(
