@@ -178,7 +178,7 @@ foreach ($f in $files) {
 function Latest($vs) {
   $live = @($vs | Where-Object { @('removed', 'archived') -notcontains [string](Get-NexusField $_ 'category') })
   if (-not $live.Count) { $live = @($vs) }
-  return ($live | Sort-Object { [DateTime](Get-NexusField $_ 'uploaded_at') } | Select-Object -Last 1)
+  return ($live | Sort-Object { [DateTimeOffset](Get-NexusField $_ 'uploaded_at') } | Select-Object -Last 1)
 }
 function Describe($f) {
   $l = Latest $byFile[[string](Get-NexusField $f 'id')]
