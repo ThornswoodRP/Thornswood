@@ -13,7 +13,9 @@
   plugin after it and the person is turned away with a load order error. So a
   mod with a plugin has to be on every machine, full stop, and the only things
   that can be made optional are the ones with no plugin at all: loose textures
-  and meshes, sounds, ENB. This finds those and puts a number on them.
+  and meshes, sounds, ENB. This finds those and puts a number on them, less
+  the loose files the game itself needs whatever a plugin says (its menus,
+  behaviors, animations and skeletons), which it counts as required (#4259).
 #>
 #Requires -Version 7
 [CmdletBinding()]
@@ -75,31 +77,60 @@ foreach ($b in ($bsaMod | Select-Object -First 15)) {
 if ($bsaMod.Count -gt 15) { Say ("  and " + ($bsaMod.Count - 15) + " smaller") 'DarkGray' }
 
 # --------------------------------------------------------- loose assets ---
-# These are the real candidates. Nothing here is in the manifest, the server
-# never looks at any of it, and the first folder under textures or meshes is
-# almost always named after the mod that put it there.
-Head 'Loose assets, the only things that can be optional'
+# Nothing loose is in the manifest and the server never looks at any of it,
+# and the first folder under textures or meshes is almost always named after
+# the mod that put it there. But the game itself needs some of it whatever a
+# plugin says (#4259): the menus (everything under interface, .swf files and
+# their translations), the behaviors and animations (Havok .hkx files, the
+# behaviors and animations folders and the two animation data caches) and
+# the skeletons. Leave those out and menus and characters break, so they are
+# counted as required; only the rest can be optional. Until 12 November the
+# whole loose total was called optional.
+function Test-RequiredLoose([string]$top, [string]$rel) {
+    if ($top -eq 'interface') { return $true }
+    if ($top -ne 'meshes') { return $false }
+    $parts = $rel.ToLowerInvariant().Split([char[]]'\/')
+    $name = $parts[-1]
+    if ($name.EndsWith('.hkx') -or $name.StartsWith('skeleton')) { return $true }
+    if ($name -in 'animationdatasinglefile.txt', 'animationsetdatasinglefile.txt') { return $true }
+    if ($parts.Count -gt 1 -and $parts[0] -in 'animationdata', 'animationsetdata') { return $true }
+    return [bool]@($parts[0..($parts.Count - 2)] | Where-Object { $_ -in 'behaviors', 'animations' }).Count
+}
+# Every file under a folder. One it cannot read stops the audit naming it,
+# because a total that leaves it out reads smaller than the build is.
+function Get-LooseFiles([string]$dir) {
+    try { return @(Get-ChildItem -LiteralPath $dir -Recurse -File -Force) }
+    catch {
+        Write-Host ''
+        Write-Host ('STOP. A folder under ' + $dir + ' cannot be read: ' + $_.Exception.Message) -ForegroundColor Red
+        Write-Host 'Nothing was written. Give this account read access to it and run this again.' -ForegroundColor Yellow
+        exit 1
+    }
+}
+Head 'Loose assets'
 $loose = @()
 foreach ($top in 'textures', 'meshes', 'sound', 'music', 'Shaders', 'interface') {
     $dir = Join-Path $DataDir $top
     if (-not (Test-Path -LiteralPath $dir)) { continue }
 
-    $files = @(Get-ChildItem -LiteralPath $dir -Recurse -File -Force -EA SilentlyContinue)
-    $total = ($files | Measure-Object -Property Length -Sum).Sum
-    if (-not $total) { $total = 0 }
-    $loose += [pscustomobject]@{ path = "Data\$top\"; bytes = [long]$total; files = $files.Count; depth = 1 }
-    Say ("  {0}  {1:n0} files   Data\{2}\" -f (MB $total), $files.Count, $top) 'Green'
+    $prefix = $dir.TrimEnd([char[]]'\/') + [IO.Path]::DirectorySeparatorChar
+    $files = Get-LooseFiles $dir
+    $sum = { param($fs, $want) [long](@($fs | Where-Object { (Test-RequiredLoose $top $_.FullName.Substring($prefix.Length)) -eq $want }) | Measure-Object -Property Length -Sum).Sum }
+    $req = & $sum $files $true
+    $opt = & $sum $files $false
+    $loose += [pscustomobject]@{ path = "Data\$top\"; bytes = $req + $opt; required = $req; files = $files.Count; depth = 1 }
+    Say ("  {0}  {1:n0} files   Data\{2}\{3}" -f (MB ($req + $opt)), $files.Count, $top, $(if ($req) { '   ' + (MB $req).Trim() + ' of it required' } else { '' })) 'Green'
 
     # One level in, so a texture pack can be taken out without taking the lot.
-    $prefix = $dir.TrimEnd('\') + '\'
-    foreach ($sub in (Get-ChildItem -LiteralPath $dir -Directory -Force -EA SilentlyContinue)) {
-        $sf = @(Get-ChildItem -LiteralPath $sub.FullName -Recurse -File -Force -EA SilentlyContinue)
-        $st = ($sf | Measure-Object -Property Length -Sum).Sum
-        if (-not $st) { $st = 0 }
-        if ($st -lt 20MB) { continue }
+    foreach ($sub in (Get-ChildItem -LiteralPath $dir -Directory -Force)) {
+        $sp = $sub.FullName.TrimEnd([char[]]'\/') + [IO.Path]::DirectorySeparatorChar
+        $sf = @($files | Where-Object { $_.FullName.StartsWith($sp) })
+        $sr = & $sum $sf $true
+        $so = & $sum $sf $false
+        if ($sr + $so -lt 20MB) { continue }
         $loose += [pscustomobject]@{
-            path = "Data\$top\$($sub.Name)\"; bytes = [long]$st; files = $sf.Count; depth = 2 }
-        Say ("      {0}  {1:n0} files   Data\{2}\{3}\" -f (MB $st), $sf.Count, $top, $sub.Name)
+            path = "Data\$top\$($sub.Name)\"; bytes = $sr + $so; required = $sr; files = $sf.Count; depth = 2 }
+        Say ("      {0}  {1:n0} files   Data\{2}\{3}\{4}" -f (MB ($sr + $so)), $sf.Count, $top, $sub.Name, $(if ($sr) { '   ' + (MB $sr).Trim() + ' of it required' } else { '' }))
     }
 }
 
@@ -124,6 +155,9 @@ foreach ($r in (@($root | Sort-Object bytes -Descending) | Select-Object -First 
 # ------------------------------------------------------------- the sums ---
 $looseTotal = (@($loose | Where-Object { $_.depth -eq 1 }) | Measure-Object -Property bytes -Sum).Sum
 if (-not $looseTotal) { $looseTotal = 0 }
+$looseRequired = (@($loose | Where-Object { $_.depth -eq 1 }) | Measure-Object -Property required -Sum).Sum
+if (-not $looseRequired) { $looseRequired = 0 }
+$looseOptional = $looseTotal - $looseRequired
 $bsaModTotal = ($bsaMod | Measure-Object -Property bytes -Sum).Sum
 if (-not $bsaModTotal) { $bsaModTotal = 0 }
 $noPlugin = @($bsaMod | Where-Object { -not $_.plugin })
@@ -131,7 +165,8 @@ $noPluginTotal = ($noPlugin | Measure-Object -Property bytes -Sum).Sum
 if (-not $noPluginTotal) { $noPluginTotal = 0 }
 
 Head 'What this means'
-Say ("  {0}  loose assets. No plugin, server never looks, ALL of this can be optional." -f (MB $looseTotal)) 'Green'
+Say ("  {0}  loose assets with no plugin, which the server never looks at. These can be optional." -f (MB $looseOptional)) 'Green'
+Say ("  {0}  loose files the game itself needs: menus, behaviors, animations, skeletons. These have to stay." -f (MB $looseRequired)) 'Yellow'
 Say ("  {0}  mod archives that a plugin loads. These have to stay with their plugin." -f (MB $bsaModTotal)) 'Yellow'
 if ($noPlugin.Count) {
     Say ("  {0}  archives with no enabled plugin at all. Dead weight, can go." -f (MB $noPluginTotal)) 'Green'
@@ -144,6 +179,8 @@ $report = [pscustomobject]@{
     loose = @($loose)
     root = @($root | Sort-Object bytes -Descending)
     looseTotal = [long]$looseTotal
+    looseRequiredTotal = [long]$looseRequired
+    looseOptionalTotal = [long]$looseOptional
     bsaModTotal = [long]$bsaModTotal
 }
 # local\ is what this machine keeps and git ignores (tools\ until 29 Sep, #440).
