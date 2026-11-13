@@ -26,6 +26,7 @@ function Test-Path { return $script:portCheck }
 function Get-Content { return '{"port":7777}' }
 function Get-NetUDPEndpoint { return @([pscustomobject]@{ OwningProcess = 200 }) }
 function Get-CimInstance($ClassName, $Filter) {
+    if ($script:failRead) { throw 'Process list unavailable' }
     if ($Filter) {
         if ($Filter -eq 'ProcessId = 200') { return $script:owner }
         if ($Filter -eq 'ProcessId = 201') { return $script:parent }
@@ -68,5 +69,8 @@ Case 'dev UDP owner is not live' 'node "C:\Thornswood-Server-Dev\skymp5-server.j
 Case 'live UDP owner blocks live' 'node "C:\Thornswood-Server\skymp5-server.js"' $true 'C:\Thornswood-Server' $true
 Case 'relative dev start parent is not live' 'cmd /c cd /d "C:\Thornswood-Server-Dev" && node skymp5-server.js' $false 'C:\Thornswood-Server' $true $true
 Case 'relative live start parent blocks live' 'cmd /c cd /d "C:\Thornswood-Server" && node skymp5-server.js' $true 'C:\Thornswood-Server' $true $true
+$script:failRead = $true
+Case 'an unreadable process list refuses the restore' 'node server.js' $true
+$script:failRead = $false
 Write-Host "$script:pass passed, $script:fail failed"
 if ($script:fail) { exit 1 }
