@@ -24,9 +24,9 @@
   Add-Characters.ps1, whose refusals tests\test-sunhelm-gone.js holds.
 
   On a machine with the game built it also reads the shape names out of
-  femalebody_1.nif, the check the issue gives. Until the collection revision
-  carries the covered body that part says SKIP, with what it found, rather
-  than failing a harness over a step no code can take.
+  femalebody_1.nif, the check the issue gives, and fails on anything but a
+  covered body: the launcher builds it covered since #3715, so a nude body, a
+  mesh that will not read or a check that breaks is a fault there (#4233).
 
   Read only apart from files under its own temp folder.
 #>
@@ -177,12 +177,12 @@ if ($live -and (Test-Path -LiteralPath $live)) {
                -Game (Join-Path $GameRoot 'Game') 2>&1 | Out-String
     $code = $LASTEXITCODE
     $line = @($out -split "\r?\n" | Where-Object { $_ -match '^\s+\S+\s+femalebody_1\.nif' } | ForEach-Object { $_.Trim() }) -join ''
-    if ($code -eq 0) {
-        Yes ('the female body in the game folder is the covered one (' + $line + ')') $true
-    } else {
-        Skip ('the female body in the game folder is still the nude one (' + $line +
-              '). That changes with a collection revision, which is Patrick''s, not with code.')
-    }
+    # The launcher builds the bodies covered on every computer since #3715,
+    # so on a machine with the game anything but covered is a failure: 2 is a
+    # nude body, 1 a folder or mesh the check could not read, and anything
+    # else the check itself breaking (#4233).
+    $why = switch ($code) { 0 { 'covered' } 2 { 'nude' } 1 { 'not read' } default { 'the check broke, exit ' + $code } }
+    Yes ('the female body in the game folder is the covered one: ' + $why + ' (' + $line + ')') ($code -eq 0)
 } else {
     Skip ('no game folder at ' + $GameRoot)
 }
