@@ -31,9 +31,19 @@ function sign(v) {
   return crypto.createHmac('sha256', cfg.secret).update(String(v)).digest('hex').slice(0, 32);
 }
 
+/*
+  Whether a secret somebody gave is the one we hold, in the same time
+  whatever they gave (#4223). Both are hashed first, so the compare is of
+  two digests of one length: timingSafeEqual throws on lengths that differ,
+  and it did, for any wrong key or password with a character outside ASCII.
+  Nothing is padded or cut, so trailing spaces and what comes after the
+  96th character count, and only a string is a secret: a JSON body's ["pw"]
+  or 1234 is not "pw" or "1234".
+*/
 function sameSecret(a, b) {
-  const x = Buffer.from(String(a).padEnd(96).slice(0, 96));
-  const y = Buffer.from(String(b).padEnd(96).slice(0, 96));
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const x = crypto.createHash('sha256').update(a, 'utf8').digest();
+  const y = crypto.createHash('sha256').update(b, 'utf8').digest();
   return crypto.timingSafeEqual(x, y);
 }
 
