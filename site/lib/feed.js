@@ -210,7 +210,10 @@ function readJsonQuiet(file) {
    and says so once in its log. */
 const RELEASE_REPO = 'ThornswoodRP/Thornswood';
 const RELEASE_LOOK_MS = 10 * 60 * 1000;
-const RELEASE_TAG_RE = /^release\/(main|dev)\/\d{8}-\d{4,6}(-dev)?$/;
+// A release id is its instant: yyyyMMdd-HHmmss with a Z, in UTC since
+// #4950, -dev on dev. The ids already published (seconds with no Z, and
+// the older minutes) still read, and a Z only ever follows the seconds.
+const RELEASE_TAG_RE = /^release\/(main|dev)\/\d{8}-\d{4}(\d{2}Z?)?(-dev)?$/;
 const releaseCopies = {};   // tag -> { files: { sha: { id, size } }, seen } once found; { at, busy } while not
 const releaseTagOf = {};    // feed generation file -> the release tag it names, or ''
 /* The site's GitHub token (#5608): an installation token of the box admin
