@@ -117,6 +117,11 @@ function scratch(name, discord) {
     [ADMIN_D]: { id: ADMIN_D, name: 'Aela', profiles: [1001] },
     [BJORN_D]: { id: BJORN_D, name: 'Bjorn', profiles: [2002] }
   }));
+  // Make the site's clock one second ahead of this process. A replacement
+  // sign in must follow the site's recorded sign out, not a guess from the
+  // harness clock. This makes that ordering error repeat on every OS.
+  fs.writeFileSync(path.join(dir, 'clock.cjs'),
+    'const now = Date.now; Date.now = () => now() + 1000;\n');
   return { dir, secret, password };
 }
 function freePort() {
@@ -153,7 +158,7 @@ function listening(srv, port) {
 }
 async function start(s) {
   const port = await freePort();
-  const srv = spawn(process.execPath, [path.join(s.dir, 'server.js')], {
+  const srv = spawn(process.execPath, ['--require', path.join(s.dir, 'clock.cjs'), path.join(s.dir, 'server.js')], {
     cwd: s.dir, stdio: ['ignore', 'pipe', 'pipe'],
     env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' })
   });
@@ -298,7 +303,12 @@ const refused = (r) => r.status === 403 && r.j.why === 'cross-site' && fair(r.j.
     // below, which need staff signed in, sign in again. The new cookie is
     // made one millisecond after the sign out had answered, so it is later
     // than the time the site kept for the sign out, whatever the clock does.
-    const again = cookieFor(A.secret, ADMIN_D, 'Aela', Date.now() + 1);
+    const madeAgain = Date.now() + 1;
+    const signOutKey = crypto.createHmac('sha256', A.secret).update('signout|' + ADMIN_D).digest('hex').slice(0, 32);
+    const endedAt = Number(read(A.dir, 'data/signouts.json', {})[signOutKey]);
+    console.log('      replacement sign in at ' + madeAgain + ', site ended sign in at ' + endedAt);
+    yes('replacement sign in is later than the site recorded sign out', madeAgain > endedAt);
+    const again = cookieFor(A.secret, ADMIN_D, 'Aela', madeAgain);
 
     // ------------------------------------------ what is not a browser goes on --
     console.log('\nwhat is not a browser, no cookie and no Origin:');
