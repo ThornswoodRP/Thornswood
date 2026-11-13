@@ -18,7 +18,7 @@ const crypto = require('crypto');
 const { DATA, FILES, FOR_BOT, FROM_BOT, PUBLIC, ROOT, UP } = require('./base');
 
 const CFGFILE = path.join(ROOT, 'config.json');
-let cfg = {
+const DEFAULTS = {
   password: '',
   discord: { clientId: '', clientSecret: '', botToken: '', guildId: '', invite: '' },
   patreon: '',           // the page link, once there is one to link at
@@ -78,6 +78,19 @@ let cfg = {
   turnstileSiteKey: '',
   turnstileSecret: ''
 };
+const copyOf = (o) => JSON.parse(JSON.stringify(o));
+let cfg = copyOf(DEFAULTS);
+/* WHAT CONFIG.JSON SAYS, KEPT APART FROM WHAT THIS RUN MAKES OF IT (#4251).
+   Below, cfg is changed for this run: open made a real true or false, Member
+   put on the play list when open (playRoles), default lists filled in. Those
+   are readings of the file, not things to save. A key made here (the cookie
+   secret, the join pass key, the member password) used to be saved by
+   writing the whole of cfg back, so turning open on wrote Member into the
+   play list for good, turning it off again left Members able to play, and a
+   written "open": "true" came back as false. onDisk is the file as it was
+   read (or, with none, the completed defaults, set further down), and keep()
+   writes that with only the keys made added. */
+let onDisk = null;
 /* The byte order mark matters. Windows PowerShell puts one on the front of
    anything it writes with -Encoding UTF8, JSON.parse refuses a string that
    starts with it, and this used to be a bare catch that swallowed the error
@@ -93,9 +106,19 @@ try {
       typeof parsedCfg.password === 'string' && parsedCfg.password.length > 0) {
     fileHadPassword = true;
   }
-  cfg = Object.assign(cfg, parsedCfg);
+  if (parsedCfg && typeof parsedCfg === 'object' && !Array.isArray(parsedCfg)) onDisk = parsedCfg;
+  cfg = Object.assign(cfg, copyOf(parsedCfg));
 } catch (e) {
   if (fs.existsSync(CFGFILE)) cfgBroken = e;
+}
+/* Saves the keys made into config.json as onDisk holds it, and nothing else
+   of cfg. onDisk takes them only once the file has them, so a key that could
+   not be kept is not written later by the next one. Throws as writeFileSync
+   does, for the caller to say. */
+function keep(made) {
+  const next = Object.assign({}, onDisk, made);
+  fs.writeFileSync(CFGFILE, JSON.stringify(next, null, 2), 'utf8');
+  onDisk = next;
 }
 cfg.discord = Object.assign({ clientId:'', clientSecret:'', botToken:'', guildId:'', invite:'' },
                             cfg.discord || {});
@@ -138,6 +161,11 @@ if (!Array.isArray(cfg.access.slots3)) {
   cfg.access.slots3 = ['Thalmor Boot-Licker', 'Talos Worshiper', 'Milk Drinker', 'Gamemaster'];
 }
 cfg.admins  = Array.isArray(cfg.admins) ? cfg.admins.map(String) : [];
+/* With no config.json, the file a first start writes is the defaults as the
+   lines above complete them: every access list filled and open false, so
+   Member is not on the play list. That is what config.example.json documents.
+   Nothing here was read from a file, so nothing read is changed by it. */
+if (!onDisk) onDisk = copyOf(cfg);
 
 // A list of role names for a sentence: "Owner, Dev and Gamemaster" rather than
 // "Owner and Dev and Gamemaster", so the dev-role refusal reads plainly once
@@ -181,7 +209,7 @@ if (cfgBroken) {
   cfg.secret = crypto.randomBytes(32).toString('hex');
   // Said when it cannot be kept (#2736): the secret then lives only in this
   // run, so every restart signs everybody out until config.json can be written.
-  try { fs.writeFileSync(CFGFILE, JSON.stringify(cfg, null, 2), 'utf8'); }
+  try { keep({ secret: cfg.secret }); }
   catch (e) {
     console.error('[thornswood] could not keep the new cookie secret in config.json (' + (e.code || e.message) +
                   '), so a restart signs everybody out');
@@ -197,7 +225,7 @@ if (cfgBroken) {
   cfg.passKey = '';
 } else if (!cfg.passKey) {
   cfg.passKey = crypto.randomBytes(32).toString('hex');
-  try { fs.writeFileSync(CFGFILE, JSON.stringify(cfg, null, 2), 'utf8'); }
+  try { keep({ passKey: cfg.passKey }); }
   catch (e) {
     cfg.passKey = '';
     console.error('[thornswood] could not keep a join pass key in config.json, so no join ' +
@@ -207,7 +235,7 @@ if (cfgBroken) {
 
 if (tellPassword) {
   try {
-    fs.writeFileSync(CFGFILE, JSON.stringify(cfg, null, 2), 'utf8');
+    keep({ password: cfg.password });
     console.log('[thornswood] member bootstrap password (shown once): ' + cfg.password);
   } catch (e) {
     console.error('[thornswood] could not keep a member bootstrap password in config.json, ' +
