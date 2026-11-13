@@ -151,12 +151,38 @@ apart, and a token signed in the harness then can read as minted before the
 service started, which it refuses (#1867).
 `node voice\tests\test-auth.js` and the rest.
 
+### Chat files and quiet connections
+
+| Setting | Default | What it controls |
+| --- | --- | --- |
+| `THORNSWOOD_CHAT_DIR` | chat beside the service | Folder for the daily chat files, named `yyyy-MM-dd.jsonl` on the box's local date. |
+| `THORNSWOOD_CHAT_DAYS` | 365 days | Keeping time for daily chat files. It must be a whole number of 365 or more; invalid values use 365 and are logged. |
+| `THORNSWOOD_VOICE_PING_MS` | 25000 ms | Interval between WebSocket pings, including quiet connections. |
+| `THORNSWOOD_VOICE_SILENT_MS` | 75000 ms | How long a connection may answer nothing before it is closed. When unset, this is three ping intervals, so changing the ping interval changes this default too. |
+
+Day files older than the keeping time are deleted at start and by the
+hourly sweep. The service's local `/health` gives the days in use in
+`chatRetention.days`. The folder and keeping time apply to chat logs, not
+audio: audio is never recorded here.
+
+### Relay settings
+
 A TURN relay, for the pairs of people who cannot reach each other directly,
 is `THORNSWOOD_TURN_URL`. Its key is `THORNSWOOD_TURN_SECRET` or, so it stays
 off the command line `Install-Voice.ps1` builds, `turn-key.txt` beside the
-service, put there by hand. Unless both are there, `/ice` offers STUN only; with
-neither, `/health` says `turn: none`, which is how every box runs today.
-`Install-Voice.ps1 -TurnUrl` sets the address. `test-turn-key.js` covers it.
+service, put there by hand. With a URL, the shared key generates short-lived
+credentials. Alternatively, without a shared key, a static user and password
+can be used; both are needed. The shared key takes precedence over static
+credentials. With no URL or no usable credentials, `/ice` offers STUN only.
+
+| Setting | Default | What it controls |
+| --- | --- | --- |
+| `THORNSWOOD_TURN_USER` | empty | Static relay user name, used with the password only when no shared key is set. |
+| `THORNSWOOD_TURN_PASS` | empty | Static relay password. Keep it private, like the shared key. |
+| `THORNSWOOD_TURN_TTL` | 3600 seconds | Lifetime of credentials generated with the shared key; not used for static credentials. |
+
+`Install-Voice.ps1 -TurnUrl` sets the address. `test-turn-key.js` and
+`test-ice.js` cover the relay choices.
 The pages in the room get the list on every roster (`{ t: 'peers', peers,
 iceServers }`), over the socket their join token proved, which is when they
 build their connections, so the relay comes with it however long they have
