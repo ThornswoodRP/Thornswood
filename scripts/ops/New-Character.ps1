@@ -84,6 +84,7 @@ if (-not (Read-ThornswoodReleaseList $list).ok) {
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $bin = Join-Path $World "_discarded-$stamp"
 $gone = 0
+$stuck = @()
 $ids = @()
 $notes = @()
 
@@ -108,6 +109,7 @@ foreach ($f in $characters) {
         }
     } catch {
         Write-Host ("  could not discard {0}: {1}" -f $f.Name, $_.Exception.Message) -ForegroundColor Red
+        $stuck += $f.Name
         continue
     }
     Write-Host ("  discarded {0}  profile {1}  '{2}'" -f $f.Name, $profile, $name) -ForegroundColor Cyan
@@ -117,9 +119,19 @@ foreach ($f in $characters) {
 }
 
 Write-Host ''
-if ($gone -gt 0) {
+# A character that could not be discarded is still there on the next
+# connect (#4199): never said as gone, and the run ends 1 once the release
+# list names the ones that did go.
+$stuckLine = "STOP. $($stuck.Count) character change form(s) could not be discarded ($($stuck -join ', ')), so the next connect still finds them."
+if ($gone -gt 0 -and -not $stuck.Count) {
     Write-Host "$gone character(s) gone. The next connect runs creation from the top." -ForegroundColor Green
     if (-not $NoBackup) { Write-Host "  the old ones are in $bin if you ever want them" -ForegroundColor DarkGray }
+} elseif ($gone -gt 0) {
+    Write-Host "$gone character(s) discarded, $($stuck.Count) not." -ForegroundColor Yellow
+    if (-not $NoBackup) { Write-Host "  the discarded ones are in $bin" -ForegroundColor DarkGray }
+} elseif ($stuck.Count) {
+    Write-Host $stuckLine -ForegroundColor Red
+    exit 1
 } else {
     Write-Host 'nothing changed.' -ForegroundColor Yellow
     return
@@ -136,3 +148,4 @@ foreach ($l in @($notes) + @(Write-ThornswoodReleaseList -Root $Root -Actors $id
     }
 }
 if ($bad) { exit 1 }
+if ($stuck.Count) { Write-Host $stuckLine -ForegroundColor Red; exit 1 }
