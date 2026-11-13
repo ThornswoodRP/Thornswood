@@ -17,10 +17,19 @@
     2. 25 FAIL lines: the first 10 and a line saying 15 more;
     3. a FAIL line of 1000 characters: cut at 300 with "...";
     4. no FAIL line: its last lines instead, and it says so;
-    5. a % in a line goes in as %25, so the message reads as written.
+    5. a % in a line goes in as %25, so the message reads as written;
+    6. a child that dies (#5752): its "Segmentation fault" and "Unhandled
+       exception." lines go in after the FAIL lines, and no stack line;
+    7. a dying line said twice goes in once, a PASS line that only quotes
+       one stays out, and past 5 a count of how many more;
+    8. with no FAIL line the last lines already hold it, said once;
+    9. a header alone, as .NET 10's fail fast prints "Process terminated.",
+       takes the message on the line after it, never a stack line.
   B. The runner against stand-in harnesses in a scratch repository: the
      ::error line it writes for a failing harness carries its FAIL lines,
-     and a harness that passed gets none. The runner reads the processor
+     a harness that passed gets none, and a harness whose child pwsh dies
+     by .NET's fail fast carries the child's "Process terminated." line
+     after its FAIL line. The runner reads the processor
      from /proc/stat off Windows, so on a machine with neither this part
      says NOT RUN; the gate's Windows and Linux shares both have it.
 
@@ -44,8 +53,8 @@ function Yes([string]$what, [bool]$cond) {
 # ---- A. the function, as the runner has it -------------------------------------------
 $ast = [Management.Automation.Language.Parser]::ParseFile($runner, [ref]$null, [ref]$null)
 $fn = $ast.Find({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-FailSaid' }, $true)
-$caps = @($ast.FindAll({ param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -in '$FAIL_LINES', '$FAIL_LINE_CHARS' }, $false))
-Yes 'Nightly-Harnesses.ps1 has Get-FailSaid and its two caps' ($null -ne $fn -and $caps.Count -eq 2)
+$caps = @($ast.FindAll({ param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -in '$FAIL_LINES', '$FAIL_LINE_CHARS', '$DEATH_LINES', '$DEATH_SAYS' }, $false))
+Yes 'Nightly-Harnesses.ps1 has Get-FailSaid, its two caps, and what a dying process says (#5752)' ($null -ne $fn -and $caps.Count -eq 4)
 if ($null -ne $fn) {
     foreach ($c in $caps) { . ([scriptblock]::Create($c.Extent.Text)) }
     . ([scriptblock]::Create($fn.Extent.Text))
@@ -63,6 +72,27 @@ if ($null -ne $fn) {
     Yes '   and nothing printed says so' ((Get-FailSaid '') -eq ': it printed nothing')
     $five = Get-FailSaid 'FAIL  100% of the cells, %0A not a new line'
     Yes ('5. a % goes in as %25 (' + $five + ')') ($five -eq ': its FAIL lines%0AFAIL  100%25 of the cells, %250A not a new line')
+    # #5752: a child that dies prints how; the FAIL line after it says only
+    # what the harness did not get.
+    $six = Get-FailSaid ("PASS  it starts`nSegmentation fault (core dumped)`nUnhandled exception. System.ArgumentException: Token b03f5f7f11d`n" +
+        "   at System.Reflection.AssemblyNameParser.Parse()`nFAIL  with no Dist folder it says none (exit 139)`n")
+    Yes ('6. the lines of a process dying go in after the FAIL lines (' + $six + ')') ($six -eq (
+        ': its FAIL lines%0AFAIL  with no Dist folder it says none (exit 139)%0Aand what it printed of a process dying%0A' +
+        'Segmentation fault (core dumped)%0AUnhandled exception. System.ArgumentException: Token b03f5f7f11d'))
+    Yes '   and not a line of its stack, nor a PASS line' ($six -notmatch 'AssemblyNameParser' -and $six -notmatch 'PASS')
+    $seven = Get-FailSaid ("FAIL  one`nPASS  the abort is handled, Process terminated. is only quoted`nAborted`nAborted`nProcess terminated. planted`nFatal error. 0x80131506`nStack overflow.`n" +
+        "/bin/sh: line 1: 42 Segmentation fault`nanother (core dumped)`n")
+    Yes ('7. a line said twice goes in once, a line merely quoting one stays out, and at most 5 with a count (' + $seven + ')') (
+        $seven -eq (': its FAIL lines%0AFAIL  one%0Aand what it printed of a process dying%0AAborted%0AProcess terminated. planted%0AFatal error. 0x80131506%0A' +
+        'Stack overflow.%0A/bin/sh: line 1: 42 Segmentation fault%0Aand 1 more such line(s), in the job log'))
+    $eight = Get-FailSaid "reading the record`nSegmentation fault`n"
+    Yes ('8. with no FAIL line the last lines already hold it, so it is not said twice (' + $eight + ')') ($eight -eq ': no FAIL line; its last lines%0Areading the record%0ASegmentation fault')
+    Yes ('   and case 1, with nothing dying, is as it was') ((Get-FailSaid $l) -eq $one -and $one -notmatch 'dying')
+    # .NET 10's fail fast prints its header alone and the message on the next
+    # line (#5785's Linux share 3 of 4): the message goes with the header.
+    $nine = Get-FailSaid "Process terminated.`nplanted for 5752`n   at System.Environment.FailFast(System.String)`nUnhandled exception.`n   at Thornswood.Main()`nFAIL  the child gave nothing back (exit 134)`n"
+    Yes ('9. a header alone takes the line after it, never a stack line (' + $nine + ')') ($nine -eq (
+        ': its FAIL lines%0AFAIL  the child gave nothing back (exit 134)%0Aand what it printed of a process dying%0AProcess terminated. planted for 5752%0AUnhandled exception.'))
 }
 
 # ---- B. the runner writes it -------------------------------------------------------------
@@ -86,12 +116,19 @@ if (-not $canRun) {
         Put (Join-Path $a 'tests/test-1-two.ps1') ("Write-Host 'PASS  the first thing'`nWrite-Host 'FAIL  the door opens for the holder'`n" +
             "Write-Host 'PASS  the second thing'`nWrite-Host 'FAIL  the key is kept'`nexit 1`n")
         Put (Join-Path $a 'tests/test-2-pass.ps1') ("Write-Host 'PASS  all good'`nexit 0`n")
+        # #5752: a harness whose child really dies, by .NET's own fail fast,
+        # and prints what the child said before its FAIL line.
+        Put (Join-Path $a 'tests/test-3-dies.ps1') ("`$said = @(& (Get-Process -Id `$PID).Path -NoProfile -NonInteractive -Command '[Environment]::FailFast(""planted for 5752"")' 2>&1 | ForEach-Object { ""`$_"" })`n" +
+            "`$code = `$LASTEXITCODE`nforeach (`$s in `$said) { Write-Host `$s }`nWrite-Host ""FAIL  the child gave nothing back (exit `$code)""`nexit 1`n")
         $said = (@(& (Get-BoxPowerShell) -NoProfile -NonInteractive -File $runner -Root $a -OutDir (Join-Path $work 'out') 2>&1 | ForEach-Object { "$_" }) -join "`n")
         $code = $LASTEXITCODE
         $got = Annotation $said 'test-1-two.ps1'
         Yes ("B. the share with a failure is red (exit $code)") ($code -eq 1)
         Yes ('   its annotation carries the harness''s FAIL lines (' + $got + ')') ($got -eq 'harness failed (exit 1): its FAIL lines%0AFAIL  the door opens for the holder%0AFAIL  the key is kept')
         Yes '   and the harness that passed has none' (-not (Annotation $said 'test-2-pass.ps1'))
+        $died = Annotation $said 'test-3-dies.ps1'
+        Yes ('B. a harness whose child died carries the child''s dying line after its FAIL line (' + $died + ')') (
+            $died -match '^harness failed \(exit 1\): its FAIL lines%0AFAIL  the child gave nothing back \(exit \d+\)%0Aand what it printed of a process dying%0AProcess terminated\. planted for 5752')
     } finally {
         Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
     }
