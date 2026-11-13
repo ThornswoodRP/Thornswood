@@ -74,7 +74,7 @@ function Get-SiteJson([string]$Uri) { return Invoke-RestMethod -Uri $Uri }
 
 function Stop-Run([string]$Why) { Write-Host "::error title=Release files::$Why"; Write-Host "STOPPED  $Why"; exit 1 }
 
-if ($Tag -notmatch '^release/(main|dev)/(\d{8}-\d{4,6}(-dev)?)$') { Stop-Run "'$Tag' is not release/main/<id> or release/dev/<id>; nothing was uploaded" }
+if ($Tag -notmatch '^release/(main|dev)/(\d{8}-\d{4}(\d{2}Z?)?(-dev)?)$') { Stop-Run "'$Tag' is not release/main/<id> or release/dev/<id>; nothing was uploaded" }
 $channel = $Matches[1]
 $id = $Matches[2]
 $feedDir = if ($channel -eq 'dev') { 'feed-dev' } else { 'feed' }

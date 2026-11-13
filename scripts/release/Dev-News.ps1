@@ -88,9 +88,12 @@ function Get-DevReleaseTags([string]$sourceRepo) {
             if ($f.Count -lt 4 -or $f[1] -ne 'tag' -or $f[2] -notmatch '^[0-9a-f]{40}$') { continue }
             $id = $f[0] -replace '^refs/tags/release/dev/', ''
             $from = [datetime]::MinValue; $to = [datetime]::MinValue
-            # The first 13 characters of an id are its minute in both shapes
-            # it has had, yyyyMMdd-HHmm and yyyyMMdd-HHmmss (New-ReleaseId).
-            if ($id.Length -lt 13 -or -not [datetime]::TryParseExact($id.Substring(0, 13), 'yyyyMMdd-HHmm', $inv, 'None', [ref]$from)) { continue }
+            # The minute its id names, on the team's clock the notes are dated
+            # by: a UTC id since #4950, Mountain time before (Get-ReleaseIdUtc).
+            $made = Get-ReleaseIdUtc $id
+            if ($null -eq $made) { continue }
+            $from = Get-TeamNow $made
+            $from = $from.AddSeconds(-$from.Second)
             # "2026-10-01 20:04:26 -0600": the tagger's own clock.
             $at = $f[3].Trim()
             if ($at.Length -lt 16 -or -not [datetime]::TryParseExact($at.Substring(0, 16), 'yyyy-MM-dd HH:mm', $inv, 'None', [ref]$to)) { continue }
