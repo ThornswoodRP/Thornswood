@@ -61,6 +61,7 @@ try {
     Put ($d + 'Skyrim.esm') 1
     $r = Run (Join-Path $T 'build')
     Yes 'Audit-Mods runs on a scratch build and writes its report' ($r.Code -eq 0 -and (Test-Path -LiteralPath $out))
+    if ($r.Code -ne 0) { Write-Host $r.Out }
     $rep = if (Test-Path -LiteralPath $out) { Get-Content -Raw -LiteralPath $out | ConvertFrom-Json } else { $null }
     $has = { param($n) $null -ne $rep -and $null -ne $rep.PSObject.Properties[$n] }
     Yes 'the report counts the loose files the game itself needs as required: menus, behaviors, animations, skeletons (159 bytes)' ((& $has 'looseRequiredTotal') -and $rep.looseRequiredTotal -eq 159)
@@ -70,18 +71,20 @@ try {
     Yes 'the summary no longer calls the whole loose total optional' ($r.Out -notmatch 'ALL of this can be optional')
 
     if (-not $IsWindows) {
-        $locked = Join-Path $T 'build\Game\Data\textures\locked'
-        New-Item -ItemType Directory -Force -Path $locked | Out-Null
+        $script:locked = Join-Path $T 'build\Game\Data\textures\locked'
+        New-Item -ItemType Directory -Force -Path $script:locked | Out-Null
         Put 'build\Game\Data\textures\locked\x.dds' 10
-        & chmod 000 $locked
-        Remove-Item -LiteralPath $out
+        if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out }
+        & chmod 000 $script:locked
         $r = Run (Join-Path $T 'build')
-        & chmod 755 $locked
+        & chmod 755 $script:locked
         Yes 'a folder it cannot read stops it, naming the folder, and no report is written' ($r.Code -ne 0 -and $r.Out -match [regex]::Escape('locked') -and -not (Test-Path -LiteralPath $out))
     }
     else { Write-Host 'SKIP  an unreadable folder: made with chmod, off Windows only' }
 }
 finally {
+    # The unreadable folder is made readable again before anything is removed.
+    if ((Get-Variable -Name locked -Scope Script -ErrorAction Ignore) -and (Test-Path -LiteralPath $script:locked)) { & chmod 755 $script:locked }
     if (Test-Path -LiteralPath $T) { Remove-Item -LiteralPath $T -Recurse -Force }
 }
 Write-Host ''
