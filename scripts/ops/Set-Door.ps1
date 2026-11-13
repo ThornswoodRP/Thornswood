@@ -36,7 +36,8 @@ param(
   [string]$User = '',
   [string]$Site = 'https://thornswood.net',
   [string]$DocsRoot = 'C:/Thornswood-Docs',
-  # Which server. Empty finds the live one itself. Give it
+  # Which server. Empty takes the live one, C:\Thornswood-Server, or the
+  # only server folder on C: (#4201). Give it
   # C:\Thornswood-Server-Dev to point at the dev instance, which is the
   # only way to refresh the dev door after the site key is rotated.
   [string]$Root,
@@ -86,8 +87,18 @@ foreach (`$d in (Get-ChildItem 'C:\' -Directory -EA SilentlyContinue)) {
   if (Test-Path (Join-Path `$d.FullName 'server-settings.json')) { 'ROOT ' + `$d.FullName }
 }
 "@
-  $root = (@($found) | Where-Object { $_ -match '^ROOT ' } | Select-Object -First 1) -replace '^ROOT ', ''
-  $root = "$root".Trim()
+  $roots = @(@($found) | Where-Object { $_ -match '^ROOT ' } | ForEach-Object { ("$_" -replace '^ROOT ', '').Trim() } | Where-Object { $_ })
+  # The live server's folder by its name, as every other box script names it
+  # (#4201): the first folder found was C:\Thornswood-Rehearsal whenever a
+  # restore rehearsal was there, which sorts before it. One folder and not
+  # live is a box set up another way, and is taken; two or more with none
+  # live are not guessed between.
+  $live = @($roots | Where-Object { $_ -ieq 'C:\Thornswood-Server' })
+  if ($live.Count) { $root = $live[0] }
+  elseif ($roots.Count -eq 1) { $root = $roots[0] }
+  elseif ($roots.Count -gt 1) {
+    Die ('No C:\Thornswood-Server on the VPS, and ' + $roots.Count + ' folders hold server settings: ' + ($roots -join ', ') + '. Give -Root with the one you mean.')
+  } else { $root = '' }
 }
 if (-not $root) { Die 'No server-settings.json anywhere on C: of the VPS.' }
 Say "  $root"
