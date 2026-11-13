@@ -71,6 +71,19 @@ public sealed class Config
         WaitSeconds = 30,
     };
 
+    /// <summary>The content build (#5191, stage 3): a merge whose content
+    /// inputs have no build yet makes a Deployment to "Content", and the agent
+    /// has the gate's Build-Content verb build it on this box, then puts it on
+    /// a draft Release for the merge release to take (Patrick's B on
+    /// q-5191-box-build-upload, 12 Nov 2026). Root is where Build-Content
+    /// keeps its builds (scripts/mods/Build-ContentOnBox.ps1 -Cache).</summary>
+    public static EnvConfig DefaultContent() => new()
+    {
+        Kind = ContentBuild.Kind,
+        GitHubEnvironment = "Content",
+        Root = @"C:\Thornswood-ContentBuilds",
+    };
+
     /// <summary>The Discord bot (#5187): the Windows service ThornswoodBot that
     /// Install-Bot.ps1 sets up. A merge that changes it makes a Deployment to
     /// "Discord bot".</summary>
@@ -130,6 +143,7 @@ public sealed class Config
         "dev" => DefaultDev(),
         AppKinds.Site => DefaultSite(),
         AppKinds.Discord => DefaultDiscord(),
+        ContentBuild.Kind => DefaultContent(),
         "main" => DefaultMain(),
         _ => new EnvConfig(),
     };
@@ -201,9 +215,9 @@ public sealed class Config
         if (Environments.Count == 0) throw new ConfigException("no environment is named, so there is nothing to look after");
         foreach (var (name, e) in Environments)
         {
-            // Dev, the site, the Discord bot, and the live server once Patrick
-            // approves (#5181).
-            if (name is not ("dev" or "main" or AppKinds.Site or AppKinds.Discord)) throw new ConfigException($"environment \"{name}\": this agent applies dev, main, site and discord only so far (#5180, #5181, #5190, #5187)");
+            // Dev, the site, the Discord bot, the live server once Patrick
+            // approves (#5181), and the content build (#5191).
+            if (name is not ("dev" or "main" or AppKinds.Site or AppKinds.Discord or ContentBuild.Kind)) throw new ConfigException($"environment \"{name}\": this agent applies dev, main, site, discord and content only so far (#5180, #5181, #5190, #5187, #5191)");
             if (name != "main" && e.GitHubEnvironment is "" or "Main")
                 throw new ConfigException($"environment {name}: githubEnvironment \"{e.GitHubEnvironment}\" must be named, and not Main, whose Deployments wait on Patrick's approval (#5181)");
             if (name == "main")
@@ -216,6 +230,7 @@ public sealed class Config
             }
             else if (e.Approved) throw new ConfigException($"environment {name}: only main is held to an approval");
             if (e.Root == "" || !(Path.IsPathRooted(e.Root) || e.Root.Contains(@":\"))) throw new ConfigException($"environment {name}: root \"{e.Root}\" is not a full path");
+            if (e.Kind == ContentBuild.Kind) continue;
             if (e.Kind != EnvConfig.ServerKind)
             {
                 if (e.Kind == AppKinds.Site && (e.Health == "" || e.Task == "")) throw new ConfigException($"environment {name}: the site needs its health address and its task");
@@ -263,8 +278,8 @@ public sealed class Config
 public sealed class EnvConfig
 {
     public const string ServerKind = "server";
-    /// <summary>What it is: a game server ("server"), the site ("site") or
-    /// the Discord bot ("discord"). Set by the environment's name; agent.json
+    /// <summary>What it is: a game server ("server"), the site ("site"),
+    /// the Discord bot ("discord") or the content build ("content"). Set by the environment's name; agent.json
     /// does not change it.</summary>
     public string Kind { get; set; } = ServerKind;
     /// <summary>A server's voice service, which goes in with its Deployments:

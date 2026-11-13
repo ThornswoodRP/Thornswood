@@ -37,6 +37,7 @@ build** (the engine).
 | Main | Applied by the agent once `Install-DeployAgent -Main` has run (#5181): the same Release dev ran, after Patrick approves its promotion on GitHub. See "Main" below. |
 | Site, Discord bot | Applied by the agent (#5190, #5187): a merge that changes either makes a Deployment to **Site** or **Discord bot** with the Release's `site.zip` or `discord.zip`, and the agent swaps it in the way Deploy-Docs and Install-Bot -CodeOnly do. See "The site, the Discord bot and voice" below. |
 | Voice | Applied with its server's Deployment: dev voice with dev's (#5187), live voice with main's (#5610). Voice has no Deployment of its own, because the gamemode pushes positions to it, so a promotion puts on live the voice dev ran with that Release. |
+| Content build | Built by the agent (#5191) where `agent.json` names `content`: a merge whose content inputs have no build makes a Deployment to **Content**, and the agent has the gate's `Build-Content` verb build the content plugin and the tables on the box, then puts the build on a draft Release for the merge release. See "The content build" below. |
 | Release news | After a Deployment goes in, the agent leaves its Release's notes for the bot, which posts them once (#5187). See "Release news" below. |
 | Restart notices | Before a server build swap stops a server, the agent leaves a notice the bot posts in #updates (dev's in the dev updates channel), counts down in the game, and waits five minutes on main, one on dev (#5784). It says the box's own restart for Windows updates ahead the same way. See "Restart notices" below. |
 | Launcher and game files | Not the agent's job: they reach people through the launcher's feed and a Ship. Since #5179 every Release carries them as well (the signed launcher, the game files and the Velopack packages of both), attested, for the launcher's move to Velopack; the agent logs them as left alone. |
@@ -424,6 +425,39 @@ would each put back what the other put in. It still sends the documents,
 the boards and the password, sets up the task, and sends the app on a new
 box before the agent has the site.
 
+## The content build
+
+Nothing generated is committed (Patrick's B on #5191, 1 Nov 2026): the
+content plugin, the Last plugin's recipe and every table read out of the
+load order are built where the whole load order is, on the box. The merge
+release runs on GitHub, which has no game data, so it takes them from a
+**draft Release** on this repository (Patrick's B on q-5191-box-build-upload,
+12 Nov 2026).
+
+- A build is named by its inputs: the server it is built against and the git
+  blob id of every file the chain reads (`scripts/mods/ContentPaths.ps1`).
+  Its draft is `content-<server>-<key>`, with `content.zip` (every file at
+  its repository path) and `content-build.json` (the commit, the key and
+  each file's sha256).
+- A Deployment to **Content** carries `{"content": "<key>", "server": "dev"}`.
+  The agent asks the gate for `Build-Content -Server dev`, which builds main
+  as it is, or takes the kept build with the same inputs. It holds the kept
+  build in `C:\Thornswood-ContentBuilds\<server>\<key>` to its
+  `build.json`, zips it the same way every time, and puts it up. A draft
+  already up whole is left as it is, and one cut short is taken down and
+  made again.
+- When main moved past the Deployment's commit, the build is of main's
+  newest, and its draft is named by what was built; the status says so.
+- The newest 16 drafts of each server are kept.
+- The status is success, failure (the build stopped, or is not what its
+  `build.json` says) or error (the gate never took the line, or GitHub
+  refused the upload). A single look (`once`) leaves these Deployments to
+  the service, which is the one with the gate.
+
+The draft is written with a token of its own that asks only for **Contents:
+write**, minted only where `agent.json` names `content`. The installer names
+it where the gate's task is set up.
+
 ## Release news
 
 Once a Deployment's success is on GitHub, the agent reads its Release again
@@ -541,7 +575,9 @@ exists with Patrick as its reviewer, and `-NoMain` turns it off.
   it on the installation. Until then every pass says GitHub gave it no token,
   and nothing is applied. For the parity check's issues it mints a second
   token asking only **Issues: write** (the App holds it), kept apart so the
-  service's own token never carries it.
+  service's own token never carries it. For the content build's draft
+  Releases it mints a third, asking only **Contents: write** (#5191), in
+  the same way.
 - It asks the deploy gate's broker for two verbs after a dev Deployment
   (above), over the pipe the broker lets SYSTEM open. The broker holds each
   line to main's `verbs.json`, as it does a person's.
