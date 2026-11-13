@@ -52,7 +52,7 @@ try {
     Yes 'LinkOrCopy copies through CopyWhole, never onto its own name' ($body -match 'CopyWhole\(from, to\)' -and $body -notmatch 'File\.Copy\(')
     $place = [regex]::Match($inr, '(?s)\$used = New-Object.*?\$lines\[0\] = \$whole').Value
     Yes 'the placing step copies a file placed twice through CopyWhole, and onto $to nowhere' ($place -match 'CopyWhole\(\$x\.Full, \$to\)' -and $place -notmatch '\[IO\.File\]::Copy\(')
-    $out = [regex]::Match($inr, '(?s)the earlier layout''s files are being taken out\.''(.*?)# Folders the old layout left empty').Groups[1].Value
+    $out = [regex]::Match($inr, '(?s)the earlier layout''''s files are being taken out\.''(.*?)# Folders the old layout left empty').Groups[1].Value
     Yes 'a run again takes out the .part of each file its files.txt lists' ($out -match '\.part')
 }
 finally {
