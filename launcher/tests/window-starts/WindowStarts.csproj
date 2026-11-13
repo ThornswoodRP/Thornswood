@@ -17,9 +17,9 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- The launcher's own Avalonia version, and its headless platform. -->
-    <PackageReference Include="Avalonia" Version="12.1.4" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
-    <PackageReference Include="Avalonia.Headless" Version="12.1.4" />
+    <PackageReference Include="Avalonia" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Headless" Version="12.1.6" />
     <PackageReference Include="Avalonia.BuildServices" Version="11.3.2" ExcludeAssets="all" PrivateAssets="all" />
     <Reference Include="Thornswood"><HintPath>$(LauncherDll)</HintPath></Reference>
   </ItemGroup>
