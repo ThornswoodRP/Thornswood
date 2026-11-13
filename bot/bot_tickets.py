@@ -907,12 +907,39 @@ def _ticket_key(guild, who):
 
 
 def _open_tickets():
-    try:
-        with open(OPEN_TICKETS) as f:
-            d = json.load(f)
-        return d if isinstance(d, dict) else {}
-    except Exception:
+    """
+    The open ticket list, or {} when there is no file yet.
+
+    RAISES WHEN THE FILE IS THERE AND WILL NOT READ (#4339). This used to
+    answer {} for that too, so a file cut off half way through a write was
+    taken for an empty list, the next ticket wrote a fresh one over it, every
+    open ticket was forgotten and nothing was logged. Now the caller hears it
+    and writes nothing: remember_ticket and forget_ticket log it and leave the
+    file as it is for somebody to look at, and ticket_refusal logs it and lets
+    the person through, as it does for anything it cannot check.
+    """
+    if not os.path.exists(OPEN_TICKETS):
         return {}
+    with open(OPEN_TICKETS, encoding='utf-8-sig') as f:
+        d = json.load(f)
+    if not isinstance(d, dict):
+        raise ValueError(OPEN_TICKETS + ' is not a JSON object')
+    return d
+
+
+def _open_tickets_write(d):
+    """
+    Written to a file beside it and swapped in (#4339), the way joins.json is,
+    so a write that fails half way leaves the old list whole rather than half
+    of a new one. Opening the live file for writing empties it first, which is
+    how a cut-off write used to leave half a file behind.
+    """
+    tmp = OPEN_TICKETS + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(d, f)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, OPEN_TICKETS)
 
 
 def _open_thread(guild, tid):
@@ -950,11 +977,11 @@ def remember_ticket(guild, who, thread):
                 continue
             keep[k] = v
         keep[_ticket_key(guild, who)] = thread.id
-        with open(OPEN_TICKETS, 'w') as f:
-            json.dump(keep, f)
+        _open_tickets_write(keep)
     except Exception:
-        log('could not write down which ticket %s has open, so they can open '
-            'a second one:\n' % who + traceback.format_exc())
+        log('could not write down which ticket %s has open in %s, so they '
+            'can open a second one; the file is left as it was:\n'
+            % (who, OPEN_TICKETS) + traceback.format_exc())
 
 
 def forget_ticket(guild, who, thread):
@@ -970,11 +997,10 @@ def forget_ticket(guild, who, thread):
         if have.get(key) != getattr(thread, 'id', None):
             return
         have.pop(key, None)
-        with open(OPEN_TICKETS, 'w') as f:
-            json.dump(have, f)
+        _open_tickets_write(have)
     except Exception:
-        log('could not forget the half-written ticket for %s:\n'
-            % who + traceback.format_exc())
+        log('could not forget the half-written ticket for %s in %s; the file '
+            'is left as it was:\n' % (who, OPEN_TICKETS) + traceback.format_exc())
 
 
 def ticket_refusal(interaction):
