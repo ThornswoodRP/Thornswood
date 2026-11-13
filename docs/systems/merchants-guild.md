@@ -30,17 +30,24 @@ from the price lists in faction and business books, submitted at
 that hold's drop box. See
 [Factions and businesses](factions.md) and [Property](property.md).
 
-For each item, the buy price is the average of the buy prices
-submitted to that hold. The sell price is the average of the sell
-prices. A blank is not a number. 0 is free, and it counts. The
-average is rounded to the nearest gold. A half rounds up.
+Only a line with both a buy and a sell price sets a trader's prices
+(Patrick, 12 Nov 2026). For each item, the buy price is the average
+of the buy prices on those lines submitted to that hold, and the sell
+price is the average of the sell prices on the same lines, so a trader
+never pays more for an item than it sells it for. 0 is free, and it
+counts. The average is rounded to the nearest gold. A half rounds up.
 
-A hold with no submitted buy for an item uses the average of the
-holds that did submit one. The same for a sell price. A hold that
-did submit its own price uses that price, so two holds can differ.
+A line with one side blank stays in the book and still shows in J,
+but no trader uses it. A book line cannot buy above its own sell: the
+book refuses it when the price is set. Two names for the same item,
+such as Iron Ingot and Iron Ingots, are one item.
 
-If no submitted list anywhere names a buy price, no trader buys it.
-If none names a sell price, no trader sells it.
+A hold with no line of its own for an item uses the other holds'
+prices, buy and sell together, never one side alone. A hold that did
+submit its own uses that, so two holds can differ.
+
+An item whose only lines are one-sided, anywhere, is not traded by the
+guild until someone submits a line with both.
 
 ## The trader's purse
 

@@ -791,6 +791,11 @@ function thornswoodBooks(env) {
     var buy = parseGold(buyRaw);
     var sell = parseGold(sellRaw);
     if (!buy.ok || !sell.ok) { return 'A price is a whole number of gold, or a blank.'; }
+    // A line that pays more for a thing than it asks for it would have a
+    // guild trader buy above its own sell (#4530).
+    if (buy.n !== null && sell.n !== null && buy.n > sell.n) {
+      return 'The buy price on a line cannot be above its sell price.';
+    }
     book.prices = book.prices || [];
     var low = named.name.toLowerCase();
     for (var i = 0; i < book.prices.length; i++) {
@@ -1036,22 +1041,62 @@ function thornswoodBooks(env) {
     return Math.floor(Number(n) + 0.5);
   }
 
-  function sideNumbers(hold, item, side) {
+  /*
+    WHAT A GUILD TRADER IS QUOTED (#4530). One buy and one sell for an
+    item, taken from the same lines, so a trader never offers more for an
+    item than it sells it for. Before, each side was averaged on its own
+    and skipped its own blanks, a hold with no price for one side borrowed
+    that side alone from the other holds, and a price was kept under the
+    label a book used, not the item; any of the three could put the buy
+    above the sell, and someone could sell to the trader and buy it back
+    until its purse was empty.
+
+    So (Patrick, 12 Nov 2026, docs/DECIDED.md): only a line with both a
+    buy and a sell prices a trader. Every label that names the same item
+    (as __thornswoodResolveItem reads it) is one item. A hold's price is
+    the average buy and the average sell of its submitted lines for that
+    item that carry both, with the buy not above the sell. setPrice
+    refuses a line whose buy is above its own sell, and one saved before
+    that rule prices nothing. A line with one side blank stays in the book
+    and shows in J, but no trader uses it. A hold with no such line
+    borrows the other holds' pairs whole, the average of each hold's buy
+    and of each hold's sell, never one side alone. Each pair has its buy
+    at or under its sell, so their averages do too, and rounding keeps the
+    order.
+  */
+  function itemKey(label) {
+    var text = String(label || '').trim();
+    var resolveFn = typeof env.resolve === 'function' ? env.resolve :
+      (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodResolveItem;
+    if (typeof resolveFn === 'function') {
+      // It answers { error } for a name it cannot place, and never throws.
+      var found = resolveFn(text);
+      if (found && !found.error && found.baseId) { return 'item:' + (Number(found.baseId) >>> 0); }
+    }
+    return 'label:' + text.toLowerCase();
+  }
+
+  function pricesBoth(row) {
+    return row && row.buy != null && row.buy !== '' && row.sell != null && row.sell !== '' &&
+      Number(row.buy) <= Number(row.sell);
+  }
+
+  function holdPair(hold, key) {
     var bag = ledgers[hold];
-    var out = [];
-    if (!bag) { return out; }
-    var low = String(item || '').toLowerCase();
+    if (!bag) { return null; }
+    var buys = [];
+    var sells = [];
     for (var id in bag) {
       if (!Object.prototype.hasOwnProperty.call(bag, id)) { continue; }
       var rows = (bag[id] && bag[id].prices) || [];
       for (var i = 0; i < rows.length; i++) {
-        if (String(rows[i].name || '').toLowerCase() !== low) { continue; }
-        var v = rows[i][side];
-        if (v == null || v === '') { continue; }
-        out.push(Number(v));
+        if (!pricesBoth(rows[i]) || itemKey(rows[i].name) !== key) { continue; }
+        buys.push(Number(rows[i].buy));
+        sells.push(Number(rows[i].sell));
       }
     }
-    return out;
+    if (!buys.length) { return null; }
+    return { buy: meanGold(buys), sell: meanGold(sells) };
   }
 
   function meanGold(nums) {
@@ -1061,17 +1106,18 @@ function thornswoodBooks(env) {
     return roundGold(sum / nums.length);
   }
 
-  function sidePrice(hold, item, side) {
-    var own = meanGold(sideNumbers(hold, item, side));
-    if (own !== null) { return own; }
-    var fromHolds = [];
+  function itemPrice(hold, key) {
+    var own = holdPair(hold, key);
+    if (own) { return own; }
+    var buys = [];
+    var sells = [];
     for (var name in ledgers) {
-      if (!Object.prototype.hasOwnProperty.call(ledgers, name)) { continue; }
-      if (name === hold) { continue; }
-      var one = meanGold(sideNumbers(name, item, side));
-      if (one !== null) { fromHolds.push(one); }
+      if (!Object.prototype.hasOwnProperty.call(ledgers, name) || name === hold) { continue; }
+      var pair = holdPair(name, key);
+      if (pair) { buys.push(pair.buy); sells.push(pair.sell); }
     }
-    return meanGold(fromHolds);
+    if (!buys.length) { return { buy: null, sell: null }; }
+    return { buy: meanGold(buys), sell: meanGold(sells) };
   }
 
   function catalog(hold) {
@@ -1082,8 +1128,9 @@ function thornswoodBooks(env) {
     function take(rows) {
       for (var i = 0; i < rows.length; i++) {
         var label = String((rows[i] && rows[i].name) || '').trim();
-        var key = label.toLowerCase();
-        if (!key || seen[key]) { continue; }
+        if (!label) { continue; }
+        var key = itemKey(label);
+        if (seen[key]) { continue; }
         seen[key] = label;
         order.push(key);
       }
@@ -1103,10 +1150,9 @@ function thornswoodBooks(env) {
     }
     var out = [];
     for (var k = 0; k < order.length; k++) {
-      var item = seen[order[k]];
-      var price = guildPrice(name, item);
-      if (price.buy === null && price.sell === null) { continue; }
-      out.push({ name: item, buy: price.buy, sell: price.sell });
+      var price = itemPrice(name, order[k]);
+      if (price.buy === null) { continue; }
+      out.push({ name: seen[order[k]], buy: price.buy, sell: price.sell });
     }
     return out;
   }
@@ -1114,10 +1160,7 @@ function thornswoodBooks(env) {
   function guildPrice(hold, item) {
     var name = String(hold || '').toLowerCase();
     if (!active || !validHold(name)) { return { buy: null, sell: null }; }
-    return {
-      buy: sidePrice(name, item, 'buy'),
-      sell: sidePrice(name, item, 'sell')
-    };
+    return itemPrice(name, itemKey(item));
   }
 
   function submit(actorId, pid, words) {
