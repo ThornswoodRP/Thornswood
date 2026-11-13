@@ -1,0 +1,5 @@
+{
+  "what": "Which pull requests are Main Server changes (Patrick, 12 Nov 2026: Discord changes are live, not dev, so they are posted where main updates go, labeled Main Server). A merged pull request is one when every file it changed is under live or neutral and at least one is under live: the Discord bot and the Discord plan (bot/) and the site (site/), which go live on the merge, and nothing in the build people install or the game servers run. Its Release note line is kept out of the build Release's notes (scripts/release/Collect-ReleaseNotes.ps1) and the bot posts it in #news as Main Server (bot/bot_news.py). Both read this file.",
+  "live": ["bot/", "site/"],
+  "neutral": ["docs/", "tests/"]
+}

@@ -4,7 +4,7 @@
 # WHY. Patrick, 19 Oct 2026: Done is "merged and only needs testing". A pull
 # request that finishes an issue says Closes #N, and the board's own "Pull
 # request merged" workflow moves the card. A fix people would notice says
-# Refs #N instead, because its issue stays open until a main Ship puts the
+# Refs #N instead, because its issue stays open until a main release puts the
 # fix on the main server (docs/guide/the-board.md), and nothing moved
 # its card: the board
 # review of 21 Oct (#3192) found Refs fixes sitting in In Progress for days
@@ -33,8 +33,9 @@
 # reads it as a test task to post. The card moves to Done by itself: board.yml
 # reads the same merged test task (#5185). Until then this put a board: Done
 # label on with Patrick's board token for board-status.yml to carry out.
-# The main Ship that carries the merge closes the issue with that block as
-# its "Test task:" comment
+# The main release that carries the merge closes the issue with that block as
+# its "Test task:" comment, once the live server runs it (close-shipped.yml,
+# #5530; a main Ship did it until main went out through promote-main.yml)
 # (scripts/release/Close-ShippedIssues.ps1, #3279), reading the merge commit
 # and the block from this comment: change its first line or its footer and
 # that script, and tests/test-3279-close-shipped.ps1, change with it. A closed
@@ -137,15 +138,15 @@ jobs:
               if ($said) { Write-Host ("#{0} finishes #{1}, which already holds its done-on-merge comment; passed over" -f $num, $t.issue); continue }
               $steps = (($t.rest -join "`n").Trim())
               # A Dev test task is for developers and goes up as soon as a dev
-              # release carries the work, written by that dev Ship (#5199); a
-              # Main one when a main Ship does. The main Ship closes the issue
+              # release carries the work, written once dev runs it (#5199); a
+              # Main one when main does (close-shipped.yml, #5530). Main closes the issue
               # either way, and writes this block on it unless a test task of
               # the same kind was written after the merge (docs/guide/the-board.md,
               # "Test tasks and known issues").
               if ($steps -match '^\s*Server\s*:\s*Dev\s*(\n|$)') {
-                $when = 'This test task is for developers. The dev Ship that carries it writes it on this issue with its Build: line naming that release, and the bot posts it in #dev-test-tasks (scripts/release/Close-ShippedIssues.ps1 -Dev). The main Ship that carries it closes this issue, and writes this on it if nobody has:'
+                $when = 'This test task is for developers. The dev release that carries it writes it on this issue with its Build: line naming that release, once dev runs it, and the bot posts it in #dev-test-tasks (close-shipped.yml, scripts/release/Close-ShippedIssues.ps1 -Dev). The main release that carries it closes this issue once the live server runs it, and writes this on it if nobody has:'
               } else {
-                $when = 'The main Ship that carries it closes this issue with a comment holding exactly this (scripts/release/Close-ShippedIssues.ps1):'
+                $when = 'The main release that carries it closes this issue once the live server runs it, with a comment holding exactly this (close-shipped.yml, scripts/release/Close-ShippedIssues.ps1):'
               }
               $body = ('Pull request #{0} merged ({1}), so this is in Done and stays open: the merge puts the fix on the main branch, not on the main server testers play. {2}' -f $num, ([string]$p.merge_commit_sha).Substring(0, 12), $when) + "`n`n" + '```' + "`n" + 'Test task: ' + $t.title + "`n" + $steps + "`n" + '```' + "`n`n---`n_Done on merge, .github/workflows/done-on-merge.yml_"
               Invoke-RestMethod -Method Post -Uri ("$api/issues/" + $t.issue + '/comments') -Headers $h -Body (@{ body = $body } | ConvertTo-Json -Compress) -ContentType 'application/json' | Out-Null

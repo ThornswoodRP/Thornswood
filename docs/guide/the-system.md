@@ -79,9 +79,13 @@ restarts and runs from it. `Paths.Init` prefers `<Root>\Game` over the Steam
 copy, so from then on the launcher points Windows' Skyrim settings, plugin list
 and saves at `Profile` for each session and ignores which profile Vortex has
 on. When Vortex deploys a newer Thornswood collection, the next launcher start
-brings it in by itself. The offer to make the folder is made at startup
-whenever it is possible; it used to wait for another server's files to be
-found, and no longer looks for any.
+brings it in by itself. The launcher makes the folder at startup whenever it
+is possible, without asking: the setup window's box "Give Thornswood a Skyrim
+folder of its own" starts ticked, and a `config.json` with no `MakeOwnGame`
+counts as ticked (Patrick, 12 November: the own folder is the default for
+everyone). Only an install whose box was unticked is asked first, at startup
+and again at Play. It used to wait for another server's files to be found, and
+no longer looks for any.
 
 **When Vortex deploys somewhere else.** Vortex can manage a Skyrim that is not
 the Steam copy: on 24 September a tester's Vortex deployed the collection into

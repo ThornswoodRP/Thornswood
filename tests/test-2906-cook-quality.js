@@ -20,11 +20,12 @@
 //      names the record and the count, Grand Chef's batch is two of the one
 //      quality, and nothing waits for the engine;
 //   4. the committed content plugin holds every record the table names;
-//   5. Add-ContentRecords.py, over stand-in masters, makes each record from
-//      its plain dish's look, and stops on a dish whose look names a plugin
-//      the content plugin does not master.
+//   5. Add-ContentRecords.py's quality step, over stand-in masters, makes
+//      each record from its plain dish's look, and names every dish whose
+//      look names a plugin the content plugin does not master (the tool
+//      stops on them); with no game the tool writes nothing.
 //
-// Copies go to a temporary folder (TEST_TMP if set) and are removed. Read only.
+// Stand-ins go to a temporary folder (TEST_TMP if set) and are removed.
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -344,30 +345,24 @@ function python(args) {
 const tmpRoot = process.env.TEST_TMP || os.tmpdir();
 fs.mkdirSync(tmpRoot, { recursive: true });
 const dir = fs.mkdtempSync(path.join(tmpRoot, 'ts-2906-'));
+// The tool's own step (quality_records, loaded as a module) over the
+// stand-in masters, its records and the two effects written into a plugin
+// of their own with the tool's header, so section 4's checks read them.
+const MAKE = [
+  'import importlib.util, struct, sys',
+  'spec = importlib.util.spec_from_file_location("acr", sys.argv[1])',
+  'm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)',
+  'problems = []',
+  'made = m.quality_records(sys.argv[2], list(m.PLUGIN_MASTERS), problems)',
+  'eff = m.quality_effects()',
+  'def grp(tag, recs):',
+  '    body = b"".join(r.bytes() for r in recs)',
+  '    return b"GRUP" + struct.pack("<I", 24 + len(body)) + tag + b"\\0" * 12 + body',
+  'open(sys.argv[3], "wb").write(m.header(b"x", len(made) + len(eff)) + grp(b"MGEF", eff) + grp(b"ALCH", made))',
+  'print("%d made" % len(made))',
+  'for p in problems: print("PROBLEM " + p)',
+].join('\n');
 try {
-  // The shipped plugin without the records this makes, so the tool has to make them.
-  const making = new Set([Q.burnt].concat(fineIds).map(function (d) { return localFid(d, shippedPlugin.masters); }));
-  const headSize = shipped.readUInt32LE(4);
-  const kept = [];
-  (function strip(p, end, into) {
-    while (p + 24 <= end) {
-      const tag = shipped.toString('latin1', p, p + 4);
-      const size = shipped.readUInt32LE(p + 4);
-      if (tag === 'GRUP') {
-        const kids = [];
-        strip(p + 24, p + size, kids);
-        const body = Buffer.concat(kids);
-        const h = Buffer.from(shipped.subarray(p, p + 24)); h.writeUInt32LE(24 + body.length, 4);
-        if (kids.length || shipped.toString('latin1', p + 8, p + 12) !== 'ALCH') { into.push(Buffer.concat([h, body])); }
-        p += size; continue;
-      }
-      if (!making.has(shipped.readUInt32LE(p + 12))) { into.push(shipped.subarray(p, p + 24 + size)); }
-      p += 24 + size;
-    }
-  })(24 + headSize, shipped.length, kept);
-  const bare = Buffer.concat([shipped.subarray(0, 24 + headSize)].concat(kept));
-  fs.writeFileSync(path.join(dir, 'Thornswood-Content.esp'), bare);
-
   // Stand-in masters: each dish in the file that made it, and the burnt meal's look.
   const byFile = {};
   const looks = Object.keys(FINE).concat(['721e8:Skyrim.esm']);
@@ -385,13 +380,14 @@ try {
     }
   }
   writeMasters();
-  const run = python([TOOL, '--data', dir, '--masters', masters]);
+  const out = path.join(dir, 'quality.esp');
+  const run = python(['-c', MAKE, TOOL, masters, out]);
   yes('5 python is on this machine', run !== null);
   if (run) {
-    yes('5 the tool makes the records from the masters and writes the plugin', run.status === 0 &&
-      /Cooking quality \(#2906/.test(run.stdout) && /68 made now from the masters/.test(run.stdout));
-    if (run.status !== 0) { console.log(run.stdout + run.stderr); }
-    const made = readPlugin(fs.readFileSync(path.join(dir, 'Thornswood-Content.esp')));
+    yes('5 the tool makes the records from the masters, every one of them', run.status === 0 &&
+      /^68 made$/m.test(run.stdout) && !/PROBLEM/.test(run.stdout));
+    if (run.status !== 0 || /PROBLEM/.test(run.stdout)) { console.log(run.stdout + run.stderr); }
+    const made = readPlugin(fs.readFileSync(out));
     const by = checkRecords(made, '5');
     const stew = by.get(localFid(FINE[STEW], made.masters));
     const i = looks.indexOf(STEW);
@@ -406,20 +402,19 @@ try {
     const g1 = by.get(localFid(FINE[gour], made.masters));
     yes('5 a Gourmet dish\'s sound is moved from Gourmet\'s numbering into this plugin\'s',
       !!g1 && sub(g1, 'YNAM').body.readUInt32LE(0) === SOUND);
-    const again = python([TOOL, '--data', dir, '--masters', path.join(dir, 'no-game')]);
-    yes('5 run again with no game, it finds them all made and writes nothing',
-      !!again && again.status === 0 && /Nothing was written/.test(again.stdout) && /68 already here, 0 made now/.test(again.stdout));
 
     // A Gourmet dish whose sound is Gourmet's own: this plugin does not master
-    // Gourmet.esp, so it cannot point at it, and the tool says which dishes.
-    fs.writeFileSync(path.join(dir, 'Thornswood-Content.esp'), bare);
+    // Gourmet.esp, so it cannot point at it, and the tool names every such dish.
     writeMasters(0x01000801);
-    const stop = python([TOOL, '--data', dir, '--masters', masters]);
+    const stop = python(['-c', MAKE, TOOL, masters, out]);
     const gourmetCount = Object.keys(FINE).filter(function (d) { return /Gourmet\.esp$/.test(d); }).length;
-    yes('5 a dish whose look names Gourmet.esp\'s own record stops the tool, every such dish listed (' + gourmetCount + ')',
-      !!stop && stop.status === 1 && new RegExp('STOP\\. ' + gourmetCount + ' of the cooking quality records').test(stop.stdout) &&
-      fs.readFileSync(path.join(dir, 'Thornswood-Content.esp')).equals(bare));
+    const named = stop && stop.status === 0 ? stop.stdout.split(/\r?\n/).filter(function (l) { return /^PROBLEM .*Gourmet\.esp.* which this plugin does not master$/.test(l); }).length : -1;
+    yes('5 a dish whose look names Gourmet.esp\'s own record is a problem the tool names, every such dish (' + gourmetCount + ')',
+      named === gourmetCount);
   }
+  const stopped = python([TOOL, '--masters', path.join(dir, 'no-game'), '--out', path.join(dir, 'Thornswood-Content.esp')]);
+  yes('5 with no game, the tool stops and writes nothing',
+    !!stopped && stopped.status === 1 && !fs.existsSync(path.join(dir, 'Thornswood-Content.esp')));
 } finally {
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
 }

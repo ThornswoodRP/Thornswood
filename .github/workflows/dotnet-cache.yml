@@ -1,0 +1,74 @@
+# Keeps the newest .NET 10 SDK, as setup-dotnet unpacks it, in main's
+# Actions cache, for the Windows jobs of build.yml and build-pr.yml to take
+# (12 Nov 2026). Each of those jobs downloaded the SDK's 300 MB zip and
+# unpacked it, 25 to 42 s a job, six times a pull request build; restored
+# from here it takes about 5 s, and setup-dotnet then finds that version
+# installed and downloads nothing (measured on GitHub's Windows runner,
+# 12 Nov 2026: 244 MB in the cache). build.yml's job "gate" says the rest.
+#
+# WHY HERE AND NOT IN THE BUILD. A cache saved by a pull request's run can be
+# read by that pull request alone, so the builds only restore, and only a
+# run on main saves: this one, by the schedule, by hand, or when this file
+# changes on main. build.yml's own main build is skipped for a tree its
+# merge queue run already tested (#3182), so it could not keep the cache
+# fresh, and a cache saved by a build would hold whatever that build's
+# change had put in the folder.
+#
+# A NEW SDK. The key names the SDK and runtime versions in the folder, so
+# once Microsoft ships a newer 10.0 SDK, the next run here installs it and
+# saves it under a new key, and the builds take the newest key by its
+# prefix. Until then a build downloads the newer SDK itself, as it did
+# before. GitHub removes a cache nobody has read for seven days, so the old
+# one goes on its own. Nothing is saved when the key is already there.
+name: .NET SDK cache
+on:
+  schedule:
+    - cron: '40 8 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/dotnet-cache.yml']
+permissions:
+  contents: read
+concurrency:
+  group: dotnet-cache
+  cancel-in-progress: false
+jobs:
+  sdk:
+    name: Keep the .NET SDK in the cache
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      # Where build.yml's Windows jobs put it, so the same path is restored.
+      - name: Put .NET on the work drive
+        shell: pwsh
+        run: |
+          "DOTNET_INSTALL_DIR=$env:RUNNER_TEMP\dotnet" >> $env:GITHUB_ENV
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Name the cache by what was installed
+        id: key
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'dotnet'
+          $sdks = @(Get-ChildItem -LiteralPath (Join-Path $root 'sdk') -Directory | ForEach-Object Name | Sort-Object)
+          $runtimes = @(Get-ChildItem -LiteralPath (Join-Path $root 'shared\Microsoft.NETCore.App') -Directory | ForEach-Object Name | Sort-Object)
+          if (-not $sdks.Count -or -not $runtimes.Count) { Write-Host "::error::setup-dotnet left no SDK or no runtime in $root"; exit 1 }
+          $key = 'dotnet-{0}-sdk{1}-runtime{2}' -f $env:RUNNER_OS, ($sdks -join '+'), ($runtimes -join '+')
+          Write-Host "The folder holds SDK $($sdks -join ', ') and runtime $($runtimes -join ', '): $key"
+          "key=$key" >> $env:GITHUB_OUTPUT
+      - name: Look for it in the cache
+        id: have
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}\dotnet
+          key: ${{ steps.key.outputs.key }}
+          lookup-only: true
+      - name: Save it
+        if: steps.have.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}\dotnet
+          key: ${{ steps.key.outputs.key }}

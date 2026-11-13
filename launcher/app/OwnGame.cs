@@ -370,6 +370,49 @@ namespace Thornswood
         }
 
         /// <summary>
+        /// The note that the folder has just been made and the launcher's
+        /// first start in it has not run Fix yet (#5937). Everything the
+        /// install leaves to do waits on the folder: Thornswood-Last.esp and
+        /// the other files made from the game, the plugin list in the
+        /// server's order, and the animation and body files. All of it is
+        /// Fix's, and the start after the make is the first one that can run
+        /// it. That restart is the launcher's own (Shell.RestartLauncher), not
+        /// Velopack's, so Velo.Restarted does not say it happened; this file
+        /// does, and it survives a restart that did not come back, so the
+        /// next start the person makes runs it instead.
+        /// </summary>
+        static string FixAfterMakeFile { get { return Path.Combine(Dir, "fix-after-make.txt"); } }
+
+        /// <summary>Written by the make's finish, just before the launcher restarts into the new folder.</summary>
+        public static void NoteFixAfterMake()
+        {
+            try { WriteRecord(FixAfterMakeFile, new string[] { DateTime.Now.ToString("o") }); } catch (Exception ex) { Swallow.Note("OwnGame.NoteFixAfterMake, write", ex); }
+        }
+
+        /// <summary>
+        /// True once, on the first start after the folder was made: the note
+        /// is taken away as it is read, so Fix runs once for it and a Fix that
+        /// leaves something wrong is reported, never run again at every start.
+        /// </summary>
+        public static bool TakeFixAfterMake()
+        {
+            string f = FixAfterMakeFile;
+            try
+            {
+                if (!File.Exists(f)) return false;
+                File.Delete(f);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // Not taken away, so not run: a note that cannot be deleted
+                // would run Fix at every start.
+                Swallow.Note("OwnGame.TakeFixAfterMake", ex);
+                return false;
+            }
+        }
+
+        /// <summary>
         /// The Skyrim the game itself is taken from when the folder is first
         /// made: a Steam copy of Skyrim Special Edition. When Vortex deploys
         /// into a Steam copy it is that folder, which is the ordinary case and

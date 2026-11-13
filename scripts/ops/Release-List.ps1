@@ -25,6 +25,13 @@
   the trade ships' manifest, #511), so a list with no profiles in it never
   takes anything a profile holds (#2668 has the table, part by part).
 
+  WHICH CHANGE FORMS ARE CHARACTERS (#5168). Get-ThornswoodCharacterForms
+  is the one rule all of them, and Reset-Appearance.ps1, pick them by: a
+  file named with a runtime form's id in lowercase hex and no plugin, whose
+  profileId is above 0 and which is not deleted. The file name is hex, not
+  digits (1f.json is a character as much as 12.json), and the world's own
+  runtime forms (profileId -1) are left where they are.
+
   A character's form id is read off its change form the way Delete-Person
   reads it: profileId above 0 and a formDesc made in the world, a hex
   number with no plugin (FormDesc::ToString), which is the form's local id.
@@ -123,6 +130,37 @@ function Read-ThornswoodReleaseList([string]$File) {
   # Every actor a runtime form id; a local id is the old shape (#2870).
   if (@($a | Where-Object { $_ -le 4278190080 }).Count) { return @{ ok = $false; old = (@($a | Where-Object { $_ -le 16777215 }).Count -gt 0) } }
   return @{ ok = $true; missing = $false; profiles = $p; actors = $a }
+}
+# The characters' change forms in a changeForms folder (#5168), read the way
+# Restore-Server.ps1, the nightly backup and scripts\bot\character.js read a
+# world (#5287): a form made in the world is named with its local id in
+# lowercase hex and no plugin (the engine's FormDesc::ToString('_'), %x:
+# 0.json, a.json, 1f.json, a01.json), and it is a character when its
+# profileId is above 0 and it is not deleted. Reading digits alone missed
+# every character whose id has a letter, and threw away the world's own
+# runtime forms with a digit name (an NPC the server made, an item put down,
+# profileId -1). A runtime form that will not parse is not guessed at either
+# way: it is named in a RELEASENOTE line ending with $Unread, what the caller
+# does with it. @{ files = @(full paths, in id order); notes = @(...) }
+function Get-ThornswoodCharacterForms([string]$Dir, [string]$Unread = 'it is not on the release list') {
+  $files = @()
+  $notes = @()
+  if (-not $Dir -or -not (Test-Path -LiteralPath $Dir)) { return @{ files = $files; notes = $notes } }
+  $named = @(Get-ChildItem -LiteralPath $Dir -Filter *.json -File | Where-Object { $_.BaseName -cmatch '^[0-9a-f]{1,8}$' } |
+             Sort-Object { [Convert]::ToInt64($_.BaseName, 16) })
+  foreach ($f in $named) {
+    $o = $null
+    try { $o = [IO.File]::ReadAllText($f.FullName) -replace '^\uFEFF', '' | ConvertFrom-Json } catch { $o = $null }
+    if (-not ($o -is [System.Management.Automation.PSCustomObject])) {
+      $notes += ('RELEASENOTE|' + $f.FullName + ' will not parse, so whether it is a character is not known; ' + $Unread)
+      continue
+    }
+    $p = $o.profileId
+    if (-not ($p -is [int] -or $p -is [long] -or $p -is [decimal] -or $p -is [double])) { continue }
+    if ($p -le 0 -or $o.isDeleted -eq $true) { continue }
+    $files += $f.FullName
+  }
+  return @{ files = $files; notes = $notes }
 }
 # The form ids of the characters in these change forms, and a RELEASENOTE
 # line for each one that will not parse: @{ ids = @(...); notes = @(...) }.

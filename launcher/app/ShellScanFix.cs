@@ -278,6 +278,12 @@ namespace Thornswood
         static bool fixWhenFolderReadyAfterVortex;
 
         /// <summary>
+        /// With fixWhenFolderReady: the Fix waiting for the folder is the one
+        /// the first start in a newly made folder runs (#5937).
+        /// </summary>
+        static bool fixWhenFolderReadyAfterMake;
+
+        /// <summary>
         /// Install now's second half (#3201): the update has gone in, or
         /// failed, and Fix's whole path runs on the folder as it left it.
         /// </summary>
@@ -289,7 +295,8 @@ namespace Thornswood
 
         /// <param name="afterUpdate">True when an update has just gone in or failed (Install now, the automatic update, the first start of a new launcher): the log says so, and FixRest never takes that same update a second time (#3201).</param>
         /// <param name="afterVortex">True when Vortex has just finished the collection revision the card opened (FixAfterVortex, #5200): the log says so, and FixRest leaves a waiting update on the card, where UpdateBySelf already decided about it.</param>
-        static void RunFix(bool afterUpdate, bool afterVortex = false)
+        /// <param name="afterMake">True on the first start in Thornswood's own folder after it was made (OwnGameAtStart, #5937): the log says so, and Fix runs as a press of it would, so the install's last steps (Thornswood-Last.esp, the plugin order, the animation and body files) need no press.</param>
+        static void RunFix(bool afterUpdate, bool afterVortex = false, bool afterMake = false)
         {
             if (fixing) return;
             // Nothing is written into a folder while it is being made or
@@ -297,6 +304,7 @@ namespace Thornswood
             // while its own folder was being made and wrote into the Steam
             // copy (#2403). After an update, the folder's finish runs it.
             if (ownGameBusy && afterUpdate) { fixWhenFolderReady = true; Log("Thornswood's own Skyrim folder is being prepared. The scan after the update runs, and puts right what it finds, as soon as the folder is ready."); return; }
+            if (ownGameBusy && afterMake) { fixWhenFolderReady = true; fixWhenFolderReadyAfterMake = true; Log("Thornswood's own Skyrim folder is being brought up to date. The scan after making it runs, and puts right what it finds, as soon as that is done."); return; }
             if (ownGameBusy && afterVortex) { fixWhenFolderReady = true; fixWhenFolderReadyAfterVortex = true; Log("Thornswood's own Skyrim folder is being prepared. The scan after Vortex runs, and puts right what it finds, as soon as the folder is ready."); return; }
             if (ownGameBusy) { Log("Thornswood's own Skyrim folder is being prepared. Press Fix when it is done: nothing is put right in a folder while it is being made."); return; }
             if (Downgrade.Busy) { Log("The Downgrade is running. Press Fix when it is done."); return; }
@@ -318,6 +326,7 @@ namespace Thornswood
             Verify.OwnFolderNext = false;
             Log(afterUpdate ? "The update is done. Scanning everything again, and putting right what the scan finds."
                 : afterVortex ? "Vortex is done. Scanning everything, and putting right what the scan finds."
+                : afterMake ? "Thornswood's own Skyrim folder is made. Scanning everything, and putting right what the scan finds: the files made from your game, the plugin order, and the animation and body files, which Pandora and BodySlide build in their own windows."
                 : "Fix: scanning everything first.");
             List<Issue> plugins = null, rest = null;
             try
@@ -340,6 +349,7 @@ namespace Thornswood
                 fixing = false;
                 Log(afterUpdate ? "The scan after the update found nothing wrong."
                     : afterVortex ? "The scan after Vortex found nothing wrong."
+                    : afterMake ? "The scan after making the folder found nothing wrong."
                     : "Fix found nothing to put right.");
                 ShowVerify(plugins, false);
                 return;

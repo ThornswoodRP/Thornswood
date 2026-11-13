@@ -7,8 +7,8 @@ Patrick, 12 Nov 2026 (page cards q-discord-hand-given-member and
 q-discord-readback, A): reacting to the rules gives Member, and the reaction
 is the record that somebody accepts the rules and is 18 or over. No button.
 Taking the reaction off takes Member off. The Members given by hand, who
-never answered anything, lose it and get it back by reacting. Playtesters and
-staff keep it. The live audit of 12 Nov found 20 Members, every one given by
+never answered anything, lose it and get it back by reacting. Staff and
+Playtesters too, and only Member comes off them (Patrick, 12 Nov, 3:32 PM). The live audit of 12 Nov found 20 Members, every one given by
 hand, and nothing in the bot that gave Member.
 
 So this checks:
@@ -17,15 +17,15 @@ So this checks:
      reaction events, its start puts the message up in every server, and the
      build's -Posts run never deletes the message, by the same first line
   P  its start in a #rules with no message of its own posts one, reacts to
-     it so there is something to press, takes Member from the hand-given
-     Member who has not reacted, gives it to whoever has, leaves the
-     Playtester's and the staff member's alone, and records each on the site
+     it so there is something to press, takes Member from every Member who
+     has not reacted, staff included and nothing else of theirs, gives it to
+     whoever has, and records each on the site
   A  a second start finds the same message and changes nothing; old words on
      it are edited to the new ones in place, reactions and all
   R  a reaction on it gives Member and records a yes; one on another message,
      with another emoji, or by the bot itself does nothing
   U  taking the reaction off takes Member off and records a no; a
-     Playtester keeps Member and the no is recorded all the same
+     staff member loses Member as well, and keeps their own role
   F  with no Member role, or the bot's own role under it, nothing is given or
      taken and the log says why; a failure reading #rules leaves Member as it
      is
@@ -253,7 +253,7 @@ if content is None:
     import content  # noqa: E402
 yes('W #rules tells people which message to react to',
     G.GATE_FIRST_LINE.strip('*') in ' '.join(content.RULES.split()))
-yes('W every staff role keeps Member, the same list as the build\'s staff',
+yes('W every staff role counts as staff for the ping buttons, the same list as the build\'s staff',
     sorted(G.EVERY_STAFF_NAMES) == sorted(n.lower() for n in B.STAFF))
 yes('W the message says 18 or over, the rules, Member and the record',
     all(w in G.GATE_TEXT for w in ('18 or over', 'accept the rules', 'Member role',
@@ -285,14 +285,15 @@ yes('P the hand-given Member who has not reacted with the mark loses Member '
 yes('  and it is recorded as a no, with a staff inbox line saying why',
     [(p[0], p[5]['yes']) for p in pushed_for(g.hand)] == [('member', False)]
     and 'Reacting there gives it back' in pushed_for(g.hand)[0][2])
-yes('P the Playtester keeps Member, reaction or not, and nothing is recorded '
-    'for them', has(g.tester_p, g) and not pushed_for(g.tester_p))
-yes('P staff keep Member without reacting', has(g.staff_p, g) and not pushed_for(g.staff_p))
+yes('P the Playtester who reacted keeps Member, and nothing is recorded for them',
+    has(g.tester_p, g) and not pushed_for(g.tester_p))
+yes('P staff who have not reacted lose Member and keep their staff role',
+    not has(g.staff_p, g) and g.support in g.staff_p.roles)
 yes('P somebody with no role and no reaction is left alone',
     g.nobody.roles == [] and not pushed_for(g.nobody))
 yes('P the bot never gives itself anything', ME.roles == [])
 yes('P the log says the counts',
-    any('2 reacted' in s and '1 given Member' in s and '1 without a reaction' in s
+    any('2 reacted' in s and '1 given Member' in s and '2 without a reaction' in s
         for s in SAID))
 
 g2 = server()
@@ -302,8 +303,8 @@ yes('P in a #rules with no message of its own it posts one and reacts to it',
     len(g2.rules.messages) == 1 and g2.rules.messages[0].content == G.GATE_TEXT
     and any(r.emoji == MARK and r.me for r in g2.rules.messages[0].reactions)
     and G.GATE_IDS.get(g2.id) == g2.rules.messages[0].id)
-yes('  and every hand-given Member who is neither Playtester nor staff loses it',
-    not has(g2.hand, g2) and has(g2.tester_p, g2) and has(g2.staff_p, g2))
+yes('  and every Member who has not reacted loses it, staff and Playtesters too',
+    not has(g2.hand, g2) and not has(g2.tester_p, g2) and not has(g2.staff_p, g2))
 
 # ------------------------------------------------------------------- A --
 del PUSHED[:]
@@ -352,9 +353,13 @@ run(G.on_raw_reaction_remove(payload(g, g.nobody)))
 yes('U taking the reaction off takes Member off', not has(g.nobody, g))
 yes('  and records a no', [(p[0], p[5]['yes']) for p in pushed_for(g.nobody)]
     == [('member', False)])
-run(G.on_raw_reaction_remove(payload(g, g.tester_p)))
-yes('U a Playtester who takes it off keeps Member, and the no is recorded',
-    has(g.tester_p, g) and [p[5]['yes'] for p in pushed_for(g.tester_p)] == [False])
+run(G.on_raw_reaction_add(payload(g, g.staff_p)))
+yes('U staff who react get Member back', has(g.staff_p, g))
+del PUSHED[:]
+run(G.on_raw_reaction_remove(payload(g, g.staff_p)))
+yes('U staff who take it off lose Member and only Member, and the no is recorded',
+    not has(g.staff_p, g) and g.support in g.staff_p.roles
+    and [p[5]['yes'] for p in pushed_for(g.staff_p)] == [False])
 
 # ------------------------------------------------------------------- F --
 for what, kw in (('no Member role', dict(member_role=False)),

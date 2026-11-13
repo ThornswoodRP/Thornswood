@@ -265,6 +265,10 @@ namespace Thornswood
                     string moved = Display.MatchScreen();
                     if (moved != null) Log("Set the game to " + moved + " to match your screen. Tick Lock resolution in Settings to stop that.");
                 }
+                // The mode the launcher shows, written where Display Tweaks
+                // reads it, or the game's own bFull Screen decides (#5946).
+                string pinned = Display.PinMode();
+                if (pinned != null) Log(pinned);
 
                 int held = Enforce.Apply();
                 if (held > 0) Log("Put back " + held + " setting" + (held == 1 ? "" : "s") + " the last session overwrote.");

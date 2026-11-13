@@ -126,7 +126,33 @@ function createNpcMerchantPurses(api,data,storage) {
       Number.isInteger(state.purse) && state.purse>=0 && state.purse<=2147483647 &&
       Array.isArray(state.stock) && state.stock.every(row=>row && Number.isInteger(row.baseId) &&
         row.baseId>0 && row.baseId<=0xffffffff && row.baseId!==15 &&
-      Number.isInteger(row.count) && row.count>0 && row.count<=2147483647);
+      Number.isInteger(row.count) && row.count>0 && row.count<=2147483647) &&
+      booksRead(state.commissions);
+  }
+  // Commission books (#4941). Every writer of them is
+  // merchant-commission-state.js: empty() makes both books, and read(),
+  // which reserve, cancel and finish return through, refuses a book missing
+  // or a key that does not read. So a record with commissions but one book,
+  // or a key that is not JSON [owner, job] with the owner JSON [form id,
+  // plugin, profile], is never written by the game: it is damage. It is
+  // refused here, where the ledger loads and every commit is checked, so the
+  // let-go below and the trades only ever meet books that read. The promise
+  // rows themselves are still read() at trade time, with its own refusal.
+  function bookObject(book) {
+    return !!book && typeof book==='object' && !Array.isArray(book);
+  }
+  function keyReads(name) {
+    let pair=null,who=null;
+    try {
+      pair=JSON.parse(name);
+      who=Array.isArray(pair) && pair.length===2 && typeof pair[0]==='string' && typeof pair[1]==='string' ? JSON.parse(pair[0]) : null;
+    } catch(error) {return false;}
+    return Array.isArray(who) && who.length===3 && Number.isSafeInteger(who[0]) && typeof who[1]==='string' && Number.isSafeInteger(who[2]);
+  }
+  function booksRead(commissions) {
+    if(commissions===undefined) return true;
+    return bookObject(commissions) && ['held','cool'].every(book=>Object.prototype.hasOwnProperty.call(commissions,book) &&
+      bookObject(commissions[book]) && Object.keys(commissions[book]).every(keyReads));
   }
   // Version 2 from #2870: supply waits and commission owners name a runtime
   // character by its runtime form id. A version 1 ledger keyed them by
@@ -141,8 +167,11 @@ function createNpcMerchantPurses(api,data,storage) {
   const references=new Map(Array.from(catalogue.values()).map(identity=>[identity.reference,identity]));
   if(Object.keys(ledger.entries).length!==references.size) throw new Error('Saved merchant ledger manifest cannot be verified');
   for(const reference of Object.keys(ledger.entries)) {
-    if(!references.has(reference) || (ledger.entries[reference]!==null && !valid(ledger.entries[reference],references.get(reference))))
-      throw new Error('Saved merchant ledger entry cannot be verified');
+    const saved=ledger.entries[reference];
+    if(!references.has(reference) || (saved!==null && !valid(saved,references.get(reference))))
+      throw new Error(saved && typeof saved==='object' && !booksRead(saved.commissions) ?
+        'Saved merchant ledger entry '+reference+' cannot be verified: its commission books do not read' :
+        'Saved merchant ledger entry cannot be verified');
   }
   if(retirement && data.merchantRoster.worldMode==='existing' &&
       Array.from(references.values()).some(identity=>identity.active && ledger.entries[identity.reference]===null))

@@ -108,7 +108,15 @@ function fakeGitHub() {
   // ---- 4. the workflows ----------------------------------------------------------
   const wf = fs.readFileSync(path.join(REPO, '.github', 'workflows', 'after-deploy.yml'), 'utf8').replace(/\r\n/g, '\n');
   yes('after-deploy.yml runs on a Deployment\'s status, for a success with a log only', /\non:\n  deployment_status:\n/.test(wf) &&
-      wf.indexOf("if: ${{ github.event.deployment_status.state == 'success' && github.event.deployment_status.log_url != '' }}") >= 0);
+      wf.indexOf("if: ${{ github.event.deployment_status.state == 'success' && github.event.deployment_status.log_url != '' && ") >= 0);
+  // #5961: GitHub makes a Deployment for every job that names an
+  // environment (board.yml's board, engine-pin.yml's engine-pin), and its
+  // success status has a log URL, the job's run. Only a Deployment to Dev or
+  // Main can carry steps, so the job is skipped for any other, and a skipped
+  // job takes no hosted runner from the pull request builds and the queue.
+  const sayIf = (wf.match(/\n    if: (.+)\n    runs-on: /) || [])[1] || '';
+  yes('  and only for a Deployment to Dev or Main, so one made for a job\'s environment takes no runner (#5961): ' + sayIf,
+      sayIf.indexOf("(github.event.deployment.environment == 'Dev' || github.event.deployment.environment == 'Main')") >= 0);
   yes('  with the run\'s own token, issues write and contents read only, and no secret', /\npermissions:\n  contents: read\n  issues: write\n(?! )/.test(wf) && !/secrets\./.test(wf) && /GH_TOKEN: \$\{\{ github\.token \}\}/.test(wf));
   yes('  from the Deployment\'s own commit, keeping no credentials', /ref: \$\{\{ github\.event\.deployment\.sha \}\}/.test(wf) && /persist-credentials: false/.test(wf) && /COMMIT: \$\{\{ github\.event\.deployment\.sha \}\}/.test(wf));
   yes('  taking the Deployment to Dev as the step files\' dev and to Main as main, and no other', /\n            Dev\) export ENVIRONMENT=dev ;;\n            Main\) export ENVIRONMENT=main ;;\n            \*\) /.test(wf));
