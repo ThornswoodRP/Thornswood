@@ -117,6 +117,15 @@ token, which Releases hold the setup programs and the move program.
 where nothing answers, so what its copy serves never depends on the live
 Releases (#5547).
 
+### Settings for where it listens and what it reads
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `THORNSWOOD_DOCS_EXPOSE` | unset | `1` opens the site on every address as plain HTTP, with a warning at every start. Unset, or anything else, keeps it on 127.0.0.1, and `THORNSWOOD_DOCS_LOCAL=1` keeps it there even when this is `1` (`lib\base.js`). |
+| `THORNSWOOD_TRUSTED_PROXIES` | empty | Comma separated addresses of proxies on another box whose `X-Forwarded-For` the site believes, for the report limit and the sign in log. Loopback, which is Caddy, is always believed, and only the last forwarded hop is taken (`lib\limits.js`). |
+| `THORNSWOOD_CHAT_DIR` | `C:\Thornswood-Voice\chat` | The live voice service's chat folder, read for the chat under a main session (`lib\serverlogs.js`). Set it to match when the live voice service writes elsewhere. |
+| `THORNSWOOD_DEV_CHAT_DIR` | `C:\Thornswood-Voice-Dev\chat` | The dev voice service's chat folder, read for the chat under a dev session (`lib\serverlogs.js`). |
+
 To see the door answer, from a second window:
 
 ```
