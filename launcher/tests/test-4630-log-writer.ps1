@@ -70,6 +70,29 @@ namespace Thornswood
             Swallow.Say("cap", "roll-two");
             Yes("the second roll replaces the one older file", File.Exists(older) && File.ReadAllText(older).StartsWith("bbb") && Directory.GetFiles(dir, "launcher.log.*").Length == 1);
             Yes("both files are bounded", new FileInfo(Paths.LogFile).Length <= cap && File.Exists(older) && new FileInfo(older).Length <= cap);
+            File.Delete(Paths.LogFile);
+            File.Delete(older);
+            string huge = new string('\u20ac', cap / 3 + 100);
+            LauncherLog.Text(huge);
+            var strict = new UTF8Encoding(false, true);
+            string joined = strict.GetString(File.ReadAllBytes(older)) + strict.GetString(File.ReadAllBytes(Paths.LogFile));
+            Yes("an oversized record spans bounded files without losing UTF-8", joined == huge && new FileInfo(older).Length <= cap && new FileInfo(Paths.LogFile).Length <= cap);
+            File.WriteAllText(Paths.LogFile, new string('z', cap + 100), new UTF8Encoding(false));
+            LauncherLog.Line("after legacy log");
+            Yes("an existing unbounded log retains only a bounded older tail", new FileInfo(older).Length == cap && File.ReadAllText(Paths.LogFile).Contains("after legacy log"));
+            bool refused = false;
+            string normal = Paths.LogFile;
+            Paths.LogFile = dir;
+            try { LauncherLog.Line("cannot append to a directory"); }
+            catch (IOException) { refused = true; }
+            catch (UnauthorizedAccessException) { refused = true; }
+            Paths.LogFile = normal;
+            Yes("a genuine I/O refusal is reported rather than skipped", refused);
+            File.Delete(Paths.LogFile);
+            File.Delete(older);
+            LauncherLog.Text("multiline\nstack detail\n");
+            Swallow.Note("mixed", new InvalidOperationException("the reason"));
+            Yes("raw multiline and exception records share the writer", File.ReadAllText(Paths.LogFile).StartsWith("multiline\nstack detail\n") && File.ReadAllText(Paths.LogFile).Contains("the reason"));
             Console.WriteLine(failed + " failed");
             return failed == 0 ? 0 : 1;
         }
