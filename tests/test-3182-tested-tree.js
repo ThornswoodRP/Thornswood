@@ -367,14 +367,17 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
   yes('  and runs in the merge queue, whose run the script reads first (#5182)', /\non:\n  pull_request:\n  merge_group:\n    types: \[checks_requested\]\n/.test(pr));
 
   // ---- 3. why the tree is enough ---------------------------------------------
-  const checkout = steps.find(st => /^      - uses: actions\/checkout@/.test(st)) || '';
+  // A step that runs an action carries a name of its own (#4166), so the
+  // checkout's first line is its name and its uses comes next.
+  const CHECKOUT = /^      - (name: .+\n        )?uses: actions\/checkout@[0-9a-f]{40} # v\d+(\.\d+)*\n/;
+  const checkout = steps.find(st => CHECKOUT.test(st + '\n')) || '';
   const treeCheckout = treeSteps[0] || '';
   // persist-credentials: false keeps the token out of .git/config (#4162)
   // and changes nothing the checks see; any other with: (a depth, a filter,
   // a ref) would.
   const oneCommit = (c) => !/^\s+with:/m.test(c.replace(/\n        with:\n          persist-credentials: false(?=\n|$)/, ''));
-  yes('the checks check out one commit, with no history on either build, in both jobs', /^      - uses: actions\/checkout@[0-9a-f]{40} # v\d+(\.\d+)*\n/.test(checkout + '\n') && oneCommit(checkout) &&
-      /^      - uses: actions\/checkout@[0-9a-f]{40} # v\d+(\.\d+)*\n/.test(treeCheckout + '\n') && oneCommit(treeCheckout));
+  yes('the checks check out one commit, with no history on either build, in both jobs', CHECKOUT.test(checkout + '\n') && oneCommit(checkout) &&
+      CHECKOUT.test(treeCheckout + '\n') && oneCommit(treeCheckout));
   yes('  and keep no credentials in .git/config (#4162)', /\n          persist-credentials: false(\n|$)/.test(checkout) && /\n          persist-credentials: false(\n|$)/.test(treeCheckout));
   // The lint step is the one step that reads the event and fetches the
   // base (#3185): it reports warnings and cannot fail a build, and it is the
