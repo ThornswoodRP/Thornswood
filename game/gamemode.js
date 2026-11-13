@@ -1538,26 +1538,29 @@ function creditWork(actorId, key, n) {
     the plot, the river and the hunt all call it, and anything added later
     gets the same treatment for nothing.
 
-    Guarded and silent. A needs block that is not loaded yet, or a hot reload
-    mid-tick, must not stop somebody's work being counted.
+    No catch around it (#4955). A needs block that is not loaded yet, or a
+    hot reload mid-tick, is the check below: the work is still counted and
+    there is nothing to charge it to. Everything worked() reaches either
+    catches its own engine call or is arithmetic, and notify and say catch
+    their own, so a throw from here is a bug in our own code, and it goes
+    up to the event's guard and the log rather than the work being counted
+    with its rest unpaid.
   */
-  try {
-    const needs = globalThis.__thornswoodNeeds;
-    if (needs && needs.worked) {
-      /*
-        AND IT SAYS SO WHEN THE WORK ACTUALLY TELLS. worked() costs rest per
-        swing now rather than nudging a rate, so it can cross a band, and a
-        band crossing is the one thing worth interrupting somebody for. Every
-        swing before that says nothing, which is the same rule the seam and
-        the chopping block already follow.
-      */
-      const tiredLine = needs.worked(actorId);
-      if (tiredLine) {
-        try { notify(actorId, tiredLine); } catch (e) { }
-        try { say(actorId, tiredLine); } catch (e) { }
-      }
+  const needs = globalThis.__thornswoodNeeds;
+  if (needs && needs.worked) {
+    /*
+      AND IT SAYS SO WHEN THE WORK ACTUALLY TELLS. worked() costs rest per
+      swing now rather than nudging a rate, so it can cross a band, and a
+      band crossing is the one thing worth interrupting somebody for. Every
+      swing before that says nothing, which is the same rule the seam and
+      the chopping block already follow.
+    */
+    const tiredLine = needs.worked(actorId, key);
+    if (tiredLine) {
+      notify(actorId, tiredLine);
+      say(actorId, tiredLine);
     }
-  } catch (e) { }
+  }
 
   /*
     And work done with your party standing next to you counts for more.
@@ -53431,27 +53434,30 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   /*
     A piece of work was done, so it costs rest. See NEEDS.work.
 
+    BY THE RANK OF THE WORK (#4955). professions.md: "A swing of your own
+    work also costs rest, by the rank you are climbing". key is what the work
+    was counted under, the same key creditWork hands the rules (a class verb
+    such as 'mine', a class, a half or a school), and the cost is the rank
+    held in that one. It used to walk every rank the character held and
+    charge the highest, so a Master Miner working their novice half paid the
+    master's 0.6 rather than 1.5. Work in something they hold no rank in is
+    novice work.
+
     Answers a line when the cost crossed a band, because getting tired enough
     to matter is worth being told about and every swing before that is not.
   */
-  function worked(actorId) {
+  function worked(actorId, key) {
     var n = settle(actorId);
     var was = { food: bandOf(n.food), drink: bandOf(n.drink), rest: bandOf(n.rest),
                 temp: tempBand(n.temp).name };
     var rank = 'novice';
-    try {
-      var P = g.__thornswoodProgression;
-      var C = g.__thornswoodCharacter;
-      if (P && C && C.stateOf) {
-        var s = C.stateOf(actorId);
-        var ranks = (s && s.ranks) || {};
-        var order = ['novice', 'advanced', 'expert', 'master'];
-        for (var k in ranks) {
-          if (!Object.prototype.hasOwnProperty.call(ranks, k)) { continue; }
-          if (order.indexOf(ranks[k]) > order.indexOf(rank)) { rank = ranks[k]; }
-        }
-      }
-    } catch (e) { }
+    var P = g.__thornswoodProgression;
+    var C = g.__thornswoodCharacter;
+    if (P && C && C.stateOf && key) {
+      var s = C.stateOf(actorId);
+      var held = s ? P.rankOf(s, P.classFor(key) || key) : null;
+      if (held) { rank = held; }
+    }
     var cost = NEEDS.work[rank];
     if (typeof cost !== 'number') { cost = NEEDS.work.novice; }
     n.rest = clamp(n.rest - cost);

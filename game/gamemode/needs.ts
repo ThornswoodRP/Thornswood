@@ -2928,27 +2928,30 @@
   /*
     A piece of work was done, so it costs rest. See NEEDS.work.
 
+    BY THE RANK OF THE WORK (#4955). professions.md: "A swing of your own
+    work also costs rest, by the rank you are climbing". key is what the work
+    was counted under, the same key creditWork hands the rules (a class verb
+    such as 'mine', a class, a half or a school), and the cost is the rank
+    held in that one. It used to walk every rank the character held and
+    charge the highest, so a Master Miner working their novice half paid the
+    master's 0.6 rather than 1.5. Work in something they hold no rank in is
+    novice work.
+
     Answers a line when the cost crossed a band, because getting tired enough
     to matter is worth being told about and every swing before that is not.
   */
-  function worked(actorId) {
+  function worked(actorId, key) {
     var n = settle(actorId);
     var was = { food: bandOf(n.food), drink: bandOf(n.drink), rest: bandOf(n.rest),
                 temp: tempBand(n.temp).name };
     var rank = 'novice';
-    try {
-      var P = g.__thornswoodProgression;
-      var C = g.__thornswoodCharacter;
-      if (P && C && C.stateOf) {
-        var s = C.stateOf(actorId);
-        var ranks = (s && s.ranks) || {};
-        var order = ['novice', 'advanced', 'expert', 'master'];
-        for (var k in ranks) {
-          if (!Object.prototype.hasOwnProperty.call(ranks, k)) { continue; }
-          if (order.indexOf(ranks[k]) > order.indexOf(rank)) { rank = ranks[k]; }
-        }
-      }
-    } catch (e) { }
+    var P = g.__thornswoodProgression;
+    var C = g.__thornswoodCharacter;
+    if (P && C && C.stateOf && key) {
+      var s = C.stateOf(actorId);
+      var held = s ? P.rankOf(s, P.classFor(key) || key) : null;
+      if (held) { rank = held; }
+    }
     var cost = NEEDS.work[rank];
     if (typeof cost !== 'number') { cost = NEEDS.work.novice; }
     n.rest = clamp(n.rest - cost);
