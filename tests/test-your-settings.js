@@ -148,7 +148,22 @@ async function ask(files, ticket, req, standing, writes) {
   names.push('launcher.json');
   yes('every game file it sends is one the site keeps (' + names.length + ')',
       names.length >= 4 && names.every((n) => ys.nameOk(n)));
-  yes('and the mod menus go as mcm/<file>', /all\["mcm\/"\s*\+\s*Path\.GetFileName\(f\)\]/.test(cs));
+  // The launcher's rule for a mod menu's file name, read out of MenuFileOk,
+  // run beside the site's on the same names: one name the site refuses would
+  // refuse the whole send.
+  const okBody = (cs.match(/static bool MenuFileOk\(string file\)\s*\{([\s\S]*?)\n        \}/) || [])[1] || '';
+  const allowed = (okBody.match(/ch == '(\\'|.)'/g) || []).map((x) => x.slice(7, -1).replace("\\'", "'"));
+  const launcherOk = (f) => {
+    if (!f.endsWith('.ini')) return false;
+    const stem = f.slice(0, -4);
+    if (stem.length < 1 || stem.length > 80 || f.indexOf('..') >= 0) return false;
+    return [...stem].every((c) => /[A-Za-z0-9]/.test(c) || allowed.indexOf(c) >= 0);
+  };
+  const tries = ['SkyUI.ini', 'SkyUI (SE).ini', "Someone's Mod.ini", 'a-b_c.ini', 'a+b.ini', 'a&b.ini', 'C:\\x.ini',
+                 '..\\x.ini', 'a/b.ini', '.ini', 'x'.repeat(80) + '.ini', 'x'.repeat(81) + '.ini', 'x.INI', 'naïve.ini'];
+  yes('the launcher sends a mod menu file only when the site keeps its name (' + allowed.join('') + ')',
+      allowed.length === 7 && tries.every((f) => launcherOk(f) === ys.nameOk('mcm/' + f)));
+  yes('and leaves one the site would refuse on the PC, saying so', /if \(MenuFileOk\(n\)\) all\["mcm\/" \+ n\] = f;/.test(cs));
   yes('no screen or graphics file is among them', !/Skyrim(Prefs|Custom)?\.ini/i.test(cs.replace(/\/\/.*$/gm, '')));
   yes('the microphone\'s line stays on the PC', /MachineLines\s*=\s*\{\s*"MicrophoneName"\s*\}/.test(cs) &&
       /files\[kv\.Key\]\s*=\s*Strip\(/.test(cs));

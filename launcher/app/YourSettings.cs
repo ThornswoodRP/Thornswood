@@ -54,7 +54,14 @@ namespace Thornswood
                 {
                     if (Directory.Exists(menus))
                         foreach (string f in Directory.GetFiles(menus, "*.ini"))
-                            all["mcm/" + Path.GetFileName(f)] = f;
+                        {
+                            // The site keeps only names of its own shape and
+                            // refuses a whole send with one it does not, so a
+                            // file named otherwise stays on this PC alone.
+                            string n = Path.GetFileName(f);
+                            if (MenuFileOk(n)) all["mcm/" + n] = f;
+                            else Swallow.Say("YourSettings.GameFiles", "the mod menu file " + n + " is not a name thornswood.net keeps, so it stays on this PC only");
+                        }
                 }
                 catch (Exception ex) { Swallow.Note("YourSettings.GameFiles, listing the mod menus", ex); }
             }
@@ -71,11 +78,30 @@ namespace Thornswood
             if (name.StartsWith("mcm/", StringComparison.Ordinal))
             {
                 string file = name.Substring(4);
-                if (file.Length > 4 && file.EndsWith(".ini", StringComparison.OrdinalIgnoreCase) &&
-                    file.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 && file.IndexOf("..", StringComparison.Ordinal) < 0)
-                    return Path.Combine(MenusDir, file);
+                if (MenuFileOk(file)) return Path.Combine(MenusDir, file);
             }
             return null;
+        }
+
+        /// <summary>
+        /// A mod menu's file name as the site keeps it (your-settings.js):
+        /// letters, digits, spaces and _ . ( ) ' - only, at most 80 before
+        /// .ini, and no "..". No separator, drive or root can be in it, so it
+        /// is always a file directly in Data\MCM\Settings.
+        /// </summary>
+        static bool MenuFileOk(string file)
+        {
+            if (file == null || !file.EndsWith(".ini", StringComparison.Ordinal)) return false;
+            int stem = file.Length - 4;
+            if (stem < 1 || stem > 80 || file.IndexOf("..", StringComparison.Ordinal) >= 0) return false;
+            for (int i = 0; i < stem; i++)
+            {
+                char ch = file[i];
+                bool ok = (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') ||
+                          ch == ' ' || ch == '_' || ch == '.' || ch == '(' || ch == ')' || ch == '\'' || ch == '-';
+                if (!ok) return false;
+            }
+            return true;
         }
 
         static string Body(string op, JsonObject files)
