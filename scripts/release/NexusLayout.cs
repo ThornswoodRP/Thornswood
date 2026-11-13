@@ -803,8 +803,21 @@ namespace Thornswood.Layout
         {
             Directory.CreateDirectory(Path.GetDirectoryName(to));
             if (OperatingSystem.IsWindows() ? CreateHardLink(@"\\?\" + to, @"\\?\" + from, IntPtr.Zero) : Link(from, to) == 0) return true;
-            File.Copy(from, to, false);
+            CopyWhole(from, to);
             return false;
+        }
+
+        // A copy written as <to>.part and renamed to its name once every byte
+        // is in (#4303), so a run cut part way through a copy (a window
+        // closed, Ctrl+C, power lost) never leaves a short file under a name
+        // files.txt lists. A .part already there stops it: a run again takes
+        // out the .part of each file its files.txt lists before it places.
+        public static void CopyWhole(string from, string to)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(to));
+            string part = to + ".part";
+            File.Copy(from, part, false);
+            File.Move(part, to, false);
         }
     }
 
