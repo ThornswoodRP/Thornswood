@@ -9,7 +9,7 @@ is its own file, game/gamemode-tables/<NAME>.json, and the gamemode's
 The file is laid out one entry to a line down to the second level and compact
 below that, so two changes to different rows are two lines git merges. The
 same rule is GamemodeTables.js and GamemodeTables.ps1;
-tests/test-5191-gamemode-tables.js holds the three to each other.
+game/tests/test-5191-gamemode-tables.js holds the three to each other.
 """
 import json
 import os

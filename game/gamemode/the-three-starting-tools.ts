@@ -2061,7 +2061,7 @@ holdNeverCopiedOff();
   nobody asked to spend. Nothing here answers a kiln press now. benchGate
   still refuses it to anybody who is not a woodworker, and the menu's rows go
   through mp.onCraft like every other bench: the half and rank on each row,
-  the fit-to-make gate, and the work counted. tests/test-2337-kiln-menu.js
+  the fit-to-make gate, and the work counted. game/tests/test-2337-kiln-menu.js
   holds it.
 */
 

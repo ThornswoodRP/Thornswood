@@ -314,7 +314,7 @@ The hundred commissions add no actor, spawn, harvest, purse refill, new currency
 or character inventory grant. Native inventory, pending-record and private
 ledger byte limits remain in force. No alpha reset is required for this slice.
 
-`node tests/test-merchant-quest-catalogue.js` checks actual rulebook gates,
+`node game/tests/test-merchant-quest-catalogue.js` checks actual rulebook gates,
 exact merchant and retained-target bindings, distinct objectives, source
 positions and returns, exact commission recipe/harvest/gate/role evidence, distinct
 goods bundles and the explicit activation boundary. It does not construct a server,

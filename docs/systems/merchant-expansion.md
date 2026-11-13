@@ -315,7 +315,7 @@ completed saves, native build and load-order binding, a fresh hash check,
 coordinated plugin delivery and strict client admission. The component is not
 imported into startup and does not itself change the roster or initialize
 new ledger state. It remains an optional existing-world evidence inspector,
-not a prerequisite to preserving disposable alpha merchant records. `node tests/test-merchant-ledger-inspection.js` checks it.
+not a prerequisite to preserving disposable alpha merchant records. `node game/tests/test-merchant-ledger-inspection.js` checks it.
 
 `game/merchant-ledger-native.js` binds an already isolated native reader to
 that inspection interface. It checks each winning actor placement and its
@@ -323,14 +323,14 @@ NPC base, translating record-local IDs through the owning plugin's mapping.
 Light-plugin IDs must fit their local width; masked aliases are refused.
 It also uses the native inventory validator. The adapter creates no server,
 loads no actors and supplies no cut authorization or population-policy check.
-Interface fixtures in `tests/test-merchant-ledger-native.js` cover full and
+Interface fixtures in `game/tests/test-merchant-ledger-native.js` cover full and
 light plugins and overridden records; compiled native acceptance is separate.
 
-Local checks include `node tests/test-merchant-trading.js`,
-`node tests/test-merchant-settlement.js`,
-`node tests/test-merchant-pending-preflight.js`,
-`node tests/test-merchant-conservation.js`,
-`node tests/test-merchant-deployment.js` and
+Local checks include `node game/tests/test-merchant-trading.js`,
+`node game/tests/test-merchant-settlement.js`,
+`node game/tests/test-merchant-pending-preflight.js`,
+`node game/tests/test-merchant-conservation.js`,
+`node game/tests/test-merchant-deployment.js` and
 `node scripts/dev/Build-MerchantGamemode.js --check`.
 These source changes include no game playtests or operational steps. Changes
 merge only after the required exact-head Launcher builds gate, and no change

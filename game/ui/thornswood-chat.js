@@ -456,7 +456,7 @@
     // Somewhere in the second half of that, so a service restart does not
     // bring every page in the world back in the same instant. Where in it
     // comes from the profile id rather than from chance: no Math.random in
-    // this file, which tests/test-dice.js holds it to because the dice are
+    // this file, which game/tests/test-dice.js holds it to because the dice are
     // the server's.
     var cap = Math.min(30000, 1000 * Math.pow(2, Math.min(tries, 5)));
     var spread = ((Math.abs(ME) % 1009) + tries * 389) % 1009 / 1009;
@@ -588,7 +588,7 @@
                                says mulitple trimes he wasnt connected yet".
 
     A line that is not typed is pressed whatever the notice does, and only the
-    chat box can send a line as typed. tests/test-2732-press-mark.js holds
+    chat box can send a line as typed. game/tests/test-2732-press-mark.js holds
     every caller to one of the three.
   */
   function send(text, press, notice) {

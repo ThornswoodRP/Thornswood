@@ -2,7 +2,7 @@
   test-1319-pass-switch.ps1
 
   #1319. The gamemode now reads thornswoodRequirePass as on unless it is
-  false (tests\test-1319-pass-switch.js). So a deploy never changes what a
+  false (game\tests\test-1319-pass-switch.js). So a deploy never changes what a
   server does without being asked: a server whose settings hold neither true
   nor false is refused until -RequirePass says which.
 

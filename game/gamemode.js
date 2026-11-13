@@ -3707,7 +3707,7 @@ holdNeverCopiedOff();
   nobody asked to spend. Nothing here answers a kiln press now. benchGate
   still refuses it to anybody who is not a woodworker, and the menu's rows go
   through mp.onCraft like every other bench: the half and rank on each row,
-  the fit-to-make gate, and the work counted. tests/test-2337-kiln-menu.js
+  the fit-to-make gate, and the work counted. game/tests/test-2337-kiln-menu.js
   holds it.
 */
 
@@ -3932,7 +3932,7 @@ const FACE_CAP_MS = 1800000;
   gamemode deploy logged in again everybody on: the login hook ran for each
   of them (their profession said again, the known spells and the K panel
   sent again), and somebody in the hall read as a reconnect, which starts
-  the creation wait over. Measured by tests\test-3154-login-restore.js, which
+  the creation wait over. Measured by game\tests\test-3154-login-restore.js, which
   runs the whole file and reloads it under a character in the world. The
   needs block already keeps who has arrived on globalThis for the same
   reason. A restart is a new process, so everybody is new again, which is
@@ -9363,7 +9363,7 @@ function benchGate(actorId, baseDesc) {
 
   Keyed off the family the recipe table already puts on every owned row, so this
   list is checked against real data rather than against a memory of what Skyrim
-  contains: tests\test-1398-fuel.js counts the rows in each of these families and fails if
+  contains: game\tests\test-1398-fuel.js counts the rows in each of these families and fails if
   a family here matches nothing, because a family name that has been renamed
   under it would turn this rule off without a word.
 */
@@ -11176,7 +11176,7 @@ const KEY_RECIPE = '15497:Thornswood-Content.esp';
   somebody with a broken arm was refused the forge's own Key row and cut the
   same key with the lock key at the same forge. A road that asks this asks
   both, and a gate added later goes here and reaches every road at once.
-  tests/test-1733-injury-gate.js holds every road, and the rest of the file,
+  game/tests/test-1733-injury-gate.js holds every road, and the rest of the file,
   to it.
 
   workbenchId is the bench reference the work is done at, because the injury
@@ -13954,8 +13954,9 @@ log('gamemode loaded:',
   // (#3386): this port is plain http, so the launcher's Fix takes them from
   // the signed release over https, by the sha256 its record gives them.
   // The names are the plugins scripts\release\Ship-Rules.ps1 calls ours
-  // ($ShipOursFiles), and tests\test-1180-own-plugins.js holds the two lists
-  // to each other, so a plugin the repo makes goes into both in one change.
+  // ($ShipOursFiles), and launcher\tests\test-1180-own-plugins.js holds the
+  // two lists to each other, so a plugin the repo makes goes into both in one
+  // change.
   var OURS = { 'thornswood-content.esp': 1, 'thornswood-last.esp': 1 };
 
   // Returns '' once the manifest is published, otherwise why it was not.
@@ -14028,7 +14029,7 @@ log('gamemode loaded:',
   // calls manifestGen.generateManifest, which writes data/manifest.json with
   // writeFileSync, and only after it returns does setupGamemode load this file
   // (skymp5-server/ts/index.ts at the commit records\server-build.json names;
-  // tests\test-1885-manifest-order.js reads it there). A start whose
+  // game\tests\test-1885-manifest-order.js reads it there). A start whose
   // generateManifest throws never loads the gamemode at all. So the file is
   // complete when this runs, and a publish that fails here fails for a reason
   // no wait mends: the file unreadable, no mods in it, the api folder not
@@ -17907,7 +17908,7 @@ log('gamemode loaded:',
   /*
     ONE WAY A STORE'S FILE IS READ AND WRITTEN (#4529). The same text is in
     the season, farming, property and furniture blocks, and
-    tests/test-4529-store-saves.js holds the copies to it, since each block
+    game/tests/test-4529-store-saves.js holds the copies to it, since each block
     is lifted and run alone. Seven stores (the property register and its
     jail, bed and bench books, the season, the farm claims and the
     furniture register) were each written straight over the old file, and
@@ -19967,7 +19968,7 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
   /*
     ONE WAY A STORE'S FILE IS READ AND WRITTEN (#4529). The same text is in
     the season, farming, property and furniture blocks, and
-    tests/test-4529-store-saves.js holds the copies to it, since each block
+    game/tests/test-4529-store-saves.js holds the copies to it, since each block
     is lifted and run alone. Seven stores (the property register and its
     jail, bed and bench books, the season, the farm claims and the
     furniture register) were each written straight over the old file, and
@@ -21911,7 +21912,7 @@ module.exports = {
   /*
     ONE WAY A STORE'S FILE IS READ AND WRITTEN (#4529). The same text is in
     the season, farming, property and furniture blocks, and
-    tests/test-4529-store-saves.js holds the copies to it, since each block
+    game/tests/test-4529-store-saves.js holds the copies to it, since each block
     is lifted and run alone. Seven stores (the property register and its
     jail, bed and bench books, the season, the farm claims and the
     furniture register) were each written straight over the old file, and
@@ -22685,7 +22686,7 @@ module.exports = {
     walks out, or a guard lets them out, or /helpme reaches staff.
 
     No timer, release by the hold's guards, lockpicking and the temple on
-    death are what the cells and the respawn already do; tests/test-502-jail-rules.js
+    death are what the cells and the respawn already do; game/tests/test-502-jail-rules.js
     holds each of them.
   */
 
@@ -23609,7 +23610,7 @@ module.exports = {
     front of an old one would hand the old one's number, and so its keys, to
     the new one. So a number is never moved: a building that joins a clash
     gets the next number of its group, and one that leaves the table has its
-    row taken out. tests/test-3899-key-labels.js fails the build whenever
+    row taken out. game/tests/test-3899-key-labels.js fails the build whenever
     two buildings that can be held come out with the same label, and names
     them.
   */
@@ -27280,7 +27281,7 @@ module.exports = {
     town's navmesh, on ground flat to a few units, and touch no furniture,
     container, door, the place somebody stands at any other bench, or any
     smaller static. game\data\woodworking-benches.json says what it measured
-    at each spot. tests\test-516-woodworking-benches.js holds this block to
+    at each spot. game\tests\test-516-woodworking-benches.js holds this block to
     that file and, on a machine with the game, the file to the plugins.
 
     The forge is the anchor because the server loads it (a FURN), and
@@ -30495,7 +30496,7 @@ module.exports = {
   carriage and ferry workers, read out of the plugins by
   scripts/dev/Build-NpcPopulation.py. Each row below is one of those, with its
   reference, base, world, spot and hold copied across, and
-  tests/test-1394-fares.js fails when the two drift apart. You land on the
+  game/tests/test-1394-fares.js fails when the two drift apart. You land on the
   driver's own spot at the other end, the way MoveTo onto an actor lands.
   Which water a ferryman works is the mod's: KmodFerryRoute1 to 4 in
   cast.json, which the mod's own page calls the North Coast, Lake Honrich,
@@ -32305,7 +32306,7 @@ module.exports = {
 
   The manifest is game\trade-cargo.js, bundled just below so the one file the
   server loads carries it (scripts\dev\Build-TradeCargoGamemode.js writes the
-  bundle; tests\test-511-trade-cargo.js fails when it is stale). This block is
+  bundle; game\tests\test-511-trade-cargo.js fails when it is stale). This block is
   the server's side of it: the register on disk, the release of deleted
   characters, the line the load says and, with the switch on, the dock, the
   staff panel and the clock (#2700, game\trade-ship-dock.js, bundled below
@@ -41413,7 +41414,7 @@ mp.onUpdateEquipmentAttempt = guard('onUpdateEquipmentAttempt', function (actorI
   Only an actor with a character record is gated. An NPC has no Might.
 
   The K panel (game/ui/thornswood-skills.js, the Might row) shows the same
-  two thresholds; tests/test-2262-strength-weapons.js holds the two equal.
+  two thresholds; game/tests/test-2262-strength-weapons.js holds the two equal.
 */
 (function () {
   'use strict';
@@ -50215,7 +50216,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   /*
     ONE WAY A STORE'S FILE IS READ AND WRITTEN (#4529). The same text is in
     the season, farming, property and furniture blocks, and
-    tests/test-4529-store-saves.js holds the copies to it, since each block
+    game/tests/test-4529-store-saves.js holds the copies to it, since each block
     is lifted and run alone. Seven stores (the property register and its
     jail, bed and bench books, the season, the farm claims and the
     furniture register) were each written straight over the old file, and
@@ -51647,7 +51648,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       (#1764). Until this, the whole time away was settled toward that place,
       so somebody who logged out at 45 in the snow at night came back six
       hours later at 10, freezing, with the cold band on both clocks and the
-      chill's hour already counting (tests\test-3154-login-restore.js). They
+      chill's hour already counting (game\tests\test-3154-login-restore.js). They
       come back at the temperature they left with, and it moves from there
       toward wherever they stand now, from their game's first /place.
     */

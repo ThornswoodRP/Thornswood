@@ -19,7 +19,7 @@
 //   node scripts\dev\Build-SpoilNames.js
 //
 // It stops, changing nothing, when a food that spoils has no readable name in
-// food.json. tests\test-3163-spoilage.js holds the two files to each other.
+// food.json. game\tests\test-3163-spoilage.js holds the two files to each other.
 'use strict';
 const fs = require('fs');
 const path = require('path');

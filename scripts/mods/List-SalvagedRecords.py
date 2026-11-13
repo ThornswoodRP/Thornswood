@@ -5,7 +5,7 @@ Writes scripts\\mods\\content-salvaged.json: every record Thornswood-Content.esp
 carried that Thornswood's own tools did not add, what each one is used by, what
 became of it (#2553), and the sha256 of every version of it the repository has
 held. Add-ContentRecords.py reads the list to take out what goes, and
-tests\\test-2553-salvaged-gone.js reads it to prove nothing salvaged is left.
+game\\tests\\test-2553-salvaged-gone.js reads it to prove nothing salvaged is left.
 
 WHY (#2553)
 

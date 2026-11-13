@@ -14,7 +14,7 @@
 // CONT, and nothing else, and that the swap's key lists carry the key. With
 // the fork checked out (the nightly fetches it at the pin and sets
 // THORNSWOOD_FORK_REQUIRED=1) it also checks the pinned engine reads it.
-// tests\test-spoils.js checks the gamemode no longer touches a container.
+// game\tests\test-spoils.js checks the gamemode no longer touches a container.
 //
 // Read only.
 'use strict';

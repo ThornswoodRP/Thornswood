@@ -121,6 +121,9 @@ on:
     branches: [main]
     paths:
       - 'game/**'
+      # Nor the game's harnesses in game/tests: a change to a check is no
+      # new release.
+      - '!game/tests/**'
       - 'launcher/**'
       # Not its harnesses (plan line 42): a change to a check is no new
       # launcher, as LauncherVersion.ps1 says.
