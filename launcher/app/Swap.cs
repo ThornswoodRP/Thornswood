@@ -143,12 +143,18 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// Moves a folder aside, with a second go if the first is refused.
-        /// Windows says access denied when anything still holds the folder
-        /// open, and a game that has just fallen over holds it for a few
-        /// seconds after it has stopped showing in the task list. Clearing
-        /// whatever is left of Skyrim and waiting is what turns this from a
-        /// failed launch into a pause nobody notices.
+        /// Moves a folder aside. Windows says access denied when anything still
+        /// holds the folder open, and a game that has just fallen over can
+        /// still hold it after it has stopped showing in the task list. So a
+        /// refused move closes whatever is left of Skyrim, which returns once
+        /// those processes have exited and Windows has closed every handle
+        /// they held (Checks.CloseGame), and moves once more. A move refused
+        /// after that is held by something that is not the game, and waiting
+        /// does not make it let go.
+        ///
+        /// Until #4628 the second move was ten, 400 ms apart: four seconds of
+        /// the launcher not answering, hoping the handles had closed by one
+        /// of them.
         /// </summary>
         static void MoveAside(string from, string to)
         {
@@ -158,23 +164,27 @@ namespace Thornswood
 
             try { Checks.CloseGame(); } catch (Exception ex) { Swallow.Note("Swap.MoveAside, CloseGame", ex); }
 
-            for (int i = 0; i < 10; i++)
-            {
-                System.Threading.Thread.Sleep(400);
-                try { Directory.Move(from, to); return; }
-                catch (UnauthorizedAccessException ex) { Swallow.Note("Swap.MoveAside, retry UnauthorizedAccess", ex); }
-                catch (IOException ex) { Swallow.Note("Swap.MoveAside, retry IO", ex); }
-            }
+            try { Directory.Move(from, to); }
+            catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException) { throw StillHeld(from, ex); }
+        }
 
-            // Out of ideas, so name the folder and the two causes that are
-            // actually worth acting on, rather than repeating the word
-            // Windows used.
-            throw new Exception(
+        /// <summary>
+        /// What a refused second move says: the folder, and the cause worth
+        /// acting on rather than the word Windows used. A game that would not
+        /// go is named by StuckReport; anything else is not Skyrim.
+        /// </summary>
+        static Exception StillHeld(string from, Exception refused)
+        {
+            string left = "";
+            try { left = Checks.StuckReport(); } catch (Exception ex) { Swallow.Note("Swap.MoveAside, StuckReport", ex); }
+            return new Exception(
                 "Windows would not let go of\n\n    " + from + "\n\n" +
-                "Something still has it open. Almost always that is Skyrim or the " +
-                "multiplayer client left over from a crash, so a restart clears it. " +
-                "If it happens again straight after a restart, that folder is most " +
-                "likely in OneDrive, and moving it out of OneDrive fixes it for good.");
+                (left.Length > 0
+                    ? left
+                    : "Something other than Skyrim still has it open (" + refused.Message.TrimEnd('.') + "). " +
+                      "If it happens again straight after a restart, that folder is most " +
+                      "likely in OneDrive, and moving it out of OneDrive fixes it for good."),
+                refused);
         }
 
         public static void Apply()

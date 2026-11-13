@@ -1281,6 +1281,15 @@ namespace Thornswood
         /// go. Anything with a window is asked first and given six seconds;
         /// anything without one never had a window to ask, so it is ended
         /// straight away. Returns how many were closed.
+        ///
+        /// Both waits are on the processes' own exit (WaitForExit on each
+        /// handle), so this returns the moment the last one has gone, and by
+        /// then Windows has closed every handle they held, the folders Swap
+        /// moves among them (#4628). Until then it looked again every 250 ms,
+        /// up to 24 times after asking and 12 after ending them, so a game that
+        /// had already gone still cost the rest of each quarter second, and
+        /// Swap.MoveAside tried its move ten more times on top in case the
+        /// handles were still open.
         /// </summary>
         public static int CloseGame()
         {
@@ -1300,29 +1309,33 @@ namespace Thornswood
                 catch (Exception ex) { Swallow.Note("Checks.CloseGame, close", ex); }
             }
 
-            if (asked)
-            {
-                for (int i = 0; i < 24; i++)
-                {
-                    Thread.Sleep(250);
-                    bool any = false;
-                    foreach (Process p in ps) { try { if (!p.HasExited) any = true; } catch (Exception ex) { Swallow.Note("Checks.CloseGame, has exited", ex); } }
-                    if (!any) break;
-                }
-            }
+            // Six seconds to save and go, for a game that was asked.
+            if (asked) WaitForExits(ps, AskedToClose);
 
             foreach (Process p in ps) { try { if (!p.HasExited) p.Kill(); } catch (Exception ex) { Swallow.Note("Checks.CloseGame, kill", ex); } }
-            Release(ps);
 
-            // A process that has been ended can sit in the table for a moment
-            // afterwards, so this waits for it to leave rather than reporting a
-            // failure on the first look.
-            for (int i = 0; i < 12; i++)
-            {
-                Thread.Sleep(250);
-                if (!GameRunning()) break;
-            }
+            // Ended, it goes as soon as Windows has torn it down. One that
+            // does not within three seconds is held by something (a crash
+            // report being written), which StuckReport names.
+            WaitForExits(ps, EndedToGo);
+            Release(ps);
             return count;
+        }
+
+        static readonly TimeSpan AskedToClose = TimeSpan.FromSeconds(6);
+        static readonly TimeSpan EndedToGo = TimeSpan.FromSeconds(3);
+
+        /// <summary>Waits on each process's own exit, all of them within one deadline.</summary>
+        static void WaitForExits(List<Process> ps, TimeSpan within)
+        {
+            DateTime until = DateTime.UtcNow + within;
+            foreach (Process p in ps)
+            {
+                TimeSpan left = until - DateTime.UtcNow;
+                if (left < TimeSpan.Zero) left = TimeSpan.Zero;
+                try { p.WaitForExit(left); }
+                catch (Exception ex) { Swallow.Note("Checks.WaitForExits", ex); }
+            }
         }
 
         /// <summary>
