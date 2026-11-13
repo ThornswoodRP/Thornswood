@@ -64,6 +64,9 @@ link, and the old line goes.
   board in the recipient's hold, not at an inn.**
   (dec_SaZmBq9bZT4O_xP-wHpqbg) 12 Nov 2026,
   [#4560](https://github.com/ThornswoodRP/Thornswood/issues/4560#issuecomment-6842189471).
+- **A parcel costs the 20 board fee plus a courier pay the sender names, at
+  least 15.** (dec_T2p8Emt1pF5ZarJ4vv2j0Q) 12 Nov 2026,
+  [#4560](https://github.com/ThornswoodRP/Thornswood/issues/4560#issuecomment-6842435718).
 - **House and shop upkeep is due weekly**, in goods or labour. 22 Oct 2026,
   [#3170](https://github.com/EvilPatrick06/Thornswood/issues/3170#issuecomment-6335271623).
 - **Missed upkeep never takes the claim away;** it brings a penalty, the way
