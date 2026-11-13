@@ -206,9 +206,7 @@ def scan(path, name, wanted, keywords_out=None):
     bench keyword in this table uses, so it is passed over rather than guessed
     at: a wrong guess here would claim a piece of furniture is a forge.
     """
-    buf = open(path, 'rb').read()
-    if len(buf) < 24 or buf[:4] != b'TES4':
-        return []
+    buf = own_plugins.read_plugin(path, name)
     masters = masters_of(buf)
     header = struct.unpack_from('<I', buf, 4)[0]
     u32 = lambda i: struct.unpack_from('<I', buf, i)[0]
@@ -238,32 +236,36 @@ def scan(path, name, wanted, keywords_out=None):
                 p += size
                 continue
             flags, fid = struct.unpack_from('<II', buf, p + 8)
-            if not (flags & COMPRESSED):
-                pairs = subrecords(buf[p + 24:p + 24 + size])
-                if kywd:
-                    for st, body in pairs:
-                        if st == b'EDID' and keywords_out is not None:
-                            d = desc(fid)
-                            if d:
-                                keywords_out[body.rstrip(bytes([0])).decode('ascii', 'replace')] = d
-                    p += 24 + size
-                    continue
-                bd = desc(fid)
-                hit = None
+            body = buf[p + 24:p + 24 + size]
+            if flags & COMPRESSED:
+                # Until #4553 a compressed record was passed over unread, so a
+                # bench a plugin stores compressed was no bench at all.
+                body = own_plugins.inflate(body, name, tag, fid)
+            pairs = subrecords(body)
+            if kywd:
                 for st, body in pairs:
-                    if st == b'KWDA':
-                        for i in range(0, len(body) - 3, 4):
-                            kd = desc(struct.unpack_from('<I', body, i)[0])
-                            if kd in wanted:
-                                hit = kd
-                    elif st == b'WBDT' and len(body) >= 1 and body[0] in MENU_STATIONS:
-                        # A keyword wins over a workbench type, because a bench
-                        # with one of our keywords is a bench we have recipes for
-                        # and those are the specific answer.
-                        if hit is None:
-                            hit = MENU_STATIONS[body[0]]['key']
-                if hit and bd:
-                    found.append((bd, hit))
+                    if st == b'EDID' and keywords_out is not None:
+                        d = desc(fid)
+                        if d:
+                            keywords_out[body.rstrip(bytes([0])).decode('ascii', 'replace')] = d
+                p += 24 + size
+                continue
+            bd = desc(fid)
+            hit = None
+            for st, body in pairs:
+                if st == b'KWDA':
+                    for i in range(0, len(body) - 3, 4):
+                        kd = desc(struct.unpack_from('<I', body, i)[0])
+                        if kd in wanted:
+                            hit = kd
+                elif st == b'WBDT' and len(body) >= 1 and body[0] in MENU_STATIONS:
+                    # A keyword wins over a workbench type, because a bench
+                    # with one of our keywords is a bench we have recipes for
+                    # and those are the specific answer.
+                    if hit is None:
+                        hit = MENU_STATIONS[body[0]]['key']
+            if hit and bd:
+                found.append((bd, hit))
             p += 24 + size
 
     p = 24 + header
@@ -453,4 +455,9 @@ def main():
     return 0
 
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except own_plugins.Unreadable as exc:
+        # Every plugin is read before anything is written.
+        print('STOP. %s. Nothing was written.' % exc)
+        sys.exit(1)

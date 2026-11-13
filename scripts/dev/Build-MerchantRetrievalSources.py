@@ -103,15 +103,11 @@ def build(data):
         owned = ROOT / 'game/content' / name
         path = owned if owned.is_file() else data / name
         plugin = C.Plugin(str(path), name)
-        if not plugin.ok:
-            raise ValueError('Invalid source plugin: ' + name)
         sha = hashlib.sha256(plugin.buf).hexdigest()
         verify_plugin_sha(name, sha, entry['sha256'])
         winning_refs(plugin, index, sha, wanted, winners)
         C.read(plugin, tables)
         P.read_details(plugin, tables)
-        if plugin.failed:
-            raise ValueError('Unreadable compressed records: ' + name)
     cast = C.Cast(tables)
     rows, fixtures = [], []
     for i, (quest, ref, hold, role, gold, hours) in enumerate(TERMS):

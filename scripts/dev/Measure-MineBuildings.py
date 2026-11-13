@@ -223,11 +223,8 @@ def main():
     print('  %d plugins, the five masters then %s' % (len(order), args.plugins))
 
     cells, worlds, veins, removed = {}, {}, {}, set()
-    failed = 0
     for name in order:
         pl = dt.Plugin(own_plugins.plugin_path(args.data, name), name)
-        if not pl.ok:
-            continue
         # Only a vein's cell needs a name a person would know, and only when the
         # gamemode's BUILDING_NAME does not already have one. The string tables
         # are still read up front, because which cells hold veins is not known
@@ -235,7 +232,6 @@ def main():
         if pl.localised:
             pl.strings = dt.bsa.load_strings(args.data, name)
         walk(pl, ores, cells, worlds, veins, removed)
-        failed += pl.failed
 
     def world_name(w):
         row = worlds.get(w, {})
@@ -389,8 +385,6 @@ def main():
           % (format(inside, ','), len(in_building)))
     print('  %s inside an interior no door leads into, across %d cell(s), so nobody can claim it'
           % (format(nowhere, ','), len(no_door)))
-    if failed:
-        print('  %d compressed record(s) would not inflate, so this is incomplete' % failed)
 
     def ore_line(rows):
         count = {}
@@ -506,7 +500,7 @@ def main():
                    'removedByLaterPlugin': len(removed), 'openGround': outside,
                    'behindABuilding': shut_out, 'worldsBehindABuilding': len(behind),
                    'inBuildings': inside, 'buildings': len(in_building),
-                   'noDoor': nowhere, 'failedToInflate': failed},
+                   'noDoor': nowhere},
         'buildings': dict((b, building_row(b)) for b in in_building),
         'worlds': dict((w, world_row(w)) for w in behind),
         'onTheWayIn': dict((b, {'name': called(b), 'shuts': sorted(shuts[b]),
@@ -523,4 +517,9 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except own_plugins.Unreadable as exc:
+        # Every plugin is read before anything is written.
+        print('STOP. %s. Nothing was written.' % exc)
+        sys.exit(1)

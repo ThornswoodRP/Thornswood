@@ -339,8 +339,8 @@ def build(paths, strings_dir=None):
     sources = []
     for path, name in zip(paths, order):
         plugin = C.Plugin(path, name)
-        if not plugin.ok:
-            raise ValueError('Invalid plugin: ' + name)
+        # C.Plugin raises own_plugins.Unreadable, a ValueError, on a file that
+        # is not a plugin and on a compressed record that will not inflate.
         # Thornswood-Last.esp is built FROM this catalogue: it switches off
         # every placed actor the catalogue cuts (#2468). Read as an input it
         # would make every cut actor "Deleted or initially switched off", and
@@ -362,8 +362,6 @@ def build(paths, strings_dir=None):
             places = {tag: {} for tag in tables}
             places[b'LCTN'] = tables[b'LCTN']
             C.read(plugin, places)
-            if plugin.failed:
-                raise ValueError('Failed compressed records: ' + name)
             for desc, row in places[b'CELL'].items():
                 if row.get('location') and desc in tables[b'CELL']:
                     tables[b'CELL'][desc]['location'] = row['location']
@@ -373,8 +371,6 @@ def build(paths, strings_dir=None):
             plugin.strings = C.bsa.load_strings(strings_dir or os.path.dirname(path), name)
         C.read(plugin, tables)
         read_details(plugin, tables)
-        if plugin.failed:
-            raise ValueError('Failed compressed records: ' + name)
         sources.append({'name': name, 'sha256': hashlib.sha256(plugin.buf).hexdigest()})
     context = C.Cast(tables)
     rows = []

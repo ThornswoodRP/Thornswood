@@ -52,17 +52,19 @@ def main():
         kinds[base] = ('ores', row['name'])
     tables = {tag: {} for tag in C.WANTED}
     tables.update({b'ACHR': {}, b'REFR': {}, b'ECZN': {}})
-    for row in population['loadOrder']:
-        path = own_plugins.plugin_path(args.data, row['name'])
-        plugin = C.Plugin(path, row['name'])
-        if not plugin.ok:
-            raise SystemExit('STOP. %s is not a plugin this can read.' % row['name'])
-        if not own_plugins.is_own(row['name']) and hashlib.sha256(plugin.buf).hexdigest() != row['sha256']:
-            raise SystemExit('STOP. %s is not the bytes npc-population.json was built from.' % row['name'])
-        if plugin.localised:
-            plugin.strings = C.bsa.load_strings(args.data, plugin.name)
-        C.read(plugin, tables)
-        P.read_details(plugin, tables)
+    try:
+        for row in population['loadOrder']:
+            path = own_plugins.plugin_path(args.data, row['name'])
+            plugin = C.Plugin(path, row['name'])
+            if not own_plugins.is_own(row['name']) and hashlib.sha256(plugin.buf).hexdigest() != row['sha256']:
+                raise SystemExit('STOP. %s is not the bytes npc-population.json was built from.' % row['name'])
+            if plugin.localised:
+                plugin.strings = C.bsa.load_strings(args.data, plugin.name)
+            C.read(plugin, tables)
+            P.read_details(plugin, tables)
+    except own_plugins.Unreadable as exc:
+        # A plugin that is not one, or a record in it that will not inflate.
+        raise SystemExit('STOP. %s.' % exc)
     context = C.Cast(tables)
     out = {'plants': {}, 'ores': {}}
     bases = collections.defaultdict(set)

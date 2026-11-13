@@ -503,11 +503,9 @@ def build(data, plugins_txt, say):
 
     t = dict((k, {}) for k in WANTED)
     t[b'ACHR'], t[b'REFR'] = {}, {}
-    failed = tables = 0
+    tables = 0
     for name in order:
         pl = Plugin(own_plugins.plugin_path(data, name), name)
-        if not pl.ok:
-            continue
         pl.masters = [canon.get(m.lower(), m) for m in pl.masters]
         if pl.localised:
             pl.strings = bsa.load_strings(data, name)
@@ -522,20 +520,18 @@ def build(data, plugins_txt, say):
             places = dict((k, {}) for k in t)
             places[b'LCTN'] = t[b'LCTN']
             read(pl, places)
-            failed += pl.failed
             for d, row in places[b'CELL'].items():
                 if row.get('location') and d in t[b'CELL']:
                     t[b'CELL'][d]['location'] = row['location']
             continue
         read(pl, t)
-        failed += pl.failed
 
     cast = Cast(t)
     holds = {}
     counts = {'placed': 0, 'deleted': 0, 'notPeople': 0, 'people': 0, 'offAtStart': 0,
               'traders': 0, 'transport': 0, 'guards': 0, 'everyoneElse': 0,
               'uniqueTraders': 0, 'uniqueTransport': 0,
-              'noHold': 0, 'failedToInflate': failed, 'stringTables': tables}
+              'noHold': 0, 'stringTables': tables}
     how, sellers = {}, {}
     for ref in sorted(t[b'ACHR']):
         a = t[b'ACHR'][ref]
@@ -630,8 +626,6 @@ def main():
     say('  %s are not people: animals, monsters, draugr and mannequins' % f(c['notPeople']))
     say('  %s are people, and %s of those start switched off, by their own flag or an enable parent'
         % (f(c['people']), f(c['offAtStart'])))
-    if c['failedToInflate']:
-        say('  %d compressed record(s) would not inflate, so this is incomplete' % c['failedToInflate'])
     say('')
     say('The people standing in the world')
     say('  %s trader(s), who survive, %s of them with a name of their own'
@@ -700,4 +694,9 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except own_plugins.Unreadable as exc:
+        # Every plugin is read before anything is written.
+        print('STOP. %s. Nothing was written.' % exc)
+        sys.exit(1)

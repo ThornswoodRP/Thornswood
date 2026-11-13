@@ -35,8 +35,47 @@ on 1 Oct. Every builder takes its load order from load_order.
 import hashlib
 import io
 import os
+import struct
+import zlib
 
 OWN_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'game', 'content'))
+
+
+# A PLUGIN THAT DOES NOT READ STOPS THE BUILD (#4553). A builder that passed
+# over a file that is not a plugin, or read a compressed record that would
+# not inflate as an empty one, built a table of a load order nobody runs and
+# wrote it: with the masters swapped for blank files the bench, cast and door
+# builders wrote empty tables and exited 0. So the reader refuses both, and
+# no builder has a count of its own to remember to look at. It is a
+# ValueError, so a builder that already stopped on ValueError still does.
+class Unreadable(ValueError):
+    pass
+
+
+def read_plugin(path, name):
+    """A plugin's bytes, or Unreadable when they are not a plugin."""
+    with open(str(path), 'rb') as fh:
+        buf = fh.read()
+    if len(buf) < 24 or buf[:4] != b'TES4':
+        raise Unreadable('%s is not a plugin: it does not start with a TES4 header' % name)
+    return buf
+
+
+def inflate(raw, name, tag, fid):
+    """A compressed record's data: four bytes saying how long it inflates to,
+    then a zlib stream. Unreadable when it does not inflate to that length."""
+    what = '%s %s 0x%08X' % (name, tag.decode('ascii', 'replace'), fid)
+    if len(raw) < 4:
+        raise Unreadable('%s is compressed and will not inflate: it is %d bytes' % (what, len(raw)))
+    want = struct.unpack_from('<I', raw, 0)[0]
+    try:
+        out = zlib.decompress(raw[4:])
+    except zlib.error as exc:
+        raise Unreadable('%s is compressed and will not inflate (%s)' % (what, exc))
+    if len(out) != want:
+        raise Unreadable('%s is compressed and will not inflate to its length: %d bytes, not %d'
+                         % (what, len(out), want))
+    return out
 
 
 # Ours, and made in the Data folder from a recipe rather than held here (#2791).

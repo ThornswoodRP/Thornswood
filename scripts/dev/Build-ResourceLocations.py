@@ -62,8 +62,6 @@ def main():
             plugin.strings = C.bsa.load_strings(args.strings_dir, plugin.name)
         C.read(plugin, tables)
         P.read_details(plugin, tables)
-        if plugin.failed:
-            raise ValueError('Failed compressed records: ' + plugin.name)
     context = C.Cast(tables)
     fish = js_table('FISH_BY_BASE')
     racks = js_table('GAME_BY_BASE')

@@ -89,13 +89,14 @@ def main():
         if not os.path.isfile(path):
             print('STOP. %s is not in %s' % (name, args.data))
             return 1
-        pl = dt.Plugin(path, name)
-        if not pl.ok:
-            print('STOP. %s is not a plugin' % name)
+        try:
+            pl = dt.Plugin(path, name)
+            if pl.localised:
+                pl.strings = bsa.load_strings(args.data, name)
+            walk(pl, out)
+        except own_plugins.Unreadable as exc:
+            print('STOP. %s' % exc)
             return 1
-        if pl.localised:
-            pl.strings = bsa.load_strings(args.data, name)
-        walk(pl, out)
 
     for d in sorted(out, key=lambda k: (out[k]['type'], out[k].get('edid', ''))):
         r = out[d]

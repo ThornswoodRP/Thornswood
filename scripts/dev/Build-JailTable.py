@@ -225,10 +225,9 @@ def main():
     plugins = []
     for name in order:
         pl = dt.Plugin(own_plugins.plugin_path(args.data, name), name)
-        if pl.ok:
-            plugins.append(pl)
-            read_factions(pl, factions)
-            read_world(pl, bases, {}, {})
+        plugins.append(pl)
+        read_factions(pl, factions)
+        read_world(pl, bases, {}, {})
     for pl in plugins:
         if pl.localised:
             pl.strings = bsa.load_strings(args.data, pl.name)
@@ -315,4 +314,9 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except own_plugins.Unreadable as exc:
+        # Every plugin is read before anything is written.
+        print('STOP. %s. Nothing was written.' % exc)
+        sys.exit(1)
