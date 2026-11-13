@@ -1,7 +1,10 @@
-# Silent catches in the launcher and the scripts, per file. Read by
-# scripts\dev\Check-Swallow.ps1, which fails when any file in launcher\app, or
-# any .ps1 under scripts\ or installer\ (since #2711, the section at the end),
-# has more than its line here allows. A file that is not listed is allowed none.
+# Silent catches in the launcher, the scripts, the site, voice, the bot, the
+# game and the tools, per file. Read by scripts\dev\Check-Swallow.ps1, which
+# fails when any file in launcher\app, any .ps1 under scripts\ or installer\
+# (since #2711), any .js or .py under site\, voice\ or bot\ (since #2736),
+# or any .js, .ts or .cs under game\, tools\ or launcher\move\ (since #4132),
+# each in its section below, has more than its line here allows. A file that
+# is not listed is allowed none.
 #
 # THE RULE. A catch counts when the body between its braces is empty or holds
 # nothing but whitespace, whether the braces sit on one line or on lines of
@@ -306,3 +309,108 @@ scripts\vps\Write-BotToken.ps1 1
 # the except line what they expect, and a glyph or avatar that will not draw
 # fails the card, which on_member_join logs. The rest were tries around code
 # that does not throw.
+#
+# THE GAME AND THE TOOLS, since #4132. Check-Swallow.ps1 reads the
+# JavaScript and TypeScript under game\ by the JavaScript rule, and the C#
+# under tools\ and launcher\move\ by the empty-body rule, keyed by the path
+# from the repository root. Nothing read them before, and in one week 101
+# empty catches landed there unseen, among them the stall keeper's 14-day
+# lapse clock write and the character switch's dead and in-combat checks.
+# Not read: game\gamemode.js, which Build-Gamemode.js joins from the parts
+# in game\gamemode\, so each catch is counted once, in its part; and a .NET
+# test project or build output (a folder ending in .Tests, bin or obj).
+#
+# Measured on main at 9b308286: 717 in 90 files. The gamemode's parts hold
+# 360, the plugins 209 (194 in thornswood-front.js), the overlays 125, the
+# game's loose scripts 7, the deploy agent 14 and the launcher's mover 2.
+# Each line below is that file's count today, its allowance, so it can only
+# go down; converting one lowers its line.
+game\gamemode\alchemy.ts 3
+game\gamemode\asking-staff.ts 6
+game\gamemode\carriages.ts 4
+game\gamemode\character-creation.ts 2
+game\gamemode\character-roster.ts 6
+game\gamemode\character.ts 10
+game\gamemode\college.ts 4
+game\gamemode\company-terms.ts 5
+game\gamemode\cuffs.ts 2
+game\gamemode\custom-quests.ts 3
+game\gamemode\door.ts 7
+game\gamemode\durability.ts 4
+game\gamemode\embassy-and-remnant.ts 1
+game\gamemode\event-handlers.ts 1
+game\gamemode\farming.ts 4
+game\gamemode\furniture.ts 6
+game\gamemode\gathering-stations.ts 2
+game\gamemode\hair-dye.ts 5
+game\gamemode\hold-economy.ts 5
+game\gamemode\idle.ts 2
+game\gamemode\injury-and-disease.ts 15
+game\gamemode\join-pass.ts 1
+game\gamemode\map-calendar.ts 2
+game\gamemode\market-stalls-bundle.ts 7
+game\gamemode\merchant-trading-bundle.ts 7
+game\gamemode\mod-settings.ts 6
+game\gamemode\needs.ts 23
+game\gamemode\npc-server-runtime.ts 2
+game\gamemode\property.ts 43
+game\gamemode\scripted-activators.ts 8
+game\gamemode\season.ts 7
+game\gamemode\server-manifest.ts 1
+game\gamemode\small-helpers.ts 5
+game\gamemode\social.ts 19
+game\gamemode\spoilage.ts 12
+game\gamemode\spoils.ts 1
+game\gamemode\staff-crafting.ts 1
+game\gamemode\staff-spells.ts 11
+game\gamemode\staff.ts 9
+game\gamemode\strength-weapons.ts 1
+game\gamemode\stuck.ts 7
+game\gamemode\teleport.ts 17
+game\gamemode\thalmor-patrols.ts 4
+game\gamemode\the-benches.ts 2
+game\gamemode\the-class-and-profession-gates.ts 4
+game\gamemode\the-three-starting-tools.ts 18
+game\gamemode\trade-carts-bundle.ts 6
+game\gamemode\trade-dock-bundle.ts 6
+game\gamemode\trade.ts 15
+game\gamemode\voice-feed.ts 8
+game\gamemode\warrior-maneuvers.ts 3
+game\gamemode\world-stage.ts 7
+game\merchant-trading.js 6
+game\plugins\thornswood-emotes.js 6
+game\plugins\thornswood-front.js 194
+game\plugins\thornswood-mark.js 3
+game\plugins\thornswood-voice.js 6
+game\quest-transactions.js 1
+game\ui\thornswood-afk.js 1
+game\ui\thornswood-board.js 2
+game\ui\thornswood-box.js 2
+game\ui\thornswood-bridge.js 19
+game\ui\thornswood-chat.js 17
+game\ui\thornswood-emotes.js 4
+game\ui\thornswood-furniture.js 2
+game\ui\thornswood-help.js 2
+game\ui\thornswood-journal.js 5
+game\ui\thornswood-loadscreen.js 6
+game\ui\thornswood-maneuvers.js 1
+game\ui\thornswood-merchant.js 2
+game\ui\thornswood-party.js 5
+game\ui\thornswood-preserve.js 2
+game\ui\thornswood-repair.js 2
+game\ui\thornswood-ride.js 2
+game\ui\thornswood-select.js 13
+game\ui\thornswood-settings.js 1
+game\ui\thornswood-ship.js 2
+game\ui\thornswood-skills.js 5
+game\ui\thornswood-stall.js 2
+game\ui\thornswood-trade.js 2
+game\ui\thornswood-treat.js 2
+game\ui\thornswood-voice.js 24
+launcher\move\Program.cs 2
+tools\DeployAgent\Agent.cs 4
+tools\DeployAgent\AppControl.cs 2
+tools\DeployAgent\GitHub.cs 2
+tools\DeployAgent\Program.cs 4
+tools\DeployAgent\ServerControl.cs 1
+tools\DeployAgent\ServerLog.cs 1
