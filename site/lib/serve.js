@@ -61,6 +61,9 @@ const { copyKeptChat, dropKeptChat, freshGalleryReports, isObjectLike,
 const { applyTrouble, noteTrouble, readTrouble, TROUBLE_RULES } = require('./trouble');
 const { chatSlice, DEPLOYS_DIR, readDeploys, serverLogSlice, sessionRow } = require('./serverlogs');
 const { changeOffice, departed, officesForDoor, standing } = require('./members');
+const chars = require('./characters');
+const yourSettings = require('./your-settings');
+const { SETTINGS } = yourSettings;
 const { errorPage, feedLaunchers, getWithToken, makePass, makeTicket, notAllowedPage,
   notFoundPage, PASS_MS, passLoginKey, plainPage, readTicket, versionCompare,
   versionParts, wantsHtml } = require('./passes');
@@ -2070,9 +2073,10 @@ async function handle(req, res) {
 
       Such an install's spare, the id the menu's New character uses, was
       checked in under the first account too, and this route cannot tell it
-      from an id somebody took. So the launcher mints the relinked account a
-      fresh spare before it checks anything in (Chars.EnsureSpare), and the
-      new character is filed under the account that made it.
+      from an id somebody took. So each account's spare is minted here, by
+      /api/play/characters (lib/characters.js, #5938), and the launcher
+      checks in the spare that route hands it, so the new character is filed
+      under the account that made it.
 
       WHAT THIS COSTS SOMEBODY WHO CHANGED ACCOUNTS, which is new with this
       rule and not something main did. Measured by a reviewer on 24 September
@@ -2149,7 +2153,9 @@ async function handle(req, res) {
       id: String(t.d), name: st.name || t.n,
       first: was.first || Date.now(), seen: Date.now(),
       played: Date.now(), roles: st.roles,
-      profiles: profiles.slice(-8)
+      // Its characters and spare stay on whatever else comes and goes
+      // (#5938); the rest is cut to the eight checked in most recently.
+      profiles: chars.keepProfiles(profiles, was)
     });
     /* Not recorded is not let in: the door lists only what linked.json holds.
        It used to answer yes whatever the write did, and a linked.json that
@@ -2954,6 +2960,96 @@ async function handle(req, res) {
       ok: st.play && !st.banned, id: st.id, name: st.name || t.n,
       admin: st.admin, dev: !!st.dev, banned: st.banned, inGuild: st.inGuild, roles: st.roles
     });
+  }
+
+  /*
+    The account's characters (#5938, site/lib/characters.js says what is
+    kept). The launcher asks with its Discord ticket at every Play, and again
+    after each pick, forget and finished session, and draws the game's menu
+    from the answer, so nothing about which characters are somebody's is
+    written on their PC.
+
+      op ''       the list, made right first (dead, revived, slots, spare)
+      op 'chose'  profileId was picked at the menu
+      op 'played' profileId was played for seconds
+      op 'forget' profileId was put in the bin at the menu
+
+    Discord is asked first, as at /api/play/join, and nothing is awaited
+    between reading linked.json and writing it. Discord not answering is 503,
+    not a no, and the launcher stops Play on it rather than draw a menu
+    without anybody's characters.
+  */
+  if (p === '/api/play/characters' && req.method === 'POST') {
+    const by = Date.now() + PLAY_ANSWER_MS;
+    let o = {};
+    try { o = JSON.parse(await body(req, 8192, PLAY_BODY_MS)) || {}; } catch (e) { passBodyFailure(e); }
+    const t = readTicket(o.ticket);
+    const d = t ? chars.accountKey(t.d) : '';
+    if (!d) return sendJson(res, 401, { ok: false, why: 'link', message:
+      'This copy is not linked to a Discord account yet.' });
+    const st = await within(standingCached(d), by - Date.now(), () => standingLate(d));
+    if (st.lookupFailed && !st.admin) return sendJson(res, 503, discordUnasked());
+    if (st.banned) return sendJson(res, 403, { ok: false, why: 'banned', message: accountBanned(st) });
+    if (!st.play) return sendJson(res, 403, { ok: false, why: 'role', message: notAcceptedYet() });
+
+    const now = Date.now();
+    const op = String(o.op || '');
+    const linked = jsonFile(LINKED, {});
+    let refused = null;
+    if (op === 'chose') refused = chars.choose(linked, d, o.profileId, now);
+    else if (op === 'played') refused = chars.played(linked, d, o.profileId, o.seconds, now);
+    else if (op === 'forget') refused = chars.forget(linked, d, o.profileId);
+    else if (op !== '') return sendJson(res, 400, { ok: false, why: 'op', message: 'The site does not know that request.' });
+
+    const pkRows = jsonFile(PK, {}) || {};
+    const slots = slotsFor(st);
+    const said = chars.settle(linked, d, {
+      slots,
+      pk: (pid) => { const bar = characterBar(pid, now); return !!(bar && bar.pk); },
+      revived: (pid) => !!pkRows[String(pid)] && !pkActive(pkRows[String(pid)])
+    });
+    if (!putJson(LINKED, linked)) {
+      console.error('[thornswood-docs] a list of characters was not recorded: linked.json was not written');
+      return sendJson(res, 503, { ok: false, why: 'not recorded', message:
+        'The site could not record your characters just now. Try again later, and tell staff if it keeps happening.' });
+    }
+    const out = chars.answer(linked, d, slots);
+    out.said = said;
+    if (refused) { out.ok = false; out.why = 'refused'; out.message = refused; }
+    return sendJson(res, 200, out);
+  }
+
+  /*
+    The account's settings (#5939, site/lib/your-settings.js says which). The
+    launcher gets them before the game starts (op 'get') and sends them back
+    when it closes, and sends launcher.json whenever one of its own choices
+    changes (op 'put', files { name: text, or null to remove }). Written
+    against the Discord id in the ticket and nothing else, so a ticket only
+    ever reads and writes its own account's.
+  */
+  if (p === '/api/play/settings' && req.method === 'POST') {
+    let o = {};
+    try { o = JSON.parse(await body(req, 1536 * 1024)) || {}; } catch (e) { passBodyFailure(e); }
+    const t = readTicket(o.ticket);
+    const d = t ? chars.accountKey(t.d) : '';
+    if (!d) return sendJson(res, 401, { ok: false, why: 'link', message:
+      'This copy is not linked to a Discord account yet.' });
+    const st = await standingCached(d);
+    if (st.banned) return sendJson(res, 403, { ok: false, why: 'banned', message: accountBanned(st) });
+    const all = jsonFile(SETTINGS, {}) || {};
+    const have = all[d] || {};
+    if (String(o.op || '') === 'get') {
+      return sendJson(res, 200, { ok: true, at: Number(have.at) || 0, files: have.files || {} });
+    }
+    if (String(o.op || '') !== 'put') return sendJson(res, 400, { ok: false, why: 'op', message: 'The site does not know that request.' });
+    const next = yourSettings.merge(have, o.files);
+    if (next.why) return sendJson(res, 400, { ok: false, why: 'refused', message: 'Your settings were not kept: ' + next.why + '.' });
+    all[d] = { at: Date.now(), files: next.files };
+    if (!putJson(SETTINGS, all)) {
+      console.error('[thornswood-docs] settings were not kept: settings.json was not written');
+      return sendJson(res, 503, { ok: false, why: 'not recorded', message: 'The site could not keep your settings just now.' });
+    }
+    return sendJson(res, 200, { ok: true, at: all[d].at, files: Object.keys(next.files).length });
   }
 
   // ------------------------------------------------------------------- api

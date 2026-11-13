@@ -47,8 +47,9 @@
   (the live folder and the copies a restore, a wipe, an install or a character
   reset sets aside beside it). The copies go at once. The live folders are
   each service's own, and it takes them at its next start (below):
-    site            their Discord link (linked.json), their answer to the
-                    rules (rules-accepted.json), their sign-in rows
+    site            their Discord link (linked.json) with their list of
+                    characters, their settings (settings.json), their answer
+                    to the rules (rules-accepted.json), their sign-in rows
                     (signins.json, which hold an address), their session rows
                     (sessions.json) with the launcher logs sent with them
                     (session-logs) and the failed-session alerts about them
@@ -621,6 +622,10 @@ for (const person of people) {
   const P = new Set(person.profiles);
   const L = linked.value || {};
   if (isObj(L[id]) && Array.isArray(L[id].profiles)) for (const n of L[id].profiles) if (Number(n) > 0) P.add(Number(n));
+  // The site's list of their characters (#5938), and the ones they deleted at
+  // the menu, which stay on the game server and drop off the door's list.
+  if (isObj(L[id]) && Array.isArray(L[id].chars)) for (const c of L[id].chars) if (isObj(c) && Number(c.id) > 0) P.add(Number(c.id));
+  if (isObj(L[id]) && Array.isArray(L[id].retired)) for (const n of L[id].retired) if (Number(n) > 0) P.add(Number(n));
   for (const other of Object.keys(L)) {
     if (other === id || !isObj(L[other]) || !Array.isArray(L[other].profiles)) continue;
     for (const n of L[other].profiles) if (P.has(Number(n))) { P.delete(Number(n)); r.skipped.push(Number(n)); }
@@ -640,6 +645,8 @@ for (const person of people) {
     if (want(lk, 'object') && has(lk.value, id)) { delete lk.value[id]; dirty(lk); removed(T + ': Discord link', 1); }
     const rules = json(path.join(D, 'rules-accepted.json'), s.writer);
     if (want(rules, 'object') && has(rules.value, id)) { delete rules.value[id]; dirty(rules); removed(T + ': answer to the rules', 1); }
+    const settings = json(path.join(D, 'settings.json'), s.writer);
+    if (want(settings, 'object') && has(settings.value, id)) { delete settings.value[id]; dirty(settings); removed(T + ': settings', 1); }
     const signins = json(path.join(D, 'signins.json'), s.writer);
     if (want(signins, 'array')) {
       const keep = signins.value.filter((x) => !(isObj(x) && String(x.id) === id));

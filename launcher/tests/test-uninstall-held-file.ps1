@@ -3,7 +3,7 @@
 
       pwsh -NoProfile -File .\launcher\tests\test-uninstall-held-file.ps1
 
-  On One on 12 Nov 2026 a full uninstall (saves not kept) left
+  On One on 12 Nov 2026 a full uninstall (the game copy deleted too) left
   C:\Thornswood\Profile behind with everything in it, the Discord sign-in
   among it, and its farewell called the folder "not Thornswood's, so it was
   left alone". Measured in that Profile's launcher.log:
@@ -36,7 +36,8 @@
        swapped for printing, calls that Profile Thornswood's own and never
        "not Thornswood's". A folder nobody set out to remove still is.
     4. Run: OursInRoot names what the farewell can find in the install folder:
-       Profile and config.json when the saves go, neither when they stay.
+       Profile and config.json when the game copy goes; config.json and not
+       Profile, which keeps the copy's record, when it stays (#5939).
     5. The launcher itself. Velopack's setup puts it in a folder of its own
        (%LocalAppData%\Thornswood) with shortcuts and its own Installed apps
        entry, and on One the same day the setup afterwards said Thornswood was
@@ -99,7 +100,7 @@ $musicSrc = Read 'launcher\app\MenuMusic.cs'
 $theme = Join-Path $Repo 'game\ui\thornswood-theme.mp3'
 
 # ---- 1: by text ----------------------------------------------------------------
-$begin = [regex]::Match($uninstallSrc, '(?s)public static string\[\] Begin\(Config cfg, bool keepSaves, bool deleteMods, Action<string> say\)\s*\{(.*?)return Targets\(keepSaves, deleteMods\);')
+$begin = [regex]::Match($uninstallSrc, '(?s)public static string\[\] Begin\(Config cfg, bool deleteMods, Action<string> say\)\s*\{(.*?)return Targets\(deleteMods\);')
 Yes 'Uninstall.Begin is found' $begin.Success
 $b = $begin.Groups[1].Value
 $end = $b.IndexOf('MenuMusic.End();')
@@ -109,7 +110,7 @@ Yes 'and once ended Decide makes no playback' ($musicSrc -match '(?s)public stat
 $fin = [regex]::Match($musicSrc, '(?s)finally\s*\{(.*?)\n                \}')
 Yes 'the playback closes the track and says so before it touches the sound device' ($fin.Success -and $fin.Groups[1].Value.IndexOf('file.Dispose()') -ge 0 -and $fin.Groups[1].Value.IndexOf('file.Dispose()') -lt $fin.Groups[1].Value.IndexOf('released.Set();') -and $fin.Groups[1].Value.IndexOf('released.Set();') -lt $fin.Groups[1].Value.IndexOf('waveOutReset'))
 Yes 'DeleteTree goes on past a folder it could not remove' ($uninstallSrc -match 'else \{ try \{ DeleteTree\(sub\); \} catch \(Exception ex\) \{ Swallow\.Note\(')
-Yes 'the farewell gives what Targets set out to remove a reason of its own' ($uninstallSrc -match 'foreach \(string name in OursInRoot\(keepSaves, deleteMods\)\)')
+Yes 'the farewell gives what Targets set out to remove a reason of its own' ($uninstallSrc -match 'foreach \(string name in OursInRoot\(deleteMods\)\)')
 Yes 'the theme the launcher plays is in the repository' (Test-Path -LiteralPath $theme)
 Yes 'Finish hands the script Velopack''s Update.exe (AppUninstaller)' ($uninstallSrc -match '(?s)Script\(targets, Process\.GetCurrentProcess\(\)\.Id, note,\s*appToo \? AppUninstaller\(\) : null, InstallPlace\.RecordFile\)' -and $uninstallSrc -match 'bool deleteMods, bool appToo = true\)' -and $uninstallSrc -match '(?s)static string AppUninstaller\(\).*?Velo\.Installed.*?Velo\.Locator\.UpdateExePath')
 $shellSrc = Read 'launcher\app\Shell.cs'
@@ -120,7 +121,7 @@ Yes 'Velopack''s uninstall hook runs what Shell.Main hands it, Uninstall.FromVel
 $from = [regex]::Match($uninstallSrc, '(?s)public static void FromVelopack\(\)\s*\{(.*?)\n        \}')
 $f = $from.Groups[1].Value
 Yes 'FromVelopack finds Root from the install''s record and stops when WhyNot says it is not one' ($from.Success -and $f.Contains('InstallPlace.Recorded()') -and $f -match 'if \(why != null\) \{[^}]*return; \}')
-Yes 'and removes everything the way the uninstall does, without a second Velopack uninstall' ($f.Contains('Begin(cfg, false, true,') -and $f.Contains('Finish(rest, false, true, false);') -and $f.IndexOf('Begin(') -gt $f.IndexOf('WhyNot()'))
+Yes 'and removes everything the way the uninstall does, without a second Velopack uninstall' ($f.Contains('Begin(cfg, true,') -and $f.Contains('Finish(rest, true, false);') -and $f.IndexOf('Begin(') -gt $f.IndexOf('WhyNot()'))
 Yes 'Register.Ensure hides Velopack''s own entry' ($registerSrc -match '(?s)catch \(Exception ex\) \{ Swallow\.Note\("Register\.Ensure", ex\); \}\s*HideVelopackEntry\(\);' -and $registerSrc -match 'HideEntry\(Registry\.CurrentUser, Root \+ "\\\\" \+ l\.AppId, l\.UpdateExePath\)')
 $devSrc = Read 'launcher\app\DevBuild.cs'
 $self = [regex]::Match($devSrc, '(?s)public static string RemoveSelf\(\)(.*?)Process\.Start\(psi\);')
@@ -240,12 +241,13 @@ namespace Thornswood
         static void InRoot(string root)
         {
             Install(root);
-            var gone = new List<string>(Uninstall.OursInRoot(false, false));
-            Yes("with the saves going, OursInRoot names Profile, config.json and Launcher",
+            var gone = new List<string>(Uninstall.OursInRoot(true));
+            Yes("with the game copy going, OursInRoot names Profile, config.json and Launcher",
                 gone.Contains("Profile") && gone.Contains("config.json") && gone.Contains("Launcher"));
             Yes("and nothing that is not directly in the install folder", !gone.Exists(delegate(string n) { return n.Contains("\\") || n.Contains("/"); }));
-            var kept = new List<string>(Uninstall.OursInRoot(true, false));
-            Yes("with the saves kept, neither Profile nor config.json", !kept.Contains("Profile") && !kept.Contains("config.json") && kept.Contains("Launcher"));
+            var kept = new List<string>(Uninstall.OursInRoot(false));
+            Yes("with the game copy kept, not Profile, which keeps the copy's record, but config.json and Launcher",
+                !kept.Contains("Profile") && kept.Contains("config.json") && kept.Contains("Launcher"));
         }
 
         // ---- 5: the launcher itself goes by Velopack's own uninstall --------
@@ -257,7 +259,7 @@ namespace Thornswood
             // A stand in for Update.exe: writes down its arguments, and whether
             // the install folder was still there when it ran.
             Put(upd, "@echo off\r\n(echo %*& if exist \"" + root + "\" (echo root still there) else (echo root gone)) > \"" + said + "\"\r\n");
-            string[] targets = Uninstall.Targets(false, false);
+            string[] targets = Uninstall.Targets(true);
             string with = Uninstall.Script(targets, 1, null, upd) ?? "";
             string without = Uninstall.Script(targets, 1, null) ?? "";
             Yes("given Update.exe, the script runs it with --uninstall --silent", with.Contains("call \"" + upd + "\" --uninstall --silent"));
@@ -323,7 +325,7 @@ namespace Thornswood
             string[] later;
             using (new FileStream(track, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
-                later = Uninstall.RemoveNow(Uninstall.Targets(false, false), Path.Combine(root, "..", "elsewhere"));
+                later = Uninstall.RemoveNow(Uninstall.Targets(true), Path.Combine(root, "..", "elsewhere"));
             }
             Yes("RemoveNow leaves the script nothing when the launcher runs from outside", later.Length == 0);
             bool rest = true;
@@ -345,7 +347,7 @@ namespace Thornswood
             Yes("config.json and the launcher's folder went", Gone(Paths.CfgFile) && Gone(Paths.LauncherDir));
 
             Put(Path.Combine(root, "notes-of-mine.txt"), "mine");
-            string note = Uninstall.WriteFarewell(false, false);
+            string note = Uninstall.WriteFarewell(true);
             Console.WriteLine("farewell-held: " + note);
         }
     }

@@ -568,9 +568,11 @@ sends both ends of every session and its logs (`/api/play/start`, `/end`,
 **Chars, AutoJoin and Roster** (Chars.cs, AutoJoin.cs, Roster.cs). Characters.
 There is no class called Creation: the person picks or makes a character at
 the game's own main menu, and these three prepare that menu and read its
-answer. `Chars.cs:895 Prepare()` owns `Profile\Characters\profiles.txt` (one
-row per profile id, plus a spare on slot 0 for New character),
-`retired.txt`, the saves folder `Profile\Characters\saves`, the menu's list
+answer. The account's character list (each character's slot, last played
+and play time, the spare id for New character, the ids forgotten) is the
+site's, kept under the Discord account (`/api/play/characters`, #5938);
+`Chars.cs:895 Prepare()` asks for it at every Play and holds the answer in
+memory, and owns the saves folder `Profile\Characters\saves`, the menu's list
 `Game\Data\Platform\thornswood-characters.json` and
 `Game\Data\Platform\UI\thornswood-characters.js`, and the two files the menu
 writes back, `thornswood-choice.txt` and `thornswood-forget.txt` in
@@ -771,12 +773,12 @@ installer script, its batch files and the setup program it ran in went with
 
 **LocalKeep** (LocalKeep.cs). How long the launcher keeps its own records on
 the PC: `Profile\launcher.log` lines and the support zips for `Days` (30)
-days, cut at every start, which is what the privacy page promises. NotSaves
-lists what is in Profile that is not a save or a setting (the log, the
-reports, the Discord sign-in, name and picture from `Discord.AccountFiles`,
-and `Profile\MusicBrowser`, the folder the menu music's old browser left);
-Uninstall removes those even when it keeps the saves and settings, and its
-farewell names any it could not.
+days, cut at every start, which is what the privacy page promises. Uninstall
+removes all of Profile and config.json: the characters and settings a person
+keeps are on the site under their Discord account (#5938, #5939). When the
+game copy stays, Profile\OwnGame and Profile\Payload stay with it, so a
+reinstall knows the copy, and the farewell names anything else in Profile it
+could not remove.
 
 **DevBuild** (DevBuild.cs). The dev build is a channel of the one install
 (#5608, Patrick's answer B on 11 Nov 2026). The Server card's Main/Dev switch
@@ -801,8 +803,7 @@ instead of refusing the whole document), Keys.cs (the few Thornswood keys the
 Play page and the voice line name, read out of `Thornswood.ini`), Diag.cs (`Profile\Reports`), Files.cs (the logs and the newest crash
 for the support report), Secrets.cs (DPAPI and locking a file to this account), Junction.cs
 (making and reading junctions without cmd), Steam.cs (finding Steam and its
-Skyrim), Online.cs (the headcount the server publishes), Slots.cs (the one
-rule for moving a character's slot), Art.cs (the art inside the exe, and the
+Skyrim), Online.cs (the headcount the server publishes), Art.cs (the art inside the exe, and the
 moving strip behind the title, `launcher-header.webp`, an animated WebP that
 `HeaderFrames` decodes a frame at a time with SkiaSharp),
 Themes.cs (every colour; the install window is drawn in its Forge too, #2851), Gallery.cs (the pictures the site shows from the world, read
@@ -922,11 +923,10 @@ box.
 | Where | What happens | Left behind |
 |---|---|---|
 | `Chars.cs:895 Prepare()` | The saves folder Skyrim will see, `Profile\MyGames\Saves`, becomes a junction to `Profile\Characters\saves`. A real folder there with files in it is moved aside whole, never deleted. SkyrimPlatform's scaffolding saves are deleted. | `Profile\Characters\saves`, the junction, maybe `Saves-before-Thornswood-<time>` |
-| `Chars.cs:984 EnsureSpare` | Mints the spare id for New character when there is none. | `Profile\Characters\profiles.txt` |
+| `Chars.cs:984 Ask` | Before the saves folder: the account's characters from the site (`/api/play/characters`), which mints the spare, buries the dead, brings back a PK undone and tidies the slots. Throws, and Play stops, when the site cannot hand them over. | |
 | `Chars.cs:1001 AutoJoin.SetChooseAtMenu` | `AutoJoin.cs:295 SetChooseAtMenu()`: the id played last and `chooseAtMenu` inside `gameData`, read back, and a throw if the file does not say what was written. | `skymp5-client-settings.txt` |
 | `Chars.cs:1003 WriteBrowserBackend` | Which in-game browser SkyrimPlatform uses (its log level and text window are Enforce's, step 15). Edited, never rewritten, and only when a value changes. | `Game\Data\SKSE\Plugins\SkyrimPlatform.ini` |
 | `Chars.cs:1010 Voice.Reconfigure` | Voice fetches a token for that id for its session, when the voice address is https. The game's chat asks for its own (`voice-token-ask.txt`). | |
-| `Chars.cs:1032 TidySlots` | Only on the site's own answer about how many slots this account has. | `profiles.txt` when a slot moves |
 | `Chars.cs:1034 WriteCharacters` | Names from the site's roster, then the list the menu draws. Throws when it cannot be written. | `Game\Data\Platform\thornswood-characters.json`, `Game\Data\Platform\UI\thornswood-characters.js` |
 | `Chars.cs:1038 ChoiceFile` | Last session's choice and forget files deleted, so neither is read as this session's. | |
 
@@ -934,7 +934,7 @@ box.
 
 Written or rewritten, when anything needed changing:
 
-- `Profile`: `door.txt`, `Characters\profiles.txt`, `Characters\saves`,
+- `Profile`: `door.txt`, `Characters\saves`,
   `MyGames\Saves` (a junction), `MyGames\SkyrimPrefs.ini`, `Parked\` and
   `parked.txt`, `swap.json`, `logs-pending.txt`, `played.flag`, `stats.txt`,
   `launcher.log`, and with a local server `server.pid` and
@@ -962,9 +962,9 @@ empty stand-ins where parked plugins were.
 
 `Shell.cs:2515 timer.Tick` keeps going. `Shell.cs:2541 PollChoice` reads
 `Game\Data\Platform\thornswood-choice.txt`, which the menu plugin writes when
-the person picks (`Chars.cs:598 ReadChoice()`); a new id is written into
-`profiles.txt` (`Chars.cs:623 Chose()`), handed to voice and checked in with
-the site. The same tick keeps a join pass for the character picked
+the person picks (`Chars.cs:598 ReadChoice()`); a new id is told to the
+site, which keeps the list (`Chars.cs:623 Chose()`), handed to voice and
+checked in. The same tick keeps a join pass for the character picked
 (`JoinPass.cs:82 Tick()`, #937): fetched from the site when they pick and
 every minute after (a pass proves one session, #1320), and left in `Game\Data\Platform\thornswood-pass.txt`
 for the front plugin to hand the game server, which ends a session without
@@ -985,9 +985,10 @@ The first tick that finds no game runs, in order:
 `Shell.cs:2567 Keep.Unpark` (parked plugins home, or into `Profile\Isolated`
 when their launcher has already written a new copy),
 `Shell.cs:2570 Stats.StoppedPlaying`, then on a pool thread
-`Shell.cs:2581 Discord.SessionEnd` and `Shell.cs:2588 Discord.SessionLogs`
+`Shell.cs:2575 Chars.AddPlaytime` (the character's time, to the site that
+keeps the list), `Shell.cs:2581 Discord.SessionEnd` and `Shell.cs:2588 Discord.SessionLogs`
 (the session's logs up to the site before the next start truncates them),
-`Shell.cs:2597 Chars.AddPlaytime`, `Shell.cs:2618 CrashDump.AfterSession`
+`Shell.cs:2618 CrashDump.AfterSession`
 (when a crash log was written this session, a line naming it and the
 snapshot beside it), `Shell.cs:2635 Checks.LastRunFrom` (a
 warning if that session ran some other Skyrim), and `Shell.cs:2648 Verify.Run`

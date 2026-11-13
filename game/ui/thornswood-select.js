@@ -567,10 +567,11 @@
     drawing 1 to n for the characters there are, in slot order, earlier the
     same day, because the stored numbers had climbed past the allowance (1
     empty, 2 empty, 3, 4, 5 on a three slot account) and the page was
-    offering a fourth and a fifth. That is closed on the launcher side now:
-    NextSlot hands out the lowest free number and Slots.Tidy moves a
-    character down from above the allowance whenever a number under it is
-    free, before this list is written. A character with no number, or one
+    offering a fourth and a fifth. That is closed where the list is kept, on
+    the site (site\lib\characters.js, #5938): nextSlot hands out the lowest
+    free number and tidySlots moves a character down from above the
+    allowance whenever a number under it is free, before this list is
+    written. A character with no number, or one
     whose number another already holds, is drawn in the first empty slot
     rather than lost; the launcher has written a number since the day the
     file existed, so that is a hand edited file and nothing more.

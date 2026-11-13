@@ -381,14 +381,13 @@ yes('a normal start never goes through OpenForUninstall', !play.calls.has('OpenF
 
 // ---- the uninstall itself, untouched -----------------------------------------
 const du = shell.DoUninstall.code;
-yes('DoUninstall still asks whether to keep the characters (ChkKeepSaves)', /chkKeepSaves\s*\.\s*IsChecked/.test(du));
+yes('DoUninstall asks nothing about keeping characters: they are kept with the Discord account (#5938)', !/chkKeepSaves/i.test(du));
 yes('DoUninstall still asks whether to keep the game files (ChkDeleteMods)', /chkDeleteMods\s*\.\s*IsChecked/.test(du));
 yes('and confirms twice before anything goes', (du.match(/\bAsk\s*\.\s*(?:YesNo|Tell|OkCancel)\s*\(/g) || []).length >= 3 &&
     (du.match(/\bAsk\s*\.\s*YesNo\s*\(/g) || []).length >= 2);
 yes('DoUninstall hands over to Uninstall.Begin and Uninstall.Finish', /Uninstall\s*\.\s*Begin\s*\(/.test(du) && /Uninstall\s*\.\s*Finish\s*\(/.test(du));
-yes('both ticks are bound from the real window, by name',
-    shell.Bind && /chkKeepSaves\s*=\s*win\s*\.\s*ChkKeepSaves\s*;/.test(shell.Bind.raw) &&
-    /chkDeleteMods\s*=\s*win\s*\.\s*ChkDeleteMods\s*;/.test(shell.Bind.raw));
+yes('the game files tick is bound from the real window, by name',
+    shell.Bind && /chkDeleteMods\s*=\s*win\s*\.\s*ChkDeleteMods\s*;/.test(shell.Bind.raw));
 yes('the Uninstall button still runs DoUninstall on the main build',
     /btnUninstall\s*\.\s*Click\s*\+=\s*delegate\s*\{\s*DoUninstall\s*\(\s*\)\s*;\s*\}/.test(shell.Wire.code));
 

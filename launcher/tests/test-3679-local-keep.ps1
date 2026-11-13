@@ -9,7 +9,10 @@
   and settings", ticked by default, kept the whole Profile folder and so all
   of them, and the privacy page said nothing about any of it. Measured on one
   install on 26 Oct: a 478,059 byte log going back to the day it was made,
-  and 71 MB of browser folders.
+  and 71 MB of browser folders. Since #5938 and #5939 the characters and
+  settings that box kept are on the site with the Discord account, so the box
+  is gone and an uninstall keeps nothing of Profile but the record of a game
+  copy the person keeps.
 
   WHAT THIS HOLDS THE LAUNCHER TO.
     1. launcher\app\LocalKeep.cs, the one place the rule lives: a log past
@@ -21,15 +24,18 @@
        anything else in the folder stay. Tidy says in the log what it took.
     2. Shell.Run tidies straight after Paths.Init, before the terms check and
        before anything else writes the log.
-    3. Uninstall with the box ticked: the real Targets list and the real
-       handover script, run by cmd against a scratch install, remove the log,
-       every Discord account file, the support reports and both browser
-       folders, and leave the saves, the characters, the launcher's records
-       and config.json. With the box unticked Profile and config.json go
-       whole, as before. The real farewell names what it should have removed
-       and could not, and says nothing of the kind when everything went.
-    4. The words: the uninstall box, the privacy page and LocalKeep.Days say
-       the same 30 days and the same list.
+    3. Uninstall keeping the game copy: the real Targets list and the real
+       handover script, run by cmd against a scratch install, remove
+       config.json and everything in Profile (the log, every Discord account
+       file, the support reports, both browser folders, the old character
+       files) but Profile\OwnGame and Profile\Payload, the record a
+       reinstall reuses the copy by. Deleting the game copy, Profile and
+       config.json go whole. The real farewell names what it should have
+       removed and could not, and says nothing of the kind when everything
+       went.
+    4. The words: the uninstall page, the privacy page and LocalKeep.Days
+       say the same 30 days, and that characters and settings are kept with
+       the Discord account, not on the PC.
 
   HOW. Part 1 and 3 build the whole launcher with a driver into one program,
   the way the project builds (the .NET 10 SDK, tests\Launcher-Csc.ps1), and
@@ -88,29 +94,25 @@ $terms = $body.IndexOf('Acceptance.')
 Yes 'Run tidies the log and the reports straight after Paths.Init, before the terms check' ($init -ge 0 -and $tidy -gt $init -and $terms -gt $tidy)
 Yes 'nothing else in the launcher calls Tidy' (@(Get-ChildItem (Join-Path $App '*.cs') -File | Where-Object { $_.Name -ne 'LocalKeep.cs' -and ([IO.File]::ReadAllText($_.FullName) -match 'LocalKeep\.Tidy\(') }).Count -eq 1)
 
-# ---- 3, by text: the uninstall takes NotSaves when it keeps the saves --------
-$targets = [regex]::Match($uninstallSrc, '(?s)public static string\[\] Targets\(bool keepSaves, bool deleteMods\)(.*?)return leave\.ToArray\(\);')
-Yes 'Uninstall.Targets is the list Begin hands back' ($targets.Success -and $uninstallSrc -match 'return Targets\(keepSaves, deleteMods\);')
-Yes 'and with the saves kept it takes LocalKeep.NotSaves' ($targets.Groups[1].Value -match '(?s)if \(!keepSaves\)\s*\{[^}]*ProfileDir[^}]*\}\s*else\s*\{[^}]*leave\.AddRange\(LocalKeep\.NotSaves\(\)\);')
-Yes 'Discord.Forget deletes the same files the uninstall does (Discord.AccountFiles)' ($discordSrc -match '(?s)public static void Forget\(\)\s*\{\s*foreach \(string f in AccountFiles\(Folder\)\)')
-Yes 'NotSaves takes the Discord files from Discord.AccountFiles, and the old voice and music browsers'' folders' ($keepSrc -match 'Discord\.AccountFiles\(Paths\.ProfileDir\)' -and $keepSrc -match 'Path\.Combine\(Paths\.ProfileDir, "VoiceBrowser"\)' -and $keepSrc -match 'Path\.Combine\(Paths\.ProfileDir, "MusicBrowser"\)')
+# ---- 3, by text: the uninstall keeps nothing of Profile but the game's record -
+$targets = [regex]::Match($uninstallSrc, '(?s)public static string\[\] Targets\(bool deleteMods\)(.*?)return leave\.ToArray\(\);')
+Yes 'Uninstall.Targets is the list Begin hands back' ($targets.Success -and $uninstallSrc -match 'return Targets\(deleteMods\);')
+Yes 'and it takes Profile whole, or all of it but the game copy''s record, and config.json either way' ($targets.Groups[1].Value -match '(?s)if \(deleteMods\) leave\.Add\(Paths\.ProfileDir\);\s*else leave\.AddRange\(ProfileButGame\(\)\);\s*leave\.Add\(Paths\.CfgFile\);')
+Yes 'nothing asks to keep the saves any more' (-not (($uninstallSrc + $shellSrc + $xaml + $keepSrc) -match 'keepSaves|NotSaves'))
+Yes 'Discord.Forget deletes the account files (Discord.AccountFiles)' ($discordSrc -match '(?s)public static void Forget\(\)\s*\{\s*foreach \(string f in AccountFiles\(Folder\)\)')
 
 # ---- 4: the words -------------------------------------------------------------
-$box = [regex]::Match($xaml, 'x:Name="ChkKeepSaves"[^>]*/>\s*<TextBlock[^>]*Text="([^"]*)"')
-Yes 'the uninstall box has its small print' $box.Success
-$small = [Net.WebUtility]::HtmlDecode($box.Groups[1].Value)
-foreach ($w in @('log', 'Discord sign-in, name and picture', 'support reports', 'voice browser''s data')) {
-    Yes ("the small print under the box says the $w go either way") ($small.Contains($w) -and $small.Contains('go either way'))
-}
-$words = [regex]::Match($keepSrc, 'NotSavesInWords =\s*"([^"]*)"')
-Yes 'the uninstall dialog names the same things (LocalKeep.NotSavesInWords)' ($words.Success -and $words.Groups[1].Value.Contains('Discord sign-in, name and picture') -and $shellSrc.Contains('LocalKeep.NotSavesInWords'))
+$note = [regex]::Match($xaml, 'Text="(Your characters and settings are not on this PC[^"]*)"')
+Yes 'the uninstall page says characters and settings are kept with the Discord account, not on the PC' ($note.Success -and $note.Groups[1].Value.Contains('Discord account') -and $note.Groups[1].Value.Contains('log') -and $note.Groups[1].Value.Contains('Discord sign-in'))
+Yes 'and so does the uninstall dialog' ($shellSrc.Contains('Your characters and settings, kept with your Discord account on thornswood.net'))
 $onPc = [regex]::Match($privacy, '(?s)## What the launcher keeps on your PC\n(.*?)\n## ')
 Yes 'the privacy page has a section on what the launcher keeps on the PC' $onPc.Success
 $sec = $onPc.Groups[1].Value -replace '\s+', ' '
 Yes ('it says the log keeps each line for ' + $days + ' days') ($sec -match ('launcher\.log, the one described above\. Each line is kept for ' + $days + ' days'))
 Yes ('and the support reports are kept for ' + $days + ' days') ($sec -match ('Support reports.*Each is kept for ' + $days + ' days'))
 Yes 'it names the Discord sign-in, name and picture, until uninstall' ($sec -match 'Your Discord sign-in.*name and picture.*until you uninstall')
-Yes 'it says the box keeps only the saves and settings and the rest goes either way' ($sec -match 'Keep this build''s saves and settings' -and $sec -match 'go either way')
+Yes 'it says the characters and settings are not on the PC but kept with the Discord account' ($sec -match 'Your characters and settings are not among them: the site keeps them with your Discord account')
+Yes 'and that uninstalling keeps only the record of a kept game copy' ($sec -match 'Uninstalling.*removes all of it' -and $sec -match 'record of that copy stays' -and -not ($sec -match 'Keep this build'))
 # The launcher.log entry among the logs sent when a session ends (#3627).
 $logPara = [regex]::Match($privacy, '(?s)\n- \*\*launcher\.log\*\*(.*?)\n(?:- |\n)').Groups[1].Value -replace '\s+', ' '
 Yes 'the log''s paragraph names the voice address and port, the profile number and the microphone' ($logPara -match 'address and port' -and $logPara -match 'profile number' -and $logPara -match 'microphone')
@@ -233,7 +235,8 @@ namespace Thornswood
 
         // ---- 3: uninstall ------------------------------------------------------
         static string root;
-        static string[] saves;
+        static string[] record;
+        static string[] mine;
 
         static void Install(string at)
         {
@@ -248,16 +251,24 @@ namespace Thornswood
             Put(Path.Combine(p, "VoiceBrowser\\EBWebView\\Default\\Cache\\data_0"), "cache");
             Put(Path.Combine(p, "MusicBrowser\\EBWebView\\Local State"), "state");
             Put(Path.Combine(Diag.ReportDir, "thornswood-20261026-1200.zip"), "zip");
-            saves = new string[]
+            // What a kept game copy is known by on a reinstall.
+            record = new string[]
+            {
+                Path.Combine(p, "OwnGame\\files.txt"),
+                Path.Combine(p, "Payload\\waiting.txt"),
+            };
+            foreach (string s in record) Put(s, "kept");
+            // What used to stay under the keep box, and goes now: the
+            // characters and settings are on the site (#5938, #5939).
+            mine = new string[]
             {
                 Path.Combine(p, "MyGames\\Saves\\Save1.ess"),
-                Path.Combine(p, "Characters\\characters.json"),
+                Path.Combine(p, "Characters\\profiles.txt"),
                 Path.Combine(p, "swap.json"),
                 Path.Combine(p, "stats.txt"),
                 Path.Combine(p, "installed-into-game.txt"),
-                Paths.CfgFile,
             };
-            foreach (string s in saves) if (!File.Exists(s)) Put(s, "kept");
+            foreach (string s in mine) if (!File.Exists(s)) Put(s, "gone");
         }
 
         static bool Gone(string path) { return !File.Exists(path) && !Directory.Exists(path); }
@@ -279,15 +290,15 @@ namespace Thornswood
 
         static void Uninstalls(string t)
         {
-            // Kept: only what is not a save or a setting goes.
+            // The game copy kept: all of Profile goes but its record.
             Install(Path.Combine(t, "kept", "Thornswood"));
-            string[] notSaves = LocalKeep.NotSaves();
-            string[] targets = Uninstall.Targets(true, false);
+            string[] targets = Uninstall.Targets(false);
             var list = new List<string>(targets);
-            bool all = true;
-            foreach (string n in notSaves) if (!list.Contains(n)) all = false;
-            Yes("with the box ticked, Targets holds every one of LocalKeep.NotSaves (" + notSaves.Length + ")", all && notSaves.Length == 9);
-            Yes("and not Profile or config.json themselves", !list.Contains(Paths.ProfileDir) && !list.Contains(Paths.CfgFile));
+            Yes("keeping the game copy, Targets holds config.json and not Profile itself", list.Contains(Paths.CfgFile) && !list.Contains(Paths.ProfileDir));
+            Yes("and not Profile\\OwnGame or Profile\\Payload", !list.Contains(Path.Combine(Paths.ProfileDir, "OwnGame")) && !list.Contains(Path.Combine(Paths.ProfileDir, "Payload")));
+            // Written before the script runs, as Finish does, so it knows
+            // what Profile held.
+            string note = Uninstall.WriteFarewell(false);
             Yes("the handover script ran", RunScript(targets, null, "kept") >= 0);
             Yes("launcher.log is gone", Gone(Paths.LogFile));
             foreach (string f in Discord.AccountFiles(Paths.ProfileDir))
@@ -295,24 +306,26 @@ namespace Thornswood
             Yes("Profile\\VoiceBrowser, the old voice browser's folder, is gone", Gone(Path.Combine(Paths.ProfileDir, "VoiceBrowser")));
             Yes("Profile\\MusicBrowser, the old music browser's folder, is gone", Gone(Path.Combine(Paths.ProfileDir, "MusicBrowser")));
             Yes("Profile\\Reports is gone", Gone(Diag.ReportDir));
-            foreach (string s in saves)
-                Yes(s.Substring(root.Length + 1) + " is still there", File.Exists(s) && Text(s) == (s == Paths.CfgFile ? "{}" : "kept"));
+            foreach (string s in mine)
+                Yes(s.Substring(root.Length + 1) + " is gone", Gone(s));
+            Yes("config.json is gone", Gone(Paths.CfgFile));
+            foreach (string s in record)
+                Yes(s.Substring(root.Length + 1) + " is still there", File.Exists(s) && Text(s) == "kept");
             Yes("the launcher's own folder went", Gone(Paths.LauncherDir));
 
-            // The farewell, with the box ticked: one thing that would not go.
-            string note = Uninstall.WriteFarewell(true, false);
+            // The farewell: one thing that would not go.
             Console.WriteLine("farewell-kept: " + note);
             Put(Paths.LogFile, "held open");
             Console.WriteLine("stuck: " + Paths.LogFile);
             Console.WriteLine("root-kept: " + root);
 
-            // Not kept: Profile and config.json go whole, as before.
+            // The game copy deleted: Profile and config.json go whole.
             Install(Path.Combine(t, "whole", "Thornswood"));
-            targets = Uninstall.Targets(false, false);
+            targets = Uninstall.Targets(true);
             list = new List<string>(targets);
-            Yes("with the box unticked, Targets holds Profile and config.json", list.Contains(Paths.ProfileDir) && list.Contains(Paths.CfgFile));
+            Yes("deleting the game copy, Targets holds Profile and config.json", list.Contains(Paths.ProfileDir) && list.Contains(Paths.CfgFile));
             Yes("and the handover script ran", RunScript(targets, null, "whole") >= 0);
-            Yes("Profile went whole, the saves with it", Gone(Paths.ProfileDir));
+            Yes("Profile went whole, the game copy's record with it", Gone(Paths.ProfileDir));
             Yes("and config.json", Gone(Paths.CfgFile));
             Yes("and with nothing left the install folder went too", Gone(root));
 
@@ -321,7 +334,7 @@ namespace Thornswood
             Install(Path.Combine(t, "now", "Thornswood"));
             string outside = Path.Combine(t, "now", "not-ours.txt");
             Put(outside, "theirs");
-            targets = Uninstall.Targets(false, false);
+            targets = Uninstall.Targets(true);
             list = new List<string>(targets);
             list.Add(outside);
             string[] later = Uninstall.RemoveNow(list.ToArray(), Paths.LauncherDir);
@@ -375,7 +388,7 @@ if ($farewell -and (Test-Path -LiteralPath $farewell)) {
     $said = Farewell $farewell
     Yes 'the farewell shows its message with one line, which this swaps for printing it' ($null -ne $said)
     if ($null -ne $said) {
-        Yes 'it says what was left in the kept install: Profile, as the saves and settings' ($said -match 'Profile  -  your characters, saves and settings' -and $said -match 'config\.json  -  your settings')
+        Yes 'it says what was left in the kept install: Profile, as the game copy''s record, and no config.json' ($said -match 'Profile  -  the record of Thornswood''s copy of the game' -and -not ($said -match 'config\.json'))
         Yes 'and names the log it should have removed and could not' ($stuck -and $said.Contains('could not be removed') -and $said.Contains($stuck))
         Remove-Item -LiteralPath $stuck -Force
         $said = Farewell $farewell

@@ -194,17 +194,20 @@ try {
     put(path.join(UP, 'uploads.json'), { 'mine.png': { discordId: ME }, 'yours.png': { discordId: YOU }, 'approved.png': { discordId: ME },
       'reported.png': { discordId: ME }, 'yours2.png': { discordId: YOU } });
     put(path.join(D, 'bans.json'), { [ME]: { why: 'x' } });
+    // Each account's settings (#5939).
+    put(path.join(D, 'settings.json'), { [ME]: { at: 1, files: { 'launcher.json': '{}' } }, [YOU]: { at: 1, files: { 'launcher.json': '{}' } } });
     put(path.join(D, 'deletion-requests.json'), { people: [{ discordId: ME, profiles: [P1] }] });
   }
   function runSite() {
     const logged = [];
     const putJson = (p, o) => { try { fs.writeFileSync(p, JSON.stringify(o, null, 2)); return true; } catch (e) { return false; } };
     const fn = new Function('fs', 'path', 'console', 'putJson', 'DATA', 'UP', 'LINKED', 'RULES_OK', 'ATTEMPTS', 'SESSIONS', 'SLOGS',
-      'TROUBLE_FILE', 'ROSTER', 'INBOX', 'GPENDING', 'GALLERY', 'GREPORTS', 'UPMETA', cut[1] + '\napplyDeletionRequests();');
+      'TROUBLE_FILE', 'ROSTER', 'INBOX', 'GPENDING', 'GALLERY', 'GREPORTS', 'UPMETA', 'SETTINGS', cut[1] + '\napplyDeletionRequests();');
     fn(fs, path, { log: (l) => logged.push(l), error: (l) => logged.push(l) }, putJson, D, UP,
       path.join(D, 'linked.json'), path.join(D, 'rules-accepted.json'), path.join(D, 'signins.json'), path.join(D, 'sessions.json'),
       path.join(D, 'session-logs'), path.join(FB, 'trouble.json'), path.join(D, 'roster.json'), path.join(FB, 'inbox.json'),
-      path.join(D, 'gallery-pending.json'), path.join(D, 'gallery.json'), path.join(D, 'gallery-reports.json'), path.join(UP, 'uploads.json'));
+      path.join(D, 'gallery-pending.json'), path.join(D, 'gallery.json'), path.join(D, 'gallery-reports.json'), path.join(UP, 'uploads.json'),
+      path.join(D, 'settings.json'));
     return logged.join('\n');
   }
   if (cut) {
@@ -212,6 +215,8 @@ try {
     const bans = rd(path.join(D, 'bans.json'));
     const said = runSite();
     const lk = J(path.join(D, 'linked.json'));
+    const kept = J(path.join(D, 'settings.json'));
+    yes('the site: their settings go, the others\' stay (#5939)', !(ME in kept) && (YOU in kept));
     yes('the site: their Discord link, rules answer and sign-in rows go, the others stay',
         !lk[ME] && !!lk[YOU] && J(path.join(D, 'rules-accepted.json'))[ME] === undefined &&
         J(path.join(D, 'signins.json')).length === 1 && J(path.join(D, 'signins.json'))[0].id === YOU);

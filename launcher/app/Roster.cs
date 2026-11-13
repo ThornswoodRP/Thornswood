@@ -97,7 +97,7 @@ namespace Thornswood
         /// <summary>
         /// True when the server said it has no character under this profile,
         /// and said so after the character was last played here. Played is
-        /// local time, as profiles.txt keeps it. A character made or played
+        /// local time, as Chars holds it. A character made or played
         /// after the server's last look is never called gone on that look.
         /// </summary>
         public static bool Gone(int profileId, DateTime lastPlayedLocal)
@@ -109,7 +109,7 @@ namespace Thornswood
             }
         }
 
-        /// <summary>A local time from profiles.txt in UTC; MinValue stays MinValue.</summary>
+        /// <summary>A local time in UTC; MinValue stays MinValue.</summary>
         public static DateTime Played(DateTime local)
         {
             if (local == DateTime.MinValue) return DateTime.MinValue;
