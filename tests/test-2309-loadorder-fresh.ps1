@@ -74,6 +74,18 @@ Yes '  and it holds the box read between its markers' ($block.Contains('# ==== t
 $Scratch = Join-Path ([IO.Path]::GetTempPath()) ('ts-2309-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force -Path $Scratch | Out-Null
 $oldServerDir = $env:THORNSWOOD_TEST_SERVER_DIR
+# This machine's own data is LOCALAPPDATA (Where.ps1 Get-MachineData asks the
+# variable first, and the known folder only when it is empty), and a Ship
+# machine records its engine build there (engine-build.json, #2019, #3047).
+# Read from the real one, that record sent Where.ps1 ServerDist to CI's build
+# of a pin the scratch checkout has no record of, and the test stopped before
+# its checks (#4168). A fresh checkout on a fresh machine has empty user
+# folders, so this run has its own.
+$oldLocalAppData = $env:LOCALAPPDATA
+$oldAppData = $env:APPDATA
+$env:LOCALAPPDATA = Join-Path $Scratch 'localappdata'
+$env:APPDATA = Join-Path $Scratch 'appdata'
+New-Item -ItemType Directory -Force -Path $env:LOCALAPPDATA, $env:APPDATA | Out-Null
 try {
     # ---- the fresh checkout ---------------------------------------------------------------
     $fresh = Join-Path $Scratch 'fresh'
@@ -196,6 +208,8 @@ try {
 }
 finally {
     $env:THORNSWOOD_TEST_SERVER_DIR = $oldServerDir
+    $env:LOCALAPPDATA = $oldLocalAppData
+    $env:APPDATA = $oldAppData
     Remove-Item -LiteralPath $Scratch -Recurse -Force -ErrorAction SilentlyContinue
 }
 Done
