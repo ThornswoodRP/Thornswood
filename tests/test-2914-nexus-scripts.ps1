@@ -40,7 +40,10 @@
        entry with hashes is refused; a moved entry's patch stays when the new
        archive holds the same file, goes when it is dropped and is refused
        otherwise, and a mod rule that names it is given the new archive's md5,
-       file name and version (#2793); each -Mod and -Add archive is held to
+       file name and version (#2793), while a rule naming another mod that
+       only shares its file name stays, a swap onto a file id another entry
+       installs is refused, and so is one add naming a plugin twice in
+       names that differ only in case (#4200); each -Mod and -Add archive is held to
        the file Nexus serves as its file id, and one that is not it is
        refused with both sizes and md5s (#4980); -WhatIf builds the
        archive and writes nothing; the real run uploads an archive with the
@@ -440,6 +443,23 @@ Yes 'a rule that matches the moved entry by a version range is refused, and noth
 $said = NodeSaid $js $cj $sw $o1 $o2
 Yes 'and one that matches it by its own version moves to the new one' ($LASTEXITCODE -eq 0 -and (@($said) -join '|') -match ('modRules\[0\]\.source\.fileMD5\tfa1fe7613d21ab5826d4a3a3b258f14a\t' + $md5) -and (@($said) -join '|') -match 'modRules\[0\]\.source\.versionMatch\t1\.0\.0\t9\.0\.0')
 
+# Issue #4200: a rule moves only when it names the moved entry. Here the
+# runtime and another mod both have the file name "Main File" on Nexus; a
+# rule naming the other mod by its md5 stays as it is, and one naming the
+# runtime by its md5 moves.
+$cjMain = Join-Path $T 'main-file-collection.json'
+& $node.Source -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));c.mods[1].source.logicalFilename='Main File';c.mods.push({name:'Another Mod',version:'1.0.0',optional:false,domainName:'skyrimspecialedition',source:{type:'nexus',modId:5050,fileId:5051,md5:'00000000000000000000000000000005',fileSize:10,logicalFilename:'Main File',updatePolicy:'exact',tag:'otherTag123'},author:'Someone',details:{category:'Gameplay',type:''},phase:0});const fish={fileMD5:'fa1fe7613d21ab5826d4a3a3b258f14a',logicalFileName:'Fishing In Skyrim',versionMatch:'1.0.0'};c.modRules.push({type:'after',reference:{fileMD5:'00000000000000000000000000000005',logicalFileName:'Main File',versionMatch:'1.0.0'},source:fish});c.modRules.push({type:'after',reference:{fileMD5:'c515679068f6563750b1ca1f9260031f',logicalFileName:'Main File',versionMatch:'1.0.0'},source:fish});fs.writeFileSync(process.argv[2],JSON.stringify(c,undefined,2))" $cj $cjMain
+Put $sw ('[{"modId":"192762","fileId":"812346","version":"1.0.2","md5":"' + $md5 + '","fileSize":300000,"logicalFilename":"Main File"}]')
+$o1 = Join-Path $T 'main-file-out.json'
+$said = NodeSaid $js $cjMain $sw $o1 (Join-Path $T 'main-file-payload.json')
+& $node.Source -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));process.exit(JSON.stringify(b.modRules[1])===JSON.stringify(a.modRules[1])&&b.modRules[2].reference.fileMD5===process.argv[3]&&b.modRules[2].reference.versionMatch==='1.0.2'?0:1)" $cjMain $o1 $md5
+Yes '#4200 a rule naming another mod by its md5 stays, though it shares the moved entry''s file name, and one naming the moved entry moves' ($LASTEXITCODE -eq 0 -and -not ((@($said) -join '|') -match 'modRules\[1\]') -and (@($said) -join '|') -match 'modRules\[2\]\.reference\.fileMD5')
+# Issue #4200: a swap onto a file id another entry already installs.
+Put $sw ('[{"modId":"192762","fileId":"191234","version":"1.0.2","md5":"' + $md5 + '","fileSize":300000,"logicalFilename":"Thornswood Client Runtime"}]')
+Remove-Item -LiteralPath (Join-Path $T 'no.json') -ErrorAction SilentlyContinue
+$err = (& $node.Source $js $cj $sw (Join-Path $T 'no.json') (Join-Path $T 'no-payload.json') 2>&1) -join ' '
+Yes '#4200 a swap onto a file id another entry of the revision installs is refused, saying so, and nothing is written' ($LASTEXITCODE -eq 1 -and $err -match 'file 191234 is already in this revision, as A Fishing Mod' -and -not (Test-Path -LiteralPath (Join-Path $T 'no.json')))
+
 # Issue #2969: a mod the revision does not carry yet, added the way Vortex
 # writes one it put in with its basic installer.
 $addJson = Join-Path $T 'add.json'
@@ -464,6 +484,11 @@ foreach ($case in @(
     $null = & $node.Source $js $cj $addJson (Join-Path $T 'no.json') (Join-Path $T 'no-payload.json') 2>$null
     Yes ('adding ' + $case[1] + ' is refused, and nothing is written') ($LASTEXITCODE -eq 1 -and -not (Test-Path -LiteralPath (Join-Path $T 'no.json')))
 }
+# Issue #4200: one mod with two plugins whose names differ only in case.
+Put $addJson ('[' + (AddSpec '8662' 'Hair.esp' 'Dragonborn.esm').Replace(']}]}', ']},{"name":"hair.esp","after":["Dragonborn.esm"]}]}') + ']')
+Remove-Item -LiteralPath (Join-Path $T 'no.json') -ErrorAction SilentlyContinue
+$err = (& $node.Source $js $cj $addJson (Join-Path $T 'no.json') (Join-Path $T 'no-payload.json') 2>&1) -join ' '
+Yes '#4200 one mod adding two plugins whose names differ only in case is refused, saying so, and nothing is written' ($LASTEXITCODE -eq 1 -and $err -match 'names hair\.esp twice' -and -not (Test-Path -LiteralPath (Join-Path $T 'no.json')))
 
 # #4603: revision 6 installs RaceMenuMorphsCBBE.esp off its list, and the
 # record (checked by Check-CollectionRecord.ps1) lets a new plugin load after
