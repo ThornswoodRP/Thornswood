@@ -32,6 +32,10 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
     /// <summary>GitHub with a token that may open issues, for the parity
     /// check's rows; minted apart from the service's own (AppTokens.IssuesWrite).</summary>
     public GitHub? IssuesGh { get; set; }
+    /// <summary>The content build (#5191), for Deployments to Content; null
+    /// when the agent does not look after it, or runs no gate (a deploy by
+    /// tag, a single look).</summary>
+    public ContentBuild? Content { get; set; }
     /// <summary>The environment the steps after a Deployment run for: the dev
     /// server, the one Deploy-DevGamemode.ps1 deploys to.</summary>
     public const string DevEnv = "dev";
@@ -399,6 +403,9 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
     /// would only put in what is about to be replaced.</summary>
     public async Task Pass(string env, CancellationToken ct)
     {
+        // Only the service builds content, through the gate; a single look
+        // (once) leaves its Deployments to it.
+        if (cfg.Environments[env].Kind == ContentBuild.Kind && Content == null) return;
         var deps = await gh.Deployments(cfg.Environments[env].GitHubEnvironment, 10, ct);
         if (deps.Count == 0) return;
         var newest = deps[0];
@@ -453,7 +460,13 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
             var tag = "";
             var after = new Dictionary<string, byte[]>(StringComparer.Ordinal);
             var steps = new List<StepResult>();
+            var content = cfg.Environments[env].Kind == ContentBuild.Kind;
             if (d.Task != "" && d.Task != "deploy") outc = new Outcome("failure", $"not applied: the Deployment's task is {d.Task}, and the agent applies deploy only");
+            else if (content)
+            {
+                try { outc = await Content!.Apply(d, Redacted(Logf), ct); }
+                catch (Exception e) when (e is InvalidDataException or JsonException) { outc = new Outcome("failure", "not built: " + e.Message); }
+            }
             else
             {
                 try
@@ -487,7 +500,7 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
             // which files the in-game checks and says a failed step on its issue.
             if (steps.Count > 0 && servers.TryGetValue(env, out var stepsSrv)) Records.PublishSteps(stepsSrv, d.Id.ToString(), d.Sha, steps);
             await gh.SetStatus(d.Id, outc.State, outc.Summary, url, ct);
-            if (outc.State == "success") await LeaveNews(env, tag, d, ct);
+            if (outc.State == "success" && !content) await LeaveNews(env, tag, d, ct);
             // The parity check reads the box as it is now, so it runs once the
             // Deployment is in and said; what it finds never changes how the
             // Deployment went, and its lines join the same log.
@@ -792,6 +805,11 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
                 var down = await app.Unhealthy(ct);
                 if (down != "") { log($"{env}: {down}"); ok = false; }
                 else log($"{env}: " + (e.Kind == AppKinds.Discord ? $"the service {e.Service} is running" : $"{e.Health} answers"));
+                continue;
+            }
+            if (e.Kind == ContentBuild.Kind)
+            {
+                log($"{env}: builds are kept in {e.Root}" + (Directory.Exists(e.Root) ? "" : ", which Build-Content makes with its first build"));
                 continue;
             }
             var sick = await servers[env].Unhealthy(ct);

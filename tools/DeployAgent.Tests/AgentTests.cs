@@ -43,6 +43,30 @@ sealed class FakeGitHub : HttpMessageHandler
     public readonly List<string> Labels = new();
     /// <summary>What opening an issue answers, for a token that may not.</summary>
     public HttpStatusCode IssueAnswer { get; set; } = HttpStatusCode.Created;
+    /// <summary>Draft Releases (#5191, the content builds), oldest first, and
+    /// each one's uploaded files by name.</summary>
+    public readonly List<JsonObject> DraftList = new();
+    public readonly Dictionary<long, Dictionary<string, byte[]>> Uploaded = new();
+    public int DraftsMade { get; set; }
+    /// <summary>What an upload answers, for one that fails part way.</summary>
+    public HttpStatusCode UploadAnswer { get; set; } = HttpStatusCode.Created;
+
+    public JsonObject AddDraft(string tag, DateTimeOffset made, params string[] assets)
+    {
+        lock (gate)
+        {
+            var id = nextId++;
+            var d = new JsonObject
+            {
+                ["id"] = id, ["tag_name"] = tag, ["draft"] = true, ["created_at"] = made.ToString("o"),
+                ["upload_url"] = $"{Api}/uploads/O/R/releases/{id}/assets{{?name,label}}",
+                ["assets"] = new JsonArray(assets.Select(a => (JsonNode)new JsonObject { ["id"] = nextId++, ["name"] = a, ["size"] = 1, ["url"] = "" }).ToArray()),
+            };
+            DraftList.Add(d);
+            Uploaded[id] = new();
+            return d;
+        }
+    }
 
     public void AddRelease(string tag, Dictionary<string, byte[]> files)
     {
@@ -112,7 +136,8 @@ sealed class FakeGitHub : HttpMessageHandler
     {
         if (r.RequestUri!.Host != "gh.test")
             return Other?.Invoke(r) ?? new HttpResponseMessage(HttpStatusCode.NotFound);
-        var body = r.Content == null ? "" : await r.Content.ReadAsStringAsync(ct);
+        var raw = r.Content == null ? [] : await r.Content.ReadAsByteArrayAsync(ct);
+        var body = Encoding.UTF8.GetString(raw);
         var p = r.RequestUri.AbsolutePath;
         var q = System.Web.HttpUtility.ParseQueryString(r.RequestUri.Query);
         if (r.Method == HttpMethod.Get && p == "/repos/O/R/deployments" && BeforeDeployments is { } before) await before(q["environment"] ?? "");
@@ -193,6 +218,37 @@ sealed class FakeGitHub : HttpMessageHandler
                 var i = JsonNode.Parse(body)!.AsObject();
                 i["state"] = "open";
                 Issues.Add(i);
+                return Json(HttpStatusCode.Created, "{}");
+            }
+            if (p == "/repos/O/R/releases" && r.Method == HttpMethod.Get)
+            {
+                // Drafts first, the way GitHub lists them; one page here.
+                var page = int.Parse(q["page"] ?? "1");
+                var all = DraftList.AsEnumerable().Reverse().Concat(Releases.Values).Select(x => x.DeepClone()).ToArray();
+                return Json(HttpStatusCode.OK, (page == 1 ? new JsonArray(all) : new JsonArray()).ToJsonString());
+            }
+            if (p == "/repos/O/R/releases" && r.Method == HttpMethod.Post)
+            {
+                var b = JsonNode.Parse(body)!;
+                if ((bool?)b["draft"] != true) return Json(HttpStatusCode.UnprocessableEntity, "{\"message\":\"the stand-in makes drafts only\"}");
+                DraftsMade++;
+                return Json(HttpStatusCode.Created, AddDraft((string)b["tag_name"]!, DateTimeOffset.UtcNow).ToJsonString());
+            }
+            const string rp = "/repos/O/R/releases/";
+            if (r.Method == HttpMethod.Delete && p.StartsWith(rp))
+            {
+                var id = long.Parse(p[rp.Length..]);
+                return DraftList.RemoveAll(d => (long)d["id"]! == id) == 1 ? new HttpResponseMessage(HttpStatusCode.NoContent) : Json(HttpStatusCode.NotFound, "{\"message\":\"Not Found\"}");
+            }
+            const string up = "/uploads/O/R/releases/";
+            if (r.Method == HttpMethod.Post && p.StartsWith(up) && p.EndsWith("/assets"))
+            {
+                if (UploadAnswer != HttpStatusCode.Created) return Json(UploadAnswer, "{\"message\":\"upload refused\"}");
+                var id = long.Parse(p[up.Length..^"/assets".Length]);
+                var d = DraftList.Single(x => (long)x["id"]! == id);
+                var name = q["name"]!;
+                Uploaded[id][name] = raw;
+                d["assets"]!.AsArray().Add(new JsonObject { ["id"] = nextId++, ["name"] = name, ["size"] = raw.Length, ["url"] = "" });
                 return Json(HttpStatusCode.Created, "{}");
             }
             return Json(HttpStatusCode.NotFound, $"{{\"message\":\"no such path in the stand-in: {p}\"}}");
