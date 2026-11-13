@@ -19,6 +19,8 @@
 param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Windows.ps1')
+$ps = Get-BoxPowerShell
 $repo = (Resolve-Path (Split-Path -Parent $PSScriptRoot)).Path
 $script = Join-Path $repo 'scripts\mods\Check-FromGame.ps1'
 $script:pass = 0; $script:fail = 0
@@ -36,7 +38,7 @@ function Q([string]$s) { return "'" + $s.Replace("'", "''") + "'" }
 function Run([string]$at, [string]$out) {
     $cmd = '[Environment]::CurrentDirectory = ' + (Q $T) + '; Set-Location -LiteralPath ' + (Q $at) + '; [Environment]::CurrentDirectory = ' + (Q $T) +
         '; & ' + (Q $script) + ' -Data ' + (Q $noGame) + ' -Out ' + (Q $out) + '; exit $LASTEXITCODE'
-    $o = & pwsh -NoProfile -Command $cmd 2>&1 | Out-String
+    $o = & $ps -NoProfile -Command $cmd 2>&1 | Out-String
     return [pscustomobject]@{ Code = $LASTEXITCODE; Out = $o }
 }
 $stop = 'STOP\. -Out is inside the repository'
@@ -49,11 +51,11 @@ try {
     Yes 'a relative -Out the session''s location puts in the repository is refused, though the process folder is outside' ($r.Code -eq 1 -and $r.Out -match $stop -and -not (Test-Path -LiteralPath (Join-Path $T 'from-game-out')))
     # A junction on Windows, which needs no privilege; a symbolic link elsewhere.
     $link = Join-Path $T 'into-repo'
-    New-Item -ItemType $(if ($IsWindows) { 'Junction' } else { 'SymbolicLink' }) -Path $link -Target (Join-Path $repo 'scripts') -Force | Out-Null
+    New-Item -ItemType $(if ($OnWindows) { 'Junction' } else { 'SymbolicLink' }) -Path $link -Target (Join-Path $repo 'scripts') -Force | Out-Null
     $r = Run $T (Join-Path $link 'from-game')
     Yes 'a link outside the repository that points into it is refused' ($r.Code -eq 1 -and $r.Out -match $stop)
     if ($r.Out -notmatch $stop) { Write-Host $r.Out }
-    if (-not $IsWindows) {
+    if (-not $OnWindows) {
         # local is not in git, so on a fresh checkout this link points at nothing yet.
         $dangling = Join-Path $T 'into-local'
         New-Item -ItemType SymbolicLink -Path $dangling -Target (Join-Path $repo 'local-not-there') -Force | Out-Null
