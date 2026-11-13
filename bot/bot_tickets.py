@@ -789,18 +789,40 @@ class TicketModal(discord.ui.Modal):
                     log('the ticket could not be posted in #%s either:\n'
                         % book.name + traceback.format_exc())
 
-        # And whatever happened in Discord, the person gets told something
-        # true. The old wording promised a message that nothing ever sent.
-        if not posted and not fell_back and self.kind != 'faction':
-            try:
-                await who.send(
-                    'Your ticket reached staff, but Discord would not let the '
-                    'bot open a thread for it. Nothing is lost: it is in the '
-                    'staff inbox. Somebody will get back to you.')
-            except Exception as e:
-                log('could not even DM %s about the failed ticket: %s' % (who, e))
+        # Discord holds no copy of this one when neither the thread nor the
+        # staff only log channel took it. Then the site's inbox is the only
+        # place it is kept, and the person is told it is there only once the
+        # site has said it kept it (#4230): until then the message promised
+        # "nothing is lost: it is in the staff inbox" before the site copy was
+        # even sent, and a refused send or a bot with no key was a line in the
+        # bot's log and nothing else. A Faction Leader ticket never goes to
+        # the site without its thread, and was told above.
+        only_site = not posted and not fell_back and self.kind != 'faction'
+        kept = None
+        if only_site:
+            kept = await push_async(
+                self.kind, '%s: %s' % (self.label_text, who.display_name),
+                detail, str(who), who.id, rules)
+            if kept:
+                try:
+                    await who.send(
+                        'Your ticket reached staff, but Discord would not let '
+                        'the bot open a thread for it. It is in the staff '
+                        'inbox on the site, and somebody will get back to you '
+                        'by message.')
+                except Exception as e:
+                    log('could not even DM %s about the failed ticket: %s' % (who, e))
+            else:
+                # Nothing kept it, so it is no ticket, and the wait between
+                # tickets is for tickets: they may send it again straight away.
+                _last_ticket.pop(_ticket_key(guild, who), None)
+                log('ticket from %s was kept nowhere: no thread, no staff only '
+                    'channel, and the site did not take it. They were asked to '
+                    'try again or message staff.' % who)
 
-        # The site copy is bookkeeping, and nobody waits on it. It used to be
+        # Where Discord holds a copy (the thread, or the staff only log
+        # channel), the site copy is bookkeeping, and nobody waits on it. With
+        # no Discord copy it was sent and answered above (#4230). It used to be
         # awaited here, before the reply, and push gives the site twelve
         # seconds to answer, so with the site down a stranger pressing Submit
         # watched the bot think for twelve seconds before hearing their ticket
@@ -811,7 +833,7 @@ class TicketModal(discord.ui.Modal):
         # push_async logs its own failure, so nothing is lost by not awaiting.
         # A Faction Leader ticket that never opened a thread is not sent:
         # the site inbox is readable by general staff.
-        if posted or self.kind != 'faction':
+        if (posted or self.kind != 'faction') and not only_site:
             task = asyncio.create_task(push_async(
                 self.kind, '%s: %s' % (self.label_text, who.display_name),
                 detail, str(who), who.id, rules))
@@ -830,10 +852,18 @@ class TicketModal(discord.ui.Modal):
                 'to staff instead, somewhere only staff can read it. Somebody '
                 'will answer you by message.',
                 ephemeral=True)
-        else:
+        elif kept:
             await interaction.followup.send(
                 'Sent to staff. Discord would not let a thread open for it, so '
-                'the answer will come by message rather than in here.',
+                'it is in the staff inbox on the site, and the answer will come '
+                'by message rather than in here.',
+                ephemeral=True)
+        else:
+            await interaction.followup.send(
+                'This did not reach staff. Discord would not let a thread open '
+                'for it and the site did not take it either, so nothing kept '
+                'it. Please try again in a few minutes, or message a member of '
+                'staff directly.',
                 ephemeral=True)
 
 
