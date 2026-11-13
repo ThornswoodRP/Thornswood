@@ -51,6 +51,7 @@ try {
     New-Item -ItemType SymbolicLink -Path $link -Target (Join-Path $repo 'local') -Force | Out-Null
     $r = Run $T (Join-Path $link 'from-game')
     Yes 'a link outside the repository that points into it is refused' ($r.Code -eq 1 -and $r.Out -match $stop)
+    if ($r.Out -notmatch $stop) { Write-Host $r.Out }
     $r = Run $T (Join-Path $T 'look')
     Yes 'a folder outside the repository is let through to the build' ($r.Out -notmatch $stop)
 }

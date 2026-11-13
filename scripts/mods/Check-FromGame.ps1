@@ -44,11 +44,47 @@ param(
   [string] $Out = ''
 )
 $ErrorActionPreference = 'Stop'
-$repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+# A path as the filesystem will take it (#4277): each folder in turn, a link
+# replaced by what it points to, and .. taken from the real folder, so a link
+# from outside into the repository, or the repository named some other way,
+# reads as the repository. The part that does not exist yet is added as it
+# is written.
+function Resolve-RealPath([string]$path) {
+  # One part at a time: Combine given a PowerShell array picks an overload
+  # that joins the parts with spaces.
+  $join = { param([string]$base, $more) foreach ($m in @($more)) { $base = [IO.Path]::Combine($base, [string]$m) }; $base }
+  $root = [IO.Path]::GetPathRoot($path)
+  $cur = $root
+  $parts = @($path.Substring($root.Length).Split([char[]]'\/', [StringSplitOptions]::RemoveEmptyEntries))
+  for ($i = 0; $i -lt $parts.Count; $i++) {
+    $part = $parts[$i]
+    if ($part -eq '.') { continue }
+    if ($part -eq '..') { $up = [IO.Path]::GetDirectoryName($cur); if ($up) { $cur = $up }; continue }
+    $next = [IO.Path]::Combine($cur, $part)
+    # A link is read as a link even when what it points to is not there yet,
+    # because writing through it still lands where it points.
+    $link = [IO.FileInfo]::new($next).LinkTarget
+    if ($link) {
+      $target = if ([IO.Path]::IsPathRooted($link)) { $link } else { [IO.Path]::Combine($cur, $link) }
+      $rest = if ($i + 1 -lt $parts.Count) { @($parts[($i + 1)..($parts.Count - 1)]) } else { @() }
+      return Resolve-RealPath (& $join (Resolve-RealPath $target) $rest)
+    }
+    if (-not (Test-Path -LiteralPath $next)) {
+      $tail = @($parts[$i..($parts.Count - 1)] | Where-Object { $_ -ne '.' })
+      if ($tail -contains '..') { return Resolve-RealPath ([IO.Path]::GetFullPath((& $join $cur $tail))) }
+      return (& $join $cur $tail)
+    }
+    $cur = $next
+  }
+  return $cur
+}
+$repo = Resolve-RealPath (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 if ($Out) {
-  $full = [IO.Path]::GetFullPath($Out)
-  if ($full.StartsWith($repo + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
-    Write-Host 'STOP. -Out is inside the repository; these are Bethesda''s and the mods'' authors'' files and are not to be committed (#2827, #3113).'
+  # Against this session's own location, as New-Item and the writes below
+  # take it, not the process folder, which Set-Location leaves where it was.
+  $Out = Resolve-RealPath $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Out)
+  if ($Out.Equals($repo, [StringComparison]::OrdinalIgnoreCase) -or $Out.StartsWith($repo + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    Write-Host ('STOP. -Out is inside the repository (' + $Out + '); these are Bethesda''s and the mods'' authors'' files and are not to be committed (#2827, #3113).')
     exit 1
   }
 }
