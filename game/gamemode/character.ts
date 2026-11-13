@@ -1461,6 +1461,36 @@
     return ms;
   }
 
+  /*
+    WORKING BESIDE YOUR MASTER (#4562). Decided 22 Oct: an apprentice climbs
+    1.5 times as fast while their master is within 10 m. BESIDE.times is that
+    1.5 and BESIDE.reach is 10 m in game units, the reach a letter is handed
+    over at.
+
+    The half a piece of work under key counts for, when the Master who took
+    this person on in it still stands (masterFor), is online, and is in the
+    same place within BESIDE.reach; '' otherwise. creditWork (the class and
+    profession gates) pays the extra, banked as whole pieces the way the party
+    bonus is. Work in any other half is not touched: a Master speeds the half
+    they teach.
+  */
+  var BESIDE = { times: 1.5, reach: 700 };
+  function masterBeside(actorId, key) {
+    var s = stateOf(actorId);
+    var half = P.classFor(key) || key;
+    if (!masterFor(actorId, s, half)) { return ''; }
+    var them = s.masters[half].id;
+    var soc = g.__thornswoodSocial;
+    if (!soc || !soc.actorForProfile || !soc.profileOf) { return ''; }
+    if (soc.actorForProfile(soc.profileOf(them)) !== them) { return ''; }
+    var cell = String(mp.get(actorId, 'worldOrCellDesc') || '');
+    if (!cell || String(mp.get(them, 'worldOrCellDesc') || '') !== cell) { return ''; }
+    var a = mp.get(actorId, 'pos'), b = mp.get(them, 'pos');
+    if (!a || !b) { return ''; }
+    var dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
+    return (dx * dx + dy * dy + dz * dz) <= BESIDE.reach * BESIDE.reach ? half : '';
+  }
+
   /** Every half and school somebody holds at Master. A class is not taught. */
   function mastered(ms) {
     var out = [];
@@ -2365,6 +2395,7 @@
     gate: gate, gateHalf: gateHalf, credit: credit,
     grantSpell: grantSpell, grantKnown: grantKnown, nameOf: nameOf, raiseLines: raiseLines,
     acceptApprentice: acceptApprentice, masterFor: masterFor, effectsOf: effectsOf,
+    masterBeside: masterBeside, BESIDE: BESIDE,
     masterRecord: masterRecord, takeOnMark: takeOnMark, weaveOf: weaveOf,
     rankOf: function (actorId, key) { return P.rankOf(stateOf(actorId), key); }
   };

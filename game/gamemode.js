@@ -1591,7 +1591,25 @@ function creditWork(actorId, key, n) {
     }
   } catch (e) { }
 
+  /*
+    And an apprentice's work beside their master counts 1.5 times (#4562,
+    decided 22 Oct), in the half that master teaches. Banked the same way as
+    the party bonus and for the same reason, half a piece at a time per
+    character and half, so every second piece beside them is paid one more.
+    The character block says whether the master is there (masterBeside).
+  */
   const c = globalThis.__thornswoodCharacter;
+  if (c && c.masterBeside && c.BESIDE) {
+    let half = '';
+    try { half = c.masterBeside(actorId, key); }
+    catch (e) { log('could not tell whether the master of', actorId.toString(16), 'is beside them for', key + ':', e); }
+    if (half) {
+      const bank = actorId + ' ' + half;
+      MASTER_BANK[bank] = (MASTER_BANK[bank] || 0) + (c.BESIDE.times - 1) * pieces;
+      while (MASTER_BANK[bank] >= 1) { MASTER_BANK[bank] -= 1; extra++; }
+    }
+  }
+
   if (!c || !c.credit) { return null; }
   try {
     let line = c.credit(actorId, key);
@@ -1612,6 +1630,11 @@ function creditWork(actorId, key, n) {
 /* What each character is owed of the party bonus, in fractions of a piece.
    In memory: a party is a session, so its bonus is too. */
 const PARTY_BANK = {};
+
+/* What each apprentice is owed of working beside their master (#4562), per
+   character and half, in fractions of a piece. In memory, like the party's:
+   standing beside somebody is a session's. */
+const MASTER_BANK = {};
 
 /*
   A yield, counted for the hold it came out of (#3164). Each place that hands
@@ -37152,6 +37175,36 @@ return module.exports;
     return ms;
   }
 
+  /*
+    WORKING BESIDE YOUR MASTER (#4562). Decided 22 Oct: an apprentice climbs
+    1.5 times as fast while their master is within 10 m. BESIDE.times is that
+    1.5 and BESIDE.reach is 10 m in game units, the reach a letter is handed
+    over at.
+
+    The half a piece of work under key counts for, when the Master who took
+    this person on in it still stands (masterFor), is online, and is in the
+    same place within BESIDE.reach; '' otherwise. creditWork (the class and
+    profession gates) pays the extra, banked as whole pieces the way the party
+    bonus is. Work in any other half is not touched: a Master speeds the half
+    they teach.
+  */
+  var BESIDE = { times: 1.5, reach: 700 };
+  function masterBeside(actorId, key) {
+    var s = stateOf(actorId);
+    var half = P.classFor(key) || key;
+    if (!masterFor(actorId, s, half)) { return ''; }
+    var them = s.masters[half].id;
+    var soc = g.__thornswoodSocial;
+    if (!soc || !soc.actorForProfile || !soc.profileOf) { return ''; }
+    if (soc.actorForProfile(soc.profileOf(them)) !== them) { return ''; }
+    var cell = String(mp.get(actorId, 'worldOrCellDesc') || '');
+    if (!cell || String(mp.get(them, 'worldOrCellDesc') || '') !== cell) { return ''; }
+    var a = mp.get(actorId, 'pos'), b = mp.get(them, 'pos');
+    if (!a || !b) { return ''; }
+    var dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
+    return (dx * dx + dy * dy + dz * dz) <= BESIDE.reach * BESIDE.reach ? half : '';
+  }
+
   /** Every half and school somebody holds at Master. A class is not taught. */
   function mastered(ms) {
     var out = [];
@@ -38056,6 +38109,7 @@ return module.exports;
     gate: gate, gateHalf: gateHalf, credit: credit,
     grantSpell: grantSpell, grantKnown: grantKnown, nameOf: nameOf, raiseLines: raiseLines,
     acceptApprentice: acceptApprentice, masterFor: masterFor, effectsOf: effectsOf,
+    masterBeside: masterBeside, BESIDE: BESIDE,
     masterRecord: masterRecord, takeOnMark: takeOnMark, weaveOf: weaveOf,
     rankOf: function (actorId, key) { return P.rankOf(stateOf(actorId), key); }
   };

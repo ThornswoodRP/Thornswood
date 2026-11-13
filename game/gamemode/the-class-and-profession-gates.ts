@@ -119,7 +119,25 @@ function creditWork(actorId, key, n) {
     }
   } catch (e) { }
 
+  /*
+    And an apprentice's work beside their master counts 1.5 times (#4562,
+    decided 22 Oct), in the half that master teaches. Banked the same way as
+    the party bonus and for the same reason, half a piece at a time per
+    character and half, so every second piece beside them is paid one more.
+    The character block says whether the master is there (masterBeside).
+  */
   const c = globalThis.__thornswoodCharacter;
+  if (c && c.masterBeside && c.BESIDE) {
+    let half = '';
+    try { half = c.masterBeside(actorId, key); }
+    catch (e) { log('could not tell whether the master of', actorId.toString(16), 'is beside them for', key + ':', e); }
+    if (half) {
+      const bank = actorId + ' ' + half;
+      MASTER_BANK[bank] = (MASTER_BANK[bank] || 0) + (c.BESIDE.times - 1) * pieces;
+      while (MASTER_BANK[bank] >= 1) { MASTER_BANK[bank] -= 1; extra++; }
+    }
+  }
+
   if (!c || !c.credit) { return null; }
   try {
     let line = c.credit(actorId, key);
@@ -140,6 +158,11 @@ function creditWork(actorId, key, n) {
 /* What each character is owed of the party bonus, in fractions of a piece.
    In memory: a party is a session, so its bonus is too. */
 const PARTY_BANK = {};
+
+/* What each apprentice is owed of working beside their master (#4562), per
+   character and half, in fractions of a piece. In memory, like the party's:
+   standing beside somebody is a session's. */
+const MASTER_BANK = {};
 
 /*
   A yield, counted for the hold it came out of (#3164). Each place that hands
