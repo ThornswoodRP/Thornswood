@@ -21,8 +21,9 @@ WHAT IT HOLDS, for each "Test task for #N" block in the body:
     (Dev for "Server: Dev", Main otherwise), the same function the bot posts
     with, so the two can never disagree; whether the fix is in the newest
     main release is not asked, because it never is before the merge;
-  - a Main body fits the first post the bot makes of it (bot.TASK_BODY_ROOM),
-    since the bot cuts a Main one there and the rest would never be seen;
+  - a Main body fits the one post the bot makes of it (TASK_BODY_ROOM),
+    which is one of post_problems' rules since 12 Nov: the bot used to cut a
+    longer one there, and now refuses it as this check does;
   - one block per issue and kind in the pull request (the bot posts the last
     one of each kind and nobody would see the first);
   - with an issue reader (the workflow passes one, from the run's own token):
@@ -136,14 +137,10 @@ def problems(body, read_issue=None, bot=None):
         # reads a comment: its title, its Server line and its body.
         issue_stub = {'number': b['issue'], 'title': b['title']}
         title, text, server, _c, _u = bot._all_marked(
-            issue_stub, [{'body': comment_of(b)}], bot.TASK_MARK, room=None)[0]
+            issue_stub, [{'body': comment_of(b)}], bot.TASK_MARK)[0]
         channel = 'dev' if b['kind'] == 'Dev' else 'main'
         rules = list(bot.post_problems(channel, b['title'], text, server=server,
                                        fix_in_main=None))
-        if channel == 'main' and len(text) > bot.TASK_BODY_ROOM:
-            rules.append('Format: the steps are %d characters; the bot posts a Main '
-                         'test task in one message of %d, and cuts the rest.'
-                         % (len(text), bot.TASK_BODY_ROOM))
         key = (b['issue'], b['kind'])
         if key in seen:
             rules.append('Duplicates: this pull request has another %s test task for '

@@ -183,10 +183,13 @@ once in the log.
   issue did, a measuring step on the scripts finding, partial fixes and a
   `Refs` written by mistake kept bugs people still meet off the list. Each
   post taken down says why in the log, `known issues: took #N down:`. Its title and body are the issue's
-  last comment that starts `Known issue:` (a short title, at most 45
-  characters, then what goes wrong, where, and how to avoid it), the same
-  shape as a test task below; until somebody writes one, the issue's own title
-  and a plain line. No issue number and no link, because testers have no
+  last comment that starts `Known issue:`: a summary of a few words, whole
+  and at most 45 characters, then in plain words what happens, where, how
+  to avoid it, and what is being done about it. With no such comment there
+  is no post: the bot never writes a post's words itself, and the issue
+  gets one comment saying what to write (Patrick, 12 Nov, after posts went
+  up as the issue title cut mid-sentence over "Known on Main. The team is
+  working on it"). No issue number and no link, because testers have no
   GitHub. The post is deleted the moment the issue is no longer an open
   finding: fixed and closed, closed any other way, its label taken off,
   moved to Done, or a test task written on it.
@@ -199,12 +202,14 @@ once in the log.
       Test task: <what to try, at most 45 characters>
       <numbered steps in the game, then what should happen>
 
-  `Test task:` with nothing after the colon takes the issue's own title. A
-  closed issue also gets a post when its latest `Test task:` comment was
-  written after that day, however long ago it closed. A fixed finding with no
-  such comment gets its own title and a plain line asking testers to check
-  it on main; a fixed issue that is neither a finding nor has that comment
-  gets no post. A reopened issue loses its test task and comes
+  A closed issue also gets a post when its latest `Test task:` comment was
+  written after that day, however long ago it closed. A fixed issue with no
+  such comment gets no post, finding or not: until 12 Nov a fixed finding
+  got its title cut to 45 characters over "Check it on main", which told a
+  tester nothing. Nothing in a post is cut or filled in: `Test task:` with
+  nothing after the colon, a known issue with nothing under its title, and
+  a `#test-tasks` or `#known-issues` post over 2000 characters are refused
+  like any other rule, and the issue is told why. A reopened issue loses its test task and comes
   back to `#known-issues` if it is still a finding. Staff close a test task
   in Discord once it is confirmed.
 - `#dev-test-tasks`, in Staff and seen only by staff (Patrick, 12 Oct): one

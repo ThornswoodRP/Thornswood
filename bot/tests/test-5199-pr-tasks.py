@@ -136,7 +136,7 @@ yes('whether the fix is on the main release is never asked before the merge',
 
 # ---- what only the pull request can get wrong
 long_steps = 'Test task for #4: Long one\nServer: Main\n' + '1. Walk.\n' * 300
-yes('a Main body past the first post is refused', has(rules_of(long_steps), 'Format: the steps are'))
+yes('a Main body past the first post is refused', has(rules_of(long_steps), 'Format: the text is'))
 yes('two Main test tasks for one issue are refused', has(rules_of(MAIN + MAIN), 'Duplicates'))
 yes('  one Main and one Dev for one issue pass',
     rules_of(MAIN + DEV.replace('#102', '#101')) == [])
