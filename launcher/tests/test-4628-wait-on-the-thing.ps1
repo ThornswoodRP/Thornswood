@@ -220,7 +220,7 @@ __MOVE__
         static Exception Try(int refuse, string stuck)
         {
             Directory.Moves = 0; Directory.RefuseFirst = refuse; Checks.Closes = 0; Checks.Stuck = stuck;
-            try { MoveAside(@"C:\Users\someone\Documents\My Games\Skyrim Special Edition", @"C:\aside"); return null; }
+            try { MoveAside(@"C:\Users\<you>\Documents\My Games\Skyrim Special Edition", @"C:\aside"); return null; }
             catch (Exception ex) { return ex; }
         }
 
