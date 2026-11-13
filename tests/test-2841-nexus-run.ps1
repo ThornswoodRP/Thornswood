@@ -130,6 +130,12 @@ foreach ($bad in @(
         @('a pack missing its name', 'Send-NexusFile -Mod 192001 -Version 1.3 -PackRoot game/content -Pack Thornswood-Content.esp'),
         @('a pack name that is not a zip', 'Send-NexusFile -Mod 192001 -Version 1.3 -PackRoot game/content -Pack a.esp -PackName a.7z'),
         @('-Mod with no -FileId', 'New-NexusRevision -Mod 192001'),
+        @('-FileId with no -Mod (#4325)', 'New-NexusRevision -FileId 830001'),
+        @('-FileId with -Publish', 'New-NexusRevision -Publish 7 -FileId 830001'),
+        @('-Mod and -FileId with -Publish', 'New-NexusRevision -Publish 7 -Mod 192001 -FileId 830001'),
+        @('-Add with -Publish', 'New-NexusRevision -Publish 7 -Add records/x.json'),
+        @('-Discard with -Publish', 'New-NexusRevision -Publish 7 -Discard 7'),
+        @('-Mod and -FileId with -Discard', 'New-NexusRevision -Discard 7 -Mod 192001 -FileId 830001'),
         @('-Add outside records', 'New-NexusRevision -Add game/x.json'),
         @('-Rule outside docs', 'New-NexusRevision -Rule records/x.json'),
         @('-Rule that climbs out', 'New-NexusRevision -Rule docs/../x.json'),
@@ -139,6 +145,12 @@ foreach ($bad in @(
     Yes ('refused: ' + $bad[0]) (Refused $bad[1])
 }
 Yes 'a path that climbs out of the repository is not one' (-not (Test-NexusRunPath '../x') -and -not (Test-NexusRunPath 'game/../../x') -and -not (Test-NexusRunPath 'game//x') -and -not (Test-NexusRunPath '/etc/x') -and (Test-NexusRunPath 'game/content'))
+# New-NexusRevision refuses these itself, but only once the runner has
+# downloaded every -FileId and -Add archive (#4325); Nexus-Run says why first.
+function Why([string]$line) { try { [void](Params $line); return '' } catch { return $_.Exception.Message } }
+Yes 'a -FileId with no -Mod says they go together, before anything runs' ((Why 'New-NexusRevision -FileId 830001') -match '-Mod and -FileId go together' -and (Why 'New-NexusRevision -FileId 830001') -match 'Nothing was run')
+Yes '-Publish with a file to move says it publishes a draft already there, naming what it takes none of' ((Why 'New-NexusRevision -Publish 7 -FileId 830001') -match '-Publish publishes a draft that is already there' -and (Why 'New-NexusRevision -Publish 7 -FileId 830001') -match '-FileId')
+Yes '-Publish alone, and with -WhatIf, still goes through' (-not (Refused 'New-NexusRevision -Publish 7') -and -not (Refused 'New-NexusRevision -Publish 7 -WhatIf'))
 
 # ---- 3. the pack ------------------------------------------------------------------
 $esp = 'game/content/Thornswood-Content.esp'
