@@ -162,6 +162,30 @@ try {
         Yes "$s mints through New-ReleaseId and mints no id from the minute" ($src -match 'New-ReleaseId \$\w+ -Dev:\$Dev' -and $src -notmatch "Get-Date -Format 'yyyyMMdd-HHmm'")
     }
 
+    # ---- 1c. a new id sorts after every release the feed has (#4950) -----------------
+    # Ids are Mountain time with no zone, and on 1 Nov Mountain clocks run
+    # 1:00 to 1:59 AM twice. A release at 1:50 AM summer time was named
+    # 20261101-015000; one at 1:10 AM standard time, forty minutes later, was
+    # named 20261101-011000 and sorted before it, so the store's list of
+    # releases (Get-StoreReleases, by the time in the id) put the older first,
+    # and a rollback or Ship's tag check read it as the newest.
+    Write-Host ''; Write-Host 'a new id sorts after the feed''s'
+    $first = Get-TeamNow ([datetime]::new(2026, 11, 1, 7, 50, 0, [DateTimeKind]::Utc))
+    $again = Get-TeamNow ([datetime]::new(2026, 11, 1, 8, 10, 0, [DateTimeKind]::Utc))
+    Yes ('1:50 AM summer time and 1:10 AM standard time, forty minutes apart, read back as {0} and {1}' -f
+        $first.ToString('HH:mm'), $again.ToString('HH:mm')) ($first.ToString('HH:mm') -eq '01:50' -and $again.ToString('HH:mm') -eq '01:10')
+    $one = New-ReleaseId $null -Now $first
+    $f = [pscustomobject]@{ packs = @([pscustomobject]@{ id = $one }); release = [pscustomobject]@{ id = $one }; baseline = [pscustomobject]@{ id = $one } }
+    $two = New-ReleaseId $f -Now $again
+    Yes ("  the second release's id ($two) sorts after the first's ($one)") ([string]::CompareOrdinal($two, $one) -gt 0)
+    $fd = [pscustomobject]@{ packs = @([pscustomobject]@{ id = ($one + '-dev') }) }
+    $twoDev = New-ReleaseId $fd -Dev -Now $again
+    Yes ("  and on dev ($twoDev after $one-dev)") ([string]::CompareOrdinal($twoDev, $one + '-dev') -gt 0)
+    $fo = [pscustomobject]@{ release = [pscustomobject]@{ id = '20261101-0150' } }
+    Yes '  and after a minute id from before #1057' ([string]::CompareOrdinal((New-ReleaseId $fo -Now $again), '20261101-0150') -gt 0)
+    $fs = [pscustomobject]@{ release = [pscustomobject]@{ id = '20261101-015000' } }
+    Yes '  a clock that is ahead of the feed still names the release by its own time' ((New-ReleaseId $fs -Now ([datetime]::new(2026, 11, 1, 2, 30, 5))) -eq '20261101-023005')
+
     # ---- 2. do the names agree ---------------------------------------------------------
     Write-Host ''; Write-Host 'do the names agree'
     $c1 = 'a' * 40
