@@ -54,6 +54,12 @@ spec = importlib.util.spec_from_file_location(
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 
+
+async def _no_guide(guild):
+    # The Server Guide as Discord sends it, here naming no channel.
+    return {}
+B.read_server_guide = _no_guide
+
 WRITES = []
 
 
@@ -143,6 +149,10 @@ class Guild(object):
         WRITES.append(('guild edit',))
 
     onboarding_enabled = False
+
+    async def welcome_screen(self):
+        # A Welcome Screen with no channels on it (#start-here, 13 Nov).
+        return types.SimpleNamespace(welcome_channels=[], description='', enabled=False)
 
     async def onboarding(self):
         return types.SimpleNamespace(enabled=self.onboarding_enabled)
