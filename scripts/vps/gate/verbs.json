@@ -420,7 +420,8 @@
       "timeoutMinutes": 10,
       "fixed": ["-NoPause"],
       "params": {
-        "Which": "^(desk|notices)$"
+        "Which": "^(desk|notices)$",
+        "Retire": "switch"
       }
     },
     "Grant-BoxKey": {

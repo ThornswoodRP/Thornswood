@@ -13,6 +13,17 @@
 
   Until now only Grant-BoxAccess.ps1 -MakeKey -ToEnvironment on One did it.
 
+  RETIRE (-Retire, notices only; #5314). Staff notices from a cloud session
+  are issues the bot says since #5187, so staff-notice.yml and its key have
+  nothing left that starts them. -Which notices -Retire takes the key's line
+  off the box and its secret off GitHub, and makes no new key:
+
+      pwsh scripts/vps/Box-Run.ps1 Renew-BoxKey -Which notices -Retire
+
+  It checks the line exactly as a renewal does, so it never takes off a key
+  that is not the notices key. The line comes off first, then the secret,
+  each read back; run again, it says each is already gone.
+
   RENEW ONLY. Each -Which is one key the box already holds, fixed here: its
   name, the file its line is in, the environment and secret it goes into.
   The new line takes the old line's options word for word (from="127.0.0.1",
@@ -55,6 +66,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][ValidateSet('desk', 'notices')][string]$Which,
+    [switch]$Retire,
     [string]$AdminState = 'C:\Thornswood-Admin\state',
     [switch]$NoPause
 )
@@ -80,6 +92,7 @@ $Kinds = @{
                  Proved = '^READY$' }
 }
 $K = $Kinds[$Which]
+if ($Retire -and $Which -ne 'notices') { Die 'only the notices key retires; box-run.yml needs the desk key. Nothing was changed.' }
 $PutBack = 'Thornswood box access put back'
 
 if ($env:THORNSWOOD_GATE -ne '1') { Die 'this runs on the box through the deploy gate: pwsh scripts/vps/Box-Run.ps1 Renew-BoxKey -Which desk (or notices). Nothing was changed.' }
@@ -114,21 +127,25 @@ function Split-KeyLine([string]$Line) {
     if (-not $m.Success) { return $null }
     return [pscustomobject]@{ Options = $m.Groups['opts'].Value; Key = $m.Groups['key'].Value }
 }
-if (-not $old.Count) { Die ("the box holds no key named thornswood-" + $K.Name + " in $KeysFile, and this only renews one that is there. Grant-BoxAccess.ps1 makes a new one. Nothing was changed.") }
+if ($Retire -and -not $old.Count) { Say ("  the box holds no key named thornswood-" + $K.Name + " in $KeysFile; it is already off") 'Green' }
+elseif (-not $old.Count) { Die ("the box holds no key named thornswood-" + $K.Name + " in $KeysFile, and this only renews one that is there. Grant-BoxAccess.ps1 makes a new one. Nothing was changed.") }
 $parts = @($old | ForEach-Object { Split-KeyLine $_ })
-if (@($parts | Where-Object { -not $_ }).Count) { Die ("a line for thornswood-" + $K.Name + " is not the shape this renews (options, an ed25519 key, its name). Nothing was changed.") }
-$opts = @($parts | ForEach-Object { $_.Options } | Select-Object -Unique)
-if ($opts.Count -ne 1) { Die ("the lines for thornswood-" + $K.Name + " carry different options, so which to keep is not this script's to choose. Nothing was changed.") }
-$opts = [string]$opts[0]
-# The forced command's program is PowerShell 7 (#5356): a line Grant-BoxAccess
-# made before then starts Windows PowerShell, and its renewed line starts
-# pwsh with the same arguments. The login below proves pwsh runs it.
-$opts = $opts -replace '(^|,)command="powershell\.exe ', '$1command="pwsh '
-$wantCommand = if ($K.Gate) { 'command="[^"]*-File C:\\Thornswood-Gate\\Gate\.ps1"' } else { 'command="[^"]*\\say-staff\.ps1 -From ' + $K.Name + '"' }
-foreach ($need in '(^|,)from="127\.0\.0\.1"(,|$)', '(^|,)restrict(,|$)', ('(^|,)' + $wantCommand + '(,|$)')) {
-    if ($opts -notmatch $need) { Die ("the line for thornswood-" + $K.Name + " lacks what it must hold (from=""127.0.0.1"", restrict and its forced command), so a key renewed from it could do more than the old one. Nothing was changed.") }
+$opts = ''
+if ($old.Count) {
+    if (@($parts | Where-Object { -not $_ }).Count) { Die ("a line for thornswood-" + $K.Name + " is not the shape this renews (options, an ed25519 key, its name). Nothing was changed.") }
+    $opts = @($parts | ForEach-Object { $_.Options } | Select-Object -Unique)
+    if ($opts.Count -ne 1) { Die ("the lines for thornswood-" + $K.Name + " carry different options, so which to keep is not this script's to choose. Nothing was changed.") }
+    $opts = [string]$opts[0]
+    # The forced command's program is PowerShell 7 (#5356): a line Grant-BoxAccess
+    # made before then starts Windows PowerShell, and its renewed line starts
+    # pwsh with the same arguments. The login below proves pwsh runs it.
+    $opts = $opts -replace '(^|,)command="powershell\.exe ', '$1command="pwsh '
+    $wantCommand = if ($K.Gate) { 'command="[^"]*-File C:\\Thornswood-Gate\\Gate\.ps1"' } else { 'command="[^"]*\\say-staff\.ps1 -From ' + $K.Name + '"' }
+    foreach ($need in '(^|,)from="127\.0\.0\.1"(,|$)', '(^|,)restrict(,|$)', ('(^|,)' + $wantCommand + '(,|$)')) {
+        if ($opts -notmatch $need) { Die ("the line for thornswood-" + $K.Name + " lacks what it must hold (from=""127.0.0.1"", restrict and its forced command), so a key renewed from it could do more than the old one. Nothing was changed.") }
 }
 foreach ($p in $parts) { Say ('  now   ' + (Get-ThornswoodSshFingerprint ('x ' + $p.Key)) + '  thornswood-' + $K.Name) }
+}
 
 # ------------------------------------------------------------- the token --
 Head "Where it goes: $($K.Secret) in the $($K.Environment) environment of $GitHubRepo"
@@ -149,6 +166,33 @@ if (-not $policy -or -not $policy.custom_branch_policies -or $policy.protected_b
 $branches = @((Invoke-Api "$base/deployment-branch-policies?per_page=100").branch_policies)
 if ($branches.Count -ne 1 -or $branches[0].name -ne 'main' -or $branches[0].type -ne 'branch') { Die ("the environment $($K.Environment) lets in " + (@($branches | ForEach-Object { $_.type + ' ' + $_.name }) -join ', ') + ', not main alone. Nothing was changed.') }
 Say "  the token, for that repository's environments alone; $($K.Environment) lets in main alone" 'Green'
+
+if ($Retire) {
+    Head 'The key off the box'
+    if ($old.Count) {
+        $utf8 = New-Object Text.UTF8Encoding($false)
+        [IO.File]::WriteAllLines($KeysFile, [string[]]@($have | Where-Object { $old -notcontains $_ }), $utf8)
+        $left = @([IO.File]::ReadAllLines($KeysFile) | Where-Object { (' ' + $_.Trim() + ' ').EndsWith($tag + ' ') })
+        if ($left.Count) { Die ("$KeysFile still reads back with a line for thornswood-" + $K.Name + '. The secret is unchanged.') }
+        Say ('  ' + $old.Count + ' line(s) for thornswood-' + $K.Name + ' off; ' + @($have | Where-Object { $old -notcontains $_ }).Count + ' other line(s) kept') 'Green'
+    } else { Say '  already off' 'Green' }
+    Head "$($K.Secret) off GitHub"
+    $names = @((Invoke-Api "$base/secrets?per_page=100").secrets | ForEach-Object { [string]$_.name })
+    if ($names -contains $K.Secret) {
+        $was = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        $del = @(& gh secret delete $K.Secret --env $K.Environment --repo $GitHubRepo 2>&1 | ForEach-Object { "$_" })
+        $delCode = $LASTEXITCODE
+        $ErrorActionPreference = $was
+        if ($delCode -ne 0) { Die ('GitHub refused to delete the secret: ' + ($del -join ' ') + ' The key is off the box, so the secret opens nothing.') }
+        $names = @((Invoke-Api "$base/secrets?per_page=100").secrets | ForEach-Object { [string]$_.name })
+        if ($names -contains $K.Secret) { Die ("$($K.Secret) still reads back in $($K.Environment). The key is off the box, so it opens nothing.") }
+        Say "  $($K.Secret) is gone from $($K.Environment)" 'Green'
+    } else { Say "  $($K.Secret) is already gone from $($K.Environment)" 'Green' }
+    $rest = @($names | Where-Object { $_ })
+    Say ("  $($K.Environment) now holds " + $(if ($rest.Count) { ($rest -join ', ') } else { 'no secret' })) 'White'
+    Remove-Item -LiteralPath Env:\GH_TOKEN -ErrorAction SilentlyContinue
+    exit 0
+}
 
 $work = Join-Path 'C:\ProgramData\ssh' ('renew-' + [Guid]::NewGuid().ToString('N'))
 $before = [IO.File]::ReadAllBytes($KeysFile)
