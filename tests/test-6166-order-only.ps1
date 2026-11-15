@@ -19,7 +19,8 @@
 
   It proves:
     - the files the order is made from are the same list in the script and
-      in the agent's LoadOrderPaths
+      in the agent's LoadOrderPaths, and are what the box's content build
+      reads its order from, which -FromRecord writes (#6209)
     - -At at the checkout's own commit, and at an older commit whose order
       files are the same as main's, goes on
     - -At at a commit main has moved the order past says NOT THIS COMMIT'S
@@ -52,7 +53,15 @@ $block = [regex]::Match($dev, '(?s)# ==== thornswood dev order at ====(.*?)# ===
 Yes 'Deploy-DevGamemode.ps1 has the -At block between its markers' ($block -ne '')
 $inScript = @([regex]::Match($block, '(?s)\$ThornswoodOrderInputs = @\((.*?)\)').Groups[1].Value -split "`n" | ForEach-Object { if ($_ -match "'([^']+)'") { $Matches[1] } })
 $inAgent = @([regex]::Match($agentCs, '(?s)LoadOrderPaths =\s*\[(.*?)\];').Groups[1].Value -split "`n" | ForEach-Object { if ($_ -match '"([^"]+)"') { $Matches[1] } })
-Yes ("the script's order files are the agent's LoadOrderPaths ({0})" -f ($inAgent -join ', ')) ($inAgent.Count -eq 3 -and (($inScript | Sort-Object) -join '|') -eq (($inAgent | Sort-Object) -join '|'))
+Yes ("the script's order files are the agent's LoadOrderPaths ({0})" -f ($inAgent -join ', ')) ($inAgent.Count -eq 4 -and (($inScript | Sort-Object) -join '|') -eq (($inAgent | Sort-Object) -join '|'))
+# #6209: they are what the box's content build reads its order from, so the
+# order the step writes is the one a Release's tables were built against.
+$contentPaths = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/mods/ContentPaths.ps1')).Replace("`r`n", "`n")
+$orderFn = [regex]::Match($contentPaths, '(?s)function Get-ThornswoodContentOrder \{(.*?)\n\}\n').Groups[1].Value
+Yes '  and each is a file Get-ThornswoodContentOrder reads, the content build''s order (#6209)' ($orderFn -ne '' -and @($inScript | Where-Object { -not $orderFn.Contains("'" + $_ + "'") }).Count -eq 0)
+Yes '  and -FromRecord writes that order, not last-plugin.json''s (#6209)' (
+  $dev.Contains("`$contentOrder = Get-ThornswoodContentOrder -Repo `$repoRoot") -and
+  $dev.Contains("@(`$contentOrder.Names)") -and -not $dev.Contains("`$built.loadOrder) | ForEach-Object { [string]`$_ } | Where-Object { `$_ -and `$_ -ine `$ThornswoodLastPlugin }"))
 
 # ---- the -At block, run in a clone made as the gate makes its own ---------
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('test-6166-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
