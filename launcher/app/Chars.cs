@@ -187,12 +187,6 @@ namespace Thornswood
             catch { return 0; }
         }
 
-        static Row FindId(List<Row> rows, int profileId)
-        {
-            foreach (Row r in rows) if (r.Id == profileId) return r;
-            return null;
-        }
-
         /// <summary>The rows staff have killed for good.</summary>
         static List<Row> DeadRows(List<Row> rows)
         {

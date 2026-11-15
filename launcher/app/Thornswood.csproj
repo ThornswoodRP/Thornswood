@@ -47,7 +47,14 @@
          on a plain `dotnet build` too, not only when Build-Launcher.ps1
          publishes. -->
     <IsAotCompatible>true</IsAotCompatible>
+    <!-- Unused members fail the build (#4632): the rules are in
+         Unused.globalconfig, and the IDE ones only run in a build with this. -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
+
+  <ItemGroup>
+    <GlobalAnalyzerConfigFiles Include="Unused.globalconfig" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.4" />
