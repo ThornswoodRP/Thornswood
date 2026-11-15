@@ -35,6 +35,8 @@ sealed class FakeGitHub : HttpMessageHandler
     /// answered, with that environment: a test holds one environment's pass
     /// here to stand for an apply that takes a long time.</summary>
     public Func<string, Task>? BeforeDeployments { get; set; }
+    /// <summary>The repository's files at a commit, by "path@commit" (#6209).</summary>
+    public readonly Dictionary<string, byte[]> Contents = new();
     /// <summary>What a compare of two commits names; null answers 404.</summary>
     public List<string>? Changed { get; set; } = new();
     public readonly List<string> Compared = new();
@@ -43,6 +45,30 @@ sealed class FakeGitHub : HttpMessageHandler
     public readonly List<string> Labels = new();
     /// <summary>What opening an issue answers, for a token that may not.</summary>
     public HttpStatusCode IssueAnswer { get; set; } = HttpStatusCode.Created;
+    /// <summary>Draft Releases (#5191, the content builds), oldest first, and
+    /// each one's uploaded files by name.</summary>
+    public readonly List<JsonObject> DraftList = new();
+    public readonly Dictionary<long, Dictionary<string, byte[]>> Uploaded = new();
+    public int DraftsMade { get; set; }
+    /// <summary>What an upload answers, for one that fails part way.</summary>
+    public HttpStatusCode UploadAnswer { get; set; } = HttpStatusCode.Created;
+
+    public JsonObject AddDraft(string tag, DateTimeOffset made, params string[] assets)
+    {
+        lock (gate)
+        {
+            var id = nextId++;
+            var d = new JsonObject
+            {
+                ["id"] = id, ["tag_name"] = tag, ["draft"] = true, ["created_at"] = made.ToString("o"),
+                ["upload_url"] = $"{Api}/uploads/O/R/releases/{id}/assets{{?name,label}}",
+                ["assets"] = new JsonArray(assets.Select(a => (JsonNode)new JsonObject { ["id"] = nextId++, ["name"] = a, ["size"] = 1, ["url"] = "" }).ToArray()),
+            };
+            DraftList.Add(d);
+            Uploaded[id] = new();
+            return d;
+        }
+    }
 
     public void AddRelease(string tag, Dictionary<string, byte[]> files)
     {
@@ -112,7 +138,8 @@ sealed class FakeGitHub : HttpMessageHandler
     {
         if (r.RequestUri!.Host != "gh.test")
             return Other?.Invoke(r) ?? new HttpResponseMessage(HttpStatusCode.NotFound);
-        var body = r.Content == null ? "" : await r.Content.ReadAsStringAsync(ct);
+        var raw = r.Content == null ? [] : await r.Content.ReadAsByteArrayAsync(ct);
+        var body = Encoding.UTF8.GetString(raw);
         var p = r.RequestUri.AbsolutePath;
         var q = System.Web.HttpUtility.ParseQueryString(r.RequestUri.Query);
         if (r.Method == HttpMethod.Get && p == "/repos/O/R/deployments" && BeforeDeployments is { } before) await before(q["environment"] ?? "");
@@ -167,6 +194,14 @@ sealed class FakeGitHub : HttpMessageHandler
                 Downloaded.Add(Names[aid]);
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Files[aid]) };
             }
+            const string cn = "/repos/O/R/contents/";
+            if (r.Method == HttpMethod.Get && p.StartsWith(cn))
+            {
+                if (r.Headers.Accept.ToString() != "application/vnd.github.raw") return new HttpResponseMessage(HttpStatusCode.UnsupportedMediaType);
+                return Contents.TryGetValue(Uri.UnescapeDataString(p[cn.Length..]) + "@" + q["ref"], out var cb)
+                    ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(cb) }
+                    : Json(HttpStatusCode.NotFound, "{\"message\":\"Not Found\"}");
+            }
             const string cp = "/repos/O/R/compare/";
             if (p.StartsWith(cp))
             {
@@ -193,6 +228,37 @@ sealed class FakeGitHub : HttpMessageHandler
                 var i = JsonNode.Parse(body)!.AsObject();
                 i["state"] = "open";
                 Issues.Add(i);
+                return Json(HttpStatusCode.Created, "{}");
+            }
+            if (p == "/repos/O/R/releases" && r.Method == HttpMethod.Get)
+            {
+                // Drafts first, the way GitHub lists them; one page here.
+                var page = int.Parse(q["page"] ?? "1");
+                var all = DraftList.AsEnumerable().Reverse().Concat(Releases.Values).Select(x => x.DeepClone()).ToArray();
+                return Json(HttpStatusCode.OK, (page == 1 ? new JsonArray(all) : new JsonArray()).ToJsonString());
+            }
+            if (p == "/repos/O/R/releases" && r.Method == HttpMethod.Post)
+            {
+                var b = JsonNode.Parse(body)!;
+                if ((bool?)b["draft"] != true) return Json(HttpStatusCode.UnprocessableEntity, "{\"message\":\"the stand-in makes drafts only\"}");
+                DraftsMade++;
+                return Json(HttpStatusCode.Created, AddDraft((string)b["tag_name"]!, DateTimeOffset.UtcNow).ToJsonString());
+            }
+            const string rp = "/repos/O/R/releases/";
+            if (r.Method == HttpMethod.Delete && p.StartsWith(rp))
+            {
+                var id = long.Parse(p[rp.Length..]);
+                return DraftList.RemoveAll(d => (long)d["id"]! == id) == 1 ? new HttpResponseMessage(HttpStatusCode.NoContent) : Json(HttpStatusCode.NotFound, "{\"message\":\"Not Found\"}");
+            }
+            const string up = "/uploads/O/R/releases/";
+            if (r.Method == HttpMethod.Post && p.StartsWith(up) && p.EndsWith("/assets"))
+            {
+                if (UploadAnswer != HttpStatusCode.Created) return Json(UploadAnswer, "{\"message\":\"upload refused\"}");
+                var id = long.Parse(p[up.Length..^"/assets".Length]);
+                var d = DraftList.Single(x => (long)x["id"]! == id);
+                var name = q["name"]!;
+                Uploaded[id][name] = raw;
+                d["assets"]!.AsArray().Add(new JsonObject { ["id"] = nextId++, ["name"] = name, ["size"] = raw.Length, ["url"] = "" });
                 return Json(HttpStatusCode.Created, "{}");
             }
             return Json(HttpStatusCode.NotFound, $"{{\"message\":\"no such path in the stand-in: {p}\"}}");
@@ -393,6 +459,10 @@ public sealed partial class AgentTests : IDisposable
     readonly List<string> temp = new();
     readonly List<IDisposable> owned = new();
     readonly List<string> said = new();
+    /// <summary>Each lead a restart was announced with (#5784), waited instantly.</summary>
+    readonly List<TimeSpan> waits = new();
+    /// <summary>The Server the last Make or MakeMain built.</summary>
+    Server? made;
 
     string Temp()
     {
@@ -490,9 +560,11 @@ public sealed partial class AgentTests : IDisposable
         var cfg = new Config { Repo = "O/R", Api = FakeGitHub.Api, Home = home, Environments = { ["dev"] = env } };
         env.Watch = Temp();
         env.StartSeconds = 2;
-        var server = new Server(env, http) { Tick = TimeSpan.FromMilliseconds(5), Control = new FakeControl(s) };
+        Directory.CreateDirectory(Path.Combine(env.Store, News.Folder));
+        var server = new Server(env, http) { Tick = TimeSpan.FromMilliseconds(5), Control = new FakeControl(s), Wait = (t, _) => { lock (waits) waits.Add(t); return Task.CompletedTask; } };
         var gh2 = new GitHub(FakeGitHub.Api, "O/R", new StaticToken("t"), http);
         var a = new Agent(cfg, gh2, v ?? new FakeVerifier(), new() { ["dev"] = server }, "1.0.0", "", l => { lock (said) said.Add(l); }) { Host = "box" };
+        made = server;
         return (a, gh, s, server, cfg);
     }
 
@@ -516,9 +588,11 @@ public sealed partial class AgentTests : IDisposable
         env.Watch = Temp();
         env.StartSeconds = 2;
         var cfg = new Config { Repo = "O/R", Api = FakeGitHub.Api, Home = home, Environments = { ["main"] = env } };
-        var server = new Server(env, http) { Tick = TimeSpan.FromMilliseconds(5), Control = new FakeControl(s) };
+        Directory.CreateDirectory(Path.Combine(env.Store, News.Folder));
+        var server = new Server(env, http) { Tick = TimeSpan.FromMilliseconds(5), Control = new FakeControl(s), Wait = (t, _) => { lock (waits) waits.Add(t); return Task.CompletedTask; } };
         var gh2 = new GitHub(FakeGitHub.Api, "O/R", new StaticToken("t"), http);
         var a = new Agent(cfg, gh2, new FakeVerifier(), new() { ["main"] = server }, "1.0.0", "", l => { lock (said) said.Add(l); }) { Host = "box" };
+        made = server;
         return (a, gh, s, cfg);
     }
 
@@ -723,6 +797,263 @@ public sealed partial class AgentTests : IDisposable
         Assert.Contains("the hold on Thornswood Dev Server is taken away", log);
         Assert.Empty(Directory.GetFiles(Path.Combine(cfg.Environments["dev"].Watch, "holds")));
         Assert.Contains("server-", string.Join(",", gh.Downloaded));
+    }
+
+    // ---- a restart is said before it happens (#5784) -------------------------
+
+    /// <summary>restart-&lt;env&gt;.json as the bot reads it.</summary>
+    static JsonObject Notice(Config cfg, string env) =>
+        JsonNode.Parse(File.ReadAllText(RestartNotice.FileFor(cfg.Environments[env].Store, env)))!.AsObject();
+
+    [Fact]
+    public async Task AMainServerBuildSwapIsAnnouncedInDiscordAndTheGameBeforeTheStop()
+    {
+        // 11 Nov 2026: build-1.3.20 swapped the live server build at 11:12 AM
+        // and nothing was said, in Discord or in the game.
+        var (a, gh, s, cfg) = MakeMain();
+        var (oldFiles, oldRec) = Build(ForkA);
+        Install(s, oldFiles, oldRec);
+        var (newFiles, newRec) = Build(ForkB);
+        PinRelease(gh, "build-30", "// gamemode for B\n", newFiles, newRec);
+        var srv = made!;
+        string? stateAtWait = null;
+        JsonObject? gameAtWait = null;
+        var runningAtWait = false;
+        srv.Wait = (t, _) =>
+        {
+            waits.Add(t);
+            stateAtWait = (string?)Notice(cfg, "main")["state"];
+            gameAtWait = JsonNode.Parse(File.ReadAllText(Path.Combine(s.Root, "data", "restart.json")))!.AsObject();
+            runningAtWait = s.Running;
+            return Task.CompletedTask;
+        };
+        var id = Promoted(gh, "build-30", 58);
+        await a.Pass("main", default);
+        HasStates(gh, s, id, "in_progress,success");
+        Assert.Equal(RestartNotice.Coming, stateAtWait);
+        Assert.True(runningAtWait, "the server was stopped before the restart was announced");
+        Assert.Equal("notice", (string?)gameAtWait!["mode"]);
+        Assert.InRange((int)gameAtWait["seconds"]!, 295, 300);
+        Assert.InRange(Assert.Single(waits).TotalSeconds, 295, 300);
+        var n = Notice(cfg, "main");
+        Assert.Equal((RestartNotice.Back, "main"), ((string?)n["state"], (string?)n["environment"]));
+        Assert.StartsWith("main-", (string?)n["id"]);
+        Assert.Matches(@"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$", (string?)n["downUtc"]);
+        Assert.True(s.Running);
+    }
+
+    [Fact]
+    public async Task AServerBuildSwapThatCannotBeAnnouncedIsRefusedBeforeAnythingStops()
+    {
+        var (a, gh, s, _, cfg) = Make();
+        Directory.Delete(Path.Combine(cfg.Environments["dev"].Store, News.Folder));
+        var (oldFiles, oldRec) = Build(ForkA);
+        Install(s, oldFiles, oldRec);
+        var (newFiles, newRec) = Build(ForkB);
+        PinRelease(gh, "build-31", "// gamemode for B\n", newFiles, newRec);
+        var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-31\"}");
+        await a.Pass("dev", default);
+        HasStates(gh, s, id, "in_progress,failure");
+        Assert.Contains("could not be announced", (string)gh.Last(id)!["description"]!);
+        Assert.True(s.Running);
+        Assert.Equal(oldRec, File.ReadAllBytes(Path.Combine(s.Root, "server-build.json")));
+        Assert.Empty(waits);
+        Assert.Empty(Directory.GetDirectories(s.Root, ".agent-stage-*"));
+    }
+
+    [Fact]
+    public async Task ASwapThatPutsTheOldBuildBackSaysTheServerIsBack()
+    {
+        var (a, gh, s, _, cfg) = Make();
+        var (oldFiles, oldRec) = Build(ForkA);
+        Install(s, oldFiles, oldRec);
+        var (newFiles, newRec) = Build(ForkB, engineExtra: "WONTSTART");
+        PinRelease(gh, "build-32", "// gamemode for B\n", newFiles, newRec);
+        var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-32\"}");
+        await a.Pass("dev", default);
+        HasStates(gh, s, id, "in_progress,failure");
+        Assert.Equal(RestartNotice.Back, (string?)Notice(cfg, "dev")["state"]);
+        Assert.InRange(Assert.Single(waits).TotalSeconds, 55, 60);
+    }
+
+    [Fact]
+    public async Task AGamemodeReloadIsNotARestartAndSaysNothing()
+    {
+        var (a, gh, s, _, cfg) = Make();
+        GamemodeRelease(gh, "build-33", "// new gamemode\n");
+        var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-33\"}");
+        await a.Pass("dev", default);
+        HasStates(gh, s, id, "in_progress,success");
+        Assert.False(File.Exists(RestartNotice.FileFor(cfg.Environments["dev"].Store, "dev")));
+        Assert.Empty(waits);
+    }
+
+    [Fact]
+    public void TheLeadARestartIsAnnouncedWithCannotBeWrittenAway()
+    {
+        var p = Path.Combine(Temp(), "agent.json");
+        File.WriteAllText(p, "{\"repo\":\"O/R\",\"environments\":{\"dev\":{},\"main\":{}}}");
+        var c = Config.Load(p);
+        Assert.Equal((60, 300), (c.Environments["dev"].AnnounceSeconds, c.Environments["main"].AnnounceSeconds));
+        File.WriteAllText(p, "{\"repo\":\"O/R\",\"environments\":{\"main\":{\"announceSeconds\":600}}}");
+        Assert.Equal(600, Config.Load(p).Environments["main"].AnnounceSeconds);
+        File.WriteAllText(p, "{\"repo\":\"O/R\",\"environments\":{\"main\":{\"announceSeconds\":0}}}");
+        Assert.Throws<ConfigException>(() => Config.Load(p));
+    }
+
+    // ---- the box's own restart for Windows updates (#5784) -------------------
+
+    /// <summary>Reboot_AC as schtasks /query /xml gave it on 11 Nov 2026,
+    /// cut to what decides when it runs.</summary>
+    static string RebootXml(string start = "2026-11-11T04:20:57-07:00", bool taskOn = true, bool triggerOn = true) => $"""
+        <?xml version="1.0" encoding="UTF-16"?>
+        <Task version="1.6" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+          <Triggers>
+            <TimeTrigger>
+              <StartBoundary>{start}</StartBoundary>
+              <Enabled>{(triggerOn ? "true" : "false")}</Enabled>
+            </TimeTrigger>
+          </Triggers>
+          <Settings>
+            <Enabled>{(taskOn ? "true" : "false")}</Enabled>
+            <WakeToRun>true</WakeToRun>
+          </Settings>
+        </Task>
+        """;
+
+    [Fact]
+    public void TheWindowsRestartIsReadFromReboot_ACsTimeTrigger()
+    {
+        Assert.Equal(new DateTime(2026, 11, 11, 11, 20, 57, DateTimeKind.Utc), WindowsRestart.RebootTime(RebootXml()));
+        Assert.Null(WindowsRestart.RebootTime(RebootXml(taskOn: false)));
+        Assert.Null(WindowsRestart.RebootTime(RebootXml(triggerOn: false)));
+        Assert.Null(WindowsRestart.RebootTime(RebootXml(start: "")));
+    }
+
+    /// <summary>A watcher over MakeMain's server at a time of the test's own.</summary>
+    (WindowsRestart w, FakeServer s, Config cfg) Watcher(DateTime now, DateTime? planned, DateTime boot)
+    {
+        var (_, _, s, cfg) = MakeMain();
+        var w = new WindowsRestart(new Dictionary<string, Server> { ["main"] = made! }, l => { lock (said) said.Add(l); })
+        {
+            Planned = _ => Task.FromResult(planned),
+            UtcNow = () => now,
+            BootUtc = () => boot,
+        };
+        return (w, s, cfg);
+    }
+
+    static readonly DateTime At = new(2026, 11, 11, 11, 20, 57, DateTimeKind.Utc);
+
+    [Fact]
+    public async Task AWindowsRestartIsSaidAheadInDiscordAndTheGameThenBackOnceTheServerAnswers()
+    {
+        // 11 Nov 2026: Reboot_AC was set at 4:05:57 AM for 4:20:57 AM, and
+        // the box restarted then with nobody told.
+        var now = At - TimeSpan.FromMinutes(15);
+        DateTime? planned = At;
+        var boot = At - TimeSpan.FromDays(3);
+        var (w, s, cfg) = Watcher(now, planned, boot);
+        w.UtcNow = () => now;
+        w.BootUtc = () => boot;
+        await w.Pass(default);
+        var n = Notice(cfg, "main");
+        Assert.Equal((RestartNotice.Coming, "windows-main-20261111-112057", "2026-11-11T11:20:57Z", "yes"),
+            ((string?)n["state"], (string?)n["id"], (string?)n["downUtc"], (string?)n["logOut"]));
+        var rq = Path.Combine(s.Root, "data", "restart.json");
+        var game = JsonNode.Parse(File.ReadAllText(rq))!.AsObject();
+        Assert.Equal(("restart", 900, WindowsRestart.Why), ((string?)game["mode"], (int)game["seconds"]!, (string?)game["why"]));
+
+        // Said once: the game's countdown is not dropped again.
+        File.Delete(rq);
+        now += TimeSpan.FromMinutes(1);
+        await w.Pass(default);
+        Assert.False(File.Exists(rq));
+
+        // The box restarts at its time; the server is not up yet.
+        boot = At + TimeSpan.FromSeconds(97);
+        now = At + TimeSpan.FromMinutes(3);
+        s.Healthy = false;
+        await w.Pass(default);
+        Assert.Equal(RestartNotice.Coming, (string?)Notice(cfg, "main")["state"]);
+        s.Healthy = true;
+        await w.Pass(default);
+        n = Notice(cfg, "main");
+        Assert.Equal((RestartNotice.Back, "windows-main-20261111-112057"), ((string?)n["state"], (string?)n["id"]));
+        await w.Pass(default);
+        Assert.Equal(RestartNotice.Back, (string?)Notice(cfg, "main")["state"]);
+    }
+
+    [Fact]
+    public async Task AServerThatDoesNotAnswerAfterTheWindowsRestartIsSaidDown()
+    {
+        var now = At - TimeSpan.FromMinutes(15);
+        var boot = At - TimeSpan.FromDays(3);
+        var (w, s, cfg) = Watcher(now, At, boot);
+        w.UtcNow = () => now;
+        w.BootUtc = () => boot;
+        await w.Pass(default);
+        boot = At + TimeSpan.FromMinutes(2);
+        s.Healthy = false;
+        now = boot + WindowsRestart.DownAfter - TimeSpan.FromMinutes(1);
+        await w.Pass(default);
+        Assert.Equal(RestartNotice.Coming, (string?)Notice(cfg, "main")["state"]);
+        now = boot + WindowsRestart.DownAfter;
+        await w.Pass(default);
+        Assert.Equal(RestartNotice.Down, (string?)Notice(cfg, "main")["state"]);
+    }
+
+    [Fact]
+    public async Task AWindowsRestartMovedDroppedOrThatNeverCameIsSaidOff()
+    {
+        var now = At - TimeSpan.FromMinutes(15);
+        DateTime? planned = At;
+        var boot = At - TimeSpan.FromDays(3);
+        var (w, _, cfg) = Watcher(now, planned, boot);
+        w.UtcNow = () => now;
+        w.Planned = _ => Task.FromResult(planned);
+
+        // Moved to the next night: off, and not said again a day early.
+        await w.Pass(default);
+        planned = At + TimeSpan.FromDays(1);
+        await w.Pass(default);
+        var n = Notice(cfg, "main");
+        Assert.Equal((RestartNotice.Off, "windows-main-20261111-112057"), ((string?)n["state"], (string?)n["id"]));
+
+        // Moved ten minutes on: the old one off, the new one said.
+        planned = At;
+        await w.Pass(default);
+        planned = At + TimeSpan.FromMinutes(10);
+        await w.Pass(default);
+        n = Notice(cfg, "main");
+        Assert.Equal((RestartNotice.Coming, "windows-main-20261111-113057"), ((string?)n["state"], (string?)n["id"]));
+
+        // Its time goes by and the box never restarts: off once it is plainly not coming.
+        planned = null;
+        now = At + TimeSpan.FromMinutes(12);
+        await w.Pass(default);
+        Assert.Equal(RestartNotice.Coming, (string?)Notice(cfg, "main")["state"]);
+        now = At + TimeSpan.FromMinutes(10) + WindowsRestart.NeverCame;
+        await w.Pass(default);
+        Assert.Equal(RestartNotice.Off, (string?)Notice(cfg, "main")["state"]);
+    }
+
+    [Fact]
+    public async Task AWindowsRestartWaitsForARestartAlreadyComingAndIsNotSaidADayEarly()
+    {
+        var now = At - TimeSpan.FromMinutes(15);
+        var (w, s, cfg) = Watcher(now, At + TimeSpan.FromHours(20), At - TimeSpan.FromDays(3));
+        await w.Pass(default);
+        Assert.False(File.Exists(RestartNotice.FileFor(cfg.Environments["main"].Store, "main")));
+
+        w.Planned = _ => Task.FromResult<DateTime?>(At);
+        RestartNotice.Write(cfg.Environments["main"].Store, "main", "main-20261111-110000", RestartNotice.Coming, now + TimeSpan.FromMinutes(5), "an update", _ => { });
+        await w.Pass(default);
+        Assert.Equal("main-20261111-110000", (string?)Notice(cfg, "main")["id"]);
+        Assert.False(File.Exists(Path.Combine(s.Root, "data", "restart.json")));
+        RestartNotice.Write(cfg.Environments["main"].Store, "main", "main-20261111-110000", RestartNotice.Back, now + TimeSpan.FromMinutes(5), "an update", _ => { });
+        await w.Pass(default);
+        Assert.Equal(("windows-main-20261111-112057", RestartNotice.Coming), ((string?)Notice(cfg, "main")["id"], (string?)Notice(cfg, "main")["state"]));
     }
 
     [Fact]
@@ -1313,14 +1644,14 @@ public sealed partial class AgentTests : IDisposable
     public async Task TheFirstDevDeploymentMovesTheLoadOrderAndFilesEachParityRowOnce()
     {
         var (a, gh, s, cfg, gate) = MakeAfter(null);
-        gate.Answers[Agent.LoadOrderLine] = new GateRun(0, ["gate run x: Deploy-DevGamemode", "main at " + Commit, "the dev server runs the new order"]);
+        gate.Answers[Agent.LoadOrderLineAt(Commit)] = new GateRun(0, ["gate run x: Deploy-DevGamemode", "main at " + Commit, "the dev server runs the new order"]);
         gate.Answers["Check-ProdParity"] = new GateRun(0, ["main at " + Commit, Review1, Review2, "40 rows, 2 to review"]);
         gh.Issues.Add(new JsonObject { ["title"] = "Parity: firewall Thornswood Dev UDP differs on the box", ["state"] = "open", ["labels"] = new JsonArray("parity") });
         var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-1\"}");
         await a.Pass("dev", default);
         HasStates(gh, s, id, "in_progress,success");
         Assert.EndsWith("load order moved", (string)gh.Last(id)!["description"]!);
-        Assert.Equal([Agent.LoadOrderLine, "Check-ProdParity"], gate.Asked);
+        Assert.Equal([Agent.LoadOrderLineAt(Commit), "Check-ProdParity"], gate.Asked);
         Assert.Empty(gh.Compared);
         Assert.Equal(Commit, MovedTo(cfg));
         var filed = Assert.Single(gh.Issues.Skip(1));
@@ -1338,7 +1669,8 @@ public sealed partial class AgentTests : IDisposable
     public async Task ADeploymentThatChangesNothingTheOrderIsMadeFromLeavesItAlone()
     {
         var (a, gh, s, cfg, gate) = MakeAfter(Before);
-        gh.Changed = ["game/gamemode.js", "docs/GAMEMODE.md"];
+        // Our own plugins are the Release's (#6175), not the order's.
+        gh.Changed = ["game/gamemode.js", "docs/GAMEMODE.md", "game/content/Thornswood-Content.esp", "game/data/last-plugin.recipe"];
         var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-1\"}");
         await a.Pass("dev", default);
         HasStates(gh, s, id, "in_progress,success");
@@ -1350,20 +1682,58 @@ public sealed partial class AgentTests : IDisposable
 
     [Theory]
     [InlineData("records/collection-plugins.json")]
-    [InlineData("game/content/Thornswood-Content.esp")]
+    [InlineData("game/data/last-plugin.json")]
     [InlineData(null)]
     public async Task ARecordChangeMovesTheOrderAndAMoveThatFailsFailsTheDeploymentAndIsTriedByTheNext(string? changed)
     {
         var (a, gh, s, cfg, gate) = MakeAfter(Before);
         gh.Changed = changed == null ? null : ["game/gamemode.js", changed];
-        gate.Answers[Agent.LoadOrderLine] = new GateRun(1, ["main at " + Commit, "the store is not whole and Nexus did not answer"]);
+        gate.Answers[Agent.LoadOrderLineAt(Commit)] = new GateRun(1, ["main at " + Commit, "the store is not whole and Nexus did not answer"]);
         var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-1\"}");
         await a.Pass("dev", default);
         HasStates(gh, s, id, "in_progress,failure");
         Assert.Contains("the plugins are not", (string)gh.Last(id)!["description"]!);
         Assert.Equal("// new gamemode\n", s.Read("gamemode.js"));
-        Assert.Equal([Agent.LoadOrderLine], gate.Asked);
+        Assert.StartsWith("the plugins are not in", (string)gh.Last(id)!["description"]!);
+        Assert.Equal([Agent.LoadOrderLineAt(Commit)], gate.Asked);
         // Not moved, so the next Deployment compares from the last move again.
+        Assert.Equal(Before, MovedTo(cfg));
+    }
+
+    [Fact]
+    public void TheLoadOrderStepSendsOnlyTheOrderFromTheDeploymentsCommit()
+    {
+        // #6166: the step ran main as it was and sent main's gamemode and
+        // committed tables over the Release's. It now names the order only,
+        // and the commit it must be.
+        Assert.Contains(" -OrderOnly", Agent.LoadOrderLine);
+        Assert.Equal(Agent.LoadOrderLine + " -At " + Commit, Agent.LoadOrderLineAt(Commit));
+    }
+
+    [Fact]
+    public async Task WhenTheGateRanMainPastTheReleaseTheOrderIsKeptAsTheReleasesCommit()
+    {
+        var (a, gh, s, cfg, gate) = MakeAfter(Before);
+        gh.Changed = ["records/collection-plugins.json"];
+        gate.Answers[Agent.LoadOrderLineAt(Commit)] = new GateRun(0, ["main at " + Before.Replace('f', 'e'), "the dev server runs the new order"]);
+        var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-1\"}");
+        await a.Pass("dev", default);
+        HasStates(gh, s, id, "in_progress,success");
+        Assert.Equal(Commit, MovedTo(cfg));
+        Assert.Equal("// new gamemode\n", s.Read("gamemode.js"));
+    }
+
+    [Fact]
+    public async Task WhenMainMovedTheOrderPastTheReleaseNothingIsMovedAndTheNextDeploymentMovesIt()
+    {
+        var (a, gh, s, cfg, gate) = MakeAfter(Before);
+        gh.Changed = ["records/collection-plugins.json"];
+        gate.Answers[Agent.LoadOrderLineAt(Commit)] = new GateRun(3, ["NOT THIS COMMIT'S ORDER: main's records/collection-plugins.json is not 0123456's"]);
+        var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-1\"}");
+        await a.Pass("dev", default);
+        HasStates(gh, s, id, "in_progress,failure");
+        Assert.StartsWith("the plugins are not this Release's", (string)gh.Last(id)!["description"]!);
+        Assert.Equal("// new gamemode\n", s.Read("gamemode.js"));
         Assert.Equal(Before, MovedTo(cfg));
     }
 
@@ -1672,6 +2042,12 @@ public sealed partial class AgentTests : IDisposable
     /// archive, a world and a private folder that must never be copied.</summary>
     (Agent a, FakeGitHub gh, FakeServer s, BotPass bp) MakeWithPass(Func<BotPass, string?> work)
     {
+        var (a, gh, s, bp, _) = MakeWithPassAndConfig(work);
+        return (a, gh, s, bp);
+    }
+
+    (Agent a, FakeGitHub gh, FakeServer s, BotPass bp, Config cfg) MakeWithPassAndConfig(Func<BotPass, string?> work)
+    {
         var (a, gh, s, server, cfg) = Make();
         var env = cfg.Environments["dev"];
         env.BotPassRoot = Temp();
@@ -1693,6 +2069,9 @@ public sealed partial class AgentTests : IDisposable
         File.WriteAllText(Path.Combine(s.Root, "data", "thornswood-deploy.json"), "{}");
         Directory.CreateDirectory(Path.Combine(s.Root, "private"));
         File.WriteAllText(Path.Combine(s.Root, "private", "door.json"), "{\"passKey\":\"SECRET-DOOR\"}");
+        File.WriteAllText(Path.Combine(s.Root, "private", "property.json"), "{\"claims\":{}}");
+        File.WriteAllText(Path.Combine(s.Root, "private", "merchant-ledger.json"), "{\"version\":1,\"entries\":{}}");
+        File.WriteAllText(Path.Combine(s.Root, "private", "merchant-ledger.initialized"), "1");
         Directory.CreateDirectory(Path.Combine(s.Root, "world", "changeForms"));
         File.WriteAllText(Path.Combine(s.Root, "world", "changeForms", "1.json"), "{\"profileId\":5}");
         BotPass? made = null;
@@ -1700,7 +2079,7 @@ public sealed partial class AgentTests : IDisposable
         var bp = made = new BotPass(env, tasks) { Tick = TimeSpan.FromMilliseconds(20), InUse = () => (new() { 7900 }, new() { 7904 }) };
         a.Tasks = tasks;
         a.MakeBotPass = _ => bp;
-        return (a, gh, s, bp);
+        return (a, gh, s, bp, cfg);
     }
 
     static string? WriteResult(BotPass bp, bool ok, string failAt = "")
@@ -1731,13 +2110,16 @@ public sealed partial class AgentTests : IDisposable
         Assert.Contains("bot pass: 7 of 7 passed", s.Read(Path.Combine("data", $"deploy-{id}.log")));
 
         // The copy: the new gamemode and the engine, the bot, dev's data
-        // without its game files, nothing private, no world.
+        // without its game files, of dev's private folder only the merchant
+        // ledger and its mark, no world.
         Assert.NotNull(copyTree);
         Assert.Equal(string.Join("\n", new[] {
             "bot/Bot-Pass.js", "bot/bot.js", "bot/character.js", "pass.txt",
             "server/data/scripts/ActiveMagicEffect.pex", "server/dist_back/skymp5-server.js",
-            "server/gamemode.js", "server/scam_native.node", "server/server-settings.json", "server/thornswood-build.json",
+            "server/gamemode.js", "server/private/merchant-ledger.initialized", "server/private/merchant-ledger.json",
+            "server/scam_native.node", "server/server-settings.json", "server/thornswood-build.json",
         }.Order(StringComparer.Ordinal)), copyTree);
+        Assert.Contains("the copy has dev's merchant ledger and its mark", s.Read(Path.Combine("data", $"deploy-{id}.log")));
         Assert.Equal("// new gamemode\n", File.ReadAllText(Path.Combine(bp.ServerDir, "gamemode.js")));
 
         // Its settings: its own ports, offline, no hold, no secrets, game files by full path.
@@ -2044,6 +2426,26 @@ public sealed partial class AgentTests : IDisposable
         Assert.NotNull(copied);
         Assert.Equal(inRelease ? "DATA.json={},FOODS.json=[\"new\"]" : "FOODS.json=[\"dev\"]",
             string.Join(",", copied!.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => kv.Key + "=" + kv.Value)));
+    }
+
+    [Fact]
+    public void WithNoLedgerOnDevTheCopyHasNoneAndSaysSo()
+    {
+        // Dev with no merchant ledger runs no NPCs, and neither does the copy:
+        // nothing is made up for it.
+        var (_, _, s, bp) = MakeWithPass(_ => null);
+        File.Delete(Path.Combine(s.Root, "private", "merchant-ledger.initialized"));
+        var files = new Dictionary<string, string>();
+        var dir = Temp();
+        foreach (var (n, b) in BotPart.Concat(new Dictionary<string, byte[]> { ["gamemode.js"] = B("// g"), ["thornswood-build.json"] = B("{}") }))
+        {
+            files[n] = Path.Combine(dir, n);
+            File.WriteAllBytes(files[n], b);
+        }
+        var said = new List<string>();
+        Assert.Equal("", bp.Prepare(files, BotPart.Keys, said.Add));
+        Assert.Contains(said, l => l.Contains("dev has 1 of the merchant ledger's 2 files") && l.Contains("NPC runtime does not start"));
+        Assert.Equal(new[] { "merchant-ledger.json" }, Directory.GetFiles(Path.Combine(bp.ServerDir, "private")).Select(Path.GetFileName));
     }
 
     [Fact]

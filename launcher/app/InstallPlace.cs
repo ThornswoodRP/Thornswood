@@ -281,10 +281,11 @@ namespace Thornswood
             }
             else
             {
-                text = "Off for now. Thornswood's own files go into your Steam copy of Skyrim, and the launcher asks " +
+                text = "Off. Thornswood's own files go into your Steam copy of Skyrim, and the launcher asks " +
                        "before it makes the folder; Settings, Maintenance has the button, and once the folder is made " +
                        "the launcher takes Thornswood's files back out of the Steam copy. Thornswood will not start out " +
-                       "of a Skyrim shared with other servers, so Play asks for it too.";
+                       "of a Skyrim shared with other servers, so Play asks for it too. Tick the box to have the " +
+                       "launcher make it without asking.";
             }
             // The same drive logic as the line under the drive buttons: the
             // folder is mostly hard links out of the Steam copy.

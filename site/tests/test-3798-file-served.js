@@ -77,6 +77,10 @@ yes('server.js has the one rule for what is served, downloadServed', /function d
 eval(servedSrc);
 eval(grab('function cspFor('));
 eval(grab('function send('));
+// Every error a browser can reach goes out through errorAnswer (#4435); with
+// no Accept, as asked here, it is the plain line send() writes.
+eval(grab('function wantsHtml('));
+eval(grab('function errorAnswer('));
 eval(grab('function rangeReply('));
 // The setup programs' names, as the site has them (lib/feed.js), and a stand-in for the
 // Release lookup (test-release-copies.js drives the real one).

@@ -111,13 +111,14 @@ try {
     $env:THORNSWOOD_TEST_SERVER_DIR = $box
 
     . (Join-Path $repo 'scripts\release\Read-JsonFile.ps1')
-    function Plan([bool]$loadOrder, [string]$distArg, [string[]]$dropArg = @()) {
+    function Plan([bool]$loadOrder, [string]$distArg, [string[]]$dropArg = @(), [bool]$orderOnly = $false) {
         # The variables the script has by the time it reaches the block.
         $Here = Join-Path $fresh 'scripts\deploy'
         $LoadOrder = $loadOrder
         $Dist = $distArg
         $FromRecord = $false
         $DropPlugins = $dropArg
+        $OrderOnly = $orderOnly
         $Root = $box
         $User = 'Administrator'
         $Vps = '127.0.0.1'
@@ -144,6 +145,9 @@ try {
     Yes '  and it is kept: no list goes up to rewrite it' ($p.OrderWire -eq '')
     Yes ("  our content plugin goes up, from the checkout, when the box holds another size ({0})" -f ($p.Send -join ', ')) (($p.Send -join '|') -eq 'Thornswood-Content.esp')
     Yes '  and Skyrim.esm, the same on both, does not' ($p.Send -notcontains 'Skyrim.esm')
+    # -OrderOnly (#6166, #6175): our plugins are the Release's, put in by the agent.
+    $p = Plan $true '' @() $true
+    Yes ('  with -OrderOnly our content plugin does not go up, the agent puts the Release''s in' + $(if ($p.Thrown) { ': ' + $p.Thrown } else { '' })) ($p.Thrown -eq '' -and @($p.Send).Count -eq 0)
 
     Put (Join-Path $box 'plugins\Thornswood-Content.esp') 'the content plugin, version one'
     Yes '  (the box copy is now the same length as the checkout''s)' ((Get-Item -LiteralPath (Join-Path $box 'plugins\Thornswood-Content.esp')).Length -eq (Get-Item -LiteralPath $ours).Length)

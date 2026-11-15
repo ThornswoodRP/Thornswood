@@ -14,7 +14,8 @@
        Security, so until the flip each run is skipped rather than red. It
        runs pull request code, so it must never ask for a self-hosted runner,
        which is the VPS (#3685). A schedule trigger carries no repository in
-       its event, so the gate would read nothing there; it has none.
+       its event, so the gate would read nothing there; it has none. It
+       reads with the security-extended suite (Patrick, 12 Nov 2026).
     B. The issue chooser's "A security hole" link opens SECURITY.md, never
        GitHub's advisory form, which a private repository cannot use (#3650).
     C. SECURITY.md gives the three routes security.txt and it share (the
@@ -29,7 +30,9 @@
        it, and uploads with CodeQL's upload-sarif at the SHA codeql.yml runs.
     D. Dependabot watches every manifest this repository has, and only those:
        every entry's directory holds the manifest its ecosystem reads, and a
-       package.json anywhere means an npm entry is owed. The npm lockfiles
+       package.json or a pip requirements file anywhere means an entry for
+       its folder is owed (#4161: the linter's pin in
+       .github/ruff-requirements.txt was not watched). The npm lockfiles
        that ship are the engine's, watched in the fork (#2759). Every entry
        sets rebase-strategy: disabled, so Dependabot does not push a new
        head each time main moves and turn a head-pinned yes stale (#5327).
@@ -72,13 +75,14 @@ function codeqlFaults(text) {
   const langs = ((/language:\s*\[([^\]]*)\]/.exec(t) || [])[1] || '').split(',').map((s) => s.trim()).filter(Boolean);
   for (const l of LANGS) { if (langs.indexOf(l) < 0) { bad.push('does not read ' + l); } }
   if (!/build-mode: none/.test(t)) { bad.push('builds before it reads'); }
+  if (!/^\s*queries: security-extended\s*$/m.test(t)) { bad.push('does not read with the security-extended suite'); }
   return bad;
 }
 const WF = '.github/workflows/codeql.yml';
 const cq = fs.existsSync(path.join(ROOT, WF)) ? read(WF) : '';
 yes('A  ' + WF + ' is there', !!cq);
 const cqBad = codeqlFaults(cq);
-yes('A  it reads ' + LANGS.join(', ') + ' from source, on GitHub\'s runners, only while public' +
+yes('A  it reads ' + LANGS.join(', ') + ' from source with security-extended, on GitHub\'s runners, only while public' +
     (cqBad.length ? ' (' + cqBad.join('; ') + ')' : ''), !!cq && cqBad.length === 0);
 yes('A  and the reader fails a scheduled one on the VPS with no gate',
     codeqlFaults('on:\n  schedule:\n    - cron: x\njobs:\n  a:\n    runs-on: [self-hosted, Windows, thornswood-vps]\n').length >= 4);
@@ -124,7 +128,7 @@ yes('C  and the reader fails the text it replaced',
 
 // ---- D. Dependabot ----------------------------------------------------------
 // The manifest each ecosystem reads, by the names this repository could have.
-const MANIFEST = { 'github-actions': null, pip: /^requirements[^/]*\.txt$|^pyproject\.toml$/, npm: /^package\.json$/ };
+const MANIFEST = { 'github-actions': null, pip: /requirements[^/]*\.(txt|in)$|^pyproject\.toml$/, npm: /^package\.json$/ };
 function entries(t) {
   const out = [];
   const re = /- package-ecosystem: "?([a-z-]+)"?\n\s*directory: "?([^"\n]+)"?/g;
@@ -148,6 +152,13 @@ function dependabotFaults(list, files) {
     const d = '/' + path.posix.dirname(f).replace(/^\.$/, '');
     if (!list.some((e) => e.eco === 'npm' && e.dir.replace(/\/+$/, '') === d.replace(/\/+$/, ''))) { bad.push(f + ' has no npm entry'); }
   }
+  // A pip manifest anywhere is owed a pip entry for its folder (#4161): the
+  // linter's pinned version in .github/ruff-requirements.txt went unwatched,
+  // so its updates were never raised.
+  for (const f of files.filter((x) => MANIFEST.pip.test(path.posix.basename(x)))) {
+    const d = '/' + path.posix.dirname(f).replace(/^\.$/, '');
+    if (!list.some((e) => e.eco === 'pip' && e.dir.replace(/\/+$/, '') === d.replace(/\/+$/, ''))) { bad.push(f + ' has no pip entry'); }
+  }
   return bad;
 }
 let tracked = [];
@@ -163,6 +174,8 @@ const depBad = dependabotFaults(dep, tracked);
 yes('D  every entry watches a manifest that is here, and every package.json is watched' + (depBad.length ? ' (' + depBad.join('; ') + ')' : ''), depBad.length === 0);
 yes('D  and the reader fails an npm entry with no package.json and a package.json with no entry',
     dependabotFaults([{ eco: 'npm', dir: '/site' }], ['site/server.js', 'voice/package.json']).length === 2);
+yes('D  and a pip manifest with no entry for its folder, the linter\'s among them (#4161)',
+    dependabotFaults([{ eco: 'pip', dir: '/bot' }], ['bot/requirements.txt', '.github/ruff-requirements.txt']).length === 1);
 yes('D  the npm lockfiles that ship are named as watched in the fork',
     ['skymp5-server', 'skymp5-client', 'skymp5-front', 'thornswood/engine-changes'].every((w) => read('.github/dependabot.yml').indexOf(w) >= 0));
 // Each entry, as its own block of text, from its "- package-ecosystem:" line

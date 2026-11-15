@@ -25,7 +25,7 @@ namespace Thornswood {
  class Config { public string CollectionUrl = "https://example/collections/7essxf"; }
  static class Checks { public const int MostPluginsWithoutCollection=40; public static int Reads, Revision, Plugins=100;
   public static int EnabledPlugins(){return Plugins;} public static int CollectionRevision(Config c){Reads++;return Revision;} }
- static class Updater { public static int FeedCollectionRevision=2; }
+ static class Updater { public static int ServerCollectionRevision=2; }
  static class Swallow { public static void Note(string tag,Exception ex){throw ex;} }
  public static class CollectionDrawFixture {
   static Config cfg=new Config();

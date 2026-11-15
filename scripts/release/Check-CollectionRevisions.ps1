@@ -22,8 +22,11 @@
   WHAT IT READS. The newest published revision from Nexus
   (NexusPublished.ps1, the public read, no key), the revision
   records\collection-plugins.json names in this checkout, and the
-  collectionRevision each feed names on the site (Feed-Store.ps1,
-  Read-SiteFeed), which is the number every launcher holds Play to.
+  collectionRevision in the signed manifest of the Release each channel runs
+  (ReleaseRevision.ps1), which is the number every launcher holds Play to
+  (#5767). Until 11 Nov that was the feed's, which only a Ship writes; nothing
+  ships through a Ship any more, and revision 8 sat behind 7 on both feeds
+  from 8 to 11 Nov.
 
   WHAT IT SAYS. Exit 0 when all four agree, 1 when they do not, with a line
   for each that is behind, 2 when one of them could not be read: a check that
@@ -32,8 +35,8 @@
   -Issue (.github/workflows/collection-revision.yml, every hour, with GH_TOKEN
   and REPO set). While they part, one open issue named for the newest
   revision says what is behind, so the rebuild is on the board for the Desk:
-  the record first, then Thornswood-Last.esp on the new order, then dev,
-  checked, then main. None is opened while one for that revision is open. Once
+  the record first (its merge release carries the revision to dev), then
+  main with the next promotion. None is opened while one for that revision is open. Once
   all four say the same revision, every open one is closed by this, saying
   so. An unreadable number changes no issue. Exit 0 once the issue is as it
   should be, 2 as above.
@@ -53,13 +56,10 @@ $script:RevisionTitleRx = '^Collection revision \d+ is published: rebuild dev, t
 
 # Each number, read once. The tests replace these three.
 function Read-RevisionNexus([string]$Slug) { return [int](& (Join-Path $script:RevisionHere 'NexusPublished.ps1') -Slug $Slug) }
-function Read-RevisionFeed([string]$Channel) {
-    . (Join-Path $script:RevisionHere 'Feed-Store.ps1')
-    $doc = Read-SiteFeed $Channel
-    $n = 0
-    if ($null -ne $doc -and $doc.PSObject.Properties['collectionRevision']) { [void][int]::TryParse([string]$doc.collectionRevision, [ref]$n) }
-    if ($n -le 0) { throw "the $Channel feed names no collection revision" }
-    return $n
+function Read-RevisionRelease([string]$Channel) {
+    . (Join-Path $script:RevisionHere 'ReleaseRevision.ps1')
+    $r = Get-ChannelReleaseRevision -Channel $Channel -Repo $(if ($env:REPO) { $env:REPO } else { 'ThornswoodRP/Thornswood' })
+    return $r.Revision
 }
 function Invoke-RevisionApi {
     param([string]$Method, [string]$Path, $Body = $null)
@@ -83,14 +83,14 @@ function Get-RevisionState([string]$RepoDir) {
     $slug = if ($rec) { $rec.Slug } else { '7essxf' }
     $nexus = 0; $main = 0; $dev = 0
     try { $nexus = Read-RevisionNexus $slug } catch { $unread += ('Nexus: ' + ($_.Exception.Message -replace '\s+', ' ')) }
-    try { $main = Read-RevisionFeed 'main' } catch { $unread += ('the main feed: ' + ($_.Exception.Message -replace '\s+', ' ')) }
-    try { $dev = Read-RevisionFeed 'dev' } catch { $unread += ('the dev feed: ' + ($_.Exception.Message -replace '\s+', ' ')) }
+    try { $main = Read-RevisionRelease 'main' } catch { $unread += ('main''s Release: ' + ($_.Exception.Message -replace '\s+', ' ')) }
+    try { $dev = Read-RevisionRelease 'dev' } catch { $unread += ('dev''s Release: ' + ($_.Exception.Message -replace '\s+', ' ')) }
     $record = if ($rec) { [int]$rec.Revision } else { 0 }
     $behind = @()
     if (-not $unread.Count) {
         if ($record -ne $nexus) { $behind += ("records\collection-plugins.json names revision {0}" -f $record) }
-        if ($dev -ne $nexus) { $behind += ("the dev feed names revision {0}, so every dev launcher holds Play to it" -f $dev) }
-        if ($main -ne $nexus) { $behind += ("the main feed names revision {0}, so every main launcher holds Play to it" -f $main) }
+        if ($dev -ne $nexus) { $behind += ("the Release dev runs names revision {0}, so every dev launcher holds Play to it" -f $dev) }
+        if ($main -ne $nexus) { $behind += ("the Release main runs names revision {0}, so every main launcher holds Play to it" -f $main) }
     }
     return [pscustomobject]@{ Nexus = $nexus; Record = $record; Main = $main; Dev = $dev; Unread = @($unread); Behind = @($behind) }
 }
@@ -121,7 +121,7 @@ function Sync-RevisionIssue($State) {
     $title = $script:RevisionTitle -f $State.Nexus
     if (-not $State.Behind.Count) {
         foreach ($o in $open) {
-            [void](Invoke-RevisionApi 'POST' "issues/$($o.number)/comments" @{ body = ("Nexus, the record and both feeds all name collection revision {0} now. Closed by the hourly revision check." -f $State.Nexus) })
+            [void](Invoke-RevisionApi 'POST' "issues/$($o.number)/comments" @{ body = ("Nexus, the record and the Releases dev and main run all name collection revision {0} now. Closed by the hourly revision check." -f $State.Nexus) })
             [void](Invoke-RevisionApi 'PATCH' "issues/$($o.number)" @{ state = 'closed'; state_reason = 'completed' })
             $said += "closed #$($o.number)"
         }
@@ -137,8 +137,8 @@ function Sync-RevisionIssue($State) {
     }
     if ($same.Count) { $said += "#$($same[0].number) is open for it"; return ($said -join '; ') }
     $body = ("Collection revision {0} is published on Nexus and is not shipped yet: {1}.`n" -f $State.Nexus, ($State.Behind -join '; ')) +
-            "A Ship refuses until the record names it, so the Desk rebuilds on it: record it (New-CollectionPluginRecord.ps1), rebuild Thornswood-Last.esp on its order (Deploy-Gamemode.ps1 -OrderOnly), then dev, checked, then main.`n" +
-            "Done when Nexus, the record and both feeds name revision $($State.Nexus); the hourly revision check closes this then."
+            "Record it in a pull request (New-CollectionPluginRecord.ps1; when its plugins changed, Thornswood-Last.esp is rebuilt on its order, Rebuild-ContentTables). That merge's release carries the revision to dev, and main takes it with the next promotion (promote-main.yml).`n" +
+            "Done when Nexus, the record and the Releases dev and main run name revision $($State.Nexus); the hourly revision check closes this then."
     $i = Invoke-RevisionApi 'POST' 'issues' @{ title = $title; body = $body; labels = @('area: Release') }
     $said += "opened #$($i.number)"
     return ($said -join '; ')
@@ -148,7 +148,7 @@ if ($MyInvocation.InvocationName -eq '.') { return }
 
 $repoDir = (Resolve-Path -LiteralPath (Join-Path $script:RevisionHere '..\..')).ProviderPath
 $state = Get-RevisionState $repoDir
-Write-Host ("  Nexus {0}, the record {1}, the dev feed {2}, the main feed {3}" -f $state.Nexus, $state.Record, $state.Dev, $state.Main)
+Write-Host ("  Nexus {0}, the record {1}, dev's Release {2}, main's Release {3}" -f $state.Nexus, $state.Record, $state.Dev, $state.Main)
 foreach ($u in $state.Unread) { Write-Host ("  could not read {0}" -f $u) -ForegroundColor Red }
 foreach ($b in $state.Behind) { Write-Host ("  behind revision {0}: {1}" -f $state.Nexus, $b) -ForegroundColor Yellow }
 if ($Issue) {

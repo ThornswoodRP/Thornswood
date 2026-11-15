@@ -1,5 +1,5 @@
 /*
-  A gallery picture's smaller copies (#3218; SMALL_WIDTHS in server.js says
+  A gallery picture's smaller copies (#3218; SMALL_WIDTHS in site/lib/uploads.js says
   why and what the site checks). The site cannot make a picture smaller, so
   the page that sends one does: the upload form on the front page (home.js)
   after each picture, and the hub's gallery for staff, for a picture that

@@ -4,6 +4,24 @@ Part of the [Developer Guide](../../Developer-Guide.md), the index of every page
 
 Each letter stands on its own: what the thing is, then the commands. The pages from Set up a machine to Release to main are the path. These letters are what you open when you already know the name.
 
+## Contents
+
+- [A. GitHub](#a-github)
+- [B. Git](#b-git)
+- [C. PowerShell](#c-powershell)
+- [D. Visual Studio Code](#d-visual-studio-code)
+- [E. VPS](#e-vps)
+- [F. Website](#f-website)
+- [G. Main Build](#g-main-build)
+- [H. Dev Build](#h-dev-build)
+- [I. Bot](#i-bot)
+- [J. Node](#j-node)
+- [K. Vortex](#k-vortex)
+- [L. Pandora](#l-pandora)
+- [M. Creation Kit](#m-creation-kit)
+- [N. The repository map](#n-the-repository-map)
+- [O. Others](#o-others)
+
 ## A. GitHub
 
 GitHub is the website copy of the repository, at https://github.com/ThornswoodRP/Thornswood. Your PC and GitHub each hold the history. `origin` is the name Git uses for the GitHub copy.
@@ -69,7 +87,7 @@ The safe way to hold two jobs at once is [Switch between branches](make-a-change
 
 ## C. PowerShell
 
-PowerShell is the terminal. You type one line, press Enter, and Windows runs it. The prompt looks like `PS C:\Dev\Thornswood>`. The folder in the prompt is the folder the next command runs in.
+PowerShell is the terminal. You type one line, press Enter, and Windows runs it. The prompt looks like `PS C:\Thornswood-Repo>`. The folder in the prompt is the folder the next command runs in.
 
 ### Where you are
 
@@ -121,7 +139,7 @@ Visual Studio Code is the window you work in. The folders sit on the left. The f
 ### Open this repository
 
 ```powershell
-cd C:\Dev\Thornswood
+cd C:\Thornswood-Repo
 code .
 code .\Developer-Guide.md
 code .\game\gamemode\order.json
@@ -145,7 +163,7 @@ The branch name is in the status bar at the bottom left. Click it for a list of 
 
 ### Where to click
 
-Stay in `C:\Dev\Thornswood`. Each big folder has its own `README.md`. Open that file when you go into the folder. The long map is [The pieces](the-system.md#the-pieces).
+Stay in `C:\Thornswood-Repo`. Each big folder has its own `README.md`. Open that file when you go into the folder. The long map is [The pieces](the-system.md#the-pieces).
 
 | In Explorer | What it is | In PowerShell |
 | --- | --- | --- |
@@ -239,28 +257,36 @@ pwsh scripts/vps/Box-Run.ps1 -Line 'Deploy-Release -Environment site -Tag <tag>'
 
 ## G. Main Build
 
-The main build is the live launcher. People who join use this install. A main Ship publishes the live feed that this launcher reads. The steps to publish are [Release to main](release-to-main.md).
+The main build is the live channel. People who join use it. The launcher takes the main channel's release straight from GitHub: the newest Release that carries `releases.main.json`, which a main release publishes (#5608). The steps to publish are [Release to main](release-to-main.md).
 
-The install folder is `<drive>:\Thornswood` on most machines. The launcher exe sits under that tree. Profile, config, and packs sit beside it. The map of ports and folders is [The pieces](the-system.md#the-pieces). The Play page, with Main and Dev in the server list, is pictured in [H. Dev Build](#h-dev-build).
+The install folder is `<drive>:\Thornswood` on most machines. The launcher exe sits under that tree. Profile and config sit beside it. The map of ports and folders is [The pieces](the-system.md#the-pieces). The Play page, with Main and Dev in the server list, is pictured in [H. Dev Build](#h-dev-build).
 
 ### Learn more about Main Build
 
-- The live feed: https://thornswood.net/feed/version.json
-- The feed, in detail: [docs/FEED.md](../FEED.md)
+- The Releases the launcher reads: https://github.com/ThornswoodRP/Thornswood/releases
+- How the launcher reads them: [launcher/app/ARCHITECTURE.md](../../launcher/app/ARCHITECTURE.md), Updater and Velo
 
 ## H. Dev Build
 
-The dev build is a second launcher beside the main install, at `<drive>:\Thornswood-DevBuild`. Its config says the channel is dev. The game port is 7787 and voice is 7789. Staff roles use it. Every change is tried here before a main release.
+The dev build is the dev channel of the same install, not a second launcher (#5608, Patrick's answer B on 11 Nov 2026). On it the config says the channel is dev, the game port is 7787 and voice is 7789, and the launcher takes the dev channel's release from GitHub, game files included. Staff roles use it. Every change is tried here before a main release.
 
-### Install it from the main launcher
+### Switch to it from the launcher
 
-In the main launcher, on the Play page, open the Server dropdown and choose Dev. It checks your Discord roles, then puts the dev build beside the main install. Open it once and let it make its own game folder. Settings, Maintenance has "Make it".
+In the launcher, on the Play page, open the Server dropdown and choose Dev. It checks your Discord roles, then puts the install on the dev channel, takes the dev launcher from GitHub and restarts into it. Main in the same dropdown goes back the same way. A dev copy at `<drive>:\Thornswood-DevBuild` made by an older launcher reads no updates any more: remove it from its own Settings and switch the main install instead.
+
+A machine that ships builds the dev release from a release folder of its own, recorded once:
+
+```powershell
+.\scripts\release\Setup-ShipMachine.ps1 -Channel dev -Root <folder>
+```
+
+`Update-ShipRoot.ps1` makes that folder on the first Ship, with Thornswood's own files from the dev channel's package on GitHub (#2019). Then:
 
 ```powershell
 .\scripts\release\Check-ShipReady.ps1 -Channel dev
 ```
 
-That says whether the dev build and its game folder are in place, and ships nothing. Ship refuses `-Channel dev` without the dev build, unless the folder was named with `-Root` or recorded with Setup-ShipMachine.ps1 (#2662). The publish steps are [section 3](release-to-dev.md).
+That says whether the release folder and its game folder are in place, and ships nothing. Ship refuses `-Channel dev` with no folder named with `-Root` or recorded with Setup-ShipMachine.ps1 and no older dev copy to build from (#2662). The publish steps are [section 3](release-to-dev.md).
 
 ### The Play page
 
@@ -270,8 +296,8 @@ On the Play page, the server list is at the lower right, under the Play button. 
 
 ### Learn more about Dev Build
 
-- The dev feed: https://thornswood.net/feed-dev/version.json
-- The same feed notes: [docs/FEED.md](../FEED.md)
+- The Releases the launcher reads: https://github.com/ThornswoodRP/Thornswood/releases
+- The dev channel's newest release is the newest Release carrying `releases.dev.json`
 
 ## I. Bot
 
@@ -296,7 +322,7 @@ The bot's avatar is uploaded by hand in the Discord developer portal. No script 
 
 ## J. Node
 
-Node runs the website, the voice service, and the JavaScript tests. The install in [Install the tools](set-up-a-machine.md#install-the-tools) is the one this repository uses.
+Node runs the website, the voice service, and the JavaScript tests. The install in [Install the tools](set-up-a-machine.md#install-the-tools) is the one this repository uses. The website needs Node 22.19 or later, or 24.5 or later; no Node 23 runs it. On an older Node it stops at start with one line naming the Node it needs and the one it found.
 
 ### See the version and run a test
 
@@ -305,7 +331,7 @@ node --version
 node tests\test-site-local.js
 ```
 
-A passing run ends without an error. Use the file in `tests\` whose name matches the area you touched. Voice is `voice\voice-server.js`, also Node. The site program is `site\server.js` over its modules in `site\lib`.
+A passing run ends without an error. Use the file whose name matches the area you touched. A product's own checks are beside it, in `game\tests\`, `launcher\tests\`, `site\tests\`, `voice\tests\` and `bot\tests\`; the ones that read more than one product are in `tests\`. Voice is `voice\voice-server.js`, also Node. The site program is `site\server.js` over its modules in `site\lib`.
 
 ### Learn more about Node
 
@@ -387,7 +413,7 @@ The game server, the launcher, and the site are different programs. Putting each
 
 Open the clone with `code .`, as in [Open the folder in Visual Studio Code](set-up-a-machine.md#open-the-folder-in-visual-studio-code). In Explorer, click a triangle to open a folder. `Ctrl+P`, then the file name, opens a file without walking the tree. `Ctrl+Shift+F` searches the words inside files.
 
-From PowerShell, inside `C:\Dev\Thornswood`:
+From PowerShell, inside `C:\Thornswood-Repo`:
 
 ```powershell
 Get-ChildItem
@@ -490,7 +516,7 @@ The bot scripts need Python 3.11 or newer (the bot runs on 3.12; Pillow 13 needs
 
 ### The .NET Framework
 
-Launcher code is C# on .NET 10 with Avalonia, published with Native AOT from `launcher\app\Thornswood.csproj` (#4823, Patrick's decision of 26 Oct), so it stays AOT safe (the rules are in [Settled design](settled-design.md)), and C# that Windows PowerShell 5.1 compiles with Add-Type stays C# 5. The window is `launcher\app\MainWindow.axaml`. How the launcher starts is `launcher\app\ARCHITECTURE.md`. The six shared files in `launcher\app` are named in [D. Visual Studio Code](#d-visual-studio-code).
+Launcher code is C# on .NET 10 with Avalonia, published with Native AOT from `launcher\app\Thornswood.csproj` (#4823, Patrick's decision of 26 Oct), so it stays AOT safe (the rules are in [Settled design](settled-design.md)); the few launcher files a script loads with Add-Type compile with pwsh 7's Add-Type too. The window is `launcher\app\MainWindow.axaml`. How the launcher starts is `launcher\app\ARCHITECTURE.md`. The six shared files in `launcher\app` are named in [D. Visual Studio Code](#d-visual-studio-code).
 
 ### SkyMP
 
@@ -508,7 +534,7 @@ Open these in Visual Studio Code. `Ctrl+P`, then the file name.
 | [site/public/index.html](../../site/public/index.html) | The staff hub at https://thornswood.net/hub |
 | [game/ui/index.html](../../game/ui/index.html) | The page Skyrim Platform opens over the game |
 
-In `home.html`, the `<title>` is the tab name. Two `<link>` tags pull in the stylesheets, `fonts.css` and `home.css`. The page loads nothing from another site. Keep it that way: a test fails if a `src`, a `url()`, or a stylesheet link points anywhere else.
+In `home.html`, the `<title>` is the tab name. One `<link>` tag pulls in the stylesheet, `home.css`, which holds the font faces too, so the first paint waits on one sheet (#4334). The page loads nothing from another site. Keep it that way: a test fails if a `src`, a `url()`, or a stylesheet link points anywhere else.
 
 The public page and the hub go out with the site deploy in [F. Website](#f-website). The in-game page is different. With the game closed, from the repository folder:
 
@@ -524,10 +550,9 @@ CSS is the look of a page: colour, type, and spacing. A rule names a part of the
 
 | File | What it styles |
 | --- | --- |
-| [site/public/home.css](../../site/public/home.css) | The public page |
-| [site/public/hub.css](../../site/public/hub.css) | The staff hub |
+| [site/public/home.css](../../site/public/home.css) | The public page, with the Spectral and Cinzel faces at its top |
+| [site/public/hub.css](../../site/public/hub.css) | The staff hub, with the same faces |
 | [site/public/door.css](../../site/public/door.css) | The door page. `site\lib\passes.js` is what links it |
-| [site/public/fonts.css](../../site/public/fonts.css) | Spectral and Cinzel. The font files sit beside it |
 
 Open `home.css`. The `:root` block at the top names the colours and the fonts the rest of the file uses. `--night` is the ground. `--gold` is the warm colour. A change here shows on https://thornswood.net after the deploy in [F. Website](#f-website).
 
@@ -552,7 +577,7 @@ Run one check from the repository folder:
 node tests\test-site-local.js
 ```
 
-A passing run ends without an error. Use the file in `tests\` whose name matches the area you touched.
+A passing run ends without an error. Use the file whose name matches the area you touched. A product's own checks are beside it, in `game\tests\`, `launcher\tests\`, `site\tests\`, `voice\tests\` and `bot\tests\`; the ones that read more than one product are in `tests\`.
 
 An overlay change uses the same `Go.ps1 -SkipServer` as the HTML section, with the game closed. A new overlay is named `thornswood-*.js` and listed in the `OVERLAYS` list at the top of `game\plugins\thornswood-front.js`. That list is what loads it. There is no build step for these files.
 

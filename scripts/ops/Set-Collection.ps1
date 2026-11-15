@@ -19,6 +19,7 @@
 
       .\scripts\ops\Set-Collection.ps1 -Clear     put it back to carrying everything
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
   [string]$Url,

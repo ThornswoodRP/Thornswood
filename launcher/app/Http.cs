@@ -96,11 +96,16 @@ namespace Thornswood
 
         /// <summary>
         /// A GET with the launcher's User-Agent: the body of a 2xx answer, or
-        /// null for any other answer or none, which is what WebClient's
-        /// DownloadData in a catch returning null gave the callers before.
+        /// null for any other answer or none, with why saying which (#4350).
+        /// Why is null when the body came back. Otherwise it is the status the
+        /// server answered, or what kept it from answering, in a few words
+        /// for launcher.log. Until #4350 the null came with nothing, so the
+        /// headcount and the manifest check before Play could only say that
+        /// they had no answer, never why, and said nothing at all.
         /// </summary>
-        public static byte[] GetOrNull(string url, int waitMs, int readMs)
+        public static byte[] GetOrNull(string url, int waitMs, int readMs, out string why)
         {
+            why = null;
             try
             {
                 using (var req = new HttpRequestMessage(HttpMethod.Get, url))
@@ -108,13 +113,18 @@ namespace Thornswood
                     req.Headers.TryAddWithoutValidation("User-Agent", "ThornswoodLauncher/" + Updater.Version);
                     using (HttpResponseMessage res = Send(req, waitMs))
                     {
-                        if (!res.IsSuccessStatusCode) return null;
+                        if (!res.IsSuccessStatusCode)
+                        {
+                            why = "the server answered " + (int)res.StatusCode + " " + res.ReasonPhrase;
+                            return null;
+                        }
                         return Body(res, readMs);
                     }
                 }
             }
             catch (Exception ex) when (ex is HttpRequestException || ex is TimeoutException || ex is IOException || ex is UriFormatException || ex is InvalidOperationException)
             {
+                why = ex.GetType().Name + ": " + ex.Message;
                 return null;
             }
         }

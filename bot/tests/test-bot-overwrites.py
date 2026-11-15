@@ -67,6 +67,12 @@ spec = importlib.util.spec_from_file_location(
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 
+
+async def _no_guide(guild):
+    # The Server Guide as Discord sends it, here naming no channel.
+    return {}
+B.read_server_guide = _no_guide
+
 # The three bits, by their numbers on Discord's permissions page, rather than
 # by discord.py's names, so a wrong name in the builder cannot agree with
 # itself here.
@@ -79,7 +85,7 @@ ATTACH_FILES = 1 << 15
 
 # Every mode that shuts @everyone out of one of the three. Only public does
 # not, and a public channel needs nothing for the bot.
-RESTRICTED = ('read', 'open', 'membersread', 'testersread', 'hold', 'holdread',
+RESTRICTED = ('read', 'staffbump', 'open', 'membersread', 'testersread', 'hold', 'holdread',
               'holdcourt', 'holdguard', 'staff', 'staffread', 'council',
               'pathfind', 'space', 'spaceread', 'spacerules', 'faction',
               'factionread', 'factionlead', 'factionseats')
@@ -272,6 +278,10 @@ class Guild(object):
         return await self._made('create_forum', name, **kw)
 
 
+    async def welcome_screen(self):
+        # A Welcome Screen with no channels on it (#start-here, 12 Nov).
+        return types.SimpleNamespace(welcome_channels=[], description='', enabled=False)
+
     async def onboarding(self):
         return types.SimpleNamespace(enabled=getattr(self, 'onboarding_enabled', False))
 
@@ -372,7 +382,8 @@ def live_server():
                          ow=B.overwrites(bare, s.get('mode', 'open'), roles,
                                          s.get('hold'), space=s.get('space'),
                                          read_extra=s.get('read_extra'),
-                                         faction=s.get('faction')))
+                                         faction=s.get('faction'),
+                                         tickets=s.get('key') in B.TICKET_KEYS))
             ch.mode = s.get('mode', 'open')
             g.channels.append(ch)
             if cat is not None:
@@ -692,15 +703,16 @@ try:
         not before_bot[by_name['choose-your-hold']])
     yes('  and out of #news, where the release webhook and -Posts write',
         not before_bot[by_name['news']])
-    yes('  but not out of #say-hello, which is open to everybody',
-        before_bot[by_name['say-hello']])
+    yes('  but not out of the Start Here category, which is open to everybody',
+        before_bot[by_name['Start Here']])
     # Every ticket desk (#3317, q-3317-ticket-split, A), by its key in PLAN.
     tickets = [by_name[s['name']] for _c, specs in B.PLAN for s in specs
                if s.get('key') in B.TICKET_KEYS]
-    yes('  and in each of the %d ticket channels it could open a ticket thread '
-        'but not write in it, even with the running set on its role' % len(tickets),
-        len(tickets) == 5
-        and not any(resolve(g, me, t).send_messages_in_threads for t in tickets))
+    # Each was read, which denied @everyone threads, until #5841 put them
+    # behind Member (membersread), which denies @everyone the channel.
+    yes('  and out of each of the %d ticket channels, behind Member, even with the '
+        'running set on its role' % len(tickets),
+        len(tickets) == 5 and not any(before_bot[t] for t in tickets))
 
     said = run(g, True)
     yes('-Check writes nothing to any channel',
@@ -731,10 +743,10 @@ try:
             [c for c in everything if getattr(c, 'mode', None) in RESTRICTED],
             key=id))
     yes('the staff #news made by hand is one of them', news in wrote)
-    yes('no channel open to everybody was touched: not #say-hello, not the '
-        'Applications category, not the one made by hand behind the gate',
-        not [c for c in wrote if before_bot[c]] and by_name['say-hello'] not in wrote
-        and by_name['Applications'] not in wrote and loose not in wrote)
+    yes('no channel open to everybody was touched: not the Start Here category, '
+        'not the one made by hand behind the gate',
+        not [c for c in wrote if before_bot[c]] and by_name['Start Here'] not in wrote
+        and loose not in wrote)
 
     for c in everything:
         if not gets_in(resolve(g, me, c)):

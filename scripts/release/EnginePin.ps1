@@ -35,8 +35,9 @@
 #>
 
 # The release note rules a pull request's "Release note:" line is held to
-# (#5179); a fork pull request carries one too (plan part 8).
-. (Join-Path $PSScriptRoot 'Note-Rules.ps1')
+# (#5179); a fork pull request carries one too (plan part 8). The one copy,
+# tools\ReleaseNotes\NoteRules.cs, which pwsh compiles here (#5354).
+Add-Type -Path (Join-Path $PSScriptRoot '../../tools/ReleaseNotes/NoteRules.cs')
 
 $EnginePinBranch = 'engine-pin/next'
 $EnginePinThornswood = 'ThornswoodRP/Thornswood'
@@ -185,8 +186,8 @@ function Get-EnginePinValue($Object, [string]$Name) {
 # and the commit main pins ($Pin). One of:
 #   pinned     main pins the fork's head: nothing to do
 #   aside      another open pull request moves engine/skymp: it goes first
-#   ready      engine-pin/next already pins the head (Pr says whether a pull
-#              request is open from it)
+#   ready      engine-pin/next already pins the head and is not behind main
+#              (Pr says whether a pull request is open from it)
 #   building   the fork is still building the head, and no earlier head
 #              since the pin is built either
 #   no-build   the fork has no build of the head to record, or it ended red
@@ -231,6 +232,30 @@ function Find-EnginePinBuiltBefore([string]$Pin, [string]$ForkHead, [scriptblock
     return $null
 }
 
+# Why engine-pin/next, behind main, has to be made again, or '' when it
+# does not (Thornswood #4523): its pull request conflicts with main, or the
+# newest run of the check main's ruleset requires for the build ended red at
+# the branch's head. Only that check: Test tasks and Release note read the
+# pull request's body, which a remake does not change. A check still queued
+# or running, or green, is no reason, so a pin waiting on its checks or in
+# the merge queue is never pushed over.
+$EnginePinCheck = 'Build check result'
+function Get-EnginePinStale($Ours, [scriptblock]$Get) {
+    if ($Ours) {
+        $pr = & $Get ("repos/{0}/pulls/{1}" -f $EnginePinThornswood, $Ours.number)
+        if ((Get-EnginePinValue $pr 'mergeable') -eq $false) { return "its pull request #$($Ours.number) conflicts with main" }
+    }
+    $br = & $Get ("repos/{0}/branches/{1}" -f $EnginePinThornswood, [uri]::EscapeDataString($EnginePinBranch))
+    $sha = ([string](Get-EnginePinValue (Get-EnginePinValue $br 'commit') 'sha')).ToLowerInvariant()
+    if ($sha -notmatch '^[0-9a-f]{40}$') { throw "GitHub gave no head for $EnginePinBranch" }
+    $list = & $Get ("repos/{0}/commits/{1}/check-runs?check_name={2}" -f $EnginePinThornswood, $sha, [uri]::EscapeDataString($EnginePinCheck))
+    $run = @(@(Get-EnginePinValue $list 'check_runs') | Where-Object { $_ -and [string]$_.name -eq $EnginePinCheck } |
+        Sort-Object { [long]$_.id } -Descending) | Select-Object -First 1
+    if (-not $run -or [string]$run.status -ne 'completed') { return '' }
+    if (@('success', 'skipped', 'neutral') -contains [string]$run.conclusion) { return '' }
+    return ("its {0} at {1} ended {2}" -f $EnginePinCheck, $sha.Substring(0, 12), $run.conclusion)
+}
+
 function Get-EnginePinStep([string]$Pin, [scriptblock]$Get) {
     $fork = $ForkEngineRepo
     $branch = & $Get ("repos/{0}/branches/{1}" -f $fork, [uri]::EscapeDataString($ForkEngineBranch))
@@ -255,6 +280,28 @@ function Get-EnginePinStep([string]$Pin, [scriptblock]$Get) {
     $r.Pr = if ($ours) { [int]$ours.number } else { $null }
     $at = $null
     try { $at = & $Get ("repos/{0}/contents/engine/skymp?ref={1}" -f $EnginePinThornswood, [uri]::EscapeDataString($EnginePinBranch)) } catch { $at = $null }
+    # A pin is ready only on main as it is now (Thornswood #4523). make builds
+    # engine-pin/next on main's head of that moment, and nothing made it
+    # again after, so a pin made before a fix to main kept that failure on
+    # its pull request: on 10 Nov 2026 the pin of 3ac482a6 was made on
+    # 252f47b at 6:01 AM UTC, #5719 fixed test-3196 and test-4161 on Windows
+    # at 6:27, and the pin sat red on both with every look saying ready.
+    # Behind main alone is no reason: main moves on every merge, so a green
+    # or still-building pin would be made again for ever. A branch behind main
+    # is made again on main's head, from the same record, only when its
+    # pull request conflicts or its required check ended red at its head
+    # (Get-EnginePinStale).
+    if ($at) {
+        $cmp = & $Get ("repos/{0}/compare/main...{1}" -f $EnginePinThornswood, $EnginePinBranch)
+        $behindBy = [int](Get-EnginePinValue $cmp 'behind_by')
+        if ($behindBy -gt 0) {
+            $stale = Get-EnginePinStale $ours $Get
+            if ($stale) {
+                $also += (" {0} is {1} commit(s) behind main and {2}, so it is made again on main's head." -f $EnginePinBranch, $behindBy, $stale)
+                $at = $null
+            }
+        }
+    }
     if ($at -and ([string](Get-EnginePinValue $at 'sha')).ToLowerInvariant() -eq $head) {
         return (Done 'ready' ("$EnginePinBranch already pins $($head.Substring(0, 12))" + $(if ($ours) { ", in pull request #$($ours.number)" } else { ', and no pull request is open from it' })))
     }
@@ -265,7 +312,7 @@ function Get-EnginePinStep([string]$Pin, [scriptblock]$Get) {
         if (-not $going) { return (Done 'no-build' $b.Why) }
         $before = Find-EnginePinBuiltBefore $Pin $head $Get
         if (-not $before) { return (Done 'building' $b.Why) }
-        $also = (" The fork's head {0} is still building and follows once it is built: {1}" -f $head.Substring(0, 12), $b.Run.html_url)
+        $also += (" The fork's head {0} is still building and follows once it is built: {1}" -f $head.Substring(0, 12), $b.Run.html_url)
         $head = $before.Commit; $b = $before.Build; $r.Head = $head
         if ($at -and ([string](Get-EnginePinValue $at 'sha')).ToLowerInvariant() -eq $head) {
             return (Done 'ready' ("$EnginePinBranch already pins $($head.Substring(0, 12)), the newest head the fork built" + $(if ($ours) { ", in pull request #$($ours.number)" } else { ', and no pull request is open from it' }) + '.'))
@@ -287,8 +334,8 @@ function Get-EnginePinStep([string]$Pin, [scriptblock]$Get) {
 # steps under it, ending where done-on-merge.yml ends one), turned into the
 # shape done-on-merge.yml reads in a pull request here. And the release note
 # the pin carries (plan part 8): each fork pull request has its own
-# "Release note:" line, held to Note-Rules.ps1 by the fork's own check, and
-# the pin's is those joined (Join-PrReleaseNotes), so Collect-ReleaseNotes.ps1
+# "Release note:" line, held to the rules by the fork's own check, and
+# the pin's is those joined (PrNote.Join), so Collect-ReleaseNotes.ps1
 # reads an engine fix in a release the way it reads any other change.
 # ReleaseNote is that joined note, '' when every one says none; NoNote names
 # the fork pull requests with no line, which the pin's body says so a person
@@ -310,10 +357,10 @@ function Get-EnginePinNotes([string]$Old, [string]$New, [scriptblock]$Get) {
     $issues = New-Object System.Collections.Generic.SortedSet[int]
     $tasks = New-Object System.Collections.Generic.List[string]
     $lines = New-Object System.Collections.Generic.List[string]
-    $noted = New-Object System.Collections.Generic.List[object]
+    $noted = New-Object System.Collections.Generic.List[string]
     $noNote = New-Object System.Collections.Generic.List[int]
     foreach ($p in $prs) {
-        if ((Get-PrReleaseNote ([string]$p.body)).Found) { $noted.Add([pscustomobject]@{ Number = [int]$p.number; Body = [string]$p.body }) }
+        if ([Thornswood.ReleaseNotes.PrNote]::Read([string]$p.body).Found) { $noted.Add([string]$p.body) }
         else { $noNote.Add([int]$p.number) }
         $text = (([string]$p.title) + "`n" + ([string]$p.body)) -replace "`r`n", "`n"
         $named = @([regex]::Matches($text, '(?i)\bThornswood\s+#(\d+)') | ForEach-Object { [int]$_.Groups[1].Value })
@@ -335,5 +382,5 @@ function Get-EnginePinNotes([string]$Old, [string]$New, [scriptblock]$Get) {
         if ($cur) { $tasks.Add(($cur -join "`n").TrimEnd()) }
     }
     return [pscustomobject]@{ PullRequests = $lines.ToArray(); Issues = @($issues); TestTasks = $tasks.ToArray(); Count = $prs.Count
-                              ReleaseNote = (Join-PrReleaseNotes $noted.ToArray()); NoNote = $noNote.ToArray() }
+                              ReleaseNote = [Thornswood.ReleaseNotes.PrNote]::Join($noted.ToArray()); NoNote = $noNote.ToArray() }
 }

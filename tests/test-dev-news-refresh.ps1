@@ -16,7 +16,7 @@
        them as they were;
     2. that "Nothing to do" exited 0 without -Launcher, which is how a Ship
        that keeps its launcher runs it (#921), and Ship read 0 as a release: it
-       posted the previous night's note to the dev updates channel again and
+       posted the previous night's note to #staff-news again and
        told the dev server "update in 5 min";
     3. a main Ship never touched the dev feed, so after every main release
        the dev News tab marked finished work DEV until somebody shipped dev.

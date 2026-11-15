@@ -506,9 +506,9 @@
               <TextBlock x:Name="TxtPing" Theme="{StaticResource Mono}" FontSize="11" VerticalAlignment="Center"/>
             </StackPanel>
           </Border>
-          <Button x:Name="BtnMin"  Theme="{StaticResource Chrome}" Content="&#x2013;" WindowDecorationProperties.ElementRole="User"/>
-          <Button x:Name="BtnMax"  Theme="{StaticResource Chrome}" Content="&#x2610;" WindowDecorationProperties.ElementRole="User"/>
-          <Button x:Name="BtnClose" Theme="{StaticResource Chrome}" Content="&#x2715;" WindowDecorationProperties.ElementRole="User"/>
+          <Button x:Name="BtnMin"  Theme="{StaticResource Chrome}" Content="&#x2013;" AutomationProperties.Name="Minimise" WindowDecorationProperties.ElementRole="User"/>
+          <Button x:Name="BtnMax"  Theme="{StaticResource Chrome}" Content="&#x2610;" AutomationProperties.Name="Maximise or restore" WindowDecorationProperties.ElementRole="User"/>
+          <Button x:Name="BtnClose" Theme="{StaticResource Chrome}" Content="&#x2715;" AutomationProperties.Name="Close" WindowDecorationProperties.ElementRole="User"/>
         </StackPanel>
       </Grid>
 
@@ -538,7 +538,7 @@
                   </StackPanel>
                 </StackPanel>
               </StackPanel>
-              <Button x:Name="NavSettings" Theme="{StaticResource Nav}">
+              <Button x:Name="NavSettings" Theme="{StaticResource Nav}" AutomationProperties.Name="Settings">
                 <StackPanel Orientation="Horizontal">
                   <Path Width="15" Height="15" Stretch="Uniform" Margin="0,0,13,0" VerticalAlignment="Center"
                         Data="M 0.5,3.5 H 14.5 M 0.5,11.5 H 14.5 M 5,3.5 A 1.6,1.6 0 1 0 5.01,3.5 M 10,11.5 A 1.6,1.6 0 1 0 10.01,11.5" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4"/>
@@ -567,14 +567,14 @@
                 </StackPanel>
                 <Rectangle Height="1" Fill="{DynamicResource Line}" Margin="22,16,18,0"/>
                 <TextBlock Text="Session" Theme="{StaticResource NavGroup}"/>
-              <Button x:Name="NavPlay" Theme="{StaticResource Nav}">
+              <Button x:Name="NavPlay" Theme="{StaticResource Nav}" AutomationProperties.Name="Play">
                 <StackPanel Orientation="Horizontal">
                   <Path Width="15" Height="15" Stretch="Uniform" Margin="0,0,13,0" VerticalAlignment="Center"
                         Data="M 2,1 L 13,7.5 L 2,14 Z" Fill="{Binding $parent[Button].Foreground}"/>
                   <TextBlock Text="Play" VerticalAlignment="Center"/>
                 </StackPanel>
               </Button>
-              <Button x:Name="NavGallery" Theme="{StaticResource Nav}">
+              <Button x:Name="NavGallery" Theme="{StaticResource Nav}" AutomationProperties.Name="Gallery">
                 <StackPanel Orientation="Horizontal">
                   <Path Width="15" Height="15" Stretch="Uniform" Margin="0,0,13,0" VerticalAlignment="Center"
                         Data="M 1.5,2.5 H 13.5 V 12.5 H 1.5 Z M 1.5,9.5 H 13.5 M 5.5,2.5 V 9.5 M 10.5,2.5 V 9.5"
@@ -582,7 +582,7 @@
                   <TextBlock Text="Gallery" VerticalAlignment="Center"/>
                 </StackPanel>
               </Button>
-              <Button x:Name="NavNews" Theme="{StaticResource Nav}">
+              <Button x:Name="NavNews" Theme="{StaticResource Nav}" AutomationProperties.Name="News">
                 <StackPanel Orientation="Horizontal">
                   <Path Width="15" Height="15" Stretch="Uniform" Margin="0,0,13,0" VerticalAlignment="Center"
                         Data="M 1.5,2 H 13.5 V 13 H 1.5 Z M 3.5,5 H 11.5 M 3.5,7.5 H 11.5 M 3.5,10 H 8" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4"/>
@@ -590,7 +590,7 @@
                 </StackPanel>
               </Button>
                 <TextBlock Text="When it breaks" Theme="{StaticResource NavGroup}"/>
-              <Button x:Name="NavDiag" Theme="{StaticResource Nav}">
+              <Button x:Name="NavDiag" Theme="{StaticResource Nav}" AutomationProperties.Name="Diagnostics">
                 <StackPanel Orientation="Horizontal">
                   <Path Width="15" Height="15" Stretch="Uniform" Margin="0,0,13,0" VerticalAlignment="Center"
                         Data="M 1,8 H 4.2 L 6,3.4 L 9,12.6 L 10.8,8 H 14" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4"/>
@@ -599,7 +599,7 @@
               </Button>
               <!-- Help is the site's help page, opened in the browser (#3146).
                    In the game it is F7; the launcher keeps no third copy. -->
-              <Button x:Name="NavHelp" Theme="{StaticResource Nav}" ToolTip.Tip="Opens the help on the site">
+              <Button x:Name="NavHelp" Theme="{StaticResource Nav}" ToolTip.Tip="Opens the help on the site" AutomationProperties.Name="Help, opens the help on the site">
                 <StackPanel Orientation="Horizontal">
                   <Path Width="15" Height="15" Stretch="Uniform" Margin="0,0,13,0" VerticalAlignment="Center"
                         Data="M 4.6,4.8 A 3,3 0 1 1 7.6,8.4 L 7.6,10.2 M 7.6,12.6 L 7.6,13.2" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.4"/>
@@ -829,21 +829,6 @@
               </Grid>
             </Border>
 
-            <!-- What the update feed says to everybody (To Do List entry 262): its
-                 message, and the reason when it holds Play for maintenance or for
-                 a launcher too old to play. A row of its own, so it can stand
-                 under an update card without covering it; UpdateBar and
-                 DowngradeBar share row 2 because DrawStatus keeps the downgrade
-                 card down while an update card is up.
-                 Filled in by ShowNotice in Shell.cs. -->
-            <Border x:Name="NoticeBar" Grid.Row="3" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Accent}"
-                    BorderThickness="1" CornerRadius="2" Padding="20,16" Margin="36,0,36,16" IsVisible="False">
-              <StackPanel>
-                <TextBlock x:Name="TxtNoticeTitle" Theme="{StaticResource H2}"/>
-                <TextBlock x:Name="TxtNoticeNote" Theme="{StaticResource Small}" Margin="0,2,0,0" TextWrapping="Wrap"/>
-              </StackPanel>
-            </Border>
-
             <!-- Same columns as the Gallery | gap | Ready row above: PLAY under Gallery,
                  server chip under the Ready column. Recheck is gone; Diagnostics owns that path. -->
             <Grid Grid.Row="4" Margin="36,4,36,28">
@@ -865,7 +850,7 @@
                   <!-- One control open and closed. Closed: Ghost chip full width of the Ready
                        column. Open: Popup covers the chip (VerticalOffset = -chip height in
                        Shell) with one Border the exact chip width, both Main and Dev rows. -->
-                  <Button x:Name="BtnServerPick" Theme="{StaticResource Ghost}"
+                  <Button x:Name="BtnServerPick" Theme="{StaticResource Ghost}" AutomationProperties.Name="Server, choose which one to play on"
                           HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                           Padding="10,8">
                     <Grid>
@@ -893,7 +878,7 @@
                             Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}"
                             BorderThickness="1" CornerRadius="2" Padding="4">
                       <StackPanel>
-                        <Button x:Name="BtnServerMain" Theme="{StaticResource Ghost}"
+                        <Button x:Name="BtnServerMain" Theme="{StaticResource Ghost}" AutomationProperties.Name="Main server"
                                 HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,0,0,2"
                                 Padding="10,8">
                           <StackPanel Orientation="Horizontal">
@@ -904,7 +889,7 @@
                                        Foreground="{DynamicResource Muted}" FontSize="11"/>
                           </StackPanel>
                         </Button>
-                        <Button x:Name="BtnServerDev" Theme="{StaticResource Ghost}"
+                        <Button x:Name="BtnServerDev" Theme="{StaticResource Ghost}" AutomationProperties.Name="Dev server"
                                 HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                                 Padding="10,8">
                           <StackPanel Orientation="Horizontal">
@@ -964,12 +949,6 @@
                      before Bring it up to date from Vortex. Built in C# so a
                      missing named control cannot take the page with it. -->
                 <StackPanel x:Name="DiagCollection" Margin="0,8,0,0"/>
-
-                <!-- The optional packs (#1170), under the collection line. Their
-                     Add-ons tab is on the Mods page, which #599 took off the
-                     rail. Built in C# like the collection line, and empty until
-                     the update feed lists a pack. -->
-                <StackPanel x:Name="DiagAddons"/>
 
                 <!-- Bring it up to date from Vortex, Repair and Restore Windows
                      folders were buttons here until 17 Oct (#2627): Scan finds
@@ -1047,11 +1026,11 @@
                       </Grid.ColumnDefinitions>
                       <StackPanel Grid.Column="0">
                         <TextBlock Text="By" Theme="{StaticResource Small}" Margin="0,0,0,4"/>
-                        <TextBox x:Name="BoxGalleryBy" Theme="{StaticResource Field}" MaxLength="40" Padding="10,6"/>
+                        <TextBox x:Name="BoxGalleryBy" Theme="{StaticResource Field}" AutomationProperties.Name="By, the name shown under the picture" MaxLength="40" Padding="10,6"/>
                       </StackPanel>
                       <StackPanel Grid.Column="2">
                         <TextBlock Text="Note (optional)" Theme="{StaticResource Small}" Margin="0,0,0,4"/>
-                        <TextBox x:Name="BoxGalleryNote" Theme="{StaticResource Field}" MaxLength="300" Padding="10,6"/>
+                        <TextBox x:Name="BoxGalleryNote" Theme="{StaticResource Field}" AutomationProperties.Name="Note, optional" MaxLength="300" Padding="10,6"/>
                       </StackPanel>
                       <Button x:Name="BtnGallerySend" Grid.Column="3" Theme="{StaticResource Solid}"
                               Content="Send" Padding="18,8" Margin="16,18,0,0" VerticalAlignment="Bottom"
@@ -1075,7 +1054,7 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                   </Grid.ColumnDefinitions>
-                  <TextBox x:Name="BoxGalleryWhy" Grid.Column="0" Theme="{StaticResource Field}"
+                  <TextBox x:Name="BoxGalleryWhy" Grid.Column="0" Theme="{StaticResource Field}" AutomationProperties.Name="What is wrong with this picture"
                            MaxLength="500" Padding="10,6"/>
                   <Button x:Name="BtnGalleryReportSend" Grid.Column="1" Theme="{StaticResource Ghost}"
                           Content="Send report" Padding="10,4" Margin="8,0,0,0"/>
@@ -1103,7 +1082,7 @@
                 <StackPanel Margin="0,0,0,30">
                   <CheckBox x:Name="ChkMusic" Content="Play music while the launcher is open"/>
                   <StackPanel Orientation="Horizontal" Margin="28,12,0,0">
-                    <Slider x:Name="SldMusic" Theme="{StaticResource ThornSlider}" Width="260" Minimum="0" Maximum="100"
+                    <Slider x:Name="SldMusic" Theme="{StaticResource ThornSlider}" AutomationProperties.Name="Music volume" Width="260" Minimum="0" Maximum="100"
                             TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
                     <TextBlock x:Name="TxtMusic" Theme="{StaticResource Small}" Margin="14,0,0,0" VerticalAlignment="Center" Text="45%"/>
                   </StackPanel>
@@ -1156,8 +1135,8 @@
                       <ColumnDefinition Width="112"/><ColumnDefinition Width="14"/>
                       <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <TextBox x:Name="BoxResolution" Grid.Column="0" Theme="{StaticResource Field}" FontFamily="Cascadia Mono, Consolas"/>
-                    <TextBox x:Name="BoxFrameLimit" Grid.Column="2" Theme="{StaticResource Field}" FontFamily="Cascadia Mono, Consolas"/>
+                    <TextBox x:Name="BoxResolution" Grid.Column="0" Theme="{StaticResource Field}" AutomationProperties.Name="Resolution, such as 1920x1080" FontFamily="Cascadia Mono, Consolas"/>
+                    <TextBox x:Name="BoxFrameLimit" Grid.Column="2" Theme="{StaticResource Field}" AutomationProperties.Name="Frame limit, in frames per second" FontFamily="Cascadia Mono, Consolas"/>
                     <CheckBox x:Name="ChkVSync" Grid.Column="4" Content="VSync" VerticalAlignment="Center" Margin="4,0,0,0"/>
                   </Grid>
                   <TextBlock x:Name="TxtDisplayNote" Theme="{StaticResource Small}" Margin="0,10,0,0"
@@ -1207,8 +1186,7 @@
                     <TextBlock Theme="{StaticResource Body}" Text="Puts your Windows Skyrim folders back, then deletes this build and the launcher with it. Your own Skyrim in Steam is never touched: this is a separate copy and Steam does not know it exists. There is no undo, and the whole thing has to be downloaded again afterwards."/>
                     <CheckBox x:Name="ChkDeleteMods" Content="Delete Thornswood's copy of the game as well" Margin="0,13,0,0" IsChecked="True"/>
                     <TextBlock Theme="{StaticResource Small}" Margin="28,6,0,0" Text="This is Thornswood's own Game folder, built from what Vortex deployed. It is not the mods themselves and it is not your Skyrim in Steam, neither of which this can touch: taking the mods off is Purge in Vortex and nothing here does it for you. Untick this and the folder stays exactly where it is, so reinstalling reuses what is already on the disk instead of pulling the collection down again, which is the difference between a few minutes and an evening."/>
-                    <CheckBox x:Name="ChkKeepSaves" Content="Keep this build's saves and settings" Margin="0,13,0,0" IsChecked="True"/>
-                    <TextBlock Theme="{StaticResource Small}" Margin="28,6,0,0" Text="Leaves your characters, saves and settings in the Profile folder, so a reinstall picks them back up. The launcher's log, your Discord sign-in, name and picture, the support reports and the voice browser's data are not saves or settings, and go either way."/>
+                    <TextBlock Theme="{StaticResource Small}" Margin="0,13,0,0" Text="Your characters and settings are not on this PC: thornswood.net keeps them with your Discord account, so connecting Discord again after a reinstall, or on another PC, brings them back. Everything this launcher keeps here goes, its log and your Discord sign-in included."/>
                     <Button x:Name="BtnUninstall" Theme="{StaticResource Ghost}" Content="Uninstall Thornswood" HorizontalAlignment="Left" Margin="0,15,0,0"/>
                   </StackPanel>
                 </Border>

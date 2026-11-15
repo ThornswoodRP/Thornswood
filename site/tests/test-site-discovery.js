@@ -2,7 +2,7 @@
 // Real HTTP responses from an isolated copy. No live accounts or data.
 const fs = require('fs'), path = require('path'), os = require('os');
 const siteFiles = require('../../tests/site-files');
-const http = require('http'), net = require('net'), {spawn} = require('child_process');
+const http = require('http'), {spawn} = require('child_process');
 const assert = require('assert');
 const app = path.join(__dirname, '..', '..', 'site');
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'tw-discovery-'));
@@ -19,39 +19,6 @@ function ask(port, route, headers = {}, method = 'GET') {
     req.on('error', reject); req.setTimeout(5000, () => req.destroy(new Error('HTTP timeout'))); req.end();
   });
 }
-/*
-  Waits for the site's own "[thornswood-docs] listening on ...:port" line, so
-  nothing is asked of the port before this run's site holds it (#1727). The
-  port came from the system and was let go again, and builds run side by side
-  on the VPS: if something takes it in between, the site stops on EADDRINUSE,
-  and polling the port would have read whatever holds it as this site. The
-  error says which, with what the site printed.
-*/
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const said = (d) => {
-      out += d;
-      const m = /\[thornswood-docs\] listening on \S+:(\d+)/.exec(out);
-      if (m && Number(m[1]) === port) { end(null); }
-    };
-    const more = (d) => { out += d; };
-    const gone = (code) => end(new Error((/EADDRINUSE/.test(out) ? 'something else already holds port ' + port + ', so ' : '') +
-                                         'the site stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
-    const late = setTimeout(() => end(new Error('the site did not say it was listening on ' + port +
-                                                ' within fifteen seconds. It printed:\n' + out)), 15000);
-    function end(err) {
-      clearTimeout(late);
-      srv.stdout.removeListener('data', said);
-      srv.stderr.removeListener('data', more);
-      srv.removeListener('close', gone);
-      if (err) { bad(err); } else { ok(); }
-    }
-    srv.stdout.on('data', said);
-    srv.stderr.on('data', more);
-    srv.on('close', gone);
-  });
-}
 async function main() {
   siteFiles.copy(work, path.join(app, 'server.js'));
   fs.cpSync(path.join(app, 'public'), path.join(work, 'public'), {recursive:true});
@@ -63,13 +30,11 @@ async function main() {
   fs.writeFileSync(path.join(work, 'data', 'news.json'), JSON.stringify({launcher:'1.2.3',news:[
     {date:'2026-10-03', title:'A real release </script><script>alert(1)</script>', details:['Released safely.']}
   ]}));
-  const port = await new Promise(resolve => {
-    const s = net.createServer(); s.listen(0, '127.0.0.1', () => {const p=s.address().port;s.close(()=>resolve(p));});
-  });
+  let port = 0;
   server = spawn(process.execPath, [path.join(work, 'server.js')], {cwd:work,
-    env:{...process.env, THORNSWOOD_DOCS_LOCAL:'1', THORNSWOOD_DOCS_PORT:String(port), THORNSWOOD_GITHUB_API:'http://127.0.0.1:1'}, stdio:'pipe'});
+    env:{...process.env, THORNSWOOD_DOCS_LOCAL:'1', THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API:'http://127.0.0.1:1'}, stdio:'pipe'});
   let log = ''; server.stdout.on('data', b => log += b); server.stderr.on('data', b => log += b);
-  await listening(server, port);
+  await siteFiles.listening(server).then((r) => (port = r.port, r));
   const titles = new Set(), descriptions = new Set();
   for (const route of routes) {
     const r = await ask(port, route, {host:'untrusted.example', accept:'text/html'});
@@ -101,6 +66,30 @@ async function main() {
   const robots=await ask(port,'/robots.txt');
   assert(robots.body.includes('Sitemap: https://thornswood.net/sitemap.xml'),'robots sitemap');
   assert(robots.body.includes('Disallow: /hub'),'private page crawl exclusions');
+  /*
+    The member hub pages, held to robots.txt (#4472). They are the PAGES
+    table in site/lib/public.js, which is what serve.js answers with the hub
+    (public/index.html), and /index.html, which it answers with the same
+    file. robots.txt was a hand list nothing checked: it missed /sessions,
+    /economy and /index.html and kept six pages that were gone. So every
+    member page must be under a Disallow line and carry noindex, and every
+    Disallow line naming a page (no trailing slash) must be one of them, so
+    adding or dropping a member page without its line turns this red.
+  */
+  const pubSrc=fs.readFileSync(path.join(app,'lib','public.js'),'utf8');
+  const table=(pubSrc.match(/const PAGES = \{([\s\S]*?)\};/)||[])[1]||'';
+  const member=['/index.html'].concat([...table.matchAll(/'(\/[^']*)'\s*:/g)].map(m=>m[1]));
+  assert(member.length>=7 && member.includes('/hub'),'the member pages are read from PAGES: '+member.join(' '));
+  const disallow=robots.body.split(/\r?\n/).map(l=>(l.match(/^Disallow:\s*(\S+)/)||[])[1]).filter(Boolean);
+  for(const page of member){
+    assert(disallow.some(d=>page.startsWith(d)),'robots.txt keeps crawlers off the member page '+page);
+    const r=await ask(port,page,{accept:'text/html'});
+    assert.equal(r.status,200,'the member page '+page+' is served');
+    assert(r.body.includes('<meta name="robots" content="noindex">'),'the member page '+page+' says noindex');
+  }
+  for(const d of disallow.filter(x=>!x.endsWith('/'))){
+    assert(member.includes(d),'robots.txt names '+d+', which is no member page the site serves');
+  }
   const llms=await ask(port,'/llms.txt'); assert.equal(llms.status,200); assert(llms.body.includes('https://thornswood.net/rules'));
   const gone=await ask(port,'/this-page-does-not-exist',{accept:'text/html'});
   assert.equal(gone.status,404); assert(gone.body.includes('name="robots" content="noindex"'));

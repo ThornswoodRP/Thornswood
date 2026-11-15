@@ -208,7 +208,7 @@ namespace Thornswood
 
             if (st.Why == "link")
             {
-                body += "\n\nPress Connect Discord on the Play page, then try again.";
+                body += "\n\nPress Connect Discord at the bottom of the left sidebar, above Settings, then try again.";
                 Ask.Tell(body, title, Ask.Icon.Info);
                 if (connect != null) connect();
                 return;

@@ -71,7 +71,8 @@ Set-Env 'THORNSWOOD_VPS_LOCAL' (Join-Path $tmp 'none.json')
 
 try {
 # ---- 1. ParseFile over Vps.ps1 and every script that dotsources it ---------
-$all = @(Get-ChildItem -Path (Join-Path $Repo 'scripts') -Filter *.ps1 -Recurse -File)
+# Not the scripts' own harnesses in scripts\tests (#5341), which name what they look for.
+$all = @(Get-ChildItem -Path (Join-Path $Repo 'scripts') -Filter *.ps1 -Recurse -File | Where-Object { $_.FullName -notmatch '[\\/]scripts[\\/]tests[\\/]' })
 $changed = @($all | Where-Object {
         $raw = Get-Content -LiteralPath $_.FullName -Raw -ErrorAction SilentlyContinue
         $raw -and ($raw.Contains('Get-ThornswoodVpsAddress') -or $_.Name -eq 'Vps.ps1')
@@ -146,9 +147,9 @@ try {
     $ErrorActionPreference = $old
 } finally { Pop-Location }
 Yes 'vps.json is among the files carrying the address' ($carriers -contains 'scripts/vps/vps.json')
-# Prose that names the box for a person reading it: the .md files, and the
-# site's copy of the board, a record of what was said.
-$prose = @('site/data/board.json')
+# Prose that names the box for a person reading it: the .md files. The
+# site's copy of the hub's boards was here too until they went in #4359.
+$prose = @()
 $outside = @($carriers | Where-Object {
         $_ -ne 'scripts/vps/vps.json' -and $baked -notcontains $_ -and $prose -notcontains $_ -and $_ -notmatch '\.md$'
     })

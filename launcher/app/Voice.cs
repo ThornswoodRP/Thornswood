@@ -52,21 +52,8 @@ namespace Thornswood
         /// </summary>
         static void Quiet(string m)
         {
-            try
-            {
-                // One line at a time: the voice thread, the token fetches and
-                // the file channel all write here, and two appends at once
-                // collide on the file.
-                lock (quietLock)
-                {
-                    File.AppendAllText(Paths.LogFile,
-                        DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + m + Environment.NewLine);
-                }
-            }
-            catch (Exception ex) { Swallow.Note("Voice.Quiet, log", ex); }
+            LauncherLog.Line(m);
         }
-
-        static readonly object quietLock = new object();
 
         /// <summary>
         /// Every line goes through here, and this is not tidiness.

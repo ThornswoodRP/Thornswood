@@ -4,6 +4,13 @@ Part of the [Developer Guide](../../Developer-Guide.md), the index of every page
 
 How the pieces fit together. The pages from Set up a machine to Release to main are the path. The letters in [The tools, A to O](tools.md) are the tools.
 
+## Contents
+
+- [What Thornswood is](#what-thornswood-is)
+- [The pieces](#the-pieces)
+- [One Skyrim of its own](#one-skyrim-of-its-own)
+- [Where things are written down](#where-things-are-written-down)
+
 ## What Thornswood is
 
 Thornswood is a modded co-op Skyrim roleplay server on SkyMP, the server
@@ -22,7 +29,7 @@ release, launcher, game files and server together, are in How work moves.
 
 | Piece | Where | What it is |
 | --- | --- | --- |
-| Source repo | github.com/ThornswoodRP/Thornswood (private), clone at `C:\Users\<you>\Downloads\Thornswood-Repo` | Launcher source, plugins, site, bot, every script |
+| Source repo | github.com/ThornswoodRP/Thornswood (private), cloned as [Clone the repository](set-up-a-machine.md#clone-the-repository) says | Launcher source, plugins, site, bot, every script |
 | Feed store | On the VPS beside the feed the site serves: `C:\Thornswood-Docs\feed\{version.json, published.json, launchers.txt, history\}` and the same under `feed-dev`. Each machine's working copy is `%LOCALAPPDATA%\Thornswood\feed\main` and `\dev` | `version.json` (the feed, served at `/feed[-dev]/version.json`), `published.json` (the pack baseline), every launcher version the channel published, and each replaced file, none of those three served. Ship receives and sends them through `scripts\release\Feed-Store.ps1` (#907). Until then they were the `Thornswood-Releases` GitHub repository and its two clones |
 | Downloads | On the VPS, `C:\Thornswood-Docs\feed\assets` and `feed-dev\assets`, served at `https://thornswood.net/feed[-dev]/assets/<sha256>` | Every pack, launcher exe and client runtime a feed names, one file per sha256, one folder per channel (`docs\FEED.md` "Downloads come from the site") |
 | Launcher | `launcher\app\*.cs` + `launcher\app\*.axaml`, published by `scripts\release\Build-Launcher.ps1` with `dotnet publish` (Native AOT) from `launcher\app\Thornswood.csproj` (#4823) | Avalonia app, installed by Velopack, at `<drive>:\Thornswood\Launcher\Thornswood.exe` (C: on most machines); profile, config and packs under that folder. The scripts find the install on whichever fixed drive holds it; `-Root` overrides |
@@ -72,6 +79,8 @@ launcher's builds, copied across from the Steam copy on every rebuild and then
 patched by text. None of them had come from Vortex and none had come from
 here.
 
+### The game folder
+
 **The folder.** The launcher makes `<Root>\Game` itself (`launcher\app\OwnGame.cs`,
 Settings, Maintenance, "Thornswood's own Skyrim folder"). With the Thornswood
 profile deployed in Vortex, it builds the folder from that deployment, then
@@ -79,9 +88,13 @@ restarts and runs from it. `Paths.Init` prefers `<Root>\Game` over the Steam
 copy, so from then on the launcher points Windows' Skyrim settings, plugin list
 and saves at `Profile` for each session and ignores which profile Vortex has
 on. When Vortex deploys a newer Thornswood collection, the next launcher start
-brings it in by itself. The offer to make the folder is made at startup
-whenever it is possible; it used to wait for another server's files to be
-found, and no longer looks for any.
+brings it in by itself. The launcher makes the folder at startup whenever it
+is possible, without asking: the setup window's box "Give Thornswood a Skyrim
+folder of its own" starts ticked, and a `config.json` with no `MakeOwnGame`
+counts as ticked (Patrick, 12 November: the own folder is the default for
+everyone). Only an install whose box was unticked is asked first, at startup
+and again at Play. It used to wait for another server's files to be found, and
+no longer looks for any.
 
 **When Vortex deploys somewhere else.** Vortex can manage a Skyrim that is not
 the Steam copy: on 24 September a tester's Vortex deployed the collection into
@@ -166,6 +179,8 @@ the Vortex profile's lists as of the folder's last update, and are the
 reference load order a release carries (`Get-ShipLoadOrderDir`). Ship checks
 the client in `<Root>\Game` against `records\client-build.json`.
 
+### Behavior files and bodies
+
 **The behavior files and the bodies, built on each computer.** The behavior
 files (the animations for the mod list, Nemesis' output until 29 September)
 and the bodies BodySlide builds are other people's work: Precision's and True
@@ -226,6 +241,8 @@ files: never packed, never in the installer and never listed as removed, so
 no update deletes what an install built. Ship's "Animation and body files"
 step runs `Build-Generated.ps1 -DryRun` on the ship root and stops both
 channels when the collection installed there could not build them.
+
+### Ship roots, the Skyrim build and the dev channel
 
 **The folder a release is built from (issue #2019).** Each channel's ship root
 (`Where.ps1 ShipRoot` and `ShipRootDev`, recorded by `Setup-ShipMachine.ps1
@@ -301,9 +318,9 @@ it per session and ignores which profile Vortex has on.
 - `lore\`: history and the Accord. `site\data\site\*.md`: the public
   pages (join, rules, classes, world, credits, privacy, terms), also live on
   the site.
-- The site's hub boards (Active Issues, Test These, Suggestions, Archive, the
-  Patrick runbook) are older than the board and are being retired (issue
-  #433); where they disagree with the board, the board is right. The
+- The site's hub boards (Active Issues, Suggestions, Archive, the Patrick
+  runbook) are gone (issues #433 and #4359): the board is the one record of
+  work, and the words pasted into Patreon are in `docs\PATREON.md`. The
   public Known Issues page and roadmap are not boards: the bot writes both
   from the issue board into the site's `data\from-bot\lists.json`, the
   known list from the `Known issue:` comments on the findings and the

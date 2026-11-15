@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- The release note rules' tests (#5179): every case in
-       tests/fixtures/note-rules-cases.json, which scripts/release/Note-Rules.ps1
-       answered, gets the same answer from the C# rules, and the
+       tests/fixtures/note-rules-cases.json gets its answer from the rules, the
+       one copy the release scripts load too (#5354), and the
        thornswood-notes command says what the Release note check prints. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>

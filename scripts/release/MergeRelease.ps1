@@ -12,8 +12,10 @@
       Resolve-MergeReleaseSince -Commit <sha> -Subject <scriptblock> [-RepoDir .]
           where this history's notes start: the Release before's commit, or
           the same merge in this history when the history was rewritten
+      Get-MergeReleaseList [-Repo owner/name]
+          every Release, all pages, in GitHub's order (which is not newest first)
       Get-MergeReleasePrevious [-Repo owner/name]
-          the newest published build-* Release and its manifest, or $null
+          the highest published build-1.3.<n> Release and its manifest, or $null
       Get-MergeReleasePrint -Manifest <obj> -Part <name>
           one line that changes exactly when the part's content does
       Get-MergeReleaseChanged -Manifest <obj> [-Previous <obj>]
@@ -182,21 +184,41 @@ function Get-VelopackFullOf {
   return $best
 }
 
-# The newest published build-* Release, by GitHub's own order (newest first),
-# with its manifest.json read from its assets. Drafts are skipped: a run that
-# stopped part way leaves one, and it was never applied. $null when there is
-# none yet. Throws when GitHub cannot be read, so a failed read is never taken
-# for "no Release before".
+# Every Release of the repository, all pages, drafts too. GitHub's list is
+# not in the order the Releases were made: on 9 Nov 2026 it gave
+# build-1.3.9 before build-1.3.10 to build-1.3.13, and it puts every draft
+# ahead of them, so neither its first entry nor its first page is "the
+# newest". Whoever wants the newest of something reads all of them and
+# orders them itself. Throws when a page cannot be read, so a failed read is
+# never taken for a short list.
+function Get-MergeReleaseList {
+  param([string]$Repo = $env:GITHUB_REPOSITORY, [string]$ReleasesFile = '')
+  if ($ReleasesFile) { return @(Get-Content -LiteralPath $ReleasesFile -Raw | ConvertFrom-Json) }
+  $all = @()
+  for ($page = 1; ; $page++) {
+    $raw = gh api "repos/$Repo/releases?per_page=100&page=$page"
+    if ($LASTEXITCODE -ne 0) { throw "GitHub did not list page $page of the Releases of $Repo (gh exit $LASTEXITCODE)" }
+    $got = @(($raw -join "`n") | ConvertFrom-Json)
+    $all += $got
+    if ($got.Count -lt 100) { break }
+  }
+  return $all
+}
+
+# The newest published build Release, the highest build-1.3.<n>, with its
+# manifest.json read from its assets. By the number in the tag and never by
+# GitHub's list order (Get-MergeReleaseList says why): taking the first one
+# GitHub listed made build-1.3.10 to build-1.3.13 all start their notes and
+# their changed parts from build-1.3.9, so each said "Site pages show
+# sooner" again. Drafts are skipped: a run that stopped part way leaves one,
+# and it was never applied. $null when there is none yet. Throws when GitHub
+# cannot be read, so a failed read is never taken for "no Release before".
 function Get-MergeReleasePrevious {
   param([string]$Repo = $env:GITHUB_REPOSITORY, [string]$ReleasesFile = '', [string]$ManifestDir = '')
-  if ($ReleasesFile) { $rels = Get-Content -LiteralPath $ReleasesFile -Raw | ConvertFrom-Json }
-  else {
-    $raw = gh api "repos/$Repo/releases?per_page=50"
-    if ($LASTEXITCODE -ne 0) { throw "GitHub did not list the Releases of $Repo (gh exit $LASTEXITCODE)" }
-    $rels = ($raw -join "`n") | ConvertFrom-Json
-  }
-  foreach ($r in @($rels)) {
-    if ($r.draft -or [string]$r.tag_name -notmatch '^build-') { continue }
+  $rels = Get-MergeReleaseList -Repo $Repo -ReleasesFile $ReleasesFile
+  $builds = @($rels | Where-Object { -not $_.draft -and (Get-MergeReleaseOrder ([string]$_.tag_name)) -ge 0 } |
+              Sort-Object { Get-MergeReleaseOrder ([string]$_.tag_name) } -Descending)
+  foreach ($r in $builds) {
     $asset = @($r.assets | Where-Object { $_.name -eq 'manifest.json' }) | Select-Object -First 1
     if ($null -eq $asset) { continue }
     if ($ManifestDir) { $m = Get-Content -LiteralPath (Join-Path $ManifestDir ([string]$r.tag_name + '.json')) -Raw | ConvertFrom-Json }
@@ -265,15 +287,10 @@ function Get-MainPackageProblem {
 function Find-MainPackage {
   param([Parameter(Mandatory = $true)][string]$Tag, [Parameter(Mandatory = $true)]$Manifest,
         [string]$Repo = $env:GITHUB_REPOSITORY, [string]$ReleasesFile = '', [string]$ManifestDir = '')
-  if ($ReleasesFile) { $rels = @(Get-Content -LiteralPath $ReleasesFile -Raw | ConvertFrom-Json) }
-  else {
-    $raw = gh api "repos/$Repo/releases?per_page=100"
-    if ($LASTEXITCODE -ne 0) { throw "GitHub did not list the Releases of $Repo (gh exit $LASTEXITCODE)" }
-    $rels = @(($raw -join "`n") | ConvertFrom-Json)
-  }
+  $rels = Get-MergeReleaseList -Repo $Repo -ReleasesFile $ReleasesFile
   $at = Get-MergeReleaseOrder $Tag
   if ($at -lt 0) { throw "$Tag is not a build Release tag" }
-  if (-not @($rels | Where-Object { [string]$_.tag_name -eq $Tag -and -not $_.draft }).Count) { throw "$Tag is not among the hundred newest published Releases" }
+  if (-not @($rels | Where-Object { [string]$_.tag_name -eq $Tag -and -not $_.draft }).Count) { throw "$Tag is not among the published Releases" }
   $builds = @($rels | Where-Object { -not $_.draft -and (Get-MergeReleaseOrder ([string]$_.tag_name)) -ge 0 -and (Get-MergeReleaseOrder ([string]$_.tag_name)) -le $at } |
               Sort-Object { Get-MergeReleaseOrder ([string]$_.tag_name) } -Descending)
   # Read by property, so a manifest from before a field existed reads as ''.

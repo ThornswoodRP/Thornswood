@@ -19,7 +19,7 @@ const { FILES } = require('./base');
 const { cfg } = require('./config');
 const { escAttr } = require('./pages');
 const { jsonFile } = require('./store');
-const { newestSetup } = require('./feed');
+const { newestSetup, serverRevision } = require('./feed');
 const { NEWS } = require('./news');
 const { publicJson } = require('./limits');
 
@@ -137,14 +137,18 @@ function ageGateBody() {
 // page and the API cannot say two different things.
 function downloadsFacts() {
   const feed = publicJson(NEWS, { news: [] });
+  // The revision the link opens, the one the server was built against
+  // (#4115): from the signed record of the Release main runs (#5767), not the
+  // feed, which only a Ship writes. The feed still names the collection.
+  const revision = serverRevision('main');
+  const base = String(feed.collection || '').replace(/\/revisions\/\d+$/, '');
   return {
     // The one switch (#428).
     open: cfg.open === true,
     invite: cfg.discord.invite || '',
     launcher: feed.launcher || '',
-    collection: feed.collection || '',
-    // The revision that link opens, the one the server was built against (#4115).
-    collectionRevision: Number(feed.collectionRevision) > 0 ? Number(feed.collectionRevision) : 0,
+    collection: base && revision > 0 ? base + '/revisions/' + revision : base,
+    collectionRevision: revision,
     files: listFiles()
   };
 }
@@ -287,9 +291,12 @@ function downloadsBody(d) {
          '<div class="step"><div><h3>Take the installer</h3>' +
            '<p>One file. Download it and run it. The mods are not in it. It puts in ' +
            'the launcher with Thornswood&rsquo;s own content and opens it, and the ' +
-           'launcher asks where to install, puts in the script extender and ' +
-           'builds a game folder of its own from the Skyrim you already have, with ' +
-           'most of it as hard links, and leaves your own Skyrim alone. The SkyMP files in it are free software, and the credits page ' +
+           'launcher asks where to install and puts in the script extender. One box ' +
+           'there, Give Thornswood a Skyrim folder of its own, starts ticked. Left ticked, ' +
+           'Thornswood writes nothing of its own into your Steam copy, and once Vortex has deployed the ' +
+           'launcher builds a game folder of its own from it, mostly as hard links. ' +
+           'Unticked, Thornswood&rsquo;s own files go into your Steam copy and the ' +
+           'launcher asks before it builds the folder. The SkyMP files in it are free software, and the credits page ' +
            // Beside the download button because that is where the files are
            // handed over. Entry 170 on the To Do List: the source had to be
            // reachable "from the download page". It says where the source is

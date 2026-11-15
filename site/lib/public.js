@@ -32,13 +32,20 @@ function creditsFacts() {
 
 // Public discovery uses the configured project domain, never a request's Host.
 const PUBLIC_ORIGIN = 'https://thornswood.net';
+/* One h1 a page, and its sections nested under it (#4389): from the second
+   h1 on, every heading goes down one level. The written pages use # for
+   their title and for their top sections, and this used to turn each later
+   h1 into an h2 and leave the h2 and h3 under it where they were, so a
+   section's own parts became its siblings. home.js's show() does the same
+   for a page drawn after load. A page with no h1 is given its title. */
 function singlePageHeading(body, title) {
-  let seen = false;
-  body = body.replace(/<h1\b([^>]*)>([\s\S]*?)<\/h1>/gi, (whole, attrs, text) => {
-    if (!seen) { seen = true; return whole; }
-    return '<h2' + attrs + '>' + text + '</h2>';
+  let h1s = 0;
+  body = body.replace(/<(\/?)h([1-6])\b([^>]*)>/gi, (all, close, n, attrs) => {
+    if (!close && n === '1') h1s++;
+    if (h1s < 2) return all;
+    return '<' + close + 'h' + Math.min(6, Number(n) + 1) + attrs + '>';
   });
-  return seen ? body : '<h1>' + escAttr(title) + '</h1>' + body;
+  return h1s ? body : '<h1>' + escAttr(title) + '</h1>' + body;
 }
 function publicPageBody(route) {
   const b = BLURB[route];
@@ -114,7 +121,7 @@ function publicPageBody(route) {
   now as immutable for a year. A deploy that changes a file changes its hash,
   so the page names a new address and nothing old is shown. A stylesheet's
   hash is of the stylesheet as served, its fonts' hashes included, so a new
-  font file moves fonts.css's address with it. Asked for with no hash, or an
+  font file moves home.css's and hub.css's addresses with it. Asked for with no hash, or an
   old one, a file is the hour and its ETag, as before.
 
   The hash of a stylesheet is kept against its own file and the hashes of what

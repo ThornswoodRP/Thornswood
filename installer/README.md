@@ -81,14 +81,16 @@ from the registry, then every path in `config\libraryfolders.vdf`, then the
 first library holding `steamapps\common\Skyrim Special Edition\SkyrimSE.exe`).
 `C:\Thornswood` is only the fallback when there is no Steam copy to find.
 
-That is not a preference. Thornswood runs from its own game folder, built out
-of the Steam copy mostly as hard links, and a hard link cannot cross a drive,
-so an install on another drive is one the launcher refuses to play from
-(`OwnGame.WhyNot`). The drive Skyrim is on is marked on its button, the line
-under the buttons says what a different drive costs, and pressing Install on a
-different drive asks once more before anything is written. It asks and does not
-refuse: whether the launcher may fall back to copies instead is the team's call
-(issue #473).
+That is not a preference. With the own folder box ticked (below), Thornswood
+runs from a game folder the launcher builds out of the Steam copy mostly as
+hard links, and a hard link cannot cross a drive, so an install on another
+drive is one the launcher refuses to play from (`OwnGame.WhyNot`).
+Unticked, the launcher asks to build that folder before Play
+(`OwnGameRequired`), and the same rule holds. The drive Skyrim is on is marked
+on its button, the line under the buttons says what a different drive costs,
+and pressing Install on a different drive asks once more before anything is
+written. It asks and does not refuse: whether the launcher may fall back to
+copies instead is the team's call (issue #473).
 
 ## Thornswood's own Skyrim folder
 
@@ -97,15 +99,18 @@ well". Under the drive card is a card with the words of the launcher's
 Settings, Maintenance panel, a tick box, "Give Thornswood a Skyrim folder of
 its own", and Choose Vortex's folder.
 
-The install does not make the folder. The launcher does (`OwnGame.Make`), out
-of what Vortex has deployed, and nothing is deployed while the install window
-is up. So the tick answers the launcher's own question in advance: it goes into
-`config.json` as `MakeOwnGame`, and the launcher then makes the folder without
-asking once Vortex has deployed. Ticked, Thornswood's own files go into
-`Profile\Payload` and nothing is written into the Steam copy (#1226); left
-unticked, which is the default, they go into the Steam copy with a list of what
-went there (`Profile\installed-into-game.txt`), and the launcher asks as it did
-before. A chosen Vortex folder is checked the way `OwnGame.PointAt` checks it
+The install does not make the folder. The launcher builds it (`OwnGame.Make`),
+out of what Vortex has deployed, and nothing is deployed while the install
+window is up. The box starts ticked (decided 12 November: the own folder
+is the default for everyone). So the tick answers the launcher's own question
+in advance: it goes into `config.json` as `MakeOwnGame`, and the launcher then
+makes the folder without asking once Vortex has deployed. The launcher reads a
+`config.json` with no `MakeOwnGame` the same as ticked, so only an install
+whose box was unticked is asked. Ticked, which is the default, Thornswood's own
+files go into `Profile\Payload` and nothing is written into the Steam copy
+(#1226); unticked, they go into the Steam copy with a list of what went there
+(`Profile\installed-into-game.txt`), and the launcher asks before it makes the
+folder. A chosen Vortex folder is checked the way `OwnGame.PointAt` checks it
 (SkyrimSE.exe and `Data\vortex.deployment.json`) and saved as `VortexGame`, the
 field the Settings button writes. A second install over a folder the launcher
 already made writes Thornswood's files into it, separating any hard-linked name

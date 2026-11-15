@@ -459,7 +459,7 @@ try {
     Yes 'T7 and says so once, not once per launcher step' (([regex]::Matches($t.Out, 'built as part of publishing')).Count -eq 1)
 
     # A stand-in Skyrim, a copy of ping.exe named SkyrimSE.exe as
-    # tests\test-2233-inuse-image.ps1 makes, run from somewhere else and then
+    # scripts\tests\test-2233-inuse-image.ps1 makes, run from somewhere else and then
     # from the root's own Game folder.
     $elsewhere = Join-Path $work 'elsewhere'
     $itGame = Join-Path $itRoot 'Game'

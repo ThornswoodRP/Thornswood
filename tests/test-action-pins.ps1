@@ -94,6 +94,16 @@ function Get-PinFaults($uses) {
         }
         if ($u.Note -notmatch '^#\s*\S') {
             [void]$bad.Add("$where has no comment saying which tag that SHA is")
+            continue
+        }
+        # The comment names the release the SHA is, in full (#4165). A major
+        # tag like v7 moves to each new release, so "# v7" stops saying which
+        # commit this is the day the action ships v7.0.2: upload-artifact's
+        # pin said v7 while its commit was v7.0.1 and v7 had moved on. The
+        # nightly holds each pin to the commit its tag names
+        # (scripts\dev\Check-ActionPins.ps1), which only a full tag can be.
+        if ($u.Note -notmatch '^#\s*v\d+\.\d+\.\d+(\s|$)') {
+            [void]$bad.Add(("$where says {0}, not the full release tag (vX.Y.Z) that SHA is" -f $u.Note))
         }
     }
     # The same action pinned two ways is one workflow left behind, which is
@@ -118,22 +128,21 @@ Yes ("it holds workflows to read ({0}: {1})" -f $files.Count, (($files | ForEach
 # The ones that exist today. Named rather than counted, so a renamed or
 # deleted workflow says so here instead of this harness reading two files and
 # reporting that everything is fine.
-foreach ($want in 'build.yml', 'nightly.yml', 'merge-release.yml', 'drop-claims.yml', 'board.yml', 'duplicate-check.yml', 'board-read.yml', 'expire-claims.yml', 'done-on-merge.yml', 'area-label.yml', 'git-ref.yml', 'engine-prune.yml') {
+foreach ($want in 'build.yml', 'nightly.yml', 'merge-release.yml', 'drop-claims.yml', 'board.yml', 'duplicate-check.yml', 'board-read.yml', 'expire-claims.yml', 'done-on-merge.yml', 'area-label.yml', 'git-ref.yml') {
     Yes "$want is one of them" (@($files | Where-Object { $_.Name -eq $want }).Count -eq 1)
 }
 # drop-claims.yml (#1863) runs no action on purpose: it checks out nothing and
 # makes its label calls from its own script, so there is nothing in it to pin.
 # tests\test-1863-drop-claims.ps1 holds it to that. So are expire-claims.yml,
 # done-on-merge.yml and area-label.yml (#3192), held by
-# tests\test-3192-board-hygiene.ps1. engine-prune.yml (#3410) is too, held by
-# tests\test-3410-artifact-room.ps1. clone-report.yml (#3534) checks nothing
+# tests\test-3192-board-hygiene.ps1. clone-report.yml (#3534) checks nothing
 # out and only prints the report it is given, held by
 # tests\test-3534-clone-report.ps1, and pr-events.yml (#5185) only prints
 # which pull request changed, with no token, held by
 # tests\test-5185-board-sync.js. board-read.yml runs one action since #5185,
 # the board App's token. promote-main.yml (#5181) runs one since #4825, the
 # checkout, for MergeRelease.ps1, which finds main's launcher package.
-$noActions = @('drop-claims.yml', 'expire-claims.yml', 'done-on-merge.yml', 'area-label.yml', 'engine-prune.yml', 'clone-report.yml', 'pr-events.yml', 'engine-pin-aside.yml')
+$noActions = @('drop-claims.yml', 'expire-claims.yml', 'done-on-merge.yml', 'area-label.yml', 'clone-report.yml', 'pr-events.yml', 'engine-pin-aside.yml')
 
 $all = @()
 foreach ($f in $files) {
@@ -171,9 +180,9 @@ try {
 
     $ok = @(Fake 'good.yml' @(
         'jobs:', '  one:', '    steps:',
-        "      - uses: actions/checkout@$sha # v7",
+        "      - uses: actions/checkout@$sha # v7.0.1",
         '      - name: keep it',
-        "        uses: actions/upload-artifact@$other # v7"))
+        "        uses: actions/upload-artifact@$other # v7.0.1"))
     Yes 'the reader finds both shapes of uses, on the step line and under a name' ($ok.Count -eq 2)
     Yes 'and a pinned pair is clean' (@(Get-PinFaults $ok).Count -eq 0)
 
@@ -198,10 +207,21 @@ try {
     $local = @(Fake 'local.yml' @('jobs:', '  one:', '    steps:', '      - uses: ./.github/actions/ours'))
     Yes 'an action in this repository is not asked for a pin' ($local.Count -eq 0)
 
+    # The comment is the full release, never a tag that moves (#4165).
+    $major = @(Fake 'major.yml' @('jobs:', '  one:', '    steps:', "      - uses: actions/upload-artifact@$sha # v7"))
+    $f = @(Get-PinFaults $major)
+    Yes ('a comment naming only the major tag, which moves, is caught (' + ($f -join '; ') + ')') ($f.Count -eq 1 -and $f[0] -match 'says # v7, not the full release tag')
+    $minor = @(Fake 'minor.yml' @('jobs:', '  one:', '    steps:', "      - uses: actions/upload-artifact@$sha # v7.0"))
+    Yes 'so is one naming a major and minor only' (@(Get-PinFaults $minor).Count -eq 1)
+    $words = @(Fake 'words.yml' @('jobs:', '  one:', '    steps:', "      - uses: actions/upload-artifact@$sha # latest"))
+    Yes 'so is one that is not a version at all' (@(Get-PinFaults $words).Count -eq 1)
+    $after = @(Fake 'after.yml' @('jobs:', '  one:', '    steps:', "      - uses: actions/upload-artifact@$sha # v7.0.1 (the share's report)"))
+    Yes 'and a full release with words after it is clean' (@(Get-PinFaults $after).Count -eq 0)
+
     # Two files, one action, two SHAs: the drift this is really for.
     $drift = @()
-    $drift += @(Fake 'a.yml' @('jobs:', '  one:', '    steps:', "      - uses: actions/checkout@$sha # v7"))
-    $drift += @(Fake 'b.yml' @('jobs:', '  one:', '    steps:', "      - uses: actions/checkout@$other # v7"))
+    $drift += @(Fake 'a.yml' @('jobs:', '  one:', '    steps:', "      - uses: actions/checkout@$sha # v7.0.1"))
+    $drift += @(Fake 'b.yml' @('jobs:', '  one:', '    steps:', "      - uses: actions/checkout@$other # v7.0.1"))
     $f = @(Get-PinFaults $drift)
     Yes 'the same action pinned two ways in two workflows is caught' ($f.Count -eq 1 -and $f[0] -match 'pinned 2 different ways')
 }

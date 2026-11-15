@@ -14,11 +14,10 @@ namespace Thornswood
     /// until the move to .NET 10 (#4823), which System.Text.Json replaced
     /// because the native build cannot run a serializer that reads types at
     /// run time. That serializer took 1 or true into a string field without a
-    /// word, and the feed counts on it: "maintenance" is a string so that
-    /// true, "true", 1, null and "yes" all read (measured on 24 September,
-    /// VersionDoc in Config.cs). System.Text.Json refuses a number in a string
-    /// member and throws, and a throw there is the whole feed unread, so every
-    /// context that reads a document from outside the launcher carries this.
+    /// word, and the documents counted on it. System.Text.Json refuses a
+    /// number in a string member and throws, and a throw there is the whole
+    /// document unread, so every context that reads a document from outside
+    /// the launcher carries this.
     /// Null stays null: the serializer hands null to a string member itself.
     /// </summary>
     public sealed class LooseString : JsonConverter<string>

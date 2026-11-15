@@ -64,6 +64,25 @@
 //      THORNSWOOD_GITHUB_API on 127.0.0.1:1, where nothing answers, so no
 //      copy's answers depend on what the repository's Releases hold.
 //
+// #6136, the site's port itself. The site harnesses still took a port from
+// the system, let it go and started the site on it, so on the Linux gate,
+// with four to six harnesses at once, another socket took the port in that
+// moment and the copy exited with EADDRINUSE. Now every copy is started on
+// port 0, the system hands it a free port as it listens, and site\server.js
+// says which on its "listening on" line. The harness reads the port from
+// that line (tests\site-files.js listening() and saidPort()), so there is no
+// moment in which the port is free. This replaces 4, 5, 7 and 8 above with:
+//   4. every harness that starts server.js starts each copy on port 0 and
+//      reads its port from the site's own line, with no waitUp() poll;
+//   5. a copy on port 0 says a real port, and what answers there is that
+//      copy; a copy that stops before its line is reported, with what it
+//      printed; a line that has not ended yet names no port;
+//   7. every .ps1 harness that starts server.js starts it on port 0 and
+//      takes its port from Wait-OwnLine, which reads it off the site's own
+//      line; the GitHub stand-in in test-site-assets.ps1 does the same;
+//   8. Wait-OwnLine, lifted out of each and run in pwsh, gives the port a
+//      copy on 0 said, and the site answers there.
+//
 // HARNESS_ROOT points it at another copy of the repository, which is how it
 // was shown to fail on the harnesses before the change.
 //
@@ -182,24 +201,40 @@ console.log('\nthe harnesses that start the site (' + sites.length + '):');
 yes('there are the twelve #1727 found, and the five that already waited for the site\'s line',
     TWELVE.concat(['tests/test-deploy-records.js', 'site/tests/test-gallery.js', 'site/tests/test-hub-staff-gallery.js',
                    'site/tests/test-site-headers.js', 'tests/test-site-local.js']).every((f) => sites.indexOf(f) >= 0));
-// Waiting on the site's own line is "await listening(...)" here, or reading
-// the child's "listening on " line, as the five did before #1727, or its
-// ready line, which the same site says after that one and after its first
-// sweep (#4082). waitUp() was the connect loop six of the twelve polled the
-// port with.
+// The value each copy is handed: every THORNSWOOD_DOCS_PORT a harness sets.
+function docsPorts(src) {
+  const out = [];
+  const re = /\bTHORNSWOOD_DOCS_PORT\s*:\s*([^,}\n]+)/g;
+  let m;
+  while ((m = re.exec(src))) { out.push(m[1].trim()); }
+  return out;
+}
+yes('the check would have caught a copy handed a port the harness chose',
+    docsPorts("env: { THORNSWOOD_DOCS_PORT: String(port) }").some((v) => v !== "'0'") &&
+    docsPorts("env: { THORNSWOOD_DOCS_PORT: '0' }").every((v) => v === "'0'"));
+// Reading the port off the site's own line is siteFiles.listening() or
+// siteFiles.saidPort() on what the copy printed. A harness that asks its
+// copy nothing and only reads the files it wrote waits for the ready line,
+// which the site says after its first sweep (#4082). waitUp() was the
+// connect loop six of the twelve polled the port with before #1727.
 for (const f of sites) {
-  const own = /await listening\(\w+, \w+\)/.test(text[f]) || text[f].indexOf("'listening on ") >= 0 ||
-              text[f].indexOf('/\\[thornswood-docs\\] (ready|NOT READY): /.test(out)') >= 0;
-  yes(f + ' waits for its own site to say it is listening, with no waitUp() poll of the port',
-      own && !/function waitUp\(/.test(text[f]));
+  const vs = docsPorts(text[f]);
+  yes(f + ' starts each copy on port 0 (' + vs.join(', ') + ')', vs.length > 0 && vs.every((v) => v === "'0'"));
+  const reads = /siteFiles\.(listening|saidPort)\(/.test(text[f]) ||
+                text[f].indexOf('/\\[thornswood-docs\\] (ready|NOT READY): /.test(out)') >= 0;
+  yes(f + ' waits for its own site\'s line, with no waitUp() poll of a port',
+      reads && !/function waitUp\(/.test(text[f]) &&
+      !/function listening\(srv, port\)[\s\S]{0,400}thornswood-docs/.test(text[f]));
 }
-const siteWaits = {};
-for (const f of TWELVE) {
-  siteWaits[f] = lift(text[f]);
-  yes(f + ' has the wait for the site\'s own line, and waits on it',
-      !!siteWaits[f] && /\[thornswood-docs\\\] listening on/.test(String(siteWaits[f])) &&
-      /await listening\(\w+, \w+\)/.test(text[f]));
+{
+  const srvSrc = read(path.join(REPO_DIR, 'site', 'server.js'));
+  yes('site/server.js says the port it got, not the one it was handed',
+      /}\).listen\(PORT, BIND, function \(\) \{(\s*\/\*[\s\S]*?\*\/)?\s*const port = this\.address\(\)\.port;\s*console\.log\('\[thornswood-docs\] listening on ' \+ BIND \+ ':' \+ port\);/.test(srvSrc));
 }
+yes('saidPort() reads the port off a whole line, and nothing off half of one',
+    siteFiles.saidPort('[thornswood-docs] listening on 127.0.0.1:4567\n') === 4567 &&
+    siteFiles.saidPort('[thornswood-docs] listening on 127.0.0.1:45') === 0 &&
+    siteFiles.saidPort('[voice] listening on 127.0.0.1:4567\n') === 0);
 
 // ------------------------------------------ the PowerShell harnesses (#1755)
 const psFiles = ['tests'].concat(beside).reduce((all, dir) => all.concat(
@@ -207,10 +242,12 @@ const psFiles = ['tests'].concat(beside).reduce((all, dir) => all.concat(
 const psText = {};
 for (const f of psFiles) { psText[f] = read(path.join(REPO_DIR, f)).replace(/^\uFEFF/, ''); }
 const psSites = psFiles.filter((f) => /THORNSWOOD_DOCS_PORT/.test(psText[f]));
-const FIVE = ['tests/test-deployed-build.ps1', 'tests/test-feed-store.ps1', 'tests/test-record-sync.ps1', 'tests/test-release-baseline.ps1',
-  'tests/test-scrub-feed.ps1', 'site/tests/test-site-assets.ps1'];
+// test-record-sync.ps1 and test-scrub-feed.ps1 went with the launcher's
+// update feed (#5608).
+const FIVE = ['tests/test-deployed-build.ps1', 'tests/test-feed-store.ps1', 'tests/test-release-baseline.ps1',
+  'site/tests/test-site-assets.ps1'];
 console.log('\nthe PowerShell harnesses that start the site (' + psSites.length + '):');
-yes('they are the five #1755 found, and test-deployed-build.ps1', psSites.length === FIVE.length && FIVE.every((f) => psSites.indexOf(f) >= 0));
+yes('they are the three #1755 found that are left, and test-deployed-build.ps1', psSites.length === FIVE.length && FIVE.every((f) => psSites.indexOf(f) >= 0));
 // The function, from its line to the brace that closes it at the margin.
 function psLift(src) {
   const m = /^function Wait-OwnLine\([\s\S]*?\n\}\n/m.exec(src);
@@ -221,21 +258,20 @@ for (const f of psSites) {
   const fn = psLift(psText[f]);
   psWaits[f] = fn;
   const rest = fn ? psText[f].replace(fn, '') : psText[f];
-  yes(f + ' has Wait-OwnLine and waits on the site\'s own line with it',
-      !!fn && /Wait-OwnLine \$\w+ \$[\w:]+(\[\$\w+\.Id\])? '\[thornswood-docs\]' \$\w+ 'the site'/.test(rest));
+  yes(f + ' has Wait-OwnLine and takes the site\'s port from its own line with it',
+      !!fn && /Wait-OwnLine \$\w+ \$[\w:]+(\[\$\w+\.Id\])? '\[thornswood-docs\]' \(\[ref\]\$\w+\) 'the site'/.test(rest));
+  yes(f + ' starts the site on port 0',
+      /EnvironmentVariables\['THORNSWOOD_DOCS_PORT'\] = '0'|THORNSWOOD_DOCS_PORT = '0'/.test(rest) &&
+      !/EnvironmentVariables\['THORNSWOOD_DOCS_PORT'\] = (?!'0')|THORNSWOOD_DOCS_PORT = (?!'0')/.test(rest));
   yes(f + ' neither polls the port nor drains the site\'s output before its line',
       !/function Up\(/.test(rest) && !/for \(\$i = 0; \$i -lt 100/.test(rest) && rest.indexOf('StandardOutput.ReadToEndAsync()') < 0);
 }
 yes('they all carry the same Wait-OwnLine', psSites.every((f) => psWaits[f] && psWaits[f] === psWaits[psSites[0]]));
 {
   const sa = psText['site/tests/test-site-assets.ps1'] || '';
-  yes('test-site-assets.ps1: the GitHub stand-in says its own line, and is waited on',
-      /\.listen\(port, '127\.0\.0\.1', \(\) => console\.log\('\[github\] listening on 127\.0\.0\.1:' \+ port\)\)/.test(sa) &&
-      /Wait-OwnLine \$ghProc \$script:errOf\[\$ghProc\.Id\] '\[github\]' \$ghPort/.test(sa));
-  const rs = psText['tests/test-record-sync.ps1'] || '';
-  yes('test-record-sync.ps1: the game server stand-in says its own line, and is waited on',
-      /console\.log\('\[game\] listening on 127\.0\.0\.1:\$gamePort'\)/.test(rs) &&
-      /Wait-OwnLine \$gp \$gpErr '\[game\]' \$gamePort/.test(rs));
+  yes('test-site-assets.ps1: the GitHub stand-in listens on 0, says the port it got, and is waited on for it',
+      /server\.listen\(0, '127\.0\.0\.1', \(\) => console\.log\('\[github\] listening on 127\.0\.0\.1:' \+ server\.address\(\)\.port\)\)/.test(sa) &&
+      /Wait-OwnLine \$ghProc \$script:errOf\[\$ghProc\.Id\] '\[github\]' \(\[ref\]\$ghPort\)/.test(sa));
 }
 
 // ------------------------------------- the game port the site checks (#1816)
@@ -261,10 +297,10 @@ function portOne(src, v, ps) {
 }
 const gameSites = sites.filter((f) => /\bgameCheckPort\b/.test(text[f]))
   .concat(psSites.filter((f) => /\bgameCheckPort\b/.test(psText[f])));
-const SEVEN = ['site/tests/test-site-assets.ps1', 'tests/test-feed-store.ps1', 'tests/test-record-sync.ps1',
-  'tests/test-release-baseline.ps1', 'tests/test-scrub-feed.ps1', 'site/tests/test-report-limits.js', 'site/tests/test-for-bot-folder.js'];
+const SEVEN = ['site/tests/test-site-assets.ps1', 'tests/test-feed-store.ps1',
+  'tests/test-release-baseline.ps1', 'site/tests/test-report-limits.js', 'site/tests/test-for-bot-folder.js'];
 console.log('\nthe game port each site harness gives its site (' + gameSites.length + '):');
-yes('they include the seven #1816 found', SEVEN.every((f) => gameSites.indexOf(f) >= 0));
+yes('they include the seven #1816 found, but the two that went with the update feed (#5608)', SEVEN.every((f) => gameSites.indexOf(f) >= 0));
 // The check itself, on the lines this issue took out.
 yes('it would have caught $dead from a listener let go, and DEAD from freePort()',
     !portOne('$l.Start(); $dead = $l.LocalEndpoint.Port; $l.Stop()\n', '$dead', true) &&
@@ -281,15 +317,16 @@ for (const f of gameSites) {
 // One THORNSWOOD_GITHUB_API on 127.0.0.1:1 for every THORNSWOOD_DOCS_PORT a
 // harness hands a copy it starts.
 function githubFor(src, ps) {
-  const port = ps ? /EnvironmentVariables\['THORNSWOOD_DOCS_PORT'\]|THORNSWOOD_DOCS_PORT = \[string\]/g : /THORNSWOOD_DOCS_PORT:\s*String\(/g;
+  const port = ps ? /EnvironmentVariables\['THORNSWOOD_DOCS_PORT'\]|THORNSWOOD_DOCS_PORT = /g : /THORNSWOOD_DOCS_PORT\s*:/g;
   const gh = ps ? /EnvironmentVariables\['THORNSWOOD_GITHUB_API'\] = 'http:\/\/127\.0\.0\.1:1'|THORNSWOOD_GITHUB_API = 'http:\/\/127\.0\.0\.1:1'/g
     : /THORNSWOOD_GITHUB_API:\s*'http:\/\/127\.0\.0\.1:1'/g;
   return { port: (src.match(port) || []).length, gh: (src.match(gh) || []).length };
 }
 console.log('\nwhere each site harness has its site ask GitHub (' + (sites.length + psSites.length) + '):');
 yes('it would have caught a copy started with only its port',
-    githubFor("env: { THORNSWOOD_DOCS_PORT: String(port) }", false).gh === 0 &&
-    githubFor("$psi.EnvironmentVariables['THORNSWOOD_DOCS_PORT'] = [string]$port\n", true).gh === 0);
+    githubFor("env: { THORNSWOOD_DOCS_PORT: '0' }", false).gh === 0 && githubFor("env: { THORNSWOOD_DOCS_PORT: '0' }", false).port === 1 &&
+    githubFor("$psi.EnvironmentVariables['THORNSWOOD_DOCS_PORT'] = '0'\n", true).gh === 0 &&
+    githubFor("$psi.EnvironmentVariables['THORNSWOOD_DOCS_PORT'] = '0'\n", true).port === 1);
 for (const f of sites.concat(psSites)) {
   const ps = /\.ps1$/.test(f);
   const n = githubFor(ps ? psText[f] : text[f], ps);
@@ -365,16 +402,6 @@ function runHarness(rel) {
     yes(f + ': with another server on its port, the wait fails and says so ("' + said + '")',
         said.indexOf('something else already holds port ' + held) === 0);
   }
-  // The same for each of the twelve site harnesses' waits.
-  for (const f of TWELVE) {
-    if (!siteWaits[f]) { continue; }
-    const srv = site(held);
-    let said = '';
-    try { await siteWaits[f](srv, held); said = 'took it'; } catch (e) { said = e.message.split('\n')[0]; }
-    await gone(srv);
-    yes(f + ': with another server on its port, the wait fails and says so ("' + said + '")',
-        said.indexOf('something else already holds port ' + held) === 0);
-  }
   other.close();
 
   // The same for each PowerShell harness's Wait-OwnLine, run in pwsh.
@@ -383,18 +410,20 @@ function runHarness(rel) {
     c.on('error', () => ok(false)); c.on('exit', (code) => ok(code === 0));
   });
   yes('pwsh is on this machine, so the PowerShell waits can be run', pwsh);
-  function psWait(f, port) {
+  function psWait(f) {
     const driver = path.join(scratch, 'wait-' + path.basename(f, '.ps1') + '.ps1');
     fs.writeFileSync(driver, psWaits[f] + [
-      '$port = [int]$env:WAIT_PORT',
+      '$port = 0',
       '$psi = New-Object Diagnostics.ProcessStartInfo',
       '$psi.FileName = $env:WAIT_NODE; $psi.Arguments = \'"server.js"\'; $psi.WorkingDirectory = $env:WAIT_SITE',
       '$psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true',
-      '$psi.EnvironmentVariables[\'THORNSWOOD_DOCS_PORT\'] = [string]$port',
+      '$psi.EnvironmentVariables[\'THORNSWOOD_DOCS_PORT\'] = \'0\'',
+      '$psi.EnvironmentVariables[\'THORNSWOOD_GITHUB_API\'] = \'http://127.0.0.1:1\'',
       '$psi.EnvironmentVariables[\'THORNSWOOD_DOCS_LOCAL\'] = \'1\'',
       '$p = [Diagnostics.Process]::Start($psi); $e = $p.StandardError.ReadToEndAsync()',
-      '$why = Wait-OwnLine $p $e \'[thornswood-docs]\' $port \'the site\'',
+      '$why = Wait-OwnLine $p $e \'[thornswood-docs]\' ([ref]$port) \'the site\'',
       'Write-Output (\'WHY:\' + $why)',
+      'Write-Output (\'PORT:\' + $port)',
       'if (-not $why) {',
       '  try { $r = [Net.HttpWebRequest]::Create("http://127.0.0.1:$port/api/public").GetResponse(); $b = (New-Object IO.StreamReader($r.GetResponseStream())).ReadToEnd(); Write-Output (\'STATUS:\' + [int]$r.StatusCode + \' \' + $b.Contains(\'not this run\')); $r.Close() }',
       '  catch { Write-Output (\'STATUS:0 \' + $_.Exception.Message) }',
@@ -403,50 +432,51 @@ function runHarness(rel) {
       ''].join('\n'));
     return new Promise((ok) => {
       const c = spawn('pwsh', ['-NoProfile', '-File', driver], {
-        env: Object.assign({}, process.env, { WAIT_PORT: String(port), WAIT_NODE: process.execPath, WAIT_SITE: siteDir }) });
+        env: Object.assign({}, process.env, { WAIT_NODE: process.execPath, WAIT_SITE: siteDir }) });
       let out = '';
       c.stdout.on('data', (d) => { out += d; }); c.stderr.on('data', (d) => { out += d; });
       c.on('exit', () => ok(out));
     });
   }
   if (pwsh) {
+    // Somebody else answers on a port of the system's: a copy on 0 is never
+    // handed it, so what answers on the port Wait-OwnLine gives is this copy.
     const psOther = http.createServer((q, r) => { r.writeHead(200); r.end('not this run'); });
     await new Promise((r) => psOther.listen(0, '127.0.0.1', r));
-    const psHeld = psOther.address().port;
     for (const f of psSites) {
       if (!psWaits[f]) { continue; }
-      const out = await psWait(f, psHeld);
-      const why = ((/WHY:(.*)/.exec(out) || [])[1] || out.trim().split(/\r?\n/).pop() || '').trim();
-      yes(f + ': with another server on its port, Wait-OwnLine fails and says so ("' + why + '")',
-          why.indexOf('something else already holds port ' + psHeld) === 0);
+      const out = await psWait(f);
+      const got = Number((/PORT:(\d+)/.exec(out) || [])[1] || 0);
+      yes(f + ': Wait-OwnLine gives the port a copy on 0 said, and the site answers there (' +
+          out.trim().split(/\r?\n/).join(' | ') + ')',
+          /WHY:\s*(\r?\n|$)/.test(out) && got > 0 && got !== psOther.address().port && /STATUS:200 False/.test(out));
     }
     psOther.close();
-    const firstPs = psSites.filter((f) => !!psWaits[f])[0];
-    if (firstPs) {
-      const port = await new Promise((ok) => {
-        const s = net.createServer();
-        s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-      });
-      const out = await psWait(firstPs, port);
-      yes('on a port the site holds, Wait-OwnLine ends and the site answers there (' + out.trim().split(/\r?\n/).join(' | ') + ')',
-          /WHY:\s*(\r?\n|$)/.test(out) && /STATUS:200 False/.test(out));
-    }
   }
 
-  // A site on its own port: the wait ends, and what answers is that site.
-  const firstSite = TWELVE.filter((f) => !!siteWaits[f])[0];
-  if (firstSite) {
-    const port = await new Promise((ok) => {
-      const s = net.createServer();
-      s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-    });
-    const srv = site(port);
-    let up = false;
-    try { await siteWaits[firstSite](srv, port); up = true; } catch (e) { console.log('      ' + e.message); }
-    const h = up ? await get(port, '/api/public') : { status: 0, body: '' };
-    yes('on a port the site holds, the wait ends and the site answers there',
-        up && h.status === 200 && h.body.indexOf('not this run') < 0);
+  // A copy on port 0: listening() gives the port it said, and what answers
+  // there is that copy, not a server somebody else started first.
+  {
+    const someone = http.createServer((q, r) => { r.writeHead(200); r.end('not this run'); });
+    await new Promise((r) => someone.listen(0, '127.0.0.1', r));
+    const srv = site(0);
+    let got = null;
+    try { got = await siteFiles.listening(srv); } catch (e) { console.log('      ' + e.message); }
+    const h = got ? await get(got.port, '/api/public') : { status: 0, body: '' };
+    yes('a copy on port 0 says a real port (' + (got && got.port) + '), and that copy answers there',
+        !!got && got.port > 0 && got.port !== someone.address().port && h.status === 200 && h.body.indexOf('not this run') < 0);
     await gone(srv);
+    // A copy handed a port somebody holds stops before its line, and
+    // listening() says so with what it printed rather than waiting it out.
+    const held = spawn(process.execPath, ['server.js'], { cwd: siteDir,
+      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(someone.address().port),
+                                            THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1' }) });
+    let why = '';
+    try { await siteFiles.listening(held); why = 'it said it was listening'; } catch (e) { why = e.message; }
+    await gone(held);
+    yes('a copy that stops before its line is reported, with what it printed ("' + why.split('\n')[0] + '")',
+        /^the site stopped \(exit \d+\) before it was listening/.test(why) && /EADDRINUSE/.test(why));
+    someone.close();
   }
 
   // And the service's own port: the wait ends, and what answers is this service.

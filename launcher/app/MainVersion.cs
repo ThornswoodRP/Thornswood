@@ -19,10 +19,9 @@ namespace Thornswood
     /// package of a main Release (promote-main.yml), so main's number is the
     /// version of that package, and it is read where an update reads it: the
     /// newest Release that carries releases.main.json, through the same
-    /// ChannelSource and ChannelRelease the update check uses (VeloUpdate.cs).
-    /// One request to the site for the list of Releases and one download of
-    /// that Release's feed through the site's Release route (#5608). The tab
-    /// is opened by hand, so it is read each time rather than kept.
+    /// ChannelSource and ChannelRelease the update check uses (VeloUpdate.cs),
+    /// from GitHub's API (GitHub.cs, #5608): the Release list the update
+    /// check shares, and that Release's feed, kept on disk once read.
     /// </summary>
     static partial class Updater
     {
@@ -49,6 +48,18 @@ namespace Thornswood
         /// </summary>
         static string MainVersionOf(VelopackAsset[] assets)
         {
+            VelopackAsset top = NewestFull(assets);
+            if (top == null) throw new Exception("main's newest Release carries no launcher package");
+            return top.Version.ToString();
+        }
+
+        /// <summary>
+        /// The highest full package in a feed ChannelSource cut, which is the
+        /// newest Release's own (ChannelRelease), or null when there is none.
+        /// Also what a new ship root takes (SyncPackage.cs, SeedFromChannel).
+        /// </summary>
+        internal static VelopackAsset NewestFull(VelopackAsset[] assets)
+        {
             VelopackAsset top = null;
             if (assets != null)
             {
@@ -58,8 +69,7 @@ namespace Thornswood
                     if (top == null || a.Version > top.Version) top = a;
                 }
             }
-            if (top == null) throw new Exception("main's newest Release carries no launcher package");
-            return top.Version.ToString();
+            return top;
         }
     }
 }

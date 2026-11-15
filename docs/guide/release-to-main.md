@@ -72,7 +72,7 @@ That is the dev release: version 2026.1101.1745.1, .2, .3, pack ids ending `-dev
 dev feed and the dev baseline (`feed-dev` in the VPS store), the dev ports,
 and the dev server told. It runs from
 any branch on any developer's machine. There is no installer for it, and it
-posts to the dev updates channel in Discord and the dev launcher's News tab,
+posts to #staff-news in Discord and the dev launcher's News tab,
 never #news. There is one dev feed and the last dev Ship wins, so a Dev says in #dev-coordination before taking it. Main and Dev have independent feeds and baselines. A Main
 Ship leaves Dev's release unchanged; advance Dev through its own Ship. What a
 Main Ship does change on the dev feed is which notes are marked DEV and its
@@ -83,7 +83,7 @@ releases nothing, either channel, posts nothing and tells no server.
 A main release, from your clone, on a machine that can sign:
 
 ```
-cd C:\Users\<you>\Downloads\Thornswood-Repo
+cd C:\Thornswood-Repo
 git checkout main
 git pull
 .\scripts\release\Ship.ps1 "what changed, in plain words"

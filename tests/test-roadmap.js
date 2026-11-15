@@ -3,8 +3,8 @@
 // What the emote wheel's notes say about it is read off the files that decide
 // it. This began as a check on the roadmap's wheel row; since #3140 the
 // roadmap is built from the issue board, so that row is the "Roadmap:"
-// comment on the wheel's issue and is no longer a file here. The ini, the
-// plugin and the todo.md note it was held to still are.
+// comment on the wheel's issue and is no longer a file here. The ini and the
+// plugin it was held to still are.
 //
 // WHY THIS EXISTS. The roadmap's Later section said "Emote wheel | Wanted
 // since the start, never started", while game/plugins/thornswood-emotes.js,
@@ -14,7 +14,8 @@
 // feature as not started is a roadmap nobody will trust on the items that
 // really are unstarted".
 //
-// The one note that did record the wheel as done, in data/todo.md, was wrong
+// The one note that did record the wheel as done, in data/todo.md (gone with
+// the hub's boards in #4359), was wrong
 // twice over: "B opens it" and "twenty four emotes". B is the plugin's fallback
 // for when the ini has no WheelKey line at all (thornswood-emotes.js,
 // key('WheelKey', 48)); the ini that ships says 34, which is G. Twenty four was
@@ -46,26 +47,13 @@ function yes(what, cond) {
   else { fail++; console.log('FAIL  ' + what); }
 }
 
-/* Numbers as the site writes them: "fifty nine", "fifty-nine" or "59". */
-const ONES = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven',
-  'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen',
-  'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
-const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty',
-  'seventy', 'eighty', 'ninety'];
-function says(text, n) {
-  const t = ' ' + String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ') + ' ';
-  const forms = [String(n)];
-  if (n < 20) { forms.push(ONES[n]); }
-  else if (n < 100) { forms.push(TENS[Math.floor(n / 10)] + (n % 10 ? ' ' + ONES[n % 10] : '')); }
-  return forms.some(function (f) { return t.indexOf(' ' + f + ' ') !== -1; });
-}
-
 // ------------------------------------------------------------ the roadmap --
 /* Since #3140 the roadmap is built from the issue board: the wheel's row is
    the "Roadmap:" comment on its issue, and an issue that is closed as done is
    under Done by itself, so the row this harness held to the ini and the
-   plugin is no longer a file here. What it was checked against still is, and
-   so is the note in todo.md the wrong numbers came from. */
+   plugin is no longer a file here. What it was checked against still is.
+   The note in data/todo.md the wrong numbers came from went with the hub's
+   boards in #4359. */
 
 // -------------------------------------------------------------- the keys ----
 const ini = read('launcher/Thornswood.ini');
@@ -94,7 +82,6 @@ yes('WheelKey (' + WHEEL + ') and StopKey (' + STOP + ') are letters: ' +
     (wheelLetter || '?') + ' and ' + (stopLetter || '?'), !!wheelLetter && !!stopLetter);
 yes('PageKey (' + PAGE + ') is Tab by the ini\'s table', !!tab && parseInt(tab[1], 10) === PAGE);
 
-function opens(t, l) { return new RegExp('(^|[^A-Za-z])' + l + ' opens').test(t); }
 
 /* "Settings in the game moves any of those keys" is a claim too. Until
    #3126 it was the launcher's Controls page. */
@@ -119,17 +106,6 @@ const nEmotes = list ? list.length : 0;
 const events = (a >= 0 && b >= 0) ? (plugin.slice(a, b).match(/event: '/g) || []).length : -1;
 yes('and it agrees with a plain count of its event lines, ' + nEmotes + ' and ' + events,
     nEmotes > 0 && nEmotes === events);
-
-// -------------------------------------------------- the note in todo.md ----
-/* The note the wrong numbers were copied from, so the next copy is right. */
-const todo = read('site/data/todo.md');
-const t0 = todo.indexOf('- Emote wheel.');
-const t1 = t0 < 0 ? -1 : todo.indexOf('\n- ', t0 + 1);
-const note = t0 < 0 ? '' : todo.slice(t0, t1 < 0 ? todo.length : t1).replace(/\s+/g, ' ');
-yes('todo.md still records the wheel as done', t0 >= 0);
-yes('and no longer says B opens it', !/(^|[^A-Za-z])B opens/.test(note));
-yes('it says ' + wheelLetter + ' opens it', !!wheelLetter && opens(note, wheelLetter));
-yes('and gives the plugin\'s count, ' + nEmotes, says(note, nEmotes));
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');

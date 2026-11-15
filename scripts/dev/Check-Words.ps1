@@ -78,13 +78,14 @@ if (-not $Root) { $Root = Split-Path -Parent (Split-Path -Parent $Here) }
 $Root = (Resolve-Path -LiteralPath $Root).Path
 
 # Files that must be there. A missing one is said out loud, not dropped.
-# site/data/board.json because the hub's boards in it are shown on the site.
-# The Known Issues page and the roadmap came out of it in #3140: they are
+# site/data/board.json was here while the hub's boards in it were shown on
+# the site; they went in #4359. The Known Issues page and the roadmap came
+# out of it in #3140: they are
 # written from the issue board, and the bot checks their words (bot.py
 # post_problems).
 $Named = @(
     'README.md', 'SECURITY.md', 'Developer-Guide.md', 'launcher/app/MainWindow.axaml',
-    'bot/content.py', 'site/public/home.html', 'site/data/board.json'
+    'bot/content.py', 'site/public/home.html'
 )
 # README.md and the component READMEs that tests\test-component-readmes.js reads.
 $NameFiles = @(
@@ -98,8 +99,8 @@ $Rules = @(
     @{ Id = 'banned-word'; Case = 'IgnoreCase'; For = 'people'
        Re = '\bplayers?\b'
        Say = 'the word player. Say customers, clients, people, testers or partners.' },
-    # `gavin/` is a branch prefix from before 17 Sep, a name in git. Any other
-    # "Gavin" is the old owner name. Until #1052 the name on the signing
+    # The branch prefix from before 17 Sep is a name in git, so it passes. Any
+    # other use of that word is the owner's real name. Until #1052 the name on the signing
     # certificate was let through here; no page names it now (signer-name).
     @{ Id = 'old-owner'; Case = 'IgnoreCase'; For = 'people'
        Re = '\bgavin\b(?!/)'

@@ -14,9 +14,9 @@
   that day this reader found 114 harnesses that found Windows their own way.
 
   Now every harness asks tests\Windows.ps1: Get-BoxPowerShell for the
-  PowerShell 7 the box runs its scripts in (#5356), and for Windows itself
-  $OnWindows first, then Get-WindowsPath (or Get-WindowsPowerShell, kept
-  only for the launcher harnesses until the launcher's pull request lands).
+  PowerShell 7 every script runs in (#5356), and for Windows itself
+  $OnWindows first, then Get-WindowsPath, or Get-WindowsPowerShell for what
+  the launcher leaves a person's PC to run in Windows PowerShell 5.1.
   This fails on:
     1. a harness in tests\ that names $env:SystemRoot or $env:WINDIR, in its
        code or in the text of a script it writes;
@@ -25,12 +25,17 @@
        (unset there, and an error under Set-StrictMode);
     4. one that uses $OnWindows, Get-BoxPowerShell, Get-WindowsPowerShell or
        Get-WindowsPath without dot-sourcing tests\Windows.ps1 (or
-       tests\Launcher-Csc.ps1, which dot-sources it).
+       tests\Launcher-Csc.ps1, which dot-sources it);
+    5. one outside launcher\tests that asks for Windows PowerShell 5.1: box
+       and release code runs in PowerShell 7 since #5356;
+    6. a node harness or helper (tests\*.js) that starts Windows PowerShell:
+       chrome-audio.js and test-2349-server-log.js did, until #5356, and
+       start pwsh now.
   The same reader is run over planted harnesses, one of each, so a reader that
   finds nothing anywhere cannot pass by accident. Then Windows.ps1 itself:
   Get-BoxPowerShell names the PowerShell 7 running this on every OS; off
   Windows the Windows paths say so and name nothing; on Windows they name
-  powershell.exe where Windows keeps it.
+  powershell.exe and cmd.exe where Windows keeps them.
 
   Read only, apart from the planted folder under TEMP, which it removes.
 #>
@@ -110,6 +115,32 @@ foreach ($h in $harnesses) {
 }
 Yes 'every harness finds Windows, and its PowerShell and cmd, through tests\Windows.ps1' ($bad -eq 0)
 
+# Windows PowerShell 5.1 only for what the launcher leaves a person's PC to
+# run (the uninstall's farewell); box and release code runs in PowerShell 7.
+$launcherTests = [IO.Path]::GetFullPath((Join-Path (Join-Path $Repo 'launcher') 'tests'))
+$ps51Users = @($harnesses | Where-Object {
+    $errs = $null
+    @([System.Management.Automation.PSParser]::Tokenize([IO.File]::ReadAllText($_.FullName), [ref]$errs) |
+        Where-Object { "$($_.Type)" -eq 'Command' -and $_.Content -eq 'Get-WindowsPowerShell' }).Count -gt 0 })
+$elsewhere = @($ps51Users | Where-Object { [IO.Path]::GetDirectoryName($_.FullName) -ne $launcherTests } | ForEach-Object { $_.Name })
+Yes ('only a launcher harness asks for Windows PowerShell 5.1 (' + ((@($ps51Users | ForEach-Object { $_.Name }) | Sort-Object) -join ', ') + ')') (
+    $ps51Users.Count -gt 0 -and $elsewhere.Count -eq 0)
+if ($elsewhere.Count) { Write-Host ('      outside launcher\tests: ' + ($elsewhere -join ', ') + '; box and release code runs in Get-BoxPowerShell (#5356)') }
+
+# A node harness starts PowerShell 7 as well. Read with comments taken out,
+# so a line that tells the history is not a hit.
+$jsStarts = '(spawn|spawnSync|exec|execSync|execFile|execFileSync)\(\s*[''"`]powershell(\.exe)?[''"`]'
+$jsFiles = @(@($Here) + @(Get-ProductTestFolders $Repo | ForEach-Object { $_.Path }) | ForEach-Object {
+    Get-ChildItem -LiteralPath $_ -File -Filter '*.js' })
+$jsBad = @($jsFiles | Where-Object {
+    $code = [IO.File]::ReadAllText($_.FullName) -replace '(?s)/\*.*?\*/', '' -replace '(?m)^\s*//.*$', ''
+    $code -match $jsStarts } | ForEach-Object { $_.Name })
+Yes ('no node harness starts Windows PowerShell; each starts pwsh (' + $jsFiles.Count + ' read)') ($jsFiles.Count -gt 50 -and $jsBad.Count -eq 0)
+if ($jsBad.Count) { Write-Host ('      starts powershell.exe: ' + ($jsBad -join ', ') + '; start pwsh, the PowerShell every script runs in (#5356)') }
+foreach ($probe in @(@("cp.spawnSync('powershell.exe', ['-NoProfile'])", $true), @("cp.spawn(`"powershell`", [])", $true), @("cp.spawnSync('pwsh', ['-NoProfile'])", $false))) {
+    Yes ('the node reader ' + $(if ($probe[1]) { 'finds' } else { 'passes' }) + ': ' + $probe[0]) (($probe[0] -match $jsStarts) -eq $probe[1])
+}
+
 # ---- 2. the reader, over planted harnesses -----------------------------------
 $plant = Join-Path ([IO.Path]::GetTempPath()) ('ts-2957-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 [void][IO.Directory]::CreateDirectory($plant)
@@ -125,10 +156,10 @@ try {
         'Get-Command asked for cmd, after a parameter' = @('$c = Get-Command -CommandType Application cmd', 1)
         'a process started as powershell.exe' = @('$psi.FileName = ''powershell.exe''', 1)
         '$IsWindows asked' = @('$w = ($PSVersionTable.PSVersion.Major -lt 6) -or $IsWindows', 1)
-        'the helper used without loading it' = @('if ($OnWindows) { $p = Get-WindowsPowerShell }', 1)
+        'the helper used without loading it' = @('if ($OnWindows) { $p = Get-WindowsPath ''System32\cmd.exe'' }', 1)
         'the box''s shell asked for without loading it' = @('$ps = Get-BoxPowerShell', 1)
         'the box''s shell, loaded and asked for' = @(". (Join-Path `$PSScriptRoot 'Windows.ps1')`r`n`$ps = Get-BoxPowerShell", 0)
-        'the helper, loaded and used' = @(". (Join-Path `$PSScriptRoot 'Windows.ps1')`r`nif (-not `$OnWindows) { exit 0 }`r`n`$p = Get-WindowsPowerShell`r`n`$c = Get-WindowsPath 'System32\cmd.exe'", 0)
+        'the helper, loaded and used' = @(". (Join-Path `$PSScriptRoot 'Windows.ps1')`r`nif (-not `$OnWindows) { exit 0 }`r`n`$c = Get-WindowsPath 'System32\cmd.exe'", 0)
         'history told in a comment' = @("# before #2957 this joined onto `$env:SystemRoot and ran powershell.exe`r`n<# `$env:WINDIR #>`r`n`$x = 1", 0)
         'a stand-in process named powershell.exe in data' = @('$list = @([pscustomobject]@{ Name = ''powershell.exe''; ProcessId = 7 })', 0)
         'a function of its own named Cmd' = @("function Cmd([string]`$name) { `$name }`r`n`$a = Cmd 'Assert-ThornswoodCommitted'", 0)
