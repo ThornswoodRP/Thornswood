@@ -21,7 +21,6 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -52,9 +51,6 @@ function outside() {
   }
   return '';
 }
-function freePort() {
-  return new Promise((ok) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); }); });
-}
 function answers(host, port) {
   return new Promise((done) => {
     const r = http.get({ host: host, port: port, path: '/' }, (res) => { res.resume(); done(res.statusCode); });
@@ -62,26 +58,23 @@ function answers(host, port) {
     r.setTimeout(3000, () => r.destroy(new Error('timed out')));
   });
 }
-function listening(srv, port) {
-  return new Promise((ok, bad) => {
-    let out = '';
-    const end = (e) => { clearTimeout(late); srv.stdout.removeListener('data', said); srv.removeListener('close', gone); if (e) { bad(e); } else { ok(out); } };
-    const said = (d) => { out += d; const m = /\[thornswood-docs\] listening on (\S+):(\d+)[^\n]*\n([^\n]*\n)?/.exec(out); if (m && Number(m[2]) === port && m[3] !== undefined) { end(); } };
-    const gone = (c) => end(new Error('site stopped ' + c + ' before it was listening:\n' + out));
-    const late = setTimeout(() => end(new Error('site did not say it was listening on ' + port + ':\n' + out)), 15000);
-    srv.stdout.on('data', said);
-    srv.on('close', gone);
-  });
-}
 async function run(env) {
-  const port = await freePort();
-  const e = Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1' });
+  let port = 0;
+  const e = Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1' });
   delete e.THORNSWOOD_DOCS_LOCAL; delete e.THORNSWOOD_DOCS_EXPOSE;
   Object.assign(e, env);
   const srv = spawn(process.execPath, ['server.js'], { cwd: dir, env: e });
+  let out = '';
+  srv.stdout.on('data', (d) => { out += d; });
   srv.stderr.on('data', () => { });
   try {
-    const out = await listening(srv, port);
+    // The site starts on 0 and says the port it got (#6136). The line after
+    // it is where a WARNING would be, so that line is in out before the checks.
+    port = (await siteFiles.listening(srv)).port;
+    const end = Date.now() + 15000;
+    while (!/listening on \S+:\d+[^\n]*\n[^\n]*\n/.test(out) && srv.exitCode === null && Date.now() < end) {
+      await new Promise((ok) => setTimeout(ok, 20));
+    }
     const bind = (/listening on (\S+):/.exec(out) || [])[1] || '';
     const home = await answers('127.0.0.1', port);
     const far = OUT ? await answers(OUT, port) : -1;

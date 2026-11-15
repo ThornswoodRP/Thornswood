@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -29,22 +28,20 @@ namespace Thornswood
     /// dev launcher each note main's Deployment has not reached yet is marked
     /// DEV, which is the list of what wants testing before dev goes over.
     ///
-    /// What is asked, all of it from GitHub's API without a token (the
-    /// repository is public): the channel's Deployments, the newest status of
-    /// those that name a build Release until one is success, the same for
-    /// Main on a dev launcher, and the newest hundred Releases. Asked without
-    /// a token GitHub allows sixty requests an hour from one address, and the
-    /// launcher's update check runs every thirty seconds while the game runs,
-    /// so the answer is kept and asked again at most every NewsEvery. A read
-    /// that fails keeps the notes from the last one that worked, says why in
-    /// launcher.log, and never fails the update check: the news is cosmetic.
+    /// What is asked, all of it from GitHub's API without a token through
+    /// GitHub.cs, inside the same sixty calls an hour as the update check:
+    /// the channel's Deployments, the newest status of those that name a
+    /// build Release until one is success (a success is kept, since it never
+    /// changes), the same for Main on a dev launcher, and the Release list the
+    /// update check reads too (#5608). The answer is kept and asked again at
+    /// most every NewsEvery. A read that fails keeps the notes from the last
+    /// one that worked and never fails the update check: the news is
+    /// cosmetic.
     /// </summary>
     static partial class Updater
     {
-        const string ReleasesApi = "https://api.github.com/repos/" + Velo.Repo;
-
-        /// <summary>How long a read of the Releases stands before it is asked again.</summary>
-        static readonly TimeSpan NewsEvery = TimeSpan.FromMinutes(15);
+        /// <summary>How long a read of the Releases stands before it is asked again: the update check's own half hour.</summary>
+        static readonly TimeSpan NewsEvery = TimeSpan.FromMinutes(30);
 
         /// <summary>
         /// How many Deployments' statuses one read asks at most before it
@@ -69,14 +66,23 @@ namespace Thornswood
         static string newsChannel;
         static DateTime newsAsked = DateTime.MinValue;
 
-        /// <summary>
-        /// The Releases' notes for this launcher's channel into v.news, read
-        /// from GitHub when the last read is older than NewsEvery. Runs on
-        /// the update check's own thread. Never throws.
-        /// </summary>
-        public static void FillNews(Config cfg, VersionDoc v)
+        // Deployments GitHub said succeeded: a status that is success stays
+        // the newest one, so it is not asked again.
+        static readonly HashSet<long> deploySucceeded = new HashSet<long>();
+
+        /// <summary>The notes the last read that worked found, newest first; empty before one.</summary>
+        public static NewsItem[] News
         {
-            if (v == null) return;
+            get { lock (newsLock) return newsHeld ?? new NewsItem[0]; }
+        }
+
+        /// <summary>
+        /// Reads the Releases' notes for this launcher's channel from GitHub
+        /// when the last read is older than NewsEvery. Runs on the update
+        /// check's own thread. Never throws.
+        /// </summary>
+        public static void FillNews(Config cfg)
+        {
             bool dev = cfg != null && cfg.IsDev;
             string channel = dev ? "dev" : "main";
             bool ask;
@@ -92,26 +98,31 @@ namespace Thornswood
             {
                 try
                 {
-                    NewsItem[] read = ReadReleaseNews(ReleasesApi, dev);
+                    NewsItem[] read = ReadReleaseNews(dev);
                     lock (newsLock) { if (newsChannel == channel) newsHeld = read; }
                 }
                 catch (Exception ex) { Swallow.Note("Updater.FillNews, the Releases on GitHub", ex); }
             }
-            lock (newsLock) { v.news = newsHeld ?? new NewsItem[0]; }
         }
 
         /// <summary>
-        /// The notes as GitHub has them now, from api (the repository's API
-        /// address, a server of its own in tests\test-5187-launcher-news.ps1).
-        /// Throws when GitHub could not be read, which is not the same as no
-        /// news.
+        /// The notes as GitHub has them now, from GitHub.Api (a server of its
+        /// own in tests\test-5187-launcher-news.ps1). Throws when GitHub could
+        /// not be read, which is not the same as no news.
         /// </summary>
-        internal static NewsItem[] ReadReleaseNews(string api, bool dev)
+        internal static NewsItem[] ReadReleaseNews(bool dev)
         {
-            string on = DeployedRelease(api, dev ? "Dev" : "Main");
+            string on = DeployedRelease(dev ? "Dev" : "Main");
             if (on == null) return new NewsItem[0];
-            string main = dev ? DeployedRelease(api, "Main") : on;
-            List<GitHubRelease> releases = JsonSerializer.Deserialize(GitHubGet(api + "/releases?per_page=100"), ReleaseNewsJson.Default.ListGitHubRelease);
+            string main = dev ? DeployedRelease("Main") : on;
+            long top = BuildKey(on);
+            var releases = new List<GitHubRelease>();
+            foreach (GitHub.Release r in GitHub.Releases(delegate(GitHub.Release x) { long k = BuildKey(x.TagName); return k >= 0 && k <= top; }, 100))
+            {
+                var g = new GitHubRelease();
+                g.TagName = r.TagName; g.Name = r.Name; g.Body = r.Body; g.Draft = r.Draft; g.PublishedAt = r.PublishedAt;
+                releases.Add(g);
+            }
             return NewsOf(releases, on, main);
         }
 
@@ -125,10 +136,10 @@ namespace Thornswood
         /// failed leaves the server on the one before, so the first success
         /// is the answer.
         /// </summary>
-        static string DeployedRelease(string api, string environment)
+        static string DeployedRelease(string environment)
         {
             List<GitHubDeployment> list = JsonSerializer.Deserialize(
-                GitHubGet(api + "/deployments?environment=" + Uri.EscapeDataString(environment) + "&per_page=20"),
+                GitHub.Json("/deployments?environment=" + Uri.EscapeDataString(environment) + "&per_page=20"),
                 ReleaseNewsJson.Default.ListGitHubDeployment);
             if (list == null) return null;
             int asked = 0;
@@ -138,11 +149,16 @@ namespace Thornswood
                 if (BuildKey(tag) < 0) continue;
                 if (asked == NewsStatusReads)
                     throw new Exception("none of the newest " + NewsStatusReads + " Deployments to " + environment + " that name a release ended in success");
+                lock (newsLock) { if (deploySucceeded.Contains(d.Id)) return tag; }
                 asked++;
                 List<GitHubStatus> st = JsonSerializer.Deserialize(
-                    GitHubGet(api + "/deployments/" + d.Id.ToString(CultureInfo.InvariantCulture) + "/statuses?per_page=1"),
+                    GitHub.Json("/deployments/" + d.Id.ToString(CultureInfo.InvariantCulture) + "/statuses?per_page=1"),
                     ReleaseNewsJson.Default.ListGitHubStatus);
-                if (st != null && st.Count > 0 && st[0] != null && st[0].State == "success") return tag;
+                if (st != null && st.Count > 0 && st[0] != null && st[0].State == "success")
+                {
+                    lock (newsLock) deploySucceeded.Add(d.Id);
+                    return tag;
+                }
             }
             return null;
         }
@@ -229,26 +245,6 @@ namespace Thornswood
                  + long.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
         }
 
-        /// <summary>
-        /// One read of GitHub's API: the body of a 2xx answer, and an
-        /// exception for any other. No token goes with it: what it reads is
-        /// public, and a token in config.json is for the update feed alone.
-        /// </summary>
-        static byte[] GitHubGet(string url)
-        {
-            using (var req = new HttpRequestMessage(HttpMethod.Get, url))
-            {
-                req.Headers.TryAddWithoutValidation("User-Agent", "ThornswoodLauncher/" + Version);
-                req.Headers.TryAddWithoutValidation("Accept", "application/vnd.github+json");
-                req.Headers.TryAddWithoutValidation("X-GitHub-Api-Version", "2022-11-28");
-                using (HttpResponseMessage res = Http.Send(req, AnswerMs))
-                {
-                    if (!res.IsSuccessStatusCode) throw Refused(res);
-                    return Http.Body(res, Http.DefaultReadMs);
-                }
-            }
-        }
-
         /// <summary>What the tab reads of a Release in GitHub's list.</summary>
         internal sealed class GitHubRelease
         {
@@ -296,7 +292,6 @@ namespace Thornswood
     /// loosely (LooseString), like every document from outside.
     /// </summary>
     [JsonSourceGenerationOptions(Converters = new[] { typeof(LooseString) })]
-    [JsonSerializable(typeof(List<Updater.GitHubRelease>))]
     [JsonSerializable(typeof(List<Updater.GitHubDeployment>))]
     [JsonSerializable(typeof(List<Updater.GitHubStatus>))]
     internal partial class ReleaseNewsJson : JsonSerializerContext

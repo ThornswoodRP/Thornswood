@@ -162,8 +162,7 @@ namespace Thornswood
         ///
         /// Internal, and the one way the launcher writes a record it keeps
         /// in its Profile (#2591): Updater's release.txt and
-        /// release-files.txt (Sync.cs) and the settings cache (FeedSettings.cs) go
-        /// through it too. They deleted the old file and then moved the new
+        /// release-files.txt (Sync.cs) go through it too. They deleted the old file and then moved the new
         /// one in; killed 150 times, that left the record missing 30 times.
         /// </summary>
         internal static void WriteRecord(string path, IEnumerable<string> lines)
@@ -178,19 +177,6 @@ namespace Thornswood
                     w.Flush();
                     fs.Flush(true);
                 }
-            }
-            SwapIn(next, path);
-        }
-
-        /// <summary>The same, for a record kept byte for byte (the settings cache).</summary>
-        internal static void WriteRecord(string path, byte[] bytes)
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(path));
-            string next = path + ".new";
-            using (var fs = new FileStream(next, FileMode.Create, FileAccess.Write, FileShare.None))
-            {
-                fs.Write(bytes, 0, bytes.Length);
-                fs.Flush(true);
             }
             SwapIn(next, path);
         }
@@ -384,6 +370,51 @@ namespace Thornswood
         }
 
         /// <summary>
+        /// The note that the folder has just been made and the launcher's
+        /// first start in it has not run Fix yet (#5937). Everything the
+        /// install leaves to do waits on the folder: Thornswood-Last.esp and
+        /// the other files made from the game, the plugin list in the
+        /// server's order, and the animation and body files. All of it is
+        /// Fix's. The make's finish runs that Fix in the same run and takes
+        /// this note as it starts (ShellOwnGame, FolderWork), so the setup
+        /// restarts once, at the end. The note is for a launcher that closes
+        /// before then: an update going in, or the launcher shut by hand. A
+        /// restart of the launcher's own (Shell.RestartLauncher) is not
+        /// Velopack's, so Velo.Restarted does not say it happened; this file
+        /// does, and the next start the person makes runs Fix for it.
+        /// </summary>
+        static string FixAfterMakeFile { get { return Path.Combine(Dir, "fix-after-make.txt"); } }
+
+        /// <summary>Written by the make's finish, once Paths name the new folder and before its Fix runs.</summary>
+        public static void NoteFixAfterMake()
+        {
+            try { WriteRecord(FixAfterMakeFile, new string[] { DateTime.Now.ToString("o") }); } catch (Exception ex) { Swallow.Note("OwnGame.NoteFixAfterMake, write", ex); }
+        }
+
+        /// <summary>
+        /// True once, on the first start after the folder was made: the note
+        /// is taken away as it is read, so Fix runs once for it and a Fix that
+        /// leaves something wrong is reported, never run again at every start.
+        /// </summary>
+        public static bool TakeFixAfterMake()
+        {
+            string f = FixAfterMakeFile;
+            try
+            {
+                if (!File.Exists(f)) return false;
+                File.Delete(f);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // Not taken away, so not run: a note that cannot be deleted
+                // would run Fix at every start.
+                Swallow.Note("OwnGame.TakeFixAfterMake", ex);
+                return false;
+            }
+        }
+
+        /// <summary>
         /// The Skyrim the game itself is taken from when the folder is first
         /// made: a Steam copy of Skyrim Special Edition. When Vortex deploys
         /// into a Steam copy it is that folder, which is the ordinary case and
@@ -524,8 +555,7 @@ namespace Thornswood
                 if (line == lastChosen) return;
                 lastChosen = line;
             }
-            try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + line + Environment.NewLine); }
-            catch { /* the log is only a note of the choice; the choice stands without it */ }
+            LauncherLog.Line(line);
         }
 
         static bool HasRecord(string dir)
@@ -1864,7 +1894,7 @@ namespace Thornswood
         /// <summary>
         /// Puts collection plugins the golden list expects but Game\Data does not
         /// have back into Data, from what Vortex has deployed (or its staging).
-        /// Does not remove anything from plugins.txt: Gavin's Diagnostics case
+        /// Does not remove anything from plugins.txt: Patrick's Diagnostics case
         /// (CFTO-Lanterns, CFTO-CoveredCarriages, BeardMaskFix and the like) is
         /// light plugins the person wants kept on, and the server never serves
         /// light plugins, so Fix cannot fetch them. Refreshing the own folder,
@@ -2094,7 +2124,7 @@ namespace Thornswood
                 string livePlugins = Path.Combine(Paths.WinLocalAD, "plugins.txt");
                 if (tw == null)
                 {
-                    try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  OwnGame: Vortex profile Thornswood was not found; leaving Profile\\OwnGame plugin list alone rather than copying Windows' live list from another profile." + Environment.NewLine); } catch { /* the log is only a note; leaving OwnGame alone stands without it */ }
+                    LauncherLog.Line("OwnGame: Vortex profile Thornswood was not found; leaving Profile\\OwnGame plugin list alone rather than copying Windows' live list from another profile.");
                 }
                 else
                 {
@@ -2110,11 +2140,11 @@ namespace Thornswood
                         string a = File.ReadAllText(livePlugins);
                         string b = File.ReadAllText(twPlugins);
                         if (!string.Equals(a, b, StringComparison.Ordinal))
-                            try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  OwnGame: Windows' live plugins.txt differs from the Thornswood Vortex profile at " + tw + "; baked OwnGame from Thornswood." + Environment.NewLine); } catch { /* the log is only a note; the bake stands without it */ }
+                            LauncherLog.Line("OwnGame: Windows' live plugins.txt differs from the Thornswood Vortex profile at " + tw + "; baked OwnGame from Thornswood.");
                     }
                 }
             }
-            catch (Exception ex) { try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  OwnGame: baking Thornswood profile list failed: " + ex.Message + Environment.NewLine); } catch { /* the log itself failed; nowhere left to say so */ } }
+            catch (Exception ex) { LauncherLog.Line("OwnGame: baking Thornswood profile list failed: " + ex.Message); }
         }
 
         /// <summary>The settings a folder gets only when it is made (SettleSettings(true)).</summary>

@@ -115,7 +115,7 @@ Yes '  and stops on the answer, before anything is built' ($stopAt -gt 0 -and $s
 Write-Host ''; Write-Host 'the launcher'
 $appDir = Join-Path (Join-Path $Repo 'launcher') 'app'
 $shell = [IO.File]::ReadAllText((Join-Path $appDir 'Shell.cs'))
-$packs = [IO.File]::ReadAllText((Join-Path $appDir 'ShellPacks.cs'))
+$packs = [IO.File]::ReadAllText((Join-Path $appDir 'ShellCollection.cs'))
 Yes 'no bar calls the feed''s number the collection''s revision' (-not ($shell + $packs).Contains('"The collection is on revision "'))
 Yes 'the behind bar names the revision the server was built against' ($shell.Contains('"The server was built against collection revision " + wants'))
 

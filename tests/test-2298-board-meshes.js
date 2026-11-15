@@ -26,7 +26,7 @@
 //   5. Go.ps1 makes both meshes, and Ship-Rules.ps1 never ships them.
 //   6. E on the board or the box is the server's to answer, on its own
 //      references (#2516): the client answers neither, so a press on the box
-//      can never open the board. tests/test-2516-server-boards.js drives the
+//      can never open the board. game/tests/test-2516-server-boards.js drives the
 //      server's answer: the board opens only the board, the box only the box.
 //
 // What cannot be proven here is how the game's own crosshair meets that

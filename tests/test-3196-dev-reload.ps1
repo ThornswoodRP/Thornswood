@@ -40,9 +40,9 @@
       with the server never stopped
     - an engine that loads neither leaves the old files on disk and in .prev,
       and says RELOAD FAILED, for the put-back swap
-    - Deploy-DevGamemode.ps1 reloads only when neither -PutBack nor -Restart
-      is given, before the warning, and restarts with the put-back after
-      RELOAD FAILED
+    - Deploy-DevGamemode.ps1 reloads only when none of -PutBack, -Restart
+      and -OrderOnly is given, before the warning, and restarts with the
+      put-back after RELOAD FAILED
     - the gamemode's tables (#5191): the deploy's tree id is git's; a run
       that changes only the tables puts the folder in whole, the gamemode
       again, and waits for the server to say it loaded that tree, keeping
@@ -451,7 +451,7 @@ Yes 'Deploy-DevGamemode.ps1 takes -Restart and loads Reload.ps1' ($cmd.Parameter
 Yes '  it waits for the blob of the gamemode it sends, and the tree of its tables (#5191)' ($dev.Contains('$newBlob = Get-ThornswoodGamemodeBlob $Gamemode') -and $dev.Contains('$newTree = Get-ThornswoodTablesTree $GamemodeTables') -and $dev.Contains('(ReloadVars $Root $Task $stageName $prevName $Wait $hashes $newBlob $newTree) + $reloadBlock'))
 $atReload = $dev.IndexOf('+ $reloadBlock')
 $atWarn = $dev.IndexOf("Write-Host 'Who is on the dev server...'")
-Yes '  it reloads before the warning, and only without -PutBack and -Restart' ($atReload -gt 0 -and $atWarn -gt $atReload -and $dev.Contains('if (-not $PutBack -and -not $Restart) {'))
+Yes '  it reloads before the warning, and only without -PutBack, -Restart and -OrderOnly (#6166)' ($atReload -gt 0 -and $atWarn -gt $atReload -and $dev.Contains('if (-not $PutBack -and -not $Restart -and -not $OrderOnly) {'))
 Yes '  the warning and the swap run only for a restart or the put-back after RELOAD FAILED' (
   $dev.Contains("if (`$outcome -eq 'swap' -or `$outcome -eq 'recover') {") -and $dev.Contains("if (`$PutBack -or `$outcome -eq 'recover') { `$pick = `$putBackPick }") -and
   $dev.Contains("elseif (`$reloadOut -contains 'RELOAD FAILED') {"))

@@ -65,7 +65,7 @@ Yes ('the client step runs ' + $m.Groups[1].Value) ($m.Success -and $m.Groups[1]
 Yes 'Install-SkyMPClient.ps1 is gone' (@(Get-ChildItem -LiteralPath (Join-Path $Repo 'scripts') -Recurse -File -Filter 'Install-SkyMPClient.*').Count -eq 0)
 
 $named = @()
-foreach ($dir in 'scripts', 'tests', 'launcher', 'installer', 'site', '.github') {
+foreach ($dir in 'scripts', 'tests', 'game', 'launcher', 'installer', 'site', '.github') {
     $root = Join-Path $Repo $dir
     if (-not (Test-Path -LiteralPath $root)) { continue }
     foreach ($f in Get-ChildItem -LiteralPath $root -Recurse -File -Include *.ps1, *.psm1, *.cmd, *.bat, *.js, *.cs, *.md, *.yml, *.txt) {

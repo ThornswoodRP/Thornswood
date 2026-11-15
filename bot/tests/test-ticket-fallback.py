@@ -22,7 +22,7 @@ guilds, channels, roles and people, and the thread creation always raises.
 The site push is replaced by a counter. One scenario loads Build-Discord.py
 too, without running it, to build #tickets from the PLAN's own roles and
 overwrites. The one open ticket file is pointed at a scratch folder, so the
-real one beside bot.py is never read or written.
+real one in the bot's data folder is never read or written.
 
 Read only. Never connects to anything.
 """
@@ -311,9 +311,9 @@ def plan_shape():
     panel_at = where.get('report-someone', (None, None))
     yes("the PLAN makes #ticket-log, TICKET_LOG's first name, in Staff, for the council",
         bot.TICKET_LOG[0] == 'ticket-log' and tickets == ('Staff', 'council'))
-    yes("and a report's desk, #report-someone, in the public Tickets",
+    yes("and a report's desk, #report-someone, in Tickets, which every Member reads (#5841)",
         bot.desk_of('report') == 'report-someone'
-        and panel_at == ('Tickets', 'read'))
+        and panel_at == ('Tickets', 'membersread'))
 
     g = Guild()
     roles = {}

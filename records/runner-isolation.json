@@ -14,7 +14,7 @@
   "tempMaxHours": 24,
   "mainOnlyEnvironments": {
     "about": "Environments whose deployment branch policy lets only main use them (Settings, Environments). A job in one of these runs only main's code (#3550), and scripts/vps/Check-RunnerIsolation.ps1 -Collect reads each one's policy from GitHub and says so when it lets in any other ref. Until #4033 the check also counted such a job as held to main on the signing runner; no runner of the box signs since #4013.",
-    "names": ["board", "desk", "notices"]
+    "names": ["board", "desk"]
   },
   "intentional": []
 }

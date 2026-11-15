@@ -19,6 +19,7 @@
   feed sent, which every older launcher already takes, so none of those is
   offered a launcher it cannot start.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [string]$Root,
@@ -121,7 +122,7 @@ if (-not $PSBoundParameters.ContainsKey('Root')) {
 # installed. A folder named by -Root is not: Ship always passes one, and the
 # ship root Update-ShipRoot.ps1 makes has no Launcher folder.
 if ($Dev -and -not $PSBoundParameters.ContainsKey('Root') -and -not (Test-Path (Join-Path $Root 'Launcher'))) {
-    Die "No dev build at $Root. Install it from the main launcher's Settings page first, or name the folder with -Root."
+    Die "No dev build at $Root. Name the folder with -Root, or record it with Setup-ShipMachine.ps1 -Channel dev -Root <folder> (the launcher installs no second copy for dev since #5608)."
 }
 
 # ------------------------------------------------------------ the feed store
@@ -1037,7 +1038,7 @@ if ($collectionRemovals) {
 # This looks at the total, before anything is zipped. A release is one pack;
 # nothing later caps that zip or splits it.
 #
-# Kept between these markers so tests\test-release-size.ps1 can run the real
+# Kept between these markers so scripts\tests\test-release-size.ps1 can run the real
 # thing against the incident's own number.
 function Get-ReleaseSizeRefusal([int64]$Bytes, [int64]$CapMB, [bool]$Accepted) {
     if ($Accepted) { return '' }
@@ -1097,7 +1098,7 @@ if ($removed.Count -gt $MaxRemovals -and -not $AcceptRemovals) {
 # does), and 0 is what a release that went out returns, so Ship went on to
 # its after-release steps. Measured
 # 6 Oct: a dev Ship from main 2a8ebc9b printed "Nothing to do", then posted
-# the previous night's note to the dev updates channel a second time and told
+# the previous night's note to #staff-news a second time and told
 # the dev server "update in 5 min" for a release that did not exist.
 #
 # A DEV PUBLISH WITH NOTHING NEW STILL MARKS THE DEV FEED (Dev-News.ps1). Its
@@ -1347,8 +1348,9 @@ if ($changed.Count -or $removed.Count -or $profileChanged.Count) {
 }
 
 # ==== thornswood packs gone ====
-# tests\test-record-sync.ps1 runs the real publisher through this, and
-# tests\test-feed-rules.ps1 runs the feed append block with what it decides.
+# scripts\tests\test-feed-rules.ps1 runs the feed append block with what it decides.
+# tests\test-record-sync.ps1 ran the real publisher through it until it went
+# with the launcher's feed reader (#5608).
 #
 # THE PACKS COME OFF THE FEED ONCE NO LAUNCHER ALLOWED IN NEEDS ONE (#1050).
 # Every launcher from the first one with Sync.cs syncs the install to the
@@ -1534,7 +1536,8 @@ if (-not $NoUpload) {
 }
 
 # ==== thornswood record files ====
-# tests\test-record-sync.ps1 runs the real Publish-Update through this block.
+# tests\test-record-sync.ps1 ran the real Publish-Update through this block
+# until it went with the launcher's feed reader (#5608).
 #
 # EVERY FILE OF THIS RELEASE IS ON THE SITE BY ITS OWN SHA256 (#1050), so a
 # launcher can sync the install to the record below instead of replaying the
@@ -1845,7 +1848,7 @@ Head 'version.json'
 # Where the last release's packs end, for the release list block below.
 $lastPackBefore = Get-FeedLastPackId $doc
 # ==== thornswood feed append ====
-# tests\test-feed-rules.ps1 runs this block on its own. If the markers move,
+# scripts\tests\test-feed-rules.ps1 runs this block on its own. If the markers move,
 # it stops rather than quietly testing nothing.
 #
 # The feed as pulled, before anything is added to it. What is already there is
@@ -1907,7 +1910,8 @@ if ($clientRel -and $clientRel.url) {
     Say "  client runtime $($clientRel.forkCommit) recorded" 'Green'
 }
 # ==== thornswood release list ====
-# tests\test-feed-rollback.ps1 runs this block on its own.
+# tests\test-feed-rollback.ps1 ran this block on its own until it went with
+# the launcher's feed reader (#5608).
 #
 # EVERY RELEASE'S RECORD STAYS NAMED (#442). "baseline" below names only the
 # last one, so on its own the feed could never say what an earlier release

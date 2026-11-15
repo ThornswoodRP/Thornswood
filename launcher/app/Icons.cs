@@ -484,7 +484,20 @@ namespace Thornswood
             catch (Exception ex) { Swallow.Note("Icons.Repair", ex); }
             finally
             {
-                try { Process.Start("explorer.exe"); restarted = true; } catch (Exception ex) { Swallow.Note("Icons.Repair, restart explorer", ex); }
+                try
+                {
+                    // Explorer runs until the PC shuts down, and works from
+                    // the folder it is started in for all that time. Started
+                    // from the Windows folder, never from the launcher's: an
+                    // Explorer working from current\ held it, and every
+                    // launcher update after failed on it (#6129).
+                    var psi = new ProcessStartInfo("explorer.exe");
+                    psi.UseShellExecute = false;
+                    psi.WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+                    Process.Start(psi);
+                    restarted = true;
+                }
+                catch (Exception ex) { Swallow.Note("Icons.Repair, restart explorer", ex); }
             }
 
             try { SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, IntPtr.Zero, IntPtr.Zero); } catch (Exception ex) { Swallow.Note("Icons.Repair, notify", ex); }

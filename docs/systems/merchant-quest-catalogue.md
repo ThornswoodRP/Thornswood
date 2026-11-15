@@ -19,6 +19,15 @@ which can include goods obtained from other craftspeople; they do not assert
 that the person returning them crafted them. Neither kind grants ordinary
 buy, sell or supply permissions.
 
+## Contents
+
+- [First playable scenes](#first-playable-scenes)
+- [Targets and their existing returns](#targets-and-their-existing-returns)
+- [Finite-purse commissions](#finite-purse-commissions)
+- [Reward and activation limits](#reward-and-activation-limits)
+- [Commission persistence and admission](#commission-persistence-and-admission)
+- [Runtime admission and recovery](#runtime-admission-and-recovery)
+
 ## First playable scenes
 
 | Work | Offering trade and hold | Required standing | Exact objective | Gold | Personal cooldown |
@@ -314,7 +323,7 @@ The hundred commissions add no actor, spawn, harvest, purse refill, new currency
 or character inventory grant. Native inventory, pending-record and private
 ledger byte limits remain in force. No alpha reset is required for this slice.
 
-`node tests/test-merchant-quest-catalogue.js` checks actual rulebook gates,
+`node game/tests/test-merchant-quest-catalogue.js` checks actual rulebook gates,
 exact merchant and retained-target bindings, distinct objectives, source
 positions and returns, exact commission recipe/harvest/gate/role evidence, distinct
 goods bundles and the explicit activation boundary. It does not construct a server,

@@ -27,8 +27,9 @@ namespace Thornswood
     /// A NEW ROOT is made the way an install that chose its own folder is
     /// (#1226), which is what every ship root used to be: its config.json is
     /// written for the channel, Thornswood's own files of the release the
-    /// channel's feed names now are synced into Profile\Payload by the
-    /// launcher's own sync (Updater.Resync), and Make builds the folder from
+    /// channel is on now are synced into Profile\Payload out of that
+    /// release's package on GitHub, with every check an update makes
+    /// (Updater.SeedFromChannel, #5608), and Make builds the folder from
     /// Vortex's deployment, the Steam copy's game and that Payload. So the
     /// first release from a new root starts from what everybody already has,
     /// not from a folder that would read as removing every file of ours.
@@ -155,10 +156,12 @@ namespace Thornswood
                 say("There is no game folder in " + root + ", so it is made now, as an install that chose its own folder is.");
                 Directory.CreateDirectory(Path.Combine(root, "Profile\\Payload"));
                 Paths.Init(root);
-                VersionDoc v = Updater.Check(cfg);
-                if (!Updater.Resync(cfg, v, say))
-                    return "The " + channel + " feed names no release whose files are on the site one by one, so Thornswood's own files cannot be brought into " + root +
-                           " the way a launcher brings them, and the folder was not made.";
+                try { Updater.SeedFromChannel(cfg, channel, say); }
+                catch (Exception ex)
+                {
+                    return "Thornswood's own files of the " + channel + " channel's release could not be brought into " + root +
+                           ", so the folder was not made: " + ex.Message;
+                }
                 say(OwnGame.Make(cfg, say, skyrimFrom));
                 Paths.Init(root);
             }
@@ -188,21 +191,13 @@ namespace Thornswood
 
         /// <summary>
         /// A config.json for a new root: the launcher's defaults, which are
-        /// the main build's, and for dev the five things DevBuild.Install
-        /// changes when it makes the dev build from the main one.
+        /// the main build's, and for dev what the Server card's switch to the
+        /// dev channel changes (DevBuild.Set).
         /// </summary>
         static Config NewConfig(string channel)
         {
             var c = new Config();
-            if (channel == "dev")
-            {
-                c.Channel = "dev";
-                c.UpdateBranch = "dev";
-                c.UpdateFeedUrl = "https://thornswood.net/feed-dev/version.json";
-                c.ServerPort = DevBuild.DevPort;
-                c.VoicePort = DevBuild.DevVoicePort;
-                c.VoiceUrl = DevBuild.DevVoiceUrl(c.VoiceUrl);
-            }
+            if (channel == "dev") DevBuild.Set(c, "dev");
             return c;
         }
 

@@ -4,7 +4,13 @@ Part of the [Developer Guide](../../Developer-Guide.md), the index of every page
 
 Do this once on a new Windows PC. Stay in order. On every PC is the steps. Setting up a machine and Shipping from another machine are for a PC that will publish a release. You can read those two after the clone works.
 
-Use your own GitHub account. Patrick adds that account as a collaborator on the private repository before a clone will work. Say so in Discord and wait for that. Before your first change, read `LICENSE` at the root of the repository and say in #staff-updates that you agree to its contributor terms. You agree once, and it covers anything you contributed before. Use your own clone. The shared clone on the shipping machine is for the lanes that build from it. Your clone can live at `C:\Dev\Thornswood`, or any empty folder you own.
+Use your own GitHub account. Patrick adds that account as a collaborator on the private repository before a clone will work. Say so in Discord and wait for that. Before your first change, read `LICENSE` at the root of the repository and say in #staff-updates that you agree to its contributor terms. You agree once, and it covers anything you contributed before. Use your own clone. The clone on the shipping machine is for the Ship that builds from it. Where your clone goes is in [Clone the repository](#clone-the-repository).
+
+## Contents
+
+- [On every PC](#on-every-pc)
+- [Setting up a machine](#setting-up-a-machine)
+- [Shipping from another machine](#shipping-from-another-machine)
 
 ## On every PC
 
@@ -93,11 +99,12 @@ Choose GitHub.com, then HTTPS, then login with a browser, as the GitHub user tha
 
 ### Clone the repository
 
+Every machine's clone is `C:\Thornswood-Repo`, the folder every command in this guide and every script's example names, so they work as written. On One, the shipping machine, the clone is shared and sits detached at `origin/main`: branch work there goes in a worktree in its ignored `worktrees` folder, removed with its branch once the pull request merges.
+
 ```powershell
-New-Item -ItemType Directory -Force -Path C:\Dev | Out-Null
-cd C:\Dev
-git clone https://github.com/ThornswoodRP/Thornswood.git
-cd C:\Dev\Thornswood
+cd C:\
+git clone https://github.com/ThornswoodRP/Thornswood.git Thornswood-Repo
+cd C:\Thornswood-Repo
 git status
 ```
 
@@ -111,16 +118,16 @@ git config core.hooksPath .githooks
 
 It prints nothing. From then on `git push` first checks that every script parses and that the writing rules hold in what you are pushing, in about twenty seconds (#5291). When one fails, the push stops and names the file and line; fix it, commit, and push again. A cloud session turns this on by itself.
 
-From here on, the commands assume PowerShell is inside your clone. If you used another folder, `cd` there first.
+From here on, the commands assume PowerShell is inside your clone.
 
 ### Open the folder in Visual Studio Code
 
 ```powershell
-cd C:\Dev\Thornswood
+cd C:\Thornswood-Repo
 code .
 ```
 
-`code .` opens the folder you are in. The window title shows Thornswood. If `code` is not recognized, close PowerShell, open PowerShell 7 again, `cd C:\Dev\Thornswood`, and run `code .` again.
+`code .` opens the folder you are in. The window title shows Thornswood-Repo. If `code` is not recognized, close PowerShell, open PowerShell 7 again, `cd C:\Thornswood-Repo`, and run `code .` again.
 
 The branch name is in the status bar at the bottom left. Open the terminal from the View menu, Terminal. It starts in the clone. The parts of the window are in [D. Visual Studio Code](tools.md#d-visual-studio-code). The folders, and the files a first change usually touches, are in [N. The repository map](tools.md#n-the-repository-map).
 
@@ -143,12 +150,11 @@ signed in, git, the GitHub CLI (`gh`) signed in to an account that is a
 collaborator on the source repo, PowerShell 7, node, Python 3.11 or newer (the
 bot runs on 3.12) with `discord.py` and `Pillow` for the bot scripts, and an
 SSH key the VPS knows. There is no releases clone any more: the feed and its
-baseline are on the VPS (#907).
+baseline are on the VPS (#907). The clone is [Clone the repository](#clone-the-repository);
+from it, check that `gh` is signed in as the collaborator who ships:
 
 ```
-cd C:\Users\<you>\Downloads
-git clone https://github.com/ThornswoodRP/Thornswood.git Thornswood-Repo
-gh auth login
+cd C:\Thornswood-Repo
 gh auth status
 ```
 
@@ -168,19 +174,23 @@ The second line prints the discord.py version `bot\requirements.txt` pins when
 the first worked. The nightly does the same into a venv of its own on the VPS,
 because the live bot runs on that box's Python.
 
-Every change goes to the dev channel first, and the dev channel needs the dev
-build on this machine too: in the main launcher, on the Play page, the Server
-dropdown, Dev. It checks your Discord roles first, then puts it
-at `<drive>:\Thornswood-DevBuild`, beside the main install. Then open it once and let it make its own game folder,
-`<Root>-DevBuild\Game`: it offers at startup, and its own Settings, Maintenance
-has "Make it". Ship refuses `-Channel dev` without the dev build, and with the
-dev build but without that folder it builds the dev release out of the Steam
-copy instead. That refusal is for `<drive>:\Thornswood-DevBuild` only, the folder
-Ship finds for itself: a folder you name with `-Root`, or record once with
-`.\scripts\release\Setup-ShipMachine.ps1 -Channel dev -Root <folder>`, is a release
-folder `Update-ShipRoot.ps1` makes with no `Launcher` folder, and the Ship's own
-launcher step makes one there (#2662). `.\scripts\release\Check-ShipReady.ps1 -Channel dev` says whether both are
-in place, without shipping anything.
+Every change goes to the dev channel first. To play on it, switch the launcher:
+on the Play page, the Server dropdown, "Dev". It checks your Discord roles,
+then puts the install on the dev channel and takes the dev launcher from
+GitHub; there is no second launcher for dev since #5608. To ship it, this
+machine builds the dev release from a release folder of its own, recorded once
+with `.\scripts\release\Setup-ShipMachine.ps1 -Channel dev -Root <folder>`:
+`Update-ShipRoot.ps1` makes it on the first Ship, with Thornswood's own files
+from the dev channel's package on GitHub and its own game folder from what
+Vortex deployed, and the Ship's own launcher step makes its `Launcher` folder
+(#2019). With no folder named with `-Root` or recorded, Ship falls back to a
+dev copy an older launcher made at `<drive>:\Thornswood-DevBuild`, and with
+that copy but no game folder in it, it builds the dev release out of the Steam
+copy instead. Ship refuses `-Channel dev` when there is not even that copy:
+the refusal is for `<drive>:\Thornswood-DevBuild` only, the folder Ship finds
+for itself, never for one named or recorded (#2662).
+`.\scripts\release\Check-ShipReady.ps1 -Channel dev` says whether both are in
+place, without shipping anything.
 
 Then in `Thornswood-Repo`:
 
@@ -191,7 +201,7 @@ Then in `Thornswood-Repo`:
 which makes a key for the VPS, points ssh at it through the bridge, and
 prints the public line. That is for a machine that already holds a key: since
 31 Oct 2026 no key is made for a new person or machine (Patrick's answer A
-on q-retire-box-keys, #2862), and the keys there are changed only by Patrick (the workflows' two with the deploy gate's Renew-BoxKey verb). Box work from a new machine goes
+on q-retire-box-keys, #2862), and the keys there are changed only by Patrick (the desk's, box-run.yml's key, with the deploy gate's Renew-BoxKey verb). Box work from a new machine goes
 through the gate instead, with `gh` signed in as somebody who may run workflows in the private ops repository, and no key:
 `pwsh scripts/vps/Box-Run.ps1 -Line '<verb>'` ([E. VPS](tools.md#e-vps)). Ships go
 the same way (`Ship-Dev`, `Ship-Main`), so a machine without a key can still
@@ -257,7 +267,7 @@ which records what the game folder holds right now without shipping anything. Do
 straight after the launcher has brought the game up to date, so the baseline is the
 current release and the first real Ship carries only what you changed.
 
-`Publish-Discord.ps1` reads the #news webhook and the dev updates one from
+`Publish-Discord.ps1` reads the #news webhook and the #staff-news one from
 the VPS through `Discord-Hook.ps1`, and a copy in `bot\news-webhook.txt` or
 `bot\dev-webhook.txt` only when the VPS cannot be asked; without either, Ship
 says so and carries on.
@@ -276,7 +286,7 @@ by hand, and no secret is written into the repository.
 
 | What a Ship needs | On One | A second machine |
 | --- | --- | --- |
-| The source | the shared clone | `git clone https://github.com/ThornswoodRP/Thornswood.git` and `gh auth login` as a collaborator |
+| The source | the shared clone | [Clone the repository](#clone-the-repository) and `gh auth login` as a collaborator |
 | The feed, its baseline, the launcher list and history | the VPS store, with a working copy in `%LOCALAPPDATA%\Thornswood\feed\<channel>` | Nothing to copy: every Ship receives them from the VPS first (`scripts\release\Feed-Store.ps1`, #907). The working copy is made on the first Ship |
 | The release webhooks, dev and #news | the VPS, `C:\Thornswood-Bot\webhooks`; One has no local copy | Nothing to copy: Ship reads them over ssh (`scripts\ops\Discord-Hook.ps1`) |
 | VPS access | One's own key, `.ssh\thornswood_ed25519`, and its own bridge token, `.ssh\thornswood-box-token` | None: no new key is made (Patrick's A on q-retire-box-keys, 31 Oct 2026), and a Ship from the gate needs none. Box work goes through `scripts\vps\Box-Run.ps1`, with `gh` signed in as somebody who may run workflows in the private ops repository. With the gate down too, the BisectHosting panel is the way in (`docs\IT-IS-DOWN.md` in the private ops repo) |
@@ -284,7 +294,7 @@ by hand, and no secret is written into the repository.
 | Signing: Microsoft's signing client | `records\signing\client`, ignored by git | The same script fetches `Microsoft.ArtifactSigning.Client` 1.0.128 from nuget.org and refuses it unless its sha256 is the pinned one, which is the package One has |
 | Signing: the Azure sign in | `az login` on One, as Patrick | `az login` on the new machine, as the person who ships from it, with an account of their own in the signing tenant that holds the Certificate Profile Signer role on the ThornswoodSigning account's profile ThornswoodRelease (Patrick, 4 Oct; #1740). Patrick makes the account and gives the role once: [Your own signing sign in](#your-own-signing-sign-in). The script asks the signing service with that sign in and checks the profile answers with the identity the launcher pins |
 | The client runtime `records\client-build.json` names | only in the dev game folder, `C:\Thornswood-DevBuild\Game`. The build copies in `Downloads\Thornswood-ClientBuild-<commit>` are older builds, and the shared clone's `engine\skymp\build` does not match the record | Setup-ShipMachine records CI's build of the pin as the machine's engine build (`-EngineBuild ci`, which it does by itself on a machine with no engine build), and `Get-EngineArtifact.ps1` fetches the public fork's build of the pin, `thornswood-engine-<fork commit>` from ThornswoodRP/skymp (#3540), and holds every file to both records. A build made on the machine is not the recorded bytes (engine\README.md, "A Ship machine takes CI's build") |
-| The game folder the Ship packs, `<root>-DevBuild\Game` | built by the dev launcher from what Vortex deployed | Skyrim Special Edition on Steam, Vortex with a profile named Thornswood and the Thornswood collection installed and deployed, the launcher from thornswood.net, then the dev build and its own game folder (Setting up a machine, above). A person does this; it needs a Nexus account, not Patrick's |
+| The game folder the Ship packs, `<dev release folder>\Game` | made by `Update-ShipRoot.ps1` from what Vortex deployed | Skyrim Special Edition on Steam, Vortex with a profile named Thornswood and the Thornswood collection installed and deployed, then the dev release folder recorded (Setting up a machine, above). A person does this; it needs a Nexus account, not Patrick's |
 | The collection itself | Nexus collection `7essxf`, curated from Patrick's Nexus account in his Vortex | Any machine installs it. Only publishing a new revision needs his account (`docs\OWNERSHIP.md` in the private ops repo) |
 | Backups | the originals on the VPS, `C:\Thornswood-Backup`; the copy off the box goes to the Oracle VM and on to Google Drive (`Send-Backups.ps1`, #2862), not to One; the passphrase on the VPS and in Patrick's keeping | Not needed to Ship. `pwsh scripts/vps/Box-Run.ps1 -Line 'Send-Backups -Status'` says what went off the box |
 
@@ -393,7 +403,7 @@ checks the tools a Ship calls (git, gh, PowerShell 7, node, ssh, the .NET
 Framework compiler, signtool, az, the .NET 8 runtime), fetches the signing
 client, writes `records\signing\signing.json`, checks the Azure sign in, fetches the
 recorded client, and then runs `.\scripts\release\Check-ShipReady.ps1 -Channel dev`
-for everything else Ship asks: the dev build, its game folder, the Vortex
+for everything else Ship asks: the dev release folder, its game folder, the Vortex
 profile, the VPS and the feed store. Each gap prints the command that closes
 it and says when it is Patrick's. It never turns signing off, never edits a
 `records\signing\signing.json` that is there, and never ships. The sign in is

@@ -2,8 +2,10 @@
 //
 // Issue #986: the access comment and the bot README still told people that
 // Member is handed out on join, or that Discord has a default-role setting.
-// Staff give Member after an application is accepted. Playtester (access.play)
-// is what opens the game. Discord has no default-role setting.
+// Playtester (access.play) is what opens the game. Discord has no
+// default-role setting. Since 12 Nov 2026 the bot gives Member when somebody
+// reacts to the rules in #rules (#5841), and the README and the site's
+// access comment both say so (#5846).
 // Reads the files. No server.
 
 const fs = require('fs');
@@ -25,8 +27,12 @@ const access = accessAt < 0 ? '' : server.slice(accessAt, accessAt + 1400);
 const itemAt = readme.indexOf('3. **Hand Member out on join.**');
 const item = itemAt < 0 ? '' : readme.slice(itemAt, itemAt + 600);
 
-yes('the access comment says staff give Member after an application is accepted',
-    access.indexOf('Staff give Member after an application is accepted.') >= 0);
+yes('the access comment says the bot gives Member for the rules reaction (#5846)',
+    access.indexOf('The bot gives Member when somebody reacts to the rules in #rules') >= 0
+    && access.indexOf('Staff give Member after an application') < 0);
+yes('and the open switch note says it too, not that staff give it',
+    server.indexOf('The bot gives Member when somebody reacts to the rules in\n   #rules') >= 0
+    && server.indexOf('Staff give Member after an application') < 0);
 yes('the access comment says Discord has no default-role setting',
     access.indexOf('Discord has no\n    default-role setting') >= 0);
 yes('the access comment says Playtester (access.play) opens the game',
@@ -35,13 +41,16 @@ yes('the access comment no longer punts to the issue',
     access.indexOf('Who gives Member') < 0);
 
 yes('item 3 says the bot cannot hand Member out on join',
-    item.indexOf('**Hand Member out on join.** It cannot.') >= 0);
+    item.indexOf('**Hand Member out on join.** It cannot') >= 0);
 yes('item 3 says Discord has no default-role setting',
-    item.indexOf('Discord has no default-role\n   setting') >= 0);
-yes('item 3 says staff give Member after an application is accepted',
-    item.indexOf('Staff give Member after an application is accepted.') >= 0);
+    item.indexOf('Discord\n   has no default-role setting') >= 0);
+yes('item 3 says the bot gives Member for the rules reaction in #rules (#5841)',
+    item.indexOf('the bot gives Member when somebody reacts\n   to the rules in `#rules`') >= 0 &&
+    item.indexOf('given by\n   hand') < 0);
+yes('item 3 no longer says staff give Member after an application (#4413)',
+    item.indexOf('Staff give Member after an application is accepted.') < 0);
 yes('item 3 says Playtester (access.play) opens the game',
-    item.indexOf('Playtester\n   (access.play) is what opens the game.') >= 0);
+    item.indexOf('Playtester (access.play) is what opens the\n   game.') >= 0);
 yes('item 3 no longer names a default role option',
     readme.indexOf('default role option') < 0);
 yes('the role table no longer says Member is handed out on the way in',

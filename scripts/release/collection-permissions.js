@@ -30,6 +30,27 @@
 // the collection hands out no file of the author's. Three readings first
 // marked for such a line carry that ruling.
 //
+// WHAT MAKES A READING (#4190), the same rule records/README.md gives, and
+// ruled() below is it. "not allowed" is the reader's, on the line above. Any
+// other reading is "allowed" when the page grants the mod's own files more
+// than a collection asks, in one of three ways the reading records:
+//   licence  an open licence covering the mod's own files, named on the page
+//            or in a licence file the page points to as its terms. One the
+//            page only points to is recorded with where it is (at) and who
+//            opened it (read, by), because the page's words do not say it;
+//   upload   the page's Upload permission line lets the files go to other
+//            sites, with or without credit, which is more than a collection
+//            does with them;
+//   grant    the page's own words letting anyone do anything with them,
+//            copied in grant as they stand in a term.
+// A licence covering only part of the mod's files (a program but not its
+// assets) is none of these, and neither is "open source" with no licence
+// named. Anything else is "not stated". Until 12 November 2026 this was
+// written nowhere, and two pages that point to their licence file without
+// naming it were read two ways: SKSE Menu Framework "not stated", Crash
+// Logger "allowed". "allowed" and "not stated" both pass the check, so the
+// rule says what the record means and lets nothing new through.
+//
 // UPDATE rewrites the record's list of mods from a collection.json, for a new
 // revision: each mod keeps its reading, a mod the collection no longer
 // carries goes, and a new one comes in with no reading, so CHECK refuses it
@@ -45,6 +66,18 @@ const path = require('path');
 
 const RECORD = path.join(__dirname, '..', '..', 'records', 'collection-permissions.json');
 const COLLECTIONS = ['allowed', 'not stated', 'not allowed'];
+// Nexus's two Upload permission lines that let the files go to other sites.
+const UPLOAD_ALLOWED = /^You (can|are allowed to) upload this file to other sites\b/;
+
+// What a reading comes to by the rule in the header (#4190).
+function ruled(r) {
+  if (r.collections === 'not allowed') return 'not allowed';
+  if (r.licence) return 'allowed';
+  const up = r.terms && r.terms['Upload permission'];
+  if (typeof up === 'string' && UPLOAD_ALLOWED.test(up)) return 'allowed';
+  if (r.grant) return 'allowed';
+  return 'not stated';
+}
 
 function readRecord(file) {
   return JSON.parse(fs.readFileSync(file || RECORD, 'utf8').replace(/^\uFEFF/, ''));
@@ -88,6 +121,20 @@ function shapeProblems(record) {
       if (!(typeof v === 'string' && v) && !(Array.isArray(v) && v.length && v.every(s => typeof s === 'string' && s))) out.push(who + ': term "' + k + '" is empty');
     }
     if (/@[A-Za-z0-9-]+\.[A-Za-z]/.test(JSON.stringify(r))) out.push(who + ': reading holds a mail address; name the page instead');
+    if (r.licence !== undefined) {
+      const l = r.licence;
+      if (!l || typeof l !== 'object' || typeof l.name !== 'string' || !l.name) out.push(who + ': licence names no licence');
+      else if (l.at !== undefined && (typeof l.at !== 'string' || !l.at || typeof l.by !== 'string' || !l.by || typeof l.read !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(l.read))) {
+        out.push(who + ': a licence the page points to says where it is, when it was read and by whom');
+      }
+    }
+    if (r.grant !== undefined) {
+      const words = r.terms && typeof r.terms === 'object' ? Object.keys(r.terms).map(k => [].concat(r.terms[k]).join(' ')).join('\n') : '';
+      if (typeof r.grant !== 'string' || !r.grant || words.indexOf(r.grant) < 0) out.push(who + ': grant is not the page\'s own words in a term');
+    }
+    if (COLLECTIONS.indexOf(r.collections) >= 0 && ruled(r) !== r.collections) {
+      out.push(who + ': reads "' + r.collections + '", and the rule (records/README.md, What makes a reading) gives "' + ruled(r) + '"');
+    }
   }
   return out;
 }
@@ -149,7 +196,7 @@ function text(record) {
   return JSON.stringify(record, null, 2) + '\n';
 }
 
-module.exports = { RECORD, COLLECTIONS, readRecord, shapeProblems, refusals, collectionModIds, updated, text };
+module.exports = { RECORD, COLLECTIONS, readRecord, ruled, shapeProblems, refusals, collectionModIds, updated, text };
 
 if (require.main === module) {
   const a = process.argv.slice(2);
