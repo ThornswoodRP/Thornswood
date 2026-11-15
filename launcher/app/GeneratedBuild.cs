@@ -252,7 +252,7 @@ namespace Thornswood
                 CoveredResult all = CoveredBodies.Check(game, true, Say);
                 if (all.Nude > 0 || all.Unread > 0)
                     throw new GeneratedStop("A body in " + game + " is nude, or cannot be read (see above), so nothing was recorded and the game does not start on it (issue #405). " +
-                        "The mesh named above comes from a mod in Vortex: take that mod out of the Thornswood profile, deploy, and play again.");
+                        "The mesh named above comes from a mod in Vortex: take that mod out of the Thornswood profile, deploy, and play again.", all.Errors.Count > 0 ? all.Errors[0] : null);
             }
 
             // ------------------------------------------------------------ the record
@@ -597,7 +597,7 @@ namespace Thornswood
             // The bodies it built, read before any is put in place.
             CoveredResult covered = CoveredBodies.Check(stageRoot, false, Say);
             if (covered.Nude > 0 || covered.Unread > 0)
-                throw new GeneratedStop("A body BodySlide built is not covered, or cannot be read (see above). Nothing was put in the folder (issue #405).");
+                throw new GeneratedStop("A body BodySlide built is not covered, or cannot be read (see above). Nothing was put in the folder (issue #405).", covered.Errors.Count > 0 ? covered.Errors[0] : null);
 
             foreach (string f in built) outputs.Add(PutOutput(f, "Data\\" + f.Substring(stageData.Length + 1)));
             Line(string.Format(CultureInfo.InvariantCulture, "  built {0} file(s) and put them in the folder", built.Length), "Green");

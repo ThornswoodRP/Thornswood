@@ -105,17 +105,20 @@ $breaks = [ordered]@{
     'M5' = @('the key is named by the wrong part of the pass', "pass.Substring(pass.LastIndexOf('.') + 1)", "pass.Substring(pass.IndexOf('.') + 1)")
 }
 $sources = @((StandIns 'Thornswood'))
+# JoinPass says a caught exception through Failure (#4633), in each namespace.
+$failure = [IO.File]::ReadAllText((Join-Path (Split-Path -Parent $src) 'Failure.cs'))
 foreach ($id in $breaks.Keys) {
     $b = $breaks[$id]
     $found = $real.Contains($b[1])
     Yes ("the break '" + $b[0] + "' still finds its text in JoinPass.cs") $found
     if (-not $found) { continue }
     $sources += (StandIns ('JoinPass' + $id))
+    $sources += $failure.Replace('namespace Thornswood', 'namespace JoinPass' + $id)
     $sources += $real.Replace($b[1], $b[2]).Replace('namespace Thornswood', 'namespace JoinPass' + $id)
 }
 
 $asm = $null
-try { $asm = Add-LauncherType -File $src -Source $sources } catch { Write-Host ('      ' + $_.Exception.Message) }
+try { $asm = Add-LauncherType -File $src, (Join-Path (Split-Path -Parent $src) 'Failure.cs') -Source $sources } catch { Write-Host ('      ' + $_.Exception.Message) }
 Yes 'JoinPass.cs builds with its stand-ins, the way the project builds it' ($null -ne $asm)
 if ($null -eq $asm) { Done }
 

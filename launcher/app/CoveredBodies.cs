@@ -199,7 +199,11 @@ namespace Thornswood
                 {
                     if (!(ex is IOException) && !(ex is UnauthorizedAccessException) && !(ex is InvalidDataException)) throw;
                     r.Unread++;
-                    line(string.Format(CultureInfo.InvariantCulture, "  UNREAD   {0,-24} {1}", name, Failure.Why("CoveredBodies, " + name, ex, name)), "Red");
+                    r.Errors.Add(ex);
+                    string unread = ex is InvalidDataException
+                        ? "is not a mesh this check can read; reinstall the mod that carries it, or take it out of the Thornswood profile"
+                        : "could not be opened; close any program that has it open (BodySlide, Outfit Studio, NifSkope) and try again";
+                    line(string.Format(CultureInfo.InvariantCulture, "  UNREAD   {0,-24} {1}", name, unread), "Red");
                     continue;
                 }
                 string list = string.Join(", ", shapes);
@@ -295,6 +299,14 @@ namespace Thornswood
     {
         public int Nude, Unread;
         public List<string> Lines = new List<string>();
+        /// <summary>
+        /// The exception behind each UNREAD line, kept whole. The line says
+        /// what to do in this file's own words; the stop that follows carries
+        /// the first of these as its inner exception, so the launcher writes it
+        /// to launcher.log through Failure (#4633), which this file cannot
+        /// reach because Generated.ps1 compiles it alone.
+        /// </summary>
+        public List<Exception> Errors = new List<Exception>();
         public int ExitCode { get { return Unread > 0 ? 1 : Nude > 0 ? 2 : 0; } }
     }
 }

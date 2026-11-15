@@ -28,6 +28,12 @@ function Yes([string]$name, [bool]$ok) {
 # Failure.cs is the one reader. Swallow.cs writes the whole exception to
 # launcher.log, which is where Windows' words belong.
 $readers = @('Failure.cs', 'Swallow.cs')
+# Compiled outside the launcher too, by the scripts that sign and publish and
+# by the box's deploy agent, so it cannot reach Failure: #6168 holds its fix,
+# which is a change to code that signs. Named here so it is never missed.
+$waits = @{ 'Signature.cs' = '#6168' }
+foreach ($w in $waits.Keys) { Write-Host ('NOTE ' + $w + ' still shows a Message; waits on ' + $waits[$w]) }
+$readers += @($waits.Keys)
 $shown = New-Object System.Collections.Generic.List[string]
 foreach ($f in Get-ChildItem -LiteralPath $app -Filter '*.cs' -File) {
     if ($readers -contains $f.Name) { continue }

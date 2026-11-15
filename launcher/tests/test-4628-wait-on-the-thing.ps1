@@ -85,7 +85,9 @@ function Body([string]$src, [string]$start) {
 }
 function Run-Built([string]$src, [string]$label) {
     $built = $null
-    try { $built = Build-LauncherCode -Source $src -Exe }
+    # The real Failure beside each driver: CloseGame keeps why Windows refused
+    # through it (#4633), and each driver stands in Swallow, which it needs.
+    try { $built = Build-LauncherCode -Source $src -File (Join-Path $AppDir 'Failure.cs') -Exe }
     catch { ($_.Exception.Message -split "`n") | Where-Object { $_ -match 'error' } | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
     Yes "$label builds the way the project builds" ($null -ne $built)
     if (-not $built) { return @() }

@@ -259,7 +259,7 @@ namespace Thornswood
             foreach (FromGameFile f in MadeFromGame.Make(off))
                 if (off.Contains(f.Rel) && f.Problem != null)
                 {
-                    why = f.Problem.TrimEnd('.');
+                    why = MadeFromGame.Said(f);
                     mod = MadeFromGame.FromMod(f.Rel);
                     last = f.Rel.Equals(LastPlugin.File, StringComparison.OrdinalIgnoreCase);
                     english = f.NotEnglish;

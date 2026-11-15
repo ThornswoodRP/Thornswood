@@ -80,7 +80,7 @@ Yes 'MadeFromGame counts it out of date only when the game folder holds a recipe
 Yes '  and makes it only when it is out of date' ($mfg -match 'if \(rels\.Contains\(LastPlugin\.File\)\) l\.Add\(MakeLast\(\)\);' -and $mfg -match 'foreach \(FromGameFile f in Make\(off\)\)')
 $upkeep = Src (Join-Path $App 'Upkeep.cs')
 Yes 'Scan says to switch Skyrim to English when an English table is missing (#4007, Patrick''s A)' ($upkeep -match 'english = f\.NotEnglish;' -and $upkeep -match 'english \? "Thornswood plays in English: in Steam, right click Skyrim Special Edition, Properties, Language' -and
-    (Src (Join-Path $App 'MadeFromGame.cs')) -match 'catch \(LastPlugin\.CannotMake ex\) \{ f\.Problem = ex\.Message; f\.NotEnglish = ex\.NotEnglish; \}')
+    (Src (Join-Path $App 'MadeFromGame.cs')) -match 'catch \(LastPlugin\.CannotMake ex\) \{ f\.Problem = Failure\.Why\("MadeFromGame, the last plugin", ex\); f\.NotEnglish = ex\.NotEnglish; \}')
 Yes 'Scan names it with the collection to put right in Vortex' ($upkeep -match 'MadeFromGame\.Make\(off\)' -and $upkeep -match 'last \? "Install the collection revision Thornswood pins in Vortex and press Deploy there')
 $verify = Src (Join-Path $App 'Verify.cs')
 Yes 'Verify''s Fix never fetches it, from the release or the server (#3386)' (

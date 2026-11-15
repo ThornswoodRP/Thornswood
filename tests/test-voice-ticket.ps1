@@ -222,8 +222,12 @@ namespace NS
 }
 '@
 $cs = $cs.Replace('namespace NS', 'namespace ' + $ns).Replace('TOKENHTTP', $http).Replace('ESCAPE', $escape).Replace('REFUSAL', $refusal).Replace('FETCH', $fetch)
+# FetchToken says a caught exception through Failure, which writes it through
+# Swallow (#4633): the real Failure in this namespace, and a stand-in Swallow.
+$failureCs = [IO.File]::ReadAllText((Join-Path (Split-Path -Parent $VoicePath) 'Failure.cs')).Replace('namespace Thornswood', 'namespace ' + $ns)
+$swallowCs = "namespace $ns { static class Swallow { public static void Note(string where, System.Exception e) { } } }`n"
 $compiled = $true
-try { $null = Add-LauncherType -Source $cs }
+try { $null = Add-LauncherType -Source $cs, $failureCs, $swallowCs }
 catch { $compiled = $false; Write-Host $_.Exception.Message }
 Yes 'FetchToken compiles against the stubs, with the .NET 10 SDK' $compiled
 if (-not $compiled) { Done }

@@ -86,7 +86,7 @@ namespace Thornswood
             foreach (FromGameFile f in Make(off))
             {
                 if (!off.Contains(f.Rel)) continue;
-                if (f.Problem != null) { not.Add(Path.GetFileName(f.Rel) + ": " + f.Problem.TrimEnd('.')); continue; }
+                if (f.Problem != null) { not.Add(Path.GetFileName(f.Rel) + ": " + Said(f)); continue; }
                 Write(Path.Combine(Paths.Game, f.Rel), f.Bytes);
                 wrote.Add(Path.GetFileName(f.Rel));
             }
@@ -95,6 +95,19 @@ namespace Thornswood
             if (not.Count > 0)
                 said.Add("Could not make " + string.Join("; ", not.ToArray()) + ". Until that is put right " + Shows(off) + ".");
             return string.Join(" ", said.ToArray());
+        }
+
+        /// <summary>
+        /// Why a file was not made, as a clause: FromGame's own words, and
+        /// when it caught an exception, that exception through Failure, which
+        /// writes it whole to launcher.log (#4633). FromGame keeps the
+        /// exception rather than its Message because scripts compile it alone.
+        /// </summary>
+        public static string Said(FromGameFile f)
+        {
+            string problem = f.Problem.TrimEnd('.');
+            if (f.Error == null) return problem;
+            return problem + " (" + Failure.Why("MadeFromGame, " + f.Rel, f.Error, f.Rel) + ")";
         }
 
         /// <summary>Whether the file is one of the collection's mods' menus rather than one of the game's.</summary>
