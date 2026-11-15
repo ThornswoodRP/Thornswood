@@ -48162,6 +48162,23 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   on PANEL_PROPERTY, which draws game/ui/thornswood-repair.js. Each row's
   button sends /repair mend with that piece. Nobody is told to type either.
 
+  WHO MENDS A PIECE, AND WHERE (#4578). Decided 21 October: gear is mended
+  by the profession that makes it, at that profession's own bench (smiths
+  at the forge, tailors at their bench), not by anybody holding a kit. A
+  repair used to be checked against the kit alone, so a cook in a field
+  mended a sword. A piece's makers are read off the tables the bench gate
+  reads: each recipe whose output is the piece names its owner
+  (RECIPES_BY_ID), and the bench it is made at is the bench whose rows hold
+  that recipe (BENCH_ACCESS). A piece no recipe makes, a unique or a
+  dungeon find, is mended by the trade that makes its kit, at the bench the
+  kit is made at. The bench a person stands at is the server's own
+  reckoning: the references around them (getNeighborsByPosition), each
+  furniture base the bench table knows (BENCH_BY_BASE), in their cell and
+  within REPAIR_REACH. Nothing is remembered from an earlier press, and the
+  client names no bench. Anywhere else the panel row and the refusal say
+  where it is mended, and by whom. The kit, the 120% repair and who reaches
+  it (repairTo) are unchanged.
+
   NOTHING HERE TOUCHES A NUMBER ON THE PAGE. 120% does not yet add 5% to a
   weapon's damage or an armour piece's rating: the server works damage out
   in the fork's TES5DamageFormula, which this file cannot reach.
@@ -48193,6 +48210,23 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   var CLOCK_PROPERTY = 'thornswoodDull';
   // The repair panel's view, the owner's only (game/ui/thornswood-repair.js).
   var PANEL_PROPERTY = 'thornswoodRepairView';
+  // How near a bench a person stands to mend at it (#4578): the reach the
+  // key cut at a forge uses for standing at one (MOLD_REACH in property).
+  var REPAIR_REACH = 400;
+  /*
+    What a person calls each bench a weapon or a garment is made at, by the
+    editor id BENCH_ACCESS names it by. test-4578-repair-at-bench.js fails
+    when a bench that makes one has no words here.
+  */
+  var BENCH_WORDS = {
+    CraftingSmithingForge: 'a forge',
+    CraftingSmithingSkyforge: 'the skyforge',
+    CraftingTanningRack: 'a tanning rack',
+    MCE_CraftingLoom: 'a loom',
+    ThornswoodCraftingWoodworking: 'a woodworking bench',
+    DLC2StaffEnchanter: 'a staff enchanter',
+    DLC1CraftingDawnguard: 'the Dawnguard bench'
+  };
 
   /*
     THE THREE KITS, by what they mend. half is the half that makes it and
@@ -48450,6 +48484,97 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       return CONDITION.highest;
     }
 
+    /*
+      WHO MAKES A PIECE, AND AT WHICH BENCH (#4578): the output of every
+      owned recipe, to { prof, bench } pairs, read once out of the recipe
+      table and the bench table. prof is the owner in lower case, the key
+      the character's prof is (benchToolKey reads it the same way); bench
+      is the BENCH_ACCESS key whose rows hold the recipe.
+    */
+    var makers = null;
+    var access = null;
+    function makersTable() {
+      if (makers) { return makers; }
+      var recipes = api.recipes() || {};
+      access = api.benchAccess() || {};
+      makers = {};
+      for (var bench in access) {
+        if (!own(access, bench)) { continue; }
+        // A shut bench (the sharpening wheel, the armour table) is nobody's
+        // bench, so nothing is mended at it.
+        if (!access[bench] || access[bench].shut) { continue; }
+        var rows = access[bench].rows || [];
+        for (var i = 0; i < rows.length; i++) {
+          var r = own(recipes, rows[i]) ? recipes[rows[i]] : null;
+          var prof = (r && r.owner) ? String(r.owner).toLowerCase() : '';
+          if (!prof || !r.out) { continue; }
+          var list = own(makers, r.out) ? makers[r.out] : (makers[r.out] = []);
+          var had = false;
+          for (var j = 0; j < list.length; j++) {
+            if (list[j].prof === prof && list[j].bench === bench) { had = true; break; }
+          }
+          if (!had) { list.push({ prof: prof, bench: bench }); }
+        }
+      }
+      return makers;
+    }
+
+    /** Who mends a piece and where: its own makers, else its kit's. */
+    function makersOf(baseId, kind) {
+      var t = makersTable();
+      var desc = String(api.descOf(baseId) || '');
+      if (desc && own(t, desc)) { return t[desc]; }
+      var kit = kits[kind];
+      return (kit && kit.item && own(t, kit.item)) ? t[kit.item] : [];
+    }
+
+    function benchWords(key) {
+      var name = (access && own(access, key) && access[key]) ? String(access[key].name || '') : '';
+      return own(BENCH_WORDS, name) ? BENCH_WORDS[name] : 'the bench it is made at';
+    }
+
+    /** The benches in a list of makers, as a person reads them: 'a forge or a skyforge'. */
+    function placesOf(list) {
+      var words = [];
+      for (var i = 0; i < list.length; i++) {
+        var w = benchWords(list[i].bench);
+        if (words.indexOf(w) === -1) { words.push(w); }
+      }
+      return words.join(' or ');
+    }
+
+    /*
+      WHY THIS PERSON CANNOT MEND THIS PIECE WHERE THEY STAND, or '' when
+      they can. here is the bench keys they stand at (api.benchesHere). The
+      wrong trade is said first, because no bench changes that.
+    */
+    function whereToMend(state, here, p) {
+      var list = makersOf(p.entry.baseId, p.kind);
+      if (!list.length) {
+        return 'Nobody makes your ' + p.name + ' or its kit, so nobody can mend it yet.';
+      }
+      var prof = (state && state.prof) ? String(state.prof).toLowerCase() : '';
+      var mine = [];
+      var trades = [];
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].prof === prof) { mine.push(list[i]); }
+        if (trades.indexOf(list[i].prof) === -1) { trades.push(list[i].prof); }
+      }
+      if (!mine.length) {
+        var by = [];
+        for (var t = 0; t < trades.length; t++) {
+          var theirs = list.filter(function (m) { return m.prof === trades[t]; });
+          by.push(aWord(trades[t]) + ' at ' + placesOf(theirs));
+        }
+        return 'Your ' + p.name + ' is ' + trades.map(function (x) { return aWord(x) + '\'s'; }).join(' or ') +
+               ' work. It is mended by ' + by.join(' or ') + '.';
+      }
+      for (var k = 0; k < mine.length; k++) {
+        if (here.indexOf(mine[k].bench) !== -1) { return ''; }
+      }
+      return 'Your ' + p.name + ' is mended at ' + placesOf(mine) + '. Stand at one and mend it there.';
+    }
+
     function heldOf(entries, id) {
       var n = 0;
       for (var i = 0; i < entries.length; i++) {
@@ -48483,6 +48608,12 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
         return no('Your ' + p.name + ' is mended with ' + aWord(kit.name) +
                   ', and no ' + kit.name + ' has been made in the world yet.');
       }
+      var state = null;
+      try { state = api.stateOf(actorId); } catch (e) { state = null; }
+      // Only the piece's own trade, at its own bench (#4578), before the kit
+      // is looked for: a kit in the pack changes neither.
+      var where = whereToMend(state, api.benchesHere(actorId) || [], p);
+      if (where) { return no(where); }
       var k = -1;
       for (var i = 0; i < entries.length; i++) {
         if (entries[i] && entries[i].baseId === id && Number(entries[i].count) > 0) { k = i; break; }
@@ -48492,8 +48623,6 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
         return no('Your ' + p.name + ' is mended with ' + aWord(kit.name) + ', and you have none. ' +
                   maker.charAt(0).toUpperCase() + maker.slice(1) + ' makes them.');
       }
-      var state = null;
-      try { state = api.stateOf(actorId); } catch (e) { state = null; }
       var to = repairTo(state, p.kind);
       if (p.cond >= to) {
         return no('Your ' + p.name + ' is at ' + p.cond + '%. A repair by you would not raise it.');
@@ -48551,6 +48680,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       }
       var rows = [];
       var byKey = {};
+      var here = api.benchesHere(actorId) || [];
       var pieces = piecesIn(entries);
       for (var i = 0; i < pieces.length; i++) {
         var p = pieces[i];
@@ -48564,9 +48694,12 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
           byKey[rowKey].worn = byKey[rowKey].worn || worn;
           continue;
         }
+        // Where it is mended, and by whom, when it is not here (#4578).
+        var where = whereToMend(state, here, p);
         var row = { base: p.entry.baseId.toString(16), cond: p.cond, name: p.name, count: n, worn: worn,
                     kind: p.kind, kit: kits[p.kind].name, maker: kits[p.kind].maker, to: to,
-                    can: p.cond < to && held[p.kind] > 0 };
+                    can: !where && p.cond < to && held[p.kind] > 0 };
+        if (where) { row.where = where; }
         byKey[rowKey] = row;
         rows.push(row);
       }
@@ -48913,6 +49046,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
 
   g.__thornswoodDurabilityCreate = create;
   g.__thornswoodDurabilityKits = KITS;
+  g.__thornswoodDurabilityBenchWords = BENCH_WORDS;
   if (typeof mp === 'undefined' || !mp) { return; }
 
   try {
@@ -49032,6 +49166,36 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     },
     nameOf: displayName,
     idOf: idOf,
+    // The tables the bench gate reads, for who makes a piece and where (#4578).
+    recipes: function () { return table('RECIPES_BY_ID'); },
+    benchAccess: function () { return BENCH_ACCESS; },
+    descOf: function (baseId) { return String(mp.getDescFromId(baseId) || ''); },
+    /*
+      The benches this person stands at (#4578), by the server's own
+      reckoning: what the engine has around their position, each a furniture
+      base the bench table knows, in their cell and within REPAIR_REACH.
+      Answers the BENCH_ACCESS keys, once each.
+    */
+    benchesHere: function (actorId) {
+      var cell = String(mp.get(actorId, 'worldOrCellDesc') || '');
+      var pos = mp.get(actorId, 'pos');
+      if (!cell || !pos) { return []; }
+      var near = mp.getNeighborsByPosition(cell, pos) || [];
+      var out = [];
+      for (var i = 0; i < near.length; i++) {
+        var id = near[i];
+        if (!id || id === actorId) { continue; }
+        var base = String(mp.get(id, 'baseDesc') || '');
+        if (!own(BENCH_BY_BASE, base)) { continue; }
+        if (String(mp.get(id, 'worldOrCellDesc') || '') !== cell) { continue; }
+        var at = mp.get(id, 'pos');
+        if (!at) { continue; }
+        var dx = at[0] - pos[0], dy = at[1] - pos[1], dz = at[2] - pos[2];
+        if (Math.sqrt(dx * dx + dy * dy + dz * dz) > REPAIR_REACH) { continue; }
+        if (out.indexOf(BENCH_BY_BASE[base]) === -1) { out.push(BENCH_BY_BASE[base]); }
+      }
+      return out;
+    },
     stateOf: function (actorId) {
       var C = g.__thornswoodCharacter;
       return (C && C.stateOf) ? C.stateOf(actorId) : null;
