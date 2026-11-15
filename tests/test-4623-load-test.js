@@ -53,7 +53,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const BOT = path.join(ROOT, 'scripts', 'bot');
 const { makeProxy, addressFor } = require(path.join(BOT, 'load-proxy.js'));
-const { LoadBot, MOVE_MS, QUEST_REACH, QUEST_SAID, MERCHANT_VIEW } = require(path.join(BOT, 'load-bots.js'));
+const { LoadBot, MOVE_MS, QUEST_REACH, QUEST_SAID, QUEST_ROW_WHY, MERCHANT_VIEW } = require(path.join(BOT, 'load-bots.js'));
 const { windowOf, perPerson, markdown, startVoice, siteThatSaysYes, someoneOn, playCounts, PLAYS } = require(path.join(BOT, 'Load-Test.js'));
 const http = require('http');
 const net = require('net');
@@ -246,6 +246,8 @@ function questChecks() {
   const literal = (t) => "'" + t.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
   const missing = Object.keys(QUEST_SAID).filter((t) => bundle.indexOf(literal(t)) < 0);
   yes('every quest answer the bots count is a line the merchant block says', missing.length === 0 || console.log('      not said: ' + JSON.stringify(missing)));
+  const notWhy = Object.keys(QUEST_ROW_WHY).filter((t) => bundle.indexOf(literal(t)) < 0);
+  yes('every reason a panel row is counted by is one the commissions\' view writes', notWhy.length === 0 || console.log('      not written: ' + JSON.stringify(notWhy)));
   yes('the panel view they read is the property the merchant block pushes', bundle.indexOf("var property = '" + MERCHANT_VIEW + "';") >= 0);
   yes('they open the panel within the merchant block\'s own reach', new RegExp('var REACH = ' + QUEST_REACH + ';').test(bundle));
   yes('the panel\'s buttons send the quest presses and Step back the way the bots do',
@@ -287,6 +289,12 @@ function questChecks() {
   view([{ id: 'q-winterhold-cook-master-parcel', kind: 'commission', who: 'cook, hearthcook, master', state: 'locked', canTake: false }, locked]);
   b.pump();
   yes('the panel the server pushes is read and its rows counted', b.played.questViews === 1 && b.played.questRowsSeen === 2 && b.played.questRowsTakeable === 0);
+  yes('  each row by its kind and state', b.played['questRow:commission:locked'] === 2);
+  view([Object.assign({}, locked, { state: 'unavailable', check: 'Bring the parcel. No submitted buy price is available for this work.' })]);
+  b.pump();
+  yes('  and a row it cannot take by the reason its check line ends with', b.played['questRow:commission:unavailable'] === 1 && b.played['questWhy:noPrice'] === 1);
+  view([{ id: 'q-winterhold-cook-master-parcel', kind: 'commission', who: 'cook, hearthcook, master', state: 'locked', canTake: false }, locked]);
+  b.pump();
   step();
   yes('with nothing it can take, it picks the trade of the novice work it saw, as the K panel sends it', said[said.length - 1] === '/pick profession cook hearthcook' && b.played.questPicks === 1);
   step();

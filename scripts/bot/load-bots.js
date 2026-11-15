@@ -128,6 +128,20 @@ const QUEST_SAID = {
   'Choose the work again from the trader.': 'questRefused:session',
   'The work could not be changed.': 'questRefused:other'
 };
+// Why the panel shows a commission it cannot be taken (merchant-trading-
+// bundle.ts, the commissions' view: the reason ends its check line), by the
+// count it adds to. The 15 Nov 2026 box crowd saw 499 rows at 50 people and
+// none it could take, with nothing to say why.
+const QUEST_ROW_WHY = {
+  'This trader is finishing a saved transfer.': 'busy',
+  'Trading is waiting for a saved inventory.': 'inventory',
+  'You do not meet this work\'s requirements.': 'requirements',
+  'This work is still resting.': 'resting',
+  'No submitted buy price is available for this work.': 'noPrice',
+  'You already hold three commissions.': 'threeHeld',
+  'This trader cannot accept more work yet.': 'traderFull',
+  'The trader cannot reserve this payment.': 'purse'
+};
 
 function distance(a, b) {
   const dx = a[0] - b[0]; const dy = a[1] - b[1]; const dz = a[2] - b[2];
@@ -293,6 +307,17 @@ class LoadBot extends Bot {
     end();
   }
 
+  // What a row of the panel says: its state, and for one it cannot take,
+  // why (a commission's reason, the end of its check line).
+  tallyRow(q) {
+    if (!q || typeof q !== 'object') { return; }
+    this.did('questRow:' + String(q.kind || 'scarce') + ':' + String(q.state || 'none'));
+    if (q.canTake === true || q.state === 'open') { return; }
+    const check = String(q.check || '');
+    const why = Object.keys(QUEST_ROW_WHY).find((t) => check.endsWith(t));
+    if (why) { this.did('questWhy:' + QUEST_ROW_WHY[why]); }
+  }
+
   // Leave work: the panel's second button on work that is open.
   leave(q, say) {
     const token = Number.isSafeInteger(q.token) && q.token > 0 ? ' @' + q.token : (q.gem ? ' ' + q.gem : this.questGem ? ' ' + this.questGem : '');
@@ -363,7 +388,11 @@ class LoadBot extends Bot {
         if (v && typeof v === 'object') {
           this.questView = v;
           this.did('questViews');
-          if (Array.isArray(v.quests)) { this.did('questRowsSeen', v.quests.length); this.did('questRowsTakeable', v.quests.filter((q) => q && q.canTake === true).length); }
+          if (Array.isArray(v.quests)) {
+            this.did('questRowsSeen', v.quests.length);
+            this.did('questRowsTakeable', v.quests.filter((q) => q && q.canTake === true).length);
+            for (const q of v.quests) { this.tallyRow(q); }
+          }
         }
       }
       if (m.t === MSG.CreateActor && !m.isMe && this.play.length) {
@@ -561,4 +590,4 @@ function main() {
 
 if (require.main === module) { main(); }
 
-module.exports = { LoadBot, MOVE_MS, passKeyOf, UNARMED, FIGHT_REACH, TRADE_REACH, QUEST_REACH, QUEST_SAID, MERCHANT_VIEW };
+module.exports = { LoadBot, MOVE_MS, passKeyOf, UNARMED, FIGHT_REACH, TRADE_REACH, QUEST_REACH, QUEST_SAID, QUEST_ROW_WHY, MERCHANT_VIEW };
