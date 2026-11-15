@@ -144,9 +144,13 @@ signed in, git, the GitHub CLI (`gh`) signed in to an account that is a
 collaborator on the source repo, PowerShell 7, node, Python 3.11 or newer (the
 bot runs on 3.12) with `discord.py` and `Pillow` for the bot scripts, and an
 SSH key the VPS knows. There is no releases clone any more: the feed and its
-baseline are on the VPS (#907). The clone and the `gh` sign-in are the two
-steps above, [Sign the GitHub CLI into your account](#sign-the-github-cli-into-your-account)
-and [Clone the repository](#clone-the-repository).
+baseline are on the VPS (#907). The clone is [Clone the repository](#clone-the-repository);
+from it, check that `gh` is signed in as the collaborator who ships:
+
+```
+cd C:\Thornswood-Repo
+gh auth status
+```
 
 The bot's libraries go into the Python that `py` starts by default, because
 that is the one the bot harnesses run on: `bot\tests\test-*.py`, and
