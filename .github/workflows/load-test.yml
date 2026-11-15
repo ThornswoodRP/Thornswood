@@ -84,8 +84,8 @@ jobs:
 
       # The server build the checkout records: the fork's own build of the
       # pin, every file held to records/server-build.json
-      # (Get-EngineArtifact.ps1), as merge-release.yml takes it to make the
-      # build Release's server zip. Until #6153 this waited for that Release,
+      # (Get-EngineArtifact.ps1), and the server zip it makes of it, as
+      # merge-release.yml takes it for the build Release. Until #6153 this waited for that Release,
       # so every pull request after an engine pin merged went red until the
       # next dev release; the fork keeps its build the moment the pin is
       # recorded, so nothing here waits on main's Releases.
@@ -96,16 +96,21 @@ jobs:
         run: |
           ./scripts/release/Get-EngineArtifact.ps1 -NoPause
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::CI's engine build of the pin could not be fetched; the lines above say why"; exit 1 }
+          # Its server zip, the one the build Release carries, as the deploy
+          # agent unpacks it, server-build.json and all.
+          . ./scripts/release/Read-JsonFile.ps1
           $ciDir = & ./scripts/release/Where.ps1 EngineArtifact
-          $server = Join-Path $ciDir 'build/dist/server'
-          if (-not (Test-Path -LiteralPath (Join-Path $server 'server-build.json') -PathType Leaf)) { Write-Host "::error::$server holds no server-build.json"; exit 1 }
-          Add-Content -LiteralPath $env:GITHUB_ENV -Value ("SERVER_BUILD=" + $server)
-          Write-Host "the server build in $server"
+          $ciStamp = Join-Path $ciDir 'engine-artifact.json'
+          $ciInfo = ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($ciStamp)) $ciStamp
+          $zip = Join-Path (Join-Path (Join-Path $ciDir 'artifact') 'server') ([string]$ciInfo.serverZip)
+          if (-not $ciInfo.serverZip -or -not (Test-Path -LiteralPath $zip -PathType Leaf)) { Write-Host "::error::$ciStamp names no server zip that is there"; exit 1 }
+          Expand-Archive -LiteralPath $zip -DestinationPath (Join-Path $env:RUNNER_TEMP 'build')
+          Write-Host "server build $($ciInfo.serverZip)"
 
       - name: Lay out the load server
         shell: pwsh
         run: |
-          node scripts/bot/New-LoadServer.js --build "$env:SERVER_BUILD" --masters "$env:RUNNER_TEMP/masters" --out "$env:RUNNER_TEMP/server" --shape ${{ matrix.shape }} --seats 200 --download yes
+          node scripts/bot/New-LoadServer.js --build "$env:RUNNER_TEMP/build" --masters "$env:RUNNER_TEMP/masters" --out "$env:RUNNER_TEMP/server" --shape ${{ matrix.shape }} --seats 200 --download yes
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Put the bots on it

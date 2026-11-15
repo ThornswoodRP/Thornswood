@@ -7,7 +7,7 @@
 //                fork's own build of the pin, as Get-EngineArtifact.ps1
 //                takes it and holds every file to the record, the same build
 //                merge-release.yml makes the build Release's server zip from
-//                (the workflow hands over its build\dist\server). Every
+//                (the workflow unpacks that zip, server-build.json and all). Every
 //                file the record names is held to its sha256 again here. A
 //                rebuild is never the same bytes (engine\README.md), and
 //                after the history rewrite the fork built one commit twice
