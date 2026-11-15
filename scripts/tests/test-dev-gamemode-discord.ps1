@@ -3,8 +3,8 @@
 
       pwsh -NoProfile -File .\scripts\tests\test-dev-gamemode-discord.ps1
 
-  A dev gamemode deploy must carry a note and post it to the dev updates
-  channel through Publish-Discord.ps1. Issue #594.
+  A dev gamemode deploy must carry a note and post it to
+  #staff-news through Publish-Discord.ps1. Issue #594.
 
   Read only apart from dot-sourcing Publish-Discord.ps1's functions.
 #>

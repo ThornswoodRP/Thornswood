@@ -9,7 +9,7 @@ news_post_parts, news_once).
 It holds:
   - the files are read in the agent's shape; no folder is no news, a file
     that does not read is left out;
-  - a dev release (dev, site or the bot) goes to the dev updates channel and
+  - a dev release (dev, site or the bot) goes to #staff-news and
     a main one to #news, each tag once however many places it reached;
   - the notes merge-release.yml writes when nothing people would notice
     changed, empty notes, and a release deployed over a day ago are written
@@ -111,7 +111,7 @@ finally:
 state, w = {}, World()
 done = run(state, w, [doc('dev', 'build-1', at=NOW - 30), doc('site', 'build-1', at=NOW - 20),
                       doc('discord', 'build-1', at=NOW - 10)])
-yes('a release that reached dev, the site and the bot is one post, in the dev updates channel',
+yes('a release that reached dev, the site and the bot is one post, in #staff-news',
     done == [('dev', 'build-1', 'post')] and len(w.posts) == 1 and w.posts[0][0] == 'dev')
 yes('it is written down with its message', state['said']['dev']['build-1']['message'] == 501 and w.saves == 1)
 run(state, w, [doc('dev', 'build-1')])

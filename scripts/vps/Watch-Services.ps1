@@ -58,7 +58,7 @@
   Discord where a pasted webhook points and refuses any other channel, and
   the report this prints with no switch says where the one on the box points
   (#2501: until 12 Oct nothing checked, and the bot itself was saying the
-  watchdog's messages in the dev updates channel).
+  watchdog's messages in #staff-news).
 
   Anything else on this box that needs to tell staff something (the bot's own
   wrapper, issue #449) appends a line of the same shape to alerts.jsonl and

@@ -1098,7 +1098,7 @@ if ($removed.Count -gt $MaxRemovals -and -not $AcceptRemovals) {
 # does), and 0 is what a release that went out returns, so Ship went on to
 # its after-release steps. Measured
 # 6 Oct: a dev Ship from main 2a8ebc9b printed "Nothing to do", then posted
-# the previous night's note to the dev updates channel a second time and told
+# the previous night's note to #staff-news a second time and told
 # the dev server "update in 5 min" for a release that did not exist.
 #
 # A DEV PUBLISH WITH NOTHING NEW STILL MARKS THE DEV FEED (Dev-News.ps1). Its

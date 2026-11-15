@@ -26,7 +26,7 @@ from bot_github import GITHUB_API, KNOWN_REPO, _github_get, pass_failure
 # NEWS_DIR as news-<environment>.json (tools\DeployAgent\News.cs), a folder
 # only SYSTEM, Administrators and this bot's account read. Each pass reads
 # them and posts each tag not said yet: a dev release (every merge, to Dev,
-# Site or Discord bot) in the dev updates channel, by the id in
+# Site or Discord bot) in #staff-news, by the id in
 # dev-channel.txt, and a main release in #news, by the id in news-channel.txt
 # (by id and never by name: there are two channels called news). One post a
 # tag, however many environments it reached, written down in news-said.json.
@@ -378,7 +378,7 @@ async def news_once(state, docs, send, save, now=None, about=None):
 
 async def _news_send(channel, parts, said_once):
     cid = DEV_NEWS_ID if channel == 'dev' else MAIN_NEWS_ID
-    where = 'the dev updates channel' if channel == 'dev' else '#news'
+    where = '#staff-news' if channel == 'dev' else '#news'
     ch = client.get_channel(cid) if cid else None
     if ch is None:
         if channel not in said_once:
@@ -396,10 +396,12 @@ async def _news_send(channel, parts, said_once):
     e.set_footer(text=parts['footer'], icon_url=logo)
     if parts.get('at'):
         e.timestamp = datetime.datetime.fromtimestamp(parts['at'], datetime.timezone.utc)
-    # A post in #news pings News Pings, the role its button in #welcome
-    # promises (bot_pings.py); nothing pinged it before 12 Nov 2026. The dev
-    # channel pings nobody.
-    role = ping_role(getattr(ch, 'guild', None), NEWS_PING_ROLE) if channel != 'dev' else None
+    # A post pings News Pings, the role its button in #welcome promises
+    # (bot_pings.py); nothing pinged it before 12 Nov 2026. #staff-news, the
+    # staff side of #news, pings it too, so staff who took the role hear of
+    # a dev release the way everybody hears of a main one (Patrick, 15 Nov
+    # 2026). Only staff see #staff-news, so only staff are pinged there.
+    role = ping_role(getattr(ch, 'guild', None), NEWS_PING_ROLE)
     try:
         msg = await ch.send(content=role.mention if role else None, embed=e,
                             allowed_mentions=discord.AllowedMentions(

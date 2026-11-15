@@ -24,8 +24,8 @@ So this checks:
   S  the bot's start posts the panel in #welcome when it is not there,
      rewrites one with old words, and leaves a current one alone; the
      build's -Posts run never deletes a message with buttons
-  N  a post in #news pings News Pings and nobody else; a post in the dev
-     channel pings nobody
+  N  a post in #news pings News Pings and nobody else; so does one in
+     #staff-news, the dev channel (Patrick, 15 Nov 2026)
   C  Clanker is in the plan, shown apart, under staff and above the rest,
      with no permissions; a build gives it to every bot and to nobody else,
      and -Check gives nothing
@@ -268,8 +268,10 @@ content, allowed = news_ch.sends[0]
 yes('N a post in #news pings News Pings, and only that role',
     content == ROLES['News Pings'].mention and allowed.roles == [ROLES['News Pings']]
     and allowed.everyone is False and allowed.users is False)
-yes('N a post in the dev channel pings nobody',
-    dev_ch.sends[0][0] is None and dev_ch.sends[0][1].roles is False)
+content, allowed = dev_ch.sends[0]
+yes('N a post in #staff-news, the dev channel, pings News Pings too, and only that role',
+    content == ROLES['News Pings'].mention and allowed.roles == [ROLES['News Pings']]
+    and allowed.everyone is False and allowed.users is False)
 
 # ------------------------------------------------------------------ C --
 names = [n for n, _c, _h, _p in B.ROLES]

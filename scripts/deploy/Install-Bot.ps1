@@ -393,7 +393,7 @@ Head 'Staging it'
 # unlike the webhook files that sit on the box, which are not sent by anything
 # and must not be added here.
 #
-# dev-channel.txt goes up again (#5187). It is the dev updates channel, and
+# dev-channel.txt goes up again (#5187). It is #staff-news, and
 # the bot posts each dev release's news there by its id (watch_release_news).
 # From #2501 until then it was not sent: the bot read it for the watchdog until
 # 12 Oct, which put every outage among the dev release posts. The watchdog

@@ -70,7 +70,7 @@
   Ship takes: a title, then "- " lines from the side of the person playing.
   It is the one parameter taken without its name, so a bare string after the
   script is the note; every other one is given by name (#1929).
-  After a successful deploy it posts to the dev updates channel through
+  After a successful deploy it posts to #staff-news through
   Publish-Discord.ps1 -Dev -GamemodeDeploy, the same embed style as a dev
   Ship, with footer "dev server". Issue #594.
 
@@ -79,8 +79,8 @@
                                    next carries the same change to the
                                    launcher and says it, once (#3320)
 
-  A note that says again a title or line the dev feed or the dev updates
-  channel has already had is refused before anything is sent
+  A note that says again a title or line the dev feed or
+  #staff-news has already had is refused before anything is sent
   (Note-Repeats.ps1, #3320). On 22 Oct a deploy and the Ship after it posted
   the same note twice, and that is what -ShipFollows is for: one change, one
   post, from the Ship.
@@ -302,7 +302,7 @@ param(
   # Stop and start the dev server even when only the gamemode changes, which
   # it otherwise loads where it runs (THE RELOAD in the header, #3196).
   [switch]$Restart,
-  # What goes to the dev updates channel after a successful deploy. The same
+  # What goes to #staff-news after a successful deploy. The same
   # shape Ship takes: first line the title, "- " lines the details. Not taken
   # on -PutBack, which sends nothing and posts nothing.
   # Position 0, and the only parameter with one, which leaves every other
@@ -343,7 +343,7 @@ if ($ShipFollows -and $PutBack) { throw '-PutBack posts nothing already, so it d
 if (-not $PutBack -and -not $ShipFollows) {
   if (-not $Note.Trim()) {
     Write-Host ''
-    Write-Host '  STOP. A dev gamemode deploy needs -Note so the dev updates channel' -ForegroundColor Red
+    Write-Host '  STOP. A dev gamemode deploy needs -Note so #staff-news' -ForegroundColor Red
     Write-Host '  can be told what changed. Nothing was sent.' -ForegroundColor Red
     Write-Host ''
     Write-Host '  The shape, written from the side of the person playing:' -ForegroundColor DarkGray
@@ -866,7 +866,7 @@ function Warn-DevRoom {
 
   $unit = 'minutes'
   if ($Minutes -eq 1) { $unit = 'minute' }
-  # Said in the dev updates channel as well as in the game, and waited out,
+  # Said in #staff-updates as well as in the game, and waited out,
   # whoever is on (#5784): until 11 Nov 2026 an empty room went straight
   # down and Discord heard nothing.
   $wasOn = $room.Online
@@ -1474,7 +1474,7 @@ elseif ($deployed -and -not $PutBack) {
   $discord = Join-Path $Here '..\ops\Publish-Discord.ps1'
   if (Test-Path -LiteralPath $discord) {
     Write-Host ''
-    Write-Host 'Telling the dev updates channel...'
+    Write-Host 'Telling #staff-news...'
     try {
       & $discord -Dev -Note $Note -GamemodeDeploy
     } catch {
@@ -1483,7 +1483,7 @@ elseif ($deployed -and -not $PutBack) {
     }
     if ($global:ThornswoodDiscordResult -eq 'failed') { exit 1 }
   } else {
-    Write-Host '  Publish-Discord.ps1 is missing, the dev updates channel was not told.' -ForegroundColor Yellow
+    Write-Host '  Publish-Discord.ps1 is missing, #staff-news was not told.' -ForegroundColor Yellow
     exit 1
   }
 }

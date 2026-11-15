@@ -898,7 +898,7 @@ jobs:
 
       # One Deployment for each app that changed, with the part beside the
       # tag (header, THE DEPLOYMENT). The box deploy agent applies each and
-      # the bot posts the Release's news once, in the dev updates channel,
+      # the bot posts the Release's news once, in #staff-news,
       # however many places it reached.
       - name: Ask the site and the Discord bot for it (Deployments to Site and Discord bot)
         id: appdeploy

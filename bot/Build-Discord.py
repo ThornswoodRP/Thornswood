@@ -873,10 +873,16 @@ PLAN = [
  # What every staff member shares, and the council's own two channels.
  ('Staff', [
    # The staff #news, renamed so it is not taken for the public #news in
-   # Information, which carries the key and the release webhook.
-   dict(kind='announce', name='staff-announcements', mode='staffread',
-        topic='Announcements for every staff member. The council posts here.',
-        was=(('Staff', 'news'),)),
+   # Information, which carries the key and the release webhook. It was
+   # #staff-announcements from #3317 until Patrick named it #staff-news on
+   # 15 Nov 2026, so the staff pair matches the public one: #staff-news
+   # beside #news (releases: a dev release here by the id in
+   # dev-channel.txt, a main one in #news), #staff-updates beside #updates
+   # (restarts: a dev one in #staff-updates, a live one in #updates).
+   dict(kind='announce', name='staff-news', mode='staffread',
+        topic='Every dev release, and announcements for every staff member. '
+              'The council posts here.',
+        was=(('Staff', 'news'), ('Staff', 'staff-announcements'))),
    dict(kind='text',  name='council-decisions', mode='staffread',
         topic='Every council decision, with its date. The council posts here.'),
    # Where staff status updates go (Patrick, 11 Oct), and where the bot says
@@ -1082,7 +1088,7 @@ KEEP = (
     # Their names from before #3317, and the channels #3317 renamed them to.
     # #tickets, the old closed ticket log, is not here any more: Patrick's
     # page card q-3317-ticket-split deletes it (RETIRED).
-    'ticket-log', 'staff-announcements', 'playtester voice',
+    'ticket-log', 'staff-announcements', 'staff-news', 'playtester voice',
     'news', 'help voice', 'support', 'council', 'council-decisions',
 ) + tuple(
     # The in-world roles (#2551, Patrick, 15 Oct: the office roles go in the
