@@ -83,14 +83,41 @@ namespace Thornswood
             File.WriteAllText(Paths.LogFile, new string('z', cap + 100), new UTF8Encoding(false));
             LauncherLog.Line("after legacy log");
             Yes("an existing unbounded log retains only a bounded older tail", new FileInfo(older).Length == cap && File.ReadAllText(Paths.LogFile).Contains("after legacy log"));
-            bool refused = false;
             string normal = Paths.LogFile;
             Paths.LogFile = dir;
-            try { LauncherLog.Line("cannot append to a directory"); }
-            catch (IOException) { refused = true; }
-            catch (UnauthorizedAccessException) { refused = true; }
+            LauncherLog.Line("cannot append to a directory");
+            Yes("a genuine I/O refusal is retained without escaping the writer", LauncherLog.Refused().Contains("cannot append to a directory") && LauncherLog.Refused().Contains("launcher.log refused:"));
+            var refusedStart = new Barrier(threads);
+            for (int t = 0; t < threads; t++)
+            {
+                int id = t;
+                workers[t] = new Thread(delegate()
+                {
+                    refusedStart.SignalAndWait();
+                    for (int i = 0; i < 100; i++) Swallow.Say("refused-concurrent", "held-record=" + id + ":" + i + ";");
+                });
+                workers[t].Start();
+            }
+            foreach (Thread worker in workers) worker.Join();
+            string retained = LauncherLog.Refused();
+            int refusedFound = 0;
+            for (int t = 0; t < threads; t++)
+                for (int i = 0; i < 100; i++)
+                {
+                    string mark = "held-record=" + t + ":" + i + ";";
+                    int at = retained.IndexOf(mark, StringComparison.Ordinal);
+                    if (at >= 0 && retained.IndexOf(mark, at + mark.Length, StringComparison.Ordinal) < 0) refusedFound++;
+                }
+            Yes("every concurrent refused diagnostic is retained exactly once", refusedFound == threads * 100);
+            LauncherLog.Text(new string('\u20ac', cap) + "refused-size-tail");
+            retained = LauncherLog.Refused();
+            Yes("refused history has two bounded UTF-8 generations", Encoding.UTF8.GetByteCount(retained) <= 2 * cap && retained.Contains("refused-size-tail") && !retained.Contains("\ufffd"));
+            string reportLog = Path.Combine(dir, "report-log.txt");
+            LauncherLog.AppendRefusedToReport(reportLog);
+            Yes("the report exports the retained session history", File.ReadAllText(reportLog).Contains("refused-size-tail"));
             Paths.LogFile = normal;
-            Yes("a genuine I/O refusal is reported rather than skipped", refused);
+            LauncherLog.Line("ordinary-write-after-refusal");
+            Yes("a later ordinary write does not retry refused records", File.ReadAllText(normal).Contains("ordinary-write-after-refusal") && !File.ReadAllText(normal).Contains("refused-size-tail") && LauncherLog.Refused().Contains("refused-size-tail"));
             File.Delete(Paths.LogFile);
             File.Delete(older);
             LauncherLog.Text("multiline\nstack detail\n");

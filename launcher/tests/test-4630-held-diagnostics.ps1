@@ -82,6 +82,16 @@ namespace Thornswood {
                     else Shell.UninstallFault(fault);
                     if (!fault.Handled) return 2;
                 }
+                string marker = action == "stall-thread" ? "held-stall-marker" :
+                    action == "caught-exception" ? "original-caught-marker" : "handled-fault-marker";
+                string retained = LauncherLog.Refused();
+                if (!retained.Contains(marker) || !retained.Contains("launcher.log refused: IOException")) return 3;
+                if (action == "caught-exception" && !retained.Contains("held-say-marker")) return 4;
+                string reportLog = Path.Combine(args[0], "report-" + action + ".log");
+                LauncherLog.AppendRefusedToReport(reportLog);
+                string exported = File.ReadAllText(reportLog);
+                if (!exported.Contains(marker) || !exported.Contains("launcher.log refused: IOException")) return 5;
+                Console.WriteLine("RETAINED " + action + " and the file refusal reason, exported while held");
             }
             Console.WriteLine("CONTINUED " + action);
             return 0;

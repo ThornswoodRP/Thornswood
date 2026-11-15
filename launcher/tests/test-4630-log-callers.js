@@ -36,6 +36,6 @@ const keep = fs.readFileSync(path.join(app, 'LocalKeep.cs'), 'utf8');
 yes('age pruning takes the same gate', keep.includes('LauncherLog.Holding(delegate { return PruneLogHeld(path, now); })'));
 yes('age pruning covers the older file too', keep.includes('PruneLog(LauncherLog.Older(Paths.LogFile), now)'));
 const diag = fs.readFileSync(path.join(app, 'Diag.cs'), 'utf8');
-yes('the report snapshot takes the same gate', diag.includes('LauncherLog.Holding(delegate { Grab(work, "launcher.log", Paths.LogFile); return 0; })'));
+yes('the report snapshot takes the same gate', /LauncherLog\.Holding\(delegate\s*\{\s*Grab\(work, "launcher.log", Paths\.LogFile\);\s*LauncherLog\.AppendRefusedToReport\(Path\.Combine\(work, "launcher.log"\)\);\s*return 0;\s*\}\)/.test(diag));
 console.log(failed + ' failed');
 process.exitCode = failed ? 1 : 0;

@@ -468,6 +468,7 @@ namespace $ns
             catch (System.Exception ex) { Swallow.Note(where, ex); }
         }
         public static void Nothing(string where) { Swallow.Note(where, null); }
+        public static string Refused() { return LauncherLog.Refused(); }
     }
 }
 "@
@@ -505,7 +506,7 @@ namespace $ns
             $held = New-Object IO.FileStream($log, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
             try { $door::SetLog($log); $door::Fail('log held open', 'x') } catch { $threw = $_ }
             finally { $held.Dispose() }
-            Yes 'Note propagates a refused log write instead of dropping the record' ($null -ne $threw)
+            Yes 'Note retains a refused log record and reason without escaping its catch' ($null -eq $threw -and $door::Refused().Contains('log held open') -and $door::Refused().Contains('launcher.log refused: IOException'))
         } else {
             Write-Host 'SKIP  4, the log held open: a file held with no sharing refuses a write only on Windows'
         }

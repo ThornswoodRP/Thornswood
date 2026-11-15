@@ -173,8 +173,12 @@ and the report's snapshot. Each UTF-8 file is capped at 4 MiB; crossing that
 limit moves the current file to `launcher.log.1`, replacing the previous older
 file. An unusually large record spans bounded files without splitting UTF-8
 code points. An old unbounded log keeps only its newest 4 MiB on its first
-roll. Both files also follow LocalKeep's 30-day rule. A genuine I/O refusal
-propagates instead of silently discarding a record; there is no log retry.
+roll. Both files also follow LocalKeep's 30-day rule. There is no log retry.
+A refused file write never becomes its caller's exception: fault handlers,
+the stall watch and every catch at a Swallow call continue as written. The
+record and the refusal reason go to two bounded 4 MiB memory generations for
+this session, and the support report appends them to its copy of
+`launcher.log`.
 `Waiting.cs:53 OffThread()`
 runs one piece of work on a pool thread, with the controls off and the wait
 cursor up, for its caller to await: the window's own loop carries on while
