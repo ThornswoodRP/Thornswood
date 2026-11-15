@@ -846,6 +846,8 @@
         "scripts/dev/Build-DoorTable.py",
         "scripts/dev/Build-NpcPopulation.py",
         "scripts/dev/Build-ResourceLocations.py",
+        "scripts/dev/Build-StationSites.py",
+        "scripts/dev/Build-WoodworkingBenches.py",
         "scripts/dev/MerchantRoster.py",
         "scripts/dev/OwnPlugins.ps1",
         "scripts/dev/bsa.py",
@@ -887,7 +889,8 @@
       "fixed": [],
       "out": "-Out",
       "params": {
-        "Server": "^(dev|main)$"
+        "Server": "^(dev|main)$",
+        "Stations": "switch"
       }
     },
     "Ship-Dev": {
