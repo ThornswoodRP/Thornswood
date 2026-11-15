@@ -2447,10 +2447,10 @@
                       "script":  "scripts/vps/Setup-SshKey.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "ssh",
-                      "anchor":  "Invoke-ThornswoodNative { \u0026 ssh -o StrictHostKeyChecking=yes $target \"powershell -NoProfile -EncodedCommand $b64\" }",
+                      "anchor":  "Invoke-ThornswoodNative { \u0026 ssh -o StrictHostKeyChecking=yes $target $line }",
                       "does":  "install-time or outside-the-gate work",
                       "class":  "admin",
-                      "reason":  "sends authorized_keys"
+                      "reason":  "puts the pinned pwsh on a new box and sends authorized_keys"
                   },
                   {
                       "script":  "scripts/vps/Show-BotLog.ps1",

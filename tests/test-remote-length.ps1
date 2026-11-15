@@ -56,11 +56,10 @@ $Limit = 8191
 
 function OnTheWire([string]$script) {
     # Exactly what goes on the command line: the switches, then the script as
-    # base64 of UTF-16, which is what -EncodedCommand takes. The box runs
-    # pwsh since #5356, but a new box's first script (Remote.ps1 -NewBox)
-    # still names powershell, the longer of the two, so that is the bound.
+    # base64 of UTF-16, which is what -EncodedCommand takes. Every script runs
+    # in pwsh on the box since #5356, a new box's first ones included.
     $b = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))
-    return ('powershell -NoProfile -EncodedCommand ').Length + $b.Length
+    return ('pwsh -NoProfile -EncodedCommand ').Length + $b.Length
 }
 
 $files = Get-ChildItem -Path $ToolsPath -Filter *.ps1 -File -Recurse |

@@ -290,7 +290,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [release/Write-EnginePinText.ps1](release/Write-EnginePinText.ps1) | Writes the engine pin's lines in THIRD-PARTY.md and site\data\site\credits.md from the records, or with -Check says which ones differ from them. |
 | [vps/admin/ShipAccess.ps1](vps/admin/ShipAccess.ps1) | Get-ThornswoodShipAccess: the box admin App's token for one release step through the deploy gate (#2841), from scripts\vps\admin\ship-access.js: Actions write on the engine fork and Thornswood, Contents read on Thornswood, ended by GitHub within the hour. |
 | [vps/Backup-Server.ps1](vps/Backup-Server.ps1) | Pulls everything off the server that could not be rebuilt from the repo, and puts it on this machine as a dated zip encrypted with the backup passphrase, thornswood-backup-<yyyyMMdd-HHmm>.zip.enc: in local\backups in the repository (Where.ps1 Backups), or the folder -Out names. |
-| [vps/Bootstrap-VPS.ps1](vps/Bootstrap-VPS.ps1) | Run this ON THE VPS, once, in the PowerShell 5.1 that ships with Windows Server 2022. |
+| [vps/Bootstrap-VPS.ps1](vps/Bootstrap-VPS.ps1) | Run this ON THE VPS, once, in PowerShell 7, which Setup-SshKey.ps1 -NewBox puts on a new box before anything else runs there (#5356). |
 | [vps/Bot-Service.ps1](vps/Bot-Service.ps1) | Runs the Thornswood bot as a Windows service under its own account, and stops and starts it by name (issue #465). |
 | [vps/Box-Run.ps1](vps/Box-Run.ps1) | Runs one verb of the deploy gate on the box (#2841), from any session gh is signed in on, a cloud thread included, with no key to the box. |
 | [vps/BoxFirewall.ps1](vps/BoxFirewall.ps1) | Where the box keeps its firewall rules, and how a change to them takes effect (#3896). |

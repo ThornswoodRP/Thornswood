@@ -129,10 +129,8 @@ if ($PSBoundParameters.ContainsKey('Secret')) {
     exit $LASTEXITCODE
 }
 
-# Everything runs in PowerShell 7 on the box, as its own tasks do (#5356),
-# except Bootstrap-VPS.ps1: it is what puts PowerShell 7 on a new box, so it
-# runs in the Windows PowerShell Windows Server comes with, the only one there
-# until it has run.
-$newBox = ($PSCmdlet.ParameterSetName -eq 'File') -and ((Split-Path -Leaf $File) -eq 'Bootstrap-VPS.ps1')
-Invoke-ThornswoodRemote -Target "$VpsUser@$VpsHost" -SshArgs $sshArgs -Script $full -NewBox:$newBox
+# Everything runs in PowerShell 7 on the box, as its own tasks do, a new
+# box's Bootstrap-VPS.ps1 included: Setup-SshKey.ps1 -NewBox puts pwsh there
+# before anything else runs (#5356).
+Invoke-ThornswoodRemote -Target "$VpsUser@$VpsHost" -SshArgs $sshArgs -Script $full
 exit $LASTEXITCODE

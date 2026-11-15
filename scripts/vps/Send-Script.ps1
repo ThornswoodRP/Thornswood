@@ -146,10 +146,8 @@ function Get-ThornswoodFileScript {
 #             at most $ThornswoodStdinLimit bytes with its line end. A long
 #             script's runner reads none of it, so the script reads it as
 #             its first line either way
-#   -NewBox   run it in the Windows PowerShell a new Windows Server comes
-#             with, for Bootstrap-VPS.ps1 alone, which is what puts
-#             PowerShell 7 on a new box (Remote.ps1 says so). Everything
-#             else runs in pwsh, as the box's own tasks do (#5356).
+#   Everything runs in pwsh, as the box's own tasks do; a new box gets it
+#             first from Setup-SshKey.ps1 -NewBox (#5356).
 function Invoke-ThornswoodRemote {
     param(
         [Parameter(Mandatory = $true)][string]$Target,
@@ -157,11 +155,9 @@ function Invoke-ThornswoodRemote {
         [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Script,
         [switch]$Bypass,
         [int]$Limit = 6000,
-        [AllowEmptyString()][string]$Stdin,
-        [switch]$NewBox
+        [AllowEmptyString()][string]$Stdin
     )
     $shell = 'pwsh'
-    if ($NewBox) { $shell = 'powershell' }
     $weak = @($SshArgs | Where-Object { $_ -match '(?i)StrictHostKeyChecking\s*=\s*(?!yes\b)' })
     if ($weak.Count) { throw ('ssh options with host key checking turned down (' + ($weak -join ', ') + '). Only the box whose key is pinned is talked to. Nothing was sent.') }
     $ssh = @(@($SshArgs | Where-Object { $_ }) + @('-o', 'StrictHostKeyChecking=yes'))
