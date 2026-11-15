@@ -28,13 +28,6 @@
   knows one. The text is never on a command line.
 
   WHICH WAY, the first that fits:
-    -OnTheBox (the staff-notice workflow, on a VPS runner; #3045): ssh to
-        127.0.0.1, the box's own sshd, with the notices key in
-        THORNSWOOD_NOTICE_KEY_B64. The box takes every agent key only from
-        127.0.0.1, and a runner is on the box, so no bridge and no token: the
-        key is no use anywhere else. The host key is checked against the
-        three vps.json pins, and the key and known_hosts live in a folder of
-        this run's own that goes when it ends.
     THORNSWOOD_NOTICE_KEY_B64 and THORNSWOOD_NOTICE_TOKEN set (an agent
         environment given a notices key by Grant-BoxAccess.ps1 -NoticesOnly
         -MakeKey): that key, through the bridge with that token. The box
@@ -53,8 +46,9 @@
         -Check and -Unsay; -Unsay puts the label "notice: take back" on it.
         The board is public, so a notice filed this way is read by anybody:
         one that must stay with staff goes from a machine with ssh. Nothing
-        secret is in the container or crosses it. The ops repository's
-        staff-notice.yml still runs -OnTheBox when started by hand.
+        secret is in the container or crosses it. Until 15 Nov 2026 the ops
+        repository's staff-notice.yml posted from a runner on the box with a
+        notices key of its own; #5314 took both away.
 
   WHAT IT SAYS AND EXITS.
     queued    0, with the id, after the box wrote it to the outbox
@@ -70,10 +64,6 @@
     refused, not found, expired, no watchdog, or the box not reached: 1,
               with why. Nothing was posted. A notice the watchdog's webhook
               said, or one the bot could not delete: 1, with why.
-  In a GitHub Actions job it also writes the box's answer, or why it
-  stopped, as an annotation titled Say-Staff, which the staff-notice run
-  shows.
-
   The notice: 1800 characters at most, 30 an hour for each sender, no
   mentions (the bot and the webhook both send with mentions off).
   tests\test-say-staff.ps1 runs this against the box half in a scratch folder.
@@ -89,8 +79,6 @@ param(
     # Takes a notice back (#3328).
     [Parameter(ParameterSetName = 'Unsay', Mandatory = $true)]
     [string]$Unsay,
-    # The staff-notice workflow's half: this runs on the box itself.
-    [switch]$OnTheBox,
     # Where a notice through GitHub is filed: the board the bot reads (#5187).
     [string]$NoticeRepo = 'ThornswoodRP/Thornswood',
     [string]$VpsHost = '',
@@ -109,15 +97,8 @@ $maxText = 1800
 # The labels the bot reads (bot\bot.py STAFF_NOTICE_LABEL, STAFF_TAKE_BACK_LABEL).
 $noticeLabel = 'notice: staff'
 $takeBackLabel = 'notice: take back'
-$inActions = ($env:GITHUB_ACTIONS -eq 'true')
-
-# An annotation on the job, which GitHub keeps on its check run, so the cloud
-# half reads the answer without reading the log.
-function Note([string]$level, [string]$m) {
-    if ($inActions) { Write-Host ('::' + $level + ' title=Say-Staff::' + ($m -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A')) }
-}
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
-function Die($m) { Note 'error' $m; Write-Host "STOP. $m" -ForegroundColor Red; exit 1 }
+function Die($m) { Write-Host "STOP. $m" -ForegroundColor Red; exit 1 }
 
 $noticeKey = [string]$env:THORNSWOOD_NOTICE_KEY_B64
 $noticeToken = [string]$env:THORNSWOOD_NOTICE_TOKEN
@@ -125,10 +106,7 @@ $withNoticeKey = [bool]($noticeKey -and $noticeToken)
 
 # ------------------------------------------------------------- the way -----
 $route = ''
-if ($OnTheBox) {
-    if (-not $noticeKey) { Die 'THORNSWOOD_NOTICE_KEY_B64 is not set, so there is no key to post with. In the ops repository''s staff-notice workflow it is the NOTICE_KEY_B64 secret of the "notices" environment, which .\scripts\vps\Grant-BoxAccess.ps1 -Name claude -MakeKey -NoticesOnly -ToEnvironment notices puts there from One. Nothing was posted.' }
-    $route = 'box'
-} elseif ($noticeKey -or $noticeToken) {
+if ($noticeKey -or $noticeToken) {
     if (-not $withNoticeKey) { Die 'only one of THORNSWOOD_NOTICE_KEY_B64 and THORNSWOOD_NOTICE_TOKEN is set; a notices key needs both. Grant-BoxAccess.ps1 -NoticesOnly -MakeKey on One makes the pair. Nothing was posted.' }
     $route = 'bridge'
 } elseif (Get-Command ssh -ErrorAction SilentlyContinue) {
@@ -237,7 +215,7 @@ if ($route -eq 'github') {
     # The key, when there is one, for this run only.
     $work = ''
     try {
-        if ($route -eq 'box' -or $route -eq 'bridge') {
+        if ($route -eq 'bridge') {
             $base = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
             $work = Join-Path $base ('thornswood-notice-' + [Guid]::NewGuid().ToString('N'))
             # ssh reads a -o file option up to the first space as one file.
@@ -250,19 +228,6 @@ if ($route -eq 'github') {
             Write-ThornswoodPrivateFile -Path $keyFile -Text ($keyText.Replace("`r`n", "`n").TrimEnd() + "`n")
             $keyText = $null
             $sshArgs = @('-F', 'none', '-i', $keyFile, '-o', 'IdentitiesOnly=yes') + $sshArgs
-        }
-        if ($route -eq 'box') {
-            # The box's own sshd, its host key held to the pins in a
-            # known_hosts of this run's own: nothing in the runner account's
-            # .ssh is read or written. The pins and the user are the
-            # checkout's vps.json alone, not a machine's own override file,
-            # which an earlier job on the same runner account could leave.
-            $pinned = Get-ThornswoodVpsCommitted
-            $knownHosts = Join-Path $work 'known_hosts'
-            try { $null = Add-ThornswoodKnownHost -Address '127.0.0.1' -KnownHosts $knownHosts -Pinned @($pinned.hostKeys) }
-            catch { Die ('the box''s own sshd on 127.0.0.1: ' + $_.Exception.Message) }
-            $sshArgs += @('-o', "UserKnownHostsFile=$knownHosts")
-            $target = ([string]$pinned.user) + '@127.0.0.1'
         }
         if ($route -eq 'bridge') {
             $node = Get-Command node -ErrorAction SilentlyContinue
@@ -292,7 +257,6 @@ if ($route -eq 'github') {
 
 # ------------------------------------------------------------ the answer ---
 $answer = @($out | Where-Object { $_ -match '^(QUEUED|POSTED|WAITING|EXPIRED|NOT FOUND|NOWATCHER|REFUSED|READY|UNSAY|UNSAID)\b' }) | Select-Object -Last 1
-if ($answer -and $route -ne 'github') { Note 'notice' $answer }
 switch -Regex ("$answer") {
     '^QUEUED (\S+)$' {
         Say ('queued ' + $Matches[1] + '. The bot says it in #staff-updates within a minute.') 'Green'

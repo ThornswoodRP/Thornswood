@@ -106,7 +106,7 @@ if ($OnTheBox) {
         Write-ThornswoodPrivateFile -Path $keyFile -Text ($keyText.Replace("`r`n", "`n").TrimEnd() + "`n")
         $keyText = $null
         # The box's own sshd, its host keys held to the checkout's vps.json
-        # pins in a known_hosts of this run's own, as staff-notice.yml does.
+        # pins in a known_hosts of this run's own.
         $pinned = Get-ThornswoodVpsCommitted
         $knownHosts = Join-Path $work 'known_hosts'
         try { $null = Add-ThornswoodKnownHost -Address '127.0.0.1' -KnownHosts $knownHosts -Pinned @($pinned.hostKeys) }
