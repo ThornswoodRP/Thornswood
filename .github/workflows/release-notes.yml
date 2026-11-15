@@ -7,7 +7,7 @@
 #
 # PULL REQUESTS that touch the rules, their tests, the fixture or this file:
 # dotnet test on tools/ReleaseNotes.Tests from the locked packages (every
-# case in tests/fixtures/note-rules-cases.json), and tests/test-note-rules.ps1,
+# case in tests/fixtures/note-rules-cases.json), and scripts/tests/test-note-rules.ps1,
 # which compiles NoteRules.cs with Add-Type the way the scripts do, so a
 # change that pwsh cannot compile fails here and not at a Ship.
 # Read only, no secret.
@@ -19,7 +19,7 @@ on:
       - 'tools/ReleaseNotes/**'
       - 'tools/ReleaseNotes.Tests/**'
       - 'tests/fixtures/note-rules-cases.json'
-      - 'tests/test-note-rules.ps1'
+      - 'scripts/tests/test-note-rules.ps1'
       - '.github/workflows/release-notes.yml'
   workflow_dispatch:
 
@@ -51,4 +51,4 @@ jobs:
           dotnet test tools/ReleaseNotes.Tests --no-restore
       - name: The rules as the release scripts load them
         shell: pwsh
-        run: ./tests/test-note-rules.ps1
+        run: ./scripts/tests/test-note-rules.ps1

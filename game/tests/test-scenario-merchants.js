@@ -214,8 +214,8 @@ yes('H3 and she can trade on: buying 1 settles', say('/merchant buy 1 Iron Ingot
 const BOOTS = 0xa6d7f, BRACERS = 0x86983;        // Fur Boots, Stormcloak Officer Bracers: the novice parcel's goods
 const PARCEL = 'q-windhelm-smith-novice-parcel';
 function parcel() { return (view().quests || []).find(function (q) { return q.id === PARCEL; }) || {}; }
-say('/book price Brenna\'s Forge Fur Boots | 12 | -');
-say('/book price Brenna\'s Forge Stormcloak Officer Bracers | 9 | -');
+say('/book price Brenna\'s Forge Fur Boots | 12 | 15');   // both sides: a one-sided line prices no trader (#4530)
+say('/book price Brenna\'s Forge Stormcloak Officer Bracers | 9 | 12');
 w.moveTo(BRENNA, BOARD.cell, BOARD.pos);
 w.run(2000);
 say('/book submit Brenna\'s Forge');

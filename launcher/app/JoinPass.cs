@@ -97,7 +97,7 @@ namespace Thornswood
             string pass = "";
             string key = "";
             try { pass = Discord.Pass(id, out key, out why); }
-            catch (Exception ex) { why = "Could not ask thornswood.net for a join pass: " + ex.Message; }
+            catch (Exception ex) { why = "Could not ask thornswood.net for a join pass: " + Failure.Say("JoinPass", ex, "thornswood.net"); }
 
             string line = null;
             lock (gate)

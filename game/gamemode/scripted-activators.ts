@@ -2097,7 +2097,7 @@ function kindIsContainer(baseDesc) {
 mp.onActivate = guard('onActivate', function (refrId, casterRefrId) {
   if([0x33fa6,0x846ea,0x846eb].includes(refrId)) {
     if(!casterRefrId)return false;
-    try {notify(casterRefrId,loot(casterRefrId,refrId,mp.get(refrId,'baseDesc')));}
+    try {const line=loot(casterRefrId,refrId,mp.get(refrId,'baseDesc'));if(line){notify(casterRefrId,line);say(casterRefrId,line);}}
     catch(error){try {log('Mammoth dressing refused:',String(error));}catch(logError){}}
     return false;
   }
@@ -2106,7 +2106,8 @@ mp.onActivate = guard('onActivate', function (refrId, casterRefrId) {
     try {
       const quests=globalThis.__thornswoodQuests;
       const text=quests && typeof quests.onActivate==='function' ? quests.onActivate(casterRefrId,refrId) : null;
-      notify(casterRefrId,text || 'This retrieval source is unavailable for now.');
+      const line=text || 'This retrieval source is unavailable for now.';
+      if(line){notify(casterRefrId,line);say(casterRefrId,line);}
     }catch(error){try {log('Retrieval refused:',String(error));}catch(logError){}}
     return false;
   }
@@ -2115,20 +2116,22 @@ mp.onActivate = guard('onActivate', function (refrId, casterRefrId) {
     if(!casterRefrId)return false;
     try {
       const base=mp.get(refrId,'baseDesc');
-      notify(casterRefrId,base===questFishBase?fish(casterRefrId,refrId,base):'This quest water is unavailable for now.');
+      const line=base===questFishBase?fish(casterRefrId,refrId,base):'This quest water is unavailable for now.';
+      if(line){notify(casterRefrId,line);say(casterRefrId,line);}
     }catch(error){try {log('Scarce fishing refused:',String(error));}catch(logError){}}
     return false;
   }
   if([0x10fc57,0x10eb24,0x10e994,0x10e955,0x10e8bb,0x10fc4c].includes(refrId)) {
     if(!casterRefrId)return false;
-    try {notify(casterRefrId,drawGeode(casterRefrId,refrId,mp.get(refrId,'baseDesc')));}
+    try {const line=drawGeode(casterRefrId,refrId,mp.get(refrId,'baseDesc'));if(line){notify(casterRefrId,line);say(casterRefrId,line);}}
     catch(error){try {log('Geode work refused:',String(error));}catch(logError){}}
     return false;
   }
   if([0xf3b51,0xf3b54,0xf3b5d,0x10ffac,0x10ffaf,0x10ffb0,0xf3b56,0x10ffa9].includes(refrId)) {
     if(!casterRefrId)return false;
     try {
-      notify(casterRefrId,harvest(casterRefrId,refrId,mp.get(refrId,'baseDesc')));
+      const line=harvest(casterRefrId,refrId,mp.get(refrId,'baseDesc'));
+      if(line){notify(casterRefrId,line);say(casterRefrId,line);}
     }catch(error){
       try {log('Crimson harvesting refused:',String(error));}catch(logError){}
     }

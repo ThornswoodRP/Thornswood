@@ -565,7 +565,7 @@ namespace Thornswood
             catch (Exception e)
             {
                 if (ws != s) return;
-                Quiet("the voice server did not answer (" + e.Message + ")");
+                Quiet("the voice server did not answer (" + Failure.Plain(e, "the voice server") + ")");
                 ws = null;
                 Lost();
                 return;
@@ -590,7 +590,10 @@ namespace Thornswood
                     if (ws == s) Message(text);
                 }
             }
-            catch (Exception e) { if (ws == s) Quiet("the voice server's socket closed (" + e.Message + ")"); }
+            // A socket the server closed or never opened is looked for again
+            // (Lost); its reason is the debug line, not a swallowed
+            // exception on every reconnect (Failure.Plain).
+            catch (Exception e) { if (ws == s) Quiet("the voice server's socket closed (" + Failure.Plain(e, "the voice server") + ")"); }
             if (ws != s) return;
             ws = null;
             Close(s);
@@ -612,7 +615,7 @@ namespace Thornswood
                         await s.Ws.SendAsync(Encoding.UTF8.GetBytes(m), WebSocketMessageType.Text, true, CancellationToken.None);
                 }
             }
-            catch (Exception e) { if (ws == s) Quiet("could not write to the voice server (" + e.Message + ")"); }
+            catch (Exception e) { if (ws == s) Quiet("could not write to the voice server (" + Failure.Plain(e, "the voice server") + ")"); }
         }
 
         void Opened(Sock s)
@@ -670,7 +673,7 @@ namespace Thornswood
             heard = Now();
             JsonDocument doc;
             try { doc = JsonDocument.Parse(text); }
-            catch (JsonException e) { Quiet("the voice server sent something that is not JSON (" + e.Message + ")"); return; }
+            catch (JsonException e) { Quiet("the voice server sent something that is not JSON (" + Failure.Why("VoiceSession, a message", e, "the voice server's message") + ")"); return; }
             using (doc)
             {
                 JsonElement m = doc.RootElement;
@@ -860,7 +863,7 @@ namespace Thornswood
                 string sdp = pc.Description();
                 SendSdp(id, "offer", sdp);
             }
-            catch (Exception e) { Say("offer failed: " + e.Message); }
+            catch (Exception e) { Say("offer failed: " + Failure.Why("VoiceSession, the offer", e, "the voice peer")); }
         }
 
         void SendSdp(int id, string type, string sdp)
@@ -947,7 +950,7 @@ namespace Thornswood
                     rec.Pc.SetRemote(sdp);
                 }
             }
-            catch (Exception e) { Say("sdp failed: " + e.Message); }
+            catch (Exception e) { Say("sdp failed: " + Failure.Why("VoiceSession, the sdp", e, "the voice peer")); }
         }
 
         void OnIce(JsonElement m)

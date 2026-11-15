@@ -201,7 +201,7 @@ Then in `Thornswood-Repo`:
 which makes a key for the VPS, points ssh at it through the bridge, and
 prints the public line. That is for a machine that already holds a key: since
 31 Oct 2026 no key is made for a new person or machine (Patrick's answer A
-on q-retire-box-keys, #2862), and the keys there are changed only by Patrick (the workflows' two with the deploy gate's Renew-BoxKey verb). Box work from a new machine goes
+on q-retire-box-keys, #2862), and the keys there are changed only by Patrick (the desk's, box-run.yml's key, with the deploy gate's Renew-BoxKey verb). Box work from a new machine goes
 through the gate instead, with `gh` signed in as somebody who may run workflows in the private ops repository, and no key:
 `pwsh scripts/vps/Box-Run.ps1 -Line '<verb>'` ([E. VPS](tools.md#e-vps)). Ships go
 the same way (`Ship-Dev`, `Ship-Main`), so a machine without a key can still
@@ -267,7 +267,7 @@ which records what the game folder holds right now without shipping anything. Do
 straight after the launcher has brought the game up to date, so the baseline is the
 current release and the first real Ship carries only what you changed.
 
-`Publish-Discord.ps1` reads the #news webhook and the dev updates one from
+`Publish-Discord.ps1` reads the #news webhook and the #staff-news one from
 the VPS through `Discord-Hook.ps1`, and a copy in `bot\news-webhook.txt` or
 `bot\dev-webhook.txt` only when the VPS cannot be asked; without either, Ship
 says so and carries on.

@@ -91,7 +91,7 @@ Yes 'it hands Vortex the link only when Vortex answers nxm links' ($open.Contain
     $open.IndexOf('if (vortex)') -lt $open.IndexOf('new ProcessStartInfo(nxm)'))
 Yes 'and opens the revision''s page otherwise' ($open.Contains('string page = CollectionLink();') -and $open.Contains('new ProcessStartInfo(page)') -and
     $open.IndexOf('new ProcessStartInfo(page)') -gt $open.IndexOf('new ProcessStartInfo(nxm)'))
-Yes 'a failure to open says so in the log' ($open.Contains('Log("Could not open the collection: " + ex.Message);'))
+Yes 'a failure to open says so in the log' ($open.Contains('Log("Could not open the collection: " + Failure.Say('))
 Yes 'the card''s button, the missing-mods box and the Diagnostics cards are OpenCollection' (
     (Code (Method $update 'static void InstallNowPressed()')).Contains('OpenCollection();') -and
     ([regex]::Matches((Code $play), 'OpenCollection\(\);')).Count -eq 1 -and

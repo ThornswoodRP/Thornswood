@@ -81,7 +81,13 @@ namespace Thornswood
             win.Cursor = new Cursor(StandardCursorType.Wait);
         }
 
-        /// <summary>The last of the waits to end gives the window back as it was.</summary>
+        /// <summary>
+        /// Set when an update closed the window while a wait ran (Shell.cs,
+        /// win.Closing): the close is made again once the last wait ends.
+        /// </summary>
+        static bool closeWhenWaitsEnd;
+
+        /// <summary>The last of the waits to end gives the window back as it was, or closes it for an update that is waiting (#6129).</summary>
         static void LetWindowGo()
         {
             waitDepth--;
@@ -90,6 +96,11 @@ namespace Thornswood
             heldContent = null;
             win.Cursor = cursorBeforeWait;
             cursorBeforeWait = null;
+            if (closeWhenWaitsEnd)
+            {
+                closeWhenWaitsEnd = false;
+                Dispatcher.UIThread.Post(delegate { win.Close(); });
+            }
         }
 
         /// <summary>

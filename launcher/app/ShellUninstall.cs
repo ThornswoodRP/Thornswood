@@ -43,7 +43,7 @@ namespace Thornswood
     /// shut, because nothing has said this build is current, which is where
     /// updatePending starts.
     ///
-    /// tests\test-uninstall-entry.js walks everything this path can reach and
+    /// launcher\tests\test-uninstall-entry.js walks everything this path can reach and
     /// fails if any of that startup work comes back into it.
     /// </summary>
     static partial class Shell

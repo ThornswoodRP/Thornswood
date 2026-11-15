@@ -778,7 +778,7 @@ namespace Thornswood
                 try { oursNow = Ours(deployedHere); }
                 catch (Exception ex)
                 {
-                    return "Thornswood could not read its own records of which files are its own (" + ex.Message.TrimEnd('.') +
+                    return "Thornswood could not read its own records of which files are its own (" + Failure.Why("OwnGame, its own records", ex) +
                            "), so it cannot tell them from mods in the Steam copy yet. Close anything that has Thornswood's Profile folder open and try again.";
                 }
             }
@@ -1390,7 +1390,7 @@ namespace Thornswood
                 }
                 catch (Exception ex)
                 {
-                    left.Add(f.Rel + "  (could not be brought over: " + ex.Message + ")");
+                    left.Add(f.Rel + "  (could not be brought over: " + Failure.Why("OwnGame.Make, " + f.Rel, ex, f.Rel) + ")");
                     failed.Add(f.Rel);
                     continue;
                 }
@@ -1542,7 +1542,7 @@ namespace Thornswood
                 catch (Exception ex)
                 {
                     throw new Exception("The list of what was left out of Thornswood's folder last time, " + LeftOutFile +
-                                        ", could not be read (" + ex.Message.TrimEnd('.') + "), so nothing was changed.");
+                                        ", could not be read (" + Failure.Why("OwnGame, reading a file", ex) + "), so nothing was changed.");
                 }
                 foreach (string line in before)
                     if (line.Trim().Length > 0 && !InScope(LeftRel(line), scope)) leftBefore.Add(line);
@@ -1657,7 +1657,7 @@ namespace Thornswood
                 }
                 catch (Exception ex)
                 {
-                    left.Add(f.Rel + "  (could not be brought over: " + ex.Message + ")");
+                    left.Add(f.Rel + "  (could not be brought over: " + Failure.Why("OwnGame.Refresh, " + f.Rel, ex, f.Rel) + ")");
                     failed.Add(f.Rel);
                     if (exists && had) lines.Add(r.Kind + "|" + r.Origin + "|" + r.Size + "|" + r.Ticks + "|" + f.Rel);
                     continue;
@@ -1894,7 +1894,7 @@ namespace Thornswood
         /// <summary>
         /// Puts collection plugins the golden list expects but Game\Data does not
         /// have back into Data, from what Vortex has deployed (or its staging).
-        /// Does not remove anything from plugins.txt: Gavin's Diagnostics case
+        /// Does not remove anything from plugins.txt: Patrick's Diagnostics case
         /// (CFTO-Lanterns, CFTO-CoveredCarriages, BeardMaskFix and the like) is
         /// light plugins the person wants kept on, and the server never serves
         /// light plugins, so Fix cannot fetch them. Refreshing the own folder,
@@ -1950,8 +1950,7 @@ namespace Thornswood
                     try { why = WhyNot(cfg, srcOwn); }
                     catch (Exception ex)
                     {
-                        Swallow.Note("OwnGame.RestoreMissingPlugins, asking whether the own folder can refresh", ex);
-                        why = ex.Message;
+                        why = Failure.Why("OwnGame.RestoreMissingPlugins, asking whether the own folder can refresh", ex);
                     }
                 }
                 else why = "Vortex has no folder Thornswood can refresh from.";
@@ -1974,8 +1973,7 @@ namespace Thornswood
                     }
                     catch (Exception ex)
                     {
-                        Swallow.Note("OwnGame.RestoreMissingPlugins, refreshing the own folder", ex);
-                        say("Could not refresh Thornswood's own folder (" + ex.Message.TrimEnd('.') + "). Trying Vortex's files one by one.");
+                        say("Could not refresh Thornswood's own folder (" + Failure.Why("OwnGame.RestoreMissingPlugins, refreshing the own folder", ex) + "). Trying Vortex's files one by one.");
                     }
                 }
                 else
@@ -2005,8 +2003,7 @@ namespace Thornswood
                 try { rec = Staged(src); }
                 catch (Exception ex)
                 {
-                    Swallow.Note("OwnGame.RestoreMissingPlugins, reading Vortex's staging records", ex);
-                    say("Vortex's staging record for " + src + " could not be read (" + ex.Message.TrimEnd('.') + ").");
+                    say("Vortex's staging record for " + src + " could not be read (" + Failure.Why("OwnGame.RestoreMissingPlugins, reading Vortex's staging records", ex, src) + ").");
                 }
             }
 
@@ -2066,8 +2063,7 @@ namespace Thornswood
                 }
                 catch (Exception ex)
                 {
-                    Swallow.Note("OwnGame.RestoreMissingPlugins, placing " + p, ex);
-                    say(p + " could not be put back (" + ex.Message.TrimEnd('.') + "). Close Skyrim and Vortex and press Fix again.");
+                    say(p + " could not be put back (" + Failure.Why("OwnGame.RestoreMissingPlugins, placing " + p, ex, p) + "). Close Skyrim and Vortex and press Fix again.");
                 }
             }
             return n;
@@ -2144,7 +2140,7 @@ namespace Thornswood
                     }
                 }
             }
-            catch (Exception ex) { LauncherLog.Line("OwnGame: baking Thornswood profile list failed: " + ex.Message); }
+            catch (Exception ex) { Swallow.Note("OwnGame: baking Thornswood profile list failed", ex); }
         }
 
         /// <summary>The settings a folder gets only when it is made (SettleSettings(true)).</summary>
@@ -2753,7 +2749,7 @@ namespace Thornswood
             try { stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("ui-gone.json"); }
             catch (Exception ex)
             {
-                throw new Exception("This launcher could not open records\\ui-gone.json (" + ex.Message.TrimEnd('.') +
+                throw new Exception("This launcher could not open records\\ui-gone.json (" + Failure.Why("OwnGame, opening ui-gone.json", ex) +
                     "), so a refresh cannot keep another server's menu files out. Update the launcher, or tell staff it said this.");
             }
             if (stream == null)
@@ -2770,8 +2766,8 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                if (ex.Message != null && ex.Message.IndexOf("records\\ui-gone.json", StringComparison.Ordinal) >= 0) throw;
-                throw new Exception("This launcher could not read records\\ui-gone.json (" + ex.Message.TrimEnd('.') +
+                if (ex.GetType() == typeof(Exception)) throw;
+                throw new Exception("This launcher could not read records\\ui-gone.json (" + Failure.Why("OwnGame, reading ui-gone.json", ex) +
                     "), so a refresh cannot keep another server's menu files out. Update the launcher, or tell staff it said this.");
             }
         }
@@ -3290,8 +3286,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                Swallow.Note("OwnGame.DropPayload", ex);
-                return "Some of " + dir + " could not be removed yet (" + ex.Message.TrimEnd('.') + "); the launcher removes the rest the next time it starts.";
+                return "Some of " + dir + " could not be removed yet (" + Failure.Why("OwnGame.DropPayload", ex, dir) + "); the launcher removes the rest the next time it starts.";
             }
         }
 
@@ -3655,7 +3650,7 @@ namespace Thornswood
                 catch (Exception ex)
                 {
                     throw new Exception("Could not read the pack lists in " + Paths.PacksDir +
-                        " (" + ex.Message.TrimEnd('.') + "). Nothing was changed. Close whatever has that folder open and try again.");
+                        " (" + Failure.Why("OwnGame, a folder", ex) + "). Nothing was changed. Close whatever has that folder open and try again.");
                 }
                 foreach (string rec in recs)
                 {
@@ -3665,7 +3660,7 @@ namespace Thornswood
                     {
                         throw new Exception("Could not read " + Path.GetFileName(rec) +
                             ", a pack's list of the files it put into the game (" +
-                            ex.Message.TrimEnd('.') + "). Nothing was changed. Close whatever has that list open and try again.");
+                            Failure.Why("OwnGame, a list", ex) + "). Nothing was changed. Close whatever has that list open and try again.");
                     }
                     foreach (string line in lines)
                     {

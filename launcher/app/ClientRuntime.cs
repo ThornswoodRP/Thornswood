@@ -116,7 +116,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                recordError = "client-build.json could not be read: " + ex.Message;
+                recordError = "client-build.json could not be read: " + Failure.Why("ClientRuntime, client-build.json", ex, "client-build.json");
             }
             recorded = list;
             return recorded;
@@ -259,7 +259,7 @@ namespace Thornswood
                     want.RemoveAt(i);
                     done++;
                 }
-                catch (Exception ex) { log("  " + Path.GetFileName(rel) + ": " + ex.Message); }
+                catch (Exception ex) { log("  " + Path.GetFileName(rel) + ": " + Failure.Say("ClientRuntime.Heal, kept copy of " + rel, ex, Full(rel))); }
             }
             if (want.Count == 0) { log("The client runtime is back to the recorded build."); return done; }
 
@@ -298,7 +298,7 @@ namespace Thornswood
                     want.RemoveAt(i);
                     done++;
                 }
-                catch (Exception ex) { log("  " + Path.GetFileName(rel) + ": " + ex.Message); }
+                catch (Exception ex) { log("  " + Path.GetFileName(rel) + ": " + Failure.Say("ClientRuntime.Heal, package copy of " + rel, ex, Full(rel))); }
             }
 
             if (want.Count == 0) log("The client runtime is back to the recorded build.");

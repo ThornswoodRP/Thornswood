@@ -270,7 +270,21 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./scripts/release/Get-ContentBuild.ps1 -Server dev -Take
+        run: ./scripts/release/Get-ContentBuild.ps1 -Server dev -Take -Keep '${{ runner.temp }}/content-kept'
+
+      # What it took, as the artifact the harnesses and every checkout read
+      # the tables from now that they are not committed (#5191, stage 4;
+      # Get-ContentBuild.ps1 -Newest), newest first. Reading it needs Actions
+      # read only, which a pull request's token has.
+      - name: Keep what was taken
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
+        with:
+          name: content-dev
+          path: |
+            ${{ runner.temp }}/content-kept/content.zip
+            ${{ runner.temp }}/content-kept/content-build.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Name the release and read the one before
         id: names
@@ -898,7 +912,7 @@ jobs:
 
       # One Deployment for each app that changed, with the part beside the
       # tag (header, THE DEPLOYMENT). The box deploy agent applies each and
-      # the bot posts the Release's news once, in the dev updates channel,
+      # the bot posts the Release's news once, in #staff-news,
       # however many places it reached.
       - name: Ask the site and the Discord bot for it (Deployments to Site and Discord bot)
         id: appdeploy

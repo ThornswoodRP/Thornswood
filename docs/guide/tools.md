@@ -331,7 +331,7 @@ node --version
 node tests\test-site-local.js
 ```
 
-A passing run ends without an error. Use the file in `tests\` whose name matches the area you touched. Voice is `voice\voice-server.js`, also Node. The site program is `site\server.js` over its modules in `site\lib`.
+A passing run ends without an error. Use the file whose name matches the area you touched. A product's own checks are beside it, in `game\tests\`, `launcher\tests\`, `site\tests\`, `voice\tests\` and `bot\tests\`; the ones that read more than one product are in `tests\`. Voice is `voice\voice-server.js`, also Node. The site program is `site\server.js` over its modules in `site\lib`.
 
 ### Learn more about Node
 
@@ -516,7 +516,7 @@ The bot scripts need Python 3.11 or newer (the bot runs on 3.12; Pillow 13 needs
 
 ### The .NET Framework
 
-Launcher code is C# on .NET 10 with Avalonia, published with Native AOT from `launcher\app\Thornswood.csproj` (#4823, Patrick's decision of 26 Oct), so it stays AOT safe (the rules are in [Settled design](settled-design.md)), and C# that Windows PowerShell 5.1 compiles with Add-Type stays C# 5. The window is `launcher\app\MainWindow.axaml`. How the launcher starts is `launcher\app\ARCHITECTURE.md`. The six shared files in `launcher\app` are named in [D. Visual Studio Code](#d-visual-studio-code).
+Launcher code is C# on .NET 10 with Avalonia, published with Native AOT from `launcher\app\Thornswood.csproj` (#4823, Patrick's decision of 26 Oct), so it stays AOT safe (the rules are in [Settled design](settled-design.md)); the few launcher files a script loads with Add-Type compile with pwsh 7's Add-Type too. The window is `launcher\app\MainWindow.axaml`. How the launcher starts is `launcher\app\ARCHITECTURE.md`. The six shared files in `launcher\app` are named in [D. Visual Studio Code](#d-visual-studio-code).
 
 ### SkyMP
 
@@ -577,7 +577,7 @@ Run one check from the repository folder:
 node tests\test-site-local.js
 ```
 
-A passing run ends without an error. Use the file in `tests\` whose name matches the area you touched.
+A passing run ends without an error. Use the file whose name matches the area you touched. A product's own checks are beside it, in `game\tests\`, `launcher\tests\`, `site\tests\`, `voice\tests\` and `bot\tests\`; the ones that read more than one product are in `tests\`.
 
 An overlay change uses the same `Go.ps1 -SkipServer` as the HTML section, with the game closed. A new overlay is named `thornswood-*.js` and listed in the `OVERLAYS` list at the top of `game\plugins\thornswood-front.js`. That list is what loads it. There is no build step for these files.
 

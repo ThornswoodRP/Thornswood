@@ -279,7 +279,7 @@ namespace Thornswood
                 catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
                 {
                     Say("");
-                    Say("  It would not move: " + e.Message);
+                    Say("  It would not move: " + Failure.Say("InstallSteps, moving it aside", e));
                     Say("  Close Skyrim, Vortex and the launcher, then run this again.");
                     throw Die("The old Game folder is in the way and the launcher will read it instead.");
                 }
@@ -449,7 +449,7 @@ namespace Thornswood
                 }
                 catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
                 {
-                    throw Die("Could not copy " + from + " to " + dest + " (" + e.Message + "). " +
+                    throw Die("Could not copy " + from + " to " + dest + " (" + Failure.Why("InstallSteps, copying " + from, e, dest) + "). " +
                               "Check the disk has room and nothing has those files open, then run this again.");
                 }
                 done += new FileInfo(from).Length;
@@ -703,7 +703,7 @@ namespace Thornswood
             catch (Exception e) when (e is UnauthorizedAccessException || e is IOException || e is InvalidOperationException ||
                                       e is System.Security.Principal.IdentityNotMappedException || e is PlatformNotSupportedException)
             {
-                Say("  config.json could not be kept to this account only: " + e.Message);
+                Say("  config.json could not be kept to this account only: " + Failure.Say("InstallSteps, config.json's rights", e, "config.json"));
             }
         }
 

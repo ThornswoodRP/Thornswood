@@ -11,7 +11,7 @@ function yes(name, ok) {
 const expected = {
   'Discord.cs': 1,
   'LocalKeep.cs': 1,
-  'OwnGame.cs': 4,
+  'OwnGame.cs': 3,
   'Shell.cs': 5,
   'ShellUninstall.cs': 1,
   'Stall.cs': 1,

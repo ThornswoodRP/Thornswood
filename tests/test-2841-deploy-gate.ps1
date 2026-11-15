@@ -165,9 +165,10 @@ Yes '  it finds the server''s processes by the installer''s own rule and reads o
 Yes 'Check-Site takes nothing of the caller''s' ((Words 'Check-Site') -eq '-NoPause' -and (Words 'Check-Site -Who 1') -eq 'REFUSED' -and (Words 'Check-Site -Site x') -eq 'REFUSED')
 # Box keys and runners, renewed from the cloud and never made new (#2862,
 # Patrick's A on q-retire-box-keys, 31 Oct 2026).
-Yes 'Renew-BoxKey takes desk or notices and nothing else: no name, environment, repository or file' ((Words 'Renew-BoxKey -Which desk') -eq '-NoPause|-Which|desk' -and
-    (Words 'Renew-BoxKey -Which notices') -eq '-NoPause|-Which|notices' -and (Words 'Renew-BoxKey -Which cloud') -eq 'REFUSED' -and
+Yes 'Renew-BoxKey takes desk and nothing else: no name, environment, repository or file' ((Words 'Renew-BoxKey -Which desk') -eq '-NoPause|-Which|desk' -and
+    (Words 'Renew-BoxKey -Which cloud') -eq 'REFUSED' -and
     (Words 'Renew-BoxKey -Which desk -AdminState x') -eq 'REFUSED' -and (Words 'Renew-BoxKey -Name djinn') -eq 'REFUSED')
+Yes '  the notices key and -Retire are gone (#5314)' ((Words 'Renew-BoxKey -Which notices') -eq 'REFUSED' -and (Words 'Renew-BoxKey -Which notices -Retire') -eq 'REFUSED')
 Yes 'Install-Runner runs from the gate with a number, -Status, -Lock or -NetworkOnly: never -Remove, -OffBox, another repository, name or folder' (
     (Words 'Install-Runner -Number 2') -eq '-FromGate|-AllowHost|pypi.org,files.pythonhosted.org,registry.npmjs.org|-NoPause|-Number|2' -and
     (Words 'Install-Runner -Number 2 -Status') -ne 'REFUSED' -and (Words 'Install-Runner -Remove') -eq 'REFUSED' -and (Words 'Install-Runner -OffBox') -eq 'REFUSED' -and
@@ -182,10 +183,13 @@ Yes '  Renew-BoxKey keeps the old line until the secret holds the new key, and p
     $rk.IndexOf('& $ssh -n -F none -i $keyFile') -lt $rk.IndexOf('& gh secret set $K.Secret') -and
     $rk.IndexOf('& gh secret set $K.Secret') -lt $rk.IndexOf('Where-Object { $old -notcontains $_ }') -and
     $rk.Contains('if ($changed -and -not $done) { [IO.File]::WriteAllBytes($KeysFile, $before) }'))
-Yes '  its key goes only to the two fixed secrets of the ops repository, with the old line''s options and the App''s environments token' (
-    $rk.Contains("`$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'") -and $rk.Contains("Secret = 'DESK_KEY_B64'") -and $rk.Contains("Secret = 'NOTICE_KEY_B64'") -and
+Yes '  its key goes only to the desk''s fixed secret of the ops repository, with the old line''s options and the App''s environments token' (
+    $rk.Contains("`$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'") -and $rk.Contains("Secret = 'DESK_KEY_B64'") -and -not $rk.Contains("Secret = 'NOTICE_KEY_B64'") -and
     $rk.Contains('$newLine = $opts + '' '' + $bare + $tag') -and $rk.Contains('Get-ThornswoodOpsAccess -Repo $RepoRoot -For keys') -and
     $rk.Contains('does not let in main alone'))
+$rkCode = $rk -replace '(?s)<#.*?#>', ''
+Yes '  and it holds the line to the gate''s forced command, with no -Retire and no say-staff.ps1 left' (
+    $rkCode.Contains('$wantCommand = ''command="[^"]*-File C:\\Thornswood-Gate\\Gate\.ps1"''') -and $rkCode -notmatch 'Retire|say-staff|gh secret delete')
 $ir = Text 'scripts/deploy/Install-Runner.ps1'
 Yes '  Install-Runner from the gate is the ops repository''s, with the App''s runners token, and puts back only a runner the records or GitHub already name' (
     $ir.Contains("`$Repo = 'ThornswoodRP/Thornswood-Ops'") -and $ir.Contains('Get-ThornswoodOpsAccess -Repo') -and $ir.Contains('-For runners') -and
@@ -609,7 +613,7 @@ Yes 'a notices key''s line is forced to say-staff.ps1 through pwsh' ((Get-BoxKey
 $grant = Text 'scripts/vps/Grant-BoxAccess.ps1'
 Yes 'a deploy key goes into the gate account''s authorized_keys, and stops without the account' ($grant.Contains("Run scripts\deploy\Install-Gate.ps1 first") -and $grant.Contains("ProfileImagePath '.ssh\authorized_keys'"))
 Yes 'its proof needs a refused command and GATE READY' ($grant.Contains("@('echo THORNSWOOD_OK', 'ping')") -and $grant.Contains("'^\| GATE READY'") -and $grant.Contains('($NoticesOnly -or $Deploy) -and @($proof | Where-Object { $_ -match ''THORNSWOOD_OK'' }).Count'))
-Yes 'it goes into DESK_KEY_B64 of a main-only environment' ($grant.Contains("if (`$Deploy) { 'DESK_KEY_B64' }") -and $grant.Contains('gh secret set $SecretName --env $ToEnvironment'))
+Yes 'it goes into DESK_KEY_B64 of a main-only environment' ($grant.Contains("`$SecretName = 'DESK_KEY_B64'") -and $grant.Contains('gh secret set $SecretName --env $ToEnvironment'))
 
 # ShipAccess.ps1 against a stand-in ship-access.js, run by the real node.
 if (Get-Command node -ErrorAction SilentlyContinue) {

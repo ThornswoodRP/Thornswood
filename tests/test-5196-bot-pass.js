@@ -82,9 +82,22 @@ const character = require(path.join(ROOT, 'scripts', 'bot', 'character.js'));
 const relay = require(path.join(ROOT, 'scripts', 'bot', 'relay.js'));
 
 let pass = 0, fail = 0;
+// The passes run() made since the last check. A FAIL prints their lines
+// under it, so a check that fails on a gate runner and not here says which
+// step the pass stopped at and what it said there (#6050: on the Linux gate
+// two checks failed with nothing to say why, and they pass on every run
+// here, under Node 22 and 24 and four copies at once on a loaded machine).
+let ran = [];
 function yes(what, cond) {
   if (cond) { pass++; console.log('PASS  ' + what); }
-  else { fail++; console.log('FAIL  ' + what); }
+  else {
+    fail++; console.log('FAIL  ' + what);
+    for (const x of ran) {
+      console.log('      the pass "' + x.name + '" said:');
+      for (const l of (x.r && x.r.lines) || []) { console.log('        ' + (l.ok ? 'PASS  ' : 'FAIL  ') + l.step + ': ' + l.detail); }
+    }
+  }
+  ran = [];
 }
 function done() {
   console.log('');
@@ -484,7 +497,9 @@ async function run(name, break_, settings) {
   const said = [];
   const r = await botPass.pass({ root, spawn: s.spawn, addon: s.addon, loadMs: 2000, stepMs: 4000, log: (l) => said.push(l),
                                  voiceFrom: break_ === 'no voice' ? NO_VOICE : VOICE });
-  return { r, s, said, root, voiceDir: path.join(path.dirname(root), 'voice') };
+  const one = { name, r, s, said, root, voiceDir: path.join(path.dirname(root), 'voice') };
+  ran.push(one);
+  return one;
 }
 
 // Whether anything still answers on the copy's voice port.

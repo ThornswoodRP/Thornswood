@@ -10,7 +10,7 @@
 // they read these rules and not a second copy. That is why the file names
 // every namespace it uses and says #nullable itself: Add-Type has neither
 // the project's implicit usings nor its Nullable setting.
-// tests/test-note-rules.ps1 loads it the way the scripts do.
+// scripts/tests/test-note-rules.ps1 loads it the way the scripts do.
 #nullable enable
 using System;
 using System.Collections.Generic;

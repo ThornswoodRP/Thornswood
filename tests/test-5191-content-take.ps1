@@ -18,6 +18,8 @@
     4. -Take stops, writing nothing, on a file not its sha256, a file the
        record does not name, a file it lacks, a path out of the repository,
        or a record for another key;
+    3b. -Newest takes the newest build a run on main kept, whatever its key,
+       held to its server, and -Keep keeps what -Take took;
     5. merge-release.yml asks for the build before it releases, takes it
        before any part is built, and starts again on a Content Deployment's
        success, with the release's concurrency on its job.
@@ -130,6 +132,33 @@ try {
     Check '3 -Take writes every file of the build over the checkout' ($r.Code -eq 0 -and $same -and $r.Text -match "TOOK $key FROM $head`: 3 files")
     TGit $repo @('checkout', '--quiet', '--force', $head) | Out-Null
     TGit $repo @('clean', '--quiet', '-fd') | Out-Null
+    $kept = Join-Path $tmp 'kept'
+    $r = Run @('-Repo', $repo, '-ReleasesFile', $rels, '-AssetDir', $assets, '-Take', '-Keep', $kept, '-Output', '')
+    Check '3 -Keep keeps the two files it took, byte for byte, for the artifact' ($r.Code -eq 0 -and
+        (Sha ([IO.File]::ReadAllBytes((Join-Path $kept 'content.zip')))) -eq (Sha ([IO.File]::ReadAllBytes((Join-Path $assets 'content.zip')))) -and
+        (Sha ([IO.File]::ReadAllBytes((Join-Path $kept 'content-build.json')))) -eq (Sha ([IO.File]::ReadAllBytes((Join-Path $assets 'content-build.json')))))
+    TGit $repo @('checkout', '--quiet', '--force', $head) | Out-Null
+    TGit $repo @('clean', '--quiet', '-fd') | Out-Null
+
+    # ----------------------------------------------------- 3b. -Newest
+    # Whatever its key: a pull request's checkout has inputs of its own.
+    $other = Plant $built $null ('a' * 64)
+    $r = Run @('-Repo', $repo, '-Newest', '-ArtifactDir', $other, '-Output', '')
+    $same = @($built.Keys | Where-Object { (Sha ([IO.File]::ReadAllBytes((Join-Path $repo $_)))) -ne (Sha $built[$_]) }).Count -eq 0
+    Check '3 -Newest writes the newest build over the checkout, whatever its key' ($r.Code -eq 0 -and $same -and $r.Text -match "TOOK $('a' * 64) FROM $head`: 3 files")
+    TGit $repo @('checkout', '--quiet', '--force', $head) | Out-Null
+    TGit $repo @('clean', '--quiet', '-fd') | Out-Null
+    $r = Run @('-Repo', $repo, '-Newest', '-ArtifactDir', (Plant $built $null $key 'main'), '-Output', '')
+    Check '3 -Newest still holds the build to its server' ($r.Code -eq 1 -and $r.Text -match 'is for the main server, not dev')
+    $arts = Join-Path $tmp 'artifacts.json'
+    @{ artifacts = @(
+            @{ id = 1; expired = $false; created_at = '2026-11-15T10:00:00Z'; workflow_run = @{ id = 11; head_branch = 'claude/x' } },
+            @{ id = 2; expired = $true; created_at = '2026-11-14T10:00:00Z'; workflow_run = @{ id = 12; head_branch = 'main' } }) } |
+        ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $arts
+    $r = Run @('-Repo', $repo, '-Newest', '-ArtifactsFile', $arts, '-Output', '')
+    Check '3 -Newest takes only a build kept by a run on main that has not expired' ($r.Code -eq 1 -and $r.Text -match 'no merge release on main has kept a content-dev build yet')
+    $r = Run @('-Repo', $repo, '-Newest', '-Take', '-Output', '')
+    Check '3 -Newest goes without -Take and -Ask' ($r.Code -eq 1 -and $r.Text -match '-Newest takes the newest build main released')
 
     # ------------------------------------------------------- 4. refusals
     $plugin = Join-Path $repo 'game\content\Thornswood-Content.esp'
@@ -142,7 +171,7 @@ try {
     }
     $names = @{}; foreach ($n in $built.Keys) { $names[$n] = Sha $built[$n] }
     $bad = $names.Clone(); $bad['game/data/last-plugin.recipe'] = ('0' * 64)
-    Refused 'a file that is not the sha256 its record names' 'last-plugin\.recipe in content\.zip on .* is not the sha256' (Plant $built $bad)
+    Refused 'a file that is not the sha256 its record names' 'last-plugin\.recipe in content\.zip in the draft .* is not the sha256' (Plant $built $bad)
     $fewer = $names.Clone(); $fewer.Remove('game/gamemode-tables/NewTable.json')
     Refused 'a file the record does not name' 'NewTable\.json, which content-build\.json does not name' (Plant $built $fewer)
     $more = $names.Clone(); $more['game/data/gone.json'] = ('1' * 64)
@@ -150,7 +179,7 @@ try {
     $out1 = $built.Clone(); $out1['game/../../escape.txt'] = $enc.GetBytes('x')
     Refused 'a path out of the repository' 'which is not a repository path' (Plant $out1)
     Refused 'a record for another key' 'is for dev .*, not dev' (Plant $built $null ('f' * 64))
-    Refused 'a record for the other server' 'is for main ' (Plant $built $null $key 'main')
+    Refused 'a record for the other server' 'is for the main server, not dev' (Plant $built $null $key 'main')
 
     # ---------------------------------------------- 5. the merge release
     $wf = [IO.File]::ReadAllText((Join-Path $root '.github\workflows\merge-release.yml'))
@@ -162,6 +191,10 @@ try {
     Check '5 the release waits on it and runs only when the build is found' ($job -match 'needs: content' -and $job -match "if: \$\{\{ needs\.content\.outputs\.found == 'yes' \}\}")
     $takeAt = $job.IndexOf('Get-ContentBuild.ps1 -Server dev -Take')
     Check '5 it takes the build right after the checkout, before any part is built' ($takeAt -gt 0 -and $takeAt -lt $job.IndexOf('- name: Name the release and read the one before'))
+    $keepAt = $job.IndexOf('- name: Keep what was taken')
+    Check '5 it keeps what it took as the artifact content-dev, for 90 days, for the harnesses and checkouts that read the tables (-Newest)' (
+        $job -match 'Get-ContentBuild\.ps1 -Server dev -Take -Keep' -and $keepAt -gt $takeAt -and
+        $job.Substring($keepAt) -match '(?s)^- name: Keep what was taken.*?uses: actions/upload-artifact@[0-9a-f]{40}.*?name: content-dev\s.*?retention-days: 90')
     Check '5 one release at a time on the release job, not the whole workflow, so a run a Deployment''s status starts holds no merge back (#6008)' (
         $wf -notmatch '(?m)^concurrency:' -and $job -match '(?s)concurrency:\s+group: merge-release\s+cancel-in-progress: false')
 }

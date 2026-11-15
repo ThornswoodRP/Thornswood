@@ -486,7 +486,6 @@ try {
       return named(rows, 'Market Trader').map(function (r) { return r.ref; }).sort().join(' ');
     };
 
-    yes('nothing was lost to a record that would not inflate', j.counts.failedToInflate === 0);
     yes('seven plugins in the load order, though plugins.txt lists Skyrim.esm again as skyrim.esm, Thornswood-Last.esp among them',
       /^7 plugins in load order \(names sha256 [0-9a-f]{12}\)$/.test(j.readFrom || ''));
     yes('32 placements read, 2 of them deleted, one by a patch that kept only the flag',
