@@ -2799,10 +2799,16 @@
 
     Vanilla marks most beds Owned by an NPC or a faction, and Sleep/Wait then
     refuses them. Under SkyMP there is nobody home to ask, so an Owned bed is
-    just a bed nobody can rest in. Clear the owner on a bed press (and ask
-    again if it was owned, because that press may already have been refused),
-    and when somebody actually lies down tell the server /rest bed so the
-    exhaustion meter recovers the way Blade's pitch asked.
+    just a bed nobody can rest in. Clear the owner when the bed comes into the
+    world here (its 3D loads, or its cell finishes loading), and when somebody actually lies down tell the
+    server /rest bed so the exhaustion meter recovers the way Blade's pitch
+    asked.
+
+    Not at the press (#4583). The press reaches this plugin a frame after
+    Skyrim has handled it (the fork's activate sink runs it as an update
+    task), so an owner cleared there was always cleared too late for that
+    press, and the plugin used to press the bed a second time to make up for
+    it. The owner is the plugin record's: nothing in the fork sets one.
 
     Claimed-property beds are left as a later gate if Patrick wants one: the
     done line for #839 is ordinary beds sleepable, not a new property lock.
@@ -2837,14 +2843,50 @@
   function clearBedOwnership(ref) {
     if (!isBedRef(ref)) { return false; }
     let cleared = false;
-    try {
-      if (ref.getActorOwner()) { ref.setActorOwner(null); cleared = true; }
-    } catch (e) { }
-    try {
-      if (ref.getFactionOwner()) { ref.setFactionOwner(null); cleared = true; }
-    } catch (e) { }
+    if (ref.getActorOwner()) { ref.setActorOwner(null); cleared = true; }
+    if (ref.getFactionOwner()) { ref.setFactionOwner(null); cleared = true; }
     return cleared;
   }
+
+  // A throw here reaches guard, which says which handler it was.
+  sp.on('objectLoaded', guard('bed owner', (e) => {
+    if (!e || !e.isLoaded || !e.object) { return; }
+    const ref = sp.ObjectReference.from(e.object);
+    if (!ref) { return; }
+    clearBedOwnership(ref);
+  }));
+
+  /*
+    EVERY BED IN A CELL, not only the ones whose 3D this plugin watched load.
+    A cell that comes in with a save or a login (somebody who logs in inside
+    an inn) may hand its references their 3D without an objectLoaded for
+    each, so the whole cell's furniture is walked once it has finished
+    loading (cellFullyLoaded, the fork's TESCellFullyLoadedEvent sink), and
+    the person's own cell is walked once when this plugin starts, for a cell
+    that loaded before it did. 40 is kFurniture.
+  */
+  function clearBedsIn(cell) {
+    if (!cell) { return 0; }
+    const n = cell.getNumRefs(40);
+    let cleared = 0;
+    for (let i = 0; i < n; i++) {
+      const ref = cell.getNthRef(i, 40);
+      if (ref && clearBedOwnership(ref)) { cleared++; }
+    }
+    return cleared;
+  }
+
+  sp.on('cellFullyLoaded', guard('bed owners', (e) => {
+    if (!e || !e.cell) { return; }
+    clearBedsIn(e.cell);
+  }));
+
+  guard('bed owners at start', () => {
+    const pc = sp.Game.getPlayer();
+    if (!pc) { return; }
+    const cleared = clearBedsIn(pc.getParentCell());
+    if (cleared) { say('cleared the owner of ' + cleared + ' bed(s) already here'); }
+  })();
 
   sp.on('activate', guard('activate', (e) => {
     // Declared here, once, for the whole handler. It used to be declared
@@ -3010,34 +3052,9 @@
       return;
     }
 
-    // Furniture: beds only. Clear Owned so Sleep/Wait works (#839).
-    if (type === 40) {
-      let wasOwned = false;
-      try {
-        wasOwned = !!(e.target.getActorOwner() || e.target.getFactionOwner());
-      } catch (err) { }
-      let bed = false;
-      try { bed = isBedRef(e.target); } catch (err) { }
-      if (bed) {
-        try { clearBedOwnership(e.target); } catch (err) { }
-        if (wasOwned) {
-          // This press may already have been refused as Owned. Ask again.
-          try {
-            const pc = sp.Game.getPlayer();
-            if (pc) {
-              reActivating = true;
-              try { e.target.activate(pc, false); }
-              finally { reActivating = false; }
-              say('  cleared ownership on ' + (name || 'a bed') + ', activated again');
-            }
-          } catch (err) {
-            reActivating = false;
-            say('  clearing bed ownership threw: ' + err);
-          }
-        }
-      }
-      return;
-    }
+    // Furniture: beds were cleared and pressed again here. They are cleared
+    // when they load now, and the person's own press is the only one (#4583).
+    if (type === 40) { return; }
 
     if (type !== 24) { return; }
 
@@ -3174,7 +3191,7 @@
   /*
     ------------------------------------------------- lying down in a bed (#839)
 
-    Ownership clear on activate makes Sleep/Wait open. This half tells the
+    The owner cleared when a bed loads makes Sleep/Wait open. This half tells the
     exhaustion meter: furnitureEnter on a bed is /rest bed, on any other
     furniture /rest sit, and furnitureExit is /rest up. Nobody types them
     (#1603). The server answers by the furniture it saw pressed, so a chair
@@ -3197,7 +3214,6 @@
       const ref = e ? e.target : null;
       if (!ref) { return; }
       seatedInFurniture = true;
-      try { clearBedOwnership(ref); } catch (err) { }
       let bed = false;
       try { bed = isBedRef(ref); } catch (err) { }
       restSent = true;
