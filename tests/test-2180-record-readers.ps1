@@ -7,6 +7,18 @@
 # or short of a field, stops before anything is sent. Each reader's own code
 # is checked for the call, placed before its first send, and the behaviour is
 # run where the reader is a function (MaxOnline, CollectionPlugins). Offline.
+#
+# records\collection-plugins.json has these readers, and each one is held
+# here to the same contract, a version it knows, a plugins list, a name, a
+# whole size and a sha256 on every row and no plugin twice (#4279):
+#   Read-ThornswoodCollectionPluginRecord (CollectionPlugins.ps1), which
+#     Deploy-Server, Deploy-DevGamemode and CollectionStore.ps1 read through;
+#   Ship-Rules' Get-ShipLastPluginProblem, the Thornswood-Last check;
+#   New-NexusRevision's light-flag step, which also refuses a missing record
+#     and one that is not the revision it starts from;
+#   Build-WoodworkingBenches.py's collection_stop, which Build-BuildingHolds.py
+#     and Build-StationSites.py (and Build-MarketStalls.py) call, through
+#     own_plugins.read_collection_plugins, the same checks in Python.
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $pass = 0; $fail = 0
@@ -69,13 +81,95 @@ try {
     $t = Read-ThornswoodCollectionPluginRecord $cp
     Yes '  a good record still reads' ($t.ContainsKey('A.ESP') -and $t['a.esp'].Size -eq 12)
     Yes 'the committed collection-plugins.json still reads through the deploy reader' ((Read-ThornswoodCollectionPluginRecord (Join-Path $repo 'records\collection-plugins.json')).Count -gt 50)
+
+    # ---- the other readers of collection-plugins.json (#4279)
+    $real = Join-Path $repo 'records\collection-plugins.json'
+    $realRev = [int](ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($real)) $real).revision
+    $twice = '{"version":1,"collection":"7essxf","revision":8,"plugins":[{"name":"a.esp","size":12,"sha256":"' + $h + '"},{"name":"A.esp","size":12,"sha256":"' + $h + '"}]}'
+    $v2 = '{"version":2,"collection":"7essxf","revision":8,"plugins":[{"name":"a.esp","size":12,"sha256":"' + $h + '"}]}'
+    $good = '{"version":1,"collection":"7essxf","revision":8,"plugins":[{"name":"a.esp","size":12,"sha256":"' + $h + '"}]}'
+
+    # Ship-Rules: the Thornswood-Last check reads the record before the recipe.
+    . (Join-Path $repo 'scripts\release\Ship-Rules.ps1')
+    $sr = Join-Path $tmp 'ship'
+    $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent (Join-Path $sr $ShipLastManifest)), (Join-Path $sr 'records')
+    [IO.File]::WriteAllText((Join-Path $sr $ShipLastManifest), '{}')
+    $srRec = Join-Path $sr 'records\collection-plugins.json'
+    function ShipSays { try { return [string](Get-ShipLastPluginProblem $sr @('a.esp', 'Thornswood-Last.esp')) } catch { return 'THREW: ' + $_.Exception.Message } }
+    [IO.File]::WriteAllText($srRec, $twice)
+    $p = ShipSays
+    Yes 'Get-ShipLastPluginProblem refuses a record that lists a plugin twice, before it reads the recipe' ($p -match 'collection-plugins record this checkout can trust' -and $p -match 'lists A\.esp twice')
+    if ($p -notmatch 'lists A\.esp twice') { Write-Host "      it said: $p" }
+    [IO.File]::WriteAllText($srRec, $v2)
+    $p = ShipSays
+    Yes '  and one at a version this checkout does not know' ($p -match 'it is version 2, and this checkout knows 1')
+    $sh = Src 'scripts\release\Ship-Rules.ps1'
+    $f = At $sh 'function Get-ShipLastPluginProblem'
+    Yes '  it reads the record through Read-ThornswoodRecord, and has no bare parse of it left' ($sh.IndexOf('Read-ThornswoodRecord -Path $rpath -Kind collection-plugins', $f) -gt $f -and -not $sh.Contains('$record = ([IO.File]::ReadAllText($rpath)'))
+
+    # New-NexusRevision: the light-flag step, a script run on Nexus, so its
+    # code is checked here and its runs in test-2914-nexus-scripts.ps1.
+    $nn = Src 'scripts\release\New-NexusRevision.ps1'
+    $i = At $nn 'Read-ThornswoodRecord -Path $PluginRecord -Kind collection-plugins'
+    Yes 'New-NexusRevision reads collection-plugins.json through Read-ThornswoodRecord in its light-flag step' ($i -gt 0 -and (At $nn ". (Join-Path `$Here 'RecordShape.ps1')") -gt 0 -and (At $nn ". (Join-Path `$Here 'RecordShape.ps1')") -lt $i)
+    Yes '  does not pass over a missing record' (-not $nn.Contains('if (Test-Path -LiteralPath $recordPath)') -and -not $nn.Contains('if (Test-Path -LiteralPath $PluginRecord)'))
+    $j = $nn.IndexOf('-ne $BaseRevision', [Math]::Max($i, 0))
+    Yes '  holds the record''s revision to the revision it starts from' ($i -gt 0 -and $j -gt $i -and $j - $i -lt 700)
+    Yes '  and both before any archive is downloaded for it' ($i -gt 0 -and $j -lt $nn.IndexOf('Get-NexusFileArchive $Game $fid'))
+
+    # The builders: one shared helper in Python, the same checks.
+    $wbSrc = Src 'scripts\dev\Build-WoodworkingBenches.py'
+    $cs = At $wbSrc 'def collection_stop('
+    Yes 'Build-WoodworkingBenches.py''s collection_stop reads the record through own_plugins.read_collection_plugins' ($cs -gt 0 -and $wbSrc.IndexOf('own_plugins.read_collection_plugins(COLLECTION_PLUGINS)', $cs) -gt $cs -and -not $wbSrc.Contains('json.load(io.open(COLLECTION_PLUGINS'))
+    foreach ($b in 'Build-BuildingHolds.py', 'Build-StationSites.py') {
+        $bs = Src ('scripts\dev\' + $b)
+        Yes "  $b asks wb.collection_stop and parses the record nowhere itself" ($bs.Contains('wb.collection_stop(') -and $bs -notmatch 'json\.load\([^\n]*(collection-plugins|COLLECTION_PLUGINS)')
+    }
+    $py = $null
+    foreach ($exe in 'python', 'py', 'python3') { if (Get-Command $exe -ErrorAction SilentlyContinue) { $py = $exe; break } }
+    Yes 'there is a python here to run the builders'' check' ($null -ne $py)
+    if ($py) {
+        $wbPath = Join-Path $repo 'scripts\dev\Build-WoodworkingBenches.py'
+        $stopPy = "import importlib.util,sys`ns=importlib.util.spec_from_file_location('wb',sys.argv[1])`nm=importlib.util.module_from_spec(s)`ntry:`n    s.loader.exec_module(m)`n    print(m.collection_stop([],[],'Data') or 'NONE')`nexcept Exception as e:`n    print('RAISED %s: %s' % (type(e).__name__,e))"
+        $pyRec = Join-Path $tmp 'py-collection-plugins.json'
+        function PyStop {
+            $was = $env:THORNSWOOD_COLLECTION_PLUGINS
+            $env:THORNSWOOD_COLLECTION_PLUGINS = $pyRec
+            try { return ((& $py -c $stopPy $wbPath) | Out-String).Trim() } finally { $env:THORNSWOOD_COLLECTION_PLUGINS = $was }
+        }
+        [IO.File]::WriteAllText($pyRec, $twice)
+        $p = PyStop
+        Yes 'the builders'' collection_stop stops on a record that lists a plugin twice, naming the file' ($p.StartsWith('STOP.') -and $p.Contains($pyRec) -and $p -match 'this checkout can trust' -and $p -match 'lists A\.esp twice')
+        if (-not $p.StartsWith('STOP.') -or $p -notmatch 'twice') { Write-Host "      it said: $p" }
+        [IO.File]::WriteAllText($pyRec, $v2)
+        $p = PyStop
+        Yes '  and on one at a version this checkout does not know' ($p.StartsWith('STOP.') -and $p -match 'it is version 2, and this checkout knows 1')
+        [IO.File]::WriteAllText($pyRec, '{"version":1,"plugins":[{"name":"a.esp","size":"12","sha256":"' + $h + '"}]}')
+        $p = PyStop
+        Yes '  and on a size that is a string' ($p.StartsWith('STOP.') -and $p -match 'plugins\.a\.esp has no whole size')
+        Remove-Item -LiteralPath $pyRec
+        $p = PyStop
+        Yes '  and on no record at all, as a STOP rather than a traceback' ($p.StartsWith('STOP.') -and $p.Contains($pyRec))
+        [IO.File]::WriteAllText($pyRec, $good)
+        $p = PyStop
+        Yes '  a good record still reads, and only the load order is asked about' ($p.StartsWith('STOP.') -and $p -notmatch 'can trust' -and $p -match 'not in the load order' -and $p -match 'a\.esp')
+        $readPy = "import sys`nsys.path.insert(0,sys.argv[1])`nimport own_plugins`nprint(len(own_plugins.read_collection_plugins(sys.argv[2])['plugins']))"
+        $n = ((& $py -c $readPy (Join-Path $repo 'scripts\dev') $real 2>&1) | Out-String).Trim()
+        Yes 'the committed collection-plugins.json reads through own_plugins.read_collection_plugins' ($n -match '^\d+$' -and [int]$n -gt 50)
+    }
+
+    # The header of CollectionPlugins.ps1 shows the record as it is now.
+    $cph = Src 'scripts\deploy\CollectionPlugins.ps1'
+    $ex = [regex]::Match($cph, '"revision": (\d+)')
+    Yes "CollectionPlugins.ps1's example names revision $realRev, the one the record is on" ($ex.Success -and [int]$ex.Groups[1].Value -eq $realRev)
 } finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# ---- build.yml runs Check-Records
+# ---- build.yml runs Check-Records (as ./scripts/release/Check-Records.ps1
+# since the workflow's paths went to forward slashes, so either is read)
 $by = Src '.github\workflows\build.yml'
-Yes 'build.yml runs Check-Records.ps1 and fails closed on it' ($by.Contains('scripts\release\Check-Records.ps1') -and $by -match 'Check-Records\.ps1[^\n]*\n\s+if \(\$LASTEXITCODE -ne 0\)')
+Yes 'build.yml runs Check-Records.ps1 and fails closed on it' ($by -match 'scripts[\\/]release[\\/]Check-Records\.ps1[^\n]*\n\s+if \(\$LASTEXITCODE -ne 0\)')
 
 Write-Host ''
 Write-Host "$pass passed, $fail failed"
