@@ -1072,7 +1072,7 @@ Yes 'SkyrimSE.exe goes in last (#369 F3)' `
 Yes 'removing a pack no longer deletes anything from the Steam copy' `
     ($upd -notmatch 'also went from the Skyrim on Steam')
 $shellPlay = & $read 'ShellPlay.cs'
-$play = $shellPlay.Substring($shellPlay.IndexOf('static void Play()'))
+$play = $shellPlay.Substring($shellPlay.IndexOf('static async Task PlayAsync()'))
 Yes 'Play checks the shared archives before anything else is read, and stops when one changed' `
     (($play.IndexOf('OwnGame.CheckShared(') -ge 0) -and ($play.IndexOf('OwnGame.CheckShared(') -lt $play.IndexOf('Verify.Run(cfg)')))
 Yes 'after the Downgrade, the folder is made from the download, and Steam''s updates are not asked about' `

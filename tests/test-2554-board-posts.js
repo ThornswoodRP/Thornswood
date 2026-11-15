@@ -18,7 +18,7 @@
 
   The real property block of game/gamemode.js runs here over a pretend
   engine and a register in a temporary folder, the way
-  tests/test-502-guard-board.js runs it, and the real board page runs in a
+  game/tests/test-502-guard-board.js runs it, and the real board page runs in a
   small stand-in document. The line the page sends is fed to the server, so
   what one writes is what the other reads. Read only apart from its own
   temporary folder.

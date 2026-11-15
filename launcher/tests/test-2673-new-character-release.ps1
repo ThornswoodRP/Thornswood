@@ -28,7 +28,9 @@
        machine starts under server-log.js); a list there that is not one, a
        server-settings.json that will not parse, or a -World that is not a
        server's world\changeForms, stops it with nothing moved; a change
-       form that will not parse is named
+       form that will not parse is named and left where it is; a character
+       whose id has a letter (1f.json, #5168) is thrown away and named, and
+       the world's own runtime forms (profileId -1) and a deleted slot stay
     G  the list it wrote is read by the gamemode's own release block, and
        every part but the saves waits on it
 
@@ -87,6 +89,7 @@ $boxPs = Get-BoxPowerShell
 
 $T = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-2673-' + [Guid]::NewGuid().ToString('N'))
 $A1 = 4278192641; $A2 = 4278192642; $A9 = 4278192649     # ff000a01, ff000a02, ff000a09
+$A1f = 4278190111                                          # ff00001f, a character in 1f.json (#5168)
 function Put([string]$path, [string]$body) {
     [void][IO.Directory]::CreateDirectory((Split-Path -Parent $path))
     [IO.File]::WriteAllText($path, $body)
@@ -194,9 +197,24 @@ try {
     Put (Join-Path $n10 'world\changeForms\3.json') '{"formDesc":"ff000a0'
     $x = RunNew $boxPs @('-World', (Join-Path $n10 'world\changeForms'))
     $l = ListOf (Join-Path $n10 'private\deleted-characters.json')
-    Yes ('N17 a change form that will not parse is named, and the others are still listed (' + (@($x.out | Where-Object { $_ -like '*will not parse*' }) -join ' / ') + ')') (
-        $x.code -eq 0 -and @($x.out | Where-Object { $_ -like '*3.json will not parse, so its character, if it is one, is not on the release list' }).Count -eq 1 -and
-        $l -and (Ids $l.actors) -eq "$A1,$A2")
+    Yes ('N17 a change form that will not parse is named and left where it is, and the others are still listed (' + (@($x.out | Where-Object { $_ -like '*will not parse*' }) -join ' / ') + ')') (
+        $x.code -eq 0 -and @($x.out | Where-Object { $_ -like '*3.json will not parse, so whether it is a character is not known; it is left where it is' }).Count -eq 1 -and
+        (Test-Path -LiteralPath (Join-Path $n10 'world\changeForms\3.json')) -and $l -and (Ids $l.actors) -eq "$A1,$A2")
+
+    # #5168: a runtime form's file is its local id in hex (FormDesc::ToString,
+    # %x), so a character whose id has a letter is 1f.json, and the world's own
+    # runtime forms (profileId -1) have names of digits and letters alike.
+    $n11 = Server 'hex' '{}'
+    Put (Join-Path $n11 'world\changeForms\1f.json') ('{"formDesc":"1f","profileId":5004}')
+    Put (Join-Path $n11 'world\changeForms\10.json') ('{"formDesc":"10","profileId":-1}')
+    Put (Join-Path $n11 'world\changeForms\b.json') ('{"formDesc":"b","profileId":-1,"isDeleted":true}')
+    $x = RunNew $boxPs @('-World', (Join-Path $n11 'world\changeForms'))
+    $l = ListOf (Join-Path $n11 'private\deleted-characters.json')
+    $left = @(Forms $n11 | ForEach-Object { $_.Name } | Sort-Object)
+    Yes ('N18 a character whose id has a letter is thrown away and on the list as 0xff00001f (' + (Ids $l.actors) + ')') (
+        $x.code -eq 0 -and $l -and (Ids $l.actors) -eq "$A1f,$A1,$A2" -and -not ($left -contains '1f.json'))
+    Yes ('N19 the world''s own runtime form and a deleted slot stay where they are (' + ($left -join ',') + ')') (
+        ($left -join ',') -eq '10.json,13164_JKs Whiterun.esp.json,b.json')
 
     # ---- G: the gamemode reads what it wrote -----------------------------------------
     $node = Get-Command node -ErrorAction SilentlyContinue

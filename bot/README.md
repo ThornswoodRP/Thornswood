@@ -16,12 +16,29 @@ The sidebar reads in the order somebody meets it (#3317, Patrick, 22 Oct,
 page card q-3317-discord-order, A): Start Here, Tickets, Information,
 Roleplay Guide, Applications, Out of Character, In Character, a category per
 faction, a category per hold, Playtesters, Staff, and the staff spaces.
-Somebody who joins sees Start Here, Tickets and Applications, and nothing
-else (THE GATE in the builder). Member adds Information, read only; the
-plan gives it from a button in `#start-here` once they answer the rules and
-age questions, and the bot does not make that button yet (#5841), so today it is
-given by hand. Playtester, given when a playtest application is accepted,
-opens everything else that is not staff.
+Somebody who joins sees `#rules` and `#welcome-travelers`, talks in
+neither, and sees nothing else (THE GATE in the builder; Patrick, 12 Nov
+2026). Reacting with ✅ to the bot's message in `#rules`, the one that starts
+**React here for the Member role**, gives Member (`bot_rules_gate.py`,
+#5841), and the reaction is the record that they are 18 or over and accept
+the rules. Member reads the rest of Start Here, Tickets, Information, the
+Roleplay Guide and Applications, and applies there. Playtester, given when a
+playtest application is approved, opens everything else that is not staff.
+
+### Member, from the rules reaction
+
+The bot posts its message in `#rules` and reacts to it itself, so there is
+something to press. Adding the reaction gives Member and taking it off takes
+Member off; each goes to the site's record of who accepted the rules against
+the Discord id, with a line in the staff inbox. A reaction added or taken off
+while the bot was down reaches no event, so every start reads who has
+reacted and sets Member to match: given to everybody who reacted, taken from
+everybody else who holds it, apart from Playtesters and staff, whose own
+roles open more. The message is apart from the rules' own words, so a
+`-Posts` run that writes those again leaves it and its reactions alone.
+`RULES_CHANNEL` and `MEMBER_ROLE` in `bot.env.json` name the channel and the
+role when they are not `rules` and `Member`. The bot's role has to sit above
+Member and hold Manage Roles; the log says so when it does not.
 
 ### Tickets and Applications
 
@@ -86,6 +103,17 @@ them, the office panel, where a Jarl gives and takes their hold's Court,
 Steward and Guards (#2551). Each hold then has a category of its own:
 `#<hold>-announcements`, the hold's hall, `#<hold>-court`, `#<hold>-guard`
 and a `<Hold> Court` voice room. A hold's Citizen role opens its category.
+
+### The ping buttons
+
+`#welcome` has the bot's two ping buttons (`bot_pings.py`, moved there from
+under the holds on 12 Nov 2026), so every Member can press them. News Pings
+is pinged when the bot posts a change to the live server in `#news`, and
+Updates Pings when it warns of a live game server restart in `#updates`.
+Staff who took a role are pinged on the staff side as well: News Pings for a
+dev release in `#staff-news`, Updates Pings for a dev server restart in
+`#staff-updates` (Patrick, 15 Nov 2026). Pressing one again takes the role
+off.
 
 ### The factions
 
@@ -158,10 +186,13 @@ once in the log.
   issue did, a measuring step on the scripts finding, partial fixes and a
   `Refs` written by mistake kept bugs people still meet off the list. Each
   post taken down says why in the log, `known issues: took #N down:`. Its title and body are the issue's
-  last comment that starts `Known issue:` (a short title, at most 45
-  characters, then what goes wrong, where, and how to avoid it), the same
-  shape as a test task below; until somebody writes one, the issue's own title
-  and a plain line. No issue number and no link, because testers have no
+  last comment that starts `Known issue:`: a summary of a few words, whole
+  and at most 45 characters, then in plain words what happens, where, how
+  to avoid it, and what is being done about it. With no such comment there
+  is no post: the bot never writes a post's words itself, and the issue
+  gets one comment saying what to write (Patrick, 12 Nov, after posts went
+  up as the issue title cut mid-sentence over "Known on Main. The team is
+  working on it"). No issue number and no link, because testers have no
   GitHub. The post is deleted the moment the issue is no longer an open
   finding: fixed and closed, closed any other way, its label taken off,
   moved to Done, or a test task written on it.
@@ -174,12 +205,14 @@ once in the log.
       Test task: <what to try, at most 45 characters>
       <numbered steps in the game, then what should happen>
 
-  `Test task:` with nothing after the colon takes the issue's own title. A
-  closed issue also gets a post when its latest `Test task:` comment was
-  written after that day, however long ago it closed. A fixed finding with no
-  such comment gets its own title and a plain line asking testers to check
-  it on main; a fixed issue that is neither a finding nor has that comment
-  gets no post. A reopened issue loses its test task and comes
+  A closed issue also gets a post when its latest `Test task:` comment was
+  written after that day, however long ago it closed. A fixed issue with no
+  such comment gets no post, finding or not: until 12 Nov a fixed finding
+  got its title cut to 45 characters over "Check it on main", which told a
+  tester nothing. Nothing in a post is cut or filled in: `Test task:` with
+  nothing after the colon, a known issue with nothing under its title, and
+  a `#test-tasks` or `#known-issues` post over 2000 characters are refused
+  like any other rule, and the issue is told why. A reopened issue loses its test task and comes
   back to `#known-issues` if it is still a finding. Staff close a test task
   in Discord once it is confirmed.
 - `#dev-test-tasks`, in Staff and seen only by staff (Patrick, 12 Oct): one
@@ -371,8 +404,10 @@ whole file at once.
 
 ### Staff
 
-`#staff-announcements` (the staff `#news` until #3317, where the dev updates
-webhook posts), `#council-decisions`, `#staff-updates`, `#staff-general`,
+`#staff-news` (the staff `#news` until #3317, then staff-announcements
+until 15 Nov 2026; dev releases are posted here, the staff side of `#news`),
+`#council-decisions`, `#staff-updates` (dev server restarts, the staff side of
+`#updates`, and the watchdog), `#staff-general`,
 `#council`, `#ticket-log` and a Staff Room. Invisible to everybody else, and
 `#council` and `#ticket-log` are the council's only. `#dev-test-tasks` (a
 forum the bot keeps, see Testing above) and `#dev-test-findings` are in the
@@ -414,6 +449,7 @@ two different servers stitched together.
 | Moderator | Moderates the Discord only |
 | Content Creator | Thornswood's own social media and content |
 | Support | Answers help tickets and playtest applications, and gives Playtester |
+| Clanker | Every bot in the server, shown in a group of its own under staff. A build gives it to each bot, those added later too |
 | Jarl of *hold* | Holds that hold. Ten of them, one each: the nine holds and Raven Rock |
 | *Faction* Leader | Leads that faction, one for each of the sixteen |
 | Server Booster | Boosted the server. Discord's own role, never made here |
@@ -424,9 +460,9 @@ two different servers stitched together.
 | *Hold* Court, Steward of *hold*, Guard of *hold* | The offices that hold's Jarl gives (#2551): an officer at its drop box; its Steward; its Guards. Three for each of the nine holds and Raven Rock, never hoisted, so they never show as a group of their own. In the game one character of the account holds each |
 | *Faction*, *Faction* Officer | A faction's members and its Officers, which its Leader gives and takes |
 | Business Owner | Owns a business book in the game. Support gives it |
-| Member | Answered the rules and age questions. Sees Start Here, Applications and Information |
+| Member | Reacted to the rules in `#rules`, which the bot gives it for. Reads Start Here, Tickets, Information, the Roleplay Guide and Applications |
 | Banned | What the site keys a ban off. No permissions, not hoisted |
-| News Pings, Updates Pings | Made by the bot, never here. They are in the builder's list for their place in the order and nothing else |
+| News Pings, Updates Pings | Made by the bot, never here, and handed out by its buttons in `#welcome`. They are in the builder's list for their place in the order and nothing else |
 
 The council is Owner, Co-Owner and the six leads. It talks and posts in
 every read only channel and sees every staff space. "Everybody on staff" in
@@ -518,10 +554,9 @@ holds Manage Roles, to give Playtester, and Manage Threads. The rest hold
 nothing of their own; `docs/systems/discord.md` lists each set in full.
 
 Give the people testing with you **Playtester**. That role is access.play,
-and it is what opens the game. **Member** comes before it: the plan gives it
-from the button in `#start-here` once the rules and age questions are
-answered, and until the bot makes that button it is given by hand. Discord
-has no default-role setting. Then the person picks a hold.
+and it is what opens the game. **Member** comes before it: the bot gives it
+when somebody reacts to the rules in `#rules`, so nobody gives it by hand.
+Then the person picks a hold.
 
 ## The three things the bot cannot do
 
@@ -533,12 +568,10 @@ has no default-role setting. Then the person picks a hold.
 2. **Point the rules screen at the rules.** Community, then Safety Setup. That
    is what makes people accept the rules before they can type.
 
-3. **Hand Member out on join.** It cannot. Discord has no default-role
-   setting, so there is nothing to turn on under Server Settings, Roles.
-   The plan gives Member from a button in `#start-here` once the rules and
-   age questions are answered; until the bot makes it, Member is given by
-   hand. Playtester
-   (access.play) is what opens the game.
+3. **Hand Member out on join.** It cannot, and it does not need to. Discord
+   has no default-role setting; the bot gives Member when somebody reacts
+   to the rules in `#rules`. Playtester (access.play) is what opens the
+   game.
 
 ## Changing the words later
 
@@ -571,7 +604,7 @@ lines that run it. The bot itself is in the modules `bot.py` imports, one area
 each, all beside it in `bot\` (#5357): `bot_base.py` (where its files are and
 the roots it trusts, loaded first), `bot_core.py` (its settings, its client,
 the log and what every part uses), then joins, holds, the staff channel,
-reports, tickets, hold offices, factions, the testing channels, the GitHub
+reports, tickets, the Member reaction in `#rules`, hold offices, factions, the testing channels, the GitHub
 reads, the forums' post text, rules and passes, the site's lists, staff
 notices, release news, the watchdog, Report a problem, staff in the world,
 the heartbeat, the uptime ping, `on_ready`, the by-hand jobs and deletion
@@ -652,7 +685,9 @@ together): `bot.py`; the `bot_*.py` modules `bot.py` imports
 without; `card.py` and its artwork, `assets\join-card.png`; the channel ids,
 `staff-channel.txt`, `dev-channel.txt` and `news-channel.txt`;
 `requirements.txt`; `factions.json`, the named factions the Faction Leader
-form reads from beside itself; and `BotService.cs`, the service's program,
+form reads from beside itself; `NoteRules.cs`, the release note rules from
+`tools\ReleaseNotes`, which the bot asks for a pull request's note through
+pwsh's Add-Type (#6004); and `BotService.cs`, the service's program,
 which a full run puts in `service`. A file the bot reads and this list does
 not name is a file that is only ever on main, never on the box.
 
@@ -706,7 +741,7 @@ folder.
 Since #5187 a release's news is posted when the release is deployed. The box's
 deploy agent leaves each deployed Release's notes in
 `C:\Thornswood-Deploys\for-bot`, and the bot posts each release once: a
-merge's release in the dev updates channel (`dev-channel.txt`), a main release
+merge's release in #staff-news (`dev-channel.txt`), a main release
 in #news (`news-channel.txt`, by id). Notes that say nothing people would
 notice are not posted. What follows is how a Ship posts, which still holds
 for a release the agent does not deploy.
@@ -843,13 +878,13 @@ channel up by name on the server, so `-Check` names both and sends nothing
 until the script is caught up. That is its own change and its own issue on the
 board. And a whole `Setup-Discord.ps1` build switches Onboarding off again
 (`ONBOARDING_WHY` in `Build-Discord.py`), because the plan gates the server
-with the Member button in `#start-here` instead and Discord refuses that gate
+with the rules reaction in `#rules` instead and Discord refuses that gate
 on two channels while Onboarding is on.
 - **Which hold does your character call home?** Only with `-GrantMember`. Pick
   one, members must answer. Each hold gives Member and its own Citizen role,
   which opens that hold's channel; Not decided yet gives Member only. Off by
-  default, because Member comes from the rules and age questions in
-  `#start-here` (the gate in `Build-Discord.py`), and a hold is picked in
+  default, because Member comes from the rules reaction in `#rules`
+  (`bot_rules_gate.py`), and a hold is picked in
   `#choose-your-hold` after that.
 - **Rules and age.** `-Rules` and `-Age` each add one required question, off
   by default until it is decided that they belong here (entry 181).

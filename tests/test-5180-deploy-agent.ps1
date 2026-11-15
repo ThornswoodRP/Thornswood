@@ -269,18 +269,24 @@ $h = @{}; $want = ''
     $lo = [regex]::Match($agentCs, 'LoadOrderLine = "([^"]+)"').Groups[1].Value
     # The rules read verbs.json the way the broker does, which is not strict.
     function Ask([string]$line) { Set-StrictMode -Off; Test-ThornswoodGateRequest -Line $line -Verbs $verbs }
-    $req = Ask $lo
-    Yes "the agent's load order line is one the gate takes: $lo" ($lo -ne '' -and $req.Ok -and $req.Verb -eq 'Deploy-DevGamemode' -and -not $req.Build)
-    Yes '  and it runs no longer than the 50 minutes the agent waits for the gate' ($req.Minutes -le 50 -and $agentCs.Contains('Gate!.Run(LoadOrderLine, TimeSpan.FromMinutes(50)'))
+    # The agent names the Deployment's commit with -At (#6166).
+    $loAt = $lo + ' -At 0123456789abcdef0123456789abcdef01234567'
+    $req = Ask $loAt
+    Yes "the agent's load order line, with -At and a commit, is one the gate takes: $lo" ($lo -ne '' -and $req.Ok -and $req.Verb -eq 'Deploy-DevGamemode' -and -not $req.Build)
+    Yes '  and it sends only the order (-OrderOnly), at the commit the agent names' ($lo.Contains(' -OrderOnly') -and $agentCs.Contains('LoadOrderLine + " -At " + commit') -and $agentCs.Contains('var line = LoadOrderLineAt(commit);'))
+    Yes '  and it runs no longer than the 50 minutes the agent waits for the gate' ($req.Minutes -le 50 -and $agentCs.Contains('Gate!.Run(line, TimeSpan.FromMinutes(50)'))
+    Yes '  and the gate refuses an -At that is not a whole commit' (-not (Ask ($lo + ' -At main')).Ok)
     $req = Ask 'Check-ProdParity'
     Yes 'the gate takes the parity line the agent sends, Check-ProdParity' ($req.Ok -and $agentCs.Contains('Gate!.Run("Check-ProdParity"'))
     $parity = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\vps\Check-ProdParity.ps1'))
     Yes '  and it prints the REVIEW rows the agent reads' ($parity.Contains('"REVIEW  {0} {1}: expected {2}, found {3}"') -and $agentCs.Contains('^REVIEW  (\S+) (.+?): expected (.*?), found (.*)$'))
     $dg = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\deploy\Deploy-DevGamemode.ps1'))
-    foreach ($f in 'records/collection-plugins.json', 'records/collection-dropped.json', 'game/data/last-plugin.json', 'game/data/last-plugin.recipe', 'game/content/Thornswood-Content.esp') {
+    foreach ($f in 'records/collection-plugins.json', 'records/collection-dropped.json', 'game/data/last-plugin.json') {
         $win = $f.Replace('/', '\')
         Yes "  the agent moves the order when $f changes, a file -LoadOrder -FromRecord reads" ($agentCs.Contains('"' + $f + '"') -and ($dg.Contains($f) -or $dg.Contains($win) -or $dg.Contains("'" + (Split-Path -Leaf $win) + "'")))
     }
+    $lop = [regex]::Match($agentCs, '(?s)LoadOrderPaths =\s*\[(.*?)\];').Groups[1].Value
+    Yes '  and not when our own plugins change: they are the Release''s (#6175)' ($lop -ne '' -and -not $lop.Contains('Thornswood-Content.esp') -and -not $lop.Contains('last-plugin.recipe'))
     $prog = [IO.File]::ReadAllText((Join-Path $Repo 'tools\DeployAgent\Program.cs'))
     Yes 'only the service takes the gate steps, never a deploy by tag inside a gate verb' ($prog -match '(?s)if \(verb == "service"\)\s*\{\s*agent\.Gate = new GatePipe\(\);')
 
@@ -290,11 +296,32 @@ $h = @{}; $want = ''
     else {
         $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'; $env:DOTNET_NOLOGO = '1'
         $tests = Join-Path $Repo 'tools\DeployAgent.Tests'
-        $rs = & dotnet restore $tests --locked-mode 2>&1
-        Yes 'dotnet restore from the locked packages' ($LASTEXITCODE -eq 0)
-        if ($LASTEXITCODE -ne 0) { $rs | Select-Object -Last 10 | ForEach-Object { Write-Host "  $_" } }
+        $rs = @(& dotnet restore $tests --locked-mode --disable-build-servers 2>&1 | ForEach-Object { "$_" })
+        $restored = $LASTEXITCODE -eq 0
+        # When it refuses, dotnet's own error lines go in the FAIL lines
+        # (#5925): a gate annotation carries a harness's FAIL lines and
+        # nothing else it printed (Nightly-Harnesses.ps1 Get-FailSaid,
+        # #5660), and the job log below them is too big for a Bot to read
+        # (Ops #266). The first is on the check's own line, each other one
+        # on a line of its own, at most ten; the last lines stand in when
+        # dotnet printed no error line. Error lines are what
+        # scripts\release\Invoke-Said.ps1 calls one.
+        $why = @()
+        if (-not $restored) {
+            . (Join-Path $Repo 'scripts\release\Invoke-Said.ps1')
+            $said = @($rs | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+            $why = @($said | Where-Object { $_ -match $SAID_ERROR -and $_ -notmatch '^Restore failed in ' })
+            if (-not $why.Count) { $why = @($said | Select-Object -Last 3) }
+            if (-not $why.Count) { $why = @('it printed nothing') }
+            $why = @($why | Select-Object -First 10 | ForEach-Object { if ($_.Length -gt 300) { $_.Substring(0, 300) + '...' } else { $_ } })
+        }
+        Yes ('dotnet restore from the locked packages' + $(if ($why.Count) { ': ' + $why[0] } else { '' })) $restored
+        if (-not $restored) {
+            foreach ($w in @($why | Select-Object -Skip 1)) { Write-Host ('FAIL    dotnet restore said: ' + $w) }
+            $rs | Select-Object -Last 10 | ForEach-Object { Write-Host "  $_" }
+        }
         else {
-            $t = & dotnet test $tests --no-restore 2>&1
+            $t = & dotnet test $tests --no-restore --disable-build-servers 2>&1
             Yes 'dotnet test on tools/DeployAgent.Tests' ($LASTEXITCODE -eq 0)
             if ($LASTEXITCODE -ne 0) { $t | Select-Object -Last 30 | ForEach-Object { Write-Host "  $_" } }
         }

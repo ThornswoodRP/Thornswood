@@ -1,0 +1,7 @@
+{
+  "issue": 4549,
+  "environment": "dev",
+  "steps": [
+    { "inGame": "On dev, mine a vein with a pickaxe until the swing ends, then try to jump and sprint. Before starting the game again, send Data\\Platform\\thornswood-front.log, since the game empties it at each start.", "doneWhen": "Every line of that log with mining in it is on #4549, with whether jump and sprint worked." }
+  ]
+}

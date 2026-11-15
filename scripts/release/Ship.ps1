@@ -99,8 +99,8 @@
 
 .PARAMETER Notes
   What customers read about this release: the launcher's News tab, the site
-  and #news for a main release, the dev launcher's News tab and the dev
-  updates channel for a dev release. Mandatory, and the only option taken by
+  and #news for a main release, the dev launcher's News tab and
+  #staff-news for a dev release. Mandatory, and the only option taken by
   position, so it can come first without its name. The first line is the
   title, a line starting with a dash becomes a bullet, and the rest becomes
   the body. The server's warning before the restart carries the title only.
@@ -397,16 +397,20 @@ Write-Host '  SHIP' -ForegroundColor White
 # as those. A title of at least three words that is not a placeholder, and
 # at least one "- " line saying what somebody will notice. Checked before
 # anything is built, so nothing is half done when it stops.
-$noteLines = @($Notes -split "`r?`n")
-$noteTitle = (@($noteLines | Where-Object { $_.Trim() }) + @(''))[0].Trim()
-$noteBullets = @($noteLines | Where-Object { $_ -match '^\s*-\s*\S' -and ($_ -replace '^\s*-\s*', '').Trim().Length -ge 12 })
-$placeholder = $noteTitle -match '^[\W_]*$' -or $noteTitle -match '^(test|testing|wip|update|updates|fix|fixes|changes|stuff|dev|build|misc)\W*$'
-if ($placeholder -or @($noteTitle -split '\s+' | Where-Object { $_ }).Count -lt 3 -or $noteBullets.Count -lt 1) {
+#
+# The rules are tools\ReleaseNotes\NoteRules.cs, the one copy, which pwsh
+# compiles here (#5354): thornswood-notes builds the same file for the
+# Release note check on every pull request, and the box that runs a Ship has
+# no .NET SDK. NoteRules.cs says why each rule exists: on 26 and 27 September
+# notes went out saying players, naming PR #239, env variables, code names
+# and the shipping machine, and one list said "Launcher 1.1.101" twice.
+Add-Type -Path (Join-Path $RepoDir 'tools/ReleaseNotes/NoteRules.cs')
+$shapeProblems = @([Thornswood.ReleaseNotes.NoteRules]::ShapeProblems($Notes))
+if ($shapeProblems.Count) {
     Write-Host ''
     Say '  STOP. These notes are what people read in the launcher, on the site and' 'Red'
     Say '  in Discord, and they need a real title and details. Nothing was built.' 'Red'
-    if ($placeholder -or @($noteTitle -split '\s+' | Where-Object { $_ }).Count -lt 3) { Say "  The title '$noteTitle' is too short to say what changed." 'Yellow' }
-    if ($noteBullets.Count -lt 1) { Say '  There is no detail line: at least one line starting with "- ".' 'Yellow' }
+    foreach ($p in $shapeProblems) { Say "  $p" 'Yellow' }
     Write-Host ''
     Say '  The shape, written from the side of the person playing:' 'DarkGray'
     Say '      .\scripts\release\Ship.ps1 -Channel dev "The scroll''s Continue gives you the full three minutes' 'DarkGray'
@@ -415,11 +419,8 @@ if ($placeholder -or @($noteTitle -split '\s+' | Where-Object { $_ }).Count -lt 
     exit 1
 }
 
-# And what the words may be. Note-Rules.ps1 says why: on 26 and 27 September
-# notes went out saying players, naming PR #239, env variables, code names and
-# the shipping machine, and one list said "Launcher 1.1.101" twice.
-. (Join-Path $PSScriptRoot 'Note-Rules.ps1')
-$noteProblems = @(Get-NoteProblems $Notes)
+# And what the words may be.
+$noteProblems = @([Thornswood.ReleaseNotes.NoteRules]::Problems($Notes))
 if ($noteProblems.Count) {
     Write-Host ''
     Say '  STOP. These notes are for the people who play, and they say things only' 'Red'
@@ -449,7 +450,7 @@ if ($repeats.Count) {
 }
 Write-Host "  $Notes" -ForegroundColor DarkGray
 
-# The words in the files people read, not only the notes. Note-Rules above
+# The words in the files people read, not only the notes. NoteRules above
 # reads the release notes. Check-Words reads the launcher window,
 # and every other page a Ship sends out (issue #1081). A dev Ship may be run
 # from any branch, including one whose pull request build never ran or went
@@ -938,7 +939,7 @@ if ($FromFeed -and $revMoveFrom) {
 
 # ------------------------------------------------------------ publish sign gate
 # The release manifest is signed (Publish-Update.ps1, Release-Manifest.ps1), so
-# only a machine that can sign it may Ship, dev included. Ship sends no launcher
+# only a machine that can sign it may Ship, dev included (docs/guide/how-work-moves.md, "Signing, the build check, and the six shared files"). Ship sends no launcher
 # (#4825): the launcher goes out signed through Velopack, from
 # .github\workflows\merge-release.yml and promote-main.yml, and nothing here
 # builds, signs or checks one. Assert-PublishSigned.ps1 is dot-sourced at the
@@ -1126,7 +1127,7 @@ if ($published -ne 0 -and $published -ne 2) {
 if ($published -eq 2) {
     Head 'Done'
     Say 'Nothing was released. The build already matches the last release.' 'Yellow'
-    Say ('  No news entry was added, ' + $(if ($Dev) { 'the dev updates channel' } else { '#news' }) +
+    Say ('  No news entry was added, ' + $(if ($Dev) { '#staff-news' } else { '#news' }) +
          ' was not posted to, and no server was told.') 'Yellow'
     $devMarks = $global:ThornswoodDevMarks
     if (-not $Dev) {
@@ -1253,7 +1254,7 @@ if (-not $DryRun) {
 # was set up, the script worked, and #news sat empty through every release.
 # It exits quietly on its own if no webhook is configured, so there is nothing
 # to guard here.
-# A dev release goes to the dev updates channel and nowhere else. Not #news,
+# A dev release goes to #staff-news and nowhere else. Not #news,
 # not the website (which reads main's feed only), and not the main
 # launcher, which reads main's feed. The dev launcher's News tab gets it from
 # the dev feed, as it always did; this is so the people testing it are told
@@ -1272,7 +1273,7 @@ if (-not $DryRun) {
         }
     } else {
         Say ('  Publish-Discord.ps1 is missing, ' +
-             $(if ($Dev) { 'the dev updates channel' } else { '#news' }) +
+             $(if ($Dev) { '#staff-news' } else { '#news' }) +
              ' was not told.') 'Yellow'
     }
 }
@@ -1403,7 +1404,7 @@ Head 'Done'
 # do not know it. Said here because this is the screen that gets looked at.
 if ($global:ThornswoodDiscordResult -eq 'failed') {
     Say ('The release went out, but ' +
-         $(if ($Dev) { 'the dev updates channel' } else { '#news' }) +
+         $(if ($Dev) { '#staff-news' } else { '#news' }) +
          ' was NOT told.') 'Yellow'
     Say ('  .\scripts\ops\Publish-Discord.ps1' + $(if ($Dev) { ' -Dev' } else { '' }) +
          '   posts it on its own') 'Yellow'
