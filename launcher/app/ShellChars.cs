@@ -298,6 +298,8 @@ namespace Thornswood
             if (chosenId > 0) choseAt = DateTime.Now;
             chosenId = id;
             JoinPass.For(id, PresenceLog);
+            // Every character this session plays, for its end (#4643).
+            Discord.Played(id);
             Log("chose character " + id);
             // The list is the site's (#5938), so the pick and the time are
             // told to it off the window's thread, in that order.
