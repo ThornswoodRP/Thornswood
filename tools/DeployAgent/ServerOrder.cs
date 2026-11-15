@@ -129,6 +129,11 @@ public static class ServerOrder
     /// order cannot be the server's, having touched nothing of the server.</summary>
     public static Move Stage(string root, IReadOnlyList<string> want, Collection record, string storeRoot, string stage, IReadOnlyCollection<string> ours, Action<string> log)
     {
+        // Every name is joined to a folder below, so each has to be a plain
+        // file name: Of holds a Release's to that, and so does any caller.
+        foreach (var n in want)
+            if (n == "" || n is "." or ".." || n.IndexOfAny(['/', '\\', ':']) >= 0 || Path.IsPathRooted(n) || Path.GetFileName(n) != n)
+                throw new InvalidDataException($"the order names a plugin that is not a file name: \"{n}\"");
         var settingsPath = Path.Combine(root, Settings);
         var settings = JsonNode.Parse(File.ReadAllText(settingsPath).TrimStart('\uFEFF'))?.AsObject()
             ?? throw new InvalidDataException("the server's server-settings.json is not an object");

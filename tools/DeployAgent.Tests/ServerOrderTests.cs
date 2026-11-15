@@ -159,6 +159,11 @@ public sealed partial class AgentTests
         Assert.Throws<InvalidDataException>(() => ServerOrder.Of(Zip(Catalogue("..\\x.esp"))));
         Assert.Throws<InvalidDataException>(() => ServerOrder.Of(Zip(Catalogue("a.esp", "A.esp"))));
         Assert.Throws<InvalidDataException>(() => ServerOrder.Of(Zip("{\"version\":1}")));
+        var root = Temp();
+        File.WriteAllText(Path.Combine(root, ServerOrder.Settings), "{\"loadOrder\":[]}");
+        var rec = ServerOrder.ReadRecord(CollectionRecord(("a.esp", B("a"))));
+        foreach (var bad in new[] { "/etc/x.esp", "..", "sub/a.esp", "C:\\x.esp" })
+            Assert.Throws<InvalidDataException>(() => ServerOrder.Stage(root, [bad], rec, Temp(), Path.Combine(root, "stage"), [], _ => { }));
         Assert.True(ServerOrder.Same(["C:/S/plugins/a.esp", "b.esp"], ["a.esp", "b.esp"]));
         Assert.False(ServerOrder.Same(["b.esp", "a.esp"], ["a.esp", "b.esp"]));
     }
