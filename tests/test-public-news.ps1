@@ -16,7 +16,7 @@
 
   The site's News page reads the build Releases main has reached since #5801
   (site/lib/news.js, "news from the Release"), notes written for people and
-  held to Note-Rules.ps1, so no feed line reaches it any more
+  held to the release note rules, so no feed line reaches it any more
   (tests\test-5187-site-news.js). This reads Publish-Server.ps1 and checks
   those lines are no longer written at all, and that Publish-Discord, which
   still posts from a feed, strips every kind of them.

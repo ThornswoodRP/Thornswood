@@ -1,0 +1,7 @@
+{
+  "issue": 4584,
+  "environment": "dev",
+  "steps": [
+    { "inGame": "Two people on dev each look at the other once in first person and once in third person (F switches), then each sends Data\\Platform\\thornswood-front.log before starting the game again.", "doneWhen": "The lines starting looking at from both logs are on #4584, with what prompt each person saw." }
+  ]
+}

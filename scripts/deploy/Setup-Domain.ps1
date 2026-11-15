@@ -355,7 +355,7 @@ Get-Process caddy -EA SilentlyContinue | Stop-Process -Force -EA SilentlyContinu
 # 2, measured on the VPS on 5 October, and in the kernel trace of 4 October
 # 17:18 its reads took a median of 47 ms, held back the way the game
 # server's were (#1931). 4 gives Normal, I/O priority 2 and memory priority
-# 5, what the services on the box run at. tests\test-service-task-priority.ps1
+# 5, what the services on the box run at. scripts\tests\test-service-task-priority.ps1
 # measures all three.
 `$s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries ``
       -DontStopIfGoingOnBatteries -RestartCount 10 -RestartInterval (New-TimeSpan -Minutes 1) ``

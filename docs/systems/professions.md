@@ -19,6 +19,22 @@ counts, and the item list sit.
 | [Tailor](professions/tailor.md) | [Liverywright](professions/tailor/liverywright.md), [Haberdasher](professions/tailor/haberdasher.md) |
 | [Woodworker](professions/woodworker.md) | [Charburner](professions/woodworker/charburner.md), [Woodwright](professions/woodworker/woodwright.md) |
 
+## Contents
+
+- [The ladder](#the-ladder)
+- [How a recipe gets its rank](#how-a-recipe-gets-its-rank)
+- [What the server allows](#what-the-server-allows)
+- [Crude, fine and masterwork](#crude-fine-and-masterwork)
+- [Apprentices](#apprentices)
+- [Benches, in one picture](#benches-in-one-picture)
+- [The tool of each trade](#the-tool-of-each-trade)
+- [The book on K](#the-book-on-k)
+- [The guides on K](#the-guides-on-k)
+- [Everything has a maker](#everything-has-a-maker)
+- [Names that are not a profession](#names-that-are-not-a-profession)
+- [Staff](#staff)
+- [Where this is](#where-this-is)
+
 ## The ladder
 
 Four ranks: novice, advanced, expert, master. Everyone starts at novice.
@@ -276,9 +292,11 @@ can be read before it is picked. A page says three things:
 The facts are read out of `game\data\recipes.json`,
 `game\data\mine-buildings.json`, `game\data\hunts.json` and the
 gamemode's bench table, maneuvers and tuning by
-`scripts\dev\Build-ProfessionGuides.js`, which writes them into
-`game\ui\thornswood-skills.js`. Run it after any of those change;
-`tests\test-3165-profession-guides.js` fails while the page is behind.
+`scripts\dev\Build-ProfessionGuides.js`, which writes them into a file of
+their own, `game\ui\thornswood-profession-guides.js`, that the K panel
+reads when it draws a page. It is a step of the content chain, so a content
+build rebuilds the guides with the tables they come from;
+`game\tests\test-3165-profession-guides.js` fails while the page is behind.
 
 ## Everything has a maker
 

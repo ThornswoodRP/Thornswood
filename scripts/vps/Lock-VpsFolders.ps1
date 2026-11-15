@@ -66,7 +66,7 @@
   -WhatIf says what it would change and changes nothing. Every folder is read
   back afterwards: its rules, one line each, and whether Users still reaches it.
 
-  tests\test-server-acl.ps1 and tests\test-vps-service-folders.ps1 run it against scratch folders.
+  scripts\tests\test-server-acl.ps1 and scripts\tests\test-vps-service-folders.ps1 run it against scratch folders.
 #>
 param(
     [switch]$WhatIf,

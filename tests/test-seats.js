@@ -614,6 +614,7 @@ async function join(standing, status, channel) {
   let sent = null;
   const env = {
     p: '/api/play/join', req: { method: 'POST' }, res: {},
+    chars: require('../site/lib/characters'),
     body: async function () { return JSON.stringify({ ticket: 'D1', profileId: 4242, channel: channel || '' }); },
     readTicket: function (s) { return s ? { d: String(s), n: 'name' } : null; },
     standing: async function () {

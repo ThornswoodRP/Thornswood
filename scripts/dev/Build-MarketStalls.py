@@ -3,8 +3,8 @@ Build-MarketStalls.py (#3160)
 
 Finds every market stall the game places in a town, out of the plugins, and
 writes them down in game\\data\\market-stalls.json. Then
-scripts\\dev\\Build-MarketStallsGamemode.js carries the table into the
-gamemode and the front plugin.
+scripts\\dev\\Build-MarketStallTables.js carries the table into the
+gamemode's tables and the front plugin's.
 
 WHY. Patrick, 22 October 2026, on #3160: "Stalls are fixed market stalls,
 claimed like property." So the stalls are the ones already standing in the
@@ -402,7 +402,7 @@ def main():
         return 0
     io.open(args.out, 'w', encoding='utf-8', newline='\n').write(out_text)
     print('')
-    print('wrote %s, %d stall(s). Now run node scripts/dev/Build-MarketStallsGamemode.js' % (args.out, len(stalls)))
+    print('wrote %s, %d stall(s). Now run node scripts/dev/Build-MarketStallTables.js' % (args.out, len(stalls)))
     return 0
 
 

@@ -57,21 +57,106 @@
               each trader's own saved copy, retired traders' too (the purse
               service, at NPC startup, #2652)
 
-  A part that answers that it took is marked done in the file, the time it
-  ran, so it never runs again; when every part is done the file is deleted,
-  and nothing about who was released stays on the server. A part whose write
-  did not take is said in the log and waits for the next start, and so does
-  one whose block never got as far as asking; only those run then
+  A part that answers that it took is marked done in the taken list
+  (deleted-characters.taken.json, thornswoodTakeReleaseList below), the time
+  it ran, so it never runs again; when every part is done that file is
+  deleted, and nothing about who was released stays on the server. A part
+  whose write did not take is said in the log and waits for the next start,
+  and so does one whose block never got as far as asking; only those run then
   (__thornswoodReleaseWaiting, after the NPC startup, the last block that
   asks, says which).
-  Delete-Person.ps1 merges a new request into a list still waiting and clears
-  done, so every part runs for the new ids too; running again for an id
-  already let go finds nothing.
+  Delete-Person.ps1 merges a new request into deleted-characters.json, which
+  the server never writes: one merged in while it starts is taken at the
+  next start (#4920), and taking it in clears done for the new ids, so every
+  part runs for them too; running again for an id already let go finds
+  nothing.
 
   The log says counts and nothing else: never a name, a profile id or a form
   id. A list that cannot be read, or does not have the shape above, releases
   nothing, is left as it is, and the log says so.
 */
+// -- the release list, taken (#4920), begin --
+/*
+  THE LIST IS TAKEN, NEVER WRITTEN OVER (#4920). private\deleted-characters.json
+  is the requests: Delete-Person.ps1 and Release-List.ps1 merge a new one in
+  whenever they run, while the game server runs too. A server that wrote back
+  the copy it had read, or deleted the file once that copy was done, put
+  back or threw away a request merged in since, and nobody was told.
+
+  So the server never writes that file. It takes it, with a rename, the one
+  step no other write can come between: deleted-characters.json becomes
+  deleted-characters.taking.json, which goes into deleted-characters.taken.json,
+  the server's own, and is deleted. Only the server writes .taken (server-log.js
+  before the engine starts, then the gamemode as it loads, never at once), and
+  its marks and its deleting are there. A request merged in after the take
+  lands in a new deleted-characters.json and is taken at the next start; one
+  merged in before it is in what was taken.
+
+  Taking it in: every id of both, and a part done only where it is done on
+  both, so a part that ran for the ids already taken runs again for the new
+  ones (running again for an id already let go finds nothing). A .taking left
+  by a stop between the rename and the merge goes in first, and a new list is
+  never renamed onto it.
+
+  Answers { list, file, left }: list is what is taken (null for none) and
+  file is .taken; left, when set, is a request file that could not be taken
+  and is left where it is, for a person: { bad, file } for one that is not a
+  list (bad is what it held, null when it would not parse), or { error, file }.
+  A .taken that is not a list answers { bad, file } or { error, file } and no
+  list, so nothing is let go. Server-Log.js carries this same text, and
+  tests\test-4920-taken-list.js holds the two the same.
+*/
+function thornswoodTakeReleaseList(fs, path, priv, valid) {
+  var LIST = path.join(priv, 'deleted-characters.json');
+  var TAKING = path.join(priv, 'deleted-characters.taking.json');
+  var TAKEN = path.join(priv, 'deleted-characters.taken.json');
+  function why(e) { return (e && (e.code || e.message)) || String(e); }
+  function load(p) {
+    var text;
+    try { text = fs.readFileSync(p, 'utf8'); }
+    catch (e) {
+      if (e && e.code === 'ENOENT') { return { none: true }; }
+      return { error: why(e), file: p };
+    }
+    var v = null;
+    try { v = JSON.parse(String(text).replace(/^\uFEFF/, '')); } catch (e) { v = null; }
+    return valid(v) ? { list: v } : { bad: v, file: p };
+  }
+  function ids(a, b) {
+    var seen = {}, out = [];
+    (a || []).concat(b || []).forEach(function (n) { if (!seen[n]) { seen[n] = true; out.push(n); } });
+    return out.sort(function (x, y) { return x - y; });
+  }
+  var left = null;
+  var taking = load(TAKING);
+  if (taking.none) {
+    var asked = load(LIST);
+    if (asked.list) {
+      try { fs.renameSync(LIST, TAKING); taking = load(TAKING); }
+      catch (e) { if (!(e && e.code === 'ENOENT')) { left = { error: why(e), file: LIST }; } }
+    } else if (!asked.none) { left = asked; }
+  }
+  if (!taking.none && !taking.list) { left = taking; taking = { none: true }; }
+  var taken = load(TAKEN);
+  if (!taken.none && !taken.list) { return taken; }
+  if (!taking.list) { return { list: taken.list || null, file: TAKEN, left: left }; }
+  var was = taken.list || { profiles: [], actors: [], done: taking.list.done || {} };
+  var a = was.done || {}, b = taking.list.done || {}, done = {};
+  Object.keys(a).forEach(function (k) {
+    if (Object.prototype.hasOwnProperty.call(b, k)) { done[k] = Math.max(a[k], b[k]); }
+  });
+  var list = { profiles: ids(was.profiles, taking.list.profiles), actors: ids(was.actors, taking.list.actors), done: done };
+  try {
+    fs.writeFileSync(TAKEN + '.tmp', JSON.stringify(list));
+    fs.renameSync(TAKEN + '.tmp', TAKEN);
+  } catch (e) {
+    return { error: why(e), file: TAKEN };
+  }
+  try { fs.unlinkSync(TAKING); }
+  catch (e) { left = { error: why(e), file: TAKING }; }
+  return { list: list, file: TAKEN, left: left };
+}
+// -- the release list, taken (#4920), end --
 (function () {
   'use strict';
   var g = (typeof globalThis !== 'undefined' ? globalThis : this);
@@ -85,10 +170,10 @@
   var fs = null, path = null;
   try { fs = require('fs'); path = require('path'); } catch (e) { st = null; }
 
-  // Where the list is: the privDir server-settings.json names, or private
-  // when it names none. A settings file that will not read or parse names no
-  // folder (#2871): the list is not looked for in one guessed for it, which
-  // would let nothing go and say nothing. It is said, and nothing is let go.
+  // The privDir server-settings.json names, or private when it names none.
+  // A settings file that will not read or parse names no folder (#2871): the
+  // list is not looked for in one guessed for it, which would let nothing go
+  // and say nothing. It is said, and nothing is let go.
   function where() {
     var cfg = null;
     try { cfg = JSON.parse(String(fs.readFileSync('server-settings.json', 'utf8')).replace(/^\uFEFF/, '')); }
@@ -97,7 +182,7 @@
            '), so where the list is is not known and nothing was let go');
       return null;
     }
-    return path.join((cfg && cfg.privDir) ? String(cfg.privDir) : 'private', 'deleted-characters.json');
+    return (cfg && cfg.privDir) ? String(cfg.privDir) : 'private';
   }
 
   // One shape for a character's form id (#2870); game\form-id.js is the
@@ -132,39 +217,44 @@
     }
   }
 
-  // The list, read once a load, field by field. A profile that is not a whole
-  // number above 0, an actor that is not a runtime form id (isFormId), or a
-  // done mark that is not a time, makes the whole list unreadable rather than
-  // half read.
-  function read() {
-    if (st !== undefined) { return st; }
-    st = null;
-    var file = where();
-    if (!file) { return st; }
-    var text = null;
-    try { text = fs.readFileSync(file, 'utf8'); }
-    catch (e) {
-      if (e && e.code !== 'ENOENT') { rlog(file + ' could not be read (' + e.code + '), so nothing was let go'); }
-      return st;
-    }
-    var list = null;
-    try { list = JSON.parse(String(text).replace(/^\uFEFF/, '')); } catch (e) { list = null; }
+  // The list's shape, field by field. A profile that is not a whole number
+  // above 0, an actor that is not a runtime form id (isFormId), or a done mark
+  // that is not a time, makes the whole list unreadable rather than half read.
+  function isList(list) {
     var idsOk = function (a, top) {
       return Array.isArray(a) && a.every(function (n) { return Number.isSafeInteger(n) && n > 0 && n <= top; });
     };
-    var ok = !!list && typeof list === 'object' && !Array.isArray(list) &&
+    return !!list && typeof list === 'object' && !Array.isArray(list) &&
       idsOk(list.profiles, Number.MAX_SAFE_INTEGER) &&
       (list.actors === undefined || (Array.isArray(list.actors) && list.actors.every(isFormId))) &&
       (list.done === undefined || (!!list.done && typeof list.done === 'object' && !Array.isArray(list.done) &&
         Object.keys(list.done).every(function (k) { return Number.isSafeInteger(list.done[k]) && list.done[k] > 0; })));
-    if (!ok) {
-      var old = !!list && typeof list === 'object' && Array.isArray(list.actors) &&
-        list.actors.some(function (n) { return Number.isSafeInteger(n) && n > 0 && n <= 0xffffff; });
-      rlog(file + (old ? ' holds form ids in the old shape, from a build before #2870, and is not read'
-        : ' is not a list of deleted characters') + ', so nothing was let go and it is left as it is' +
-        (old ? '; docs\\GAMEMODE.md says what to do' : ''));
-      return st;
+  }
+  // What a file that is not a list is said as, and left as it is.
+  function notList(file, v, tail) {
+    var old = !!v && typeof v === 'object' && Array.isArray(v.actors) &&
+      v.actors.some(function (n) { return Number.isSafeInteger(n) && n > 0 && n <= 0xffffff; });
+    rlog(file + (old ? ' holds form ids in the old shape, from a build before #2870, and is not read'
+      : ' is not a list of deleted characters') + ', so ' + tail + ' and it is left as it is' +
+      (old ? '; docs\\GAMEMODE.md says what to do' : ''));
+  }
+
+  // The list, taken once a load (thornswoodTakeReleaseList, above).
+  function read() {
+    if (st !== undefined) { return st; }
+    st = null;
+    var priv = where();
+    if (!priv) { return st; }
+    var got = thornswoodTakeReleaseList(fs, path, priv, isList);
+    if (got.left && got.left.error) {
+      rlog(got.left.file + ' could not be taken (' + got.left.error + '), so the requests in it wait for the next start');
+    } else if (got.left) {
+      notList(got.left.file, got.left.bad, got.list ? 'the requests in it were not taken,' : 'nothing was let go');
     }
+    if (got.error) { rlog(got.file + ' could not be read or written (' + got.error + '), so nothing was let go'); return st; }
+    if (!got.list && got.bad !== undefined) { notList(got.file, got.bad, 'nothing was let go'); return st; }
+    if (!got.list) { return st; }
+    var file = got.file, list = got.list;
     var P = {}, A = {};
     list.profiles.forEach(function (n) { P[n] = true; });
     (list.actors || []).forEach(function (n) { A[n] = true; });

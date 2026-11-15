@@ -69,7 +69,7 @@ param(
     [int]   $Port     = 7777,
     [switch]$MinimalLoadOrder,   # masters plus Thornswood-Content.esp only
     [switch]$FullLoadOrder,      # list everything, indices be damned. for bisecting
-    [switch]$Vortex,             # read the Steam game and the active Vortex profile
+    [switch]$Vortex,             # read the Steam game and the Thornswood Vortex profile's list (#4804)
     [switch]$NewOrder,           # take the plugin list's order as it is, for a world being wiped
     # Write only the load order this run would give the server, to this file,
     # as { "loadOrder": [paths] }, and nothing into the build: the order a new
@@ -159,9 +159,9 @@ $ErrorActionPreference = 'Stop'   # before any file loads, so one that is missin
 # that points at it keeps working long after it stopped being the truth.
 #
 # -Vortex reads the live one instead: Skyrim where Steam put it, with the mods
-# Vortex has deployed into it, and the plugin list of whichever Vortex profile
-# is active. That is what is loaded when the game starts, so it is what the
-# server should be built from.
+# Vortex has deployed into it, and the plugin list of the Vortex profile named
+# Thornswood, which the game's own list has to match (#4804). That is what is
+# loaded when the game starts, so it is what the server should be built from.
 function Get-SkyrimPath {
     $roots = @()
     foreach ($k in 'HKCU:\Software\Valve\Steam','HKCU:\Software\Wow6432Node\Valve\Steam') {
@@ -193,11 +193,41 @@ if ($Vortex) {
     $sk = Get-SkyrimPath
     if (-not $sk) { throw "Could not find Skyrim Special Edition through Steam, so -Vortex has nothing to read." }
     $Data    = Join-Path $sk 'Data'
-    $Plugins = Join-Path $env:LOCALAPPDATA 'Skyrim Special Edition\Plugins.txt'
-    if (-not (Test-Path -LiteralPath $Plugins)) { throw "No plugin list at $Plugins. Start Vortex, activate the Thornswood profile and deploy, then run this again." }
+    # THE THORNSWOOD PROFILE'S LIST, BY NAME (#4804). This took Windows' own
+    # plugins.txt, which holds whichever Vortex profile deployed last, and
+    # asked only that it was there, so with another profile deployed last the
+    # servers' order was built from that profile's list and nothing said so.
+    # The profile is found the one way Ship and Check-ShipReady find it
+    # (Assert-VortexProfile, Get-VortexProfileDir), and the live list is held
+    # to it the way Ship holds its copies (Get-LoadOrderCopyDiffs): the game
+    # loads the live list, so one that is not the profile's is not what the
+    # Thornswood profile deploys. Either stops here, before anything is written.
+    $loVortex = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\mods\LoadOrder.ps1'))
+    if (-not (Test-Path -LiteralPath $loVortex)) { throw "$loVortex is missing, so -Vortex cannot find the Thornswood profile. Nothing was written." }
+    . $loVortex
+    try { $twVortex = Assert-VortexProfile 'Thornswood' }
+    catch {
+        Write-Host ''
+        Write-Host ('  STOP. ' + $_.Exception.Message) -ForegroundColor Red
+        Write-Host '  Nothing was written.' -ForegroundColor Red
+        throw ($_.Exception.Message + ' Nothing was written.')
+    }
+    $Plugins = Join-Path $twVortex 'plugins.txt'
+    if (-not (Test-Path -LiteralPath $Plugins)) { throw "The Thornswood Vortex profile at $twVortex has no plugins.txt. In Vortex, activate the Thornswood profile and deploy, then run this again. Nothing was written." }
+    $live = Join-Path $env:LOCALAPPDATA 'Skyrim Special Edition\Plugins.txt'
+    if (-not (Test-Path -LiteralPath $live)) { throw "No plugin list at $live, so whether the game loads the Thornswood profile's list is not known. In Vortex, activate the Thornswood profile and deploy, then run this again. Nothing was written." }
+    $liveDiffs = @(Get-LoadOrderCopyDiffs @{ 'Vortex Thornswood\plugins.txt' = $Plugins; 'Skyrim Special Edition\Plugins.txt' = $live })
+    if ($liveDiffs.Count) {
+        Write-Host ''
+        Write-Host "  STOP. The game's plugin list at $live is not the Thornswood profile's list, at $Plugins." -ForegroundColor Red
+        foreach ($d in $liveDiffs) { Write-Host "    $d" -ForegroundColor Red }
+        Write-Host '  Another Vortex profile deployed last. In Vortex, activate the Thornswood profile and deploy, then run this again.' -ForegroundColor Yellow
+        Write-Host '  Nothing was written.' -ForegroundColor Red
+        throw "The game's plugin list at $live is not the Thornswood profile's list ($($liveDiffs -join '; ')). Nothing was written."
+    }
     Write-Host "  -Vortex" -ForegroundColor Cyan
     Write-Host "    data     $Data" -ForegroundColor DarkGray
-    Write-Host "    plugins  $Plugins" -ForegroundColor DarkGray
+    Write-Host "    plugins  $Plugins, the Thornswood profile's, which the game's list matches" -ForegroundColor DarkGray
 }
 
 

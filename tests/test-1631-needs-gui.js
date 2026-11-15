@@ -11,7 +11,7 @@
 //           for the person, which the engine clears when they move.
 //   /needs  gone with #1631, and back as a line of text for somebody who
 //           hid the bars (Patrick, 11 Oct, #2267): one of the words people
-//           are told, and tests/test-2267-needs-text.js holds what it says.
+//           are told, and game/tests/test-2267-needs-text.js holds what it says.
 //           The four bars, and the Body page on K, still say it all.
 //   /eat, /drink  gone. They fed and watered with no item at all; eating and
 //           drinking is the item (/ate). Said on #1382 before it went.
@@ -411,7 +411,7 @@ function needsRig() {
 
   yes('D2 K has a Body section in the world, never while creating, with no Confirm',
       /if \(!creating\(\) && bodyView\(\)\) sections\.push\('body'\);/.test(skills) &&
-      /section !== 'apprentice' && (?:section !== 'hairdye' && )?section !== 'body'(?: && section !== 'alchemy')?(?: && section !== 'college')?\);/.test(skills) &&
+      /section !== 'apprentice' && (?:section !== 'hairdye' && )?section !== 'body'(?: && section !== 'alchemy')?(?: && section !== 'college')?(?: && section !== 'contracts')?\);/.test(skills) &&
       /if \(section === 'body'\) return 0;/.test(skills));
 
   const parts = ['function bodyView() {', 'function bodyWorries(v) {', 'function tempWord(t) {', 'function drawNeeds() {']

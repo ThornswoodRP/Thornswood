@@ -37,7 +37,8 @@ THE PART THAT HAS NOT BEEN DONE HERE BEFORE: placed references live inside
 compressed records, and every other scanner in this repo skips those. A
 compressed record is a four byte uncompressed length and then a zlib stream, and
 zlib is two header bytes and raw deflate after them. Nothing about a door can be
-learned without inflating them, so this does, and counts how many it could not.
+learned without inflating them, so this does, and stops on one that will not
+(#4553): a door table missing the doors in it is a table of no load order.
 
 WHAT IT WRITES. game\\data\\doors.json, and the three tables the server
 carries out of it, BUILDING_BY_DOOR, BUILDING_NAME and WAY_OUT, each in
@@ -57,7 +58,6 @@ import json
 import os
 import struct
 import sys
-import zlib
 
 import bsa
 import gamemode_tables
@@ -96,15 +96,14 @@ def masters_of(buf):
 
 
 class Plugin(object):
+    """One plugin, read whole. A file that is not a plugin, and a compressed
+    record that will not inflate, raise own_plugins.Unreadable (#4553)."""
+
     def __init__(self, path, name):
-        self.buf = open(path, 'rb').read()
+        self.buf = own_plugins.read_plugin(path, name)
         self.name = name
-        self.ok = len(self.buf) >= 24 and self.buf[:4] == b'TES4'
-        if not self.ok:
-            return
         self.masters = masters_of(self.buf)
         self.header = struct.unpack_from('<I', self.buf, 4)[0]
-        self.failed = 0
         self.localised = bool(struct.unpack_from('<I', self.buf, 8)[0] & LOCALISED)
         self.strings = {}
 
@@ -139,13 +138,8 @@ class Plugin(object):
         raw = self.buf[p + 24:p + 24 + size]
         if not (flags & COMPRESSED):
             return raw
-        if len(raw) <= 6:
-            return b''
-        try:
-            return zlib.decompress(raw[4:])
-        except zlib.error:
-            self.failed += 1
-            return b''
+        return own_plugins.inflate(raw, self.name, self.buf[p:p + 4],
+                                   struct.unpack_from('<I', self.buf, p + 12)[0])
 
 
 def walk(pl, doors, out, want_bases):
@@ -253,11 +247,8 @@ def main():
     # placements. Anything else would miss every door placed before its own base
     # is read.
     doors, out = {}, {'cells': {}, 'doors': {}}
-    failed = 0
     for name in order:
-        pl = Plugin(own_plugins.plugin_path(args.data, name), name)
-        if pl.ok:
-            walk(pl, doors, out, set())
+        walk(Plugin(own_plugins.plugin_path(args.data, name), name), doors, out, set())
     print('')
     print('Door bases')
     print('  %d door record(s) across the load order' % len(doors))
@@ -265,8 +256,6 @@ def main():
     localised = 0
     for name in order:
         pl = Plugin(own_plugins.plugin_path(args.data, name), name)
-        if not pl.ok:
-            continue
         # A localised plugin's cell names are string ids, and the text is in a
         # BSA. Only the plugins that say they are localised are looked up, so a
         # plugin that stores its names as words costs nothing here.
@@ -275,7 +264,6 @@ def main():
             if pl.strings:
                 localised += 1
         walk(pl, doors, out, set(doors))
-        failed += pl.failed
 
     cells, placed = out['cells'], out['doors']
     leads = {d: r for d, r in placed.items() if r.get('to')}
@@ -290,8 +278,6 @@ def main():
     print('  %s of those are locked, %s of the locks want a named key'
           % (format(len(locked), ','), format(len(keyed), ',')))
     print('  %s carry an owner Bethesda set' % format(len(owned), ','))
-    if failed:
-        print('  %d compressed record(s) would not inflate, so this is incomplete' % failed)
 
     # A building is the interior a door opens into. Group by that, so the count
     # below is buildings rather than doorways: a house with a back door is one.
@@ -356,8 +342,7 @@ def main():
                            'with a back door a single claim.',
         'counts': {'doorBases': len(doors), 'placed': len(placed), 'lead': len(leads),
                    'locked': len(locked), 'keyed': len(keyed), 'owned': len(owned),
-                   'buildings': len(buildings), 'unpaired': unpaired,
-                   'failedToInflate': failed},
+                   'buildings': len(buildings), 'unpaired': unpaired},
         'cells': cells,
         'doors': placed,
         'buildings': {k: sorted(v) for k, v in buildings.items()},
@@ -450,4 +435,9 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except own_plugins.Unreadable as exc:
+        # Every plugin is read before anything is written.
+        print('STOP. %s. Nothing was written.' % exc)
+        sys.exit(1)

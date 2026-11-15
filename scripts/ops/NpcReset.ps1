@@ -5,7 +5,7 @@
   and moving those aside so each NPC starts again from its plugin record.
   Dot-sourced by Reset-Npcs.ps1, which sends $ThornswoodNpcReset to the box
   with the step that stops and starts the server, and by
-  tests\test-4595-npc-reset.ps1, which runs it over stand-in server folders.
+  scripts\tests\test-4595-npc-reset.ps1, which runs it over stand-in server folders.
   It does nothing on its own. Keep it ASCII. It runs on the box, in
   PowerShell 7.
 

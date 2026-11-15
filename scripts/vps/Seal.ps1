@@ -30,7 +30,7 @@
   left in a Windows key store. A 3072-bit key seals
   up to 342 bytes, far more than a token. The sealed value is base64, one line.
 
-  tests\test-3216-turnstile-seal.ps1 seals and opens with these blocks.
+  scripts\tests\test-3216-turnstile-seal.ps1 seals and opens with these blocks.
 #>
 
 # Where the box keeps the key. One folder, one file.

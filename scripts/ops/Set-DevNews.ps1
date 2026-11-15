@@ -9,7 +9,7 @@
 
   It asks for a webhook URL and nothing else. Make one first:
 
-    Discord, the dev updates channel, Edit Channel, Integrations, Webhooks,
+    Discord, #staff-news, Edit Channel, Integrations, Webhooks,
     New Webhook, then Copy Webhook URL.
 
   The URL is a credential: anyone holding it can post in that channel as the
@@ -58,7 +58,7 @@ if (Test-Path -LiteralPath $channelFile) {
 Write-Host ''
 Write-Host '  THORNSWOOD  -  where dev releases are announced' -ForegroundColor White
 Write-Host ''
-if ($wantChannel) { Say "the dev updates channel is $wantChannel" 'DarkGray' }
+if ($wantChannel) { Say "#staff-news is $wantChannel" 'DarkGray' }
 else { Say 'no channel id in bot\dev-channel.txt, so the channel cannot be checked' 'Yellow' }
 
 # What a webhook points at, asked of Discord. The URL is its own authority, so
@@ -98,7 +98,7 @@ if ($Check) {
   $url = [string](& (Join-Path $Here 'Discord-Hook.ps1') -Name dev | Select-Object -First 1)
   if (-not $url) {
     Say 'No dev webhook set, on the VPS or here. A dev release tells nobody in Discord.' 'Yellow'
-    Say 'Run .\scripts\ops\Set-DevNews.ps1 to point it at the dev updates channel.' 'DarkGray'
+    Say 'Run .\scripts\ops\Set-DevNews.ps1 to point it at #staff-news.' 'DarkGray'
     Done; exit 0
   }
   $got = Ask $url
@@ -108,7 +108,7 @@ if ($Check) {
     Say "THAT IS NOT THE DEV UPDATES CHANNEL ($wantChannel)." 'Red'
     Done; exit 1
   }
-  if ($wantChannel) { Say 'which is the dev updates channel' 'Green' }
+  if ($wantChannel) { Say 'which is #staff-news' 'Green' }
   Done; exit 0
 }
 
@@ -124,7 +124,7 @@ if ($Clear) {
 
 # --------------------------------------------------------------------- set
 Write-Host ''
-Say 'Discord, the dev updates channel, Edit Channel, Integrations, Webhooks,' 'DarkGray'
+Say 'Discord, #staff-news, Edit Channel, Integrations, Webhooks,' 'DarkGray'
 Say 'New Webhook, then Copy Webhook URL.' 'DarkGray'
 Say 'It is not printed back and it does not go into the repository.' 'DarkGray'
 Write-Host ''
@@ -160,9 +160,9 @@ Say "webhook `"$($got.name)`" posts into channel $($got.channel)" 'Green'
 
 if ($wantChannel -and $got.channel -ne $wantChannel) {
   Write-Host ''
-  Say "That is NOT the dev updates channel, which is $wantChannel." 'Red'
+  Say "That is NOT #staff-news, which is $wantChannel." 'Red'
   Say 'Dev notes in the wrong channel is the one thing this is here to stop,' 'DarkGray'
-  Say 'so nothing was saved. Make the webhook in the dev updates channel.' 'DarkGray'
+  Say 'so nothing was saved. Make the webhook in #staff-news.' 'DarkGray'
   Done; exit 1
 }
 

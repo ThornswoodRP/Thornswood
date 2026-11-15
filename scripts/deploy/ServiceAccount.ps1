@@ -62,7 +62,7 @@
   the test fails when the copy differs. Install-Voice.ps1 and
   Setup-Domain.ps1 run on this machine, so they send the functions as text
   inside the script they run on the box (Get-ThornswoodServiceAccountScript).
-  tests\test-2578-service-principals.ps1 runs it on scratch folders, and
+  scripts\tests\test-2578-service-principals.ps1 runs it on scratch folders, and
   tests\test-4077-service-owner.ps1 builds the launcher and runs it.
 #>
 
