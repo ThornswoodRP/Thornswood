@@ -338,9 +338,8 @@ Local checks include `node game/tests/test-merchant-trading.js`,
 `node game/tests/test-merchant-settlement.js`,
 `node game/tests/test-merchant-pending-preflight.js`,
 `node game/tests/test-merchant-conservation.js`,
-`node game/tests/test-merchant-deployment.js`,
-`node scripts/dev/Build-MerchantGamemode.js --check` and
-`node scripts/dev/Build-MerchantTables.js --check`.
+`node game/tests/test-merchant-deployment.js`, `node scripts/dev/Build-MerchantTables.js --check`
+and `node scripts/dev/Build-MerchantGamemode.js --check`.
 These source changes include no game playtests or operational steps. Changes
 merge only after the required exact-head Launcher builds gate, and no change
 is described as live before its release.
