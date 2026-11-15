@@ -126,8 +126,8 @@
   says how many are on, and who: the gamemode keeps their names in
   online-names.json in the private folder, not the served one. Whoever is
   on, nobody included, gets
-  the same warning Ship.ps1 and Deploy-Server.ps1 give, said in the dev
-  updates channel as well since #5784: Request-Restart.ps1
+  the same warning Ship.ps1 and Deploy-Server.ps1 give, said in
+  #staff-updates as well since #5784: Request-Restart.ps1
   drops restart.json into the dev server's data folder, the dev gamemode
   announces it in chat and on screen, and this waits out the countdown before
   the stop, leaving early if the room empties. -Mode notice is the default,
