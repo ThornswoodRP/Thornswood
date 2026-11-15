@@ -405,6 +405,15 @@ if ($win) {
     function Text([string]$rel) { $p = P $game $rel; if (Test-Path -LiteralPath $p) { return [IO.File]::ReadAllText($p) }; return $null }
     $r = Run @('-CollectionArchive', $colFull, '-Revision', '5', '-Game', $game, '-Cache', $cache)
     YesR 'a run again over its own layout replaces it' ($r.Code -eq 0 -and $r.Out -match 'the layout there now has 13 files, all as its files.txt says' -and (Text 'Data\Gamma.esp') -eq 'gamma two') $r
+    # What a run cut part way through a copy leaves (#4303): files.txt still
+    # saying it is being placed, the file not there, and its .part short.
+    $ft = P $recDir 'files.txt'
+    $fl = [IO.File]::ReadAllLines($ft); $fl[0] = $fl[0] -replace '\. sha256, size, Nexus file id, path in the game folder\.$', '. Being placed; layout.json is written when it is whole.'
+    [IO.File]::WriteAllText($ft, (($fl -join "`r`n") + "`r`n"))
+    [IO.File]::Delete((P $game 'Data\Gamma.esp'))
+    [IO.File]::WriteAllText((P $game 'Data\Gamma.esp.part'), 'gam')
+    $r = Run @('-CollectionArchive', $colFull, '-Revision', '5', '-Game', $game, '-Cache', $cache)
+    YesR 'a run again over a layout cut part way through a copy finishes it, and leaves no .part' ($r.Code -eq 0 -and (Text 'Data\Gamma.esp') -eq 'gamma two' -and @(Get-ChildItem -LiteralPath $game -Recurse -File -Filter '*.part').Count -eq 0) $r
     [IO.File]::WriteAllText((P $game 'Data\Alpha.esp'), 'edited by hand')
     $r = Run @('-CollectionArchive', $colFull, '-Revision', '5', '-Game', $game, '-Cache', $cache)
     YesR 'a layout file that changed is not taken out, and the run stops naming it' ($r.Code -eq 1 -and $r.Out -match 'not what its files.txt says' -and $r.Out -match 'Data\\Alpha.esp' -and (Text 'Data\Alpha.esp') -eq 'edited by hand') $r

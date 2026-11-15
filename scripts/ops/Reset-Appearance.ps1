@@ -32,21 +32,27 @@ param(
     [switch]$KeepTrade      # leave the trade and starting town already chosen
 )
 
+$ErrorActionPreference = 'Stop'   # before any file loads, so one that is missing stops here (#3006)
 if (-not (Test-Path -LiteralPath $World)) { throw "not found: $World" }
 
 if (Get-Process -Name node -ErrorAction SilentlyContinue) {
     Write-Host 'A node process is running. If that is the Thornswood server, stop it first or this edit will be overwritten.' -ForegroundColor Yellow
 }
 
-# Player change forms are the numerically named ones. Everything else is a world
-# object keyed by form id and plugin, like 13164_JKs Whiterun.esp.json.
-$players = Get-ChildItem -LiteralPath $World -Filter '*.json' |
-           Where-Object { $_.BaseName -match '^\d+$' }
+# The characters' change forms, by the one rule (#5168, Release-List.ps1): a
+# runtime form's id in lowercase hex and no plugin, 0.json or 1f.json, with a
+# profileId above 0 and not deleted. Digits alone missed every character
+# whose id has a letter, and -All took the world's own runtime forms too.
+. (Join-Path $PSScriptRoot 'Release-List.ps1')
+. ([scriptblock]::Create($ThornswoodReleaseList))
+$chars = Get-ThornswoodCharacterForms $World 'it is left as it is'
+foreach ($n in $chars.notes) { Write-Host ('  ' + ("$n" -split '\|', 2)[1]) -ForegroundColor Yellow }
+$characters = @($chars.files | ForEach-Object { Get-Item -LiteralPath $_ })
 
-if (-not $players) { Write-Host 'no player change forms found' -ForegroundColor Yellow; return }
+if (-not $characters) { Write-Host 'no characters'' change forms found' -ForegroundColor Yellow; return }
 
 $done = 0
-foreach ($f in $players) {
+foreach ($f in $characters) {
     $raw = Get-Content -LiteralPath $f.FullName -Raw
     $j = $raw | ConvertFrom-Json -AsHashtable
     if (-not $All -and $j.profileId -ne $ProfileId) { continue }

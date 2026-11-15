@@ -5,7 +5,8 @@
 # own "Release note:" line (.github/pull_request_template.md), and
 # scripts/release/Collect-ReleaseNotes.ps1 joins them into the release's note.
 # Checking the line here, with the rules Ship.ps1 holds a note to
-# (scripts/release/Note-Rules.ps1), means a release never stops on a note.
+# (tools/ReleaseNotes/NoteRules.cs, the one copy), means a release never
+# stops on a note.
 #
 # WHEN. Opened, pushed to, reopened, and when the body is edited: the build
 # check (build-pr.yml) does not run on an edit, so the note has its own small

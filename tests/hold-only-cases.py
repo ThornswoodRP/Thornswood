@@ -22,7 +22,7 @@ without the game:
 
     python tests/hold-only-cases.py
 
-tests/test-3150-hold-builder.js runs it on the build check.
+game/tests/test-3150-hold-builder.js runs it on the build check.
 
 Prints PASS or FAIL per check and exits 1 when any fails.
 """

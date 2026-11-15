@@ -8,6 +8,21 @@ Shops, halls and palaces are buildings. Claiming one costs nothing. You
 may hold more than one. A dispute about who should have it is the
 court's, and the server does not pick a side.
 
+## Contents
+
+- [A claim](#a-claim)
+- [The deed](#the-deed)
+- [Locks and keys](#locks-and-keys)
+- [The master key](#the-master-key)
+- [Stewards and rent](#stewards-and-rent)
+- [The hold's box](#the-holds-box)
+- [What a home is for](#what-a-home-is-for)
+- [Furniture](#furniture)
+- [A shop](#a-shop)
+- [What is not a house](#what-is-not-a-house)
+- [Word to the holder](#word-to-the-holder)
+- [Where this is](#where-this-is)
+
 ## A claim
 
 Open the door. For the next minute, while one of that building's doors
@@ -501,4 +516,4 @@ old holder. The limits are `game/data/property-word.json`: per kind
 there keeps the default and is logged. The words wait in the register,
 `private/property.json`, under `word`, so a restart keeps them and a
 wipe moves them aside. A word that has gone out is kept only while the
-limits count it. `tests\test-2680-holder-word.js` drives all of it.
+limits count it. `game\tests\test-2680-holder-word.js` drives all of it.

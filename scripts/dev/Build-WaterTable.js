@@ -57,6 +57,7 @@ const fs = require('fs');
 const path = require('path');
 const { pluginPath, loadedOrder } = require('./OwnPlugins.js');
 const TABLES = require('./GamemodeTables.js');
+const CLIENT = require('./ClientTables.js');
 const zlib = require('zlib');
 
 const args = process.argv.slice(2);
@@ -283,17 +284,12 @@ function placedRows() {
 }
 
 function installPlaced() {
-  const fp = path.join(__dirname, '..', '..', 'game', 'plugins', 'thornswood-front.js');
-  let src;
-  try { src = fs.readFileSync(fp, 'utf8'); } catch (e) { fail('no thornswood-front.js to install into'); return; }
   const rows = placedRows();
-  const line = '  const PLACED_WATERS = ' + JSON.stringify(rows) + ';';
-  const re = /^  const PLACED_WATERS = .*;$/m;
-  if (!re.test(src)) { fail('could not find PLACED_WATERS in thornswood-front.js'); return; }
-  const next = src.replace(re, function () { return line; });
-  if (next === src) { console.log('installed placed waters already match this load order'); return; }
-  fs.writeFileSync(fp, next);
-  console.log('installed ' + rows.length + ' placed waters into game\\plugins\\thornswood-front.js');
+  if (CLIENT.write('PLACED_WATERS', rows, 'scripts/dev/Build-WaterTable.js')) {
+    console.log('wrote ' + rows.length + ' placed waters into ' + path.relative(path.join(__dirname, '..', '..'), CLIENT.file('PLACED_WATERS')));
+  } else {
+    console.log('the placed waters already match this load order');
+  }
 }
 
 if (!Object.keys(placed).length) { fail('no placed water activators found, so ACTI WNAM is not being read'); }

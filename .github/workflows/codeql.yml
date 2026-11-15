@@ -29,6 +29,12 @@
 # and this job never starts while the repository is private, so it spends
 # none of the private minutes either.
 #
+# THE EXTENDED SECURITY SUITE (Patrick, 12 Nov 2026). It reads with
+# security-extended: the default security queries plus the ones of lower
+# severity and precision, so a weaker fault still shows on the Security tab.
+# Not security-and-quality: GitHub Code Quality reads the same code for
+# quality faults, and the two would raise each of those twice.
+#
 # This is CodeQL's advanced setup, a workflow in the repository, rather than
 # its default setup, a switch in the settings: the actions are pinned here
 # like every other workflow's, and a change to what is scanned is a pull
@@ -87,6 +93,7 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: none
+          queries: security-extended
           config: |
             paths-ignore:
               - site/public/marked-12.0.2.min.js

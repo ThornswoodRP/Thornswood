@@ -17,7 +17,11 @@
     2. 25 FAIL lines: the first 10 and a line saying 15 more;
     3. a FAIL line of 1000 characters: cut at 300 with "...";
     4. no FAIL line: its last lines instead, and it says so;
-    5. a % in a line goes in as %25, so the message reads as written.
+    5. a % in a line goes in as %25, so the message reads as written;
+    6. the indented lines under a FAIL line, which say why it failed
+       (#6137), go with it, and an indented line under no FAIL line does not;
+    7. at most $FAIL_REASON_LINES of them per FAIL line, each cut at 300, and
+       a line saying how many more.
   B. The runner against stand-in harnesses in a scratch repository: the
      ::error line it writes for a failing harness carries its FAIL lines,
      and a harness that passed gets none. The runner reads the processor
@@ -44,8 +48,8 @@ function Yes([string]$what, [bool]$cond) {
 # ---- A. the function, as the runner has it -------------------------------------------
 $ast = [Management.Automation.Language.Parser]::ParseFile($runner, [ref]$null, [ref]$null)
 $fn = $ast.Find({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-FailSaid' }, $true)
-$caps = @($ast.FindAll({ param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -in '$FAIL_LINES', '$FAIL_LINE_CHARS' }, $false))
-Yes 'Nightly-Harnesses.ps1 has Get-FailSaid and its two caps' ($null -ne $fn -and $caps.Count -eq 2)
+$caps = @($ast.FindAll({ param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -in '$FAIL_LINES', '$FAIL_LINE_CHARS', '$FAIL_REASON_LINES' }, $false))
+Yes 'Nightly-Harnesses.ps1 has Get-FailSaid and its three caps' ($null -ne $fn -and $caps.Count -eq 3)
 if ($null -ne $fn) {
     foreach ($c in $caps) { . ([scriptblock]::Create($c.Extent.Text)) }
     . ([scriptblock]::Create($fn.Extent.Text))
@@ -63,6 +67,18 @@ if ($null -ne $fn) {
     Yes '   and nothing printed says so' ((Get-FailSaid '') -eq ': it printed nothing')
     $five = Get-FailSaid 'FAIL  100% of the cells, %0A not a new line'
     Yes ('5. a % goes in as %25 (' + $five + ')') ($five -eq ': its FAIL lines%0AFAIL  100%25 of the cells, %250A not a new line')
+    # #6137: a harness says why a check failed on indented lines under it
+    # (test-4389 prints its site copy's output there); the annotation is the
+    # only place a Bot can read that, so the lines go with their FAIL line.
+    $six = Get-FailSaid ("PASS  first`nFAIL  a copy of the site starts`n      Error: listen EADDRINUSE 127.0.0.1:41234`n      at Server.setupListenHandle`n" +
+        "PASS  later`n  not under a FAIL line`nFAIL  E1 /rules: one h1 (0)`n")
+    Yes ('6. the indented lines under a FAIL line go with it, and no others (' + $six + ')') ($six -eq (': its FAIL lines%0AFAIL  a copy of the site starts' +
+        '%0A    Error: listen EADDRINUSE 127.0.0.1:41234%0A    at Server.setupListenHandle%0AFAIL  E1 /rules: one h1 (0)'))
+    $seven = Get-FailSaid ((@('FAIL  the copy said a lot') + (1..30 | ForEach-Object { '      line ' + $_ + ' ' + ('y' * 400) })) -join "`n")
+    $kept = @([regex]::Matches($seven, '%0A    line \d+ ')).Count
+    Yes ("7. at most $FAIL_REASON_LINES of them ($kept kept), each cut at 300, and how many more") ($kept -eq $FAIL_REASON_LINES -and
+        $seven.Contains('%0A    line 1 ' + ('y' * (300 - 'line 1 '.Length)) + '...') -and
+        $seven.EndsWith('%0A    and ' + (30 - $FAIL_REASON_LINES) + ' more line(s) under it, in the job log'))
 }
 
 # ---- B. the runner writes it -------------------------------------------------------------
@@ -83,14 +99,14 @@ if (-not $canRun) {
     }
     try {
         $a = Join-Path $work 'repo'
-        Put (Join-Path $a 'tests/test-1-two.ps1') ("Write-Host 'PASS  the first thing'`nWrite-Host 'FAIL  the door opens for the holder'`n" +
+        Put (Join-Path $a 'tests/test-1-two.ps1') ("Write-Host 'PASS  the first thing'`nWrite-Host 'FAIL  the door opens for the holder'`nWrite-Host '      the holder has no key'`n" +
             "Write-Host 'PASS  the second thing'`nWrite-Host 'FAIL  the key is kept'`nexit 1`n")
         Put (Join-Path $a 'tests/test-2-pass.ps1') ("Write-Host 'PASS  all good'`nexit 0`n")
         $said = (@(& (Get-BoxPowerShell) -NoProfile -NonInteractive -File $runner -Root $a -OutDir (Join-Path $work 'out') 2>&1 | ForEach-Object { "$_" }) -join "`n")
         $code = $LASTEXITCODE
         $got = Annotation $said 'test-1-two.ps1'
         Yes ("B. the share with a failure is red (exit $code)") ($code -eq 1)
-        Yes ('   its annotation carries the harness''s FAIL lines (' + $got + ')') ($got -eq 'harness failed (exit 1): its FAIL lines%0AFAIL  the door opens for the holder%0AFAIL  the key is kept')
+        Yes ('   its annotation carries the harness''s FAIL lines, with the reason under the first (' + $got + ')') ($got -eq 'harness failed (exit 1): its FAIL lines%0AFAIL  the door opens for the holder%0A    the holder has no key%0AFAIL  the key is kept')
         Yes '   and the harness that passed has none' (-not (Annotation $said 'test-2-pass.ps1'))
     } finally {
         Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue

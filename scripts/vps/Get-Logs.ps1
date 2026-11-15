@@ -28,6 +28,8 @@
       door.log      the door: who it let in and what the site said
       voice.log     the voice and register service
       health.json   what the voice service says about itself right now
+      deploy-<id>.log  the box deploy agent's log of each of the last ten
+                    Deployments to this server (#6149)
 
   For every log that rolls (server, thornswood, voice, site, bot), its
   rolled generations come down too, under the same names: the box is asked
@@ -140,6 +142,22 @@ $logs = @(
 )
 
 <#
+  THE DEPLOY AGENT'S LOGS (#6149).
+
+  The box deploy agent leaves the log of each Deployment it applies to this
+  server in the server's data folder as deploy-<Deployment id>.log, the
+  newest ten kept (tools/DeployAgent/Record.cs, PublishLog), and names it
+  as the Deployment's log_url on the resources port. That port is shut to a
+  cloud thread, and a Deployment's description stops at 140 characters, so
+  on 15 Nov 2026 the reason dev's build-1.3.68 failed was on the box and
+  nowhere a cloud thread could read it. They come down here under their
+  own names, the tail asked for as with every log; each is one
+  Deployment's, a few hundred lines at most.
+#>
+$deployDir = Join-Path $srvRoot 'data'
+$deployLeaf = '^deploy-[A-Za-z0-9._-]+\.log$'
+
+<#
   WHAT THE BOX HAS, asked once (#1605).
 
   This used to make up the names: every log that rolls got .1 through .5
@@ -167,6 +185,11 @@ foreach ($w in @(WANTED)) {
 }
 '@
 $listing = $listing.Replace('WANTED', ($wanted -join ', '))
+$listing += "`n" + @'
+if (Test-Path -LiteralPath 'DEPLOYDIR' -PathType Container) {
+    Get-ChildItem -LiteralPath 'DEPLOYDIR' -File | Where-Object { $_.Name -match 'DEPLOYLEAF' } | ForEach-Object { $_.FullName }
+}
+'@.Replace('DEPLOYDIR', $deployDir.Replace("'", "''")).Replace('DEPLOYLEAF', $deployLeaf)
 
 <#
   One question to the box. Any failure there stops that question with exit 1
@@ -195,29 +218,39 @@ if ($box.Code -ne 0) {
     Say ("  could not ask the VPS which logs it has. ssh exit {0}: {1}" -f $box.Code, $why) 'Red'
 } else {
     $onBox = @($box.Answer | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-    foreach ($base in $logs) {
-        # The current file, then its rolled generations oldest last, the way
-        # they sit on the box.
+    # The deploy agent's logs ride the same loop as one more "log" whose
+    # files are exactly the ones the box named, newest first.
+    $deployLogs = @($onBox | Where-Object {
+        (Split-Path -Parent $_) -ieq $deployDir -and (Split-Path -Leaf $_) -match $deployLeaf
+    } | Sort-Object -Descending)
+    $sets = @($logs) + @(@{ Deploy = $deployLogs })
+    foreach ($base in $sets) {
         $files = New-Object System.Collections.Generic.List[object]
-        if ($onBox | Where-Object { $_ -ieq $base.Path }) {
-            [void]$files.Add(@{ Name = $base.Name; Path = $base.Path; What = $base.What })
+        if ($base.ContainsKey('Deploy')) {
+            foreach ($p in $base.Deploy) { [void]$files.Add(@{ Name = (Split-Path -Leaf $p); Path = $p; What = 'the deploy agent, one Deployment' }) }
         } else {
-            Say ("  {0,-14} not on the VPS at {1}" -f $base.Name, $base.Path) 'Red'
-        }
-        if ($base.ContainsKey('Rolls') -and $base.Rolls) {
-            $rolled = @(foreach ($p in $onBox) {
-                if ($p.StartsWith($base.Path + '.', [StringComparison]::OrdinalIgnoreCase)) {
-                    $n = $p.Substring($base.Path.Length + 1)
-                    if ($n -match '^\d{1,18}$') { [pscustomobject]@{ N = [long]$n; Path = $p } }
+            # The current file, then its rolled generations oldest last, the way
+            # they sit on the box.
+            if ($onBox | Where-Object { $_ -ieq $base.Path }) {
+                [void]$files.Add(@{ Name = $base.Name; Path = $base.Path; What = $base.What })
+            } else {
+                Say ("  {0,-14} not on the VPS at {1}" -f $base.Name, $base.Path) 'Red'
+            }
+            if ($base.ContainsKey('Rolls') -and $base.Rolls) {
+                $rolled = @(foreach ($p in $onBox) {
+                    if ($p.StartsWith($base.Path + '.', [StringComparison]::OrdinalIgnoreCase)) {
+                        $n = $p.Substring($base.Path.Length + 1)
+                        if ($n -match '^\d{1,18}$') { [pscustomobject]@{ N = [long]$n; Path = $p } }
+                    }
+                })
+                # server.log rolls by its time since #2349, server.log.<when>,
+                # newest the biggest; the numbered ones the rollers keep, .1 the
+                # newest, sort after them.
+                $dated = { $_.N -ge 1000000000000 }
+                foreach ($g in ($rolled | Sort-Object @{ Expression = { if (& $dated) { 0 } else { 1 } } },
+                                                       @{ Expression = { if (& $dated) { -$_.N } else { $_.N } } })) {
+                    [void]$files.Add(@{ Name = ($base.Name + '.' + $g.N); Path = $g.Path; What = ('older ' + $base.Name) })
                 }
-            })
-            # server.log rolls by its time since #2349, server.log.<when>,
-            # newest the biggest; the numbered ones the rollers keep, .1 the
-            # newest, sort after them.
-            $dated = { $_.N -ge 1000000000000 }
-            foreach ($g in ($rolled | Sort-Object @{ Expression = { if (& $dated) { 0 } else { 1 } } },
-                                                   @{ Expression = { if (& $dated) { -$_.N } else { $_.N } } })) {
-                [void]$files.Add(@{ Name = ($base.Name + '.' + $g.N); Path = $g.Path; What = ('older ' + $base.Name) })
             }
         }
 

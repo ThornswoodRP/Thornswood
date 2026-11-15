@@ -14,13 +14,13 @@
      rather than from Google and Cloudflare's library CDN. The faces are in
      hub.css itself, so this one sheet is all the first paint waits on (#4334). -->
 <link rel="stylesheet" href="/hub.css">
-<script src="/marked-12.0.2.min.js"></script>
 </head>
 <body>
 
 <div id="gate">
   <div class="box">
-    <img src="/logo.png" alt="Thornswood" width="82" height="82" class="gate-logo">
+    <!-- logo-84.webp, 5.9 KB, not logo.png, 89 KB, for an 82 px emblem (#4143). -->
+    <img src="/logo-84.webp" alt="Thornswood" width="82" height="82" class="gate-logo">
     <h1>The Works</h1>
     <p>Discord decides who gets in here, the same as it decides who gets into
       the game. No second password to pass around.</p>
@@ -61,6 +61,10 @@
 </div>
 
 <script src="/copies.js"></script>
+<!-- marked is read only by hub.js, so it loads here, just before it, and the
+     sign-in page no longer waits on it in the head (#4143). A plain script,
+     not deferred, so it has run by the time hub.js does. -->
+<script src="/marked-12.0.2.min.js"></script>
 <script src="/hub.js"></script>
 </body>
 </html>

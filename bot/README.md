@@ -104,6 +104,17 @@ Steward and Guards (#2551). Each hold then has a category of its own:
 `#<hold>-announcements`, the hold's hall, `#<hold>-court`, `#<hold>-guard`
 and a `<Hold> Court` voice room. A hold's Citizen role opens its category.
 
+### The ping buttons
+
+`#welcome` has the bot's two ping buttons (`bot_pings.py`, moved there from
+under the holds on 12 Nov 2026), so every Member can press them. News Pings
+is pinged when the bot posts a change to the live server in `#news`, and
+Updates Pings when it warns of a live game server restart in `#updates`.
+Staff who took a role are pinged on the staff side as well: News Pings for a
+dev release in `#staff-news`, Updates Pings for a dev server restart in
+`#staff-updates` (Patrick, 15 Nov 2026). Pressing one again takes the role
+off.
+
 ### The factions
 
 Each of the sixteen factions in `factions.json` has a category of its own
@@ -175,10 +186,13 @@ once in the log.
   issue did, a measuring step on the scripts finding, partial fixes and a
   `Refs` written by mistake kept bugs people still meet off the list. Each
   post taken down says why in the log, `known issues: took #N down:`. Its title and body are the issue's
-  last comment that starts `Known issue:` (a short title, at most 45
-  characters, then what goes wrong, where, and how to avoid it), the same
-  shape as a test task below; until somebody writes one, the issue's own title
-  and a plain line. No issue number and no link, because testers have no
+  last comment that starts `Known issue:`: a summary of a few words, whole
+  and at most 45 characters, then in plain words what happens, where, how
+  to avoid it, and what is being done about it. With no such comment there
+  is no post: the bot never writes a post's words itself, and the issue
+  gets one comment saying what to write (Patrick, 12 Nov, after posts went
+  up as the issue title cut mid-sentence over "Known on Main. The team is
+  working on it"). No issue number and no link, because testers have no
   GitHub. The post is deleted the moment the issue is no longer an open
   finding: fixed and closed, closed any other way, its label taken off,
   moved to Done, or a test task written on it.
@@ -191,12 +205,14 @@ once in the log.
       Test task: <what to try, at most 45 characters>
       <numbered steps in the game, then what should happen>
 
-  `Test task:` with nothing after the colon takes the issue's own title. A
-  closed issue also gets a post when its latest `Test task:` comment was
-  written after that day, however long ago it closed. A fixed finding with no
-  such comment gets its own title and a plain line asking testers to check
-  it on main; a fixed issue that is neither a finding nor has that comment
-  gets no post. A reopened issue loses its test task and comes
+  A closed issue also gets a post when its latest `Test task:` comment was
+  written after that day, however long ago it closed. A fixed issue with no
+  such comment gets no post, finding or not: until 12 Nov a fixed finding
+  got its title cut to 45 characters over "Check it on main", which told a
+  tester nothing. Nothing in a post is cut or filled in: `Test task:` with
+  nothing after the colon, a known issue with nothing under its title, and
+  a `#test-tasks` or `#known-issues` post over 2000 characters are refused
+  like any other rule, and the issue is told why. A reopened issue loses its test task and comes
   back to `#known-issues` if it is still a finding. Staff close a test task
   in Discord once it is confirmed.
 - `#dev-test-tasks`, in Staff and seen only by staff (Patrick, 12 Oct): one
@@ -388,8 +404,10 @@ whole file at once.
 
 ### Staff
 
-`#staff-announcements` (the staff `#news` until #3317, where the dev updates
-webhook posts), `#council-decisions`, `#staff-updates`, `#staff-general`,
+`#staff-news` (the staff `#news` until #3317, then staff-announcements
+until 15 Nov 2026; dev releases are posted here, the staff side of `#news`),
+`#council-decisions`, `#staff-updates` (dev server restarts, the staff side of
+`#updates`, and the watchdog), `#staff-general`,
 `#council`, `#ticket-log` and a Staff Room. Invisible to everybody else, and
 `#council` and `#ticket-log` are the council's only. `#dev-test-tasks` (a
 forum the bot keeps, see Testing above) and `#dev-test-findings` are in the
@@ -431,6 +449,7 @@ two different servers stitched together.
 | Moderator | Moderates the Discord only |
 | Content Creator | Thornswood's own social media and content |
 | Support | Answers help tickets and playtest applications, and gives Playtester |
+| Clanker | Every bot in the server, shown in a group of its own under staff. A build gives it to each bot, those added later too |
 | Jarl of *hold* | Holds that hold. Ten of them, one each: the nine holds and Raven Rock |
 | *Faction* Leader | Leads that faction, one for each of the sixteen |
 | Server Booster | Boosted the server. Discord's own role, never made here |
@@ -443,7 +462,7 @@ two different servers stitched together.
 | Business Owner | Owns a business book in the game. Support gives it |
 | Member | Reacted to the rules in `#rules`, which the bot gives it for. Reads Start Here, Tickets, Information, the Roleplay Guide and Applications |
 | Banned | What the site keys a ban off. No permissions, not hoisted |
-| News Pings, Updates Pings | Made by the bot, never here. They are in the builder's list for their place in the order and nothing else |
+| News Pings, Updates Pings | Made by the bot, never here, and handed out by its buttons in `#welcome`. They are in the builder's list for their place in the order and nothing else |
 
 The council is Owner, Co-Owner and the six leads. It talks and posts in
 every read only channel and sees every staff space. "Everybody on staff" in
@@ -666,7 +685,9 @@ together): `bot.py`; the `bot_*.py` modules `bot.py` imports
 without; `card.py` and its artwork, `assets\join-card.png`; the channel ids,
 `staff-channel.txt`, `dev-channel.txt` and `news-channel.txt`;
 `requirements.txt`; `factions.json`, the named factions the Faction Leader
-form reads from beside itself; and `BotService.cs`, the service's program,
+form reads from beside itself; `NoteRules.cs`, the release note rules from
+`tools\ReleaseNotes`, which the bot asks for a pull request's note through
+pwsh's Add-Type (#6004); and `BotService.cs`, the service's program,
 which a full run puts in `service`. A file the bot reads and this list does
 not name is a file that is only ever on main, never on the box.
 
@@ -720,7 +741,7 @@ folder.
 Since #5187 a release's news is posted when the release is deployed. The box's
 deploy agent leaves each deployed Release's notes in
 `C:\Thornswood-Deploys\for-bot`, and the bot posts each release once: a
-merge's release in the dev updates channel (`dev-channel.txt`), a main release
+merge's release in #staff-news (`dev-channel.txt`), a main release
 in #news (`news-channel.txt`, by id). Notes that say nothing people would
 notice are not posted. What follows is how a Ship posts, which still holds
 for a release the agent does not deploy.

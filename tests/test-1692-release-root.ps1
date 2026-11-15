@@ -25,7 +25,7 @@
      refuses a folder Vortex deploys into before the version is worked
      out or anything is built, and asks whether the collection builds the
      animation and body files (#3715) before the launcher is built or
-     installed. tests\test-ship-dry-run.ps1 runs Ship on both
+     installed. scripts\tests\test-ship-dry-run.ps1 runs Ship on both
      (G, H and I).
   4. Check-ShipReady.ps1 run whole: -Root is the folder it checks, and a
      folder Vortex deploys into is a gap; since #2662 the recorded folder,

@@ -36,7 +36,7 @@ const gamemodeSource = require('./gamemode-source.js');
 const ROOT = path.join(__dirname, '..', '..');
 const GAMEMODE = path.join(ROOT, 'game', 'gamemode');
 // Every game/data file a gamemode reader opens at run time with no copy of
-// its own inside gamemode.js. guild-sites.json is not here: Build-MerchantGamemode.js
+// its own inside gamemode.js. guild-sites.json is not here: Build-MerchantTables.js
 // carries it. merchant-traders.json is (#5137): that bundle carries the traders
 // only inside MERCHANT_TRADING, for its own install, and first steps reads them
 // at load to find the start town's Cook, so on a server it found nothing.

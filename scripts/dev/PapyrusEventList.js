@@ -26,7 +26,7 @@
 //   exterior while disableVanillaScriptsInExterior is on.
 //
 // records\papyrus-events.json is the list. scripts\dev\Audit-PapyrusEvents.py
-// judges the load order against it, and tests\test-papyrus-event-list.js holds
+// judges the load order against it, and game\tests\test-papyrus-event-list.js holds
 // it to the fork at the pin the repository names. The fork is read from git's
 // objects at that commit (git show), never from the working tree, so a fork
 // checked out at another commit reads the same.
@@ -518,7 +518,7 @@ const NOTE = 'The fork\'s Papyrus event list, both halves, read out of the fork\
   'the server\'s own Papyrus machine is sent, and which scripts it can load and attach (only to placed ' +
   'references). loads.archives is not the fork\'s: it is the "archives" setting Thornswood writes, which ' +
   'no deploy script writes today. The fingerprints hold the code too intricate to read as a list. ' +
-  'tests\\test-papyrus-event-list.js holds this to the fork at the pin; when the fork changes the list, ' +
+  'game\\tests\\test-papyrus-event-list.js holds this to the fork at the pin; when the fork changes the list, ' +
   'run node scripts\\dev\\PapyrusEventList.js --write and commit what it writes.';
 
 function build(list, commit, archives) {

@@ -1,11 +1,12 @@
 <#
   Load-Box.ps1
 
-      pwsh scripts/vps/Box-Run.ps1 -Line 'Load-Test -From dev -Shape crowd -Steps 10,25,50 -Play fight,host,trade'
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Load-Test -From dev -Shape crowd -Steps 10,25,50 -Play fight,host,trade,quest'
 
   #4623. The load test with the collection's world: its NPCs, the gamemode's
   NPC runtime, merchants and quests, and bots that fight, host the NPCs near
-  them and ask the guild traders to trade. The collection's plugins are
+  them, ask the guild traders to trade and take and leave their work
+  (load-bots.js, quest). The collection's plugins are
   other people's and are only on the box, so this runs there, through the
   deploy gate (verbs.json "Load-Test"), and nothing of the collection leaves
   it. The runner's load test (.github\workflows\load-test.yml) is the same
@@ -19,7 +20,8 @@
        C:\Thornswood-Server, dev is C:\Thornswood-Server-Dev) in a folder of
        its own under the account's temp folder (New-LoadServer.js --from):
        the server's program and gamemode.js and the plugins its loadOrder
-       names, read and never written, with its own port, its own voice
+       names, read and never written, copies of its merchant ledger and the
+       hold price lists the traders quote from, its own port, its own voice
        service on 127.0.0.1, an empty world and a pass key made for the run;
     3. runs Load-Test.js on it, which also stops before each step if
        anybody joins either server, and at 60% of the box's CPU, because the
@@ -41,8 +43,8 @@ param(
     [string]$Steps = '10,25,50',
     [ValidatePattern('^[0-9]{2,3}$')]
     [string]$Hold = '60',
-    [ValidatePattern('^((fight|host|trade)(,(fight|host|trade)){0,2})?$')]
-    [string]$Play = 'fight,host,trade',
+    [ValidatePattern('^((fight|host|trade|quest)(,(fight|host|trade|quest)){0,3})?$')]
+    [string]$Play = 'fight,host,trade,quest',
     [string]$Out = '',
     # For the harness: the folder the servers are installed in and the
     # online.json addresses, which on the box are the ones below.

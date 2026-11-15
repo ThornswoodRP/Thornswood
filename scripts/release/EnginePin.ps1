@@ -35,8 +35,9 @@
 #>
 
 # The release note rules a pull request's "Release note:" line is held to
-# (#5179); a fork pull request carries one too (plan part 8).
-. (Join-Path $PSScriptRoot 'Note-Rules.ps1')
+# (#5179); a fork pull request carries one too (plan part 8). The one copy,
+# tools\ReleaseNotes\NoteRules.cs, which pwsh compiles here (#5354).
+Add-Type -Path (Join-Path $PSScriptRoot '../../tools/ReleaseNotes/NoteRules.cs')
 
 $EnginePinBranch = 'engine-pin/next'
 $EnginePinThornswood = 'ThornswoodRP/Thornswood'
@@ -333,8 +334,8 @@ function Get-EnginePinStep([string]$Pin, [scriptblock]$Get) {
 # steps under it, ending where done-on-merge.yml ends one), turned into the
 # shape done-on-merge.yml reads in a pull request here. And the release note
 # the pin carries (plan part 8): each fork pull request has its own
-# "Release note:" line, held to Note-Rules.ps1 by the fork's own check, and
-# the pin's is those joined (Join-PrReleaseNotes), so Collect-ReleaseNotes.ps1
+# "Release note:" line, held to the rules by the fork's own check, and
+# the pin's is those joined (PrNote.Join), so Collect-ReleaseNotes.ps1
 # reads an engine fix in a release the way it reads any other change.
 # ReleaseNote is that joined note, '' when every one says none; NoNote names
 # the fork pull requests with no line, which the pin's body says so a person
@@ -356,10 +357,10 @@ function Get-EnginePinNotes([string]$Old, [string]$New, [scriptblock]$Get) {
     $issues = New-Object System.Collections.Generic.SortedSet[int]
     $tasks = New-Object System.Collections.Generic.List[string]
     $lines = New-Object System.Collections.Generic.List[string]
-    $noted = New-Object System.Collections.Generic.List[object]
+    $noted = New-Object System.Collections.Generic.List[string]
     $noNote = New-Object System.Collections.Generic.List[int]
     foreach ($p in $prs) {
-        if ((Get-PrReleaseNote ([string]$p.body)).Found) { $noted.Add([pscustomobject]@{ Number = [int]$p.number; Body = [string]$p.body }) }
+        if ([Thornswood.ReleaseNotes.PrNote]::Read([string]$p.body).Found) { $noted.Add([string]$p.body) }
         else { $noNote.Add([int]$p.number) }
         $text = (([string]$p.title) + "`n" + ([string]$p.body)) -replace "`r`n", "`n"
         $named = @([regex]::Matches($text, '(?i)\bThornswood\s+#(\d+)') | ForEach-Object { [int]$_.Groups[1].Value })
@@ -381,5 +382,5 @@ function Get-EnginePinNotes([string]$Old, [string]$New, [scriptblock]$Get) {
         if ($cur) { $tasks.Add(($cur -join "`n").TrimEnd()) }
     }
     return [pscustomobject]@{ PullRequests = $lines.ToArray(); Issues = @($issues); TestTasks = $tasks.ToArray(); Count = $prs.Count
-                              ReleaseNote = (Join-PrReleaseNotes $noted.ToArray()); NoNote = $noNote.ToArray() }
+                              ReleaseNote = [Thornswood.ReleaseNotes.PrNote]::Join($noted.ToArray()); NoNote = $noNote.ToArray() }
 }

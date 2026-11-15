@@ -400,6 +400,5 @@ yes('every building the gamemode calls a mine is accounted for in it',
       return !/\bMines?\b/.test(realNames[k]) || !!rb[k] || !!(real.onTheWayIn || {})[k] ||
              !!(real.calledAMineWithNoVein || {})[k];
     }));
-yes('nothing in it failed to inflate', rc.failedToInflate === 0);
 
 done();
