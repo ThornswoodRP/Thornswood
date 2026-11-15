@@ -37,7 +37,7 @@
 //     node Load-Test.js --root <server folder> --out <result.json>
 //         [--steps 10,20,40,60,80,100] [--settle 20] [--hold 60] [--workers 3]
 //         [--shape crowd] [--summary <markdown file>]
-//         [--play fight,host,trade] [--busy 0.6] [--watch <online.json url>,...]
+//         [--play fight,host,trade,quest] [--busy 0.6] [--watch <online.json url>,...]
 //
 // --play is what the bots do besides walking (load-bots.js). --busy is the
 // share of the machine's CPU a step stops at (0.9 on a runner of its own; the
@@ -282,8 +282,9 @@ function child(file, argv, log) {
 }
 
 // What the bots do besides walking (load-bots.js --play): fight, host the
-// NPCs the server hands them, and open the guild traders near them.
-const PLAYS = ['fight', 'host', 'trade'];
+// NPCs the server hands them, open the guild traders near them, and take and
+// leave the traders' work.
+const PLAYS = ['fight', 'host', 'trade', 'quest'];
 
 // The play counts the bots reported over the window, added up.
 function playCounts(reports) {
