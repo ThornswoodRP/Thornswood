@@ -236,11 +236,7 @@ namespace Thornswood
                         try { Paths.Init(Velo.InstallRoot); }
                         catch (Exception initEx) { Swallow.Note("Shell.Main, paths", initEx); }
                     }
-                    Action<string> log = delegate (string line)
-                    {
-                        try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + line + Environment.NewLine); }
-                        catch (Exception logEx) { Swallow.Note("Shell.Main, log", logEx); }
-                    };
+                    Action<string> log = delegate (string line) { LauncherLog.Line(line); };
                     log("COULD NOT START: " + ex.ToString());
                     // The update check is otherwise asked from the window, so a
                     // launcher that cannot open its window asks here, unless the
@@ -640,7 +636,7 @@ namespace Thornswood
             Dispatcher.UIThread.UnhandledException += delegate (object faultSender, DispatcherUnhandledExceptionEventArgs fault)
             {
                 try { Log("Fault on the launcher's own thread: " + fault.Exception.GetType().Name + ": " + fault.Exception.Message); } catch (Exception ex) { Swallow.Note("Shell.Run", ex); }
-                try { File.AppendAllText(Paths.LogFile, fault.Exception.ToString() + Environment.NewLine); } catch (Exception ex) { Swallow.Note("Shell.Run, append", ex); }
+                LauncherLog.Text(fault.Exception.ToString() + Environment.NewLine);
                 // The launcher is native code with no symbols on the customer's
                 // machine, so each frame is also written as its method and its
                 // offset into the exe. The pdb the native build writes, kept on
@@ -665,7 +661,7 @@ namespace Thornswood
                         at.Append(ip != 0 && image != 0 ? " +0x" + (ip - image).ToString("x8") : " (no native offset)");
                         at.AppendLine();
                     }
-                    File.AppendAllText(Paths.LogFile, at.ToString());
+                    LauncherLog.Text(at.ToString());
                 }
                 catch (Exception atEx) { Swallow.Note("Shell.UnhandledException, native offsets", atEx); }
                 fault.Handled = true;
@@ -1085,8 +1081,7 @@ namespace Thornswood
         {
             lastLogged = m;
             txtStatus.Text = m;
-            try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + m + Environment.NewLine); }
-            catch (Exception ex) { Swallow.Note("Shell.Log, append", ex); }
+            LauncherLog.Line(m);
         }
 
         /// <summary>
@@ -1096,8 +1091,7 @@ namespace Thornswood
         /// </summary>
         static void LogOnly(string m)
         {
-            try { File.AppendAllText(Paths.LogFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + m + Environment.NewLine); }
-            catch { /* the log is the only place this line could have gone */ }
+            LauncherLog.Line(m);
         }
 
         /// <summary>
