@@ -269,9 +269,13 @@ $h = @{}; $want = ''
     $lo = [regex]::Match($agentCs, 'LoadOrderLine = "([^"]+)"').Groups[1].Value
     # The rules read verbs.json the way the broker does, which is not strict.
     function Ask([string]$line) { Set-StrictMode -Off; Test-ThornswoodGateRequest -Line $line -Verbs $verbs }
-    $req = Ask $lo
-    Yes "the agent's load order line is one the gate takes: $lo" ($lo -ne '' -and $req.Ok -and $req.Verb -eq 'Deploy-DevGamemode' -and -not $req.Build)
-    Yes '  and it runs no longer than the 50 minutes the agent waits for the gate' ($req.Minutes -le 50 -and $agentCs.Contains('Gate!.Run(LoadOrderLine, TimeSpan.FromMinutes(50)'))
+    # The agent names the Deployment's commit with -At (#6166).
+    $loAt = $lo + ' -At 0123456789abcdef0123456789abcdef01234567'
+    $req = Ask $loAt
+    Yes "the agent's load order line, with -At and a commit, is one the gate takes: $lo" ($lo -ne '' -and $req.Ok -and $req.Verb -eq 'Deploy-DevGamemode' -and -not $req.Build)
+    Yes '  and it sends only the order (-OrderOnly), at the commit the agent names' ($lo.Contains(' -OrderOnly') -and $agentCs.Contains('LoadOrderLine + " -At " + commit') -and $agentCs.Contains('var line = LoadOrderLineAt(commit);'))
+    Yes '  and it runs no longer than the 50 minutes the agent waits for the gate' ($req.Minutes -le 50 -and $agentCs.Contains('Gate!.Run(line, TimeSpan.FromMinutes(50)'))
+    Yes '  and the gate refuses an -At that is not a whole commit' (-not (Ask ($lo + ' -At main')).Ok)
     $req = Ask 'Check-ProdParity'
     Yes 'the gate takes the parity line the agent sends, Check-ProdParity' ($req.Ok -and $agentCs.Contains('Gate!.Run("Check-ProdParity"'))
     $parity = [IO.File]::ReadAllText((Join-Path $Repo 'scripts\vps\Check-ProdParity.ps1'))

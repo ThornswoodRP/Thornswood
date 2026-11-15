@@ -50,12 +50,19 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
         "game/data/last-plugin.recipe",
         "game/content/Thornswood-Content.esp",
     ];
-    public const string LoadOrderLine = "Deploy-DevGamemode -LoadOrder -FromRecord -ShipFollows";
+    /// <summary>Only dev's order and plugins, nothing of the gamemode: the
+    /// Release's gamemode and tables are already in, and the gate runs main as
+    /// it is, which can be past the Release (#6166). The line names the
+    /// Release's commit with -At (LoadOrderLineAt).</summary>
+    public const string LoadOrderLine = "Deploy-DevGamemode -LoadOrder -FromRecord -OrderOnly -ShipFollows";
+    public static string LoadOrderLineAt(string commit) => LoadOrderLine + " -At " + commit;
+    /// <summary>What Deploy-DevGamemode.ps1 -At says when main's records of
+    /// the order are not the Release commit's: main moved the order past it.</summary>
+    public const string NotThisOrder = "NOT THIS COMMIT'S ORDER";
     /// <summary>How long a step after a deploy (#5186) waits for the gate's
     /// turn; a step the gate never took runs with the next Deployment.</summary>
     public static readonly TimeSpan StepWait = TimeSpan.FromMinutes(30);
     static readonly Regex ReviewRow = new(@"^REVIEW  (\S+) (.+?): expected (.*?), found (.*)$");
-    static readonly Regex MainAt = new(@"^main at ([0-9a-f]{40})$");
     /// <summary>The record of the Deployment an environment is part way
     /// through, one per environment because each has its own loop (Run).</summary>
     string StatePath(string env) => Path.Combine(cfg.Home, "state", $"working-{env}.json");
@@ -537,9 +544,12 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
     /// <summary>Dev's load order and plugins, moved to what the Deployment's
     /// commit records when that commit changed one of LoadOrderPaths since
     /// the last move (or when that cannot be told): the gate's
-    /// Deploy-DevGamemode -LoadOrder -FromRecord, the tested path a person
-    /// runs with Box-Run. The gamemode is already in when this runs, so a
-    /// move that fails leaves it in and says the plugins are not.</summary>
+    /// Deploy-DevGamemode -LoadOrder -FromRecord -OrderOnly -At, the tested
+    /// path a person runs with Box-Run, which sends nothing of the gamemode
+    /// and moves the order only when main's records of it are the
+    /// Deployment's commit's (#6166). The gamemode is already in when this
+    /// runs, so a move that does not happen leaves it in and says the
+    /// plugins are not, first, where the Deployment's 140 characters show it.</summary>
     async Task<Outcome> LoadOrder(string env, string commit, Outcome applied, Action<string> logf, CancellationToken ct)
     {
         var since = LoadOrderCommit(env);
@@ -560,15 +570,20 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
         logf(since == "" ? "load order: this agent has not moved dev's order yet, so it is moved to this commit's records"
             : touched == null ? $"load order: what changed since {Short(since)} is not known in full, so dev's order and plugins are moved to this commit's records"
             : $"load order: {string.Join(", ", touched)} changed since {Short(since)}, so dev's order and plugins are moved to this commit's records");
-        logf("load order: the gate's " + LoadOrderLine);
+        var line = LoadOrderLineAt(commit);
+        logf("load order: the gate's " + line);
         // The gate runs one verb at a time; a verb already running is waited
         // for (up to its 45 minutes and a little more) by the connect.
-        var run = await Gate!.Run(LoadOrderLine, TimeSpan.FromMinutes(50), Redacted(logf), ct);
+        var run = await Gate!.Run(line, TimeSpan.FromMinutes(50), Redacted(logf), ct);
+        // Main moved the order past this commit: not moved, and not recorded
+        // as moved, so the next Deployment compares from the last move and
+        // moves it to its own commit's records.
+        if (run.Lines.Any(l => l.Contains(NotThisOrder, StringComparison.Ordinal)))
+            return new Outcome("failure", $"the plugins are not this Release's: main has moved the load order past {Short(commit)}, the next Deployment moves it; {applied.Summary}");
         if (run.Code != 0)
-            return new Outcome("failure", $"{applied.Summary}; but the plugins are not: the load order move ended with {run.Code}, the log says why");
-        var at = run.Lines.Select(l => MainAt.Match(l)).FirstOrDefault(m => m.Success)?.Groups[1].Value ?? commit;
-        if (at != commit) logf($"load order: the gate ran main at {Short(at)}, after this Deployment's {Short(commit)}; dev has that commit's order and gamemode until its own Deployment");
-        Files.WriteWhole(LoadOrderPath(env), JsonSerializer.SerializeToUtf8Bytes(new LoadOrderState(at, Records.UtcNow())));
+            return new Outcome("failure", $"the plugins are not in: the load order move ended with {run.Code}, the log says why; {applied.Summary}");
+        // The order is this commit's whichever commit of main the gate ran.
+        Files.WriteWhole(LoadOrderPath(env), JsonSerializer.SerializeToUtf8Bytes(new LoadOrderState(commit, Records.UtcNow())));
         return applied with { Summary = applied.Summary + "; load order moved" };
     }
 
