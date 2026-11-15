@@ -69,6 +69,8 @@ is gone, or says another workflow than they give.
 | Test | What it holds | Runs on |
 |---|---|---|
 | `launcher/tests/test-2771-text-contrast.js` | The install window takes every colour from the Forge theme before it builds a control, and the lines InstallPlace.cs colours meet the contrast the launcher is held to | Pull request and nightly |
+| `launcher/tests/test-4459-setup-keys.ps1` | The install window works from the keyboard: focus starts on its first control, Esc closes it as Not now does, Enter on a tick box starts the install, and focus follows what the install says, run on the real window on Avalonia's headless platform | Pull request and nightly |
+| `launcher/tests/test-4538-install-sizes.ps1` | The install says the build's own sizes: the real InstallSteps, run against a pretend Steam copy and package, count the package's files and megabytes, and no install file names the old 18 GB build | Pull request and nightly |
 | `launcher/tests/test-downgrade-copy-order.js` | A Skyrim on the wrong build is not a failed install: InstallSteps counts it as next and sends the person to the launcher's Downgrade button | Nightly only |
 | `launcher/tests/test-move.ps1` | The new launcher takes an older launcher's handover (InstallPlace.TakeHandover) only on its first start after Velopack's setup, before the install window would ask | Pull request and nightly |
 | `launcher/tests/test-own-folder-first.ps1` | Runs the real InstallSteps on a pretend Steam copy and package: with the own folder chosen nothing is written into the Steam copy and the files wait in `Profile\Payload`; not chosen, they go into the Steam copy with their list | Pull request and nightly |
@@ -91,7 +93,9 @@ These name an install file or this read me without testing the install.
 
 - `test-3003-one-install-rule.ps1`: names InstallPlace.cs in its header, to say a new install's folder is the launcher's choice and no script's.
 - `test-4115-collection-revision-link.ps1`: names this read me in a comment.
-- `test-4329-accessible-names.ps1`: names InstallWindow.cs to leave it out of what it reads.
+- `test-4415-clean-install-run.js`: names InstallWindow.cs and InstallAgreements.cs to say what the clean install list follows; it reads only that list.
+- `test-5197-real-client.js`: reads InstallPlace.cs for the record that says where the launcher is installed, so the real game run finds it; it tests that run, not the install.
+- `launcher/tests/test-4329-accessible-names.ps1`: names InstallWindow.cs to leave it out of what it reads.
 - `test-check-words.ps1`: writes a stand-in `installer/README.md` in its own scratch folder and never reads this one.
 
 
