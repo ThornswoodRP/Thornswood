@@ -76,9 +76,11 @@ const KIT_ITEMS = { weapon: '154b0:Thornswood-Content.esp', armour: '154b1:Thorn
 
 // Ids for the descriptors this file uses.
 const SWORD = 0x100001, ROBE = 0x100002, ODD = 0x100003, WEAPON_KIT = 0x5100001, SEWING_KIT = 0x5100003;
+const IRON_SWORD = 0x100004, IRON_ARMOR = 0x100005, TUNIC = 0x100006;
 const DESC = {};
+DESC[IRON_SWORD] = '12eb7:Skyrim.esm'; DESC[IRON_ARMOR] = '12e49:Skyrim.esm'; DESC[TUNIC] = '1be1a:Skyrim.esm';
 DESC[SWORD] = SWORD_ROW.out; DESC[ROBE] = ROBE_ROW.out; DESC[ODD] = 'abc:SomeoneElses.esp';
-DESC[WEAPON_KIT] = KIT_ITEMS.weapon; DESC[SEWING_KIT] = KIT_ITEMS.clothing;
+DESC[WEAPON_KIT] = KIT_ITEMS.weapon; DESC[SEWING_KIT] = KIT_ITEMS.clothing; DESC[0x5100002] = KIT_ITEMS.armour;
 const ID = {};
 Object.keys(DESC).forEach(function (k) { ID[DESC[k]] = Number(k); });
 
@@ -88,6 +90,9 @@ RECORDS[SWORD] = { type: 'WEAP', fields: [] };
 RECORDS[ODD] = { type: 'WEAP', fields: [] };
 // A garment: the body slot, armour type 2 (clothing).
 RECORDS[ROBE] = { type: 'ARMO', fields: [{ type: 'BOD2', data: le32(1 << 2).concat(le32(2)) }] };
+RECORDS[IRON_SWORD] = { type: 'WEAP', fields: [] };
+RECORDS[IRON_ARMOR] = { type: 'ARMO', fields: [{ type: 'BOD2', data: le32(1 << 2).concat(le32(1)) }] };
+RECORDS[TUNIC] = { type: 'ARMO', fields: [{ type: 'BOD2', data: le32(1 << 2).concat(le32(2)) }] };
 RECORDS[WEAPON_KIT] = { type: 'MISC', fields: [] };
 RECORDS[SEWING_KIT] = { type: 'MISC', fields: [] };
 
@@ -124,7 +129,7 @@ function world() {
     worn: function () { return []; },
     record: function () { return null; }, setRecord: function () { return true; },
     recordOf: function (id) { return RECORDS[id] || null; },
-    nameOf: function (id) { return id === SWORD ? SWORD_NAME : id === ROBE ? ROBE_NAME : id === ODD ? 'Odd Blade' : ''; },
+    nameOf: function (id) { return ({ 1048577: SWORD_NAME, 1048578: ROBE_NAME, 1048579: 'Odd Blade', 1048580: 'Iron Sword', 1048581: 'Iron Armor', 1048582: 'Belted Tunic' })[id] || ''; },
     idOf: function (desc) { return ID[desc] || 0; },
     stateOf: function (id) { return w.states[id] || null; },
     isPerson: function () { return true; }, isTool: function () { return false; },
@@ -253,6 +258,25 @@ function pick(base, cond, name) { return { baseId: base, cond: cond, name: name 
   const without = Object.keys(missing).filter(function (n) { return !named[n]; });
   yes('A9 every bench a weapon or a garment is made at has words a person reads', !!fbox.__thornswoodDurabilityBenchWords && without.length === 0,
       without.join(', '));
+}
+
+// The three pieces test-scenario-durability.js mends, as the real tables
+// have them: the sentences that scenario expects rest on these.
+{
+  const w = world();
+  w.packs[ME] = [{ baseId: IRON_SWORD, count: 1, name: 'Iron Sword (99%)' },
+                 { baseId: IRON_ARMOR, count: 1, name: 'Iron Armor (90%)' },
+                 { baseId: TUNIC, count: 1, name: 'Belted Tunic (99%)' }];
+  w.states[ME] = TAILOR;
+  const s = w.api.repairWithKit(ME, pick(IRON_SWORD, 99, 'Iron Sword'));
+  yes('A10 the Iron Sword is a smith\'s at a forge and nobody else\'s, the temper at the shut wheel not counted',
+      s.line === 'Your Iron Sword is a smith\'s work. It is mended by a smith at a forge.', s.line);
+  const a = w.api.repairWithKit(ME, pick(IRON_ARMOR, 90, 'Iron Armor'));
+  yes('A10 the Iron Armor is a smith\'s at a forge, the shut armour table not counted',
+      a.line === 'Your Iron Armor is a smith\'s work. It is mended by a smith at a forge.', a.line);
+  w.states[ME] = SMITH;
+  const t = w.api.repairWithKit(ME, pick(TUNIC, 99, 'Belted Tunic'));
+  yes('A10 the Belted Tunic is a tailor\'s at a loom', t.line === 'Your Belted Tunic is a tailor\'s work. It is mended by a tailor at a loom.', t.line);
 }
 
 // --------------------------------------------- W. the block on an engine --
