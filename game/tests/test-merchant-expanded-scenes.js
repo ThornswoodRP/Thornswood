@@ -21,7 +21,7 @@ vm.createContext(bundleContext);
 vm.runInContext(mode.slice(mode.indexOf('// MERCHANT TRADING BUNDLE BEGIN'),mode.indexOf('// MERCHANT TRADING BUNDLE END'))+
  '\nglobalThis.rows=MERCHANT_TRADING.expandedScenes();',bundleContext);
 assert.deepEqual(JSON.parse(JSON.stringify(bundleContext.rows)),rows,'the actual hot-reload bundle carries only the reviewed published rows');
-const buildFile=path.join(__dirname,'../../scripts/dev/Build-MerchantGamemode.js');
+const buildFile=path.join(__dirname,'../../scripts/dev/Build-MerchantTables.js');
 for(const defect of ['hash','missing','commission','duplicate','too-many']) {
  const pins=JSON.parse(JSON.stringify(activation));
  if(defect==='hash')pins.killScenes[0].sha256='0'.repeat(64);

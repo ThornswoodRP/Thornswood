@@ -7,12 +7,15 @@
 # writes by hand with --write-runtime (writesOffChain), are written LF the same
 # way (#3120). tests/test-3029-builder-eol.js holds this list to
 # content-tables.json. What ships still goes out as scripts/release/ShippedBytes.ps1
-# reads it, whatever the checkout.
+# reads it, whatever the checkout. The gamemode and its source are no step's
+# output since #6195, but Build-Gamemode.js and the two bundle builders
+# compare them byte for byte with what they write LF, so they stay LF too.
 game/data/** text eol=lf
 game/gamemode.js text eol=lf
 game/gamemode/** text eol=lf
 game/gamemode-tables/** text eol=lf
 game/plugins/thornswood-table-*.js text eol=lf
+game/ui/thornswood-profession-guides.js text eol=lf
 docs/systems/** text eol=lf
 tests/fixtures/merchant-retrieval-records.json text eol=lf
 docs/HUNTING-SPOTS.csv text eol=lf
