@@ -9,6 +9,7 @@
       pwsh scripts/vps/Box-Run.ps1 -Line 'Get-Logs -Dev -Lines 2000'
       pwsh scripts/vps/Box-Run.ps1 -Line 'Rebuild-ContentTables -Server dev'
       pwsh scripts/vps/Box-Run.ps1 -Line 'Deploy-Server -GamemodeOnly -Build <main's full commit>'
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Deploy-Server -GamemodeOnly -Build <main's full commit>' -Word <run>
       pwsh scripts/vps/Box-Run.ps1 -Line 'Watch-Services -Install'
       pwsh scripts/vps/Box-Run.ps1 -Line 'Hold-Server -Service dev -Why "swapping the ledger" -Minutes 45'
       pwsh scripts/vps/Box-Run.ps1 -Line 'ping'
@@ -29,10 +30,19 @@
   of the ops repository's "desk" environment, which only main may use
   (Grant-BoxAccess.ps1 -Deploy puts it there), and asks the gate over the box's own sshd on 127.0.0.1 with
   this script's -OnTheBox half. The key logs in as thornswood-deploy and can
-  only hand the gate a line (scripts\vps\gate\Gate.ps1). A line that names
-  a build waits first in the ops repository's "live" environment until
-  Patrick approves that run on its page (Ops #289); this then says the run
-  waits for him, and -Run reads its answer once he has.
+  only hand the gate a line (scripts\vps\gate\Gate.ps1).
+
+  PATRICK'S CLICK FOR A LIVE LINE (Ops #289). A line that names a build
+  (a live verb, held to -Build) is not sent at first: this starts
+  .github\workflows\live-word.yml in this repository with the line, says
+  where Patrick approves it, and ends 2. His approval is that run's job in
+  the environment "Live box run", whose only required reviewer is him; it
+  lives here because GitHub holds a job to a reviewer only in a public
+  repository on the organization's plan. Once he has approved it, the same
+  line with -Word <that run> starts box-run.yml, whose first job reads the
+  run through GitHub's API and sends the line on only when he approved
+  exactly that line, from main, in that environment, and no box run named
+  that run before.
 
   WHAT COMES BACK, AND TO WHOM. A deploy prints paths and a Get-Logs run
   brings back the servers' logs, and a run's log and files are readable by
@@ -46,11 +56,13 @@
   prints the output and puts the files in box-run\<run>\.
 
   Exit code: the verb's own, or 1 when it was refused, or the answer could
-  not be read.
+  not be read, or 2 when a live line waits for Patrick's approval.
 #>
 param(
     [string]$Line = '',
     [long]$Run = 0,
+    # The live-word.yml run in which Patrick approved this live line (Ops #289).
+    [long]$Word = 0,
     [switch]$OnTheBox,
     # Where box-run.yml and the VPS runners are (#4013).
     [string]$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'
@@ -64,6 +76,9 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 . (Join-Path (Join-Path (Split-Path -Parent $Here) 'ops') 'WorkflowRun.ps1')
 . (Join-Path (Join-Path (Split-Path -Parent $Here) 'ops') 'Sealed.ps1')
 $Workflow = 'box-run.yml'
+# Where Patrick's click for a live line lives (live-word.yml, Ops #289).
+$WordRepo = 'ThornswoodRP/Thornswood'
+$WordWorkflow = 'live-word.yml'
 $GateUser = 'thornswood-deploy'
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
 # The title of its annotations. One run of a workflow with more than one gate
@@ -237,6 +252,18 @@ $minutes = 30
 if (-not $Run) {
     $req = Test-ThornswoodGateRequest -Line $Line -Verbs (Read-ThornswoodGateVerbs (Join-Path $Here 'gate\verbs.json'))
     if (-not $req.Ok) { Die $req.Why }
+    if ($Word -and -not $req.Build) { Die ('-Word goes only with a line that names a build, and ' + $req.Verb + ' is not a live verb. Nothing was run.') }
+    if ($req.Build -and -not $Word) {
+        # The click first: nothing is sent to the box until Patrick approved
+        # this line in live-word.yml's environment.
+        try { $w = Start-ThornswoodWorkflow -Repo $WordRepo -Workflow $WordWorkflow -Inputs ([ordered]@{ line = $Line }) }
+        catch { Die ($_.Exception.Message + ' Nothing was run.') }
+        if (-not $w.Run) { Die ("GitHub started $WordWorkflow but named no run, so the line cannot name it. It is under " + $w.Url + ' Nothing was run.') }
+        Say "  $($req.Verb) changes what people play on, so it waits for Patrick's approval of run $($w.Run): $($w.Url)" 'Yellow'
+        Say '  Nothing was sent to the box. Once he approves it there (Review deployments, Approve), send the line with:' 'Yellow'
+        Say ("  pwsh scripts/vps/Box-Run.ps1 -Line '" + ($Line -replace "'", "''") + "' -Word " + $w.Run) 'White'
+        exit 2
+    }
     if ($req.Minutes) { $minutes = $req.Minutes }
     # A key for this run alone. Its public half goes with the run; its
     # private half stays here.
@@ -244,7 +271,9 @@ if (-not $Run) {
     $pub = $k.Public
     $priv = $k.Private
     Say "  asking the gate for: $Line" 'White'
-    try { $s = Start-ThornswoodWorkflow -Repo $GitHubRepo -Workflow $Workflow -Inputs ([ordered]@{ line = $Line; recipient = $pub }) }
+    $in = [ordered]@{ line = $Line; recipient = $pub }
+    if ($Word) { $in['word'] = [string]$Word }
+    try { $s = Start-ThornswoodWorkflow -Repo $GitHubRepo -Workflow $Workflow -Inputs $in }
     catch { Die ($_.Exception.Message + ' Nothing was run.') }
     if (-not $s.Run) { Die ("GitHub started $Workflow but named no run, so its answer cannot be read here. It is under " + $s.Url) }
     $Run = $s.Run
