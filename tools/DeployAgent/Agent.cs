@@ -41,15 +41,19 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
     /// server, the one Deploy-DevGamemode.ps1 deploys to.</summary>
     public const string DevEnv = "dev";
     /// <summary>The files a dev server's load order and plugins are made from
-    /// (Deploy-DevGamemode.ps1 -LoadOrder -FromRecord, #4069). A Deployment
-    /// whose commit changes one of them moves dev's order and plugins too.
-    /// Our own plugins, Thornswood-Content.esp and Thornswood-Last.esp, are
-    /// not among them: they are the Release's, put in with it (#6175).</summary>
+    /// (Deploy-DevGamemode.ps1 -LoadOrder -FromRecord, #4069): the ones the
+    /// box's content build reads its order from (ContentPaths.ps1,
+    /// Get-ThornswoodContentOrder, #6209). A Deployment whose commit changes
+    /// one of them has the gate hold dev's plugins to the record too. Our own
+    /// plugins, Thornswood-Content.esp and Thornswood-Last.esp, are not among
+    /// them: they are the Release's, put in with it (#6175), and so is the
+    /// order itself (ServerOrder).</summary>
     public static readonly string[] LoadOrderPaths =
     [
+        "records/collection.json",
         "records/collection-plugins.json",
         "records/collection-dropped.json",
-        "game/data/last-plugin.json",
+        "game/data/npc-population.json",
     ];
     /// <summary>Only dev's order and plugins, nothing of the gamemode: the
     /// Release's gamemode and tables are already in, and the gate runs main as
