@@ -25,6 +25,7 @@
 //   Discord.SessionStart/End -> both ends of a session, for the site's log
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Net;
@@ -667,7 +668,40 @@ namespace Thornswood
         public static string NewSession()
         {
             session = Guid.NewGuid().ToString("N");
+            lock (played) played.Clear();
             return session;
+        }
+
+        /// <summary>
+        /// Every character picked at the game's menu in this session, in the
+        /// order first picked. Change character (#3128) brings the menu back
+        /// without closing the game, so one session can play several, and the
+        /// end has to name each of them, not only the last (#4643). Filled from
+        /// the window's two second tick, read by the end on a pool thread.
+        /// </summary>
+        static readonly List<int> played = new List<int>();
+
+        /// <summary>A character was picked at the game's menu in this session.</summary>
+        public static void Played(int profileId)
+        {
+            if (profileId <= 0) return;
+            lock (played) { if (!played.Contains(profileId)) played.Add(profileId); }
+        }
+
+        /// <summary>The end's list of every character played, as JSON: "" when none was picked.</summary>
+        internal static string PlayedJson()
+        {
+            lock (played)
+            {
+                if (played.Count == 0) return "";
+                var sb = new StringBuilder(",\"profiles\":[");
+                for (int i = 0; i < played.Count; i++)
+                {
+                    if (i > 0) sb.Append(",");
+                    sb.Append(played[i].ToString(CultureInfo.InvariantCulture));
+                }
+                return sb.Append("]").ToString();
+            }
         }
 
         /// <summary>The game has just been started. Call it from a pool thread.</summary>
@@ -748,13 +782,14 @@ namespace Thornswood
             // A launcher that took a running session over, or one that was
             // itself replaced mid session, has no id of its own. It makes one
             // and sends the end alone; the site records that as a session whose
-            // start was never seen, which is the truth of it.
-            if (session.Length == 0) NewSession();
+            // start was never seen, which is the truth of it. The characters
+            // it saw picked stay on the list.
+            if (session.Length == 0) session = Guid.NewGuid().ToString("N");
             double m = minutes;
             if (m < 0 || m > 60 * 24 * 7 || double.IsNaN(m)) m = 0;
             string reason = why == "update" ? "update" : "quit";
             Send("end", Site + "/api/play/end",
-                 Head(profileId) +
+                 Head(profileId) + PlayedJson() +
                  ",\"minutes\":" + m.ToString("F1", CultureInfo.InvariantCulture) +
                  ",\"why\":\"" + reason + "\"}");
         }
