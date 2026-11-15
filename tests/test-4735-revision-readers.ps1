@@ -23,7 +23,9 @@
        throws, naming state.v2, and never answers the legacy folder's number;
        Get-CollectionNewest and Get-CollectionModIds throw too;
        Get-CollectionState is not Known and says why. A machine with no
-       database at all still reads the legacy folder, the one case it is for.
+       database at all still reads the legacy folder, the one case it is for;
+       a database that reads and names no revision of the slug answers 0
+       (not installed), never a leftover folder's number (#6085).
     B. Get-CollectionState checks the newest against Nexus: installed 2, Vortex
        knowing only 2, Nexus on 5 is Behind; Nexus not answering is not Known
        and says so.
@@ -73,6 +75,9 @@ try {
     $spec = [ordered]@{
         'installed-2' = [ordered]@{ table = @((Attr $z 'collectionSlug' '"7essxf"'), (Attr $z 'revisionNumber' '2'), (Attr $z 'newestVersion' '"2"')); log = @() }
         'unreadable'  = [ordered]@{ table = @((Attr $z 'collectionSlug' '"7essxf"'), (Attr $z 'revisionNumber' '2'), (Attr $z 'newestVersion' '"2"')); log = @() }
+        # A database that reads and names a revision of another collection
+        # only, so none of 7essxf is installed (#6085).
+        'no-revision' = [ordered]@{ table = @((Attr $z 'collectionSlug' '"other1"'), (Attr $z 'revisionNumber' '3'), (Attr $z 'newestVersion' '"3"')); log = @() }
     }
     $specPath = Join-Path $T 'cases.json'
     [IO.File]::WriteAllText($specPath, (ConvertTo-Json -InputObject $spec -Depth 6), (New-Object Text.UTF8Encoding($false)))
@@ -99,6 +104,12 @@ try {
     $env:APPDATA = Join-Path $T 'legacy'
     $null = New-Item -ItemType Directory -Force -Path (Join-Path (Join-Path (Join-Path (Join-Path $env:APPDATA 'Vortex') 'skyrimse') 'mods') 'collection_7essxf_3_2026-09-20T10-00-00Z')
     Yes 'with no Vortex database at all, the legacy folder name is still read' ((Get-CollectionRevision '7essxf') -eq 3)
+    # A database that reads but names no revision of the slug says it is not
+    # installed; a leftover folder beside it is not read as one (#6085).
+    At 'no-revision'
+    $null = New-Item -ItemType Directory -Force -Path (Join-Path (Join-Path (Join-Path (Join-Path (Join-Path $cases 'no-revision') 'Vortex') 'skyrimse') 'mods') 'collection_7essxf_4_2026-09-20T10-00-00Z')
+    $got = $null; $gotWhy = Thrown { $script:got = Get-CollectionRevision '7essxf' }
+    Yes ("a database that reads and names no revision of the slug answers 0, never a leftover folder's 4 (" + $script:got + ')') ($gotWhy -eq '' -and $script:got -eq 0)
 
     # ---- B. the newest is checked against Nexus ------------------------------------
     Write-Host ''; Write-Host 'B. the newest revision'
