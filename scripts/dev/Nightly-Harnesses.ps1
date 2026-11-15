@@ -472,20 +472,43 @@ function Start-One($t) {
 # command's message takes %0A for a new line, and % itself as %25.
 $FAIL_LINES = 10
 $FAIL_LINE_CHARS = 300
+# A harness says why a check failed on indented lines under its FAIL line
+# (#6137: test-4389 prints its site copy's own output there). The annotation
+# is the only part of a failed run a Bot can read, so up to this many of
+# those lines go with each FAIL line shown.
+$FAIL_REASON_LINES = 8
 function Get-FailSaid([string]$printed) {
-    $lines = @($printed -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-    $fails = @($lines | Where-Object { $_ -match '^FAIL\b' })
+    $raw = @($printed -split "`r?`n")
+    $lines = @($raw | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $cut = { param($s) if ($s.Length -gt $FAIL_LINE_CHARS) { $s.Substring(0, $FAIL_LINE_CHARS) + '...' } else { $s } }
+    # Each FAIL line, with the indented lines straight under it. A line that
+    # is not indented ends what belongs to the FAIL line above; a blank one
+    # does not.
+    $fails = New-Object System.Collections.Generic.List[object]
+    $open = $null
+    foreach ($line in $raw) {
+        $t = $line.Trim()
+        if (-not $t) { continue }
+        if ($t -match '^FAIL\b') { $open = [pscustomobject]@{ Line = $t; Why = New-Object System.Collections.Generic.List[string] }; $fails.Add($open); continue }
+        if ($null -ne $open -and $line -match '^\s') { $open.Why.Add($t); continue }
+        $open = $null
+    }
     $head = 'its FAIL lines'
     if (-not $fails.Count) {
-        $fails = @($lines | Select-Object -Last $FAIL_LINES)
-        $head = 'no FAIL line; its last lines'
-        if (-not $fails.Count) { return ': it printed nothing' }
+        $show = @($lines | Select-Object -Last $FAIL_LINES | ForEach-Object { & $cut $_ })
+        if (-not $show.Count) { return ': it printed nothing' }
+        $text = ': no FAIL line; its last lines' + "`n" + ($show -join "`n")
+        return $text.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
     }
     $more = $fails.Count - $FAIL_LINES
-    $show = @($fails | Select-Object -First $FAIL_LINES | ForEach-Object {
-        if ($_.Length -gt $FAIL_LINE_CHARS) { $_.Substring(0, $FAIL_LINE_CHARS) + '...' } else { $_ }
-    })
-    if ($more -gt 0) { $show += ('and {0} more FAIL line(s), in the job log' -f $more) }
+    $show = New-Object System.Collections.Generic.List[string]
+    foreach ($f in @($fails | Select-Object -First $FAIL_LINES)) {
+        $show.Add((& $cut $f.Line))
+        foreach ($w in @($f.Why | Select-Object -First $FAIL_REASON_LINES)) { $show.Add('    ' + (& $cut $w)) }
+        $over = $f.Why.Count - $FAIL_REASON_LINES
+        if ($over -gt 0) { $show.Add(('    and {0} more line(s) under it, in the job log' -f $over)) }
+    }
+    if ($more -gt 0) { $show.Add(('and {0} more FAIL line(s), in the job log' -f $more)) }
     $text = ': ' + $head + "`n" + ($show -join "`n")
     return $text.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
 }
