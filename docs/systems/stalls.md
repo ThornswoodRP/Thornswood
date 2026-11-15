@@ -117,7 +117,8 @@ naming the stall, the way a staff eviction at a door is
 The book of stalls is `game/market-stalls.js`: who keeps each stall,
 what is on it, at what price, and the words the panel sends. The
 gamemode carries it, bundled by
-`scripts/dev/Build-MarketStallsGamemode.js`, and the market stalls
+`scripts/dev/Build-MarketStallsGamemode.js`, and the stalls themselves
+are tables that `scripts/dev/Build-MarketStallTables.js` writes. The market stalls
 block in `game/gamemode.js` is the world's side of it: the packs and
 purses a sale moves, who stands where, the panel, and the drop box. The
 register is `private/market-stalls.json`. The panel is

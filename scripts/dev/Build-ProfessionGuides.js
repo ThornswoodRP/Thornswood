@@ -3,7 +3,7 @@
 /*
   Build-ProfessionGuides.js (#3165)
 
-      node scripts/dev/Build-ProfessionGuides.js           write the GUIDES block
+      node scripts/dev/Build-ProfessionGuides.js           write the guides file
       node scripts/dev/Build-ProfessionGuides.js --check   fail when it is stale
 
   The K panel's Profession guides page, one page per profession (Patrick's
@@ -27,29 +27,31 @@
                                   rest a piece costs, CRAFT_REST, partyBonus,
                                   a mage's study work and TOOL_USES
 
-  It writes one line into game/ui/thornswood-skills.js, between
-
-      // ==== PROFESSION_GUIDES ====
-      // ==== end PROFESSION_GUIDES ====
+  It writes a file of its own, game/ui/thornswood-profession-guides.js, which
+  puts the facts on window.ThornswoodTables.PROFESSION_GUIDES. It is a step of
+  the content chain (scripts/mods/content-tables.json, #6193): until then it
+  spliced a line into the K panel's code, and nothing rebuilt it when the load
+  order moved, so the guides kept the committed tables while dev ran the box's.
 
   The page is a browser drawn over a running Skyrim, and the server sends the
-  panel on every write, so the guide rides in the page's own file rather than
-  on the character's property: it is the same for everybody, and a person's
-  own rank and count on it come from the panel the server already sends.
+  panel on every write, so the guide rides in the page as an overlay file the
+  front injects rather than on the character's property: it is the same for
+  everybody, and a person's own rank and count on it come from the panel the
+  server already sends.
 
   The sentences around these facts are the page's own (GUIDE_TEXT in
-  thornswood-skills.js). game/tests/test-3165-profession-guides.js holds the two
-  together and runs --check.
+  thornswood-skills.js, which reads the facts with guidesNow() when it draws a
+  page). game/tests/test-3165-profession-guides.js holds the two together and
+  runs --check.
 */
 const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..', '..');
-const UI = path.join(ROOT, 'game', 'ui', 'thornswood-skills.js');
+const OUT = path.join(ROOT, 'game', 'ui', 'thornswood-profession-guides.js');
+const PREFIX = '(window.ThornswoodTables = window.ThornswoodTables || {}).PROFESSION_GUIDES = ';
 const GAMEMODE = path.join(ROOT, 'game', 'gamemode.js');
 const TABLES = require('./GamemodeTables.js');
-const BEGIN = '  // ==== PROFESSION_GUIDES ====\n';
-const END = '  // ==== end PROFESSION_GUIDES ====\n';
 
 const RANKS = ['novice', 'advanced', 'expert', 'master'];
 // The profession keys of the K panel, in its order, and the halves of each.
@@ -327,43 +329,37 @@ function guides() {
   return out;
 }
 
-function block() {
-  return BEGIN +
-    '  /* Built by scripts/dev/Build-ProfessionGuides.js out of game/data and game/gamemode.js. Do not hand edit. */\n' +
-    '  var GUIDES = ' + JSON.stringify(guides()) + ';\n' +
-    END;
+/** The guides file, LF, one line of facts. */
+function text() {
+  return '/* Built by scripts/dev/Build-ProfessionGuides.js out of game/data, game/gamemode-tables and game/gamemode.js. Do not hand edit.\n' +
+    '   The K panel\'s Profession guides (#3165), read by game/ui/thornswood-skills.js when it draws a page (#6193). */\n' +
+    PREFIX + JSON.stringify(guides()) + ';\n';
 }
 
-function build(uiText) {
-  const a = uiText.indexOf(BEGIN);
-  const b = uiText.indexOf(END);
-  if (a < 0 || b < a || uiText.indexOf(BEGIN, a + 1) >= 0) {
-    throw new Error('game/ui/thornswood-skills.js needs exactly one PROFESSION_GUIDES block');
-  }
-  return uiText.slice(0, a) + block() + uiText.slice(b + END.length);
+/** The facts the file holds, read back without running it, or null. */
+function read(file) {
+  let t;
+  try { t = fs.readFileSync(file || OUT, 'utf8').split('\r\n').join('\n'); } catch (e) { return null; }
+  const a = t.indexOf('\n' + PREFIX);
+  if (a < 0 || !t.endsWith(';\n')) { return null; }
+  try { return JSON.parse(t.slice(a + 1 + PREFIX.length, -2)); } catch (e) { return null; }
 }
 
 if (require.main === module) {
-  /*
-    Read and compared with LF line ends, and written back with the ends the
-    file came with: a Windows checkout with core.autocrlf holds this file
-    CRLF, and a marker searched for with \n alone would not be found there.
-  */
-  const raw = fs.readFileSync(UI, 'utf8');
-  const crlf = raw.indexOf('\r\n') >= 0;
-  const now = raw.split('\r\n').join('\n');
-  const next = build(now);
+  const next = text();
+  let now = null;
+  try { now = fs.readFileSync(OUT, 'utf8'); } catch (e) { now = null; }
   if (process.argv.includes('--check')) {
     if (next !== now) {
-      console.log('PROFESSION_GUIDES in game/ui/thornswood-skills.js is stale: run node scripts/dev/Build-ProfessionGuides.js');
+      console.log('game/ui/thornswood-profession-guides.js is stale: run node scripts/dev/Build-ProfessionGuides.js');
       process.exit(1);
     }
-    console.log('PASS PROFESSION_GUIDES matches game/data and game/gamemode.js');
+    console.log('PASS the profession guides match game/data, the gamemode tables and game/gamemode.js');
     process.exit(0);
   }
-  if (next === now) { console.log('PROFESSION_GUIDES is already up to date'); process.exit(0); }
-  fs.writeFileSync(UI, crlf ? next.split('\n').join('\r\n') : next, 'utf8');
-  console.log('wrote PROFESSION_GUIDES into game/ui/thornswood-skills.js');
+  if (next === now) { console.log('the profession guides are already up to date'); process.exit(0); }
+  fs.writeFileSync(OUT, next, 'utf8');
+  console.log('wrote game/ui/thornswood-profession-guides.js');
 }
 
-module.exports = { build, guides, BENCH_WORDS };
+module.exports = { text, read, guides, BENCH_WORDS, OUT, PREFIX };
