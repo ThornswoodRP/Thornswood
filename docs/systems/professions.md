@@ -292,8 +292,10 @@ can be read before it is picked. A page says three things:
 The facts are read out of `game\data\recipes.json`,
 `game\data\mine-buildings.json`, `game\data\hunts.json` and the
 gamemode's bench table, maneuvers and tuning by
-`scripts\dev\Build-ProfessionGuides.js`, which writes them into
-`game\ui\thornswood-skills.js`. Run it after any of those change;
+`scripts\dev\Build-ProfessionGuides.js`, which writes them into a file of
+their own, `game\ui\thornswood-profession-guides.js`, that the K panel
+reads when it draws a page. It is a step of the content chain, so a content
+build rebuilds the guides with the tables they come from;
 `game\tests\test-3165-profession-guides.js` fails while the page is behind.
 
 ## Everything has a maker

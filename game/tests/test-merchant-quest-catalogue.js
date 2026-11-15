@@ -40,7 +40,7 @@ function validate(catalogue, source = {recipes, tables, harvests}) {
   assert.equal(catalogue.active, false, 'Draft data cannot activate work');
   assert.equal(catalogue.complete, false, 'The full catalogue and runtime prerequisites remain unfinished');
   assert.ok(Array.isArray(catalogue.quests) && catalogue.quests.length > 0);
-  assert.ok(read('scripts/dev/Build-MerchantGamemode.js').includes('merchant-quest-activation.json'), 'Runtime uses explicit pinned admission');
+  assert.ok(read('scripts/dev/Build-MerchantTables.js').includes('merchant-quest-activation.json'), 'Runtime uses explicit pinned admission');
 
   // Compare actual objective identities, not titles or merchant/hold labels.
   const killSource = read('game/kill-contracts.js');
