@@ -9,6 +9,19 @@ changed; it is not filed as if the question were open.
 A decision that changes moves here the day it changes, with the new date and
 link, and the old line goes.
 
+## Contents
+
+- [The world is run by people](#the-world-is-run-by-people)
+- [Items and coin](#items-and-coin)
+- [Buttons, not commands](#buttons-not-commands)
+- [Voice and the in-game UI](#voice-and-the-in-game-ui)
+- [The box](#the-box)
+- [Work and crafting](#work-and-crafting)
+- [The site](#the-site)
+- [How work moves](#how-work-moves)
+- [The plan of 31 Oct](#the-plan-of-31-oct)
+- [Kept, after being asked](#kept-after-being-asked)
+
 ## The world is run by people
 
 - **Guards are people, never NPCs.** The Jarl of each hold names that hold's
@@ -60,9 +73,13 @@ link, and the old line goes.
 - **A blizzard or heavy storm makes travel 15% slower** and adds cold or
   wet; the right gear protects. 22 Oct 2026,
   [#3176](https://github.com/EvilPatrick06/Thornswood/issues/3176#issuecomment-6335270816).
-- **Letters and parcels are picked up at any inn in the recipient's hold.**
-  22 Oct 2026,
-  [#3175](https://github.com/EvilPatrick06/Thornswood/issues/3175#issuecomment-6335271035).
+- **Letters and parcels are left and collected at the drop box by a notice
+  board in the recipient's hold, not at an inn.**
+  (dec_SaZmBq9bZT4O_xP-wHpqbg) 12 Nov 2026,
+  [#4560](https://github.com/ThornswoodRP/Thornswood/issues/4560#issuecomment-6842189471).
+- **A parcel costs the 20 board fee plus a courier pay the sender names, at
+  least 15.** (dec_T2p8Emt1pF5ZarJ4vv2j0Q) 12 Nov 2026,
+  [#4560](https://github.com/ThornswoodRP/Thornswood/issues/4560#issuecomment-6842435718).
 - **House and shop upkeep is due weekly**, in goods or labour. 22 Oct 2026,
   [#3170](https://github.com/EvilPatrick06/Thornswood/issues/3170#issuecomment-6335271623).
 - **Missed upkeep never takes the claim away;** it brings a penalty, the way
@@ -753,10 +770,19 @@ issue where the card did.
 - **FOMOD mods are installed without Vortex**, by writing the installer choices
   the way Vortex does (q-p12-fomod-no-vortex). 31 Oct 2026,
   [#5189](https://github.com/ThornswoodRP/Thornswood/issues/5189).
+- **#5992 stays merged as it is, though it merged before its card was
+  answered: a mod's permission reads allowed only on a licence covering its
+  own files, an upload line letting files go to other sites, or a grant in
+  the page's own words.** (dec_YcdrGnAFdisVFWy7n67GqA) 12 Nov 2026,
+  [#4190](https://github.com/ThornswoodRP/Thornswood/issues/4190#issuecomment-6841005244).
 - **#5896 merges at 3e55c69 and its merge publishes collection revision 9,
   which carries only three load-after rules that hold the servers' order.**
   (dec__Ek_LSW4kO5MEGG2lIOIWg) 12 Nov 2026,
   [#4728](https://github.com/ThornswoodRP/Thornswood/issues/4728#issuecomment-6830945384).
+- **#6007 stays merged as 4b86964, though it merged before its card was
+  answered: a moved or added collection entry is checked against the rest of
+  the revision.** (dec_BtxAK7ZxWgqHFvPaheYEFQ) 12 Nov 2026,
+  [#4200](https://github.com/ThornswoodRP/Thornswood/issues/4200#issuecomment-6840852921).
 
 ### The launcher and updates
 
@@ -909,6 +935,10 @@ issue where the card did.
   Grant-BoxKey -Name oracle-hermes.** (dec_8IRMk9Pf55b91lg4a-_b3Q) 10 Nov
   2026,
   [#5746](https://github.com/ThornswoodRP/Thornswood/issues/5746#issuecomment-6771996368).
+- **Each action pin's comment names the full release its commit is, and the
+  nightly checks every pin is the commit its tag names; #5843 merges at
+  04b9084.** (dec_ZkY5kVW6bjbs6_1M2AqY1g) 12 Nov 2026,
+  [#4165](https://github.com/ThornswoodRP/Thornswood/issues/4165#issuecomment-6830718714).
 
 ### Turned down
 

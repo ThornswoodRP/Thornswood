@@ -270,7 +270,8 @@ function tableFrom(wire) {
   for (const m of wire) {
     if (m.t === 'pos') { t = Object.assign({}, m.who); }
     if (m.t === 'moved' && t) {
-      Object.assign(t, m.who || {});
+      // A row already held comes as the fields that changed (#5358).
+      for (const k of Object.keys(m.who || {})) t[k] = Object.assign({}, t[k] || {}, m.who[k]);
       for (const id of m.gone || []) delete t[id];
     }
   }

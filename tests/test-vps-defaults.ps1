@@ -71,7 +71,8 @@ Set-Env 'THORNSWOOD_VPS_LOCAL' (Join-Path $tmp 'none.json')
 
 try {
 # ---- 1. ParseFile over Vps.ps1 and every script that dotsources it ---------
-$all = @(Get-ChildItem -Path (Join-Path $Repo 'scripts') -Filter *.ps1 -Recurse -File)
+# Not the scripts' own harnesses in scripts\tests (#5341), which name what they look for.
+$all = @(Get-ChildItem -Path (Join-Path $Repo 'scripts') -Filter *.ps1 -Recurse -File | Where-Object { $_.FullName -notmatch '[\\/]scripts[\\/]tests[\\/]' })
 $changed = @($all | Where-Object {
         $raw = Get-Content -LiteralPath $_.FullName -Raw -ErrorAction SilentlyContinue
         $raw -and ($raw.Contains('Get-ThornswoodVpsAddress') -or $_.Name -eq 'Vps.ps1')

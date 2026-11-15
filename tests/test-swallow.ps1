@@ -468,6 +468,7 @@ namespace $ns
             catch (System.Exception ex) { Swallow.Note(where, ex); }
         }
         public static void Nothing(string where) { Swallow.Note(where, null); }
+        public static string Refused() { return LauncherLog.Refused(); }
     }
 }
 "@
@@ -496,17 +497,18 @@ namespace $ns
         Yes 'Note does not throw before the log path is set' ($null -eq $threw)
 
         $threw = $null
-        $missing = Join-Path $tmp 'no-such-folder\launcher.log'
+        $missing = Join-Path (Join-Path $tmp 'no-such-folder') 'launcher.log'
         try { $door::SetLog($missing); $door::Fail('folder missing', 'x') } catch { $threw = $_ }
         Yes 'Note does not throw when the log folder is missing' ($null -eq $threw)
         Yes 'and does not make the folder' (-not (Test-Path -LiteralPath (Split-Path -Parent $missing)))
+        Yes 'and keeps the record in memory with the reason the write was refused' ($door::Refused().Contains('Swallowed in folder missing') -and $door::Refused().Contains('launcher.log refused: DirectoryNotFoundException'))
 
         if ($OnWindows) {
             $threw = $null
             $held = New-Object IO.FileStream($log, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
             try { $door::SetLog($log); $door::Fail('log held open', 'x') } catch { $threw = $_ }
             finally { $held.Dispose() }
-            Yes 'Note does not throw when something else has the log open' ($null -eq $threw)
+            Yes 'Note retains a refused log record and reason without escaping its catch' ($null -eq $threw -and $door::Refused().Contains('log held open') -and $door::Refused().Contains('launcher.log refused: IOException'))
         } else {
             Write-Host 'SKIP  4, the log held open: a file held with no sharing refuses a write only on Windows'
         }
@@ -517,7 +519,7 @@ namespace $ns
     $body = [regex]::Replace($src, '(?m)^\s*///.*$|//.*$', '')
     Yes 'Swallow.cs never calls Shell.Log' ($body -notmatch '\bLog\s*\(')
     Yes 'Swallow.cs touches no control, window or dispatcher' ($body -notmatch 'txtStatus|Dispatcher|MessageBox|System\.Windows')
-    Yes 'Swallow.cs writes straight to Paths.LogFile' ($body -match 'Paths\.LogFile' -and $body -match 'File\.AppendAllText')
+    Yes 'Swallow.cs writes through the one gated writer' ($body -match 'Paths\.LogFile' -and $body -match 'FileMode\.Append' -and $body -match 'lock \(gate\)')
 
     Yes 'Swallow.cs has no silent catch of its own' (-not ([regex]'\bcatch\s*(\([^)]*\))?\s*\{\s*\}').IsMatch($src))
 }

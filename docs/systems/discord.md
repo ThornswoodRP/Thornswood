@@ -6,6 +6,14 @@ change the plan and run that, and `bot/tests/test-3317-layout.py` fails when
 the two differ. `Setup-Discord.ps1 -OnBox -Audit` says where the live
 server differs from this page. Issue #3317 is where it was set out.
 
+## Contents
+
+- [The staff council](#the-staff-council)
+- [Roles, top of the list first](#roles-top-of-the-list-first)
+- [Who a mode lets in](#who-a-mode-lets-in)
+- [Categories and channels, in order](#categories-and-channels-in-order)
+- [Retired](#retired)
+
 ## The staff council
 
 Each staff category has a lead, and the leads are the council: they
@@ -52,6 +60,7 @@ Holders of Moderator also talk in the Gamemasters space.
 | Moderator | #6FA05A | yes | moderator set | the build | Moderates the Discord only. No staff powers in the game. |
 | Content Creator | #D2603F | yes | nothing of its own | the build | Thornswood's own social media and content, not community creators. |
 | Support | #C9B46A | yes | support set | the build | Answers help tickets and playtest applications, and gives Playtester. |
+| Clanker | #00E5FF | yes | nothing of its own | the build | Every bot in the server: Thornswood, Patreon, Jockie Music, DISBOARD and any added later. A build gives it. |
 | Jarl of Whiterun | #E0C56A | yes | nothing of its own | the build | The seat of Whiterun. Applied for on its own application. |
 | Jarl of Solitude | #E0C56A | yes | nothing of its own | the build | The seat of Solitude. Applied for on its own application. |
 | Jarl of Windhelm | #E0C56A | yes | nothing of its own | the build | The seat of Windhelm. Applied for on its own application. |
@@ -157,10 +166,10 @@ Holders of Moderator also talk in the Gamemasters space.
 | Blades Officer | #A08560 | no | nothing of its own | the build | An Officer of Blades: posts its announcements and sits in its leadership. Its Leader gives and takes it, to a member. |
 | Volkihar Clan Officer | #A08560 | no | nothing of its own | the build | An Officer of Volkihar Clan: posts its announcements and sits in its leadership. Its Leader gives and takes it, to a member. |
 | Business Owner | #A08C6A | no | nothing of its own | the build | Owns a business book in the game. Support gives it. |
-| Member | #8D9682 | no | nothing of its own | the build | Joined and answered the rules and age questions. Sees Start Here, Applications and Information. |
+| Member | #8D9682 | no | nothing of its own | the build | Reacted to the rules in #rules, which says 18 or over and the rules accepted. Sees Start Here, Applications and Information. |
 | Banned | #4A4A4A | no | nothing of its own | the build | Takes the site and the game away (site/server.js, access.banned). |
-| News Pings | #8D9682 | no | left to what makes it | bot.py |  |
-| Updates Pings | #8D9682 | no | left to what makes it | bot.py |  |
+| News Pings | #8D9682 | no | left to what makes it | the bot (bot_pings.py) |  |
+| Updates Pings | #8D9682 | no | left to what makes it | the bot (bot_pings.py) |  |
 
 @everyone keeps what the server gives it; the build does not change it,
 and the audit prints it. Every other role opens exactly the channels
@@ -620,7 +629,7 @@ Category mode: staff.
 
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
-| #staff-announcements | announce | staffread | everybody on staff | the council | posts: the council; was #news in Staff; topic: Announcements for every staff member. The council posts here. |
+| #staff-news | announce | staffread | everybody on staff | the council | posts: the council; was #news in Staff; was #staff-announcements in Staff; topic: Every dev release, and announcements for every staff member. The council posts here. |
 | #council-decisions | text | staffread | everybody on staff | the council | posts: the council; topic: Every council decision, with its date. The council posts here. |
 | #staff-updates | text | staff | everybody on staff | everybody on staff | never made by the build; topic: Only what every staff member must act on: a restart, an outage, or a change to how staff work. The bot and the watchdog post here. |
 | #staff-general | text | staff | everybody on staff | everybody on staff | topic: Nobody else can see this. |
@@ -712,6 +721,6 @@ Categories retired by the plan, removed by `-Prune` once empty: Help, The Holds,
 
 Channel names the build no longer wants, removed by `-Prune`: tech-help, looking-for-group, off-topic, downloads, links-and-credits, Small Table, The Longhouse, Away, screenshots, clips, bot-commands, The Bannered Mare, The Road, test-these, test-tasks-archive, tickets-and-applications, tickets, seats.
 
-Channels never deleted by anything in the build: council, council-decisions, dev-test-findings, dev-test-results, dev-test-tasks, general-chat, gm, gm voice, gm-chat, gm-discipline, gm-rules, gm-scene-summaries, gm-suggestions, help voice, jukebox, known-issues, news, play-testing, playtester voice, server-progression-and-economy, staff-announcements, staff-updates, suggestions, support, test-findings, test-results, test-tasks, ticket-log, welcome-travelers.
+Channels never deleted by anything in the build: council, council-decisions, dev-test-findings, dev-test-results, dev-test-tasks, general-chat, gm, gm voice, gm-chat, gm-discipline, gm-rules, gm-scene-summaries, gm-suggestions, help voice, jukebox, known-issues, news, play-testing, playtester voice, server-progression-and-economy, staff-announcements, staff-news, staff-updates, suggestions, support, test-findings, test-results, test-tasks, ticket-log, welcome-travelers.
 
 Roles never deleted: every Jarl, Citizen and office role, and every faction's Leader, member and Officer role.

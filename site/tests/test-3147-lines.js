@@ -18,7 +18,8 @@
 //      their markers, read the file and fill home.html's one empty quote.
 //      home.html keeps no lore line of its own. A copy of the site, started
 //      on a spare port, shows a line from the file on the front page and
-//      hands every line out in /api/public.
+//      hands every line out in /api/public. home.js picks again from those
+//      lines on each load, since Cloudflare keeps a page five minutes (#5978).
 //   3. The bot. bot.py keeps none of the lines, starts watch_lines when it
 //      comes up, and reads /api/public's lines. With the Python the bot runs
 //      on (tests\bot-python.js), status_lines turns what the site hands out
@@ -27,7 +28,7 @@
 // Nothing leaves this machine. The site copy and its files are in a scratch
 // folder under the system's temp folder.
 const fs = require('fs'), path = require('path'), os = require('os');
-const net = require('net'), http = require('http');
+const http = require('http');
 const { spawn, spawnSync } = require('child_process');
 const siteFiles = require('../../tests/site-files');
 const ROOT = path.join(__dirname, '..', '..');
@@ -128,6 +129,37 @@ yes('a line is put in as text, not HTML',
 yes('the site fills it on the pages it serves', /html = fillLoreLine\(html, readLines\(\)\.lore, Math\.random\(\)\);/.test(src));
 yes('and hands every line out in /api/public', /lines: readLines\(\)/.test(src));
 
+// The browser picks again (#5978): Cloudflare keeps a public page for five
+// minutes, so the server's pick alone showed everybody one line until then.
+const homeJs = read('site/public/home.js') || '';
+const pickCut = /\/\/ ==== thornswood lore pick ====([\s\S]*?)\/\/ ==== end thornswood lore pick ====/.exec(homeJs);
+yes('home.js has the lore pick between its markers', !!pickCut);
+function fakeQuote() {
+  const q = { hidden: true, textContent: '', kids: [],
+              appendChild(c) { this.kids.push(c); } };
+  const doc = { getElementById: (id) => (id === 'loreLine' ? q : null),
+                createElement: () => ({ textContent: '' }) };
+  return { q, doc };
+}
+const pickLore = (doc) => pickCut
+  ? new Function('document', pickCut[1] + '\nreturn pickLoreLine;')(doc)
+  : () => {};
+{
+  const { q, doc } = fakeQuote();
+  pickLore(doc)(parsed.lore, 0.9999);
+  yes('pickLoreLine shows the picked line with its source, as text',
+      q.hidden === false && q.textContent === last.text &&
+      q.kids.length === 1 && q.kids[0].textContent === last.from);
+}
+{
+  const { q, doc } = fakeQuote();
+  pickLore(doc)([], 0.5);
+  pickLore(doc)(undefined, 0.5);
+  yes('no lines handed out: the server\'s pick is left as it is', q.hidden === true && q.textContent === '');
+}
+yes('home.js picks from /api/public\'s lines on every load',
+    /pickLoreLine\(d\.lines && d\.lines\.lore, Math\.random\(\)\);/.test(homeJs));
+
 // ------------------------------------------------------------- the bot --
 const bot = require('../../tests/bot-files').source().replace(/\r\n/g, '\n');
 yes('bot.py starts watch_lines when it comes up', /asyncio\.create_task\(watch_lines\(\)\)/.test(bot));
@@ -173,13 +205,6 @@ else {
 }
 
 // --------------------------------------------------- a copy of the site --
-function freePort() {
-  return new Promise(function (ok, no) {
-    const s = net.createServer();
-    s.on('error', no);
-    s.listen(0, '127.0.0.1', function () { const p = s.address().port; s.close(function () { ok(p); }); });
-  });
-}
 function ask(port, route) {
   return new Promise(function (ok) {
     const req = http.request({ host: '127.0.0.1', port: port, method: 'GET', path: route, agent: false }, function (res) {
@@ -208,19 +233,20 @@ function copyTree(from, to) {
     copyTree(path.join(APP, 'public'), path.join(dir, 'public'));
     copyTree(path.join(APP, 'data', 'site'), path.join(dir, 'data', 'site'));
     fs.copyFileSync(path.join(APP, 'config.example.json'), path.join(dir, 'config.json'));
-    const port = await freePort();
+    let port = 0;
     child = spawn(process.execPath, ['server.js'], {
       cwd: dir,
-      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
+      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
                                             THORNSWOOD_CHAT_DIR: path.join(dir, 'chat') })
     });
     child.stdout.on('data', function (d) { out += d; });
     child.stderr.on('data', function (d) { out += d; });
     child.on('exit', function () { exited = true; });
     const end = Date.now() + 10000;
-    while (Date.now() < end && out.indexOf('listening on ') < 0 && !exited) await new Promise((ok) => setTimeout(ok, 20));
-    yes('a copy of the site comes up', out.indexOf('listening on ') >= 0 && !exited);
-    if (exited || out.indexOf('listening on ') < 0) { console.log(out.split('\n').slice(-12).join('\n')); return; }
+    while (Date.now() < end && !siteFiles.saidPort(out) && !exited) await new Promise((ok) => setTimeout(ok, 20));
+    yes('a copy of the site comes up', siteFiles.saidPort(out) > 0 && !exited);
+    if (exited || !siteFiles.saidPort(out)) { console.log(out.split('\n').slice(-12).join('\n')); return; }
+    port = siteFiles.saidPort(out);
 
     const front = await ask(port, '/');
     const q = /<blockquote class="chron" id="loreLine">([\s\S]*?)<cite>([\s\S]*?)<\/cite><\/blockquote>/.exec(front.body);
@@ -235,7 +261,15 @@ function copyTree(from, to) {
     const gone = await ask(port, '/');
     yes('with no lines.md the front page still comes, its quote empty and hidden',
         gone.status === 200 && gone.body.indexOf(EMPTY) >= 0);
-    yes('and the site says why in its log', /could not read data\/site\/lines\.md/.test(out));
+    // The site logs this line before it answers, but the answer comes on a
+    // socket and the line on the stderr pipe, and nothing orders the two here,
+    // so on a busy machine the answer is read first (#4154). Wait for the line
+    // itself, to the same deadline as "listening on" above.
+    const why = /could not read data\/site\/lines\.md/;
+    const until = Date.now() + 10000;
+    while (Date.now() < until && !why.test(out) && !exited) await new Promise((ok) => setTimeout(ok, 20));
+    yes('and the site says why in its log', why.test(out));
+    if (!why.test(out)) console.log('      in ten seconds the site logged:\n' + out.split('\n').slice(-12).join('\n'));
   } finally {
     if (child && !exited) {
       await new Promise(function (ok) { child.once('exit', ok); try { child.kill(); } catch (e) { ok(); } setTimeout(ok, 3000); });

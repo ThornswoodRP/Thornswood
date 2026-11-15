@@ -14,7 +14,8 @@ const module = { exports: {} };
   and at what price, and the words the stall's panel sends. It never touches
   the world, a pack or a purse; the market stalls block in game/gamemode.js
   does that, around these calls, and bundles this file
-  (scripts/dev/Build-MarketStallsGamemode.js).
+  (scripts/dev/Build-MarketStallsGamemode.js). The stalls themselves are
+  tables (scripts/dev/Build-MarketStallTables.js).
 
   A STALL is a row of game/data/market-stalls.json: { id, hold, place, world,
   pos, reach }. Which stalls there are is the table's, built out of the
@@ -461,7 +462,7 @@ module.exports = {
 return module.exports;
 })();
 // MARKET STALLS BUNDLE END
-// The stalls of game\data\market-stalls.json, as scripts\dev\Build-MarketStallsGamemode.js writes them.
+// The stalls of game\data\market-stalls.json, as scripts\dev\Build-MarketStallTables.js writes them.
 var MARKET_STALL_TABLE = table('MARKET_STALL_TABLE');
 (function () {
   'use strict';

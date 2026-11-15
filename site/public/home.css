@@ -100,7 +100,9 @@
   --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
 }
 *{box-sizing:border-box}
-html{scroll-behavior:smooth}
+/* Smooth in-page scrolling only for a visitor who has not asked for less
+   motion (#4127); the hero and the slideshow already keep to that. */
+@media(prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
 body{margin:0;background:var(--night);color:var(--page);
   font:400 17px/1.7 var(--serif);overflow-x:hidden;
   -webkit-font-smoothing:antialiased}
@@ -507,10 +509,19 @@ blockquote.chron cite{display:block;margin-top:14px;font:400 12px/1 var(--sans);
   background:var(--gold);color:var(--night)}
 .gal-show .gal-prev{left:14px}
 .gal-show .gal-next{right:14px}
+/* The pause button (#4127), top right, the arrows' look and size. */
+.gal-show .gal-pause{position:absolute;top:14px;right:14px;z-index:3;
+  width:44px;height:44px;padding:0;border-radius:2px;
+  border:1px solid var(--gold);background:rgba(11,14,10,.82);
+  color:var(--gold);cursor:pointer;font:600 14px/1 var(--carve);
+  display:grid;place-items:center}
+.gal-show .gal-pause:hover,.gal-show .gal-pause:focus-visible{
+  background:var(--gold);color:var(--night)}
 @media(max-width:560px){
   .gal-show .gal-nav{width:38px;height:38px;font-size:18px}
   .gal-show .gal-prev{left:8px}
   .gal-show .gal-next{right:8px}
+  .gal-show .gal-pause{width:38px;height:38px;top:8px;right:8px}
 }
 /* Each dot is a 24 pixel button with the 9 pixel dot drawn in the middle of
    it (#3218). The buttons were the 9 pixel dots themselves, 8 apart, under

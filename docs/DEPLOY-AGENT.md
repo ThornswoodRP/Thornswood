@@ -23,6 +23,26 @@ It does two jobs with the same code:
   waiting behind it (#5190). The update check waits until no environment is
   part way through one, so a restart never cuts an apply short.
 
+## Contents
+
+- [What this first slice does, and what it does not](#what-this-first-slice-does-and-what-it-does-not)
+- [After a dev Deployment](#after-a-dev-deployment)
+- [Deploying a Release by its tag, and rolling back](#deploying-a-release-by-its-tag-and-rolling-back)
+- [How a change reaches dev](#how-a-change-reaches-dev)
+- [Steps after a deploy](#steps-after-a-deploy)
+- [A new server build](#a-new-server-build)
+- [The bot pass before each dev Deployment](#the-bot-pass-before-each-dev-deployment)
+- [The site, the Discord bot and voice](#the-site-the-discord-bot-and-voice)
+- [The content build](#the-content-build)
+- [Release news](#release-news)
+- [Restart notices](#restart-notices)
+- [Why "Dev"](#why-dev)
+- [Main](#main)
+- [What it holds and what it can do](#what-it-holds-and-what-it-can-do)
+- [How it updates itself](#how-it-updates-itself)
+- [Putting it on the box](#putting-it-on-the-box)
+- [Tests](#tests)
+
 ## What this first slice does, and what it does not
 
 It looks after the **dev server**, and **the live server** once main is
@@ -33,12 +53,14 @@ build** (the engine).
 | --- | --- |
 | Dev gamemode | Applied by the agent: a merge that changes `game/gamemode.js` makes a signed Release and a Deployment, and the agent reloads the dev server's gamemode with nobody dropped. The gate's `Deploy-Release` verb puts in any such Release by its tag. |
 | Dev engine (the server build) | Applied by the agent (#5219): every Release carries the server build its commit records, and when dev runs another one the agent stops dev, swaps in the build and the gamemode together and starts it under a hold. So a merged engine pin reaches dev with no Publish-Server and no Deploy-DevGamemode. See "A new server build" below. |
-| Dev plugins and load order | Moved by the agent after a dev Deployment (#5180): when the Deployment's commit changed what the order is made from since the agent last moved it (`records/collection-plugins.json`, `records/collection-dropped.json`, `game/data/last-plugin.json` or `.recipe`, `game/content/Thornswood-Content.esp`), the agent asks the gate for `Deploy-DevGamemode -LoadOrder -FromRecord -ShipFollows`, the tested move a person runs with Box-Run. See "After a dev Deployment" below. Settings flags (`-RequirePass`, `-Npcs` and the like) stay a person's Deploy-DevGamemode run. |
+| Dev plugins and load order | Moved by the agent after a dev Deployment (#5180): when the Deployment's commit changed what the order is made from since the agent last moved it (`records/collection-plugins.json`, `records/collection-dropped.json` or `game/data/last-plugin.json`; our own plugins, Thornswood-Content.esp and Thornswood-Last.esp, are the Release's and go in with it, #6175), the agent asks the gate for `Deploy-DevGamemode -LoadOrder -FromRecord -OrderOnly -ShipFollows -At <the Deployment's commit>`, the tested move a person runs with Box-Run, which sends nothing of the gamemode (#6166). See "After a dev Deployment" below. Settings flags (`-RequirePass`, `-Npcs` and the like) stay a person's Deploy-DevGamemode run. |
+| Server plugins | Applied with every server Deployment (#6175): the Release's game files carry `Thornswood-Content.esp` and `Thornswood-Last.recipe` from the box's content build, and when the server's `plugins\Thornswood-Content.esp` or `plugins\Thornswood-Last.esp` is not that Release's, the agent puts in the Release's content plugin and the Last plugin it makes from the Release's recipe, out of the server's other plugins and the string tables of `C:\Thornswood-GameData` (the launcher's own `LastPlugin.cs`, compiled in), by a stop, swap and start that keeps the server build when the Release records the one the server runs. A recipe the server's plugins cannot make stops the Deployment before anything is touched. Before this, on 15 Nov 2026, main took build-1.3.69's box-built tables over its committed plugins, and every launcher on it refused Play. |
 | Main | Applied by the agent once `Install-DeployAgent -Main` has run (#5181): the same Release dev ran, after Patrick approves its promotion on GitHub. See "Main" below. |
 | Site, Discord bot | Applied by the agent (#5190, #5187): a merge that changes either makes a Deployment to **Site** or **Discord bot** with the Release's `site.zip` or `discord.zip`, and the agent swaps it in the way Deploy-Docs and Install-Bot -CodeOnly do. See "The site, the Discord bot and voice" below. |
 | Voice | Applied with its server's Deployment: dev voice with dev's (#5187), live voice with main's (#5610). Voice has no Deployment of its own, because the gamemode pushes positions to it, so a promotion puts on live the voice dev ran with that Release. |
+| Content build | Built by the agent (#5191) where `agent.json` names `content`: a merge whose content inputs have no build makes a Deployment to **Content**, and the agent has the gate's `Build-Content` verb build the content plugin and the tables on the box, then puts the build on a draft Release for the merge release. See "The content build" below. |
 | Release news | After a Deployment goes in, the agent leaves its Release's notes for the bot, which posts them once (#5187). See "Release news" below. |
-| Restart notices | Before a server build swap stops a server, the agent leaves a notice the bot posts in #updates (dev's in the dev updates channel), counts down in the game, and waits five minutes on main, one on dev (#5784). It says the box's own restart for Windows updates ahead the same way. See "Restart notices" below. |
+| Restart notices | Before a server build swap stops a server, the agent leaves a notice the bot posts in #updates (dev's in #staff-updates), counts down in the game, and waits five minutes on main, one on dev (#5784). It says the box's own restart for Windows updates ahead the same way. See "Restart notices" below. |
 | Launcher and game files | Not the agent's job: they reach people through the launcher's feed and a Ship. Since #5179 every Release carries them as well (the signed launcher, the game files and the Velopack packages of both), attested, for the launcher's move to Velopack; the agent logs them as left alone. |
 | Bot pass before each dev Deployment | Once `Install-DeployAgent` has set up its task, every Deployment waits on a bot pass on a throwaway copy of dev with the new gamemode (#5196, below). A FAIL fails the Deployment and dev keeps what it runs. A deploy by tag (the gate's `Deploy-Release`, a rollback) does not wait on one. |
 | Steps after a deploy | Run by the agent (#5186), once each, after a Deployment of the Release carrying them succeeds: a pull request's file under `deploy/after/` names gate verbs to run and checks for a person in the game, instead of a run note. See "Steps after a deploy" below. merge-release.yml puts them in every Release as the part `after`. |
@@ -66,15 +88,23 @@ last moved dev's order to. When the Deployment's commit is another one, it
 asks GitHub to compare the two. When the compare names one of the files the
 order is made from, or GitHub cannot say in full (no record yet, a compare
 over 300 files, a commit GitHub does not know), it runs
-`Deploy-DevGamemode -LoadOrder -FromRecord -ShipFollows`: the order from
-`game/data/last-plugin.json`, the collection's plugins from the box's store
-of the revision `records/collection-plugins.json` names, each held to its
-sha256, and a drop only where `records/collection-dropped.json` allows it.
-When that ends with anything but 0, the Deployment fails with the gamemode
-in and says the plugins are not, and the record is not moved, so the next
-Deployment moves them again. The gate runs main as it is then, so when main
-has moved past the Deployment the agent records the commit the gate said it
-ran, and dev has that commit's order and gamemode until its own Deployment.
+`Deploy-DevGamemode -LoadOrder -FromRecord -OrderOnly -ShipFollows -At <the
+Deployment's commit>`: the order from `game/data/last-plugin.json`, the
+collection's plugins from the box's store of the revision
+`records/collection-plugins.json` names, each held to its sha256, and a drop
+only where `records/collection-dropped.json` allows it. `-OrderOnly` sends
+no gamemode.js, stamp or tables, none of our own plugins (it neither sends
+Thornswood-Content.esp nor makes Thornswood-Last.esp) and writes no deploy
+record, so the Release's stay as the agent put them in; a moved order is a restart, and an
+order already in stops nothing. The gate runs main as it is then, so `-At`
+holds main's records of the order to the Deployment's: when any file the
+order is made from differs between the two, it says `NOT THIS COMMIT'S
+ORDER`, sends nothing, and the Deployment fails saying the plugins are not
+this Release's. When the move ends with anything but 0, the Deployment fails
+with the gamemode in and says the plugins are not. Either way the record is
+not moved, so the next Deployment moves them. Until #6166 (15 Nov 2026) the
+step ran the whole dev deploy at main's tip, which put main's gamemode and
+the committed tables over the Release's.
 
 **The parity check.** After the status is set, the agent asks the gate for
 `Check-ProdParity`, reads each `REVIEW` row and opens an issue labelled
@@ -262,9 +292,14 @@ a copy of dev that nobody plays on:
    Release carries none, #5191), and dev's data folder without its plugins and
    archives. Those are read where the bot pass keeps them,
    `C:\Thornswood-BotPass\plugins`, copied from dev's only when one
-   changes, by their full paths. Dev's world, its `private` folder (the
-   door and the join pass key), its logs and deploy records never go in. The
-   world starts empty.
+   changes, by their full paths. Of dev's `private` folder only the
+   merchant ledger and its first-start mark go in (`merchant-ledger.json`
+   and `merchant-ledger.initialized`, copies), so the gamemode's NPC
+   runtime starts as it does on dev; without them it stands up no NPC
+   ("Saved merchant ledger or initialization evidence is missing", as the
+   load copy found, #5557). Dev's world, the rest of its `private` folder
+   (the door, the join pass key and the registers), its logs and deploy
+   records never go in. The world starts empty.
 2. The copy's settings are dev's with what reaches outside taken out
    (`discordAuth`, `metricsAuth`, `masterKey`, `additionalServerSettings`):
    no master server, offline login, no join pass hold, a password of its
@@ -291,12 +326,38 @@ a copy of dev that nobody plays on:
    the face), **face** (a face is sent and creation moves on to choosing a
    home), **home** (a home picked over the relay, as the K panel picks one,
    ends creation, and the welcome comes back over the relay), **needs**
-   (`/needs` over the relay is answered with the needs line), **saved**
+   (`/needs` over the relay is answered with the needs line), **claim**
+   (the bot presses E on Whiterun Stables' door near the start spot, the
+   door offers Claim and takes it inside, and Claim over the relay is
+   answered, puts the deed in its pack and the claim in the copy's
+   `private\property.json`), **keys** (the master key came with the deed,
+   and Lock at the door's inside half is answered, written to the register
+   and turns the door's offer to Unlock), **stations** (Alvor's forge in
+   Riverwood is shut to the bot with no trade, and says why over the relay;
+   once it picks Smith, Platewright and is handed a hammer, the forge
+   opens), **merchants** (the bot goes into Dead Man's Drink in Falkreath,
+   the engine sends it Valga Vinicia, a guild trader the NPC runtime keeps,
+   and pressing E beside her opens her trade, said over the relay; this
+   needs the merchant ledger the agent copies in, and a FAIL carries the
+   server's lines about its NPCs and traders), **jail** (the bot is a Guard of Falkreath: the copy's door has
+   no site, so the pass writes the role into the copy's own
+   `private\allowed.json` the way the site's answer lands, and the bot
+   takes the office over the relay as the Office page does; it goes through
+   Falkreath Barracks down into the jail, the cell door offers it the
+   cell's lock, and Unlock, Lock and Unlock again are each answered,
+   written to `private\law.json` and followed by the line at the door),
+   **saved**
    (the world on disk holds the character by name), **restart**
-   (the copy is stopped and started again and loads again) and **loads
+   (the copy is stopped and started again and loads again), **loads
    back** (a second bot logs in as the same profile and gets the same
-   character, where it was saved, with no race menu). A FAIL at new, face,
+   character, where it was saved, with no race menu) and **kept** (still
+   in the jail, the cell door offers it Lock, so the office and the cell as
+   the guard left it came back rather than as the game ships it; it walks
+   out of the barracks and the stables' door still offers it Unlock, so the
+   claim and its lock came back with the restart). A FAIL at new, face,
    home or saved ends with what the gamemode's creation said about the bot,
+   one at claim, keys, jail or kept with the property block's last lines, one
+   at stations with the character block's,
    and one at relay with what the gamemode said of the pass and the voice
    service's last lines (its log is `run\voice\bot-pass-voice.log`).
 5. Every line goes in the Deployment's log. All PASS and the gamemode goes
@@ -402,6 +463,39 @@ would each put back what the other put in. It still sends the documents,
 the boards and the password, sets up the task, and sends the app on a new
 box before the agent has the site.
 
+## The content build
+
+Nothing generated is committed (Patrick's B on #5191, 1 Nov 2026): the
+content plugin, the Last plugin's recipe and every table read out of the
+load order are built where the whole load order is, on the box. The merge
+release runs on GitHub, which has no game data, so it takes them from a
+**draft Release** on this repository (Patrick's B on q-5191-box-build-upload,
+12 Nov 2026).
+
+- A build is named by its inputs: the server it is built against and the git
+  blob id of every file the chain reads (`scripts/mods/ContentPaths.ps1`).
+  Its draft is `content-<server>-<key>`, with `content.zip` (every file at
+  its repository path) and `content-build.json` (the commit, the key and
+  each file's sha256).
+- A Deployment to **Content** carries `{"content": "<key>", "server": "dev"}`.
+  The agent asks the gate for `Build-Content -Server dev`, which builds main
+  as it is, or takes the kept build with the same inputs. It holds the kept
+  build in `C:\Thornswood-ContentBuilds\<server>\<key>` to its
+  `build.json`, zips it the same way every time, and puts it up. A draft
+  already up whole is left as it is, and one cut short is taken down and
+  made again.
+- When main moved past the Deployment's commit, the build is of main's
+  newest, and its draft is named by what was built; the status says so.
+- The newest 16 drafts of each server are kept.
+- The status is success, failure (the build stopped, or is not what its
+  `build.json` says) or error (the gate never took the line, or GitHub
+  refused the upload). A single look (`once`) leaves these Deployments to
+  the service, which is the one with the gate.
+
+The draft is written with a token of its own that asks only for **Contents:
+write**, minted only where `agent.json` names `content`. The installer names
+it where the gate's task is set up.
+
 ## Release news
 
 Once a Deployment's success is on GitHub, the agent reads its Release again
@@ -409,7 +503,7 @@ and writes the tag, name and notes to
 `C:\Thornswood-Deploys\for-bot\news-<environment>.json`, a folder only
 SYSTEM, Administrators and the bot's account read. The bot
 (`watch_release_news` in `bot/bot_news.py`) posts each tag once: a merge's release
-in the dev updates channel, a main release in #news, each by its id. A release
+in #staff-news, a main release in #news, each by its id. A release
 whose notes start "Nothing people would notice" (merge-release.yml's line for
 a merge whose pull requests say none), and one deployed over a day ago, are
 written down without a post. A rollback by tag is not news and leaves none.
@@ -421,7 +515,8 @@ A server build swap stops the server, so it is said first (#5784, step 3 of
 reads `restart-<environment>.json` from the same folder every 15 seconds and
 posts each restart once ahead: the live server's in #updates, the channel
 whose Updates Pings role promises a ping for restarts, with that role's
-mention; dev's in the dev updates channel. The time is Discord's own
+mention; dev's in #staff-updates, by the id in `staff-channel.txt`, with
+the same mention for the staff who took the role. The time is Discord's own
 timestamp, so each reader sees it in their clock. When the notice moves on
 to "back", "down" or "off" (called off before the stop), that is posted
 once too. A "coming" whose time is over 15 minutes gone, and an end whose
@@ -519,7 +614,9 @@ exists with Patrick as its reviewer, and `-NoMain` turns it off.
   it on the installation. Until then every pass says GitHub gave it no token,
   and nothing is applied. For the parity check's issues it mints a second
   token asking only **Issues: write** (the App holds it), kept apart so the
-  service's own token never carries it.
+  service's own token never carries it. For the content build's draft
+  Releases it mints a third, asking only **Contents: write** (#5191), in
+  the same way.
 - It asks the deploy gate's broker for two verbs after a dev Deployment
   (above), over the pipe the broker lets SYSTEM open. The broker holds each
   line to main's `verbs.json`, as it does a person's.
