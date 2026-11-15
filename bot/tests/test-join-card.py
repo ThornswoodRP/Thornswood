@@ -317,7 +317,7 @@ for ln in lines:
 # service/BotService.cs is the source of the Windows service the bot runs
 # under (issue #465), which replaced roll-log.ps1 here. It is a program, not
 # the record, and I4 below still refuses any write that names joins.json.
-allowed = ['$Root/$f', '$Root/assets/join-card.png',
+allowed = ['$Root/$f', '$Root/assets/join-card.png', '$Root/NoteRules.cs',
            '$Root/service/BotService.cs', '$far']
 # Since #1093 the code goes up into a stage folder first ($Root/$stageName/$rel,
 # stage, check, swap), each file under its key in $send. So that destination is

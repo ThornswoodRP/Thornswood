@@ -6,8 +6,11 @@ Part of the bot: bot.py loads it (#5357).
 import asyncio
 import datetime
 import json
+import base64
 import os
 import re
+import shutil
+import subprocess
 import time
 
 import discord
@@ -173,30 +176,63 @@ def is_main_server_change(files):
     return live
 
 
-_NOTE_LINE = re.compile(r'^\s*(\*\*)?Release note:(\*\*)?\s*(.*?)\s*$')
+# How a pull request's "Release note:" line is read is tools/ReleaseNotes/
+# NoteRules.cs, the one copy (#5354): PrNote.Read, which the "Release note"
+# check and Collect-ReleaseNotes.ps1 use. The bot has no reader of its own
+# (#6004). It asks that file, compiled by pwsh's Add-Type the way the
+# release scripts compile it, with every body on standard input as JSON, and
+# reads back one answer each. On the box the file is beside the bot
+# (Install-Bot.ps1 and App-Part.ps1 send it); in a checkout it is in tools.
+_READ_NOTES = r"""
+$ErrorActionPreference = 'Stop'
+Add-Type -LiteralPath $env:THORNSWOOD_NOTE_RULES
+$bodies = @([Console]::In.ReadToEnd() | ConvertFrom-Json)
+$answers = @(foreach ($b in $bodies) {
+    $n = [Thornswood.ReleaseNotes.PrNote]::Read([string]$b)
+    [ordered]@{ found = $n.Found; none = $n.None; headline = $n.Headline; details = @($n.Details) }
+})
+ConvertTo-Json -InputObject $answers -Depth 4 -Compress
+"""
 
 
-def pr_release_note(body):
-    """(headline, [details]) of a pull request body's Release note line, as
-       PrNote.Read in tools/ReleaseNotes/NoteRules.cs reads it, or None for
-       none or no line."""
-    text = re.sub(r'(?s)<!--.*?-->', '', str(body or ''))
-    lines = re.split(r'\r?\n', text)
-    for i, line in enumerate(lines):
-        m = _NOTE_LINE.match(line)
-        if not m:
-            continue
-        head = m.group(3).strip()
-        if not head or re.match(r'(?i)^none\.?$', head):
-            return None
-        details = []
-        for nxt in lines[i + 1:]:
-            if re.match(r'^\s*-\s+\S', nxt):
-                details.append(nxt.strip())
-            else:
-                break
-        return head, details
+def note_rules_file():
+    """NoteRules.cs beside the bot, or in the checkout's tools; None without."""
+    for path in (os.path.join(HERE, 'NoteRules.cs'),
+                 os.path.join(os.path.dirname(HERE), 'tools', 'ReleaseNotes', 'NoteRules.cs')):
+        if os.path.isfile(path):
+            return path
     return None
+
+
+def _pwsh():
+    return shutil.which('pwsh') or r'C:\Program Files\PowerShell\7\pwsh.exe'
+
+
+def pr_release_notes(bodies):
+    """For each pull request body, (headline, [details]) of its Release note
+       line as PrNote.Read in tools/ReleaseNotes/NoteRules.cs reads it, or
+       None for none or no line. Raises when the rules cannot be asked, so
+       the release is tried again next pass."""
+    bodies = [str(b or '') for b in bodies]
+    if not bodies:
+        return []
+    rules = note_rules_file()
+    if not rules:
+        raise RuntimeError('NoteRules.cs is not beside the bot, so no release note can be read')
+    script = base64.b64encode(_READ_NOTES.encode('utf-16-le')).decode('ascii')
+    env = dict(os.environ, THORNSWOOD_NOTE_RULES=rules)
+    done = subprocess.run([_pwsh(), '-NoProfile', '-NonInteractive', '-EncodedCommand', script],
+                          input=json.dumps(bodies).encode('utf-8'), capture_output=True,
+                          env=env, timeout=120)
+    if done.returncode != 0:
+        raise RuntimeError('the release note rules did not answer: '
+                           + done.stderr.decode('utf-8', 'replace').strip()[-400:])
+    answers = json.loads(done.stdout.decode('utf-8'))
+    if not isinstance(answers, list) or len(answers) != len(bodies):
+        raise RuntimeError('the release note rules gave %r answers for %d bodies'
+                           % (len(answers) if isinstance(answers, list) else answers, len(bodies)))
+    return [(a['headline'], list(a.get('details') or []))
+            if a.get('found') and not a.get('none') else None for a in answers]
 
 
 def _version(tag):
@@ -256,7 +292,8 @@ def release_about(tag, get=None):
        Server changes that have a note}. The pull requests are the merges
        since the published build Release before it, as
        Collect-ReleaseNotes.ps1 reads them. None for a tag that is not a
-       build-1.3.<n>. Raises when GitHub does not answer."""
+       build-1.3.<n>. Raises when GitHub does not answer, or when the
+       release note rules cannot be asked (pr_release_notes)."""
     get = get or _github_get
     m = TAG_NUMBER.match(str(tag or '').strip())
     if not m:
@@ -289,11 +326,11 @@ def release_about(tag, get=None):
             if len(got) < 100:
                 break
         if is_main_server_change(files):
-            note = pr_release_note(pr.get('body'))
-            if note:
-                live.append((number, note, areas_of(files)))
+            live.append((number, pr.get('body'), areas_of(files)))
         else:
             areas.update(areas_of(files))
+    notes = pr_release_notes([body for _n, body, _a in live])
+    live = [(number, note, where) for (number, _b, where), note in zip(live, notes) if note]
     return {'areas': [a for a in AREA_ORDER if a in areas], 'live': live}
 
 

@@ -175,7 +175,8 @@
         "scripts/vps/Send-Secret.ps1",
         "scripts/vps/ServerHold.ps1",
         "scripts/vps/Vps.ps1",
-        "scripts/vps/Write-BotToken.ps1"
+        "scripts/vps/Write-BotToken.ps1",
+        "tools/ReleaseNotes/NoteRules.cs"
       ],
       "timeoutMinutes": 30,
       "fixed": ["-CodeOnly", "-NoPause"],

@@ -20,8 +20,9 @@
   trust.py, the roots the bot trusts, two helpers the bot cannot start
   without; card.py and its artwork, assets\join-card.png; the channel ids,
   staff-channel.txt, dev-channel.txt and news-channel.txt; requirements.txt;
-  factions.json; and BotService.cs, the service's program, which only a
-  full run puts in service. bot\README.md names the same files, and
+  factions.json; NoteRules.cs, the release note rules (tools\ReleaseNotes),
+  which the bot asks for a pull request's note (#6004); and BotService.cs,
+  the service's program, which only a full run puts in service. bot\README.md names the same files, and
   tests\test-4391-bot-install-files.ps1 holds this list, that one and the
   artifact's together (issue #4391).
 
@@ -175,7 +176,7 @@ $docsWin = $DocsRoot.Replace('/','\')
 . (Join-Path $Here 'Artifact.ps1')
 $artifact = $null
 if (-not $PutBack -and -not $SetPing) {
-$artifact = New-ThornswoodArtifact -Component bot -RepoDir $Repo -Paths (@(Get-ThornswoodBotCode $Repo | ForEach-Object { 'bot/' + $_ }) + @('bot/staff-channel.txt', 'bot/dev-channel.txt', 'bot/news-channel.txt', 'bot/requirements.txt', 'bot/factions.json', 'bot/assets/join-card.png', 'scripts/vps/BotService.cs'))
+$artifact = New-ThornswoodArtifact -Component bot -RepoDir $Repo -Paths (@(Get-ThornswoodBotCode $Repo | ForEach-Object { 'bot/' + $_ }) + @('bot/staff-channel.txt', 'bot/dev-channel.txt', 'bot/news-channel.txt', 'bot/requirements.txt', 'bot/factions.json', 'bot/assets/join-card.png', 'tools/ReleaseNotes/NoteRules.cs', 'scripts/vps/BotService.cs'))
 Write-Host ('artifact ' + (Format-ThornswoodArtifact $artifact)) -ForegroundColor DarkGray
 Send-ThornswoodArtifact -Artifact $artifact -Target "$User@$Vps" -SshArgs $ssh
 $Repo = $artifact.Folder
@@ -425,6 +426,11 @@ foreach ($f in @(Get-ThornswoodBotCode $Repo) + @('staff-channel.txt', 'dev-chan
 }
 # No roll-log.ps1 any more: the service rolls bot.log itself, by size, while
 # the bot runs (BotService.cs).
+
+# The release note rules, the one copy (tools\ReleaseNotes\NoteRules.cs),
+# beside the bot, which asks them for a pull request's note through pwsh's
+# Add-Type (bot_news.py, #6004).
+$send['NoteRules.cs'] = (Join-Path $Repo 'tools\ReleaseNotes\NoteRules.cs')
 
 $art = Join-Path $Repo 'bot\assets\join-card.png'
 if (Test-Path $art) { $send['assets/join-card.png'] = $art }

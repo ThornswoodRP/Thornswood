@@ -685,7 +685,9 @@ together): `bot.py`; the `bot_*.py` modules `bot.py` imports
 without; `card.py` and its artwork, `assets\join-card.png`; the channel ids,
 `staff-channel.txt`, `dev-channel.txt` and `news-channel.txt`;
 `requirements.txt`; `factions.json`, the named factions the Faction Leader
-form reads from beside itself; and `BotService.cs`, the service's program,
+form reads from beside itself; `NoteRules.cs`, the release note rules from
+`tools\ReleaseNotes`, which the bot asks for a pull request's note through
+pwsh's Add-Type (#6004); and `BotService.cs`, the service's program,
 which a full run puts in `service`. A file the bot reads and this list does
 not name is a file that is only ever on main, never on the box.
 
