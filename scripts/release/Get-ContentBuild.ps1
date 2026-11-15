@@ -31,6 +31,7 @@
   files) for GitHub, and -DeploymentFile, where -Ask writes what it would
   send.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [ValidateSet('dev', 'main')][string]$Server = 'dev',
