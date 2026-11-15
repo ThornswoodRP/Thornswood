@@ -409,7 +409,7 @@ namespace Thornswood
             }
             catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
             {
-                throw Die("Could not take the older " + dir + " out of the way (" + e.Message + "). " +
+                throw Die("Could not take the older " + dir + " out of the way (" + Failure.Why("InstallSteps, the older Payload", e, dir) + "). " +
                           "Close Skyrim, Vortex and the launcher, then run this again.");
             }
             Say("  An older " + dir + " was here from an earlier install and was taken out,");

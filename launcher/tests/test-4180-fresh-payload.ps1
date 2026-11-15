@@ -101,6 +101,13 @@ using System.Text;
 using System.Text.Json;
 using Thornswood;
 
+namespace Thornswood
+{
+    // Stands in for launcher\app\Swallow.cs, which Failure.cs writes the
+    // whole exception through (#4633). This driver has no launcher.log.
+    static class Swallow { public static void Note(string where, Exception e) { } }
+}
+
 static class FreshPayloadDriver
 {
     static int Main(string[] a)
@@ -132,7 +139,7 @@ $dll = $null
 try {
     $dll = Build-LauncherCode -Exe -Source $driver -File @(
         (Join-Path $App 'InstallSteps.cs'), (Join-Path $App 'InstallAgreements.cs'),
-        (Join-Path $App 'InstallPlace.cs'), (Join-Path $App 'InstallShortcut.cs')) `
+        (Join-Path $App 'InstallPlace.cs'), (Join-Path $App 'InstallShortcut.cs'), (Join-Path $App 'Failure.cs')) `
         -Resource @{ 'skyrim-files.json' = (Join-Path (Join-Path $Repo 'records') 'skyrim-files.json') }
 } catch { Yes 'the install steps build with a driver' $false $_.Exception.Message; Done }
 Yes 'the install steps build with a driver' ($null -ne $dll)
