@@ -75,8 +75,9 @@ How to use it:
   area. `weekly-review` marks what the weekly project review found,
   `Suggestion` an idea somebody asked for, and `bug` something broken;
   nothing reads these three, they are for people sorting the board.
-  `claimed: <name>` marks who is on an issue ("What this is" says how the
-  Bots use it). Assign yourself when you start one. The stage is Order and
+  `claimed: Bramble`, `claimed: Echo`, `claimed: Magpie`, `claimed: Rift`,
+  `claimed: Sprocket` and `claimed: Wisp` mark which Bot is on an issue
+  ("What this is" says how the Bots use them). Assign yourself when you start one. The stage is Order and
   Status: the `wave:` labels and `needs: the live server` were retired on
   22 Oct (#3192), because nothing read them and Order had replaced them.
 - Status: In Progress the moment work starts, Done when it is merged and only

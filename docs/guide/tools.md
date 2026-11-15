@@ -87,7 +87,7 @@ The safe way to hold two jobs at once is [Switch between branches](make-a-change
 
 ## C. PowerShell
 
-PowerShell is the terminal. You type one line, press Enter, and Windows runs it. The prompt looks like `PS C:\Dev\Thornswood>`. The folder in the prompt is the folder the next command runs in.
+PowerShell is the terminal. You type one line, press Enter, and Windows runs it. The prompt looks like `PS C:\Thornswood-Repo>`. The folder in the prompt is the folder the next command runs in.
 
 ### Where you are
 
@@ -139,7 +139,7 @@ Visual Studio Code is the window you work in. The folders sit on the left. The f
 ### Open this repository
 
 ```powershell
-cd C:\Dev\Thornswood
+cd C:\Thornswood-Repo
 code .
 code .\Developer-Guide.md
 code .\game\gamemode\order.json
@@ -163,7 +163,7 @@ The branch name is in the status bar at the bottom left. Click it for a list of 
 
 ### Where to click
 
-Stay in `C:\Dev\Thornswood`. Each big folder has its own `README.md`. Open that file when you go into the folder. The long map is [The pieces](the-system.md#the-pieces).
+Stay in `C:\Thornswood-Repo`. Each big folder has its own `README.md`. Open that file when you go into the folder. The long map is [The pieces](the-system.md#the-pieces).
 
 | In Explorer | What it is | In PowerShell |
 | --- | --- | --- |
@@ -413,7 +413,7 @@ The game server, the launcher, and the site are different programs. Putting each
 
 Open the clone with `code .`, as in [Open the folder in Visual Studio Code](set-up-a-machine.md#open-the-folder-in-visual-studio-code). In Explorer, click a triangle to open a folder. `Ctrl+P`, then the file name, opens a file without walking the tree. `Ctrl+Shift+F` searches the words inside files.
 
-From PowerShell, inside `C:\Dev\Thornswood`:
+From PowerShell, inside `C:\Thornswood-Repo`:
 
 ```powershell
 Get-ChildItem

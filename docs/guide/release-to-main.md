@@ -83,7 +83,7 @@ releases nothing, either channel, posts nothing and tells no server.
 A main release, from your clone, on a machine that can sign:
 
 ```
-cd C:\Users\<you>\Downloads\Thornswood-Repo
+cd C:\Thornswood-Repo
 git checkout main
 git pull
 .\scripts\release\Ship.ps1 "what changed, in plain words"
