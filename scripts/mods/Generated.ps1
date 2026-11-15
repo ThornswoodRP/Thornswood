@@ -2,8 +2,10 @@
 .SYNOPSIS
   Thornswood's animation and body files, for a script: what they are, what
   they were built from, whether the ones in a game folder are current, and
-  the build itself. Dot-sourced by Build-Generated.ps1, Check-CoveredBodies.ps1
-  and the harnesses.
+  the build itself. Dot-sourced by Build-Generated.ps1 and
+  Check-CoveredBodies.ps1 in scripts\mods, by the harness
+  test-2180-release-records.ps1 in scripts\tests, and by the harnesses in
+  tests.
 
 .DESCRIPTION
   Issue #1247, and since 27 Oct 2026 #3715. The behavior files Pandora
