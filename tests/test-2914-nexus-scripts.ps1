@@ -570,6 +570,20 @@ Put $ruJson '[{"unlisted":["Immersive Weapons.esp"]},{"rule":true,"name":"chedda
 Remove-Item -LiteralPath (Join-Path $T 'no.json') -ErrorAction SilentlyContinue
 $err = (& $node.Source $js $cjRule $ruJson (Join-Path $T 'no.json') (Join-Path $T 'no-payload.json') 2>&1) -join ' '
 Yes 'an "unlisted" plugin the list has is refused, saying so, and nothing is written' ($LASTEXITCODE -eq 1 -and $err -match 'which the plugin list has, so it is not installed off the list' -and -not (Test-Path -LiteralPath (Join-Path $T 'no.json')))
+# #6090: a plugin installed off the list may be given a rule itself, as
+# revision 9's CBBE.esp is (#4728). It has no place in the list to move to,
+# so the list stays as it was and only the rule changes.
+Put $ruJson '[{"unlisted":["CBBE.esp"]},{"rule":true,"name":"CBBE.esp","after":["RaceCompatibility.esm"]}]'
+$o1 = Join-Path $T 'rule-off-list-out.json'
+Remove-Item -LiteralPath $o1 -ErrorAction SilentlyContinue
+$said = NodeSaid $js $cjRule $ruJson $o1 (Join-Path $T 'rule-off-list-payload.json')
+$code = $LASTEXITCODE
+$ok = $false
+if ($code -eq 0 -and (Test-Path -LiteralPath $o1)) {
+    & $node.Source -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));if(JSON.stringify(b.plugins)!==JSON.stringify(a.plugins))process.exit(2);if(JSON.stringify(b.pluginRules.plugins)!==JSON.stringify(a.pluginRules.plugins.concat([{name:'cbbe.esp',after:['racecompatibility.esm']}])))process.exit(3);a.pluginRules=b.pluginRules;process.exit(JSON.stringify(a)===JSON.stringify(b)?0:1)" $cjRule $o1
+    $ok = ($LASTEXITCODE -eq 0)
+}
+Yes '#6090 a plugin "unlisted" gives may be given a rule, the list stays as it was, and only the rule is added' ($code -eq 0 -and $ok -and (@($said) -join '|') -eq ("CBBE.esp`trule`tafter `tafter racecompatibility.esm"))
 
 # Issue #3649: a mod taken out, with the plugins its hashes put in Data.
 # Since #4191 each one carries its file name on Nexus, as New-NexusRevision.ps1
