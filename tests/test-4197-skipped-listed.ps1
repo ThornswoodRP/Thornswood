@@ -73,7 +73,7 @@ try {
     $null = @(& (Get-Process -Id $PID).Path -NoProfile -File $merge -Path (Join-Path $work 'reports') -Summary $page -Failed $failed 2>&1)
     $md = $(if (Test-Path -LiteralPath $page) { [IO.File]::ReadAllText($page) } else { '' })
     $fl = $(if (Test-Path -LiteralPath $failed) { [IO.File]::ReadAllText($failed) } else { '' })
-    $count = ([regex]::Match($md, '(?m)^.*harnesses:.*$')).Value
+    $count = ([regex]::Match($md, '(?m)^\d+ harnesses:.*$')).Value
     Yes ('1. the count line names the harnesses by how they ended (' + $count + ')') (
         $md -match '(?m)^4 harnesses: 1 failed, 1 passed, 1 passed with parts skipped, 1 ran nothing but skips\.\s*$')
 
