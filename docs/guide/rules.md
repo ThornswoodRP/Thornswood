@@ -47,10 +47,8 @@ left of them. Work that recurs or waits on a date is an issue, not a note. A
 step only a person can take outside the game (a click in Vortex's
 own window) is a card on Patrick's report page, never a note, and a main or
 live run still waits for Patrick's word. Bot branches carry the Bot's name
-(`wisp/3150-what-it-is`). On the shipping machine `C:\Thornswood-Repo` is
-shared and sits detached at `origin/main`: branch work goes in a worktree in
-its ignored `worktrees` folder, removed with its branch once the pull request
-merges.
+(`wisp/3150-what-it-is`). How branch work goes in the shared clone on the
+shipping machine is in [Clone the repository](set-up-a-machine.md#clone-the-repository).
 
 A Bot writes test tasks the way "Test tasks and known issues" says, in
 its pull request and on the issue: Main for what any playtester can check,

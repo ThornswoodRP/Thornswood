@@ -4,7 +4,7 @@ Part of the [Developer Guide](../../Developer-Guide.md), the index of every page
 
 Do this once on a new Windows PC. Stay in order. On every PC is the steps. Setting up a machine and Shipping from another machine are for a PC that will publish a release. You can read those two after the clone works.
 
-Use your own GitHub account. Patrick adds that account as a collaborator on the private repository before a clone will work. Say so in Discord and wait for that. Before your first change, read `LICENSE` at the root of the repository and say in #staff-updates that you agree to its contributor terms. You agree once, and it covers anything you contributed before. Use your own clone. The clone on the shipping machine is for the Ship that builds from it. Your clone can live at `C:\Dev\Thornswood`, or any empty folder you own.
+Use your own GitHub account. Patrick adds that account as a collaborator on the private repository before a clone will work. Say so in Discord and wait for that. Before your first change, read `LICENSE` at the root of the repository and say in #staff-updates that you agree to its contributor terms. You agree once, and it covers anything you contributed before. Use your own clone. The clone on the shipping machine is for the Ship that builds from it. Where your clone goes is in [Clone the repository](#clone-the-repository).
 
 ## On every PC
 
@@ -93,11 +93,12 @@ Choose GitHub.com, then HTTPS, then login with a browser, as the GitHub user tha
 
 ### Clone the repository
 
+Every machine's clone is `C:\Thornswood-Repo`, the folder every command in this guide and every script's example names, so they work as written. On One, the shipping machine, the clone is shared and sits detached at `origin/main`: branch work there goes in a worktree in its ignored `worktrees` folder, removed with its branch once the pull request merges.
+
 ```powershell
-New-Item -ItemType Directory -Force -Path C:\Dev | Out-Null
-cd C:\Dev
-git clone https://github.com/ThornswoodRP/Thornswood.git
-cd C:\Dev\Thornswood
+cd C:\
+git clone https://github.com/ThornswoodRP/Thornswood.git Thornswood-Repo
+cd C:\Thornswood-Repo
 git status
 ```
 
@@ -111,16 +112,16 @@ git config core.hooksPath .githooks
 
 It prints nothing. From then on `git push` first checks that every script parses and that the writing rules hold in what you are pushing, in about twenty seconds (#5291). When one fails, the push stops and names the file and line; fix it, commit, and push again. A cloud session turns this on by itself.
 
-From here on, the commands assume PowerShell is inside your clone. If you used another folder, `cd` there first.
+From here on, the commands assume PowerShell is inside your clone.
 
 ### Open the folder in Visual Studio Code
 
 ```powershell
-cd C:\Dev\Thornswood
+cd C:\Thornswood-Repo
 code .
 ```
 
-`code .` opens the folder you are in. The window title shows Thornswood. If `code` is not recognized, close PowerShell, open PowerShell 7 again, `cd C:\Dev\Thornswood`, and run `code .` again.
+`code .` opens the folder you are in. The window title shows Thornswood-Repo. If `code` is not recognized, close PowerShell, open PowerShell 7 again, `cd C:\Thornswood-Repo`, and run `code .` again.
 
 The branch name is in the status bar at the bottom left. Open the terminal from the View menu, Terminal. It starts in the clone. The parts of the window are in [D. Visual Studio Code](tools.md#d-visual-studio-code). The folders, and the files a first change usually touches, are in [N. The repository map](tools.md#n-the-repository-map).
 
@@ -143,14 +144,9 @@ signed in, git, the GitHub CLI (`gh`) signed in to an account that is a
 collaborator on the source repo, PowerShell 7, node, Python 3.11 or newer (the
 bot runs on 3.12) with `discord.py` and `Pillow` for the bot scripts, and an
 SSH key the VPS knows. There is no releases clone any more: the feed and its
-baseline are on the VPS (#907).
-
-```
-cd C:\Users\<you>\Downloads
-git clone https://github.com/ThornswoodRP/Thornswood.git Thornswood-Repo
-gh auth login
-gh auth status
-```
+baseline are on the VPS (#907). The clone and the `gh` sign-in are the two
+steps above, [Sign the GitHub CLI into your account](#sign-the-github-cli-into-your-account)
+and [Clone the repository](#clone-the-repository).
 
 The bot's libraries go into the Python that `py` starts by default, because
 that is the one the bot harnesses run on: `bot\tests\test-*.py`, and
@@ -280,7 +276,7 @@ by hand, and no secret is written into the repository.
 
 | What a Ship needs | On One | A second machine |
 | --- | --- | --- |
-| The source | the shared clone | `git clone https://github.com/ThornswoodRP/Thornswood.git` and `gh auth login` as a collaborator |
+| The source | the shared clone | [Clone the repository](#clone-the-repository) and `gh auth login` as a collaborator |
 | The feed, its baseline, the launcher list and history | the VPS store, with a working copy in `%LOCALAPPDATA%\Thornswood\feed\<channel>` | Nothing to copy: every Ship receives them from the VPS first (`scripts\release\Feed-Store.ps1`, #907). The working copy is made on the first Ship |
 | The release webhooks, dev and #news | the VPS, `C:\Thornswood-Bot\webhooks`; One has no local copy | Nothing to copy: Ship reads them over ssh (`scripts\ops\Discord-Hook.ps1`) |
 | VPS access | One's own key, `.ssh\thornswood_ed25519`, and its own bridge token, `.ssh\thornswood-box-token` | None: no new key is made (Patrick's A on q-retire-box-keys, 31 Oct 2026), and a Ship from the gate needs none. Box work goes through `scripts\vps\Box-Run.ps1`, with `gh` signed in as somebody who may run workflows in the private ops repository. With the gate down too, the BisectHosting panel is the way in (`docs\IT-IS-DOWN.md` in the private ops repo) |

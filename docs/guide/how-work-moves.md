@@ -181,7 +181,7 @@ The short form of the rules. The same decisions, with the dates they were made, 
     lives in the repository folder: its ignored `local\` and `out\` for what
     is one machine's own, and its ignored `worktrees\<name>` and
     `temp\<task>` for worktrees and scratch, each removed when its work is
-    done. On One that folder is `C:\Thornswood-Repo`. The other is the
+    done. That folder is the clone ([Clone the repository](set-up-a-machine.md#clone-the-repository)). The other is the
     shared notes on One (`C:\Thornswood Vault`). The launcher's installs, the main one and
     `<Root>-DevBuild`, are the product and stay. No other top-level folders
     and no scratch files in Downloads. And no copies of what GitHub or the VPS
