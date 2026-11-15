@@ -132,16 +132,32 @@
 // (records/collection.json, "enabled": false). It refuses a name the list
 // already has. It changes nothing by itself and writes no line.
 //
-// TAKING A MOD OUT (#3649). An entry with "remove": true takes Nexus mod
-// modId out of the revision, with the plugins it puts in Data:
-//   { "remove": true, "modId": "24104" }
-// Its plugins are the ones its file hashes name at the top of Data, and each
-// comes off the plugin list. It refuses an entry with no hashes (nothing in
-// the revision says which plugins it brings), one with patches (their folder
-// is in the archive), one a mod rule names, and one whose plugin a plugin
-// rule names, because each of those needs the rest of the collection worked
-// out again in Vortex on One.
-// On stdout: <entry name>\tremoved\t\tfile <id>, and <plugin>\tplugin\t\tremoved.
+// TAKING A MOD OUT (#3649, #4191). An entry with "remove": true takes Nexus
+// mod modId out of the revision, with the plugins it puts in Data:
+//   { "remove": true, "modId": "24104",
+//     "fileExpression": "Atlas Map Markers SE-24104-1-0-1594000000" }
+// fileExpression is the entry's file name on Nexus without its extension,
+// which New-NexusRevision.ps1 reads from the v1 file record as it does for a
+// moved entry; a mod rule may name the entry by that alone.
+// Its plugins are the ones its file hashes name at the top of Data. A plugin
+// another entry's hashes name too stays on the plugin list, because that
+// entry still installs it (Immersive Armors and its Script Free and
+// Skypatched file both bring the Hothtrooper44 plugins). Each other one
+// comes off the list. It refuses an entry with no hashes (nothing in the
+// revision says which plugins it brings), one with patches (their folder is
+// in the archive), one a mod rule names by md5, logical file name, tag or
+// file name, one whose plugin a plugin rule names, and one whose plugin is a
+// master of a plugin the revision still installs, because each of those
+// needs the rest of the collection worked out again in Vortex on One.
+// collection.json says nothing of masters, so they come in an entry of
+// their own, the plugins' masters as the record has them from each header:
+//   { "masters": { "IA CBBE Patch.esp": ["Skyrim.esm", "Hothtrooper44_ArmorCompilation.esp"] } }
+// A mod whose plugins come off is refused when any plugin the revision still
+// installs (on its list or off it) has no masters given, because nothing then
+// says the plugin taken out is not one of them. It changes nothing by itself
+// and writes no line.
+// On stdout: <entry name>\tremoved\t\tfile <id>, <plugin>\tplugin\t\tremoved,
+// and <plugin>\tplugin\t\tkept, <entry> installs it too.
 
 'use strict';
 const fs = require('fs');
@@ -219,13 +235,17 @@ function toV3CollectionPayload(manifest, adultContent) {
 function payloadOf(collection) { return toV3CollectionPayload(filterInfo(collection)); }
 
 // --------------------------------------------------------------- swaps ---
-function named(rule, entry) {
+// Whether a mod rule names the entry. fileExpression, when given, is the
+// entry's own file name on Nexus without its extension, which a rule may name
+// it by alone (#4191); collection.json does not carry it on the entry.
+function named(rule, entry, fileExpression) {
   const s = entry.source;
   for (const side of [rule.source, rule.reference]) {
     if (!side) continue;
     if (s.md5 && side.fileMD5 === s.md5) return true;
     if (s.logicalFilename && side.logicalFileName === s.logicalFilename) return true;
     if (s.tag && side.tag === s.tag) return true;
+    if (fileExpression && side.fileExpression === fileExpression) return true;
   }
   return false;
 }
@@ -234,6 +254,29 @@ function named(rule, entry) {
 // "unlisted" entries of the swaps gave them (PLUGINS OFF THE LIST above).
 const UNLISTED = new WeakMap();
 function unlistedOf(collection) { return UNLISTED.get(collection) || new Set(); }
+
+// Each plugin's masters, lower case, as the "masters" entry of the swaps gave
+// them (TAKING A MOD OUT above), or null when none was given.
+const MASTERS = new WeakMap();
+function mastersOf(collection) { return MASTERS.get(collection) || null; }
+function setMasters(collection, swaps) {
+  let map = null;
+  for (const sw of swaps) {
+    if (!sw || sw.masters === undefined) continue;
+    if (map) stop('Two "masters" entries were given, and one says every plugin\'s masters.');
+    if (!sw.masters || typeof sw.masters !== 'object' || Array.isArray(sw.masters)) stop('"masters" is not each plugin\'s name with the list of its masters.');
+    map = new Map();
+    for (const n of Object.keys(sw.masters)) {
+      const ms = sw.masters[n];
+      if (!/^[^\\/]+\.es[mpl]$/i.test(n) || !Array.isArray(ms) || ms.some(x => typeof x !== 'string' || !/\.es[mpl]$/i.test(x))) stop('"masters" gives ' + JSON.stringify(n) + ' as ' + JSON.stringify(ms) + ', which is not a plugin with a list of plugin names.');
+      map.set(n.toLowerCase(), ms.map(x => x.toLowerCase()));
+    }
+  }
+  MASTERS.set(collection, map);
+}
+// An entry that only says something about the revision ("unlisted",
+// "masters") and changes nothing by itself.
+function onlyContext(sw) { return !!sw && typeof sw === 'object' && Object.keys(sw).length > 0 && Object.keys(sw).every(k => k === 'unlisted' || k === 'masters'); }
 
 function setUnlisted(collection, swaps) {
   const set = new Set();
@@ -254,8 +297,9 @@ function applySwaps(collection, swaps) {
   const lines = [];
   if (!Array.isArray(collection.mods)) stop('collection.json has no mods list, so it is not a collection Vortex wrote.');
   setUnlisted(collection, swaps);
+  setMasters(collection, swaps);
   for (const sw of swaps) {
-    if (sw.unlisted !== undefined && Object.keys(sw).length === 1) continue;
+    if (onlyContext(sw)) continue;
     if (sw.add === true) { applyAdd(collection, sw, lines); continue; }
     if (sw.patch === true) { applyPatch(collection, sw, lines); continue; }
     if (sw.rule === true) { applyRule(collection, sw, lines); continue; }
@@ -543,26 +587,57 @@ function applyRemove(collection, rm, lines) {
   if (hits.length !== 1) stop('The revision has ' + hits.length + ' entries for Nexus mod ' + rm.modId + ', so there is no one entry to take out.');
   const e = hits[0];
   if (e.patches && Object.keys(e.patches).length) stop(e.name + ' carries patches, whose folder is in the archive. Take it out in Vortex on One.');
-  const rules = (collection.modRules || []).filter(r => named(r, e));
+  // A mod rule may name the entry by its file name on Nexus alone, which
+  // only the v1 file record gives (#4191).
+  if (!rm.fileExpression || typeof rm.fileExpression !== 'string') stop('The mod to take out gives no fileExpression for ' + e.name + ', its file name on Nexus, so a mod rule naming it by that alone would not be found.');
+  const rules = (collection.modRules || []).filter(r => named(r, e, rm.fileExpression));
   if (rules.length) stop(rules.length + ' of the collection\'s mod rules name ' + e.name + '. Take it out in Vortex on One.');
   if (!Array.isArray(e.hashes) || !e.hashes.length) stop(e.name + ' has no file hashes, so nothing in the revision says which plugins it brings. Take it out in Vortex on One.');
-  const plugins = [];
-  for (const h of e.hashes) {
-    const path = String(h.path || '');
-    if (/^[^\\/]+\.es[mpl]$/i.test(path) && plugins.indexOf(path.toLowerCase()) < 0) plugins.push(path.toLowerCase());
+  const pluginsOf = (m) => {
+    const out = [];
+    for (const h of (Array.isArray(m.hashes) ? m.hashes : [])) {
+      const p = String(h.path || '');
+      if (/^[^\\/]+\.es[mpl]$/i.test(p) && out.indexOf(p.toLowerCase()) < 0) out.push(p.toLowerCase());
+    }
+    return out;
+  };
+  // A plugin another entry's hashes name too is still installed by that
+  // entry, so it stays (#4191); only the rest leave Data.
+  const kept = new Map();
+  for (const m of collection.mods) {
+    if (m === e) continue;
+    for (const p of pluginsOf(m)) if (!kept.has(p)) kept.set(p, m.name);
   }
+  const brought = pluginsOf(e);
+  const plugins = brought.filter(p => !kept.has(p));
   const pr = (collection.pluginRules && Array.isArray(collection.pluginRules.plugins)) ? collection.pluginRules.plugins : [];
   for (const r of pr) {
     const names = [r.name].concat(r.after || [], r.before || []).map(n => String(n).toLowerCase());
     const hit = plugins.find(p => names.indexOf(p) >= 0);
     if (hit) stop('A plugin rule names ' + hit + ', which ' + e.name + ' brings. Take it out in Vortex on One.');
   }
+  // A plugin the revision still installs that has one of these as a master
+  // would stop the game loading (#4191). collection.json does not say what
+  // a plugin's masters are, so each plugin left has to be given them.
+  if (plugins.length) {
+    const masters = mastersOf(collection);
+    const listedName = (p) => { const q = (collection.plugins || []).find(x => String(x.name).toLowerCase() === p); return q ? String(q.name) : p; };
+    const left = (Array.isArray(collection.plugins) ? collection.plugins : []).map(q => String(q.name).toLowerCase()).filter(n => plugins.indexOf(n) < 0);
+    for (const u of unlistedOf(collection)) if (plugins.indexOf(u) < 0 && left.indexOf(u) < 0) left.push(u);
+    for (const n of left) {
+      const ms = masters ? masters.get(n) : undefined;
+      if (ms === undefined) stop('Nothing says which masters ' + listedName(n) + ' has, so taking out ' + e.name + ' cannot be shown not to take one of them away. The masters come from records\\collection.json when it follows the revision this starts from.');
+      const hit = plugins.find(p => ms.indexOf(p) >= 0);
+      if (hit) stop(listedName(n) + ', which the revision still installs, has ' + listedName(hit) + ' as a master, and taking out ' + e.name + ' takes it away. Take it out in Vortex on One, with what needs it.');
+    }
+  }
   collection.mods.splice(collection.mods.indexOf(e), 1);
   lines.push([String(e.name), 'removed', '', 'file ' + e.source.fileId].join('\t'));
   if (Array.isArray(collection.plugins)) {
-    for (const p of plugins) {
+    for (const p of brought) {
       const at = collection.plugins.findIndex(q => String(q.name).toLowerCase() === p);
       if (at < 0) continue;
+      if (kept.has(p)) { lines.push([String(collection.plugins[at].name), 'plugin', '', 'kept, ' + kept.get(p) + ' installs it too'].join('\t')); continue; }
       lines.push([String(collection.plugins[at].name), 'plugin', '', 'removed'].join('\t'));
       collection.plugins.splice(at, 1);
     }
@@ -578,7 +653,7 @@ function main(argv) {
   try { swaps = JSON.parse(fs.readFileSync(swapsPath, 'utf8').replace(/^﻿/, '')); }
   catch (e) { stop(swapsPath + ' is not JSON this can read: ' + e.message); }
   if (!Array.isArray(swaps)) swaps = [swaps];
-  if (!swaps.some(sw => !(sw && sw.unlisted !== undefined && Object.keys(sw).length === 1))) stop('There are no swaps, so the revision would be the same as the one published.');
+  if (!swaps.some(sw => !onlyContext(sw))) stop('There are no swaps, so the revision would be the same as the one published.');
   const lines = applySwaps(collection, swaps);
   fs.writeFileSync(outPath, JSON.stringify(collection, undefined, 2));
   fs.writeFileSync(payloadPath, JSON.stringify(payloadOf(collection)));
