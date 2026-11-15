@@ -126,6 +126,10 @@ namespace Thornswood
 __WRITERECORD__
     }
 
+    // Stands in for launcher\app\Swallow.cs, which Failure.cs, beside
+    // SteamUpdates.cs here, writes the whole exception through (#4633).
+    static class Swallow { public static void Note(string where, Exception e) { } }
+
     static class WholeRecordTest
     {
         static byte[] Make(char c, int n) { var b = new byte[n]; for (int i = 0; i < n; i++) b[i] = (byte)(i % 64 == 63 ? '\n' : c); return b; }
@@ -158,7 +162,7 @@ __WRITERECORD__
     Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
     if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
     $dll = $null
-    try { $dll = Build-LauncherCode -Source $driver -File (Join-Path $App 'SteamUpdates.cs') -Exe }
+    try { $dll = Build-LauncherCode -Source $driver -File (Join-Path $App 'SteamUpdates.cs'), (Join-Path $App 'Failure.cs') -Exe }
     catch { Write-Host ('      ' + $_.Exception.Message) }
     Yes "SteamUpdates.cs and WriteRecord compile with the .NET SDK the launcher builds with, C# $LauncherLangVersion" ($null -ne $dll)
     if (-not $dll) { Done }

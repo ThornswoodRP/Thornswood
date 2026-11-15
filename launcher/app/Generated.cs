@@ -463,6 +463,8 @@ namespace Thornswood
     {
         public readonly int Code;
         public GeneratedStop(string message) : this(message, 1) { }
+        /// <summary>A stop caused by an exception, kept whole as the inner one, so its words stay out of the sentence (#4633).</summary>
+        public GeneratedStop(string message, Exception cause) : base(message, cause) { Code = 1; }
         public GeneratedStop(string message, int code) : base(message) { Code = code; }
     }
 
@@ -488,7 +490,7 @@ namespace Thornswood
             var l = new GeneratedList { Path = path, Text = text.TrimStart('\uFEFF') };
             Dictionary<string, object> doc;
             try { doc = GeneratedJson.Parse(l.Text) as Dictionary<string, object>; }
-            catch (Exception ex) { throw new GeneratedStop(path + " is not valid JSON: " + ex.Message); }
+            catch (Exception ex) { throw new GeneratedStop(path + " is not valid JSON, so the build list cannot be read. Update the launcher.", ex); }
             if (doc == null) throw new GeneratedStop(path + " is not valid JSON: it is not an object.");
             // A version this build does not know stops here (RecordShape.ps1, #2180).
             object ver;

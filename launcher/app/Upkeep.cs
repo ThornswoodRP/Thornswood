@@ -169,7 +169,7 @@ namespace Thornswood
             {
                 // Not knowing is said, and Fix brings the folder up to date
                 // anyway, because the refresh itself says what is in the way.
-                l.Add(Issue.Of(IssueKind.Behind, "Thornswood could not tell whether its own Skyrim folder matches what Vortex has deployed (" + ex.Message.TrimEnd('.') + ").",
+                l.Add(Issue.Of(IssueKind.Behind, "Thornswood could not tell whether its own Skyrim folder matches what Vortex has deployed (" + Failure.Why("Upkeep, comparing with Vortex", ex) + ").",
                     "Fix brings the folder up to date from Vortex, which says what is in the way if it cannot.", Upkeep.CloseAndRetry, false));
                 return true;
             }
@@ -259,7 +259,7 @@ namespace Thornswood
             foreach (FromGameFile f in MadeFromGame.Make(off))
                 if (off.Contains(f.Rel) && f.Problem != null)
                 {
-                    why = f.Problem.TrimEnd('.');
+                    why = MadeFromGame.Said(f);
                     mod = MadeFromGame.FromMod(f.Rel);
                     last = f.Rel.Equals(LastPlugin.File, StringComparison.OrdinalIgnoreCase);
                     english = f.NotEnglish;
@@ -360,7 +360,7 @@ namespace Thornswood
             if (kinds.Contains(IssueKind.WindowsFolders))
             {
                 bool put = false;
-                try { put = Swap.Restore(); } catch (Exception ex) { say("Windows' Skyrim folders could not be put back (" + ex.Message.TrimEnd('.') + ")."); }
+                try { put = Swap.Restore(); } catch (Exception ex) { say("Windows' Skyrim folders could not be put back: " + Failure.Say("Upkeep.FixOnDisk, Windows' Skyrim folders", ex)); }
                 if (put) say("Windows' Skyrim settings and saves folders are back to normal.");
             }
             if (kinds.Contains(IssueKind.Steam)) StartSteam(say);
@@ -370,29 +370,29 @@ namespace Thornswood
                 if (kinds.Contains(IssueKind.Lost))
                 {
                     try { OwnGame.PutBackLost(cfg, OwnGame.Lost(true).Vortex, say); }
-                    catch (Exception ex) { Swallow.Note("Upkeep.FixOnDisk, putting back Vortex's files", ex); say("Vortex's files could not be put back (" + ex.Message.TrimEnd('.') + ")."); }
+                    catch (Exception ex) { say("Vortex's files could not be put back: " + Failure.Say("Upkeep.FixOnDisk, putting back Vortex's files", ex)); }
                 }
                 if (kinds.Contains(IssueKind.BuildFiles)) PutBackBuildFiles(say);
                 if (kinds.Contains(IssueKind.MadeFromGame))
                 {
                     try { string made = MadeFromGame.Ensure(); if (!string.IsNullOrEmpty(made)) say(made); }
-                    catch (Exception ex) { Swallow.Note("Upkeep.FixOnDisk, the files made from the game", ex); say("The files made from your game could not be written (" + ex.Message.TrimEnd('.') + ")."); }
+                    catch (Exception ex) { say("The files made from your game could not be written: " + Failure.Say("Upkeep.FixOnDisk, the files made from the game", ex)); }
                 }
                 if (kinds.Contains(IssueKind.Generated))
                 {
                     try { string built = GeneratedHere.Ensure(say); if (!string.IsNullOrEmpty(built)) say(built); }
-                    catch (GeneratedStop ex) { say(ex.Message); }
-                    catch (Exception ex) { Swallow.Note("Upkeep.FixOnDisk, the animation and body files", ex); say("The animation and body files could not be built (" + ex.Message.TrimEnd('.') + ")."); }
+                    catch (GeneratedStop ex) { say(Failure.Say("Upkeep.FixOnDisk, the generated files", ex)); }
+                    catch (Exception ex) { say("The animation and body files could not be built: " + Failure.Say("Upkeep.FixOnDisk, the animation and body files", ex)); }
                 }
                 if (kinds.Contains(IssueKind.Client))
                 {
                     try { ClientRuntime.Heal(cfg, say); }
-                    catch (Exception ex) { Swallow.Note("Upkeep.FixOnDisk, the client runtime", ex); say("The client runtime could not be put back (" + ex.Message.TrimEnd('.') + ")."); }
+                    catch (Exception ex) { say("The client runtime could not be put back: " + Failure.Say("Upkeep.FixOnDisk, the client runtime", ex)); }
                 }
                 if (kinds.Contains(IssueKind.Plugins) || kinds.Contains(IssueKind.Personal) || kinds.Contains(IssueKind.OwnFolder))
                 {
                     try { Verify.Fix(cfg, say, Updater.ReleaseCopy(cfg)); }
-                    catch (Exception ex) { Swallow.Note("Upkeep.FixOnDisk, the plugin list", ex); say("The plugin list could not be put right (" + ex.Message.TrimEnd('.') + ")."); }
+                    catch (Exception ex) { say("The plugin list could not be put right: " + Failure.Say("Upkeep.FixOnDisk, the plugin list", ex, "plugins.txt")); }
                 }
                 // Thornswood's own files, from the release this install is
                 // on, when no update is waiting to bring them anyway.
@@ -402,7 +402,7 @@ namespace Thornswood
                     {
                         if (!Updater.Resync(cfg, say)) say("This launcher has no installed package to put Thornswood's own files back from.");
                     }
-                    catch (Exception ex) { Swallow.Note("Upkeep.FixOnDisk, the release's files", ex); say("Thornswood's own files could not be put back (" + ex.Message.TrimEnd('.') + ")."); }
+                    catch (Exception ex) { say("Thornswood's own files could not be put back: " + Failure.Say("Upkeep.FixOnDisk, the release's files", ex)); }
                 }
             }, delegate { say("An update or a bring-up-to-date is writing into the game folder. Fix goes on as soon as that is done."); });
 
@@ -447,7 +447,7 @@ namespace Thornswood
             if (exe.Length > 0 && File.Exists(exe))
             {
                 try { Process.Start(new ProcessStartInfo(exe, "-silent") { UseShellExecute = false }); say("Started Steam."); return true; }
-                catch (Exception ex) { say("steam.exe would not start (" + ex.Message.TrimEnd('.') + "), so Steam's link is asked instead."); }
+                catch (Exception ex) { say("steam.exe would not start (" + Failure.Why("Upkeep, starting steam.exe", ex, "steam.exe") + "), so Steam's link is asked instead."); }
             }
             if (Downgrade.AskSteam("steam://open/main", say)) { say("Asked Windows to start Steam."); return true; }
             say("Steam could not be started. Start it yourself.");

@@ -103,7 +103,7 @@ namespace Thornswood
             {
                 await OffThread(delegate { saveNote = Chars.Prepare(cfg); });
             }
-            catch (Exception ex) { Log(ex.Message); return; }
+            catch (Exception ex) { Log(Failure.Say("ShellChars", ex)); return; }
             if (saveNote != null) Log(saveNote);
             RecordBrowserBackend();
 
@@ -242,7 +242,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                PresenceLog("Could not check profile " + id + " in with thornswood.net: " + ex.Message);
+                PresenceLog("Could not check profile " + id + " in with thornswood.net: " + Failure.Say("ShellChars, checking in profile " + id, ex, "thornswood.net"));
             }
             return true;
         }
@@ -278,7 +278,7 @@ namespace Thornswood
                     ThreadPool.QueueUserWorkItem(delegate
                     {
                         try { Chars.Forget(forget); PresenceLog("forgot character " + forget + " at the menu"); }
-                        catch (Exception ex) { PresenceLog("Could not forget character " + forget + ": " + ex.Message); }
+                        catch (Exception ex) { PresenceLog("Could not forget character " + forget + ": " + Failure.Say("ShellChars, forgetting " + forget, ex, "thornswood.net")); }
                         Chars.Relist(cfg);
                     });
                 }
@@ -310,11 +310,11 @@ namespace Thornswood
                 if (before > 0)
                 {
                     try { Chars.AddPlaytime(before, beforeRan); }
-                    catch (Exception ex) { PresenceLog("Could not add the play time of character " + before + ": " + ex.Message); }
+                    catch (Exception ex) { PresenceLog("Could not add the play time of character " + before + ": " + Failure.Say("ShellChars, play time of " + before, ex, "thornswood.net")); }
                 }
                 int spareWas = Chars.SpareId();
                 try { Chars.Chose(id); }
-                catch (Exception ex) { PresenceLog("Could not write that choice down: " + ex.Message); }
+                catch (Exception ex) { PresenceLog("Could not write that choice down: " + Failure.Say("ShellChars, the choice", ex)); }
                 int spareNow = Chars.SpareId();
                 try { Voice.Reconfigure(id); } catch (Exception ex) { Swallow.Note("Shell.PollChoice, voice", ex); }
                 // A New character pick minted the next spare, which the site

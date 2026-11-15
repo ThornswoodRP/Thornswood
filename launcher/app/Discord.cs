@@ -470,7 +470,7 @@ namespace Thornswood
                         ctx.Response.OutputStream.Write(bytes, 0, bytes.Length);
                         ctx.Response.Close();
                     }
-                    catch (Exception e) { if (!good) error = e.Message; }
+                    catch (Exception e) { if (!good) error = Failure.Why("Discord, the sign in", e); }
 
                     if (good) { done.Set(); return; }
                 }
@@ -897,7 +897,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                Note("Could not send this session's logs: " + ex.Message);
+                Note("Could not send this session's logs: " + Failure.Say("Discord, the session's logs", ex, "thornswood.net"));
             }
         }
 
@@ -1227,7 +1227,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                Note("Could not tell thornswood.net the session " + what + ": " + ex.Message);
+                Note("Could not tell thornswood.net the session " + what + ": " + Failure.Say("Discord, the session " + what, ex, "thornswood.net"));
             }
         }
 
