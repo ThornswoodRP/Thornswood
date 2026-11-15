@@ -236,7 +236,7 @@ namespace Thornswood
                 }
                 return last;
             }
-            catch { return ""; }
+            catch (Exception ex) { Swallow.Note("Velo.LastError, reading Velopack's log", ex); return ""; }
         }
 
         /// <summary>
