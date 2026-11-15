@@ -113,8 +113,13 @@ function signIn() {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ password: pw })
   }).then(function (r) {
-    if (!r.ok) { el('err').textContent = 'Not that one.'; return; }
-    start();
+    if (r.ok) return start();
+    /* A wrong password is "Not that one."; anything else is the site's own
+       reason (#4187). The 429 says how long to wait, and every try during
+       that wait makes it longer, so it must not read as "guess again". */
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      el('err').textContent = r.status === 401 ? 'Not that one.' : whyWords(r.status, j);
+    });
   }).catch(function () { el('err').textContent = 'Could not reach the server.'; });
 }
 
@@ -158,10 +163,17 @@ document.addEventListener('click', function (e) {
 
 /* ---------------------------------------------------------------- boot -- */
 function start() {
+  /* Signed out (401), or signed in but not let into the hub (403): the gate,
+     to sign in. Any other answer, or one that is not JSON, is the site not
+     answering as it should (a restart, a proxy error), and showing the gate
+     for that told a signed in member to sign in again (#4187). */
   api('/api/all').then(function (r) {
-    if (!r.ok) throw 0;
-    return r.json();
-  }).then(function (d) {
+    if (r.status === 401 || r.status === 403) { showGate(); return; }
+    if (!r.ok) { unreachable(whyWords(r.status)); return; }
+    return r.json().then(opened, function () { unreachable('its answer could not be read'); });
+  }, function () { unreachable(whyWords(0)); });
+}
+function opened(d) {
     S.me = d.me || S.me;
     S.titles = d.titles; S.level = d.level || {};
     S.docs = d.docs || {}; S.docWas = d.docWas || {};
@@ -178,7 +190,6 @@ function start() {
     // A sign in that did not finish, said on the page if the hub opened
     // signed in anyway (#4406, SIGNIN_SAID below).
     if (SIGNIN_SAID && el('said')) el('said').textContent = SIGNIN_SAID;
-  }).catch(function () { el('gate').style.display = 'grid'; });
 }
 
 /* Fetches /api/all again after a staff action. A failure is the caller's to
@@ -509,15 +520,17 @@ function wireLinked() {
       var acct = S.linked.filter(function (u) { return String(u && u.id) === id; })[0];
       var who = pid ? (this.getAttribute('data-name') || charName(pid, S.records) || 'profile ' + pid)
                     : ((acct && (acct.name || acct.handle)) || 'Discord ' + id);
-      // The site's own sentence when it has one: Undo PK says why it did not.
-      // taken is set once the site has done it, so a refresh that fails after
-      // that says the lists are old rather than that nothing happened.
+      // The site's own sentence when it has one, else its short error (#4187):
+      // "that is your own account", "staff only" and the rest came only as
+      // error and never reached staff. taken is set once the site has done
+      // it, so a refresh that fails after that says the lists are old rather
+      // than that nothing happened.
       var said = '', taken = false;
       api('/api/staff/' + act, { method: 'POST', headers: { 'Content-Type': 'application/json' },
                                   body: JSON.stringify(bodyOf) })
         .then(function (r) {
           return r.json().catch(function () { return {}; }).then(function (j) {
-            said = (j && j.message) || '';
+            said = siteSaid(j);
             if (!r.ok) throw 0;
             taken = true;
             return refresh();
@@ -1152,15 +1165,18 @@ function drawLogs(box, sid, d) {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session: b.dataset.s, who: b.dataset.w, keep: on })
       }).then(function (r) {
+        return r.json().catch(function () { return {}; })
+          .then(function (j) { return { ok: r.ok, status: r.status, j: j || {} }; });
+      }).then(function (a) {
         b.disabled = false;
-        saidNow(r.ok ? 'saved' : 'did not save');
-        if (!r.ok) return;
+        saidNow(a.ok ? 'saved' : notSaved(a.status, a.j));
+        if (!a.ok) return;
         b.classList.toggle('on', on);
         b.textContent = on ? 'Held, stop holding it' : 'Hold this past the year';
         S.sessions.forEach(function (s) {
           if (s.session === b.dataset.s) s.keep = on;
         });
-      }).catch(function () { b.disabled = false; saidNow('did not save'); });
+      }).catch(function () { b.disabled = false; saidNow(notSaved(0)); });
     };
   });
 
@@ -1174,10 +1190,13 @@ function drawLogs(box, sid, d) {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session: b.dataset.s, who: b.dataset.w, looked: on })
       }).then(function (r) {
-        return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; });
+        // A refusal may carry no JSON; an ok answer must, since the mark is
+        // drawn from it.
+        return r.json().catch(function (e) { if (r.ok) throw e; return {}; })
+          .then(function (j) { return { ok: r.ok, status: r.status, j: j || {} }; });
       }).then(function (a) {
         b.disabled = false;
-        saidNow(a.ok ? 'saved' : (a.j.message || 'did not save'));
+        saidNow(a.ok ? 'saved' : notSaved(a.status, a.j));
         if (!a.ok) return;
         S.sessions.forEach(function (s) {
           if (s.session !== b.dataset.s) return;
@@ -1186,7 +1205,7 @@ function drawLogs(box, sid, d) {
           s.lookedAt = a.j.lookedAt || 0;
         });
         drawLogs(box, sid, d);
-      }).catch(function () { b.disabled = false; saidNow('did not save'); });
+      }).catch(function () { b.disabled = false; saidNow(notSaved(0)); });
     };
   });
 }
@@ -1613,6 +1632,27 @@ function head(extra, noLede) {
     '<span class="said" id="said"></span>' + (extra || '') + '</div>' +
     (ABOUT[S.at] && !noLede ? '<p class="lede">' + esc(ABOUT[S.at]) + '</p>' : '');
 }
+/* Why the site refused, in one place (#4187). Every caller used to write its
+   own blanket line ("did not save", "Not that one.") and none read the
+   answer, so a person signed out, a member who is not an admin and a site
+   that was down were all told the same thing, and a 429 that says how long
+   to wait was hidden. The site's own sentence first, then its short error,
+   then what the status means; 0 is no answer at all. */
+function siteSaid(j) {
+  if (j && typeof j.message === 'string' && j.message) return j.message;
+  if (j && typeof j.error === 'string' && j.error) return j.error;
+  return '';
+}
+function whyWords(status, j) {
+  var s = siteSaid(j);
+  if (s) return s;
+  if (status === 401) return 'you are signed out, so sign in again first';
+  if (status === 403) return 'only admins can do that';
+  if (status === 429) return 'too many tries just now, so wait a minute and try again';
+  if (!status || status >= 500) return 'could not reach the site';
+  return 'the site answered ' + status;
+}
+function notSaved(status, j) { return 'did not save: ' + whyWords(status, j); }
 function saidNow(t) {
   var s = el('said');
   if (!s) return;
@@ -1968,11 +2008,11 @@ function drawEdit() {
             ' What you wrote is still here. Cancel shows theirs; Save again puts yours over it.');
           return;
         }
-        if (!r.ok) throw 0;
+        if (!r.ok) { saidNow(notSaved(r.status, j)); return; }
         S.docs[at] = text; S.docWas[at] = j.was || '';
         S.editing = false; draw(); saidNow('saved');
       });
-    }).catch(function () { saidNow('did not save'); });
+    }).catch(function () { saidNow(notSaved(0)); });
   };
 }
 
@@ -2054,7 +2094,10 @@ function saveResult(id, rec, bar) {
     method:'PUT', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ id: id, status: rec.status || '', notes: rec.notes || '', by: rec.by || '' })
   }).then(function (r) {
-    if (r && !r.ok) { saidNow('did not save'); return; }
+    if (r && !r.ok) {
+      return r.json().catch(function () { return {}; })
+        .then(function (j) { saidNow(notSaved(r.status, j)); });
+    }
     if (bar) {
       each(bar, '.mark', function (b) {
         b.className = 'mark' + (rec.status === b.dataset.v ? ' on' : '');
@@ -2068,7 +2111,7 @@ function saveResult(id, rec, bar) {
         if (j && j.results && typeof j.results === 'object') { S.results = j.results; tally(); }
       });
     }
-  }).catch(function () { saidNow('did not save'); });
+  }).catch(function () { saidNow(notSaved(0)); });
 }
 
 function tally() {
@@ -2351,7 +2394,14 @@ function drawReport() {
       body: JSON.stringify({ kind:reportKind, title:title,
         detail:el('rd').value, by:byName })
     }).then(function (r) {
-      if (!r.ok) throw 0;
+      if (!r.ok) {
+        /* The site's own sentence (#4187): the 429 says when to try again,
+           and a refused sign in or Turnstile check says what to do. */
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          el('rsend').disabled = false;
+          el('rsaid').textContent = 'did not send: ' + whyWords(r.status, j);
+        });
+      }
       el('page').innerHTML = head() +
         '<div class="form form-center">' +
         '<h3 class="form-sent-title">Sent</h3>' +
@@ -2362,7 +2412,7 @@ function drawReport() {
       el('another').onclick = function () { drawReport(); };
     }).catch(function () {
       el('rsend').disabled = false;
-      el('rsaid').textContent = 'did not send, try again';
+      el('rsaid').textContent = 'did not send: ' + whyWords(0);
     });
   };
 }
@@ -2380,9 +2430,11 @@ function inboxAct(id, act) {
   var was = S.inbox.filter(function (x) { return x.id === id; })[0];
   var at = S.inbox.indexOf(was);
   var name = was ? inboxName(was) : 'that report';
-  var unsaved = function (why) {
-    draw(); saidNow('did not save'); inboxFocus(id, at);
-    announce('Not saved: ' + name + '. ' + why);
+  var unsaved = function (status, j) {
+    var why = whyWords(status, j).replace(/[.\s]+$/, '');
+    draw(); saidNow(notSaved(status, j)); inboxFocus(id, at);
+    announce('Not saved: ' + name + '. ' + why.charAt(0).toUpperCase() + why.slice(1) +
+             ', so the report is as it was.');
   };
   saidNow('saving');
   api('/api/inbox', {
@@ -2391,11 +2443,12 @@ function inboxAct(id, act) {
   }).then(function (r) {
     return r.json().catch(function () { return {}; }).then(function (j) {
       if (j && Array.isArray(j.inbox)) S.inbox = j.inbox;
-      if (!r.ok) return unsaved((j && j.message) || 'The site did not take it, so the report is as it was.');
+      // The site's reason, signed out or admins only among them (#4187).
+      if (!r.ok) return unsaved(r.status, j);
       draw(); saidNow('saved'); inboxFocus(id, at);
       announce({ dismiss: 'Marked not doing this', reopen: 'Put back as new', delete: 'Deleted' }[act] + ': ' + name + '.');
     });
-  }).catch(function () { unsaved('The site did not answer, so the report is as it was.'); });
+  }).catch(function () { unsaved(0); });
 }
 /* A report as its buttons and the Delete question name it. */
 function inboxName(n) {
@@ -2561,16 +2614,20 @@ var SIGNIN_SAID = (function () {
 })();
 if (SIGNIN_SAID) el('err').textContent = SIGNIN_SAID;
 
+/* 401 is signed out, and the gate. Any other refusal, or an answer that is
+   not JSON, is the site not answering as it should, which is not being
+   signed out (#4187). */
 api('/api/hello').then(function (r) {
-  return r.json().then(function (d) { return { ok:r.ok, d:d }; });
-}).then(function (x) {
-  S.discord = !!(x.d && x.d.discord);
-  if (!S.discord) {
-    el('gatediscord').hidden = true;
-    el('pwbox').hidden = false;
-  }
-  if (x.ok) start(); else showGate();
-}).catch(function () { showGate(); });
+  if (!r.ok && r.status !== 401) return unreachable(whyWords(r.status));
+  return r.json().then(function (d) {
+    S.discord = !!(d && d.discord);
+    if (!S.discord) {
+      el('gatediscord').hidden = true;
+      el('pwbox').hidden = false;
+    }
+    if (r.ok) start(); else showGate();
+  }, function () { unreachable('its answer could not be read'); });
+}, function () { unreachable(whyWords(0)); });
 
 // The sign in button on the gate had a bare /auth/discord with no back, so
 // everybody who signed in from here landed on the public front page and had to
@@ -2584,4 +2641,17 @@ function showGate() {
     a.href = '/auth/discord?back=' + encodeURIComponent(back);
   }
   el('gate').style.display = 'grid';
+}
+
+/* The site did not answer the hub's first questions as it should: a
+   restart, a proxy error, an answer that was not JSON (#4187). That used to
+   show the sign in gate as if the person were signed out. The gate's box
+   says what happened instead and offers no sign in, since signing in again
+   would not help; a reload asks again. */
+function unreachable(why) {
+  showGate();
+  el('gatediscord').hidden = true;
+  el('pwbox').hidden = true;
+  el('err').textContent = 'The hub could not open: ' + why +
+    '. This is not a sign in problem, so reload this page in a minute.';
 }
