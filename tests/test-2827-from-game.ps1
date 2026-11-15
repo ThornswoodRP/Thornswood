@@ -39,7 +39,10 @@
        FromGame.Files, Ship-Rules.ps1 $ShipMadeFromGame then
        $ShipMadeFromMods, and OwnGameKinds.cs MadeInGame alike; no release list
        ships them and no file at their paths is in the repository; Play, Scan
-       and Fix, the own folder and Go.ps1 all make or keep them.
+       and Fix, the own folder and Go.ps1 all make or keep them. Play makes
+       them before it judges the plugin list, and a Thornswood-Last.esp not
+       made yet is Fix's to make there, never a mod that is not installed
+       (#6181).
     8. The collection's menus with no gold values (#3113) and the journal (#3127, FromGameModMenus.cs,
        written by scripts\mods\Build-ModMenus.py from the mods' own archives,
        which no test machine has): on the made-up game, which has none of the
@@ -363,6 +366,10 @@ sys.exit(1 if bad else 0)
     Yes 'no file at their game\ours paths is in the repository' ($LASTEXITCODE -eq 0 -and $tracked.Count -eq 0)
     $play = Src (Join-Path $App 'ShellPlay.cs')
     Yes 'Play makes what is missing or changed before the game starts' ($play -match 'MadeFromGame\.Ensure\(\)' -and $play.IndexOf('MadeFromGame.Ensure()') -lt $play.IndexOf('if (!await EnsureServer()) return;'))
+    # #6181: and before Play judges the plugin list, which names Thornswood-Last.esp.
+    Yes 'Play makes them before it judges the plugin list (#6181)' ($play.IndexOf('MadeFromGame.Ensure()') -ge 0 -and $play.IndexOf('MadeFromGame.Ensure()') -lt $play.IndexOf('found = Verify.Run(cfg)'))
+    $verify = Src (Join-Path $App 'Verify.cs')
+    Yes 'a Last plugin not made yet is Fix''s to make, never a mod that is not installed (#6181)' ($verify -match 'if \(NotMadeYet\(p, issues\)\) continue;[\s\S]*bool onDisk' -and ([regex]::Matches($verify, 'if \(NotMadeYet\(p, issues\)\) continue;')).Count -eq 2 -and $verify -match 'static bool NotMadeYet[\s\S]{0,400}LastPlugin\.Makes\(Paths\.Game, p\)[\s\S]{0,900}IssueKind\.MadeFromGame')
     $upkeep = Src (Join-Path $App 'Upkeep.cs')
     Yes 'Scan says when they are missing or changed, and Fix makes them' ($upkeep -match '\bMade\(l\);' -and $upkeep -match 'IssueKind\.MadeFromGame\)\)\s*\{?\s*[^\n]*MadeFromGame\.Ensure\(\)')
     $own = Src (Join-Path $App 'OwnGame.cs')
