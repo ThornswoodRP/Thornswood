@@ -44,11 +44,12 @@ $crlf = [Text.Encoding]::UTF8.GetBytes("{`r`n  ""a"": 1`r`n}`r`n")
 Yes 'a record sums the same with either line ending' ((Get-ThornswoodRecordSum $lf) -eq (Get-ThornswoodRecordSum $crlf))
 
 $src = [IO.File]::ReadAllText((Join-Path $repo 'scripts\deploy\Deploy-DevGamemode.ps1')).Replace("`r`n", "`n")
-$guard = $src.IndexOf("if (-not `$PutBack) {`n`$alsoSends")
+# -OrderOnly sends no gamemode either (#6166), so it is not asked.
+$guard = $src.IndexOf("if (-not `$PutBack -and -not `$OrderOnly) {`n`$alsoSends")
 $ask = $src.IndexOf('Get-ThornswoodBoxBuildProblem $devBoxSum')
 $send = $src.IndexOf('Send-ThornswoodArtifact -Artifact $artifact')
 Yes 'Deploy-DevGamemode asks the dev box which build it runs' ($ask -gt 0)
-Yes 'after the -PutBack guard, so -PutBack, which sends no gamemode, is not asked' ($guard -gt 0 -and $ask -gt $guard)
+Yes 'after the -PutBack and -OrderOnly guard, so neither, which send no gamemode, is asked' ($guard -gt 0 -and $ask -gt $guard)
 Yes 'before the artifact is sent, so a refusal sends nothing' ($send -gt $ask)
 Yes 'and a refusal stops the run' ($src.IndexOf("throw 'The dev server does not run the server build this gamemode is written for.", $ask) -gt $ask)
 # The record it compares is held to the commit like the files it sends (#2132):
