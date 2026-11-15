@@ -431,10 +431,10 @@ jobs:
           # Issue #1081: Ship runs Check-Words before it builds. The harness
           # plants one hit in a temp tree and a dry-run Ship must stop and
           # name that hit.
-          foreach ($n in 'test-check-words.ps1', 'test-note-rules.ps1', 'test-ship-check-words.ps1') {
+          foreach ($n in 'tests/test-check-words.ps1', 'scripts/tests/test-note-rules.ps1', 'tests/test-ship-check-words.ps1') {
             Write-Host ("--- {0}" -f $n)
-            & pwsh -NoProfile -File (Join-Path 'tests' $n)
-            if ($LASTEXITCODE -ne 0) { $failed += $n; Write-Host ("::error file=tests/{0}::a writing check let a planted break through or reported an allowed line; the FAIL lines above say which" -f $n) }
+            & pwsh -NoProfile -File $n
+            if ($LASTEXITCODE -ne 0) { $failed += $n; Write-Host ("::error file={0}::a writing check let a planted break through or reported an allowed line; the FAIL lines above say which" -f $n) }
           }
           if ($failed.Count) { exit 1 }
 

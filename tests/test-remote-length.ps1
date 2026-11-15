@@ -65,6 +65,8 @@ function OnTheWire([string]$script) {
 
 $files = Get-ChildItem -Path $ToolsPath -Filter *.ps1 -File -Recurse |
          Where-Object { $_.Name -ne 'test-remote-length.ps1' } |
+         # Not the scripts' own harnesses in scripts\tests (#5341).
+         Where-Object { $_.FullName -notmatch '[\\/]scripts[\\/]tests[\\/]' } |
          Sort-Object Name
 
 $sending = 0

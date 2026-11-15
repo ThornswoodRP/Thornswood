@@ -1038,7 +1038,7 @@ if ($collectionRemovals) {
 # This looks at the total, before anything is zipped. A release is one pack;
 # nothing later caps that zip or splits it.
 #
-# Kept between these markers so tests\test-release-size.ps1 can run the real
+# Kept between these markers so scripts\tests\test-release-size.ps1 can run the real
 # thing against the incident's own number.
 function Get-ReleaseSizeRefusal([int64]$Bytes, [int64]$CapMB, [bool]$Accepted) {
     if ($Accepted) { return '' }
@@ -1348,7 +1348,7 @@ if ($changed.Count -or $removed.Count -or $profileChanged.Count) {
 }
 
 # ==== thornswood packs gone ====
-# tests\test-feed-rules.ps1 runs the feed append block with what it decides.
+# scripts\tests\test-feed-rules.ps1 runs the feed append block with what it decides.
 # tests\test-record-sync.ps1 ran the real publisher through it until it went
 # with the launcher's feed reader (#5608).
 #
@@ -1848,7 +1848,7 @@ Head 'version.json'
 # Where the last release's packs end, for the release list block below.
 $lastPackBefore = Get-FeedLastPackId $doc
 # ==== thornswood feed append ====
-# tests\test-feed-rules.ps1 runs this block on its own. If the markers move,
+# scripts\tests\test-feed-rules.ps1 runs this block on its own. If the markers move,
 # it stops rather than quietly testing nothing.
 #
 # The feed as pulled, before anything is added to it. What is already there is

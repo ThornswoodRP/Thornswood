@@ -331,7 +331,7 @@ node --version
 node tests\test-site-local.js
 ```
 
-A passing run ends without an error. Use the file in `tests\` whose name matches the area you touched. Voice is `voice\voice-server.js`, also Node. The site program is `site\server.js` over its modules in `site\lib`.
+A passing run ends without an error. Use the file whose name matches the area you touched. A product's own checks are beside it, in `game\tests\`, `launcher\tests\`, `site\tests\`, `voice\tests\` and `bot\tests\`; the ones that read more than one product are in `tests\`. Voice is `voice\voice-server.js`, also Node. The site program is `site\server.js` over its modules in `site\lib`.
 
 ### Learn more about Node
 
@@ -577,7 +577,7 @@ Run one check from the repository folder:
 node tests\test-site-local.js
 ```
 
-A passing run ends without an error. Use the file in `tests\` whose name matches the area you touched.
+A passing run ends without an error. Use the file whose name matches the area you touched. A product's own checks are beside it, in `game\tests\`, `launcher\tests\`, `site\tests\`, `voice\tests\` and `bot\tests\`; the ones that read more than one product are in `tests\`.
 
 An overlay change uses the same `Go.ps1 -SkipServer` as the HTML section, with the game closed. A new overlay is named `thornswood-*.js` and listed in the `OVERLAYS` list at the top of `game\plugins\thornswood-front.js`. That list is what loads it. There is no build step for these files.
 

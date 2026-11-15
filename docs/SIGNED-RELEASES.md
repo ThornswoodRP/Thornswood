@@ -242,7 +242,7 @@ the sha256 and keeps the sha256 check.
   logs and keeps the old version; in phase D it refuses to install and keeps
   the old version running. The pilot proves a one byte change inside the
   hashed region fails both the checksum and the signature
-  (`tests\test-sign-pilot.ps1`, `Test-SignPilot.ps1 -Verify`).
+  (`scripts\tests\test-sign-pilot.ps1`, `Test-SignPilot.ps1 -Verify`).
 
 ## 7. The pilot
 

@@ -116,7 +116,7 @@ if ($Show) {
 # here uses: the command line when the script fits, otherwise scp to a copy
 # its run deletes before it runs (#3027, #3059), and the far side's exit
 # code handed back. Why a long script cannot go on the command line is in its
-# header; tests\test-remote-big-script.ps1 sends a 10 KB script through it.
+# header; scripts\tests\test-remote-big-script.ps1 sends a 10 KB script through it.
 #
 # With a secret, Send-Secret.ps1 sends it: the value on standard input, the
 # script the same way as without one.

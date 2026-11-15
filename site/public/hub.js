@@ -2546,7 +2546,7 @@ function drawInbox() {
    front page. Now the line is said where the person is: on the gate's
    error line, read at once, and on the page's saved line if the hub opens
    signed in. Only these three words are shown, and as text. home.js says
-   the same three lines, and tests\test-4406-signin-failure-line.js holds
+   the same three lines, and site\tests\test-4406-signin-failure-line.js holds
    the two equal. */
 var SIGNIN_WORDS = {
   cancelled: 'You cancelled the Discord sign in, so you are still signed out. Sign in again whenever you are ready.',
