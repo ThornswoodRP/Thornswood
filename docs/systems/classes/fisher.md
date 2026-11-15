@@ -1,7 +1,7 @@
 # Fisher
 
 A pole in the pack, then press E at the water. The fishing mod can
-be replaced. Its scripts do not fire, and three poles plus fifteen
+be replaced. Its scripts do not fire, and three poles plus a few
 pieces of water are not a class.
 
 The poles are remade as our own records when that mod goes: Crude,
@@ -17,9 +17,9 @@ the same way a miner is handed a pick.
 
 Salmon staying on eight spots, ten minutes apart, is on purpose.
 Those eight are not the class. The other water that stands today is
-three clams, one small pearl, one pearl, one horker, and one egg.
-That is the whole of a new fisher's evening, and it is not enough to
-climb.
+one or three records of each fish in the table under Every record,
+21 water records in all. That is the whole of a new fisher's evening,
+and it is not enough to climb.
 
 The table under Every record is that current book. The same rows are
 in [lists/fisher.md](../lists/fisher.md).
@@ -160,7 +160,7 @@ Generated from the work tables by `scripts/dev/Write-SystemLists.js`. The same r
 
 ## Where this is
 
-The fifteen records, the waits, the yields and the season's quarter
+The 21 water records, the waits, the yields and the season's quarter
 on them are in the server. The
 wait is kept on the water, shared by everyone who fishes it and kept
 through a restart (#1413), and a fished-out water says how long is left
