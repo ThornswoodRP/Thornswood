@@ -13,7 +13,7 @@
 // stale with the next Ship, and the launcher and the news feed already say
 // which build is current.
 //
-// The same entry found "Ask Gavin" in the restart test. That was fixed in #169
+// The same entry found an "Ask" line with the owner's real name in the restart test. That was fixed in #169
 // and is held here too, because it is the same kind of line going stale.
 //
 // What stays is where to find the build, since the load order section still
@@ -66,7 +66,7 @@ yes('the launcher reads its version off its own exe, so no source file carries a
   /typeof\(Updater\)\.Assembly\.GetName\(\)\.Version/.test(upd) && !/const string Version = "/.test(upd));
 
 // The old name.
-yes('the checklist does not name Gavin', !/\bGavin\b/.test(md));
+yes("the checklist does not use the owner's real name", !/\bGavin\b/.test(md));
 
 // Where to find the build, since the load order section asks for it.
 yes('the checklist says where the build is shown', /bottom of the launcher, under Settings/.test(md));
