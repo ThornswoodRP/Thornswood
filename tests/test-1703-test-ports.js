@@ -213,19 +213,23 @@ yes('the check would have caught a copy handed a port the harness chose',
     docsPorts("env: { THORNSWOOD_DOCS_PORT: String(port) }").some((v) => v !== "'0'") &&
     docsPorts("env: { THORNSWOOD_DOCS_PORT: '0' }").every((v) => v === "'0'"));
 // Reading the port off the site's own line is siteFiles.listening() or
-// siteFiles.saidPort() on what the copy printed. waitUp() was the connect
-// loop six of the twelve polled the port with before #1727.
+// siteFiles.saidPort() on what the copy printed. A harness that asks its
+// copy nothing and only reads the files it wrote waits for the ready line,
+// which the site says after its first sweep (#4082). waitUp() was the
+// connect loop six of the twelve polled the port with before #1727.
 for (const f of sites) {
   const vs = docsPorts(text[f]);
   yes(f + ' starts each copy on port 0 (' + vs.join(', ') + ')', vs.length > 0 && vs.every((v) => v === "'0'"));
-  yes(f + ' reads the port from its own site\'s line, with no waitUp() poll of a port',
-      /siteFiles\.(listening|saidPort)\(/.test(text[f]) && !/function waitUp\(/.test(text[f]) &&
+  const reads = /siteFiles\.(listening|saidPort)\(/.test(text[f]) ||
+                text[f].indexOf('/\\[thornswood-docs\\] (ready|NOT READY): /.test(out)') >= 0;
+  yes(f + ' waits for its own site\'s line, with no waitUp() poll of a port',
+      reads && !/function waitUp\(/.test(text[f]) &&
       !/function listening\(srv, port\)[\s\S]{0,400}thornswood-docs/.test(text[f]));
 }
 {
   const srvSrc = read(path.join(REPO_DIR, 'site', 'server.js'));
   yes('site/server.js says the port it got, not the one it was handed',
-      /}\).listen\(PORT, BIND, function \(\) \{\s*const port = this\.address\(\)\.port;\s*console\.log\('\[thornswood-docs\] listening on ' \+ BIND \+ ':' \+ port\);/.test(srvSrc));
+      /}\).listen\(PORT, BIND, function \(\) \{(\s*\/\*[\s\S]*?\*\/)?\s*const port = this\.address\(\)\.port;\s*console\.log\('\[thornswood-docs\] listening on ' \+ BIND \+ ':' \+ port\);/.test(srvSrc));
 }
 yes('saidPort() reads the port off a whole line, and nothing off half of one',
     siteFiles.saidPort('[thornswood-docs] listening on 127.0.0.1:4567\n') === 4567 &&

@@ -75,13 +75,6 @@ const { applyDeletionRequests } = require('./lib/deletion');
 
 applyDeletionRequests();
 
-/* THE PORT IT GOT (#6136). Given THORNSWOOD_DOCS_PORT=0 the system hands the
-   site a free port as it listens, and its listening line, at the end of
-   this block, says which. A copy handed a port somebody else chose and
-   let go can find it taken by then: on the Linux gate a harness's copy
-   exited with EADDRINUSE on the port its freePort() had just closed. So a
-   harness starts its copy on 0 and reads the port from that line
-   (tests/site-files.js, listening). */
 http.createServer((req, res) => {
   // Both halves matter. A throw before the first await arrives here as an
   // exception, and one after it arrives as a rejected promise.
@@ -96,6 +89,13 @@ http.createServer((req, res) => {
     done.catch((e) => failed(req, res, e));
   }
 }).listen(PORT, BIND, function () {
+  /* THE PORT IT GOT (#6136). Given THORNSWOOD_DOCS_PORT=0 the system hands
+     the site a free port as it listens, and the line below says which. A
+     copy handed a port somebody else chose and let go can find it taken
+     by then: on the Linux gate a harness's copy exited with EADDRINUSE on
+     the port its freePort() had just closed. So a harness starts its copy
+     on 0 and reads the port from that line (tests/site-files.js,
+     listening). */
   const port = this.address().port;
   console.log('[thornswood-docs] listening on ' + BIND + ':' + port);
   if (EXPOSED) {

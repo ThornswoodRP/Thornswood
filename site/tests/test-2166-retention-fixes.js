@@ -98,7 +98,6 @@ async function trouble() {
     { at: NOW - 31 * DAY, id: '602', handle: 'standin602', outcome: 'allowed', ip: '192.0.2.2' }
   ], null, 2));
 
-  let port = 0;
   const srv = spawn(process.execPath, ['server.js'], {
     cwd: dir,
     env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1', THORNSWOOD_DOCS_LOCAL: '1',
@@ -114,7 +113,7 @@ async function trouble() {
        all written by then however busy the machine is (#4082). The minute
        only bounds a site that never comes up. */
     for (let i = 0; i < 1200 && !up; i++) {
-      if (/\[thornswood-docs\] (ready|NOT READY): /.test(out)) { port = siteFiles.saidPort(out); up = true; break; }
+      if (/\[thornswood-docs\] (ready|NOT READY): /.test(out)) { up = true; break; }
       if (srv.exitCode !== null) break;
       await wait(50);
     }
