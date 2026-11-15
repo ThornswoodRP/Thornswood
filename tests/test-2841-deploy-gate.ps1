@@ -689,6 +689,15 @@ $script:fakeLog = @($written | ForEach-Object { '2026-10-31T04:00:02.0000000Z ' 
 $into = Join-Path $tmp 'opened'
 $o = Open-ThornswoodSealedRun -Repo 'o/r' -Run 1 -Artifact 'box-run-sealed' -File 'box-run.sealed' -KeyPath $keyPath -Into $into -FromLog
 Yes '  and -FromLog opens it to the output and the files' ($o.Ok -and ([IO.File]::ReadAllText((Join-Path $into 'output.txt'))) -eq 'the verb said this' -and (Test-Path -LiteralPath (Join-Path (Join-Path $into 'files') 'a.log')))
+# A run whose verb said nothing still seals: Compress-Archive made no archive
+# from a folder holding only the empty files\ and the run ended on "Could not
+# find file ...out.zip", with why it stopped lost (15 Nov 2026).
+$bare = Join-Path $tmp 'bare'
+New-Item -ItemType Directory -Path (Join-Path $bare 'files') -Force | Out-Null
+$bareSealed = Join-Path $tmp 'bare.sealed'
+$threw = ''; try { [void](Save-ThornswoodSealed $bare ([Convert]::ToBase64String($rsa.ExportSubjectPublicKeyInfo())) $bareSealed) } catch { $threw = $_.Exception.Message }
+Yes '  an output with nothing in it is still sealed' (-not $threw -and (Test-Path -LiteralPath $bareSealed))
+Yes 'Box-Run puts the gate''s refusal and why it stopped in the sealed output' ((Text 'scripts/vps/Box-Run.ps1').Contains("'gate: REFUSED ' + `$Matches[1]") -and (Text 'scripts/vps/Box-Run.ps1').Contains("'box-run: REFUSED ' + `$refused"))
 $script:fakeLog = @($written | Where-Object { $_ -notmatch '^TWSEAL-LOG 1 ' } | ForEach-Object { '2026-10-31T04:00:02.0000000Z ' + $_ })
 $l = Read-ThornswoodSealedLog 'o/r' 1
 Yes '  a part missing from the log is refused' (-not $l.Bytes -and $l.Why -match 'lacks 1')
