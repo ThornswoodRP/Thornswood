@@ -142,14 +142,10 @@ yes('it has no list of what is deliberate any more', !/normal here|All of that i
 /* The text was kept twice, known.md for the page and a known board nothing
    showed, and the board went stale. Then the board was the one copy (#2414),
    and it went stale too. Since #3140 the one copy is the issue board, and
-   neither known.md nor a known board in board.json comes back. */
+   neither known.md nor a known board comes back. The hub's boards and
+   board.json itself went in #4359. */
 yes('there is no known.md', read(path.join('data', 'known.md')) === null);
-{
-  let board = null;
-  try { board = JSON.parse(read(path.join('data', 'board.json'))); } catch (e) { board = null; }
-  yes('board.json has no known board and no roadmap board',
-      !!board && !('known' in board) && !('roadmap' in board));
-}
+yes('and no board.json to hold a known or roadmap board', read(path.join('data', 'board.json')) === null);
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');

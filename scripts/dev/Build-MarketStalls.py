@@ -3,8 +3,8 @@ Build-MarketStalls.py (#3160)
 
 Finds every market stall the game places in a town, out of the plugins, and
 writes them down in game\\data\\market-stalls.json. Then
-scripts\\dev\\Build-MarketStallsGamemode.js carries the table into the
-gamemode and the front plugin.
+scripts\\dev\\Build-MarketStallTables.js carries the table into the
+gamemode's tables and the front plugin's.
 
 WHY. Patrick, 22 October 2026, on #3160: "Stalls are fixed market stalls,
 claimed like property." So the stalls are the ones already standing in the
@@ -233,13 +233,9 @@ def main():
         print('STOP. %d plugin(s) of the load order are not there: %s' % (len(missing), ', '.join(missing[:6])))
         return 1
     plugins = [wb.Plugin(p, n) for p, n in order]
-    record = json.load(io.open(os.path.join(ROOT, 'records', 'collection-plugins.json'), encoding='utf-8'))
-    rec = {r['name'].lower(): r for r in record['plugins']}
-    other = [pl.name for pl in plugins if pl.name not in wb.OURS + wb.AFTER and
-             (pl.name.lower() not in rec or rec[pl.name.lower()]['sha256'].lower() != pl.sha256)]
-    if other:
-        print('STOP. %d plugin(s) in %s are not the collection\'s bytes (revision %s): %s'
-              % (len(other), args.data, record.get('revision'), ', '.join(other[:6])))
+    stop = wb.collection_stop(plugins, wb.OURS + wb.AFTER, args.data)
+    if stop:
+        print(stop)
         return 2
     names = {pl.name.lower(): pl.name for pl in plugins}
     rank = {pl.name.lower(): i for i, pl in enumerate(plugins)}
@@ -406,7 +402,7 @@ def main():
         return 0
     io.open(args.out, 'w', encoding='utf-8', newline='\n').write(out_text)
     print('')
-    print('wrote %s, %d stall(s). Now run node scripts/dev/Build-MarketStallsGamemode.js' % (args.out, len(stalls)))
+    print('wrote %s, %d stall(s). Now run node scripts/dev/Build-MarketStallTables.js' % (args.out, len(stalls)))
     return 0
 
 

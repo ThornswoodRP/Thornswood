@@ -858,13 +858,9 @@ def main():
         print('STOP. %d plugin(s) of the load order are not there: %s' % (len(missing), ', '.join(missing[:6])))
         return 1
     plugins = [wb.Plugin(p, n) for p, n in order]
-    record = json.load(io.open(os.path.join(ROOT, 'records', 'collection-plugins.json'), encoding='utf-8'))
-    rec = {r['name'].lower(): r for r in record['plugins']}
-    other = [pl.name for pl in plugins if pl.name != CONTENT and
-             (pl.name.lower() not in rec or rec[pl.name.lower()]['sha256'].lower() != pl.sha256)]
-    if other:
-        print('STOP. %d plugin(s) in %s are not the collection\'s bytes (revision %s): %s'
-              % (len(other), args.data, record.get('revision'), ', '.join(other[:6])))
+    stop = wb.collection_stop(plugins, [CONTENT], args.data)
+    if stop:
+        print(stop)
         return 2
     # Thornswood's two plugins after the content plugin place nothing new, so
     # they are not read: measured here, not assumed. Thornswood-Last.esp's

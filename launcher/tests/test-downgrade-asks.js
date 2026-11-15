@@ -123,7 +123,7 @@ yes('Run no longer builds the line by hand anywhere else',
 // they are the three lines a person would expect to see.
 const appId = (DOWN.match(/const int AppId = (\d+);/) || [])[1];
 const depots = [];
-const depotBlock = (DOWN.match(/static readonly string\[\]\[\] FallbackDepots = \{([\s\S]*?)\};/) || [])[1] || '';
+const depotBlock = (DOWN.match(/static readonly string\[\]\[\] PinDepots = \{([\s\S]*?)\};/) || [])[1] || '';
 depotBlock.replace(/new\[\] \{ "(\d+)", "(\d+)" \}/g, (_, d, m) => { depots.push([d, m]); return ''; });
 const commandShape = /return "download_depot " \+ AppId \+ " " \+ depot\[0\] \+ " " \+ depot\[1\];/.test(DOWN);
 yes('Command writes download_depot, the app, the depot and the manifest in that order', commandShape);

@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -47,6 +48,9 @@ namespace Thornswood
 
         /// <summary>The words on the setup window's three links, in page order.</summary>
         public static readonly string[] LinkWords = new string[] { "Read them", "Read it", "Read them" };
+
+        /// <summary>What a screen reader says for each link, which names its page (#4329).</summary>
+        public static readonly string[] LinkNames = new string[] { "Read the Terms and Conditions", "Read the Privacy Policy", "Read the Rules" };
 
         public static string PathOf(string profileDir)
         {
@@ -337,6 +341,7 @@ namespace Thornswood
                 // against the three first.
                 var link = new HyperlinkButton();
                 link.Content = LinkWords[i];
+                AutomationProperties.SetName(link, LinkNames[i]);
                 link.Margin = new Thickness(10, 0, 0, 0);
                 link.VerticalAlignment = VerticalAlignment.Center;
                 link.Click += delegate { OpenPage(pageUrl); };

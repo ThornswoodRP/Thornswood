@@ -106,9 +106,24 @@ function ConvertTo-NexusRunParams($Req, $Verbs) {
     $packs = @($OwnParams | Where-Object { $own.ContainsKey($_) })
     if ($packs.Count -and $packs.Count -ne 3) { throw '-PackRoot, -Pack and -PackName go together: the folder, the files in it, and the zip''s name. Nothing was run.' }
     if ($Req.Verb -eq 'Send-NexusFile' -and -not $packs.Count) { throw 'Send-NexusFile uploads an archive zipped from files of main: give -PackRoot, -Pack and -PackName. An archive built anywhere else is uploaded from One. Nothing was run.' }
-    $fileIds = if ($params.Contains('FileId')) { @($params['FileId']).Count } else { 0 }
-    if ($params.Contains('Mod') -and $Req.Verb -eq 'New-NexusRevision' -and @($params['Mod']).Count -ne $fileIds) {
-        throw '-Mod and -FileId go together, one file id for each mod. Nothing was run.'
+    if ($Req.Verb -eq 'New-NexusRevision') {
+        # New-NexusRevision refuses these itself, but on the runner, after every
+        # -FileId and -Add archive is downloaded with the key (#4325). Held here,
+        # before the workflow starts, as the script holds them and in its
+        # order: -Publish and -Discard take a draft that is already there, so
+        # they take none of the changes; then -Mod and -FileId pair, whichever
+        # is given.
+        $count = { param($n) if ($params.Contains($n)) { @($params[$n]).Count } else { 0 } }
+        $changes = @('Mod', 'FileId', 'DropPatch', 'Add', 'Rule', 'Remove')
+        if ($params.Contains('Publish')) {
+            $with = @(@('Discard') + $changes | Where-Object { $params.Contains($_) })
+            if ($with.Count) { throw ('-Publish publishes a draft that is already there, so it takes no ' + (($with | ForEach-Object { '-' + $_ }) -join ', ') + '. Nothing was run.') }
+        }
+        if ($params.Contains('Discard')) {
+            $with = @($changes | Where-Object { $params.Contains($_) })
+            if ($with.Count) { throw ('-Discard throws away a draft that is already there, so it takes no ' + (($with | ForEach-Object { '-' + $_ }) -join ', ') + '. Nothing was run.') }
+        }
+        if ((& $count 'Mod') -ne (& $count 'FileId')) { throw '-Mod and -FileId go together, one file id for each mod. Nothing was run.' }
     }
     return [pscustomobject]@{ Params = $params; Own = $own }
 }
@@ -315,30 +330,25 @@ if ($a.State -eq 'waiting' -or $a.State -eq 'unread') { Die ("run $Run has no an
 
 $keyPath = Join-Path $scratch "$Run.key"
 $dir = Join-Path $scratch "$Run"
+$read = $false
 if (Test-Path -LiteralPath $keyPath) {
     $o = Open-ThornswoodSealedRun -Repo $GitHubRepo -Run $Run -Artifact 'nexus-run-sealed' -File 'nexus-run.sealed' -KeyPath $keyPath -Into $dir
     if ($o.Ok) {
+        $read = $true
         $txt = Join-Path $dir 'output.txt'
         if (Test-Path -LiteralPath $txt) { Get-Content -LiteralPath $txt | ForEach-Object { Write-Host $_ } }
         $files = @(Get-ChildItem -LiteralPath (Join-Path $dir 'files') -Recurse -File -ErrorAction SilentlyContinue)
         if ($files.Count) { Say ''; Say "  $($files.Count) file(s) in $(Join-Path $dir 'files')" 'Green' }
     } else {
-        Say ('  the run left no sealed output (' + $o.Why + ')') 'Yellow'
+        Say ('  the run''s sealed output could not be read (' + $o.Why + ')') 'Red'
     }
 } else {
-    Say "  this machine has no key for run $Run ($keyPath), so only its end can be read here" 'Yellow'
+    Say "  this machine has no key for run $Run ($keyPath), so its sealed output cannot be read here" 'Red'
 }
 
-switch ($a.State) {
-    'answer' {
-        Say ''; Say ('  ' + $a.Text) 'Green'
-        if ($a.Text -match '^ENDED (-?[0-9]+)') { exit [int]$Matches[1] }
-        exit 0
-    }
-    'stopped' {
-        Say ''; Say ('  ' + $a.Text) 'Red'
-        if ($a.Text -match '^ENDED (-?[0-9]+)') { exit [Math]::Max(1, [int]$Matches[1]) }
-        exit 1
-    }
-    default { Die ("run $Run ended with no answer: " + $a.Text + ' ' + $a.Url) }
-}
+# Header, exit code: the script's own, and never 0 when its answer was not read.
+$code = Get-ThornswoodRunExit $a $read
+if ($code -lt 0) { Die ("run $Run ended with no answer: " + $a.Text + ' ' + $a.Url) }
+Say ''; Say ('  ' + $a.Text) $(if ($code -eq 0) { 'Green' } else { 'Red' })
+if (-not $read) { Say "  what the script printed was not read, so this ends $code" 'Red' }
+exit $code

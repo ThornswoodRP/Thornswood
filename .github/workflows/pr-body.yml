@@ -5,7 +5,8 @@
 # own "Release note:" line (.github/pull_request_template.md), and
 # scripts/release/Collect-ReleaseNotes.ps1 joins them into the release's note.
 # Checking the line here, with the rules Ship.ps1 holds a note to
-# (scripts/release/Note-Rules.ps1), means a release never stops on a note.
+# (tools/ReleaseNotes/NoteRules.cs, the one copy), means a release never
+# stops on a note.
 #
 # WHEN. Opened, pushed to, reopened, and when the body is edited: the build
 # check (build-pr.yml) does not run on an edit, so the note has its own small
@@ -53,11 +54,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           sparse-checkout: tools/ReleaseNotes
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: '10.0.x'
       - name: Build the release note rules

@@ -48,7 +48,9 @@
   main has, and a live server should not start on a gamemode nobody tried on
   dev without somebody saying so.
 
-  Prints SERVICES OK and exits 0 when all three are back.
+  Prints SERVICES OK and exits 0 when all three are back and the bot's
+  settings are locked; SERVICES INCOMPLETE and exit 1 names what is not,
+  a lock that failed among them (#4198).
 #>
 [CmdletBinding()]
 param(
@@ -167,6 +169,7 @@ foreach ($feed in 'feed', 'feed-dev') {
 
 Place 'bot\bot.env.json' (Join-Path $BotRoot 'bot.env.json') -Essential
 $envFile = Join-Path $BotRoot 'bot.env.json'
+$unlocked = ''
 if (Test-Path -LiteralPath $envFile) {
   # The token is in it. SYSTEM (the bot's task) and Administrators, and
   # nobody else, the same as Install-Bot.ps1 leaves it.
@@ -182,7 +185,13 @@ if (Test-Path -LiteralPath $envFile) {
       [Security.Principal.WindowsIdentity]::GetCurrent().Name, 'FullControl', 'Allow')))
     Set-Acl -LiteralPath $envFile -AclObject $acl
     'locked    ' + $envFile + ' to SYSTEM and Administrators'
-  } catch { 'COULD NOT LOCK ' + $envFile + ': ' + $_.Exception.Message }
+  } catch {
+    # The token stays as open as the folder, so the restore is not done
+    # (#4198): the end below says SERVICES INCOMPLETE and exits 1, as
+    # Install-Bot.ps1 stops on the same lock.
+    'COULD NOT LOCK ' + $envFile + ': ' + $_.Exception.Message
+    $unlocked = $envFile
+  }
 }
 Place 'bot\joins.json'   (Join-Path $BotRoot 'data\joins.json')
 Place 'web\Caddyfile'    (Join-Path $CaddyRoot 'Caddyfile')
@@ -219,8 +228,11 @@ foreach ($g in @(@{ Tag = 'game'; Root = $GameRoot }, @{ Tag = 'game-dev'; Root 
 }
 
 ''
-if ($essential.Count) {
-  'SERVICES INCOMPLETE: not in the backup: ' + ($essential -join ', ')
+if ($essential.Count -or $unlocked) {
+  $why = @()
+  if ($essential.Count) { $why += ('not in the backup: ' + ($essential -join ', ')) }
+  if ($unlocked) { $why += ('could not lock ' + $unlocked + ' to SYSTEM and Administrators, so the bot''s token is as open as its folder') }
+  'SERVICES INCOMPLETE: ' + ($why -join '; ')
   exit 1
 }
 'SERVICES OK: the site''s data and config and the bot''s settings are back'

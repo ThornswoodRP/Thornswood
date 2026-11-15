@@ -401,15 +401,38 @@ const PKG_MIT_BODY = [
   yes('the credits page carries ' + l[0] + '\'s licence word for word', flat(C).indexOf(flat(l[1])) >= 0);
 });
 
-// NLayer, the menu theme's MP3 decoder (#3207): NLayer 3.0.0 from nuget.org.
-// Its netstandard2.0 file was compared byte for byte on 26 October, when the
-// launcher embedded it; since #4823 the package is a reference and its
-// net8.0 file is compiled in. The package names MIT as its licence and commit
-// 046c7ce4 of naudio/NLayer as its source; the MIT licence wants its notice
-// with every copy, so it is on the public page too, as the repository's
-// LICENSE at that commit has it.
-yes('THIRD-PARTY.md gives the NLayer version and its source commit', N.indexOf('Version 3.0.0') >= 0 && N.indexOf('046c7ce422970f8f0f0bc205d6c6341bcb7debf1') >= 0);
-yes('the credits page gives the NLayer version and links its source', C.indexOf('NLayer 3.0.0') >= 0 && C.indexOf('https://github.com/naudio/NLayer') >= 0);
+// NLayer, the menu theme's MP3 decoder (#3207), from nuget.org at the version
+// Thornswood.csproj names. Its netstandard2.0 file was compared byte for byte
+// on 26 October, when the launcher embedded it; since #4823 the package is a
+// reference and its net8.0 file is compiled in. The package names MIT as its
+// licence and a commit of naudio/NLayer as its source; the MIT licence wants
+// its notice with every copy, so it is on the public page too, as the
+// repository's LICENSE at that commit has it. The version is read from the
+// project and the commit from THIRD-PARTY.md, so a bump needs the notices
+// brought up and nothing here (#5703).
+const nlayerRef = pkgRefs.filter(function (r) { return r.name === 'NLayer'; })[0];
+const nlayerVersion = nlayerRef ? nlayerRef.version : '';
+yes('Thornswood.csproj names an NLayer version (' + nlayerVersion + ')', /^\d+(\.\d+)+$/.test(nlayerVersion));
+const nlayerSource = /naudio\/NLayer at commit `([0-9a-f]{8})` \(in full,\s*`([0-9a-f]{40})`\)/.exec(N);
+yes('THIRD-PARTY.md gives the NLayer version and its source commit in full (' + (nlayerSource ? nlayerSource[2] : 'none') + ')',
+    nlayerVersion !== '' && N.indexOf('Version ' + nlayerVersion + ' ') >= 0 && !!nlayerSource && nlayerSource[2].indexOf(nlayerSource[1]) === 0);
+// The credits page's link to the source: a Markdown link whose target, read
+// as a URL, is the repository on github.com, followed by the commit.
+function linkedAt(text, host, repoPath) {
+  const re = /\]\(([^)\s]+)\),?\s+at commit\s+`([0-9a-f]{8})`/g;
+  const found = [];
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    let u = null;
+    try { u = new URL(m[1]); } catch (e) { u = null; }
+    if (u && u.protocol === 'https:' && u.host === host && u.pathname.replace(/\/$/, '') === repoPath) { found.push(m[2]); }
+  }
+  return found;
+}
+const nlayerLinked = linkedAt(C, 'github.com', '/naudio/NLayer');
+yes('the credits page gives the NLayer version and links naudio/NLayer at that commit (' + nlayerLinked.join(', ') + ')',
+    nlayerVersion !== '' && C.indexOf('NLayer ' + nlayerVersion + ',') >= 0 &&
+    !!nlayerSource && nlayerLinked.length === 1 && nlayerLinked[0] === nlayerSource[1]);
 const NLAYER_LICENCE = [
   'Copyright (c) 2018 Mark Heath, Andrew Ward & Contributors',
   'Permission is hereby granted, free of charge, to any person obtaining a copy',
@@ -1154,10 +1177,17 @@ try {
 } catch (e) { runtimeDir = null; }
 const notedVer = (/version (\d+(?:\.\d+)*), file \d+/.exec(runtimeFlat) || [])[1] || null;
 yes('the Client Runtime section gives the version and file it describes', !!notedVer);
+// The one decision every check on the installed runtime goes by: a machine
+// whose Vortex holds an older upload than the notices describe has not caught
+// up, and its files are not held to the section. The files.txt comparison
+// below reads the same older runtime, as the launcher installed it from
+// Vortex, so it asks this too (#4160).
+const runtimeOlder = !!runtimeDir && !!notedVer && compareVersions(runtimeVer, notedVer) < 0;
+const runtimeOlderWhy = runtimeOlder ? 'Vortex here holds the Client Runtime ' + runtimeVer + ', older than the ' + notedVer + ' THIRD-PARTY.md describes' : '';
 if (!runtimeDir) {
   skip('no copy of the Thornswood Client Runtime in ' + VORTEX_MODS + ', so its files were not read');
-} else if (notedVer && compareVersions(runtimeVer, notedVer) < 0) {
-  skip('Vortex here holds the Client Runtime ' + runtimeVer + ', older than the ' + notedVer + ' THIRD-PARTY.md describes');
+} else if (runtimeOlder) {
+  skip(runtimeOlderWhy);
 } else {
   yes('THIRD-PARTY.md describes the Client Runtime Vortex holds here, ' + runtimeVer,
       !!notedVer && compareVersions(runtimeVer, notedVer) === 0);
@@ -1242,6 +1272,8 @@ if (filesTxt === null) {
     .filter(function (r) { return /^Data\\Platform\\Distribution\\/i.test(r); });
   if (fromCollection.length === 0) {
     skip('files.txt here gives the collection no file under Data\\Platform\\Distribution');
+  } else if (runtimeOlder) {
+    skip('the ' + fromCollection.length + ' files files.txt gives the collection under Data\\Platform\\Distribution were not held to the section: ' + runtimeOlderWhy);
   } else {
     const loose = fromCollection.filter(function (r) {
       if (/\\CEF\\locales\\[^\\]+\.pak$/i.test(r)) { return runtimeSec.indexOf('`CEF\\locales\\*.pak`') < 0; }

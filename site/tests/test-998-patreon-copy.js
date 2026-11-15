@@ -2,9 +2,9 @@
 /*
   test-998-patreon-copy.js
 
-  #998: Patreon's About text is pasted by hand from the To Do board's
-  "every word to paste" section in site/data/board.json, so the repo copy is
-  the only one anything can check. It has to:
+  #998: Patreon's About text is pasted by hand from docs/PATREON.md (until
+  #4359 it was the "every word to paste" section of the hub's to do board),
+  so the repo copy is the only one anything can check. It has to:
   A. say nothing about a closed playtest (the words #428 retired),
   B. carry a closing line for each state of the site's open switch, and
   C. say for each state what the bot's join panel says for that state, so
@@ -23,12 +23,10 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8').split('\r\n').jo
 let pass = 0, fail = 0;
 function yes(what, c) { if (c) { pass++; console.log('PASS  ' + what); } else { fail++; console.log('FAIL  ' + what); } }
 
-const board = JSON.parse(read('site/data/board.json'));
-const sec = ((board.todo || {}).sections || []).find((s) => /every word to paste/i.test(s.name || ''));
-yes('the Patreon paste section is on the board', !!sec);
-const row = sec && sec.rows.find((r) => /page blurb/i.test(JSON.stringify(r.cells)));
-yes('it has the page blurb row', !!row);
-const text = row ? Object.values(row.cells).join('\n') : '';
+const doc = read('docs/PATREON.md');
+const b0 = doc.indexOf('## The page blurb'), b1 = doc.indexOf('\n## ', b0 + 1);
+yes('docs/PATREON.md has the page blurb', b0 >= 0);
+const text = b0 < 0 ? '' : doc.slice(b0, b1 < 0 ? doc.length : b1);
 
 yes('A nothing in the blurb says closed playtest', !/\bclosed[\s-]+playtest/i.test(text));
 

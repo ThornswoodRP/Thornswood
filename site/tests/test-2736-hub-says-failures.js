@@ -41,7 +41,7 @@ function slice(from, to) {
 }
 
 const REFRESH = slice('function refresh() {', 'function chrome() {');
-const GALLERY = slice('function loadGalleryStaff() {', '/* -------------------------------------------------------------- report -- */');
+const GALLERY = slice('function loadGalleryStaff(after) {', '/* -------------------------------------------------------------- report -- */');
 yes('refresh and loadGalleryStaff are in hub.js', REFRESH.length > 0 && GALLERY.length > 0);
 yes('no empty catch is left in either', !/catch\s*\(\s*function\s*\(\s*\)\s*\{\s*\}\s*\)/.test(REFRESH + GALLERY));
 
@@ -58,8 +58,7 @@ function page(routes) {
   const alerts = [];
   const node = (id) => (els[id] = els[id] || { id, innerHTML: '', querySelectorAll: () => [] });
   const box = {
-    S: { boards: {}, boardRevs: {}, docs: { kept: 1 } },
-    pending: {}, inflight: {},
+    S: { docs: { kept: 1 } },
     alerts,
     api: (p) => {
       const r = routes[p];

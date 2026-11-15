@@ -81,7 +81,7 @@ Yes '  its password is letters and digits, which cmd.exe passes to config.cmd un
 Yes 'the service runs as that account' ($text -match '--windowslogonaccount')
 Yes 'every live Thornswood folder is denied to it, by the Close-RunnerAccount -Lock runs' ($text.Contains("Close-RunnerAccount ```$acct ```$root 'C:\' '`$liveFilter' `$alsoDenyList `$leaveList"))
 Yes '  except its own' ($text.Contains('if ($d.FullName -eq $own) { continue }'))
-Yes '  and Dumps on the VPS, which Lock-VpsFolders.ps1 gives it write on (#2127, #2488; tests\test-runner-lock.ps1 holds the rest)' ($text.Contains("`$leaveList = `$(if (`$OffBox) { '@()' } else { `"@('Thornswood-Dumps')`" })"))
+Yes '  and Dumps on the VPS, which Lock-VpsFolders.ps1 gives it write on (#2127, #2488; scripts\tests\test-runner-lock.ps1 holds the rest)' ($text.Contains("`$leaveList = `$(if (`$OffBox) { '@()' } else { `"@('Thornswood-Dumps')`" })"))
 
 # ---- the download ------------------------------------------------------------------
 Yes 'the runner zip is checked against the SHA-256 in the release notes' ($text -match 'BEGIN SHA win-x64' -and $text -match 'Get-FileHash -LiteralPath `\$zip -Algorithm SHA256')

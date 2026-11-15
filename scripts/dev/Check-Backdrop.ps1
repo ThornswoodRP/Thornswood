@@ -15,6 +15,7 @@
   single mip built from the old 1536 wide art. Somebody looking at a soft,
   doubled menu can run this and read which half is still wrong.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [string]$Game = ((& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install) + '\Game')

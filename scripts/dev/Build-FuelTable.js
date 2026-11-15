@@ -35,7 +35,7 @@
 // smelts nobody owns that make one of the table's ingots (the dwarven smelt
 // KEPT_SMELT keeps is one). A row that is not in this table burns nothing.
 //
-// Run it after Build-RecipeTable.ps1 rebuilds recipes.json. tests\test-1398-fuel.js
+// Run it after Build-RecipeTable.ps1 rebuilds recipes.json. game\tests\test-1398-fuel.js
 // fails while the table and this script disagree.
 //
 // Read only except for the FUEL_BY_RECIPE table, which it writes.

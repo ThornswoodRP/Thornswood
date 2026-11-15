@@ -34,39 +34,12 @@ namespace Thornswood
         public const string RepoUrl = "https://github.com/" + Repo;
 
         /// <summary>
-        /// WHERE THE RELEASES ARE READ FROM (#5608, Patrick's B of 9 Nov 2026).
-        /// On 9 Nov GitHub answered every anonymous request to github.com with
-        /// 504 for hours, its Release downloads included, while its API kept
-        /// answering, and asked without a token the API allows sixty calls an
-        /// hour from one address. So the launcher asks GitHub nothing itself:
-        /// the site, which asks the API signed in, lists the Releases
-        /// (ReleaseList) and sends each file of one on to where GitHub keeps
-        /// it (ReleaseFile, site\lib\feed.js THE RELEASE ROUTE). What arrives
-        /// is held to the signed record and Velopack's sha256 as before.
+        /// WHERE THE RELEASES ARE READ FROM (#5608): GitHub's API, by the
+        /// launcher itself (GitHub.cs), never thornswood.net. Patrick, 11 Nov
+        /// 2026: the site or the box being down may stop Play, never an
+        /// update. What arrives is held to the signed record and Velopack's
+        /// sha256 as before.
         /// </summary>
-        public const string Site = "https://thornswood.net";
-        public const string ReleaseList = Site + "/api/launcher/releases";
-
-        /// <summary>The site's address for the file <paramref name="name"/> of the Release <paramref name="tag"/>.</summary>
-        public static string ReleaseFile(string tag, string name)
-        {
-            return Site + "/release/" + Uri.EscapeDataString(tag) + "/" + Uri.EscapeDataString(name);
-        }
-
-        /// <summary>
-        /// A file address the site's Release list gave, made whole against the
-        /// site: only the site's own Release route is taken, so nothing in the
-        /// list can send the launcher anywhere else. Throws for anything else.
-        /// </summary>
-        public static string SiteReleaseFile(string said)
-        {
-            Uri u;
-            if (string.IsNullOrEmpty(said) || !Uri.TryCreate(new Uri(Site + "/"), said, out u) ||
-                u.Scheme != Uri.UriSchemeHttps || !string.Equals(u.Host, new Uri(Site).Host, StringComparison.OrdinalIgnoreCase) ||
-                !u.IsDefaultPort || u.UserInfo.Length > 0 || !u.AbsolutePath.StartsWith("/release/", StringComparison.Ordinal))
-                throw new ArgumentException("The site's list of Releases named " + (said ?? "nothing") + ", which is not the site's own Release route.");
-            return u.AbsoluteUri;
-        }
 
         // The arguments this launcher was started with, handed back to it when
         // Velopack restarts it after an update.
@@ -84,13 +57,22 @@ namespace Thornswood
         /// VeloUpdate.cs have passed it. Left off, the next update check finds
         /// it on disk and checks it like any other.
         /// </summary>
-        public static void Start(string[] args)
+        /// <param name="uninstalling">
+        /// What runs when Velopack's own uninstall runs without Thornswood's
+        /// (Uninstall.FromVelopack, #5932). Handed in by Shell.Main rather
+        /// than named here, so this file still builds alone in ShipRoot.
+        /// </param>
+        public static void Start(string[] args, Action uninstalling)
         {
             startArgs = args ?? new string[0];
             VelopackApp.Build()
                 .SetArgs(startArgs)
                 .SetAutoApplyOnStartup(false)
                 .OnRestarted(delegate { Restarted = true; })
+                // Velopack's own uninstall run some other way than through
+                // Thornswood's (Register.HideVelopackEntry, #5932): the rest
+                // of Thornswood goes with it.
+                .OnBeforeUninstallFastCallback(delegate { if (uninstalling != null) uninstalling(); })
                 .Run();
         }
 
@@ -137,8 +119,8 @@ namespace Thornswood
 
         /// <summary>
         /// The Velopack channel this install reads: "dev" for the dev server's
-        /// launcher, "main" for the live one. The same answer the update feed
-        /// goes by (Updater.FeedUrl): config.json's Channel or UpdateBranch.
+        /// launcher, "main" for the live one: config.json's Channel or
+        /// UpdateBranch.
         ///
         /// Every merge release that makes a package packs it for both
         /// channels, from the same files, and lists both in its one signed
@@ -163,20 +145,42 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// THE LINE BETWEEN THE PACKAGE AND THE FEED FOR THE GAME FILES (#4825).
+        /// Moves this launcher's working directory out of the folder an update
+        /// moves aside (#6129). Velopack starts the launcher in its current
+        /// folder, and every program the launcher starts without a folder of
+        /// its own works from there too and holds it open for as long as it
+        /// runs. On 15 Nov 2026 that was the Explorer Icons.Repair restarts:
+        /// from 11:15 AM it held current\, Velopack could not move it ("being
+        /// used by another process") and every update after failed and started
+        /// the launcher again, every 15 seconds. Velopack's own root, which
+        /// holds current\ and Update.exe, is never moved by an update. Does
+        /// nothing for a launcher Velopack did not install. Returns a line for
+        /// the log when the folder could not be changed, else null.
+        /// </summary>
+        public static string LeaveCurrentFolder()
+        {
+            try
+            {
+                if (!Installed) return null;
+                string root = Locator.RootAppDir;
+                if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return null;
+                Environment.CurrentDirectory = root;
+                return null;
+            }
+            catch (Exception ex)
+            {
+                return "Could not move the launcher's working folder out of its program folder (" + ex.Message + "), so an update may find the folder held.";
+            }
+        }
+
+        /// <summary>
+        /// WHERE THE GAME FILES COME FROM (#4825, #5608).
         /// True when Thornswood's game files come from the Velopack package of
-        /// each launcher update (Updater, SyncPackage.cs), and the feed's
-        /// release record and packs are not this install's (Sync.cs, Pending).
-        ///
-        /// Every launcher Velopack installed, on both channels. The plan has one
-        /// update channel carry both the launcher and the game payload. Until
-        /// 8 Nov 2026 this was dev only, because main had no package until
-        /// Patrick approved one (#5181); main-build-20261108.1 was the first,
-        /// and while main stayed on the feed, its game files stayed at the
-        /// feed's last record (release/main/20261102-121621) whatever main's
-        /// packages carried. A launcher Velopack did not install (a build into
-        /// a test root) has no package, and stays on the feed until the feed's
-        /// game path retires.
+        /// each launcher update (Updater, SyncPackage.cs): every launcher
+        /// Velopack installed, on both channels, since one update channel
+        /// carries both the launcher and the game files. A launcher Velopack
+        /// did not install (a build into a test root) has no package and takes
+        /// no update; the update feed it once fell back to went with #5608.
         /// </summary>
         public static bool GameFromPackage(Config cfg)
         {
@@ -200,6 +204,40 @@ namespace Thornswood
 
         /// <summary>True while an update waits for the launcher to close.</summary>
         public static bool Staged { get { lock (stageGate) return staged != null; } }
+
+        /// <summary>The version of the update waiting for the launcher to close, or null.</summary>
+        public static string StagedVersion { get { lock (stageGate) return staged != null && staged.Version != null ? staged.Version.ToString() : null; } }
+
+        /// <summary>
+        /// The last line Velopack's own log says an error on, for the launcher
+        /// to say why an update did not go in (#6129). Velopack writes it in
+        /// %LocalAppData%\velopack\velopack_&lt;app&gt;.log, not beside the
+        /// launcher. Empty when there is none or it cannot be read.
+        /// </summary>
+        public static string LastError()
+        {
+            try
+            {
+                IVelopackLocator l = Locator;
+                if (l == null || string.IsNullOrEmpty(l.AppId)) return "";
+                string file = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                                           "velopack", "velopack_" + l.AppId + ".log");
+                if (!File.Exists(file)) return "";
+                string last = "";
+                using (var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                using (var r = new StreamReader(fs))
+                {
+                    // Only the end matters, and the log grows for as long as
+                    // the install lives.
+                    if (fs.Length > 256 * 1024) fs.Seek(-256 * 1024, SeekOrigin.End);
+                    string line;
+                    while ((line = r.ReadLine()) != null)
+                        if (line.Contains("[ERROR]")) last = line.Trim();
+                }
+                return last;
+            }
+            catch (Exception ex) { Swallow.Note("Velo.LastError, reading Velopack's log", ex); return ""; }
+        }
 
         /// <summary>
         /// The last line of Main, after the window has closed and everything

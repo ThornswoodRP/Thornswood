@@ -67,18 +67,19 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// The scratch folder the setup program unpacks into, which nothing
-        /// has ever deleted.
+        /// The scratch folder the setup program before #4824 unpacked into,
+        /// which nothing ever deleted.
         ///
-        /// The installer makes Thornswood-setup at the root of whichever drive
-        /// the install is going to, unzips the whole payload into it, and runs
-        /// Setup.bat out of it. Setup moves the mods from there into the game,
-        /// so the big part empties, but the folder, the scripts and a copy of
-        /// the launcher stay behind for good. It is not under Root, so the
-        /// fence in Finish correctly refuses to touch it, and it has been
-        /// sitting on every machine that has ever run this. That is most of
-        /// the difference somebody sees when they uninstall and the disk does
-        /// not go back to where it was.
+        /// That installer made Thornswood-setup at the root of whichever drive
+        /// the install was going to, unzipped the whole payload into it, and
+        /// ran Setup.bat out of it. Setup moved the mods from there into the
+        /// game, so the big part emptied, but the folder, the scripts and a
+        /// copy of the launcher stayed behind for good. Velopack's setup and
+        /// the launcher's own install make no such folder, and Setup.bat is
+        /// gone, but machines that ran the old one still have it. It is not
+        /// under Root, so the fence in Finish correctly refuses to touch it.
+        /// That is most of the difference somebody sees when they uninstall
+        /// and the disk does not go back to where it was.
         ///
         /// Found by looking rather than remembered, because an install can be
         /// moved and the scratch stays on the drive it was made on.
@@ -140,6 +141,14 @@ namespace Thornswood
         ///
         /// A junction found here has the link removed and its target left
         /// alone, which is what deleting a shortcut should mean.
+        ///
+        /// One thing that will not go stops only itself and the folders it is
+        /// in. Everything beside it still goes, and the throw from the top
+        /// folder, which cannot be removed with it there, comes at the end.
+        /// A folder that could not be removed used to throw straight out of
+        /// the walk: on 12 Nov 2026 one held file in Profile\Music, the first
+        /// folder in Profile, left the rest of Profile on the PC untouched,
+        /// the Discord sign-in among it.
         /// </summary>
         static void DeleteTree(string dir)
         {
@@ -150,7 +159,7 @@ namespace Thornswood
                 catch { link = true; }   // unreadable is treated as do not enter
 
                 if (link) { try { Directory.Delete(sub, false); } catch (Exception ex) { Swallow.Note("Uninstall.DeleteTree, delete dir", ex); } }
-                else DeleteTree(sub);
+                else { try { DeleteTree(sub); } catch (Exception ex) { Swallow.Note("Uninstall.DeleteTree, " + sub, ex); } }
             }
             foreach (string f in Directory.GetFiles(dir))
             {
@@ -371,7 +380,7 @@ namespace Thornswood
         /// what is left for the handover script, or an empty array if nothing
         /// is.
         /// </summary>
-        public static string[] Begin(Config cfg, bool keepSaves, bool deleteMods, Action<string> say)
+        public static string[] Begin(Config cfg, bool deleteMods, Action<string> say)
         {
             say("Closing the game...");
             Kill();
@@ -384,6 +393,12 @@ namespace Thornswood
             // nothing to put back. Both calls are safe whether or not the game
             // ever ran, and neither throws.
             Hold.Release();
+            // The menu theme plays from Profile\Music, and a file this process
+            // has open is one Windows will not delete. On One on 12 Nov 2026
+            // that one file stopped all of Profile going, the Discord sign-in
+            // and the log with it. End returns once the track is let go, and
+            // nothing plays it again before the launcher closes.
+            MenuMusic.End();
             int back = Keep.Unpark();
             if (back > 0)
                 say(back + (back == 1 ? " plugin" : " plugins") + " from another server or build put back.");
@@ -451,7 +466,25 @@ namespace Thornswood
                 if (gone > 0) say(gone.ToString("n0") + " files removed from your Skyrim on Steam.");
             }
 
-            return Targets(keepSaves, deleteMods);
+            return Targets(deleteMods);
+        }
+
+        /// <summary>
+        /// Everything in Profile except what a kept game copy needs: its
+        /// record (OwnGame) and an own folder not made yet (Payload).
+        /// </summary>
+        static string[] ProfileButGame()
+        {
+            var l = new System.Collections.Generic.List<string>();
+            if (!Directory.Exists(Paths.ProfileDir)) return l.ToArray();
+            foreach (string e in Directory.GetFileSystemEntries(Paths.ProfileDir))
+            {
+                string n = Path.GetFileName(e);
+                if (n.Equals("OwnGame", StringComparison.OrdinalIgnoreCase) ||
+                    n.Equals("Payload", StringComparison.OrdinalIgnoreCase)) continue;
+                l.Add(e);
+            }
+            return l.ToArray();
         }
 
         /// <summary>
@@ -460,7 +493,7 @@ namespace Thornswood
         /// running by the time this is asked. Deletes nothing itself, so
         /// launcher\tests\test-3679-local-keep.ps1 runs it against a scratch install.
         /// </summary>
-        public static string[] Targets(bool keepSaves, bool deleteMods)
+        public static string[] Targets(bool deleteMods)
         {
             var leave = new System.Collections.Generic.List<string>();
 
@@ -476,21 +509,21 @@ namespace Thornswood
             if (deleteMods && (!Paths.Collection || Paths.OwnFirst)) leave.Add(Paths.Game);
 
             leave.Add(Paths.Personal);
-            if (!keepSaves)
-            {
-                leave.Add(Paths.ProfileDir);
-                leave.Add(Paths.CfgFile);
-            }
-            else
-            {
-                // The box keeps saves and settings, and Profile holds more
-                // than those: the log, the Discord sign-in with the name and
-                // picture beside it, the support zips and the music's old
-                // browser folder. Keeping all of Profile kept them on the PC
-                // under a box that named none of them (#3679). They go here,
-                // and the farewell names any that are still there.
-                leave.AddRange(LocalKeep.NotSaves());
-            }
+            // Profile and config.json go whole. There was a box, "Keep this
+            // build's saves and settings", that kept them for a reinstall,
+            // because the character list and every setting lived only here.
+            // They are kept with the Discord account on the site now
+            // (#5938, #5939), and a SkyMP character was never a save on
+            // this PC, so nothing in Profile is the person's to keep.
+            //
+            // Except, when the game copy stays, the record that says what it
+            // is: Paths.Init knows Root\Game as Thornswood's own folder only
+            // by Profile\OwnGame\files.txt beside it, and an own folder not
+            // made yet waits in Profile\Payload. Without them a reinstall
+            // would not reuse the copy it was kept for.
+            if (deleteMods) leave.Add(Paths.ProfileDir);
+            else leave.AddRange(ProfileButGame());
+            leave.Add(Paths.CfgFile);
             // The rest of what setup and updating left in the install folder.
             //
             // Finish already tries to remove the install folder itself when
@@ -592,15 +625,16 @@ namespace Thornswood
         /// its own folder can go, so this waits on the process id rather than
         /// guessing at a delay.
         /// </summary>
-        public static void Finish(string[] targets, bool keepSaves, bool deleteMods)
+        public static void Finish(string[] targets, bool deleteMods, bool appToo = true)
         {
             // Said after the deletes in the script, so it reports what is
             // actually there rather than what was expected to be.
             string note = null;
-            try { note = WriteFarewell(keepSaves, deleteMods); }
+            try { note = WriteFarewell(deleteMods); }
             catch (Exception ex) { Swallow.Note("Uninstall.Finish, farewell", ex); }
 
-            string text = Script(targets, Process.GetCurrentProcess().Id, note);
+            string text = Script(targets, Process.GetCurrentProcess().Id, note,
+                                 appToo ? AppUninstaller() : null, InstallPlace.RecordFile);
             if (text == null)
             {
                 try { if (note != null) File.Delete(note); } catch (Exception ex) { Swallow.Note("Uninstall.Finish, clearing the unused farewell", ex); }
@@ -620,12 +654,73 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// The handover script's text: wait for process waitFor to exit, delete
-        /// the targets that are under Root, then run the farewell note, when
-        /// there is one. Null when Root cannot be fenced, and then nothing is
-        /// deleted at all.
+        /// Velopack's own uninstall, when it runs without Thornswood's: its
+        /// hook (Velo.Start), in a process that must show nothing and be gone
+        /// within 30 seconds. Its entry in Installed apps is hidden
+        /// (Register.HideVelopackEntry), but Update.exe --uninstall can still
+        /// be run by hand or by a package manager, and on its own it removed
+        /// only the launcher's folder: Root stayed, and Windows' Skyrim folders
+        /// stayed pointed into it with nothing left that knew how to put them
+        /// back (#5932).
+        ///
+        /// So it does what Thornswood's uninstall does with nobody to ask:
+        /// everything goes, the Skyrim folders are put back first, and a
+        /// failure there stops it with nothing removed (Begin throws). The
+        /// deleting is the handover script's, after this process has exited,
+        /// so it is not held to Velopack's 30 seconds; Velopack is already
+        /// removing its own folder, so the script does not run it again.
+        ///
+        /// Thornswood's own uninstall deletes the record of Root before it runs
+        /// Update.exe (Script), so when it is what started Velopack's, this
+        /// finds no install and does nothing.
         /// </summary>
-        public static string Script(string[] targets, int waitFor, string note)
+        public static void FromVelopack()
+        {
+            try
+            {
+                string root = InstallPlace.Recorded();
+                if (string.IsNullOrEmpty(root)) return;
+                Paths.Init(root);
+                string why = WhyNot();
+                if (why != null) { Swallow.Say("Uninstall.FromVelopack", why); return; }
+                Config cfg = Config.Load(Paths.CfgFile);
+                string[] rest = Begin(cfg, true, delegate(string m) { Swallow.Say("Uninstall.FromVelopack", m); });
+                Finish(rest, true, false);
+            }
+            catch (Exception ex) { Swallow.Note("Uninstall.FromVelopack, stopped", ex); }
+        }
+
+        /// <summary>
+        /// Velopack's Update.exe for this install, or null for a launcher
+        /// Velopack did not install (a build into a test root).
+        ///
+        /// Velopack's setup puts the launcher itself in a folder of its own,
+        /// %LocalAppData%\Thornswood, with Desktop and Start menu shortcuts and
+        /// an entry of its own in Installed apps (Velo.cs). Nothing here took
+        /// any of that away: the uninstall removed Root and its own Installed
+        /// apps entry, and on One on 12 Nov 2026 the setup run afterwards said
+        /// Thornswood was already installed, with the whole 1.3.20 install
+        /// still in that folder. Velopack's own uninstall is what removes all
+        /// three, and the handover script runs it once this launcher has gone.
+        /// </summary>
+        static string AppUninstaller()
+        {
+            try
+            {
+                if (!Velo.Installed) return null;
+                string exe = Velo.Locator.UpdateExePath;
+                return string.IsNullOrEmpty(exe) ? null : exe;
+            }
+            catch (Exception ex) { Swallow.Note("Uninstall.AppUninstaller", ex); return null; }
+        }
+
+        /// <summary>
+        /// The handover script's text: wait for process waitFor to exit, delete
+        /// the targets that are under Root, run Velopack's own uninstall when
+        /// updateExe names it, then run the farewell note, when there is one.
+        /// Null when Root cannot be fenced, and then nothing is deleted at all.
+        /// </summary>
+        public static string Script(string[] targets, int waitFor, string note, string updateExe = null, string rootRecord = null)
         {
             var sb = new StringBuilder();
             sb.AppendLine("@echo off");
@@ -679,6 +774,22 @@ namespace Thornswood
             // leaves an empty Thornswood behind.
             sb.AppendLine("rmdir \"" + Paths.Root + "\" 2>nul");
 
+            // Then the launcher itself: Velopack's uninstall takes its folder,
+            // its shortcuts and its Installed apps entry (AppUninstaller). Run
+            // and waited for here, after this launcher has exited, because it
+            // deletes the folder this launcher runs from. --silent, because
+            // the farewell below is what says the uninstall is done.
+            //
+            // The record of where Root is goes first. Velopack's uninstall
+            // runs this launcher's FromVelopack, and with no record that finds
+            // no install to remove: a kept Profile stays kept.
+            if (!string.IsNullOrEmpty(updateExe))
+            {
+                if (!string.IsNullOrEmpty(rootRecord))
+                    sb.AppendLine("del /f /q \"" + rootRecord + "\" 2>nul");
+                sb.AppendLine("if exist \"" + updateExe + "\" call \"" + updateExe + "\" --uninstall --silent");
+            }
+
             // Last, say what survived and why.
             if (note != null)
             {
@@ -702,7 +813,7 @@ namespace Thornswood
         /// at all: a person whose uninstall left nothing behind does not need a
         /// box telling them so.
         /// </summary>
-        public static string WriteFarewell(bool keepSaves, bool deleteMods)
+        public static string WriteFarewell(bool deleteMods)
         {
             var ps = new StringBuilder();
             ps.AppendLine("$ErrorActionPreference = 'SilentlyContinue'");
@@ -717,22 +828,28 @@ namespace Thornswood
             ps.AppendLine("$why = @{}");
             ps.AppendLine("$why['_quarantine'] = 'files taken out of your game and set aside, another server''s among them. Not ours to delete.'");
             if (!deleteMods)
-                ps.AppendLine("$why['Game'] = 'Thornswood''s copy of the game. You chose to keep it, so a reinstall can reuse it.'");
-            if (keepSaves)
             {
-                ps.AppendLine("$why['Profile'] = 'your characters, saves and settings, and the launcher''s record of what it installed. You chose to keep them.'");
-                ps.AppendLine("$why['config.json'] = 'your settings. You chose to keep them.'");
+                ps.AppendLine("$why['Game'] = 'Thornswood''s copy of the game. You chose to keep it, so a reinstall can reuse it.'");
+                ps.AppendLine("$why['Profile'] = 'the record of Thornswood''s copy of the game, kept with it so a reinstall knows it.'");
             }
+            // Whatever this uninstall set out to remove from the install folder
+            // and is still there is Thornswood's and failed to go. It is said
+            // so: on 12 Nov 2026 Profile could not be deleted and this called
+            // it "not Thornswood's", which was wrong about the launcher's own
+            // folder. Anything named nowhere is still not ours.
+            foreach (string name in OursInRoot(deleteMods))
+                ps.AppendLine("if (-not $why.ContainsKey(" + PsQuote(name) + ")) { $why[" + PsQuote(name) +
+                              "] = 'Thornswood''s own. It should have gone, but could not be removed.' }");
             ps.AppendLine();
 
-            // What the script was told to take out of a kept Profile and could
-            // not (a browser still closing, a file held open). Named one by one,
-            // because "your saves and settings" would be wrong about each of
-            // them (#3679).
+            // What the script was told to take out of Profile beside a kept
+            // game copy and could not (a browser still closing, a file held
+            // open). Named one by one, because "the record of Thornswood's
+            // copy of the game" would be wrong about each of them (#3679).
             ps.AppendLine("$stuck = @()");
-            if (keepSaves)
+            if (!deleteMods)
             {
-                foreach (string p in LocalKeep.NotSaves())
+                foreach (string p in ProfileButGame())
                     ps.AppendLine("if (Test-Path -LiteralPath " + PsQuote(p) + ") { $stuck += '  ' + " + PsQuote(p) + " }");
             }
             ps.AppendLine();
@@ -745,13 +862,40 @@ namespace Thornswood
             ps.AppendLine();
 
             ps.AppendLine("$msg = \"Thornswood is uninstalled.`r`n`r`nThis was left at\" + \"`r`n`r`n    \" + $root + \"`r`n`r`n\" + ($lines -join \"`r`n\") + \"`r`n`r`nDelete that folder yourself once you are done with them.\"");
-            ps.AppendLine("if ($stuck) { $msg += \"`r`n`r`nThese are not saves or settings and should have gone, but could not be removed. Delete them yourself:`r`n`r`n\" + ($stuck -join \"`r`n\") }");
+            ps.AppendLine("if ($stuck) { $msg += \"`r`n`r`nThese are not the record of the game copy and should have gone, but could not be removed. Delete them yourself:`r`n`r`n\" + ($stuck -join \"`r`n\") }");
             ps.AppendLine("Add-Type -AssemblyName System.Windows.Forms");
             ps.AppendLine("[void][System.Windows.Forms.MessageBox]::Show($msg, 'Thornswood', 'OK', 'Information')");
 
             string note = Path.Combine(Path.GetTempPath(), "thornswood-farewell.ps1");
             File.WriteAllText(note, ps.ToString(), new UTF8Encoding(false));
             return note;
+        }
+
+        /// <summary>
+        /// The names, in the install folder itself, of what Targets removes:
+        /// the entries the farewell can find there afterwards. A target deeper
+        /// down (what ProfileButGame takes out of Profile beside a kept game) is not
+        /// one of them; the farewell names those by path.
+        /// </summary>
+        public static string[] OursInRoot(bool deleteMods)
+        {
+            var names = new System.Collections.Generic.List<string>();
+            string root;
+            try { root = Path.GetFullPath(Paths.Root).TrimEnd('\\', '/'); }
+            catch (Exception ex) { Swallow.Note("Uninstall.OursInRoot, root", ex); return names.ToArray(); }
+            foreach (string t in Targets(deleteMods))
+            {
+                if (string.IsNullOrEmpty(t)) continue;
+                try
+                {
+                    string full = Path.GetFullPath(t).TrimEnd('\\', '/');
+                    if (!string.Equals(Path.GetDirectoryName(full), root, StringComparison.OrdinalIgnoreCase)) continue;
+                    string name = Path.GetFileName(full);
+                    if (name.Length > 0 && !names.Contains(name)) names.Add(name);
+                }
+                catch (Exception ex) { Swallow.Note("Uninstall.OursInRoot, " + t, ex); }
+            }
+            return names.ToArray();
         }
 
         /// <summary>A path as a PowerShell single quoted string.</summary>

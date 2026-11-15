@@ -124,7 +124,7 @@ jobs:
       # work out the launcher's number from when its sources last changed
       # (#5179), so on a shallow checkout four of them failed under the trace
       # (run 41326989125).
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           filter: blob:none
@@ -199,7 +199,7 @@ jobs:
       # (#5293). Names, exit codes, seconds and SKIP lines, no file contents.
       - name: Keep what each harness said
         if: always() && steps.gate.outcome == 'success'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: gate-starts-windows
           path: ${{ runner.temp }}/gate-trace/starts.jsonl
@@ -210,7 +210,7 @@ jobs:
       # schedule, a push to main or a run by hand on main.
       - name: Keep the map
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: gate-map
           path: ${{ runner.temp }}/gate-map
@@ -219,7 +219,7 @@ jobs:
 
       - name: Keep the trial map
         if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: gate-map-trial
           path: ${{ runner.temp }}/gate-map
@@ -241,7 +241,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           filter: blob:none
@@ -268,7 +268,7 @@ jobs:
           exit 0
 
       - name: Keep what each harness said
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: gate-starts-linux
           path: ${{ runner.temp }}/gate-linux/starts.jsonl
@@ -285,7 +285,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -323,7 +323,7 @@ jobs:
 
       - name: Keep the map with it
         if: steps.compare.outputs.keep == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: gate-map
           path: ${{ runner.temp }}/parts/gate-map
@@ -333,7 +333,7 @@ jobs:
 
       - name: Keep the trial map with it
         if: steps.compare.outputs.keep == 'true' && github.event_name == 'pull_request'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: gate-map-trial
           path: ${{ runner.temp }}/parts/gate-map-trial

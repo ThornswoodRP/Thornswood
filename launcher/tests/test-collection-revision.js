@@ -105,12 +105,13 @@ yes('an empty address gives nothing', slugFrom('') === '');
 yes('a slug with punctuation in it is refused', slugFrom('https://x/collections/../../evil') === '');
 
 // ---- the revision from the legacy folder name, the fallback ----------------
-const real = ['collection_7essxf_2_2026-09-15T21-08-00Z'];
-yes('the legacy folder still reads as revision 2', revisionFrom(real, '7essxf') === 2);
+// The real one: the old ombo2a collection's revision 2, as Vortex named it.
+const real = ['collection_ombo2a_2_2026-09-15T21-08-00Z'];
+yes('the legacy folder still reads as revision 2', revisionFrom(real, 'ombo2a') === 2);
 
 yes('the newest wins when an upgrade leaves the old one behind',
     revisionFrom([
-      'collection_7essxf_2_2026-09-15T21-08-00Z',
+      'collection_7essxf_2_2026-10-03T17-33-45Z',
       'collection_7essxf_4_2026-09-22T10-00-00Z',
       'collection_7essxf_3_2026-09-19T10-00-00Z'
     ], '7essxf') === 4);
@@ -123,7 +124,7 @@ yes('double figures beat single figures, rather than sorting as text',
 
 yes('another collection in the same folder is ignored',
     revisionFrom([
-      'collection_7essxf_2_2026-09-15T21-08-00Z',
+      'collection_7essxf_2_2026-10-03T17-33-45Z',
       'collection_somebodyelse_99_2026-09-22T10-00-00Z'
     ], '7essxf') === 2);
 

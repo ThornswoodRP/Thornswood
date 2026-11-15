@@ -44,7 +44,7 @@
 
 .PARAMETER Layer
   A file that replaces the functions below that touch Windows, and may set
-  $ServerRoots. Only tests\test-time-wait.ps1 passes it.
+  $ServerRoots. Only scripts\tests\test-time-wait.ps1 passes it.
 #>
 [CmdletBinding()]
 param(

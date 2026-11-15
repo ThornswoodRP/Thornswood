@@ -8,7 +8,8 @@
 #   code      all ~380 test harnesses in tests/, plus the bot and voice harnesses, and
 #             the launcher's native publish
 #   GitHub    pull requests open more than two days and branches other than
-#             main, which CONTRIBUTING.md says are merged or closed; issues
+#             main, which are merged or closed (docs/guide/how-work-moves.md,
+#             "Dev first, notes, and open branches"); issues
 #             and comments of the last day not written plain (#3692)
 #
 # Every action here is named by a full length commit SHA with its tag in the
@@ -28,6 +29,13 @@
 # is safe), the rest of the checks in a job beside them, and the board is
 # told in a last job that waits for all of them and runs whether they passed
 # or failed, though not when somebody cancels the run.
+#
+# THE TOKEN (#4162). Every job reads the repository and nothing more, and
+# each checkout keeps no credentials in .git/config, so no harness can read
+# a token there. "nightly" also reads issues and pull requests (the stray
+# and plain-writing checks); only "board" writes an issue. Until #4162
+# issues: write was given to all five, so the jobs that run every harness
+# and the bot's tests held a token that could write issues.
 name: Nightly checks
 on:
   schedule:
@@ -35,8 +43,6 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-  issues: write
-  pull-requests: read
 concurrency:
   group: nightly
   cancel-in-progress: false
@@ -50,18 +56,25 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
     timeout-minutes: 45
+    # Nightly-Stray.ps1 reads pull requests and branches, and
+    # Nightly-PlainIssues.ps1 reads issues and comments; neither writes.
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
     steps:
       # Every commit and tree, no old file contents: "Build the launcher"
       # works out the launcher's number from when its sources last changed
       # (scripts\release\LauncherVersion.ps1, #5179), which a shallow checkout
       # cannot say.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           filter: blob:none
+          persist-credentials: false
       # The .NET 10 SDK publishes the launcher (#4823), pinned for the reason
       # build.yml gives.
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: '10.0.x'
 
@@ -100,7 +113,7 @@ jobs:
           # server sends and can load. The build on every pull request has no
           # fork, so this is where the record is read against the fork at the
           # pin: fetched shallow, read from git's objects at that commit by
-          # tests\test-papyrus-event-list.js, and taken out again, the way the
+          # game\tests\test-papyrus-event-list.js, and taken out again, the way the
           # secret scan above does it. A pin that moved over fork work which
           # leaves the list alone passes; one that changed the list fails
           # here, naming what changed and the command that writes the record
@@ -110,7 +123,7 @@ jobs:
           $fetched = ($LASTEXITCODE -eq 0)
           if (-not $fetched) { Write-Host '::error file=.gitmodules::engine/skymp could not be fetched at its pin, so the event list was not checked' }
           $env:THORNSWOOD_FORK_REQUIRED = '1'
-          node tests\test-papyrus-event-list.js
+          node game\tests\test-papyrus-event-list.js
           $code = $LASTEXITCODE
           git -c core.longpaths=true submodule deinit -q -f engine/skymp
           if ($code -ne 0) { Write-Host '::error file=records/papyrus-events.json::the record is not the fork''s event list at the pin; the lines above say what changed. node scripts\dev\PapyrusEventList.js --write writes it again' }
@@ -152,7 +165,7 @@ jobs:
         if: ${{ !cancelled() }}
         shell: pwsh
         run: |
-          # The Words section of CONTRIBUTING.md, over the files people read: no em
+          # The writing rules (docs/guide/rules.md, "Words"), over the files people read: no em
           # dashes, never the word player, and the owner is Patrick. Written
           # down since the start and never checked, and on 24 September eleven
           # hits had gone out in those files. Each hit is marked on its line.
@@ -312,6 +325,21 @@ jobs:
           node scripts/dev/Check-AppPermissions.js
           exit $LASTEXITCODE
 
+      - name: Each action pin is the commit its tag names
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # #4165: every uses: is a full commit SHA with its release tag in a
+          # comment (tests\test-action-pins.ps1, on every pull request), and
+          # only GitHub can say whether that tag names that commit. The tag
+          # is read from the action's own repository, an annotated one
+          # followed to its commit; a pin whose tag names another commit, or
+          # a tag that is not there, is named with every line that carries
+          # it. tests\test-4165-pin-tags.ps1 runs it against a stand-in GitHub.
+          .\scripts\dev\Check-ActionPins.ps1 -Run
+
   harnesses:
     # The test harnesses, in shares (#2357). One job for each entry under
     # shard, each on a runner of its own with 45 minutes of its own; another
@@ -332,10 +360,11 @@ jobs:
       # scripts on this checkout, and they work out the launcher's number
       # from when its sources last changed (scripts\release\LauncherVersion.ps1,
       # #5179), which a shallow checkout cannot say.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           filter: blob:none
+          persist-credentials: false
 
       - name: Install the eslint the lint harness copies
         if: ${{ !cancelled() }}
@@ -379,7 +408,7 @@ jobs:
         # report job names this share as having left no report and is red,
         # so the failure is said where the report is read.
         continue-on-error: true
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: harness-report-${{ matrix.shard }}
           path: ${{ runner.temp }}/harness-report/share.xml
@@ -397,25 +426,41 @@ jobs:
     if: ${{ !cancelled() && needs.harnesses.result != 'skipped' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # Each failed test, with its FAIL lines and the command that runs it
+    # alone, for the board's failure comment (#4178).
+    outputs:
+      failed: ${{ steps.merge.outputs.failed }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           sparse-checkout: scripts/dev/Merge-HarnessReports.ps1
           sparse-checkout-cone-mode: false
+          persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: harness-report-*
           path: ${{ runner.temp }}/harness-reports
       - name: Merge the shares' reports into one
+        id: merge
         shell: pwsh
         run: |
           $in = Join-Path $env:RUNNER_TEMP 'harness-reports'
           New-Item -ItemType Directory -Path $in -Force | Out-Null
-          .\scripts\dev\Merge-HarnessReports.ps1 -Path $in -Expect 2 -Out (Join-Path $env:RUNNER_TEMP 'harness-report.xml') -Title 'Nightly harnesses'
-          exit $LASTEXITCODE
+          $failed = Join-Path $env:RUNNER_TEMP 'harness-failed.md'
+          .\scripts\dev\Merge-HarnessReports.ps1 -Path $in -Expect 2 -Out (Join-Path $env:RUNNER_TEMP 'harness-report.xml') -Title 'Nightly harnesses' -Failed $failed
+          $code = $LASTEXITCODE
+          # The list goes on as this job's output "failed" whether or not
+          # every share's report came: a share that left none is named in
+          # it. A failed test's lines are its own words, so the output ends
+          # at a delimiter made new for this run, which no line can hold.
+          $end = 'FAILED_' + [Guid]::NewGuid().ToString('N')
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('failed<<' + $end)
+          if (Test-Path -LiteralPath $failed) { Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ([IO.File]::ReadAllText($failed)) }
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value $end
+          exit $code
       - name: Keep the merged report with the run
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
           name: harness-report
           path: ${{ runner.temp }}/harness-report.xml
@@ -434,7 +479,9 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Run the bot harnesses
         shell: pwsh
@@ -508,8 +555,14 @@ jobs:
     if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
     runs-on: windows-latest
     timeout-minutes: 10
+    # The one job that writes an issue (Nightly-Issue.ps1, #4162).
+    permissions:
+      contents: read
+      issues: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Put a failure on the board
         if: ${{ needs.nightly.result != 'success' || needs.harnesses.result != 'success' || needs.harness-report.result != 'success' || needs.bot.result != 'success' }}
@@ -518,10 +571,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          NIGHTLY_FAILED: ${{ needs.harness-report.outputs.failed }}
         run: |
           # One "Nightly checks failed" issue, never two: added to when one is
           # open (every page read, the oldest kept, any duplicate closed
           # pointing to it), opened when none is. Issues #905 and #1120.
+          # The comment lists each failed test, its FAIL lines and the
+          # command that runs it alone, from the harness report (#4178).
           Write-Host ('checks: ${{ needs.nightly.result }}, harnesses: ${{ needs.harnesses.result }}, harness report: ${{ needs.harness-report.result }}, bot: ${{ needs.bot.result }}')
           .\scripts\dev\Nightly-Issue.ps1 -Result failure
 

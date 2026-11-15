@@ -1,5 +1,13 @@
 # The update feed
 
+**Retired from the launcher by #5608 (11 Nov 2026).** The launcher reads none
+of this any more: it takes its channel's release, game files included,
+straight from GitHub's Releases through Velopack, held to the signed release
+record (launcher\app\ARCHITECTURE.md, Updater and Velo). The feed stays on the
+site only for launchers from before that, until the site side of #5608
+(#5783) takes it down with the scripts that write it. What follows is the
+feed as it was, for that site side; the launcher names in it are history.
+
 Every Thornswood launcher decides what to download from one file:
 `version.json`. It is served from **thornswood.net** (`/feed/version.json`
 live, `/feed-dev/version.json` for dev), and since #907 from nowhere else:
@@ -7,6 +15,20 @@ the GitHub repository `EvilPatrick06/Thornswood-Releases`, once the feed, its
 fallback and the home of the release baseline, is retired. This page is every
 field in it, who writes each one, who reads it, and what goes wrong when it is
 wrong.
+
+## Contents
+
+- [Where it is and how a launcher reads it](#where-it-is-and-how-a-launcher-reads-it)
+- [A real entry, trimmed](#a-real-entry-trimmed)
+- [Top-level fields](#top-level-fields)
+- [How a launcher decides what is new](#how-a-launcher-decides-what-is-new)
+- [Syncing to the release record (#1050)](#syncing-to-the-release-record-1050)
+- [When the packs can go](#when-the-packs-can-go)
+- [version.json in two (#1050)](#versionjson-in-two-1050)
+- [Checks on every download](#checks-on-every-download)
+- [Main and dev](#main-and-dev)
+- [Putting a channel back (#442)](#putting-a-channel-back-442)
+- [What looks wrong in the feeds today](#what-looks-wrong-in-the-feeds-today)
 
 ## Where it is and how a launcher reads it
 
@@ -337,7 +359,7 @@ saved fields that come from elsewhere, as their rows say.
 | `serverPort` | string | as above, `ServerPort` | `ShellUpdate.cs:OnVersionDoc` | Saved. Must be a string; the launcher field is a string. |
 | `maxOnline` | number | `Publish-Update.ps1`, from `records\most-online.json` by way of `scripts\deploy\MaxOnline.ps1` (#481): the channel's seats, people and staff seats together (30 on main, 5 on dev from its `dev` numbers; Patrick, 12 Oct) | `ShellUpdate.cs:v.maxOnline > 0` | Saved when above 0. Written as a number because a quoted `"30"` reads as 0. It is the M of "N of M awake". The Play page prefers the number the running server announces as `max` in its `online.json` (`Online.cs`), which is the same seats. |
 | `collectionUrl` | string | `Set-Collection.ps1:$doc.collectionUrl = $Url` only; Ship carries it forward untouched | `ShellUpdate.cs:OnVersionDoc` | Saved. The collection the buttons send people to; they open its page for the feed's `collectionRevision` (`Checks.CollectionRevisionUrl`, `.../revisions/<N>`), never the bare page, which Nexus shows at its newest revision (#4115). |
-| `collectionRevision` | number | `Publish-Update.ps1:Set-Prop $doc 'collectionRevision' $ShipCollectionRevision`, the revision `records\collection-plugins.json` names; Ship and Publish-Update stop unless the shipping machine's Vortex (or, from the feed, the last release) is on it (`CollectionRevision.ps1`, #3597); from the feed a release behind the record moves up to it, carrying `game\data\last-plugin.json`'s order as its plugin list (`Get-ShipFeedMoveRevision`, `New-ShipFeedMoveLists`, #4069), and unless it is the newest revision published on Nexus (`NexusPublished.ps1`, #4068); `Check-CollectionRevisions.ps1` holds both feeds to Nexus every hour and puts the rebuild on the board | `ShellUpdate.cs:Updater.FeedCollectionRevision = v.collectionRevision`, then `Shell.cs:CollectionProblem` | Not saved. 0 or missing: the launcher says nothing about the collection being behind or ahead. Wrong: lets an install on an old revision in (both feeds said 2 while the collection was on 5, #3597), or tells people to reinstall a collection that is fine. |
+| `collectionRevision` | number | `Publish-Update.ps1:Set-Prop $doc 'collectionRevision' $ShipCollectionRevision`, the revision `records\collection-plugins.json` names; Ship and Publish-Update stop unless the shipping machine's Vortex (or, from the feed, the last release) is on it (`CollectionRevision.ps1`, #3597); from the feed a release behind the record moves up to it, carrying `game\data\last-plugin.json`'s order as its plugin list (`Get-ShipFeedMoveRevision`, `New-ShipFeedMoveLists`, #4069), and unless it is the newest revision published on Nexus (`NexusPublished.ps1`, #4068); `Check-CollectionRevisions.ps1` held both feeds to Nexus every hour until #5767 | Read by nothing since #5767 (11 Nov 2026): the launcher takes the server's revision from the signed manifest of the Release its channel runs (`VeloUpdate.cs:CheckLauncher`, `Updater.ServerCollectionRevision`, then `Shell.cs:CollectionProblem`), the Downloads page from main's (`feed.js:serverRevision`), and the hourly check from both (`ReleaseRevision.ps1`) | Not saved. 0 or missing: the launcher says nothing about the collection being behind or ahead. Wrong: lets an install on an old revision in (both feeds said 2 while the collection was on 5, #3597), or tells people to reinstall a collection that is fine. |
 | `updateRepo` | string `owner/name` | Nobody since #907: `Publish-Update.ps1` takes it out of the feed | `Feed-Rules.ps1` only (a feed that still names one keeps its GitHub pack urls legal until its next Ship) | Launchers from #907 on ignore it. Older ones save it and ask that repository, via the GitHub Contents API, when the site does not answer; once it is deleted that answers 404 and they ask the site again. |
 | `updateFeedUrl` | string, https | `Publish-Update.ps1` from `UpdateFeedUrl` (defaults to the site live/dev URL by channel) | `Shell.cs`, `Updater.FeedUrl` | Saved, quietly. The one `version.json` fetch since #907. Publish the new URL under the old feed first, then move. Since #937 only an https address on thornswood.net is used; anything else in `config.json`, empty included, is the built-in live or dev address, so editing the file cannot switch the update check off. |
 | `voicePort` | string | from `VoicePort` | `ShellUpdate.cs:v.voicePort != cfg.VoicePort` | Saved, quietly. Was the raw port's number for an empty `voiceUrl`; since #1304 the launcher never connects to the raw port, and this only goes into `Thornswood.ini` for the game. |
@@ -353,8 +375,8 @@ saved fields that come from elsewhere, as their rows say.
 | `releases` | array, newest first, at most 30, of `{ id, sha256, url, entries, lastPack, to? }` | Gone from the feed since #1050: the list is `releases.json` in the channel's store beside the feed (see "The feed store on the VPS"), written by `Publish-Update.ps1` on every release that names a `baseline` (the release list block, #442) and by `Rollback-Feed.ps1`, with `to` naming the release a rollback went back to. A feed that still carries the field (written before #1050, or by a Ship from a branch without it) is read too, merged by id, and the next write takes it out | No launcher. `Rollback-Feed.ps1`, `Scrub-Feed.ps1`, Ship's release tag check (`Get-StoreReleases`, `Release-Baseline.ps1`; `Read-ReleaseListFile`, `Release-Name.ps1`) | The record each release published, the same shape as `baseline`, plus `lastPack`, the last pack on the feed once that release was out, whose plugin list is the one it shipped ('' once the packs are gone: the record's own `:golden:` entries hold it). What a channel can be put back to; a release older than the newest thirty cannot be. The first release after #442 started the list with the `baseline` the feed already named. |
 | `release` | object `{ id, channel, launcherVersion, packs, baseline, commit, branch, uncommitted, tag }` | `Publish-Update.ps1` on every release (the release record block, #444) | No launcher. Ship, which tags `commit` as `tag` once the feed is out (`Add-ReleaseTag`, `Release-Name.ps1`); the store's `releases.txt` | The release's one name is `id`, the id its packs and its `baseline` carry (`20260928-1630`, dev `20260928-2324-dev`). The rest is what else it is known by: the launcher the feed offers with it (the same across Ships that keep their launcher, #921), the packs it added, its baseline id (empty on a `-NoUpload` run), the commit it was built from and how many tracked files differed from it, and the tag `release/main/<id>` or `release/dev/<id>` (empty when it was not built from a git checkout). `Get-ReleaseDisagreements` says whether they agree, with each other and with `releases`, whose newest entry is the same id ending on its last pack. After a main Ship the dev feed carries main's, `channel` main. `Rollback-Feed.ps1` does not rewrite it yet, so after a rollback it still names the last Ship until the next. |
 | `signedManifest` | object `{ url, sha256, catalogUrl, catalogSha256 }` | `Publish-Update.ps1` on every release that sends to the site (the signed manifest block, #2163 phase B); taken out by a `-NoUpload` run | No launcher yet (phase C of `docs\SIGNED-RELEASES.md`) | `release.json`, the sha256 of every asset of the release that carries code or names files (launcher, client runtime, packs, optional packs, the baseline record) with the commit it was built from, and a Windows catalog over it signed by ThornswoodRelease, both at `/feed[-dev]/assets/<sha256>`. Written only after the catalog was signed and passed the publish gate and `Signature.cs`; a signing failure stops the Ship before this file moves. Feed edits after a Ship carry it forward untouched. |
-| `news` | array, newest first, at most 40 | `Publish-Update.ps1:Set-Prop $doc 'news' $news`; `Publish-Server.ps1:$newsList`. On the dev feed each entry's `channel` is `"dev"` while main has not had it, set by `Dev-News.ps1:Update-DevNewsChannels` | The site's News page, which reads it from the main feed (`site/lib/news.js` "news from the Release", #5187). Not the launcher since #5187: its News tab reads the build Releases its channel's Deployment reached (`launcher\app\ReleaseNews.cs`) | Cosmetic. Every launcher up to 1.2.3 reads the notes only here, so they stay here until the channel's minLauncher reads `newsFile` (#1050), and from then it is `[]`. Every script reads and writes the notes through `scripts\release\Feed-News.ps1` (`Get-FeedNewsList`, `Open-FeedNewsList`, `Set-FeedNewsList`), wherever the channel keeps them. |
-| `newsFile` | object `{ url, sha256, count }` or absent | `Set-FeedNewsList` (`Feed-News.ps1`), called by Publish-Update (the news out block), Rollback-Feed, Publish-Server's news entry and a dev marks refresh (`Update-DevFeedMarks`), once the channel's minLauncher is at or above `$FeedNewsFileLauncher` (1.2.4, the first launcher with FeedNews.cs): every note, at most 40, as one asset at `/feed[-dev]/assets/<sha256>`, sent to the site before the feed names it. Absent before that. `Remirror-Site-Feed.ps1` checks it is on the site like any asset | The site's News page. Launchers from #1050 until #5187 read it (`FeedNews.cs`, gone); the launcher now reads the build Releases (`launcher\app\ReleaseNews.cs`) | Cosmetic. A file that cannot be had or read leaves the notes `news` carries and one line in launcher.log; the update check goes on. |
+| `news` | array, newest first, at most 40 | `Publish-Update.ps1:Set-Prop $doc 'news' $news`; `Publish-Server.ps1:$newsList`. On the dev feed each entry's `channel` is `"dev"` while main has not had it, set by `Dev-News.ps1:Update-DevNewsChannels` | Nothing since #5801. The launcher's News tab reads the build Releases its channel's Deployment reached (`launcher\app\ReleaseNews.cs`, #5187), and the site's News page the build Releases at or before main's (`site/lib/news.js` "news from the Release") | Cosmetic. Every launcher up to 1.2.3 reads the notes only here, so they stay here until the channel's minLauncher reads `newsFile` (#1050), and from then it is `[]`. Every script reads and writes the notes through `scripts\release\Feed-News.ps1` (`Get-FeedNewsList`, `Open-FeedNewsList`, `Set-FeedNewsList`), wherever the channel keeps them. |
+| `newsFile` | object `{ url, sha256, count }` or absent | `Set-FeedNewsList` (`Feed-News.ps1`), called by Publish-Update (the news out block), Rollback-Feed, Publish-Server's news entry and a dev marks refresh (`Update-DevFeedMarks`), once the channel's minLauncher is at or above `$FeedNewsFileLauncher` (1.2.4, the first launcher with FeedNews.cs): every note, at most 40, as one asset at `/feed[-dev]/assets/<sha256>`, sent to the site before the feed names it. Absent before that. `Remirror-Site-Feed.ps1` checks it is on the site like any asset | Nothing since #5801. Launchers from #1050 until #5187 read it (`FeedNews.cs`, gone), and the site's News page until #5801; both read the build Releases now (`launcher\app\ReleaseNews.cs`, `site/lib/news.js`) | Cosmetic. A file that cannot be had or read leaves the notes `news` carries and one line in launcher.log; the update check goes on. |
 | `mainVersion` | string | `Dev-News.ps1:Set-DevFeedMarks`: the main feed's `launcherVersion`, read off the site, with the DEV marks, on every dev ship (one with nothing new included), after every main ship (`Refresh-DevNews.ps1`), and by `Refresh-DevNews.ps1` run by hand; `""` on a main ship (`Publish-Update.ps1:Set-Prop $doc 'mainVersion' ''`) | Nothing since #5385: the dev News tab asks main's newest Release (`MainVersion.cs:MainLauncherVersion`) | Cosmetic. |
 | `serverPassword` | string | Nobody. Every ship deletes it (`Publish-Update.ps1:$doc.PSObject.Properties.Remove('serverPassword')`) | No longer declared in `Config.cs:VersionDoc`; read by nothing since 1.0.197 | Must never come back: the feed is public. |
 
@@ -623,9 +645,8 @@ for byte, as before.
 
 Projected from the 19 Oct main feed with the note's title, version.json is
 about 650 bytes. `launcher\tests\test-1050-feed-split.js` holds the site to this, and
-`launcher\tests\test-1050-feed-split.ps1` the launcher, `Join-FeedSettings`, and (with
-`-OldSrc`) every older launcher reading the split version.json as a feed that
-is behind and offers only the launcher update.
+`launcher\tests\test-1050-feed-split.ps1` held the launcher's reader to it
+until the launcher stopped reading the feed (#5608).
 
 It reaches launchers with the site deployed and the first launcher at 1.2.6
 or above on a channel: Publish-Update writes minLauncher as the launcher it
@@ -761,24 +782,25 @@ Now it is one command, and it goes the same way as every other update:
   with its sha256 on the feed. A launcher that took every release applies it
   and lands on the older files; one several releases behind applies those and
   then this, and lands on the same files; a fresh install seeded with every
-  pack id applies only this. `tests\test-feed-rollback.ps1` proves all three
-  with the launcher's own `Updater` compiled, back, further back and forward.
+  pack id applies only this. `tests\test-feed-rollback.ps1` proved all three
+  with the launcher's own `Updater` compiled until #5608 took the feed out of
+  the launcher.
 - **Launchers that sync to the record** (#1050) follow the new record rather
   than the pack: it names what the release asked for installed, lists what the
   later releases added under `:gone:`, and says `:record:files` once every file
   it names is in the channel's folder on the site (the rollback sends any that
   are not, from what it staged or from the folder of either record). When one
   cannot be had it goes out without `:record:files` and those launchers take
-  the pack like the rest. `tests\test-record-sync.ps1` proves both kinds land
-  on the same files, back and forward.
+  the pack like the rest. `tests\test-record-sync.ps1` proved both kinds land
+  on the same files until #5608.
 - **Once the packs are gone** (the feed's `minLauncher` syncs to the record,
   "When the packs can go"), a rollback is the record alone: no pack goes on
   the feed, the plugin list is the `:golden:` entries of the record it goes
   back to, and the list in the store names no `lastPack`. A record whose files
   cannot all be had is refused with nothing sent, because no launcher would
   have anything to take. The zip is still built from what was staged, for
-  Check-Secrets, and not sent. `tests\test-record-sync.ps1` goes back and
-  forward that way too.
+  Check-Secrets, and not sent. `tests\test-record-sync.ps1` went back and
+  forward that way too until #5608.
 - **Where the list is.** `releases.json` in the channel's store beside the
   feed since #1050 (it was `releases` in version.json), received and sent
   with the feed in one step.
@@ -806,7 +828,8 @@ Now it is one command, and it goes the same way as every other update:
   Ship after #442 on each channel and holds the newest thirty. A release that
   named no record (every one before #441, and a `-NoUpload` run) is not one.
 - **Safety.** `-DryRun` builds the pack and sends nothing. The pack is checked
-  by `Check-Secrets.ps1` like a Ship's, the note by `Note-Rules.ps1`, and the
+  by `Check-Secrets.ps1` like a Ship's, the note by the release note rules
+  (`tools/ReleaseNotes/NoteRules.cs`), and the
   pack and its record are on the site before `version.json` names them. The
   feed and the baseline go back through `Feed-Store.ps1` in one send, which
   replaces nothing if another Ship or feed edit went out meanwhile.

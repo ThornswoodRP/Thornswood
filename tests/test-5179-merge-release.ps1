@@ -168,6 +168,26 @@ try {
     [IO.File]::WriteAllText((Join-Path $rd 'build-1.3.23.json'), (@{ tag = 'build-1.3.21'; commit = $commit; parts = @{} } | ConvertTo-Json))
     $threw = $false; try { Get-MergeReleasePrevious -ReleasesFile $rf -ManifestDir $rd | Out-Null } catch { $threw = $_.Exception.Message -match 'says it is build-1\.3\.21' }
     Yes '  a manifest that names another tag is refused' $threw
+    # GitHub's own order on 9 Nov 2026: drafts first, then build-1.3.9 ahead
+    # of build-1.3.13 to build-1.3.10. Taking the first made 1.3.10 to 1.3.13
+    # all start from 1.3.9 and say its next note again.
+    $gh = @(
+        @{ id = 20; tag_name = 'build-1.3.14'; draft = $true; assets = @(@{ id = 30; name = 'manifest.json' }) },
+        @{ id = 21; tag_name = 'main-build-1.3.7'; draft = $false; assets = @(@{ id = 31; name = 'releases.main.json' }) },
+        @{ id = 22; tag_name = 'build-1.3.9'; draft = $false; assets = @(@{ id = 32; name = 'manifest.json' }) },
+        @{ id = 23; tag_name = 'build-1.3.8'; draft = $false; assets = @(@{ id = 33; name = 'manifest.json' }) },
+        @{ id = 24; tag_name = 'build-1.3.13'; draft = $false; assets = @(@{ id = 34; name = 'manifest.json' }) },
+        @{ id = 25; tag_name = 'build-1.3.12'; draft = $false; assets = @(@{ id = 35; name = 'manifest.json' }) },
+        @{ id = 26; tag_name = 'build-1.3.10'; draft = $false; assets = @(@{ id = 36; name = 'manifest.json' }) },
+        @{ id = 27; tag_name = 'build-20261108.5'; draft = $false; assets = @(@{ id = 37; name = 'manifest.json' }) }
+    )
+    [IO.File]::WriteAllText($rf, ($gh | ConvertTo-Json -Depth 5))
+    foreach ($t in 'build-1.3.9', 'build-1.3.13') { [IO.File]::WriteAllText((Join-Path $rd ($t + '.json')), (@{ tag = $t; commit = $commit; parts = @{} } | ConvertTo-Json)) }
+    $p = Get-MergeReleasePrevious -ReleasesFile $rf -ManifestDir $rd
+    Yes '  by the number in its tag, not GitHub''s list order: 1.3.13, never 1.3.9 listed first' ($null -ne $p -and $p.Tag -eq 'build-1.3.13' -and $p.Id -eq 24)
+    $wfText = Get-Content -Raw -LiteralPath (Join-Path $Repo '.github/workflows/merge-release.yml')
+    Yes '  and the workflow reads every page of Releases, never one page alone' (
+        $wfText -notmatch 'releases\?per_page' -and ([regex]::Matches($wfText, 'Get-MergeReleaseList')).Count -ge 2)
     [IO.File]::WriteAllText($rf, '[]')
     Yes '  and with no build Release yet there is none' ($null -eq (Get-MergeReleasePrevious -ReleasesFile $rf -ManifestDir $rd))
 
@@ -233,7 +253,7 @@ try {
     $none = @((Rel 2 'build-1.3.27' $false @(Asset 102 'manifest.json' '')), (Rel 6 'build-1.3.0' $false @(Asset 106 'notes.txt' '')))
     Yes 'with no package made up to it, there is nothing for main''s launcher' ($null -eq (Find-MainPackage -Tag 'build-1.3.27' -Manifest $promoted -ReleasesFile (Write-Rels $none) -ManifestDir $md))
     $why = ''; try { Find-MainPackage -Tag 'build-1.3.29' -Manifest $promoted -ReleasesFile (Write-Rels $base5181) -ManifestDir $md | Out-Null } catch { $why = $_.Exception.Message }
-    Yes ('a tag that is not among the Releases read stops it: ' + $why) ($why -match 'not among the hundred newest')
+    Yes ('a tag that is not among the Releases read stops it: ' + $why) ($why -match 'not among the published Releases')
     # 3 Nov 2026: build .2's package was main's only one and had no main tag
     # (made before #5489), so it could never go out. A merge then makes the
     # package again (Test-MainPackageReachable, the launcher step).
@@ -446,22 +466,29 @@ try {
     Yes ('  and for the scripts it runs that decide what is built' + $(if ($self) { ': not ' + ($self -join ', ') } else { '' })) (-not $self)
     Yes '  and for a new step after a deploy, carried as the part after with the gate''s verbs (#5186)' ($wf -match "(?m)^\s+- 'deploy/after/\*\.json'\s*$" -and
         $wf.Contains("Get-ChildItem -LiteralPath 'deploy\after' -Filter '*.json'") -and $wf.Contains("'after=' + (Resolve-Path 'scripts\vps\gate\verbs.json').Path"))
-    Yes '  in the release environment, on main only, one run at a time, a newer merge cancelling the run before (#5398)' ($wf -match '(?m)^\s+environment: release\s*$' -and $wf.Contains("if: `${{ github.ref == 'refs/heads/main' }}") -and $wf -match '(?m)^\s+group: merge-release\s*$' -and $wf -match '(?m)^\s+cancel-in-progress: true\s*$')
+    # A run in progress is never cancelled (#6008): with merges landing every
+    # 5 minutes and a release taking 10, cancelling meant no release at all
+    # (22 runs cancelled in a row on 12 Nov). GitHub keeps the newest waiting.
+    # On the release job (#5191), after the content job finds the box's build.
+    Yes '  in the release environment, on main only, after the box''s content build is found, one run at a time, a newer merge waiting for the run in progress (#6008)' ($wf -match '(?m)^\s+environment: release\s*$' -and $wf.Contains("if: `${{ github.ref == 'refs/heads/main' && ") -and $wf -match '(?m)^\s+needs: content\s*$' -and $wf -match '(?m)^\s+group: merge-release\s*$' -and $wf -match '(?m)^\s+cancel-in-progress: false\s*$' -and $wf -notmatch '(?m)^\s+cancel-in-progress: true\s*$')
     # GitHub refuses the run's token a tag on a commit whose workflow files
     # differ from main's (probe runs 41375894899 and 41376016183, #5398), so
-    # only main's newest merge is published; the newer run carries the rest.
-    $newestAt = $wf.IndexOf('- name: Is this still main''s newest merge'); $publishAt = $wf.IndexOf('- name: Publish the Release')
+    # a merge main has moved past is published only when its workflow files
+    # are still main's; otherwise the run of main's newest merge carries it.
+    $newestAt = $wf.IndexOf('- name: Is this a merge that can still be tagged'); $publishAt = $wf.IndexOf('- name: Publish the Release')
     # Five steps wait on it: the Release, main's held package and its tag
     # (kept and made only for a Release that is out), and the two
     # Deployments.
-    Yes 'a merge main has moved past publishes nothing and keeps no main package' ($newestAt -gt 0 -and $publishAt -gt $newestAt -and
+    $newestStep = if ($newestAt -gt 0 -and $publishAt -gt $newestAt) { $wf.Substring($newestAt, $publishAt - $newestAt) } else { '' }
+    Yes 'main''s newest merge is published' ($newestAt -gt 0 -and $publishAt -gt $newestAt -and
         $wf.Contains('gh api "repos/$($env:GITHUB_REPOSITORY)/commits/main" --jq .sha') -and $wf.Contains("if ([string]`$head -eq `$env:GITHUB_SHA) { Add-Content -LiteralPath `$env:GITHUB_OUTPUT -Value 'release=yes'; exit 0 }") -and
         ([regex]::Matches($wf, [regex]::Escape("if: `${{ steps.newest.outputs.release == 'yes'"))).Count -eq 5)
+    Yes '  and so is a merge main moved past, only when no workflow file differs between it and main, and fewer than 300 files do' ($newestStep.Contains('compare/$($env:GITHUB_SHA)...$head') -and
+        $newestStep.Contains("Where-Object { `$_ -like '.github/workflows/*' }") -and $newestStep.Contains('if ($files.Count -lt 300 -and -not $flows.Count) {'))
     # A merge outside the paths above starts no run, so it cancels nothing and
     # releases nothing: the site fix #5451 was built and dropped that way on
     # 2 Nov. The run main moved past starts one of main's newest merge, and
     # fails when it cannot, rather than leave the change unreleased.
-    $newestStep = if ($newestAt -gt 0) { $wf.Substring($newestAt, $publishAt - $newestAt) } else { '' }
     Yes '  and starts a run of main''s newest merge, which releases its changes, or fails' ($newestStep.Contains('gh workflow run merge-release.yml --repo $env:GITHUB_REPOSITORY --ref main') -and
         $newestStep -match 'if \(\$LASTEXITCODE -ne 0\) \{ Write-Host "::error::[^"]*"; exit 1 \}' -and
         $wf -match '(?m)^\s+actions: write\s*$' -and $wf -match '(?m)^  workflow_dispatch:\s*$')

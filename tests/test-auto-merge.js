@@ -21,7 +21,9 @@
 //      robot's App token from the engine-pin environment, never the run's
 //      own (a queue entry the run's token makes starts no checks).
 //   5. the two skips (Patrick's yes on Bramble's card, 2 Nov 2026): one that
-//      changes what runs on the live box stays off unless it is Patrick's,
+//      changes what runs on the live box, or what a verb reads from main
+//      such as the keys in scripts/vps/box-keys (#5726), stays off unless it
+//      is Patrick's,
 //      and a Bot's stays off until Bramble approved its head.
 //   6. outside work (Patrick, 8 Nov 2026): one labelled 'outside work' stays
 //      off whoever opened it, and the sweep asks GitHub for the labels.
@@ -79,9 +81,27 @@ const worker = { author: { login: 'thornswood-workers' }, headRefName: 'claude/y
 for (const f of ['.github/workflows/build-pr.yml', 'scripts/vps/gate/GateRules.ps1', 'scripts/vps/gate/verbs.json', 'scripts/release/nexus-verbs.json', 'scripts/ops/Reset-Npcs.ps1']) {
   yes('5 one that changes ' + f + ', not Patrick\'s, stays off', !on5(pr(30, Object.assign({}, worker, { paths: ['README.md', f] }))));
 }
+// #5726: Grant-BoxKey puts on the box the key main carries in
+// scripts/vps/box-keys/, so a change there is held like the script.
+yes('5 the verb lists\' reads are read too: Grant-BoxKey reads scripts/vps/box-keys/', scripts.indexOf('scripts/vps/box-keys/') >= 0);
+for (const f of ['scripts/vps/box-keys/oracle-hermes.json', 'scripts/vps/box-keys/somebody-new.json', 'scripts/vps/box-keys/README.md']) {
+  yes('5 one that changes only ' + f + ', not Patrick\'s, stays off', !on5(pr(35, Object.assign({}, worker, { paths: [f] }))));
+}
+yes('  a robot\'s that adds a key stays off too', !on5(pr(36, { author: { login: 'thornswood-pin-robot' }, headRefName: 'engine-pin/next', paths: ['scripts/vps/box-keys/x.json'] })));
+yes('  Patrick\'s that adds a key goes on', on5(pr(37, { headRefName: 'patrick-keys', paths: ['scripts/vps/box-keys/x.json'] })));
+yes('  a folder entry holds only what is under it', A.boxFiles(['scripts/vps/box-keys-notes.md', 'scripts/vps/box-keys/a.json'], ['scripts/vps/box-keys/']).join(' ') === 'scripts/vps/box-keys/a.json');
 yes('  and says it changes what runs on the live box, naming the file', /changes what runs on the live box \(\.github\/workflows\/build-pr\.yml\)/.test(judge5(pr(30, Object.assign({}, worker, { paths: ['.github/workflows/build-pr.yml'] })))[1]));
 yes('  Dependabot\'s workflow bump stays off too', !on5(pr(31, { author: { login: 'dependabot' }, headRefName: 'dependabot/github_actions/x', paths: ['.github/workflows/build.yml'] })));
-yes('5 Patrick\'s that changes them goes on', on5(pr(32, { paths: ['.github/workflows/build-pr.yml', 'scripts/vps/gate/GateRules.ps1', 'scripts/ops/Reset-Npcs.ps1'] })));
+yes('5 Patrick\'s that changes them goes on', on5(pr(32, { headRefName: 'patrick-gate', paths: ['.github/workflows/build-pr.yml', 'scripts/vps/gate/GateRules.ps1', 'scripts/ops/Reset-Npcs.ps1'] })));
+// Ops #353 (Patrick's A on his page, 15 Nov 2026): a Claude session's
+// branch is opened with Patrick's sign-in, and counts as his only for what
+// does not run on the box.
+const claude = (paths) => pr(38, { headRefName: 'claude/project-thread-abc123', paths });
+yes('5 a Claude session\'s, authored as Patrick, that changes a workflow, the gate or a verb\'s file stays off',
+  !on5(claude(['.github/workflows/build-pr.yml'])) && !on5(claude(['scripts/vps/gate/verbs.json'])) && !on5(claude(['scripts/ops/Reset-Npcs.ps1'])) && !on5(claude(['scripts/vps/box-keys/x.json'])));
+yes('  and says it merges on Patrick\'s Main card, which Bramble opens', /a Claude session's branch that changes what runs on the live box \(\.github\/workflows\/build-pr\.yml\); it merges on Patrick's Main card, which Bramble opens/.test(judge5(claude(['.github/workflows/build-pr.yml']))[1]));
+yes('  a Claude session\'s that changes nothing the box runs goes on', on5(claude(['game/gamemode/a.ts', 'tests/test-auto-merge.js'])));
+yes('  a branch whose name only starts like claude counts as Patrick\'s', on5(pr(39, { headRefName: 'claudette/x', paths: ['.github/workflows/build-pr.yml'] })));
 yes('5 one changing only what the box does not run goes on, whoever\'s it is', on5(pr(33, Object.assign({}, worker, { paths: ['scripts/ops/Auto-Merge.js', 'tests/test-auto-merge.js'] }))));
 const bot = (more) => pr(34, Object.assign({ author: { login: 'thornswood-workers' }, headRefName: 'magpie/5327-dependabot-rebase', headRefOid: 'h34' }, more || {}));
 const review = (login, oid) => ({ nodes: [{ author: { login }, commit: { oid } }] });

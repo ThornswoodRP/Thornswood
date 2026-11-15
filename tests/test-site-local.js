@@ -52,7 +52,6 @@ const REPO_DIR = require('path').join(__dirname, '..'); // the tests are in test
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -143,8 +142,17 @@ yes('site config template uses .example (same suffix as root config.example.json
     read('site/config.example.json') !== null && read('site/config.sample.json') === null);
 
 // ------------------------------------------------------------ the README --
-yes('the README tells a copy to take config.example.json as its config.json',
-    readme.indexOf('Copy `config.example.json` into the copy as `config.json`') >= 0);
+yes('the README tells a run to take config.example.json as its config.json',
+    readme.indexOf('Copy `config.example.json` in as `config.json`') >= 0);
+// It runs from the checkout as well as a copy, and git ignores what it writes
+// there (#4454); test-4454-site-stores-ignored.js holds that.
+yes('the README says git ignores what a run from the checkout writes',
+    readme.indexOf('Run it from this folder in the checkout, or from a') >= 0 &&
+    readme.indexOf('so a run from the') >= 0 && readme.indexOf('which git\ntracks') < 0);
+// The listen address it gives is the one lib/base.js uses (#2185).
+yes('the README says an unset run listens on 127.0.0.1:3001, not every address',
+    readme.indexOf('Left unset it listens on 127.0.0.1:3001') >= 0 &&
+    readme.indexOf('Left unset it listens on every address') < 0);
 const runPort = (/THORNSWOOD_DOCS_PORT = '(\d+)'; \$env:THORNSWOOD_DOCS_LOCAL = '1'; node server\.js/.exec(readme) || [])[1];
 yes('the README has the one line local run, on loopback, port ' + runPort, !!runPort);
 const curl = readme.split('\n').filter(function (l) { return /^curl\.exe /.test(l); })[0] || '';
@@ -192,6 +200,58 @@ rows.forEach(function (r) {
 });
 yes('every route in the table is one server.js answers, with that method' +
     (wrong.length ? ', not: ' + wrong.join(', ') : ''), rows.length > 0 && wrong.length === 0);
+
+// Every table in the README whose first two columns are Route and Method,
+// not only the door's above (#4363). The gallery's doors are a table of
+// their own, and a row there for a route the site did not have, and one
+// that said a route wrongly, went unnoticed because nothing read it.
+const tables = [];
+lines.forEach(function (l, i) {
+  const head = l.split('|').slice(1, -1).map(function (s) { return s.trim(); });
+  if (l.indexOf('|') !== 0 || head[0] !== 'Route' || head[1] !== 'Method' || !/^\|\s*-/.test(lines[i + 1] || '')) { return; }
+  const got = [];
+  for (let j = i + 2; j < lines.length && lines[j].indexOf('|') === 0; j++) {
+    const cells = lines[j].split('|').slice(1, -1).map(function (s) { return s.trim(); });
+    got.push({ routes: ((cells[0] || '').match(/`\/[^`]*`/g) || []).map(function (s) { return s.slice(1, -1); }),
+               method: cells[1] || '', line: j + 1 });
+  }
+  tables.push({ line: i + 1, rows: got });
+});
+const allRows = [].concat.apply([], tables.map(function (t) { return t.rows; }));
+yes('the README has ' + tables.length + ' route tables (' +
+    tables.map(function (t) { return 'line ' + t.line + ', ' + t.rows.length + ' rows'; }).join('; ') + '), the door\'s and the gallery\'s',
+    tables.length >= 2 && tables.every(function (t) { return t.rows.length > 0; }));
+const shapeless = allRows.filter(function (r) { return !r.routes.length || !/^(GET|POST|PUT|DELETE)$/.test(r.method); });
+yes('every row in every route table names a route and one method' +
+    (shapeless.length ? ', not: line ' + shapeless.map(function (r) { return r.line; }).join(', ') : ''),
+    allRows.length > 0 && shapeless.length === 0);
+const unanswered = [];
+allRows.forEach(function (r) {
+  r.routes.forEach(function (route) { if (!answers(route, r.method)) { unanswered.push('line ' + r.line + ' ' + r.method + ' ' + route); } });
+});
+yes('every route in every route table is one the site answers, with that method' +
+    (unanswered.length ? ', not: ' + unanswered.join(', ') : ''), allRows.length > 0 && unanswered.length === 0);
+
+// Who asks /api/play/owns, held to the code that asks it (#4363): a route
+// that still answers passes the check above with its caller said wrongly.
+// voice-server.js asks it in owns(), and calls owns() only from its POST
+// /token handler, so before every voice token it hands out.
+const voice = read('voice/voice-server.js') || '';
+const vLines = voice.split('\n');
+const tokenAt = vLines.findIndex(function (l) { return /route === '\/token'/.test(l); });
+let tokenEnd = vLines.length;
+for (let i = tokenAt + 1; tokenAt >= 0 && i < vLines.length; i++) {
+  if (/route === '\//.test(vLines[i])) { tokenEnd = i; break; }
+}
+const ownsCalls = [];
+vLines.forEach(function (l, i) { if (/(^|[^\w.])owns\(/.test(l) && !/function owns\(/.test(l)) { ownsCalls.push(i); } });
+yes('voice-server.js asks /api/play/owns from its /token handler and nowhere else (called at line ' +
+    ownsCalls.map(function (i) { return i + 1; }).join(', ') + ', /token from line ' + (tokenAt + 1) + ' to ' + tokenEnd + ')',
+    voice.indexOf("'/api/play/owns'") >= 0 && tokenAt >= 0 && ownsCalls.length > 0 &&
+    ownsCalls.every(function (i) { return i > tokenAt && i < tokenEnd; }));
+const ownsRow = rows.filter(function (r) { return r.routes.indexOf('/api/play/owns') >= 0; })[0];
+yes('and the table says the voice service asks it on every /token, not for a character creation choice',
+    !!ownsRow && /`\/token`/.test(ownsRow.text) && !/creation/i.test(ownsRow.text));
 
 // Who asks. A /dev route is the same path asked under /dev, so the caller names
 // the path without it.
@@ -262,7 +322,7 @@ yes('the grace the README gives, ' + grace + ' hours, is GraceHours in Door.cs',
 // secret, so it has to say what the script does. The script reads the file,
 // sets the password and writes the rest back, and leaves a file that will not
 // parse alone. If that changes, this fails and the -Password sentence in the
-// README is what to change. tests\test-docs-password.ps1 runs the script itself.
+// README is what to change. scripts\tests\test-docs-password.ps1 runs the script itself.
 // The read, the set and the write are SiteConfigSet.ps1, which Deploy-Docs
 // shares with Rotate-ServerPassword (#2317).
 const configSet = read('scripts/deploy/SiteConfigSet.ps1') || '';
@@ -275,8 +335,8 @@ yes('Deploy-Docs.ps1 -Password sets the password in the config.json it read, and
     /will not read as JSON, an empty one included, is\s+left exactly as it is and the password is not changed/.test(readme) &&
     readme.indexOf('holding the password and nothing else') < 0);
 yes('the README names the harness that runs -Password, and it is there',
-    readme.indexOf('tests' + BS + 'test-docs-password.ps1') >= 0 &&
-    read('tests/test-docs-password.ps1') !== null);
+    readme.indexOf('scripts' + BS + 'tests' + BS + 'test-docs-password.ps1') >= 0 &&
+    read('scripts/tests/test-docs-password.ps1') !== null);
 yes('the README says the site is one node process', /one\s+node process/.test(readme));
 
 // ------------------------------------------------------------- the copies --
@@ -285,16 +345,6 @@ async function until(cond, ms) {
   const end = Date.now() + ms;
   while (Date.now() < end) { if (cond()) { return true; } await wait(20); }
   return cond();
-}
-function freePort() {
-  return new Promise(function (ok, no) {
-    const s = net.createServer();
-    s.on('error', no);
-    s.listen(0, '127.0.0.1', function () {
-      const p = s.address().port;
-      s.close(function () { ok(p); });
-    });
-  });
 }
 const made = [];
 function copy(tag, withConfig, patch) {
@@ -316,22 +366,22 @@ function copy(tag, withConfig, patch) {
   return dir;
 }
 async function start(dir) {
-  const port = await freePort();
   const child = spawn(process.execPath, ['server.js'], {
     cwd: dir,
     env: Object.assign({}, process.env, {
-      THORNSWOOD_DOCS_PORT: String(port),
+      THORNSWOOD_DOCS_PORT: '0',
       THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1',
       THORNSWOOD_DOCS_LOCAL: '1',
       THORNSWOOD_CHAT_DIR: path.join(dir, 'chat')
     })
   });
-  const run = { child: child, port: port, out: '', exited: false };
+  const run = { child: child, port: 0, out: '', exited: false };
   child.stdout.on('data', function (d) { run.out += d; });
   child.stderr.on('data', function (d) { run.out += d; });
   child.on('exit', function () { run.exited = true; });
-  run.up = await until(function () { return run.out.indexOf('listening on ') >= 0 || run.exited; }, 10000) &&
+  run.up = await until(function () { return siteFiles.saidPort(run.out) > 0 || run.exited; }, 10000) &&
            !run.exited;
+  run.port = siteFiles.saidPort(run.out);
   return run;
 }
 function stop(run) {
