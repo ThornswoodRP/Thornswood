@@ -139,24 +139,24 @@ names the ones in the first table, and the others come with them.
 |---|---|---|---|---|
 | Microsoft.NETCore.App.Runtime.NativeAOT.win-x64 | 10.0.14 | The .NET class libraries, compiled into the exe | MIT, the package's `LICENSE.TXT` | `76c0f133981113273a0e50dba97a6107eead821f707565443e787f0aa9f9fc69` |
 | runtime.win-x64.Microsoft.DotNet.ILCompiler | 10.0.14 | The Native AOT compiler and the runtime it links into the exe (the garbage collector, threads, exceptions) | MIT | `e4279d8ed9bcc01b1d8a3a9b2c7db16f3249e098dc3081e15c6d93ef462e1bce` |
-| System.Security.Cryptography.ProtectedData | 10.0.14 | DPAPI, for the keys the launcher keeps on the PC (Secrets.cs); part of the framework on .NET Framework | MIT | `6ada18646ef345d3e43e25ea52973d5cba98cf9103df14df0a18feb685fa7f35` |
-| Avalonia | 12.1.4 | The window, its controls and the compiled markup | MIT | `90cf963a0e5fed7fc0e5cd9cefe3c159b78de086272c3ddde94c75cb83f9c4ac` |
-| Avalonia.Desktop | 12.1.4 | Picks the Windows platform at start | MIT | `5da57df4f56d32f3894475da869d3555a968085f5d93b73b3f5ae89f70a5cd58` |
-| Avalonia.Themes.Fluent | 12.1.4 | The controls' base look (App.axaml) | MIT | `0b2c317ee4dbc9b12c9cb564d4f99b10872b655a450c91a66ac063d9056a3c38` |
+| System.Security.Cryptography.ProtectedData | 11.0.0 | DPAPI, for the keys the launcher keeps on the PC (Secrets.cs); part of the framework on .NET Framework | MIT | `2645d1106c62c9fb0147e8b9ec7472689aa7a804c5e6560d957dacf31f5bb37e` |
+| Avalonia | 12.1.6 | The window, its controls and the compiled markup | MIT | `3fc15f809786ee99791620c5d3c25452487cb70d5cd99393f853e4d241361255` |
+| Avalonia.Desktop | 12.1.6 | Picks the Windows platform at start | MIT | `01547a36484ebcd67cc68b9f83d23e1cf1e5dd0246132f6169ccc6cdfb45e7b7` |
+| Avalonia.Themes.Fluent | 12.1.6 | The controls' base look (App.axaml) | MIT | `af6c7a862a16ee35aac0922deaa939f65436fc2433dacfe460e975ebc646047c` |
 | Velopack | 1.2.161 | The install's hand over at the first start, the update check, download and apply (Velo*.cs) | MIT | `d57275692b299751a12ee3e18283b5f7fe3e55339f96b1623345da095dc484ed` |
 
 Brought in by those:
 
 | Package | Version | What it is | Licence | sha256 of the .nupkg |
 |---|---|---|---|---|
-| Avalonia.Win32 | 12.1.4 | Avalonia on Windows | MIT | `743abeae210f287b846a42d292b2d8cc85b345bef8df13a01e481d252090b81b` |
-| Avalonia.Skia | 12.1.4 | Avalonia's drawing, on Skia | MIT | `f42e12d06df92ae116e5baaac5e0319cec090d990a303edc1afd0e7c202a6e69` |
-| Avalonia.HarfBuzz | 12.1.4 | Avalonia's text shaping, on HarfBuzz | MIT | `f52e5c1b6a00886ef46816ed2fc9a2c28844289b1af30bd7ea247e220d20c0cb` |
-| Avalonia.Remote.Protocol | 12.1.4 | Avalonia's designer protocol, which Avalonia names; the launcher never opens it | MIT | `e115f5143ef0fc745cf171bb926ad1083ed4c833ca977a0eb11bdb0c41605f5c` |
-| Avalonia.FreeDesktop | 12.1.4 | Avalonia on Linux desktops, which Avalonia.Desktop names; the launcher runs on Windows only | MIT | `e689791338533943a246d3522055edb44229aa19eb7a8233801f0d89fb63da72` |
-| Avalonia.FreeDesktop.AtSpi | 12.1.4 | Accessibility on Linux, the same | MIT | `d8d29680c17ae46e887775e6840f96c37e68016f9edacbbb7b62d453e5685649` |
-| Avalonia.X11 | 12.1.4 | Avalonia on X11, the same | MIT | `c10179d2da3d0d7dfa75ba698a80674a3bed9b51a4d3a44ec829832c68e6d696` |
-| Avalonia.Native | 12.1.4 | Avalonia on macOS, the same | MIT | `418dbf45252748c5295a948436d646ed90d54a5872e8352467d181587bc1b51d` |
+| Avalonia.Win32 | 12.1.6 | Avalonia on Windows | MIT | `f7884291156695d01e3fdedf6ed385bbc02aa52c83d71b0c68905df18165cdae` |
+| Avalonia.Skia | 12.1.6 | Avalonia's drawing, on Skia | MIT | `5d767f1c7bc1603ec03fde2620fc1ac478f7fd5dc3e599cdcd1be2f6f7f5c68c` |
+| Avalonia.HarfBuzz | 12.1.6 | Avalonia's text shaping, on HarfBuzz | MIT | `0a14d3ad829dd9a705c3cf906101cbaa4d94a9fc26711959f7b0bf538a7556d2` |
+| Avalonia.Remote.Protocol | 12.1.6 | Avalonia's designer protocol, which Avalonia names; the launcher never opens it | MIT | `366925200bbc15d42fd151cb8b5a8f6869f143260c8cb02514225dd92ada86fb` |
+| Avalonia.FreeDesktop | 12.1.6 | Avalonia on Linux desktops, which Avalonia.Desktop names; the launcher runs on Windows only | MIT | `f254c3076e5176da0e4708dd114331e0558bee729f347fbae4b261db040432d6` |
+| Avalonia.FreeDesktop.AtSpi | 12.1.6 | Accessibility on Linux, the same | MIT | `660c5603f16f5037aceddfba3eb07c9cf70d8cad49323f6d8cc319052b739eec` |
+| Avalonia.X11 | 12.1.6 | Avalonia on X11, the same | MIT | `7c72bcea42345d7b7122e35a6cd41b89ab68d1c0eb0f7e46fb3719c8545f5c93` |
+| Avalonia.Native | 12.1.6 | Avalonia on macOS, the same | MIT | `080a0cb7555967509c51a946728a48b42334ab75af05898bea93dab3f0dca5fc` |
 | Avalonia.Angle.Windows.Natives | 2.1.27548.20260419 | ANGLE, OpenGL ES on Direct3D, which Avalonia draws through on Windows (`av_libglesv2.dll`) | ANGLE's three-clause BSD licence, the package's `LICENSE` file | `76d67901097e9173d155efc4c2b7d2c8e3122f2c2e0415028eb0c88478a386f9` |
 | SkiaSharp | 3.119.4 | Skia for .NET: Avalonia's drawing, the header strip's WebP frames (Art.cs) and the gallery's smaller copies (Gallery.cs) | MIT | `e32a449d31945c0b9d169eb5bc676e1e3f589aab69888e49d703fdc1c384c176` |
 | SkiaSharp.NativeAssets.Win32 | 3.119.4 | Skia itself, built for Windows (`libSkiaSharp.dll`) | MIT, with Skia's three-clause BSD licence and the others in its `THIRD-PARTY-NOTICES.txt` | `5a5698b1b4e1fdc9ffe9868df6874db5fa69f21a4de76ba71a01a542e9b43391` |
@@ -203,12 +203,14 @@ whose text the file carries.
 Downloaded from nuget.org and read on 1 November 2026. Their sources, as each
 nuspec names them:
 
-- .NET (the runtime packages and ProtectedData), by Microsoft and the .NET
-  Foundation: https://github.com/dotnet/dotnet at commit `0427b9ab` (in
-  full, `0427b9abbead3fa64c6655eb4290c537397131fa`).
-- Avalonia (every Avalonia package at 12.1.4), by the AvaloniaUI project:
-  https://github.com/AvaloniaUI/Avalonia at commit `2d79ba55` (in full,
-  `2d79ba55fae1b1e71c69f93a668080c9029e6a31`). Its ANGLE build:
+- .NET (the runtime packages), by Microsoft and the .NET Foundation:
+  https://github.com/dotnet/dotnet at commit `0427b9ab` (in full,
+  `0427b9abbead3fa64c6655eb4290c537397131fa`). ProtectedData 11.0.0 is from
+  the same repository at commit `297acf93` (in full,
+  `297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f`).
+- Avalonia (every Avalonia package at 12.1.6), by the AvaloniaUI project:
+  https://github.com/AvaloniaUI/Avalonia at commit `cf8e5646` (in full,
+  `cf8e564674700348947e93ab19105f27afe859a9`). Its ANGLE build:
   https://github.com/AvaloniaUI/angle at commit `1c898059` (in full,
   `1c89805903c1482166356d3b950d474973180e61`).
 - SkiaSharp 3.119.4, by Microsoft: https://github.com/mono/SkiaSharp at
@@ -306,22 +308,22 @@ credits page, and the installer puts each beside `SOURCE CODE.txt`.
 NLayer, the MP3 decoder the launcher plays its menu theme with (MenuMusic.cs,
 since #3207, so the theme plays from the launcher's own process and the
 Windows Volume Mixer lists it as the launcher). Since the launcher moved to
-.NET 10 (#4823) it is the NuGet package `NLayer` 3.0.0, which
+.NET 10 (#4823) it is the NuGet package `NLayer` 3.0.1, which
 `launcher\app\Thornswood.csproj` references and the native build compiles
 into `Thornswood.exe` with the launcher's own code. No copy of it is kept in
 the repository and no file of it goes beside the exe.
 
 | File | Where it sits in the package | sha256 |
 |---|---|---|
-| `NLayer.dll` | `lib\net8.0` | `2cb48f87143445245a8161e9a823a83aa5b369dccae977a2311d0b42685caffa` |
+| `NLayer.dll` | `lib\net8.0` | `44a481f08d0437b135c78e102fdaac25abe122203af87ac63528fca859f7a498` |
 
-Version 3.0.0 (file version 3.0.0.0), as nuget.org serves it (the .nupkg's
+Version 3.0.1 (file version 3.0.1.0), as nuget.org serves it (the .nupkg's
 sha256 is
-`625b215f76453180d499c203f711aceedcce6e855c86a65716c0b1275afcb9c6`, the same
-package whose `netstandard2.0` file the launcher embedded from 26 October
-2026). Its source is
-https://github.com/naudio/NLayer at commit `046c7ce4` (in full,
-`046c7ce422970f8f0f0bc205d6c6341bcb7debf1`), the commit the package's nuspec
+`72086b1a15203d291b895fcef80ed40b669cdd34f978d5082874b466be074545`). From
+26 October 2026 the launcher embedded the `netstandard2.0` file of 3.0.0, the
+version before it. Its source is
+https://github.com/naudio/NLayer at commit `cdd16ea2` (in full,
+`cdd16ea2a389b30f99d5797ad7b09224ab29e01a`), the commit the package's nuspec
 and the file's own product version name. By Mark Heath, Andrew Ward and
 contributors.
 
@@ -1773,7 +1775,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 ## NLayer licence
 
-The text of `LICENSE` in https://github.com/naudio/NLayer at commit `046c7ce4`.
+The text of `LICENSE` in https://github.com/naudio/NLayer at commit `cdd16ea2`.
 
 ```
 MIT License
@@ -1950,7 +1952,7 @@ SOFTWARE.
 
 ## Avalonia licence
 
-The text of `licence.md` in https://github.com/AvaloniaUI/Avalonia at commit `2d79ba55`, the commit every Avalonia 12.1.4 package names.
+The text of `licence.md` in https://github.com/AvaloniaUI/Avalonia at commit `cf8e5646`, the commit every Avalonia 12.1.6 package names.
 
 ```
 The MIT License (MIT)
