@@ -103,12 +103,12 @@ yes('R2 -Remove with two entries stops, as before', r.code === 1 && /The revisio
 yes('R2 and names both entries and says to take it out in Vortex on One', /Twin One/.test(r.said) && /Twin Two/.test(r.said) && /Take it out in Vortex on One/.test(r.said), r.said);
 
 r = run('m1', [swap(30)]);
-yes('M1 a rule naming the mod by its Nexus file name, with none given, stops, as before', r.code === 1 && /Mod rule 0 names Charlie by its file name on Nexus/.test(r.said), r.said);
+yes('M1 a rule naming the mod by its Nexus file name, with none given, stops, as before', r.code === 1 && /Mod rule 0 \([^)]*\) names Charlie by its file name on Nexus/.test(r.said), r.said);
 yes('M1 and says which rule by what it names (Alpha File after Charlie File)', /Alpha File after Charlie File/.test(r.said), r.said);
 yes('M1 and says New-NexusRevision.ps1 reads that name from Nexus, from where staff run it', /\.\\scripts\\release\\New-NexusRevision\.ps1/.test(r.said), r.said);
 
 r = run('m2', [swap(40, { fileExpression: 'Delta File-40-2-0' })]);
-yes('M2 a rule matching another version stops, as before', r.code === 1 && /Mod rule 1 matches Delta by the version "2\.0\.0"/.test(r.said), r.said);
+yes('M2 a rule matching another version stops, as before', r.code === 1 && /Mod rule 1 \([^)]*\) matches Delta by the version "2\.0\.0"/.test(r.said), r.said);
 yes('M2 and says which rule by what it names (Delta File before Alpha File)', /Delta File before Alpha File/.test(r.said), r.said);
 yes('M2 and says that revision is made in Vortex on One', /in Vortex on One/.test(r.said), r.said);
 

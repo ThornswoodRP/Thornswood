@@ -391,7 +391,7 @@ foreach ($e in $col.Entries) {
   $got = Step { Receive-NexusPresigned $url $dir $what ([string]$e.FileId + '.archive') }
   if ($got.Size -ne $e.Size -or $got.Md5Hex -ne $e.Md5) {
     [IO.File]::Delete($got.Path)
-    Die ('The download of ' + $e.Say() + ' is not the archive the revision lists: it is ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex + ', and the revision says ' + $e.Size + ' bytes, md5 ' + $e.Md5 + '. It was deleted from the cache; ' + $fetched + ' archives were downloaded before it and stay there.')
+    Die ('The download of ' + $e.Say() + ' is not the archive the revision lists: it is ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex + ', and the revision says ' + $e.Size + ' bytes, md5 ' + $e.Md5 + '. It was deleted from the cache; ' + $fetched + ' archives were downloaded before it and stay there. Run it again to tell which: if the second download is the same ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex + ', Nexus now serves other bytes as file ' + $e.FileId + ' and the revision is made again in Vortex on One; if it is the revision''s, the first broke on the way and the run carries on.')
   }
   # Measured on 20 Oct: the CDN sends no Content-Disposition for some files
   # (Crafting Categories for SkyUI, file 493920). Then the archive is named
@@ -535,7 +535,7 @@ Head 'Deploying, as Vortex would'
 $edges = [Thornswood.Layout.NexusLayout]::Edges($col)
 $cycle = $null
 $before = [Thornswood.Layout.NexusLayout]::Before($edges, [ref]$cycle)
-if ($null -ne $cycle) { Die ('The collection''s mod rules go round in a circle (entries ' + $cycle + '), which Vortex refuses to deploy.') }
+if ($null -ne $cycle) { Die ('The collection''s mod rules go round in a circle (entries ' + $cycle + '), which Vortex refuses to deploy. Take one of those rules out in Vortex on One, and lay out the revision that publishes.') }
 $claims = @{}
 foreach ($plan in $plans) {
   $e = $plan.Entry
@@ -567,7 +567,7 @@ foreach ($key in $claims.Keys) {
   }
   $placed.Add([pscustomobject]@{ Rel = $win.Rel; Full = $win.Staged.Full; Entry = $win.Entry; Over = @($c | Where-Object { $_ -ne $win } | ForEach-Object { $_.Entry }); Size = 0; Sha256 = '' })
 }
-if ($unordered.Count) { Die ("No mod rule says which of these Vortex deploys last, and they share files, so which copy Vortex keeps depends on its own state:`n  " + (($unordered.Keys | Sort-Object | ForEach-Object { $_ + ' (' + $unordered[$_] + ' files)' }) -join "`n  ")) }
+if ($unordered.Count) { Die ("No mod rule says which of these Vortex deploys last, and they share files, so which copy Vortex keeps depends on its own state:`n  " + (($unordered.Keys | Sort-Object | ForEach-Object { $_ + ' (' + $unordered[$_] + ' files)' }) -join "`n  ") + "`nGive each pair a mod rule in Vortex on One, one of the two loading after the other, and lay out the revision that publishes.") }
 Say ('  ' + $placed.Count + ' files; ' + $won + ' copies lost to a mod the rules deploy later')
 
 # Plugins: the collection's list first, in its order (gamebryo.tsx, the
@@ -585,7 +585,7 @@ foreach ($p in $col.Plugins) {
   if (-not $present.ContainsKey($k)) { $missingPlugins += $p.Name; continue }
   $order.Add([pscustomobject]@{ Name = $p.Name; Enabled = $p.Enabled })
 }
-if ($missingPlugins.Count) { Die ('The collection lists plugins no mod in it has: ' + ($missingPlugins -join ', ') + '.') }
+if ($missingPlugins.Count) { Die ('The collection lists plugins no mod in it has: ' + ($missingPlugins -join ', ') + '. Put in the mod that has them, or take them off the plugin list, in Vortex on One, and lay out the revision that publishes.') }
 $unlisted = @($present.Keys | Where-Object { -not $seen.ContainsKey($_) } | Sort-Object | ForEach-Object { $present[$_] })
 foreach ($n in $unlisted) { $order.Add([pscustomobject]@{ Name = $n; Enabled = $false }) }
 # The rules are held over the plugins the game loads, the enabled ones. A
