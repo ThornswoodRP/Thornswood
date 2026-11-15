@@ -116,6 +116,11 @@ namespace Thornswood
             LauncherLog.AppendRefusedToReport(reportLog);
             Yes("the report exports the retained session history", File.ReadAllText(reportLog).Contains("refused-size-tail"));
             Paths.LogFile = normal;
+            string gone = Path.Combine(dir, "uninstalled-profile");
+            Paths.LogFile = Path.Combine(gone, "launcher.log");
+            LauncherLog.Line("after-uninstall-record");
+            Yes("a record after the log folder is gone does not make it again", !Directory.Exists(gone) && LauncherLog.Refused().Contains("after-uninstall-record"));
+            Paths.LogFile = normal;
             LauncherLog.Line("ordinary-write-after-refusal");
             Yes("a later ordinary write does not retry refused records", File.ReadAllText(normal).Contains("ordinary-write-after-refusal") && !File.ReadAllText(normal).Contains("refused-size-tail") && LauncherLog.Refused().Contains("refused-size-tail"));
             File.Delete(Paths.LogFile);

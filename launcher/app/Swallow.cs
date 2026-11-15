@@ -99,8 +99,10 @@ namespace Thornswood
             string path = Paths.LogFile;
             // Paths has not been initialized yet. No log exists to write.
             if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(text)) return;
-            string dir = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            // The writer never makes the log's folder (#4630): the install
+            // makes Profile, and a record written after an uninstall deleted
+            // it must not bring it back. The append below refuses instead,
+            // and Text keeps the record in memory with that reason.
             byte[] bytes = utf8.GetBytes(text);
             int at = 0;
             while (at < bytes.Length)
