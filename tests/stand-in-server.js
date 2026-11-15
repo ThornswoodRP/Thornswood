@@ -1469,8 +1469,8 @@ let catalogueCache = null;
 function npcCatalogue() {
   if (catalogueCache) { return catalogueCache; }
   const gm = fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode.js'), 'utf8');
-  const at = gm.indexOf('const NPC_POPULATION_DATA = ');
-  const population = JSON.parse(gm.slice(at + 'const NPC_POPULATION_DATA = '.length, gm.indexOf('\n', at)).replace(/;\s*$/, ''));
+  // The catalogue is the table NPC_POPULATION_DATA too (#5191, stage 4).
+  const population = require('./gamemode-tables.js').inGamemode(gm, 'NPC_POPULATION_DATA');
   // The item catalogues are tables beside the gamemode since #5191 (#5427).
   const tables = path.join(REPO_DIR, 'game', 'gamemode-tables');
   const text = [gm].concat(fs.readdirSync(tables).filter(function (n) { return /\.json$/.test(n); }).sort()
