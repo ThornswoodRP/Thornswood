@@ -323,7 +323,7 @@ yes('the grace the README gives, ' + grace + ' hours, is GraceHours in Door.cs',
 // secret, so it has to say what the script does. The script reads the file,
 // sets the password and writes the rest back, and leaves a file that will not
 // parse alone. If that changes, this fails and the -Password sentence in the
-// README is what to change. tests\test-docs-password.ps1 runs the script itself.
+// README is what to change. scripts\tests\test-docs-password.ps1 runs the script itself.
 // The read, the set and the write are SiteConfigSet.ps1, which Deploy-Docs
 // shares with Rotate-ServerPassword (#2317).
 const configSet = read('scripts/deploy/SiteConfigSet.ps1') || '';
@@ -336,8 +336,8 @@ yes('Deploy-Docs.ps1 -Password sets the password in the config.json it read, and
     /will not read as JSON, an empty one included, is\s+left exactly as it is and the password is not changed/.test(readme) &&
     readme.indexOf('holding the password and nothing else') < 0);
 yes('the README names the harness that runs -Password, and it is there',
-    readme.indexOf('tests' + BS + 'test-docs-password.ps1') >= 0 &&
-    read('tests/test-docs-password.ps1') !== null);
+    readme.indexOf('scripts' + BS + 'tests' + BS + 'test-docs-password.ps1') >= 0 &&
+    read('scripts/tests/test-docs-password.ps1') !== null);
 yes('the README says the site is one node process', /one\s+node process/.test(readme));
 
 // ------------------------------------------------------------- the copies --

@@ -54,12 +54,12 @@
   REFUSES, besides: anywhere that is not the box (BoxGuard.ps1), and an
   account that is not an elevated Administrator.
 
-  tests\test-3288-hand-made-tasks.ps1 runs it against stand-ins.
+  scripts\tests\test-3288-hand-made-tasks.ps1 runs it against stand-ins.
 
 .PARAMETER Layer
   A file that replaces the functions below that touch Windows (the scheduled
   tasks, the processes, the removal of a folder). Only
-  tests\test-3288-hand-made-tasks.ps1 passes it, with -Parent.
+  scripts\tests\test-3288-hand-made-tasks.ps1 passes it, with -Parent.
 #>
 param(
     [switch]$WhatIf,

@@ -156,7 +156,7 @@ shell's history would keep it. `-Password` reads the `config.json`
 on the VPS, changes the member password in it and keeps every other setting.
 A `config.json` there that will not read as JSON, an empty one included, is
 left exactly as it is and the password is not changed.
-`tests\test-docs-password.ps1` runs that part of the script against copies.
+`scripts\tests\test-docs-password.ps1` runs that part of the script against copies.
 
 `GET /api/deploys` says which commit, zip and hash each part on the box runs
 and when each last went out, read from the records the deploy scripts leave

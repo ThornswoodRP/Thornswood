@@ -84,7 +84,7 @@ $ThornswoodStdinLimit = 8000
 # progress record there, and a raw line after that is a line the caller's
 # PowerShell cannot read (measured on the VPS runners, #3059). Kept apart so
 # the harnesses know it when they see it (Get-ThornswoodRemoteRunnerPath,
-# tests\test-remote-big-script.ps1).
+# scripts\tests\test-remote-big-script.ps1).
 function Get-ThornswoodRemoteRunner([Parameter(Mandatory = $true)][string]$Path) {
     if ($Path -notmatch '^C:\\Windows\\Temp\\thornswood-remote-[0-9a-f]{32}\.ps1$') { throw ('not a runner''s file: ' + $Path) }
     return @"
@@ -125,7 +125,7 @@ function Get-ThornswoodRemoteRunnerPath([AllowEmptyString()][string]$Text) {
 # block's top level is a scope of its own and $script: is the one above it:
 # measured 21 Oct 2026, a file that sets $stopped = $false at its top, has a
 # function set $script:stopped = $true, and exits 3 when $stopped is true
-# exited 0 with &, and 3 dot-sourced (tests\test-3035-file-script.ps1).
+# exited 0 with &, and 3 dot-sourced (scripts\tests\test-3035-file-script.ps1).
 function Get-ThornswoodFileScript {
     param(
         [Parameter(Mandatory = $true)][string]$Path,

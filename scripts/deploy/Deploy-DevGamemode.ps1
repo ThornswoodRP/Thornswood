@@ -732,7 +732,7 @@ if ($LoadOrder) {
 # the load order is worked out, so a missing plugin still stops this before
 # anybody has been told an update is coming. WHO IS ON in the header says why.
 #
-# The functions sit between markers so tests\test-dev-deploy-warning.ps1 can
+# The functions sit between markers so scripts\tests\test-dev-deploy-warning.ps1 can
 # load them and drive them with no VPS behind them.
 # ==== thornswood dev deploy warning ====
 function Read-DevRoom($lines) {
@@ -1125,7 +1125,7 @@ Copy-Item -LiteralPath '$rootWin\server-settings.json' -Destination '$stageWin\s
   # nothing said so. These are handed to the swap, which reads every other key
   # of the staged file back against the running one before it starts anything
   # and puts the old files back when one moved: the read-back #1222 gave
-  # Deploy-Server. tests\test-dev-settings-keys.ps1 holds this list to the
+  # Deploy-Server. scripts\tests\test-dev-settings-keys.ps1 holds this list to the
   # keys the block writes.
   $DevSettingsKeys = @(
     'loadOrder', 'startPoints', 'thornswoodMostOnline', 'maxPlayers', 'npcSettings',

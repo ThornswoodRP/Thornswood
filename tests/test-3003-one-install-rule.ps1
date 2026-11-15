@@ -11,7 +11,7 @@
   pasted Find-Root (Publish-Update, Repair-Manifest, Sync-Client, Go,
   Deploy-Gamemode and Check-CollectionRules), and Check-Editions a seventh
   copy written out inline, each pasted from the one before. A change to the
-  rule had to be made seven times, and tests\test-feed-rules.ps1 held five
+  rule had to be made seven times, and scripts\tests\test-feed-rules.ps1 held five
   of the copies word for word against each other, which kept them alike and
   kept them copies. Five of them also stopped off Windows: their first line
   asked Join-Path for C:\Thornswood, and Join-Path throws "Cannot find drive"

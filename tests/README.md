@@ -20,9 +20,11 @@ Most of them run on every pull request as well, in the build check
 runners at once): every
 `test-*.js` and `test-*.ps1` here that `gate-excluded.txt` does not name, as
 `scripts\dev\Gate-Harnesses.ps1` lists them when the build runs (issue
-#3009). A new harness is on that gate the moment it is in this folder, and
-touches no shared line; say in its header why it exists. To keep one off the
-gate, add a line to `gate-excluded.txt`, `name  reason`, in name order. A
+#3009). A new harness is on that gate the moment it is in this folder or in
+a product's own tests folder, and touches no shared line; say in its header
+why it exists. One that reads only one product goes beside that product
+("Beside their product" below), and one that reads two or more goes here.
+To keep one off the gate, add a line to `gate-excluded.txt`, `name  reason`, in name order. A
 harness build.yml runs in a step of its own (`test-old-name-gone.js`, issue #497)
 has a line there too, "own step in build.yml", so the gate does not run it
 twice. The "not sorted yet" lines are minutes together, which is why they
@@ -33,21 +35,23 @@ bot's Python ones in `bot\tests\`, because they are run from there.
 
 ## Beside their product
 
-The repository's folders are being grouped by product, with each product's
-harnesses beside its code (plan line 42, 1 Nov 2026), one product at a time.
-A product's harnesses go in a `tests` folder of its own, one folder below the
-top: `launcher\tests\`, `site\tests\`. This folder keeps the checks that are
+The repository's folders are grouped by product, with each product's
+harnesses beside its code (plan line 42, 1 Nov 2026). A product's harnesses
+go in a `tests` folder of its own, one folder below the top:
+`launcher\tests\`, `site\tests\`. This folder keeps the checks that are
 about the whole repository (the gate, the words, the secrets, the scripts'
-paths), the shared helpers (`Windows.ps1`, `Launcher-Csc.ps1`,
-`launcher-csc.js`, `fork-git.js` and the rest) and `fixtures\`, and every
-harness whose product has not moved yet. Moved on 1 Nov 2026: the launcher's
+paths), the harnesses that read two products or more, the shared helpers
+(`Windows.ps1`, `Launcher-Csc.ps1`, `launcher-csc.js`, `fork-git.js` and the
+rest) and `fixtures\`. Moved on 1 Nov 2026: the launcher's
 (`launcher\tests\`), voice's (`voice\tests\`) and the site's
 (`site\tests\`). Moved on 12 Nov 2026: the game's (`game\tests\`), every
 harness that reads only the game: the gamemode and its parts, the game's
 plugins, data and pages, and the builders in `scripts\dev` and
-`scripts\mods` that make its tables. A harness that reads two products, the
-game and the launcher say, stays here, because it checks how they fit
-together.
+`scripts\mods` that make its tables; and the scripts' (`scripts\tests\`),
+every harness that reads only the box, release and developer scripts. A
+harness that reads two products, the game and the launcher say, stays here,
+because it checks how they fit together. The few that open pull requests
+were changing on 12 Nov stay here until those merge (#5341).
 
 A product's harnesses are no part of it. `LauncherVersion.ps1` and Ship's
 launcher fingerprint leave `launcher\tests` out, so a change to one gives no
@@ -70,7 +74,8 @@ const lc = require('../../tests/launcher-csc');
 
 A check that reads a whole product folder for something its code must never
 do leaves that folder's `tests` out, since a harness names the very thing it
-looks for (`test-browser-args.ps1`, `test-3003-one-install-rule.ps1`).
+looks for (`test-browser-args.ps1`, `test-3003-one-install-rule.ps1`, and
+the checks that read every script, which leave `scripts\tests` out).
 
 Moving a product's harnesses is one pull request for that product, and only
 while no open pull request changes any of them: a moved file and an edit to

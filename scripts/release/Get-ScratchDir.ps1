@@ -22,7 +22,7 @@
   it was C:\ThornswoodTemps&Worktrees\temp on One.
 
   OVERRIDE. THORNSWOOD_SCRATCH_ROOT, when set, replaces the temps folder.
-  tests\test-ship-dry-run.ps1 points it at its own sandbox so a dry run never
+  scripts\tests\test-ship-dry-run.ps1 points it at its own sandbox so a dry run never
   writes beside the real temps tree. Outside a git checkout (a copy of the
   scripts with no repository round them), falls back to
   [IO.Path]::GetTempPath() so they still run.
