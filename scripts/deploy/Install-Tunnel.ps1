@@ -108,10 +108,14 @@
   <tunnel id>.cfargotunnel.com, which the box's own requests to both names
   must then reach: cloudflared's request counter has to rise within -Wait
   seconds. When it does not, both records are put back as they were.
-  -BACK changes them back to proxied A records at the box's address.
-  Caddy's public 443 stays open behind Cloudflare's ranges
-  (Set-WebFirewall.ps1) through all of this, so -Back is only DNS; closing
-  80 and 443 is a later step of its own.
+  -BACK changes them back to proxied A records at the box's address. Once
+  the tunnel has carried the site, Set-WebFirewall.ps1 -Close turns the
+  box's two web rules off (#5351), and then the box's address answers
+  nobody on 80 or 443. So -Back first reads both rules, "Thornswood Web 80"
+  and "Thornswood Web 443", and stops while either is off, saying to open
+  them to Cloudflare's ranges again first:
+
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Set-WebFirewall'
 
   WHY A RESTART WAITS FOR -BACK. Every ssh to the box goes through the
   bridge on thornswood.net/box/ (#2753), so once the names are on the
@@ -529,6 +533,22 @@ try {
             'DNS NOT CHANGED'; exit 1
         }
         `$plan += `$n
+    }
+    # The box's address answers on 80 and 443 only while both web rules are
+    # on (#5351): with them off, -Back would send everybody to a door that
+    # takes nobody. The rule in the box's own policy is the one that counts
+    # when it is there (vps-web-firewall.ps1's Get-WebRule).
+    if (`$want -eq 'back') {
+        `$shut = @()
+        foreach (`$dn in 'Thornswood Web 80', 'Thornswood Web 443') {
+            `$r = @(Get-NetFirewallRule -PolicyStore localhost -DisplayName `$dn -ErrorAction SilentlyContinue)
+            if (-not `$r.Count) { `$r = @(Get-NetFirewallRule -PolicyStore ActiveStore -DisplayName `$dn -ErrorAction SilentlyContinue) }
+            if (-not @(`$r | Where-Object { [string]`$_.Enabled -eq 'True' }).Count) { `$shut += `$dn }
+        }
+        if (`$shut.Count) {
+            'the box''s firewall takes nothing on 80 and 443 (' + (`$shut -join ' and ') + ' off, Set-WebFirewall.ps1 -Close), so on the box''s address the site would answer nobody. Open them to Cloudflare''s ranges first, with pwsh scripts/vps/Box-Run.ps1 -Line ''Set-WebFirewall'' (or Set-WebFirewall.ps1 from a machine with the box''s key), then run -Back again'
+            'DNS NOT CHANGED'; exit 1
+        }
     }
     if (`$want -eq 'switch') {
         `$ready = Get-Plain (`$metrics + '/ready') 5

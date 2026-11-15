@@ -51,8 +51,13 @@ One writes its `signing.json` from the template like any other machine.
 
 SIGNING IS ON since 27 September (issue #390, closed). It was switched off on
 purpose until then (Patrick, 22 September: "the code signing stuff isnt
-finnished thats why its switched off"). The launcher and the setup program are
-signed on every Ship from a machine whose `records\signing\signing.json` is enabled.
+finnished thats why its switched off"). Since #4825 every launcher and
+Velopack's setup program that goes out is signed on GitHub's runner, in
+`.github/workflows/merge-release.yml` through
+`scripts\release\Sign-OnRunner.ps1` and the `release` environment's federated
+identity, with no signing.json and no secret. A machine whose
+`records\signing\signing.json` is enabled signs what it builds by hand
+(`Build-Launcher.ps1`).
 
 EVERY RELEASE HAS TO BE SIGNED NOW. `ExpectedSigner` in
 `launcher\app\Updater.cs` is set, so a launcher from dev 1.1.101.17 on

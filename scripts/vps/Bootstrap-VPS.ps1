@@ -1,12 +1,13 @@
 <#
   Bootstrap-VPS.ps1
 
-  Run this ON THE VPS, once, in the PowerShell 5.1 that ships with Windows
-  Server 2022. It brings the box up to what the Thornswood server needs and
-  nothing more.
+  Run this ON THE VPS, once, in PowerShell 7, which Setup-SshKey.ps1 -NewBox
+  puts on a new box before anything else runs there (#5356). It brings the
+  box up to what the Thornswood server needs and nothing more.
 
   What it installs:
-    PowerShell 7   so scripts behave the same here as on the build machine
+    PowerShell 7   the pinned release, if the box has an older one, so
+                   scripts behave the same here as on the build machine
     Node 24        matching the build machine exactly
     Git (optional) only if you want to pull updates here rather than copy them
     Build Tools (optional, -IncludeBuildTools) MSBuild and the .NET Framework
@@ -63,10 +64,10 @@
   asked again.
 
   winget does not exist on Windows Server 2022, so everything here is a direct
-  MSI. PowerShell 7 and Git are resolved at download time. Node is not: it is
-  one exact release with the SHA-256 nodejs.org publishes for it, because the
-  newest v24 on the day is whatever the next fresh box happens to get, and
-  nodejs.org keeps every release at the same address, so that URL does not rot.
+  MSI. Git is resolved at download time. PowerShell 7 and Node are not: each
+  is one exact release with the SHA-256 its makers publish for it, because the
+  newest on the day is whatever the next fresh box happens to get, and both
+  keep every release at the same address, so those URLs do not rot.
 #>
 [CmdletBinding()]
 param(
@@ -81,6 +82,11 @@ param(
     # machine's, are security releases.
     [string]$NodeVersion  = 'v24.21.0',
     [string]$NodeSha256   = 'bb0eaee134f9357f22aea915ee793343e627aefc1e66488164bac6915bce2cac',
+    # The PowerShell 7 release and the SHA-256 of its x64 msi from the
+    # release's hashes.sha256, the same pair Setup-SshKey.ps1 -NewBox puts on
+    # a new box (#5356). Bump both files together.
+    [string]$PwshVersion  = '7.6.10',
+    [string]$PwshSha256   = '7d8daea48b450d4d62fcd1ac4d6faa7ac2db5e11aba5061ee81b7496adca8c07',
     [switch]$IncludeGit,
     # MSBuild and the .NET Framework 4.8.1 reference assemblies, for the build
     # runners (#498). See the header.
@@ -148,15 +154,15 @@ function Install-Msi([string]$url, [string]$name, [string]$sha256) {
 }
 
 # --- PowerShell 7 -----------------------------------------------------------
-if (Get-Command pwsh -ErrorAction SilentlyContinue) {
-    Write-Host "PowerShell 7 already present: $(& pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()')" -ForegroundColor Green
+# This runs in it (Setup-SshKey.ps1 -NewBox put it here first); a box with an
+# older release gets the pinned one, a newer one is left as it is.
+$havePwsh = $null
+if (Get-Command pwsh -ErrorAction SilentlyContinue) { $havePwsh = [version](& pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()').Trim().Split('-')[0] }
+if ($havePwsh -and $havePwsh -ge [version]$PwshVersion) {
+    Write-Host "PowerShell 7 already present: $havePwsh" -ForegroundColor Green
 } else {
-    Write-Host 'PowerShell 7' -ForegroundColor Cyan
-    $rel = Invoke-RestMethod 'https://api.github.com/repos/PowerShell/PowerShell/releases/latest' `
-                             -Headers @{ 'User-Agent' = 'thornswood' } -UseBasicParsing
-    $asset = $rel.assets | Where-Object { $_.name -like '*win-x64.msi' } | Select-Object -First 1
-    if (-not $asset) { throw 'could not find a win-x64 msi in the latest PowerShell release' }
-    Install-Msi $asset.browser_download_url "PowerShell $($rel.tag_name)"
+    Write-Host "PowerShell $PwshVersion (currently $(if ($havePwsh) { $havePwsh } else { 'absent' }))" -ForegroundColor Cyan
+    Install-Msi "https://github.com/PowerShell/PowerShell/releases/download/v$PwshVersion/PowerShell-$PwshVersion-win-x64.msi" "PowerShell $PwshVersion" $PwshSha256
 }
 
 # --- Node -------------------------------------------------------------------

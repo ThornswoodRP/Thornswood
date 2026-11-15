@@ -80,6 +80,7 @@
   has not been configured, if the packages or the compile fail, or if a file
   it was supposed to produce is not there afterwards.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     # Our fork. The branch is checked and reported, never changed.

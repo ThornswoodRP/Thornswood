@@ -74,9 +74,12 @@ async def main():
     holds = ['thornswood:hold:' + h.lower() for h in bot.HOLDS]
     pings = ['thornswood:ping:' + k for k, _, _ in bot.PINGS]
 
-    yes('L1 ten holds in three rows of three and Raven Rock, in order, then the pings',
+    yes('L1 ten holds in three rows of three and Raven Rock, in order, and no pings '
+        '(they are in #welcome since 12 Nov 2026)',
         len(bot.HOLDS) == 10 and bot.HOLDS[-1] == 'Raven Rock'
-        and hold == [holds[0:3], holds[3:6], holds[6:9], holds[9:], pings])
+        and hold == [holds[0:3], holds[3:6], holds[6:9], holds[9:]])
+    yes('L1 the ping buttons are their own panel, both on one row',
+        rows_of(bot.PingPanel()) == [pings] and 'Pings' not in bot.HOLD_PANEL)
     yes('L1 what the bot checks a posted panel against is that same layout',
         bot._hold_rows_wanted() == hold)
     yes('L2 no row of the hold or office panel has more than three buttons',

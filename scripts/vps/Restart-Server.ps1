@@ -15,8 +15,8 @@
   Check first, then decide, rather than finding out afterwards.
 
   The game and dev servers' restart is said in Discord first (#5784): with
-  nobody on, Request-Restart.ps1 says it (#updates for the live server, the
-  dev updates channel for dev) a minute ahead and this waits the minute out,
+  nobody on, Request-Restart.ps1 says it (#updates for the live server,
+  #staff-updates for dev) a minute ahead and this waits the minute out,
   and once the server is started again the notice says it is back. -Now
   says nothing ahead; a restart Request-Restart -ThenRestart counted down
   was said by it, and is said to be back here.

@@ -20,7 +20,7 @@ This does.
 
 THE RULE is the fork's, and it is records\\papyrus-events.json, which
 scripts\\dev\\PapyrusEventList.js reads out of the fork and
-tests\\test-papyrus-event-list.js holds to the fork at its pin (issue #503).
+game\\tests\\test-papyrus-event-list.js holds to the fork at its pin (issue #503).
 This keeps no copy of it. A script fires only where both halves let it:
 
   On each person's machine. skymp5-client turns the blocker on, and
@@ -121,7 +121,7 @@ MASTERS = own_plugins.MASTERS
 
 # The fork's event list, both halves, is records\papyrus-events.json, which
 # scripts\dev\PapyrusEventList.js reads out of the fork and
-# tests\test-papyrus-event-list.js holds to the fork at the pin (#503). This
+# game\tests\test-papyrus-event-list.js holds to the fork at the pin (#503). This
 # keeps no copy of it.
 RECORD = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'records', 'papyrus-events.json')
 

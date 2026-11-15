@@ -16,6 +16,20 @@ fallback and the home of the release baseline, is retired. This page is every
 field in it, who writes each one, who reads it, and what goes wrong when it is
 wrong.
 
+## Contents
+
+- [Where it is and how a launcher reads it](#where-it-is-and-how-a-launcher-reads-it)
+- [A real entry, trimmed](#a-real-entry-trimmed)
+- [Top-level fields](#top-level-fields)
+- [How a launcher decides what is new](#how-a-launcher-decides-what-is-new)
+- [Syncing to the release record (#1050)](#syncing-to-the-release-record-1050)
+- [When the packs can go](#when-the-packs-can-go)
+- [version.json in two (#1050)](#versionjson-in-two-1050)
+- [Checks on every download](#checks-on-every-download)
+- [Main and dev](#main-and-dev)
+- [Putting a channel back (#442)](#putting-a-channel-back-442)
+- [What looks wrong in the feeds today](#what-looks-wrong-in-the-feeds-today)
+
 ## Where it is and how a launcher reads it
 
 ### Host cutover (#649) - live URL shape
@@ -814,7 +828,8 @@ Now it is one command, and it goes the same way as every other update:
   Ship after #442 on each channel and holds the newest thirty. A release that
   named no record (every one before #441, and a `-NoUpload` run) is not one.
 - **Safety.** `-DryRun` builds the pack and sends nothing. The pack is checked
-  by `Check-Secrets.ps1` like a Ship's, the note by `Note-Rules.ps1`, and the
+  by `Check-Secrets.ps1` like a Ship's, the note by the release note rules
+  (`tools/ReleaseNotes/NoteRules.cs`), and the
   pack and its record are on the site before `version.json` names them. The
   feed and the baseline go back through `Feed-Store.ps1` in one send, which
   replaces nothing if another Ship or feed edit went out meanwhile.

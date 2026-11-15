@@ -56,6 +56,7 @@
   people. Issue #594.
 
 #>
+#Requires -Version 7
 param(
     [string]$Gamemode,
     [string]$Dist     = (& (Join-Path $PSScriptRoot '..\release\Where.ps1') ServerDist),
@@ -68,7 +69,7 @@ param(
     [int]   $Port     = 7777,
     [switch]$MinimalLoadOrder,   # masters plus Thornswood-Content.esp only
     [switch]$FullLoadOrder,      # list everything, indices be damned. for bisecting
-    [switch]$Vortex,             # read the Steam game and the active Vortex profile
+    [switch]$Vortex,             # read the Steam game and the Thornswood Vortex profile's list (#4804)
     [switch]$NewOrder,           # take the plugin list's order as it is, for a world being wiped
     # Write only the load order this run would give the server, to this file,
     # as { "loadOrder": [paths] }, and nothing into the build: the order a new
@@ -158,9 +159,9 @@ $ErrorActionPreference = 'Stop'   # before any file loads, so one that is missin
 # that points at it keeps working long after it stopped being the truth.
 #
 # -Vortex reads the live one instead: Skyrim where Steam put it, with the mods
-# Vortex has deployed into it, and the plugin list of whichever Vortex profile
-# is active. That is what is loaded when the game starts, so it is what the
-# server should be built from.
+# Vortex has deployed into it, and the plugin list of the Vortex profile named
+# Thornswood, which the game's own list has to match (#4804). That is what is
+# loaded when the game starts, so it is what the server should be built from.
 function Get-SkyrimPath {
     $roots = @()
     foreach ($k in 'HKCU:\Software\Valve\Steam','HKCU:\Software\Wow6432Node\Valve\Steam') {
@@ -192,11 +193,41 @@ if ($Vortex) {
     $sk = Get-SkyrimPath
     if (-not $sk) { throw "Could not find Skyrim Special Edition through Steam, so -Vortex has nothing to read." }
     $Data    = Join-Path $sk 'Data'
-    $Plugins = Join-Path $env:LOCALAPPDATA 'Skyrim Special Edition\Plugins.txt'
-    if (-not (Test-Path -LiteralPath $Plugins)) { throw "No plugin list at $Plugins. Start Vortex, activate the Thornswood profile and deploy, then run this again." }
+    # THE THORNSWOOD PROFILE'S LIST, BY NAME (#4804). This took Windows' own
+    # plugins.txt, which holds whichever Vortex profile deployed last, and
+    # asked only that it was there, so with another profile deployed last the
+    # servers' order was built from that profile's list and nothing said so.
+    # The profile is found the one way Ship and Check-ShipReady find it
+    # (Assert-VortexProfile, Get-VortexProfileDir), and the live list is held
+    # to it the way Ship holds its copies (Get-LoadOrderCopyDiffs): the game
+    # loads the live list, so one that is not the profile's is not what the
+    # Thornswood profile deploys. Either stops here, before anything is written.
+    $loVortex = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\mods\LoadOrder.ps1'))
+    if (-not (Test-Path -LiteralPath $loVortex)) { throw "$loVortex is missing, so -Vortex cannot find the Thornswood profile. Nothing was written." }
+    . $loVortex
+    try { $twVortex = Assert-VortexProfile 'Thornswood' }
+    catch {
+        Write-Host ''
+        Write-Host ('  STOP. ' + $_.Exception.Message) -ForegroundColor Red
+        Write-Host '  Nothing was written.' -ForegroundColor Red
+        throw ($_.Exception.Message + ' Nothing was written.')
+    }
+    $Plugins = Join-Path $twVortex 'plugins.txt'
+    if (-not (Test-Path -LiteralPath $Plugins)) { throw "The Thornswood Vortex profile at $twVortex has no plugins.txt. In Vortex, activate the Thornswood profile and deploy, then run this again. Nothing was written." }
+    $live = Join-Path $env:LOCALAPPDATA 'Skyrim Special Edition\Plugins.txt'
+    if (-not (Test-Path -LiteralPath $live)) { throw "No plugin list at $live, so whether the game loads the Thornswood profile's list is not known. In Vortex, activate the Thornswood profile and deploy, then run this again. Nothing was written." }
+    $liveDiffs = @(Get-LoadOrderCopyDiffs @{ 'Vortex Thornswood\plugins.txt' = $Plugins; 'Skyrim Special Edition\Plugins.txt' = $live })
+    if ($liveDiffs.Count) {
+        Write-Host ''
+        Write-Host "  STOP. The game's plugin list at $live is not the Thornswood profile's list, at $Plugins." -ForegroundColor Red
+        foreach ($d in $liveDiffs) { Write-Host "    $d" -ForegroundColor Red }
+        Write-Host '  Another Vortex profile deployed last. In Vortex, activate the Thornswood profile and deploy, then run this again.' -ForegroundColor Yellow
+        Write-Host '  Nothing was written.' -ForegroundColor Red
+        throw "The game's plugin list at $live is not the Thornswood profile's list ($($liveDiffs -join '; ')). Nothing was written."
+    }
     Write-Host "  -Vortex" -ForegroundColor Cyan
     Write-Host "    data     $Data" -ForegroundColor DarkGray
-    Write-Host "    plugins  $Plugins" -ForegroundColor DarkGray
+    Write-Host "    plugins  $Plugins, the Thornswood profile's, which the game's list matches" -ForegroundColor DarkGray
 }
 
 
@@ -245,6 +276,24 @@ if (-not (Test-Path -LiteralPath $lo) -and -not $IgnoreRevision) {
     Write-Host '  Nothing was written. Put the file back from git, then run this again.' -ForegroundColor Yellow
     Write-Host '  -IgnoreRevision if you mean to deploy without the check.' -ForegroundColor DarkGray
     throw "$lo is missing, so the collection revision was not checked. Nothing was written."
+}
+
+# A PLUGIN LIST UNDER A VORTEX PROFILE IS THE THORNSWOOD PROFILE'S (#557,
+# #4688). Another profile's list builds the server against a mod set nobody
+# installs from the collection, and every person who does is refused at the
+# door. The retired sync script refused one (#4688); the refusal is here,
+# asked before anything is written, by the rule Ship asks
+# (Assert-VortexProfile in LoadOrder.ps1).
+if ($Plugins -match '(?i)[\\/]Vortex[\\/].*[\\/]profiles[\\/]') {
+    if (-not (Test-Path -LiteralPath $lo)) { throw "$Plugins is under a Vortex profile, and $lo, which says which profile is the Thornswood one, is not here. Nothing was written." }
+    . $lo
+    $twProfile = [IO.Path]::GetFullPath((Assert-VortexProfile 'Thornswood')).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    if (-not [IO.Path]::GetFullPath($Plugins).StartsWith($twProfile, [StringComparison]::OrdinalIgnoreCase)) {
+        Write-Host ''
+        Write-Host "  STOP. $Plugins is another Vortex profile's list. This reads only the Vortex profile named Thornswood, at $twProfile." -ForegroundColor Red
+        Write-Host '  Nothing was written.' -ForegroundColor Red
+        throw "Deploy-Gamemode reads only the Vortex profile named Thornswood (at $twProfile). Refusing $Plugins. Nothing was written."
+    }
 }
 
 # Whether the engine this build is loads light plugins (#1715), read before
@@ -367,6 +416,25 @@ $wanted = if ($MinimalLoadOrder) {
     $fromFile = Get-Content -LiteralPath $Plugins |
                 Where-Object { $_ -match '^\*' } |
                 ForEach-Object { $_.TrimStart('*').Trim() }
+    # A plugin the list switches on twice, in any case (#4688). Which place
+    # it takes is not known, and the launcher refuses such a list too
+    # (LoadOrder.Reorder), so the server's order is not built from it either.
+    # Until #4688 the duplicate was folded away without a word for an engine
+    # that loads light plugins, and written twice for one that does not.
+    $firstSpelling = @{}
+    $twice = New-Object Collections.Generic.List[string]
+    foreach ($n in @($fromFile)) {
+        $k = ([string]$n).ToLowerInvariant()
+        if (-not $firstSpelling.ContainsKey($k)) { $firstSpelling[$k] = [string]$n; continue }
+        if (-not $twice.Contains($firstSpelling[$k])) { [void]$twice.Add($firstSpelling[$k]) }
+    }
+    if ($twice.Count) {
+        Write-Host ''
+        Write-Host ("  STOP. {0} switches on {1} more than once." -f (Split-Path -Leaf $Plugins), ($twice -join ', ')) -ForegroundColor Red
+        Write-Host '  Which place such a plugin takes is not known, and the launcher refuses the list too.' -ForegroundColor Red
+        Write-Host '  Take the extra line out, then run this again.' -ForegroundColor Red
+        throw ("{0} switches on {1} more than once" -f $Plugins, ($twice -join ', '))
+    }
     # plugins.txt omits the always-on masters; the server needs them spelled out
     $implicit = 'Skyrim.esm','Update.esm','Dawnguard.esm','HearthFires.esm','Dragonborn.esm'
     @($implicit | Where-Object { $fromFile -notcontains $_ }) + $fromFile
@@ -416,7 +484,7 @@ else {
     if ($cs.Known) {
         if ($cs.Behind -and -not $IgnoreRevision) {
             Write-Host ''
-            Write-Host ("  STOP. This machine has collection revision {0} and Vortex says {1} is out." -f $cs.Have, $cs.Newest) -ForegroundColor Red
+            Write-Host ("  STOP. This machine has collection revision {0} and Nexus has {1} published." -f $cs.Have, $cs.Newest) -ForegroundColor Red
             Write-Host '  The server''s load order is derived from what Vortex has deployed here, so' -ForegroundColor Red
             Write-Host '  deploying now builds the server against a collection two steps behind the' -ForegroundColor Red
             Write-Host '  one everybody else installs. They get a mod set the server has never seen' -ForegroundColor Red
@@ -426,7 +494,7 @@ else {
             Write-Host '  -IgnoreRevision if you mean to deploy from the old one anyway.' -ForegroundColor DarkGray
             throw ("collection revision {0} installed, {1} available" -f $cs.Have, $cs.Newest)
         }
-        Write-Host ("  collection revision {0}{1}" -f $cs.Have, $(if ($cs.Behind) { " (BEHIND $($cs.Newest), carrying on because -IgnoreRevision)" } else { ', which is the newest Vortex knows of' })) -ForegroundColor $(if ($cs.Behind) { 'Yellow' } else { 'Green' })
+        Write-Host ("  collection revision {0}{1}" -f $cs.Have, $(if ($cs.Behind) { " (BEHIND $($cs.Newest), carrying on because -IgnoreRevision)" } else { ', which is the newest published on Nexus' })) -ForegroundColor $(if ($cs.Behind) { 'Yellow' } else { 'Green' })
     }
     elseif (-not $IgnoreRevision) {
         #
@@ -448,20 +516,21 @@ else {
         # refuses a binary it cannot hash. -IgnoreRevision is the way past it.
         Write-Host ''
         Write-Host '  STOP. The collection revision could not be read, so it was not checked.' -ForegroundColor Red
-        Write-Host ("  installed here: {0}    newest Vortex knows of: {1}" -f `
+        Write-Host ("  installed here: {0}    newest published on Nexus: {1}" -f `
             $(if ($cs.Have -gt 0) { $cs.Have } else { 'unreadable' }), `
             $(if ($cs.Newest -gt 0) { $cs.Newest } else { 'unreadable' })) -ForegroundColor Red
+        if ($cs.Why) { Write-Host ("  why: {0}" -f $cs.Why) -ForegroundColor Red }
         if ($cfgWhy) { Write-Host ("  no collection to read it for: {0}" -f $cfgWhy) -ForegroundColor Red }
         Write-Host '  The server''s load order is derived from what Vortex has deployed here.' -ForegroundColor Red
         Write-Host '  Deploying without knowing the revision is how the server was built against' -ForegroundColor Red
         Write-Host '  a two revision old collection for days with nothing saying so.' -ForegroundColor Red
         Write-Host ''
-        Write-Host '  Close Vortex and run this again: it holds its own state open while running.' -ForegroundColor Yellow
+        Write-Host '  Read the line above, put that right, and run this again.' -ForegroundColor Yellow
         Write-Host '  -IgnoreRevision if you mean to deploy without the check.' -ForegroundColor DarkGray
         throw 'the collection revision could not be read, so it was not checked'
     }
     else {
-        Write-Host ("  collection revision NOT checked: it could not be read{0}, carrying on because -IgnoreRevision" -f $(if ($cfgWhy) { " ($cfgWhy)" } else { '' })) -ForegroundColor Yellow
+        Write-Host ("  collection revision NOT checked: it could not be read{0}, carrying on because -IgnoreRevision" -f $(if ($cfgWhy) { " ($cfgWhy)" } elseif ($cs.Why) { " ($($cs.Why))" } else { '' })) -ForegroundColor Yellow
     }
 }
 
@@ -682,6 +751,34 @@ if ($loadsLight) {
 
 # And last after the server's own order was followed, whatever it held.
 if ($lastHeld) { $keep = @($keep | Where-Object { $_ -ine $lastName }) + $lastName }
+
+# EVERY MASTER IS IN THE ORDER (#4688). The server's reader will not load a
+# plugin whose master it does not have, and the game will not start with
+# one either. A master the list does not switch on, or that Data does not
+# have, stops here with both named, rather than in the server's log after
+# the order is out. The retired sync script named these; nothing here did. A
+# plugin that masters a light one an engine without light plugins leaves
+# out was pruned above, with it. Thornswood-Last.esp is held to the order
+# it was built against above instead, and -OrderOnly is the order it is
+# about to be built against, so its own masters are not asked here.
+$inOrder = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+foreach ($k in $keep) { [void]$inOrder.Add($k) }
+$noMaster = New-Object Collections.Generic.List[string]
+foreach ($k in $keep) {
+    if (-not $info[$k] -or ($lastHeld -and $k -ieq $lastName)) { continue }
+    foreach ($m in @($info[$k].Masters)) {
+        if ($m -and -not $inOrder.Contains($m)) { [void]$noMaster.Add("$k needs $m, which this order does not hold") }
+    }
+}
+if ($noMaster.Count) {
+    Write-Host ''
+    Write-Host ("  STOP. {0} plugin(s) name a master the order does not hold:" -f $noMaster.Count) -ForegroundColor Red
+    foreach ($n in $noMaster) { Write-Host "    $n" -ForegroundColor Red }
+    Write-Host '  The server will not load such a plugin, and the game will not start with it.' -ForegroundColor Red
+    Write-Host '  Switch the master on, or the plugin off, then run this again.' -ForegroundColor Red
+    throw 'a plugin in the load order names a master the order does not hold'
+}
+
 $paths = @($keep | ForEach-Object {
     (Join-Path $Data $_) -replace '\\', '/'
 })

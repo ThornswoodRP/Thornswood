@@ -4,6 +4,24 @@ Part of the [Developer Guide](../../Developer-Guide.md), the index of every page
 
 Each letter stands on its own: what the thing is, then the commands. The pages from Set up a machine to Release to main are the path. These letters are what you open when you already know the name.
 
+## Contents
+
+- [A. GitHub](#a-github)
+- [B. Git](#b-git)
+- [C. PowerShell](#c-powershell)
+- [D. Visual Studio Code](#d-visual-studio-code)
+- [E. VPS](#e-vps)
+- [F. Website](#f-website)
+- [G. Main Build](#g-main-build)
+- [H. Dev Build](#h-dev-build)
+- [I. Bot](#i-bot)
+- [J. Node](#j-node)
+- [K. Vortex](#k-vortex)
+- [L. Pandora](#l-pandora)
+- [M. Creation Kit](#m-creation-kit)
+- [N. The repository map](#n-the-repository-map)
+- [O. Others](#o-others)
+
 ## A. GitHub
 
 GitHub is the website copy of the repository, at https://github.com/ThornswoodRP/Thornswood. Your PC and GitHub each hold the history. `origin` is the name Git uses for the GitHub copy.
@@ -69,7 +87,7 @@ The safe way to hold two jobs at once is [Switch between branches](make-a-change
 
 ## C. PowerShell
 
-PowerShell is the terminal. You type one line, press Enter, and Windows runs it. The prompt looks like `PS C:\Dev\Thornswood>`. The folder in the prompt is the folder the next command runs in.
+PowerShell is the terminal. You type one line, press Enter, and Windows runs it. The prompt looks like `PS C:\Thornswood-Repo>`. The folder in the prompt is the folder the next command runs in.
 
 ### Where you are
 
@@ -121,7 +139,7 @@ Visual Studio Code is the window you work in. The folders sit on the left. The f
 ### Open this repository
 
 ```powershell
-cd C:\Dev\Thornswood
+cd C:\Thornswood-Repo
 code .
 code .\Developer-Guide.md
 code .\game\gamemode\order.json
@@ -145,7 +163,7 @@ The branch name is in the status bar at the bottom left. Click it for a list of 
 
 ### Where to click
 
-Stay in `C:\Dev\Thornswood`. Each big folder has its own `README.md`. Open that file when you go into the folder. The long map is [The pieces](the-system.md#the-pieces).
+Stay in `C:\Thornswood-Repo`. Each big folder has its own `README.md`. Open that file when you go into the folder. The long map is [The pieces](the-system.md#the-pieces).
 
 | In Explorer | What it is | In PowerShell |
 | --- | --- | --- |
@@ -304,7 +322,7 @@ The bot's avatar is uploaded by hand in the Discord developer portal. No script 
 
 ## J. Node
 
-Node runs the website, the voice service, and the JavaScript tests. The install in [Install the tools](set-up-a-machine.md#install-the-tools) is the one this repository uses.
+Node runs the website, the voice service, and the JavaScript tests. The install in [Install the tools](set-up-a-machine.md#install-the-tools) is the one this repository uses. The website needs Node 22.19 or later, or 24.5 or later; no Node 23 runs it. On an older Node it stops at start with one line naming the Node it needs and the one it found.
 
 ### See the version and run a test
 
@@ -313,7 +331,7 @@ node --version
 node tests\test-site-local.js
 ```
 
-A passing run ends without an error. Use the file in `tests\` whose name matches the area you touched. Voice is `voice\voice-server.js`, also Node. The site program is `site\server.js` over its modules in `site\lib`.
+A passing run ends without an error. Use the file whose name matches the area you touched. A product's own checks are beside it, in `game\tests\`, `launcher\tests\`, `site\tests\`, `voice\tests\` and `bot\tests\`; the ones that read more than one product are in `tests\`. Voice is `voice\voice-server.js`, also Node. The site program is `site\server.js` over its modules in `site\lib`.
 
 ### Learn more about Node
 
@@ -395,7 +413,7 @@ The game server, the launcher, and the site are different programs. Putting each
 
 Open the clone with `code .`, as in [Open the folder in Visual Studio Code](set-up-a-machine.md#open-the-folder-in-visual-studio-code). In Explorer, click a triangle to open a folder. `Ctrl+P`, then the file name, opens a file without walking the tree. `Ctrl+Shift+F` searches the words inside files.
 
-From PowerShell, inside `C:\Dev\Thornswood`:
+From PowerShell, inside `C:\Thornswood-Repo`:
 
 ```powershell
 Get-ChildItem
@@ -498,7 +516,7 @@ The bot scripts need Python 3.11 or newer (the bot runs on 3.12; Pillow 13 needs
 
 ### The .NET Framework
 
-Launcher code is C# on .NET 10 with Avalonia, published with Native AOT from `launcher\app\Thornswood.csproj` (#4823, Patrick's decision of 26 Oct), so it stays AOT safe (the rules are in [Settled design](settled-design.md)), and C# that Windows PowerShell 5.1 compiles with Add-Type stays C# 5. The window is `launcher\app\MainWindow.axaml`. How the launcher starts is `launcher\app\ARCHITECTURE.md`. The six shared files in `launcher\app` are named in [D. Visual Studio Code](#d-visual-studio-code).
+Launcher code is C# on .NET 10 with Avalonia, published with Native AOT from `launcher\app\Thornswood.csproj` (#4823, Patrick's decision of 26 Oct), so it stays AOT safe (the rules are in [Settled design](settled-design.md)); the few launcher files a script loads with Add-Type compile with pwsh 7's Add-Type too. The window is `launcher\app\MainWindow.axaml`. How the launcher starts is `launcher\app\ARCHITECTURE.md`. The six shared files in `launcher\app` are named in [D. Visual Studio Code](#d-visual-studio-code).
 
 ### SkyMP
 
@@ -559,7 +577,7 @@ Run one check from the repository folder:
 node tests\test-site-local.js
 ```
 
-A passing run ends without an error. Use the file in `tests\` whose name matches the area you touched.
+A passing run ends without an error. Use the file whose name matches the area you touched. A product's own checks are beside it, in `game\tests\`, `launcher\tests\`, `site\tests\`, `voice\tests\` and `bot\tests\`; the ones that read more than one product are in `tests\`.
 
 An overlay change uses the same `Go.ps1 -SkipServer` as the HTML section, with the game closed. A new overlay is named `thornswood-*.js` and listed in the `OVERLAYS` list at the top of `game\plugins\thornswood-front.js`. That list is what loads it. There is no build step for these files.
 

@@ -116,6 +116,7 @@
   Exit codes: 0 when every issue the release carries is closed (or would be,
   with -Check), and 1 when something stopped, with the line before saying why.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Commit,
@@ -261,6 +262,39 @@ $done = @(@($board.items) | Where-Object {
     } | Sort-Object { [int]$_.number })
 Say ("  {0} open issue(s) in Done, read at {1}" -f $done.Count, $board.read_at) 'DarkGray'
 
+# An issue moved to Done by hand (#3411) is not in Done on the board: since
+# #5185 a card's Status follows only what GitHub knows, and a "Fixed by" line
+# in a comment is not one of those facts, so its card stays In Progress or
+# Todo. Read from the board alone, every such issue stayed open for ever: on
+# 15 Nov 2026 #3314, #3751 and #3752 had held their lines since 1 Nov through
+# three main releases. So the open issues whose comments say "Fixed by" are
+# found with GitHub's issue search as well, and each is read the same way as
+# a card in Done. One the search finds whose comments hold no Fixed by line
+# at the start of a comment is passed over without a word: the search matches
+# the words anywhere.
+$byHandOnly = New-Object 'System.Collections.Generic.HashSet[int]'
+$seen = New-Object 'System.Collections.Generic.HashSet[int]'
+foreach ($card in $done) { [void]$seen.Add([int]$card.number) }
+$q = [uri]::EscapeDataString(('repo:{0} is:issue is:open in:comments "Fixed by"' -f $GitHubRepo))
+for ($page = 1; $page -le 10; $page++) {
+    try { $found = Invoke-GitHub 'GET' ("search/issues?q=$q&per_page=100&page=$page") $null }
+    catch { Stop-Here "GitHub's issue search for the Fixed by lines did not answer, so nothing was closed: $($_.Exception.Message)" }
+    $items = @(if ($found -and $found.PSObject.Properties['items']) { $found.items })
+    foreach ($it in $items) {
+        if ($it.PSObject.Properties['pull_request'] -and $it.pull_request) { continue }
+        $num = [int]$it.number
+        if ($seen.Add($num)) {
+            [void]$byHandOnly.Add($num)
+            $done += [pscustomobject]@{ number = $num; repo = $GitHubRepo; kind = 'Issue'; state = 'OPEN'; status = 'Fixed by'; archived = $false }
+        }
+    }
+    if ($items.Count -lt 100) { break }
+}
+if ($byHandOnly.Count) {
+    $done = @($done | Sort-Object { [int]$_.number })
+    Say ("  {0} more open issue(s) with a Fixed by line, which the board does not put in Done" -f $byHandOnly.Count) 'DarkGray'
+}
+
 # ------------------------------------------------------------ each issue
 Head 'Each issue'
 $closed = New-Object System.Collections.Generic.List[string]
@@ -282,7 +316,10 @@ foreach ($card in $done) {
         if ([string]$c.user.login -eq $Robot -and $body.Contains($Footer) -and $body -match $MergedLine) { $mark = $i; break }
         if ($body.TrimStart() -match $HandLine) { $mark = $i; $byHand = $true; break }
     }
-    if ($mark -lt 0) { $noTask.Add("#$n"); continue }
+    if ($mark -lt 0) {
+        if (-not $byHandOnly.Contains($n)) { $noTask.Add("#$n") }
+        continue
+    }
 
     $body = ([string]$comments[$mark].body) -replace "`r`n", "`n"
     if ($byHand) {

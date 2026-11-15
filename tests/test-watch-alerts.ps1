@@ -101,7 +101,7 @@ Yes '-SetWebhook sends the address on standard input, never on the command line'
 
 # The watcher as it runs, without the probes that touch the world. The fakes
 # below stand in for those, and $root is a scratch folder.
-$fake = @('Answers', 'SiteAnswers', 'BotAlive', 'BotProcs', 'HealthProblem', 'ReadyProblem', 'EndTask', 'HowItEnded', 'ServiceProblem', 'BackupProblem', 'OffBoxProblem', 'CertProblem', 'PostWebhook', 'DiskNow')
+$fake = @('Answers', 'SiteAnswers', 'BotAlive', 'BotProcs', 'HealthProblem', 'ReadyProblem', 'HeldProblem', 'EndTask', 'HowItEnded', 'ServiceProblem', 'BackupProblem', 'OffBoxProblem', 'CertProblem', 'PostWebhook', 'DiskNow')
 $body = @()
 foreach ($s in $inner.EndBlock.Statements) {
     if ($s -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $fake -contains $s.Name) { continue }
@@ -185,6 +185,9 @@ function ReadyProblem($url) {
     foreach ($k in $ports.Keys) { if ($url -match (':' + $k + '/')) { return $script:world[$ports[$k]].Ready } }
     return ''
 }
+# The website's readiness (#4448): every file it holds reads, here.
+# test-4448-site-ready.ps1 asks a stand-in site for the real thing.
+function HeldProblem($url) { return '' }
 # Ending a task whose program runs but does not work: only written down here.
 function EndTask($task, $port) { $script:runs += ('end ' + $task); return ('ended ' + $task) }
 function HowItEnded($task) { if ($tasks.ContainsKey($task)) { return $script:world[$tasks[$task]].Ended }; return '' }
@@ -581,7 +584,7 @@ try {
     $script:certWhy = 'it runs out on 30 September 2026 03:00, in 1 day, and the line is 14'
     Step 1
     Yes 'Caddy''s certificate running out is told once, in words' ((Said '^\*\*The certificate Caddy holds for thornswood\.net needs a look\.\*\* It runs out on 30 September 2026 03:00, in 1 day') -eq 1)
-    Yes '  saying where to look, and that 443 must still take Cloudflare' ("$($script:said[0].Text)" -match 'Caddy''s log in C:\\Thornswood-Caddy' -and "$($script:said[0].Text)" -match 'Set-WebFirewall\.ps1 -Check')
+    Yes '  saying where to look, and that the tunnel must carry the names for the renewal' ("$($script:said[0].Text)" -match 'Caddy''s log in C:\\Thornswood-Caddy' -and "$($script:said[0].Text)" -match 'Set-WebFirewall\.ps1 -Check says whether the tunnel carries both names')
     Yes '  asking about the site''s own name' ($script:certAsked -eq 'https://thornswood.net/')
     Yes '  and restarting nothing for it' ($script:runs.Count -eq 0)
     $script:certWhy = ''

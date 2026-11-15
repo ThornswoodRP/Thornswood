@@ -44,7 +44,9 @@
        runner's annotation and says what it did, exit 0; a stopped runner is
        1; a run not ended in time is 2 with the -Run line; and a name it would
        refuse is refused before anything is started. -Fork starts the fork's
-       thornswood-git-ref.yml instead, for a branch only. -DeleteTag
+       thornswood-git-ref.yml instead, for a branch only, and -Ops the
+       private ops repository's git-ref.yml, for a branch only (Ops #258);
+       both at once are refused before anything is started. -DeleteTag
        and -DeleteDraft send their one input each, and -PublishLauncher and
        -RetagLauncher are no parameters of it.
     4. Add-ReleaseTag in a cloud session (CLAUDE_CODE_REMOTE true): it hands
@@ -370,6 +372,23 @@ Yes '  and -Fork -Run reads only a run of that workflow' ($s.Code -eq 1)
 $threw = $false
 try { & $setRef -Fork -Tag $t -Commit $main -Message 'x' 6>$null } catch { $threw = $true }
 Yes '  and makes no tags' $threw
+$s = Session @{ Ops = $true; DeleteBranch = $b; Commit = $main } $done @((Note 'notice' "DELETED $b $main"))
+Yes '-Ops: it starts the private ops repository''s git-ref.yml on main with the branch and its commit only, exit 0' (
+    $s.Code -eq 0 -and $s.Calls[0] -match '^api -X POST repos/ThornswoodRP/Thornswood-Ops/actions/workflows/git-ref\.yml/dispatches' -and $s.Body.ref -eq 'main' -and
+    $s.Body.inputs.delete_branch -eq $b -and $s.Body.inputs.commit -eq $main -and @($s.Body.inputs.PSObject.Properties).Count -eq 2 -and $s.Out -match 'is deleted on GitHub')
+Yes '  and reads that run''s answer in the ops repository' (@($s.Calls | Where-Object { $_ -match 'repos/ThornswoodRP/Thornswood-Ops/actions/runs/88$' }).Count -ge 1 -and -not @($s.Calls | Where-Object { $_ -match 'repos/ThornswoodRP/Thornswood/' }).Count)
+$s = Session @{ Ops = $true; DeleteBranch = $b; Commit = $main; WaitMinutes = '0' } $done.Replace('"completed"', '"queued"') @()
+Yes '  a run not ended in time names the -Ops -Run line' ($s.Code -eq 2 -and $s.Out -match 'Set-Ref\.ps1 -Ops -Run 88')
+$s = Session @{ Ops = $true; Run = 88 } $done.Replace('git-ref.yml', 'build.yml') @((Note 'notice' "GONE $b"))
+Yes '  and -Ops -Run reads only a git-ref run' ($s.Code -eq 1)
+$threw = $false
+try { & $setRef -Ops -Tag $t -Commit $main -Message 'x' 6>$null } catch { $threw = $true }
+Yes '  and makes no tags' $threw
+$threw = $false
+try { & $setRef -Ops -DeleteTag 'v1.1.47' -Commit $main 6>$null } catch { $threw = $true }
+Yes '  and deletes no tags' $threw
+$s = Session @{ Ops = $true; Fork = $true; DeleteBranch = $b; Commit = $main } $done @()
+Yes '-Ops and -Fork at once: refused before anything is started' ($s.Code -eq 1 -and $s.Calls.Count -eq 0 -and $s.Out -match 'not both')
 $s = Session @{ Tag = 'v1.2.6.6'; Commit = $main; Message = 'x' } $done @()
 Yes 'a name it would refuse is refused before anything is started' ($s.Code -eq 1 -and $s.Calls.Count -eq 0)
 $s = Session @{ Tag = $t; Commit = $main } $done @()

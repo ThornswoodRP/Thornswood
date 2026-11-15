@@ -43,6 +43,7 @@
 .EXAMPLE
   .\scripts\release\New-ClientBuildRecord.ps1
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
   [string]$Dist  = (& (Join-Path $PSScriptRoot 'Where.ps1') ClientDist),

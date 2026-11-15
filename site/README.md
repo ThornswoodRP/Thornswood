@@ -24,6 +24,8 @@ else does.
 | `/api/play/join` | POST | the launcher, before every launch (`launcher\app\Discord.cs`) |
 | `/api/play/start`, `/api/play/end`, `/api/play/logs` | POST | the launcher, as a session starts, as it ends, and with the logs after (`launcher\app\Discord.cs`) |
 | `/api/play/roster` | POST | the launcher, for the names on the character cards (`launcher\app\Roster.cs`) |
+| `/api/play/characters` | POST | the launcher, at every Play and after a character is picked, deleted or played: the account's list of characters, their slots and the spare New character uses, kept in `linked.json` (#5938, `launcher\app\Chars.cs`) |
+| `/api/play/settings` | POST | the launcher, as it starts, before every launch, when the game closes and when its own settings change: the account's settings files, kept in `settings.json` (#5939, `launcher\app\YourSettings.cs`) |
 | `/api/play/pass` | POST | the launcher, when a character is picked at the game's menu and every minute while the game runs: a join pass the game server checks, or a plain no (#937, `launcher\app\Discord.cs`, which `launcher\app\JoinPass.cs` calls) |
 | `/auth/discord` | GET | the launcher's link button, through the browser; Discord sends the browser back to `/auth/discord/callback` (`launcher\app\Discord.cs`) |
 | `/api/allowed`, `/dev/api/allowed` | GET | each game server's door, every five minutes, with the bot's key; the dev server's `door.json` names the site with `/dev` on the end (`game\gamemode.js`) |
@@ -70,11 +72,19 @@ write the hub makes from another site and from this one.
 
 ## On your machine
 
-It needs node and nothing else. Run it from a copy of this folder rather than
-from the checkout, because it writes beside itself: `config.json` with a fresh
-cookie secret, `site.log`, the `files\` and `uploads\` folders, and anything
-typed into a board or a page in the browser goes into `data\`, which git
-tracks. Copy `config.example.json` into the copy as `config.json` first. It is
+It needs Node 22.19 or later, or 24.5 or later, and nothing else: it sets its
+trusted roots with two calls older Nodes lack, and on one of those it stops at
+once with a line naming the Node it needs and the one it found
+(`lib\node-version.js`). Run it from this folder in the checkout, or from a
+copy of it. It writes beside itself either way: `config.json` with a fresh
+cookie secret, `site.log`, the `files\` and `uploads\` folders, and every
+store under `data\`: reports and tickets, sign ins and linked accounts, the
+gallery, its queue and the pictures sent to it, and anything typed into a
+page in the browser. Git ignores all of it except the pages it tracks,
+`data\help.md`, `data\tests.md` and `data\site\` (#4454), so a run from the
+checkout leaves `git status` clean unless one of those pages is edited in the
+browser, and nothing anybody sent it can be committed by mistake.
+Copy `config.example.json` in as `config.json` first. It is
 every setting the site reads, holding what it runs on when there is no
 `config.json` at all: an empty member password, the roles, and every Discord
 setting, the bot's key and the cookie secret empty. Empty Discord settings are
@@ -82,14 +92,17 @@ what keep a copy on your machine from asking Discord anything. The empty
 password is not a password: the first start writes a random one and prints it
 once. A
 `config.json` already in this folder is that machine's own, and git ignores it;
-leave it where it is rather than copying it. From the copy:
+leave it where it is rather than copying it. From this folder, or the copy:
 
 ```
 $env:THORNSWOOD_DOCS_PORT = '3101'; $env:THORNSWOOD_DOCS_LOCAL = '1'; node server.js
 ```
 
-then open http://127.0.0.1:3101. Left unset it listens on every address on
-3001. Without a `config.json` it runs on the defaults written in `lib\config.js`,
+then open http://127.0.0.1:3101. Left unset it listens on 127.0.0.1:3001, this
+machine only (#2185). Only `THORNSWOOD_DOCS_EXPOSE=1` opens it on every
+address, as plain HTTP, with a warning at every start, and
+`THORNSWOOD_DOCS_LOCAL=1` keeps it on 127.0.0.1 even then (`lib\base.js`).
+Without a `config.json` it runs on the defaults written in `lib\config.js`,
 makes a random member password, prints it once, and keeps it in the
 `config.json` it writes. A later start does not print it again. Discord sign
 in and the role checks are off, since there is no client id or bot token. The game status and
@@ -143,7 +156,7 @@ shell's history would keep it. `-Password` reads the `config.json`
 on the VPS, changes the member password in it and keeps every other setting.
 A `config.json` there that will not read as JSON, an empty one included, is
 left exactly as it is and the password is not changed.
-`tests\test-docs-password.ps1` runs that part of the script against copies.
+`scripts\tests\test-docs-password.ps1` runs that part of the script against copies.
 
 `GET /api/deploys` says which commit, zip and hash each part on the box runs
 and when each last went out, read from the records the deploy scripts leave
@@ -211,7 +224,7 @@ leaves the queue and is public at `/shot`, and `/up` closes behind it.
 | `/api/gallery/pending` | GET | staff (`access.dev`), by the hub cookie or a launcher ticket | none | `200 {pending:[...]}`, each with `copies` (the widths sent); `403` otherwise |
 | `/api/gallery/approve` | POST | staff | `{name, by?, copies?}` | `200 {ok,approved,copies}`; upserts the name onto `gallery.json`, removes it from the queue, idempotent; only the copies named in `copies`, the ones the card showed, go into the item's `srcset`; `400` with no name |
 | `/api/gallery/approved` | DELETE | staff | `{name}`; a `deleteFile` is no longer read | `200 {ok,removed,removedApproved,removedPending,fileDeleted}`; takes the name off `gallery.json` and off the pending queue, which is how staff turn down a waiting picture (there is no Reject); clears reports on that name; deletes the file, unless the picture had an open report, when it is kept unshown for `GALLERY_HOLD_DAYS` (#2352); `400` with no name |
-| `/api/gallery/report` | POST | signed-in play member, or launcher ticket | `{name, why?}` | `200 {ok,id}`; writes to `gallery-reports.json`; does not take the shot down; `404` if the name is not approved |
+| `/api/gallery/report` | POST | signed-in play member, or launcher ticket | `{name, why?}` | `200 {ok,id}`; writes to `gallery-reports.json`; does not take the shot down; `404` if the name is not approved; a repeat from the same account on the same picture updates its first row and keeps its id; `429` with `Retry-After` past the report limit (five an hour, twenty a day, per account) |
 | `/api/gallery/reports` | GET | staff | none | `200 {reports:[...]}` |
 | `/api/gallery/report/dismiss` | POST | staff | `{id}` | `200 {ok,removed}` |
 

@@ -240,6 +240,17 @@ const SLOG_NAMES = [
 
 function slogFile(key) { return path.join(SLOGS, key + '.json'); }
 
+/* A set on disk, with the file's modified time set to the set's own "at",
+   its saved time (#4432). pruneSessionLogs ages a set by that time alone and
+   never opens it, so every write of a set goes through here: the first, a
+   replay marked on it, a kept session's chat copied in or dropped. A set
+   written again is not younger for it. Throws as writeFileSync does. */
+function writeSlogSet(file, set) {
+  fs.writeFileSync(file, JSON.stringify(set));
+  const at = Number(set && set.at);
+  if (at > 0) fs.utimesSync(file, new Date(at), new Date(at));
+}
+
 /* The tail of a log, never the head. A crash is at the end. */
 function slogTrim(s, cap) {
   const t = String(s == null ? '' : s);
@@ -282,7 +293,7 @@ function putSessionLogs(key, who, logs) {
       if (first && typeof first === 'object') {
         first.resent = (Number(first.resent) || 0) + 1;
         first.resentAt = Date.now();
-        try { fs.writeFileSync(file, JSON.stringify(first)); }
+        try { writeSlogSet(file, first); }
         catch (e) {
           console.error('[thornswood-docs] session-logs ' + JSON.stringify({ event: 'resend-unmarked', session: key, code: e.code || e.name }));
         }
@@ -313,7 +324,7 @@ function putSessionLogs(key, who, logs) {
       logs: keep
     };
     if (keptChat) set.chat = keptChat;
-    fs.writeFileSync(file, JSON.stringify(set));
+    writeSlogSet(file, set);
     return 'saved';
   } catch (e) {
     /* 'failed', not 'nothing' (#2736). A set the folder would not take was
@@ -369,13 +380,15 @@ function pruneSessionLogs() {
     const key = f.slice(0, -5);
     if (held.has(key)) continue;
     const full = path.join(SLOGS, f);
-    // When the set was saved: its own stamp, else the file's time. A set
-    // whose time cannot be read either way is not aged, because a guess
+    // When the set was saved: the file's modified time, which every write
+    // of a set sets to the set's own "at" (writeSlogSet, #4432). Read by
+    // stat, never by opening the set: this used to read and parse every set
+    // in full, up to a megabyte each, one after another on the site's only
+    // thread. A set whose time cannot be read is not aged, because a guess
     // that deletes evidence is the wrong way to be wrong.
     let at = 0;
-    try { at = Number((JSON.parse(fs.readFileSync(full, 'utf8')) || {}).at) || 0; } catch (e) { at = 0; }
-    if (!at) { try { at = fs.statSync(full).mtimeMs; } catch (e) { at = Date.now(); } }
-    if (at >= cutoff) continue;
+    try { at = fs.statSync(full).mtimeMs; } catch (e) { at = 0; }
+    if (!at || at >= cutoff) continue;
     try {
       fs.unlinkSync(full);
       out.deleted++;
@@ -389,7 +402,7 @@ function pruneSessionLogs() {
   return out;
 }
 
-Object.assign(module.exports, { SESSIONS, SESSIONS_DAYS, SLOG_ALL, SLOGS });
+Object.assign(module.exports, { SESSIONS, SESSIONS_DAYS, SLOG_ALL, SLOGS, writeSlogSet });
 
 // From modules loaded after this one, taken once this one is whole, so a
 // module that needs this one back finds all of it.

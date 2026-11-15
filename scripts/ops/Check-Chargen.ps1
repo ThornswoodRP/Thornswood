@@ -33,6 +33,7 @@
 
   Read only, here and there. It changes nothing on either machine.
 #>
+#Requires -Version 7
 param(
     [string]$Dist = (& (Join-Path $PSScriptRoot '..\release\Where.ps1') ServerDist),
     [string]$Data = ((& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install) + '\Game\Data'),

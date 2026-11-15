@@ -2,6 +2,11 @@
 
 Part of the [Developer Guide](../../Developer-Guide.md), the index of every page and section.
 
+## Contents
+
+- [How work moves](#how-work-moves)
+- [How work moves, the long form](#how-work-moves-the-long-form)
+
 ## How work moves
 
 The short form of the rules. The same decisions, with the dates they were made, are in [How work moves, the long form](#how-work-moves-the-long-form).
@@ -45,12 +50,13 @@ The short form of the rules. The same decisions, with the dates they were made, 
   not refuse one from the admin account: with `enforce_admins` off, GitHub
   holds an admin to none of main's rules, so for the admin this is a team rule
   kept by hand.
-- What branch protection on main actually enforces, since 25 Sep:
-  `enforce_admins` is **off**, there is no required check, required
-  approving reviews is **0**, and the code owner review is **off**.
-  Patrick, that day: "we don't need the required check/reviewer at all anymore for anyone as long as we give verbal agreement and the VPS check goes through". So the rule is ours, not a setting:
+- What branch protection on main enforces, since 25 Sep:
+  `enforce_admins` is **off**, branch protection itself names no check,
+  required approving reviews is **0**, and the code owner review is **off**.
+  Patrick, that day: "we don't need the required check/reviewer at all anymore for anyone as long as we give verbal agreement and the VPS check goes through". Since 31 Oct main's ruleset, below, holds
+  the checks instead:
   anybody on the team merges their own pull request once `Build check result`
-  (the build check, on the VPS) is green and they are confident in the
+  (the build check, on GitHub's hosted runners) is green and they are confident in the
   change. A merge gets no line in #staff-updates (Patrick, 22 Oct: that
   channel is only for what staff must act on). Nobody waits for Patrick. What GitHub does hold write
   access to on main: a change comes through a pull request (with no approval
@@ -76,7 +82,13 @@ The short form of the rules. The same decisions, with the dates they were made, 
   one that conflicts with main are left off. So is one labelled
   `outside work`, which carries the work of somebody outside the team: it
   merges only when Patrick says so for that person (8 Nov 2026), whoever
-  opened the pull request that carries it. One the queue lets go goes back
+  opened the pull request that carries it. One that changes what runs on the
+  box (a workflow, the deploy gate, a verb list, or a file a verb runs or
+  reads, as the verb lists name them) is left off unless it is Patrick's,
+  and a Claude session's branch (`claude/...`) is not his for this, though
+  GitHub names him as its author: it merges on his Main card in the Hermes
+  app, which Bramble opens (Patrick, 15 Nov 2026). Nobody turns auto-merge
+  on for it by hand. One the queue lets go goes back
   on after the next push to main when the queue was cleared, rolled back or
   timed out; let go for a failed check or a conflict, it is its owner's, and
   the owner's push with the fix puts it back on. The
@@ -135,7 +147,7 @@ The short form of the rules. The same decisions, with the dates they were made, 
   for them, then one "- " line for each thing they will notice, saying what
   it does and what to do if anything. Ship refuses a title under three words
   or notes with no "- " line. Since 27 Sep it also refuses notes that say
-  what only we would understand (scripts\release\Note-Rules.ps1): the word
+  what only we would understand (tools\ReleaseNotes\NoteRules.cs): the word
   the Words section bans, an em dash, an issue or pull request number, "PR", a code file or
   a setting name (WEBVIEW2_LIKE_THIS), a name out of the code (PutInServerOrder,
   camelCase), our own words for how we work (demoting, worktree, squash, CI),
@@ -180,7 +192,7 @@ The short form of the rules. The same decisions, with the dates they were made, 
     lives in the repository folder: its ignored `local\` and `out\` for what
     is one machine's own, and its ignored `worktrees\<name>` and
     `temp\<task>` for worktrees and scratch, each removed when its work is
-    done. On One that folder is `C:\Thornswood-Repo`. The other is the
+    done. That folder is the clone ([Clone the repository](set-up-a-machine.md#clone-the-repository)). The other is the
     shared notes on One (`C:\Thornswood Vault`). The launcher's installs, the main one and
     `<Root>-DevBuild`, are the product and stay. No other top-level folders
     and no scratch files in Downloads. And no copies of what GitHub or the VPS
@@ -278,9 +290,12 @@ The short form of the rules. The same decisions, with the dates they were made, 
   switch (#4983). A push
   to main whose tree a green pull request build already passed stops green at
   "Already tested in its pull request" instead of building again (#3182).
-  Red means the branch would stop Ship at the build step; fix that, and merge
-  once it is green and you are confident in the change; a merge
-  gets no line in #staff-updates. Nothing in GitHub's settings is required. Before you
+  Red means the branch would stop Ship at the build step; fix that, and
+  it merges by itself once it is green, and you opened it ready only when
+  you were confident in the change; a merge gets no line in
+  #staff-updates. Main's ruleset requires `Build check result`,
+  `Test tasks in the pull request` and `Release note`
+  (`records/github-repo-settings.json`). Before you
   push, commit and run `pwsh scripts\dev\Check-Change.ps1`: it runs the
   harnesses your change can reach, picked from the same map the shares use,
   and with `-Body <file>` holds the pull request's test tasks to the bot's
@@ -319,8 +334,11 @@ this is the long form.
   commits with plain messages, `git push -u origin <branch>`, then
   `gh pr create --fill` standing on the branch. Nothing is force pushed.
 - **What GitHub enforces on main, and what it does not.** Since 25 Sep:
-  `enforce_admins` is off; there is no required check; required approving
-  reviews is 0; the code owner review is off. For write access a change
+  `enforce_admins` is off; branch protection names no check;
+  required approving reviews is 0; the code owner review is off. Main's
+  ruleset (since 31 Oct, #3683) is what holds the checks: it requires
+  `Build check result`, `Test tasks in the pull request` and
+  `Release note` of everybody, the admin account included. For write access a change
   still has to come through a pull request, and a force push or deleting
   main is refused; with `enforce_admins` off, GitHub holds an admin to none
   of main's rules. The build check,

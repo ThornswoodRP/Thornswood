@@ -34,6 +34,7 @@
   Kept despite its size: skymp5-server.js.map, 10 MB. Without it every stack
   trace from the server points at minified bundle offsets.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     [string]$Dist    = (& (Join-Path $PSScriptRoot 'Where.ps1') ServerDist),
