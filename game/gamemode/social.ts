@@ -94,7 +94,7 @@
   // ------------------------------------------------------------- storage --
 
   function fresh() {
-    return { friends: {}, muted: {}, textOff: {}, namesOff: {}, namesAll: false, journals: [], at: 0 };
+    return { friends: {}, muted: {}, textOff: {}, namesOff: {}, namesAll: false, journals: [], journalsMade: 0, at: 0 };
   }
 
   /*
@@ -135,6 +135,8 @@
     if (v.namesOff && typeof v.namesOff === 'object') { out.namesOff = v.namesOff; }
     out.namesAll = !!v.namesAll;
     if (Array.isArray(v.journals)) { out.journals = v.journals; }
+    // How many journals were ever made, for their ids (#6178).
+    out.journalsMade = Math.max(0, Math.floor(Number(v.journalsMade) || 0));
     out.at = Number(v.at) || 0;
     return out;
   }
@@ -899,8 +901,21 @@
     // once, and a command offered again under its id runs once (commandsRun).
     // tests/test-2135-journal-press.js counts it. So there is no time window
     // here: the 2 s one #2037 added guessed at a repeat nothing makes.
+    /*
+      THE ID IS UNIQUE BY HOW IT IS MADE (#6178): the millisecond, then how
+      many journals this character has made, which only counts up and is
+      never reused when one is dropped. The millisecond is always eight
+      characters, so two ids are the same only if both parts are. It used
+      to be the millisecond and a random number under 1000, so two journals
+      made in one millisecond shared an id one time in a thousand, and
+      findJournal gave the first of them for both. The count is kept modulo
+      1296 to stay two characters, the length test-2563-journal-length.js
+      holds a Save line to; 1296 journals in one millisecond is not a thing.
+    */
+    var made = Number(s.journalsMade) || 0;
+    s.journalsMade = made + 1;
     var j = {
-      id: 'j' + Date.now().toString(36) + Math.floor(Math.random() * 1000).toString(36),
+      id: 'j' + Date.now().toString(36) + (made % 1296).toString(36),
       title: String(title || 'Journal').slice(0, 60),
       pages: [], shared: {}, at: Date.now()
     };
