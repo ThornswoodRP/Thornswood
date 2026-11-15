@@ -56,6 +56,10 @@
                   that is off on again, after its address is set. -Close
                   turns both rules off. A connection already open stays
                   open, and port 22 and the bridge are never touched.
+    the copies    a rule by one of the two names under another id: the
+                  scoped local pair still beside the box's policy pair until
+                  Set-InboundRules.ps1 -Own runs (#3896). COPY names each.
+                  -Close turns them off with the pair and reads each back.
 
   CLOSED (#5351). Once thornswood.net and www are on the tunnel, every
   visitor reaches Caddy from cloudflared on 127.0.0.1, which the firewall
@@ -67,11 +71,11 @@
   every ACME HTTP challenge on every server it runs, before any route
   (caddyhttp's Server.ServeHTTP calls the TLS app's HandleHTTPChallenge
   first). The watchdog's cert row (Watch-Services.ps1) says so 14 days
-  before the certificate ends if a renewal fails. -Close needs another rule
-  that lets Caddy take 80 or 443 from any address, scoped or not, to be gone
-  first, since it would still let a SYN in.
+  before the certificate ends if a renewal fails. -Close needs any other
+  rule that lets Caddy take 80 or 443, scoped or not, to be gone first,
+  since it would still let a SYN in; a copy of the pair is not another rule.
 
-  Every line of output starts with one word: RULE, ALSO, PROFILE, NAME,
+  Every line of output starts with one word: RULE, COPY, ALSO, PROFILE, NAME,
   TUNNEL, CERT, CHANGED, WOULD (with -DryRun), ALREADY, STOP or DONE. STOP means nothing
   after it was done, and the exit code is 1.
 
@@ -85,7 +89,8 @@
   Set both rules back to any address.
 
 .PARAMETER Close
-  Turn both rules off, once the tunnel carries both names.
+  Turn both rules off, and any copy of them, once the tunnel carries both
+  names.
 
 .PARAMETER Metrics
   cloudflared's metrics address, as records\cloudflare-tunnel.json has it.
@@ -158,7 +163,8 @@ function Sync-ThornswoodFirewall {
 
 # Every enabled inbound Allow rule the firewall takes: Name, DisplayName,
 # Protocol, Ports, Program, Package (the app container, '' when none), Service
-# ('Any' when not bound to one) and Remote ('Any' when open to all).
+# ('Any' when not bound to one), Remote ('Any' when open to all) and Store
+# (GroupPolicy or Local, as Get-WebRule says it).
 function Get-AllowRules {
     foreach ($r in @(Get-NetFirewallRule -PolicyStore ActiveStore -Direction Inbound -Enabled True -Action Allow -ErrorAction SilentlyContinue)) {
         $pf = $r | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
@@ -173,6 +179,7 @@ function Get-AllowRules {
             Package = [string]$ap.Package
             Service = [string]$sf.Service
             Remote = @(@($af.RemoteAddress) | ForEach-Object { [string]$_ })
+            Store = [string]$r.PolicyStoreSourceType
         }
     }
 }
@@ -397,8 +404,21 @@ function Invoke-WebFirewall {
     }
     $also = @()
     $alsoScoped = @()
+    # A second copy of one of the two rules, under its own id in the other
+    # store: until Set-InboundRules.ps1 -Own has run (#3896) the scoped local
+    # pair stays beside the pair Setup-Domain.ps1 made in the box's policy on
+    # 8 Nov 2026, and both are taken (the box, 15 Nov 2026). It is the same
+    # rule, so -Close turns it off with the pair (#5351).
+    $copies = @()
     foreach ($r in @(Get-AllowRules)) {
         if (@($web.Values | ForEach-Object { $_.Name }) -contains $r.Name) { continue }
+        if (@($WebRules.Values) -contains $r.DisplayName) {
+            $copies += $r
+            $from = $(if ($r.Remote -contains 'Any') { 'any address' } else { [string]$r.Remote.Count + ' addresses' })
+            Say 'COPY' ("rule '" + $r.DisplayName + "' is also in the " + $r.Store + ' store, under its own id, and lets ' + $(if ($r.Ports.Count) { $r.Ports -join ',' } else { 'any port' }) + ' in from ' + $from)
+            if ($r.Remote -contains 'Any') { $also += $r.DisplayName }
+            continue
+        }
         if ($r.Protocol -ne 'TCP' -and $r.Protocol -ne 'Any') { continue }
         if (-not (Test-TakesWebPort $r) -or -not (Test-TakesCaddy $r)) { continue }
         $ports = $(if ($r.Ports.Count) { $r.Ports -join ',' } else { 'Any' })
@@ -406,8 +426,8 @@ function Invoke-WebFirewall {
             $also += $r.DisplayName
             Say 'ALSO' ("rule '" + $r.DisplayName + "' lets 80 or 443 in from any address (ports " + $ports + ')')
         } elseif ($Check -or $Close) {
-            # A copy left beside the pair, scoped like it (#5334), lets
-            # Cloudflare in after -Close turns the pair off.
+            # Another rule scoped like the pair lets Cloudflare in after
+            # -Close turns the pair off.
             $alsoScoped += $r.DisplayName
             Say 'ALSO' ("rule '" + $r.DisplayName + "' lets 80 or 443 in from " + $r.Remote.Count + ' addresses (ports ' + $ports + ')')
         }
@@ -441,7 +461,7 @@ function Invoke-WebFirewall {
         $tunnel = Test-Tunnel @($Domain, ('www.' + $Domain))
         Say 'TUNNEL' ('cloudflared''s /ready answered ' + $tunnel.Ready)
         if ($tunnel.Carried -lt 0) { Say 'TUNNEL' 'its request counter could not be read, so whether it carries the names is not known' }
-        else { Say 'TUNNEL' ('it carried ' + $tunnel.Carried + ' of 2 requests from here to ' + $Domain + ' and www') }
+        else { Say 'TUNNEL' ('its request count rose by ' + $tunnel.Carried + ' over the 2 requests sent from here to ' + $Domain + ' and www') }
     }
     $cert = Get-OriginCert $Domain
     if ($cert) { Say 'CERT' ($Domain + ' from ' + $cert.Issuer + ', ' + $cert.NotBefore.ToString('yyyy-MM-dd HH:mm') + 'Z to ' + $cert.NotAfter.ToString('yyyy-MM-dd HH:mm') + 'Z') }
@@ -452,9 +472,10 @@ function Invoke-WebFirewall {
     # -------------------------------------------------------- the change ---
     if ($Close) {
         if ($outside.Count) { $script:stopped = $true; Say 'STOP' ($Domain + ' does not point only into Cloudflare''s ranges for everybody (' + (($outside | Select-Object -Unique) -join '; ') + '), so it is not all coming through Cloudflare. Nothing was changed.'); return }
-        if ($tunnel.Ready -ne 200 -or $tunnel.Carried -lt 2) { $script:stopped = $true; Say 'STOP' ('the tunnel did not carry both names (/ready ' + $tunnel.Ready + ', ' + $tunnel.Carried + ' of 2 requests), so the site still comes to the box''s address, and closing 80 and 443 would shut everybody out. Install-Tunnel.ps1 -Switch puts the names on the tunnel. Nothing was changed.'); return }
+        if ($tunnel.Ready -ne 200 -or $tunnel.Carried -lt 2) { $script:stopped = $true; Say 'STOP' ('the tunnel did not carry both names (/ready ' + $tunnel.Ready + ', its count rose by ' + $tunnel.Carried + ' over 2 requests), so the site still comes to the box''s address, and closing 80 and 443 would shut everybody out. Install-Tunnel.ps1 -Switch puts the names on the tunnel. Nothing was changed.'); return }
         if ($off.Count) { $script:stopped = $true; Say 'STOP' ('the firewall profile ' + ($off -join ', ') + ' is off or lets everything in, so turning the two rules off would close nothing. Nothing was changed.'); return }
-        if ($also.Count -or $alsoScoped.Count) { $script:stopped = $true; Say 'STOP' ('another rule lets Caddy take 80 or 443 (' + ((@($also) + @($alsoScoped)) -join ', ') + '), and would still let a SYN in. Decide about it first. Nothing was changed.'); return }
+        $other = @(@($also) + @($alsoScoped) | Where-Object { @($WebRules.Values) -notcontains $_ })
+        if ($other.Count) { $script:stopped = $true; Say 'STOP' ('another rule lets Caddy take 80 or 443 (' + ($other -join ', ') + '), and would still let a SYN in. Decide about it first. Nothing was changed.'); return }
         foreach ($port in $WebRules.Keys) {
             $r = $web[$port]
             if ($r.Enabled -ne 'True') { Say 'ALREADY' ("rule '" + $WebRules[$port] + "' is off, so nothing from outside reaches " + $port); continue }
@@ -464,6 +485,13 @@ function Invoke-WebFirewall {
                 if ($back.Enabled -ne 'False') { $script:stopped = $true; Say 'STOP' ("rule '" + $WebRules[$port] + "' reads back as enabled " + $back.Enabled + ', not off. Run Set-WebFirewall.ps1 to put both back to Cloudflare''s ranges.'); return }
             }
             Change ("rule '" + $WebRules[$port] + "' is off, so nothing from outside reaches " + $port)
+        }
+        foreach ($c in $copies) {
+            if (-not $DryRun) {
+                Set-RuleEnabled $c.Name $false $c.Store
+                if (@(Get-AllowRules | Where-Object { $_.Name -eq $c.Name }).Count) { $script:stopped = $true; Say 'STOP' ("the copy of '" + $c.DisplayName + "' in the " + $c.Store + ' store reads back as still on. Run Set-WebFirewall.ps1 to put the pair back to Cloudflare''s ranges.'); return }
+            }
+            Change ("the copy of '" + $c.DisplayName + "' in the " + $c.Store + ' store is off too')
         }
         return
     }

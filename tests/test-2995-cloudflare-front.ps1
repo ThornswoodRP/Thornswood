@@ -183,6 +183,7 @@ function Set-RuleEnabled([string]$Name, [bool]$On) {
     $global:Fake.log.Add('Enabled ' + $Name + ' ' + $On)
     if (-not $global:Fake.sticks) { return }
     foreach ($k in @($global:Fake.web.Keys)) { if ($global:Fake.web[$k].Name -eq $Name) { $global:Fake.web[$k].Enabled = $(if ($On) { 'True' } else { 'False' }) } }
+    if (-not $On) { $global:Fake.rules = @($global:Fake.rules | Where-Object { $_.Name -ne $Name }) }
 }
 function Test-Tunnel([string[]]$Names) { $global:Fake.asked.Add('tunnel ' + ($Names -join ',')); return $global:Fake.tunnel }
 function Get-OriginCert([string]$Name) { return $global:Fake.cert }
@@ -215,7 +216,7 @@ function Resolve-Name([string]$Name, [string]$Server) {
     Yes '  and the stand-in replaces every one of them' (@($layerNames | Where-Object { $fakeNames -notcontains $_ }).Count -eq 0)
 
     function Rule([string]$display, [string]$proto, [string[]]$ports, [string]$program = '', [string]$package = '', [string[]]$remote = @('Any')) {
-        return [pscustomobject]@{ Name = ('{' + [Guid]::NewGuid().ToString() + '}'); DisplayName = $display; Protocol = $proto; Ports = @($ports); Program = $program; Package = $package; Service = 'Any'; Remote = @($remote) }
+        return [pscustomobject]@{ Name = ('{' + [Guid]::NewGuid().ToString() + '}'); DisplayName = $display; Protocol = $proto; Ports = @($ports); Program = $program; Package = $package; Service = 'Any'; Remote = @($remote); Store = 'Local' }
     }
     function New-Fake {
         $global:Fake = @{
@@ -260,7 +261,7 @@ function Resolve-Name([string]$Name, [string]$Server) {
     Yes '  each rule as it stands, open' ((Has $r.Lines '^RULE 80 OPEN to any address$') -and (Has $r.Lines '^RULE 443 OPEN to any address$'))
     Yes '  every profile' (@($r.Lines | Where-Object { $_ -match '^PROFILE ' }).Count -eq 3)
     Yes '  both names from both resolvers, every address inside' (@($r.Lines | Where-Object { $_ -match '^NAME .*, inside the ranges$' }).Count -eq 10 -and @($global:Fake.asked | Where-Object { $_ -notlike 'tunnel *' }).Count -eq 4 -and (Has $global:Fake.asked '^8\.8\.8\.8 www\.thornswood\.net$'))
-    Yes '  whether the tunnel carries both names (#5351)' ((Has $r.Lines '^TUNNEL cloudflared''s /ready answered 200$') -and (Has $r.Lines '^TUNNEL it carried 2 of 2 requests from here to thornswood\.net and www$') -and (Has $global:Fake.asked '^tunnel thornswood\.net,www\.thornswood\.net$'))
+    Yes '  whether the tunnel carries both names (#5351)' ((Has $r.Lines '^TUNNEL cloudflared''s /ready answered 200$') -and (Has $r.Lines '^TUNNEL its request count rose by 2 over the 2 requests sent from here to thornswood\.net and www$') -and (Has $global:Fake.asked '^tunnel thornswood\.net,www\.thornswood\.net$'))
     Yes '  and Caddy''s certificate, who issued it and when it starts and ends' (Has $r.Lines '^CERT thornswood\.net from CN=E7, .*, 2026-11-10 04:00Z to 2027-02-08 04:00Z$')
     Yes '  and no ALSO: the Store apps'' package rules, the game''s UDP port and 3000 let nothing in on 443 for Caddy' (-not (Has $r.Lines '^ALSO '))
 
@@ -340,11 +341,39 @@ function Resolve-Name([string]$Name, [string]$Server) {
     New-Fake
     $global:Fake.tunnel = [pscustomobject]@{ Ready = 200; Carried = 1 }
     $r = Invoke-BoxHere ("-Close -Ranges '" + $list + "'")
-    Yes '-Close when the tunnel carried one name of two: STOP, nothing changed' ($r.Code -eq 1 -and (Has $r.Lines '^STOP the tunnel did not carry both names \(/ready 200, 1 of 2') -and $global:Fake.log.Count -eq 0)
+    Yes '-Close when the tunnel carried one name of two: STOP, nothing changed' ($r.Code -eq 1 -and (Has $r.Lines '^STOP the tunnel did not carry both names \(/ready 200, its count rose by 1 over 2 requests') -and $global:Fake.log.Count -eq 0)
     New-Fake
-    $global:Fake.rules += (Rule 'Thornswood Web 443' 'TCP' @('443') '' '' @('173.245.48.0/20'))
+    $global:Fake.rules += (Rule 'Thornswood Web 8443' 'TCP' @('443') '' '' @('173.245.48.0/20'))
     $r = Invoke-BoxHere ("-Close -Ranges '" + $list + "'")
-    Yes '-Close with a scoped copy of the rule beside the pair: ALSO names it, STOP, nothing changed' ($r.Code -eq 1 -and (Has $r.Lines "^ALSO rule 'Thornswood Web 443' lets 80 or 443 in from 1 addresses") -and (Has $r.Lines '^STOP another rule lets Caddy take 80 or 443') -and $global:Fake.log.Count -eq 0)
+    Yes '-Close with another scoped rule on 443: ALSO names it, STOP, nothing changed' ($r.Code -eq 1 -and (Has $r.Lines "^ALSO rule 'Thornswood Web 8443' lets 80 or 443 in from 1 addresses") -and (Has $r.Lines '^STOP another rule lets Caddy take 80 or 443 \(Thornswood Web 8443\)') -and $global:Fake.log.Count -eq 0)
+    # The box on 15 Nov 2026: the scoped local pair beside the policy pair.
+    New-Fake
+    $null = Invoke-BoxHere ("-Apply -Ranges '" + $list + "'")
+    $c80 = Rule 'Thornswood Web 80' 'TCP' @('80') '' '' @($ranges)
+    $c443 = Rule 'Thornswood Web 443' 'TCP' @('443') '' '' @($ranges)
+    $global:Fake.rules += @($c80, $c443)
+    $global:Fake.log.Clear()
+    $r = Invoke-BoxHere ("-Check -Ranges '" + $list + "'")
+    Yes '-Check with the local pair beside the policy pair: COPY for each, in its store, and no ALSO' ($r.Code -eq 0 -and (Has $r.Lines ("^COPY rule 'Thornswood Web 80' is also in the Local store, under its own id, and lets 80 in from " + $ranges.Count + ' addresses$')) -and
+        (Has $r.Lines "^COPY rule 'Thornswood Web 443' is also in the Local store") -and -not (Has $r.Lines '^ALSO ') -and $global:Fake.log.Count -eq 0)
+    $r = Invoke-BoxHere ("-Close -Ranges '" + $list + "' -DryRun")
+    Yes '  -Close -DryRun: WOULD for the pair and both copies, nothing changed' ($r.Code -eq 0 -and @($r.Lines | Where-Object { $_ -match '^WOULD ' }).Count -eq 4 -and (Has $r.Lines "^WOULD the copy of 'Thornswood Web 443' in the Local store is off too$") -and $global:Fake.log.Count -eq 0)
+    $r = Invoke-BoxHere ("-Close -Ranges '" + $list + "'")
+    Yes '  -Close turns off the pair, then each copy in its own store, and reads each back' ($r.Code -eq 0 -and (($global:Fake.log) -join '|') -eq ('Enabled {web-80} False|Enabled {web-443} False|Enabled ' + $c80.Name + ' False|Enabled ' + $c443.Name + ' False') -and
+        @($r.Lines | Where-Object { $_ -match '^CHANGED ' }).Count -eq 4 -and @($global:Fake.rules | Where-Object { $_.DisplayName -like 'Thornswood Web *' }).Count -eq 0)
+    $global:Fake.log.Clear()
+    $r = Invoke-BoxHere ("-Check -Ranges '" + $list + "'")
+    Yes '  -Check then says both closed, with no COPY left' ((Has $r.Lines '^RULE 80 CLOSED') -and (Has $r.Lines '^RULE 443 CLOSED') -and -not (Has $r.Lines '^COPY ') -and $global:Fake.log.Count -eq 0)
+    New-Fake
+    $global:Fake.web['Thornswood Web 80'].Enabled = 'False'; $global:Fake.web['Thornswood Web 443'].Enabled = 'False'
+    $global:Fake.sticks = $false
+    $global:Fake.rules += (Rule 'Thornswood Web 443' 'TCP' @('443') '' '' @($ranges))
+    $r = Invoke-BoxHere ("-Close -Ranges '" + $list + "'")
+    Yes '  a copy that reads back as still on: STOP' ($r.Code -eq 1 -and (Has $r.Lines "^STOP the copy of 'Thornswood Web 443' in the Local store reads back as still on"))
+    New-Fake
+    $global:Fake.rules += (Rule 'Thornswood Web 443' 'TCP' @('443'))
+    $r = Invoke-BoxHere ("-Apply -Ranges '" + $list + "'")
+    Yes '  -Apply with a copy that takes any address: STOP, nothing changed' ($r.Code -eq 1 -and (Has $r.Lines "^COPY rule 'Thornswood Web 443' is also in the Local store, under its own id, and lets 443 in from any address$") -and (Has $r.Lines '^STOP another rule lets 80 or 443 in from any address') -and $global:Fake.log.Count -eq 0)
     New-Fake
     $global:Fake.profiles[2].Enabled = 'False'
     $r = Invoke-BoxHere ("-Close -Ranges '" + $list + "'")
@@ -401,7 +430,7 @@ function Resolve-Name([string]$Name, [string]$Server) {
     Yes 'no mode at all: STOP' ($r.Code -eq 1 -and (Has $r.Lines '^STOP say one of -Check, -Apply, -Open or -Close'))
     $r = Invoke-BoxHere ("-Check -Apply -Ranges '" + $list + "'")
     Yes 'two modes: STOP' ($r.Code -eq 1 -and (Has $r.Lines '^STOP say one of') -and $global:Fake.log.Count -eq 0)
-    $words = @($r.Lines + (Invoke-BoxHere ("-Check -Ranges '" + $list + "'")).Lines | Where-Object { $_ -notmatch '^(RULE|ALSO|PROFILE|NAME|TUNNEL|CERT|CHANGED|WOULD|ALREADY|STOP|DONE) ' })
+    $words = @($r.Lines + (Invoke-BoxHere ("-Check -Ranges '" + $list + "'")).Lines | Where-Object { $_ -notmatch '^(RULE|COPY|ALSO|PROFILE|NAME|TUNNEL|CERT|CHANGED|WOULD|ALREADY|STOP|DONE) ' })
     Yes 'every line it prints starts with one of its words' ($words.Count -eq 0)
 
     # ---- 5. the machine half -----------------------------------------------------
