@@ -180,10 +180,13 @@ for (const name of ['BtnGalleryChoose', 'BtnGallerySend', 'BtnGalleryRefresh',
                     'BtnGalleryReportSend', 'BtnGalleryReportCancel',
                     'GalleryApprovedList',
                     'GalleryPageReportRow', 'TxtGalleryPageSaid',
-                    'GalleryDrop', 'GalleryChosenList', 'TxtGalleryDropLead']) {
+                    'GalleryDrop', 'GalleryChosenList']) {
   yes('MainWindow.axaml has ' + name, XAML.indexOf('x:Name="' + name + '"') > 0);
   yes('Shell.cs takes ' + name + ' from the window', SHELL.indexOf('win.' + name + ';') > 0);
 }
+// The drop zone's lead line is fixed text in the window; Shell keeps no copy
+// of a control it never changes (#4632).
+yes('MainWindow.axaml has TxtGalleryDropLead', XAML.indexOf('x:Name="TxtGalleryDropLead"') > 0);
 yes('no separate waiting section in XAML',
     XAML.indexOf('GalleryStaffBlock') < 0 &&
     XAML.indexOf('GalleryPendingList') < 0 &&
