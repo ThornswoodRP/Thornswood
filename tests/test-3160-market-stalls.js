@@ -461,9 +461,12 @@ yes('W5 the front plugin\'s stalls are the table\'s, row for row', Array.isArray
     /const STALL_SPOTS = clientTable\('STALL_SPOTS'\);/.test(front) &&
     spots.length === table.length &&
     table.every(function (t, i) { return spots[i][0] === t.id; }));
-let bundled = '';
-try { bundled = require('child_process').execFileSync(process.execPath, [path.join(REPO_DIR, 'scripts', 'dev', 'Build-MarketStallsGamemode.js'), '--check'], { encoding: 'utf8' }); }
-catch (e) { bundled = String(e.stdout || '') + String(e.message || ''); }
-yes('W6 the bundle in the gamemode and both tables are not stale', /^PASS/.test(bundled));
+// The bundle is game code and the tables are content, built apart (#6195).
+function checked(tool) {
+  try { return require('child_process').execFileSync(process.execPath, [path.join(REPO_DIR, 'scripts', 'dev', tool), '--check'], { encoding: 'utf8' }); }
+  catch (e) { return String(e.stdout || '') + String(e.message || ''); }
+}
+yes('W6 the bundle in the gamemode is not stale', /^PASS/.test(checked('Build-MarketStallsGamemode.js')));
+yes('W7 both stall tables are not stale', /^PASS/.test(checked('Build-MarketStallTables.js')));
 
 done();

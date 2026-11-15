@@ -31,9 +31,11 @@ still say something.
   block whose banner has three slashes).
 - **One module already works this way.** `game\merchant-trading.js`,
   `merchant-settlement.js`, `quest-transactions.js` and `kill-contracts.js` are
-  ordinary files that `scripts\dev\Build-MerchantGamemode.js` wraps, with their
-  catalogues, into the `// MERCHANT TRADING BUNDLE BEGIN` region; `--check`
-  fails when the region is not what the sources make.
+  ordinary files that `scripts\dev\Build-MerchantGamemode.js` wraps into the
+  `// MERCHANT TRADING BUNDLE BEGIN` region; `--check` fails when the region is
+  not what the sources make. Their catalogues are gamemode tables that
+  `scripts\dev\Build-MerchantTables.js` writes, a step of the content chain
+  (#6195).
 
 Who edits it (12 Oct, 1,053 merged pull requests since 25 Sep): 188 changed
 `gamemode.js`, from every lane; 37 of the 46 sections touched were touched from

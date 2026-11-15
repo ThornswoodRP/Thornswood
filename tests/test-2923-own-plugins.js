@@ -299,12 +299,15 @@ const written = [].concat.apply([], steps.map((s) => s.writes || []));
 const badUses = [];
 for (const s of steps) {
   for (const f of s.uses || []) {
-    if (!fs.existsSync(path.join(ROOT, f)) || !fs.statSync(path.join(ROOT, f)).isFile()) { badUses.push(s.tool + ' uses ' + f + ', which is not a file here'); }
+    // A folder too: Build-MerchantTables.js reads the gamemode's progression
+    // block out of its source folder, game/gamemode (#6195), and a folder
+    // goes up whole, as git ls-tree gives it (ContentPaths.ps1).
+    if (!fs.existsSync(path.join(ROOT, f))) { badUses.push(s.tool + ' uses ' + f + ', which is not a file or folder here'); }
     if (under(f, written)) { badUses.push(s.tool + ' uses ' + f + ', which a step writes: that is a read'); }
     if (under(f, SENT) || /^scripts\//.test(f)) { badUses.push(s.tool + ' uses ' + f + ', which goes up anyway'); }
   }
 }
-yes('C11 each use is a file here that no step writes and the box would not get otherwise' + (badUses.length ? ' (' + badUses.slice(0, 3).join('; ') + ')' : ''),
+yes('C11 each use is a file or folder here that no step writes and the box would not get otherwise' + (badUses.length ? ' (' + badUses.slice(0, 3).join('; ') + ')' : ''),
     badUses.length === 0);
 
 const script = read('scripts/mods/Rebuild-ContentTables.ps1');

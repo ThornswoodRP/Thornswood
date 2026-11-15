@@ -42,10 +42,14 @@ function firstDifference(a, b) {
 
 if (args.includes('--check')) {
   if (dir === source.SOURCE) {
-    const r = spawnSync(process.execPath, [path.join(__dirname, 'Build-MerchantGamemode.js'), '--check'], { cwd: source.ROOT, encoding: 'utf8' });
-    if (r.stdout) process.stdout.write(r.stdout);
-    if (r.stderr) process.stderr.write(r.stderr);
-    if (r.status !== 0) process.exit(r.status || 1);
+    // The bundles of game code the parts carry (#6195: neither is a step of
+    // the content chain, so a content build never writes gamemode code).
+    for (const bundle of ['Build-MerchantGamemode.js', 'Build-MarketStallsGamemode.js']) {
+      const r = spawnSync(process.execPath, [path.join(__dirname, bundle), '--check'], { cwd: source.ROOT, encoding: 'utf8' });
+      if (r.stdout) process.stdout.write(r.stdout);
+      if (r.stderr) process.stderr.write(r.stderr);
+      if (r.status !== 0) process.exit(r.status || 1);
+    }
   }
   let built;
   try { built = source.build(dir); } catch (e) { stop(e); }

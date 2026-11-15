@@ -1,4 +1,4 @@
-// STALL_SPOTS, a table the front plugin reads (#5191). Built by scripts/dev/Build-MarketStallsGamemode.js;
+// STALL_SPOTS, a table the front plugin reads (#5191). Built by scripts/dev/Build-MarketStallTables.js;
 // the content build writes it, so do not hand edit.
 // ------------------------------------------------------------ whose game ----
 // thornswood-front.js owns the whose-game check (issue #485): the client

@@ -16,9 +16,11 @@
 //      read by a table() call in game/gamemode.js; every table() call has its
 //      file; and every file is written by a step of
 //      scripts/mods/content-tables.json, so the chain rebuilds all of them.
-//   4. No step of the chain writes a table into game/gamemode.js: the only
-//      steps that still write it carry code (the merchant and market stall
-//      bundles), and their catalogues are table files.
+//   4. No step of the chain writes game/gamemode.js or its source (#6195):
+//      the merchant and market stall bundles carry code, so each is built
+//      out of the chain by its own script, which writes no table, and its
+//      catalogues are table files a step of the chain writes. Each --check
+//      passes.
 //   5. The gamemode's own table() reads the server's folder, else the
 //      repository's game folder, once a load, and stops the load, naming the
 //      file, when a table is missing or does not parse; the load logs the
@@ -122,12 +124,23 @@ const unwritten = files.filter((n) => !written.has(n));
 yes('every table file is written by a step of the chain' + (unwritten.length ? ' (not: ' + unwritten.join(', ') + ')' : ''), unwritten.length === 0);
 
 // ------------------------------------------------- 4. the chain and gamemode.js
-const intoGamemode = chain.steps.filter((s) => (s.writes || []).indexOf('game/gamemode.js') >= 0).map((s) => s.tool).sort();
-yes('the only chain steps that still write gamemode.js are the two code bundles (' + intoGamemode.join(', ') + ')',
-    JSON.stringify(intoGamemode) === JSON.stringify(['scripts/dev/Build-MarketStallsGamemode.js', 'scripts/dev/Build-MerchantGamemode.js']));
-for (const tool of intoGamemode) {
-  const r = cp.spawnSync(process.execPath, [path.join(REPO, tool), '--check'], { cwd: REPO, encoding: 'utf8' });
-  yes(tool + ' --check: its bundle and its tables are what it builds' + (r.status ? ' (' + (r.stderr || r.stdout).trim().split('\n').pop() + ')' : ''), r.status === 0);
+// #6195: a step that wrote the gamemode put code into the content build, so
+// a build taken over a newer checkout laid old code over it. The two code
+// bundles are built apart from their tables, out of the chain.
+const intoGamemode = chain.steps.filter((s) => (s.writes || []).some((w) => w === 'game/gamemode.js' || w === 'game/gamemode' || w.indexOf('game/gamemode/') === 0)).map((s) => s.tool);
+yes('no step of the chain writes the gamemode or its source' + (intoGamemode.length ? ' (' + intoGamemode.join(', ') + ')' : ''), intoGamemode.length === 0);
+const steps = chain.steps.map((s) => s.tool);
+for (const [bundle, tables] of [['scripts/dev/Build-MarketStallsGamemode.js', 'scripts/dev/Build-MarketStallTables.js'],
+                                ['scripts/dev/Build-MerchantGamemode.js', 'scripts/dev/Build-MerchantTables.js']]) {
+  yes(bundle + ' is not a step, and ' + tables + ' is', steps.indexOf(bundle) < 0 && steps.indexOf(tables) >= 0);
+  for (const tool of [bundle, tables]) {
+    const r = cp.spawnSync(process.execPath, [path.join(REPO, tool), '--check'], { cwd: REPO, encoding: 'utf8' });
+    yes(tool + ' --check: what it writes is what it builds' + (r.status ? ' (' + (r.stderr || r.stdout).trim().split('\n').pop() + ')' : ''), r.status === 0);
+  }
+}
+for (const tool of ['scripts/dev/Build-MarketStallsGamemode.js', 'scripts/dev/Build-MerchantGamemode.js']) {
+  const text = fs.readFileSync(path.join(REPO, tool), 'utf8');
+  yes(tool + ' writes no table', !/TABLES\.write|CLIENT\.write|GamemodeTables|ClientTables/.test(text));
 }
 
 // -------------------------------------------------- 5. the gamemode's table()
