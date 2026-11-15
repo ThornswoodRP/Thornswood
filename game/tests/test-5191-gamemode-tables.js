@@ -138,9 +138,11 @@ for (const [bundle, tables] of [['scripts/dev/Build-MarketStallsGamemode.js', 's
     yes(tool + ' --check: what it writes is what it builds' + (r.status ? ' (' + (r.stderr || r.stdout).trim().split('\n').pop() + ')' : ''), r.status === 0);
   }
 }
+const buildGamemode = fs.readFileSync(path.join(REPO, 'scripts', 'dev', 'Build-Gamemode.js'), 'utf8');
 for (const tool of ['scripts/dev/Build-MarketStallsGamemode.js', 'scripts/dev/Build-MerchantGamemode.js']) {
   const text = fs.readFileSync(path.join(REPO, tool), 'utf8');
-  yes(tool + ' writes no table', !/TABLES\.write|CLIENT\.write|GamemodeTables|ClientTables/.test(text));
+  yes(tool + ' writes no table, and Build-Gamemode.js builds and checks it with the gamemode',
+      !/TABLES\.write|CLIENT\.write|GamemodeTables|ClientTables/.test(text) && buildGamemode.indexOf("'" + path.basename(tool) + "'") >= 0);
 }
 
 // -------------------------------------------------- 5. the gamemode's table()
