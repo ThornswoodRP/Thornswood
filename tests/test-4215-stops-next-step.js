@@ -26,8 +26,8 @@
   in the same issue (the download, the circle of mod rules, the shared files,
   the plugins no mod has), since only it has the stand-in Nexus they need.
   And P reads the last step of Enable-MCM.ps1 and Fix-QuickLoot.ps1, which
-  are retired and refuse to run. Sync-LoadOrder.ps1, the third script the
-  issue named, is gone from the repository (#4688).
+  are retired and refuse to run. The third script the issue named, the old
+  load order sync, is gone from the repository (#4688).
 */
 const fs = require('fs');
 const os = require('os');
