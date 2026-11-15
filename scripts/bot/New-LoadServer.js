@@ -3,16 +3,18 @@
 //
 // #4623. Lays out the load test's server on GitHub's runner, from three
 // things and nothing else:
-//   the engine   the server build records\server-build.json names, as the
-//                signed build-<date>.<run> Release carries it for the deploy
-//                agent (the server-<commit>-<hash>.zip, unpacked, as the
-//                workflow downloads it), every file the record names held to
-//                its sha256, so the server measured is the one dev runs. The
-//                fork's own artifact of the commit is not used: after the
-//                history rewrite the fork built that commit again (run
-//                41340857541), and a rebuild is never the same bytes
-//                (engine\README.md), so its scam_native.node is not the one
-//                the record holds;
+//   the engine   the server build records\server-build.json names: the
+//                fork's own build of the pin, as Get-EngineArtifact.ps1
+//                takes it and holds every file to the record, the same build
+//                merge-release.yml makes the build Release's server zip from
+//                (the workflow unpacks that zip, server-build.json and all). Every
+//                file the record names is held to its sha256 again here. A
+//                rebuild is never the same bytes (engine\README.md), and
+//                after the history rewrite the fork built one commit twice
+//                (run 41340857541); EngineArtifact.ps1 takes only the build
+//                whose files are the record's. Until #6153 this took the
+//                build Release instead, which a pin merge left behind until
+//                the next dev release;
 //   the game     game\gamemode.js, its tables (game\gamemode-tables, which
 //                the gamemode reads as it loads since #5280) and
 //                game\content\Thornswood-Content.esp from this checkout;
