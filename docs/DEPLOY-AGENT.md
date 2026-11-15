@@ -59,7 +59,7 @@ build** (the engine).
 | Voice | Applied with its server's Deployment: dev voice with dev's (#5187), live voice with main's (#5610). Voice has no Deployment of its own, because the gamemode pushes positions to it, so a promotion puts on live the voice dev ran with that Release. |
 | Content build | Built by the agent (#5191) where `agent.json` names `content`: a merge whose content inputs have no build makes a Deployment to **Content**, and the agent has the gate's `Build-Content` verb build the content plugin and the tables on the box, then puts the build on a draft Release for the merge release. See "The content build" below. |
 | Release news | After a Deployment goes in, the agent leaves its Release's notes for the bot, which posts them once (#5187). See "Release news" below. |
-| Restart notices | Before a server build swap stops a server, the agent leaves a notice the bot posts in #updates (dev's in the dev updates channel), counts down in the game, and waits five minutes on main, one on dev (#5784). It says the box's own restart for Windows updates ahead the same way. See "Restart notices" below. |
+| Restart notices | Before a server build swap stops a server, the agent leaves a notice the bot posts in #updates (dev's in #staff-updates), counts down in the game, and waits five minutes on main, one on dev (#5784). It says the box's own restart for Windows updates ahead the same way. See "Restart notices" below. |
 | Launcher and game files | Not the agent's job: they reach people through the launcher's feed and a Ship. Since #5179 every Release carries them as well (the signed launcher, the game files and the Velopack packages of both), attested, for the launcher's move to Velopack; the agent logs them as left alone. |
 | Bot pass before each dev Deployment | Once `Install-DeployAgent` has set up its task, every Deployment waits on a bot pass on a throwaway copy of dev with the new gamemode (#5196, below). A FAIL fails the Deployment and dev keeps what it runs. A deploy by tag (the gate's `Deploy-Release`, a rollback) does not wait on one. |
 | Steps after a deploy | Run by the agent (#5186), once each, after a Deployment of the Release carrying them succeeds: a pull request's file under `deploy/after/` names gate verbs to run and checks for a person in the game, instead of a run note. See "Steps after a deploy" below. merge-release.yml puts them in every Release as the part `after`. |
@@ -494,7 +494,7 @@ and writes the tag, name and notes to
 `C:\Thornswood-Deploys\for-bot\news-<environment>.json`, a folder only
 SYSTEM, Administrators and the bot's account read. The bot
 (`watch_release_news` in `bot/bot_news.py`) posts each tag once: a merge's release
-in the dev updates channel, a main release in #news, each by its id. A release
+in #staff-news, a main release in #news, each by its id. A release
 whose notes start "Nothing people would notice" (merge-release.yml's line for
 a merge whose pull requests say none), and one deployed over a day ago, are
 written down without a post. A rollback by tag is not news and leaves none.
@@ -506,7 +506,8 @@ A server build swap stops the server, so it is said first (#5784, step 3 of
 reads `restart-<environment>.json` from the same folder every 15 seconds and
 posts each restart once ahead: the live server's in #updates, the channel
 whose Updates Pings role promises a ping for restarts, with that role's
-mention; dev's in the dev updates channel. The time is Discord's own
+mention; dev's in #staff-updates, by the id in `staff-channel.txt`, with
+the same mention for the staff who took the role. The time is Discord's own
 timestamp, so each reader sees it in their clock. When the notice moves on
 to "back", "down" or "off" (called off before the stop), that is posted
 once too. A "coming" whose time is over 15 minutes gone, and an end whose

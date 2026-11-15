@@ -267,7 +267,7 @@ which records what the game folder holds right now without shipping anything. Do
 straight after the launcher has brought the game up to date, so the baseline is the
 current release and the first real Ship carries only what you changed.
 
-`Publish-Discord.ps1` reads the #news webhook and the dev updates one from
+`Publish-Discord.ps1` reads the #news webhook and the #staff-news one from
 the VPS through `Discord-Hook.ps1`, and a copy in `bot\news-webhook.txt` or
 `bot\dev-webhook.txt` only when the VPS cannot be asked; without either, Ship
 says so and carries on.

@@ -63,14 +63,14 @@ try {
     $told = Get-ChannelPosts 'dev'
     Yes 'the dev channel''s posts are its feed''s notes and its Discord posts' (@($told.Posts).Count -eq 4)
     Yes 'and its feed''s newest note is the newest release' ($told.Newest.title -eq 'Lighter gallery pictures')
-    Yes 'a Discord post is named as one' (@($told.Posts | Where-Object { $_.where -eq 'the dev updates channel' -and $_.title -like 'Immersive*' }).Count -eq 1)
+    Yes 'a Discord post is named as one' (@($told.Posts | Where-Object { $_.where -eq '#staff-news' -and $_.title -like 'Immersive*' }).Count -eq 1)
     Yes 'the main channel has had nothing here' (@((Get-ChannelPosts 'main').Posts).Count -eq 0)
 
     # ---- the check
     $r = @(Get-NoteRepeats "A new launcher build`n- The Ready card now says what is wrong when something stops Play.`n- An axe in the hand stays seen." $told.Posts $told.Newest)
     Yes 'the 7:08 AM repeat is found, and named with the note that said it first' ($r.Count -eq 1 -and $r[0] -like '*Ready card*' -and $r[0] -like '*"A new launcher"*7:08 AM*')
     $r = @(Get-NoteRepeats "Immersive Armors recipes ask for the right things`n- Immersive Armors pieces at a forge now cost the same ingredients as the same kind of piece at its rank and metal, and no gold coins." $told.Posts $told.Newest)
-    Yes 'the Ship after a deploy with the deploy''s note is refused, title and line' ($r.Count -eq 2 -and @($r | Where-Object { $_ -like '*the dev updates channel*' }).Count -eq 2)
+    Yes 'the Ship after a deploy with the deploy''s note is refused, title and line' ($r.Count -eq 2 -and @($r | Where-Object { $_ -like '*#staff-news*' }).Count -eq 2)
     Yes 'a title said before is a repeat too' (@(Get-NoteRepeats "A new launcher`n- The shortcut no longer doubles." $told.Posts $null).Count -eq 1)
     Yes 'a note that is all new repeats nothing' (@(Get-NoteRepeats "Kilns stand by the forge`n- Charcoal kilns stand beside each forge now." $told.Posts $told.Newest).Count -eq 0)
     Yes 'a note whose only match is the publisher''s own line repeats nothing' (@(Get-NoteRepeats "The gallery opens faster`n- Launcher 1.2.6.6`n- The gallery opens on the newest picture." $told.Posts $told.Newest).Count -eq 0)
