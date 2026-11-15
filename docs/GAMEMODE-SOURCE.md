@@ -268,8 +268,7 @@ the tables left the file for `game\gamemode-tables` (#5191):
   `gamemode_source.py`, which calls `Build-Gamemode.js --read` and `--write`.
   Writing it back refuses a joined source that renames, drops, adds or breaks
   a part, writes only the parts that changed and builds the file. A builder
-  given a plain file edits that file as before; `tests\gamemode-scratch.js`
-  gives a harness a source folder of its own instead.
+  given a plain file edits that file as before.
 - **The record.** `tests\test-2181-gamemode-source.js` holds all of this.
 
 Left, each its own issue: type checking the parts with `tsc` (#5346; no

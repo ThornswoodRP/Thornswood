@@ -546,6 +546,19 @@ jobs:
           # The fingerprints are in bot\content.py now, no discord.py needed.
           & python tests/test-3457-doc-change-lines.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Issue #3656: no change line or live words of a doc, and no page
+          # the site shows, says an issue number or a team member's name.
+          # Nothing ran it until #4195.
+          & python tests/test-3656-public-words.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Check the killmove idle reader
+        shell: pwsh
+        run: |
+          # Issue #4507: scripts/dev/List-KillMoveIdles.py read against five
+          # small masters it builds. Nothing ran it until #4195.
+          & python tests/test-4507-killmove-idles.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run the voice service's /health harness
         shell: pwsh

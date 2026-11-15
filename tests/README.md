@@ -112,6 +112,35 @@ by the rest of the line, in the report scripts\dev\Nightly-Harnesses.ps1
 -Report writes and on the run's page. So give each check a line of its own
 that names it, and print nothing else that starts with one of those words.
 
+## Run by hand
+
+Every script in this folder is a harness, run by a workflow step, used by
+another script, or listed here with the command that runs it;
+`test-4195-every-test-script-runs.ps1` fails on one that is none of those
+(#4195). These two check the merchant code against a built server addon and
+the game's own plugins, which no gate or nightly machine has, so they are run
+by hand on a machine that has both. Neither connects to Main or Dev: each
+starts an offline server of its own on a port the system picks.
+
+```
+node tests/native-merchant-settlement.js <built addon .node> <installed record .json>
+node tests/native-retrieval-sources.js <built addon .node> <Skyrim Data folder> <scratch folder> [mammoth|orchard]
+```
+
+- `native-merchant-settlement.js` runs merchant sales and a quest payment
+  through the addon itself: the private economy ledger written and read back
+  after a reload, each saved debit and credit, a quest record that cannot pay
+  twice, and a ledger write refused through a folder the site serves. It
+  leaves its scratch folder in the temp folder, since the addon may still
+  hold files there.
+- `native-retrieval-sources.js` holds the seven retrieval sources in
+  `game/data/merchant-retrievals.json` to the addon's own record lookup:
+  winning plugin, raw id and the hash of every field. `mammoth` adds the
+  three mammoth placements and `orchard` those and the ten orchard ones,
+  with a write and read back of the orchard plots. Each plugin must match
+  its pinned sha256, and the scratch folder must be inside `temp` two
+  folders above the repository.
+
 ## A harness that runs box code, or needs Windows
 
 The box runs its scripts in PowerShell 7 (#5356), the same pwsh that runs the

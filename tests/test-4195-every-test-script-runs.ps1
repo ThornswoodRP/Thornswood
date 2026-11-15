@@ -40,8 +40,11 @@ $CodeKinds = @('.js', '.cjs', '.mjs', '.ps1', '.psm1', '.py')
 
 # The scripts in tests\ that are none of the four, as '<name>: why' lines.
 function Get-Unrun([string]$root) {
+    # What git tracks and is still there: a file deleted and not yet
+    # committed is gone, and is no script to run.
     $tracked = @(& git -C $root ls-files)
     if ($LASTEXITCODE -ne 0) { throw "git ls-files in $root said $LASTEXITCODE, so the files are not known" }
+    $tracked = @($tracked | Where-Object { Test-Path -LiteralPath (Join-Path $root $_) -PathType Leaf })
     $scripts = @($tracked | Where-Object { $_ -match '^tests/[^/]+$' -and $ScriptKinds -contains [IO.Path]::GetExtension($_) })
     # Comment lines say what a step does and run nothing, so they are left out.
     $flows = (@($tracked | Where-Object { $_ -match '^\.github/workflows/[^/]+\.ya?ml$' } |
