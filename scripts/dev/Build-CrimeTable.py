@@ -181,8 +181,6 @@ def read(data, order):
     names = set(s[1] for s in SETTINGS)
     for name in order:
         pl = dt.Plugin(own_plugins.plugin_path(data, name), name)
-        if not pl.ok:
-            continue
         for tag, flags, fid, q, rs in top_groups(pl, (b'FACT', b'GMST')):
             pairs = dt.subrecords(pl.data(q, rs, flags))
             if tag == b'GMST':
@@ -429,4 +427,9 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except own_plugins.Unreadable as exc:
+        # Every plugin is read before anything is written.
+        print('STOP. %s. Nothing was written.' % exc)
+        sys.exit(1)
