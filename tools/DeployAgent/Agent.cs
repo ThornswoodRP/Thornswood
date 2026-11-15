@@ -1,5 +1,6 @@
 #nullable enable
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace Thornswood.DeployAgent;
@@ -188,6 +189,43 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
                     return new Outcome("failure", "not applied: the Release's plugins: " + e.Message);
                 }
             }
+            // The load order the Release's gamemode runs on (#6209): its
+            // catalogue names it, and the gamemode starts no NPC runtime on
+            // another. A server on another order takes it in the same restart
+            // as the plugins, and the bot pass runs on it first.
+            ServerOrder.Move? order = null;
+            if (f.Files.TryGetValue(Tables.Zip, out var tablesPath))
+            {
+                try
+                {
+                    var want = ServerOrder.Of(tablesPath);
+                    if (want == null) logf("load order: the Release's tables carry no catalogue, so the server's order is left as it is");
+                    else
+                    {
+                        var entries = ServerOrder.Entries(JsonNode.Parse(File.ReadAllText(Path.Combine(srv.Env.Root, ServerOrder.Settings)).TrimStart('\uFEFF'))
+                            ?? throw new InvalidDataException("the server's server-settings.json is empty"));
+                        if (ServerOrder.Same(entries, want)) logf($"load order: {env} loads the {want.Count} plugins this Release's gamemode runs on");
+                        else
+                        {
+                            logf($"load order: this Release's gamemode runs on {want.Count} plugins, and {env} loads {entries.Count} in another order or others, so its order goes in with it");
+                            ServerOrder.Collection record;
+                            try { record = ServerOrder.ReadRecord(await gh.FileAt(ServerOrder.Record, m.Commit, ct)); }
+                            catch (Exception e) when (e is GitHubException or HttpRequestException or TaskCanceledException)
+                            {
+                                return new Outcome("error", $"the Release commit's {ServerOrder.Record} could not be read: " + e.Message);
+                            }
+                            order = ServerOrder.Stage(srv.Env.Root, want, record, cfg.CollectionStore, Path.Combine(f.Dir, "order-stage"), [ServerPlugins.Content, ServerPlugins.Last], logf);
+                            logf("load order: " + (order.Added.Count > 0 ? $"{string.Join(", ", order.Added)} added, " : "") + $"{order.Entries.Count} plugins, collection {record.Slug} revision {record.Revision}");
+                            plugins ??= new Dictionary<string, string>(StringComparer.Ordinal);
+                            foreach (var (at, path) in order.Files) plugins[at] = path;
+                        }
+                    }
+                }
+                catch (Exception e) when (e is InvalidDataException or IOException or JsonException or UnauthorizedAccessException)
+                {
+                    return new Outcome("failure", "not applied: the load order: " + e.Message);
+                }
+            }
             if (plugins != null && swapZip == null)
             {
                 // The same build stays: its record is the one the folder runs.
@@ -199,7 +237,7 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
             {
                 logf(swapZip == null ? "the bot pass first, on a throwaway copy of the server with this gamemode (#5196)"
                                      : "the bot pass first, on a throwaway copy of the server with this gamemode and the new server build (#5196)");
-                var bp = await (MakeBotPass?.Invoke(srv.Env) ?? new BotPass(srv.Env, Tasks)).Run(f.Files, m.Parts["bot"].Select(x => x.Name).ToList(), logf, ct, swapZip, workName);
+                var bp = await (MakeBotPass?.Invoke(srv.Env) ?? new BotPass(srv.Env, Tasks)).Run(f.Files, m.Parts["bot"].Select(x => x.Name).ToList(), logf, ct, swapZip, workName, plugins, order?.Entries);
                 if (bp.State != "success") return bp;
                 logf(bp.Summary);
             }
@@ -237,7 +275,8 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
                 DeployedUtc = Records.UtcNow(),
                 From = $"deploy agent {version} on {Host}",
             }, logf);
-            return outc with { Summary = rel.TagName + ": " + outc.Summary + voiceIn };
+            var onOrder = order != null ? $" on its load order of {order.Entries.Count} plugins" : "";
+            return outc with { Summary = rel.TagName + ": " + outc.Summary + onOrder + voiceIn };
         }
         finally
         {

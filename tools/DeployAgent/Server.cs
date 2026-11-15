@@ -380,6 +380,9 @@ public sealed class Server(EnvConfig env, HttpClient http)
             return new Outcome("failure", "not applied: the server build is not the one its record names: " + bad[0]);
         }
         var want = (zip != null ? sums.Keys.Append("server-build.json") : []).Concat(ReloadFiles).Concat(plugins.Keys).ToList();
+        // What the summary names: the plugins, not the settings a new load
+        // order rides in (ServerOrder, #6209).
+        var pluginFiles = plugins.Keys.Where(k => k.StartsWith(ServerPlugins.Dir + "/", StringComparison.Ordinal)).ToList();
         var newBlob = Files.GamemodeBlob(Path.Combine(stage, "gamemode.js"));
         var tablesAt = Path.Combine(Root, Tables.Dir);
         var withTables = files.ContainsKey(Tables.Zip);
@@ -477,7 +480,7 @@ public sealed class Server(EnvConfig env, HttpClient http)
                 TryDelete(stage);
                 PruneOld(log);
                 return new Outcome("success", $"{Which} runs server build {rec.Short} and gamemode blob {newBlob[..12]}" + (newTree != "" ? $" with tables tree {newTree[..12]}" : "") +
-                    (plugins.Count > 0 ? " and the Release's " + string.Join(" and ", plugins.Keys.Select(Path.GetFileName)) : "") + ", restarted", newBlob, prevName);
+                    (pluginFiles.Count > 0 ? " and the Release's " + string.Join(" and ", pluginFiles.Select(Path.GetFileName)) : "") + ", restarted", newBlob, prevName);
             }
 
             // The way back: stop what was started, the new files out, the old ones in, and the old server started.
