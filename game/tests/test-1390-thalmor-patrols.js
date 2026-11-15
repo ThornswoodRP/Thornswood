@@ -43,8 +43,8 @@ const dataText = fs.readFileSync(path.join(ROOT, 'game', 'data', 'thalmor-patrol
 yes('thalmor-patrols.json is UTF-8 without a BOM', dataText.charCodeAt(0) !== 0xFEFF);
 const SHIPPED = JSON.parse(dataText);
 
-const dataLine = gm.slice(gm.indexOf('const NPC_POPULATION_DATA = ') + 'const NPC_POPULATION_DATA = '.length);
-const KEEP = JSON.parse(dataLine.slice(0, dataLine.indexOf('\n')).replace(/;\s*$/, '')).keep;
+// The catalogue is the table NPC_POPULATION_DATA the gamemode reads (#5191).
+const KEEP = require('../../tests/gamemode-tables.js').inGamemode(gm, 'NPC_POPULATION_DATA').keep;
 
 const policyCtx = { Math, JSON, Number, Array, Object, Set, Map, Error, Reflect, String, console };
 vm.createContext(policyCtx);

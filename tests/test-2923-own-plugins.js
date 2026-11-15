@@ -224,8 +224,12 @@ for (const s of steps) {
   const src = read(s.tool);
   for (const f of (s.reads || []).concat(s.readsBack || [], s.uses || [], s.writes || [])) {
     // A gamemode table (#5191) is named in its builder by its constant's
-    // name, which GamemodeTables turns into the file's.
-    const named = /^game\/gamemode-tables\//.test(f) ? path.basename(f, '.json') : path.basename(f);
+    // name, which GamemodeTables turns into the file's, and a client table
+    // (game/plugins/thornswood-table-<name>.js) by its name, which
+    // ClientTables turns into the plugin's.
+    const client = /^game\/plugins\/thornswood-table-(.+)\.js$/.exec(f);
+    const named = /^game\/gamemode-tables\//.test(f) ? path.basename(f, '.json')
+      : client ? client[1].toUpperCase().replace(/-/g, '_') : path.basename(f);
     if (src.indexOf(named) < 0) { unnamed.push(s.tool + ' ' + f); }
   }
 }

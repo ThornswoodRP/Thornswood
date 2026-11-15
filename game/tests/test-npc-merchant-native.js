@@ -21,7 +21,7 @@ const server=new addon.ScampServer(JSON.stringify({port:0,maxPlayers:2,offlineMo
   npcEnabled:true,npcAllowEssential:true,npcAllowCrimeFaction:true,npcSettings:{},
   bannedEspmCharacterRaceIds:[0x10760a],logLevel:'error'}));
 server._setSelf(server);
-const source=fs.readFileSync(path.join(__dirname,'../../game/gamemode.js'),'utf8');
+const source=require('../../tests/gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../../game/gamemode.js'),'utf8'));
 const ctx={Map,Set,Number,Math,JSON,require};vm.createContext(ctx);
 for(const marker of ['NPC MERCHANT PURSES','NPC POPULATION POLICY','NPC POPULATION DATA']) {
   vm.runInContext(source.slice(source.indexOf('// '+marker+' BEGIN'),source.indexOf('// '+marker+' END')),ctx);
