@@ -127,7 +127,7 @@ const worker = { id: 'PR_1', number: 1, isDraft: false, isCrossRepository: false
 for (const f of ['scripts/release/nexus-collection.js', 'scripts/release/collection-permissions.js']) {
   const j = A.judge(Object.assign({}, worker, { paths: [f] }), 'main', held);
   yes('3 auto-merge holds one that changes only ' + f + ', not Patrick\'s', j[0] === false && j[1].indexOf(f) >= 0);
-  yes('  Patrick\'s that changes it goes on', A.judge(Object.assign({}, worker, { author: { login: 'EvilPatrick06' }, paths: [f] }), 'main', held)[0] === true);
+  yes('  Patrick\'s that changes it goes on', A.judge(Object.assign({}, worker, { author: { login: 'EvilPatrick06' }, headRefName: 'patrick-nexus', paths: [f] }), 'main', held)[0] === true);
 }
 yes('3 one that changes only the gamemode\'s source is not held', A.judge(Object.assign({}, worker, { paths: ['game/gamemode/a.ts'] }), 'main', held)[0] === true);
 

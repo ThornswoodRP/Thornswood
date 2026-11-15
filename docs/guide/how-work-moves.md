@@ -82,7 +82,13 @@ The short form of the rules. The same decisions, with the dates they were made, 
   one that conflicts with main are left off. So is one labelled
   `outside work`, which carries the work of somebody outside the team: it
   merges only when Patrick says so for that person (8 Nov 2026), whoever
-  opened the pull request that carries it. One the queue lets go goes back
+  opened the pull request that carries it. One that changes what runs on the
+  box (a workflow, the deploy gate, a verb list, or a file a verb runs or
+  reads, as the verb lists name them) is left off unless it is Patrick's,
+  and a Claude session's branch (`claude/...`) is not his for this, though
+  GitHub names him as its author: it merges on his Main card in the Hermes
+  app, which Bramble opens (Patrick, 15 Nov 2026). Nobody turns auto-merge
+  on for it by hand. One the queue lets go goes back
   on after the next push to main when the queue was cleared, rolled back or
   timed out; let go for a failed check or a conflict, it is its owner's, and
   the owner's push with the fix puts it back on. The
