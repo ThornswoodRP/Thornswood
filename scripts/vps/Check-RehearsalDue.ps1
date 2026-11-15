@@ -32,7 +32,7 @@
   It reads one file and writes nothing. With no -Doc it reads
   docs\RESTORING.md in the ops repo checkout THORNSWOOD_OPS names, or else
   the one beside this checkout as ..\Thornswood-Ops. -Doc and -Today stand
-  in for the real ones so tests\test-1046-rehearsal-due.ps1 can run it
+  in for the real ones so scripts\tests\test-1046-rehearsal-due.ps1 can run it
   offline.
 
   Run by hand from the repository folder:

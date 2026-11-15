@@ -18,8 +18,9 @@ What this holds:
     stand-in folders (a pretend Steam copy, a pretend package, a temp
     install folder; no Steam, no network, no install):
       * not chosen: Thornswood's own files go into the Steam copy with
-        Profile/installed-into-game.txt listing them, and config.json gets no
-        MakeOwnGame (#1226);
+        Profile/installed-into-game.txt listing them, and config.json gets
+        MakeOwnGame false, because an absent one reads as ticked (#1226;
+        Patrick, 12 Nov, the own folder is the default);
       * own folder chosen: the files go into Profile/Payload, nothing is
         written into the Steam copy, no list is written, MakeOwnGame and a good
         Vortex folder go into config.json and a folder Vortex never deployed
@@ -49,8 +50,9 @@ What this holds:
     installing, Skyrim's drive first and C:\\Thornswood only without one, a
     second ask on another drive, the own folder card in Settings' own words,
     no colour of its own (#2851);
-  - the launcher reads what the card writes (Config.cs) and makes the folder
-    without its question when MakeOwnGame is set (ShellOwnGame.cs);
+  - the launcher reads what the card writes (Config.cs), reads no MakeOwnGame
+    as ticked, and makes the folder without its question when MakeOwnGame is
+    set (ShellOwnGame.cs); the card's box starts ticked;
   - Skyrim still running: closed politely first, then a Yes or No before
     anything is ended, and No stops with nothing installed;
   - no em dash, and never the word the project does not use.
@@ -204,6 +206,8 @@ about = 'Runs Thornswood from a Skyrim folder of its own, made from what Vortex 
 settings = [p for p in list((ROOT / 'launcher').glob('*.xaml')) + list((ROOT / 'launcher').rglob('*.axaml')) if about in read(p)]
 check('the own folder card has the words of Settings, Maintenance', about in src.get('InstallWindow.cs', '') and len(settings) > 0)
 check('the tick box says what Settings says', 'Give Thornswood a Skyrim folder of its own' in win)
+check('the own folder box starts ticked (Patrick, 12 Nov)',
+      re.search(r'chkOwn = Box\("Give Thornswood a Skyrim folder of its own"[^;]*;\s*chkOwn\.IsChecked = true;', win) is not None)
 
 # What the card writes is what the launcher reads and acts on (#906).
 cfgcs = code_only(read(APP / 'Config.cs'))
@@ -212,6 +216,9 @@ check('the launcher reads MakeOwnGame and VortexGame from config.json',
 shellown = code_only(read(APP / 'ShellOwnGame.cs'))
 check('the launcher makes the folder without its question when MakeOwnGame is set, and a tick outweighs an earlier no',
       'cfg.MakeOwnGame' in shellown and '(!OwnGame.Declined || c.MakeOwnGame)' in shellown)
+check('a config.json with no MakeOwnGame reads as ticked: only an explicit false asks first',
+      re.search(r'JsonPropertyName\("MakeOwnGame"\)\]\s*public bool\? MakeOwnGameSetting = true;', cfgcs) is not None
+      and 'return MakeOwnGameSetting != false;' in cfgcs)
 
 # Skyrim still running.
 check('Skyrim and the script extender loader are looked for', '"SkyrimSE", "skse64_loader"' in sky)
@@ -279,6 +286,11 @@ static class Driver
                 w.WriteBoolean("http", InstallAgreements.IsSitePage("http://thornswood.net/terms"));
                 w.WriteString("sha", InstallAgreements.PageSha("abc"));
             }
+            else if (a[0] == "config")
+            {
+                // What the launcher itself reads out of a config.json.
+                w.WriteBoolean("makeOwnGame", Config.Load(a[1]).MakeOwnGame);
+            }
             else if (a[0] == "vortex")
             {
                 string full;
@@ -291,6 +303,14 @@ static class Driver
         Console.Out.Write(Encoding.UTF8.GetString(o.ToArray()));
         return 0;
     }
+}
+
+namespace Thornswood
+{
+    // Config.cs reaches these two only to log a failure and to lock the file
+    // down on Windows; neither decides what a config.json says.
+    static class Swallow { public static void Note(string where, Exception e) { } }
+    static class Secrets { public static void LockDown(string path) { } }
 }
 '''
 
@@ -326,7 +346,7 @@ else:
     try:
         proj = tmp / 'runner'
         proj.mkdir()
-        files = ';'.join(str(APP / n) for n in ['InstallSteps.cs', 'InstallAgreements.cs', 'InstallPlace.cs', 'InstallShortcut.cs'])
+        files = ';'.join(str(APP / n) for n in ['InstallSteps.cs', 'InstallAgreements.cs', 'InstallPlace.cs', 'InstallShortcut.cs', 'Config.cs', 'LooseString.cs'])
         write(proj / 'runner.csproj', f'''<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -404,7 +424,11 @@ else:
         check('not chosen: Bethesda\'s files are not touched', (game / 'Data' / 'Skyrim.esm').read_text() == 'bethesda')
         cfg_raw = (root / 'config.json').read_bytes()
         cfg = json.loads(cfg_raw)
-        check('config.json: no MakeOwnGame when the card was left alone', 'MakeOwnGame' not in cfg and 'VortexGame' not in cfg)
+        check('config.json: MakeOwnGame false when the box was unticked, and no Vortex folder', cfg.get('MakeOwnGame') is False and 'VortexGame' not in cfg)
+        check('the launcher reads that unticked box as asking first', run('config', root / 'config.json')['makeOwnGame'] is False)
+        write(tmp / 'nokey' / 'config.json', json.dumps({'Password': 'kept'}))
+        check('the launcher reads a config.json with no MakeOwnGame as ticked (Patrick, 12 Nov)',
+              run('config', tmp / 'nokey' / 'config.json')['makeOwnGame'] is True)
         check('config.json: a blank field never wipes a filled one', cfg.get('Password') == 'kept')
         check('config.json: what was on the disk stays and the package\'s new fields come in',
               cfg.get('Theme') == 'Forge' and cfg.get('Server') == 'thornswood.net' and cfg.get('Channel') == 'dev')
@@ -447,6 +471,7 @@ else:
         cfg = json.loads((root / 'config.json').read_text(encoding='utf-8'))
         check('chosen: MakeOwnGame and the Vortex folder go into config.json',
               cfg.get('MakeOwnGame') is True and cfg.get('VortexGame') == str(vortex))
+        check('chosen: the launcher reads it as making the folder without asking', run('config', root / 'config.json')['makeOwnGame'] is True)
         check('chosen: the multiplayer client is read from Profile/Payload', '  [ok]   Multiplayer' in r['lines'])
         check('chosen: it says nothing was written into the Steam copy', 'Nothing was written into your Steam copy of Skyrim.' in r['lines'])
 

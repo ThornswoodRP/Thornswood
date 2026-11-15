@@ -56,6 +56,11 @@
   Deployment waits on a pass (tools\DeployAgent\BotPass.cs). -NoBotPass
   takes it off again.
 
+  THE CONTENT BUILD (#5191). Where the gate's task Thornswood Gate is set
+  up, agent.json names content, and the agent builds every Deployment to
+  Content through the gate's Build-Content verb and puts the build on a
+  draft Release, content-<server>-<key>, which the merge release takes.
+
   THE SITE AND THE DISCORD BOT (#5190, #5187). agent.json names them, each
   only where its full install has set it up (the task Thornswood Docs, the
   service ThornswoodBot), and the agent then applies every Deployment to
@@ -347,6 +352,16 @@ foreach (`$app in @(
   `$cfg.environments | Add-Member -NotePropertyName `$app.name -NotePropertyValue `$e -Force
   'apps: ' + `$app.name + ' named; the agent applies its Deployments'
 }
+
+# The content build (#5191): the agent builds each Deployment to Content
+# through the gate's Build-Content verb and puts it on a draft Release the
+# merge release takes. Named only where the gate's task is set up
+# (Update-Gate.ps1), since the build runs through it.
+`$cfg.environments.PSObject.Properties.Remove('content')
+if (Get-ScheduledTask -TaskName 'Thornswood Gate' -ErrorAction SilentlyContinue) {
+  `$cfg.environments | Add-Member -NotePropertyName content -NotePropertyValue (New-Object PSObject) -Force
+  'content: named; the agent builds each Deployment to Content through the gate'
+} else { 'content: left out, the task Thornswood Gate is not on this box' }
 
 # Dev voice (#5187): a Release's voice part goes in with dev's Deployment,
 # into the folder Install-Voice.ps1 set up, under its task.

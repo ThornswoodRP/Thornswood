@@ -33,9 +33,8 @@
 // under the first while it stays in the Discord: /owns called it somebody else's, /roster gave its
 // menu card no name, and /api/allowed let it in on the first account's
 // standing. The site cannot tell that spare from an id somebody took, and
-// must not, so the fix is the launcher's: Chars.EnsureSpare mints a fresh
-// spare under the account the install is linked to now (test-spare-owner.ps1
-// runs that half against the real Chars.cs). /owns, /roster and /api/allowed
+// must not, so each account has its own spare, minted by the site since
+// #5938 (site/lib/characters.js, run below and in test-play-characters.js). /owns, /roster and /api/allowed
 // are lifted and run here too, so what the second account's own character
 // looks like afterwards is asked of the same routes the reviewer asked.
 //
@@ -280,6 +279,7 @@ async function checkIn(table, discordId, profileId, standingOver, world) {
   const env = {
     p: '/api/play/join',
     req: { method: 'POST' },
+    chars: require('../site/lib/characters'),
     res: {},
     body: async function () { return JSON.stringify(request); },
     readTicket: function (s) { return s ? { d: String(s), n: 'name-' + s } : null; },
@@ -398,9 +398,9 @@ const PID = 1893288986;
     Discord link it to account B.
 
     Door.Check goes first, with the id the settings file holds, which is
-    the one A played last. Then Chars.Prepare runs, and it retires the spare
-    A holds and mints a fresh one under B before anything else is checked
-    in (test-spare-owner.ps1 runs that against the real Chars.cs). So what
+    the one A played last. Then the site hands B its own list, with a spare
+    minted under B, before anything else is checked in
+    (test-play-characters.js runs that against the site's own module). So what
     StartPlay checks in is A's two characters and B's own spare. Every one
     of those has to be a yes, or B never reaches the menu. B picks New
     character, which is B's spare; PollChoice checks it in again, Chars.Chose
@@ -485,10 +485,16 @@ const PID = 1893288986;
     const o = await owns(s.table, B, OLD_SPARE);
     yes('so /owns would call a character made on it somebody else\'s',
         o && o.obj.ok === false && o.obj.why === 'somebody else');
-    const chars = fs.readFileSync(path.join(__dirname, '..', 'launcher', 'app', 'Chars.cs'), 'utf8');
-    yes('which is why Chars.EnsureSpare retires a spare minted under another account, and test-spare-owner.ps1 runs it',
-        /sp\.Owner == who/.test(chars) && /Retire\(sp\.Id\)/.test(chars) &&
-        fs.existsSync(path.join(__dirname, 'test-spare-owner.ps1')));
+    // Which is why the spare is the site's since #5938: each account has its
+    // own, minted against every account's ids, so a relinked install never
+    // offers the first account's spare to the second.
+    const C = require('../site/lib/characters');
+    const two = {};
+    two[A] = { id: A, profiles: [PID, OLD_SPARE], spare: OLD_SPARE, chars: [{ id: PID, slot: 1 }] };
+    two[B] = { id: B, profiles: [] };
+    C.settle(two, B, { slots: 2, pk: () => false, revived: () => false });
+    yes('which is why the site mints the second account a spare of its own, never the first account\'s',
+        two[B].spare > 0 && two[B].spare !== OLD_SPARE && two[B].spare !== PID);
   }
 
   /*

@@ -176,7 +176,7 @@ function Update-DevNewsChannels($doc, $news, $mainDoc, [string]$sourceRepo) {
     $script:holdsSeen = @{}
     # Every commit a target holds as an ancestor, from one rev-list for each
     # target, in place of a merge-base --is-ancestor for every pair (#3168):
-    # tests\test-2401-legacy-dev-marks.ps1 started 382 of those, nearly
+    # scripts\tests\test-2401-legacy-dev-marks.ps1 started 382 of those, nearly
     # 2,000 processes on the box with the rest. $null when git cannot list
     # it, and then each pair is asked the old way.
     $script:ancestorsOf = @{}
@@ -211,7 +211,7 @@ function Update-DevNewsChannels($doc, $news, $mainDoc, [string]$sourceRepo) {
                 # one git: diff target...commit is the diff from their merge
                 # base, and fails where they have none, as merge-base did.
                 # It was a merge-base and then a diff, 117 of each in
-                # tests\test-2401-legacy-dev-marks.ps1, each two processes on
+                # scripts\tests\test-2401-legacy-dev-marks.ps1, each two processes on
                 # the box behind Git's cmd\git.exe and each a Defender scan
                 # (#3835).
                 $changed = Invoke-ReleaseGit $sourceRepo @('diff', '--name-only', ($target + '...' + $commit))

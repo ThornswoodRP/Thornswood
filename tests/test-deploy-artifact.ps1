@@ -9,8 +9,8 @@
   runs. scripts\deploy\Artifact.ps1 does it; this proves:
 
     1. The same commit gives the same bytes: built twice, built from a second
-       clone that checks files out with CRLF, and built by the other
-       PowerShell (5.1 or 7, whichever this is not) all give one sha256.
+       clone that checks files out with CRLF, and built in a PowerShell 7
+       of its own all give one sha256.
     2. The record matches: its sha256 and size are the zip's, its commit is
        HEAD, and its file list is the zip's entries, each with the size and
        sha256 of the commit's own bytes. The name carries the component, the
@@ -140,21 +140,19 @@ try {
     Yes 'a CRLF checkout of the same commit builds the same bytes' ($a3.Sha256 -eq $a1.Sha256 -and $a3.Name -eq $a1.Name)
     Yes 'and does not count line endings as uncommitted changes' ($a3.Sha256 -eq $a1.Sha256)
 
-    # The other PowerShell, whichever this is not.
-    $other = $(if ($PSVersionTable.PSEdition -eq 'Core') { 'powershell.exe' } else { 'pwsh' })
-    $otherCmd = Get-Command $other -ErrorAction SilentlyContinue
-    if ($otherCmd) {
-        $script = Join-Path $tmp 'other.ps1'
-        Put $script ('. ''' + $helper.Replace("'", "''") + "'`n" +
-                     '$a = New-ThornswoodArtifact -Component site -RepoDir ''' + $src.Replace("'", "''") + ''' -Paths ''site/server.js'', ''site/public'', ''site/data'' -OutDir ''' + (Join-Path $tmp 'out4').Replace("'", "''") + "'`n" +
-                     'Write-Output (''SHA '' + $a.Sha256)' + "`n")
-        $said = @(& $otherCmd.Source -NoProfile -ExecutionPolicy Bypass -File $script 2>&1 | ForEach-Object { "$_" })
-        $shaLine = @($said | Where-Object { $_ -like 'SHA *' }) | Select-Object -Last 1
-        Yes "$other builds the same bytes as PowerShell $($PSVersionTable.PSVersion.Major)" ($shaLine -eq ('SHA ' + $a1.Sha256))
-        if ($shaLine -ne ('SHA ' + $a1.Sha256)) { $said | Select-Object -Last 8 | ForEach-Object { Write-Host "  $_" } }
-    } else {
-        Write-Host "SKIP  $other is not on this machine, so only one PowerShell built it"
-    }
+    # In a PowerShell 7 of its own, the shell every script runs in (#5356):
+    # the same bytes from a fresh session. Until #5356 this was Windows
+    # PowerShell 5.1 beside pwsh, and off Windows it said SKIP.
+    . (Join-Path $PSScriptRoot 'Windows.ps1')
+    $other = Get-BoxPowerShell
+    $script = Join-Path $tmp 'other.ps1'
+    Put $script ('. ''' + $helper.Replace("'", "''") + "'`n" +
+                 '$a = New-ThornswoodArtifact -Component site -RepoDir ''' + $src.Replace("'", "''") + ''' -Paths ''site/server.js'', ''site/public'', ''site/data'' -OutDir ''' + (Join-Path $tmp 'out4').Replace("'", "''") + "'`n" +
+                 'Write-Output (''SHA '' + $a.Sha256)' + "`n")
+    $said = @(& $other -NoProfile -ExecutionPolicy Bypass -File $script 2>&1 | ForEach-Object { "$_" })
+    $shaLine = @($said | Where-Object { $_ -like 'SHA *' }) | Select-Object -Last 1
+    Yes 'a PowerShell 7 of its own builds the same bytes' ($shaLine -eq ('SHA ' + $a1.Sha256))
+    if ($shaLine -ne ('SHA ' + $a1.Sha256)) { $said | Select-Object -Last 8 | ForEach-Object { Write-Host "  $_" } }
 
     # ---- 2. the record matches ---------------------------------------------
     $r = Get-Content -LiteralPath $a1.RecordPath -Raw | ConvertFrom-Json

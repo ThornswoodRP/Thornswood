@@ -540,7 +540,7 @@ try {
   Yes 'Webhook-Channel: a webhook in #staff-updates says so' ($wc.Channel -eq '1549254991082946570' -and -not $wc.Why)
   $script:hookBody = '{"id":"123456","channel_id":"1550176792726343700","name":"Watchdog"}'
   $wc = Webhook-Channel $HookUrl
-  Yes 'Webhook-Channel: one in the dev updates channel names that channel, not #staff-updates' ($wc.Channel -eq '1550176792726343700' -and $wc.Channel -ne $S.StaffChannel)
+  Yes 'Webhook-Channel: one in #staff-news names that channel, not #staff-updates' ($wc.Channel -eq '1550176792726343700' -and $wc.Channel -ne $S.StaffChannel)
   $script:hookCode = 404; $script:hookBody = '{"message":"Unknown Webhook"}'
   $wc = Webhook-Channel $HookUrl
   Yes 'Webhook-Channel: a deleted webhook is no channel, and says why' (-not $wc.Channel -and $wc.Why -match '404')

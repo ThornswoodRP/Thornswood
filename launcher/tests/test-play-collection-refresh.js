@@ -60,9 +60,10 @@ function body(src, sig) {
 const own = read('ShellOwnGame.cs');
 const chars = read('ShellChars.cs');
 const shell = read('Shell.cs');
-const due = body(own, 'static bool OwnGameRefreshIfDue()');
-const startPlay = body(chars, 'static void StartPlay()');
-const play = body(read('ShellPlay.cs'), 'static void Play()');
+const due = body(own, 'static async Task<bool> OwnGameRefreshIfDue()');
+const startPlay = body(chars, 'static async Task StartPlayAsync()');
+const play = body(read('ShellPlay.cs'), 'static async Task PlayAsync()');
+const again = body(own, 'static async Task PlayAfterRefresh()');
 const wire = body(own, 'static void WireOwnGame()');
 
 yes('OwnGameRefreshIfDue exists', due.length > 0);
@@ -107,15 +108,19 @@ yes('that line is inside the finish on the window\'s thread, after the status is
     folderWork.indexOf('then();') > folderWork.lastIndexOf('DrawOwnGame();') &&
     folderWork.lastIndexOf('win.Dispatcher.BeginInvoke') < folderWork.indexOf('then();'));
 const cont = due.slice(due.indexOf('StartOwnGame(false, true,'));
+// #4582: the second pass is awaited (PlayAfterRefresh), so the mark is still
+// up when it asks NeedsRefresh off the window's thread.
+// launcher\tests\test-4582-await-not-pump.ps1 runs that order, built.
 yes('what comes after is StartPlay from the top, not Play(), so Discord and the character list are not skipped',
-    /StartPlay\(\);/.test(cont) && !/[^t]Play\(\);/.test(cont.replace(/StartPlay\(\);/g, '')));
+    /Begin\(PlayAfterRefresh\(\)\);/.test(cont) && /await StartPlayAsync\(\);/.test(again) &&
+    !/[^t]Play(Async)?\(\);/.test(again.replace(/StartPlayAsync\(\);/g, '')));
 yes('it marks that StartPlay as the one after a bring-up-to-date, and clears the mark however it ends',
-    /ownGameRefreshedForPlay = true;\s*try \{ StartPlay\(\); \}\s*finally \{ ownGameRefreshedForPlay = false; \}/.test(cont));
+    /ownGameRefreshedForPlay = true;\s*try \{ await StartPlayAsync\(\); \}\s*finally \{ ownGameRefreshedForPlay = false; \}/.test(again));
 const guardAt = due.indexOf('if (ownGameRefreshedForPlay)');
 yes('a folder still due straight after its bring-up-to-date is said, and not started again',
     guardAt > 0 && guardAt < due.indexOf('StartOwnGame(false, true,') &&
     /if \(ownGameRefreshedForPlay\)\s*\{[\s\S]*?Log\([\s\S]*?return true;\s*\}/.test(due));
-const waitAt = due.indexOf('Waiting(');
+const waitAt = due.indexOf('OffThread(');
 const busyAfter = due.indexOf('if (ownGameBusy)', waitAt);
 yes('ownGameBusy is read again after the wait, before anything is started',
     waitAt > 0 && busyAfter > waitAt && busyAfter < due.indexOf('if (!due) return false;'));
@@ -126,19 +131,19 @@ yes('a NeedsRefresh that throws is noted and said in the log, and Play goes on f
     catchBody.indexOf('Swallow.Note(') >= 0 && catchBody.indexOf('Log(') >= 0);
 
 const requiredAt = startPlay.indexOf('if (!OwnGameRequired()) return;');
-const dueAt = startPlay.indexOf('if (OwnGameRefreshIfDue()) return;');
+const dueAt = startPlay.indexOf('if (await OwnGameRefreshIfDue()) return;');
 const doorAt = startPlay.indexOf('if (!Door.RecentlyCleared)');
 yes('StartPlay asks it after OwnGameRequired and before Discord',
     requiredAt >= 0 && dueAt > requiredAt && doorAt > dueAt);
 yes('StartPlay still reaches Play() when the folder is current',
-    /if \(OwnGameRefreshIfDue\(\)\) return;[\s\S]*\n\s*Play\(\);/.test(startPlay));
+    /if \(await OwnGameRefreshIfDue\(\)\) return;[\s\S]*\n\s*await PlayAsync\(\);/.test(startPlay));
 
 const playHead = play.slice(0, 1200);
 yes('Play() asks it on the way in, with the other holds',
-    playHead.indexOf('if (OwnGameRefreshIfDue()) return;') >= 0);
+    playHead.indexOf('if (await OwnGameRefreshIfDue()) return;') >= 0);
 yes('Play() still checks ownGameBusy before it, so work already going is not started twice',
     playHead.indexOf('if (ownGameBusy)') >= 0 &&
-    playHead.indexOf('if (ownGameBusy)') < playHead.indexOf('if (OwnGameRefreshIfDue()) return;'));
+    playHead.indexOf('if (ownGameBusy)') < playHead.indexOf('if (await OwnGameRefreshIfDue()) return;'));
 yes('Play() still launches when none of those holds fire',
     play.indexOf('Process.Start') >= 0 || play.indexOf('skse64_loader') >= 0 ||
     play.indexOf('Paths.Loader') >= 0);

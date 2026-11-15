@@ -210,7 +210,10 @@ function readJsonQuiet(file) {
    and says so once in its log. */
 const RELEASE_REPO = 'ThornswoodRP/Thornswood';
 const RELEASE_LOOK_MS = 10 * 60 * 1000;
-const RELEASE_TAG_RE = /^release\/(main|dev)\/\d{8}-\d{4,6}(-dev)?$/;
+// A release id is its instant: yyyyMMdd-HHmmss with a Z, in UTC since
+// #4950, -dev on dev. The ids already published (seconds with no Z, and
+// the older minutes) still read, and a Z only ever follows the seconds.
+const RELEASE_TAG_RE = /^release\/(main|dev)\/\d{8}-\d{4}(\d{2}Z?)?(-dev)?$/;
 const releaseCopies = {};   // tag -> { files: { sha: { id, size } }, seen } once found; { at, busy } while not
 const releaseTagOf = {};    // feed generation file -> the release tag it names, or ''
 /* The site's GitHub token (#5608): an installation token of the box admin
@@ -241,10 +244,32 @@ function siteToken() {
     tokenLog(SITE_TOKEN + ' did not read (' + e.message + '), so GitHub is asked without one', true);
     return '';
   }
+  /* What a token may hold (#6186): the characters of GitHub's installation
+     token shapes, which can go into the authorization header as they are,
+     and nothing else, so a damaged file never puts a line break or a space
+     in a request. Since GitHub's stateless tokens (rolled out by 2 Oct
+     2026) one is ghs_<App id>_<a JWT>: about 520 characters, its length
+     varying with what it carries, with the JWT's dots and its base64url
+     hyphens in it. The old check took only letters, digits and _ up to 255,
+     so it refused every token the admin service has written since the site
+     first asked with one (#5608, 9 Nov). The site asked GitHub without a
+     token from then on, sixty calls an hour, and on 15 Nov at 1:59 PM
+     Mountain, after three restarts emptied what it kept, GitHub answered 403
+     and every /release/ file answered 503 until the hour turned over. */
   const token = doc && typeof doc.token === 'string' ? doc.token : '';
   const left = Date.parse(String((doc && doc.expires_at) || '')) - Date.now();
-  if (!/^[A-Za-z0-9_]{20,255}$/.test(token) || !(left > 2 * 60 * 1000)) {
-    tokenLog(SITE_TOKEN + ' holds no token with more than two minutes left, so GitHub is asked without one; the admin service writes a new one every half hour', true);
+  // Each reason said apart: one line for both hid for six days that the
+  // token was there, and current, and refused only by its shape.
+  if (!token) {
+    tokenLog(SITE_TOKEN + ' holds no token, so GitHub is asked without one; the admin service writes one every half hour', true);
+    return '';
+  }
+  if (!/^[A-Za-z0-9._-]{20,4096}$/.test(token)) {
+    tokenLog(SITE_TOKEN + ' holds a token of ' + token.length + ' characters that is not in the shape of a GitHub token, so GitHub is asked without one', true);
+    return '';
+  }
+  if (!(left > 2 * 60 * 1000)) {
+    tokenLog(SITE_TOKEN + ' holds a token with less than two minutes left, so GitHub is asked without one; the admin service writes a new one every half hour', true);
     return '';
   }
   tokenLog('signed in, from ' + SITE_TOKEN, false);

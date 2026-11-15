@@ -224,7 +224,7 @@ try {
     $scripts = @(Get-ChildItem -LiteralPath $ToolsPath -Filter '*.ps1' -File -Recurse |
                  Where-Object { $_.Extension -eq '.ps1' } |
                  ForEach-Object { $_.FullName.Substring($rootFull.Length + 1).Replace('\', '/') } |
-                 Where-Object { $_ -notlike 'oneoff/*' })
+                 Where-Object { $_ -notlike 'oneoff/*' -and $_ -notlike 'tests/*' })
     $listed = @($rows | ForEach-Object { if ($_ -match '^\| \[([^\]]+)\]') { $Matches[1] } })
     $unlisted = @($scripts | Where-Object { $listed -notcontains $_ })
     $some = @($unlisted | Select-Object -First 8)

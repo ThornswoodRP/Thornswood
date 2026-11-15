@@ -43,7 +43,7 @@ namespace Thornswood
     /// shut, because nothing has said this build is current, which is where
     /// updatePending starts.
     ///
-    /// tests\test-uninstall-entry.js walks everything this path can reach and
+    /// launcher\tests\test-uninstall-entry.js walks everything this path can reach and
     /// fails if any of that startup work comes back into it.
     /// </summary>
     static partial class Shell
@@ -82,12 +82,7 @@ namespace Thornswood
                 DispatcherUnhandledExceptionEventArgs fault)
             {
                 try { Log("Fault on the launcher's own thread: " + fault.Exception.GetType().Name + ": " + fault.Exception.Message); } catch (Exception ex) { Swallow.Note("Shell.OpenForUninstall, writing a fault to the status line", ex); }
-                try { File.AppendAllText(Paths.LogFile, fault.Exception.ToString() + Environment.NewLine); }
-                catch
-                {
-                    // The log is the one place this could have gone, and it is
-                    // the log that failed, so there is nowhere left to say so.
-                }
+                LauncherLog.Text(fault.Exception.ToString() + Environment.NewLine);
                 fault.Handled = true;
             };
             StartStallWatch();

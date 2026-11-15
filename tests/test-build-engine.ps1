@@ -58,7 +58,7 @@ $runAst = [System.Management.Automation.Language.Parser]::ParseInput($text, [ref
 Yes 'it has a Run function' ($null -ne $runAst)
 if ($runAst) {
     # Run notes out of memory errors with EngineJobs.ps1, which the script
-    # dot-sources (#1203; tests\test-1203-engine-jobs.ps1 holds that half).
+    # dot-sources (#1203; scripts\tests\test-1203-engine-jobs.ps1 holds that half).
     $withJobs = ". '" + (Join-Path $root 'scripts\release\EngineJobs.ps1') + "'; " + $runAst.Extent.Text
     # The tool is this PowerShell, started as a program, so the check runs
     # wherever the harness does (#2957; it was cmd.exe, which only Windows has).
