@@ -190,6 +190,6 @@ $out = Join-Path $outDir 'mod-audit.json'
 [IO.File]::WriteAllText($out, ($report | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding($false)))
 
 Write-Host ''
-Say "  Written to local\mod-audit.json. Tell Claude it is done." 'Green'
+Say "  Written to local\mod-audit.json. What it marks optional, and the archives no plugin loads, are the only parts of this build that could be an optional download; everything else has to be on every machine." 'Green'
 Write-Host ''
 if (-not $NoPause) { [void](Read-Host 'Enter to close') }
