@@ -28,14 +28,17 @@
   crash, said so), or after -Minutes.
 
   It refuses to start while the launcher or the game is already running, so
-  it never takes over somebody's session. It stops both when it ends.
+  it never takes over somebody's session, and on an install that is not on
+  the dev channel, so it never plays on the live server. It stops both when
+  it ends.
 
   Windows only: it drives the launcher through UI Automation and the game
   window through user32.
 #>
 [CmdletBinding()]
 param(
-    # The dev install, which Where.ps1 InstallDev finds, unless named.
+    # The install, which Where.ps1 Install finds, unless named. Dev is a
+    # channel of that one install, set on the launcher's Settings page.
     [string]$Root = '',
     [string]$Steps = '',
     [string]$Out = '',
@@ -52,7 +55,9 @@ $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw 'Run-RealClient.ps1 drives the real game, so it runs on Windows only.' }
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-if (-not $Root) { $Root = & (Join-Path $repoRoot 'scripts\release\Where.ps1') InstallDev }
+$where = Join-Path $repoRoot 'scripts\release\Where.ps1'
+if (-not $Root) { $Root = & $where Install }
+$Root = $Root.TrimEnd('\')
 if (-not $Steps) { $Steps = Join-Path $repoRoot 'tests\real-client\dev-release.json' }
 $runId = (Get-Date).ToString('yyyyMMdd-HHmmss')
 if (-not $Out) { $Out = Join-Path $repoRoot ('temp\real-client\' + $runId) }
@@ -60,7 +65,22 @@ New-Item -ItemType Directory -Force -Path $Out | Out-Null
 
 $game = Join-Path $Root 'Game'
 $platform = Join-Path $game 'Data\Platform'
-$launcherExe = Join-Path $Root 'Launcher\Thornswood.exe'
+# The launcher of this install. A launcher from the setup is a Velopack
+# install in this account's own folder (MachineData, %LOCALAPPDATA%\Thornswood),
+# with Thornswood.exe in its current folder and the install folder it serves
+# written in install-root.txt beside it (launcher\app\InstallPlace.cs). Until
+# 15 Nov this script looked only in <Root>\Launcher, the layout from before
+# Velopack, and so stopped on "Not there" on every install the setup makes.
+# A folder with that older layout, such as a ship root, keeps its own.
+$veloHome = & $where MachineData
+$veloRecord = Join-Path $veloHome 'install-root.txt'
+$veloRoot = ''
+if (Test-Path -LiteralPath $veloRecord) { $veloRoot = ([IO.File]::ReadAllText($veloRecord)).Trim().TrimEnd('\') }
+if ($veloRoot -and [string]::Equals($veloRoot, $Root, [StringComparison]::OrdinalIgnoreCase)) {
+    $launcherExe = Join-Path $veloHome 'current\Thornswood.exe'
+} else {
+    $launcherExe = Join-Path $Root 'Launcher\Thornswood.exe'
+}
 $runFile = Join-Path $platform 'thornswood-test-run.json'
 $resultsFile = Join-Path $platform 'thornswood-test-results.jsonl'
 $ackFile = Join-Path $platform 'thornswood-test-ack.txt'
@@ -75,13 +95,26 @@ function Say([string]$text) {
 foreach ($p in @($game, $platform, $launcherExe, $Steps)) {
     if (-not (Test-Path -LiteralPath $p)) { throw "Not there: $p" }
 }
+# The run joins whichever server the install is on, and its steps are for a
+# dev release (-Publish puts it on the newest Dev Deployment), so an install
+# on main would play on the live server. The channel is the launcher's
+# UpdateBranch in config.json (launcher\app\DevBuild.cs).
+$branch = 'main'
+try {
+    $cfg = [IO.File]::ReadAllText((Join-Path $Root 'config.json')) | ConvertFrom-Json
+    if ($cfg.PSObject.Properties['UpdateBranch'] -and $cfg.UpdateBranch) { $branch = [string]$cfg.UpdateBranch }
+} catch { throw "No readable config.json in $Root, so which server this install joins is not known: $($_.Exception.Message)" }
+if ($branch -ne 'dev') {
+    throw "This install is on the $branch channel, so the run would play on the $branch server. Switch it to dev on the launcher's Settings page, let it update, close it, and run this again."
+}
 if (-not (Test-Path -LiteralPath (Join-Path $Root 'Profile\dev-allowed.txt'))) {
     throw "No Profile\dev-allowed.txt under $Root, so the test plugin would not run: the site has not named this install's Discord account a dev."
 }
 
 $running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
     $_.ProcessName -in @('SkyrimSE', 'skse64_loader') -or
-    ($_.ProcessName -eq 'Thornswood' -and $_.Path -and $_.Path.StartsWith($Root, [StringComparison]::OrdinalIgnoreCase))
+    ($_.ProcessName -eq 'Thornswood' -and $_.Path -and
+     [string]::Equals($_.Path, $launcherExe, [StringComparison]::OrdinalIgnoreCase))
 })
 if ($running.Count -gt 0) {
     throw ('Already running, so this run would take over somebody''s session: ' + (($running | ForEach-Object { $_.ProcessName + ' ' + $_.Id }) -join ', '))
