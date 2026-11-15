@@ -500,7 +500,8 @@
       "timeoutMinutes": 10,
       "fixed": ["-OnTheBox", "-NoPause"],
       "params": {
-        "Check": "switch"
+        "Check": "switch",
+        "Close": "switch"
       }
     },
     "Install-Tunnel": {

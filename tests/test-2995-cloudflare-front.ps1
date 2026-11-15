@@ -155,7 +155,7 @@ try {
         Yes ((Split-Path -Leaf $f) + ' parses and is plain ASCII') ((-not $e -or $e.Count -eq 0) -and -not ($t.ToCharArray() | Where-Object { [int]$_ -gt 127 }))
     }
 
-    $layerNames = @('Get-ThornswoodBoxRefusal', 'Get-AllowRules', 'Get-WebRule', 'Set-RuleRemote', 'Get-Profiles', 'Resolve-Name')
+    $layerNames = @('Get-ThornswoodBoxRefusal', 'Get-AllowRules', 'Get-WebRule', 'Set-RuleRemote', 'Set-RuleEnabled', 'Get-Profiles', 'Resolve-Name', 'Test-Tunnel', 'Get-OriginCert')
     $defined = @($ast.FindAll({ param($n) $n -is $FnAst }, $true) | ForEach-Object { $_.Name })
     Yes 'every layer function the stand-in replaces is defined in it' (@($layerNames | Where-Object { $defined -notcontains $_ }).Count -eq 0)
     $touchers = 'Get-NetFirewallRule', 'Set-NetFirewallRule', 'New-NetFirewallRule', 'Remove-NetFirewallRule', 'Get-NetFirewallPortFilter', 'Get-NetFirewallAddressFilter',
@@ -177,8 +177,15 @@ function Get-AllowRules { return @($global:Fake.rules) }
 function Get-WebRule([string]$DisplayName) {
     $r = $global:Fake.web[$DisplayName]
     if (-not $r) { return $null }
-    return [pscustomobject]@{ Name = $r.Name; Enabled = 'True'; Count = $r.Count; Remote = @($r.Remote) }
+    return [pscustomobject]@{ Name = $r.Name; Enabled = $(if ($r.ContainsKey('Enabled')) { $r.Enabled } else { 'True' }); Count = $r.Count; Remote = @($r.Remote) }
 }
+function Set-RuleEnabled([string]$Name, [bool]$On) {
+    $global:Fake.log.Add('Enabled ' + $Name + ' ' + $On)
+    if (-not $global:Fake.sticks) { return }
+    foreach ($k in @($global:Fake.web.Keys)) { if ($global:Fake.web[$k].Name -eq $Name) { $global:Fake.web[$k].Enabled = $(if ($On) { 'True' } else { 'False' }) } }
+}
+function Test-Tunnel([string[]]$Names) { $global:Fake.asked.Add('tunnel ' + ($Names -join ',')); return $global:Fake.tunnel }
+function Get-OriginCert([string]$Name) { return $global:Fake.cert }
 # Windows keeps an IPv4 range given as 104.16.0.0/13 as 104.16.0.0/255.248.0.0
 # and reads it back that way; IPv6 keeps its prefix length (the box, 21 Oct).
 function ConvertTo-WindowsForm([string]$t) {
@@ -221,6 +228,8 @@ function Resolve-Name([string]$Name, [string]$Server) {
                          [pscustomobject]@{ Name = 'Public'; Enabled = 'True'; Inbound = 'NotConfigured' })
             dns = @{ 'thornswood.net' = @('104.21.5.10', '172.67.130.5'); 'www.thornswood.net' = @('104.21.5.10', '172.67.130.5', '2606:4700:3031::6815:50a') }
             dnsFails = $false
+            tunnel = [pscustomobject]@{ Ready = 200; Carried = 2 }
+            cert = [pscustomobject]@{ Issuer = 'CN=E7, O=Let''s Encrypt, C=US'; NotBefore = [datetime]'2026-11-10T04:00:00Z'; NotAfter = [datetime]'2027-02-08T04:00:00Z' }
             sticks = $true
             asked = New-Object System.Collections.Generic.List[string]
             log = New-Object System.Collections.Generic.List[string]
@@ -250,7 +259,9 @@ function Resolve-Name([string]$Name, [string]$Server) {
     Yes '-Check: exit 0, read only' ($r.Code -eq 0 -and $global:Fake.log.Count -eq 0 -and (Has $r.Lines '^DONE read only\. Nothing was changed\.$'))
     Yes '  each rule as it stands, open' ((Has $r.Lines '^RULE 80 OPEN to any address$') -and (Has $r.Lines '^RULE 443 OPEN to any address$'))
     Yes '  every profile' (@($r.Lines | Where-Object { $_ -match '^PROFILE ' }).Count -eq 3)
-    Yes '  both names from both resolvers, every address inside' (@($r.Lines | Where-Object { $_ -match '^NAME .*, inside the ranges$' }).Count -eq 10 -and $global:Fake.asked.Count -eq 4 -and (Has $global:Fake.asked '^8\.8\.8\.8 www\.thornswood\.net$'))
+    Yes '  both names from both resolvers, every address inside' (@($r.Lines | Where-Object { $_ -match '^NAME .*, inside the ranges$' }).Count -eq 10 -and @($global:Fake.asked | Where-Object { $_ -notlike 'tunnel *' }).Count -eq 4 -and (Has $global:Fake.asked '^8\.8\.8\.8 www\.thornswood\.net$'))
+    Yes '  whether the tunnel carries both names (#5351)' ((Has $r.Lines '^TUNNEL cloudflared''s /ready answered 200$') -and (Has $r.Lines '^TUNNEL it carried 2 of 2 requests from here to thornswood\.net and www$') -and (Has $global:Fake.asked '^tunnel thornswood\.net,www\.thornswood\.net$'))
+    Yes '  and Caddy''s certificate, who issued it and when it starts and ends' (Has $r.Lines '^CERT thornswood\.net from CN=E7, .*, 2026-11-10 04:00Z to 2027-02-08 04:00Z$')
     Yes '  and no ALSO: the Store apps'' package rules, the game''s UDP port and 3000 let nothing in on 443 for Caddy' (-not (Has $r.Lines '^ALSO '))
 
     New-Fake
@@ -296,7 +307,7 @@ function Resolve-Name([string]$Name, [string]$Server) {
         New-Fake
         $global:Fake.rules += $case.Rule
         $r = Invoke-BoxHere ("-Check -Ranges '" + $list + "'")
-        Yes ('a rule ' + $case.Say + ' is no ALSO') ($r.Code -eq 0 -and -not (Has $r.Lines '^ALSO '))
+        Yes ('a rule ' + $case.Say + ' is no ALSO for -Apply') ($r.Code -eq 0 -and -not (Has $r.Lines '^ALSO .*from any address'))
     }
 
     New-Fake
@@ -321,6 +332,49 @@ function Resolve-Name([string]$Name, [string]$Server) {
     $r = Invoke-BoxHere '-Open'
     Yes '  and a second -Open says ALREADY' ($r.Code -eq 0 -and @($r.Lines | Where-Object { $_ -match '^ALREADY ' }).Count -eq 2)
 
+    # -Close (#5351): both rules off once the tunnel carries both names.
+    New-Fake
+    $global:Fake.tunnel = [pscustomobject]@{ Ready = 503; Carried = -1 }
+    $r = Invoke-BoxHere ("-Close -Ranges '" + $list + "'")
+    Yes '-Close while cloudflared is not ready: STOP, nothing changed' ($r.Code -eq 1 -and (Has $r.Lines '^STOP the tunnel did not carry both names \(/ready 503') -and $global:Fake.log.Count -eq 0)
+    New-Fake
+    $global:Fake.tunnel = [pscustomobject]@{ Ready = 200; Carried = 1 }
+    $r = Invoke-BoxHere ("-Close -Ranges '" + $list + "'")
+    Yes '-Close when the tunnel carried one name of two: STOP, nothing changed' ($r.Code -eq 1 -and (Has $r.Lines '^STOP the tunnel did not carry both names \(/ready 200, 1 of 2') -and $global:Fake.log.Count -eq 0)
+    New-Fake
+    $global:Fake.rules += (Rule 'Thornswood Web 443' 'TCP' @('443') '' '' @('173.245.48.0/20'))
+    $r = Invoke-BoxHere ("-Close -Ranges '" + $list + "'")
+    Yes '-Close with a scoped copy of the rule beside the pair: ALSO names it, STOP, nothing changed' ($r.Code -eq 1 -and (Has $r.Lines "^ALSO rule 'Thornswood Web 443' lets 80 or 443 in from 1 addresses") -and (Has $r.Lines '^STOP another rule lets Caddy take 80 or 443') -and $global:Fake.log.Count -eq 0)
+    New-Fake
+    $global:Fake.profiles[2].Enabled = 'False'
+    $r = Invoke-BoxHere ("-Close -Ranges '" + $list + "'")
+    Yes '-Close with a profile off: STOP, nothing changed' ($r.Code -eq 1 -and (Has $r.Lines '^STOP the firewall profile Public is off') -and $global:Fake.log.Count -eq 0)
+    New-Fake
+    $global:Fake.dns['www.thornswood.net'] = @($VpsAddr)
+    $r = Invoke-BoxHere ("-Close -Ranges '" + $list + "'")
+    Yes '-Close while www points straight at the box: STOP, nothing changed' ($r.Code -eq 1 -and (Has $r.Lines '^STOP thornswood\.net does not point only into Cloudflare''s ranges') -and $global:Fake.log.Count -eq 0)
+    New-Fake
+    $r = Invoke-BoxHere ("-Close -Ranges '" + $list + "' -DryRun")
+    Yes '-Close -DryRun: WOULD for both rules, nothing changed' ($r.Code -eq 0 -and @($r.Lines | Where-Object { $_ -match "^WOULD rule 'Thornswood Web (80|443)' is off, so nothing from outside reaches (80|443)$" }).Count -eq 2 -and $global:Fake.log.Count -eq 0)
+    New-Fake
+    $null = Invoke-BoxHere ("-Apply -Ranges '" + $list + "'")
+    $global:Fake.log.Clear()
+    $r = Invoke-BoxHere ("-Close -Ranges '" + $list + "'")
+    Yes '-Close: exit 0, both rules off, by their own names' ($r.Code -eq 0 -and $global:Fake.web['Thornswood Web 80'].Enabled -eq 'False' -and $global:Fake.web['Thornswood Web 443'].Enabled -eq 'False' -and
+        (($global:Fake.log) -join '|') -eq 'Enabled {web-80} False|Enabled {web-443} False' -and @($r.Lines | Where-Object { $_ -match '^CHANGED ' }).Count -eq 2)
+    $global:Fake.log.Clear()
+    $r = Invoke-BoxHere ("-Check -Ranges '" + $list + "'")
+    Yes '  -Check then says both are closed' ((Has $r.Lines '^RULE 80 CLOSED, the rule is off$') -and (Has $r.Lines '^RULE 443 CLOSED, the rule is off$') -and $global:Fake.log.Count -eq 0)
+    $r = Invoke-BoxHere ("-Close -Ranges '" + $list + "'")
+    Yes '  a second -Close says ALREADY and changes nothing' ($r.Code -eq 0 -and @($r.Lines | Where-Object { $_ -match '^ALREADY ' }).Count -eq 2 -and $global:Fake.log.Count -eq 0)
+    $r = Invoke-BoxHere ("-Apply -Ranges '" + $list + "'")
+    Yes '  -Apply puts both on again, scoped to the list, and touches no address that is already right' ($r.Code -eq 0 -and $global:Fake.web['Thornswood Web 443'].Enabled -eq 'True' -and (Remote 'Thornswood Web 443') -eq $sorted -and
+        (($global:Fake.log) -join '|') -eq 'Enabled {web-80} True|Enabled {web-443} True' -and @($r.Lines | Where-Object { $_ -match "^CHANGED rule 'Thornswood Web (80|443)' is on again$" }).Count -eq 2)
+    $null = Invoke-BoxHere ("-Close -Ranges '" + $list + "'")
+    $global:Fake.log.Clear()
+    $r = Invoke-BoxHere '-Open'
+    Yes '  and -Open after -Close sets the address first, then turns the rule on' ($r.Code -eq 0 -and $global:Fake.log[0] -like 'Set {web-80} Any' -and $global:Fake.log[1] -eq 'Enabled {web-80} True' -and $global:Fake.web['Thornswood Web 80'].Enabled -eq 'True')
+
     New-Fake
     $global:Fake.sticks = $false
     $r = Invoke-BoxHere ("-Apply -Ranges '" + $list + "'")
@@ -344,10 +398,10 @@ function Resolve-Name([string]$Name, [string]$Server) {
     $r = Invoke-BoxHere '-Apply'
     Yes '-Apply with no list: STOP' ($r.Code -eq 1 -and (Has $r.Lines '^STOP -Apply needs -Ranges'))
     $r = Invoke-BoxHere ("-Ranges '" + $list + "'")
-    Yes 'no mode at all: STOP' ($r.Code -eq 1 -and (Has $r.Lines '^STOP say one of -Check, -Apply or -Open'))
+    Yes 'no mode at all: STOP' ($r.Code -eq 1 -and (Has $r.Lines '^STOP say one of -Check, -Apply, -Open or -Close'))
     $r = Invoke-BoxHere ("-Check -Apply -Ranges '" + $list + "'")
     Yes 'two modes: STOP' ($r.Code -eq 1 -and (Has $r.Lines '^STOP say one of') -and $global:Fake.log.Count -eq 0)
-    $words = @($r.Lines + (Invoke-BoxHere ("-Check -Ranges '" + $list + "'")).Lines | Where-Object { $_ -notmatch '^(RULE|ALSO|PROFILE|NAME|CHANGED|WOULD|ALREADY|STOP|DONE) ' })
+    $words = @($r.Lines + (Invoke-BoxHere ("-Check -Ranges '" + $list + "'")).Lines | Where-Object { $_ -notmatch '^(RULE|ALSO|PROFILE|NAME|TUNNEL|CERT|CHANGED|WOULD|ALREADY|STOP|DONE) ' })
     Yes 'every line it prints starts with one of its words' ($words.Count -eq 0)
 
     # ---- 5. the machine half -----------------------------------------------------
@@ -405,7 +459,7 @@ function Resolve-Name([string]$Name, [string]$Server) {
         $out = @(& $Driver @a 6>&1 2>&1 | ForEach-Object { [string]$_ })
         return [pscustomobject]@{ Code = $LASTEXITCODE; Lines = $out; Text = ($out -join "`n") }
     }
-    $wantList = "-Ranges '" + $list + "'"
+    $wantList = "-Ranges '" + $list + "' -Metrics '127.0.0.1:20241'"
 
     Fresh
     $global:H.HostFp = 'SHA256:' + ('A' * 43)
@@ -416,6 +470,15 @@ function Resolve-Name([string]$Name, [string]$Server) {
     [IO.File]::WriteAllText((Join-Path $tmp 'bad-list.txt'), "173.245.48.0/20`nnot-a-range`n", $utf8)
     $r = Invoke-Driver @{ RangesFile = (Join-Path $tmp 'bad-list.txt') }
     Yes 'a list with a bad line: refused, exit 1, nothing sent' ($r.Code -eq 1 -and $r.Text -match "Line 2 .*'not-a-range'" -and $global:H.Calls.Count -eq 0)
+
+    Fresh
+    $r = Invoke-Driver @{ Close = $true; Open = $true }
+    Yes '-Close with -Open: refused before anything is sent' ($r.Code -eq 1 -and $global:H.Calls.Count -eq 0)
+
+    Fresh
+    $r = Invoke-Driver @{ Close = $true }
+    Yes '-Close: exit 0, the box asked with -Close, the list and the tunnel''s metrics address from its record' ($r.Code -eq 0 -and $global:H.Given -eq ('-Close ' + $wantList) -and
+        $global:Fake.web['Thornswood Web 443'].Enabled -eq 'False' -and $r.Text -match 'the site comes through the tunnel')
 
     Fresh
     $r = Invoke-Driver @{ Check = $true; Open = $true }
@@ -462,7 +525,7 @@ Yes 'Setup-Domain.ps1 makes a web rule only when the firewall takes none of that
 $wr = Fn $Box 'Get-WebRule'
 Yes 'the box half reads the policy store''s rule first, and the active store only when the policy holds none' ($wr -match '(?s)-PolicyStore localhost -DisplayName \$DisplayName.*?\$store = ''GroupPolicy''.*?if \(-not \$r\.Count\) \{\s*\$r = @\(Get-NetFirewallRule -PolicyStore ActiveStore')
 $gv = ([IO.File]::ReadAllText((P 'scripts', 'vps', 'gate', 'verbs.json')) | ConvertFrom-Json).verbs.'Set-WebFirewall'
-Yes 'the gate''s Set-WebFirewall runs Set-WebFirewall.ps1 -OnTheBox, with -Check and nothing else, so never -Open' ($null -ne $gv -and $gv.script -eq 'scripts/vps/Set-WebFirewall.ps1' -and (@($gv.fixed) -join ' ') -eq '-OnTheBox -NoPause' -and (@($gv.params.PSObject.Properties | ForEach-Object { $_.Name }) -join ',') -eq 'Check')
+Yes 'the gate''s Set-WebFirewall runs Set-WebFirewall.ps1 -OnTheBox, with -Check and -Close and nothing else, so never -Open' ($null -ne $gv -and $gv.script -eq 'scripts/vps/Set-WebFirewall.ps1' -and (@($gv.fixed) -join ' ') -eq '-OnTheBox -NoPause' -and (@($gv.params.PSObject.Properties | ForEach-Object { $_.Name }) -join ',') -eq 'Check,Close')
 $dt = [IO.File]::ReadAllText($Driver)
 Yes '  and -OnTheBox runs the same box file here, needs no key, and refuses -Open' ($dt -match '\[switch\]\$OnTheBox' -and $dt -match "(?s)if \(\`$OnTheBox\) \{.*?\[scriptblock\]::Create\(`"& '`" \+ \`$BoxScript" -and $dt -match "if \(-not \`$OnTheBox\) \{\s*Head `"2\. The box's own key`"" -and $dt -match 'if \(\$OnTheBox -and \$Open\) \{ Die')
 $fp = [IO.File]::ReadAllText((P 'scripts', 'vps', 'vps-firewall-policy.ps1'))
