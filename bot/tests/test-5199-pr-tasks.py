@@ -176,6 +176,34 @@ yes('main() fails a bad body with exit 1 and names the rule', code == 1 and 'FAI
     and 'Server: Main' in out)
 code, out = run('Closes #9\n')
 yes('main() passes a body with no test task', code == 0 and 'nothing to check' in out)
+
+# ---- a test task in another shape (15 Nov: six Bot pull requests wrote one
+# that done-on-merge.yml never copied, so their issues never closed)
+yes('"## Test task (Dev)" with steps under it is found',
+    pr_tasks.loose('Refs #9\n\n## Test task (Dev)\n\nA person on Dev: log in.\n') == [(3, '## Test task (Dev)')])
+yes('"Main test task, for two staff:" is found', [n for n, _ in pr_tasks.loose(
+    'Refs #9\nMain test task, for two members of staff:\n1. Go.\n')] == [2])
+yes('"### Test tasks" over "- [ ] Main:" lines is found', len(pr_tasks.loose(
+    '### Test tasks\n- [ ] Main: open the inbox.\n')) == 1)
+yes('"Test tasks: none" passes', pr_tasks.loose('Test tasks: none; nobody would notice.\n') == [])
+yes('a heading whose next line says none passes', pr_tasks.loose('## Test task\nMain: none. Nothing changes.\n') == [])
+yes('"No test task: nobody would notice this fix." passes',
+    pr_tasks.loose('No test task: nobody would notice this fix.\n') == [])
+yes('prose that names test tasks mid-line passes',
+    pr_tasks.loose('- Dev test tasks and findings move to the Dev space.\nThat is the test task below.\n') == [])
+yes('a fenced example passes', pr_tasks.loose('```\n## Test task\nsteps\n```\n') == [])
+yes('a heading over real blocks passes', pr_tasks.loose('## Test task\n\n' + MAIN) == [])
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '.github',
+                       'pull_request_template.md'), encoding='utf-8') as f:
+    TEMPLATE = f.read()
+yes("the pull request template's own notes, left in, pass", pr_tasks.loose(TEMPLATE) == [])
+yes('  a line after a comment keeps its own line number',
+    pr_tasks.loose('<!-- a\nb -->\nMain test task:\n1. Go.\n') == [(3, 'Main test task:')])
+code, out = run('Refs #9\n\n## Test task (Dev)\n\nA person on Dev: log in.\n')
+yes('main() fails a test task in another shape with exit 1 and names the shape', code == 1
+    and 'line 3, "## Test task (Dev)"' in out and 'Test task for #N: <title>' in out)
+code, out = run('Refs #9\nTest tasks: none; nobody would notice.\n')
+yes('main() passes "Test tasks: none"', code == 0)
 os.environ.pop('PR_BODY', None)
 
 
