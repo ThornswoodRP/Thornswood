@@ -2800,7 +2800,7 @@
     Vanilla marks most beds Owned by an NPC or a faction, and Sleep/Wait then
     refuses them. Under SkyMP there is nobody home to ask, so an Owned bed is
     just a bed nobody can rest in. Clear the owner when the bed comes into the
-    world here (its 3D loads), and when somebody actually lies down tell the
+    world here (its 3D loads, or its cell finishes loading), and when somebody actually lies down tell the
     server /rest bed so the exhaustion meter recovers the way Blade's pitch
     asked.
 
@@ -2855,6 +2855,38 @@
     if (!ref) { return; }
     clearBedOwnership(ref);
   }));
+
+  /*
+    EVERY BED IN A CELL, not only the ones whose 3D this plugin watched load.
+    A cell that comes in with a save or a login (somebody who logs in inside
+    an inn) may hand its references their 3D without an objectLoaded for
+    each, so the whole cell's furniture is walked once it has finished
+    loading (cellFullyLoaded, the fork's TESCellFullyLoadedEvent sink), and
+    the person's own cell is walked once when this plugin starts, for a cell
+    that loaded before it did. 40 is kFurniture.
+  */
+  function clearBedsIn(cell) {
+    if (!cell) { return 0; }
+    const n = cell.getNumRefs(40);
+    let cleared = 0;
+    for (let i = 0; i < n; i++) {
+      const ref = cell.getNthRef(i, 40);
+      if (ref && clearBedOwnership(ref)) { cleared++; }
+    }
+    return cleared;
+  }
+
+  sp.on('cellFullyLoaded', guard('bed owners', (e) => {
+    if (!e || !e.cell) { return; }
+    clearBedsIn(e.cell);
+  }));
+
+  guard('bed owners at start', () => {
+    const pc = sp.Game.getPlayer();
+    if (!pc) { return; }
+    const cleared = clearBedsIn(pc.getParentCell());
+    if (cleared) { say('cleared the owner of ' + cleared + ' bed(s) already here'); }
+  })();
 
   sp.on('activate', guard('activate', (e) => {
     // Declared here, once, for the whole handler. It used to be declared
