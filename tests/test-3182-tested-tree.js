@@ -369,8 +369,13 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
   // ---- 3. why the tree is enough ---------------------------------------------
   const checkout = steps.find(st => /^      - uses: actions\/checkout@/.test(st)) || '';
   const treeCheckout = treeSteps[0] || '';
-  yes('the checks check out one commit, with no history on either build, in both jobs', /^      - uses: actions\/checkout@[0-9a-f]{40} # v\d+(\.\d+)*\n/.test(checkout + '\n') && !/^\s+with:/m.test(checkout) &&
-      /^      - uses: actions\/checkout@[0-9a-f]{40} # v\d+(\.\d+)*\n/.test(treeCheckout + '\n') && !/^\s+with:/m.test(treeCheckout));
+  // persist-credentials: false keeps the token out of .git/config (#4162)
+  // and changes nothing the checks see; any other with: (a depth, a filter,
+  // a ref) would.
+  const oneCommit = (c) => !/^\s+with:/m.test(c.replace(/\n        with:\n          persist-credentials: false(?=\n|$)/, ''));
+  yes('the checks check out one commit, with no history on either build, in both jobs', /^      - uses: actions\/checkout@[0-9a-f]{40} # v\d+(\.\d+)*\n/.test(checkout + '\n') && oneCommit(checkout) &&
+      /^      - uses: actions\/checkout@[0-9a-f]{40} # v\d+(\.\d+)*\n/.test(treeCheckout + '\n') && oneCommit(treeCheckout));
+  yes('  and keep no credentials in .git/config (#4162)', /\n          persist-credentials: false(\n|$)/.test(checkout) && /\n          persist-credentials: false(\n|$)/.test(treeCheckout));
   // The lint step is the one step that reads the event and fetches the
   // base (#3185): it reports warnings and cannot fail a build, and it is the
   // last step of the Tree checks job (#5292), so no check runs after its
@@ -406,6 +411,10 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
     }
   };
   walk('tests'); walk('scripts');
+  // And every product's own harnesses, beside its code (#5341).
+  for (const e of fs.readdirSync(REPO, { withFileTypes: true })) {
+    if (e.isDirectory() && e.name !== 'tests' && e.name !== 'node_modules' && fs.existsSync(path.join(REPO, e.name, 'tests'))) { walk(e.name + '/tests'); }
+  }
   const loose = found.filter(f => !ALLOWED[f]);
   yes('no harness or script reads the event or ref but those named here (' + (loose.join(', ') || 'none') + ')', loose.length === 0);
   for (const f of Object.keys(ALLOWED)) { yes('  ' + f + ' is still one (' + ALLOWED[f] + ')', found.indexOf(f) >= 0); }

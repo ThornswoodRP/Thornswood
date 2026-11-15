@@ -566,7 +566,15 @@ yes('only the roster is sent newest-only',
      instant. */
   yes('health counts it as backed up',
       await until('one backed', async () => (await health()).backed === 1, 3000));
-  yes('and counts the positions it was not sent', hStuck.droppedPositions > 0);
+  /* Polled as well (#6032). A position is dropped only when a tick finds
+     the socket backed, which is from a write the kernel would not take until
+     its drain, and "backed up" above asks only that node's queue held
+     something on two probes running. So six seconds of it promise no
+     refused send, and on Ubuntu 26 runners twice the one read just after
+     them was 0 while the memory check above, which waits for thirty more,
+     passed. What this checks is that the drops are counted, not how soon. */
+  yes('and counts the positions it was not sent',
+      await until('a dropped position', async () => (await health()).droppedPositions > 0, BOUND_MS));
   yes('somebody who keeps up is still sent positions every tick (' + gotDuring + ' in 6 s)',
       gotDuring >= 20);
 

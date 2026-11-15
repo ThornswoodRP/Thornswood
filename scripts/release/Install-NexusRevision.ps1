@@ -776,6 +776,9 @@ if ($foreign.Count) { Die ('These are in ' + $Game + ' already and no layout put
 
 $script:Changed = 'In ' + $Game + ': the earlier layout''s files are being taken out.'
 foreach ($o in $old.Values) { $f = Join-Path $Game $o.Rel; if (Test-Path -LiteralPath $f -PathType Leaf) { [IO.File]::SetAttributes($f, [IO.FileAttributes]::Normal); [IO.File]::Delete($f) } }
+# A run cut part way through a copy leaves that file's .part (CopyWhole in
+# NexusLayout.cs, #4303); it is this script's own, for a name files.txt lists.
+foreach ($o in $old.Values) { $f = Join-Path $Game ($o.Rel + '.part'); if (Test-Path -LiteralPath $f -PathType Leaf) { [IO.File]::SetAttributes($f, [IO.FileAttributes]::Normal); [IO.File]::Delete($f) } }
 foreach ($n in 'layout.json', 'files.txt', 'plugins.txt', 'loadorder.txt') { $f = Join-Path $recDir $n; if (Test-Path -LiteralPath $f) { [IO.File]::Delete($f) } }
 # Folders the old layout left empty go too, deepest first; Data and the
 # game folder stay.
@@ -804,7 +807,7 @@ try {
     # One unpacked file placed twice is copied the second time, so no two
     # names in the layout are one file.
     if ($used.Add($x.Full)) { if ([Thornswood.Layout.NexusLayout]::LinkOrCopy($x.Full, $to)) { $linked++ } else { $copied++ } }
-    else { New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null; [IO.File]::Copy($x.Full, $to, $false); $copied++ }
+    else { [Thornswood.Layout.NexusLayout]::CopyWhole($x.Full, $to); $copied++ }
   }
 }
 catch { Die ('Placing ' + $x.Rel + ' failed after ' + ($linked + $copied) + ' files: ' + $_.Exception.Message) }

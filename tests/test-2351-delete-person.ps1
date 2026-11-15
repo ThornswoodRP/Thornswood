@@ -155,6 +155,7 @@ function Build {
     $D = Join-Path $Site 'data'
     Put (Join-Path $D 'linked.json') ('{"' + $ME + '":{"name":"Me","profiles":[' + $P1 + ',' + $P2 + ']},"' + $YOU + '":{"name":"You","profiles":[' + $PY + ',' + $P2 + ']},"' + $THEM + '":{"name":"Them","profiles":[' + $PT + ']}}')
     Put (Join-Path $D 'rules-accepted.json') ('{"' + $ME + '":{"yes":true},"' + $YOU + '":{"yes":true}}')
+    Put (Join-Path $D 'settings.json') ('{"' + $ME + '":{"at":1,"files":{"launcher.json":"{}"}},"' + $YOU + '":{"at":1,"files":{"launcher.json":"{}"}}}')
     Put (Join-Path $D 'signins.json') ('[{"id":"' + $ME + '","ip":"203.0.113.1"},{"id":"' + $YOU + '","ip":"203.0.113.2"},{"id":"' + $ME + '","ip":"203.0.113.3"}]')
     Put (Join-Path $D 'sessions.json') ('[{"session":"s1","who":"' + $ME + '","profile":' + $P1 + '},{"session":"s2","who":"' + $ME + '","profile":' + $P1 + ',"start":100000,"end":200000,"keep":true},{"session":"s3","who":"' + $YOU + '","profile":' + $PY + '},{"session":"s4","who":"' + $THEM + '","profile":' + $PT + '}]')
     Put (Join-Path $D 'session-logs\s1.json') ('{"session":"s1","who":"' + $ME + '","logs":{"launcher.log":"x"}}')
@@ -427,10 +428,11 @@ const block = /\/\/ ==== thornswood deletion requests ====([\s\S]*?)\/\/ ==== en
 const D = path.join(site, 'data'), FB = path.join(D, 'for-bot'), UP = path.join(site, 'uploads');
 const putJson = (p, o) => { try { fs.writeFileSync(p, JSON.stringify(o, null, 2)); return true; } catch (e) { return false; } };
 new Function('fs', 'path', 'putJson', 'DATA', 'UP', 'LINKED', 'RULES_OK', 'ATTEMPTS', 'SESSIONS', 'SLOGS', 'TROUBLE_FILE', 'ROSTER', 'INBOX',
-  'GPENDING', 'GALLERY', 'GREPORTS', 'UPMETA', block + '\napplyDeletionRequests();')(fs, path, putJson, D, UP,
+  'GPENDING', 'GALLERY', 'GREPORTS', 'UPMETA', 'SETTINGS', block + '\napplyDeletionRequests();')(fs, path, putJson, D, UP,
   path.join(D, 'linked.json'), path.join(D, 'rules-accepted.json'), path.join(D, 'signins.json'), path.join(D, 'sessions.json'),
   path.join(D, 'session-logs'), path.join(FB, 'trouble.json'), path.join(D, 'roster.json'), path.join(FB, 'inbox.json'),
-  path.join(D, 'gallery-pending.json'), path.join(D, 'gallery.json'), path.join(D, 'gallery-reports.json'), path.join(UP, 'uploads.json'));
+  path.join(D, 'gallery-pending.json'), path.join(D, 'gallery.json'), path.join(D, 'gallery-reports.json'), path.join(UP, 'uploads.json'),
+  path.join(D, 'settings.json'));
 '@
     $siteSaid = @(& $node $driver $Repo $Site 2>&1 | ForEach-Object { "$_" }) -join "`n"
     Yes 'the site took its request as it started, and said so with counts' ($siteSaid -match 'deletion requests: 1 person\(s\): .*done, and the request is gone' -and -not (Test-Path (Join-Path $Site 'data\deletion-requests.json')))
@@ -457,6 +459,8 @@ new Function('fs', 'path', 'putJson', 'DATA', 'UP', 'LINKED', 'RULES_OK', 'ATTEM
     $lk = J (Join-Path $D 'linked.json')
     Yes 'their Discord link is gone, the others stay' ($null -eq $lk.$ME -and $null -ne $lk.$YOU -and $null -ne $lk.$THEM)
     Yes 'their answer to the rules is gone' ($null -eq (J (Join-Path $D 'rules-accepted.json')).$ME)
+    $st = J (Join-Path $D 'settings.json')
+    Yes 'their settings are gone, the others'' stay (#5939)' ($null -eq $st.$ME -and $null -ne $st.$YOU)
     $si = @(J (Join-Path $D 'signins.json'))
     Yes 'their sign-in rows are gone, with the addresses in them' ($si.Count -eq 1 -and $si[0].id -eq $YOU)
     $ss = @(J (Join-Path $D 'sessions.json'))

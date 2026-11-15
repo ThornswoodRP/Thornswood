@@ -11,7 +11,7 @@
 //     node scripts/dev/Build-HairDyeGamemode.js
 //
 // With --check it writes nothing and exits 1 when the block is not what the
-// two files make; tests/test-2675-hair-dye-wiring.js runs that check.
+// two files make; game/tests/test-2675-hair-dye-wiring.js runs that check.
 'use strict';
 const fs = require('fs');
 const path = require('path');

@@ -99,11 +99,15 @@ function Get-VortexStateDir {
   and then as the legacy folder's number, so Ship and Publish-Update were
   handed a revision nobody had read. Now it throws a sentence naming
   state.v2, and the caller says it.
+
+  A DATABASE THAT READS IS THE ANSWER (#6085). When state.v2 reads and names
+  no installed revision of the slug, the collection is not installed and this
+  is 0; a collection_<slug>_<rev>_ folder left behind by an old Vortex is not
+  read in its place. The folder parse is only for a machine with no database.
 #>
 function Get-CollectionRevision([string]$Slug) {
     if (-not $Slug) { return 0 }
-    $fromState = Get-CollectionRevisionFromState $Slug
-    if ($fromState -gt 0) { return $fromState }
+    if (Get-VortexDatabaseDir) { return Get-CollectionRevisionFromState $Slug }
     return Get-CollectionRevisionFromFolder $Slug
 }
 
@@ -146,9 +150,9 @@ function Read-VortexCollectionState([string]$St, [scriptblock]$Read) {
 function Import-VortexStateReader {
     if ('Thornswood.VortexProfileState' -as [type]) { return }
     $source = Join-Path $PSScriptRoot '..\..\launcher\app\VortexProfileState.cs'
-    if ($PSVersionTable.PSVersion.Major -le 5) {
-        Add-Type -LiteralPath $source -ReferencedAssemblies System.dll,System.Core.dll,System.Xml.dll
-    } else { Add-Type -LiteralPath $source }
+    # pwsh 7, where every script runs (#5356): its Add-Type has every
+    # assembly the file uses already (#5968).
+    Add-Type -LiteralPath $source
 }
 <#
   The legacy fallback: the revision out of the old folder name, or 0. Kept for

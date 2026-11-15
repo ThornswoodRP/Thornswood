@@ -170,7 +170,7 @@ try {
         $catch.Success -and $catch.Value -match 'why = ex\.GetType\(\)\.Name' -and $catch.Value -notmatch 'Swallow\.')
 
     $sw = [IO.File]::ReadAllText((Join-Path $AppDir 'Swallow.cs'))
-    Yes 'Swallow.Say writes to the log and never throws' ($sw -match 'public static void Say\(string where, string why\)' -and $sw -match 'File\.AppendAllText')
+    Yes 'Swallow.Say uses the one diagnostic writer' ($sw -match 'public static void Say\(string where, string why\)' -and $sw -match 'LauncherLog\.Line')
 }
 finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue

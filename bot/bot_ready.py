@@ -13,6 +13,7 @@ from bot_core import (UPPER_STAFF_IDS, WELCOME, _int_env, by_name, client, log,
     tree, warn_upper_staff_config)
 from bot_joins import watch_join_numbers
 from bot_holds import ensure_hold_panel
+from bot_pings import ensure_ping_panel
 from bot_rules_gate import ensure_rules_gate
 from bot_staff_channel import watch_trouble
 from bot_reports import watch_reports
@@ -192,6 +193,7 @@ async def on_ready():
         await ensure_panel(g)
         await ensure_hold_panel(g)
         await ensure_rules_gate(g)
+        await ensure_ping_panel(g)
         await ensure_office_roles(g)
         await ensure_office_panel(g)
         await ensure_faction_panel(g)

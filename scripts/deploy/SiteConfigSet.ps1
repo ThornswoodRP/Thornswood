@@ -47,8 +47,8 @@
     - No file at all, a first install: writes one holding just this key;
       server.js fills in the rest when it starts.
 
-  tests\test-docs-password.ps1 runs it through Deploy-Docs -Password, and
-  tests\test-2317-rotate-config.ps1 through Rotate-ServerPassword, both in
+  scripts\tests\test-docs-password.ps1 runs it through Deploy-Docs -Password, and
+  scripts\tests\test-2317-rotate-config.ps1 through Rotate-ServerPassword, both in
   Windows PowerShell 5.1 against scratch files.
 #>
 

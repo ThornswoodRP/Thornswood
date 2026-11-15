@@ -12,6 +12,19 @@ This page is the comparison and the recommendation. Patrick made the pick on
 his report page on 26 Oct 2026 at 11:46 PM, and the pick is split into
 smaller issues.
 
+## Contents
+
+- [Decided](#decided)
+- [Where things stand today, measured](#where-things-stand-today-measured)
+- [How it was measured](#how-it-was-measured)
+- [The comparison](#the-comparison)
+- [The options, with pros and cons](#the-options-with-pros-and-cons)
+- [The installer](#the-installer)
+- [Linux and the Steam Deck](#linux-and-the-steam-deck)
+- [Recommendation](#recommendation)
+- [Questions for Patrick, answered](#questions-for-patrick-answered)
+- [Appendix: the Linux runs](#appendix-the-linux-runs)
+
 ## Decided
 
 Patrick's picks, on his report page, 26 Oct 2026, 11:46 PM ([#3209](https://github.com/EvilPatrick06/Thornswood/issues/3209#issuecomment-6434829911)):

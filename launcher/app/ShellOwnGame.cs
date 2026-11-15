@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
@@ -140,8 +141,12 @@ namespace Thornswood
 
             ThreadPool.QueueUserWorkItem(delegate
             {
-                bool refresh = false, offer = false;
+                bool refresh = false, offer = false, fixAfterMake = false;
                 string refused = null;
+                // The first start in a folder just made runs Fix (#5937):
+                // what the install leaves to do all waits on the folder, and
+                // this is the first start that has it.
+                if (active) fixAfterMake = OwnGame.TakeFixAfterMake();
                 try
                 {
                     // Vortex deploying into a Thornswood folder is refused
@@ -170,13 +175,22 @@ namespace Thornswood
                     }
                 }
                 catch (Exception ex) { Swallow.Note("ShellOwnGame.OwnGameAtStart, NeedsRefresh or offer", ex); }
-                if (!refresh && !offer) return;
+                if (!refresh && !offer && !fixAfterMake) return;
                 try
                 {
                     Dispatcher.UIThread.Post(delegate
                     {
-                        if (refresh) StartOwnGame(false, false);
-                        else AskOwnGame(true);
+                        // Fix after the bring-up-to-date when Vortex deployed
+                        // again in between, whether that succeeds or not, as a
+                        // pressed Fix carries on after it; straight away
+                        // otherwise.
+                        Action fix = fixAfterMake ? (Action)delegate { RunFix(false, false, true); } : null;
+                        if (refresh)
+                        {
+                            if (!StartOwnGame(false, false, fix, fix) && fix != null) fix();
+                        }
+                        else if (offer) AskOwnGame(true);
+                        else fix();
                     });
                 }
                 catch (Exception ex) { Swallow.Note("ShellOwnGame.OwnGameAtStart, BeginInvoke", ex); }
@@ -200,14 +214,17 @@ namespace Thornswood
         /// and says why. StartPlay rather than Play(), because Play() is also
         /// reached from paths that have not been through Discord.
         ///
-        /// ownGameBusy is read again after the wait. NeedsRefresh runs under
-        /// Waiting, which keeps the window's messages moving, and the
-        /// bring-up-to-date OwnGameAtStart queues when the window is first
-        /// shown can start inside that wait. Read only before it, a Play
-        /// pressed in that first second went on into the game while the
-        /// folder under it was being rewritten.
+        /// ownGameBusy is read again after the wait. NeedsRefresh runs off the
+        /// window's thread (OffThread), and while it does the window's own
+        /// loop carries on, so the bring-up-to-date OwnGameAtStart queues when
+        /// the window is first shown can start inside that wait. Read only
+        /// before it, a Play pressed in that first second went on into the
+        /// game while the folder under it was being rewritten.
+        ///
+        /// The second StartPlay is awaited inside ownGameRefreshedForPlay, so
+        /// the flag is still up when that pass asks NeedsRefresh again.
         /// </summary>
-        static bool OwnGameRefreshIfDue()
+        static async Task<bool> OwnGameRefreshIfDue()
         {
             if (!OwnGame.Active) return false;
             if (playing || Checks.GameRunning()) return false;
@@ -219,7 +236,7 @@ namespace Thornswood
             bool due = false;
             try
             {
-                Waiting(delegate { due = OwnGame.NeedsRefresh(cfg); });
+                await OffThread(delegate { due = OwnGame.NeedsRefresh(cfg); });
             }
             catch (Exception ex)
             {
@@ -244,13 +261,16 @@ namespace Thornswood
                     "Press Scan, then Fix, on Diagnostics, and send the launcher log if it keeps saying this.");
                 return true;
             }
-            StartOwnGame(false, true, delegate
-            {
-                ownGameRefreshedForPlay = true;
-                try { StartPlay(); }
-                finally { ownGameRefreshedForPlay = false; }
-            });
+            StartOwnGame(false, true, delegate { Begin(PlayAfterRefresh()); });
             return true;
+        }
+
+        /// <summary>StartPlay again once the bring-up-to-date for this press is done, with ownGameRefreshedForPlay up until that pass has ended.</summary>
+        static async Task PlayAfterRefresh()
+        {
+            ownGameRefreshedForPlay = true;
+            try { await StartPlayAsync(); }
+            finally { ownGameRefreshedForPlay = false; }
         }
 
         /// <summary>
@@ -472,11 +492,16 @@ namespace Thornswood
             {
                 try { Paths.Init(Paths.Root); }
                 catch (Exception ex) { Swallow.Note("ShellOwnGame.StartOwnGame, pointing Paths at the new folder", ex); }
+                // Fix runs in the new folder straight after this (#5937, the
+                // finish below), and this note runs it on the next start
+                // instead when the launcher closes first: an update going in,
+                // or the launcher shut by hand.
+                OwnGame.NoteFixAfterMake();
             }
 
             // The same load-order step Fix runs. SettleSettings on a full
             // Refresh used to lay Golden's plugins.txt over Live, which put
-            // Thornswood-Content.esp out of the server's order (Gavin: Mod
+            // Thornswood-Content.esp out of the server's order (Patrick: Mod
             // list red at position 21 after "already matches"), so
             // PutInServerOrder (the same write Scan and Fix uses) keeps Mod
             // list green. Light flags are not written here or anywhere: the
@@ -534,8 +559,25 @@ namespace Thornswood
                         Log(said);
                         if (make)
                         {
-                            Log("Restarting the launcher so it runs from the new folder.");
-                            RestartLauncher();
+                            // One restart for the whole first setup (Patrick,
+                            // 12 Nov: "do the scan and fix, the own game
+                            // folder, and all the body slider and pandora
+                            // stuff and update to the latest version ... and
+                            // than restart just once"). Paths already name
+                            // the new folder (FolderWork), so Fix runs here,
+                            // in it, and FirstSetupRestart takes a newer
+                            // launcher or restarts once at its end. An update
+                            // already going in restarts the launcher itself
+                            // once the folder is let go, and the note runs
+                            // Fix on the start after it instead.
+                            if (updating)
+                            {
+                                Log("The update going in restarts the launcher into the new folder, and Fix runs there.");
+                                return;
+                            }
+                            OwnGame.TakeFixAfterMake();
+                            restartAfterFirstFix = true;
+                            RunFix(false, false, true);
                             return;
                         }
                         // LastIssues was refreshed on the pool thread after
@@ -558,6 +600,7 @@ namespace Thornswood
                     {
                         fixWhenFolderReady = false;
                         if (fixWhenFolderReadyAfterVortex) { fixWhenFolderReadyAfterVortex = false; RunFix(false, true); }
+                        else if (fixWhenFolderReadyAfterMake) { fixWhenFolderReadyAfterMake = false; RunFix(false, false, true); }
                         else RunFix(true);
                     }
                 });

@@ -69,7 +69,8 @@ Write-Host 'every script that writes version.json goes through Write-FeedVersion
 # the indentation (or a byte order mark) back.
 $writers = @{}
 $bad = @()
-foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $Repo 'scripts') -Recurse -File -Filter '*.ps1')) {
+# Not the scripts' own harnesses in scripts\tests (#5341), which name what they look for.
+foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $Repo 'scripts') -Recurse -File -Filter '*.ps1' | Where-Object { $_.FullName -notmatch '[\\/]scripts[\\/]tests[\\/]' })) {
     $text = [IO.File]::ReadAllText($f.FullName)
     # Named with \ whatever the machine, the way $known names them.
     $rel = $f.FullName.Substring($Repo.Length + 1).Replace([IO.Path]::DirectorySeparatorChar, '\')

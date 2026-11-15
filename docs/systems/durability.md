@@ -37,9 +37,17 @@ these recipes use only Skyrim's own records.
 
 ## Using a kit
 
-The person holding the kit can use it on a piece they are repairing.
-One kit mends one piece, and the kit is used up. The result depends
-on who they are.
+The person holding the kit can use it on a piece they are repairing,
+when it is their trade's work and they are standing at its bench
+(Patrick, 21 October). A piece is mended by the profession that makes
+it, at the bench it is made at: smiths mend weapons and armour at the
+forge, tailors mend clothing at the loom, a woodworker mends a bow at
+the woodworking bench. Either half of that profession may mend it. A
+piece nobody makes, a unique or a dungeon find, is mended where its
+kit is made, by the trade that makes the kit. Anywhere else, the
+repair says where the piece is mended and by whom, and nothing is
+used. One kit mends one piece, and the kit is used up. The result
+depends on who they are.
 
 | Who uses the kit | Condition after |
 | --- | --- |
@@ -127,7 +135,11 @@ would raise to 120%, worst first, each with the kit it takes and
 what a repair by you comes out at. Mend uses one kit on one piece,
 to 120% for the half that makes that kit (at Master, for the two
 smith kits) and to 100% for anyone else. A piece already at or above that number has no button, and the
-row says why. No command does any of this.
+row says why. A piece that is not your trade's work, or whose bench
+you are not standing at, has no button either, and the row says where
+it is mended and by whom. The server finds the bench itself: a bench
+of that kind within a few steps of you, in the same place (#4578). No
+command does any of this.
 
 Each hit takes 1% off the armour and clothing worn by the person hit,
 off the weapon it was landed with, and off the weapon that blocked

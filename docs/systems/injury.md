@@ -79,7 +79,7 @@ is not a hidden stat.
 | --- | --- | --- |
 | Torn cloth | Anyone | Bleed from 2 a second to 1 |
 | Bandage | A tailor's work, used by anyone | Stops a bleed, lowers fever |
-| Splint | A woodworker or a tailor | Holds a break |
+| Splint | A woodwright's work at the kiln, used by anyone | Holds a break |
 | Healing potion | Anyone who has one | Health. Does not set a bone |
 | Poultice | A physicker | Cuts the fever chance |
 | Restoration, novice | Whoever has the spell | Stops a bleed |

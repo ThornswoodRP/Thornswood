@@ -52,7 +52,7 @@
       REFUSED <why>                             nothing was changed
   Exit 0 when it did what was asked, 1 when it refused.
 
-  tests\test-capture-443.ps1 holds it to all of this.
+  scripts\tests\test-capture-443.ps1 holds it to all of this.
 #>
 [CmdletBinding()]
 param(

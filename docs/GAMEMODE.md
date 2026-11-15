@@ -11,6 +11,26 @@ the file, a colon, and a name it declares or its own words, never a line
 number (#1075, #2416). Search the file for what follows the colon.
 `tests\test-1075-script-citations.js` fails when a cited name goes away.
 
+## Contents
+
+- [Why it is one file](#why-it-is-one-file)
+- [Where its source is](#where-its-source-is)
+- [How the blocks find each other](#how-the-blocks-find-each-other)
+- [The map](#the-map)
+- [Startup and settings](#startup-and-settings)
+- [Character creation](#character-creation)
+- [The door](#the-door)
+- [Professions, benches and BENCH_ACCESS](#professions-benches-and-bench_access)
+- [Spells, tomes and staff spells](#spells-tomes-and-staff-spells)
+- [Property, offices, rent and gold](#property-offices-rent-and-gold)
+- [Needs](#needs)
+- [Chat and commands](#chat-and-commands)
+- [How it talks to the plugins](#how-it-talks-to-the-plugins)
+- [Where its data lives on the VPS](#where-its-data-lives-on-the-vps)
+- [Generated tables](#generated-tables)
+- [Deploying it](#deploying-it)
+- [Tests that read it](#tests-that-read-it)
+
 ## Why it is one file
 
 `requireTemp()` in skymp5-server copies the file to a temp folder and requires
@@ -100,7 +120,7 @@ In file order, top to bottom. Search for a name to find it; the sections have no
 | Needs | See "Needs". |
 | Social | Friends, parties, mutes, journals, the panel, `thornswoodNear`. |
 | Trade | Two people, two offers, both confirm: `begin`, `gold`, `confirm`, `swap`. |
-| Mod settings | Issue #488, added 28 September. The 176 GLOB records of five classic mod menus (`MOD_GLOBALS`), kept per profile in `private\mod-settings.json` from the plugin's `/modset` lines and put back at login through `thornswoodModSettings` and its updateOwner script. `tests\test-mod-settings.js`. |
+| Mod settings | Issue #488, added 28 September. The 176 GLOB records of five classic mod menus (`MOD_GLOBALS`), kept per profile in `private\mod-settings.json` from the plugin's `/modset` lines and put back at login through `thornswoodModSettings` and its updateOwner script. `game\tests\test-mod-settings.js`. |
 
 ## Startup and settings
 
@@ -454,9 +474,12 @@ whether the live server runs the file in this repository, by hash.
 
 ## Tests that read it
 
-The build check runs every `tests\test-*.js` and `tests\test-*.ps1` harness
-that `tests\gate-excluded.txt` does not name (`scripts\dev\Gate-Harnesses.ps1`).
-These read `gamemode.js`, most by running one block against a stubbed `mp`.
+The build check runs every `test-*.js` and `test-*.ps1` harness in `tests\`
+and in each product's own tests folder that `tests\gate-excluded.txt` does
+not name (`scripts\dev\Gate-Harnesses.ps1`). The ones that read only the
+game are beside it in `game\tests\`; the ones that read the game and another
+product as well, the launcher or the site, are in `tests\`. These read
+`gamemode.js`, most by running one block against a stubbed `mp`.
 
 | Area | Tests |
 |---|---|
