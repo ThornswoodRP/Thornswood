@@ -5,8 +5,9 @@
       .\scripts\dev\Check-Swallow.ps1 -List    print today's numbers in the
                                          baseline's own format
 
-  Counts the silent catches in the launcher and in the PowerShell under
-  scripts\ and installer\, file by file, and fails when any file has more than
+  Counts the silent catches in the launcher, the PowerShell under scripts\
+  and installer\, the site, voice, the bot, the game and the tools' C#, file
+  by file, and fails when any file has more than
   scripts\dev\swallow-baseline.txt allows, or fewer than it allows with its
   line not yet lowered.
 
