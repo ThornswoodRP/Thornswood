@@ -2,9 +2,11 @@
   New-NexusRevision.ps1
 
   Makes the next revision of the Thornswood collection on Nexus Mods (slug
-  7essxf), as a draft, from the revision published now with one or more of its
-  mods moved to a new Nexus file; and publishes a draft once it has been
-  checked (#2914).
+  7essxf), as a draft, from the revision published now with mods moved to a
+  new Nexus file (-Mod), added (-Add), given new installer answers (-Answers)
+  or taken out (-Remove), plugins given a new load rule (-Rule) or their light
+  flag set or cleared (-SetLight, -ClearLight); and publishes a checked draft
+  (-Publish) or discards one (-Discard) (#2914).
 
       .\scripts\release\New-NexusRevision.ps1 -Mod 192762 -FileId <new file id> -Archive <the archive uploaded> -WhatIf
       .\scripts\release\New-NexusRevision.ps1 -Mod 192762 -FileId <new file id> -Archive <the archive uploaded>
