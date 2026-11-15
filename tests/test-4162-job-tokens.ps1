@@ -119,6 +119,10 @@ $Writes = [ordered]@{
     # to ghcr.io (packages); gh workflow run merge-release.yml when main
     # moved on (actions).
     'merge-release.yml/release'   = @('actions', 'attestations', 'contents', 'deployments', 'id-token', 'packages')
+    # Get-ContentBuild.ps1 -Ask: a draft Release is listed only to a token
+    # that may write Contents (contents); POST deployments to Content when
+    # there is no draft yet (deployments).
+    'merge-release.yml/content'   = @('contents', 'deployments')
     # gh release create/upload/edit of main-<tag> (contents); POST
     # deployments to Main (deployments).
     'promote-main.yml/promote'    = @('contents', 'deployments')
