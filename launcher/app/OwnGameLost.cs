@@ -100,7 +100,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                say("Vortex's record in " + src + " could not be read (" + ex.Message.TrimEnd('.') + "), so its files were not put back.");
+                say("Vortex's record in " + src + " could not be read (" + Failure.Why("OwnGameLost, Vortex's record", ex, src) + "), so its files were not put back.");
                 return 0;
             }
             int n = 0, missing = 0;
@@ -121,7 +121,7 @@ namespace Thornswood
                     Place(from, dest, MustCopy(rel, deployed), out linked);
                     n++;
                 }
-                catch (Exception ex) { say(rel + " could not be put back (" + ex.Message.TrimEnd('.') + "). Close Skyrim and Vortex and press Fix again."); }
+                catch (Exception ex) { say(rel + " could not be put back (" + Failure.Why("OwnGameLost, " + rel, ex, rel) + "). Close Skyrim and Vortex and press Fix again."); }
             }
             if (n > 0) say(n + " of Vortex's file" + (n == 1 ? "" : "s") + " that Thornswood's folder had lost " + (n == 1 ? "is" : "are") + " back, from Vortex's own copies.");
             if (missing > 0)

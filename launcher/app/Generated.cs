@@ -488,7 +488,7 @@ namespace Thornswood
             var l = new GeneratedList { Path = path, Text = text.TrimStart('\uFEFF') };
             Dictionary<string, object> doc;
             try { doc = GeneratedJson.Parse(l.Text) as Dictionary<string, object>; }
-            catch (Exception ex) { throw new GeneratedStop(path + " is not valid JSON: " + ex.Message); }
+            catch (Exception ex) { throw new GeneratedStop(path + " is not valid JSON: " + Failure.Why("Generated, " + path, ex, path)); }
             if (doc == null) throw new GeneratedStop(path + " is not valid JSON: it is not an object.");
             // A version this build does not know stops here (RecordShape.ps1, #2180).
             object ver;

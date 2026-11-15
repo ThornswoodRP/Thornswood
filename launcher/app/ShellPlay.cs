@@ -158,7 +158,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                Log("Could not check the server: " + ex.Message);
+                Log("Could not check the server: " + Failure.Say("ShellPlay, checking the server", ex, "the server"));
                 return true;
             }
         }
@@ -327,7 +327,7 @@ namespace Thornswood
                 await OffThread(delegate
                 {
                     try { putSettings = YourSettings.PutInPlace(); }
-                    catch (Exception ex) { settingsWhy = ex.Message; }
+                    catch (Exception ex) { settingsWhy = Failure.Why("ShellPlay, the game's settings", ex); }
                 });
                 if (settingsWhy != null)
                 {
@@ -356,11 +356,10 @@ namespace Thornswood
                 await OffThread(delegate
                 {
                     try { built = GeneratedHere.Ensure(SafeLog); }
-                    catch (GeneratedStop ex) { notBuilt = ex.Message; }
+                    catch (GeneratedStop ex) { notBuilt = Failure.Say("ShellPlay, the generated files", ex); }
                     catch (Exception ex)
                     {
-                        Swallow.Note("Shell.Play, the animation and body files", ex);
-                        notBuilt = "Thornswood's animation and body files could not be built (" + ex.Message.TrimEnd('.') + ").";
+                        notBuilt = "Thornswood's animation and body files could not be built (" + Failure.Why("Shell.Play, the animation and body files", ex) + ").";
                     }
                 });
                 if (built != null) Log(built);
@@ -381,8 +380,7 @@ namespace Thornswood
                 try { string made = MadeFromGame.Ensure(); if (made != null) Log(made); }
                 catch (Exception ex)
                 {
-                    Swallow.Note("Shell.Play, the files made from the game", ex);
-                    Log("The files made from your game could not be written (" + ex.Message.TrimEnd('.') + ").");
+                    Log("The files made from your game could not be written (" + Failure.Why("Shell.Play, the files made from the game", ex) + ").");
                 }
 
                 if (!await EnsureServer()) return;
@@ -494,7 +492,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                string reason = ex.Message == null ? "" : ex.Message;
+                string reason = Failure.Why("ShellPlay, starting the game", ex);
 
                 // The whole thing still goes to the log file, because Log
                 // writes there before the bar trims anything, and the log is

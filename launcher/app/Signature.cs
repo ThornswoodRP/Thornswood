@@ -107,7 +107,7 @@ namespace Thornswood
 
             FileStream fs;
             try { fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read); }
-            catch (Exception ex) { return "could not be opened to check its signature: " + ex.Message; }
+            catch (Exception ex) { return "could not be opened to check its signature: " + Failure.Why("Signature", ex); }
 
             // Held open, sharing only reads, from the first check to the last,
             // so the file checked is the file the chain was read from.

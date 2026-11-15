@@ -95,7 +95,7 @@ namespace Thornswood
                     }
                 }
             }
-            catch (Exception ex) { why = ex.GetType().Name + ": " + ex.Message; }
+            catch (Exception ex) { why = Failure.Why("Online, the server's count", ex); }
             SayWhenItChanges(resourcePort, url, why);
             return got;
         }

@@ -137,7 +137,7 @@ namespace Thornswood
                 }
                 return names.ToArray();
             }
-            catch (ArgumentException ex) { throw new InvalidDataException("the header runs past the end of the file (" + ex.Message.TrimEnd('.') + ")"); }
+            catch (ArgumentException ex) { throw new InvalidDataException("the header runs past the end of the file", ex); }
             catch (IndexOutOfRangeException) { throw new InvalidDataException("the header runs past the end of the file"); }
             catch (OverflowException) { throw new InvalidDataException("a length in the header is too large"); }
         }
@@ -199,7 +199,7 @@ namespace Thornswood
                 {
                     if (!(ex is IOException) && !(ex is UnauthorizedAccessException) && !(ex is InvalidDataException)) throw;
                     r.Unread++;
-                    line(string.Format(CultureInfo.InvariantCulture, "  UNREAD   {0,-24} {1}", name, ex.Message), "Red");
+                    line(string.Format(CultureInfo.InvariantCulture, "  UNREAD   {0,-24} {1}", name, Failure.Why("CoveredBodies, " + name, ex, name)), "Red");
                     continue;
                 }
                 string list = string.Join(", ", shapes);

@@ -127,7 +127,7 @@ namespace Thornswood
             var f = new FromGameFile { Rel = r.Path, Expected = r.Sha256 };
             byte[] src;
             try { src = new GameArchives(data, new[] { r.Archive }).Read(r.Source); }
-            catch (Exception ex) { f.Problem = "could not read " + r.Source + " from " + r.Archive + ": " + ex.Message; return f; }
+            catch (Exception ex) { f.Problem = "could not read " + r.Source + " from " + r.Archive + ": " + Failure.Why("FromGame, " + r.Source, ex, r.Archive); return f; }
             string have = Sha256(src);
             if (have != r.SourceSha256)
             {
@@ -229,7 +229,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                board.Problem = box.Problem = "could not be made from the game's meshes: " + ex.Message;
+                board.Problem = box.Problem = "could not be made from the game's meshes: " + Failure.Why("FromGame, the game's meshes", ex);
                 return l;
             }
             Checked(board, boardBytes);
