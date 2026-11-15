@@ -248,7 +248,7 @@ function standingWith(open, roleIds) {
   // -------------------------------------- nothing people read says it --
   const PEOPLE = ['README.md', 'SECURITY.md', 'site/data/help.md',
                   'site/public/home.html', 'site/public/home.js', 'bot/content.py',
-                  'launcher/app/MainWindow.axaml', 'launcher/app/ShellPacks.cs']
+                  'launcher/app/MainWindow.axaml', 'launcher/app/ShellCollection.cs']
     .concat(fs.readdirSync(path.join(ROOT, 'site/data/site')).filter((n) => /\.md$/.test(n))
       .map((n) => 'site/data/site/' + n));
   const said = PEOPLE.filter((rel) => fs.existsSync(path.join(ROOT, rel)) &&
@@ -260,8 +260,8 @@ function standingWith(open, roleIds) {
   yes('nor the Known Issues page, across line breaks too',
       !/closed[\s-]+playtest/i.test(require('../../tests/fixtures/known-page').knownPage() || ''));
   yes('the launcher no longer holds the collection back until an application is accepted',
-      !/b\.Content = "Apply first"/.test(read('launcher/app/ShellPacks.cs')) &&
-      !/The collection opens once you have been accepted/.test(read('launcher/app/ShellPacks.cs')) &&
+      !/b\.Content = "Apply first"/.test(read('launcher/app/ShellCollection.cs')) &&
+      !/The collection opens once you have been accepted/.test(read('launcher/app/ShellCollection.cs')) &&
       !/Connect Discord first and this opens the collection/.test(read('launcher/app/Shell.cs')));
 
   console.log('');

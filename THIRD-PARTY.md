@@ -30,6 +30,36 @@ rebuild records a new commit, this file and
 `site\data\site\credits.md` have to change in the same pull request,
 or the build check goes red.
 
+## Contents
+
+- [How it reaches people](#how-it-reaches-people)
+- [.NET, Avalonia, SkiaSharp and Velopack, inside the launcher](#net-avalonia-skiasharp-and-velopack-inside-the-launcher)
+- [Concentus, SharpSRTP and BouncyCastle, inside the launcher](#concentus-sharpsrtp-and-bouncycastle-inside-the-launcher)
+- [NLayer, inside the launcher](#nlayer-inside-the-launcher)
+- [The voice's HRTF panner and its impulse responses, inside the launcher](#the-voices-hrtf-panner-and-its-impulse-responses-inside-the-launcher)
+- [zlib 1.3, translated into C# inside the launcher](#zlib-13-translated-into-c-inside-the-launcher)
+- [The SkyMP client runtime, built from the fork](#the-skymp-client-runtime-built-from-the-fork)
+- [From upstream SkyMP, not built here](#from-upstream-skymp-not-built-here)
+- [SkyMP's interface, built from the fork](#skymps-interface-built-from-the-fork)
+- [Thornswood's own sprite font](#thornswoods-own-sprite-font)
+- [Thornswood Client Runtime, Thornswood's mod on Nexus Mods](#thornswood-client-runtime-thornswoods-mod-on-nexus-mods)
+- [Thornswood Content, Thornswood's other mod on Nexus Mods](#thornswood-content-thornswoods-other-mod-on-nexus-mods)
+- [Shipped today with no licence this file can name](#shipped-today-with-no-licence-this-file-can-name)
+- [Built here from other people's work: behaviors and bodies](#built-here-from-other-peoples-work-behaviors-and-bodies)
+- [Bethesda's own files, made on each machine](#bethesdas-own-files-made-on-each-machine)
+- [The collection's menus, with no gold values](#the-collections-menus-with-no-gold-values)
+- [Made for Thornswood by somebody else](#made-for-thornswood-by-somebody-else)
+- [On the site](#on-the-site)
+- [Not shipped by Thornswood](#not-shipped-by-thornswood)
+- [texconv, Microsoft's texture converter, used to build and not shipped](#texconv-microsofts-texture-converter-used-to-build-and-not-shipped)
+- [Bethesda's master files, downloaded by the fork's build to test it and not shipped](#bethesdas-master-files-downloaded-by-the-forks-build-to-test-it-and-not-shipped)
+- [Kept in the repository, not shipped](#kept-in-the-repository-not-shipped)
+- [On our servers](#on-our-servers)
+- [The Discord bot, on the VPS](#the-discord-bot-on-the-vps)
+- [Where the source is](#where-the-source-is)
+- [What is still missing](#what-is-still-missing)
+- Licence texts: [Concentus](#concentus-licence), [SharpSRTP](#sharpsrtp-licence), [BouncyCastle](#bouncycastle-licence), [NLayer](#nlayer-licence), [Chromium HRTF](#chromium-hrtf-licence), [IRCAM Listen HRTF](#ircam-listen-hrtf-terms), [.NET](#net-licence), [Avalonia](#avalonia-licence), [SkiaSharp and HarfBuzzSharp](#skiasharp-and-harfbuzzsharp-licence), [Skia](#skia-licence), [HarfBuzz](#harfbuzz-licence), [ANGLE](#angle-licence), [Velopack](#velopack-licence), [MicroCom](#microcom-licence)
+
 ## How it reaches people
 
 - **The launcher**, `Thornswood.exe`, in the Velopack package that Setup.exe
@@ -395,10 +425,10 @@ file carries outside code and the file does not carry that project's notice.
 <!-- engine-pin:fork -->
 The six files recorded in `records\client-build.json` correspond to
 https://github.com/ThornswoodRP/skymp, branch `thornswood/engine-changes`,
-commit `2921bc88` (in full, `2921bc88b3fc7ade68a7698cf317bc113197027e`). That
+commit `ee67f972` (in full, `ee67f972b66943a4602b570a7f947c1353a0d412`). That
 is upstream skyrim-multiplayer/skymp at `2849e676` with Thornswood's changes on
 top, and every one of those changes is in
-https://github.com/ThornswoodRP/skymp/compare/2849e676...2921bc88.
+https://github.com/ThornswoodRP/skymp/compare/2849e676...ee67f972.
 <!-- /engine-pin:fork -->
 Check-Secrets.ps1 stops a release whose copy of any of the six is not the
 recorded sha256 (client-not-recorded-build), and Sync-Client.ps1 puts in the
@@ -667,7 +697,7 @@ at the engine pin, with webpack, and holds what it built to
 `records\front-build.json`:
 <!-- engine-pin:front -->
 67 files, 8,676,260 bytes, from commit
-`2921bc88`, the commit the client record names.
+`ee67f972`, the commit the client record names.
 <!-- /engine-pin:front -->
 Its build.js is 2,444,820
 bytes, sha256
@@ -1450,15 +1480,15 @@ rewrite takes it out (#3684).
 <!-- engine-pin:servers -->
 - The game server's native module, `scam_native.node`, recorded in
   `records\server-build.json`, is AGPL-3.0. That record and the client record
-  name `2921bc88b3fc7ade68a7698cf317bc113197027e` on the public fork. The
+  name `ee67f972b66943a4602b570a7f947c1353a0d412` on the public fork. The
   server module and the six client files were built from that commit, which
   is upstream at `2849e676` with every change in
-  https://github.com/ThornswoodRP/skymp/compare/2849e676...2921bc88. Each change
+  https://github.com/ThornswoodRP/skymp/compare/2849e676...ee67f972. Each change
   is a merged pull request of the fork, and the pull request here that moved
   the pin lists the ones it brought in.
   The server module's SHA256
-  is `b28907f662fc35889d20a966f1db27587df56e951b55d3aa63f23e14592bbc41`, built
-  2026-11-10T14:05:22Z. This is the recorded next release, not a deployment
+  is `72ba8d2202add1c51d02c050219405bd1aa668822fda50d2395025c01e80ac63`, built
+  2026-11-15T19:17:19Z. This is the recorded next release, not a deployment
   claim. Main remains on `0714e444047a994b1013dfe4cac187aef29ad65a` until this goes
   out.
   <!-- /engine-pin:servers -->
@@ -1495,7 +1525,7 @@ Corresponding Source is the fork at the commit each record names. The six
 client files and the game server module, at the one commit both records name:
 
 <!-- engine-pin:source -->
-https://github.com/ThornswoodRP/skymp/tree/2921bc88b3fc7ade68a7698cf317bc113197027e
+https://github.com/ThornswoodRP/skymp/tree/ee67f972b66943a4602b570a7f947c1353a0d412
 
 For the engine Main runs until then:
 

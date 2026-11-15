@@ -27,8 +27,8 @@
     - a file the site does not hold, or a newsFile of another shape, stops a
       script rather than letting it write back a list without its older notes
     - Dev-News's marks read every note through it
-    - (the site's News page, which reads the news file itself since #5187,
-      is tests\test-5187-site-news.js)
+    - (the site's News page reads the build Releases since #5801, not the
+      feed: tests\test-5187-site-news.js)
     - Publish-Update, Rollback-Feed, Publish-Server, Publish-Discord and
       Remirror-Site-Feed go through it (read from their source)
 #>

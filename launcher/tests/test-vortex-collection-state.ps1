@@ -41,16 +41,26 @@ $ids=@{
 function Newest($case){ if($newest.ContainsKey($case)){$newest[$case]}else{$cases[$case]} }
 $count=0
  # Exercise the publishing entry point first: the old raw-byte reader must fail.
+ # A database that does not read (corrupt, partial) stops each entry point
+ # with a sentence naming state.v2, never a 0 (#4735).
+ $unread=@('corrupt','partial')
+ function Entry($case,[scriptblock]$read){
+  if($case -notin $unread){return (& $read)}
+  $why='';try{$null=& $read}catch{$why=$_.Exception.Message}
+  if($why -notmatch 'state\.v2'){throw ('Collection '+$case+': expected a stop naming state.v2, got ['+$why+']')}
+  return 'stopped'
+ }
+ function Want($case,$value){ if($case -in $unread){'stopped'}else{$value} }
  foreach($case in @('compressed')+@($cases.Keys | Where-Object {$_ -ne 'compressed'} | Sort-Object)){
   $env:APPDATA=Join-Path $Scratch ('collection-'+$case)
-  $got=Get-CollectionRevisionFromState '7essxf'
-  if($got -ne $cases[$case]){throw ('Collection '+$case+': expected '+$cases[$case]+', got '+$got)}
+  $got=Entry $case { Get-CollectionRevisionFromState '7essxf' }
+  if($got -ne (Want $case $cases[$case])){throw ('Collection '+$case+': expected '+(Want $case $cases[$case])+', got '+$got)}
   $count++;Write-Host ('PASS publishing '+$case)
-  $got=Get-CollectionNewest '7essxf'
-  if($got -ne (Newest $case)){throw ('Newest '+$case+': expected '+(Newest $case)+', got '+$got)}
+  $got=Entry $case { Get-CollectionNewest '7essxf' }
+  if($got -ne (Want $case (Newest $case))){throw ('Newest '+$case+': expected '+(Want $case (Newest $case))+', got '+$got)}
   $count++;Write-Host ('PASS newest '+$case)
-  $got=(Get-CollectionModIds '7essxf') -join ','
-  if($got -ne $ids[$case]){throw ('Mod ids '+$case+': expected ['+$ids[$case]+'], got ['+$got+']')}
+  $got=Entry $case { (Get-CollectionModIds '7essxf') -join ',' }
+  if($got -ne (Want $case $ids[$case])){throw ('Mod ids '+$case+': expected ['+(Want $case $ids[$case])+'], got ['+$got+']')}
   $count++;Write-Host ('PASS mod ids '+$case)
  }
  # The same reader built the way the launcher builds it, with the .NET SDK at

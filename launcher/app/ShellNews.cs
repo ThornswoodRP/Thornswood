@@ -16,13 +16,11 @@ namespace Thornswood
 
         // What main is on, for the dev header (#2434, #5385). The header used
         // to name mainVersion out of the dev feed as it was at the launcher's
-        // last update check (pendingDoc), so a dev launcher open since before
+        // last update check, so a dev launcher open since before
         // a main Ship named the old main for as long as it stayed open:
         // Patrick, 12 Oct, "dev says main is on 1.2.3 even tho it's on
         // 1.2.4". Now the tab asks main's newest Release when it is shown
-        // (Updater.MainLauncherVersion, MainVersion.cs). The feed's own
-        // numbers, this build's launcherVersion and mainVersion, stopped
-        // moving with Velopack (#4825), so neither is named: this build is
+        // (Updater.MainLauncherVersion, MainVersion.cs). This build is
         // Updater.Version, and while main has not answered, or could not be
         // read, the header names only this build.
         //
@@ -85,7 +83,7 @@ namespace Thornswood
         {
             newsList.Children.Clear();
             newsHead = null;
-            NewsItem[] items = (pendingDoc != null && pendingDoc.news != null) ? pendingDoc.news : new NewsItem[0];
+            NewsItem[] items = Updater.News;
 
             if (items.Length == 0)
             {

@@ -57,13 +57,17 @@ function createQuestTransactions(deps) {
               expectedLifeGeneration:metadataOwner.life,expectedRuntimeIdentity:metadataOwner.runtime});
           return {ok:committed===true,why:committed===true?'':'changed'};
         } catch(error) {
-          // An unchanged inventory receipt says nothing about a metadata save.
-          // Only a verified unchanged property establishes a refused operation.
+          // A metadata save that threw can still have written: the record
+          // read back says which (#4524). The new record is a save, the old
+          // one a refusal; only anything else, or no answer, is unknown.
           try {
             var record=mp.get(actor,property);
-            if(identity(actor)===token && same(record==null?null:record,expectedRecord==null?null:expectedRecord)) {
-              report('quest metadata refused: ',error);
-              return {ok:false,why:'unwritten'};
+            if(identity(actor)===token) {
+              if(same(record,nextRecord))return {ok:true};
+              if(same(record==null?null:record,expectedRecord==null?null:expectedRecord)) {
+                report('quest metadata refused: ',error);
+                return {ok:false,why:'unwritten'};
+              }
             }
           } catch(readError) { /* Unreadable outcomes revoke the service below. */ }
           active=false;

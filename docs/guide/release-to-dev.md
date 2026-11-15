@@ -50,7 +50,7 @@ It stops and names any merged pull request with no `Release note:` line, and say
 - When the downgrade stops, the line under the button says why and what to do next."
 ```
 
-That publishes the dev feed, the dev launcher News tab, and the dev updates channel in Discord. It leaves the live feed alone.
+That publishes the dev feed, the dev launcher News tab, and #staff-news in Discord. It leaves the live feed alone.
 
 When the build matches what dev already has, Ship releases nothing and says so. It posts nothing to Discord, tells no server, and adds no news entry, because a note goes out with the release it describes. It still marks the dev notes again, below.
 
@@ -92,10 +92,10 @@ The machine that runs `Ship.ps1` still has to sign the build. `records\signing\s
 
 | Job | Command | Where it shows up |
 | --- | --- | --- |
-| Dev release | `.\scripts\release\Ship.ps1 -Channel dev` plus the note | Dev feed, dev launcher News tab, dev updates channel in Discord |
+| Dev release | `.\scripts\release\Ship.ps1 -Channel dev` plus the note | Dev feed, dev launcher News tab, #staff-news in Discord |
 | Main release | `.\scripts\release\Ship.ps1` plus the note | Live feed, launcher News tab, the site news page, Discord #news |
-| Discord news | Ship posts it. To post the current feed again: `.\scripts\ops\Publish-Discord.ps1` or `.\scripts\ops\Publish-Discord.ps1 -Dev` | #news for main, the dev updates channel for dev |
-| Game news | The same note. The launcher News tab reads the feed. The site writes its News page itself from the main feed and its news file (the site's copy or the Release's) within a minute of a new feed (#5187); nothing is run | Launcher News tab, and https://thornswood.net for main |
+| Discord news | Ship posts it. To post the current feed again: `.\scripts\ops\Publish-Discord.ps1` or `.\scripts\ops\Publish-Discord.ps1 -Dev` | #news for main, #staff-news for dev |
+| Game news | The same note. The launcher News tab reads the build Releases its channel's Deployment reached. The site writes its News page itself from the build Releases at or before main's within a minute of a promotion (#5801); nothing is run | Launcher News tab, and https://thornswood.net for main |
 | Docs site | The merge's Release, put in by the box deploy agent: the app and the public pages. `.\scripts\deploy\Deploy-Docs.ps1` for the documents, the boards and the password | https://thornswood.net |
 | Dev gamemode | `.\scripts\deploy\Deploy-DevGamemode.ps1` | Dev server only |
 | Live gamemode | `.\scripts\deploy\Deploy-Server.ps1 -GamemodeOnly`, from any machine, needs no server build | Live server |

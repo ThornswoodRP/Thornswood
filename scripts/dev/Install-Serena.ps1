@@ -31,6 +31,7 @@
   Then it runs scripts\dev\Check-Serena.ps1, which times one start, and exits
   with what that says.
 #>
+#Requires -Version 7
 [CmdletBinding()]
 param(
     # Install and register only; do not time a start afterwards.

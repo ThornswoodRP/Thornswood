@@ -230,7 +230,7 @@ FACTION_THREAD_FAILED = ('This application could not be opened. '
 # unlike the webhook files next to it, so the id is not a secret. Install-Bot
 # sends it with the code.
 #
-# NOT dev-channel.txt. That one is the dev updates channel, where dev releases
+# NOT dev-channel.txt. That one is #staff-news, where dev releases
 # are announced, and only Set-DevNews.ps1 reads it, to check the dev release
 # webhook. The watchdog read it until 12 Oct (#2501), from a comment here that
 # called that channel "the staff channel", so every outage and the disk
@@ -262,7 +262,7 @@ WATCH_ID = _int_env('WATCH_CHANNEL_ID', _staff_channel_id())
 # The channel that hears about a session that went wrong: the same one.
 #
 # It once read `_staff_channel_id() or _dev_channel_id()`, so with no
-# staff-channel.txt it took the dev updates channel's id and never reached the
+# staff-channel.txt it took #staff-news's id and never reached the
 # name lookup in _trouble_channel. The first deploy on 22 September logged
 # "speaking in #news": right kind of place, wrong place, and it would have put
 # every crash report in with the release announcements.
@@ -307,7 +307,9 @@ WATCH_READ_EVERY = _int_env('WATCH_READ_EVERY', 60)
 if not TOKEN:
     raise SystemExit('No DISCORD_TOKEN. Install-Bot.ps1 sets it.')
 
-intents = discord.Intents(guilds=True, members=True)
+# guild_reactions: a reaction to the rules in #rules gives Member
+# (bot_rules_gate.py, #5841).
+intents = discord.Intents(guilds=True, members=True, guild_reactions=True)
 
 
 class Thornswood(TrustedClient):
@@ -334,6 +336,7 @@ class Thornswood(TrustedClient):
         from bot_heartbeat import heartbeat
         from bot_uptime import uptime_ping
         from bot_holds import HoldPanel
+        from bot_pings import PingPanel
         from bot_offices import OfficePanel
         from bot_factions import FactionPanel
         from bot_problems import ProblemPanel
@@ -352,7 +355,8 @@ class Thornswood(TrustedClient):
             if desk_kinds(desk):
                 self.add_view(TicketPanel(desk))
         self.add_view(TicketTools())          # and so does Close on every old ticket
-        self.add_view(HoldPanel())            # and the hold and ping buttons
+        self.add_view(HoldPanel())            # and the hold buttons
+        self.add_view(PingPanel())            # and the ping buttons in #welcome
         self.add_view(OfficePanel())          # and a Jarl's office buttons (#2551)
         self.add_view(FactionPanel())         # and a faction Leader's member buttons (#3317)
         self.add_view(ProblemPanel())         # and Report a problem in #test-findings (#3155)

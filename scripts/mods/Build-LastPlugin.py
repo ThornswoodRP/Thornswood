@@ -261,7 +261,7 @@ WHAT IT WRITES
   parent or location it had before, and the floor items it switches off,
   counted by type and by the plugin that won each, with the cells only they
   needed (#2791 reads those). tests/test-2468-last-plugin.js holds the two
-  together on every build, without the game, tests/test-2551-place-holds.js
+  together on every build, without the game, game/tests/test-2551-place-holds.js
   the place holds and tests/test-3077-floor-items.js the floor items, each
   reading the plugin's records where a machine has the game to make it from
   (tests/last-plugin-made.js).

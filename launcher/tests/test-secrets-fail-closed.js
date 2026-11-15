@@ -16,8 +16,9 @@
 //   - Unprotect is untouched: still an empty string on failure, never a throw,
 //     because an unreadable blob is nothing to recover and the launcher asks
 //     for the secret again;
-//   - both callers, Config.Save and Discord.Save, still catch and log, so the
-//     throw stops the write without stopping the launcher.
+//   - its one caller, Discord.Save, still catches and logs, so the throw
+//     stops the write without stopping the launcher. Config.Save was the
+//     other until the update token went with the update feed (#5608).
 //
 // Read only.
 const fs = require('fs');
@@ -93,15 +94,11 @@ yes('an untagged string still comes back unchanged, so an old plaintext file loa
     /!stored\.StartsWith\(Tag/.test(unprotect) && /return stored;/.test(unprotect));
 
 // ------------------------------------------- what the throw reaches first --
-const save = body(read('launcher/app/Config.cs'), 'public void Save(string path)');
-yes('Config.Save protects the update token', save.indexOf('Secrets.Protect(tk)') >= 0);
-yes('and it is inside a try that logs, so the throw is a Save that did not happen',
-    save.indexOf('try') >= 0 && save.indexOf('try') < save.indexOf('Secrets.Protect(tk)') &&
-    /catch \(Exception ex\) \{ Swallow\.Note\("Config\.Save/.test(save));
-yes('and the plaintext token is put back in memory either way',
-    /finally[\s\S]*UpdateToken = tk;/.test(save));
-yes('the file is written after the protect, so nothing is written when it throws',
-    save.indexOf('Secrets.Protect(tk)') < save.indexOf('File.WriteAllBytes(path'));
+// The update token Config.Save protected went with the update feed (#5608):
+// updates come from public Releases on GitHub and need no credential.
+const cfgSrc = read('launcher/app/Config.cs');
+yes('Config keeps no update token any more, so it has nothing to protect',
+    !/UpdateToken/.test(cfgSrc) && cfgSrc.indexOf('Secrets.Protect') < 0);
 
 const dSave = body(read('launcher/app/Discord.cs'), 'static void Save(string t, string who, string pic)');
 yes('Discord.Save protects the ticket', dSave.indexOf('Secrets.Protect(t ?? "")') >= 0);
@@ -115,7 +112,7 @@ yes('nothing else in the launcher calls Protect',
     fs.readdirSync(path.join(ROOT, 'launcher/app'))
       .filter((n) => /\.cs$/.test(n) && n !== 'Secrets.cs')
       .filter((n) => read('launcher/app/' + n).indexOf('Secrets.Protect') >= 0)
-      .sort().join(',') === 'Config.cs,Discord.cs');
+      .sort().join(',') === 'Discord.cs');
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');

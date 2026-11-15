@@ -5,7 +5,7 @@ Writes scripts\\mods\\content-salvaged.json: every record Thornswood-Content.esp
 carried that Thornswood's own tools did not add, what each one is used by, what
 became of it (#2553), and the sha256 of every version of it the repository has
 held. Add-ContentRecords.py reads the list to take out what goes, and
-tests\\test-2553-salvaged-gone.js reads it to prove nothing salvaged is left.
+game\\tests\\test-2553-salvaged-gone.js reads it to prove nothing salvaged is left.
 
 WHY (#2553)
 
@@ -23,7 +23,8 @@ tools\\thornswood-src\\patch_esp.py, had added the books and menus numbered
 0x05E80000 and up (BASE in its content.py): the welcome book, the writs, the
 passages and the four menus. Every other record in that copy is salvaged.
 Everything added since came from this repository's tools
-(Add-ContentRecords.py, Collapse-DwarvenIngots.py), each with its own issue.
+(Add-ContentRecords.py, and Collapse-DwarvenIngots.py until #5191 folded it
+into Add-ContentRecords.py), each with its own issue.
 
 So a record is salvaged when its form id is in the 13 September copy and not
 in the 0x05E8 range. The editor ids written here are the ones the plugin has

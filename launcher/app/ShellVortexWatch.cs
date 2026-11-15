@@ -15,17 +15,15 @@ namespace Thornswood
     /// revision 6". Two things were missing, and both had to be there:
     ///
     ///   1. Nothing looked at Vortex again. DrawStatus reads the installed
-    ///      revision fresh, but only runs on a page change, a scan, a feed
-    ///      answer or Steam starting and stopping. Somebody who pressed
+    ///      revision fresh, but only runs on a page change, a scan, an update
+    ///      check's answer or Steam starting and stopping. Somebody who pressed
     ///      "Open revision N", updated in Vortex and came back to the Play
     ///      page touched none of those, so the card said the mods needed
     ///      updating long after they did not.
     ///   2. The updates that waited on the collection were never asked for
-    ///      again. OnVersionDoc returns early while ModsMissing, with no mod
-    ///      updates pending, so even a redraw that took the card down left
-    ///      the release built on the new revision uninstalled and Play open
-    ///      on the old one. Only Scan, which hands its feed answer back to
-    ///      OnVersionDoc, ever put that right.
+    ///      again, so even a redraw that took the card down left the release
+    ///      built on the new revision uninstalled and Play open on the old
+    ///      one.
     ///
     /// So while the collection card or the not-confirmed note is up, the two
     /// second tick compares what Vortex has on disk (its state.v2 files and
@@ -33,10 +31,10 @@ namespace Thornswood
     /// listing and nothing more). Only when that changes is the revision read
     /// again, off the UI thread, because the read walks Vortex's whole state
     /// database. When the answer differs from what the card was drawn from,
-    /// the card is drawn again; when the card comes down, the feed is asked
-    /// again the same way the start and Scan ask it, with Play shut on
-    /// CHECKING until it answers, so the waiting updates are offered, and go
-    /// in by themselves when automatic updates are on.
+    /// the card is drawn again; when the card comes down, the update check
+    /// runs again the way the start runs it, with Play shut on CHECKING until
+    /// it answers, so a waiting update is offered, and goes in by itself when
+    /// automatic updates are on.
     ///
     /// Every later change Vortex writes is looked at the same way, so the
     /// card follows Vortex to where it stops. Play's own gates (Verify, and
@@ -45,7 +43,7 @@ namespace Thornswood
     ///
     /// Since #5200 the card's button opens Vortex itself at the server's
     /// revision (Shell.OpenCollection), and when the card comes down here
-    /// Scan and Fix run after the feed's answer (FixAfterVortex), so the
+    /// Scan and Fix run after the update check's answer (FixAfterVortex), so the
     /// press on Diagnostics Patrick made by hand is made for him.
     /// </summary>
     static partial class Shell
@@ -149,7 +147,7 @@ namespace Thornswood
         /// <summary>
         /// On the UI thread, after a look found Vortex's files changed. Draws
         /// the card again when the revision or the problem it was drawn from
-        /// moved, and asks the feed again when the card came down.
+        /// moved, and runs the update check again when the card came down.
         /// </summary>
         static void VortexChanged(int revision, string problem)
         {
@@ -168,8 +166,8 @@ namespace Thornswood
             // Scan and Fix follow the answer (FixAfterVortex), once the
             // update it brings has been taken or left on the card (#5200).
             fixAfterVortex = true;
-            // Play stays shut on CHECKING until the feed answers, as at the
-            // start: the release built on this revision may have mod updates.
+            // Play stays shut on CHECKING until the check answers, as at the
+            // start: a launcher built on this revision may be waiting.
             updatePending = true;
             updateAnswered = false;
             DrawStatus();
@@ -178,14 +176,14 @@ namespace Thornswood
 
         /// <summary>
         /// Set when the collection card came down because Vortex finished,
-        /// so the feed's answer is followed by Scan and Fix (#5200). Cleared
+        /// so the update check's answer is followed by Scan and Fix (#5200). Cleared
         /// by the one answer that runs them.
         /// </summary>
         static bool fixAfterVortex;
 
         /// <summary>
-        /// After a feed answer on the UI thread (CheckUpdatesBackground,
-        /// after OnVersionDoc and UpdateBySelf): Scan and Fix, once, when the
+        /// After an update check's answer on the UI thread
+        /// (CheckUpdatesBackground, after LauncherAnswer and UpdateBySelf): Scan and Fix, once, when the
         /// collection card came down because Vortex finished (#5200).
         ///
         /// Patrick, 31 Oct, after updating to revision 6 through the card:

@@ -1,16 +1,35 @@
 #!/usr/bin/env node
-// Find-Duplicate.js: when an issue is filed, says on it which open issues it
-// may repeat (#5185, the redesign's part 5).
+// Find-Duplicate.js: when an issue is filed, closes it when it is an exact
+// repeat of an open issue, and otherwise says on it which open issues it may
+// repeat (#5185, the redesign's part 5).
 //
-//   node scripts/ops/Find-Duplicate.js --issue 5301            reads and comments
+//   node scripts/ops/Find-Duplicate.js --issue 5301            reads, closes or comments
 //   node scripts/ops/Find-Duplicate.js --issue 5301 --dry-run  reads and says
 //
 // WHY. The same problem gets filed twice when nobody finds the first one:
 // 17 issues were closed as duplicates by 1 Nov 2026, found by hand, some of
 // them weeks later and after work had gone into both. A new issue is read
 // against the open ones the moment it is filed, and a likely repeat is
-// linked on it, so whoever triages sees both at once. It never closes,
-// labels or edits anything: a person decides.
+// linked on it, so whoever triages sees both at once.
+//
+// AN EXACT REPEAT IS CLOSED (15 Nov 2026). Only commenting never stopped a
+// repeat: the comment sat on the new issue and both stayed open (Patrick,
+// 15 Nov: "If something is already done or already an issue it should not be
+// an issue or an extra one"). A new issue is closed as a duplicate, with a
+// comment naming the open one, when an older open issue
+//   - has the same title, read without case, spaces or punctuation; or
+//   - asks for the same deploy/after step: both name its step file
+//     (deploy/after/4549-after-mining-log.json, or the deploy agent's
+//     "Step 4549-after-mining-log#1 of deploy/after"), and where both give a
+//     step number it is the same one.
+// Measured on 15 Nov against 2,695 issues: every pair with the same title
+// filed while the first was open was a repeat (#5798 and #5799, #1034
+// and #1040, #3699 and #3721, #5409, #5619 and #5629), and #6111 asked for
+// #6039's step 4549-after-mining-log a second time. An issue labelled
+// notice: (a staff notice, which is meant to repeat its title) is never
+// closed this way. A title that is only alike gets the comment below, and a
+// person decides: closing on a score would close siblings that are not
+// repeats. Whoever disagrees reopens it and says how it differs.
 //
 // HOW IT MATCHES. Titles only, since a title here is a whole sentence about
 // the problem. Each title becomes its words, less the small ones (the, is,
@@ -36,13 +55,15 @@
 // into a command. The comment is plain, as docs/guide/the-board.md says an issue
 // comment is written.
 //
-// Exits 0 when it has looked (a comment made or none due), 1 when GitHub
+// Exits 0 when it has looked (closed, a comment made or none due), 1 when GitHub
 // could not be read or written, 2 for a bad argument or a missing setting.
 
 'use strict';
 
 const THRESHOLD = 0.5;
 const MOST = 3;
+// A label that means the title is meant to repeat (notice: staff).
+const REPEATS_BY_DESIGN = /^notice:/i;
 
 const SMALL = new Set(('a an the and or of to in on for is are be was were it its this that these those with from at by as ' +
   'not no can cannot does do when what which who how so but if then than into out up off one two every each all any some ' +
@@ -89,6 +110,50 @@ function likelyRepeats(number, title, open) {
   return found.slice(0, MOST);
 }
 
+// A title as the exact match reads it: no case, spaces or punctuation.
+function sameTitle(title) {
+  return String(title || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).join(' ');
+}
+
+// The deploy/after steps an issue's text asks for: [{ file, step }], step
+// null when only the file is named.
+function stepsOf(text) {
+  const out = [];
+  const t = String(text || '');
+  for (const m of t.matchAll(/deploy\/after\/([a-z0-9][a-z0-9-]*)\.json/gi)) out.push({ file: m[1].toLowerCase(), step: null });
+  for (const m of t.matchAll(/\bStep ([a-z0-9][a-z0-9-]*)#(\d+) of deploy\/after\b/gi)) out.push({ file: m[1].toLowerCase(), step: Number(m[2]) });
+  return out;
+}
+
+// The older open issue this one repeats exactly, with why, or null. issue and
+// each of open: { number, title, body, labels: [names] }. Only an older issue
+// is named, so of two repeats the first filed stays.
+function exactRepeat(issue, open) {
+  if ((issue.labels || []).some(l => REPEATS_BY_DESIGN.test(l))) return null;
+  const mine = sameTitle(issue.title);
+  const steps = stepsOf(issue.body);
+  const older = open.filter(o => o.number < issue.number && !(o.labels || []).some(l => REPEATS_BY_DESIGN.test(l)))
+    .sort((a, b) => a.number - b.number);
+  for (const o of older) {
+    if (mine && sameTitle(o.title) === mine) return { number: o.number, title: o.title, why: 'it has the same title' };
+  }
+  for (const o of older) {
+    for (const a of steps) {
+      const b = stepsOf(o.body).find(x => x.file === a.file && (a.step === null || x.step === null || a.step === x.step));
+      if (b) return { number: o.number, title: o.title, why: `it asks for the same deploy/after step, ${a.file}` };
+    }
+  }
+  return null;
+}
+
+function closeCommentFor(rep) {
+  return [
+    `Closed as a duplicate of #${rep.number}, which is open: ${rep.why}.`,
+    '',
+    `Anything this one adds goes on #${rep.number}. If it is a different problem, reopen this one and say here how it differs.`,
+  ].join('\n');
+}
+
 function commentFor(found) {
   const lines = found.map(f => `- #${f.number} ${f.title}`);
   return [
@@ -127,7 +192,9 @@ async function openIssues(gh, repo) {
   const out = [];
   for (let page = 1; page <= 50; page++) {
     const got = await gh.call('GET', `repos/${repo}/issues?state=open&per_page=100&page=${page}`);
-    for (const i of got) if (!i.pull_request) out.push({ number: i.number, title: i.title });
+    for (const i of got) {
+      if (!i.pull_request) out.push({ number: i.number, title: i.title, body: i.body || '', labels: (i.labels || []).map(l => (typeof l === 'string' ? l : l.name)) });
+    }
     if (got.length < 100) break;
   }
   return out;
@@ -144,8 +211,22 @@ async function run(argv, env, fetchImpl, say) {
   if (!env.GITHUB_TOKEN) { say('STOP. GITHUB_TOKEN is not set.'); return 2; }
   const gh = client(env.GITHUB_TOKEN, fetchImpl);
   try {
-    const title = env.TITLE || (await gh.call('GET', `repos/${repo}/issues/${number}`)).title;
+    // The issue as it is now: its body and labels decide an exact repeat, and
+    // one already closed (by hand, a second filing of the event) is left be.
+    const me = await gh.call('GET', `repos/${repo}/issues/${number}`);
+    const title = env.TITLE || me.title;
+    if (me.state !== 'open') { say(`#${number} is ${me.state} already; nothing to do`); return 0; }
     const open = await openIssues(gh, repo);
+    const issue = { number, title, body: me.body || '', labels: (me.labels || []).map(l => (typeof l === 'string' ? l : l.name)) };
+    const rep = exactRepeat(issue, open);
+    if (rep) {
+      say(`#${number} "${title}" repeats #${rep.number} exactly: ${rep.why}`);
+      if (dry) { say('dry run, not closed:\n' + closeCommentFor(rep)); return 0; }
+      await gh.call('POST', `repos/${repo}/issues/${number}/comments`, { body: closeCommentFor(rep) });
+      await gh.call('PATCH', `repos/${repo}/issues/${number}`, { state: 'closed', state_reason: 'duplicate' });
+      say(`closed #${number} as a duplicate of #${rep.number}`);
+      return 0;
+    }
     const found = likelyRepeats(number, title, open);
     say(`#${number} "${title}" read against ${open.length} open issue(s): ${found.length ? found.map(f => `#${f.number} (${f.score.toFixed(2)})`).join(', ') : 'none alike'}`);
     if (!found.length) return 0;
@@ -159,7 +240,7 @@ async function run(argv, env, fetchImpl, say) {
   }
 }
 
-module.exports = { THRESHOLD, MOST, wordsOf, likelyRepeats, commentFor, openIssues, run };
+module.exports = { THRESHOLD, MOST, wordsOf, likelyRepeats, commentFor, sameTitle, stepsOf, exactRepeat, closeCommentFor, openIssues, run };
 
 if (require.main === module) {
   run(process.argv.slice(2), process.env).then(code => process.exit(code));

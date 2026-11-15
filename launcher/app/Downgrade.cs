@@ -51,27 +51,26 @@ namespace Thornswood
         // line is never cut off: any progress at all resets it. See the loop
         // below for why a deadline is needed at all.
         const int GiveUpMinutes = 25;
-        // ---- THE COMPILED FALLBACK (#471) ----
-        // The pin comes from the update feed: version.json carries
-        // expectedExeBytes, newerExeBytes and depots, written by Publish-Update
-        // from records\skyrim-pin.json, and AdoptPin keeps them in config.json.
-        // What follows is only for a launcher that has never had them from the
-        // feed. The same numbers are in records\skyrim-pin.json,
-        // Config.ExpectedExeBytes and Setup-Thornswood.ps1, and
-        // launcher\tests\test-skyrim-pin.ps1 fails when any of them disagree.
+        // ---- THE PIN (#471), COMPILED IN ----
+        // The Skyrim build Thornswood is pinned to, records\skyrim-pin.json
+        // as numbers here and in Config.PinnedExeBytes. Until 11 Nov 2026 the
+        // update feed carried it and config.json kept it; the feed is gone
+        // (#5608), so a new pin goes out as a new launcher.
+        // launcher\tests\test-skyrim-pin.ps1 fails when these and
+        // records\skyrim-pin.json and Setup-Thornswood.ps1 disagree.
         //
         // Depot id -> the manifest of that depot at 1.6.1170.
-        static readonly string[][] FallbackDepots = {
+        static readonly string[][] PinDepots = {
             new[] { "489831", "8442952117333549665" },
             new[] { "489832", "8042843504692938467" },
             new[] { "489833", "1914580699073641964" },
         };
         /// <summary>SkyrimSE.exe at 1.7.104, the Steam build we never want.</summary>
         public const long NewerExeBytes = 37910440;
-        // ---- end of the compiled fallback ----
+        // ---- end of the pin ----
 
-        // The depots this run asks Steam for. Run sets it from PinnedDepots.
-        static string[][] Depots = FallbackDepots;
+        // The depots this run asks Steam for.
+        static string[][] Depots = PinDepots;
 
         // How many stretches the bar under the button is divided into: one for
         // each of the three downloads, then one for the copy into the game.
@@ -226,81 +225,16 @@ namespace Thornswood
             return all;
         }
 
-        /// <summary>
-        /// The depots to ask Steam for: the ones the feed sent, kept in
-        /// config.json, or the compiled fallback when it has sent none that
-        /// can be used.
-        /// </summary>
+        /// <summary>The depots to ask Steam for: the pin's.</summary>
         static string[][] PinnedDepots(Config cfg)
         {
-            if (cfg == null || !Usable(cfg.SkyrimDepots)) return FallbackDepots;
-            var all = new string[cfg.SkyrimDepots.Length][];
-            for (int i = 0; i < all.Length; i++) all[i] = new[] { cfg.SkyrimDepots[i].id, cfg.SkyrimDepots[i].manifest };
-            return all;
+            return PinDepots;
         }
 
-        /// <summary>The newer build's exe size, from the feed or the fallback.</summary>
+        /// <summary>The newer build's exe size: the pin's, unless a harness set another on the config.</summary>
         static long Newer(Config cfg)
         {
             return cfg != null && cfg.NewerExeBytes > 0 ? cfg.NewerExeBytes : NewerExeBytes;
-        }
-
-        /// <summary>
-        /// A depot list worth using: as many parts as the fallback, because the
-        /// card, the bar and every "Part 2 of 3" are built on that many, and each
-        /// one an id and a manifest in digits. Anything else is ignored whole,
-        /// never half used.
-        /// </summary>
-        static bool Usable(PinDepot[] d)
-        {
-            if (d == null || d.Length != FallbackDepots.Length) return false;
-            foreach (PinDepot p in d)
-                if (p == null || !AllDigits(p.id) || !AllDigits(p.manifest)) return false;
-            return true;
-        }
-
-        static bool AllDigits(string s)
-        {
-            if (string.IsNullOrEmpty(s) || s.Length > 20) return false;
-            foreach (char c in s) if (c < '0' || c > '9') return false;
-            return true;
-        }
-
-        /// <summary>A size from the feed, or 0 when it is not a plain number.</summary>
-        static long FeedBytes(string s)
-        {
-            long n;
-            return AllDigits(s) && long.TryParse(s, out n) ? n : 0;
-        }
-
-        /// <summary>
-        /// Takes the Skyrim pin from a version document into cfg (#471). Only
-        /// what the feed carries is taken: a size that is not a number above 0
-        /// and a missing or unusable depot list leave cfg as it is, so a feed
-        /// written before these fields changes nothing. True when anything
-        /// moved; the caller saves.
-        /// </summary>
-        public static bool AdoptPin(Config cfg, VersionDoc v)
-        {
-            if (cfg == null || v == null) return false;
-            bool moved = false;
-            long exe = FeedBytes(v.expectedExeBytes), newer = FeedBytes(v.newerExeBytes);
-            if (exe > 0 && exe != cfg.ExpectedExeBytes) { cfg.ExpectedExeBytes = exe; moved = true; }
-            if (newer > 0 && newer != cfg.NewerExeBytes) { cfg.NewerExeBytes = newer; moved = true; }
-            if (Usable(v.depots))
-            {
-                bool same = cfg.SkyrimDepots != null && cfg.SkyrimDepots.Length == v.depots.Length;
-                for (int i = 0; same && i < v.depots.Length; i++)
-                    same = cfg.SkyrimDepots[i] != null && cfg.SkyrimDepots[i].id == v.depots[i].id && cfg.SkyrimDepots[i].manifest == v.depots[i].manifest;
-                if (!same)
-                {
-                    var copy = new PinDepot[v.depots.Length];
-                    for (int i = 0; i < copy.Length; i++) copy[i] = new PinDepot { id = v.depots[i].id, manifest = v.depots[i].manifest };
-                    cfg.SkyrimDepots = copy;
-                    moved = true;
-                }
-            }
-            return moved;
         }
 
         static string Command(string[] depot)

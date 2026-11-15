@@ -9,11 +9,14 @@
 // Its functions, given before it loads any other module, so a module that
 // needs this one back finds them (a function is there from the top of its
 // file).
-module.exports = { cookies, discordUnasked, gallerySender, galleryStaff,
+module.exports = { cookies, discordUnasked, endSignIn, gallerySender, galleryStaff,
   personReportRefusal, sameSecret, sign, standingCached, standingLate,
-  standingsForDoor, who, within };
+  standingsForDoor, sweepSignOuts, who, within };
 
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const { DATA } = require('./base');
 const { cfg } = require('./config');
 const { LEVEL } = require('./pages');
 const { banActive, bansNow } = require('./staff');
@@ -28,9 +31,21 @@ function sign(v) {
   return crypto.createHmac('sha256', cfg.secret).update(String(v)).digest('hex').slice(0, 32);
 }
 
+/*
+  Whether a secret somebody gave is the one we hold (#4223). The bytes are
+  compared whole: a different length is a different secret, and said
+  before timingSafeEqual, which throws on lengths that differ, and did, for
+  any wrong key or password with a character outside ASCII. Same lengths
+  are compared in the same time wherever they differ. Nothing is padded or
+  cut, so trailing spaces and what comes after the 96th character count,
+  and only a string is a secret: a JSON body's ["pw"] or 1234 is not "pw"
+  or "1234".
+*/
 function sameSecret(a, b) {
-  const x = Buffer.from(String(a).padEnd(96).slice(0, 96));
-  const y = Buffer.from(String(b).padEnd(96).slice(0, 96));
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const x = Buffer.from(a, 'utf8');
+  const y = Buffer.from(b, 'utf8');
+  if (x.length !== y.length) return false;
   return crypto.timingSafeEqual(x, y);
 }
 
@@ -73,7 +88,100 @@ function identity(req) {
   // A minute of slack the other way, for a clock that stepped back.
   const age = Date.now() - Number(at);
   if (!(age > -60000 && age < ADMIN_DAYS * 86400000)) return null;
+  // Signed out since this cookie was made (#4405, endSignIn below).
+  const ends = signOutsNow();
+  if (ends.broken) return null;
+  if (Number(at) <= (Number(ends.table[signOutKey(id)]) || 0)) return null;
   return { id: String(id), name: name || '' };
+}
+
+/* SIGNING OUT ENDS THE SIGN IN (#4405). /api/logout only told the browser
+   to drop its twa cookie, and identity() above took any copy whose signature
+   checked out and that was under ADMIN_DAYS old. Nothing on the site knew
+   the sign in had ended, so a copy taken from a shared machine or a browser
+   backup kept working for the rest of its thirty days after its owner
+   signed out, and for staff it carries bans, deletions and gallery
+   approval.
+
+   So the site keeps when each account last signed out, and a cookie made at
+   or before that time reads as signed out. A sign in after it makes a new
+   cookie, which is later, so it works. Signing out ends every sign in the
+   account had made until then, on every browser, which is what somebody
+   signing out of a shared machine wants.
+
+   The record is keyed by sign('signout|' + id), so it names no Discord id,
+   and holds only a time. A time older than ADMIN_DAYS refuses nothing that
+   the age above does not already refuse, so the hourly sweep drops it
+   (sweepSignOuts). A file that is there but will not read is never written
+   over, and while it is broken every staff sign in reads as signed out, the
+   way a broken bans.json lets nobody play (#2186): which sign ins were ended
+   is not known. It is said on the log once each time it breaks, and the
+   next request reads it again, so a repair from the backup takes at once. */
+const SIGNOUTS = path.join(DATA, 'signouts.json');
+let signOuts = null;
+let signOutsSaid = '';
+const signOutKey = (id) => sign('signout|' + id);
+function signOutsBroken(why) {
+  if (signOutsSaid !== why) {
+    signOutsSaid = why;
+    console.error('[thornswood-docs] ' + SIGNOUTS + ' ' + why +
+                  ', so every staff sign in reads as signed out until it is repaired from the backup');
+  }
+  return { table: null, broken: why };
+}
+function signOutsNow() {
+  if (signOuts) return { table: signOuts, broken: '' };
+  let text;
+  try { text = fs.readFileSync(SIGNOUTS, 'utf8'); }
+  catch (e) {
+    if (!e || e.code !== 'ENOENT') return signOutsBroken('cannot be read (' + ((e && e.code) || 'unknown') + ')');
+    text = '{}';
+  }
+  let doc;
+  try { doc = JSON.parse(text.replace(/^\uFEFF/, '')); }
+  catch (e) { return signOutsBroken('will not parse'); }
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return signOutsBroken('is not a table');
+  signOuts = doc;
+  signOutsSaid = '';
+  return { table: signOuts, broken: '' };
+}
+// The rows that can still refuse a cookie: a time inside ADMIN_DAYS.
+function freshSignOuts(table, now) {
+  const cut = (Number(now) || Date.now()) - ADMIN_DAYS * 86400000;
+  const kept = {};
+  for (const k of Object.keys(table || {})) {
+    const t = Number(table[k]);
+    if (isFinite(t) && t > cut) kept[k] = t;
+  }
+  return kept;
+}
+/* Ends the sign in the request carries, and every other the account made
+   before now. True when it is ended or there was none to end; false when the
+   record could not be written, which is said on the log. This process
+   refuses the old cookies either way, but a restart would not, so the caller
+   says it did not work. */
+function endSignIn(req) {
+  const me = identity(req);
+  if (!me) return true;
+  const now = Date.now();
+  const kept = freshSignOuts(signOutsNow().table, now);
+  kept[signOutKey(me.id)] = now;
+  signOuts = kept;
+  if (putJson(SIGNOUTS, kept)) return true;
+  console.error('[thornswood-docs] could not write ' + SIGNOUTS + ', so a sign out holds only until the site restarts');
+  return false;
+}
+// The hourly sweep (retention.js): rows past ADMIN_DAYS go.
+function sweepSignOuts(now) {
+  const r = signOutsNow();
+  if (r.broken) return { written: false, broken: r.broken };
+  const kept = freshSignOuts(r.table, now);
+  const out = { rows: Object.keys(r.table).length, kept: Object.keys(kept).length, written: false };
+  if (out.kept === out.rows) return out;
+  signOuts = kept;
+  out.written = putJson(SIGNOUTS, kept);
+  if (!out.written) console.error('[thornswood-docs] could not write ' + SIGNOUTS + ' after ageing it');
+  return out;
 }
 
 /* A minute of memory, so clicking around the site is not forty calls to
@@ -355,3 +463,4 @@ Object.assign(module.exports, { ADMIN, ADMIN_DAYS, allowed, COOKIE,
 const { discordQuietMs } = require('./discord');
 const { standing } = require('./members');
 const { readTicket } = require('./passes');
+const { putJson } = require('./store');

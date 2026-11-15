@@ -4,7 +4,7 @@
 # WHY. Patrick, 19 Oct 2026: Done is "merged and only needs testing". A pull
 # request that finishes an issue says Closes #N, and the board's own "Pull
 # request merged" workflow moves the card. A fix people would notice says
-# Refs #N instead, because its issue stays open until a main Ship puts the
+# Refs #N instead, because its issue stays open until a main release puts the
 # fix on the main server (docs/guide/the-board.md), and nothing moved
 # its card: the board
 # review of 21 Oct (#3192) found Refs fixes sitting in In Progress for days
@@ -26,15 +26,18 @@
 # block to the bot's post rules there (#5199); change a pattern here and
 # change it there, or bot/tests/test-5199-pr-tasks.py fails.
 #
-# WHAT IT DOES. On each push to main, for every commit in it, it asks GitHub
-# which merged pull request the commit came from, and reads its body. For each
+# WHAT IT DOES. On each push to main, for every commit in it, it reads the
+# pull request number the commit's own message names, reads that pull
+# request, and takes it only when it merged into main with that commit as
+# its merge (#4135). It reads its body. For each
 # "Test task for #N" naming an open issue of this repository it writes a
 # comment on the issue with the test task in a fenced block, so the bot never
 # reads it as a test task to post. The card moves to Done by itself: board.yml
 # reads the same merged test task (#5185). Until then this put a board: Done
 # label on with Patrick's board token for board-status.yml to carry out.
-# The main Ship that carries the merge closes the issue with that block as
-# its "Test task:" comment
+# The main release that carries the merge closes the issue with that block as
+# its "Test task:" comment, once the live server runs it (close-shipped.yml,
+# #5530; a main Ship did it until main went out through promote-main.yml)
 # (scripts/release/Close-ShippedIssues.ps1, #3279), reading the merge commit
 # and the block from this comment: change its first line or its footer and
 # that script, and tests/test-3279-close-shipped.ps1, change with it. A closed
@@ -57,7 +60,7 @@
 #
 # WHERE IT RUNS. On GitHub's Windows runner (#4983). Every push to main
 # takes a few seconds; a push with no test task in its pull request
-# makes one call per commit and stops.
+# makes two calls per commit and stops.
 name: Done on merge
 on:
   push:
@@ -75,7 +78,7 @@ jobs:
   done:
     name: Move test-tasked issues to Done
     runs-on: windows-latest
-    # A call per commit and three per issue. Past this it is stuck, not slow.
+    # Two calls per commit and three per issue. Past this it is stuck, not slow.
     timeout-minutes: 3
     steps:
       - name: Read the merged pull request and move what it finishes
@@ -97,12 +100,37 @@ jobs:
           }
           $prs = @{}
           foreach ($sha in $shas) {
-            # Through ForEach-Object so the list is one pull request per item:
-            # Invoke-RestMethod hands a JSON array on as one object, and @() alone
-            # kept the whole list as a single item (#2798, #3273).
-            foreach ($p in @(Invoke-RestMethod -Method Get -Uri "$api/commits/$sha/pulls" -Headers $h | ForEach-Object { $_ })) {
-              if ((Has $p 'merged_at') -and [string]$p.base.ref -eq 'main') { $prs[[int]$p.number] = $p }
+            # The pull request the commit's own message names, held to this
+            # commit (#4135). GitHub's commit-to-pull-request lookup
+            # (commits/<sha>/pulls) is not asked: it answered with server
+            # errors, and this run stopped on them, so the issue a merged test
+            # task named never heard of it. Every merge to main comes from a
+            # pull request, and GitHub writes its number in the first line of
+            # the message in one of two shapes: "<title> (#N)" for a squash, as
+            # the merge queue makes, and "Merge pull request #N from ..." for a
+            # merge commit. The pull request is then read by its number and
+            # taken only when it merged into main with this commit as its
+            # merge, so a message that names another pull request moves nothing.
+            $c = Invoke-RestMethod -Method Get -Uri "$api/commits/$sha" -Headers $h
+            $full = ([string]$c.sha).ToLowerInvariant()
+            $first = (((([string]$c.commit.message) -replace "`r`n", "`n") -split "`n")[0]).Trim()
+            $m = [regex]::Match($first, '^Merge pull request #(\d+) from \S')
+            if (-not $m.Success) { $m = [regex]::Match($first, '\(#(\d+)\)$') }
+            if (-not $m.Success) { Write-Host ("{0}: its message names no pull request; passed over" -f $sha); continue }
+            $n = [int]$m.Groups[1].Value
+            # A number that is an issue, not a pull request, answers 404: said
+            # and passed over. Any other failure stops the run, as before.
+            try { $p = Invoke-RestMethod -Method Get -Uri "$api/pulls/$n" -Headers $h }
+            catch {
+              if (-not ($_.Exception.PSObject.Properties['Response'] -and $_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 404)) { throw }
+              Write-Host ("{0} names #{1}, which is no pull request; passed over" -f $sha, $n); continue
             }
+            $not = ''
+            if (-not (Has $p 'merged_at')) { $not = 'it is not merged' }
+            elseif ([string]$p.base.ref -ne 'main') { $not = 'it merged into ' + [string]$p.base.ref + ', not main' }
+            elseif (([string]$p.merge_commit_sha).ToLowerInvariant() -ne $full -or $full -notmatch '^[0-9a-f]{40}$') { $not = 'its merge is ' + [string]$p.merge_commit_sha + ', not ' + $full }
+            if ($not) { Write-Host ("{0} names #{1}, but {2}; passed over" -f $sha, $n, $not); continue }
+            $prs[[int]$p.number] = $p
           }
           if ($prs.Count -eq 0) { Write-Host ("no merged pull request behind {0} commit(s)" -f $shas.Count); return }
           foreach ($num in @($prs.Keys | Sort-Object)) {
@@ -137,15 +165,15 @@ jobs:
               if ($said) { Write-Host ("#{0} finishes #{1}, which already holds its done-on-merge comment; passed over" -f $num, $t.issue); continue }
               $steps = (($t.rest -join "`n").Trim())
               # A Dev test task is for developers and goes up as soon as a dev
-              # release carries the work, written by that dev Ship (#5199); a
-              # Main one when a main Ship does. The main Ship closes the issue
+              # release carries the work, written once dev runs it (#5199); a
+              # Main one when main does (close-shipped.yml, #5530). Main closes the issue
               # either way, and writes this block on it unless a test task of
               # the same kind was written after the merge (docs/guide/the-board.md,
               # "Test tasks and known issues").
               if ($steps -match '^\s*Server\s*:\s*Dev\s*(\n|$)') {
-                $when = 'This test task is for developers. The dev Ship that carries it writes it on this issue with its Build: line naming that release, and the bot posts it in #dev-test-tasks (scripts/release/Close-ShippedIssues.ps1 -Dev). The main Ship that carries it closes this issue, and writes this on it if nobody has:'
+                $when = 'This test task is for developers. The dev release that carries it writes it on this issue with its Build: line naming that release, once dev runs it, and the bot posts it in #dev-test-tasks (close-shipped.yml, scripts/release/Close-ShippedIssues.ps1 -Dev). The main release that carries it closes this issue once the live server runs it, and writes this on it if nobody has:'
               } else {
-                $when = 'The main Ship that carries it closes this issue with a comment holding exactly this (scripts/release/Close-ShippedIssues.ps1):'
+                $when = 'The main release that carries it closes this issue once the live server runs it, with a comment holding exactly this (close-shipped.yml, scripts/release/Close-ShippedIssues.ps1):'
               }
               $body = ('Pull request #{0} merged ({1}), so this is in Done and stays open: the merge puts the fix on the main branch, not on the main server testers play. {2}' -f $num, ([string]$p.merge_commit_sha).Substring(0, 12), $when) + "`n`n" + '```' + "`n" + 'Test task: ' + $t.title + "`n" + $steps + "`n" + '```' + "`n`n---`n_Done on merge, .github/workflows/done-on-merge.yml_"
               Invoke-RestMethod -Method Post -Uri ("$api/issues/" + $t.issue + '/comments') -Headers $h -Body (@{ body = $body } | ConvertTo-Json -Compress) -ContentType 'application/json' | Out-Null

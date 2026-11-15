@@ -7,7 +7,7 @@
   keeping the rotating approved spotlight only (#731).
 
   WHY THIS EXISTS. Issue #731 asked for Report and staff Approve/Delete wired
-  to the site's gallery doors. Gavin's ask on 2026-09-27 moved those tools off
+  to the site's gallery doors. Patrick's ask on 2026-09-27 moved those tools off
   the Play card onto a real Gallery tab/page, and stripped Report / Manage from
   Play.
 
@@ -129,7 +129,7 @@ yes('Report posts to /api/gallery/report with ticket',
     /"\/api\/gallery\/report\?ticket="/.test(report) &&
     /Uri\.EscapeDataString\(Discord\.Ticket\)/.test(report));
 
-const submit = body(GALLERY, 'public static string Submit(string path, string by, string note, out string copies)');
+const submit = body(GALLERY, 'public static string Submit(string path, string by, string note, string alt, out string copies)');
 yes('Gallery.Submit is there', submit.length > 0);
 yes('Submit posts to /api/gallery/submit with ticket',
     /"\/api\/gallery\/submit\?ticket="/.test(submit));

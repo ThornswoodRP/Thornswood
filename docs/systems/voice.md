@@ -89,7 +89,7 @@ Gamemaster, Dev, Loremaster, Moderator.
 `/silence` and the name, then the minutes if not 30 (a day at most)
 and why. Their voice, their local text, the words above their head,
 and the speaking mark stop for everybody. They are told how long. They
-cannot lift it. `/unsilence` and the name, from any staff member,
+cannot lift it. `/unsilence` and the name, from any other staff member,
 lifts it, and it lifts by itself when the minutes run out.
 
 `/silence` with nothing after it says how it is used.

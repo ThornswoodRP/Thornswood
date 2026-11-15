@@ -70,7 +70,7 @@ function Get-Unlisted([string]$repo) {
     $names = @(Get-Harnesses $repo | ForEach-Object { $_.Name })
     $why = Get-Excluded $repo
     foreach ($n in $names) {
-        # Named in quotes ('name') or run by path (node tests\name, -File
+        # Named in quotes ('name' or 'tests/name') or run by path (node tests\name, -File
         # tests\name), not merely in an ::error line naming the file. One
         # beside its product by its path either way, with either slash.
         if ($n.Contains('/')) {
@@ -78,7 +78,7 @@ function Get-Unlisted([string]$repo) {
             $own = ($yml -match ("'(\.[\\/])?" + $e + "'")) -or ($yml -match ('(node|-File|python)\s+(\.[\\/])?' + $e + '(?![\w.-])'))
         } else {
             $e = [regex]::Escape($n)
-            $own = ($yml -match ("'" + $e + "'")) -or ($yml -match ('(node|-File|python)\s+(\.[\\/])?tests[\\/]' + $e + '(?![\w.-])'))
+            $own = ($yml -match ("'((\.[\\/])?tests[\\/])?" + $e + "'")) -or ($yml -match ('(node|-File|python)\s+(\.[\\/])?tests[\\/]' + $e + '(?![\w.-])'))
         }
         $says = $why.ContainsKey($n) -and $why[$n].StartsWith('own step in build.yml')
         if ($own -and -not $why.ContainsKey($n)) { $problems.Add("$n runs in a step of its own in build.yml and is not in tests\gate-excluded.txt, so the gate runs it twice") }

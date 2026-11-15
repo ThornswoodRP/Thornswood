@@ -61,6 +61,7 @@
 .EXAMPLE
   .\scripts\release\New-ServerBuildRecord.ps1
 #>
+#Requires -Version 7
 param(
   [string]$Dist  = (& (Join-Path $PSScriptRoot 'Where.ps1') ServerDist),
   [string]$Clone = (& (Join-Path $PSScriptRoot 'Where.ps1') Engine),

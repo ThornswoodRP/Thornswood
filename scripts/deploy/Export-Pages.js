@@ -37,7 +37,6 @@ const os = require('os');
 const path = require('path');
 const http = require('http');
 const https = require('https');
-const net = require('net');
 const { spawn } = require('child_process');
 
 const REPO = path.join(__dirname, '..', '..');
@@ -80,12 +79,12 @@ function ask(port, route) {
     req.on('error', (e) => resolve({ status: 0, why: e.message }));
   });
 }
-function freePort() {
-  return new Promise((ok, no) => {
-    const s = net.createServer();
-    s.on('error', no);
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
-  });
+/* The port the site said it got. It is started on 0 so the system picks a
+   free one as it listens; a port chosen here and let go first can be taken
+   by then (#6136). site/server.js prints this line. */
+function saidPort(text) {
+  const m = /\[thornswood-docs\] listening on \S+:(\d+)\r?\n/.exec(String(text));
+  return m ? Number(m[1]) : 0;
 }
 function copyDir(from, to) {
   fs.mkdirSync(to, { recursive: true });
@@ -126,19 +125,20 @@ async function main() {
     cfg.discord = Object.assign({}, cfg.discord, { invite: pub.body.invite });
     fs.writeFileSync(path.join(scratch, 'config.json'), JSON.stringify(cfg, null, 2));
 
-    const port = await freePort();
+    let port = 0;
     let said = '', exited = false;
     child = spawn(process.execPath, ['server.js'], {
       cwd: scratch,
-      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: String(port), THORNSWOOD_DOCS_LOCAL: '1',
+      env: Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_DOCS_LOCAL: '1',
                                             THORNSWOOD_CHAT_DIR: path.join(scratch, 'chat') })
     });
     child.stdout.on('data', (d) => { said += d; });
     child.stderr.on('data', (d) => { said += d; });
     child.on('exit', () => { exited = true; });
     const until = Date.now() + 15000;
-    while (!exited && said.indexOf('listening on ') < 0 && Date.now() < until) await new Promise((r) => setTimeout(r, 50));
-    if (exited || said.indexOf('listening on ') < 0) fail('the site did not start: ' + said.slice(-400));
+    while (!exited && !saidPort(said) && Date.now() < until) await new Promise((r) => setTimeout(r, 50));
+    if (exited || !saidPort(said)) fail('the site did not start: ' + said.slice(-400));
+    port = saidPort(said);
 
     const got = {};
     for (const route of pages) {

@@ -245,7 +245,17 @@ function Select-Affected {
 # or, with each harness's seconds from the map, the longest first, each to
 # the share with the least so far (ties to the lowest share), so the shares
 # end close together; a harness the map has no seconds for counts as the
-# median. Each share's names in name order, and the loads in $script:Loads.
+# median. The loads go in $script:Loads.
+#
+# LONGEST FIRST IN EACH SHARE TOO (12 Nov 2026). Each share keeps its names
+# in the order they were dealt, longest first, and Nightly-Harnesses.ps1
+# -Only starts them in the order given. Until then each share was put in
+# name order, and the longest started whenever its name came up: in run
+# 43305303114, Linux share 3 of 4 started test-2821-launcher-compiler.ps1
+# (148.6 s) about 40 s in and test-scenario-spoilage.js (94.8 s) about 150 s
+# in, so the share took 257 s for about 160 s of its longest harness and
+# the rest beside it, and every check waited for it. With no seconds the
+# order is the list's.
 function Split-Shares([string[]]$list, [int]$count) {
     $parts = New-Object 'System.Collections.Generic.List[string][]' $count
     for ($k = 0; $k -lt $count; $k++) { $parts[$k] = New-Object 'System.Collections.Generic.List[string]' }
@@ -266,7 +276,7 @@ function Split-Shares([string[]]$list, [int]$count) {
     }
     $script:Loads = $load
     $out = New-Object 'object[]' $count
-    for ($k = 0; $k -lt $count; $k++) { $out[$k] = [string[]]@($parts[$k] | Sort-Object) }
+    for ($k = 0; $k -lt $count; $k++) { $out[$k] = [string[]]@($parts[$k]) }
     return ,$out
 }
 
@@ -366,8 +376,25 @@ if ($Of -gt 1 -or [string]$env:GATE_PLAN) {
     if ($null -ne $picked) { $run = $picked; $whole = $false }
 }
 
+# WHICH POWERSHELL AND .NET THIS SHARE RAN ON (#5752). On 10 Nov 2026 a
+# Linux share's pwsh aborted (exit 134) on an assembly name garbled in
+# memory, in a share that passed on main minutes before, on the same image.
+# Which pwsh and .NET each ran was only in the job log, which no Bot can
+# read. So every share says them in a notice, which the run's annotations
+# carry: PowerShell, .NET, the OS, and on GitHub's runner the image
+# (ImageOS and ImageVersion, which the image sets).
+function Get-RunnerSaid([string]$where) {
+    $image = ''
+    if ($env:ImageOS -or $env:ImageVersion) { $image = ', image ' + ([string]$env:ImageOS + ' ' + [string]$env:ImageVersion).Trim() }
+    $line = ('{0} ran on PowerShell {1}, {2}, {3}{4}' -f $where, $PSVersionTable.PSVersion,
+        [System.Runtime.InteropServices.RuntimeInformation]::FrameworkDescription,
+        [System.Runtime.InteropServices.RuntimeInformation]::OSDescription.Trim(), $image)
+    return '::notice title=Gate runner::' + $line.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+}
+
 $code = 0
 $title = $(if ($Of -gt 1) { 'Gate harnesses, share {0} of {1}' -f $Shard, $Of } else { 'Gate harnesses' })
+Write-Host (Get-RunnerSaid ($(if ($Platform -eq 'Linux') { 'Linux ' } else { '' }) + $title))
 if ($run.Count) {
     $with = @{ Only = ($run -join ' '); Throttle = $Throttle; Share = $share; BudgetSeconds = $BudgetSeconds }
     if ($StartLog) { $with.StartLog = $StartLog }

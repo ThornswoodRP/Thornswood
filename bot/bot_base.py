@@ -7,16 +7,38 @@ Part of the bot: bot.py loads it (#5357).
 import os
 import urllib.request
 
-# The bot's own records, joins.json, open-tickets.json, heartbeat.json
-# and commands-synced.json, go in a folder of their own, data beside bot.py, and
-# so does bot.log, which the service writes (issue #1104). The service's
-# account may write there and nowhere else in the bot's folder: the code is
-# read only to it, so nothing that gets into the bot can rewrite bot.py or put
-# a module beside it for the next start to import. The service names the
-# folder in THORNSWOOD_BOT_DATA (BotService.cs). With no data folder yet, a
-# box whose full install has not run since, the records stay beside bot.py
-# where they were, so a code only deploy never starts the join numbers again;
-# the full install moves them across while the bot is stopped (Bot-Service.ps1).
+# THE BOT'S RECORDS (#4428). Everything the bot writes and keeps goes in its
+# data folder, DATA_DIR below: data under the bot's folder
+# (C:\Thornswood-Bot\data on the VPS), or the folder the service names in
+# THORNSWOOD_BOT_DATA (BotService.cs). These are all of them, and
+# tests\test-4428-bot-records-folder.js holds this list to the files the
+# code names there:
+#   roots.pem               the roots it trusts, written at every start
+#   heartbeat.json          its heartbeat for the watchdog, every minute
+#   joins.json              which arrival each person was, and the
+#                           joins.json-before-restore-<stamp> copies a
+#                           restore sets aside, which it deletes at 30 days
+#   open-tickets.json       which thread is each person's open ticket
+#   commands-synced.json    the slash commands it last registered
+#   trouble-posts.json      which message is which row of the site's trouble
+#   deletion-requests.json  put there by Delete-Person.ps1; read and removed
+#                           at the next start
+#   news-said.json          which release notes it has posted
+#   restarts-said.json      which restart notices it has posted
+#   staff-notices.json      which staff notice became which message
+#   problems-filed.json     the Report a problem issues it has filed
+#   channel-setup.json      the testing channels setup, once applied
+#   known-issues.json       which #known-issues post is which issue
+#   staff-messages.txt      the watchdog's messages it has said
+#   staff-unsaid.txt        what it did with each ask to take one back
+#   bot.log                 its log, written by the service, not the bot
+# The service's account may write there and nowhere else in the bot's
+# folder: the code is read only to it, so nothing that gets into the bot can
+# rewrite bot.py or put a module beside it for the next start to import.
+# With no data folder yet, a box whose full install is older than #1104,
+# DATA_DIR is the bot's own folder, as it was then, so a code only deploy
+# never starts the join numbers again; the full install moves them across
+# while the bot is stopped (Bot-Service.ps1).
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get('THORNSWOOD_BOT_DATA') or (
     os.path.join(HERE, 'data') if os.path.isdir(os.path.join(HERE, 'data')) else HERE)

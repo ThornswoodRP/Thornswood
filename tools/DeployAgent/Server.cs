@@ -310,9 +310,16 @@ public sealed class Server(EnvConfig env, HttpClient http)
     ///  - when any of that does not happen, the stop again, the old files
     ///    back the same way, and the old server started and asked again.
     /// files are the Release's gamemode part (gamemode.js, its stamp and, from
-    /// #5191, gamemode-tables.zip, whose folder is swapped with the files).</summary>
-    public async Task<Outcome> ApplyServerBuild(string zip, byte[] record, IReadOnlyDictionary<string, string> files, string who, Action<string> log, CancellationToken ct)
+    /// #5191, gamemode-tables.zip, whose folder is swapped with the files).
+    /// zip null keeps the server build the folder runs, whose record is
+    /// record: the stop, swap and start then carry the gamemode and plugins
+    /// alone. plugins are the server's own plugins from the Release (#6175,
+    /// ServerPlugins), by their path under the root to the staged file; they
+    /// are swapped and put back with the rest.</summary>
+    public async Task<Outcome> ApplyServerBuild(string? zip, byte[] record, IReadOnlyDictionary<string, string> files, string who, Action<string> log, CancellationToken ct, string about = "an update",
+        IReadOnlyDictionary<string, string>? plugins = null)
     {
+        plugins ??= new Dictionary<string, string>();
         foreach (var n in ReloadFiles)
             if (!files.ContainsKey(n)) return new Outcome("failure", "the Release's gamemode part has no " + n);
         if (env.Task == "") return new Outcome("failure", "not applied: no scheduled task is named for this server, so the agent cannot stop and start it for a new server build");
@@ -338,11 +345,20 @@ public sealed class Server(EnvConfig env, HttpClient http)
         Dictionary<string, string> sums;
         try
         {
-            sums = ServerBuild.Expand(zip, stage, out var zipRecord);
-            if (ServerBuild.RecordSum(zipRecord) != ServerBuild.RecordSum(record))
-                throw new InvalidDataException("the zip's server-build.json is not the one the signed manifest names");
-            Files.WriteWhole(Path.Combine(stage, "server-build.json"), record);
+            if (zip != null)
+            {
+                sums = ServerBuild.Expand(zip, stage, out var zipRecord);
+                if (ServerBuild.RecordSum(zipRecord) != ServerBuild.RecordSum(record))
+                    throw new InvalidDataException("the zip's server-build.json is not the one the signed manifest names");
+                Files.WriteWhole(Path.Combine(stage, "server-build.json"), record);
+            }
+            else sums = new();
             foreach (var rel in ReloadFiles) Files.Copy(files[rel], Path.Combine(stage, rel));
+            foreach (var (rel, from) in plugins)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(stage, rel))!);
+                Files.Copy(from, Path.Combine(stage, rel));
+            }
             if (files.ContainsKey(Tables.Zip)) Tables.Expand(files[Tables.Zip], Path.Combine(stage, Tables.Dir));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
@@ -350,8 +366,8 @@ public sealed class Server(EnvConfig env, HttpClient http)
             TryDelete(stage);
             return new Outcome("failure", "not applied: the new server build could not be staged: " + e.Message);
         }
-        var bad = ServerBuild.Problems(rec, sums, "the Release's server build");
-        try
+        var bad = zip != null ? ServerBuild.Problems(rec, sums, "the Release's server build") : new List<string>();
+        if (zip != null) try
         {
             if (!File.ReadAllText(Path.Combine(stage, "dist_back", "skymp5-server.js")).Contains("[thornswood] gamemode did not load; the error is above"))
                 bad.Add("the new engine does not say how a gamemode load went (it needs the fork from Thornswood #3196)");
@@ -363,7 +379,7 @@ public sealed class Server(EnvConfig env, HttpClient http)
             TryDelete(stage);
             return new Outcome("failure", "not applied: the server build is not the one its record names: " + bad[0]);
         }
-        var want = sums.Keys.Append("server-build.json").Concat(ReloadFiles).ToList();
+        var want = (zip != null ? sums.Keys.Append("server-build.json") : []).Concat(ReloadFiles).Concat(plugins.Keys).ToList();
         var newBlob = Files.GamemodeBlob(Path.Combine(stage, "gamemode.js"));
         var tablesAt = Path.Combine(Root, Tables.Dir);
         var withTables = files.ContainsKey(Tables.Zip);
@@ -371,14 +387,39 @@ public sealed class Server(EnvConfig env, HttpClient http)
         var newTree = withTables ? Tables.Tree(Path.Combine(stage, Tables.Dir)) : Tables.Tree(tablesAt);
         // Held only when the new gamemode reads tables (see ApplyGamemode).
         var newHeld = Tables.Reads(Path.Combine(stage, "gamemode.js")) ? newTree : "";
-        log($"the stage checks out: server build {rec.Short}, {sums.Count} file(s) held to its record, and gamemode git blob {newBlob}" +
-            (newTree != "" ? $" with tables tree {newTree}" : ""));
+        log((zip != null ? $"the stage checks out: server build {rec.Short}, {sums.Count} file(s) held to its record, and gamemode git blob {newBlob}"
+                         : $"the stage checks out: the server build it runs, {rec.Short}, kept, and gamemode git blob {newBlob}") +
+            (newTree != "" ? $" with tables tree {newTree}" : "") + (plugins.Count > 0 ? $", and {string.Join(", ", plugins.Keys)}" : ""));
 
         Turn turn;
         try { turn = Turn.Take(env.Turn, who, TimeSpan.FromSeconds(env.TurnSeconds), log); }
         catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException) { TryDelete(stage); return new Outcome("failure", "not applied: " + e.Message); }
         using var _ = turn;
-        Hold.Set(env.Watch, env.Task, $"the deploy agent is swapping in server build {rec.Short} at {Root}", who, 30, log);
+
+        // Said before it happens (#5784): in Discord through the bot and in
+        // the game by a notice countdown, then the wait, then the stop. On 11
+        // Nov the live server was swapped at 11:12 AM with neither.
+        var noticeId = $"{Which}-{stamp}";
+        var downAt = Now().ToUniversalTime() + TimeSpan.FromSeconds(env.AnnounceSeconds);
+        var unsaid = await Announce(noticeId, downAt, about, log, ct);
+        if (unsaid != "")
+        {
+            TryDelete(stage);
+            return new Outcome("failure", "not applied: the restart could not be announced: " + Trim(unsaid));
+        }
+        Outcome swapped;
+        try { swapped = await SwapUnderHold(); }
+        catch (OperationCanceledException)
+        {
+            RestartNotice.Write(env.Store, Which, noticeId, RestartNotice.Down, downAt, about, log);
+            throw;
+        }
+        RestartNotice.Write(env.Store, Which, noticeId, swapped.State == "error" ? RestartNotice.Down : RestartNotice.Back, downAt, about, log);
+        return swapped;
+
+        async Task<Outcome> SwapUnderHold()
+        {
+        Hold.Set(env.Watch, env.Task, zip != null ? $"the deploy agent is swapping in server build {rec.Short} at {Root}" : $"the deploy agent is putting in the Release's plugins at {Root}", who, 30, log);
         try
         {
             var stopWhy = StopServer(port, log);
@@ -390,7 +431,7 @@ public sealed class Server(EnvConfig env, HttpClient http)
 
             // The fork files the new record does not list go aside too, so the
             // folder is one build, the way a whole install leaves it.
-            var stale = ServerBuild.FolderForkFiles(Root).Where(r => !sums.ContainsKey(r)).ToList();
+            var stale = zip != null ? ServerBuild.FolderForkFiles(Root).Where(r => !sums.ContainsKey(r)).ToList() : [];
             var placed = new List<string>();
             var aside = new List<string>();
             var why = "";
@@ -435,7 +476,8 @@ public sealed class Server(EnvConfig env, HttpClient http)
             {
                 TryDelete(stage);
                 PruneOld(log);
-                return new Outcome("success", $"{Which} runs server build {rec.Short} and gamemode blob {newBlob[..12]}" + (newTree != "" ? $" with tables tree {newTree[..12]}" : "") + ", restarted", newBlob, prevName);
+                return new Outcome("success", $"{Which} runs server build {rec.Short} and gamemode blob {newBlob[..12]}" + (newTree != "" ? $" with tables tree {newTree[..12]}" : "") +
+                    (plugins.Count > 0 ? " and the Release's " + string.Join(" and ", plugins.Keys.Select(Path.GetFileName)) : "") + ", restarted", newBlob, prevName);
             }
 
             // The way back: stop what was started, the new files out, the old ones in, and the old server started.
@@ -483,6 +525,49 @@ public sealed class Server(EnvConfig env, HttpClient http)
             return new Outcome("error", Trim(why) + $"; putting the old build back did not take either: what it replaced is in {prevName}, and dev needs Publish-Server -PutBack", Prev: prevName);
         }
         finally { Hold.Clear(env.Watch, env.Task, log); }
+        }
+    }
+
+    /// <summary>Waits out the lead a restart is announced with. A test makes it instant.</summary>
+    public Func<TimeSpan, CancellationToken, Task> Wait { get; set; } = (t, c) => Task.Delay(t, c);
+
+    /// <summary>Says a restart is coming at downAt (#5784): the notice the
+    /// bot posts in Discord (RestartNotice) and a notice countdown in the
+    /// game (restart.json, which the gamemode reads, Request-Restart.ps1's
+    /// mode notice: nobody is put out, the world freezes for a few seconds),
+    /// then waits until downAt. "" when both were said and the wait ran out;
+    /// otherwise why not, with nothing stopped and the notice called off.</summary>
+    async Task<string> Announce(string id, DateTime downAt, string why, Action<string> log, CancellationToken ct)
+    {
+        var ahead = downAt - Now().ToUniversalTime();
+        if (ahead < TimeSpan.Zero) ahead = TimeSpan.Zero;
+        var no = RestartNotice.Write(env.Store, Which, id, RestartNotice.Coming, downAt, why, log);
+        if (no != "") return "Discord was not told: " + no;
+        var rq = Path.Combine(DataDir(), "restart.json");
+        try
+        {
+            var body = JsonSerializer.SerializeToUtf8Bytes(new Dictionary<string, object>
+            {
+                ["seconds"] = (int)Math.Round(ahead.TotalSeconds),
+                ["mode"] = "notice",
+                ["why"] = why,
+            });
+            Files.WriteWhole(rq, body);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            RestartNotice.Write(env.Store, Which, id, RestartNotice.Off, downAt, why, log);
+            return $"the game was not told: {rq} could not be written ({e.Message})";
+        }
+        log($"the restart is announced for {downAt:HH:mm:ss} UTC, in Discord and in the game; waiting {(int)ahead.TotalSeconds} seconds before the stop");
+        try { await Wait(ahead, ct); }
+        catch (OperationCanceledException)
+        {
+            try { Files.WriteWhole(rq, Encoding.UTF8.GetBytes("{\"cancel\":true}")); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            RestartNotice.Write(env.Store, Which, id, RestartNotice.Off, downAt, why, log);
+            throw;
+        }
+        return "";
     }
 
     /// <summary>Stops whatever holds this server's UDP port and waits for it

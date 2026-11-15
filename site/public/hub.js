@@ -16,7 +16,7 @@
 /* ---------------------------------------------------------------- state -- */
 var S = {
   me:{member:false,admin:false,dev:false,name:''}, titles:{}, level:{},
-  docs:{}, results:{}, files:[], uploads:[], inbox:[], linked:[],
+  docs:{}, docWas:{}, results:{}, files:[], uploads:[], inbox:[], linked:[],
   sessions:[], records:{bans:{}, notes:{}, pk:{}, names:{}},
   news:{news:[]}, invite:'', at:'home', editing:false, discord:false
 };
@@ -113,8 +113,13 @@ function signIn() {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ password: pw })
   }).then(function (r) {
-    if (!r.ok) { el('err').textContent = 'Not that one.'; return; }
-    start();
+    if (r.ok) return start();
+    /* A wrong password is "Not that one."; anything else is the site's own
+       reason (#4187). The 429 says how long to wait, and every try during
+       that wait makes it longer, so it must not read as "guess again". */
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      el('err').textContent = r.status === 401 ? 'Not that one.' : whyWords(r.status, j);
+    });
   }).catch(function () { el('err').textContent = 'Could not reach the server.'; });
 }
 
@@ -158,13 +163,20 @@ document.addEventListener('click', function (e) {
 
 /* ---------------------------------------------------------------- boot -- */
 function start() {
+  /* Signed out (401), or signed in but not let into the hub (403): the gate,
+     to sign in. Any other answer, or one that is not JSON, is the site not
+     answering as it should (a restart, a proxy error), and showing the gate
+     for that told a signed in member to sign in again (#4187). */
   api('/api/all').then(function (r) {
-    if (!r.ok) throw 0;
-    return r.json();
-  }).then(function (d) {
+    if (r.status === 401 || r.status === 403) { showGate(); return; }
+    if (!r.ok) { unreachable(whyWords(r.status)); return; }
+    return r.json().then(opened, function () { unreachable('its answer could not be read'); });
+  }, function () { unreachable(whyWords(0)); });
+}
+function opened(d) {
     S.me = d.me || S.me;
     S.titles = d.titles; S.level = d.level || {};
-    S.docs = d.docs || {};
+    S.docs = d.docs || {}; S.docWas = d.docWas || {};
     S.results = d.results || {}; S.files = d.files || [];
     S.uploads = d.uploads || []; S.inbox = d.inbox || [];
     S.linked = d.linked || []; S.invite = d.invite || '';
@@ -175,7 +187,9 @@ function start() {
     el('shell').style.display = 'grid';
     chrome();
     go(keyFor(location.pathname), false, true);
-  }).catch(function () { el('gate').style.display = 'grid'; });
+    // A sign in that did not finish, said on the page if the hub opened
+    // signed in anyway (#4406, SIGNIN_SAID below).
+    if (SIGNIN_SAID && el('said')) el('said').textContent = SIGNIN_SAID;
 }
 
 /* Fetches /api/all again after a staff action. A failure is the caller's to
@@ -187,7 +201,7 @@ function refresh() {
     if (!r.ok) throw new Error('the site answered ' + r.status);
     return r.json();
   }).then(function (d) {
-    S.docs = d.docs || {};
+    S.docs = d.docs || {}; S.docWas = d.docWas || {};
     S.results = d.results || {}; S.files = d.files || [];
     S.uploads = d.uploads || []; S.inbox = d.inbox || [];
     S.linked = d.linked || []; S.sessions = d.sessions || [];
@@ -238,7 +252,7 @@ function drawLink() {
       'another login: it means one list decides who is allowed in, and that ' +
       'list is the Discord server everybody is already in.\n\n' +
       '## How it works\n\n' +
-      '1. Open the launcher and press **Connect Discord** on the main page.\n' +
+      '1. Open the launcher and press **Connect Discord** at the bottom of the left sidebar, above Settings.\n' +
       '2. Your browser opens, you say yes, and it closes itself.\n' +
       '3. The launcher remembers. You do not do this again.\n\n' +
       'From then on every time you press Play, the launcher checks with the ' +
@@ -502,21 +516,34 @@ function wireLinked() {
                      'played again from a free slot on its account. The PK stays on its record.')) return;
       }
       if (act === 'note' && !bodyOf.text.trim()) return;
-      // The site's own sentence when it has one: Undo PK says why it did not.
-      // taken is set once the site has done it, so a refresh that fails after
-      // that says the lists are old rather than that nothing happened.
+      /* Who it was done to, for the words said once it is done (#4421). */
+      var acct = S.linked.filter(function (u) { return String(u && u.id) === id; })[0];
+      var who = pid ? (this.getAttribute('data-name') || charName(pid, S.records) || 'profile ' + pid)
+                    : ((acct && (acct.name || acct.handle)) || 'Discord ' + id);
+      // The site's own sentence when it has one, else its short error (#4187):
+      // "that is your own account", "staff only" and the rest came only as
+      // error and never reached staff. taken is set once the site has done
+      // it, so a refresh that fails after that says the lists are old rather
+      // than that nothing happened.
       var said = '', taken = false;
       api('/api/staff/' + act, { method: 'POST', headers: { 'Content-Type': 'application/json' },
                                   body: JSON.stringify(bodyOf) })
         .then(function (r) {
           return r.json().catch(function () { return {}; }).then(function (j) {
-            said = (j && j.message) || '';
+            said = siteSaid(j);
             if (!r.ok) throw 0;
             taken = true;
             return refresh();
           });
         })
-        .then(function () { drawLinked(); })
+        .then(function () {
+          // Drawn again, so focus goes back to the same button, or another on
+          // the same account or character when that one is gone (#4421).
+          drawLinked();
+          linkedFocus(act, id, pid);
+          announce({ note: 'Note added for ', ban: 'Banned ', unban: 'Ban lifted for ', pk: 'PK done for ',
+                     unpk: 'PK undone for ' }[act] + who + '.');
+        })
         .catch(function (e) {
           if (taken) {
             alert('That was done, but the lists could not be fetched again (' +
@@ -528,6 +555,21 @@ function wireLinked() {
         });
     };
   }
+}
+
+/* The button this action was pressed on, drawn again: the same act on the
+   same account or character, or failing that any button for it, or the
+   page's heading (#4421). */
+function linkedFocus(act, id, pid) {
+  var page = el('page');
+  if (!page) return;
+  var bs = Array.prototype.slice.call(page.querySelectorAll('button[data-act]'));
+  var mine = bs.filter(function (b) {
+    return b.getAttribute('data-id') === id && (b.getAttribute('data-pid') || '') === pid;
+  });
+  var hit = mine.filter(function (b) { return b.getAttribute('data-act') === act; })[0] || mine[0] ||
+            page.querySelector('h1');
+  if (hit) hit.focus();
 }
 
 /* ------------------------------------------------------- play sessions -- */
@@ -1123,15 +1165,18 @@ function drawLogs(box, sid, d) {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session: b.dataset.s, who: b.dataset.w, keep: on })
       }).then(function (r) {
+        return r.json().catch(function () { return {}; })
+          .then(function (j) { return { ok: r.ok, status: r.status, j: j || {} }; });
+      }).then(function (a) {
         b.disabled = false;
-        saidNow(r.ok ? 'saved' : 'did not save');
-        if (!r.ok) return;
+        saidNow(a.ok ? 'saved' : notSaved(a.status, a.j));
+        if (!a.ok) return;
         b.classList.toggle('on', on);
         b.textContent = on ? 'Held, stop holding it' : 'Hold this past the year';
         S.sessions.forEach(function (s) {
           if (s.session === b.dataset.s) s.keep = on;
         });
-      }).catch(function () { b.disabled = false; saidNow('did not save'); });
+      }).catch(function () { b.disabled = false; saidNow(notSaved(0)); });
     };
   });
 
@@ -1145,10 +1190,13 @@ function drawLogs(box, sid, d) {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session: b.dataset.s, who: b.dataset.w, looked: on })
       }).then(function (r) {
-        return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; });
+        // A refusal may carry no JSON; an ok answer must, since the mark is
+        // drawn from it.
+        return r.json().catch(function (e) { if (r.ok) throw e; return {}; })
+          .then(function (j) { return { ok: r.ok, status: r.status, j: j || {} }; });
       }).then(function (a) {
         b.disabled = false;
-        saidNow(a.ok ? 'saved' : (a.j.message || 'did not save'));
+        saidNow(a.ok ? 'saved' : notSaved(a.status, a.j));
         if (!a.ok) return;
         S.sessions.forEach(function (s) {
           if (s.session !== b.dataset.s) return;
@@ -1157,7 +1205,7 @@ function drawLogs(box, sid, d) {
           s.lookedAt = a.j.lookedAt || 0;
         });
         drawLogs(box, sid, d);
-      }).catch(function () { b.disabled = false; saidNow('did not save'); });
+      }).catch(function () { b.disabled = false; saidNow(notSaved(0)); });
     };
   });
 }
@@ -1584,11 +1632,41 @@ function head(extra, noLede) {
     '<span class="said" id="said"></span>' + (extra || '') + '</div>' +
     (ABOUT[S.at] && !noLede ? '<p class="lede">' + esc(ABOUT[S.at]) + '</p>' : '');
 }
+/* Why the site refused, in one place (#4187). Every caller used to write its
+   own blanket line ("did not save", "Not that one.") and none read the
+   answer, so a person signed out, a member who is not an admin and a site
+   that was down were all told the same thing, and a 429 that says how long
+   to wait was hidden. The site's own sentence first, then its short error,
+   then what the status means; 0 is no answer at all. */
+function siteSaid(j) {
+  if (j && typeof j.message === 'string' && j.message) return j.message;
+  if (j && typeof j.error === 'string' && j.error) return j.error;
+  return '';
+}
+function whyWords(status, j) {
+  var s = siteSaid(j);
+  if (s) return s;
+  if (status === 401) return 'you are signed out, so sign in again first';
+  if (status === 403) return 'only admins can do that';
+  if (status === 429) return 'too many tries just now, so wait a minute and try again';
+  if (!status || status >= 500) return 'could not reach the site';
+  return 'the site answered ' + status;
+}
+function notSaved(status, j) { return 'did not save: ' + whyWords(status, j); }
 function saidNow(t) {
   var s = el('said');
   if (!s) return;
   s.textContent = t;
   if (t === 'saved') setTimeout(function () { if (el('said') === s) s.textContent = ''; }, 1600);
+}
+/* Says what an action did in the hub's one live region (#4421), #hubsaid in
+   index.html, which no redraw replaces. Emptied first, so the same words
+   twice are read twice. */
+function announce(t) {
+  var s = el('hubsaid');
+  if (!s) return;
+  s.textContent = '';
+  s.textContent = String(t || '');
 }
 
 /* ------------------------------------------------------------- economy -- */
@@ -1867,7 +1945,7 @@ function card(k, lead) {
 function drawHome() {
   var out =
     '<div class="hero">' +
-      '<img src="/logo.png" alt="Thornswood">' +
+      '<img src="/logo-84.webp" alt="Thornswood" width="74" height="74">' +
       '<div><h1 tabindex="-1">Hub</h1>' +
       '<div class="sub">Gallery, sessions, linked accounts, the report inbox and the hold economy. ' +
       'The public site is at <a href="/">thornswood.net</a>.</div></div>' +
@@ -1916,12 +1994,25 @@ function drawEdit() {
   el('ta').value = S.docs[S.at] || '';
   el('cancel').onclick = function () { S.editing = false; draw(); };
   el('save').onclick = function () {
-    var text = el('ta').value;
+    var text = el('ta').value, at = S.at;
     saidNow('saving');
-    api('/api/doc/' + S.at, { method:'PUT', body:text }).then(function (r) {
-      if (!r.ok) throw 0;
-      S.docs[S.at] = text; S.editing = false; draw(); saidNow('saved');
-    }).catch(function () { saidNow('did not save'); });
+    /* With the copy this editor opened (#4418): a save over a copy somebody
+       has saved since is refused, and this page is sent what is there now.
+       What was typed stays in the box; Cancel shows theirs, and Save again
+       puts this over it, knowingly. */
+    api('/api/doc/' + at, { method:'PUT', headers:{ 'X-Thornswood-Doc-Was': S.docWas[at] || '' }, body:text }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (r.status === 409 && j && typeof j.text === 'string') {
+          S.docs[at] = j.text; S.docWas[at] = j.was || '';
+          saidNow((j.message || 'This page changed since you opened it, so yours was not saved.') +
+            ' What you wrote is still here. Cancel shows theirs; Save again puts yours over it.');
+          return;
+        }
+        if (!r.ok) { saidNow(notSaved(r.status, j)); return; }
+        S.docs[at] = text; S.docWas[at] = j.was || '';
+        S.editing = false; draw(); saidNow('saved');
+      });
+    }).catch(function () { saidNow(notSaved(0)); });
   };
 }
 
@@ -1996,10 +2087,17 @@ function dressTests() {
 function saveResult(id, rec, bar) {
   rec.at = Date.now();
   S.results[id] = rec;
+  /* This one test's mark and nothing else (#4418): sending every mark the
+     page loaded wrote over marks other people made since. The answer is the
+     marks as they now are, so theirs show here too. */
   api('/api/results', {
     method:'PUT', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(S.results)
-  }).then(function () {
+    body: JSON.stringify({ id: id, status: rec.status || '', notes: rec.notes || '', by: rec.by || '' })
+  }).then(function (r) {
+    if (r && !r.ok) {
+      return r.json().catch(function () { return {}; })
+        .then(function (j) { saidNow(notSaved(r.status, j)); });
+    }
     if (bar) {
       each(bar, '.mark', function (b) {
         b.className = 'mark' + (rec.status === b.dataset.v ? ' on' : '');
@@ -2008,7 +2106,12 @@ function saveResult(id, rec, bar) {
       bar.querySelector('.when').textContent = new Date(rec.at).toLocaleDateString();
     }
     tally();
-  });
+    if (r && r.json) {
+      return r.json().then(function (j) {
+        if (j && j.results && typeof j.results === 'object') { S.results = j.results; tally(); }
+      });
+    }
+  }).catch(function () { saidNow(notSaved(0)); });
 }
 
 function tally() {
@@ -2083,7 +2186,38 @@ function drawUploads() {
    here, from the picture on the card, by copies.js. On a live picture they
    go out at once. */
 var GAL_STILL = /\.(png|jpe?g|webp)$/i;
-function loadGalleryStaff() {
+/* The pictures in the grid, in the order they are drawn, by name. */
+function galNames(box) {
+  var out = [];
+  Array.prototype.forEach.call(box.querySelectorAll('[data-galok],[data-galdel]'), function (b) {
+    var n = b.getAttribute('data-galok') || b.getAttribute('data-galdel');
+    if (n && out.indexOf(n) < 0) out.push(n);
+  });
+  return out;
+}
+/* What runs once the grid is drawn again after an action on one picture
+   (#4421): focus goes to that picture's first button, or to the picture now
+   in its place, or to the page's heading when the grid is empty, and the
+   words are said. Without it the redraw threw the pressed button away and
+   focus fell to the top of the page. */
+function galAfter(name, words) {
+  var box = el('galgrid');
+  var at = box ? galNames(box).indexOf(name) : -1;
+  return function (grid) {
+    var names = galNames(grid);
+    var pick = names.indexOf(name) >= 0 ? name : names[Math.min(Math.max(at, 0), names.length - 1)];
+    var hit = null;
+    Array.prototype.forEach.call(grid.querySelectorAll('button'), function (b) {
+      if (hit || !pick) return;
+      if (b.getAttribute('data-galcopy') === pick || b.getAttribute('data-galok') === pick ||
+          b.getAttribute('data-galdel') === pick) hit = b;
+    });
+    if (!hit) hit = el('page') && el('page').querySelector('h1');
+    if (hit) hit.focus();
+    announce(words());
+  };
+}
+function loadGalleryStaff(after) {
   var box = el('galgrid');
   if (!box) return;
   // Either read failing is said in the grid. It used to read a refused answer
@@ -2142,6 +2276,8 @@ function loadGalleryStaff() {
     box.innerHTML = out;
     each(box, '[data-galok]', function (b) {
       b.onclick = function () {
+        var name = b.dataset.galok, words = 'Not accepted: ' + name + '.';
+        var after = galAfter(name, function () { return words; });
         b.disabled = true; b.textContent = 'accepting';
         api('/api/gallery/approve', { method:'POST', headers:{ 'content-type':'application/json' },
             body: JSON.stringify({ name: b.dataset.galok,
@@ -2149,15 +2285,18 @@ function loadGalleryStaff() {
           .then(function (r) { return r.json().catch(function () { return { ok: r.ok }; }); })
           .then(function (a) {
             if (!a || !a.ok) alert((a && a.error) || 'The site could not accept that picture.');
-            loadGalleryStaff();
+            else words = 'Accepted ' + name + '. It is on the gallery now.';
+            loadGalleryStaff(after);
           }, function () {
             alert('The site did not answer, so that picture was not accepted.');
-            loadGalleryStaff();
+            loadGalleryStaff(after);
           });
       };
     });
     each(box, '[data-galcopy]', function (b) {
       b.onclick = function () {
+        var name = b.dataset.galcopy, words = 'No smaller copies were made of ' + name + '.';
+        var after = galAfter(name, function () { return words; });
         b.disabled = true; b.textContent = 'making copies';
         api(b.dataset.galfrom).then(function (r) {
           if (!r.ok) throw new Error('the site answered ' + r.status + ' for the picture');
@@ -2167,16 +2306,19 @@ function loadGalleryStaff() {
         }).then(function (done) {
           if (done.bad) alert(done.bad + '.');
           else if (!done.made.length) alert('That picture is narrow enough that it needs no smaller copy.');
-          loadGalleryStaff();
+          else words = 'Smaller copies made of ' + name + '.';
+          loadGalleryStaff(after);
         }, function (e) {
           alert('The picture could not be read to make its copies (' + ((e && e.message) || 'no answer') + ').');
-          loadGalleryStaff();
+          loadGalleryStaff(after);
         });
       };
     });
     each(box, '[data-galdel]', function (b) {
       b.onclick = function () {
         var pendingOne = b.getAttribute('data-galpend') === '1';
+        var name = b.dataset.galdel, words = 'Not deleted: ' + name + '.';
+        var after = galAfter(name, function () { return words; });
         // One question (#2352, option C): removing deletes the file. The site
         // keeps a picture somebody reported, out of sight, for 30 days so
         // staff can look into the report, then deletes it.
@@ -2191,19 +2333,22 @@ function loadGalleryStaff() {
           .then(function (r) { return r.json().catch(function () { return { ok: r.ok }; }); })
           .then(function (a) {
             if (!a || !a.ok) alert((a && a.error) || 'The site could not finish removing that picture.');
-            loadGalleryStaff();
+            else words = 'Deleted ' + name + '.';
+            loadGalleryStaff(after);
           }, function () {
             alert('The site did not answer, so that picture was not removed.');
-            loadGalleryStaff();
+            loadGalleryStaff(after);
           });
       };
     });
+    if (after) after(box);
   }).catch(function (e) {
     box = el('galgrid');
     if (!box) return;
     box.innerHTML = '<div class="section-label">Gallery</div>' +
       '<div class="empty">The gallery could not be read (' +
       esc((e && e.message) || 'no answer from the site') + '). Reload the page to see it.</div>';
+    if (after) after(box);
   });
 }
 
@@ -2249,7 +2394,14 @@ function drawReport() {
       body: JSON.stringify({ kind:reportKind, title:title,
         detail:el('rd').value, by:byName })
     }).then(function (r) {
-      if (!r.ok) throw 0;
+      if (!r.ok) {
+        /* The site's own sentence (#4187): the 429 says when to try again,
+           and a refused sign in or Turnstile check says what to do. */
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          el('rsend').disabled = false;
+          el('rsaid').textContent = 'did not send: ' + whyWords(r.status, j);
+        });
+      }
       el('page').innerHTML = head() +
         '<div class="form form-center">' +
         '<h3 class="form-sent-title">Sent</h3>' +
@@ -2260,19 +2412,63 @@ function drawReport() {
       el('another').onclick = function () { drawReport(); };
     }).catch(function () {
       el('rsend').disabled = false;
-      el('rsaid').textContent = 'did not send, try again';
+      el('rsaid').textContent = 'did not send: ' + whyWords(0);
     });
   };
 }
 
 /* --------------------------------------------------------------- inbox -- */
-function saveInbox() {
+/* One button on one row (#4418). The page used to send back the whole list it
+   loaded, which deleted every report sent since and brought back rows a
+   deletion request had taken out. The site applies this one change to the
+   inbox as it is now and answers with that inbox, which is drawn. */
+function inboxAct(id, act) {
+  /* Focus goes back to this row once the inbox is drawn again, or to the row
+     that took its place, and the result is said (#4421). The row is only
+     changed from the site's answer, so a save that did not land draws it as
+     it was. */
+  var was = S.inbox.filter(function (x) { return x.id === id; })[0];
+  var at = S.inbox.indexOf(was);
+  var name = was ? inboxName(was) : 'that report';
+  var unsaved = function (status, j) {
+    var why = whyWords(status, j).replace(/[.\s]+$/, '');
+    draw(); saidNow(notSaved(status, j)); inboxFocus(id, at);
+    announce('Not saved: ' + name + '. ' + why.charAt(0).toUpperCase() + why.slice(1) +
+             ', so the report is as it was.');
+  };
   saidNow('saving');
   api('/api/inbox', {
     method:'PUT', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(S.inbox)
-  }).then(function (r) { saidNow(r.ok ? 'saved' : 'did not save'); })
-    .catch(function () { saidNow('did not save'); });
+    body: JSON.stringify({ id: id, act: act })
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (j && Array.isArray(j.inbox)) S.inbox = j.inbox;
+      // The site's reason, signed out or admins only among them (#4187).
+      if (!r.ok) return unsaved(r.status, j);
+      draw(); saidNow('saved'); inboxFocus(id, at);
+      announce({ dismiss: 'Marked not doing this', reopen: 'Put back as new', delete: 'Deleted' }[act] + ': ' + name + '.');
+    });
+  }).catch(function () { unsaved(0); });
+}
+/* A report as its buttons and the Delete question name it. */
+function inboxName(n) {
+  return (n.about ? 'about ' + n.about + ', ' : '') + (n.title || 'a report with no title');
+}
+/* A button on the row with this id, or failing that on the row now at the
+   same place in the list, or the page's heading when the inbox is empty. */
+function inboxFocus(id, at) {
+  var page = el('page');
+  if (!page) return;
+  var bs = Array.prototype.slice.call(page.querySelectorAll('button'));
+  var on = function (want) {
+    return bs.filter(function (b) {
+      return b.getAttribute('data-dismiss') === want || b.getAttribute('data-reopen') === want ||
+             b.getAttribute('data-forget') === want;
+    })[0];
+  };
+  var next = S.inbox[Math.min(Math.max(at, 0), S.inbox.length - 1)];
+  var hit = on(id) || (next && on(next.id)) || page.querySelector('h1');
+  if (hit) hit.focus();
 }
 
 function drawInbox() {
@@ -2295,35 +2491,27 @@ function drawInbox() {
           new Date(n.at).toLocaleString() +
           (n.state !== 'new' ? '  &middot;  ' + esc(n.state) : '') + '</div>' +
         (n.state === 'new' ? '<div class="acts">' +
-          '<button class="btn small" data-dismiss="' + n.id + '">Not doing this</button>' +
+          '<button class="btn small" data-dismiss="' + n.id + '" aria-label="Not doing this: ' + esc(inboxName(n)) + '">Not doing this</button>' +
         '</div>' : '<div class="acts">' +
-          '<button class="btn small" data-reopen="' + n.id + '">Put it back</button>' +
-          '<button class="btn small" data-forget="' + n.id + '">Delete</button></div>') +
+          '<button class="btn small" data-reopen="' + n.id + '" aria-label="Put it back: ' + esc(inboxName(n)) + '">Put it back</button>' +
+          '<button class="btn small" data-forget="' + n.id + '" aria-label="Delete: ' + esc(inboxName(n)) + '">Delete</button></div>') +
       '</div></div>';
   });
   el('page').innerHTML = out;
 
-  var find = function (id) {
-    return S.inbox.filter(function (x) { return x.id === id; })[0];
-  };
-
+  /* Each button names the report it acts on (#4421): a list of buttons that
+     all say Delete tells a screen reader nothing about which. */
   each(el('page'), '[data-dismiss]', function (b) {
-    b.onclick = function () {
-      var item = find(b.dataset.dismiss);
-      if (item) { item.state = 'not doing this'; saveInbox(); draw(); }
-    };
+    b.onclick = function () { inboxAct(b.dataset.dismiss, 'dismiss'); };
   });
   each(el('page'), '[data-reopen]', function (b) {
-    b.onclick = function () {
-      var item = find(b.dataset.reopen);
-      if (item) { item.state = 'new'; saveInbox(); draw(); }
-    };
+    b.onclick = function () { inboxAct(b.dataset.reopen, 'reopen'); };
   });
   each(el('page'), '[data-forget]', function (b) {
     b.onclick = function () {
-      if (!confirm('Delete this for good?')) return;
-      S.inbox = S.inbox.filter(function (x) { return x.id !== b.dataset.forget; });
-      saveInbox(); draw();
+      var n = S.inbox.filter(function (x) { return x.id === b.dataset.forget; })[0];
+      if (!confirm('Delete "' + (n ? inboxName(n) : 'this report') + '" for good? It cannot be brought back.')) return;
+      inboxAct(b.dataset.forget, 'delete');
     };
   });
 }
@@ -2403,27 +2591,43 @@ function drawInbox() {
   if (f) SFIND.q = String(f).slice(0, 80);
 })();
 
-// Discord sends people back here with a word about how it went.
-(function () {
-  var q = new URLSearchParams(location.search).get('discord');
-  if (!q) return;
+/* A Discord sign in that did not finish comes back to the page it began on
+   with ?discord= and one of three words (#4406, the callback in
+   site\lib\serve.js). This used to wait 400 ms and write into the page's
+   saved line, which a signed out person never sees behind the gate, and no
+   failure came back to the hub at all: the callback sent every one to the
+   front page. Now the line is said where the person is: on the gate's
+   error line, read at once, and on the page's saved line if the hub opens
+   signed in. Only these three words are shown, and as text. home.js says
+   the same three lines, and site\tests\test-4406-signin-failure-line.js holds
+   the two equal. */
+var SIGNIN_WORDS = {
+  cancelled: 'You cancelled the Discord sign in, so you are still signed out. Sign in again whenever you are ready.',
+  expired: 'That Discord sign in ran out of time before it finished. Sign in again to carry on.',
+  failed: 'Discord could not sign you in just then. Give it a minute and try again.'
+};
+var SIGNIN_SAID = (function () {
+  var word = new URLSearchParams(location.search).get('discord');
+  if (word === null) return '';
   history.replaceState({}, '', location.pathname);
-  setTimeout(function () {
-    var s = el('said');
-    if (s) s.textContent = q === 'cancelled' ? 'Discord sign in cancelled' : 'Discord sign in failed';
-  }, 400);
+  return Object.prototype.hasOwnProperty.call(SIGNIN_WORDS, word) ? SIGNIN_WORDS[word] : '';
 })();
+if (SIGNIN_SAID) el('err').textContent = SIGNIN_SAID;
 
+/* 401 is signed out, and the gate. Any other refusal, or an answer that is
+   not JSON, is the site not answering as it should, which is not being
+   signed out (#4187). */
 api('/api/hello').then(function (r) {
-  return r.json().then(function (d) { return { ok:r.ok, d:d }; });
-}).then(function (x) {
-  S.discord = !!(x.d && x.d.discord);
-  if (!S.discord) {
-    el('gatediscord').hidden = true;
-    el('pwbox').hidden = false;
-  }
-  if (x.ok) start(); else showGate();
-}).catch(function () { showGate(); });
+  if (!r.ok && r.status !== 401) return unreachable(whyWords(r.status));
+  return r.json().then(function (d) {
+    S.discord = !!(d && d.discord);
+    if (!S.discord) {
+      el('gatediscord').hidden = true;
+      el('pwbox').hidden = false;
+    }
+    if (r.ok) start(); else showGate();
+  }, function () { unreachable('its answer could not be read'); });
+}, function () { unreachable(whyWords(0)); });
 
 // The sign in button on the gate had a bare /auth/discord with no back, so
 // everybody who signed in from here landed on the public front page and had to
@@ -2437,4 +2641,17 @@ function showGate() {
     a.href = '/auth/discord?back=' + encodeURIComponent(back);
   }
   el('gate').style.display = 'grid';
+}
+
+/* The site did not answer the hub's first questions as it should: a
+   restart, a proxy error, an answer that was not JSON (#4187). That used to
+   show the sign in gate as if the person were signed out. The gate's box
+   says what happened instead and offers no sign in, since signing in again
+   would not help; a reload asks again. */
+function unreachable(why) {
+  showGate();
+  el('gatediscord').hidden = true;
+  el('pwbox').hidden = true;
+  el('err').textContent = 'The hub could not open: ' + why +
+    '. This is not a sign in problem, so reload this page in a minute.';
 }
