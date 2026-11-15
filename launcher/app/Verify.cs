@@ -94,7 +94,7 @@ namespace Thornswood
         public const string Personal = "your-mods";
         public const string OwnFolder = "own-folder";
         public const string Update = "update";
-        public const string Feed = "feed";
+        public const string UpdateCheck = "update-check";
         public const string Behind = "behind-vortex";
         public const string VortexInto = "vortex-into-thornswood";
         public const string Lost = "lost-vortex";
@@ -229,6 +229,7 @@ namespace Thornswood
             foreach (string p in want)
             {
                 if (haveSet.Contains(p)) continue;
+                if (NotMadeYet(p, issues)) continue;
                 bool onDisk = true;
                 try { onDisk = File.Exists(Path.Combine(dataDir, p)); } catch (Exception ex) { Swallow.Note("Verify.Run, asking whether " + p + " is on disk", ex); }
                 Issue off = onDisk
@@ -389,6 +390,7 @@ namespace Thornswood
                 {
                     if (!File.Exists(Path.Combine(data, p)))
                     {
+                        if (NotMadeYet(p, issues)) continue;
                         var gone = Issue.Of(IssueKind.Plugins, p + " is in the list but the file is not in Data.",
                                             "Fix puts it back from Vortex's copy, or fetches the server's when it is ours.", VortexDeploys, true);
                         gone.FileMissing = true;
@@ -896,6 +898,30 @@ namespace Thornswood
         }
 
         /// <summary>True when the game gives the plugin no normal index: not in Data, an .esl, or flagged light.</summary>
+        /// <summary>
+        /// Thornswood-Last.esp, when the list names it and Data does not have
+        /// it yet, is made here from the release's recipe (#2791, LastPlugin)
+        /// and never comes from Vortex or the server: Play and Fix make it
+        /// (MadeFromGame), and Upkeep's line about the files made from the game
+        /// says what stops it when it cannot be. So it is one issue that says
+        /// that, never "not installed" (which Play answered with "Fix will not
+        /// help", #6181) and never counted as a missing mod.
+        /// </summary>
+        static bool NotMadeYet(string p, List<Issue> issues)
+        {
+            if (!LastPlugin.Makes(Paths.Game, p)) return false;
+            try { if (File.Exists(Path.Combine(Path.Combine(Paths.Game, "Data"), p))) return false; }
+            catch (Exception ex) { Swallow.Note("Verify.Run, asking whether " + p + " is made", ex); return false; }
+            foreach (Issue had in issues) if (had.Plugin == p && had.Kind == IssueKind.MadeFromGame) return true;
+            var i = Issue.Of(IssueKind.MadeFromGame,
+                p + " is made on this computer from your own plugins and has not been made yet.",
+                "Fix makes it from your game's own files.",
+                "When Fix cannot make it, the line about the files Thornswood makes from your game says which of your plugins stops it.", true);
+            i.Plugin = p;
+            issues.Add(i);
+            return true;
+        }
+
         static bool LightOrMissing(string name)
         {
             return !InData(name) || Checks.TakesNoPlace(name);
@@ -1115,9 +1141,9 @@ namespace Thornswood
         /// everywhere and Vortex has nothing to report. The old bytes are kept
         /// whole under Profile\Replaced first.
         ///
-        /// The bytes come from the release the update feed names, over https,
-        /// by the sha256 its record gives them (Updater.ReleaseCopy), and
-        /// from nowhere else. Until #3386 they came from the server's
+        /// The bytes come from the installed launcher's package, checked
+        /// against the sha256 its signed list gives them (Updater.ReleaseCopy,
+        /// SyncPackage.cs), and from nowhere else. Until #3386 they came from the server's
         /// resources port over plain http and were checked against the size
         /// and crc32 in that same server's manifest, so anybody on the path
         /// could hand over a plugin of their own with numbers to match. The
@@ -1140,19 +1166,19 @@ namespace Thornswood
             string dest = Path.Combine(Paths.Game, "Data", i.Plugin);
             if (release == null)
             {
-                say(i.Plugin + ": the update feed could not be read, so there is no release copy to put in and nothing was changed.");
+                say(i.Plugin + ": this launcher was not installed by Thornswood's setup, so it has no package to take a release copy from, and nothing was changed.");
                 return false;
             }
             byte[] bytes;
             try { bytes = release(i.Plugin); }
             catch (Exception ex)
             {
-                say(i.Plugin + ": the release's copy could not be fetched (" + ex.Message.TrimEnd('.') + "), so nothing was changed.");
+                say(i.Plugin + ": the release's copy could not be read (" + ex.Message.TrimEnd('.') + "), so nothing was changed.");
                 return false;
             }
             if (bytes == null)
             {
-                say(i.Plugin + ": the release the update feed names does not ship it, so nothing was changed.");
+                say(i.Plugin + ": the installed release does not ship it, so nothing was changed.");
                 return false;
             }
             int crc;
@@ -1266,10 +1292,10 @@ namespace Thornswood
         /// </summary>
         public static bool OwnFolderNext;
 
-        /// <param name="release">Thornswood's own plugins from the release
-        /// the update feed names (Updater.ReleaseCopy, #3386), the only
-        /// place Fix takes a plugin's bytes from. Null when the feed could not
-        /// be read, and then none is put in.</param>
+        /// <param name="release">Thornswood's own plugins from the installed
+        /// launcher's package (Updater.ReleaseCopy, #3386), the only place Fix
+        /// takes a plugin's bytes from. Null when Velopack did not install
+        /// this launcher, and then none is put in.</param>
         public static int Fix(Config cfg, Action<string> say, Func<string, byte[]> release)
         {
             if (say == null) say = delegate(string m) { };

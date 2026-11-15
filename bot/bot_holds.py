@@ -1,5 +1,5 @@
 """
-The hold panel and the ping roles.
+The hold panel.
 
 Part of the bot: bot.py loads it (#5357).
 """
@@ -12,8 +12,9 @@ from bot_core import (STAFF_IDS, STAFF_NAMES, _role_tokens, _who_hits, by_name,
     client, log)
 
 
-# #choose-your-hold, where a Member picks the hold their character calls home
-# and which announcements they want a ping for.
+# #choose-your-hold, where a Playtester picks the hold their character calls
+# home. The ping buttons were here until 12 Nov 2026; they are in #welcome
+# now (bot_pings.py).
 #
 # The hold channels are private: each hold's category is open to its own
 # Citizen, Jarl and officers and to staff, so picking a hold here is what
@@ -25,9 +26,6 @@ from bot_core import (STAFF_IDS, STAFF_NAMES, _role_tokens, _who_hits, by_name,
 # Only somebody with the Member role, or a staff role, can use it. The channel
 # is hidden from everybody else already, and this is the second lock, so a
 # button reached some other way still does nothing for somebody not yet in.
-#
-# The two ping roles are made if they are missing, and made not mentionable,
-# so only staff who can already mention everyone can ping them.
 HOLD_CHANNEL = [n.strip().lower() for n in
                 os.environ.get('HOLD_CHANNEL', 'choose-your-hold').split(',')
                 if n.strip()]
@@ -39,18 +37,11 @@ HOLDS = ['Whiterun', 'Solitude', 'Windhelm', 'Riften', 'Markarth',
          'Dawnstar', 'Morthal', 'Falkreath', 'Winterhold', 'Raven Rock']
 # The towns a hold role can name: every hold, Raven Rock included.
 OFFICE_TOWNS = list(HOLDS)
-# key, role name, button label
-PINGS = [('news', 'News Pings', 'News pings'),
-         ('updates', 'Updates Pings', 'Updates pings')]
 
 HOLD_PANEL = ('**Choose your hold**\n\n'
               'Pick the hold your character calls home and its channels open '
               'to you. One hold at a time: picking another moves you there, '
-              'and pressing the one you have leaves it.\n\n'
-              '**Pings**\n\n'
-              'News pings you when a release goes out in #news. Updates pings '
-              'you for restarts and notices in #updates. Press either again '
-              'to stop.')
+              'and pressing the one you have leaves it.')
 
 
 def _citizen(hold):
@@ -117,30 +108,6 @@ async def pick_hold(interaction, hold):
         await _say(interaction, 'That did not go through. Try again, or ask staff.')
 
 
-async def toggle_ping(interaction, name):
-    guild, who = interaction.guild, interaction.user
-    if guild is None or not _may_pick(who):
-        await _say(interaction, 'Pings open once your application is approved '
-                                'and you have the Member role.')
-        return
-    role = _role(guild, name)
-    if role is None or not _can_give(guild, role):
-        log('cannot give %s: the role is missing, or the bot has no Manage '
-            'Roles, or its own role is not above it.' % name)
-        await _say(interaction, 'Pings cannot be changed right now. Ask staff.')
-        return
-    try:
-        if role in who.roles:
-            await who.remove_roles(role, reason='Turned off in #choose-your-hold')
-            await _say(interaction, '%s off.' % name)
-        else:
-            await who.add_roles(role, reason='Turned on in #choose-your-hold')
-            await _say(interaction, '%s on.' % name)
-    except Exception:
-        log('ping toggle failed:\n' + traceback.format_exc())
-        await _say(interaction, 'That did not go through. Try again, or ask staff.')
-
-
 class HoldButton(discord.ui.Button):
     def __init__(self, hold, row):
         super().__init__(label=hold, style=discord.ButtonStyle.secondary,
@@ -155,19 +122,8 @@ class HoldButton(discord.ui.Button):
 # fixed"). Five holds to a row wrapped on a phone, four and then Markarth on
 # its own, three and then Winterhold on its own. Three to a row fits a phone
 # and reads as a block on a desktop: nine holds in three rows of three, and
-# the two pings in a row of their own under them.
+# Raven Rock on a row of its own under them.
 HOLDS_PER_ROW = 3
-
-
-class PingButton(discord.ui.Button):
-    def __init__(self, key, name, label):
-        super().__init__(label=label, style=discord.ButtonStyle.primary,
-                         custom_id='thornswood:ping:' + key,
-                         row=-(-len(HOLDS) // HOLDS_PER_ROW))
-        self.role_name = name
-
-    async def callback(self, interaction):
-        await toggle_ping(interaction, self.role_name)
 
 
 class HoldPanel(discord.ui.View):
@@ -176,20 +132,16 @@ class HoldPanel(discord.ui.View):
         super().__init__(timeout=None)
         for i, hold in enumerate(HOLDS):
             self.add_item(HoldButton(hold, i // HOLDS_PER_ROW))
-        for key, name, label in PINGS:
-            self.add_item(PingButton(key, name, label))
 
 
 def _hold_ids_wanted():
-    return (['thornswood:hold:' + h.lower() for h in HOLDS] +
-            ['thornswood:ping:' + k for k, _, _ in PINGS])
+    return ['thornswood:hold:' + h.lower() for h in HOLDS]
 
 
 def _hold_rows_wanted():
     """The panel's buttons by row, as Discord gives a posted message back."""
     ids = ['thornswood:hold:' + h.lower() for h in HOLDS]
-    return ([ids[i:i + HOLDS_PER_ROW] for i in range(0, len(ids), HOLDS_PER_ROW)] +
-            [['thornswood:ping:' + k for k, _, _ in PINGS]])
+    return [ids[i:i + HOLDS_PER_ROW] for i in range(0, len(ids), HOLDS_PER_ROW)]
 
 
 def _rows(msg):
@@ -230,20 +182,6 @@ async def ensure_hold_panel(guild):
     if missing:
         log('these hold roles are missing, so those buttons will say so: %s'
             % ', '.join(missing))
-
-    for _, name, _ in PINGS:
-        if _role(guild, name) is not None:
-            continue
-        if not guild.me.guild_permissions.manage_roles:
-            log('there is no %s role and the bot cannot make one without '
-                'Manage Roles.' % name)
-            continue
-        try:
-            await guild.create_role(name=name, mentionable=False,
-                                    reason='Ping role for #choose-your-hold')
-            log('made the %s role' % name)
-        except Exception:
-            log('could not make %s:\n' % name + traceback.format_exc())
 
     try:
         async for m in ch.history(limit=30):

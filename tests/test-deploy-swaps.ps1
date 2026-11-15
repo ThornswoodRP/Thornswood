@@ -499,6 +499,14 @@ if (BUILD.indexOf('will-not-start') >= 0) { console.error('this voice will not s
 const port = Number(process.env.THORNSWOOD_VOICE_PORT);
 http.createServer(function (q, r) {
   if (q.url === '/health') { r.writeHead(200, { 'content-type': 'application/json' }); r.end(JSON.stringify({ build: BUILD, bind: process.env.THORNSWOOD_VOICE_BIND, auth: process.env.THORNSWOOD_VOICE_AUTH, chatRange: 0, turn: '' })); return; }
+  // /token as the real service answers a ticket nobody holds (#4467): 403
+  // ticket when it has a site to ask, 503 when it has none.
+  if (q.method === 'POST' && q.url === '/token') {
+    q.resume();
+    if (process.env.THORNSWOOD_SITE) { r.writeHead(403, { 'content-type': 'text/plain' }); r.end('ticket'); }
+    else { r.writeHead(503, { 'content-type': 'text/plain' }); r.end('nobody could check this profile, so no token'); }
+    return;
+  }
   r.end('voice');
 }).listen(port, '127.0.0.1');
 setTimeout(function () { process.exit(0); }, 600000);
@@ -600,10 +608,10 @@ try {
         @{ Name = 'Deploy-Docs.ps1'; File = 'site/public/home.html'; How = 'changed'
            Args = $docs.Clone() },
         @{ Name = 'Install-Voice.ps1'; File = 'voice/headlines.js'; How = 'changed'
-           Args = @{ VpsHost = '127.0.0.1'; VpsUser = 'nobody'; Root = (Join-Path $box 'Thornswood-Voice'); Port = (PickPort); Site = ''; Bind = '0.0.0.0'
+           Args = @{ VpsHost = '127.0.0.1'; VpsUser = 'nobody'; Root = (Join-Path $box 'Thornswood-Voice'); Port = (PickPort); Site = 'https://thornswood.invalid'; Bind = '0.0.0.0'
                      ChatRange = 'off'; TurnUrl = ''; TaskName = ($TaskPrefix + ' Voice'); NoPause = $true; Wait = 10 } },
         @{ Name = 'Install-Voice.ps1'; File = 'scripts/vps/Server-Log.js'; How = 'changed'
-           Args = @{ VpsHost = '127.0.0.1'; VpsUser = 'nobody'; Root = (Join-Path $box 'Thornswood-Voice'); Port = (PickPort); Site = ''; Bind = '0.0.0.0'
+           Args = @{ VpsHost = '127.0.0.1'; VpsUser = 'nobody'; Root = (Join-Path $box 'Thornswood-Voice'); Port = (PickPort); Site = 'https://thornswood.invalid'; Bind = '0.0.0.0'
                      ChatRange = 'off'; TurnUrl = ''; TaskName = ($TaskPrefix + ' Voice'); NoPause = $true; Wait = 10 } },
         @{ Name = 'Install-Bot.ps1'; File = 'bot/card.py'; How = 'staged'
            Args = @{ Vps = '127.0.0.1'; User = 'nobody'; Root = (Join-Path $box 'Thornswood-Bot'); Service = $BotService; CodeOnly = $true; NoPause = $true; Wait = 20 } },
@@ -757,7 +765,7 @@ try {
     # ==================================================== the voice service
     $voiceRoot = Join-Path $box 'Thornswood-Voice'
     $voicePort = PickPort
-    $voice = @{ VpsHost = '127.0.0.1'; VpsUser = 'nobody'; Root = $voiceRoot; Port = $voicePort; Site = ''; Bind = '0.0.0.0'
+    $voice = @{ VpsHost = '127.0.0.1'; VpsUser = 'nobody'; Root = $voiceRoot; Port = $voicePort; Site = 'https://thornswood.invalid'; Bind = '0.0.0.0'
                 ChatRange = 'off'; TurnUrl = ''; TaskName = ($TaskPrefix + ' Voice'); NoPause = $true; Wait = 10 }
     function Build { $h = Http $voicePort '/health'; if ($h) { try { return [string]($h | ConvertFrom-Json).build } catch { } }; return '' }
 

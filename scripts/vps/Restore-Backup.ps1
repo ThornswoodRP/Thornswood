@@ -14,8 +14,10 @@
   -KeyFile to point at your copy of it. It is never printed and never written
   anywhere by this script.
 
-  -CheckOnly verifies the signature, then reads the numbered change forms
-  under game/world in the zip (0.json, 1.json, ...: a slot, not a profile id).
+  -CheckOnly verifies the signature, then reads the runtime change forms
+  under game/world in the zip, each named with its form id in lowercase hex
+  and no plugin (0.json, 1f.json, ...: the engine's FormDesc::ToString, a
+  slot, not a profile id; digits alone missed every id with a letter, #5168).
   It fails when none of them has a profile id above 0 that is not deleted, the
   same question Restore-Server.ps1 asks of a world (#1047). A world of only
   deleted slots, or only change forms that are not characters, is not a backup
@@ -271,15 +273,17 @@ if ($notes) {
   $sr.Close()
 }
 
-# A character is a numbered change form (0.json, 1.json, ...) whose profile id
-# is above 0 and which is not deleted. Counting every file under game/world
+# A character is a runtime change form, named with its form id in lowercase
+# hex and no plugin (0.json, 1f.json, ...; the rule Release-List.ps1 and
+# Restore-Server.ps1 read a world by, #5168), whose profile id is above 0 and
+# which is not deleted. Counting every file under game/world
 # called a world of only deleted slots, or only forms that are not characters,
 # a good backup (#1047). Read here, before the zip is closed, and only for
 # -CheckOnly: unpacking still does not decide that, Restore-Server.ps1 does.
 $living = 0
 if ($CheckOnly) {
   foreach ($en in $entries) {
-    if ($en.FullName -notmatch '^game[/\\]world[/\\]changeForms[/\\][0-9]+\.json$') { continue }
+    if ($en.FullName -cnotmatch '^game[/\\]world[/\\]changeForms[/\\][0-9a-f]{1,8}\.json$') { continue }
     $sr = $null
     $o = $null
     try {
@@ -303,9 +307,9 @@ if ($CheckOnly) {
     Die 'The backup opens, but there is nothing under game/world in it, so it holds no characters.'
   }
   if ($living -lt 1) {
-    Die 'The backup opens, but none of the numbered change forms under game/world has a profile id above 0 that is not deleted, so it holds no characters.'
+    Die 'The backup opens, but none of the runtime change forms under game/world has a profile id above 0 that is not deleted, so it holds no characters.'
   }
-  Say ("  {0} numbered change form(s) name a character" -f $living) 'Green'
+  Say ("  {0} runtime change form(s) name a character" -f $living) 'Green'
   Head 'Checked only'
   Say '  The backup opens and its signature is good. Nothing was written.' 'Green'
   if (-not $NoPause) { [void](Read-Host 'Enter to close') }

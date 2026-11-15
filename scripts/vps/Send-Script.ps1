@@ -84,7 +84,7 @@ $ThornswoodStdinLimit = 8000
 # progress record there, and a raw line after that is a line the caller's
 # PowerShell cannot read (measured on the VPS runners, #3059). Kept apart so
 # the harnesses know it when they see it (Get-ThornswoodRemoteRunnerPath,
-# tests\test-remote-big-script.ps1).
+# scripts\tests\test-remote-big-script.ps1).
 function Get-ThornswoodRemoteRunner([Parameter(Mandatory = $true)][string]$Path) {
     if ($Path -notmatch '^C:\\Windows\\Temp\\thornswood-remote-[0-9a-f]{32}\.ps1$') { throw ('not a runner''s file: ' + $Path) }
     return @"
@@ -125,7 +125,7 @@ function Get-ThornswoodRemoteRunnerPath([AllowEmptyString()][string]$Text) {
 # block's top level is a scope of its own and $script: is the one above it:
 # measured 21 Oct 2026, a file that sets $stopped = $false at its top, has a
 # function set $script:stopped = $true, and exits 3 when $stopped is true
-# exited 0 with &, and 3 dot-sourced (tests\test-3035-file-script.ps1).
+# exited 0 with &, and 3 dot-sourced (scripts\tests\test-3035-file-script.ps1).
 function Get-ThornswoodFileScript {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -146,10 +146,8 @@ function Get-ThornswoodFileScript {
 #             at most $ThornswoodStdinLimit bytes with its line end. A long
 #             script's runner reads none of it, so the script reads it as
 #             its first line either way
-#   -NewBox   run it in the Windows PowerShell a new Windows Server comes
-#             with, for Bootstrap-VPS.ps1 alone, which is what puts
-#             PowerShell 7 on a new box (Remote.ps1 says so). Everything
-#             else runs in pwsh, as the box's own tasks do (#5356).
+#   Everything runs in pwsh, as the box's own tasks do; a new box gets it
+#             first from Setup-SshKey.ps1 -NewBox (#5356).
 function Invoke-ThornswoodRemote {
     param(
         [Parameter(Mandatory = $true)][string]$Target,
@@ -157,11 +155,9 @@ function Invoke-ThornswoodRemote {
         [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Script,
         [switch]$Bypass,
         [int]$Limit = 6000,
-        [AllowEmptyString()][string]$Stdin,
-        [switch]$NewBox
+        [AllowEmptyString()][string]$Stdin
     )
     $shell = 'pwsh'
-    if ($NewBox) { $shell = 'powershell' }
     $weak = @($SshArgs | Where-Object { $_ -match '(?i)StrictHostKeyChecking\s*=\s*(?!yes\b)' })
     if ($weak.Count) { throw ('ssh options with host key checking turned down (' + ($weak -join ', ') + '). Only the box whose key is pinned is talked to. Nothing was sent.') }
     $ssh = @(@($SshArgs | Where-Object { $_ }) + @('-o', 'StrictHostKeyChecking=yes'))

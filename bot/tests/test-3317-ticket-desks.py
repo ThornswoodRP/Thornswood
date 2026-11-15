@@ -92,8 +92,8 @@ yes('T1 the plan makes every desk, and no other ticket channel',
 yes('T1 help and reports are in Tickets, the applications in Applications',
     [planned[d][0] for d in DESKS] == ['Tickets', 'Tickets', 'Applications',
                                       'Applications', 'Applications'])
-yes('T1 each desk is readable by everybody, and the bot can write in its threads',
-    all(s['mode'] == 'read' and B.bot_needs(s) == B.TICKET_BOT_NEEDS
+yes('T1 each desk is readable by every Member (#5841), and the bot can write in its threads',
+    all(s['mode'] == 'membersread' and B.bot_needs(s) == B.TICKET_BOT_NEEDS
         for _c, s in planned.values()))
 cats = [c for c, _ in B.PLAN]
 yes('T1 Tickets sits right under Start Here; Applications after Roleplay Guide',

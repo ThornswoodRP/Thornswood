@@ -22,12 +22,17 @@ You need **Skyrim Special Edition** on Steam, on build **1.6.1170**, and
 **Vortex** with a free Nexus Mods account. Nothing else has to be installed
 first. Anniversary Edition is not required.
 
-Thornswood leaves the Skyrim you already have alone. The launcher builds a
-game folder of its own, `C:\Thornswood\Game`, out of your Steam copy and what
-Vortex put into it. Most of it is hard links to your own files, which take no
-extra space, and the few files other programs rewrite are real copies. Vortex
-keeps the mods in a profile of their own, so switching back to your usual
-profile and running Purge Mods leaves your own Skyrim the way it was.
+Where Thornswood's files go is one box in the install window, **Give
+Thornswood a Skyrim folder of its own**, and it starts ticked. Left ticked,
+Thornswood writes nothing of its own into your Steam copy: once Vortex has deployed, the launcher
+builds a game folder of its own, `Game` in the install folder on the same
+drive as Skyrim, out of your Steam copy and what Vortex put into it. Most of it
+is hard links to your own files, which take no extra space, and the few files
+other programs rewrite are real copies. Unticked, Thornswood's own files
+go into your Steam copy, with a list of what went there, and the launcher asks
+before it builds the folder. Vortex keeps the mods in a profile of their own,
+so switching back to your usual profile and running Purge Mods leaves your own
+Skyrim the way it was.
 
 1. From the [Downloads](/downloads) page take the installer. One file. Run it.
    It fetches Thornswood's own content while you watch, about half a gigabyte,
@@ -42,8 +47,9 @@ profile and running Purge Mods leaves your own Skyrim the way it was.
    built against. Install that revision, not a newer one Nexus may show first.
    Not optional: without it you have a launcher and no mods, and the server
    turns you away when you press Play.
-4. Press **Connect Discord** on the launcher's Play page. Your browser opens,
-   you say yes, and it closes itself. You never do this again.
+4. Press **Connect Discord** at the bottom of the launcher's left sidebar,
+   above Settings. Your browser opens, you say yes, and it closes itself. You
+   never do this again.
 <!-- alpha -->
    It works once your application has been accepted; before that it says
    your account has not been accepted into the alpha yet, and applying is the

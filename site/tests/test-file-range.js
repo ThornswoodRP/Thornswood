@@ -74,6 +74,10 @@ const TYPES = { '.mp4': 'video/mp4' };
 const sendSrc = grab('function send(');
 yes('server.js still has send()', !!sendSrc);
 eval(sendSrc);
+// Every error a browser can reach goes out through errorAnswer (#4435); with
+// no Accept, as asked here, it is the plain line send() writes.
+eval(grab('function wantsHtml('));
+eval(grab('function errorAnswer('));
 // send() and rangeReply() put each answer's nonce into the CSP (#3216).
 eval(grab('function cspFor('));
 

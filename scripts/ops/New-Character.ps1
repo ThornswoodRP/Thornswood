@@ -29,6 +29,7 @@
   the list goes in that server's folder; a list already there that is not one
   stops this before anything is thrown away.
 #>
+#Requires -Version 7
 [CmdletBinding(SupportsShouldProcess)]
 param(
     [string]$World = (& (Join-Path $PSScriptRoot '..\release\Where.ps1') ChangeForms),
@@ -48,10 +49,14 @@ if (Get-Process -Name node -ErrorAction SilentlyContinue) {
     Write-Host 'A node process is running. If that is the Thornswood server, stop it first or this will be undone.' -ForegroundColor Yellow
 }
 
-# Characters' change forms are the numerically named ones. Everything else is a world
-# object keyed by form id and plugin, like 13164_JKs Whiterun.esp.json.
-$characters = Get-ChildItem -LiteralPath $World -Filter '*.json' |
-           Where-Object { $_.BaseName -match '^\d+$' }
+# The characters' change forms, by the one rule (#5168, Release-List.ps1): a
+# runtime form's id in lowercase hex and no plugin, 0.json or 1f.json, with a
+# profileId above 0 and not deleted. Everything else is the world: a form
+# keyed by id and plugin, like 13164_JKs Whiterun.esp.json, or one of the
+# world's own runtime forms, profileId -1.
+$chars = Get-ThornswoodCharacterForms $World 'it is left where it is'
+foreach ($n in $chars.notes) { Write-Host ('  ' + ("$n" -split '\|', 2)[1]) -ForegroundColor Yellow }
+$characters = @($chars.files | ForEach-Object { Get-Item -LiteralPath $_ })
 
 if (-not $characters) {
     Write-Host 'No character change forms. The next connect already builds a fresh character.' -ForegroundColor Green
@@ -79,6 +84,7 @@ if (-not (Read-ThornswoodReleaseList $list).ok) {
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $bin = Join-Path $World "_discarded-$stamp"
 $gone = 0
+$stuck = @()
 $ids = @()
 $notes = @()
 
@@ -103,6 +109,7 @@ foreach ($f in $characters) {
         }
     } catch {
         Write-Host ("  could not discard {0}: {1}" -f $f.Name, $_.Exception.Message) -ForegroundColor Red
+        $stuck += $f.Name
         continue
     }
     Write-Host ("  discarded {0}  profile {1}  '{2}'" -f $f.Name, $profile, $name) -ForegroundColor Cyan
@@ -112,9 +119,19 @@ foreach ($f in $characters) {
 }
 
 Write-Host ''
-if ($gone -gt 0) {
+# A character that could not be discarded is still there on the next
+# connect (#4199): never said as gone, and the run ends 1 once the release
+# list names the ones that did go.
+$stuckLine = "STOP. $($stuck.Count) character change form(s) could not be discarded ($($stuck -join ', ')), so the next connect still finds them."
+if ($gone -gt 0 -and -not $stuck.Count) {
     Write-Host "$gone character(s) gone. The next connect runs creation from the top." -ForegroundColor Green
     if (-not $NoBackup) { Write-Host "  the old ones are in $bin if you ever want them" -ForegroundColor DarkGray }
+} elseif ($gone -gt 0) {
+    Write-Host "$gone character(s) discarded, $($stuck.Count) not." -ForegroundColor Yellow
+    if (-not $NoBackup) { Write-Host "  the discarded ones are in $bin" -ForegroundColor DarkGray }
+} elseif ($stuck.Count) {
+    Write-Host $stuckLine -ForegroundColor Red
+    exit 1
 } else {
     Write-Host 'nothing changed.' -ForegroundColor Yellow
     return
@@ -131,3 +148,4 @@ foreach ($l in @($notes) + @(Write-ThornswoodReleaseList -Root $Root -Actors $id
     }
 }
 if ($bad) { exit 1 }
+if ($stuck.Count) { Write-Host $stuckLine -ForegroundColor Red; exit 1 }

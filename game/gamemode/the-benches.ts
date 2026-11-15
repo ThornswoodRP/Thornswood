@@ -284,7 +284,7 @@ function benchGate(actorId, baseDesc) {
 
   Keyed off the family the recipe table already puts on every owned row, so this
   list is checked against real data rather than against a memory of what Skyrim
-  contains: tests\test-1398-fuel.js counts the rows in each of these families and fails if
+  contains: game\tests\test-1398-fuel.js counts the rows in each of these families and fails if
   a family here matches nothing, because a family name that has been renamed
   under it would turn this rule off without a word.
 */
@@ -2097,7 +2097,7 @@ const KEY_RECIPE = '15497:Thornswood-Content.esp';
   somebody with a broken arm was refused the forge's own Key row and cut the
   same key with the lock key at the same forge. A road that asks this asks
   both, and a gate added later goes here and reaches every road at once.
-  tests/test-1733-injury-gate.js holds every road, and the rest of the file,
+  game/tests/test-1733-injury-gate.js holds every road, and the rest of the file,
   to it.
 
   workbenchId is the bench reference the work is done at, because the injury

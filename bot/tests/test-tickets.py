@@ -12,7 +12,7 @@ The real bot module is imported, and the real TicketPicker.callback and
 TicketModal.on_submit are run. Only what touches the world is replaced: the
 guild, its channel and threads, the interaction, the push to the site, the
 clock, and the file of open tickets, which is pointed at a temporary folder so
-this cannot touch the one beside the code.
+this cannot touch the bot's own, in its data folder.
 
 Read only. Never connects to anything.
 """

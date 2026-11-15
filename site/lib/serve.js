@@ -24,7 +24,7 @@ const { creditsFacts, findPageVersion, PAGES, pageSha256, PUBLIC_ORIGIN,
   publicAssetBody, publicAssetVersion, publicDiscovery, publicPageBody,
   singlePageHeading } = require('./public');
 const { gameStatus, mostOnlineFallback, seatsFull, worldFull } = require('./game');
-const { INBOX, jsonFile, noteRules, putJson, readDoc,
+const { docVersion, INBOX, jsonFile, noteRules, putJson, readDoc,
   readLists, RESULTS, RULES_OK, writeDoc } = require('./store');
 const { NEWS } = require('./news');
 const { galleryPage, loginBackoff, loginBackoffBump, loginKey, loginNote,
@@ -40,7 +40,7 @@ const { deleteUpload, GALLERY, GALLERY_ALLOW, GALLERY_CAP, GALLERY_HOLD_DAYS,
 const { accountBanned, accountOf, activeBans, banMinutes, banUntilText,
   characterBar, dropBan, findDead, heldBroken, modLog, PK, pkActive,
   pkProfiles, putBan, putNote, putPk, recordKey, staffRecords, undoPk } = require('./staff');
-const { ADMIN, ADMIN_DAYS, allowed, COOKIE, cookies, discordReady,
+const { ADMIN, ADMIN_DAYS, allowed, COOKIE, cookies, discordReady, endSignIn,
   discordUnasked, gallerySender, galleryStaff, memberToken,
   personReportRefusal, PLAY_ANSWER_MS, PLAY_BODY_MS, sameSecret, sign,
   standCache, standingCached, standingLate, standingsForDoor, SUBMIT_DOORS,
@@ -54,14 +54,17 @@ const { cleanEconomy, ECONOMY, ECONOMY_KEEP_DAYS, economyNow, ROSTER,
   ROSTER_HELD_FRESH_MS, slotsFor } = require('./roster');
 const { ATTEMPTS, freshSignIns, noteSignIn } = require('./signins');
 const { crashedRow, findSession, lookedAtFor, markLooked, openSessionOf,
-  pruneSessionLogs, putSessionLogs, putSessions, retentionSay, sessionKey,
+  putSessionLogs, putSessions, retentionSay, sessionKey,
   sessionRows, SLOG_ALL, slogFile } = require('./sessions');
 const { copyKeptChat, dropKeptChat, freshGalleryReports, isObjectLike,
   sessionWindow, stalePending } = require('./retention');
 const { applyTrouble, noteTrouble, readTrouble, TROUBLE_RULES } = require('./trouble');
 const { chatSlice, DEPLOYS_DIR, readDeploys, serverLogSlice, sessionRow } = require('./serverlogs');
 const { changeOffice, departed, officesForDoor, standing } = require('./members');
-const { feedLaunchers, getWithToken, makePass, makeTicket, notAllowedPage,
+const chars = require('./characters');
+const yourSettings = require('./your-settings');
+const { SETTINGS } = yourSettings;
+const { errorPage, feedLaunchers, getWithToken, makePass, makeTicket, notAllowedPage,
   notFoundPage, PASS_MS, passLoginKey, plainPage, readTicket, versionCompare,
   versionParts, wantsHtml } = require('./passes');
 
@@ -117,11 +120,29 @@ function failed(req, res, e) {
     // Half an answer is already on the wire and cannot be taken back. Cutting
     // the connection is the only honest end to it.
     if (res.headersSent) { res.destroy(); return; }
+    // A browser gets the site's page with a way back (#4435); anything else
+    // the plain line it always had.
+    if (wantsHtml(req)) { send(res, bad ? 400 : 500, errorPage(bad ? 400 : 500), TYPES['.html']); return; }
     res.writeHead(bad ? 400 : 500, { 'content-type': 'text/plain; charset=utf-8' });
     res.end(bad ? 'bad request' : 'server error');
   } catch (e2) {
     // The socket went away while we were answering. Nothing left to tell.
   }
+}
+
+/*
+  EVERY ERROR A BROWSER CAN REACH, ONE WAY (#4435). A browser asking (its
+  Accept names text/html, wantsHtml) is shown errorPage, the same page an
+  unknown address gets, with the same status. Anybody else, the launcher, a
+  script, curl, an <img> or a fetch, gets exactly the plain line the route
+  always answered, so nothing that reads them changes. lines says what
+  happened in a browser's words when the route knows more than its status.
+  The launcher's own routes (the feed, its watch and its assets) do not come
+  here: only the launcher reads them.
+*/
+function errorAnswer(req, res, status, plain, headers, lines) {
+  if (wantsHtml(req)) return send(res, status, errorPage(status, lines), TYPES['.html'], headers);
+  return send(res, status, plain, 'text/plain', headers);
 }
 
 /*
@@ -145,6 +166,16 @@ process.on('uncaughtException', (e) => {
                 (e && e.stack ? e.stack : e));
   process.exit(1);
 });
+
+/*
+  What a visitor is told when a report or a gallery report does not go
+  (#4407). The report page, the gallery's Report button and the launcher show
+  the error of the answer as it comes, so every refusal on those routes is a
+  sentence that says what happened and what to do, never a short code.
+*/
+const REPORT_UNREAD = 'The site could not read that report, so nothing was sent. Reload the page and send it again.';
+const REPORT_UNSAVED = 'The site could not save that report, so it was not sent. Try again in a minute, ' +
+  'and if it keeps happening, tell staff in the Discord.';
 
 async function handle(req, res) {
   // Apply before parsing the address, so streamed and malformed responses
@@ -298,18 +329,26 @@ async function handle(req, res) {
   }
 
   if (p === '/api/logout' && req.method === 'POST') {
+    const clear = { 'Set-Cookie': [
+      COOKIE + '=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
+      ADMIN  + '=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax'
+    ] };
+    // The sign in itself ends here, not only this browser's cookie (#4405,
+    // endSignIn in auth.js), so a copy of the cookie is refused after this.
+    if (!endSignIn(req)) {
+      return send(res, 500, JSON.stringify({ ok: false, error:
+        'This browser is signed out, but the site could not record the sign out, so a copy of this sign in may still work. Tell staff.' }),
+        'application/json; charset=utf-8', clear);
+    }
     return send(res, 200, JSON.stringify({ ok: true }),
-      'application/json; charset=utf-8',
-      { 'Set-Cookie': [
-          COOKIE + '=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
-          ADMIN  + '=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax'
-        ] });
+      'application/json; charset=utf-8', clear);
   }
 
   // --------------------------------------------------------- discord login
   // An invite link that never goes stale in six places at once.
   if (route === '/discord' && req.method === 'GET') {
-    if (!cfg.discord.invite) return send(res, 404, 'No invite link set yet.', 'text/plain');
+    if (!cfg.discord.invite) return errorAnswer(req, res, 404, 'No invite link set yet.', undefined,
+      ['The site has no Discord invite link to send you to right now.', 'Ask somebody already in the Discord for one.']);
     return send(res, 302, '', 'text/plain', { Location: cfg.discord.invite });
   }
 
@@ -358,12 +397,13 @@ async function handle(req, res) {
       return send(res, 200, fs.readFileSync(file), 'text/plain; charset=utf-8',
         { 'Cache-Control': 'no-store' });
     }
-    return send(res, 404, 'no such file', 'text/plain');
+    return errorAnswer(req, res, 404, 'no such file');
   }
 
   if (p === '/auth/discord' && req.method === 'GET') {
     if (!cfg.discord.clientId) {
-      return send(res, 500, 'Discord login is not set up on this server yet.', 'text/plain');
+      return errorAnswer(req, res, 500, 'Discord login is not set up on this server yet.', undefined,
+        ['Signing in with Discord is not set up on this copy of the site.']);
     }
     // back is where the browser lands afterwards; port is the launcher waiting
     // on the loopback address for its ticket. Both are signed into the state so
@@ -404,6 +444,18 @@ async function handle(req, res) {
       attempt = (bits[3] || '').replace(/[^0-9a-f]/g, '').slice(0, 32);
       began = Number(bits[4]) || 0;
     }
+    // Two slashes is another host to a browser (//2130706433), so back has to
+    // start with exactly one.
+    if (!/^\/(?!\/)[A-Za-z0-9/_-]*$/.test(back)) back = '/';
+    /* Where a sign in that did not finish sends the browser (#4406): back to
+       the page it began on, with a word that page reads and says as a line.
+       These used to go to the front page whatever back said, with a word
+       nothing there read, so the person lost their page and was told
+       nothing. back comes from the signed state alone and is a plain path of
+       this site (just above), so this is never another host. A launcher's
+       sign in (a port) names no page of the site, so it keeps the front
+       page. */
+    const unfinished = (why) => ({ Location: (port ? '/' : back) + '?discord=' + why });
     // Refused here, before Discord is asked anything: a state with no attempt
     // in it, one this browser did not start, one already used, or one older
     // than ten minutes. A signature alone used to be enough, and it is the
@@ -414,17 +466,14 @@ async function handle(req, res) {
     if (attempt.length !== 32 || attemptsSpent.has(attempt) ||
         !(age > -60000 && age < ATTEMPT_MS) ||
         !sameSecret(cookies(req)[ATTEMPT + attempt.slice(0, 8)] || '', attempt)) {
-      return send(res, 302, '', 'text/plain', { Location: '/?discord=expired' });
+      return send(res, 302, '', 'text/plain', unfinished('expired'));
     }
     // Spent whatever happens next, and the cookie cleared on every answer
     // below. The one that sets cookies of its own carries this in its list.
     attemptsSpent.set(attempt, now);
     const spent = attemptCookie(req, attempt, '', 0);
     res.setHeader('Set-Cookie', spent);
-    // Two slashes is another host to a browser (//2130706433), so back has to
-    // start with exactly one.
-    if (!/^\/(?!\/)[A-Za-z0-9/_-]*$/.test(back)) back = '/';
-    if (!code) return send(res, 302, '', 'text/plain', { Location: '/?discord=cancelled' });
+    if (!code) return send(res, 302, '', 'text/plain', unfinished('cancelled'));
 
     let me;
     try {
@@ -446,10 +495,10 @@ async function handle(req, res) {
           'Try again.'
         ]), TYPES['.html']);
       }
-      return send(res, 302, '', 'text/plain', { Location: '/?discord=failed' });
+      return send(res, 302, '', 'text/plain', unfinished('failed'));
     }
     if (!me || !me.id) {
-      return send(res, 302, '', 'text/plain', { Location: '/?discord=failed' });
+      return send(res, 302, '', 'text/plain', unfinished('failed'));
     }
     const st = await standing(me.id);
     standCache.delete(String(me.id));
@@ -616,7 +665,7 @@ async function handle(req, res) {
       }
       return send(res, 200, html, TYPES['.html'],
         { 'Cache-Control': 'no-cache', 'Cloudflare-CDN-Cache-Control': 'max-age=' + PUBLIC_EDGE_SECONDS });
-    } catch (e) { return send(res, 500, 'no home.html', 'text/plain'); }
+    } catch (e) { return errorAnswer(req, res, 500, 'no home.html'); }
   }
 
   // Two addresses people type, or paste out of an old message. Both mean the
@@ -706,13 +755,16 @@ async function handle(req, res) {
     if (early) return refuse(early);
     let o;
     try { o = JSON.parse(await body(req, 20000)); }
-    catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
+    catch (e) {
+      passBodyFailure(e);
+      return sendJson(res, 400, { error: REPORT_UNREAD });
+    }
     // The form's hidden field. A person never sees it, so anything in it was
     // put there by a script filling in every box it found. Answered as if it
     // worked, so the script has nothing to learn from, and nothing is kept.
     if (o && String(o.homepage || '').trim()) return sendJson(res, 200, { ok: true });
     const title = String(o.title || '').trim().slice(0, 200);
-    if (!title) return sendJson(res, 400, { error: 'say what happened in the first box' });
+    if (!title) return sendJson(res, 400, { error: 'Nothing was sent: say what happened in the first box, then send it again.' });
     // Turnstile's pass (#3216), asked before the limit is read again below,
     // because it waits on Cloudflare and nothing may wait between that read
     // and reportTaken. A refused pass is not counted against the sender.
@@ -744,7 +796,7 @@ async function handle(req, res) {
       const no = personReportRefusal(w);
       if (no) return sendJson(res, no.code, { error: no.error });
       const about = String(o.about || '').trim().slice(0, 60);
-      if (!about) return sendJson(res, 400, { error: 'say who it is about in the Who box' });
+      if (!about) return sendJson(res, 400, { error: 'Nothing was sent: say who it is about in the Who box, then send it again.' });
       const acct = 'acct:' + w.id;
       const mine = reportRefusal(acct, Date.now(), 'your account');
       if (mine) return refuse(mine);
@@ -762,7 +814,7 @@ async function handle(req, res) {
       from: person ? 'the public page, signed in' : 'the public page'
     }, person ? { about: person.about, discordId: String(w.id) } : {}));
     if (!putJson(INBOX, trimInbox(list))) {
-      return sendJson(res, 500, { error: 'could not save' });
+      return sendJson(res, 500, { error: REPORT_UNSAVED });
     }
     reportTaken(sender, Date.now());
     if (person) reportTaken(person.acct, Date.now());
@@ -963,7 +1015,7 @@ async function handle(req, res) {
     let o;
     try { o = JSON.parse(await body(req, 40000)); }
     catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
-    if (!sameSecret(String(o.key || ''), String(cfg.botKey))) {
+    if (!sameSecret(o.key, String(cfg.botKey))) {
       return sendJson(res, 401, { error: 'no' });
     }
     const title = String(o.title || '').trim().slice(0, 200);
@@ -1069,7 +1121,8 @@ async function handle(req, res) {
       : wide === null ? path.join(UP, String(item.name))
       : srcsetWidths(item.srcset).indexOf(Number(wide)) >= 0 ? smallCopy(item.name, Number(wide)) : '';
     if (!file || !file.startsWith(UP + path.sep) || !fs.existsSync(file)) {
-      return send(res, 404, 'no such picture', 'text/plain');
+      return errorAnswer(req, res, 404, 'no such picture', undefined,
+        ['That picture is not on the gallery.', 'It may have been taken off it. The gallery shows every picture that is.']);
     }
     const st = fs.statSync(file);
     const shotKind = {
@@ -1092,10 +1145,10 @@ async function handle(req, res) {
   if (req.method === 'GET' &&
       (p === '/index.html' || Object.prototype.hasOwnProperty.call(PAGES, route))) {
     try { return send(res, 200, fs.readFileSync(path.join(PUBLIC, 'index.html')), TYPES['.html']); }
-    catch (e) { return send(res, 500, 'no index.html', 'text/plain'); }
+    catch (e) { return errorAnswer(req, res, 500, 'no index.html'); }
   }
   if (req.method === 'GET' && /^\/[A-Za-z0-9._-]+$/.test(p)) {
-    if (/\.map$/i.test(p)) return send(res, 404, 'not here', 'text/plain');
+    if (/\.map$/i.test(p)) return errorAnswer(req, res, 404, 'not here');
     const file = path.join(PUBLIC, p.slice(1));
     if (file.startsWith(PUBLIC + path.sep) && fs.existsSync(file)) {
       const type = TYPES[path.extname(file).toLowerCase()] || 'text/plain';
@@ -1166,9 +1219,13 @@ async function handle(req, res) {
     const ch = setupChannel(dl[1]);
     if (ch) {
       const setup = newestSetup(ch);
-      if (!setup) return send(res, 404, 'the installer is not published yet', 'text/plain');
+      if (!setup) return errorAnswer(req, res, 404, 'the installer is not published yet', undefined,
+        ['The installer is not on the site right now.', 'The Downloads page says when there is one to take.']);
       const at = await assetLocation(setup.id);
-      if (!at.url) return send(res, 503, 'GitHub could not say where the installer is just now (' + at.why + '). Try again in a minute.', 'text/plain', { 'Cache-Control': 'no-store' });
+      if (!at.url) {
+        const said = 'GitHub could not say where the installer is just now (' + at.why + '). Try again in a minute.';
+        return errorAnswer(req, res, 503, said, { 'Cache-Control': 'no-store' }, [said]);
+      }
       res.writeHead(302, { location: at.url, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
       return res.end();
     }
@@ -1177,7 +1234,8 @@ async function handle(req, res) {
     const meta = jsonFile(path.join(FILES, 'files.json'), {});
     if (!file.startsWith(FILES + path.sep) || !downloadServed(dl[1], meta) ||
         !fs.existsSync(file) || !fs.statSync(file).isFile()) {
-      return send(res, 404, 'no such file', 'text/plain');
+      return errorAnswer(req, res, 404, 'no such file', undefined,
+        ['There is no download at that address.', 'The Downloads page has what there is to take now.']);
     }
     const st = fs.statSync(file);
     /* Resumable, because a dropped connection should carry on. Accept-Ranges
@@ -1363,9 +1421,10 @@ async function handle(req, res) {
       res.writeHead(302, { location: at.url, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
       return res.end();
     }
-    if (at.missing) return send(res, 404, 'no such file on a published Release', 'text/plain', { 'Cache-Control': 'no-store' });
-    return send(res, 503, 'GitHub could not say where that file is just now (' + at.why + '). Try again in a minute.', 'text/plain',
-      { 'Cache-Control': 'no-store' });
+    if (at.missing) return errorAnswer(req, res, 404, 'no such file on a published Release', { 'Cache-Control': 'no-store' },
+      ['There is no download at that address.', 'The Downloads page has what there is to take now.']);
+    const said = 'GitHub could not say where that file is just now (' + at.why + '). Try again in a minute.';
+    return errorAnswer(req, res, 503, said, { 'Cache-Control': 'no-store' }, [said]);
   }
   // --------------------------------------------------------------- uploads
   /*
@@ -1397,10 +1456,9 @@ async function handle(req, res) {
       const waiting = staffAsking &&
         jsonFile(GPENDING, []).some((x) => String(x.name) === up[1]);
       const gs = waiting ? await galleryStaff(url, w) : null;
-      if (!gs) return send(res, 401, 'sign in first', 'text/plain');
+      if (!gs) return errorAnswer(req, res, 401, 'sign in first');
       if (!gs.ok) {
-        return send(res, gs.code,
-                    String((gs.body && gs.body.error) || 'staff only'), 'text/plain');
+        return errorAnswer(req, res, gs.code, String((gs.body && gs.body.error) || 'staff only'));
       }
     }
     // ?w= is a waiting picture's smaller copy (#3218), for the staff card.
@@ -1408,14 +1466,14 @@ async function handle(req, res) {
     const file = wide === null ? path.join(UP, up[1])
       : SMALL_WIDTHS.indexOf(Number(wide)) >= 0 ? smallCopy(up[1], Number(wide)) : '';
     if (!file || !file.startsWith(UP + path.sep) || !fs.existsSync(file)) {
-      return send(res, 404, 'no such file', 'text/plain');
+      return errorAnswer(req, res, 404, 'no such file');
     }
     /* A gallery submission that staff removed is not served to anybody
        (#2352), whether its file is still on disk because staff chose to keep
        it, because its delete failed, or because the launcher's buttons never
        ask to delete it. The removal marks it on uploads.json (removedUpload). */
     if (uploadRemoved(up[1])) {
-      return send(res, 404, 'removed from the gallery', 'text/plain');
+      return errorAnswer(req, res, 404, 'removed from the gallery', undefined, ['That picture was taken off the gallery.']);
     }
     const st = fs.statSync(file);
     const kind = KIND[path.extname(file).toLowerCase()];
@@ -1833,33 +1891,59 @@ async function handle(req, res) {
   // launcher with the same ticket /api/gallery/submit takes. The report sits
   // in gallery-reports.json for staff; it does not take the shot down.
   if (p === '/api/gallery/report' && req.method === 'POST') {
-    const who = await gallerySender(url, w, 'Sign in, or send a valid launcher ticket.');
+    const who = await gallerySender(url, w, 'Sign in with Discord to report a picture, so staff know who sent it. ' +
+      'In the launcher, connect Discord again and report it once more.');
     if (!who.ok) return sendJson(res, who.code, who.body);
     const from = who.from, discordId = who.discordId;
 
-    let o = {};
-    try { o = JSON.parse(await body(req, 8192)) || {}; } catch (e) { passBodyFailure(e); }
+    let o;
+    try { o = JSON.parse(await body(req, 8192)) || {}; }
+    catch (e) {
+      passBodyFailure(e);
+      return sendJson(res, 400, { ok: false, error: REPORT_UNREAD });
+    }
     const name = String(o.name || '');
-    if (!name) return sendJson(res, 400, { error: 'no name' });
+    if (!name) {
+      return sendJson(res, 400, { ok: false, error: 'That report did not say which picture it is about, so nothing ' +
+        'was sent. Reload the page and press Report on the picture again.' });
+    }
     const why = String(o.why || '').slice(0, 500);
 
     const gallery = jsonFile(GALLERY, []);
     if (!gallery.find((g) => String(g.name) === name)) {
-      return sendJson(res, 404, { error: 'not on the gallery' });
+      return sendJson(res, 404, { ok: false, error: 'That picture is not on the gallery any more, so there is ' +
+        'nothing to report. Reload the page to see what is up now.' });
     }
 
     const reports = jsonFile(GREPORTS, []);
-    const id = crypto.randomBytes(8).toString('hex');
+    /* ONE ACCOUNT CANNOT PUSH THE OTHERS OUT (#4380). The file keeps its newest
+       500 and nothing limited a sender, so one account could send enough to
+       push every other report off the end, and a report is what holds a
+       taken-down picture's file (#2352). Held to the limit every other
+       report on the site has, by the same table (reportRefusal, five an hour
+       and twenty a day): by the account, the one the person report on
+       /api/report counts, or by the connection for the member password,
+       which names no account. Asked here, after the body is in, with nothing
+       awaited between this and reportTaken, as /api/report does. And one row
+       per account and picture: saying it again updates the first, so one
+       account holds at most one row for each picture on the gallery. */
+    const key = discordId ? 'acct:' + discordId : reportFrom(req);
+    const no = reportRefusal(key, Date.now(), discordId ? 'your account' : 'your connection');
+    if (no) return send(res, 429, JSON.stringify({ error: no.error }), null, { 'Retry-After': String(no.wait) });
+    const again = discordId ? reports.find((r) => String(r.name) === name && String(r.discordId || '') === discordId) : null;
+    const id = again ? String(again.id) : crypto.randomBytes(8).toString('hex');
     const entry = { id: id, name: name, why: why, at: Date.now(), from: from };
     if (discordId) entry.discordId = discordId;
+    if (again) reports.splice(reports.indexOf(again), 1);
     reports.push(entry);
     // Keep the newest 500 so a flood cannot grow the file forever, and none
     // past GREPORTS_DAYS (#2353). A report that will not save is said, not
     // answered ok (#4379), so the person who sent it knows to send it again.
     if (!putJson(GREPORTS, freshGalleryReports(reports, Date.now()).slice(-500))) {
       console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'report-write-failed' }));
-      return sendJson(res, 500, { ok: false, error: 'The site could not save that report. Try again in a minute.' });
+      return sendJson(res, 500, { ok: false, error: REPORT_UNSAVED });
     }
+    reportTaken(key, Date.now());
     return sendJson(res, 200, { ok: true, id: id });
   }
 
@@ -2006,9 +2090,10 @@ async function handle(req, res) {
 
       Such an install's spare, the id the menu's New character uses, was
       checked in under the first account too, and this route cannot tell it
-      from an id somebody took. So the launcher mints the relinked account a
-      fresh spare before it checks anything in (Chars.EnsureSpare), and the
-      new character is filed under the account that made it.
+      from an id somebody took. So each account's spare is minted here, by
+      /api/play/characters (lib/characters.js, #5938), and the launcher
+      checks in the spare that route hands it, so the new character is filed
+      under the account that made it.
 
       WHAT THIS COSTS SOMEBODY WHO CHANGED ACCOUNTS, which is new with this
       rule and not something main did. Measured by a reviewer on 24 September
@@ -2085,7 +2170,9 @@ async function handle(req, res) {
       id: String(t.d), name: st.name || t.n,
       first: was.first || Date.now(), seen: Date.now(),
       played: Date.now(), roles: st.roles,
-      profiles: profiles.slice(-8)
+      // Its characters and spare stay on whatever else comes and goes
+      // (#5938); the rest is cut to the eight checked in most recently.
+      profiles: chars.keepProfiles(profiles, was)
     });
     /* Not recorded is not let in: the door lists only what linked.json holds.
        It used to answer yes whatever the write did, and a linked.json that
@@ -2215,8 +2302,8 @@ async function handle(req, res) {
       }
     }
     if (!putSessions(rows)) return sendJson(res, 500, { ok: false, why: 'could not save' });
-    // pruneSessionLogs says its own failures and never throws (#2354).
-    if (ending) pruneSessionLogs();
+    // The log sets are aged by the hourly sweep (retentionSweep), never here:
+    // the end of a session used to wait while every set was read (#4432).
     return sendJson(res, 200, { ok: true });
   }
 
@@ -2344,7 +2431,7 @@ async function handle(req, res) {
     if (!cfg.botKey) return sendJson(res, 404, { error: 'not set up' });
     let o = {};
     try { o = JSON.parse(await body(req, 4 * 1024 * 1024)) || {}; } catch (e) { passBodyFailure(e); }
-    if (!sameSecret(String(o.key || ''), String(cfg.botKey))) return sendJson(res, 401, { error: 'no' });
+    if (!sameSecret(o.key, String(cfg.botKey))) return sendJson(res, 401, { error: 'no' });
     const who = (o.who && typeof o.who === 'object') ? o.who : {};
     const store = jsonFile(ROSTER, { who: {} });
     if (!store.who || typeof store.who !== 'object') store.who = {};
@@ -2423,7 +2510,7 @@ async function handle(req, res) {
     if (!cfg.botKey) return sendJson(res, 404, { error: 'not set up' });
     let o = {};
     try { o = JSON.parse(await body(req, 4 * 1024 * 1024)) || {}; } catch (e) { passBodyFailure(e); }
-    if (!sameSecret(String(o.key || ''), String(cfg.botKey))) return sendJson(res, 401, { error: 'no' });
+    if (!sameSecret(o.key, String(cfg.botKey))) return sendJson(res, 401, { error: 'no' });
     const srv = (String(o.server || '') === 'dev' || route.indexOf('/dev/') === 0) ? 'dev' : 'main';
     const now = Date.now();
     const kept = cleanEconomy(Object.assign({}, o, { at: now }), now);
@@ -2892,6 +2979,96 @@ async function handle(req, res) {
     });
   }
 
+  /*
+    The account's characters (#5938, site/lib/characters.js says what is
+    kept). The launcher asks with its Discord ticket at every Play, and again
+    after each pick, forget and finished session, and draws the game's menu
+    from the answer, so nothing about which characters are somebody's is
+    written on their PC.
+
+      op ''       the list, made right first (dead, revived, slots, spare)
+      op 'chose'  profileId was picked at the menu
+      op 'played' profileId was played for seconds
+      op 'forget' profileId was put in the bin at the menu
+
+    Discord is asked first, as at /api/play/join, and nothing is awaited
+    between reading linked.json and writing it. Discord not answering is 503,
+    not a no, and the launcher stops Play on it rather than draw a menu
+    without anybody's characters.
+  */
+  if (p === '/api/play/characters' && req.method === 'POST') {
+    const by = Date.now() + PLAY_ANSWER_MS;
+    let o = {};
+    try { o = JSON.parse(await body(req, 8192, PLAY_BODY_MS)) || {}; } catch (e) { passBodyFailure(e); }
+    const t = readTicket(o.ticket);
+    const d = t ? chars.accountKey(t.d) : '';
+    if (!d) return sendJson(res, 401, { ok: false, why: 'link', message:
+      'This copy is not linked to a Discord account yet.' });
+    const st = await within(standingCached(d), by - Date.now(), () => standingLate(d));
+    if (st.lookupFailed && !st.admin) return sendJson(res, 503, discordUnasked());
+    if (st.banned) return sendJson(res, 403, { ok: false, why: 'banned', message: accountBanned(st) });
+    if (!st.play) return sendJson(res, 403, { ok: false, why: 'role', message: notAcceptedYet() });
+
+    const now = Date.now();
+    const op = String(o.op || '');
+    const linked = jsonFile(LINKED, {});
+    let refused = null;
+    if (op === 'chose') refused = chars.choose(linked, d, o.profileId, now);
+    else if (op === 'played') refused = chars.played(linked, d, o.profileId, o.seconds, now);
+    else if (op === 'forget') refused = chars.forget(linked, d, o.profileId);
+    else if (op !== '') return sendJson(res, 400, { ok: false, why: 'op', message: 'The site does not know that request.' });
+
+    const pkRows = jsonFile(PK, {}) || {};
+    const slots = slotsFor(st);
+    const said = chars.settle(linked, d, {
+      slots,
+      pk: (pid) => { const bar = characterBar(pid, now); return !!(bar && bar.pk); },
+      revived: (pid) => !!pkRows[String(pid)] && !pkActive(pkRows[String(pid)])
+    });
+    if (!putJson(LINKED, linked)) {
+      console.error('[thornswood-docs] a list of characters was not recorded: linked.json was not written');
+      return sendJson(res, 503, { ok: false, why: 'not recorded', message:
+        'The site could not record your characters just now. Try again later, and tell staff if it keeps happening.' });
+    }
+    const out = chars.answer(linked, d, slots);
+    out.said = said;
+    if (refused) { out.ok = false; out.why = 'refused'; out.message = refused; }
+    return sendJson(res, 200, out);
+  }
+
+  /*
+    The account's settings (#5939, site/lib/your-settings.js says which). The
+    launcher gets them before the game starts (op 'get') and sends them back
+    when it closes, and sends launcher.json whenever one of its own choices
+    changes (op 'put', files { name: text, or null to remove }). Written
+    against the Discord id in the ticket and nothing else, so a ticket only
+    ever reads and writes its own account's.
+  */
+  if (p === '/api/play/settings' && req.method === 'POST') {
+    let o = {};
+    try { o = JSON.parse(await body(req, 1536 * 1024)) || {}; } catch (e) { passBodyFailure(e); }
+    const t = readTicket(o.ticket);
+    const d = t ? chars.accountKey(t.d) : '';
+    if (!d) return sendJson(res, 401, { ok: false, why: 'link', message:
+      'This copy is not linked to a Discord account yet.' });
+    const st = await standingCached(d);
+    if (st.banned) return sendJson(res, 403, { ok: false, why: 'banned', message: accountBanned(st) });
+    const all = jsonFile(SETTINGS, {}) || {};
+    const have = all[d] || {};
+    if (String(o.op || '') === 'get') {
+      return sendJson(res, 200, { ok: true, at: Number(have.at) || 0, files: have.files || {} });
+    }
+    if (String(o.op || '') !== 'put') return sendJson(res, 400, { ok: false, why: 'op', message: 'The site does not know that request.' });
+    const next = yourSettings.merge(have, o.files);
+    if (next.why) return sendJson(res, 400, { ok: false, why: 'refused', message: 'Your settings were not kept: ' + next.why + '.' });
+    all[d] = { at: Date.now(), files: next.files };
+    if (!putJson(SETTINGS, all)) {
+      console.error('[thornswood-docs] settings were not kept: settings.json was not written');
+      return sendJson(res, 503, { ok: false, why: 'not recorded', message: 'The site could not keep your settings just now.' });
+    }
+    return sendJson(res, 200, { ok: true, at: all[d].at, files: Object.keys(next.files).length });
+  }
+
   // ------------------------------------------------------------------- api
   if (p.startsWith('/api/')) {
     // Staff as well as hub members, so the Gallery page can boot (#742). What
@@ -2903,13 +3080,16 @@ async function handle(req, res) {
     if (!w.member && !w.dev) return sendJson(res, 401, { error: 'sign in first' });
 
     if (p === '/api/all' && req.method === 'GET') {
-      const docs = {};
-      for (const n of Object.keys(DOCS))   if (allowed(n, w)) docs[n]   = readDoc(n);
+      const docs = {}, docWas = {};
+      for (const n of Object.keys(DOCS))   if (allowed(n, w)) { docs[n] = readDoc(n); docWas[n] = docVersion(docs[n]); }
       return sendJson(res, 200, {
         me: w,
         titles: Object.assign({}, DOCS),
         level: LEVEL,
         docs,
+        // Which copy of each page was sent, for the editor to send back with
+        // a save (#4418).
+        docWas,
         // Member and admin material, held back from staff who are neither.
         // They are here for the Gallery page, which reads none of these: the
         // queue and the live list are their own doors.
@@ -2940,11 +3120,28 @@ async function handle(req, res) {
       // A hub door, not a staff one: the gate above now lets staff in as far
       // as the pages LEVEL marks 'staff', and this writes the test marks.
       if (!w.member) return sendJson(res, 403, { error: 'hub members only' });
-      let obj;
-      try { obj = JSON.parse(await body(req)); }
+      /* One test's mark, put into the marks as they are now (#4418). The hub
+         used to send every mark the page had loaded, and that copy was
+         written over the file, so a mark somebody else made after the page
+         opened was wiped by the next one. */
+      let o;
+      try { o = JSON.parse(await body(req, 8192)); }
       catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
-      if (!putJson(RESULTS, obj)) return sendJson(res, 500, { error: 'could not save' });
-      return sendJson(res, 200, { ok: true });
+      const id = o && typeof o.id === 'string' ? o.id : '';
+      if (!/^[a-z0-9][a-z0-9-]{0,119}$/.test(id)) return sendJson(res, 400, { error: 'a mark names its test' });
+      if (['', 'pass', 'fail', 'skip'].indexOf(o.status) < 0) return sendJson(res, 400, { error: 'a mark is pass, fail, skip or none' });
+      // A marks file that is there and will not read is never written over:
+      // the write would be this one mark and every other one gone.
+      let marks = {};
+      try { marks = JSON.parse(fs.readFileSync(RESULTS, 'utf8')); }
+      catch (e) { if (e.code !== 'ENOENT') return sendJson(res, 500, { error: 'the test marks will not read, so nothing was saved' }); }
+      if (!marks || typeof marks !== 'object' || Array.isArray(marks)) {
+        return sendJson(res, 500, { error: 'the test marks will not read, so nothing was saved' });
+      }
+      marks[id] = { status: o.status, notes: String(o.notes == null ? '' : o.notes).slice(0, 1000),
+                    by: String(o.by == null ? '' : o.by).slice(0, 60), at: Date.now() };
+      if (!putJson(RESULTS, marks)) return sendJson(res, 500, { error: 'could not save' });
+      return sendJson(res, 200, { ok: true, results: marks });
     }
 
     /*
@@ -3071,8 +3268,21 @@ async function handle(req, res) {
 
     const md = p.match(/^\/api\/doc\/([a-z]+)$/);
     if (md && req.method === 'PUT') {
-      if (!writeDoc(md[1], await body(req))) return sendJson(res, 400, { error: 'no such doc' });
-      return sendJson(res, 200, { ok: true });
+      /* Only over the copy the editor opened (#4418). The hub sends back
+         which copy that was, as /api/all gave it; a save made from a copy
+         somebody has saved over since is refused with what is there now,
+         rather than written over their work. A save that names no copy is
+         refused the same way. */
+      const text = await body(req);
+      const now = readDoc(md[1]);
+      if (now === null) return sendJson(res, 400, { error: 'no such doc' });
+      const was = docVersion(now);
+      if (String(req.headers['x-thornswood-doc-was'] || '') !== was) {
+        return sendJson(res, 409, { ok: false, error: 'changed', was, text: now,
+          message: 'Somebody saved this page after you opened it, so yours was not saved.' });
+      }
+      if (!writeDoc(md[1], text)) return sendJson(res, 500, { error: 'could not save' });
+      return sendJson(res, 200, { ok: true, was: docVersion(text) });
     }
 
     /* The hub's board save (a PUT per board, #2188) was here. It went
@@ -3227,22 +3437,39 @@ async function handle(req, res) {
     }
 
     if (p === '/api/inbox' && req.method === 'PUT') {
-      let obj;
-      try { obj = JSON.parse(await body(req)); }
+      /* One button on one row, applied to the inbox as it is now (#4418).
+         The hub used to send back the whole list it loaded when it opened,
+         and that was written over the file: every report sent since was
+         deleted, and a row a deletion request had taken out came back. Now
+         it names the row and what was pressed; a row no longer there (aged
+         out, deleted, or taken by a deletion request) is said, never made
+         again. The answer carries the inbox as it now is. */
+      let o;
+      try { o = JSON.parse(await body(req, 4096)); }
       catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
-      // The whole list, back from the hub, through the same keeping time as
-      // every other write (#2353), so a list the hub read before a row aged
-      // out cannot write that row back.
-      if (!Array.isArray(obj)) return sendJson(res, 400, { error: 'the inbox is a list' });
-      if (!putJson(INBOX, trimInbox(obj, Date.now()))) return sendJson(res, 500, { error: 'could not save' });
-      return sendJson(res, 200, { ok: true });
+      const id = o && typeof o.id === 'string' ? o.id : '';
+      const act = o && o.act;
+      if (!id || ['dismiss', 'reopen', 'delete'].indexOf(act) < 0) {
+        return sendJson(res, 400, { error: 'an inbox change names a row and dismiss, reopen or delete' });
+      }
+      // Through the same keeping time as every other write (#2353), so a row
+      // past it is not written back.
+      const list = trimInbox(jsonFile(INBOX, []), Date.now());
+      const at = list.findIndex((x) => x && x.id === id);
+      if (at < 0) {
+        return sendJson(res, 404, { error: 'gone', inbox: list,
+          message: 'That one is no longer in the inbox. It was deleted, aged out, or taken out by a deletion request.' });
+      }
+      if (act === 'delete') list.splice(at, 1);
+      else list[at].state = act === 'dismiss' ? 'not doing this' : 'new';
+      if (!putJson(INBOX, trimInbox(list, Date.now()))) return sendJson(res, 500, { error: 'could not save' });
+      return sendJson(res, 200, { ok: true, inbox: trimInbox(list, Date.now()) });
     }
 
     return sendJson(res, 404, { error: 'no such endpoint' });
   }
 
   // The site's own look for a person, the same four characters for anything
-  // that did not ask for HTML. See notFoundPage above.
-  if (wantsHtml(req)) { return send(res, 404, notFoundPage(), TYPES['.html']); }
-  send(res, 404, 'not here', 'text/plain');
+  // that did not ask for HTML, by the one path every error takes (#4435).
+  return errorAnswer(req, res, 404, 'not here');
 }

@@ -13,9 +13,16 @@
 
     -Out      one JUnit file with every share's suites, in the order given;
     -Summary  Markdown for the run's summary page: how many checks ran, how
-              many failed and were skipped, and a line for each failing
-              check, harness first, so a red run names its checks without
-              anybody opening a log. $env:GITHUB_STEP_SUMMARY on a runner.
+              many failed and were skipped, and each failed test under a
+              heading of its own, with its FAIL lines, the end of what it
+              printed when it had no FAIL line, and the command that runs it
+              alone (#4178), so a red run says what failed and how to see it
+              fail without anybody opening a log. $env:GITHUB_STEP_SUMMARY
+              on a runner.
+    -Failed   the same list of failed tests alone, without the heading and
+              counts, to a file of its own: nightly.yml hands it to the
+              nightly's failure comment (Nightly-Issue.ps1). An empty file
+              when nothing failed.
 
       .\scripts\dev\Merge-HarnessReports.ps1 -Path reports -Expect 5 -Out harnesses.xml
 
@@ -42,12 +49,16 @@
 .PARAMETER Title
   The summary's heading.
 
+.PARAMETER Failed
+  Where the list of failed tests goes, by itself, for a comment. None
+  unless asked.
+
 .PARAMETER Expect
   How many share reports there should be. 0, any number, unless asked.
 
 .PARAMETER MostLines
-  The most failing checks the summary lists by name; the rest are counted.
-  A summary holds 1 MiB at most.
+  The most FAIL lines the list gives, across every failed test; a test past
+  that is still named with its command. A summary holds 1 MiB at most.
 #>
 [CmdletBinding()]
 param(
@@ -55,6 +66,7 @@ param(
     [string]$Out = '',
     [string]$Summary = $env:GITHUB_STEP_SUMMARY,
     [string]$Title = 'Harnesses',
+    [string]$Failed = '',
     [int]$Expect = 0,
     [int]$MostLines = 200
 )
@@ -81,11 +93,21 @@ if ($Expect -gt 0 -and $files.Count -lt $Expect) {
 }
 
 $all = 0; $bad = 0; $skip = 0
-$failing = New-Object System.Collections.Generic.List[object]
+# Each failing harness, in report order, with its failing checks; a check
+# that is the runner's own (a harness that ended with no FAIL line) carries
+# the end of what the harness printed as its failure's text.
+$byHarness = [ordered]@{}
 foreach ($s in $suites) {
     foreach ($c in $s.SelectNodes('testcase')) {
         $all++
-        if ($c.SelectSingleNode('failure')) { $bad++; $failing.Add([pscustomobject]@{ Harness = $s.GetAttribute('name'); What = $c.GetAttribute('name') }) }
+        $f = $c.SelectSingleNode('failure')
+        if ($f) {
+            $bad++
+            $h = $s.GetAttribute('name')
+            $x = [pscustomobject]@{ Harness = $h; What = $c.GetAttribute('name'); Tail = ([string]$f.InnerText).Trim() }
+            if (-not $byHarness.Contains($h)) { $byHarness[$h] = New-Object System.Collections.Generic.List[object] }
+            $byHarness[$h].Add($x)
+        }
         elseif ($c.SelectSingleNode('skipped')) { $skip++ }
     }
 }
@@ -109,25 +131,86 @@ if ($Out) {
     try { $merged.Save($w) } finally { $w.Dispose() }
 }
 
-# Markdown: a table cell holds no line break and no bar of its own.
-function Cell([string]$s) { ($s -replace '[\r\n]+', ' ' -replace '\|', '\|').Trim() }
+# The command that runs a harness alone, from the repository's root, as the
+# runner starts it (Nightly-Harnesses.ps1 Start-One): node for a .js,
+# pwsh -NoProfile -File for the rest. A harness's name is its path from the
+# repository when it has a slash in it, and a file in tests\ when it has
+# none (Harness-Files.ps1).
+function Alone-Command([string]$name) {
+    $path = $(if ($name.Contains('/')) { $name } else { 'tests/' + $name })
+    if ($name -like '*.js') { return 'node ' + $path }
+    return 'pwsh -NoProfile -File ' + $path
+}
+# A line of a block: one line, at most 300 characters.
+function Clip([string]$s) {
+    $s = ($s -replace '[\r\n]+', ' ').Trim()
+    if ($s.Length -gt 300) { return $s.Substring(0, 300) + '...' }
+    return $s
+}
+# A fenced block that no run of backticks in its text can close early.
+function Block([string[]]$lines) {
+    $n = 3
+    foreach ($m in [regex]::Matches(($lines -join "`n"), '`+')) { if ($m.Length -ge $n) { $n = $m.Length + 1 } }
+    $fence = '`' * $n
+    return ($fence + "`n" + ($lines -join "`n") + "`n" + $fence + "`n")
+}
+# Each failed test (#4178): a heading, its FAIL lines, the end of what it
+# printed when it had no FAIL line of its own, and the command that runs it
+# alone. At most -MostLines FAIL lines in all; a test past that still has
+# its heading and command, and says where its lines are. $room caps the
+# whole list: a GitHub comment holds 65,536 characters, a summary 1 MiB.
+function Failed-List([int]$room) {
+    $out = New-Object System.Text.StringBuilder
+    $lines = 0; $left = 0
+    foreach ($h in $byHarness.Keys) {
+        $b = New-Object System.Text.StringBuilder
+        [void]$b.AppendLine('### ' + $h)
+        [void]$b.AppendLine('')
+        $checks = $byHarness[$h]
+        $show = @(foreach ($x in $checks) { if ($lines -lt $MostLines) { $lines++; $x } })
+        if ($show.Count) { [void]$b.Append((Block @($show | ForEach-Object { 'FAIL  ' + (Clip $_.What) }))) }
+        if ($show.Count -lt $checks.Count) { [void]$b.AppendLine(('{0} more FAIL line(s) of it are in the merged report.' -f ($checks.Count - $show.Count))) }
+        foreach ($x in $show) {
+            if (-not $x.Tail) { continue }
+            [void]$b.AppendLine('')
+            [void]$b.AppendLine('Its last lines:')
+            [void]$b.AppendLine('')
+            [void]$b.Append((Block @($x.Tail -split "`r?`n" | Where-Object { $_.Trim() } | ForEach-Object { Clip $_ })))
+        }
+        [void]$b.AppendLine('')
+        [void]$b.AppendLine('Run it alone:')
+        [void]$b.AppendLine('')
+        [void]$b.Append((Block @(Alone-Command $h)))
+        [void]$b.AppendLine('')
+        if ($left -or $out.Length + $b.Length -gt $room) { $left++; continue }
+        [void]$out.Append($b.ToString())
+    }
+    if ($left) { [void]$out.AppendLine(('{0} more failed test(s) are named in the merged report and on the run''s page.' -f $left)) }
+    return $out.ToString()
+}
+$list = Failed-List $(if ($Failed) { 60000 } else { 900000 })
+
+# Markdown: a line of its own holds no line break.
+function Cell([string]$s) { ($s -replace '[\r\n]+', ' ').Trim() }
 $md = New-Object System.Text.StringBuilder
 [void]$md.AppendLine('## ' + $Title)
 [void]$md.AppendLine('')
 [void]$md.AppendLine(('{0} checks in {1} harnesses: {2} failed, {3} skipped.' -f $all, $suites.Count, $bad, $skip))
 foreach ($p in $problems) { [void]$md.AppendLine(''); [void]$md.AppendLine('**' + (Cell $p) + '.**') }
-if ($failing.Count) {
+if ($list) {
     [void]$md.AppendLine('')
-    [void]$md.AppendLine('| Harness | Failing check |')
-    [void]$md.AppendLine('| --- | --- |')
-    foreach ($x in @($failing | Select-Object -First $MostLines)) { [void]$md.AppendLine(('| {0} | {1} |' -f (Cell $x.Harness), (Cell $x.What))) }
-    if ($failing.Count -gt $MostLines) {
-        [void]$md.AppendLine('')
-        [void]$md.AppendLine(('{0} more failing checks are in the merged report.' -f ($failing.Count - $MostLines)))
-    }
+    [void]$md.Append($list)
 }
 if ($Summary) { [IO.File]::AppendAllText($Summary, $md.ToString(), (New-Object System.Text.UTF8Encoding $false)) }
 else { Write-Host $md.ToString() }
+if ($Failed) {
+    $said = New-Object System.Text.StringBuilder
+    foreach ($p in $problems) { [void]$said.AppendLine('**' + (Cell $p) + '.**'); [void]$said.AppendLine('') }
+    [void]$said.Append($list)
+    $dir = Split-Path -Parent ([IO.Path]::GetFullPath($Failed))
+    if ($dir) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    [IO.File]::WriteAllText([IO.Path]::GetFullPath($Failed), $said.ToString(), (New-Object System.Text.UTF8Encoding $false))
+}
 
 Write-Host ('{0} checks in {1} harnesses from {2} report(s): {3} failed, {4} skipped' -f $all, $suites.Count, $files.Count, $bad, $skip)
 if ($problems.Count) {

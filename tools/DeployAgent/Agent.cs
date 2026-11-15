@@ -32,26 +32,37 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
     /// <summary>GitHub with a token that may open issues, for the parity
     /// check's rows; minted apart from the service's own (AppTokens.IssuesWrite).</summary>
     public GitHub? IssuesGh { get; set; }
+    /// <summary>The content build (#5191), for Deployments to Content; null
+    /// when the agent does not look after it, or runs no gate (a deploy by
+    /// tag, a single look).</summary>
+    public ContentBuild? Content { get; set; }
     /// <summary>The environment the steps after a Deployment run for: the dev
     /// server, the one Deploy-DevGamemode.ps1 deploys to.</summary>
     public const string DevEnv = "dev";
     /// <summary>The files a dev server's load order and plugins are made from
     /// (Deploy-DevGamemode.ps1 -LoadOrder -FromRecord, #4069). A Deployment
-    /// whose commit changes one of them moves dev's order and plugins too.</summary>
+    /// whose commit changes one of them moves dev's order and plugins too.
+    /// Our own plugins, Thornswood-Content.esp and Thornswood-Last.esp, are
+    /// not among them: they are the Release's, put in with it (#6175).</summary>
     public static readonly string[] LoadOrderPaths =
     [
         "records/collection-plugins.json",
         "records/collection-dropped.json",
         "game/data/last-plugin.json",
-        "game/data/last-plugin.recipe",
-        "game/content/Thornswood-Content.esp",
     ];
-    public const string LoadOrderLine = "Deploy-DevGamemode -LoadOrder -FromRecord -ShipFollows";
+    /// <summary>Only dev's order and plugins, nothing of the gamemode: the
+    /// Release's gamemode and tables are already in, and the gate runs main as
+    /// it is, which can be past the Release (#6166). The line names the
+    /// Release's commit with -At (LoadOrderLineAt).</summary>
+    public const string LoadOrderLine = "Deploy-DevGamemode -LoadOrder -FromRecord -OrderOnly -ShipFollows";
+    public static string LoadOrderLineAt(string commit) => LoadOrderLine + " -At " + commit;
+    /// <summary>What Deploy-DevGamemode.ps1 -At says when main's records of
+    /// the order are not the Release commit's: main moved the order past it.</summary>
+    public const string NotThisOrder = "NOT THIS COMMIT'S ORDER";
     /// <summary>How long a step after a deploy (#5186) waits for the gate's
     /// turn; a step the gate never took runs with the next Deployment.</summary>
     public static readonly TimeSpan StepWait = TimeSpan.FromMinutes(30);
     static readonly Regex ReviewRow = new(@"^REVIEW  (\S+) (.+?): expected (.*?), found (.*)$");
-    static readonly Regex MainAt = new(@"^main at ([0-9a-f]{40})$");
     /// <summary>The record of the Deployment an environment is part way
     /// through, one per environment because each has its own loop (Run).</summary>
     string StatePath(string env) => Path.Combine(cfg.Home, "state", $"working-{env}.json");
@@ -91,7 +102,10 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
             var optional = new List<string> { "server" };
             if (Voices.ContainsKey(env)) optional.Add(AppKinds.Voice);
             if (after != null) optional.Add(AfterDeploy.Part);
-            try { f = await ReleaseFetch.Fetch(gh, verify, rel, dir, parts, logf, ct, optional: [.. optional], later: IsServerZip); }
+            // The game part for the server's own plugins (#6175): its list
+            // now, game.zip below, when the list names the content plugin.
+            optional.Add(ServerPlugins.Part);
+            try { f = await ReleaseFetch.Fetch(gh, verify, rel, dir, parts, logf, ct, optional: [.. optional], later: n => IsServerZip(n) || n == ServerPlugins.GameZip); }
             catch (Exception e) when (e is InvalidDataException or IOException or HttpRequestException) { return new Outcome("failure", "not applied: " + e.Message); }
             var m = f.Manifest;
             // The name, not the owner: the repositories move to an
@@ -101,7 +115,7 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
                 return new Outcome("failure", $"not applied: the Release was built from {m.Repo}, not {cfg.Repo}");
             if (expectCommit != "" && m.Commit != expectCommit)
                 return new Outcome("failure", $"not applied: the Release is commit {Short(m.Commit)} and the Deployment is {Short(expectCommit)}");
-            var others = m.Parts.Keys.Where(k => !parts.Contains(k) && k != "server" && k != AfterDeploy.Part && !(k == AppKinds.Voice && Voices.ContainsKey(env))).OrderBy(k => k, StringComparer.Ordinal).ToList();
+            var others = m.Parts.Keys.Where(k => !parts.Contains(k) && k != "server" && k != AfterDeploy.Part && k != ServerPlugins.Part && !(k == AppKinds.Voice && Voices.ContainsKey(env))).OrderBy(k => k, StringComparer.Ordinal).ToList();
             if (others.Count > 0) logf($"the Release also carries {string.Join(", ", others)}, which this agent does not apply yet; left alone");
             if (m.Parts.TryGetValue(AfterDeploy.Part, out var afterPart))
             {
@@ -142,6 +156,45 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
                     swapRecord = record;
                 }
             }
+            // The server's own plugins, the Release's (#6175): the content
+            // plugin out of its game files, and the Last plugin made here
+            // from its recipe. Either one not the server's puts both in by
+            // a stop, swap and start, with the server build kept when the
+            // Release records the one it runs.
+            Dictionary<string, string>? plugins = null;
+            if (m.Parts.TryGetValue(ServerPlugins.Part, out var gamePart) && f.Files.TryGetValue(ServerPlugins.GameFiles, out var listPath))
+            {
+                try
+                {
+                    var list = File.ReadAllBytes(listPath);
+                    if (ServerPlugins.Lists(list))
+                    {
+                        var gz = gamePart.Where(x => x.Name == ServerPlugins.GameZip).ToList();
+                        if (gz.Count != 1) return new Outcome("failure", $"not applied: the Release's game part carries {gz.Count} {ServerPlugins.GameZip}, not one");
+                        var gzPath = await ReleaseFetch.FetchFile(gh, rel, gz[0], f.Dir, ct);
+                        var want = ServerPlugins.Read(gzPath, list);
+                        var differ = ServerPlugins.Differ(srv.Env.Root, want);
+                        if (differ.Count == 0) logf($"plugins: {ServerPlugins.Content} and {ServerPlugins.Last} are already this Release's");
+                        else
+                        {
+                            logf($"plugins: {string.Join(" and ", differ)} on {env} {(differ.Count == 1 ? "is" : "are")} not this Release's, so the Release's go in with a restart");
+                            plugins = ServerPlugins.Stage(srv.Env.Root, Path.Combine(f.Dir, "plugins-stage"), want, srv.Env.GameData, logf);
+                        }
+                    }
+                    else logf("plugins: the Release's game files carry no content plugin, so the server's are left alone");
+                }
+                catch (Exception e) when (e is InvalidDataException or IOException or JsonException or UnauthorizedAccessException or HttpRequestException)
+                {
+                    return new Outcome("failure", "not applied: the Release's plugins: " + e.Message);
+                }
+            }
+            if (plugins != null && swapZip == null)
+            {
+                // The same build stays: its record is the one the folder runs.
+                var runningRec = Path.Combine(srv.Env.Root, "server-build.json");
+                if (!File.Exists(runningRec)) return new Outcome("failure", "not applied: the server has no server-build.json, and the Release carries no server build to give it");
+                swapRecord = Files.ReadShared(runningRec);
+            }
             if (pass)
             {
                 logf(swapZip == null ? "the bot pass first, on a throwaway copy of the server with this gamemode (#5196)"
@@ -168,8 +221,8 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
                 if (vo.State != "success") return vo with { Summary = "voice: " + vo.Summary + "; the gamemode was not touched" };
                 voiceIn = "; voice runs it too";
             }
-            var outc = swapZip != null && swapRecord != null
-                ? await srv.ApplyServerBuild(swapZip, swapRecord, f.Files, who, logf, ct)
+            var outc = swapRecord != null && (swapZip != null || plugins != null)
+                ? await srv.ApplyServerBuild(swapZip, swapRecord, f.Files, who, logf, ct, plugins: plugins)
                 : await srv.ApplyGamemode(f.Files, who, logf, ct);
             if (outc.State != "success") return voiceIn == "" ? outc : outc with { Summary = outc.Summary + $"; voice already runs {rel.TagName}" };
             var gm = Path.Combine(srv.Env.Root, "gamemode.js");
@@ -312,6 +365,7 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
         var envs = cfg.Environments.Keys.OrderBy(k => k, StringComparer.Ordinal).ToList();
         var turns = envs.ToDictionary(e => e, _ => new SemaphoreSlim(1, 1));
         var loops = envs.Select(e => Loop(e, turns[e], stop.Token)).Append(UpdateLoop(turns.Values.ToList(), stop.Token)).ToList();
+        if (servers.Count > 0) loops.Add(WindowsRestartLoop(stop.Token));
         try
         {
             // The first to end is the update loop with a newer agent in place
@@ -347,6 +401,27 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
         }
     }
 
+    /// <summary>Says the box's own restarts for Windows updates ahead
+    /// (WindowsRestart, #5784), each pollSeconds. It takes no environment's
+    /// turn: it writes only the restart notice and the game's countdown,
+    /// never a server's files, and leaves a restart already coming alone.</summary>
+    async Task WindowsRestartLoop(CancellationToken ct)
+    {
+        var watch = new WindowsRestart(servers, log);
+        string said = "";
+        while (!ct.IsCancellationRequested)
+        {
+            try { await watch.Pass(ct); said = ""; }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                var s = "windows restart: " + e.Message;
+                if (s != said) { said = s; log(s); }
+            }
+            try { await Task.Delay(TimeSpan.FromSeconds(cfg.PollSeconds), ct); } catch (OperationCanceledException) { return; }
+        }
+    }
+
     async Task UpdateLoop(List<SemaphoreSlim> turns, CancellationToken ct)
     {
         string said = "";
@@ -377,6 +452,9 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
     /// would only put in what is about to be replaced.</summary>
     public async Task Pass(string env, CancellationToken ct)
     {
+        // Only the service builds content, through the gate; a single look
+        // (once) leaves its Deployments to it.
+        if (cfg.Environments[env].Kind == ContentBuild.Kind && Content == null) return;
         var deps = await gh.Deployments(cfg.Environments[env].GitHubEnvironment, 10, ct);
         if (deps.Count == 0) return;
         var newest = deps[0];
@@ -431,7 +509,13 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
             var tag = "";
             var after = new Dictionary<string, byte[]>(StringComparer.Ordinal);
             var steps = new List<StepResult>();
+            var content = cfg.Environments[env].Kind == ContentBuild.Kind;
             if (d.Task != "" && d.Task != "deploy") outc = new Outcome("failure", $"not applied: the Deployment's task is {d.Task}, and the agent applies deploy only");
+            else if (content)
+            {
+                try { outc = await Content!.Apply(d, Redacted(Logf), ct); }
+                catch (Exception e) when (e is InvalidDataException or JsonException) { outc = new Outcome("failure", "not built: " + e.Message); }
+            }
             else
             {
                 try
@@ -465,7 +549,7 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
             // which files the in-game checks and says a failed step on its issue.
             if (steps.Count > 0 && servers.TryGetValue(env, out var stepsSrv)) Records.PublishSteps(stepsSrv, d.Id.ToString(), d.Sha, steps);
             await gh.SetStatus(d.Id, outc.State, outc.Summary, url, ct);
-            if (outc.State == "success") await LeaveNews(env, tag, d, ct);
+            if (outc.State == "success" && !content) await LeaveNews(env, tag, d, ct);
             // The parity check reads the box as it is now, so it runs once the
             // Deployment is in and said; what it finds never changes how the
             // Deployment went, and its lines join the same log.
@@ -502,9 +586,12 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
     /// <summary>Dev's load order and plugins, moved to what the Deployment's
     /// commit records when that commit changed one of LoadOrderPaths since
     /// the last move (or when that cannot be told): the gate's
-    /// Deploy-DevGamemode -LoadOrder -FromRecord, the tested path a person
-    /// runs with Box-Run. The gamemode is already in when this runs, so a
-    /// move that fails leaves it in and says the plugins are not.</summary>
+    /// Deploy-DevGamemode -LoadOrder -FromRecord -OrderOnly -At, the tested
+    /// path a person runs with Box-Run, which sends nothing of the gamemode
+    /// and moves the order only when main's records of it are the
+    /// Deployment's commit's (#6166). The gamemode is already in when this
+    /// runs, so a move that does not happen leaves it in and says the
+    /// plugins are not, first, where the Deployment's 140 characters show it.</summary>
     async Task<Outcome> LoadOrder(string env, string commit, Outcome applied, Action<string> logf, CancellationToken ct)
     {
         var since = LoadOrderCommit(env);
@@ -525,15 +612,20 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
         logf(since == "" ? "load order: this agent has not moved dev's order yet, so it is moved to this commit's records"
             : touched == null ? $"load order: what changed since {Short(since)} is not known in full, so dev's order and plugins are moved to this commit's records"
             : $"load order: {string.Join(", ", touched)} changed since {Short(since)}, so dev's order and plugins are moved to this commit's records");
-        logf("load order: the gate's " + LoadOrderLine);
+        var line = LoadOrderLineAt(commit);
+        logf("load order: the gate's " + line);
         // The gate runs one verb at a time; a verb already running is waited
         // for (up to its 45 minutes and a little more) by the connect.
-        var run = await Gate!.Run(LoadOrderLine, TimeSpan.FromMinutes(50), Redacted(logf), ct);
+        var run = await Gate!.Run(line, TimeSpan.FromMinutes(50), Redacted(logf), ct);
+        // Main moved the order past this commit: not moved, and not recorded
+        // as moved, so the next Deployment compares from the last move and
+        // moves it to its own commit's records.
+        if (run.Lines.Any(l => l.Contains(NotThisOrder, StringComparison.Ordinal)))
+            return new Outcome("failure", $"the plugins are not this Release's: main has moved the load order past {Short(commit)}, the next Deployment moves it; {applied.Summary}");
         if (run.Code != 0)
-            return new Outcome("failure", $"{applied.Summary}; but the plugins are not: the load order move ended with {run.Code}, the log says why");
-        var at = run.Lines.Select(l => MainAt.Match(l)).FirstOrDefault(m => m.Success)?.Groups[1].Value ?? commit;
-        if (at != commit) logf($"load order: the gate ran main at {Short(at)}, after this Deployment's {Short(commit)}; dev has that commit's order and gamemode until its own Deployment");
-        Files.WriteWhole(LoadOrderPath(env), JsonSerializer.SerializeToUtf8Bytes(new LoadOrderState(at, Records.UtcNow())));
+            return new Outcome("failure", $"the plugins are not in: the load order move ended with {run.Code}, the log says why; {applied.Summary}");
+        // The order is this commit's whichever commit of main the gate ran.
+        Files.WriteWhole(LoadOrderPath(env), JsonSerializer.SerializeToUtf8Bytes(new LoadOrderState(commit, Records.UtcNow())));
         return applied with { Summary = applied.Summary + "; load order moved" };
     }
 
@@ -770,6 +862,11 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
                 var down = await app.Unhealthy(ct);
                 if (down != "") { log($"{env}: {down}"); ok = false; }
                 else log($"{env}: " + (e.Kind == AppKinds.Discord ? $"the service {e.Service} is running" : $"{e.Health} answers"));
+                continue;
+            }
+            if (e.Kind == ContentBuild.Kind)
+            {
+                log($"{env}: builds are kept in {e.Root}" + (Directory.Exists(e.Root) ? "" : ", which Build-Content makes with its first build"));
                 continue;
             }
             var sick = await servers[env].Unhealthy(ct);

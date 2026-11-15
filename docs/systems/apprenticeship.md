@@ -32,6 +32,12 @@ waits. The next piece after they take you on is the one that raises
 you. After that, the sister half climbs the whole ladder. It is still
 not your profession's other name. You remain the half you picked.
 
+Work on that half while your master stands within 10 metres of you,
+in the same place, counts 1.5 times (decided 22 Oct). Every second piece
+you make beside them counts one more. Only the half they took you on in
+is faster, and only while they are there with you and in the world. A
+party standing with you still adds its own bonus on top.
+
 Taking you on is the master's decision. Nobody is owed it. There is
 no fee, and there is no distance written down. It is an agreement the
 master makes, and the server records it. Either of you can end it: the

@@ -23,8 +23,9 @@
 // builds"; Ship.ps1 never writes to the source repository; nothing commits
 // the launcher's number (#5179); CODEOWNERS names files that exist and
 // covers the six shared ones the ops repo's CLAUDE.md lists. Then the documents: each states
-// the four settings (since 25 September: enforce_admins off, no required
-// check, since the build check on GitHub is off), gives
+// the four settings of branch protection (since 25 September: enforce_admins
+// off, no check named there; #4157: main's ruleset requires three since
+// 31 Oct, so no document may say there is no required check), gives
 // the command that reads the live settings, and says none of the things that
 // stopped being true.
 //
@@ -82,8 +83,9 @@ yml.forEach(function (l) {
   const nm = /^    name:\s*["']?(.+?)["']?\s*$/.exec(l);
   if (nm && jobs.length && jobs[jobs.length - 1].name === null) jobs[jobs.length - 1].name = nm[1];
 });
-// No check is required since 25 September (the build check on GitHub is off),
-// but the job keeps its name, so turning the requirement back on is one setting.
+// Branch protection names no check since 25 September; main's ruleset
+// requires Build check result and two more since 31 Oct (#3683, #4157). The
+// job keeps its name.
 // #1306: the hosted job is the build, the only one since #4983.
 // #3182: "tested" builds nothing; it only asks whether a pull request build
 // already passed main's tree, and the build job waits for its answer.
@@ -247,7 +249,8 @@ const PROTECTION = 'gh api repos/ThornswoodRP/Thornswood/branches/main/protectio
 docs.forEach(function (d) {
   const t = d.text;
   yes(d.name + ' says enforce_admins is off', /enforce_admins is off\b/.test(t));
-  yes(d.name + ' says there is no required check', /there is no required check/.test(t));
+  yes(d.name + ' says branch protection names no check (main\'s ruleset holds them, #4157)', /branch protection (itself )?names no check/.test(t));
+  yes(d.name + ' does not say there is no required check, while main\'s ruleset requires three (#4157)', !/there is no required check/.test(t));
   yes(d.name + ' says required approving reviews is 0', /required approving reviews is (0|zero)\b/i.test(t));
   yes(d.name + ' says the code owner review is off', /code owner review is off|Require review from Code Owners is off/i.test(t));
   yes(d.name + ' gives the command that reads the live settings', t.indexOf(PROTECTION) !== -1);

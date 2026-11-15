@@ -61,6 +61,9 @@ $Cfg = Join-Path $Box 'vm.json'
 $Sent = Join-Path $Box 'sent.txt'
 $Log = Join-Path $Box 'send.log'
 $Name = '^thornswood-\d{8}-\d{6}\.zip\.enc$'
+# How sftp logs in, the same for the send and for -Status's login check, so
+# the check tries exactly what the send does.
+$Login = @('-i', $Key, '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=yes', '-o', ('UserKnownHostsFile=' + $Known))
 # The event that starts the send: Task Scheduler's 102 ("task completed") for
 # the nightly, in its Operational log. -Install subscribes the task to it and
 # -Status asks the log the same question, so both read one query.
@@ -82,6 +85,41 @@ if ($Status) {
   if (-not (Test-Path -LiteralPath $Cfg)) { Say 'not set up: there is no vm.json (Send-Backups.ps1 -Install -VmHost <address>)' }
   else { Say ('sends to   tw-boxdrop@' + (Get-Content -LiteralPath $Cfg -Raw | ConvertFrom-Json).host) }
   if (Test-Path -LiteralPath ($Key + '.pub')) { Say ('its key    ' + (Get-Content -LiteralPath ($Key + '.pub') -Raw).Trim()) }
+  # Why the VM refuses the key. On 11 Nov 2026 at 8:25 PM every file came
+  # back "Permission denied (publickey)" while the VM held this key's public
+  # half from this box's address, and its sshd logged only "Connection reset
+  # by authenticating user tw-boxdrop [preauth]". So: does the private key
+  # match the .pub, who may open it, and what sftp itself says while it logs
+  # in. The login check runs an empty batch, so it sends nothing.
+  if (Test-Path -LiteralPath $Key) {
+    $EAP = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    $kg = Get-Command ssh-keygen -ErrorAction SilentlyContinue
+    if ($kg) {
+      # -P '': ssh-keygen asks for a passphrase when a key has one, and
+      # nobody is there to answer (gate run 315 on 12 Nov 2026 waited out
+      # its 30 minutes on that ask).
+      $half = ((& $kg.Source -y -P '' -f $Key 2>&1) -join ' ').Trim()
+      $pub = if (Test-Path -LiteralPath ($Key + '.pub')) { ((Get-Content -LiteralPath ($Key + '.pub') -Raw).Trim() -split '\s+')[0..1] -join ' ' } else { '' }
+      $mine = ($half -split '\s+')[0..1] -join ' '
+      Say ('key pair   ' + $(if ($half -notmatch '^ssh-') { 'the private key does not load without a passphrase, so the task cannot sign with it (-Install takes the old one off): ' + $half } elseif ($mine -eq $pub) { 'the private key matches its .pub' } else { 'the private key is ' + $mine + ', NOT its .pub' }))
+    }
+    $ka = Get-Acl -LiteralPath $Key
+    Say ('key owner  ' + $ka.Owner + $(if ($ka.AreAccessRulesProtected) { ', nothing inherited' } else { ', rules inherited' }))
+    foreach ($r in $ka.Access) { Say ('key rule   ' + $r.IdentityReference + ' ' + $r.AccessControlType + ' ' + $r.FileSystemRights) }
+    Say ('runs as    ' + [Security.Principal.WindowsIdentity]::GetCurrent().Name)
+    $sf = Get-Command sftp -ErrorAction SilentlyContinue
+    if ($sf -and (Test-Path -LiteralPath $Cfg)) {
+      $vm = Get-Content -LiteralPath $Cfg -Raw | ConvertFrom-Json
+      $empty = Join-Path $Box 'login-check.txt'
+      [IO.File]::WriteAllText($empty, '')
+      $probe = @(& $sf.Source -v -b $empty @Login -o ConnectTimeout=20 ($vm.user + '@' + $vm.host) 2>&1 | ForEach-Object { "$_" })
+      $code = $LASTEXITCODE
+      Remove-Item -LiteralPath $empty -Force -ErrorAction SilentlyContinue
+      Say ('--- logging in as ' + $vm.user + ', sftp ended ' + $code + ' ---')
+      $probe | Where-Object { $_ -match 'OpenSSH_|Server host key|Host .* is known|identity file|Load key|load_|bad permissions|UNPROTECTED|Will attempt key|Offering|Server accepts|Authentications that can continue|Next authentication|we did not send|sign_and_send|Authenticated to|Permission denied|No more authentication|Connection|Connecting to|kex_exchange|banner|disconnect' } | ForEach-Object { Say ('  ' + $_) }
+    }
+    $ErrorActionPreference = $EAP
+  }
   $t = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
   if ($t) { $i = Get-ScheduledTaskInfo -TaskName $TaskName; Say ('task       ' + $t.State + ', last ran ' + $i.LastRunTime + ' result ' + $i.LastTaskResult) }
   else { Say 'task       NOT REGISTERED' }
@@ -124,10 +162,25 @@ if ($Install) {
   }
   [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo](Get-Item -LiteralPath $Box -Force), $acl)
   Note "  $Box is SYSTEM's and the Administrators' only"
+  # No passphrase: the task has nobody to type one. PowerShell 7 hands
+  # ssh-keygen the text it is given, so -N '' is an empty passphrase; the
+  # -N '""' this used to say became the two quote marks themselves. The
+  # key made on 1 Nov 2026 was locked with them, so ssh in BatchMode could
+  # offer its public half but never sign with it, and on 11 Nov the VM
+  # refused every file ("Permission denied (publickey)").
   if (-not (Test-Path -LiteralPath $Key)) {
-    & $keygen -q -t ed25519 -N '""' -C 'thornswood-box-drops-backups' -f $Key
+    & $keygen -q -t ed25519 -N '' -C 'thornswood-box-drops-backups' -f $Key
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $Key)) { Die 'ssh-keygen could not make the key.' }
     Note '  made the drop key'
+  }
+  & $keygen -y -P '' -f $Key 2>&1 | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    # The same key with the quote marks taken off, so the VM's entry for it
+    # still holds and nothing changes there.
+    & $keygen -p -q -P '""' -N '' -f $Key 2>&1 | Out-Null
+    & $keygen -y -P '' -f $Key 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { Die "$Key needs a passphrase that is not the old two quote marks, so the task cannot use it. Nothing else was changed." }
+    Note '  took the passphrase (two quote marks) off the drop key; it is the same key'
   }
   # Said before anything that needs the VM, so the key can go into
   # Thornswood-Hermes even while the VM does not answer this box yet.
@@ -190,7 +243,7 @@ foreach ($f in $todo) {
   [IO.File]::WriteAllText($mark, ($sha + ' ' + $f.Length + "`n"), (New-Object Text.ASCIIEncoding))
   $batch = Join-Path $Box 'batch.txt'
   [IO.File]::WriteAllLines($batch, [string[]]@(('put "' + $f.FullName + '" "' + $f.Name + '"'), ('put "' + $mark + '" "' + $f.Name + '.done"')))
-  $out = & $sftp -b $batch -i $Key -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ("UserKnownHostsFile=" + $Known) ($vm.user + '@' + $vm.host) 2>&1
+  $out = & $sftp -b $batch @Login ($vm.user + '@' + $vm.host) 2>&1
   $code = $LASTEXITCODE
   Remove-Item -LiteralPath $mark, $batch -Force -ErrorAction SilentlyContinue
   if ($code -ne 0) { Note ("  NOT SENT $($f.Name): sftp ended with $code. " + ("$out" -replace '\s+', ' ')); $failed++; continue }

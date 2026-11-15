@@ -24,8 +24,15 @@ using System.Text;
 //    (discordAuth, metricsAuth, masterKey, additionalServerSettings), no
 //    master server, offline login, no join pass hold, a password of its own,
 //    and ports from 7900 that nothing else holds;
-//  - never dev's world, its private folder (door.json and the join pass key),
-//    its logs or its deploy records. The world starts empty.
+//  - dev's merchant ledger and its first-start mark (merchant-ledger.json
+//    and merchant-ledger.initialized in its private folder), copies, so the
+//    gamemode's NPC runtime starts as it does on dev and the copy's trades
+//    never touch dev's purses. Without them it says "Saved merchant ledger
+//    or initialization evidence is missing" and stands up no NPC (the load
+//    copy found the same, #5557), so a pass could never reach a trader;
+//  - never the rest of dev's private folder (door.json and the join pass
+//    key, the registers), its world, its logs or its deploy records. The
+//    world starts empty.
 // docs/DEPLOY-AGENT.md has the whole design.
 using System.Diagnostics;
 using System.Net.NetworkInformation;
@@ -422,6 +429,10 @@ public sealed class BotPass(EnvConfig env, ITasks tasks)
             if (!reserved.Contains(c) && !tcp.Contains(c)) voice = c;
         if (voice == 0) return $"no free voice port above {port}";
 
+        // Dev's private folder, read before the copy's settings name its own.
+        var privSetting = settings["privDir"]?.GetValue<string>() ?? "private";
+        var devPrivate = Path.IsPathRooted(privSetting) ? privSetting : Path.Combine(dev, privSetting);
+
         foreach (var k in Dropped) settings.Remove(k);
         settings["port"] = port;
         settings["thornswoodVoicePort"] = voice;
@@ -435,11 +446,27 @@ public sealed class BotPass(EnvConfig env, ITasks tasks)
         settings["databaseDriver"] = "file";
         settings["databaseName"] = "world";
         Directory.CreateDirectory(Path.Combine(ServerDir, "private"));
+        var ledger = 0;
+        foreach (var name in Ledger)
+        {
+            var at = Path.Combine(devPrivate, name);
+            if (!File.Exists(at)) continue;
+            Files.Copy(at, Path.Combine(ServerDir, "private", name));
+            ledger++;
+        }
+        log(ledger == Ledger.Length
+            ? "the copy has dev's merchant ledger and its mark, so its NPC runtime starts as dev's does"
+            : $"dev has {ledger} of the merchant ledger's {Ledger.Length} files in {devPrivate}, so the copy's NPC runtime does not start, as dev's would not");
         Files.WriteWhole(Path.Combine(ServerDir, "server-settings.json"),
             JsonSerializer.SerializeToUtf8Bytes(settings, new JsonSerializerOptions { WriteIndented = true }));
-        log($"the copy is ready in {ServerDir}: game port {port}, resources {port + 1}, voice {voice}, an empty world, no private folder of dev's");
+        log($"the copy is ready in {ServerDir}: game port {port}, resources {port + 1}, voice {voice}, an empty world, and of dev's private folder only the merchant ledger");
         return "";
     }
+
+    /// <summary>The merchant ledger and its first-start mark, the only files
+    /// of dev's private folder the copy gets (npc-merchant-purses.ts,
+    /// requireMerchantEvidence).</summary>
+    public static readonly string[] Ledger = ["merchant-ledger.json", "merchant-ledger.initialized"];
 
     static void CopyTree(string from, string to, Func<string, bool> take)
     {
