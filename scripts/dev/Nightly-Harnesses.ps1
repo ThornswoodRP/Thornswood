@@ -203,6 +203,21 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# No PowerShell this run starts rewrites the shared start-up profile (#5752).
+# Every pwsh reads StartupProfileData-NonInteractive (~/.cache/powershell,
+# or LOCALAPPDATA\Microsoft\PowerShell) as it starts and, as it exits,
+# writes it again in place: opened with O_TRUNC and written in about two
+# hundred small writes, with no lock and no rename (strace of pwsh 7.6.9 on
+# 15 Nov 2026). With harnesses side by side, one pwsh starts while another
+# is halfway through that write and reads a torn assembly name, and .NET's
+# start-up JIT thread aborts on it (exit 134, "The given assembly name was
+# invalid", 'PublicKeyToken=b03f5f7f11d' cut short) or crashes (exit 139).
+# That is PowerShell/PowerShell#26528 and dotnet/runtime#121977, open
+# upstream. The Linux gate lost #5750's and #5996's merge queue runs and a
+# share of #6098's to it between 10 and 15 Nov. With this setting each pwsh still reads
+# the profile but never writes it, so there is nothing torn to read; the
+# harnesses and all they start inherit it.
+$env:DOTNET_MultiCoreJitNoProfileGather = '1'
 if ($Of -lt 1 -or $Shard -lt 1 -or $Shard -gt $Of) { Write-Host "::error::-Shard $Shard -Of $Of names no share"; exit 2 }
 if ($Throttle -lt 1 -or $Throttle -gt 16) { Write-Host "::error::-Throttle $Throttle is not 1 to 16"; exit 2 }
 if ($Share -eq 0) { $Share = $Throttle }
