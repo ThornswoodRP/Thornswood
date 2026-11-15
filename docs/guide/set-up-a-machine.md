@@ -201,7 +201,7 @@ Then in `Thornswood-Repo`:
 which makes a key for the VPS, points ssh at it through the bridge, and
 prints the public line. That is for a machine that already holds a key: since
 31 Oct 2026 no key is made for a new person or machine (Patrick's answer A
-on q-retire-box-keys, #2862), and the keys there are changed only by Patrick (the workflows' two with the deploy gate's Renew-BoxKey verb). Box work from a new machine goes
+on q-retire-box-keys, #2862), and the keys there are changed only by Patrick (the desk's, box-run.yml's key, with the deploy gate's Renew-BoxKey verb). Box work from a new machine goes
 through the gate instead, with `gh` signed in as somebody who may run workflows in the private ops repository, and no key:
 `pwsh scripts/vps/Box-Run.ps1 -Line '<verb>'` ([E. VPS](tools.md#e-vps)). Ships go
 the same way (`Ship-Dev`, `Ship-Main`), so a machine without a key can still
