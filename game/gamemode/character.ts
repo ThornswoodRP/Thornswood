@@ -1319,6 +1319,12 @@
     return false;
   }
 
+  /*
+    The emote powers (#4577): WAVE_POWER in scripts/mods/Add-ContentRecords.py,
+    by descriptor. Every character holds them; grantKnown puts them on.
+  */
+  var EMOTE_POWERS = ['1c000:Thornswood-Content.esp'];
+
   /**
     Everything in somebody's book, back onto their character.
 
@@ -1359,6 +1365,20 @@
     if (staff.length) {
       clog('spawn:', put, 'of', staff.length, 'staff spells put back on', actorId.toString(16));
     }
+    // And the emote powers (#4577), on every character, so an emote can sit
+    // on a favourites key: the content plugin's own lesser powers, which do
+    // nothing of their own (game/plugins/thornswood-emotes.js plays the
+    // emote when it is cast). The College's sweep above takes off only
+    // spells of a school, never a power.
+    var powers = 0;
+    for (var k = 0; k < EMOTE_POWERS.length; k++) {
+      try {
+        if (typeof spellOn === 'function' && spellOn(actorId, EMOTE_POWERS[k], true)) { powers++; }
+      } catch (e) {
+        clog('could not put emote power', EMOTE_POWERS[k], 'on', actorId.toString(16), e);
+      }
+    }
+    if (powers) { clog('spawn:', powers, 'emote power(s) put on', actorId.toString(16)); }
     // And the second enchantment slot Twin Souls gives (#1389): a session
     // starts from a save with no perks on it.
     if (typeof handEnchantSlots === 'function') { handEnchantSlots(actorId, s); }

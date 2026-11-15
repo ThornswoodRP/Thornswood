@@ -131,6 +131,41 @@ yes('R1 the content builder names the Wave power (WAVE_POWER) in this plugin\'s 
   yes('C5 a cast with no caster or no spell plays nothing and throws nothing', w.played.length === 0);
 }
 
+// =========================================================== the grant
+// The real rules and character blocks out of game/gamemode.js, with spellOn
+// (the Actor.AddSpell helper the shrines use) recording what it is asked.
+{
+  const GM = require('../../tests/gamemode-tables.js').joined(read(path.join('game', 'gamemode.js')));
+  function between(a, b) { const i = GM.indexOf(a); const j = i < 0 ? -1 : GM.indexOf(b, i); return (i >= 0 && j >= 0) ? GM.slice(i, j) : null; }
+  const RULES = between('// ==== thornswood progression ====', '// ==== end thornswood progression ====');
+  const CHARACTER = between('// ==== thornswood character ====', '// ==== end thornswood character ====');
+  const store = {}, put = [];
+  const ctx = {
+    mp: {
+      makeProperty() { }, getDescFromId: () => 'x:Nowhere.esp', lookupEspmRecordById: () => ({}),
+      get(id, key) { if (key === 'profileId') { return 1000 + (id & 0xff); } const p = store[id] || {}; return Object.prototype.hasOwnProperty.call(p, key) ? JSON.parse(p[key]) : undefined; },
+      set(id, key, value) { (store[id] = store[id] || {})[key] = JSON.stringify(value); }
+    },
+    JSON: JSON, Object: Object, Array: Array, String: String, Number: Number, Math: Math,
+    console: { log() { }, error() { } }, guard: (n, fn) => fn, notify() { }, say() { }, log() { },
+    spellOn(actorId, desc, on) { put.push([actorId, desc, on]); return true; }
+  };
+  ctx.globalThis = ctx;
+  vm.createContext(ctx);
+  let C = null;
+  try {
+    vm.runInContext(RULES, ctx);
+    vm.runInContext(CHARACTER, ctx);
+    C = ctx.__thornswoodCharacter;
+  } catch (e) { console.log('the blocks threw: ' + e); }
+  const WAVE_DESC = WAVE_LOCAL.toString(16) + ':Thornswood-Content.esp';
+  const PERSON = 0xff000aa1;
+  if (C) { C.grantKnown(PERSON); }
+  yes('S1 on arrival every character is given the Wave power (' + WAVE_DESC + ')',
+      put.some((c) => c[0] === PERSON && c[1] === WAVE_DESC && c[2] === true));
+  yes('S2 and only given it, never taken off', !put.some((c) => c[1] === WAVE_DESC && c[2] !== true));
+}
+
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

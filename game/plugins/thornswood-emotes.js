@@ -636,6 +636,40 @@ try {
   log('could not watch emote idles:', e);
 }
 
+/*
+  An emote as a lesser power (#4577), so it can sit on a favourites key and
+  be pressed without opening the wheel. The power is the content plugin's own
+  SPEL, WAVE_POWER in scripts/mods/Add-ContentRecords.py: a lesser power on
+  self whose one effect does nothing, so casting it is only the press. The
+  server gives it to every character. When this person casts it, Wave plays
+  through play(), the same path as the wheel, so the stance reset, the one at
+  a time rule and what other people see are the wheel's. Somebody else's
+  cast is theirs: their own machine plays it and the relay carries it.
+*/
+const CONTENT_FILE = 'Thornswood-Content.esp';
+const POWERS = [{ local: 0x01C000, name: 'Wave' }];   // WAVE_POWER
+let powerIds = null;
+
+function powerEmote(spellId) {
+  if (powerIds === null) {
+    powerIds = {};
+    for (let i = 0; i < POWERS.length; i++) {
+      const form = sp.Game.getFormFromFile(POWERS[i].local, CONTENT_FILE);
+      if (form) { powerIds[form.getFormID() >>> 0] = POWERS[i].name; }
+    }
+  }
+  return emoteByName(powerIds[spellId >>> 0]);
+}
+
+sp.on('spellCast', guard('spellCast', (e) => {
+  if (!e || !e.caster || !e.spell) { return; }
+  if (e.caster.getFormID() !== 0x14) { return; }
+  const item = powerEmote(e.spell.getFormID());
+  if (!item) { return; }
+  log('power', item.name);
+  play(item.event, item.name);
+}));
+
 // The front closes the wheel for us in a menu, but only for focus. The overlay
 // itself has to be told, or it stays drawn over the inventory.
 sp.on('update', guard('hold', () => {

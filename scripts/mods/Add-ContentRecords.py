@@ -496,6 +496,8 @@ CONTENTS = (
      r'|MGEF Thornswood(TeaSteep|Burnt|Fine|Feast|Brew|Spoiled)Effect$', 'own', 'food and drink'),
     (r'(MISC ThornswoodQuest\w+|ACTI ThornswoodQuestLedgerSource)$', 'own', 'quest items'),
     (r'IMAD Thornswood(Drunk|High|Hangover|Withdrawal)Imod$', 'own', 'the screen looks'),
+    # The emote powers (#4577) and their effects.
+    (r'(SPEL ThornswoodEmote\w+|MGEF ThornswoodEmote\w+Effect)$', 'own', 'emotes'),
     (r'BOOK ThornswoodPassage\w+$', 'own', 'starting town passages'),
     (r'BOOK ThornswoodWelcome$', 'own', 'the welcome letter'),
     (r'COBJ (DLC[12])?Recipe(Weapon\w+Bow|Arrow\w+|TechBolt\w+)$', 'bethesda',
@@ -1436,6 +1438,50 @@ def look_imad(fid, edid, look):
     return own_record(b'IMAD', fid, pairs)
 
 
+# ---------------------------------------------------------------------------
+# AN EMOTE AS A LESSER POWER (#4577, Patrick, 22 Oct 2026). The favourites
+# menu holds spells and powers, so an emote that is a power can sit on a
+# favourites key and be pressed without opening the wheel. The power does
+# nothing of its own: game/plugins/thornswood-emotes.js hears this person cast
+# it and plays the emote through the wheel's own path, and the server gives it
+# to every character. Their form ids are 0x501C000 on, a range no version of
+# this plugin has used. Wave first; which others become powers comes once
+# this one is seen in the game.
+#
+# The power: a lesser power (SPIT type 3), fire and forget (1), on the self
+# (0), no cost and no charge, cost set by hand (flag 1) so the game works out
+# nothing. Its ETYP is Skyrim's Voice slot (EquipTypeVoice, 0x25BEE), where
+# every power sits. Its one effect is a script effect with no script, the
+# tea's DATA (TEA_EFFECT_DATA): fire and forget on the self, no duration, no
+# magnitude and no area, so casting it changes nothing on anybody.
+WAVE_POWER = 0x501C000
+WAVE_EFFECT = 0x501C001
+EQUIP_TYPE_VOICE = 0x00025BEE
+LESSER_POWER, FIRE_AND_FORGET, ON_SELF, MANUAL_COST = 3, 1, 0, 0x00000001
+EMOTE_POWERS = (
+    (WAVE_POWER, WAVE_EFFECT, 'Wave', 'You wave.'),
+)
+
+
+def emote_records():
+    """The emote powers and their effects (#4577)."""
+    out = []
+    for power, effect, name, words in EMOTE_POWERS:
+        data = bytearray(TEA_EFFECT_DATA)
+        struct.pack_into('<I', data, 0, TEA_EFFECT_FLAGS)
+        out.append(own_record(b'MGEF', effect, [
+            (b'EDID', zstr('ThornswoodEmote%sEffect' % name)), (b'FULL', zstr(name)),
+            (b'DATA', bytes(data)), (b'SNDD', b''), (b'DNAM', zstr(words))]))
+        out.append(own_record(b'SPEL', power, [
+            (b'EDID', zstr('ThornswoodEmote%s' % name)), (b'OBND', bounds((0, 0, 0, 0, 0, 0))),
+            (b'FULL', zstr(name)), (b'ETYP', struct.pack('<I', EQUIP_TYPE_VOICE)),
+            (b'DESC', zstr(words)),
+            (b'SPIT', struct.pack('<IIIfIIffI', 0, MANUAL_COST, LESSER_POWER, 0.0,
+                                  FIRE_AND_FORGET, ON_SELF, 0.0, 0.0, 0)),
+            (b'EFID', struct.pack('<I', effect)), (b'EFIT', struct.pack('<fII', 0.0, 0, 0))]))
+    return out
+
+
 def needs_records():
     """Tea, its recipes and its effect (#1382), and the screen looks (#1382, #3153)."""
     data = bytearray(TEA_EFFECT_DATA)
@@ -1788,6 +1834,7 @@ def thornswood_records(clam, scrap):
     ]
     # Tea, its recipes and the screen looks (#1382, #3153).
     out += needs_records()
+    out += emote_records()
     # Placeable furniture (#2679), one MISC and one woodworking recipe a row.
     out += furniture_records()
     out += quest_records()
@@ -2416,7 +2463,7 @@ PLUGIN_AUTHOR = 'Thornswood'
 HEDR_VERSION = 1.71
 NEXT_OBJECT_ID = 0x00E80054
 GROUP_ORDER = (b'KYWD', b'ACTI', b'BOOK', b'MISC', b'FLOR', b'FURN', b'COBJ', b'CELL', b'WRLD',
-               b'MGEF', b'ALCH', b'IMAD')
+               b'MGEF', b'ALCH', b'IMAD', b'SPEL')
 # A group header ends in eight bytes the game does not read: a date and
 # version control numbers in the Creation Kit's files. This writes them as
 # nothing; GROUP_STAMP is the last four, which new_group() takes.
