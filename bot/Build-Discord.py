@@ -1307,6 +1307,28 @@ def _also(guild, roles, out, extra, talk):
     return out
 
 
+# The modes whose readers are roles by name, not a hold's, a faction's or
+# a staff space's own, which the Member line has no need of.
+_PLAIN_MODES = ('membersread', 'open', 'pathfind', 'staffbump', 'testersread')
+
+
+def _seen_by(role):
+    """The channels of PLAN that somebody holding only this role sees, named
+       from the modes, so the audit's line about who sees what follows the
+       plan instead of saying an old order. None is somebody with no role."""
+    names = []
+    for _, chans in PLAN:
+        for ch in chans:
+            mode = ch.get('mode')
+            if mode in ('read', 'public'):
+                names.append('#' + ch['name'])
+            elif role is not None and mode in _PLAIN_MODES:
+                readers, talkers, _ = mode_audience(mode)
+                if role in readers or role in talkers:
+                    names.append('#' + ch['name'])
+    return ', '.join(names) or 'nothing'
+
+
 # Who each mode lets in, by role name: (readers, talkers, posters). A reader
 # sees and reads back and cannot post; a talker sees and posts; a poster in a
 # read only channel posts and tidies. A name in more than one list ends with
@@ -3231,7 +3253,23 @@ def layout():
     w('Roles never deleted: every Jarl, Citizen and office role, and every '
       'faction\'s Leader, member and Officer role.')
     w('')
-    return '\n'.join(L)
+    return '\n'.join(_with_contents(L))
+
+
+def _with_contents(L):
+    """The page with a Contents linking each ## heading, put before the
+       first one. Every doc over 300 lines carries one
+       (tests/test-4336-long-docs-contents.js), and this page is written
+       here, so it is made here from the headings the page has."""
+    heads = [x[3:] for x in L if x.startswith('## ')]
+    if not heads:
+        return L
+    first = L.index('## ' + heads[0])
+    toc = ['## Contents', '']
+    for h in heads:
+        slug = re.sub(r'[^a-z0-9 -]', '', h.lower()).replace(' ', '-')
+        toc.append('- [%s](#%s)' % (h, slug))
+    return L[:first] + toc + [''] + L[first:]
 
 
 async def audit(guild):
@@ -3359,13 +3397,13 @@ async def audit(guild):
         only = [m for m in member.members
                 if (tester is None or tester not in m.roles)
                 and not any(x.name in staff_held for x in m.roles)]
-        line('Member and neither Playtester nor staff, so Start Here and '
-             'Information only: %d (%s)'
-             % (len(only), ', '.join(sorted(_who(m) for m in only)) or 'nobody'))
+        line('Member and neither Playtester nor staff, so %s only: %d (%s)'
+             % (_seen_by('Member'), len(only),
+                ', '.join(sorted(_who(m) for m in only)) or 'nobody'))
     nobody = [m for m in guild.members
               if not getattr(m, 'bot', False)
               and not [x for x in m.roles if x != guild.default_role]]
-    line('no role at all, so Start Here only: %d' % len(nobody))
+    line('no role at all, so %s only: %d' % (_seen_by(None), len(nobody)))
     for m, cat, held in doubles(guild.members):
         off('%s holds %s, two ranks of %s' % (_who(m), ' and '.join(held), cat))
     for m, staff, seats in seat_clashes(guild.members):
