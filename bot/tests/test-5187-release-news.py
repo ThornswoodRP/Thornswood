@@ -216,13 +216,18 @@ if shutil.which('pwsh'):
 else:
     print('SKIP  no pwsh here to compile tools/ReleaseNotes/NoteRules.cs with')
 yes('  and with no bodies the rules are not asked', bot.pr_release_notes([]) == [])
+def _text(path):
+    with open(path, encoding='utf-8') as fh:
+        return fh.read()
+
+
 _bot_dir = os.path.join(HERE)
 _readers = [f for f in os.listdir(_bot_dir) if f.endswith('.py')
-            and re.search(r'Release note:\(', open(os.path.join(_bot_dir, f), encoding='utf-8').read())]
+            and re.search(r'Release note:\(', _text(os.path.join(_bot_dir, f)))]
 yes('  nothing in bot/ reads the line itself (got %r)' % (_readers,), _readers == [])
 _root = os.path.dirname(HERE)
-_install = open(os.path.join(_root, 'scripts', 'deploy', 'Install-Bot.ps1'), encoding='utf-8').read()
-_part = open(os.path.join(_root, 'scripts', 'release', 'App-Part.ps1'), encoding='utf-8').read()
+_install = _text(os.path.join(_root, 'scripts', 'deploy', 'Install-Bot.ps1'))
+_part = _text(os.path.join(_root, 'scripts', 'release', 'App-Part.ps1'))
 yes('  NoteRules.cs goes to the box beside the bot, by Install-Bot.ps1 and in the bot\'s Release part',
     "$send['NoteRules.cs'] = (Join-Path $Repo 'tools\\ReleaseNotes\\NoteRules.cs')" in _install
     and "Add-One 'NoteRules.cs' 'tools/ReleaseNotes/NoteRules.cs'" in _part)
@@ -231,7 +236,7 @@ yes('a Main Server change is only the bot or the site, with docs and tests besid
     bot.is_main_server_change(['bot/bot.py', 'docs/x.md']) and bot.is_main_server_change(['site/lib/x.js'])
     and not bot.is_main_server_change(['bot/bot.py', 'scripts/x.ps1'])
     and not bot.is_main_server_change(['docs/x.md', 'tests/y.js']) and not bot.is_main_server_change([]))
-ms = json.load(open(os.path.join(os.path.dirname(HERE), 'scripts', 'release', 'main-server-paths.json')))
+ms = json.loads(_text(os.path.join(os.path.dirname(HERE), 'scripts', 'release', 'main-server-paths.json')))
 yes('  the same paths Collect-ReleaseNotes.ps1 reads',
     sorted(ms['live']) == sorted(p for p, a in bot.AREAS if a in bot.LIVE_AREAS)
     and tuple(ms['neutral']) == bot.NEUTRAL)
@@ -299,10 +304,10 @@ yes('the record keeps the newest 200 a channel', len(state['said']['dev']) == bo
 src = harness_bot.source()
 yes('the loop is started with the others', 'asyncio.create_task(watch_release_news())' in src)
 yes('dev news goes to the id in dev-channel.txt',
-    bot.DEV_NEWS_ID == int(open(os.path.join(HERE, 'dev-channel.txt')).read().strip()))
+    bot.DEV_NEWS_ID == int(_text(os.path.join(HERE, 'dev-channel.txt')).strip()))
 # #news was named by no file until 9 Nov, so no main release was ever posted.
 yes('main news goes to the id in news-channel.txt, which is there',
-    bot.MAIN_NEWS_ID != 0 and bot.MAIN_NEWS_ID == int(open(os.path.join(HERE, 'news-channel.txt')).read().strip()))
+    bot.MAIN_NEWS_ID != 0 and bot.MAIN_NEWS_ID == int(_text(os.path.join(HERE, 'news-channel.txt')).strip()))
 yes('the folder is the one the agent writes', bot.NEWS_DIR == r'C:\Thornswood-Deploys\for-bot'
     or os.environ.get('THORNSWOOD_NEWS_DIR'))
 
