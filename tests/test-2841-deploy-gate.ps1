@@ -648,6 +648,17 @@ else if (c === 'nothing') { }
 Yes 'box-run.yml is not in this repository, which has no VPS runner once public' (-not (Test-Path -LiteralPath ([IO.Path]::Combine($Repo, '.github', 'workflows', 'box-run.yml'))))
 $br = Text 'scripts/vps/Box-Run.ps1'
 Yes '  Box-Run.ps1 starts it in the private ops repository, where the runners are registered' ($br.Contains("[string]`$GitHubRepo = 'ThornswoodRP/Thornswood-Ops'") -and $br.Contains("`$Workflow = 'box-run.yml'"))
+# A live line waits in the ops repository's "live" environment for Patrick
+# (Ops #289): the run's status is then "waiting", and the read says so at
+# once instead of asking GitHub again until its wait runs out.
+. (Join-Path $Repo 'scripts/ops/WorkflowRun.ps1')
+$script:asked = 0
+function Get-ThornswoodGitHub([string]$Path) { $script:asked++; return @{ Body = [pscustomobject]@{ status = 'waiting'; html_url = 'https://github.com/o/r/actions/runs/7' }; NotFound = $false; Why = '' } }
+$t0 = [DateTime]::UtcNow
+$a = Read-ThornswoodRunAnswer -Repo 'o/r' -Workflow 'box-run.yml' -Run 7 -Title 'Box-Run' -WaitMinutes 60 -Started
+Yes '  a run waiting for its environment''s reviewer is answered at once as waiting, with its page' ($a.State -eq 'waiting' -and $a.Text -match 'waits for a reviewer' -and $a.Url -eq 'https://github.com/o/r/actions/runs/7' -and $script:asked -eq 1 -and ([DateTime]::UtcNow - $t0).TotalSeconds -lt 5)
+Yes '  and Box-Run.ps1 then says how to read it later' ($br.Contains("if (`$a.State -eq 'waiting' -or `$a.State -eq 'unread') { Die (") -and $br.Contains('Read it later: pwsh scripts/vps/Box-Run.ps1 -Run '))
+Remove-Item -LiteralPath function:\Get-ThornswoodGitHub
 
 # ---- 9. the seal, and the ssh it uses -------------------------------------------
 . (Join-Path $Repo 'scripts/ops/Sealed.ps1')

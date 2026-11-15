@@ -29,7 +29,10 @@
   of the ops repository's "desk" environment, which only main may use
   (Grant-BoxAccess.ps1 -Deploy puts it there), and asks the gate over the box's own sshd on 127.0.0.1 with
   this script's -OnTheBox half. The key logs in as thornswood-deploy and can
-  only hand the gate a line (scripts\vps\gate\Gate.ps1).
+  only hand the gate a line (scripts\vps\gate\Gate.ps1). A line that names
+  a build waits first in the ops repository's "live" environment until
+  Patrick approves that run on its page (Ops #289); this then says the run
+  waits for him, and -Run reads its answer once he has.
 
   WHAT COMES BACK, AND TO WHOM. A deploy prints paths and a Get-Logs run
   brings back the servers' logs, and a run's log and files are readable by

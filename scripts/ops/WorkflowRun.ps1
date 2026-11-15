@@ -56,7 +56,8 @@ function Start-ThornswoodWorkflow {
 #   answer    the run's last notice; Text is its message
 #   stopped   the run's last failure; Text is why
 #   none      the run ended with neither; Text is how it ended
-#   waiting   it had not ended in time; Text is the state it was in
+#   waiting   it had not ended in time, or waits for a reviewer of its
+#             environment; Text is the state it was in
 #   unread    a read failed; Text is what GitHub said
 #   other     the run is not one of -Workflow; Text is what it is
 # -Say is how it says it is waiting, a script block taking one line.
@@ -72,6 +73,10 @@ function Read-ThornswoodRunAnswer {
         $r = $g.Body
         if ($r) { $notYet = $false }
         if ($r -and $r.status -eq 'completed') { break }
+        # A run whose job waits for a reviewer of its environment (box-run.yml's
+        # "live", Ops #289) waits for a person, not a runner: say so now
+        # rather than ask GitHub again until the wait runs out.
+        if ($r -and $r.status -eq 'waiting') { return @{ State = 'waiting'; Text = ('it waits for a reviewer of its environment to approve it, on its page ' + [string]$r.html_url); Url = [string]$r.html_url } }
         $state = if ($r) { [string]$r.status } else { 'not served by GitHub yet' }
         if ([DateTime]::UtcNow -gt $deadline) { return @{ State = 'waiting'; Text = $state; Url = $(if ($r) { [string]$r.html_url } else { '' }) } }
         if ($told -ne $state -and $state -ne 'in_progress') {
